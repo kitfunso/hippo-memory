@@ -1,0 +1,7 @@
+src/
+tests/
+.hippo/
+vitest.config.ts
+tsconfig.json
+PLAN.md
+*.test.ts

@@ -35,7 +35,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/hippo-memory/hippo"
+    "url": "https://github.com/kitfunso/hippo-memory"
   },
   "engines": {
     "node": ">=20.0.0"
