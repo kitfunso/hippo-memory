@@ -1,0 +1,12 @@
+{
+  "name": "hippo-memory",
+  "description": "Biologically-inspired memory for Claude Code. Memories decay by default, retrieval strengthens them, errors stick longer. Auto-captures context at session start and learns from errors.",
+  "version": "0.4.0",
+  "author": {
+    "name": "Keith So",
+    "url": "https://github.com/kitfunso/hippo-memory"
+  },
+  "homepage": "https://github.com/kitfunso/hippo-memory",
+  "repository": "https://github.com/kitfunso/hippo-memory",
+  "license": "MIT"
+}
