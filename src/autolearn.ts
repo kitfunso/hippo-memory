@@ -1,92 +1,137 @@
 /**
  * Auto-learn from errors and git history.
- * Zero required dependencies - everything is stdlib.
+ * Agents learn from failures without explicit hippo remember calls.
  */
 
-import { createMemory, Layer, MemoryEntry } from './memory.js';
-import { textOverlap } from './search.js';
+import { execSync, spawn } from 'child_process';
+import { MemoryEntry, createMemory, Layer } from './memory.js';
 import { loadAllEntries } from './store.js';
-
-// ---------------------------------------------------------------------------
-// captureError
-// ---------------------------------------------------------------------------
+import { textOverlap } from './search.js';
 
 /**
- * Create a MemoryEntry that captures a failed command's context.
- * Truncates stderr to 500 chars to keep memory size bounded.
+ * Create a MemoryEntry capturing a command failure.
+ * Content format: "Command '<cmd>' failed: <truncated stderr>"
  */
-export function captureError(exitCode: number, stderr: string, command: string): MemoryEntry {
-  const truncated = stderr.length > 500 ? stderr.slice(0, 500) + '...(truncated)' : stderr;
-  const content = `Command failed (exit ${exitCode}): ${command}\n\nStderr:\n${truncated}`;
+export function captureError(
+  exitCode: number,
+  stderr: string,
+  command: string
+): MemoryEntry {
+  // Truncate to first 500 chars to avoid storing megabytes of build logs
+  const truncated = stderr.slice(0, 500).trim();
+  const content = `Command '${command}' failed (exit ${exitCode}): ${truncated}`;
+
+  // Derive a sanitized tag from the command name (first word, strip path)
+  const cmdBase = command.trim().split(/\s+/)[0].replace(/[^a-zA-Z0-9-]/g, '');
+  const tags = ['error'];
+  if (cmdBase) tags.push(cmdBase.toLowerCase().slice(0, 30));
 
   return createMemory(content, {
     layer: Layer.Episodic,
-    tags: ['error', 'autolearn'],
-    emotional_valence: 'negative',
+    tags,
     source: 'autolearn',
   });
 }
 
-// ---------------------------------------------------------------------------
-// extractLessons
-// ---------------------------------------------------------------------------
-
-// Matches commit subjects that indicate a fix, revert, or bug
-const FIX_PATTERN = /\b(fix|fixes|fixed|revert|reverts|reverted|bug|bugfix|hotfix|patch)\b/i;
-
 /**
- * Parse git log output and extract lessons from fix/revert/bug commits.
- * Expects lines in the format: "HASH SUBJECT" (one commit per line).
- * Use: git log --oneline --no-merges
+ * Parse git log output for actionable lessons.
+ * Looks for fix:, revert:, bug:, error:, hotfix: commit messages.
  */
 export function extractLessons(gitLog: string): string[] {
   const lessons: string[] = [];
+  const lines = gitLog.split('\n');
 
-  for (const rawLine of gitLog.split('\n')) {
-    const line = rawLine.trim();
-    if (!line) continue;
+  // Patterns that indicate a lesson to learn from
+  const patterns = [
+    /^(fix|revert|bug|error|hotfix)(\(.+?\))?:\s*(.+)/i,
+    /\b(fixed|reverted|corrected|resolved)\b.{3,100}/i,
+  ];
 
-    // git log --oneline: "<hash> <subject>"
-    const spaceIdx = line.indexOf(' ');
-    if (spaceIdx === -1) continue;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('commit ') || trimmed.startsWith('Author:') || trimmed.startsWith('Date:')) {
+      continue;
+    }
 
-    const subject = line.slice(spaceIdx + 1).trim();
-    if (!FIX_PATTERN.test(subject)) continue;
-
-    // Build a lesson sentence from the commit subject
-    const lesson = formatLesson(subject);
-    if (lesson) lessons.push(lesson);
+    for (const pat of patterns) {
+      const m = trimmed.match(pat);
+      if (m) {
+        // For conventional commits: use the full subject line (group 3 or full match)
+        const lesson = (m[3] ?? m[0]).trim();
+        if (lesson.length > 5 && lesson.length < 500) {
+          lessons.push(lesson);
+        }
+        break;
+      }
+    }
   }
 
-  return lessons;
+  // Deduplicate exact matches at extraction time
+  return [...new Set(lessons)];
 }
-
-function formatLesson(subject: string): string {
-  // Normalise: strip common prefixes like "fix:", "Fix:", "chore(fix):", etc.
-  const cleaned = subject
-    .replace(/^(fix|bug|patch|hotfix|revert)[:\s(]+/i, '')
-    .replace(/^[\w-]+\([^)]+\):\s*/i, '') // "scope(context): ..."
-    .trim();
-
-  if (cleaned.length < 5) return '';
-  return `Lesson from git: ${cleaned}`;
-}
-
-// ---------------------------------------------------------------------------
-// deduplicateLesson
-// ---------------------------------------------------------------------------
 
 /**
- * Returns true if a similar memory already exists in the store (overlap > 0.7).
- * Avoids flooding the store with near-duplicate git lessons.
+ * Check if a substantially similar memory already exists.
+ * Returns true if overlap > threshold (default 0.7).
  */
-export function deduplicateLesson(hippoRoot: string, lesson: string): boolean {
+export function deduplicateLesson(
+  hippoRoot: string,
+  lesson: string,
+  threshold = 0.7
+): boolean {
   const entries = loadAllEntries(hippoRoot);
 
   for (const entry of entries) {
     const overlap = textOverlap(lesson, entry.content);
-    if (overlap > 0.7) return true;
+    if (overlap > threshold) return true;
   }
 
   return false;
+}
+
+/**
+ * Run a command, streaming stdout/stderr to the terminal in real time.
+ * Returns: { exitCode, stderr }.
+ */
+export function runWatched(command: string): Promise<{ exitCode: number; stderr: string }> {
+  return new Promise((resolve) => {
+    // Use shell: true so the command string is handled by the shell as-is
+    const child = spawn(command, { shell: true, stdio: ['inherit', 'inherit', 'pipe'] });
+
+    const stderrChunks: Buffer[] = [];
+
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderrChunks.push(chunk);
+      // Also pass through to terminal
+      process.stderr.write(chunk);
+    });
+
+    child.on('close', (code: number | null) => {
+      resolve({
+        exitCode: code ?? 1,
+        stderr: Buffer.concat(stderrChunks).toString('utf8'),
+      });
+    });
+
+    child.on('error', (err: Error) => {
+      resolve({ exitCode: 1, stderr: err.message });
+    });
+  });
+}
+
+/**
+ * Fetch recent git log lines (subject lines only).
+ * days: how many days of history to include.
+ */
+export function fetchGitLog(cwd: string, days: number): string {
+  try {
+    const since = `--since="${days} days ago"`;
+    const raw = execSync(
+      `git log ${since} --pretty=format:"%s" 2>&1`,
+      { encoding: 'utf8', cwd, timeout: 10000 }
+    );
+    return raw;
+  } catch {
+    return '';
+  }
 }

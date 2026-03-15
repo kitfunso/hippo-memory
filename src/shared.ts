@@ -1,98 +1,114 @@
 /**
- * Cross-agent shared memory via a global ~/.hippo store.
- * Zero required dependencies.
+ * Cross-agent shared memory for Hippo.
+ * Global store at ~/.hippo/ is shared across all projects.
+ * Local .hippo/ stores are per-project.
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { MemoryEntry } from './memory.js';
-import { initStore, loadAllEntries, readEntry, writeEntry } from './store.js';
+import { MemoryEntry, generateId } from './memory.js';
+import {
+  initStore,
+  loadAllEntries,
+  loadIndex,
+  writeEntry,
+  readEntry,
+} from './store.js';
 import { search, SearchResult } from './search.js';
 
-// ---------------------------------------------------------------------------
-// Global root
-// ---------------------------------------------------------------------------
-
+/**
+ * Returns the path to the global Hippo store: ~/.hippo/
+ */
 export function getGlobalRoot(): string {
   return path.join(os.homedir(), '.hippo');
 }
 
+/**
+ * Ensure the global store exists.
+ */
 export function initGlobal(): void {
-  initStore(getGlobalRoot());
+  const globalRoot = getGlobalRoot();
+  if (!fs.existsSync(globalRoot)) {
+    initStore(globalRoot);
+  } else {
+    // Ensure subdirectories exist in case partially initialized
+    initStore(globalRoot);
+  }
 }
 
-// ---------------------------------------------------------------------------
-// promoteToGlobal
-// ---------------------------------------------------------------------------
-
 /**
- * Copy a local memory entry into the global store.
- * The entry keeps its original ID - callers should detect conflicts.
+ * Copy a local memory entry to the global store.
+ * Assigns a new ID (prefixed with 'g_') to avoid collisions.
+ * Returns the new global entry.
  */
 export function promoteToGlobal(localRoot: string, id: string): MemoryEntry {
   const entry = readEntry(localRoot, id);
-  if (!entry) throw new Error(`Memory not found in local store: ${id}`);
+  if (!entry) throw new Error(`Memory not found: ${id}`);
 
+  initGlobal();
   const globalRoot = getGlobalRoot();
-  if (!fs.existsSync(globalRoot)) initGlobal();
 
-  writeEntry(globalRoot, entry);
-  return entry;
+  // Mint a new ID for the global store
+  const globalEntry: MemoryEntry = {
+    ...entry,
+    id: generateId('g'),
+    source: `promoted:${localRoot}`,
+  };
+
+  writeEntry(globalRoot, globalEntry);
+  return globalEntry;
 }
 
-// ---------------------------------------------------------------------------
-// searchBoth
-// ---------------------------------------------------------------------------
+export interface SearchOptions {
+  budget?: number;
+  now?: Date;
+}
 
 /**
- * Search both local and global stores.
- * Local results are boosted by 1.2x to prefer project-specific memories.
- * Returns a merged list sorted by score descending, respecting token budget.
+ * Search across both local and global stores, merging results.
+ * Local results are boosted by 1.2x to prefer project-specific context.
+ * Returns results sorted by adjusted score, within combined token budget.
  */
 export function searchBoth(
   query: string,
   localRoot: string,
   globalRoot: string,
-  options: { budget?: number; now?: Date } = {}
+  options: SearchOptions = {}
 ): SearchResult[] {
-  const budget = options.budget ?? 4000;
-  const now = options.now ?? new Date();
+  const { budget = 4000, now = new Date() } = options;
 
   const localEntries = fs.existsSync(localRoot) ? loadAllEntries(localRoot) : [];
   const globalEntries = fs.existsSync(globalRoot) ? loadAllEntries(globalRoot) : [];
 
-  // Tag global entries so callers can distinguish them later
-  const taggedGlobal = globalEntries.map((e) => ({ ...e, source: `global:${e.source}` }));
+  if (localEntries.length === 0 && globalEntries.length === 0) return [];
 
-  const localResults = search(query, localEntries, { budget, now }).map((r) => ({
-    ...r,
-    score: r.score * 1.2,
-    isGlobal: false,
-  }));
+  // Search each store with full budget, then blend
+  const localResults = search(query, localEntries, { budget, now });
+  const globalResults = search(query, globalEntries, { budget, now });
 
-  const globalResults = search(query, taggedGlobal, { budget, now }).map((r) => ({
-    ...r,
-    isGlobal: true,
-  }));
+  // Tag global results
+  const tagged: Array<SearchResult & { isGlobal: boolean }> = [
+    ...localResults.map((r) => ({ ...r, isGlobal: false, score: r.score * 1.2 })),
+    ...globalResults.map((r) => ({ ...r, isGlobal: true })),
+  ];
 
-  // Merge, deduplicate by ID (local wins), sort by score
+  // Remove duplicates: if same ID appears in both, keep the local (higher weight) one
   const seen = new Set<string>();
-  const merged: Array<SearchResult & { isGlobal: boolean }> = [];
-
-  for (const r of [...localResults, ...globalResults]) {
-    if (seen.has(r.entry.id)) continue;
+  const deduped = tagged.filter((r) => {
+    if (seen.has(r.entry.id)) return false;
     seen.add(r.entry.id);
-    merged.push(r);
-  }
+    return true;
+  });
 
-  merged.sort((a, b) => b.score - a.score);
+  // Sort by adjusted score descending
+  deduped.sort((a, b) => b.score - a.score);
 
-  // Respect token budget across merged set
-  const results: Array<SearchResult & { isGlobal: boolean }> = [];
+  // Apply combined token budget
+  const results: typeof deduped = [];
   let usedTokens = 0;
 
-  for (const r of merged) {
+  for (const r of deduped) {
     if (usedTokens + r.tokens > budget) continue;
     results.push(r);
     usedTokens += r.tokens;
@@ -101,28 +117,25 @@ export function searchBoth(
   return results;
 }
 
-// ---------------------------------------------------------------------------
-// syncGlobalToLocal
-// ---------------------------------------------------------------------------
-
 /**
- * Pull all entries from global store into local store.
- * Skips entries already present in local (by ID).
+ * Copy all global memories into the local store.
+ * Skips entries that already exist locally (by ID or by near-identical content).
  * Returns the count of newly copied entries.
  */
 export function syncGlobalToLocal(localRoot: string, globalRoot: string): number {
   if (!fs.existsSync(globalRoot)) return 0;
 
   const globalEntries = loadAllEntries(globalRoot);
-  const localEntries = loadAllEntries(localRoot);
-  const localIds = new Set(localEntries.map((e) => e.id));
+  const localIndex = loadIndex(localRoot);
+  let count = 0;
 
-  let copied = 0;
   for (const entry of globalEntries) {
-    if (localIds.has(entry.id)) continue;
+    // Skip if already present by ID
+    if (localIndex.entries[entry.id]) continue;
+
     writeEntry(localRoot, entry);
-    copied++;
+    count++;
   }
 
-  return copied;
+  return count;
 }
