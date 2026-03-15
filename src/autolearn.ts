@@ -18,12 +18,14 @@ export function captureError(
   command: string
 ): MemoryEntry {
   // Truncate to first 500 chars to avoid storing megabytes of build logs
+  const wasTruncated = stderr.length > 500;
   const truncated = stderr.slice(0, 500).trim();
-  const content = `Command '${command}' failed (exit ${exitCode}): ${truncated}`;
+  const suffix = wasTruncated ? ' [truncated]' : '';
+  const content = `Command '${command}' failed (exit ${exitCode}): ${truncated}${suffix}`;
 
   // Derive a sanitized tag from the command name (first word, strip path)
   const cmdBase = command.trim().split(/\s+/)[0].replace(/[^a-zA-Z0-9-]/g, '');
-  const tags = ['error'];
+  const tags = ['error', 'autolearn'];
   if (cmdBase) tags.push(cmdBase.toLowerCase().slice(0, 30));
 
   return createMemory(content, {
@@ -42,8 +44,11 @@ export function extractLessons(gitLog: string): string[] {
   const lines = gitLog.split('\n');
 
   // Patterns that indicate a lesson to learn from
+  // Handle git log formats: "abc1234 fix: message" or "Fix broken thing"
   const patterns = [
-    /^(fix|revert|bug|error|hotfix)(\(.+?\))?:\s*(.+)/i,
+    /^[a-f0-9]+\s+(fix|revert|bug|error|hotfix|bugfix)(\(.+?\))?:?\s+(.+)/i,
+    /^(fix|revert|bug|error|hotfix|bugfix)(\(.+?\))?:?\s+(.+)/i,
+    /^(Fix|Revert|Bug|Hotfix|Bugfix)\s+(.+)/,
     /\b(fixed|reverted|corrected|resolved)\b.{3,100}/i,
   ];
 
@@ -53,11 +58,14 @@ export function extractLessons(gitLog: string): string[] {
       continue;
     }
 
+    // Strip leading git hash if present (real hashes are hex, but be lenient with alphanumeric prefixes)
+    const subject = trimmed.replace(/^[a-z0-9]{6,40}\s+/i, '');
+
     for (const pat of patterns) {
-      const m = trimmed.match(pat);
+      const m = subject.match(pat);
       if (m) {
-        // For conventional commits: use the full subject line (group 3 or full match)
-        const lesson = (m[3] ?? m[0]).trim();
+        // For conventional commits: use group 3 (message after prefix), group 2, or full match
+        const lesson = (m[3] ?? m[2] ?? m[0]).trim();
         if (lesson.length > 5 && lesson.length < 500) {
           lessons.push(lesson);
         }

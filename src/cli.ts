@@ -3,19 +3,24 @@
  * Hippo CLI  - biologically-inspired memory system for AI agents.
  *
  * Commands:
- *   hippo init
- *   hippo remember <text> [--tag <t>] [--error] [--pin]
+ *   hippo init [--global]
+ *   hippo remember <text> [--tag <t>] [--error] [--pin] [--global]
  *   hippo recall <query> [--budget <n>] [--json]
  *   hippo sleep [--dry-run]
  *   hippo status
  *   hippo outcome --good | --bad [--id <id>]
  *   hippo forget <id>
  *   hippo inspect <id>
+ *   hippo embed [--status]
+ *   hippo watch "<command>"
+ *   hippo learn --git [--days <n>]
+ *   hippo promote <id>
+ *   hippo sync
  */
 
 import * as path from 'path';
 import * as fs from 'fs';
-import { execSync, spawn } from 'child_process';
+import { execSync } from 'child_process';
 import {
   createMemory,
   calculateStrength,
@@ -36,9 +41,21 @@ import {
   loadStats,
   updateStats,
 } from './store.js';
-import { search, markRetrieved, estimateTokens } from './search.js';
+import { search, markRetrieved, estimateTokens, hybridSearch } from './search.js';
 import { consolidate } from './consolidate.js';
-import { captureError, extractLessons, deduplicateLesson } from './autolearn.js';
+import {
+  isEmbeddingAvailable,
+  embedAll,
+  embedMemory,
+  loadEmbeddingIndex,
+} from './embeddings.js';
+import {
+  captureError,
+  extractLessons,
+  deduplicateLesson,
+  runWatched,
+  fetchGitLog,
+} from './autolearn.js';
 import {
   getGlobalRoot,
   initGlobal,
@@ -46,8 +63,6 @@ import {
   searchBoth,
   syncGlobalToLocal,
 } from './shared.js';
-import { isEmbeddingAvailable, embedAll, loadEmbeddingIndex } from './embeddings.js';
-import { loadConfig } from './config.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -55,7 +70,7 @@ import { loadConfig } from './config.js';
 
 function requireInit(hippoRoot: string): void {
   if (!isInitialized(hippoRoot)) {
-    console.error('❌ No .hippo directory found. Run `hippo init` first.');
+    console.error('No .hippo directory found. Run `hippo init` first.');
     process.exit(1);
   }
 }
@@ -110,20 +125,20 @@ function cmdInit(hippoRoot: string, flags: Record<string, string | boolean | str
   if (flags['global']) {
     const globalRoot = getGlobalRoot();
     if (isInitialized(globalRoot)) {
-      console.log('✅ Global store already initialized at', globalRoot);
-    } else {
-      initGlobal();
-      console.log('🌐 Initialized global Hippo store at', globalRoot);
+      console.log('Already initialized global store at', globalRoot);
+      return;
     }
+    initGlobal();
+    console.log('Initialized global Hippo store at', globalRoot);
     return;
   }
 
   if (isInitialized(hippoRoot)) {
-    console.log('✅ Already initialized at', hippoRoot);
+    console.log('Already initialized at', hippoRoot);
     return;
   }
   initStore(hippoRoot);
-  console.log('🦛 Initialized Hippo at', hippoRoot);
+  console.log('Initialized Hippo at', hippoRoot);
   console.log('   Directories: buffer/ episodic/ semantic/ conflicts/');
   console.log('   Files: index.json stats.json');
 }
@@ -137,7 +152,7 @@ function cmdRemember(
   const targetRoot = useGlobal ? getGlobalRoot() : hippoRoot;
 
   if (useGlobal) {
-    if (!isInitialized(targetRoot)) initGlobal();
+    initGlobal();
   } else {
     requireInit(hippoRoot);
   }
@@ -149,23 +164,23 @@ function cmdRemember(
     layer: Layer.Episodic,
     tags: rawTags,
     pinned: Boolean(flags['pin']),
-    source: 'cli',
+    source: useGlobal ? 'cli-global' : 'cli',
   });
 
   writeEntry(targetRoot, entry);
   updateStats(targetRoot, { remembered: 1 });
 
-  console.log(`${useGlobal ? '🌐' : '✅'} Remembered [${entry.id}]${useGlobal ? ' (global)' : ''}`);
+  const prefix = useGlobal ? '[global] ' : '';
+  console.log(`${prefix}Remembered [${entry.id}]`);
   console.log(`   Layer: ${entry.layer} | Strength: ${fmt(entry.strength)} | Half-life: ${entry.half_life_days}d`);
   if (entry.tags.length > 0) console.log(`   Tags: ${entry.tags.join(', ')}`);
-  if (entry.pinned) console.log('   📌 Pinned (no decay)');
+  if (entry.pinned) console.log('   Pinned (no decay)');
 
-  // Auto-embed if available (fire and forget)
-  const config = isInitialized(targetRoot) ? loadConfig(targetRoot) : null;
-  if (config?.embeddings?.enabled) {
-    import('./embeddings.js').then(({ embedMemory }) => {
-      embedMemory(targetRoot, entry).catch(() => { /* silent */ });
-    }).catch(() => { /* silent */ });
+  // Auto-embed if available
+  if (isEmbeddingAvailable()) {
+    embedMemory(targetRoot, entry).catch(() => {
+      // Silently ignore embedding errors
+    });
   }
 }
 
@@ -180,24 +195,39 @@ function cmdRecall(
   const asJson = Boolean(flags['json']);
   const globalRoot = getGlobalRoot();
 
-  // Search local + global (if global store exists)
-  const rawResults = searchBoth(query, hippoRoot, globalRoot, { budget });
-  const results = rawResults as Array<typeof rawResults[0] & { isGlobal?: boolean }>;
+  const localEntries = loadAllEntries(hippoRoot);
+  const globalEntries = isInitialized(globalRoot) ? loadAllEntries(globalRoot) : [];
+
+  const hasGlobal = globalEntries.length > 0;
+
+  let results;
+  if (hasGlobal) {
+    // Use searchBoth for merged results
+    const merged = searchBoth(query, hippoRoot, globalRoot, { budget });
+    results = merged;
+  } else {
+    results = search(query, localEntries, { budget });
+  }
 
   if (results.length === 0) {
     if (asJson) {
       console.log(JSON.stringify({ query, results: [], total: 0 }));
     } else {
-      console.log('🔍 No memories found for:', query);
+      console.log('No memories found for:', query);
     }
     return;
   }
 
-  // Update retrieval metadata and persist (local entries only)
-  const localEntries = results.filter((r) => !r.isGlobal).map((r) => r.entry);
-  const updated = markRetrieved(localEntries);
-  for (const u of updated) writeEntry(hippoRoot, u);
+  // Update retrieval metadata and persist
+  const updated = markRetrieved(results.map((r) => r.entry));
+  for (const u of updated) {
+    // Determine which store this entry belongs to
+    const localIndex = loadIndex(hippoRoot);
+    const targetRoot = localIndex.entries[u.id] ? hippoRoot : (isInitialized(globalRoot) ? globalRoot : hippoRoot);
+    writeEntry(targetRoot, u);
+  }
 
+  // Track last retrieval IDs for outcome command
   const index = loadIndex(hippoRoot);
   index.last_retrieval_ids = updated.map((u) => u.id);
   saveIndex(hippoRoot, index);
@@ -212,21 +242,19 @@ function cmdRecall(
       tokens: r.tokens,
       tags: r.entry.tags,
       content: r.entry.content,
-      global: Boolean(r.isGlobal),
     }));
     console.log(JSON.stringify({ query, budget, results: output, total: output.length }));
     return;
   }
 
   const totalTokens = results.reduce((sum, r) => sum + r.tokens, 0);
-  console.log(`🔍 Found ${results.length} memories (${totalTokens} tokens) for: "${query}"\n`);
+  console.log(`Found ${results.length} memories (${totalTokens} tokens) for: "${query}"\n`);
 
   for (const r of results) {
     const e = r.entry;
-    const isGlobal = Boolean(r.isGlobal);
-    const strengthBar = '█'.repeat(Math.round(e.strength * 10)) + '░'.repeat(10 - Math.round(e.strength * 10));
-    const prefix = isGlobal ? '[global] ' : '';
-    console.log(`━━━ ${prefix}${e.id} [${e.layer}] score=${fmt(r.score, 3)} strength=${fmt(e.strength)}`);
+    const strengthBar = '\u2588'.repeat(Math.round(e.strength * 10)) + '\u2591'.repeat(10 - Math.round(e.strength * 10));
+    const globalMark = (isInitialized(globalRoot) && !loadIndex(hippoRoot).entries[e.id]) ? ' [global]' : '';
+    console.log(`--- ${e.id} [${e.layer}]${globalMark} score=${fmt(r.score, 3)} strength=${fmt(e.strength)}`);
     console.log(`    [${strengthBar}] tags: ${e.tags.join(', ') || 'none'} | retrieved: ${e.retrieval_count}x`);
     console.log();
     console.log(e.content);
@@ -241,18 +269,18 @@ function cmdSleep(
   requireInit(hippoRoot);
 
   const dryRun = Boolean(flags['dry-run']);
-  console.log(`💤 Running consolidation${dryRun ? ' (dry run)' : ''}...`);
+  console.log(`Running consolidation${dryRun ? ' (dry run)' : ''}...`);
 
   const result = consolidate(hippoRoot, { dryRun });
 
-  console.log(`\n📊 Results:`);
+  console.log(`\nResults:`);
   console.log(`   Active memories:  ${result.decayed}`);
   console.log(`   Removed (decayed): ${result.removed}`);
   console.log(`   Merged episodic:   ${result.merged}`);
   console.log(`   New semantic:      ${result.semanticCreated}`);
 
   if (result.details.length > 0) {
-    console.log('\n📝 Details:');
+    console.log('\nDetails:');
     for (const d of result.details) {
       console.log(d);
     }
@@ -288,8 +316,8 @@ function cmdStatus(hippoRoot: string): void {
 
   const avgStrength = entries.length > 0 ? totalStrength / entries.length : 0;
 
-  console.log('🦛 Hippo Status');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('Hippo Status');
+  console.log('---------------------------');
   console.log(`Total memories:    ${entries.length}`);
   console.log(`  Buffer:          ${byLayer[Layer.Buffer]}`);
   console.log(`  Episodic:        ${byLayer[Layer.Episodic]}`);
@@ -309,6 +337,16 @@ function cmdStatus(hippoRoot: string): void {
   } else {
     console.log(`Last sleep:        never`);
   }
+
+  // Embedding status
+  const embAvail = isEmbeddingAvailable();
+  console.log('');
+  console.log(`Embeddings:        ${embAvail ? 'available' : 'not installed (BM25 only)'}`);
+  if (embAvail) {
+    const embIndex = loadEmbeddingIndex(hippoRoot);
+    const embCount = Object.keys(embIndex).length;
+    console.log(`Embedded:          ${embCount}/${entries.length} memories`);
+  }
 }
 
 function cmdOutcome(
@@ -321,7 +359,7 @@ function cmdOutcome(
   const bad = Boolean(flags['bad']);
 
   if (!good && !bad) {
-    console.error('❌ Specify --good or --bad');
+    console.error('Specify --good or --bad');
     process.exit(1);
   }
 
@@ -331,7 +369,7 @@ function cmdOutcome(
   const ids = specificId ? [specificId] : index.last_retrieval_ids;
 
   if (ids.length === 0) {
-    console.log('ℹ️  No recent recall to apply outcome to. Use --id <id> to target a specific memory.');
+    console.log('No recent recall to apply outcome to. Use --id <id> to target a specific memory.');
     return;
   }
 
@@ -344,7 +382,7 @@ function cmdOutcome(
     updated++;
   }
 
-  console.log(`${good ? '👍' : '👎'} Applied ${good ? 'positive' : 'negative'} outcome to ${updated} memor${updated === 1 ? 'y' : 'ies'}`);
+  console.log(`Applied ${good ? 'positive' : 'negative'} outcome to ${updated} memor${updated === 1 ? 'y' : 'ies'}`);
 }
 
 function cmdForget(hippoRoot: string, id: string): void {
@@ -353,9 +391,9 @@ function cmdForget(hippoRoot: string, id: string): void {
   const ok = deleteEntry(hippoRoot, id);
   if (ok) {
     updateStats(hippoRoot, { forgotten: 1 });
-    console.log(`🗑  Forgot ${id}`);
+    console.log(`Forgot ${id}`);
   } else {
-    console.error(`❌ Memory not found: ${id}`);
+    console.error(`Memory not found: ${id}`);
     process.exit(1);
   }
 }
@@ -365,7 +403,7 @@ function cmdInspect(hippoRoot: string, id: string): void {
 
   const entry = readEntry(hippoRoot, id);
   if (!entry) {
-    console.error(`❌ Memory not found: ${id}`);
+    console.error(`Memory not found: ${id}`);
     process.exit(1);
   }
 
@@ -376,8 +414,8 @@ function cmdInspect(hippoRoot: string, id: string): void {
   const ageDays = (now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24);
   const daysSince = (now.getTime() - lastRetrieved.getTime()) / (1000 * 60 * 60 * 24);
 
-  console.log(`🔎 Memory: ${entry.id}`);
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log(`Memory: ${entry.id}`);
+  console.log('---------------------------');
   console.log(`Layer:            ${entry.layer}`);
   console.log(`Created:          ${entry.created} (${fmt(ageDays, 1)}d ago)`);
   console.log(`Last retrieved:   ${entry.last_retrieved} (${fmt(daysSince, 1)}d ago)`);
@@ -394,7 +432,7 @@ function cmdInspect(hippoRoot: string, id: string): void {
   }
   console.log('');
   console.log('Content:');
-  console.log('─'.repeat(40));
+  console.log('-'.repeat(40));
   console.log(entry.content);
 }
 
@@ -422,100 +460,114 @@ function cmdContext(
     query = '*';
   }
 
+  const globalRoot = getGlobalRoot();
+  const hasGlobal = isInitialized(globalRoot);
+  const localEntries = loadAllEntries(hippoRoot);
+  const globalEntries = hasGlobal ? loadAllEntries(globalRoot) : [];
+  const allEntries = [...localEntries];
+
+  if (allEntries.length === 0 && globalEntries.length === 0) return; // no memories, zero output
+
+  let selectedItems: Array<{ entry: MemoryEntry; score: number; tokens: number; isGlobal?: boolean }> = [];
+  let totalTokens = 0;
+
   if (query === '*') {
-    const entries = loadAllEntries(hippoRoot);
-    if (entries.length === 0) return; // no memories, zero output
     // No query: return strongest memories by strength, up to budget
     const now = new Date();
-    const ranked = entries
+    const localRanked = localEntries
       .map((e) => ({
         entry: e,
-        strength: calculateStrength(e, now),
+        score: calculateStrength(e, now),
         tokens: estimateTokens(e.content),
+        isGlobal: false,
       }))
-      .sort((a, b) => b.strength - a.strength);
+      .sort((a, b) => b.score - a.score);
 
-    const selected: typeof ranked = [];
+    const globalRanked = globalEntries
+      .map((e) => ({
+        entry: e,
+        score: calculateStrength(e, now) * (1 / 1.2), // global slightly lower
+        tokens: estimateTokens(e.content),
+        isGlobal: true,
+      }))
+      .sort((a, b) => b.score - a.score);
+
+    const combined = [...localRanked, ...globalRanked].sort((a, b) => b.score - a.score);
+
     let used = 0;
-    for (const r of ranked) {
+    for (const r of combined) {
       if (used + r.tokens > budget) continue;
-      selected.push(r);
+      selectedItems.push(r);
       used += r.tokens;
     }
-
-    if (selected.length === 0) return;
-
-    // Mark retrieved
-    const updated = markRetrieved(selected.map((s) => s.entry));
-    for (const u of updated) writeEntry(hippoRoot, u);
-
-    const index = loadIndex(hippoRoot);
-    index.last_retrieval_ids = updated.map((u) => u.id);
-    saveIndex(hippoRoot, index);
-    updateStats(hippoRoot, { recalled: selected.length });
-
-    const totalTokens = selected.reduce((sum, r) => sum + r.tokens, 0);
-    const format = String(flags['format'] ?? 'markdown');
-    if (format === 'json') {
-      const output = selected.map((r) => ({
-        id: r.entry.id,
-        strength: r.strength,
-        tags: r.entry.tags,
-        content: r.entry.content,
-      }));
-      console.log(JSON.stringify({ memories: output, tokens: totalTokens }));
-    } else {
-      printContextMarkdown(selected.map((r) => ({
-        entry: updated.find((u) => u.id === r.entry.id) ?? r.entry,
-        score: r.strength,
+    totalTokens = used;
+  } else {
+    let results;
+    if (hasGlobal) {
+      const merged = searchBoth(query, hippoRoot, globalRoot, { budget });
+      const localIndex = loadIndex(hippoRoot);
+      results = merged.map((r) => ({
+        entry: r.entry,
+        score: r.score,
         tokens: r.tokens,
-      })), totalTokens);
+        isGlobal: !localIndex.entries[r.entry.id],
+      }));
+    } else {
+      results = search(query, localEntries, { budget }).map((r) => ({
+        entry: r.entry,
+        score: r.score,
+        tokens: r.tokens,
+        isGlobal: false,
+      }));
     }
-    return;
+
+    selectedItems = results;
+    totalTokens = results.reduce((sum, r) => sum + r.tokens, 0);
   }
 
-  // Normal query-based recall: search local + global
-  const globalRoot = getGlobalRoot();
-  const rawResults = searchBoth(query, hippoRoot, globalRoot, { budget });
-  const queryResults = rawResults as Array<typeof rawResults[0] & { isGlobal?: boolean }>;
+  if (selectedItems.length === 0) return;
 
-  if (queryResults.length === 0) return; // no results, zero output
+  // Mark retrieved and persist
+  const toUpdate = selectedItems.map((s) => s.entry);
+  const updatedEntries = markRetrieved(toUpdate);
+  const localIndex = loadIndex(hippoRoot);
 
-  // Mark retrieved and persist (local only)
-  const localOnly = queryResults.filter((r) => !r.isGlobal).map((r) => r.entry);
-  const updated = markRetrieved(localOnly);
-  for (const u of updated) writeEntry(hippoRoot, u);
+  for (const u of updatedEntries) {
+    const targetRoot = localIndex.entries[u.id] ? hippoRoot : (hasGlobal ? globalRoot : hippoRoot);
+    writeEntry(targetRoot, u);
+  }
 
-  const index = loadIndex(hippoRoot);
-  index.last_retrieval_ids = updated.map((u) => u.id);
-  saveIndex(hippoRoot, index);
-  updateStats(hippoRoot, { recalled: queryResults.length });
+  localIndex.last_retrieval_ids = updatedEntries.map((u) => u.id);
+  saveIndex(hippoRoot, localIndex);
+  updateStats(hippoRoot, { recalled: selectedItems.length });
 
-  const totalTokens = queryResults.reduce((sum, r) => sum + r.tokens, 0);
   const format = String(flags['format'] ?? 'markdown');
 
   if (format === 'json') {
-    const output = queryResults.map((r) => ({
+    const output = selectedItems.map((r) => ({
       id: r.entry.id,
       score: r.score,
       strength: r.entry.strength,
       tags: r.entry.tags,
       content: r.entry.content,
-      global: Boolean(r.isGlobal),
+      global: r.isGlobal ?? false,
     }));
     console.log(JSON.stringify({ query, memories: output, tokens: totalTokens }));
   } else {
-    printContextMarkdown(queryResults.map((r) => ({
-      entry: updated.find((u) => u.id === r.entry.id) ?? r.entry,
-      score: r.score,
-      tokens: r.tokens,
-      isGlobal: Boolean(r.isGlobal),
-    })), totalTokens);
+    printContextMarkdown(
+      selectedItems.map((r) => ({
+        entry: updatedEntries.find((u) => u.id === r.entry.id) ?? r.entry,
+        score: r.score,
+        tokens: r.tokens,
+        isGlobal: r.isGlobal ?? false,
+      })),
+      totalTokens
+    );
   }
 }
 
 function printContextMarkdown(
-  items: Array<{ entry: MemoryEntry; score: number; tokens: number; isGlobal?: boolean }>,
+  items: Array<{ entry: MemoryEntry; score: number; tokens: number; isGlobal: boolean }>,
   totalTokens: number
 ): void {
   console.log(`## Project Memory (${items.length} entries, ${totalTokens} tokens)\n`);
@@ -560,6 +612,177 @@ function autoDetectContext(): string {
   }
 
   return '';
+}
+
+// ---------------------------------------------------------------------------
+// Embed command
+// ---------------------------------------------------------------------------
+
+async function cmdEmbed(
+  hippoRoot: string,
+  flags: Record<string, string | boolean | string[]>
+): Promise<void> {
+  requireInit(hippoRoot);
+
+  if (!isEmbeddingAvailable()) {
+    console.log('Embeddings not available. Install @xenova/transformers to enable:');
+    console.log('  npm install @xenova/transformers');
+    return;
+  }
+
+  if (flags['status']) {
+    const entries = loadAllEntries(hippoRoot);
+    const embIndex = loadEmbeddingIndex(hippoRoot);
+    const embCount = Object.keys(embIndex).length;
+    console.log(`Embedding status: ${embCount}/${entries.length} memories embedded`);
+    const missing = entries.filter((e) => !embIndex[e.id]);
+    if (missing.length > 0) {
+      console.log(`  ${missing.length} memories need embedding (run \`hippo embed\` to embed them)`);
+    }
+    return;
+  }
+
+  console.log('Embedding all memories (this may take a moment on first run to download model)...');
+  const count = await embedAll(hippoRoot);
+  const entries = loadAllEntries(hippoRoot);
+  const embIndex = loadEmbeddingIndex(hippoRoot);
+  console.log(`Done. ${count} new embeddings created. ${Object.keys(embIndex).length}/${entries.length} total.`);
+}
+
+// ---------------------------------------------------------------------------
+// Watch command
+// ---------------------------------------------------------------------------
+
+async function cmdWatch(command: string, hippoRoot: string): Promise<void> {
+  if (!command) {
+    console.error('Usage: hippo watch "<command>"');
+    process.exit(1);
+  }
+
+  const { exitCode, stderr } = await runWatched(command);
+
+  if (exitCode === 0) {
+    // Success: no noise
+    return;
+  }
+
+  // Only create memory if hippo is initialized
+  if (!isInitialized(hippoRoot)) {
+    console.error('Command failed but .hippo not initialized. Run `hippo init` to enable auto-learn.');
+    process.exit(exitCode);
+  }
+
+  const entry = captureError(exitCode, stderr, command);
+  writeEntry(hippoRoot, entry);
+  updateStats(hippoRoot, { remembered: 1 });
+
+  if (isEmbeddingAvailable()) {
+    embedMemory(hippoRoot, entry).catch(() => {});
+  }
+
+  const preview = stderr.trim().slice(0, 80);
+  console.error(`\nHippo learned from failure: "${preview}"`);
+
+  process.exit(exitCode);
+}
+
+// ---------------------------------------------------------------------------
+// Learn command
+// ---------------------------------------------------------------------------
+
+function cmdLearn(
+  hippoRoot: string,
+  flags: Record<string, string | boolean | string[]>
+): void {
+  requireInit(hippoRoot);
+
+  if (!flags['git']) {
+    console.error('Usage: hippo learn --git [--days <n>]');
+    process.exit(1);
+  }
+
+  const days = parseInt(String(flags['days'] ?? '7'), 10);
+  const cwd = process.cwd();
+
+  console.log(`Scanning git log for the last ${days} days...`);
+
+  const gitLog = fetchGitLog(cwd, days);
+  if (!gitLog.trim()) {
+    console.log('No git history found (or not a git repository).');
+    return;
+  }
+
+  const lessons = extractLessons(gitLog);
+  if (lessons.length === 0) {
+    console.log('No fix/revert/bug commits found in the specified period.');
+    return;
+  }
+
+  let added = 0;
+  let skipped = 0;
+
+  for (const lesson of lessons) {
+    if (deduplicateLesson(hippoRoot, lesson)) {
+      skipped++;
+      continue;
+    }
+
+    const entry = createMemory(lesson, {
+      layer: Layer.Episodic,
+      tags: ['error', 'git-learned'],
+      source: 'git-learn',
+    });
+
+    writeEntry(hippoRoot, entry);
+    updateStats(hippoRoot, { remembered: 1 });
+
+    if (isEmbeddingAvailable()) {
+      embedMemory(hippoRoot, entry).catch(() => {});
+    }
+
+    added++;
+  }
+
+  console.log(`Git learn complete: ${added} new lessons added, ${skipped} duplicates skipped.`);
+}
+
+// ---------------------------------------------------------------------------
+// Promote command
+// ---------------------------------------------------------------------------
+
+function cmdPromote(hippoRoot: string, id: string): void {
+  requireInit(hippoRoot);
+
+  if (!id) {
+    console.error('Usage: hippo promote <id>');
+    process.exit(1);
+  }
+
+  try {
+    const globalEntry = promoteToGlobal(hippoRoot, id);
+    console.log(`Promoted ${id} to global store as ${globalEntry.id}`);
+    console.log(`   Global store: ${getGlobalRoot()}`);
+  } catch (err) {
+    console.error(`Failed to promote: ${(err as Error).message}`);
+    process.exit(1);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Sync command
+// ---------------------------------------------------------------------------
+
+function cmdSync(hippoRoot: string): void {
+  requireInit(hippoRoot);
+
+  const globalRoot = getGlobalRoot();
+  if (!isInitialized(globalRoot)) {
+    console.log('No global store found. Run `hippo init --global` first.');
+    return;
+  }
+
+  const count = syncGlobalToLocal(hippoRoot, globalRoot);
+  console.log(`Synced ${count} global memories into local project.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -669,7 +892,7 @@ function cmdHook(
   if (subcommand === 'list') {
     console.log('Available hooks:\n');
     for (const [name, hook] of Object.entries(HOOKS)) {
-      console.log(`  ${name.padEnd(15)} → ${hook.file} (${hook.description})`);
+      console.log(`  ${name.padEnd(15)} -> ${hook.file} (${hook.description})`);
     }
     console.log('\nUsage: hippo hook install <name>');
     console.log('       hippo hook uninstall <name>');
@@ -678,7 +901,7 @@ function cmdHook(
 
   if (subcommand === 'install') {
     if (!target || !HOOKS[target]) {
-      console.error(`❌ Unknown hook target: ${target ?? '(none)'}`);
+      console.error(`Unknown hook target: ${target ?? '(none)'}`);
       console.error(`   Available: ${Object.keys(HOOKS).join(', ')}`);
       process.exit(1);
     }
@@ -702,17 +925,17 @@ function cmdHook(
         );
         const updated = existing.replace(re, block);
         fs.writeFileSync(filepath, updated, 'utf8');
-        console.log(`🔄 Updated Hippo hook in ${hook.file}`);
+        console.log(`Updated Hippo hook in ${hook.file}`);
       } else {
         // Append
         const sep = existing.endsWith('\n') ? '\n' : '\n\n';
         fs.writeFileSync(filepath, existing + sep + block + '\n', 'utf8');
-        console.log(`✅ Installed Hippo hook in ${hook.file} (appended)`);
+        console.log(`Installed Hippo hook in ${hook.file} (appended)`);
       }
     } else {
       // Create new file
       fs.writeFileSync(filepath, block + '\n', 'utf8');
-      console.log(`✅ Created ${hook.file} with Hippo hook`);
+      console.log(`Created ${hook.file} with Hippo hook`);
     }
 
     return;
@@ -720,7 +943,7 @@ function cmdHook(
 
   if (subcommand === 'uninstall') {
     if (!target || !HOOKS[target]) {
-      console.error(`❌ Unknown hook target: ${target ?? '(none)'}`);
+      console.error(`Unknown hook target: ${target ?? '(none)'}`);
       process.exit(1);
     }
 
@@ -728,13 +951,13 @@ function cmdHook(
     const filepath = path.resolve(process.cwd(), hook.file);
 
     if (!fs.existsSync(filepath)) {
-      console.log(`ℹ️  ${hook.file} not found, nothing to uninstall.`);
+      console.log(`${hook.file} not found, nothing to uninstall.`);
       return;
     }
 
     const existing = fs.readFileSync(filepath, 'utf8');
     if (!existing.includes(HOOK_MARKERS.start)) {
-      console.log(`ℹ️  No Hippo hook found in ${hook.file}.`);
+      console.log(`No Hippo hook found in ${hook.file}.`);
       return;
     }
 
@@ -744,11 +967,11 @@ function cmdHook(
     );
     const cleaned = existing.replace(re, '\n').replace(/\n{3,}/g, '\n\n').trim();
     fs.writeFileSync(filepath, cleaned + '\n', 'utf8');
-    console.log(`🗑  Removed Hippo hook from ${hook.file}`);
+    console.log(`Removed Hippo hook from ${hook.file}`);
     return;
   }
 
-  console.error('❌ Usage: hippo hook <install|uninstall|list> [target]');
+  console.error('Usage: hippo hook <install|uninstall|list> [target]');
   process.exit(1);
 }
 
@@ -756,195 +979,20 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-// ---------------------------------------------------------------------------
-// New v0.2.0 commands
-// ---------------------------------------------------------------------------
-
-/**
- * hippo watch "<command>" - run a command, auto-learn from failure.
- */
-async function cmdWatch(hippoRoot: string, cmdArgs: string[]): Promise<void> {
-  requireInit(hippoRoot);
-
-  const command = cmdArgs.join(' ').trim();
-  if (!command) {
-    console.error('❌ Please provide a command to watch.');
-    process.exit(1);
-  }
-
-  console.log(`👁  Watching: ${command}`);
-
-  await new Promise<void>((resolve) => {
-    const child = spawn(command, [], {
-      shell: true,
-      stdio: ['inherit', 'pipe', 'pipe'],
-    });
-
-    let stderrBuf = '';
-    let stdoutBuf = '';
-
-    child.stdout?.on('data', (chunk: Buffer) => {
-      const text = chunk.toString();
-      process.stdout.write(text);
-      stdoutBuf += text;
-    });
-
-    child.stderr?.on('data', (chunk: Buffer) => {
-      const text = chunk.toString();
-      process.stderr.write(text);
-      stderrBuf += text;
-    });
-
-    child.on('close', (code) => {
-      const exitCode = code ?? 1;
-      if (exitCode !== 0) {
-        const combined = (stderrBuf || stdoutBuf).slice(0, 500);
-        const entry = captureError(exitCode, combined, command);
-        writeEntry(hippoRoot, entry);
-        updateStats(hippoRoot, { remembered: 1 });
-
-        const preview = entry.content.replace(/\n/g, ' ').slice(0, 80);
-        console.error(`\nLearned from failure: "${preview}"`);
-      }
-      resolve();
-    });
-  });
-}
-
-/**
- * hippo learn --git [--days N] - scan git log, extract lessons, dedup, remember.
- */
-function cmdLearnGit(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
-  requireInit(hippoRoot);
-
-  const days = parseInt(String(flags['days'] ?? '7'), 10);
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-
-  let gitLog = '';
-  try {
-    gitLog = execSync(`git log --oneline --no-merges --since="${since}"`, {
-      encoding: 'utf8',
-      timeout: 5000,
-    }).trim();
-  } catch {
-    console.error('❌ Could not run git log. Are you in a git repo?');
-    process.exit(1);
-  }
-
-  if (!gitLog) {
-    console.log(`ℹ️  No commits in the last ${days} days.`);
-    return;
-  }
-
-  const lessons = extractLessons(gitLog);
-
-  if (lessons.length === 0) {
-    console.log('ℹ️  No fix/revert/bug commits found.');
-    return;
-  }
-
-  let added = 0;
-  let skipped = 0;
-
-  for (const lesson of lessons) {
-    if (deduplicateLesson(hippoRoot, lesson)) {
-      skipped++;
-      continue;
-    }
-
-    const entry = createMemory(lesson, {
-      layer: Layer.Episodic,
-      tags: ['error', 'git', 'autolearn'],
-      emotional_valence: 'negative',
-      source: 'git',
-    });
-
-    writeEntry(hippoRoot, entry);
-    updateStats(hippoRoot, { remembered: 1 });
-    added++;
-    console.log(`+ [${entry.id}] ${lesson.slice(0, 100)}`);
-  }
-
-  console.log(`\nAdded ${added} lesson(s), skipped ${skipped} duplicate(s) from last ${days} days.`);
-}
-
-/**
- * hippo promote <id> - copy local memory to global store.
- */
-function cmdPromote(hippoRoot: string, id: string): void {
-  requireInit(hippoRoot);
-
-  try {
-    const entry = promoteToGlobal(hippoRoot, id);
-    console.log(`🌐 Promoted [${entry.id}] to global store (${getGlobalRoot()})`);
-  } catch (err) {
-    console.error(`❌ ${(err as Error).message}`);
-    process.exit(1);
-  }
-}
-
-/**
- * hippo sync - pull global memories into local.
- */
-function cmdSync(hippoRoot: string): void {
-  requireInit(hippoRoot);
-
-  const globalRoot = getGlobalRoot();
-  if (!isInitialized(globalRoot)) {
-    console.log('ℹ️  No global store found. Run `hippo init --global` first.');
-    return;
-  }
-
-  const count = syncGlobalToLocal(hippoRoot, globalRoot);
-  if (count === 0) {
-    console.log('✅ Already in sync - no new global memories.');
-  } else {
-    console.log(`📥 Synced ${count} memor${count === 1 ? 'y' : 'ies'} from global store.`);
-  }
-}
-
-/**
- * hippo embed [--status] - embed all memories or show embedding status.
- */
-async function cmdEmbed(hippoRoot: string, flags: Record<string, string | boolean | string[]>): Promise<void> {
-  requireInit(hippoRoot);
-
-  if (flags['status']) {
-    const entries = loadAllEntries(hippoRoot);
-    const index = loadEmbeddingIndex(hippoRoot);
-    const embedded = entries.filter((e) => index[e.id]).length;
-    const available = await isEmbeddingAvailable();
-    console.log(`Embedding status:`);
-    console.log(`  Available: ${available ? 'yes (@xenova/transformers)' : 'no (install @xenova/transformers)'}`);
-    console.log(`  Embedded:  ${embedded} / ${entries.length}`);
-    return;
-  }
-
-  const available = await isEmbeddingAvailable();
-  if (!available) {
-    console.error('❌ @xenova/transformers not installed. Run: npm install @xenova/transformers');
-    process.exit(1);
-  }
-
-  console.log('Embedding memories...');
-  const count = await embedAll(hippoRoot);
-  console.log(`✅ Embedded ${count} new memor${count === 1 ? 'y' : 'ies'}.`);
-}
-
 function printUsage(): void {
   console.log(`
-🦛 Hippo - biologically-inspired memory system for AI agents
+Hippo - biologically-inspired memory system for AI agents
 
 Usage: hippo <command> [options]
 
 Commands:
   init                     Create .hippo/ structure in current directory
-    --global               Init global store at ~/.hippo/
+    --global               Init the global store at ~/.hippo/
   remember <text>          Store a memory
     --tag <tag>            Add a tag (repeatable)
     --error                Tag as error (boosts retention)
     --pin                  Pin memory (never decays)
-    --global               Store in global store
+    --global               Store in global ~/.hippo/ store
   recall <query>           Search and retrieve memories (local + global)
     --budget <n>           Token budget (default: 4000)
     --json                 Output as JSON
@@ -961,30 +1009,29 @@ Commands:
     --id <id>              Target a specific memory
   forget <id>              Force remove a memory
   inspect <id>             Show full memory detail
+  embed                    Embed all memories for semantic search
+    --status               Show embedding coverage
+  watch "<command>"        Run command, auto-learn from failures
+  learn                    Learn lessons from repository history
+    --git                  Scan recent git commits for lessons
+    --days <n>             Scan this many days back (default: 7)
+  promote <id>             Copy a local memory to the global store
+  sync                     Pull global memories into local project
   hook <sub> [target]      Manage framework integrations
     hook list              Show available hooks
     hook install <target>  Install hook (claude-code|codex|cursor|openclaw)
     hook uninstall <target> Remove hook
-  watch "<cmd>"            Run command, auto-learn from failure
-  learn --git              Scan git log for fix/bug commits, auto-remember
-    --days <n>             How many days back (default: 7)
-  promote <id>             Copy local memory to global store
-  sync                     Pull global memories into local
-  embed                    Embed all memories for semantic search
-    --status               Show embedding coverage
 
 Examples:
   hippo init
-  hippo init --global
   hippo remember "FRED cache can silently drop series" --tag error
-  hippo remember "cross-project lesson" --global
   hippo recall "data pipeline issues" --budget 2000
   hippo context --auto --budget 1500
-  hippo watch "npm test"
+  hippo embed --status
+  hippo watch "npm run build"
   hippo learn --git --days 30
   hippo promote mem_abc123
   hippo sync
-  hippo embed --status
   hippo hook install claude-code
   hippo sleep --dry-run
   hippo outcome --good
@@ -999,117 +1046,115 @@ Examples:
 const { command, args, flags } = parseArgs(process.argv);
 const hippoRoot = getHippoRoot(process.cwd());
 
-switch (command) {
-  case 'init':
-    cmdInit(hippoRoot, flags);
-    break;
+async function main(): Promise<void> {
+  switch (command) {
+    case 'init':
+      cmdInit(hippoRoot, flags);
+      break;
 
-  case 'remember': {
-    const text = args.join(' ').trim();
-    if (!text) {
-      console.error('❌ Please provide text to remember.');
-      process.exit(1);
+    case 'remember': {
+      const text = args.join(' ').trim();
+      if (!text) {
+        console.error('Please provide text to remember.');
+        process.exit(1);
+      }
+      cmdRemember(hippoRoot, text, flags);
+      break;
     }
-    cmdRemember(hippoRoot, text, flags);
-    break;
+
+    case 'recall': {
+      const query = args.join(' ').trim();
+      if (!query) {
+        console.error('Please provide a search query.');
+        process.exit(1);
+      }
+      cmdRecall(hippoRoot, query, flags);
+      break;
+    }
+
+    case 'sleep':
+      cmdSleep(hippoRoot, flags);
+      break;
+
+    case 'status':
+      cmdStatus(hippoRoot);
+      break;
+
+    case 'outcome':
+      cmdOutcome(hippoRoot, flags);
+      break;
+
+    case 'forget': {
+      const id = args[0];
+      if (!id) {
+        console.error('Please provide a memory ID.');
+        process.exit(1);
+      }
+      cmdForget(hippoRoot, id);
+      break;
+    }
+
+    case 'inspect': {
+      const id = args[0];
+      if (!id) {
+        console.error('Please provide a memory ID.');
+        process.exit(1);
+      }
+      cmdInspect(hippoRoot, id);
+      break;
+    }
+
+    case 'context':
+      cmdContext(hippoRoot, args, flags);
+      break;
+
+    case 'hook':
+      cmdHook(args, flags);
+      break;
+
+    case 'embed':
+      await cmdEmbed(hippoRoot, flags);
+      break;
+
+    case 'watch': {
+      const watchCmd = args.join(' ').trim();
+      await cmdWatch(watchCmd, hippoRoot);
+      break;
+    }
+
+    case 'learn':
+      cmdLearn(hippoRoot, flags);
+      break;
+
+    case 'promote': {
+      const id = args[0];
+      if (!id) {
+        console.error('Please provide a memory ID.');
+        process.exit(1);
+      }
+      cmdPromote(hippoRoot, id);
+      break;
+    }
+
+    case 'sync':
+      cmdSync(hippoRoot);
+      break;
+
+    case 'help':
+    case '--help':
+    case '-h':
+    case '':
+      printUsage();
+      break;
+
+    default:
+      console.error(`Unknown command: ${command}`);
+      printUsage();
+      process.exit(1);
   }
-
-  case 'recall': {
-    const query = args.join(' ').trim();
-    if (!query) {
-      console.error('❌ Please provide a search query.');
-      process.exit(1);
-    }
-    cmdRecall(hippoRoot, query, flags);
-    break;
-  }
-
-  case 'sleep':
-    cmdSleep(hippoRoot, flags);
-    break;
-
-  case 'status':
-    cmdStatus(hippoRoot);
-    break;
-
-  case 'outcome':
-    cmdOutcome(hippoRoot, flags);
-    break;
-
-  case 'forget': {
-    const id = args[0];
-    if (!id) {
-      console.error('❌ Please provide a memory ID.');
-      process.exit(1);
-    }
-    cmdForget(hippoRoot, id);
-    break;
-  }
-
-  case 'inspect': {
-    const id = args[0];
-    if (!id) {
-      console.error('❌ Please provide a memory ID.');
-      process.exit(1);
-    }
-    cmdInspect(hippoRoot, id);
-    break;
-  }
-
-  case 'context':
-    cmdContext(hippoRoot, args, flags);
-    break;
-
-  case 'hook':
-    cmdHook(args, flags);
-    break;
-
-  case 'watch':
-    cmdWatch(hippoRoot, args).catch((err) => {
-      console.error('❌ Watch failed:', err);
-      process.exit(1);
-    });
-    break;
-
-  case 'learn':
-    if (flags['git']) {
-      cmdLearnGit(hippoRoot, flags);
-    } else {
-      console.error('❌ Only --git is supported for `learn` currently.');
-      process.exit(1);
-    }
-    break;
-
-  case 'promote': {
-    const id = args[0];
-    if (!id) {
-      console.error('❌ Please provide a memory ID to promote.');
-      process.exit(1);
-    }
-    cmdPromote(hippoRoot, id);
-    break;
-  }
-
-  case 'sync':
-    cmdSync(hippoRoot);
-    break;
-
-  case 'embed':
-    cmdEmbed(hippoRoot, flags).catch((err) => {
-      console.error('❌ Embed failed:', err);
-      process.exit(1);
-    });
-    break;
-
-  case 'help':
-  case '--help':
-  case '-h':
-  case '':
-    printUsage();
-    break;
-
-  default:
-    console.error(`❌ Unknown command: ${command}`);
-    printUsage();
-    process.exit(1);
 }
+
+main().catch((err) => {
+  console.error('Error:', err.message ?? err);
+  process.exit(1);
+});

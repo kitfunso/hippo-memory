@@ -1,19 +1,13 @@
 /**
- * Hippo public API - re-exports for programmatic use.
+ * Hippo public API  - re-exports for programmatic use.
  */
 
 export { MemoryEntry, Layer, EmotionalValence, calculateStrength, createMemory, applyOutcome, generateId } from './memory.js';
 export { search, hybridSearch, markRetrieved, estimateTokens, textOverlap, SearchResult } from './search.js';
 export { initStore, loadAllEntries, writeEntry, readEntry, deleteEntry, loadIndex, rebuildIndex } from './store.js';
 export { consolidate, ConsolidationResult } from './consolidate.js';
-export { captureError, extractLessons, deduplicateLesson } from './autolearn.js';
-export {
-  getGlobalRoot,
-  initGlobal,
-  promoteToGlobal,
-  searchBoth,
-  syncGlobalToLocal,
-} from './shared.js';
+
+// Feature 1: Embedding search
 export {
   isEmbeddingAvailable,
   getEmbedding,
@@ -23,4 +17,21 @@ export {
   embedMemory,
   embedAll,
 } from './embeddings.js';
-export { loadConfig, saveConfig, HippoConfig } from './config.js';
+
+// Feature 2: Auto-learn from errors
+export {
+  captureError,
+  extractLessons,
+  deduplicateLesson,
+  runWatched,
+  fetchGitLog,
+} from './autolearn.js';
+
+// Feature 3: Cross-agent shared memory
+export {
+  getGlobalRoot,
+  initGlobal,
+  promoteToGlobal,
+  searchBoth,
+  syncGlobalToLocal,
+} from './shared.js';

@@ -1,7 +1,6 @@
 /**
- * BM25 search + strength-ranked retrieval for Hippo.
- * Optional hybrid mode: BM25 + embedding cosine similarity.
- * Zero required dependencies - implemented from scratch.
+ * BM25 search + optional embedding hybrid search for Hippo.
+ * Zero external dependencies when embeddings are not available.
  */
 
 import { MemoryEntry, calculateStrength } from './memory.js';
@@ -116,17 +115,122 @@ export interface SearchResult {
 }
 
 /**
+ * Hybrid search: BM25 + cosine similarity (when embeddings are available).
+ * score = 0.4 * bm25_norm + 0.6 * cosine_sim  (with embeddings)
+ * score = bm25_norm * strength * recency        (BM25-only fallback)
+ *
+ * embeddingWeight: weight for the cosine similarity component (0.0 to 1.0).
+ */
+export async function hybridSearch(
+  query: string,
+  entries: MemoryEntry[],
+  options: {
+    budget?: number;
+    now?: Date;
+    hippoRoot?: string;
+    embeddingWeight?: number;
+  } = {}
+): Promise<SearchResult[]> {
+  const now = options.now ?? new Date();
+  const budget = options.budget ?? 4000;
+  const embeddingWeight = options.embeddingWeight ?? 0.6;
+  const bm25Weight = 1 - embeddingWeight;
+
+  if (entries.length === 0) return [];
+
+  const queryTerms = tokenize(query);
+  if (queryTerms.length === 0) return [];
+
+  // Build BM25 corpus
+  const texts = entries.map((e) => `${e.content} ${e.tags.join(' ')}`);
+  const corpus = buildCorpus(texts);
+
+  // Score all entries with BM25
+  const bm25Scores: number[] = entries.map((_, i) => bm25Score(corpus, i, queryTerms));
+  const maxBm25 = Math.max(...bm25Scores, 1e-9);
+
+  // Try to get embedding scores if available
+  let useEmbeddings = false;
+  let embeddingIndex: Record<string, number[]> = {};
+  let queryVector: number[] = [];
+
+  if (isEmbeddingAvailable() && options.hippoRoot) {
+    try {
+      queryVector = await getEmbedding(query);
+      if (queryVector.length > 0) {
+        embeddingIndex = loadEmbeddingIndex(options.hippoRoot);
+        useEmbeddings = true;
+      }
+    } catch {
+      // Fall through to BM25-only
+    }
+  }
+
+  // Score each entry
+  const scored: SearchResult[] = [];
+
+  for (let i = 0; i < entries.length; i++) {
+    const rawBm25 = bm25Scores[i];
+
+    if (!useEmbeddings && rawBm25 <= 0) continue;
+
+    const normBm25 = rawBm25 / maxBm25;
+    const strength = calculateStrength(entries[i], now);
+    const recency = recencyBoost(entries[i], now);
+
+    let compositeScore: number;
+
+    if (useEmbeddings) {
+      const cached = embeddingIndex[entries[i].id];
+      const cosine = cached && queryVector.length > 0
+        ? cosineSimilarity(queryVector, cached)
+        : 0;
+
+      // Hybrid: weighted blend, then modulated by strength and recency
+      const hybrid = bm25Weight * normBm25 + embeddingWeight * Math.max(0, cosine);
+      compositeScore = hybrid * (0.5 + 0.5 * strength) * (0.8 + 0.2 * recency);
+    } else {
+      // Pure BM25 path: identical to original behavior
+      const normQ = queryTerms.length > 0 ? rawBm25 / queryTerms.length : rawBm25;
+      compositeScore = normQ * (0.5 + 0.5 * strength) * (0.8 + 0.2 * recency);
+    }
+
+    if (compositeScore <= 0) continue;
+
+    const tokens = estimateTokens(entries[i].content);
+    scored.push({ entry: entries[i], score: compositeScore, bm25: rawBm25, tokens });
+  }
+
+  // Sort by composite score descending
+  scored.sort((a, b) => b.score - a.score);
+
+  // Apply token budget
+  const results: SearchResult[] = [];
+  let usedTokens = 0;
+
+  for (const result of scored) {
+    if (usedTokens + result.tokens > budget) continue;
+    results.push(result);
+    usedTokens += result.tokens;
+  }
+
+  return results;
+}
+
+/**
  * Search entries using BM25 + strength + recency composite score.
+ * When embeddings are available and hippoRoot is provided, uses hybrid scoring.
  * Returns results sorted by score, capped at token budget.
  *
- * Pass hippoRoot + hybridWeight to enable hybrid BM25/embedding scoring.
- * Synchronous. For async hybrid, use hybridSearch() directly.
+ * Also updates retrieval metadata on returned entries (side effect: caller
+ * must persist the updated entries).
  */
 export function search(
   query: string,
   entries: MemoryEntry[],
-  options: { budget?: number; now?: Date; hippoRoot?: string; hybridWeight?: number } = {}
+  options: { budget?: number; now?: Date; hippoRoot?: string } = {}
 ): SearchResult[] {
+  // Synchronous path: BM25 only (no async hybrid)
   const now = options.now ?? new Date();
   const budget = options.budget ?? 4000;
 
@@ -208,100 +312,4 @@ export function textOverlap(a: string, b: string): number {
 
   const union = setA.size + setB.size - intersection;
   return intersection / union;
-}
-
-// ---------------------------------------------------------------------------
-// Hybrid search (BM25 + embeddings)
-// ---------------------------------------------------------------------------
-
-/**
- * Hybrid search: score = 0.4 * bm25_norm + 0.6 * cosine_sim
- * Falls back to BM25-only if embeddings are unavailable or hippoRoot is unset.
- *
- * hybridWeight controls the cosine share (default 0.6).
- */
-export async function hybridSearch(
-  query: string,
-  entries: MemoryEntry[],
-  options: { budget?: number; now?: Date; hippoRoot?: string; hybridWeight?: number } = {}
-): Promise<SearchResult[]> {
-  const available = options.hippoRoot ? await isEmbeddingAvailable() : false;
-
-  if (!available || !options.hippoRoot) {
-    // Pure BM25 path
-    return search(query, entries, options);
-  }
-
-  const hybridWeight = options.hybridWeight ?? 0.6;
-  const bm25Weight = 1 - hybridWeight;
-
-  const now = options.now ?? new Date();
-  const budget = options.budget ?? 4000;
-
-  if (entries.length === 0) return [];
-
-  const queryTerms = tokenize(query);
-  if (queryTerms.length === 0) return [];
-
-  // --- BM25 scores ---
-  const texts = entries.map((e) => `${e.content} ${e.tags.join(' ')}`);
-  const corpus = buildCorpus(texts);
-
-  const bm25Scores: number[] = [];
-  let maxBm25 = 0;
-
-  for (let i = 0; i < entries.length; i++) {
-    const s = bm25Score(corpus, i, queryTerms);
-    bm25Scores.push(s);
-    if (s > maxBm25) maxBm25 = s;
-  }
-
-  // --- Cosine scores from cached embeddings ---
-  const index = loadEmbeddingIndex(options.hippoRoot);
-  let queryVec: number[] | null = null;
-
-  try {
-    queryVec = await getEmbedding(query);
-  } catch {
-    // Embedding failed - fall back to BM25-only
-    return search(query, entries, options);
-  }
-
-  const scored: SearchResult[] = [];
-
-  for (let i = 0; i < entries.length; i++) {
-    const bm25Raw = bm25Scores[i];
-    const bm25Norm = maxBm25 > 0 ? bm25Raw / maxBm25 : 0;
-
-    const entryVec = index[entries[i].id] ?? null;
-    const cosine = entryVec && queryVec ? cosineSimilarity(queryVec, entryVec) : 0;
-
-    // Skip entries with zero relevance in both signals
-    if (bm25Norm === 0 && cosine === 0) continue;
-
-    const hybridScore = bm25Weight * bm25Norm + hybridWeight * cosine;
-
-    const strength = calculateStrength(entries[i], now);
-    const recency = Math.exp(
-      -(now.getTime() - new Date(entries[i].created).getTime()) / (1000 * 60 * 60 * 24 * 30)
-    );
-
-    const composite = hybridScore * (0.5 + 0.5 * strength) * (0.8 + 0.2 * recency);
-    const tokens = estimateTokens(entries[i].content);
-
-    scored.push({ entry: entries[i], score: composite, bm25: bm25Raw, tokens });
-  }
-
-  scored.sort((a, b) => b.score - a.score);
-
-  const results: SearchResult[] = [];
-  let usedTokens = 0;
-
-  for (const r of scored) {
-    if (usedTokens + r.tokens > budget) continue;
-    results.push(r);
-    usedTokens += r.tokens;
-  }
-
-  return results;
 }

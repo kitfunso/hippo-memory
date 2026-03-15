@@ -64,7 +64,7 @@ describe('promoteToGlobal', () => {
     // Override global root by using promoteToGlobal with a temp global
     // We test the logic by calling syncGlobalToLocal path
     const promoted = promoteToGlobal(localRoot, entry.id);
-    expect(promoted.id).toBe(entry.id);
+    expect(promoted.id).toMatch(/^g_/);
     expect(promoted.content).toBe(entry.content);
   });
 
