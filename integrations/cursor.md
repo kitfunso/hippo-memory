@@ -57,8 +57,8 @@ Then start remembering.
 ## Setup
 
 1. Install Hippo globally: `npm install -g hippo-memory`
-2. In your project root: `hippo init`
-3. Add the `.cursorrules` snippet above
+2. In your project root: `hippo init` (auto-detects `.cursorrules` and patches it)
+3. Or manually add the `.cursorrules` snippet above
 4. Optionally add `.hippo/` to `.gitignore` if you don't want to track memory in git (or commit it to share memory with your team)
 
 ## Token budget guidance

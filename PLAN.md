@@ -232,21 +232,32 @@ Runs as `hippo sleep` (manually or via cron). Steps:
 
 Ship the smallest thing that demonstrates the core insight (decay + retrieval strengthening).
 
-### In:
-- [ ] `hippo init`
-- [ ] `hippo remember <text>` (with auto-tagging: error/success/neutral)
-- [ ] `hippo recall <query> --budget N` (BM25 search, strength-ranked)
-- [ ] `hippo sleep` (decay pass + basic merge)
-- [ ] `hippo status`
-- [ ] `hippo outcome --good/--bad`
-- [ ] Strength formula with decay + retrieval boost
-- [ ] Markdown storage, git-friendly
-- [ ] Zero external dependencies mode (BM25, no embeddings)
+### In (all shipped):
+- [x] `hippo init` (with auto-hook detection for claude-code, codex, cursor, openclaw)
+- [x] `hippo remember <text>` (with auto-tagging: error/success/neutral)
+- [x] `hippo recall <query> --budget N` (BM25 search, strength-ranked)
+- [x] `hippo sleep` (decay pass + basic merge)
+- [x] `hippo status`
+- [x] `hippo outcome --good/--bad`
+- [x] Strength formula with decay + retrieval boost
+- [x] Markdown storage, git-friendly
+- [x] Zero external dependencies mode (BM25, no embeddings)
+
+### Shipped since v0.1:
+- [x] Cross-tool import (ChatGPT, Claude, Cursor, markdown, any text file)
+- [x] Conversation capture (pattern-based, no LLM needed)
+- [x] Confidence tiers (verified, observed, inferred, stale)
+- [x] Observation framing (observe, suggest, assert)
+- [x] `hippo learn --git` (auto-learn from commit history)
+- [x] `hippo learn --git --repos` (multi-repo scanning)
+- [x] `hippo watch` (auto-learn from command failures)
+- [x] `hippo context --auto` (smart context injection from git state)
+- [x] `hippo init` auto-detects and installs framework hooks
+- [x] Framework integrations: Claude Code, Codex, Cursor, OpenClaw
 
 ### Out (v0.2+):
 - [ ] Embedding-based search (optional, needs model)
 - [ ] MCP server
-- [ ] Framework-specific integrations
 - [ ] Schema acceleration
 - [ ] Conflict detection
 - [ ] Web UI / dashboard

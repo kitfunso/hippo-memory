@@ -75,6 +75,18 @@ hippo status
 
 ---
 
+## Auto-install (recommended)
+
+If your project already has a `CLAUDE.md`, just run:
+
+```bash
+hippo init
+```
+
+Hippo auto-detects Claude Code and patches `CLAUDE.md` with the hook block above. No copy-paste needed.
+
+To skip auto-detection: `hippo init --no-hooks`
+
 ## Notes
 
 - Hippo stores everything in `.hippo/` in your project root. It's markdown on disk. Commit it or gitignore it, your call.
