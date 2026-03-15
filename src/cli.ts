@@ -24,9 +24,11 @@ import { execSync } from 'child_process';
 import {
   createMemory,
   calculateStrength,
+  resolveConfidence,
   applyOutcome,
   Layer,
   MemoryEntry,
+  ConfidenceLevel,
 } from './memory.js';
 import {
   getHippoRoot,
@@ -63,6 +65,14 @@ import {
   searchBoth,
   syncGlobalToLocal,
 } from './shared.js';
+import {
+  importChatGPT,
+  importClaude,
+  importCursor,
+  importGenericFile,
+  importMarkdown,
+  ImportOptions,
+} from './importers.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -160,11 +170,18 @@ function cmdRemember(
   const rawTags: string[] = Array.isArray(flags['tag']) ? flags['tag'] as string[] : [];
   if (flags['error']) rawTags.push('error');
 
+  // Resolve explicit confidence flag (default: 'verified' for manual remember)
+  let confidence: ConfidenceLevel = 'verified';
+  if (flags['observed']) confidence = 'observed';
+  if (flags['inferred']) confidence = 'inferred';
+  if (flags['verified']) confidence = 'verified';
+
   const entry = createMemory(text, {
     layer: Layer.Episodic,
     tags: rawTags,
     pinned: Boolean(flags['pin']),
     source: useGlobal ? 'cli-global' : 'cli',
+    confidence,
   });
 
   writeEntry(targetRoot, entry);
@@ -172,7 +189,7 @@ function cmdRemember(
 
   const prefix = useGlobal ? '[global] ' : '';
   console.log(`${prefix}Remembered [${entry.id}]`);
-  console.log(`   Layer: ${entry.layer} | Strength: ${fmt(entry.strength)} | Half-life: ${entry.half_life_days}d`);
+  console.log(`   Layer: ${entry.layer} | Strength: ${fmt(entry.strength)} | Half-life: ${entry.half_life_days}d | Confidence: ${entry.confidence}`);
   if (entry.tags.length > 0) console.log(`   Tags: ${entry.tags.join(', ')}`);
   if (entry.pinned) console.log('   Pinned (no decay)');
 
@@ -252,9 +269,11 @@ function cmdRecall(
 
   for (const r of results) {
     const e = r.entry;
+    const conf = resolveConfidence(e);
+    const confLabel = conf === 'stale' || conf === 'inferred' ? `[${conf}] \u26A0\uFE0F` : `[${conf}]`;
     const strengthBar = '\u2588'.repeat(Math.round(e.strength * 10)) + '\u2591'.repeat(10 - Math.round(e.strength * 10));
     const globalMark = (isInitialized(globalRoot) && !loadIndex(hippoRoot).entries[e.id]) ? ' [global]' : '';
-    console.log(`--- ${e.id} [${e.layer}]${globalMark} score=${fmt(r.score, 3)} strength=${fmt(e.strength)}`);
+    console.log(`--- ${e.id} [${e.layer}] ${confLabel}${globalMark} score=${fmt(r.score, 3)} strength=${fmt(e.strength)}`);
     console.log(`    [${strengthBar}] tags: ${e.tags.join(', ') || 'none'} | retrieved: ${e.retrieval_count}x`);
     console.log();
     console.log(e.content);
@@ -302,6 +321,13 @@ function cmdStatus(hippoRoot: string): void {
     [Layer.Semantic]: 0,
   };
 
+  const byConfidence: Record<string, number> = {
+    verified: 0,
+    observed: 0,
+    inferred: 0,
+    stale: 0,
+  };
+
   let totalStrength = 0;
   let pinned = 0;
   let atRisk = 0; // strength < 0.2
@@ -312,6 +338,8 @@ function cmdStatus(hippoRoot: string): void {
     totalStrength += s;
     if (e.pinned) pinned++;
     if (s < 0.2) atRisk++;
+    const conf = resolveConfidence(e, now);
+    byConfidence[conf] = (byConfidence[conf] ?? 0) + 1;
   }
 
   const avgStrength = entries.length > 0 ? totalStrength / entries.length : 0;
@@ -325,6 +353,12 @@ function cmdStatus(hippoRoot: string): void {
   console.log(`Pinned:            ${pinned}`);
   console.log(`At risk (<0.2):    ${atRisk}`);
   console.log(`Avg strength:      ${fmt(avgStrength)}`);
+  console.log('');
+  console.log('Confidence breakdown:');
+  console.log(`  Verified:        ${byConfidence['verified'] ?? 0}`);
+  console.log(`  Observed:        ${byConfidence['observed'] ?? 0}`);
+  console.log(`  Inferred:        ${byConfidence['inferred'] ?? 0}`);
+  console.log(`  Stale:           ${byConfidence['stale'] ?? 0}`);
   console.log('');
   console.log(`Total remembered:  ${(stats as Record<string,number>)['total_remembered'] ?? 0}`);
   console.log(`Total recalled:    ${(stats as Record<string,number>)['total_recalled'] ?? 0}`);
@@ -414,9 +448,12 @@ function cmdInspect(hippoRoot: string, id: string): void {
   const ageDays = (now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24);
   const daysSince = (now.getTime() - lastRetrieved.getTime()) / (1000 * 60 * 60 * 24);
 
+  const effectiveConfidence = resolveConfidence(entry, now);
+
   console.log(`Memory: ${entry.id}`);
   console.log('---------------------------');
   console.log(`Layer:            ${entry.layer}`);
+  console.log(`Confidence:       ${entry.confidence}${effectiveConfidence !== entry.confidence ? ` (effective: ${effectiveConfidence})` : ''}`);
   console.log(`Created:          ${entry.created} (${fmt(ageDays, 1)}d ago)`);
   console.log(`Last retrieved:   ${entry.last_retrieved} (${fmt(daysSince, 1)}d ago)`);
   console.log(`Retrieval count:  ${entry.retrieval_count}`);
@@ -543,12 +580,15 @@ function cmdContext(
 
   const format = String(flags['format'] ?? 'markdown');
 
+  const framing = String(flags['framing'] ?? 'observe');
+
   if (format === 'json') {
     const output = selectedItems.map((r) => ({
       id: r.entry.id,
       score: r.score,
       strength: r.entry.strength,
       tags: r.entry.tags,
+      confidence: r.entry.confidence,
       content: r.entry.content,
       global: r.isGlobal ?? false,
     }));
@@ -561,22 +601,44 @@ function cmdContext(
         tokens: r.tokens,
         isGlobal: r.isGlobal ?? false,
       })),
-      totalTokens
+      totalTokens,
+      framing
     );
   }
 }
 
 function printContextMarkdown(
   items: Array<{ entry: MemoryEntry; score: number; tokens: number; isGlobal: boolean }>,
-  totalTokens: number
+  totalTokens: number,
+  framing: string = 'observe'
 ): void {
+  const now = new Date();
   console.log(`## Project Memory (${items.length} entries, ${totalTokens} tokens)\n`);
   for (const item of items) {
     const e = item.entry;
     const tagStr = e.tags.length > 0 ? ` [${e.tags.join(', ')}]` : '';
     const strengthPct = Math.round(calculateStrength(e) * 100);
     const globalPrefix = item.isGlobal ? '[global] ' : '';
-    console.log(`- **${globalPrefix}${e.content}**${tagStr} (${strengthPct}%)`);
+    const effectiveConf = resolveConfidence(e, now);
+    const confWarning = (effectiveConf === 'stale' || effectiveConf === 'inferred') ? ' \u26A0\uFE0F' : '';
+    const confTag = `[${effectiveConf}]${confWarning}`;
+
+    if (framing === 'observe') {
+      const dateStr = new Date(e.created).toISOString().slice(0, 10);
+      if (effectiveConf === 'verified') {
+        // Verified: no date prefix, just the rule
+        console.log(`- **${confTag} ${globalPrefix}${e.content}**${tagStr} (${strengthPct}%)`);
+      } else if (effectiveConf === 'stale') {
+        console.log(`- **${confTag} Previously observed (${dateStr}): ${globalPrefix}${e.content}**${tagStr} (${strengthPct}%)`);
+      } else {
+        console.log(`- **${confTag} Previously observed (${dateStr}): ${globalPrefix}${e.content}**${tagStr} (${strengthPct}%)`);
+      }
+    } else if (framing === 'suggest') {
+      console.log(`- **${confTag} Consider checking: ${globalPrefix}${e.content}**${tagStr} (${strengthPct}%)`);
+    } else {
+      // framing === 'assert': no prefix (bare facts)
+      console.log(`- **${confTag} ${globalPrefix}${e.content}**${tagStr} (${strengthPct}%)`);
+    }
   }
 }
 
@@ -731,6 +793,7 @@ function cmdLearn(
       layer: Layer.Episodic,
       tags: ['error', 'git-learned'],
       source: 'git-learn',
+      confidence: 'observed',
     });
 
     writeEntry(hippoRoot, entry);
@@ -744,6 +807,104 @@ function cmdLearn(
   }
 
   console.log(`Git learn complete: ${added} new lessons added, ${skipped} duplicates skipped.`);
+}
+
+// ---------------------------------------------------------------------------
+// Import command
+// ---------------------------------------------------------------------------
+
+function cmdImport(
+  hippoRoot: string,
+  args: string[],
+  flags: Record<string, string | boolean | string[]>
+): void {
+  const useGlobal = Boolean(flags['global']);
+  const dryRun = Boolean(flags['dry-run']);
+  const extraTags: string[] = Array.isArray(flags['tag'])
+    ? (flags['tag'] as string[])
+    : flags['tag']
+      ? [String(flags['tag'])]
+      : [];
+
+  const targetRoot = useGlobal ? getGlobalRoot() : hippoRoot;
+
+  if (useGlobal) {
+    initGlobal();
+  } else {
+    requireInit(hippoRoot);
+  }
+
+  const importOptions: ImportOptions = {
+    dryRun,
+    global: useGlobal,
+    extraTags,
+    hippoRoot,
+  };
+
+  // Determine which importer to use based on flag
+  let filePath: string | undefined;
+  let importer: ((fp: string, opts: ImportOptions) => ReturnType<typeof importChatGPT>) | undefined;
+  let importerName = '';
+
+  if (flags['chatgpt']) {
+    filePath = String(flags['chatgpt']);
+    importer = importChatGPT;
+    importerName = 'ChatGPT';
+  } else if (flags['claude']) {
+    filePath = String(flags['claude']);
+    importer = importClaude;
+    importerName = 'Claude';
+  } else if (flags['cursor']) {
+    filePath = String(flags['cursor']);
+    importer = importCursor;
+    importerName = 'Cursor';
+  } else if (flags['file']) {
+    filePath = String(flags['file']);
+    importer = importGenericFile;
+    importerName = 'File';
+  } else if (flags['markdown']) {
+    filePath = String(flags['markdown']);
+    importer = importMarkdown;
+    importerName = 'Markdown';
+  } else if (args[0]) {
+    // Positional: try to auto-detect from extension
+    filePath = args[0];
+    importer = importGenericFile;
+    importerName = 'File';
+  }
+
+  if (!filePath || !importer) {
+    console.error('Usage: hippo import <--chatgpt|--claude|--cursor|--file|--markdown> <path>');
+    process.exit(1);
+  }
+
+  if (!fs.existsSync(filePath)) {
+    console.error(`File not found: ${filePath}`);
+    process.exit(1);
+  }
+
+  const result = importer(filePath, importOptions);
+
+  const storeLabel = useGlobal ? `global (~/.hippo/)` : targetRoot;
+
+  console.log(`\nImport ${importerName}: ${filePath}`);
+  console.log(`  Source entries found:  ${result.total}`);
+  console.log(`  Imported:              ${result.imported}`);
+  console.log(`  Skipped (dedup/noise): ${result.skipped}`);
+  if (dryRun) {
+    console.log('\n  (dry run - nothing written)');
+    if (result.entries.length > 0) {
+      console.log('\n  Would import:');
+      for (const e of result.entries.slice(0, 10)) {
+        console.log(`    - ${e.content.slice(0, 80)}`);
+      }
+      if (result.entries.length > 10) {
+        console.log(`    ... and ${result.entries.length - 10} more`);
+      }
+    }
+  } else {
+    console.log(`  Store:                 ${storeLabel}`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -814,6 +975,11 @@ hippo remember "<lesson>"
 When you hit an error or discover a gotcha:
 \`\`\`bash
 hippo remember "<what went wrong and why>" --error
+\`\`\`
+
+After significant discussions or decisions, capture context:
+\`\`\`bash
+hippo capture --stdin <<< 'summary of what was decided'
 \`\`\`
 
 After completing work successfully:
@@ -992,6 +1158,9 @@ Commands:
     --tag <tag>            Add a tag (repeatable)
     --error                Tag as error (boosts retention)
     --pin                  Pin memory (never decays)
+    --verified             Set confidence: verified (default)
+    --observed             Set confidence: observed
+    --inferred             Set confidence: inferred
     --global               Store in global ~/.hippo/ store
   recall <query>           Search and retrieve memories (local + global)
     --budget <n>           Token budget (default: 4000)
@@ -1000,6 +1169,7 @@ Commands:
     --auto                 Auto-detect task from git state
     --budget <n>           Token budget (default: 1500)
     --format <fmt>         Output format: markdown (default) or json
+    --framing <mode>       Framing: observe (default), suggest, assert
   sleep                    Run consolidation pass
     --dry-run              Preview without writing
   status                   Show memory health stats
@@ -1017,6 +1187,21 @@ Commands:
     --days <n>             Scan this many days back (default: 7)
   promote <id>             Copy a local memory to the global store
   sync                     Pull global memories into local project
+  import                   Import memories from other AI tools
+    --chatgpt <path>       Import from ChatGPT memory export (JSON or txt)
+    --claude <path>        Import from CLAUDE.md or Claude memory.json
+    --cursor <path>        Import from .cursorrules or .cursor/rules
+    --file <path>          Import from any markdown or text file
+    --markdown <path>      Import from structured MEMORY.md / AGENTS.md
+    --dry-run              Preview without writing
+    --global               Write to global store (~/.hippo/)
+    --tag <tag>            Add extra tag (repeatable)
+  capture                  Extract memories from conversation text
+    --stdin                Read from piped input
+    --file <path>          Read from a file
+    --last-session         (placeholder) Read from agent session logs
+    --dry-run              Preview without writing
+    --global               Write to global store (~/.hippo/)
   hook <sub> [target]      Manage framework integrations
     hook list              Show available hooks
     hook install <target>  Install hook (claude-code|codex|cursor|openclaw)
@@ -1139,6 +1324,53 @@ async function main(): Promise<void> {
     case 'sync':
       cmdSync(hippoRoot);
       break;
+
+    case 'import': {
+      // Determine format and file path from flags
+      let importFormat: ImportOptions['format'] | null = null;
+      let importFile = '';
+
+      if (flags['chatgpt']) { importFormat = 'chatgpt'; importFile = String(flags['chatgpt']); }
+      else if (flags['claude']) { importFormat = 'claude'; importFile = String(flags['claude']); }
+      else if (flags['cursor']) { importFormat = 'cursor'; importFile = String(flags['cursor']); }
+      else if (flags['markdown']) { importFormat = 'markdown'; importFile = String(flags['markdown']); }
+      else if (flags['file']) { importFormat = 'file'; importFile = String(flags['file']); }
+
+      if (!importFormat || !importFile) {
+        console.error('Usage: hippo import --chatgpt|--claude|--cursor|--file|--markdown <path> [--dry-run] [--global]');
+        process.exit(1);
+      }
+
+      cmdImport(hippoRoot, {
+        format: importFormat,
+        filePath: importFile,
+        dryRun: Boolean(flags['dry-run']),
+        global: Boolean(flags['global']),
+      });
+      break;
+    }
+
+    case 'capture': {
+      let captureSource: CaptureOptions['source'] | null = null;
+      let captureFile: string | undefined;
+
+      if (flags['stdin']) { captureSource = 'stdin'; }
+      else if (flags['file']) { captureSource = 'file'; captureFile = String(flags['file']); }
+      else if (flags['last-session']) { captureSource = 'last-session'; }
+
+      if (!captureSource) {
+        console.error('Usage: hippo capture --stdin|--file <path>|--last-session [--dry-run] [--global]');
+        process.exit(1);
+      }
+
+      cmdCapture(hippoRoot, {
+        source: captureSource,
+        filePath: captureFile,
+        dryRun: Boolean(flags['dry-run']),
+        global: Boolean(flags['global']),
+      });
+      break;
+    }
 
     case 'help':
     case '--help':

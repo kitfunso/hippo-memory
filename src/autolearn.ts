@@ -32,6 +32,7 @@ export function captureError(
     layer: Layer.Episodic,
     tags,
     source: 'autolearn',
+    confidence: 'observed',
   });
 }
 

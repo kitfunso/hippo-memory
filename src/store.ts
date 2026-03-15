@@ -6,7 +6,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { MemoryEntry, Layer, calculateStrength } from './memory.js';
+import { MemoryEntry, Layer, ConfidenceLevel, calculateStrength } from './memory.js';
 import { dumpFrontmatter, parseFrontmatter } from './yaml.js';
 
 export interface IndexEntry {
@@ -103,6 +103,7 @@ export function serializeEntry(entry: MemoryEntry): string {
     outcome_score: entry.outcome_score,
     conflicts_with: entry.conflicts_with,
     pinned: entry.pinned,
+    confidence: entry.confidence ?? 'observed',
   });
   return `${fm}\n\n${entry.content}\n`;
 }
@@ -130,6 +131,7 @@ export function deserializeEntry(raw: string): MemoryEntry | null {
     outcome_score: data['outcome_score'] === null ? null : Number(data['outcome_score']),
     conflicts_with: (data['conflicts_with'] as string[]) ?? [],
     pinned: Boolean(data['pinned'] ?? false),
+    confidence: (data['confidence'] as ConfidenceLevel) ?? 'observed',
     content: content.trim(),
   };
 }

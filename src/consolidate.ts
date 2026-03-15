@@ -115,6 +115,7 @@ export function consolidate(
         emotional_valence: maxValence,
         schema_fit: 0.7,
         source: 'consolidation',
+        confidence: 'inferred',
       });
       writeEntry(hippoRoot, semantic);
       result.semanticCreated++;

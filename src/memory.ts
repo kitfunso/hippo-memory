@@ -11,6 +11,8 @@ export enum Layer {
 
 export type EmotionalValence = 'neutral' | 'positive' | 'negative' | 'critical';
 
+export type ConfidenceLevel = 'verified' | 'observed' | 'inferred' | 'stale';
+
 export interface MemoryEntry {
   id: string;
   created: string;         // ISO 8601
@@ -26,6 +28,7 @@ export interface MemoryEntry {
   outcome_score: number | null;  // null = no feedback yet
   conflicts_with: string[];
   pinned: boolean;
+  confidence: ConfidenceLevel;  // epistemic confidence tier
   content: string;         // the actual memory text
 }
 
@@ -42,6 +45,9 @@ const EMOTIONAL_MULTIPLIERS: Record<EmotionalValence, number> = {
  * strength(t) = base_strength * decay * retrieval_boost * emotional_multiplier
  *
  * Pinned memories always return 1.0 (no decay).
+ *
+ * Side effect: if daysSince > 30 and confidence is not 'verified', the
+ * returned object should be treated as 'stale'. Use resolveConfidence() for that.
  */
 export function calculateStrength(entry: MemoryEntry, now: Date = new Date()): number {
   if (entry.pinned) return 1.0;
@@ -110,6 +116,21 @@ export function generateId(prefix: string = 'mem'): string {
 }
 
 /**
+ * Resolve the effective confidence for a memory entry.
+ * If the entry has not been retrieved in 30+ days and is not 'verified',
+ * returns 'stale'. Otherwise returns the stored confidence value.
+ */
+export function resolveConfidence(entry: MemoryEntry, now: Date = new Date()): ConfidenceLevel {
+  if (entry.pinned || entry.confidence === 'verified') return entry.confidence;
+
+  const lastRetrieved = new Date(entry.last_retrieved);
+  const daysSince = (now.getTime() - lastRetrieved.getTime()) / (1000 * 60 * 60 * 24);
+
+  if (daysSince > 30) return 'stale';
+  return entry.confidence;
+}
+
+/**
  * Create a new memory entry with defaults.
  */
 export function createMemory(
@@ -121,6 +142,7 @@ export function createMemory(
     pinned?: boolean;
     schema_fit?: number;
     source?: string;
+    confidence?: ConfidenceLevel;
   } = {}
 ): MemoryEntry {
   const now = new Date().toISOString();
@@ -147,6 +169,7 @@ export function createMemory(
     outcome_score: null,
     conflicts_with: [],
     pinned: options.pinned ?? false,
+    confidence: options.confidence ?? 'verified',
     content,
   };
 

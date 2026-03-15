@@ -2,7 +2,7 @@
  * Hippo public API  - re-exports for programmatic use.
  */
 
-export { MemoryEntry, Layer, EmotionalValence, calculateStrength, createMemory, applyOutcome, generateId } from './memory.js';
+export { MemoryEntry, Layer, EmotionalValence, ConfidenceLevel, calculateStrength, resolveConfidence, createMemory, applyOutcome, generateId } from './memory.js';
 export { search, hybridSearch, markRetrieved, estimateTokens, textOverlap, SearchResult } from './search.js';
 export { initStore, loadAllEntries, writeEntry, readEntry, deleteEntry, loadIndex, rebuildIndex } from './store.js';
 export { consolidate, ConsolidationResult } from './consolidate.js';
@@ -35,3 +35,15 @@ export {
   searchBoth,
   syncGlobalToLocal,
 } from './shared.js';
+
+// Feature 4: Memory importers
+export {
+  importChatGPT,
+  importClaude,
+  importCursor,
+  importGenericFile,
+  importMarkdown,
+  importEntries,
+  ImportResult,
+  ImportOptions,
+} from './importers.js';
