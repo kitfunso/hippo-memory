@@ -13,7 +13,7 @@
  *   hippo inspect <id>
  *   hippo embed [--status]
  *   hippo watch "<command>"
- *   hippo learn --git [--days <n>]
+ *   hippo learn --git [--days <n>] [--repos <paths>]
  *   hippo promote <id>
  *   hippo sync
  */
@@ -144,14 +144,75 @@ function cmdInit(hippoRoot: string, flags: Record<string, string | boolean | str
     return;
   }
 
-  if (isInitialized(hippoRoot)) {
+  const alreadyExists = isInitialized(hippoRoot);
+  if (alreadyExists) {
     console.log('Already initialized at', hippoRoot);
-    return;
+  } else {
+    initStore(hippoRoot);
+    console.log('Initialized Hippo at', hippoRoot);
+    console.log('   Directories: buffer/ episodic/ semantic/ conflicts/');
+    console.log('   Files: index.json stats.json');
   }
-  initStore(hippoRoot);
-  console.log('Initialized Hippo at', hippoRoot);
-  console.log('   Directories: buffer/ episodic/ semantic/ conflicts/');
-  console.log('   Files: index.json stats.json');
+
+  // Auto-detect and install hooks (unless --no-hooks)
+  if (!flags['no-hooks']) {
+    autoInstallHooks(alreadyExists);
+  }
+}
+
+/**
+ * Detect agent config files in cwd and auto-install hippo hooks.
+ * Skips files that already have a <!-- hippo:start --> block.
+ */
+function autoInstallHooks(quiet: boolean): void {
+  const cwd = process.cwd();
+
+  // Map: filename to check -> hook key(s) to install
+  const detectors: Array<{ files: string[]; hook: string }> = [
+    { files: ['CLAUDE.md', '.claude/settings.json'], hook: 'claude-code' },
+    { files: ['AGENTS.md', '.codex'], hook: 'codex' },
+    { files: ['.cursorrules', '.cursor/rules'], hook: 'cursor' },
+    { files: ['.openclaw', 'AGENTS.md'], hook: 'openclaw' },
+  ];
+
+  // Track which hook files we've already touched to avoid double-patching AGENTS.md
+  const installed = new Set<string>();
+
+  for (const { files, hook } of detectors) {
+    const hookDef = HOOKS[hook];
+    if (!hookDef) continue;
+
+    // Check if any marker file exists
+    const detected = files.some((f) => fs.existsSync(path.join(cwd, f)));
+    if (!detected) continue;
+
+    const targetPath = path.resolve(cwd, hookDef.file);
+
+    // Skip if we already installed a hook into this file
+    if (installed.has(targetPath)) continue;
+
+    // Skip if hook already present
+    if (fs.existsSync(targetPath)) {
+      const content = fs.readFileSync(targetPath, 'utf8');
+      if (content.includes(HOOK_MARKERS.start)) continue;
+    }
+
+    // Install the hook
+    const block = `${HOOK_MARKERS.start}\n${hookDef.content}\n${HOOK_MARKERS.end}`;
+
+    if (fs.existsSync(targetPath)) {
+      const existing = fs.readFileSync(targetPath, 'utf8');
+      const sep = existing.endsWith('\n') ? '\n' : '\n\n';
+      fs.writeFileSync(targetPath, existing + sep + block + '\n', 'utf8');
+    } else {
+      const dir = path.dirname(targetPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(targetPath, block + '\n', 'utf8');
+    }
+
+    installed.add(targetPath);
+    console.log(`   Auto-installed ${hook} hook in ${hookDef.file}`);
+  }
 }
 
 function cmdRemember(
@@ -753,32 +814,24 @@ async function cmdWatch(command: string, hippoRoot: string): Promise<void> {
 // Learn command
 // ---------------------------------------------------------------------------
 
-function cmdLearn(
+function learnFromRepo(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>
-): void {
-  requireInit(hippoRoot);
+  repoPath: string,
+  days: number,
+  label?: string
+): { added: number; skipped: number } {
+  const prefix = label ? `[${label}] ` : '';
 
-  if (!flags['git']) {
-    console.error('Usage: hippo learn --git [--days <n>]');
-    process.exit(1);
-  }
-
-  const days = parseInt(String(flags['days'] ?? '7'), 10);
-  const cwd = process.cwd();
-
-  console.log(`Scanning git log for the last ${days} days...`);
-
-  const gitLog = fetchGitLog(cwd, days);
+  const gitLog = fetchGitLog(repoPath, days);
   if (!gitLog.trim()) {
-    console.log('No git history found (or not a git repository).');
-    return;
+    console.log(`${prefix}No git history found (or not a git repository).`);
+    return { added: 0, skipped: 0 };
   }
 
   const lessons = extractLessons(gitLog);
   if (lessons.length === 0) {
-    console.log('No fix/revert/bug commits found in the specified period.');
-    return;
+    console.log(`${prefix}No fix/revert/bug commits found in the specified period.`);
+    return { added: 0, skipped: 0 };
   }
 
   let added = 0;
@@ -807,7 +860,43 @@ function cmdLearn(
     added++;
   }
 
-  console.log(`Git learn complete: ${added} new lessons added, ${skipped} duplicates skipped.`);
+  console.log(`${prefix}${added} new lessons added, ${skipped} duplicates skipped.`);
+  return { added, skipped };
+}
+
+function cmdLearn(
+  hippoRoot: string,
+  flags: Record<string, string | boolean | string[]>
+): void {
+  requireInit(hippoRoot);
+
+  if (!flags['git']) {
+    console.error('Usage: hippo learn --git [--days <n>] [--repos <paths>]');
+    process.exit(1);
+  }
+
+  const days = parseInt(String(flags['days'] ?? '7'), 10);
+
+  console.log(`Scanning git log for the last ${days} days...`);
+
+  const reposFlag = flags['repos'];
+  if (reposFlag && typeof reposFlag === 'string') {
+    const repos = reposFlag.split(',').map((r) => r.trim()).filter(Boolean);
+    let totalAdded = 0;
+    let totalSkipped = 0;
+
+    for (const repo of repos) {
+      const label = path.basename(repo);
+      const { added, skipped } = learnFromRepo(hippoRoot, repo, days, label);
+      totalAdded += added;
+      totalSkipped += skipped;
+    }
+
+    console.log(`Git learn complete: ${totalAdded} new lessons added, ${totalSkipped} duplicates skipped across ${repos.length} repos.`);
+  } else {
+    const { added, skipped } = learnFromRepo(hippoRoot, process.cwd(), days);
+    console.log(`Git learn complete: ${added} new lessons added, ${skipped} duplicates skipped.`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1026,24 +1115,30 @@ hippo outcome --good
 `.trim(),
   },
   'openclaw': {
-    file: '.openclaw/skills/hippo/SKILL.md',
+    file: 'AGENTS.md',
     description: 'OpenClaw',
     content: `
-# Hippo Memory Skill
+## Project Memory (Hippo)
 
-On session start, inject project memory:
+At the start of every session, run:
 \`\`\`bash
 hippo context --auto --budget 1500
 \`\`\`
+Read the output before writing any code.
 
-When an error occurs:
+On errors or unexpected behaviour:
 \`\`\`bash
-hippo remember "<error>" --error
+hippo remember "<description of what went wrong>" --error
 \`\`\`
 
-On session end:
+On task completion:
 \`\`\`bash
 hippo outcome --good
+\`\`\`
+
+After significant coding sessions:
+\`\`\`bash
+hippo learn --git
 \`\`\`
 `.trim(),
   },
@@ -1155,6 +1250,7 @@ Usage: hippo <command> [options]
 Commands:
   init                     Create .hippo/ structure in current directory
     --global               Init the global store at ~/.hippo/
+    --no-hooks             Skip auto-detecting and installing agent hooks
   remember <text>          Store a memory
     --tag <tag>            Add a tag (repeatable)
     --error                Tag as error (boosts retention)
@@ -1186,6 +1282,7 @@ Commands:
   learn                    Learn lessons from repository history
     --git                  Scan recent git commits for lessons
     --days <n>             Scan this many days back (default: 7)
+    --repos <paths>        Comma-separated repo paths to scan
   promote <id>             Copy a local memory to the global store
   sync                     Pull global memories into local project
   import                   Import memories from other AI tools

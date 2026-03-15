@@ -93,6 +93,60 @@ describe('extractLessons', () => {
   it('returns empty array for empty log', () => {
     expect(extractLessons('')).toEqual([]);
   });
+
+  it('extracts lessons from multi-repo combined output', () => {
+    // Simulate concatenated git logs from multiple repos
+    const repoALog = [
+      'aaa1111 fix: broken auth flow in login page',
+      'bbb2222 feat: add search bar',
+    ].join('\n');
+
+    const repoBLog = [
+      'ccc3333 hotfix: database connection pool exhaustion',
+      'ddd4444 chore: bump dependencies',
+      'eee5555 revert: rolled back bad migration',
+    ].join('\n');
+
+    const lessonsA = extractLessons(repoALog);
+    const lessonsB = extractLessons(repoBLog);
+
+    expect(lessonsA.length).toBe(1);
+    expect(lessonsA[0]).toContain('broken auth flow');
+
+    expect(lessonsB.length).toBe(2);
+    expect(lessonsB.some((l) => l.includes('connection pool'))).toBe(true);
+    expect(lessonsB.some((l) => l.includes('bad migration'))).toBe(true);
+
+    // Combined set has no overlap
+    const all = [...lessonsA, ...lessonsB];
+    expect(new Set(all).size).toBe(all.length);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deduplicateLesson
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// HOOKS config (verified by reading source)
+// ---------------------------------------------------------------------------
+
+describe('HOOKS config', () => {
+  const cliSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'cli.ts'), 'utf8');
+
+  it('openclaw hook targets AGENTS.md', () => {
+    // The openclaw entry in HOOKS should use AGENTS.md, not a skill file
+    expect(cliSource).toContain("'openclaw': {");
+    expect(cliSource).toContain("file: 'AGENTS.md',");
+    // Ensure it does NOT point to the old skill path
+    expect(cliSource).not.toContain('.openclaw/skills/hippo/SKILL.md');
+  });
+
+  it('openclaw hook content includes key commands', () => {
+    expect(cliSource).toContain('hippo context --auto --budget 1500');
+    expect(cliSource).toContain('hippo outcome --good');
+    expect(cliSource).toContain('hippo learn --git');
+  });
 });
 
 // ---------------------------------------------------------------------------
