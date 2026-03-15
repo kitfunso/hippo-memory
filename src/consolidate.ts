@@ -2,8 +2,8 @@
  * Consolidation engine ("Sleep") for Hippo.
  *
  * Steps:
- * 1. Decay pass — remove entries below strength threshold
- * 2. Merge pass — find episodic entries with high text overlap, create semantic summaries
+ * 1. Decay pass  - remove entries below strength threshold
+ * 2. Merge pass  - find episodic entries with high text overlap, create semantic summaries
  * 3. Stats tracking
  */
 
@@ -75,7 +75,7 @@ export function consolidate(
   }
 
   // -------------------------------------------------------------------------
-  // 2. Merge pass — episodic entries only
+  // 2. Merge pass  - episodic entries only
   // -------------------------------------------------------------------------
   const episodics = survivors.filter((e) => e.layer === Layer.Episodic);
   const used = new Set<string>();

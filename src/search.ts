@@ -1,6 +1,6 @@
 /**
  * BM25 search + strength-ranked retrieval for Hippo.
- * Zero external dependencies — implemented from scratch.
+ * Zero external dependencies  - implemented from scratch.
  */
 
 import { MemoryEntry, calculateStrength } from './memory.js';

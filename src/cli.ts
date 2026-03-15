@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Hippo CLI — biologically-inspired memory system for AI agents.
+ * Hippo CLI  - biologically-inspired memory system for AI agents.
  *
  * Commands:
  *   hippo init
@@ -219,7 +219,7 @@ function cmdSleep(
     }
   }
 
-  if (dryRun) console.log('\n(dry run — nothing written)');
+  if (dryRun) console.log('\n(dry run  - nothing written)');
 }
 
 function cmdStatus(hippoRoot: string): void {
@@ -715,7 +715,7 @@ function escapeRegex(s: string): string {
 
 function printUsage(): void {
   console.log(`
-🦛 Hippo — biologically-inspired memory system for AI agents
+🦛 Hippo  - biologically-inspired memory system for AI agents
 
 Usage: hippo <command> [options]
 

@@ -1,5 +1,5 @@
 /**
- * Hippo public API — re-exports for programmatic use.
+ * Hippo public API  - re-exports for programmatic use.
  */
 
 export { MemoryEntry, Layer, EmotionalValence, calculateStrength, createMemory, applyOutcome, generateId } from './memory.js';

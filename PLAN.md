@@ -1,4 +1,4 @@
-# Hippo — Architecture Plan
+# Hippo  - Architecture Plan
 
 ## Tagline
 "Every AI memory tool remembers everything. The brain doesn't. That's why it works."
@@ -7,13 +7,13 @@
 A biologically-inspired memory system for AI agents. Not a filing cabinet with search. A system that learns what to forget.
 
 ## Core Principles (from neuroscience)
-1. **Two-speed storage** — Fast episodic buffer + slow semantic store (CLS theory)
-2. **Decay by default** — Every memory has a half-life. Persistence is earned.
-3. **Retrieval strengthens** — Using a memory boosts it. Ignoring it lets it die.
-4. **Emotional tagging** — Errors and breakthroughs get priority encoding.
-5. **Sleep consolidation** — Background process compresses episodes into patterns.
-6. **Schema acceleration** — Info fitting existing patterns consolidates faster.
-7. **Interference detection** — Conflicting memories get flagged, not accumulated.
+1. **Two-speed storage**  - Fast episodic buffer + slow semantic store (CLS theory)
+2. **Decay by default**  - Every memory has a half-life. Persistence is earned.
+3. **Retrieval strengthens**  - Using a memory boosts it. Ignoring it lets it die.
+4. **Emotional tagging**  - Errors and breakthroughs get priority encoding.
+5. **Sleep consolidation**  - Background process compresses episodes into patterns.
+6. **Schema acceleration**  - Info fitting existing patterns consolidates faster.
+7. **Interference detection**  - Conflicting memories get flagged, not accumulated.
 
 ---
 
