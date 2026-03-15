@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0 (2026-03-15)
+
+### Added
+- `hippo init` auto-detects agent frameworks (Claude Code, Codex, Cursor, OpenClaw) and installs hooks automatically. Use `--no-hooks` to skip.
+- `hippo learn --git --repos <paths>` scans multiple repos in one pass (comma-separated paths).
+- Codex integration guide (`integrations/codex.md`).
+- CHANGELOG.md with full version history.
+
+### Changed
+- README rewritten with auto-hook install docs, multi-repo learn section, and updated comparison table.
+- PLAN.md updated with shipped feature status.
+- All integration guides updated for auto-install workflow.
+
 ## 0.3.1 (2026-03-15)
 
 ### Added
