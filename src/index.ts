@@ -4,7 +4,7 @@
 
 export { MemoryEntry, Layer, EmotionalValence, ConfidenceLevel, calculateStrength, resolveConfidence, createMemory, applyOutcome, generateId } from './memory.js';
 export { search, hybridSearch, markRetrieved, estimateTokens, textOverlap, SearchResult } from './search.js';
-export { initStore, loadAllEntries, writeEntry, readEntry, deleteEntry, loadIndex, rebuildIndex } from './store.js';
+export { initStore, loadAllEntries, loadSearchEntries, writeEntry, readEntry, deleteEntry, loadIndex, rebuildIndex } from './store.js';
 export { consolidate, ConsolidationResult } from './consolidate.js';
 
 // Feature 1: Embedding search

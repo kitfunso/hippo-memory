@@ -1,0 +1,13 @@
+{
+  "total_remembered": 7,
+  "total_recalled": 11,
+  "total_forgotten": 2,
+  "consolidation_runs": [
+    {
+      "timestamp": "2026-03-03T08:00:00.000Z",
+      "decayed": 4,
+      "merged": 1,
+      "removed": 2
+    }
+  ]
+}

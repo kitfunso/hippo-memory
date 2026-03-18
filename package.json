@@ -19,6 +19,7 @@
     "dev": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",
+    "smoke:pack": "node scripts/smoke-pack.mjs",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -41,7 +42,7 @@
     "url": "git+https://github.com/kitfunso/hippo-memory.git"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.5.0"
   },
   "devDependencies": {
     "typescript": "^5.4.0",

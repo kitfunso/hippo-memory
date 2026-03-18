@@ -60,7 +60,7 @@ A biologically-inspired memory system for AI agents. Not a filing cabinet with s
 
 ## Data Model
 
-All data is **markdown + frontmatter** on disk. No database required. Git-trackable.
+SQLite is the source of truth. Markdown + frontmatter remain as compatibility mirrors, still git-trackable and human-readable.
 
 ### Memory Entry (single unit)
 
@@ -124,8 +124,9 @@ where:
 │   └── sem_*.md
 ├── conflicts/           # Detected contradictions needing resolution
 │   └── conflict_*.md
-├── index.json           # Fast lookup: id → file, strength, tags
-└── stats.json           # Retrieval stats, consolidation history
+├── hippo.db             # Source of truth: SQLite backbone
+├── index.json           # Derived compatibility mirror for fast lookup
+└── stats.json           # Derived compatibility mirror for stats/history
 ```
 
 ## CLI Interface

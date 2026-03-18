@@ -8,8 +8,8 @@
 ```
 Works with:  Claude Code, Codex, Cursor, OpenClaw, any CLI agent
 Imports from: ChatGPT, Claude (CLAUDE.md), Cursor (.cursorrules), any markdown
-Storage:     Markdown + YAML frontmatter. No database. Git-trackable.
-Dependencies: Zero runtime deps. Optional embeddings via @xenova/transformers.
+Storage:     SQLite backbone + markdown/YAML mirrors. Git-trackable and human-readable.
+Dependencies: Zero runtime deps. Requires Node.js 22.5+. Optional embeddings via @xenova/transformers.
 ```
 
 ---

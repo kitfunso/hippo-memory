@@ -12,6 +12,7 @@ import {
   initStore,
   loadAllEntries,
   loadIndex,
+  loadSearchEntries,
   writeEntry,
   readEntry,
 } from './store.js';
@@ -78,8 +79,8 @@ export function searchBoth(
 ): SearchResult[] {
   const { budget = 4000, now = new Date() } = options;
 
-  const localEntries = fs.existsSync(localRoot) ? loadAllEntries(localRoot) : [];
-  const globalEntries = fs.existsSync(globalRoot) ? loadAllEntries(globalRoot) : [];
+  const localEntries = fs.existsSync(localRoot) ? loadSearchEntries(localRoot, query) : [];
+  const globalEntries = fs.existsSync(globalRoot) ? loadSearchEntries(globalRoot, query) : [];
 
   if (localEntries.length === 0 && globalEntries.length === 0) return [];
 

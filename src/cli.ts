@@ -38,6 +38,7 @@ import {
   readEntry,
   deleteEntry,
   loadAllEntries,
+  loadSearchEntries,
   loadIndex,
   saveIndex,
   loadStats,
@@ -151,7 +152,7 @@ function cmdInit(hippoRoot: string, flags: Record<string, string | boolean | str
     initStore(hippoRoot);
     console.log('Initialized Hippo at', hippoRoot);
     console.log('   Directories: buffer/ episodic/ semantic/ conflicts/');
-    console.log('   Files: index.json stats.json');
+    console.log('   Files: hippo.db index.json stats.json');
   }
 
   // Auto-detect and install hooks (unless --no-hooks)
@@ -334,8 +335,8 @@ function cmdRecall(
   const asJson = Boolean(flags['json']);
   const globalRoot = getGlobalRoot();
 
-  const localEntries = loadAllEntries(hippoRoot);
-  const globalEntries = isInitialized(globalRoot) ? loadAllEntries(globalRoot) : [];
+  const localEntries = loadSearchEntries(hippoRoot, query);
+  const globalEntries = isInitialized(globalRoot) ? loadSearchEntries(globalRoot, query) : [];
 
   const hasGlobal = globalEntries.length > 0;
 

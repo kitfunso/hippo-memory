@@ -75,14 +75,33 @@ export function parseFrontmatter(raw: string): ParsedFrontmatter {
   const frontLines = match[1].split('\n');
   const data: Record<string, YamlValue> = {};
 
-  for (const line of frontLines) {
+  for (let i = 0; i < frontLines.length; i++) {
+    const line = frontLines[i];
     const idx = line.indexOf(':');
     if (idx === -1) continue;
+
     const key = line.slice(0, idx).trim();
     const val = line.slice(idx + 1).trim();
-    if (key) {
-      data[key] = parseValue(val);
+    if (!key) continue;
+
+    if (val === '') {
+      const items: string[] = [];
+      let j = i + 1;
+      while (j < frontLines.length) {
+        const listLine = frontLines[j].trim();
+        if (!listLine.startsWith('- ')) break;
+        items.push(listLine.slice(2).trim());
+        j++;
+      }
+
+      if (items.length > 0) {
+        data[key] = items;
+        i = j - 1;
+        continue;
+      }
     }
+
+    data[key] = parseValue(val);
   }
 
   return { data, content: match[2] };

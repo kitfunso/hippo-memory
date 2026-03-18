@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "entries": {
+    "mem_legacy_alpha": {
+      "id": "mem_legacy_alpha",
+      "file": "episodic/mem_legacy_alpha.md",
+      "layer": "episodic",
+      "strength": 1.4,
+      "tags": ["legacy", "block-list", "migration"],
+      "created": "2026-03-01T10:00:00.000Z",
+      "last_retrieved": "2026-03-02T09:30:00.000Z",
+      "pinned": false
+    },
+    "mem_legacy_beta": {
+      "id": "mem_legacy_beta",
+      "file": "semantic/mem_legacy_beta.md",
+      "layer": "semantic",
+      "strength": 1.9,
+      "tags": ["legacy", "semantic", "fixture"],
+      "created": "2026-03-01T11:00:00.000Z",
+      "last_retrieved": "2026-03-02T10:15:00.000Z",
+      "pinned": true
+    }
+  },
+  "last_retrieval_ids": ["mem_legacy_alpha", "mem_legacy_beta"]
+}
