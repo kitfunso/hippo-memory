@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { consolidate } from '../src/consolidate.js';
-import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
+import { initStore, writeEntry, loadAllEntries, readEntry } from '../src/store.js';
 import { createMemory, Layer } from '../src/memory.js';
 
 let tmpDir: string;
@@ -63,6 +63,21 @@ describe('Decay pass', () => {
     // Entry should still be on disk
     const remaining = loadAllEntries(tmpDir);
     expect(remaining.find((e) => e.id === ancient.id)).toBeDefined();
+  });
+
+  it('persists stale confidence for old non-verified memories during sleep', () => {
+    initStore(tmpDir);
+
+    const entry = createMemory('stale memory candidate', { confidence: 'observed', tags: ['error'] });
+    const oldDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString();
+    const staleCandidate = { ...entry, last_retrieved: oldDate, confidence: 'observed' as const };
+    writeEntry(tmpDir, staleCandidate);
+
+    consolidate(tmpDir, { now: new Date() });
+
+    const loaded = readEntry(tmpDir, staleCandidate.id);
+    expect(loaded).not.toBeNull();
+    expect(loaded!.confidence).toBe('stale');
   });
 });
 

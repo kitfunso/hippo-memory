@@ -222,7 +222,7 @@ When context is generated, confidence is shown inline:
 
 Agents can see at a glance what's established fact vs. a pattern worth questioning.
 
-Memories unretrieved for 30+ days are automatically marked `stale` during the next `hippo sleep`.
+Memories unretrieved for 30+ days are automatically marked `stale` during the next `hippo sleep`. If one gets recalled again, Hippo wakes it back up to `observed` so it can earn trust again instead of staying permanently stale.
 
 ---
 

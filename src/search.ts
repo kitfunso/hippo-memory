@@ -290,6 +290,8 @@ export function markRetrieved(entries: MemoryEntry[], now: Date = new Date()): M
       last_retrieved: now.toISOString(),
       // Extend half-life by +2 days per retrieval (PLAN.md)
       half_life_days: e.half_life_days + 2,
+      // A stale memory that gets used again becomes live context.
+      confidence: e.confidence === 'stale' ? 'observed' : e.confidence,
     };
     updated.strength = calculateStrength(updated, now);
     return updated;

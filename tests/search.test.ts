@@ -120,4 +120,12 @@ describe('markRetrieved', () => {
     const [updated] = markRetrieved([entry]);
     expect(updated.half_life_days).toBe(beforeHL + 2);
   });
+
+  it('wakes stale memories back to observed on retrieval', () => {
+    const entry = createMemory('old memory', { confidence: 'observed' });
+    const stale = { ...entry, confidence: 'stale' as const };
+
+    const [updated] = markRetrieved([stale]);
+    expect(updated.confidence).toBe('observed');
+  });
 });

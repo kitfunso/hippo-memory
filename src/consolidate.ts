@@ -7,7 +7,7 @@
  * 3. Stats tracking
  */
 
-import { MemoryEntry, Layer, calculateStrength, createMemory } from './memory.js';
+import { MemoryEntry, Layer, calculateStrength, createMemory, resolveConfidence } from './memory.js';
 import {
   loadAllEntries,
   writeEntry,
@@ -64,10 +64,15 @@ export function consolidate(
         deleteEntry(hippoRoot, entry.id);
       }
     } else {
-      // Update the stored strength value
-      const updated = { ...entry, strength };
+      // Update the stored strength value and persist stale confidence when applicable.
+      const effectiveConfidence = resolveConfidence(entry, now);
+      const updated = {
+        ...entry,
+        strength,
+        confidence: effectiveConfidence,
+      };
       survivors.push(updated);
-      if (!dryRun && strength !== entry.strength) {
+      if (!dryRun && (strength !== entry.strength || effectiveConfidence !== entry.confidence)) {
         writeEntry(hippoRoot, updated);
       }
       result.decayed++;
