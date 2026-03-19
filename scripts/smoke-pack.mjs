@@ -93,6 +93,11 @@ try {
     throw new Error(`Pack smoke test expected snapshot clear confirmation, got:\n${snapshotClearOutput}`);
   }
 
+  const conflictsOutput = run(`${quote(hippoBin)} conflicts`, workspaceDir);
+  if (!/No memory conflicts found/i.test(conflictsOutput)) {
+    throw new Error(`Pack smoke test expected no conflicts output, got:\n${conflictsOutput}`);
+  }
+
   const inspectOutput = run(`${quote(hippoBin)} inspect ${memoryId}`, workspaceDir);
   if (!inspectOutput.includes(memoryId)) {
     throw new Error(`Pack smoke test expected inspect output for ${memoryId}, got:\n${inspectOutput}`);

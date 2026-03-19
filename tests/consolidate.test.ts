@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { consolidate } from '../src/consolidate.js';
-import { initStore, writeEntry, loadAllEntries, readEntry } from '../src/store.js';
+import { initStore, writeEntry, loadAllEntries, readEntry, listMemoryConflicts } from '../src/store.js';
 import { createMemory, Layer } from '../src/memory.js';
 
 let tmpDir: string;
@@ -112,5 +112,56 @@ describe('Merge pass', () => {
     const result = consolidate(tmpDir, { now: new Date() });
     expect(result.merged).toBe(0);
     expect(result.semanticCreated).toBe(0);
+  });
+
+  it('detects overlapping contradictory memories and records open conflicts', () => {
+    initStore(tmpDir);
+
+    const a = createMemory('The feature flag is enabled for production users', {
+      layer: Layer.Episodic,
+      tags: ['feature-flag', 'prod'],
+    });
+    const b = createMemory('The feature flag is disabled for production users', {
+      layer: Layer.Episodic,
+      tags: ['feature-flag', 'prod'],
+    });
+    writeEntry(tmpDir, a);
+    writeEntry(tmpDir, b);
+
+    consolidate(tmpDir, { now: new Date() });
+
+    const conflicts = listMemoryConflicts(tmpDir);
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0].reason).toMatch(/enabled\/disabled mismatch|negation polarity mismatch/i);
+
+    const loadedA = readEntry(tmpDir, a.id);
+    const loadedB = readEntry(tmpDir, b.id);
+    expect(loadedA?.conflicts_with).toContain(b.id);
+    expect(loadedB?.conflicts_with).toContain(a.id);
+  });
+
+  it('resolves open conflicts when the contradiction disappears', () => {
+    initStore(tmpDir);
+
+    const a = createMemory('The feature flag is enabled for production users', {
+      layer: Layer.Episodic,
+      tags: ['feature-flag', 'prod'],
+    });
+    const b = createMemory('The feature flag is disabled for production users', {
+      layer: Layer.Episodic,
+      tags: ['feature-flag', 'prod'],
+    });
+    writeEntry(tmpDir, a);
+    writeEntry(tmpDir, b);
+
+    consolidate(tmpDir, { now: new Date() });
+    expect(listMemoryConflicts(tmpDir)).toHaveLength(1);
+
+    writeEntry(tmpDir, { ...b, content: 'The feature flag is enabled for production users' });
+    consolidate(tmpDir, { now: new Date() });
+
+    expect(listMemoryConflicts(tmpDir)).toHaveLength(0);
+    expect(readEntry(tmpDir, a.id)?.conflicts_with ?? []).toEqual([]);
+    expect(readEntry(tmpDir, b.id)?.conflicts_with ?? []).toEqual([]);
   });
 });

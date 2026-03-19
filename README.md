@@ -224,6 +224,17 @@ Agents can see at a glance what's established fact vs. a pattern worth questioni
 
 Memories unretrieved for 30+ days are automatically marked `stale` during the next `hippo sleep`. If one gets recalled again, Hippo wakes it back up to `observed` so it can earn trust again instead of staying permanently stale.
 
+### Conflict tracking
+
+Hippo now detects obvious contradictions between overlapping memories and keeps them visible instead of silently letting both masquerade as truth.
+
+```bash
+hippo sleep       # refreshes open conflicts
+hippo conflicts   # inspect them
+```
+
+Open conflicts are stored in SQLite, mirrored under `.hippo/conflicts/`, and linked back into each memory's `conflicts_with` field.
+
 ---
 
 ### Observation framing

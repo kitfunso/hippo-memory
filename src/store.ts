@@ -73,6 +73,17 @@ interface TaskSnapshotRow {
   updated_at: string;
 }
 
+interface MemoryConflictRow {
+  id: number;
+  memory_a_id: string;
+  memory_b_id: string;
+  reason: string;
+  score: number;
+  status: string;
+  detected_at: string;
+  updated_at: string;
+}
+
 export interface TaskSnapshot {
   id: number;
   task: string;
@@ -81,6 +92,17 @@ export interface TaskSnapshot {
   status: string;
   source: string;
   created_at: string;
+  updated_at: string;
+}
+
+export interface MemoryConflict {
+  id: number;
+  memory_a_id: string;
+  memory_b_id: string;
+  reason: string;
+  score: number;
+  status: string;
+  detected_at: string;
   updated_at: string;
 }
 
@@ -226,6 +248,19 @@ function rowToTaskSnapshot(row: TaskSnapshotRow): TaskSnapshot {
   };
 }
 
+function rowToMemoryConflict(row: MemoryConflictRow): MemoryConflict {
+  return {
+    id: Number(row.id),
+    memory_a_id: row.memory_a_id,
+    memory_b_id: row.memory_b_id,
+    reason: row.reason,
+    score: Number(row.score ?? 0),
+    status: row.status,
+    detected_at: row.detected_at,
+    updated_at: row.updated_at,
+  };
+}
+
 function writeActiveTaskMirror(hippoRoot: string, snapshot: TaskSnapshot): void {
   const filePath = path.join(hippoRoot, 'buffer', 'active-task.md');
   const fm = dumpFrontmatter({
@@ -261,6 +296,54 @@ function removeActiveTaskMirror(hippoRoot: string): void {
   if (fs.existsSync(filePath)) {
     fs.unlinkSync(filePath);
   }
+}
+
+function writeConflictMirrors(hippoRoot: string, conflicts: MemoryConflict[]): void {
+  const conflictDir = path.join(hippoRoot, 'conflicts');
+  fs.mkdirSync(conflictDir, { recursive: true });
+
+  const keep = new Set<string>();
+  for (const conflict of conflicts) {
+    const filename = `conflict_${conflict.id}.md`;
+    keep.add(filename);
+
+    const fm = dumpFrontmatter({
+      id: conflict.id,
+      memory_a_id: conflict.memory_a_id,
+      memory_b_id: conflict.memory_b_id,
+      reason: conflict.reason,
+      score: Math.round(conflict.score * 10000) / 10000,
+      status: conflict.status,
+      detected_at: conflict.detected_at,
+      updated_at: conflict.updated_at,
+    });
+
+    const body = [
+      '# Memory Conflict',
+      '',
+      `- Memory A: ${conflict.memory_a_id}`,
+      `- Memory B: ${conflict.memory_b_id}`,
+      `- Reason: ${conflict.reason}`,
+      `- Score: ${conflict.score.toFixed(3)}`,
+      `- Status: ${conflict.status}`,
+      '',
+    ].join('\n');
+
+    fs.writeFileSync(path.join(conflictDir, filename), `${fm}\n\n${body}`, 'utf8');
+  }
+
+  for (const existing of fs.readdirSync(conflictDir)) {
+    if (existing === '.gitkeep') continue;
+    if (!keep.has(existing)) {
+      fs.unlinkSync(path.join(conflictDir, existing));
+    }
+  }
+}
+
+function canonicalConflictPair(aId: string, bId: string): { memory_a_id: string; memory_b_id: string } {
+  return aId < bId
+    ? { memory_a_id: aId, memory_b_id: bId }
+    : { memory_a_id: bId, memory_b_id: aId };
 }
 
 function tokenizeSearchQuery(query: string): string[] {
@@ -552,6 +635,14 @@ function syncMirrorFiles(hippoRoot: string, db: ReturnType<typeof openHippoDb>):
     writeMarkdownMirror(hippoRoot, entry);
   }
 
+  const conflicts = db.prepare(`
+    SELECT id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at
+    FROM memory_conflicts
+    WHERE status = 'open'
+    ORDER BY updated_at DESC, id DESC
+  `).all() as MemoryConflictRow[];
+  writeConflictMirrors(hippoRoot, conflicts.map(rowToMemoryConflict));
+
   writeIndexMirror(hippoRoot, buildIndexFromDb(db));
   writeStatsMirror(hippoRoot, buildStatsFromDb(db));
 }
@@ -835,6 +926,107 @@ export function clearActiveTaskSnapshot(hippoRoot: string, clearedStatus: string
     db.prepare(`UPDATE task_snapshots SET status = ?, updated_at = ? WHERE id = ?`).run(clearedStatus, now, active.id);
     removeActiveTaskMirror(hippoRoot);
     return true;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+export function listMemoryConflicts(hippoRoot: string, status: string = 'open'): MemoryConflict[] {
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    const rows = db.prepare(`
+      SELECT id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at
+      FROM memory_conflicts
+      WHERE status = ?
+      ORDER BY updated_at DESC, id DESC
+    `).all(status) as MemoryConflictRow[];
+    return rows.map(rowToMemoryConflict);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+export function replaceDetectedConflicts(
+  hippoRoot: string,
+  detected: Array<{ memory_a_id: string; memory_b_id: string; reason: string; score: number }>,
+  detectedAt: string = new Date().toISOString()
+): void {
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+
+  try {
+    db.exec('BEGIN');
+
+    const canonicalDetected = detected.map((conflict) => ({
+      ...canonicalConflictPair(conflict.memory_a_id, conflict.memory_b_id),
+      reason: conflict.reason,
+      score: conflict.score,
+    }));
+
+    const detectedKeys = new Set(canonicalDetected.map((conflict) => `${conflict.memory_a_id}::${conflict.memory_b_id}`));
+
+    const openRows = db.prepare(`
+      SELECT id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at
+      FROM memory_conflicts
+      WHERE status = 'open'
+    `).all() as MemoryConflictRow[];
+
+    for (const row of openRows) {
+      const key = `${row.memory_a_id}::${row.memory_b_id}`;
+      if (!detectedKeys.has(key)) {
+        db.prepare(`UPDATE memory_conflicts SET status = 'resolved', updated_at = ? WHERE id = ?`).run(detectedAt, row.id);
+      }
+    }
+
+    for (const conflict of canonicalDetected) {
+      db.prepare(`
+        INSERT INTO memory_conflicts(memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at)
+        VALUES (?, ?, ?, ?, 'open', ?, ?)
+        ON CONFLICT(memory_a_id, memory_b_id) DO UPDATE SET
+          reason = excluded.reason,
+          score = excluded.score,
+          status = 'open',
+          updated_at = excluded.updated_at
+      `).run(
+        conflict.memory_a_id,
+        conflict.memory_b_id,
+        conflict.reason,
+        conflict.score,
+        detectedAt,
+        detectedAt,
+      );
+    }
+
+    const openConflicts = db.prepare(`
+      SELECT memory_a_id, memory_b_id
+      FROM memory_conflicts
+      WHERE status = 'open'
+    `).all() as Array<{ memory_a_id: string; memory_b_id: string }>;
+
+    const refMap = new Map<string, Set<string>>();
+    for (const row of openConflicts) {
+      if (!refMap.has(row.memory_a_id)) refMap.set(row.memory_a_id, new Set());
+      if (!refMap.has(row.memory_b_id)) refMap.set(row.memory_b_id, new Set());
+      refMap.get(row.memory_a_id)!.add(row.memory_b_id);
+      refMap.get(row.memory_b_id)!.add(row.memory_a_id);
+    }
+
+    const memoryRows = db.prepare(`SELECT id FROM memories`).all() as Array<{ id: string }>;
+    for (const memory of memoryRows) {
+      const refs = Array.from(refMap.get(memory.id) ?? []).sort();
+      db.prepare(`UPDATE memories SET conflicts_with_json = ?, updated_at = datetime('now') WHERE id = ?`).run(JSON.stringify(refs), memory.id);
+    }
+
+    db.exec('COMMIT');
+    syncMirrorFiles(hippoRoot, db);
+  } catch (error) {
+    try {
+      db.exec('ROLLBACK');
+    } catch {
+      // Ignore nested rollback failures.
+    }
+    throw error;
   } finally {
     closeHippoDb(db);
   }

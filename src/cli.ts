@@ -9,6 +9,7 @@
  *   hippo sleep [--dry-run]
  *   hippo status
  *   hippo outcome --good | --bad [--id <id>]
+ *   hippo conflicts [--status <status>] [--json]
  *   hippo snapshot <save|show|clear>
  *   hippo forget <id>
  *   hippo inspect <id>
@@ -47,6 +48,7 @@ import {
   saveActiveTaskSnapshot,
   loadActiveTaskSnapshot,
   clearActiveTaskSnapshot,
+  listMemoryConflicts,
   TaskSnapshot,
 } from './store.js';
 import { search, markRetrieved, estimateTokens, hybridSearch } from './search.js';
@@ -478,8 +480,11 @@ function cmdStatus(hippoRoot: string): void {
   console.log(`  Buffer:          ${byLayer[Layer.Buffer]}`);
   console.log(`  Episodic:        ${byLayer[Layer.Episodic]}`);
   console.log(`  Semantic:        ${byLayer[Layer.Semantic]}`);
+  const conflictCount = listMemoryConflicts(hippoRoot).length;
+
   console.log(`Pinned:            ${pinned}`);
   console.log(`At risk (<0.2):    ${atRisk}`);
+  console.log(`Open conflicts:    ${conflictCount}`);
   console.log(`Avg strength:      ${fmt(avgStrength)}`);
   console.log('');
   console.log('Confidence breakdown:');
@@ -614,6 +619,32 @@ function printActiveTaskSnapshot(snapshot: TaskSnapshot): void {
   console.log('### Next step');
   console.log(snapshot.next_step);
   console.log('');
+}
+
+function cmdConflicts(
+  hippoRoot: string,
+  flags: Record<string, string | boolean | string[]>
+): void {
+  requireInit(hippoRoot);
+
+  const conflicts = listMemoryConflicts(hippoRoot, String(flags['status'] ?? 'open'));
+  if (flags['json']) {
+    console.log(JSON.stringify({ conflicts }, null, 2));
+    return;
+  }
+
+  if (conflicts.length === 0) {
+    console.log('No memory conflicts found.');
+    return;
+  }
+
+  console.log(`Found ${conflicts.length} memory conflict${conflicts.length === 1 ? '' : 's'}\n`);
+  for (const conflict of conflicts) {
+    console.log(`--- conflict_${conflict.id} score=${fmt(conflict.score, 3)} status=${conflict.status}`);
+    console.log(`    ${conflict.memory_a_id} <-> ${conflict.memory_b_id}`);
+    console.log(`    reason: ${conflict.reason}`);
+    console.log('');
+  }
 }
 
 function cmdSnapshot(
@@ -1426,6 +1457,9 @@ Commands:
     --good                 Memories were helpful
     --bad                  Memories were irrelevant
     --id <id>              Target a specific memory
+  conflicts                List detected open memory conflicts
+    --status <status>      Filter by status (default: open)
+    --json                 Output as JSON
   snapshot <sub>           Persist or inspect the current active task
     snapshot save          Save active task state
       --task <task>
@@ -1473,6 +1507,7 @@ Examples:
   hippo remember "FRED cache can silently drop series" --tag error
   hippo recall "data pipeline issues" --budget 2000
   hippo context --auto --budget 1500
+  hippo conflicts
   hippo snapshot save --task "Ship feature" --summary "Tests are green" --next-step "Open the PR"
   hippo embed --status
   hippo watch "npm run build"
@@ -1529,6 +1564,10 @@ async function main(): Promise<void> {
 
     case 'outcome':
       cmdOutcome(hippoRoot, flags);
+      break;
+
+    case 'conflicts':
+      cmdConflicts(hippoRoot, flags);
       break;
 
     case 'snapshot':

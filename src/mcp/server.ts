@@ -17,7 +17,7 @@ import {
   calculateStrength,
 } from '../memory.js';
 import { search, markRetrieved, estimateTokens } from '../search.js';
-import { loadAllEntries, writeEntry, readEntry, initStore } from '../store.js';
+import { loadAllEntries, writeEntry, readEntry, initStore, loadActiveTaskSnapshot, listMemoryConflicts } from '../store.js';
 import { consolidate } from '../consolidate.js';
 import { fetchGitLog, extractLessons, deduplicateLesson } from '../autolearn.js';
 import { loadConfig } from '../config.js';
@@ -258,7 +258,25 @@ function executeTool(name: string, args: Record<string, unknown>): string {
       for (const entry of retrieved) writeEntry(hippoRoot, entry);
       lastRecalledIds = retrieved.map((e) => e.id);
 
-      return formatMemories(results, hippoRoot);
+      const snapshot = loadActiveTaskSnapshot(hippoRoot);
+      const snapshotText = snapshot
+        ? [
+            '## Active Task Snapshot',
+            `- Task: ${snapshot.task}`,
+            `- Status: ${snapshot.status}`,
+            `- Updated: ${snapshot.updated_at}`,
+            '',
+            '### Summary',
+            snapshot.summary,
+            '',
+            '### Next step',
+            snapshot.next_step,
+            '',
+          ].join('\n')
+        : '';
+
+      const memoryText = formatMemories(results, hippoRoot);
+      return snapshotText ? `${snapshotText}\n${memoryText}` : memoryText;
     }
 
     case 'hippo_status': {
@@ -274,10 +292,12 @@ function executeTool(name: string, args: Record<string, unknown>): string {
       const avgStrength = entries.length > 0 ? (totalStrength / entries.length).toFixed(2) : '0';
       const pinned = entries.filter((e) => e.pinned).length;
       const errors = entries.filter((e) => e.tags.includes('error')).length;
+      const conflicts = listMemoryConflicts(hippoRoot).length;
       return [
         `Memories: ${entries.length} (${pinned} pinned, ${errors} errors)`,
         `Avg strength: ${avgStrength}`,
         `At risk (<0.1): ${atRisk}`,
+        `Open conflicts: ${conflicts}`,
         `Half-life default: ${config.defaultHalfLifeDays}d`,
       ].join('\n');
     }
