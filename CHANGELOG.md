@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.1 (2026-03-19)
+
+### Added
+- OpenClaw plugin package is now included in the npm tarball so npm installs carry the integration files as well as the CLI.
+
+### Changed
+- OpenClaw plugin now resolves Hippo from the active workspace instead of arbitrary process cwd, preserving the intended local `.hippo/` plus global `~/.hippo/` lookup model.
+- OpenClaw plugin `autoLearn` and `autoSleep` config now map to real hook behavior, including failed-tool capture and session-end consolidation.
+- Release metadata is aligned across package, MCP server, lockfile, and OpenClaw plugin manifests.
+
 ## 0.5.1 (2026-03-15)
 
 ### Added

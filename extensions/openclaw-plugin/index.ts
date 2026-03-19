@@ -9,7 +9,7 @@
 
 import { execSync } from 'child_process';
 import { existsSync } from 'fs';
-import { resolve, join } from 'path';
+import { basename, dirname, join } from 'path';
 
 interface HippoConfig {
   budget?: number;
@@ -19,6 +19,16 @@ interface HippoConfig {
   framing?: 'observe' | 'suggest' | 'assert';
   root?: string;
 }
+
+type HippoRuntimeContext = {
+  workspaceDir?: string;
+  agentId?: string;
+  sessionId?: string;
+  sessionKey?: string;
+};
+
+const AUTO_SLEEP_SESSION_THRESHOLD = 10;
+const sessionMemoryCounts = new Map<string, number>();
 
 function getConfig(api: any): HippoConfig {
   try {
@@ -44,6 +54,80 @@ function findHippoRoot(workspace?: string, configRoot?: string): string | null {
   return null;
 }
 
+function getAgentWorkspace(api: any, agentId?: string): string | undefined {
+  try {
+    const agents = api.config?.agents;
+    const list = Array.isArray(agents?.list) ? agents.list : [];
+
+    if (agentId) {
+      const match = list.find((agent: any) => agent?.id === agentId);
+      if (typeof match?.workspace === 'string' && match.workspace) return match.workspace;
+    }
+
+    const defaultAgent = list.find((agent: any) => agent?.default);
+    if (typeof defaultAgent?.workspace === 'string' && defaultAgent.workspace) {
+      return defaultAgent.workspace;
+    }
+
+    const fallback = agents?.defaults?.workspace;
+    return typeof fallback === 'string' && fallback ? fallback : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveHippoCwd(workspace?: string, configRoot?: string): string {
+  const hippoRoot = findHippoRoot(workspace, configRoot);
+  if (!hippoRoot) return workspace || process.cwd();
+  return basename(hippoRoot).toLowerCase() === '.hippo' ? dirname(hippoRoot) : hippoRoot;
+}
+
+function resolveHippoCwdFromContext(api: any, ctx: HippoRuntimeContext, configRoot?: string): string {
+  const workspace = ctx.workspaceDir ?? getAgentWorkspace(api, ctx.agentId);
+  return resolveHippoCwd(workspace, configRoot);
+}
+
+function getSessionIdentity(ctx: Pick<HippoRuntimeContext, 'sessionId' | 'sessionKey' | 'agentId'>): string | undefined {
+  return ctx.sessionId ?? ctx.sessionKey ?? ctx.agentId;
+}
+
+function recordSessionMemory(ctx: Pick<HippoRuntimeContext, 'sessionId' | 'sessionKey' | 'agentId'>): void {
+  const key = getSessionIdentity(ctx);
+  if (!key) return;
+  sessionMemoryCounts.set(key, (sessionMemoryCounts.get(key) ?? 0) + 1);
+}
+
+function consumeSessionMemoryCount(
+  ctx: Pick<HippoRuntimeContext, 'sessionId' | 'sessionKey' | 'agentId'>,
+): number {
+  const key = getSessionIdentity(ctx);
+  if (!key) return 0;
+  const count = sessionMemoryCounts.get(key) ?? 0;
+  sessionMemoryCounts.delete(key);
+  return count;
+}
+
+function sanitizeTag(tag?: string): string | undefined {
+  if (!tag) return undefined;
+  const normalized = tag
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 30);
+  return normalized || undefined;
+}
+
+function formatToolErrorMemory(toolName: string, error: string): string {
+  const normalized = error.replace(/\s+/g, ' ').trim();
+  const truncated = normalized.slice(0, 500);
+  const suffix = normalized.length > truncated.length ? ' [truncated]' : '';
+  return `Tool '${toolName}' failed: ${truncated}${suffix}`;
+}
+
+function hippoRememberSucceeded(result: string): boolean {
+  return result.includes('Remembered [');
+}
+
 function runHippo(args: string, cwd?: string): string {
   try {
     const result = execSync(`hippo ${args}`, {
@@ -62,7 +146,7 @@ export default function register(api: any) {
   const logger = api.logger ?? console;
 
   // --- Tool: hippo_recall ---
-  api.registerTool({
+  api.registerTool((ctx: HippoRuntimeContext) => ({
     name: 'hippo_recall',
     description:
       'Retrieve relevant memories from the project memory store. Returns memories ranked by relevance, strength, and recency within the token budget. Use at session start or when you need context about a topic.',
@@ -84,15 +168,17 @@ export default function register(api: any) {
       const cfg = getConfig(api);
       const budget = params.budget ?? cfg.budget ?? 1500;
       const framing = cfg.framing ?? 'observe';
+      const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
       const result = runHippo(
         `recall "${params.query.replace(/"/g, '\\"')}" --budget ${budget} --framing ${framing}`,
+        hippoCwd,
       );
       return { content: [{ type: 'text', text: result || 'No relevant memories found.' }] };
     },
-  });
+  }));
 
   // --- Tool: hippo_remember ---
-  api.registerTool({
+  api.registerTool((ctx: HippoRuntimeContext) => ({
     name: 'hippo_remember',
     description:
       'Store a new memory. Use when you learn something non-obvious, hit an error, or discover a useful pattern. Memories decay over time unless retrieved. Errors get 2x half-life.',
@@ -122,17 +208,22 @@ export default function register(api: any) {
       _id: string,
       params: { text: string; error?: boolean; pin?: boolean; tag?: string },
     ) {
+      const cfg = getConfig(api);
+      const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
       let args = `remember "${params.text.replace(/"/g, '\\"')}"`;
       if (params.error) args += ' --error';
       if (params.pin) args += ' --pin';
       if (params.tag) args += ` --tag ${params.tag}`;
-      const result = runHippo(args);
+      const result = runHippo(args, hippoCwd);
+      if (hippoRememberSucceeded(result)) {
+        recordSessionMemory(ctx);
+      }
       return { content: [{ type: 'text', text: result || 'Memory stored.' }] };
     },
-  });
+  }));
 
   // --- Tool: hippo_outcome ---
-  api.registerTool({
+  api.registerTool((ctx: HippoRuntimeContext) => ({
     name: 'hippo_outcome',
     description:
       'Report whether recalled memories were useful. Strengthens good memories (+5 days half-life) and weakens bad ones (-3 days). Call after completing work.',
@@ -147,15 +238,17 @@ export default function register(api: any) {
       required: ['good'],
     },
     async execute(_id: string, params: { good: boolean }) {
+      const cfg = getConfig(api);
+      const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
       const flag = params.good ? '--good' : '--bad';
-      const result = runHippo(`outcome ${flag}`);
+      const result = runHippo(`outcome ${flag}`, hippoCwd);
       return { content: [{ type: 'text', text: result || 'Outcome recorded.' }] };
     },
-  });
+  }));
 
   // --- Tool: hippo_status ---
   api.registerTool(
-    {
+    (ctx: HippoRuntimeContext) => ({
       name: 'hippo_status',
       description:
         'Check memory health: counts, strengths, at-risk memories, last consolidation time.',
@@ -164,16 +257,18 @@ export default function register(api: any) {
         properties: {},
       },
       async execute() {
-        const result = runHippo('status');
+        const cfg = getConfig(api);
+        const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
+        const result = runHippo('status', hippoCwd);
         return { content: [{ type: 'text', text: result || 'No hippo store found.' }] };
       },
-    },
+    }),
     { optional: true },
   );
 
   // --- Tool: hippo_context ---
   api.registerTool(
-    {
+    (ctx: HippoRuntimeContext) => ({
       name: 'hippo_context',
       description:
         'Smart context injection: auto-detects current task from git state and returns relevant memories. Use at the start of any session.',
@@ -190,25 +285,33 @@ export default function register(api: any) {
         const cfg = getConfig(api);
         const budget = params.budget ?? cfg.budget ?? 1500;
         const framing = cfg.framing ?? 'observe';
-        const result = runHippo(`context --auto --budget ${budget} --framing ${framing}`);
+        const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
+        const result = runHippo(
+          `context --auto --budget ${budget} --framing ${framing}`,
+          hippoCwd,
+        );
         return { content: [{ type: 'text', text: result || 'No context available.' }] };
       },
-    },
+    }),
     { optional: true },
   );
 
   // --- Hook: auto-inject context at session start ---
   api.on(
     'before_prompt_build',
-    (_event: any, _ctx: any) => {
+    (_event: any, ctx: HippoRuntimeContext) => {
       const cfg = getConfig(api);
       if (cfg.autoContext === false) return {};
 
       const budget = cfg.budget ?? 1500;
       const framing = cfg.framing ?? 'observe';
+      const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
 
       try {
-        const context = runHippo(`context --auto --budget ${budget} --framing ${framing}`);
+        const context = runHippo(
+          `context --auto --budget ${budget} --framing ${framing}`,
+          hippoCwd,
+        );
         if (context && context.length > 10 && !context.includes('No hippo store')) {
           return {
             appendSystemContext: `\n\n## Project Memory (Hippo)\n${context}`,
@@ -220,6 +323,47 @@ export default function register(api: any) {
       return {};
     },
     { priority: 5 },
+  );
+
+  api.on(
+    'after_tool_call',
+    (event: { toolName: string; error?: string }, ctx: HippoRuntimeContext) => {
+      const cfg = getConfig(api);
+      if (cfg.autoLearn === false) return;
+      if (!event.error?.trim()) return;
+      if (event.toolName.startsWith('hippo_')) return;
+
+      const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
+      const toolTag = sanitizeTag(event.toolName);
+      let args =
+        `remember "${formatToolErrorMemory(event.toolName, event.error).replace(/"/g, '\\"')}"` +
+        ' --error --observed --tag openclaw';
+      if (toolTag) args += ` --tag ${toolTag}`;
+
+      const result = runHippo(args, hippoCwd);
+      if (hippoRememberSucceeded(result)) {
+        recordSessionMemory(ctx);
+      } else {
+        logger.debug?.(`[hippo] autoLearn skipped storing tool error: ${result}`);
+      }
+    },
+  );
+
+  api.on(
+    'session_end',
+    (_event: { sessionId: string; messageCount: number }, ctx: HippoRuntimeContext) => {
+      const cfg = getConfig(api);
+      const newMemories = consumeSessionMemoryCount(ctx);
+      if (!cfg.autoSleep || newMemories < AUTO_SLEEP_SESSION_THRESHOLD) return;
+
+      const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
+      const result = runHippo('sleep', hippoCwd);
+      logger.info?.(
+        `[hippo] autoSleep ran for session ${ctx.sessionId ?? ctx.sessionKey ?? 'unknown'} ` +
+          `after ${newMemories} new memories`,
+      );
+      logger.debug?.(`[hippo] autoSleep result: ${result}`);
+    },
   );
 
   logger.info?.('[hippo] Memory plugin registered (tools: hippo_recall, hippo_remember, hippo_outcome, hippo_status, hippo_context)');

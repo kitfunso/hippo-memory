@@ -28,6 +28,7 @@ Add to `openclaw.json`:
           autoLearn: true,       // auto-capture errors
           autoSleep: false,      // auto-consolidate after heavy sessions
           framing: "observe"     // observe | suggest | assert
+          // root: "C:/path/to/workspace/.hippo" // optional override
         }
       }
     }
@@ -42,6 +43,11 @@ Restart the gateway after enabling.
 ### Auto-context injection
 
 At every session start, hippo automatically injects relevant project memories into the system prompt. No manual `hippo context` needed. The agent sees memories from past sessions without any explicit tool calls.
+
+By default the plugin runs Hippo from the current agent workspace, so Hippo uses that
+workspace's local `.hippo/` store and automatically merges any global `~/.hippo/`
+store during `recall` / `context`. You only need `config.root` if you want to
+override workspace auto-detection.
 
 ### Agent tools
 
@@ -71,3 +77,4 @@ The plugin registers these tools for the agent to call:
 
 - `hippo-memory` CLI installed globally: `npm install -g hippo-memory`
 - A `.hippo/` directory in your workspace: `hippo init`
+- Optional shared global store: `hippo init --global`

@@ -1,6 +1,6 @@
 {
   "name": "hippo-memory",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Biologically-inspired memory system for AI agents. Decay by default, strength through use.",
   "type": "module",
   "main": "./dist/index.js",
@@ -12,7 +12,8 @@
   },
   "files": [
     "dist",
-    "bin"
+    "bin",
+    "extensions/openclaw-plugin"
   ],
   "scripts": {
     "build": "tsc",
