@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.2 (2026-03-19)
+
+### Added
+- `hippo-memory` now exposes root-level OpenClaw package metadata and a root plugin manifest, so `openclaw plugins install hippo-memory` works directly from npm.
+- Added an OpenClaw npm-install smoke test script to verify the packed tarball can be installed into an isolated OpenClaw state directory.
+
+### Fixed
+- Normalized the published CLI `bin` entry to avoid npm auto-correct warnings during publish.
+
 ## 0.6.1 (2026-03-19)
 
 ### Added

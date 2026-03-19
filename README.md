@@ -489,7 +489,15 @@ Exposes 6 tools: `hippo_recall`, `hippo_remember`, `hippo_outcome`, `hippo_conte
 
 ### OpenClaw Plugin
 
-Native plugin with auto-context injection at session start. See [extensions/openclaw-plugin/](extensions/openclaw-plugin/).
+Native plugin with auto-context injection, workspace-aware memory lookup, and
+tool hooks for auto-learn / auto-sleep.
+
+```bash
+openclaw plugins install hippo-memory
+openclaw plugins enable hippo-memory
+```
+
+Plugin docs: [extensions/openclaw-plugin/](extensions/openclaw-plugin/). Integration guide: [integrations/openclaw.md](integrations/openclaw.md).
 
 ### Claude Code Plugin
 

@@ -5,11 +5,18 @@ Biologically-inspired memory for OpenClaw agents. Memories decay by default, ret
 ## Install
 
 ```bash
-# Copy plugin to OpenClaw extensions
-cp -r extensions/openclaw-plugin ~/.openclaw/extensions/hippo-memory
+# Install directly from npm
+openclaw plugins install hippo-memory
+openclaw plugins enable hippo-memory
 
-# Or link for development
+# Or link the local plugin folder for development
 openclaw plugins install -l ./extensions/openclaw-plugin
+```
+
+If you prefer manual file copy instead of the plugin installer:
+
+```bash
+cp -r extensions/openclaw-plugin ~/.openclaw/extensions/hippo-memory
 ```
 
 ## Configure

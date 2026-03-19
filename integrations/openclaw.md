@@ -1,5 +1,19 @@
 # Hippo + OpenClaw Integration
 
+## Native plugin (recommended)
+
+Install the native OpenClaw plugin directly from npm:
+
+```bash
+openclaw plugins install hippo-memory
+openclaw plugins enable hippo-memory
+```
+
+This loads Hippo as a real OpenClaw plugin instead of relying only on prompt hooks.
+The plugin resolves memory from the active workspace by default, so it uses the
+workspace `.hippo/` store and automatically merges your shared `~/.hippo/` memory
+during `recall` and `context`.
+
 ## Auto-install (recommended)
 
 If your project has a `.openclaw` directory or `AGENTS.md`, `hippo init` auto-detects and patches `AGENTS.md` with the memory hook. No extra steps.
@@ -15,6 +29,9 @@ hippo init
 ```bash
 hippo hook install openclaw
 ```
+
+Use this hook path if you want lightweight prompt injection without installing the
+native plugin.
 
 This appends a `<!-- hippo:start -->` ... `<!-- hippo:end -->` block to `AGENTS.md`:
 
