@@ -342,7 +342,7 @@ function handleRequest(req: McpRequest): McpResponse {
         result: {
           protocolVersion: '2024-11-05',
           capabilities: { tools: {} },
-          serverInfo: { name: 'hippo-memory', version: '0.4.1' },
+          serverInfo: { name: 'hippo-memory', version: '0.6.0' },
         },
       };
 

@@ -43,6 +43,13 @@ hippo recall "data pipeline issues" --budget 2000
 
 That's it. You have a memory system.
 
+### What's new in this build
+
+- **SQLite-first storage** with markdown/JSON mirrors for humans and git
+- **Active task snapshots** for bare `continue` recovery
+- **Persistent stale-memory lifecycle** during `hippo sleep`
+- **Conflict tracking** with `hippo conflicts` and `.hippo/conflicts/` mirrors
+
 ### Zero-config agent integration
 
 `hippo init` auto-detects your agent framework and wires itself in:

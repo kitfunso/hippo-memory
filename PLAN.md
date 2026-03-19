@@ -189,7 +189,7 @@ After learning something, save it: `hippo remember "<insight>"`
 ```
 
 ### MCP Server
-Expose as MCP tool for any MCP-compatible client.
+Exposed as an MCP tool server for MCP-compatible clients, with active task snapshot parity in `hippo_context` and conflict counts in `hippo_status`.
 
 ## Consolidation Engine ("Sleep")
 
@@ -203,9 +203,7 @@ Runs as `hippo sleep` (manually or via cron). Steps:
    - Create a semantic memory from the pattern
    - Reduce strength of source episodes (they've been "taught" to neocortex)
 
-3. **Conflict detection:** For each new semantic memory:
-   - Check for contradiction with existing semantic memories
-   - If found, create a conflict entry for human resolution
+3. **Conflict detection:** Compare live non-semantic memories for strong overlap plus contradictory polarity (for example enabled vs disabled, true vs false, always vs never). Store open/resolved conflicts in SQLite, mirror them under `.hippo/conflicts/`, and link them back through each memory's `conflicts_with` field.
 
 4. **Schema indexing:** Update the schema map (topic clusters) so future novelty scoring works.
 
@@ -225,7 +223,7 @@ Runs as `hippo sleep` (manually or via cron). Steps:
 - **Language:** TypeScript (npm ecosystem, `npx hippo` works everywhere)
 - **Embeddings:** Local model (transformers.js or ONNX) for zero-API-key mode. Optional OpenAI/Anthropic for better quality.
 - **Search:** BM25 (keyword) + cosine similarity (embedding) hybrid. BM25 as fallback for zero-dependency mode.
-- **Storage:** Markdown files + JSON index. No database.
+- **Storage:** SQLite source of truth with markdown/frontmatter + JSON compatibility mirrors.
 - **CLI:** Commander.js
 - **Package:** Published to npm as `hippo-memory` (or `@hippo/core`)
 
@@ -255,14 +253,20 @@ Ship the smallest thing that demonstrates the core insight (decay + retrieval st
 - [x] `hippo context --auto` (smart context injection from git state)
 - [x] `hippo init` auto-detects and installs framework hooks
 - [x] Framework integrations: Claude Code, Codex, Cursor, OpenClaw
+- [x] SQLite-first storage backbone with migration scaffolding
+- [x] Packaged install smoke test (`npm run smoke:pack`)
+- [x] Active task snapshots (`hippo snapshot save|show|clear`)
+- [x] Persistent stale-memory lifecycle during `hippo sleep`
+- [x] Conflict detection + `hippo conflicts`
+- [x] MCP server parity for snapshots/status
 
 ### Out (v0.2+):
 - [ ] Embedding-based search (optional, needs model)
-- [ ] MCP server
 - [ ] Schema acceleration
-- [ ] Conflict detection
 - [ ] Web UI / dashboard
 - [ ] Multi-agent shared memory
+- [ ] Richer session/event history on top of the SQLite backbone
+- [ ] Explicit conflict resolution workflows beyond open/resolved auto-refresh
 
 ## Name Availability
 
