@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.3 (2026-03-21)
+
+### Fixed
+- `hippo learn --git` now distinguishes between "not a git repo" and "real repo with no commits in the lookback window", so multi-repo learn reports the correct status instead of false `No git history found` messages.
+- Synced release metadata across package, OpenClaw plugin manifests, and MCP server version reporting.
+
 ## 0.6.2 (2026-03-19)
 
 ### Added
