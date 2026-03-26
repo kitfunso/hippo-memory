@@ -47,6 +47,7 @@ That's it. You have a memory system.
 
 - **SQLite-first storage** with markdown/JSON mirrors for humans and git
 - **Active task snapshots** for bare `continue` recovery
+- **Session event trails** for short-term continuity across stops and resumes
 - **Persistent stale-memory lifecycle** during `hippo sleep`
 - **Conflict tracking** with `hippo conflicts` and `.hippo/conflicts/` mirrors
 
@@ -125,6 +126,29 @@ hippo snapshot clear
 ```
 
 `hippo context --auto` includes the active task snapshot before long-term memories, so agents get both the immediate thread and the deeper lessons.
+
+### Session event trails
+
+Manual snapshots are useful, but real work also needs a breadcrumb trail. Hippo can now store short session events and link them to the active snapshot so context output shows the latest steps, not just the last summary.
+
+```bash
+hippo session log \
+  --id sess_20260326 \
+  --task "Ship continuity" \
+  --type progress \
+  --content "Schema migration is done, next step is CLI wiring"
+
+hippo snapshot save \
+  --task "Ship continuity" \
+  --summary "Structured session events are flowing" \
+  --next-step "Surface them in framework hooks" \
+  --session sess_20260326
+
+hippo session show --id sess_20260326
+hippo context --auto --budget 1500
+```
+
+Hippo mirrors the latest trail to `.hippo/buffer/recent-session.md` so you can inspect the short-term thread without opening SQLite.
 
 ---
 

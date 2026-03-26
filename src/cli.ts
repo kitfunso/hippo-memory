@@ -11,6 +11,7 @@
  *   hippo outcome --good | --bad [--id <id>]
  *   hippo conflicts [--status <status>] [--json]
  *   hippo snapshot <save|show|clear>
+ *   hippo session <log|show>
  *   hippo forget <id>
  *   hippo inspect <id>
  *   hippo embed [--status]
@@ -48,8 +49,11 @@ import {
   saveActiveTaskSnapshot,
   loadActiveTaskSnapshot,
   clearActiveTaskSnapshot,
+  appendSessionEvent,
+  listSessionEvents,
   listMemoryConflicts,
   TaskSnapshot,
+  SessionEvent,
 } from './store.js';
 import { search, markRetrieved, estimateTokens, hybridSearch } from './search.js';
 import { consolidate } from './consolidate.js';
@@ -613,12 +617,34 @@ function printActiveTaskSnapshot(snapshot: TaskSnapshot): void {
   console.log(`- Status: ${snapshot.status}`);
   console.log(`- Updated: ${snapshot.updated_at}`);
   console.log(`- Source: ${snapshot.source}`);
+  if (snapshot.session_id) {
+    console.log(`- Session: ${snapshot.session_id}`);
+  }
   console.log('');
   console.log('### Summary');
   console.log(snapshot.summary);
   console.log('');
   console.log('### Next step');
   console.log(snapshot.next_step);
+  console.log('');
+}
+
+function printSessionEvents(events: SessionEvent[]): void {
+  if (events.length === 0) {
+    console.log('No session events found.');
+    return;
+  }
+
+  const latest = events[events.length - 1]!;
+  console.log('## Recent Session Trail\n');
+  console.log(`- Session: ${latest.session_id}`);
+  console.log(`- Task: ${latest.task ?? 'n/a'}`);
+  console.log(`- Updated: ${latest.created_at}`);
+  console.log('');
+
+  for (const event of events) {
+    console.log(`- [${event.created_at}] (${event.event_type}) ${event.content}`);
+  }
   console.log('');
 }
 
@@ -661,9 +687,10 @@ function cmdSnapshot(
     const task = String(flags['task'] ?? '').trim();
     const summary = String(flags['summary'] ?? '').trim();
     const nextStep = String(flags['next-step'] ?? '').trim();
+    const sessionId = String(flags['session'] ?? flags['id'] ?? '').trim();
 
     if (!task || !summary || !nextStep) {
-      console.error('Usage: hippo snapshot save --task <task> --summary <summary> --next-step <step> [--source <source>]');
+      console.error('Usage: hippo snapshot save --task <task> --summary <summary> --next-step <step> [--source <source>] [--session <session-id>]');
       process.exit(1);
     }
 
@@ -672,11 +699,15 @@ function cmdSnapshot(
       summary,
       next_step: nextStep,
       source: String(flags['source'] ?? 'cli'),
+      session_id: sessionId || null,
     });
 
     console.log(`Saved active task snapshot #${snapshot.id}`);
     console.log(`   Task: ${snapshot.task}`);
     console.log(`   Next: ${snapshot.next_step}`);
+    if (snapshot.session_id) {
+      console.log(`   Session: ${snapshot.session_id}`);
+    }
     return;
   }
 
@@ -711,6 +742,61 @@ function cmdSnapshot(
   }
 
   console.error('Usage: hippo snapshot <save|show|clear>');
+  process.exit(1);
+}
+
+function cmdSession(
+  hippoRoot: string,
+  args: string[],
+  flags: Record<string, string | boolean | string[]>
+): void {
+  requireInit(hippoRoot);
+
+  const subcommand = args[0] ?? 'show';
+  const sessionId = String(flags['id'] ?? flags['session'] ?? '').trim();
+  const task = String(flags['task'] ?? '').trim();
+  const limit = Math.max(1, parseInt(String(flags['limit'] ?? '8'), 10) || 8);
+
+  if (subcommand === 'log') {
+    const eventType = String(flags['type'] ?? 'note').trim();
+    const content = String(flags['content'] ?? '').trim();
+
+    if (!sessionId || !content) {
+      console.error('Usage: hippo session log --id <session-id> --content <text> [--type <type>] [--task <task>] [--source <source>]');
+      process.exit(1);
+    }
+
+    const event = appendSessionEvent(hippoRoot, {
+      session_id: sessionId,
+      task: task || null,
+      event_type: eventType || 'note',
+      content,
+      source: String(flags['source'] ?? 'cli'),
+    });
+
+    console.log(`Logged session event #${event.id}`);
+    console.log(`   Session: ${event.session_id}`);
+    console.log(`   Type: ${event.event_type}`);
+    return;
+  }
+
+  if (subcommand === 'show') {
+    const events = listSessionEvents(hippoRoot, {
+      session_id: sessionId || undefined,
+      task: task || undefined,
+      limit,
+    });
+
+    if (flags['json']) {
+      console.log(JSON.stringify({ events }, null, 2));
+      return;
+    }
+
+    printSessionEvents(events);
+    return;
+  }
+
+  console.error('Usage: hippo session <log|show>');
   process.exit(1);
 }
 
@@ -749,6 +835,9 @@ function cmdContext(
   let selectedItems: Array<{ entry: MemoryEntry; score: number; tokens: number; isGlobal?: boolean }> = [];
   let totalTokens = 0;
   const activeSnapshot = loadActiveTaskSnapshot(hippoRoot);
+  const recentSessionEvents = activeSnapshot?.session_id
+    ? listSessionEvents(hippoRoot, { session_id: activeSnapshot.session_id, limit: 5 })
+    : [];
 
   if (query === '*') {
     // No query: return strongest memories by strength, up to budget
@@ -804,7 +893,7 @@ function cmdContext(
     totalTokens = results.reduce((sum, r) => sum + r.tokens, 0);
   }
 
-  if (selectedItems.length === 0 && !activeSnapshot) return;
+  if (selectedItems.length === 0 && !activeSnapshot && recentSessionEvents.length === 0) return;
 
   // Mark retrieved and persist
   const toUpdate = selectedItems.map((s) => s.entry);
@@ -834,10 +923,13 @@ function cmdContext(
       content: r.entry.content,
       global: r.isGlobal ?? false,
     }));
-    console.log(JSON.stringify({ query, activeSnapshot, memories: output, tokens: totalTokens }));
+    console.log(JSON.stringify({ query, activeSnapshot, recentSessionEvents, memories: output, tokens: totalTokens }));
   } else {
     if (activeSnapshot) {
       printActiveTaskSnapshot(activeSnapshot);
+    }
+    if (recentSessionEvents.length > 0) {
+      printSessionEvents(recentSessionEvents);
     }
     printContextMarkdown(
       selectedItems.map((r) => ({
@@ -1472,10 +1564,23 @@ Commands:
       --summary <summary>
       --next-step <step>
       --source <source>    Optional source label
+      --session <id>       Link snapshot to a session trail
     snapshot show          Show the active task snapshot
       --json               Output as JSON
     snapshot clear         Clear the active task snapshot
       --status <status>    Mark final status (default: cleared)
+  session <sub>            Append or inspect short-term session history
+    session log            Append a structured session event
+      --id <session-id>
+      --content <text>
+      --type <type>        Event type (default: note)
+      --task <task>        Optional task label
+      --source <source>    Optional source label
+    session show           Show recent events for a session or task
+      --id <session-id>
+      --task <task>
+      --limit <n>          Event limit (default: 8)
+      --json               Output as JSON
   forget <id>              Force remove a memory
   inspect <id>             Show full memory detail
   embed                    Embed all memories for semantic search
@@ -1514,7 +1619,8 @@ Examples:
   hippo recall "data pipeline issues" --budget 2000
   hippo context --auto --budget 1500
   hippo conflicts
-  hippo snapshot save --task "Ship feature" --summary "Tests are green" --next-step "Open the PR"
+  hippo session log --id sess_123 --task "Ship feature" --type progress --content "Build is green, next step is docs"
+  hippo snapshot save --task "Ship feature" --summary "Tests are green" --next-step "Open the PR" --session sess_123
   hippo embed --status
   hippo watch "npm run build"
   hippo learn --git --days 30
@@ -1578,6 +1684,10 @@ async function main(): Promise<void> {
 
     case 'snapshot':
       cmdSnapshot(hippoRoot, args, flags);
+      break;
+
+    case 'session':
+      cmdSession(hippoRoot, args, flags);
       break;
 
     case 'forget': {

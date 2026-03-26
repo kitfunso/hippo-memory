@@ -265,7 +265,7 @@ Ship the smallest thing that demonstrates the core insight (decay + retrieval st
 - [ ] Schema acceleration
 - [ ] Web UI / dashboard
 - [ ] Multi-agent shared memory
-- [ ] Richer session/event history on top of the SQLite backbone
+- [x] Richer session/event history on top of the SQLite backbone
 - [ ] Explicit conflict resolution workflows beyond open/resolved auto-refresh
 
 ## Name Availability

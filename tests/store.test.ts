@@ -17,6 +17,8 @@ import {
   saveActiveTaskSnapshot,
   loadActiveTaskSnapshot,
   clearActiveTaskSnapshot,
+  appendSessionEvent,
+  listSessionEvents,
 } from '../src/store.js';
 import {
   openHippoDb,
@@ -314,10 +316,30 @@ describe('active task snapshots', () => {
     expect(loaded!.summary).toBe('Build, tests, and smoke pass locally.');
     expect(loaded!.next_step).toBe('Implement active session resume snapshot support.');
     expect(loaded!.status).toBe('active');
+    expect(loaded!.session_id).toBeNull();
 
     const mirrorPath = path.join(tmpDir, 'buffer', 'active-task.md');
     expect(fs.existsSync(mirrorPath)).toBe(true);
     expect(fs.readFileSync(mirrorPath, 'utf8')).toContain('Implement active session resume snapshot support.');
+  });
+
+  it('persists an optional session link with the active snapshot', () => {
+    initStore(tmpDir);
+
+    saveActiveTaskSnapshot(tmpDir, {
+      task: 'Ship session continuity',
+      summary: 'Structured session events are flowing.',
+      next_step: 'Surface the session trail in context output.',
+      source: 'test',
+      session_id: 'sess_alpha',
+    });
+
+    const loaded = loadActiveTaskSnapshot(tmpDir);
+    expect(loaded).not.toBeNull();
+    expect(loaded!.session_id).toBe('sess_alpha');
+
+    const mirrorPath = path.join(tmpDir, 'buffer', 'active-task.md');
+    expect(fs.readFileSync(mirrorPath, 'utf8')).toContain('sess_alpha');
   });
 
   it('supersedes the previous active snapshot when a new one is saved', () => {
@@ -364,5 +386,65 @@ describe('active task snapshots', () => {
     expect(clearActiveTaskSnapshot(tmpDir)).toBe(true);
     expect(loadActiveTaskSnapshot(tmpDir)).toBeNull();
     expect(fs.existsSync(path.join(tmpDir, 'buffer', 'active-task.md'))).toBe(false);
+  });
+});
+
+describe('session events', () => {
+  it('stores and reloads recent session events in chronological order', () => {
+    initStore(tmpDir);
+
+    appendSessionEvent(tmpDir, {
+      session_id: 'sess_alpha',
+      task: 'Ship continuity',
+      event_type: 'plan',
+      content: 'Decide on the first thin slice.',
+      source: 'test',
+      metadata: { step: 1 },
+    });
+
+    appendSessionEvent(tmpDir, {
+      session_id: 'sess_alpha',
+      task: 'Ship continuity',
+      event_type: 'progress',
+      content: 'Schema migration is done.',
+      source: 'test',
+      metadata: { step: 2 },
+    });
+
+    const events = listSessionEvents(tmpDir, { session_id: 'sess_alpha', limit: 5 });
+    expect(events).toHaveLength(2);
+    expect(events[0]!.event_type).toBe('plan');
+    expect(events[0]!.metadata).toEqual({ step: 1 });
+    expect(events[1]!.event_type).toBe('progress');
+    expect(events[1]!.content).toContain('Schema migration');
+
+    const mirrorPath = path.join(tmpDir, 'buffer', 'recent-session.md');
+    expect(fs.existsSync(mirrorPath)).toBe(true);
+    expect(fs.readFileSync(mirrorPath, 'utf8')).toContain('sess_alpha');
+  });
+
+  it('can filter down to the newest session trail', () => {
+    initStore(tmpDir);
+
+    appendSessionEvent(tmpDir, {
+      session_id: 'sess_old',
+      task: 'Old task',
+      event_type: 'note',
+      content: 'Old event',
+      source: 'test',
+    });
+
+    appendSessionEvent(tmpDir, {
+      session_id: 'sess_new',
+      task: 'New task',
+      event_type: 'note',
+      content: 'Newest event',
+      source: 'test',
+    });
+
+    const latest = listSessionEvents(tmpDir, { limit: 1 });
+    expect(latest).toHaveLength(1);
+    expect(latest[0]!.session_id).toBe('sess_new');
+    expect(latest[0]!.content).toBe('Newest event');
   });
 });

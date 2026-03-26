@@ -69,6 +69,7 @@ interface TaskSnapshotRow {
   next_step: string;
   status: string;
   source: string;
+  session_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -84,6 +85,17 @@ interface MemoryConflictRow {
   updated_at: string;
 }
 
+interface SessionEventRow {
+  id: number;
+  session_id: string;
+  task: string | null;
+  event_type: string;
+  content: string;
+  source: string;
+  metadata_json: string;
+  created_at: string;
+}
+
 export interface TaskSnapshot {
   id: number;
   task: string;
@@ -91,6 +103,7 @@ export interface TaskSnapshot {
   next_step: string;
   status: string;
   source: string;
+  session_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -104,6 +117,17 @@ export interface MemoryConflict {
   status: string;
   detected_at: string;
   updated_at: string;
+}
+
+export interface SessionEvent {
+  id: number;
+  session_id: string;
+  task: string | null;
+  event_type: string;
+  content: string;
+  source: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
 }
 
 const INDEX_VERSION = 2;
@@ -235,6 +259,19 @@ function parseJsonArray(raw: string | null | undefined): string[] {
   }
 }
 
+function parseJsonObject(raw: string | null | undefined): Record<string, unknown> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    return {};
+  } catch {
+    return {};
+  }
+}
+
 function rowToTaskSnapshot(row: TaskSnapshotRow): TaskSnapshot {
   return {
     id: Number(row.id),
@@ -243,6 +280,7 @@ function rowToTaskSnapshot(row: TaskSnapshotRow): TaskSnapshot {
     next_step: row.next_step,
     status: row.status,
     source: row.source,
+    session_id: row.session_id ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -261,6 +299,19 @@ function rowToMemoryConflict(row: MemoryConflictRow): MemoryConflict {
   };
 }
 
+function rowToSessionEvent(row: SessionEventRow): SessionEvent {
+  return {
+    id: Number(row.id),
+    session_id: row.session_id,
+    task: row.task ?? null,
+    event_type: row.event_type,
+    content: row.content,
+    source: row.source,
+    metadata: parseJsonObject(row.metadata_json),
+    created_at: row.created_at,
+  };
+}
+
 function writeActiveTaskMirror(hippoRoot: string, snapshot: TaskSnapshot): void {
   const filePath = path.join(hippoRoot, 'buffer', 'active-task.md');
   const fm = dumpFrontmatter({
@@ -268,6 +319,7 @@ function writeActiveTaskMirror(hippoRoot: string, snapshot: TaskSnapshot): void 
     task: snapshot.task,
     status: snapshot.status,
     source: snapshot.source,
+    session_id: snapshot.session_id,
     created_at: snapshot.created_at,
     updated_at: snapshot.updated_at,
     next_step: snapshot.next_step,
@@ -285,10 +337,14 @@ function writeActiveTaskMirror(hippoRoot: string, snapshot: TaskSnapshot): void 
     `## Task`,
     snapshot.task,
     '',
-  ].join('\n');
+  ];
+
+  if (snapshot.session_id) {
+    body.push(`## Session`, snapshot.session_id, '');
+  }
 
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, `${fm}\n\n${body}`, 'utf8');
+  fs.writeFileSync(filePath, `${fm}\n\n${body.join('\n')}`, 'utf8');
 }
 
 function removeActiveTaskMirror(hippoRoot: string): void {
@@ -296,6 +352,44 @@ function removeActiveTaskMirror(hippoRoot: string): void {
   if (fs.existsSync(filePath)) {
     fs.unlinkSync(filePath);
   }
+}
+
+function writeRecentSessionMirror(hippoRoot: string, events: SessionEvent[]): void {
+  const filePath = path.join(hippoRoot, 'buffer', 'recent-session.md');
+  if (events.length === 0) {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+    return;
+  }
+
+  const latest = events[events.length - 1]!;
+  const fm = dumpFrontmatter({
+    session_id: latest.session_id,
+    task: latest.task,
+    event_count: events.length,
+    updated_at: latest.created_at,
+  });
+
+  const lines = [
+    '# Recent Session Trail',
+    '',
+    `- Session: ${latest.session_id}`,
+    `- Task: ${latest.task ?? 'n/a'}`,
+    `- Updated: ${latest.created_at}`,
+    '',
+    '## Events',
+    '',
+  ];
+
+  for (const event of events) {
+    lines.push(`- [${event.created_at}] (${event.event_type}) ${event.content}`);
+  }
+
+  lines.push('');
+
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, `${fm}\n\n${lines.join('\n')}`, 'utf8');
 }
 
 function writeConflictMirrors(hippoRoot: string, conflicts: MemoryConflict[]): void {
@@ -836,7 +930,7 @@ export function appendConsolidationRun(
 
 export function saveActiveTaskSnapshot(
   hippoRoot: string,
-  snapshot: { task: string; summary: string; next_step: string; source?: string }
+  snapshot: { task: string; summary: string; next_step: string; source?: string; session_id?: string | null }
 ): TaskSnapshot {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
@@ -847,13 +941,14 @@ export function saveActiveTaskSnapshot(
     db.prepare(`UPDATE task_snapshots SET status = 'superseded', updated_at = ? WHERE status = 'active'`).run(now);
 
     const result = db.prepare(`
-      INSERT INTO task_snapshots(task, summary, next_step, status, source, created_at, updated_at)
-      VALUES (?, ?, ?, 'active', ?, ?, ?)
+      INSERT INTO task_snapshots(task, summary, next_step, status, source, session_id, created_at, updated_at)
+      VALUES (?, ?, ?, 'active', ?, ?, ?, ?)
     `).run(
       snapshot.task,
       snapshot.summary,
       snapshot.next_step,
       snapshot.source ?? 'cli',
+      snapshot.session_id ?? null,
       now,
       now,
     );
@@ -862,7 +957,7 @@ export function saveActiveTaskSnapshot(
 
     const id = Number(result.lastInsertRowid ?? 0);
     const row = db.prepare(`
-      SELECT id, task, summary, next_step, status, source, created_at, updated_at
+      SELECT id, task, summary, next_step, status, source, session_id, created_at, updated_at
       FROM task_snapshots
       WHERE id = ?
     `).get(id) as TaskSnapshotRow | undefined;
@@ -891,7 +986,7 @@ export function loadActiveTaskSnapshot(hippoRoot: string): TaskSnapshot | null {
   const db = openHippoDb(hippoRoot);
   try {
     const row = db.prepare(`
-      SELECT id, task, summary, next_step, status, source, created_at, updated_at
+      SELECT id, task, summary, next_step, status, source, session_id, created_at, updated_at
       FROM task_snapshots
       WHERE status = 'active'
       ORDER BY updated_at DESC, id DESC
@@ -926,6 +1021,92 @@ export function clearActiveTaskSnapshot(hippoRoot: string, clearedStatus: string
     db.prepare(`UPDATE task_snapshots SET status = ?, updated_at = ? WHERE id = ?`).run(clearedStatus, now, active.id);
     removeActiveTaskMirror(hippoRoot);
     return true;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+export function appendSessionEvent(
+  hippoRoot: string,
+  event: {
+    session_id: string;
+    event_type: string;
+    content: string;
+    task?: string | null;
+    source?: string;
+    metadata?: Record<string, unknown>;
+  }
+): SessionEvent {
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  const now = new Date().toISOString();
+
+  try {
+    const result = db.prepare(`
+      INSERT INTO session_events(session_id, task, event_type, content, source, metadata_json, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      event.session_id,
+      event.task ?? null,
+      event.event_type,
+      event.content,
+      event.source ?? 'cli',
+      JSON.stringify(event.metadata ?? {}),
+      now,
+    );
+
+    const id = Number(result.lastInsertRowid ?? 0);
+    const row = db.prepare(`
+      SELECT id, session_id, task, event_type, content, source, metadata_json, created_at
+      FROM session_events
+      WHERE id = ?
+    `).get(id) as SessionEventRow | undefined;
+
+    if (!row) {
+      throw new Error('Failed to reload saved session event');
+    }
+
+    const loaded = rowToSessionEvent(row);
+    const recent = listSessionEvents(hippoRoot, { session_id: loaded.session_id, limit: 20 });
+    writeRecentSessionMirror(hippoRoot, recent);
+    return loaded;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+export function listSessionEvents(
+  hippoRoot: string,
+  options: { session_id?: string; task?: string; limit?: number } = {}
+): SessionEvent[] {
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    const clauses: string[] = [];
+    const params: Array<string | number> = [];
+
+    if (options.session_id) {
+      clauses.push('session_id = ?');
+      params.push(options.session_id);
+    }
+    if (options.task) {
+      clauses.push('task = ?');
+      params.push(options.task);
+    }
+
+    const limit = Math.max(1, Math.trunc(options.limit ?? 8));
+    params.push(limit);
+
+    const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+    const rows = db.prepare(`
+      SELECT id, session_id, task, event_type, content, source, metadata_json, created_at
+      FROM session_events
+      ${where}
+      ORDER BY created_at DESC, id DESC
+      LIMIT ?
+    `).all(...params) as SessionEventRow[];
+
+    return rows.map(rowToSessionEvent).reverse();
   } finally {
     closeHippoDb(db);
   }

@@ -16,6 +16,8 @@ export {
   saveActiveTaskSnapshot,
   loadActiveTaskSnapshot,
   clearActiveTaskSnapshot,
+  appendSessionEvent,
+  listSessionEvents,
   listMemoryConflicts,
   replaceDetectedConflicts,
 } from './store.js';
