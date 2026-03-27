@@ -1,6 +1,6 @@
 {
   "name": "hippo-memory",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Biologically-inspired memory system for AI agents. Decay by default, strength through use.",
   "type": "module",
   "main": "./dist/index.js",
