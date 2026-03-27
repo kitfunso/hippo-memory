@@ -296,6 +296,131 @@ export default function register(api: any) {
     { optional: true },
   );
 
+  // --- Tool: hippo_conflicts ---
+  api.registerTool(
+    (ctx: HippoRuntimeContext) => ({
+      name: 'hippo_conflicts',
+      description:
+        'List open memory conflicts — contradictory memories that need resolution.',
+      parameters: {
+        type: 'object',
+        properties: {
+          json: {
+            type: 'boolean',
+            description: 'Output as JSON (default: false)',
+          },
+        },
+      },
+      async execute(_id: string, params: { json?: boolean }) {
+        const cfg = getConfig(api);
+        const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
+        const args = params.json ? 'conflicts --json' : 'conflicts';
+        const result = runHippo(args, hippoCwd);
+        return { content: [{ type: 'text', text: result || 'No conflicts found.' }] };
+      },
+    }),
+    { optional: true },
+  );
+
+  // --- Tool: hippo_resolve ---
+  api.registerTool(
+    (ctx: HippoRuntimeContext) => ({
+      name: 'hippo_resolve',
+      description:
+        'Resolve a memory conflict by keeping one memory and weakening or deleting the other.',
+      parameters: {
+        type: 'object',
+        properties: {
+          conflict_id: {
+            type: 'number',
+            description: 'The conflict ID to resolve',
+          },
+          keep: {
+            type: 'string',
+            description: 'ID of the memory to keep',
+          },
+          forget: {
+            type: 'boolean',
+            description: 'Delete the losing memory instead of weakening it (default: false)',
+          },
+        },
+        required: ['conflict_id', 'keep'],
+      },
+      async execute(
+        _id: string,
+        params: { conflict_id: number; keep: string; forget?: boolean },
+      ) {
+        const cfg = getConfig(api);
+        const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
+        let args = `resolve ${params.conflict_id} --keep ${params.keep}`;
+        if (params.forget) args += ' --forget';
+        const result = runHippo(args, hippoCwd);
+        return { content: [{ type: 'text', text: result || 'Conflict resolved.' }] };
+      },
+    }),
+    { optional: true },
+  );
+
+  // --- Tool: hippo_share ---
+  api.registerTool(
+    (ctx: HippoRuntimeContext) => ({
+      name: 'hippo_share',
+      description:
+        'Share a memory to the global store for cross-project use. Memories with universal lessons (errors, platform gotchas) transfer well; project-specific ones are filtered.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Memory ID to share (or "auto" to auto-share all high-scoring memories)',
+          },
+          force: {
+            type: 'boolean',
+            description: 'Share even if transfer score is low (default: false)',
+          },
+        },
+        required: ['id'],
+      },
+      async execute(
+        _id: string,
+        params: { id: string; force?: boolean },
+      ) {
+        const cfg = getConfig(api);
+        const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
+        let args: string;
+        if (params.id === 'auto') {
+          args = 'share --auto';
+        } else {
+          args = `share ${params.id}`;
+          if (params.force) args += ' --force';
+        }
+        const result = runHippo(args, hippoCwd);
+        return { content: [{ type: 'text', text: result || 'Share complete.' }] };
+      },
+    }),
+    { optional: true },
+  );
+
+  // --- Tool: hippo_peers ---
+  api.registerTool(
+    (ctx: HippoRuntimeContext) => ({
+      name: 'hippo_peers',
+      description:
+        'List all projects that have contributed memories to the global shared store.',
+      parameters: {
+        type: 'object',
+        properties: {},
+      },
+      async execute() {
+        const cfg = getConfig(api);
+        const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
+        const result = runHippo('peers', hippoCwd);
+        return { content: [{ type: 'text', text: result || 'No peers found.' }] };
+      },
+    }),
+    { optional: true },
+  );
+
   // --- Hook: auto-inject context at session start ---
   api.on(
     'before_prompt_build',
@@ -366,5 +491,5 @@ export default function register(api: any) {
     },
   );
 
-  logger.info?.('[hippo] Memory plugin registered (tools: hippo_recall, hippo_remember, hippo_outcome, hippo_status, hippo_context)');
+  logger.info?.('[hippo] Memory plugin registered (tools: hippo_recall, hippo_remember, hippo_outcome, hippo_status, hippo_context, hippo_conflicts, hippo_resolve, hippo_share, hippo_peers)');
 }

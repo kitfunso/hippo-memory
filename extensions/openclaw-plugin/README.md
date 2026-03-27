@@ -65,8 +65,12 @@ The plugin registers these tools for the agent to call:
 | `hippo_recall` | Search memories by topic (always available) |
 | `hippo_remember` | Store a new memory (always available) |
 | `hippo_outcome` | Report if recalled memories helped (always available) |
-| `hippo_status` | Check memory health (optional, enable in tools.allow) |
-| `hippo_context` | Smart context from git state (optional, enable in tools.allow) |
+| `hippo_status` | Check memory health (optional) |
+| `hippo_context` | Smart context from git state (optional) |
+| `hippo_conflicts` | List open memory conflicts (optional) |
+| `hippo_resolve` | Resolve a conflict by keeping one memory (optional) |
+| `hippo_share` | Share a memory to global store with transfer scoring (optional) |
+| `hippo_peers` | List projects contributing to global store (optional) |
 
 ### How it differs from claude-mem
 

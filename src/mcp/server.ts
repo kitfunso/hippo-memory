@@ -18,7 +18,8 @@ import {
   calculateStrength,
 } from '../memory.js';
 import { search, hybridSearch, markRetrieved, estimateTokens } from '../search.js';
-import { loadAllEntries, writeEntry, readEntry, initStore, loadActiveTaskSnapshot, listMemoryConflicts } from '../store.js';
+import { loadAllEntries, writeEntry, readEntry, initStore, loadActiveTaskSnapshot, listMemoryConflicts, resolveConflict } from '../store.js';
+import { shareMemory, listPeers } from '../shared.js';
 import { consolidate } from '../consolidate.js';
 import { fetchGitLog, extractLessons, deduplicateLesson, isGitRepo } from '../autolearn.js';
 import { loadConfig } from '../config.js';
@@ -162,6 +163,51 @@ const TOOLS = [
       properties: {
         days: { type: 'number', description: 'Days to scan back (default: 7)' },
       },
+    },
+  },
+  {
+    name: 'hippo_conflicts',
+    description:
+      'List open memory conflicts — contradictory memories that need resolution.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {},
+    },
+  },
+  {
+    name: 'hippo_resolve',
+    description:
+      'Resolve a memory conflict by keeping one memory and weakening or deleting the other.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        conflict_id: { type: 'number', description: 'The conflict ID to resolve' },
+        keep: { type: 'string', description: 'ID of the memory to keep' },
+        forget: { type: 'boolean', description: 'Delete the loser instead of weakening (default: false)' },
+      },
+      required: ['conflict_id', 'keep'],
+    },
+  },
+  {
+    name: 'hippo_share',
+    description:
+      'Share a memory to the global store for cross-project use with transfer scoring.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        id: { type: 'string', description: 'Memory ID to share' },
+        force: { type: 'boolean', description: 'Share even if transfer score is low' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'hippo_peers',
+    description:
+      'List all projects that have contributed memories to the global shared store.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {},
     },
   },
 ];
@@ -327,6 +373,40 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
         added++;
       }
       return `Git learn: ${added} new, ${skipped} duplicates skipped (scanned ${days} days)`;
+    }
+
+    case 'hippo_conflicts': {
+      const conflicts = listMemoryConflicts(hippoRoot, 'open');
+      if (conflicts.length === 0) return 'No open conflicts.';
+      return conflicts.map((c) =>
+        `conflict_${c.id}: ${c.memory_a_id} <-> ${c.memory_b_id} (score=${c.score.toFixed(2)}) — ${c.reason}`
+      ).join('\n');
+    }
+
+    case 'hippo_resolve': {
+      const conflictId = Number(args.conflict_id);
+      const keepId = String(args.keep || '');
+      const forget = Boolean(args.forget);
+      if (!conflictId || !keepId) return 'Required: conflict_id and keep.';
+      const result = resolveConflict(hippoRoot, conflictId, keepId, forget);
+      if (!result) return 'Could not resolve. Check the conflict ID and --keep value.';
+      const action = forget ? 'deleted' : 'weakened';
+      return `Resolved conflict ${conflictId}: kept ${keepId}, ${action} ${result.loserId}`;
+    }
+
+    case 'hippo_share': {
+      const shareId = String(args.id || '');
+      if (!shareId) return 'Required: id (memory ID to share).';
+      const force = Boolean(args.force);
+      const shared = shareMemory(hippoRoot, shareId, { force });
+      if (!shared) return 'Transfer score too low. Use force=true to override.';
+      return `Shared [${shared.id}] to global store. Source: ${shared.source}`;
+    }
+
+    case 'hippo_peers': {
+      const peers = listPeers();
+      if (peers.length === 0) return 'No peers found.';
+      return peers.map((p) => `${p.project}: ${p.count} memories (latest: ${p.latest.slice(0, 10)})`).join('\n');
     }
 
     default:
