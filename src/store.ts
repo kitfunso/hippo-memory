@@ -1213,4 +1213,85 @@ export function replaceDetectedConflicts(
   }
 }
 
+/**
+ * Resolve a conflict by keeping one memory and weakening the other.
+ * Sets conflict status to 'resolved' and halves the loser's half-life.
+ * If --forget is used, the loser is deleted entirely.
+ *
+ * Returns the resolved conflict, or null if not found.
+ */
+export function resolveConflict(
+  hippoRoot: string,
+  conflictId: number,
+  keepId: string,
+  forgetLoser: boolean = false
+): { conflict: MemoryConflict; loserId: string } | null {
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+
+  try {
+    const row = db.prepare(`
+      SELECT id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at
+      FROM memory_conflicts WHERE id = ?
+    `).get(conflictId) as MemoryConflictRow | undefined;
+
+    if (!row) return null;
+
+    const conflict = rowToMemoryConflict(row);
+    if (conflict.status !== 'open') return null;
+
+    const loserId = keepId === conflict.memory_a_id
+      ? conflict.memory_b_id
+      : keepId === conflict.memory_b_id
+        ? conflict.memory_a_id
+        : null;
+
+    if (!loserId) return null;
+
+    db.exec('BEGIN');
+
+    // Mark conflict as resolved
+    db.prepare(`UPDATE memory_conflicts SET status = 'resolved', updated_at = datetime('now') WHERE id = ?`)
+      .run(conflictId);
+
+    if (forgetLoser) {
+      // Delete the losing memory
+      db.prepare(`DELETE FROM memories WHERE id = ?`).run(loserId);
+    } else {
+      // Halve the loser's half-life (weakens it over time)
+      db.prepare(`UPDATE memories SET half_life_days = MAX(1, half_life_days / 2), updated_at = datetime('now') WHERE id = ?`)
+        .run(loserId);
+    }
+
+    // Clean up conflicts_with references
+    const keepRow = db.prepare(`SELECT conflicts_with_json FROM memories WHERE id = ?`).get(keepId) as { conflicts_with_json: string } | undefined;
+    if (keepRow) {
+      const refs: string[] = JSON.parse(keepRow.conflicts_with_json || '[]');
+      const cleaned = refs.filter((r: string) => r !== loserId);
+      db.prepare(`UPDATE memories SET conflicts_with_json = ?, updated_at = datetime('now') WHERE id = ?`)
+        .run(JSON.stringify(cleaned), keepId);
+    }
+
+    if (!forgetLoser) {
+      const loserRow = db.prepare(`SELECT conflicts_with_json FROM memories WHERE id = ?`).get(loserId) as { conflicts_with_json: string } | undefined;
+      if (loserRow) {
+        const refs: string[] = JSON.parse(loserRow.conflicts_with_json || '[]');
+        const cleaned = refs.filter((r: string) => r !== keepId);
+        db.prepare(`UPDATE memories SET conflicts_with_json = ?, updated_at = datetime('now') WHERE id = ?`)
+          .run(JSON.stringify(cleaned), loserId);
+      }
+    }
+
+    db.exec('COMMIT');
+    syncMirrorFiles(hippoRoot, db);
+
+    return { conflict: { ...conflict, status: 'resolved' }, loserId };
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch { /* ignore */ }
+    throw error;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 export { getHippoDbPath };

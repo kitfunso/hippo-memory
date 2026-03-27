@@ -54,6 +54,7 @@ import {
   appendSessionEvent,
   listSessionEvents,
   listMemoryConflicts,
+  resolveConflict,
   TaskSnapshot,
   SessionEvent,
 } from './store.js';
@@ -677,6 +678,63 @@ function cmdConflicts(
     console.log(`    reason: ${conflict.reason}`);
     console.log('');
   }
+}
+
+function cmdResolve(
+  hippoRoot: string,
+  args: string[],
+  flags: Record<string, string | boolean | string[]>
+): void {
+  requireInit(hippoRoot);
+
+  const rawId = args[0] ?? '';
+  // Accept "42" or "conflict_42"
+  const conflictId = parseInt(rawId.replace(/^conflict_/, ''), 10);
+  if (isNaN(conflictId)) {
+    console.error('Usage: hippo resolve <conflict_id> --keep <memory_id> [--forget]');
+    process.exit(1);
+  }
+
+  const keepId = String(flags['keep'] ?? '').trim();
+  if (!keepId) {
+    // Show the conflict details to help the user decide
+    const conflicts = listMemoryConflicts(hippoRoot, 'open');
+    const conflict = conflicts.find((c) => c.id === conflictId);
+    if (!conflict) {
+      console.error(`Conflict ${conflictId} not found or already resolved.`);
+      process.exit(1);
+    }
+
+    console.log(`Conflict ${conflictId}:`);
+    console.log(`  ${conflict.memory_a_id} <-> ${conflict.memory_b_id}`);
+    console.log(`  Reason: ${conflict.reason}`);
+    console.log('');
+
+    const entryA = readEntry(hippoRoot, conflict.memory_a_id);
+    const entryB = readEntry(hippoRoot, conflict.memory_b_id);
+    if (entryA) {
+      console.log(`  [A] ${conflict.memory_a_id}:`);
+      console.log(`      ${entryA.content.slice(0, 120)}${entryA.content.length > 120 ? '...' : ''}`);
+    }
+    if (entryB) {
+      console.log(`  [B] ${conflict.memory_b_id}:`);
+      console.log(`      ${entryB.content.slice(0, 120)}${entryB.content.length > 120 ? '...' : ''}`);
+    }
+    console.log('');
+    console.log(`Resolve with: hippo resolve ${conflictId} --keep <memory_id> [--forget]`);
+    return;
+  }
+
+  const forgetLoser = Boolean(flags['forget']);
+  const result = resolveConflict(hippoRoot, conflictId, keepId, forgetLoser);
+
+  if (!result) {
+    console.error(`Could not resolve conflict ${conflictId}. Check the ID and --keep value.`);
+    process.exit(1);
+  }
+
+  const action = forgetLoser ? 'deleted' : 'weakened (half-life halved)';
+  console.log(`Resolved conflict ${conflictId}: kept ${keepId}, ${action} ${result.loserId}`);
 }
 
 function cmdSnapshot(
@@ -1574,6 +1632,9 @@ Commands:
   conflicts                List detected open memory conflicts
     --status <status>      Filter by status (default: open)
     --json                 Output as JSON
+  resolve <conflict_id>    Resolve a memory conflict
+    --keep <memory_id>     Memory to keep (required)
+    --forget               Delete the losing memory (default: halve half-life)
   snapshot <sub>           Persist or inspect the current active task
     snapshot save          Save active task state
       --task <task>
@@ -1696,6 +1757,10 @@ async function main(): Promise<void> {
 
     case 'conflicts':
       cmdConflicts(hippoRoot, flags);
+      break;
+
+    case 'resolve':
+      cmdResolve(hippoRoot, args, flags);
       break;
 
     case 'snapshot':

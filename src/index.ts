@@ -20,6 +20,7 @@ export {
   listSessionEvents,
   listMemoryConflicts,
   replaceDetectedConflicts,
+  resolveConflict,
 } from './store.js';
 export { consolidate, ConsolidationResult } from './consolidate.js';
 

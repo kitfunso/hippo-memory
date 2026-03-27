@@ -266,7 +266,7 @@ Ship the smallest thing that demonstrates the core insight (decay + retrieval st
 - [ ] Web UI / dashboard
 - [ ] Multi-agent shared memory
 - [x] Richer session/event history on top of the SQLite backbone
-- [ ] Explicit conflict resolution workflows beyond open/resolved auto-refresh
+- [x] Explicit conflict resolution: `hippo resolve <id> --keep <mem_id> [--forget]`
 
 ## Name Availability
 
