@@ -53,6 +53,10 @@ export {
   searchBothHybrid,
   syncGlobalToLocal,
   HybridSearchOptions,
+  transferScore,
+  shareMemory,
+  listPeers,
+  autoShare,
 } from './shared.js';
 
 // Feature 4: Memory importers

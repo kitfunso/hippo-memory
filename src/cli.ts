@@ -78,6 +78,10 @@ import {
   getGlobalRoot,
   initGlobal,
   promoteToGlobal,
+  shareMemory,
+  listPeers,
+  autoShare,
+  transferScore,
   searchBoth,
   searchBothHybrid,
   syncGlobalToLocal,
@@ -1668,6 +1672,12 @@ Commands:
     --days <n>             Scan this many days back (default: 7)
     --repos <paths>        Comma-separated repo paths to scan
   promote <id>             Copy a local memory to the global store
+  share <id>               Share a memory with attribution + transfer scoring
+    --force                Share even if transfer score is low
+    --auto                 Auto-share all high-transfer-score memories
+    --dry-run              Preview what would be shared
+    --min-score <n>        Minimum transfer score (default: 0.6)
+  peers                    List projects contributing to global store
   sync                     Pull global memories into local project
   import                   Import memories from other AI tools
     --chatgpt <path>       Import from ChatGPT memory export (JSON or txt)
@@ -1826,6 +1836,66 @@ async function main(): Promise<void> {
     case 'sync':
       cmdSync(hippoRoot);
       break;
+
+    case 'share': {
+      const shareId = args[0];
+      if (shareId === '--auto' || flags['auto']) {
+        // Auto-share mode
+        requireInit(hippoRoot);
+        const minScore = parseFloat(String(flags['min-score'] ?? '0.6'));
+        const dryRun = Boolean(flags['dry-run']);
+        const results = autoShare(hippoRoot, { minScore, dryRun });
+        if (results.length === 0) {
+          console.log('No memories meet the sharing threshold.');
+        } else if (dryRun) {
+          console.log(`Would share ${results.length} memories:\n`);
+          for (const e of results) {
+            const score = transferScore(e);
+            console.log(`  ${e.id} (transfer=${fmt(score)}) ${e.content.slice(0, 80)}...`);
+          }
+        } else {
+          console.log(`Shared ${results.length} memories to global store.`);
+          for (const e of results) {
+            console.log(`  ${e.id} <- ${e.source}`);
+          }
+        }
+      } else if (shareId) {
+        requireInit(hippoRoot);
+        const force = Boolean(flags['force']);
+        const result = shareMemory(hippoRoot, shareId, { force });
+        if (result) {
+          console.log(`Shared [${result.id}] to global store.`);
+          console.log(`  Source: ${result.source}`);
+        } else {
+          const entry = readEntry(hippoRoot, shareId);
+          if (entry) {
+            const score = transferScore(entry);
+            console.log(`Transfer score too low (${fmt(score)}). This memory looks project-specific.`);
+            console.log('Use --force to share anyway.');
+          } else {
+            console.error(`Memory not found: ${shareId}`);
+            process.exit(1);
+          }
+        }
+      } else {
+        console.error('Usage: hippo share <memory_id> [--force] or hippo share --auto [--dry-run]');
+        process.exit(1);
+      }
+      break;
+    }
+
+    case 'peers': {
+      const peers = listPeers();
+      if (peers.length === 0) {
+        console.log('No peers found. Share memories with: hippo share <id>');
+      } else {
+        console.log(`${peers.length} project${peers.length === 1 ? '' : 's'} contributing to global store:\n`);
+        for (const p of peers) {
+          console.log(`  ${p.project.padEnd(25)} ${String(p.count).padStart(4)} memories  (latest: ${p.latest.slice(0, 10)})`);
+        }
+      }
+      break;
+    }
 
     case 'import':
       cmdImport(hippoRoot, args, flags);

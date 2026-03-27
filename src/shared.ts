@@ -176,6 +176,160 @@ export async function searchBothHybrid(
   return results;
 }
 
+// ---------------------------------------------------------------------------
+// Multi-agent shared memory
+// ---------------------------------------------------------------------------
+
+/** Tags that indicate project-specific memories (poor transfer candidates) */
+const PROJECT_SPECIFIC_TAGS = new Set([
+  'file-path', 'config', 'deploy', 'cron', 'url', 'auth',
+  'field-names', 'column-names', 'api-key', 'endpoint',
+]);
+
+/** Tags that indicate transferable memories (good transfer candidates) */
+const TRANSFERABLE_TAGS = new Set([
+  'error', 'platform', 'windows', 'encoding', 'python', 'shell',
+  'powershell', 'quant', 'backtest', 'pattern', 'rule', 'gotcha',
+  'sub-agent', 'review', 'best-practice',
+]);
+
+/**
+ * Estimate how well a memory would transfer to other projects.
+ * Returns 0..1 where >0.5 = good candidate for sharing.
+ */
+export function transferScore(entry: MemoryEntry): number {
+  let score = 0.5; // neutral default
+
+  // Boost for transferable tags
+  const transferableCount = entry.tags.filter((t) => TRANSFERABLE_TAGS.has(t)).length;
+  score += transferableCount * 0.1;
+
+  // Penalize for project-specific tags
+  const specificCount = entry.tags.filter((t) => PROJECT_SPECIFIC_TAGS.has(t)).length;
+  score -= specificCount * 0.15;
+
+  // High-retrieval memories are more likely to be universally useful
+  if (entry.retrieval_count >= 3) score += 0.1;
+
+  // Pinned memories are important to their owner
+  if (entry.pinned) score += 0.1;
+
+  // Error-tagged memories often encode universal lessons
+  if (entry.emotional_valence === 'negative' || entry.emotional_valence === 'critical') score += 0.05;
+
+  return Math.min(1, Math.max(0, score));
+}
+
+/**
+ * Share a memory to the global store with attribution.
+ * Enriches the source field with project path and timestamp.
+ * Returns the new global entry, or null if transfer score is too low.
+ */
+export function shareMemory(
+  localRoot: string,
+  id: string,
+  options: { force?: boolean } = {}
+): MemoryEntry | null {
+  const entry = readEntry(localRoot, id);
+  if (!entry) throw new Error(`Memory not found: ${id}`);
+
+  const score = transferScore(entry);
+  if (score < 0.3 && !options.force) return null;
+
+  initGlobal();
+  const globalRoot = getGlobalRoot();
+
+  const projectName = path.basename(path.resolve(localRoot, '..'));
+  const globalEntry: MemoryEntry = {
+    ...entry,
+    id: generateId('g'),
+    source: `shared:${projectName}:${new Date().toISOString()}`,
+  };
+
+  writeEntry(globalRoot, globalEntry);
+  return globalEntry;
+}
+
+/**
+ * List all projects that have contributed memories to the global store.
+ * Parses the source field for 'shared:<project>:' or 'promoted:<path>' patterns.
+ */
+export function listPeers(globalRoot?: string): Array<{ project: string; count: number; latest: string }> {
+  const root = globalRoot ?? getGlobalRoot();
+  if (!fs.existsSync(root)) return [];
+
+  const entries = loadAllEntries(root);
+  const peerMap = new Map<string, { count: number; latest: string }>();
+
+  for (const entry of entries) {
+    let project = 'unknown';
+
+    if (entry.source.startsWith('shared:')) {
+      const parts = entry.source.split(':');
+      project = parts[1] || 'unknown';
+    } else if (entry.source.startsWith('promoted:')) {
+      const promotedPath = entry.source.slice('promoted:'.length);
+      project = path.basename(path.resolve(promotedPath, '..'));
+    } else if (entry.source === 'cli-global') {
+      project = 'global-cli';
+    }
+
+    const existing = peerMap.get(project);
+    if (!existing) {
+      peerMap.set(project, { count: 1, latest: entry.created });
+    } else {
+      existing.count++;
+      if (entry.created > existing.latest) existing.latest = entry.created;
+    }
+  }
+
+  return Array.from(peerMap.entries())
+    .map(([project, data]) => ({ project, ...data }))
+    .sort((a, b) => b.count - a.count);
+}
+
+/**
+ * Auto-share: find local memories with high transfer scores that aren't already global.
+ * Returns the list of shared entries.
+ */
+export function autoShare(
+  localRoot: string,
+  options: { minScore?: number; dryRun?: boolean } = {}
+): MemoryEntry[] {
+  const { minScore = 0.6, dryRun = false } = options;
+
+  const localEntries = loadAllEntries(localRoot);
+  initGlobal();
+  const globalRoot = getGlobalRoot();
+  const globalEntries = loadAllEntries(globalRoot);
+
+  // Build set of global content hashes to avoid duplicates
+  const globalContentSet = new Set(
+    globalEntries.map((e) => e.content.toLowerCase().trim().slice(0, 200))
+  );
+
+  const candidates = localEntries.filter((entry) => {
+    const score = transferScore(entry);
+    if (score < minScore) return false;
+
+    // Skip if already shared (approximate content match)
+    const contentKey = entry.content.toLowerCase().trim().slice(0, 200);
+    if (globalContentSet.has(contentKey)) return false;
+
+    return true;
+  });
+
+  if (dryRun) return candidates;
+
+  const shared: MemoryEntry[] = [];
+  for (const entry of candidates) {
+    const result = shareMemory(localRoot, entry.id, { force: true });
+    if (result) shared.push(result);
+  }
+
+  return shared;
+}
+
 /**
  * Copy all global memories into the local store.
  * Skips entries that already exist locally (by ID or by near-identical content).

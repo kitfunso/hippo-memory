@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.0 (2026-03-27)
+
+### Added
+- Multi-agent shared memory: `hippo share <id>` shares memories with attribution and transfer scoring. Memories tagged with universal patterns (error, platform, gotcha) score higher for sharing; project-specific ones (config, deploy, file-path) are filtered out.
+- `hippo share --auto` auto-shares all high-scoring memories. `--dry-run` previews candidates.
+- `hippo peers` lists all projects contributing to the global store with memory counts.
+- `transferScore()` exported for programmatic transfer quality estimation.
+- Conflict resolution CLI: `hippo resolve <id> --keep <mem_id> [--forget]`.
+
+### Changed
+- `hippo resolve` without `--keep` now shows both conflicting memories for comparison.
+- Version bumped to 0.8.0 across all manifests.
+
 ## 0.7.0 (2026-03-27)
 
 ### Added
