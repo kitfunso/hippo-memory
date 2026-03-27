@@ -27,8 +27,10 @@ import { execSync } from 'child_process';
 import {
   createMemory,
   calculateStrength,
+  deriveHalfLife,
   resolveConfidence,
   applyOutcome,
+  computeSchemaFit,
   Layer,
   MemoryEntry,
   ConfidenceLevel,
@@ -312,12 +314,17 @@ function cmdRemember(
   if (flags['inferred']) confidence = 'inferred';
   if (flags['verified']) confidence = 'verified';
 
+  // Compute schema fit against existing memories
+  const existing = loadAllEntries(targetRoot);
+  const schemaFit = computeSchemaFit(text, rawTags, existing);
+
   const entry = createMemory(text, {
     layer: Layer.Episodic,
     tags: rawTags,
     pinned: Boolean(flags['pin']),
     source: useGlobal ? 'cli-global' : 'cli',
     confidence,
+    schema_fit: schemaFit,
   });
 
   writeEntry(targetRoot, entry);
@@ -1072,6 +1079,12 @@ async function cmdWatch(command: string, hippoRoot: string): Promise<void> {
   }
 
   const entry = captureError(exitCode, stderr, command);
+  // Compute schema fit against existing memories
+  const existingWatch = loadAllEntries(hippoRoot);
+  const watchFit = computeSchemaFit(entry.content, entry.tags, existingWatch);
+  entry.schema_fit = watchFit;
+  entry.half_life_days = deriveHalfLife(7, entry);
+  entry.strength = calculateStrength(entry);
   writeEntry(hippoRoot, entry);
   updateStats(hippoRoot, { remembered: 1 });
 
@@ -1123,11 +1136,16 @@ function learnFromRepo(
       continue;
     }
 
+    const gitLearnTags = ['error', 'git-learned'];
+    const existingForSchema = loadAllEntries(hippoRoot);
+    const schemaFitVal = computeSchemaFit(lesson, gitLearnTags, existingForSchema);
+
     const entry = createMemory(lesson, {
       layer: Layer.Episodic,
-      tags: ['error', 'git-learned'],
+      tags: gitLearnTags,
       source: 'git-learn',
       confidence: 'observed',
+      schema_fit: schemaFitVal,
     });
 
     writeEntry(hippoRoot, entry);

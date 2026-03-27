@@ -6,11 +6,15 @@
 - Hybrid search: `hippo recall` and `hippo context` now blend BM25 keyword scores with cosine embedding similarity when `@xenova/transformers` is installed. Falls back to pure BM25 otherwise.
 - `SearchResult.cosine` field on all search results (0 when embeddings not used).
 - `searchBothHybrid()` async function for cross-store (local + global) hybrid search.
-- `tests/hybrid-search.test.ts` covering hybrid scoring, fallback, budget, and weight tuning.
+- Schema acceleration: `schema_fit` is now auto-computed from tag + content overlap against existing memories. High-fit memories (>0.7) get 1.5x half-life; novel memories (<0.3) get 0.5x.
+- `computeSchemaFit()` exported for programmatic use.
+- Agent evaluation benchmark: 50-task sequential learning eval comparing no memory, static memory, and hippo. Validates the learning-over-time hypothesis (78% early trap rate -> 14% late).
+- `tests/hybrid-search.test.ts`, `tests/agent-eval.test.ts`, `tests/schema-fit.test.ts`.
 
 ### Changed
 - `hippo recall`, `hippo context`, and MCP tools (`hippo_recall`, `hippo_context`) upgraded from synchronous BM25-only search to async hybrid search.
 - MCP server request handling is now async to support embedding pipeline.
+- `hippo remember`, `hippo learn --git`, and `hippo watch` now auto-compute schema_fit instead of defaulting to 0.5.
 
 ## 0.6.3 (2026-03-21)
 

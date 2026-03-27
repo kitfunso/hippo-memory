@@ -2,7 +2,7 @@
  * Hippo public API  - re-exports for programmatic use.
  */
 
-export { MemoryEntry, Layer, EmotionalValence, ConfidenceLevel, calculateStrength, resolveConfidence, createMemory, applyOutcome, generateId } from './memory.js';
+export { MemoryEntry, Layer, EmotionalValence, ConfidenceLevel, calculateStrength, resolveConfidence, createMemory, applyOutcome, generateId, computeSchemaFit } from './memory.js';
 export { search, hybridSearch, markRetrieved, estimateTokens, textOverlap, SearchResult } from './search.js';
 export {
   initStore,

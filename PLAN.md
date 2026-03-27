@@ -262,7 +262,7 @@ Ship the smallest thing that demonstrates the core insight (decay + retrieval st
 
 ### Out (v0.2+):
 - [x] Embedding-based hybrid search (BM25 + cosine, optional @xenova/transformers)
-- [ ] Schema acceleration
+- [x] Schema acceleration (auto-computed schema_fit from tag + content overlap)
 - [ ] Web UI / dashboard
 - [ ] Multi-agent shared memory
 - [x] Richer session/event history on top of the SQLite backbone

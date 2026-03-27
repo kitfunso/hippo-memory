@@ -179,6 +179,81 @@ export function createMemory(
   return entry;
 }
 
+/**
+ * Compute how well new content fits existing knowledge patterns.
+ * Returns 0..1 where:
+ *   >0.7 = high fit (consistent with existing knowledge, consolidates faster)
+ *   0.3-0.7 = moderate fit
+ *   <0.3 = novel (doesn't match existing patterns, decays faster if unused)
+ *
+ * Uses tag overlap (always available) weighted by how common each tag is.
+ * Rare shared tags signal stronger schema fit than common ones.
+ */
+export function computeSchemaFit(
+  content: string,
+  tags: string[],
+  existingEntries: MemoryEntry[]
+): number {
+  if (existingEntries.length === 0) return 0.5; // no schema yet, neutral
+
+  // Build tag frequency map across all existing entries
+  const tagFreq = new Map<string, number>();
+  for (const entry of existingEntries) {
+    for (const tag of entry.tags) {
+      tagFreq.set(tag, (tagFreq.get(tag) ?? 0) + 1);
+    }
+  }
+
+  if (tags.length === 0 && tagFreq.size === 0) return 0.5;
+
+  // Tag overlap: IDF-weighted Jaccard
+  // Shared rare tags matter more than shared common tags
+  let weightedOverlap = 0;
+  let totalWeight = 0;
+  const N = existingEntries.length;
+
+  for (const tag of tags) {
+    const freq = tagFreq.get(tag) ?? 0;
+    // IDF-weighted: rare shared tags score higher
+    const maxIdf = Math.log(N + 1) + 1;
+
+    if (freq > 0) {
+      const idf = Math.log(N / freq) + 1;
+      weightedOverlap += idf;
+    }
+    totalWeight += maxIdf;
+  }
+
+  // Scale so that matching half the tags at average IDF gives ~0.5
+  const tagScore = totalWeight > 0 ? Math.min(1, (weightedOverlap / totalWeight) * 2) : 0;
+
+  // Content overlap: check how many existing entries share significant tokens
+  const newTokens = new Set(
+    content.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter((t) => t.length > 3)
+  );
+
+  if (newTokens.size === 0) return Math.min(1, Math.max(0, tagScore));
+
+  let contentMatches = 0;
+  for (const entry of existingEntries) {
+    const entryTokens = new Set(
+      entry.content.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter((t) => t.length > 3)
+    );
+    let shared = 0;
+    for (const token of newTokens) {
+      if (entryTokens.has(token)) shared++;
+    }
+    const overlap = shared / Math.max(newTokens.size, 1);
+    if (overlap > 0.2) contentMatches++;
+  }
+
+  const contentScore = Math.min(1, contentMatches / Math.max(5, N * 0.1));
+
+  // Blend: 60% tag overlap, 40% content overlap
+  const fit = 0.6 * tagScore + 0.4 * contentScore;
+  return Math.min(1, Math.max(0, fit));
+}
+
 function inferValence(tags: string[]): EmotionalValence {
   if (tags.includes('critical')) return 'critical';
   if (tags.includes('error')) return 'negative';
