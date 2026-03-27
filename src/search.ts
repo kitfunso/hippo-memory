@@ -148,7 +148,7 @@ export async function hybridSearch(
 
   // Score all entries with BM25
   const bm25Scores: number[] = entries.map((_, i) => bm25Score(corpus, i, queryTerms));
-  const maxBm25 = Math.max(...bm25Scores, 1e-9);
+  const maxBm25 = bm25Scores.reduce((a, b) => Math.max(a, b), 1e-9);
 
   // Try to get embedding scores if available
   let useEmbeddings = false;

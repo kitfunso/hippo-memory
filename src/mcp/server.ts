@@ -12,6 +12,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {
   createMemory,
+  computeSchemaFit,
   Layer,
   applyOutcome,
   calculateStrength,
@@ -197,6 +198,8 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
       const tags: string[] = [];
       if (args.error) tags.push('error');
       if (args.tag) tags.push(String(args.tag));
+      const existing = loadAllEntries(hippoRoot);
+      const schemaFit = computeSchemaFit(text, tags, existing);
       const entry = createMemory(text, {
         layer: Layer.Episodic,
         tags,
@@ -204,6 +207,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
         source: 'mcp',
         confidence: 'verified',
         baseHalfLifeDays: config.defaultHalfLifeDays,
+        schema_fit: schemaFit,
       });
       writeEntry(hippoRoot, entry);
 
@@ -404,9 +408,9 @@ process.stdin.on('data', (chunk: string) => {
     try {
       const req = JSON.parse(body) as McpRequest;
       if (req.method && !req.method.startsWith('notifications/')) {
-        handleRequest(req).then(send);
+        handleRequest(req).then(send).catch(() => {});
       } else if (req.method) {
-        handleRequest(req);
+        handleRequest(req).catch(() => {});
       }
     } catch {
       // Skip malformed messages

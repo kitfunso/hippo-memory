@@ -379,17 +379,15 @@ async function cmdRecall(
 
   // Update retrieval metadata and persist
   const updated = markRetrieved(results.map((r) => r.entry));
+  const localIndex = loadIndex(hippoRoot);
   for (const u of updated) {
-    // Determine which store this entry belongs to
-    const localIndex = loadIndex(hippoRoot);
     const targetRoot = localIndex.entries[u.id] ? hippoRoot : (isInitialized(globalRoot) ? globalRoot : hippoRoot);
     writeEntry(targetRoot, u);
   }
 
   // Track last retrieval IDs for outcome command
-  const index = loadIndex(hippoRoot);
-  index.last_retrieval_ids = updated.map((u) => u.id);
-  saveIndex(hippoRoot, index);
+  localIndex.last_retrieval_ids = updated.map((u) => u.id);
+  saveIndex(hippoRoot, localIndex);
 
   updateStats(hippoRoot, { recalled: results.length });
 
@@ -1129,6 +1127,8 @@ function learnFromRepo(
 
   let added = 0;
   let skipped = 0;
+  const gitLearnTags = ['error', 'git-learned'];
+  const existingForSchema = loadAllEntries(hippoRoot);
 
   for (const lesson of lessons) {
     if (deduplicateLesson(hippoRoot, lesson)) {
@@ -1136,8 +1136,6 @@ function learnFromRepo(
       continue;
     }
 
-    const gitLearnTags = ['error', 'git-learned'];
-    const existingForSchema = loadAllEntries(hippoRoot);
     const schemaFitVal = computeSchemaFit(lesson, gitLearnTags, existingForSchema);
 
     const entry = createMemory(lesson, {

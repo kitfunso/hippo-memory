@@ -119,7 +119,6 @@ const TRAP_CATEGORIES: TrapCategory[] = [
 
 function generateTasks(): Task[] {
   const tasks: Task[] = [];
-  let taskId = 1;
 
   // Each trap category appears at 3 positions: early, mid, late
   // This tests whether the agent learns from early encounters
@@ -192,7 +191,6 @@ function generateTasks(): Task[] {
       });
       cleanIdx++;
     }
-    taskId++;
   }
 
   return tasks;
@@ -293,6 +291,7 @@ function simulate(tasks: Task[], mode: 'none' | 'static' | 'hippo'): SimResult[]
 
 function trapHitRate(results: SimResult[]): number {
   const trapTasks = results.filter((r) => r.trapCategory !== null);
+  if (trapTasks.length === 0) return 0;
   const hits = trapTasks.filter((r) => r.trapHit).length;
   return hits / trapTasks.length;
 }

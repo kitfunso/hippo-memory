@@ -51,6 +51,7 @@ export {
   searchBoth,
   searchBothHybrid,
   syncGlobalToLocal,
+  HybridSearchOptions,
 } from './shared.js';
 
 // Feature 4: Memory importers
