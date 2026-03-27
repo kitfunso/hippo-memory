@@ -446,6 +446,8 @@ hippo watch "npm run build"
 | `hippo hook list` | Show available framework hooks |
 | `hippo hook install <target>` | Install hook (claude-code, codex, cursor, openclaw) |
 | `hippo hook uninstall <target>` | Remove hook |
+| `hippo dashboard` | Open web dashboard at localhost:3333 |
+| `hippo dashboard --port <n>` | Use custom port |
 | `hippo mcp` | Start MCP server (stdio transport) |
 
 ---

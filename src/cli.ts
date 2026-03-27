@@ -1698,6 +1698,8 @@ Commands:
     hook list              Show available hooks
     hook install <target>  Install hook (claude-code|codex|cursor|openclaw)
     hook uninstall <target> Remove hook
+  dashboard                Open web dashboard for memory health
+    --port <n>             Port to serve on (default: 3333)
   mcp                      Start MCP server (stdio transport)
 
 Examples:
@@ -1920,6 +1922,15 @@ async function main(): Promise<void> {
         dryRun: Boolean(flags['dry-run']),
         global: Boolean(flags['global']),
       });
+      break;
+    }
+
+    case 'dashboard': {
+      requireInit(hippoRoot);
+      const port = parseInt(String(flags['port'] ?? '3333'), 10);
+      const { serveDashboard } = await import('./dashboard.js');
+      serveDashboard(hippoRoot, port);
+      await new Promise(() => {}); // run until Ctrl+C
       break;
     }
 

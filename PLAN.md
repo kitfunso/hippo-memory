@@ -263,7 +263,7 @@ Ship the smallest thing that demonstrates the core insight (decay + retrieval st
 ### Out (v0.2+):
 - [x] Embedding-based hybrid search (BM25 + cosine, optional @xenova/transformers)
 - [x] Schema acceleration (auto-computed schema_fit from tag + content overlap)
-- [ ] Web UI / dashboard
+- [x] Web UI / dashboard (`hippo dashboard` — local server with memory health, decay chart, conflict management)
 - [x] Multi-agent shared memory (share, peers, transfer scoring, auto-share)
 - [x] Richer session/event history on top of the SQLite backbone
 - [x] Explicit conflict resolution: `hippo resolve <id> --keep <mem_id> [--forget]`

@@ -8,6 +8,9 @@
 - `hippo peers` lists all projects contributing to the global store with memory counts.
 - `transferScore()` exported for programmatic transfer quality estimation.
 - Conflict resolution CLI: `hippo resolve <id> --keep <mem_id> [--forget]`.
+- `hippo dashboard` — local web UI at localhost:3333 with memory health overview, strength distribution chart, conflict management, peer status, and searchable/filterable memory table.
+- MCP server: added `hippo_conflicts`, `hippo_resolve`, `hippo_share`, `hippo_peers` tools (10 total).
+- OpenClaw plugin: added same 4 tools (9 total).
 
 ### Changed
 - `hippo resolve` without `--keep` now shows both conflicting memories for comparison.
