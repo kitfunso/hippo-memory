@@ -59,6 +59,16 @@ export {
   autoShare,
 } from './shared.js';
 
+// Feature 5: Working memory
+export {
+  wmPush,
+  wmRead,
+  wmClear,
+  wmFlush,
+  WorkingMemoryItem,
+  WM_MAX_ENTRIES,
+} from './working-memory.js';
+
 // Feature 4: Memory importers
 export {
   importChatGPT,

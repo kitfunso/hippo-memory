@@ -422,6 +422,49 @@ export default function register(api: any) {
     { optional: true },
   );
 
+  // --- Tool: hippo_wm_push ---
+  api.registerTool(
+    (ctx: HippoRuntimeContext) => ({
+      name: 'hippo_wm_push',
+      description:
+        'Push a note into working memory — a bounded buffer for current-state context. Entries are scoped, importance-ranked, and auto-evicted when the buffer is full (max 20 per scope).',
+      parameters: {
+        type: 'object',
+        properties: {
+          content: {
+            type: 'string',
+            description: 'Working memory note',
+          },
+          scope: {
+            type: 'string',
+            description: 'Scope (default: repo)',
+          },
+          importance: {
+            type: 'number',
+            description: 'Priority 0-1 (default: 0.5)',
+          },
+        },
+        required: ['content'],
+      },
+      async execute(
+        _id: string,
+        params: { content: string; scope?: string; importance?: number },
+      ) {
+        const cfg = getConfig(api);
+        const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
+        const scope = params.scope ?? 'repo';
+        const importance = params.importance ?? 0.5;
+        const escapedContent = params.content.replace(/"/g, '\\"');
+        const result = runHippo(
+          `wm push --scope ${scope} --content "${escapedContent}" --importance ${importance}`,
+          hippoCwd,
+        );
+        return { content: [{ type: 'text', text: result || 'Working memory entry pushed.' }] };
+      },
+    }),
+    { optional: true },
+  );
+
   // --- Hook: auto-inject context at session start ---
   api.on(
     'before_prompt_build',
@@ -504,5 +547,5 @@ export default function register(api: any) {
     },
   );
 
-  logger.info?.('[hippo] Memory plugin registered (tools: hippo_recall, hippo_remember, hippo_outcome, hippo_status, hippo_context, hippo_conflicts, hippo_resolve, hippo_share, hippo_peers)');
+  logger.info?.('[hippo] Memory plugin registered (tools: hippo_recall, hippo_remember, hippo_outcome, hippo_status, hippo_context, hippo_conflicts, hippo_resolve, hippo_share, hippo_peers, hippo_wm_push)');
 }

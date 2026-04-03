@@ -19,6 +19,7 @@
  *   hippo learn --git [--days <n>] [--repos <paths>]
  *   hippo promote <id>
  *   hippo sync
+ *   hippo wm <push|read|clear|flush>
  */
 
 import * as path from 'path';
@@ -95,6 +96,7 @@ import {
   ImportOptions,
 } from './importers.js';
 import { cmdCapture, CaptureOptions } from './capture.js';
+import { wmPush, wmRead, wmClear, wmFlush, WorkingMemoryItem } from './working-memory.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1610,6 +1612,94 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// ---------------------------------------------------------------------------
+// Working Memory
+// ---------------------------------------------------------------------------
+
+function cmdWm(
+  hippoRoot: string,
+  args: string[],
+  flags: Record<string, string | boolean | string[]>,
+): void {
+  requireInit(hippoRoot);
+
+  const subcommand = args[0] ?? '';
+
+  if (subcommand === 'push') {
+    const scope = String(flags['scope'] ?? 'default').trim();
+    const content = String(flags['content'] ?? '').trim();
+    const importance = parseFloat(String(flags['importance'] ?? '0.5'));
+    const sessionId = flags['session'] ? String(flags['session']).trim() : undefined;
+    const taskId = flags['task'] ? String(flags['task']).trim() : undefined;
+
+    if (!content) {
+      console.error('Usage: hippo wm push --scope <scope> --content "..." [--importance 0.8] [--session <id>] [--task <id>]');
+      process.exit(1);
+    }
+
+    const id = wmPush(hippoRoot, {
+      scope,
+      content,
+      importance: Number.isFinite(importance) ? importance : 0.5,
+      sessionId,
+      taskId,
+    });
+
+    console.log(`Pushed working memory #${id} (scope=${scope}, importance=${Number.isFinite(importance) ? importance : 0.5})`);
+    return;
+  }
+
+  if (subcommand === 'read') {
+    const scope = flags['scope'] ? String(flags['scope']).trim() : undefined;
+    const sessionId = flags['session'] ? String(flags['session']).trim() : undefined;
+    const limit = parseInt(String(flags['limit'] ?? '20'), 10) || 20;
+
+    const items = wmRead(hippoRoot, { scope, sessionId, limit });
+
+    if (flags['json']) {
+      console.log(JSON.stringify({ items }, null, 2));
+      return;
+    }
+
+    if (items.length === 0) {
+      console.log('No working memory entries.');
+      return;
+    }
+
+    console.log(`Working memory (${items.length} entries):\n`);
+    for (const item of items) {
+      const sessionLabel = item.sessionId ? ` session=${item.sessionId}` : '';
+      const taskLabel = item.taskId ? ` task=${item.taskId}` : '';
+      console.log(`  #${item.id} [${item.scope}] importance=${item.importance}${sessionLabel}${taskLabel}`);
+      console.log(`    ${item.content}`);
+      console.log(`    created=${item.createdAt}`);
+      console.log('');
+    }
+    return;
+  }
+
+  if (subcommand === 'clear') {
+    const scope = flags['scope'] ? String(flags['scope']).trim() : undefined;
+    const sessionId = flags['session'] ? String(flags['session']).trim() : undefined;
+
+    const count = wmClear(hippoRoot, { scope, sessionId });
+    console.log(`Cleared ${count} working memory entries.`);
+    return;
+  }
+
+  if (subcommand === 'flush') {
+    const scope = flags['scope'] ? String(flags['scope']).trim() : undefined;
+    const sessionId = flags['session'] ? String(flags['session']).trim() : undefined;
+
+    const count = wmFlush(hippoRoot, { scope, sessionId });
+    console.log(`Flushed ${count} working memory entries.`);
+    return;
+  }
+
+  console.error('Usage: hippo wm <push|read|clear|flush>');
+  process.exit(1);
+}
+
 function printUsage(): void {
   console.log(`
 Hippo - biologically-inspired memory system for AI agents
@@ -1709,6 +1799,24 @@ Commands:
     hook list              Show available hooks
     hook install <target>  Install hook (claude-code|codex|cursor|openclaw)
     hook uninstall <target> Remove hook
+  wm <sub>                 Working memory — bounded buffer for current state
+    wm push                Push a working memory entry
+      --scope <scope>      Scope name (default: default)
+      --content <text>     Content to store (required)
+      --importance <n>     Priority 0-1 (default: 0.5)
+      --session <id>       Session ID
+      --task <id>          Task ID
+    wm read                Read working memory entries
+      --scope <scope>      Filter by scope
+      --session <id>       Filter by session
+      --limit <n>          Max entries (default: 20)
+      --json               Output as JSON
+    wm clear               Clear working memory entries
+      --scope <scope>      Filter by scope
+      --session <id>       Filter by session
+    wm flush               Flush working memory (session end)
+      --scope <scope>      Filter by scope
+      --session <id>       Filter by session
   dashboard                Open web dashboard for memory health
     --port <n>             Port to serve on (default: 3333)
   mcp                      Start MCP server (stdio transport)
@@ -1944,6 +2052,10 @@ async function main(): Promise<void> {
       await new Promise(() => {}); // run until Ctrl+C
       break;
     }
+
+    case 'wm':
+      cmdWm(hippoRoot, args, flags);
+      break;
 
     case 'mcp':
       // Start MCP server over stdio - dynamically import to keep main CLI lean
