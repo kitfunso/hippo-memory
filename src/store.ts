@@ -820,6 +820,46 @@ export function deleteEntry(hippoRoot: string, id: string): boolean {
 }
 
 /**
+ * Batch-write and batch-delete entries in a single transaction.
+ * Used by consolidation to avoid N open/close cycles.
+ */
+export function batchWriteAndDelete(
+  hippoRoot: string,
+  toWrite: MemoryEntry[],
+  toDeleteIds: string[],
+): void {
+  if (toWrite.length === 0 && toDeleteIds.length === 0) return;
+
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    db.exec('BEGIN');
+    for (const entry of toWrite) {
+      upsertEntryRow(db, entry);
+    }
+    for (const id of toDeleteIds) {
+      db.prepare('DELETE FROM memories WHERE id = ?').run(id);
+      deleteFtsRow(db, id);
+    }
+    db.exec('COMMIT');
+
+    // Sync mirrors once after all DB writes
+    for (const entry of toWrite) {
+      writeMarkdownMirror(hippoRoot, entry);
+    }
+    for (const id of toDeleteIds) {
+      removeEntryMirrors(hippoRoot, id);
+    }
+    writeIndexMirror(hippoRoot, buildIndexFromDb(db));
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch { /* ignore */ }
+    throw error;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/**
  * Load all entries from SQLite.
  */
 export function loadAllEntries(hippoRoot: string): MemoryEntry[] {

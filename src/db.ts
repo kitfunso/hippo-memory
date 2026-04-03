@@ -153,6 +153,9 @@ export function openHippoDb(hippoRoot: string): DatabaseSyncLike {
   const db = new DatabaseSync(getHippoDbPath(hippoRoot));
   try {
     db.exec('PRAGMA journal_mode = WAL');
+    db.exec('PRAGMA busy_timeout = 5000');
+    db.exec('PRAGMA synchronous = NORMAL');
+    db.exec('PRAGMA wal_autocheckpoint = 100');
     db.exec('PRAGMA foreign_keys = ON');
     runMigrations(db);
     return db;

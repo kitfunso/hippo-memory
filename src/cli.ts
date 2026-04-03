@@ -357,6 +357,7 @@ async function cmdRecall(
   requireInit(hippoRoot);
 
   const budget = parseInt(String(flags['budget'] ?? '4000'), 10);
+  const limit = flags['limit'] ? Math.max(1, parseInt(String(flags['limit']), 10) || Infinity) : Infinity;
   const asJson = Boolean(flags['json']);
   const globalRoot = getGlobalRoot();
 
@@ -371,6 +372,10 @@ async function cmdRecall(
     results = await searchBothHybrid(query, hippoRoot, globalRoot, { budget });
   } else {
     results = await hybridSearch(query, localEntries, { budget, hippoRoot });
+  }
+
+  if (limit < results.length) {
+    results = results.slice(0, limit);
   }
 
   if (results.length === 0) {
@@ -875,6 +880,7 @@ async function cmdContext(
   requireInit(hippoRoot);
 
   const budget = parseInt(String(flags['budget'] ?? '1500'), 10);
+  const limit = flags['limit'] ? Math.max(1, parseInt(String(flags['limit']), 10) || Infinity) : Infinity;
 
   // If budget is 0, skip entirely (zero token cost)
   if (budget <= 0) return;
@@ -958,6 +964,11 @@ async function cmdContext(
 
     selectedItems = results;
     totalTokens = results.reduce((sum, r) => sum + r.tokens, 0);
+  }
+
+  if (limit < selectedItems.length) {
+    selectedItems = selectedItems.slice(0, limit);
+    totalTokens = selectedItems.reduce((sum, r) => sum + r.tokens, 0);
   }
 
   if (selectedItems.length === 0 && !activeSnapshot && recentSessionEvents.length === 0) return;

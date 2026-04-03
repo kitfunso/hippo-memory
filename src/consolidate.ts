@@ -12,6 +12,7 @@ import {
   loadAllEntries,
   writeEntry,
   deleteEntry,
+  batchWriteAndDelete,
   appendConsolidationRun,
   replaceDetectedConflicts,
 } from './store.js';
@@ -51,6 +52,10 @@ export function consolidate(
 
   const all = loadAllEntries(hippoRoot);
 
+  // Collect all writes/deletes and batch them at the end
+  const pendingWrites: MemoryEntry[] = [];
+  const pendingDeletes: string[] = [];
+
   // -------------------------------------------------------------------------
   // 1. Decay pass
   // -------------------------------------------------------------------------
@@ -62,7 +67,7 @@ export function consolidate(
       result.removed++;
       result.details.push(`  🗑  removed ${entry.id} (strength ${strength.toFixed(4)} < ${DECAY_THRESHOLD})`);
       if (!dryRun) {
-        deleteEntry(hippoRoot, entry.id);
+        pendingDeletes.push(entry.id);
       }
     } else {
       // Update the stored strength value and persist stale confidence when applicable.
@@ -74,7 +79,7 @@ export function consolidate(
       };
       survivors.push(updated);
       if (!dryRun && (strength !== entry.strength || effectiveConfidence !== entry.confidence)) {
-        writeEntry(hippoRoot, updated);
+        pendingWrites.push(updated);
       }
       result.decayed++;
     }
@@ -123,15 +128,20 @@ export function consolidate(
         source: 'consolidation',
         confidence: 'inferred',
       });
-      writeEntry(hippoRoot, semantic);
+      pendingWrites.push(semantic);
       result.semanticCreated++;
 
       // Reduce strength of source episodics (they've been compressed into neocortex)
       for (const e of cluster) {
         const weakened: MemoryEntry = { ...e, strength: e.strength * 0.3 };
-        writeEntry(hippoRoot, weakened);
+        pendingWrites.push(weakened);
       }
     }
+  }
+
+  // Flush all writes/deletes in a single transaction
+  if (!dryRun) {
+    batchWriteAndDelete(hippoRoot, pendingWrites, pendingDeletes);
   }
 
   // -------------------------------------------------------------------------

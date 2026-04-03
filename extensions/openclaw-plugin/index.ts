@@ -29,6 +29,7 @@ type HippoRuntimeContext = {
 
 const AUTO_SLEEP_SESSION_THRESHOLD = 10;
 const sessionMemoryCounts = new Map<string, number>();
+const injectedSessions = new Set<string>();
 
 function getConfig(api: any): HippoConfig {
   try {
@@ -428,6 +429,13 @@ export default function register(api: any) {
       const cfg = getConfig(api);
       if (cfg.autoContext === false) return {};
 
+      // Dedup guard: skip if this session already got context injected
+      const sessionKey = getSessionIdentity(ctx);
+      if (sessionKey && injectedSessions.has(sessionKey)) {
+        logger.debug?.(`[hippo] skipping duplicate context injection for session ${sessionKey}`);
+        return {};
+      }
+
       const budget = cfg.budget ?? 1500;
       const framing = cfg.framing ?? 'observe';
       const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
@@ -438,6 +446,7 @@ export default function register(api: any) {
           hippoCwd,
         );
         if (context && context.length > 10 && !context.includes('No hippo store')) {
+          if (sessionKey) injectedSessions.add(sessionKey);
           return {
             appendSystemContext: `\n\n## Project Memory (Hippo)\n${context}`,
           };
@@ -477,6 +486,10 @@ export default function register(api: any) {
   api.on(
     'session_end',
     (_event: { sessionId: string; messageCount: number }, ctx: HippoRuntimeContext) => {
+      // Clear dedup guard so a new session can inject fresh context
+      const sessionKey = getSessionIdentity(ctx);
+      if (sessionKey) injectedSessions.delete(sessionKey);
+
       const cfg = getConfig(api);
       const newMemories = consumeSessionMemoryCount(ctx);
       if (!cfg.autoSleep || newMemories < AUTO_SLEEP_SESSION_THRESHOLD) return;
