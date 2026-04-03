@@ -3,7 +3,7 @@
  */
 
 export { MemoryEntry, Layer, EmotionalValence, ConfidenceLevel, calculateStrength, resolveConfidence, createMemory, applyOutcome, generateId, computeSchemaFit } from './memory.js';
-export { search, hybridSearch, markRetrieved, estimateTokens, textOverlap, SearchResult } from './search.js';
+export { search, hybridSearch, markRetrieved, estimateTokens, textOverlap, tokenize, explainMatch, SearchResult, MatchExplanation } from './search.js';
 export {
   initStore,
   loadAllEntries,

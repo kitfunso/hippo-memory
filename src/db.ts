@@ -180,6 +180,7 @@ const MIGRATIONS: Migration[] = [
 ];
 
 function tableHasColumn(db: DatabaseSyncLike, tableName: string, columnName: string): boolean {
+  if (!/^[a-z_]+$/i.test(tableName)) throw new Error(`Invalid table name: ${tableName}`);
   const rows = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name?: string }>;
   return rows.some((row) => row.name === columnName);
 }

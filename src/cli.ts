@@ -108,6 +108,12 @@ import { wmPush, wmRead, wmClear, wmFlush, WorkingMemoryItem } from './working-m
 // Helpers
 // ---------------------------------------------------------------------------
 
+function parseLimitFlag(value: string | boolean | string[] | undefined): number {
+  if (!value) return Infinity;
+  const parsed = parseInt(String(value), 10);
+  return Number.isFinite(parsed) && parsed >= 1 ? parsed : Infinity;
+}
+
 function requireInit(hippoRoot: string): void {
   if (!isInitialized(hippoRoot)) {
     console.error('No .hippo directory found. Run `hippo init` first.');
@@ -365,7 +371,7 @@ async function cmdRecall(
   requireInit(hippoRoot);
 
   const budget = parseInt(String(flags['budget'] ?? '4000'), 10);
-  const limit = flags['limit'] ? Math.max(1, parseInt(String(flags['limit']), 10) || Infinity) : Infinity;
+  const limit = parseLimitFlag(flags['limit']);
   const asJson = Boolean(flags['json']);
   const showWhy = Boolean(flags['why']);
   const globalRoot = getGlobalRoot();
@@ -1154,7 +1160,7 @@ async function cmdContext(
   requireInit(hippoRoot);
 
   const budget = parseInt(String(flags['budget'] ?? '1500'), 10);
-  const limit = flags['limit'] ? Math.max(1, parseInt(String(flags['limit']), 10) || Infinity) : Infinity;
+  const limit = parseLimitFlag(flags['limit']);
 
   // If budget is 0, skip entirely (zero token cost)
   if (budget <= 0) return;

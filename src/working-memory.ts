@@ -75,42 +75,49 @@ export function wmPush(hippoRoot: string, opts: {
     const now = new Date().toISOString();
     const importance = opts.importance ?? 0;
 
-    const result = db.prepare(`
-      INSERT INTO working_memory(scope, session_id, task_id, importance, content, metadata_json, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      opts.scope,
-      opts.sessionId ?? null,
-      opts.taskId ?? null,
-      importance,
-      opts.content,
-      JSON.stringify(opts.metadata ?? {}),
-      now,
-      now,
-    );
+    db.exec('BEGIN');
+    try {
+      const result = db.prepare(`
+        INSERT INTO working_memory(scope, session_id, task_id, importance, content, metadata_json, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        opts.scope,
+        opts.sessionId ?? null,
+        opts.taskId ?? null,
+        importance,
+        opts.content,
+        JSON.stringify(opts.metadata ?? {}),
+        now,
+        now,
+      );
 
-    const id = Number(result.lastInsertRowid ?? 0);
+      const id = Number(result.lastInsertRowid ?? 0);
 
-    // Evict if over capacity for this scope
-    const countRow = db.prepare(`
-      SELECT COUNT(*) AS cnt FROM working_memory WHERE scope = ?
-    `).get(opts.scope) as { cnt: number } | undefined;
+      // Evict if over capacity for this scope
+      const countRow = db.prepare(`
+        SELECT COUNT(*) AS cnt FROM working_memory WHERE scope = ?
+      `).get(opts.scope) as { cnt: number } | undefined;
 
-    const count = Number(countRow?.cnt ?? 0);
-    if (count > WM_MAX_ENTRIES) {
-      const excess = count - WM_MAX_ENTRIES;
-      db.prepare(`
-        DELETE FROM working_memory
-        WHERE id IN (
-          SELECT id FROM working_memory
-          WHERE scope = ?
-          ORDER BY importance ASC, created_at ASC
-          LIMIT ?
-        )
-      `).run(opts.scope, excess);
+      const count = Number(countRow?.cnt ?? 0);
+      if (count > WM_MAX_ENTRIES) {
+        const excess = count - WM_MAX_ENTRIES;
+        db.prepare(`
+          DELETE FROM working_memory
+          WHERE id IN (
+            SELECT id FROM working_memory
+            WHERE scope = ?
+            ORDER BY importance ASC, created_at ASC
+            LIMIT ?
+          )
+        `).run(opts.scope, excess);
+      }
+
+      db.exec('COMMIT');
+      return id;
+    } catch (error) {
+      try { db.exec('ROLLBACK'); } catch { /* ignore */ }
+      throw error;
     }
-
-    return id;
   } finally {
     closeHippoDb(db);
   }

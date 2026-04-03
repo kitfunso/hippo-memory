@@ -19,6 +19,7 @@ import {
   getHippoDbPath,
 } from './db.js';
 import { SessionHandoff, SessionHandoffRow, rowToSessionHandoff } from './handoff.js';
+import { tokenize } from './search.js';
 
 export interface IndexEntry {
   id: string;
@@ -441,16 +442,8 @@ function canonicalConflictPair(aId: string, bId: string): { memory_a_id: string;
     : { memory_a_id: bId, memory_b_id: aId };
 }
 
-function tokenizeSearchQuery(query: string): string[] {
-  return query
-    .toLowerCase()
-    .replace(/[^\w\s]/g, ' ')
-    .split(/\s+/)
-    .filter((term) => term.length > 1);
-}
-
 function loadSearchRows(db: ReturnType<typeof openHippoDb>, query: string, limit: number): MemoryRow[] {
-  const terms = Array.from(new Set(tokenizeSearchQuery(query)));
+  const terms = Array.from(new Set(tokenize(query)));
   if (terms.length === 0) {
     return db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`).all() as MemoryRow[];
   }
