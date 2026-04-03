@@ -11,7 +11,8 @@
  *   hippo outcome --good | --bad [--id <id>]
  *   hippo conflicts [--status <status>] [--json]
  *   hippo snapshot <save|show|clear>
- *   hippo session <log|show>
+ *   hippo session <log|show|latest|resume>
+ *   hippo handoff <create|latest|show>
  *   hippo forget <id>
  *   hippo inspect <id>
  *   hippo embed [--status]
@@ -55,9 +56,13 @@ import {
   listSessionEvents,
   listMemoryConflicts,
   resolveConflict,
+  saveSessionHandoff,
+  loadLatestHandoff,
+  loadHandoffById,
   TaskSnapshot,
   SessionEvent,
 } from './store.js';
+import type { SessionHandoff } from './handoff.js';
 import { search, markRetrieved, estimateTokens, hybridSearch } from './search.js';
 import { consolidate } from './consolidate.js';
 import {
@@ -124,8 +129,8 @@ function parseArgs(argv: string[]): { command: string; args: string[]; flags: Re
         flags[key] = true;
         i++;
       } else {
-        // Check if it's a repeatable flag (tag)
-        if (key === 'tag') {
+        // Check if it's a repeatable flag (tag, artifact)
+        if (key === 'tag' || key === 'artifact') {
           if (Array.isArray(flags[key])) {
             (flags[key] as string[]).push(next);
           } else {
@@ -868,7 +873,185 @@ function cmdSession(
     return;
   }
 
-  console.error('Usage: hippo session <log|show>');
+  if (subcommand === 'latest') {
+    const snapshot = loadActiveTaskSnapshot(hippoRoot);
+    const events = listSessionEvents(hippoRoot, {
+      session_id: sessionId || snapshot?.session_id || undefined,
+      limit,
+    });
+
+    if (flags['json']) {
+      console.log(JSON.stringify({ snapshot: snapshot ?? null, events }, null, 2));
+      return;
+    }
+
+    if (snapshot) {
+      printActiveTaskSnapshot(snapshot);
+    } else {
+      console.log('No active task snapshot.');
+      console.log('');
+    }
+    printSessionEvents(events);
+    return;
+  }
+
+  if (subcommand === 'resume') {
+    const handoff = loadLatestHandoff(hippoRoot, sessionId || undefined);
+    if (!handoff) {
+      console.log('No handoff to resume from.');
+      return;
+    }
+
+    const lines: string[] = [
+      '## Session Handoff (resumed)',
+      '',
+      `- Session: ${handoff.sessionId}`,
+      `- Updated: ${handoff.updatedAt}`,
+    ];
+    if (handoff.taskId) lines.push(`- Task: ${handoff.taskId}`);
+    if (handoff.repoRoot) lines.push(`- Repo: ${handoff.repoRoot}`);
+    lines.push('', '### Summary', handoff.summary);
+    if (handoff.nextAction) {
+      lines.push('', '### Next action', handoff.nextAction);
+    }
+    if (handoff.artifacts && handoff.artifacts.length > 0) {
+      lines.push('', '### Artifacts');
+      for (const artifact of handoff.artifacts) {
+        lines.push(`- ${artifact}`);
+      }
+    }
+    lines.push('');
+    console.log(lines.join('\n'));
+    return;
+  }
+
+  console.error('Usage: hippo session <log|show|latest|resume>');
+  process.exit(1);
+}
+
+function printHandoff(handoff: SessionHandoff): void {
+  console.log('## Session Handoff\n');
+  console.log(`- Session: ${handoff.sessionId}`);
+  console.log(`- Updated: ${handoff.updatedAt}`);
+  if (handoff.taskId) console.log(`- Task: ${handoff.taskId}`);
+  if (handoff.repoRoot) console.log(`- Repo: ${handoff.repoRoot}`);
+  console.log('');
+  console.log('### Summary');
+  console.log(handoff.summary);
+  if (handoff.nextAction) {
+    console.log('');
+    console.log('### Next action');
+    console.log(handoff.nextAction);
+  }
+  if (handoff.artifacts && handoff.artifacts.length > 0) {
+    console.log('');
+    console.log('### Artifacts');
+    for (const artifact of handoff.artifacts) {
+      console.log(`- ${artifact}`);
+    }
+  }
+  console.log('');
+}
+
+function cmdHandoff(
+  hippoRoot: string,
+  args: string[],
+  flags: Record<string, string | boolean | string[]>
+): void {
+  requireInit(hippoRoot);
+
+  const subcommand = args[0] ?? 'latest';
+
+  if (subcommand === 'create') {
+    const summary = String(flags['summary'] ?? '').trim();
+    if (!summary) {
+      console.error('Usage: hippo handoff create --summary "..." [--next "..."] [--session <id>] [--task <id>] [--artifact <path>...]');
+      process.exit(1);
+    }
+
+    const sessionId = String(flags['session'] ?? flags['id'] ?? '').trim() || `fallback-${Date.now()}-${process.pid}`;
+    const nextAction = String(flags['next'] ?? '').trim() || undefined;
+    const taskId = String(flags['task'] ?? '').trim() || undefined;
+    const artifactFlag = flags['artifact'];
+    const artifacts: string[] = Array.isArray(artifactFlag)
+      ? artifactFlag
+      : (typeof artifactFlag === 'string' ? [artifactFlag] : []);
+
+    const handoff = saveSessionHandoff(hippoRoot, {
+      version: 1,
+      sessionId,
+      repoRoot: process.cwd(),
+      taskId,
+      summary,
+      nextAction,
+      artifacts,
+    });
+
+    console.log(`Created session handoff for session ${handoff.sessionId}`);
+    console.log(`   Summary: ${handoff.summary}`);
+    if (handoff.nextAction) console.log(`   Next: ${handoff.nextAction}`);
+    if (handoff.artifacts && handoff.artifacts.length > 0) {
+      console.log(`   Artifacts: ${handoff.artifacts.join(', ')}`);
+    }
+    return;
+  }
+
+  if (subcommand === 'latest') {
+    const sessionId = String(flags['session'] ?? flags['id'] ?? '').trim() || undefined;
+    const handoff = loadLatestHandoff(hippoRoot, sessionId);
+
+    if (!handoff) {
+      if (flags['json']) {
+        console.log(JSON.stringify({ handoff: null }));
+      } else {
+        console.log('No session handoff found.');
+      }
+      return;
+    }
+
+    if (flags['json']) {
+      console.log(JSON.stringify({ handoff }, null, 2));
+      return;
+    }
+
+    printHandoff(handoff);
+    return;
+  }
+
+  if (subcommand === 'show') {
+    const idArg = args[1];
+    if (!idArg) {
+      console.error('Usage: hippo handoff show <id> [--json]');
+      process.exit(1);
+    }
+
+    const handoffId = parseInt(idArg, 10);
+    if (!Number.isFinite(handoffId) || handoffId <= 0) {
+      console.error(`Invalid handoff ID: ${idArg}`);
+      process.exit(1);
+    }
+
+    const handoff = loadHandoffById(hippoRoot, handoffId);
+
+    if (!handoff) {
+      if (flags['json']) {
+        console.log(JSON.stringify({ handoff: null }));
+      } else {
+        console.log(`No handoff found with ID ${handoffId}.`);
+      }
+      return;
+    }
+
+    if (flags['json']) {
+      console.log(JSON.stringify({ handoff }, null, 2));
+      return;
+    }
+
+    printHandoff(handoff);
+    return;
+  }
+
+  console.error('Usage: hippo handoff <create|latest|show>');
   process.exit(1);
 }
 
@@ -1673,6 +1856,23 @@ Commands:
       --task <task>
       --limit <n>          Event limit (default: 8)
       --json               Output as JSON
+    session latest         Show latest task snapshot + events
+      --id <session-id>   Filter by session
+      --json               Output as JSON
+    session resume         Re-inject latest handoff as context output
+      --id <session-id>   Filter by session
+  handoff <sub>            Manage session handoffs for continuity
+    handoff create         Create a new session handoff
+      --summary <text>     Handoff summary (required)
+      --next <text>        Next action for successor
+      --session <id>       Session ID (auto-generated if omitted)
+      --task <id>          Associated task ID
+      --artifact <path>    Related file path (repeatable)
+    handoff latest         Show the most recent handoff
+      --session <id>       Filter by session
+      --json               Output as JSON
+    handoff show <id>      Show a specific handoff by ID
+      --json               Output as JSON
   forget <id>              Force remove a memory
   inspect <id>             Show full memory detail
   embed                    Embed all memories for semantic search
@@ -1720,7 +1920,10 @@ Examples:
   hippo context --auto --budget 1500
   hippo conflicts
   hippo session log --id sess_123 --task "Ship feature" --type progress --content "Build is green, next step is docs"
+  hippo session latest --json
+  hippo session resume
   hippo snapshot save --task "Ship feature" --summary "Tests are green" --next-step "Open the PR" --session sess_123
+  hippo handoff create --summary "PR is open, tests green" --next "Merge after review" --session sess_123 --artifact src/foo.ts
   hippo embed --status
   hippo watch "npm run build"
   hippo learn --git --days 30
@@ -1792,6 +1995,10 @@ async function main(): Promise<void> {
 
     case 'session':
       cmdSession(hippoRoot, args, flags);
+      break;
+
+    case 'handoff':
+      cmdHandoff(hippoRoot, args, flags);
       break;
 
     case 'forget': {

@@ -131,8 +131,12 @@ describe('openclaw hippo plugin', () => {
     const hook = harness.getHook('before_prompt_build');
     const result = hook({ prompt: 'help', messages: [] }, { workspaceDir: 'C:\\repo\\clawd' });
 
-    expect(execSyncMock).toHaveBeenCalledTimes(1);
+    // 2 calls: session_start event + context injection
+    expect(execSyncMock).toHaveBeenCalledTimes(2);
+    expect(execSyncMock.mock.calls[0]?.[0]).toContain('session log');
     expect(execSyncMock.mock.calls[0]?.[1]).toMatchObject({ cwd: 'C:\\repo\\clawd' });
+    expect(execSyncMock.mock.calls[1]?.[0]).toContain('context');
+    expect(execSyncMock.mock.calls[1]?.[1]).toMatchObject({ cwd: 'C:\\repo\\clawd' });
     expect(result).toMatchObject({
       appendSystemContext: expect.stringContaining('Project Memory (Hippo)'),
     });

@@ -21,7 +21,13 @@ export {
   listMemoryConflicts,
   replaceDetectedConflicts,
   resolveConflict,
+  saveSessionHandoff,
+  loadLatestHandoff,
+  loadHandoffById,
 } from './store.js';
+
+// Feature 5: Session handoff
+export { SessionHandoff } from './handoff.js';
 export { consolidate, ConsolidationResult } from './consolidate.js';
 
 // Feature 1: Embedding search

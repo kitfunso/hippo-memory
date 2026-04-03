@@ -88,13 +88,12 @@ function resolveHippoCwdFromContext(api: any, ctx: HippoRuntimeContext, configRo
   return resolveHippoCwd(workspace, configRoot);
 }
 
-function getSessionIdentity(ctx: Pick<HippoRuntimeContext, 'sessionId' | 'sessionKey' | 'agentId'>): string | undefined {
-  return ctx.sessionId ?? ctx.sessionKey ?? ctx.agentId;
+function getSessionIdentity(ctx: Pick<HippoRuntimeContext, 'sessionId' | 'sessionKey' | 'agentId'>): string {
+  return ctx.sessionId ?? ctx.sessionKey ?? ctx.agentId ?? `fallback-${Date.now()}-${process.pid}`;
 }
 
 function recordSessionMemory(ctx: Pick<HippoRuntimeContext, 'sessionId' | 'sessionKey' | 'agentId'>): void {
   const key = getSessionIdentity(ctx);
-  if (!key) return;
   sessionMemoryCounts.set(key, (sessionMemoryCounts.get(key) ?? 0) + 1);
 }
 
@@ -102,7 +101,6 @@ function consumeSessionMemoryCount(
   ctx: Pick<HippoRuntimeContext, 'sessionId' | 'sessionKey' | 'agentId'>,
 ): number {
   const key = getSessionIdentity(ctx);
-  if (!key) return 0;
   const count = sessionMemoryCounts.get(key) ?? 0;
   sessionMemoryCounts.delete(key);
   return count;
@@ -440,6 +438,16 @@ export default function register(api: any) {
       const framing = cfg.framing ?? 'observe';
       const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
 
+      // Record session_start event
+      try {
+        runHippo(
+          `session log --id "${sessionKey}" --type session_start --content "Session started" --source openclaw`,
+          hippoCwd,
+        );
+      } catch (err) {
+        logger.debug?.('[hippo] session_start event skipped:', err);
+      }
+
       try {
         const context = runHippo(
           `context --auto --budget ${budget} --framing ${framing}`,
@@ -488,13 +496,23 @@ export default function register(api: any) {
     (_event: { sessionId: string; messageCount: number }, ctx: HippoRuntimeContext) => {
       // Clear dedup guard so a new session can inject fresh context
       const sessionKey = getSessionIdentity(ctx);
-      if (sessionKey) injectedSessions.delete(sessionKey);
+      injectedSessions.delete(sessionKey);
 
       const cfg = getConfig(api);
+      const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
+
+      // Record session_end event
+      try {
+        runHippo(
+          `session log --id "${sessionKey}" --type session_end --content "Session ended" --source openclaw`,
+          hippoCwd,
+        );
+      } catch (err) {
+        logger.debug?.('[hippo] session_end event skipped:', err);
+      }
+
       const newMemories = consumeSessionMemoryCount(ctx);
       if (!cfg.autoSleep || newMemories < AUTO_SLEEP_SESSION_THRESHOLD) return;
-
-      const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
       const result = runHippo('sleep', hippoCwd);
       logger.info?.(
         `[hippo] autoSleep ran for session ${ctx.sessionId ?? ctx.sessionKey ?? 'unknown'} ` +

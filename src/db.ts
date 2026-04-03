@@ -20,7 +20,7 @@ const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: new (path: string) => DatabaseSyncLike;
 };
 
-const CURRENT_SCHEMA_VERSION = 4;
+const CURRENT_SCHEMA_VERSION = 5;
 
 type Migration = {
   version: number;
@@ -130,6 +130,26 @@ const MIGRATIONS: Migration[] = [
 
         CREATE INDEX IF NOT EXISTS idx_session_events_task_created
         ON session_events(task, created_at DESC, id DESC);
+      `);
+    },
+  },
+  {
+    version: 5,
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS session_handoffs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          session_id TEXT NOT NULL,
+          repo_root TEXT,
+          task_id TEXT,
+          summary TEXT NOT NULL,
+          next_action TEXT,
+          artifacts_json TEXT NOT NULL DEFAULT '[]',
+          created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_session_handoffs_session
+        ON session_handoffs(session_id, created_at DESC);
       `);
     },
   },

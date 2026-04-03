@@ -18,6 +18,7 @@ import {
   pruneConsolidationRuns,
   getHippoDbPath,
 } from './db.js';
+import { SessionHandoff, SessionHandoffRow, rowToSessionHandoff } from './handoff.js';
 
 export interface IndexEntry {
   id: string;
@@ -1329,6 +1330,100 @@ export function resolveConflict(
   } catch (error) {
     try { db.exec('ROLLBACK'); } catch { /* ignore */ }
     throw error;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/**
+ * Save a session handoff record. Returns the persisted handoff.
+ */
+export function saveSessionHandoff(
+  hippoRoot: string,
+  handoff: Omit<SessionHandoff, 'updatedAt'>,
+): SessionHandoff {
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  const now = new Date().toISOString();
+
+  try {
+    const result = db.prepare(`
+      INSERT INTO session_handoffs(session_id, repo_root, task_id, summary, next_action, artifacts_json, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      handoff.sessionId,
+      handoff.repoRoot ?? null,
+      handoff.taskId ?? null,
+      handoff.summary,
+      handoff.nextAction ?? null,
+      JSON.stringify(handoff.artifacts ?? []),
+      now,
+    );
+
+    const id = Number(result.lastInsertRowid ?? 0);
+    const row = db.prepare(`
+      SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, created_at
+      FROM session_handoffs
+      WHERE id = ?
+    `).get(id) as SessionHandoffRow | undefined;
+
+    if (!row) {
+      throw new Error('Failed to reload saved session handoff');
+    }
+
+    return rowToSessionHandoff(row);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/**
+ * Load the most recent handoff, optionally filtered by session ID.
+ */
+export function loadLatestHandoff(hippoRoot: string, sessionId?: string): SessionHandoff | null {
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+
+  try {
+    let row: SessionHandoffRow | undefined;
+    if (sessionId) {
+      row = db.prepare(`
+        SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, created_at
+        FROM session_handoffs
+        WHERE session_id = ?
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+      `).get(sessionId) as SessionHandoffRow | undefined;
+    } else {
+      row = db.prepare(`
+        SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, created_at
+        FROM session_handoffs
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+      `).get() as SessionHandoffRow | undefined;
+    }
+
+    return row ? rowToSessionHandoff(row) : null;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/**
+ * Load a specific handoff by its row ID.
+ */
+export function loadHandoffById(hippoRoot: string, id: number): SessionHandoff | null {
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+
+  try {
+    const row = db.prepare(`
+      SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, created_at
+      FROM session_handoffs
+      WHERE id = ?
+    `).get(id) as SessionHandoffRow | undefined;
+
+    return row ? rowToSessionHandoff(row) : null;
   } finally {
     closeHippoDb(db);
   }
