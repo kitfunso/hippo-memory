@@ -48,9 +48,9 @@ The `SessionStart` hook automatically runs `hippo context --auto --budget 1500` 
 
 The `PostToolUseFailure` hook captures tool failures as hippo error memories (2x half-life). Next time someone hits the same error, the memory surfaces automatically.
 
-### Auto-outcome on stop
+### Auto-outcome and sleep on stop
 
-The `Stop` hook runs `hippo outcome --good` when a session ends, strengthening the memories that were recalled during the session.
+The `Stop` hook runs `hippo outcome --good` when a session ends, strengthening the memories that were recalled during the session. It then runs `hippo sleep` to consolidate memories, decay weak ones, and merge related episodes into patterns.
 
 ### Memory skill
 

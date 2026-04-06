@@ -27,6 +27,11 @@
           {
             "type": "command",
             "command": "hippo outcome --good 2>/dev/null || true"
+          },
+          {
+            "type": "command",
+            "command": "hippo sleep 2>/dev/null || true",
+            "timeout": 30
           }
         ]
       }
