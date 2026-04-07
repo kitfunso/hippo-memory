@@ -6,6 +6,10 @@
 - **Active invalidation**: `hippo learn --git` detects migration/breaking commits and actively weakens memories referencing the old pattern. Manual invalidation via `hippo invalidate "<pattern>"`.
 - **Architectural decisions**: `hippo decide` stores one-off decisions with 90-day half-life and verified confidence. Supports `--context` for reasoning and `--supersedes` to chain decisions.
 - 1.2x recall boost for decision-tagged memories so they surface despite low retrieval frequency.
+- **Path-based memory triggers**: Memories auto-tagged with `path:<segment>` from cwd on creation. Recall boosts memories matching the current directory (up to 1.3x). Works for remember, decide, and learn --git.
+- **OpenCode integration**: `hippo hook install opencode` patches AGENTS.md. Auto-detection via `.opencode/` or `opencode.json`. Integration guide with MCP server config and `.opencode/skills/memory/` skill.
+- `hippo export [file]` exports all memories as JSON or markdown.
+- HippoRAG paper reference added to RESEARCH.md and README.md.
 
 ## 0.9.1 (2026-04-06)
 
