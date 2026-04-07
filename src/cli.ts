@@ -21,6 +21,7 @@
  *   hippo learn --git [--days <n>] [--repos <paths>]
  *   hippo promote <id>
  *   hippo sync
+ *   hippo decide "<decision>" [--context "<why>"] [--supersedes <id>]
  *   hippo wm <push|read|clear|flush>
  */
 
@@ -38,6 +39,7 @@ import {
   Layer,
   MemoryEntry,
   ConfidenceLevel,
+  DECISION_HALF_LIFE_DAYS,
 } from './memory.js';
 import {
   getHippoRoot,
@@ -82,7 +84,7 @@ import {
   fetchGitLog,
   isGitRepo,
 } from './autolearn.js';
-import { extractInvalidationTarget, invalidateMatching } from './invalidation.js';
+import { extractInvalidationTarget, invalidateMatching, InvalidationTarget } from './invalidation.js';
 import {
   getGlobalRoot,
   initGlobal,
@@ -2225,6 +2227,11 @@ Commands:
     hook install <target>  Install hook (claude-code|codex|cursor|openclaw)
                            claude-code also installs Stop hook (hippo sleep on exit)
     hook uninstall <target> Remove hook
+  decide "<decision>"      Record an architectural decision (90-day half-life)
+    --context "<why>"      Why this decision was made
+    --supersedes <id>      Supersede a previous decision (weakens it)
+  invalidate "<pattern>"   Actively weaken memories matching an old pattern
+    --reason "<why>"       Optional: what replaced it
   wm <sub>                 Working memory — bounded buffer for current state
     wm push                Push a working memory entry
       --scope <scope>      Scope name (default: default)
@@ -2264,6 +2271,8 @@ Examples:
   hippo promote mem_abc123
   hippo sync
   hippo hook install claude-code
+  hippo decide "Use PostgreSQL for new services" --context "JSONB support"
+  hippo invalidate "REST API" --reason "migrated to GraphQL"
   hippo sleep --dry-run
   hippo outcome --good
   hippo status
@@ -2500,6 +2509,74 @@ async function main(): Promise<void> {
       // Server runs until stdin closes, so we never reach here
       await new Promise(() => {}); // hang forever
       break;
+
+    case 'invalidate': {
+      requireInit(hippoRoot);
+      const target = args[0];
+      if (!target) {
+        console.error('Usage: hippo invalidate "<old pattern>" [--reason "<why>"]');
+        process.exit(1);
+      }
+      const reason = flags['reason'] as string || null;
+      const invTarget: InvalidationTarget = {
+        from: target,
+        to: reason,
+        type: 'migration',
+      };
+      const result = invalidateMatching(hippoRoot, invTarget);
+      if (result.invalidated === 0) {
+        console.log(`No memories matched "${target}".`);
+      } else {
+        console.log(`Invalidated ${result.invalidated} memories referencing "${target}".`);
+        result.targets.forEach(id => console.log(`   ${id}`));
+      }
+      break;
+    }
+
+    case 'decide': {
+      requireInit(hippoRoot);
+      const text = args[0];
+      if (!text) {
+        console.error('Usage: hippo decide "<decision>" [--context "<why>"] [--supersedes <id>]');
+        process.exit(1);
+      }
+
+      const context = flags['context'] as string || '';
+      const supersedesId = flags['supersedes'] as string || null;
+
+      // Build content with context
+      const decisionContent = context ? `${text}\n\nContext: ${context}` : text;
+
+      // Handle supersession
+      if (supersedesId) {
+        const oldEntry = readEntry(hippoRoot, supersedesId);
+        if (!oldEntry) {
+          console.error(`Memory ${supersedesId} not found.`);
+          process.exit(1);
+        }
+        oldEntry.half_life_days = Math.max(1, Math.floor(oldEntry.half_life_days / 2));
+        oldEntry.confidence = 'stale';
+        if (!oldEntry.tags.includes('superseded')) oldEntry.tags.push('superseded');
+        writeEntry(hippoRoot, oldEntry);
+        console.log(`Superseded ${supersedesId} (half-life halved, marked stale)`);
+      }
+
+      // Create decision memory
+      const mem = createMemory(decisionContent, {
+        tags: ['decision'],
+        layer: Layer.Semantic,
+        confidence: 'verified',
+        source: 'decision',
+      });
+      mem.half_life_days = DECISION_HALF_LIFE_DAYS;
+      writeEntry(hippoRoot, mem);
+
+      console.log(`Decision recorded: ${mem.id}`);
+      if (supersedesId) {
+        console.log(`   Supersedes: ${supersedesId}`);
+      }
+      break;
+    }
 
     case 'help':
     case '--help':
