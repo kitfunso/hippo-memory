@@ -99,12 +99,19 @@ export function invalidateMatching(
   return result;
 }
 
+const STOPWORDS = new Set([
+  'the', 'an', 'is', 'it', 'in', 'on', 'at', 'to', 'for', 'of', 'by',
+  'and', 'or', 'but', 'not', 'with', 'from', 'that', 'this', 'was', 'are',
+  'be', 'has', 'had', 'have', 'been', 'will', 'would', 'could', 'should',
+  'do', 'does', 'did', 'all', 'our', 'old', 'new', 'use', 'used', 'using',
+]);
+
 function invalidationTokenize(text: string): string[] {
   return text
     .toLowerCase()
     .replace(/[^a-z0-9\s_.-]/g, ' ')
     .split(/\s+/)
-    .filter(t => t.length >= 2);
+    .filter(t => t.length >= 2 && !STOPWORDS.has(t));
 }
 
 function matchScore(fromTokens: string[], contentTokens: string[]): number {
