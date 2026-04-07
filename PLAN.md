@@ -78,6 +78,8 @@ emotional_valence: negative
 schema_fit: 0.4
 source: session
 outcome_score: null
+outcome_positive: 0
+outcome_negative: 0
 conflicts_with: [mem_d4e5f6]
 ---
 
@@ -88,27 +90,37 @@ breaking the gold model. Always verify cache contents after refresh failures.
 ### Strength Formula
 
 ```
-strength(t) = base_strength * (0.5 ^ (days_since_last_retrieval / half_life))
+strength(t) = base_strength * (0.5 ^ (days_since_last_retrieval / effective_half_life))
               * retrieval_boost
               * emotional_multiplier
 
 where:
   base_strength = 1.0 (at creation)
   half_life = 7 days (default, adjusted by signals)
+  reward_ratio = (outcome_positive - outcome_negative) / (outcome_positive + outcome_negative + 1)
+  reward_factor = 1 + 0.5 * reward_ratio    // range (0.5, 1.5)
+  effective_half_life = half_life * reward_factor
   retrieval_boost = 1 + (0.1 * log2(retrieval_count + 1))
   emotional_multiplier = 1.0 (neutral) | 1.5 (error) | 1.3 (success) | 2.0 (critical)
 ```
+
+The reward factor continuously modulates decay rate based on cumulative outcome
+history. Memories with consistent positive outcomes decay slower (up to 1.5x
+half-life). Memories with consistent negative outcomes decay faster (down to
+0.5x half-life). Mixed outcomes converge toward no effect.
+
+Inspired by R-STDP in spiking neural networks, where synapses that don't
+contribute to reward weaken naturally without an explicit forgetting mechanism.
 
 ### Half-life Adjustments
 
 | Signal | Half-life Modifier |
 |--------|-------------------|
-| Each retrieval | +2 days |
+| Each retrieval | +2 days (base half-life) |
 | Error-tagged | x2 base half-life |
 | High schema fit (>0.7) | x1.5 (consolidates faster) |
 | Low schema fit (<0.3) | x0.5 (novel, keep in buffer longer but decay faster if unused) |
-| Positive outcome feedback | +5 days |
-| Negative outcome feedback | -3 days |
+| Outcome feedback | Reward factor: x0.5 to x1.5 (proportional to cumulative pos/neg ratio) |
 | Manual pin by user | infinite (no decay) |
 
 ## File Structure

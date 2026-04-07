@@ -32,6 +32,7 @@ import { execSync } from 'child_process';
 import {
   createMemory,
   calculateStrength,
+  calculateRewardFactor,
   deriveHalfLife,
   resolveConfidence,
   applyOutcome,
@@ -670,7 +671,13 @@ function cmdInspect(hippoRoot: string, id: string): void {
   console.log(`Schema fit:       ${entry.schema_fit}`);
   console.log(`Pinned:           ${entry.pinned}`);
   console.log(`Tags:             ${entry.tags.join(', ') || 'none'}`);
-  console.log(`Outcome score:    ${entry.outcome_score ?? 'none'}`);
+  const rewardFactor = calculateRewardFactor(entry);
+  const pos = entry.outcome_positive ?? 0;
+  const neg = entry.outcome_negative ?? 0;
+  const outcomeLabel = pos === 0 && neg === 0
+    ? 'none'
+    : `+${pos} / -${neg} (reward factor: ${fmt(rewardFactor)})`;
+  console.log(`Outcomes:         ${outcomeLabel}`);
   if (entry.conflicts_with.length > 0) {
     console.log(`Conflicts with:   ${entry.conflicts_with.join(', ')}`);
   }

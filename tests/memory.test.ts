@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateStrength, createMemory, applyOutcome, Layer } from '../src/memory.js';
+import { calculateStrength, calculateRewardFactor, createMemory, applyOutcome, Layer } from '../src/memory.js';
 
 describe('Strength formula', () => {
   it('returns 1.0 for a pinned memory regardless of age', () => {
@@ -68,26 +68,100 @@ describe('Strength formula', () => {
 });
 
 describe('applyOutcome', () => {
-  it('positive outcome increases half-life by 5', () => {
+  it('positive outcome increments outcome_positive counter', () => {
     const entry = createMemory('some memory');
-    const before = entry.half_life_days;
     const updated = applyOutcome(entry, true);
-    expect(updated.half_life_days).toBe(before + 5);
+    expect(updated.outcome_positive).toBe(1);
+    expect(updated.outcome_negative).toBe(0);
     expect(updated.outcome_score).toBe(1);
   });
 
-  it('negative outcome decreases half-life by 3', () => {
+  it('negative outcome increments outcome_negative counter', () => {
     const entry = createMemory('some memory');
-    const before = entry.half_life_days;
     const updated = applyOutcome(entry, false);
-    expect(updated.half_life_days).toBe(before - 3);
+    expect(updated.outcome_positive).toBe(0);
+    expect(updated.outcome_negative).toBe(1);
     expect(updated.outcome_score).toBe(-1);
   });
 
-  it('half-life never drops below 1', () => {
-    const entry = createMemory('new note');
-    const low = { ...entry, half_life_days: 2 };
-    const updated = applyOutcome(low, false);
-    expect(updated.half_life_days).toBeGreaterThanOrEqual(1);
+  it('does not mutate half_life_days (reward factor is dynamic)', () => {
+    const entry = createMemory('some memory');
+    const before = entry.half_life_days;
+    const afterGood = applyOutcome(entry, true);
+    expect(afterGood.half_life_days).toBe(before);
+    const afterBad = applyOutcome(entry, false);
+    expect(afterBad.half_life_days).toBe(before);
+  });
+
+  it('cumulative positive outcomes increase strength via reward factor', () => {
+    const now = new Date();
+    const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString();
+    const entry = createMemory('useful memory');
+    const aged = { ...entry, last_retrieved: tenDaysAgo };
+
+    // Apply 5 positive outcomes
+    let current = aged;
+    for (let i = 0; i < 5; i++) {
+      current = applyOutcome(current, true);
+    }
+
+    // Strength should be higher than without outcomes
+    expect(calculateStrength(current, now)).toBeGreaterThan(calculateStrength(aged, now));
+  });
+
+  it('cumulative negative outcomes decrease strength via reward factor', () => {
+    const now = new Date();
+    const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString();
+    const entry = createMemory('bad memory');
+    const aged = { ...entry, last_retrieved: tenDaysAgo };
+
+    // Apply 3 negative outcomes
+    let current = aged;
+    for (let i = 0; i < 3; i++) {
+      current = applyOutcome(current, false);
+    }
+
+    expect(calculateStrength(current, now)).toBeLessThan(calculateStrength(aged, now));
+  });
+});
+
+describe('calculateRewardFactor', () => {
+  it('returns 1.0 with no outcomes', () => {
+    const entry = createMemory('neutral');
+    expect(calculateRewardFactor(entry)).toBe(1.0);
+  });
+
+  it('returns > 1.0 with net positive outcomes', () => {
+    const entry = createMemory('good');
+    const updated = { ...entry, outcome_positive: 5, outcome_negative: 0 };
+    const rf = calculateRewardFactor(updated);
+    expect(rf).toBeGreaterThan(1.0);
+    // 1 + 0.5 * (5 / 6) ≈ 1.417
+    expect(rf).toBeCloseTo(1.417, 2);
+  });
+
+  it('returns < 1.0 with net negative outcomes', () => {
+    const entry = createMemory('bad');
+    const updated = { ...entry, outcome_positive: 0, outcome_negative: 3 };
+    const rf = calculateRewardFactor(updated);
+    expect(rf).toBeLessThan(1.0);
+    // 1 + 0.5 * (-3 / 4) = 0.625
+    expect(rf).toBeCloseTo(0.625, 2);
+  });
+
+  it('converges toward 1.0 with mixed outcomes', () => {
+    const entry = createMemory('mixed');
+    const updated = { ...entry, outcome_positive: 3, outcome_negative: 3 };
+    const rf = calculateRewardFactor(updated);
+    // 1 + 0.5 * (0 / 7) = 1.0
+    expect(rf).toBe(1.0);
+  });
+
+  it('is bounded between 0.5 and 1.5', () => {
+    const entry = createMemory('extreme');
+    const allGood = { ...entry, outcome_positive: 1000, outcome_negative: 0 };
+    const allBad = { ...entry, outcome_positive: 0, outcome_negative: 1000 };
+    expect(calculateRewardFactor(allGood)).toBeLessThanOrEqual(1.5);
+    expect(calculateRewardFactor(allBad)).toBeGreaterThanOrEqual(0.5);
   });
 });

@@ -28,7 +28,7 @@ describe('schema migration', () => {
   it('creates the working_memory table at schema version 6', () => {
     const db = openHippoDb(tmpDir);
     try {
-      expect(getSchemaVersion(db)).toBe(6);
+      expect(getSchemaVersion(db)).toBe(7);
       // Table should exist — inserting should not throw
       db.prepare(`SELECT COUNT(*) AS cnt FROM working_memory`).get();
     } finally {

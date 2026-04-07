@@ -43,6 +43,11 @@ hippo recall "data pipeline issues" --budget 2000
 
 That's it. You have a memory system.
 
+### What's new in v0.11.0
+
+- **Reward-proportional decay.** Outcome feedback now modulates decay rate continuously instead of fixed half-life deltas. Memories with consistent positive outcomes decay up to 1.5x slower; consistent negatives decay up to 2x faster. Mixed outcomes converge toward neutral. Inspired by R-STDP in spiking neural networks. `hippo inspect` now shows cumulative outcome counts and the computed reward factor.
+- **Public benchmarks.** Two benchmarks in `benchmarks/`: a [Sequential Learning Benchmark](benchmarks/sequential-learning/) (50 tasks, 10 traps, measures agent improvement over time) and a [LongMemEval integration](benchmarks/longmemeval/) (industry-standard 500-question retrieval benchmark, R@5=74.0% with BM25 only). The sequential learning benchmark is unique: no other public benchmark tests whether memory systems produce learning curves.
+
 ### What's new in v0.10.0
 
 - **Active invalidation.** `hippo learn --git` detects migration and breaking-change commits and actively weakens memories referencing the old pattern. Manual invalidation via `hippo invalidate "REST API" --reason "migrated to GraphQL"`.
@@ -424,13 +429,14 @@ hippo recall "why is the gold model broken"
 
 hippo outcome --good
 # Applied positive outcome to 3 memories
-# half_life +5d on each
+# reward factor increases, decay slows
 
 hippo outcome --bad
 # Applied negative outcome to 3 memories
-# half_life -3d on each
-# irrelevant memories decay faster
+# reward factor decreases, decay accelerates
 ```
+
+Outcomes are cumulative. A memory with 5 positive outcomes and 0 negative has a reward factor of ~1.42, making its effective half-life 42% longer. A memory with 0 positive and 3 negative has a factor of ~0.63, decaying nearly twice as fast. Mixed outcomes converge toward neutral (1.0).
 
 ---
 
@@ -690,34 +696,100 @@ The 7 mechanisms in full: [PLAN.md#core-principles](PLAN.md#core-principles)
 
 For how these mechanisms connect to LLM training, continual learning, and open research problems: **[RESEARCH.md](RESEARCH.md)**
 
-**Related work:** [HippoRAG](https://arxiv.org/abs/2405.14831) (Gutierrez et al., 2024) applies hippocampal indexing to RAG via knowledge graphs. Complementary approach — HippoRAG optimizes retrieval quality, Hippo optimizes memory lifecycle. Same brain region, different mechanisms.
+**Why does reward modulate decay?** In spiking neural networks, reward-modulated STDP strengthens synapses that contribute to positive outcomes and weakens those that don't. Hippo's reward-proportional decay (v0.11.0) implements this: memories with consistent positive outcomes decay slower, negatives decay faster, with no fixed deltas. Inspired by [MH-FLOCKE](https://github.com/MarcHesse/mhflocke)'s R-STDP architecture for quadruped locomotion, where the same mechanism produces stable learning with 11.6x lower variance than PPO.
+
+**Prior art in agent memory simulation.** The idea that human-like memory produces human-like behavior as an emergent property was explored in IEEE research from 2010-2011 ([5952114](https://ieeexplore.ieee.org/document/5952114), [5548405](https://ieeexplore.ieee.org/document/5548405), [5953964](https://ieeexplore.ieee.org/document/5953964)). Walking between rooms and forgetting why you went there doesn't need direct simulation; it emerges naturally from a memory system with capacity limits and decay. Hippo's design follows the same principle: implement the mechanisms, and the behavior follows.
+
+**Related work:** [HippoRAG](https://arxiv.org/abs/2405.14831) (Gutierrez et al., 2024) applies hippocampal indexing to RAG via knowledge graphs. [MemPalace](https://github.com/milla-jovovich/mempalace) (Sigman & Jovovich, 2026) organizes memory spatially (wings/halls/rooms) with AAAK compression, achieving 100% on [LongMemEval](https://arxiv.org/abs/2410.10813). [MH-FLOCKE](https://github.com/MarcHesse/mhflocke) (Hesse, 2026) uses spiking neurons with R-STDP for embodied cognition. Each system tackles a different facet: HippoRAG optimizes retrieval quality, MemPalace optimizes retrieval organization, MH-FLOCKE optimizes embodied learning, and Hippo optimizes memory lifecycle.
 
 ---
 
 ## Comparison
 
-| Feature | Hippo | Mem0 | Basic Memory | Claude-Mem |
-|---------|-------|------|-------------|-----------|
+| Feature | Hippo | MemPalace | Mem0 | Basic Memory |
+|---------|-------|-----------|------|-------------|
 | Decay by default | Yes | No | No | No |
 | Retrieval strengthening | Yes | No | No | No |
-| Hybrid search (BM25 + embeddings) | Yes | Embeddings only | No | No |
+| Reward-proportional decay | Yes | No | No | No |
+| Hybrid search (BM25 + embeddings) | Yes | Embeddings + spatial | Embeddings only | No |
 | Schema acceleration | Yes | No | No | No |
 | Conflict detection + resolution | Yes | No | No | No |
 | Multi-agent shared memory | Yes | No | No | No |
 | Transfer scoring | Yes | No | No | No |
 | Outcome tracking | Yes | No | No | No |
 | Confidence tiers | Yes | No | No | No |
+| Spatial organization | No | Yes (wings/halls/rooms) | No | No |
+| Lossless compression | No | Yes (AAAK, 30x) | No | No |
 | Cross-tool import | Yes | No | No | No |
-| Conversation capture | Yes | No | No | No |
 | Auto-hook install | Yes | No | No | No |
-| MCP server | Yes | No | No | No |
-| Native plugins | OpenClaw + Claude Code | No | No | No |
-| Multi-repo git learn | Yes | No | No | No |
-| Zero dependencies | Yes | No | No | No |
-| Git-friendly | Yes | No | Yes | No |
-| Framework agnostic | Yes | Partial | Yes | No |
+| MCP server | Yes | Yes | No | No |
+| Zero dependencies | Yes | No (ChromaDB) | No | No |
+| LongMemEval R@5 (retrieval) | 74.0% (BM25 only) | 96.6% (raw) / 100% (reranked) | ~49-85% | N/A |
+| Git-friendly | Yes | No | No | Yes |
+| Framework agnostic | Yes | Yes | Partial | Yes |
 
-Mem0, Basic Memory, and Claude-Mem all implement "save everything, search later." Hippo implements all 7 hippocampal mechanisms: two-speed storage, decay, retrieval strengthening, schema acceleration, conflict detection, multi-agent transfer, and explicit working memory. It's the only tool that models what memories are worth keeping.
+Different tools answer different questions. Mem0 and Basic Memory implement "save everything, search later." MemPalace implements "store everything, organize spatially for retrieval." Hippo implements "forget by default, earn persistence through use." These are complementary approaches: MemPalace's retrieval precision + Hippo's lifecycle management would be stronger than either alone.
+
+---
+
+## Benchmarks
+
+Two benchmarks testing two different things. Full details in [`benchmarks/`](benchmarks/).
+
+### LongMemEval (retrieval accuracy)
+
+[LongMemEval](https://arxiv.org/abs/2410.10813) (ICLR 2025) is the industry-standard benchmark: 500 questions across 5 memory abilities, embedded in 115k+ token chat histories.
+
+**Hippo v0.11.0 results (BM25 only, zero dependencies):**
+
+| Metric | Score |
+|--------|-------|
+| Recall@1 | 50.4% |
+| Recall@3 | 66.6% |
+| Recall@5 | 74.0% |
+| Recall@10 | 82.6% |
+| Answer in content@5 | 46.6% |
+
+| Question Type | Count | R@5 |
+|---------------|-------|-----|
+| single-session-assistant | 56 | 94.6% |
+| knowledge-update | 78 | 88.5% |
+| temporal-reasoning | 133 | 73.7% |
+| multi-session | 133 | 72.2% |
+| single-session-user | 70 | 65.7% |
+| single-session-preference | 30 | 26.7% |
+
+For context: MemPalace scores 96.6% (raw) using ChromaDB embeddings + spatial indexing. Hippo achieves 74.0% using BM25 keyword matching alone with zero runtime dependencies. Adding embeddings via `hippo embed` (optional `@xenova/transformers` peer dep) enables hybrid search and should close the gap.
+
+Hippo's strongest categories (knowledge-update 88.5%, single-session-assistant 94.6%) are the ones where keyword overlap between question and stored content is highest. The weakest (preference 26.7%) involves indirect references that need semantic understanding.
+
+```bash
+cd benchmarks/longmemeval
+python ingest_direct.py --data data/longmemeval_oracle.json --store-dir ./store
+python retrieve_fast.py --data data/longmemeval_oracle.json --store-dir ./store --output results/retrieval.jsonl
+python evaluate_retrieval.py --retrieval results/retrieval.jsonl --data data/longmemeval_oracle.json
+```
+
+### Sequential Learning Benchmark (agent improvement over time)
+
+No other public benchmark tests whether memory systems produce learning curves. LongMemEval tests retrieval on a fixed corpus. This benchmark tests whether an agent with memory *performs better on task 40 than task 5*.
+
+50 tasks, 10 trap categories, each appearing 2-3 times across the sequence.
+
+**Hippo v0.11.0 results:**
+
+| Condition | Overall | Early | Mid | Late | Learns? |
+|-----------|---------|-------|-----|------|---------|
+| No memory | 100% | 100% | 100% | 100% | No |
+| Static memory | 20% | 33% | 11% | 14% | No |
+| Hippo | 40% | 78% | 22% | 14% | Yes |
+
+The hippo agent's trap-hit rate drops from 78% to 14% as it accumulates error memories with 2x half-life. Static pre-loaded memory helps from the start but doesn't improve. Any memory system can run this benchmark by implementing the [adapter interface](benchmarks/sequential-learning/adapters/interface.mjs).
+
+```bash
+cd benchmarks/sequential-learning
+node run.mjs --adapter all
+```
 
 ---
 
@@ -726,10 +798,13 @@ Mem0, Basic Memory, and Claude-Mem all implement "save everything, search later.
 Issues and PRs welcome. Before contributing, run `hippo status` in the repo root to see the project's own memory.
 
 The interesting problems:
+- **Improve LongMemEval score.** Current R@5 is 74.0% with BM25 only. Adding embeddings (`hippo embed`) and hybrid search should close the gap toward MemPalace's 96.6%.
 - Better consolidation heuristics (LLM-powered merge vs current text overlap)
 - Web UI / dashboard for visualizing decay curves and memory health
 - Optimal decay parameter tuning from real usage data
 - Cross-agent transfer learning evaluation
+- **MemPalace-style spatial organization.** Could spatial structure (wings/halls/rooms) improve hippo's semantic layer?
+- **AAAK-style compression for semantic memories.** Lossless token compression for context injection.
 
 ## License
 

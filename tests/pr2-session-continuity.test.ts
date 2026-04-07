@@ -36,8 +36,8 @@ describe('schema v5+v6 migration', () => {
     initStore(tmpDir);
     const db = openHippoDb(tmpDir);
     try {
-      expect(getSchemaVersion(db)).toBe(6);
-      expect(getCurrentSchemaVersion()).toBe(6);
+      expect(getSchemaVersion(db)).toBe(7);
+      expect(getCurrentSchemaVersion()).toBe(7);
     } finally {
       closeHippoDb(db);
     }

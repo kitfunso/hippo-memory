@@ -661,20 +661,22 @@ describe('Error priority', () => {
 });
 
 describe('Outcome feedback', () => {
-  it('--good increases half_life by 5', () => {
+  it('--good increments outcome_positive counter', () => {
     const entry = createMemory('some lesson');
-    const before = entry.half_life_days;
     const updated = applyOutcome(entry, true);
-    expect(updated.half_life_days).toBe(before + 5);
+    expect(updated.outcome_positive).toBe(1);
+    expect(updated.outcome_negative).toBe(0);
     expect(updated.outcome_score).toBe(1);
+    expect(updated.half_life_days).toBe(entry.half_life_days);
   });
 
-  it('--bad decreases half_life by 3', () => {
+  it('--bad increments outcome_negative counter', () => {
     const entry = createMemory('some lesson');
-    const before = entry.half_life_days;
     const updated = applyOutcome(entry, false);
-    expect(updated.half_life_days).toBe(before - 3);
+    expect(updated.outcome_positive).toBe(0);
+    expect(updated.outcome_negative).toBe(1);
     expect(updated.outcome_score).toBe(-1);
+    expect(updated.half_life_days).toBe(entry.half_life_days);
   });
 });
 

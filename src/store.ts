@@ -51,6 +51,8 @@ interface MemoryRow {
   schema_fit: number;
   source: string;
   outcome_score: number | null;
+  outcome_positive: number;
+  outcome_negative: number;
   conflicts_with_json: string;
   pinned: number;
   confidence: ConfidenceLevel;
@@ -133,7 +135,7 @@ export interface SessionEvent {
 }
 
 const INDEX_VERSION = 2;
-const MEMORY_SELECT_COLUMNS = `id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, conflicts_with_json, pinned, confidence, content`;
+const MEMORY_SELECT_COLUMNS = `id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content`;
 const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
 
 function layerDir(root: string, layer: Layer): string {
@@ -190,6 +192,8 @@ export function serializeEntry(entry: MemoryEntry): string {
     schema_fit: entry.schema_fit,
     source: entry.source,
     outcome_score: entry.outcome_score,
+    outcome_positive: entry.outcome_positive,
+    outcome_negative: entry.outcome_negative,
     conflicts_with: entry.conflicts_with,
     pinned: entry.pinned,
     confidence: entry.confidence ?? 'observed',
@@ -218,6 +222,8 @@ export function deserializeEntry(raw: string): MemoryEntry | null {
     schema_fit: Number(data['schema_fit'] ?? 0.5),
     source: String(data['source'] ?? 'cli'),
     outcome_score: data['outcome_score'] === null || data['outcome_score'] === undefined ? null : Number(data['outcome_score']),
+    outcome_positive: Number(data['outcome_positive'] ?? 0),
+    outcome_negative: Number(data['outcome_negative'] ?? 0),
     conflicts_with: normalizeStringArray(data['conflicts_with']),
     pinned: Boolean(data['pinned'] ?? false),
     confidence: (data['confidence'] as ConfidenceLevel) ?? 'observed',
@@ -244,6 +250,8 @@ function rowToEntry(row: MemoryRow): MemoryEntry {
     schema_fit: Number(row.schema_fit ?? 0.5),
     source: row.source ?? 'cli',
     outcome_score: row.outcome_score === null || row.outcome_score === undefined ? null : Number(row.outcome_score),
+    outcome_positive: Number(row.outcome_positive ?? 0),
+    outcome_negative: Number(row.outcome_negative ?? 0),
     conflicts_with: parseJsonArray(row.conflicts_with_json),
     pinned: Boolean(row.pinned),
     confidence: row.confidence ?? 'observed',
@@ -600,8 +608,9 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
     INSERT INTO memories(
       id, created, last_retrieved, retrieval_count, strength, half_life_days, layer,
       tags_json, emotional_valence, schema_fit, source, outcome_score,
+      outcome_positive, outcome_negative,
       conflicts_with_json, pinned, confidence, content, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     ON CONFLICT(id) DO UPDATE SET
       created = excluded.created,
       last_retrieved = excluded.last_retrieved,
@@ -614,6 +623,8 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
       schema_fit = excluded.schema_fit,
       source = excluded.source,
       outcome_score = excluded.outcome_score,
+      outcome_positive = excluded.outcome_positive,
+      outcome_negative = excluded.outcome_negative,
       conflicts_with_json = excluded.conflicts_with_json,
       pinned = excluded.pinned,
       confidence = excluded.confidence,
@@ -632,6 +643,8 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
     entry.schema_fit,
     entry.source,
     entry.outcome_score,
+    entry.outcome_positive ?? 0,
+    entry.outcome_negative ?? 0,
     JSON.stringify(entry.conflicts_with ?? []),
     entry.pinned ? 1 : 0,
     entry.confidence,
@@ -717,7 +730,7 @@ function writeStatsMirror(hippoRoot: string, stats: Record<string, unknown>): vo
 }
 
 function syncMirrorFiles(hippoRoot: string, db: ReturnType<typeof openHippoDb>): void {
-  const entries = db.prepare(`SELECT id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, conflicts_with_json, pinned, confidence, content FROM memories ORDER BY created ASC, id ASC`).all() as MemoryRow[];
+  const entries = db.prepare(`SELECT id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content FROM memories ORDER BY created ASC, id ASC`).all() as MemoryRow[];
 
   for (const entry of entries.map(rowToEntry)) {
     writeMarkdownMirror(hippoRoot, entry);
@@ -786,7 +799,7 @@ export function readEntry(hippoRoot: string, id: string): MemoryEntry | null {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    const row = db.prepare(`SELECT id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, conflicts_with_json, pinned, confidence, content FROM memories WHERE id = ?`).get(id) as MemoryRow | undefined;
+    const row = db.prepare(`SELECT id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content FROM memories WHERE id = ?`).get(id) as MemoryRow | undefined;
     return row ? rowToEntry(row) : null;
   } finally {
     closeHippoDb(db);

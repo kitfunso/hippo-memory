@@ -38,6 +38,8 @@ Hippo implements all seven hippocampal mechanisms as software. The question is w
 
 **Open problem:** When a model retrieves and uses a piece of knowledge successfully (positive user feedback), that knowledge should be reinforced in the weights. When knowledge is retrieved but leads to negative feedback, it should be weakened. Hippo's `outcome --good/--bad` generates exactly this signal.
 
+**Hippo implementation (v0.11.0):** Reward-proportional decay. Cumulative outcome counts modulate effective half-life via a reward factor (range 0.5-1.5), inspired by R-STDP in spiking neural networks. See [MH-FLOCKE](https://github.com/MarcHesse/mhflocke) for the embodied AI parallel.
+
 ### 4. Emotional tagging -> Error-prioritized replay
 
 **Current state:** Prioritized Experience Replay (Schaul et al., 2015) replays high-TD-error examples more frequently in RL. But this hasn't been systematically applied to LLM training.
@@ -135,6 +137,102 @@ Hippo is the prototype. The data it generates is the evidence base. The research
 
 [HippoRAG](https://arxiv.org/abs/2405.14831) (Gutierrez et al., 2024) applies hippocampal indexing theory to retrieval-augmented generation, using knowledge graphs as an analog to the entorhinal cortex's pattern separation. The approach is complementary but distinct from Hippo's: HippoRAG focuses on retrieval quality via graph-based indexing, while Hippo focuses on memory lifecycle (decay, consolidation, invalidation). The name overlap reflects shared neuroscience inspiration, not shared techniques.
 
+### MH-FLOCKE (Embodied Cognition via Spiking Networks)
+
+[MH-FLOCKE](https://github.com/MarcHesse/mhflocke) (Hesse, 2026) is a biologically-inspired architecture for quadruped locomotion using Izhikevich spiking neurons with reward-modulated spike-timing-dependent plasticity (R-STDP). The system uses 5,000+ spiking neurons organized into a 15-step cognitive loop running at 200 Hz, including spinal reflexes, a cerebellar forward model, episodic memory, motivational drives, and a global workspace.
+
+The memory parallel is direct: in MH-FLOCKE, "memory" lives in synaptic weights. Synapses that contribute to reward are strengthened via R-STDP; those that don't weaken naturally. Stop the robot, restart it, and the weights reload. No explicit forgetting mechanism is needed because decay emerges from the reward signal.
+
+**What hippo borrowed:** Reward-proportional decay (v0.11.0). Instead of fixed half-life deltas on outcome feedback, hippo now modulates effective half-life continuously based on cumulative reward ratio, directly inspired by R-STDP's continuous reward-driven plasticity.
+
+**Key differences:**
+
+| Property | MH-FLOCKE | Hippo |
+|----------|-----------|-------|
+| Abstraction level | Sub-symbolic (spike trains, synaptic weights) | Symbolic (text, tags, confidence tiers) |
+| Memory inspectability | Opaque (can't ask "what does synapse #3472 know?") | Fully inspectable (`hippo inspect <id>`) |
+| Decay driver | Reward absence (continuous, implicit) | Time + reward ratio (explicit half-life) |
+| Domain | Continuous motor control (joint angles, gait) | Discrete knowledge tasks (code, decisions, errors) |
+| Persistence | Weight file reload | SQLite + markdown mirrors |
+| Consolidation | Dream mode (offline replay) | `hippo sleep` (episodic-to-semantic merge) |
+| Search | N/A (weights are the knowledge) | BM25 + cosine embeddings |
+
+MH-FLOCKE validates that biologically-inspired memory with natural decay works in embodied systems. Hippo validates it works for LLM agent knowledge management. Same neuroscience, different substrates.
+
+### MemPalace (Spatial Memory Organization)
+
+[MemPalace](https://github.com/milla-jovovich/mempalace) (Sigman & Jovovich, 2026) organizes AI memory using a spatial metaphor: wings (people/projects), halls (connection types), rooms (specific topics), closets (compressed summaries), and drawers (verbatim originals). It achieved a perfect 500/500 score on LongMemEval using Claude Haiku reranking and 96.6% with local-only retrieval.
+
+The system uses AAAK, a lossless compression dialect that achieves 30x token reduction, and a four-layer memory stack (L0-L3) from identity prompts through full semantic search. Storage is ChromaDB (vectors) + SQLite (temporal knowledge graph).
+
+**Hippo vs MemPalace: different philosophies.**
+
+MemPalace answers: "How do you find the right memory?" It solves retrieval quality through spatial structure and achieves state-of-the-art benchmark scores doing it. Everything is kept. Organization makes it findable.
+
+Hippo answers: "Which memories are worth keeping?" It solves memory lifecycle through decay, strengthening, and consolidation. Useless memories disappear. Useful ones get stronger. The system self-curates.
+
+| Property | Hippo | MemPalace |
+|----------|-------|-----------|
+| Philosophy | Forget by default, earn persistence | Store everything, organize for retrieval |
+| Forgetting | Automatic (exponential decay) | Manual invalidation only |
+| Retrieval strengthening | Yes (half-life extension + reward factor) | No |
+| Compression | No (full text stored) | AAAK (30x lossless compression) |
+| Search | BM25 + embeddings | Spatial structure + embeddings |
+| Storage | SQLite + markdown (zero deps) | ChromaDB + SQLite |
+| Conflict detection | Yes | No |
+| Outcome feedback | Yes (reward-proportional decay) | No |
+| LongMemEval | Not benchmarked | 100% (reranked), 96.6% (raw) |
+| Dependencies | Zero runtime | ChromaDB |
+
+These systems are complementary. MemPalace's spatial organization and AAAK compression could improve how hippo stores and compresses semantic memories. Hippo's decay and outcome feedback could give MemPalace a mechanism to surface high-value memories and let stale ones fade.
+
+### LongMemEval as a Benchmark Target
+
+[LongMemEval](https://arxiv.org/abs/2410.10813) (Wu et al., ICLR 2025) tests five core long-term memory abilities: information extraction, multi-session reasoning, temporal reasoning, knowledge updates, and abstention. The benchmark uses 500 questions embedded in scalable chat histories.
+
+Current leaderboard (approximate): MemPalace 100% (reranked) / 96.6% (raw), Supermemory ASMR ~99%, Mastra ~95%, MemLayer ~94%, Mem0 ~49-85% (varies by version).
+
+**Hippo v0.11.0 LongMemEval retrieval results (BM25 only, zero dependencies):**
+
+| Metric | Score |
+|--------|-------|
+| Recall@1 | 50.4% |
+| Recall@3 | 66.6% |
+| Recall@5 | 74.0% |
+| Recall@10 | 82.6% |
+
+Strongest on knowledge-update (R@5=88.5%) and single-session-assistant (94.6%). Weakest on single-session-preference (26.7%), where queries reference preferences indirectly and keyword overlap is low.
+
+For context: MemPalace scores 96.6% (raw) using ChromaDB embeddings + spatial indexing. Hippo's 74.0% uses BM25 keyword matching alone. The gap is expected: BM25 misses semantic similarity. Adding embeddings (`hippo embed`) enables hybrid search and should close it.
+
+The benchmark tests retrieval accuracy, which is not hippo's primary thesis. Hippo's thesis is that memory lifecycle management (decay, strengthening, consolidation) produces better *agent behavior over time*, not better *retrieval precision on a fixed corpus*. The sequential learning benchmark (78% trap rate -> 14% over 50 tasks) tests this directly. Both benchmarks are needed: LongMemEval for public comparability, sequential learning for differentiation.
+
+The five abilities map to hippo features:
+
+| LongMemEval Ability | Hippo Feature |
+|---------------------|---------------|
+| Information extraction | `hippo remember` + `capture` |
+| Multi-session reasoning | `hippo recall` (BM25 + embeddings across sessions) |
+| Temporal reasoning | Timestamps on all memories, `--framing observe` includes dates |
+| Knowledge updates | `hippo invalidate`, `hippo decide --supersedes`, conflict detection |
+| Abstention | Confidence tiers (`stale`, `inferred`) signal when not to trust |
+
+Running LongMemEval is a near-term priority. It would let hippo participate in direct comparisons and expose retrieval gaps.
+
+### Early Work on Agent Memory Simulation
+
+The HN commenter [davman](https://news.ycombinator.com/item?id=47667672) shared three IEEE papers from 2010-2011 that predate the current wave of LLM memory systems. These papers explored biologically-inspired memory for virtual agents and serious games:
+
+- **"Storing objects in a short-term biologically inspired memory system for artificial agents"** ([IEEE 5952114](https://ieeexplore.ieee.org/document/5952114), 2011). Proposes a method for short-term storage that emulates biological memory systems in artificial agents, examining how capacity limits and decay affect agent behavior.
+
+- **"Storage, degradation and recall of agent memory in Serious Games and Simulations"** ([IEEE 5548405](https://ieeexplore.ieee.org/document/5548405), 2010). Describes a biologically-inspired method for storing, degrading, and recalling agent memories. Considers biological limits on both storage and recall capacity, modeling realistic memory degradation over time.
+
+- [IEEE 5953964](https://ieeexplore.ieee.org/document/5953964) (2011). Related work by the same author on agent memory and behavior simulation.
+
+The key insight from this line of research: human-like memory storage produces human-like behavior as an emergent property. The example of walking between rooms and forgetting why you went there is a behavior that would otherwise need direct simulation, but falls out naturally from a memory system with capacity limits and context-dependent recall. This aligns directly with hippo's design: we don't program specific forgetting behaviors. We implement decay, and irrelevant context disappears on its own.
+
+These papers were ahead of their time. The mechanisms they described (capacity limits, degradation curves, context-dependent recall) are now being rediscovered in the LLM agent memory space, fifteen years later.
+
 ## References
 
 - McClelland, J.L., McNaughton, B.L., & O'Reilly, R.C. (1995). Why there are complementary learning systems in the hippocampus and neocortex. *Psychological Review*.
@@ -145,3 +243,10 @@ Hippo is the prototype. The data it generates is the evidence base. The research
 - Tse, D. et al. (2007). Schemas and memory consolidation. *Science*.
 - Frankland, P.W. et al. (2013). Hippocampal neurogenesis and forgetting. *Trends in Neurosciences*.
 - Nader, K. et al. (2000). Fear memories require protein synthesis in the amygdala for reconsolidation after retrieval. *Nature*.
+- Wu, D. et al. (2024). LongMemEval: Benchmarking Chat Assistants on Long-Term Interactive Memory. *ICLR 2025*. *arXiv:2410.10813*.
+- Gutierrez, B.J. et al. (2024). HippoRAG: Neurobiologically Inspired Long-Term Memory for Large Language Models. *arXiv:2405.14831*.
+- Hesse, M. (2026). MH-FLOCKE: Embodied Cognition Architecture for Quadruped Learning. *GitHub*.
+- Sigman, B. & Jovovich, M. (2026). MemPalace: Palace-structured memory for AI agents. *GitHub*.
+- IEEE 5952114 (2011). Storing objects in a short-term biologically inspired memory system for artificial agents. *IEEE*.
+- IEEE 5548405 (2010). Storage, degradation and recall of agent memory in Serious Games and Simulations. *IEEE*.
+- IEEE 5953964 (2011). Agent memory and behavior simulation. *IEEE*.

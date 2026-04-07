@@ -26,6 +26,8 @@ export interface MemoryEntry {
   schema_fit: number;      // 0..1
   source: string;
   outcome_score: number | null;  // null = no feedback yet
+  outcome_positive: number;      // cumulative positive outcome count
+  outcome_negative: number;      // cumulative negative outcome count
   conflicts_with: string[];
   pinned: boolean;
   confidence: ConfidenceLevel;  // epistemic confidence tier
@@ -43,8 +45,29 @@ const EMOTIONAL_MULTIPLIERS: Record<EmotionalValence, number> = {
 };
 
 /**
+ * Compute the reward factor from cumulative outcome counts.
+ *
+ *   reward_ratio  = (positive - negative) / (positive + negative + 1)
+ *   reward_factor = 1 + 0.5 * reward_ratio
+ *
+ * Range: (0.5, 1.5). Neutral (no outcomes) returns 1.0.
+ * Modulates effective half-life: memories with consistent positive outcomes
+ * decay slower; consistent negative outcomes decay faster.
+ */
+export function calculateRewardFactor(entry: MemoryEntry): number {
+  const pos = entry.outcome_positive ?? 0;
+  const neg = entry.outcome_negative ?? 0;
+  if (pos === 0 && neg === 0) return 1.0;
+  const ratio = (pos - neg) / (pos + neg + 1);
+  return 1 + 0.5 * ratio;
+}
+
+/**
  * Calculate current strength at a given time.
  * strength(t) = base_strength * decay * retrieval_boost * emotional_multiplier
+ *
+ * Decay uses reward-modulated half-life:
+ *   effective_half_life = half_life_days * reward_factor
  *
  * Pinned memories always return 1.0 (no decay).
  *
@@ -57,8 +80,12 @@ export function calculateStrength(entry: MemoryEntry, now: Date = new Date()): n
   const lastRetrieved = new Date(entry.last_retrieved);
   const daysSince = (now.getTime() - lastRetrieved.getTime()) / (1000 * 60 * 60 * 24);
 
-  // Exponential decay: base * (0.5 ^ (days / half_life))
-  const decay = Math.pow(0.5, daysSince / entry.half_life_days);
+  // Reward-proportional half-life modulation
+  const rewardFactor = calculateRewardFactor(entry);
+  const effectiveHalfLife = entry.half_life_days * rewardFactor;
+
+  // Exponential decay: base * (0.5 ^ (days / effective_half_life))
+  const decay = Math.pow(0.5, daysSince / effectiveHalfLife);
 
   // Retrieval boost: 1 + 0.1 * log2(retrieval_count + 1)
   const retrievalBoost = 1 + 0.1 * Math.log2(entry.retrieval_count + 1);
@@ -98,13 +125,24 @@ export function deriveHalfLife(base: number, entry: Partial<MemoryEntry>): numbe
 
 /**
  * Apply outcome feedback to a memory entry.
- * Positive: +5 days half-life. Negative: -3 days.
+ *
+ * Increments outcome_positive or outcome_negative counters.
+ * The reward factor in calculateStrength() uses these counts to
+ * continuously modulate the effective half-life:
+ *   reward_ratio  = (pos - neg) / (pos + neg + 1)
+ *   reward_factor = 1 + 0.5 * reward_ratio    // range (0.5, 1.5)
+ *   effective_hl  = half_life_days * reward_factor
+ *
+ * No fixed half-life delta. Decay rate adjusts proportionally to
+ * cumulative reward signal, inspired by R-STDP in spiking networks.
  */
 export function applyOutcome(entry: MemoryEntry, good: boolean): MemoryEntry {
-  const delta = good ? 5 : -3;
-  const newHalfLife = Math.max(1, entry.half_life_days + delta);
-  const newOutcome = good ? 1 : -1;
-  const updated = { ...entry, half_life_days: newHalfLife, outcome_score: newOutcome };
+  const updated: MemoryEntry = {
+    ...entry,
+    outcome_score: good ? 1 : -1,
+    outcome_positive: (entry.outcome_positive ?? 0) + (good ? 1 : 0),
+    outcome_negative: (entry.outcome_negative ?? 0) + (good ? 0 : 1),
+  };
   updated.strength = calculateStrength(updated);
   return updated;
 }
@@ -170,6 +208,8 @@ export function createMemory(
     schema_fit,
     source: options.source ?? 'cli',
     outcome_score: null,
+    outcome_positive: 0,
+    outcome_negative: 0,
     conflicts_with: [],
     pinned: options.pinned ?? false,
     confidence: options.confidence ?? 'verified',

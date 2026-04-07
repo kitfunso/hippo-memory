@@ -6,3 +6,8 @@ dist/
 .env
 .DS_Store
 Thumbs.db
+benchmarks/longmemeval/data/
+benchmarks/longmemeval/results/
+benchmarks/longmemeval/hippo_store*/
+benchmarks/longmemeval/__pycache__/
+benchmarks/sequential-learning/results/

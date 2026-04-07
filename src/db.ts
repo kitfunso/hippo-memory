@@ -20,7 +20,7 @@ const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: new (path: string) => DatabaseSyncLike;
 };
 
-const CURRENT_SCHEMA_VERSION = 6;
+const CURRENT_SCHEMA_VERSION = 7;
 
 type Migration = {
   version: number;
@@ -175,6 +175,17 @@ const MIGRATIONS: Migration[] = [
         CREATE INDEX IF NOT EXISTS idx_working_memory_session
         ON working_memory(session_id, created_at DESC);
       `);
+    },
+  },
+  {
+    version: 7,
+    up: (db) => {
+      if (!tableHasColumn(db, 'memories', 'outcome_positive')) {
+        db.exec(`ALTER TABLE memories ADD COLUMN outcome_positive INTEGER NOT NULL DEFAULT 0`);
+      }
+      if (!tableHasColumn(db, 'memories', 'outcome_negative')) {
+        db.exec(`ALTER TABLE memories ADD COLUMN outcome_negative INTEGER NOT NULL DEFAULT 0`);
+      }
     },
   },
 ];
