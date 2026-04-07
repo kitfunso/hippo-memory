@@ -103,6 +103,51 @@ describe('textOverlap (Jaccard)', () => {
   });
 });
 
+describe('decision recall boost', () => {
+  it('decision-tagged memories get a 1.2x recall boost', () => {
+    const decision = createMemory('PostgreSQL is the standard database for all services', {
+      tags: ['decision', 'database'],
+      layer: Layer.Semantic,
+      confidence: 'verified',
+      source: 'decision',
+    });
+    // Give it a longer half-life typical for decisions
+    decision.half_life_days = 90;
+
+    const normal = createMemory('PostgreSQL connection pool maximum is set to 20', {
+      tags: ['database'],
+    });
+
+    const results = search('PostgreSQL database', [decision, normal], { budget: 4000 });
+
+    expect(results.length).toBe(2);
+    expect(results[0].entry.tags).toContain('decision');
+  });
+
+  it('decision boost applies as a 1.2x multiplier to composite score', () => {
+    // Use tags that don't overlap with the query so BM25 stays identical
+    const withDecision = createMemory('cache refresh data pipeline issue', {
+      tags: ['decision', 'ops'],
+    });
+    const without = createMemory('cache refresh data pipeline issue', {
+      tags: ['ops'],
+    });
+
+    // Query only on content terms, not on tag terms
+    const results = search('cache refresh', [withDecision, without], { budget: 4000 });
+
+    expect(results.length).toBe(2);
+    const decisionResult = results.find(r => r.entry.tags.includes('decision'))!;
+    const normalResult = results.find(r => !r.entry.tags.includes('decision'))!;
+    // The decision tag adds "decision" to the BM25 doc text which slightly affects
+    // corpus stats, so we check a looser tolerance
+    expect(decisionResult.score).toBeGreaterThan(normalResult.score);
+    // Ratio should be approximately 1.2 (within 10% tolerance)
+    expect(decisionResult.score / normalResult.score).toBeGreaterThan(1.1);
+    expect(decisionResult.score / normalResult.score).toBeLessThan(1.3);
+  });
+});
+
 describe('markRetrieved', () => {
   it('increments retrieval_count and updates last_retrieved', () => {
     const entry = createMemory('test memory');

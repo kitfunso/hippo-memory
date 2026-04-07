@@ -198,6 +198,10 @@ export async function hybridSearch(
       compositeScore = normQ * (0.5 + 0.5 * strength) * (0.8 + 0.2 * recency);
     }
 
+    // Decision-tagged memories get a 1.2x recall boost
+    const decisionBoost = entries[i].tags.includes('decision') ? 1.2 : 1.0;
+    compositeScore *= decisionBoost;
+
     if (compositeScore <= 0) continue;
 
     const tokens = estimateTokens(entries[i].content);
@@ -258,7 +262,11 @@ export function search(
     // Composite: BM25 relevance * strength * recency
     // Normalise BM25 against query term count to keep scale consistent
     const normBm25 = queryTerms.length > 0 ? bm25 / queryTerms.length : bm25;
-    const composite = normBm25 * (0.5 + 0.5 * strength) * (0.8 + 0.2 * recency);
+    let composite = normBm25 * (0.5 + 0.5 * strength) * (0.8 + 0.2 * recency);
+
+    // Decision-tagged memories get a 1.2x recall boost
+    const decisionBoost = entries[i].tags.includes('decision') ? 1.2 : 1.0;
+    composite *= decisionBoost;
 
     const tokens = estimateTokens(entries[i].content);
 
