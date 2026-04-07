@@ -1520,7 +1520,7 @@ function learnFromRepo(
 
     const entry = createMemory(lesson, {
       layer: Layer.Episodic,
-      tags: gitLearnTags,
+      tags: [...gitLearnTags],
       source: 'git-learn',
       confidence: 'observed',
       schema_fit: schemaFitVal,
