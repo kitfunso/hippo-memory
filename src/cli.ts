@@ -208,6 +208,20 @@ function cmdInit(hippoRoot: string, flags: Record<string, string | boolean | str
   if (!flags['no-schedule'] && !flags['global']) {
     setupDailySchedule(hippoRoot);
   }
+
+  // Seed with git history on first init (unless --no-learn)
+  if (!alreadyExists && !flags['no-learn'] && !flags['global']) {
+    if (isGitRepo(process.cwd())) {
+      const seedDays = 30;
+      console.log(`\n   Seeding memories from last ${seedDays} days of git history...`);
+      const { added, skipped } = learnFromRepo(hippoRoot, process.cwd(), seedDays);
+      if (added > 0) {
+        console.log(`   Learned ${added} lessons from git (${skipped} duplicates skipped).`);
+      } else {
+        console.log(`   No matching commits found in git history.`);
+      }
+    }
+  }
 }
 
 /**
@@ -516,6 +530,15 @@ function cmdSleep(
   flags: Record<string, string | boolean | string[]>
 ): void {
   requireInit(hippoRoot);
+
+  // Auto-learn from git before consolidating (unless --no-learn)
+  if (!flags['no-learn']) {
+    const config = loadConfig(hippoRoot);
+    if (config.autoLearnOnSleep && isGitRepo(process.cwd())) {
+      const { added } = learnFromRepo(hippoRoot, process.cwd(), 1);
+      if (added > 0) console.log(`Auto-learned ${added} lessons from today's git commits.`);
+    }
+  }
 
   const dryRun = Boolean(flags['dry-run']);
   console.log(`Running consolidation${dryRun ? ' (dry run)' : ''}...`);
@@ -2246,6 +2269,7 @@ Commands:
     --global               Init the global store ($HIPPO_HOME or ~/.hippo/)
     --no-hooks             Skip auto-detecting and installing agent hooks
     --no-schedule          Skip auto-creating daily learn+sleep cron job
+    --no-learn             Skip seeding memories from git history
   remember <text>          Store a memory
     --tag <tag>            Add a tag (repeatable)
     --error                Tag as error (boosts retention)
@@ -2263,8 +2287,9 @@ Commands:
     --budget <n>           Token budget (default: 1500)
     --format <fmt>         Output format: markdown (default) or json
     --framing <mode>       Framing: observe (default), suggest, assert
-  sleep                    Run consolidation pass
+  sleep                    Run consolidation pass (auto-learns from git first)
     --dry-run              Preview without writing
+    --no-learn             Skip auto git-learn before consolidation
   status                   Show memory health stats
   outcome                  Apply feedback to last recall
     --good                 Memories were helpful
