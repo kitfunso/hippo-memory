@@ -1612,7 +1612,7 @@ function learnFromRepo(
   const existingForSchema = loadAllEntries(hippoRoot);
 
   for (const lesson of lessons) {
-    if (deduplicateLesson(hippoRoot, lesson)) {
+    if (deduplicateLesson(existingForSchema, lesson)) {
       skipped++;
       continue;
     }

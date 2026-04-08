@@ -87,11 +87,13 @@ export function extractLessons(gitLog: string, customPatterns?: string[]): strin
  * Returns true if overlap > threshold (default 0.7).
  */
 export function deduplicateLesson(
-  hippoRoot: string,
+  hippoRootOrEntries: string | MemoryEntry[],
   lesson: string,
   threshold = 0.7
 ): boolean {
-  const entries = loadAllEntries(hippoRoot);
+  const entries = typeof hippoRootOrEntries === 'string'
+    ? loadAllEntries(hippoRootOrEntries)
+    : hippoRootOrEntries;
 
   for (const entry of entries) {
     const overlap = textOverlap(lesson, entry.content);
