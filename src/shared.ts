@@ -110,14 +110,14 @@ export function searchBoth(
   // Sort by adjusted score descending
   deduped.sort((a, b) => b.score - a.score);
 
-  // Apply combined token budget
+  // Apply combined token budget (always include first result)
   const results: typeof deduped = [];
   let usedTokens = 0;
 
-  for (const r of deduped) {
-    if (usedTokens + r.tokens > budget) continue;
-    results.push(r);
-    usedTokens += r.tokens;
+  for (let i = 0; i < deduped.length; i++) {
+    if (i > 0 && usedTokens + deduped[i].tokens > budget) continue;
+    usedTokens += deduped[i].tokens;
+    results.push(deduped[i]);
   }
 
   return results;
@@ -169,14 +169,14 @@ export async function searchBothHybrid(
   // Sort by adjusted score descending
   deduped.sort((a, b) => b.score - a.score);
 
-  // Apply combined token budget
+  // Apply combined token budget (always include first result)
   const results: typeof deduped = [];
   let usedTokens = 0;
 
-  for (const r of deduped) {
-    if (usedTokens + r.tokens > budget) continue;
-    results.push(r);
-    usedTokens += r.tokens;
+  for (let i = 0; i < deduped.length; i++) {
+    if (i > 0 && usedTokens + deduped[i].tokens > budget) continue;
+    usedTokens += deduped[i].tokens;
+    results.push(deduped[i]);
   }
 
   return results;

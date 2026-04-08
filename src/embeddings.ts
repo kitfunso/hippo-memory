@@ -230,35 +230,37 @@ export async function embedAll(
 ): Promise<number> {
   if (!isEmbeddingAvailable()) return 0;
 
-  const entries = loadAllEntries(hippoRoot);
-  const index = loadEmbeddingIndex(hippoRoot);
-  let count = 0;
-  let dirty = false;
+  return withEmbedLock(async () => {
+    const entries = loadAllEntries(hippoRoot);
+    const index = loadEmbeddingIndex(hippoRoot);
+    let count = 0;
+    let dirty = false;
 
-  // Prune orphaned embeddings for deleted memories
-  const activeIds = new Set(entries.map((e) => e.id));
-  for (const id of Object.keys(index)) {
-    if (!activeIds.has(id)) {
-      delete index[id];
-      dirty = true;
+    // Prune orphaned embeddings for deleted memories
+    const activeIds = new Set(entries.map((e) => e.id));
+    for (const id of Object.keys(index)) {
+      if (!activeIds.has(id)) {
+        delete index[id];
+        dirty = true;
+      }
     }
-  }
 
-  for (const entry of entries) {
-    if (index[entry.id]) continue; // already embedded
+    for (const entry of entries) {
+      if (index[entry.id]) continue; // already embedded
 
-    const text = `${entry.content} ${entry.tags.join(' ')}`.trim();
-    const vector = await getEmbedding(text, model);
-    if (vector.length > 0) {
-      index[entry.id] = vector;
-      count++;
-      dirty = true;
+      const text = `${entry.content} ${entry.tags.join(' ')}`.trim();
+      const vector = await getEmbedding(text, model);
+      if (vector.length > 0) {
+        index[entry.id] = vector;
+        count++;
+        dirty = true;
+      }
     }
-  }
 
-  if (dirty) {
-    saveEmbeddingIndex(hippoRoot, index);
-  }
+    if (dirty) {
+      saveEmbeddingIndex(hippoRoot, index);
+    }
 
-  return count;
+    return count;
+  });
 }

@@ -392,7 +392,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
       const conflictId = Number(args.conflict_id);
       const keepId = String(args.keep || '');
       const forget = Boolean(args.forget);
-      if (!conflictId || !keepId) return 'Required: conflict_id and keep.';
+      if (isNaN(conflictId) || !keepId) return 'Required: conflict_id and keep.';
       const result = resolveConflict(hippoRoot, conflictId, keepId, forget);
       if (!result) return 'Could not resolve. Check the conflict ID and --keep value.';
       const action = forget ? 'deleted' : 'weakened';
@@ -494,7 +494,9 @@ process.stdin.on('data', (chunk: Buffer) => {
     try {
       const req = JSON.parse(body) as McpRequest;
       if (req.method && !req.method.startsWith('notifications/')) {
-        handleRequest(req).then((resp) => { if (resp) send(resp); }).catch(() => {});
+        handleRequest(req).then((resp) => { if (resp) send(resp); }).catch((err) => {
+          send({ jsonrpc: '2.0', id: req.id, error: { code: -32603, message: err?.message ?? 'Internal error' } });
+        });
       } else if (req.method) {
         handleRequest(req).catch(() => {});
       }

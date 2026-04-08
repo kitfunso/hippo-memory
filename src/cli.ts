@@ -283,7 +283,7 @@ function setupDailySchedule(hippoRoot: string): void {
   const projectDir = path.resolve(path.dirname(hippoRoot));
   // Reject paths with characters that could break shell/crontab quoting
   // (backslash is normal on Windows, only dangerous in Unix shell/crontab)
-  const unsafeChars = process.platform === 'win32' ? /["`$\n\r]/ : /["`$\n\r\\]/;
+  const unsafeChars = process.platform === 'win32' ? /["`$%\n\r]/ : /["`$\n\r\\]/;
   if (unsafeChars.test(projectDir)) {
     console.log(`   Skipping schedule: project path contains unsafe characters.`);
     return;
@@ -305,7 +305,7 @@ function setupDailySchedule(hippoRoot: string): void {
     const cmd = `cd /d "${projectDir}" && hippo learn --git --days 1 && hippo sleep`;
     try {
       execSync(
-        `schtasks /create /tn "${taskName}" /tr "cmd /c ${cmd.replace(/"/g, '\\"')}" /sc daily /st 06:15 /f`,
+        `schtasks /create /tn "${taskName}" /tr "cmd /c ${cmd.replace(/"/g, '""')}" /sc daily /st 06:15 /f`,
         { stdio: 'pipe' }
       );
       console.log(`   Scheduled daily learn+sleep (6:15am) via Task Scheduler: ${taskName}`);

@@ -21,8 +21,8 @@ export function captureError(
   const wasTruncated = stderr.length > 500;
   const truncated = stderr.slice(0, 500).trim();
   const suffix = wasTruncated ? ' [truncated]' : '';
-  // Strip potential secrets from command (env var assignments before the command name)
-  const safeCmd = command.replace(/\b[A-Z_]+=\S+\s*/g, '').trim() || '(redacted)';
+  // Strip leading env var assignments (KEY=val) before the actual command name
+  const safeCmd = command.replace(/^([A-Z_]+=\S+\s+)+/, '').trim() || '(redacted)';
   const content = `Command '${safeCmd}' failed (exit ${exitCode}): ${truncated}${suffix}`;
 
   // Derive a sanitized tag from the command name (first word, strip path)
