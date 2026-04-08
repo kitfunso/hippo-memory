@@ -13,6 +13,9 @@
 import type { EmotionalValence } from './memory.js';
 import type { PhysicsConfig } from './physics-config.js';
 
+/** Shared epsilon for zero-magnitude checks (normalization, co-location, cosine). */
+const EPSILON = 1e-10;
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -84,11 +87,19 @@ export function vecZero(dim: number): number[] {
   return new Array<number>(dim).fill(0);
 }
 
-/** Normalize to unit length. Returns zero vector if magnitude < epsilon. */
+/** Normalize to unit length. Returns zero vector if magnitude < EPSILON. */
 export function vecNormalize(v: number[]): number[] {
   const mag = vecNorm(v);
-  if (mag < 1e-10) return vecZero(v.length);
+  if (mag < EPSILON) return vecZero(v.length);
   return vecScale(v, 1 / mag);
+}
+
+/** Random unit vector — fallback for degenerate co-location cases. */
+function randomUnitVector(dims: number): number[] {
+  const v = Array.from({ length: dims }, () => Math.random() - 0.5);
+  // Fallback if all components are ~0 (astronomically unlikely)
+  if (vecNorm(v) < EPSILON) v[0] = 1;
+  return vecNormalize(v);
 }
 
 /** Clamp vector magnitude to maxMag. */
@@ -104,7 +115,7 @@ function cosine(a: number[], b: number[]): number {
   const dot = vecDot(a, b);
   const na = vecNorm(a);
   const nb = vecNorm(b);
-  if (na < 1e-10 || nb < 1e-10) return 0;
+  if (na < EPSILON || nb < EPSILON) return 0;
   return Math.min(1, Math.max(-1, dot / (na * nb)));
 }
 
@@ -161,7 +172,7 @@ export function velocityAlignmentBonus(
   if (particle.velocity.length === 0 || particle.velocity.length !== queryEmbedding.length) return 0;
   const velMag = vecNorm(particle.velocity);
   const qNorm = vecNorm(queryEmbedding);
-  if (velMag < 1e-10 || qNorm < 1e-10) return 0;
+  if (velMag < EPSILON || qNorm < EPSILON) return 0;
   const alignment = vecDot(particle.velocity, queryEmbedding) / (velMag * qNorm);
   return Math.max(0, alignment);
 }
@@ -186,9 +197,8 @@ export function attractionForce(
   const magnitude = G_memory * pi.mass * pj.mass * Math.pow(cos, 3);
   // Direction: from i toward j (tangent projection handled by normalization after integration)
   let direction = vecNormalize(vecSub(pj.position, pi.position));
-  if (vecNorm(direction) < 1e-10) {
-    // Co-located particles: random perturbation so they can separate
-    direction = vecNormalize(direction.map(() => Math.random() - 0.5));
+  if (vecNorm(direction) < EPSILON) {
+    direction = randomUnitVector(pi.position.length);
   }
   return vecScale(direction, magnitude);
 }
@@ -210,9 +220,8 @@ export function repulsionForce(
   const magnitude = K_repulsion * pi.mass * pj.mass / (dist * dist);
   // Direction: away from j
   let direction = vecNormalize(vecSub(pi.position, pj.position));
-  if (vecNorm(direction) < 1e-10) {
-    // Co-located conflicting particles: random perturbation so they can repel
-    direction = vecNormalize(direction.map(() => Math.random() - 0.5));
+  if (vecNorm(direction) < EPSILON) {
+    direction = randomUnitVector(pi.position.length);
   }
   return vecScale(direction, magnitude);
 }
@@ -317,9 +326,8 @@ function verletStep(
     // Stability: clamp velocity and normalize position to unit sphere
     p.velocity = vecClampMagnitude(p.velocity, maxVel);
     p.position = vecNormalize(p.position);
-    if (vecNorm(p.position) < 1e-10) {
-      // Position collapsed to origin: reset to random unit-sphere point
-      p.position = vecNormalize(p.position.map(() => Math.random() - 0.5));
+    if (vecNorm(p.position) < EPSILON) {
+      p.position = randomUnitVector(p.position.length);
     }
   }
 

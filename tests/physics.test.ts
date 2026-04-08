@@ -357,6 +357,16 @@ describe('Force computations', () => {
       expect(f2).toBeCloseTo(f1 * 6, 5);
     });
 
+    it('magnitude uses cos^3 scaling for near particles', () => {
+      // Near but NOT identical positions — test the cos^3 formula
+      const pi = makeParticle({ memoryId: 'a', position: vecNormalize([1, 0, 0]), mass: 1 });
+      const pj = makeParticle({ memoryId: 'b', position: vecNormalize([1, 0.1, 0]), mass: 1 });
+      const force = attractionForce(pi, pj, 1.0);
+      const cos = vecDot(pi.position, pj.position);
+      // Magnitude should be cos^3 (for unit mass particles with G=1)
+      expect(vecNorm(force)).toBeCloseTo(Math.pow(cos, 3), 4);
+    });
+
     it('co-located particles get random perturbation', () => {
       const pi = makeParticle({ memoryId: 'a', position: [1, 0, 0], mass: 1 });
       const pj = makeParticle({ memoryId: 'b', position: [1, 0, 0], mass: 1 });
@@ -413,6 +423,14 @@ describe('Force computations', () => {
       // Direction is normalize(pi.pos - pj.pos) = normalize([1,-1,0])
       expect(force[0]).toBeGreaterThan(0);
       expect(force[1]).toBeLessThan(0);
+    });
+
+    it('co-located conflicting particles get random perturbation', () => {
+      const pi = makeParticle({ memoryId: 'a', position: [1, 0, 0], mass: 1 });
+      const pj = makeParticle({ memoryId: 'b', position: [1, 0, 0], mass: 1 });
+      const force = repulsionForce(pi, pj, 0.5);
+      // Co-located particles now get a random direction instead of zero force
+      expect(vecNorm(force)).toBeGreaterThan(0);
     });
   });
 
@@ -606,6 +624,14 @@ describe('Simulation', () => {
       const moved1 = p1.position.some((v, i) => Math.abs(v - posBefore1[i]) > 1e-15);
       const moved2 = p2.position.some((v, i) => Math.abs(v - posBefore2[i]) > 1e-15);
       expect(moved1 || moved2).toBe(true);
+    });
+
+    it('collapsed position resets to unit sphere', () => {
+      // Start a particle at near-zero position (simulates collapse)
+      const p = makeParticle({ memoryId: 'a', position: [1e-15, 1e-15, 1e-15] });
+      simulate([p], makeCtx());
+      // After simulation, position should be on the unit sphere (not stuck at origin)
+      expect(vecNorm(p.position)).toBeCloseTo(1.0, 5);
     });
 
     it('velocity stays clamped to max_velocity', () => {
