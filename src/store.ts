@@ -983,6 +983,64 @@ export function appendConsolidationRun(
   }
 }
 
+/**
+ * Session decay context: provides the data needed for session-based and adaptive decay.
+ */
+export interface SessionDecayContext {
+  /** Total number of sleep (consolidation) cycles completed. */
+  sleepCount: number;
+  /** Average interval between recent sleep cycles, in days. 0 if < 2 cycles. */
+  avgSessionIntervalDays: number;
+}
+
+/**
+ * Load the session decay context from the store.
+ * Uses consolidation_runs timestamps to compute session intervals.
+ */
+export function loadSessionDecayContext(hippoRoot: string): SessionDecayContext {
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    // Get recent consolidation timestamps (last 20)
+    const rows = db.prepare(
+      `SELECT timestamp FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT 20`
+    ).all() as Array<{ timestamp: string }>;
+
+    const sleepCount = Number(getMeta(db, 'sleep_count', '0')) || rows.length;
+
+    if (rows.length < 2) {
+      return { sleepCount, avgSessionIntervalDays: 0 };
+    }
+
+    // Compute average interval between consecutive sessions
+    const timestamps = rows.map((r) => new Date(r.timestamp).getTime()).reverse();
+    let totalInterval = 0;
+    for (let i = 1; i < timestamps.length; i++) {
+      totalInterval += timestamps[i] - timestamps[i - 1];
+    }
+    const avgMs = totalInterval / (timestamps.length - 1);
+    const avgDays = avgMs / (1000 * 60 * 60 * 24);
+
+    return { sleepCount, avgSessionIntervalDays: Math.max(0, avgDays) };
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/**
+ * Increment the sleep counter. Called after each consolidation run.
+ */
+export function incrementSleepCount(hippoRoot: string): void {
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    const current = Number(getMeta(db, 'sleep_count', '0')) || 0;
+    setMeta(db, 'sleep_count', String(current + 1));
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 export function saveActiveTaskSnapshot(
   hippoRoot: string,
   snapshot: { task: string; summary: string; next_step: string; source?: string; session_id?: string | null }

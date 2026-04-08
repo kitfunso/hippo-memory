@@ -6,10 +6,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { type PhysicsConfig, DEFAULT_PHYSICS_CONFIG, mergePhysicsConfig } from './physics-config.js';
 
+export type DecayBasis = 'clock' | 'session' | 'adaptive';
+
 export interface HippoConfig {
   defaultHalfLifeDays: number;
   defaultBudget: number;
   defaultContextBudget: number;
+  decayBasis: DecayBasis;
   autoSleep: {
     enabled: boolean;
     threshold: number;  // trigger sleep after this many new memories
@@ -30,6 +33,7 @@ const DEFAULT_CONFIG: HippoConfig = {
   defaultHalfLifeDays: 7,
   defaultBudget: 4000,
   defaultContextBudget: 3000,
+  decayBasis: 'adaptive',
   autoSleep: {
     enabled: true,
     threshold: 50,
@@ -54,10 +58,13 @@ export function loadConfig(hippoRoot: string): HippoConfig {
   if (!fs.existsSync(configPath)) return { ...DEFAULT_CONFIG };
   try {
     const raw = JSON.parse(fs.readFileSync(configPath, 'utf8')) as Partial<HippoConfig>;
+    const basis = raw.decayBasis;
+    const validBasis = basis === 'clock' || basis === 'session' || basis === 'adaptive';
     return {
       defaultHalfLifeDays: raw.defaultHalfLifeDays ?? DEFAULT_CONFIG.defaultHalfLifeDays,
       defaultBudget: raw.defaultBudget ?? DEFAULT_CONFIG.defaultBudget,
       defaultContextBudget: raw.defaultContextBudget ?? DEFAULT_CONFIG.defaultContextBudget,
+      decayBasis: validBasis ? basis : DEFAULT_CONFIG.decayBasis,
       autoSleep: { ...DEFAULT_CONFIG.autoSleep, ...(raw.autoSleep ?? {}) },
       embeddings: { ...DEFAULT_CONFIG.embeddings, ...(raw.embeddings ?? {}) },
       global: { ...DEFAULT_CONFIG.global, ...(raw.global ?? {}) },

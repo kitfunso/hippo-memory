@@ -7,7 +7,7 @@
  * 3. Stats tracking
  */
 
-import { MemoryEntry, Layer, calculateStrength, createMemory, resolveConfidence } from './memory.js';
+import { MemoryEntry, Layer, calculateStrength, createMemory, resolveConfidence, type DecayOptions } from './memory.js';
 import {
   loadAllEntries,
   writeEntry,
@@ -15,6 +15,8 @@ import {
   batchWriteAndDelete,
   appendConsolidationRun,
   replaceDetectedConflicts,
+  loadSessionDecayContext,
+  incrementSleepCount,
 } from './store.js';
 import { textOverlap } from './search.js';
 import { openHippoDb, closeHippoDb } from './db.js';
@@ -58,6 +60,15 @@ export function consolidate(
 
   const all = loadAllEntries(hippoRoot);
 
+  // Load decay options from config + session context
+  const config = loadConfig(hippoRoot);
+  const sessionCtx = loadSessionDecayContext(hippoRoot);
+  const decayOpts: DecayOptions = {
+    decayBasis: config.decayBasis,
+    avgSessionIntervalDays: sessionCtx.avgSessionIntervalDays,
+    sleepCount: sessionCtx.sleepCount,
+  };
+
   // Collect all writes/deletes and batch them at the end
   const pendingWrites: MemoryEntry[] = [];
   const pendingDeletes: string[] = [];
@@ -67,7 +78,7 @@ export function consolidate(
   // -------------------------------------------------------------------------
   const survivors: MemoryEntry[] = [];
   for (const entry of all) {
-    const strength = calculateStrength(entry, now);
+    const strength = calculateStrength(entry, now, decayOpts);
 
     if (!entry.pinned && strength < DECAY_THRESHOLD) {
       result.removed++;
@@ -215,7 +226,7 @@ export function consolidate(
   // 4. Log run
   // -------------------------------------------------------------------------
   if (!dryRun) {
-    const detectedConflicts = detectConflicts(survivors, now);
+    const detectedConflicts = detectConflicts(survivors, now, decayOpts);
     replaceDetectedConflicts(hippoRoot, detectedConflicts, now.toISOString());
 
     if (detectedConflicts.length > 0) {
@@ -228,6 +239,7 @@ export function consolidate(
       merged: result.merged,
       removed: result.removed,
     });
+    incrementSleepCount(hippoRoot);
   }
 
   return result;
@@ -262,8 +274,9 @@ function pickStrongestValence(entries: MemoryEntry[]): MemoryEntry['emotional_va
 function detectConflicts(
   entries: MemoryEntry[],
   now: Date,
+  decayOpts: DecayOptions = {},
 ): Array<{ memory_a_id: string; memory_b_id: string; reason: string; score: number }> {
-  const survivors = entries.filter((entry) => entry.layer !== Layer.Semantic && calculateStrength(entry, now) >= DECAY_THRESHOLD);
+  const survivors = entries.filter((entry) => entry.layer !== Layer.Semantic && calculateStrength(entry, now, decayOpts) >= DECAY_THRESHOLD);
   const detected: Array<{ memory_a_id: string; memory_b_id: string; reason: string; score: number }> = [];
 
   for (let i = 0; i < survivors.length; i++) {

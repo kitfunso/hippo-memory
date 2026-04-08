@@ -65,18 +65,37 @@ export function calculateRewardFactor(entry: MemoryEntry): number {
 }
 
 /**
+ * Options for decay basis.
+ * - clock: wall-clock time (default pre-v0.15)
+ * - session: decay by sleep cycle count (for intermittent agents)
+ * - adaptive: auto-scale half-life by session frequency (default v0.15+)
+ */
+export interface DecayOptions {
+  decayBasis?: 'clock' | 'session' | 'adaptive';
+  /** Average interval between sleep cycles, in days. Used by 'adaptive' mode. */
+  avgSessionIntervalDays?: number;
+  /** Total sleep cycles completed. Used by 'session' mode. */
+  sleepCount?: number;
+  /** Sleep count at memory's last retrieval. Defaults to 0. Used by 'session' mode. */
+  sleepCountAtLastRetrieval?: number;
+}
+
+/**
  * Calculate current strength at a given time.
  * strength(t) = base_strength * decay * retrieval_boost * emotional_multiplier
  *
- * Decay uses reward-modulated half-life:
- *   effective_half_life = half_life_days * reward_factor
+ * Decay basis modes:
+ * - clock: classic wall-clock decay (daysSince / halfLife)
+ * - session: decay by sleep cycles instead of days (sessionsSince / halfLife)
+ * - adaptive: wall-clock decay with half-life scaled by session frequency
  *
  * Pinned memories always return 1.0 (no decay).
- *
- * Side effect: if daysSince > 30 and confidence is not 'verified', the
- * returned object should be treated as 'stale'. Use resolveConfidence() for that.
  */
-export function calculateStrength(entry: MemoryEntry, now: Date = new Date()): number {
+export function calculateStrength(
+  entry: MemoryEntry,
+  now: Date = new Date(),
+  options: DecayOptions = {},
+): number {
   if (entry.pinned) return 1.0;
 
   const lastRetrieved = new Date(entry.last_retrieved);
@@ -84,13 +103,33 @@ export function calculateStrength(entry: MemoryEntry, now: Date = new Date()): n
 
   // Reward-proportional half-life modulation
   const rewardFactor = calculateRewardFactor(entry);
-  const effectiveHalfLife = entry.half_life_days * rewardFactor;
+  let effectiveHalfLife = entry.half_life_days * rewardFactor;
 
   // Guard: zero half-life causes 0/0 = NaN in the exponent
   if (effectiveHalfLife <= 0) return 0.0;
 
-  // Exponential decay: base * (0.5 ^ (days / effective_half_life))
-  const decay = Math.pow(0.5, daysSince / effectiveHalfLife);
+  const basis = options.decayBasis ?? 'clock';
+  let decayExponent: number;
+
+  if (basis === 'session') {
+    // Decay by session count: each sleep cycle = 1 "day" in the decay formula
+    const currentCount = options.sleepCount ?? 0;
+    const lastCount = options.sleepCountAtLastRetrieval ?? 0;
+    const sessionsSince = Math.max(0, currentCount - lastCount);
+    decayExponent = sessionsSince / effectiveHalfLife;
+  } else if (basis === 'adaptive') {
+    // Scale half-life by session frequency: infrequent agents get longer half-lives
+    const avgInterval = options.avgSessionIntervalDays ?? 0;
+    if (avgInterval > 1) {
+      effectiveHalfLife *= avgInterval;
+    }
+    decayExponent = daysSince / effectiveHalfLife;
+  } else {
+    // clock: classic wall-clock decay
+    decayExponent = daysSince / effectiveHalfLife;
+  }
+
+  const decay = Math.pow(0.5, decayExponent);
 
   // Retrieval boost: 1 + 0.1 * log2(retrieval_count + 1)
   const retrievalBoost = 1 + 0.1 * Math.log2(entry.retrieval_count + 1);

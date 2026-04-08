@@ -43,6 +43,10 @@ hippo recall "data pipeline issues" --budget 2000
 
 That's it. You have a memory system.
 
+### What's new in v0.15.0
+
+- **Adaptive decay for intermittent agents.** Memories now decay based on how often the agent actually runs, not wall-clock time. A weekly agent's memories persist ~7x longer automatically. Configure via `decayBasis` in `.hippo/config.json`: `"adaptive"` (default), `"session"`, or `"clock"`.
+
 ### What's new in v0.14.0
 
 - **OpenClaw backup cleanup.** Plugin updates no longer leave `hippo-memory.bak-*` directories that cause duplicate plugin ID errors. Cleanup runs automatically at boot.

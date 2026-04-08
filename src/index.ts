@@ -2,7 +2,7 @@
  * Hippo public API  - re-exports for programmatic use.
  */
 
-export { MemoryEntry, Layer, EmotionalValence, ConfidenceLevel, calculateStrength, resolveConfidence, createMemory, applyOutcome, generateId, computeSchemaFit } from './memory.js';
+export { MemoryEntry, Layer, EmotionalValence, ConfidenceLevel, DecayOptions, calculateStrength, resolveConfidence, createMemory, applyOutcome, generateId, computeSchemaFit } from './memory.js';
 export { search, hybridSearch, physicsSearch, markRetrieved, estimateTokens, textOverlap, tokenize, explainMatch, SearchResult, MatchExplanation } from './search.js';
 export {
   initStore,
@@ -24,6 +24,8 @@ export {
   saveSessionHandoff,
   loadLatestHandoff,
   loadHandoffById,
+  loadSessionDecayContext,
+  SessionDecayContext,
 } from './store.js';
 
 // Feature 5: Session handoff

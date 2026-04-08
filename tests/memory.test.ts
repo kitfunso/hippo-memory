@@ -165,3 +165,85 @@ describe('calculateRewardFactor', () => {
     expect(calculateRewardFactor(allBad)).toBeGreaterThanOrEqual(0.5);
   });
 });
+
+describe('Decay basis modes', () => {
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  function makeAged() {
+    const entry = createMemory('test memory');
+    return { ...entry, last_retrieved: sevenDaysAgo.toISOString() };
+  }
+
+  it('clock mode: decays by wall-clock time (default)', () => {
+    const entry = makeAged();
+    const s = calculateStrength(entry, now, { decayBasis: 'clock' });
+    // 7 days / 7 day half-life = 50% decay
+    expect(s).toBeCloseTo(0.5, 1);
+  });
+
+  it('session mode: decays by sleep cycle count', () => {
+    const entry = makeAged();
+    // 3 sleep cycles since last retrieval, with 7-day half-life
+    const s = calculateStrength(entry, now, {
+      decayBasis: 'session',
+      sleepCount: 10,
+      sleepCountAtLastRetrieval: 7,
+    });
+    // 3 sessions / 7 half-life = 0.5^(3/7) ≈ 0.743
+    expect(s).toBeCloseTo(0.743, 2);
+  });
+
+  it('session mode: no decay when sleepCount equals last retrieval count', () => {
+    const entry = makeAged();
+    const s = calculateStrength(entry, now, {
+      decayBasis: 'session',
+      sleepCount: 5,
+      sleepCountAtLastRetrieval: 5,
+    });
+    // 0 sessions since retrieval = no decay
+    expect(s).toBeCloseTo(1.0, 1);
+  });
+
+  it('adaptive mode: scales half-life by session interval', () => {
+    const entry = makeAged();
+    // Agent runs every 3 days on average
+    const sAdaptive = calculateStrength(entry, now, {
+      decayBasis: 'adaptive',
+      avgSessionIntervalDays: 3,
+    });
+    // Effective half-life = 7 * 3 = 21 days. 7 days / 21 = 0.5^(1/3) ≈ 0.794
+    expect(sAdaptive).toBeCloseTo(0.794, 2);
+  });
+
+  it('adaptive mode: daily agent behaves like clock mode', () => {
+    const entry = makeAged();
+    const sClock = calculateStrength(entry, now, { decayBasis: 'clock' });
+    const sAdaptive = calculateStrength(entry, now, {
+      decayBasis: 'adaptive',
+      avgSessionIntervalDays: 1,
+    });
+    // avgInterval <= 1 day means no scaling, same as clock
+    expect(sAdaptive).toBeCloseTo(sClock, 5);
+  });
+
+  it('adaptive mode: weekly agent gets 7x half-life', () => {
+    const entry = makeAged();
+    const sWeekly = calculateStrength(entry, now, {
+      decayBasis: 'adaptive',
+      avgSessionIntervalDays: 7,
+    });
+    // Effective half-life = 7 * 7 = 49 days. 7 days / 49 = 0.5^(1/7) ≈ 0.906
+    expect(sWeekly).toBeCloseTo(0.906, 2);
+  });
+
+  it('adaptive mode: no session data falls back to clock behavior', () => {
+    const entry = makeAged();
+    const sClock = calculateStrength(entry, now, { decayBasis: 'clock' });
+    const sAdaptive = calculateStrength(entry, now, {
+      decayBasis: 'adaptive',
+      avgSessionIntervalDays: 0,
+    });
+    expect(sAdaptive).toBeCloseTo(sClock, 5);
+  });
+});

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.15.0 (2026-04-08)
+
+### Added
+- **Adaptive decay for intermittent agents.** Memories now decay based on how often the agent runs, not just wall-clock time. An agent that runs weekly gets 7x longer half-lives automatically. Three modes available via `decayBasis` in config:
+  - `"adaptive"` (default) — auto-scales half-life by average session interval. Daily agents behave identically to before. Weekly agents keep memories ~7x longer.
+  - `"session"` — decay by sleep cycle count instead of days. Each `hippo sleep` = 1 "day" in the decay formula. Best for agents with unpredictable schedules.
+  - `"clock"` — classic wall-clock decay (previous default behavior).
+- `SessionDecayContext` and `loadSessionDecayContext()` exported for programmatic use.
+- Sleep counter tracked in meta table, incremented on each consolidation run.
+
 ## 0.14.0 (2026-04-08)
 
 ### Added
