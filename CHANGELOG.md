@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.16.2 (2026-04-08)
+
+### Fixed
+- **OpenClaw plugin registers once.** Added module-level guard to prevent repeated tool registration on WebSocket reconnection. Previously, every reconnect attempt re-registered all 10 tools.
+
+## 0.16.1 (2026-04-08)
+
+### Changed
+- **`deduplicateLesson` performance.** Accepts pre-loaded `MemoryEntry[]` instead of reloading from disk on every iteration. Eliminates N redundant `loadAllEntries` calls during `hippo learn --git`.
+
 ## 0.16.0 (2026-04-08)
 
 ### Added
