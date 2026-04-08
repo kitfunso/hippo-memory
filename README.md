@@ -43,6 +43,10 @@ hippo recall "data pipeline issues" --budget 2000
 
 That's it. You have a memory system.
 
+### What's new in v0.17
+
+- **Auto-share to global.** `hippo sleep` now promotes high-value memories to the global store automatically. Universal lessons travel across projects; project-specific memories stay local. No manual `hippo promote` needed.
+
 ### What's new in v0.16
 
 - **Auto-learn from git.** `hippo init` seeds the store with 30 days of commit history. `hippo sleep` captures today's commits before consolidation. New users get instant memory; existing users get continuous learning. Both skippable with `--no-learn`.

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.17.0 (2026-04-08)
+
+### Added
+- **Auto-share to global on sleep.** `hippo sleep` now promotes high-transfer-score memories (>= 0.6) to the global store after consolidation. Universal lessons (error patterns, tool gotchas) are shared; project-specific memories (file paths, deploy configs) are filtered out. Content dedup prevents duplicates. Configurable via `autoShareOnSleep` in config (default: true). Skip with `--no-share`.
+
 ## 0.16.2 (2026-04-08)
 
 ### Fixed
