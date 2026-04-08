@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.13.3 (2026-04-08)
+
+### Fixed
+- **`rebuildIndex` ROLLBACK safety.** Wrapped in try-catch to prevent masking the original error if BEGIN fails.
+- **MCP bare `require` replaced.** `child_process` now imported at top level instead of dynamic `require()` inside ESM module.
+- **MCP notification protocol compliance.** All unknown `notifications/*` methods return null (no response), preventing malformed JSON-RPC responses with `id: undefined`.
+- **Dead code in `calculateStrength`.** Removed unreachable `entry.pinned` check (pinned entries return early before reaching the guard).
+- **Embedding atomic write cleanup.** `.tmp` file is deleted if `renameSync` fails.
+- **`HIPPO_HOME` whitespace rejection.** Environment variables are trimmed before use, preventing whitespace-only values from being treated as valid paths.
+- **Autolearn env var regex.** Now handles lowercase env vars (`node_env=prod cmd`). `fetchGitLog` uses `execFileSync` to avoid shell interpolation.
+
 ## 0.13.2 (2026-04-08)
 
 ### Fixed

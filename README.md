@@ -43,6 +43,10 @@ hippo recall "data pipeline issues" --budget 2000
 
 That's it. You have a memory system.
 
+### What's new in v0.13.3
+
+- **Final polish.** 8 remaining review findings fixed: ROLLBACK safety, MCP protocol compliance, dead code removal, atomic write cleanup, env var trimming, ESM import consistency.
+
 ### What's new in v0.13.2
 
 - **7 more bug fixes** from second deep review: Windows schtasks injection, MCP error handling, cross-store budget consistency, embedding mutex, and more. See CHANGELOG.
