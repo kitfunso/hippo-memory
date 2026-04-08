@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.13.0 (2026-04-08)
+
+### Fixed
+- **SECURITY: Command injection in OpenClaw plugin.** `runHippo` now uses `execFileSync` with an args array instead of shell string interpolation. All 15 call sites converted. Tag, ID, and session key parameters are no longer injectable.
+- **MCP server Content-Length byte/char mismatch.** Incoming message parser now works with raw Buffers instead of decoded strings, correctly handling multi-byte Unicode characters.
+- **NaN propagation in `calculateStrength`.** Added guards for zero `half_life_days` and NaN-safe clamping. Memory IDs now use `crypto.randomUUID` for stronger entropy.
+- **Token budget drops top result.** Search now always includes the first (highest-ranked) result regardless of budget, then applies budget logic for subsequent results.
+- **Non-atomic embedding writes.** `saveEmbeddingIndex` now writes to a temp file then renames. Added mutex to serialize concurrent `embedMemory` calls.
+- **FTS5/LIKE query injection.** Search terms are now properly quoted for FTS5 and escaped for LIKE metacharacters.
+- **Physics simulation edge cases.** Zero-magnitude query embeddings guarded against NaN. Co-located particles get random perturbation. Position collapse resets to random unit vector. Float32Array alignment ensured.
+- **MCP server swallows all exceptions.** `uncaughtException` and `unhandledRejection` now log to stderr instead of silently swallowing.
+- **Recursive DB open in `appendSessionEvent`.** Session event count query now reuses the existing connection.
+- **Legacy import not transactional.** `rebuildIndex` legacy import loop now wrapped in BEGIN/COMMIT.
+- **Shell injection in schedule setup.** `projectDir` validated for unsafe characters before interpolation into crontab/schtasks.
+- **Cross-store dedup ineffective.** Search dedup now uses content hash instead of ID (local/global IDs differ after promote/share).
+- **Autolearn stores secrets.** Environment variable assignments are stripped from command text before storing error memories.
+- **Silent config parse failure.** Broken `config.json` now warns to stderr instead of silently falling back to defaults.
+- **Import truncation silent.** Memories truncated during import now produce a warning.
+- **Cached pipeline failure permanent.** Failed embedding pipeline load no longer permanently prevents retries.
+- **MCP `notifications/initialized` response.** Notifications no longer receive a JSON-RPC response (protocol compliance).
+
 ## 0.12.0 (2026-04-08)
 
 ### Added

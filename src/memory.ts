@@ -3,6 +3,8 @@
  * Based on the strength formula from PLAN.md.
  */
 
+import { randomUUID } from 'crypto';
+
 export enum Layer {
   Buffer = 'buffer',
   Episodic = 'episodic',
@@ -84,6 +86,9 @@ export function calculateStrength(entry: MemoryEntry, now: Date = new Date()): n
   const rewardFactor = calculateRewardFactor(entry);
   const effectiveHalfLife = entry.half_life_days * rewardFactor;
 
+  // Guard: zero half-life causes 0/0 = NaN in the exponent
+  if (effectiveHalfLife <= 0) return entry.pinned ? 1.0 : 0.0;
+
   // Exponential decay: base * (0.5 ^ (days / effective_half_life))
   const decay = Math.pow(0.5, daysSince / effectiveHalfLife);
 
@@ -95,8 +100,9 @@ export function calculateStrength(entry: MemoryEntry, now: Date = new Date()): n
 
   const raw = decay * retrievalBoost * emotionalMultiplier;
 
-  // Clamp to [0, 1]
-  return Math.min(1.0, Math.max(0.0, raw));
+  // Clamp to [0, 1] with NaN guard
+  const clamped = Math.min(1.0, Math.max(0.0, raw));
+  return Number.isFinite(clamped) ? clamped : 0.0;
 }
 
 /**
@@ -148,11 +154,10 @@ export function applyOutcome(entry: MemoryEntry, good: boolean): MemoryEntry {
 }
 
 /**
- * Generate a random memory ID.
+ * Generate a random memory ID using crypto.randomUUID().
  */
 export function generateId(prefix: string = 'mem'): string {
-  const hex = Math.random().toString(16).slice(2, 8) + Math.random().toString(16).slice(2, 8);
-  return `${prefix}_${hex.slice(0, 8)}`;
+  return `${prefix}_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 }
 
 /**

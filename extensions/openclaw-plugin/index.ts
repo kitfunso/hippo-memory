@@ -7,7 +7,7 @@
  * Config lives under plugins.entries.hippo-memory.config
  */
 
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { basename as posixBasename, dirname as posixDirname } from 'path/posix';
@@ -167,15 +167,15 @@ function hippoRememberSucceeded(result: string): boolean {
   return result.includes('Remembered [');
 }
 
-function runHippo(args: string, cwd?: string): string {
+function runHippo(args: readonly string[], cwd?: string): string {
   try {
-    const result = execSync(`hippo ${args}`, {
+    const result = execFileSync('hippo', args, {
       cwd: cwd || process.cwd(),
-      timeout: 30000,
-      encoding: 'utf-8',
+      encoding: 'utf8',
+      timeout: 30_000,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
-    return result.trim();
+    return typeof result === 'string' ? result.trim() : '';
   } catch (err: any) {
     return err.stdout?.trim() || err.message || 'hippo command failed';
   }
@@ -209,7 +209,7 @@ export default function register(api: any) {
       const framing = cfg.framing ?? 'observe';
       const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
       const result = runHippo(
-        `recall "${params.query.replace(/"/g, '\\"')}" --budget ${budget} --framing ${framing}`,
+        ['recall', params.query, '--budget', String(budget), '--framing', framing],
         hippoCwd,
       );
       return { content: [{ type: 'text', text: result || 'No relevant memories found.' }] };
@@ -249,10 +249,13 @@ export default function register(api: any) {
     ) {
       const cfg = getConfig(api);
       const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
-      let args = `remember "${params.text.replace(/"/g, '\\"')}"`;
-      if (params.error) args += ' --error';
-      if (params.pin) args += ' --pin';
-      if (params.tag) args += ` --tag ${params.tag}`;
+      const args: string[] = ['remember', params.text];
+      if (params.error) args.push('--error');
+      if (params.pin) args.push('--pin');
+      if (params.tag) {
+        const safe = sanitizeTag(params.tag);
+        if (safe) args.push('--tag', safe);
+      }
       const result = runHippo(args, hippoCwd);
       if (hippoRememberSucceeded(result)) {
         recordSessionMemory(ctx);
@@ -280,7 +283,7 @@ export default function register(api: any) {
       const cfg = getConfig(api);
       const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
       const flag = params.good ? '--good' : '--bad';
-      const result = runHippo(`outcome ${flag}`, hippoCwd);
+      const result = runHippo(['outcome', flag], hippoCwd);
       return { content: [{ type: 'text', text: result || 'Outcome recorded.' }] };
     },
   }));
@@ -298,7 +301,7 @@ export default function register(api: any) {
       async execute() {
         const cfg = getConfig(api);
         const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
-        const result = runHippo('status', hippoCwd);
+        const result = runHippo(['status'], hippoCwd);
         return { content: [{ type: 'text', text: result || 'No hippo store found.' }] };
       },
     }),
@@ -326,7 +329,7 @@ export default function register(api: any) {
         const framing = cfg.framing ?? 'observe';
         const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
         const result = runHippo(
-          `context --auto --budget ${budget} --framing ${framing}`,
+          ['context', '--auto', '--budget', String(budget), '--framing', framing],
           hippoCwd,
         );
         return { content: [{ type: 'text', text: result || 'No context available.' }] };
@@ -353,7 +356,7 @@ export default function register(api: any) {
       async execute(_id: string, params: { json?: boolean }) {
         const cfg = getConfig(api);
         const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
-        const args = params.json ? 'conflicts --json' : 'conflicts';
+        const args: string[] = params.json ? ['conflicts', '--json'] : ['conflicts'];
         const result = runHippo(args, hippoCwd);
         return { content: [{ type: 'text', text: result || 'No conflicts found.' }] };
       },
@@ -391,8 +394,8 @@ export default function register(api: any) {
       ) {
         const cfg = getConfig(api);
         const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
-        let args = `resolve ${params.conflict_id} --keep ${params.keep}`;
-        if (params.forget) args += ' --forget';
+        const args: string[] = ['resolve', String(params.conflict_id), '--keep', params.keep];
+        if (params.forget) args.push('--forget');
         const result = runHippo(args, hippoCwd);
         return { content: [{ type: 'text', text: result || 'Conflict resolved.' }] };
       },
@@ -426,12 +429,12 @@ export default function register(api: any) {
       ) {
         const cfg = getConfig(api);
         const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
-        let args: string;
+        const args: string[] = ['share'];
         if (params.id === 'auto') {
-          args = 'share --auto';
+          args.push('--auto');
         } else {
-          args = `share ${params.id}`;
-          if (params.force) args += ' --force';
+          args.push(params.id);
+          if (params.force) args.push('--force');
         }
         const result = runHippo(args, hippoCwd);
         return { content: [{ type: 'text', text: result || 'Share complete.' }] };
@@ -453,7 +456,7 @@ export default function register(api: any) {
       async execute() {
         const cfg = getConfig(api);
         const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
-        const result = runHippo('peers', hippoCwd);
+        const result = runHippo(['peers'], hippoCwd);
         return { content: [{ type: 'text', text: result || 'No peers found.' }] };
       },
     }),
@@ -492,9 +495,8 @@ export default function register(api: any) {
         const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
         const scope = params.scope ?? 'repo';
         const importance = params.importance ?? 0.5;
-        const escapedContent = params.content.replace(/"/g, '\\"');
         const result = runHippo(
-          `wm push --scope ${scope} --content "${escapedContent}" --importance ${importance}`,
+          ['wm', 'push', '--scope', scope, '--content', params.content, '--importance', String(importance)],
           hippoCwd,
         );
         return { content: [{ type: 'text', text: result || 'Working memory entry pushed.' }] };
@@ -524,7 +526,7 @@ export default function register(api: any) {
       // Record session_start event
       try {
         runHippo(
-          `session log --id "${sessionKey}" --type session_start --content "Session started" --source openclaw`,
+          ['session', 'log', '--id', sessionKey, '--type', 'session_start', '--content', 'Session started', '--source', 'openclaw'],
           hippoCwd,
         );
       } catch (err) {
@@ -533,7 +535,7 @@ export default function register(api: any) {
 
       try {
         const context = runHippo(
-          `context --auto --budget ${budget} --framing ${framing}`,
+          ['context', '--auto', '--budget', String(budget), '--framing', framing],
           hippoCwd,
         );
         if (context && context.length > 10 && !context.includes('No hippo store')) {
@@ -583,10 +585,11 @@ export default function register(api: any) {
 
       const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
       const toolTag = sanitizeTag(event.toolName);
-      let args =
-        `remember "${formatToolErrorMemory(event.toolName, event.error).replace(/"/g, '\\"')}"` +
-        ' --error --observed --tag openclaw';
-      if (toolTag) args += ` --tag ${toolTag}`;
+      const args: string[] = [
+        'remember', formatToolErrorMemory(event.toolName, event.error),
+        '--error', '--observed', '--tag', 'openclaw',
+      ];
+      if (toolTag) args.push('--tag', toolTag);
 
       const result = runHippo(args, hippoCwd);
       if (hippoRememberSucceeded(result)) {
@@ -615,7 +618,7 @@ export default function register(api: any) {
       // Record session_end event
       try {
         runHippo(
-          `session log --id "${sessionKey}" --type session_end --content "Session ended" --source openclaw`,
+          ['session', 'log', '--id', sessionKey, '--type', 'session_end', '--content', 'Session ended', '--source', 'openclaw'],
           hippoCwd,
         );
       } catch (err) {
@@ -624,7 +627,7 @@ export default function register(api: any) {
 
       const newMemories = consumeSessionMemoryCount(ctx);
       if (!cfg.autoSleep || newMemories < AUTO_SLEEP_SESSION_THRESHOLD) return;
-      const result = runHippo('sleep', hippoCwd);
+      const result = runHippo(['sleep'], hippoCwd);
       logger.info?.(
         `[hippo] autoSleep ran for session ${ctx.sessionId ?? ctx.sessionKey ?? 'unknown'} ` +
           `after ${newMemories} new memories`,

@@ -72,16 +72,21 @@ async function loadPipeline(model: string): Promise<any> {
           const mod = await _dynImport('@huggingface/transformers') as any;
           pipelineFn = mod.pipeline ?? mod.default?.pipeline;
         } catch {
+          _pipelineLoading = null; // Allow retry on next call
           return null;
         }
       }
 
-      if (!pipelineFn) return null;
+      if (!pipelineFn) {
+        _pipelineLoading = null; // Allow retry on next call
+        return null;
+      }
 
       try {
         _pipelineInstance = await pipelineFn('feature-extraction', model, { quantized: true });
         return _pipelineInstance;
       } catch {
+        _pipelineLoading = null; // Allow retry on next call
         return null;
       }
     })();
@@ -156,7 +161,25 @@ export function loadEmbeddingIndex(hippoRoot: string): Record<string, number[]> 
  */
 export function saveEmbeddingIndex(hippoRoot: string, index: Record<string, number[]>): void {
   const fp = path.join(hippoRoot, EMBEDDINGS_FILE);
-  fs.writeFileSync(fp, JSON.stringify(index), 'utf8');
+  const tmp = fp + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(index), 'utf8');
+  fs.renameSync(tmp, fp);
+}
+
+// Mutex to serialize embedding writes and prevent read-modify-write races
+let _embedWriteLock: Promise<void> = Promise.resolve();
+
+async function withEmbedLock<T>(fn: () => Promise<T>): Promise<T> {
+  let resolve!: () => void;
+  const next = new Promise<void>(r => { resolve = r; });
+  const prev = _embedWriteLock;
+  _embedWriteLock = next;
+  await prev;
+  try {
+    return await fn();
+  } finally {
+    resolve();
+  }
 }
 
 /**
@@ -169,29 +192,31 @@ export async function embedMemory(
 ): Promise<void> {
   if (!isEmbeddingAvailable()) return;
 
-  const text = `${entry.content} ${entry.tags.join(' ')}`.trim();
-  const vector = await getEmbedding(text, model);
-  if (vector.length === 0) return;
+  return withEmbedLock(async () => {
+    const text = `${entry.content} ${entry.tags.join(' ')}`.trim();
+    const vector = await getEmbedding(text, model);
+    if (vector.length === 0) return;
 
-  const index = loadEmbeddingIndex(hippoRoot);
-  index[entry.id] = vector;
-  saveEmbeddingIndex(hippoRoot, index);
+    const index = loadEmbeddingIndex(hippoRoot);
+    index[entry.id] = vector;
+    saveEmbeddingIndex(hippoRoot, index);
 
-  // Initialize physics state for this memory
-  try {
-    const db = openHippoDb(hippoRoot);
+    // Initialize physics state for this memory
     try {
-      const existing = loadPhysicsState(db, [entry.id]);
-      if (!existing.has(entry.id)) {
-        const particle = initializeParticle(entry, vector);
-        savePhysicsState(db, [particle]);
+      const db = openHippoDb(hippoRoot);
+      try {
+        const existing = loadPhysicsState(db, [entry.id]);
+        if (!existing.has(entry.id)) {
+          const particle = initializeParticle(entry, vector);
+          savePhysicsState(db, [particle]);
+        }
+      } finally {
+        closeHippoDb(db);
       }
-    } finally {
-      closeHippoDb(db);
+    } catch {
+      // Physics init is best-effort — don't break embedding
     }
-  } catch {
-    // Physics init is best-effort — don't break embedding
-  }
+  });
 }
 
 /**

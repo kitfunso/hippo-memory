@@ -421,7 +421,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
 
 // ── Request handling ──
 
-async function handleRequest(req: McpRequest): Promise<McpResponse> {
+async function handleRequest(req: McpRequest): Promise<McpResponse | null> {
   const { id, method, params } = req;
 
   switch (method) {
@@ -437,7 +437,7 @@ async function handleRequest(req: McpRequest): Promise<McpResponse> {
       };
 
     case 'notifications/initialized':
-      return { jsonrpc: '2.0', id, result: {} };
+      return null;
 
     case 'tools/list':
       return { jsonrpc: '2.0', id, result: { tools: TOOLS } };
@@ -466,17 +466,18 @@ async function handleRequest(req: McpRequest): Promise<McpResponse> {
 
 // ── Stdio transport ──
 
-let buffer = '';
+let buffer = Buffer.alloc(0);
 
-process.stdin.setEncoding('utf-8');
-process.stdin.on('data', (chunk: string) => {
-  buffer += chunk;
+const HEADER_DELIM = Buffer.from('\r\n\r\n');
+
+process.stdin.on('data', (chunk: Buffer) => {
+  buffer = Buffer.concat([buffer, chunk]);
 
   while (true) {
-    const headerEnd = buffer.indexOf('\r\n\r\n');
+    const headerEnd = buffer.indexOf(HEADER_DELIM);
     if (headerEnd === -1) break;
 
-    const header = buffer.slice(0, headerEnd);
+    const header = buffer.slice(0, headerEnd).toString('utf-8');
     const match = header.match(/Content-Length:\s*(\d+)/i);
     if (!match) {
       buffer = buffer.slice(headerEnd + 4);
@@ -487,13 +488,13 @@ process.stdin.on('data', (chunk: string) => {
     const bodyStart = headerEnd + 4;
     if (buffer.length < bodyStart + contentLength) break;
 
-    const body = buffer.slice(bodyStart, bodyStart + contentLength);
+    const body = buffer.slice(bodyStart, bodyStart + contentLength).toString('utf-8');
     buffer = buffer.slice(bodyStart + contentLength);
 
     try {
       const req = JSON.parse(body) as McpRequest;
       if (req.method && !req.method.startsWith('notifications/')) {
-        handleRequest(req).then(send).catch(() => {});
+        handleRequest(req).then((resp) => { if (resp) send(resp); }).catch(() => {});
       } else if (req.method) {
         handleRequest(req).catch(() => {});
       }
@@ -505,5 +506,9 @@ process.stdin.on('data', (chunk: string) => {
 
 process.stdin.on('end', () => process.exit(0));
 
-process.on('uncaughtException', () => {});
-process.on('unhandledRejection', () => {});
+process.on('uncaughtException', (err) => {
+  process.stderr.write(`hippo-mcp uncaught: ${err?.message ?? err}\n`);
+});
+process.on('unhandledRejection', (err) => {
+  process.stderr.write(`hippo-mcp unhandled: ${err instanceof Error ? err.message : String(err)}\n`);
+});

@@ -98,11 +98,12 @@ export function searchBoth(
     ...globalResults.map((r) => ({ ...r, isGlobal: true })),
   ];
 
-  // Remove duplicates: if same ID appears in both, keep the local (higher weight) one
+  // Remove duplicates by content (local/global IDs differ after promote/share)
   const seen = new Set<string>();
   const deduped = tagged.filter((r) => {
-    if (seen.has(r.entry.id)) return false;
-    seen.add(r.entry.id);
+    const key = r.entry.content.slice(0, 200).toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
     return true;
   });
 
@@ -156,11 +157,12 @@ export async function searchBothHybrid(
     ...globalResults.map((r) => ({ ...r, isGlobal: true })),
   ];
 
-  // Remove duplicates: if same ID appears in both, keep the local (higher weight) one
+  // Remove duplicates by content (local/global IDs differ after promote/share)
   const seen = new Set<string>();
   const deduped = tagged.filter((r) => {
-    if (seen.has(r.entry.id)) return false;
-    seen.add(r.entry.id);
+    const key = r.entry.content.slice(0, 200).toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
     return true;
   });
 

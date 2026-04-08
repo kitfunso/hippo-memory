@@ -43,6 +43,11 @@ hippo recall "data pipeline issues" --budget 2000
 
 That's it. You have a memory system.
 
+### What's new in v0.13.0
+
+- **Security: command injection fixed.** OpenClaw plugin now uses `execFileSync` (no shell). All user input is passed as array args, eliminating shell injection vectors.
+- **17 bug fixes** across search, embeddings, physics, MCP server, store, and CLI. See CHANGELOG for details.
+
 ### What's new in v0.12.0
 
 - **Configurable global store.** Set `$HIPPO_HOME` or use XDG (`$XDG_DATA_HOME/hippo`) to put the global store wherever you want. Falls back to `~/.hippo/` if neither is set.

@@ -57,7 +57,11 @@ export function importEntries(
   const entries: MemoryEntry[] = [];
 
   for (const raw of chunks) {
-    const chunk = raw.trim().slice(0, 1000);
+    const trimmed = raw.trim();
+    if (trimmed.length > 1000) {
+      console.error(`Warning: imported memory truncated from ${trimmed.length} to 1000 chars`);
+    }
+    const chunk = trimmed.slice(0, 1000);
 
     // Skip empty or too-short chunks
     if (!chunk || chunk.length < 10) {

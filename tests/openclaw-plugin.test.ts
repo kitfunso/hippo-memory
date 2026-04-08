@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const execSyncMock = vi.fn();
+const execFileSyncMock = vi.fn();
 const existsSyncMock = vi.fn((target: string) => target.includes('.hippo'));
 
 vi.mock('child_process', () => ({
-  execSync: execSyncMock,
+  execFileSync: execFileSyncMock,
 }));
 
 vi.mock('fs', async () => {
@@ -103,8 +103,8 @@ function hippoConfig(overrides: Record<string, unknown> = {}) {
 describe('openclaw hippo plugin', () => {
   beforeEach(() => {
     vi.resetModules();
-    execSyncMock.mockReset();
-    execSyncMock.mockReturnValue('Memory context from hippo');
+    execFileSyncMock.mockReset();
+    execFileSyncMock.mockReturnValue('Memory context from hippo');
     existsSyncMock.mockClear();
     existsSyncMock.mockImplementation((target: string) => target.includes('.hippo'));
   });
@@ -118,8 +118,9 @@ describe('openclaw hippo plugin', () => {
     const tool = harness.getTool('hippo_recall', { workspaceDir: 'C:\\repo\\clawd' });
     await tool.execute('tool-1', { query: 'cache refresh' });
 
-    expect(execSyncMock).toHaveBeenCalledTimes(1);
-    expect(execSyncMock.mock.calls[0]?.[1]).toMatchObject({ cwd: 'C:/repo/clawd' });
+    expect(execFileSyncMock).toHaveBeenCalledTimes(1);
+    expect(execFileSyncMock.mock.calls[0]?.[0]).toBe('hippo');
+    expect(execFileSyncMock.mock.calls[0]?.[2]).toMatchObject({ cwd: 'C:/repo/clawd' });
   });
 
   it('uses workspaceDir for prompt hook auto-context', async () => {
@@ -132,11 +133,11 @@ describe('openclaw hippo plugin', () => {
     const result = hook({ prompt: 'help', messages: [] }, { workspaceDir: 'C:\\repo\\clawd' });
 
     // 2 calls: session_start event + context injection
-    expect(execSyncMock).toHaveBeenCalledTimes(2);
-    expect(execSyncMock.mock.calls[0]?.[0]).toContain('session log');
-    expect(execSyncMock.mock.calls[0]?.[1]).toMatchObject({ cwd: 'C:/repo/clawd' });
-    expect(execSyncMock.mock.calls[1]?.[0]).toContain('context');
-    expect(execSyncMock.mock.calls[1]?.[1]).toMatchObject({ cwd: 'C:/repo/clawd' });
+    expect(execFileSyncMock).toHaveBeenCalledTimes(2);
+    expect(execFileSyncMock.mock.calls[0]?.[1]).toContain('session');
+    expect(execFileSyncMock.mock.calls[0]?.[2]).toMatchObject({ cwd: 'C:/repo/clawd' });
+    expect(execFileSyncMock.mock.calls[1]?.[1]).toContain('context');
+    expect(execFileSyncMock.mock.calls[1]?.[2]).toMatchObject({ cwd: 'C:/repo/clawd' });
     expect(result).toMatchObject({
       appendSystemContext: expect.stringContaining('Project Memory (Hippo)'),
     });
@@ -155,8 +156,8 @@ describe('openclaw hippo plugin', () => {
     const tool = harness.getTool('hippo_recall', { workspaceDir: 'C:\\repo\\clawd' });
     await tool.execute('tool-2', { query: 'shared memory' });
 
-    expect(execSyncMock).toHaveBeenCalledTimes(1);
-    expect(execSyncMock.mock.calls[0]?.[1]).toMatchObject({ cwd: 'D:/shared/workspace' });
+    expect(execFileSyncMock).toHaveBeenCalledTimes(1);
+    expect(execFileSyncMock.mock.calls[0]?.[2]).toMatchObject({ cwd: 'D:/shared/workspace' });
   });
 
   it('autoLearn stores a Hippo error memory when a tool call fails', async () => {
@@ -170,7 +171,7 @@ describe('openclaw hippo plugin', () => {
       { agentId?: string; sessionId?: string; toolName: string }
     >('after_tool_call');
 
-    execSyncMock.mockClear();
+    execFileSyncMock.mockClear();
     await hook(
       {
         toolName: 'browser_open',
@@ -184,20 +185,22 @@ describe('openclaw hippo plugin', () => {
       },
     );
 
-    expect(execSyncMock).toHaveBeenCalledTimes(1);
-    expect(execSyncMock.mock.calls[0]?.[0]).toContain('remember');
-    expect(execSyncMock.mock.calls[0]?.[0]).toContain('--error');
-    expect(execSyncMock.mock.calls[0]?.[0]).toContain('browser_open');
-    expect(execSyncMock.mock.calls[0]?.[1]).toMatchObject({ cwd: 'C:/Users/skf_s/clawd' });
+    expect(execFileSyncMock).toHaveBeenCalledTimes(1);
+    const args = execFileSyncMock.mock.calls[0]?.[1] as string[];
+    expect(args).toContain('remember');
+    expect(args).toContain('--error');
+    // tool name sanitized to tag: browser_open -> browser-open
+    expect(args).toContain('browser-open');
+    expect(execFileSyncMock.mock.calls[0]?.[2]).toMatchObject({ cwd: 'C:/Users/skf_s/clawd' });
   });
 
   it('autoSleep consolidates only after sessions with at least 10 new memories', async () => {
     const { default: register } = await import('../extensions/openclaw-plugin/index.ts');
     const harness = makeApi(hippoConfig({ autoSleep: true }));
 
-    execSyncMock.mockImplementation((command: string) => {
-      if (command.startsWith('hippo remember ')) return 'Remembered [mem-123]';
-      if (command.startsWith('hippo sleep')) return 'Sleep complete';
+    execFileSyncMock.mockImplementation((_cmd: string, args: string[]) => {
+      if (args?.[0] === 'remember') return 'Remembered [mem-123]';
+      if (args?.[0] === 'sleep') return 'Sleep complete';
       return 'Memory context from hippo';
     });
 
@@ -213,7 +216,7 @@ describe('openclaw hippo plugin', () => {
       { agentId?: string; sessionId: string }
     >('session_end');
 
-    execSyncMock.mockClear();
+    execFileSyncMock.mockClear();
 
     for (let i = 0; i < 9; i++) {
       await lightSessionTool.execute(`remember-light-${i}`, { text: `lesson ${i}` });
@@ -224,7 +227,7 @@ describe('openclaw hippo plugin', () => {
       { agentId: 'main', sessionId: 'session-light' },
     );
 
-    expect(execSyncMock.mock.calls.some((call) => String(call[0]).includes('sleep'))).toBe(false);
+    expect(execFileSyncMock.mock.calls.some((call) => call[1]?.[0] === 'sleep')).toBe(false);
 
     const heavySessionTool = harness.getTool('hippo_remember', {
       workspaceDir: 'C:\\repo\\clawd',
@@ -241,8 +244,8 @@ describe('openclaw hippo plugin', () => {
       { agentId: 'main', sessionId: 'session-heavy' },
     );
 
-    const sleepCalls = execSyncMock.mock.calls.filter((call) => String(call[0]).includes('sleep'));
+    const sleepCalls = execFileSyncMock.mock.calls.filter((call) => call[1]?.[0] === 'sleep');
     expect(sleepCalls).toHaveLength(1);
-    expect(sleepCalls[0]?.[1]).toMatchObject({ cwd: 'C:/Users/skf_s/clawd' });
+    expect(sleepCalls[0]?.[2]).toMatchObject({ cwd: 'C:/Users/skf_s/clawd' });
   });
 });

@@ -158,8 +158,9 @@ export function velocityAlignmentBonus(
   queryEmbedding: number[],
 ): number {
   const velMag = vecNorm(particle.velocity);
-  if (velMag < 1e-10) return 0;
-  const alignment = vecDot(particle.velocity, queryEmbedding) / (velMag * vecNorm(queryEmbedding));
+  const qNorm = vecNorm(queryEmbedding);
+  if (velMag < 1e-10 || qNorm < 1e-10) return 0;
+  const alignment = vecDot(particle.velocity, queryEmbedding) / (velMag * qNorm);
   return Math.max(0, alignment);
 }
 
@@ -182,7 +183,10 @@ export function attractionForce(
 
   const magnitude = G_memory * pi.mass * pj.mass * Math.pow(cos, 3);
   // Direction: from i toward j (tangent projection handled by normalization after integration)
-  const direction = vecNormalize(vecSub(pj.position, pi.position));
+  let direction = vecNormalize(vecSub(pj.position, pi.position));
+  if (vecNorm(direction) < 1e-10) {
+    direction = vecNormalize(direction.map(() => Math.random() - 0.5));
+  }
   return vecScale(direction, magnitude);
 }
 
@@ -202,7 +206,10 @@ export function repulsionForce(
   const dist = Math.max(0.01, 1 - cos);
   const magnitude = K_repulsion * pi.mass * pj.mass / (dist * dist);
   // Direction: away from j
-  const direction = vecNormalize(vecSub(pi.position, pj.position));
+  let direction = vecNormalize(vecSub(pi.position, pj.position));
+  if (vecNorm(direction) < 1e-10) {
+    direction = vecNormalize(direction.map(() => Math.random() - 0.5));
+  }
   return vecScale(direction, magnitude);
 }
 
@@ -306,6 +313,11 @@ function verletStep(
     // Stability: clamp velocity and normalize position to unit sphere
     p.velocity = vecClampMagnitude(p.velocity, maxVel);
     p.position = vecNormalize(p.position);
+    const posNorm = vecNorm(p.position);
+    if (posNorm < 1e-10) {
+      // Reset to random point on unit sphere to prevent permanent collapse
+      p.position = vecNormalize(p.position.map(() => Math.random() - 0.5));
+    }
   }
 
   // Update accelerations for next step

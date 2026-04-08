@@ -229,10 +229,11 @@ export async function hybridSearch(
   const results: SearchResult[] = [];
   let usedTokens = 0;
 
-  for (const result of scored) {
-    if (usedTokens + result.tokens > budget) continue;
-    results.push(result);
-    usedTokens += result.tokens;
+  for (let i = 0; i < scored.length; i++) {
+    const tokens = scored[i].tokens;
+    if (i > 0 && usedTokens + tokens > budget) continue;  // always include first result
+    usedTokens += tokens;
+    results.push(scored[i]);
   }
 
   return results;
@@ -333,10 +334,11 @@ export async function physicsSearch(
 
   const results: SearchResult[] = [];
   let usedTokens = 0;
-  for (const result of merged) {
-    if (usedTokens + result.tokens > budget) continue;
-    results.push(result);
-    usedTokens += result.tokens;
+  for (let i = 0; i < merged.length; i++) {
+    const tokens = merged[i].tokens;
+    if (i > 0 && usedTokens + tokens > budget) continue;  // always include first result
+    usedTokens += tokens;
+    results.push(merged[i]);
   }
 
   return results;
@@ -420,10 +422,11 @@ export function search(
   const results: SearchResult[] = [];
   let usedTokens = 0;
 
-  for (const result of scored) {
-    if (usedTokens + result.tokens > budget) continue;
-    results.push(result);
-    usedTokens += result.tokens;
+  for (let i = 0; i < scored.length; i++) {
+    const tokens = scored[i].tokens;
+    if (i > 0 && usedTokens + tokens > budget) continue;  // always include first result
+    usedTokens += tokens;
+    results.push(scored[i]);
   }
 
   return results;

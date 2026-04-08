@@ -64,7 +64,10 @@ export function loadConfig(hippoRoot: string): HippoConfig {
       gitLearnPatterns: raw.gitLearnPatterns ?? DEFAULT_CONFIG.gitLearnPatterns,
       physics: mergePhysicsConfig(raw.physics as Partial<PhysicsConfig> | undefined),
     };
-  } catch {
+  } catch (err) {
+    if (fs.existsSync(configPath)) {
+      console.error(`Warning: failed to parse ${configPath}: ${err instanceof Error ? err.message : err}`);
+    }
     return { ...DEFAULT_CONFIG };
   }
 }

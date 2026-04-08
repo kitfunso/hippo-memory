@@ -458,7 +458,7 @@ function loadSearchRows(db: ReturnType<typeof openHippoDb>, query: string, limit
 
   if (isFtsAvailable(db)) {
     try {
-      const ftsQuery = terms.map((term) => `${term.replace(/"/g, '""')}*`).join(' OR ');
+      const ftsQuery = terms.map((t) => `"${t.replace(/"/g, '""')}"`).join(' OR ');
       const rows = db.prepare(`
         SELECT ${MEMORY_SELECT_COLUMNS}
         FROM memories m
@@ -474,9 +474,10 @@ function loadSearchRows(db: ReturnType<typeof openHippoDb>, query: string, limit
     }
   }
 
-  const where = terms.map(() => `(LOWER(content) LIKE ? OR LOWER(tags_json) LIKE ?)` ).join(' OR ');
+  const escapeLike = (term: string): string => term.replace(/[%_\\]/g, '\\$&');
+  const where = terms.map(() => `(LOWER(content) LIKE ? ESCAPE '\\' OR LOWER(tags_json) LIKE ? ESCAPE '\\')`).join(' OR ');
   const params = terms.flatMap((term) => {
-    const like = `%${term}%`;
+    const like = `%${escapeLike(term)}%`;
     return [like, like];
   });
 
@@ -910,8 +911,15 @@ export function rebuildIndex(hippoRoot: string): HippoIndex {
     );
     const legacyEntries = loadLegacyEntriesFromMarkdown(hippoRoot).filter((entry) => !existingIds.has(entry.id));
     if (legacyEntries.length > 0) {
-      for (const entry of legacyEntries) {
-        upsertEntryRow(db, entry);
+      db.exec('BEGIN');
+      try {
+        for (const entry of legacyEntries) {
+          upsertEntryRow(db, entry);
+        }
+        db.exec('COMMIT');
+      } catch (err) {
+        db.exec('ROLLBACK');
+        throw err;
       }
     }
 
@@ -1114,7 +1122,16 @@ export function appendSessionEvent(
     }
 
     const loaded = rowToSessionEvent(row);
-    const recent = listSessionEvents(hippoRoot, { session_id: loaded.session_id, limit: 20 });
+    // Query recent events inline using the already-open db handle
+    // (avoids opening a second connection via listSessionEvents)
+    const recentRows = db.prepare(`
+      SELECT id, session_id, task, event_type, content, source, metadata_json, created_at
+      FROM session_events
+      WHERE session_id = ?
+      ORDER BY created_at DESC, id DESC
+      LIMIT ?
+    `).all(loaded.session_id, 20) as SessionEventRow[];
+    const recent = recentRows.map(rowToSessionEvent).reverse();
     writeRecentSessionMirror(hippoRoot, recent);
     return loaded;
   } finally {

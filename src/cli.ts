@@ -280,7 +280,12 @@ function autoInstallHooks(quiet: boolean): void {
  * Skips if already installed.
  */
 function setupDailySchedule(hippoRoot: string): void {
-  const projectDir = path.dirname(hippoRoot);
+  const projectDir = path.resolve(path.dirname(hippoRoot));
+  // Reject paths with characters that could break shell/crontab quoting
+  if (/["`$\n\r\\]/.test(projectDir)) {
+    console.log(`   Skipping schedule: project path contains unsafe characters.`);
+    return;
+  }
   const isWindows = process.platform === 'win32';
   const taskName = `hippo-daily-${path.basename(projectDir)}`.replace(/[^a-zA-Z0-9_-]/g, '-');
 
