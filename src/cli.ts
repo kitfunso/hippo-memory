@@ -604,8 +604,12 @@ function cmdStatus(hippoRoot: string): void {
   console.log(`Embeddings:        ${embAvail ? 'available' : 'not installed (BM25 only)'}`);
   if (embAvail) {
     const embIndex = loadEmbeddingIndex(hippoRoot);
-    const embCount = Object.keys(embIndex).length;
-    console.log(`Embedded:          ${embCount}/${entries.length} memories`);
+    const activeIds = new Set(entries.map((e) => e.id));
+    const activeEmbedded = Object.keys(embIndex).filter((id) => activeIds.has(id)).length;
+    const orphaned = Object.keys(embIndex).length - activeEmbedded;
+    let line = `Embedded:          ${activeEmbedded}/${entries.length} memories`;
+    if (orphaned > 0) line += ` (${orphaned} orphaned — run \`hippo embed\` to prune)`;
+    console.log(line);
   }
 
   // Physics status
@@ -1479,8 +1483,13 @@ async function cmdEmbed(
   if (flags['status']) {
     const entries = loadAllEntries(hippoRoot);
     const embIndex = loadEmbeddingIndex(hippoRoot);
-    const embCount = Object.keys(embIndex).length;
-    console.log(`Embedding status: ${embCount}/${entries.length} memories embedded`);
+    const activeIds = new Set(entries.map((e) => e.id));
+    const activeEmbedded = Object.keys(embIndex).filter((id) => activeIds.has(id)).length;
+    const orphaned = Object.keys(embIndex).length - activeEmbedded;
+    console.log(`Embedding status: ${activeEmbedded}/${entries.length} memories embedded`);
+    if (orphaned > 0) {
+      console.log(`  ${orphaned} orphaned embeddings (run \`hippo embed\` to prune)`);
+    }
     const missing = entries.filter((e) => !embIndex[e.id]);
     if (missing.length > 0) {
       console.log(`  ${missing.length} memories need embedding (run \`hippo embed\` to embed them)`);
@@ -1490,9 +1499,9 @@ async function cmdEmbed(
 
   console.log('Embedding all memories (this may take a moment on first run to download model)...');
   const count = await embedAll(hippoRoot);
-  const entries = loadAllEntries(hippoRoot);
-  const embIndex = loadEmbeddingIndex(hippoRoot);
-  console.log(`Done. ${count} new embeddings created. ${Object.keys(embIndex).length}/${entries.length} total.`);
+  const entriesAfter = loadAllEntries(hippoRoot);
+  const embIndexAfter = loadEmbeddingIndex(hippoRoot);
+  console.log(`Done. ${count} new embeddings created. ${Object.keys(embIndexAfter).length}/${entriesAfter.length} total.`);
 }
 
 // ---------------------------------------------------------------------------

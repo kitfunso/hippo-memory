@@ -196,6 +196,7 @@ export async function embedMemory(
 
 /**
  * Embed all entries in hippoRoot that don't already have cached vectors.
+ * Prunes orphaned embeddings for memories that no longer exist.
  * Returns the count of newly embedded entries.
  */
 export async function embedAll(
@@ -207,6 +208,16 @@ export async function embedAll(
   const entries = loadAllEntries(hippoRoot);
   const index = loadEmbeddingIndex(hippoRoot);
   let count = 0;
+  let dirty = false;
+
+  // Prune orphaned embeddings for deleted memories
+  const activeIds = new Set(entries.map((e) => e.id));
+  for (const id of Object.keys(index)) {
+    if (!activeIds.has(id)) {
+      delete index[id];
+      dirty = true;
+    }
+  }
 
   for (const entry of entries) {
     if (index[entry.id]) continue; // already embedded
@@ -216,10 +227,11 @@ export async function embedAll(
     if (vector.length > 0) {
       index[entry.id] = vector;
       count++;
+      dirty = true;
     }
   }
 
-  if (count > 0) {
+  if (dirty) {
     saveEmbeddingIndex(hippoRoot, index);
   }
 
