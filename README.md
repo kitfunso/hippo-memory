@@ -43,38 +43,28 @@ hippo recall "data pipeline issues" --budget 2000
 
 That's it. You have a memory system.
 
-### What's new in v0.15.0
+### What's new in v0.15
 
-- **Adaptive decay for intermittent agents.** Memories now decay based on how often the agent actually runs, not wall-clock time. A weekly agent's memories persist ~7x longer automatically. Configure via `decayBasis` in `.hippo/config.json`: `"adaptive"` (default), `"session"`, or `"clock"`.
+- **Adaptive decay for intermittent agents.** Memories now decay based on how often the agent actually runs, not wall-clock time. A weekly agent's memories persist ~7x longer automatically. Three modes via `decayBasis` in `.hippo/config.json`: `"adaptive"` (default), `"session"`, or `"clock"`.
 
-### What's new in v0.14.0
+### What's new in v0.14
 
 - **OpenClaw backup cleanup.** Plugin updates no longer leave `hippo-memory.bak-*` directories that cause duplicate plugin ID errors. Cleanup runs automatically at boot.
 
-### What's new in v0.13.3
-
-- **Final polish.** 8 remaining review findings fixed: ROLLBACK safety, MCP protocol compliance, dead code removal, atomic write cleanup, env var trimming, ESM import consistency.
-
-### What's new in v0.13.2
-
-- **7 more bug fixes** from second deep review: Windows schtasks injection, MCP error handling, cross-store budget consistency, embedding mutex, and more. See CHANGELOG.
-
-### What's new in v0.13.0
+### What's new in v0.13
 
 - **Security: command injection fixed.** OpenClaw plugin now uses `execFileSync` (no shell). All user input is passed as array args, eliminating shell injection vectors.
-- **17 bug fixes** across search, embeddings, physics, MCP server, store, and CLI. See CHANGELOG for details.
+- **25+ bug fixes** across search, embeddings, physics, MCP server, store, and CLI: NaN propagation, token budget accuracy, atomic writes, FTS/LIKE escaping, Buffer-based MCP parsing, protocol compliance, and more. See [CHANGELOG](./CHANGELOG.md) for the full list.
 
-### What's new in v0.12.0
+### What's new in v0.12
 
 - **Configurable global store.** Set `$HIPPO_HOME` or use XDG (`$XDG_DATA_HOME/hippo`) to put the global store wherever you want. Falls back to `~/.hippo/` if neither is set.
 
-### What's new in v0.11.2
+### What's new in v0.11
 
-- **Cross-platform path fix.** OpenClaw plugin now correctly resolves `.hippo` paths on Unix when given Windows-style backslash paths. Uses `path/posix` instead of platform-dependent `path.basename`.
-
-### What's new in v0.11.1
-
-- **OpenClaw error capture filtering.** The `autoLearn` hook now applies three filters before storing tool errors: a noise pattern filter for known transient errors, per-session rate limiting (max 5), and per-session deduplication. Prevents memory pollution from infrastructure noise.
+- **OpenClaw error capture filtering.** The `autoLearn` hook now applies three filters before storing tool errors: noise pattern filter, per-session rate limiting (max 5), and deduplication. Prevents memory pollution from infrastructure noise.
+- **Orphaned embedding pruning.** `hippo embed` removes cached vectors for deleted memories.
+- **Cross-platform path handling.** OpenClaw plugin uses `path/posix` for consistent `.hippo` detection on Unix with Windows-style paths.
 
 ### What's new in v0.11.0
 
