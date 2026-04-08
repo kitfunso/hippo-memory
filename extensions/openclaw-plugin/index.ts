@@ -9,7 +9,8 @@
 
 import { execSync } from 'child_process';
 import { existsSync } from 'fs';
-import { basename, dirname, join } from 'path';
+import { join } from 'path';
+import { basename as posixBasename, dirname as posixDirname } from 'path/posix';
 
 interface HippoConfig {
   budget?: number;
@@ -113,7 +114,10 @@ function getAgentWorkspace(api: any, agentId?: string): string | undefined {
 function resolveHippoCwd(workspace?: string, configRoot?: string): string {
   const hippoRoot = findHippoRoot(workspace, configRoot);
   if (!hippoRoot) return workspace || process.cwd();
-  return basename(hippoRoot).toLowerCase() === '.hippo' ? dirname(hippoRoot) : hippoRoot;
+  const normalized = hippoRoot.replace(/\\/g, '/');
+  return posixBasename(normalized).toLowerCase() === '.hippo'
+    ? posixDirname(normalized)
+    : hippoRoot;
 }
 
 function resolveHippoCwdFromContext(api: any, ctx: HippoRuntimeContext, configRoot?: string): string {
