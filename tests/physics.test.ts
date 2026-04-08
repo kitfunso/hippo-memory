@@ -357,14 +357,12 @@ describe('Force computations', () => {
       expect(f2).toBeCloseTo(f1 * 6, 5);
     });
 
-    it('magnitude uses cos^3 scaling', () => {
-      // Identical positions: cos=1, cos^3=1
+    it('co-located particles get random perturbation', () => {
       const pi = makeParticle({ memoryId: 'a', position: [1, 0, 0], mass: 1 });
       const pj = makeParticle({ memoryId: 'b', position: [1, 0, 0], mass: 1 });
       const force = attractionForce(pi, pj, 1.0);
-      // Direction of (pj - pi) = [0,0,0] -> normalized to zero -> magnitude * zero = zero
-      // Identical positions means difference is zero, so force is zero despite high cosine
-      expect(vecNorm(force)).toBe(0);
+      // Co-located particles now get a random direction instead of zero force
+      expect(vecNorm(force)).toBeGreaterThan(0);
     });
 
     it('force direction points from i toward j', () => {

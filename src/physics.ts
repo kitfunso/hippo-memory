@@ -185,7 +185,11 @@ export function attractionForce(
 
   const magnitude = G_memory * pi.mass * pj.mass * Math.pow(cos, 3);
   // Direction: from i toward j (tangent projection handled by normalization after integration)
-  const direction = vecNormalize(vecSub(pj.position, pi.position));
+  let direction = vecNormalize(vecSub(pj.position, pi.position));
+  if (vecNorm(direction) < 1e-10) {
+    // Co-located particles: random perturbation so they can separate
+    direction = vecNormalize(direction.map(() => Math.random() - 0.5));
+  }
   return vecScale(direction, magnitude);
 }
 
@@ -205,7 +209,11 @@ export function repulsionForce(
   const dist = Math.max(0.01, 1 - cos);
   const magnitude = K_repulsion * pi.mass * pj.mass / (dist * dist);
   // Direction: away from j
-  const direction = vecNormalize(vecSub(pi.position, pj.position));
+  let direction = vecNormalize(vecSub(pi.position, pj.position));
+  if (vecNorm(direction) < 1e-10) {
+    // Co-located conflicting particles: random perturbation so they can repel
+    direction = vecNormalize(direction.map(() => Math.random() - 0.5));
+  }
   return vecScale(direction, magnitude);
 }
 
@@ -309,6 +317,10 @@ function verletStep(
     // Stability: clamp velocity and normalize position to unit sphere
     p.velocity = vecClampMagnitude(p.velocity, maxVel);
     p.position = vecNormalize(p.position);
+    if (vecNorm(p.position) < 1e-10) {
+      // Position collapsed to origin: reset to random unit-sphere point
+      p.position = vecNormalize(p.position.map(() => Math.random() - 0.5));
+    }
   }
 
   // Update accelerations for next step
