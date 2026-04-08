@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.13.1 (2026-04-08)
+
+### Reverted
+- **Physics simulation behavior changes.** Reverted co-location perturbation, position collapse reset, and repulsion direction changes from v0.13.0. These need local validation before shipping. The `velocityAlignmentBonus` NaN guard and `Float32Array` alignment fix are kept (pure safety, no behavior change).
+
 ## 0.13.0 (2026-04-08)
 
 ### Fixed
