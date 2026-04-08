@@ -205,7 +205,12 @@ function runHippo(args: readonly string[], cwd?: string): string {
   }
 }
 
+let _registered = false;
+
 export default function register(api: any) {
+  if (_registered) return;
+  _registered = true;
+
   const logger = api.logger ?? console;
 
   // Clean up stale backup plugins from previous updates
