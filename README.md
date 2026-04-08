@@ -36,12 +36,31 @@ Your memories are also trapped. ChatGPT knows things Claude doesn't. Cursor rule
 ```bash
 npm install -g hippo-memory
 
+# Single project
 hippo init
+
+# All your projects at once (recommended)
+hippo init --scan ~
+```
+
+`--scan` finds every git repo under your home directory, creates a `.hippo/` store in each one, and seeds it with lessons from your commit history. One command, instant memory across all your projects.
+
+After setup, `hippo sleep` runs automatically at session end (via agent hooks) and does three things:
+1. **Learns** from today's git commits
+2. **Consolidates** memories (decay, merge, prune)
+3. **Shares** high-value lessons to the global store so they surface in every project
+
+```bash
+# Manual usage
 hippo remember "FRED cache silently dropped the tips_10y series" --tag error
 hippo recall "data pipeline issues" --budget 2000
 ```
 
-That's it. You have a memory system.
+---
+
+### What's new in v0.18
+
+- **Multi-project auto-discovery.** `hippo init --scan [dir]` finds all git repos under a directory and initializes each one. Seeds with a full year of git history by default. One command to set up memory across all your projects.
 
 ### What's new in v0.17
 

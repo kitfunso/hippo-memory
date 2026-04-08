@@ -177,7 +177,86 @@ function fmt(n: number, digits = 2): string {
 // Commands
 // ---------------------------------------------------------------------------
 
+function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
+  const repos: string[] = [];
+  function walk(dir: string, depth: number): void {
+    if (depth > maxDepth) return;
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        if (entry.name === 'node_modules' || entry.name === '.git' || entry.name.startsWith('.')) continue;
+        const full = path.join(dir, entry.name);
+        if (fs.existsSync(path.join(full, '.git'))) {
+          repos.push(full);
+        }
+        if (depth < maxDepth) walk(full, depth + 1);
+      }
+    } catch { /* permission denied, etc */ }
+  }
+  // Check if rootDir itself is a git repo
+  if (fs.existsSync(path.join(rootDir, '.git'))) repos.push(rootDir);
+  walk(rootDir, 0);
+  return repos;
+}
+
+function cmdInitScan(scanDir: string, flags: Record<string, string | boolean | string[]>): void {
+  const resolved = path.resolve(scanDir);
+  console.log(`Scanning ${resolved} for git repositories...\n`);
+
+  const repos = scanForGitRepos(resolved);
+  if (repos.length === 0) {
+    console.log('No git repositories found.');
+    return;
+  }
+
+  console.log(`Found ${repos.length} repositories:\n`);
+
+  // Init global store first
+  const globalRoot = getGlobalRoot();
+  if (!isInitialized(globalRoot)) {
+    initGlobal();
+    console.log(`Initialized global store at ${globalRoot}\n`);
+  }
+
+  let totalLessons = 0;
+  const seedDays = parseInt(String(flags['days'] ?? '365'), 10);
+
+  for (const repo of repos) {
+    const name = path.basename(repo);
+    const repoHippo = path.join(repo, '.hippo');
+    const alreadyExists = isInitialized(repoHippo);
+
+    if (!alreadyExists) {
+      initStore(repoHippo);
+    }
+
+    // Learn from git history
+    let added = 0;
+    if (!flags['no-learn'] && isGitRepo(repo)) {
+      const result = learnFromRepo(repoHippo, repo, seedDays, name);
+      added = result.added;
+      totalLessons += added;
+    }
+
+    const status = alreadyExists ? 'existing' : 'new';
+    const entries = loadAllEntries(repoHippo);
+    console.log(`  ${name.padEnd(25)} ${status.padEnd(10)} ${entries.length} memories${added > 0 ? ` (+${added} from git)` : ''}`);
+  }
+
+  console.log(`\n${repos.length} repositories, ${totalLessons} new lessons learned.`);
+  console.log(`Global store: ${globalRoot}`);
+  console.log(`\nRun \`hippo sleep\` in any project to consolidate and auto-share to global.`);
+}
+
 function cmdInit(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
+  // Handle --scan mode
+  if (flags['scan']) {
+    const scanDir = typeof flags['scan'] === 'string' ? flags['scan'] : os.homedir();
+    cmdInitScan(scanDir, flags);
+    return;
+  }
+
   if (flags['global']) {
     const globalRoot = getGlobalRoot();
     if (isInitialized(globalRoot)) {
@@ -2277,6 +2356,8 @@ Usage: hippo <command> [options]
 
 Commands:
   init                     Create .hippo/ structure in current directory
+    --scan [dir]           Find all git repos under dir (default: ~) and init each
+    --days <n>             Days of git history to seed (default: 365 for --scan, 30 for single)
     --global               Init the global store ($HIPPO_HOME or ~/.hippo/)
     --no-hooks             Skip auto-detecting and installing agent hooks
     --no-schedule          Skip auto-creating daily learn+sleep cron job

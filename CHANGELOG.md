@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.18.0 (2026-04-08)
+
+### Added
+- **Multi-project auto-discovery.** `hippo init --scan [dir]` finds all git repos under a directory (default: home, max 2 levels deep) and initializes each one with a `.hippo/` store. Seeds with a full year of git history by default. Also initializes the global store. Use `--days <n>` to control history depth, `--no-learn` to skip git seeding.
+
 ## 0.17.0 (2026-04-08)
 
 ### Added
