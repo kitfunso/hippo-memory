@@ -1,7 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const execSyncMock = vi.fn();
-const existsSyncMock = vi.fn((target: string) => target.includes('.hippo'));
+// Mock existsSync to only return true for actual .hippo directories (paths ending with .hippo)
+// This prevents false positives like 'C:\repo\clawd/.hippo' being treated as existing
+const existsSyncMock = vi.fn((target: string) => {
+  // Check if path ends with .hippo (after a path separator)
+  const normalized = target.replace(/\\/g, '/');
+  const parts = normalized.split('/').filter(Boolean);
+  return parts[parts.length - 1] === '.hippo';
+});
 
 vi.mock('child_process', () => ({
   execSync: execSyncMock,
@@ -188,7 +195,7 @@ describe('openclaw hippo plugin', () => {
     expect(execSyncMock.mock.calls[0]?.[0]).toContain('remember');
     expect(execSyncMock.mock.calls[0]?.[0]).toContain('--error');
     expect(execSyncMock.mock.calls[0]?.[0]).toContain('browser_open');
-    expect(execSyncMock.mock.calls[0]?.[1]).toMatchObject({ cwd: 'C:\\Users\\skf_s\\clawd' });
+    expect(execSyncMock.mock.calls[0]?.[1]).toMatchObject({ cwd: 'C:/Users/skf_s/clawd' });
   });
 
   it('autoSleep consolidates only after sessions with at least 10 new memories', async () => {
@@ -243,6 +250,6 @@ describe('openclaw hippo plugin', () => {
 
     const sleepCalls = execSyncMock.mock.calls.filter((call) => String(call[0]).includes('sleep'));
     expect(sleepCalls).toHaveLength(1);
-    expect(sleepCalls[0]?.[1]).toMatchObject({ cwd: 'C:\\Users\\skf_s\\clawd' });
+    expect(sleepCalls[0]?.[1]).toMatchObject({ cwd: 'C:/Users/skf_s/clawd' });
   });
 });

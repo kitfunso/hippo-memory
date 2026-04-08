@@ -113,7 +113,29 @@ function getAgentWorkspace(api: any, agentId?: string): string | undefined {
 function resolveHippoCwd(workspace?: string, configRoot?: string): string {
   const hippoRoot = findHippoRoot(workspace, configRoot);
   if (!hippoRoot) return workspace || process.cwd();
-  return basename(hippoRoot).toLowerCase() === '.hippo' ? dirname(hippoRoot) : hippoRoot;
+
+  // Determine the separator style to use for the output
+  // Priority: workspace input style > hippoRoot style > system default
+  const inputUsesBackslashes = workspace && workspace.includes('\\');
+  const hippoUsesBackslashes = hippoRoot.includes('\\') && !hippoRoot.includes('/');
+  const useBackslashes = inputUsesBackslashes || hippoUsesBackslashes;
+
+  // Normalize to forward slashes for consistent processing
+  const normalized = hippoRoot.replace(/\\/g, '/');
+  const lastSep = normalized.lastIndexOf('/');
+  const lastComponent = normalized.slice(lastSep + 1).toLowerCase();
+
+  if (lastComponent === '.hippo') {
+    // Return parent directory, converting to preferred separator style
+    const parentPath = normalized.slice(0, lastSep);
+    if (useBackslashes) {
+      return parentPath.replace(/\//g, '\\') || workspace || process.cwd();
+    }
+    return parentPath || workspace || process.cwd();
+  }
+
+  // Preserve original hippoRoot if no .hippo suffix
+  return hippoRoot;
 }
 
 function resolveHippoCwdFromContext(api: any, ctx: HippoRuntimeContext, configRoot?: string): string {
