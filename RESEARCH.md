@@ -72,6 +72,58 @@ This is sharp-wave ripple replay, implemented as a training pipeline.
 
 **Open problem:** Detecting contradictions in training data before they're learned. When new data conflicts with strongly-held existing knowledge, flag it for human review rather than blindly training on it. Hippo's conflict detection mechanism (flagging memories that contradict each other) is the prototype.
 
+## Mechanism 8: Spatial memory (Memory-as-Physics)
+
+The hippocampus doesn't just store memories with different strengths. It organizes them spatially. The 2014 Nobel Prize in Physiology or Medicine (O'Keefe, Moser & Moser) was awarded for discovering **place cells** and **grid cells** — neurons in the hippocampus and entorhinal cortex that encode memories as positions in a cognitive map. When you recall something, your hippocampus replays a trajectory through this map. Related memories are stored near each other in neural space.
+
+Hippo v0.11+ implements this as a physics simulation. Each memory is a particle in 384-dimensional embedding space with position, velocity, mass, charge, and temperature. Forces act on these particles: queries exert gravitational attraction, related memories attract each other, conflicting memories repel, and drag prevents runaway drift. The system is integrated using Velocity Verlet (symplectic, energy-conserving) during `hippo sleep`.
+
+### Mapping physics to hippocampal biology
+
+| Physics mechanism | Hippocampal biology | Neural basis |
+|---|---|---|
+| Position in embedding space | Location in cognitive map | **Place cells** — CA1 neurons that fire at specific locations in the cognitive map |
+| Position drift via inter-memory forces | Memory reorganization during sleep | **Sharp-wave ripple replay** — hippocampus replays and reorganizes memories during slow-wave sleep |
+| Query gravity (retrieval-time attraction) | Context-dependent recall | **Pattern completion** — CA3 recurrent connections activate nearby memories from partial cues |
+| Cluster amplification | Co-activation of related memories | **Ensemble coding** — groups of place cells fire together, producing a group signal stronger than any individual |
+| Conflict repulsion | Interference resolution | **Pattern separation** — dentate gyrus pushes similar-but-different memories apart to prevent confabulation |
+| Drag / velocity damping | Stabilization of old memories | **Systems consolidation** — memories transfer from hippocampus (plastic, high learning rate) to neocortex (stable, low learning rate) |
+| Temperature (new memories = hot, old = cold) | Lability of recent memories | **Synaptic tagging and capture** — fresh synapses exist in a labile state receptive to modification; consolidated synapses are stable |
+| Outcome feedback nudge | Learning from reward/punishment | **Dopaminergic modulation** — VTA reward signals gate hippocampal plasticity, strengthening memories associated with positive outcomes |
+
+### What existed before was the chemistry. What physics adds is the geometry.
+
+The original seven mechanisms model biochemical processes: how individual synapses strengthen (retrieval boost), weaken (decay), and reorganize (consolidation). These determine **how strong** a memory is.
+
+The physics engine models spatial organization: how the hippocampus arranges memories **relative to each other** in cognitive space. This determines which memories are neighbors, which form clusters, and which are isolated.
+
+Both are real aspects of hippocampal function. Chemistry without geometry gives you strength-ranked retrieval (a sorted list). Geometry without chemistry gives you spatial clustering (a map with no salience). Together they produce context-sensitive recall where the answer emerges from the interaction between memory strength and spatial proximity — which is what biological memory actually does.
+
+### The cluster amplification hypothesis
+
+The most novel prediction of the physics model is **constructive interference**: when multiple memories about the same topic have clustered together through consolidation forces, their combined retrieval signal is stronger than any individual memory's score. This is analogous to ensemble coding in the hippocampus, where a population of co-active neurons produces a clearer signal than any single neuron.
+
+A/B benchmark results (synthetic embeddings, 26 memories, 10 sleep cycles):
+
+| Query type | Classic R@3 | Physics R@3 | Delta |
+|---|---|---|---|
+| Standard (keyword-heavy) | 0.817 | 0.850 | +0.033 |
+| Cluster (broad, 3+ related memories) | 0.733 | 0.800 | +0.067 |
+
+The +6.7% improvement on cluster queries is the physics model's primary contribution: surfacing groups of related memories that BM25 treats independently. The effect should compound over time as position drift from real usage creates tighter clusters than synthetic initialization.
+
+### Open research questions
+
+1. **Does position drift improve retrieval over time?** After N real usage sessions with outcome feedback, do physics-scored queries outperform classic by a widening margin? The micro-nudge mechanism (good outcomes push memories toward the query context) should create increasingly accurate spatial organization.
+
+2. **What is the optimal simulation schedule?** Currently physics runs once per `hippo sleep`. Would more frequent simulation (every N retrievals) produce better clustering? Is there an analogue to the hippocampal theta rhythm (periodic synchronization)?
+
+3. **Can spatial proximity replace text overlap for merge detection?** Currently, episodic-to-semantic merging uses Jaccard text overlap (threshold 0.35). Memories that have drifted close in physics space may be better merge candidates, capturing semantic relatedness that keyword overlap misses.
+
+4. **Does conflict repulsion improve pattern separation?** When contradictory memories are pushed apart in embedding space, does retrieval produce fewer confabulations (returning one memory when the other was intended)?
+
+5. **What happens at scale?** The O(N^2) force computation is fine for 500 memories (~100ms). At 5,000+ memories, Barnes-Hut approximation or spatial hashing would be needed. Is the clustering benefit worth the computational cost at that scale?
+
 ## What hippo collects that nobody else has
 
 If hippo achieves meaningful adoption, it will generate a unique dataset:
@@ -262,3 +314,6 @@ These papers were ahead of their time. The mechanisms they described (capacity l
 - IEEE 5952114 (2011). Storing objects in a short-term biologically inspired memory system for artificial agents. *IEEE*.
 - IEEE 5548405 (2010). Storage, degradation and recall of agent memory in Serious Games and Simulations. *IEEE*.
 - IEEE 5953964 (2011). Agent memory and behavior simulation. *IEEE*.
+- O'Keefe, J. (1976). Place units in the hippocampus of the freely moving rat. *Experimental Neurology*.
+- Moser, E.I., Kropff, E., & Moser, M.-B. (2008). Place cells, grid cells, and the brain's spatial representation system. *Annual Review of Neuroscience*.
+- Nobel Prize in Physiology or Medicine (2014). Awarded to John O'Keefe, May-Britt Moser, and Edvard Moser for discoveries of cells that constitute a positioning system in the brain.
