@@ -9,7 +9,9 @@ import {
   isEmbeddingAvailable,
   getEmbedding,
   cosineSimilarity,
+  embeddingModelRequiresReindex,
   loadEmbeddingIndex,
+  resolveEmbeddingModel,
 } from './embeddings.js';
 import { physicsScore as computePhysicsScores } from './physics.js';
 import type { PhysicsParticle } from './physics.js';
@@ -164,10 +166,13 @@ export async function hybridSearch(
 
   if (isEmbeddingAvailable() && options.hippoRoot) {
     try {
-      queryVector = await getEmbedding(query);
-      if (queryVector.length > 0) {
-        embeddingIndex = loadEmbeddingIndex(options.hippoRoot);
-        useEmbeddings = true;
+      const model = resolveEmbeddingModel(options.hippoRoot);
+      if (!embeddingModelRequiresReindex(options.hippoRoot, model)) {
+        queryVector = await getEmbedding(query, model);
+        if (queryVector.length > 0) {
+          embeddingIndex = loadEmbeddingIndex(options.hippoRoot);
+          useEmbeddings = true;
+        }
       }
     } catch {
       // Fall through to BM25-only
@@ -267,7 +272,11 @@ export async function physicsSearch(
     if (!isEmbeddingAvailable()) {
       return hybridSearch(query, entries, options);
     }
-    queryVector = await getEmbedding(query);
+    const model = resolveEmbeddingModel(options.hippoRoot);
+    if (embeddingModelRequiresReindex(options.hippoRoot, model)) {
+      return hybridSearch(query, entries, options);
+    }
+    queryVector = await getEmbedding(query, model);
     if (queryVector.length === 0) {
       return hybridSearch(query, entries, options);
     }
@@ -293,7 +302,12 @@ export async function physicsSearch(
 
   for (const entry of entries) {
     const particle = physicsMap.get(entry.id);
-    if (particle && particle.position.length > 0) {
+    if (
+      particle
+      && particle.position.length > 0
+      && particle.position.length === queryVector.length
+      && particle.velocity.length === queryVector.length
+    ) {
       physicsEntries.push(entry);
       physicsParticles.push(particle);
     } else {

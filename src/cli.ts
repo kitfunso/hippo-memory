@@ -76,6 +76,7 @@ import {
   embedAll,
   embedMemory,
   loadEmbeddingIndex,
+  resolveEmbeddingModel,
 } from './embeddings.js';
 import { loadPhysicsState, resetAllPhysicsState } from './physics-state.js';
 import { computeSystemEnergy, vecNorm } from './physics.js';
@@ -1619,7 +1620,7 @@ async function cmdEmbed(
   }
 
   console.log('Embedding all memories (this may take a moment on first run to download model)...');
-  const count = await embedAll(hippoRoot);
+  const count = await embedAll(hippoRoot, resolveEmbeddingModel(hippoRoot));
   const entriesAfter = loadAllEntries(hippoRoot);
   const embIndexAfter = loadEmbeddingIndex(hippoRoot);
   console.log(`Done. ${count} new embeddings created. ${Object.keys(embIndexAfter).length}/${entriesAfter.length} total.`);

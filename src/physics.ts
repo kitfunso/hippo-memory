@@ -100,6 +100,7 @@ export function vecClampMagnitude(v: number[], maxMag: number): number[] {
 
 /** Cosine similarity between two vectors. */
 function cosine(a: number[], b: number[]): number {
+  if (a.length === 0 || b.length === 0 || a.length !== b.length) return 0;
   const dot = vecDot(a, b);
   const na = vecNorm(a);
   const nb = vecNorm(b);
@@ -157,6 +158,7 @@ export function velocityAlignmentBonus(
   particle: PhysicsParticle,
   queryEmbedding: number[],
 ): number {
+  if (particle.velocity.length === 0 || particle.velocity.length !== queryEmbedding.length) return 0;
   const velMag = vecNorm(particle.velocity);
   const qNorm = vecNorm(queryEmbedding);
   if (velMag < 1e-10 || qNorm < 1e-10) return 0;
@@ -490,6 +492,7 @@ export function applyOutcomeFeedback(
   good: boolean,
   feedbackAlpha: number,
 ): void {
+  if (particle.position.length === 0 || particle.position.length !== queryEmbedding.length) return;
   const sign = good ? 1 : -1;
   const direction = vecSub(queryEmbedding, particle.position);
   const nudge = vecScale(direction, sign * feedbackAlpha * particle.temperature);

@@ -9,8 +9,9 @@ import * as path from 'path';
 import { createRequire } from 'module';
 import { MemoryEntry } from './memory.js';
 import { loadAllEntries } from './store.js';
-import { openHippoDb, closeHippoDb } from './db.js';
-import { initializeParticle, savePhysicsState, loadPhysicsState } from './physics-state.js';
+import { openHippoDb, closeHippoDb, getMeta, setMeta } from './db.js';
+import { initializeParticle, savePhysicsState, loadPhysicsState, resetAllPhysicsState } from './physics-state.js';
+import { loadConfig } from './config.js';
 
 // Use createRequire for synchronous module resolution check in ESM
 const _require = createRequire(import.meta.url);
@@ -19,9 +20,11 @@ const _require = createRequire(import.meta.url);
 let _embeddingAvailable: boolean | null = null;
 
 // Lazy-loaded pipeline (expensive to initialize)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _pipelineInstance: any = null;
-let _pipelineLoading: Promise<unknown> | null = null;
+const _pipelineInstances = new Map<string, unknown>();
+const _pipelineLoading = new Map<string, Promise<unknown>>();
+
+const DEFAULT_EMBEDDING_MODEL = 'Xenova/all-MiniLM-L6-v2';
+const EMBEDDING_MODEL_META_KEY = 'embedding_model';
 
 // Use Function constructor to bypass TypeScript static module resolution
 // for optional peer dependencies that may not be installed.
@@ -55,44 +58,131 @@ export function isEmbeddingAvailable(): boolean {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function loadPipeline(model: string): Promise<any> {
-  if (_pipelineInstance) return _pipelineInstance;
+  if (_pipelineInstances.has(model)) return _pipelineInstances.get(model);
+  if (_pipelineLoading.has(model)) return _pipelineLoading.get(model);
 
-  if (!_pipelineLoading) {
-    _pipelineLoading = (async () => {
+  const loading = (async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let pipelineFn: any = null;
+
+    try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let pipelineFn: any = null;
-
+      const mod = await _dynImport('@xenova/transformers') as any;
+      pipelineFn = mod.pipeline ?? mod.default?.pipeline;
+    } catch {
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const mod = await _dynImport('@xenova/transformers') as any;
+        const mod = await _dynImport('@huggingface/transformers') as any;
         pipelineFn = mod.pipeline ?? mod.default?.pipeline;
       } catch {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const mod = await _dynImport('@huggingface/transformers') as any;
-          pipelineFn = mod.pipeline ?? mod.default?.pipeline;
-        } catch {
-          _pipelineLoading = null; // Allow retry on next call
-          return null;
-        }
-      }
-
-      if (!pipelineFn) {
-        _pipelineLoading = null; // Allow retry on next call
         return null;
       }
+    }
 
-      try {
-        _pipelineInstance = await pipelineFn('feature-extraction', model, { quantized: true });
-        return _pipelineInstance;
-      } catch {
-        _pipelineLoading = null; // Allow retry on next call
-        return null;
-      }
-    })();
+    if (!pipelineFn) return null;
+
+    try {
+      const instance = await pipelineFn('feature-extraction', model, { quantized: true });
+      _pipelineInstances.set(model, instance);
+      return instance;
+    } catch {
+      return null;
+    } finally {
+      _pipelineLoading.delete(model);
+    }
+  })();
+
+  _pipelineLoading.set(model, loading);
+  return loading;
+}
+
+export function resolveEmbeddingModel(hippoRoot: string, explicitModel?: string): string {
+  const direct = explicitModel?.trim();
+  if (direct) return direct;
+
+  try {
+    const configured = loadConfig(hippoRoot).embeddings.model?.trim();
+    if (configured) return configured;
+  } catch {
+    // Fall back to the default model when config cannot be read.
   }
 
-  return _pipelineLoading;
+  return DEFAULT_EMBEDDING_MODEL;
+}
+
+function loadStoredEmbeddingModel(hippoRoot: string): string | null {
+  try {
+    const db = openHippoDb(hippoRoot);
+    try {
+      const model = getMeta(db, EMBEDDING_MODEL_META_KEY, '').trim();
+      return model || null;
+    } finally {
+      closeHippoDb(db);
+    }
+  } catch {
+    return null;
+  }
+}
+
+function saveStoredEmbeddingModel(hippoRoot: string, model: string): void {
+  const db = openHippoDb(hippoRoot);
+  try {
+    setMeta(db, EMBEDDING_MODEL_META_KEY, model);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+export function resolveIndexedEmbeddingModel(
+  hippoRoot: string,
+  index: Record<string, number[]> = loadEmbeddingIndex(hippoRoot),
+): string | null {
+  const stored = loadStoredEmbeddingModel(hippoRoot);
+  if (stored) return stored;
+  return Object.keys(index).length > 0 ? DEFAULT_EMBEDDING_MODEL : null;
+}
+
+export function embeddingModelRequiresReindex(
+  hippoRoot: string,
+  model: string,
+  index: Record<string, number[]> = loadEmbeddingIndex(hippoRoot),
+): boolean {
+  const indexedModel = resolveIndexedEmbeddingModel(hippoRoot, index);
+  return indexedModel !== null && indexedModel !== model;
+}
+
+async function rebuildEmbeddingIndex(
+  entries: MemoryEntry[],
+  model: string,
+): Promise<Record<string, number[]>> {
+  const rebuilt: Record<string, number[]> = {};
+
+  for (const entry of entries) {
+    const text = `${entry.content} ${entry.tags.join(' ')}`.trim();
+    const vector = await getEmbedding(text, model);
+    if (vector.length > 0) {
+      rebuilt[entry.id] = vector;
+    }
+  }
+
+  return rebuilt;
+}
+
+function resetPhysicsFromIndex(
+  hippoRoot: string,
+  entries: MemoryEntry[],
+  index: Record<string, number[]>,
+): void {
+  try {
+    const db = openHippoDb(hippoRoot);
+    try {
+      resetAllPhysicsState(db, entries, index);
+    } finally {
+      closeHippoDb(db);
+    }
+  } catch {
+    // Physics reset is best-effort; retrieval will still fall back gracefully.
+  }
 }
 
 /**
@@ -101,7 +191,7 @@ async function loadPipeline(model: string): Promise<any> {
  */
 export async function getEmbedding(
   text: string,
-  model = 'Xenova/all-MiniLM-L6-v2'
+  model = DEFAULT_EMBEDDING_MODEL
 ): Promise<number[]> {
   if (!isEmbeddingAvailable()) return [];
 
@@ -193,18 +283,31 @@ async function withEmbedLock<T>(fn: () => Promise<T>): Promise<T> {
 export async function embedMemory(
   hippoRoot: string,
   entry: MemoryEntry,
-  model = 'Xenova/all-MiniLM-L6-v2'
+  model?: string
 ): Promise<void> {
   if (!isEmbeddingAvailable()) return;
 
   return withEmbedLock(async () => {
+    const effectiveModel = resolveEmbeddingModel(hippoRoot, model);
+    const existingIndex = loadEmbeddingIndex(hippoRoot);
+
+    if (embeddingModelRequiresReindex(hippoRoot, effectiveModel, existingIndex)) {
+      const entries = loadAllEntries(hippoRoot);
+      const rebuiltIndex = await rebuildEmbeddingIndex(entries, effectiveModel);
+      saveEmbeddingIndex(hippoRoot, rebuiltIndex);
+      saveStoredEmbeddingModel(hippoRoot, effectiveModel);
+      resetPhysicsFromIndex(hippoRoot, entries, rebuiltIndex);
+      return;
+    }
+
     const text = `${entry.content} ${entry.tags.join(' ')}`.trim();
-    const vector = await getEmbedding(text, model);
+    const vector = await getEmbedding(text, effectiveModel);
     if (vector.length === 0) return;
 
-    const index = loadEmbeddingIndex(hippoRoot);
+    const index = existingIndex;
     index[entry.id] = vector;
     saveEmbeddingIndex(hippoRoot, index);
+    saveStoredEmbeddingModel(hippoRoot, effectiveModel);
 
     // Initialize physics state for this memory
     try {
@@ -231,13 +334,23 @@ export async function embedMemory(
  */
 export async function embedAll(
   hippoRoot: string,
-  model = 'Xenova/all-MiniLM-L6-v2'
+  model?: string
 ): Promise<number> {
   if (!isEmbeddingAvailable()) return 0;
 
   return withEmbedLock(async () => {
+    const effectiveModel = resolveEmbeddingModel(hippoRoot, model);
     const entries = loadAllEntries(hippoRoot);
     const index = loadEmbeddingIndex(hippoRoot);
+
+    if (embeddingModelRequiresReindex(hippoRoot, effectiveModel, index)) {
+      const rebuiltIndex = await rebuildEmbeddingIndex(entries, effectiveModel);
+      saveEmbeddingIndex(hippoRoot, rebuiltIndex);
+      saveStoredEmbeddingModel(hippoRoot, effectiveModel);
+      resetPhysicsFromIndex(hippoRoot, entries, rebuiltIndex);
+      return Object.keys(rebuiltIndex).length;
+    }
+
     let count = 0;
     let dirty = false;
 
@@ -254,7 +367,7 @@ export async function embedAll(
       if (index[entry.id]) continue; // already embedded
 
       const text = `${entry.content} ${entry.tags.join(' ')}`.trim();
-      const vector = await getEmbedding(text, model);
+      const vector = await getEmbedding(text, effectiveModel);
       if (vector.length > 0) {
         index[entry.id] = vector;
         count++;
@@ -265,6 +378,7 @@ export async function embedAll(
     if (dirty) {
       saveEmbeddingIndex(hippoRoot, index);
     }
+    saveStoredEmbeddingModel(hippoRoot, effectiveModel);
 
     return count;
   });

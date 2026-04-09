@@ -490,6 +490,14 @@ describe('Scoring', () => {
       expect(results).toEqual([]);
     });
 
+    it('returns finite zero scores for mismatched query dimensions', () => {
+      const particles = [makeParticle({ memoryId: 'a', position: [1, 0, 0], velocity: [1, 0, 0] })];
+      const results = physicsScore(particles, [1, 0], { ...DEFAULT_PHYSICS_CONFIG });
+      expect(results).toHaveLength(1);
+      expect(results[0].baseScore).toBe(0);
+      expect(Number.isFinite(results[0].finalScore)).toBe(true);
+    });
+
     it('velocity alignment contributes to score', () => {
       const still = makeParticle({ memoryId: 'still', position: [1, 0, 0], velocity: [0, 0, 0] });
       const moving = makeParticle({ memoryId: 'moving', position: [1, 0, 0], velocity: [0.1, 0, 0] });
