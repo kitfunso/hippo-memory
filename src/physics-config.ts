@@ -32,6 +32,10 @@ export interface PhysicsConfig {
   cluster_threshold: number;
   /** Number of top results to consider for cluster amplification. */
   cluster_top_k: number;
+  /** Short-range repulsion constant — prevents particle collapse. Like electron shell repulsion. */
+  K_short_range: number;
+  /** Cosine distance below which short-range repulsion activates. */
+  short_range_threshold: number;
 }
 
 export const DEFAULT_PHYSICS_CONFIG: Readonly<PhysicsConfig> = {
@@ -49,6 +53,8 @@ export const DEFAULT_PHYSICS_CONFIG: Readonly<PhysicsConfig> = {
   temperature_decay: 1.0,
   cluster_threshold: 0.7,
   cluster_top_k: 20,
+  K_short_range: 0.05,
+  short_range_threshold: 0.05,
 };
 
 export function mergePhysicsConfig(partial?: Partial<PhysicsConfig>): PhysicsConfig {

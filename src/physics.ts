@@ -227,6 +227,38 @@ export function repulsionForce(
 }
 
 /**
+ * F5: Short-range repulsion (all pairs, not just conflicts).
+ * Prevents particle collapse by repelling when cosine distance < threshold.
+ * Like electron shell repulsion or Lennard-Jones short-range term.
+ *
+ * F_sr(i,j) = K_sr / max(0.001, dist)^2 * direction(away from j)
+ * Only active when cosine_distance(i,j) < short_range_threshold.
+ */
+export function shortRangeRepulsion(
+  pi: PhysicsParticle,
+  pj: PhysicsParticle,
+  K_short_range: number,
+  threshold: number,
+): number[] {
+  const cos = cosine(pi.position, pj.position);
+  const dist = 1 - cos; // cosine distance [0, 2]
+  if (dist >= threshold) return vecZero(pi.position.length);
+
+  // Strength increases as distance decreases (1/dist^2 with floor)
+  const magnitude = K_short_range / Math.max(0.001, dist * dist);
+  const direction = vecNormalize(vecSub(pi.position, pj.position));
+
+  // If exactly co-located, pick a random direction
+  if (vecNorm(direction) < 1e-10) {
+    const rand = pi.position.map(() => Math.random() - 0.5);
+    if (vecNorm(rand) < 1e-10) rand[0] = 1;
+    return vecScale(vecNormalize(rand), magnitude);
+  }
+
+  return vecScale(direction, magnitude);
+}
+
+/**
  * F4: Drag force vector (consolidation-time).
  * F_drag(i) = -drag * velocity(i) / max(1, effective_half_life(i))
  *
@@ -275,7 +307,11 @@ function computeNetForce(
     const fa = attractionForce(pi, pj, ctx.config.G_memory);
     net = vecAdd(net, fa);
 
-    // Repulsion (conflict pairs only)
+    // Short-range repulsion (all pairs — prevents collapse)
+    const fsr = shortRangeRepulsion(pi, pj, ctx.config.K_short_range, ctx.config.short_range_threshold);
+    net = vecAdd(net, fsr);
+
+    // Conflict repulsion (conflict pairs only — stronger, longer range)
     if (conflicts?.has(pj.memoryId)) {
       const fr = repulsionForce(pi, pj, ctx.config.K_repulsion);
       net = vecAdd(net, fr);
