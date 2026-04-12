@@ -32,6 +32,7 @@ import { execSync } from 'child_process';
 import {
   installJsonHooks,
   uninstallJsonHooks,
+  resolveJsonHookPaths,
   detectInstalledTools,
   defaultSleepLogPath,
   type JsonHookTarget,
@@ -369,14 +370,22 @@ function autoInstallHooks(quiet: boolean): void {
       console.log(`   Auto-installed ${hook} hook in ${hookDef.file}`);
     }
 
-    // For claude-code, also install the SessionEnd hook in settings.json
-    if (hook === 'claude-code') {
-      const result = installClaudeCodeSessionEndHook();
-      if (result.installed) {
-        console.log(`   Auto-installed hippo sleep SessionEnd hook in Claude Code settings.json`);
+    // For JSON-hook tools, also install SessionEnd+SessionStart entries.
+    // Keeps `hippo init` in lockstep with `hippo hook install <target>` and
+    // `hippo setup`, which both cover claude-code + opencode now.
+    if (hook === 'claude-code' || hook === 'opencode') {
+      const result = installJsonHooks(hook);
+      if (result.installedSessionEnd) {
+        console.log(`   Auto-installed hippo sleep SessionEnd hook in ${hook} settings`);
+      }
+      if (result.installedSessionStart) {
+        console.log(`   Auto-installed hippo last-sleep SessionStart hook in ${hook} settings`);
       }
       if (result.migratedFromStop) {
         console.log(`   Migrated legacy Stop hook → SessionEnd (no longer runs every turn)`);
+      }
+      if (result.migratedLegacySessionEnd) {
+        console.log(`   Migrated legacy SessionEnd entry to the new --log-file form`);
       }
     }
   }
@@ -2542,7 +2551,10 @@ function cmdSetup(flags: Record<string, string | boolean | string[]>): void {
 
   for (const tool of jsonTools) {
     if (dryRun) {
-      console.log(`[dry-run] would install hooks in ${tool.configDir}/settings.json`);
+      // Resolve the real settings path so the filename is right for each tool
+      // (claude-code -> settings.json, opencode -> opencode.json).
+      const { settings } = resolveJsonHookPaths(tool.name as JsonHookTarget);
+      console.log(`[dry-run] would install hooks in ${settings}`);
       continue;
     }
     const result = installJsonHooks(tool.name as JsonHookTarget);

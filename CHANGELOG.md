@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.21.1 (2026-04-12)
+
+### Fixed
+- **`hippo init` now installs OpenCode JSON hooks too, not just Claude Code.** The auto-install path was only wiring up `SessionEnd`/`SessionStart` entries for Claude Code, even though `hippo hook install opencode` and `hippo setup` already did so. Now all three entry points behave consistently: any detected JSON-hook tool gets its settings file patched.
+- **`hippo setup --dry-run` shows the real filename per tool.** The dry-run message previously hard-coded `settings.json`, so OpenCode was reported as writing to `opencode/settings.json` instead of `opencode.json`.
+
 ## 0.21.0 (2026-04-12)
 
 ### Added
