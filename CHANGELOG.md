@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.20.0 (2026-04-12)
+
+### Added
+- **`hippo dedup` command.** Scans the store for near-duplicate memories (default: 70% Jaccard overlap), keeps the stronger copy, removes the weaker. Shows clear reasoning: count by type (redundant semantic patterns, duplicate episodic lessons, cross-layer duplicates), similarity percentage, and content preview for each pair. Supports `--dry-run` and `--threshold <n>`.
+- **Auto-dedup on sleep.** `hippo sleep` now runs dedup after consolidation with a categorized summary of what was removed and why.
+- **MEMORY.md import on init and sleep.** `hippo init` and `hippo sleep` scan Claude Code memory files (`~/.claude/projects/<project>/memory/*.md`) and import new entries with deduplication against existing memories.
+
+### Fixed
+- **Windows CRLF in MEMORY.md frontmatter.** Frontmatter regex now handles `\r\n` line endings.
+
 ## 0.19.1 (2026-04-09)
 
 ### Fixed

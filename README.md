@@ -45,10 +45,12 @@ hippo init --scan ~
 
 `--scan` finds every git repo under your home directory, creates a `.hippo/` store in each one, and seeds it with lessons from your commit history. One command, instant memory across all your projects.
 
-After setup, `hippo sleep` runs automatically at session end (via agent hooks) and does three things:
+After setup, `hippo sleep` runs automatically at session end (via agent hooks) and does five things:
 1. **Learns** from today's git commits
-2. **Consolidates** memories (decay, merge, prune)
-3. **Shares** high-value lessons to the global store so they surface in every project
+2. **Imports** new entries from Claude Code MEMORY.md files
+3. **Consolidates** memories (decay, merge, prune)
+4. **Deduplicates** near-identical memories (keeps the stronger copy)
+5. **Shares** high-value lessons to the global store so they surface in every project
 
 ```bash
 # Manual usage
@@ -57,6 +59,11 @@ hippo recall "data pipeline issues" --budget 2000
 ```
 
 ---
+
+### What's new in v0.20
+
+- **`hippo dedup`.** Scans for near-duplicate memories, shows you what's duplicated and why (redundant semantic patterns, same lesson from multiple sources, cross-layer overlap), and removes the weaker copy. Runs automatically during `hippo sleep`.
+- **MEMORY.md import.** `hippo init` and `hippo sleep` now scan Claude Code memory files and import new entries. Your agent memories from Claude Code flow into hippo automatically.
 
 ### What's new in v0.19.1
 
