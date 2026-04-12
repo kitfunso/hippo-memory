@@ -2158,14 +2158,14 @@ When you hit an error or discover a gotcha:
 hippo remember "<what went wrong and why>" --error
 \`\`\`
 
-After significant discussions or decisions, capture context:
-\`\`\`bash
-hippo capture --stdin <<< 'summary of what was decided'
-\`\`\`
-
 After completing work successfully:
 \`\`\`bash
 hippo outcome --good
+\`\`\`
+
+When the user ends the session, capture a brief summary:
+\`\`\`bash
+hippo capture --stdin <<< '<decisions, errors, lessons — 2-5 bullets>'
 \`\`\`
 `.trim(),
   },
@@ -2189,6 +2189,11 @@ hippo remember "<description of what went wrong>" --error
 On task completion:
 \`\`\`bash
 hippo outcome --good
+\`\`\`
+
+When ending a session, capture a brief summary:
+\`\`\`bash
+hippo capture --stdin <<< '<decisions, errors, lessons — 2-5 bullets>'
 \`\`\`
 `.trim(),
   },
@@ -2227,9 +2232,9 @@ On task completion:
 hippo outcome --good
 \`\`\`
 
-After significant coding sessions:
+When ending a session, capture a brief summary:
 \`\`\`bash
-hippo learn --git
+hippo capture --stdin <<< '<decisions, errors, lessons — 2-5 bullets>'
 \`\`\`
 `.trim(),
   },
@@ -2259,6 +2264,11 @@ On task completion:
 \`\`\`bash
 hippo outcome --good
 \`\`\`
+
+When ending a session, capture a brief summary:
+\`\`\`bash
+hippo capture --stdin <<< '<decisions, errors, lessons — 2-5 bullets>'
+\`\`\`
 `.trim(),
   },
   'pi': {
@@ -2283,9 +2293,9 @@ On task completion:
 hippo outcome --good
 \`\`\`
 
-After significant coding sessions:
+When ending a session, capture a brief summary:
 \`\`\`bash
-hippo learn --git
+hippo capture --stdin <<< '<decisions, errors, lessons — 2-5 bullets>'
 \`\`\`
 
 For full integration, copy the hippo-memory Pi extension to \`~/.pi/agent/extensions/hippo-memory/\`.
