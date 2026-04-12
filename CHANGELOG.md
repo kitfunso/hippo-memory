@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.20.2 (2026-04-12)
+
+### Fixed
+- **Claude Code hook now uses `SessionEnd` instead of `Stop`.** Earlier versions installed a `Stop` hook, which fires at the end of every assistant turn — so `hippo sleep` (consolidation + dedup + auto-share) ran on every reply. That was expensive, noisy, and could make the UI feel stuck behind the hook timeout. `SessionEnd` fires once when the session actually terminates, which is the intended behaviour.
+- **Automatic migration.** Re-running `hippo hook install claude-code` (or `hippo init` in a project with Claude Code) detects any legacy `Stop` entry that runs `hippo sleep`, removes it, and installs the new `SessionEnd` entry. `hippo hook uninstall claude-code` now cleans up both old and new entries.
+- **Never create a new agent-instructions file.** `hippo hook install <target>` and `hippo init` used to create a fresh `CLAUDE.md` / `AGENTS.md` / etc. when none existed in the current directory — polluting the working tree of unrelated projects. Hippo now only patches agent-instruction files that already exist. For `claude-code`, the `SessionEnd` hook in `~/.claude/settings.json` is still installed unconditionally (that's the user-level config, not the project).
+
 ## 0.20.1 (2026-04-12)
 
 ### Changed

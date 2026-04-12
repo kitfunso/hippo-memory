@@ -349,26 +349,27 @@ function autoInstallHooks(quiet: boolean): void {
       if (content.includes(HOOK_MARKERS.start)) continue;
     }
 
-    // Install the hook
-    const block = `${HOOK_MARKERS.start}\n${hookDef.content}\n${HOOK_MARKERS.end}`;
-
+    // Only patch the agent-instructions file if it already exists.
+    // Never create a new CLAUDE.md / AGENTS.md / etc. just because a sibling
+    // marker file (.claude/settings.json, .codex, etc.) was detected — that
+    // pollutes dirs the user didn't intend to configure.
     if (fs.existsSync(targetPath)) {
+      const block = `${HOOK_MARKERS.start}\n${hookDef.content}\n${HOOK_MARKERS.end}`;
       const existing = fs.readFileSync(targetPath, 'utf8');
       const sep = existing.endsWith('\n') ? '\n' : '\n\n';
       fs.writeFileSync(targetPath, existing + sep + block + '\n', 'utf8');
-    } else {
-      const dir = path.dirname(targetPath);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(targetPath, block + '\n', 'utf8');
+      installed.add(targetPath);
+      console.log(`   Auto-installed ${hook} hook in ${hookDef.file}`);
     }
 
-    installed.add(targetPath);
-    console.log(`   Auto-installed ${hook} hook in ${hookDef.file}`);
-
-    // For claude-code, also install the Stop hook in settings.json
+    // For claude-code, also install the SessionEnd hook in settings.json
     if (hook === 'claude-code') {
-      if (installClaudeCodeStopHook()) {
-        console.log(`   Auto-installed hippo sleep Stop hook in Claude Code settings.json`);
+      const result = installClaudeCodeSessionEndHook();
+      if (result.installed) {
+        console.log(`   Auto-installed hippo sleep SessionEnd hook in Claude Code settings.json`);
+      }
+      if (result.migratedFromStop) {
+        console.log(`   Migrated legacy Stop hook → SessionEnd (no longer runs every turn)`);
       }
     }
   }
@@ -2329,40 +2330,46 @@ function cmdHook(
 
     const hook = HOOKS[target];
     const filepath = path.resolve(process.cwd(), hook.file);
-    const dir = path.dirname(filepath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
     const block = `${HOOK_MARKERS.start}\n${hook.content}\n${HOOK_MARKERS.end}`;
+    let agentFileTouched = false;
 
     if (fs.existsSync(filepath)) {
       const existing = fs.readFileSync(filepath, 'utf8');
 
-      // Check if already installed
       if (existing.includes(HOOK_MARKERS.start)) {
-        // Replace existing block
         const re = new RegExp(
           `${escapeRegex(HOOK_MARKERS.start)}[\\s\\S]*?${escapeRegex(HOOK_MARKERS.end)}`,
-          'g'
+          'g',
         );
         const updated = existing.replace(re, block);
         fs.writeFileSync(filepath, updated, 'utf8');
         console.log(`Updated Hippo hook in ${hook.file}`);
       } else {
-        // Append
         const sep = existing.endsWith('\n') ? '\n' : '\n\n';
         fs.writeFileSync(filepath, existing + sep + block + '\n', 'utf8');
         console.log(`Installed Hippo hook in ${hook.file} (appended)`);
       }
+      agentFileTouched = true;
     } else {
-      // Create new file
-      fs.writeFileSync(filepath, block + '\n', 'utf8');
-      console.log(`Created ${hook.file} with Hippo hook`);
+      // Do not create a new agent-instructions file (CLAUDE.md, AGENTS.md, etc.)
+      // in directories that don't already have one — avoids polluting cwd with
+      // files the user didn't ask for. The settings.json hook below is still
+      // installed for claude-code, so the consolidation hook still runs.
+      console.log(
+        `${hook.file} not found in ${process.cwd()} — skipping agent-instructions patch.`,
+      );
+      console.log(`   Create ${hook.file} and re-run \`hippo hook install ${target}\` if you want the agent prompt.`);
     }
 
-    // For claude-code, also install the Stop hook in settings.json
+    // For claude-code, also install the SessionEnd hook in settings.json
     if (target === 'claude-code') {
-      if (installClaudeCodeStopHook()) {
-        console.log(`Installed hippo sleep Stop hook in Claude Code settings.json`);
+      const result = installClaudeCodeSessionEndHook();
+      if (result.installed) {
+        console.log(`Installed hippo sleep SessionEnd hook in Claude Code settings.json`);
+      }
+      if (result.migratedFromStop) {
+        console.log(`Migrated legacy Stop hook → SessionEnd (was running every turn; now fires once on session exit)`);
       }
     }
 
@@ -2397,10 +2404,10 @@ function cmdHook(
     fs.writeFileSync(filepath, cleaned + '\n', 'utf8');
     console.log(`Removed Hippo hook from ${hook.file}`);
 
-    // For claude-code, also remove the Stop hook from settings.json
+    // For claude-code, also remove the SessionEnd (and any legacy Stop) hook
     if (target === 'claude-code') {
-      if (uninstallClaudeCodeStopHook()) {
-        console.log(`Removed hippo sleep Stop hook from Claude Code settings.json`);
+      if (uninstallClaudeCodeSessionEndHook()) {
+        console.log(`Removed hippo sleep hook from Claude Code settings.json`);
       }
     }
 
@@ -2416,34 +2423,34 @@ function escapeRegex(s: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Claude Code settings.json Stop hook (hippo sleep on session end)
+// Claude Code settings.json SessionEnd hook (hippo sleep on session exit)
+//
+// Note: we use SessionEnd, not Stop. Stop fires at the end of every assistant
+// turn, which causes hippo sleep to run on every reply — expensive and noisy.
+// SessionEnd fires once when the session terminates, which is what we want.
 // ---------------------------------------------------------------------------
 
-const HIPPO_STOP_HOOK_MARKER = 'hippo sleep';
+const HIPPO_HOOK_MARKER = 'hippo sleep';
 
 /**
  * Resolve the Claude Code user-level settings.json path (~/.claude/settings.json).
- * Always targets the global config so the Stop hook runs for all sessions.
+ * Always targets the global config so the hook runs for all sessions.
  */
 function resolveClaudeSettingsPath(): string {
   const home = process.env.HOME || process.env.USERPROFILE || os.homedir();
   return path.join(home, '.claude', 'settings.json');
 }
 
-/**
- * Check if hippo sleep Stop hook is already installed in Claude Code settings.
- */
-function hasClaudeCodeStopHook(settings: Record<string, unknown>): boolean {
-  const hooks = settings.hooks as Record<string, unknown[]> | undefined;
-  if (!hooks?.Stop) return false;
-  return JSON.stringify(hooks.Stop).includes(HIPPO_STOP_HOOK_MARKER);
+function hasHippoMarkerIn(hookArray: unknown): boolean {
+  if (!Array.isArray(hookArray)) return false;
+  return JSON.stringify(hookArray).includes(HIPPO_HOOK_MARKER);
 }
 
 /**
- * Install a Claude Code Stop hook that runs `hippo sleep` at session end.
- * Merges into existing settings.json without clobbering other hooks.
+ * Install a Claude Code SessionEnd hook that runs `hippo sleep` on session exit.
+ * Also migrates any legacy Stop-hook entry that earlier versions installed.
  */
-function installClaudeCodeStopHook(): boolean {
+function installClaudeCodeSessionEndHook(): { installed: boolean; migratedFromStop: boolean } {
   const settingsPath = resolveClaudeSettingsPath();
   const dir = path.dirname(settingsPath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -2453,37 +2460,50 @@ function installClaudeCodeStopHook(): boolean {
     try {
       settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
     } catch {
-      console.error(`   Warning: could not parse ${settingsPath}, skipping Stop hook install`);
-      return false;
+      console.error(`   Warning: could not parse ${settingsPath}, skipping SessionEnd hook install`);
+      return { installed: false, migratedFromStop: false };
     }
   }
 
-  if (hasClaudeCodeStopHook(settings)) return false;
-
-  // Ensure hooks.Stop array exists
   if (!settings.hooks) settings.hooks = {};
   const hooks = settings.hooks as Record<string, unknown[]>;
-  if (!Array.isArray(hooks.Stop)) hooks.Stop = [];
 
-  // Append hippo sleep hook entry (silent: runs every turn, must not produce errors)
-  hooks.Stop.push({
-    hooks: [
-      {
-        type: 'command',
-        command: 'hippo sleep 2>/dev/null || true',
-        timeout: 30,
-      },
-    ],
-  });
+  // Migration: strip any legacy Stop-hook entry that runs `hippo sleep`
+  let migratedFromStop = false;
+  if (Array.isArray(hooks.Stop) && hasHippoMarkerIn(hooks.Stop)) {
+    hooks.Stop = hooks.Stop.filter((entry) => !JSON.stringify(entry).includes(HIPPO_HOOK_MARKER));
+    if (hooks.Stop.length === 0) delete hooks.Stop;
+    migratedFromStop = true;
+  }
 
-  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
-  return true;
+  const alreadyInstalled = hasHippoMarkerIn(hooks.SessionEnd);
+  let installed = false;
+
+  if (!alreadyInstalled) {
+    if (!Array.isArray(hooks.SessionEnd)) hooks.SessionEnd = [];
+    hooks.SessionEnd.push({
+      hooks: [
+        {
+          type: 'command',
+          command: 'hippo sleep 2>/dev/null || true',
+          timeout: 30,
+        },
+      ],
+    });
+    installed = true;
+  }
+
+  if (installed || migratedFromStop) {
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
+  }
+  return { installed, migratedFromStop };
 }
 
 /**
- * Remove the hippo sleep Stop hook from Claude Code settings.json.
+ * Remove any `hippo sleep` hook from Claude Code settings.json — both the
+ * current SessionEnd entry and any legacy Stop entry from older versions.
  */
-function uninstallClaudeCodeStopHook(): boolean {
+function uninstallClaudeCodeSessionEndHook(): boolean {
   const settingsPath = resolveClaudeSettingsPath();
   if (!fs.existsSync(settingsPath)) return false;
 
@@ -2494,18 +2514,23 @@ function uninstallClaudeCodeStopHook(): boolean {
     return false;
   }
 
-  if (!hasClaudeCodeStopHook(settings)) return false;
+  const hooks = settings.hooks as Record<string, unknown[]> | undefined;
+  if (!hooks) return false;
 
-  const hooks = settings.hooks as Record<string, unknown[]>;
-  hooks.Stop = hooks.Stop.filter(
-    (entry) => !JSON.stringify(entry).includes(HIPPO_STOP_HOOK_MARKER)
-  );
+  let changed = false;
+  for (const key of ['SessionEnd', 'Stop'] as const) {
+    if (Array.isArray(hooks[key]) && hasHippoMarkerIn(hooks[key])) {
+      hooks[key] = hooks[key].filter(
+        (entry) => !JSON.stringify(entry).includes(HIPPO_HOOK_MARKER),
+      );
+      if (hooks[key].length === 0) delete hooks[key];
+      changed = true;
+    }
+  }
 
-  // Clean up empty Stop array
-  if (hooks.Stop.length === 0) delete hooks.Stop;
-  // Clean up empty hooks object
+  if (!changed) return false;
+
   if (Object.keys(hooks).length === 0) delete settings.hooks;
-
   fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
   return true;
 }
@@ -2726,7 +2751,7 @@ Commands:
   hook <sub> [target]      Manage framework integrations
     hook list              Show available hooks
     hook install <target>  Install hook (claude-code|codex|cursor|openclaw|opencode|pi)
-                           claude-code also installs Stop hook (hippo sleep on exit)
+                           claude-code also installs SessionEnd hook (hippo sleep on exit)
     hook uninstall <target> Remove hook
   decide "<decision>"      Record an architectural decision (90-day half-life)
     --context "<why>"      Why this decision was made

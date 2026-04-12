@@ -60,6 +60,11 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v0.20.2
+
+- **Claude Code hook uses `SessionEnd`, not `Stop`.** Earlier versions ran `hippo sleep` after every assistant turn; now it runs once at session exit. Re-running `hippo hook install claude-code` migrates existing `Stop` entries automatically.
+- **No more accidental `CLAUDE.md` files.** `hippo hook install` and `hippo init` only patch agent-instruction files that already exist — they no longer create fresh ones in unrelated directories.
+
 ### What's new in v0.20
 
 - **`hippo dedup`.** Scans for near-duplicate memories, shows you what's duplicated and why (redundant semantic patterns, same lesson from multiple sources, cross-layer overlap), and removes the weaker copy. Runs automatically during `hippo sleep`.

@@ -57,7 +57,9 @@ This tightens the feedback loop. Good memories strengthen; irrelevant ones decay
 
 ### Periodic maintenance
 
-Consolidation runs automatically when Claude Code exits (via a Stop hook in `~/.claude/settings.json`). This is installed by `hippo init` or `hippo hook install claude-code`.
+Consolidation runs automatically when Claude Code exits (via a `SessionEnd` hook in `~/.claude/settings.json`). This is installed by `hippo init` or `hippo hook install claude-code`.
+
+> Earlier versions (< 0.20.2) used a `Stop` hook, which fires after every assistant turn — that caused `hippo sleep` to run on every reply. Re-running `hippo hook install claude-code` migrates the old entry automatically.
 
 If you prefer manual control:
 
@@ -87,7 +89,7 @@ hippo init
 
 Hippo auto-detects Claude Code and:
 1. Patches `CLAUDE.md` with the hook block above
-2. Adds a Stop hook to `~/.claude/settings.json` so `hippo sleep` runs on session exit
+2. Adds a `SessionEnd` hook to `~/.claude/settings.json` so `hippo sleep` runs on session exit
 
 No copy-paste needed, no cron required.
 
