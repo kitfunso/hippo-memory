@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.22.0 (2026-04-13)
+
+### Added
+- **`hippo capture --last-session` is now fully implemented.** Previously a placeholder, it now reads the JSONL transcript of the last agent session and extracts actionable memories (decisions, rules, errors, preferences). Resolution priority: explicit `--transcript <path>` flag, then stdin JSON payload (`{transcript_path, session_id, cwd}` — the shape Claude Code / OpenCode SessionEnd hooks pass), then auto-discovery of the newest `.jsonl` under `~/.claude/projects/`. Skips `thinking` blocks, `tool_use`, and `tool_result` noise; keeps the tail (last 20 user messages, last 10 assistant replies) since session-end is about what was decided near the end.
+- **SessionEnd `hippo capture` hook auto-installed.** `hippo init`, `hippo hook install <target>`, and `hippo setup` now install a second SessionEnd entry: `hippo capture --last-session` (timeout 15s). Runs once per session, not per turn — addresses the common request to "capture a session summary at /exit without burning tokens on every reply." Existing installs pick up the new entry automatically on re-run (idempotent).
+- **Claude Code plugin (`extensions/claude-code-plugin`) moved `hippo sleep` + `hippo outcome --good` from `Stop` to `SessionEnd`** and added the `hippo capture --last-session` entry alongside. Plugin behavior now matches the JSON-hook install path.
+
+### Internal
+- New `summariseTranscript()` and `resolveLastSessionTranscript()` exports in `src/capture.ts`, covered by `tests/capture-last-session.test.ts` (10 cases: tail-truncation, block filtering, malformed JSONL, stdin payload resolution, auto-discovery, graceful fallbacks).
+- `InstallResult` gained `installedSessionCapture: boolean`. Uninstall markers now include `hippo capture --last-session` so `hippo hook uninstall <target>` cleans up every entry.
+
 ## 0.21.1 (2026-04-12)
 
 ### Fixed

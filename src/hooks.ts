@@ -2,9 +2,13 @@
  * JSON-hook install/uninstall for AI coding tools.
  *
  * Currently supports Claude Code and OpenCode, which share the same
- * SessionStart/SessionEnd schema. Hippo installs two entries:
+ * SessionStart/SessionEnd schema. Hippo installs three entries:
  *   - SessionEnd: `hippo sleep --log-file <path>` - captures consolidation
  *     output to a log file because the TUI is tearing down at that point.
+ *   - SessionEnd: `hippo capture --last-session` - extracts actionable
+ *     memories from the session transcript (one capture per session, not per
+ *     turn). The SessionEnd payload stdin carries `transcript_path`, which
+ *     `hippo capture` resolves automatically.
  *   - SessionStart: `hippo last-sleep --path <path>` - prints that log on
  *     the next startup and clears it, so the user actually sees it.
  *
@@ -29,6 +33,7 @@ export interface InstallResult {
   settingsPath: string;
   installedSessionEnd: boolean;
   installedSessionStart: boolean;
+  installedSessionCapture: boolean;
   migratedFromStop: boolean;
   migratedLegacySessionEnd: boolean;
 }
@@ -43,6 +48,7 @@ export interface ToolDetection {
 
 const HIPPO_SLEEP_MARKER = 'hippo sleep';
 const HIPPO_LAST_SLEEP_MARKER = 'hippo last-sleep';
+const HIPPO_CAPTURE_MARKER = 'hippo capture --last-session';
 const CURRENT_SESSIONEND_MARKER = 'hippo sleep --log-file';
 
 function homeDir(): string {
@@ -100,6 +106,7 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
         settingsPath,
         installedSessionEnd: false,
         installedSessionStart: false,
+        installedSessionCapture: false,
         migratedFromStop: false,
         migratedLegacySessionEnd: false,
       };
@@ -159,7 +166,28 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
     installedSessionStart = true;
   }
 
-  if (installedSessionEnd || installedSessionStart || migratedFromStop || migratedLegacySessionEnd) {
+  let installedSessionCapture = false;
+  if (!hookArrayContains(hooks.SessionEnd, HIPPO_CAPTURE_MARKER)) {
+    if (!Array.isArray(hooks.SessionEnd)) hooks.SessionEnd = [];
+    hooks.SessionEnd.push({
+      hooks: [
+        {
+          type: 'command',
+          command: 'hippo capture --last-session',
+          timeout: 15,
+        },
+      ],
+    });
+    installedSessionCapture = true;
+  }
+
+  if (
+    installedSessionEnd ||
+    installedSessionStart ||
+    installedSessionCapture ||
+    migratedFromStop ||
+    migratedLegacySessionEnd
+  ) {
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
   }
 
@@ -168,6 +196,7 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
     settingsPath,
     installedSessionEnd,
     installedSessionStart,
+    installedSessionCapture,
     migratedFromStop,
     migratedLegacySessionEnd,
   };
@@ -189,7 +218,7 @@ export function uninstallJsonHooks(target: JsonHookTarget): boolean {
 
   let changed = false;
   const markersByKey: Record<string, string[]> = {
-    SessionEnd: [HIPPO_SLEEP_MARKER],
+    SessionEnd: [HIPPO_SLEEP_MARKER, HIPPO_CAPTURE_MARKER],
     SessionStart: [HIPPO_LAST_SLEEP_MARKER],
     Stop: [HIPPO_SLEEP_MARKER],
   };

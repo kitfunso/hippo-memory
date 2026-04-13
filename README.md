@@ -60,6 +60,17 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v0.22.0
+
+- **`hippo capture --last-session` works.** The placeholder from earlier releases is now implemented. It reads the JSONL transcript of the most recent agent session and extracts actionable memories (decisions, rules, errors, preferences). Resolves the transcript from `--transcript <path>`, stdin JSON payload (the shape SessionEnd hooks pass), or auto-discovery under `~/.claude/projects/`.
+- **SessionEnd auto-runs `hippo capture`.** `hippo init` / `hippo setup` now installs a second SessionEnd entry alongside `hippo sleep` — one summary per `/exit`, not per turn. Existing installs pick it up on re-run (idempotent).
+- **Claude Code plugin moved off `Stop`.** The plugin's `hooks.json` now fires sleep + capture + outcome on `SessionEnd`, matching the JSON-hook install path.
+
+```bash
+npm install -g hippo-memory
+hippo setup              # picks up the new SessionEnd capture hook
+```
+
 ### What's new in v0.21.0
 
 - **`hippo setup` — one command, every tool.** Detects Claude Code, OpenCode, OpenClaw, Codex, Cursor, and Pi on your machine and installs all available SessionEnd + SessionStart hooks in one pass. Idempotent — safe to re-run.

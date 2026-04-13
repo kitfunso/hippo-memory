@@ -381,6 +381,9 @@ function autoInstallHooks(quiet: boolean): void {
       if (result.installedSessionStart) {
         console.log(`   Auto-installed hippo last-sleep SessionStart hook in ${hook} settings`);
       }
+      if (result.installedSessionCapture) {
+        console.log(`   Auto-installed hippo capture SessionEnd hook in ${hook} settings`);
+      }
       if (result.migratedFromStop) {
         console.log(`   Migrated legacy Stop hook → SessionEnd (no longer runs every turn)`);
       }
@@ -2471,6 +2474,9 @@ function cmdHook(
       if (result.installedSessionStart) {
         console.log(`Installed hippo last-sleep SessionStart hook in ${result.target} settings`);
       }
+      if (result.installedSessionCapture) {
+        console.log(`Installed hippo capture SessionEnd hook in ${result.target} settings`);
+      }
       if (result.migratedFromStop) {
         console.log(`Migrated legacy Stop hook → SessionEnd (was running every turn; now fires once on session exit)`);
       }
@@ -2559,7 +2565,8 @@ function cmdSetup(flags: Record<string, string | boolean | string[]>): void {
     }
     const result = installJsonHooks(tool.name as JsonHookTarget);
     const bits: string[] = [];
-    if (result.installedSessionEnd) bits.push('SessionEnd');
+    if (result.installedSessionEnd) bits.push('SessionEnd (sleep)');
+    if (result.installedSessionCapture) bits.push('SessionEnd (capture)');
     if (result.installedSessionStart) bits.push('SessionStart');
     if (result.migratedFromStop) bits.push('migrated legacy Stop');
     if (result.migratedLegacySessionEnd) bits.push('migrated legacy SessionEnd');
@@ -2601,7 +2608,10 @@ function cmdSetup(flags: Record<string, string | boolean | string[]>): void {
 function installClaudeCodeSessionEndHook(): { installed: boolean; migratedFromStop: boolean } {
   const result = installJsonHooks('claude-code');
   return {
-    installed: result.installedSessionEnd || result.installedSessionStart,
+    installed:
+      result.installedSessionEnd ||
+      result.installedSessionStart ||
+      result.installedSessionCapture,
     migratedFromStop: result.migratedFromStop,
   };
 }
@@ -2820,7 +2830,8 @@ Commands:
   capture                  Extract memories from conversation text
     --stdin                Read from piped input
     --file <path>          Read from a file
-    --last-session         (placeholder) Read from agent session logs
+    --last-session         Read from the most recent agent session transcript
+    --transcript <path>    Explicit transcript path (implies --last-session)
     --dry-run              Preview without writing
     --global               Write to global store ($HIPPO_HOME or ~/.hippo/)
   setup                    One-shot: detect installed AI tools and install all
@@ -3126,19 +3137,26 @@ async function main(): Promise<void> {
     case 'capture': {
       let captureSource: CaptureOptions['source'] | null = null;
       let captureFile: string | undefined;
+      let transcriptPath: string | undefined;
 
       if (flags['stdin']) { captureSource = 'stdin'; }
       else if (flags['file']) { captureSource = 'file'; captureFile = String(flags['file']); }
       else if (flags['last-session']) { captureSource = 'last-session'; }
 
+      if (flags['transcript']) {
+        transcriptPath = String(flags['transcript']);
+        if (!captureSource) captureSource = 'last-session';
+      }
+
       if (!captureSource) {
-        console.error('Usage: hippo capture --stdin|--file <path>|--last-session [--dry-run] [--global]');
+        console.error('Usage: hippo capture --stdin|--file <path>|--last-session [--transcript <path>] [--dry-run] [--global]');
         process.exit(1);
       }
 
       cmdCapture(hippoRoot, {
         source: captureSource,
         filePath: captureFile,
+        transcriptPath,
         dryRun: Boolean(flags['dry-run']),
         global: Boolean(flags['global']),
       });

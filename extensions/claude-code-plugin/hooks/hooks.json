@@ -21,17 +21,22 @@
         ]
       }
     ],
-    "Stop": [
+    "SessionEnd": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "hippo outcome --good 2>/dev/null || true"
+            "command": "echo '[hippo] consolidating memory...' && (hippo sleep && echo '[hippo] sleep complete' || echo '[hippo] sleep failed')",
+            "timeout": 30
           },
           {
             "type": "command",
-            "command": "echo '[hippo] consolidating memory...' && (hippo sleep && echo '[hippo] sleep complete' || echo '[hippo] sleep failed')",
-            "timeout": 30
+            "command": "hippo capture --last-session 2>/dev/null || true",
+            "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "hippo outcome --good 2>/dev/null || true"
           }
         ]
       }

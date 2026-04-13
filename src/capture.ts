@@ -10,6 +10,7 @@
  */
 
 import * as fs from 'fs';
+import * as path from 'path';
 import { createMemory, Layer, MemoryEntry } from './memory.js';
 import {
   isInitialized,
@@ -219,8 +220,135 @@ function isDuplicate(content: string, existing: MemoryEntry[]): boolean {
 export interface CaptureOptions {
   source: 'stdin' | 'file' | 'last-session';
   filePath?: string;
+  /**
+   * Explicit transcript path for `--last-session`. When not set, we fall back
+   * to reading a JSON payload from stdin (the shape Claude Code / OpenCode
+   * SessionEnd hooks pass) and then to auto-discovery under
+   * `~/.claude/projects/`.
+   */
+  transcriptPath?: string;
   dryRun: boolean;
   global: boolean;
+}
+
+/**
+ * Build a compact text summary from a Claude Code / OpenCode JSONL transcript.
+ * Keeps plain user messages and the final chunk of assistant text, drops
+ * thinking blocks, tool_use, and tool_result noise. Output is fed to the
+ * existing `extractFromText` pipeline.
+ *
+ * Exported for tests.
+ */
+export function summariseTranscript(jsonl: string): string {
+  const lines = jsonl.split('\n').filter((l) => l.trim());
+  const userMessages: string[] = [];
+  const assistantTexts: string[] = [];
+
+  for (const line of lines) {
+    let entry: unknown;
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (!entry || typeof entry !== 'object') continue;
+    const e = entry as Record<string, unknown>;
+    if (e.type !== 'user' && e.type !== 'assistant') continue;
+
+    const message = e.message as Record<string, unknown> | undefined;
+    if (!message) continue;
+    const content = message.content;
+
+    if (e.type === 'user') {
+      // Plain text user messages only (skip tool_result arrays)
+      if (typeof content === 'string' && content.trim()) {
+        userMessages.push(content.trim());
+      }
+    } else if (e.type === 'assistant' && Array.isArray(content)) {
+      // Keep assistant text blocks; drop thinking + tool_use
+      const chunks: string[] = [];
+      for (const block of content) {
+        if (block && typeof block === 'object') {
+          const b = block as Record<string, unknown>;
+          if (b.type === 'text' && typeof b.text === 'string' && b.text.trim()) {
+            chunks.push(b.text.trim());
+          }
+        }
+      }
+      if (chunks.length > 0) {
+        assistantTexts.push(chunks.join('\n'));
+      }
+    }
+  }
+
+  if (userMessages.length === 0 && assistantTexts.length === 0) return '';
+
+  // Keep the tail: last ~20 user turns and last ~10 assistant replies.
+  // Session-end is about what was decided near the end, not at the start.
+  const tailUsers = userMessages.slice(-20);
+  const tailAssistants = assistantTexts.slice(-10);
+
+  return [
+    '# Session Summary',
+    '',
+    '## User Messages',
+    ...tailUsers.map((m) => `- ${m.replace(/\s+/g, ' ').slice(0, 500)}`),
+    '',
+    '## Assistant Responses',
+    ...tailAssistants.map((t) => t.slice(0, 2000)),
+  ].join('\n');
+}
+
+/**
+ * Resolve a transcript path for `--last-session`.
+ *
+ * Priority:
+ *   1. Explicit `transcriptPath` option (from `--transcript <path>`)
+ *   2. Stdin JSON payload (Claude Code / OpenCode SessionEnd hook shape)
+ *   3. Most recent `.jsonl` under `~/.claude/projects/<any>/`
+ *
+ * Returns null when nothing resolves. Never throws.
+ */
+export function resolveLastSessionTranscript(
+  explicit: string | undefined,
+  stdinText: string | undefined
+): string | null {
+  if (explicit && fs.existsSync(explicit)) return explicit;
+
+  // Try parsing stdin as the SessionEnd JSON payload
+  if (stdinText && stdinText.trim().startsWith('{')) {
+    try {
+      const payload = JSON.parse(stdinText) as Record<string, unknown>;
+      const tp = payload.transcript_path;
+      if (typeof tp === 'string' && fs.existsSync(tp)) return tp;
+    } catch {
+      // not JSON - fall through
+    }
+  }
+
+  // Auto-discover the most recent transcript
+  const home = process.env.HOME || process.env.USERPROFILE;
+  if (!home) return null;
+  const projectsDir = path.join(home, '.claude', 'projects');
+  if (!fs.existsSync(projectsDir)) return null;
+
+  let newest: { path: string; mtime: number } | null = null;
+  try {
+    for (const entry of fs.readdirSync(projectsDir)) {
+      const subDir = path.join(projectsDir, entry);
+      const stat = fs.statSync(subDir);
+      if (!stat.isDirectory()) continue;
+      for (const file of fs.readdirSync(subDir)) {
+        if (!file.endsWith('.jsonl')) continue;
+        const full = path.join(subDir, file);
+        const m = fs.statSync(full).mtimeMs;
+        if (!newest || m > newest.mtime) newest = { path: full, mtime: m };
+      }
+    }
+  } catch {
+    return null;
+  }
+  return newest?.path ?? null;
 }
 
 export function cmdCapture(
@@ -265,9 +393,32 @@ export function cmdCapture(
       break;
     }
     case 'last-session': {
-      console.log('--last-session is a placeholder. Not yet implemented.');
-      console.log('Use --stdin or --file instead.');
-      return;
+      // Try to read stdin non-blockingly: SessionEnd hooks pass a JSON payload,
+      // but manual invocations have no piped stdin. fs.readFileSync(0) will
+      // block waiting for input when run interactively, so only read from
+      // stdin when it is actually piped.
+      let stdinText: string | undefined;
+      if (!process.stdin.isTTY) {
+        try {
+          stdinText = fs.readFileSync(0, 'utf8');
+        } catch {
+          stdinText = undefined;
+        }
+      }
+
+      const resolved = resolveLastSessionTranscript(options.transcriptPath, stdinText);
+      if (!resolved) {
+        console.log('No transcript found. Pass --transcript <path> or run from a SessionEnd hook.');
+        return;
+      }
+
+      const jsonl = fs.readFileSync(resolved, 'utf8');
+      text = summariseTranscript(jsonl);
+      if (!text) {
+        console.log('Transcript had no user/assistant messages to summarise.');
+        return;
+      }
+      break;
     }
   }
 
