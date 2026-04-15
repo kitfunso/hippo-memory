@@ -60,6 +60,12 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v0.24.1
+
+- **Conflict detection stops over-weighting shared tags.** `feedback` / `policy` tags no longer make unrelated memories look contradictory on the next `hippo sleep`.
+- **Reworded contradictions still get caught.** Hippo keeps pairs like `API auth must be enabled in prod` / `Disable API auth in prod` while dropping the false positives that triggered the review.
+- **Broader regression coverage.** This release adds tests for the exact false-positive examples from the migrated store plus extra polarity cases like `must` vs `should not` and `available` vs `missing`.
+
 ### What's new in v0.24.0
 
 - **Codex session-end memory is now automatic on install/update.** Hippo no longer tells Codex users to fix `PATH` by hand. The published package now attempts to wrap the detected `codex` launcher during install or upgrade, and it can self-heal on later Hippo commands if Codex shows up afterward.
@@ -478,7 +484,7 @@ Memories unretrieved for 30+ days are automatically marked `stale` during the ne
 
 ### Conflict tracking
 
-Hippo now detects obvious contradictions between overlapping memories and keeps them visible instead of silently letting both masquerade as truth.
+Hippo detects obvious contradictions between overlapping memories and keeps them visible instead of silently letting both masquerade as truth. Shared tags alone do not count; the statements themselves need to overlap in content.
 
 ```bash
 hippo sleep       # refreshes open conflicts

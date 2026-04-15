@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.24.1 (2026-04-15)
+
+### Fixed
+- **Conflict detection now gates on content overlap, not shared tags.** `hippo sleep` no longer flags unrelated `feedback` / `policy` memories as contradictions just because they share coarse tags and opposite polarity words.
+- **Reworded contradictions still surface.** Opposites like `API auth must be enabled in prod` / `Disable API auth in prod` stay detectable instead of being filtered out by a blunt overlap threshold.
+- **`must` and `always` now count as positive polarity.** Contradictions like `Production deploys must require approval` / `Production deploys should not require approval` are caught consistently.
+
+### Internal
+- Added regression tests for the exact false-positive pairs from the migrated-store report plus a broader contradiction matrix (`must` vs `should not`, `available` vs `missing`, `works` vs `broken`). Full suite passes: 491 tests.
+
 ## 0.24.0 (2026-04-15)
 
 ### Added
