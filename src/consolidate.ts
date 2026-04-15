@@ -28,6 +28,13 @@ const DECAY_THRESHOLD = 0.05;
 const MERGE_OVERLAP_THRESHOLD = 0.35;  // Jaccard similarity for "related"
 const MERGE_MIN_CLUSTER = 2;            // minimum cluster size to merge
 
+// Minimum content/tag overlap required before a pair of memories is considered
+// as a potential contradiction. Must be high enough that the polarity keyword
+// heuristics (enabled/disabled, always/never, inferred polarity) only fire on
+// pairs that are clearly about the same statement — otherwise curated policy
+// stores that share domain vocabulary get hundreds of false positives at scale.
+const CONFLICT_OVERLAP_THRESHOLD = 0.85;
+
 export interface ConsolidationResult {
   decayed: number;
   removed: number;
@@ -301,7 +308,7 @@ function describeConflict(a: MemoryEntry, b: MemoryEntry): { reason: string; sco
   const tagOverlap = jaccard(a.tags, b.tags);
   const overlapScore = Math.max(strippedOverlap, rawOverlap, tagOverlap * 0.75);
 
-  if (overlapScore < 0.55) return null;
+  if (overlapScore < CONFLICT_OVERLAP_THRESHOLD) return null;
 
   const polarityA = inferConflictPolarity(a.content);
   const polarityB = inferConflictPolarity(b.content);
