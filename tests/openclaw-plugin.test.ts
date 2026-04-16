@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const execFileSyncMock = vi.fn();
+const spawnUnrefMock = vi.fn();
+const spawnMock = vi.fn(() => ({
+  unref: spawnUnrefMock,
+}));
 const existsSyncMock = vi.fn((target: string) => target.includes('.hippo'));
 
 vi.mock('child_process', () => ({
   execFileSync: execFileSyncMock,
+  spawn: spawnMock,
 }));
 
 vi.mock('fs', async () => {
@@ -104,6 +109,9 @@ describe('openclaw hippo plugin', () => {
   beforeEach(() => {
     vi.resetModules();
     execFileSyncMock.mockReset();
+    spawnMock.mockReset();
+    spawnUnrefMock.mockReset();
+    spawnMock.mockReturnValue({ unref: spawnUnrefMock });
     execFileSyncMock.mockReturnValue('Memory context from hippo');
     existsSyncMock.mockClear();
     existsSyncMock.mockImplementation((target: string) => target.includes('.hippo'));
@@ -194,13 +202,12 @@ describe('openclaw hippo plugin', () => {
     expect(execFileSyncMock.mock.calls[0]?.[2]).toMatchObject({ cwd: 'C:/Users/skf_s/clawd' });
   });
 
-  it('autoSleep consolidates only after sessions with at least 10 new memories', async () => {
+  it('autoSleep detaches consolidation only after sessions with at least 10 new memories', async () => {
     const { default: register } = await import('../extensions/openclaw-plugin/index.ts');
     const harness = makeApi(hippoConfig({ autoSleep: true }));
 
     execFileSyncMock.mockImplementation((_cmd: string, args: string[]) => {
       if (args?.[0] === 'remember') return 'Remembered [mem-123]';
-      if (args?.[0] === 'sleep') return 'Sleep complete';
       return 'Memory context from hippo';
     });
 
@@ -227,7 +234,7 @@ describe('openclaw hippo plugin', () => {
       { agentId: 'main', sessionId: 'session-light' },
     );
 
-    expect(execFileSyncMock.mock.calls.some((call) => call[1]?.[0] === 'sleep')).toBe(false);
+    expect(spawnMock).not.toHaveBeenCalled();
 
     const heavySessionTool = harness.getTool('hippo_remember', {
       workspaceDir: 'C:\\repo\\clawd',
@@ -244,8 +251,18 @@ describe('openclaw hippo plugin', () => {
       { agentId: 'main', sessionId: 'session-heavy' },
     );
 
-    const sleepCalls = execFileSyncMock.mock.calls.filter((call) => call[1]?.[0] === 'sleep');
-    expect(sleepCalls).toHaveLength(1);
-    expect(sleepCalls[0]?.[2]).toMatchObject({ cwd: 'C:/Users/skf_s/clawd' });
+    expect(execFileSyncMock.mock.calls.some((call) => call[1]?.[0] === 'sleep')).toBe(false);
+    expect(spawnMock).toHaveBeenCalledTimes(1);
+    expect(spawnMock).toHaveBeenCalledWith(
+      'hippo',
+      ['sleep'],
+      expect.objectContaining({
+        cwd: 'C:/Users/skf_s/clawd',
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true,
+      }),
+    );
+    expect(spawnUnrefMock).toHaveBeenCalledTimes(1);
   });
 });

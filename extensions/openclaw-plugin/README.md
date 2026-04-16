@@ -33,7 +33,7 @@ Add to `openclaw.json`:
           budget: 1500,          // token budget for context injection
           autoContext: true,     // auto-inject memory at session start
           autoLearn: true,       // auto-capture errors (filtered, deduplicated, rate-limited)
-          autoSleep: false,      // auto-consolidate after heavy sessions
+          autoSleep: false,      // queue detached hippo sleep after heavy sessions
           framing: "observe"     // observe | suggest | assert
           // root: "C:/path/to/workspace/.hippo" // optional override
         }
@@ -45,6 +45,16 @@ Add to `openclaw.json`:
 
 Restart the gateway after enabling.
 
+`autoSleep` is off by default so consolidation does not compete with the live
+session. If you turn it on, the plugin schedules `hippo sleep` in a detached
+background process on `session_end` once the session has created at least 10 new
+memories, then returns immediately to OpenClaw.
+
+Strict daily consolidation does not depend on `autoSleep`. `hippo init` /
+`hippo setup` install one machine-level daily runner that sweeps every
+registered Hippo workspace and runs `hippo learn --git --days 1` followed by
+`hippo sleep`.
+
 ## What It Does
 
 ### Auto-context injection
@@ -55,6 +65,13 @@ By default the plugin runs Hippo from the current agent workspace, so Hippo uses
 workspace's local `.hippo/` store and automatically merges any global `~/.hippo/`
 store during `recall` / `context`. You only need `config.root` if you want to
 override workspace auto-detection.
+
+### Session-end auto-sleep
+
+When `autoSleep` is enabled, Hippo does not block OpenClaw shutdown waiting for
+consolidation. The plugin records the session end event, spawns a detached
+`hippo sleep` worker, and returns. If detached spawn fails, it falls back to the
+old inline `sleep` path so consolidation still happens.
 
 ### Agent tools
 

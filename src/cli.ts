@@ -19,6 +19,7 @@
  *   hippo embed [--status]
  *   hippo watch "<command>"
  *   hippo learn --git [--days <n>] [--repos <paths>]
+ *   hippo daily-runner
  *   hippo promote <id>
  *   hippo sync
  *   hippo decide "<decision>" [--context "<why>"] [--supersedes <id>]
@@ -28,7 +29,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { execSync, spawn } from 'child_process';
+import { execFileSync, execSync, spawn } from 'child_process';
 import {
   installJsonHooks,
   uninstallJsonHooks,
@@ -118,6 +119,13 @@ import {
   searchBothHybrid,
   syncGlobalToLocal,
 } from './shared.js';
+import {
+  DAILY_TASK_NAME,
+  buildDailyRunnerCommand,
+  listRegisteredWorkspaces,
+  registerWorkspace,
+  runDailyMaintenance,
+} from './scheduler.js';
 import {
   importChatGPT,
   importClaude,
@@ -250,6 +258,8 @@ function cmdInitScan(scanDir: string, flags: Record<string, string | boolean | s
       initStore(repoHippo);
     }
 
+    registerWorkspace(globalRoot, repo);
+
     // Learn from git history
     let added = 0;
     if (!flags['no-learn'] && isGitRepo(repo)) {
@@ -265,6 +275,9 @@ function cmdInitScan(scanDir: string, flags: Record<string, string | boolean | s
 
   console.log(`\n${repos.length} repositories, ${totalLessons} new lessons learned.`);
   console.log(`Global store: ${globalRoot}`);
+  if (!flags['no-schedule']) {
+    setupDailySchedule(globalRoot);
+  }
   console.log(`\nRun \`hippo sleep\` in any project to consolidate and auto-share to global.`);
 }
 
@@ -297,6 +310,9 @@ function cmdInit(hippoRoot: string, flags: Record<string, string | boolean | str
     console.log('   Files: hippo.db index.json stats.json');
   }
 
+  const globalRoot = getGlobalRoot();
+  registerWorkspace(globalRoot, path.dirname(hippoRoot));
+
   // Auto-detect and install hooks (unless --no-hooks)
   if (!flags['no-hooks']) {
     autoInstallHooks(alreadyExists);
@@ -304,7 +320,7 @@ function cmdInit(hippoRoot: string, flags: Record<string, string | boolean | str
 
   // Auto-setup daily schedule (unless --no-schedule)
   if (!flags['no-schedule'] && !flags['global']) {
-    setupDailySchedule(hippoRoot);
+    setupDailySchedule(globalRoot);
   }
 
   // Seed with git history on first init (unless --no-learn)
@@ -404,22 +420,24 @@ function autoInstallHooks(quiet: boolean): void {
 }
 
 /**
- * Set up a daily cron job for hippo learn + sleep.
+ * Set up a machine-level daily runner that sweeps all registered Hippo
+ * workspaces.
  * Linux/macOS: writes to user crontab.
  * Windows: creates a scheduled task.
  * Skips if already installed.
  */
-function setupDailySchedule(hippoRoot: string): void {
-  const projectDir = path.resolve(path.dirname(hippoRoot));
+function setupDailySchedule(globalRoot: string): void {
+  const runnerDir = path.resolve(globalRoot);
   // Reject paths with characters that could break shell/crontab quoting
   // (backslash is normal on Windows, only dangerous in Unix shell/crontab)
   const unsafeChars = process.platform === 'win32' ? /["`$%\n\r]/ : /["`$\n\r\\]/;
-  if (unsafeChars.test(projectDir)) {
-    console.log(`   Skipping schedule: project path contains unsafe characters.`);
+  if (unsafeChars.test(runnerDir)) {
+    console.log(`   Skipping schedule: runner path contains unsafe characters.`);
     return;
   }
   const isWindows = process.platform === 'win32';
-  const taskName = `hippo-daily-${path.basename(projectDir)}`.replace(/[^a-zA-Z0-9_-]/g, '-');
+  const taskName = DAILY_TASK_NAME;
+  const cmd = buildDailyRunnerCommand(runnerDir);
 
   if (isWindows) {
     // Check if task already exists
@@ -432,16 +450,15 @@ function setupDailySchedule(hippoRoot: string): void {
       // Task doesn't exist, create it
     }
 
-    const cmd = `cd /d "${projectDir}" && hippo learn --git --days 1 && hippo sleep`;
     try {
       execSync(
         `schtasks /create /tn "${taskName}" /tr "cmd /c ${cmd.replace(/"/g, '""')}" /sc daily /st 06:15 /f`,
         { stdio: 'pipe' }
       );
-      console.log(`   Scheduled daily learn+sleep (6:15am) via Task Scheduler: ${taskName}`);
+      console.log(`   Scheduled machine-level daily runner (6:15am) via Task Scheduler: ${taskName}`);
     } catch {
       // No admin rights or schtasks unavailable, fall back to printing instructions
-      console.log(`   To schedule daily learn+sleep, run:`);
+      console.log(`   To schedule the machine-level daily runner, run:`);
       console.log(`   schtasks /create /tn "${taskName}" /tr "cmd /c ${cmd}" /sc daily /st 06:15`);
     }
   } else {
@@ -453,13 +470,13 @@ function setupDailySchedule(hippoRoot: string): void {
         return; // already scheduled
       }
 
-      const cronLine = `15 6 * * * cd "${projectDir}" && hippo learn --git --days 1 && hippo sleep ${marker}`;
+      const cronLine = `15 6 * * * ${cmd} ${marker}`;
       const newCrontab = existing.trimEnd() + '\n' + cronLine + '\n';
       execSync('crontab -', { input: newCrontab, stdio: ['pipe', 'pipe', 'pipe'] });
-      console.log(`   Scheduled daily learn+sleep (6:15am) via crontab`);
+      console.log(`   Scheduled machine-level daily runner (6:15am) via crontab`);
     } catch {
-      const cronLine = `15 6 * * * cd "${projectDir}" && hippo learn --git --days 1 && hippo sleep`;
-      console.log(`   To schedule daily learn+sleep, add to crontab (crontab -e):`);
+      const cronLine = `15 6 * * * ${cmd}`;
+      console.log(`   To schedule the machine-level daily runner, add to crontab (crontab -e):`);
       console.log(`   ${cronLine}`);
     }
   }
@@ -2809,6 +2826,7 @@ function cmdSetup(flags: Record<string, string | boolean | string[]>): void {
   const dryRun = Boolean(flags['dry-run']);
   const forceAll = Boolean(flags['all']);
   const tools = detectInstalledTools();
+  const globalRoot = getGlobalRoot();
 
   console.log('Hippo setup -- configuring SessionEnd + SessionStart hooks');
   console.log('');
@@ -2883,8 +2901,48 @@ function cmdSetup(flags: Record<string, string | boolean | string[]>): void {
     }
   }
 
+  if (!flags['no-schedule']) {
+    console.log('');
+    if (dryRun) {
+      console.log(`[dry-run] would install the machine-level daily runner around ${globalRoot}`);
+    } else {
+      setupDailySchedule(globalRoot);
+    }
+  }
+
   console.log('');
   console.log('Done. Restart your AI tool to activate the hooks.');
+}
+
+function cmdDailyRunner(): void {
+  const globalRoot = getGlobalRoot();
+  const workspaces = listRegisteredWorkspaces(globalRoot);
+
+  if (workspaces.length === 0) {
+    console.log('No registered Hippo workspaces found. Run `hippo init` inside a project first.');
+    return;
+  }
+
+  console.log(`Running daily maintenance across ${workspaces.length} registered workspace${workspaces.length === 1 ? '' : 's'}...`);
+
+  let processed = 0;
+  let failed = 0;
+  runDailyMaintenance(workspaces, (cwd, args) => {
+    try {
+      execFileSync(process.execPath, [process.argv[1], ...args], {
+        cwd,
+        stdio: 'inherit',
+        windowsHide: true,
+      });
+      if (args[0] === 'sleep') processed++;
+    } catch (err) {
+      failed++;
+      const action = args.join(' ');
+      console.error(`[hippo] daily-runner failed in ${cwd} during \`${action}\`: ${(err as Error).message}`);
+    }
+  });
+
+  console.log(`Daily maintenance complete: ${processed} workspace${processed === 1 ? '' : 's'} processed, ${failed} command failure${failed === 1 ? '' : 's'}.`);
 }
 
 // JSON-hook install/uninstall lives in ./hooks.ts so tests can import it
@@ -3005,7 +3063,7 @@ Commands:
     --days <n>             Days of git history to seed (default: 365 for --scan, 30 for single)
     --global               Init the global store ($HIPPO_HOME or ~/.hippo/)
     --no-hooks             Skip auto-detecting and installing agent hooks
-    --no-schedule          Skip auto-creating daily learn+sleep cron job
+    --no-schedule          Skip auto-creating the machine-level daily runner
     --no-learn             Skip seeding memories from git history
   remember <text>          Store a memory
     --tag <tag>            Add a tag (repeatable)
@@ -3028,6 +3086,7 @@ Commands:
     --dry-run              Preview without writing
     --no-learn             Skip auto git-learn before consolidation
     --no-share             Skip auto-sharing to global store
+  daily-runner             Sweep registered workspaces and run daily learn+sleep
   dedup                    Remove duplicate memories (keeps stronger copy)
     --dry-run              Preview without removing
     --threshold <n>        Overlap threshold 0-1 (default: 0.7)
@@ -3124,6 +3183,7 @@ Commands:
                            available SessionEnd+SessionStart hooks
     --all                  Install for every JSON-hook tool, even if not detected
     --dry-run              Show what would be installed without writing
+    --no-schedule          Skip installing or repairing the daily runner
   last-sleep               Print the last 'hippo sleep --log-file' output and clear it
     --path <p>             Log path (default: ~/.hippo/logs/last-sleep.log)
     --keep                 Print without clearing
@@ -3313,6 +3373,10 @@ async function main(): Promise<void> {
 
     case 'setup':
       cmdSetup(flags);
+      break;
+
+    case 'daily-runner':
+      cmdDailyRunner();
       break;
 
     case 'embed':

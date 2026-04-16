@@ -60,6 +60,12 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v0.24.2
+
+- **One daily runner per machine, not one task per project.** `hippo init` now registers each workspace and installs a machine-level `hippo daily-runner` job that sweeps every registered Hippo project at 6:15am.
+- **OpenClaw session-end autosleep no longer blocks shutdown.** The native OpenClaw plugin now detaches `hippo sleep` on `session_end` when `autoSleep` is enabled.
+- **Retrieval and refresh are now documented separately across tools.** Query-time recall still uses local plus global memory, while session-end hooks and the daily runner handle consolidation on their own paths.
+
 ### What's new in v0.24.1
 
 - **Conflict detection stops over-weighting shared tags.** `feedback` / `policy` tags no longer make unrelated memories look contradictory on the next `hippo sleep`.
@@ -94,7 +100,7 @@ hippo setup              # picks up the new SessionEnd capture hook
 
 ### What's new in v0.21.0
 
-- **`hippo setup` — one command, every tool.** Detects Claude Code, OpenCode, OpenClaw, Codex, Cursor, and Pi on your machine and installs all available SessionEnd + SessionStart hooks in one pass. Idempotent — safe to re-run.
+- **`hippo setup` — one command, every tool.** Detects Claude Code, OpenCode, OpenClaw, Codex, Cursor, and Pi on your machine and installs all available SessionEnd + SessionStart hooks in one pass. It also repairs the machine-level daily runner. Idempotent — safe to re-run.
 - **OpenCode hooks.** SessionEnd + SessionStart install into `~/.config/opencode/opencode.json` (OpenCode added Claude-Code-compatible hooks in Jan 2026).
 - **You actually see consolidation output now.** New `SessionStart` hook prints the previous session's `hippo sleep` output between banners on the next startup. Previously, SessionEnd output was invisible because the TUI was tearing down when it ran.
 
@@ -211,7 +217,7 @@ hippo init
 
 If you have a `CLAUDE.md`, it patches it. `AGENTS.md` for Codex/OpenClaw/OpenCode. `.cursorrules` for Cursor. For Codex, Hippo also wraps the detected launcher in place so `/exit` can consolidate memory without a manual PATH step. No manual `hook install` needed. Your agent starts using Hippo on its next session.
 
-It also sets up a daily cron job (6:15am) that runs `hippo learn --git` and `hippo sleep` automatically. Memories get captured from your commits and consolidated every day without you thinking about it.
+It also registers the current project in Hippo's workspace registry and installs one machine-level daily runner (6:15am). That runner sweeps every registered workspace, runs `hippo learn --git --days 1`, then `hippo sleep`. You get strict daily consolidation without creating one OS task per project.
 
 To skip: `hippo init --no-hooks --no-schedule`
 
@@ -662,6 +668,7 @@ hippo watch "npm run build"
 | `hippo learn --git` | Scan recent git commits for lessons |
 | `hippo learn --git --days <n>` | Scan N days back (default: 7) |
 | `hippo learn --git --repos <paths>` | Scan multiple repos (comma-separated) |
+| `hippo daily-runner` | Sweep registered workspaces and run daily learn+sleep |
 | `hippo conflicts` | List detected open memory conflicts |
 | `hippo conflicts --json` | Output conflicts as JSON |
 | `hippo resolve <id>` | Show both conflicting memories for comparison |
@@ -709,7 +716,7 @@ hippo watch "npm run build"
 | Claude Code | `CLAUDE.md` or `.claude/settings.json` | `CLAUDE.md` + `SessionStart`/`SessionEnd` hooks in `settings.json` |
 | Codex | `AGENTS.md` or `.codex` | `AGENTS.md` + automatic in-place Codex launcher wrapper |
 | Cursor | `.cursorrules` or `.cursor/rules` | `.cursorrules` |
-| OpenClaw | `.openclaw` or `AGENTS.md` | `AGENTS.md` |
+| OpenClaw | `.openclaw` or `AGENTS.md` | native OpenClaw plugin or `AGENTS.md` |
 | OpenCode | `.opencode/` or `opencode.json` | `AGENTS.md` |
 
 No extra commands needed. Just `hippo init` and your agent knows about Hippo.
@@ -776,7 +783,13 @@ Exposes tools: `hippo_recall`, `hippo_remember`, `hippo_outcome`, `hippo_context
 ### OpenClaw Plugin
 
 Native plugin with auto-context injection, workspace-aware memory lookup, and
-tool hooks for auto-learn / auto-sleep.
+tool hooks for auto-learn / auto-sleep. When `autoSleep` is enabled, the
+OpenClaw plugin now launches `hippo sleep` in a detached background worker at
+session end so the live session can exit immediately.
+
+Query-time retrieval still uses the active workspace store plus the shared
+global store. Daily consolidation comes from the machine-level runner that
+`hippo init` / `hippo setup` installs.
 
 ```bash
 openclaw plugins install hippo-memory

@@ -7,7 +7,7 @@
  * Config lives under plugins.entries.hippo-memory.config
  */
 
-import { execFileSync } from 'child_process';
+import { execFileSync, spawn } from 'child_process';
 import { existsSync, readdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { basename as posixBasename, dirname as posixDirname } from 'path/posix';
@@ -202,6 +202,21 @@ function runHippo(args: readonly string[], cwd?: string): string {
     return typeof result === 'string' ? result.trim() : '';
   } catch (err: any) {
     return err.stdout?.trim() || err.message || 'hippo command failed';
+  }
+}
+
+function spawnHippoDetached(args: readonly string[], cwd?: string): boolean {
+  try {
+    const child = spawn('hippo', [...args], {
+      cwd: cwd || process.cwd(),
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    child.unref();
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -659,9 +674,18 @@ export default function register(api: any) {
 
       const newMemories = consumeSessionMemoryCount(ctx);
       if (!cfg.autoSleep || newMemories < AUTO_SLEEP_SESSION_THRESHOLD) return;
+      const sessionLabel = ctx.sessionId ?? ctx.sessionKey ?? 'unknown';
+      if (spawnHippoDetached(['sleep'], hippoCwd)) {
+        logger.info?.(
+          `[hippo] autoSleep scheduled for session ${sessionLabel} ` +
+            `after ${newMemories} new memories`,
+        );
+        return;
+      }
+
       const result = runHippo(['sleep'], hippoCwd);
-      logger.info?.(
-        `[hippo] autoSleep ran for session ${ctx.sessionId ?? ctx.sessionKey ?? 'unknown'} ` +
+      logger.warn?.(
+        `[hippo] autoSleep fell back to inline execution for session ${sessionLabel} ` +
           `after ${newMemories} new memories`,
       );
       logger.debug?.(`[hippo] autoSleep result: ${result}`);

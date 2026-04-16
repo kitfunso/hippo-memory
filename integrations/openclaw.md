@@ -14,6 +14,22 @@ The plugin resolves memory from the active workspace by default, so it uses the
 workspace `.hippo/` store and automatically merges your shared `~/.hippo/` memory
 during `recall` and `context`.
 
+If you enable `autoSleep` in the plugin config, OpenClaw session-end
+consolidation now runs in a detached background worker. The session can end
+immediately while `hippo sleep` finishes in the background.
+
+Daily cadence is separate. `hippo init` registers the workspace and installs a
+single machine-level daily runner that sweeps every registered Hippo project at
+6:15am. OpenClaw retrieval stays query-driven: the current workspace store and
+the shared global store are searched together.
+
+Recommended split:
+
+- `autoContext: true` for session-start retrieval
+- `autoLearn: true` for filtered in-session error capture
+- `autoSleep: false` if you prefer a daily scheduler and zero session-end work
+- `autoSleep: true` if you want per-session consolidation without blocking exit
+
 ## Auto-install (recommended)
 
 If your project has a `.openclaw` directory or `AGENTS.md`, `hippo init` auto-detects and patches `AGENTS.md` with the memory hook. No extra steps.

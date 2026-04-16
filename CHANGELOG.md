@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.24.2 (2026-04-16)
+
+### Added
+- **Machine-level daily runner.** `hippo init` now registers each workspace in a global registry and installs one daily runner at 6:15am instead of creating one OS task per project. The new `hippo daily-runner` command sweeps all registered workspaces and runs `hippo learn --git --days 1` followed by `hippo sleep`.
+
+### Changed
+- **OpenClaw session-end autosleep is detached.** When the native OpenClaw plugin has `autoSleep` enabled, it now spawns `hippo sleep` in a detached background process on `session_end` so shutdown is not blocked by consolidation.
+- **Docs now describe local + global retrieval plus daily refresh separately.** OpenClaw, OpenCode, Pi, and other agent integrations now document the split between query-time retrieval, session-end hooks, and the machine-level daily runner.
+
+### Internal
+- Added `src/scheduler.ts` and `tests/scheduler.test.ts` for workspace registry handling, command generation, and daily sweep execution. Full suite passes: 494 tests.
+
 ## 0.24.1 (2026-04-15)
 
 ### Fixed
