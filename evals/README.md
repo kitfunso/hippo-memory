@@ -69,6 +69,37 @@ IDs (session summaries that mention the keyword in passing but aren't the
 canonical answer) Recall@10 jumped to 0.63. **Your corpus is your eval:
 noisy expected lists produce noisy numbers.**
 
+### Parameter sweep findings (2026-04-20)
+
+`scripts/sweep-params.mjs evals/real-corpus.json --out evals/sweep-results.md`
+swept 30 combinations of (MMR lambda, embedding weight, local bump) through
+the keyword corpus. Full numbers in `sweep-results.md`; the punchline:
+
+| | MRR | R@5 | R@10 | NDCG@10 |
+|---|---|---|---|---|
+| default (lambda=0.7, emb=0.6, bump=1.2) | 0.967 | 66.2% | 67.1% | 0.722 |
+| best (lambda=any, emb=0.4, bump=1.2) | 1.000 | 66.2% | 67.1% | 0.745 |
+| delta | +0.033 | +0.0 | +0.0 | +0.023 |
+
+**Embedding weight is the real lever.** Lowering it from 0.6 to 0.4 lifts
+MRR to 1.0 and adds 2.3 pp to NDCG. **MMR lambda had no effect** on this
+corpus — the handcrafted cases lack near-duplicate density for MMR to
+de-cluster, so lambda=1.0 (relevance only) ties lambda=0.5 exactly.
+
+**We did NOT change the default** because:
+
+1. This is a single corpus of 15 handcrafted, keyword-heavy queries. BM25
+   is well-suited to that style — lowering cosine weight makes BM25 score
+   relatively more. Real user queries often paraphrase, where cosine wins.
+2. The LLM-generated corpus (`build-eval-corpus-llm.mjs` with paraphrased
+   questions) is the honest test for embedding-weight tuning. Run that
+   before changing the default.
+3. Overfitting to one corpus is a classic eval trap. The sweep is a
+   tuning knob for users, not a new default.
+
+Users who want the uplift today: `hippo recall <q> --embedding-weight 0.4`
+or set `"embeddings": {"hybridWeight": 0.4}` in `.hippo/config.json`.
+
 ### LLM-generated corpus (`llm-corpus.json`)
 
 Harder-than-bootstrap cases with **paraphrased** queries — the right memory
