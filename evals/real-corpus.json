@@ -1,0 +1,165 @@
+{
+  "cases": [
+    {
+      "id": "prod-files-never-overwrite",
+      "query": "never overwrite production files keep versioned copies",
+      "expectedIds": [
+        "mem_4c4e4205",
+        "mem_50b6f6f9",
+        "g_d6104ecac8ff",
+        "g_d2c989665096",
+        "g_a9caa766271b",
+        "sem_5e1af53a5de4"
+      ],
+      "description": "project rule about prod file safety"
+    },
+    {
+      "id": "react-props-rerender",
+      "query": "React components re-render when props change",
+      "expectedIds": [
+        "mem_cfc98463395e",
+        "mem_084a8355b1a3",
+        "mem_e58a3965c0bd"
+      ],
+      "description": "three near-duplicates seeded during QA"
+    },
+    {
+      "id": "direct-user-instructions",
+      "query": "when the user gives a direct instruction how should I act",
+      "expectedIds": [
+        "mem_86c98eb48109",
+        "mem_e71d4889204b"
+      ],
+      "description": "project directive: execute exactly what user asks"
+    },
+    {
+      "id": "powershell-chaining",
+      "query": "PowerShell refuses git command chaining with &&",
+      "expectedIds": [
+        "mem_b875c7b97204",
+        "mem_102793a1dfbb",
+        "g_0f0807f79dc5",
+        "g_fd207a3ede29",
+        "g_e8ba9080cadf",
+        "mem_84b4411c7b89",
+        "g_43393f2b466c",
+        "g_e0303198e492",
+        "g_cd5df46b3880"
+      ],
+      "description": "Windows dev quirk"
+    },
+    {
+      "id": "no-em-dashes",
+      "query": "no em dashes in UI text or code",
+      "expectedIds": [
+        "mem_c79a896f6496",
+        "g_45fda50856c2",
+        "g_ebe4a4a10a0b",
+        "g_80191e19feca",
+        "mem_cbabea250a98"
+      ],
+      "description": "style directive"
+    },
+    {
+      "id": "vitest-runinband",
+      "query": "vitest does not accept runInBand in this repo",
+      "expectedIds": [
+        "mem_96d87581d6b7",
+        "sem_d949b3ce1845",
+        "g_14336f7c546f",
+        "g_ab66c0a63e14"
+      ],
+      "description": "test infra gotcha"
+    },
+    {
+      "id": "gold-tips-inflation",
+      "query": "Gold model TIPS inflation signal",
+      "expectedIds": [
+        "mem_8b5803aa",
+        "g_d9744ffaf58e",
+        "sem_4f61921e8de7"
+      ],
+      "description": "quant model spec"
+    },
+    {
+      "id": "shiny-electricity",
+      "query": "Shiny electricity market platform Bloomberg terminal",
+      "expectedIds": [
+        "mem_fea3f260dc74",
+        "mem_cd9fd7f334b2"
+      ],
+      "description": "external project reference"
+    },
+    {
+      "id": "pineal-intuition",
+      "query": "AI pineal gland intuition awareness module",
+      "expectedIds": [
+        "mem_7ce4e89d5b9d",
+        "mem_4ec53a9afb10",
+        "g_de1a98ed8845",
+        "g_8626ed0ea886"
+      ],
+      "description": "architecture brainstorm"
+    },
+    {
+      "id": "agent-first-pivot",
+      "query": "agent-first product direction pivot",
+      "expectedIds": [
+        "mem_ea942895726c",
+        "mem_2599daa8b07d"
+      ],
+      "description": "recent strategy shift"
+    },
+    {
+      "id": "bloomberg-parquet",
+      "query": "Bloomberg parquet data usage backtesting only",
+      "expectedIds": [
+        "mem_78d6c0754255",
+        "mem_ed5d0a8a7b19"
+      ],
+      "description": "data provenance rule"
+    },
+    {
+      "id": "quantamental-cta-split",
+      "query": "Quantamental and CTA are independent pipelines",
+      "expectedIds": [
+        "mem_5aad3e052b87",
+        "g_4b27461cfbbf",
+        "mem_05ac3aa80745"
+      ],
+      "description": "architecture rule"
+    },
+    {
+      "id": "postgres-vacuum",
+      "query": "Postgres VACUUM dead tuples",
+      "expectedIds": [
+        "mem_61e25c1ef18c"
+      ],
+      "description": "db maintenance note"
+    },
+    {
+      "id": "contradiction-content-overlap",
+      "query": "contradiction detection gated by content overlap",
+      "expectedIds": [
+        "mem_28d0450b8d50",
+        "mem_1e6dc963ec8f",
+        "mem_07a9228cf888",
+        "g_348d4df53d8e"
+      ],
+      "description": "consolidate behavior"
+    },
+    {
+      "id": "pineal-vs-architecture-ideas",
+      "query": "novel AI architecture ideas beyond transformers",
+      "expectedIds": [
+        "mem_7ce4e89d5b9d",
+        "mem_4ec53a9afb10",
+        "mem_28d0450b8d50",
+        "g_de1a98ed8845",
+        "g_8626ed0ea886",
+        "mem_07a9228cf888"
+      ],
+      "description": "should find both pineal and 8-ideas brainstorm"
+    }
+  ]
+}
