@@ -60,6 +60,12 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v0.26.0
+
+- **`hippo audit` catches junk memories.** New command flags too-short entries, release/merge/WIP commit noise, fragments, and vague single-clause notes. `--fix` removes the worst offenders. `hippo sleep` now runs audit automatically so commit-noise never survives consolidation.
+- **Conflict detector stops firing on English prepositions.** The v0.25 detector was scanning whole memory bodies and flagging 800+ bogus "polarity mismatch" conflicts anywhere the words `on` / `off` / `in` / `out` appeared together. Rewritten to use stopword-filtered Jaccard, a rare-token gate, and an opening-window polarity check.
+- **`hippo remember` rejects tiny inputs.** Content under 3 characters is blocked at the CLI with a clear error.
+
 ### What's new in v0.24.2
 
 - **One daily runner per machine, not one task per project.** `hippo init` now registers each workspace and installs a machine-level `hippo daily-runner` job that sweeps every registered Hippo project at 6:15am.

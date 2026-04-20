@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>HIPPO :: Memory Oscilloscope</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0906;
+    --amber:#e8a618;
+    --hi:#ffc74a;
+    --mut:#8a5f1a;
+    --dim:#5a3f10;
+    --dimmer:#3a2a0a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#050403;color:var(--amber);font-family:'Share Tech Mono',ui-monospace,monospace;font-size:12px;line-height:1.3;overflow:hidden}
+  body{
+    text-shadow:0 0 1px rgba(232,166,24,0.55), 0 0 6px rgba(232,166,24,0.1);
+    filter:contrast(1.05) brightness(1.05);
+  }
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:60;
+    background:repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0 2px, rgba(0,0,0,0.14) 2px 3px);
+    mix-blend-mode:multiply;opacity:0.45;
+  }
+  .vignette{position:fixed;inset:0;pointer-events:none;z-index:61;
+    background:radial-gradient(ellipse at center, rgba(0,0,0,0) 50%, rgba(0,0,0,0.78) 100%)}
+  .crt{
+    position:fixed;inset:14px;
+    border-radius:40% / 25%;
+    overflow:hidden;
+    background:#0a0906;
+    box-shadow:
+      inset 0 0 120px rgba(0,0,0,0.85),
+      inset 0 0 30px rgba(232,166,24,0.04),
+      0 0 2px rgba(232,166,24,0.3);
+  }
+  canvas{
+    position:absolute;inset:0;width:100%;height:100%;
+    filter:blur(0.3px);
+  }
+  .overlay{position:absolute;inset:0;z-index:10;pointer-events:none}
+  .panel{
+    position:absolute;
+    font-family:'Share Tech Mono',monospace;
+    color:var(--amber);
+    text-shadow:0 0 1px rgba(232,166,24,0.7), 0 0 8px rgba(232,166,24,0.15);
+    white-space:pre;
+    letter-spacing:0.5px;
+  }
+  .panel .hi{color:var(--hi)}
+  .panel .mut{color:var(--mut)}
+  .panel .dim{color:var(--dim)}
+  .tl{top:22px;left:32px;font-size:12px}
+  .tl .row{display:grid;grid-template-columns:52px 100px 1fr;gap:10px;margin-bottom:2px}
+  .tl .tag{color:var(--hi);letter-spacing:1px}
+  .tl .name{color:var(--amber)}
+  .tl .val{color:var(--mut)}
+  .tl .off .tag{color:var(--dimmer)}
+  .tl .off .name{color:var(--dimmer)}
+  .tl .off .val{color:var(--dimmer)}
+  .tr{top:22px;right:32px;text-align:right;font-size:12px}
+  .tr .knob{border:1px solid var(--dim);padding:2px 8px;margin:2px 0;display:inline-block;min-width:150px;text-align:left;background:rgba(232,166,24,0.015)}
+  .tr .knob b{font-weight:normal;color:var(--hi)}
+  .bc{bottom:22px;left:50%;transform:translateX(-50%);font-size:12px;letter-spacing:2px;text-align:center}
+  .bc .sep{color:var(--dim);margin:0 8px}
+  .bc .k{color:var(--mut)}
+  .bc .v{color:var(--hi)}
+  .br{bottom:22px;right:32px;font-size:12px;letter-spacing:1px}
+  .br .lock{color:var(--hi);font-weight:normal;animation:blink 1.15s steps(2,end) infinite}
+  .br .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--hi);margin-right:6px;vertical-align:middle;box-shadow:0 0 8px rgba(255,199,74,0.8)}
+  @keyframes blink{0%,49%{opacity:1}50%,100%{opacity:0.35}}
+  .bl{bottom:22px;left:32px;font-size:12px;color:var(--mut);letter-spacing:1px}
+  .bl b{color:var(--amber);font-weight:normal}
+  .brand{position:absolute;top:50%;left:32px;transform:translateY(-50%) rotate(-90deg);transform-origin:left center;
+    font-family:'VT323',monospace;font-size:16px;color:var(--dim);letter-spacing:6px}
+  .modeln{position:absolute;top:22px;left:50%;transform:translateX(-50%);font-family:'VT323',monospace;
+    font-size:15px;color:var(--mut);letter-spacing:4px}
+</style>
+</head>
+<body>
+<div class="crt">
+  <canvas id="scope"></canvas>
+  <div class="overlay">
+    <div class="modeln">MEMORY OSCILLOSCOPE&nbsp;&nbsp;MODEL 1740A</div>
+    <div class="brand">HIPPO</div>
+    <div class="panel tl">
+      <div class="row" id="r1"><span class="tag">CH1</span><span class="name">heartbeat</span><span class="val" id="v1">12 bpm</span></div>
+      <div class="row" id="r2"><span class="tag">CH2</span><span class="name">decay</span><span class="val" id="v2">half 30s</span></div>
+      <div class="row" id="r3"><span class="tag">CH3</span><span class="name">activity</span><span class="val" id="v3">quiet</span></div>
+    </div>
+    <div class="panel tr">
+      <div class="knob">VOLTS/DIV <b>1.0</b></div><br>
+      <div class="knob">TIME/DIV  <b>500ms</b></div><br>
+      <div class="knob">TRIG      <b>AUTO</b></div>
+    </div>
+    <div class="panel bc"><span class="k">MEMORY</span> <span class="v">60 Hz LINE</span><span class="sep">::</span><span class="k">MEAN</span> <span class="v" id="mean">0.84V</span><span class="sep">::</span><span class="k">PEAK</span> <span class="v" id="peak">+2.1V / -0.3V</span></div>
+    <div class="panel br"><span class="dot"></span><span class="lock">LOCKED</span></div>
+    <div class="panel bl"><b id="ts">T+000.0s</b>  SWEEP <b id="sweep">A</b>  BEAM <b>ON</b></div>
+  </div>
+</div>
+<div class="vignette"></div>
+<script>
+(() => {
+  const canvas = document.getElementById('scope');
+  const ctx = canvas.getContext('2d');
+  let W=0,H=0,DPR=Math.min(window.devicePixelRatio||1, 2);
+
+  const state = {
+    enabled:[true,true,true],
+    yOffset:[0,0,0],
+    t0: performance.now(),
+    buf1: [], buf2: [], buf3: [],
+    N: 512,
+    lastRefresh: 0,
+    nextRefresh: 7,
+    nextConsolidate: 15,
+    consolidateUntil: 0,
+    decayVal: 0.85,
+    sweepX: 0,
+    lastBeat: 0,
+    bpm: 12,
+    meanAcc: 0, meanN: 0,
+    peakHi: 0, peakLo: 0,
+  };
+
+  function resize(){
+    W = canvas.clientWidth; H = canvas.clientHeight;
+    canvas.width = W*DPR; canvas.height = H*DPR;
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    // init black
+    ctx.fillStyle = '#0a0906';
+    ctx.fillRect(0,0,W,H);
+  }
+  window.addEventListener('resize', resize);
+
+  // EKG-style QRS shape. phase in [0,1) over one beat.
+  function ekg(phase){
+    // baseline + P + Q + R + S + T
+    let v = 0;
+    // P wave
+    v += 0.08 * Math.exp(-Math.pow((phase-0.12)/0.035, 2));
+    // Q dip
+    v -= 0.10 * Math.exp(-Math.pow((phase-0.21)/0.012, 2));
+    // R spike
+    v += 1.60 * Math.exp(-Math.pow((phase-0.235)/0.010, 2));
+    // S dip
+    v -= 0.35 * Math.exp(-Math.pow((phase-0.265)/0.014, 2));
+    // T wave
+    v += 0.20 * Math.exp(-Math.pow((phase-0.38)/0.055, 2));
+    return v;
+  }
+
+  function drawGraticule(){
+    const cols = 10, rows = 8;
+    const colW = W/cols, rowH = H/rows;
+    ctx.save();
+    ctx.lineWidth = 1;
+    // minor ticks on center axes (every 1/5 division)
+    ctx.strokeStyle = 'rgba(232,166,24,0.22)';
+    ctx.beginPath();
+    const cx = W/2, cy = H/2;
+    for(let c=0;c<=cols;c++){
+      for(let m=1;m<5;m++){
+        const x = (c+m/5)*colW;
+        if(x>W) continue;
+        ctx.moveTo(x, cy-3); ctx.lineTo(x, cy+3);
+      }
+    }
+    for(let r=0;r<=rows;r++){
+      for(let m=1;m<5;m++){
+        const y = (r+m/5)*rowH;
+        if(y>H) continue;
+        ctx.moveTo(cx-3, y); ctx.lineTo(cx+3, y);
+      }
+    }
+    ctx.stroke();
+
+    // major grid, dashed, with per-line opacity variance
+    ctx.setLineDash([2,4]);
+    for(let c=1;c<cols;c++){
+      const x = c*colW;
+      const a = 0.18 + (Math.sin(c*1.7)*0.5+0.5)*0.12;
+      ctx.strokeStyle = `rgba(232,166,24,${a.toFixed(3)})`;
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+    }
+    for(let r=1;r<rows;r++){
+      const y = r*rowH;
+      const a = 0.18 + (Math.cos(r*2.1)*0.5+0.5)*0.12;
+      ctx.strokeStyle = `rgba(232,166,24,${a.toFixed(3)})`;
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // center cross (brighter)
+    ctx.strokeStyle = 'rgba(232,166,24,0.4)';
+    ctx.beginPath();
+    ctx.moveTo(cx,0); ctx.lineTo(cx,H);
+    ctx.moveTo(0,cy); ctx.lineTo(W,cy);
+    ctx.stroke();
+
+    // outer frame
+    ctx.strokeStyle = 'rgba(232,166,24,0.32)';
+    ctx.strokeRect(0.5,0.5,W-1,H-1);
+    ctx.restore();
+  }
+
+  function drawTrace(buf, color, yOff, jitter){
+    if(buf.length < 2) return;
+    ctx.save();
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 10;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.3;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    const dx = W / (state.N-1);
+    for(let i=0;i<buf.length;i++){
+      const x = i*dx + (jitter ? (Math.random()-0.5)*0.6 : 0);
+      const y = buf[i] + yOff;
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    // faint second pass for extra bloom
+    ctx.globalAlpha = 0.35;
+    ctx.lineWidth = 2.4;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function frame(now){
+    const t = (now - state.t0)/1000;
+
+    // phosphor fade
+    ctx.fillStyle = 'rgba(10,9,6,0.10)';
+    ctx.fillRect(0,0,W,H);
+
+    drawGraticule();
+
+    // sweep beam
+    state.sweepX = (t*0.06) % 1;
+    const sx = state.sweepX * W;
+    const grd = ctx.createLinearGradient(sx-40,0,sx+40,0);
+    grd.addColorStop(0,'rgba(232,166,24,0)');
+    grd.addColorStop(0.5,'rgba(232,166,24,0.06)');
+    grd.addColorStop(1,'rgba(232,166,24,0)');
+    ctx.fillStyle = grd;
+    ctx.fillRect(sx-40,0,80,H);
+
+    // CH1: heartbeat
+    const beatPeriod = 60/state.bpm;
+    const breath = 0.10 * Math.sin(2*Math.PI*t*0.1);
+    const phase = (t % beatPeriod) / beatPeriod;
+    const ch1raw = ekg(phase) + breath;
+    const ch1y = H*0.28 + state.yOffset[0] - ch1raw * (H/10); // scale: 1V = H/8 div
+    state.buf1.push(ch1y);
+    if(state.buf1.length > state.N) state.buf1.shift();
+
+    // beat tracking
+    if(phase < 0.02 && t - state.lastBeat > 1) state.lastBeat = t;
+
+    // CH2: decay
+    const dt = 1/60;
+    const halfLife = 30;
+    const k = Math.log(2)/halfLife;
+    state.decayVal = Math.max(0, state.decayVal - state.decayVal*k*dt);
+    if(t > state.nextRefresh){
+      state.decayVal = Math.min(1.2, state.decayVal + 0.22 + Math.random()*0.08);
+      state.nextRefresh = t + 5 + Math.random()*4;
+      state.lastRefresh = t;
+    }
+    const ch2y = H*0.62 + state.yOffset[1] - state.decayVal * (H/10);
+    state.buf2.push(ch2y);
+    if(state.buf2.length > state.N) state.buf2.shift();
+
+    // CH3: activity
+    if(t > state.nextConsolidate){
+      state.consolidateUntil = t + 2;
+      state.nextConsolidate = t + 13 + Math.random()*4;
+    }
+    const inSpike = t < state.consolidateUntil;
+    const amp = inSpike ? (0.35 + Math.random()*0.15) : 0.05;
+    const hf = Math.sin(t*80) * 0.3 + Math.sin(t*173)*0.2;
+    const noise = (Math.random()-0.5)*2;
+    const ch3raw = noise*amp + hf*amp*0.3;
+    const ch3y = H*0.86 + state.yOffset[2] - ch3raw * (H/10);
+    state.buf3.push(ch3y);
+    if(state.buf3.length > state.N) state.buf3.shift();
+
+    // draw traces
+    if(state.enabled[0]) drawTrace(state.buf1, '#ffc74a', 0, true);
+    if(state.enabled[1]) drawTrace(state.buf2, '#e8a618', 0, false);
+    if(state.enabled[2]) drawTrace(state.buf3, '#ffb535', 0, true);
+
+    // readouts update (throttled)
+    if((now|0) % 7 === 0){
+      state.meanAcc += ch1raw; state.meanN++;
+      if(ch1raw > state.peakHi) state.peakHi = ch1raw;
+      if(ch1raw < state.peakLo) state.peakLo = ch1raw;
+      document.getElementById('mean').textContent = (state.meanAcc/state.meanN).toFixed(2)+'V';
+      document.getElementById('peak').textContent = '+'+state.peakHi.toFixed(1)+'V / '+state.peakLo.toFixed(1)+'V';
+      document.getElementById('ts').textContent = 'T+'+t.toFixed(1).padStart(5,'0')+'s';
+      document.getElementById('v1').textContent = state.bpm.toFixed(0)+' bpm';
+      document.getElementById('v2').textContent = 'lvl '+state.decayVal.toFixed(2);
+      document.getElementById('v3').textContent = inSpike ? 'CONSOLIDATING' : 'quiet';
+      document.getElementById('sweep').textContent = inSpike ? 'B' : 'A';
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  // controls
+  window.addEventListener('keydown', (e)=>{
+    const k = e.key.toLowerCase();
+    if(k==='1'||k==='2'||k==='3'){
+      const i = parseInt(k)-1;
+      state.enabled[i] = !state.enabled[i];
+      document.getElementById('r'+(i+1)).classList.toggle('off', !state.enabled[i]);
+    } else if(k==='c'){
+      state.nextConsolidate = (performance.now()-state.t0)/1000;
+    } else if(e.key==='ArrowUp'){
+      state.yOffset = state.yOffset.map(y=>y - H/8);
+    } else if(e.key==='ArrowDown'){
+      state.yOffset = state.yOffset.map(y=>y + H/8);
+    }
+  });
+
+  resize();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

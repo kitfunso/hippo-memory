@@ -8,7 +8,7 @@
 import * as http from 'http';
 import * as path from 'path';
 import * as fs from 'fs';
-import { loadAllEntries, listMemoryConflicts } from './store.js';
+import { loadAllEntries, listMemoryConflicts, readEntry, writeEntry } from './store.js';
 import { calculateStrength, resolveConfidence, type MemoryEntry } from './memory.js';
 import { loadConfig } from './config.js';
 import { listPeers } from './shared.js';
@@ -32,6 +32,9 @@ interface DashboardData {
     age_days: number;
     projected_strength_7d: number;
     projected_strength_30d: number;
+    parents: string[];
+    starred: boolean;
+    conflicts_with: string[];
   }>;
   conflicts: Array<{
     id: number;
@@ -110,6 +113,9 @@ function buildDashboardData(hippoRoot: string): DashboardData {
       age_days: Math.round(ageDays * 10) / 10,
       projected_strength_7d: calculateStrength(future7, in7d),
       projected_strength_30d: calculateStrength(future30, in30d),
+      parents: e.parents ?? [],
+      starred: Boolean(e.starred),
+      conflicts_with: e.conflicts_with ?? [],
     };
   });
 
@@ -398,6 +404,17 @@ export function serveDashboard(hippoRoot: string, port: number = 3333): void {
 
     // --- API routes ---
     if (pathname.startsWith('/api/')) {
+      // POST /api/star/:id - toggle starred on a memory
+      const starMatch = pathname.match(/^\/api\/star\/([A-Za-z0-9_\-]+)$/);
+      if (starMatch && req.method === 'POST') {
+        const id = starMatch[1];
+        const entry = readEntry(hippoRoot, id);
+        if (!entry) return jsonResponse(res, { error: 'Not found' }, 404);
+        entry.starred = !entry.starred;
+        writeEntry(hippoRoot, entry);
+        return jsonResponse(res, { id, starred: entry.starred });
+      }
+
       const data = buildDashboardData(hippoRoot);
 
       if (pathname === '/api/memories') return jsonResponse(res, data.memories);

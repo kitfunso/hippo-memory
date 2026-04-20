@@ -135,6 +135,7 @@ import {
   ImportOptions,
 } from './importers.js';
 import { cmdCapture, CaptureOptions } from './capture.js';
+import { auditMemories, type AuditResult } from './audit.js';
 import { wmPush, wmRead, wmClear, wmFlush, WorkingMemoryItem } from './working-memory.js';
 
 // ---------------------------------------------------------------------------
@@ -943,6 +944,25 @@ function cmdSleepCore(
       if (epiDups > 0) parts.push(`${epiDups} duplicate episodic lessons`);
       if (crossDups > 0) parts.push(`${crossDups} cross-layer duplicates`);
       console.log(`\nDeduped ${dedupResult.removed} duplicates (${parts.join(', ')}). Kept stronger copies.`);
+    }
+  }
+
+  // Quality audit — remove junk, report warnings
+  if (!dryRun) {
+    const allEntries = loadAllEntries(hippoRoot);
+    const audit = auditMemories(allEntries);
+    if (audit.issues.length > 0) {
+      const errors = audit.issues.filter(i => i.severity === 'error');
+      const warnings = audit.issues.filter(i => i.severity === 'warning');
+      if (errors.length > 0) {
+        for (const issue of errors) {
+          deleteEntry(hippoRoot, issue.memoryId);
+        }
+        console.log(`\nAudit: removed ${errors.length} junk memories (too short/empty).`);
+      }
+      if (warnings.length > 0) {
+        console.log(`Audit: ${warnings.length} low-quality memories detected (run \`hippo audit\` for details).`);
+      }
     }
   }
 
@@ -3091,6 +3111,7 @@ Commands:
     --dry-run              Preview without removing
     --threshold <n>        Overlap threshold 0-1 (default: 0.7)
   status                   Show memory health stats
+  audit [--fix]            Check memory quality (--fix removes junk)
   outcome                  Apply feedback to last recall
     --good                 Memories were helpful
     --bad                  Memories were irrelevant
@@ -3265,8 +3286,8 @@ async function main(): Promise<void> {
 
     case 'remember': {
       const text = args.join(' ').trim();
-      if (!text) {
-        console.error('Please provide text to remember.');
+      if (!text || text.length < 3) {
+        console.error('Memory content too short (minimum 3 characters).');
         process.exit(1);
       }
       cmdRemember(hippoRoot, text, flags);
@@ -3310,6 +3331,39 @@ async function main(): Promise<void> {
     case 'dedup':
       cmdDedup(hippoRoot, flags);
       break;
+
+    case 'audit': {
+      requireInit(hippoRoot);
+      const entries = loadAllEntries(hippoRoot);
+      const result = auditMemories(entries);
+      const shouldFix = Boolean(flags['fix']);
+
+      if (result.issues.length === 0) {
+        console.log(`All ${result.total} memories passed quality checks.`);
+      } else {
+        console.log(`Audited ${result.total} memories: ${result.clean} clean, ${result.issues.length} issues\n`);
+        for (const issue of result.issues) {
+          const icon = issue.severity === 'error' ? 'ERR' : 'WARN';
+          console.log(`  [${icon}] ${issue.memoryId}: ${issue.reason}`);
+          console.log(`         "${issue.content.slice(0, 80)}${issue.content.length > 80 ? '...' : ''}"`);
+        }
+        if (shouldFix) {
+          const errorIds = result.issues.filter(i => i.severity === 'error').map(i => i.memoryId);
+          if (errorIds.length > 0) {
+            for (const id of errorIds) {
+              deleteEntry(hippoRoot, id);
+            }
+            console.log(`\nRemoved ${errorIds.length} error-severity memories.`);
+            console.log(`${result.issues.length - errorIds.length} warnings remain (review manually).`);
+          } else {
+            console.log(`\nNo error-severity issues. Warnings require manual review.`);
+          }
+        } else {
+          console.log(`\nRun with --fix to auto-remove error-severity issues.`);
+        }
+      }
+      break;
+    }
 
     case 'status':
       cmdStatus(hippoRoot);

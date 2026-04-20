@@ -34,6 +34,8 @@ export interface MemoryEntry {
   pinned: boolean;
   confidence: ConfidenceLevel;  // epistemic confidence tier
   content: string;         // the actual memory text
+  parents: string[];       // IDs of source memories this was consolidated from (may be empty)
+  starred: boolean;        // user-bookmarked
 }
 
 export const DECISION_HALF_LIFE_DAYS = 90;
@@ -228,6 +230,11 @@ export function createMemory(
     baseHalfLifeDays?: number;
   } = {}
 ): MemoryEntry {
+  const trimmed = content.trim();
+  if (trimmed.length < 3) {
+    throw new Error(`Memory content too short (${trimmed.length} chars, minimum 3): "${trimmed}"`);
+  }
+
   const now = new Date().toISOString();
   const layer = options.layer ?? Layer.Episodic;
   const tags = options.tags ?? [];
@@ -256,6 +263,8 @@ export function createMemory(
     pinned: options.pinned ?? false,
     confidence: options.confidence ?? 'verified',
     content,
+    parents: [],
+    starred: false,
   };
 
   // Recalculate strength with the emotional multiplier applied

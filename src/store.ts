@@ -57,6 +57,8 @@ interface MemoryRow {
   pinned: number;
   confidence: ConfidenceLevel;
   content: string;
+  parents_json: string;
+  starred: number;
 }
 
 interface ConsolidationRunRow {
@@ -135,7 +137,7 @@ export interface SessionEvent {
 }
 
 const INDEX_VERSION = 2;
-const MEMORY_SELECT_COLUMNS = `id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content`;
+const MEMORY_SELECT_COLUMNS = `id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content, parents_json, starred`;
 const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
 
 function layerDir(root: string, layer: Layer): string {
@@ -197,6 +199,8 @@ export function serializeEntry(entry: MemoryEntry): string {
     conflicts_with: entry.conflicts_with,
     pinned: entry.pinned,
     confidence: entry.confidence ?? 'observed',
+    parents: entry.parents ?? [],
+    starred: entry.starred ?? false,
   });
   return `${fm}\n\n${entry.content}\n`;
 }
@@ -228,6 +232,8 @@ export function deserializeEntry(raw: string): MemoryEntry | null {
     pinned: Boolean(data['pinned'] ?? false),
     confidence: (data['confidence'] as ConfidenceLevel) ?? 'observed',
     content: content.trim(),
+    parents: normalizeStringArray(data['parents']),
+    starred: Boolean(data['starred'] ?? false),
   };
 }
 
@@ -256,6 +262,8 @@ function rowToEntry(row: MemoryRow): MemoryEntry {
     pinned: Boolean(row.pinned),
     confidence: row.confidence ?? 'observed',
     content: row.content,
+    parents: parseJsonArray(row.parents_json),
+    starred: Boolean(row.starred),
   };
 }
 
@@ -610,8 +618,10 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
       id, created, last_retrieved, retrieval_count, strength, half_life_days, layer,
       tags_json, emotional_valence, schema_fit, source, outcome_score,
       outcome_positive, outcome_negative,
-      conflicts_with_json, pinned, confidence, content, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      conflicts_with_json, pinned, confidence, content,
+      parents_json, starred,
+      updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     ON CONFLICT(id) DO UPDATE SET
       created = excluded.created,
       last_retrieved = excluded.last_retrieved,
@@ -630,6 +640,8 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
       pinned = excluded.pinned,
       confidence = excluded.confidence,
       content = excluded.content,
+      parents_json = excluded.parents_json,
+      starred = excluded.starred,
       updated_at = datetime('now')
   `).run(
     entry.id,
@@ -650,6 +662,8 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
     entry.pinned ? 1 : 0,
     entry.confidence,
     entry.content,
+    JSON.stringify(entry.parents ?? []),
+    entry.starred ? 1 : 0,
   );
 
   syncFtsRow(db, entry);

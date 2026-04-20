@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>HIPPO :: Consolidation River</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0906;
+    --amber:#e8a618;
+    --hi:#ffc74a;
+    --mut:#8a5f1a;
+    --dim:#5a3f10;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--amber);font-family:'Share Tech Mono',ui-monospace,monospace;overflow:hidden}
+  body{text-shadow:0 0 1px rgba(232,166,24,0.5), 0 0 8px rgba(232,166,24,0.1)}
+  canvas{position:fixed;inset:0;display:block}
+  .scan{position:fixed;inset:0;pointer-events:none;z-index:20;
+    background:repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0 2px, rgba(0,0,0,0.16) 2px 3px);
+    mix-blend-mode:multiply;opacity:0.55}
+  .vignette{position:fixed;inset:0;pointer-events:none;z-index:21;
+    background:radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.75) 100%)}
+  .chrome{position:fixed;top:10px;left:12px;z-index:30;
+    font-family:'VT323',monospace;font-size:16px;letter-spacing:1px;
+    color:var(--mut);white-space:pre;pointer-events:none}
+  .chrome b{color:var(--amber);font-weight:normal}
+  .chrome .hi{color:var(--hi)}
+  .counter{position:fixed;bottom:10px;right:14px;z-index:30;
+    font-family:'VT323',monospace;font-size:15px;letter-spacing:1px;
+    color:var(--mut);pointer-events:none}
+  .counter b{color:var(--amber);font-weight:normal}
+</style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div class="scan"></div>
+  <div class="vignette"></div>
+  <div class="chrome" id="chrome">[ stream :: <b>--/s</b>  consolidations/hr: <b class="hi">--</b> ]</div>
+  <div class="counter" id="counter">drops processed <b>000000</b></div>
+<script>
+// ---------- memory data (copied from archivist-terminal.html) ----------
+const memoriesData = [
+  { text:"Gold model uses TIPS 10y as primary inflation signal", layer:'buffer' },
+  { text:"Supabase sync overwrites all signal data from local files", layer:'buffer' },
+  { text:"RTX 5080 confirmed working with PyTorch 2.10", layer:'buffer' },
+  { text:"Pre-commit hooks can revert file edits silently", layer:'buffer' },
+  { text:"Hippo memory uses hippocampal consolidation model", layer:'buffer' },
+  { text:"Weekly pipeline runs 42 models in parallel", layer:'buffer' },
+  { text:"Never force push to main branch", layer:'episodic' },
+  { text:"ProcessPoolExecutor default 8 workers for pipeline", layer:'episodic' },
+  { text:"Strength decays with biological half-life curve", layer:'episodic' },
+  { text:"Memory retrieval reinforces strength", layer:'episodic' },
+  { text:"Buffer memories consolidate to episodic after sleep", layer:'episodic' },
+  { text:"Episodic memories generalize into semantic over time", layer:'episodic' },
+  { text:"Power models have known validation issues", layer:'episodic' },
+  { text:"Use safe_sync.py instead of direct Supabase sync", layer:'episodic' },
+  { text:"Signal prices use actual front-month not adjusted", layer:'episodic' },
+  { text:"All futures models must use futures_pnl.py", layer:'episodic' },
+  { text:"VAR limit is 100k for all commodities", layer:'episodic' },
+  { text:"No vol upper clip in position sizing", layer:'episodic' },
+  { text:"GPU gives 40x speedup on matrix operations", layer:'episodic' },
+  { text:"Playwright smoke tests cover 15 scenarios", layer:'episodic' },
+  { text:"GitHub Actions deploys from master automatically", layer:'episodic' },
+  { text:"Content hash caching uses SHA-256 for file ops", layer:'episodic' },
+  { text:"Nightly validation runs at 7AM UTC", layer:'episodic' },
+  { text:"Semantic layer stores generalized knowledge", layer:'episodic' },
+  { text:"Buffer is short-term working memory", layer:'semantic' },
+  { text:"Episodic captures specific events and contexts", layer:'semantic' },
+  { text:"Memory as physics models decay and interference", layer:'semantic' },
+  { text:"Phase transitions in memory consolidation", layer:'semantic' },
+  { text:"Claude Code hooks configured in settings.json", layer:'semantic' },
+  { text:"Compaction triggers at 50 percent context usage", layer:'semantic' },
+  { text:"Roll adjustments needed when contracts change", layer:'semantic' },
+  { text:"Lot sizing uses raw prices not backward-adjusted", layer:'semantic' },
+  { text:"Minimum 1 lot when signal is active", layer:'semantic' },
+  { text:"Vol floor 0.01 prevents division by zero", layer:'semantic' },
+  { text:"Scaled signal equals raw signal always", layer:'semantic' },
+  { text:"MCP server connected for Supabase queries", layer:'semantic' },
+  { text:"Faster whisper uses GPU float16 for transcription", layer:'semantic' },
+  { text:"Confidence 0.95 for all position sizing", layer:'semantic' },
+];
+
+// ---------- seeded RNG (Mulberry32) ----------
+function mulberry32(seed){
+  let t = seed >>> 0;
+  return function(){
+    t = (t + 0x6D2B79F5) >>> 0;
+    let r = Math.imul(t ^ (t>>>15), 1 | t);
+    r ^= r + Math.imul(r ^ (r>>>7), 61 | r);
+    return ((r ^ (r>>>14)) >>> 0) / 4294967296;
+  };
+}
+const rand = mulberry32(0x5EED1984);
+
+// ---------- canvas setup ----------
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d', { alpha: false });
+let W = 0, H = 0, DPR = 1;
+const COL_W = 14;          // column width in CSS px
+let COLS = 0;
+let BAND_H = 0;            // each band height in CSS px
+
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = Math.round(W * DPR);
+  canvas.height = Math.round(H * DPR);
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  COLS = Math.max(24, Math.floor(W / COL_W));
+  BAND_H = H / 3;
+  // hard clear on resize so trails don't warp
+  ctx.fillStyle = '#0a0906';
+  ctx.fillRect(0, 0, W, H);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ---------- bands ----------
+const BANDS = [
+  { name:'BUFFER',   sub:'volatile working memory',    color:[255,199,74]  },
+  { name:'EPISODIC', sub:'consolidated experiences',    color:[232,166,24]  },
+  { name:'SEMANTIC', sub:'generalized knowledge',       color:[138, 95, 26] },
+];
+
+function bandIndex(y){
+  if (y < BAND_H) return 0;
+  if (y < BAND_H * 2) return 1;
+  return 2;
+}
+
+// color interpolation between band colors as y descends
+function colorAt(y){
+  const b = Math.min(2, Math.max(0, y / BAND_H));
+  const i = Math.floor(b);
+  const t = b - i;
+  const c1 = BANDS[i].color;
+  const c2 = BANDS[Math.min(2, i+1)].color;
+  return [
+    c1[0] + (c2[0]-c1[0])*t,
+    c1[1] + (c2[1]-c1[1])*t,
+    c1[2] + (c2[2]-c1[2])*t,
+  ];
+}
+
+// ---------- drops ----------
+// each drop: x (col index), y, char, speed, age, event (bool), life
+const drops = [];
+let dropsProcessed = 0;
+let dropsPerSecAvg = 0;
+let consolidationsThisHour = 0;
+let hourStart = 0;
+
+function firstLetter(text){
+  const m = text.match(/[A-Za-z]/);
+  return m ? m[0].toUpperCase() : '?';
+}
+
+function spawnDrop(sourceBand = null, event = false){
+  // choose a memory; if sourceBand given, prefer matching
+  const pool = sourceBand
+    ? memoriesData.filter(m=>m.layer === sourceBand)
+    : memoriesData;
+  const mem = pool[Math.floor(rand() * pool.length)];
+  const col = Math.floor(rand() * COLS);
+  const x = col * COL_W + COL_W/2;
+  // spawn inside the source band if specified, else at the very top
+  let y;
+  if (sourceBand === 'buffer' || sourceBand === null){
+    y = -12 + rand()*8;
+  } else if (sourceBand === 'episodic'){
+    y = BAND_H + rand()*20;
+  } else {
+    y = BAND_H*2 + rand()*20;
+  }
+  const baseSpeed = 1.5 + rand()*1.5;
+  const speed = event ? baseSpeed * 3.2 : baseSpeed;
+  drops.push({
+    x, y,
+    ch: firstLetter(mem.text),
+    speed,
+    event,
+    eventFrames: event ? 90 : 0,   // how long to stay hot
+    born: performance.now(),
+  });
+}
+
+// ---------- consolidation event ----------
+function consolidationEvent(){
+  const n = 5 + Math.floor(rand()*4);   // 5-8
+  for (let i=0; i<n; i++){
+    spawnDrop('buffer', true);
+  }
+  consolidationsThisHour++;
+}
+
+// ---------- interaction: click forces a consolidation event ----------
+window.addEventListener('click', consolidationEvent);
+
+// ---------- labels ----------
+function drawBandChrome(){
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.font = '11px VT323, monospace';
+  ctx.textBaseline = 'top';
+  // dashed dividers
+  ctx.strokeStyle = 'rgba(232,166,24,0.30)';
+  ctx.setLineDash([6, 6]);
+  ctx.lineWidth = 1;
+  for (let i=1; i<3; i++){
+    const y = Math.round(BAND_H * i) + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  // labels, upper-left of each band
+  for (let i=0; i<3; i++){
+    const b = BANDS[i];
+    const y = i * BAND_H + 8;
+    const label = `[ ${b.name.padEnd(8)} :: ${b.sub.padEnd(28)} ]`;
+    ctx.fillStyle = 'rgba(232,166,24,0.42)';
+    ctx.fillText(label, 14, y);
+  }
+  ctx.restore();
+}
+
+// ---------- draw loop ----------
+let spawnAccum = 0;
+let lastTs = performance.now();
+let frame = 0;
+let dropsInWindow = 0;
+let windowStart = performance.now();
+
+// mouse x for pull effect
+let mouseX = -9999, mouseY = -9999;
+window.addEventListener('mousemove', e=>{ mouseX = e.clientX; mouseY = e.clientY; });
+window.addEventListener('mouseleave', ()=>{ mouseX = -9999; mouseY = -9999; });
+
+function tick(ts){
+  const dt = Math.min(0.050, (ts - lastTs) / 1000);
+  lastTs = ts;
+  frame++;
+
+  // fade frame (trail decay)
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = 'rgba(10,9,6,0.12)';
+  ctx.fillRect(0, 0, W, H);
+
+  // band chrome (redraw each frame, but faint alpha keeps trails mostly intact)
+  drawBandChrome();
+
+  // slight whole-canvas flicker
+  const flick = (frame % 7 === 0) ? (0.97 + rand()*0.03) : 1.0;
+
+  // spawn drops: aim for ~2.5/sec baseline
+  spawnAccum += dt * (2 + rand()*1);
+  while (spawnAccum >= 1){
+    spawnDrop(null, false);
+    spawnAccum -= 1;
+    dropsInWindow++;
+  }
+  // rolling drops/sec average, 1s window
+  if (ts - windowStart > 1000){
+    dropsPerSecAvg = dropsPerSecAvg * 0.6 + dropsInWindow * 0.4;
+    dropsInWindow = 0;
+    windowStart = ts;
+  }
+  // periodic consolidation events every ~8s
+  if (frame % 480 === 0){
+    consolidationEvent();
+  }
+  // reset hourly counter
+  if (ts - hourStart > 3600000){
+    consolidationsThisHour = 0;
+    hourStart = ts;
+  }
+
+  // draw drops
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.font = '16px "Share Tech Mono", monospace';
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'center';
+
+  for (let i = drops.length - 1; i >= 0; i--){
+    const d = drops[i];
+
+    // mouse pull: mild x-attraction when within radius
+    if (mouseX > -1000){
+      const dx = mouseX - d.x;
+      const dy = mouseY - d.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < 160 && dist > 0.1){
+        const pull = (1 - dist/160) * 0.6;
+        d.x += (dx / dist) * pull;
+      }
+    }
+
+    // advance
+    d.y += d.speed;
+    if (d.event && d.eventFrames > 0) d.eventFrames--;
+
+    // kill off-screen
+    if (d.y > H + 18){
+      drops.splice(i, 1);
+      dropsProcessed++;
+      continue;
+    }
+
+    // color by current band with smooth interpolation
+    const [r,g,b] = colorAt(d.y);
+
+    // event drops are hotter + slightly larger
+    const isHot = d.event && d.eventFrames > 0;
+    const size = isHot ? 20 : 16;
+    if (size !== 16) ctx.font = `${size}px "Share Tech Mono", monospace`;
+
+    // head: full brightness with phosphor bloom
+    const alphaHead = Math.min(1.0, 0.85 * flick + (isHot ? 0.25 : 0));
+    ctx.shadowColor = `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},${isHot?0.9:0.55})`;
+    ctx.shadowBlur = isHot ? 14 : 8;
+    ctx.fillStyle = `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},${alphaHead})`;
+    ctx.fillText(d.ch, d.x, d.y);
+
+    // occasional character swap (visual texture, not semantic)
+    if (rand() < 0.006){
+      const mem = memoriesData[Math.floor(rand()*memoriesData.length)];
+      d.ch = firstLetter(mem.text);
+    }
+
+    if (size !== 16) ctx.font = '16px "Share Tech Mono", monospace';
+  }
+
+  ctx.shadowBlur = 0;
+  ctx.globalCompositeOperation = 'source-over';
+
+  // chrome readouts (every ~15 frames to avoid DOM churn)
+  if (frame % 15 === 0){
+    const perSec = Math.round(dropsPerSecAvg);
+    document.getElementById('chrome').innerHTML =
+      `[ stream :: <b>${String(perSec).padStart(2,' ')}/s</b>  consolidations/hr: <span class="hi"><b>${consolidationsThisHour}</b></span> ]`;
+    document.getElementById('counter').innerHTML =
+      `drops processed <b>${String(dropsProcessed).padStart(6,'0')}</b>`;
+  }
+
+  requestAnimationFrame(tick);
+}
+
+// warm up with a few drops so the canvas isn't empty at t=0
+for (let i=0; i<40; i++){
+  spawnDrop(null, false);
+  drops[drops.length-1].y = rand() * H;
+}
+hourStart = performance.now();
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

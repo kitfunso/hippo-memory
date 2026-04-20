@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>hippo : memories</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: none; -moz-osx-font-smoothing: none; font-smooth: never; }
+  html, body { height: 100%; }
+  body {
+    background: #ffffff;
+    background-image:
+      repeating-linear-gradient(45deg, #000 0px, #000 1px, #fff 1px, #fff 4px);
+    background-attachment: fixed;
+    color: #000;
+    font-family: Geneva, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    display: flex; align-items: center; justify-content: center;
+    padding: 40px 20px;
+    min-height: 100vh;
+    image-rendering: pixelated;
+  }
+  .silk { font-family: "Silkscreen", monospace; letter-spacing: 0.5px; }
+
+  /* ---------- WINDOW ---------- */
+  .stack {
+    width: 640px; max-width: 100%;
+    background: #fff;
+    border: 1px solid #000;
+    box-shadow: 2px 2px 0 0 #000;
+    position: relative;
+    border-radius: 1px;
+  }
+  .titlebar {
+    height: 20px;
+    border-bottom: 1px solid #000;
+    display: flex; align-items: center;
+    position: relative;
+    background:
+      linear-gradient(#fff,#fff) 0 0/100% 2px no-repeat,
+      linear-gradient(#fff,#fff) 0 100%/100% 2px no-repeat,
+      repeating-linear-gradient(to bottom, #000 0 2px, #fff 2px 4px);
+  }
+  .closebox, .zoombox {
+    width: 11px; height: 11px;
+    border: 1px solid #000;
+    background: #fff;
+    margin: 0 6px;
+    flex: none;
+    position: relative;
+    z-index: 2;
+  }
+  .zoombox::after {
+    content: "";
+    position: absolute; inset: 2px;
+    border: 1px solid #000;
+  }
+  .title-text {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    background: #fff;
+    padding: 0 10px;
+    font-family: "Silkscreen", monospace;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+
+  /* ---------- CARD AREA ---------- */
+  .card-wrap {
+    display: flex;
+    min-height: 520px;
+  }
+  .card {
+    flex: 1;
+    padding: 18px 22px 16px 22px;
+    position: relative;
+  }
+  .card.flip { animation: wipe 80ms steps(1) both; }
+  @keyframes wipe { 0% { clip-path: inset(0 100% 0 0); } 100% { clip-path: inset(0 0 0 0); } }
+  .card-title {
+    font-family: "Silkscreen", monospace;
+    font-size: 18px;
+    line-height: 1.2;
+    padding-bottom: 10px;
+  }
+  .rule { border: 0; border-top: 1px solid #000; margin: 2px 0 14px 0; }
+  .body {
+    font-size: 14px;
+    line-height: 1.55;
+    min-height: 90px;
+    padding-bottom: 12px;
+  }
+  .meta {
+    font-size: 12px;
+    line-height: 1.7;
+    border-top: 1px solid #000;
+    padding-top: 10px;
+    margin-top: 6px;
+    font-family: Geneva, "Helvetica Neue", sans-serif;
+  }
+  .meta .row { display: flex; }
+  .meta .label {
+    display: inline-block;
+    width: 92px;
+    font-family: "Silkscreen", monospace;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+  }
+  .meta .val { flex: 1; }
+  .bar {
+    display: inline-block;
+    width: 120px; height: 10px;
+    border: 1px solid #000;
+    vertical-align: -1px;
+    background: #fff;
+    position: relative;
+    margin-right: 8px;
+  }
+  .bar-fill {
+    position: absolute; inset: 0; right: auto;
+    background: repeating-linear-gradient(45deg, #000 0 1px, #fff 1px 2px);
+    border-right: 1px solid #000;
+  }
+
+  /* ---------- SCROLLBAR ---------- */
+  .scrollbar {
+    width: 16px;
+    border-left: 1px solid #000;
+    display: flex; flex-direction: column;
+    background: repeating-linear-gradient(45deg, #000 0 1px, #fff 1px 2px);
+  }
+  .sb-arrow {
+    height: 16px;
+    border-bottom: 1px solid #000;
+    background: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-family: "Silkscreen", monospace; font-size: 10px;
+    cursor: pointer;
+  }
+  .sb-arrow.bottom { border-bottom: 0; border-top: 1px solid #000; }
+  .sb-track { flex: 1; position: relative; }
+  .sb-thumb {
+    position: absolute; left: 2px; right: 2px;
+    background: #000;
+    min-height: 20px;
+  }
+
+  /* ---------- BUTTON ROW ---------- */
+  .btn-row {
+    border-top: 1px solid #000;
+    padding: 10px 22px 12px 22px;
+    display: flex; gap: 10px;
+    align-items: center;
+  }
+  .btn {
+    font-family: "Silkscreen", monospace;
+    font-size: 11px;
+    background: #fff;
+    color: #000;
+    border: 1px solid #000;
+    border-radius: 6px;
+    padding: 4px 12px;
+    box-shadow: 2px 2px 0 0 #000;
+    cursor: pointer;
+    user-select: none;
+    letter-spacing: 0.5px;
+  }
+  .btn:active, .btn.pressed {
+    background: #000; color: #fff;
+    box-shadow: none;
+    transform: translate(2px, 2px);
+  }
+  .btn.big {
+    font-size: 13px; padding: 8px 16px;
+  }
+  .btn-row .spacer { flex: 1; }
+  .page-num {
+    font-family: "Silkscreen", monospace;
+    font-size: 10px;
+    color: #000;
+  }
+
+  /* ---------- HOME CARD ---------- */
+  .home { text-align: center; padding: 36px 30px 20px 30px; }
+  .home h1 {
+    font-family: "Silkscreen", monospace;
+    font-size: 42px;
+    letter-spacing: 2px;
+    padding-bottom: 6px;
+  }
+  .home .sub { font-size: 13px; padding-bottom: 20px; }
+  .home .layer-btns { display: flex; gap: 12px; justify-content: center; padding: 14px 0 18px 0; }
+  .home .double { font-family: "Silkscreen", monospace; font-size: 10px; padding-top: 12px; letter-spacing: 1px; }
+  .home .stack-art {
+    display: inline-block;
+    position: relative;
+    width: 80px; height: 60px;
+    margin: 10px 0 18px 0;
+  }
+  .home .stack-art .cd {
+    position: absolute;
+    width: 60px; height: 40px;
+    border: 1px solid #000;
+    background: #fff;
+    box-shadow: 2px 2px 0 0 #000;
+  }
+  .home .stack-art .cd:nth-child(1) { top: 0; left: 0; }
+  .home .stack-art .cd:nth-child(2) { top: 6px; left: 8px; }
+  .home .stack-art .cd:nth-child(3) { top: 12px; left: 16px; }
+  .clock {
+    position: absolute;
+    top: 24px; right: 10px;
+    font-family: "Silkscreen", monospace;
+    font-size: 10px;
+    border: 1px solid #000;
+    padding: 2px 6px;
+    background: #fff;
+  }
+
+  /* ---------- INDEX OVERLAY ---------- */
+  .overlay {
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(45deg, #000 0 1px, transparent 1px 2px);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 50;
+  }
+  .overlay.open { display: flex; }
+  .dlg {
+    width: 460px; max-height: 70vh;
+    background: #fff;
+    border: 1px solid #000;
+    box-shadow: 2px 2px 0 0 #000;
+    display: flex; flex-direction: column;
+  }
+  .dlg .tb { /* reuse titlebar look */
+    height: 20px; border-bottom: 1px solid #000; display: flex; align-items: center;
+    background:
+      linear-gradient(#fff,#fff) 0 0/100% 2px no-repeat,
+      linear-gradient(#fff,#fff) 0 100%/100% 2px no-repeat,
+      repeating-linear-gradient(to bottom, #000 0 2px, #fff 2px 4px);
+    position: relative;
+  }
+  .dlg .tb .title-text { font-size: 10px; }
+  .dlg-body { overflow: auto; flex: 1; }
+  .dlg table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .dlg th, .dlg td { padding: 4px 8px; text-align: left; border-bottom: 1px solid #000; vertical-align: top; }
+  .dlg th {
+    font-family: "Silkscreen", monospace; font-size: 10px;
+    background: repeating-linear-gradient(45deg, #000 0 1px, #fff 1px 2px);
+    position: sticky; top: 0;
+  }
+  .dlg th span { background: #fff; padding: 2px 4px; }
+  .dlg tbody tr { cursor: pointer; }
+  .dlg tbody tr:hover { background: #000; color: #fff; }
+  .dlg-foot { border-top: 1px solid #000; padding: 8px; text-align: right; }
+
+  .footer-hint {
+    text-align: center;
+    font-family: "Silkscreen", monospace;
+    font-size: 10px;
+    margin-top: 14px;
+    color: #000;
+    background: #fff;
+    display: inline-block;
+    padding: 4px 8px;
+    border: 1px solid #000;
+    box-shadow: 2px 2px 0 0 #000;
+  }
+  .footer-wrap { text-align: center; margin-top: 16px; }
+</style>
+</head>
+<body>
+  <div>
+  <div class="stack" id="stack">
+    <div class="titlebar">
+      <div class="closebox" title="close"></div>
+      <div style="flex:1"></div>
+      <div class="title-text">hippo : memories</div>
+      <div style="flex:1"></div>
+      <div class="zoombox" title="zoom"></div>
+    </div>
+    <div class="card-wrap">
+      <div class="card" id="card"></div>
+      <div class="scrollbar">
+        <div class="sb-arrow" title="up">^</div>
+        <div class="sb-track"><div class="sb-thumb" id="sbThumb" style="top:2px;height:40px"></div></div>
+        <div class="sb-arrow bottom" title="down">v</div>
+      </div>
+    </div>
+    <div class="btn-row" id="btnRow">
+      <button class="btn" id="btnPrev">&lt; Prev</button>
+      <button class="btn" id="btnIndex">Index...</button>
+      <button class="btn" id="btnNext">Next &gt;</button>
+      <div class="spacer"></div>
+      <div class="page-num" id="pageNum">card 0 / 38</div>
+    </div>
+  </div>
+  <div class="footer-wrap"><div class="footer-hint">Arrow keys = navigate &nbsp;&middot;&nbsp; Click Index... for list</div></div>
+  </div>
+
+  <!-- index overlay -->
+  <div class="overlay" id="overlay">
+    <div class="dlg">
+      <div class="tb">
+        <div class="closebox" id="dlgClose"></div>
+        <div style="flex:1"></div>
+        <div class="title-text">Stack Index</div>
+        <div style="flex:1"></div>
+        <div class="zoombox"></div>
+      </div>
+      <div class="dlg-body">
+        <table id="idxTable">
+          <thead><tr><th><span>#</span></th><th><span>title</span></th><th><span>layer</span></th><th><span>conf</span></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="dlg-foot"><button class="btn" id="dlgCancel">Cancel</button></div>
+    </div>
+  </div>
+
+<script>
+// ---------- data (copied from retro-terminal.html) ----------
+const memoriesData = [
+  { text: "Gold model uses TIPS 10y as primary inflation signal", layer: 'buffer', tags: ['gold','tips','inflation','signals'], confidence: 'verified' },
+  { text: "Supabase sync overwrites all signal data from local files", layer: 'buffer', tags: ['supabase','sync','safety'], confidence: 'verified' },
+  { text: "RTX 5080 confirmed working with PyTorch 2.10", layer: 'buffer', tags: ['gpu','pytorch','hardware'], confidence: 'verified' },
+  { text: "Pre-commit hooks can revert file edits silently", layer: 'buffer', tags: ['git','hooks','gotcha'], confidence: 'observed' },
+  { text: "Hippo memory uses hippocampal consolidation model", layer: 'buffer', tags: ['hippo','consolidation','theory'], confidence: 'observed' },
+  { text: "Weekly pipeline runs 42 models in parallel", layer: 'buffer', tags: ['pipeline','parallel','weekly'], confidence: 'verified' },
+  { text: "Never force push to main branch", layer: 'episodic', tags: ['git','safety'], confidence: 'verified' },
+  { text: "ProcessPoolExecutor default 8 workers for pipeline", layer: 'episodic', tags: ['pipeline','parallel','python'], confidence: 'verified' },
+  { text: "Strength decays with biological half-life curve", layer: 'episodic', tags: ['hippo','decay','theory'], confidence: 'verified' },
+  { text: "Memory retrieval reinforces strength", layer: 'episodic', tags: ['hippo','retrieval','theory'], confidence: 'verified' },
+  { text: "Buffer memories consolidate to episodic after sleep", layer: 'episodic', tags: ['hippo','consolidation','buffer','episodic'], confidence: 'verified' },
+  { text: "Episodic memories generalize into semantic over time", layer: 'episodic', tags: ['hippo','consolidation','episodic','semantic'], confidence: 'verified' },
+  { text: "Power models have known validation issues", layer: 'episodic', tags: ['power','validation','issues'], confidence: 'observed' },
+  { text: "Use safe_sync.py instead of direct Supabase sync", layer: 'episodic', tags: ['supabase','sync','safety'], confidence: 'verified' },
+  { text: "Signal prices use actual front-month not adjusted", layer: 'episodic', tags: ['prices','signals','futures'], confidence: 'verified' },
+  { text: "All futures models must use futures_pnl.py", layer: 'episodic', tags: ['futures','pnl','standard'], confidence: 'verified' },
+  { text: "VAR limit is 100k for all commodities", layer: 'episodic', tags: ['var','sizing','futures'], confidence: 'verified' },
+  { text: "No vol upper clip in position sizing", layer: 'episodic', tags: ['vol','sizing','futures'], confidence: 'verified' },
+  { text: "GPU gives 40x speedup on matrix operations", layer: 'episodic', tags: ['gpu','performance','pytorch'], confidence: 'observed' },
+  { text: "Playwright smoke tests cover 15 scenarios", layer: 'episodic', tags: ['playwright','tests','frontend'], confidence: 'verified' },
+  { text: "GitHub Actions deploys from master automatically", layer: 'episodic', tags: ['deploy','github','ci'], confidence: 'verified' },
+  { text: "Content hash caching uses SHA-256 for file ops", layer: 'episodic', tags: ['cache','hash','files'], confidence: 'observed' },
+  { text: "Nightly validation runs at 7AM UTC", layer: 'episodic', tags: ['validation','schedule','ci'], confidence: 'verified' },
+  { text: "Semantic layer stores generalized knowledge", layer: 'episodic', tags: ['hippo','semantic','theory'], confidence: 'verified' },
+  { text: "Buffer is short-term working memory", layer: 'semantic', tags: ['hippo','buffer','theory'], confidence: 'verified' },
+  { text: "Episodic captures specific events and contexts", layer: 'semantic', tags: ['hippo','episodic','theory'], confidence: 'verified' },
+  { text: "Memory as physics models decay and interference", layer: 'semantic', tags: ['hippo','physics','theory'], confidence: 'inferred' },
+  { text: "Phase transitions in memory consolidation", layer: 'semantic', tags: ['hippo','consolidation','theory'], confidence: 'inferred' },
+  { text: "Claude Code hooks configured in settings.json", layer: 'semantic', tags: ['claude','hooks','config'], confidence: 'verified' },
+  { text: "Compaction triggers at 50 percent context usage", layer: 'semantic', tags: ['claude','compaction','context'], confidence: 'verified' },
+  { text: "Roll adjustments needed when contracts change", layer: 'semantic', tags: ['futures','roll','prices'], confidence: 'verified' },
+  { text: "Lot sizing uses raw prices not backward-adjusted", layer: 'semantic', tags: ['sizing','prices','futures'], confidence: 'verified' },
+  { text: "Minimum 1 lot when signal is active", layer: 'semantic', tags: ['sizing','futures','signals'], confidence: 'verified' },
+  { text: "Vol floor 0.01 prevents division by zero", layer: 'semantic', tags: ['vol','sizing','safety'], confidence: 'verified' },
+  { text: "Scaled signal equals raw signal always", layer: 'semantic', tags: ['sizing','signals','standard'], confidence: 'verified' },
+  { text: "MCP server connected for Supabase queries", layer: 'semantic', tags: ['mcp','supabase','config'], confidence: 'verified' },
+  { text: "Faster whisper uses GPU float16 for transcription", layer: 'semantic', tags: ['whisper','gpu','transcription'], confidence: 'observed' },
+  { text: "Confidence 0.95 for all position sizing", layer: 'semantic', tags: ['sizing','futures','standard'], confidence: 'verified' },
+];
+
+function rng(seed){ let s=seed; return ()=>{ s=(s*1103515245+12345)&0x7fffffff; return s/0x7fffffff; }; }
+const r = rng(42);
+const NOW = Date.now();
+const DAY = 86400000;
+function fmtDate(ts){
+  const d = new Date(ts);
+  const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
+  return `${d.getFullYear()} ${mo} ${String(d.getDate()).padStart(2,'0')}`;
+}
+const memories = memoriesData.map((d,i)=>{
+  const age = +(r()*30).toFixed(1);
+  const createdTs = NOW - Math.round(age * DAY);
+  const base = d.layer==='buffer'?0.85:d.layer==='episodic'?0.6:0.4;
+  const strength = Math.max(0.05, Math.min(0.99, +(base + (r()-0.5)*0.3).toFixed(2)));
+  const half = d.layer==='buffer'?3:d.layer==='episodic'?14:90;
+  const retrievals = Math.floor(r()*12);
+  return { id:i+1, ...d, age_days:age, created:fmtDate(createdTs), strength, half_life_days:half, retrieval_count:retrievals };
+});
+
+const TOTAL = memories.length + 1; // + home
+let idx = 0; // 0 = home
+
+function confTag(c){ return '['+c+']'; }
+
+function renderHome(){
+  const counts = { buffer: memories.filter(m=>m.layer==='buffer').length,
+                   episodic: memories.filter(m=>m.layer==='episodic').length,
+                   semantic: memories.filter(m=>m.layer==='semantic').length };
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2,'0');
+  const mm = String(now.getMinutes()).padStart(2,'0');
+  document.getElementById('card').innerHTML = `
+    <div class="home">
+      <div class="clock">${hh}:${mm}</div>
+      <h1 class="silk">hippo</h1>
+      <div class="sub">A stack of ${memories.length} memory cards.</div>
+      <div class="stack-art"><div class="cd"></div><div class="cd"></div><div class="cd"></div></div>
+      <div class="layer-btns">
+        <button class="btn big" data-jump="buffer">Buffer (${counts.buffer})</button>
+        <button class="btn big" data-jump="episodic">Episodic (${counts.episodic})</button>
+        <button class="btn big" data-jump="semantic">Semantic (${counts.semantic})</button>
+      </div>
+      <div class="double silk">Double-click to begin &gt;&gt;&gt;</div>
+    </div>`;
+  document.querySelectorAll('.layer-btns .btn').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const layer = b.dataset.jump;
+      const first = memories.findIndex(m=>m.layer===layer);
+      if(first>=0) go(first+1);
+    });
+  });
+  document.querySelector('.home').addEventListener('dblclick', ()=> go(1));
+}
+
+function renderMemory(m, i){
+  const pct = Math.round(m.strength*100);
+  const firstLine = m.text.length>56 ? m.text.slice(0,53)+'...' : m.text;
+  document.getElementById('card').innerHTML = `
+    <div class="card-title silk">${escapeHtml(firstLine)}</div>
+    <hr class="rule">
+    <div class="body">${escapeHtml(m.text)}</div>
+    <div class="meta">
+      <div class="row"><span class="label">Layer:</span><span class="val">${m.layer.toUpperCase()}</span></div>
+      <div class="row"><span class="label">Strength:</span><span class="val"><span class="bar"><span class="bar-fill" style="width:${pct}%"></span></span>${m.strength.toFixed(2)}</span></div>
+      <div class="row"><span class="label">Half-life:</span><span class="val">${m.half_life_days} days</span></div>
+      <div class="row"><span class="label">Created:</span><span class="val">${m.created}</span></div>
+      <div class="row"><span class="label">Retrieved:</span><span class="val">${m.retrieval_count} times</span></div>
+      <div class="row"><span class="label">Confidence:</span><span class="val">${confTag(m.confidence)}</span></div>
+      <div class="row"><span class="label">Tags:</span><span class="val">${m.tags.join(', ')}</span></div>
+      <div class="row"><span class="label">Card ID:</span><span class="val">mem_${String(m.id).padStart(3,'0')}</span></div>
+    </div>`;
+}
+
+function escapeHtml(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function updateChrome(){
+  document.getElementById('pageNum').textContent = idx===0 ? 'home card' : `card ${idx} / ${memories.length}`;
+  // scrollbar thumb position
+  const track = document.querySelector('.sb-track');
+  const thumb = document.getElementById('sbThumb');
+  const h = track.clientHeight;
+  const thumbH = Math.max(20, Math.floor(h * 0.15));
+  const range = h - thumbH - 4;
+  const frac = idx / (TOTAL-1);
+  thumb.style.height = thumbH + 'px';
+  thumb.style.top = (2 + Math.round(range*frac)) + 'px';
+}
+
+function go(i){
+  idx = Math.max(0, Math.min(TOTAL-1, i));
+  const card = document.getElementById('card');
+  card.classList.remove('flip'); void card.offsetWidth; card.classList.add('flip');
+  if(idx===0) renderHome();
+  else renderMemory(memories[idx-1], idx);
+  updateChrome();
+}
+
+// ---------- wire up buttons ----------
+document.getElementById('btnPrev').addEventListener('click', ()=> go(idx-1));
+document.getElementById('btnNext').addEventListener('click', ()=> go(idx+1));
+document.getElementById('btnIndex').addEventListener('click', openIndex);
+
+document.addEventListener('keydown', e=>{
+  if(document.getElementById('overlay').classList.contains('open')){
+    if(e.key==='Escape'){ closeIndex(); }
+    return;
+  }
+  if(e.key==='ArrowRight'){ go(idx+1); }
+  else if(e.key==='ArrowLeft'){ go(idx-1); }
+  else if(e.key==='Home'){ go(0); }
+  else if(e.key==='End'){ go(TOTAL-1); }
+});
+
+// scrollbar arrows
+document.querySelectorAll('.sb-arrow').forEach(a=>{
+  a.addEventListener('click', ()=>{
+    if(a.classList.contains('bottom')) go(idx+1); else go(idx-1);
+  });
+});
+
+// ---------- index overlay ----------
+function openIndex(){
+  const tbody = document.querySelector('#idxTable tbody');
+  tbody.innerHTML = '';
+  memories.forEach((m,i)=>{
+    const tr = document.createElement('tr');
+    const titleShort = m.text.length>46 ? m.text.slice(0,43)+'...' : m.text;
+    tr.innerHTML = `<td>${String(i+1).padStart(2,'0')}</td><td>${escapeHtml(titleShort)}</td><td>${m.layer}</td><td>${m.confidence}</td>`;
+    tr.addEventListener('click', ()=>{ closeIndex(); go(i+1); });
+    tbody.appendChild(tr);
+  });
+  document.getElementById('overlay').classList.add('open');
+}
+function closeIndex(){ document.getElementById('overlay').classList.remove('open'); }
+document.getElementById('dlgClose').addEventListener('click', closeIndex);
+document.getElementById('dlgCancel').addEventListener('click', closeIndex);
+document.getElementById('overlay').addEventListener('click', e=>{
+  if(e.target.id==='overlay') closeIndex();
+});
+
+// boot
+renderHome();
+updateChrome();
+</script>
+</body>
+</html>

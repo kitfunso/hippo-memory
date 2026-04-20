@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.26.0 (2026-04-20) — Memory quality
+
+### Added
+- **`hippo audit` command.** Checks memory quality and flags low-value entries: too-short content, release/merge/WIP commit noise, sentence fragments, vague entries with no specific details. `--fix` removes errors (auto-deletes). Severities: `error` (removed on fix) and `warning` (reported only).
+- **Sleep-time auto-cleanup.** `hippo sleep` now runs the audit and silently removes junk memories (severity `error`). Prevents commit-noise like `"release 0.24.1"` or `"Merge branch main"` from surviving consolidation.
+- **Capture quality gate.** `cmdCapture` (markdown importer, Claude Code hooks) filters extractions through `isContentWorthStoring()` so fragments and version bumps never enter the store.
+
+### Fixed
+- **Conflict detector over-fires.** Previous detector flagged 800+ spurious "negation polarity mismatch" conflicts from scanning entire memory bodies. Rewritten with stopword-filtered Jaccard, a minimum rare-shared-token gate, and opening-window polarity: enabled/disabled, true/false, and always/never checks now only fire on tokens near the start of a memory. Removes false positives where common English prepositions ("on", "off", "in", "out") happened to co-occur deep in unrelated prose.
+- **`hippo remember` accepts empty/tiny inputs.** Now rejects content under 3 characters with a clear error.
+
+### Internal
+- New `src/audit.ts` with `auditMemory`, `auditMemories`, `isContentWorthStoring`.
+- `scripts/resolve-stale-conflicts.mjs` — one-off migration that marks the pre-0.26 spurious conflicts as resolved so they vanish from the UI and reports.
+- Schema migration to version 9 adds `parents_json` and `starred` columns to the memory store (reserved for future UI work; unused in this release).
+
 ## 0.25.0 (2026-04-16) — Brain Observatory
 
 ### Added

@@ -1,0 +1,673 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>HIPPO :: Catalog Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0906;
+    --bg2:#120e07;
+    --amber:#e8a618;
+    --hi:#ffc74a;
+    --mut:#8a5f1a;
+    --dim:#5a3f10;
+    --dimmer:#3a2a0a;
+    --red:#ff6b2e;
+    --panel:#100c07;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--amber);font-family:'Share Tech Mono',ui-monospace,monospace;font-size:13px;line-height:1.35;overflow:hidden}
+  body{
+    filter:contrast(1.05) brightness(1.08);
+    text-shadow:0 0 1px rgba(232,166,24,0.55), 0 0 8px rgba(232,166,24,0.12);
+  }
+  /* scanlines */
+  .scan{position:fixed;inset:0;pointer-events:none;z-index:50;
+    background:repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0 2px, rgba(0,0,0,0.18) 2px 3px);
+    mix-blend-mode:multiply;opacity:0.55}
+  /* vignette */
+  .vignette{position:fixed;inset:0;pointer-events:none;z-index:51;
+    background:radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.75) 100%)}
+  /* flicker */
+  @keyframes flicker{ 0%{opacity:1} 3%{opacity:.92} 6%{opacity:1} 70%{opacity:1} 72%{opacity:.95} 100%{opacity:1} }
+  .flick{animation:flicker 4.7s infinite}
+  /* layout */
+  .shell{display:grid;grid-template-rows:56px 1fr 40px;height:100vh;gap:0}
+  .chrome{display:flex;align-items:center;justify-content:space-between;padding:2px 10px;border-bottom:1px solid var(--dim)}
+  .banner{white-space:pre;color:var(--hi);font-family:'VT323',monospace;font-size:16px;letter-spacing:0.5px}
+  .leds{display:flex;gap:10px;font-family:'VT323',monospace;font-size:17px;letter-spacing:1px}
+  .led{color:var(--mut)}
+  .led.err{color:var(--red)}
+  .led.conf{color:var(--amber)}
+  .led.fad{color:var(--hi)}
+  .uptime{color:var(--mut);font-size:12px;letter-spacing:1px}
+  .uptime b{color:var(--amber);font-weight:normal}
+
+  .main{display:grid;grid-template-columns:300px 1fr;min-height:0}
+  .cabinet{border-right:1px solid var(--dim);overflow:auto;padding:10px 8px 60px 10px;background:linear-gradient(180deg, var(--panel), #0c0904)}
+  .cabinet::-webkit-scrollbar{width:8px}
+  .cabinet::-webkit-scrollbar-thumb{background:var(--dim)}
+  .desk{overflow:auto;padding:14px 18px;background:radial-gradient(ellipse at 30% 10%, rgba(232,166,24,0.04), transparent 60%)}
+  .desk::-webkit-scrollbar{width:8px}
+  .desk::-webkit-scrollbar-thumb{background:var(--dim)}
+
+  .drawer{font-family:'Share Tech Mono',monospace;white-space:pre;cursor:pointer;margin-bottom:2px;color:var(--amber);user-select:none}
+  .drawer.sel{color:#0a0906}
+  .drawer.sel .drawer-inner{background:var(--amber);color:#0a0906;text-shadow:none}
+  .drawer-inner{display:block;white-space:pre;padding:0}
+  .drawer .meta{color:var(--mut);font-size:11px;padding-left:2px}
+  .drawer.sel .meta{color:#2a1d05}
+
+  .idx{margin:2px 0 10px 8px;font-family:'Share Tech Mono',monospace;white-space:pre}
+  .idx .row{cursor:pointer;padding:0 2px;color:var(--amber)}
+  .idx .row:hover{background:rgba(232,166,24,0.08)}
+  .idx .row.sel{background:var(--amber);color:#0a0906;text-shadow:none}
+  .idx .row .cn{color:var(--hi)}
+  .idx .row.sel .cn{color:#2a1d05}
+  .idx .row .cf{color:var(--mut)}
+  .idx .row.sel .cf{color:#3a2a05}
+
+  /* card */
+  .card-wrap{display:flex;justify-content:center;padding:6px 0 20px}
+  .card{white-space:pre;font-family:'Share Tech Mono',monospace;font-size:13.5px;color:var(--amber);
+    text-shadow:0 0 1px rgba(232,166,24,0.6), 1px 0 0 rgba(232,166,24,0.08), 0 0 10px rgba(232,166,24,0.1)}
+  .card .br{color:var(--hi)}
+  .card .ttl{color:var(--hi);letter-spacing:1px}
+  .card .stamp{color:var(--red);letter-spacing:2px;text-shadow:0 0 1px rgba(255,107,46,0.7), 0 0 6px rgba(255,107,46,0.25)}
+  .card .dim{color:var(--mut)}
+  .card .hole{color:var(--dimmer)}
+  .card .tag{color:var(--hi)}
+  .card .k{color:var(--mut)}
+  .card .bar{color:var(--hi)}
+
+  /* desk header strip */
+  .desk-head{font-family:'Share Tech Mono',monospace;color:var(--mut);white-space:pre;margin-bottom:8px;font-size:12px}
+  .desk-head b{color:var(--amber);font-weight:normal}
+
+  /* prompt */
+  .prompt{display:flex;align-items:center;border-top:1px solid var(--dim);background:var(--bg2);padding:0 12px;gap:8px}
+  .prompt .ps{color:var(--hi);font-family:'VT323',monospace;font-size:18px;letter-spacing:1px}
+  .prompt input{flex:1;background:transparent;border:0;outline:0;color:var(--amber);font-family:'Share Tech Mono',monospace;font-size:14px;caret-color:var(--hi)}
+  .prompt input::placeholder{color:var(--dim)}
+  .prompt .hint{color:var(--dim);font-size:11px;letter-spacing:1px}
+
+  /* help overlay */
+  .overlay{position:fixed;inset:0;background:rgba(10,9,6,0.85);z-index:60;display:none;align-items:center;justify-content:center}
+  .overlay.on{display:flex}
+  .overlay pre{white-space:pre;font-family:'Share Tech Mono',monospace;color:var(--amber);
+    text-shadow:0 0 1px rgba(232,166,24,0.6), 0 0 10px rgba(232,166,24,0.12);font-size:13px}
+  .overlay .hi{color:var(--hi)}
+  .overlay .dim{color:var(--mut)}
+
+  /* boot */
+  .boot{position:fixed;inset:0;background:var(--bg);z-index:70;display:flex;align-items:flex-start;justify-content:flex-start;padding:30px 40px;font-family:'VT323',monospace;font-size:18px;color:var(--amber);white-space:pre;overflow:hidden}
+  .boot .hi{color:var(--hi)}
+  .boot .red{color:var(--red)}
+  .boot.off{display:none}
+
+  .cursor{display:inline-block;width:0.55em;background:var(--amber);color:var(--amber);animation:blink 1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+</style>
+</head>
+<body class="flick">
+  <div class="scan"></div>
+  <div class="vignette"></div>
+
+  <div class="boot" id="boot"><span id="bootOut"></span><span class="cursor">_</span></div>
+
+  <div class="shell" id="shell" style="visibility:hidden">
+    <!-- TOP CHROME -->
+    <div class="chrome">
+      <pre class="banner" id="banner"></pre>
+      <div style="display:flex;align-items:center;gap:18px">
+        <div class="leds" id="leds"></div>
+        <div class="uptime">UP <b id="uptime">00:00:00</b></div>
+      </div>
+    </div>
+
+    <!-- MAIN -->
+    <div class="main">
+      <!-- LEFT: drawer cabinet -->
+      <nav class="cabinet" id="cabinet"></nav>
+
+      <!-- CENTER: reading desk -->
+      <section class="desk" id="desk">
+        <div class="desk-head" id="deskHead"></div>
+        <div class="card-wrap"><pre class="card" id="card"></pre></div>
+      </section>
+    </div>
+
+    <!-- PROMPT -->
+    <div class="prompt">
+      <span class="ps">CALL&gt;</span>
+      <input id="prompt" autocomplete="off" spellcheck="false" placeholder="call HIP.EP.012 | drw 02 | grep gpu | ls buffer | stat | help"/>
+      <span class="hint">/ FOCUS  ? HELP  &uarr;&darr; NAV  ENTER PULL</span>
+    </div>
+  </div>
+
+  <!-- HELP OVERLAY -->
+  <div class="overlay" id="overlay">
+    <pre id="help"></pre>
+  </div>
+
+<script>
+// ---------- reference data (copied from retro-terminal.html) ----------
+const memoriesData = [
+  { text:"Gold model uses TIPS 10y as primary inflation signal", layer:'buffer', tags:['gold','tips','inflation','signals'], confidence:'verified' },
+  { text:"Supabase sync overwrites all signal data from local files", layer:'buffer', tags:['supabase','sync','safety'], confidence:'verified' },
+  { text:"RTX 5080 confirmed working with PyTorch 2.10", layer:'buffer', tags:['gpu','pytorch','hardware'], confidence:'verified' },
+  { text:"Pre-commit hooks can revert file edits silently", layer:'buffer', tags:['git','hooks','gotcha'], confidence:'observed' },
+  { text:"Hippo memory uses hippocampal consolidation model", layer:'buffer', tags:['hippo','consolidation','theory'], confidence:'observed' },
+  { text:"Weekly pipeline runs 42 models in parallel", layer:'buffer', tags:['pipeline','parallel','weekly'], confidence:'verified' },
+
+  { text:"Never force push to main branch", layer:'episodic', tags:['git','safety'], confidence:'verified' },
+  { text:"ProcessPoolExecutor default 8 workers for pipeline", layer:'episodic', tags:['pipeline','parallel','python'], confidence:'verified' },
+  { text:"Strength decays with biological half-life curve", layer:'episodic', tags:['hippo','decay','theory'], confidence:'verified' },
+  { text:"Memory retrieval reinforces strength", layer:'episodic', tags:['hippo','retrieval','theory'], confidence:'verified' },
+  { text:"Buffer memories consolidate to episodic after sleep", layer:'episodic', tags:['hippo','consolidation','buffer','episodic'], confidence:'verified' },
+  { text:"Episodic memories generalize into semantic over time", layer:'episodic', tags:['hippo','consolidation','episodic','semantic'], confidence:'verified' },
+  { text:"Power models have known validation issues", layer:'episodic', tags:['power','validation','issues'], confidence:'observed' },
+  { text:"Use safe_sync.py instead of direct Supabase sync", layer:'episodic', tags:['supabase','sync','safety'], confidence:'verified' },
+  { text:"Signal prices use actual front-month not adjusted", layer:'episodic', tags:['prices','signals','futures'], confidence:'verified' },
+  { text:"All futures models must use futures_pnl.py", layer:'episodic', tags:['futures','pnl','standard'], confidence:'verified' },
+  { text:"VAR limit is 100k for all commodities", layer:'episodic', tags:['var','sizing','futures'], confidence:'verified' },
+  { text:"No vol upper clip in position sizing", layer:'episodic', tags:['vol','sizing','futures'], confidence:'verified' },
+  { text:"GPU gives 40x speedup on matrix operations", layer:'episodic', tags:['gpu','performance','pytorch'], confidence:'observed' },
+  { text:"Playwright smoke tests cover 15 scenarios", layer:'episodic', tags:['playwright','tests','frontend'], confidence:'verified' },
+  { text:"GitHub Actions deploys from master automatically", layer:'episodic', tags:['deploy','github','ci'], confidence:'verified' },
+  { text:"Content hash caching uses SHA-256 for file ops", layer:'episodic', tags:['cache','hash','files'], confidence:'observed' },
+  { text:"Nightly validation runs at 7AM UTC", layer:'episodic', tags:['validation','schedule','ci'], confidence:'verified' },
+  { text:"Semantic layer stores generalized knowledge", layer:'episodic', tags:['hippo','semantic','theory'], confidence:'verified' },
+
+  { text:"Buffer is short-term working memory", layer:'semantic', tags:['hippo','buffer','theory'], confidence:'verified' },
+  { text:"Episodic captures specific events and contexts", layer:'semantic', tags:['hippo','episodic','theory'], confidence:'verified' },
+  { text:"Memory as physics models decay and interference", layer:'semantic', tags:['hippo','physics','theory'], confidence:'inferred' },
+  { text:"Phase transitions in memory consolidation", layer:'semantic', tags:['hippo','consolidation','theory'], confidence:'inferred' },
+  { text:"Claude Code hooks configured in settings.json", layer:'semantic', tags:['claude','hooks','config'], confidence:'verified' },
+  { text:"Compaction triggers at 50 percent context usage", layer:'semantic', tags:['claude','compaction','context'], confidence:'verified' },
+  { text:"Roll adjustments needed when contracts change", layer:'semantic', tags:['futures','roll','prices'], confidence:'verified' },
+  { text:"Lot sizing uses raw prices not backward-adjusted", layer:'semantic', tags:['sizing','prices','futures'], confidence:'verified' },
+  { text:"Minimum 1 lot when signal is active", layer:'semantic', tags:['sizing','futures','signals'], confidence:'verified' },
+  { text:"Vol floor 0.01 prevents division by zero", layer:'semantic', tags:['vol','sizing','safety'], confidence:'verified' },
+  { text:"Scaled signal equals raw signal always", layer:'semantic', tags:['sizing','signals','standard'], confidence:'verified' },
+  { text:"MCP server connected for Supabase queries", layer:'semantic', tags:['mcp','supabase','config'], confidence:'verified' },
+  { text:"Faster whisper uses GPU float16 for transcription", layer:'semantic', tags:['whisper','gpu','transcription'], confidence:'observed' },
+  { text:"Confidence 0.95 for all position sizing", layer:'semantic', tags:['sizing','futures','standard'], confidence:'verified' },
+];
+
+// ---------- enrichment ----------
+function rng(seed){ let s=seed; return ()=>{ s=(s*1103515245+12345)&0x7fffffff; return s/0x7fffffff; }; }
+const r = rng(42);
+const NOW = Date.now();
+const DAY = 86400000;
+function fmtDate(ts){
+  const d=new Date(ts);
+  const mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
+  const day=String(d.getDate()).padStart(2,'0');
+  return `${d.getFullYear()} ${mo} ${day}`;
+}
+const LAYER_CODE = { buffer:'BU', episodic:'EP', semantic:'SM' };
+
+// group by layer to assign sequential call numbers
+const byLayer = { buffer:[], episodic:[], semantic:[] };
+memoriesData.forEach(d=>byLayer[d.layer].push(d));
+
+const memories = [];
+let idCounter = 0;
+['buffer','episodic','semantic'].forEach(layer=>{
+  byLayer[layer].forEach((d, i)=>{
+    const age = +(r()*30).toFixed(1);
+    const createdTs = NOW - Math.round(age*DAY);
+    const base = layer==='buffer'?0.85:layer==='episodic'?0.6:0.4;
+    const strength = Math.max(0.05, Math.min(0.99, +(base + (r()-0.5)*0.3).toFixed(2)));
+    const half = layer==='buffer'?3:layer==='episodic'?14:90;
+    const retrievals = Math.floor(r()*12);
+    const callNum = `HIP.${LAYER_CODE[layer]}.${String(i+1).padStart(3,'0')}`;
+    memories.push({
+      id:idCounter++,
+      call:callNum,
+      ...d,
+      age_days:age,
+      created_ts:createdTs,
+      created:fmtDate(createdTs),
+      strength, half_life_days:half, retrieval_count:retrievals,
+    });
+  });
+});
+
+// ---------- drawer model ----------
+const DRAWERS = [
+  { code:'01', name:'BUFFER',   layer:'buffer' },
+  { code:'02', name:'EPISODIC', layer:'episodic' },
+  { code:'03', name:'SEMANTIC', layer:'semantic' },
+];
+DRAWERS.forEach(dr=>{
+  dr.items = memories.filter(m=>m.layer===dr.layer);
+  const first = dr.items[0].call.split('.')[2];
+  const last  = dr.items[dr.items.length-1].call.split('.')[2];
+  dr.range = `HIP.${LAYER_CODE[dr.layer]}.${first}-${last}`;
+});
+
+// ---------- state ----------
+const state = {
+  openDrawerIdx: 1,          // episodic pulled out by default
+  selCardId: memories.find(m=>m.layer==='episodic').id,
+  filter: '',
+  focus: 'drawer',           // 'drawer' or 'card'
+};
+
+// ---------- banner ----------
+const bannerTxt =
+`╔════════════════════════════════════════════════════════════════════════════╗
+║  H I P P O :: CATALOG TERMINAL v1.25   [AMBER VT220 COMPAT]                ║
+╚════════════════════════════════════════════════════════════════════════════╝`;
+document.getElementById('banner').textContent = bannerTxt;
+
+// ---------- LED strip ----------
+function renderLeds(){
+  const stale = memories.filter(m=>m.age_days/m.half_life_days > 2).length;
+  const inferred = memories.filter(m=>m.confidence==='inferred').length;
+  const faded = memories.filter(m=>m.strength < 0.25).length;
+  document.getElementById('leds').innerHTML =
+    `<span class="led err">[ERR &middot;${stale}&middot;]</span>`+
+    `<span class="led conf">[CONF &middot;${inferred}&middot;]</span>`+
+    `<span class="led fad">[FAD &middot;${faded}&middot;]</span>`;
+}
+renderLeds();
+
+// ---------- uptime ----------
+const START = Date.now();
+function tickUptime(){
+  const s = Math.floor((Date.now()-START)/1000);
+  const hh=String(Math.floor(s/3600)).padStart(2,'0');
+  const mm=String(Math.floor((s%3600)/60)).padStart(2,'0');
+  const ss=String(s%60).padStart(2,'0');
+  document.getElementById('uptime').textContent = `${hh}:${mm}:${ss}`;
+}
+setInterval(tickUptime,1000); tickUptime();
+
+// ---------- cabinet render ----------
+function esc(s){ return s.replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+function truncate(s,n){ return s.length>n? s.slice(0,n-1)+'\u2026' : s; }
+
+function filteredItems(dr){
+  const q = state.filter.trim().toLowerCase();
+  if(!q) return dr.items;
+  return dr.items.filter(m=>
+    m.text.toLowerCase().includes(q) ||
+    m.tags.some(t=>t.toLowerCase().includes(q)) ||
+    m.call.toLowerCase().includes(q)
+  );
+}
+
+function renderCabinet(){
+  const cab = document.getElementById('cabinet');
+  cab.innerHTML = '';
+  DRAWERS.forEach((dr, idx)=>{
+    const open = idx === state.openDrawerIdx;
+    const items = filteredItems(dr);
+    const count = items.length;
+
+    // drawer box (brass-ish corners using ╭╮╰╯)
+    const label = ` DRW ${dr.code}  ${dr.name.padEnd(9)}`;
+    const range = ` [${open?'\u2588':' '}] ${dr.range}  (${count})`.padEnd(label.length);
+    const pad = Math.max(label.length, range.length);
+    const top = '\u256D' + '\u2500'.repeat(pad) + '\u256E';
+    const mid1 = '\u2502' + label.padEnd(pad) + '\u2502';
+    const mid2 = '\u2502' + range.padEnd(pad) + '\u2502';
+    const bot = '\u2570' + '\u2500'.repeat(pad) + '\u256F';
+    const drawerEl = document.createElement('div');
+    drawerEl.className = 'drawer' + (open?' sel':'');
+    drawerEl.dataset.idx = idx;
+    drawerEl.innerHTML = `<span class="drawer-inner">${esc(top)}\n${esc(mid1)}\n${esc(mid2)}\n${esc(bot)}</span>`;
+    drawerEl.addEventListener('click', ()=>{
+      state.openDrawerIdx = idx;
+      state.focus = 'drawer';
+      // select first card in this drawer
+      const items2 = filteredItems(DRAWERS[idx]);
+      if(items2.length) state.selCardId = items2[0].id;
+      renderAll();
+    });
+    cab.appendChild(drawerEl);
+
+    if(open){
+      const idxBox = document.createElement('div');
+      idxBox.className = 'idx';
+      if(items.length===0){
+        idxBox.innerHTML = `<div class="row" style="color:var(--mut)">    - no cards match -</div>`;
+      } else {
+        items.forEach(m=>{
+          const sel = m.id===state.selCardId;
+          const cf = m.confidence.slice(0,3).toUpperCase();
+          const line = `\u251C\u2500\u2500 <span class="cn">${m.call}</span>  <span class="cf">${cf}</span>  ${esc(truncate(m.text,32))}`;
+          const row = document.createElement('div');
+          row.className = 'row' + (sel?' sel':'');
+          row.dataset.id = m.id;
+          row.innerHTML = line;
+          row.addEventListener('click', ()=>{
+            state.selCardId = m.id;
+            state.focus = 'card';
+            renderAll();
+          });
+          idxBox.appendChild(row);
+        });
+      }
+      cab.appendChild(idxBox);
+    }
+  });
+  // keep selected card visible
+  const s = cab.querySelector('.idx .row.sel');
+  if(s) s.scrollIntoView({block:'nearest'});
+}
+
+// ---------- card render ----------
+function bar(v){
+  const n=8, f=Math.max(0,Math.min(n,Math.round(v*n)));
+  return '\u2588'.repeat(f)+'\u2591'.repeat(n-f);
+}
+function confTag(c){
+  const m = {verified:'VRFD', observed:'OBSV', inferred:'INFR', stale:'STAL'};
+  return m[c]||'????';
+}
+
+function wrap(text, width){
+  const words = text.split(/\s+/);
+  const lines = [];
+  let cur = '';
+  for(const w of words){
+    if((cur+' '+w).trim().length > width){
+      if(cur) lines.push(cur);
+      cur = w;
+    } else {
+      cur = (cur? cur+' ' : '') + w;
+    }
+  }
+  if(cur) lines.push(cur);
+  return lines;
+}
+
+function renderCard(){
+  const m = memories.find(x=>x.id===state.selCardId) || memories[0];
+  const W = 60; // inner width
+  const topB = '\u2554' + '\u2550'.repeat(W) + '\u2557';
+  const botB = '\u255A' + '\u2550'.repeat(W) + '\u255D';
+  const sep  = '  ' + '\u2500'.repeat(W-4);
+
+  // header row: call number left, RECEIVED stamp right (colored inline)
+  const callLeft = m.call;
+  const stampTxt = `  RECEIVED  `;
+  const dateTxt = `[${m.created}]`;
+  const gap1 = W - callLeft.length - stampTxt.length - 2;
+  const headLine = ` ${callLeft}${' '.repeat(Math.max(1,gap1))}<span class="stamp">${stampTxt}</span> `;
+  const gap2 = W - dateTxt.length - 2;
+  const dateLine = ` ${' '.repeat(Math.max(1,gap2))}<span class="stamp">${dateTxt}</span> `;
+
+  // title
+  const titleRaw = m.text.toUpperCase();
+  const titleLines = wrap(titleRaw, W-4).map(l=>`  <span class="ttl">${esc(l)}</span>`);
+  const titlePad = titleLines.map(l=>{
+    // compute visible length roughly: strip tags
+    const visLen = l.replace(/<[^>]+>/g,'').length;
+    return l + ' '.repeat(Math.max(0, W - visLen));
+  });
+
+  // body
+  const bodyLines = wrap(m.text, W-6).map(l=>'    '+l);
+
+  // stats
+  const decay = Math.exp(-m.age_days/m.half_life_days);
+  const statL1 = ` STR <span class="bar">[${bar(m.strength)}]</span> .${String(Math.round(m.strength*100)).padStart(2,'0')}   HALF ${String(m.half_life_days).padStart(2,' ')}d   RETR ${String(m.retrieval_count).padStart(2,' ')}`;
+  const statL2 = ` CONF :: [<span class="tag">${confTag(m.confidence)}</span>]   AGE ${m.age_days.toFixed(1)}d   DECAY .${String(Math.round(decay*100)).padStart(2,'0')}`;
+
+  // tags
+  const tagStr = m.tags.map(t=>'#'+t).join(' ');
+  const tagLines = wrap(tagStr, W-14).map((l,i)=> (i===0?' SEE ALSO :: ':'             ') + l);
+
+  // punch holes
+  const hole = `<span class="hole">O</span>`;
+  const holePad = W - 4;
+  const holeLine = ` ${hole}${' '.repeat(holePad)}${hole} `;
+
+  // pad helper for lines with html tags
+  function padLine(s){
+    const visLen = s.replace(/<[^>]+>/g,'').length;
+    const need = Math.max(0, W - visLen);
+    return s + ' '.repeat(need);
+  }
+  function wall(s){ return `<span class="br">\u2551</span>${padLine(s)}<span class="br">\u2551</span>`; }
+
+  const lines = [];
+  lines.push(`<span class="br">${topB}</span>`);
+  lines.push(wall(headLine));
+  lines.push(wall(dateLine));
+  lines.push(wall(' '));
+  titlePad.forEach(l=>lines.push(wall(l)));
+  lines.push(wall(sep));
+  lines.push(wall(' '));
+  bodyLines.forEach(l=>lines.push(wall(l)));
+  lines.push(wall(' '));
+  lines.push(wall(sep));
+  lines.push(wall(statL1));
+  lines.push(wall(statL2));
+  lines.push(wall(' '));
+  tagLines.forEach(l=>lines.push(wall(l)));
+  lines.push(wall(' '));
+  lines.push(wall(holeLine));
+  lines.push(`<span class="br">${botB}</span>`);
+
+  document.getElementById('card').innerHTML = lines.join('\n');
+
+  // desk head
+  const n = memories.length;
+  const rank = memories.indexOf(m)+1;
+  document.getElementById('deskHead').innerHTML =
+    `READING DESK :: card <b>${rank}</b>/${n}  &middot;  drawer <b>${DRAWERS[state.openDrawerIdx].name}</b>  &middot;  filter <b>${state.filter||'(none)'}</b>`;
+}
+
+function renderAll(){ renderCabinet(); renderCard(); }
+
+// ---------- keyboard nav ----------
+function currentDrawerCards(){ return filteredItems(DRAWERS[state.openDrawerIdx]); }
+
+function selectCardDelta(delta){
+  const items = currentDrawerCards();
+  if(!items.length) return;
+  let i = items.findIndex(m=>m.id===state.selCardId);
+  if(i<0) i=0;
+  i = Math.max(0, Math.min(items.length-1, i+delta));
+  state.selCardId = items[i].id;
+  state.focus = 'card';
+  renderAll();
+}
+function selectDrawerDelta(delta){
+  state.openDrawerIdx = Math.max(0, Math.min(DRAWERS.length-1, state.openDrawerIdx+delta));
+  const items = currentDrawerCards();
+  if(items.length) state.selCardId = items[0].id;
+  state.focus = 'drawer';
+  renderAll();
+}
+
+const prompt = document.getElementById('prompt');
+
+window.addEventListener('keydown', (e)=>{
+  if(document.getElementById('overlay').classList.contains('on')){
+    if(e.key==='Escape' || e.key==='?') { toggleHelp(false); e.preventDefault(); }
+    return;
+  }
+  const tag = e.target.tagName;
+  const inInput = tag==='INPUT';
+
+  if(e.key==='/' && !inInput){ prompt.focus(); e.preventDefault(); return; }
+  if(e.key==='?' && !inInput){ toggleHelp(true); e.preventDefault(); return; }
+  if(e.key==='Escape' && inInput){ prompt.blur(); return; }
+
+  if(inInput){
+    if(e.key==='Enter'){
+      runCommand(prompt.value.trim());
+      prompt.value = '';
+      state.filter = '';
+      renderAll();
+      e.preventDefault();
+      return;
+    }
+    return;
+  }
+
+  if(e.key==='ArrowDown'){ selectCardDelta(+1); e.preventDefault(); }
+  else if(e.key==='ArrowUp'){ selectCardDelta(-1); e.preventDefault(); }
+  else if(e.key==='ArrowLeft' || e.key==='['){ selectDrawerDelta(-1); e.preventDefault(); }
+  else if(e.key==='ArrowRight' || e.key===']'){ selectDrawerDelta(+1); e.preventDefault(); }
+  else if(e.key==='Enter'){
+    // pull drawer / render card
+    renderAll();
+  } else if(e.key==='PageDown'){ selectCardDelta(+5); e.preventDefault(); }
+  else if(e.key==='PageUp'){ selectCardDelta(-5); e.preventDefault(); }
+});
+
+// live filter
+prompt.addEventListener('input', ()=>{
+  const v = prompt.value;
+  // if it looks like a command prefix, don't live-filter
+  if(/^(call|drw|ls|stat|help|grep)\b/i.test(v.trim())){
+    state.filter = '';
+  } else {
+    state.filter = v;
+  }
+  renderAll();
+});
+
+// ---------- command runner ----------
+function runCommand(raw){
+  if(!raw) return;
+  const cmd = raw.trim();
+  const low = cmd.toLowerCase();
+
+  if(low==='help' || low==='?'){ toggleHelp(true); return; }
+  if(low==='stat' || low==='stats'){
+    // flash the LED strip via brief scroll-to-top
+    document.getElementById('desk').scrollTop = 0;
+    return;
+  }
+  // call HIP.EP.012
+  let m;
+  if((m = low.match(/^call\s+(hip\.[a-z]{2}\.\d{1,3})$/))){
+    const tgt = m[1].toUpperCase();
+    const hit = memories.find(x=>x.call===tgt);
+    if(hit){
+      // switch drawer to match
+      state.openDrawerIdx = DRAWERS.findIndex(d=>d.layer===hit.layer);
+      state.selCardId = hit.id;
+    }
+    return;
+  }
+  if((m = low.match(/^drw\s+(\d{1,2})$/))){
+    const n = parseInt(m[1],10)-1;
+    if(n>=0 && n<DRAWERS.length){
+      state.openDrawerIdx = n;
+      const items = currentDrawerCards();
+      if(items.length) state.selCardId = items[0].id;
+    }
+    return;
+  }
+  if((m = low.match(/^ls\s+(buffer|episodic|semantic)$/))){
+    state.openDrawerIdx = DRAWERS.findIndex(d=>d.layer===m[1]);
+    const items = currentDrawerCards();
+    if(items.length) state.selCardId = items[0].id;
+    return;
+  }
+  if((m = raw.match(/^grep\s+"?([^"]+?)"?$/i))){
+    state.filter = m[1];
+    // pick first match in current drawer or any drawer
+    prompt.value = m[1];
+    return;
+  }
+}
+
+// ---------- help overlay ----------
+function toggleHelp(on){
+  const o = document.getElementById('overlay');
+  if(on===undefined) on = !o.classList.contains('on');
+  o.classList.toggle('on', on);
+  if(on){
+    const W = 66;
+    const top = '\u2554'+'\u2550'.repeat(W)+'\u2557';
+    const bot = '\u255A'+'\u2550'.repeat(W)+'\u255D';
+    const wall = (s)=>`\u2551${s.padEnd(W)}\u2551`;
+    const pad = (l)=>wall(' '+l);
+    const lines = [
+      top,
+      pad(`<span class="hi">HIPPO :: CATALOG TERMINAL</span>   man(1)`),
+      pad(''),
+      pad(`<span class="hi">NAVIGATION</span>`),
+      pad(`  &larr; &rarr;   select drawer     &uarr; &darr;   select index card`),
+      pad(`  PgUp/Dn jump 5 cards      Enter pull drawer / render`),
+      pad(''),
+      pad(`<span class="hi">PROMPT</span>  (CALL&gt;)`),
+      pad(`  call HIP.EP.012    look up a specific record`),
+      pad(`  drw 02             pull drawer 02 (EPISODIC)`),
+      pad(`  ls buffer          list buffer drawer`),
+      pad(`  grep "gpu"         filter cabinet by term`),
+      pad(`  stat               scroll desk to top`),
+      pad(`  help               this page`),
+      pad(''),
+      pad(`<span class="hi">KEYS</span>`),
+      pad(`  /    focus prompt        ?    toggle help`),
+      pad(`  ESC  unfocus / dismiss`),
+      pad(''),
+      pad(`<span class="dim">call numbers: HIP.[BU|EP|SM].NNN</span>`),
+      pad(`<span class="dim">BU = buffer  EP = episodic  SM = semantic</span>`),
+      pad(''),
+      bot,
+    ];
+    document.getElementById('help').innerHTML = lines.join('\n');
+  }
+}
+
+// ---------- boot sequence ----------
+const bootLines = [
+  '<span class="hi">HIPPO CATALOG ROM v1.25</span>   (c) 1984-2026',
+  '',
+  'POST ............................. <span class="hi">OK</span>',
+  'PHOSPHOR BIAS .................... AMBER',
+  'CRT SWEEP ........................ 60Hz',
+  'CARD CABINET ..................... <span class="hi">MOUNTED</span>',
+  'DRAWERS .......................... 03',
+  'INDEX RECORDS .................... 38',
+  'CONSOLIDATION DAEMON ............. <span class="hi">RUNNING</span>',
+  'STALE WATCHDOG ................... <span class="red">2 FLAGGED</span>',
+  '',
+  'loading catalog ...',
+  '',
+];
+function boot(){
+  const out = document.getElementById('bootOut');
+  let i=0, s='';
+  function step(){
+    if(i>=bootLines.length){
+      setTimeout(()=>{
+        document.getElementById('boot').classList.add('off');
+        document.getElementById('shell').style.visibility='visible';
+        prompt.focus();
+        setTimeout(()=>prompt.blur(), 0);
+      }, 280);
+      return;
+    }
+    s += bootLines[i] + '\n';
+    out.innerHTML = s;
+    i++;
+    setTimeout(step, 70 + Math.random()*60);
+  }
+  step();
+}
+
+// ---------- init ----------
+renderAll();
+boot();
+</script>
+</body>
+</html>

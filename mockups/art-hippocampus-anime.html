@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>HIPPO :: Hippo-chan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0a0906;--amber:#e8a618;--hi:#ffc74a;--mut:#8a5f1a}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#000;color:var(--amber);font-family:'Share Tech Mono',ui-monospace,monospace;font-size:15px;line-height:1.35;overflow:hidden}
+  body{background:var(--bg);text-shadow:0 0 1px rgba(232,166,24,.55),0 0 8px rgba(232,166,24,.12);animation:flicker 6s infinite}
+  @keyframes flicker{0%{opacity:1}12%{opacity:.98}13%{opacity:1}48%{opacity:1}49%{opacity:.97}50%{opacity:1}82%{opacity:1}83%{opacity:.985}84%{opacity:1}100%{opacity:1}}
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:10;background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0 2px,rgba(232,166,24,.06) 2px 3px);mix-blend-mode:screen}
+  body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:11;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 55%,rgba(0,0,0,.8) 100%)}
+  canvas{position:fixed;inset:0;display:block;z-index:1;filter:saturate(1.1)}
+  .hud{position:fixed;z-index:20;color:var(--amber);white-space:pre;pointer-events:none;letter-spacing:.5px}
+  .hud.tl{top:18px;left:22px;font-family:'VT323',monospace;font-size:18px;line-height:1.25}
+  .hud.tl .k{color:var(--mut)} .hud.tl .v{color:var(--hi)} .hud.tl .t{color:var(--hi);letter-spacing:1px}
+  .hud.br{bottom:18px;right:22px;font-family:'Share Tech Mono',monospace;font-size:13px;text-align:right}
+  .hud.br .line{opacity:1;transition:opacity 1.4s linear}
+  .hud.br .line.f1{opacity:.72} .hud.br .line.f2{opacity:.45} .hud.br .line.f3{opacity:.22}
+  .hud.br .ts{color:var(--mut);margin-right:8px} .hud.br .em{color:var(--hi)}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="hud tl" id="hudTL"></div>
+<div class="hud br" id="hudBR"></div>
+<script>
+(()=>{'use strict';
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d',{alpha:false});
+const hudTL=document.getElementById('hudTL'),hudBR=document.getElementById('hudBR');
+const COL={bg:'#0a0906',body:'#f0d9a8',belly:'#fbecc8',ink:'#3a2010',inkSoft:'rgba(58,32,16,.55)',blush:'#f2a088',coronet:'#ffc74a',coronetShade:'#c07018',fin:'rgba(255,199,74,.55)',finEdge:'#ffc74a',iris:'#c07018',irisInner:'#8a4a10',pupil:'#2a1508',highlight:'#fff7d8',mouth:'#3a2010'};
+
+let W=0,H=0,DPR=1,SCALE=1;
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,2);
+  W=window.innerWidth; H=window.innerHeight;
+  canvas.width=Math.floor(W*DPR); canvas.height=Math.floor(H*DPR);
+  canvas.style.width=W+'px'; canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  SCALE=Math.min(W,H)*0.0022;
+}
+window.addEventListener('resize',resize);
+
+// body spiral centerline + width (precomputed in local units)
+const BODY_PTS=160;
+const bodyCenter=new Float32Array(BODY_PTS*2);
+const bodyWidth=new Float32Array(BODY_PTS);
+(function buildBody(){
+  for(let i=0;i<BODY_PTS;i++){
+    const u=i/(BODY_PTS-1);
+    const theta=-Math.PI*0.5 - u*1.25*Math.PI*2;
+    const r=44*(1-u*0.78);
+    bodyCenter[i*2]=-6 + r*Math.cos(theta);
+    bodyCenter[i*2+1]=30 + r*Math.sin(theta) + u*8;
+    bodyWidth[i]=18*Math.pow(1-u*0.82,0.9)+3;
+  }
+})();
+function buildBodyPath(){
+  ctx.beginPath();
+  const right=[];
+  for(let i=0;i<BODY_PTS;i++){
+    const x=bodyCenter[i*2], y=bodyCenter[i*2+1];
+    const ip=Math.max(0,i-1), in_=Math.min(BODY_PTS-1,i+1);
+    const tx=bodyCenter[in_*2]-bodyCenter[ip*2];
+    const ty=bodyCenter[in_*2+1]-bodyCenter[ip*2+1];
+    const len=Math.hypot(tx,ty)||1;
+    const nx=-ty/len, ny=tx/len, w=bodyWidth[i];
+    const lx=x+nx*w, ly=y+ny*w;
+    if(i===0) ctx.moveTo(lx,ly); else ctx.lineTo(lx,ly);
+    right.push([x-nx*w,y-ny*w]);
+  }
+  for(let i=right.length-1;i>=0;i--) ctx.lineTo(right[i][0],right[i][1]);
+  ctx.closePath();
+}
+
+// sparkle + bubble pools (no per-frame allocation)
+const SPARK_MAX=40, sparks=[]; for(let i=0;i<SPARK_MAX;i++) sparks.push({alive:false});
+function spawnSparkle(x,y,size,life){
+  for(let i=0;i<SPARK_MAX;i++){const s=sparks[i];if(!s.alive){
+    s.alive=true;s.x=x;s.y=y;s.size=size||(4+Math.random()*4);
+    s.born=performance.now();s.life=life||(500+Math.random()*400);
+    s.rot=Math.random()*Math.PI;s.drift=(Math.random()-0.5)*0.25;s.riseY=-10-Math.random()*20;return;
+  }}
+}
+const BUBBLE_MAX=10, bubbles=[]; for(let i=0;i<BUBBLE_MAX;i++) bubbles.push({alive:false});
+function spawnBubble(x,y){
+  for(let i=0;i<BUBBLE_MAX;i++){const b=bubbles[i];if(!b.alive){
+    b.alive=true;b.x=x;b.y=y;b.r=3+Math.random()*3;
+    b.born=performance.now();b.life=2400+Math.random()*800;
+    b.driftX=(Math.random()-0.5)*0.15;return;
+  }}
+}
+
+// reactions
+const react={blinkUntil:0,nextBlinkAt:performance.now()+2000+Math.random()*3000,
+  excitedUntil:0,excitedBorn:0,sleepUntil:0,sleepBorn:0,surpriseUntil:0,surpriseBorn:0};
+
+// HUD
+const logLines=[],MAX_LOG=4;
+function timeStr(){const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');}
+function pushLog(text){
+  logLines.unshift({ts:timeStr(),text});
+  while(logLines.length>MAX_LOG) logLines.pop();
+  let html='';
+  for(let i=0;i<logLines.length;i++){const l=logLines[i];const fade=i===0?'':i===1?'f1':i===2?'f2':'f3';
+    html+=`<div class="line ${fade}"><span class="ts">${l.ts}</span>${l.text}</div>`;}
+  hudBR.innerHTML=html;
+}
+const stats={kawaii:99.8,mood:'CONTENT',blinks:0,retrievals:142,blinksPerMin:14};
+function renderTL(){
+  hudTL.innerHTML=`<span class="t">[ hippo-chan :: neural activity monitor ]</span>\n`+
+    `<span class="k">kawaii factor</span>  <span class="v">${stats.kawaii.toFixed(1)}%</span>    <span class="k">mood:</span> <span class="v">${stats.mood}</span>\n`+
+    `<span class="k">blinks/min</span> <span class="v">${stats.blinksPerMin}</span>    <span class="k">retrievals</span> <span class="v">${stats.retrievals}</span>`;
+}
+
+let memSeq=23; const memId=()=>`mem_${String(memSeq++).padStart(3,'0')}`;
+
+// event timing
+const FIRE_MS=4000, SPINDLE_MS=30000, BUBBLE_MS=5000;
+let lastFire=performance.now()+1500, lastSpindle=performance.now()+14000, lastBubble=performance.now()+2000;
+const schedFire=()=>lastFire=performance.now()+FIRE_MS*0.6+Math.random()*FIRE_MS*0.8;
+const schedSpindle=()=>lastSpindle=performance.now()+SPINDLE_MS*0.7+Math.random()*SPINDLE_MS*0.6;
+const schedBubble=()=>lastBubble=performance.now()+BUBBLE_MS*0.5+Math.random()*BUBBLE_MS;
+
+const lastHead={x:0,y:0,r:0};
+
+function triggerFire(now){
+  react.excitedBorn=now; react.excitedUntil=now+700;
+  for(let i=0;i<5;i++){const a=Math.random()*Math.PI*2,r=40+Math.random()*30;
+    spawnSparkle(lastHead.x+Math.cos(a)*r,lastHead.y+Math.sin(a)*r,5+Math.random()*4,500+Math.random()*300);}
+  stats.retrievals++; stats.mood='EXCITED';
+  pushLog(`${memId()} retrieved  <span class="em">+0.0${2+Math.floor(Math.random()*4)} strength</span>`);
+}
+function triggerSpindle(now){
+  react.sleepBorn=now; react.sleepUntil=now+1200; stats.mood='DREAMY';
+  for(let i=0;i<12;i++){setTimeout(()=>{
+    const a=(-Math.PI*0.8)+(i/11)*Math.PI*1.6, r=50+Math.random()*40;
+    spawnSparkle(lastHead.x+Math.cos(a)*r,lastHead.y+Math.sin(a)*r-10,5+Math.random()*5,700+Math.random()*300);
+  },i*50);}
+  pushLog(`sleep spindle  <span class="em">hippo-chan yawned</span>`);
+}
+function triggerSurprise(now){
+  react.surpriseBorn=now; react.surpriseUntil=now+500;
+  react.excitedBorn=now; react.excitedUntil=now+650;
+  for(let i=0;i<4;i++){const a=Math.random()*Math.PI*2,r=35+Math.random()*25;
+    spawnSparkle(lastHead.x+Math.cos(a)*r,lastHead.y+Math.sin(a)*r,5+Math.random()*3,500);}
+  stats.mood='STARTLED';
+  pushLog(`<span class="em">hippo-chan surprised!</span>  (click)`);
+}
+function triggerBlink(now){ react.blinkUntil=now+120; stats.blinks++; }
+
+// draw helpers
+function sparkleShape(cx,cy,size,rot,alpha){
+  ctx.save(); ctx.translate(cx,cy); ctx.rotate(rot);
+  const g=ctx.createRadialGradient(0,0,0,0,0,size);
+  g.addColorStop(0,`rgba(255,255,224,${alpha})`);
+  g.addColorStop(0.4,`rgba(255,244,128,${alpha*0.8})`);
+  g.addColorStop(1,`rgba(255,199,74,0)`);
+  ctx.fillStyle=g;
+  ctx.beginPath();
+  ctx.moveTo(0,-size);
+  ctx.quadraticCurveTo(size*0.18,-size*0.18,size,0);
+  ctx.quadraticCurveTo(size*0.18,size*0.18,0,size);
+  ctx.quadraticCurveTo(-size*0.18,size*0.18,-size,0);
+  ctx.quadraticCurveTo(-size*0.18,-size*0.18,0,-size);
+  ctx.closePath(); ctx.fill(); ctx.restore();
+}
+function starGlint(sx,sy,size){
+  ctx.save(); ctx.translate(sx,sy); ctx.fillStyle=COL.highlight;
+  ctx.beginPath();
+  ctx.moveTo(0,-size); ctx.lineTo(size*0.25,-size*0.25); ctx.lineTo(size,0);
+  ctx.lineTo(size*0.25,size*0.25); ctx.lineTo(0,size); ctx.lineTo(-size*0.25,size*0.25);
+  ctx.lineTo(-size,0); ctx.lineTo(-size*0.25,-size*0.25); ctx.closePath();
+  ctx.fill(); ctx.restore();
+}
+
+function drawBigEye(ex,ey,sH){
+  const eW=7.5, eH=10;
+  ctx.beginPath(); ctx.ellipse(ex,ey,eW,eH*sH,0,0,Math.PI*2);
+  ctx.fillStyle=COL.highlight; ctx.fill();
+  ctx.strokeStyle=COL.ink; ctx.lineWidth=1.8; ctx.stroke();
+  ctx.save();
+  ctx.beginPath(); ctx.ellipse(ex,ey,eW,eH*sH,0,0,Math.PI*2); ctx.clip();
+  const ig=ctx.createRadialGradient(ex,ey+1,1,ex,ey+1,eW*1.3);
+  ig.addColorStop(0,COL.iris); ig.addColorStop(1,COL.irisInner);
+  ctx.fillStyle=ig;
+  ctx.beginPath(); ctx.ellipse(ex,ey+1,eW*0.95,eH*0.88*sH,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle=COL.pupil;
+  ctx.beginPath(); ctx.ellipse(ex,ey+1,eW*0.45,eH*0.55*sH,0,0,Math.PI*2); ctx.fill();
+  starGlint(ex-2,ey-3,2.6); starGlint(ex+2.2,ey+3,1.4);
+  ctx.restore();
+  ctx.strokeStyle=COL.ink; ctx.lineWidth=1;
+  ctx.beginPath();
+  ctx.moveTo(ex-eW*0.9,ey+eH*0.55*sH);
+  ctx.quadraticCurveTo(ex,ey+eH*0.8*sH,ex+eW*0.9,ey+eH*0.55*sH);
+  ctx.stroke();
+}
+function drawHappyEye(ex,ey){
+  ctx.strokeStyle=COL.ink; ctx.lineWidth=2; ctx.lineCap='round';
+  ctx.beginPath();
+  ctx.moveTo(ex-6,ey+2); ctx.quadraticCurveTo(ex,ey-5,ex+6,ey+2);
+  ctx.stroke();
+}
+function drawBlinkEye(ex,ey){
+  ctx.strokeStyle=COL.ink; ctx.lineWidth=2; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(ex-6,ey+1); ctx.lineTo(ex+6,ey+1); ctx.stroke();
+}
+
+function drawHippoChan(now){
+  const bob=Math.sin(now*0.0016)*6;
+  const breath=Math.sin(now*0.00125);
+  const squashY=1+0.03*breath, squashX=1-0.03*breath;
+  const tilt=Math.sin(now*0.0009)*(3*Math.PI/180);
+  let jumpY=0,jumpS=1;
+  if(now<react.excitedUntil){
+    const p=(now-react.excitedBorn)/(react.excitedUntil-react.excitedBorn);
+    const bounce=Math.sin(p*Math.PI);
+    jumpY=-bounce*8; jumpS=1+bounce*0.08;
+  }
+  const cx=W*0.5, cy=H*0.5+bob+jumpY;
+  const U=SCALE*45;
+  ctx.save();
+  ctx.translate(cx,cy);
+  ctx.rotate(tilt);
+  ctx.scale(squashX*jumpS,squashY*jumpS);
+  ctx.scale(U/45,U/45);
+
+  // dorsal fin (behind body)
+  {
+    ctx.save(); ctx.translate(-8,-14);
+    const finPhase=Math.sin(now*0.004);
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    ctx.bezierCurveTo(-18,-6,-30,2+finPhase*3,-36,14);
+    ctx.bezierCurveTo(-28,12,-18,10,-4,6);
+    ctx.closePath();
+    ctx.fillStyle=COL.fin; ctx.fill();
+    ctx.strokeStyle=COL.finEdge; ctx.lineWidth=1.6; ctx.stroke();
+    ctx.strokeStyle='rgba(255,199,74,0.7)'; ctx.lineWidth=1;
+    for(let k=0;k<3;k++){
+      ctx.beginPath();
+      ctx.moveTo(-4-k*8,4);
+      ctx.quadraticCurveTo(-14-k*8,4+finPhase*2,-22-k*8,12);
+      ctx.stroke();
+    }
+    ctx.fillStyle='rgba(255,244,200,0.9)';
+    ctx.beginPath(); ctx.arc(-14,2+finPhase,1.2,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(-22,8-finPhase,1,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(-28,14,0.9,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  // body fill
+  buildBodyPath();
+  ctx.fillStyle=COL.body; ctx.fill();
+  // belly highlight
+  ctx.save();
+  ctx.globalCompositeOperation='source-atop';
+  const bg=ctx.createLinearGradient(0,-20,10,40);
+  bg.addColorStop(0,'rgba(251,236,200,0)');
+  bg.addColorStop(0.5,'rgba(251,236,200,0.6)');
+  bg.addColorStop(1,'rgba(251,236,200,0)');
+  ctx.fillStyle=bg;
+  ctx.beginPath(); ctx.ellipse(8,25,24,30,0,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+  // body outline
+  buildBodyPath();
+  ctx.strokeStyle=COL.ink; ctx.lineWidth=2.2; ctx.lineJoin='round'; ctx.stroke();
+  // segmentation ridges
+  ctx.save();
+  ctx.strokeStyle=COL.inkSoft; ctx.lineWidth=0.9;
+  for(let i=6;i<BODY_PTS-4;i+=8){
+    const x=bodyCenter[i*2], y=bodyCenter[i*2+1];
+    const tx=bodyCenter[(i+1)*2]-bodyCenter[(i-1)*2];
+    const ty=bodyCenter[(i+1)*2+1]-bodyCenter[(i-1)*2+1];
+    const len=Math.hypot(tx,ty)||1;
+    const nx=-ty/len, ny=tx/len, w=bodyWidth[i]*0.82;
+    ctx.beginPath();
+    ctx.moveTo(x+nx*w*0.35,y+ny*w*0.35);
+    ctx.lineTo(x-nx*w*0.35,y-ny*w*0.35);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // head
+  const hCX=0, hCY=-30, hR=28;
+  ctx.beginPath(); ctx.ellipse(hCX,hCY,hR,hR*0.96,0,0,Math.PI*2);
+  ctx.fillStyle=COL.body; ctx.fill();
+  ctx.save();
+  ctx.globalCompositeOperation='multiply';
+  const hg=ctx.createRadialGradient(hCX+8,hCY+6,4,hCX+8,hCY+6,hR);
+  hg.addColorStop(0,'rgba(217,180,120,0)');
+  hg.addColorStop(1,'rgba(217,180,120,0.35)');
+  ctx.fillStyle=hg;
+  ctx.beginPath(); ctx.ellipse(hCX,hCY,hR,hR*0.96,0,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+  // snout
+  ctx.beginPath(); ctx.ellipse(hCX+14,hCY+8,10,7,-0.25,0,Math.PI*2);
+  ctx.fillStyle=COL.body; ctx.fill();
+  ctx.strokeStyle=COL.ink; ctx.lineWidth=2.2; ctx.stroke();
+  // head outline
+  ctx.beginPath(); ctx.ellipse(hCX,hCY,hR,hR*0.96,0,0,Math.PI*2);
+  ctx.lineWidth=2.3; ctx.stroke();
+  // neck cover
+  ctx.fillStyle=COL.body;
+  ctx.beginPath(); ctx.ellipse(0,-6,16,10,0,0,Math.PI*2); ctx.fill();
+
+  // coronet (three spikes)
+  ctx.save();
+  ctx.translate(hCX-4,hCY-hR+2);
+  const spikes=[{x:-10,y:0,h:14},{x:0,y:-3,h:18},{x:10,y:0,h:14}];
+  for(const s of spikes){
+    ctx.beginPath();
+    ctx.moveTo(s.x-5,s.y+2);
+    ctx.quadraticCurveTo(s.x,s.y-s.h*0.6,s.x,s.y-s.h);
+    ctx.quadraticCurveTo(s.x,s.y-s.h*0.6,s.x+5,s.y+2);
+    ctx.closePath();
+    const cg=ctx.createLinearGradient(0,s.y-s.h,0,s.y);
+    cg.addColorStop(0,COL.coronet); cg.addColorStop(1,COL.coronetShade);
+    ctx.fillStyle=cg; ctx.fill();
+    ctx.strokeStyle=COL.ink; ctx.lineWidth=1.6; ctx.stroke();
+    ctx.fillStyle=COL.highlight;
+    ctx.beginPath(); ctx.arc(s.x-1.5,s.y-s.h+3,1.3,0,Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+
+  // face state
+  const sleeping=now<react.sleepUntil;
+  const surprised=now<react.surpriseUntil;
+  const blinking=now<react.blinkUntil;
+  const eyeY=hCY+2, eyeLX=hCX-9, eyeRX=hCX+7;
+  const blushBoost=now<react.excitedUntil?1.25:1;
+  ctx.save();
+  ctx.fillStyle=`rgba(242,160,136,${0.55*blushBoost})`;
+  ctx.beginPath(); ctx.ellipse(eyeLX-5,eyeY+7,5,2.6,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(eyeRX+5,eyeY+7,5,2.6,0,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  if(sleeping){ drawHappyEye(eyeLX-1,eyeY); drawHappyEye(eyeRX+1,eyeY); }
+  else if(blinking){ drawBlinkEye(eyeLX-1,eyeY); drawBlinkEye(eyeRX+1,eyeY); }
+  else { const s=surprised?1.2:1; drawBigEye(eyeLX,eyeY,s); drawBigEye(eyeRX,eyeY,s); }
+
+  // mouth
+  ctx.strokeStyle=COL.mouth; ctx.lineWidth=1.6; ctx.lineCap='round';
+  if(surprised){
+    ctx.beginPath(); ctx.ellipse(hCX+2,eyeY+16,2.2,3,0,0,Math.PI*2);
+    ctx.fillStyle='#2a1508'; ctx.fill();
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(hCX-4,eyeY+15);
+    ctx.quadraticCurveTo(hCX-2,eyeY+17.5,hCX,eyeY+15.5);
+    ctx.quadraticCurveTo(hCX+2,eyeY+17.5,hCX+4,eyeY+15);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+
+  // cache world head pos
+  const worldHeadX=cx;
+  const worldHeadY=cy-30*(U/45)*squashY*jumpS;
+  lastHead.x=worldHeadX; lastHead.y=worldHeadY;
+  lastHead.r=28*(U/45)*jumpS;
+
+  // popups in world space
+  if(now<react.excitedUntil){
+    const p=(now-react.excitedBorn)/(react.excitedUntil-react.excitedBorn);
+    const popY=worldHeadY-lastHead.r-16-p*10;
+    ctx.save(); ctx.globalAlpha=1-p*p;
+    ctx.font='bold 32px VT323, monospace'; ctx.textAlign='center';
+    ctx.fillStyle='#fff7a0'; ctx.strokeStyle='#3a2010'; ctx.lineWidth=3;
+    ctx.strokeText('!',worldHeadX+lastHead.r*0.4,popY);
+    ctx.fillText('!',worldHeadX+lastHead.r*0.4,popY);
+    ctx.restore();
+  }
+  if(now<react.sleepUntil){
+    const p=(now-react.sleepBorn)/(react.sleepUntil-react.sleepBorn);
+    const bx=worldHeadX+lastHead.r*0.5, by=worldHeadY-lastHead.r-8-p*24;
+    ctx.save(); ctx.globalAlpha=1-p*p;
+    ctx.font='22px VT323, monospace'; ctx.textAlign='left';
+    ctx.fillStyle='#b4d5ff'; ctx.strokeStyle='#3a2010'; ctx.lineWidth=2;
+    ctx.strokeText('z z z',bx,by); ctx.fillText('z z z',bx,by);
+    ctx.restore();
+  }
+
+  // bubbles
+  for(let i=0;i<BUBBLE_MAX;i++){
+    const b=bubbles[i]; if(!b.alive) continue;
+    const age=now-b.born; if(age>b.life){b.alive=false; continue;}
+    const p=age/b.life, y=b.y-p*80, x=b.x+b.driftX*age*0.02, alpha=1-p;
+    ctx.save(); ctx.globalAlpha=alpha;
+    ctx.strokeStyle='rgba(255,199,74,0.9)'; ctx.fillStyle='rgba(255,244,200,0.15)'; ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.arc(x,y,b.r,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle='rgba(255,255,240,0.75)'; ctx.lineWidth=0.9;
+    ctx.beginPath(); ctx.arc(x-b.r*0.35,y-b.r*0.35,b.r*0.5,Math.PI*0.9,Math.PI*1.5); ctx.stroke();
+    ctx.restore();
+  }
+
+  // sparkles (additive)
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  for(let i=0;i<SPARK_MAX;i++){
+    const s=sparks[i]; if(!s.alive) continue;
+    const age=now-s.born; if(age>s.life){s.alive=false; continue;}
+    const p=age/s.life, env=Math.sin(p*Math.PI);
+    const y=s.y+s.riseY*p, x=s.x+s.drift*age*0.03;
+    sparkleShape(x,y,s.size*(0.4+env*0.8),s.rot+p*1.5,env);
+  }
+  ctx.restore();
+}
+
+function tick(now){
+  ctx.globalCompositeOperation='source-over';
+  ctx.fillStyle=COL.bg; ctx.fillRect(0,0,W,H);
+  if(now>=react.nextBlinkAt && !(now<react.blinkUntil) && !(now<react.sleepUntil)){
+    triggerBlink(now); react.nextBlinkAt=now+3000+Math.random()*3000;
+  }
+  if(now>=lastFire){ triggerFire(now); schedFire(); }
+  if(now>=lastSpindle){ triggerSpindle(now); schedSpindle(); }
+  if(now>=lastBubble){ spawnBubble(lastHead.x+2,lastHead.y+14); schedBubble(); }
+  if(now>react.excitedUntil+400 && now>react.sleepUntil+400 && now>react.surpriseUntil+400) stats.mood='CONTENT';
+  stats.kawaii=99.5+Math.sin(now*0.0007)*0.4;
+  stats.blinksPerMin=12+Math.round(Math.sin(now*0.0002)*3);
+  drawHippoChan(now);
+  renderTL();
+  requestAnimationFrame(tick);
+}
+
+function isOverHippoChan(px,py){
+  const dx=px-lastHead.x, dy=py-lastHead.y, r=lastHead.r;
+  if(dx*dx+dy*dy<(r*1.1)*(r*1.1)) return true;
+  if(Math.abs(px-lastHead.x)<r*1.4 && py>lastHead.y && py<lastHead.y+r*2.4) return true;
+  return false;
+}
+canvas.addEventListener('mousemove',e=>{
+  const rect=canvas.getBoundingClientRect();
+  canvas.style.cursor=isOverHippoChan(e.clientX-rect.left,e.clientY-rect.top)?'pointer':'default';
+});
+canvas.addEventListener('click',e=>{
+  const rect=canvas.getBoundingClientRect();
+  const px=e.clientX-rect.left, py=e.clientY-rect.top, now=performance.now();
+  if(isOverHippoChan(px,py)) triggerSurprise(now);
+  else for(let i=0;i<3;i++) spawnSparkle(px+(Math.random()-0.5)*10,py+(Math.random()-0.5)*10,4+Math.random()*3,450+Math.random()*250);
+});
+
+resize();
+pushLog(`monitor online  <span class="em">hippo-chan greets you</span>`);
+renderTL();
+requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

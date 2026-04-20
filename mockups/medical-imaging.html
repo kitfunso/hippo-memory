@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HBO - Hippo Brain Observatory</title>
+<style>
+  *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+  html,body{
+    width:100%;height:100%;overflow:hidden;
+    background:#0c1117;color:#d4dae3;
+    font-family:"SF Mono","Menlo","Consolas",monospace;
+    font-size:11px;line-height:1.4;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* scanline overlay */
+  body::after{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:9999;
+    background:repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 2px,
+      rgba(255,255,255,0.015) 2px,
+      rgba(255,255,255,0.015) 3px
+    );
+  }
+
+  /* utility classes */
+  .label{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#5a6675}
+  .label-teal{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#2dd4bf}
+  .dim{color:#5a6675}
+  .teal{color:#2dd4bf}
+  .value{font-size:11px;font-variant-numeric:tabular-nums}
+
+  /* layout */
+  .app{display:flex;flex-direction:column;height:100vh;width:100vw}
+
+  /* ── TOP BAR ── */
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    height:36px;min-height:36px;
+    background:#0a0e14;
+    border-bottom:1px solid rgba(255,255,255,0.08);
+    padding:0 16px;
+  }
+  .topbar-left{display:flex;align-items:center;gap:12px}
+  .topbar-left .logo{font-size:13px;font-weight:700;color:#2dd4bf;letter-spacing:2px}
+  .topbar-left .title{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:#5a6675}
+  .topbar-right{display:flex;align-items:center;gap:20px}
+  .scan-mode{display:flex;align-items:center;gap:6px}
+  .pulse-dot{
+    width:6px;height:6px;background:#2dd4bf;
+    animation:pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse{
+    0%,100%{opacity:1;box-shadow:0 0 4px #2dd4bf}
+    50%{opacity:0.4;box-shadow:0 0 1px #2dd4bf}
+  }
+
+  /* ── MAIN AREA ── */
+  .main{display:flex;flex:1;overflow:hidden}
+
+  /* center scan */
+  .scan-panel{
+    flex:1;display:flex;flex-direction:column;
+    border-right:1px solid rgba(255,255,255,0.08);
+    position:relative;
+  }
+  .scan-header{
+    padding:8px 16px;
+    border-bottom:1px solid rgba(255,255,255,0.08);
+    display:flex;align-items:center;gap:12px;
+  }
+  .scan-canvas-wrap{
+    flex:1;position:relative;background:#0c1117;
+    display:flex;align-items:center;justify-content:center;
+  }
+  #scanCanvas{display:block}
+
+  /* scale bar */
+  .scale-bar{
+    position:absolute;bottom:16px;left:16px;
+    display:flex;flex-direction:column;gap:4px;
+  }
+  .scale-gradient{
+    width:120px;height:6px;
+    background:linear-gradient(to right,#4a6fa5,#f0766e,#f0a050,#f0d060);
+  }
+  .scale-labels{display:flex;justify-content:space-between;width:120px}
+
+  /* ── RIGHT PANEL ── */
+  .right-panel{
+    width:280px;min-width:280px;
+    background:#141a22;
+    display:flex;flex-direction:column;
+    overflow-y:auto;
+  }
+  .rp-section{padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.08)}
+  .rp-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .rp-header .region-id{font-size:12px;color:#2dd4bf;letter-spacing:1px}
+  .active-dot{width:5px;height:5px;background:#34d399}
+  .active-label{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:#34d399}
+
+  .separator{height:1px;background:rgba(255,255,255,0.08);margin:0}
+
+  .classification{margin-top:8px}
+  .content-text{font-size:12px;color:#d4dae3;line-height:1.5;margin-top:8px}
+
+  /* vitals grid */
+  .vitals{display:grid;grid-template-columns:1fr 1fr;gap:0}
+  .vital-cell{
+    padding:8px 0;
+    border-bottom:1px solid rgba(255,255,255,0.04);
+    display:flex;flex-direction:column;gap:3px;
+  }
+  .vital-cell:nth-child(odd){padding-right:8px;border-right:1px solid rgba(255,255,255,0.04)}
+  .vital-cell:nth-child(even){padding-left:8px}
+  .vital-bar{height:3px;background:rgba(255,255,255,0.06);position:relative}
+  .vital-bar-fill{height:100%;position:absolute;left:0;top:0}
+
+  /* decay canvas */
+  .decay-section{padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.08)}
+  #decayCanvas{display:block;width:100%;height:80px}
+
+  /* tags */
+  .tags{display:flex;flex-wrap:wrap;gap:4px;padding:12px 16px}
+  .tag{
+    padding:2px 6px;
+    border:1px solid rgba(45,212,191,0.3);
+    color:#2dd4bf;font-size:9px;letter-spacing:1px;text-transform:uppercase;
+  }
+
+  /* ── BOTTOM STRIP ── */
+  .bottom-strip{
+    height:48px;min-height:48px;
+    background:#0a0e14;
+    border-top:1px solid rgba(255,255,255,0.08);
+    display:flex;align-items:center;
+    padding:0 16px;gap:24px;
+  }
+  .bar-chart{display:flex;align-items:center;gap:2px;height:20px}
+  .bar-segment{height:100%}
+  .bar-label{display:flex;align-items:center;gap:4px;margin-left:8px}
+  .bar-dot{width:6px;height:6px}
+  .metrics{display:flex;align-items:center;gap:4px}
+  .metric-sep{color:#5a6675;margin:0 2px}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <span class="logo">HBO</span>
+      <span class="title">HIPPO BRAIN OBSERVATORY</span>
+    </div>
+    <div class="topbar-right">
+      <div class="scan-mode">
+        <div class="pulse-dot"></div>
+        <span class="label">SCAN MODE</span>
+      </div>
+      <span class="dim value">2026-04-17T11:45:00Z</span>
+      <span class="label">57 REGIONS MAPPED</span>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- CENTER: SCAN VIEW -->
+    <div class="scan-panel">
+      <div class="scan-header">
+        <span class="label-teal">CORONAL SECTION</span>
+        <span class="dim">Z = 47.2mm</span>
+        <span class="dim" style="margin-left:auto">TR = 2.0s</span>
+        <span class="dim">TE = 30ms</span>
+      </div>
+      <div class="scan-canvas-wrap">
+        <canvas id="scanCanvas"></canvas>
+        <div class="scale-bar">
+          <span class="label">STRENGTH</span>
+          <div class="scale-gradient"></div>
+          <div class="scale-labels">
+            <span class="dim" style="font-size:8px">0.0</span>
+            <span class="dim" style="font-size:8px">0.5</span>
+            <span class="dim" style="font-size:8px">1.0</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL -->
+    <div class="right-panel">
+      <div class="rp-section">
+        <div class="rp-header">
+          <span class="region-id">REGION &#945;-2847</span>
+          <div class="active-dot"></div>
+          <span class="active-label">ACTIVE</span>
+        </div>
+        <div class="separator"></div>
+        <div class="classification label" style="margin-top:10px">CLASSIFICATION: EPISODIC / OBSERVED</div>
+        <div class="content-text">Gold model uses TIPS 10y as primary inflation signal</div>
+      </div>
+
+      <div class="rp-section">
+        <span class="label" style="margin-bottom:8px;display:block">VITALS</span>
+        <div class="vitals">
+          <!-- STR -->
+          <div class="vital-cell">
+            <span class="label">STR</span>
+            <span class="value" style="color:#f0d060">1.000</span>
+            <div class="vital-bar"><div class="vital-bar-fill" style="width:100%;background:linear-gradient(to right,#f0766e,#f0d060)"></div></div>
+          </div>
+          <!-- HLF -->
+          <div class="vital-cell">
+            <span class="label">HLF</span>
+            <span class="value">31.5d</span>
+            <div class="vital-bar"><div class="vital-bar-fill" style="width:63%;background:#4a6fa5"></div></div>
+          </div>
+          <!-- RET -->
+          <div class="vital-cell">
+            <span class="label">RET</span>
+            <span class="value">14</span>
+            <div class="vital-bar"><div class="vital-bar-fill" style="width:28%;background:#5a6675"></div></div>
+          </div>
+          <!-- AGE -->
+          <div class="vital-cell">
+            <span class="label">AGE</span>
+            <span class="value">9.9d</span>
+            <div class="vital-bar"><div class="vital-bar-fill" style="width:20%;background:#5a6675"></div></div>
+          </div>
+          <!-- SCH -->
+          <div class="vital-cell">
+            <span class="label">SCH</span>
+            <span class="value">0.50</span>
+            <div class="vital-bar"><div class="vital-bar-fill" style="width:50%;background:#4a6fa5"></div></div>
+          </div>
+          <!-- P7D -->
+          <div class="vital-cell">
+            <span class="label">P7D</span>
+            <span class="value" style="color:#34d399">1.000</span>
+            <div class="vital-bar"><div class="vital-bar-fill" style="width:100%;background:#34d399"></div></div>
+          </div>
+          <!-- P30 -->
+          <div class="vital-cell">
+            <span class="label">P30</span>
+            <span class="value" style="color:#f0a050">0.853</span>
+            <div class="vital-bar"><div class="vital-bar-fill" style="width:85%;background:#f0a050"></div></div>
+          </div>
+          <!-- EMPTY for grid alignment -->
+          <div class="vital-cell" style="border-bottom:none"></div>
+        </div>
+      </div>
+
+      <!-- DECAY PROJECTION -->
+      <div class="decay-section">
+        <span class="label" style="margin-bottom:6px;display:block">DECAY PROJECTION</span>
+        <canvas id="decayCanvas"></canvas>
+      </div>
+
+      <!-- TAGS -->
+      <div class="tags">
+        <span class="tag">GOLD</span>
+        <span class="tag">INFLATION</span>
+        <span class="tag">TIPS-10Y</span>
+        <span class="tag">MACRO</span>
+        <span class="tag">OBSERVED</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM STRIP -->
+  <div class="bottom-strip">
+    <span class="label">SCAN SUMMARY</span>
+
+    <div style="display:flex;align-items:center;gap:12px">
+      <div class="bar-chart">
+        <div class="bar-segment" style="width:24px;background:#2dd4bf"></div>
+        <div class="bar-segment" style="width:80px;background:#f0766e"></div>
+        <div class="bar-segment" style="width:36px;background:#4a6fa5"></div>
+      </div>
+      <div class="bar-label"><div class="bar-dot" style="background:#2dd4bf"></div><span class="dim" style="font-size:9px">BUF 8</span></div>
+      <div class="bar-label"><div class="bar-dot" style="background:#f0766e"></div><span class="dim" style="font-size:9px">EPI 35</span></div>
+      <div class="bar-label"><div class="bar-dot" style="background:#4a6fa5"></div><span class="dim" style="font-size:9px">SEM 14</span></div>
+    </div>
+
+    <div class="metrics">
+      <span class="dim">COVERAGE</span> <span class="value">82.7%</span>
+      <span class="metric-sep">|</span>
+      <span class="dim">CONFLICTS</span> <span class="value">14</span>
+      <span class="metric-sep">|</span>
+      <span class="dim">AT RISK</span> <span class="value" style="color:#34d399">0</span>
+      <span class="metric-sep">|</span>
+      <span class="dim">AVG STRENGTH</span> <span class="value">0.987</span>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── BRAIN SCAN CANVAS ──
+(function(){
+  var canvas = document.getElementById('scanCanvas');
+  var wrap = canvas.parentElement;
+  var W, H, ctx;
+  var dpr = window.devicePixelRatio || 1;
+  var activations = [];
+  var connections = [];
+  var time = 0;
+
+  function resize(){
+    var rect = wrap.getBoundingClientRect();
+    W = rect.width;
+    H = rect.height;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    generateActivations();
+  }
+
+  // seeded random
+  var seed = 42;
+  function rng(){ seed = (seed * 16807 + 0) % 2147483647; return (seed - 1) / 2147483646; }
+
+  function brainRadius(angle, cx, cy){
+    // organic ellipse with some waviness
+    var rx = W * 0.28;
+    var ry = H * 0.38;
+    var noise = 1 + 0.06 * Math.sin(angle * 3.7) + 0.04 * Math.sin(angle * 7.1 + 1.2) + 0.03 * Math.cos(angle * 5.3 - 0.8);
+    return { x: cx + rx * Math.cos(angle) * noise, y: cy + ry * Math.sin(angle) * noise };
+  }
+
+  function isInsideBrain(px, py, cx, cy){
+    var dx = (px - cx) / (W * 0.27);
+    var dy = (py - cy) / (H * 0.37);
+    return dx*dx + dy*dy < 1.05;
+  }
+
+  function heatColor(strength){
+    // 0 = steel blue, 0.5 = coral, 1.0 = yellow
+    if(strength < 0.3){
+      var t = strength / 0.3;
+      return lerpColor([74,111,165], [240,118,110], t);
+    } else if(strength < 0.7){
+      var t = (strength - 0.3) / 0.4;
+      return lerpColor([240,118,110], [240,160,80], t);
+    } else {
+      var t = (strength - 0.7) / 0.3;
+      return lerpColor([240,160,80], [240,208,96], t);
+    }
+  }
+
+  function lerpColor(a, b, t){
+    return [
+      Math.round(a[0] + (b[0]-a[0]) * t),
+      Math.round(a[1] + (b[1]-a[1]) * t),
+      Math.round(a[2] + (b[2]-a[2]) * t)
+    ];
+  }
+
+  function generateActivations(){
+    seed = 42;
+    activations = [];
+    connections = [];
+    var cx = W / 2;
+    var cy = H / 2;
+    var count = 38;
+    var attempts = 0;
+    while(activations.length < count && attempts < 500){
+      attempts++;
+      var px = cx + (rng() - 0.5) * W * 0.52;
+      var py = cy + (rng() - 0.5) * H * 0.7;
+      if(!isInsideBrain(px, py, cx, cy)) continue;
+      var strength = rng();
+      // bias toward higher strengths
+      strength = strength * 0.5 + 0.5 * rng();
+      // determine region by y position
+      var relY = (py - (cy - H*0.37)) / (H * 0.74);
+      var region;
+      if(relY < 0.3) region = 'buffer';
+      else if(relY < 0.72) region = 'episodic';
+      else region = 'semantic';
+      var size = 8 + strength * 24 + rng() * 8;
+      activations.push({ x: px, y: py, strength: strength, region: region, size: size, phase: rng() * Math.PI * 2 });
+    }
+
+    // generate connections between nearby activations
+    for(var i = 0; i < activations.length; i++){
+      for(var j = i+1; j < activations.length; j++){
+        var dx = activations[i].x - activations[j].x;
+        var dy = activations[i].y - activations[j].y;
+        var dist = Math.sqrt(dx*dx + dy*dy);
+        if(dist < 100 && rng() > 0.4){
+          connections.push([i, j, dist]);
+        }
+      }
+    }
+  }
+
+  function drawGrid(){
+    var cx = W / 2;
+    var cy = H / 2;
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 0.5;
+
+    // concentric rings
+    for(var r = 40; r < Math.max(W,H); r += 50){
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // radial lines
+    for(var a = 0; a < Math.PI * 2; a += Math.PI / 8){
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(a) * Math.max(W,H), cy + Math.sin(a) * Math.max(W,H));
+      ctx.stroke();
+    }
+  }
+
+  function drawBrainOutline(){
+    var cx = W / 2;
+    var cy = H / 2;
+    ctx.setLineDash([3, 6]);
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for(var a = 0; a <= Math.PI * 2 + 0.1; a += 0.03){
+      var p = brainRadius(a, cx, cy);
+      if(a === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // region labels
+    var topY = cy - H * 0.28;
+    var midY = cy;
+    var botY = cy + H * 0.26;
+    ctx.font = '9px "SF Mono","Menlo","Consolas",monospace';
+    ctx.textAlign = 'center';
+    ctx.letterSpacing = '2px';
+
+    ctx.fillStyle = 'rgba(90,102,117,0.5)';
+    ctx.fillText('B U F F E R', cx, topY);
+
+    ctx.fillStyle = 'rgba(90,102,117,0.5)';
+    ctx.fillText('E P I S O D I C', cx, midY);
+
+    ctx.fillStyle = 'rgba(90,102,117,0.5)';
+    ctx.fillText('S E M A N T I C', cx, botY);
+
+    // faint horizontal separators between regions
+    var sep1y = cy - H * 0.37 + H * 0.74 * 0.3;
+    var sep2y = cy - H * 0.37 + H * 0.74 * 0.72;
+    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+    ctx.lineWidth = 0.5;
+    ctx.setLineDash([2, 4]);
+
+    ctx.beginPath();
+    ctx.moveTo(cx - W * 0.2, sep1y);
+    ctx.lineTo(cx + W * 0.2, sep1y);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(cx - W * 0.18, sep2y);
+    ctx.lineTo(cx + W * 0.18, sep2y);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+  }
+
+  function drawConnections(){
+    for(var c = 0; c < connections.length; c++){
+      var a = activations[connections[c][0]];
+      var b = activations[connections[c][1]];
+      var avgStr = (a.strength + b.strength) / 2;
+      ctx.strokeStyle = 'rgba(255,255,255,' + (0.03 + avgStr * 0.06) + ')';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
+  }
+
+  function drawActivations(t){
+    for(var i = 0; i < activations.length; i++){
+      var a = activations[i];
+      var col = heatColor(a.strength);
+      var pulseAmt = 0.7 + 0.3 * Math.sin(t * 0.001 + a.phase);
+      var alpha = (0.3 + a.strength * 0.7) * pulseAmt;
+
+      var grad = ctx.createRadialGradient(a.x, a.y, 0, a.x, a.y, a.size);
+      grad.addColorStop(0, 'rgba(' + col[0] + ',' + col[1] + ',' + col[2] + ',' + alpha + ')');
+      grad.addColorStop(0.4, 'rgba(' + col[0] + ',' + col[1] + ',' + col[2] + ',' + (alpha * 0.4) + ')');
+      grad.addColorStop(1, 'rgba(' + col[0] + ',' + col[1] + ',' + col[2] + ',0)');
+
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(a.x, a.y, a.size, 0, Math.PI * 2);
+      ctx.fill();
+
+      // bright core for strong activations
+      if(a.strength > 0.7){
+        var coreGrad = ctx.createRadialGradient(a.x, a.y, 0, a.x, a.y, a.size * 0.25);
+        coreGrad.addColorStop(0, 'rgba(255,255,255,' + (alpha * 0.6) + ')');
+        coreGrad.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = coreGrad;
+        ctx.beginPath();
+        ctx.arc(a.x, a.y, a.size * 0.25, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  function drawCrosshair(){
+    var cx = W / 2;
+    var cy = H / 2;
+    ctx.strokeStyle = 'rgba(45,212,191,0.25)';
+    ctx.lineWidth = 0.5;
+
+    // horizontal
+    ctx.beginPath();
+    ctx.moveTo(0, cy);
+    ctx.lineTo(W, cy);
+    ctx.stroke();
+
+    // vertical
+    ctx.beginPath();
+    ctx.moveTo(cx, 0);
+    ctx.lineTo(cx, H);
+    ctx.stroke();
+
+    // center tick marks
+    ctx.strokeStyle = 'rgba(45,212,191,0.5)';
+    ctx.lineWidth = 1;
+    var tick = 8;
+    ctx.beginPath();
+    ctx.moveTo(cx - tick, cy); ctx.lineTo(cx - 3, cy);
+    ctx.moveTo(cx + 3, cy); ctx.lineTo(cx + tick, cy);
+    ctx.moveTo(cx, cy - tick); ctx.lineTo(cx, cy - 3);
+    ctx.moveTo(cx, cy + 3); ctx.lineTo(cx, cy + tick);
+    ctx.stroke();
+
+    // coordinates label
+    ctx.font = '8px "SF Mono","Menlo","Consolas",monospace';
+    ctx.fillStyle = 'rgba(45,212,191,0.4)';
+    ctx.textAlign = 'left';
+    ctx.fillText('X:0.00  Y:0.00', cx + 10, cy - 6);
+  }
+
+  function render(t){
+    time = t;
+    ctx.clearRect(0, 0, W, H);
+    drawGrid();
+    drawBrainOutline();
+    drawConnections();
+    drawActivations(t);
+    drawCrosshair();
+    requestAnimationFrame(render);
+  }
+
+  window.addEventListener('resize', resize);
+  resize();
+  requestAnimationFrame(render);
+})();
+
+// ── DECAY PROJECTION CANVAS ──
+(function(){
+  var canvas = document.getElementById('decayCanvas');
+  var parent = canvas.parentElement;
+  var dpr = window.devicePixelRatio || 1;
+
+  function draw(){
+    var rect = parent.getBoundingClientRect();
+    var W = rect.width - 32; // account for padding
+    var H = 80;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    var padL = 28, padR = 4, padT = 4, padB = 16;
+    var plotW = W - padL - padR;
+    var plotH = H - padT - padB;
+
+    // axes
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(padL, padT);
+    ctx.lineTo(padL, padT + plotH);
+    ctx.lineTo(padL + plotW, padT + plotH);
+    ctx.stroke();
+
+    // horizontal grid lines
+    for(var i = 0; i <= 4; i++){
+      var y = padT + plotH * (1 - i / 4);
+      ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+      ctx.beginPath();
+      ctx.moveTo(padL, y);
+      ctx.lineTo(padL + plotW, y);
+      ctx.stroke();
+    }
+
+    // y-axis labels
+    ctx.font = '7px "SF Mono","Menlo","Consolas",monospace';
+    ctx.fillStyle = '#5a6675';
+    ctx.textAlign = 'right';
+    ctx.fillText('1.0', padL - 4, padT + 4);
+    ctx.fillText('0.5', padL - 4, padT + plotH / 2 + 3);
+    ctx.fillText('0.0', padL - 4, padT + plotH + 3);
+
+    // x-axis labels
+    ctx.textAlign = 'center';
+    ctx.fillText('0d', padL, padT + plotH + 12);
+    ctx.fillText('30d', padL + plotW / 2, padT + plotH + 12);
+    ctx.fillText('60d', padL + plotW, padT + plotH + 12);
+
+    // decay curve: exponential with half-life 31.5 days over 60 days
+    var halfLife = 31.5;
+    var lambda = Math.log(2) / halfLife;
+    ctx.strokeStyle = '#2dd4bf';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for(var px = 0; px <= plotW; px++){
+      var days = (px / plotW) * 60;
+      var val = Math.exp(-lambda * days);
+      var x = padL + px;
+      var y = padT + plotH * (1 - val);
+      if(px === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // glow effect
+    ctx.strokeStyle = 'rgba(45,212,191,0.15)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    for(var px = 0; px <= plotW; px++){
+      var days = (px / plotW) * 60;
+      var val = Math.exp(-lambda * days);
+      var x = padL + px;
+      var y = padT + plotH * (1 - val);
+      if(px === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // current position marker
+    var currentDay = 9.9;
+    var currentVal = Math.exp(-lambda * currentDay);
+    var mx = padL + (currentDay / 60) * plotW;
+    var my = padT + plotH * (1 - currentVal);
+    ctx.fillStyle = '#2dd4bf';
+    ctx.beginPath();
+    ctx.arc(mx, my, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // dashed line from marker to axes
+    ctx.setLineDash([2, 3]);
+    ctx.strokeStyle = 'rgba(45,212,191,0.3)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(mx, my);
+    ctx.lineTo(mx, padT + plotH);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(mx, my);
+    ctx.lineTo(padL, my);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // EEG noise overlaid on the curve (subtle)
+    ctx.strokeStyle = 'rgba(45,212,191,0.08)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    var noiseSeed = 17;
+    for(var px = 0; px <= plotW; px++){
+      noiseSeed = (noiseSeed * 16807) % 2147483647;
+      var noise = ((noiseSeed / 2147483647) - 0.5) * 6;
+      var days = (px / plotW) * 60;
+      var val = Math.exp(-lambda * days);
+      var x = padL + px;
+      var y = padT + plotH * (1 - val) + noise;
+      if(px === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  draw();
+  window.addEventListener('resize', draw);
+})();
+</script>
+</body>
+</html>

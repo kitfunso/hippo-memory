@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>hippo :: memory catalog</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Courier+Prime:wght@400;700&family=IM+Fell+English+SC&family=UnifrakturMaguntia&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --mah1:#6b4423; --mah2:#4a2e18; --mah3:#3a2312;
+    --paper:#f0e6cf; --paper-dim:#e3d7ba;
+    --ink:#1c1814; --ink-soft:#3a332b;
+    --stamp:#a3272a; --brass:#8c6a3d; --brass-lt:#b8905a;
+    --rule:#c4b9a8; --shadow:0 10px 28px rgba(0,0,0,.55);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:'Courier Prime','Special Elite',monospace;
+    color:var(--ink);
+    background:
+      repeating-linear-gradient(92deg, rgba(0,0,0,.08) 0 2px, transparent 2px 7px),
+      repeating-linear-gradient(88deg, rgba(255,255,255,.03) 0 1px, transparent 1px 4px),
+      linear-gradient(180deg, var(--mah1) 0%, var(--mah2) 60%, var(--mah3) 100%);
+    min-height:100vh;
+    filter:sepia(.18) contrast(.96);
+    padding:18px 22px 30px;
+  }
+  /* masthead */
+  .masthead{
+    border-top:4px double var(--ink); border-bottom:4px double var(--ink);
+    padding:10px 14px; margin-bottom:14px; background:var(--paper);
+    display:flex; align-items:baseline; justify-content:space-between;
+    box-shadow:var(--shadow);
+  }
+  .masthead h1{
+    font-family:'UnifrakturMaguntia',serif; font-weight:400;
+    margin:0; font-size:44px; letter-spacing:1px; color:var(--ink);
+  }
+  .masthead .sub{
+    font-family:'IM Fell English SC',serif; font-size:14px;
+    letter-spacing:3px; text-transform:lowercase;
+  }
+  .masthead .vol{
+    font-family:'IM Fell English SC',serif; font-size:13px;
+    letter-spacing:2px;
+  }
+  /* layout grid */
+  .stage{
+    display:grid;
+    grid-template-columns:240px 1fr 250px;
+    gap:22px; align-items:start;
+  }
+  /* cabinet */
+  .cabinet{
+    background:
+      repeating-linear-gradient(90deg, rgba(0,0,0,.10) 0 1px, transparent 1px 5px),
+      linear-gradient(180deg,#5a3718,#3e2411);
+    padding:14px 10px; border:2px solid #2a1808;
+    box-shadow:inset 0 0 0 1px #8c6a3d33, var(--shadow);
+    border-radius:2px;
+  }
+  .cabinet h3{
+    font-family:'IM Fell English SC',serif; font-size:14px; color:#f0e6cf;
+    letter-spacing:4px; margin:0 0 10px; text-align:center; opacity:.85;
+    text-shadow:0 1px 0 #000;
+  }
+  .drawer{
+    background:linear-gradient(180deg,#caa877,#9d7a4a 60%,#7a5a33);
+    border:1px solid #2a1808; margin:6px 4px;
+    padding:9px 10px 9px 36px; position:relative; cursor:pointer;
+    font-family:'IM Fell English SC',serif; letter-spacing:2px; font-size:13px;
+    color:#2a1808; text-shadow:0 1px 0 #e6c99b;
+    box-shadow:inset 0 1px 0 #f2d8aa, inset 0 -2px 4px rgba(0,0,0,.3);
+    transition:transform .25s;
+  }
+  .drawer:hover{transform:translateX(3px)}
+  .drawer.open{transform:translateX(8px); background:linear-gradient(180deg,#d9b889,#a88450 60%,#7a5a33)}
+  .drawer .pull{
+    position:absolute; left:8px; top:50%; transform:translateY(-50%);
+    width:18px; height:10px; border-radius:3px;
+    background:radial-gradient(ellipse at 30% 30%, #e6c089, var(--brass) 60%, #5a3e20);
+    box-shadow:0 1px 2px rgba(0,0,0,.5), inset 0 1px 0 #fbe3b1;
+    border:1px solid #3a2a12;
+  }
+  .drawer .lbl-sm{font-size:10px; letter-spacing:1px; opacity:.7; display:block}
+  /* stack revealed under a drawer */
+  .stack{
+    display:none; padding:6px 4px 10px; margin:-2px 4px 6px;
+    background:linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.15));
+    border-left:1px dashed #8c6a3d66; border-right:1px dashed #8c6a3d66;
+    border-bottom:1px solid #2a1808;
+  }
+  .drawer.open + .stack{display:block}
+  .stack-card{
+    background:var(--paper); color:var(--ink);
+    font-family:'Special Elite',monospace; font-size:11px;
+    padding:6px 8px 6px 20px; margin:4px 2px; cursor:pointer;
+    position:relative; border:1px solid #b8a98b;
+    box-shadow:0 2px 4px rgba(0,0,0,.4);
+    transition:transform .18s, box-shadow .18s;
+    line-height:1.25;
+  }
+  .stack-card::before, .stack-card::after{
+    content:""; position:absolute; left:6px; width:5px; height:5px;
+    border-radius:50%; background:#3a2312;
+    box-shadow:inset 0 1px 1px rgba(0,0,0,.6);
+  }
+  .stack-card::before{top:6px}
+  .stack-card::after{bottom:6px}
+  .stack-card:hover{transform:translate(2px,-10px) rotate(.4deg); box-shadow:0 10px 18px rgba(0,0,0,.55)}
+  .stack-card .cn{font-family:'IM Fell English SC',serif; font-size:10px; letter-spacing:1px; opacity:.7}
+  /* reading desk */
+  .desk{
+    background:
+      radial-gradient(ellipse at 20% 10%, rgba(0,0,0,.25), transparent 40%),
+      repeating-linear-gradient(48deg, rgba(0,0,0,.06) 0 2px, transparent 2px 9px),
+      linear-gradient(180deg,#5b3a1b,#3e2411);
+    border:2px solid #2a1808; padding:26px 22px;
+    min-height:560px; box-shadow:var(--shadow); position:relative;
+  }
+  .desk-label{
+    position:absolute; top:8px; right:14px;
+    font-family:'IM Fell English SC',serif; font-size:11px; letter-spacing:3px;
+    color:#f0e6cfaa; text-shadow:0 1px 0 #000;
+  }
+  /* big index card on the desk */
+  .card{
+    width:520px; min-height:320px; margin:10px auto;
+    background:
+      radial-gradient(ellipse 120px 60px at 80% 15%, rgba(150,130,90,.25), transparent 60%),
+      radial-gradient(ellipse 80px 40px at 20% 80%, rgba(120,90,60,.22), transparent 60%),
+      linear-gradient(180deg, var(--paper) 0%, #ebe0c6 100%);
+    color:var(--ink);
+    padding:22px 28px 22px 52px; position:relative;
+    border:1px solid #b8a98b;
+    box-shadow:
+      0 1px 0 #fff6 inset,
+      0 22px 32px rgba(0,0,0,.55),
+      0 42px 40px -22px rgba(0,0,0,.6);
+    transform:rotate(-.4deg);
+    font-family:'Special Elite',monospace;
+    background-repeat:no-repeat;
+  }
+  .card::before{
+    /* faded horizontal rule lines */
+    content:""; position:absolute; inset:60px 20px 20px 48px;
+    background-image:repeating-linear-gradient(transparent 0 22px, var(--rule) 22px 23px);
+    opacity:.4; pointer-events:none;
+  }
+  .card .holes{position:absolute; left:14px; top:0; bottom:0; width:14px}
+  .card .holes span{
+    position:absolute; left:2px; width:10px; height:10px; border-radius:50%;
+    background:radial-gradient(circle at 40% 40%, #1c1814, #000);
+    box-shadow:inset 0 1px 2px #0008, 0 1px 0 #fff6;
+  }
+  .card .holes span:first-child{top:32px}
+  .card .holes span:last-child{bottom:32px}
+  .card .cn{
+    font-family:'IM Fell English SC',serif; font-size:13px; letter-spacing:2px;
+    color:var(--ink-soft);
+  }
+  .card .stamp{
+    position:absolute; top:16px; right:22px;
+    color:var(--stamp); border:2px solid var(--stamp);
+    padding:3px 8px; font-family:'Courier Prime',monospace;
+    font-size:11px; letter-spacing:4px; font-weight:700;
+    transform:rotate(-6deg); opacity:.78;
+    text-shadow:0.3px 0 0 var(--stamp);
+  }
+  .card h2{
+    font-family:'Special Elite',monospace; text-transform:uppercase;
+    letter-spacing:2px; font-size:16px; margin:16px 0 6px;
+    text-shadow:.3px 0 0 var(--ink);
+  }
+  .card .body{
+    font-size:15px; line-height:22px; margin-top:14px;
+    text-shadow:.3px 0 0 var(--ink);
+  }
+  .card .meta{
+    margin-top:26px; padding-top:10px;
+    border-top:1px dashed #0003;
+    font-size:11px; line-height:1.5; color:var(--ink-soft);
+    letter-spacing:.5px;
+  }
+  .card .meta .row{display:flex; justify-content:space-between; gap:18px}
+  .card .bar{display:inline-block; height:6px; background:var(--ink-soft); vertical-align:middle; margin-left:4px}
+  /* related shadows */
+  .related{position:relative; height:0}
+  .related i{
+    position:absolute; width:520px; height:320px; left:50%; margin-left:-260px; top:-330px;
+    background:var(--paper-dim); border:1px solid #b8a98b;
+    box-shadow:0 10px 18px rgba(0,0,0,.4); z-index:-1;
+  }
+  /* search card */
+  .search{
+    width:520px; margin:0 auto 10px;
+    background:var(--paper); padding:10px 14px 10px 40px;
+    font-family:'Special Elite',monospace; position:relative;
+    border:1px solid #b8a98b; transform:rotate(.3deg);
+    box-shadow:0 8px 14px rgba(0,0,0,.45);
+  }
+  .search::before, .search::after{
+    content:""; position:absolute; left:12px; width:6px; height:6px;
+    border-radius:50%; background:#3a2312;
+  }
+  .search::before{top:10px}
+  .search::after{bottom:10px}
+  .search label{font-family:'IM Fell English SC',serif; letter-spacing:2px; font-size:11px}
+  .search input{
+    border:none; border-bottom:1px solid var(--ink-soft); background:transparent;
+    font-family:'Special Elite',monospace; font-size:14px; width:70%;
+    outline:none; color:var(--ink); padding:2px 4px;
+  }
+  /* circulation column */
+  .circ{
+    background:
+      linear-gradient(180deg,#f5ecd4,#e6d8b6);
+    padding:12px 12px 16px; font-family:'Special Elite',monospace;
+    font-size:11px; color:var(--ink); line-height:1.4;
+    border:1px dashed #9a8561;
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), 94% 100%, 88% calc(100% - 8px), 82% 100%, 76% calc(100% - 8px), 70% 100%, 64% calc(100% - 8px), 58% 100%, 52% calc(100% - 8px), 46% 100%, 40% calc(100% - 8px), 34% 100%, 28% calc(100% - 8px), 22% 100%, 16% calc(100% - 8px), 10% 100%, 4% calc(100% - 8px), 0 100%);
+    box-shadow:var(--shadow);
+  }
+  .circ h4{
+    font-family:'IM Fell English SC',serif; letter-spacing:3px;
+    font-size:12px; margin:0 0 8px; border-bottom:1px solid var(--ink-soft);
+    padding-bottom:4px;
+  }
+  .circ .entry{padding:4px 0; border-bottom:1px dotted #9a8561}
+  .circ .entry .t{opacity:.65; font-size:10px; letter-spacing:1px}
+  .circ .entry .n{font-size:11px}
+  /* bottom summary */
+  .summary-wrap{margin-top:18px; display:flex; justify-content:center}
+  .summary{
+    position:relative;
+    width:620px; background:var(--paper); color:var(--ink);
+    padding:20px 26px 22px; font-family:'Special Elite',monospace;
+    border:1px solid #b8a98b; box-shadow:0 14px 24px rgba(0,0,0,.55);
+    transform:rotate(-.6deg);
+  }
+  .summary h3{
+    font-family:'IM Fell English SC',serif; letter-spacing:4px;
+    margin:0 0 10px; font-size:16px;
+  }
+  .summary .grid{
+    display:grid; grid-template-columns:repeat(4,1fr); gap:14px;
+    font-size:12px; letter-spacing:1px;
+  }
+  .summary .grid .big{
+    font-family:'IM Fell English SC',serif; font-size:26px; display:block;
+  }
+  .tape{
+    position:absolute; width:86px; height:22px; opacity:.55;
+    background:repeating-linear-gradient(45deg, #c9a96a 0 6px, #b8965a 6px 12px);
+    box-shadow:0 2px 4px rgba(0,0,0,.25);
+  }
+  .tape.l{top:-10px; left:-20px; transform:rotate(-18deg)}
+  .tape.r{top:-10px; right:-20px; transform:rotate(14deg)}
+  .stamp-big{
+    position:absolute; right:20px; bottom:12px;
+    color:var(--stamp); border:3px double var(--stamp); padding:4px 10px;
+    font-family:'Courier Prime',monospace; font-weight:700;
+    font-size:13px; letter-spacing:5px; opacity:.7;
+    transform:rotate(-5deg);
+  }
+  /* faint vignette on stage */
+  .vignette{position:fixed; inset:0; pointer-events:none;
+    background:radial-gradient(ellipse at 50% 40%, transparent 40%, rgba(0,0,0,.45) 100%);
+    z-index:5;}
+  .hint{opacity:.6; font-size:11px; margin:6px 0; text-align:center; color:#f0e6cfaa; letter-spacing:2px; font-family:'IM Fell English SC',serif}
+</style>
+</head>
+<body>
+<div class="masthead">
+  <span class="vol">vol. i &middot; no. 38</span>
+  <h1>hippo &middot; memory catalog</h1>
+  <span class="sub">est. MMXXVI</span>
+</div>
+
+<div class="stage">
+  <!-- CABINET -->
+  <div class="cabinet" id="cabinet">
+    <h3>CARD CABINET</h3>
+    <div id="drawers"></div>
+  </div>
+
+  <!-- DESK -->
+  <div class="desk">
+    <span class="desk-label">READING DESK</span>
+    <div class="search">
+      <label>QUERY CARD /</label>
+      <input id="q" placeholder="type to filter..." autocomplete="off"/>
+    </div>
+    <div class="related"><i style="transform:rotate(-1.8deg)"></i><i style="transform:rotate(1.2deg)"></i></div>
+    <div id="deskCard"></div>
+    <p class="hint">click any drawer at left &middot; click a card to examine</p>
+  </div>
+
+  <!-- CIRCULATION -->
+  <div class="circ">
+    <h4>CIRCULATION</h4>
+    <div id="circ"></div>
+  </div>
+</div>
+
+<!-- SUMMARY -->
+<div class="summary-wrap">
+  <div class="summary">
+    <span class="tape l"></span><span class="tape r"></span>
+    <h3>CATALOG SUMMARY</h3>
+    <div class="grid">
+      <div><span class="big" id="sTot">38</span>total holdings</div>
+      <div><span class="big" id="sBuf">6</span>buffer</div>
+      <div><span class="big" id="sEpi">18</span>episodic</div>
+      <div><span class="big" id="sSem">14</span>semantic</div>
+    </div>
+    <div style="margin-top:12px; font-size:11px; letter-spacing:1px; opacity:.85">
+      last inventory: <b id="today"></b> &nbsp;&middot;&nbsp; classification: HIP &nbsp;&middot;&nbsp; librarian: S.K.F.
+    </div>
+    <span class="stamp-big">AUDITED</span>
+  </div>
+</div>
+
+<div class="vignette"></div>
+
+<script>
+const memoriesData = [
+  { text: "Gold model uses TIPS 10y as primary inflation signal", layer:'buffer', tags:['gold','tips','inflation','signals'], confidence:'verified' },
+  { text: "Supabase sync overwrites all signal data from local files", layer:'buffer', tags:['supabase','sync','safety'], confidence:'verified' },
+  { text: "RTX 5080 confirmed working with PyTorch 2.10", layer:'buffer', tags:['gpu','pytorch','hardware'], confidence:'verified' },
+  { text: "Pre-commit hooks can revert file edits silently", layer:'buffer', tags:['git','hooks','gotcha'], confidence:'observed' },
+  { text: "Hippo memory uses hippocampal consolidation model", layer:'buffer', tags:['hippo','consolidation','theory'], confidence:'observed' },
+  { text: "Weekly pipeline runs 42 models in parallel", layer:'buffer', tags:['pipeline','parallel','weekly'], confidence:'verified' },
+  { text: "Never force push to main branch", layer:'episodic', tags:['git','safety'], confidence:'verified' },
+  { text: "ProcessPoolExecutor default 8 workers for pipeline", layer:'episodic', tags:['pipeline','parallel','python'], confidence:'verified' },
+  { text: "Strength decays with biological half-life curve", layer:'episodic', tags:['hippo','decay','theory'], confidence:'verified' },
+  { text: "Memory retrieval reinforces strength", layer:'episodic', tags:['hippo','retrieval','theory'], confidence:'verified' },
+  { text: "Buffer memories consolidate to episodic after sleep", layer:'episodic', tags:['hippo','consolidation','buffer','episodic'], confidence:'verified' },
+  { text: "Episodic memories generalize into semantic over time", layer:'episodic', tags:['hippo','consolidation','episodic','semantic'], confidence:'verified' },
+  { text: "Power models have known validation issues", layer:'episodic', tags:['power','validation','issues'], confidence:'observed' },
+  { text: "Use safe_sync.py instead of direct Supabase sync", layer:'episodic', tags:['supabase','sync','safety'], confidence:'verified' },
+  { text: "Signal prices use actual front-month not adjusted", layer:'episodic', tags:['prices','signals','futures'], confidence:'verified' },
+  { text: "All futures models must use futures_pnl.py", layer:'episodic', tags:['futures','pnl','standard'], confidence:'verified' },
+  { text: "VAR limit is 100k for all commodities", layer:'episodic', tags:['var','sizing','futures'], confidence:'verified' },
+  { text: "No vol upper clip in position sizing", layer:'episodic', tags:['vol','sizing','futures'], confidence:'verified' },
+  { text: "GPU gives 40x speedup on matrix operations", layer:'episodic', tags:['gpu','performance','pytorch'], confidence:'observed' },
+  { text: "Playwright smoke tests cover 15 scenarios", layer:'episodic', tags:['playwright','tests','frontend'], confidence:'verified' },
+  { text: "GitHub Actions deploys from master automatically", layer:'episodic', tags:['deploy','github','ci'], confidence:'verified' },
+  { text: "Content hash caching uses SHA-256 for file ops", layer:'episodic', tags:['cache','hash','files'], confidence:'observed' },
+  { text: "Nightly validation runs at 7AM UTC", layer:'episodic', tags:['validation','schedule','ci'], confidence:'verified' },
+  { text: "Semantic layer stores generalized knowledge", layer:'episodic', tags:['hippo','semantic','theory'], confidence:'verified' },
+  { text: "Buffer is short-term working memory", layer:'semantic', tags:['hippo','buffer','theory'], confidence:'verified' },
+  { text: "Episodic captures specific events and contexts", layer:'semantic', tags:['hippo','episodic','theory'], confidence:'verified' },
+  { text: "Memory as physics models decay and interference", layer:'semantic', tags:['hippo','physics','theory'], confidence:'inferred' },
+  { text: "Phase transitions in memory consolidation", layer:'semantic', tags:['hippo','consolidation','theory'], confidence:'inferred' },
+  { text: "Claude Code hooks configured in settings.json", layer:'semantic', tags:['claude','hooks','config'], confidence:'verified' },
+  { text: "Compaction triggers at 50 percent context usage", layer:'semantic', tags:['claude','compaction','context'], confidence:'verified' },
+  { text: "Roll adjustments needed when contracts change", layer:'semantic', tags:['futures','roll','prices'], confidence:'verified' },
+  { text: "Lot sizing uses raw prices not backward-adjusted", layer:'semantic', tags:['sizing','prices','futures'], confidence:'verified' },
+  { text: "Minimum 1 lot when signal is active", layer:'semantic', tags:['sizing','futures','signals'], confidence:'verified' },
+  { text: "Vol floor 0.01 prevents division by zero", layer:'semantic', tags:['vol','sizing','safety'], confidence:'verified' },
+  { text: "Scaled signal equals raw signal always", layer:'semantic', tags:['sizing','signals','standard'], confidence:'verified' },
+  { text: "MCP server connected for Supabase queries", layer:'semantic', tags:['mcp','supabase','config'], confidence:'verified' },
+  { text: "Faster whisper uses GPU float16 for transcription", layer:'semantic', tags:['whisper','gpu','transcription'], confidence:'observed' },
+  { text: "Confidence 0.95 for all position sizing", layer:'semantic', tags:['sizing','futures','standard'], confidence:'verified' },
+];
+
+// decorate
+const layerCodes = {buffer:'BU', episodic:'EP', semantic:'SE'};
+const memories = memoriesData.map((m,i)=>{
+  const rng = (i*977+131)%100/100;
+  const strength = 0.35 + rng*0.6;
+  const retrievals = Math.floor(rng*18);
+  const ageDays = 3 + Math.floor(rng*300);
+  const dateStamped = new Date(2026,3,17);
+  dateStamped.setDate(dateStamped.getDate()-ageDays);
+  const dstr = dateStamped.toISOString().slice(0,10).replace(/-/g,'.');
+  const callNum = `HIP.${layerCodes[m.layer]}.${String(i+1).padStart(3,'0')}`;
+  const title = m.text.split(' ').slice(0,5).join(' ').toUpperCase();
+  return {...m, id:i, strength, retrievals, ageDays, dstr, callNum, title};
+});
+
+const STAMPS = {verified:'AUDITED', observed:'RECEIVED', inferred:'REVIEW', stale:'EXPIRED'};
+const byTag = {};
+memories.forEach(m=>m.tags.forEach(t=>{(byTag[t]=byTag[t]||[]).push(m)}));
+const topTags = Object.entries(byTag).sort((a,b)=>b[1].length-a[1].length).slice(0,4).map(x=>x[0]);
+
+function drawerDef(label, sub, key){ return {label, sub, key}; }
+const drawers = [
+  drawerDef('BUFFER','short term','layer:buffer'),
+  drawerDef('EPISODIC','events','layer:episodic'),
+  drawerDef('SEMANTIC','knowledge','layer:semantic'),
+  ...topTags.map(t=>drawerDef('TAG / '+t.toUpperCase(), byTag[t].length+' cards', 'tag:'+t)),
+  drawerDef('VERIFIED','audited','conf:verified'),
+  drawerDef('INFERRED','unconfirmed','conf:inferred'),
+];
+
+function filterFor(key){
+  const [type,val] = key.split(':');
+  if(type==='layer') return memories.filter(m=>m.layer===val);
+  if(type==='tag')   return memories.filter(m=>m.tags.includes(val));
+  if(type==='conf')  return memories.filter(m=>m.confidence===val);
+  return memories;
+}
+
+const drawersEl = document.getElementById('drawers');
+drawers.forEach((d,idx)=>{
+  const btn = document.createElement('div');
+  btn.className = 'drawer'; btn.dataset.key=d.key;
+  btn.innerHTML = `<span class="pull"></span>${d.label}<span class="lbl-sm">${d.sub}</span>`;
+  const stack = document.createElement('div'); stack.className='stack'; stack.dataset.key=d.key;
+  drawersEl.appendChild(btn); drawersEl.appendChild(stack);
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.drawer.open').forEach(d=>{if(d!==btn)d.classList.remove('open')});
+    btn.classList.toggle('open');
+    renderStack(d.key, stack);
+  });
+});
+
+function renderStack(key, el){
+  const list = filterFor(key);
+  el.innerHTML='';
+  list.forEach((m,idx)=>{
+    const c = document.createElement('div');
+    c.className='stack-card';
+    const jitter = ((idx*53)%7-3)*0.4;
+    c.style.transform = `rotate(${jitter}deg)`;
+    c.innerHTML = `<span class="cn">${m.callNum}</span><br>${m.text}`;
+    c.addEventListener('click', e=>{e.stopPropagation(); examine(m)});
+    el.appendChild(c);
+  });
+}
+
+const circEl = document.getElementById('circ');
+const circLog = [];
+function logCirc(m){
+  const t = new Date().toTimeString().slice(0,5);
+  circLog.unshift({t, call:m.callNum, title:m.title});
+  if(circLog.length>10) circLog.pop();
+  circEl.innerHTML = circLog.map(e=>`
+    <div class="entry"><span class="t">${e.t}  /  ${e.call}</span><div class="n">${e.title}</div></div>
+  `).join('');
+}
+
+function examine(m){
+  const stamp = STAMPS[m.confidence] || 'FILED';
+  const tagsLine = 'see also: '+m.tags.join(', ');
+  const bar = Math.round(m.strength*30);
+  document.getElementById('deskCard').innerHTML = `
+    <div class="card">
+      <div class="holes"><span></span><span></span></div>
+      <div style="display:flex; justify-content:space-between; align-items:flex-start">
+        <div class="cn">${m.callNum}</div>
+        <div style="font-family:'Special Elite'; font-size:11px; color:var(--ink-soft); opacity:.7">acc. ${m.dstr}</div>
+      </div>
+      <span class="stamp">${stamp}</span>
+      <h2>${m.title}</h2>
+      <div class="body">${m.text}.</div>
+      <div class="meta">
+        <div class="row"><span>layer / <b>${m.layer}</b></span><span>retrievals / <b>${m.retrievals}</b></span><span>age / <b>${m.ageDays} d</b></span></div>
+        <div class="row" style="margin-top:4px"><span>strength <span class="bar" style="width:${bar*3}px"></span> <b>${m.strength.toFixed(2)}</b></span><span>${tagsLine}</span></div>
+      </div>
+    </div>`;
+  logCirc(m);
+}
+
+// search
+document.getElementById('q').addEventListener('input', e=>{
+  const q = e.target.value.trim().toLowerCase();
+  if(!q){ return; }
+  const hit = memories.find(m=>m.text.toLowerCase().includes(q) || m.tags.some(t=>t.includes(q)) || m.callNum.toLowerCase().includes(q));
+  if(hit){ examine(hit); }
+});
+
+// summary counts
+document.getElementById('sTot').textContent = memories.length;
+document.getElementById('sBuf').textContent = memories.filter(m=>m.layer==='buffer').length;
+document.getElementById('sEpi').textContent = memories.filter(m=>m.layer==='episodic').length;
+document.getElementById('sSem').textContent = memories.filter(m=>m.layer==='semantic').length;
+document.getElementById('today').textContent = new Date().toISOString().slice(0,10).replace(/-/g,'.');
+
+// initial examination
+examine(memories[2]);
+// open buffer drawer by default
+setTimeout(()=>{ document.querySelector('.drawer').click(); }, 50);
+</script>
+</body>
+</html>

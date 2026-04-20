@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Background C: Ink-wash nebula + bioluminescent orbs</title>
+<style>
+  :root {
+    --parchment: #f4efe6;
+    --ink: #2a241e;
+    --accent: #c45c3c;
+  }
+  html, body { margin: 0; height: 100%; background: var(--parchment); color: var(--ink); font-family: "Courier New", ui-monospace, monospace; overflow: hidden; }
+  #scene { position: absolute; inset: 0; }
+  .label {
+    position: absolute; top: 16px; left: 20px; z-index: 10;
+    background: rgba(244,239,230,0.82); border: 1px solid rgba(42,36,30,0.25); border-radius: 3px;
+    padding: 10px 14px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .label b { color: var(--accent); font-weight: 700; }
+  .hint { position: absolute; bottom: 14px; left: 20px; font-size: 10px; letter-spacing: 0.08em; color: #534838; text-transform: uppercase; }
+</style>
+</head>
+<body>
+<div class="label"><b>Variation C</b> &nbsp; Ink-wash nebula &middot; bioluminescent orbs</div>
+<div class="hint">drag to orbit &middot; scroll to zoom</div>
+<div id="scene"></div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+const PAL = {
+  teal: new THREE.Color("#4a8ca3"),
+  sage: new THREE.Color("#5a8f6b"),
+  violet: new THREE.Color("#7c6caf"),
+};
+const LAYER_Y = { buffer: 14, episodic: 7, semantic: 0 };
+
+function mulberry(a) {
+  return function() { a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+const rand = mulberry(2024);
+
+const MEMORIES = [];
+const layers = ["buffer","episodic","semantic"];
+for (let i = 0; i < 28; i++) {
+  MEMORIES.push({ id: `m${i}`, layer: layers[i % 3], strength: 0.3 + rand() * 0.7, text: `word${i} phrase${i%5}` });
+}
+const positions = MEMORIES.map((m, i) => {
+  const angle = i * 2.3998;
+  const r = 6 + Math.sqrt(i) * 3.4;
+  return new THREE.Vector3(Math.cos(angle) * r, LAYER_Y[m.layer], Math.sin(angle) * r);
+});
+
+const mount = document.getElementById("scene");
+const scene = new THREE.Scene();
+scene.background = new THREE.Color("#ede5d0");
+scene.fog = new THREE.Fog(0xede5d0, 50, 130);
+
+const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 400);
+camera.position.set(26, 22, 38);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+renderer.setSize(window.innerWidth, window.innerHeight);
+mount.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.target.set(0, 6, 0);
+
+// ------- Ink-wash floor (sumi-e style bleed)
+function makeWashTexture() {
+  const size = 1024;
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#ede5d0";
+  ctx.fillRect(0,0,size,size);
+
+  // grain
+  const img = ctx.getImageData(0,0,size,size);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const n = (Math.random() - 0.5) * 24;
+    img.data[i] = Math.max(0, Math.min(255, img.data[i] + n));
+    img.data[i+1] = Math.max(0, Math.min(255, img.data[i+1] + n - 4));
+    img.data[i+2] = Math.max(0, Math.min(255, img.data[i+2] + n - 12));
+  }
+  ctx.putImageData(img, 0, 0);
+
+  // large ink blooms (soft dark clouds)
+  const p = mulberry(91);
+  for (let k = 0; k < 7; k++) {
+    const cx = p() * size, cy = p() * size;
+    const r = 140 + p() * 220;
+    const tint = p() > 0.5 ? "rgba(42,70,82," : "rgba(74,82,60,"; // muted teal / sage
+    const g = ctx.createRadialGradient(cx, cy, r * 0.15, cx, cy, r);
+    g.addColorStop(0, tint + "0.28)");
+    g.addColorStop(0.45, tint + "0.14)");
+    g.addColorStop(1, tint + "0)");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+  }
+
+  // scattered fine droplets
+  for (let k = 0; k < 180; k++) {
+    const x = p() * size, y = p() * size, rr = 0.6 + p() * 2.4;
+    ctx.fillStyle = `rgba(42,36,30,${0.1 + p() * 0.25})`;
+    ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI*2); ctx.fill();
+  }
+
+  // vignette
+  const v = ctx.createRadialGradient(size/2, size/2, size*0.3, size/2, size/2, size*0.72);
+  v.addColorStop(0, "rgba(237,229,208,0)");
+  v.addColorStop(1, "rgba(40,30,22,0.35)");
+  ctx.fillStyle = v; ctx.fillRect(0,0,size,size);
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.anisotropy = 8;
+  return tex;
+}
+
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(140, 140),
+  new THREE.MeshBasicMaterial({ map: makeWashTexture() })
+);
+floor.rotation.x = -Math.PI / 2;
+floor.position.y = -3;
+scene.add(floor);
+
+// darker atmospheric dome for moodier feel
+const dome = new THREE.Mesh(
+  new THREE.SphereGeometry(90, 32, 16, 0, Math.PI*2, 0, Math.PI/2),
+  new THREE.MeshBasicMaterial({ color: "#c9b99a", side: THREE.BackSide, transparent: true, opacity: 0.85 })
+);
+scene.add(dome);
+
+// ------- drifting pollen / paper dust
+function makePollenTexture() {
+  const s = 64;
+  const c = document.createElement("canvas"); c.width = c.height = s;
+  const ctx = c.getContext("2d");
+  const g = ctx.createRadialGradient(s/2, s/2, 0, s/2, s/2, s/2);
+  g.addColorStop(0.0, "rgba(52,40,28,1)");
+  g.addColorStop(0.28, "rgba(52,40,28,0.55)");
+  g.addColorStop(0.55, "rgba(52,40,28,0.18)");
+  g.addColorStop(1.0, "rgba(52,40,28,0)");
+  ctx.fillStyle = g; ctx.fillRect(0,0,s,s);
+  return new THREE.CanvasTexture(c);
+}
+const pollenTex = makePollenTexture();
+
+const POLLEN_COUNT = 2600;
+const pollenGeom = new THREE.BufferGeometry();
+const pollenPos = new Float32Array(POLLEN_COUNT * 3);
+const pollenVel = new Float32Array(POLLEN_COUNT * 3);
+const pollenPhase = new Float32Array(POLLEN_COUNT);
+const pollenSize = new Float32Array(POLLEN_COUNT);
+const pollenSpread = 58;
+for (let i = 0; i < POLLEN_COUNT; i++) {
+  pollenPos[i*3]   = (rand() - 0.5) * pollenSpread * 2;
+  pollenPos[i*3+1] = -2 + rand() * 32;
+  pollenPos[i*3+2] = (rand() - 0.5) * pollenSpread * 2;
+  pollenVel[i*3]   = (rand() - 0.5) * 0.025;
+  pollenVel[i*3+1] = 0.012 + rand() * 0.045;
+  pollenVel[i*3+2] = (rand() - 0.5) * 0.025;
+  pollenPhase[i]   = rand() * Math.PI * 2;
+  const r = rand();
+  pollenSize[i] = r < 0.82 ? (0.28 + rand() * 0.45) : (0.85 + rand() * 0.9);
+}
+pollenGeom.setAttribute("position", new THREE.BufferAttribute(pollenPos, 3));
+pollenGeom.setAttribute("size", new THREE.BufferAttribute(pollenSize, 1));
+
+const pollenMat = new THREE.ShaderMaterial({
+  uniforms: {
+    map: { value: pollenTex },
+    fogColor: { value: scene.fog.color },
+  },
+  vertexShader: `
+    attribute float size;
+    varying float vFog;
+    varying float vSize;
+    void main() {
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      gl_PointSize = size * (360.0 / -mv.z);
+      gl_Position = projectionMatrix * mv;
+      float d = length(mv.xyz);
+      vFog = smoothstep(55.0, 135.0, d);
+      vSize = size;
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D map;
+    uniform vec3 fogColor;
+    varying float vFog;
+    varying float vSize;
+    void main() {
+      vec4 tex = texture2D(map, gl_PointCoord);
+      if (tex.a < 0.02) discard;
+      vec3 baseCol = mix(vec3(0.18,0.13,0.08), vec3(0.45,0.35,0.22), clamp(vSize - 0.3, 0.0, 1.0));
+      vec3 col = mix(baseCol, fogColor, vFog * 0.7);
+      float a = tex.a * (1.0 - vFog * 0.85) * 0.85;
+      gl_FragColor = vec4(col, a);
+    }
+  `,
+  transparent: true,
+  depthWrite: false,
+});
+const pollen = new THREE.Points(pollenGeom, pollenMat);
+scene.add(pollen);
+
+// ------- Bioluminescent orb: multi-layer sprite with breathing
+function makeBioTexture(color, layer) {
+  const s = 256;
+  const c = document.createElement("canvas"); c.width = c.height = s;
+  const ctx = c.getContext("2d");
+  const hex = "#" + color.getHexString();
+  // saturated colored disc with soft falloff — big readable bloom
+  const g1 = ctx.createRadialGradient(s/2, s/2, 0, s/2, s/2, s*0.46);
+  g1.addColorStop(0.00, hex + "ff");
+  g1.addColorStop(0.22, hex + "dd");
+  g1.addColorStop(0.45, hex + "55");
+  g1.addColorStop(0.72, hex + "14");
+  g1.addColorStop(1.00, hex + "00");
+  ctx.fillStyle = g1; ctx.fillRect(0,0,s,s);
+  // small warm core — not pure white, parchment-warm
+  const g2 = ctx.createRadialGradient(s/2, s/2, 0, s/2, s/2, s*0.055);
+  g2.addColorStop(0, "rgba(252,245,225,0.85)");
+  g2.addColorStop(1, hex + "00");
+  ctx.fillStyle = g2; ctx.beginPath(); ctx.arc(s/2, s/2, s*0.055, 0, Math.PI*2); ctx.fill();
+  // ink hairline ring for anchor
+  ctx.strokeStyle = "rgba(42,36,30,0.4)";
+  ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.arc(s/2, s/2, s*0.18, 0, Math.PI*2); ctx.stroke();
+  return new THREE.CanvasTexture(c);
+}
+
+const bioTex = {
+  buffer: makeBioTexture(PAL.violet, "buffer"),
+  episodic: makeBioTexture(PAL.teal, "episodic"),
+  semantic: makeBioTexture(PAL.sage, "semantic"),
+};
+
+const orbs = [];
+MEMORIES.forEach((m, i) => {
+  // inner colored disc — normal blend preserves hue on parchment
+  const innerMat = new THREE.SpriteMaterial({
+    map: bioTex[m.layer], transparent: true, depthWrite: false,
+    blending: THREE.NormalBlending, opacity: 0.95,
+  });
+  const inner = new THREE.Sprite(innerMat);
+  inner.position.copy(positions[i]);
+  inner.userData = { mem: m, phase: rand() * Math.PI * 2, base: 2.2 + m.strength * 1.2 };
+  inner.scale.setScalar(inner.userData.base);
+  scene.add(inner);
+
+  // outer halo — subtle additive bloom
+  const outerMat = new THREE.SpriteMaterial({
+    map: bioTex[m.layer], transparent: true, depthWrite: false,
+    blending: THREE.AdditiveBlending, opacity: 0.22,
+  });
+  const outer = new THREE.Sprite(outerMat);
+  outer.position.copy(positions[i]);
+  outer.userData = { mem: m, phase: inner.userData.phase + Math.PI * 0.3, base: inner.userData.base * 2.1 };
+  outer.scale.setScalar(outer.userData.base);
+  scene.add(outer);
+
+  orbs.push({ inner, outer });
+});
+
+// edges (thin ink lines)
+function tokens(t) { return new Set(t.toLowerCase().split(/\W+/).filter(w => w.length > 2)); }
+function jaccard(a, b) { const inter = [...a].filter(x => b.has(x)).length; const uni = new Set([...a, ...b]).size; return uni ? inter/uni : 0; }
+const sets = MEMORIES.map(m => tokens(m.text));
+const ep = [];
+for (let i = 0; i < MEMORIES.length; i++) {
+  const scores = [];
+  for (let j = 0; j < MEMORIES.length; j++) if (i !== j) {
+    const s = jaccard(sets[i], sets[j]);
+    if (s > 0.15) scores.push({ j, s });
+  }
+  scores.sort((a,b) => b.s - a.s).slice(0,3).forEach(({ j }) => { ep.push(positions[i], positions[j]); });
+}
+const edges = new THREE.LineSegments(
+  new THREE.BufferGeometry().setFromPoints(ep),
+  new THREE.LineBasicMaterial({ color: "#2a241e", transparent: true, opacity: 0.25 })
+);
+scene.add(edges);
+
+const clock = new THREE.Clock();
+function frame() {
+  const t = clock.getElapsedTime();
+  for (const { inner, outer } of orbs) {
+    const p1 = 0.10 * Math.sin(t * 0.9 + inner.userData.phase);
+    const p2 = 0.16 * Math.sin(t * 0.9 + outer.userData.phase);
+    inner.scale.setScalar(inner.userData.base * (1 + p1));
+    outer.scale.setScalar(outer.userData.base * (1 + p2));
+    outer.material.opacity = 0.18 + 0.12 * Math.sin(t * 0.9 + outer.userData.phase);
+  }
+  // pollen drift + gentle sway, wrap when out of bounds
+  const pArr = pollenGeom.attributes.position.array;
+  for (let i = 0; i < POLLEN_COUNT; i++) {
+    const k = i * 3;
+    const sway = 0.03 * Math.sin(t * 0.7 + pollenPhase[i]);
+    pArr[k]   += pollenVel[k]   + sway * 0.02;
+    pArr[k+1] += pollenVel[k+1];
+    pArr[k+2] += pollenVel[k+2] + sway * 0.01;
+    if (pArr[k+1] > 32) {
+      pArr[k]   = (rand() - 0.5) * pollenSpread * 2;
+      pArr[k+1] = -3;
+      pArr[k+2] = (rand() - 0.5) * pollenSpread * 2;
+    }
+  }
+  pollenGeom.attributes.position.needsUpdate = true;
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+frame();
+
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>

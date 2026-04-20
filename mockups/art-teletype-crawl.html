@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>HIPPO :: Operations Teletype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0906;
+    --amber:#e8a618;
+    --hi:#ffc74a;
+    --mut:#8a5f1a;
+    --dim:#5a3f10;
+    --paper:#f4e8c0;
+    --paper-shade:#e8d9a4;
+    --rule:rgba(90,63,16,0.16);
+    --ink:#2a1508;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--amber);font-family:'Share Tech Mono',ui-monospace,monospace;overflow:hidden}
+  body{
+    text-shadow:0 0 1px rgba(232,166,24,0.55), 0 0 8px rgba(232,166,24,0.12);
+  }
+  /* amber scan lines in the black void */
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:2;
+    background:repeating-linear-gradient(to bottom, rgba(232,166,24,0.04) 0 1px, rgba(0,0,0,0) 1px 3px);
+    mix-blend-mode:screen;opacity:0.5;
+  }
+  /* vignette */
+  body::after{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:3;
+    background:radial-gradient(ellipse at center, rgba(0,0,0,0) 45%, rgba(0,0,0,0.72) 100%);
+  }
+
+  /* paper strip */
+  .strip{
+    position:fixed;top:0;bottom:0;left:50%;transform:translateX(-50%);width:40%;min-width:520px;max-width:780px;
+    background:linear-gradient(180deg, rgba(0,0,0,0.18), rgba(0,0,0,0) 6%, rgba(0,0,0,0) 94%, rgba(0,0,0,0.18)), repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0 21px, var(--rule) 21px 22px), linear-gradient(180deg, var(--paper), var(--paper-shade));
+    box-shadow:-18px 0 40px rgba(0,0,0,0.75), 18px 0 40px rgba(0,0,0,0.75), inset 0 0 60px rgba(120,80,20,0.12);
+    filter:sepia(0.15);overflow:hidden;
+    clip-path: polygon(0% 0.8%, 3% 0%, 6% 0.6%, 10% 0%, 14% 0.7%, 18% 0.1%, 22% 0.8%, 26% 0%, 30% 0.7%, 34% 0.1%, 38% 0.8%, 42% 0%, 46% 0.7%, 50% 0.1%, 54% 0.8%, 58% 0%, 62% 0.7%, 66% 0.1%, 70% 0.8%, 74% 0%, 78% 0.7%, 82% 0.1%, 86% 0.8%, 90% 0%, 94% 0.7%, 98% 0.1%, 100% 0.8%, 100% 100%, 0% 100%);
+  }
+  /* perforations: tiny dark circles on each edge */
+  .perfs{position:absolute;top:0;bottom:0;width:14px;pointer-events:none;background-image:radial-gradient(circle at 7px 6px, rgba(10,5,0,0.85) 0 1.8px, rgba(10,5,0,0) 2.2px);background-size:14px 12px;background-repeat:repeat-y}
+  .perfs.l{left:0;box-shadow:inset -6px 0 10px rgba(120,80,20,0.12)}
+  .perfs.r{right:0;box-shadow:inset 6px 0 10px rgba(120,80,20,0.12)}
+  /* scrolling text column */
+  .tape{position:absolute;left:28px;right:28px;bottom:0;font-family:'Special Elite','Courier Prime','Courier New',monospace;color:var(--ink);font-size:15px;line-height:22px;letter-spacing:0.2px;will-change:transform}
+  .tape .ln{white-space:pre;padding:0 6px;text-shadow:0.3px 0 0 currentColor}
+  .tape .ln .ch{display:inline}
+  .tape .ln .ch.dim{opacity:0.92}
+  .tape .ln .ch.full{opacity:1}
+  /* ribbon wear tints */
+  .tape .ln.smudge{color:#3a1e0c;filter:contrast(1.05)}
+  .tape .ln.faint{color:#4a2a14}
+
+  /* typing caret (thin ink bar) */
+  .caret{display:inline-block;width:9px;height:2px;background:var(--ink);vertical-align:baseline;margin-left:1px;transform:translateY(-3px)}
+  .caret.blink{animation:cbl 0.9s steps(1) infinite}
+  @keyframes cbl{50%{opacity:0}}
+
+  /* carriage slam: brief horizontal translate */
+  .slam{transition:transform 90ms ease-out;transform:translateX(-6px)}
+  /* typehead return flash */
+  .flash{position:absolute;left:28px;right:28px;height:1.2px;background:rgba(10,5,0,0.35);pointer-events:none;opacity:0}
+  .flash.on{animation:fl 180ms linear 1}
+  @keyframes fl{0%{opacity:0.55}100%{opacity:0}}
+
+  /* coffee-ring stain */
+  .stain{
+    position:absolute;width:90px;height:90px;border-radius:50%;
+    background:radial-gradient(circle at 50% 50%, rgba(90,50,10,0) 44%, rgba(110,60,15,0.22) 48%, rgba(140,80,20,0.28) 52%, rgba(110,60,15,0.14) 58%, rgba(0,0,0,0) 66%);
+    mix-blend-mode:multiply;pointer-events:none;opacity:0;transition:opacity 1.8s ease-out;
+  }
+  .stain.on{opacity:0.85}
+
+  /* status block top-right */
+  .status{position:fixed;top:22px;right:26px;z-index:5;font-family:'VT323',monospace;color:var(--amber);font-size:17px;line-height:1.15;letter-spacing:1px;white-space:pre;text-shadow:0 0 1px rgba(232,166,24,0.6),0 0 10px rgba(232,166,24,0.12)}
+  /* plate top-left */
+  .plate{position:fixed;top:22px;left:26px;z-index:5;font-family:'VT323',monospace;color:var(--mut);font-size:17px;letter-spacing:1px;white-space:pre;text-shadow:0 0 1px rgba(232,166,24,0.4)}
+  .plate b{color:var(--hi);font-weight:normal}
+
+  /* paused label */
+  .paused{position:fixed;left:50%;top:42px;transform:translateX(-50%);z-index:6;font-family:'VT323',monospace;color:#ff6b2e;font-size:22px;letter-spacing:3px;text-shadow:0 0 2px rgba(255,107,46,0.7),0 0 8px rgba(255,107,46,0.3);display:none}
+  .paused.on{display:block}
+  /* fades so lines dissolve before the torn edge */
+  .fade-top{position:absolute;left:0;right:0;top:0;height:80px;background:linear-gradient(180deg, rgba(10,6,0,0.55), rgba(10,6,0,0));pointer-events:none}
+  .fade-bot{position:absolute;left:0;right:0;bottom:0;height:40px;background:linear-gradient(0deg, rgba(244,232,192,0.85), rgba(244,232,192,0));pointer-events:none}
+</style>
+</head>
+<body>
+
+  <div class="plate" id="plate">HIPPO <b>OPS</b>  TELETYPE LINE 03</div>
+
+  <pre class="status" id="status"></pre>
+
+  <div class="paused" id="paused">[ PAUSED ]</div>
+
+  <div class="strip" id="strip">
+    <div class="perfs l"></div>
+    <div class="perfs r"></div>
+    <div class="tape" id="tape"></div>
+    <div class="flash" id="flash"></div>
+    <div class="fade-top"></div>
+    <div class="fade-bot"></div>
+  </div>
+
+<script>
+// -------- event templates --------
+const TEMPLATES = [
+  { kind:'SLEEP',    fmt:(ctx)=>`[SLEEP]    consolidation cycle start  tick=${ctx.tick}` },
+  { kind:'SLEEP',    fmt:(ctx)=>`[SLEEP]    cycle complete  ${ctx.merge} merged  ${ctx.exp} expired  ${ctx.prom} promoted` },
+  { kind:'RECALL',   fmt:(ctx)=>`[RECALL]   ${ctx.mem}  retrieved in ${ctx.ms}ms  strength ${ctx.s1} -> ${ctx.s2}` },
+  { kind:'DECAY',    fmt:(ctx)=>`[DECAY]    ${ctx.mem}  weak  strength ${ctx.s1} -> ${ctx.s2}  (fading)` },
+  { kind:'STORE',    fmt:(ctx)=>`[STORE]    ${ctx.mem}  new  layer=${ctx.layer}  tags=[${ctx.tags}]` },
+  { kind:'MERGE',    fmt:(ctx)=>`[MERGE]    ${ctx.m1} + ${ctx.m2} -> ${ctx.sem}  (consolidated)` },
+  { kind:'AUDIT',    fmt:(ctx)=>`[AUDIT]    no issues  ${ctx.ok}/${ctx.ok} clean` },
+  { kind:'AUDIT',    fmt:(ctx)=>`[AUDIT]    ${ctx.bad} flagged  ${ctx.ok}/${ctx.total} clean` },
+  { kind:'CONFLICT', fmt:(ctx)=>`[CONFLICT] ${ctx.m1} <-> ${ctx.m2}  polarity mismatch  score ${ctx.sc}` },
+  { kind:'TAG',      fmt:(ctx)=>`[TAG]      #${ctx.tag}  +${ctx.n} refs  -> ${ctx.tot} total` },
+  { kind:'EMBED',    fmt:(ctx)=>`[EMBED]    ${ctx.mem} vectorized  dim=384  ${ctx.cache}` },
+  { kind:'PROMOTE',  fmt:(ctx)=>`[PROMOTE]  ${ctx.mem}  buffer -> episodic  (strength ${ctx.s2})` },
+  { kind:'EXPIRE',   fmt:(ctx)=>`[EXPIRE]   ${ctx.mem}  age ${ctx.age}d > half_life ${ctx.hl}d  purged` },
+  { kind:'QUERY',    fmt:(ctx)=>`[QUERY]    "${ctx.q}"  ${ctx.hits} hits  top ${ctx.mem} @ ${ctx.sc}` },
+  { kind:'INDEX',    fmt:(ctx)=>`[INDEX]    semantic layer rebuilt  ${ctx.tot} vectors  ${ctx.ms}ms` },
+  { kind:'REHEARSE', fmt:(ctx)=>`[REHEARSE] ${ctx.mem}  replay ${ctx.n}/${ctx.tot}  strength +0.0${ctx.d}` },
+  { kind:'SIGNAL',   fmt:(ctx)=>`[SIGNAL]   context_window ${ctx.pct}%  pressure=${ctx.p}` },
+  { kind:'LINK',     fmt:(ctx)=>`[LINK]     ${ctx.m1} -> ${ctx.m2}  via #${ctx.tag}  weight ${ctx.w}` },
+  { kind:'DRIFT',    fmt:(ctx)=>`[DRIFT]    ${ctx.mem}  embedding shift  cos=${ctx.sc}  (minor)` },
+  { kind:'HEARTBEAT',fmt:(ctx)=>`[HEARTBEAT] daemon ok  ${ctx.mem_ct} memories resident  uptime ${ctx.up}` },
+];
+
+const LAYERS = ['buffer','episodic','semantic'];
+const TAG_POOL = ['gpu','hippo','theory','gold','tips','supabase','sync','safety','git','hooks','pipeline','parallel','weekly','decay','retrieval','consolidation','buffer','episodic','semantic','power','validation','prices','signals','futures','var','sizing','vol','playwright','deploy','cache','files','claude','config','mcp','whisper','physics'];
+const QUERIES = ['gpu acceleration','position sizing rules','decay half-life','supabase sync','futures roll','semantic consolidation','vol floor','weekly pipeline','signal price source','context compaction'];
+
+const SIGTYPES = ['buffer','episodic','semantic'];
+const CACHES = ['cache hit','cache miss (computed)','cache refreshed'];
+
+function pad(n, w){ return String(n).padStart(w,'0'); }
+function rand(n){ return Math.floor(Math.random()*n); }
+function pick(a){ return a[rand(a.length)]; }
+function mem(prefix='mem'){ return `${prefix}_${pad(rand(200)+1,3)}`; }
+function sem(){ return `mem_sem_${pad(rand(60)+1,3)}`; }
+function str(){ return (0.10 + Math.random()*0.89).toFixed(2); }
+
+// timestamp anchored at today's system clock, then advances per event
+let simNow = new Date();
+simNow.setHours(19,42,3,0);
+function tsStr(){
+  const y = simNow.getFullYear();
+  const m = pad(simNow.getMonth()+1,2);
+  const d = pad(simNow.getDate(),2);
+  const hh = pad(simNow.getHours(),2);
+  const mm = pad(simNow.getMinutes(),2);
+  const ss = pad(simNow.getSeconds(),2);
+  return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
+}
+function advanceClock(){
+  simNow = new Date(simNow.getTime() + (1500 + rand(3500)));
+}
+
+let tickCtr = 432;
+function buildCtx(){
+  const s1 = str();
+  const s2 = (parseFloat(s1) + (Math.random()*0.12 - 0.04)).toFixed(2);
+  return {
+    tick: tickCtr++,
+    mem: mem(),
+    m1: mem(), m2: mem(),
+    sem: sem(),
+    ms: 4 + rand(40),
+    s1, s2,
+    layer: pick(LAYERS),
+    tags: [pick(TAG_POOL), pick(TAG_POOL)].join(', '),
+    ok: 36 + rand(6),
+    total: 38,
+    bad: 1 + rand(3),
+    sc: (0.55 + Math.random()*0.4).toFixed(2),
+    tag: pick(TAG_POOL),
+    n: 1 + rand(6),
+    tot: 10 + rand(40),
+    cache: pick(CACHES),
+    age: (8 + Math.random()*40).toFixed(1),
+    hl: [3,14,90][rand(3)],
+    q: pick(QUERIES),
+    hits: 2 + rand(9),
+    merge: rand(5),
+    exp: rand(3),
+    prom: rand(2),
+    d: 1 + rand(9),
+    pct: 30 + rand(60),
+    p: ['low','mod','high'][rand(3)],
+    w: (0.2 + Math.random()*0.7).toFixed(2),
+    mem_ct: 38 + rand(8),
+    up: `${pad(rand(6),2)}:${pad(rand(60),2)}:${pad(rand(60),2)}`,
+  };
+}
+
+let lastTemplate = -1;
+function nextLine(){
+  let i;
+  do { i = rand(TEMPLATES.length); } while(i === lastTemplate);
+  lastTemplate = i;
+  const t = TEMPLATES[i];
+  const ctx = buildCtx();
+  const body = t.fmt(ctx);
+  advanceClock();
+  return { ts: tsStr(), body, kind: t.kind };
+}
+
+// -------- DOM machinery --------
+const tape = document.getElementById('tape');
+const strip = document.getElementById('strip');
+const flashEl = document.getElementById('flash');
+const pausedEl = document.getElementById('paused');
+
+const MAX_LINES = 80;          // keep DOM trim
+const SCROLL_PPF = 0.4;        // base upward drift per frame (px). chars push real work.
+const LINE_H = 22;
+
+let offset = 0;                // how far tape has translated up (negative Y)
+let paused = false;
+let lineCount = 0;
+let linesSinceReturn = 0;
+
+function makeLine(rec){
+  const wrap = document.createElement('div');
+  wrap.className = 'ln' + (Math.random()<0.08 ? ' smudge' : (Math.random()<0.08 ? ' faint' : ''));
+  const txt = `${rec.ts}  ${rec.body}`;
+  wrap.dataset.full = txt;
+  wrap.dataset.i = '0';
+  const caret = document.createElement('span');
+  caret.className = 'caret blink';
+  wrap.appendChild(caret);
+  return wrap;
+}
+
+function appendChar(lineEl){
+  const full = lineEl.dataset.full;
+  let i = parseInt(lineEl.dataset.i,10);
+  if(i >= full.length) return true; // done
+  const ch = full.charAt(i);
+  const span = document.createElement('span');
+  span.className = 'ch ' + (i % 3 === 0 ? 'dim' : 'full');
+  span.textContent = ch === ' ' ? '\u00a0' : ch;
+  // insert before caret
+  const caret = lineEl.querySelector('.caret');
+  lineEl.insertBefore(span, caret);
+  i++;
+  lineEl.dataset.i = String(i);
+  return i >= full.length;
+}
+
+// typing scheduler
+let activeLine = null;
+let nextCharAt = 0;
+let nextLineAt = 0;
+
+function scheduleChar(){
+  nextCharAt = performance.now() + 40 + Math.random()*22;
+}
+function scheduleLineGap(){
+  // gap between finishing one line and starting next
+  nextLineAt = performance.now() + 220 + Math.random()*520;
+}
+
+function finishActiveLine(){
+  // remove caret from finished line
+  if(!activeLine) return;
+  const caret = activeLine.querySelector('.caret');
+  if(caret) caret.remove();
+  activeLine = null;
+
+  // typehead-return flash across paper
+  flashEl.style.top = (strip.clientHeight - 60 - offset % LINE_H) + 'px';
+  flashEl.classList.remove('on');
+  void flashEl.offsetWidth;
+  flashEl.classList.add('on');
+
+  linesSinceReturn++;
+  if(linesSinceReturn >= 16 + rand(6)){
+    // carriage-slam visual on next line
+    carriageSlamPending = true;
+    linesSinceReturn = 0;
+  }
+  scheduleLineGap();
+}
+
+let carriageSlamPending = false;
+
+function startNewLine(){
+  const rec = nextLine();
+  const el = makeLine(rec);
+  tape.appendChild(el);
+  lineCount++;
+
+  // the tape is bottom-anchored; each new line sits at the bottom.
+  // to make room, we pre-shift the offset up by one line-height, which is
+  // equivalent to everything already typed scrolling up by one row.
+  offset += LINE_H;
+
+  if(carriageSlamPending){
+    el.classList.add('slam');
+    requestAnimationFrame(()=>{
+      requestAnimationFrame(()=>{ el.classList.remove('slam'); el.style.transform=''; });
+    });
+    carriageSlamPending = false;
+  }
+
+  // trim old lines
+  while(tape.children.length > MAX_LINES){
+    tape.removeChild(tape.firstChild);
+    // when we trim a line, drop offset by one line-height so the remaining
+    // content doesn't visually jump
+    offset -= LINE_H;
+  }
+
+  activeLine = el;
+  scheduleChar();
+}
+
+// -------- scrolling (tape drift upward) --------
+function applyTransform(){
+  tape.style.transform = `translateY(${-offset}px)`;
+}
+
+// continuous drift so older lines leave via top even during gaps
+function driftStep(){
+  offset += SCROLL_PPF;
+}
+
+// -------- stain sprites --------
+function emitStain(){
+  const s = document.createElement('div');
+  s.className = 'stain';
+  const W = strip.clientWidth;
+  const H = strip.clientHeight;
+  s.style.left = (30 + Math.random()*(W-150)) + 'px';
+  s.style.top  = (60 + Math.random()*(H-180)) + 'px';
+  s.style.transform = `scale(${0.7+Math.random()*0.8}) rotate(${rand(360)}deg)`;
+  strip.appendChild(s);
+  requestAnimationFrame(()=>s.classList.add('on'));
+  // fade out and remove after a while so we don't accumulate forever
+  setTimeout(()=>{
+    s.style.transition = 'opacity 6s ease-out';
+    s.classList.remove('on');
+    setTimeout(()=>s.remove(), 6500);
+  }, 18000 + rand(12000));
+}
+// seed a couple at start
+setTimeout(emitStain, 2200);
+setTimeout(emitStain, 9000);
+setInterval(()=>{ if(!paused) emitStain(); }, 30000);
+
+// -------- status block --------
+const START = Date.now();
+function fmtUptime(){
+  const s = Math.floor((Date.now()-START)/1000);
+  return `${pad(Math.floor(s/3600),2)}:${pad(Math.floor((s%3600)/60),2)}:${pad(s%60,2)}`;
+}
+function renderStatus(){
+  const W = 24;
+  const top = '\u250C' + '\u2500'.repeat(W) + '\u2510';
+  const bot = '\u2514' + '\u2500'.repeat(W) + '\u2518';
+  const row = (s)=> '\u2502 ' + s.padEnd(W-2) + ' \u2502';
+  const lines = [
+    top,
+    row('MODEL 33 ASR'),
+    row('LINE SPEED 110 BAUD'),
+    row('UPTIME ' + fmtUptime()),
+    bot,
+  ];
+  document.getElementById('status').textContent = lines.join('\n');
+}
+renderStatus();
+setInterval(renderStatus, 1000);
+
+// -------- main RAF loop --------
+function frame(now){
+  if(!paused){
+    // upward drift (continuous)
+    driftStep();
+    applyTransform();
+
+    // typing
+    if(activeLine){
+      if(now >= nextCharAt){
+        const done = appendChar(activeLine);
+        if(done){
+          finishActiveLine();
+        } else {
+          scheduleChar();
+        }
+      }
+    } else if(now >= nextLineAt){
+      startNewLine();
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+// kick off
+nextLineAt = performance.now() + 300;
+requestAnimationFrame(frame);
+
+// -------- pause/resume --------
+function togglePause(){
+  paused = !paused;
+  pausedEl.classList.toggle('on', paused);
+  // stop caret blink from looking frozen mid-paint: fine as-is
+}
+document.addEventListener('click', (e)=>{
+  // ignore clicks in the status block area so it feels like a panel
+  togglePause();
+});
+document.addEventListener('keydown', (e)=>{
+  if(e.code === 'Space'){ e.preventDefault(); togglePause(); }
+});
+</script>
+</body>
+</html>

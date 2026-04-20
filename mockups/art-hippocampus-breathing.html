@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>HIPPO :: Breathing Hippocampus</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0906;
+    --amber:#e8a618;
+    --hi:#ffc74a;
+    --mut:#8a5f1a;
+    --dim:#5a3f10;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#000;color:var(--amber);font-family:'Share Tech Mono',ui-monospace,monospace;font-size:15px;line-height:1.35;overflow:hidden}
+  body{
+    background:var(--bg);
+    text-shadow:0 0 1px rgba(232,166,24,0.55), 0 0 8px rgba(232,166,24,0.12);
+    animation:flicker 6s infinite;
+  }
+  @keyframes flicker{
+    0%{opacity:1} 12%{opacity:.98} 13%{opacity:1}
+    48%{opacity:1} 49%{opacity:.97} 50%{opacity:1}
+    82%{opacity:1} 83%{opacity:.985} 84%{opacity:1}
+    100%{opacity:1}
+  }
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:10;
+    background:repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0 2px, rgba(0,0,0,0.10) 2px 3px);
+    mix-blend-mode:multiply;
+  }
+  body::after{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:11;
+    background:radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.80) 100%);
+  }
+  canvas{position:fixed;inset:0;display:block;z-index:1}
+
+  .hud{position:fixed;z-index:20;color:var(--amber);white-space:pre;pointer-events:none;letter-spacing:0.5px}
+  .hud.tl{top:18px;left:22px;font-family:'VT323',monospace;font-size:18px;line-height:1.25}
+  .hud.tl .k{color:var(--mut)}
+  .hud.tl .v{color:var(--hi)}
+  .hud.tl .t{color:var(--hi);letter-spacing:1px}
+  .hud.br{bottom:18px;right:22px;font-family:'Share Tech Mono',monospace;font-size:13px;text-align:right}
+  .hud.br .line{opacity:1;transition:opacity 1.4s linear}
+  .hud.br .line.f1{opacity:0.72}
+  .hud.br .line.f2{opacity:0.45}
+  .hud.br .line.f3{opacity:0.22}
+  .hud.br .ts{color:var(--mut);margin-right:8px}
+  .hud.br .em{color:var(--hi)}
+</style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div class="hud tl" id="hudTL"></div>
+  <div class="hud br" id="hudBR"></div>
+
+<script>
+(()=>{
+  'use strict';
+
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d', { alpha:false });
+  const hudTL = document.getElementById('hudTL');
+  const hudBR = document.getElementById('hudBR');
+
+  // ---------- sizing ----------
+  let W=0, H=0, DPR=1;
+  function resize(){
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = Math.floor(W*DPR);
+    canvas.height = Math.floor(H*DPR);
+    canvas.style.width = W+'px';
+    canvas.style.height = H+'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    buildCurve();
+  }
+  window.addEventListener('resize', resize);
+
+  // ---------- curve: stylized hippocampus ----------
+  // A logarithmic spiral looped ~1.5 turns with a tapering tail, tilted so the
+  // curl sits like a seahorse. Built once per resize, then only sampled.
+  const CURVE_POINTS = 900;   // resolution of the outline
+  const curve = { x:new Float32Array(CURVE_POINTS), y:new Float32Array(CURVE_POINTS), t:new Float32Array(CURVE_POINTS) };
+  let curveCx=0, curveCy=0, curveScale=1;
+
+  function buildCurve(){
+    curveCx = W*0.5;
+    curveCy = H*0.5;
+    // scale piece to fit viewport with margin
+    const margin = Math.min(W,H) * 0.10;
+    const radius = Math.min(W,H)*0.5 - margin;
+    curveScale = radius / 1.0;  // normalized curve max radius ~1
+
+    // parameter range. Spiral from large (tail) inward to small (curl head).
+    // 1.6 full turns.
+    const turns = 1.6;
+    const tMin = 0;
+    const tMax = turns * Math.PI * 2;
+
+    // logarithmic spiral: r = a * e^(b*t). Choose so the ratio over 1.6 turns ~ 7.
+    const b = 0.22;
+    // normalize so outer radius == 1
+    const rMaxRaw = Math.exp(b * tMax);
+    const a = 1 / rMaxRaw;
+
+    // tail extension: prepend a straight-ish tapering arc that sweeps out from the tail.
+    // We'll do it by extending t below tMin with a different parametric curve.
+    const TAIL_PTS = 220;
+    const MAIN_PTS = CURVE_POINTS - TAIL_PTS;
+
+    // Tilt the whole shape so the curl reads as a seahorse head at upper-right,
+    // tail trailing lower-left.
+    const rot = -0.35;
+    const cosR = Math.cos(rot), sinR = Math.sin(rot);
+
+    // MAIN spiral
+    for(let i=0;i<MAIN_PTS;i++){
+      const u = i/(MAIN_PTS-1);          // 0..1
+      const t = tMax - u*(tMax-tMin);    // start from outer (tail side), curl inward
+      const r = a * Math.exp(b*t);
+      // add a gentle asymmetric bias so it reads more like a curled organ, not a perfect spiral
+      const bias = 0.05 * Math.sin(t*1.3);
+      const rx = r + bias;
+      const ry = r - bias*0.6;
+      const x0 = rx * Math.cos(t);
+      const y0 = ry * Math.sin(t);
+      // rotate
+      const x = x0*cosR - y0*sinR;
+      const y = x0*sinR + y0*cosR;
+      curve.x[i] = x;
+      curve.y[i] = y;
+      curve.t[i] = u;
+    }
+    // TAIL: continues from the outer end of the spiral, sweeping out and down,
+    // tapering with a tiny S-bend.
+    const tailStartX = curve.x[0];
+    const tailStartY = curve.y[0];
+    // tangent at outer end — direction of motion as t decreases
+    const dx0 = curve.x[0] - curve.x[1];
+    const dy0 = curve.y[0] - curve.y[1];
+    const dLen = Math.hypot(dx0,dy0) || 1;
+    const tx = dx0/dLen, ty = dy0/dLen;
+    // perpendicular
+    const nx = -ty, ny = tx;
+    for(let i=0;i<TAIL_PTS;i++){
+      const u = i/(TAIL_PTS-1);
+      // length of tail: matches spiral outer radius
+      const L = 1.15;
+      const along = u*L;
+      // taper + S-wiggle
+      const wob = Math.sin(u*Math.PI*1.6) * 0.18 * (1 - u*0.5);
+      const x = tailStartX + tx*along + nx*wob;
+      const y = tailStartY + ty*along + ny*wob;
+      curve.x[MAIN_PTS + i] = x;
+      curve.y[MAIN_PTS + i] = y;
+      curve.t[MAIN_PTS + i] = 1 + u*0.3;
+    }
+  }
+
+  // transform curve coord (normalized) to screen coord given breathing scale
+  function xform(x, y, sx, sy){
+    return [ curveCx + x * curveScale * sx, curveCy + y * curveScale * sy ];
+  }
+
+  // find nearest curve index to a screen (x,y)
+  function nearestCurveIndex(px, py, sx, sy){
+    let best=0, bestD=Infinity;
+    for(let i=0;i<CURVE_POINTS;i++){
+      const [cx, cy] = xform(curve.x[i], curve.y[i], sx, sy);
+      const dx = cx-px, dy = cy-py;
+      const d = dx*dx+dy*dy;
+      if(d<bestD){ bestD=d; best=i; }
+    }
+    return best;
+  }
+
+  // ---------- sparks: neuron firings ----------
+  // pool allocated once, no per-frame alloc
+  const MAX_SPARKS = 120;
+  const sparks = [];
+  for(let i=0;i<MAX_SPARKS;i++){
+    sparks.push({ alive:false, born:0, life:800, idx:0, intensity:1, trail:30 });
+  }
+  function spawnSpark(idx, intensity, life){
+    for(let i=0;i<MAX_SPARKS;i++){
+      const s = sparks[i];
+      if(!s.alive){
+        s.alive = true;
+        s.born = performance.now();
+        s.life = life || 800;
+        s.idx = idx;
+        s.intensity = intensity || 1;
+        s.trail = 30 + Math.floor(Math.random()*10);
+        return s;
+      }
+    }
+    return null;
+  }
+
+  // ---------- event log ----------
+  const logLines = [];   // {ts, text, type}
+  const MAX_LOG = 4;
+  function timeStr(){
+    const d = new Date();
+    return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');
+  }
+  function pushLog(text){
+    logLines.unshift({ ts: timeStr(), text });
+    while(logLines.length > MAX_LOG) logLines.pop();
+    renderLog();
+  }
+  function renderLog(){
+    let html = '';
+    for(let i=0;i<logLines.length;i++){
+      const l = logLines[i];
+      const fade = i===0? '' : i===1? 'f1' : i===2? 'f2' : 'f3';
+      html += `<div class="line ${fade}"><span class="ts">${l.ts}</span>${l.text}</div>`;
+    }
+    hudBR.innerHTML = html;
+  }
+
+  // ---------- top-left status ----------
+  const stats = { bpm:12.0, spindles:3, retrievals:0, startTs:Date.now() };
+  function renderTL(){
+    const bpm = stats.bpm.toFixed(1);
+    const sp = String(stats.spindles);
+    const rt = String(stats.retrievals);
+    hudTL.innerHTML =
+      `<span class="t">[neural activity monitor :: hippocampus ca1-ca3]</span>\n`+
+      `<span class="k">bpm</span> <span class="v">${bpm}</span>   `+
+      `<span class="k">spindles</span> <span class="v">${sp}</span>/h   `+
+      `<span class="k">retrievals</span> <span class="v">${rt}</span>`;
+  }
+
+  // ---------- memory id generator ----------
+  let memSeq = Math.floor(Math.random()*40) + 1;
+  function memId(){ return 'mem_'+String(memSeq++).padStart(3,'0'); }
+  function strengthDelta(){ return (0.02 + Math.random()*0.04).toFixed(2); }
+
+  // ---------- timing ----------
+  const BREATH_MS = 5000;         // full inhale+exhale
+  const FIRE_MEAN_MS = 4000;      // ~one firing every ~4s
+  const SPINDLE_MEAN_MS = 30000;  // ~every 30s
+  let lastFire = performance.now() + 1200;  // small delay on start
+  let lastSpindle = performance.now() + 12000;
+  let spindleQueue = null;  // { fires: [{idx, at}], i }
+
+  function scheduleNextFire(){
+    lastFire = performance.now() + FIRE_MEAN_MS*0.6 + Math.random()*FIRE_MEAN_MS*0.8;
+  }
+  function scheduleNextSpindle(){
+    lastSpindle = performance.now() + SPINDLE_MEAN_MS*0.7 + Math.random()*SPINDLE_MEAN_MS*0.6;
+  }
+
+  function triggerFire(){
+    const idx = Math.floor(Math.random()*CURVE_POINTS);
+    spawnSpark(idx, 1.0, 750 + Math.random()*250);
+    stats.retrievals++;
+    pushLog(`${memId()} retrieved  <span class="em">+${strengthDelta()} strength</span>`);
+  }
+  function triggerSpindle(){
+    stats.spindles++;
+    pushLog(`sleep spindle :: <span class="em">consolidation cycle</span>`);
+    const now = performance.now();
+    const count = 6 + Math.floor(Math.random()*3);
+    const fires = [];
+    // spread along the curve with a sweep from tail to head
+    for(let i=0;i<count;i++){
+      const frac = i/(count-1);
+      const idx = Math.floor(frac * (CURVE_POINTS-1));
+      fires.push({ idx, at: now + i*80 });
+    }
+    spindleQueue = { fires, i:0 };
+  }
+
+  // ---------- draw ----------
+  function drawHippocampus(now){
+    // breathing scale
+    const phase = (now % BREATH_MS) / BREATH_MS * Math.PI * 2;
+    const breath = Math.sin(phase);
+    const sx = 1.0 + 0.03 * breath;
+    const sy = 1.0 + 0.03 * breath;
+    const strokeAlpha = 0.85 + 0.15 * (breath*0.5+0.5);
+
+    // background wash (slight gradient pulse)
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#0a0906';
+    ctx.fillRect(0,0,W,H);
+
+    // outer glow pass (wide, low alpha)
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // --- inner dashed structure (dentate gyrus + CA1-CA3 hint) ---
+    // draw a tighter inner spiral, dashed, at reduced alpha
+    ctx.save();
+    ctx.setLineDash([6, 10]);
+    ctx.strokeStyle = `rgba(138,95,26,${0.45 * strokeAlpha})`;
+    ctx.lineWidth = 1.2;
+    ctx.shadowColor = 'rgba(232,166,24,0.35)';
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    for(let i=0;i<CURVE_POINTS;i++){
+      // shrink toward center for inner band
+      const shrink = 0.72 + 0.06*Math.sin(i*0.05 + now*0.0006);
+      const [x,y] = xform(curve.x[i]*shrink, curve.y[i]*shrink, sx, sy);
+      if(i===0) ctx.moveTo(x,y);
+      else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+
+    // second inner band (narrower)
+    ctx.setLineDash([3, 7]);
+    ctx.strokeStyle = `rgba(90,63,16,${0.6 * strokeAlpha})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for(let i=0;i<CURVE_POINTS;i++){
+      const shrink = 0.52 + 0.04*Math.cos(i*0.07 + now*0.0004);
+      const [x,y] = xform(curve.x[i]*shrink, curve.y[i]*shrink, sx, sy);
+      if(i===0) ctx.moveTo(x,y);
+      else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    // --- main outline: two-pass bloom ---
+    // wide soft glow
+    ctx.strokeStyle = `rgba(232,166,24,${0.22 * strokeAlpha})`;
+    ctx.lineWidth = 14;
+    ctx.shadowColor = 'rgba(232,166,24,0.55)';
+    ctx.shadowBlur = 28;
+    ctx.beginPath();
+    for(let i=0;i<CURVE_POINTS;i++){
+      const [x,y] = xform(curve.x[i], curve.y[i], sx, sy);
+      if(i===0) ctx.moveTo(x,y);
+      else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+
+    // crisp stroke
+    ctx.strokeStyle = `rgba(232,166,24,${strokeAlpha})`;
+    ctx.lineWidth = 3;
+    ctx.shadowColor = 'rgba(255,199,74,0.65)';
+    ctx.shadowBlur = 20;
+    ctx.beginPath();
+    for(let i=0;i<CURVE_POINTS;i++){
+      const [x,y] = xform(curve.x[i], curve.y[i], sx, sy);
+      if(i===0) ctx.moveTo(x,y);
+      else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+
+    // bright core stroke for hot-phosphor look
+    ctx.strokeStyle = `rgba(255,230,160,${0.35 * strokeAlpha})`;
+    ctx.lineWidth = 1;
+    ctx.shadowColor = 'rgba(255,230,160,0.8)';
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    for(let i=0;i<CURVE_POINTS;i++){
+      const [x,y] = xform(curve.x[i], curve.y[i], sx, sy);
+      if(i===0) ctx.moveTo(x,y);
+      else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+
+    // --- sparks ---
+    for(let i=0;i<MAX_SPARKS;i++){
+      const s = sparks[i];
+      if(!s.alive) continue;
+      const age = now - s.born;
+      if(age > s.life){ s.alive = false; continue; }
+      const p = age / s.life;          // 0..1
+      const env = Math.pow(1-p, 1.6);  // fade envelope
+
+      // trail: draw back along the curve from s.idx, fading intensity
+      const trailLen = s.trail;
+      for(let k=0;k<trailLen;k++){
+        const idx = (s.idx - k + CURVE_POINTS) % CURVE_POINTS;
+        const [x,y] = xform(curve.x[idx], curve.y[idx], sx, sy);
+        const kf = 1 - k/trailLen;
+        const a = env * kf * 0.55 * s.intensity;
+        if(a < 0.01) continue;
+        const r = 1 + kf*2;
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(255,199,74,${a})`;
+        ctx.shadowColor = 'rgba(255,199,74,0.9)';
+        ctx.shadowBlur = 8 + kf*6;
+        ctx.arc(x,y,r,0,Math.PI*2);
+        ctx.fill();
+      }
+
+      // head: hot-white to amber radial
+      const [hx, hy] = xform(curve.x[s.idx], curve.y[s.idx], sx, sy);
+      const headR = (8 + 18*env) * (0.9 + 0.3*s.intensity);
+      const grad = ctx.createRadialGradient(hx, hy, 0, hx, hy, headR);
+      grad.addColorStop(0, `rgba(255,255,240,${0.95*env*s.intensity})`);
+      grad.addColorStop(0.25, `rgba(255,220,130,${0.75*env*s.intensity})`);
+      grad.addColorStop(0.6, `rgba(232,166,24,${0.35*env*s.intensity})`);
+      grad.addColorStop(1, 'rgba(232,166,24,0)');
+      ctx.fillStyle = grad;
+      ctx.shadowColor = 'rgba(255,220,130,0.9)';
+      ctx.shadowBlur = 24;
+      ctx.beginPath();
+      ctx.arc(hx, hy, headR, 0, Math.PI*2);
+      ctx.fill();
+
+      // bright center dot
+      ctx.beginPath();
+      ctx.fillStyle = `rgba(255,255,245,${env*s.intensity})`;
+      ctx.shadowBlur = 12;
+      ctx.arc(hx, hy, 1.6, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // reset shadow
+    ctx.shadowBlur = 0;
+    ctx.globalCompositeOperation = 'source-over';
+
+    return { sx, sy };
+  }
+
+  // ---------- main loop ----------
+  let rafId = 0;
+  function tick(now){
+    const state = drawHippocampus(now);
+
+    // schedule fires
+    if(now >= lastFire){
+      triggerFire();
+      scheduleNextFire();
+    }
+    // spindle
+    if(!spindleQueue && now >= lastSpindle){
+      triggerSpindle();
+      scheduleNextSpindle();
+    }
+    if(spindleQueue){
+      while(spindleQueue.i < spindleQueue.fires.length && spindleQueue.fires[spindleQueue.i].at <= now){
+        spawnSpark(spindleQueue.fires[spindleQueue.i].idx, 1.3, 950);
+        spindleQueue.i++;
+      }
+      if(spindleQueue.i >= spindleQueue.fires.length) spindleQueue = null;
+    }
+
+    // bpm drift (very subtle)
+    stats.bpm = 12.0 + Math.sin(now*0.00013)*0.3;
+
+    renderTL();
+    rafId = requestAnimationFrame(tick);
+    // keep reference to last state for clicks
+    lastState = state;
+  }
+  let lastState = { sx:1, sy:1 };
+
+  // ---------- click: trigger spark at nearest curve point ----------
+  canvas.addEventListener('click', (e)=>{
+    const rect = canvas.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    const idx = nearestCurveIndex(px, py, lastState.sx, lastState.sy);
+    spawnSpark(idx, 1.2, 900);
+    stats.retrievals++;
+    pushLog(`${memId()} retrieved  <span class="em">+${strengthDelta()} strength</span> [manual]`);
+  });
+
+  // ---------- init ----------
+  resize();
+  // seed a couple of log lines so it's not empty on load
+  pushLog(`monitor online :: <span class="em">12.0 bpm baseline</span>`);
+  renderTL();
+  rafId = requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Hippo Vitrine: Memory Collection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:ital,wght@0,400;1,400;1,500&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #1a1410;
+    --card: #2a1f18;
+    --card-lit: #342619;
+    --brass: #c9a961;
+    --brass-dim: #8a7441;
+    --ink: #ece4d0;
+    --ink-dim: #a89e85;
+    --buffer: #8a6bc8;
+    --episodic: #d4a037;
+    --semantic: #6ba075;
+    --r-verified: #e4c97a;
+    --r-observed: #c8c8d0;
+    --r-inferred: #b87850;
+    --r-stale: #6a6560;
+    --blood: #a03a3a;
+    --iron: #2f2820;
+  }
+  html, body {
+    background: radial-gradient(ellipse at top, #241b14 0%, var(--bg) 60%, #0e0a07 100%);
+    color: var(--ink);
+    font-family: 'EB Garamond', serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  /* Banner */
+  .banner {
+    background:
+      linear-gradient(180deg, rgba(0,0,0,0.4), rgba(0,0,0,0) 30%, rgba(0,0,0,0.5)),
+      repeating-linear-gradient(90deg, #2a1d12 0, #2a1d12 3px, #1f1509 3px, #1f1509 6px),
+      linear-gradient(180deg, #3a2818, #1e1309);
+    border-bottom: 2px solid var(--brass-dim);
+    padding: 18px 36px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+  }
+  .banner::before, .banner::after {
+    content: '';
+    position: absolute;
+    top: 50%; width: 10px; height: 10px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #e8cc85, #7a5f2c 70%, #2a1d12);
+    box-shadow: 0 0 4px rgba(0,0,0,0.8) inset;
+    transform: translateY(-50%);
+  }
+  .banner::before { left: 10px; }
+  .banner::after { right: 10px; }
+  .stud-row { position: absolute; left: 30px; right: 30px; top: 6px; height: 6px;
+    background-image: radial-gradient(circle, #c9a961 0 2px, transparent 3px);
+    background-size: 18px 6px; opacity: 0.35; }
+  .stud-row.b { top: auto; bottom: 6px; }
+  .adv { font-family: 'Cinzel', serif; font-size: 13px; letter-spacing: 0.22em; color: var(--brass); }
+  .adv .sep { color: var(--brass-dim); margin: 0 14px; }
+  .adv .val { color: var(--ink); }
+  .title { font-family: 'Cinzel', serif; font-size: 18px; letter-spacing: 0.35em; color: var(--brass); text-shadow: 0 1px 0 #000; }
+  /* Layout */
+  .wrap { display: grid; grid-template-columns: 260px 1fr 200px; gap: 20px; padding: 22px 28px 80px; max-width: 1600px; margin: 0 auto; }
+  .rail { position: sticky; top: 18px; align-self: start; }
+  .rail h3 { font-family: 'Cinzel', serif; font-size: 11px; letter-spacing: 0.28em; color: var(--brass-dim); margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid rgba(201,169,97,0.25); }
+  /* Card grid */
+  .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; }
+  @media (max-width: 1400px) { .grid { grid-template-columns: repeat(5, 1fr); } }
+  @media (max-width: 1100px) { .grid { grid-template-columns: repeat(4, 1fr); } }
+  /* Card */
+  .card {
+    position: relative;
+    background:
+      radial-gradient(ellipse at 50% 0%, rgba(201,169,97,0.08), transparent 60%),
+      linear-gradient(180deg, #32251a, var(--card) 40%, #1f160f);
+    border: 1px solid var(--brass-dim);
+    border-radius: 3px;
+    padding: 12px 12px 10px;
+    min-height: 230px;
+    display: flex; flex-direction: column;
+    cursor: pointer;
+    transition: transform 0.18s ease, opacity 0.25s, filter 0.25s;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.6) inset, 0 2px 6px rgba(0,0,0,0.5);
+  }
+  .card::before, .card::after {
+    content: '';
+    position: absolute;
+    width: 14px; height: 14px;
+    border: 1px solid var(--brass);
+    opacity: 0.7;
+  }
+  .card::before { top: 4px; left: 4px; border-right: 0; border-bottom: 0; }
+  .card::after { bottom: 4px; right: 4px; border-left: 0; border-top: 0; }
+  .card .corners-2::before, .card .corners-2::after {
+    content: '';
+    position: absolute;
+    width: 14px; height: 14px;
+    border: 1px solid var(--brass);
+    opacity: 0.7;
+  }
+  .card .corners-2::before { top: 4px; right: 4px; border-left: 0; border-bottom: 0; }
+  .card .corners-2::after { bottom: 4px; left: 4px; border-right: 0; border-top: 0; }
+  .card:hover { transform: scale(1.05); z-index: 4; }
+  .card.filtered-out { opacity: 0.3; filter: saturate(0.25); }
+  .card.equipped { outline: 1px solid var(--brass); animation: shimmer 2.4s ease-in-out infinite; }
+  @keyframes shimmer {
+    0%, 100% { box-shadow: 0 0 0 1px rgba(0,0,0,0.6) inset, 0 0 14px rgba(228,201,122,0.25); }
+    50% { box-shadow: 0 0 0 1px rgba(0,0,0,0.6) inset, 0 0 22px rgba(228,201,122,0.55); }
+  }
+  /* Rarity tints */
+  .r-verified { box-shadow: 0 0 0 1px rgba(0,0,0,0.6) inset, 0 0 10px rgba(228,201,122,0.35); animation: pulse-v 2.6s ease-in-out infinite; }
+  .r-observed { box-shadow: 0 0 0 1px rgba(0,0,0,0.6) inset, 0 0 10px rgba(200,200,208,0.3); animation: pulse-o 2.6s ease-in-out infinite; }
+  .r-inferred { box-shadow: 0 0 0 1px rgba(0,0,0,0.6) inset, 0 0 10px rgba(184,120,80,0.3); animation: pulse-i 2.6s ease-in-out infinite; }
+  .r-stale { box-shadow: 0 0 0 1px rgba(0,0,0,0.6) inset, 0 0 6px rgba(106,101,96,0.2); }
+  @keyframes pulse-v { 0%,100% { box-shadow: 0 0 0 1px rgba(0,0,0,0.6) inset, 0 0 10px rgba(228,201,122,0.3); } 50% { box-shadow: 0 0 0 1px rgba(0,0,0,0.6) inset, 0 0 18px rgba(228,201,122,0.6); } }
+  @keyframes pulse-o { 0%,100% { box-shadow: 0 0 0 1px rgba(0,0,0,0.6) inset, 0 0 10px rgba(200,200,208,0.25); } 50% { box-shadow: 0 0 0 1px rgba(0,0,0,0.6) inset, 0 0 18px rgba(200,200,208,0.5); } }
+  @keyframes pulse-i { 0%,100% { box-shadow: 0 0 0 1px rgba(0,0,0,0.6) inset, 0 0 10px rgba(184,120,80,0.25); } 50% { box-shadow: 0 0 0 1px rgba(0,0,0,0.6) inset, 0 0 18px rgba(184,120,80,0.5); } }
+  /* Card header */
+  .card-head { display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid rgba(201,169,97,0.2); margin-bottom: 8px; }
+  .sigil { font-size: 18px; line-height: 1; width: 24px; height: 24px; display: grid; place-items: center; border: 1px solid currentColor; border-radius: 50%; }
+  .sigil.buffer { color: var(--buffer); }
+  .sigil.episodic { color: var(--episodic); }
+  .sigil.semantic { color: var(--semantic); }
+  .layer-label { font-family: 'Cinzel', serif; font-size: 9px; letter-spacing: 0.3em; color: var(--brass-dim); }
+  /* Card body */
+  .card-title {
+    font-family: 'Cinzel', serif;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--brass);
+    line-height: 1.3;
+    margin-bottom: 8px;
+    text-shadow: 0 1px 0 #000;
+  }
+  .flavor {
+    font-family: 'EB Garamond', serif;
+    font-style: italic;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--ink-dim);
+    flex: 1;
+    padding: 4px 2px 8px;
+    position: relative;
+  }
+  .flavor .drop {
+    float: left;
+    font-size: 26px;
+    line-height: 0.9;
+    font-style: normal;
+    font-family: 'Cinzel', serif;
+    color: var(--brass);
+    padding: 3px 4px 0 0;
+    text-shadow: 0 1px 0 #000;
+  }
+  /* Stats */
+  .stats { border-top: 1px solid rgba(201,169,97,0.2); padding-top: 6px; font-family: 'JetBrains Mono', monospace; font-size: 9.5px; color: var(--ink-dim); }
+  .stat { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
+  .stat .k { color: var(--brass-dim); width: 26px; letter-spacing: 0.12em; }
+  .stat .bar { flex: 1; height: 5px; background: var(--iron); border: 1px solid rgba(0,0,0,0.6); position: relative; }
+  .stat .bar i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, var(--brass-dim), var(--brass)); }
+  .stat .bar.low i { background: linear-gradient(90deg, #5a2020, var(--blood)); }
+  .stat .v { color: var(--ink); min-width: 32px; text-align: right; }
+  /* Rarity badge */
+  .rarity {
+    margin-top: 6px;
+    font-family: 'Cinzel', serif;
+    font-size: 8.5px;
+    letter-spacing: 0.28em;
+    text-align: center;
+    padding: 3px 0;
+    border-top: 1px solid rgba(201,169,97,0.25);
+  }
+  .rarity.verified { color: var(--r-verified); }
+  .rarity.observed { color: var(--r-observed); }
+  .rarity.inferred { color: var(--r-inferred); }
+  .rarity.stale { color: var(--r-stale); }
+  /* Left rail: studying */
+  .study-card {
+    background: linear-gradient(180deg, #32251a, var(--card) 40%, #1f160f);
+    border: 1px solid var(--brass);
+    padding: 14px 14px 12px;
+    margin-bottom: 18px;
+    position: relative;
+    box-shadow: 0 0 20px rgba(228,201,122,0.2), inset 0 0 0 1px rgba(0,0,0,0.5);
+  }
+  .empty-shield {
+    text-align: center;
+    padding: 40px 10px;
+    border: 1px dashed var(--brass-dim);
+    color: var(--brass-dim);
+    font-family: 'Cinzel', serif;
+    font-size: 9.5px;
+    letter-spacing: 0.3em;
+  }
+  .shield-glyph { font-size: 42px; color: var(--brass-dim); margin-bottom: 14px; opacity: 0.5; }
+  .lineage-box { display: flex; flex-direction: column; gap: 8px; }
+  .mini-card {
+    background: #1f170f;
+    border: 1px solid var(--brass-dim);
+    padding: 8px 10px;
+    font-size: 11px;
+    color: var(--ink-dim);
+    line-height: 1.3;
+    position: relative;
+  }
+  .mini-card .mini-head { font-family: 'Cinzel', serif; font-size: 8.5px; letter-spacing: 0.25em; color: var(--brass-dim); margin-bottom: 4px; }
+  .mini-card.child { margin-left: 18px; border-left: 2px solid var(--brass-dim); }
+  .lineage-arrow { font-family: 'Cinzel', serif; font-size: 9px; color: var(--brass-dim); letter-spacing: 0.3em; text-align: center; padding: 2px 0; }
+  /* Right rail: stats */
+  .tally { margin-bottom: 20px; }
+  .tally-row { display: flex; align-items: center; gap: 8px; margin: 5px 0; font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+  .tally-row .lbl { width: 58px; font-family: 'Cinzel', serif; font-size: 9px; letter-spacing: 0.18em; }
+  .tally-row .bar { flex: 1; height: 8px; background: var(--iron); border: 1px solid rgba(0,0,0,0.6); position: relative; }
+  .tally-row .bar i { position: absolute; inset: 0 auto 0 0; }
+  .tally-row .bar i.verified { background: linear-gradient(90deg, #a88740, var(--r-verified)); }
+  .tally-row .bar i.observed { background: linear-gradient(90deg, #8a8a92, var(--r-observed)); }
+  .tally-row .bar i.inferred { background: linear-gradient(90deg, #7a4e32, var(--r-inferred)); }
+  .tally-row .bar i.stale { background: linear-gradient(90deg, #3a3630, var(--r-stale)); }
+  .tally-row .n { width: 22px; text-align: right; color: var(--ink); }
+  .set-row { margin: 6px 0; font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+  .set-row .sl { display: flex; justify-content: space-between; color: var(--ink-dim); margin-bottom: 3px; font-family: 'Cinzel', serif; font-size: 9px; letter-spacing: 0.2em; }
+  .set-row .bar { height: 6px; background: var(--iron); border: 1px solid rgba(0,0,0,0.6); }
+  .set-row .bar i { display: block; height: 100%; }
+  .set-row .bar i.buffer { background: linear-gradient(90deg, #5a4580, var(--buffer)); }
+  .set-row .bar i.episodic { background: linear-gradient(90deg, #8a6820, var(--episodic)); }
+  .set-row .bar i.semantic { background: linear-gradient(90deg, #3f6547, var(--semantic)); }
+  /* Filter bar */
+  .filters {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: linear-gradient(180deg, rgba(26,20,16,0), rgba(26,20,16,0.9) 30%, rgba(14,10,7,1));
+    padding: 16px 28px 14px;
+    display: flex; justify-content: center; gap: 8px;
+    z-index: 10;
+  }
+  .rune {
+    font-family: 'Cinzel', serif;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    padding: 8px 14px;
+    background: linear-gradient(180deg, #28201a, #15100a);
+    border: 1px solid var(--brass-dim);
+    color: var(--ink-dim);
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .rune:hover { border-color: var(--brass); color: var(--brass); }
+  .rune.active { border-color: var(--brass); color: var(--brass); box-shadow: 0 0 10px rgba(228,201,122,0.3) inset; background: linear-gradient(180deg, #3a2c1c, #1f1609); }
+  .rune .g { font-size: 14px; line-height: 1; }
+  .rune .g.buffer { color: var(--buffer); }
+  .rune .g.episodic { color: var(--episodic); }
+  .rune .g.semantic { color: var(--semantic); }
+  .rune.clear { border-style: dashed; }
+  /* Section header for grid */
+  .grid-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .grid-head h2 { font-family: 'Cinzel', serif; font-size: 13px; letter-spacing: 0.3em; color: var(--brass); }
+  .grid-head .count { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-dim); }
+  /* Watermark for card interior */
+  .card .wm {
+    position: absolute; inset: 30px 18px 40px 18px;
+    background-image: radial-gradient(circle at 50% 50%, rgba(201,169,97,0.04), transparent 70%);
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+  <header class="banner">
+    <span class="stud-row"></span><span class="stud-row b"></span>
+    <div class="title">Hippo Vitrine: Memory Collection</div>
+    <div class="adv">
+      ADVENTURER <span class="val">skf_s</span>
+      <span class="sep">//</span>
+      CLASS <span class="val">Engineer</span>
+      <span class="sep">//</span>
+      LVL <span class="val">59</span>
+      <span class="sep">//</span>
+      XP <span class="val">26d avg half-life</span>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <aside class="rail left-rail">
+      <h3>Currently Studying</h3>
+      <div id="studyArea"></div>
+      <h3>Evolution Chain</h3>
+      <div id="lineageArea" class="lineage-box"></div>
+    </aside>
+
+    <section>
+      <div class="grid-head">
+        <h2>The Collection</h2>
+        <div class="count" id="countLabel"></div>
+      </div>
+      <div id="grid" class="grid"></div>
+    </section>
+
+    <aside class="rail right-rail">
+      <h3>Collection Stats</h3>
+      <div class="tally" id="tallyBox"></div>
+      <h3>Set Completion</h3>
+      <div id="setBox"></div>
+    </aside>
+  </main>
+
+  <div class="filters" id="filterBar"></div>
+
+<script>
+const memoriesData = [
+  { text: "Gold model uses TIPS 10y as primary inflation signal", layer: 'buffer', tags: ['gold','tips','inflation','signals'], confidence: 'verified' },
+  { text: "Supabase sync overwrites all signal data from local files", layer: 'buffer', tags: ['supabase','sync','safety'], confidence: 'verified' },
+  { text: "RTX 5080 confirmed working with PyTorch 2.10", layer: 'buffer', tags: ['gpu','pytorch','hardware'], confidence: 'verified' },
+  { text: "Pre-commit hooks can revert file edits silently", layer: 'buffer', tags: ['git','hooks','gotcha'], confidence: 'observed' },
+  { text: "Hippo memory uses hippocampal consolidation model", layer: 'buffer', tags: ['hippo','consolidation','theory'], confidence: 'observed' },
+  { text: "Weekly pipeline runs 42 models in parallel", layer: 'buffer', tags: ['pipeline','parallel','weekly'], confidence: 'verified' },
+  { text: "Never force push to main branch", layer: 'episodic', tags: ['git','safety'], confidence: 'verified' },
+  { text: "ProcessPoolExecutor default 8 workers for pipeline", layer: 'episodic', tags: ['pipeline','parallel','python'], confidence: 'verified' },
+  { text: "Strength decays with biological half-life curve", layer: 'episodic', tags: ['hippo','decay','theory'], confidence: 'verified' },
+  { text: "Memory retrieval reinforces strength", layer: 'episodic', tags: ['hippo','retrieval','theory'], confidence: 'verified' },
+  { text: "Buffer memories consolidate to episodic after sleep", layer: 'episodic', tags: ['hippo','consolidation','buffer','episodic'], confidence: 'verified' },
+  { text: "Episodic memories generalize into semantic over time", layer: 'episodic', tags: ['hippo','consolidation','episodic','semantic'], confidence: 'verified' },
+  { text: "Power models have known validation issues", layer: 'episodic', tags: ['power','validation','issues'], confidence: 'observed' },
+  { text: "Use safe_sync.py instead of direct Supabase sync", layer: 'episodic', tags: ['supabase','sync','safety'], confidence: 'verified' },
+  { text: "Signal prices use actual front-month not adjusted", layer: 'episodic', tags: ['prices','signals','futures'], confidence: 'verified' },
+  { text: "All futures models must use futures_pnl.py", layer: 'episodic', tags: ['futures','pnl','standard'], confidence: 'verified' },
+  { text: "VAR limit is 100k for all commodities", layer: 'episodic', tags: ['var','sizing','futures'], confidence: 'verified' },
+  { text: "No vol upper clip in position sizing", layer: 'episodic', tags: ['vol','sizing','futures'], confidence: 'verified' },
+  { text: "GPU gives 40x speedup on matrix operations", layer: 'episodic', tags: ['gpu','performance','pytorch'], confidence: 'observed' },
+  { text: "Playwright smoke tests cover 15 scenarios", layer: 'episodic', tags: ['playwright','tests','frontend'], confidence: 'verified' },
+  { text: "GitHub Actions deploys from master automatically", layer: 'episodic', tags: ['deploy','github','ci'], confidence: 'verified' },
+  { text: "Content hash caching uses SHA-256 for file ops", layer: 'episodic', tags: ['cache','hash','files'], confidence: 'observed' },
+  { text: "Nightly validation runs at 7AM UTC", layer: 'episodic', tags: ['validation','schedule','ci'], confidence: 'verified' },
+  { text: "Semantic layer stores generalized knowledge", layer: 'episodic', tags: ['hippo','semantic','theory'], confidence: 'verified' },
+  { text: "Buffer is short-term working memory", layer: 'semantic', tags: ['hippo','buffer','theory'], confidence: 'verified' },
+  { text: "Episodic captures specific events and contexts", layer: 'semantic', tags: ['hippo','episodic','theory'], confidence: 'verified' },
+  { text: "Memory as physics models decay and interference", layer: 'semantic', tags: ['hippo','physics','theory'], confidence: 'inferred' },
+  { text: "Phase transitions in memory consolidation", layer: 'semantic', tags: ['hippo','consolidation','theory'], confidence: 'inferred' },
+  { text: "Claude Code hooks configured in settings.json", layer: 'semantic', tags: ['claude','hooks','config'], confidence: 'verified' },
+  { text: "Compaction triggers at 50 percent context usage", layer: 'semantic', tags: ['claude','compaction','context'], confidence: 'verified' },
+  { text: "Roll adjustments needed when contracts change", layer: 'semantic', tags: ['futures','roll','prices'], confidence: 'verified' },
+  { text: "Lot sizing uses raw prices not backward-adjusted", layer: 'semantic', tags: ['sizing','prices','futures'], confidence: 'verified' },
+  { text: "Minimum 1 lot when signal is active", layer: 'semantic', tags: ['sizing','futures','signals'], confidence: 'verified' },
+  { text: "Vol floor 0.01 prevents division by zero", layer: 'semantic', tags: ['vol','sizing','safety'], confidence: 'verified' },
+  { text: "Scaled signal equals raw signal always", layer: 'semantic', tags: ['sizing','signals','standard'], confidence: 'verified' },
+  { text: "MCP server connected for Supabase queries", layer: 'semantic', tags: ['mcp','supabase','config'], confidence: 'verified' },
+  { text: "Faster whisper uses GPU float16 for transcription", layer: 'semantic', tags: ['whisper','gpu','transcription'], confidence: 'observed' },
+  { text: "Confidence 0.95 for all position sizing", layer: 'semantic', tags: ['sizing','futures','standard'], confidence: 'verified' },
+];
+
+// Seeded deterministic RNG
+function seededRandom(seed) { let s = seed; return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; }; }
+const rng = seededRandom(42);
+const memories = memoriesData.map((d, i) => {
+  const age = rng() * 30;
+  return {
+    id: i, text: d.text, layer: d.layer, tags: d.tags, confidence: d.confidence,
+    retrievals: Math.floor(rng() * 20) + 1,
+    strength: 0.15 + rng() * 0.85,
+    halfLife: 10 + rng() * 50,
+    age,
+  };
+});
+memories[0].retrievals = 14; memories[0].strength = 1.0; memories[0].halfLife = 31.5; memories[0].age = 9.9;
+
+// Lineage: semantic card -> parent memories
+const LINEAGE = { 24: [4, 10], 25: [10, 11], 26: [8, 9], 27: [10, 11], 32: [16, 17], 33: [17, 18] };
+
+const SIGIL = { buffer: '\u263D', episodic: '\u2609', semantic: '\u2698' };
+const SIGIL_LABEL = { buffer: 'BUFFER', episodic: 'EPISODIC', semantic: 'SEMANTIC' };
+
+let state = { equipped: null, layerFilter: null, rarityFilter: null };
+
+function splitTitle(text) {
+  // First ~5 words as title, rest as flavor
+  const words = text.split(' ');
+  if (words.length <= 5) return { title: text, body: '' };
+  return { title: words.slice(0, 5).join(' '), body: words.slice(5).join(' ') };
+}
+
+function cardHTML(m) {
+  const { title, body } = splitTitle(m.text);
+  const strPct = Math.round(m.strength * 100);
+  const strLow = m.strength < 0.35;
+  const rtrPct = Math.min(100, m.retrievals * 5);
+  const bodyWithDrop = body ? `<span class="drop">${body.charAt(0).toUpperCase()}</span>${body.slice(1)}` : `<span class="drop">${title.charAt(0)}</span>`;
+  return `
+    <div class="card r-${m.confidence}" data-id="${m.id}" data-layer="${m.layer}" data-rarity="${m.confidence}">
+      <span class="corners-2"></span>
+      <div class="wm"></div>
+      <div class="card-head">
+        <div class="sigil ${m.layer}">${SIGIL[m.layer]}</div>
+        <div class="layer-label">${SIGIL_LABEL[m.layer]}</div>
+      </div>
+      <div class="card-title">${title}</div>
+      <div class="flavor">${bodyWithDrop}</div>
+      <div class="stats">
+        <div class="stat"><span class="k">STR</span><span class="bar ${strLow ? 'low' : ''}"><i style="width:${strPct}%"></i></span><span class="v">.${String(strPct).padStart(2,'0')}</span></div>
+        <div class="stat"><span class="k">RTR</span><span class="bar"><i style="width:${rtrPct}%"></i></span><span class="v">${m.retrievals}</span></div>
+        <div class="stat"><span class="k">HLF</span><span class="bar"><i style="width:${Math.min(100, m.halfLife*1.5)}%"></i></span><span class="v">${m.halfLife.toFixed(0)}d</span></div>
+        <div class="stat"><span class="k">AGE</span><span class="bar"><i style="width:${Math.min(100, m.age*3)}%"></i></span><span class="v">${m.age.toFixed(1)}d</span></div>
+      </div>
+      <div class="rarity ${m.confidence}">[ ${m.confidence.toUpperCase()} ]</div>
+    </div>`;
+}
+
+function miniCardHTML(m, role) {
+  const { title } = splitTitle(m.text);
+  return `<div class="mini-card ${role === 'child' ? 'child' : ''}">
+    <div class="mini-head"><span class="sigil ${m.layer}" style="display:inline;border:0;width:auto;height:auto;">${SIGIL[m.layer]}</span> ${SIGIL_LABEL[m.layer]} / ${role.toUpperCase()}</div>
+    ${title}
+  </div>`;
+}
+
+function renderGrid() {
+  const g = document.getElementById('grid');
+  g.innerHTML = memories.map(cardHTML).join('');
+  g.querySelectorAll('.card').forEach(el => {
+    el.addEventListener('click', () => {
+      state.equipped = parseInt(el.dataset.id);
+      renderAll();
+    });
+  });
+  applyFilters();
+}
+
+function applyFilters() {
+  let shown = 0;
+  document.querySelectorAll('.card').forEach(el => {
+    const layer = el.dataset.layer;
+    const rarity = el.dataset.rarity;
+    const matchLayer = !state.layerFilter || state.layerFilter === layer;
+    const matchRarity = !state.rarityFilter || state.rarityFilter === rarity;
+    const equipped = state.equipped === parseInt(el.dataset.id);
+    el.classList.toggle('filtered-out', !(matchLayer && matchRarity));
+    el.classList.toggle('equipped', equipped);
+    if (matchLayer && matchRarity) shown++;
+  });
+  document.getElementById('countLabel').textContent = `${shown} of ${memories.length} cards visible`;
+}
+
+function renderStudy() {
+  const area = document.getElementById('studyArea');
+  const lin = document.getElementById('lineageArea');
+  if (state.equipped === null) {
+    area.innerHTML = `<div class="empty-shield">
+      <div class="shield-glyph">\u2694</div>
+      No Memory Equipped
+      <div style="margin-top:10px;font-size:8.5px;opacity:0.7;">Click a card to examine</div>
+    </div>`;
+    lin.innerHTML = `<div style="color:var(--ink-dim);font-size:11px;font-style:italic;padding:6px 2px;opacity:0.6;">Lineage will appear when a memory is equipped.</div>`;
+    return;
+  }
+  const m = memories[state.equipped];
+  const { title, body } = splitTitle(m.text);
+  const strPct = Math.round(m.strength * 100);
+  area.innerHTML = `
+    <div class="study-card r-${m.confidence}">
+      <span class="corners-2"></span>
+      <div class="card-head">
+        <div class="sigil ${m.layer}">${SIGIL[m.layer]}</div>
+        <div class="layer-label">${SIGIL_LABEL[m.layer]}</div>
+      </div>
+      <div class="card-title" style="font-size:12px;">${title}</div>
+      <div class="flavor" style="font-size:12.5px;">${body || title}</div>
+      <div class="stats">
+        <div class="stat"><span class="k">STR</span><span class="bar ${m.strength < 0.35 ? 'low' : ''}"><i style="width:${strPct}%"></i></span><span class="v">.${String(strPct).padStart(2,'0')}</span></div>
+        <div class="stat"><span class="k">RTR</span><span class="bar"><i style="width:${Math.min(100, m.retrievals*5)}%"></i></span><span class="v">${m.retrievals}</span></div>
+        <div class="stat"><span class="k">HLF</span><span class="bar"><i style="width:${Math.min(100, m.halfLife*1.5)}%"></i></span><span class="v">${m.halfLife.toFixed(1)}d</span></div>
+        <div class="stat"><span class="k">AGE</span><span class="bar"><i style="width:${Math.min(100, m.age*3)}%"></i></span><span class="v">${m.age.toFixed(1)}d</span></div>
+      </div>
+      <div style="margin-top:8px;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink-dim);line-height:1.5;">
+        <div style="color:var(--brass-dim);font-family:'Cinzel',serif;letter-spacing:0.2em;font-size:8.5px;margin-bottom:4px;">RUNES</div>
+        ${m.tags.map(t => `<span style="display:inline-block;padding:1px 5px;border:1px solid var(--brass-dim);margin:1px 2px 1px 0;">${t}</span>`).join('')}
+      </div>
+      <div class="rarity ${m.confidence}" style="margin-top:10px;">[ ${m.confidence.toUpperCase()} ]</div>
+    </div>`;
+
+  // Lineage
+  const parents = LINEAGE[m.id] || [];
+  const children = Object.entries(LINEAGE).filter(([c, ps]) => ps.includes(m.id)).map(([c]) => parseInt(c));
+  let linHTML = '';
+  if (parents.length) {
+    linHTML += parents.map(pi => miniCardHTML(memories[pi], 'parent')).join('');
+    linHTML += `<div class="lineage-arrow">\u2193 CONSOLIDATES \u2193</div>`;
+    linHTML += miniCardHTML(m, 'self');
+  } else if (children.length) {
+    linHTML += miniCardHTML(m, 'self');
+    linHTML += `<div class="lineage-arrow">\u2193 YIELDS \u2193</div>`;
+    linHTML += children.map(ci => miniCardHTML(memories[ci], 'child')).join('');
+  } else {
+    linHTML = `<div style="color:var(--ink-dim);font-size:11px;font-style:italic;padding:6px 2px;opacity:0.7;">Standalone memory, no ancestry traced.</div>`;
+  }
+  lin.innerHTML = linHTML;
+}
+
+function renderStats() {
+  const rar = { verified: 0, observed: 0, inferred: 0, stale: 0 };
+  const lay = { buffer: 0, episodic: 0, semantic: 0 };
+  memories.forEach(m => { rar[m.confidence]++; lay[m.layer]++; });
+  const total = memories.length;
+  const tally = document.getElementById('tallyBox');
+  tally.innerHTML = ['verified','observed','inferred','stale'].map(k =>
+    `<div class="tally-row"><span class="lbl">${k.toUpperCase()}</span><span class="bar"><i class="${k}" style="width:${(rar[k]/total)*100}%"></i></span><span class="n">${rar[k]}</span></div>`
+  ).join('');
+
+  const setBox = document.getElementById('setBox');
+  const totals = { buffer: 6, episodic: 18, semantic: 14 };
+  setBox.innerHTML = ['buffer','episodic','semantic'].map(l => {
+    const pct = Math.round((lay[l]/totals[l])*100);
+    return `<div class="set-row">
+      <div class="sl"><span style="color:var(--${l});">${SIGIL[l]} ${l.toUpperCase()}</span><span>${lay[l]}/${totals[l]} - ${pct}%</span></div>
+      <div class="bar"><i class="${l}" style="width:${pct}%"></i></div>
+    </div>`;
+  }).join('');
+}
+
+function renderFilters() {
+  const bar = document.getElementById('filterBar');
+  const layers = ['buffer','episodic','semantic'];
+  const rarities = ['verified','observed','inferred','stale'];
+  let html = '';
+  layers.forEach(l => {
+    html += `<button class="rune" data-fkind="layer" data-fval="${l}"><span class="g ${l}">${SIGIL[l]}</span>${l.toUpperCase()}</button>`;
+  });
+  html += `<span style="width:1px;background:var(--brass-dim);margin:0 6px;"></span>`;
+  rarities.forEach(r => {
+    html += `<button class="rune" data-fkind="rarity" data-fval="${r}">${r.toUpperCase()}</button>`;
+  });
+  html += `<button class="rune clear" data-fkind="clear">\u2715 CLEAR</button>`;
+  bar.innerHTML = html;
+  bar.querySelectorAll('.rune').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const kind = btn.dataset.fkind;
+      if (kind === 'clear') { state.layerFilter = null; state.rarityFilter = null; }
+      else if (kind === 'layer') state.layerFilter = state.layerFilter === btn.dataset.fval ? null : btn.dataset.fval;
+      else if (kind === 'rarity') state.rarityFilter = state.rarityFilter === btn.dataset.fval ? null : btn.dataset.fval;
+      updateFilterActive();
+      applyFilters();
+    });
+  });
+  updateFilterActive();
+}
+
+function updateFilterActive() {
+  document.querySelectorAll('.rune').forEach(btn => {
+    const kind = btn.dataset.fkind;
+    const val = btn.dataset.fval;
+    const active = (kind === 'layer' && val === state.layerFilter) || (kind === 'rarity' && val === state.rarityFilter);
+    btn.classList.toggle('active', active);
+  });
+}
+
+function renderAll() {
+  renderStudy();
+  applyFilters();
+}
+
+renderGrid();
+renderStats();
+renderFilters();
+renderStudy();
+</script>
+</body>
+</html>

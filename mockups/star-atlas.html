@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hippo Brain Observatory</title>
+<style>
+  @font-face {
+    font-family: 'SerifFallback';
+    src: local('Georgia'), local('Times New Roman'), local('serif');
+  }
+
+  :root {
+    --bg: #0a1628;
+    --cream: #e8dcc8;
+    --gold: #c9a84c;
+    --copper: #b87d4b;
+    --dim: #6b7a8e;
+    --rose: #c45c5c;
+    --sage: #7a9e7a;
+    --constellation: rgba(201, 168, 76, 0.15);
+    --grid: rgba(107, 122, 142, 0.08);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--cream);
+    font-family: Georgia, 'Times New Roman', serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  /* Paper grain texture via pseudo-element */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 50% 40%, rgba(201, 168, 76, 0.04) 0%, transparent 60%),
+      radial-gradient(ellipse at 50% 50%, rgba(10, 22, 40, 0) 30%, rgba(4, 8, 16, 0.6) 100%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Noise texture overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    opacity: 0.035;
+    pointer-events: none;
+    z-index: 1;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+    background-size: 256px 256px;
+  }
+
+  .page-container {
+    position: relative;
+    z-index: 2;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 40px 40px 30px;
+  }
+
+  /* ── Header ── */
+  .header {
+    text-align: center;
+    margin-bottom: 8px;
+  }
+
+  .header h1 {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-weight: 400;
+    font-size: 28px;
+    letter-spacing: 0.35em;
+    font-variant: small-caps;
+    color: var(--cream);
+    margin-bottom: 6px;
+  }
+
+  .header .subtitle {
+    font-style: italic;
+    font-size: 13px;
+    color: var(--dim);
+    letter-spacing: 0.08em;
+  }
+
+  /* Decorative rule with star ornament */
+  .ornamental-rule {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    margin: 18px 0 24px;
+  }
+
+  .ornamental-rule .line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--gold), transparent);
+    opacity: 0.4;
+  }
+
+  .ornamental-rule .star {
+    font-size: 14px;
+    color: var(--gold);
+    padding: 0 16px;
+    opacity: 0.7;
+    position: relative;
+  }
+
+  .ornamental-rule .star::before,
+  .ornamental-rule .star::after {
+    content: '\2022';
+    font-size: 6px;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--gold);
+    opacity: 0.5;
+  }
+
+  .ornamental-rule .star::before { left: 4px; }
+  .ornamental-rule .star::after { right: 4px; }
+
+  /* ── Main layout ── */
+  .main-area {
+    position: relative;
+    display: flex;
+    gap: 0;
+  }
+
+  /* ── Star field ── */
+  .star-field-wrapper {
+    flex: 1;
+    position: relative;
+  }
+
+  .star-field-wrapper canvas {
+    display: block;
+    width: 100%;
+    height: 520px;
+    border: 1px solid rgba(201, 168, 76, 0.2);
+  }
+
+  /* Zone labels positioned over canvas */
+  .zone-labels {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .zone-label {
+    position: absolute;
+    font-variant: small-caps;
+    font-size: 11px;
+    letter-spacing: 0.25em;
+    color: var(--dim);
+    opacity: 0.35;
+    font-family: Georgia, 'Times New Roman', serif;
+  }
+
+  .zone-label.episodic { top: 50px; left: 40px; }
+  .zone-label.semantic { top: 50px; right: 340px; }
+  .zone-label.buffer { bottom: 60px; left: 50%; transform: translateX(-50%); }
+
+  /* ── Detail card ── */
+  .detail-card {
+    position: absolute;
+    right: 0;
+    top: 30px;
+    width: 290px;
+    background: rgba(10, 22, 40, 0.92);
+    border: 1px solid rgba(201, 168, 76, 0.35);
+    padding: 0;
+    z-index: 5;
+  }
+
+  /* Corner ornaments */
+  .detail-card::before {
+    content: '\250C\2500\2500';
+    position: absolute;
+    top: -1px;
+    left: -1px;
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--gold);
+    opacity: 0.6;
+    line-height: 1;
+  }
+
+  .detail-card::after {
+    content: '\2500\2500\2518';
+    position: absolute;
+    bottom: -1px;
+    right: -1px;
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--gold);
+    opacity: 0.6;
+    line-height: 1;
+  }
+
+  .card-corner-tr {
+    position: absolute;
+    top: -1px;
+    right: -1px;
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--gold);
+    opacity: 0.6;
+    line-height: 1;
+  }
+
+  .card-corner-bl {
+    position: absolute;
+    bottom: -1px;
+    left: -1px;
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--gold);
+    opacity: 0.6;
+    line-height: 1;
+  }
+
+  .card-inner {
+    padding: 22px 20px 18px;
+  }
+
+  .card-header {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 17px;
+    font-style: italic;
+    color: var(--gold);
+    margin-bottom: 4px;
+    letter-spacing: 0.02em;
+  }
+
+  .card-type {
+    font-variant: small-caps;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--dim);
+    margin-bottom: 14px;
+  }
+
+  .card-divider {
+    height: 1px;
+    background: linear-gradient(to right, var(--gold), transparent);
+    opacity: 0.25;
+    margin-bottom: 14px;
+  }
+
+  .card-content {
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--cream);
+    margin-bottom: 18px;
+    font-style: italic;
+  }
+
+  .card-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 16px;
+    margin-bottom: 16px;
+  }
+
+  .stat-item {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .stat-label {
+    font-variant: small-caps;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    color: var(--dim);
+    margin-bottom: 2px;
+  }
+
+  .stat-value {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 13px;
+    color: var(--cream);
+  }
+
+  .stat-value.high { color: var(--gold); }
+  .stat-value.danger { color: var(--rose); }
+  .stat-value.ok { color: var(--sage); }
+
+  /* Light curve / trajectory */
+  .light-curve-section {
+    margin-bottom: 14px;
+  }
+
+  .light-curve-label {
+    font-variant: small-caps;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    color: var(--dim);
+    margin-bottom: 6px;
+  }
+
+  .light-curve {
+    height: 20px;
+    position: relative;
+  }
+
+  .light-curve .track {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: rgba(201, 168, 76, 0.2);
+  }
+
+  .light-curve .dot {
+    position: absolute;
+    top: 50%;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--gold);
+  }
+
+  .light-curve .dot.dim { background: var(--dim); opacity: 0.5; width: 4px; height: 4px; }
+  .light-curve .dot.med { background: var(--copper); opacity: 0.7; }
+  .light-curve .dot.bright { background: var(--gold); }
+
+  /* Tags */
+  .card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .tag {
+    font-variant: small-caps;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    color: var(--gold);
+    border: 1px solid rgba(201, 168, 76, 0.35);
+    padding: 2px 8px;
+    font-family: Georgia, 'Times New Roman', serif;
+  }
+
+  /* ── Bottom bar ── */
+  .bottom-bar {
+    margin-top: 20px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(201, 168, 76, 0.15);
+    text-align: center;
+  }
+
+  .bottom-bar p {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--dim);
+    font-variant: small-caps;
+  }
+
+  .bottom-bar .log-prefix {
+    color: var(--copper);
+    opacity: 0.7;
+  }
+
+  .bottom-bar .conflict-count {
+    color: var(--rose);
+    opacity: 0.8;
+  }
+
+  /* ── Star pulse animation ── */
+  @keyframes starBreathe {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  /* ── Responsive tweaks ── */
+  @media (max-width: 900px) {
+    .detail-card {
+      position: relative;
+      right: auto;
+      top: auto;
+      width: 100%;
+      margin-top: 20px;
+    }
+    .main-area {
+      flex-direction: column;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="page-container">
+
+  <!-- Header -->
+  <header class="header">
+    <h1>Hippo Brain Observatory</h1>
+    <p class="subtitle">Celestial Survey &mdash; 57 memories catalogued</p>
+  </header>
+
+  <div class="ornamental-rule">
+    <span class="line"></span>
+    <span class="star">&#10022;</span>
+    <span class="line"></span>
+  </div>
+
+  <!-- Main area -->
+  <div class="main-area">
+    <div class="star-field-wrapper">
+      <canvas id="starCanvas"></canvas>
+
+      <div class="zone-labels">
+        <span class="zone-label episodic">Episodic</span>
+        <span class="zone-label semantic">Semantic</span>
+        <span class="zone-label buffer">Buffer</span>
+      </div>
+    </div>
+
+    <!-- Detail card -->
+    <div class="detail-card">
+      <span class="card-corner-tr">&#9488;</span>
+      <span class="card-corner-bl">&#9492;</span>
+      <div class="card-inner">
+        <div class="card-header">&alpha; Mem-2847</div>
+        <div class="card-type">episodic &middot; observed</div>
+        <div class="card-divider"></div>
+        <div class="card-content">
+          Gold model uses TIPS 10y as primary inflation signal. Confirmed across
+          three separate backtests with consistent alpha.
+        </div>
+        <div class="card-stats">
+          <div class="stat-item">
+            <span class="stat-label">Magnitude</span>
+            <span class="stat-value high">0.94</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Declination</span>
+            <span class="stat-value">12d 7h</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Period</span>
+            <span class="stat-value ok">168h</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Observations</span>
+            <span class="stat-value">17</span>
+          </div>
+        </div>
+        <div class="light-curve-section">
+          <div class="light-curve-label">Strength Trajectory</div>
+          <div class="light-curve">
+            <div class="track"></div>
+            <div class="dot dim" style="left: 5%"></div>
+            <div class="dot dim" style="left: 15%"></div>
+            <div class="dot med" style="left: 28%"></div>
+            <div class="dot med" style="left: 42%"></div>
+            <div class="dot bright" style="left: 55%"></div>
+            <div class="dot bright" style="left: 68%"></div>
+            <div class="dot bright" style="left: 80%; width: 6px; height: 6px;"></div>
+            <div class="dot bright" style="left: 93%; width: 7px; height: 7px;"></div>
+          </div>
+        </div>
+        <div class="card-tags">
+          <span class="tag">inflation</span>
+          <span class="tag">gold</span>
+          <span class="tag">tips-10y</span>
+          <span class="tag">backtest</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom bar -->
+  <div class="bottom-bar">
+    <p>
+      <span class="log-prefix">Log:</span>
+      57 bodies catalogued &middot; 12 global &middot; 45 local (hippo) &middot;
+      0 at risk &middot; <span class="conflict-count">14 conflicts detected</span>
+    </p>
+  </div>
+
+</div>
+
+<script>
+(function() {
+  var canvas = document.getElementById('starCanvas');
+  var ctx = canvas.getContext('2d');
+
+  // High-DPI support
+  var dpr = window.devicePixelRatio || 1;
+  var rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+  var W = rect.width;
+  var H = rect.height;
+
+  // Seeded pseudo-random for consistent layout
+  var seed = 42;
+  function rand() {
+    seed = (seed * 16807 + 0) % 2147483647;
+    return (seed - 1) / 2147483646;
+  }
+
+  // Greek letters for star names
+  var greeks = [
+    '\u03B1', '\u03B2', '\u03B3', '\u03B4', '\u03B5', '\u03B6',
+    '\u03B7', '\u03B8', '\u03B9', '\u03BA', '\u03BB', '\u03BC',
+    '\u03BD', '\u03BE', '\u03BF', '\u03C0', '\u03C1', '\u03C3',
+    '\u03C4', '\u03C5', '\u03C6', '\u03C7', '\u03C8', '\u03C9'
+  ];
+
+  var prefixes = ['Mem', 'Sem', 'Buf', 'Epi', 'Ctx', 'Ref'];
+  var zones = ['episodic', 'semantic', 'buffer'];
+
+  // Generate stars
+  var stars = [];
+  var margin = 50;
+  for (var i = 0; i < 38; i++) {
+    var importance = rand();
+    var zone;
+    var x, y;
+
+    // Cluster by zone with some overlap
+    var zoneRoll = rand();
+    if (zoneRoll < 0.4) {
+      zone = 'episodic';
+      x = margin + rand() * (W * 0.35 - margin);
+      y = margin + rand() * (H * 0.6 - margin);
+    } else if (zoneRoll < 0.75) {
+      zone = 'semantic';
+      x = W * 0.35 + rand() * (W * 0.35);
+      y = margin + rand() * (H * 0.55 - margin);
+    } else {
+      zone = 'buffer';
+      x = W * 0.15 + rand() * (W * 0.7);
+      y = H * 0.55 + rand() * (H * 0.4 - margin);
+    }
+
+    var greek = greeks[i % greeks.length];
+    var prefix = prefixes[Math.floor(rand() * prefixes.length)];
+    var num = Math.floor(rand() * 9000 + 1000);
+
+    stars.push({
+      x: x,
+      y: y,
+      importance: importance,
+      radius: 1.5 + importance * 4.5,
+      zone: zone,
+      label: greek + ' ' + prefix + '-' + num,
+      phase: rand() * Math.PI * 2
+    });
+  }
+
+  // Find constellation connections (nearest neighbors)
+  var connections = [];
+  for (var i = 0; i < stars.length; i++) {
+    var dists = [];
+    for (var j = 0; j < stars.length; j++) {
+      if (i === j) continue;
+      var dx = stars[i].x - stars[j].x;
+      var dy = stars[i].y - stars[j].y;
+      dists.push({ idx: j, d: Math.sqrt(dx * dx + dy * dy) });
+    }
+    dists.sort(function(a, b) { return a.d - b.d; });
+    // Connect to 1-2 nearest, only if close enough
+    var numConn = stars[i].importance > 0.6 ? 2 : 1;
+    for (var k = 0; k < numConn && k < dists.length; k++) {
+      if (dists[k].d < 180) {
+        var a = Math.min(i, dists[k].idx);
+        var b = Math.max(i, dists[k].idx);
+        var key = a + '-' + b;
+        var exists = false;
+        for (var c = 0; c < connections.length; c++) {
+          if (connections[c].key === key) { exists = true; break; }
+        }
+        if (!exists) {
+          connections.push({ a: a, b: b, key: key });
+        }
+      }
+    }
+  }
+
+  function getStarColor(importance) {
+    if (importance > 0.7) return { r: 201, g: 168, b: 76 };   // gold
+    if (importance > 0.4) return { r: 184, g: 125, b: 75 };   // copper
+    return { r: 107, g: 122, b: 142 };                         // dim blue-grey
+  }
+
+  function draw(time) {
+    ctx.clearRect(0, 0, W, H);
+
+    // Background
+    ctx.fillStyle = '#0a1628';
+    ctx.fillRect(0, 0, W, H);
+
+    // Subtle vignette
+    var vg = ctx.createRadialGradient(W / 2, H / 2, 100, W / 2, H / 2, W * 0.7);
+    vg.addColorStop(0, 'rgba(201, 168, 76, 0.015)');
+    vg.addColorStop(1, 'rgba(4, 8, 16, 0.3)');
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Grid lines (celestial coordinates)
+    ctx.strokeStyle = 'rgba(107, 122, 142, 0.06)';
+    ctx.lineWidth = 0.5;
+
+    // Vertical lines (right ascension)
+    for (var gx = 0; gx < W; gx += 80) {
+      ctx.beginPath();
+      ctx.moveTo(gx, 0);
+      ctx.lineTo(gx, H);
+      ctx.stroke();
+    }
+
+    // Horizontal lines (declination)
+    for (var gy = 0; gy < H; gy += 80) {
+      ctx.beginPath();
+      ctx.moveTo(0, gy);
+      ctx.lineTo(W, gy);
+      ctx.stroke();
+    }
+
+    // Faint coordinate tick labels along edges
+    ctx.font = 'italic 9px Georgia, serif';
+    ctx.fillStyle = 'rgba(107, 122, 142, 0.2)';
+    ctx.textAlign = 'center';
+    for (var gx = 80; gx < W; gx += 160) {
+      var raH = Math.floor((gx / W) * 24);
+      ctx.fillText(raH + 'h', gx, H - 6);
+    }
+    ctx.textAlign = 'right';
+    for (var gy = 80; gy < H; gy += 160) {
+      var dec = Math.floor(90 - (gy / H) * 180);
+      ctx.fillText(dec + '\u00B0', W - 8, gy + 3);
+    }
+
+    // Constellation lines (slightly curved)
+    for (var c = 0; c < connections.length; c++) {
+      var sa = stars[connections[c].a];
+      var sb = stars[connections[c].b];
+
+      ctx.beginPath();
+      ctx.strokeStyle = 'rgba(201, 168, 76, 0.12)';
+      ctx.lineWidth = 0.6;
+
+      // Slight curve via quadratic bezier
+      var mx = (sa.x + sb.x) / 2;
+      var my = (sa.y + sb.y) / 2;
+      var dx = sb.x - sa.x;
+      var dy = sb.y - sa.y;
+      // Perpendicular offset for curve
+      var offset = 12;
+      var cpx = mx + (-dy / Math.sqrt(dx * dx + dy * dy)) * offset;
+      var cpy = my + (dx / Math.sqrt(dx * dx + dy * dy)) * offset;
+
+      ctx.moveTo(sa.x, sa.y);
+      ctx.quadraticCurveTo(cpx, cpy, sb.x, sb.y);
+      ctx.stroke();
+    }
+
+    // Stars
+    var t = time / 1000;
+    for (var i = 0; i < stars.length; i++) {
+      var s = stars[i];
+      var col = getStarColor(s.importance);
+
+      // Pulse: slow breathe
+      var pulse = 0.85 + 0.15 * Math.sin(t * 0.4 + s.phase);
+      var alpha = (0.5 + s.importance * 0.5) * pulse;
+
+      // Glow (radial gradient, not filter)
+      if (s.importance > 0.5) {
+        var glowR = s.radius * (3 + s.importance * 3);
+        var glow = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, glowR);
+        glow.addColorStop(0, 'rgba(' + col.r + ',' + col.g + ',' + col.b + ',' + (0.15 * pulse) + ')');
+        glow.addColorStop(1, 'rgba(' + col.r + ',' + col.g + ',' + col.b + ',0)');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, glowR, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Star body
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.radius * pulse, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(' + col.r + ',' + col.g + ',' + col.b + ',' + alpha + ')';
+      ctx.fill();
+
+      // Bright core for important stars
+      if (s.importance > 0.6) {
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.radius * 0.4 * pulse, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 248, 230, ' + (0.6 * pulse) + ')';
+        ctx.fill();
+      }
+
+      // Label
+      ctx.font = 'italic 9px Georgia, serif';
+      var labelAlpha = s.importance > 0.5 ? 0.55 : 0.25;
+      ctx.fillStyle = 'rgba(232, 220, 200, ' + labelAlpha + ')';
+      ctx.textAlign = 'left';
+      ctx.fillText(s.label, s.x + s.radius + 5, s.y - s.radius - 2);
+    }
+
+    // Highlight selected star (alpha Mem-2847 = index 0)
+    var sel = stars[0];
+    ctx.beginPath();
+    ctx.arc(sel.x, sel.y, sel.radius + 8, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(201, 168, 76, 0.3)';
+    ctx.lineWidth = 0.8;
+    ctx.setLineDash([3, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    requestAnimationFrame(draw);
+  }
+
+  requestAnimationFrame(draw);
+})();
+</script>
+
+</body>
+</html>

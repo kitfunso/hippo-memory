@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>HIPPO-CHAN :: Crystal v2.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0906;
+    --amber:#e8a618;
+    --hi:#ffc74a;
+    --mut:#8a5f1a;
+    --dim:#5a3f10;
+    --plum:#1a0a20;
+    --cream:#f7d9a8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--amber);font-family:'Share Tech Mono',ui-monospace,monospace;font-size:11px;line-height:1.4;overflow:hidden}
+  body{
+    filter:contrast(1.05) brightness(1.06);
+    text-shadow:0 0 1px rgba(232,166,24,0.55), 0 0 8px rgba(232,166,24,0.12);
+  }
+  .scan{position:fixed;inset:0;pointer-events:none;z-index:50;
+    background:repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0 2px, rgba(0,0,0,0.2) 2px 3px);
+    mix-blend-mode:multiply;opacity:0.55}
+  .vignette{position:fixed;inset:0;pointer-events:none;z-index:51;
+    background:radial-gradient(ellipse at center, rgba(0,0,0,0) 50%, rgba(0,0,0,0.82) 100%)}
+  @keyframes flicker{ 0%{opacity:1} 3%{opacity:.93} 6%{opacity:1} 70%{opacity:1} 72%{opacity:.96} 100%{opacity:1} }
+  .flick{animation:flicker 6s infinite}
+
+  .stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+  #spriteCanvas{
+    image-rendering:pixelated;
+    image-rendering:-moz-crisp-edges;
+    image-rendering:crisp-edges;
+    width:320px;height:320px;
+    filter:drop-shadow(0 0 16px rgba(232,166,24,0.08));
+  }
+  #fxCanvas{
+    position:fixed;inset:0;pointer-events:none;z-index:40;
+    image-rendering:pixelated;
+  }
+
+  .status-tl{
+    position:fixed;top:18px;left:20px;z-index:30;
+    font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--amber);
+    white-space:pre;letter-spacing:0.5px;
+  }
+  .status-tl .ttl{color:var(--hi);font-family:'VT323',monospace;font-size:16px;letter-spacing:1.5px}
+  .status-tl .bar{color:var(--amber)}
+  .status-tl .bar .off{color:var(--dim)}
+  .status-tl .ok{color:var(--hi)}
+
+  .dialog{
+    position:fixed;left:50%;top:calc(50% + 180px);transform:translateX(-50%);z-index:30;
+    background:var(--cream);color:var(--plum);
+    border:3px solid var(--plum);
+    box-shadow:0 0 0 2px var(--cream), 0 0 0 5px var(--plum);
+    padding:10px 14px 10px 14px;
+    font-family:'Press Start 2P',monospace;font-size:9px;line-height:1.7;letter-spacing:0.5px;
+    text-shadow:none;
+    width:300px;
+    image-rendering:pixelated;
+  }
+  .dialog::after{
+    content:'';position:absolute;right:8px;bottom:4px;
+    width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;
+    border-top:6px solid var(--plum);
+    animation:blinkArrow 1.1s steps(2) infinite;
+  }
+  @keyframes blinkArrow{ 0%,50%{opacity:1} 51%,100%{opacity:0} }
+
+  .bottom-bar{
+    position:fixed;left:0;right:0;bottom:0;z-index:30;
+    height:36px;
+    border-top:1px solid var(--dim);
+    background:
+      repeating-linear-gradient(90deg, rgba(232,166,24,0.05) 0 1px, transparent 1px 3px),
+      linear-gradient(180deg, #120e07, #0a0906);
+    display:flex;align-items:center;padding:0 14px;
+    font-family:'Share Tech Mono',monospace;font-size:10.5px;color:var(--amber);
+    overflow:hidden;
+  }
+  .bottom-bar .tag{color:var(--mut);margin-right:10px}
+  .bottom-bar .log{color:var(--amber);white-space:pre;letter-spacing:0.3px}
+  .bottom-bar .log .t{color:var(--hi)}
+  .bottom-bar .log .d{color:var(--mut)}
+
+  .corner{
+    position:fixed;z-index:30;color:var(--mut);font-family:'VT323',monospace;font-size:14px;letter-spacing:1px;
+  }
+  .corner.tr{top:18px;right:22px;text-align:right}
+  .corner.br{right:20px;bottom:46px}
+</style>
+</head>
+<body class="flick">
+  <div class="stage">
+    <canvas id="spriteCanvas" width="320" height="320"></canvas>
+  </div>
+
+  <div class="status-tl">
+<span class="ttl">[ HIPPO-CHAN :: CRYSTAL v2.0 ]</span>
+<span class="bar">HP  <span id="hpbar">xxxxxxxxxx</span> 38/38</span>
+<span class="bar">PP  <span id="ppbar">x<span class="off">---------</span></span> 01/10</span>
+STATUS: <span class="ok" id="statusLine">HEALTHY</span>
+  </div>
+
+  <div class="corner tr">
+    MEM.CORE ONLINE<br/>
+    <span style="color:var(--amber)">>> ambient mode</span>
+  </div>
+
+  <div class="dialog">
+    &gt; Hippo-chan is watching<br/>
+    &nbsp;&nbsp;over your memories.
+  </div>
+
+  <div class="bottom-bar">
+    <span class="tag">[LOG]</span>
+    <span class="log" id="logLine"></span>
+  </div>
+
+  <canvas id="fxCanvas"></canvas>
+  <div class="scan"></div>
+  <div class="vignette"></div>
+
+<script>
+// ---------- PALETTE ----------
+// 0 = transparent
+// 1 = outline (plum)      #1a0a20
+// 2 = body main           #f7d9a8
+// 3 = body shadow         #e0a878
+// 4 = white (eye/hi)      #ffffff
+// 5 = pupil dark          #3a2510
+// 6 = blush pink          #f2a088
+// 7 = coronet gold        #ffb848
+// 8 = fin accent blue     #6dbeff
+const PAL = [null,'#1a0a20','#f7d9a8','#e0a878','#ffffff','#3a2510','#f2a088','#ffb848','#6dbeff'];
+
+// Each frame is 32 strings of 32 chars. '.' = transparent, 1-8 = palette index.
+// Chibi seahorse spirit, 3/4 front view, faces slightly right.
+// Top-heavy: head rows 3..18, body+tail rows 18..31, coronet rows 0..3.
+
+// Sprite generated row-by-row, character is chibi seahorse facing forward.
+// Head: cols 7..24 rows 6..19. Coronet: three gold spikes rows 1..5.
+// Eyes: big 4x4 white with 2-col dark pupils upper-right. Blush: 2x2 pink on cheeks.
+// Mouth: tiny w. Body coils down-right. Dorsal fin: blue wave on left with white highlight.
+
+const IDLE = [
+  "................................", // 0
+  "...............1................", // 1
+  "............1.171.1.............", // 2
+  "...........171777171............", // 3
+  "..........17777777771...........", // 4
+  "..........177777777711..........", // 5
+  ".........12222222222221.........", // 6
+  "........1222222222222221........", // 7
+  ".......122222222222222221.......", // 8
+  ".......122222222222222221.......", // 9
+  ".......122444422224444221.......", // 10  eye whites
+  ".......122454422224544221.......", // 11  pupil + glint row
+  ".......122455422224554221.......", // 12  pupil 2-wide
+  ".......122444422224444221.......", // 13  eye bottom rim
+  ".......126622222222226621.......", // 14
+  ".......126622222222226621.......", // 15
+  ".......122222212212222221.......", // 16
+  ".......122222221122222221.......", // 17
+  "........1222222222222221........", // 18
+  "......11.12222222222221.........", // 19
+  ".....1881.112222222211..........", // 20
+  "....188481122222222221..........", // 21
+  ".....188482222222222221.........", // 22
+  "......188822323232323221........", // 23
+  ".......11112232323232221........", // 24
+  "...........1223232323221........", // 25
+  "............1122222222221.......", // 26
+  "..............11222222221.......", // 27
+  "................1122222221......", // 28
+  "..................11222221......", // 29
+  "....................12221.......", // 30
+  ".....................111........", // 31
+];
+
+const BLINK = [
+  "................................", // 0
+  "...............1................", // 1
+  "............1.171.1.............", // 2
+  "...........171777171............", // 3
+  "..........17777777771...........", // 4
+  "..........177777777711..........", // 5
+  ".........12222222222221.........", // 6
+  "........1222222222222221........", // 7
+  ".......122222222222222221.......", // 8
+  ".......122222222222222221.......", // 9
+  ".......122222222222222221.......", // 10
+  ".......122111122221111221.......", // 11
+  ".......122222222222222221.......", // 12
+  ".......122222222222222221.......", // 13
+  ".......126622222222226621.......", // 14
+  ".......126622222222226621.......", // 15
+  ".......122222212212222221.......", // 16
+  ".......122222221122222221.......", // 17
+  "........1222222222222221........", // 18
+  "......11.12222222222221.........", // 19
+  ".....1881.112222222211..........", // 20
+  "....188481122222222221..........", // 21
+  ".....188482222222222221.........", // 22
+  "......188822323232323221........", // 23
+  ".......11112232323232221........", // 24
+  "...........1223232323221........", // 25
+  "............1122222222221.......", // 26
+  "..............11222222221.......", // 27
+  "................1122222221......", // 28
+  "..................11222221......", // 29
+  "....................12221.......", // 30
+  ".....................111........", // 31
+];
+
+const HAPPY = [
+  "...............1................", // 0
+  "..............141...............", // 1
+  "...........11.171.11............", // 2
+  "..........14717771741...........", // 3
+  "..........17777777771...........", // 4
+  "..........177777777711..........", // 5
+  ".........12222222222221.........", // 6
+  "........1222222222222221........", // 7
+  ".......122222222222222221.......", // 8
+  ".......122222222222222221.......", // 9
+  ".......122211222222112221.......", // 10
+  ".......122122122221221221.......", // 11
+  ".......122222222222222221.......", // 12
+  ".......122222222222222221.......", // 13
+  ".......126622222222226621.......", // 14
+  ".......126622222222226621.......", // 15
+  ".......122222122221222221.......", // 16
+  ".......122222211112222221.......", // 17
+  "........1222222222222221........", // 18
+  "......11.12222222222221.........", // 19
+  ".....1881.112222222211..........", // 20
+  "....188481122222222221..........", // 21
+  ".....188482222222222221.........", // 22
+  "......188822323232323221........", // 23
+  ".......11112232323232221........", // 24
+  "...........1223232323221........", // 25
+  "............1122222222221.......", // 26
+  "..............11222222221.......", // 27
+  "................1122222221......", // 28
+  "..................11222221......", // 29
+  "....................12221.......", // 30
+  ".....................111........", // 31
+];
+
+const SLEEPY = [
+  "................................", // 0
+  "...............1................", // 1
+  "............1.171.1.......111...", // 2
+  "...........171777171.....17771..", // 3
+  "..........17777777771.....171...", // 4
+  "..........177777777711...17771..", // 5
+  ".........12222222222221...111...", // 6
+  "........1222222222222221........", // 7
+  ".......122222222222222221.......", // 8
+  ".......122222222222222221.......", // 9
+  ".......122222222222222221.......", // 10
+  ".......122121222221212221.......", // 11
+  ".......122212122222121221.......", // 12
+  ".......122222222222222221.......", // 13
+  ".......126622222222226621.......", // 14
+  ".......126622222222226621.......", // 15
+  ".......122222212212222221.......", // 16
+  ".......122222221122222221.......", // 17
+  "........1222222222222221........", // 18
+  "......11.12222222222221.........", // 19
+  ".....1881.112222222211..........", // 20
+  "....188481122222222221..........", // 21
+  ".....188482222222222221.........", // 22
+  "......188822323232323221........", // 23
+  ".......11112232323232221........", // 24
+  "...........1223232323221........", // 25
+  "............1122222222221.......", // 26
+  "..............11222222221.......", // 27
+  "................1122222221......", // 28
+  "..................11222221......", // 29
+  "....................12221.......", // 30
+  ".....................111........", // 31
+];
+
+// ---------- OFFSCREEN FRAME BUILDER ----------
+function buildFrame(rows){
+  const c = document.createElement('canvas');
+  c.width = 32; c.height = 32;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  for(let y=0;y<32;y++){
+    const row = rows[y] || '';
+    for(let x=0;x<32;x++){
+      const ch = row.charAt(x);
+      if(ch === '.' || ch === '' || ch === '0') continue;
+      const idx = parseInt(ch,10);
+      const col = PAL[idx];
+      if(!col) continue;
+      ctx.fillStyle = col;
+      ctx.fillRect(x,y,1,1);
+    }
+  }
+  return c;
+}
+
+const frames = {
+  idle:   buildFrame(IDLE),
+  blink:  buildFrame(BLINK),
+  happy:  buildFrame(HAPPY),
+  sleepy: buildFrame(SLEEPY),
+};
+
+// ---------- MAIN RENDER LOOP ----------
+const main = document.getElementById('spriteCanvas');
+const mctx = main.getContext('2d');
+mctx.imageSmoothingEnabled = false;
+
+const fx = document.getElementById('fxCanvas');
+const fxctx = fx.getContext('2d');
+function sizeFx(){ fx.width = innerWidth; fx.height = innerHeight; fxctx.imageSmoothingEnabled = false; }
+sizeFx(); addEventListener('resize', sizeFx);
+
+let state = 'idle';
+let stateUntil = 0;
+let nextBlinkAt = performance.now() + 3000 + Math.random()*2000;
+let nextHappyAt = performance.now() + 7000 + Math.random()*3000;
+let nextSleepyAt = performance.now() + 20000 + Math.random()*10000;
+
+// Facing nudge (arrow-right)
+let facingOffset = 0;
+let facingTarget = 0;
+
+function setState(s, durationMs){
+  state = s;
+  stateUntil = performance.now() + durationMs;
+}
+
+// Sparkles / hearts
+const sparkles = []; // {x,y,vx,vy,life,max,type}
+function spawnHeartBurst(cx, cy){
+  for(let i=0;i<8;i++){
+    const a = (i/8) * Math.PI * 2;
+    sparkles.push({
+      x:cx, y:cy,
+      vx:Math.cos(a)*1.6, vy:Math.sin(a)*1.6 - 0.3,
+      life:0, max:600, type:'heart'
+    });
+  }
+}
+function spawnAmberAt(cx,cy){
+  for(let i=0;i<3;i++){
+    sparkles.push({
+      x:cx + (Math.random()*10-5),
+      y:cy + (Math.random()*10-5),
+      vx:(Math.random()-0.5)*0.6,
+      vy:-Math.random()*0.8 - 0.2,
+      life:0, max:400, type:'amber'
+    });
+  }
+}
+
+// Heart shape in 5x5 grid (1 = filled pink)
+const HEART = [
+  [0,1,0,1,0],
+  [1,1,1,1,1],
+  [1,1,1,1,1],
+  [0,1,1,1,0],
+  [0,0,1,0,0],
+];
+
+function drawSparkle(s, dtFrac){
+  const px = 2;
+  const alpha = 1 - (s.life / s.max);
+  if(alpha <= 0) return;
+  fxctx.globalAlpha = alpha;
+  if(s.type === 'heart'){
+    fxctx.fillStyle = '#f2a088';
+    for(let y=0;y<5;y++) for(let x=0;x<5;x++){
+      if(HEART[y][x]) fxctx.fillRect(Math.round(s.x + (x-2)*px), Math.round(s.y + (y-2)*px), px, px);
+    }
+  } else {
+    fxctx.fillStyle = '#ffc74a';
+    fxctx.fillRect(Math.round(s.x), Math.round(s.y), 2, 2);
+    fxctx.fillRect(Math.round(s.x)-1, Math.round(s.y)+1, 2, 2);
+  }
+  fxctx.globalAlpha = 1;
+}
+
+let last = performance.now();
+function loop(now){
+  const dt = now - last; last = now;
+
+  // State machine
+  if(now > stateUntil){
+    state = 'idle';
+  }
+  if(state === 'idle'){
+    if(now >= nextSleepyAt){
+      setState('sleepy', 1200);
+      nextSleepyAt = now + 20000 + Math.random()*10000;
+      logEvent('Hippo-chan is consolidating memories. Zzz...');
+    } else if(now >= nextHappyAt){
+      setState('happy', 500);
+      nextHappyAt = now + 7000 + Math.random()*3000;
+      logEvent('Hippo-chan blinked. Hearts appear.');
+    } else if(now >= nextBlinkAt){
+      setState('blink', 120);
+      nextBlinkAt = now + 3000 + Math.random()*2000;
+    }
+  }
+
+  // Vertical bob
+  const bob = Math.sin(now/700) * 3;
+
+  // Facing ease
+  facingOffset += (facingTarget - facingOffset) * 0.15;
+  if(Math.abs(facingTarget) > 0.1 && Math.abs(facingOffset - facingTarget) < 0.3){
+    facingTarget = 0;
+  }
+
+  // Draw sprite
+  mctx.clearRect(0,0,main.width,main.height);
+  const frame = frames[state] || frames.idle;
+  // 32x32 -> 320x320, scale 10x
+  const dx = Math.round(facingOffset * 10);
+  const dy = Math.round(bob * 2);
+  mctx.drawImage(frame, 0, 0, 32, 32, dx, dy, 320, 320);
+
+  // Sparkles
+  fxctx.clearRect(0,0,fx.width,fx.height);
+  for(let i=sparkles.length-1;i>=0;i--){
+    const s = sparkles[i];
+    s.life += dt;
+    s.x += s.vx * (dt/16);
+    s.y += s.vy * (dt/16);
+    s.vy += 0.02 * (dt/16); // mild gravity
+    if(s.life >= s.max) sparkles.splice(i,1);
+    else drawSparkle(s);
+  }
+
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ---------- INTERACTION ----------
+function spriteRect(){
+  const r = main.getBoundingClientRect();
+  return r;
+}
+addEventListener('click', (e) => {
+  const r = spriteRect();
+  const onSprite = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+  if(onSprite){
+    setState('happy', 800);
+    spawnHeartBurst(r.left + r.width/2, r.top + r.height/2);
+    logEvent('You petted Hippo-chan. +love');
+  } else {
+    spawnAmberAt(e.clientX, e.clientY);
+  }
+});
+
+addEventListener('keydown', (e) => {
+  if(e.key === 'ArrowRight'){
+    facingTarget = 2;
+  } else if(e.key === 'ArrowLeft'){
+    facingTarget = -2;
+  }
+});
+
+// ---------- LOG TICKER ----------
+const logLine = document.getElementById('logLine');
+const logHistory = [
+  { t:'19:42:03', d:'Hippo-chan retrieved mem_023', v:'(+0.04)' },
+  { t:'19:42:12', d:'Hippo-chan blinked. Hearts appear.', v:'' },
+  { t:'19:42:30', d:'Hippo-chan is consolidating memories.', v:'Zzz...' },
+];
+let logIdx = 0;
+function renderLog(){
+  const e = logHistory[logIdx % logHistory.length];
+  logLine.innerHTML = `<span class="t">${e.t}</span>  ${e.d} <span class="d">${e.v}</span>`;
+}
+function logEvent(msg){
+  const d = new Date();
+  const t = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + ':' + String(d.getSeconds()).padStart(2,'0');
+  logHistory.push({ t, d: msg, v: '' });
+  if(logHistory.length > 24) logHistory.shift();
+  logIdx = logHistory.length - 1;
+  renderLog();
+}
+setInterval(()=>{ logIdx++; renderLog(); }, 4000);
+renderLog();
+
+// ---------- INITIAL FLAVOR ----------
+// Cycle status line subtly
+const statuses = ['HEALTHY','DREAMING','LISTENING','HEALTHY','CURIOUS'];
+let si = 0;
+setInterval(()=>{
+  si = (si+1) % statuses.length;
+  document.getElementById('statusLine').textContent = statuses[si];
+}, 6000);
+</script>
+</body>
+</html>

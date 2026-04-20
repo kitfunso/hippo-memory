@@ -12,6 +12,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { createMemory, Layer, MemoryEntry } from './memory.js';
+import { isContentWorthStoring } from './audit.js';
 import {
   isInitialized,
   writeEntry,
@@ -160,10 +161,10 @@ export function extractFromText(text: string): ExtractedItem[] {
 
   const addIfNew = (item: ExtractedItem): void => {
     const norm = item.content.toLowerCase().replace(/\s+/g, ' ').trim();
-    if (!seen.has(norm)) {
-      seen.add(norm);
-      items.push(item);
-    }
+    if (seen.has(norm)) return;
+    if (!isContentWorthStoring(item.content)) return;
+    seen.add(norm);
+    items.push(item);
   };
 
   // 1. Extract spec sections (bullet lists under spec headings)

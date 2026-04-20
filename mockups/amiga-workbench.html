@@ -1,0 +1,934 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Workbench 1.3 :: hippo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --wb-blue:   #0c5280;
+    --wb-orange: #d89030;
+    --wb-gray:   #aaaaaa;
+    --wb-black:  #000000;
+    --wb-white:  #ffffff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    width: 100%;
+    background: var(--wb-blue);
+    color: var(--wb-black);
+    font-family: 'VT323', monospace;
+    font-size: 16px;
+    overflow: hidden;
+    image-rendering: pixelated;
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: unset;
+    font-smooth: never;
+    text-rendering: geometricPrecision;
+  }
+  .pix { font-family: 'Press Start 2P', monospace; letter-spacing: 0; }
+
+  /* Dither patterns simulate shading with only 4 colors */
+  .dither-gray-white {
+    background-image:
+      repeating-linear-gradient(0deg, var(--wb-gray) 0 1px, var(--wb-white) 1px 2px);
+  }
+  .dither-blue-black {
+    background-image:
+      repeating-linear-gradient(0deg, var(--wb-blue) 0 1px, var(--wb-black) 1px 2px);
+  }
+  .dither-orange-black {
+    background-image:
+      repeating-linear-gradient(0deg, var(--wb-orange) 0 1px, var(--wb-black) 1px 2px);
+  }
+
+  /* ---------- Menu Bar ---------- */
+  .menubar {
+    position: fixed; top: 0; left: 0; right: 0;
+    height: 24px;
+    background: var(--wb-gray);
+    border-bottom: 2px solid var(--wb-black);
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    z-index: 1000;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    color: var(--wb-black);
+  }
+  .menubar .brand {
+    width: 22px; height: 16px;
+    margin-right: 10px;
+    background: var(--wb-black);
+    position: relative;
+    border: 2px solid var(--wb-black);
+  }
+  .menubar .brand::before {
+    content: ""; position: absolute;
+    top: 2px; left: 2px; right: 2px; bottom: 2px;
+    background:
+      linear-gradient(90deg, var(--wb-white) 33%, var(--wb-black) 33% 66%, var(--wb-orange) 66%);
+  }
+  .menubar .item {
+    padding: 4px 10px 4px 10px;
+    cursor: default;
+  }
+  .menubar .item:hover { background: var(--wb-black); color: var(--wb-white); }
+  .menubar .spacer { flex: 1; }
+  .menubar .clock {
+    padding: 4px 8px;
+    border-left: 2px solid var(--wb-black);
+  }
+
+  /* ---------- Desktop ---------- */
+  .desktop {
+    position: fixed;
+    top: 24px; left: 0; right: 0; bottom: 0;
+    overflow: hidden;
+  }
+
+  /* Desktop drawer icons (Ram Disk style) */
+  .desk-icon {
+    position: absolute;
+    width: 72px;
+    text-align: center;
+    cursor: pointer;
+    user-select: none;
+  }
+  .desk-icon .drawer {
+    width: 52px;
+    height: 36px;
+    margin: 0 auto;
+    background: var(--wb-white);
+    border: 2px solid var(--wb-black);
+    box-shadow:
+      2px 0 0 var(--wb-black),
+      0 2px 0 var(--wb-black),
+      4px 4px 0 rgba(0,0,0,0.5);
+    position: relative;
+  }
+  .desk-icon .drawer::before {
+    /* drawer tab */
+    content: "";
+    position: absolute;
+    top: -6px; left: 4px;
+    width: 22px; height: 6px;
+    background: var(--wb-white);
+    border: 2px solid var(--wb-black);
+    border-bottom: 0;
+  }
+  .desk-icon .drawer::after {
+    /* inner shading line */
+    content: "";
+    position: absolute;
+    top: 4px; left: 4px; right: 4px; bottom: 4px;
+    border-top: 2px solid var(--wb-gray);
+    border-left: 2px solid var(--wb-gray);
+  }
+  .desk-icon .label {
+    margin-top: 4px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    color: var(--wb-white);
+    background: var(--wb-blue);
+    padding: 2px 3px;
+    display: inline-block;
+    border: 1px solid var(--wb-blue);
+  }
+  .desk-icon.selected .drawer {
+    background: var(--wb-orange);
+  }
+  .desk-icon.selected .label {
+    background: var(--wb-white);
+    color: var(--wb-black);
+  }
+
+  /* ---------- Window ---------- */
+  .win {
+    position: absolute;
+    background: var(--wb-gray);
+    border: 2px solid var(--wb-black);
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.6);
+    display: flex;
+    flex-direction: column;
+  }
+  .win-title {
+    height: 20px;
+    background: var(--wb-orange);
+    border-bottom: 2px solid var(--wb-black);
+    color: var(--wb-white);
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    display: flex;
+    align-items: center;
+    padding: 0;
+    position: relative;
+    user-select: none;
+  }
+  .win-title .title-stripes {
+    /* horizontal Amiga title bar stripes, shown around the title */
+    flex: 1;
+    height: 100%;
+    background-image:
+      repeating-linear-gradient(
+        0deg,
+        var(--wb-white) 0 2px,
+        var(--wb-orange) 2px 4px
+      );
+    position: relative;
+  }
+  .win-title .title-label {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--wb-orange);
+    padding: 0 8px;
+    white-space: nowrap;
+  }
+  .gadget {
+    width: 22px;
+    height: 100%;
+    background: var(--wb-gray);
+    border-right: 2px solid var(--wb-black);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .gadget.right { border-right: 0; border-left: 2px solid var(--wb-black); }
+  .gadget .close-box {
+    width: 10px; height: 10px;
+    background: var(--wb-white);
+    border: 2px solid var(--wb-black);
+    position: relative;
+  }
+  .gadget .close-box::before {
+    content: "";
+    position: absolute; inset: 2px;
+    background: var(--wb-orange);
+  }
+  .gadget .zoom-box {
+    width: 12px; height: 10px;
+    background: var(--wb-white);
+    border: 2px solid var(--wb-black);
+    position: relative;
+  }
+  .gadget .zoom-box::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0;
+    width: 5px; height: 4px;
+    background: var(--wb-black);
+  }
+  .gadget .depth-box {
+    width: 12px; height: 10px;
+    background: var(--wb-white);
+    border: 2px solid var(--wb-black);
+    position: relative;
+  }
+  .gadget .depth-box::before {
+    content: "";
+    position: absolute;
+    top: 1px; left: 1px;
+    width: 5px; height: 4px;
+    background: var(--wb-black);
+  }
+  .gadget .depth-box::after {
+    content: "";
+    position: absolute;
+    bottom: 1px; right: 1px;
+    width: 5px; height: 4px;
+    background: var(--wb-orange);
+    border: 1px solid var(--wb-black);
+  }
+
+  .win-body {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    border-top: 2px solid var(--wb-white);
+    background: var(--wb-gray);
+  }
+  .win-content {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    position: relative;
+    border-right: 2px solid var(--wb-black);
+  }
+
+  /* ---------- Scrollbar ---------- */
+  .scrollbar {
+    width: 18px;
+    background: var(--wb-orange);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+  .scroll-arrow {
+    height: 18px;
+    background: var(--wb-gray);
+    border-top: 2px solid var(--wb-white);
+    border-left: 2px solid var(--wb-white);
+    border-right: 2px solid var(--wb-black);
+    border-bottom: 2px solid var(--wb-black);
+    position: relative;
+    cursor: pointer;
+  }
+  .scroll-arrow.down { border-top: 2px solid var(--wb-black); border-bottom: 2px solid var(--wb-white); }
+  .scroll-arrow::before {
+    content: "";
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 0; height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-bottom: 6px solid var(--wb-black);
+  }
+  .scroll-arrow.down::before {
+    border-bottom: 0;
+    border-top: 6px solid var(--wb-black);
+  }
+  .scroll-track {
+    flex: 1;
+    background-image:
+      repeating-linear-gradient(
+        45deg,
+        var(--wb-orange) 0 2px,
+        var(--wb-black) 2px 3px
+      );
+    position: relative;
+  }
+  .scroll-thumb {
+    position: absolute;
+    left: 2px; right: 2px;
+    background: var(--wb-gray);
+    border-top: 2px solid var(--wb-white);
+    border-left: 2px solid var(--wb-white);
+    border-right: 2px solid var(--wb-black);
+    border-bottom: 2px solid var(--wb-black);
+  }
+
+  .win-footer {
+    height: 14px;
+    border-top: 2px solid var(--wb-black);
+    background: var(--wb-orange);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+  .win-footer .resize {
+    width: 18px; height: 14px;
+    background: var(--wb-gray);
+    border-left: 2px solid var(--wb-black);
+    position: relative;
+  }
+  .win-footer .resize::before {
+    content: "";
+    position: absolute;
+    right: 2px; bottom: 2px;
+    width: 8px; height: 8px;
+    background-image:
+      repeating-linear-gradient(
+        135deg,
+        var(--wb-black) 0 1px,
+        var(--wb-gray) 1px 3px
+      );
+  }
+
+  /* ---------- Memory List (floppy grid) ---------- */
+  .mem-grid {
+    padding: 12px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 76px);
+    gap: 14px 10px;
+    overflow-y: auto;
+    height: 100%;
+    background: var(--wb-gray);
+    align-content: start;
+  }
+  .mem-grid::-webkit-scrollbar { display: none; }
+
+  .floppy {
+    width: 72px;
+    text-align: center;
+    cursor: pointer;
+    user-select: none;
+  }
+  .floppy .disk {
+    width: 40px;
+    height: 48px;
+    margin: 0 auto;
+    background: var(--wb-black);
+    border: 2px solid var(--wb-black);
+    position: relative;
+  }
+  /* metal shutter at top */
+  .floppy .disk::before {
+    content: "";
+    position: absolute;
+    top: 2px; left: 10px;
+    width: 16px; height: 12px;
+    background: var(--wb-gray);
+    border: 2px solid var(--wb-black);
+  }
+  /* label area at bottom of floppy face */
+  .floppy .disk .face {
+    position: absolute;
+    left: 2px; right: 2px;
+    bottom: 4px;
+    height: 18px;
+    background: var(--wb-white);
+    border: 2px solid var(--wb-black);
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    color: var(--wb-black);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .floppy .label {
+    margin-top: 4px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    color: var(--wb-black);
+    padding: 2px 2px;
+    background: transparent;
+    word-break: break-all;
+    line-height: 1.3;
+  }
+  .floppy.selected .disk { background: var(--wb-orange); }
+  .floppy.selected .disk::before { background: var(--wb-black); }
+  .floppy.selected .disk .face { background: var(--wb-orange); color: var(--wb-white); border-color: var(--wb-white); }
+  .floppy.selected .label { background: var(--wb-black); color: var(--wb-white); }
+
+  /* layer color tint (but still only 4 palette colors) */
+  .floppy[data-layer="buffer"] .disk    { background: var(--wb-black); }
+  .floppy[data-layer="episodic"] .disk  { background-image: repeating-linear-gradient(90deg, var(--wb-black) 0 2px, var(--wb-blue) 2px 3px); }
+  .floppy[data-layer="semantic"] .disk  { background-image: repeating-linear-gradient(90deg, var(--wb-black) 0 2px, var(--wb-gray) 2px 3px); }
+  .floppy.selected .disk { background-image: none !important; background: var(--wb-orange); }
+
+  /* ---------- Memory.info detail pane ---------- */
+  #info-window { display: none; }
+  .requester {
+    padding: 10px;
+    font-family: 'VT323', monospace;
+    font-size: 17px;
+    color: var(--wb-black);
+    height: 100%;
+    overflow-y: auto;
+    background: var(--wb-gray);
+  }
+  .requester::-webkit-scrollbar { display: none; }
+  .req-title {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    background: var(--wb-black);
+    color: var(--wb-white);
+    padding: 4px 6px;
+    margin-bottom: 8px;
+    border: 2px solid var(--wb-black);
+    letter-spacing: 0.5px;
+  }
+  .req-body {
+    background: var(--wb-white);
+    border: 2px solid var(--wb-black);
+    padding: 8px;
+    margin-bottom: 8px;
+    font-size: 18px;
+    line-height: 1.3;
+    min-height: 60px;
+  }
+  .req-stats {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 3px 10px;
+    margin-bottom: 8px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    line-height: 1.5;
+  }
+  .req-stats .k { color: var(--wb-black); }
+  .req-stats .v { color: var(--wb-white); background: var(--wb-black); padding: 1px 3px; margin-left: 4px; }
+  .req-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    margin-bottom: 10px;
+  }
+  .tag-pill {
+    background: var(--wb-black);
+    color: var(--wb-orange);
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    padding: 3px 5px;
+    border: 1px solid var(--wb-black);
+  }
+  .req-buttons {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    padding: 6px 0 2px 0;
+  }
+  .amiga-btn {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    padding: 6px 14px;
+    background: var(--wb-gray);
+    color: var(--wb-black);
+    border-top: 2px solid var(--wb-white);
+    border-left: 2px solid var(--wb-white);
+    border-right: 2px solid var(--wb-black);
+    border-bottom: 2px solid var(--wb-black);
+    cursor: pointer;
+    user-select: none;
+  }
+  .amiga-btn:active {
+    border-top: 2px solid var(--wb-black);
+    border-left: 2px solid var(--wb-black);
+    border-right: 2px solid var(--wb-white);
+    border-bottom: 2px solid var(--wb-white);
+  }
+
+  /* strength bar */
+  .str-bar {
+    display: inline-block;
+    width: 40px; height: 6px;
+    background: var(--wb-white);
+    border: 1px solid var(--wb-black);
+    vertical-align: middle;
+    margin-left: 2px;
+    position: relative;
+  }
+  .str-bar > span {
+    display: block;
+    height: 100%;
+    background: var(--wb-orange);
+  }
+
+  /* layer filter window body */
+  .filter-body {
+    padding: 10px;
+    height: 100%;
+    overflow-y: auto;
+    background: var(--wb-gray);
+    font-family: 'VT323', monospace;
+    font-size: 17px;
+  }
+  .filter-body::-webkit-scrollbar { display: none; }
+  .filter-body h4 {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    background: var(--wb-black);
+    color: var(--wb-white);
+    padding: 4px 6px;
+    margin-bottom: 6px;
+  }
+  .filter-row {
+    padding: 3px 6px;
+    border-bottom: 1px dashed var(--wb-black);
+    cursor: pointer;
+    line-height: 1.3;
+  }
+  .filter-row:hover { background: var(--wb-orange); color: var(--wb-white); }
+  .filter-row .mid {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+  }
+
+  /* helper: content list of floppies scrolls the area */
+  .scroll-host { position: absolute; inset: 0; }
+</style>
+</head>
+<body>
+
+<!-- ============== MENU BAR ============== -->
+<div class="menubar">
+  <div class="brand" title="Workbench"></div>
+  <div class="item">Workbench</div>
+  <div class="item">Project</div>
+  <div class="item">Memory</div>
+  <div class="item">Windows</div>
+  <div class="item">View</div>
+  <div class="spacer"></div>
+  <div class="clock" id="clock">17:42:03</div>
+</div>
+
+<!-- ============== DESKTOP ============== -->
+<div class="desktop" id="desktop">
+
+  <!-- Desk drawers -->
+  <div class="desk-icon" style="top: 12px; right: 20px;" data-layer="buffer">
+    <div class="drawer"></div>
+    <div class="label">BUFFER</div>
+  </div>
+  <div class="desk-icon" style="top: 80px; right: 20px;" data-layer="episodic">
+    <div class="drawer"></div>
+    <div class="label">EPISODIC</div>
+  </div>
+  <div class="desk-icon" style="top: 148px; right: 20px;" data-layer="semantic">
+    <div class="drawer"></div>
+    <div class="label">SEMANTIC</div>
+  </div>
+  <div class="desk-icon" style="top: 216px; right: 20px;" data-layer="conflicts">
+    <div class="drawer"></div>
+    <div class="label">CONFLICT</div>
+  </div>
+  <div class="desk-icon" style="top: 284px; right: 20px;" data-layer="ram">
+    <div class="drawer"></div>
+    <div class="label">Ram Disk</div>
+  </div>
+
+  <!-- ============== MAIN WINDOW ============== -->
+  <div class="win" id="main-window" style="top: 40px; left: 30px; width: 560px; height: 500px;">
+    <div class="win-title">
+      <div class="gadget" onclick="hideWindow('main-window')" title="Close">
+        <div class="close-box"></div>
+      </div>
+      <div class="title-stripes">
+        <div class="title-label pix" id="main-title">hippo : Memory List</div>
+      </div>
+      <div class="gadget right"><div class="depth-box"></div></div>
+      <div class="gadget right"><div class="zoom-box"></div></div>
+    </div>
+    <div class="win-body">
+      <div class="win-content">
+        <div class="scroll-host">
+          <div class="mem-grid" id="mem-grid"></div>
+        </div>
+      </div>
+      <div class="scrollbar">
+        <div class="scroll-arrow" onclick="scrollGrid(-60)"></div>
+        <div class="scroll-track"><div class="scroll-thumb" id="scroll-thumb" style="top: 4px; height: 60px;"></div></div>
+        <div class="scroll-arrow down" onclick="scrollGrid(60)"></div>
+      </div>
+    </div>
+    <div class="win-footer"><div class="resize"></div></div>
+  </div>
+
+  <!-- ============== DETAIL / INFO WINDOW ============== -->
+  <div class="win" id="info-window" style="top: 80px; left: 620px; width: 360px; height: 400px;">
+    <div class="win-title">
+      <div class="gadget" onclick="hideWindow('info-window')" title="Close">
+        <div class="close-box"></div>
+      </div>
+      <div class="title-stripes">
+        <div class="title-label pix" id="info-title">Memory.info</div>
+      </div>
+      <div class="gadget right"><div class="depth-box"></div></div>
+      <div class="gadget right"><div class="zoom-box"></div></div>
+    </div>
+    <div class="win-body">
+      <div class="win-content">
+        <div class="requester" id="info-body">
+          <div class="req-title">SELECT A DISK</div>
+          <div class="req-body">Click a floppy in the Memory List window, then click again (or press Enter) to open its info requester.</div>
+          <div class="req-buttons">
+            <button class="amiga-btn" onclick="hideWindow('info-window')">[ OK ]</button>
+          </div>
+        </div>
+      </div>
+      <div class="scrollbar">
+        <div class="scroll-arrow"></div>
+        <div class="scroll-track"><div class="scroll-thumb" style="top: 4px; height: 40px;"></div></div>
+        <div class="scroll-arrow down"></div>
+      </div>
+    </div>
+    <div class="win-footer"><div class="resize"></div></div>
+  </div>
+
+  <!-- ============== LAYER FILTER WINDOW ============== -->
+  <div class="win" id="filter-window" style="top: 430px; left: 620px; width: 320px; height: 220px; display: none;">
+    <div class="win-title">
+      <div class="gadget" onclick="hideWindow('filter-window')">
+        <div class="close-box"></div>
+      </div>
+      <div class="title-stripes">
+        <div class="title-label pix" id="filter-title">Layer</div>
+      </div>
+      <div class="gadget right"><div class="depth-box"></div></div>
+      <div class="gadget right"><div class="zoom-box"></div></div>
+    </div>
+    <div class="win-body">
+      <div class="win-content">
+        <div class="filter-body" id="filter-body"></div>
+      </div>
+      <div class="scrollbar">
+        <div class="scroll-arrow"></div>
+        <div class="scroll-track"><div class="scroll-thumb" style="top: 4px; height: 30px;"></div></div>
+        <div class="scroll-arrow down"></div>
+      </div>
+    </div>
+    <div class="win-footer"><div class="resize"></div></div>
+  </div>
+
+</div>
+
+<script>
+// ============== DATA ==============
+const memoriesData = [
+  { text: "Gold model uses TIPS 10y as primary inflation signal", layer: 'buffer', tags: ['gold','tips','inflation','signals'], confidence: 'verified' },
+  { text: "Supabase sync overwrites all signal data from local files", layer: 'buffer', tags: ['supabase','sync','safety'], confidence: 'verified' },
+  { text: "RTX 5080 confirmed working with PyTorch 2.10", layer: 'buffer', tags: ['gpu','pytorch','hardware'], confidence: 'verified' },
+  { text: "Pre-commit hooks can revert file edits silently", layer: 'buffer', tags: ['git','hooks','gotcha'], confidence: 'observed' },
+  { text: "Hippo memory uses hippocampal consolidation model", layer: 'buffer', tags: ['hippo','consolidation','theory'], confidence: 'observed' },
+  { text: "Weekly pipeline runs 42 models in parallel", layer: 'buffer', tags: ['pipeline','parallel','weekly'], confidence: 'verified' },
+  { text: "Never force push to main branch", layer: 'episodic', tags: ['git','safety'], confidence: 'verified' },
+  { text: "ProcessPoolExecutor default 8 workers for pipeline", layer: 'episodic', tags: ['pipeline','parallel','python'], confidence: 'verified' },
+  { text: "Strength decays with biological half-life curve", layer: 'episodic', tags: ['hippo','decay','theory'], confidence: 'verified' },
+  { text: "Memory retrieval reinforces strength", layer: 'episodic', tags: ['hippo','retrieval','theory'], confidence: 'verified' },
+  { text: "Buffer memories consolidate to episodic after sleep", layer: 'episodic', tags: ['hippo','consolidation','buffer','episodic'], confidence: 'verified' },
+  { text: "Episodic memories generalize into semantic over time", layer: 'episodic', tags: ['hippo','consolidation','episodic','semantic'], confidence: 'verified' },
+  { text: "Power models have known validation issues", layer: 'episodic', tags: ['power','validation','issues'], confidence: 'observed' },
+  { text: "Use safe_sync.py instead of direct Supabase sync", layer: 'episodic', tags: ['supabase','sync','safety'], confidence: 'verified' },
+  { text: "Signal prices use actual front-month not adjusted", layer: 'episodic', tags: ['prices','signals','futures'], confidence: 'verified' },
+  { text: "All futures models must use futures_pnl.py", layer: 'episodic', tags: ['futures','pnl','standard'], confidence: 'verified' },
+  { text: "VAR limit is 100k for all commodities", layer: 'episodic', tags: ['var','sizing','futures'], confidence: 'verified' },
+  { text: "No vol upper clip in position sizing", layer: 'episodic', tags: ['vol','sizing','futures'], confidence: 'verified' },
+  { text: "GPU gives 40x speedup on matrix operations", layer: 'episodic', tags: ['gpu','performance','pytorch'], confidence: 'observed' },
+  { text: "Playwright smoke tests cover 15 scenarios", layer: 'episodic', tags: ['playwright','tests','frontend'], confidence: 'verified' },
+  { text: "GitHub Actions deploys from master automatically", layer: 'episodic', tags: ['deploy','github','ci'], confidence: 'verified' },
+  { text: "Content hash caching uses SHA-256 for file ops", layer: 'episodic', tags: ['cache','hash','files'], confidence: 'observed' },
+  { text: "Nightly validation runs at 7AM UTC", layer: 'episodic', tags: ['validation','schedule','ci'], confidence: 'verified' },
+  { text: "Semantic layer stores generalized knowledge", layer: 'episodic', tags: ['hippo','semantic','theory'], confidence: 'verified' },
+  { text: "Buffer is short-term working memory", layer: 'semantic', tags: ['hippo','buffer','theory'], confidence: 'verified' },
+  { text: "Episodic captures specific events and contexts", layer: 'semantic', tags: ['hippo','episodic','theory'], confidence: 'verified' },
+  { text: "Memory as physics models decay and interference", layer: 'semantic', tags: ['hippo','physics','theory'], confidence: 'inferred' },
+  { text: "Phase transitions in memory consolidation", layer: 'semantic', tags: ['hippo','consolidation','theory'], confidence: 'inferred' },
+  { text: "Claude Code hooks configured in settings.json", layer: 'semantic', tags: ['claude','hooks','config'], confidence: 'verified' },
+  { text: "Compaction triggers at 50 percent context usage", layer: 'semantic', tags: ['claude','compaction','context'], confidence: 'verified' },
+  { text: "Roll adjustments needed when contracts change", layer: 'semantic', tags: ['futures','roll','prices'], confidence: 'verified' },
+  { text: "Lot sizing uses raw prices not backward-adjusted", layer: 'semantic', tags: ['sizing','prices','futures'], confidence: 'verified' },
+  { text: "Minimum 1 lot when signal is active", layer: 'semantic', tags: ['sizing','futures','signals'], confidence: 'verified' },
+  { text: "Vol floor 0.01 prevents division by zero", layer: 'semantic', tags: ['vol','sizing','safety'], confidence: 'verified' },
+  { text: "Scaled signal equals raw signal always", layer: 'semantic', tags: ['sizing','signals','standard'], confidence: 'verified' },
+  { text: "MCP server connected for Supabase queries", layer: 'semantic', tags: ['mcp','supabase','config'], confidence: 'verified' },
+  { text: "Faster whisper uses GPU float16 for transcription", layer: 'semantic', tags: ['whisper','gpu','transcription'], confidence: 'observed' },
+  { text: "Confidence 0.95 for all position sizing", layer: 'semantic', tags: ['sizing','futures','standard'], confidence: 'verified' },
+];
+
+// enrich with stats
+function rng(seed){ let s=seed; return ()=>{ s=(s*1103515245+12345)&0x7fffffff; return s/0x7fffffff; }; }
+const r = rng(42);
+const NOW = Date.now();
+const DAY = 86400000;
+
+const memories = memoriesData.map((d,i)=>{
+  const age = +(r()*30).toFixed(1);
+  const base = d.layer==='buffer'?0.85:d.layer==='episodic'?0.6:0.4;
+  const strength = Math.max(0.05, Math.min(0.99, +(base + (r()-0.5)*0.3).toFixed(2)));
+  const half = d.layer==='buffer'?3:d.layer==='episodic'?14:90;
+  const retrievals = Math.floor(r()*12);
+  const layerAbbr = d.layer==='buffer'?'BU':d.layer==='episodic'?'EP':'SE';
+  const mem_id = 'HIP.'+layerAbbr+'.'+String(i+1).padStart(3,'0');
+  return {
+    id:i,
+    mem_id,
+    layerAbbr,
+    ...d,
+    age_days:age,
+    strength,
+    half_life_days:half,
+    retrieval_count:retrievals,
+  };
+});
+
+// ============== STATE ==============
+let state = {
+  selectedId: null,
+  lastClickId: null,
+  lastClickTime: 0,
+};
+
+// ============== RENDER: MEMORY GRID ==============
+function renderGrid(){
+  const grid = document.getElementById('mem-grid');
+  grid.innerHTML = '';
+  memories.forEach(m => {
+    const f = document.createElement('div');
+    f.className = 'floppy' + (m.id === state.selectedId ? ' selected' : '');
+    f.dataset.layer = m.layer;
+    f.dataset.id = m.id;
+    f.innerHTML = `
+      <div class="disk"><div class="face">${m.layerAbbr}</div></div>
+      <div class="label">${m.mem_id}</div>
+    `;
+    f.addEventListener('click', ()=> onFloppyClick(m.id));
+    grid.appendChild(f);
+  });
+}
+
+function onFloppyClick(id){
+  const now = Date.now();
+  const isDouble = (state.lastClickId === id) && (now - state.lastClickTime < 400);
+  state.lastClickId = id;
+  state.lastClickTime = now;
+
+  if (state.selectedId === id || isDouble) {
+    // already selected or double-click => open info
+    state.selectedId = id;
+    openInfo(id);
+  } else {
+    state.selectedId = id;
+  }
+  renderGrid();
+}
+
+// ============== RENDER: MEMORY.INFO ==============
+function openInfo(id){
+  const m = memories.find(x=>x.id===id);
+  if (!m) return;
+  document.getElementById('info-window').style.display = 'flex';
+  document.getElementById('info-title').textContent = m.mem_id + '.info';
+
+  const strPct = Math.round(m.strength*100);
+  const decay = Math.exp(-m.age_days/m.half_life_days).toFixed(3);
+
+  const tagsHtml = m.tags.map(t=>`<span class="tag-pill">#${t.toUpperCase()}</span>`).join('');
+
+  const body = `
+    <div class="req-title">${m.mem_id}</div>
+    <div class="req-body">${m.text}</div>
+    <div class="req-stats">
+      <div><span class="k">STR</span><span class="v">${m.strength.toFixed(2)}</span>
+        <span class="str-bar"><span style="width:${strPct}%"></span></span>
+      </div>
+      <div><span class="k">HALF</span><span class="v">${m.half_life_days}D</span></div>
+      <div><span class="k">RETR</span><span class="v">${m.retrieval_count}</span></div>
+      <div><span class="k">AGE</span><span class="v">${m.age_days}D</span></div>
+      <div><span class="k">CONF</span><span class="v">${m.confidence.slice(0,4).toUpperCase()}</span></div>
+      <div><span class="k">DECAY</span><span class="v">${decay}</span></div>
+    </div>
+    <div class="req-tags">${tagsHtml}</div>
+    <div class="req-buttons">
+      <button class="amiga-btn" onclick="hideWindow('info-window')">[ OK ]</button>
+      <button class="amiga-btn" onclick="moreInfo(${m.id})">[ More... ]</button>
+    </div>
+  `;
+  document.getElementById('info-body').innerHTML = body;
+}
+
+function moreInfo(id){
+  const m = memories.find(x=>x.id===id);
+  alert(`${m.mem_id}\nLAYER: ${m.layer.toUpperCase()}\nCONFIDENCE: ${m.confidence}\nSTRENGTH: ${m.strength}\nAGE: ${m.age_days}d\nTAGS: ${m.tags.join(', ')}`);
+}
+
+function hideWindow(id){
+  document.getElementById(id).style.display = 'none';
+}
+
+// ============== LAYER FILTER (drawer open) ==============
+function openLayer(layerKey){
+  const win = document.getElementById('filter-window');
+  win.style.display = 'flex';
+  const titleMap = {
+    buffer: 'Buffer (short term)',
+    episodic: 'Episodic (events)',
+    semantic: 'Semantic (knowledge)',
+    conflicts: 'Conflicts',
+    ram: 'Ram Disk',
+  };
+  document.getElementById('filter-title').textContent = titleMap[layerKey] || layerKey;
+
+  let rows = [];
+  if (layerKey === 'conflicts') {
+    rows = [{mem_id:'(no conflicts)', text:'All memories consistent.', strength:0}];
+  } else if (layerKey === 'ram') {
+    rows = [
+      {mem_id:'HIP.SYS.001', text:'workbench.drawer', strength:0.99},
+      {mem_id:'HIP.SYS.002', text:'consolidator.task', strength:0.90},
+      {mem_id:'HIP.SYS.003', text:'decay.scheduler', strength:0.85},
+    ];
+  } else {
+    rows = memories.filter(m=>m.layer===layerKey);
+  }
+
+  const html = [`<h4>${(titleMap[layerKey]||layerKey).toUpperCase()} -- ${rows.length} DISKS</h4>`];
+  rows.forEach(m => {
+    const strBar = m.strength ? `${(m.strength*100).toFixed(0)}%` : '---';
+    html.push(`
+      <div class="filter-row" ${m.id!==undefined?`onclick="selectFromFilter(${m.id})"`:''}>
+        <span class="mid">${m.mem_id}</span>
+        <span>STR ${strBar}</span> ::
+        ${m.text}
+      </div>
+    `);
+  });
+  document.getElementById('filter-body').innerHTML = html.join('');
+}
+
+function selectFromFilter(id){
+  state.selectedId = id;
+  renderGrid();
+  openInfo(id);
+  // scroll to
+  const el = document.querySelector(`.floppy[data-id="${id}"]`);
+  if (el) el.scrollIntoView({block:'nearest'});
+}
+
+// ============== DESKTOP DRAWER CLICKS ==============
+document.querySelectorAll('.desk-icon').forEach(ic => {
+  ic.addEventListener('click', ()=>{
+    document.querySelectorAll('.desk-icon').forEach(x=>x.classList.remove('selected'));
+    ic.classList.add('selected');
+  });
+  ic.addEventListener('dblclick', ()=>{
+    openLayer(ic.dataset.layer);
+  });
+  // single click also opens (simpler UX, still authentic enough)
+  ic.addEventListener('click', ()=>{
+    setTimeout(()=> openLayer(ic.dataset.layer), 50);
+  });
+});
+
+// ============== SCROLLBAR ==============
+function scrollGrid(delta){
+  const grid = document.getElementById('mem-grid');
+  grid.scrollTop += delta;
+  updateThumb();
+}
+function updateThumb(){
+  const grid = document.getElementById('mem-grid');
+  const thumb = document.getElementById('scroll-thumb');
+  const track = thumb.parentElement;
+  const maxScroll = grid.scrollHeight - grid.clientHeight;
+  if (maxScroll <= 0) { thumb.style.top='4px'; thumb.style.height='90%'; return; }
+  const trackH = track.clientHeight;
+  const visibleRatio = grid.clientHeight / grid.scrollHeight;
+  const thumbH = Math.max(24, trackH * visibleRatio);
+  const pos = (grid.scrollTop / maxScroll) * (trackH - thumbH);
+  thumb.style.height = thumbH + 'px';
+  thumb.style.top = pos + 'px';
+}
+document.getElementById('mem-grid').addEventListener('scroll', updateThumb);
+
+// ============== CLOCK ==============
+function tick(){
+  const d = new Date();
+  const hh = String(d.getHours()).padStart(2,'0');
+  const mm = String(d.getMinutes()).padStart(2,'0');
+  const ss = String(d.getSeconds()).padStart(2,'0');
+  document.getElementById('clock').textContent = `${hh}:${mm}:${ss}`;
+}
+setInterval(tick, 1000);
+
+// ============== KEYBOARD ==============
+document.addEventListener('keydown', (e)=>{
+  if (e.key === 'Enter' && state.selectedId !== null) {
+    openInfo(state.selectedId);
+  }
+});
+
+// ============== INIT ==============
+renderGrid();
+setTimeout(updateThumb, 100);
+tick();
+</script>
+</body>
+</html>

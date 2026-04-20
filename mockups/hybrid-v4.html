@@ -1,0 +1,2167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hippo Brain Observatory</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root {
+    --bg: #f4efe6; --map-bg: #faf7f2; --text: #3a3228; --accent: #c45c3c;
+    --buffer: #7c6caf; --episodic: #4a8ca3; --semantic: #5a8f6b;
+    --dim: #9b8e7e; --border: #c4b9a8; --tag-bg: #f0ebe0;
+    --serif: Georgia, "Palatino Linotype", serif;
+    --mono: "Consolas", "Monaco", monospace;
+  }
+  html { font-size: 14px; }
+  body {
+    font-family: var(--serif); color: var(--text); background: var(--bg);
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(180,170,150,0.015) 2px, rgba(180,170,150,0.015) 3px),
+      repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(180,170,150,0.015) 2px, rgba(180,170,150,0.015) 3px);
+    min-height: 100vh; -webkit-font-smoothing: antialiased; overflow: hidden;
+  }
+  .header {
+    display: grid; grid-template-columns: auto 1fr auto;
+    gap: 24px; align-items: center;
+    padding: 12px 32px; border-bottom: 1px solid var(--border);
+    max-width: 1400px; margin: 0 auto;
+  }
+  .header-left { display: flex; align-items: baseline; gap: 10px; }
+  .header-logo { font-weight: bold; font-size: 20px; letter-spacing: 0.5px; }
+  .header-subtitle { font-style: italic; font-size: 13px; color: var(--dim); }
+  .header-center { justify-self: center; width: 100%; max-width: 320px; }
+  .search-input {
+    width: 100%; font: 13px var(--serif); background: var(--map-bg);
+    border: 1px solid var(--border); padding: 7px 12px; border-radius: 3px;
+    color: var(--text); transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .search-input:focus {
+    outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(196,92,60,0.08);
+  }
+  .header-right { display: flex; align-items: center; gap: 14px; justify-self: end; }
+  .header-stats { font-family: var(--mono); font-size: 11px; color: var(--dim); }
+  .freeze-toggle {
+    font: 10px var(--mono); letter-spacing: 0.8px; text-transform: uppercase;
+    background: transparent; border: 1px solid var(--border);
+    padding: 5px 12px; border-radius: 3px; color: var(--dim); cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+  }
+  .freeze-toggle:hover { color: var(--text); border-color: var(--dim); }
+  .freeze-toggle.active { color: var(--accent); border-color: var(--accent); background: rgba(196,92,60,0.05); }
+
+  .main { display: flex; max-width: 1400px; margin: 0 auto; height: calc(100vh - 95px); }
+  .map-area { flex: 1; padding: 24px; min-width: 0; position: relative; }
+  .map-container {
+    position: relative; border: 1px solid var(--border); border-radius: 2px;
+    height: 100%; overflow: hidden; cursor: grab;
+  }
+  .map-container:active { cursor: grabbing; }
+  .map-container canvas { display: block; }
+  .map-hint {
+    position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+    font: 11px var(--mono); color: var(--dim); opacity: 0.5; pointer-events: none; letter-spacing: 2px;
+  }
+  .node-label {
+    position: absolute; font: 600 11px var(--serif); color: #2a2218;
+    background: rgba(244, 239, 230, 0.92); padding: 2px 8px; border-radius: 3px;
+    pointer-events: none; white-space: nowrap; transform: translate(14px, -50%);
+    border: 1px solid rgba(196, 185, 168, 0.5); box-shadow: 0 1px 3px rgba(58,50,40,0.08);
+    letter-spacing: 0.2px; transition: opacity 0.2s ease, background 0.15s, border-color 0.15s;
+  }
+  .node-label.selected {
+    background: rgba(196, 92, 60, 0.12); border-color: var(--accent);
+    color: var(--accent); font-weight: 700; box-shadow: 0 1px 6px rgba(196,92,60,0.15);
+  }
+  .node-label.hovered {
+    background: rgba(255, 255, 255, 0.96); border-color: rgba(58, 50, 40, 0.3);
+    box-shadow: 0 2px 8px rgba(58,50,40,0.12);
+  }
+  .map-tooltip {
+    position: absolute; pointer-events: none; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 2px; padding: 6px 10px;
+    font-size: 12px; max-width: 240px; line-height: 1.5;
+    box-shadow: 0 1px 4px rgba(139,125,107,0.1); opacity: 0;
+    transition: opacity 0.15s; z-index: 10;
+  }
+  .map-tooltip.visible { opacity: 1; }
+  .map-tooltip .tt-layer { font-size: 10px; font-variant: small-caps; letter-spacing: 0.8px; margin-bottom: 2px; }
+
+  .sidebar {
+    width: 340px; flex-shrink: 0; border-left: 1px solid var(--border);
+    padding: 20px; overflow-y: auto;
+  }
+  .panel { margin-bottom: 20px; }
+  .panel-title {
+    font-size: 12px; font-variant: small-caps; letter-spacing: 1px;
+    font-weight: normal; color: var(--dim); margin-bottom: 10px;
+    padding-bottom: 6px; border-bottom: 1px solid var(--border);
+  }
+  .stats-headline { display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px; }
+  .stats-headline-num { font-family: var(--mono); font-size: 28px; color: var(--text); }
+  .stats-headline-label { font-size: 11px; font-variant: small-caps; letter-spacing: 0.6px; color: var(--dim); }
+  .stats-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .stat-row { display: grid; grid-template-columns: 68px 1fr 28px; align-items: center; gap: 10px; font-size: 11px; }
+  .stat-row-label { font-variant: small-caps; letter-spacing: 0.5px; color: var(--text); }
+  .stat-row-bar-wrap { height: 6px; background: rgba(196,185,168,0.25); border-radius: 2px; overflow: hidden; }
+  .stat-row-bar { height: 100%; border-radius: 2px; transition: width 0.3s; }
+  .stat-row-count { font-family: var(--mono); font-size: 11px; color: var(--dim); text-align: right; }
+  .stats-footer { font-size: 11px; color: var(--dim); font-family: var(--mono); letter-spacing: 0.3px; }
+  .stats-at-risk { color: var(--accent); font-weight: 600; }
+
+  .filter-group { margin-bottom: 12px; }
+  .filter-label { font-size: 11px; font-variant: small-caps; letter-spacing: 0.5px; color: var(--dim); margin-bottom: 5px; display: flex; justify-content: space-between; align-items: baseline; }
+  .filter-value { font-family: var(--mono); font-size: 11px; color: var(--text); letter-spacing: 0; }
+  .chk-row { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+  .chk { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; cursor: pointer; user-select: none; }
+  .chk input { cursor: pointer; accent-color: var(--accent); }
+  .chk-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .range { width: 100%; accent-color: var(--accent); }
+
+  .drawer-toggle {
+    padding: 8px 12px; background: var(--tag-bg); border: 1px solid var(--border);
+    border-radius: 3px; cursor: pointer; display: flex;
+    justify-content: space-between; align-items: center;
+    font-size: 12px; color: var(--dim); transition: color 0.15s; margin-bottom: 14px;
+  }
+  .drawer-toggle:hover { color: var(--text); }
+  .drawer-toggle span:first-child { font-family: var(--mono); font-size: 11px; }
+  .drawer-toggle-action { font-size: 9px; font-family: var(--mono); letter-spacing: 0.5px; }
+
+  .hover-preview {
+    margin-bottom: 14px; padding: 10px 12px;
+    background: rgba(250,247,242,0.8); border: 1px solid var(--border); border-radius: 3px;
+  }
+  .hp-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .hp-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .hp-layer { font-size: 11px; font-variant: small-caps; letter-spacing: 0.5px; }
+  .hp-meta { font-family: var(--mono); font-size: 10px; color: var(--dim); margin-left: auto; }
+  .hp-text { font-size: 13px; line-height: 1.5; color: var(--text); }
+  .hp-foot { margin-top: 6px; font-family: var(--mono); font-size: 10px; color: var(--dim); }
+
+  .sidebar-section-title {
+    font-size: 12px; font-variant: small-caps; letter-spacing: 1px;
+    font-weight: normal; color: var(--dim); padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); margin-bottom: 12px;
+  }
+  .sidebar-empty { color: var(--dim); font-style: italic; font-size: 13px; }
+  .selected-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .badge { display: inline-block; font-size: 11px; padding: 2px 10px; border-radius: 3px; }
+  .badge-layer { color: #fff; }
+  .badge-layer.buffer { background: var(--buffer); }
+  .badge-layer.episodic { background: var(--episodic); }
+  .badge-layer.semantic { background: var(--semantic); }
+  .badge-project { color: var(--accent); border: 1px solid var(--accent); background: transparent; }
+  .badge-conf { border: 1px solid var(--border); background: var(--tag-bg); color: var(--dim); font-variant: small-caps; letter-spacing: 0.4px; }
+  .badge-conf.verified { color: var(--semantic); border-color: var(--semantic); background: rgba(90,143,107,0.08); }
+  .badge-conf.observed { color: var(--episodic); border-color: var(--episodic); background: rgba(74,140,163,0.08); }
+  .badge-conf.inferred { color: var(--accent); border-color: var(--accent); background: rgba(196,92,60,0.08); }
+
+  .memory-content { font-size: 14px; line-height: 1.7; border-left: 3px solid var(--accent); padding-left: 14px; margin: 8px 0 14px; }
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; margin-bottom: 14px; }
+  .stat-label { font-variant: small-caps; font-size: 11px; letter-spacing: 0.6px; color: var(--dim); margin-bottom: 3px; }
+  .stat-value { font-family: var(--mono); font-size: 13px; display: flex; align-items: center; gap: 6px; }
+  .stat-bar { display: inline-block; height: 4px; border-radius: 2px; background: var(--accent); }
+  .tags-section { margin-bottom: 14px; }
+  .tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+  .tag { font-size: 11px; padding: 2px 9px; border: 1px solid var(--border); border-radius: 2px; background: var(--tag-bg); color: var(--text); }
+  .decay-section { margin-bottom: 8px; }
+  .decay-label { font-variant: small-caps; font-size: 11px; letter-spacing: 0.6px; color: var(--dim); margin-bottom: 5px; }
+  .decay-canvas-wrap { width: 100%; height: 55px; background: var(--map-bg); border: 1px solid var(--border); border-radius: 2px; }
+  .decay-canvas-wrap canvas { display: block; width: 100%; height: 100%; }
+  .decay-axis { display: flex; justify-content: space-between; margin-top: 3px; }
+  .decay-axis span { font-family: var(--mono); font-size: 10px; color: var(--dim); }
+
+  .bottom-bar {
+    border-top: 1px solid var(--border); max-width: 1400px; margin: 0 auto;
+    padding: 10px 32px; display: flex; align-items: center; justify-content: space-between;
+    font-size: 12px; color: var(--dim);
+  }
+  .legend-group { display: flex; align-items: center; gap: 14px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .legend-dot.buffer { background: var(--buffer); }
+  .legend-dot.episodic { background: var(--episodic); }
+  .legend-dot.semantic { background: var(--semantic); }
+  .bottom-note { font-style: italic; }
+  .bottom-shortcuts { font-family: var(--mono); font-size: 11px; color: var(--dim); letter-spacing: 0.3px; }
+  .bottom-shortcuts kbd { font-family: var(--mono); background: var(--tag-bg); border: 1px solid var(--border); border-radius: 2px; padding: 1px 5px; font-size: 10px; color: var(--text); margin: 0 2px; }
+
+  .memory-drawer {
+    position: fixed; bottom: 0; left: 0; right: 0; height: 280px;
+    background: var(--bg); border-top: 1px solid var(--border); z-index: 15;
+    transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex; flex-direction: column;
+  }
+  .memory-drawer.open { transform: translateY(0); }
+  .drawer-header {
+    display: grid; grid-template-columns: 36px 1fr 90px 56px 48px 80px;
+    align-items: center; padding: 8px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .drawer-header div { font: small-caps 10px var(--serif); letter-spacing: 0.6px; color: var(--dim); cursor: pointer; user-select: none; }
+  .drawer-header div:hover { color: var(--text); }
+  .drawer-header .sort-active { color: var(--accent); }
+  .drawer-body { overflow-y: auto; flex: 1; }
+  .drawer-row {
+    display: grid; grid-template-columns: 36px 1fr 90px 56px 48px 80px;
+    align-items: center; padding: 7px 20px; cursor: pointer;
+    border-left: 2px solid transparent; transition: background 0.1s;
+  }
+  .drawer-row:hover { background: rgba(196, 185, 168, 0.12); }
+  .drawer-row.selected { background: rgba(196, 92, 60, 0.06); border-left-color: var(--accent); }
+  .drawer-dot { width: 7px; height: 7px; border-radius: 50%; }
+  .drawer-content { font: 12px var(--serif); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 10px; }
+  .drawer-val { font: 12px var(--mono); }
+  .drawer-str-wrap { display: flex; align-items: center; gap: 5px; }
+  .drawer-str-bar { height: 3px; border-radius: 2px; flex: 1; background: rgba(196,185,168,0.2); overflow: hidden; }
+  .drawer-str-fill { height: 100%; border-radius: 2px; }
+  .drawer-conf { font: 10px var(--serif); padding: 2px 7px; border-radius: 2px; font-variant: small-caps; letter-spacing: 0.4px; }
+  .drawer-conf.verified { background: rgba(90,143,107,0.12); color: var(--semantic); }
+  .drawer-conf.observed { background: rgba(74,140,163,0.12); color: var(--episodic); }
+  .drawer-conf.inferred { background: rgba(196,92,60,0.12); color: var(--accent); }
+  .drawer-empty { padding: 40px 20px; text-align: center; color: var(--dim); font-style: italic; font-size: 13px; }
+  .drawer-empty-action {
+    display: inline-block; margin-top: 10px;
+    font: 11px var(--serif); color: var(--accent); cursor: pointer;
+    background: transparent; border: 1px solid var(--accent);
+    padding: 4px 12px; border-radius: 3px;
+  }
+  .drawer-empty-action:hover { background: rgba(196,92,60,0.08); }
+
+  /* ===== Focus rings ===== */
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+  .drawer-row:focus-visible { outline-offset: -2px; }
+  button:focus-visible, input:focus-visible { outline-offset: 2px; }
+
+  /* ===== Layer shape glyphs ===== */
+  .layer-glyph { display: inline-block; margin-right: 4px; font-size: 10px; line-height: 1; vertical-align: baseline; }
+  .legend-shape { display: inline-block; font-size: 9px; margin-right: 2px; }
+
+  /* ===== Minimap ===== */
+  .minimap {
+    position: absolute; top: 12px; right: 12px; width: 160px; height: 160px;
+    background: rgba(250,247,242,0.85); border: 1px solid var(--border);
+    border-radius: 3px; box-shadow: 0 2px 8px rgba(58,50,40,0.08);
+    cursor: pointer; z-index: 5; overflow: hidden;
+  }
+  .minimap canvas { display: block; width: 100%; height: 100%; }
+  .minimap-label {
+    position: absolute; top: 4px; left: 7px; font: 9px var(--mono); letter-spacing: 0.7px;
+    color: var(--dim); text-transform: uppercase; pointer-events: none; z-index: 2;
+  }
+
+  /* ===== Timeline scrubber ===== */
+  .timeline-strip {
+    max-width: 1400px; margin: 0 auto;
+    padding: 8px 32px; border-bottom: 1px solid var(--border);
+    display: grid; grid-template-columns: 88px 1fr 120px; align-items: center; gap: 14px;
+    background: var(--bg);
+  }
+  .timeline-title { font-size: 10px; font-variant: small-caps; letter-spacing: 0.8px; color: var(--dim); }
+  .timeline-track { position: relative; height: 28px; user-select: none; }
+  .timeline-hist { position: absolute; inset: 0 0 6px 0; display: flex; align-items: flex-end; gap: 1px; }
+  .timeline-bar { flex: 1; background: var(--border); min-height: 1px; border-radius: 1px 1px 0 0; transition: background 0.15s; }
+  .timeline-bar.active { background: var(--episodic); }
+  .timeline-range {
+    position: absolute; left: 0; right: 0; top: 0; width: 100%; height: 100%;
+    appearance: none; -webkit-appearance: none; pointer-events: none; background: transparent; margin: 0;
+  }
+  .timeline-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 10px; height: 28px; background: var(--accent); border-radius: 2px; pointer-events: auto; cursor: ew-resize; box-shadow: 0 0 0 1px var(--bg); }
+  .timeline-range::-moz-range-thumb { width: 10px; height: 28px; background: var(--accent); border: none; border-radius: 2px; pointer-events: auto; cursor: ew-resize; }
+  .timeline-range::-webkit-slider-runnable-track { background: transparent; height: 28px; }
+  .timeline-range::-moz-range-track { background: transparent; height: 28px; }
+  .timeline-value { font: 10px var(--mono); color: var(--dim); text-align: right; }
+
+  /* ===== Related memories ===== */
+  .related-section, .lineage-section, .conflicts-section, .children-section { margin: 14px 0; }
+  .related-title { font-variant: small-caps; font-size: 11px; letter-spacing: 0.6px; color: var(--dim); margin-bottom: 6px; }
+  .related-card {
+    padding: 7px 10px; border: 1px solid var(--border); border-radius: 2px;
+    background: var(--map-bg); cursor: pointer; margin-bottom: 5px;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .related-card:hover { background: rgba(196,92,60,0.04); border-color: var(--accent); }
+  .related-card-head { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--dim); margin-bottom: 3px; }
+  .related-card-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .related-card-sim { font-family: var(--mono); margin-left: auto; }
+  .related-card-text { font-size: 12px; line-height: 1.4; color: var(--text); }
+
+  /* ===== Lineage / conflicts ===== */
+  .lineage-chip, .conflict-chip {
+    display: inline-flex; align-items: center; gap: 4px; max-width: 100%;
+    padding: 4px 8px; border: 1px solid var(--border); border-radius: 2px;
+    font-size: 11px; cursor: pointer; margin: 3px 4px 0 0;
+    background: var(--map-bg); transition: background 0.12s, border-color 0.12s;
+  }
+  .lineage-chip-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+  .lineage-chip:hover { background: rgba(90,143,107,0.08); border-color: var(--semantic); }
+  .conflict-chip { border-color: var(--accent); color: var(--accent); background: rgba(196,92,60,0.04); }
+  .conflict-chip:hover { background: rgba(196,92,60,0.10); }
+
+  /* ===== Clickable tags + star ===== */
+  .tag { cursor: pointer; transition: background 0.12s, border-color 0.12s, color 0.12s; }
+  .tag:hover { background: rgba(196,92,60,0.10); border-color: var(--accent); color: var(--accent); }
+  .star-btn {
+    background: transparent; border: 1px solid var(--border); padding: 3px 10px;
+    border-radius: 2px; cursor: pointer; font-size: 11px; color: var(--dim);
+    font-family: var(--serif); transition: all 0.15s; margin-left: 6px;
+  }
+  .star-btn:hover { color: var(--text); }
+  .star-btn.starred { color: var(--accent); border-color: var(--accent); background: rgba(196,92,60,0.06); }
+
+  /* ===== Decay canvas tooltip ===== */
+  .decay-canvas-wrap { position: relative; cursor: crosshair; }
+  .decay-tip {
+    position: absolute; pointer-events: none; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 2px; padding: 3px 7px;
+    font: 10px var(--mono); color: var(--text); white-space: nowrap;
+    box-shadow: 0 1px 3px rgba(58,50,40,0.1); opacity: 0; transition: opacity 0.1s;
+    z-index: 4; transform: translate(-50%, -100%);
+  }
+  .decay-tip.visible { opacity: 1; }
+
+  /* ===== Copy toast ===== */
+  .toast {
+    position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%) translateY(16px);
+    background: var(--text); color: var(--bg); padding: 7px 16px; border-radius: 3px;
+    font-size: 12px; letter-spacing: 0.3px; opacity: 0;
+    transition: transform 0.22s, opacity 0.22s;
+    z-index: 30; pointer-events: none;
+  }
+  .toast.visible { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+  /* ===== Memory-content copy affordance ===== */
+  .memory-content { cursor: copy; }
+  .memory-content-wrap { position: relative; }
+  .memory-content-wrap .copy-hint {
+    position: absolute; right: 0; top: -14px; font: 9px var(--mono); color: var(--dim); letter-spacing: 0.5px; opacity: 0; transition: opacity 0.15s;
+  }
+  .memory-content-wrap:hover .copy-hint { opacity: 1; }
+
+  /* ===== Drawer resize handle ===== */
+  .drawer-resize-handle {
+    position: absolute; left: 0; right: 0; top: -5px; height: 10px;
+    cursor: ns-resize; z-index: 16;
+  }
+  .drawer-resize-handle::after {
+    content: ''; position: absolute; left: 50%; top: 4px;
+    width: 38px; height: 2px; border-radius: 1px;
+    background: var(--border); transform: translateX(-50%);
+  }
+  .drawer-resize-handle:hover::after { background: var(--dim); }
+
+  /* ===== Header snapshot button ===== */
+  .snap-btn {
+    font: 10px var(--mono); letter-spacing: 0.8px; text-transform: uppercase;
+    background: transparent; border: 1px solid var(--border);
+    padding: 5px 10px; border-radius: 3px; color: var(--dim); cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .snap-btn:hover { color: var(--text); border-color: var(--dim); }
+
+  /* ===== Reset filters ===== */
+  .panel-title-wrap { display: flex; align-items: center; gap: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+  .panel-title-wrap .panel-title { margin-bottom: 0; border-bottom: none; padding-bottom: 0; flex: 1; }
+  .reset-filters-btn {
+    background: transparent; border: none; font: 10px var(--mono); color: var(--dim);
+    cursor: pointer; letter-spacing: 0.5px; padding: 2px 4px;
+  }
+  .reset-filters-btn:hover { color: var(--accent); }
+
+  /* ===== Search input wrap with clear ===== */
+  .search-wrap { position: relative; }
+  .search-clear {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    width: 20px; height: 20px; border: none; background: transparent;
+    cursor: pointer; color: var(--dim); font-family: var(--serif); font-size: 15px;
+    display: none; padding: 0; line-height: 1;
+  }
+  .search-clear:hover { color: var(--text); }
+  .search-wrap.has-value .search-clear { display: flex; align-items: center; justify-content: center; }
+
+  /* ===== Edge tooltip ===== */
+  .edge-tooltip {
+    position: absolute; pointer-events: none; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 2px; padding: 8px 10px;
+    font-size: 11px; max-width: 300px; line-height: 1.4;
+    box-shadow: 0 2px 6px rgba(58,50,40,0.1); opacity: 0;
+    transition: opacity 0.12s; z-index: 11;
+  }
+  .edge-tooltip.visible { opacity: 1; }
+  .edge-tooltip-head { font-variant: small-caps; font-size: 9px; letter-spacing: 0.6px; color: var(--dim); margin-bottom: 4px; }
+  .edge-tooltip-arrow { color: var(--accent); font-family: var(--mono); }
+  .edge-tooltip-tokens { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+  .edge-tooltip-token { font-family: var(--mono); font-size: 10px; padding: 1px 6px; background: var(--tag-bg); border-radius: 2px; }
+
+  /* ===== Last retrieved inline ===== */
+  .last-retr { font-family: var(--mono); font-size: 11px; color: var(--dim); margin-top: 6px; margin-bottom: 10px; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+}}
+</script>
+</head>
+<body>
+<header class="header">
+  <div class="header-left">
+    <span class="header-logo">hippo</span>
+    <span class="header-subtitle">brain observatory</span>
+  </div>
+  <div class="header-center">
+    <div class="search-wrap" id="searchWrap">
+      <input type="search" id="searchInput" class="search-input" placeholder="search memories and tags  ( / )" autocomplete="off" spellcheck="false">
+      <button class="search-clear" id="searchClear" type="button" title="clear (Esc)">&times;</button>
+    </div>
+  </div>
+  <div class="header-right">
+    <span id="headerStats" class="header-stats"></span>
+    <button id="snapshotBtn" class="snap-btn" type="button" title="save view as PNG">Snapshot</button>
+    <button id="freezeToggle" class="freeze-toggle" type="button">Freeze motion</button>
+  </div>
+</header>
+<div class="main">
+  <div class="map-area">
+    <div class="map-container" id="mapContainer">
+      <div class="map-tooltip" id="tooltip"></div>
+      <div class="edge-tooltip" id="edgeTooltip"></div>
+      <div class="minimap" id="minimap" title="top-down overview : click to fly">
+        <div class="minimap-label">overview</div>
+        <canvas id="minimapCanvas" width="160" height="160"></canvas>
+      </div>
+      <div class="map-hint">drag to orbit : scroll to zoom : click a memory</div>
+    </div>
+  </div>
+  <aside class="sidebar">
+    <section class="panel" id="statsPanel"></section>
+    <section class="panel" id="filterPanel"></section>
+    <div id="memoryListToggle" class="drawer-toggle" onclick="toggleDrawer()">
+      <span id="drawerCount">loading</span>
+      <span class="drawer-toggle-action">VIEW LIST</span>
+    </div>
+    <div id="hoverPreview" class="hover-preview" style="display:none"></div>
+    <h2 class="sidebar-section-title">Selected memory</h2>
+    <div id="sidebarBody"><div class="sidebar-empty">Click a memory to see details</div></div>
+  </aside>
+</div>
+<div class="timeline-strip" id="timelineStrip">
+  <div class="timeline-title">age range</div>
+  <div class="timeline-track" id="timelineTrack">
+    <div class="timeline-hist" id="timelineHist"></div>
+    <input type="range" id="timelineMin" class="timeline-range" min="0" max="30" step="1" value="0">
+    <input type="range" id="timelineMax" class="timeline-range" min="0" max="30" step="1" value="30">
+  </div>
+  <div class="timeline-value" id="timelineValue">0 to 30 days</div>
+</div>
+<div class="toast" id="toast"></div>
+<div class="memory-drawer" id="memoryDrawer">
+  <div class="drawer-resize-handle" id="drawerResizeHandle"></div>
+  <div class="drawer-header">
+    <div>Layer</div><div>Content</div>
+    <div data-sort="strength" class="sort-active" onclick="sortDrawer('strength')">Strength &#8595;</div>
+    <div data-sort="retrievals" onclick="sortDrawer('retrievals')">Retr.</div>
+    <div data-sort="age" onclick="sortDrawer('age')">Age</div>
+    <div>Confidence</div>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+</div>
+<div class="bottom-bar">
+  <div class="legend-group">
+    <div class="legend-item"><span class="legend-dot buffer"></span><span class="legend-shape" style="color:var(--buffer)">&#9679;</span>buffer</div>
+    <div class="legend-item"><span class="legend-dot episodic"></span><span class="legend-shape" style="color:var(--episodic)">&#9650;</span>episodic</div>
+    <div class="legend-item"><span class="legend-dot semantic"></span><span class="legend-shape" style="color:var(--semantic)">&#9632;</span>semantic</div>
+  </div>
+  <div class="bottom-shortcuts"><kbd>/</kbd> search : <kbd>&#8592;</kbd> <kbd>&#8594;</kbd> step : <kbd>[</kbd> <kbd>]</kbd> history : <kbd>Esc</kbd> clear</div>
+  <div class="bottom-note">Size = retrievals : Opacity = strength : Lines = similarity</div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ============================================================================
+//  Constants
+// ============================================================================
+const LAYERS = { buffer: '#7c6caf', episodic: '#4a8ca3', semantic: '#5a8f6b' };
+const ACCENT = '#c45c3c';
+const LAYER_Y = { buffer: 5, episodic: 0, semantic: -5 };
+const SPREAD = 16;
+const SIM_THRESHOLD = 0.10;
+const MAX_EDGES_PER_NODE = 4;
+const AT_RISK_STRENGTH = 0.3;
+const STOPWORDS = new Set([
+  'the','a','an','is','are','was','were','be','been','have','has','had',
+  'do','does','did','will','would','shall','should','may','might','can',
+  'could','must','and','but','or','for','so','in','on','at','to','from',
+  'by','with','as','of','not','no','all','uses','use','used','instead',
+  'after','before','into','out','up','its','it','this','that','than',
+  'when','then','over','via','using','each','any','some'
+]);
+
+// ============================================================================
+//  Utilities
+// ============================================================================
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+function seededRandom(seed) {
+  let s = seed;
+  return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
+}
+
+function tokenize(text) {
+  return new Set(
+    text.toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(w => w.length > 2 && !STOPWORDS.has(w))
+  );
+}
+
+function jaccard(a, b) {
+  if (a.size === 0 || b.size === 0) return 0;
+  let inter = 0;
+  for (const x of a) if (b.has(x)) inter++;
+  const union = a.size + b.size - inter;
+  return union === 0 ? 0 : inter / union;
+}
+
+function sharedTokens(a, b) {
+  const out = [];
+  for (const x of a) if (b.has(x)) out.push(x);
+  return out;
+}
+
+function formatRelativeTime(days) {
+  if (!isFinite(days) || days < 0) return 'unknown';
+  if (days < 1 / 24) return 'just now';
+  if (days < 1) return `${Math.round(days * 24)}h ago`;
+  if (days < 14) return `${Math.round(days)}d ago`;
+  if (days < 60) return `${Math.round(days / 7)}w ago`;
+  return `${Math.round(days / 30)}mo ago`;
+}
+
+const LAYER_GLYPHS = { buffer: '\u25CF', episodic: '\u25B2', semantic: '\u25A0' };
+function layerGlyph(layer) { return LAYER_GLYPHS[layer] || '\u25CF'; }
+
+function copyToClipboard(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+  }
+  return fallbackCopy(text);
+}
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;top:-1000px;left:-1000px';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); } catch (e) {}
+  document.body.removeChild(ta);
+  return Promise.resolve();
+}
+
+let toastTimer = null;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('visible');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('visible'), 1600);
+}
+
+// Cheap string hash for layout cache key
+function stringHash(s) {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
+
+function loadCachedLayout(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!Array.isArray(data) || data.length === 0) return null;
+    return data;
+  } catch (e) { return null; }
+}
+function saveCachedLayout(key, positions) {
+  try { localStorage.setItem(key, JSON.stringify(positions)); } catch (e) {}
+}
+
+// ============================================================================
+//  Memory data (with real tags + confidence)
+// ============================================================================
+const memoriesData = [
+  { text: "Gold model uses TIPS 10y as primary inflation signal", layer: 'buffer', tags: ['gold','tips','inflation','signals'], confidence: 'verified' },
+  { text: "Supabase sync overwrites all signal data from local files", layer: 'buffer', tags: ['supabase','sync','safety'], confidence: 'verified' },
+  { text: "RTX 5080 confirmed working with PyTorch 2.10", layer: 'buffer', tags: ['gpu','pytorch','hardware'], confidence: 'verified' },
+  { text: "Pre-commit hooks can revert file edits silently", layer: 'buffer', tags: ['git','hooks','gotcha'], confidence: 'observed' },
+  { text: "Hippo memory uses hippocampal consolidation model", layer: 'buffer', tags: ['hippo','consolidation','theory'], confidence: 'observed' },
+  { text: "Weekly pipeline runs 42 models in parallel", layer: 'buffer', tags: ['pipeline','parallel','weekly'], confidence: 'verified' },
+
+  { text: "Never force push to main branch", layer: 'episodic', tags: ['git','safety'], confidence: 'verified' },
+  { text: "ProcessPoolExecutor default 8 workers for pipeline", layer: 'episodic', tags: ['pipeline','parallel','python'], confidence: 'verified' },
+  { text: "Strength decays with biological half-life curve", layer: 'episodic', tags: ['hippo','decay','theory'], confidence: 'verified' },
+  { text: "Memory retrieval reinforces strength", layer: 'episodic', tags: ['hippo','retrieval','theory'], confidence: 'verified' },
+  { text: "Buffer memories consolidate to episodic after sleep", layer: 'episodic', tags: ['hippo','consolidation','buffer','episodic'], confidence: 'verified' },
+  { text: "Episodic memories generalize into semantic over time", layer: 'episodic', tags: ['hippo','consolidation','episodic','semantic'], confidence: 'verified' },
+  { text: "Power models have known validation issues", layer: 'episodic', tags: ['power','validation','issues'], confidence: 'observed' },
+  { text: "Use safe_sync.py instead of direct Supabase sync", layer: 'episodic', tags: ['supabase','sync','safety'], confidence: 'verified' },
+  { text: "Signal prices use actual front-month not adjusted", layer: 'episodic', tags: ['prices','signals','futures'], confidence: 'verified' },
+  { text: "All futures models must use futures_pnl.py", layer: 'episodic', tags: ['futures','pnl','standard'], confidence: 'verified' },
+  { text: "VAR limit is 100k for all commodities", layer: 'episodic', tags: ['var','sizing','futures'], confidence: 'verified' },
+  { text: "No vol upper clip in position sizing", layer: 'episodic', tags: ['vol','sizing','futures'], confidence: 'verified' },
+  { text: "GPU gives 40x speedup on matrix operations", layer: 'episodic', tags: ['gpu','performance','pytorch'], confidence: 'observed' },
+  { text: "Playwright smoke tests cover 15 scenarios", layer: 'episodic', tags: ['playwright','tests','frontend'], confidence: 'verified' },
+  { text: "GitHub Actions deploys from master automatically", layer: 'episodic', tags: ['deploy','github','ci'], confidence: 'verified' },
+  { text: "Content hash caching uses SHA-256 for file ops", layer: 'episodic', tags: ['cache','hash','files'], confidence: 'observed' },
+  { text: "Nightly validation runs at 7AM UTC", layer: 'episodic', tags: ['validation','schedule','ci'], confidence: 'verified' },
+  { text: "Semantic layer stores generalized knowledge", layer: 'episodic', tags: ['hippo','semantic','theory'], confidence: 'verified' },
+
+  { text: "Buffer is short-term working memory", layer: 'semantic', tags: ['hippo','buffer','theory'], confidence: 'verified' },
+  { text: "Episodic captures specific events and contexts", layer: 'semantic', tags: ['hippo','episodic','theory'], confidence: 'verified' },
+  { text: "Memory as physics models decay and interference", layer: 'semantic', tags: ['hippo','physics','theory'], confidence: 'inferred' },
+  { text: "Phase transitions in memory consolidation", layer: 'semantic', tags: ['hippo','consolidation','theory'], confidence: 'inferred' },
+  { text: "Claude Code hooks configured in settings.json", layer: 'semantic', tags: ['claude','hooks','config'], confidence: 'verified' },
+  { text: "Compaction triggers at 50 percent context usage", layer: 'semantic', tags: ['claude','compaction','context'], confidence: 'verified' },
+  { text: "Roll adjustments needed when contracts change", layer: 'semantic', tags: ['futures','roll','prices'], confidence: 'verified' },
+  { text: "Lot sizing uses raw prices not backward-adjusted", layer: 'semantic', tags: ['sizing','prices','futures'], confidence: 'verified' },
+  { text: "Minimum 1 lot when signal is active", layer: 'semantic', tags: ['sizing','futures','signals'], confidence: 'verified' },
+  { text: "Vol floor 0.01 prevents division by zero", layer: 'semantic', tags: ['vol','sizing','safety'], confidence: 'verified' },
+  { text: "Scaled signal equals raw signal always", layer: 'semantic', tags: ['sizing','signals','standard'], confidence: 'verified' },
+  { text: "MCP server connected for Supabase queries", layer: 'semantic', tags: ['mcp','supabase','config'], confidence: 'verified' },
+  { text: "Faster whisper uses GPU float16 for transcription", layer: 'semantic', tags: ['whisper','gpu','transcription'], confidence: 'observed' },
+  { text: "Confidence 0.95 for all position sizing", layer: 'semantic', tags: ['sizing','futures','standard'], confidence: 'verified' },
+];
+
+const dataRng = seededRandom(42);
+const memories = memoriesData.map((d, i) => {
+  const age = dataRng() * 30;
+  return {
+    id: i,
+    text: d.text,
+    layer: d.layer,
+    tags: d.tags,
+    confidence: d.confidence,
+    retrievals: Math.floor(dataRng() * 20) + 1,
+    strength: 0.15 + dataRng() * 0.85,
+    halfLife: 10 + dataRng() * 50,
+    age,
+    lastRetrievedDaysAgo: Math.max(0, age * dataRng()),
+    parents: [],
+    conflicts: [],
+    starred: false,
+  };
+});
+// pin reproducible values on memory 0
+memories[0].retrievals = 14;
+memories[0].strength = 1.0;
+memories[0].halfLife = 31.5;
+memories[0].age = 9.9;
+memories[0].lastRetrievedDaysAgo = 2.3;
+
+// Hand-authored consolidation lineage (semantic memories formed from episodic/buffer)
+const LINEAGE = {
+  24: [4, 10],    // "Buffer is short-term working memory" <- consolidation model + buffer-consolidates
+  25: [10, 11],   // "Episodic captures specific events" <- consolidation edges
+  26: [8, 9],     // "Memory as physics" <- decay + retrieval reinforces
+  27: [10, 11],   // "Phase transitions" <- consolidation
+  32: [15, 17],   // "Minimum 1 lot" <- signal prices + VAR limit
+  33: [17, 18],   // "Vol floor 0.01" <- VAR limit + no vol clip
+};
+const CONFLICTS = [
+  [4, 26], // hippocampal consolidation theory vs physics-decay theory
+  [11, 27], // specific-consolidation vs phase-transition framing
+];
+for (const [child, pars] of Object.entries(LINEAGE)) {
+  memories[+child].parents = pars;
+}
+for (const [a, b] of CONFLICTS) {
+  memories[a].conflicts.push(b);
+  memories[b].conflicts.push(a);
+}
+// Reverse lineage index: children[parentId] = [childId, ...]
+const childrenIdx = memories.map(() => []);
+for (const m of memories) {
+  for (const p of m.parents) childrenIdx[p].push(m.id);
+}
+
+// ============================================================================
+//  Similarity matrix + edges
+// ============================================================================
+const tokens = memories.map(m => tokenize(m.text + ' ' + m.tags.join(' ')));
+
+const simMatrix = memories.map(() => []);
+for (let i = 0; i < memories.length; i++) {
+  for (let j = 0; j < memories.length; j++) {
+    simMatrix[i][j] = i === j ? 1 : jaccard(tokens[i], tokens[j]);
+  }
+}
+
+function computeEdges() {
+  const edgeSet = new Set();
+  for (let i = 0; i < memories.length; i++) {
+    const ranked = memories
+      .map((_, j) => ({ j, s: simMatrix[i][j] }))
+      .filter(x => x.j !== i && x.s > SIM_THRESHOLD)
+      .sort((a, b) => b.s - a.s)
+      .slice(0, MAX_EDGES_PER_NODE);
+    for (const { j } of ranked) {
+      const key = i < j ? `${i}-${j}` : `${j}-${i}`;
+      edgeSet.add(key);
+    }
+  }
+  return [...edgeSet].map(k => k.split('-').map(Number));
+}
+const edges = computeEdges();
+
+// ============================================================================
+//  Force-directed 2D layout (Fruchterman-Reingold)
+// ============================================================================
+function computeLayout(edges, seed) {
+  const rng = seededRandom(seed);
+  const n = memories.length;
+  const maxRet = memories.reduce((m, x) => Math.max(m, x.retrievals), 1);
+  const radii = memories.map(m => {
+    const logRatio = Math.log2(m.retrievals + 1) / Math.log2(maxRet + 1);
+    return 0.2 + logRatio * 0.42;
+  });
+
+  // Wider initial spread so nodes don't start on top of each other
+  const pos = memories.map(() => [(rng() - 0.5) * 12, (rng() - 0.5) * 12]);
+  const iters = 400;
+  const k = 6;
+  let temp = 6;
+  const cooling = 0.985;
+
+  function accumulateRepulsion(disp) {
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const dx = pos[i][0] - pos[j][0];
+        const dz = pos[i][1] - pos[j][1];
+        const d = Math.sqrt(dx * dx + dz * dz) + 0.01;
+        let f = (k * k) / d;
+        // Short-range inverse-square boost scaled by node radii
+        const minSep = (radii[i] + radii[j]) * 5;
+        if (d < minSep) {
+          const overlap = minSep / d;
+          f *= overlap * overlap;
+        }
+        const fx = (dx / d) * f;
+        const fz = (dz / d) * f;
+        disp[i][0] += fx; disp[i][1] += fz;
+        disp[j][0] -= fx; disp[j][1] -= fz;
+      }
+    }
+  }
+
+  // Main sim: attraction + repulsion, cooling
+  for (let it = 0; it < iters; it++) {
+    const disp = Array.from({ length: n }, () => [0, 0]);
+    accumulateRepulsion(disp);
+
+    // Softened attraction: (0.3 + 0.7*w) instead of (0.5 + w)
+    for (const [i, j] of edges) {
+      const w = simMatrix[i][j];
+      const dx = pos[i][0] - pos[j][0];
+      const dz = pos[i][1] - pos[j][1];
+      const d = Math.sqrt(dx * dx + dz * dz) + 0.01;
+      const f = ((d * d) / k) * (0.3 + 0.7 * w);
+      const fx = (dx / d) * f;
+      const fz = (dz / d) * f;
+      disp[i][0] -= fx; disp[i][1] -= fz;
+      disp[j][0] += fx; disp[j][1] += fz;
+    }
+
+    for (let i = 0; i < n; i++) {
+      const dd = Math.sqrt(disp[i][0] * disp[i][0] + disp[i][1] * disp[i][1]) + 0.01;
+      pos[i][0] += (disp[i][0] / dd) * Math.min(dd, temp);
+      pos[i][1] += (disp[i][1] / dd) * Math.min(dd, temp);
+    }
+    temp *= cooling;
+  }
+
+  // Relaxation: repulsion only, low temp, breaks up residual overlaps
+  let relaxTemp = 0.5;
+  for (let it = 0; it < 60; it++) {
+    const disp = Array.from({ length: n }, () => [0, 0]);
+    accumulateRepulsion(disp);
+    for (let i = 0; i < n; i++) {
+      const dd = Math.sqrt(disp[i][0] * disp[i][0] + disp[i][1] * disp[i][1]) + 0.01;
+      pos[i][0] += (disp[i][0] / dd) * Math.min(dd, relaxTemp);
+      pos[i][1] += (disp[i][1] / dd) * Math.min(dd, relaxTemp);
+    }
+    relaxTemp *= 0.97;
+  }
+
+  // Center and scale to fit SPREAD box
+  const xs = pos.map(p => p[0]);
+  const zs = pos.map(p => p[1]);
+  const xMin = Math.min(...xs), xMax = Math.max(...xs);
+  const zMin = Math.min(...zs), zMax = Math.max(...zs);
+  const cx = (xMin + xMax) / 2;
+  const cz = (zMin + zMax) / 2;
+  const extent = Math.max(xMax - xMin, zMax - zMin, 0.01);
+  const scale = (SPREAD * 1.7) / extent;
+  const scaled = pos.map(p => [(p[0] - cx) * scale, (p[1] - cz) * scale]);
+
+  // Final hard-constraint pass in visual units: guarantee minimum surface gap
+  const MIN_GAP = 0.6;
+  for (let it = 0; it < 120; it++) {
+    let moved = 0;
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const dx = scaled[i][0] - scaled[j][0];
+        const dz = scaled[i][1] - scaled[j][1];
+        const d = Math.sqrt(dx * dx + dz * dz) + 0.001;
+        const minD = radii[i] + radii[j] + MIN_GAP;
+        if (d < minD) {
+          const push = (minD - d) * 0.5;
+          const ux = dx / d, uz = dz / d;
+          scaled[i][0] += ux * push; scaled[i][1] += uz * push;
+          scaled[j][0] -= ux * push; scaled[j][1] -= uz * push;
+          moved++;
+        }
+      }
+    }
+    if (moved === 0) break;
+  }
+  return scaled;
+}
+// Layout cache: skip the 460-iter sim if we've computed this exact graph before.
+const layoutCacheKey = 'hippo-layout-' + stringHash(
+  memories.map(m => `${m.id}:${m.retrievals}:${m.layer}:${m.text.length}`).join('|')
+  + `|st=${SIM_THRESHOLD}|mep=${MAX_EDGES_PER_NODE}|e=${edges.length}`
+);
+let layout2D = loadCachedLayout(layoutCacheKey);
+let layoutFromCache = !!layout2D;
+if (!layout2D) {
+  layout2D = computeLayout(edges, 7);
+  saveCachedLayout(layoutCacheKey, layout2D);
+}
+memories.forEach((mem, i) => {
+  mem.x = layout2D[i][0];
+  mem.y = LAYER_Y[mem.layer];
+  mem.z = layout2D[i][1];
+});
+
+// ============================================================================
+//  THREE.JS Scene
+// ============================================================================
+const container = document.getElementById('mapContainer');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0xf5e4c8);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+container.insertBefore(renderer.domElement, container.firstChild);
+
+const scene = new THREE.Scene();
+const clock = new THREE.Clock();
+
+// ── SKY DOME (kept) ──
+const skyGeo = new THREE.SphereGeometry(120, 32, 32);
+const skyMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide,
+  depthWrite: false,
+  uniforms: { uTime: { value: 0 } },
+  vertexShader: `
+    varying vec3 vWorldPos;
+    void main() {
+      vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform float uTime;
+    varying vec3 vWorldPos;
+    float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    float noise(vec2 p) {
+      vec2 i = floor(p); vec2 f = fract(p);
+      f = f * f * (3.0 - 2.0 * f);
+      float a = hash(i);
+      float b = hash(i + vec2(1.0, 0.0));
+      float c = hash(i + vec2(0.0, 1.0));
+      float d = hash(i + vec2(1.0, 1.0));
+      return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+    }
+    float fbm(vec2 p) {
+      float v = 0.0; float a = 0.5;
+      for (int i = 0; i < 5; i++) { v += a * noise(p); p *= 2.0; a *= 0.5; }
+      return v;
+    }
+    void main() {
+      vec3 dir = normalize(vWorldPos);
+      float y = dir.y;
+      vec3 zenith = vec3(0.55, 0.70, 0.85);
+      vec3 horizon = vec3(0.96, 0.88, 0.75);
+      vec3 below = vec3(0.94, 0.90, 0.82);
+      vec3 sunGlow = vec3(0.98, 0.82, 0.60);
+      vec3 sky = y > 0.0
+        ? mix(horizon, zenith, pow(y, 0.6))
+        : mix(horizon, below, pow(-y, 0.3));
+      float sunAngle = dot(dir, normalize(vec3(0.8, 0.15, 0.5)));
+      sky += sunGlow * pow(max(sunAngle, 0.0), 12.0) * 0.4;
+      sky += vec3(0.95, 0.88, 0.78) * exp(-abs(y) * 4.0) * 0.15;
+      if (y > -0.05) {
+        vec2 uv = dir.xz / (y + 0.1) * 3.0 + uTime * 0.02;
+        float cloud = smoothstep(0.35, 0.65, fbm(uv));
+        float cloudAlpha = cloud * 0.35 * smoothstep(-0.05, 0.15, y);
+        vec3 cloudColor = mix(vec3(1.0, 0.98, 0.94), vec3(0.98, 0.90, 0.80), 1.0 - y);
+        sky = mix(sky, cloudColor, cloudAlpha);
+      }
+      gl_FragColor = vec4(sky, 1.0);
+    }
+  `,
+});
+scene.add(new THREE.Mesh(skyGeo, skyMat));
+
+// ── CAMERA + CONTROLS ──
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 300);
+camera.position.set(0, 14, 30);
+camera.lookAt(0, 0, 0);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 8;
+controls.maxDistance = 60;
+controls.maxPolarAngle = Math.PI * 0.85;
+controls.autoRotate = false;
+
+// ── LIGHTING ──
+scene.add(new THREE.AmbientLight(0xf4efe6, 0.8));
+const sun = new THREE.DirectionalLight(0xfff5e8, 0.6);
+sun.position.set(10, 25, 15);
+scene.add(sun);
+const warmFill = new THREE.PointLight(0xc49a3c, 0.3, 60);
+warmFill.position.set(-8, 5, -8);
+scene.add(warmFill);
+
+// ── TERRAIN (static, computed once) ──
+const terrainGeo = new THREE.PlaneGeometry(80, 80, 80, 80);
+terrainGeo.rotateX(-Math.PI / 2);
+const tPos = terrainGeo.attributes.position;
+for (let i = 0; i < tPos.count; i++) {
+  const x = tPos.getX(i);
+  const z = tPos.getZ(i);
+  const y = Math.sin(x * 0.15) * Math.cos(z * 0.12) * 1.8
+          + Math.sin(x * 0.08 + z * 0.1) * 1.2
+          + Math.cos(x * 0.22 - z * 0.18) * 0.8
+          - 10;
+  tPos.setY(i, y);
+}
+terrainGeo.computeVertexNormals();
+scene.add(new THREE.Mesh(terrainGeo, new THREE.MeshStandardMaterial({
+  color: 0xe8dcc8, roughness: 0.95, metalness: 0.0,
+  transparent: true, opacity: 0.38, side: THREE.DoubleSide,
+})));
+
+// ── MEMORY NODES ──
+const nodeList = [];
+const meshes = [];
+const maxRet = memories.reduce((m, x) => Math.max(m, x.retrievals), 1);
+
+memories.forEach((mem, idx) => {
+  const logRatio = Math.log2(mem.retrievals + 1) / Math.log2(maxRet + 1);
+  const radius = 0.2 + logRatio * 0.42;
+  const color = new THREE.Color(LAYERS[mem.layer]);
+  const pos = new THREE.Vector3(mem.x, mem.y, mem.z);
+
+  const baseOpacity = 0.55 + mem.strength * 0.45;
+  const baseEmissive = 0.22;
+
+  const mesh = new THREE.Mesh(
+    new THREE.SphereGeometry(radius, 24, 24),
+    new THREE.MeshStandardMaterial({
+      color, emissive: color, emissiveIntensity: baseEmissive,
+      roughness: 0.4, metalness: 0.05,
+      transparent: true, opacity: baseOpacity,
+    })
+  );
+  mesh.position.copy(pos);
+  mesh.userData = { memIdx: idx };
+  scene.add(mesh);
+
+  meshes.push(mesh);
+  nodeList.push({
+    mem, mesh, radius,
+    basePos: pos.clone(),
+    baseOpacity,
+    baseEmissive,
+    filtered: false,
+    searchMatch: true,
+  });
+});
+
+// ── EDGE LINES (from computed similarity) ──
+const edgeLines = [];
+for (const [i, j] of edges) {
+  const a = nodeList[i].basePos;
+  const b = nodeList[j].basePos;
+  const mid = new THREE.Vector3().lerpVectors(a, b, 0.5);
+  mid.y += 0.4;
+  const pts = new THREE.QuadraticBezierCurve3(a, mid, b).getPoints(14);
+  const sim = simMatrix[i][j];
+  const mat = new THREE.LineBasicMaterial({
+    color: 0x8b7d6b,
+    transparent: true,
+    opacity: 0.06 + sim * 0.22,
+    depthWrite: false,
+  });
+  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat);
+  line.userData = { i, j, sim, baseOpacity: mat.opacity };
+  scene.add(line);
+  edgeLines.push(line);
+}
+
+// ── SELECTION HALO (single, moves with selection) ──
+let selectionHalo = null;
+function makeSelectionHalo(node) {
+  const color = new THREE.Color(LAYERS[node.mem.layer]);
+  const halo = new THREE.Mesh(
+    new THREE.SphereGeometry(node.radius * 2.8, 24, 24),
+    new THREE.MeshBasicMaterial({
+      color, transparent: true, opacity: 0.18,
+      side: THREE.BackSide, depthWrite: false,
+    })
+  );
+  halo.position.copy(node.mesh.position);
+  return halo;
+}
+function disposeHalo() {
+  if (!selectionHalo) return;
+  scene.remove(selectionHalo);
+  selectionHalo.geometry.dispose();
+  selectionHalo.material.dispose();
+  selectionHalo = null;
+}
+
+// ============================================================================
+//  State
+// ============================================================================
+let hoveredIdx = -1;
+let selectedIdx = -1;
+let motionFrozen = false;
+let searchQuery = '';
+const DEFAULT_FILTERS = () => ({
+  layers: new Set(['buffer', 'episodic', 'semantic']),
+  minStrength: 0,
+  confidences: new Set(['verified', 'observed', 'inferred']),
+  ageMin: 0,
+  ageMax: 30,
+  starredOnly: false,
+});
+let filters = DEFAULT_FILTERS();
+const selectionHistory = [];
+let historyIndex = -1;
+
+// ============================================================================
+//  Stats + Filter + Header panels
+// ============================================================================
+function renderStatsPanel() {
+  const total = memories.length;
+  const byLayer = { buffer: 0, episodic: 0, semantic: 0 };
+  let atRisk = 0;
+  for (const m of memories) {
+    byLayer[m.layer]++;
+    if (m.strength < AT_RISK_STRENGTH) atRisk++;
+  }
+  const maxCount = Math.max(...Object.values(byLayer), 1);
+  const row = (label, count, color) => {
+    const pct = (count / maxCount) * 100;
+    return `<div class="stat-row">
+      <span class="stat-row-label">${escapeHtml(label)}</span>
+      <div class="stat-row-bar-wrap"><div class="stat-row-bar" style="width:${pct}%;background:${color}"></div></div>
+      <span class="stat-row-count">${count}</span>
+    </div>`;
+  };
+  document.getElementById('statsPanel').innerHTML = `
+    <h3 class="panel-title">Observatory</h3>
+    <div class="stats-headline">
+      <span class="stats-headline-num">${total}</span>
+      <span class="stats-headline-label">memories tracked</span>
+    </div>
+    <div class="stats-rows">
+      ${row('buffer', byLayer.buffer, LAYERS.buffer)}
+      ${row('episodic', byLayer.episodic, LAYERS.episodic)}
+      ${row('semantic', byLayer.semantic, LAYERS.semantic)}
+    </div>
+    <div class="stats-footer">at risk: <span class="stats-at-risk">${atRisk}</span> &middot; edges: ${edges.length}</div>
+  `;
+}
+
+function renderFilterPanel() {
+  const layerCheck = l => `<label class="chk">
+    <input type="checkbox" data-filter="layer" value="${l}" ${filters.layers.has(l) ? 'checked' : ''}>
+    <span class="chk-dot" style="background:${LAYERS[l]}"></span><span style="color:${LAYERS[l]};font-size:9px;margin-right:2px">${layerGlyph(l)}</span>${l}
+  </label>`;
+  const confCheck = c => `<label class="chk">
+    <input type="checkbox" data-filter="confidence" value="${c}" ${filters.confidences.has(c) ? 'checked' : ''}>${c}
+  </label>`;
+  document.getElementById('filterPanel').innerHTML = `
+    <div class="panel-title-wrap">
+      <h3 class="panel-title">Filters</h3>
+      <button class="reset-filters-btn" id="resetFiltersBtn" type="button" title="reset all filters">reset</button>
+    </div>
+    <div class="filter-group">
+      <div class="filter-label">layer</div>
+      <div class="chk-row">${['buffer','episodic','semantic'].map(layerCheck).join('')}</div>
+    </div>
+    <div class="filter-group">
+      <div class="filter-label">min strength <span class="filter-value" id="minStrValue">${filters.minStrength.toFixed(2)}</span></div>
+      <input type="range" min="0" max="1" step="0.01" value="${filters.minStrength}" id="minStrSlider" class="range">
+    </div>
+    <div class="filter-group">
+      <div class="filter-label">confidence</div>
+      <div class="chk-row">${['verified','observed','inferred'].map(confCheck).join('')}</div>
+    </div>
+    <div class="filter-group">
+      <label class="chk">
+        <input type="checkbox" id="starredOnlyChk" ${filters.starredOnly ? 'checked' : ''}>
+        <span style="color:var(--accent)">\u2605</span> starred only
+      </label>
+    </div>
+  `;
+
+  document.querySelectorAll('#filterPanel [data-filter="layer"]').forEach(cb => {
+    cb.addEventListener('change', e => {
+      if (e.target.checked) filters.layers.add(e.target.value);
+      else filters.layers.delete(e.target.value);
+      applyFilters();
+    });
+  });
+  document.querySelectorAll('#filterPanel [data-filter="confidence"]').forEach(cb => {
+    cb.addEventListener('change', e => {
+      if (e.target.checked) filters.confidences.add(e.target.value);
+      else filters.confidences.delete(e.target.value);
+      applyFilters();
+    });
+  });
+  document.getElementById('minStrSlider').addEventListener('input', e => {
+    filters.minStrength = parseFloat(e.target.value);
+    document.getElementById('minStrValue').textContent = filters.minStrength.toFixed(2);
+    applyFilters();
+  });
+  document.getElementById('starredOnlyChk').addEventListener('change', e => {
+    filters.starredOnly = e.target.checked;
+    applyFilters();
+  });
+  document.getElementById('resetFiltersBtn').addEventListener('click', () => {
+    filters = DEFAULT_FILTERS();
+    searchQuery = '';
+    document.getElementById('searchInput').value = '';
+    document.getElementById('searchWrap').classList.remove('has-value');
+    document.getElementById('timelineMin').value = 0;
+    document.getElementById('timelineMax').value = 30;
+    updateTimelineValue();
+    renderFilterPanel();
+    renderTimelineHist();
+    applyFilters();
+    showToast('filters reset');
+  });
+}
+
+function renderHeaderStats() {
+  const total = memories.length;
+  const atRisk = memories.filter(m => m.strength < AT_RISK_STRENGTH).length;
+  const global = memories.filter(m => m.layer === 'semantic').length;
+  document.getElementById('headerStats').textContent =
+    `${total} memories : ${global} semantic : ${atRisk} at risk`;
+}
+
+// ============================================================================
+//  Filter / search application
+// ============================================================================
+function matchesFilter(mem) {
+  if (!filters.layers.has(mem.layer)) return false;
+  if (mem.strength < filters.minStrength) return false;
+  if (!filters.confidences.has(mem.confidence)) return false;
+  if (mem.age < filters.ageMin || mem.age > filters.ageMax) return false;
+  if (filters.starredOnly && !mem.starred) return false;
+  return true;
+}
+
+function matchesSearch(mem) {
+  if (!searchQuery) return true;
+  return mem.text.toLowerCase().includes(searchQuery) ||
+    mem.tags.some(t => t.toLowerCase().includes(searchQuery));
+}
+
+function applyFilters() {
+  for (const node of nodeList) {
+    const f = matchesFilter(node.mem);
+    const s = matchesSearch(node.mem);
+    node.filtered = !f;
+    node.searchMatch = s;
+    const mat = node.mesh.material;
+    const visible = f && s;
+    if (!visible) {
+      mat.opacity = 0.12;
+      mat.emissiveIntensity = 0.04;
+    } else if (searchQuery) {
+      mat.opacity = node.baseOpacity;
+      mat.emissiveIntensity = 0.55;
+    } else {
+      mat.opacity = node.baseOpacity;
+      mat.emissiveIntensity = node.baseEmissive;
+    }
+  }
+  for (const line of edgeLines) {
+    const ni = nodeList[line.userData.i];
+    const nj = nodeList[line.userData.j];
+    const anyDim = ni.filtered || nj.filtered || !ni.searchMatch || !nj.searchMatch;
+    line.material.opacity = anyDim ? 0.015 : line.userData.baseOpacity;
+  }
+  updateDrawerCount();
+  if (drawerOpen) renderDrawer();
+  labelsDirty = true;
+}
+
+function visibleMemories() {
+  return memories.filter(m => matchesFilter(m) && matchesSearch(m));
+}
+
+function updateDrawerCount() {
+  const visible = visibleMemories().length;
+  const total = memories.length;
+  document.getElementById('drawerCount').textContent =
+    visible === total ? `${total} memories` : `${visible} of ${total} memories`;
+}
+
+// ============================================================================
+//  Mouse interaction
+// ============================================================================
+const raycaster = new THREE.Raycaster();
+const mouseNdc = new THREE.Vector2();
+const tooltipEl = document.getElementById('tooltip');
+const hoverPreview = document.getElementById('hoverPreview');
+
+renderer.domElement.addEventListener('mousemove', e => {
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouseNdc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  mouseNdc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(mouseNdc, camera);
+  const hits = raycaster.intersectObjects(meshes)
+    .filter(h => !nodeList[h.object.userData.memIdx].filtered);
+  const prev = hoveredIdx;
+  if (hits.length > 0) {
+    const idx = hits[0].object.userData.memIdx;
+    hoveredIdx = idx;
+    renderer.domElement.style.cursor = 'pointer';
+    const mem = memories[idx];
+    tooltipEl.innerHTML = `<div class="tt-layer" style="color:${LAYERS[mem.layer]}">${layerGlyph(mem.layer)} ${escapeHtml(mem.layer)}</div><div>${escapeHtml(mem.text)}</div>`;
+    tooltipEl.classList.add('visible');
+    const contRect = container.getBoundingClientRect();
+    tooltipEl.style.left = (e.clientX - contRect.left + 14) + 'px';
+    tooltipEl.style.top = (e.clientY - contRect.top - 10) + 'px';
+    if (prev !== idx && prev >= 0) nodeList[prev].mesh.scale.setScalar(1);
+    nodeList[idx].mesh.scale.setScalar(1.3);
+    showHoverPreview(mem);
+    hideEdgeTooltip();
+  } else {
+    hoveredIdx = -1;
+    tooltipEl.classList.remove('visible');
+    if (prev >= 0) nodeList[prev].mesh.scale.setScalar(1);
+    hideHoverPreview();
+    // Edge hover fallback
+    const edgeHits = raycastEdges(e);
+    if (edgeHits.length > 0) {
+      const edge = edgeHits[0].object;
+      if (hoveredEdge !== edge) {
+        if (hoveredEdge) hoveredEdge.material.opacity = hoveredEdge.userData.baseOpacity;
+        hoveredEdge = edge;
+        edge.material.opacity = Math.max(0.5, edge.userData.baseOpacity);
+      }
+      renderer.domElement.style.cursor = 'help';
+      showEdgeTooltip(edge, e.clientX, e.clientY);
+    } else {
+      hideEdgeTooltip();
+      renderer.domElement.style.cursor = 'grab';
+    }
+  }
+  updateLabelHighlights();
+});
+
+function showHoverPreview(mem) {
+  if (selectedIdx >= 0) { hoverPreview.style.display = 'none'; return; }
+  hoverPreview.style.display = 'block';
+  hoverPreview.innerHTML = `
+    <div class="hp-head">
+      <span class="hp-dot" style="background:${LAYERS[mem.layer]}"></span>
+      <span class="hp-layer" style="color:${LAYERS[mem.layer]}">${escapeHtml(mem.layer)}</span>
+      <span class="hp-meta">${escapeHtml(mem.strength.toFixed(2))} str</span>
+    </div>
+    <div class="hp-text">${escapeHtml(mem.text)}</div>
+    <div class="hp-foot">${escapeHtml(String(mem.retrievals))} retrievals : ${escapeHtml(mem.age.toFixed(0))}d old</div>
+  `;
+}
+
+function hideHoverPreview() {
+  hoverPreview.style.display = 'none';
+}
+
+renderer.domElement.addEventListener('click', () => {
+  if (hoveredIdx >= 0 && !nodeList[hoveredIdx].filtered) doSelect(hoveredIdx);
+});
+
+// ============================================================================
+//  Selection + camera tween
+// ============================================================================
+let cameraTween = null;
+
+function flyCameraTo(target) {
+  controls.enabled = false;
+  const currentDir = camera.position.clone().sub(controls.target);
+  const dist = Math.max(8, Math.min(16, currentDir.length()));
+  currentDir.normalize().multiplyScalar(dist);
+  const startPos = camera.position.clone();
+  const startTarget = controls.target.clone();
+  const endPos = target.clone().add(currentDir);
+  const endTarget = target.clone();
+  cameraTween = {
+    startPos, startTarget, endPos, endTarget,
+    startTime: clock.getElapsedTime(),
+    duration: 0.55,
+  };
+}
+
+function updateCameraTween(now) {
+  if (!cameraTween) return;
+  const t = Math.min(1, (now - cameraTween.startTime) / cameraTween.duration);
+  const eased = 1 - Math.pow(1 - t, 3);
+  camera.position.lerpVectors(cameraTween.startPos, cameraTween.endPos, eased);
+  controls.target.lerpVectors(cameraTween.startTarget, cameraTween.endTarget, eased);
+  if (t >= 1) {
+    cameraTween = null;
+    controls.enabled = true;
+    controls.update();
+  }
+}
+
+function doSelect(idx, opts = {}) {
+  selectedIdx = idx;
+  const node = nodeList[idx];
+  updateSidebar(memories[idx]);
+  hoverPreview.style.display = 'none';
+
+  disposeHalo();
+  selectionHalo = makeSelectionHalo(node);
+  scene.add(selectionHalo);
+
+  updateLabelHighlights();
+  document.querySelectorAll('.drawer-row').forEach(el =>
+    el.classList.toggle('selected', parseInt(el.dataset.id) === idx));
+  const selRow = document.querySelector(`.drawer-row[data-id="${idx}"]`);
+  if (selRow && drawerOpen) selRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+
+  flyCameraTo(node.basePos);
+  if (!opts.skipHistory) pushHistory(idx);
+  updateHashForSelection(idx);
+}
+
+function clearSelection() {
+  selectedIdx = -1;
+  disposeHalo();
+  document.querySelectorAll('.drawer-row.selected').forEach(el => el.classList.remove('selected'));
+  document.getElementById('sidebarBody').innerHTML = '<div class="sidebar-empty">Click a memory to see details</div>';
+  hoverPreview.style.display = 'none';
+  updateLabelHighlights();
+  updateHashForSelection(-1);
+}
+
+// ============================================================================
+//  Sidebar detail (escaped)
+// ============================================================================
+function relatedMemories(mem, limit = 3) {
+  return memories
+    .map(m => ({ m, s: simMatrix[mem.id][m.id] }))
+    .filter(r => r.m.id !== mem.id && r.s > 0.04)
+    .sort((a, b) => b.s - a.s)
+    .slice(0, limit);
+}
+
+function updateSidebar(mem) {
+  const p7 = (mem.strength * Math.pow(0.5, 7 / mem.halfLife)).toFixed(3);
+  const p30 = (mem.strength * Math.pow(0.5, 30 / mem.halfLife)).toFixed(3);
+  const bw = Math.round(mem.strength * 40);
+  const tags = mem.tags.map(t => `<span class="tag" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</span>`).join('');
+
+  const related = relatedMemories(mem);
+  const relatedHtml = related.length ? `
+    <div class="related-section">
+      <div class="related-title">related memories</div>
+      ${related.map(({ m, s }) => `
+        <div class="related-card" data-goto="${m.id}">
+          <div class="related-card-head">
+            <span class="related-card-dot" style="background:${LAYERS[m.layer]}"></span>
+            <span style="color:${LAYERS[m.layer]}">${layerGlyph(m.layer)} ${escapeHtml(m.layer)}</span>
+            <span class="related-card-sim">${(s * 100).toFixed(0)}% match</span>
+          </div>
+          <div class="related-card-text">${escapeHtml(m.text)}</div>
+        </div>`).join('')}
+    </div>` : '';
+
+  const lineageHtml = mem.parents.length ? `
+    <div class="lineage-section">
+      <div class="related-title">consolidated from</div>
+      ${mem.parents.map(pid => {
+        const p = memories[pid];
+        return `<span class="lineage-chip" data-goto="${pid}" title="${escapeHtml(p.text)}">
+          <span style="color:${LAYERS[p.layer]}">${layerGlyph(p.layer)}</span>
+          <span class="lineage-chip-text">${escapeHtml(p.text)}</span>
+        </span>`;
+      }).join('')}
+    </div>` : '';
+
+  const kids = childrenIdx[mem.id] || [];
+  const childrenHtml = kids.length ? `
+    <div class="children-section">
+      <div class="related-title">consolidated into</div>
+      ${kids.map(cid => {
+        const c = memories[cid];
+        return `<span class="lineage-chip" data-goto="${cid}" title="${escapeHtml(c.text)}">
+          <span style="color:${LAYERS[c.layer]}">${layerGlyph(c.layer)}</span>
+          <span class="lineage-chip-text">${escapeHtml(c.text)}</span>
+        </span>`;
+      }).join('')}
+    </div>` : '';
+
+  const conflictsHtml = mem.conflicts.length ? `
+    <div class="conflicts-section">
+      <div class="related-title" style="color:var(--accent)">conflicts with</div>
+      ${mem.conflicts.map(cid => {
+        const c = memories[cid];
+        return `<span class="conflict-chip" data-goto="${cid}" title="${escapeHtml(c.text)}">
+          <span>&#9888;</span>
+          <span class="lineage-chip-text">${escapeHtml(c.text)}</span>
+        </span>`;
+      }).join('')}
+    </div>` : '';
+
+  document.getElementById('sidebarBody').innerHTML = `
+    <div class="selected-badges">
+      <span class="badge badge-layer ${escapeHtml(mem.layer)}">${layerGlyph(mem.layer)} ${escapeHtml(mem.layer)}</span>
+      <span class="badge badge-project">hippo</span>
+      <span class="badge badge-conf ${escapeHtml(mem.confidence)}">${escapeHtml(mem.confidence)}</span>
+      <button class="star-btn ${mem.starred ? 'starred' : ''}" id="starBtn" type="button" title="pin memory">${mem.starred ? '\u2605 starred' : '\u2606 star'}</button>
+    </div>
+    <div class="memory-content-wrap">
+      <span class="copy-hint">click to copy</span>
+      <p class="memory-content" id="memoryContent">${escapeHtml(mem.text)}</p>
+    </div>
+    <div class="last-retr">last retrieved: ${escapeHtml(formatRelativeTime(mem.lastRetrievedDaysAgo))}</div>
+    <div class="stats-grid">
+      <div><div class="stat-label">strength</div><div class="stat-value">${escapeHtml(mem.strength.toFixed(3))} <span class="stat-bar" style="width:${bw}px"></span></div></div>
+      <div><div class="stat-label">half-life</div><div class="stat-value">${escapeHtml(mem.halfLife.toFixed(1))} days</div></div>
+      <div><div class="stat-label">retrievals</div><div class="stat-value">${escapeHtml(String(mem.retrievals))}</div></div>
+      <div><div class="stat-label">age</div><div class="stat-value">${escapeHtml(mem.age.toFixed(1))} days</div></div>
+      <div><div class="stat-label">projected 7d</div><div class="stat-value">${escapeHtml(p7)}</div></div>
+      <div><div class="stat-label">projected 30d</div><div class="stat-value">${escapeHtml(p30)}</div></div>
+    </div>
+    <div class="tags-section">
+      <div class="stat-label">tags (click to filter)</div>
+      <div class="tags">${tags}</div>
+    </div>
+    ${lineageHtml}
+    ${childrenHtml}
+    ${conflictsHtml}
+    <div class="decay-section">
+      <div class="decay-label">strength decay</div>
+      <div class="decay-canvas-wrap">
+        <canvas id="decayCanvas"></canvas>
+        <div class="decay-tip" id="decayTip"></div>
+      </div>
+      <div class="decay-axis"><span>now</span><span>30d</span></div>
+    </div>
+    ${relatedHtml}
+  `;
+  drawDecay(mem);
+  wireSidebarInteractions(mem);
+}
+
+function wireSidebarInteractions(mem) {
+  // Clickable tags (filter by tag via search)
+  document.querySelectorAll('#sidebarBody .tag[data-tag]').forEach(el => {
+    el.addEventListener('click', () => {
+      const tag = el.dataset.tag;
+      const searchInput = document.getElementById('searchInput');
+      searchInput.value = tag;
+      searchQuery = tag.toLowerCase();
+      document.getElementById('searchWrap').classList.add('has-value');
+      applyFilters();
+      showToast('filtered to tag: ' + tag);
+    });
+  });
+
+  // Clickable related / lineage / conflict cards
+  document.querySelectorAll('#sidebarBody [data-goto]').forEach(el => {
+    el.addEventListener('click', () => {
+      const id = parseInt(el.dataset.goto);
+      if (!Number.isNaN(id)) doSelect(id);
+    });
+  });
+
+  // Star toggle
+  const starBtn = document.getElementById('starBtn');
+  if (starBtn) {
+    starBtn.addEventListener('click', () => {
+      mem.starred = !mem.starred;
+      starBtn.classList.toggle('starred', mem.starred);
+      starBtn.textContent = mem.starred ? '\u2605 starred' : '\u2606 star';
+      applyFilters();
+      showToast(mem.starred ? 'memory starred' : 'star removed');
+    });
+  }
+
+  // Copy memory text on click
+  const mc = document.getElementById('memoryContent');
+  if (mc) {
+    mc.addEventListener('click', () => {
+      copyToClipboard(mem.text).then(() => showToast('copied to clipboard'));
+    });
+  }
+
+  // Decay curve hover
+  const wrap = document.querySelector('.decay-canvas-wrap');
+  const tip = document.getElementById('decayTip');
+  if (wrap && tip) {
+    wrap.addEventListener('mousemove', e => {
+      const rect = wrap.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const day = Math.max(0, Math.min(30, (x - 4) / (rect.width - 8) * 30));
+      const strength = mem.strength * Math.pow(0.5, day / mem.halfLife);
+      tip.textContent = `day ${day.toFixed(1)}: ${strength.toFixed(3)}`;
+      tip.style.left = x + 'px';
+      tip.style.top = '-4px';
+      tip.classList.add('visible');
+    });
+    wrap.addEventListener('mouseleave', () => tip.classList.remove('visible'));
+  }
+}
+
+function drawDecay(mem) {
+  const wrap = document.querySelector('.decay-canvas-wrap');
+  if (!wrap) return;
+  const c = document.getElementById('decayCanvas');
+  const dpr = devicePixelRatio || 1;
+  c.width = wrap.clientWidth * dpr;
+  c.height = wrap.clientHeight * dpr;
+  const dc = c.getContext('2d');
+  dc.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const cw = wrap.clientWidth, ch = wrap.clientHeight;
+  dc.clearRect(0, 0, cw, ch);
+  const p = 4, gw = cw - 8, gh = ch - 12;
+  dc.beginPath();
+  dc.moveTo(p, p + 3 + gh * (1 - mem.strength));
+  for (let d = 0; d <= 30; d += 0.5) {
+    dc.lineTo(p + (d / 30) * gw, p + 3 + gh * (1 - mem.strength * Math.pow(0.5, d / mem.halfLife)));
+  }
+  dc.strokeStyle = ACCENT;
+  dc.lineWidth = 1.5;
+  dc.stroke();
+  dc.lineTo(p + gw, p + 3 + gh);
+  dc.lineTo(p, p + 3 + gh);
+  dc.closePath();
+  dc.fillStyle = 'rgba(196,92,60,0.06)';
+  dc.fill();
+}
+
+// ============================================================================
+//  Resize
+// ============================================================================
+function resize() {
+  const r = container.getBoundingClientRect();
+  renderer.setSize(r.width, r.height);
+  camera.aspect = r.width / Math.max(r.height, 1);
+  camera.updateProjectionMatrix();
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ============================================================================
+//  Labels + collision avoidance
+// ============================================================================
+const labelContainer = document.createElement('div');
+labelContainer.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:hidden;';
+container.appendChild(labelContainer);
+
+const labelEls = nodeList.map((node, idx) => {
+  const el = document.createElement('div');
+  el.className = 'node-label';
+  el.textContent = node.mem.text.split(/\s+/).slice(0, 5).join(' ');
+  el.style.display = 'none';
+  labelContainer.appendChild(el);
+  return { el, idx };
+});
+
+function updateLabelHighlights() {
+  for (const { el, idx } of labelEls) {
+    el.classList.toggle('selected', idx === selectedIdx);
+    el.classList.toggle('hovered', idx === hoveredIdx && idx !== selectedIdx);
+  }
+}
+
+function aabbOverlap(a, b) {
+  return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
+}
+
+function updateLabels() {
+  const rect = renderer.domElement.getBoundingClientRect();
+  const w = rect.width, h = rect.height;
+  const w2 = w / 2, h2 = h / 2;
+  const candidates = [];
+  for (const { el, idx } of labelEls) {
+    const node = nodeList[idx];
+    const v = node.mesh.position.clone().project(camera);
+    if (v.z > 1) { el.style.display = 'none'; continue; }
+    const sx = v.x * w2 + w2;
+    const sy = -v.y * h2 + h2;
+    if (sx < -40 || sx > w + 40 || sy < -30 || sy > h + 30) { el.style.display = 'none'; continue; }
+    const dist = camera.position.distanceTo(node.mesh.position);
+    if (dist > 55) { el.style.display = 'none'; continue; }
+    let priority;
+    if (idx === selectedIdx) priority = 1e6;
+    else if (idx === hoveredIdx) priority = 5e5;
+    else if (searchQuery && node.searchMatch && !node.filtered) priority = 1e5 + node.mem.strength * 100;
+    else if (node.filtered) priority = node.mem.strength * 5;
+    else priority = 100 + node.mem.strength * 80 + node.mem.retrievals;
+    candidates.push({ el, idx, node, sx, sy, dist, priority });
+  }
+  candidates.sort((a, b) => b.priority - a.priority);
+
+  const placed = [];
+  for (const c of candidates) {
+    const forced = c.idx === selectedIdx || c.idx === hoveredIdx;
+    if (c.node.filtered && !forced) { c.el.style.display = 'none'; continue; }
+    const textLen = c.el.textContent.length;
+    const pxW = textLen * 6.5 + 22;
+    const pxH = 20;
+    const box = {
+      left: c.sx + 12, right: c.sx + 12 + pxW,
+      top: c.sy - pxH / 2, bottom: c.sy + pxH / 2,
+    };
+    const collides = placed.some(p => aabbOverlap(p, box));
+    if (collides && !forced) { c.el.style.display = 'none'; continue; }
+    const fade = Math.max(0, Math.min(1, 1 - (c.dist - 14) / 28));
+    c.el.style.display = '';
+    c.el.style.left = c.sx + 'px';
+    c.el.style.top = c.sy + 'px';
+    c.el.style.opacity = String(fade * (c.node.filtered ? 0.35 : 1));
+    placed.push(box);
+  }
+}
+
+// ============================================================================
+//  Drawer
+// ============================================================================
+let drawerOpen = false, drawerSort = 'strength', drawerDir = 'desc';
+
+function strColor(v) { return v > 0.7 ? '#5a8f6b' : v > 0.4 ? '#4a8ca3' : '#c45c3c'; }
+
+function emptyStateSuggestion() {
+  const candidates = [];
+  if (filters.minStrength > 0) candidates.push({
+    label: `strength min is ${filters.minStrength.toFixed(2)} - relax to 0`,
+    fn: () => { filters.minStrength = 0; renderFilterPanel(); applyFilters(); }
+  });
+  if (filters.layers.size < 3) candidates.push({
+    label: 'all layers are not visible - show all',
+    fn: () => { filters.layers = new Set(['buffer','episodic','semantic']); renderFilterPanel(); applyFilters(); }
+  });
+  if (filters.confidences.size < 3) candidates.push({
+    label: 'confidence is restricted - show all',
+    fn: () => { filters.confidences = new Set(['verified','observed','inferred']); renderFilterPanel(); applyFilters(); }
+  });
+  if (filters.ageMin > 0 || filters.ageMax < 30) candidates.push({
+    label: 'age range is restricted - show all',
+    fn: () => { filters.ageMin = 0; filters.ageMax = 30; timelineMin.value = 0; timelineMax.value = 30; updateTimelineValue(); renderTimelineHist(); applyFilters(); }
+  });
+  if (filters.starredOnly) candidates.push({
+    label: 'showing starred only - include all',
+    fn: () => { filters.starredOnly = false; renderFilterPanel(); applyFilters(); }
+  });
+  if (searchQuery) candidates.push({
+    label: `clear search "${searchQuery}"`,
+    fn: () => { searchInput.value = ''; searchQuery = ''; searchWrap.classList.remove('has-value'); applyFilters(); }
+  });
+  return candidates[0] || null;
+}
+
+function renderDrawer() {
+  const visible = visibleMemories();
+  const sorted = [...visible].sort((a, b) => {
+    const va = a[drawerSort], vb = b[drawerSort];
+    return drawerDir === 'desc' ? vb - va : va - vb;
+  });
+  const body = document.getElementById('drawerBody');
+  if (sorted.length === 0) {
+    const sug = emptyStateSuggestion();
+    body.innerHTML = `<div class="drawer-empty">no memories match current filters
+      ${sug ? `<br><button class="drawer-empty-action" id="relaxBtn" type="button">${escapeHtml(sug.label)}</button>` : ''}
+    </div>`;
+    if (sug) document.getElementById('relaxBtn').addEventListener('click', sug.fn);
+    return;
+  }
+  body.innerHTML = sorted.map(mem => {
+    const sel = mem.id === selectedIdx ? ' selected' : '';
+    const sc = strColor(mem.strength);
+    const trunc = mem.text.length > 55 ? mem.text.slice(0, 55) + '\u2026' : mem.text;
+    return `<div class="drawer-row${sel}" data-id="${mem.id}" onclick="window._selectFromDrawer(${mem.id})">
+      <div><span class="drawer-dot" style="background:${LAYERS[mem.layer]}"></span></div>
+      <div class="drawer-content">${escapeHtml(trunc)}</div>
+      <div class="drawer-str-wrap">
+        <div class="drawer-str-bar"><div class="drawer-str-fill" style="width:${Math.round(mem.strength * 100)}%;background:${sc}"></div></div>
+        <span class="drawer-val" style="font-size:10px;color:${sc}">${escapeHtml(mem.strength.toFixed(2))}</span>
+      </div>
+      <div class="drawer-val">${escapeHtml(String(mem.retrievals))}</div>
+      <div class="drawer-val">${escapeHtml(mem.age.toFixed(0))}d</div>
+      <div><span class="drawer-conf ${escapeHtml(mem.confidence)}">${escapeHtml(mem.confidence)}</span></div>
+    </div>`;
+  }).join('');
+}
+
+window.toggleDrawer = function () {
+  drawerOpen = !drawerOpen;
+  document.getElementById('memoryDrawer').classList.toggle('open', drawerOpen);
+  const toggle = document.getElementById('memoryListToggle');
+  toggle.querySelector('.drawer-toggle-action').textContent = drawerOpen ? 'HIDE LIST' : 'VIEW LIST';
+  if (drawerOpen) renderDrawer();
+};
+
+window.sortDrawer = function (field) {
+  if (drawerSort === field) drawerDir = drawerDir === 'desc' ? 'asc' : 'desc';
+  else { drawerSort = field; drawerDir = 'desc'; }
+  document.querySelectorAll('.drawer-header div[data-sort]').forEach(el => {
+    const active = el.dataset.sort === drawerSort;
+    el.classList.toggle('sort-active', active);
+    const base = { strength: 'Strength', retrievals: 'Retr.', age: 'Age' }[el.dataset.sort];
+    el.innerHTML = active ? base + (drawerDir === 'desc' ? ' \u2193' : ' \u2191') : base;
+  });
+  renderDrawer();
+};
+
+window._selectFromDrawer = function (id) { doSelect(id); };
+
+// ============================================================================
+//  Timeline scrubber (age filter)
+// ============================================================================
+const timelineMin = document.getElementById('timelineMin');
+const timelineMax = document.getElementById('timelineMax');
+const timelineValue = document.getElementById('timelineValue');
+const timelineHist = document.getElementById('timelineHist');
+
+function updateTimelineValue() {
+  timelineValue.textContent = `${filters.ageMin} to ${filters.ageMax} days`;
+}
+
+function renderTimelineHist() {
+  const BUCKETS = 30;
+  const counts = new Array(BUCKETS).fill(0);
+  for (const m of memories) {
+    const b = Math.min(BUCKETS - 1, Math.floor(m.age));
+    counts[b]++;
+  }
+  const max = Math.max(...counts, 1);
+  timelineHist.innerHTML = counts.map((c, i) => {
+    const pct = (c / max) * 100;
+    const active = i >= filters.ageMin && i < filters.ageMax;
+    return `<div class="timeline-bar${active ? ' active' : ''}" style="height:${pct}%"></div>`;
+  }).join('');
+}
+
+function onTimelineChange() {
+  let lo = parseInt(timelineMin.value);
+  let hi = parseInt(timelineMax.value);
+  if (lo > hi) [lo, hi] = [hi, lo];
+  filters.ageMin = lo;
+  filters.ageMax = hi;
+  updateTimelineValue();
+  renderTimelineHist();
+  applyFilters();
+}
+timelineMin.addEventListener('input', onTimelineChange);
+timelineMax.addEventListener('input', onTimelineChange);
+
+// ============================================================================
+//  Minimap
+// ============================================================================
+const minimapCanvas = document.getElementById('minimapCanvas');
+const minimapCtx = minimapCanvas.getContext('2d');
+const MINIMAP_PAD = 10;
+let lastCameraPos = new THREE.Vector3();
+
+function xzToMinimap(x, z) {
+  const half = SPREAD * 1.8;
+  const w = minimapCanvas.width, h = minimapCanvas.height;
+  const px = MINIMAP_PAD + ((x + half) / (half * 2)) * (w - 2 * MINIMAP_PAD);
+  const py = MINIMAP_PAD + ((z + half) / (half * 2)) * (h - 2 * MINIMAP_PAD);
+  return [px, py];
+}
+function minimapToXz(px, py) {
+  const half = SPREAD * 1.8;
+  const w = minimapCanvas.width, h = minimapCanvas.height;
+  const x = ((px - MINIMAP_PAD) / (w - 2 * MINIMAP_PAD)) * (half * 2) - half;
+  const z = ((py - MINIMAP_PAD) / (h - 2 * MINIMAP_PAD)) * (half * 2) - half;
+  return [x, z];
+}
+
+function renderMinimap() {
+  const w = minimapCanvas.width, h = minimapCanvas.height;
+  minimapCtx.fillStyle = 'rgba(250,247,242,0.05)';
+  minimapCtx.fillRect(0, 0, w, h);
+  // Parchment wash
+  minimapCtx.fillStyle = 'rgba(244, 239, 230, 0.5)';
+  minimapCtx.fillRect(0, 0, w, h);
+
+  // Edges (faint)
+  minimapCtx.strokeStyle = 'rgba(139,125,107,0.25)';
+  minimapCtx.lineWidth = 0.5;
+  for (const line of edgeLines) {
+    if (line.material.opacity < 0.02) continue;
+    const ni = nodeList[line.userData.i];
+    const nj = nodeList[line.userData.j];
+    const [ax, ay] = xzToMinimap(ni.basePos.x, ni.basePos.z);
+    const [bx, by] = xzToMinimap(nj.basePos.x, nj.basePos.z);
+    minimapCtx.beginPath();
+    minimapCtx.moveTo(ax, ay);
+    minimapCtx.lineTo(bx, by);
+    minimapCtx.stroke();
+  }
+
+  // Nodes
+  for (const node of nodeList) {
+    const [px, py] = xzToMinimap(node.basePos.x, node.basePos.z);
+    const r = 1.2 + node.radius * 3;
+    const dim = node.filtered || !node.searchMatch;
+    minimapCtx.fillStyle = dim ? 'rgba(155,142,126,0.35)' : LAYERS[node.mem.layer];
+    minimapCtx.beginPath();
+    minimapCtx.arc(px, py, r, 0, Math.PI * 2);
+    minimapCtx.fill();
+  }
+
+  // Selection marker
+  if (selectedIdx >= 0) {
+    const node = nodeList[selectedIdx];
+    const [px, py] = xzToMinimap(node.basePos.x, node.basePos.z);
+    minimapCtx.strokeStyle = ACCENT;
+    minimapCtx.lineWidth = 1.5;
+    minimapCtx.beginPath();
+    minimapCtx.arc(px, py, node.radius * 3 + 4, 0, Math.PI * 2);
+    minimapCtx.stroke();
+  }
+
+  // Camera frustum (approximate: project target + position)
+  const camX = camera.position.x, camZ = camera.position.z;
+  const tgtX = controls.target.x, tgtZ = controls.target.z;
+  const [cpx, cpy] = xzToMinimap(camX, camZ);
+  const [tpx, tpy] = xzToMinimap(tgtX, tgtZ);
+  // Line from cam to target
+  minimapCtx.strokeStyle = 'rgba(196,92,60,0.55)';
+  minimapCtx.lineWidth = 1;
+  minimapCtx.beginPath();
+  minimapCtx.moveTo(cpx, cpy);
+  minimapCtx.lineTo(tpx, tpy);
+  minimapCtx.stroke();
+  // Camera dot
+  minimapCtx.fillStyle = ACCENT;
+  minimapCtx.beginPath();
+  minimapCtx.arc(cpx, cpy, 2.5, 0, Math.PI * 2);
+  minimapCtx.fill();
+  // Target cross
+  minimapCtx.strokeStyle = ACCENT;
+  minimapCtx.lineWidth = 0.8;
+  minimapCtx.beginPath();
+  minimapCtx.moveTo(tpx - 3, tpy); minimapCtx.lineTo(tpx + 3, tpy);
+  minimapCtx.moveTo(tpx, tpy - 3); minimapCtx.lineTo(tpx, tpy + 3);
+  minimapCtx.stroke();
+}
+
+minimapCanvas.addEventListener('click', e => {
+  const rect = minimapCanvas.getBoundingClientRect();
+  const px = (e.clientX - rect.left) * (minimapCanvas.width / rect.width);
+  const py = (e.clientY - rect.top) * (minimapCanvas.height / rect.height);
+  const [wx, wz] = minimapToXz(px, py);
+  // Find nearest node to click
+  let nearest = -1, bestD = Infinity;
+  for (const node of nodeList) {
+    if (node.filtered || !node.searchMatch) continue;
+    const dx = node.basePos.x - wx, dz = node.basePos.z - wz;
+    const d = Math.sqrt(dx * dx + dz * dz);
+    if (d < bestD) { bestD = d; nearest = node.mem.id; }
+  }
+  if (nearest >= 0 && bestD < 2.5) {
+    doSelect(nearest);
+  } else {
+    // Fly camera to that XZ location without selecting
+    flyCameraTo(new THREE.Vector3(wx, 0, wz));
+  }
+});
+
+// ============================================================================
+//  Edge hover (raycast)
+// ============================================================================
+const edgeRaycaster = new THREE.Raycaster();
+edgeRaycaster.params.Line = { threshold: 0.25 };
+const edgeTooltip = document.getElementById('edgeTooltip');
+let hoveredEdge = null;
+
+function raycastEdges(e) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouseNdc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  mouseNdc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  edgeRaycaster.setFromCamera(mouseNdc, camera);
+  const hits = edgeRaycaster.intersectObjects(edgeLines)
+    .filter(h => h.object.material.opacity > 0.05);
+  return hits;
+}
+
+function showEdgeTooltip(edgeLine, clientX, clientY) {
+  const { i, j, sim } = edgeLine.userData;
+  const a = memories[i], b = memories[j];
+  const shared = sharedTokens(tokens[i], tokens[j]).slice(0, 10);
+  const contRect = container.getBoundingClientRect();
+  edgeTooltip.innerHTML = `
+    <div class="edge-tooltip-head">similarity: ${(sim * 100).toFixed(0)}%</div>
+    <div style="margin-bottom:3px"><span style="color:${LAYERS[a.layer]}">${layerGlyph(a.layer)}</span> ${escapeHtml(a.text.slice(0, 54))}${a.text.length > 54 ? '\u2026' : ''}</div>
+    <div class="edge-tooltip-arrow">shares</div>
+    <div style="margin-top:3px"><span style="color:${LAYERS[b.layer]}">${layerGlyph(b.layer)}</span> ${escapeHtml(b.text.slice(0, 54))}${b.text.length > 54 ? '\u2026' : ''}</div>
+    ${shared.length ? `<div class="edge-tooltip-tokens">${shared.map(t => `<span class="edge-tooltip-token">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+  `;
+  edgeTooltip.style.left = (clientX - contRect.left + 14) + 'px';
+  edgeTooltip.style.top = (clientY - contRect.top - 10) + 'px';
+  edgeTooltip.classList.add('visible');
+}
+function hideEdgeTooltip() {
+  edgeTooltip.classList.remove('visible');
+  if (hoveredEdge) { hoveredEdge.material.opacity = hoveredEdge.userData.baseOpacity; hoveredEdge = null; }
+}
+
+// ============================================================================
+//  Deep links + selection history
+// ============================================================================
+function pushHistory(id) {
+  if (historyIndex >= 0 && selectionHistory[historyIndex] === id) return;
+  // truncate redo stack
+  selectionHistory.splice(historyIndex + 1);
+  selectionHistory.push(id);
+  historyIndex = selectionHistory.length - 1;
+}
+function historyBack() {
+  if (historyIndex <= 0) return;
+  historyIndex--;
+  doSelect(selectionHistory[historyIndex], { skipHistory: true });
+}
+function historyForward() {
+  if (historyIndex >= selectionHistory.length - 1) return;
+  historyIndex++;
+  doSelect(selectionHistory[historyIndex], { skipHistory: true });
+}
+function updateHashForSelection(id) {
+  try {
+    const newHash = id >= 0 ? `#mem=${id}` : '';
+    if (location.hash !== newHash) {
+      history.replaceState(null, '', newHash || location.pathname + location.search);
+    }
+  } catch (e) {}
+}
+function applyHash() {
+  const m = location.hash.match(/#mem=(\d+)/);
+  if (m) {
+    const id = parseInt(m[1]);
+    if (id >= 0 && id < memories.length) doSelect(id);
+  }
+}
+window.addEventListener('hashchange', applyHash);
+
+// ============================================================================
+//  Snapshot to PNG
+// ============================================================================
+document.getElementById('snapshotBtn').addEventListener('click', () => {
+  // Force a fresh render
+  renderer.render(scene, camera);
+  const url = renderer.domElement.toDataURL('image/png');
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  a.download = `hippo-observatory-${stamp}.png`;
+  a.href = url;
+  a.click();
+  showToast('snapshot saved');
+});
+
+// ============================================================================
+//  Click empty map area to deselect
+// ============================================================================
+renderer.domElement.addEventListener('dblclick', () => {
+  if (hoveredIdx < 0) clearSelection();
+});
+
+// ============================================================================
+//  Drawer resize
+// ============================================================================
+const drawerEl = document.getElementById('memoryDrawer');
+const resizeHandle = document.getElementById('drawerResizeHandle');
+let dragging = false;
+let dragStartY = 0;
+let startHeight = 0;
+resizeHandle.addEventListener('mousedown', e => {
+  dragging = true;
+  dragStartY = e.clientY;
+  startHeight = drawerEl.getBoundingClientRect().height;
+  document.body.style.userSelect = 'none';
+  e.preventDefault();
+});
+window.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  const delta = dragStartY - e.clientY;
+  const newH = Math.max(120, Math.min(window.innerHeight - 120, startHeight + delta));
+  drawerEl.style.height = newH + 'px';
+});
+window.addEventListener('mouseup', () => {
+  if (dragging) { dragging = false; document.body.style.userSelect = ''; }
+});
+
+// ============================================================================
+//  Search
+// ============================================================================
+const searchInput = document.getElementById('searchInput');
+const searchWrap = document.getElementById('searchWrap');
+const searchClear = document.getElementById('searchClear');
+searchInput.addEventListener('input', e => {
+  searchQuery = e.target.value.trim().toLowerCase();
+  searchWrap.classList.toggle('has-value', !!e.target.value);
+  applyFilters();
+});
+searchClear.addEventListener('click', () => {
+  searchInput.value = '';
+  searchQuery = '';
+  searchWrap.classList.remove('has-value');
+  applyFilters();
+  searchInput.focus();
+});
+
+// ============================================================================
+//  Keyboard navigation
+// ============================================================================
+function selectNextVisible(dir) {
+  const visible = visibleMemories();
+  if (visible.length === 0) return;
+  const ids = visible.map(m => m.id);
+  let idx = ids.indexOf(selectedIdx);
+  if (idx === -1) idx = dir > 0 ? -1 : ids.length;
+  const nextIdx = (idx + dir + ids.length) % ids.length;
+  doSelect(ids[nextIdx]);
+}
+
+document.addEventListener('keydown', e => {
+  const isTextInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA';
+  if (isTextInput) {
+    if (e.key === 'Escape') {
+      if (e.target === searchInput && searchInput.value) {
+        searchInput.value = '';
+        searchQuery = '';
+        searchWrap.classList.remove('has-value');
+        applyFilters();
+      } else {
+        e.target.blur();
+      }
+    }
+    return;
+  }
+  if (e.key === '/') {
+    e.preventDefault();
+    searchInput.focus();
+    searchInput.select();
+  } else if (e.key === 'Escape') {
+    clearSelection();
+  } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+    e.preventDefault();
+    selectNextVisible(1);
+  } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    selectNextVisible(-1);
+  } else if (e.key === '[') {
+    e.preventDefault();
+    historyBack();
+  } else if (e.key === ']') {
+    e.preventDefault();
+    historyForward();
+  }
+});
+
+// ============================================================================
+//  Freeze motion
+// ============================================================================
+const freezeBtn = document.getElementById('freezeToggle');
+freezeBtn.addEventListener('click', () => {
+  motionFrozen = !motionFrozen;
+  freezeBtn.classList.toggle('active', motionFrozen);
+  freezeBtn.textContent = motionFrozen ? 'Motion frozen' : 'Freeze motion';
+});
+
+// ============================================================================
+//  Animation loop
+// ============================================================================
+let labelsDirty = true;
+let minimapFrame = 0;
+
+function markLabelsDirty() { labelsDirty = true; }
+
+function animate() {
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+
+  if (!motionFrozen) {
+    skyMat.uniforms.uTime.value = t;
+    if (selectionHalo && selectedIdx >= 0) {
+      selectionHalo.position.copy(nodeList[selectedIdx].mesh.position);
+      const s = 1 + 0.1 * Math.sin(t * 2.4);
+      selectionHalo.scale.setScalar(s);
+      selectionHalo.material.opacity = 0.14 + 0.08 * (0.5 + 0.5 * Math.sin(t * 2.4));
+    }
+  } else if (selectionHalo && selectedIdx >= 0) {
+    selectionHalo.position.copy(nodeList[selectedIdx].mesh.position);
+  }
+
+  updateCameraTween(t);
+  controls.update();
+  renderer.render(scene, camera);
+
+  // Dirty-check for labels: if camera moved, labels need repositioning
+  const camMoved = camera.position.distanceToSquared(lastCameraPos) > 0.0001;
+  if (camMoved || labelsDirty) {
+    updateLabels();
+    lastCameraPos.copy(camera.position);
+    labelsDirty = false;
+  }
+
+  // Minimap at ~20 fps (cheap but avoid every frame)
+  if ((minimapFrame++ & 2) === 0) renderMinimap();
+}
+
+// ============================================================================
+//  Init
+// ============================================================================
+renderStatsPanel();
+renderFilterPanel();
+renderHeaderStats();
+updateTimelineValue();
+renderTimelineHist();
+updateDrawerCount();
+renderDrawer();
+applyFilters();
+renderMinimap();
+animate();
+applyHash(); // restore selection from URL if present
+if (layoutFromCache) console.log('[hippo] using cached layout');
+</script>
+</body>
+</html>

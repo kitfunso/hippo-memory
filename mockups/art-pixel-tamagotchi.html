@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>HIPPO-GOTCHI v1.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0906;
+    --amber:#e8a618;
+    --hi:#ffc74a;
+    --mut:#8a5f1a;
+    --dim:#5a3f10;
+    --shell:#f7c85a;
+    --shell-hi:#ffe28c;
+    --shell-lo:#b88a20;
+    --shell-lip:#d9a432;
+    --bezel:#2a2a22;
+    --bezel-hi:#4a4538;
+    --lcd:#8a9870;
+    --lcd-dk:#2a3a22;
+    --btn:#3a3028;
+    --btn-hi:#6a5a45;
+    --btn-lo:#1a1410;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--amber);
+    font-family:'Share Tech Mono',ui-monospace,monospace;font-size:13px;line-height:1.35;overflow:hidden}
+  body{
+    filter:contrast(1.05) brightness(1.08);
+    text-shadow:0 0 1px rgba(232,166,24,0.55), 0 0 8px rgba(232,166,24,0.12);
+  }
+  .scan{position:fixed;inset:0;pointer-events:none;z-index:50;
+    background:repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0 2px, rgba(0,0,0,0.18) 2px 3px);
+    mix-blend-mode:multiply;opacity:0.55}
+  .vignette{position:fixed;inset:0;pointer-events:none;z-index:51;
+    background:radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.75) 100%)}
+  @keyframes flicker{ 0%{opacity:1} 3%{opacity:.92} 6%{opacity:1} 70%{opacity:1} 72%{opacity:.95} 100%{opacity:1} }
+  .flick{animation:flicker 4.7s infinite}
+
+  .stage{position:fixed;inset:0;display:grid;place-items:center}
+
+  /* status block */
+  .status{position:fixed;top:18px;left:22px;z-index:10;white-space:pre;
+    color:var(--amber);font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:0.5px;
+    line-height:1.5}
+  .status .ttl{color:var(--hi)}
+  .status .lbl{color:var(--mut)}
+
+  .hint{position:fixed;bottom:22px;left:0;right:0;z-index:10;text-align:center;
+    color:var(--mut);font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:1.2px}
+  .hint b{color:var(--hi);font-weight:normal}
+
+  /* device */
+  .device{
+    position:relative;
+    width:min(55vw, 760px);
+    aspect-ratio: 5 / 6;
+    background:
+      radial-gradient(ellipse at 30% 15%, rgba(255,255,255,0.55), rgba(255,255,255,0) 45%),
+      radial-gradient(ellipse at 75% 85%, rgba(0,0,0,0.18), rgba(0,0,0,0) 55%),
+      linear-gradient(160deg, var(--shell-hi) 0%, var(--shell) 35%, var(--shell-lo) 100%);
+    border-radius: 46% 46% 44% 44% / 42% 42% 48% 48%;
+    box-shadow:
+      inset 0 8px 18px rgba(255,255,255,0.55),
+      inset 0 -18px 34px rgba(120,80,10,0.45),
+      inset 0 0 0 2px rgba(0,0,0,0.15),
+      0 22px 55px rgba(0,0,0,0.75),
+      0 4px 0 rgba(0,0,0,0.35);
+    transform: rotate(-1.6deg);
+  }
+  /* outer keychain tab */
+  .device::before{
+    content:"";
+    position:absolute;
+    top:-22px;left:50%;transform:translateX(-50%);
+    width:84px;height:36px;
+    background:
+      radial-gradient(ellipse at 30% 30%, rgba(255,255,255,0.55), rgba(255,255,255,0) 55%),
+      linear-gradient(160deg, var(--shell-hi), var(--shell) 50%, var(--shell-lo));
+    border-radius: 22px 22px 6px 6px;
+    box-shadow: inset 0 2px 4px rgba(255,255,255,0.5), inset 0 -3px 6px rgba(120,80,10,0.45), 0 4px 10px rgba(0,0,0,0.55);
+  }
+  /* keychain hole */
+  .device::after{
+    content:"";
+    position:absolute;
+    top:-10px;left:50%;transform:translateX(-50%);
+    width:22px;height:22px;border-radius:50%;
+    background:#0a0906;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.9), inset 0 -1px 2px rgba(255,255,255,0.1);
+  }
+
+  /* printed label */
+  .label{
+    position:absolute;top:8%;left:0;right:0;text-align:center;
+    font-family:'VT323',monospace;font-size:18px;letter-spacing:3px;
+    color:rgba(60,40,10,0.75);
+    text-shadow:none;
+    pointer-events:none;
+  }
+  .label .mk{color:rgba(200,60,70,0.75);letter-spacing:2px}
+
+  /* inner bezel frame */
+  .bezel{
+    position:absolute;
+    top:18%;left:14%;right:14%;bottom:48%;
+    background: linear-gradient(170deg, var(--bezel-hi), var(--bezel) 60%, #1a1812);
+    border-radius: 18px;
+    box-shadow:
+      inset 0 3px 6px rgba(0,0,0,0.8),
+      inset 0 -2px 4px rgba(255,255,255,0.06),
+      0 2px 0 rgba(255,255,255,0.45),
+      0 -1px 0 rgba(0,0,0,0.3);
+    padding:14px;
+  }
+  .bezel-inner{
+    width:100%;height:100%;
+    background:var(--lcd);
+    border-radius:6px;
+    position:relative;
+    overflow:hidden;
+    box-shadow:
+      inset 0 0 0 1px rgba(0,0,0,0.4),
+      inset 0 2px 6px rgba(0,0,0,0.35),
+      inset 0 -1px 3px rgba(255,255,255,0.1);
+    cursor:crosshair;
+  }
+  /* LCD grid overlay */
+  .bezel-inner::after{
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background:
+      repeating-linear-gradient(0deg, rgba(0,0,0,0.06) 0 1px, transparent 1px 6px),
+      repeating-linear-gradient(90deg, rgba(0,0,0,0.06) 0 1px, transparent 1px 6px);
+    mix-blend-mode:multiply;opacity:0.6;
+  }
+  /* LCD shine */
+  .bezel-inner::before{
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:3;
+    background: linear-gradient(135deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0) 40%);
+  }
+  canvas#lcd{
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    width:100%;height:100%;display:block;position:relative;z-index:1;
+  }
+
+  /* left "MODE" text tab */
+  .tab{
+    position:absolute;font-family:'VT323',monospace;color:rgba(60,40,10,0.7);font-size:12px;letter-spacing:1.5px;
+  }
+  .tab.l{top:22%;left:4%;transform:rotate(-90deg);transform-origin:left top;}
+  .tab.r{top:22%;right:4%;transform:rotate(90deg);transform-origin:right top;}
+
+  /* speaker grill */
+  .speaker{position:absolute;right:12%;bottom:28%;display:flex;flex-direction:column;gap:4px}
+  .speaker i{display:block;width:6px;height:6px;border-radius:50%;
+    background:radial-gradient(circle at 30% 30%, #3a2a05, #1a1205 70%);
+    box-shadow: 1px 1px 0 rgba(255,255,255,0.35);}
+
+  /* button cluster */
+  .btns{
+    position:absolute;
+    left:0;right:0;bottom:13%;
+    display:flex;justify-content:center;gap:8%;
+  }
+  .btn{
+    width:15%;aspect-ratio:1/1;border-radius:50%;border:none;cursor:pointer;
+    background:
+      radial-gradient(circle at 35% 30%, var(--btn-hi) 0%, var(--btn) 45%, var(--btn-lo) 100%);
+    box-shadow:
+      inset 0 -3px 6px rgba(0,0,0,0.65),
+      inset 0 3px 4px rgba(255,255,255,0.18),
+      0 4px 0 rgba(0,0,0,0.55),
+      0 6px 12px rgba(0,0,0,0.4);
+    color:#f3e8c8;font-family:'VT323',monospace;font-size:clamp(18px, 2.2vw, 26px);
+    font-weight:normal;letter-spacing:1px;
+    text-shadow: 0 1px 0 rgba(0,0,0,0.7);
+    position:relative;
+    transition: box-shadow 80ms ease, transform 80ms ease;
+    padding:0;
+  }
+  .btn:active, .btn.press{
+    box-shadow:
+      inset 0 -1px 2px rgba(0,0,0,0.5),
+      inset 0 2px 3px rgba(255,255,255,0.14),
+      0 1px 0 rgba(0,0,0,0.55),
+      0 2px 4px rgba(0,0,0,0.3);
+    transform: translateY(2px);
+  }
+  .btn-ring{
+    position:absolute;inset:-8%;border-radius:50%;
+    background:
+      radial-gradient(circle at 30% 25%, rgba(255,255,255,0.25), rgba(0,0,0,0) 40%),
+      radial-gradient(circle, rgba(0,0,0,0.35), rgba(0,0,0,0) 70%);
+    z-index:-1;filter: blur(0.5px);
+  }
+
+  /* idle wobble */
+  @keyframes nod{0%,100%{transform:rotate(-1.6deg) translateY(0)}50%{transform:rotate(-1.6deg) translateY(-2px)}}
+  .device{animation: nod 6.2s ease-in-out infinite}
+
+  /* LED power dot */
+  .power{position:absolute;top:17%;right:17%;width:8px;height:8px;border-radius:50%;
+    background:#ff4530;box-shadow:0 0 8px rgba(255,60,40,0.8), inset 0 1px 2px rgba(255,255,255,0.5);
+    animation: blink 3.2s ease-in-out infinite;
+  }
+  @keyframes blink{0%,94%,100%{opacity:1}97%{opacity:0.3}}
+
+</style>
+</head>
+<body class="flick">
+  <div class="scan"></div>
+  <div class="vignette"></div>
+
+  <div class="status"><span class="ttl">[ POCKET HIPPO :: v1.0 ]</span>
+<span class="lbl">pet age:</span> 38 memories
+<span class="lbl">last fed:</span> 2h ago
+<span class="lbl">mood:</span> <span class="ttl">CONTENT</span></div>
+
+  <div class="stage">
+    <div class="device" id="device">
+      <div class="label">HIPPO<span class="mk">*</span>GOTCHI <span class="mk">v1.0</span></div>
+      <div class="tab l">MEMORY</div>
+      <div class="tab r">CARE</div>
+      <div class="power"></div>
+      <div class="bezel">
+        <div class="bezel-inner" id="lcdWrap">
+          <canvas id="lcd" width="192" height="144"></canvas>
+        </div>
+      </div>
+      <div class="speaker">
+        <i></i><i></i><i></i><i></i>
+      </div>
+      <div class="btns">
+        <button class="btn" id="btnA" aria-label="pet">A<span class="btn-ring"></span></button>
+        <button class="btn" id="btnB" aria-label="feed">B<span class="btn-ring"></span></button>
+        <button class="btn" id="btnC" aria-label="sleep">C<span class="btn-ring"></span></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="hint">PRESS <b>[A]</b> TO PET <b>::</b> <b>[B]</b> TO FEED <b>::</b> <b>[C]</b> TO SLEEP</div>
+
+<script>
+// ----- 16x16 sprites (1=dark-green, 0=pale LCD green) chibi seahorse -----
+const S_IDLE = ["0000001111000000","0000011111100000","0000110000110000","0001100110011000","0001101111011000","0001100000011000","0000111001111000","0000001111110000","0000011111000000","0000111110000000","0001111100000000","0011111000000000","0011110011110000","0001100111100000","0000011110000000","0000001100000000"];
+const S_BLINK = ["0000001111000000","0000011111100000","0000110000110000","0001100000011000","0001111111011000","0001100000011000","0000111001111000","0000001111110000","0000011111000000","0000111110000000","0001111100000000","0011111000000000","0011110011110000","0001100111100000","0000011110000000","0000001100000000"];
+const S_HAPPY = ["0000001111000000","0000011111100000","0000110000110000","0001101001011000","0001110110111000","0001100000011000","0000111111111000","0000001111110000","0000011111000000","0000111110000000","0001111100000000","0011111000000000","0011110011110000","0001100111100000","0000011110000000","0000001100000000"];
+const S_SLEEPY = ["0000001111000000","0000011111100000","0000110000110000","0001100000011000","0001111001111000","0001100000011000","0000111111111000","0000001111110000","0000011111000000","0000111110000000","0001111100000000","0011111000000000","0011110011110000","0001100111100000","0000011110000000","0000001100000000"];
+const S_HUNGRY = ["0000001111000000","0000011111100000","0000110000110000","0001101001011000","0001101001011000","0001100110011000","0000111111111000","0000001111110000","0000011111000000","0000111110000000","0001111100000000","0011111000000000","0011110011110000","0001100111100000","0000011110000000","0000001100000000"];
+// decorations
+const S_HEART = ["0110110","1111111","1111111","0111110","0011100","0001000"];
+const S_NOTE  = ["0011100","0011110","0011010","0011010","1111010","1111000"];
+const S_Z     = ["1111","0010","0100","1111"];
+const S_APPLE = ["0011100","0111100","1111110","1111110","1111110","0111100"];
+const S_SPARK = ["010","111","010"];
+
+// ---- LCD render ----
+const canvas = document.getElementById('lcd');
+const ctx = canvas.getContext('2d', { alpha:false });
+ctx.imageSmoothingEnabled = false;
+
+// LCD dimensions (logical pixels)
+const LCD_W = 192, LCD_H = 144; // matches canvas attrs -> 12x per 16px sprite approx
+// We draw the sprite at scale 6 (so 16*6 = 96 wide, ~50% of 192 wide -> 60% visually)
+const SCALE = 6;
+
+const COLOR_BG = '#8a9870';
+const COLOR_DK = '#2a3a22';
+const COLOR_BG_DIM = '#7c8a64';
+
+function drawSprite(sprite, px, py, scale=SCALE, color=COLOR_DK){
+  ctx.fillStyle = color;
+  for(let y=0;y<sprite.length;y++){
+    const row = sprite[y];
+    for(let x=0;x<row.length;x++){
+      if(row[x]==='1'){
+        ctx.fillRect(px + x*scale, py + y*scale, scale, scale);
+      }
+    }
+  }
+}
+
+function drawHeartsMeter(filled){
+  // upper-right 5 hearts, each 6x5 + 1 gap
+  const hw = 7, hh = 6, gap = 2;
+  const startX = LCD_W - (hw*5 + gap*4) - 4;
+  const startY = 4;
+  for(let i=0;i<5;i++){
+    const x = startX + i*(hw+gap);
+    if(i < filled){
+      drawSprite(S_HEART, x, startY, 1, COLOR_DK);
+    } else {
+      // empty heart outline only
+      const outline = [
+        "0110110",
+        "1001001",
+        "1000001",
+        "0100010",
+        "0010100",
+        "0001000",
+      ];
+      drawSprite(outline, x, startY, 1, COLOR_DK);
+    }
+  }
+}
+
+function drawStatusBar(){
+  // little "M" icon (memory) on top-left, tiny dashed baseline
+  ctx.fillStyle = COLOR_DK;
+  // M icon 5x5
+  const m = ["10001","11011","10101","10001","10001"];
+  drawSprite(m, 4, 4, 1, COLOR_DK);
+  // text dots to the right
+  for(let i=0;i<3;i++) ctx.fillRect(12 + i*3, 6, 2, 2);
+}
+
+function drawBaseline(){
+  // dashed ground line under pet
+  ctx.fillStyle = COLOR_DK;
+  for(let x=20;x<LCD_W-20;x+=6){
+    ctx.fillRect(x, LCD_H-14, 3, 1);
+  }
+}
+
+// ---- state machine ----
+const state = {
+  mode: 'idle',        // idle | blink | happy | sleepy | hungry
+  modeUntil: 0,
+  nextBlink: 2500,
+  nextHappy: 14000,
+  nextSleepy: 28000,
+  nextHungry: 45000,
+  tStart: performance.now(),
+  nudgeX: 0, nudgeY: 0,
+  sparkles: [],        // {x,y,born,life}
+  foodVisible: false,
+  foodBlink: 0,
+  eating: 0,           // ms remaining of eating anim
+  overrideMode: null,  // user-triggered
+  overrideUntil: 0,
+};
+
+function setMode(mode, ms){
+  state.overrideMode = mode;
+  state.overrideUntil = performance.now() + ms;
+}
+
+function addSparkles(cx, cy){
+  const t = performance.now();
+  for(let i=0;i<6;i++){
+    const ang = (i/6)*Math.PI*2;
+    state.sparkles.push({
+      x: cx + Math.cos(ang)*18,
+      y: cy + Math.sin(ang)*14,
+      born: t,
+      life: 900,
+    });
+  }
+}
+
+function pickSprite(now){
+  if(state.overrideMode && now < state.overrideUntil){
+    return state.overrideMode;
+  }
+  state.overrideMode = null;
+  const t = now - state.tStart;
+  // schedule one-shot modes
+  if(state.mode === 'idle'){
+    if(t > state.nextBlink){ state.mode='blink'; state.modeUntil = now + 150; state.nextBlink = t + 4000 + Math.random()*3000; }
+    else if(t > state.nextHappy){ state.mode='happy'; state.modeUntil = now + 600; state.nextHappy = t + 12000 + Math.random()*6000; }
+    else if(t > state.nextSleepy){ state.mode='sleepy'; state.modeUntil = now + 1500; state.nextSleepy = t + 25000 + Math.random()*10000; }
+    else if(t > state.nextHungry){ state.mode='hungry'; state.modeUntil = now + 1500; state.nextHungry = t + 40000 + Math.random()*20000; state.foodVisible = true; }
+  } else {
+    if(now >= state.modeUntil){
+      if(state.mode==='hungry') state.foodVisible = false;
+      state.mode = 'idle';
+    }
+  }
+  return state.mode;
+}
+
+function spriteFor(mode){
+  switch(mode){
+    case 'blink': return S_BLINK;
+    case 'happy': return S_HAPPY;
+    case 'sleepy': return S_SLEEPY;
+    case 'hungry': return S_HUNGRY;
+    default: return S_IDLE;
+  }
+}
+
+function render(now){
+  // clear LCD to BG
+  ctx.fillStyle = COLOR_BG;
+  ctx.fillRect(0,0,LCD_W,LCD_H);
+
+  drawStatusBar();
+  drawHeartsMeter(4);
+  drawBaseline();
+
+  const mode = pickSprite(now);
+  const sp = spriteFor(mode);
+
+  // base position: center pet, integer pixel bob
+  const baseX = Math.floor((LCD_W - 16*SCALE)/2);
+  const baseY = Math.floor((LCD_H - 16*SCALE)/2) + 2;
+  const bob = Math.round(Math.sin(now/500) * 1); // 1-pixel integer bob
+  const px = baseX + state.nudgeX*SCALE;
+  const py = baseY + bob*SCALE + state.nudgeY*SCALE;
+
+  drawSprite(sp, px, py);
+
+  // decorations
+  if(mode==='happy'){
+    // music note or heart floating above
+    drawSprite(S_NOTE, px + 16*SCALE + 4, py + 2, 2, COLOR_DK);
+  }
+  if(mode==='sleepy'){
+    // "Z" pixel above head, fades
+    const zf = Math.floor((now/400)%3);
+    drawSprite(S_Z, px + 16*SCALE - 2, py - 10 - zf*3, 2, COLOR_DK);
+  }
+  if(mode==='hungry' && state.foodVisible){
+    // apple blinks
+    if(Math.floor(now/300)%2===0){
+      drawSprite(S_APPLE, px - 20, py + 22, 2, COLOR_DK);
+    }
+  }
+  if(state.eating > 0){
+    // shrinking apple next to mouth
+    const sc = Math.max(1, Math.floor(state.eating/400));
+    drawSprite(S_APPLE, px - 14, py + 22, sc, COLOR_DK);
+    state.eating -= 16;
+  }
+
+  // sparkles (from pet action)
+  state.sparkles = state.sparkles.filter(s => now - s.born < s.life);
+  for(const s of state.sparkles){
+    const age = (now - s.born)/s.life;
+    const sc = 1 + Math.floor((1-age)*2);
+    drawSprite(S_SPARK, Math.round(s.x), Math.round(s.y), sc, COLOR_DK);
+  }
+
+  requestAnimationFrame(render);
+}
+requestAnimationFrame(render);
+
+// ---- button interactions ----
+function flashBtn(el){
+  el.classList.add('press');
+  setTimeout(()=>el.classList.remove('press'), 120);
+}
+
+document.getElementById('btnA').addEventListener('click', (e)=>{
+  flashBtn(e.currentTarget);
+  setMode('happy', 1000);
+  const cx = LCD_W/2, cy = LCD_H/2;
+  addSparkles(cx, cy);
+});
+document.getElementById('btnB').addEventListener('click', (e)=>{
+  flashBtn(e.currentTarget);
+  setMode('hungry', 500);
+  state.foodVisible = true;
+  // then transition: after 500ms it becomes idle, and apple "eats" for 1500ms
+  setTimeout(()=>{
+    state.foodVisible = false;
+    state.eating = 1200;
+    setMode('idle', 1200);
+  }, 500);
+});
+document.getElementById('btnC').addEventListener('click', (e)=>{
+  flashBtn(e.currentTarget);
+  setMode('sleepy', 3000);
+});
+
+// click on LCD nudges the pet
+document.getElementById('lcdWrap').addEventListener('click', (e)=>{
+  const rect = e.currentTarget.getBoundingClientRect();
+  const rx = (e.clientX - rect.left)/rect.width;   // 0..1
+  const ry = (e.clientY - rect.top)/rect.height;
+  // direction from center
+  const dx = rx - 0.5, dy = ry - 0.5;
+  state.nudgeX = Math.max(-2, Math.min(2, Math.round(dx*8)));
+  state.nudgeY = Math.max(-2, Math.min(2, Math.round(dy*8)));
+  setTimeout(()=>{ state.nudgeX = 0; state.nudgeY = 0; }, 350);
+});
+</script>
+</body>
+</html>

@@ -21,7 +21,7 @@ const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: new (path: string) => DatabaseSyncLike;
 };
 
-const CURRENT_SCHEMA_VERSION = 8;
+const CURRENT_SCHEMA_VERSION = 9;
 
 type Migration = {
   version: number;
@@ -193,6 +193,17 @@ const MIGRATIONS: Migration[] = [
     version: 8,
     up: (db) => {
       createPhysicsTable(db);
+    },
+  },
+  {
+    version: 9,
+    up: (db) => {
+      if (!tableHasColumn(db, 'memories', 'parents_json')) {
+        db.exec(`ALTER TABLE memories ADD COLUMN parents_json TEXT NOT NULL DEFAULT '[]'`);
+      }
+      if (!tableHasColumn(db, 'memories', 'starred')) {
+        db.exec(`ALTER TABLE memories ADD COLUMN starred INTEGER NOT NULL DEFAULT 0`);
+      }
     },
   },
 ];

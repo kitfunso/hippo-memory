@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hippo Brain Observatory — Terrain Map</title>
+<style>
+  /* No external deps — system font stacks only */
+
+  /* ── Reset ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ── Paper texture overlay ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.035;
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(139,125,107,0.3) 2px, transparent 4px),
+      repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(139,125,107,0.2) 2px, transparent 4px),
+      repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(139,125,107,0.15) 3px, transparent 6px);
+  }
+
+  body {
+    font-family: Georgia, 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
+    background-color: #f4efe6;
+    color: #3a3228;
+    min-height: 100vh;
+    padding: 28px 32px;
+    line-height: 1.5;
+  }
+
+  /* ── Layout ── */
+  .page-grid {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    grid-template-rows: auto 1fr auto;
+    gap: 24px;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+
+  /* ── Cartouche (title box) ── */
+  .cartouche {
+    grid-column: 1 / 2;
+    grid-row: 1 / 2;
+    border: 3px double #8b7d6b;
+    padding: 20px 28px 18px;
+    position: relative;
+    background: rgba(244,239,230,0.85);
+    max-width: 520px;
+  }
+  .cartouche::before,
+  .cartouche::after {
+    position: absolute;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    color: #8b7d6b;
+    font-size: 18px;
+    line-height: 1;
+  }
+  .cartouche::before { content: '\250C'; top: -2px; left: -1px; }
+  .cartouche::after { content: '\2510'; top: -2px; right: -1px; }
+  .cartouche .corner-bl,
+  .cartouche .corner-br {
+    position: absolute;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    color: #8b7d6b;
+    font-size: 18px;
+    line-height: 1;
+  }
+  .cartouche .corner-bl { bottom: -4px; left: -1px; }
+  .cartouche .corner-br { bottom: -4px; right: -1px; }
+  .cartouche h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+    color: #3a3228;
+  }
+  .cartouche .subtitle {
+    font-style: italic;
+    font-size: 15px;
+    color: #5a4e40;
+    margin-bottom: 12px;
+  }
+  .cartouche .scale-info {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 11px;
+    color: #9b8e7e;
+    line-height: 1.7;
+  }
+
+  /* ── Main terrain canvas ── */
+  .terrain-wrap {
+    grid-column: 1 / 2;
+    grid-row: 2 / 3;
+    border: 1px solid #c4b9a8;
+    position: relative;
+    background: #f4efe6;
+    overflow: hidden;
+  }
+  .terrain-wrap canvas {
+    display: block;
+    width: 100%;
+    height: 520px;
+  }
+
+  /* ── Zone labels ── */
+  .zone-label {
+    position: absolute;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 10px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: rgba(90,62,40,0.35);
+    pointer-events: none;
+    font-weight: 600;
+  }
+  .zone-label.buffer   { top: 30px;  left: 50%; transform: translateX(-50%); color: rgba(100,140,160,0.4); }
+  .zone-label.episodic { top: 50%;   left: 50%; transform: translate(-50%, -50%); color: rgba(80,110,70,0.35); }
+  .zone-label.semantic  { bottom: 30px; left: 50%; transform: translateX(-50%); color: rgba(120,90,60,0.4); }
+
+  /* ── Compass rose (SVG overlay) ── */
+  .compass {
+    position: absolute;
+    bottom: 18px;
+    left: 18px;
+    width: 70px;
+    height: 70px;
+    opacity: 0.6;
+  }
+
+  /* ── Right sidebar ── */
+  .field-notes {
+    grid-column: 2 / 3;
+    grid-row: 1 / 3;
+    border: 1px solid #c4b9a8;
+    padding: 22px 20px;
+    background: rgba(244,239,230,0.6);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .field-notes h2 {
+    font-size: 14px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: #5a3e28;
+    border-bottom: 2px solid #8b7d6b;
+    padding-bottom: 6px;
+    margin-bottom: 0;
+  }
+  .field-notes h2::after {
+    content: '';
+    display: block;
+    width: 100%;
+    height: 1px;
+    background: #c4b9a8;
+    margin-top: 3px;
+  }
+  .station-info {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 11px;
+    color: #9b8e7e;
+    line-height: 1.8;
+  }
+  .station-info strong {
+    color: #5a3e28;
+    font-weight: 600;
+  }
+  .memory-content {
+    font-size: 16px;
+    line-height: 1.55;
+    color: #3a3228;
+    font-style: italic;
+    border-left: 3px solid #c45c3c;
+    padding-left: 14px;
+  }
+
+  /* ── Survey data table ── */
+  .survey-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 11px;
+  }
+  .survey-table th {
+    text-align: left;
+    font-weight: 500;
+    color: #9b8e7e;
+    padding: 5px 8px 5px 0;
+    border-bottom: 1px solid #c4b9a8;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 1px;
+  }
+  .survey-table td {
+    padding: 5px 8px 5px 0;
+    border-bottom: 1px solid rgba(196,185,168,0.5);
+    color: #3a3228;
+  }
+  .survey-table td.value {
+    text-align: right;
+    font-weight: 600;
+    padding-right: 0;
+  }
+  .stable { color: #6b8f5e; font-weight: 600; }
+  .at-risk { color: #c45c3c; font-weight: 600; }
+
+  /* ── Tags ── */
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .tag {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 10px;
+    border: 1px solid #8b7d6b;
+    padding: 2px 8px;
+    color: #5a3e28;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    background: rgba(139,125,107,0.06);
+  }
+  .tag:nth-child(odd) { transform: rotate(-0.8deg); }
+  .tag:nth-child(even) { transform: rotate(0.5deg); }
+
+  /* ── Elevation profile ── */
+  .elevation-profile {
+    border: 1px solid #c4b9a8;
+    padding: 10px;
+    background: rgba(244,239,230,0.5);
+  }
+  .elevation-profile h3 {
+    font-size: 10px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #9b8e7e;
+    margin-bottom: 8px;
+  }
+  .elevation-profile canvas {
+    width: 100%;
+    height: 80px;
+    display: block;
+  }
+
+  /* ── Legend (bottom) ── */
+  .legend {
+    grid-column: 1 / -1;
+    grid-row: 3 / 4;
+    border: 1px solid #c4b9a8;
+    padding: 16px 22px;
+    background: rgba(244,239,230,0.6);
+  }
+  .legend h2 {
+    font-size: 12px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: #5a3e28;
+    border-bottom: 2px solid #8b7d6b;
+    padding-bottom: 4px;
+    margin-bottom: 14px;
+    display: inline-block;
+  }
+  .legend h2::after {
+    content: '';
+    display: block;
+    width: 100%;
+    height: 1px;
+    background: #c4b9a8;
+    margin-top: 3px;
+  }
+  .legend-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 28px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 11px;
+    color: #5a4e40;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .legend-swatch {
+    width: 14px;
+    height: 14px;
+    border: 1px solid #c4b9a8;
+    flex-shrink: 0;
+  }
+  .legend-line {
+    width: 36px;
+    height: 2px;
+    background: #8b7d6b;
+    flex-shrink: 0;
+    position: relative;
+  }
+  .legend-line.dashed {
+    background: transparent;
+    border-top: 2px dashed #8b7d6b;
+    height: 0;
+  }
+  .legend-zone {
+    width: 28px;
+    height: 14px;
+    border: 1px solid #c4b9a8;
+    flex-shrink: 0;
+  }
+  .legend-totals {
+    margin-left: auto;
+    font-style: italic;
+    font-family: Georgia, 'Palatino Linotype', Palatino, serif;
+    color: #9b8e7e;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+
+<div class="page-grid">
+
+  <!-- ── Cartouche ── -->
+  <div class="cartouche">
+    <span class="corner-bl">&#x2514;</span>
+    <span class="corner-br">&#x2518;</span>
+    <h1>Hippo Brain Observatory</h1>
+    <div class="subtitle">Topographic Survey of Memory</div>
+    <div class="scale-info">
+      Scale: 1 unit = 1 memory &nbsp;|&nbsp; Contour interval: 0.1 strength<br>
+      Surveyed: April 2026 &nbsp;|&nbsp; 57 memories catalogued
+    </div>
+  </div>
+
+  <!-- ── Terrain canvas ── -->
+  <div class="terrain-wrap">
+    <canvas id="terrainCanvas"></canvas>
+    <div class="zone-label buffer">Buffer Basin</div>
+    <div class="zone-label episodic">Episodic Plateau</div>
+    <div class="zone-label semantic">Semantic Bedrock</div>
+
+    <!-- Compass rose -->
+    <svg class="compass" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="50" cy="50" r="46" stroke="#8b7d6b" stroke-width="1" fill="none"/>
+      <circle cx="50" cy="50" r="42" stroke="#8b7d6b" stroke-width="0.5" fill="none"/>
+      <!-- N arrow -->
+      <polygon points="50,8 46,28 50,22 54,28" fill="#5a3e28"/>
+      <!-- S arrow -->
+      <polygon points="50,92 46,72 50,78 54,72" fill="#c4b9a8"/>
+      <!-- E arrow -->
+      <polygon points="92,50 72,46 78,50 72,54" fill="#c4b9a8"/>
+      <!-- W arrow -->
+      <polygon points="8,50 28,46 22,50 28,54" fill="#c4b9a8"/>
+      <!-- Center dot -->
+      <circle cx="50" cy="50" r="3" fill="#5a3e28"/>
+      <circle cx="50" cy="50" r="1.5" fill="#f4efe6"/>
+      <!-- Cardinal letters -->
+      <text x="50" y="6" text-anchor="middle" font-family="Georgia,Palatino,serif" font-size="9" fill="#5a3e28" font-weight="600">N</text>
+      <text x="50" y="99" text-anchor="middle" font-family="Georgia,Palatino,serif" font-size="9" fill="#9b8e7e">S</text>
+      <text x="98" y="53" text-anchor="middle" font-family="Georgia,Palatino,serif" font-size="9" fill="#9b8e7e">E</text>
+      <text x="3" y="53" text-anchor="middle" font-family="Georgia,Palatino,serif" font-size="9" fill="#9b8e7e">W</text>
+      <!-- Tick marks -->
+      <line x1="50" y1="10" x2="50" y2="16" stroke="#8b7d6b" stroke-width="0.5"/>
+      <line x1="50" y1="84" x2="50" y2="90" stroke="#8b7d6b" stroke-width="0.5"/>
+      <line x1="10" y1="50" x2="16" y2="50" stroke="#8b7d6b" stroke-width="0.5"/>
+      <line x1="84" y1="50" x2="90" y2="50" stroke="#8b7d6b" stroke-width="0.5"/>
+    </svg>
+  </div>
+
+  <!-- ── Field Notes sidebar ── -->
+  <div class="field-notes">
+    <h2>Field Notes</h2>
+
+    <div class="station-info">
+      <strong>Station:</strong> &alpha;-2847<br>
+      <strong>Formation:</strong> EPISODIC / OBSERVED<br>
+      <strong>Coordinates:</strong> 34.2N, 67.8E
+    </div>
+
+    <div class="memory-content">
+      Gold model uses TIPS 10y as primary inflation signal. Reversion to mean observed after 3-week persistence.
+    </div>
+
+    <table class="survey-table">
+      <tr><th>Measurement</th><th style="text-align:right">Value</th></tr>
+      <tr><td>Elevation (strength)</td><td class="value">1.000</td></tr>
+      <tr><td>Erosion rate (decay)</td><td class="value">31.5 days</td></tr>
+      <tr><td>Survey count (retrievals)</td><td class="value">14</td></tr>
+      <tr><td>First survey (created)</td><td class="value">Apr 7, 2026</td></tr>
+      <tr><td>Age</td><td class="value">9.9 days</td></tr>
+      <tr><td>Stability (projected)</td><td class="value"><span class="stable">STABLE</span></td></tr>
+    </table>
+
+    <div class="tags">
+      <span class="tag">gold</span>
+      <span class="tag">tips-10y</span>
+      <span class="tag">inflation</span>
+      <span class="tag">signal</span>
+      <span class="tag">production</span>
+    </div>
+
+    <div class="elevation-profile">
+      <h3>Elevation Profile &mdash; Strength over Time</h3>
+      <canvas id="profileCanvas"></canvas>
+    </div>
+
+    <div class="station-info" style="margin-top:auto; border-top:1px solid #c4b9a8; padding-top:12px;">
+      <strong>Adjacent peaks:</strong><br>
+      &bull; Git Lesson Ridge (0.87) &mdash; 12.4 units NE<br>
+      &bull; Error Gorge (0.62) &mdash; 8.1 units SW<br>
+      &bull; Pipeline Summit (0.94) &mdash; 15.7 units N
+    </div>
+  </div>
+
+  <!-- ── Legend ── -->
+  <div class="legend">
+    <h2>Legend</h2>
+    <div class="legend-row">
+      <div class="legend-item">
+        <div class="legend-line"></div>
+        <span>Strength contour (0.1 interval)</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-line dashed"></div>
+        <span>Memory trail (association)</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:#5a3e28;"></div>
+        <span>Strong</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:#6b8f5e;"></div>
+        <span>Healthy</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:#a8c4d4;"></div>
+        <span>Fading</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:#c45c3c;"></div>
+        <span>At risk</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-zone" style="background:rgba(168,196,212,0.18);"></div>
+        <span>Buffer</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-zone" style="background:rgba(107,143,94,0.12);"></div>
+        <span>Episodic</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-zone" style="background:rgba(139,125,107,0.12);"></div>
+        <span>Semantic</span>
+      </div>
+      <div class="legend-totals">
+        57 memories &middot; 12 global &middot; 45 local &middot; 0 at risk
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── Terrain Canvas ──
+(function() {
+  const canvas = document.getElementById('terrainCanvas');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  const W = rect.width || 900;
+  const H = 520;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  // Seeded pseudo-random
+  let seed = 42;
+  function rand() { seed = (seed * 16807 + 0) % 2147483647; return (seed - 1) / 2147483646; }
+
+  // ── Background zone fills ──
+  const zoneH = H / 3;
+  // Buffer basin (top) — blue wash
+  ctx.fillStyle = 'rgba(168,196,212,0.12)';
+  ctx.fillRect(0, 0, W, zoneH);
+  // Episodic plateau (center) — green wash
+  ctx.fillStyle = 'rgba(107,143,94,0.08)';
+  ctx.fillRect(0, zoneH, W, zoneH);
+  // Semantic bedrock (bottom) — brown wash
+  ctx.fillStyle = 'rgba(139,125,107,0.08)';
+  ctx.fillRect(0, zoneH * 2, W, zoneH);
+
+  // ── Grid overlay ──
+  ctx.strokeStyle = 'rgba(139,125,107,0.12)';
+  ctx.lineWidth = 0.5;
+  for (let x = 0; x <= W; x += 60) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (let y = 0; y <= H; y += 60) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+  // UTM-style labels along edges
+  ctx.font = '9px Consolas, Monaco, monospace';
+  ctx.fillStyle = 'rgba(139,125,107,0.3)';
+  for (let x = 60; x < W; x += 60) {
+    ctx.fillText((x / 60).toFixed(0), x + 2, 10);
+  }
+  for (let y = 60; y < H; y += 60) {
+    ctx.fillText(String.fromCharCode(65 + Math.floor(y / 60) - 1), 4, y - 2);
+  }
+
+  // ── Memory peaks ──
+  const peaks = [
+    { x: 180, y: 90,  name: 'TIPS Signal Peak',    strength: 1.0,  color: '#5a3e28' },
+    { x: 420, y: 70,  name: 'Pipeline Summit',     strength: 0.94, color: '#5a3e28' },
+    { x: 650, y: 110, name: 'Cache Bluff',         strength: 0.72, color: '#6b8f5e' },
+    { x: 120, y: 260, name: 'Git Lesson Ridge',    strength: 0.87, color: '#5a3e28' },
+    { x: 380, y: 290, name: 'Error Gorge',         strength: 0.62, color: '#c45c3c' },
+    { x: 600, y: 250, name: 'Futures Col',         strength: 0.81, color: '#6b8f5e' },
+    { x: 280, y: 420, name: 'Decay Basin',         strength: 0.45, color: '#a8c4d4' },
+    { x: 520, y: 440, name: 'Schema Plateau',      strength: 0.90, color: '#5a3e28' },
+    { x: 720, y: 400, name: 'Supabase Mesa',       strength: 0.78, color: '#6b8f5e' },
+  ];
+
+  // Generate contour points for a peak (irregular closed curves)
+  function contourPoints(cx, cy, baseR, nPoints, jitter, angleSeed) {
+    const pts = [];
+    for (let i = 0; i < nPoints; i++) {
+      const a = (i / nPoints) * Math.PI * 2;
+      seed = angleSeed + i * 137;
+      const r = baseR + (rand() - 0.5) * jitter * 2;
+      pts.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r });
+    }
+    return pts;
+  }
+
+  function drawSmoothClosed(pts) {
+    if (pts.length < 3) return;
+    ctx.beginPath();
+    const n = pts.length;
+    ctx.moveTo(
+      (pts[n - 1].x + pts[0].x) / 2,
+      (pts[n - 1].y + pts[0].y) / 2
+    );
+    for (let i = 0; i < n; i++) {
+      const next = pts[(i + 1) % n];
+      const midX = (pts[i].x + next.x) / 2;
+      const midY = (pts[i].y + next.y) / 2;
+      ctx.quadraticCurveTo(pts[i].x, pts[i].y, midX, midY);
+    }
+    ctx.closePath();
+    ctx.stroke();
+  }
+
+  // Animation state
+  let time = 0;
+
+  function drawFrame() {
+    time += 0.003;
+
+    // Clear and redraw background
+    ctx.clearRect(0, 0, W, H);
+
+    // Zone fills
+    ctx.fillStyle = 'rgba(168,196,212,0.12)';
+    ctx.fillRect(0, 0, W, zoneH);
+    ctx.fillStyle = 'rgba(107,143,94,0.08)';
+    ctx.fillRect(0, zoneH, W, zoneH);
+    ctx.fillStyle = 'rgba(139,125,107,0.08)';
+    ctx.fillRect(0, zoneH * 2, W, zoneH);
+
+    // Grid
+    ctx.strokeStyle = 'rgba(139,125,107,0.12)';
+    ctx.lineWidth = 0.5;
+    for (let x = 0; x <= W; x += 60) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+    }
+    for (let y = 0; y <= H; y += 60) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    }
+    ctx.font = '9px Consolas, Monaco, monospace';
+    ctx.fillStyle = 'rgba(139,125,107,0.3)';
+    for (let x = 60; x < W; x += 60) ctx.fillText((x / 60).toFixed(0), x + 2, 10);
+    for (let y = 60; y < H; y += 60) ctx.fillText(String.fromCharCode(65 + Math.floor(y / 60) - 1), 4, y - 2);
+
+    // ── River lines (blue, flowing through low areas) ──
+    ctx.strokeStyle = 'rgba(168,196,212,0.35)';
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([]);
+
+    // River 1
+    ctx.beginPath();
+    ctx.moveTo(30, 180);
+    for (let t = 0; t < 1; t += 0.02) {
+      const x = 30 + t * 300;
+      const y = 180 + Math.sin(t * 6 + time * 2) * 15 + t * 80;
+      ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // River 2
+    ctx.beginPath();
+    ctx.moveTo(450, 330);
+    for (let t = 0; t < 1; t += 0.02) {
+      const x = 450 + t * 200;
+      const y = 330 + Math.sin(t * 5 + time * 1.5 + 2) * 12 + t * 60;
+      ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // River 3 (small tributary)
+    ctx.strokeStyle = 'rgba(168,196,212,0.25)';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(680, 300);
+    for (let t = 0; t < 1; t += 0.02) {
+      const x = 680 + t * 100;
+      const y = 300 + Math.sin(t * 7 + time * 2.5 + 4) * 8 + t * 100;
+      ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // ── Contour lines for each peak ──
+    peaks.forEach(function(peak, pi) {
+      const numContours = Math.round(peak.strength * 8);
+      for (let c = numContours; c >= 1; c--) {
+        const ratio = c / numContours;
+        const baseR = 20 + c * (15 + peak.strength * 8);
+        const opacity = 0.15 + ratio * 0.45;
+        ctx.strokeStyle = 'rgba(139,125,107,' + opacity + ')';
+        ctx.lineWidth = ratio > 0.7 ? 1.5 : 0.8;
+        ctx.setLineDash([]);
+
+        const nPts = 24;
+        const pts = [];
+        for (let i = 0; i < nPts; i++) {
+          const a = (i / nPts) * Math.PI * 2;
+          seed = pi * 1000 + c * 100 + i * 13 + 7;
+          const jitter = (rand() - 0.5) * baseR * 0.35;
+          const undulation = Math.sin(a * 3 + time + pi) * 2 + Math.cos(a * 2 - time * 0.7) * 1.5;
+          const r = baseR + jitter + undulation;
+          pts.push({
+            x: peak.x + Math.cos(a) * r,
+            y: peak.y + Math.sin(a) * r
+          });
+        }
+        drawSmoothClosed(pts);
+      }
+    });
+
+    // ── Dotted trail connections between nearby peaks ──
+    ctx.strokeStyle = 'rgba(139,125,107,0.25)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 6]);
+
+    const connections = [
+      [0, 1], [0, 3], [1, 2], [3, 4], [4, 5], [5, 2],
+      [6, 3], [6, 7], [7, 8], [4, 7], [5, 8]
+    ];
+    connections.forEach(function(conn) {
+      const a = peaks[conn[0]], b = peaks[conn[1]];
+      ctx.beginPath();
+      // Winding path with midpoint offset
+      const midX = (a.x + b.x) / 2 + Math.sin(conn[0] + conn[1]) * 20;
+      const midY = (a.y + b.y) / 2 + Math.cos(conn[0] * conn[1]) * 15;
+      ctx.moveTo(a.x, a.y);
+      ctx.quadraticCurveTo(midX, midY, b.x, b.y);
+      ctx.stroke();
+    });
+    ctx.setLineDash([]);
+
+    // ── Peak markers and labels ──
+    peaks.forEach(function(peak) {
+      // Triangle marker
+      ctx.fillStyle = peak.color;
+      ctx.beginPath();
+      ctx.moveTo(peak.x, peak.y - 8);
+      ctx.lineTo(peak.x - 5, peak.y + 2);
+      ctx.lineTo(peak.x + 5, peak.y + 2);
+      ctx.closePath();
+      ctx.fill();
+
+      // Label
+      ctx.font = 'italic 11px Georgia, Palatino, serif';
+      ctx.fillStyle = '#3a3228';
+      ctx.textAlign = 'center';
+      ctx.fillText(peak.name, peak.x, peak.y + 16);
+
+      // Elevation value
+      ctx.font = '9px Consolas, Monaco, monospace';
+      ctx.fillStyle = '#9b8e7e';
+      ctx.fillText(peak.strength.toFixed(2), peak.x, peak.y + 28);
+      ctx.textAlign = 'left';
+    });
+
+    requestAnimationFrame(drawFrame);
+  }
+
+  drawFrame();
+})();
+
+// ── Elevation Profile Canvas ──
+(function() {
+  const canvas = document.getElementById('profileCanvas');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  const W = rect.width || 260;
+  const H = 80;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  // Fake strength-over-time data (14 data points over 10 days)
+  const data = [0.4, 0.55, 0.62, 0.68, 0.71, 0.78, 0.82, 0.85, 0.89, 0.92, 0.95, 0.97, 0.99, 1.0];
+  const n = data.length;
+  const pad = { top: 8, bottom: 18, left: 4, right: 4 };
+  const plotW = W - pad.left - pad.right;
+  const plotH = H - pad.top - pad.bottom;
+
+  // Terrain fill
+  ctx.beginPath();
+  ctx.moveTo(pad.left, pad.top + plotH);
+  data.forEach(function(d, i) {
+    const x = pad.left + (i / (n - 1)) * plotW;
+    const y = pad.top + plotH - d * plotH;
+    if (i === 0) ctx.lineTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.lineTo(pad.left + plotW, pad.top + plotH);
+  ctx.closePath();
+
+  const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + plotH);
+  grad.addColorStop(0, 'rgba(196,92,60,0.25)');
+  grad.addColorStop(0.5, 'rgba(107,143,94,0.15)');
+  grad.addColorStop(1, 'rgba(168,196,212,0.1)');
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  data.forEach(function(d, i) {
+    const x = pad.left + (i / (n - 1)) * plotW;
+    const y = pad.top + plotH - d * plotH;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = '#8b7d6b';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Dots at data points
+  data.forEach(function(d, i) {
+    const x = pad.left + (i / (n - 1)) * plotW;
+    const y = pad.top + plotH - d * plotH;
+    ctx.beginPath();
+    ctx.arc(x, y, 2, 0, Math.PI * 2);
+    ctx.fillStyle = d >= 0.9 ? '#c45c3c' : '#8b7d6b';
+    ctx.fill();
+  });
+
+  // Baseline
+  ctx.strokeStyle = 'rgba(139,125,107,0.3)';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(pad.left, pad.top + plotH);
+  ctx.lineTo(pad.left + plotW, pad.top + plotH);
+  ctx.stroke();
+
+  // Axis labels
+  ctx.font = '8px Consolas, Monaco, monospace';
+  ctx.fillStyle = '#9b8e7e';
+  ctx.textAlign = 'left';
+  ctx.fillText('Apr 7', pad.left, H - 2);
+  ctx.textAlign = 'right';
+  ctx.fillText('Apr 17', W - pad.right, H - 2);
+  ctx.textAlign = 'left';
+  ctx.fillText('1.0', pad.left, pad.top + 4);
+  ctx.fillText('0.0', pad.left, pad.top + plotH - 2);
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hippo Brain Observatory</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+  :root {
+    --bg: #f4efe6;
+    --map-bg: #faf7f2;
+    --text: #3a3228;
+    --accent: #c45c3c;
+    --buffer: #7c6caf;
+    --episodic: #c49a3c;
+    --semantic: #5a8f6b;
+    --connection: rgba(58, 50, 40, 0.08);
+    --dim: #9b8e7e;
+    --border: #c4b9a8;
+    --healthy: #5a8f6b;
+    --at-risk: #c45c3c;
+    --grid: rgba(139, 125, 107, 0.08);
+    --tag-bg: #f0ebe0;
+    --serif: Georgia, "Palatino Linotype", serif;
+    --mono: "Consolas", "Monaco", monospace;
+  }
+
+  html { font-size: 14px; }
+
+  body {
+    font-family: var(--serif);
+    color: var(--text);
+    background: var(--bg);
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(180,170,150,0.015) 2px, rgba(180,170,150,0.015) 3px),
+      repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(180,170,150,0.015) 2px, rgba(180,170,150,0.015) 3px);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Header ── */
+  .header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 16px 32px;
+    border-bottom: 1px solid var(--border);
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .header-left {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .header-logo {
+    font-weight: bold;
+    font-size: 20px;
+    color: var(--text);
+    letter-spacing: 0.5px;
+  }
+  .header-subtitle {
+    font-style: italic;
+    font-size: 13px;
+    color: var(--dim);
+  }
+  .header-stats {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--dim);
+    letter-spacing: 0.3px;
+  }
+
+  /* ── Main Layout ── */
+  .main {
+    display: flex;
+    max-width: 1400px;
+    margin: 0 auto;
+    min-height: calc(100vh - 100px);
+  }
+
+  /* ── Map Area ── */
+  .map-area {
+    flex: 1;
+    padding: 24px;
+    min-width: 0;
+  }
+  .map-container {
+    position: relative;
+    background: var(--map-bg);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    height: 520px;
+    overflow: hidden;
+    cursor: crosshair;
+  }
+  .map-container canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Tooltip */
+  .map-tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 6px 10px;
+    font-size: 12px;
+    color: var(--text);
+    max-width: 220px;
+    line-height: 1.5;
+    box-shadow: 0 1px 4px rgba(139,125,107,0.1);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    z-index: 10;
+  }
+  .map-tooltip.visible { opacity: 1; }
+  .map-tooltip .tt-layer {
+    font-size: 10px;
+    font-variant: small-caps;
+    letter-spacing: 0.8px;
+    margin-bottom: 2px;
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 330px;
+    flex-shrink: 0;
+    border-left: 1px solid var(--border);
+    padding: 24px;
+    overflow-y: auto;
+    max-height: calc(100vh - 100px);
+  }
+  .sidebar-section-title {
+    font-size: 18px;
+    font-weight: normal;
+    color: var(--text);
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    font-family: var(--serif);
+    padding: 2px 10px;
+    border-radius: 3px;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .badge-layer {
+    color: #fff;
+  }
+  .badge-layer.buffer { background: var(--buffer); }
+  .badge-layer.episodic { background: var(--episodic); }
+  .badge-layer.semantic { background: var(--semantic); }
+  .badge-project {
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    background: transparent;
+  }
+  .sidebar-confidence {
+    font-size: 12px;
+    color: var(--dim);
+    margin-top: 10px;
+  }
+
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 16px 0;
+  }
+
+  .memory-content {
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--text);
+    border-left: 3px solid var(--accent);
+    padding-left: 14px;
+    margin: 0;
+  }
+
+  /* Stats Grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 20px;
+  }
+  .stat-item {}
+  .stat-label {
+    font-variant: small-caps;
+    font-size: 11px;
+    letter-spacing: 0.6px;
+    color: var(--dim);
+    margin-bottom: 3px;
+  }
+  .stat-value {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .stat-bar {
+    display: inline-block;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--accent);
+  }
+
+  /* Tags */
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .tag {
+    font-size: 11px;
+    font-family: var(--serif);
+    padding: 3px 10px;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    background: var(--tag-bg);
+    color: var(--text);
+  }
+
+  /* Decay Curve */
+  .decay-section {}
+  .decay-label {
+    font-variant: small-caps;
+    font-size: 11px;
+    letter-spacing: 0.6px;
+    color: var(--dim);
+    margin-bottom: 6px;
+  }
+  .decay-canvas-wrap {
+    position: relative;
+    width: 100%;
+    height: 55px;
+    background: var(--map-bg);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+  }
+  .decay-canvas-wrap canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .decay-axis {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 3px;
+  }
+  .decay-axis span {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--dim);
+  }
+
+  /* ── Bottom Bar ── */
+  .bottom-bar {
+    border-top: 1px solid var(--border);
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 12px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--dim);
+  }
+  .legend-group {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .legend-dot.buffer { background: var(--buffer); }
+  .legend-dot.episodic { background: var(--episodic); }
+  .legend-dot.semantic { background: var(--semantic); }
+
+  .size-legend {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .size-example {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .size-circle {
+    border-radius: 50%;
+    background: var(--dim);
+    opacity: 0.5;
+    display: inline-block;
+  }
+
+  .bottom-note {
+    font-style: italic;
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-left">
+    <span class="header-logo">hippo</span>
+    <span class="header-subtitle">brain observatory</span>
+  </div>
+  <div class="header-stats">57 memories &middot; 12 global &middot; 45 in hippo &middot; 0 at risk</div>
+</header>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- Map -->
+  <div class="map-area">
+    <div class="map-container" id="mapContainer">
+      <canvas id="mapCanvas"></canvas>
+      <div class="map-tooltip" id="tooltip"></div>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <h2 class="sidebar-section-title">Memory</h2>
+
+    <div style="margin-bottom: 8px;">
+      <span class="badge badge-layer episodic">episodic</span>
+      <span class="badge badge-project">hippo</span>
+    </div>
+    <div class="sidebar-confidence">observed</div>
+
+    <hr class="divider">
+
+    <p class="memory-content" id="sidebarContent">Gold model uses TIPS 10y as primary inflation signal</p>
+
+    <hr class="divider">
+
+    <div class="stats-grid" id="sidebarStats">
+      <div class="stat-item">
+        <div class="stat-label">strength</div>
+        <div class="stat-value">1.000 <span class="stat-bar" style="width:40px"></span></div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">half-life</div>
+        <div class="stat-value">31.5 days</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">retrievals</div>
+        <div class="stat-value">14</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">age</div>
+        <div class="stat-value">9.9 days</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">projected 7d</div>
+        <div class="stat-value">1.000</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">projected 30d</div>
+        <div class="stat-value">0.853</div>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <div class="tags" id="sidebarTags">
+      <span class="tag">gold</span>
+      <span class="tag">inflation</span>
+      <span class="tag">TIPS</span>
+      <span class="tag">signal</span>
+      <span class="tag">production</span>
+    </div>
+
+    <hr class="divider">
+
+    <div class="decay-section">
+      <div class="decay-label">strength decay</div>
+      <div class="decay-canvas-wrap">
+        <canvas id="decayCanvas"></canvas>
+      </div>
+      <div class="decay-axis">
+        <span>now</span>
+        <span>30d</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bottom Bar -->
+<div class="bottom-bar">
+  <div class="legend-group">
+    <div class="legend-item"><span class="legend-dot buffer"></span> buffer</div>
+    <div class="legend-item"><span class="legend-dot episodic"></span> episodic</div>
+    <div class="legend-item"><span class="legend-dot semantic"></span> semantic</div>
+  </div>
+  <div class="size-legend">
+    <div class="size-example"><span class="size-circle" style="width:6px;height:6px"></span> few retrievals</div>
+    <div class="size-example"><span class="size-circle" style="width:10px;height:10px"></span> moderate</div>
+    <div class="size-example"><span class="size-circle" style="width:14px;height:14px"></span> many</div>
+  </div>
+  <div class="bottom-note">Opacity shows strength. Connections show similarity.</div>
+</div>
+
+<script>
+// ── Data ──
+const LAYERS = { buffer: '#7c6caf', episodic: '#c49a3c', semantic: '#5a8f6b' };
+const ACCENT = '#c45c3c';
+const DIM = '#9b8e7e';
+const CONN_COLOR = 'rgba(58, 50, 40, 0.08)';
+const MAP_BG = '#faf7f2';
+
+const memoryTexts = [
+  "Gold model uses TIPS 10y as primary inflation signal",
+  "Supabase sync overwrites all signal data from local files",
+  "RTX 5080 confirmed working with PyTorch 2.10",
+  "Pre-commit hooks can revert file edits silently",
+  "Hippo memory uses hippocampal consolidation model",
+  "Weekly pipeline runs 42 models in parallel",
+  "Never force push to main branch",
+  "ProcessPoolExecutor default 8 workers for pipeline",
+  "Strength decays with biological half-life curve",
+  "Memory retrieval reinforces strength",
+  "Buffer memories consolidate to episodic after sleep",
+  "Episodic memories generalize into semantic over time",
+  "Power models have known validation issues",
+  "Use safe_sync.py instead of direct Supabase sync",
+  "Signal prices use actual front-month, not adjusted",
+  "All futures models must use futures_pnl.py",
+  "VAR limit is $100k for all commodities",
+  "No vol upper clip in position sizing",
+  "GPU gives 40x speedup on matrix operations",
+  "Playwright smoke tests cover 15+ scenarios",
+  "GitHub Actions deploys from master automatically",
+  "Content hash caching uses SHA-256 for file ops",
+  "Nightly validation runs at 7AM UTC",
+  "Semantic layer stores generalized knowledge",
+  "Buffer is short-term working memory",
+  "Episodic captures specific events and contexts",
+  "Memory-as-physics models decay and interference",
+  "Phase transitions in memory consolidation",
+  "Claude Code hooks configured in settings.json",
+  "Compaction triggers at 50% context usage",
+  "Roll adjustments needed when contracts change",
+  "Lot sizing uses raw prices not backward-adjusted",
+  "Minimum 1 lot when signal is active",
+  "Vol floor 0.01 prevents division by zero",
+  "Scaled signal equals raw signal always",
+  "MCP server connected for Supabase queries",
+  "Faster-whisper uses GPU float16 for transcription",
+  "Confidence 0.95 for all position sizing",
+];
+
+// Generate memory nodes
+function seededRandom(seed) {
+  let s = seed;
+  return function() {
+    s = (s * 16807 + 0) % 2147483647;
+    return (s - 1) / 2147483646;
+  };
+}
+
+const rng = seededRandom(42);
+const layerNames = ['buffer', 'episodic', 'semantic'];
+const layerZones = { buffer: [0.05, 0.28], episodic: [0.30, 0.65], semantic: [0.67, 0.95] };
+
+const memories = memoryTexts.map((text, i) => {
+  // Distribute across layers: ~6 buffer, ~18 episodic, ~14 semantic
+  let layer;
+  if (i < 6) layer = 'buffer';
+  else if (i < 24) layer = 'episodic';
+  else layer = 'semantic';
+
+  const zone = layerZones[layer];
+  const yNorm = zone[0] + rng() * (zone[1] - zone[0]);
+  const xNorm = 0.06 + rng() * 0.88;
+
+  const retrievals = Math.floor(rng() * 20) + 1;
+  const strength = 0.3 + rng() * 0.7;
+  const halfLife = 10 + rng() * 50;
+  const age = rng() * 30;
+
+  return {
+    id: i,
+    text,
+    layer,
+    x: xNorm,
+    y: yNorm,
+    retrievals,
+    strength,
+    halfLife,
+    age,
+    radius: 4 + (retrievals / 20) * 10,
+    // For drift animation
+    driftX: (rng() - 0.5) * 0.6,
+    driftY: (rng() - 0.5) * 0.6,
+    driftPhase: rng() * Math.PI * 2,
+    driftSpeed: 0.2 + rng() * 0.4,
+  };
+});
+
+// Make the first one "selected" by default with high stats
+memories[0].retrievals = 14;
+memories[0].strength = 1.0;
+memories[0].halfLife = 31.5;
+memories[0].age = 9.9;
+memories[0].radius = 12;
+
+// Generate connections between nearby memories
+const connections = [];
+for (let i = 0; i < memories.length; i++) {
+  for (let j = i + 1; j < memories.length; j++) {
+    const dx = memories[i].x - memories[j].x;
+    const dy = memories[i].y - memories[j].y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist < 0.18 && rng() > 0.4) {
+      connections.push([i, j]);
+    }
+  }
+}
+
+// ── Map Canvas ──
+const mapContainer = document.getElementById('mapContainer');
+const mapCanvas = document.getElementById('mapCanvas');
+const ctx = mapCanvas.getContext('2d');
+const tooltip = document.getElementById('tooltip');
+
+let selectedId = 0;
+let hoveredId = -1;
+let animTime = 0;
+let W, H;
+
+function resize() {
+  const rect = mapContainer.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  W = rect.width;
+  H = rect.height;
+  mapCanvas.width = W * dpr;
+  mapCanvas.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+resize();
+window.addEventListener('resize', resize);
+
+function getNodePos(mem, t) {
+  const ox = Math.sin(t * mem.driftSpeed + mem.driftPhase) * mem.driftX;
+  const oy = Math.cos(t * mem.driftSpeed * 0.8 + mem.driftPhase + 1) * mem.driftY;
+  return {
+    x: mem.x * W + ox,
+    y: mem.y * H + oy
+  };
+}
+
+function drawMap(t) {
+  ctx.clearRect(0, 0, W, H);
+
+  // Background
+  ctx.fillStyle = MAP_BG;
+  ctx.fillRect(0, 0, W, H);
+
+  // Dot grid
+  ctx.fillStyle = 'rgba(139, 125, 107, 0.08)';
+  for (let gx = 15; gx < W; gx += 30) {
+    for (let gy = 15; gy < H; gy += 30) {
+      ctx.beginPath();
+      ctx.arc(gx, gy, 0.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Zone labels (watermarks)
+  ctx.save();
+  ctx.font = 'small-caps 42px Georgia, serif';
+  ctx.textAlign = 'center';
+  const zones = [
+    { label: 'buffer', y: 0.16 },
+    { label: 'episodic', y: 0.48 },
+    { label: 'semantic', y: 0.81 },
+  ];
+  zones.forEach(z => {
+    ctx.fillStyle = 'rgba(139, 125, 107, 0.06)';
+    ctx.fillText(z.label, W * 0.5, H * z.y);
+  });
+  ctx.restore();
+
+  // Connections (curved)
+  connections.forEach(([i, j]) => {
+    const a = getNodePos(memories[i], t);
+    const b = getNodePos(memories[j], t);
+    const mx = (a.x + b.x) / 2;
+    const my = (a.y + b.y) / 2 - 15;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.quadraticCurveTo(mx, my, b.x, b.y);
+    ctx.strokeStyle = CONN_COLOR;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  });
+
+  // Nodes
+  memories.forEach((mem, idx) => {
+    const pos = getNodePos(mem, t);
+    const isSelected = idx === selectedId;
+    const isHovered = idx === hoveredId;
+    let r = mem.radius;
+    if (isHovered) r *= 1.25;
+
+    const color = LAYERS[mem.layer];
+    const alpha = 0.35 + mem.strength * 0.65;
+
+    // Selection ring
+    if (isSelected) {
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, r + 4, 0, Math.PI * 2);
+      ctx.strokeStyle = ACCENT;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    // Node fill
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Label for larger nodes
+    if (mem.radius >= 8) {
+      const words = mem.text.split(' ').slice(0, 4).join(' ');
+      ctx.save();
+      ctx.font = 'italic 10px Georgia, serif';
+      ctx.fillStyle = '#3a3228';
+      ctx.globalAlpha = 0.55;
+      ctx.textAlign = 'left';
+      ctx.fillText(words, pos.x + r + 4, pos.y + 3);
+      ctx.restore();
+    }
+  });
+}
+
+// ── Tooltip & Interaction ──
+function hitTest(mx, my, t) {
+  for (let i = memories.length - 1; i >= 0; i--) {
+    const pos = getNodePos(memories[i], t);
+    const dx = mx - pos.x;
+    const dy = my - pos.y;
+    const r = memories[i].radius + 3;
+    if (dx*dx + dy*dy < r*r) return i;
+  }
+  return -1;
+}
+
+mapContainer.addEventListener('mousemove', (e) => {
+  const rect = mapContainer.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const hit = hitTest(mx, my, animTime);
+  hoveredId = hit;
+
+  if (hit >= 0 && hit !== selectedId) {
+    const mem = memories[hit];
+    tooltip.innerHTML =
+      '<div class="tt-layer" style="color:' + LAYERS[mem.layer] + '">' + mem.layer + '</div>' +
+      '<div>' + mem.text + '</div>';
+    tooltip.classList.add('visible');
+    let tx = mx + 14;
+    let ty = my - 10;
+    if (tx + 230 > W) tx = mx - 230;
+    if (ty < 10) ty = my + 18;
+    tooltip.style.left = tx + 'px';
+    tooltip.style.top = ty + 'px';
+  } else {
+    tooltip.classList.remove('visible');
+  }
+});
+
+mapContainer.addEventListener('mouseleave', () => {
+  hoveredId = -1;
+  tooltip.classList.remove('visible');
+});
+
+mapContainer.addEventListener('click', (e) => {
+  const rect = mapContainer.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const hit = hitTest(mx, my, animTime);
+  if (hit >= 0) {
+    selectedId = hit;
+    updateSidebar(memories[hit]);
+  }
+});
+
+// ── Sidebar update ──
+function updateSidebar(mem) {
+  // Layer badge
+  const badgeLayer = document.querySelector('.badge-layer');
+  badgeLayer.className = 'badge badge-layer ' + mem.layer;
+  badgeLayer.textContent = mem.layer;
+
+  // Content
+  document.getElementById('sidebarContent').textContent = mem.text;
+
+  // Stats
+  const proj7 = Math.max(0, mem.strength * Math.pow(0.5, 7 / mem.halfLife)).toFixed(3);
+  const proj30 = Math.max(0, mem.strength * Math.pow(0.5, 30 / mem.halfLife)).toFixed(3);
+  const barWidth = Math.round(mem.strength * 40);
+
+  document.getElementById('sidebarStats').innerHTML =
+    '<div class="stat-item"><div class="stat-label">strength</div><div class="stat-value">' +
+    mem.strength.toFixed(3) + ' <span class="stat-bar" style="width:' + barWidth + 'px"></span></div></div>' +
+    '<div class="stat-item"><div class="stat-label">half-life</div><div class="stat-value">' +
+    mem.halfLife.toFixed(1) + ' days</div></div>' +
+    '<div class="stat-item"><div class="stat-label">retrievals</div><div class="stat-value">' +
+    mem.retrievals + '</div></div>' +
+    '<div class="stat-item"><div class="stat-label">age</div><div class="stat-value">' +
+    mem.age.toFixed(1) + ' days</div></div>' +
+    '<div class="stat-item"><div class="stat-label">projected 7d</div><div class="stat-value">' +
+    proj7 + '</div></div>' +
+    '<div class="stat-item"><div class="stat-label">projected 30d</div><div class="stat-value">' +
+    proj30 + '</div></div>';
+
+  // Tags
+  const words = mem.text.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/);
+  const stopwords = new Set(['the','a','an','is','are','was','were','be','been','being',
+    'have','has','had','do','does','did','will','would','shall','should','may','might',
+    'can','could','must','and','but','or','nor','for','yet','so','in','on','at','to',
+    'from','by','with','as','of','not','no','all','uses','use','instead','after','before',
+    'into','out','up','its','it','this','that','when','where','how','what','which','who']);
+  const tags = [...new Set(words.filter(w => w.length > 2 && !stopwords.has(w)))].slice(0, 6);
+  document.getElementById('sidebarTags').innerHTML = tags.map(t => '<span class="tag">' + t + '</span>').join('');
+
+  // Decay canvas
+  drawDecay(mem);
+}
+
+// ── Decay Curve ──
+function drawDecay(mem) {
+  const wrap = document.querySelector('.decay-canvas-wrap');
+  const canvas = document.getElementById('decayCanvas');
+  const dpr = window.devicePixelRatio || 1;
+  const cw = wrap.clientWidth;
+  const ch = wrap.clientHeight;
+  canvas.width = cw * dpr;
+  canvas.height = ch * dpr;
+  const dc = canvas.getContext('2d');
+  dc.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  dc.clearRect(0, 0, cw, ch);
+
+  const padL = 4, padR = 4, padT = 6, padB = 6;
+  const gw = cw - padL - padR;
+  const gh = ch - padT - padB;
+
+  dc.beginPath();
+  dc.moveTo(padL, padT + gh * (1 - mem.strength));
+  for (let d = 0; d <= 30; d += 0.5) {
+    const s = mem.strength * Math.pow(0.5, d / mem.halfLife);
+    const x = padL + (d / 30) * gw;
+    const y = padT + gh * (1 - s);
+    dc.lineTo(x, y);
+  }
+  dc.strokeStyle = ACCENT;
+  dc.lineWidth = 1.5;
+  dc.stroke();
+
+  // Fill under curve
+  const lastS = mem.strength * Math.pow(0.5, 30 / mem.halfLife);
+  dc.lineTo(padL + gw, padT + gh);
+  dc.lineTo(padL, padT + gh);
+  dc.closePath();
+  dc.fillStyle = 'rgba(196, 92, 60, 0.06)';
+  dc.fill();
+}
+
+// ── Animation Loop ──
+function animate(ts) {
+  animTime = ts / 1000;
+  drawMap(animTime);
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+// Initial sidebar
+drawDecay(memories[0]);
+</script>
+</body>
+</html>

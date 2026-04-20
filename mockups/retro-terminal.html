@@ -1,0 +1,1127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>hippo :: memory observatory v0.25</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0a120a;
+    --bg-2: #07100a;
+    --fg: #33ff66;
+    --fg-dim: #1f9a3f;
+    --fg-mid: #278c3c;
+    --amber: #ffb74a;
+    --red: #ff5b4a;
+    --glow: 0 0 1px #33ff66, 0 0 6px rgba(51,255,102,.45), 0 0 14px rgba(51,255,102,.18);
+    --glow-soft: 0 0 1px rgba(51,255,102,.6), 0 0 4px rgba(51,255,102,.2);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--fg); }
+  body {
+    font-family: 'Share Tech Mono', 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 15px;
+    line-height: 1.45;
+    text-shadow: var(--glow);
+    overflow: hidden;
+    position: relative;
+    letter-spacing: 0.01em;
+  }
+  /* VT323 only where the pixel aesthetic beats readability: banner, big chrome labels */
+  .pixel-font { font-family: 'VT323', monospace; font-size: 1.18em; letter-spacing: 0.03em; }
+  /* scan lines */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    pointer-events: none;
+    z-index: 40;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(0,0,0,0) 0px,
+      rgba(0,0,0,0) 2px,
+      rgba(0,0,0,0.09) 3px,
+      rgba(0,0,0,0.09) 3px
+    );
+    mix-blend-mode: multiply;
+  }
+  /* vignette + color bleed */
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    pointer-events: none;
+    z-index: 41;
+    background:
+      radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.55) 100%),
+      linear-gradient(to bottom, rgba(255,0,40,0.02), rgba(0,80,255,0.015));
+    animation: flicker 6s infinite steps(60);
+  }
+  @keyframes flicker {
+    0%,97%,100% { opacity: 1; }
+    98% { opacity: 0.92; }
+    98.5% { opacity: 1.02; }
+    99% { opacity: 0.96; }
+  }
+
+  .crt { height: 100vh; display: grid; grid-template-rows: auto 1fr auto; }
+
+  /* header */
+  header {
+    padding: 6px 14px 2px;
+    border-bottom: 1px solid var(--fg-mid);
+    display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 16px;
+  }
+  .banner {
+    font-family: 'Share Tech Mono', monospace;
+    white-space: pre;
+    color: var(--fg);
+    font-size: 12px;
+    line-height: 1.0;
+  }
+  .meta {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    color: var(--fg-dim);
+    text-align: right;
+    line-height: 1.4;
+  }
+  .meta .key { color: var(--fg); }
+
+  /* main two-pane */
+  main {
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    gap: 0;
+    overflow: hidden;
+    border-bottom: 1px solid var(--fg-mid);
+  }
+  .pane {
+    overflow: auto;
+    padding: 8px 10px;
+  }
+  .pane.tree { border-right: 1px solid var(--fg-mid); }
+  .pane-title {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    color: var(--fg-dim);
+    margin-bottom: 6px;
+    letter-spacing: 0.08em;
+  }
+  .tree ul { list-style: none; margin: 0; padding: 0; }
+  .tree li { white-space: pre; cursor: pointer; padding: 0 4px; }
+  .tree li.branch { color: var(--fg-dim); cursor: default; }
+  .tree li.leaf:hover { color: #b6ffcf; }
+  .tree li.selected {
+    background: var(--fg);
+    color: #000;
+    text-shadow: none;
+  }
+  .tree li.selected::after {
+    content: '_';
+    margin-left: 2px;
+    animation: blink 1s steps(2) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* right pane: cat output */
+  .cat pre {
+    margin: 0;
+    white-space: pre-wrap;
+    font-family: 'Share Tech Mono', 'IBM Plex Mono', monospace;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .sep { color: var(--fg-mid); }
+  .k { color: var(--fg-dim); }
+  .v { color: var(--fg); }
+  .v.vrfd { color: #6bff8e; }
+  .v.obsv { color: var(--amber); }
+  .v.infr { color: #6bb4ff; }
+  .v.stal { color: var(--red); }
+  .bar { color: var(--fg); letter-spacing: 0; }
+  .bar .off { color: var(--fg-mid); }
+
+  /* 30-day created-timeline sparkline */
+  .timeline-row {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--fg-mid);
+  }
+  .timeline-row pre {
+    margin: 0;
+    font-family: 'Share Tech Mono', 'IBM Plex Mono', monospace;
+    font-size: 15px;
+    line-height: 1;
+    letter-spacing: 0.08em;
+  }
+  .tl-cell { color: var(--fg); }
+  .tl-empty { color: var(--fg-mid); opacity: 0.4; }
+  .tl-sel {
+    color: var(--amber);
+    background: rgba(232,166,24,0.18);
+    text-shadow: 0 0 4px var(--amber);
+  }
+
+  /* bottom: prompt + history */
+  .shell {
+    display: grid;
+    grid-template-rows: 1fr auto;
+    max-height: 38vh;
+    min-height: 180px;
+  }
+  .history {
+    overflow: auto;
+    padding: 6px 12px;
+    color: var(--fg-dim);
+    border-bottom: 1px dashed var(--fg-mid);
+  }
+  .history .line { white-space: pre-wrap; }
+  .history .ok { color: var(--fg); }
+  .history .warn { color: var(--amber); }
+  .history .err { color: var(--red); }
+  .promptbar {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    padding: 6px 12px;
+    gap: 8px;
+  }
+  .ps1 { color: var(--fg); font-family: 'Share Tech Mono', monospace; font-size: 14px; }
+  .ps1 .host { color: #b6ffcf; }
+  .ps1 .at { color: var(--fg-dim); }
+  .prompt-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--fg);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 16px;
+    text-shadow: var(--glow);
+    width: 100%;
+    caret-color: var(--fg);
+  }
+  .recent {
+    display: flex; gap: 6px; flex-wrap: wrap;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+  }
+  .chip {
+    border: 1px solid var(--fg-mid);
+    color: var(--fg-dim);
+    padding: 1px 6px;
+    cursor: pointer;
+  }
+  .chip:hover { color: var(--fg); border-color: var(--fg); }
+
+  /* boot overlay */
+  .boot {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    z-index: 60;
+    padding: 20px;
+    overflow: hidden;
+    font-family: 'VT323', monospace;
+    font-size: 18px;
+    color: var(--fg);
+  }
+  .boot pre { margin: 0; white-space: pre-wrap; }
+
+  /* scrollbars */
+  .pane::-webkit-scrollbar, .history::-webkit-scrollbar { width: 10px; height: 10px; }
+  .pane::-webkit-scrollbar-track, .history::-webkit-scrollbar-track { background: #06100a; }
+  .pane::-webkit-scrollbar-thumb, .history::-webkit-scrollbar-thumb { background: var(--fg-mid); }
+
+  /* status LEDs */
+  .leds { display: inline-flex; gap: 10px; margin-left: 14px; }
+  .led {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    border: 1px solid var(--fg-mid);
+    padding: 1px 7px;
+    color: var(--fg-dim);
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+  }
+  .led .n { font-weight: bold; color: var(--fg); }
+  .led.ok { color: var(--fg); border-color: var(--fg-mid); }
+  .led.warn { color: var(--amber); border-color: var(--amber); background: rgba(232,166,24,0.05); }
+  .led.err { color: var(--red); border-color: var(--red); background: rgba(255,92,92,0.05); animation: ledpulse 2s infinite; }
+  @keyframes ledpulse { 0%,100% { opacity: 1; } 50% { opacity: 0.65; } }
+  .led:hover { color: var(--fg); background: rgba(255,255,255,0.04); }
+  .led.active { color: #000; background: var(--fg); }
+
+  /* footer hint bar */
+  .hintbar {
+    padding: 4px 14px;
+    border-top: 1px dashed var(--fg-mid);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--fg-dim);
+    display: flex; gap: 14px; flex-wrap: wrap;
+  }
+  .hintbar kbd {
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--fg);
+    border: 1px solid var(--fg-mid);
+    padding: 0 4px;
+    margin-right: 3px;
+  }
+
+  /* timeline cells become clickable */
+  .tl-cell, .tl-empty, .tl-sel { cursor: pointer; }
+  .tl-cell:hover, .tl-empty:hover { color: var(--amber); text-shadow: 0 0 4px var(--amber); }
+
+  /* decay curve ASCII */
+  .decay-art {
+    display: block;
+    color: var(--fg-dim);
+    margin: 4px 0 8px 14px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    line-height: 1.1;
+    letter-spacing: 0.05em;
+  }
+  .decay-art .now { color: var(--fg); }
+  .decay-art .future { color: var(--fg-mid); }
+
+  /* pager more */
+  .pager-more {
+    color: #000; background: var(--amber);
+    padding: 1px 8px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    display: inline-block;
+    margin: 8px 0;
+  }
+  .pager-more::after { content: '  -- SPACE to continue --'; opacity: 0.85; }
+
+  /* tail -f indicator */
+  .tail-indicator {
+    margin-left: 10px;
+    padding: 1px 8px;
+    background: var(--red);
+    color: #000;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    display: none;
+    animation: ledpulse 1s infinite;
+  }
+  .tail-indicator.on { display: inline-block; }
+
+  /* help overlay (manpage) */
+  .help-overlay {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    z-index: 80;
+    overflow: auto;
+    padding: 32px 48px;
+    display: none;
+  }
+  .help-overlay.on { display: block; }
+  .help-overlay pre {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--fg);
+    margin: 0;
+    white-space: pre-wrap;
+  }
+  .help-overlay .h1 { color: var(--amber); font-weight: bold; }
+  .help-overlay .hk { color: var(--fg-dim); }
+
+  /* data-source badge */
+  .data-src {
+    margin-left: 12px;
+    padding: 1px 7px;
+    border: 1px solid var(--fg-mid);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--fg-dim);
+  }
+  .data-src.live { color: var(--fg); border-color: var(--fg); }
+</style>
+</head>
+<body>
+<div class="boot" id="boot"><pre id="bootText"></pre></div>
+
+<div class="crt" id="crt" style="visibility:hidden">
+  <header>
+    <pre class="banner" id="banner"></pre>
+    <div class="meta">
+      <div>
+        <span class="key">HOST</span> skf@hippo
+        <span class="data-src" id="dataSrc">STATIC</span>
+        <span class="tail-indicator" id="tailInd">&#9679; TAIL -F</span>
+      </div>
+      <div>
+        <span class="key">UP</span> <span id="uptime">00:00:00</span>
+        <span class="leds">
+          <span class="led" id="ledErr" title="error-severity memories" data-filter="err">ERR <span class="n" id="errN">0</span></span>
+          <span class="led" id="ledConf" title="open conflicts" data-filter="conflicts">CONF <span class="n" id="confN">0</span></span>
+          <span class="led" id="ledFad" title="fading (low strength)" data-filter="fading">FAD <span class="n" id="fadN">0</span></span>
+        </span>
+      </div>
+      <div>
+        <span class="key">LAST SLEEP</span> <span id="lastSleep">3h ago</span>
+        <span class="key">AUDIT</span> <span id="lastAudit">clean</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="pane tree" id="tree">
+      <div class="pane-title">-- NAV :: tree /projects --</div>
+      <ul id="treeList"></ul>
+    </section>
+    <section class="pane cat" id="cat">
+      <div class="pane-title">-- CAT :: current memory --</div>
+      <pre id="catOut"></pre>
+      <div class="timeline-row"><pre id="timeline"></pre></div>
+    </section>
+  </main>
+
+  <div class="hintbar">
+    <span><kbd>/</kbd> grep</span>
+    <span><kbd>&#8593;</kbd><kbd>&#8595;</kbd> nav</span>
+    <span><kbd>s</kbd> star</span>
+    <span><kbd>a</kbd> audit</span>
+    <span><kbd>c</kbd> copy</span>
+    <span><kbd>x</kbd> delete</span>
+    <span><kbd>p</kbd> pin</span>
+    <span><kbd>F</kbd> tail -f</span>
+    <span><kbd>SPACE</kbd> page</span>
+    <span><kbd>?</kbd> help</span>
+    <span><kbd>ESC</kbd> clear</span>
+  </div>
+
+  <section class="shell">
+    <div class="history" id="history">
+      <div class="line">hippo shell 0.25 -- type 'help' for commands. '/' to focus prompt. ESC to clear.</div>
+    </div>
+    <div class="promptbar">
+      <span class="ps1"><span class="host">skf</span><span class="at">@</span><span class="host">hippo</span>:<span class="at">~</span>$</span>
+      <input class="prompt-input" id="prompt" autocomplete="off" spellcheck="false" placeholder="grep, cat mem_3, ls, stats, audit, consolidate..." />
+      <div class="recent">
+        <span class="chip" data-cmd="ls">ls</span>
+        <span class="chip" data-cmd="stats">stats</span>
+        <span class="chip" data-cmd="audit">audit</span>
+        <span class="chip" data-cmd="grep gpu">grep "gpu"</span>
+        <span class="chip" data-cmd="consolidate">consolidate</span>
+        <span class="chip" data-cmd="help">help</span>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+// ---------- data ----------
+const memoriesData = [
+  { text: "Gold model uses TIPS 10y as primary inflation signal", layer: 'buffer', tags: ['gold','tips','inflation','signals'], confidence: 'verified' },
+  { text: "Supabase sync overwrites all signal data from local files", layer: 'buffer', tags: ['supabase','sync','safety'], confidence: 'verified' },
+  { text: "RTX 5080 confirmed working with PyTorch 2.10", layer: 'buffer', tags: ['gpu','pytorch','hardware'], confidence: 'verified' },
+  { text: "Pre-commit hooks can revert file edits silently", layer: 'buffer', tags: ['git','hooks','gotcha'], confidence: 'observed' },
+  { text: "Hippo memory uses hippocampal consolidation model", layer: 'buffer', tags: ['hippo','consolidation','theory'], confidence: 'observed' },
+  { text: "Weekly pipeline runs 42 models in parallel", layer: 'buffer', tags: ['pipeline','parallel','weekly'], confidence: 'verified' },
+
+  { text: "Never force push to main branch", layer: 'episodic', tags: ['git','safety'], confidence: 'verified' },
+  { text: "ProcessPoolExecutor default 8 workers for pipeline", layer: 'episodic', tags: ['pipeline','parallel','python'], confidence: 'verified' },
+  { text: "Strength decays with biological half-life curve", layer: 'episodic', tags: ['hippo','decay','theory'], confidence: 'verified' },
+  { text: "Memory retrieval reinforces strength", layer: 'episodic', tags: ['hippo','retrieval','theory'], confidence: 'verified' },
+  { text: "Buffer memories consolidate to episodic after sleep", layer: 'episodic', tags: ['hippo','consolidation','buffer','episodic'], confidence: 'verified' },
+  { text: "Episodic memories generalize into semantic over time", layer: 'episodic', tags: ['hippo','consolidation','episodic','semantic'], confidence: 'verified' },
+  { text: "Power models have known validation issues", layer: 'episodic', tags: ['power','validation','issues'], confidence: 'observed' },
+  { text: "Use safe_sync.py instead of direct Supabase sync", layer: 'episodic', tags: ['supabase','sync','safety'], confidence: 'verified' },
+  { text: "Signal prices use actual front-month not adjusted", layer: 'episodic', tags: ['prices','signals','futures'], confidence: 'verified' },
+  { text: "All futures models must use futures_pnl.py", layer: 'episodic', tags: ['futures','pnl','standard'], confidence: 'verified' },
+  { text: "VAR limit is 100k for all commodities", layer: 'episodic', tags: ['var','sizing','futures'], confidence: 'verified' },
+  { text: "No vol upper clip in position sizing", layer: 'episodic', tags: ['vol','sizing','futures'], confidence: 'verified' },
+  { text: "GPU gives 40x speedup on matrix operations", layer: 'episodic', tags: ['gpu','performance','pytorch'], confidence: 'observed' },
+  { text: "Playwright smoke tests cover 15 scenarios", layer: 'episodic', tags: ['playwright','tests','frontend'], confidence: 'verified' },
+  { text: "GitHub Actions deploys from master automatically", layer: 'episodic', tags: ['deploy','github','ci'], confidence: 'verified' },
+  { text: "Content hash caching uses SHA-256 for file ops", layer: 'episodic', tags: ['cache','hash','files'], confidence: 'observed' },
+  { text: "Nightly validation runs at 7AM UTC", layer: 'episodic', tags: ['validation','schedule','ci'], confidence: 'verified' },
+  { text: "Semantic layer stores generalized knowledge", layer: 'episodic', tags: ['hippo','semantic','theory'], confidence: 'verified' },
+
+  { text: "Buffer is short-term working memory", layer: 'semantic', tags: ['hippo','buffer','theory'], confidence: 'verified' },
+  { text: "Episodic captures specific events and contexts", layer: 'semantic', tags: ['hippo','episodic','theory'], confidence: 'verified' },
+  { text: "Memory as physics models decay and interference", layer: 'semantic', tags: ['hippo','physics','theory'], confidence: 'inferred' },
+  { text: "Phase transitions in memory consolidation", layer: 'semantic', tags: ['hippo','consolidation','theory'], confidence: 'inferred' },
+  { text: "Claude Code hooks configured in settings.json", layer: 'semantic', tags: ['claude','hooks','config'], confidence: 'verified' },
+  { text: "Compaction triggers at 50 percent context usage", layer: 'semantic', tags: ['claude','compaction','context'], confidence: 'verified' },
+  { text: "Roll adjustments needed when contracts change", layer: 'semantic', tags: ['futures','roll','prices'], confidence: 'verified' },
+  { text: "Lot sizing uses raw prices not backward-adjusted", layer: 'semantic', tags: ['sizing','prices','futures'], confidence: 'verified' },
+  { text: "Minimum 1 lot when signal is active", layer: 'semantic', tags: ['sizing','futures','signals'], confidence: 'verified' },
+  { text: "Vol floor 0.01 prevents division by zero", layer: 'semantic', tags: ['vol','sizing','safety'], confidence: 'verified' },
+  { text: "Scaled signal equals raw signal always", layer: 'semantic', tags: ['sizing','signals','standard'], confidence: 'verified' },
+  { text: "MCP server connected for Supabase queries", layer: 'semantic', tags: ['mcp','supabase','config'], confidence: 'verified' },
+  { text: "Faster whisper uses GPU float16 for transcription", layer: 'semantic', tags: ['whisper','gpu','transcription'], confidence: 'observed' },
+  { text: "Confidence 0.95 for all position sizing", layer: 'semantic', tags: ['sizing','futures','standard'], confidence: 'verified' },
+];
+
+// enrich
+function rng(seed){ let s=seed; return ()=>{ s=(s*1103515245+12345)&0x7fffffff; return s/0x7fffffff; }; }
+const r = rng(42);
+const NOW = Date.now();
+const DAY = 86400000;
+
+function fmtDate(ts){
+  const d = new Date(ts);
+  const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
+  const day = String(d.getDate()).padStart(2,'0');
+  const hh = String(d.getHours()).padStart(2,'0');
+  const mm = String(d.getMinutes()).padStart(2,'0');
+  return `${d.getFullYear()} ${mo} ${day}  ${hh}:${mm}`;
+}
+
+const memories = memoriesData.map((d,i)=>{
+  const age = +(r()*30).toFixed(1);
+  const createdTs = NOW - Math.round(age * DAY);
+  const base = d.layer==='buffer'?0.85:d.layer==='episodic'?0.6:0.4;
+  const strength = Math.max(0.05, Math.min(0.99, +(base + (r()-0.5)*0.3).toFixed(2)));
+  const half = d.layer==='buffer'?3:d.layer==='episodic'?14:90;
+  const retrievals = Math.floor(r()*12);
+  return {
+    id:i,
+    mem_id:'mem_'+String(i+1).padStart(3,'0'),
+    ...d,
+    age_days:age,
+    created_ts: createdTs,
+    created: fmtDate(createdTs),
+    strength,
+    half_life_days:half,
+    retrieval_count:retrievals,
+  };
+});
+
+// ---------- banner ----------
+const banner =
+`┌──────────────────────────────────────────────────────────────────┐
+│  H I P P O  ::  memory observatory  v0.25   [VT100 compat]       │
+│  ~ biological consolidation ~ 3 layers ~ phosphor readout ~       │
+└──────────────────────────────────────────────────────────────────┘`;
+document.getElementById('banner').textContent = banner;
+
+// ---------- tree build ----------
+const LAYERS = ['buffer','episodic','semantic'];
+function confAbbr(c){ return ({verified:'VRFD',observed:'OBSV',inferred:'INFR',stale:'STAL'})[c]||'????'; }
+function confClass(c){ return ({verified:'vrfd',observed:'obsv',inferred:'infr',stale:'stal'})[c]||''; }
+function bar(v){
+  const n=10, f=Math.round(v*n);
+  return '['+('█'.repeat(f))+('░'.repeat(n-f))+'] '+v.toFixed(2);
+}
+
+let state = {
+  filter: '',
+  selectedId: 0,
+};
+
+function treeLines(){
+  const q = state.filter.trim().toLowerCase();
+  const hits = memories.filter(m => !q || m.text.toLowerCase().includes(q) || m.tags.some(t=>t.toLowerCase().includes(q)) || m.mem_id.includes(q));
+  const lines = [];
+  lines.push({type:'branch', text:'/projects/hippo'});
+  LAYERS.forEach((layer,li)=>{
+    const layerHits = hits.filter(m=>m.layer===layer);
+    const lastLayer = li===LAYERS.length-1;
+    lines.push({type:'branch', text:(lastLayer?'└── ':'├── ')+layer+' ('+layerHits.length+')'});
+    // group by tag (primary tag = first tag)
+    const byTag = new Map();
+    layerHits.forEach(m=>{
+      const t = m.tags[0]||'misc';
+      if(!byTag.has(t)) byTag.set(t, []);
+      byTag.get(t).push(m);
+    });
+    const tagKeys = [...byTag.keys()];
+    tagKeys.forEach((tag,ti)=>{
+      const lastTag = ti===tagKeys.length-1;
+      const prefixL = lastLayer?'    ':'│   ';
+      lines.push({type:'branch', text:prefixL+(lastTag?'└── ':'├── ')+'#'+tag});
+      const items = byTag.get(tag);
+      items.forEach((m,mi)=>{
+        const lastItem = mi===items.length-1;
+        const prefixT = prefixL + (lastTag?'    ':'│   ');
+        const marker = lastItem?'└── ':'├── ';
+        const abbr = confAbbr(m.confidence);
+        const txt = m.text.length>34 ? m.text.slice(0,31)+'...' : m.text;
+        lines.push({type:'leaf', id:m.id, text:prefixT+marker+m.mem_id+' '+abbr+' '+txt});
+      });
+    });
+  });
+  return lines;
+}
+
+function renderTree(){
+  const ul = document.getElementById('treeList');
+  const lines = treeLines();
+  ul.innerHTML = '';
+  lines.forEach(ln=>{
+    const li = document.createElement('li');
+    li.textContent = ln.text;
+    if(ln.type==='branch'){ li.className='branch'; }
+    else {
+      li.className='leaf';
+      li.dataset.id = ln.id;
+      if(ln.id===state.selectedId) li.classList.add('selected');
+      li.addEventListener('click', ()=>{ state.selectedId = ln.id; renderTree(); renderCat(); });
+    }
+    ul.appendChild(li);
+  });
+  // ensure selected is visible
+  const sel = ul.querySelector('.selected');
+  if(sel) sel.scrollIntoView({block:'nearest'});
+}
+
+function renderCat(){
+  const m = memories.find(x=>x.id===state.selectedId) || memories[0];
+  const line = '─'.repeat(62);
+  const abbr = confAbbr(m.confidence);
+  const cls = confClass(m.confidence);
+  const barStr = bar(m.strength);
+  const tagsStr = m.tags.map(t=>'#'+t).join(' ');
+  const decayStr = Math.exp(-m.age_days/m.half_life_days).toFixed(3);
+  const out =
+`<span class="sep">┌─ ${m.mem_id}.md ${line.slice(m.mem_id.length+5)}┐</span>
+<span class="k">mem_id       </span>: <span class="v">${m.mem_id}</span>
+<span class="k">layer        </span>: <span class="v">${m.layer}</span>
+<span class="k">confidence   </span>: <span class="v ${cls}">${abbr}</span> <span class="k">(${m.confidence})</span>
+<span class="k">created      </span>: <span class="v">${m.created}</span>
+<span class="k">strength     </span>: <span class="bar">${barStr.replace(/░/g,'<span class="off">░</span>')}</span>
+<span class="k">half_life    </span>: <span class="v">${m.half_life_days}d</span>
+<span class="k">age          </span>: <span class="v">${m.age_days}d</span>  <span class="k">decay=</span><span class="v">${decayStr}</span>
+<span class="k">retrievals   </span>: <span class="v">${m.retrieval_count}</span>
+<span class="k">tags         </span>: <span class="v">${tagsStr}</span>
+<span class="sep">├${line}┤</span>
+
+  ${m.text}
+
+<span class="sep">└${line}┘</span>
+<span class="k">-- EOF -- press arrows to browse, '/' for prompt --</span>`;
+  document.getElementById('catOut').innerHTML = out;
+  renderTimeline(m);
+}
+
+// 30-day sparkline of memories created per day, with the current memory marked.
+function renderTimeline(selected){
+  const DAYS = 30;
+  const buckets = new Array(DAYS).fill(0);
+  const nowDay = Math.floor(NOW / DAY);
+  for (const m of memories) {
+    const d = Math.floor(m.created_ts / DAY);
+    const idx = DAYS - 1 - (nowDay - d);
+    if (idx >= 0 && idx < DAYS) buckets[idx]++;
+  }
+  const max = Math.max(1, ...buckets);
+  const BLOCKS = ' ▁▂▃▄▅▆▇█';
+  const selDay = Math.floor(selected.created_ts / DAY);
+  const selIdx = DAYS - 1 - (nowDay - selDay);
+
+  let spark = '';
+  for (let i = 0; i < DAYS; i++) {
+    const ch = BLOCKS[Math.round((buckets[i] / max) * 8)];
+    const isSel = i === selIdx;
+    const isEmpty = buckets[i] === 0;
+    spark += isSel
+      ? `<span class="tl-sel">${ch}</span>`
+      : isEmpty
+        ? `<span class="tl-empty">${ch}</span>`
+        : `<span class="tl-cell">${ch}</span>`;
+  }
+
+  const label = `<span class="k">created timeline   [</span>${spark}<span class="k">]  30d ago &gt;&gt;&gt; today</span>`;
+  document.getElementById('timeline').innerHTML = label;
+}
+
+// ---------- uptime ----------
+const bootStart = Date.now();
+function tickUptime(){
+  const s = Math.floor((Date.now()-bootStart)/1000);
+  const hh = String(Math.floor(s/3600)).padStart(2,'0');
+  const mm = String(Math.floor((s%3600)/60)).padStart(2,'0');
+  const ss = String(s%60).padStart(2,'0');
+  document.getElementById('uptime').textContent = `${hh}:${mm}:${ss}`;
+}
+setInterval(tickUptime, 1000);
+
+// ---------- keyboard nav ----------
+function selectableIds(){
+  return treeLines().filter(l=>l.type==='leaf').map(l=>l.id);
+}
+function moveSel(delta){
+  const ids = selectableIds();
+  if(!ids.length) return;
+  let idx = ids.indexOf(state.selectedId);
+  if(idx<0) idx = 0;
+  idx = Math.max(0, Math.min(ids.length-1, idx+delta));
+  state.selectedId = ids[idx];
+  renderTree(); renderCat();
+}
+
+document.addEventListener('keydown', (e)=>{
+  const promptEl = document.getElementById('prompt');
+  const focused = document.activeElement === promptEl;
+  if(e.key==='/' && !focused){ e.preventDefault(); promptEl.focus(); return; }
+  if(e.key==='Escape'){ promptEl.value=''; state.filter=''; renderTree(); promptEl.blur(); return; }
+  if(!focused){
+    if(e.key==='ArrowDown'){ e.preventDefault(); moveSel(1); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); moveSel(-1); }
+    else if(e.key==='PageDown'){ e.preventDefault(); moveSel(10); }
+    else if(e.key==='PageUp'){ e.preventDefault(); moveSel(-10); }
+  }
+});
+
+// ---------- prompt / shell ----------
+const promptEl = document.getElementById('prompt');
+const historyEl = document.getElementById('history');
+
+promptEl.addEventListener('input', ()=>{
+  state.filter = promptEl.value.replace(/^grep\s+/i,'').replace(/^["']|["']$/g,'');
+  // if user hasn't typed a command prefix, filter tree
+  renderTree();
+});
+
+promptEl.addEventListener('keydown', (e)=>{
+  if(e.key==='Enter'){
+    runCommand(promptEl.value.trim());
+    promptEl.value=''; state.filter=''; renderTree();
+  }
+});
+
+document.querySelectorAll('.chip').forEach(c=>{
+  c.addEventListener('click', ()=>{
+    promptEl.value = c.dataset.cmd;
+    promptEl.focus();
+  });
+});
+
+function hline(html, cls){
+  const div = document.createElement('div');
+  div.className = 'line' + (cls?' '+cls:'');
+  div.innerHTML = html;
+  historyEl.appendChild(div);
+  historyEl.scrollTop = historyEl.scrollHeight;
+}
+
+function runCommand(raw){
+  if(!raw) return;
+  hline(`<span class="ok">skf@hippo:~$</span> ${escapeHtml(raw)}`);
+  const [cmd, ...rest] = raw.split(/\s+/);
+  const arg = rest.join(' ').replace(/^["']|["']$/g,'');
+  switch((cmd||'').toLowerCase()){
+    case 'help':
+      hline('commands :: ls | cat mem_NNN | grep &lt;term&gt; | stats | audit | consolidate | layers | clear | help');
+      break;
+    case 'ls': {
+      const counts = LAYERS.map(L=>L+'('+memories.filter(m=>m.layer===L).length+')').join('  ');
+      hline('total 38  '+counts);
+      memories.slice(0,8).forEach(m=>{
+        hline(`${m.mem_id}  ${confAbbr(m.confidence)}  ${m.layer.padEnd(9)} s=${m.strength.toFixed(2)}  ${escapeHtml(m.text.slice(0,52))}`);
+      });
+      hline('... (30 more) -- use arrow keys or grep to filter');
+      break;
+    }
+    case 'cat': {
+      const id = (arg||'').toLowerCase();
+      const hit = memories.find(m=>m.mem_id===id);
+      if(!hit){ hline(`cat: ${escapeHtml(arg)}: no such memory`, 'err'); break; }
+      state.selectedId = hit.id; renderTree(); renderCat();
+      hline(`>> loaded ${hit.mem_id} into viewer`);
+      break;
+    }
+    case 'grep': {
+      state.filter = arg;
+      renderTree();
+      const n = treeLines().filter(l=>l.type==='leaf').length;
+      hline(`grep "${escapeHtml(arg)}" :: ${n} match${n===1?'':'es'}`, n?'ok':'warn');
+      break;
+    }
+    case 'stats': {
+      const avgS = (memories.reduce((a,m)=>a+m.strength,0)/memories.length).toFixed(3);
+      const conf = memories.reduce((a,m)=>{a[m.confidence]=(a[m.confidence]||0)+1; return a;},{});
+      hline(`stats :: n=38  avg_strength=${avgS}  layers=${LAYERS.map(L=>L+':'+memories.filter(m=>m.layer===L).length).join(' ')}`);
+      hline(`conf  :: ${Object.entries(conf).map(([k,v])=>k+'='+v).join('  ')}`);
+      hline(`half  :: buffer=3d  episodic=14d  semantic=90d`);
+      break;
+    }
+    case 'audit': {
+      const weak = memories.filter(m=>m.strength<0.3);
+      hline(`audit :: ${weak.length} weak memor${weak.length===1?'y':'ies'} (strength &lt; 0.30)`, weak.length?'warn':'ok');
+      weak.slice(0,5).forEach(m=> hline('  '+m.mem_id+'  s='+m.strength.toFixed(2)+'  '+escapeHtml(m.text.slice(0,48))));
+      break;
+    }
+    case 'consolidate': {
+      const promoB = memories.filter(m=>m.layer==='buffer' && m.strength>0.7).length;
+      const promoE = memories.filter(m=>m.layer==='episodic' && m.retrieval_count>6).length;
+      hline(`consolidate :: buffer->episodic candidates=${promoB}  episodic->semantic candidates=${promoE}`);
+      hline('run complete. no writes performed (dry).', 'ok');
+      break;
+    }
+    case 'layers':
+      hline('buffer    :: short-term, half_life=3d');
+      hline('episodic  :: specific events, half_life=14d');
+      hline('semantic  :: generalized knowledge, half_life=90d');
+      break;
+    case 'clear':
+      historyEl.innerHTML=''; break;
+    default:
+      hline(`${escapeHtml(cmd)}: command not found. try 'help'`, 'err');
+  }
+}
+
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, ch=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[ch])); }
+
+// ---------- boot animation ----------
+const bootLines = [
+  'VT100 terminal init.............. OK',
+  'phosphor warm-up................. OK',
+  'loading /dev/hippo............... OK',
+  'mounting /mnt/memory [ro+wal].... OK',
+  '  > buffer   layer mounted (6)',
+  '  > episodic layer mounted (18)',
+  '  > semantic layer mounted (14)',
+  'consolidation daemon............. starting',
+  'decay kernel..................... half_life_days',
+  'MCP bridge [supabase]............ linked',
+  'shell v0.25...................... ready',
+  '',
+  'welcome, skf. 38 memories online.',
+];
+(function boot(){
+  const el = document.getElementById('bootText');
+  let i=0;
+  const t = setInterval(()=>{
+    el.textContent += (i<bootLines.length?bootLines[i]:'') + '\n';
+    i++;
+    if(i>=bootLines.length){
+      clearInterval(t);
+      setTimeout(()=>{
+        document.getElementById('boot').style.display='none';
+        document.getElementById('crt').style.visibility='visible';
+      }, 280);
+    }
+  }, 55);
+})();
+
+// =========================================================================
+//  ENHANCEMENTS (the 10 improvements)
+// =========================================================================
+
+// 1. Live data try-fetch. If a dashboard is serving /api/memories on the
+//    same origin, swap in real data; otherwise keep the 38-entry demo set.
+async function tryLiveData(){
+  // Only attempt fetch when served over http(s). file:// can't fetch same-origin.
+  if (!/^https?:$/.test(window.location.protocol)) return false;
+  try {
+    const r = await fetch('/api/memories', { cache: 'no-store' });
+    if (!r.ok) return false;
+    const live = await r.json();
+    if (!Array.isArray(live) || live.length === 0) return false;
+    memories.length = 0;
+    const maxRet = live.reduce((m,x)=>Math.max(m,x.retrieval_count||0),1);
+    live.forEach((d,i)=>{
+      const age = Number(d.age_days) || 0;
+      const createdTs = d.created ? new Date(d.created).getTime() : (NOW - Math.round(age*DAY));
+      memories.push({
+        id: i,
+        mem_id: (d.id || 'mem_'+String(i+1).padStart(3,'0')).slice(0,24),
+        text: d.content || '(no content)',
+        layer: d.layer,
+        tags: Array.isArray(d.tags) ? d.tags.filter(t=>!t.startsWith('path:')) : [],
+        confidence: d.confidence || 'observed',
+        age_days: age,
+        created_ts: createdTs,
+        created: fmtDate(createdTs),
+        strength: Number(d.strength) || 0.5,
+        half_life_days: Number(d.half_life_days) || 14,
+        retrieval_count: Number(d.retrieval_count) || 0,
+      });
+    });
+    return true;
+  } catch(e) { return false; }
+}
+
+// 2. Status LEDs. Click to filter/highlight.
+function renderLEDs(){
+  const errs = memories.filter(m => m.strength < 0.1).length;
+  const fading = memories.filter(m => m.strength < 0.3 && m.strength >= 0.1).length;
+  // demo: we don't have real conflict counts client-side, so synthesize none
+  const conflicts = 0;
+  const ledErr = document.getElementById('ledErr');
+  const ledConf = document.getElementById('ledConf');
+  const ledFad = document.getElementById('ledFad');
+  document.getElementById('errN').textContent = errs;
+  document.getElementById('confN').textContent = conflicts;
+  document.getElementById('fadN').textContent = fading;
+  ledErr.className = 'led ' + (errs>0?'err':'ok');
+  ledConf.className = 'led ' + (conflicts>0?'warn':'ok');
+  ledFad.className = 'led ' + (fading>0?'warn':'ok');
+}
+
+function toggleLEDFilter(which){
+  const ledEls = [document.getElementById('ledErr'), document.getElementById('ledConf'), document.getElementById('ledFad')];
+  ledEls.forEach(el => el.classList.toggle('active', el === document.getElementById(which)));
+  if (state.ledFilter === which) { state.ledFilter = null; ledEls.forEach(el => el.classList.remove('active')); }
+  else { state.ledFilter = which; }
+  renderTree();
+}
+
+document.getElementById('ledErr').addEventListener('click', ()=>toggleLEDFilter('ledErr'));
+document.getElementById('ledConf').addEventListener('click', ()=>toggleLEDFilter('ledConf'));
+document.getElementById('ledFad').addEventListener('click', ()=>toggleLEDFilter('ledFad'));
+
+// 3. ASCII decay curve. Rendered into the cat metadata block.
+function decayArt(m){
+  const W = 28, H = 6;
+  const HI_CH = '▆▇█';
+  const MID_CH = '▃▄▅';
+  const LO_CH = '▁▂';
+  let line = '';
+  for (let i = 0; i < W; i++) {
+    const day = (i / (W - 1)) * 30;
+    const s = m.strength * Math.exp(-day / m.half_life_days);
+    const cls = day <= m.age_days ? 'now' : 'future';
+    let ch;
+    if (s > 0.66) ch = HI_CH[Math.min(2, Math.floor(s * 3) % 3)];
+    else if (s > 0.33) ch = MID_CH[Math.min(2, Math.floor(s * 3) % 3)];
+    else if (s > 0.05) ch = LO_CH[Math.min(1, Math.floor(s * 2) % 2)];
+    else ch = '_';
+    line += `<span class="${cls}">${ch}</span>`;
+  }
+  return `<span class="decay-art">decay 30d   1.0 [${line}] 0.0</span>`;
+}
+
+// Wrap original renderCat to inject the decay curve + pager.
+const originalRenderCat = renderCat;
+renderCat = function(){
+  originalRenderCat();
+  // inject decay curve just after the tags line
+  const out = document.getElementById('catOut');
+  const decayHtml = decayArt(memories.find(x=>x.id===state.selectedId) || memories[0]);
+  out.innerHTML = out.innerHTML.replace(/(<span class="k">tags[^\n]+\n)/, '$1' + decayHtml + '\n');
+  applyPager();
+  renderLEDs();
+};
+
+// 4. Live incremental grep is already in place via the existing 'input'
+//    listener on #prompt. No-op here (already implemented).
+
+// 5. Clickable timeline cells. Hook after original renderTimeline runs.
+const originalRenderTimeline = renderTimeline;
+renderTimeline = function(selected){
+  originalRenderTimeline(selected);
+  const cells = document.querySelectorAll('#timeline .tl-cell, #timeline .tl-empty, #timeline .tl-sel');
+  cells.forEach((el, i)=>{
+    el.addEventListener('click', ()=>{
+      const nowDay = Math.floor(NOW / DAY);
+      const targetDay = nowDay - (cells.length - 1 - i);
+      const hits = memories.filter(m => Math.floor(m.created_ts / DAY) === targetDay);
+      if (hits.length === 0) return;
+      state.selectedId = hits[0].id;
+      renderTree(); renderCat();
+    });
+  });
+};
+
+// 6. tail -f mode. Toggle with F. Simulated new memories stream every 4s.
+let tailTimer = null;
+let tailCounter = 0;
+function toggleTail(){
+  const ind = document.getElementById('tailInd');
+  if (tailTimer) {
+    clearInterval(tailTimer); tailTimer = null;
+    ind.classList.remove('on');
+    hline('<span class="k">-- tail -f stopped --</span>');
+    return;
+  }
+  ind.classList.add('on');
+  hline('<span class="ok">-- tail -f memory/ --</span>');
+  tailTimer = setInterval(()=>{
+    tailCounter++;
+    const synth = {
+      id: memories.length,
+      mem_id: 'mem_' + String(memories.length+1).padStart(3,'0'),
+      text: '[tail] synthesized observation ' + tailCounter + ' at ' + new Date().toLocaleTimeString(),
+      layer: 'buffer',
+      tags: ['tail','stream','synth'],
+      confidence: 'observed',
+      age_days: 0,
+      created_ts: Date.now(),
+      created: fmtDate(Date.now()),
+      strength: 0.9,
+      half_life_days: 3,
+      retrieval_count: 0,
+    };
+    memories.unshift(synth);
+    hline(`<span class="ok">${synth.mem_id}</span> ${escapeHtml(synth.text)}`);
+    renderTree(); renderLEDs();
+  }, 4000);
+}
+
+// 7. Pager for long content. If the cat viewer exceeds maxLines, insert a
+//    '-- MORE --' marker and hide the remainder until SPACE is pressed.
+let pagerState = { paged: false, shown: 0, total: 0 };
+function applyPager(){
+  pagerState = { paged: false, shown: 0, total: 0 };
+  const out = document.getElementById('catOut');
+  const raw = out.innerHTML.split('\n');
+  if (raw.length <= 32) return;
+  pagerState.paged = true;
+  pagerState.shown = 24;
+  pagerState.total = raw.length;
+  const shown = raw.slice(0, pagerState.shown).join('\n');
+  out.innerHTML = shown + '\n\n<span class="pager-more">-- MORE (' + (raw.length - pagerState.shown) + ' lines hidden) --</span>';
+  out.dataset.fullHtml = raw.join('\n');
+}
+
+function advancePager(){
+  if (!pagerState.paged) return false;
+  const out = document.getElementById('catOut');
+  out.innerHTML = out.dataset.fullHtml || out.innerHTML;
+  pagerState.paged = false;
+  return true;
+}
+
+// 8. Help overlay on '?'. Rendered as an ASCII manpage.
+const helpOverlay = document.createElement('div');
+helpOverlay.className = 'help-overlay';
+helpOverlay.id = 'helpOverlay';
+helpOverlay.innerHTML = `<pre>
+<span class="h1">HIPPO(1)                     User Commands                     HIPPO(1)</span>
+
+<span class="h1">NAME</span>
+    hippo observatory -- phosphor readout for the memory store
+
+<span class="h1">SYNOPSIS</span>
+    navigate a retro-terminal view of episodic, semantic, and buffer
+    memories. typed commands + keyboard shortcuts only; no mouse required.
+
+<span class="h1">COMMANDS</span>
+    <span class="hk">ls</span>                     list memories (grouped by layer)
+    <span class="hk">cat mem_NNN</span>            open memory in viewer pane
+    <span class="hk">grep "term"</span>            filter tree by substring in content or tag
+    <span class="hk">stats</span>                  totals, averages, counts by layer/confidence
+    <span class="hk">audit</span>                  find weak memories (strength &lt; 0.3)
+    <span class="hk">consolidate</span>            preview buffer-&gt;episodic / episodic-&gt;semantic
+    <span class="hk">layers</span>                 describe the three layers
+    <span class="hk">clear</span>                  clear history
+    <span class="hk">help</span>                   this manpage
+
+<span class="h1">KEYBOARD</span>
+    <span class="hk">/</span>                      focus the prompt
+    <span class="hk">ArrowUp / ArrowDown</span>    step through tree (PgUp/PgDn = by 10)
+    <span class="hk">s</span>                      star the current memory
+    <span class="hk">u</span>                      unstar
+    <span class="hk">a</span>                      audit current (check for weakness)
+    <span class="hk">c</span>                      copy content to clipboard
+    <span class="hk">x</span>                      delete current (demo: prints warning)
+    <span class="hk">p</span>                      pin to working memory
+    <span class="hk">F</span>                      toggle tail -f (live memory stream)
+    <span class="hk">SPACE</span>                  advance pager (when content paged)
+    <span class="hk">?</span>                      this help
+    <span class="hk">ESC</span>                    clear filter / close overlay
+
+<span class="h1">STATUS BAR</span>
+    Top-right shows:
+      LEDs:   [ERR n] [CONF n] [FAD n] -- click to filter tree
+      UP:     session uptime
+      LAST SLEEP / AUDIT -- last consolidation run
+
+<span class="h1">DATA SOURCE</span>
+    top-left badge:
+      STATIC  -- 38 demo memories embedded in this HTML
+      LIVE    -- fetched from /api/memories (hippo dashboard running)
+
+<span class="h1">FILES</span>
+    ~/.hippo/hippo.db        memory store (sqlite3)
+    ~/.hippo/embeddings.json vector index (bm25 + cosine)
+
+<span class="h1">SEE ALSO</span>
+    hippo(1), hippo-audit(1), hippo-dashboard(1), hippo-sleep(1)
+
+                                          press <span class="hk">?</span> or <span class="hk">ESC</span> to close
+</pre>`;
+document.body.appendChild(helpOverlay);
+
+// 9. Keyboard actions bound to the document keydown listener.
+document.addEventListener('keydown', (e)=>{
+  const pEl = document.getElementById('prompt');
+  if (document.activeElement === pEl) return;
+  // help overlay toggle
+  if (e.key === '?') {
+    e.preventDefault();
+    helpOverlay.classList.toggle('on');
+    return;
+  }
+  if (helpOverlay.classList.contains('on')) {
+    if (e.key === 'Escape') helpOverlay.classList.remove('on');
+    return;
+  }
+  // pager advance
+  if (e.key === ' ' && pagerState.paged) {
+    e.preventDefault();
+    advancePager();
+    return;
+  }
+  // tail -f
+  if (e.key === 'f' || e.key === 'F') { e.preventDefault(); toggleTail(); return; }
+  // per-memory actions
+  const m = memories.find(x=>x.id===state.selectedId) || memories[0];
+  if (!m) return;
+  switch(e.key){
+    case 's': hline(`<span class="ok">starred</span> ${m.mem_id}`); m.starred = true; break;
+    case 'u': hline(`<span class="warn">unstarred</span> ${m.mem_id}`); m.starred = false; break;
+    case 'a': {
+      const weak = m.strength < 0.3;
+      hline(`audit ${m.mem_id} :: ${weak ? 'WEAK (strength '+m.strength.toFixed(2)+')' : 'OK'}`, weak ? 'warn' : 'ok');
+      break;
+    }
+    case 'c':
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(m.text).catch(()=>{});
+      }
+      hline(`<span class="ok">copied</span> ${m.mem_id} :: ${escapeHtml(m.text.slice(0,40))}...`);
+      break;
+    case 'x':
+      hline(`<span class="err">delete ${m.mem_id}?</span> not implemented in demo. run 'hippo forget ${m.mem_id}' in shell`, 'err');
+      break;
+    case 'p':
+      hline(`<span class="ok">pinned</span> ${m.mem_id} to working memory`);
+      m.pinned = true;
+      break;
+  }
+});
+
+// 10. Footer tells you the data source. Real fetch attempted at boot.
+(async function initData(){
+  const live = await tryLiveData();
+  const badge = document.getElementById('dataSrc');
+  if (live) {
+    badge.textContent = 'LIVE :: /api/memories';
+    badge.classList.add('live');
+    state.selectedId = memories[0].id;
+    renderTree(); renderCat();
+  } else {
+    badge.textContent = 'STATIC DEMO';
+  }
+  renderLEDs();
+})();
+
+// Make dashboard stats on the header vary slightly over time for vibe.
+function tickStats(){
+  const h = Math.floor(Math.random()*6)+1;
+  document.getElementById('lastSleep').textContent = h + 'h ago';
+}
+tickStats();
+setInterval(tickStats, 60000);
+
+// initial render
+renderTree();
+renderCat();
+tickUptime();
+</script>
+</body>
+</html>

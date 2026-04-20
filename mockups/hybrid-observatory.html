@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hippo Brain Observatory — Hybrid</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* Paper grain texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.03;
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(139,125,107,0.3) 2px, transparent 4px),
+      repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(139,125,107,0.2) 2px, transparent 4px),
+      repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(139,125,107,0.12) 3px, transparent 6px);
+  }
+
+  body {
+    font-family: Georgia, 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
+    background-color: #f4efe6;
+    color: #3a3228;
+    min-height: 100vh;
+    padding: 28px 32px;
+    line-height: 1.5;
+  }
+
+  /* ── Page grid ── */
+  .page-grid {
+    display: grid;
+    grid-template-columns: 1fr 310px;
+    grid-template-rows: auto 1fr auto;
+    gap: 22px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  /* ── Cartouche (title block) ── */
+  .cartouche {
+    grid-column: 1 / 2;
+    grid-row: 1 / 2;
+    border: 3px double #8b7d6b;
+    padding: 18px 26px 16px;
+    position: relative;
+    background: rgba(244,239,230,0.85);
+    max-width: 540px;
+  }
+  .cartouche::before,
+  .cartouche::after {
+    position: absolute;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    color: #8b7d6b;
+    font-size: 20px;
+    line-height: 1;
+  }
+  .cartouche::before { content: '\250C'; top: -3px; left: -2px; }
+  .cartouche::after  { content: '\2510'; top: -3px; right: -2px; }
+  .cartouche .corner-bl,
+  .cartouche .corner-br {
+    position: absolute;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    color: #8b7d6b;
+    font-size: 20px;
+    line-height: 1;
+  }
+  .cartouche .corner-bl { bottom: -5px; left: -2px; }
+  .cartouche .corner-br { bottom: -5px; right: -2px; }
+
+  .cartouche h1 {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    font-variant: small-caps;
+    margin-bottom: 2px;
+    color: #3a3228;
+  }
+  .cartouche .subtitle {
+    font-style: italic;
+    font-size: 15px;
+    color: #5a4e40;
+    margin-bottom: 10px;
+  }
+  .cartouche .plate-info {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 11px;
+    color: #9b8e7e;
+    line-height: 1.7;
+  }
+
+  /* Ornamental rule between cartouche and chart */
+  .ornamental-rule {
+    grid-column: 1 / 2;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin: -8px 0 -10px;
+    max-width: 540px;
+  }
+  .ornamental-rule .line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(to right, transparent, #8b7d6b, transparent);
+    opacity: 0.4;
+  }
+  .ornamental-rule .star {
+    font-size: 13px;
+    color: #8b7d6b;
+    padding: 0 14px;
+    opacity: 0.7;
+  }
+
+  /* ── Star chart plate ── */
+  .chart-plate {
+    grid-column: 1 / 2;
+    grid-row: 2 / 3;
+    position: relative;
+    border: 3px solid #8b7d6b;
+    background: #0a1628;
+    box-shadow:
+      inset 0 0 20px rgba(10,8,4,0.5),
+      inset 0 0 2px rgba(139,125,107,0.3),
+      0 2px 8px rgba(90,78,64,0.15);
+  }
+  /* Inner frame line */
+  .chart-plate::before {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border: 1px solid rgba(139,125,107,0.25);
+    pointer-events: none;
+    z-index: 2;
+  }
+  .chart-plate canvas {
+    display: block;
+    width: 100%;
+    height: 520px;
+  }
+
+  /* Zone labels on the dark chart */
+  .chart-plate .zone-label {
+    position: absolute;
+    font-family: Georgia, 'Palatino Linotype', Palatino, serif;
+    font-style: italic;
+    font-size: 11px;
+    letter-spacing: 3px;
+    font-variant: small-caps;
+    color: rgba(232,220,200,0.2);
+    pointer-events: none;
+    z-index: 3;
+  }
+  .chart-plate .zone-label.buffer   { top: 28px;  left: 50%; transform: translateX(-50%); }
+  .chart-plate .zone-label.episodic { top: 50%;   left: 28px; transform: translateY(-50%); writing-mode: vertical-lr; letter-spacing: 5px; }
+  .chart-plate .zone-label.semantic { bottom: 28px; left: 50%; transform: translateX(-50%); }
+
+  /* Zone divider dashes */
+  .chart-plate .zone-divider {
+    position: absolute;
+    left: 20px;
+    right: 20px;
+    height: 0;
+    border-top: 1px dashed rgba(232,220,200,0.06);
+    pointer-events: none;
+    z-index: 3;
+  }
+  .chart-plate .zone-divider.top { top: 33.3%; }
+  .chart-plate .zone-divider.bottom { top: 66.6%; }
+
+  /* ── Field Notes sidebar ── */
+  .field-notes {
+    grid-column: 2 / 3;
+    grid-row: 1 / 3;
+    border: 1px solid #c4b9a8;
+    padding: 22px 20px;
+    background: rgba(244,239,230,0.6);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    position: relative;
+  }
+  /* Corner ornaments on field notes */
+  .field-notes::before {
+    content: '\250C';
+    position: absolute;
+    top: -2px;
+    left: -1px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    color: #8b7d6b;
+    font-size: 16px;
+    line-height: 1;
+    opacity: 0.5;
+  }
+  .field-notes::after {
+    content: '\2518';
+    position: absolute;
+    bottom: -3px;
+    right: -1px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    color: #8b7d6b;
+    font-size: 16px;
+    line-height: 1;
+    opacity: 0.5;
+  }
+  .fn-corner-tr {
+    position: absolute;
+    top: -2px;
+    right: -1px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    color: #8b7d6b;
+    font-size: 16px;
+    line-height: 1;
+    opacity: 0.5;
+  }
+  .fn-corner-bl {
+    position: absolute;
+    bottom: -3px;
+    left: -1px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    color: #8b7d6b;
+    font-size: 16px;
+    line-height: 1;
+    opacity: 0.5;
+  }
+
+  .field-notes h2 {
+    font-size: 13px;
+    letter-spacing: 3px;
+    font-variant: small-caps;
+    font-weight: 600;
+    color: #5a3e28;
+    border-bottom: 2px solid #8b7d6b;
+    padding-bottom: 5px;
+    margin-bottom: 0;
+  }
+  .field-notes h2::after {
+    content: '';
+    display: block;
+    width: 100%;
+    height: 1px;
+    background: #c4b9a8;
+    margin-top: 3px;
+  }
+
+  .station-info {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 11px;
+    color: #9b8e7e;
+    line-height: 1.9;
+  }
+  .station-info strong {
+    color: #5a3e28;
+    font-weight: 600;
+  }
+  .station-info .project-tag {
+    display: inline-block;
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #c45c3c;
+    border: 1px solid rgba(196,92,60,0.4);
+    padding: 1px 6px;
+    margin-left: 4px;
+    vertical-align: middle;
+    background: rgba(196,92,60,0.05);
+  }
+
+  .divider-thin {
+    height: 0;
+    border-top: 1px solid #c4b9a8;
+  }
+
+  .memory-content {
+    font-size: 14px;
+    line-height: 1.55;
+    color: #3a3228;
+    font-style: italic;
+    border-left: 3px solid #c45c3c;
+    padding-left: 14px;
+  }
+
+  /* Survey measurements table */
+  .survey-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .survey-table th {
+    text-align: left;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-weight: 500;
+    font-variant: small-caps;
+    color: #9b8e7e;
+    padding: 4px 6px 4px 0;
+    border-bottom: 1px solid #c4b9a8;
+    font-size: 10px;
+    letter-spacing: 1px;
+  }
+  .survey-table td {
+    padding: 5px 6px 5px 0;
+    border-bottom: 1px solid rgba(196,185,168,0.5);
+    font-size: 12px;
+  }
+  .survey-table td.label {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-variant: small-caps;
+    color: #9b8e7e;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+  }
+  .survey-table td.value {
+    text-align: right;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-weight: 600;
+    color: #3a3228;
+    padding-right: 0;
+    font-size: 12px;
+  }
+  .stable { color: #6b8f5e; font-weight: 700; }
+  .at-risk { color: #c45c3c; font-weight: 700; }
+
+  .projection {
+    font-size: 12px;
+    font-style: italic;
+    color: #9b8e7e;
+    line-height: 1.6;
+  }
+  .projection span { color: #3a3228; font-weight: 600; }
+
+  /* Tags as field stamps */
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .tag {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 9px;
+    border: 1px solid #8b7d6b;
+    padding: 2px 7px;
+    color: #5a3e28;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    background: rgba(139,125,107,0.05);
+  }
+  .tag:nth-child(1) { transform: rotate(-1.2deg); }
+  .tag:nth-child(2) { transform: rotate(0.7deg); }
+  .tag:nth-child(3) { transform: rotate(-0.4deg); }
+  .tag:nth-child(4) { transform: rotate(1.5deg); }
+  .tag:nth-child(5) { transform: rotate(-0.9deg); }
+
+  /* Light curve mini chart */
+  .light-curve-section {
+    border: 1px solid #c4b9a8;
+    padding: 10px;
+    background: rgba(244,239,230,0.5);
+  }
+  .light-curve-section h3 {
+    font-size: 10px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #9b8e7e;
+    margin-bottom: 6px;
+  }
+  .light-curve-section canvas {
+    width: 100%;
+    height: 60px;
+    display: block;
+  }
+
+  /* ── Legend strip (bottom) ── */
+  .legend {
+    grid-column: 1 / -1;
+    grid-row: 3 / 4;
+    border: 1px solid #c4b9a8;
+    padding: 14px 22px;
+    background: rgba(244,239,230,0.6);
+  }
+  .legend h2 {
+    font-size: 11px;
+    letter-spacing: 3px;
+    font-variant: small-caps;
+    font-weight: 600;
+    color: #5a3e28;
+    border-bottom: 2px solid #8b7d6b;
+    padding-bottom: 3px;
+    margin-bottom: 12px;
+    display: inline-block;
+  }
+  .legend h2::after {
+    content: '';
+    display: block;
+    width: 100%;
+    height: 1px;
+    background: #c4b9a8;
+    margin-top: 3px;
+  }
+  .legend-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 24px;
+    font-size: 11px;
+    color: #5a4e40;
+  }
+  .legend-group {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .legend-group-label {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #9b8e7e;
+    margin-right: 2px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+  }
+  .legend-dot {
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .legend-sep {
+    color: #c4b9a8;
+    font-size: 14px;
+    user-select: none;
+  }
+  .legend-totals {
+    margin-left: auto;
+    font-style: italic;
+    font-family: Georgia, 'Palatino Linotype', Palatino, serif;
+    color: #9b8e7e;
+    font-size: 11px;
+  }
+
+  /* ── Breathing animation keyframes ── */
+  @keyframes starBreathe {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page-grid">
+
+  <!-- ── Title Cartouche ── -->
+  <div class="cartouche">
+    <span class="corner-bl">&#x2514;</span>
+    <span class="corner-br">&#x2518;</span>
+    <h1>Hippo Brain Observatory</h1>
+    <div class="subtitle">Celestial Survey of Memory</div>
+    <div class="plate-info">
+      Plate I &mdash; 57 bodies catalogued &middot; Observed April 2026<br>
+      Projection: equatorial &middot; Grid interval: 80px &middot; Epoch: J2026.3
+    </div>
+  </div>
+
+  <!-- ── Star Chart Plate ── -->
+  <div class="chart-plate">
+    <canvas id="starCanvas"></canvas>
+    <div class="zone-label buffer">Buffer</div>
+    <div class="zone-label episodic">Episodic</div>
+    <div class="zone-label semantic">Semantic</div>
+    <div class="zone-divider top"></div>
+    <div class="zone-divider bottom"></div>
+  </div>
+
+  <!-- ── Field Notes Sidebar ── -->
+  <div class="field-notes">
+    <span class="fn-corner-tr">&#x2510;</span>
+    <span class="fn-corner-bl">&#x2514;</span>
+
+    <h2>Field Notes</h2>
+
+    <div class="station-info">
+      <strong>Station:</strong> &alpha; Mem-2847<br>
+      <strong>Classification:</strong> EPISODIC &middot; OBSERVED<br>
+      <strong>Project:</strong> <span class="project-tag">hippo</span>
+    </div>
+
+    <div class="divider-thin"></div>
+
+    <div class="memory-content">
+      Gold model uses TIPS 10y as primary inflation signal. Confirmed across three separate backtests with consistent alpha.
+    </div>
+
+    <table class="survey-table">
+      <tr><th>Measurement</th><th style="text-align:right">Value</th></tr>
+      <tr><td class="label">Magnitude</td><td class="value">1.000</td></tr>
+      <tr><td class="label">Half-life</td><td class="value">31.5d</td></tr>
+      <tr><td class="label">Observations</td><td class="value">14</td></tr>
+      <tr><td class="label">Age</td><td class="value">9.9 days</td></tr>
+      <tr><td class="label">Stability</td><td class="value"><span class="stable">STABLE</span></td></tr>
+    </table>
+
+    <div class="projection">
+      7-day forecast: <span>1.000</span> &middot; 30-day forecast: <span>0.853</span>
+    </div>
+
+    <div class="tags">
+      <span class="tag">gold</span>
+      <span class="tag">tips-10y</span>
+      <span class="tag">inflation</span>
+      <span class="tag">signal</span>
+      <span class="tag">production</span>
+    </div>
+
+    <div class="light-curve-section">
+      <h3>Light Curve &mdash; Projected Decay</h3>
+      <canvas id="lightCurveCanvas"></canvas>
+    </div>
+
+    <div class="station-info" style="margin-top:auto; border-top:1px solid #c4b9a8; padding-top:10px; font-size:10px;">
+      <strong>Nearby bodies:</strong><br>
+      &bull; &beta; Epi-0931 (0.87) &mdash; 42px NE<br>
+      &bull; &gamma; Sem-4820 (0.62) &mdash; 68px SW<br>
+      &bull; &delta; Buf-1173 (0.94) &mdash; 55px N
+    </div>
+  </div>
+
+  <!-- ── Legend Strip ── -->
+  <div class="legend">
+    <h2>Legend</h2>
+    <div class="legend-row">
+
+      <!-- Size key -->
+      <span class="legend-group-label">Size</span>
+      <div class="legend-group">
+        <div class="legend-item">
+          <div class="legend-dot" style="width:6px;height:6px;background:#6b8a9e;"></div>
+          <span>weak</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="width:9px;height:9px;background:#b87d4b;"></div>
+          <span>moderate</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="width:13px;height:13px;background:#c9a84c;"></div>
+          <span>strong</span>
+        </div>
+      </div>
+
+      <span class="legend-sep">|</span>
+
+      <!-- Color key -->
+      <span class="legend-group-label">Color</span>
+      <div class="legend-group">
+        <div class="legend-item">
+          <div class="legend-dot" style="width:8px;height:8px;background:#c9a84c;"></div>
+          <span>active</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="width:8px;height:8px;background:#b87d4b;"></div>
+          <span>ageing</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="width:8px;height:8px;background:#6b8a9e;"></div>
+          <span>fading</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="width:8px;height:8px;background:#c45c3c;"></div>
+          <span>at risk</span>
+        </div>
+      </div>
+
+      <span class="legend-sep">|</span>
+
+      <!-- Zone key -->
+      <span class="legend-group-label">Zones</span>
+      <div class="legend-group">
+        <div class="legend-item"><span style="font-variant:small-caps;letter-spacing:1px;">buf</span></div>
+        <div class="legend-item"><span style="font-variant:small-caps;letter-spacing:1px;">epi</span></div>
+        <div class="legend-item"><span style="font-variant:small-caps;letter-spacing:1px;">sem</span></div>
+      </div>
+
+      <div class="legend-totals">
+        57 memories &middot; 12 global &middot; 45 local &middot; 0 at risk &middot; avg magnitude 0.987
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── Star Chart Canvas ──
+(function() {
+  var canvas = document.getElementById('starCanvas');
+  var ctx = canvas.getContext('2d');
+  var dpr = window.devicePixelRatio || 1;
+  var rect = canvas.getBoundingClientRect();
+  var W = rect.width || 1020;
+  var H = 520;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.scale(dpr, dpr);
+
+  // Seeded pseudo-random
+  var seed = 42;
+  function rand() {
+    seed = (seed * 16807 + 0) % 2147483647;
+    return (seed - 1) / 2147483646;
+  }
+
+  // Greek letters for star labels
+  var greeks = [
+    '\u03B1', '\u03B2', '\u03B3', '\u03B4', '\u03B5', '\u03B6',
+    '\u03B7', '\u03B8', '\u03B9', '\u03BA', '\u03BB', '\u03BC',
+    '\u03BD', '\u03BE', '\u03BF', '\u03C0', '\u03C1', '\u03C3',
+    '\u03C4', '\u03C5', '\u03C6', '\u03C7', '\u03C8', '\u03C9'
+  ];
+  var prefixes = ['Mem', 'Sem', 'Buf', 'Epi', 'Ctx', 'Ref'];
+
+  // Generate 38 stars clustered into three zones
+  var stars = [];
+  var margin = 55;
+  for (var i = 0; i < 38; i++) {
+    var importance = rand();
+    var zone, x, y;
+    var zoneRoll = rand();
+
+    if (zoneRoll < 0.3) {
+      // BUFFER zone — upper region
+      zone = 'buffer';
+      x = margin + rand() * (W - margin * 2);
+      y = margin + rand() * (H * 0.28 - margin);
+    } else if (zoneRoll < 0.75) {
+      // EPISODIC zone — center, largest
+      zone = 'episodic';
+      x = margin + rand() * (W - margin * 2);
+      y = H * 0.3 + rand() * (H * 0.38);
+    } else {
+      // SEMANTIC zone — lower region
+      zone = 'semantic';
+      x = margin + rand() * (W - margin * 2);
+      y = H * 0.68 + rand() * (H * 0.27);
+    }
+
+    var greek = greeks[i % greeks.length];
+    var prefix = prefixes[Math.floor(rand() * prefixes.length)];
+    var num = Math.floor(rand() * 9000 + 1000);
+
+    stars.push({
+      x: x,
+      y: y,
+      importance: importance,
+      radius: 2 + importance * 5,
+      zone: zone,
+      label: greek + ' ' + prefix + '-' + num,
+      phase: rand() * Math.PI * 2,
+      selected: false
+    });
+  }
+
+  // Make index 0 the selected star and force it to be prominent and in episodic zone
+  stars[0].importance = 0.94;
+  stars[0].radius = 7;
+  stars[0].x = W * 0.35;
+  stars[0].y = H * 0.42;
+  stars[0].zone = 'episodic';
+  stars[0].label = '\u03B1 Mem-2847';
+  stars[0].selected = true;
+
+  // Find constellation connections (nearest neighbors)
+  var connections = [];
+  for (var i = 0; i < stars.length; i++) {
+    var dists = [];
+    for (var j = 0; j < stars.length; j++) {
+      if (i === j) continue;
+      var dx = stars[i].x - stars[j].x;
+      var dy = stars[i].y - stars[j].y;
+      dists.push({ idx: j, d: Math.sqrt(dx * dx + dy * dy) });
+    }
+    dists.sort(function(a, b) { return a.d - b.d; });
+    var numConn = stars[i].importance > 0.6 ? 2 : 1;
+    for (var k = 0; k < numConn && k < dists.length; k++) {
+      if (dists[k].d < 200) {
+        var a = Math.min(i, dists[k].idx);
+        var b = Math.max(i, dists[k].idx);
+        var key = a + '-' + b;
+        var exists = false;
+        for (var c = 0; c < connections.length; c++) {
+          if (connections[c].key === key) { exists = true; break; }
+        }
+        if (!exists) {
+          connections.push({ a: a, b: b, key: key });
+        }
+      }
+    }
+  }
+
+  function getStarColor(importance) {
+    if (importance > 0.7) return { r: 201, g: 168, b: 76 };   // gold
+    if (importance > 0.4) return { r: 184, g: 125, b: 75 };   // copper
+    return { r: 107, g: 138, b: 158 };                         // steel blue
+  }
+
+  function draw(time) {
+    ctx.clearRect(0, 0, W, H);
+
+    // Deep navy background
+    ctx.fillStyle = '#0a1628';
+    ctx.fillRect(0, 0, W, H);
+
+    // Subtle vignette
+    var vg = ctx.createRadialGradient(W / 2, H / 2, 80, W / 2, H / 2, W * 0.65);
+    vg.addColorStop(0, 'rgba(201, 168, 76, 0.012)');
+    vg.addColorStop(1, 'rgba(4, 8, 16, 0.35)');
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Celestial coordinate grid — straight lines
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 0.5;
+    for (var gx = 80; gx < W; gx += 80) {
+      ctx.beginPath();
+      ctx.moveTo(gx, 0);
+      ctx.lineTo(gx, H);
+      ctx.stroke();
+    }
+    for (var gy = 80; gy < H; gy += 80) {
+      ctx.beginPath();
+      ctx.moveTo(0, gy);
+      ctx.lineTo(W, gy);
+      ctx.stroke();
+    }
+
+    // Concentric circles (celestial coordinate rings)
+    var cx = W / 2, cy = H / 2;
+    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+    ctx.lineWidth = 0.5;
+    for (var r = 60; r < W * 0.5; r += 80) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Radial lines from center
+    for (var ra = 0; ra < 12; ra++) {
+      var angle = (ra / 12) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(angle) * W * 0.5, cy + Math.sin(angle) * H * 0.5);
+      ctx.stroke();
+    }
+
+    // Faint coordinate tick labels along edges
+    ctx.font = 'italic 9px Georgia, Palatino, serif';
+    ctx.fillStyle = 'rgba(232,220,200,0.15)';
+    ctx.textAlign = 'center';
+    for (var gx = 80; gx < W; gx += 160) {
+      var raH = Math.floor((gx / W) * 24);
+      ctx.fillText(raH + 'h', gx, H - 8);
+    }
+    ctx.textAlign = 'right';
+    for (var gy = 80; gy < H; gy += 160) {
+      var dec = Math.floor(90 - (gy / H) * 180);
+      ctx.fillText(dec + '\u00B0', W - 10, gy + 3);
+    }
+
+    // Constellation lines (quadratic bezier curves)
+    for (var c = 0; c < connections.length; c++) {
+      var sa = stars[connections[c].a];
+      var sb = stars[connections[c].b];
+
+      ctx.beginPath();
+      ctx.strokeStyle = 'rgba(201, 168, 76, 0.2)';
+      ctx.lineWidth = 0.6;
+
+      var mx = (sa.x + sb.x) / 2;
+      var my = (sa.y + sb.y) / 2;
+      var ddx = sb.x - sa.x;
+      var ddy = sb.y - sa.y;
+      var dist = Math.sqrt(ddx * ddx + ddy * ddy);
+      if (dist === 0) continue;
+      var offset = 14;
+      var cpx = mx + (-ddy / dist) * offset;
+      var cpy = my + (ddx / dist) * offset;
+
+      ctx.moveTo(sa.x, sa.y);
+      ctx.quadraticCurveTo(cpx, cpy, sb.x, sb.y);
+      ctx.stroke();
+    }
+
+    // Scatter of tiny background stars (static, very dim)
+    seed = 999;
+    ctx.fillStyle = 'rgba(232,220,200,0.08)';
+    for (var bg = 0; bg < 120; bg++) {
+      var bx = rand() * W;
+      var by = rand() * H;
+      var bs = 0.3 + rand() * 0.7;
+      ctx.beginPath();
+      ctx.arc(bx, by, bs, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Draw stars
+    var t = time / 1000;
+    for (var i = 0; i < stars.length; i++) {
+      var s = stars[i];
+      var col = getStarColor(s.importance);
+
+      // Breathing pulse: 2-4s cycle, +/-15% opacity
+      var breathSpeed = 0.3 + (s.phase / (Math.PI * 2)) * 0.25; // varies per star
+      var pulse = 0.85 + 0.15 * Math.sin(t * breathSpeed * Math.PI * 2 + s.phase);
+      var alpha = (0.55 + s.importance * 0.45) * pulse;
+
+      // Glow (radial gradient)
+      if (s.importance > 0.35) {
+        var glowR = s.radius * (3 + s.importance * 4);
+        var glow = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, glowR);
+        glow.addColorStop(0, 'rgba(' + col.r + ',' + col.g + ',' + col.b + ',' + (0.12 * pulse) + ')');
+        glow.addColorStop(1, 'rgba(' + col.r + ',' + col.g + ',' + col.b + ',0)');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, glowR, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Star body
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.radius * pulse, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(' + col.r + ',' + col.g + ',' + col.b + ',' + alpha + ')';
+      ctx.fill();
+
+      // Bright core for important stars
+      if (s.importance > 0.6) {
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.radius * 0.35 * pulse, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 248, 230, ' + (0.55 * pulse) + ')';
+        ctx.fill();
+      }
+
+      // Label (tiny italic cream text, offset to upper-right)
+      if (s.importance > 0.35 || s.selected) {
+        ctx.font = 'italic 9px Georgia, Palatino, serif';
+        var labelAlpha = s.importance > 0.5 ? 0.5 : 0.25;
+        if (s.selected) labelAlpha = 0.7;
+        ctx.fillStyle = 'rgba(232, 220, 200, ' + labelAlpha + ')';
+        ctx.textAlign = 'left';
+        ctx.fillText(s.label, s.x + s.radius + 6, s.y - s.radius - 3);
+      }
+    }
+
+    // Highlight selected star with dashed terra cotta ring
+    var sel = stars[0];
+    var selPulse = 0.85 + 0.15 * Math.sin(t * 0.8 + sel.phase);
+
+    // Outer selection ring
+    ctx.beginPath();
+    ctx.arc(sel.x, sel.y, sel.radius + 12, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(196, 92, 60, ' + (0.5 * selPulse) + ')';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Extra glow on selected
+    var selGlow = ctx.createRadialGradient(sel.x, sel.y, 0, sel.x, sel.y, sel.radius * 8);
+    selGlow.addColorStop(0, 'rgba(196, 92, 60, ' + (0.06 * selPulse) + ')');
+    selGlow.addColorStop(1, 'rgba(196, 92, 60, 0)');
+    ctx.fillStyle = selGlow;
+    ctx.beginPath();
+    ctx.arc(sel.x, sel.y, sel.radius * 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    requestAnimationFrame(draw);
+  }
+
+  requestAnimationFrame(draw);
+})();
+
+// ── Light Curve Canvas (strength decay projection) ──
+(function() {
+  var canvas = document.getElementById('lightCurveCanvas');
+  var dpr = window.devicePixelRatio || 1;
+  var rect = canvas.getBoundingClientRect();
+  var W = rect.width || 260;
+  var H = 60;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  var ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  var pad = { top: 8, bottom: 16, left: 4, right: 4 };
+  var plotW = W - pad.left - pad.right;
+  var plotH = H - pad.top - pad.bottom;
+
+  // Exponential decay curve from 1.0 down to ~0.6 over 30 days (half-life 31.5d)
+  var nPoints = 40;
+  var halfLife = 31.5;
+  var days = 30;
+
+  // Grid behind the curve
+  ctx.strokeStyle = 'rgba(196,185,168,0.25)';
+  ctx.lineWidth = 0.5;
+  // Horizontal gridlines at 0.25 intervals
+  for (var g = 0; g <= 4; g++) {
+    var gy = pad.top + plotH - (g / 4) * plotH;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, gy);
+    ctx.lineTo(pad.left + plotW, gy);
+    ctx.stroke();
+  }
+  // Vertical gridlines
+  for (var g = 0; g <= 6; g++) {
+    var gx = pad.left + (g / 6) * plotW;
+    ctx.beginPath();
+    ctx.moveTo(gx, pad.top);
+    ctx.lineTo(gx, pad.top + plotH);
+    ctx.stroke();
+  }
+
+  // Fill under curve
+  ctx.beginPath();
+  ctx.moveTo(pad.left, pad.top + plotH);
+  for (var i = 0; i <= nPoints; i++) {
+    var t = (i / nPoints) * days;
+    var strength = Math.pow(0.5, t / halfLife);
+    var x = pad.left + (i / nPoints) * plotW;
+    var y = pad.top + plotH - strength * plotH;
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(pad.left + plotW, pad.top + plotH);
+  ctx.closePath();
+
+  var grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + plotH);
+  grad.addColorStop(0, 'rgba(196,92,60,0.15)');
+  grad.addColorStop(1, 'rgba(196,92,60,0.02)');
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Curve line
+  ctx.beginPath();
+  for (var i = 0; i <= nPoints; i++) {
+    var t = (i / nPoints) * days;
+    var strength = Math.pow(0.5, t / halfLife);
+    var x = pad.left + (i / nPoints) * plotW;
+    var y = pad.top + plotH - strength * plotH;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.strokeStyle = '#c45c3c';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Current position dot (day 0)
+  ctx.beginPath();
+  ctx.arc(pad.left, pad.top + plotH - plotH, 3, 0, Math.PI * 2);
+  ctx.fillStyle = '#c45c3c';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(pad.left, pad.top + plotH - plotH, 1.5, 0, Math.PI * 2);
+  ctx.fillStyle = '#f4efe6';
+  ctx.fill();
+
+  // Axis labels
+  ctx.font = '8px Consolas, Monaco, monospace';
+  ctx.fillStyle = '#9b8e7e';
+  ctx.textAlign = 'left';
+  ctx.fillText('now', pad.left, H - 2);
+  ctx.textAlign = 'right';
+  ctx.fillText('30d', W - pad.right, H - 2);
+
+  ctx.textAlign = 'left';
+  ctx.fillText('1', pad.left, pad.top + 3);
+  ctx.fillText('0', pad.left, pad.top + plotH - 1);
+})();
+</script>
+
+</body>
+</html>

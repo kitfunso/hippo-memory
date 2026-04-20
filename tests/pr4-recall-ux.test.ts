@@ -190,9 +190,9 @@ describe('source bucket annotation', () => {
   });
 
   it('confidence levels cover the expected set', () => {
-    const verified = createMemory('v', { confidence: 'verified' });
-    const observed = createMemory('o', { confidence: 'observed' });
-    const inferred = createMemory('i', { confidence: 'inferred' });
+    const verified = createMemory('verified confidence test', { confidence: 'verified' });
+    const observed = createMemory('observed confidence test', { confidence: 'observed' });
+    const inferred = createMemory('inferred confidence test', { confidence: 'inferred' });
 
     expect(resolveConfidence(verified)).toBe('verified');
     expect(resolveConfidence(observed)).toBe('observed');

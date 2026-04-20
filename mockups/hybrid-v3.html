@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hippo Brain Observatory</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+  :root {
+    --bg: #f4efe6;
+    --map-bg: #faf7f2;
+    --text: #3a3228;
+    --accent: #c45c3c;
+    --buffer: #7c6caf;
+    --episodic: #c49a3c;
+    --semantic: #5a8f6b;
+    --dim: #9b8e7e;
+    --border: #c4b9a8;
+    --tag-bg: #f0ebe0;
+    --serif: Georgia, "Palatino Linotype", serif;
+    --mono: "Consolas", "Monaco", monospace;
+  }
+
+  html { font-size: 14px; }
+
+  body {
+    font-family: var(--serif);
+    color: var(--text);
+    background: var(--bg);
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(180,170,150,0.015) 2px, rgba(180,170,150,0.015) 3px),
+      repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(180,170,150,0.015) 2px, rgba(180,170,150,0.015) 3px);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  .header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 16px 32px;
+    border-bottom: 1px solid var(--border);
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .header-left { display: flex; align-items: baseline; gap: 10px; }
+  .header-logo { font-weight: bold; font-size: 20px; color: var(--text); letter-spacing: 0.5px; }
+  .header-subtitle { font-style: italic; font-size: 13px; color: var(--dim); }
+  .header-stats { font-family: var(--mono); font-size: 11px; color: var(--dim); letter-spacing: 0.3px; }
+
+  .main {
+    display: flex;
+    max-width: 1400px;
+    margin: 0 auto;
+    height: calc(100vh - 95px);
+  }
+
+  .map-area { flex: 1; padding: 24px; min-width: 0; position: relative; }
+  .map-container {
+    position: relative;
+    background: var(--map-bg);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    height: 100%;
+    overflow: hidden;
+    cursor: grab;
+  }
+  .map-container:active { cursor: grabbing; }
+  .map-container canvas { display: block; }
+
+  .map-hint {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--dim);
+    opacity: 0.6;
+    pointer-events: none;
+    letter-spacing: 2px;
+  }
+
+  /* Labels floating over the 3D scene */
+  .node-label {
+    position: absolute;
+    font: italic 11px Georgia, serif;
+    color: var(--text);
+    background: rgba(244, 239, 230, 0.88);
+    padding: 1px 6px;
+    border-radius: 2px;
+    pointer-events: none;
+    white-space: nowrap;
+    transform: translate(12px, -50%);
+    border: 1px solid rgba(196, 185, 168, 0.4);
+  }
+
+  .zone-label {
+    position: absolute;
+    font: small-caps 28px Georgia, serif;
+    color: rgba(139, 125, 107, 0.12);
+    pointer-events: none;
+    white-space: nowrap;
+    transform: translate(-50%, -50%);
+    letter-spacing: 6px;
+  }
+
+  .map-tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 6px 10px;
+    font-size: 12px;
+    color: var(--text);
+    max-width: 240px;
+    line-height: 1.5;
+    box-shadow: 0 1px 4px rgba(139,125,107,0.1);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    z-index: 10;
+  }
+  .map-tooltip.visible { opacity: 1; }
+  .map-tooltip .tt-layer {
+    font-size: 10px;
+    font-variant: small-caps;
+    letter-spacing: 0.8px;
+    margin-bottom: 2px;
+  }
+
+  .sidebar {
+    width: 330px;
+    flex-shrink: 0;
+    border-left: 1px solid var(--border);
+    padding: 24px;
+    overflow-y: auto;
+  }
+  .sidebar-section-title {
+    font-size: 18px;
+    font-weight: normal;
+    color: var(--text);
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+  .sidebar-empty {
+    color: var(--dim);
+    font-style: italic;
+    font-size: 13px;
+  }
+
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    font-family: var(--serif);
+    padding: 2px 10px;
+    border-radius: 3px;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .badge-layer { color: #fff; }
+  .badge-layer.buffer { background: var(--buffer); }
+  .badge-layer.episodic { background: var(--episodic); }
+  .badge-layer.semantic { background: var(--semantic); }
+  .badge-project {
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    background: transparent;
+  }
+  .sidebar-confidence { font-size: 12px; color: var(--dim); margin-top: 10px; }
+
+  .divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+
+  .memory-content {
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--text);
+    border-left: 3px solid var(--accent);
+    padding-left: 14px;
+    margin: 0;
+  }
+
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; }
+  .stat-label {
+    font-variant: small-caps;
+    font-size: 11px;
+    letter-spacing: 0.6px;
+    color: var(--dim);
+    margin-bottom: 3px;
+  }
+  .stat-value {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .stat-bar {
+    display: inline-block;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--accent);
+  }
+
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag {
+    font-size: 11px;
+    font-family: var(--serif);
+    padding: 3px 10px;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    background: var(--tag-bg);
+    color: var(--text);
+  }
+
+  .decay-label {
+    font-variant: small-caps;
+    font-size: 11px;
+    letter-spacing: 0.6px;
+    color: var(--dim);
+    margin-bottom: 6px;
+  }
+  .decay-canvas-wrap {
+    position: relative;
+    width: 100%;
+    height: 55px;
+    background: var(--map-bg);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+  }
+  .decay-canvas-wrap canvas { display: block; width: 100%; height: 100%; }
+  .decay-axis { display: flex; justify-content: space-between; margin-top: 3px; }
+  .decay-axis span { font-family: var(--mono); font-size: 10px; color: var(--dim); }
+
+  .bottom-bar {
+    border-top: 1px solid var(--border);
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 10px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--dim);
+  }
+  .legend-group { display: flex; align-items: center; gap: 14px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .legend-dot.buffer { background: var(--buffer); }
+  .legend-dot.episodic { background: var(--episodic); }
+  .legend-dot.semantic { background: var(--semantic); }
+  .size-legend { display: flex; align-items: center; gap: 12px; }
+  .size-example { display: flex; align-items: center; gap: 5px; }
+  .size-circle { border-radius: 50%; background: var(--dim); opacity: 0.5; display: inline-block; }
+  .bottom-note { font-style: italic; }
+
+  /* ── Memory List Drawer ── */
+  .drawer-toggle {
+    position: fixed;
+    bottom: 44px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 5px 20px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    font: 11px var(--mono);
+    color: var(--dim);
+    cursor: pointer;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: bottom 0.3s ease;
+  }
+  .drawer-toggle.open { bottom: 284px; }
+  .drawer-toggle:hover { color: var(--text); }
+  .drawer-chevron { font-size: 8px; }
+
+  .memory-drawer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 280px;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+    z-index: 15;
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    flex-direction: column;
+  }
+  .memory-drawer.open { transform: translateY(0); }
+
+  .drawer-header {
+    display: grid;
+    grid-template-columns: 36px 1fr 70px 56px 48px 60px;
+    align-items: center;
+    padding: 8px 20px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .drawer-header div {
+    font: small-caps 10px var(--serif);
+    letter-spacing: 0.6px;
+    color: var(--dim);
+    cursor: pointer;
+    user-select: none;
+  }
+  .drawer-header div:hover { color: var(--text); }
+  .drawer-header .sort-active { color: var(--accent); }
+
+  .drawer-body {
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  .drawer-row {
+    display: grid;
+    grid-template-columns: 36px 1fr 70px 56px 48px 60px;
+    align-items: center;
+    padding: 7px 20px;
+    cursor: pointer;
+    border-left: 2px solid transparent;
+    transition: background 0.1s ease;
+  }
+  .drawer-row:hover { background: rgba(196, 185, 168, 0.12); }
+  .drawer-row.selected {
+    background: rgba(196, 92, 60, 0.06);
+    border-left-color: var(--accent);
+  }
+
+  .drawer-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .drawer-content {
+    font: 12px var(--serif);
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding-right: 10px;
+  }
+
+  .drawer-val {
+    font: 12px var(--mono);
+    color: var(--text);
+  }
+
+  .drawer-str-wrap {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .drawer-str-bar {
+    height: 3px;
+    border-radius: 2px;
+    flex: 1;
+    background: rgba(196, 185, 168, 0.2);
+    overflow: hidden;
+  }
+  .drawer-str-fill {
+    height: 100%;
+    border-radius: 2px;
+  }
+
+  .drawer-conf {
+    font: 10px var(--serif);
+    padding: 2px 7px;
+    border-radius: 2px;
+    display: inline-block;
+  }
+  .drawer-conf.verified { background: rgba(90,143,107,0.12); color: var(--semantic); }
+  .drawer-conf.observed { background: rgba(196,154,60,0.12); color: var(--episodic); }
+  .drawer-conf.inferred { background: rgba(196,92,60,0.12); color: var(--accent); }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-left">
+    <span class="header-logo">hippo</span>
+    <span class="header-subtitle">brain observatory</span>
+  </div>
+  <div class="header-stats">57 memories &middot; 12 global &middot; 45 in hippo &middot; 0 at risk</div>
+</header>
+
+<div class="main">
+  <div class="map-area">
+    <div class="map-container" id="mapContainer">
+      <div class="map-tooltip" id="tooltip"></div>
+      <div class="map-hint">drag to orbit &middot; scroll to zoom &middot; click a memory</div>
+    </div>
+  </div>
+
+  <div class="sidebar" id="sidebar">
+    <h2 class="sidebar-section-title">Memory</h2>
+    <div id="sidebarBody">
+      <div class="sidebar-empty">Click a memory to see details</div>
+    </div>
+  </div>
+</div>
+
+<div class="drawer-toggle" id="drawerToggle" onclick="toggleDrawer()">
+  <span id="drawerCount">38 memories</span>
+  <span class="drawer-chevron" id="drawerChevron">&#9650;</span>
+</div>
+
+<div class="memory-drawer" id="memoryDrawer">
+  <div class="drawer-header">
+    <div>Layer</div>
+    <div>Content</div>
+    <div data-sort="strength" class="sort-active" onclick="sortDrawer('strength')">Strength &#8595;</div>
+    <div data-sort="retrievals" onclick="sortDrawer('retrievals')">Retr.</div>
+    <div data-sort="age" onclick="sortDrawer('age')">Age</div>
+    <div>Status</div>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+</div>
+
+<div class="bottom-bar">
+  <div class="legend-group">
+    <div class="legend-item"><span class="legend-dot buffer"></span> buffer</div>
+    <div class="legend-item"><span class="legend-dot episodic"></span> episodic</div>
+    <div class="legend-item"><span class="legend-dot semantic"></span> semantic</div>
+  </div>
+  <div class="size-legend">
+    <div class="size-example"><span class="size-circle" style="width:6px;height:6px"></span> few retrievals</div>
+    <div class="size-example"><span class="size-circle" style="width:10px;height:10px"></span> moderate</div>
+    <div class="size-example"><span class="size-circle" style="width:14px;height:14px"></span> many</div>
+  </div>
+  <div class="bottom-note">Opacity shows strength. Lines show similarity.</div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const LAYERS = { buffer: '#7c6caf', episodic: '#c49a3c', semantic: '#5a8f6b' };
+const ACCENT = '#c45c3c';
+const LAYER_Y = { buffer: 5, episodic: 0, semantic: -5 };
+const SPREAD = 16;
+
+const memoryTexts = [
+  "Gold model uses TIPS 10y as primary inflation signal",
+  "Supabase sync overwrites all signal data from local files",
+  "RTX 5080 confirmed working with PyTorch 2.10",
+  "Pre-commit hooks can revert file edits silently",
+  "Hippo memory uses hippocampal consolidation model",
+  "Weekly pipeline runs 42 models in parallel",
+  "Never force push to main branch",
+  "ProcessPoolExecutor default 8 workers for pipeline",
+  "Strength decays with biological half-life curve",
+  "Memory retrieval reinforces strength",
+  "Buffer memories consolidate to episodic after sleep",
+  "Episodic memories generalize into semantic over time",
+  "Power models have known validation issues",
+  "Use safe_sync.py instead of direct Supabase sync",
+  "Signal prices use actual front-month, not adjusted",
+  "All futures models must use futures_pnl.py",
+  "VAR limit is $100k for all commodities",
+  "No vol upper clip in position sizing",
+  "GPU gives 40x speedup on matrix operations",
+  "Playwright smoke tests cover 15+ scenarios",
+  "GitHub Actions deploys from master automatically",
+  "Content hash caching uses SHA-256 for file ops",
+  "Nightly validation runs at 7AM UTC",
+  "Semantic layer stores generalized knowledge",
+  "Buffer is short-term working memory",
+  "Episodic captures specific events and contexts",
+  "Memory-as-physics models decay and interference",
+  "Phase transitions in memory consolidation",
+  "Claude Code hooks configured in settings.json",
+  "Compaction triggers at 50% context usage",
+  "Roll adjustments needed when contracts change",
+  "Lot sizing uses raw prices not backward-adjusted",
+  "Minimum 1 lot when signal is active",
+  "Vol floor 0.01 prevents division by zero",
+  "Scaled signal equals raw signal always",
+  "MCP server connected for Supabase queries",
+  "Faster-whisper uses GPU float16 for transcription",
+  "Confidence 0.95 for all position sizing",
+];
+
+function seededRandom(seed) {
+  let s = seed;
+  return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
+}
+
+const rng = seededRandom(42);
+const memories = memoryTexts.map((text, i) => {
+  let layer;
+  if (i < 6) layer = 'buffer';
+  else if (i < 24) layer = 'episodic';
+  else layer = 'semantic';
+  const retrievals = Math.floor(rng() * 20) + 1;
+  const strength = 0.3 + rng() * 0.7;
+  const halfLife = 10 + rng() * 50;
+  const age = rng() * 30;
+  return { id: i, text, layer, retrievals, strength, halfLife, age };
+});
+memories[0].retrievals = 14;
+memories[0].strength = 1.0;
+memories[0].halfLife = 31.5;
+memories[0].age = 9.9;
+
+// Scene setup
+const container = document.getElementById('mapContainer');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0xfaf7f2);
+container.insertBefore(renderer.domElement, container.firstChild);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0xfaf7f2, 40, 80);
+
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200);
+camera.position.set(0, 12, 28);
+camera.lookAt(0, 0, 0);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 8;
+controls.maxDistance = 60;
+controls.maxPolarAngle = Math.PI * 0.85;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.15;
+
+// Lighting — warm ambient
+scene.add(new THREE.AmbientLight(0xf4efe6, 1.2));
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.4);
+dirLight.position.set(10, 20, 10);
+scene.add(dirLight);
+
+// Grid floor
+const gridGroup = new THREE.Group();
+const gridMat = new THREE.LineBasicMaterial({ color: 0xc4b9a8, transparent: true, opacity: 0.08 });
+const gridSize = 30;
+const gridStep = 2;
+for (let i = -gridSize / 2; i <= gridSize / 2; i += gridStep) {
+  const g1 = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(i, -8, -gridSize / 2),
+    new THREE.Vector3(i, -8, gridSize / 2),
+  ]);
+  gridGroup.add(new THREE.Line(g1, gridMat));
+  const g2 = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(-gridSize / 2, -8, i),
+    new THREE.Vector3(gridSize / 2, -8, i),
+  ]);
+  gridGroup.add(new THREE.Line(g2, gridMat));
+}
+scene.add(gridGroup);
+
+// Node meshes
+const nodes = [];
+const maxRet = memories.reduce((m, mem) => Math.max(m, mem.retrievals), 1);
+
+memories.forEach((mem, idx) => {
+  const logRatio = Math.log2(mem.retrievals + 1) / Math.log2(maxRet + 1);
+  const radius = 0.15 + logRatio * 0.4;
+  const color = new THREE.Color(LAYERS[mem.layer]);
+  const layerY = LAYER_Y[mem.layer] ?? 0;
+
+  const x = (rng() - 0.5) * SPREAD * 2;
+  const y = layerY + (rng() - 0.5) * 3;
+  const z = (rng() - 0.5) * SPREAD * 2;
+
+  const geo = new THREE.SphereGeometry(radius, 20, 20);
+  const mat = new THREE.MeshStandardMaterial({
+    color,
+    emissive: color,
+    emissiveIntensity: 0.15,
+    roughness: 0.6,
+    metalness: 0.05,
+    transparent: true,
+    opacity: 0.4 + mem.strength * 0.6,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(x, y, z);
+  mesh.userData = { memIdx: idx };
+  scene.add(mesh);
+
+  nodes.push({
+    mem, mesh, radius,
+    basePos: new THREE.Vector3(x, y, z),
+    phase: rng() * Math.PI * 2,
+    speed: 0.15 + rng() * 0.25,
+  });
+});
+
+// Connections
+const connMat = new THREE.LineBasicMaterial({ color: 0x3a3228, transparent: true, opacity: 0.06, depthWrite: false });
+for (let i = 0; i < nodes.length; i++) {
+  for (let j = i + 1; j < nodes.length; j++) {
+    const d = nodes[i].basePos.distanceTo(nodes[j].basePos);
+    if (d < 5 && rng() > 0.5) {
+      const mid = new THREE.Vector3().lerpVectors(nodes[i].basePos, nodes[j].basePos, 0.5);
+      mid.y += (rng() - 0.5) * 1.5;
+      const curve = new THREE.QuadraticBezierCurve3(nodes[i].basePos, mid, nodes[j].basePos);
+      const pts = curve.getPoints(10);
+      const geo = new THREE.BufferGeometry().setFromPoints(pts);
+      scene.add(new THREE.Line(geo, connMat));
+    }
+  }
+}
+
+// Raycaster for interaction
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+let hoveredIdx = -1;
+let selectedIdx = -1;
+let selectionRing = null;
+
+const tooltip = document.getElementById('tooltip');
+const meshes = nodes.map(n => n.mesh);
+
+function onMouseMove(e) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(meshes);
+
+  const prevHovered = hoveredIdx;
+  if (hits.length > 0) {
+    const idx = hits[0].object.userData.memIdx;
+    hoveredIdx = idx;
+    renderer.domElement.style.cursor = 'pointer';
+
+    const mem = memories[idx];
+    tooltip.innerHTML =
+      '<div class="tt-layer" style="color:' + LAYERS[mem.layer] + '">' + mem.layer + '</div>' +
+      '<div>' + mem.text + '</div>';
+    tooltip.classList.add('visible');
+    tooltip.style.left = (e.clientX - container.getBoundingClientRect().left + 14) + 'px';
+    tooltip.style.top = (e.clientY - container.getBoundingClientRect().top - 10) + 'px';
+
+    if (prevHovered !== idx && prevHovered >= 0) {
+      nodes[prevHovered].mesh.scale.setScalar(1);
+    }
+    nodes[idx].mesh.scale.setScalar(1.3);
+  } else {
+    hoveredIdx = -1;
+    renderer.domElement.style.cursor = 'grab';
+    tooltip.classList.remove('visible');
+    if (prevHovered >= 0) nodes[prevHovered].mesh.scale.setScalar(1);
+  }
+}
+
+function onClick() {
+  if (hoveredIdx >= 0) {
+    selectedIdx = hoveredIdx;
+    updateSidebar(memories[hoveredIdx]);
+    updateSelectionRing(nodes[hoveredIdx]);
+  }
+}
+
+renderer.domElement.addEventListener('mousemove', onMouseMove);
+renderer.domElement.addEventListener('click', onClick);
+
+function updateSelectionRing(node) {
+  if (selectionRing) { scene.remove(selectionRing); selectionRing.geometry.dispose(); }
+  const ringGeo = new THREE.RingGeometry(node.radius + 0.15, node.radius + 0.25, 32);
+  const ringMat = new THREE.MeshBasicMaterial({ color: ACCENT, side: THREE.DoubleSide, transparent: true, opacity: 0.7 });
+  selectionRing = new THREE.Mesh(ringGeo, ringMat);
+  selectionRing.position.copy(node.mesh.position);
+  scene.add(selectionRing);
+}
+
+// Sidebar
+function updateSidebar(mem) {
+  const proj7 = Math.max(0, mem.strength * Math.pow(0.5, 7 / mem.halfLife)).toFixed(3);
+  const proj30 = Math.max(0, mem.strength * Math.pow(0.5, 30 / mem.halfLife)).toFixed(3);
+  const barWidth = Math.round(mem.strength * 40);
+
+  const words = mem.text.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/);
+  const stopwords = new Set(['the','a','an','is','are','was','were','be','been','being',
+    'have','has','had','do','does','did','will','would','shall','should','may','might',
+    'can','could','must','and','but','or','nor','for','yet','so','in','on','at','to',
+    'from','by','with','as','of','not','no','all','uses','use','instead','after','before',
+    'into','out','up','its','it','this','that','when','where','how','what','which','who']);
+  const tags = [...new Set(words.filter(w => w.length > 2 && !stopwords.has(w)))].slice(0, 6);
+
+  document.getElementById('sidebarBody').innerHTML = `
+    <div style="margin-bottom: 8px;">
+      <span class="badge badge-layer ${mem.layer}">${mem.layer}</span>
+      <span class="badge badge-project">hippo</span>
+    </div>
+    <div class="sidebar-confidence">observed</div>
+    <hr class="divider">
+    <p class="memory-content">${mem.text}</p>
+    <hr class="divider">
+    <div class="stats-grid">
+      <div><div class="stat-label">strength</div><div class="stat-value">${mem.strength.toFixed(3)} <span class="stat-bar" style="width:${barWidth}px"></span></div></div>
+      <div><div class="stat-label">half-life</div><div class="stat-value">${mem.halfLife.toFixed(1)} days</div></div>
+      <div><div class="stat-label">retrievals</div><div class="stat-value">${mem.retrievals}</div></div>
+      <div><div class="stat-label">age</div><div class="stat-value">${mem.age.toFixed(1)} days</div></div>
+      <div><div class="stat-label">projected 7d</div><div class="stat-value">${proj7}</div></div>
+      <div><div class="stat-label">projected 30d</div><div class="stat-value">${proj30}</div></div>
+    </div>
+    <hr class="divider">
+    <div class="tags">${tags.map(t => '<span class="tag">' + t + '</span>').join('')}</div>
+    <hr class="divider">
+    <div>
+      <div class="decay-label">strength decay</div>
+      <div class="decay-canvas-wrap"><canvas id="decayCanvas"></canvas></div>
+      <div class="decay-axis"><span>now</span><span>30d</span></div>
+    </div>
+  `;
+  drawDecay(mem);
+}
+
+function drawDecay(mem) {
+  const wrap = document.querySelector('.decay-canvas-wrap');
+  if (!wrap) return;
+  const canvas = document.getElementById('decayCanvas');
+  const dpr = window.devicePixelRatio || 1;
+  const cw = wrap.clientWidth;
+  const ch = wrap.clientHeight;
+  canvas.width = cw * dpr;
+  canvas.height = ch * dpr;
+  const dc = canvas.getContext('2d');
+  dc.setTransform(dpr, 0, 0, dpr, 0, 0);
+  dc.clearRect(0, 0, cw, ch);
+  const padL = 4, padR = 4, padT = 6, padB = 6;
+  const gw = cw - padL - padR;
+  const gh = ch - padT - padB;
+  dc.beginPath();
+  dc.moveTo(padL, padT + gh * (1 - mem.strength));
+  for (let d = 0; d <= 30; d += 0.5) {
+    const s = mem.strength * Math.pow(0.5, d / mem.halfLife);
+    dc.lineTo(padL + (d / 30) * gw, padT + gh * (1 - s));
+  }
+  dc.strokeStyle = ACCENT;
+  dc.lineWidth = 1.5;
+  dc.stroke();
+  dc.lineTo(padL + gw, padT + gh);
+  dc.lineTo(padL, padT + gh);
+  dc.closePath();
+  dc.fillStyle = 'rgba(196, 92, 60, 0.06)';
+  dc.fill();
+}
+
+// Resize
+function resize() {
+  const rect = container.getBoundingClientRect();
+  renderer.setSize(rect.width, rect.height);
+  camera.aspect = rect.width / rect.height;
+  camera.updateProjectionMatrix();
+}
+resize();
+window.addEventListener('resize', resize);
+
+// HTML overlay labels
+const labelContainer = document.createElement('div');
+labelContainer.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:hidden;';
+container.appendChild(labelContainer);
+
+const labelEls = [];
+nodes.forEach((node, idx) => {
+  if (node.radius < 0.3) return;
+  const el = document.createElement('div');
+  el.className = 'node-label';
+  el.textContent = node.mem.text.split(' ').slice(0, 4).join(' ');
+  labelContainer.appendChild(el);
+  labelEls.push({ el, idx });
+});
+
+const zoneLabels = [
+  { text: 'buffer', y: LAYER_Y.buffer },
+  { text: 'episodic', y: LAYER_Y.episodic },
+  { text: 'semantic', y: LAYER_Y.semantic },
+];
+const zoneLabelEls = zoneLabels.map(z => {
+  const el = document.createElement('div');
+  el.className = 'zone-label';
+  el.textContent = z.text;
+  labelContainer.appendChild(el);
+  return { el, pos: new THREE.Vector3(0, z.y, 0) };
+});
+
+function updateLabels() {
+  const rect = renderer.domElement.getBoundingClientRect();
+  const w2 = rect.width / 2;
+  const h2 = rect.height / 2;
+
+  labelEls.forEach(({ el, idx }) => {
+    const node = nodes[idx];
+    const v = node.mesh.position.clone().project(camera);
+    if (v.z > 1) { el.style.display = 'none'; return; }
+    const sx = v.x * w2 + w2;
+    const sy = -v.y * h2 + h2;
+    const dist = camera.position.distanceTo(node.mesh.position);
+    const show = dist < 35;
+    el.style.display = show ? '' : 'none';
+    el.style.left = sx + 'px';
+    el.style.top = sy + 'px';
+    el.style.opacity = Math.max(0, Math.min(1, 1 - (dist - 15) / 20));
+  });
+
+  zoneLabelEls.forEach(({ el, pos }) => {
+    const v = pos.clone().project(camera);
+    if (v.z > 1) { el.style.display = 'none'; return; }
+    el.style.display = '';
+    el.style.left = (v.x * w2 + w2) + 'px';
+    el.style.top = (-v.y * h2 + h2) + 'px';
+  });
+}
+
+// Animate
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+  controls.update();
+
+  nodes.forEach(node => {
+    node.mesh.position.x = node.basePos.x + Math.sin(t * node.speed + node.phase) * 0.12;
+    node.mesh.position.y = node.basePos.y + Math.cos(t * node.speed * 0.7 + node.phase * 1.3) * 0.08;
+    node.mesh.position.z = node.basePos.z + Math.sin(t * node.speed * 0.5 + node.phase * 0.7) * 0.1;
+  });
+
+  if (selectionRing && selectedIdx >= 0) {
+    selectionRing.position.copy(nodes[selectedIdx].mesh.position);
+    selectionRing.lookAt(camera.position);
+    const pulse = 1 + 0.08 * Math.sin(t * 3);
+    selectionRing.scale.setScalar(pulse);
+  }
+
+  renderer.render(scene, camera);
+  updateLabels();
+}
+animate();
+
+// ── Memory List Drawer ──
+let drawerOpen = false;
+let drawerSort = 'strength';
+let drawerDir = 'desc';
+
+function toggleDrawer() {
+  drawerOpen = !drawerOpen;
+  document.getElementById('memoryDrawer').classList.toggle('open', drawerOpen);
+  document.getElementById('drawerToggle').classList.toggle('open', drawerOpen);
+  document.getElementById('drawerChevron').innerHTML = drawerOpen ? '&#9660;' : '&#9650;';
+  if (drawerOpen) renderDrawer();
+}
+
+function sortDrawer(field) {
+  if (drawerSort === field) {
+    drawerDir = drawerDir === 'desc' ? 'asc' : 'desc';
+  } else {
+    drawerSort = field;
+    drawerDir = 'desc';
+  }
+  document.querySelectorAll('.drawer-header div[data-sort]').forEach(el => {
+    const f = el.dataset.sort;
+    const active = f === drawerSort;
+    el.classList.toggle('sort-active', active);
+    if (active) {
+      const base = f === 'strength' ? 'Strength' : f === 'retrievals' ? 'Retr.' : 'Age';
+      el.innerHTML = base + ' ' + (drawerDir === 'desc' ? '&#8595;' : '&#8593;');
+    } else {
+      el.innerHTML = f === 'strength' ? 'Strength' : f === 'retrievals' ? 'Retr.' : 'Age';
+    }
+  });
+  renderDrawer();
+}
+
+function strengthColor(v) {
+  if (v > 0.7) return '#5a8f6b';
+  if (v > 0.4) return '#c49a3c';
+  return '#c45c3c';
+}
+
+function renderDrawer() {
+  const sorted = [...memories].sort((a, b) => {
+    let va, vb;
+    if (drawerSort === 'strength') { va = a.strength; vb = b.strength; }
+    else if (drawerSort === 'retrievals') { va = a.retrievals; vb = b.retrievals; }
+    else { va = a.age; vb = b.age; }
+    return drawerDir === 'desc' ? vb - va : va - vb;
+  });
+
+  const body = document.getElementById('drawerBody');
+  body.innerHTML = sorted.map(mem => {
+    const sel = mem.id === selectedIdx ? ' selected' : '';
+    const sc = strengthColor(mem.strength);
+    const confCls = mem.strength > 0.8 ? 'verified' : mem.strength > 0.5 ? 'observed' : 'inferred';
+    const confText = mem.strength > 0.8 ? 'verified' : mem.strength > 0.5 ? 'observed' : 'inferred';
+    const pct = Math.round(mem.strength * 100);
+    const truncated = mem.text.length > 55 ? mem.text.slice(0, 55) + '\u2026' : mem.text;
+    return `<div class="drawer-row${sel}" data-id="${mem.id}" onclick="selectFromDrawer(${mem.id})">
+      <div><span class="drawer-dot" style="background:${LAYERS[mem.layer]}"></span></div>
+      <div class="drawer-content">${truncated}</div>
+      <div class="drawer-str-wrap">
+        <div class="drawer-str-bar"><div class="drawer-str-fill" style="width:${pct}%;background:${sc}"></div></div>
+        <span class="drawer-val" style="font-size:10px;color:${sc}">${mem.strength.toFixed(2)}</span>
+      </div>
+      <div class="drawer-val">${mem.retrievals}</div>
+      <div class="drawer-val">${mem.age.toFixed(0)}d</div>
+      <div><span class="drawer-conf ${confCls}">${confText}</span></div>
+    </div>`;
+  }).join('');
+}
+
+window.toggleDrawer = toggleDrawer;
+window.sortDrawer = sortDrawer;
+
+window.selectFromDrawer = function(id) {
+  selectedIdx = id;
+  const mem = memories[id];
+  updateSidebar(mem);
+  updateSelectionRing(nodes[id]);
+
+  // Fly camera toward the selected node
+  const target = nodes[id].basePos;
+  controls.target.lerp(target, 0.5);
+  camera.position.lerp(
+    new THREE.Vector3(target.x + 5, target.y + 3, target.z + 8),
+    0.3,
+  );
+
+  // Update row highlight
+  document.querySelectorAll('.drawer-row').forEach(el => {
+    el.classList.toggle('selected', parseInt(el.dataset.id) === id);
+  });
+};
+
+// Also update drawer selection when clicking in 3D
+const origOnClick = onClick;
+renderer.domElement.removeEventListener('click', origOnClick);
+renderer.domElement.addEventListener('click', (e) => {
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(meshes);
+  if (hits.length > 0) {
+    const idx = hits[0].object.userData.memIdx;
+    selectedIdx = idx;
+    updateSidebar(memories[idx]);
+    updateSelectionRing(nodes[idx]);
+    if (drawerOpen) {
+      document.querySelectorAll('.drawer-row').forEach(el => {
+        el.classList.toggle('selected', parseInt(el.dataset.id) === idx);
+      });
+      const selRow = document.querySelector(`.drawer-row[data-id="${idx}"]`);
+      if (selRow) selRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }
+});
+
+document.getElementById('drawerCount').textContent = memories.length + ' memories';
+renderDrawer();
+</script>
+</body>
+</html>

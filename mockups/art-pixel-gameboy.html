@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>HIPPO-CHAN :: GB AMBER CART</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0906;
+    --bg2:#1c1608;
+    --amber:#d49a26;
+    --hi:#f7c95a;
+    --mut:#8a5f1a;
+    --dim:#3a2510;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--amber);font-family:'Share Tech Mono',ui-monospace,monospace;font-size:11px;line-height:1.4;overflow:hidden}
+  body{
+    filter:contrast(1.05) brightness(1.05);
+    text-shadow:0 0 1px rgba(212,154,38,0.55), 0 0 8px rgba(212,154,38,0.12);
+  }
+  /* scanlines */
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:50;
+    background:repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0 2px, rgba(0,0,0,0.18) 2px 3px);
+    mix-blend-mode:multiply;opacity:0.55}
+  /* vignette */
+  body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:51;
+    background:radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.78) 100%)}
+  /* flicker */
+  @keyframes flicker{
+    0%{opacity:1} 3%{opacity:.97} 6%{opacity:1}
+    55%{opacity:1} 57%{opacity:.98} 60%{opacity:1}
+    100%{opacity:1}
+  }
+  .flick{animation:flicker 6s infinite}
+
+  .status{position:fixed;top:18px;left:22px;z-index:5;color:var(--amber);white-space:pre;letter-spacing:0.5px}
+  .status .hi{color:var(--hi)}
+  .status .mut{color:var(--mut)}
+
+  .stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:1}
+  #cvs{
+    image-rendering:pixelated;
+    image-rendering:crisp-edges;
+    background:var(--bg2);
+    box-shadow:
+      0 0 0 1px var(--dim),
+      0 0 40px rgba(212,154,38,0.18),
+      inset 0 0 60px rgba(0,0,0,0.6);
+    border-radius:6px;
+  }
+
+  .hints{position:fixed;bottom:22px;left:0;right:0;text-align:center;z-index:5;
+    color:var(--mut);letter-spacing:1px;font-size:12px;font-family:'VT323',monospace}
+  .hints b{color:var(--hi);font-weight:normal}
+
+  .brand{position:fixed;top:18px;right:22px;z-index:5;color:var(--mut);font-size:10px;letter-spacing:2px}
+  .brand b{color:var(--amber);font-weight:normal}
+</style>
+</head>
+<body class="flick">
+
+<div class="status" id="status"></div>
+<div class="brand">GB <b>AMBER CART</b> :: v1.0</div>
+
+<div class="stage">
+  <canvas id="cvs" width="360" height="360"></canvas>
+</div>
+
+<div class="hints">
+  [<b>A</b>] PET &nbsp;&nbsp;&nbsp; [<b>B</b>] BACK &nbsp;&nbsp;&nbsp; [<b>START</b>] MENU &nbsp;&nbsp;&nbsp; [<b>SELECT</b>] LOG
+</div>
+
+<script>
+/* ---------- palette ---------- */
+/* 0 transparent, 1 outline, 2 shadow, 3 base, 4 highlight */
+const PAL = [null, '#3a2510', '#8a5f1a', '#d49a26', '#f7c95a'];
+
+/* ---------- 32x32 sprite: chibi seahorse, right-facing ---------- */
+/* 0=transparent, 1=outline(#3a2510), 2=shadow(#8a5f1a), 3=base(#d49a26), 4=highlight(#f7c95a) */
+/*                 0         1111111111222222222233      */
+/*                 0123456789012345678901234567890123     */
+const IDLE = [
+  "................................", /* 00 */
+  ".........1.......1..............", /* 01 coronet spike tips */
+  "........141.....141.............", /* 02 bright amber spike tips */
+  "........141.....141.............", /* 03 */
+  ".......13311111113311...........", /* 04 coronet base + head top */
+  "......1333333333333311..........", /* 05 */
+  ".....133333333333333331.........", /* 06 head rounds */
+  ".....13333333333333333321.......", /* 07 snout pokes right */
+  "....13331113333331113333333211..", /* 08 eye outline top */
+  "....1333141333333141333333321...", /* 09 eye with bright pupil */
+  "....1333141333333141333333331...", /* 10 eye body */
+  "....13331113333331113333333331..", /* 11 eye bottom */
+  "....13333333333333333333333321..", /* 12 snout extends right */
+  ".....13333333111333333333333211.", /* 13 mouth: 3 dark pixels */
+  ".....133333333333333333333221...", /* 14 */
+  "......13333333333333333333221...", /* 15 chin */
+  "......1333333333333333332211....", /* 16 neck narrows */
+  ".......133333333333333333211....", /* 17 */
+  ".......13333333333333332221.....", /* 18 */
+  "........133333333333332221......", /* 19 body top narrow */
+  "........1333333333322221........", /* 20 */
+  ".........13333332222221.........", /* 21 */
+  ".........13333222222331.........", /* 22 */
+  "........1332222222333321........", /* 23 belly bump right */
+  ".......13322222233333321........", /* 24 */
+  ".......1322223333333331.........", /* 25 tail starts curling */
+  "........1222233333333321........", /* 26 */
+  ".........122233333333321........", /* 27 */
+  "..........12233333333321........", /* 28 */
+  "...........1223333333321........", /* 29 */
+  "............122333333211........", /* 30 */
+  ".............11222211...........", /* 31 tail tip curls in */
+];
+
+/* Eye positions in IDLE:
+   Left  eye: cols 8-10, rows 8-11 (ring outline, pupil at col 9 rows 9-10)
+   Right eye: cols 17-19, rows 8-11 (pupil at col 18 rows 9-10)
+   Mouth: row 13, cols 13-15 (three outline pixels) */
+const EYE_L = [8, 9, 10];
+const EYE_R = [17, 18, 19];
+
+function setCols(row, cols, ch){
+  const r = row.split('');
+  for (const c of cols) r[c] = ch;
+  return r.join('');
+}
+
+/* BLINK: eyes become flat horizontal dark lines (one row each) */
+const BLINK = IDLE.map((row, i) => {
+  if (i === 8 || i === 11){
+    /* clear outer ring rows to base */
+    let r = setCols(row, EYE_L, '3');
+    r = setCols(r, EYE_R, '3');
+    return r;
+  }
+  if (i === 9){
+    /* flat dark line for the blink */
+    let r = setCols(row, EYE_L, '1');
+    r = setCols(r, EYE_R, '1');
+    return r;
+  }
+  if (i === 10){
+    /* clear row below the line */
+    let r = setCols(row, EYE_L, '3');
+    r = setCols(r, EYE_R, '3');
+    return r;
+  }
+  return row;
+});
+
+/* HAPPY: eyes become ^_^ arcs (two dark pixels per eye) + bigger smile */
+const HAPPY = IDLE.map((row, i) => {
+  if (i === 8 || i === 11){
+    let r = setCols(row, EYE_L, '3');
+    r = setCols(r, EYE_R, '3');
+    return r;
+  }
+  if (i === 9){
+    /* top of arc: outer outline pixels (^ shape) */
+    let r = row.split('');
+    r[8] = '1'; r[9] = '3'; r[10] = '1';
+    r[17] = '1'; r[18] = '3'; r[19] = '1';
+    return r.join('');
+  }
+  if (i === 10){
+    /* bottom of arc: middle outline pixel only (_ shape) */
+    let r = row.split('');
+    r[8] = '3'; r[9] = '1'; r[10] = '3';
+    r[17] = '3'; r[18] = '1'; r[19] = '3';
+    return r.join('');
+  }
+  if (i === 13){
+    /* bigger smile: 5 outline pixels with slight curve */
+    let r = row.split('');
+    r[12] = '1'; r[13] = '1'; r[14] = '1'; r[15] = '1'; r[16] = '1';
+    return r.join('');
+  }
+  return row;
+});
+
+/* ---------- build offscreen sprite canvases ---------- */
+function buildFrame(rows){
+  const c = document.createElement('canvas');
+  c.width = 32; c.height = 32;
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  for (let y = 0; y < 32; y++){
+    const row = rows[y] || "";
+    for (let x = 0; x < 32; x++){
+      const ch = row[x];
+      if (!ch || ch === '.') continue;
+      const col = PAL[parseInt(ch, 10)];
+      if (!col) continue;
+      g.fillStyle = col;
+      g.fillRect(x, y, 1, 1);
+    }
+  }
+  return c;
+}
+
+const FRAMES = {
+  idle: buildFrame(IDLE),
+  blink: buildFrame(BLINK),
+  happy: buildFrame(HAPPY),
+};
+
+/* ---------- main canvas + render loop ---------- */
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+const SCALE = 10;          /* 32 * 10 = 320 */
+const SPRITE_W = 32 * SCALE;
+const SPRITE_H = 32 * SCALE;
+
+/* state machine for animation */
+const state = {
+  mode: 'idle',             /* 'idle' | 'blink' | 'happy' */
+  modeUntil: 0,             /* ms timestamp when to revert */
+  nextBlink: 0,
+  nextHappy: 0,
+  sparkles: [],             /* {x,y,vx,vy,born} in device px */
+};
+
+/* schedule first events */
+const now = () => performance.now();
+function schedBlink(t){ state.nextBlink = t + 3000 + Math.random() * 3000; }
+function schedHappy(t){ state.nextHappy = t + 8000 + Math.random() * 4000; }
+schedBlink(now()); schedHappy(now());
+
+function triggerHappy(dur){
+  state.mode = 'happy';
+  state.modeUntil = now() + dur;
+}
+function triggerBlink(dur){
+  if (state.mode === 'idle'){
+    state.mode = 'blink';
+    state.modeUntil = now() + dur;
+  }
+}
+
+/* sparkles */
+function spawnSparkles(cx, cy, count, radiusMin, radiusMax){
+  const t = now();
+  for (let i = 0; i < count; i++){
+    const ang = Math.random() * Math.PI * 2;
+    const r = radiusMin + Math.random() * (radiusMax - radiusMin);
+    state.sparkles.push({
+      x: cx, y: cy,
+      tx: cx + Math.cos(ang) * r,
+      ty: cy + Math.sin(ang) * r,
+      born: t,
+      life: 400,
+    });
+  }
+}
+
+/* input: click on sprite canvas -> happy + 6 sparkles radiating out */
+cvs.addEventListener('click', (e) => {
+  triggerHappy(800);
+  spawnSparkles(cvs.width/2, cvs.height/2, 6, 120, 180);
+});
+
+/* click elsewhere -> 3 sparkles mapped near canvas center */
+window.addEventListener('click', (e) => {
+  if (e.target === cvs) return;
+  const rect = cvs.getBoundingClientRect();
+  const rx = e.clientX - (rect.left + rect.width/2);
+  const ry = e.clientY - (rect.top + rect.height/2);
+  spawnSparkles(cvs.width/2 + rx*0.25, cvs.height/2 + ry*0.25, 3, 40, 80);
+});
+
+/* ---------- status panel ---------- */
+const STATUS_EL = document.getElementById('status');
+const START = Date.now();
+let blinkCount = 0;
+let lastMinute = Math.floor(START/60000);
+let blinksThisMin = 0;
+let blinksPerMin = 14;
+
+function fmtUptime(){
+  const s = Math.floor((Date.now() - START)/1000);
+  const hh = String(Math.floor(s/3600)).padStart(2,'0');
+  const mm = String(Math.floor((s%3600)/60)).padStart(2,'0');
+  const ss = String(s%60).padStart(2,'0');
+  return `${hh}:${mm}:${ss}`;
+}
+function batteryBars(){
+  const s = Math.floor((Date.now() - START)/1000);
+  const full = 5 - Math.min(4, Math.floor(s / 240));
+  return '|'.repeat(full) + '.'.repeat(5 - full);
+}
+function renderStatus(){
+  const mode = state.mode.toUpperCase().padEnd(5,' ');
+  STATUS_EL.innerHTML =
+    `<span class="hi">[ HIPPO-CHAN :: GB AMBER CART ]</span>\n` +
+    `mode: <span class="hi">${mode}</span>     blinks/min <span class="hi">${String(blinksPerMin).padStart(2,' ')}</span>\n` +
+    `battery: <span class="hi">${batteryBars()}</span>  uptime <span class="hi">${fmtUptime()}</span>`;
+}
+
+/* ---------- frame draw ---------- */
+function draw(t){
+  /* state updates */
+  if (state.mode !== 'idle' && t >= state.modeUntil){
+    state.mode = 'idle';
+  }
+  if (state.mode === 'idle'){
+    if (t >= state.nextBlink){
+      triggerBlink(120);
+      blinkCount++; blinksThisMin++;
+      schedBlink(t);
+    }
+    if (t >= state.nextHappy){
+      triggerHappy(500);
+      schedHappy(t);
+    }
+  }
+  const curMin = Math.floor(Date.now()/60000);
+  if (curMin !== lastMinute){
+    blinksPerMin = blinksThisMin || blinksPerMin;
+    blinksThisMin = 0;
+    lastMinute = curMin;
+  }
+
+  /* clear */
+  ctx.fillStyle = '#1c1608';
+  ctx.fillRect(0, 0, cvs.width, cvs.height);
+
+  /* bob offset: sub-pixel smooth on screen, sprite itself remains pixel-pure */
+  const bob = Math.round(Math.sin(t/800) * 3);
+
+  /* choose frame */
+  const frame = FRAMES[state.mode] || FRAMES.idle;
+
+  /* center sprite inside canvas + bob in screen px */
+  const dx = Math.floor((cvs.width  - SPRITE_W) / 2);
+  const dy = Math.floor((cvs.height - SPRITE_H) / 2) + bob;
+
+  ctx.drawImage(frame, 0, 0, 32, 32, dx, dy, SPRITE_W, SPRITE_H);
+
+  /* sparkles (in canvas space) */
+  const alive = [];
+  for (const s of state.sparkles){
+    const age = t - s.born;
+    if (age >= s.life) continue;
+    const u = age / s.life;            /* 0..1 */
+    const x = s.x + (s.tx - s.x) * u;
+    const y = s.y + (s.ty - s.y) * u;
+    /* fade: bright -> dim */
+    const alpha = 1 - u;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#f7c95a';
+    ctx.fillRect(Math.round(x)-2, Math.round(y)-2, 4, 4);
+    ctx.globalAlpha = 1;
+    alive.push(s);
+  }
+  state.sparkles = alive;
+
+  renderStatus();
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>

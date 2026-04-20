@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Background B: Ledger grid + wax-seal orbs</title>
+<style>
+  :root {
+    --parchment: #f4efe6;
+    --ink: #2a241e;
+    --teal: #4a8ca3;
+    --sage: #5a8f6b;
+    --violet: #7c6caf;
+    --accent: #c45c3c;
+  }
+  html, body { margin: 0; height: 100%; background: var(--parchment); color: var(--ink); font-family: "Courier New", ui-monospace, monospace; overflow: hidden; }
+  #scene { position: absolute; inset: 0; }
+  .label {
+    position: absolute; top: 16px; left: 20px; z-index: 10;
+    background: rgba(244,239,230,0.82); border: 1px solid rgba(42,36,30,0.25); border-radius: 3px;
+    padding: 10px 14px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .label b { color: var(--accent); font-weight: 700; }
+  .hint { position: absolute; bottom: 14px; left: 20px; font-size: 10px; letter-spacing: 0.08em; color: #534838; text-transform: uppercase; }
+</style>
+</head>
+<body>
+<div class="label"><b>Variation B</b> &nbsp; Ledger grid &middot; wax-seal orbs</div>
+<div class="hint">drag to orbit &middot; scroll to zoom</div>
+<div id="scene"></div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+const PAL = {
+  teal: new THREE.Color("#4a8ca3"),
+  sage: new THREE.Color("#5a8f6b"),
+  violet: new THREE.Color("#7c6caf"),
+};
+
+const LAYER_Y = { buffer: 14, episodic: 7, semantic: 0 };
+
+function mulberry(a) {
+  return function() { a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+const rand = mulberry(9001);
+
+const MEMORIES = [];
+const layers = ["buffer","episodic","semantic"];
+for (let i = 0; i < 28; i++) {
+  MEMORIES.push({ id: `m${i}`, layer: layers[i % 3], strength: 0.3 + rand() * 0.7, text: `word${i} phrase${i%5}` });
+}
+const positions = MEMORIES.map((m, i) => {
+  const angle = i * 2.3998;
+  const r = 6 + Math.sqrt(i) * 3.4;
+  return new THREE.Vector3(Math.cos(angle) * r, LAYER_Y[m.layer], Math.sin(angle) * r);
+});
+
+const mount = document.getElementById("scene");
+const scene = new THREE.Scene();
+scene.background = new THREE.Color("#f4efe6");
+scene.fog = new THREE.Fog(0xf4efe6, 55, 130);
+
+const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 400);
+camera.position.set(26, 22, 38);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+renderer.setSize(window.innerWidth, window.innerHeight);
+mount.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.target.set(0, 6, 0);
+
+// ------- Ledger floor: grid + stains + weathered edges
+function makeLedgerTexture() {
+  const size = 1024;
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  const ctx = c.getContext("2d");
+
+  // base paper
+  ctx.fillStyle = "#f4efe6";
+  ctx.fillRect(0,0,size,size);
+
+  // grain
+  const img = ctx.getImageData(0,0,size,size);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const n = (Math.random() - 0.5) * 22;
+    img.data[i] = Math.max(0, Math.min(255, img.data[i] + n));
+    img.data[i+1] = Math.max(0, Math.min(255, img.data[i+1] + n));
+    img.data[i+2] = Math.max(0, Math.min(255, img.data[i+2] + n - 4));
+  }
+  ctx.putImageData(img, 0, 0);
+
+  // fine grid
+  ctx.strokeStyle = "rgba(74,140,163,0.14)";
+  ctx.lineWidth = 1;
+  const gridStep = 32;
+  for (let x = 0; x <= size; x += gridStep) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,size); ctx.stroke(); }
+  for (let y = 0; y <= size; y += gridStep) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(size,y); ctx.stroke(); }
+
+  // bolder every-5 grid
+  ctx.strokeStyle = "rgba(74,140,163,0.26)";
+  ctx.lineWidth = 1.2;
+  for (let x = 0; x <= size; x += gridStep * 5) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,size); ctx.stroke(); }
+  for (let y = 0; y <= size; y += gridStep * 5) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(size,y); ctx.stroke(); }
+
+  // coffee-ring stains
+  const p = mulberry(777);
+  for (let k = 0; k < 4; k++) {
+    const cx = p() * size, cy = p() * size, rr = 60 + p() * 100;
+    const g = ctx.createRadialGradient(cx, cy, rr * 0.4, cx, cy, rr);
+    g.addColorStop(0, "rgba(156,112,72,0.00)");
+    g.addColorStop(0.7, "rgba(140,96,56,0.14)");
+    g.addColorStop(1, "rgba(100,70,42,0.00)");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cx, cy, rr, 0, Math.PI*2); ctx.fill();
+    // ring edge
+    ctx.strokeStyle = "rgba(100,70,42,0.22)";
+    ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.arc(cx, cy, rr*0.95, 0, Math.PI*2); ctx.stroke();
+  }
+
+  // handwritten margin notes (faint)
+  ctx.fillStyle = "rgba(42,36,30,0.14)";
+  ctx.font = "italic 22px Georgia";
+  ctx.fillText("fig. 1", 60, 980);
+  ctx.fillText("cf. layer ii", 680, 66);
+
+  // vignette
+  const v = ctx.createRadialGradient(size/2, size/2, size*0.28, size/2, size/2, size*0.72);
+  v.addColorStop(0, "rgba(244,239,230,0)");
+  v.addColorStop(1, "rgba(58,45,28,0.25)");
+  ctx.fillStyle = v; ctx.fillRect(0,0,size,size);
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.anisotropy = 8;
+  return tex;
+}
+
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(120, 120),
+  new THREE.MeshBasicMaterial({ map: makeLedgerTexture() })
+);
+floor.rotation.x = -Math.PI / 2;
+floor.position.y = -3;
+scene.add(floor);
+
+// warm dome
+const dome = new THREE.Mesh(
+  new THREE.SphereGeometry(90, 32, 16, 0, Math.PI*2, 0, Math.PI/2),
+  new THREE.MeshBasicMaterial({ color: "#e8dcc1", side: THREE.BackSide, transparent: true, opacity: 0.9 })
+);
+scene.add(dome);
+
+// ------- Wax seal sprite: disc with embossed rim shadow + monogram
+function makeSealTexture(color, letter) {
+  const s = 256;
+  const c = document.createElement("canvas"); c.width = c.height = s;
+  const ctx = c.getContext("2d");
+  const hex = "#" + color.getHexString();
+
+  // outer soft shadow
+  const sh = ctx.createRadialGradient(s/2, s/2 + 6, 0, s/2, s/2, s*0.48);
+  sh.addColorStop(0, "rgba(0,0,0,0.35)");
+  sh.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = sh; ctx.beginPath(); ctx.arc(s/2, s/2+4, s*0.4, 0, Math.PI*2); ctx.fill();
+
+  // disc body
+  const body = ctx.createRadialGradient(s*0.4, s*0.38, s*0.05, s/2, s/2, s*0.36);
+  body.addColorStop(0, "rgba(255,255,255,0.32)");
+  body.addColorStop(0.22, hex);
+  body.addColorStop(0.8, hex);
+  body.addColorStop(1, "rgba(40,30,20,0.6)");
+  ctx.fillStyle = body;
+  ctx.beginPath(); ctx.arc(s/2, s/2, s*0.36, 0, Math.PI*2); ctx.fill();
+
+  // rim highlight
+  ctx.strokeStyle = "rgba(255,245,220,0.45)";
+  ctx.lineWidth = 2.4;
+  ctx.beginPath(); ctx.arc(s/2, s/2 - 2, s*0.33, Math.PI*1.15, Math.PI*1.85); ctx.stroke();
+
+  // rim shadow
+  ctx.strokeStyle = "rgba(30,22,14,0.35)";
+  ctx.lineWidth = 2.2;
+  ctx.beginPath(); ctx.arc(s/2, s/2 + 2, s*0.33, Math.PI*0.15, Math.PI*0.85); ctx.stroke();
+
+  // inner scored ring (wax detail)
+  ctx.strokeStyle = "rgba(30,22,14,0.28)";
+  ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.arc(s/2, s/2, s*0.26, 0, Math.PI*2); ctx.stroke();
+
+  // monogram
+  ctx.fillStyle = "rgba(30,22,14,0.72)";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = "bold 76px Georgia";
+  ctx.fillText(letter, s/2, s/2 + 4);
+
+  return new THREE.CanvasTexture(c);
+}
+
+const sealTex = {
+  buffer: makeSealTexture(PAL.violet, "B"),
+  episodic: makeSealTexture(PAL.teal, "E"),
+  semantic: makeSealTexture(PAL.sage, "S"),
+};
+
+const orbs = [];
+MEMORIES.forEach((m, i) => {
+  const mat = new THREE.SpriteMaterial({ map: sealTex[m.layer], transparent: true, depthWrite: false });
+  const s = new THREE.Sprite(mat);
+  const size = 2.4 + m.strength * 1.3;
+  s.scale.set(size, size, size);
+  s.position.copy(positions[i]);
+  scene.add(s);
+  orbs.push(s);
+});
+
+// edges
+function tokens(t) { return new Set(t.toLowerCase().split(/\W+/).filter(w => w.length > 2)); }
+function jaccard(a, b) { const inter = [...a].filter(x => b.has(x)).length; const uni = new Set([...a, ...b]).size; return uni ? inter/uni : 0; }
+const sets = MEMORIES.map(m => tokens(m.text));
+const ep = [];
+for (let i = 0; i < MEMORIES.length; i++) {
+  const scores = [];
+  for (let j = 0; j < MEMORIES.length; j++) if (i !== j) {
+    const s = jaccard(sets[i], sets[j]);
+    if (s > 0.15) scores.push({ j, s });
+  }
+  scores.sort((a,b) => b.s - a.s).slice(0,3).forEach(({ j }) => { ep.push(positions[i], positions[j]); });
+}
+const edges = new THREE.LineSegments(
+  new THREE.BufferGeometry().setFromPoints(ep),
+  new THREE.LineBasicMaterial({ color: "#2a241e", transparent: true, opacity: 0.18 })
+);
+scene.add(edges);
+
+const clock = new THREE.Clock();
+function frame() {
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+frame();
+
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>

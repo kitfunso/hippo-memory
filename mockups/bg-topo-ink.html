@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Background A: Topo contours + ink-halo orbs</title>
+<style>
+  :root {
+    --parchment: #f4efe6;
+    --parchment-2: #ede5d3;
+    --ink: #2a241e;
+    --ink-2: #534838;
+    --teal: #4a8ca3;
+    --sage: #5a8f6b;
+    --violet: #7c6caf;
+    --accent: #c45c3c;
+  }
+  html, body { margin: 0; height: 100%; background: var(--parchment); color: var(--ink); font-family: "Courier New", ui-monospace, monospace; overflow: hidden; }
+  #scene { position: absolute; inset: 0; }
+  .label {
+    position: absolute; top: 16px; left: 20px; z-index: 10;
+    background: rgba(244,239,230,0.82); border: 1px solid rgba(42,36,30,0.25); border-radius: 3px;
+    padding: 10px 14px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .label b { color: var(--accent); font-weight: 700; }
+  .hint { position: absolute; bottom: 14px; left: 20px; font-size: 10px; letter-spacing: 0.08em; color: var(--ink-2); text-transform: uppercase; }
+</style>
+</head>
+<body>
+<div class="label"><b>Variation A</b> &nbsp; Topo contours &middot; ink-halo orbs</div>
+<div class="hint">drag to orbit &middot; scroll to zoom</div>
+<div id="scene"></div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+const PAL = {
+  parchment: new THREE.Color("#f4efe6"),
+  ink: new THREE.Color("#2a241e"),
+  teal: new THREE.Color("#4a8ca3"),
+  sage: new THREE.Color("#5a8f6b"),
+  violet: new THREE.Color("#7c6caf"),
+  accent: new THREE.Color("#c45c3c"),
+};
+
+const LAYER_Y = { buffer: 14, episodic: 7, semantic: 0 };
+const LAYER_COLOR = { buffer: PAL.violet, episodic: PAL.teal, semantic: PAL.sage };
+
+// deterministic PRNG
+function mulberry(a) {
+  return function() {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const rand = mulberry(1337);
+
+const MEMORIES = [];
+const words = [
+  ["pipeline","config","latency","deploy","cache","worker"],
+  ["client","error","retry","failover","timeout","batch"],
+  ["schema","index","query","migration","backup","replica"],
+];
+const layers = ["buffer","episodic","semantic"];
+for (let i = 0; i < 28; i++) {
+  const layer = layers[i % 3];
+  MEMORIES.push({
+    id: `m${i}`,
+    layer,
+    strength: 0.3 + rand() * 0.7,
+    text: `${words[0][i%6]} ${words[1][(i*3)%6]} ${words[2][(i*5)%6]}`,
+  });
+}
+
+// simple deterministic x/z layout
+const positions = MEMORIES.map((m, i) => {
+  const angle = i * 2.3998;
+  const r = 6 + Math.sqrt(i) * 3.4;
+  return new THREE.Vector3(Math.cos(angle) * r, LAYER_Y[m.layer], Math.sin(angle) * r);
+});
+
+// ------- Scene
+const mount = document.getElementById("scene");
+const scene = new THREE.Scene();
+scene.background = PAL.parchment;
+scene.fog = new THREE.Fog(PAL.parchment, 50, 120);
+
+const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 400);
+camera.position.set(26, 22, 38);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+renderer.setSize(window.innerWidth, window.innerHeight);
+mount.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.autoRotate = false;
+controls.target.set(0, 6, 0);
+
+// ------- Topographic contour floor (drawn to canvas, applied as texture)
+function makeTopoTexture() {
+  const size = 1024;
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#f4efe6";
+  ctx.fillRect(0, 0, size, size);
+
+  // warm paper grain
+  const img = ctx.getImageData(0, 0, size, size);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const n = (Math.random() - 0.5) * 18;
+    img.data[i]   = Math.max(0, Math.min(255, img.data[i] + n));
+    img.data[i+1] = Math.max(0, Math.min(255, img.data[i+1] + n));
+    img.data[i+2] = Math.max(0, Math.min(255, img.data[i+2] + n));
+  }
+  ctx.putImageData(img, 0, 0);
+
+  // Topographic contours: marching squares on a summed-gaussian heightfield.
+  const peaks = [];
+  const p = mulberry(42);
+  for (let k = 0; k < 9; k++) {
+    peaks.push({
+      x: 90 + p() * (size - 180),
+      y: 90 + p() * (size - 180),
+      r: 85 + p() * 130,
+      h: 0.9 + p() * 0.9,
+      s: p() > 0.4 ? 1 : -1,
+    });
+  }
+  function height(x, y) {
+    let h = 0;
+    for (const pk of peaks) {
+      const dx = x - pk.x, dy = y - pk.y;
+      h += pk.s * pk.h * Math.exp(-(dx*dx + dy*dy) / (2 * pk.r * pk.r));
+    }
+    return h;
+  }
+
+  // Sample heightfield into a grid.
+  const gs = 180; // grid resolution
+  const cell = size / gs;
+  const field = new Float32Array((gs + 1) * (gs + 1));
+  for (let j = 0; j <= gs; j++) {
+    for (let i = 0; i <= gs; i++) {
+      field[j * (gs + 1) + i] = height(i * cell, j * cell);
+    }
+  }
+
+  function drawContour(level, color, lw) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    for (let j = 0; j < gs; j++) {
+      for (let i = 0; i < gs; i++) {
+        const x = i * cell, y = j * cell;
+        const a = field[j * (gs + 1) + i] - level;
+        const b = field[j * (gs + 1) + (i + 1)] - level;
+        const c2 = field[(j + 1) * (gs + 1) + (i + 1)] - level;
+        const d = field[(j + 1) * (gs + 1) + i] - level;
+        const segs = [];
+        if ((a > 0) !== (b > 0)) { const t = a / (a - b); segs.push([x + t * cell, y]); }
+        if ((b > 0) !== (c2 > 0)) { const t = b / (b - c2); segs.push([x + cell, y + t * cell]); }
+        if ((c2 > 0) !== (d > 0)) { const t = c2 / (c2 - d); segs.push([x + (1 - t) * cell, y + cell]); }
+        if ((d > 0) !== (a > 0)) { const t = d / (d - a); segs.push([x, y + (1 - t) * cell]); }
+        if (segs.length >= 2) {
+          ctx.moveTo(segs[0][0], segs[0][1]);
+          ctx.lineTo(segs[1][0], segs[1][1]);
+          if (segs.length === 4) {
+            ctx.moveTo(segs[2][0], segs[2][1]);
+            ctx.lineTo(segs[3][0], segs[3][1]);
+          }
+        }
+      }
+    }
+    ctx.stroke();
+  }
+
+  // dense contours; every 4th is major (darker, thicker).
+  const step = 0.10;
+  let idx = 0;
+  for (let level = -2.2; level <= 2.2; level += step) {
+    const major = idx % 4 === 0;
+    drawContour(level, major ? "rgba(42,36,30,0.68)" : "rgba(74,64,48,0.38)", major ? 1.3 : 0.9);
+    idx++;
+  }
+
+  // labeled bench marks at peak centers
+  ctx.fillStyle = "rgba(42,36,30,0.62)";
+  ctx.font = "italic 16px Georgia";
+  for (let k = 0; k < 5; k++) {
+    const pk = peaks[k];
+    const sign = pk.s > 0 ? "+" : "-";
+    ctx.fillText(`${sign}${(pk.h).toFixed(2)}`, pk.x + 8, pk.y - 4);
+    ctx.beginPath(); ctx.arc(pk.x, pk.y, 2.4, 0, Math.PI*2); ctx.fill();
+  }
+
+  // soft vignette
+  const g = ctx.createRadialGradient(size/2, size/2, size*0.25, size/2, size/2, size*0.7);
+  g.addColorStop(0, "rgba(244,239,230,0)");
+  g.addColorStop(1, "rgba(58,45,28,0.22)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,size,size);
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.anisotropy = 8;
+  return tex;
+}
+
+const topoTex = makeTopoTexture();
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(120, 120),
+  new THREE.MeshBasicMaterial({ map: topoTex })
+);
+floor.rotation.x = -Math.PI / 2;
+floor.position.y = -3;
+scene.add(floor);
+
+// subtle horizon dome (no gradient sky — just tinted hemisphere)
+const domeMat = new THREE.MeshBasicMaterial({
+  color: "#e8dcc1", side: THREE.BackSide, transparent: true, opacity: 0.9,
+});
+const dome = new THREE.Mesh(new THREE.SphereGeometry(90, 32, 16, 0, Math.PI * 2, 0, Math.PI/2), domeMat);
+scene.add(dome);
+
+// ------- Ink-halo orb sprite
+function makeHaloTexture(color) {
+  const s = 256;
+  const c = document.createElement("canvas"); c.width = c.height = s;
+  const ctx = c.getContext("2d");
+  // outer wash
+  const g = ctx.createRadialGradient(s/2, s/2, 0, s/2, s/2, s/2);
+  const hex = "#" + color.getHexString();
+  g.addColorStop(0.00, hex + "ee");
+  g.addColorStop(0.12, hex + "cc");
+  g.addColorStop(0.28, hex + "55");
+  g.addColorStop(0.50, hex + "18");
+  g.addColorStop(1.00, hex + "00");
+  ctx.fillStyle = g; ctx.fillRect(0,0,s,s);
+  // ink ring
+  ctx.strokeStyle = "rgba(42,36,30,0.55)";
+  ctx.lineWidth = 2.2;
+  ctx.beginPath(); ctx.arc(s/2, s/2, s*0.16, 0, Math.PI*2); ctx.stroke();
+  // faint outer ring
+  ctx.strokeStyle = hex + "88";
+  ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.arc(s/2, s/2, s*0.27, 0, Math.PI*2); ctx.stroke();
+  // bright inner core
+  const g2 = ctx.createRadialGradient(s/2, s/2, 0, s/2, s/2, s*0.09);
+  g2.addColorStop(0, "rgba(255,250,240,0.95)");
+  g2.addColorStop(1, hex + "00");
+  ctx.fillStyle = g2; ctx.beginPath(); ctx.arc(s/2, s/2, s*0.09, 0, Math.PI*2); ctx.fill();
+  return new THREE.CanvasTexture(c);
+}
+
+const haloTex = { buffer: makeHaloTexture(PAL.violet), episodic: makeHaloTexture(PAL.teal), semantic: makeHaloTexture(PAL.sage) };
+
+const orbs = [];
+MEMORIES.forEach((m, i) => {
+  const mat = new THREE.SpriteMaterial({
+    map: haloTex[m.layer],
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.NormalBlending,
+  });
+  const s = new THREE.Sprite(mat);
+  const size = 2.2 + m.strength * 1.4;
+  s.scale.set(size, size, size);
+  s.position.copy(positions[i]);
+  s.userData = { mem: m, basePulse: rand() * Math.PI * 2, baseY: positions[i].y };
+  scene.add(s);
+  orbs.push(s);
+});
+
+// ------- edges (jaccard on words)
+function tokens(t) { return new Set(t.toLowerCase().split(/\W+/).filter(w => w.length > 2)); }
+function jaccard(a, b) {
+  const inter = [...a].filter(x => b.has(x)).length;
+  const uni = new Set([...a, ...b]).size;
+  return uni ? inter / uni : 0;
+}
+const tokSets = MEMORIES.map(m => tokens(m.text));
+const edgePts = [];
+for (let i = 0; i < MEMORIES.length; i++) {
+  const scores = [];
+  for (let j = 0; j < MEMORIES.length; j++) if (i !== j) {
+    const s = jaccard(tokSets[i], tokSets[j]);
+    if (s > 0.15) scores.push({ j, s });
+  }
+  scores.sort((a,b) => b.s - a.s);
+  scores.slice(0, 3).forEach(({ j }) => { edgePts.push(positions[i], positions[j]); });
+}
+const edgeGeom = new THREE.BufferGeometry().setFromPoints(edgePts);
+const edges = new THREE.LineSegments(
+  edgeGeom,
+  new THREE.LineBasicMaterial({ color: "#2a241e", transparent: true, opacity: 0.22 })
+);
+scene.add(edges);
+
+// ------- drifting pollen / paper dust
+function makePollenTexture() {
+  const s = 64;
+  const c = document.createElement("canvas"); c.width = c.height = s;
+  const ctx = c.getContext("2d");
+  const g = ctx.createRadialGradient(s/2, s/2, 0, s/2, s/2, s/2);
+  g.addColorStop(0.0, "rgba(52,40,28,1)");
+  g.addColorStop(0.28, "rgba(52,40,28,0.55)");
+  g.addColorStop(0.55, "rgba(52,40,28,0.18)");
+  g.addColorStop(1.0, "rgba(52,40,28,0)");
+  ctx.fillStyle = g; ctx.fillRect(0,0,s,s);
+  return new THREE.CanvasTexture(c);
+}
+const pollenTex = makePollenTexture();
+
+const POLLEN_COUNT = 2600;
+const pollenGeom = new THREE.BufferGeometry();
+const pollenPos = new Float32Array(POLLEN_COUNT * 3);
+const pollenVel = new Float32Array(POLLEN_COUNT * 3);
+const pollenPhase = new Float32Array(POLLEN_COUNT);
+const pollenSize = new Float32Array(POLLEN_COUNT);
+const pollenSpread = 58;
+for (let i = 0; i < POLLEN_COUNT; i++) {
+  pollenPos[i*3]   = (rand() - 0.5) * pollenSpread * 2;
+  pollenPos[i*3+1] = -2 + rand() * 32;
+  pollenPos[i*3+2] = (rand() - 0.5) * pollenSpread * 2;
+  pollenVel[i*3]   = (rand() - 0.5) * 0.025;
+  pollenVel[i*3+1] = 0.012 + rand() * 0.045;
+  pollenVel[i*3+2] = (rand() - 0.5) * 0.025;
+  pollenPhase[i]   = rand() * Math.PI * 2;
+  // power-law size distribution: most small, a few big readable specks
+  const r = rand();
+  pollenSize[i] = r < 0.82 ? (0.28 + rand() * 0.45) : (0.85 + rand() * 0.9);
+}
+pollenGeom.setAttribute("position", new THREE.BufferAttribute(pollenPos, 3));
+pollenGeom.setAttribute("size", new THREE.BufferAttribute(pollenSize, 1));
+
+const pollenMat = new THREE.ShaderMaterial({
+  uniforms: {
+    map: { value: pollenTex },
+    fogNear: { value: scene.fog.near },
+    fogFar:  { value: scene.fog.far },
+    fogColor:{ value: scene.fog.color },
+  },
+  vertexShader: `
+    attribute float size;
+    varying float vFog;
+    varying float vSize;
+    void main() {
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      gl_PointSize = size * (360.0 / -mv.z);
+      gl_Position = projectionMatrix * mv;
+      float d = length(mv.xyz);
+      vFog = smoothstep(55.0, 135.0, d);
+      vSize = size;
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D map;
+    uniform vec3 fogColor;
+    varying float vFog;
+    varying float vSize;
+    void main() {
+      vec4 tex = texture2D(map, gl_PointCoord);
+      if (tex.a < 0.02) discard;
+      // larger flecks get slightly warmer tint; smaller are darker ink
+      vec3 baseCol = mix(vec3(0.18,0.13,0.08), vec3(0.45,0.35,0.22), clamp(vSize - 0.3, 0.0, 1.0));
+      vec3 col = mix(baseCol, fogColor, vFog * 0.7);
+      float a = tex.a * (1.0 - vFog * 0.85) * 0.85;
+      gl_FragColor = vec4(col, a);
+    }
+  `,
+  transparent: true,
+  depthWrite: false,
+});
+const pollen = new THREE.Points(pollenGeom, pollenMat);
+scene.add(pollen);
+
+// ------- loop
+const clock = new THREE.Clock();
+function frame() {
+  const t = clock.getElapsedTime();
+  for (const o of orbs) {
+    const pulse = 0.06 * Math.sin(t * 1.2 + o.userData.basePulse);
+    const base = 2.2 + o.userData.mem.strength * 1.4;
+    o.scale.setScalar(base * (1 + pulse));
+  }
+  // pollen drift + gentle sway, wrap when out of bounds
+  const pArr = pollenGeom.attributes.position.array;
+  for (let i = 0; i < POLLEN_COUNT; i++) {
+    const k = i * 3;
+    const sway = 0.03 * Math.sin(t * 0.7 + pollenPhase[i]);
+    pArr[k]   += pollenVel[k]   + sway * 0.02;
+    pArr[k+1] += pollenVel[k+1];
+    pArr[k+2] += pollenVel[k+2] + sway * 0.01;
+    if (pArr[k+1] > 32) {
+      pArr[k]   = (rand() - 0.5) * pollenSpread * 2;
+      pArr[k+1] = -3;
+      pArr[k+2] = (rand() - 0.5) * pollenSpread * 2;
+    }
+  }
+  pollenGeom.attributes.position.needsUpdate = true;
+
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+frame();
+
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
