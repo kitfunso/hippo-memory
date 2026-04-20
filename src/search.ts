@@ -122,6 +122,39 @@ export interface SearchResult {
   bm25: number;
   cosine: number;         // cosine similarity (0 when embeddings not used)
   tokens: number;
+  /** Populated when search is called with options.explain === true. */
+  breakdown?: ScoreBreakdown;
+}
+
+export interface ScoreBreakdown {
+  mode: 'hybrid' | 'bm25-only' | 'physics';
+  /** BM25 score after normalization by max-in-corpus (0..1). */
+  normBm25: number;
+  /** Weight applied to BM25 in the hybrid blend. */
+  bm25Weight: number;
+  /** Weight applied to cosine in the hybrid blend. */
+  embeddingWeight: number;
+  /** Cosine similarity (0 when embeddings not used). */
+  cosine: number;
+  /** Blended base score before multipliers. */
+  base: number;
+  /** Multiplier from memory strength: 0.5 + 0.5*strength. */
+  strengthMultiplier: number;
+  /** Multiplier from age: 0.8 + 0.2*recencyBoost. */
+  recencyMultiplier: number;
+  /** 1.2 if tagged 'decision', else 1.0. */
+  decisionBoost: number;
+  /** 1.0..1.3 based on cwd path tag overlap. */
+  pathBoost: number;
+  /** Extra multiplier applied post-hybrid (e.g. 1.2x for local hits in a
+   *  local+global merged search). 1.0 when not applicable. */
+  sourceBump: number;
+  /** Query terms that appeared verbatim in the doc. */
+  matchedTerms: string[];
+  /** Final composite score (= base * multipliers). */
+  final: number;
+  /** Age of the memory in whole days, at scoring time. */
+  ageDays: number;
 }
 
 /**
@@ -139,12 +172,14 @@ export async function hybridSearch(
     now?: Date;
     hippoRoot?: string;
     embeddingWeight?: number;
+    explain?: boolean;
   } = {}
 ): Promise<SearchResult[]> {
   const now = options.now ?? new Date();
   const budget = options.budget ?? 4000;
   const embeddingWeight = options.embeddingWeight ?? 0.6;
   const bm25Weight = 1 - embeddingWeight;
+  const explain = options.explain ?? false;
 
   if (entries.length === 0) return [];
 
@@ -182,6 +217,7 @@ export async function hybridSearch(
   // Score each entry
   const scored: SearchResult[] = [];
   const currentPathTags = extractPathTags(process.cwd());
+  const queryTermSet = new Set(queryTerms);
 
   for (let i = 0; i < entries.length; i++) {
     const rawBm25 = bm25Scores[i];
@@ -191,10 +227,13 @@ export async function hybridSearch(
     const normBm25 = rawBm25 / maxBm25;
     const strength = calculateStrength(entries[i], now);
     const recency = recencyBoost(entries[i], now);
+    const strengthMultiplier = 0.5 + 0.5 * strength;
+    const recencyMultiplier = 0.8 + 0.2 * recency;
 
     let compositeScore: number;
-
     let cosineScore = 0;
+    let base: number;
+    let modeLabel: 'hybrid' | 'bm25-only';
 
     if (useEmbeddings) {
       const cached = embeddingIndex[entries[i].id];
@@ -202,13 +241,14 @@ export async function hybridSearch(
         ? Math.max(0, cosineSimilarity(queryVector, cached))
         : 0;
 
-      // Hybrid: weighted blend, then modulated by strength and recency
-      const hybrid = bm25Weight * normBm25 + embeddingWeight * cosineScore;
-      compositeScore = hybrid * (0.5 + 0.5 * strength) * (0.8 + 0.2 * recency);
+      base = bm25Weight * normBm25 + embeddingWeight * cosineScore;
+      compositeScore = base * strengthMultiplier * recencyMultiplier;
+      modeLabel = 'hybrid';
     } else {
       // Pure BM25 path: identical to original behavior
-      const normQ = queryTerms.length > 0 ? rawBm25 / queryTerms.length : rawBm25;
-      compositeScore = normQ * (0.5 + 0.5 * strength) * (0.8 + 0.2 * recency);
+      base = queryTerms.length > 0 ? rawBm25 / queryTerms.length : rawBm25;
+      compositeScore = base * strengthMultiplier * recencyMultiplier;
+      modeLabel = 'bm25-only';
     }
 
     // Decision-tagged memories get a 1.2x recall boost
@@ -224,7 +264,41 @@ export async function hybridSearch(
     if (compositeScore <= 0) continue;
 
     const tokens = estimateTokens(entries[i].content);
-    scored.push({ entry: entries[i], score: compositeScore, bm25: rawBm25, cosine: cosineScore, tokens });
+    const result: SearchResult = {
+      entry: entries[i],
+      score: compositeScore,
+      bm25: rawBm25,
+      cosine: cosineScore,
+      tokens,
+    };
+
+    if (explain) {
+      const docTerms = new Set(tokenize(`${entries[i].content} ${entries[i].tags.join(' ')}`));
+      const matchedTerms: string[] = [];
+      for (const t of queryTermSet) if (docTerms.has(t)) matchedTerms.push(t);
+      const ageDays = Math.max(
+        0,
+        Math.floor((now.getTime() - new Date(entries[i].created).getTime()) / 86_400_000),
+      );
+      result.breakdown = {
+        mode: modeLabel,
+        normBm25,
+        bm25Weight: useEmbeddings ? bm25Weight : 1,
+        embeddingWeight: useEmbeddings ? embeddingWeight : 0,
+        cosine: cosineScore,
+        base,
+        strengthMultiplier,
+        recencyMultiplier,
+        decisionBoost,
+        pathBoost,
+        sourceBump: 1,
+        matchedTerms,
+        final: compositeScore,
+        ageDays,
+      };
+    }
+
+    scored.push(result);
   }
 
   // Sort by composite score descending
@@ -258,11 +332,13 @@ export async function physicsSearch(
     hippoRoot?: string;
     physicsConfig?: PhysicsConfig;
     queryEmbedding?: number[]; // pre-computed query vector (for testing/benchmarks)
+    explain?: boolean;
   } = {}
 ): Promise<SearchResult[]> {
   const now = options.now ?? new Date();
   const budget = options.budget ?? 4000;
   const config = options.physicsConfig ?? DEFAULT_PHYSICS_CONFIG;
+  const explain = options.explain ?? false;
 
   if (entries.length === 0 || !options.hippoRoot) return [];
 
@@ -325,19 +401,42 @@ export async function physicsSearch(
       if (s.finalScore <= 0) continue;
       const entry = entryMap.get(s.memoryId);
       if (!entry) continue;
-      physicsResults.push({
+      const result: SearchResult = {
         entry,
         score: s.finalScore,
         bm25: 0,
         cosine: s.baseScore,
         tokens: estimateTokens(entry.content),
-      });
+      };
+      if (explain) {
+        const ageDays = Math.max(
+          0,
+          Math.floor((now.getTime() - new Date(entry.created).getTime()) / 86_400_000),
+        );
+        result.breakdown = {
+          mode: 'physics',
+          normBm25: 0,
+          bm25Weight: 0,
+          embeddingWeight: 1,
+          cosine: s.baseScore,
+          base: s.baseScore,
+          strengthMultiplier: 1,
+          recencyMultiplier: 1,
+          decisionBoost: 1,
+          pathBoost: 1,
+          sourceBump: 1,
+          matchedTerms: [],
+          final: s.finalScore,
+          ageDays,
+        };
+      }
+      physicsResults.push(result);
     }
   }
 
   // Score classic memories (no physics state)
   const classicResults = classicEntries.length > 0
-    ? await hybridSearch(query, classicEntries, { ...options, budget: Infinity })
+    ? await hybridSearch(query, classicEntries, { ...options, budget: Infinity, explain })
     : [];
 
   // Normalize both pools to [0, 1] and merge

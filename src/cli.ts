@@ -659,6 +659,127 @@ async function cmdRecall(
   }
 }
 
+async function cmdExplain(
+  hippoRoot: string,
+  query: string,
+  flags: Record<string, string | boolean | string[]>
+): Promise<void> {
+  requireInit(hippoRoot);
+
+  const budget = parseInt(String(flags['budget'] ?? '4000'), 10);
+  const limit = parseLimitFlag(flags['limit']);
+  const asJson = Boolean(flags['json']);
+  const forcePhysics = Boolean(flags['physics']);
+  const forceClassic = Boolean(flags['classic']);
+  const globalRoot = getGlobalRoot();
+
+  const localEntries = loadSearchEntries(hippoRoot, query);
+  const globalEntries = isInitialized(globalRoot) ? loadSearchEntries(globalRoot, query) : [];
+
+  const hasGlobal = globalEntries.length > 0;
+  const config = loadConfig(hippoRoot);
+  const usePhysics = forcePhysics
+    || (!forceClassic && config.physics.enabled !== false);
+
+  let results;
+  let modeUsed: 'physics' | 'searchBothHybrid' | 'hybrid';
+  if (usePhysics && !hasGlobal) {
+    results = await physicsSearch(query, localEntries, {
+      budget,
+      hippoRoot,
+      physicsConfig: config.physics,
+      explain: true,
+    });
+    modeUsed = 'physics';
+  } else if (hasGlobal) {
+    results = await searchBothHybrid(query, hippoRoot, globalRoot, { budget, explain: true });
+    modeUsed = 'searchBothHybrid';
+  } else {
+    results = await hybridSearch(query, localEntries, { budget, hippoRoot, explain: true });
+    modeUsed = 'hybrid';
+  }
+
+  if (limit < results.length) {
+    results = results.slice(0, limit);
+  }
+
+  const candidates = localEntries.length + globalEntries.length;
+
+  if (asJson) {
+    const output = results.map((r, rank) => ({
+      rank: rank + 1,
+      id: r.entry.id,
+      layer: r.entry.layer,
+      confidence: resolveConfidence(r.entry),
+      score: r.score,
+      tokens: r.tokens,
+      tags: r.entry.tags,
+      content: r.entry.content,
+      breakdown: r.breakdown,
+    }));
+    console.log(JSON.stringify({
+      query,
+      mode: modeUsed,
+      candidates,
+      returned: output.length,
+      results: output,
+    }));
+    return;
+  }
+
+  if (results.length === 0) {
+    console.log(`No memories matched "${query}" (scanned ${candidates}).`);
+    return;
+  }
+
+  console.log(`Query: "${query}"`);
+  console.log(`Mode:  ${modeUsed}   candidates: ${candidates}   returned: ${results.length}`);
+  console.log();
+  console.log('Rank  Score   Strength  Age    Layer      ID         Preview');
+  console.log('----- ------- --------- ------ ---------- ---------- ---------------------------------');
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    const b = r.breakdown;
+    const preview = r.entry.content.replace(/\s+/g, ' ').slice(0, 48);
+    const ageStr = b ? `${b.ageDays}d` : '?';
+    console.log(
+      `${String(i + 1).padEnd(5)} ${fmt(r.score, 3).padEnd(7)} ${fmt(r.entry.strength).padEnd(9)} ${ageStr.padEnd(6)} ${r.entry.layer.padEnd(10)} ${r.entry.id.padEnd(10)} ${preview}`,
+    );
+  }
+  console.log();
+
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    const b = r.breakdown;
+    console.log(`[${i + 1}] ${r.entry.id}   composite=${fmt(r.score, 4)}`);
+    if (!b) {
+      console.log('    (no breakdown available)');
+      console.log();
+      continue;
+    }
+    if (b.mode === 'physics') {
+      console.log(`    mode:      physics-gravity`);
+      console.log(`    cosine:    ${fmt(b.cosine, 3)}  (pre-amp baseline)`);
+      console.log(`    final:     ${fmt(b.final, 4)}  (post-amp, from physics scorer)`);
+    } else {
+      const matched = b.matchedTerms.length > 0 ? b.matchedTerms.join(', ') : '(none)';
+      console.log(`    mode:      ${b.mode}`);
+      console.log(`    BM25:      raw=${fmt(r.bm25, 3)}  normalized=${fmt(b.normBm25, 3)}  weight=${fmt(b.bm25Weight, 2)}  matched=[${matched}]`);
+      console.log(`    embedding: cosine=${fmt(b.cosine, 3)}  weight=${fmt(b.embeddingWeight, 2)}`);
+      console.log(`    base:      ${fmt(b.bm25Weight, 2)}*${fmt(b.normBm25, 3)} + ${fmt(b.embeddingWeight, 2)}*${fmt(b.cosine, 3)} = ${fmt(b.base, 4)}`);
+      console.log(`    strength:  x${fmt(b.strengthMultiplier, 3)}  (strength=${fmt(r.entry.strength, 3)})`);
+      console.log(`    recency:   x${fmt(b.recencyMultiplier, 3)}  (age=${b.ageDays}d)`);
+      if (b.decisionBoost !== 1) console.log(`    decision:  x${fmt(b.decisionBoost, 2)}  (tagged 'decision')`);
+      if (b.pathBoost !== 1) console.log(`    path:      x${fmt(b.pathBoost, 3)}  (cwd path tag overlap)`);
+      if (b.sourceBump !== 1) console.log(`    source:    x${fmt(b.sourceBump, 2)}  (local priority bump over global)`);
+      console.log(`    final:     ${fmt(b.final, 4)}`);
+    }
+    console.log();
+  }
+
+  console.log('Note: explain does not mark memories as retrieved (read-only).');
+}
+
 /**
  * Scan for Claude Code MEMORY.md files and import new entries into hippo.
  * Looks in ~/.claude/projects/<project>/memory/ for .md files with YAML frontmatter.
@@ -3097,6 +3218,11 @@ Commands:
     --budget <n>           Token budget (default: 4000)
     --json                 Output as JSON
     --why                  Show match reasons and source annotations
+  explain <query>          Show full score breakdown for each retrieved memory
+    --budget <n>           Token budget (default: 4000)
+    --limit <n>            Cap the number of results displayed
+    --json                 Output as JSON
+    --physics | --classic  Force search mode (default: from config)
   context                  Smart context injection for AI agents
     --auto                 Auto-detect task from git state
     --budget <n>           Token budget (default: 1500)
@@ -3301,6 +3427,16 @@ async function main(): Promise<void> {
         process.exit(1);
       }
       await cmdRecall(hippoRoot, query, flags);
+      break;
+    }
+
+    case 'explain': {
+      const query = args.join(' ').trim();
+      if (!query) {
+        console.error('Please provide a search query.');
+        process.exit(1);
+      }
+      await cmdExplain(hippoRoot, query, flags);
       break;
     }
 

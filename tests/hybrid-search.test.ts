@@ -150,6 +150,76 @@ describe('hybridSearch with embeddings', () => {
 });
 
 // ---------------------------------------------------------------------------
+// explain: score breakdown
+// ---------------------------------------------------------------------------
+
+describe('hybridSearch explain breakdown', () => {
+  it('omits breakdown when explain flag is not set', async () => {
+    const entries = [createMemory('FRED cache silently dropped the TIPS series')];
+    const results = await hybridSearch('FRED cache', entries, { budget: 10000 });
+    expect(results.length).toBe(1);
+    expect(results[0].breakdown).toBeUndefined();
+  });
+
+  it('populates breakdown when explain=true', async () => {
+    const entries = [createMemory('FRED cache silently dropped the TIPS series')];
+    const results = await hybridSearch('FRED cache failure', entries, {
+      budget: 10000,
+      explain: true,
+    });
+    expect(results.length).toBe(1);
+    const b = results[0].breakdown;
+    expect(b).toBeDefined();
+    if (!b) return;
+    expect(b.mode).toBe('bm25-only');
+    expect(b.matchedTerms).toEqual(expect.arrayContaining(['fred', 'cache']));
+    expect(b.strengthMultiplier).toBeGreaterThanOrEqual(0.5);
+    expect(b.strengthMultiplier).toBeLessThanOrEqual(1);
+    expect(b.recencyMultiplier).toBeGreaterThanOrEqual(0.8);
+    expect(b.recencyMultiplier).toBeLessThanOrEqual(1);
+    expect(b.decisionBoost).toBe(1);
+    expect(b.ageDays).toBeGreaterThanOrEqual(0);
+  });
+
+  it('final equals base * multipliers within rounding tolerance', async () => {
+    const entries = [
+      createMemory('cache refresh verify contents after failure'),
+      createMemory('Python dict ordering is guaranteed in 3.7+'),
+    ];
+    const results = await hybridSearch('cache failure', entries, {
+      budget: 10000,
+      explain: true,
+    });
+    for (const r of results) {
+      const b = r.breakdown;
+      expect(b).toBeDefined();
+      if (!b) continue;
+      const expected =
+        b.base * b.strengthMultiplier * b.recencyMultiplier * b.decisionBoost * b.pathBoost * b.sourceBump;
+      expect(b.final).toBeCloseTo(expected, 5);
+      expect(r.score).toBeCloseTo(b.final, 5);
+      expect(b.sourceBump).toBe(1);
+    }
+  });
+
+  it('applies 1.2x decision boost for decision-tagged memories', async () => {
+    const normal = createMemory('always verify cache after refresh');
+    const decided = createMemory('decide to always verify cache after refresh', {
+      tags: ['decision'],
+    });
+    const entries = [normal, decided];
+    const results = await hybridSearch('verify cache', entries, {
+      budget: 10000,
+      explain: true,
+    });
+    const decidedResult = results.find((r) => r.entry.id === decided.id);
+    const normalResult = results.find((r) => r.entry.id === normal.id);
+    expect(decidedResult?.breakdown?.decisionBoost).toBe(1.2);
+    expect(normalResult?.breakdown?.decisionBoost).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // SearchResult.cosine field
 // ---------------------------------------------------------------------------
 
