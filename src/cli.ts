@@ -815,6 +815,7 @@ async function cmdEval(
 
   const asJson = Boolean(flags['json']);
   const minMrr = flags['min-mrr'] !== undefined ? parseFloat(String(flags['min-mrr'])) : null;
+  const showCases = Boolean(flags['show-cases']);
   const noMmr = Boolean(flags['no-mmr']);
   const mmrLambda = flags['mmr-lambda'] !== undefined ? parseFloat(String(flags['mmr-lambda'])) : undefined;
   const embeddingWeight = flags['embedding-weight'] !== undefined ? parseFloat(String(flags['embedding-weight'])) : undefined;
@@ -873,6 +874,27 @@ async function cmdEval(
     console.log(`Recall@5:     ${fmt(summary.meanRecallAt5, 4)}`);
     console.log(`Recall@10:    ${fmt(summary.meanRecallAt10, 4)}`);
     console.log(`NDCG@10:      ${fmt(summary.meanNdcgAt10, 4)}`);
+
+    if (showCases) {
+      console.log();
+      console.log('Case details:');
+      for (const c of summary.cases) {
+        const exp = c.case.expectedIds.length;
+        const expectedSet = new Set(c.case.expectedIds);
+        const hitTop10 = c.returnedIds.slice(0, 10).filter((id) => expectedSet.has(id));
+        const missed = c.case.expectedIds.filter((id) => !c.returnedIds.slice(0, 10).includes(id));
+        console.log();
+        console.log(`[${c.case.id}] R@10=${fmt(c.recallAt10, 2)}  MRR=${fmt(c.mrr, 2)}  expected=${exp}  hit=${hitTop10.length}`);
+        console.log(`  query: ${c.case.query}`);
+        console.log(`  top 3: ${c.returnedIds.slice(0, 3).join(', ') || '(none)'}`);
+        if (missed.length > 0) {
+          const shown = missed.slice(0, 4);
+          const more = missed.length > shown.length ? ` +${missed.length - shown.length} more` : '';
+          console.log(`  missed: ${shown.join(', ')}${more}`);
+        }
+      }
+    }
+
     console.log();
     const failing = summary.cases.filter((c) => c.mrr === 0);
     if (failing.length > 0) {
@@ -887,6 +909,120 @@ async function cmdEval(
   if (minMrr !== null && summary.meanMrr < minMrr) {
     console.error(`MRR ${fmt(summary.meanMrr, 4)} below threshold ${minMrr}`);
     process.exit(1);
+  }
+}
+
+function cmdTrace(
+  hippoRoot: string,
+  id: string,
+  flags: Record<string, string | boolean | string[]>,
+): void {
+  requireInit(hippoRoot);
+  const asJson = Boolean(flags['json']);
+
+  // Look in local store first, then global.
+  let entry = readEntry(hippoRoot, id);
+  let sourceLabel: 'local' | 'global' = 'local';
+  const globalRoot = getGlobalRoot();
+  if (!entry && isInitialized(globalRoot)) {
+    entry = readEntry(globalRoot, id);
+    sourceLabel = 'global';
+  }
+  if (!entry) {
+    console.error(`Memory not found: ${id}`);
+    process.exit(1);
+  }
+
+  const now = new Date();
+  const strength = calculateStrength(entry, now);
+  const halfLife = deriveHalfLife(7, entry);
+  const rewardFactor = calculateRewardFactor(entry);
+  const effHalfLife = halfLife * rewardFactor;
+  const createdMs = new Date(entry.created).getTime();
+  const ageDays = (now.getTime() - createdMs) / 86_400_000;
+  const lastMs = new Date(entry.last_retrieved).getTime();
+  const sinceLast = (now.getTime() - lastMs) / 86_400_000;
+  const conf = resolveConfidence(entry, now);
+
+  // Projected strength: same decay curve, just push `now` out.
+  const projectedAt = (days: number): number =>
+    calculateStrength(entry, new Date(now.getTime() + days * 86_400_000));
+
+  // Parents (consolidation lineage) — schema v9 field.
+  const parents = Array.isArray(entry.parents) ? entry.parents : [];
+  const parentPreviews = parents.map((pid) => {
+    const p = readEntry(hippoRoot, pid) ?? (isInitialized(globalRoot) ? readEntry(globalRoot, pid) : null);
+    return { id: pid, content: p ? p.content.replace(/\s+/g, ' ').slice(0, 70) : '(not found)' };
+  });
+
+  // Open conflicts involving this memory.
+  const allConflicts = [
+    ...listMemoryConflicts(hippoRoot, 'open'),
+    ...(isInitialized(globalRoot) ? listMemoryConflicts(globalRoot, 'open') : []),
+  ];
+  const myConflicts = allConflicts.filter((c) => c.memory_a_id === id || c.memory_b_id === id);
+
+  if (asJson) {
+    console.log(JSON.stringify({
+      id: entry.id,
+      source: sourceLabel,
+      layer: entry.layer,
+      confidence: conf,
+      pinned: entry.pinned,
+      starred: entry.starred,
+      tags: entry.tags,
+      content: entry.content,
+      created: entry.created,
+      age_days: ageDays,
+      last_retrieved: entry.last_retrieved,
+      days_since_last_retrieval: sinceLast,
+      retrieval_count: entry.retrieval_count,
+      strength_now: strength,
+      half_life_days: halfLife,
+      reward_factor: rewardFactor,
+      effective_half_life_days: effHalfLife,
+      projected_strength_30d: projectedAt(30),
+      projected_strength_90d: projectedAt(90),
+      outcome_positive: entry.outcome_positive,
+      outcome_negative: entry.outcome_negative,
+      parents: parentPreviews,
+      open_conflicts: myConflicts,
+    }, null, 2));
+    return;
+  }
+
+  console.log(`Memory: ${entry.id}  [${sourceLabel}]`);
+  console.log('='.repeat(50));
+  console.log(`Content:   ${entry.content.replace(/\s+/g, ' ').slice(0, 160)}${entry.content.length > 160 ? '...' : ''}`);
+  console.log(`Layer:     ${entry.layer.padEnd(10)} Confidence: ${conf.padEnd(10)} Pinned: ${entry.pinned ? 'yes' : 'no'}${entry.starred ? '  Starred: yes' : ''}`);
+  console.log(`Tags:      ${entry.tags.join(', ') || '(none)'}`);
+  console.log(`Created:   ${entry.created}  (${fmt(ageDays, 1)} days ago)`);
+  console.log();
+  console.log(`Strength trajectory:`);
+  console.log(`  now:        ${fmt(strength, 3)}`);
+  console.log(`  in 30 days: ${fmt(projectedAt(30), 3)}`);
+  console.log(`  in 90 days: ${fmt(projectedAt(90), 3)}`);
+  console.log(`  half-life:  ${fmt(halfLife, 1)}d (base) x ${fmt(rewardFactor, 2)} reward = ${fmt(effHalfLife, 1)}d effective`);
+  console.log();
+  console.log(`Retrieval:`);
+  console.log(`  count:      ${entry.retrieval_count}`);
+  console.log(`  last:       ${entry.last_retrieved}  (${fmt(sinceLast, 1)} days ago)`);
+  console.log();
+  console.log(`Outcomes:   +${entry.outcome_positive} / -${entry.outcome_negative}`);
+  if (parentPreviews.length > 0) {
+    console.log();
+    console.log(`Parents (consolidation lineage):`);
+    for (const p of parentPreviews) {
+      console.log(`  - ${p.id}: ${p.content}`);
+    }
+  }
+  if (myConflicts.length > 0) {
+    console.log();
+    console.log(`Open conflicts: ${myConflicts.length}`);
+    for (const c of myConflicts) {
+      const other = c.memory_a_id === id ? c.memory_b_id : c.memory_a_id;
+      console.log(`  - with ${other}: ${c.reason} (score=${fmt(c.score, 2)})`);
+    }
   }
 }
 
@@ -3337,10 +3473,14 @@ Commands:
     --physics | --classic  Force search mode (default: from config)
     --no-mmr               Disable MMR diversity re-ranking
     --mmr-lambda <f>       MMR balance 0..1 (default: 0.7, 1.0 = pure relevance)
+  trace <id>               Memory dossier: content, decay trajectory, retrievals,
+                           outcomes, consolidation parents, open conflicts
+    --json                 Output as JSON
   eval [<corpus.json>]     Measure recall quality against a test corpus
     --bootstrap            Generate a synthetic corpus from current memories
     --out <path>           With --bootstrap, write to file instead of stdout
     --max-cases <n>        With --bootstrap, cap case count (default: 50)
+    --show-cases           Print per-case details (query, R@10, missed, top 3)
     --no-mmr               Disable MMR for this eval run
     --mmr-lambda <f>       Override MMR lambda for this run
     --embedding-weight <f> Override cosine weight (default: 0.6)
@@ -3566,6 +3706,16 @@ async function main(): Promise<void> {
     case 'eval': {
       const corpusPath = args[0] ? String(args[0]) : null;
       await cmdEval(hippoRoot, corpusPath, flags);
+      break;
+    }
+
+    case 'trace': {
+      const id = args[0] ? String(args[0]) : null;
+      if (!id) {
+        console.error('Usage: hippo trace <memory-id>');
+        process.exit(1);
+      }
+      cmdTrace(hippoRoot, id, flags);
       break;
     }
 
