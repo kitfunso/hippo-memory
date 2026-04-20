@@ -137,6 +137,7 @@ import {
 import { cmdCapture, CaptureOptions } from './capture.js';
 import { auditMemories, type AuditResult } from './audit.js';
 import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from './eval.js';
+import { refineStore } from './refine-llm.js';
 import { wmPush, wmRead, wmClear, wmFlush, WorkingMemoryItem } from './working-memory.js';
 
 // ---------------------------------------------------------------------------
@@ -1087,6 +1088,43 @@ function cmdTrace(
     for (const c of myConflicts) {
       const other = c.memory_a_id === id ? c.memory_b_id : c.memory_a_id;
       console.log(`  - with ${other}: ${c.reason} (score=${fmt(c.score, 2)})`);
+    }
+  }
+}
+
+async function cmdRefine(
+  hippoRoot: string,
+  flags: Record<string, string | boolean | string[]>,
+): Promise<void> {
+  requireInit(hippoRoot);
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    console.error('hippo refine needs ANTHROPIC_API_KEY in the environment.');
+    process.exit(1);
+  }
+
+  const dryRun = Boolean(flags['dry-run']);
+  const all = Boolean(flags['all']);
+  const limit = flags['limit'] !== undefined ? parseInt(String(flags['limit']), 10) : undefined;
+  const model = flags['model'] ? String(flags['model']) : undefined;
+  const asJson = Boolean(flags['json']);
+
+  const result = await refineStore(hippoRoot, { apiKey, model, limit, dryRun, all });
+
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  console.log(`Scanned:  ${result.scanned} consolidated semantic memories`);
+  console.log(`Refined:  ${result.refined}${dryRun ? '  (dry-run — no writes)' : ''}`);
+  console.log(`Skipped:  ${result.skipped}`);
+  console.log(`Failed:   ${result.failed}`);
+  if (result.failed > 0) {
+    console.log('\nFailures:');
+    for (const d of result.details.filter((x) => x.status === 'failed').slice(0, 5)) {
+      console.log(`  ${d.id}: ${d.reason}`);
     }
   }
 }
@@ -3541,6 +3579,13 @@ Commands:
   trace <id>               Memory dossier: content, decay trajectory, retrievals,
                            outcomes, consolidation parents, open conflicts
     --json                 Output as JSON
+  refine                   Rewrite consolidated semantic memories with Claude
+    --limit <n>            Cap the number of memories processed this run
+    --all                  Ignore \`llm-refined\` tag and re-refine everything
+    --dry-run              Call the API but don't write results back
+    --model <id>           Override the default model (claude-sonnet-4-6)
+    --json                 Output summary as JSON
+    (requires ANTHROPIC_API_KEY in env)
   eval [<corpus.json>]     Measure recall quality against a test corpus
     --bootstrap            Generate a synthetic corpus from current memories
     --out <path>           With --bootstrap, write to file instead of stdout
@@ -3786,6 +3831,10 @@ async function main(): Promise<void> {
       cmdTrace(hippoRoot, id, flags);
       break;
     }
+
+    case 'refine':
+      await cmdRefine(hippoRoot, flags);
+      break;
 
     case 'sleep':
       cmdSleep(hippoRoot, flags);
