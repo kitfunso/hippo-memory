@@ -828,6 +828,7 @@ async function cmdEval(
     const corpus = bootstrapCorpus(entries, max);
     const payload = JSON.stringify({ cases: corpus }, null, 2);
     if (outPath) {
+      fs.mkdirSync(path.dirname(outPath), { recursive: true });
       fs.writeFileSync(outPath, payload, 'utf8');
       console.log(`Wrote ${corpus.length} bootstrap cases to ${outPath}`);
     } else {
