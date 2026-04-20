@@ -100,6 +100,33 @@ de-cluster, so lambda=1.0 (relevance only) ties lambda=0.5 exactly.
 Users who want the uplift today: `hippo recall <q> --embedding-weight 0.4`
 or set `"embeddings": {"hybridWeight": 0.4}` in `.hippo/config.json`.
 
+### LongMemEval status (2026-04-20)
+
+Attempted a v0.27 run against the full 500-question LongMemEval corpus
+(`benchmarks/longmemeval/`) to compare with the documented v0.11 baseline
+(R@1=50.4%, R@3=66.6%, R@5=74.0%, R@10=82.6%, BM25-only). Two perf issues
+surfaced and were partially addressed:
+
+1. **MMR was O(N^2) cosine similarities** over all scored candidates.
+   On a 1064-memory store each recall took ~50s. Capped to top-100 head
+   candidates before the quadratic loop (see commit 014487f). Dropped
+   per-query time to ~9s in micro-benchmark.
+
+2. **`buildCorpus` tokenizes ~15MB of text per query.** LongMemEval chat
+   histories are stored as single memories averaging 14k chars each
+   (1064 memories x 14k = 15MB). BuildCorpus runs on every hybridSearch
+   call, so 500 queries = 500 x 15MB of regex+split work. Full-run
+   throughput stayed at ~30-40s per query in practice — 5+ hours for
+   500 questions. Not run to completion this session.
+
+**Real fix for future work**: make `buildCorpus` cacheable by exposing a
+`preparedCorpus` option on `hybridSearch`. One-time cost at load,
+millisecond per-query cost. Benefits production recall on large stores too,
+not just this benchmark.
+
+Retrieval results for the 15-20 questions that did complete look consistent
+with the v0.11 ballpark; won't publish a number until a full run completes.
+
 ### LLM-generated corpus (`llm-corpus.json`)
 
 Harder-than-bootstrap cases with **paraphrased** queries — the right memory

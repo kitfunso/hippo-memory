@@ -36,7 +36,12 @@ export function tokenize(text: string): string[] {
 // BM25 implementation
 // ---------------------------------------------------------------------------
 
-interface BM25Corpus {
+/**
+ * Tokenized BM25 corpus. Callers can pre-build this with `buildCorpus` once
+ * and reuse across many `hybridSearch` calls on the same entry set — the
+ * tokenization work is the bulk of per-query cost on large stores.
+ */
+export interface BM25Corpus {
   docs: string[][];        // tokenized documents
   avgLen: number;
   df: Map<string, number>; // document frequency per term
@@ -46,7 +51,7 @@ interface BM25Corpus {
 const BM25_K1 = 1.5;
 const BM25_B = 0.75;
 
-function buildCorpus(texts: string[]): BM25Corpus {
+export function buildCorpus(texts: string[]): BM25Corpus {
   const docs = texts.map(tokenize);
   const N = docs.length;
   const df = new Map<string, number>();
@@ -193,6 +198,11 @@ export async function hybridSearch(
     mmr?: boolean;
     /** MMR balance: 1.0 = pure relevance, 0.0 = pure diversity. Default 0.7. */
     mmrLambda?: number;
+    /** Pre-built BM25 corpus from `buildCorpus`. Pass this across many
+     *  queries on the same entry set to skip ~O(N*docLen) tokenization
+     *  work per call. Must be built from the same `entries` in the same
+     *  order (content + tags.join(' ')). */
+    preparedCorpus?: BM25Corpus;
   } = {}
 ): Promise<SearchResult[]> {
   const now = options.now ?? new Date();
@@ -208,9 +218,9 @@ export async function hybridSearch(
   const queryTerms = tokenize(query);
   if (queryTerms.length === 0) return [];
 
-  // Build BM25 corpus
-  const texts = entries.map((e) => `${e.content} ${e.tags.join(' ')}`);
-  const corpus = buildCorpus(texts);
+  // Build BM25 corpus (or reuse one the caller already built).
+  const corpus = options.preparedCorpus
+    ?? buildCorpus(entries.map((e) => `${e.content} ${e.tags.join(' ')}`));
 
   // Score all entries with BM25
   const bm25Scores: number[] = entries.map((_, i) => bm25Score(corpus, i, queryTerms));
