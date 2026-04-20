@@ -60,6 +60,14 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v0.28.0
+
+- **Budget saturation fix.** Large memories (14k+ chars) no longer starve retrieval. New `minResults` option guarantees at least N results regardless of token budget. `hippo recall <q> --min-results 5`.
+- **LongMemEval parity restored.** The 35pp R@10 gap vs v0.11 was a benchmark methodology issue (budget-limited vs unlimited comparison). Corrected: v0.28 R@3 67.0% (+0.4pp), answer_in_content@5 49.6% (+3.0pp), R@10 81.0% (-1.6pp). Top-5 results now more often contain the actual answer.
+- **MMR performance.** Re-ranking capped at top-100 candidates, dropping per-query time from ~50s to ~9s. `preparedCorpus` option skips per-query tokenization for batch callers.
+- **RRF scoring option.** `hybridSearch` accepts `scoring: 'rrf'` for reciprocal rank fusion as an alternative to score blending.
+- **`hippo refine` command.** LLM-powered semantic rewrite of memories for improved recall quality.
+
 ### What's new in v0.27.0
 
 - **Recall is now debuggable.** `hippo explain <query>` prints the full score breakdown for each retrieved memory: BM25 + cosine, every multiplier (strength, recency, decision, path, source-bump, outcome), age, and final composite. Read-only so it's safe to run as a diagnostic.
