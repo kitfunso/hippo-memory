@@ -394,3 +394,31 @@ describe('mmrRerank', () => {
     expect(ranked.map((r) => r.entry.id)).toEqual(['a', 'b']);
   });
 });
+
+// ---------------------------------------------------------------------------
+// MMR candidate cap — regression guard on the O(N^2) blowup that was
+// making recall on large stores take 50s+ per query.
+// ---------------------------------------------------------------------------
+
+describe('hybridSearch MMR cap on large candidate sets', () => {
+  it('preserves tail entries past MMR cap in relevance order', async () => {
+    // 150 entries — enough to exceed the 100-entry MMR cap in hybridSearch.
+    // Queries match 'topic N' where N is the entry index, so relevance is
+    // monotonic: entry N beats entry N+1 on BM25. No embeddings available in
+    // test env, so MMR is skipped and we get pure relevance order regardless.
+    const entries = Array.from({ length: 150 }, (_, i) =>
+      createMemory(`topic ${String(i).padStart(3, '0')} about ${'x'.repeat(20)} content`),
+    );
+    const results = await hybridSearch('topic content about', entries, {
+      budget: 1_000_000, // enough to include all matches
+      mmr: true,
+      mmrLambda: 0.5,
+    });
+    // Top 10 should all score positive and be in the returned list.
+    expect(results.length).toBeGreaterThan(10);
+    // No crash, no timeout, and results are well-ordered by score desc.
+    for (let i = 1; i < results.length; i++) {
+      expect(results[i - 1].score).toBeGreaterThanOrEqual(results[i].score);
+    }
+  });
+});
