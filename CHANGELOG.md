@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.28.0 (2026-04-20) — Budget saturation fix + LongMemEval parity
+
+### Added
+- **`minResults` option on all search functions.** `hybridSearch`, `physicsSearch`, `search`, and `searchBothHybrid` accept `minResults` to guarantee at least N results regardless of token budget. Prevents budget saturation when memories are large (e.g. LongMemEval's 14k-char session dumps fit only 1 per budget=4000). Production default: 1 (backward compatible). CLI: `hippo recall <q> --min-results 5`.
+- **`scoring: 'rrf'` option on `hybridSearch`.** Reciprocal rank fusion as an alternative to score blending. Combines BM25 and cosine ranks instead of scores. Available for experimentation; default remains `'blend'`.
+- **`hippo refine` command.** LLM-powered semantic rewrite of memories for improved recall quality.
+
+### Fixed
+- **LongMemEval regression was benchmark methodology, not scoring.** The v0.27 benchmark runner used `budget=4000` (fitting ~1 memory per query) while v0.11 used FTS5 `top_k=10` with no budget. Corrected benchmark defaults to `budget=1000000, minResults=10`. With fair comparison, v0.27 R@10 = 81.0% vs v0.11 R@10 = 82.6% (1.6pp gap, down from apparent 35pp). v0.27 wins on R@3 (+0.4pp) and answer_in_content@5 (+3.0pp).
+- **MMR O(N^2) on large candidate sets.** Capped re-ranking to top-100 candidates. Per-query time dropped from ~50s to ~9s.
+
+### Performance
+- **`preparedCorpus` option on `hybridSearch`.** Batch callers skip per-query O(N*docLen) tokenization. Further per-query drop to ~6-7s.
+
+### Internal
+- 540 tests pass (up from 537). New coverage: `minResults` guarantees for sync search, async hybridSearch, and edge case (minResults > available).
+- Benchmark runner (`retrieve_inprocess.mjs`) defaults updated for fair evaluation.
+- Full LongMemEval results documented in `evals/README.md` with corrected methodology.
+
 ## 0.27.0 (2026-04-20) — Recall observability + quality
 
 ### Added

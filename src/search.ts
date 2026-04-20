@@ -217,7 +217,7 @@ export async function hybridSearch(
   const minResults = options.minResults ?? 1;
   const embeddingWeight = options.embeddingWeight ?? 0.6;
   const bm25Weight = 1 - embeddingWeight;
-  const scoringMode = options.scoring ?? 'rrf';
+  const scoringMode = options.scoring ?? 'blend';
   const explain = options.explain ?? false;
   const mmrEnabled = options.mmr ?? true;
   const mmrLambda = options.mmrLambda ?? 0.7;
