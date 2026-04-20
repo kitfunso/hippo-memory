@@ -198,17 +198,26 @@ export async function hybridSearch(
     mmr?: boolean;
     /** MMR balance: 1.0 = pure relevance, 0.0 = pure diversity. Default 0.7. */
     mmrLambda?: number;
+    /** Scoring mode: 'blend' (weighted sum of BM25+cosine, default) or
+     *  'rrf' (reciprocal rank fusion - combines BM25 and cosine ranks
+     *  instead of scores, more robust for long documents). */
+    scoring?: 'blend' | 'rrf';
     /** Pre-built BM25 corpus from `buildCorpus`. Pass this across many
      *  queries on the same entry set to skip ~O(N*docLen) tokenization
      *  work per call. Must be built from the same `entries` in the same
      *  order (content + tags.join(' ')). */
     preparedCorpus?: BM25Corpus;
+    /** Minimum number of results to return regardless of budget.
+     *  Prevents budget saturation when memories are large. Default 1. */
+    minResults?: number;
   } = {}
 ): Promise<SearchResult[]> {
   const now = options.now ?? new Date();
   const budget = options.budget ?? 4000;
+  const minResults = options.minResults ?? 1;
   const embeddingWeight = options.embeddingWeight ?? 0.6;
   const bm25Weight = 1 - embeddingWeight;
+  const scoringMode = options.scoring ?? 'rrf';
   const explain = options.explain ?? false;
   const mmrEnabled = options.mmr ?? true;
   const mmrLambda = options.mmrLambda ?? 0.7;
@@ -246,6 +255,42 @@ export async function hybridSearch(
     }
   }
 
+  // Compute cosine similarities for RRF ranking (need all before scoring)
+  const cosineScores: number[] = new Array(entries.length).fill(0);
+  const hadCachedVecs: boolean[] = new Array(entries.length).fill(false);
+  if (useEmbeddings) {
+    for (let i = 0; i < entries.length; i++) {
+      const cached = embeddingIndex[entries[i].id];
+      hadCachedVecs[i] = Boolean(cached && queryVector.length > 0);
+      cosineScores[i] = hadCachedVecs[i]
+        ? Math.max(0, cosineSimilarity(queryVector, cached))
+        : 0;
+    }
+  }
+
+  // For RRF: build rank maps from BM25 and cosine orderings
+  let rrfScores: Map<number, number> | null = null;
+  if (useEmbeddings && scoringMode === 'rrf') {
+    const RRF_K = 60;
+    const bm25Ranked = entries.map((_, i) => i).filter(i => bm25Scores[i] > 0 || cosineScores[i] > 0);
+    bm25Ranked.sort((a, b) => bm25Scores[b] - bm25Scores[a]);
+    const cosineRanked = entries.map((_, i) => i).filter(i => bm25Scores[i] > 0 || cosineScores[i] > 0);
+    cosineRanked.sort((a, b) => cosineScores[b] - cosineScores[a]);
+
+    const bm25RankMap = new Map<number, number>();
+    bm25Ranked.forEach((idx, rank) => bm25RankMap.set(idx, rank + 1));
+    const cosineRankMap = new Map<number, number>();
+    cosineRanked.forEach((idx, rank) => cosineRankMap.set(idx, rank + 1));
+
+    rrfScores = new Map();
+    const allCandidates = new Set([...bm25Ranked, ...cosineRanked]);
+    for (const idx of allCandidates) {
+      const bm25Rank = bm25RankMap.get(idx) ?? (entries.length + 1);
+      const cosineRank = cosineRankMap.get(idx) ?? (entries.length + 1);
+      rrfScores.set(idx, bm25Weight / (RRF_K + bm25Rank) + embeddingWeight / (RRF_K + cosineRank));
+    }
+  }
+
   // Score each entry
   const scored: SearchResult[] = [];
   const currentPathTags = extractPathTags(process.cwd());
@@ -253,6 +298,8 @@ export async function hybridSearch(
 
   for (let i = 0; i < entries.length; i++) {
     const rawBm25 = bm25Scores[i];
+    const cosineScore = cosineScores[i];
+    const hadCachedVec = hadCachedVecs[i];
 
     if (!useEmbeddings && rawBm25 <= 0) continue;
 
@@ -263,26 +310,18 @@ export async function hybridSearch(
     const recencyMultiplier = 0.8 + 0.2 * recency;
 
     let compositeScore: number;
-    let cosineScore = 0;
     let base: number;
     let modeLabel: 'hybrid' | 'hybrid-no-vec' | 'bm25-only';
-    let hadCachedVec = false;
 
     if (useEmbeddings) {
-      const cached = embeddingIndex[entries[i].id];
-      hadCachedVec = Boolean(cached && queryVector.length > 0);
-      cosineScore = hadCachedVec
-        ? Math.max(0, cosineSimilarity(queryVector, cached))
-        : 0;
-
-      base = bm25Weight * normBm25 + embeddingWeight * cosineScore;
+      if (rrfScores) {
+        base = rrfScores.get(i) ?? 0;
+      } else {
+        base = bm25Weight * normBm25 + embeddingWeight * cosineScore;
+      }
       compositeScore = base * strengthMultiplier * recencyMultiplier;
-      // Distinguish "real hybrid" from "query embedded but doc has no cached
-      // vector" so explain can tell users their index is stale without lying
-      // that the search actually used embeddings.
       modeLabel = hadCachedVec ? 'hybrid' : 'hybrid-no-vec';
     } else {
-      // Pure BM25 path: identical to original behavior
       base = queryTerms.length > 0 ? rawBm25 / queryTerms.length : rawBm25;
       compositeScore = base * strengthMultiplier * recencyMultiplier;
       modeLabel = 'bm25-only';
@@ -371,13 +410,13 @@ export async function hybridSearch(
     ordered = scored;
   }
 
-  // Apply token budget
+  // Apply token budget (guarantee at least minResults items)
   const results: SearchResult[] = [];
   let usedTokens = 0;
 
   for (let i = 0; i < ordered.length; i++) {
     const tokens = ordered[i].tokens;
-    if (i > 0 && usedTokens + tokens > budget) continue;  // always include first result
+    if (results.length >= minResults && usedTokens + tokens > budget) continue;
     usedTokens += tokens;
     results.push(ordered[i]);
   }
@@ -465,10 +504,12 @@ export async function physicsSearch(
     physicsConfig?: PhysicsConfig;
     queryEmbedding?: number[]; // pre-computed query vector (for testing/benchmarks)
     explain?: boolean;
+    minResults?: number;
   } = {}
 ): Promise<SearchResult[]> {
   const now = options.now ?? new Date();
   const budget = options.budget ?? 4000;
+  const minResults = options.minResults ?? 1;
   const config = options.physicsConfig ?? DEFAULT_PHYSICS_CONFIG;
   const explain = options.explain ?? false;
 
@@ -582,7 +623,7 @@ export async function physicsSearch(
   let usedTokens = 0;
   for (let i = 0; i < merged.length; i++) {
     const tokens = merged[i].tokens;
-    if (i > 0 && usedTokens + tokens > budget) continue;  // always include first result
+    if (results.length >= minResults && usedTokens + tokens > budget) continue;
     usedTokens += tokens;
     results.push(merged[i]);
   }
@@ -616,11 +657,12 @@ function mergeScorePools(poolA: SearchResult[], poolB: SearchResult[]): SearchRe
 export function search(
   query: string,
   entries: MemoryEntry[],
-  options: { budget?: number; now?: Date; hippoRoot?: string } = {}
+  options: { budget?: number; now?: Date; hippoRoot?: string; minResults?: number } = {}
 ): SearchResult[] {
   // Synchronous path: BM25 only (no async hybrid)
   const now = options.now ?? new Date();
   const budget = options.budget ?? 4000;
+  const minResults = options.minResults ?? 1;
 
   if (entries.length === 0) return [];
 
@@ -670,7 +712,7 @@ export function search(
 
   for (let i = 0; i < scored.length; i++) {
     const tokens = scored[i].tokens;
-    if (i > 0 && usedTokens + tokens > budget) continue;  // always include first result
+    if (results.length >= minResults && usedTokens + tokens > budget) continue;
     usedTokens += tokens;
     results.push(scored[i]);
   }

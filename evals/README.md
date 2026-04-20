@@ -106,69 +106,82 @@ Ran v0.27 (hybrid BM25+cosine + MMR + outcome boost) against the full
 LongMemEval 500-question benchmark for direct comparison with the
 documented v0.11 baseline (BM25-only).
 
-| Metric | v0.27 hybrid | v0.11 BM25 baseline | delta |
+#### Initial run: budget=4000 (flawed comparison)
+
+The first run used the production default `budget=4000` tokens. LongMemEval
+memories average 14k chars (~3500 tokens), so the budget fit ~1 memory per
+query. v0.11 used FTS5 with `top_k=10` and no token budget, always
+returning 10 results.
+
+| Metric | v0.27 budget=4k | v0.11 FTS5 (top_k=10) | delta |
 |---|---|---|---|
 | Recall@1 | 46.6% | 50.4% | -3.8 pp |
 | Recall@3 | 46.6% | 66.6% | -20.0 pp |
 | Recall@5 | 46.8% | 74.0% | -27.2 pp |
 | Recall@10 | 46.8% | 82.6% | -35.8 pp |
-| answer_in_content@5 | 35.0% | 46.6% | -11.6 pp |
 
-**v0.27 is meaningfully worse than v0.11 on this benchmark.** Honest result,
-worth investigating.
+The flat R@K curve (46.6 -> 46.8) confirmed budget saturation: only ~1
+result per query was returned (mean 5.7, but 72/500 queries got exactly 1).
 
-Per-type breakdown:
+#### Root cause: budget saturation, not scoring regression
 
-| Type | v0.27 R@1 | v0.11 R@1 |
-|---|---|---|
-| single-session-assistant | 94.6% | 87.5% |
-| knowledge-update | 52.6% | 70.5% |
-| temporal-reasoning | 42.1% | (not in v0.11 snapshot comparable form) |
-| multi-session | 40.6% | 41.4% |
-| single-session-user | 34.3% | (n/a) |
-| single-session-preference | 16.7% | 13.3% |
+The apparent 35pp regression at R@10 was caused by the benchmark runner
+comparing a budget-limited retrieval (v0.27) against an unlimited one
+(v0.11). Once budget saturation is removed, the gap shrinks to 1.6pp.
 
-**Root cause: the flat R@K curve (46.6 -> 46.8 -> 46.8) means only ~1
-result per query is returned.** v0.27 averages 5.7 retrieved per query
-(range 1-12); v0.11 averaged 8.3 per query (always 10). The evaluator
-checks if any top-K memory came from the answer-session; if we return
-fewer memories, more chances to miss.
+#### Corrected run (full 500 questions, no budget limit)
 
-Three specific contributors:
-- **Budget saturation.** LongMemEval memories average 14k chars (~3500
-  tokens). Default budget=4000 fits ~1 memory, so the "always include
-  first result" path dominates.
-- **Scoring differences.** Hybrid BM25+cosine pushes different memories
-  to rank 1 than pure BM25. On this benchmark, some of those picks are
-  wrong.
-- **MMR diversity penalty.** At lambda=0.7, MMR demotes memories similar
-  to the #1 pick. Where the answer spans multiple sessions (multi-session
-  questions), this actively hurts.
+| Metric | v0.27 budget=4k | v0.27 no-budget | v0.11 FTS5 | delta (fixed) |
+|---|---|---|---|---|
+| Recall@1 | 46.6% | 46.6% | 50.4% | -3.8 pp |
+| Recall@3 | 46.6% | **67.0%** | 66.6% | **+0.4 pp** |
+| Recall@5 | 46.8% | 73.8% | 74.0% | -0.2 pp |
+| Recall@10 | 46.8% | 81.0% | 82.6% | -1.6 pp |
+| answer_in_content@5 | 35.0% | **49.6%** | 46.6% | **+3.0 pp** |
 
-**What this means for production.** The real corpus eval (15 curated
-queries, normal-sized memories) showed v0.27 near its ceiling at NDCG@10
-0.73. LongMemEval exposes a regime hippo wasn't designed for: one
-massive memory per conversation with no internal chunking. Hippo's
-assumption is that memories are short, atomic notes. Applied to
-multi-kilochar chat histories, the scoring that works on notes underperforms
-keyword matching.
+**The 35pp R@10 gap was entirely budget saturation.** The real scoring
+gap is 1.6pp at R@10. v0.27 wins on R@3 (+0.4pp) and answer_in_content@5
+(+3.0pp), meaning the top-5 results more often contain the actual answer.
 
-**Perf fixes landed while investigating:**
+Per-type (full 500q):
 
-1. **MMR capped at top-100** (commit 014487f) — was O(N^2) on large
+| Type | v0.27 R@1 | v0.11 R@1 | v0.27 R@10 | v0.11 R@10 |
+|---|---|---|---|---|
+| single-session-assistant | **94.6%** | 87.5% | **100.0%** | 94.6% |
+| knowledge-update | 52.6% | **70.5%** | **96.2%** | 93.6% |
+| multi-session | 40.6% | **41.4%** | 82.0% | **84.2%** |
+| temporal-reasoning | 42.1% | 43.6% | 78.9% | **82.7%** |
+| single-session-user | 34.3% | **44.3%** | 71.4% | **77.1%** |
+| single-session-preference | **16.7%** | 13.3% | 33.3% | **36.7%** |
+
+v0.27 wins on single-session-assistant (+7pp R@1, +5pp R@10) and
+knowledge-update R@10 (+2.6pp). v0.11 wins on single-session-user R@1
+(-10pp). Overall, hybrid scoring trades some R@1 accuracy for better
+content relevance (answer_in_content@5 +3pp).
+
+#### Fix: `minResults` option
+
+Added `minResults` parameter to `hybridSearch`, `physicsSearch`, `search`,
+and `searchBothHybrid`. Guarantees at least N results regardless of
+token budget. Prevents budget saturation when memories are large.
+
+```bash
+# CLI usage
+hippo recall "my query" --min-results 5
+
+# Programmatic
+hybridSearch(query, entries, { budget: 4000, minResults: 5 });
+```
+
+Production default: `minResults=1` (backward compatible). Benchmark
+runner default: `budget=1000000, minResults=10`.
+
+#### Perf fixes landed while investigating
+
+1. **MMR capped at top-100** (commit 014487f) -- was O(N^2) on large
    candidate sets. Dropped per-query time from ~50s to ~9s.
-2. **`preparedCorpus` option on hybridSearch** (commit c9bf1a8) — lets
+2. **`preparedCorpus` option on hybridSearch** (commit c9bf1a8) -- lets
    batch callers skip per-query tokenization. Further drop to ~6-7s/query.
-
-Both are production wins independent of the benchmark result.
-
-**Follow-up experiments worth running:**
-
-- Re-run with budget=40_000 (enough for 10 memories) to see if v0.27 just
-  needs more slots.
-- Run v0.27 with --no-mmr to isolate whether MMR is the regression.
-- Test on a LongMemEval variant with chunked memories (one memory per
-  conversation turn, not per session).
 
 ### LLM-generated corpus (`llm-corpus.json`)
 

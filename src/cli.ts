@@ -580,6 +580,9 @@ async function cmdRecall(
     : flags['local-bump'] !== undefined
       ? parseFloat(String(flags['local-bump']))
       : config.search.localBump;
+  const minResults = flags['min-results'] !== undefined
+    ? parseInt(String(flags['min-results']), 10)
+    : undefined;
 
   let results;
   if (usePhysics && !hasGlobal) {
@@ -587,15 +590,16 @@ async function cmdRecall(
       budget,
       hippoRoot,
       physicsConfig: config.physics,
+      minResults,
     });
   } else if (hasGlobal) {
     // Use searchBothHybrid for merged results with embedding support
     results = await searchBothHybrid(query, hippoRoot, globalRoot, {
-      budget, mmr: mmrEnabled, mmrLambda, localBump,
+      budget, mmr: mmrEnabled, mmrLambda, localBump, minResults,
     });
   } else {
     results = await hybridSearch(query, localEntries, {
-      budget, hippoRoot, mmr: mmrEnabled, mmrLambda,
+      budget, hippoRoot, mmr: mmrEnabled, mmrLambda, minResults,
     });
   }
 
@@ -3565,6 +3569,7 @@ Commands:
     --global               Store in global store ($HIPPO_HOME or ~/.hippo/)
   recall <query>           Search and retrieve memories (local + global)
     --budget <n>           Token budget (default: 4000)
+    --min-results <n>      Minimum results regardless of budget (default: 1)
     --json                 Output as JSON
     --why                  Show match reasons and source annotations
     --no-mmr               Disable MMR diversity re-ranking

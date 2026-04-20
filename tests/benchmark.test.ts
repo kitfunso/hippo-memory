@@ -704,4 +704,17 @@ describe('Token budget', () => {
       expect(totalTokens).toBeLessThanOrEqual(100); // generous cap for first-result override
     }
   });
+
+  it('minResults guarantees at least N results regardless of budget', () => {
+    const entries = loadAllEntries(tmpDir);
+    const withMin = search('production deployment rules', entries, {
+      budget: 100,
+      minResults: 5,
+    });
+    const withoutMin = search('production deployment rules', entries, {
+      budget: 100,
+    });
+    expect(withMin.length).toBeGreaterThanOrEqual(Math.min(5, entries.length));
+    expect(withMin.length).toBeGreaterThanOrEqual(withoutMin.length);
+  });
 });

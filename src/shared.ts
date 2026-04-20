@@ -70,6 +70,7 @@ export function promoteToGlobal(localRoot: string, id: string): MemoryEntry {
 export interface SearchOptions {
   budget?: number;
   now?: Date;
+  minResults?: number;
 }
 
 /**
@@ -83,7 +84,8 @@ export function searchBoth(
   globalRoot: string,
   options: SearchOptions = {}
 ): SearchResult[] {
-  const { budget = 4000, now = new Date() } = options;
+  const { budget = 4000, now = new Date(), minResults } = options;
+  const effectiveMin = minResults ?? 1;
 
   const localEntries = fs.existsSync(localRoot) ? loadSearchEntries(localRoot, query) : [];
   const globalEntries = fs.existsSync(globalRoot) ? loadSearchEntries(globalRoot, query) : [];
@@ -91,8 +93,8 @@ export function searchBoth(
   if (localEntries.length === 0 && globalEntries.length === 0) return [];
 
   // Search each store with full budget, then blend
-  const localResults = search(query, localEntries, { budget, now });
-  const globalResults = search(query, globalEntries, { budget, now });
+  const localResults = search(query, localEntries, { budget, now, minResults });
+  const globalResults = search(query, globalEntries, { budget, now, minResults });
 
   // Tag global results. Local memories get a configurable priority bump.
   const syncLocalBump = 1.2;
@@ -120,12 +122,12 @@ export function searchBoth(
   // Sort by adjusted score descending
   deduped.sort((a, b) => b.score - a.score);
 
-  // Apply combined token budget (always include first result)
+  // Apply combined token budget (guarantee at least minResults items)
   const results: typeof deduped = [];
   let usedTokens = 0;
 
   for (let i = 0; i < deduped.length; i++) {
-    if (i > 0 && usedTokens + deduped[i].tokens > budget) continue;
+    if (results.length >= effectiveMin && usedTokens + deduped[i].tokens > budget) continue;
     usedTokens += deduped[i].tokens;
     results.push(deduped[i]);
   }
@@ -153,7 +155,7 @@ export async function searchBothHybrid(
   globalRoot: string,
   options: HybridSearchOptions = {}
 ): Promise<SearchResult[]> {
-  const { budget = 4000, now = new Date(), embeddingWeight, explain, mmr, mmrLambda, localBump = 1.2 } = options;
+  const { budget = 4000, now = new Date(), embeddingWeight, explain, mmr, mmrLambda, localBump = 1.2, minResults } = options;
 
   const localEntries = fs.existsSync(localRoot) ? loadSearchEntries(localRoot, query) : [];
   const globalEntries = fs.existsSync(globalRoot) ? loadSearchEntries(globalRoot, query) : [];
@@ -161,10 +163,10 @@ export async function searchBothHybrid(
   if (localEntries.length === 0 && globalEntries.length === 0) return [];
 
   const localResults = await hybridSearch(query, localEntries, {
-    budget, now, hippoRoot: localRoot, embeddingWeight, explain, mmr, mmrLambda,
+    budget, now, hippoRoot: localRoot, embeddingWeight, explain, mmr, mmrLambda, minResults,
   });
   const globalResults = await hybridSearch(query, globalEntries, {
-    budget, now, hippoRoot: globalRoot, embeddingWeight, explain, mmr, mmrLambda,
+    budget, now, hippoRoot: globalRoot, embeddingWeight, explain, mmr, mmrLambda, minResults,
   });
 
   // Tag global results. Local memories get a configurable priority bump.
@@ -192,12 +194,13 @@ export async function searchBothHybrid(
   // Sort by adjusted score descending
   deduped.sort((a, b) => b.score - a.score);
 
-  // Apply combined token budget (always include first result)
+  // Apply combined token budget (guarantee at least minResults items)
+  const effectiveMinHybrid = minResults ?? 1;
   const results: typeof deduped = [];
   let usedTokens = 0;
 
   for (let i = 0; i < deduped.length; i++) {
-    if (i > 0 && usedTokens + deduped[i].tokens > budget) continue;
+    if (results.length >= effectiveMinHybrid && usedTokens + deduped[i].tokens > budget) continue;
     usedTokens += deduped[i].tokens;
     results.push(deduped[i]);
   }

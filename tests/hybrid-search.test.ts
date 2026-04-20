@@ -422,3 +422,29 @@ describe('hybridSearch MMR cap on large candidate sets', () => {
     }
   });
 });
+
+describe('hybridSearch minResults', () => {
+  it('returns at least minResults entries even when budget is tight', async () => {
+    const entries = Array.from({ length: 20 }, (_, i) =>
+      createMemory(`important topic ${i} with enough content to exceed a small budget ${'x'.repeat(200)}`),
+    );
+    const withMin = await hybridSearch('important topic', entries, {
+      budget: 100,
+      minResults: 5,
+    });
+    const withoutMin = await hybridSearch('important topic', entries, {
+      budget: 100,
+    });
+    expect(withMin.length).toBeGreaterThanOrEqual(5);
+    expect(withoutMin.length).toBeLessThan(withMin.length);
+  });
+
+  it('does not exceed available results when minResults is higher', async () => {
+    const entries = [createMemory('solo topic about something unique')];
+    const results = await hybridSearch('solo topic', entries, {
+      budget: 100,
+      minResults: 10,
+    });
+    expect(results.length).toBe(1);
+  });
+});

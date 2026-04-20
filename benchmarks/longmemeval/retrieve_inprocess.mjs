@@ -23,8 +23,11 @@ function flag(name, fallback) {
 const DATA_PATH = flag('--data', 'data/longmemeval_oracle.json');
 const STORE_DIR = flag('--store-dir', 'hippo_store2');
 const OUTPUT_PATH = flag('--output', 'results/retrieval_v27.jsonl');
-const BUDGET = parseInt(flag('--budget', '4000'), 10);
+const BUDGET = parseInt(flag('--budget', '1000000'), 10);
 const LIMIT = parseInt(flag('--limit', '0'), 10);
+const EMB_WEIGHT = flag('--embedding-weight', null);
+const NO_MMR = process.argv.includes('--no-mmr');
+const MIN_RESULTS = parseInt(flag('--min-results', '10'), 10);
 
 const hippoRoot = path.resolve(STORE_DIR, '.hippo');
 if (!fs.existsSync(hippoRoot)) {
@@ -66,6 +69,9 @@ for (let i = 0; i < limit; i++) {
       budget: BUDGET,
       hippoRoot,
       preparedCorpus: corpus,
+      embeddingWeight: EMB_WEIGHT !== null ? parseFloat(EMB_WEIGHT) : undefined,
+      mmr: !NO_MMR,
+      minResults: MIN_RESULTS,
     });
     const memories = results.map((r) => ({
       id: r.entry.id,
