@@ -102,30 +102,45 @@ or set `"embeddings": {"hybridWeight": 0.4}` in `.hippo/config.json`.
 
 ### LongMemEval status (2026-04-20)
 
-Attempted a v0.27 run against the full 500-question LongMemEval corpus
+Attempted a v0.27 run against the 500-question LongMemEval corpus
 (`benchmarks/longmemeval/`) to compare with the documented v0.11 baseline
-(R@1=50.4%, R@3=66.6%, R@5=74.0%, R@10=82.6%, BM25-only). Two perf issues
-surfaced and were partially addressed:
+(R@1=50.4%, R@3=66.6%, R@5=74.0%, R@10=82.6%, BM25-only). Ran 94 questions
+before stopping; partial results are informative enough to halt.
 
-1. **MMR was O(N^2) cosine similarities** over all scored candidates.
-   On a 1064-memory store each recall took ~50s. Capped to top-100 head
-   candidates before the quadratic loop (see commit 014487f). Dropped
-   per-query time to ~9s in micro-benchmark.
+**Perf fixes landed while investigating:**
 
-2. **`buildCorpus` tokenizes ~15MB of text per query.** LongMemEval chat
-   histories are stored as single memories averaging 14k chars each
-   (1064 memories x 14k = 15MB). BuildCorpus runs on every hybridSearch
-   call, so 500 queries = 500 x 15MB of regex+split work. Full-run
-   throughput stayed at ~30-40s per query in practice — 5+ hours for
-   500 questions. Not run to completion this session.
+1. **MMR was O(N^2)** on scored candidates (~50s/query on 1064 docs).
+   Capped to top-100 head (commit 014487f). Dropped to ~9s/query.
+2. **`buildCorpus` tokenized ~15MB/query.** Added `preparedCorpus` option
+   on `hybridSearch` (commit c9bf1a8). One-time 400ms corpus build +
+   ~6-7s/query. Helps any caller running many queries against the same
+   entry set (benchmarks, eval harnesses, batch jobs).
 
-**Real fix for future work**: make `buildCorpus` cacheable by exposing a
-`preparedCorpus` option on `hybridSearch`. One-time cost at load,
-millisecond per-query cost. Benefits production recall on large stores too,
-not just this benchmark.
+**Partial v0.27 numbers (94 questions, hybrid + MMR + embeddings):**
 
-Retrieval results for the 15-20 questions that did complete look consistent
-with the v0.11 ballpark; won't publish a number until a full run completes.
+| Metric | v0.27 (94q) | v0.11 baseline (500q) |
+|---|---|---|
+| Recall@1 | 47.9% | 50.4% |
+| Recall@5 | 47.9% | 74.0% |
+| Recall@10 | 47.9% | 82.6% |
+
+**The flat 47.9% across K is the real story.** When v0.27 retrieves a
+relevant session, it always ranks it #1. When it misses, it misses
+entirely — the correct session doesn't appear in the top 10 at all.
+
+Likely cause: LongMemEval memories average 14k chars (~3500 tokens each).
+With default budget=4000, hybridSearch returns only 1-2 memories per query,
+so R@K = R@1 for K >= 2. Increasing budget to fit 10+ memories should
+unlock the R@K progression.
+
+**Not publishing a headline number.** The v0.11 baseline used the same
+store with BM25-only and got 74% R@5. A fair v0.27 comparison needs:
+- Budget raised so the top-10 actually contains 10 memories
+- All 500 questions (not just the first 94, which skew to two question types)
+- Separate runs for BM25-only vs hybrid so the embedding contribution is isolable
+
+The infrastructure (corpus + retrieve_inprocess.mjs + perf fixes) is in
+place to do this properly in a follow-up session.
 
 ### LLM-generated corpus (`llm-corpus.json`)
 
