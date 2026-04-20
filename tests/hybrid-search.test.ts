@@ -4,8 +4,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { hybridSearch, search } from '../src/search.js';
-import { createMemory } from '../src/memory.js';
+import { hybridSearch, search, mmrRerank, type SearchResult } from '../src/search.js';
+import { createMemory, applyOutcome } from '../src/memory.js';
 import { cosineSimilarity } from '../src/embeddings.js';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -195,10 +195,18 @@ describe('hybridSearch explain breakdown', () => {
       expect(b).toBeDefined();
       if (!b) continue;
       const expected =
-        b.base * b.strengthMultiplier * b.recencyMultiplier * b.decisionBoost * b.pathBoost * b.sourceBump;
+        b.base
+        * b.strengthMultiplier
+        * b.recencyMultiplier
+        * b.decisionBoost
+        * b.pathBoost
+        * b.sourceBump
+        * b.outcomeBoost;
       expect(b.final).toBeCloseTo(expected, 5);
       expect(r.score).toBeCloseTo(b.final, 5);
       expect(b.sourceBump).toBe(1);
+      // Fresh memories have no outcome signal → boost should be exactly 1.
+      expect(b.outcomeBoost).toBe(1);
     }
   });
 
@@ -251,5 +259,135 @@ describe('searchBothHybrid', () => {
   it('is exported and callable', async () => {
     const { searchBothHybrid } = await import('../src/shared.js');
     expect(typeof searchBothHybrid).toBe('function');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// outcomeBoost: retrieval-time personalization
+// ---------------------------------------------------------------------------
+
+describe('outcomeBoost', () => {
+  it('fresh memory with no outcome signal has boost = 1', async () => {
+    const entries = [createMemory('FRED cache silently dropped TIPS')];
+    const results = await hybridSearch('FRED cache', entries, {
+      budget: 10000,
+      explain: true,
+    });
+    expect(results[0].breakdown?.outcomeBoost).toBe(1);
+  });
+
+  it('positive outcomes push boost above 1 (up to 1.15)', async () => {
+    let m = createMemory('FRED cache silently dropped TIPS');
+    m = applyOutcome(m, true);
+    m = applyOutcome(m, true);
+    m = applyOutcome(m, true);
+    const results = await hybridSearch('FRED cache', [m], {
+      budget: 10000,
+      explain: true,
+    });
+    const boost = results[0].breakdown?.outcomeBoost ?? 0;
+    expect(boost).toBeGreaterThan(1);
+    expect(boost).toBeLessThanOrEqual(1.15);
+  });
+
+  it('negative outcomes push boost below 1 (down to 0.85)', async () => {
+    let m = createMemory('FRED cache silently dropped TIPS');
+    m = applyOutcome(m, false);
+    m = applyOutcome(m, false);
+    m = applyOutcome(m, false);
+    const results = await hybridSearch('FRED cache', [m], {
+      budget: 10000,
+      explain: true,
+    });
+    const boost = results[0].breakdown?.outcomeBoost ?? 0;
+    expect(boost).toBeLessThan(1);
+    expect(boost).toBeGreaterThanOrEqual(0.85);
+  });
+
+  it('positive outcomes outrank neutral peers with identical text', async () => {
+    const a = createMemory('cache refresh verify contents after failure');
+    let b = createMemory('cache refresh verify contents after failure');
+    b = applyOutcome(b, true);
+    b = applyOutcome(b, true);
+    const results = await hybridSearch('cache failure', [a, b], {
+      budget: 10000,
+      explain: true,
+    });
+    expect(results[0].entry.id).toBe(b.id);
+    expect(results[1].entry.id).toBe(a.id);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// MMR re-ranking
+// ---------------------------------------------------------------------------
+
+describe('mmrRerank', () => {
+  function makeResult(id: string, score: number): SearchResult {
+    return {
+      entry: createMemory('placeholder', { tags: [] }),
+      score,
+      bm25: 0,
+      cosine: 0,
+      tokens: 0,
+      // force id to match what we index in embeddings map
+    } as unknown as SearchResult & { entry: { id: string } };
+  }
+
+  it('lambda=1 returns pure-relevance ordering unchanged', () => {
+    const a = makeResult('a', 0.9);
+    const b = makeResult('b', 0.6);
+    (a as unknown as { entry: { id: string } }).entry.id = 'a';
+    (b as unknown as { entry: { id: string } }).entry.id = 'b';
+    const idx = { a: [1, 0], b: [0, 1] };
+    const ranked = mmrRerank([a, b], idx, 1.0, false);
+    expect(ranked.map((r) => r.entry.id)).toEqual(['a', 'b']);
+  });
+
+  it('de-clusters near-duplicates at lambda=0.5', () => {
+    // a and b are near-duplicates; c is diverse. MMR should prefer c over b
+    // for the second slot even though b has the higher raw score.
+    const a = makeResult('a', 1.00);
+    const b = makeResult('b', 0.95);
+    const c = makeResult('c', 0.70);
+    (a as unknown as { entry: { id: string } }).entry.id = 'a';
+    (b as unknown as { entry: { id: string } }).entry.id = 'b';
+    (c as unknown as { entry: { id: string } }).entry.id = 'c';
+    const idx = {
+      a: [1, 0, 0],
+      b: [0.99, 0.14, 0],     // cos(a, b) ≈ 0.99 — duplicates
+      c: [0, 0, 1],            // orthogonal — diverse
+    };
+    const ranked = mmrRerank([a, b, c], idx, 0.5, false);
+    expect(ranked[0].entry.id).toBe('a');
+    expect(ranked[1].entry.id).toBe('c');    // diversity wins over raw rank
+    expect(ranked[2].entry.id).toBe('b');
+  });
+
+  it('attaches pre/post MMR ranks to breakdowns when explain=true', () => {
+    const a = makeResult('a', 1.00);
+    const b = makeResult('b', 0.95);
+    const c = makeResult('c', 0.70);
+    (a as unknown as { entry: { id: string } }).entry.id = 'a';
+    (b as unknown as { entry: { id: string } }).entry.id = 'b';
+    (c as unknown as { entry: { id: string } }).entry.id = 'c';
+    a.breakdown = { mode: 'hybrid' } as SearchResult['breakdown'];
+    b.breakdown = { mode: 'hybrid' } as SearchResult['breakdown'];
+    c.breakdown = { mode: 'hybrid' } as SearchResult['breakdown'];
+    const idx = { a: [1, 0, 0], b: [0.99, 0.14, 0], c: [0, 0, 1] };
+    const ranked = mmrRerank([a, b, c], idx, 0.5, true);
+    expect(ranked[0].breakdown?.preMmrRank).toBe(1);
+    expect(ranked[0].breakdown?.postMmrRank).toBe(1);
+    expect(ranked[1].breakdown?.preMmrRank).toBe(3);   // c was 3rd by relevance
+    expect(ranked[1].breakdown?.postMmrRank).toBe(2);  // now 2nd after MMR
+  });
+
+  it('leaves order unchanged when no embeddings are available for any doc', () => {
+    const a = makeResult('a', 0.9);
+    const b = makeResult('b', 0.8);
+    (a as unknown as { entry: { id: string } }).entry.id = 'a';
+    (b as unknown as { entry: { id: string } }).entry.id = 'b';
+    const ranked = mmrRerank([a, b], {}, 0.5, false);
+    expect(ranked.map((r) => r.entry.id)).toEqual(['a', 'b']);
   });
 });

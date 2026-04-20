@@ -29,6 +29,14 @@ export interface HippoConfig {
   };
   gitLearnPatterns: string[];
   physics: PhysicsConfig;
+  /** MMR (Maximal Marginal Relevance) re-ranking settings. Applied only when
+   *  embeddings are available — needs doc-to-doc similarity. */
+  mmr: {
+    enabled: boolean;
+    /** 1.0 = pure relevance (current behavior). 0.0 = pure diversity. 0.7 is
+     *  a typical balance. */
+    lambda: number;
+  };
 }
 
 const DEFAULT_CONFIG: HippoConfig = {
@@ -55,6 +63,10 @@ const DEFAULT_CONFIG: HippoConfig = {
     'refactor', 'perf', 'chore', 'breaking', 'deprecate',
   ],
   physics: { ...DEFAULT_PHYSICS_CONFIG },
+  mmr: {
+    enabled: true,
+    lambda: 0.7,
+  },
 };
 
 export function loadConfig(hippoRoot: string): HippoConfig {
@@ -76,6 +88,7 @@ export function loadConfig(hippoRoot: string): HippoConfig {
       global: { ...DEFAULT_CONFIG.global, ...(raw.global ?? {}) },
       gitLearnPatterns: raw.gitLearnPatterns ?? DEFAULT_CONFIG.gitLearnPatterns,
       physics: mergePhysicsConfig(raw.physics as Partial<PhysicsConfig> | undefined),
+      mmr: { ...DEFAULT_CONFIG.mmr, ...(raw.mmr ?? {}) },
     };
   } catch (err) {
     if (fs.existsSync(configPath)) {

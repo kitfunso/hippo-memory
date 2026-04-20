@@ -568,6 +568,12 @@ async function cmdRecall(
   const usePhysics = forcePhysics
     || (!forceClassic && config.physics.enabled !== false);
 
+  const noMmr = Boolean(flags['no-mmr']);
+  const mmrLambda = flags['mmr-lambda'] !== undefined
+    ? parseFloat(String(flags['mmr-lambda']))
+    : config.mmr.lambda;
+  const mmrEnabled = !noMmr && config.mmr.enabled;
+
   let results;
   if (usePhysics && !hasGlobal) {
     results = await physicsSearch(query, localEntries, {
@@ -577,9 +583,13 @@ async function cmdRecall(
     });
   } else if (hasGlobal) {
     // Use searchBothHybrid for merged results with embedding support
-    results = await searchBothHybrid(query, hippoRoot, globalRoot, { budget });
+    results = await searchBothHybrid(query, hippoRoot, globalRoot, {
+      budget, mmr: mmrEnabled, mmrLambda,
+    });
   } else {
-    results = await hybridSearch(query, localEntries, { budget, hippoRoot });
+    results = await hybridSearch(query, localEntries, {
+      budget, hippoRoot, mmr: mmrEnabled, mmrLambda,
+    });
   }
 
   if (limit < results.length) {
@@ -681,6 +691,12 @@ async function cmdExplain(
   const usePhysics = forcePhysics
     || (!forceClassic && config.physics.enabled !== false);
 
+  const noMmr = Boolean(flags['no-mmr']);
+  const mmrLambda = flags['mmr-lambda'] !== undefined
+    ? parseFloat(String(flags['mmr-lambda']))
+    : config.mmr.lambda;
+  const mmrEnabled = !noMmr && config.mmr.enabled;
+
   let results;
   let modeUsed: 'physics' | 'searchBothHybrid' | 'hybrid';
   if (usePhysics && !hasGlobal) {
@@ -692,10 +708,14 @@ async function cmdExplain(
     });
     modeUsed = 'physics';
   } else if (hasGlobal) {
-    results = await searchBothHybrid(query, hippoRoot, globalRoot, { budget, explain: true });
+    results = await searchBothHybrid(query, hippoRoot, globalRoot, {
+      budget, explain: true, mmr: mmrEnabled, mmrLambda,
+    });
     modeUsed = 'searchBothHybrid';
   } else {
-    results = await hybridSearch(query, localEntries, { budget, hippoRoot, explain: true });
+    results = await hybridSearch(query, localEntries, {
+      budget, hippoRoot, explain: true, mmr: mmrEnabled, mmrLambda,
+    });
     modeUsed = 'hybrid';
   }
 
@@ -735,15 +755,15 @@ async function cmdExplain(
   console.log(`Query: "${query}"`);
   console.log(`Mode:  ${modeUsed}   candidates: ${candidates}   returned: ${results.length}`);
   console.log();
-  console.log('Rank  Score   Strength  Age    Layer      ID         Preview');
-  console.log('----- ------- --------- ------ ---------- ---------- ---------------------------------');
+  console.log('Rank  Score   Strength  Age    Layer      ID                Preview');
+  console.log('----- ------- --------- ------ ---------- ----------------- ---------------------------------');
   for (let i = 0; i < results.length; i++) {
     const r = results[i];
     const b = r.breakdown;
     const preview = r.entry.content.replace(/\s+/g, ' ').slice(0, 48);
     const ageStr = b ? `${b.ageDays}d` : '?';
     console.log(
-      `${String(i + 1).padEnd(5)} ${fmt(r.score, 3).padEnd(7)} ${fmt(r.entry.strength).padEnd(9)} ${ageStr.padEnd(6)} ${r.entry.layer.padEnd(10)} ${r.entry.id.padEnd(10)} ${preview}`,
+      `${String(i + 1).padEnd(5)} ${fmt(r.score, 3).padEnd(7)} ${fmt(r.entry.strength).padEnd(9)} ${ageStr.padEnd(6)} ${r.entry.layer.padEnd(10)} ${r.entry.id.padEnd(17)} ${preview}`,
     );
   }
   console.log();
@@ -772,6 +792,11 @@ async function cmdExplain(
       if (b.decisionBoost !== 1) console.log(`    decision:  x${fmt(b.decisionBoost, 2)}  (tagged 'decision')`);
       if (b.pathBoost !== 1) console.log(`    path:      x${fmt(b.pathBoost, 3)}  (cwd path tag overlap)`);
       if (b.sourceBump !== 1) console.log(`    source:    x${fmt(b.sourceBump, 2)}  (local priority bump over global)`);
+      if (b.outcomeBoost !== 1) console.log(`    outcome:   x${fmt(b.outcomeBoost, 3)}  (user feedback: pos-neg = ${(r.entry.outcome_positive ?? 0) - (r.entry.outcome_negative ?? 0)})`);
+      if (b.preMmrRank !== undefined && b.postMmrRank !== undefined && b.preMmrRank !== b.postMmrRank) {
+        const arrow = b.postMmrRank < b.preMmrRank ? 'up' : 'down';
+        console.log(`    mmr:       rank ${b.preMmrRank} -> ${b.postMmrRank}  (diversity ${arrow})`);
+      }
       console.log(`    final:     ${fmt(b.final, 4)}`);
     }
     console.log();
@@ -3218,11 +3243,15 @@ Commands:
     --budget <n>           Token budget (default: 4000)
     --json                 Output as JSON
     --why                  Show match reasons and source annotations
+    --no-mmr               Disable MMR diversity re-ranking
+    --mmr-lambda <f>       MMR balance 0..1 (default: 0.7, 1.0 = pure relevance)
   explain <query>          Show full score breakdown for each retrieved memory
     --budget <n>           Token budget (default: 4000)
     --limit <n>            Cap the number of results displayed
     --json                 Output as JSON
     --physics | --classic  Force search mode (default: from config)
+    --no-mmr               Disable MMR diversity re-ranking
+    --mmr-lambda <f>       MMR balance 0..1 (default: 0.7, 1.0 = pure relevance)
   context                  Smart context injection for AI agents
     --auto                 Auto-detect task from git state
     --budget <n>           Token budget (default: 1500)

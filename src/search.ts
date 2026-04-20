@@ -149,6 +149,14 @@ export interface ScoreBreakdown {
   /** Extra multiplier applied post-hybrid (e.g. 1.2x for local hits in a
    *  local+global merged search). 1.0 when not applicable. */
   sourceBump: number;
+  /** Retrieval-time outcome personalization: 1 + 0.15*tanh(pos - neg), clipped
+   *  to [0.85, 1.15]. Immediate nudge from `hippo outcome --good/--bad`.
+   *  Separate from the slow strength-via-reward-factor path. */
+  outcomeBoost: number;
+  /** Pre-MMR rank (1-indexed). Only set when MMR re-ranking ran. */
+  preMmrRank?: number;
+  /** Post-MMR rank (1-indexed). Only set when MMR re-ranking ran. */
+  postMmrRank?: number;
   /** Query terms that appeared verbatim in the doc. */
   matchedTerms: string[];
   /** Final composite score (= base * multipliers). */
@@ -173,6 +181,10 @@ export async function hybridSearch(
     hippoRoot?: string;
     embeddingWeight?: number;
     explain?: boolean;
+    /** Disable MMR re-ranking even when embeddings are available. */
+    mmr?: boolean;
+    /** MMR balance: 1.0 = pure relevance, 0.0 = pure diversity. Default 0.7. */
+    mmrLambda?: number;
   } = {}
 ): Promise<SearchResult[]> {
   const now = options.now ?? new Date();
@@ -180,6 +192,8 @@ export async function hybridSearch(
   const embeddingWeight = options.embeddingWeight ?? 0.6;
   const bm25Weight = 1 - embeddingWeight;
   const explain = options.explain ?? false;
+  const mmrEnabled = options.mmr ?? true;
+  const mmrLambda = options.mmrLambda ?? 0.7;
 
   if (entries.length === 0) return [];
 
@@ -261,6 +275,15 @@ export async function hybridSearch(
     const pathBoost = 1.0 + (pathScore * 0.3);
     compositeScore *= pathBoost;
 
+    // Retrieval-time outcome personalization: nudge up/down from user feedback.
+    // Distinct from reward-factor-via-strength (slow); this is immediate.
+    const pos = entries[i].outcome_positive ?? 0;
+    const neg = entries[i].outcome_negative ?? 0;
+    const outcomeBoost = pos === 0 && neg === 0
+      ? 1.0
+      : Math.max(0.85, Math.min(1.15, 1 + 0.15 * Math.tanh((pos - neg) / 2)));
+    compositeScore *= outcomeBoost;
+
     if (compositeScore <= 0) continue;
 
     const tokens = estimateTokens(entries[i].content);
@@ -292,6 +315,7 @@ export async function hybridSearch(
         decisionBoost,
         pathBoost,
         sourceBump: 1,
+        outcomeBoost,
         matchedTerms,
         final: compositeScore,
         ageDays,
@@ -304,18 +328,92 @@ export async function hybridSearch(
   // Sort by composite score descending
   scored.sort((a, b) => b.score - a.score);
 
+  // MMR re-ranking: de-cluster near-duplicates by trading relevance for
+  // diversity. Only applies when embeddings are loaded (doc-to-doc similarity
+  // is via cosine of cached vectors); otherwise we return the pure-relevance
+  // ordering unchanged.
+  const applyMmr = mmrEnabled && useEmbeddings && scored.length > 1 && mmrLambda < 1;
+  const ordered = applyMmr
+    ? mmrRerank(scored, embeddingIndex, mmrLambda, explain)
+    : scored;
+
   // Apply token budget
   const results: SearchResult[] = [];
   let usedTokens = 0;
 
-  for (let i = 0; i < scored.length; i++) {
-    const tokens = scored[i].tokens;
+  for (let i = 0; i < ordered.length; i++) {
+    const tokens = ordered[i].tokens;
     if (i > 0 && usedTokens + tokens > budget) continue;  // always include first result
     usedTokens += tokens;
-    results.push(scored[i]);
+    results.push(ordered[i]);
   }
 
   return results;
+}
+
+/**
+ * MMR (Maximal Marginal Relevance) re-ranking.
+ *
+ * Iteratively picks the candidate that maximises
+ *   lambda * relevance - (1 - lambda) * max(cos(cand, picked))
+ *
+ * Inputs must already be sorted by relevance descending. When `explain` is
+ * true, attaches `preMmrRank` / `postMmrRank` to each result's breakdown.
+ * Exported for unit tests; production callers go through hybridSearch.
+ */
+export function mmrRerank(
+  scored: SearchResult[],
+  embeddingIndex: Record<string, number[]>,
+  lambda: number,
+  explain: boolean,
+): SearchResult[] {
+  if (scored.length === 0) return scored;
+
+  const maxScore = scored[0].score || 1;
+  const normScore = scored.map((r) => r.score / maxScore);
+  const vectors = scored.map((r) => embeddingIndex[r.entry.id] ?? null);
+
+  const picked: SearchResult[] = [];
+  const remaining = new Set<number>(scored.map((_, i) => i));
+
+  while (remaining.size > 0) {
+    let bestIdx = -1;
+    let bestMmr = -Infinity;
+    for (const i of remaining) {
+      const rel = normScore[i];
+      let maxSim = 0;
+      const vi = vectors[i];
+      if (vi) {
+        for (const p of picked) {
+          const vp = embeddingIndex[p.entry.id];
+          if (!vp || vp.length !== vi.length) continue;
+          const sim = Math.max(0, cosineSimilarity(vi, vp));
+          if (sim > maxSim) maxSim = sim;
+        }
+      }
+      const mmr = lambda * rel - (1 - lambda) * maxSim;
+      if (mmr > bestMmr) {
+        bestMmr = mmr;
+        bestIdx = i;
+      }
+    }
+    if (bestIdx === -1) break;
+    remaining.delete(bestIdx);
+    picked.push(scored[bestIdx]);
+  }
+
+  if (explain) {
+    const preRank = new Map<string, number>();
+    scored.forEach((r, i) => preRank.set(r.entry.id, i + 1));
+    picked.forEach((r, i) => {
+      if (r.breakdown) {
+        r.breakdown.preMmrRank = preRank.get(r.entry.id);
+        r.breakdown.postMmrRank = i + 1;
+      }
+    });
+  }
+
+  return picked;
 }
 
 /**
@@ -425,6 +523,7 @@ export async function physicsSearch(
           decisionBoost: 1,
           pathBoost: 1,
           sourceBump: 1,
+          outcomeBoost: 1,
           matchedTerms: [],
           final: s.finalScore,
           ageDays,
