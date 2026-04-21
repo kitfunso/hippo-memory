@@ -410,6 +410,9 @@ function autoInstallHooks(quiet: boolean): void {
       if (result.installedSessionStart) {
         console.log(`   Auto-installed hippo last-sleep SessionStart hook in ${hook} settings`);
       }
+      if (result.installedUserPromptSubmit) {
+        console.log(`   Auto-installed hippo pinned-inject UserPromptSubmit hook in ${hook} settings`);
+      }
       if (result.migratedFromStop) {
         console.log(`   Migrated legacy Stop hook → SessionEnd (no longer runs every turn)`);
       }
@@ -3318,6 +3321,9 @@ function cmdHook(
       if (result.installedSessionStart) {
         console.log(`Installed hippo last-sleep SessionStart hook in ${result.target} settings`);
       }
+      if (result.installedUserPromptSubmit) {
+        console.log(`Installed hippo pinned-inject UserPromptSubmit hook in ${result.target} settings`);
+      }
       if (result.migratedFromStop) {
         console.log(`Migrated legacy Stop hook → SessionEnd (was running every turn; now fires once on session exit)`);
       }
@@ -3418,6 +3424,7 @@ function cmdSetup(flags: Record<string, string | boolean | string[]>): void {
     const bits: string[] = [];
     if (result.installedSessionEnd) bits.push('SessionEnd (session-end)');
     if (result.installedSessionStart) bits.push('SessionStart');
+    if (result.installedUserPromptSubmit) bits.push('UserPromptSubmit (pinned-inject)');
     if (result.migratedFromStop) bits.push('migrated legacy Stop');
     if (result.migratedSplitSessionEnd) bits.push('migrated split SessionEnd → session-end');
     else if (result.migratedLegacySessionEnd) bits.push('migrated legacy SessionEnd');
