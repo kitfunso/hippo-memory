@@ -250,3 +250,12 @@ describe('Decay basis modes', () => {
     expect(sAdaptive).toBeCloseTo(sClock, 5);
   });
 });
+
+describe('Layer.Trace', () => {
+  it('is a distinct layer from buffer/episodic/semantic', () => {
+    expect(Layer.Trace).toBe('trace');
+    expect(Layer.Trace).not.toBe(Layer.Buffer);
+    expect(Layer.Trace).not.toBe(Layer.Episodic);
+    expect(Layer.Trace).not.toBe(Layer.Semantic);
+  });
+});

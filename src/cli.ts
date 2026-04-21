@@ -1751,6 +1751,7 @@ function cmdStatus(hippoRoot: string): void {
     [Layer.Buffer]: 0,
     [Layer.Episodic]: 0,
     [Layer.Semantic]: 0,
+    [Layer.Trace]: 0,
   };
 
   const byConfidence: Record<string, number> = {

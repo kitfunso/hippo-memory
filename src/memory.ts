@@ -9,6 +9,7 @@ export enum Layer {
   Buffer = 'buffer',
   Episodic = 'episodic',
   Semantic = 'semantic',
+  Trace = 'trace',  // ordered action→outcome sequence for RSI
 }
 
 export type EmotionalValence = 'neutral' | 'positive' | 'negative' | 'critical';
