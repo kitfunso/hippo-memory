@@ -2566,19 +2566,27 @@ async function cmdContext(
 
   if (selectedItems.length === 0 && !activeSnapshot && recentSessionEvents.length === 0) return;
 
-  // Mark retrieved and persist
-  const toUpdate = selectedItems.map((s) => s.entry);
-  const updatedEntries = markRetrieved(toUpdate);
-  const localIndex = loadIndex(hippoRoot);
+  // --pinned-only is called by the UserPromptSubmit hook every turn. Treat it
+  // as read-only so pinned memories don't inflate retrieval_count or extend
+  // their half_life by 2 days * turn-count over a long session.
+  let updatedEntries: MemoryEntry[];
+  if (pinnedOnly) {
+    updatedEntries = selectedItems.map((s) => s.entry);
+  } else {
+    // Mark retrieved and persist
+    const toUpdate = selectedItems.map((s) => s.entry);
+    updatedEntries = markRetrieved(toUpdate);
+    const localIndex = loadIndex(hippoRoot);
 
-  for (const u of updatedEntries) {
-    const targetRoot = localIndex.entries[u.id] ? hippoRoot : (hasGlobal ? globalRoot : hippoRoot);
-    writeEntry(targetRoot, u);
+    for (const u of updatedEntries) {
+      const targetRoot = localIndex.entries[u.id] ? hippoRoot : (hasGlobal ? globalRoot : hippoRoot);
+      writeEntry(targetRoot, u);
+    }
+
+    localIndex.last_retrieval_ids = updatedEntries.map((u) => u.id);
+    saveIndex(hippoRoot, localIndex);
+    updateStats(hippoRoot, { recalled: selectedItems.length });
   }
-
-  localIndex.last_retrieval_ids = updatedEntries.map((u) => u.id);
-  saveIndex(hippoRoot, localIndex);
-  updateStats(hippoRoot, { recalled: selectedItems.length });
 
   const format = String(flags['format'] ?? 'markdown');
 

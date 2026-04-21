@@ -76,4 +76,24 @@ describe('hippo context --pinned-only', () => {
     // output as pass-through.
     expect(out.trim()).toBe('');
   });
+
+  it('is read-only — does NOT bump retrieval_count on pinned memories', async () => {
+    // Hook fires every turn; if each call inflated retrieval_count the
+    // under-rehearsal score for pinned memories would skew over time.
+    initStore(hippoDir);
+    const pinned = createMemory('read-only test memory that should not be mutated by a context call', { pinned: true });
+    writeEntry(hippoDir, pinned);
+
+    runHippo(['context', '--pinned-only', '--format', 'additional-context', '--budget', '500']);
+    runHippo(['context', '--pinned-only', '--format', 'additional-context', '--budget', '500']);
+    runHippo(['context', '--pinned-only', '--format', 'additional-context', '--budget', '500']);
+
+    // Reload from disk and verify retrieval_count is still 0
+    const { loadAllEntries } = await import('../src/store.js');
+    const reloaded = loadAllEntries(hippoDir);
+    const target = reloaded.find((e) => e.id === pinned.id);
+    expect(target).toBeDefined();
+    expect(target!.retrieval_count).toBe(0);
+    expect(target!.last_retrieved).toBe(pinned.last_retrieved);
+  });
 });
