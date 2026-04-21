@@ -47,6 +47,10 @@ export interface HippoConfig {
     /** How many surviving memories to rehearse per sleep cycle. 0 disables. */
     count: number;
   };
+  /** Auto-promote completed sessions into trace-layer memories on sleep. */
+  autoTraceCapture: boolean;
+  /** Only promote sessions whose session_complete event is within N days. */
+  autoTraceWindowDays: number;
   /** Mid-session pinned-rule re-injection via the Claude Code UserPromptSubmit
    *  hook. When enabled, pinned memories are re-injected each turn within the
    *  given token budget. */
@@ -90,6 +94,8 @@ const DEFAULT_CONFIG: HippoConfig = {
   replay: {
     count: 5,
   },
+  autoTraceCapture: true,
+  autoTraceWindowDays: 7,
   pinnedInject: {
     enabled: true,
     budget: 1500,
@@ -118,6 +124,8 @@ export function loadConfig(hippoRoot: string): HippoConfig {
       mmr: { ...DEFAULT_CONFIG.mmr, ...(raw.mmr ?? {}) },
       search: { ...DEFAULT_CONFIG.search, ...(raw.search ?? {}) },
       replay: { ...DEFAULT_CONFIG.replay, ...(raw.replay ?? {}) },
+      autoTraceCapture: raw.autoTraceCapture ?? DEFAULT_CONFIG.autoTraceCapture,
+      autoTraceWindowDays: raw.autoTraceWindowDays ?? DEFAULT_CONFIG.autoTraceWindowDays,
       pinnedInject: { ...DEFAULT_CONFIG.pinnedInject, ...(raw.pinnedInject ?? {}) },
     };
   } catch (err) {

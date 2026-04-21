@@ -1263,6 +1263,46 @@ export function listSessionEvents(
   }
 }
 
+/**
+ * Return session_ids with a `session_complete` event newer than `sinceMs`.
+ * Used by the sleep auto-promotion pass to bound scanning to a fixed window.
+ */
+export function findPromotableSessions(
+  hippoRoot: string,
+  sinceMs: number,
+): Array<{ session_id: string }> {
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    const rows = db.prepare(`
+      SELECT DISTINCT session_id FROM session_events
+      WHERE event_type = 'session_complete' AND created_at >= ?
+    `).all(new Date(sinceMs).toISOString()) as { session_id: string }[];
+    return rows;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/**
+ * Idempotency guard — true if a trace-layer memory with this source_session_id
+ * already exists.
+ */
+export function traceExistsForSession(hippoRoot: string, session_id: string): boolean {
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    const row = db.prepare(`
+      SELECT 1 FROM memories
+      WHERE source_session_id = ? AND layer = 'trace'
+      LIMIT 1
+    `).get(session_id);
+    return !!row;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 export function listMemoryConflicts(hippoRoot: string, status: string = 'open'): MemoryConflict[] {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);

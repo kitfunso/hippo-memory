@@ -17,6 +17,9 @@ import {
   replaceDetectedConflicts,
   loadSessionDecayContext,
   incrementSleepCount,
+  findPromotableSessions,
+  traceExistsForSession,
+  listSessionEvents,
 } from './store.js';
 import { textOverlap, markRetrieved } from './search.js';
 import { openHippoDb, closeHippoDb } from './db.js';
@@ -24,6 +27,7 @@ import { loadPhysicsState, savePhysicsState, refreshParticleProperties } from '.
 import { simulate, type ForceContext } from './physics.js';
 import { loadConfig } from './config.js';
 import { sampleForReplay } from './replay.js';
+import { renderTraceContent } from './trace.js';
 
 const DECAY_THRESHOLD = 0.05;
 const MERGE_OVERLAP_THRESHOLD = 0.35;  // Jaccard similarity for "related"
@@ -60,6 +64,7 @@ export interface ConsolidationResult {
   merged: number;
   semanticCreated: number;
   replayed: number;
+  promotedTraces: number;
   dryRun: boolean;
   details: string[];
   physicsSimulated: number;
@@ -83,6 +88,7 @@ export function consolidate(
     merged: 0,
     semanticCreated: 0,
     replayed: 0,
+    promotedTraces: 0,
     dryRun,
     details: [],
     physicsSimulated: 0,
@@ -129,6 +135,70 @@ export function consolidate(
         pendingWrites.push(updated);
       }
       result.decayed++;
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // 1.4. Auto-promote complete sessions to traces
+  // -------------------------------------------------------------------------
+  //
+  // For each session within the configured window that has a `session_complete`
+  // event and no existing trace (idempotency via the source_session_id column),
+  // render the action sequence as markdown and persist a Layer.Trace memory.
+  // Traces inherit decay, search, replay, and physics from the base MemoryEntry.
+  if (!dryRun && config.autoTraceCapture !== false) {
+    const windowDays = config.autoTraceWindowDays ?? 7;
+    const sinceMs = now.getTime() - windowDays * 24 * 60 * 60 * 1000;
+    const promotable = findPromotableSessions(hippoRoot, sinceMs);
+
+    for (const session of promotable) {
+      // Idempotency: skip if a trace for this session already exists.
+      if (traceExistsForSession(hippoRoot, session.session_id)) continue;
+
+      const events = listSessionEvents(hippoRoot, {
+        session_id: session.session_id,
+        limit: 1000,
+      });
+      const completeEvent = events.find((e) => e.event_type === 'session_complete');
+      if (!completeEvent) continue; // defence-in-depth; findPromotableSessions filters already.
+
+      const outcomeRaw = completeEvent.content;
+      if (outcomeRaw !== 'success' && outcomeRaw !== 'failure' && outcomeRaw !== 'partial') {
+        // Malformed terminal event — skip rather than crash the whole sleep.
+        continue;
+      }
+      const outcome: 'success' | 'failure' | 'partial' = outcomeRaw;
+
+      const steps = events
+        .filter((e) => e.event_type !== 'session_complete')
+        .map((e) => ({ action: e.content, observation: '' }));
+
+      const summary = typeof completeEvent.metadata.summary === 'string'
+        ? completeEvent.metadata.summary
+        : '(untitled)';
+
+      const trace = createMemory(
+        renderTraceContent({ task: summary, steps, outcome }),
+        {
+          layer: Layer.Trace,
+          trace_outcome: outcome,
+          source_session_id: session.session_id,
+          tags: ['auto-promoted'],
+          source: 'auto-promote',
+        },
+      );
+      pendingWrites.push(trace);
+      survivors.push(trace);
+      result.promotedTraces++;
+      result.details.push(
+        `  🧬 promoted trace ${trace.id} from session ${session.session_id} (${outcome})`
+      );
+    }
+
+    if (result.promotedTraces > 0) {
+      result.details.push(
+        `  🧬 promoted ${result.promotedTraces} trace${result.promotedTraces === 1 ? '' : 's'} from completed session${result.promotedTraces === 1 ? '' : 's'}`
+      );
     }
   }
 
