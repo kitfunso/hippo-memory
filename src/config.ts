@@ -47,6 +47,13 @@ export interface HippoConfig {
     /** How many surviving memories to rehearse per sleep cycle. 0 disables. */
     count: number;
   };
+  /** Mid-session pinned-rule re-injection via the Claude Code UserPromptSubmit
+   *  hook. When enabled, pinned memories are re-injected each turn within the
+   *  given token budget. */
+  pinnedInject: {
+    enabled: boolean;
+    budget: number;
+  };
 }
 
 const DEFAULT_CONFIG: HippoConfig = {
@@ -83,6 +90,10 @@ const DEFAULT_CONFIG: HippoConfig = {
   replay: {
     count: 5,
   },
+  pinnedInject: {
+    enabled: true,
+    budget: 500,
+  },
 };
 
 export function loadConfig(hippoRoot: string): HippoConfig {
@@ -107,6 +118,7 @@ export function loadConfig(hippoRoot: string): HippoConfig {
       mmr: { ...DEFAULT_CONFIG.mmr, ...(raw.mmr ?? {}) },
       search: { ...DEFAULT_CONFIG.search, ...(raw.search ?? {}) },
       replay: { ...DEFAULT_CONFIG.replay, ...(raw.replay ?? {}) },
+      pinnedInject: { ...DEFAULT_CONFIG.pinnedInject, ...(raw.pinnedInject ?? {}) },
     };
   } catch (err) {
     if (fs.existsSync(configPath)) {
