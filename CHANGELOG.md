@@ -1,22 +1,26 @@
 # Changelog
 
-## Unreleased — Replay consolidation pass (hippocampal mechanism #4)
+## Unreleased — Replay + mid-session pinned re-injection
 
 ### Added
 - **Replay pass in `hippo sleep`.** Hippo now rehearses a small sample of surviving memories on every consolidation cycle, mirroring hippocampal replay during slow-wave sleep. The sampler weights by reward feedback, emotional valence, under-rehearsal, idle time, and remaining strength. Rehearsed memories get the same retrieval-strengthening that a real `hippo recall` applies (retrieval_count +1, half_life +2 days, last_retrieved refreshed). Exposed via new `src/replay.ts` (`sampleForReplay`, `replayPriority`). Sleep output now emits a `💭 replayed N memories: <ids>` line between the decay and physics passes.
 - **`config.replay.count`.** Number of memories to rehearse per sleep cycle (default: 5). Set to 0 to disable. Stale-confidence memories are never rehearsed — staleness is a deliberate signal we don't want to erase.
+- **Mid-session pinned-rule re-injection (Claude Code).** Addresses the Opus 4.7 complaint that the model "forgets" rules mid-session. `hippo context` now accepts `--pinned-only` (restrict to pinned memories) and `--format additional-context` (emit Claude Code's `{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"..."}}` JSON shape). `hippo hook install claude-code` (and `opencode`) now installs a `UserPromptSubmit` hook that invokes this every turn, so pinned rules stay in context every message, not just at SessionStart. Read-only: no retrieval_count inflation.
+- **`config.pinnedInject.{enabled,budget}`.** Controls the hook behaviour. Defaults: `enabled: true`, `budget: 500` tokens. Disable with `{"pinnedInject":{"enabled":false}}`. Zero output when no pinned memories exist (zero per-turn tax).
 
-### Behaviour change (users should know)
-- Every user's next `hippo sleep` will begin rehearsing up to 5 memories by default. This is a small positive bias toward high-value memories staying alive; it does not delete anything. Users who want the old behaviour can set `{ "replay": { "count": 0 } }` in `.hippo/config.json`. The change is intentionally silent on first run — no migration step required — because the effect is bounded and non-destructive.
+### Behaviour changes (users should know)
+- **Replay.** Every user's next `hippo sleep` will begin rehearsing up to 5 memories by default. Non-destructive, small positive bias toward high-value memories staying alive. Opt out with `{"replay":{"count":0}}`.
+- **Pinned re-injection.** Existing users must re-run `hippo hook install claude-code` (or `opencode`) to pick up the new `UserPromptSubmit` entry — it is NOT auto-added to existing installs. Once installed, every turn's context carries the (read-only) pinned block. Opt out per-user with `{"pinnedInject":{"enabled":false}}`.
 
 ### Grant context
-Closes the replay gap documented in `docs/plans/2026-04-21-hippocampal-mechanism-audit.md`. The Frontier AI Discovery feasibility study (comp 2422) pitch claims 7 hippocampal mechanisms; pre-audit the code implemented 6. With this patch, replay is now `PRESENT` with tests.
+Closes the replay gap documented in `docs/plans/2026-04-21-hippocampal-mechanism-audit.md`. The Frontier AI Discovery feasibility study pitch claimed 7 hippocampal mechanisms; pre-audit the code implemented 6. Replay is now `PRESENT` with unit + integration tests.
 
 ### Internal
-- 557 tests pass (+17 from v0.28.0): 14 unit tests for the sampler and priority function, 3 integration tests for the consolidation pass wiring.
+- 569 tests pass (+29 from v0.28.0): 14 unit tests for the replay sampler + priority, 3 integration tests for the consolidation pass wiring, 7 tests for `--pinned-only` command behaviour (filtering, JSON shape, read-only guarantee, config respect, multi-memory injection), 3 tests for the UserPromptSubmit hook install/uninstall/idempotency, 2 tests for the `pinnedInject` config schema.
 - Phase A model-profile benchmark infrastructure (`evals/model-profile-bench.json`, `scripts/run-model-profile-bench.mjs`, `scripts/model-profile-judge.mjs`) shipped as a reusable harness. Baseline run produced a null result (4.6 and 4.7 perform identically on our failure modes) — see `docs/plans/2026-04-21-phase-a-decision.md`.
 - O1 soak test harness (`scripts/soak-test.mjs`, `scripts/soak-all.mjs`, `benchmarks/soak/`) validates the physics engine stays energy-bounded across 10 synthetic workload profiles. Current sweep at 100 ticks × 80 particles is a smoke scale, not a 100-hour study.
 - O2 competitor-benchmark scope documented at `docs/plans/2026-04-21-o2-competitor-benchmark-scope.md` (not started).
+- Plan: `docs/plans/2026-04-21-pinned-reinject.md`.
 
 ## 0.28.0 (2026-04-20) — Budget saturation fix + LongMemEval parity
 

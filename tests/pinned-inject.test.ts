@@ -97,6 +97,26 @@ describe('hippo context --pinned-only', () => {
     expect(target!.last_retrieved).toBe(pinned.last_retrieved);
   });
 
+  it('emits multiple pinned memories in one injection payload', () => {
+    // End-to-end sanity: Claude Code's UserPromptSubmit response must be a
+    // single string containing all rehearsed rules, not an array of blocks.
+    initStore(hippoDir);
+    const a = createMemory('never commit secrets to git rotate immediately if leaked', { pinned: true });
+    const b = createMemory('use safe_sync.py not sync_to_supabase.py directly ever', { pinned: true });
+    const c = createMemory('unpinned note that absolutely must not appear in the output', { pinned: false });
+    writeEntry(hippoDir, a);
+    writeEntry(hippoDir, b);
+    writeEntry(hippoDir, c);
+
+    const raw = runHippo(['context', '--pinned-only', '--format', 'additional-context', '--budget', '500']);
+    const parsed = JSON.parse(raw);
+    expect(parsed.hookSpecificOutput.hookEventName).toBe('UserPromptSubmit');
+    expect(typeof parsed.hookSpecificOutput.additionalContext).toBe('string');
+    expect(parsed.hookSpecificOutput.additionalContext).toContain('never commit secrets');
+    expect(parsed.hookSpecificOutput.additionalContext).toContain('use safe_sync.py');
+    expect(parsed.hookSpecificOutput.additionalContext).not.toContain('unpinned note that absolutely must not appear');
+  });
+
   it('respects config.pinnedInject.enabled=false (empty output)', () => {
     initStore(hippoDir);
     const pinned = createMemory('pinned rule that should NOT appear when disabled by config', { pinned: true });

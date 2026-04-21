@@ -748,7 +748,7 @@ No extra commands needed. Just `hippo init` and your agent knows about Hippo.
 If you prefer explicit control:
 
 ```bash
-hippo hook install claude-code   # patches CLAUDE.md + adds SessionStart/SessionEnd hooks
+hippo hook install claude-code   # patches CLAUDE.md + adds SessionStart/SessionEnd + UserPromptSubmit hooks
 hippo hook install codex         # optional repair/manual run: patches AGENTS.md + wraps the detected Codex launcher
 hippo hook install cursor        # patches .cursorrules
 hippo hook install openclaw      # patches AGENTS.md
@@ -760,7 +760,10 @@ This adds a `<!-- hippo:start -->` ... `<!-- hippo:end -->` block that tells the
 2. Run `hippo remember "<lesson>" --error` on errors
 3. Run `hippo outcome --good` on completion
 
-For Claude Code, it also adds a Stop hook to `~/.claude/settings.json` so `hippo sleep` runs automatically when the session exits.
+For Claude Code, it also adds:
+- a `SessionEnd` hook so `hippo sleep` runs automatically when the session exits
+- a `SessionStart` hook that prints the previous session's consolidation output
+- a `UserPromptSubmit` hook that re-injects pinned memories (`hippo remember <text> --pin`) into every turn's context — so invariants survive long sessions where Opus 4.7 might otherwise "forget" them. Budget: 500 tokens per turn, skipped entirely when no pinned memories exist. Opt out with `{"pinnedInject":{"enabled":false}}` in `.hippo/config.json`.
 
 To remove: `hippo hook uninstall claude-code`
 
