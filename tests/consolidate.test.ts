@@ -81,6 +81,87 @@ describe('Decay pass', () => {
   });
 });
 
+describe('Replay pass (integration)', () => {
+  it('persists incremented retrieval_count and fresh last_retrieved on rehearsed memories', () => {
+    initStore(tmpDir);
+
+    // 8 distinct memories, no text overlap → merge pass won't fire.
+    const memories = [
+      createMemory('elephants have long memories according to field study', { layer: Layer.Episodic }),
+      createMemory('production pipeline deploys every friday at noon UTC', { layer: Layer.Episodic }),
+      createMemory('ravens can use tools and solve multi-step puzzles', { layer: Layer.Episodic }),
+      createMemory('rust borrow checker prevents iterator invalidation bugs', { layer: Layer.Episodic }),
+      createMemory('soybean oil futures ticker is ZL=F on yahoo finance', { layer: Layer.Episodic }),
+      createMemory('quantum error correction requires logical qubit overhead', { layer: Layer.Episodic }),
+      createMemory('the postgres vacuum process reclaims dead tuple space', { layer: Layer.Episodic }),
+      createMemory('marine otters wrap kelp around themselves while sleeping', { layer: Layer.Episodic }),
+    ];
+    for (const m of memories) writeEntry(tmpDir, m);
+
+    const result = consolidate(tmpDir, { now: new Date() });
+
+    // Default config replay count is 5
+    expect(result.replayed).toBe(5);
+
+    // Load all entries and check: exactly 5 should have retrieval_count > 0
+    // (only replay bumps retrieval_count during consolidate)
+    const after = loadAllEntries(tmpDir);
+    const rehearsed = after.filter((e) => e.retrieval_count > 0);
+    expect(rehearsed).toHaveLength(5);
+
+    // Each rehearsed entry must have:
+    // - retrieval_count = 1 (started at 0)
+    // - last_retrieved updated to a recent timestamp
+    // - half_life_days bumped by +2 from the default
+    const defaultHalfLife = memories[0].half_life_days;
+    const recentThreshold = new Date(Date.now() - 60_000).getTime();
+    for (const r of rehearsed) {
+      expect(r.retrieval_count).toBe(1);
+      expect(new Date(r.last_retrieved).getTime()).toBeGreaterThan(recentThreshold);
+      expect(r.half_life_days).toBe(defaultHalfLife + 2);
+    }
+  });
+
+  it('does nothing when config.replay.count is 0', () => {
+    initStore(tmpDir);
+
+    // Patch config.json to disable replay
+    const configPath = path.join(tmpDir, 'config.json');
+    fs.writeFileSync(configPath, JSON.stringify({ replay: { count: 0 } }, null, 2));
+
+    const memories = [
+      createMemory('memory one with enough content to pass validation', { layer: Layer.Episodic }),
+      createMemory('memory two also sufficiently long to store properly', { layer: Layer.Episodic }),
+    ];
+    for (const m of memories) writeEntry(tmpDir, m);
+
+    const result = consolidate(tmpDir, { now: new Date() });
+
+    expect(result.replayed).toBe(0);
+    const after = loadAllEntries(tmpDir);
+    const touched = after.filter((e) => e.retrieval_count > 0);
+    expect(touched).toHaveLength(0);
+  });
+
+  it('caps sample size when fewer survivors exist than config count', () => {
+    initStore(tmpDir);
+
+    // Default config count is 5; write only 2 entries.
+    const memories = [
+      createMemory('first unique memory for cap test scenario', { layer: Layer.Episodic }),
+      createMemory('second unique memory for cap test scenario', { layer: Layer.Episodic }),
+    ];
+    for (const m of memories) writeEntry(tmpDir, m);
+
+    const result = consolidate(tmpDir, { now: new Date() });
+
+    expect(result.replayed).toBe(2);
+    const after = loadAllEntries(tmpDir);
+    const touched = after.filter((e) => e.retrieval_count > 0);
+    expect(touched).toHaveLength(2);
+  });
+});
+
 describe('Merge pass', () => {
   it('merges highly similar episodic entries into a semantic memory', () => {
     initStore(tmpDir);
