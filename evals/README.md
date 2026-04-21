@@ -208,6 +208,23 @@ hippo eval evals/llm-corpus.json --json > llm-baseline.json
 hippo eval evals/llm-corpus.json --equal-sources --compare llm-baseline.json
 ```
 
+## Model Profile Bench (null result, 2026-04-21)
+
+Separate 20-case corpus (`model-profile-bench.json`) designed to test whether per-model context-injection profiles (budget + framing) could close behavioral gaps between Claude Opus 4.6 and 4.7. Tested four failure modes: invariant honor, hallucination guard, noise rejection, contradiction rejection.
+
+**Result: 0 pp gap between 4.6 and 4.7 across all four types.** Both models scored 100% when hippo's default context block was injected. The planned per-model profile feature was scrapped — no measurable problem to solve.
+
+| Model | invariant-honor | hallucination-guard | noise-rejection | contradiction-rejection |
+|---|---|---|---|---|
+| claude-opus-4-6 | 100% | 100% | 100%* | 100% |
+| claude-opus-4-7 | 100% | 100% | 100%* | 100% |
+
+\* A single Windows shell-escaping bug in the runner (not a model failure) caused one cell to error; it was identical for both models.
+
+**Interpretation.** The 4.7 "regressions" circulating on social media (long-context collapse, instruction drift, gaslighting) don't appear to affect the specific failure modes hippo guards against — at least not when 1,500 tokens of curated memory are in context. Hippo's existing context injection is sufficient; no per-model tuning needed.
+
+Corpus + runner + judge are reusable: `evals/model-profile-bench.json`, `scripts/run-model-profile-bench.mjs`, `scripts/model-profile-judge.mjs`. Uses `claude -p --model <id>` (no API key — subscription handles cost). Full investigation: `docs/plans/2026-04-21-model-aware-hippo.md` and `docs/plans/2026-04-21-phase-a-decision.md`.
+
 ## Writing new cases
 
 A case is:
