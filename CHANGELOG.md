@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.30.0 (2026-04-21) — Sequence binding (recursive-self-improvement foundation)
+
+### Added
+- **`Layer.Trace`** — a new memory layer for ordered action→outcome sequences. Traces are first-class `MemoryEntry` rows; they inherit decay, retrieval-strengthening, conflict detection, embeddings, replay, and physics from the existing infrastructure. Four inheritance smoke tests lock that claim.
+- **`trace_outcome` + `source_session_id` columns** (schema v3 migration, with a regression test that a pre-v3 store with existing data migrates without loss). `trace_outcome` is `'success' | 'failure' | 'partial' | null`. `source_session_id` is indexed for idempotent auto-promotion.
+- **`hippo session complete --session <id> --outcome <...>`** — the terminal event that marks a session as finished with a given outcome. Phase C auto-promotion depends on this event type existing.
+- **`hippo trace record --task <t> --steps <json> --outcome <...>`** — explicit trace storage. Takes a JSON array of `{action, observation}` steps plus an outcome. Renders to markdown in the memory's `content` field.
+- **`hippo recall --outcome <...>`** — filter results to trace-layer memories with matching outcome. Non-trace entries pass through unaffected.
+- **Auto-promotion during `hippo sleep`** — completed sessions (those with a `session_complete` event within `autoTraceWindowDays`, default 7) become bound traces automatically. Idempotent via the `source_session_id` guard; three consecutive sleeps produce exactly one trace per session.
+- **`examples/rsi-demo/`** — a minimal recursive-self-improvement agent that uses traces to learn from prior runs. 50-task suite with 10 trap categories. Deterministic. Ships with a measurable pass bar: late-stage success rate must exceed early-stage by at least 20 pp or the demo exits non-zero. Current seed: early 20% → late 100%, gap 0.80.
+- **`src/trace.ts`** — `renderTraceContent(rec)` for markdown rendering; `parseSteps(json)` for step validation.
+
+### Changed
+- **`detectConflicts` now skips trace-vs-trace pairs.** Two successful traces for "refactor auth" are variants of each other, not contradictions. One-line filter in the conflict pass.
+- **Default recall JSON output** includes `layer` always, and `trace_outcome` when present. Additive — existing consumers are unaffected.
+
+### Config
+- `config.autoTraceCapture: boolean` (default `true`) — master switch for auto-promotion.
+- `config.autoTraceWindowDays: number` (default `7`) — only sessions with a `session_complete` event in the last N days are eligible.
+
+### Grant / positioning
+This is the foundation for a recursive-self-improvement story. Three of hippo's primitives (outcome-modulated decay, retrieval-strengthening, conflict resolution) were already aligned with RSI needs. Sequence binding adds the fourth: **bound outcome-linked traces**. Counterfactual memory and executable skill-tier are the next two; they compose on top of this.
+
+### Internal
+- 599 tests pass (+28 from v0.29.3). Breakdown: 8 Phase A (enum + fields + v2-with-data migration), 11 Phase B (session complete + trace module + record command + --outcome filter with non-trace pass-through), 9 Phase C (auto-promote + idempotency + windowing + conflict skip + 4 inheritance smokes).
+- Phase A applied 3 eng-review blocker fixes before any code: indexed `source_session_id` for idempotency, explicit `hippo session complete` contract, dead `trace_steps_json` column dropped.
+- Full plan + post-review revisions at `docs/plans/2026-04-21-sequence-binding.md`.
+
 ## 0.29.3 (2026-04-21) — Friendly post-install nudge for Claude Code users
 
 ### Added

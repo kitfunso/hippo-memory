@@ -60,6 +60,13 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v0.30.0
+
+- **Sequence binding for recursive-self-improvement agents.** New `Layer.Trace` memories store ordered `A → B → C → outcome` traces. Agents can `hippo trace record` explicitly, or just call `hippo session complete --outcome success` and let `hippo sleep` auto-promote completed sessions into queryable traces.
+- **`hippo recall --outcome success`** — retrieve only successful prior strategies. The missing RSI primitive: "what worked last time I tried this?"
+- **`examples/rsi-demo/`** — a minimal self-improving agent, deterministic and CI-runnable. Uses traces to learn. Current seed: 20% success on tasks 1-10 rising to 100% on tasks 41-50. Non-zero exit if the learning curve collapses — the demo is also the integration test.
+- **Schema v3 migration, with a regression test that preserves existing data.** Idempotent auto-promotion via indexed `source_session_id`. Four inheritance smoke tests lock the claim that traces get decay / search / replay / physics "for free."
+
 ### What's new in v0.29.3
 
 - **Post-install banner for Claude Code users.** After `npm install -g hippo-memory`, if Claude Code is detected but the Hippo hook isn't wired yet, a three-line message points the user at `hippo init`. Silent on reinstalls or machines without Claude Code. Opt out via `HIPPO_SKIP_POSTINSTALL=1`.
