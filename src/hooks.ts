@@ -86,6 +86,7 @@ export interface InstallResult {
   settingsPath: string;
   installedSessionEnd: boolean;
   installedSessionStart: boolean;
+  installedUserPromptSubmit: boolean;
   migratedFromStop: boolean;
   migratedLegacySessionEnd: boolean;
   migratedSplitSessionEnd: boolean;
@@ -103,6 +104,7 @@ const HIPPO_SLEEP_MARKER = 'hippo sleep';
 const HIPPO_LAST_SLEEP_MARKER = 'hippo last-sleep';
 const HIPPO_CAPTURE_MARKER = 'hippo capture --last-session';
 const HIPPO_SESSION_END_MARKER = 'hippo session-end';
+const HIPPO_PINNED_INJECT_MARKER = 'hippo context --pinned-only';
 const HIPPO_CODEX_WRAPPER_MARKER = 'hippo codex wrapper';
 
 function homeDir(): string {
@@ -549,6 +551,7 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
         settingsPath,
         installedSessionEnd: false,
         installedSessionStart: false,
+        installedUserPromptSubmit: false,
         migratedFromStop: false,
         migratedLegacySessionEnd: false,
         migratedSplitSessionEnd: false,
@@ -616,9 +619,29 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
     installedSessionStart = true;
   }
 
+  // Mid-session pinned-rule re-injection: UserPromptSubmit runs every turn,
+  // so pinned memories stay in context even after the model would otherwise
+  // "forget" them in a long session. `hippo context --pinned-only` prints
+  // nothing when no pinned memories exist, so this is zero-tax when unused.
+  let installedUserPromptSubmit = false;
+  if (!hookArrayContains(hooks.UserPromptSubmit, HIPPO_PINNED_INJECT_MARKER)) {
+    if (!Array.isArray(hooks.UserPromptSubmit)) hooks.UserPromptSubmit = [];
+    hooks.UserPromptSubmit.push({
+      hooks: [
+        {
+          type: 'command',
+          command: 'hippo context --pinned-only --format additional-context',
+          timeout: 5,
+        },
+      ],
+    });
+    installedUserPromptSubmit = true;
+  }
+
   if (
     installedSessionEnd ||
     installedSessionStart ||
+    installedUserPromptSubmit ||
     migratedFromStop ||
     migratedLegacySessionEnd ||
     migratedSplitSessionEnd
@@ -631,6 +654,7 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
     settingsPath,
     installedSessionEnd,
     installedSessionStart,
+    installedUserPromptSubmit,
     migratedFromStop,
     migratedLegacySessionEnd,
     migratedSplitSessionEnd,
