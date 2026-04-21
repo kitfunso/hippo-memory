@@ -5,12 +5,14 @@ import * as os from 'os';
 import { loadConfig } from '../src/config.js';
 
 describe('config.pinnedInject', () => {
-  it('defaults to enabled=true budget=500', () => {
+  it('defaults to enabled=true budget=1500', () => {
+    // v0.29.1: raised from 500 to 1500 so mature installs (10+ pinned
+    // memories) fit the full pinned set without silently truncating.
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-cfg-'));
     try {
       const cfg = loadConfig(tmp);
       expect(cfg.pinnedInject.enabled).toBe(true);
-      expect(cfg.pinnedInject.budget).toBe(500);
+      expect(cfg.pinnedInject.budget).toBe(1500);
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });
     }

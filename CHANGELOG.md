@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.29.1 (2026-04-21) — Raise default pinnedInject.budget to 1500
+
+### Changed
+- **`config.pinnedInject.budget` default: 500 → 1500.** The initial 500-token default was too tight for mature hippo installs. Smoke-testing on a store with 10 existing pinned memories (685 tokens) showed new invariants silently dropped off the bottom of the rehearsed set. 1500 matches `defaultContextBudget` and comfortably fits typical pinned-memory counts. Users with a `.hippo/config.json` override keep their explicit value; only the default changes.
+
+### Fixed
+- **Test assertion.** `tests/config.test.ts` updated to match the new default.
+
 ## 0.29.0 (2026-04-21) — Replay + mid-session pinned re-injection
 
 ### Added

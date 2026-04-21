@@ -92,7 +92,7 @@ const DEFAULT_CONFIG: HippoConfig = {
   },
   pinnedInject: {
     enabled: true,
-    budget: 500,
+    budget: 1500,
   },
 };
 

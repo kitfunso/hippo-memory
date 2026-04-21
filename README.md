@@ -60,6 +60,10 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v0.29.1
+
+- **Raise default `pinnedInject.budget` to 1500.** Smoke-testing on a real 10-pinned-memory store showed 500 tokens truncated new invariants off the bottom. 1500 matches `defaultContextBudget` and fits typical mature installs. Explicit `.hippo/config.json` overrides are untouched; only the default changes.
+
 ### What's new in v0.29.0
 
 - **Mid-session pinned re-injection (Claude Code).** Pinned memories now re-enter context every turn via a new `UserPromptSubmit` hook — not just at SessionStart — so invariants survive long sessions where Opus 4.7 might otherwise forget them. `hippo context --pinned-only --format additional-context` is the command the hook runs; it's read-only so retrieval_count doesn't inflate. Existing users must re-run `hippo hook install claude-code` to pick it up. Opt out with `{"pinnedInject":{"enabled":false}}` in `.hippo/config.json`.
