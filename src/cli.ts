@@ -3665,7 +3665,8 @@ Commands:
   context                  Smart context injection for AI agents
     --auto                 Auto-detect task from git state
     --budget <n>           Token budget (default: 1500)
-    --format <fmt>         Output format: markdown (default) or json
+    --pinned-only          Only inject pinned memories (used by UserPromptSubmit hook)
+    --format <fmt>         Output format: markdown (default), json, or additional-context (Claude Code hook JSON)
     --framing <mode>       Framing: observe (default), suggest, assert
   sleep                    Run consolidation pass (auto-learns + dedup + auto-shares)
     --dry-run              Preview without writing
