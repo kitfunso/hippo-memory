@@ -2595,6 +2595,37 @@ async function cmdContext(
       global: r.isGlobal ?? false,
     }));
     console.log(JSON.stringify({ query, activeSnapshot, recentSessionEvents, memories: output, tokens: totalTokens }));
+  } else if (format === 'additional-context') {
+    // Claude Code UserPromptSubmit hook JSON shape. Capture the markdown that
+    // printContextMarkdown would write and wrap it as `additionalContext`.
+    const lines: string[] = [];
+    const realLog = console.log;
+    console.log = (...parts: unknown[]) => { lines.push(parts.map(String).join(' ')); };
+    try {
+      if (activeSnapshot) printActiveTaskSnapshot(activeSnapshot);
+      if (recentSessionEvents.length > 0) printSessionEvents(recentSessionEvents);
+      printContextMarkdown(
+        selectedItems.map((r) => ({
+          entry: updatedEntries.find((u) => u.id === r.entry.id) ?? r.entry,
+          score: r.score,
+          tokens: r.tokens,
+          isGlobal: r.isGlobal ?? false,
+        })),
+        totalTokens,
+        framing
+      );
+    } finally {
+      console.log = realLog;
+    }
+    const textBlock = lines.join('\n');
+    if (!textBlock.trim()) return;
+    const payload = {
+      hookSpecificOutput: {
+        hookEventName: 'UserPromptSubmit',
+        additionalContext: textBlock,
+      },
+    };
+    process.stdout.write(JSON.stringify(payload));
   } else {
     if (activeSnapshot) {
       printActiveTaskSnapshot(activeSnapshot);

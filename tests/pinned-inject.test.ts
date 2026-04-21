@@ -55,4 +55,25 @@ describe('hippo context --pinned-only', () => {
     const out = runHippo(['context', '--pinned-only', '--budget', '500']);
     expect(out.trim()).toBe('');
   });
+
+  it('--format additional-context emits Claude Code hookSpecificOutput JSON', () => {
+    initStore(hippoDir);
+    const pinned = createMemory('NEVER use --no-verify because it bypasses signing', { pinned: true });
+    writeEntry(hippoDir, pinned);
+
+    const out = runHippo(['context', '--pinned-only', '--format', 'additional-context', '--budget', '500']);
+    const parsed = JSON.parse(out);
+    expect(parsed.hookSpecificOutput).toBeDefined();
+    expect(parsed.hookSpecificOutput.hookEventName).toBe('UserPromptSubmit');
+    expect(typeof parsed.hookSpecificOutput.additionalContext).toBe('string');
+    expect(parsed.hookSpecificOutput.additionalContext).toContain('NEVER use --no-verify');
+  });
+
+  it('--format additional-context with no pinned entries emits empty output (no crash)', () => {
+    initStore(hippoDir);
+    const out = runHippo(['context', '--pinned-only', '--format', 'additional-context', '--budget', '500']);
+    // Empty stdout signals "no injection needed". Claude Code treats empty
+    // output as pass-through.
+    expect(out.trim()).toBe('');
+  });
 });
