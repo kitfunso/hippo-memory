@@ -59,6 +59,8 @@ interface MemoryRow {
   content: string;
   parents_json: string;
   starred: number;
+  trace_outcome: MemoryEntry['trace_outcome'];
+  source_session_id: string | null;
 }
 
 interface ConsolidationRunRow {
@@ -136,8 +138,8 @@ export interface SessionEvent {
   created_at: string;
 }
 
-const INDEX_VERSION = 2;
-const MEMORY_SELECT_COLUMNS = `id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content, parents_json, starred`;
+const INDEX_VERSION = 3;
+const MEMORY_SELECT_COLUMNS = `id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content, parents_json, starred, trace_outcome, source_session_id`;
 const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
 
 function layerDir(root: string, layer: Layer): string {
@@ -201,6 +203,8 @@ export function serializeEntry(entry: MemoryEntry): string {
     confidence: entry.confidence ?? 'observed',
     parents: entry.parents ?? [],
     starred: entry.starred ?? false,
+    trace_outcome: entry.trace_outcome ?? null,
+    source_session_id: entry.source_session_id ?? null,
   });
   return `${fm}\n\n${entry.content}\n`;
 }
@@ -268,8 +272,8 @@ function rowToEntry(row: MemoryRow): MemoryEntry {
     content: row.content,
     parents: parseJsonArray(row.parents_json),
     starred: Boolean(row.starred),
-    trace_outcome: null,
-    source_session_id: null,
+    trace_outcome: (row.trace_outcome as MemoryEntry['trace_outcome']) ?? null,
+    source_session_id: row.source_session_id ?? null,
   };
 }
 
@@ -626,8 +630,9 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
       outcome_positive, outcome_negative,
       conflicts_with_json, pinned, confidence, content,
       parents_json, starred,
+      trace_outcome, source_session_id,
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     ON CONFLICT(id) DO UPDATE SET
       created = excluded.created,
       last_retrieved = excluded.last_retrieved,
@@ -648,6 +653,8 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
       content = excluded.content,
       parents_json = excluded.parents_json,
       starred = excluded.starred,
+      trace_outcome = excluded.trace_outcome,
+      source_session_id = excluded.source_session_id,
       updated_at = datetime('now')
   `).run(
     entry.id,
@@ -670,6 +677,8 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
     entry.content,
     JSON.stringify(entry.parents ?? []),
     entry.starred ? 1 : 0,
+    entry.trace_outcome ?? null,
+    entry.source_session_id ?? null,
   );
 
   syncFtsRow(db, entry);
@@ -751,7 +760,7 @@ function writeStatsMirror(hippoRoot: string, stats: Record<string, unknown>): vo
 }
 
 function syncMirrorFiles(hippoRoot: string, db: ReturnType<typeof openHippoDb>): void {
-  const entries = db.prepare(`SELECT id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content FROM memories ORDER BY created ASC, id ASC`).all() as MemoryRow[];
+  const entries = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`).all() as MemoryRow[];
 
   for (const entry of entries.map(rowToEntry)) {
     writeMarkdownMirror(hippoRoot, entry);
@@ -820,7 +829,7 @@ export function readEntry(hippoRoot: string, id: string): MemoryEntry | null {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    const row = db.prepare(`SELECT id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content FROM memories WHERE id = ?`).get(id) as MemoryRow | undefined;
+    const row = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?`).get(id) as MemoryRow | undefined;
     return row ? rowToEntry(row) : null;
   } finally {
     closeHippoDb(db);
