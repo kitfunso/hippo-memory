@@ -42,6 +42,11 @@ export interface HippoConfig {
      *  results (searchBothHybrid). 1.0 = no bias, 1.2 = 20% local priority. */
     localBump: number;
   };
+  /** Replay settings — biologically-inspired rehearsal during consolidation. */
+  replay: {
+    /** How many surviving memories to rehearse per sleep cycle. 0 disables. */
+    count: number;
+  };
 }
 
 const DEFAULT_CONFIG: HippoConfig = {
@@ -75,6 +80,9 @@ const DEFAULT_CONFIG: HippoConfig = {
   search: {
     localBump: 1.2,
   },
+  replay: {
+    count: 5,
+  },
 };
 
 export function loadConfig(hippoRoot: string): HippoConfig {
@@ -98,6 +106,7 @@ export function loadConfig(hippoRoot: string): HippoConfig {
       physics: mergePhysicsConfig(raw.physics as Partial<PhysicsConfig> | undefined),
       mmr: { ...DEFAULT_CONFIG.mmr, ...(raw.mmr ?? {}) },
       search: { ...DEFAULT_CONFIG.search, ...(raw.search ?? {}) },
+      replay: { ...DEFAULT_CONFIG.replay, ...(raw.replay ?? {}) },
     };
   } catch (err) {
     if (fs.existsSync(configPath)) {

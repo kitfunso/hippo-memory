@@ -3,21 +3,25 @@
 **Date:** 2026-04-21
 **Purpose:** Verify the Frontier AI Discovery grant claim that hippo-memory implements "7 hippocampal mechanisms as code" before the funded period starts in October 2026.
 
-## Result: 6 of 7 PRESENT, 1 PARTIAL, 0 MISSING
+## Result: 7 of 7 PRESENT (updated 2026-04-21 after v0.29 replay shipped), 0 MISSING
+
+Pattern completion remains PARTIAL at the API surface, but the underlying mechanism (cluster amplification) is in the physics engine.
 
 | # | Mechanism | Status | Key evidence |
 |---|---|---|---|
 | 1 | Encoding | **PRESENT** | `src/memory.ts:220-273` (`createMemory` with strength, decay, tags, emotional_valence); 11 tests in `tests/memory.test.ts` |
-| 2 | Consolidation | **PRESENT** | `src/consolidate.ts:69-271` (3-pass: decay / physics / episodic→semantic merge); 16 tests |
+| 2 | Consolidation | **PRESENT** | `src/consolidate.ts:69-271` (4-pass: decay / replay / physics / episodic→semantic merge); 16+ tests |
 | 3 | Decay | **PRESENT** | `src/memory.ts:94-145` (`calculateStrength` exponential decay); retrieval-strengthening in `markRetrieved` (half-life +2 days) |
-| 4 | **Replay** | **PARTIAL** | Documented in `README.md:843` and `RESEARCH.md:7,13` (McClelland interleaved replay, DQN experience replay) but NO explicit replay pass in `src/consolidate.ts`. |
+| 4 | **Replay** | **PRESENT** (v0.29, 2026-04-21) | `src/replay.ts` (`sampleForReplay`, `replayPriority`) + pass in `src/consolidate.ts:130-165` (between decay and physics); 12 tests in `tests/replay.test.ts` |
 | 5 | Pattern completion | **PARTIAL** | `src/physics.ts:444-478` (cluster amplification is autoassociative) but no `searchFromPartialCue` API. |
 | 6 | Interference resolution | **PRESENT** | `src/consolidate.ts:299-350` (`detectConflicts`) + `src/invalidation.ts:69-100` (active invalidation) |
 | 7 | Emotional tagging | **PRESENT** | `src/memory.ts:44-67,184-191` (`calculateRewardFactor`, `applyOutcome`), `src/physics.ts:115-120` (charge-based valence) |
 
-## Gap #1 (critical for grant): Replay
+## Gap #1 (RESOLVED in v0.29, 2026-04-21): Replay
 
-### What the pitch says
+**Status:** Shipped. See `src/replay.ts` and the replay pass in `src/consolidate.ts` (1.5, between decay and physics). 12 unit tests pass + live `hippo sleep` verified the `💭 replayed N memories` line.
+
+### What the pitch said
 
 From `reference_frontier_ai_hippo_answers.md`:
 
@@ -61,7 +65,7 @@ Option (b) is honest and cheap. Recommended.
 ## Actions
 
 - [x] Audit complete; documented in this file.
-- [ ] Ship replay pass (Task #12, before October).
+- [x] Ship replay pass (Task #12) — landed 2026-04-21 (same session).
 - [ ] Update README to name cluster amplification as "pattern completion" explicitly.
 - [ ] Reference this audit in any future grant milestone reporting.
 

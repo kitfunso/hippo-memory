@@ -18,11 +18,12 @@ import {
   loadSessionDecayContext,
   incrementSleepCount,
 } from './store.js';
-import { textOverlap } from './search.js';
+import { textOverlap, markRetrieved } from './search.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { loadPhysicsState, savePhysicsState, refreshParticleProperties } from './physics-state.js';
 import { simulate, type ForceContext } from './physics.js';
 import { loadConfig } from './config.js';
+import { sampleForReplay } from './replay.js';
 
 const DECAY_THRESHOLD = 0.05;
 const MERGE_OVERLAP_THRESHOLD = 0.35;  // Jaccard similarity for "related"
@@ -58,10 +59,13 @@ export interface ConsolidationResult {
   removed: number;
   merged: number;
   semanticCreated: number;
+  replayed: number;
   dryRun: boolean;
   details: string[];
   physicsSimulated: number;
 }
+
+const REPLAY_COUNT_DEFAULT = 5;
 
 /**
  * Run a full consolidation pass.
@@ -78,6 +82,7 @@ export function consolidate(
     removed: 0,
     merged: 0,
     semanticCreated: 0,
+    replayed: 0,
     dryRun,
     details: [],
     physicsSimulated: 0,
@@ -124,6 +129,41 @@ export function consolidate(
         pendingWrites.push(updated);
       }
       result.decayed++;
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // 1.5. Replay pass — rehearse high-value survivors
+  // -------------------------------------------------------------------------
+  //
+  // Biologically-inspired counterpart to hippocampal replay during slow-wave
+  // sleep: sample N memories weighted by outcome + valence + under-rehearsal
+  // + idle time, then apply the same retrieval-strengthening `markRetrieved`
+  // applies to real queries. Distinct from decay (removal), physics (motion),
+  // and merge (compression) — this is the "rehearse the important stuff so
+  // it doesn't fade" pass.
+  {
+    const replayCount = config.replay?.count ?? REPLAY_COUNT_DEFAULT;
+    if (replayCount > 0 && survivors.length > 0) {
+      const seed = Math.floor(now.getTime() / 1000) & 0xffffffff;
+      const picked = sampleForReplay(survivors, replayCount, now, seed);
+      if (picked.length > 0) {
+        const rehearsed = markRetrieved(picked, now);
+        const rehearsedById = new Map(rehearsed.map((e) => [e.id, e]));
+        // Update survivors in place so downstream passes see rehearsed state.
+        for (let i = 0; i < survivors.length; i++) {
+          const replacement = rehearsedById.get(survivors[i].id);
+          if (replacement) survivors[i] = replacement;
+        }
+        result.replayed = rehearsed.length;
+        result.details.push(
+          `  💭 replayed ${rehearsed.length} memor${rehearsed.length === 1 ? 'y' : 'ies'}: ` +
+          rehearsed.map((e) => e.id).join(', ')
+        );
+        if (!dryRun) {
+          for (const r of rehearsed) pendingWrites.push(r);
+        }
+      }
     }
   }
 
