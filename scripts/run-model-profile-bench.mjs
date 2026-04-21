@@ -133,7 +133,26 @@ function rmTmp(dir) {
 const HIPPO_BIN = process.platform === 'win32' ? 'hippo.cmd' : 'hippo';
 const CLAUDE_BIN = process.platform === 'win32' ? 'claude.cmd' : 'claude';
 
+// On Windows, .cmd files must run through a shell to be resolved. Passing
+// them to execFileSync directly with shell:true is unsafe because args
+// containing <, >, |, &, " get interpreted by cmd.exe. Workaround: resolve
+// the .cmd to the underlying node script and spawn node directly, which
+// bypasses the shell entirely.
+const HIPPO_JS = process.platform === 'win32'
+  ? path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'node_modules', 'hippo-memory', 'bin', 'hippo.js')
+  : null;
+
 function hippoCall(args, env, input, cwd) {
+  if (process.platform === 'win32' && fs.existsSync(HIPPO_JS)) {
+    return execFileSync(process.execPath, [HIPPO_JS, ...args], {
+      env: { ...process.env, ...env, HIPPO_DB_BUSY_TIMEOUT_MS: '5000' },
+      input,
+      encoding: 'utf8',
+      maxBuffer: 8 * 1024 * 1024,
+      timeout: 30_000,
+      cwd,
+    });
+  }
   return execFileSync(HIPPO_BIN, args, {
     env: { ...process.env, ...env, HIPPO_DB_BUSY_TIMEOUT_MS: '5000' },
     input,
@@ -141,7 +160,7 @@ function hippoCall(args, env, input, cwd) {
     maxBuffer: 8 * 1024 * 1024,
     timeout: 30_000,
     shell: process.platform === 'win32',
-    cwd, // isolated per-case dir — keeps local + global stores test-scoped
+    cwd,
   });
 }
 
