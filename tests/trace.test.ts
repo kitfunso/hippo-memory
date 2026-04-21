@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { initStore, listSessionEvents, loadAllEntries } from '../src/store.js';
+import { renderTraceContent, parseSteps } from '../src/trace.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 
@@ -52,5 +53,51 @@ describe('hippo session complete', () => {
       '--session', 'sess-x',
       '--outcome', 'not-real',
     ])).toThrow();
+  });
+});
+
+describe('renderTraceContent', () => {
+  it('renders a successful trace as markdown', () => {
+    const md = renderTraceContent({
+      task: 'fix failing test',
+      steps: [
+        { action: 'read test file', observation: 'assertion error' },
+        { action: 'edit src/foo.ts:42', observation: 'test passes' },
+      ],
+      outcome: 'success',
+    });
+    expect(md).toContain('Task: fix failing test');
+    expect(md).toContain('Outcome: success');
+    expect(md).toContain('1. read test file');
+    expect(md).toContain('\u2192 assertion error');
+    expect(md).toContain('2. edit src/foo.ts:42');
+  });
+
+  it('renders a trace with no observations cleanly', () => {
+    const md = renderTraceContent({
+      task: 'bare task',
+      steps: [{ action: 'did a thing', observation: '' }],
+      outcome: 'failure',
+    });
+    expect(md).toContain('Outcome: failure');
+    expect(md).toContain('1. did a thing');
+    expect(md).not.toContain('\u2192');
+  });
+});
+
+describe('parseSteps', () => {
+  it('parses a JSON steps string', () => {
+    const s = parseSteps('[{"action":"a","observation":"b"}]');
+    expect(s).toHaveLength(1);
+    expect(s[0].action).toBe('a');
+    expect(s[0].observation).toBe('b');
+  });
+
+  it('throws on invalid JSON', () => {
+    expect(() => parseSteps('not-json')).toThrow(/trace steps/);
+  });
+
+  it('throws on a non-array payload', () => {
+    expect(() => parseSteps('{"action":"x"}')).toThrow(/array/);
   });
 });
