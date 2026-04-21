@@ -60,6 +60,13 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v0.29.0
+
+- **Mid-session pinned re-injection (Claude Code).** Pinned memories now re-enter context every turn via a new `UserPromptSubmit` hook — not just at SessionStart — so invariants survive long sessions where Opus 4.7 might otherwise forget them. `hippo context --pinned-only --format additional-context` is the command the hook runs; it's read-only so retrieval_count doesn't inflate. Existing users must re-run `hippo hook install claude-code` to pick it up. Opt out with `{"pinnedInject":{"enabled":false}}` in `.hippo/config.json`.
+- **Replay consolidation pass.** `hippo sleep` now rehearses 5 high-value memories per cycle (weighted by outcome feedback, emotional valence, under-rehearsal, idle time, strength). Closes the "replay" gap in the 7 hippocampal mechanisms. Non-destructive; opt out with `{"replay":{"count":0}}`.
+- **Model profile benchmark (null result).** New reusable eval harness at `evals/model-profile-bench.json` + `scripts/run-model-profile-bench.mjs` measures invariant honor, hallucination guard, noise rejection, and contradiction rejection. 4.6 and 4.7 both score 100% with hippo context injection — no per-model profile tuning needed. See `docs/plans/2026-04-21-phase-a-decision.md`.
+- **Physics soak test harness.** `scripts/soak-test.mjs` + 10 synthetic workload profiles. All 10 bounded at 100-tick smoke scale; grant-scale 100hr runs are separate follow-up work.
+
 ### What's new in v0.28.0
 
 - **Budget saturation fix.** Large memories (14k+ chars) no longer starve retrieval. New `minResults` option guarantees at least N results regardless of token budget. `hippo recall <q> --min-results 5`.

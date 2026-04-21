@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — Replay + mid-session pinned re-injection
+## 0.29.0 (2026-04-21) — Replay + mid-session pinned re-injection
 
 ### Added
 - **Replay pass in `hippo sleep`.** Hippo now rehearses a small sample of surviving memories on every consolidation cycle, mirroring hippocampal replay during slow-wave sleep. The sampler weights by reward feedback, emotional valence, under-rehearsal, idle time, and remaining strength. Rehearsed memories get the same retrieval-strengthening that a real `hippo recall` applies (retrieval_count +1, half_life +2 days, last_retrieved refreshed). Exposed via new `src/replay.ts` (`sampleForReplay`, `replayPriority`). Sleep output now emits a `💭 replayed N memories: <ids>` line between the decay and physics passes.
