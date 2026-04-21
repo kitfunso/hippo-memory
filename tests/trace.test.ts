@@ -135,3 +135,61 @@ describe('hippo trace record', () => {
     ])).toThrow();
   });
 });
+
+describe('hippo recall --outcome filter', () => {
+  it('returns only successful traces when --outcome success is set', () => {
+    initStore(hippoDir);
+    for (const outcome of ['success', 'failure'] as const) {
+      runHippo([
+        'trace', 'record',
+        '--task', `refactor auth module (${outcome})`,
+        '--steps', '[{"action":"edit","observation":"done"}]',
+        '--outcome', outcome,
+      ]);
+    }
+
+    const out = runHippo([
+      'recall', 'refactor auth',
+      '--outcome', 'success',
+      '--json',
+      '--why',
+    ]);
+    const parsed = JSON.parse(out);
+    expect(parsed.results.length).toBeGreaterThan(0);
+    for (const r of parsed.results) {
+      if (r.layer === 'trace') {
+        expect(r.content).toContain('Outcome: success');
+        expect(r.content).not.toContain('Outcome: failure');
+      }
+    }
+    const allText = JSON.stringify(parsed);
+    expect(allText).toContain('refactor auth module (success)');
+    expect(allText).not.toContain('refactor auth module (failure)');
+  });
+
+  it('does NOT filter non-trace entries by --outcome', () => {
+    initStore(hippoDir);
+    // Record a failure trace
+    runHippo([
+      'trace', 'record',
+      '--task', 'database connector patch',
+      '--steps', '[{"action":"edit connector","observation":"still broken"}]',
+      '--outcome', 'failure',
+    ]);
+    // Remember a regular episodic memory that shares some text
+    runHippo([
+      'remember', 'database connector patch applied successfully to staging',
+    ]);
+
+    const out = runHippo([
+      'recall', 'database connector patch',
+      '--outcome', 'success',
+      '--json',
+    ]);
+    const parsed = JSON.parse(out);
+    // The failure trace must be dropped; the episodic memory must survive.
+    const allText = JSON.stringify(parsed);
+    expect(allText).not.toContain('still broken');
+    expect(allText).toContain('applied successfully to staging');
+  });
+});

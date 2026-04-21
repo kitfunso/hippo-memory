@@ -607,6 +607,22 @@ async function cmdRecall(
     });
   }
 
+  // --outcome filter: drop trace entries whose trace_outcome !== target.
+  // Non-trace entries pass through unaffected (traces are the only layer with
+  // a meaningful outcome; filtering non-traces by outcome would be incoherent).
+  const outcomeFilter = flags['outcome'] !== undefined ? String(flags['outcome']).trim() : '';
+  if (outcomeFilter) {
+    const validOutcomes = ['success', 'failure', 'partial'];
+    if (!validOutcomes.includes(outcomeFilter)) {
+      console.error(`Invalid --outcome: "${outcomeFilter}". Must be one of: ${validOutcomes.join(', ')}.`);
+      process.exit(1);
+    }
+    results = results.filter((r) => {
+      if (r.entry.layer !== Layer.Trace) return true;
+      return r.entry.trace_outcome === outcomeFilter;
+    });
+  }
+
   if (limit < results.length) {
     results = results.slice(0, limit);
   }
@@ -644,10 +660,13 @@ async function cmdRecall(
         tokens: r.tokens,
         tags: r.entry.tags,
         content: r.entry.content,
+        layer: r.entry.layer,
       };
+      if (r.entry.layer === Layer.Trace) {
+        base.trace_outcome = r.entry.trace_outcome;
+      }
       if (showWhy) {
         const explanation = explainMatch(query, r);
-        base.layer = r.entry.layer;
         base.confidence = resolveConfidence(r.entry);
         base.source = isGlobal ? 'global' : 'local';
         base.reason = explanation.reason;
