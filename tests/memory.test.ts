@@ -259,3 +259,36 @@ describe('Layer.Trace', () => {
     expect(Layer.Trace).not.toBe(Layer.Semantic);
   });
 });
+
+describe('MemoryEntry trace fields', () => {
+  it('defaults trace_outcome and source_session_id to null for non-trace entries', () => {
+    const m = createMemory('plain memory content', { layer: Layer.Episodic });
+    expect(m.trace_outcome).toBeNull();
+    expect(m.source_session_id).toBeNull();
+  });
+
+  it('accepts trace_outcome when explicitly provided', () => {
+    const m = createMemory('a trace', {
+      layer: Layer.Trace,
+      trace_outcome: 'success',
+    });
+    expect(m.trace_outcome).toBe('success');
+  });
+
+  it('accepts source_session_id on auto-promoted traces', () => {
+    const m = createMemory('a trace', {
+      layer: Layer.Trace,
+      trace_outcome: 'success',
+      source_session_id: 'sess-abc-123',
+    });
+    expect(m.source_session_id).toBe('sess-abc-123');
+  });
+
+  it('rejects invalid trace_outcome values', () => {
+    expect(() => createMemory('invalid', {
+      layer: Layer.Trace,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      trace_outcome: 'not-a-real-outcome' as any,
+    })).toThrow(/trace_outcome/);
+  });
+});

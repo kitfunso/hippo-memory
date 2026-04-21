@@ -234,6 +234,10 @@ export function deserializeEntry(raw: string): MemoryEntry | null {
     content: content.trim(),
     parents: normalizeStringArray(data['parents']),
     starred: Boolean(data['starred'] ?? false),
+    trace_outcome: (data['trace_outcome'] as MemoryEntry['trace_outcome']) ?? null,
+    source_session_id: data['source_session_id'] === null || data['source_session_id'] === undefined
+      ? null
+      : String(data['source_session_id']),
   };
 }
 
@@ -264,6 +268,8 @@ function rowToEntry(row: MemoryRow): MemoryEntry {
     content: row.content,
     parents: parseJsonArray(row.parents_json),
     starred: Boolean(row.starred),
+    trace_outcome: null,
+    source_session_id: null,
   };
 }
 

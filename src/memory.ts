@@ -16,6 +16,8 @@ export type EmotionalValence = 'neutral' | 'positive' | 'negative' | 'critical';
 
 export type ConfidenceLevel = 'verified' | 'observed' | 'inferred' | 'stale';
 
+export type TraceOutcome = 'success' | 'failure' | 'partial' | null;
+
 export interface MemoryEntry {
   id: string;
   created: string;         // ISO 8601
@@ -37,6 +39,8 @@ export interface MemoryEntry {
   content: string;         // the actual memory text
   parents: string[];       // IDs of source memories this was consolidated from (may be empty)
   starred: boolean;        // user-bookmarked
+  trace_outcome: TraceOutcome;      // final outcome for trace-layer entries; null otherwise
+  source_session_id: string | null; // set by auto-promote; null for everything else
 }
 
 export const DECISION_HALF_LIFE_DAYS = 90;
@@ -229,11 +233,18 @@ export function createMemory(
     source?: string;
     confidence?: ConfidenceLevel;
     baseHalfLifeDays?: number;
+    trace_outcome?: TraceOutcome;
+    source_session_id?: string | null;
   } = {}
 ): MemoryEntry {
   const trimmed = content.trim();
   if (trimmed.length < 3) {
     throw new Error(`Memory content too short (${trimmed.length} chars, minimum 3): "${trimmed}"`);
+  }
+
+  const validOutcomes: (string | null)[] = ['success', 'failure', 'partial', null];
+  if (options.trace_outcome !== undefined && !validOutcomes.includes(options.trace_outcome)) {
+    throw new Error(`Invalid trace_outcome: ${options.trace_outcome}. Must be 'success', 'failure', 'partial', or null.`);
   }
 
   const now = new Date().toISOString();
@@ -266,6 +277,8 @@ export function createMemory(
     content,
     parents: [],
     starred: false,
+    trace_outcome: options.trace_outcome ?? null,
+    source_session_id: options.source_session_id ?? null,
   };
 
   // Recalculate strength with the emotional multiplier applied
