@@ -60,6 +60,10 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v0.29.3
+
+- **Post-install banner for Claude Code users.** After `npm install -g hippo-memory`, if Claude Code is detected but the Hippo hook isn't wired yet, a three-line message points the user at `hippo init`. Silent on reinstalls or machines without Claude Code. Opt out via `HIPPO_SKIP_POSTINSTALL=1`.
+
 ### What's new in v0.29.2
 
 - **Fix UserPromptSubmit hook in fresh directories.** In v0.29.0/0.29.1, the `hippo context --pinned-only` hook errored with "No .hippo directory found" every time Claude Code opened a session in a cwd without a local hippo store, and would silently auto-create `.hippo/` there. Fixed: pinned-only falls back to global-only, leaves cwd untouched.

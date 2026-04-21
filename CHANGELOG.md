@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.29.3 (2026-04-21) — Friendly post-install nudge for Claude Code users
+
+### Added
+- **Post-install banner on fresh installs.** `npm install -g hippo-memory` now detects whether Claude Code is present (`~/.claude/` exists) AND whether the Hippo `UserPromptSubmit` hook is already wired (`settings.json` contains `hippo context --pinned-only`). If Claude Code is present and the hook is absent, prints a three-line message pointing the user at `hippo init`. Silent on machines without Claude Code or on reinstalls where the hook is already wired. Opt out with `HIPPO_SKIP_POSTINSTALL=1`.
+- **No config writes.** The banner is read-only — it prints to stderr. No surprise edits to `~/.claude/settings.json`, which would be rude and trip security scanners.
+
+### Rationale
+Before this, a new user's flow was: `npm install -g` → run some command → "wait, why is nothing happening?" → search docs → find `hippo init`. Three friction points. Now: install → see the banner → copy-paste `hippo init`. One friction point, already highlighted.
+
 ## 0.29.2 (2026-04-21) — Fix UserPromptSubmit hook in non-initialized directories
 
 ### Fixed
