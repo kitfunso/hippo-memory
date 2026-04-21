@@ -60,6 +60,10 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v0.29.2
+
+- **Fix UserPromptSubmit hook in fresh directories.** In v0.29.0/0.29.1, the `hippo context --pinned-only` hook errored with "No .hippo directory found" every time Claude Code opened a session in a cwd without a local hippo store, and would silently auto-create `.hippo/` there. Fixed: pinned-only falls back to global-only, leaves cwd untouched.
+
 ### What's new in v0.29.1
 
 - **Raise default `pinnedInject.budget` to 1500.** Smoke-testing on a real 10-pinned-memory store showed 500 tokens truncated new invariants off the bottom. 1500 matches `defaultContextBudget` and fits typical mature installs. Explicit `.hippo/config.json` overrides are untouched; only the default changes.

@@ -117,6 +117,65 @@ describe('hippo context --pinned-only', () => {
     expect(parsed.hookSpecificOutput.additionalContext).not.toContain('unpinned note that absolutely must not appear');
   });
 
+  it('does NOT fail when local .hippo is missing (regression: UserPromptSubmit hook error)', () => {
+    // Regression for v0.29.2: the UserPromptSubmit hook fires in EVERY Claude
+    // Code session, including directories without a .hippo/ store. Before the
+    // fix, `hippo context --pinned-only` called requireInit() first and the
+    // hook would error with "No .hippo directory found."
+    //
+    // Expected behaviour: when the cwd has no local store, fall back to
+    // global-only. If global also has no pinned memories, exit cleanly with
+    // empty stdout (hook no-ops).
+    //
+    // We stand up a tmp GLOBAL with a pinned memory, point cwd at a fresh
+    // tmpdir that has NO local .hippo/, and expect the global memory to show
+    // up in the additional-context payload.
+    const globalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-global-'));
+    const freshCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-fresh-cwd-'));
+    try {
+      initStore(globalDir);
+      const pinned = createMemory('REGRESSION GUARD: no local hippo should still deliver pinned content', { pinned: true });
+      writeEntry(globalDir, pinned);
+
+      const out = execFileSync(process.execPath, [HIPPO_JS, 'context', '--pinned-only', '--format', 'additional-context', '--budget', '500'], {
+        env: { ...process.env, HIPPO_HOME: globalDir },
+        cwd: freshCwd,
+        encoding: 'utf8',
+      });
+
+      // Must NOT throw, must NOT print to stderr, must contain the pinned memory.
+      expect(out.trim()).not.toBe('');
+      const parsed = JSON.parse(out);
+      expect(parsed.hookSpecificOutput.additionalContext).toContain('REGRESSION GUARD');
+
+      // And must NOT have auto-created .hippo in freshCwd (would pollute user's dirs).
+      expect(fs.existsSync(path.join(freshCwd, '.hippo'))).toBe(false);
+    } finally {
+      fs.rmSync(globalDir, { recursive: true, force: true });
+      fs.rmSync(freshCwd, { recursive: true, force: true });
+    }
+  });
+
+  it('exits cleanly when both local AND global are empty (pinned-only, fresh cwd)', () => {
+    // Variant of the regression test: no local, no global pinned memories,
+    // hook must produce empty stdout (not an error).
+    const globalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-empty-'));
+    const freshCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-cwd-'));
+    try {
+      // Do NOT init globalDir — it's just an empty path.
+      const out = execFileSync(process.execPath, [HIPPO_JS, 'context', '--pinned-only', '--format', 'additional-context', '--budget', '500'], {
+        env: { ...process.env, HIPPO_HOME: globalDir },
+        cwd: freshCwd,
+        encoding: 'utf8',
+      });
+      expect(out.trim()).toBe('');
+      expect(fs.existsSync(path.join(freshCwd, '.hippo'))).toBe(false);
+    } finally {
+      fs.rmSync(globalDir, { recursive: true, force: true });
+      fs.rmSync(freshCwd, { recursive: true, force: true });
+    }
+  });
+
   it('respects config.pinnedInject.enabled=false (empty output)', () => {
     initStore(hippoDir);
     const pinned = createMemory('pinned rule that should NOT appear when disabled by config', { pinned: true });

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.29.2 (2026-04-21) — Fix UserPromptSubmit hook in non-initialized directories
+
+### Fixed
+- **`UserPromptSubmit` hook no longer errors in fresh cwds.** The v0.29.x `hippo context --pinned-only` path hard-failed `requireInit` whenever Claude Code opened a session in a directory without a local `.hippo/` store, producing a visible "No .hippo directory found. Run `hippo init` first." error on every user message. Now the pinned-only path falls back to global-only when no local store exists. The non-pinned `hippo context` path still requires init (unchanged).
+- **Hook no longer auto-creates `.hippo/` in arbitrary cwds.** Previously, `loadActiveTaskSnapshot` and `loadAllEntries` inside `cmdContext` would silently create `.hippo/` on first invocation. Now both are guarded by `isInitialized(hippoRoot)` so the hook leaves fresh directories untouched.
+
+### Internal
+- 571 tests pass (+2): regression tests covering the "missing local .hippo" case and the "neither local nor global has pinned memories" empty-cwd path. Both assert zero `.hippo/` pollution.
+
 ## 0.29.1 (2026-04-21) — Raise default pinnedInject.budget to 1500
 
 ### Changed

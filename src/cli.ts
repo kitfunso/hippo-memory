@@ -2441,7 +2441,14 @@ async function cmdContext(
   args: string[],
   flags: Record<string, string | boolean | string[]>
 ): Promise<void> {
-  requireInit(hippoRoot);
+  // --pinned-only fires on every UserPromptSubmit — including in directories
+  // that don't have a local .hippo. Skip requireInit for that path and fall
+  // back to global-only below. The non-pinned path still requires init.
+  const pinnedOnly = flags['pinned-only'] === true;
+  const hasLocal = isInitialized(hippoRoot);
+  if (!pinnedOnly) {
+    requireInit(hippoRoot);
+  }
 
   const budget = parseInt(String(flags['budget'] ?? '1500'), 10);
   const limit = parseLimitFlag(flags['limit']);
@@ -2463,7 +2470,10 @@ async function cmdContext(
 
   const globalRoot = getGlobalRoot();
   const hasGlobal = isInitialized(globalRoot);
-  const localEntries = loadAllEntries(hippoRoot);
+  // When the local store isn't initialized (pinned-only path in a fresh dir),
+  // skip the local load — loadAllEntries would auto-create .hippo here and
+  // we don't want to pollute arbitrary cwds.
+  const localEntries = hasLocal ? loadAllEntries(hippoRoot) : [];
   const globalEntries = hasGlobal ? loadAllEntries(globalRoot) : [];
   const allEntries = [...localEntries];
 
@@ -2471,15 +2481,18 @@ async function cmdContext(
 
   let selectedItems: Array<{ entry: MemoryEntry; score: number; tokens: number; isGlobal?: boolean }> = [];
   let totalTokens = 0;
-  const activeSnapshot = loadActiveTaskSnapshot(hippoRoot);
-  const recentSessionEvents = activeSnapshot?.session_id
+  // Task snapshots / session events live in the local store. Skip when
+  // local isn't initialized — loading would auto-create .hippo in the cwd.
+  const activeSnapshot = hasLocal ? loadActiveTaskSnapshot(hippoRoot) : null;
+  const recentSessionEvents = hasLocal && activeSnapshot?.session_id
     ? listSessionEvents(hippoRoot, { session_id: activeSnapshot.session_id, limit: 5 })
     : [];
 
   // --pinned-only: restrict to pinned entries only. Used by the Claude Code
   // UserPromptSubmit hook so invariants stay in context every turn.
-  const pinnedOnly = flags['pinned-only'] === true;
+  // (pinnedOnly and hasLocal are declared at the top of this function.)
   if (pinnedOnly) {
+    // loadConfig is safe even when local isn't initialized — it returns defaults.
     const pinnedCfg = loadConfig(hippoRoot);
     if (!pinnedCfg.pinnedInject.enabled) return; // user disabled via config
     // Effective budget: explicit --budget wins over config.
