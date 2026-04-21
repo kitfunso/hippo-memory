@@ -679,6 +679,7 @@ export function uninstallJsonHooks(target: JsonHookTarget): boolean {
   const markersByKey: Record<string, string[]> = {
     SessionEnd: [HIPPO_SESSION_END_MARKER, HIPPO_SLEEP_MARKER, HIPPO_CAPTURE_MARKER],
     SessionStart: [HIPPO_LAST_SLEEP_MARKER],
+    UserPromptSubmit: [HIPPO_PINNED_INJECT_MARKER],
     Stop: [HIPPO_SLEEP_MARKER],
   };
   for (const [key, markers] of Object.entries(markersByKey)) {

@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { installJsonHooks } from '../src/hooks.js';
+import { installJsonHooks, uninstallJsonHooks } from '../src/hooks.js';
 
 /**
  * Tests for the mid-session pinned-rule re-injection hook.
@@ -59,5 +59,16 @@ describe('installJsonHooks — UserPromptSubmit pinned-inject (claude-code)', ()
 
     const settings = JSON.parse(fs.readFileSync(second.settingsPath, 'utf8'));
     expect(settings.hooks.UserPromptSubmit).toHaveLength(1);
+  });
+
+  it('uninstallJsonHooks removes the UserPromptSubmit pinned-inject entry', () => {
+    installJsonHooks('claude-code');
+    const removed = uninstallJsonHooks('claude-code');
+    expect(removed).toBe(true);
+
+    const settingsPath = path.join(tmpHome, '.claude', 'settings.json');
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    const remaining = (settings.hooks?.UserPromptSubmit ?? []) as unknown[];
+    expect(remaining).toHaveLength(0);
   });
 });
