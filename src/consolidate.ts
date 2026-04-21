@@ -416,6 +416,10 @@ function detectConflicts(
 
   for (let i = 0; i < survivors.length; i++) {
     for (let j = i + 1; j < survivors.length; j++) {
+      // Traces are variants of each other, not contradictions. Two
+      // strategies for the same task can both be valid; conflict detection
+      // exists for stated-rule disagreement, not strategy diversity.
+      if (survivors[i].layer === Layer.Trace && survivors[j].layer === Layer.Trace) continue;
       const reasonAndScore = describeConflict(survivors[i], survivors[j]);
       if (!reasonAndScore) continue;
       detected.push({

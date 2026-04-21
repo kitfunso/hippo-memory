@@ -91,6 +91,46 @@ describe('consolidate auto-promote: session -> trace', () => {
     expect(traces).toHaveLength(1);
   });
 
+  it('does NOT fire conflict detection between two trace-layer memories', () => {
+    initStore(tmpDir);
+
+    // Two traces whose content would otherwise trip the enabled/disabled
+    // polarity heuristic (distinctive shared tokens + opposing polarity).
+    // Without the trace-vs-trace skip, detectConflicts would flag the pair.
+    // With the skip, traces are treated as variants, not contradictions.
+    const sharedTokens =
+      'refactor auth module rotation strategy overlapping distinctive tokens here';
+
+    appendSessionEvent(tmpDir, {
+      session_id: 'sess-1',
+      event_type: 'session_complete',
+      content: 'success',
+      source: 'agent',
+      metadata: { summary: `${sharedTokens} always enable new flow` },
+    });
+    appendSessionEvent(tmpDir, {
+      session_id: 'sess-2',
+      event_type: 'session_complete',
+      content: 'success',
+      source: 'agent',
+      metadata: { summary: `${sharedTokens} never enable new flow disable it` },
+    });
+
+    consolidate(tmpDir, { now: new Date() });
+
+    const entries = loadAllEntries(tmpDir);
+    const traceIds = new Set(
+      entries.filter((e) => e.layer === Layer.Trace).map((e) => e.id),
+    );
+    expect(traceIds.size).toBe(2);
+
+    const conflicts = listMemoryConflicts(tmpDir);
+    const traceVsTrace = conflicts.filter(
+      (c) => traceIds.has(c.memory_a_id) && traceIds.has(c.memory_b_id),
+    );
+    expect(traceVsTrace).toHaveLength(0);
+  });
+
   it('skips sessions older than autoTraceWindowDays (default 7)', () => {
     initStore(tmpDir);
     const sid = 'test-stale';
