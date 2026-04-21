@@ -11,7 +11,7 @@
  *   hippo outcome --good | --bad [--id <id>]
  *   hippo conflicts [--status <status>] [--json]
  *   hippo snapshot <save|show|clear>
- *   hippo session <log|show|latest|resume>
+ *   hippo session <log|show|latest|resume|complete>
  *   hippo handoff <create|latest|show>
  *   hippo current <show>
  *   hippo forget <id>
@@ -2210,6 +2210,36 @@ function cmdSession(
     return;
   }
 
+  if (subcommand === 'complete') {
+    const outcome = String(flags['outcome'] ?? '').trim();
+    const summary = String(flags['summary'] ?? '').trim();
+    const validOutcomes = ['success', 'failure', 'partial'];
+
+    if (!sessionId) {
+      console.error('Usage: hippo session complete --session <session-id> --outcome <success|failure|partial> [--summary "..."]');
+      process.exit(1);
+    }
+    if (!validOutcomes.includes(outcome)) {
+      console.error(`Invalid outcome: "${outcome}". Must be one of: ${validOutcomes.join(', ')}.`);
+      process.exit(1);
+    }
+
+    const metadata: Record<string, unknown> = { ended_at: new Date().toISOString() };
+    if (summary) metadata.summary = summary;
+
+    const event = appendSessionEvent(hippoRoot, {
+      session_id: sessionId,
+      task: task || null,
+      event_type: 'session_complete',
+      content: outcome,
+      source: String(flags['source'] ?? 'cli'),
+      metadata,
+    });
+
+    console.log(`Completed session ${event.session_id} with outcome=${outcome} (event #${event.id})`);
+    return;
+  }
+
   if (subcommand === 'resume') {
     const handoff = loadLatestHandoff(hippoRoot, sessionId || undefined);
     if (!handoff) {
@@ -2240,7 +2270,7 @@ function cmdSession(
     return;
   }
 
-  console.error('Usage: hippo session <log|show|latest|resume>');
+  console.error('Usage: hippo session <log|show|latest|resume|complete>');
   process.exit(1);
 }
 
