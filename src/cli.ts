@@ -3525,7 +3525,8 @@ function installClaudeCodeSessionEndHook(): { installed: boolean; migratedFromSt
   return {
     installed:
       result.installedSessionEnd ||
-      result.installedSessionStart,
+      result.installedSessionStart ||
+      result.installedUserPromptSubmit,
     migratedFromStop: result.migratedFromStop,
   };
 }
