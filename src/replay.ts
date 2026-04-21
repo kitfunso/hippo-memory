@@ -39,8 +39,11 @@ const VALENCE_WEIGHT: Record<EmotionalValence, number> = {
 export function replayPriority(entry: MemoryEntry, now: Date): number {
   const pos = entry.outcome_positive ?? 0;
   const neg = entry.outcome_negative ?? 0;
-  // Reward signal in [0, ∞); neutral memories get 1, strongly-rewarded memories higher.
-  const rewardSignal = 1 + pos * 0.5 + (pos - neg) * 0.25;
+  // Reward signal: neutral memories get 1, strongly-rewarded memories > 1,
+  // negative-dominated memories floor at 0.1 (so they're still eligible, just
+  // much less likely to be sampled than neutral peers). Clamp is required
+  // because sampleForReplay depends on all weights being positive.
+  const rewardSignal = Math.max(0.1, 1 + pos * 0.5 + (pos - neg) * 0.25);
 
   const valence = VALENCE_WEIGHT[entry.emotional_valence] ?? 1.0;
 
@@ -49,11 +52,13 @@ export function replayPriority(entry: MemoryEntry, now: Date): number {
 
   // Idle-time boost: memories that haven't been touched recently need rehearsal more.
   const lastRetrieved = new Date(entry.last_retrieved);
-  const ageHours = Math.max(0, (now.getTime() - lastRetrieved.getTime()) / 3_600_000);
+  const deltaMs = now.getTime() - lastRetrieved.getTime();
+  const ageHours = Number.isFinite(deltaMs) ? Math.max(0, deltaMs / 3_600_000) : 0;
   const idleBoost = 1 + Math.log1p(ageHours) * 0.1;
 
   // Weight by current strength so dead-and-decaying memories don't waste replay slots.
-  const strengthFloor = Math.max(0.1, entry.strength);
+  const rawStrength = Number.isFinite(entry.strength) ? entry.strength : 0;
+  const strengthFloor = Math.max(0.1, rawStrength);
 
   return rewardSignal * valence * underRehearsed * idleBoost * strengthFloor;
 }

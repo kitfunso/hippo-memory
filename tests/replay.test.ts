@@ -154,4 +154,23 @@ describe('replayPriority', () => {
     const busy = fakeEntry({ content: 'b', retrieval_count: 50 });
     expect(replayPriority(fresh, now)).toBeGreaterThan(replayPriority(busy, now));
   });
+
+  it('stays positive even when negative outcomes dominate', () => {
+    // Regression: rewardSignal was `1 + pos*0.5 + (pos-neg)*0.25` without a
+    // clamp, which went negative for neg >> pos. Negative weights broke the
+    // weighted-sample-without-replacement picker in sampleForReplay.
+    const now = new Date();
+    const doomed = fakeEntry({ content: 'doom', outcome_positive: 0, outcome_negative: 100 });
+    expect(replayPriority(doomed, now)).toBeGreaterThan(0);
+  });
+
+  it('is finite when last_retrieved is malformed', () => {
+    const now = new Date();
+    const bad = fakeEntry({ content: 'bad' });
+    // Force an invalid timestamp post-construction to exercise NaN guard.
+    const mutated = { ...bad, last_retrieved: 'not-a-date' };
+    const p = replayPriority(mutated, now);
+    expect(Number.isFinite(p)).toBe(true);
+    expect(p).toBeGreaterThan(0);
+  });
 });
