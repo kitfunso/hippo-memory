@@ -874,7 +874,7 @@ For how these mechanisms connect to LLM training, continual learning, and open r
 | Auto-hook install | Yes | No | No | No |
 | MCP server | Yes | Yes | No | No |
 | Zero dependencies | Yes | No (ChromaDB) | No | No |
-| LongMemEval R@5 (retrieval) | 74.0% (BM25 only) | 96.6% (raw) / 100% (reranked) | ~49-85% | N/A |
+| LongMemEval R@5 (retrieval) | 73.8% (hybrid, v0.28) | 96.6% (raw) / 100% (reranked) | ~49-85% | N/A |
 | Git-friendly | Yes | No | No | Yes |
 | Framework agnostic | Yes | Yes | Partial | Yes |
 
@@ -890,28 +890,30 @@ Two benchmarks testing two different things. Full details in [`benchmarks/`](ben
 
 [LongMemEval](https://arxiv.org/abs/2410.10813) (ICLR 2025) is the industry-standard benchmark: 500 questions across 5 memory abilities, embedded in 115k+ token chat histories.
 
-**Hippo v0.11.0 results (BM25 only, zero dependencies):**
+**Hippo v0.28.0 results (hybrid BM25 + cosine, full 500 questions):**
 
-| Metric | Score |
-|--------|-------|
-| Recall@1 | 50.4% |
-| Recall@3 | 66.6% |
-| Recall@5 | 74.0% |
-| Recall@10 | 82.6% |
-| Answer in content@5 | 46.6% |
+| Metric | v0.28 | v0.11 (BM25 only) |
+|--------|-------|-------------------|
+| Recall@1 | 46.6% | 50.4% |
+| Recall@3 | **67.0%** | 66.6% |
+| Recall@5 | 73.8% | 74.0% |
+| Recall@10 | 81.0% | 82.6% |
+| Answer in content@5 | **49.6%** | 46.6% |
 
-| Question Type | Count | R@5 |
-|---------------|-------|-----|
-| single-session-assistant | 56 | 94.6% |
-| knowledge-update | 78 | 88.5% |
-| temporal-reasoning | 133 | 73.7% |
-| multi-session | 133 | 72.2% |
-| single-session-user | 70 | 65.7% |
-| single-session-preference | 30 | 26.7% |
+| Question Type | Count | R@5 | R@10 |
+|---------------|-------|-----|------|
+| single-session-assistant | 56 | 100.0% | 100.0% |
+| knowledge-update | 78 | 89.7% | 96.2% |
+| multi-session | 133 | 72.2% | 82.0% |
+| temporal-reasoning | 133 | 72.9% | 78.9% |
+| single-session-user | 70 | 62.9% | 71.4% |
+| single-session-preference | 30 | 20.0% | 33.3% |
 
-For context: MemPalace scores 96.6% (raw) using ChromaDB embeddings + spatial indexing. Hippo achieves 74.0% using BM25 keyword matching alone with zero runtime dependencies. Adding embeddings via `hippo embed` (optional `@xenova/transformers` peer dep) enables hybrid search and should close the gap.
+For context: MemPalace scores 96.6% (raw) using ChromaDB embeddings + spatial indexing. Hippo v0.28 achieves 73.8% R@5 with hybrid BM25 + cosine. Hybrid scoring trades a little R@1 accuracy for better top-5 content relevance (answer_in_content@5 +3pp vs v0.11).
 
-Hippo's strongest categories (knowledge-update 88.5%, single-session-assistant 94.6%) are the ones where keyword overlap between question and stored content is highest. The weakest (preference 26.7%) involves indirect references that need semantic understanding.
+Hippo's strongest categories (single-session-assistant 100% R@5, knowledge-update 89.7%) are where keyword overlap between question and stored content is highest. The weakest (preference 20%) involves indirect references that need deeper semantic understanding.
+
+> Note: v0.28 R@10 is 1.6pp below v0.11's BM25-only result. The earlier v0.27 benchmark showed an apparent 35pp regression — that was a methodology bug (budget-limited retrieval vs unlimited), fixed in v0.28 with the `minResults` option. See [`evals/README.md`](evals/README.md) for the full investigation and per-type breakdown.
 
 ```bash
 cd benchmarks/longmemeval
@@ -948,7 +950,7 @@ node run.mjs --adapter all
 Issues and PRs welcome. Before contributing, run `hippo status` in the repo root to see the project's own memory.
 
 The interesting problems:
-- **Improve LongMemEval score.** Current R@5 is 74.0% with BM25 only. Adding embeddings (`hippo embed`) and hybrid search should close the gap toward MemPalace's 96.6%.
+- **Improve LongMemEval score.** Current R@5 is 73.8% with hybrid BM25 + cosine (v0.28). Gap to MemPalace's 96.6% likely needs better chunking, reranking, or semantic compression — not just more of the same retrieval.
 - Better consolidation heuristics (LLM-powered merge vs current text overlap)
 - Web UI / dashboard for visualizing decay curves and memory health
 - Optimal decay parameter tuning from real usage data
