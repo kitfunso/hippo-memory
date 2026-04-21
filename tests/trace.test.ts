@@ -101,3 +101,37 @@ describe('parseSteps', () => {
     expect(() => parseSteps('{"action":"x"}')).toThrow(/array/);
   });
 });
+
+describe('hippo trace record', () => {
+  it('creates a Trace-layer memory with outcome + steps', () => {
+    initStore(hippoDir);
+
+    runHippo([
+      'trace', 'record',
+      '--task', 'fix failing test suite',
+      '--steps', JSON.stringify([
+        { action: 'read test', observation: 'saw assertion error' },
+        { action: 'edit src/foo.ts', observation: 'test passed' },
+      ]),
+      '--outcome', 'success',
+    ]);
+
+    const entries = loadAllEntries(hippoDir);
+    const traces = entries.filter((e) => e.layer === 'trace');
+    expect(traces).toHaveLength(1);
+    expect(traces[0].trace_outcome).toBe('success');
+    expect(traces[0].content).toContain('fix failing test suite');
+    expect(traces[0].content).toContain('assertion error');
+    expect(traces[0].content).toContain('test passed');
+  });
+
+  it('rejects invalid outcome values', () => {
+    initStore(hippoDir);
+    expect(() => runHippo([
+      'trace', 'record',
+      '--task', 'bad outcome',
+      '--steps', '[{"action":"x","observation":"y"}]',
+      '--outcome', 'not-real',
+    ])).toThrow();
+  });
+});

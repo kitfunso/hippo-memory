@@ -85,6 +85,7 @@ import {
 } from './store.js';
 import type { SessionHandoff } from './handoff.js';
 import { search, markRetrieved, estimateTokens, hybridSearch, physicsSearch, explainMatch, textOverlap } from './search.js';
+import { renderTraceContent, parseSteps } from './trace.js';
 import { consolidate } from './consolidate.js';
 import {
   isEmbeddingAvailable,
@@ -983,6 +984,61 @@ async function cmdEval(
       }
     }
   }
+}
+
+function cmdTraceRecord(
+  hippoRoot: string,
+  flags: Record<string, string | boolean | string[]>,
+): void {
+  requireInit(hippoRoot);
+
+  const task = String(flags['task'] ?? '').trim();
+  const stepsJson = String(flags['steps'] ?? '').trim();
+  const outcome = String(flags['outcome'] ?? '').trim();
+  const validOutcomes = ['success', 'failure', 'partial'];
+
+  if (!task || !stepsJson || !outcome) {
+    console.error('Usage: hippo trace record --task <t> --steps <json> --outcome <success|failure|partial> [--session <id>] [--tag <t>]');
+    process.exit(1);
+  }
+  if (!validOutcomes.includes(outcome)) {
+    console.error(`Invalid outcome: "${outcome}". Must be one of: ${validOutcomes.join(', ')}.`);
+    process.exit(1);
+  }
+
+  let steps;
+  try {
+    steps = parseSteps(stepsJson);
+  } catch (err) {
+    console.error(String(err instanceof Error ? err.message : err));
+    process.exit(1);
+  }
+
+  const sessionId = String(flags['session'] ?? '').trim() || null;
+  const rawTags = flags['tag'];
+  const tags = Array.isArray(rawTags)
+    ? rawTags.map((t) => String(t))
+    : rawTags !== undefined
+      ? [String(rawTags)]
+      : [];
+
+  const content = renderTraceContent({
+    task,
+    steps,
+    outcome: outcome as 'success' | 'failure' | 'partial',
+  });
+
+  const entry = createMemory(content, {
+    layer: Layer.Trace,
+    tags,
+    source: String(flags['source'] ?? 'cli'),
+    trace_outcome: outcome as 'success' | 'failure' | 'partial',
+    source_session_id: sessionId,
+  });
+
+  writeEntry(hippoRoot, entry);
+
+  console.log(`Recorded trace ${entry.id} (outcome=${outcome}, ${steps.length} steps)`);
 }
 
 function cmdTrace(
@@ -3951,12 +4007,16 @@ async function main(): Promise<void> {
     }
 
     case 'trace': {
-      const id = args[0] ? String(args[0]) : null;
-      if (!id) {
-        console.error('Usage: hippo trace <memory-id>');
+      const sub = args[0] ? String(args[0]) : '';
+      if (sub === 'record') {
+        cmdTraceRecord(hippoRoot, flags);
+        break;
+      }
+      if (!sub) {
+        console.error('Usage: hippo trace <memory-id> | hippo trace record --task <t> --steps <json> --outcome <o>');
         process.exit(1);
       }
-      cmdTrace(hippoRoot, id, flags);
+      cmdTrace(hippoRoot, sub, flags);
       break;
     }
 
