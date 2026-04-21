@@ -1,0 +1,65 @@
+{
+  "seed": 1337,
+  "categories": [
+    {
+      "id": "api-call",
+      "description": "call the remote service",
+      "hint": "use-auth-header-v2",
+      "trap_note": "endpoint was renamed; the v2 auth header is required"
+    },
+    {
+      "id": "parse-csv",
+      "description": "parse the incoming csv",
+      "hint": "pin-delimiter-semicolon",
+      "trap_note": "european locale uses semicolons, not commas"
+    },
+    {
+      "id": "cache-lookup",
+      "description": "fetch the cached value",
+      "hint": "skip-stale-entries",
+      "trap_note": "stale entries exist past TTL; caller must re-check freshness"
+    },
+    {
+      "id": "db-write",
+      "description": "persist the record",
+      "hint": "wrap-in-transaction",
+      "trap_note": "partial writes corrupt the store; must be transactional"
+    },
+    {
+      "id": "log-ship",
+      "description": "ship the log batch",
+      "hint": "gzip-before-upload",
+      "trap_note": "ingest endpoint requires gzip content-encoding"
+    },
+    {
+      "id": "retry-request",
+      "description": "retry the flaky call",
+      "hint": "exponential-backoff-jitter",
+      "trap_note": "tight retries cause thundering herd; need jittered backoff"
+    },
+    {
+      "id": "render-template",
+      "description": "render the email template",
+      "hint": "escape-html-entities",
+      "trap_note": "user input leaks without explicit escaping"
+    },
+    {
+      "id": "rotate-key",
+      "description": "rotate the signing key",
+      "hint": "publish-before-revoke",
+      "trap_note": "must publish new key before revoking old, or requests 401"
+    }
+  ],
+  "sequence": [
+    "api-call", "parse-csv", "cache-lookup", "db-write", "log-ship",
+    "retry-request", "render-template", "rotate-key", "api-call", "parse-csv",
+    "cache-lookup", "db-write", "log-ship", "retry-request", "render-template",
+    "rotate-key", "api-call", "parse-csv", "cache-lookup", "db-write",
+    "log-ship", "retry-request", "render-template", "rotate-key", "api-call",
+    "parse-csv", "cache-lookup", "db-write", "log-ship", "retry-request",
+    "render-template", "rotate-key", "api-call", "parse-csv", "cache-lookup",
+    "db-write", "log-ship", "retry-request", "render-template", "rotate-key",
+    "api-call", "parse-csv", "cache-lookup", "db-write", "log-ship",
+    "retry-request", "render-template", "rotate-key", "api-call", "parse-csv"
+  ]
+}
