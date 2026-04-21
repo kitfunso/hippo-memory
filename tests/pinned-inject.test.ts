@@ -96,4 +96,14 @@ describe('hippo context --pinned-only', () => {
     expect(target!.retrieval_count).toBe(0);
     expect(target!.last_retrieved).toBe(pinned.last_retrieved);
   });
+
+  it('respects config.pinnedInject.enabled=false (empty output)', () => {
+    initStore(hippoDir);
+    const pinned = createMemory('pinned rule that should NOT appear when disabled by config', { pinned: true });
+    writeEntry(hippoDir, pinned);
+    fs.writeFileSync(path.join(hippoDir, 'config.json'), JSON.stringify({ pinnedInject: { enabled: false } }));
+
+    const out = runHippo(['context', '--pinned-only', '--format', 'additional-context']);
+    expect(out.trim()).toBe('');
+  });
 });

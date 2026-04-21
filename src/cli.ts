@@ -2477,6 +2477,10 @@ async function cmdContext(
   // UserPromptSubmit hook so invariants stay in context every turn.
   const pinnedOnly = flags['pinned-only'] === true;
   if (pinnedOnly) {
+    const pinnedCfg = loadConfig(hippoRoot);
+    if (!pinnedCfg.pinnedInject.enabled) return; // user disabled via config
+    // Effective budget: explicit --budget wins over config.
+    const effBudget = flags['budget'] !== undefined ? budget : pinnedCfg.pinnedInject.budget;
     const pinnedLocal = localEntries.filter((e) => e.pinned);
     const pinnedGlobal = globalEntries.filter((e) => e.pinned);
     if (pinnedLocal.length === 0 && pinnedGlobal.length === 0) return; // zero output
@@ -2495,7 +2499,7 @@ async function cmdContext(
 
     let usedP = 0;
     for (const r of rankedPinned) {
-      if (usedP + r.tokens > budget) continue;
+      if (usedP + r.tokens > effBudget) continue;
       selectedItems.push(r);
       usedP += r.tokens;
     }
