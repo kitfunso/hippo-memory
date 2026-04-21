@@ -1,0 +1,58 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+import { execFileSync } from 'child_process';
+import { initStore, writeEntry } from '../src/store.js';
+import { createMemory, Layer } from '../src/memory.js';
+
+let tmpDir: string;
+let hippoDir: string;
+
+beforeEach(() => {
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-pinned-'));
+  hippoDir = path.join(tmpDir, '.hippo');
+});
+
+afterEach(() => {
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+// Always run against the local built CLI so we're testing our source, not a
+// stale globally-installed version.
+const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
+
+function runHippo(args: string[]): string {
+  // Point HIPPO_HOME at a separate dir so the global store doesn't leak into
+  // the test (cmdContext merges local + global). The local store lives at
+  // `${tmpDir}/.hippo` (resolved via getHippoRoot(cwd)).
+  const globalDir = path.join(tmpDir, 'global');
+  return execFileSync(process.execPath, [HIPPO_JS, ...args], {
+    env: { ...process.env, HIPPO_HOME: globalDir },
+    cwd: tmpDir,
+    encoding: 'utf8',
+  });
+}
+
+describe('hippo context --pinned-only', () => {
+  it('returns only pinned entries in plain text', () => {
+    initStore(hippoDir);
+    const pinned = createMemory('NEVER skip the pre-commit hook because it caused three incidents', { pinned: true, layer: Layer.Episodic });
+    const unpinned = createMemory('random note not pinned nor critical to this test', { pinned: false, layer: Layer.Episodic });
+    writeEntry(hippoDir, pinned);
+    writeEntry(hippoDir, unpinned);
+
+    const out = runHippo(['context', '--pinned-only', '--budget', '500']);
+    expect(out).toContain('NEVER skip the pre-commit hook');
+    expect(out).not.toContain('random note not pinned');
+  });
+
+  it('emits empty string when no pinned entries', () => {
+    initStore(hippoDir);
+    const unpinned = createMemory('only unpinned entries here should produce empty output', { pinned: false });
+    writeEntry(hippoDir, unpinned);
+
+    const out = runHippo(['context', '--pinned-only', '--budget', '500']);
+    expect(out.trim()).toBe('');
+  });
+});

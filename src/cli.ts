@@ -2473,7 +2473,34 @@ async function cmdContext(
     ? listSessionEvents(hippoRoot, { session_id: activeSnapshot.session_id, limit: 5 })
     : [];
 
-  if (query === '*') {
+  // --pinned-only: restrict to pinned entries only. Used by the Claude Code
+  // UserPromptSubmit hook so invariants stay in context every turn.
+  const pinnedOnly = flags['pinned-only'] === true;
+  if (pinnedOnly) {
+    const pinnedLocal = localEntries.filter((e) => e.pinned);
+    const pinnedGlobal = globalEntries.filter((e) => e.pinned);
+    if (pinnedLocal.length === 0 && pinnedGlobal.length === 0) return; // zero output
+    const nowP = new Date();
+    const rankedPinned = [
+      ...pinnedLocal.map((e) => ({ entry: e, isGlobal: false })),
+      ...pinnedGlobal.map((e) => ({ entry: e, isGlobal: true })),
+    ]
+      .map(({ entry, isGlobal }) => ({
+        entry,
+        score: calculateStrength(entry, nowP) * (isGlobal ? 1 / 1.2 : 1),
+        tokens: estimateTokens(entry.content),
+        isGlobal,
+      }))
+      .sort((a, b) => b.score - a.score);
+
+    let usedP = 0;
+    for (const r of rankedPinned) {
+      if (usedP + r.tokens > budget) continue;
+      selectedItems.push(r);
+      usedP += r.tokens;
+    }
+    totalTokens = usedP;
+  } else if (query === '*') {
     // No query: return strongest memories by strength, up to budget
     const now = new Date();
     const localRanked = localEntries
