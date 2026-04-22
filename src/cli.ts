@@ -623,6 +623,17 @@ async function cmdRecall(
     });
   }
 
+  // --layer filter: strict, drops entries whose layer does not match.
+  const layerFilter = flags['layer'] !== undefined ? String(flags['layer']).trim() : '';
+  if (layerFilter) {
+    const validLayers = Object.values(Layer) as string[];
+    if (!validLayers.includes(layerFilter)) {
+      console.error(`Invalid --layer: "${layerFilter}". Must be one of: ${validLayers.join(', ')}.`);
+      process.exit(1);
+    }
+    results = results.filter((r) => r.entry.layer === layerFilter);
+  }
+
   if (limit < results.length) {
     results = results.slice(0, limit);
   }
