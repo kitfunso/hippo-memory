@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.31.0 (2026-04-22)
+
+### Added
+- **Scope-aware corrections.** Memories can now be tagged with a context scope (e.g. `scope:plan-eng-review`, `scope:qa`) via `hippo remember --scope <name>`. During recall, memories whose scope matches the active scope get a 1.5x boost; memories with a mismatching scope are suppressed 0.5x; unscoped memories stay neutral. A correction said during one skill no longer pollutes unrelated contexts.
+- **Auto-detection from env vars.** `detectScope()` reads `HIPPO_SCOPE`, `GSTACK_SKILL`, or `OPENCLAW_SKILL` in priority order. When any is set, `hippo remember` / `recall` / `context` / `explain` auto-apply the scope without explicit flags. Pure env var reads, no I/O on hot paths.
+- **`--scope <name>` flag** on `hippo remember`, `hippo recall`, `hippo context`, `hippo explain`. Explicit scope overrides auto-detection.
+- **`scopeBoost` in score breakdown.** `hippo explain --why` shows the scope multiplier when it is not 1.0, making scope routing debuggable.
+
+### Internal
+- 625 tests pass (+21 from v0.30.1). 3 new test files: `scope.test.ts`, `scope-boost.test.ts`, `scope-context.test.ts`.
+- New module: `src/scope.ts` (32 lines). `scopeBoost` added to `src/search.ts` alongside existing `decisionBoost` / `pathBoost` / `outcomeBoost` multipliers.
+- Reviewed via `/review` + `/self-review`. Git-branch fallback in `detectScope()` was proposed but dropped after review: it forked git on every UserPromptSubmit hook call (~50-150ms latency per user message) and polluted the tag space with ephemeral branch names.
+
 ## 0.30.1 (2026-04-22)
 
 ### Fixed

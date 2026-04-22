@@ -60,6 +60,12 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v0.31.0
+
+- **Scope-aware corrections.** Tag a memory with `hippo remember --scope plan-eng-review` and it only surfaces strongly when that scope is active again. Matching scope gets 1.5x boost, mismatching scope is suppressed 0.5x, unscoped memories stay neutral. Corrections said during one skill stop polluting unrelated contexts.
+- **Auto-detect from env.** `HIPPO_SCOPE`, `GSTACK_SKILL`, `OPENCLAW_SKILL` populate the scope automatically. Explicit `--scope` on any command overrides.
+- **`hippo explain --why`** now shows the `scope:` multiplier when it fires, so you can see why a memory got ranked up or down.
+
 ### What's new in v0.30.1
 
 - **`hippo recall --layer <L>` is now a strict filter.** Previously the flag was accepted but silently dropped; other layers leaked into results. The RSI demo's `recall --layer trace` now does what it says.
