@@ -145,6 +145,10 @@ export interface HybridSearchOptions extends SearchOptions {
   localBump?: number;
   /** Active scope for scope-boost scoring. Auto-detected if not provided. */
   scope?: string | null;
+  /** Include superseded memories in results. Default false. */
+  includeSuperseded?: boolean;
+  /** Filter to memories current at this ISO date string. */
+  asOf?: string;
 }
 
 /**
@@ -157,7 +161,7 @@ export async function searchBothHybrid(
   globalRoot: string,
   options: HybridSearchOptions = {}
 ): Promise<SearchResult[]> {
-  const { budget = 4000, now = new Date(), embeddingWeight, explain, mmr, mmrLambda, localBump = 1.2, minResults, scope } = options;
+  const { budget = 4000, now = new Date(), embeddingWeight, explain, mmr, mmrLambda, localBump = 1.2, minResults, scope, includeSuperseded, asOf } = options;
 
   const localEntries = fs.existsSync(localRoot) ? loadSearchEntries(localRoot, query) : [];
   const globalEntries = fs.existsSync(globalRoot) ? loadSearchEntries(globalRoot, query) : [];
@@ -165,10 +169,10 @@ export async function searchBothHybrid(
   if (localEntries.length === 0 && globalEntries.length === 0) return [];
 
   const localResults = await hybridSearch(query, localEntries, {
-    budget, now, hippoRoot: localRoot, embeddingWeight, explain, mmr, mmrLambda, minResults, scope,
+    budget, now, hippoRoot: localRoot, embeddingWeight, explain, mmr, mmrLambda, minResults, scope, includeSuperseded, asOf,
   });
   const globalResults = await hybridSearch(query, globalEntries, {
-    budget, now, hippoRoot: globalRoot, embeddingWeight, explain, mmr, mmrLambda, minResults, scope,
+    budget, now, hippoRoot: globalRoot, embeddingWeight, explain, mmr, mmrLambda, minResults, scope, includeSuperseded, asOf,
   });
 
   // Tag global results. Local memories get a configurable priority bump.

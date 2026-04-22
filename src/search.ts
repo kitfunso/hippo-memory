@@ -215,6 +215,10 @@ export async function hybridSearch(
     minResults?: number;
     /** Active scope for scope-boost scoring. Auto-detected if not provided. */
     scope?: string | null;
+    /** Include superseded memories in results. Default false. */
+    includeSuperseded?: boolean;
+    /** Filter to memories current at this ISO date string. */
+    asOf?: string;
   } = {}
 ): Promise<SearchResult[]> {
   const now = options.now ?? new Date();
@@ -226,6 +230,26 @@ export async function hybridSearch(
   const explain = options.explain ?? false;
   const mmrEnabled = options.mmr ?? true;
   const mmrLambda = options.mmrLambda ?? 0.7;
+
+  // Bi-temporal filtering
+  if (options.asOf) {
+    const asOfDate = new Date(options.asOf);
+    const successorValidFrom = new Map<string, string>();
+    for (const e of entries) {
+      if (e.superseded_by) {
+        const successor = entries.find(s => s.id === e.superseded_by);
+        if (successor) successorValidFrom.set(e.id, successor.valid_from);
+      }
+    }
+    entries = entries.filter(e => {
+      if (new Date(e.valid_from) > asOfDate) return false;
+      if (!e.superseded_by) return true;
+      const succVf = successorValidFrom.get(e.id);
+      return succVf ? new Date(succVf) > asOfDate : true;
+    });
+  } else if (!options.includeSuperseded) {
+    entries = entries.filter(e => !e.superseded_by);
+  }
 
   if (entries.length === 0) return [];
 
@@ -672,12 +696,32 @@ function mergeScorePools(poolA: SearchResult[], poolB: SearchResult[]): SearchRe
 export function search(
   query: string,
   entries: MemoryEntry[],
-  options: { budget?: number; now?: Date; hippoRoot?: string; minResults?: number } = {}
+  options: { budget?: number; now?: Date; hippoRoot?: string; minResults?: number; includeSuperseded?: boolean; asOf?: string } = {}
 ): SearchResult[] {
   // Synchronous path: BM25 only (no async hybrid)
   const now = options.now ?? new Date();
   const budget = options.budget ?? 4000;
   const minResults = options.minResults ?? 1;
+
+  // Bi-temporal filtering
+  if (options.asOf) {
+    const asOfDate = new Date(options.asOf);
+    const successorValidFrom = new Map<string, string>();
+    for (const e of entries) {
+      if (e.superseded_by) {
+        const successor = entries.find(s => s.id === e.superseded_by);
+        if (successor) successorValidFrom.set(e.id, successor.valid_from);
+      }
+    }
+    entries = entries.filter(e => {
+      if (new Date(e.valid_from) > asOfDate) return false;
+      if (!e.superseded_by) return true;
+      const succVf = successorValidFrom.get(e.id);
+      return succVf ? new Date(succVf) > asOfDate : true;
+    });
+  } else if (!options.includeSuperseded) {
+    entries = entries.filter(e => !e.superseded_by);
+  }
 
   if (entries.length === 0) return [];
 
@@ -747,6 +791,7 @@ export function search(
  */
 export function markRetrieved(entries: MemoryEntry[], now: Date = new Date()): MemoryEntry[] {
   return entries.map((e) => {
+    if (e.superseded_by) return e;
     const updated: MemoryEntry = {
       ...e,
       retrieval_count: e.retrieval_count + 1,

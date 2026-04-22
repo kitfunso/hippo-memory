@@ -608,10 +608,37 @@ async function cmdRecall(
   const showWhy = Boolean(flags['why']);
   const forcePhysics = Boolean(flags['physics']);
   const forceClassic = Boolean(flags['classic']);
+  const includeSuperseded = Boolean(flags['include-superseded']);
+  const asOf = typeof flags['as-of'] === 'string' ? flags['as-of'] : undefined;
   const globalRoot = getGlobalRoot();
 
-  const localEntries = loadSearchEntries(hippoRoot, query);
-  const globalEntries = isInitialized(globalRoot) ? loadSearchEntries(globalRoot, query) : [];
+  let localEntries = loadSearchEntries(hippoRoot, query);
+  let globalEntries = isInitialized(globalRoot) ? loadSearchEntries(globalRoot, query) : [];
+
+  // Bi-temporal filtering for physics path (hybridSearch handles it internally)
+  if (asOf) {
+    const filterAsOf = (entries: MemoryEntry[]) => {
+      const asOfDate = new Date(asOf);
+      const successorValidFrom = new Map<string, string>();
+      for (const e of entries) {
+        if (e.superseded_by) {
+          const successor = entries.find(s => s.id === e.superseded_by);
+          if (successor) successorValidFrom.set(e.id, successor.valid_from);
+        }
+      }
+      return entries.filter(e => {
+        if (new Date(e.valid_from) > asOfDate) return false;
+        if (!e.superseded_by) return true;
+        const succVf = successorValidFrom.get(e.id);
+        return succVf ? new Date(succVf) > asOfDate : true;
+      });
+    };
+    localEntries = filterAsOf(localEntries);
+    globalEntries = filterAsOf(globalEntries);
+  } else if (!includeSuperseded) {
+    localEntries = localEntries.filter(e => !e.superseded_by);
+    globalEntries = globalEntries.filter(e => !e.superseded_by);
+  }
 
   const hasGlobal = globalEntries.length > 0;
 
@@ -726,6 +753,10 @@ async function cmdRecall(
       if (r.entry.layer === Layer.Trace) {
         base.trace_outcome = r.entry.trace_outcome;
       }
+      if (r.entry.superseded_by) {
+        base.superseded = true;
+        base.superseded_by = r.entry.superseded_by;
+      }
       if (showWhy) {
         const explanation = explainMatch(query, r);
         base.confidence = resolveConfidence(r.entry);
@@ -750,8 +781,9 @@ async function cmdRecall(
     const strengthBar = '\u2588'.repeat(Math.round(e.strength * 10)) + '\u2591'.repeat(10 - Math.round(e.strength * 10));
     const isGlobal = isInitialized(globalRoot) && !localIndex.entries[e.id];
     const globalMark = isGlobal ? ' [global]' : '';
+    const supersededMark = e.superseded_by ? ' [superseded]' : '';
     const sourceMark = isGlobal ? ' [global]' : ' [local]';
-    console.log(`--- ${e.id} [${e.layer}] ${confLabel}${globalMark} score=${fmt(r.score, 3)} strength=${fmt(e.strength)}`);
+    console.log(`--- ${e.id} [${e.layer}] ${confLabel}${globalMark}${supersededMark} score=${fmt(r.score, 3)} strength=${fmt(e.strength)}`);
     console.log(`    [${strengthBar}] tags: ${e.tags.join(', ') || 'none'} | retrieved: ${e.retrieval_count}x`);
     if (showWhy) {
       const explanation = explainMatch(query, r);
@@ -776,12 +808,39 @@ async function cmdExplain(
   const asJson = Boolean(flags['json']);
   const forcePhysics = Boolean(flags['physics']);
   const forceClassic = Boolean(flags['classic']);
+  const explainIncludeSuperseded = Boolean(flags['include-superseded']);
+  const explainAsOf = typeof flags['as-of'] === 'string' ? flags['as-of'] : undefined;
   const globalRoot = getGlobalRoot();
 
-  const localEntries = loadSearchEntries(hippoRoot, query);
-  const globalEntries = isInitialized(globalRoot) ? loadSearchEntries(globalRoot, query) : [];
+  let explainLocalEntries = loadSearchEntries(hippoRoot, query);
+  let explainGlobalEntries = isInitialized(globalRoot) ? loadSearchEntries(globalRoot, query) : [];
 
-  const hasGlobal = globalEntries.length > 0;
+  // Bi-temporal filtering
+  if (explainAsOf) {
+    const filterAsOfExplain = (entries: MemoryEntry[]) => {
+      const asOfDate = new Date(explainAsOf);
+      const successorValidFrom = new Map<string, string>();
+      for (const e of entries) {
+        if (e.superseded_by) {
+          const successor = entries.find(s => s.id === e.superseded_by);
+          if (successor) successorValidFrom.set(e.id, successor.valid_from);
+        }
+      }
+      return entries.filter(e => {
+        if (new Date(e.valid_from) > asOfDate) return false;
+        if (!e.superseded_by) return true;
+        const succVf = successorValidFrom.get(e.id);
+        return succVf ? new Date(succVf) > asOfDate : true;
+      });
+    };
+    explainLocalEntries = filterAsOfExplain(explainLocalEntries);
+    explainGlobalEntries = filterAsOfExplain(explainGlobalEntries);
+  } else if (!explainIncludeSuperseded) {
+    explainLocalEntries = explainLocalEntries.filter(e => !e.superseded_by);
+    explainGlobalEntries = explainGlobalEntries.filter(e => !e.superseded_by);
+  }
+
+  const hasGlobal = explainGlobalEntries.length > 0;
   const config = loadConfig(hippoRoot);
   const usePhysics = forcePhysics
     || (!forceClassic && config.physics.enabled !== false);
@@ -802,7 +861,7 @@ async function cmdExplain(
   let results;
   let modeUsed: 'physics' | 'searchBothHybrid' | 'hybrid';
   if (usePhysics && !hasGlobal) {
-    results = await physicsSearch(query, localEntries, {
+    results = await physicsSearch(query, explainLocalEntries, {
       budget,
       hippoRoot,
       physicsConfig: config.physics,
@@ -813,11 +872,13 @@ async function cmdExplain(
   } else if (hasGlobal) {
     results = await searchBothHybrid(query, hippoRoot, globalRoot, {
       budget, explain: true, mmr: mmrEnabled, mmrLambda, localBump, scope: explainActiveScope,
+      includeSuperseded: explainIncludeSuperseded, asOf: explainAsOf,
     });
     modeUsed = 'searchBothHybrid';
   } else {
-    results = await hybridSearch(query, localEntries, {
+    results = await hybridSearch(query, explainLocalEntries, {
       budget, hippoRoot, explain: true, mmr: mmrEnabled, mmrLambda, scope: explainActiveScope,
+      includeSuperseded: explainIncludeSuperseded, asOf: explainAsOf,
     });
     modeUsed = 'hybrid';
   }
@@ -826,7 +887,7 @@ async function cmdExplain(
     results = results.slice(0, limit);
   }
 
-  const candidates = localEntries.length + globalEntries.length;
+  const candidates = explainLocalEntries.length + explainGlobalEntries.length;
 
   if (asJson) {
     const output = results.map((r, rank) => ({
@@ -2647,8 +2708,13 @@ async function cmdContext(
   // When the local store isn't initialized (pinned-only path in a fresh dir),
   // skip the local load — loadAllEntries would auto-create .hippo here and
   // we don't want to pollute arbitrary cwds.
-  const localEntries = hasLocal ? loadAllEntries(hippoRoot) : [];
-  const globalEntries = hasGlobal ? loadAllEntries(globalRoot) : [];
+  let localEntries = hasLocal ? loadAllEntries(hippoRoot) : [];
+  let globalEntries = hasGlobal ? loadAllEntries(globalRoot) : [];
+
+  // Default context always filters superseded (no --include-superseded / --as-of for context)
+  localEntries = localEntries.filter(e => !e.superseded_by);
+  globalEntries = globalEntries.filter(e => !e.superseded_by);
+
   const allEntries = [...localEntries];
 
   if (allEntries.length === 0 && globalEntries.length === 0) return; // no memories, zero output

@@ -33,7 +33,7 @@ function hippoErr(home: string, cmd: string): string {
 describe('hippo supersede', () => {
   it('creates new memory and links old one via superseded_by', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-ss-'));
-    hippo(home, 'init --no-hooks --no-schedule');
+    hippo(home, 'init --no-hooks --no-schedule --no-learn');
     hippo(home, 'remember "X is true"');
     const hippoRoot = join(home, '.hippo');
     const entries = loadAllEntries(hippoRoot);
@@ -57,7 +57,7 @@ describe('hippo supersede', () => {
 
   it('errors if old id does not exist', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-ss-'));
-    hippo(home, 'init --no-hooks --no-schedule');
+    hippo(home, 'init --no-hooks --no-schedule --no-learn');
     const err = hippoErr(home, 'supersede mem_does_not_exist "anything here"');
     expect(err).toContain('not found');
     rmSync(home, { recursive: true, force: true });
@@ -65,7 +65,7 @@ describe('hippo supersede', () => {
 
   it('errors if old id is already superseded', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-ss-'));
-    hippo(home, 'init --no-hooks --no-schedule');
+    hippo(home, 'init --no-hooks --no-schedule --no-learn');
     hippo(home, 'remember "first version of fact"');
     const hippoRoot = join(home, '.hippo');
     const entries = loadAllEntries(hippoRoot);

@@ -420,6 +420,7 @@ function detectConflicts(
       // strategies for the same task can both be valid; conflict detection
       // exists for stated-rule disagreement, not strategy diversity.
       if (survivors[i].layer === Layer.Trace && survivors[j].layer === Layer.Trace) continue;
+      if (survivors[i].superseded_by || survivors[j].superseded_by) continue;
       const reasonAndScore = describeConflict(survivors[i], survivors[j]);
       if (!reasonAndScore) continue;
       detected.push({
