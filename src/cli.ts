@@ -2587,6 +2587,8 @@ async function cmdContext(
 
   const budget = parseInt(String(flags['budget'] ?? '1500'), 10);
   const limit = parseLimitFlag(flags['limit']);
+  const ctxExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
+  const ctxActiveScope = ctxExplicitScope || detectScope();
 
   // If budget is 0, skip entirely (zero token cost)
   if (budget <= 0) return;
@@ -2640,12 +2642,16 @@ async function cmdContext(
       ...pinnedLocal.map((e) => ({ entry: e, isGlobal: false })),
       ...pinnedGlobal.map((e) => ({ entry: e, isGlobal: true })),
     ]
-      .map(({ entry, isGlobal }) => ({
-        entry,
-        score: calculateStrength(entry, nowP) * (isGlobal ? 1 / 1.2 : 1),
-        tokens: estimateTokens(entry.content),
-        isGlobal,
-      }))
+      .map(({ entry, isGlobal }) => {
+        const scopeSig = scopeMatch(entry.tags, ctxActiveScope);
+        const sBst = scopeSig === 1 ? 1.5 : scopeSig === -1 ? 0.5 : 1.0;
+        return {
+          entry,
+          score: calculateStrength(entry, nowP) * (isGlobal ? 1 / 1.2 : 1) * sBst,
+          tokens: estimateTokens(entry.content),
+          isGlobal,
+        };
+      })
       .sort((a, b) => b.score - a.score);
 
     let usedP = 0;
@@ -2688,7 +2694,7 @@ async function cmdContext(
   } else {
     let results;
     if (hasGlobal) {
-      const merged = await searchBothHybrid(query, hippoRoot, globalRoot, { budget });
+      const merged = await searchBothHybrid(query, hippoRoot, globalRoot, { budget, scope: ctxActiveScope });
       const localIndex = loadIndex(hippoRoot);
       results = merged.map((r) => ({
         entry: r.entry,
@@ -2700,8 +2706,8 @@ async function cmdContext(
       const ctxConfig = loadConfig(hippoRoot);
       const usePhysicsCtx = ctxConfig.physics?.enabled !== false;
       const ctxResults = usePhysicsCtx
-        ? await physicsSearch(query, localEntries, { budget, hippoRoot, physicsConfig: ctxConfig.physics })
-        : await hybridSearch(query, localEntries, { budget, hippoRoot });
+        ? await physicsSearch(query, localEntries, { budget, hippoRoot, physicsConfig: ctxConfig.physics, scope: ctxActiveScope })
+        : await hybridSearch(query, localEntries, { budget, hippoRoot, scope: ctxActiveScope });
       results = ctxResults.map((r) => ({
         entry: r.entry,
         score: r.score,
