@@ -577,7 +577,12 @@ function cmdSupersede(
   }
 
   const layer = (typeof flags['layer'] === 'string' ? flags['layer'] : old.layer) as Layer;
-  const tags = typeof flags['tag'] === 'string' ? flags['tag'].split(',').map(t => t.trim()) : [...old.tags];
+  const rawTags = flags['tag'];
+  const tags = Array.isArray(rawTags)
+    ? (rawTags as string[]).map((t) => String(t))
+    : typeof rawTags === 'string'
+      ? rawTags.split(',').map((t) => t.trim()).filter(Boolean)
+      : [...old.tags];
   const pinned = flags['pin'] === true || old.pinned;
 
   const newEntry = createMemory(newContent, {
@@ -610,6 +615,10 @@ async function cmdRecall(
   const forceClassic = Boolean(flags['classic']);
   const includeSuperseded = Boolean(flags['include-superseded']);
   const asOf = typeof flags['as-of'] === 'string' ? flags['as-of'] : undefined;
+  if (asOf !== undefined && Number.isNaN(new Date(asOf).getTime())) {
+    console.error(`Error: --as-of value "${asOf}" is not a valid ISO date (e.g. 2026-04-22 or 2026-04-22T12:00:00Z).`);
+    process.exit(1);
+  }
   const globalRoot = getGlobalRoot();
 
   let localEntries = loadSearchEntries(hippoRoot, query);
@@ -810,6 +819,10 @@ async function cmdExplain(
   const forceClassic = Boolean(flags['classic']);
   const explainIncludeSuperseded = Boolean(flags['include-superseded']);
   const explainAsOf = typeof flags['as-of'] === 'string' ? flags['as-of'] : undefined;
+  if (explainAsOf !== undefined && Number.isNaN(new Date(explainAsOf).getTime())) {
+    console.error(`Error: --as-of value "${explainAsOf}" is not a valid ISO date (e.g. 2026-04-22 or 2026-04-22T12:00:00Z).`);
+    process.exit(1);
+  }
   const globalRoot = getGlobalRoot();
 
   let explainLocalEntries = loadSearchEntries(hippoRoot, query);
