@@ -1869,6 +1869,7 @@ function cmdStatus(hippoRoot: string): void {
   console.log(`  Buffer:          ${byLayer[Layer.Buffer]}`);
   console.log(`  Episodic:        ${byLayer[Layer.Episodic]}`);
   console.log(`  Semantic:        ${byLayer[Layer.Semantic]}`);
+  console.log(`  Trace:           ${byLayer[Layer.Trace]}`);
   const conflictCount = listMemoryConflicts(hippoRoot).length;
 
   console.log(`Pinned:            ${pinned}`);
