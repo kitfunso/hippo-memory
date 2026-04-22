@@ -109,6 +109,7 @@ import {
 } from './autolearn.js';
 import { extractInvalidationTarget, invalidateMatching, InvalidationTarget } from './invalidation.js';
 import { extractPathTags } from './path-context.js';
+import { detectScope, scopeMatch } from './scope.js';
 import {
   getGlobalRoot,
   initGlobal,
@@ -530,6 +531,14 @@ function cmdRemember(
   const pathTags = extractPathTags(process.cwd());
   for (const pt of pathTags) {
     if (!entry.tags.includes(pt)) entry.tags.push(pt);
+  }
+
+  // Scope tagging: explicit --scope or auto-detected
+  const explicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
+  const activeScope = explicitScope || detectScope();
+  if (activeScope) {
+    const scopeTag = `scope:${activeScope}`;
+    if (!entry.tags.includes(scopeTag)) entry.tags.push(scopeTag);
   }
 
   writeEntry(targetRoot, entry);
