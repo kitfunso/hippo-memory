@@ -143,6 +143,8 @@ export interface HybridSearchOptions extends SearchOptions {
   /** Multiplier applied to local-store scores when merging with global.
    *  Defaults to 1.2. Use 1.0 to remove the local bias for eval comparisons. */
   localBump?: number;
+  /** Active scope for scope-boost scoring. Auto-detected if not provided. */
+  scope?: string | null;
 }
 
 /**
@@ -155,7 +157,7 @@ export async function searchBothHybrid(
   globalRoot: string,
   options: HybridSearchOptions = {}
 ): Promise<SearchResult[]> {
-  const { budget = 4000, now = new Date(), embeddingWeight, explain, mmr, mmrLambda, localBump = 1.2, minResults } = options;
+  const { budget = 4000, now = new Date(), embeddingWeight, explain, mmr, mmrLambda, localBump = 1.2, minResults, scope } = options;
 
   const localEntries = fs.existsSync(localRoot) ? loadSearchEntries(localRoot, query) : [];
   const globalEntries = fs.existsSync(globalRoot) ? loadSearchEntries(globalRoot, query) : [];
@@ -163,10 +165,10 @@ export async function searchBothHybrid(
   if (localEntries.length === 0 && globalEntries.length === 0) return [];
 
   const localResults = await hybridSearch(query, localEntries, {
-    budget, now, hippoRoot: localRoot, embeddingWeight, explain, mmr, mmrLambda, minResults,
+    budget, now, hippoRoot: localRoot, embeddingWeight, explain, mmr, mmrLambda, minResults, scope,
   });
   const globalResults = await hybridSearch(query, globalEntries, {
-    budget, now, hippoRoot: globalRoot, embeddingWeight, explain, mmr, mmrLambda, minResults,
+    budget, now, hippoRoot: globalRoot, embeddingWeight, explain, mmr, mmrLambda, minResults, scope,
   });
 
   // Tag global results. Local memories get a configurable priority bump.

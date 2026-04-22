@@ -597,6 +597,8 @@ async function cmdRecall(
   const minResults = flags['min-results'] !== undefined
     ? parseInt(String(flags['min-results']), 10)
     : undefined;
+  const recallExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
+  const recallActiveScope = recallExplicitScope || detectScope();
 
   let results;
   if (usePhysics && !hasGlobal) {
@@ -605,15 +607,16 @@ async function cmdRecall(
       hippoRoot,
       physicsConfig: config.physics,
       minResults,
+      scope: recallActiveScope,
     });
   } else if (hasGlobal) {
     // Use searchBothHybrid for merged results with embedding support
     results = await searchBothHybrid(query, hippoRoot, globalRoot, {
-      budget, mmr: mmrEnabled, mmrLambda, localBump, minResults,
+      budget, mmr: mmrEnabled, mmrLambda, localBump, minResults, scope: recallActiveScope,
     });
   } else {
     results = await hybridSearch(query, localEntries, {
-      budget, hippoRoot, mmr: mmrEnabled, mmrLambda, minResults,
+      budget, hippoRoot, mmr: mmrEnabled, mmrLambda, minResults, scope: recallActiveScope,
     });
   }
 
@@ -756,6 +759,8 @@ async function cmdExplain(
     : flags['local-bump'] !== undefined
       ? parseFloat(String(flags['local-bump']))
       : config.search.localBump;
+  const explainExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
+  const explainActiveScope = explainExplicitScope || detectScope();
 
   let results;
   let modeUsed: 'physics' | 'searchBothHybrid' | 'hybrid';
@@ -765,16 +770,17 @@ async function cmdExplain(
       hippoRoot,
       physicsConfig: config.physics,
       explain: true,
+      scope: explainActiveScope,
     });
     modeUsed = 'physics';
   } else if (hasGlobal) {
     results = await searchBothHybrid(query, hippoRoot, globalRoot, {
-      budget, explain: true, mmr: mmrEnabled, mmrLambda, localBump,
+      budget, explain: true, mmr: mmrEnabled, mmrLambda, localBump, scope: explainActiveScope,
     });
     modeUsed = 'searchBothHybrid';
   } else {
     results = await hybridSearch(query, localEntries, {
-      budget, hippoRoot, explain: true, mmr: mmrEnabled, mmrLambda,
+      budget, hippoRoot, explain: true, mmr: mmrEnabled, mmrLambda, scope: explainActiveScope,
     });
     modeUsed = 'hybrid';
   }
@@ -850,6 +856,7 @@ async function cmdExplain(
       console.log(`    strength:  x${fmt(b.strengthMultiplier, 3)}  (strength=${fmt(r.entry.strength, 3)})`);
       console.log(`    recency:   x${fmt(b.recencyMultiplier, 3)}  (age=${b.ageDays}d)`);
       if (b.decisionBoost !== 1) console.log(`    decision:  x${fmt(b.decisionBoost, 2)}  (tagged 'decision')`);
+      if (b.scopeBoost !== 1) console.log(`    scope:     x${fmt(b.scopeBoost, 2)}  (scope tag ${b.scopeBoost > 1 ? 'match' : 'mismatch'})`);
       if (b.pathBoost !== 1) console.log(`    path:      x${fmt(b.pathBoost, 3)}  (cwd path tag overlap)`);
       if (b.sourceBump !== 1) console.log(`    source:    x${fmt(b.sourceBump, 2)}  (local priority bump over global)`);
       if (b.outcomeBoost !== 1) console.log(`    outcome:   x${fmt(b.outcomeBoost, 3)}  (user feedback: pos-neg = ${(r.entry.outcome_positive ?? 0) - (r.entry.outcome_negative ?? 0)})`);

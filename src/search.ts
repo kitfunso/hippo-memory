@@ -5,6 +5,7 @@
 
 import { MemoryEntry, calculateStrength } from './memory.js';
 import { extractPathTags, pathOverlapScore } from './path-context.js';
+import { detectScope, scopeMatch } from './scope.js';
 import {
   isEmbeddingAvailable,
   getEmbedding,
@@ -159,6 +160,8 @@ export interface ScoreBreakdown {
   decisionBoost: number;
   /** 1.0..1.3 based on cwd path tag overlap. */
   pathBoost: number;
+  /** 1.5 if scope matches, 0.5 if scope mismatches, 1.0 if neutral. */
+  scopeBoost: number;
   /** Extra multiplier applied post-hybrid (e.g. 1.2x for local hits in a
    *  local+global merged search). 1.0 when not applicable. */
   sourceBump: number;
@@ -210,6 +213,8 @@ export async function hybridSearch(
     /** Minimum number of results to return regardless of budget.
      *  Prevents budget saturation when memories are large. Default 1. */
     minResults?: number;
+    /** Active scope for scope-boost scoring. Auto-detected if not provided. */
+    scope?: string | null;
   } = {}
 ): Promise<SearchResult[]> {
   const now = options.now ?? new Date();
@@ -294,6 +299,7 @@ export async function hybridSearch(
   // Score each entry
   const scored: SearchResult[] = [];
   const currentPathTags = extractPathTags(process.cwd());
+  const activeScope = options.scope !== undefined ? options.scope : detectScope();
   const queryTermSet = new Set(queryTerms);
 
   for (let i = 0; i < entries.length; i++) {
@@ -346,6 +352,11 @@ export async function hybridSearch(
       : Math.max(0.85, Math.min(1.15, 1 + 0.15 * Math.tanh((pos - neg) / 2)));
     compositeScore *= outcomeBoost;
 
+    // Scope boost: memories tagged with the active scope get 1.5x; mismatching scopes get 0.5x
+    const scopeSignal = scopeMatch(entries[i].tags, activeScope);
+    const scopeBoost = scopeSignal === 1 ? 1.5 : scopeSignal === -1 ? 0.5 : 1.0;
+    compositeScore *= scopeBoost;
+
     if (compositeScore <= 0) continue;
 
     const tokens = estimateTokens(entries[i].content);
@@ -376,6 +387,7 @@ export async function hybridSearch(
         recencyMultiplier,
         decisionBoost,
         pathBoost,
+        scopeBoost,
         sourceBump: 1,
         outcomeBoost,
         matchedTerms,
@@ -505,6 +517,8 @@ export async function physicsSearch(
     queryEmbedding?: number[]; // pre-computed query vector (for testing/benchmarks)
     explain?: boolean;
     minResults?: number;
+    /** Active scope for scope-boost scoring. Auto-detected if not provided. */
+    scope?: string | null;
   } = {}
 ): Promise<SearchResult[]> {
   const now = options.now ?? new Date();
@@ -597,6 +611,7 @@ export async function physicsSearch(
           recencyMultiplier: 1,
           decisionBoost: 1,
           pathBoost: 1,
+          scopeBoost: 1,
           sourceBump: 1,
           outcomeBoost: 1,
           matchedTerms: [],
@@ -676,6 +691,7 @@ export function search(
   // Score each entry
   const scored: SearchResult[] = [];
   const currentPathTagsSync = extractPathTags(process.cwd());
+  const activeScopeSync = detectScope();
   for (let i = 0; i < entries.length; i++) {
     const bm25 = bm25Score(corpus, i, queryTerms);
     if (bm25 <= 0) continue;
@@ -697,6 +713,11 @@ export function search(
     const pathScoreSync = pathOverlapScore(memPathTagsSync, currentPathTagsSync);
     const pathBoostSync = 1.0 + (pathScoreSync * 0.3);
     composite *= pathBoostSync;
+
+    // Scope boost (sync path)
+    const scopeSignalSync = scopeMatch(entries[i].tags, activeScopeSync);
+    const scopeBoostSync = scopeSignalSync === 1 ? 1.5 : scopeSignalSync === -1 ? 0.5 : 1.0;
+    composite *= scopeBoostSync;
 
     const tokens = estimateTokens(entries[i].content);
 
