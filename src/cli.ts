@@ -558,6 +558,43 @@ function cmdRemember(
   }
 }
 
+function cmdSupersede(
+  hippoRoot: string,
+  oldId: string,
+  newContent: string,
+  flags: Record<string, string | boolean | string[]>,
+): void {
+  requireInit(hippoRoot);
+
+  const old = readEntry(hippoRoot, oldId);
+  if (!old) {
+    console.error(`Error: memory ${oldId} not found.`);
+    process.exit(1);
+  }
+  if (old.superseded_by) {
+    console.error(`Error: memory ${oldId} is already superseded by ${old.superseded_by}. Supersede that one instead.`);
+    process.exit(1);
+  }
+
+  const layer = (typeof flags['layer'] === 'string' ? flags['layer'] : old.layer) as Layer;
+  const tags = typeof flags['tag'] === 'string' ? flags['tag'].split(',').map(t => t.trim()) : [...old.tags];
+  const pinned = flags['pin'] === true || old.pinned;
+
+  const newEntry = createMemory(newContent, {
+    layer,
+    tags,
+    pinned,
+    source: old.source,
+    confidence: 'verified',
+  });
+
+  old.superseded_by = newEntry.id;
+  writeEntry(hippoRoot, old);
+  writeEntry(hippoRoot, newEntry);
+
+  console.log(`Superseded ${oldId} → ${newEntry.id}`);
+}
+
 async function cmdRecall(
   hippoRoot: string,
   query: string,
@@ -4055,6 +4092,17 @@ async function main(): Promise<void> {
         process.exit(1);
       }
       await cmdRecall(hippoRoot, query, flags);
+      break;
+    }
+
+    case 'supersede': {
+      const oldId = args[0];
+      const newContent = args.slice(1).join(' ').trim();
+      if (!oldId || !newContent) {
+        console.error('Usage: hippo supersede <old-id> "<new content>" [--layer L] [--tag T] [--pin]');
+        process.exit(1);
+      }
+      cmdSupersede(hippoRoot, oldId, newContent, flags);
       break;
     }
 
