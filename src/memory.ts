@@ -41,6 +41,8 @@ export interface MemoryEntry {
   starred: boolean;        // user-bookmarked
   trace_outcome: TraceOutcome;      // final outcome for trace-layer entries; null otherwise
   source_session_id: string | null; // set by auto-promote; null for everything else
+  valid_from: string;               // ISO 8601 timestamp when this belief became true
+  superseded_by: string | null;     // ID of the memory that replaced this one; null = current
 }
 
 export const DECISION_HALF_LIFE_DAYS = 90;
@@ -235,6 +237,7 @@ export function createMemory(
     baseHalfLifeDays?: number;
     trace_outcome?: TraceOutcome;
     source_session_id?: string | null;
+    valid_from?: string;
   } = {}
 ): MemoryEntry {
   const trimmed = content.trim();
@@ -279,6 +282,8 @@ export function createMemory(
     starred: false,
     trace_outcome: options.trace_outcome ?? null,
     source_session_id: options.source_session_id ?? null,
+    valid_from: options.valid_from ?? now,
+    superseded_by: null,
   };
 
   // Recalculate strength with the emotional multiplier applied

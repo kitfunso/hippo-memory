@@ -61,6 +61,8 @@ interface MemoryRow {
   starred: number;
   trace_outcome: MemoryEntry['trace_outcome'];
   source_session_id: string | null;
+  valid_from: string | null;
+  superseded_by: string | null;
 }
 
 interface ConsolidationRunRow {
@@ -139,7 +141,7 @@ export interface SessionEvent {
 }
 
 const INDEX_VERSION = 3;
-const MEMORY_SELECT_COLUMNS = `id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content, parents_json, starred, trace_outcome, source_session_id`;
+const MEMORY_SELECT_COLUMNS = `id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content, parents_json, starred, trace_outcome, source_session_id, valid_from, superseded_by`;
 const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
 
 function layerDir(root: string, layer: Layer): string {
@@ -242,6 +244,10 @@ export function deserializeEntry(raw: string): MemoryEntry | null {
     source_session_id: data['source_session_id'] === null || data['source_session_id'] === undefined
       ? null
       : String(data['source_session_id']),
+    valid_from: data['valid_from'] ? String(data['valid_from']) : String(data['created'] ?? new Date().toISOString()),
+    superseded_by: data['superseded_by'] === null || data['superseded_by'] === undefined
+      ? null
+      : String(data['superseded_by']),
   };
 }
 
@@ -274,6 +280,8 @@ function rowToEntry(row: MemoryRow): MemoryEntry {
     starred: Boolean(row.starred),
     trace_outcome: (row.trace_outcome as MemoryEntry['trace_outcome']) ?? null,
     source_session_id: row.source_session_id ?? null,
+    valid_from: row.valid_from ?? row.created,
+    superseded_by: row.superseded_by ?? null,
   };
 }
 
@@ -631,8 +639,9 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
       conflicts_with_json, pinned, confidence, content,
       parents_json, starred,
       trace_outcome, source_session_id,
+      valid_from, superseded_by,
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     ON CONFLICT(id) DO UPDATE SET
       created = excluded.created,
       last_retrieved = excluded.last_retrieved,
@@ -655,6 +664,8 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
       starred = excluded.starred,
       trace_outcome = excluded.trace_outcome,
       source_session_id = excluded.source_session_id,
+      valid_from = excluded.valid_from,
+      superseded_by = excluded.superseded_by,
       updated_at = datetime('now')
   `).run(
     entry.id,
@@ -679,6 +690,8 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
     entry.starred ? 1 : 0,
     entry.trace_outcome ?? null,
     entry.source_session_id ?? null,
+    entry.valid_from ?? entry.created,
+    entry.superseded_by ?? null,
   );
 
   syncFtsRow(db, entry);

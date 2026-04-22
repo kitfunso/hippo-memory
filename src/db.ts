@@ -21,7 +21,7 @@ const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: new (path: string) => DatabaseSyncLike;
 };
 
-const CURRENT_SCHEMA_VERSION = 10;
+const CURRENT_SCHEMA_VERSION = 11;
 
 type Migration = {
   version: number;
@@ -219,6 +219,19 @@ const MIGRATIONS: Migration[] = [
         CREATE INDEX IF NOT EXISTS idx_memories_source_session_id
         ON memories(source_session_id) WHERE source_session_id IS NOT NULL
       `);
+    },
+  },
+  {
+    version: 11,
+    up: (db) => {
+      if (!tableHasColumn(db, 'memories', 'valid_from')) {
+        db.exec(`ALTER TABLE memories ADD COLUMN valid_from TEXT`);
+        db.exec(`UPDATE memories SET valid_from = created WHERE valid_from IS NULL`);
+      }
+      if (!tableHasColumn(db, 'memories', 'superseded_by')) {
+        db.exec(`ALTER TABLE memories ADD COLUMN superseded_by TEXT`);
+      }
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_current ON memories(layer, created) WHERE superseded_by IS NULL`);
     },
   },
 ];
