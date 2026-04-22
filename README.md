@@ -60,6 +60,12 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v0.30.1
+
+- **`hippo recall --layer <L>` is now a strict filter.** Previously the flag was accepted but silently dropped; other layers leaked into results. The RSI demo's `recall --layer trace` now does what it says.
+- **`hippo status` prints a `Trace:` counter.** The new layer is visible in status output.
+- **`hippo --version` / `-v`** works as expected. Previously errored.
+
 ### What's new in v0.30.0
 
 - **Sequence binding for recursive-self-improvement agents.** New `Layer.Trace` memories store ordered `A → B → C → outcome` traces. Agents can `hippo trace record` explicitly, or just call `hippo session complete --outcome success` and let `hippo sleep` auto-promote completed sessions into queryable traces.

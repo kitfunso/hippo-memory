@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.30.1 (2026-04-22)
+
+### Fixed
+- **`hippo recall --layer <L>` is now a strict filter.** Previously the flag was accepted but silently dropped, so results from other layers leaked in. This broke the intent of `recall --layer trace` and the RSI demo's headline example.
+- **`hippo status` now prints a `Trace:` counter.** The new trace layer was tracked internally but never surfaced in the status output.
+- **`hippo --version` / `-v` print the package version.** Previously errored with "Unknown command".
+
+### Internal
+- 604 tests pass (+5 from v0.30.0). 3 new test files cover the three fixes end-to-end via `execFileSync` against `bin/hippo.js`.
+- Caught by `/review` (senior-code-reviewer) + npm smoke test before the GitHub Release for v0.30.0 went public.
+
 ## 0.30.0 (2026-04-21) — Sequence binding (recursive-self-improvement foundation)
 
 ### Added
