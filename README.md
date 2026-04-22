@@ -60,6 +60,14 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v0.32.0
+
+- **Correction without deletion.** `hippo supersede <old-id> "<new content>"` links the old memory as historical truth and creates a successor. Default recall shows only current beliefs; the old one stays in the store so you can audit what changed and when.
+- **`--include-superseded`** on `recall` and `explain` surfaces historical memories with a `[superseded]` marker. Useful for "what did I used to think about X?"
+- **`--as-of <ISO-date>`** returns the set of beliefs that were current at a past moment. Invalid dates exit with a clear format hint.
+- **Schema v11, zero breaking changes.** Adds `valid_from` + `superseded_by` columns. Existing v10 stores upgrade on first open, no data loss, no manual migration.
+- **Physics search ablation: CUT.** Benchmarked over 60 LongMemEval-oracle questions: physics-on is statistically worse than plain BM25 + embeddings on MRR, Recall@5, and NDCG@5 (paired bootstrap, 5000 iters, 95% CI excludes zero). Full results in `benchmarks/physics-ablation/`. Physics stays in the codebase this release; removal is a separate decision.
+
 ### What's new in v0.31.0
 
 - **Scope-aware corrections.** Tag a memory with `hippo remember --scope plan-eng-review` and it only surfaces strongly when that scope is active again. Matching scope gets 1.5x boost, mismatching scope is suppressed 0.5x, unscoped memories stay neutral. Corrections said during one skill stop polluting unrelated contexts.

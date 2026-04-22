@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.32.0 (2026-04-22)
+
+### Added
+- **Bi-temporal memory: correction without deletion.** When a belief changes, the old memory stays as historical truth instead of being overwritten. Default recall filters superseded entries so agents see current reality; historical views are explicit. Schema v11 adds `valid_from` and `superseded_by` columns, backwards compatible with v10 stores (ADD COLUMN only, no data transform).
+- **`hippo supersede <old-id> "<new content>"`.** Creates a successor memory and links the old one via `superseded_by`. Cycle prevention: if the target is already superseded, the command errors with the successor's ID so you can supersede that one instead. Reuses `--layer`, `--tag`, `--pin` from `remember`.
+- **`--include-superseded`** on `hippo recall` / `explain`. Returns historical memories with a `[superseded]` marker in output. Default recall hides them.
+- **`--as-of <ISO-date>`** on `hippo recall` / `explain`. Returns the set of memories that were current at that date. Validates input at CLI entry; invalid dates exit with a clear ISO-format hint.
+- **Partial index for fast current-only queries.** `CREATE INDEX idx_memories_current ON memories(layer, created) WHERE superseded_by IS NULL` makes the default recall path cheap even with large archives.
+
+### Changed
+- **`markRetrieved` is a no-op for superseded entries.** Retrieving a historical memory (via `--include-superseded`) no longer strengthens it or extends its half-life. Historical reads shouldn't revive dead beliefs.
+- **`detectConflicts` skips superseded pairs.** No point flagging "these contradict" when one side is historically dead.
+
+### Research
+- **Physics search ablation: CUT verdict.** Benchmarked physics-on vs physics-off over 60 stratified LongMemEval-oracle questions (paired bootstrap, 5000 iters). Physics OFF: MRR 0.8388, Recall@5 84.31%, NDCG@5 0.7888. Physics ON: MRR 0.6848, Recall@5 74.17%, NDCG@5 0.6570. All metrics statistically worse with physics; 95% CI excludes zero. Results in `benchmarks/physics-ablation/`. Physics remains in the codebase and is not removed in this release; a decision on removal is tracked as follow-up.
+- **LoCoMo harness built.** `benchmarks/locomo/run.py` scores hippo against snap-research's long-conversation memory benchmark using Claude as judge. Sanity run (3 QAs): 2 adversarial abstentions correct, 1 open-domain miss. Full 10-conversation run requires overnight batch due to ~2 turns/sec ingestion.
+
+### Internal
+- 633 tests pass (+8 from v0.31.0). 3 new test files: `bi-temporal-migration.test.ts`, `cli-supersede.test.ts`, `bi-temporal-recall.test.ts`.
+- 4 commits on master: `091e6de` (schema v11), `026988b` (supersede command), `b538c0d` (recall filters), `7108187` (review fixes).
+- Reviewed via `/review` + `/self-review` + `/ship-check`. Two fixes landed: `--as-of` date validation (previously silent no-op on invalid input) and `cmdSupersede --tag` parity with `cmdRemember` (previously only accepted comma-separated, dropped repeated flags).
+
 ## 0.31.0 (2026-04-22)
 
 ### Added
