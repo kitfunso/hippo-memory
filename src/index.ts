@@ -3,7 +3,8 @@
  */
 
 export { MemoryEntry, Layer, EmotionalValence, ConfidenceLevel, DecayOptions, calculateStrength, resolveConfidence, createMemory, applyOutcome, generateId, computeSchemaFit } from './memory.js';
-export { search, hybridSearch, physicsSearch, markRetrieved, estimateTokens, textOverlap, tokenize, explainMatch, SearchResult, MatchExplanation } from './search.js';
+export { search, hybridSearch, physicsSearch, markRetrieved, estimateTokens, textOverlap, tokenize, explainMatch, detectTemporalDirection, temporalBoost, computeTemporalRange, SearchResult, MatchExplanation } from './search.js';
+export { multihopSearch } from './multihop.js';
 export {
   initStore,
   loadAllEntries,

@@ -21,7 +21,7 @@ const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: new (path: string) => DatabaseSyncLike;
 };
 
-const CURRENT_SCHEMA_VERSION = 11;
+const CURRENT_SCHEMA_VERSION = 13;
 
 type Migration = {
   version: number;
@@ -232,6 +232,28 @@ const MIGRATIONS: Migration[] = [
         db.exec(`ALTER TABLE memories ADD COLUMN superseded_by TEXT`);
       }
       db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_current ON memories(layer, created) WHERE superseded_by IS NULL`);
+    },
+  },
+  {
+    version: 12,
+    up: (db) => {
+      if (!tableHasColumn(db, 'memories', 'extracted_from')) {
+        db.exec(`ALTER TABLE memories ADD COLUMN extracted_from TEXT`);
+      }
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_extracted_from ON memories(extracted_from) WHERE extracted_from IS NOT NULL`);
+    },
+  },
+  {
+    version: 13,
+    up: (db) => {
+      if (!tableHasColumn(db, 'memories', 'dag_level')) {
+        db.exec(`ALTER TABLE memories ADD COLUMN dag_level INTEGER NOT NULL DEFAULT 0`);
+      }
+      if (!tableHasColumn(db, 'memories', 'dag_parent_id')) {
+        db.exec(`ALTER TABLE memories ADD COLUMN dag_parent_id TEXT`);
+      }
+      db.exec(`UPDATE memories SET dag_level = 1 WHERE extracted_from IS NOT NULL AND dag_level = 0`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_dag_parent ON memories(dag_parent_id) WHERE dag_parent_id IS NOT NULL`);
     },
   },
 ];

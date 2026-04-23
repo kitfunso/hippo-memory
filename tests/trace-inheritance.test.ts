@@ -90,7 +90,7 @@ describe('Trace layer inherits core memory mechanics', () => {
     for (const p of picked) expect(p.layer).toBe(Layer.Trace);
   });
 
-  it('physics state is created for traces on first consolidate', () => {
+  it('physics state is created for traces on first consolidate', async () => {
     // Persist a trace.
     const trace = createMemory(
       'Task: physics trace\nOutcome: success\nSteps:\n  1. do thing',
@@ -116,7 +116,7 @@ describe('Trace layer inherits core memory mechanics', () => {
 
     // And consolidate() runs cleanly over a store that contains a trace
     // with physics state — no layer-specific crash, no data loss.
-    const result = consolidate(tmpDir, { now: new Date() });
+    const result = await consolidate(tmpDir, { now: new Date() });
     expect(result.dryRun).toBe(false);
     const survivors = loadAllEntries(tmpDir);
     expect(survivors.find((e) => e.id === trace.id)).toBeDefined();

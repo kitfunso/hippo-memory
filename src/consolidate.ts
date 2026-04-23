@@ -65,6 +65,10 @@ export interface ConsolidationResult {
   semanticCreated: number;
   replayed: number;
   promotedTraces: number;
+  extractionCandidates: number;
+  extracted: number;
+  dagCandidateClusters: number;
+  dagSummariesCreated: number;
   dryRun: boolean;
   details: string[];
   physicsSimulated: number;
@@ -75,10 +79,10 @@ const REPLAY_COUNT_DEFAULT = 5;
 /**
  * Run a full consolidation pass.
  */
-export function consolidate(
+export async function consolidate(
   hippoRoot: string,
   options: { dryRun?: boolean; now?: Date } = {}
-): ConsolidationResult {
+): Promise<ConsolidationResult> {
   const now = options.now ?? new Date();
   const dryRun = options.dryRun ?? false;
 
@@ -89,6 +93,10 @@ export function consolidate(
     semanticCreated: 0,
     replayed: 0,
     promotedTraces: 0,
+    extractionCandidates: 0,
+    extracted: 0,
+    dagCandidateClusters: 0,
+    dagSummariesCreated: 0,
     dryRun,
     details: [],
     physicsSimulated: 0,
@@ -238,11 +246,66 @@ export function consolidate(
   }
 
   // -------------------------------------------------------------------------
+  // 1.6. Batch extraction — extract facts from episodic memories missing them
+  // -------------------------------------------------------------------------
+  const extractedFromIds = new Set(
+    survivors.filter((e) => e.extracted_from).map((e) => e.extracted_from!),
+  );
+  const extractionCandidates = survivors.filter(
+    (e) => e.layer === Layer.Episodic && !extractedFromIds.has(e.id),
+  );
+  result.extractionCandidates = extractionCandidates.length;
+
+  const apiKey = process.env.ANTHROPIC_API_KEY ?? '';
+  if (apiKey && extractionCandidates.length > 0 && !dryRun) {
+    const { extractFacts, storeExtractedFacts } = await import('./extract.js');
+    const batchLimit = 20;
+    let extractedCount = 0;
+    for (const candidate of extractionCandidates.slice(0, batchLimit)) {
+      try {
+        const facts = await extractFacts(candidate.content, {
+          apiKey,
+          model: config.extraction.model,
+        });
+        if (facts.length > 0) {
+          storeExtractedFacts(hippoRoot, candidate, facts);
+          extractedCount += facts.length;
+        }
+      } catch {
+        // Best-effort — continue with next candidate
+      }
+    }
+    result.extracted = extractedCount;
+  }
+
+  // -------------------------------------------------------------------------
+  // 1.7. DAG summarization — cluster extracted facts and generate summaries
+  // -------------------------------------------------------------------------
+  const extractedFacts = survivors.filter(
+    (e) => e.tags.includes('extracted') && e.dag_level === 1,
+  );
+  if (apiKey && extractedFacts.length >= 3 && !dryRun) {
+    try {
+      const { buildDag } = await import('./dag.js');
+      const dagResult = await buildDag(hippoRoot, extractedFacts, {
+        apiKey,
+        model: config.extraction.model,
+      });
+      result.dagCandidateClusters = dagResult.candidateClusters;
+      result.dagSummariesCreated = dagResult.summariesCreated;
+      if (dagResult.summariesCreated > 0) {
+        result.details.push(`  🌳 DAG: ${dagResult.summariesCreated} summaries created, ${dagResult.factsLinked} facts linked`);
+      }
+    } catch {
+      // Best-effort
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // 2. Physics simulation pass
   // -------------------------------------------------------------------------
   if (!dryRun) {
     try {
-      const config = loadConfig(hippoRoot);
       const physicsEnabled = config.physics.enabled === true
         || (config.physics.enabled === 'auto');
 
@@ -301,19 +364,21 @@ export function consolidate(
   // -------------------------------------------------------------------------
   // 3. Merge pass  - episodic entries only
   // -------------------------------------------------------------------------
-  const episodics = survivors.filter((e) => e.layer === Layer.Episodic);
+  const mergeCandidates = survivors.filter(
+    (e) => e.layer === Layer.Episodic && !e.tags.includes('extracted'),
+  );
   const used = new Set<string>();
 
-  for (let i = 0; i < episodics.length; i++) {
-    if (used.has(episodics[i].id)) continue;
+  for (let i = 0; i < mergeCandidates.length; i++) {
+    if (used.has(mergeCandidates[i].id)) continue;
 
-    const cluster: MemoryEntry[] = [episodics[i]];
+    const cluster: MemoryEntry[] = [mergeCandidates[i]];
 
-    for (let j = i + 1; j < episodics.length; j++) {
-      if (used.has(episodics[j].id)) continue;
-      const overlap = textOverlap(episodics[i].content, episodics[j].content);
+    for (let j = i + 1; j < mergeCandidates.length; j++) {
+      if (used.has(mergeCandidates[j].id)) continue;
+      const overlap = textOverlap(mergeCandidates[i].content, mergeCandidates[j].content);
       if (overlap >= MERGE_OVERLAP_THRESHOLD) {
-        cluster.push(episodics[j]);
+        cluster.push(mergeCandidates[j]);
       }
     }
 
@@ -421,6 +486,7 @@ function detectConflicts(
       // exists for stated-rule disagreement, not strategy diversity.
       if (survivors[i].layer === Layer.Trace && survivors[j].layer === Layer.Trace) continue;
       if (survivors[i].superseded_by || survivors[j].superseded_by) continue;
+      if (survivors[i].tags.includes('extracted') || survivors[j].tags.includes('extracted')) continue;
       const reasonAndScore = describeConflict(survivors[i], survivors[j]);
       if (!reasonAndScore) continue;
       detected.push({

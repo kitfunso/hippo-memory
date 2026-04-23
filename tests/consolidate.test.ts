@@ -17,7 +17,7 @@ afterEach(() => {
 });
 
 describe('Decay pass', () => {
-  it('removes entries below the strength threshold', () => {
+  it('removes entries below the strength threshold', async () => {
     initStore(tmpDir);
 
     // Create an entry that's very old (strength will be effectively 0)
@@ -26,14 +26,14 @@ describe('Decay pass', () => {
     const ancient = { ...entry, last_retrieved: veryOldDate, pinned: false };
     writeEntry(tmpDir, ancient);
 
-    const result = consolidate(tmpDir, { now: new Date() });
+    const result = await consolidate(tmpDir, { now: new Date() });
     expect(result.removed).toBeGreaterThan(0);
 
     const remaining = loadAllEntries(tmpDir);
     expect(remaining.find((e) => e.id === ancient.id)).toBeUndefined();
   });
 
-  it('keeps pinned entries regardless of age', () => {
+  it('keeps pinned entries regardless of age', async () => {
     initStore(tmpDir);
 
     const entry = createMemory('permanent rule', { pinned: true });
@@ -41,14 +41,14 @@ describe('Decay pass', () => {
     const ancient = { ...entry, last_retrieved: veryOldDate, pinned: true };
     writeEntry(tmpDir, ancient);
 
-    const result = consolidate(tmpDir, { now: new Date() });
+    const result = await consolidate(tmpDir, { now: new Date() });
 
     const remaining = loadAllEntries(tmpDir);
     const found = remaining.find((e) => e.id === ancient.id);
     expect(found).toBeDefined();
   });
 
-  it('dry-run does not remove entries', () => {
+  it('dry-run does not remove entries', async () => {
     initStore(tmpDir);
 
     const entry = createMemory('ancient memory');
@@ -56,7 +56,7 @@ describe('Decay pass', () => {
     const ancient = { ...entry, last_retrieved: veryOldDate, pinned: false };
     writeEntry(tmpDir, ancient);
 
-    const result = consolidate(tmpDir, { dryRun: true, now: new Date() });
+    const result = await consolidate(tmpDir, { dryRun: true, now: new Date() });
     expect(result.dryRun).toBe(true);
     expect(result.removed).toBeGreaterThan(0);
 
@@ -65,7 +65,7 @@ describe('Decay pass', () => {
     expect(remaining.find((e) => e.id === ancient.id)).toBeDefined();
   });
 
-  it('persists stale confidence for old non-verified memories during sleep', () => {
+  it('persists stale confidence for old non-verified memories during sleep', async () => {
     initStore(tmpDir);
 
     const entry = createMemory('stale memory candidate', { confidence: 'observed', tags: ['error'] });
@@ -73,7 +73,7 @@ describe('Decay pass', () => {
     const staleCandidate = { ...entry, last_retrieved: oldDate, confidence: 'observed' as const };
     writeEntry(tmpDir, staleCandidate);
 
-    consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: new Date() });
 
     const loaded = readEntry(tmpDir, staleCandidate.id);
     expect(loaded).not.toBeNull();
@@ -82,7 +82,7 @@ describe('Decay pass', () => {
 });
 
 describe('Replay pass (integration)', () => {
-  it('persists incremented retrieval_count and fresh last_retrieved on rehearsed memories', () => {
+  it('persists incremented retrieval_count and fresh last_retrieved on rehearsed memories', async () => {
     initStore(tmpDir);
 
     // 8 distinct memories, no text overlap → merge pass won't fire.
@@ -98,7 +98,7 @@ describe('Replay pass (integration)', () => {
     ];
     for (const m of memories) writeEntry(tmpDir, m);
 
-    const result = consolidate(tmpDir, { now: new Date() });
+    const result = await consolidate(tmpDir, { now: new Date() });
 
     // Default config replay count is 5
     expect(result.replayed).toBe(5);
@@ -122,7 +122,7 @@ describe('Replay pass (integration)', () => {
     }
   });
 
-  it('does nothing when config.replay.count is 0', () => {
+  it('does nothing when config.replay.count is 0', async () => {
     initStore(tmpDir);
 
     // Patch config.json to disable replay
@@ -135,7 +135,7 @@ describe('Replay pass (integration)', () => {
     ];
     for (const m of memories) writeEntry(tmpDir, m);
 
-    const result = consolidate(tmpDir, { now: new Date() });
+    const result = await consolidate(tmpDir, { now: new Date() });
 
     expect(result.replayed).toBe(0);
     const after = loadAllEntries(tmpDir);
@@ -143,7 +143,7 @@ describe('Replay pass (integration)', () => {
     expect(touched).toHaveLength(0);
   });
 
-  it('caps sample size when fewer survivors exist than config count', () => {
+  it('caps sample size when fewer survivors exist than config count', async () => {
     initStore(tmpDir);
 
     // Default config count is 5; write only 2 entries.
@@ -153,7 +153,7 @@ describe('Replay pass (integration)', () => {
     ];
     for (const m of memories) writeEntry(tmpDir, m);
 
-    const result = consolidate(tmpDir, { now: new Date() });
+    const result = await consolidate(tmpDir, { now: new Date() });
 
     expect(result.replayed).toBe(2);
     const after = loadAllEntries(tmpDir);
@@ -163,7 +163,7 @@ describe('Replay pass (integration)', () => {
 });
 
 describe('Merge pass', () => {
-  it('merges highly similar episodic entries into a semantic memory', () => {
+  it('merges highly similar episodic entries into a semantic memory', async () => {
     initStore(tmpDir);
 
     // Two very similar episodic entries
@@ -172,7 +172,7 @@ describe('Merge pass', () => {
     writeEntry(tmpDir, e1);
     writeEntry(tmpDir, e2);
 
-    const result = consolidate(tmpDir, { now: new Date() });
+    const result = await consolidate(tmpDir, { now: new Date() });
 
     expect(result.merged).toBeGreaterThan(0);
     expect(result.semanticCreated).toBeGreaterThan(0);
@@ -182,7 +182,7 @@ describe('Merge pass', () => {
     expect(semantics.length).toBeGreaterThan(0);
   });
 
-  it('does not merge dissimilar entries', () => {
+  it('does not merge dissimilar entries', async () => {
     initStore(tmpDir);
 
     const e1 = createMemory('Python dict ordering is guaranteed since 3.7', { layer: Layer.Episodic });
@@ -190,12 +190,12 @@ describe('Merge pass', () => {
     writeEntry(tmpDir, e1);
     writeEntry(tmpDir, e2);
 
-    const result = consolidate(tmpDir, { now: new Date() });
+    const result = await consolidate(tmpDir, { now: new Date() });
     expect(result.merged).toBe(0);
     expect(result.semanticCreated).toBe(0);
   });
 
-  it('detects overlapping contradictory memories and records open conflicts', () => {
+  it('detects overlapping contradictory memories and records open conflicts', async () => {
     initStore(tmpDir);
 
     const a = createMemory('The feature flag is enabled for production users', {
@@ -209,7 +209,7 @@ describe('Merge pass', () => {
     writeEntry(tmpDir, a);
     writeEntry(tmpDir, b);
 
-    consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: new Date() });
 
     const conflicts = listMemoryConflicts(tmpDir);
     expect(conflicts).toHaveLength(1);
@@ -221,7 +221,7 @@ describe('Merge pass', () => {
     expect(loadedB?.conflicts_with).toContain(a.id);
   });
 
-  it('detects reworded contradictions, not just near-duplicate wording', () => {
+  it('detects reworded contradictions, not just near-duplicate wording', async () => {
     initStore(tmpDir);
 
     const a = createMemory('API auth must be enabled in prod', {
@@ -235,14 +235,14 @@ describe('Merge pass', () => {
     writeEntry(tmpDir, a);
     writeEntry(tmpDir, b);
 
-    consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: new Date() });
 
     const conflicts = listMemoryConflicts(tmpDir);
     expect(conflicts).toHaveLength(1);
     expect(conflicts[0].reason).toMatch(/enabled\/disabled mismatch|always\/never mismatch|negation polarity mismatch/i);
   });
 
-  it('preserves contradiction detection across multiple polarity patterns', () => {
+  it('preserves contradiction detection across multiple polarity patterns', async () => {
     initStore(tmpDir);
 
     const pairs = [
@@ -278,7 +278,7 @@ describe('Merge pass', () => {
         writeEntry(caseDir, a);
         writeEntry(caseDir, b);
 
-        consolidate(caseDir, { now: new Date() });
+        await consolidate(caseDir, { now: new Date() });
 
         const conflicts = listMemoryConflicts(caseDir);
         expect(conflicts, `${left} <> ${right}`).toHaveLength(1);
@@ -288,7 +288,7 @@ describe('Merge pass', () => {
     }
   });
 
-  it('does not flag unrelated policy memories just because they share tags and opposite polarity words', () => {
+  it('does not flag unrelated policy memories just because they share tags and opposite polarity words', async () => {
     initStore(tmpDir);
 
     const a = createMemory('Always create a worktree when working in exemem-workspace', {
@@ -302,14 +302,14 @@ describe('Merge pass', () => {
     writeEntry(tmpDir, a);
     writeEntry(tmpDir, b);
 
-    consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: new Date() });
 
     expect(listMemoryConflicts(tmpDir)).toHaveLength(0);
     expect(readEntry(tmpDir, a.id)?.conflicts_with ?? []).toEqual([]);
     expect(readEntry(tmpDir, b.id)?.conflicts_with ?? []).toEqual([]);
   });
 
-  it('does not flag the unrelated wording pairs reported in PR #11', () => {
+  it('does not flag the unrelated wording pairs reported in PR #11', async () => {
     initStore(tmpDir);
 
     const pairs = [
@@ -341,7 +341,7 @@ describe('Merge pass', () => {
       return [leftEntry.id, rightEntry.id];
     });
 
-    consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: new Date() });
 
     expect(listMemoryConflicts(tmpDir)).toHaveLength(0);
     for (const id of ids) {
@@ -349,7 +349,7 @@ describe('Merge pass', () => {
     }
   });
 
-  it('resolves open conflicts when the contradiction disappears', () => {
+  it('resolves open conflicts when the contradiction disappears', async () => {
     initStore(tmpDir);
 
     const a = createMemory('The feature flag is enabled for production users', {
@@ -363,11 +363,11 @@ describe('Merge pass', () => {
     writeEntry(tmpDir, a);
     writeEntry(tmpDir, b);
 
-    consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: new Date() });
     expect(listMemoryConflicts(tmpDir)).toHaveLength(1);
 
     writeEntry(tmpDir, { ...b, content: 'The feature flag is enabled for production users' });
-    consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: new Date() });
 
     expect(listMemoryConflicts(tmpDir)).toHaveLength(0);
     expect(readEntry(tmpDir, a.id)?.conflicts_with ?? []).toEqual([]);

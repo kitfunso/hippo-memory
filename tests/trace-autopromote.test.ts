@@ -23,7 +23,7 @@ afterEach(() => {
 });
 
 describe('consolidate auto-promote: session -> trace', () => {
-  it('promotes a session with a session_complete event into a trace', () => {
+  it('promotes a session with a session_complete event into a trace', async () => {
     initStore(tmpDir);
     const sid = 'test-session-auto';
     appendSessionEvent(tmpDir, {
@@ -40,7 +40,7 @@ describe('consolidate auto-promote: session -> trace', () => {
       metadata: { summary: 'fixed broken test' },
     });
 
-    consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: new Date() });
 
     const traces = loadAllEntries(tmpDir).filter((e) => e.layer === Layer.Trace);
     expect(traces).toHaveLength(1);
@@ -55,20 +55,20 @@ describe('consolidate auto-promote: session -> trace', () => {
     expect(traces[0].content).toContain('Outcome: success');
   });
 
-  it('does NOT promote sessions that lack a session_complete event', () => {
+  it('does NOT promote sessions that lack a session_complete event', async () => {
     initStore(tmpDir);
     const sid = 'test-no-outcome';
     appendSessionEvent(tmpDir, {
       session_id: sid, event_type: 'action', content: 'did stuff', source: 'agent',
     });
 
-    consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: new Date() });
 
     const traces = loadAllEntries(tmpDir).filter((e) => e.layer === Layer.Trace);
     expect(traces).toHaveLength(0);
   });
 
-  it('does NOT create duplicate traces across repeated sleep runs', () => {
+  it('does NOT create duplicate traces across repeated sleep runs', async () => {
     initStore(tmpDir);
     const sid = 'test-idempotent';
     appendSessionEvent(tmpDir, {
@@ -81,9 +81,9 @@ describe('consolidate auto-promote: session -> trace', () => {
       source: 'agent',
     });
 
-    consolidate(tmpDir, { now: new Date() });
-    consolidate(tmpDir, { now: new Date() });
-    consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: new Date() });
 
     const traces = loadAllEntries(tmpDir).filter(
       (e) => e.layer === Layer.Trace && e.source_session_id === sid,
@@ -91,7 +91,7 @@ describe('consolidate auto-promote: session -> trace', () => {
     expect(traces).toHaveLength(1);
   });
 
-  it('does NOT fire conflict detection between two trace-layer memories', () => {
+  it('does NOT fire conflict detection between two trace-layer memories', async () => {
     initStore(tmpDir);
 
     // Two traces whose content would otherwise trip the enabled/disabled
@@ -116,7 +116,7 @@ describe('consolidate auto-promote: session -> trace', () => {
       metadata: { summary: `${sharedTokens} never enable new flow disable it` },
     });
 
-    consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: new Date() });
 
     const entries = loadAllEntries(tmpDir);
     const traceIds = new Set(
@@ -131,7 +131,7 @@ describe('consolidate auto-promote: session -> trace', () => {
     expect(traceVsTrace).toHaveLength(0);
   });
 
-  it('skips sessions older than autoTraceWindowDays (default 7)', () => {
+  it('skips sessions older than autoTraceWindowDays (default 7)', async () => {
     initStore(tmpDir);
     const sid = 'test-stale';
 
@@ -147,7 +147,7 @@ describe('consolidate auto-promote: session -> trace', () => {
       closeHippoDb(db);
     }
 
-    consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: new Date() });
 
     const traces = loadAllEntries(tmpDir).filter((e) => e.layer === Layer.Trace);
     expect(traces).toHaveLength(0);

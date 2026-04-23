@@ -43,6 +43,9 @@ export interface MemoryEntry {
   source_session_id: string | null; // set by auto-promote; null for everything else
   valid_from: string;               // ISO 8601 timestamp when this belief became true
   superseded_by: string | null;     // ID of the memory that replaced this one; null = current
+  extracted_from: string | null;
+  dag_level: number;            // 0=raw, 1=extracted_fact, 2=topic_summary, 3=entity_profile
+  dag_parent_id: string | null; // ID of parent summary node in the DAG; null = root level
 }
 
 export const DECISION_HALF_LIFE_DAYS = 90;
@@ -238,6 +241,9 @@ export function createMemory(
     trace_outcome?: TraceOutcome;
     source_session_id?: string | null;
     valid_from?: string;
+    extracted_from?: string;
+    dag_level?: number;
+    dag_parent_id?: string;
   } = {}
 ): MemoryEntry {
   const trimmed = content.trim();
@@ -284,6 +290,9 @@ export function createMemory(
     source_session_id: options.source_session_id ?? null,
     valid_from: options.valid_from ?? now,
     superseded_by: null,
+    extracted_from: options.extracted_from ?? null,
+    dag_level: options.dag_level ?? 0,
+    dag_parent_id: options.dag_parent_id ?? null,
   };
 
   // Recalculate strength with the emotional multiplier applied

@@ -58,6 +58,13 @@ export interface HippoConfig {
     enabled: boolean;
     budget: number;
   };
+  extraction: {
+    enabled: boolean | 'auto';
+    model: string;
+  };
+  multihop: {
+    enabled: boolean;
+  };
 }
 
 const DEFAULT_CONFIG: HippoConfig = {
@@ -100,6 +107,13 @@ const DEFAULT_CONFIG: HippoConfig = {
     enabled: true,
     budget: 1500,
   },
+  extraction: {
+    enabled: 'auto',
+    model: 'claude-sonnet-4-6',
+  },
+  multihop: {
+    enabled: false,
+  },
 };
 
 export function loadConfig(hippoRoot: string): HippoConfig {
@@ -127,6 +141,8 @@ export function loadConfig(hippoRoot: string): HippoConfig {
       autoTraceCapture: raw.autoTraceCapture ?? DEFAULT_CONFIG.autoTraceCapture,
       autoTraceWindowDays: raw.autoTraceWindowDays ?? DEFAULT_CONFIG.autoTraceWindowDays,
       pinnedInject: { ...DEFAULT_CONFIG.pinnedInject, ...(raw.pinnedInject ?? {}) },
+      extraction: { ...DEFAULT_CONFIG.extraction, ...(raw.extraction ?? {}) },
+      multihop: { ...DEFAULT_CONFIG.multihop, ...(raw.multihop ?? {}) },
     };
   } catch (err) {
     if (fs.existsSync(configPath)) {

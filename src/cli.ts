@@ -142,6 +142,7 @@ import { auditMemories, type AuditResult } from './audit.js';
 import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from './eval.js';
 import { refineStore } from './refine-llm.js';
 import { wmPush, wmRead, wmClear, wmFlush, WorkingMemoryItem } from './working-memory.js';
+import { multihopSearch } from './multihop.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -491,11 +492,11 @@ function setupDailySchedule(globalRoot: string): void {
   }
 }
 
-function cmdRemember(
+async function cmdRemember(
   hippoRoot: string,
   text: string,
   flags: Record<string, string | boolean | string[]>
-): void {
+): Promise<void> {
   const useGlobal = Boolean(flags['global']);
   const targetRoot = useGlobal ? getGlobalRoot() : hippoRoot;
 
@@ -555,6 +556,28 @@ function cmdRemember(
     embedMemory(targetRoot, entry).catch(() => {
       // Silently ignore embedding errors
     });
+  }
+
+  const config = loadConfig(targetRoot);
+  const shouldExtract = flags['extract'] || config.extraction.enabled === true;
+  const apiKey = process.env.ANTHROPIC_API_KEY ?? '';
+
+  if (shouldExtract && apiKey) {
+    try {
+      const { extractFacts, storeExtractedFacts } = await import('./extract.js');
+      const facts = await extractFacts(entry.content, {
+        apiKey,
+        model: config.extraction.model,
+      });
+      if (facts.length > 0) {
+        storeExtractedFacts(targetRoot, entry, facts);
+        console.error(`  extracted ${facts.length} fact(s)`);
+      }
+    } catch {
+      // Extraction is best-effort — never block remember
+    }
+  } else if (shouldExtract && !apiKey) {
+    console.error('  (extraction skipped: ANTHROPIC_API_KEY not set)');
   }
 }
 
@@ -673,8 +696,19 @@ async function cmdRecall(
   const recallExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
   const recallActiveScope = recallExplicitScope || detectScope();
 
+  const useMultihop = flags['multihop'] === true || config.multihop.enabled;
+
   let results;
-  if (usePhysics && !hasGlobal) {
+  if (useMultihop) {
+    const allEntries = [...localEntries, ...globalEntries];
+    results = multihopSearch(query, allEntries, {
+      budget,
+      hippoRoot,
+      minResults,
+      includeSuperseded,
+      asOf,
+    });
+  } else if (usePhysics && !hasGlobal) {
     results = await physicsSearch(query, localEntries, {
       budget,
       hippoRoot,
@@ -1533,10 +1567,10 @@ function cmdDedup(
   }
 }
 
-function cmdSleep(
+async function cmdSleep(
   hippoRoot: string,
   flags: Record<string, string | boolean | string[]>
-): void {
+): Promise<void> {
   // Tee stdout/stderr to a log file when --log-file is set. The SessionEnd
   // hook uses this so the output is captured somewhere the SessionStart hook
   // can re-display it next time the agent UI starts.
@@ -1574,7 +1608,7 @@ function cmdSleep(
   }
 
   try {
-    cmdSleepCore(hippoRoot, flags);
+    await cmdSleepCore(hippoRoot, flags);
     if (logFile) console.log('[hippo] sleep complete');
   } catch (err) {
     if (logFile) console.log(`[hippo] sleep failed: ${(err as Error).message}`);
@@ -1584,10 +1618,10 @@ function cmdSleep(
   }
 }
 
-function cmdSleepCore(
+async function cmdSleepCore(
   hippoRoot: string,
   flags: Record<string, string | boolean | string[]>
-): void {
+): Promise<void> {
   requireInit(hippoRoot);
 
   // Auto-learn from git before consolidating (unless --no-learn)
@@ -1606,7 +1640,7 @@ function cmdSleepCore(
   const dryRun = Boolean(flags['dry-run']);
   console.log(`Running consolidation${dryRun ? ' (dry run)' : ''}...`);
 
-  const result = consolidate(hippoRoot, { dryRun });
+  const result = await consolidate(hippoRoot, { dryRun });
 
   console.log(`\nResults:`);
   console.log(`   Active memories:  ${result.decayed}`);
@@ -3893,6 +3927,49 @@ function cmdWm(
   process.exit(1);
 }
 
+function cmdDag(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
+  requireInit(hippoRoot);
+  const entries = loadAllEntries(hippoRoot);
+  const isStats = flags['stats'] === true;
+
+  const byLevel = new Map<number, number>();
+  let unlinked = 0;
+
+  for (const entry of entries) {
+    const level = entry.dag_level ?? 0;
+    byLevel.set(level, (byLevel.get(level) ?? 0) + 1);
+    if (level === 1 && !entry.dag_parent_id) unlinked++;
+  }
+
+  if (isStats) {
+    console.log('DAG Structure:');
+    console.log(`  Level 3 (entity profiles):  ${byLevel.get(3) ?? 0}`);
+    console.log(`  Level 2 (topic summaries):  ${byLevel.get(2) ?? 0}`);
+    console.log(`  Level 1 (extracted facts):  ${byLevel.get(1) ?? 0}`);
+    console.log(`  Level 0 (raw memories):     ${byLevel.get(0) ?? 0}`);
+    console.log(`  Unlinked facts: ${unlinked}`);
+    return;
+  }
+
+  // Tree view: show summaries and their children
+  const summaries = entries.filter((e) => e.dag_level === 2);
+  if (summaries.length === 0) {
+    console.log('No DAG summaries yet. Run `hippo sleep` with ANTHROPIC_API_KEY set.');
+    return;
+  }
+
+  for (const summary of summaries) {
+    const summaryTags = summary.tags.filter((t) => t !== 'dag-summary').join(', ');
+    console.log(`\n📌 ${summary.content.slice(0, 80)}`);
+    if (summaryTags) console.log(`   [${summaryTags}]`);
+
+    const children = entries.filter((e) => e.dag_parent_id === summary.id);
+    for (const child of children) {
+      console.log(`   └─ ${child.content.slice(0, 70)}`);
+    }
+  }
+}
+
 function printUsage(): void {
   console.log(`
 Hippo - biologically-inspired memory system for AI agents
@@ -4160,7 +4237,7 @@ async function main(): Promise<void> {
         console.error('Memory content too short (minimum 3 characters).');
         process.exit(1);
       }
-      cmdRemember(hippoRoot, text, flags);
+      await cmdRemember(hippoRoot, text, flags);
       break;
     }
 
@@ -4220,7 +4297,7 @@ async function main(): Promise<void> {
       break;
 
     case 'sleep':
-      cmdSleep(hippoRoot, flags);
+      await cmdSleep(hippoRoot, flags);
       break;
 
     case 'last-sleep':
@@ -4245,6 +4322,10 @@ async function main(): Promise<void> {
 
     case 'dedup':
       cmdDedup(hippoRoot, flags);
+      break;
+
+    case 'dag':
+      cmdDag(hippoRoot, flags);
       break;
 
     case 'audit': {

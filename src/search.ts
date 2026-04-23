@@ -119,6 +119,49 @@ function recencyBoost(entry: MemoryEntry, now: Date): number {
 }
 
 // ---------------------------------------------------------------------------
+// Temporal-aware scoring
+// ---------------------------------------------------------------------------
+
+const TEMPORAL_RECENT_CUES = new Set(['recently', 'latest', 'last', 'newest', 'current', 'today']);
+const TEMPORAL_OLDEST_CUES = new Set(['first', 'earliest', 'oldest', 'initially', 'originally']);
+
+export function detectTemporalDirection(query: string): 'recent' | 'oldest' | null {
+  const words = query.toLowerCase().split(/\s+/);
+  for (const w of words) {
+    if (TEMPORAL_RECENT_CUES.has(w)) return 'recent';
+    if (TEMPORAL_OLDEST_CUES.has(w)) return 'oldest';
+  }
+  return null;
+}
+
+export function computeTemporalRange(entries: MemoryEntry[]): { minTime: number; maxTime: number } {
+  let minTime = Infinity;
+  let maxTime = -Infinity;
+  for (const e of entries) {
+    const t = new Date(e.created).getTime();
+    if (t < minTime) minTime = t;
+    if (t > maxTime) maxTime = t;
+  }
+  return { minTime, maxTime };
+}
+
+export function temporalBoost(entry: MemoryEntry, direction: 'recent' | 'oldest' | null, range: { minTime: number; maxTime: number }): number {
+  if (!direction) return 1.0;
+
+  const span = range.maxTime - range.minTime;
+  if (span === 0) return 1.0;
+
+  const entryTime = new Date(entry.created).getTime();
+  const normalized = (entryTime - range.minTime) / span;
+
+  if (direction === 'recent') {
+    return 0.8 + 0.4 * normalized;
+  } else {
+    return 0.8 + 0.4 * (1 - normalized);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Public search API
 // ---------------------------------------------------------------------------
 
@@ -325,6 +368,8 @@ export async function hybridSearch(
   const currentPathTags = extractPathTags(process.cwd());
   const activeScope = options.scope !== undefined ? options.scope : detectScope();
   const queryTermSet = new Set(queryTerms);
+  const temporalDirAsync = detectTemporalDirection(query);
+  const temporalRangeAsync = temporalDirAsync ? computeTemporalRange(entries) : { minTime: 0, maxTime: 0 };
 
   for (let i = 0; i < entries.length; i++) {
     const rawBm25 = bm25Scores[i];
@@ -381,6 +426,11 @@ export async function hybridSearch(
     const scopeBoost = scopeSignal === 1 ? 1.5 : scopeSignal === -1 ? 0.5 : 1.0;
     compositeScore *= scopeBoost;
 
+    const extractionBoost = entries[i].tags.includes('extracted') ? 1.3 : 1.0;
+    compositeScore *= extractionBoost;
+
+    compositeScore *= temporalBoost(entries[i], temporalDirAsync, temporalRangeAsync);
+
     if (compositeScore <= 0) continue;
 
     const tokens = estimateTokens(entries[i].content);
@@ -426,6 +476,52 @@ export async function hybridSearch(
   // Sort by composite score descending
   scored.sort((a, b) => b.score - a.score);
 
+  // Deduplicate: when an extracted fact and its source both appear,
+  // keep only the higher-scoring one (typically the fact).
+  const seenExtractedFrom = new Set<string>();
+  const deduped: typeof scored = [];
+
+  for (const result of scored) {
+    const entry = result.entry;
+    if (entry.extracted_from) {
+      seenExtractedFrom.add(entry.extracted_from);
+      const sourceIdx = deduped.findIndex((d) => d.entry.id === entry.extracted_from);
+      if (sourceIdx >= 0) deduped.splice(sourceIdx, 1);
+      deduped.push(result);
+    } else if (seenExtractedFrom.has(entry.id)) {
+      continue;
+    } else {
+      deduped.push(result);
+    }
+  }
+
+  const scoredDeduped = deduped;
+
+  // DAG drill-down: when a summary node matches, inject its children
+  const summaryIdsAsync = scoredDeduped
+    .filter((r) => r.entry.tags.includes('dag-summary'))
+    .map((r) => r.entry.id);
+
+  if (summaryIdsAsync.length > 0) {
+    const childEntriesAsync = entries.filter(
+      (e) => e.dag_parent_id && summaryIdsAsync.includes(e.dag_parent_id),
+    );
+    for (const child of childEntriesAsync) {
+      if (!scoredDeduped.some((r) => r.entry.id === child.id)) {
+        const parentResult = scoredDeduped.find((r) => r.entry.id === child.dag_parent_id);
+        const childScore = parentResult ? parentResult.score * 0.9 : 0;
+        scoredDeduped.push({
+          entry: child,
+          score: childScore,
+          bm25: 0,
+          cosine: 0,
+          tokens: estimateTokens(child.content),
+        });
+      }
+    }
+    scoredDeduped.sort((a, b) => b.score - a.score);
+  }
+
   // MMR re-ranking: de-cluster near-duplicates by trading relevance for
   // diversity. Only applies when embeddings are loaded (doc-to-doc similarity
   // is via cosine of cached vectors); otherwise we return the pure-relevance
@@ -436,14 +532,14 @@ export async function hybridSearch(
   // relevance-scored candidates — anything below top-K was never going to
   // surface anyway after budget filtering.
   const MMR_CANDIDATE_CAP = 100;
-  const applyMmr = mmrEnabled && useEmbeddings && scored.length > 1 && mmrLambda < 1;
+  const applyMmr = mmrEnabled && useEmbeddings && scoredDeduped.length > 1 && mmrLambda < 1;
   let ordered: SearchResult[];
   if (applyMmr) {
-    const head = scored.slice(0, MMR_CANDIDATE_CAP);
-    const tail = scored.slice(MMR_CANDIDATE_CAP);
+    const head = scoredDeduped.slice(0, MMR_CANDIDATE_CAP);
+    const tail = scoredDeduped.slice(MMR_CANDIDATE_CAP);
     ordered = [...mmrRerank(head, embeddingIndex, mmrLambda, explain), ...tail];
   } else {
-    ordered = scored;
+    ordered = scoredDeduped;
   }
 
   // Apply token budget (guarantee at least minResults items)
@@ -736,6 +832,8 @@ export function search(
   const scored: SearchResult[] = [];
   const currentPathTagsSync = extractPathTags(process.cwd());
   const activeScopeSync = detectScope();
+  const temporalDir = detectTemporalDirection(query);
+  const temporalRangeSync = temporalDir ? computeTemporalRange(entries) : { minTime: 0, maxTime: 0 };
   for (let i = 0; i < entries.length; i++) {
     const bm25 = bm25Score(corpus, i, queryTerms);
     if (bm25 <= 0) continue;
@@ -763,6 +861,11 @@ export function search(
     const scopeBoostSync = scopeSignalSync === 1 ? 1.5 : scopeSignalSync === -1 ? 0.5 : 1.0;
     composite *= scopeBoostSync;
 
+    const extractionBoostSync = entries[i].tags.includes('extracted') ? 1.3 : 1.0;
+    composite *= extractionBoostSync;
+
+    composite *= temporalBoost(entries[i], temporalDir, temporalRangeSync);
+
     const tokens = estimateTokens(entries[i].content);
 
     scored.push({ entry: entries[i], score: composite, bm25, cosine: 0, tokens });
@@ -771,15 +874,57 @@ export function search(
   // Sort by composite score descending
   scored.sort((a, b) => b.score - a.score);
 
+  const seenExtractedFromSync = new Set<string>();
+  const dedupedSync: typeof scored = [];
+
+  for (const result of scored) {
+    const entry = result.entry;
+    if (entry.extracted_from) {
+      seenExtractedFromSync.add(entry.extracted_from);
+      const sourceIdx = dedupedSync.findIndex((d) => d.entry.id === entry.extracted_from);
+      if (sourceIdx >= 0) dedupedSync.splice(sourceIdx, 1);
+      dedupedSync.push(result);
+    } else if (seenExtractedFromSync.has(entry.id)) {
+      continue;
+    } else {
+      dedupedSync.push(result);
+    }
+  }
+
+  // DAG drill-down: when a summary node matches, inject its children
+  const summaryIdsSync = dedupedSync
+    .filter((r) => r.entry.tags.includes('dag-summary'))
+    .map((r) => r.entry.id);
+
+  if (summaryIdsSync.length > 0) {
+    const childEntries = entries.filter(
+      (e) => e.dag_parent_id && summaryIdsSync.includes(e.dag_parent_id),
+    );
+    for (const child of childEntries) {
+      if (!dedupedSync.some((r) => r.entry.id === child.id)) {
+        const parentResult = dedupedSync.find((r) => r.entry.id === child.dag_parent_id);
+        const childScore = parentResult ? parentResult.score * 0.9 : 0;
+        dedupedSync.push({
+          entry: child,
+          score: childScore,
+          bm25: 0,
+          cosine: 0,
+          tokens: estimateTokens(child.content),
+        });
+      }
+    }
+    dedupedSync.sort((a, b) => b.score - a.score);
+  }
+
   // Apply token budget
   const results: SearchResult[] = [];
   let usedTokens = 0;
 
-  for (let i = 0; i < scored.length; i++) {
-    const tokens = scored[i].tokens;
+  for (let i = 0; i < dedupedSync.length; i++) {
+    const tokens = dedupedSync[i].tokens;
     if (results.length >= minResults && usedTokens + tokens > budget) continue;
     usedTokens += tokens;
-    results.push(scored[i]);
+    results.push(dedupedSync[i]);
   }
 
   return results;
