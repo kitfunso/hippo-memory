@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.33.0 (2026-04-23)
+
+### Added
+- **Write-time fact extraction.** During `hippo sleep`, episodic memories are now processed by an LLM to extract standalone facts (up to 8 per memory). Facts are stored as semantic-layer entries with `extracted_from` linking back to the source. Extracted facts get a 1.3x search boost and automatically deduplicate against their source entries in results, so users see the precise fact instead of the raw conversation.
+- **DAG summarization.** Extracted facts are clustered by Jaccard similarity (>= 0.5) on speaker:/topic: entity tags, then summarized into dag_level=2 parent nodes. When a summary matches a query, its children are injected into results at 0.9x parent score, giving hierarchical drill-down.
+- **Multi-hop retrieval.** `hippo recall --multihop` and `multihopSearch()` run a two-pass entity-chained search. Pass 1 retrieves top-K and extracts entity tags not in the original query. Pass 2 reformulates the query with discovered entities and retrieves again. Results merge by highest score per ID.
+- **`hippo remember --extract`** triggers immediate fact extraction on the remembered content.
+- **`hippo dag --stats`** shows DAG layer distribution (how many entries at each level).
+- **Schema v12-v13.** v12 adds `extracted_from` column, v13 adds `dag_level` + `dag_parent_id` with backfill and index. Backwards compatible, auto-migrates on first open.
+
+### Fixed
+- **`temporalBoost` O(N^2) refactored to O(N).** Previously called `Math.min(...timestamps)` per entry inside the search loop, risking stack overflow on large stores. Now precomputes range once via `computeTemporalRange()`.
+- **Config scoping bug in `consolidate.ts`.** `config` was block-scoped inside the extraction `if` block but referenced from the DAG section outside it. Would cause ReferenceError when no extraction candidates exist but extracted facts are ready for DAG processing.
+- **Dead `seenIds` variables removed** from both search paths (populated but never read).
+
+### Internal
+- 674 tests (+41 from v0.32.0). 16 new test files covering extraction, DAG, multi-hop, temporal scoring, CLI commands, and integration smoke tests.
+- Reviewed via `/review` + `/self-review` + `/qa` + `/ship-check` + senior code review agent.
+
 ## 0.32.0 (2026-04-22)
 
 ### Added

@@ -60,6 +60,14 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v0.33.0
+
+- **Fact extraction at sleep time.** `hippo sleep` now extracts standalone facts from episodic memories via LLM, stored as semantic-layer entries that score 1.3x higher and auto-deduplicate against their raw source in search results.
+- **DAG summarization.** Extracted facts cluster by entity similarity into summary nodes. When a summary matches your query, its children drill down into results automatically.
+- **Multi-hop retrieval.** `hippo recall --multihop` chains two search passes via entity tags discovered in the first pass, finding connections that single-pass search misses.
+- **`hippo dag --stats`** shows how your memory is organized across DAG levels.
+- **Performance fix.** Temporal scoring refactored from O(N^2) to O(N), eliminating stack overflow risk on large stores.
+
 ### What's new in v0.32.0
 
 - **Correction without deletion.** `hippo supersede <old-id> "<new content>"` links the old memory as historical truth and creates a successor. Default recall shows only current beliefs; the old one stays in the store so you can audit what changed and when.
