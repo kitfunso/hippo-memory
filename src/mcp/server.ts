@@ -60,10 +60,10 @@ interface McpResponse {
   error?: { code: number; message: string };
 }
 
+// MCP stdio transport spec: messages are newline-delimited JSON-RPC, no embedded newlines.
+// https://modelcontextprotocol.io/specification/.../basic/transports#stdio
 function send(msg: McpResponse): void {
-  const json = JSON.stringify(msg);
-  const header = `Content-Length: ${Buffer.byteLength(json)}\r\n\r\n`;
-  process.stdout.write(header + json);
+  process.stdout.write(JSON.stringify(msg) + '\n');
 }
 
 // ── Format helpers ──
@@ -468,43 +468,34 @@ async function handleRequest(req: McpRequest): Promise<McpResponse | null> {
 
 // ── Stdio transport ──
 
-let buffer = Buffer.alloc(0);
+import { parseFrame } from './framing.js';
 
-const HEADER_DELIM = Buffer.from('\r\n\r\n');
+let buffer: Buffer = Buffer.alloc(0);
+
+function dispatch(body: string): void {
+  let req: McpRequest;
+  try {
+    req = JSON.parse(body) as McpRequest;
+  } catch {
+    return; // skip malformed
+  }
+  if (!req.method) return;
+  if (req.method.startsWith('notifications/')) {
+    handleRequest(req).catch(() => {});
+    return;
+  }
+  handleRequest(req).then((resp) => { if (resp) send(resp); }).catch((err) => {
+    send({ jsonrpc: '2.0', id: req.id, error: { code: -32603, message: err?.message ?? 'Internal error' } });
+  });
+}
 
 process.stdin.on('data', (chunk: Buffer) => {
   buffer = Buffer.concat([buffer, chunk]);
-
   while (true) {
-    const headerEnd = buffer.indexOf(HEADER_DELIM);
-    if (headerEnd === -1) break;
-
-    const header = buffer.slice(0, headerEnd).toString('utf-8');
-    const match = header.match(/Content-Length:\s*(\d+)/i);
-    if (!match) {
-      buffer = buffer.slice(headerEnd + 4);
-      continue;
-    }
-
-    const contentLength = parseInt(match[1], 10);
-    const bodyStart = headerEnd + 4;
-    if (buffer.length < bodyStart + contentLength) break;
-
-    const body = buffer.slice(bodyStart, bodyStart + contentLength).toString('utf-8');
-    buffer = buffer.slice(bodyStart + contentLength);
-
-    try {
-      const req = JSON.parse(body) as McpRequest;
-      if (req.method && !req.method.startsWith('notifications/')) {
-        handleRequest(req).then((resp) => { if (resp) send(resp); }).catch((err) => {
-          send({ jsonrpc: '2.0', id: req.id, error: { code: -32603, message: err?.message ?? 'Internal error' } });
-        });
-      } else if (req.method) {
-        handleRequest(req).catch(() => {});
-      }
-    } catch {
-      // Skip malformed messages
-    }
+    const result = parseFrame(buffer);
+    if (result.kind === 'incomplete') break;
+    buffer = result.rest;
+    if (result.kind === 'message') dispatch(result.body);
   }
 });
 
