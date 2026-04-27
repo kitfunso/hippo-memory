@@ -5,7 +5,7 @@ For each LoCoMo conversation:
   2. hippo init.
   3. Ingest every session turn as a memory via `hippo remember`.
   4. For every QA in that conversation, run `hippo recall --json`.
-  5. LLM-judge (via `claude -p` CLI) whether the top-K memories answer the question.
+  5. LLM-judge whether the top-K memories answer the question.
 
 Outputs a single JSON at results/hippo-v{version}.json with per-QA judgments +
 overall + per-category accuracy.
@@ -14,7 +14,7 @@ Honors the brief's non-negotiables:
   - Uses globally installed `hippo` CLI.
   - Fresh HIPPO_HOME per conversation (no cross-conversation leakage).
   - No hippo source changes.
-  - Judge model id recorded in the output.
+  - Judge backend and model id recorded in the output.
 """
 
 from __future__ import annotations
@@ -31,6 +31,8 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
+import urllib.request
 from collections import defaultdict
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
@@ -43,7 +45,15 @@ logger = logging.getLogger(__name__)
 # --- Configuration ---
 
 JUDGE_MODEL = "claude-opus-4-7"  # label for the `claude -p` CLI used; actual model governed by the CLI install
+OPENAI_JUDGE_MODEL = "gpt-4.1-mini"
 RECALL_PREFLIGHT_BUDGET = 1_000_000
+VERDICT_TOKENS = ("equivalent", "partial", "wrong", "none", "weak", "strong")
+FATAL_JUDGE_MARKERS = (
+    "monthly usage limit",
+    "insufficient_quota",
+    "invalid_api_key",
+    "billing",
+)
 
 
 class JudgeError(RuntimeError):
@@ -266,6 +276,20 @@ def format_memories_for_judge(memories: list[dict[str, Any]], top_k: int) -> str
     return "\n".join(lines)
 
 
+def extract_verdict(text: str) -> str | None:
+    """Return the first supported verdict token near the start of judge output."""
+    words = text.strip().lower().split()
+    for token in VERDICT_TOKENS:
+        if words and token in words[:5]:
+            return token
+    return None
+
+
+def is_fatal_judge_error(detail: str) -> bool:
+    lowered = detail.lower()
+    return any(marker in lowered for marker in FATAL_JUDGE_MARKERS)
+
+
 def judge_with_claude_cli(prompt: str, timeout: int = 60, max_attempts: int = 4) -> str:
     """Invoke `claude -p` as the judge. Returns the one-word verdict.
 
@@ -295,14 +319,132 @@ def judge_with_claude_cli(prompt: str, timeout: int = 60, max_attempts: int = 4)
                 if "monthly usage limit" in detail.lower():
                     raise last_err
             else:
-                text = result.stdout.strip().lower()
-                for token in ("equivalent", "partial", "wrong", "none", "weak", "strong"):
-                    if token in text.split()[:5] if text else []:
-                        return token
+                verdict = extract_verdict(result.stdout)
+                if verdict:
+                    return verdict
                 last_err = JudgeError(f"judge returned no usable verdict: {result.stdout[:200]}")
         if attempt < max_attempts - 1:
             time.sleep(2 ** attempt)  # 1, 2, 4 seconds
     raise last_err if last_err else JudgeError("judge failed (unknown)")
+
+
+def extract_openai_text(data: dict[str, Any]) -> str:
+    if isinstance(data.get("output_text"), str):
+        return data["output_text"]
+    chunks: list[str] = []
+    for item in data.get("output", []):
+        if not isinstance(item, dict):
+            continue
+        for content in item.get("content", []):
+            if not isinstance(content, dict):
+                continue
+            if content.get("type") in {"output_text", "text"} and isinstance(content.get("text"), str):
+                chunks.append(content["text"])
+    return "\n".join(chunks)
+
+
+def judge_with_openai(
+    prompt: str,
+    model: str,
+    base_url: str,
+    timeout: int = 60,
+    max_attempts: int = 4,
+) -> str:
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise JudgeError("openai judge requires OPENAI_API_KEY")
+
+    url = base_url.rstrip("/") + "/responses"
+    payload = {
+        "model": model,
+        "input": prompt,
+        "max_output_tokens": 8,
+        "store": False,
+    }
+    body = json.dumps(payload).encode("utf-8")
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    last_err: Exception | None = None
+    for attempt in range(max_attempts):
+        request = urllib.request.Request(url, data=body, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                response_text = response.read().decode("utf-8", errors="replace")
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            last_err = JudgeError(f"openai judge http {exc.code}: {detail[:500]}")
+            if exc.code in {400, 401, 403} or is_fatal_judge_error(detail):
+                raise last_err
+        except urllib.error.URLError as exc:
+            last_err = JudgeError(f"openai judge url error: {exc}")
+        except TimeoutError as exc:
+            last_err = JudgeError("openai judge timed out")
+        else:
+            try:
+                data = json.loads(response_text)
+            except json.JSONDecodeError as exc:
+                last_err = JudgeError(f"openai judge returned non-json: {response_text[:200]}")
+            else:
+                verdict = extract_verdict(extract_openai_text(data))
+                if verdict:
+                    return verdict
+                last_err = JudgeError(f"openai judge returned no usable verdict: {response_text[:500]}")
+        if attempt < max_attempts - 1:
+            time.sleep(2 ** attempt)
+    raise last_err if last_err else JudgeError("openai judge failed (unknown)")
+
+
+def judge_with_command(prompt: str, command: str, timeout: int = 60, max_attempts: int = 4) -> str:
+    last_err: Exception | None = None
+    for attempt in range(max_attempts):
+        try:
+            result = subprocess.run(
+                command,
+                input=prompt,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+                shell=True,
+            )
+        except subprocess.TimeoutExpired as exc:
+            last_err = JudgeError("command judge timed out")
+        else:
+            detail = "\n".join(part for part in (result.stderr.strip(), result.stdout.strip()) if part)
+            if result.returncode != 0:
+                last_err = JudgeError(f"command judge rc={result.returncode}: {detail[:500]}")
+                if is_fatal_judge_error(detail):
+                    raise last_err
+            else:
+                verdict = extract_verdict(result.stdout)
+                if verdict:
+                    return verdict
+                last_err = JudgeError(f"command judge returned no usable verdict: {result.stdout[:200]}")
+        if attempt < max_attempts - 1:
+            time.sleep(2 ** attempt)
+    raise last_err if last_err else JudgeError("command judge failed (unknown)")
+
+
+def judge_prompt(
+    prompt: str,
+    backend: str,
+    model: str,
+    command: str | None,
+    openai_base_url: str,
+    timeout: int,
+) -> str:
+    if backend == "claude-cli":
+        return judge_with_claude_cli(prompt, timeout=timeout)
+    if backend == "openai":
+        return judge_with_openai(prompt, model=model, base_url=openai_base_url, timeout=timeout)
+    if backend == "command":
+        if not command:
+            raise JudgeError("command judge requires --judge-command")
+        return judge_with_command(prompt, command=command, timeout=timeout)
+    raise JudgeError(f"unknown judge backend: {backend}")
 
 
 def score_verdict(verdict: str, is_adversarial: bool) -> float:
@@ -321,6 +463,11 @@ def process_conversation(
     budget: int,
     flush_file=None,
     salience: bool = False,
+    judge_backend: str = "claude-cli",
+    judge_model: str = JUDGE_MODEL,
+    judge_command: str | None = None,
+    openai_base_url: str = "https://api.openai.com/v1",
+    judge_timeout: int = 60,
 ) -> list[QAResult]:
     sample_id = conv_entry["sample_id"]
     conv = conv_entry["conversation"]
@@ -393,7 +540,14 @@ def process_conversation(
             prompt = template.format(
                 question=question, expected=expected, memories=mem_block, k=top_k
             )
-            verdict = judge_with_claude_cli(prompt)
+            verdict = judge_prompt(
+                prompt,
+                backend=judge_backend,
+                model=judge_model,
+                command=judge_command,
+                openai_base_url=openai_base_url,
+                timeout=judge_timeout,
+            )
             score = score_verdict(verdict, is_adv)
 
             qa_result = QAResult(
@@ -469,11 +623,29 @@ def main() -> None:
     parser.add_argument("--skip-adversarial", action="store_true")
     parser.add_argument("--resume", action="store_true",
                         help="Skip conversations already in incremental file.")
-    parser.add_argument("--judge-model", type=str, default=JUDGE_MODEL)
+    parser.add_argument("--judge-backend", choices=["claude-cli", "openai", "command"],
+                        default="claude-cli")
+    parser.add_argument("--judge-model", type=str, default=None,
+                        help="Judge model label/name. Defaults depend on --judge-backend.")
+    parser.add_argument("--judge-command", type=str, default=None,
+                        help="Shell command for --judge-backend command; prompt is sent on stdin.")
+    parser.add_argument("--judge-timeout", type=int, default=60)
+    parser.add_argument("--openai-base-url", type=str,
+                        default=os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1"))
     parser.add_argument("--salience", action="store_true",
                         help="Enable pineal salience gate (default off, see hippo_init docstring).")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
+
+    if args.judge_model is None:
+        if args.judge_backend == "openai":
+            args.judge_model = OPENAI_JUDGE_MODEL
+        elif args.judge_backend == "command":
+            args.judge_model = "command"
+        else:
+            args.judge_model = JUDGE_MODEL
+    if args.judge_backend == "command" and not args.judge_command:
+        parser.error("--judge-backend command requires --judge-command")
 
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
@@ -569,6 +741,11 @@ def main() -> None:
                     budget=args.budget,
                     flush_file=f,
                     salience=args.salience,
+                    judge_backend=args.judge_backend,
+                    judge_model=args.judge_model,
+                    judge_command=args.judge_command,
+                    openai_base_url=args.openai_base_url,
+                    judge_timeout=args.judge_timeout,
                 )
             except Exception as exc:
                 logger.exception("Conversation %s failed: %s", entry.get("sample_id"), exc)
@@ -601,6 +778,10 @@ def main() -> None:
             "conversations_run": len(data),
             "sample_per_conv": args.sample,
             "skip_adversarial": args.skip_adversarial,
+            "judge_backend": args.judge_backend,
+            "judge_timeout": args.judge_timeout,
+            "judge_command_configured": args.judge_backend == "command",
+            "openai_base_url": args.openai_base_url if args.judge_backend == "openai" else None,
         },
         "elapsed_seconds": elapsed,
         "complete": not failed_conversations,

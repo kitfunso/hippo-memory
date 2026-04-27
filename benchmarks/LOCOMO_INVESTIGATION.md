@@ -21,6 +21,13 @@ judge failures, but the broader stable 10x20 judged run hit Claude's monthly
 usage limit after 140 QAs (`claude -p` now returns "You've hit your org's
 monthly usage limit"). Do not treat partial judged JSONs as benchmark scores.
 
+Update 2026-04-27 final: `benchmarks/locomo/run.py` now supports
+`--judge-backend claude-cli|openai|command`, stable per-conversation sampling,
+and incomplete-run reporting. The 140-QA stable partial current run is useful
+for miss analysis only. Main miss patterns: temporal anchoring misses,
+recurring-topic distractors, photo/image evidence gaps, weak list aggregation,
+and unsupported profile/inference questions.
+
 ## What we know so far
 
 | Run | Code | Salience | mean_score | n_equivalent / 1986 |
@@ -65,9 +72,10 @@ verifying:
    recall preflight enabled: it compares the configured `--budget` against
    a high-budget probe before judging and aborts if top-k recall is capped.
    If it fails, raise `--budget` before scoring.
-4. Wait for Claude judge quota or switch to a reliable judge. Then resume
-   `hippo-current-10conv-20qa-stable.json` with `--resume` and run the same
-   stable sample against v0.32.0 via `HIPPO_BIN='node C:/Users/skf_s/hippo-v032/bin/hippo.js'`.
+4. Wait for Claude judge quota or switch to `--judge-backend openai` or
+   `--judge-backend command`. Then resume `hippo-current-10conv-20qa-stable.json`
+   with `--resume` and run the same stable sample against v0.32.0 via
+   `HIPPO_BIN='node C:/Users/skf_s/hippo-v032/bin/hippo.js'`.
 5. Score, diff, decide.
 
 ## Hard rules

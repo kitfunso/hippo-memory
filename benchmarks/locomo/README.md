@@ -27,8 +27,20 @@ pip install -r requirements.txt
 # Full pipeline: ingest one conv -> recall all its QAs -> judge -> aggregate
 python run.py --data data/locomo10.json --output-dir results/
 
+# Same harness with OpenAI as the judge
+python run.py --data data/locomo10.json --output-dir results/ \
+  --judge-backend openai --judge-model gpt-4.1-mini
+
+# Same harness with a local/custom judge command. The prompt is passed on stdin
+# and stdout must start with one of: equivalent, partial, wrong, none, weak, strong.
+python run.py --data data/locomo10.json --output-dir results/ \
+  --judge-backend command --judge-command 'python my_judge.py'
+
 # Cheap structural smoke: no judge, fresh temp store, truncated ingest
 python audit_matched_stores.py --data data/locomo10.json --max-conversations 1 --max-turns 50 --sample-qa 2
+
+# Offline analysis of an existing result JSON
+python analyze_results.py results/hippo-current-10conv-20qa-stable.json --allow-incomplete
 ```
 
 Flags:
@@ -36,7 +48,11 @@ Flags:
 - `--conversations K` — limit to first K conversations (default: all 10)
 - `--top-k N` — top-K memories to pass to judge (default: 5)
 - `--skip-adversarial` — exclude category 5 (no-answer) questions
-- `--judge-model` — override Claude judge model (default: claude-opus-4-7)
+- `--judge-backend` — `claude-cli`, `openai`, or `command`
+- `--judge-model` — override judge model (defaults: claude-opus-4-7 for
+  `claude-cli`, gpt-4.1-mini for `openai`)
+- `--judge-command` — shell command for `--judge-backend command`
+- `--judge-timeout` — seconds per judge call (default: 60)
 - `HIPPO_BIN` — override the Hippo command for judged runs, for example
   `HIPPO_BIN='node C:/Users/skf_s/hippo-v032/bin/hippo.js'`
 
@@ -83,9 +99,9 @@ locomo10.json
 - Overall score = mean across all QAs.
 - `--sample` uses a stable stratified sample per conversation so version
   comparisons can score the same QAs in separate processes.
-- Claude judge subprocess failures abort the current conversation, mark the
-  JSON as incomplete, and exit nonzero. They are not scored as wrong, because
-  that silently fabricates benchmark regressions.
+- Judge subprocess/API failures abort the current conversation, mark the JSON
+  as incomplete, and exit nonzero. They are not scored as wrong, because that
+  silently fabricates benchmark regressions.
 
 ## First run (2026-04-22): results/hippo-v0.31.0.json
 
