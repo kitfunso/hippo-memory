@@ -98,6 +98,8 @@ def run_hippo_command(
 ) -> subprocess.CompletedProcess[str]:
     """Run a hippo CLI command with error handling."""
     cmd = [hippo_bin] + args
+    import os
+    env = {**os.environ, "HIPPO_HOME": cwd, "HOME": cwd, "USERPROFILE": cwd}
     try:
         result = subprocess.run(
             cmd,
@@ -109,6 +111,7 @@ def run_hippo_command(
             input=stdin_text,
             encoding="utf-8",
             errors="replace",
+            env=env,
         )
         if result.returncode != 0:
             logger.warning(
@@ -129,6 +132,8 @@ def ingest_sessions(
     data_path: Path,
     hippo_bin: str = "hippo",
     store_dir: Path | None = None,
+    salience: bool = False,
+    skip_sleep: bool = False,
 ) -> Path:
     """Ingest all LongMemEval sessions into a fresh hippo store.
 
@@ -136,6 +141,10 @@ def ingest_sessions(
         data_path: Path to the LongMemEval JSON dataset.
         hippo_bin: Path to the hippo CLI binary.
         store_dir: Directory to create .hippo/ store in. If None, uses a temp dir.
+        salience: If True, enable the pineal salience gate (write-time dedup
+            by lexical overlap). Default False — the 2026-04-24 LongMemEval run
+            with salience=true collapsed recall@10 from 81% to 14.6% because
+            same-session turns share phrasing and get dropped as duplicates.
 
     Returns:
         Path to the directory containing the .hippo/ store.
@@ -151,11 +160,25 @@ def ingest_sessions(
 
     logger.info("Using store directory: %s", store_dir)
 
-    # Initialize hippo store
-    result = run_hippo_command(hippo_bin, ["init"], cwd=str(store_dir))
+    # Initialize hippo store. Pass --no-learn / --no-hooks / --no-schedule so
+    # we don't pollute the benchmark store with MEMORY.md auto-learn or hooks.
+    result = run_hippo_command(
+        hippo_bin, ["init", "--no-hooks", "--no-schedule", "--no-learn"],
+        cwd=str(store_dir),
+    )
     if result.returncode != 0:
         raise RuntimeError(f"Failed to initialize hippo store: {result.stderr}")
     logger.info("Initialized hippo store at %s", store_dir)
+
+    if salience:
+        hippo_dir = store_dir / ".hippo"
+        hippo_dir.mkdir(parents=True, exist_ok=True)
+        config_path = hippo_dir / "config.json"
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump({"salience": {"enabled": True}}, f, indent=2)
+        logger.info("Wrote salience=true config to %s", config_path)
+    else:
+        logger.info("Salience gate disabled (default)")
 
     # Ingest each session
     failed = 0
@@ -188,9 +211,14 @@ def ingest_sessions(
         failed,
     )
 
-    # Run consolidation
-    logger.info("Running hippo sleep for consolidation...")
-    run_hippo_command(hippo_bin, ["sleep"], cwd=str(store_dir), timeout=120)
+    if skip_sleep:
+        logger.info("Skipping hippo sleep (--skip-sleep). Memories preserved as-ingested.")
+    else:
+        # Run consolidation. 940 sessions without salience-skipping take
+        # several minutes; 120s was the previous default and crashed the
+        # harness on the first salience-off run.
+        logger.info("Running hippo sleep for consolidation...")
+        run_hippo_command(hippo_bin, ["sleep"], cwd=str(store_dir), timeout=900)
 
     # Save metadata
     metadata = {
@@ -230,6 +258,16 @@ def main() -> None:
         help="Directory for .hippo/ store (default: temp directory).",
     )
     parser.add_argument(
+        "--salience",
+        action="store_true",
+        help="Enable the pineal salience gate (default off — see ingest_sessions docstring).",
+    )
+    parser.add_argument(
+        "--skip-sleep",
+        action="store_true",
+        help="Skip the hippo sleep consolidation step (preserves all ingested sessions).",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Enable verbose logging.",
@@ -242,7 +280,10 @@ def main() -> None:
     )
 
     try:
-        store_dir = ingest_sessions(args.data, args.hippo, args.store_dir)
+        store_dir = ingest_sessions(
+            args.data, args.hippo, args.store_dir,
+            salience=args.salience, skip_sleep=args.skip_sleep,
+        )
         logger.info("Ingestion complete. Store at: %s", store_dir)
     except Exception:
         logger.exception("Ingestion failed")

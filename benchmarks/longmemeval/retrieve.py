@@ -2,6 +2,18 @@
 
 For each question, calls `hippo recall "<question>" --json --budget N`
 and saves the retrieval results in JSONL format.
+
+NOT THE CANONICAL HARNESS for LongMemEval comparisons. This script shells
+out to `hippo recall` per question with a default budget of 4000 tokens.
+On LongMemEval (sessions stored as ~14k-char blobs) that produces ~1
+result per query, capping recall@K at recall@1 regardless of retrieval
+quality. Use `retrieve_inprocess.mjs` for any parity comparison — it
+calls hybridSearch in-process with budget=1,000,000 and min-results=10
+by default, which is what every published v0.27/v0.28 baseline used.
+
+See benchmarks/LONGMEMEVAL_RESOLVED.md for the 2026-04-26 incident where
+mixing this script's output with retrieve_inprocess.mjs output produced
+a fake "5x regression" that did not exist.
 """
 
 from __future__ import annotations
@@ -17,6 +29,23 @@ from typing import Any
 from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
+
+
+_NON_CANONICAL_BANNER = """
+================================================================================
+WARNING: retrieve.py is NOT the canonical LongMemEval harness.
+
+  - This script shells out to `hippo recall` per question with default
+    budget=4000. LongMemEval sessions are ~14k chars, so this returns
+    roughly one document per query and caps recall@K at recall@1.
+  - The canonical harness is `retrieve_inprocess.mjs` (in-process search,
+    budget=1,000,000, min-results=10).
+  - DO NOT compare numbers from retrieve.py against retrieve_inprocess.mjs.
+  - See benchmarks/LONGMEMEVAL_RESOLVED.md.
+
+Re-run with --i-know-this-is-not-canonical to silence this warning.
+================================================================================
+"""
 
 
 def load_dataset(data_path: Path) -> list[dict[str, Any]]:
@@ -60,9 +89,9 @@ def recall_memories(
     """
     cmd = [hippo_bin, "recall", query, "--json", "--budget", str(budget)]
 
-    # Isolate from global ~/.hippo store by overriding HOME/USERPROFILE
+    # Isolate from global ~/.hippo store by overriding HIPPO_HOME + HOME/USERPROFILE
     import os
-    env = {**os.environ, "HOME": str(store_dir), "USERPROFILE": str(store_dir)}
+    env = {**os.environ, "HIPPO_HOME": str(store_dir), "HOME": str(store_dir), "USERPROFILE": str(store_dir)}
 
     try:
         result = subprocess.run(
@@ -73,6 +102,8 @@ def recall_memories(
             timeout=timeout,
             env=env,
             shell=(sys.platform == "win32"),
+            encoding="utf-8",
+            errors="replace",
         )
     except FileNotFoundError:
         logger.error("hippo binary not found: %s", hippo_bin)
@@ -86,11 +117,11 @@ def recall_memories(
             "Recall failed (rc=%d) for query: %.80s...\nstderr: %s",
             result.returncode,
             query,
-            result.stderr.strip(),
+            (result.stderr or "").strip(),
         )
         return []
 
-    stdout = result.stdout.strip()
+    stdout = (result.stdout or "").strip()
     if not stdout:
         return []
 
@@ -191,11 +222,20 @@ def main() -> None:
         help="Token budget for retrieval (default: 4000).",
     )
     parser.add_argument(
+        "--i-know-this-is-not-canonical",
+        action="store_true",
+        help="Silence the non-canonical-harness warning.",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Enable verbose logging.",
     )
     args = parser.parse_args()
+
+    if not args.i_know_this_is_not_canonical:
+        sys.stderr.write(_NON_CANONICAL_BANNER)
+        sys.stderr.flush()
 
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,

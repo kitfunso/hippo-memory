@@ -156,15 +156,24 @@ export function getHippoRoot(cwd: string = process.cwd()): string {
 }
 
 export function isInitialized(hippoRoot: string): boolean {
-  return fs.existsSync(hippoRoot);
+  // A bare .hippo directory is not enough — autoInstallHooks /
+  // setupDailySchedule can create it without ever calling initStore,
+  // leaving a partial directory (integrations/, logs/, runs/) with no
+  // hippo.db. Returning true in that state caused `hippo init` to skip
+  // initStore and `hippo recall` to silently fall back to an empty store
+  // (incident 2026-04-26: ingest_direct.py against a bare .hippo).
+  // Treat the store as initialized only if hippo.db actually exists.
+  return fs.existsSync(path.join(hippoRoot, 'hippo.db'));
 }
 
 export function initStore(hippoRoot: string): void {
   ensureMirrorDirectories(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    bootstrapLegacyStore(db, hippoRoot);
-    syncMirrorFiles(hippoRoot, db);
+    const bootstrapped = bootstrapLegacyStore(db, hippoRoot);
+    if (bootstrapped) {
+      syncMirrorFiles(hippoRoot, db);
+    }
   } finally {
     closeHippoDb(db);
   }
@@ -545,13 +554,13 @@ function removeEntryMirrors(hippoRoot: string, id: string): void {
   }
 }
 
-function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: string): void {
+function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: string): boolean {
   const countRow = db.prepare(`SELECT COUNT(*) AS count FROM memories`).get() as { count?: number } | undefined;
   const memoryCount = Number(countRow?.count ?? 0);
-  if (memoryCount > 0) return;
+  if (memoryCount > 0) return false;
 
   const legacyEntries = loadLegacyEntriesFromMarkdown(hippoRoot);
-  if (legacyEntries.length === 0) return;
+  if (legacyEntries.length === 0) return false;
 
   db.exec('BEGIN');
   try {
@@ -585,6 +594,7 @@ function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: str
     db.exec('ROLLBACK');
     throw error;
   }
+  return true;
 }
 
 function loadLegacyEntriesFromMarkdown(hippoRoot: string): MemoryEntry[] {

@@ -87,26 +87,43 @@ def ingest_direct(
 
     # Initialize hippo store via CLI (creates schema)
     hippo_dir = store_dir / ".hippo"
+    import os
+    abs_store = str(store_dir.resolve())
+    init_env = {**os.environ, "HIPPO_HOME": abs_store, "HOME": abs_store, "USERPROFILE": abs_store}
     if not hippo_dir.exists():
         result = subprocess.run(
-            [hippo_bin, "init", "--no-schedule"],
-            cwd=str(store_dir),
+            [hippo_bin, "init", "--no-hooks", "--no-schedule", "--no-learn"],
+            cwd=abs_store,
             capture_output=True, text=True,
             shell=(sys.platform == "win32"),
+            env=init_env,
         )
         if result.returncode != 0:
-            # Try without --no-schedule
+            # Older versions (pre-v0.30) may not have all flags; fall back.
             result = subprocess.run(
-                [hippo_bin, "init"],
-                cwd=str(store_dir),
+                [hippo_bin, "init", "--no-schedule"],
+                cwd=abs_store,
                 capture_output=True, text=True,
                 shell=(sys.platform == "win32"),
+                env=init_env,
             )
-        logger.info("Initialized hippo store")
+        logger.info("Initialized hippo store (rc=%s) stdout=%r stderr=%r", result.returncode, result.stdout[:300], result.stderr[:300])
 
     db_path = hippo_dir / "hippo.db"
     if not db_path.exists():
-        raise RuntimeError(f"hippo.db not found at {db_path}")
+        # v0.34 hippo init creates schema lazily on first write. Seed with one
+        # dummy `hippo remember` to force schema creation, then we can write
+        # directly for the rest of the corpus.
+        seed_result = subprocess.run(
+            [hippo_bin, "remember", "schema-seed-dummy", "--tag", "_schema_seed"],
+            cwd=abs_store,
+            capture_output=True, text=True,
+            shell=(sys.platform == "win32"),
+            env=init_env,
+        )
+        logger.info("seed remember rc=%s stdout=%r stderr=%r", seed_result.returncode, seed_result.stdout[:300], seed_result.stderr[:300])
+        if not db_path.exists():
+            raise RuntimeError(f"hippo.db not found at {db_path} after seed")
 
     db = sqlite3.connect(str(db_path))
     db.execute("PRAGMA journal_mode = WAL")
