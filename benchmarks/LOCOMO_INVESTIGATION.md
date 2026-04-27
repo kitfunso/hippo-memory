@@ -5,6 +5,14 @@
 Open. Fresh repro needed under the canonical harness on matched stores.
 Do NOT carry any framing from the (now closed) LongMemEval thread.
 
+Update 2026-04-27: existing full LoCoMo result files are contaminated by
+Claude judge subprocess failures. `run-no-salience.log` contains 1,377
+`judge rc=1` warnings, starting in conv-42; conv-44 through conv-50 in
+`hippo-v0.34.0-no-salience.json` are all scored `wrong` despite non-empty
+top-k memories. `run-v0.32.0.log` also has 528 judge failures. Treat those
+published aggregate scores as suspect until rerun with judge failures
+aborting rather than scoring as wrong.
+
 ## What we know so far
 
 | Run | Code | Salience | mean_score | n_equivalent / 1986 |
@@ -40,11 +48,15 @@ verifying:
    the current v0.34 working tree, both with `--no-hooks --no-schedule
    --no-learn` init, both with salience off, both via whatever ingest
    path each version supports cleanly.
-2. Confirm memory counts and per-conversation distributions match.
-3. Run `benchmarks/locomo/run.py` on each with identical flags. If the
-   per-QA recall path uses CLI subprocess + low budget like LongMemEval
-   did, fix that first by pointing it at an in-process equivalent OR
-   bumping budget so it stops being the binding constraint.
+2. Confirm memory counts and per-conversation distributions match. Use
+   `benchmarks/locomo/audit_matched_stores.py` for the first cheap pass:
+   it builds fresh temp stores, exports counts, and probes configured vs
+   high-budget recall without running the Claude judge. Use `--max-turns`
+   only for smoke checks; omit it for real matched-store parity.
+3. Run `benchmarks/locomo/run.py` on each with identical flags. Keep the
+   recall preflight enabled: it compares the configured `--budget` against
+   a high-budget probe before judging and aborts if top-k recall is capped.
+   If it fails, raise `--budget` before scoring.
 4. Score, diff, decide.
 
 ## Hard rules

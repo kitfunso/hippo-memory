@@ -26,6 +26,9 @@ pip install -r requirements.txt
 ```bash
 # Full pipeline: ingest one conv -> recall all its QAs -> judge -> aggregate
 python run.py --data data/locomo10.json --output-dir results/
+
+# Cheap structural smoke: no judge, fresh temp store, truncated ingest
+python audit_matched_stores.py --data data/locomo10.json --max-conversations 1 --max-turns 50 --sample-qa 2
 ```
 
 Flags:
@@ -34,6 +37,19 @@ Flags:
 - `--top-k N` — top-K memories to pass to judge (default: 5)
 - `--skip-adversarial` — exclude category 5 (no-answer) questions
 - `--judge-model` — override Claude judge model (default: claude-opus-4-7)
+
+For version parity checks, run the audit with repeated `--hippo-cmd`
+arguments:
+
+```bash
+python audit_matched_stores.py \
+  --hippo-cmd 'v032=hippo-v032' \
+  --hippo-cmd 'current=node C:/Users/skf_s/hippo/bin/hippo.js' \
+  --max-conversations 1 --sample-qa 2
+```
+
+Omit `--max-turns` for a real matched-store count; keep it for quick smoke
+checks only.
 
 ## Non-negotiables honored
 
@@ -63,6 +79,8 @@ locomo10.json
 - Equivalent = 1.0, partial = 0.5, wrong = 0.0
 - For adversarial (cat 5): correct if top-K returns no relevant memory or abstains.
 - Overall score = mean across all QAs.
+- Claude judge subprocess failures abort the current conversation. They are
+  not scored as wrong, because that silently fabricates benchmark regressions.
 
 ## First run (2026-04-22): results/hippo-v0.31.0.json
 

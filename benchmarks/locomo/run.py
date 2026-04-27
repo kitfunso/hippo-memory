@@ -41,6 +41,11 @@ logger = logging.getLogger(__name__)
 # --- Configuration ---
 
 JUDGE_MODEL = "claude-opus-4-7"  # label for the `claude -p` CLI used; actual model governed by the CLI install
+RECALL_PREFLIGHT_BUDGET = 1_000_000
+
+
+class JudgeError(RuntimeError):
+    """Raised when the external Claude judge fails to return a usable verdict."""
 
 JUDGE_PROMPT_TEMPLATE = """\
 You are grading a memory-retrieval system.
@@ -140,7 +145,10 @@ def run_hippo(
     # Force isolation from global ~/.hippo as a belt-and-braces measure.
     env["HOME"] = hippo_home
     env["USERPROFILE"] = hippo_home
-    cmd = ["hippo"] + args
+    # Override the hippo binary via HIPPO_BIN (e.g. a worktree's hippo.cmd
+    # for parity comparisons across versions).
+    hippo_bin = os.environ.get("HIPPO_BIN", "hippo")
+    cmd = [hippo_bin] + args
     return subprocess.run(
         cmd,
         cwd=cwd,
@@ -221,6 +229,30 @@ def hippo_recall(hippo_home: str, query: str, budget: int = 4000) -> list[dict[s
         return []
 
 
+def assert_recall_budget_not_capped(
+    hippo_home: str,
+    qa_list: list[dict[str, Any]],
+    top_k: int,
+    budget: int,
+) -> None:
+    if budget >= RECALL_PREFLIGHT_BUDGET or top_k <= 0 or not qa_list:
+        return
+
+    probe = next((qa.get("question", "") for qa in qa_list if qa.get("question", "")), "")
+    if not probe:
+        return
+
+    configured = hippo_recall(hippo_home, probe, budget=budget)
+    high_budget = hippo_recall(hippo_home, probe, budget=RECALL_PREFLIGHT_BUDGET)
+    if len(configured) < top_k <= len(high_budget):
+        raise RuntimeError(
+            "LoCoMo recall preflight failed: configured --budget "
+            f"{budget} returned {len(configured)} memories for top_k={top_k}, "
+            f"but budget {RECALL_PREFLIGHT_BUDGET} returned {len(high_budget)}. "
+            "Raise --budget before scoring so the harness is not budget-capped."
+        )
+
+
 def format_memories_for_judge(memories: list[dict[str, Any]], top_k: int) -> str:
     if not memories:
         return "  (no memories returned)"
@@ -244,20 +276,16 @@ def judge_with_claude_cli(prompt: str, timeout: int = 60) -> str:
             timeout=timeout,
             shell=(sys.platform == "win32"),
         )
-    except subprocess.TimeoutExpired:
-        logger.warning("judge timed out")
-        return "wrong"
+    except subprocess.TimeoutExpired as exc:
+        raise JudgeError("judge timed out") from exc
     if result.returncode != 0:
-        logger.warning("judge rc=%d: %s", result.returncode, result.stderr[:200])
-        return "wrong"
+        raise JudgeError(f"judge rc={result.returncode}: {result.stderr[:200]}")
     text = result.stdout.strip().lower()
     # Grab first recognizable token
     for token in ("equivalent", "partial", "wrong", "none", "weak", "strong"):
         if token in text.split()[:5] if text else []:
             return token
-    # Fall back to first word
-    first = text.split()[0].strip(".,:;!?") if text else ""
-    return first or "wrong"
+    raise JudgeError(f"judge returned no usable verdict: {result.stdout[:200]}")
 
 
 def score_verdict(verdict: str, is_adversarial: bool) -> float:
@@ -325,6 +353,8 @@ def process_conversation(
             if hippo_remember(hippo_home, text, tags):
                 ingested += 1
         logger.info("[%s] ingested %d/%d turns", sample_id, ingested, len(turns))
+
+        assert_recall_budget_not_capped(hippo_home, qa_list, top_k, budget)
 
         # Retrieve + judge
         results: list[QAResult] = []
@@ -542,6 +572,7 @@ def main() -> None:
         "config": {
             "top_k": args.top_k,
             "budget": args.budget,
+            "recall_preflight_budget": RECALL_PREFLIGHT_BUDGET,
             "conversations_run": len(data),
             "sample_per_conv": args.sample,
             "skip_adversarial": args.skip_adversarial,
