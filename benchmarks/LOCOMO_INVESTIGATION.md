@@ -13,6 +13,14 @@ top-k memories. `run-v0.32.0.log` also has 528 judge failures. Treat those
 published aggregate scores as suspect until rerun with judge failures
 aborting rather than scoring as wrong.
 
+Update 2026-04-27 later: matched-store audit passed for all 10 LoCoMo
+conversations comparing v0.32.0 vs current: both stored 5,882 / 5,882
+expected turns, with zero stored-count delta and zero sampled budget-capped
+recall probes. Current judged smoke on conv-26 completed 20 QAs with no
+judge failures, but the broader stable 10x20 judged run hit Claude's monthly
+usage limit after 140 QAs (`claude -p` now returns "You've hit your org's
+monthly usage limit"). Do not treat partial judged JSONs as benchmark scores.
+
 ## What we know so far
 
 | Run | Code | Salience | mean_score | n_equivalent / 1986 |
@@ -57,7 +65,10 @@ verifying:
    recall preflight enabled: it compares the configured `--budget` against
    a high-budget probe before judging and aborts if top-k recall is capped.
    If it fails, raise `--budget` before scoring.
-4. Score, diff, decide.
+4. Wait for Claude judge quota or switch to a reliable judge. Then resume
+   `hippo-current-10conv-20qa-stable.json` with `--resume` and run the same
+   stable sample against v0.32.0 via `HIPPO_BIN='node C:/Users/skf_s/hippo-v032/bin/hippo.js'`.
+5. Score, diff, decide.
 
 ## Hard rules
 

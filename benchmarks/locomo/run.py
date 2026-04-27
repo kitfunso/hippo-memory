@@ -20,10 +20,12 @@ Honors the brief's non-negotiables:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -145,10 +147,11 @@ def run_hippo(
     # Force isolation from global ~/.hippo as a belt-and-braces measure.
     env["HOME"] = hippo_home
     env["USERPROFILE"] = hippo_home
-    # Override the hippo binary via HIPPO_BIN (e.g. a worktree's hippo.cmd
-    # for parity comparisons across versions).
-    hippo_bin = os.environ.get("HIPPO_BIN", "hippo")
-    cmd = [hippo_bin] + args
+    # Override the hippo binary via HIPPO_BIN. This may be either a single
+    # executable path or a command string such as `node C:/repo/bin/hippo.js`.
+    hippo_bin = os.environ.get("HIPPO_BIN")
+    cmd = shlex.split(hippo_bin) if hippo_bin else ["hippo"]
+    cmd += args
     return subprocess.run(
         cmd,
         cwd=cwd,
@@ -263,29 +266,43 @@ def format_memories_for_judge(memories: list[dict[str, Any]], top_k: int) -> str
     return "\n".join(lines)
 
 
-def judge_with_claude_cli(prompt: str, timeout: int = 60) -> str:
-    """Invoke `claude -p` as the judge. Returns the one-word verdict."""
-    try:
-        result = subprocess.run(
-            ["claude", "-p", "--output-format", "text"],
-            input=prompt,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-            shell=(sys.platform == "win32"),
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise JudgeError("judge timed out") from exc
-    if result.returncode != 0:
-        raise JudgeError(f"judge rc={result.returncode}: {result.stderr[:200]}")
-    text = result.stdout.strip().lower()
-    # Grab first recognizable token
-    for token in ("equivalent", "partial", "wrong", "none", "weak", "strong"):
-        if token in text.split()[:5] if text else []:
-            return token
-    raise JudgeError(f"judge returned no usable verdict: {result.stdout[:200]}")
+def judge_with_claude_cli(prompt: str, timeout: int = 60, max_attempts: int = 4) -> str:
+    """Invoke `claude -p` as the judge. Returns the one-word verdict.
+
+    Retries on transient failures (rc!=0, timeout, no-usable-verdict) with
+    exponential backoff. The `claude -p` CLI fails intermittently under
+    parallel load, so a single failure should not abort the whole run.
+    """
+    last_err: Exception | None = None
+    for attempt in range(max_attempts):
+        try:
+            result = subprocess.run(
+                ["claude", "-p", "--output-format", "text"],
+                input=prompt,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+                shell=(sys.platform == "win32"),
+            )
+        except subprocess.TimeoutExpired as exc:
+            last_err = JudgeError("judge timed out")
+        else:
+            if result.returncode != 0:
+                detail = "\n".join(part for part in (result.stderr.strip(), result.stdout.strip()) if part)
+                last_err = JudgeError(f"judge rc={result.returncode}: {detail[:200]}")
+                if "monthly usage limit" in detail.lower():
+                    raise last_err
+            else:
+                text = result.stdout.strip().lower()
+                for token in ("equivalent", "partial", "wrong", "none", "weak", "strong"):
+                    if token in text.split()[:5] if text else []:
+                        return token
+                last_err = JudgeError(f"judge returned no usable verdict: {result.stdout[:200]}")
+        if attempt < max_attempts - 1:
+            time.sleep(2 ** attempt)  # 1, 2, 4 seconds
+    raise last_err if last_err else JudgeError("judge failed (unknown)")
 
 
 def score_verdict(verdict: str, is_adversarial: bool) -> float:
@@ -315,7 +332,8 @@ def process_conversation(
         # Deterministic STRATIFIED sample: proportional allocation across categories.
         # Seed is fixed per conversation so the same sample is reproducible.
         import random
-        rng = random.Random(0xC0C0 ^ (hash(sample_id) & 0xFFFFFFFF))
+        seed = int.from_bytes(hashlib.sha256(sample_id.encode("utf-8")).digest()[:4], "big")
+        rng = random.Random(0xC0C0 ^ seed)
         by_cat: dict[int, list[dict[str, Any]]] = defaultdict(list)
         for qa in qa_list:
             by_cat[qa.get("category", 0)].append(qa)
@@ -462,11 +480,13 @@ def main() -> None:
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
 
-    # Verify hippo version
-    v_result = subprocess.run(
-        ["hippo", "--version"], capture_output=True, text=True, shell=(sys.platform == "win32"),
-    )
-    hippo_version = v_result.stdout.strip() or "unknown"
+    # Verify hippo version through the same command path used by the run.
+    version_home = tempfile.mkdtemp(prefix="hippo_locomo_version_")
+    try:
+        v_result = run_hippo(["--version"], cwd=str(Path.cwd()), hippo_home=version_home, timeout=60)
+        hippo_version = v_result.stdout.strip() or "unknown"
+    finally:
+        shutil.rmtree(version_home, ignore_errors=True)
     logger.info("hippo --version: %s", hippo_version)
 
     if args.output_name is None:
@@ -532,6 +552,7 @@ def main() -> None:
             logger.info("Resuming: %d conversations already done: %s",
                         len(completed_convs), ", ".join(sorted(completed_convs)))
     start_time = time.time()
+    failed_conversations: list[dict[str, str]] = []
     # Resume always appends: we rewrote incr_path with only complete-conv rows above.
     file_mode = "a" if args.resume else "w"
     with open(incr_path, file_mode, encoding="utf-8") as f:
@@ -551,6 +572,10 @@ def main() -> None:
                 )
             except Exception as exc:
                 logger.exception("Conversation %s failed: %s", entry.get("sample_id"), exc)
+                failed_conversations.append({
+                    "conversation_id": entry.get("sample_id", ""),
+                    "error": str(exc),
+                })
                 continue
             all_results.extend(conv_results)
             # Periodic aggregate print
@@ -578,6 +603,8 @@ def main() -> None:
             "skip_adversarial": args.skip_adversarial,
         },
         "elapsed_seconds": elapsed,
+        "complete": not failed_conversations,
+        "failed_conversations": failed_conversations,
         "aggregate": agg,
         "per_qa": [asdict(r) for r in all_results],
     }
@@ -588,6 +615,9 @@ def main() -> None:
     logger.info("Overall score: %.3f (%d QAs, %.0fs)", agg["overall"]["mean_score"],
                 agg["overall"]["total"], elapsed)
     print(json.dumps(agg, indent=2))
+    if failed_conversations:
+        logger.error("Run incomplete: %d conversations failed", len(failed_conversations))
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

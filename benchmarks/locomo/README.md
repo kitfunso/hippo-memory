@@ -37,6 +37,8 @@ Flags:
 - `--top-k N` — top-K memories to pass to judge (default: 5)
 - `--skip-adversarial` — exclude category 5 (no-answer) questions
 - `--judge-model` — override Claude judge model (default: claude-opus-4-7)
+- `HIPPO_BIN` — override the Hippo command for judged runs, for example
+  `HIPPO_BIN='node C:/Users/skf_s/hippo-v032/bin/hippo.js'`
 
 For version parity checks, run the audit with repeated `--hippo-cmd`
 arguments:
@@ -79,8 +81,11 @@ locomo10.json
 - Equivalent = 1.0, partial = 0.5, wrong = 0.0
 - For adversarial (cat 5): correct if top-K returns no relevant memory or abstains.
 - Overall score = mean across all QAs.
-- Claude judge subprocess failures abort the current conversation. They are
-  not scored as wrong, because that silently fabricates benchmark regressions.
+- `--sample` uses a stable stratified sample per conversation so version
+  comparisons can score the same QAs in separate processes.
+- Claude judge subprocess failures abort the current conversation, mark the
+  JSON as incomplete, and exit nonzero. They are not scored as wrong, because
+  that silently fabricates benchmark regressions.
 
 ## First run (2026-04-22): results/hippo-v0.31.0.json
 
