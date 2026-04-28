@@ -71,6 +71,17 @@ metadata, e.g. dlPFC goal conditioning (`--goal <tag>` boost).
   `hippo outcome --bad --id <id>` `bad` times. Used to set up
   value-attribution scenarios (vmPFC mechanic). Example:
   `{"type": "outcomes", "remember_index": 0, "good": 3, "bad": 0}`.
+- `recall` — runs `hippo recall <query> --limit 1` `times` times to bump
+  `retrieval_count` on the top-ranked match for `query`. The `--limit 1` is
+  intentional: in `cli.ts`, results are sliced to `limit` BEFORE
+  `markRetrieved()` runs, so only the rank-1 match is bumped (calling recall
+  without a limit would bump every returned memory). The fixture's `query`
+  must be selective enough to put the target memory at rank 1 — a unique
+  marker token is the canonical pattern. After the loop, the harness runs
+  `hippo trace <id>` and asserts `retrieval_count >= times`. Used by the
+  pineal-salience mechanic, where "salience" emerges from USE rather than
+  lexical overlap. Example:
+  `{"type": "recall", "query": "marker-pineal-1", "remember_index": 0, "times": 3}`.
 
 ## When to add fixtures
 

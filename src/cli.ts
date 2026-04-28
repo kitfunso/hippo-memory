@@ -871,6 +871,40 @@ async function cmdRecall(
       .sort((a, b) => b.score - a.score);
   }
 
+  // Pineal salience MVP (RESEARCH.md §"AI Pineal Gland — Intuition and Awareness
+  // Module"). When --salience-threshold T is set (T > 0), memories whose
+  // retrieval_count is below T are downweighted: score *= max(0.5, count / T).
+  // At or above T, no change. This makes salience emerge from USE — high-recall
+  // memories earn full ranking weight, low-recall memories are softly demoted.
+  //
+  // CRITICAL HISTORY: The v1 salience gate (60% lexical-overlap gate at memory
+  // CREATION time) destroyed LoCoMo recall (0.28 -> 0.02) by dropping same-
+  // session relevant turns at intake. See MEMORY.md "Hippo salience gate
+  // destroys benchmark recall". This v2 is the inverse:
+  //   - retrieval-side only (no creation-time gating)
+  //   - retrieval_count signal only (no lexical overlap, no novelty heuristic)
+  //   - default OFF, opt-in via the flag (no behaviour change without it)
+  //   - 0.5 floor so non-salient entries stay reachable, never dropped
+  // Reuses the existing retrieval_count column; no schema change.
+  const salienceThresholdRaw = flags['salience-threshold'];
+  if (salienceThresholdRaw !== undefined) {
+    const T = Number(salienceThresholdRaw);
+    if (!Number.isFinite(T) || T <= 0) {
+      console.error(
+        `Invalid --salience-threshold: "${salienceThresholdRaw}". Must be a positive number.`,
+      );
+      process.exit(1);
+    }
+    results = results
+      .map((r) => {
+        const count = r.entry.retrieval_count ?? 0;
+        if (count >= T) return r;
+        const mult = Math.max(0.5, count / T);
+        return { ...r, score: r.score * mult };
+      })
+      .sort((a, b) => b.score - a.score);
+  }
+
   // --outcome filter: drop trace entries whose trace_outcome !== target.
   // Non-trace entries pass through unaffected (traces are the only layer with
   // a meaningful outcome; filtering non-traces by outcome would be incoherent).
@@ -4239,6 +4273,16 @@ Commands:
     --goal <tag>           dlPFC goal-conditioned recall: memories tagged with
                            the goal tag get a 1.5x score boost and results are
                            re-sorted. Default off. RESEARCH.md §PFC.dlPFC.
+    --salience-threshold <n>
+                           Pineal salience: down-weight memories whose
+                           retrieval_count is below n. score *= max(0.5,
+                           retrieval_count / n) for entries with count < n;
+                           entries at or above n are unchanged. Salience emerges
+                           from USE, not from lexical overlap. Default off.
+                           RESEARCH.md §"AI Pineal Gland". (v1's creation-time
+                           lexical gate destroyed LoCoMo 0.28 -> 0.02; this v2
+                           is retrieval-side, opt-in only — see MEMORY.md
+                           "Hippo salience gate destroys benchmark recall".)
   explain <query>          Show full score breakdown for each retrieved memory
     --budget <n>           Token budget (default: 4000)
     --limit <n>            Cap the number of results displayed

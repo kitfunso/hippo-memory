@@ -42,6 +42,17 @@ Action types:
                vmPFC value attribution and OFC option-value scenarios.
                Example:
                  {"type": "outcomes", "remember_index": 0, "good": 3, "bad": 0}
+  - recall:    runs `hippo recall <query> --limit 1` `times` times. The
+               `--limit 1` caps the result set BEFORE markRetrieved() in
+               cli.ts, so only the top-ranked match has retrieval_count bumped
+               (recall without a limit bumps every returned memory). The
+               `query` must rank the target memory at #1 — a unique marker
+               token is the canonical pattern. The harness verifies via
+               `hippo trace <id>` that retrieval_count >= times. Used by
+               pineal-salience scenarios where "salience" emerges from USE
+               rather than lexical overlap. Example:
+                 {"type": "recall", "query": "marker-pineal-1",
+                  "remember_index": 0, "times": 3}
 
 Usage:
   python benchmarks/micro/run.py
@@ -175,6 +186,44 @@ def score_fixture(fixture: dict) -> FixtureResult:
                     run_hippo(["outcome", "--good", "--id", target_id], home).check_returncode()
                 for _ in range(bad_n):
                     run_hippo(["outcome", "--bad", "--id", target_id], home).check_returncode()
+            elif atype == "recall":
+                # Bump retrieval_count by issuing real `hippo recall` calls. The
+                # `remember_index` is informational only — `recall` returns the
+                # top-K matches for `query`, and any returned memory has its
+                # retrieval_count incremented inside markRetrieved (search.ts).
+                # `times` controls how many times the query is run.
+                query = action.get("query")
+                if not query:
+                    raise RuntimeError(
+                        f"fixture {name!r}: 'recall' action requires 'query'"
+                    )
+                times = int(action.get("times", 1) or 1)
+                # `--limit 1` caps retrieval BEFORE markRetrieved runs in
+                # cli.ts, so only the top match has its retrieval_count bumped.
+                # The fixture's `query` must be selective enough to put the
+                # target memory at rank 1 (typically a unique marker token).
+                idx = int(action.get("remember_index", -1))
+                target_id = remember_ids[idx] if 0 <= idx < len(remember_ids) else None
+                for _ in range(times):
+                    run_hippo(
+                        ["recall", query, "--json", "--budget", "1000", "--limit", "1"],
+                        home,
+                    ).check_returncode()
+                # If a target was named, sanity-check retrieval_count actually moved.
+                if target_id is not None:
+                    cp = run_hippo(["trace", target_id, "--json"], home)
+                    cp.check_returncode()
+                    try:
+                        trace = json.loads(cp.stdout)
+                        rc = trace.get("retrieval_count", 0)
+                        if rc < times:
+                            raise RuntimeError(
+                                f"fixture {name!r}: recall action did not bump "
+                                f"retrieval_count for remember[{idx}] "
+                                f"(got {rc}, expected >= {times})"
+                            )
+                    except json.JSONDecodeError:
+                        pass
             else:
                 raise ValueError(f"fixture {name!r}: unknown action type {atype!r}")
 
