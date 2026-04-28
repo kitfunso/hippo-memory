@@ -65,6 +65,16 @@ export interface HippoConfig {
   multihop: {
     enabled: boolean;
   };
+  salience: {
+    enabled: boolean;
+    recentWindow: number;
+    overlapThreshold: number;
+    minContentLength: number;
+    maxRepeatErrors: number;
+  };
+  ambient: {
+    enabled: boolean;
+  };
 }
 
 const DEFAULT_CONFIG: HippoConfig = {
@@ -114,6 +124,16 @@ const DEFAULT_CONFIG: HippoConfig = {
   multihop: {
     enabled: false,
   },
+  salience: {
+    enabled: false,
+    recentWindow: 20,
+    overlapThreshold: 0.6,
+    minContentLength: 5,
+    maxRepeatErrors: 4,
+  },
+  ambient: {
+    enabled: true,
+  },
 };
 
 export function loadConfig(hippoRoot: string): HippoConfig {
@@ -143,6 +163,8 @@ export function loadConfig(hippoRoot: string): HippoConfig {
       pinnedInject: { ...DEFAULT_CONFIG.pinnedInject, ...(raw.pinnedInject ?? {}) },
       extraction: { ...DEFAULT_CONFIG.extraction, ...(raw.extraction ?? {}) },
       multihop: { ...DEFAULT_CONFIG.multihop, ...(raw.multihop ?? {}) },
+      salience: { ...DEFAULT_CONFIG.salience, ...(raw.salience ?? {}) },
+      ambient: { ...DEFAULT_CONFIG.ambient, ...(raw.ambient ?? {}) },
     };
   } catch (err) {
     if (fs.existsSync(configPath)) {

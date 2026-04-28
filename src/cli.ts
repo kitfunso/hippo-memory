@@ -140,9 +140,12 @@ import {
 import { cmdCapture, CaptureOptions } from './capture.js';
 import { auditMemories, type AuditResult } from './audit.js';
 import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from './eval.js';
+import { runFeatureEval, formatResult, resultToBaseline, detectRegressions, type EvalBaseline } from './eval-suite.js';
 import { refineStore } from './refine-llm.js';
 import { wmPush, wmRead, wmClear, wmFlush, WorkingMemoryItem } from './working-memory.js';
 import { multihopSearch } from './multihop.js';
+import { computeSalience } from './salience.js';
+import { computeAmbientState, renderAmbientSummary } from './ambient.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -540,6 +543,26 @@ async function cmdRemember(
   if (activeScope) {
     const scopeTag = `scope:${activeScope}`;
     if (!entry.tags.includes(scopeTag)) entry.tags.push(scopeTag);
+  }
+
+  // Salience gate: decide if this memory is worth storing
+  const rememberConfig = loadConfig(targetRoot);
+  if (rememberConfig.salience.enabled && !Boolean(flags['pin']) && !Boolean(flags['force'])) {
+    const salienceResult = computeSalience(text, entry.tags, existing, {
+      recentWindow: rememberConfig.salience.recentWindow,
+      overlapThreshold: rememberConfig.salience.overlapThreshold,
+      minContentLength: rememberConfig.salience.minContentLength,
+      maxRepeatErrors: rememberConfig.salience.maxRepeatErrors,
+    });
+    if (salienceResult.decision === 'skip') {
+      console.log(`Skipped (salience: ${salienceResult.reason}, score ${salienceResult.score.toFixed(2)})`);
+      return;
+    }
+    if (salienceResult.decision === 'start_weak') {
+      entry.strength = salienceResult.score;
+      entry.half_life_days = Math.max(1, entry.half_life_days * 0.5);
+      console.log(`Weakened (salience: ${salienceResult.reason}, strength ${salienceResult.score.toFixed(2)})`);
+    }
   }
 
   writeEntry(targetRoot, entry);
@@ -1022,8 +1045,6 @@ async function cmdEval(
   corpusPath: string | null,
   flags: Record<string, string | boolean | string[]>
 ): Promise<void> {
-  requireInit(hippoRoot);
-
   const asJson = Boolean(flags['json']);
   const minMrr = flags['min-mrr'] !== undefined ? parseFloat(String(flags['min-mrr'])) : null;
   const showCases = Boolean(flags['show-cases']);
@@ -1032,7 +1053,14 @@ async function cmdEval(
   const mmrLambda = flags['mmr-lambda'] !== undefined ? parseFloat(String(flags['mmr-lambda'])) : undefined;
   const embeddingWeight = flags['embedding-weight'] !== undefined ? parseFloat(String(flags['embedding-weight'])) : undefined;
 
-  const entries = loadAllEntries(hippoRoot);
+  // Suite mode doesn't need an initialized store
+  if (flags['suite']) {
+    // handled below after bootstrap check
+  } else {
+    requireInit(hippoRoot);
+  }
+
+  const entries = flags['suite'] ? [] : loadAllEntries(hippoRoot);
 
   // Bootstrap mode: emit a synthetic corpus and exit.
   if (flags['bootstrap']) {
@@ -1050,8 +1078,44 @@ async function cmdEval(
     return;
   }
 
+  // Suite mode: run built-in feature eval (no corpus file needed, no init needed)
+  if (flags['suite']) {
+    const pkg = JSON.parse(fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1')), '..', 'package.json'), 'utf8'));
+    const version = pkg.version || 'unknown';
+
+    const baselinePath = flags['baseline'] ? String(flags['baseline']) : path.join(hippoRoot, 'eval-baseline.json');
+    let baseline: EvalBaseline | undefined;
+    if (fs.existsSync(baselinePath)) {
+      try { baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8')); } catch {}
+    }
+
+    const result = await runFeatureEval(version);
+
+    if (asJson) {
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      console.log(formatResult(result, baseline));
+    }
+
+    if (flags['save-baseline']) {
+      const newBaseline = resultToBaseline(result);
+      fs.mkdirSync(path.dirname(baselinePath), { recursive: true });
+      fs.writeFileSync(baselinePath, JSON.stringify(newBaseline, null, 2), 'utf8');
+      console.log(`\nBaseline saved to ${baselinePath}`);
+    }
+
+    if (baseline) {
+      const report = detectRegressions(baseline, result);
+      if (report.verdict === 'REGRESSION' && minMrr === null) {
+        process.exit(1);
+      }
+    }
+
+    return;
+  }
+
   if (!corpusPath) {
-    console.error('Usage: hippo eval <corpus.json>  OR  hippo eval --bootstrap [--out <path>]');
+    console.error('Usage: hippo eval <corpus.json>  OR  hippo eval --suite [--save-baseline]  OR  hippo eval --bootstrap');
     process.exit(1);
   }
 
@@ -1698,6 +1762,18 @@ async function cmdSleepCore(
       const shared = autoShare(hippoRoot, { minScore: 0.6 });
       if (shared.length > 0) {
         console.log(`\nAuto-shared ${shared.length} high-value memories to global store.`);
+      }
+    }
+  }
+
+  // Post-sleep ambient state summary
+  if (!dryRun) {
+    const postSleepConfig = loadConfig(hippoRoot);
+    if (postSleepConfig.ambient.enabled) {
+      const postSleepEntries = loadAllEntries(hippoRoot).filter(e => !e.superseded_by);
+      if (postSleepEntries.length > 0) {
+        const ambientState = computeAmbientState(postSleepEntries);
+        console.log(`\n${renderAmbientSummary(ambientState)}`);
       }
     }
   }
@@ -2962,6 +3038,16 @@ async function cmdContext(
       totalTokens,
       framing
     );
+
+    // Ambient state summary (one-line landscape overview)
+    const ambientConfig = loadConfig(hippoRoot);
+    if (ambientConfig.ambient.enabled && !pinnedOnly) {
+      const allForAmbient = [...localEntries, ...globalEntries];
+      if (allForAmbient.length > 0) {
+        const ambientState = computeAmbientState(allForAmbient);
+        console.log(`\n${renderAmbientSummary(ambientState)}`);
+      }
+    }
   }
 }
 
@@ -4232,7 +4318,12 @@ async function main(): Promise<void> {
       break;
 
     case 'remember': {
-      const text = args.join(' ').trim();
+      let text: string;
+      if (args.length === 1 && args[0] === '-') {
+        text = fs.readFileSync(0, 'utf-8').trim();
+      } else {
+        text = args.join(' ').trim();
+      }
       if (!text || text.length < 3) {
         console.error('Memory content too short (minimum 3 characters).');
         process.exit(1);

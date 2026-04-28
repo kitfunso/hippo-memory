@@ -366,6 +366,10 @@ function ensureOptionalFts(db: DatabaseSyncLike): void {
 }
 
 function backfillFtsIndex(db: DatabaseSyncLike): void {
+  const memCount = (db.prepare(`SELECT COUNT(*) AS c FROM memories`).get() as { c?: number } | undefined)?.c ?? 0;
+  const ftsCount = (db.prepare(`SELECT COUNT(*) AS c FROM memories_fts`).get() as { c?: number } | undefined)?.c ?? 0;
+  if (memCount === ftsCount) return;
+
   db.exec(`
     INSERT INTO memories_fts(id, content, tags)
     SELECT m.id, m.content, m.tags_json
