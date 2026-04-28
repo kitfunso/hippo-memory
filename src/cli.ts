@@ -750,6 +750,44 @@ async function cmdRecall(
     });
   }
 
+  // ACC EVC-adaptive recall (RESEARCH.md §PFC.ACC). When the initial top-K is
+  // dominated by lexically similar but distinct memories (high pairwise token
+  // overlap = same topic, different facts = conflict), allocate extra retrieval
+  // effort: take a wider candidate pool, drop low-relevance distractors, and
+  // re-rank by recency to surface the most up-to-date item from the cluster.
+  // Default off; opt-in via --evc-adaptive.
+  if (flags['evc-adaptive'] && results.length >= 2) {
+    const sliceSize = Math.min(3, results.length);
+    const slice = results.slice(0, sliceSize);
+    let pairs = 0;
+    let overlapSum = 0;
+    for (let i = 0; i < slice.length; i++) {
+      for (let j = i + 1; j < slice.length; j++) {
+        overlapSum += textOverlap(slice[i].entry.content, slice[j].entry.content);
+        pairs++;
+      }
+    }
+    const avgOverlap = pairs > 0 ? overlapSum / pairs : 0;
+    if (avgOverlap >= 0.4) {
+      const poolSize = Math.min(results.length, Math.max(sliceSize * 3, 9));
+      const pool = results.slice(0, poolSize);
+      const tail = results.slice(poolSize);
+      const maxScore = pool.reduce((m, r) => Math.max(m, r.score), 0);
+      const scoreFloor = maxScore * 0.5;
+      const onTopic: typeof pool = [];
+      const offTopic: typeof pool = [];
+      for (const r of pool) {
+        (r.score >= scoreFloor ? onTopic : offTopic).push(r);
+      }
+      onTopic.sort((a, b) => {
+        const ta = new Date(a.entry.created).getTime();
+        const tb = new Date(b.entry.created).getTime();
+        return tb - ta;
+      });
+      results = [...onTopic, ...offTopic, ...tail];
+    }
+  }
+
   // --outcome filter: drop trace entries whose trace_outcome !== target.
   // Non-trace entries pass through unaffected (traces are the only layer with
   // a meaningful outcome; filtering non-traces by outcome would be incoherent).
@@ -4096,6 +4134,9 @@ Commands:
     --why                  Show match reasons and source annotations
     --no-mmr               Disable MMR diversity re-ranking
     --mmr-lambda <f>       MMR balance 0..1 (default: 0.7, 1.0 = pure relevance)
+    --evc-adaptive         ACC-style: when top-K shows high inter-item overlap
+                           (= conflict cluster), expand pool and re-rank by
+                           recency. Default off. RESEARCH.md §PFC.ACC.
   explain <query>          Show full score breakdown for each retrieved memory
     --budget <n>           Token budget (default: 4000)
     --limit <n>            Cap the number of results displayed

@@ -218,9 +218,12 @@ def hippo_remember(hippo_home: str, text: str, tags: list[str]) -> bool:
 
 
 def hippo_recall(hippo_home: str, query: str, budget: int = 4000) -> list[dict[str, Any]]:
+    # HIPPO_RECALL_EXTRA_ARGS lets feature branches A/B compare on LoCoMo
+    # (e.g. HIPPO_RECALL_EXTRA_ARGS="--evc-adaptive"). Default empty.
+    extra = shlex.split(os.environ.get("HIPPO_RECALL_EXTRA_ARGS", ""))
     try:
         result = run_hippo(
-            ["recall", query, "--json", "--budget", str(budget)],
+            ["recall", query, "--json", "--budget", str(budget), *extra],
             cwd=hippo_home,
             hippo_home=hippo_home,
             timeout=120,

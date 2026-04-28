@@ -1,0 +1,23 @@
+{
+  "name": "acc-evc",
+  "mechanic": "acc-evc",
+  "description": "ACC EVC-adaptive recall: when retrieved top-k is dominated by lexically similar but conflicting memories, the --evc-adaptive flag detects the conflict and re-ranks to surface the disambiguating (most recent / decision-tagged) memory which has weaker BM25 overlap.",
+  "remembers": [
+    "Bob's coffee order is a flat white",
+    "Bob's coffee order is an americano",
+    "Bob's coffee order is a cappuccino",
+    "Bob's coffee order is an espresso",
+    "Bob's coffee order is a macchiato",
+    "Bob switched his coffee order to an oat milk latte this week (most recent update)",
+    "Alice prefers green tea in the morning",
+    "The team standup is at 10am every Tuesday"
+  ],
+  "queries": [
+    {
+      "q": "Bob's coffee order",
+      "must_contain_any": ["oat milk latte", "switched"],
+      "top_k": 3,
+      "cli_args": ["--evc-adaptive"]
+    }
+  ]
+}

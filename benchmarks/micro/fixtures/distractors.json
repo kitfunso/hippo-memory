@@ -1,0 +1,20 @@
+{
+  "name": "distractors",
+  "mechanic": "recall",
+  "description": "Target memory must surface above lexically-similar distractors.",
+  "remembers": [
+    "Bob's coffee order is oat milk latte",
+    "Bob's tea order is camomile",
+    "Bob's lunch order is the chicken salad",
+    "Bob's dinner reservation is at 7pm",
+    "Bob's flight to Tokyo is on the 14th",
+    "Bob bought a new laptop last week",
+    "Bob's address is 221B Baker Street",
+    "Bob is allergic to peanuts"
+  ],
+  "queries": [
+    {"q": "what coffee does Bob drink", "must_contain_any": ["oat milk", "latte"], "top_k": 3},
+    {"q": "what is Bob allergic to", "must_contain_any": ["peanuts", "allergic"], "top_k": 3},
+    {"q": "where does Bob live", "must_contain_any": ["221B", "Baker Street"], "top_k": 3}
+  ]
+}

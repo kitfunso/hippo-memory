@@ -1,0 +1,16 @@
+{
+  "name": "recall-basic",
+  "mechanic": "recall",
+  "description": "Sanity check: a stored fact should be retrievable by an obvious query.",
+  "remembers": [
+    "Bob's coffee order is oat milk latte",
+    "Alice prefers green tea in the morning",
+    "The team standup is at 10am every Tuesday",
+    "Production database is hosted on us-east-1"
+  ],
+  "queries": [
+    {"q": "what does Bob drink", "must_contain_any": ["oat milk", "latte"], "top_k": 3},
+    {"q": "when is standup", "must_contain_any": ["10am", "Tuesday", "standup"], "top_k": 3},
+    {"q": "where is the prod db", "must_contain_any": ["us-east-1", "production database"], "top_k": 3}
+  ]
+}
