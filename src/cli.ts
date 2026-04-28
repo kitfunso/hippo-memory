@@ -2838,18 +2838,21 @@ async function cmdContext(
   localEntries = localEntries.filter(e => !e.superseded_by);
   globalEntries = globalEntries.filter(e => !e.superseded_by);
 
-  const allEntries = [...localEntries];
-
-  if (allEntries.length === 0 && globalEntries.length === 0) return; // no memories, zero output
-
   let selectedItems: Array<{ entry: MemoryEntry; score: number; tokens: number; isGlobal?: boolean }> = [];
   let totalTokens = 0;
   // Task snapshots / session events live in the local store. Skip when
   // local isn't initialized — loading would auto-create .hippo in the cwd.
   const activeSnapshot = hasLocal ? loadActiveTaskSnapshot(hippoRoot) : null;
+  const sessionHandoff = hasLocal && activeSnapshot?.session_id
+    ? loadLatestHandoff(hippoRoot, activeSnapshot.session_id)
+    : null;
   const recentSessionEvents = hasLocal && activeSnapshot?.session_id
     ? listSessionEvents(hippoRoot, { session_id: activeSnapshot.session_id, limit: 5 })
     : [];
+
+  if (localEntries.length === 0 && globalEntries.length === 0 && !activeSnapshot && !sessionHandoff && recentSessionEvents.length === 0) {
+    return;
+  }
 
   // --pinned-only: restrict to pinned entries only. Used by the Claude Code
   // UserPromptSubmit hook so invariants stay in context every turn.
@@ -2951,7 +2954,7 @@ async function cmdContext(
     totalTokens = selectedItems.reduce((sum, r) => sum + r.tokens, 0);
   }
 
-  if (selectedItems.length === 0 && !activeSnapshot && recentSessionEvents.length === 0) return;
+  if (selectedItems.length === 0 && !activeSnapshot && !sessionHandoff && recentSessionEvents.length === 0) return;
 
   // --pinned-only is called by the UserPromptSubmit hook every turn. Treat it
   // as read-only so pinned memories don't inflate retrieval_count or extend
@@ -2989,7 +2992,7 @@ async function cmdContext(
       content: r.entry.content,
       global: r.isGlobal ?? false,
     }));
-    console.log(JSON.stringify({ query, activeSnapshot, recentSessionEvents, memories: output, tokens: totalTokens }));
+    console.log(JSON.stringify({ query, activeSnapshot, sessionHandoff, recentSessionEvents, memories: output, tokens: totalTokens }));
   } else if (format === 'additional-context') {
     // Claude Code UserPromptSubmit hook JSON shape. Capture the markdown that
     // printContextMarkdown would write and wrap it as `additionalContext`.
@@ -2998,17 +3001,20 @@ async function cmdContext(
     console.log = (...parts: unknown[]) => { lines.push(parts.map(String).join(' ')); };
     try {
       if (activeSnapshot) printActiveTaskSnapshot(activeSnapshot);
+      if (sessionHandoff) printHandoff(sessionHandoff);
       if (recentSessionEvents.length > 0) printSessionEvents(recentSessionEvents);
-      printContextMarkdown(
-        selectedItems.map((r) => ({
-          entry: updatedEntries.find((u) => u.id === r.entry.id) ?? r.entry,
-          score: r.score,
-          tokens: r.tokens,
-          isGlobal: r.isGlobal ?? false,
-        })),
-        totalTokens,
-        framing
-      );
+      if (selectedItems.length > 0) {
+        printContextMarkdown(
+          selectedItems.map((r) => ({
+            entry: updatedEntries.find((u) => u.id === r.entry.id) ?? r.entry,
+            score: r.score,
+            tokens: r.tokens,
+            isGlobal: r.isGlobal ?? false,
+          })),
+          totalTokens,
+          framing
+        );
+      }
     } finally {
       console.log = realLog;
     }
@@ -3025,19 +3031,24 @@ async function cmdContext(
     if (activeSnapshot) {
       printActiveTaskSnapshot(activeSnapshot);
     }
+    if (sessionHandoff) {
+      printHandoff(sessionHandoff);
+    }
     if (recentSessionEvents.length > 0) {
       printSessionEvents(recentSessionEvents);
     }
-    printContextMarkdown(
-      selectedItems.map((r) => ({
-        entry: updatedEntries.find((u) => u.id === r.entry.id) ?? r.entry,
-        score: r.score,
-        tokens: r.tokens,
-        isGlobal: r.isGlobal ?? false,
-      })),
-      totalTokens,
-      framing
-    );
+    if (selectedItems.length > 0) {
+      printContextMarkdown(
+        selectedItems.map((r) => ({
+          entry: updatedEntries.find((u) => u.id === r.entry.id) ?? r.entry,
+          score: r.score,
+          tokens: r.tokens,
+          isGlobal: r.isGlobal ?? false,
+        })),
+        totalTokens,
+        framing
+      );
+    }
 
     // Ambient state summary (one-line landscape overview)
     const ambientConfig = loadConfig(hippoRoot);
