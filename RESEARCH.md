@@ -245,6 +245,92 @@ The key insight from this line of research: human-like memory storage produces h
 
 These papers were ahead of their time. The mechanisms they described (capacity limits, degradation curves, context-dependent recall) are now being rediscovered in the LLM agent memory space, fifteen years later.
 
+
+## Hippo as a Company Brain
+
+Yes, Hippo-Memory is a strong foundation for a true Company Brain. The reason is not just that it can store context. The reason is that it already models knowledge as a living system: decay, retrieval strengthening, sleep-based consolidation, error stickiness, reward-proportional half-lives, bi-temporal correction, extracted facts, and DAG summarisation. That is much closer to how real institutional memory works than a static vector database or a giant prompt log.
+
+This also matches the core YC Company Brain idea well: a dynamic, executable map of company know-how that stays current instead of expanding into stale noise. Hippo's current architecture already gives agents a plausible institutional memory substrate: session buffer to episodic to semantic compression, intelligent forgetting, SQLite as source of truth, human-readable Markdown mirrors, framework hooks, MCP exposure, active snapshots, handoffs, and scoped recall.
+
+### Current strengths for a Company Brain
+
+- **Adaptive knowledge hygiene.** Most memory systems only accumulate. Hippo forgets on purpose. Unused processes fade, successful lessons strengthen, and errors stay sticky enough to matter.
+- **Two-speed memory.** Buffer, episodic, and semantic layers already mirror the company pattern of turning raw chat and ticket history into stable playbooks.
+- **Correction without deletion.** `hippo supersede` and `--as-of` are unusually important for enterprise use because companies need both current truth and historical truth.
+- **Fact extraction and DAG summaries.** Sleep-time extraction plus hierarchical summaries are already the beginning of a usable company knowledge substrate, not just a personal notebook.
+- **Short-term continuity primitives.** Active task snapshots, session trails, handoffs, and working memory are exactly what agents need to resume work without replaying whole transcripts.
+- **Portable integration surface.** SQLite plus Markdown mirrors, hooks, MCP, and a small CLI are the right starting point for adoption. They are inspectable, debuggable, and easy to graft onto existing workflows.
+
+### Gaps to close
+
+Hippo is still primarily agent-centric and local-first. A full Company Brain needs extra layers that the current product only hints at:
+
+- **Enterprise ingestion.** Slack, Jira or Linear, Notion or Docs, PRs, incident tools, email, meeting transcripts, and databases need durable ingestion paths.
+- **Shared security model.** Multi-user tenancy, RBAC, audit logs, scoped access, and approval boundaries are required before this becomes real company infrastructure.
+- **Relationship-first reasoning.** Extracted facts and DAG summaries help, but deeper multi-hop reasoning across decisions, policies, owners, customers, systems, and exceptions needs a graph-shaped layer.
+- **First-class operating objects.** Processes, decisions, skills, incidents, run capsules, and policy exceptions should become first-class memory products rather than only free-text memories.
+- **Confidence and provenance.** Enterprise memory must answer: who said this, when, under what scope, from which system, and how strongly do we trust it?
+- **Scalable serving path.** SQLite is excellent for local and small-team use, but shared enterprise workloads eventually need an optional service/backend layer.
+
+### No-code integration design
+
+#### Phase 1: safest bridge
+
+Goal: make Hippo the memory spine without trying to replace the systems a company already uses.
+
+- Keep Slack, Jira, Notion, GitHub, docs, and internal databases as the systems of record.
+- Feed Hippo with **append-only exports, webhooks, and cron slices**, not direct source-of-truth rewrites.
+- Standardise a canonical memory envelope for imported items: `scope`, `source`, `timestamp`, `owner`, `confidence`, `artifact_ref`, `session_id`, and whether the record is raw, distilled, or superseded.
+- Use current Hippo primitives as the bridge layer: `hippo snapshot save`, session trails, handoffs, `hippo decide`, `hippo supersede`, extracted facts, DAG summaries, and scoped recall.
+- Distil externally. For example, turn a week of Slack incidents into a short run capsule or decision note before promotion. Do not mirror every raw message into the semantic layer.
+- Keep enterprise write-backs human-approved at first. The safest bridge is read-mostly ingestion plus structured exports back out.
+
+**Why this phase is right first:** it preserves existing tools, minimises migration risk, and lets Hippo prove value as the continuity layer before it becomes a platform.
+
+#### Phase 2: higher-leverage Hippo-native workflow
+
+Goal: move from "Hippo stores context" to "Hippo runs the company memory operating model."
+
+- Promote **processes, decisions, skills, incidents, and handoffs** into first-class objects with their own recall rules and lifecycle.
+- Make `hippo context --auto` assemble a layered operating view: active snapshot, recent event trail, scoped current decisions, high-confidence facts, DAG drill-down, then optional multi-hop expansion.
+- Treat extracted facts plus DAG summaries as the first version of the **executable skills file**. Later, export them via `hippo export skills` or a service endpoint for agents.
+- Add trigger-based recall around file path, service, repo, ticket type, customer, workflow stage, and on-call context. Cheap trigger routing should happen before expensive global recall.
+- Introduce an optional graph layer only over **consolidated facts, decisions, processes, and entities**, not over every raw transcript. That keeps graph quality high and cost sane.
+- Add company scopes, team scopes, and policy scopes early so multi-agent recall stays useful without leaking unrelated context.
+
+**Why this phase matters:** this is where Hippo becomes defensible. The edge is not "we connected Slack." The edge is that the system continuously turns raw activity into current, executable operational knowledge.
+
+#### Phase 3: what is not worth integrating at all
+
+Some integrations sound exciting and are mostly traps.
+
+- **Do not duplicate whole source systems inside Hippo.** Hippo should remember and distil, not become a second Jira or second Slack.
+- **Do not ingest every raw transcript forever.** Long-term value comes from slices, summaries, facts, decisions, and conflicts, not endless full-text hoarding.
+- **Do not build a giant always-on knowledge graph over uncurated raw text.** Graphs are most useful after consolidation, not before.
+- **Do not force the zero-dependency local core to become the heavy enterprise backend.** Keep the core small and reliable; add optional service layers beside it.
+- **Do not make browser automations the primary ingestion path** when APIs, exports, or event streams exist.
+- **Do not auto-promote workflows or skills without provenance, evidence, and invalidation paths.** Enterprise memory that cannot be corrected becomes dangerous quickly.
+- **Do not optimise for perfect recall of everything.** The product thesis is better forgetting, faster correction, and more useful continuity.
+
+### Additional recommendations from prior work
+
+These are the extra pieces worth adding because they keep coming up in real agent work and earlier Hippo sessions:
+
+1. **Active-task continuity is as important as long-term memory.** Most agent failures come from losing the current thread, not missing a distant fact. Snapshots, session trails, handoffs, and working memory should stay central to the enterprise story.
+2. **Append-only event logs plus slice recall beat transcript replay.** Fresh sessions should load the needed window, not the whole past. This is cheaper, faster, and much more auditable.
+3. **Bi-temporal memory is a major enterprise feature.** `supersede` and `--as-of` should be treated as core product pillars because policy drift, operational changes, and postmortems all depend on historical truth.
+4. **Keep canonical state separate from derived skills.** Repo briefs, process maps, run capsules, and exported skills should be distilled artifacts that point back to canonical sources, not copies of raw state.
+5. **Evaluation discipline should be part of the architecture.** Canonical harnesses, file-backed evidence, fail-closed judges, and explicit verification receipts are necessary if the Company Brain is going to update itself safely.
+6. **Use scopes, provenance, and RBAC early.** Most enterprise memory disasters are leakage and authority problems, not embedding problems.
+7. **Keep the hot path boring.** Expensive LLM extraction, graph building, and skill synthesis should mostly happen during sleep or background jobs. Recall-time should stay cheap unless the query genuinely needs deeper traversal.
+8. **Prefer contracts over duplication.** Hippo should interface with other systems through snapshots, artifacts, and explicit contracts rather than cloning whole foreign state models.
+
+### Strategic take
+
+The strongest version of Hippo is not a generic enterprise search product. It is a memory operating system for agents and teams: short-term continuity plus long-term consolidation, with correction, provenance, and executable outputs. Hybrid vector + graph + symbolic memory is the right direction, but only if the graph sits on top of good memory hygiene instead of replacing it.
+
+That is the bet worth making.
+
 ## References
 
 - McClelland, J.L., McNaughton, B.L., & O'Reilly, R.C. (1995). Why there are complementary learning systems in the hippocampus and neocortex. *Psychological Review*.
