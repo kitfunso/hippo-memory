@@ -245,6 +245,253 @@ The key insight from this line of research: human-like memory storage produces h
 
 These papers were ahead of their time. The mechanisms they described (capacity limits, degradation curves, context-dependent recall) are now being rediscovered in the LLM agent memory space, fifteen years later.
 
+## Prefrontal Cortex: Cognitive Control for Memory
+
+Hippo implements seven hippocampal mechanisms. The hippocampus stores and retrieves. It does not decide *which* goal is active, *which* conflict matters, or *which* outcome to weight. That is the prefrontal cortex. Adding PFC-style cognitive control on top of hippo's hippocampal substrate is the next major direction. This section maps six PFC subregions to concrete agent-memory mechanisms, with SQL schema deltas, CLI commands, integration points, and implementation priority.
+
+### 1. PFC subregions and their functions
+
+**Dorsolateral PFC (dlPFC).** Maintains and manipulates hierarchical goal representations during task performance. Miller & Cohen (2001) proposed that PFC operates through sustained activity patterns that encode current goals and the rules to achieve them, providing bias signals to downstream regions. Koechlin et al. (2003) showed dlPFC is organized hierarchically: caudal dlPFC encodes immediate stimulus-response mappings while rostral dlPFC represents abstract task structure. Damage impairs the ability to maintain task context across delays and to suppress prepotent responses in favor of goal-aligned action.
+
+**Ventrolateral PFC (vlPFC).** Implements selective attention and inhibition. Right vlPFC (lateral BA 45/47) executes motor and semantic inhibition; left vlPFC (mid-lateral 45) performs semantic selection and controlled retrieval. These regions activate during Stroop interference, working memory filtering, and episodic retrieval under competition. Damage produces perseveration and increased susceptibility to interference. vlPFC is hierarchically subordinate to dlPFC: it executes the inhibition signals that dlPFC task representations generate.
+
+**Anterior Cingulate Cortex (ACC).** Computes the expected value of deploying cognitive control. Shenhav et al. (2013) formalized this as the Expected Value of Control (EVC): dACC integrates the expected payoff if control is applied, the cognitive effort required, and the probability of success, then allocates control resources proportionally. ACC neurons respond distinctly to conflict (Botvinick et al., 2001), to prediction errors, and to effort cost. The EVC framework unifies these: conflict is a signal that control allocation should be reconsidered.
+
+**Ventromedial PFC (vmPFC).** Encodes subjective value of outcomes and options, integrating emotional and reward-related signals to guide value-based decisions. vmPFC maintains associations between contextual cues and outcome values learned through experience. It works bidirectionally with amygdala (emotional significance) and ventral striatum (reward prediction). Unlike dlPFC's abstract task rules, vmPFC stores implicit emotional evaluations. Damage produces impaired decision-making in real-world situations where emotional consequences matter, while leaving abstract reasoning intact.
+
+**Orbitofrontal Cortex (OFC).** Computes economic value of specific choices, encoding a common currency across dissimilar outcomes (Rangel et al., 2008). OFC neurons show firing rates proportional to the subjective utility of available options, adjusting valuations based on context, satiation state, and learned associations. OFC is particularly engaged during decision-making in volatile environments or when multiple incommensurable goods must be compared.
+
+**Medial PFC (mPFC).** Integrates self-relevant information and autobiographical context. Activated during self-referential processing, mental time travel, and mentalizing about others' beliefs. mPFC maintains a meta-representation of the agent's own knowledge, goals, and competencies. It answers "what do I believe?" and "what goal am I pursuing?" mPFC shows elevated activity during sleep-stage consolidation, suggesting it guides which episodic memories are elevated to semantic schemas.
+
+### 2. Agent-memory analogues
+
+#### dlPFC → Goal stack & retrieval policy
+
+Active maintenance of hierarchical task goals, each tagged with a retrieval policy that shapes which memories are prioritized.
+
+Schema deltas:
+
+```sql
+CREATE TABLE goal_stack (
+  id TEXT PRIMARY KEY,
+  session_id TEXT, timestamp TEXT,
+  goal_name TEXT NOT NULL,
+  level INT,                              -- 0=root, 1=subgoal, 2=microgoal
+  parent_goal_id TEXT,
+  status TEXT,                            -- active|suspended|completed
+  success_condition TEXT,
+  memory_retrieval_context_json TEXT,
+  relevant_tag_filters_json TEXT,
+  created_at TEXT, updated_at TEXT
+);
+
+CREATE TABLE retrieval_policy (
+  id TEXT PRIMARY KEY,
+  goal_id TEXT REFERENCES goal_stack,
+  policy_type TEXT,                       -- schema-fit-biased|error-prioritized|recency-first|hybrid
+  weight_schema_fit REAL,
+  weight_error_tagged REAL,
+  weight_recency REAL,
+  weight_strength REAL,
+  apply_interference_filter BOOLEAN,
+  updated_at TEXT
+);
+```
+
+CLI:
+
+```bash
+hippo goal push "implement auth logging" --level 0 --success-condition "logs cover >80% of paths"
+hippo recall --goal-conditioned "implement auth logging" --top 10
+hippo goal complete "implement auth logging" --outcome-score 0.9
+```
+
+ML parallel: goal-conditioned RL (Chane-Sane et al., 2021) and hierarchical task-set representations in rostral dlPFC (Koechlin et al., 2003). Most existing agent memory systems retrieve on semantic similarity alone; goal conditioning injects task context into the retrieval ranking.
+
+#### vlPFC → Interference filter & semantic gate
+
+Suppress task-irrelevant memories and resolve semantic conflicts at retrieval time.
+
+```sql
+CREATE TABLE interference_suppression (
+  id TEXT PRIMARY KEY,
+  session_id TEXT,
+  memory_id TEXT REFERENCES memories,
+  suppression_reason TEXT,                -- conflict-with-goal|outdated-schema|error-tagged|context-switch
+  suppression_strength REAL,              -- 0-1, fraction to downweight
+  triggered_by_query TEXT,
+  expires_at TEXT,                        -- suppression fades over time
+  created_at TEXT
+);
+```
+
+CLI:
+
+```bash
+hippo recall "deployment strategy" --filter-conflicts --suppress-outdated
+hippo inspect <memory_id> --show-suppressions
+```
+
+ML parallel: Reflexion (Shinn et al., 2023) asks the model which past attempts are relevant to the current goal; vlPFC-style gating automates this by maintaining semantic conflict flags and relevance scores as persistent structure.
+
+#### ACC → Conflict monitor & EVC-adaptive retrieval
+
+Detect conflicts between retrieved memories and adaptively increase retrieval effort when uncertainty is high.
+
+```sql
+CREATE TABLE uncertainty_signal (
+  id TEXT PRIMARY KEY,
+  session_id TEXT, query TEXT,
+  retrieved_memory_ids_json TEXT,
+  semantic_entropy REAL,                  -- diversity of meanings in top-K
+  strength_variance REAL,                 -- spread in memory strengths
+  tag_agreement REAL,                     -- 0-1 agreement on tags
+  evc REAL,                               -- expected value of control
+  recommend_extra_retrieval BOOLEAN,
+  created_at TEXT
+);
+```
+
+EVC calculation: `evc = (expected_payoff × confidence) − cognitive_cost`. Gate extra retrieval depth on `evc > 0.4`.
+
+CLI:
+
+```bash
+hippo recall "deployment strategy" --evc-adaptive --conflict-report
+```
+
+ML parallel: Shenhav et al. (2013) formalized control allocation as expected payoff × probability of success − cognitive cost. Hippo's EVC would be: likelihood that resolving conflict improves outcome × memory-search cost.
+
+#### vmPFC → Outcome value attribution
+
+Continuous value scores per memory (−1 to +1), propagated backward to related memories.
+
+```sql
+CREATE TABLE memory_value_association (
+  id TEXT PRIMARY KEY,
+  memory_id TEXT REFERENCES memories,
+  outcome_label TEXT,                     -- positive|negative|neutral|uncertain
+  value_score REAL,                       -- -1 (very bad) to +1 (very good)
+  confidence REAL,
+  context_json TEXT,                      -- situational factors
+  temporal_decay_factor REAL,             -- 0.5-1.5
+  learned_from_source TEXT,               -- human-feedback|task-outcome|rollback|inference
+  created_at TEXT
+);
+```
+
+Replaces the current scalar `outcome_score`. Integrates with decay: `half_life = base_half_life × (1 + value_score × k)`. Positive-outcome memories persist longer; negative-outcome memories decay faster.
+
+ML parallel: Constitutional AI (Bai et al., 2022) uses model-generated feedback to refine outputs; Self-Refine (Madaan et al., 2023) iteratively improves via self-scoring. vmPFC-style value attribution makes the value signal a first-class persistent structure rather than a per-iteration score.
+
+#### OFC → Option value comparison
+
+Rank candidate memories and subgoals by expected utility across incommensurable axes.
+
+```sql
+CREATE TABLE option_valuation (
+  id TEXT PRIMARY KEY,
+  query_id TEXT,
+  memory_id TEXT REFERENCES memories,
+  option_value REAL,                      -- -1 to +1
+  component_reward REAL,                  -- expected utility if used
+  component_cost REAL,                    -- tokens-to-integrate + error risk
+  net_utility REAL,                       -- reward - cost
+  prediction_confidence REAL,
+  created_at TEXT
+);
+```
+
+ML parallel: Rangel et al. (2008) showed OFC neurons encode a common currency. `option_value` is this common currency across heterogeneous retrieval attributes (factual accuracy, relevance, effort, error risk).
+
+#### mPFC → Self-model & meta-memory
+
+Meta-representation of the agent's own knowledge state. Drives identity-aware consolidation.
+
+```sql
+CREATE TABLE self_model (
+  id TEXT PRIMARY KEY,
+  session_id TEXT,
+  knowledge_domain TEXT,                  -- e.g., "project-X-architecture"
+  known_confident TEXT,                   -- JSON list
+  known_uncertain TEXT,                   -- JSON list
+  unknown TEXT,                           -- known unknowns
+  competence_score REAL,                  -- 0-1
+  updated_at TEXT
+);
+
+CREATE TABLE meta_memory (
+  id TEXT PRIMARY KEY,
+  memory_id TEXT REFERENCES memories,
+  goal_relevance_score REAL,
+  consolidation_worthiness REAL,
+  identity_relevance REAL,
+  temporal_scope TEXT,                    -- immediate|session|long-term
+  created_at TEXT
+);
+```
+
+CLI:
+
+```bash
+hippo introspect                         # show self-model
+hippo goal align --to "expert in Rust"   # tag memories by identity relevance
+hippo consolidate --identity-aware       # prioritize consolidation by self-relevance
+```
+
+ML parallel: Reflexion agents maintain self-critique memory. mPFC systematizes this into a persistent evolving self-model that shapes which consolidations are worth doing.
+
+### 3. Integration with existing hippo mechanisms
+
+| PFC module | Interacts with | Synergy | Tension |
+|------------|----------------|---------|---------|
+| dlPFC (goal stack) | Decay, retrieval strengthening | Goal-retrieved memories with positive outcomes decay slower | Too many active goals → tag thrashing. Cap concurrent stack depth at 3-5 |
+| vlPFC (semantic gate) | Conflict detection, schema fit | Suppression extends existing `conflicts_with` with a soft downweight | Over-aggressive suppression hides valid context-dependent facts. Add `--show-suppressed` override |
+| ACC (EVC) | Physics engine, ambient state | High-EVC queries trigger arousal-weighted particle updates; low-EVC relaxes to stable clustering | Physics is deterministic today; arousal needs stochastic updates. Add `arousal` scalar to physics config |
+| vmPFC (value) | Reward-proportional decay | Replaces binary outcome with continuous value; context-aware value scores | Context-dependent: a memory valuable in project A may be harmful in B. Track value per goal/session |
+| OFC (option value) | Token budget, subgoal selection | Budget allocates tokens proportionally to expected utility | O(n) valuation per retrieval is expensive. Cache per (query, context) tuple |
+| mPFC (self-model) | Sleep consolidation | Identity-relevant episodic memories consolidate faster, tagged with goal/identity context | Risk of self-serving overweighting. Flag high-salience memories for human review before promotion |
+
+### 4. Implementation priority for hippo
+
+MVP ranking by effort × expected benchmark delta:
+
+| Rank | Module | Effort | LongMemEval Δ | LoCoMo Δ (agent learning) | Rationale |
+|------|--------|--------|---------------|---------------------------|-----------|
+| 1 | ACC (EVC-adaptive) | 20-25h | +2-4% | +5-8% | Extends existing conflict detection. Minimal new infra |
+| 2 | vmPFC (value attribution) | 18-22h | +3-5% | +8-12% | Synergizes with reward-proportional decay already in v0.11 |
+| 3 | dlPFC (goal stack) | 30-40h | +1-2% | +12-18% | Foundational for any goal-conditioned agent. Most structural change |
+| 4 | vlPFC (semantic gate) | 25-30h | +2-3% | +5-8% | Depends on dlPFC + conflict detection being in place |
+| 5 | OFC (option valuation) | 35-45h | +1-2% | +8-15% | Most per-memory computation. Cache-heavy |
+| 6 | mPFC (self-model) | 40-50h | +0-1% | +15-25% | Most ambitious. Highest long-term impact, slowest ROI |
+
+**Recommended first ship: ACC + vmPFC together.** Both extend infrastructure already present (conflict detection, outcome tracking). Smallest diff, largest immediate benchmark lift, cleanest story for release notes. Ships as hippo v0.35.0 with `--evc-adaptive` recall and extended outcome tracking.
+
+Goal stack (dlPFC) ships next as v0.36.0. This is where goal-conditioned retrieval unlocks multi-step task performance on LoCoMo.
+
+### 5. Open research questions
+
+1. **Goal-aware decay dynamics.** Should memories retrieved for Goal A but producing a bad outcome decay faster, or persist as "anti-pattern" memories tagged to avoid similar approaches? This tests whether outcome valence and goal relevance should be decoupled or coupled.
+
+2. **Conflict resolution under uncertainty.** When ACC detects high-conflict, high-EVC, how should the agent choose between retrieval-depth expansion (costlier, more comprehensive search) versus decision-deferral (flag for human review)? Current RL frameworks assume agents always decide; biological agents often don't. What loss function guides this trade-off? Does it vary by domain (safety-critical vs exploratory)?
+
+3. **Self-model calibration.** How can hippo prevent the model from becoming overconfident in its `competence_score` in domains where it is genuinely weak? Hippo's dataset could test whether consolidation-weighted self-models converge to ground truth or systematically overestimate competence. Directly testable: compare agent self-assessments against objective task success across many sessions.
+
+4. **Cross-session transfer via semantic gates.** Do vlPFC-style suppression patterns learned for one goal transfer to semantically similar goals? This is classical transfer learning at the memory-system level, not the model-weight level.
+
+5. **Ambient state as a behavioral proxy.** Does high ambient energy during low-EVC queries indicate the agent should *reduce* retrieval effort (contradicting EVC), or does it signal healthy exploration? This is a basic question about what the physics engine's ambient state actually means for agent behavior. Hippo's query+outcome dataset is unique for testing it.
+
+### References
+
+- Miller, E.K., & Cohen, J.D. (2001). An integrative theory of prefrontal cortex function. *Annual Review of Neuroscience*, 24, 167-202.
+- Koechlin, E., Ody, C., & Kouneiher, F. (2003). The architecture of cognitive control in the human prefrontal cortex. *Science*, 302(5648), 1181-1185.
+- Botvinick, M.M., Braver, T.S., Barch, D.M., Carter, C.S., & Cohen, J.D. (2001). Conflict monitoring and cognitive control. *Psychological Review*, 108(3), 624-652.
+- Shenhav, A., Botvinick, M.M., & Cohen, J.D. (2013). The expected value of control: An integrative theory of anterior cingulate cortex function. *Neuron*, 79(2), 217-240.
+- Rangel, A., Camerer, C., & Montague, P.R. (2008). A framework for studying the neurobiology of value-based decision making. *Nature Reviews Neuroscience*, 9, 545-556.
+- Bai, Y., Jones, A., Ndousse, K., et al. (2022). Constitutional AI: Harmlessness from AI feedback. *arXiv:2212.08073*.
+- Shinn, N., Cassano, F., Labash, B., Gopinath, A., Narasimhan, K., & Yao, S. (2023). Reflexion: Language agents with verbal reinforcement learning. *NeurIPS 2023*.
+- Madaan, A., Tandon, N., Gupta, P., et al. (2023). Self-Refine: Iterative refinement with self-feedback for LLMs. *arXiv:2303.17651*.
+- Chane-Sane, A., Leonardi, C., & Kottakis, A. (2021). Goal-conditioned reinforcement learning with imagined subgoals. *ICML 2021*.
 
 ## Hippo as a Company Brain
 
