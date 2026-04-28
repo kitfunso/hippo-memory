@@ -61,6 +61,11 @@ in the top-k recall results AND none of the substrings in `must_not_contain_any`
   memory whose content is `new_content`. Equivalent to running
   `hippo supersede <id> "<new content>"`. Sets `entry.superseded_by` on the
   original.
+- `outcomes` — applies positive/negative outcomes to `remembers[remember_index]`.
+  Calls `hippo outcome --good --id <id>` `good` times and
+  `hippo outcome --bad --id <id>` `bad` times. Used to set up
+  value-attribution scenarios (vmPFC mechanic). Example:
+  `{"type": "outcomes", "remember_index": 0, "good": 3, "bad": 0}`.
 
 ## When to add fixtures
 

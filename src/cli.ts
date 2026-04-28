@@ -811,6 +811,26 @@ async function cmdRecall(
     results.sort((a, b) => b.score - a.score);
   }
 
+  // vmPFC continuous value attribution (RESEARCH.md §PFC.vmPFC). Continuous
+  // value scoring per memory based on cumulative outcome attribution. Memories
+  // with positive cumulative outcomes are boosted; those with negative outcomes
+  // are demoted. The multiplier is a tanh-shaped function clamped to [0.7, 1.3]
+  // — wider than the always-on outcomeBoost (which clamps [0.85, 1.15]) so this
+  // flag has additional decisive effect when value attribution should drive
+  // ranking. Default off; opt-in via --value-aware. Reuses outcome_positive /
+  // outcome_negative columns; no schema change.
+  if (flags['value-aware'] && results.length >= 1) {
+    results = results.map((r) => {
+      const pos = r.entry.outcome_positive ?? 0;
+      const neg = r.entry.outcome_negative ?? 0;
+      if (pos === 0 && neg === 0) return r;
+      const raw = 1 + 0.3 * Math.tanh(pos - neg);
+      const valueMult = Math.max(0.7, Math.min(1.3, raw));
+      return { ...r, score: r.score * valueMult };
+    });
+    results.sort((a, b) => b.score - a.score);
+  }
+
   // --outcome filter: drop trace entries whose trace_outcome !== target.
   // Non-trace entries pass through unaffected (traces are the only layer with
   // a meaningful outcome; filtering non-traces by outcome would be incoherent).
@@ -4165,6 +4185,12 @@ Commands:
                            conflict with a peer in the same result set.
                            Uses recorded supersession + conflicts only — never
                            lexical inference. Default off. RESEARCH.md §PFC.vlPFC.
+    --value-aware          vmPFC value attribution: boost memories with positive
+                           cumulative outcomes and demote those with negative
+                           outcomes during ranking. Multiplier
+                           clip(1 + 0.3*tanh(pos - neg), 0.7, 1.3). Reuses
+                           outcome_positive / outcome_negative; no schema
+                           change. Default off. RESEARCH.md §PFC.vmPFC.
   explain <query>          Show full score breakdown for each retrieved memory
     --budget <n>           Token budget (default: 4000)
     --limit <n>            Cap the number of results displayed

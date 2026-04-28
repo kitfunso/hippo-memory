@@ -35,6 +35,12 @@ Action types:
   - supersede: marks remembers[remember_index] as superseded_by a new memory
                whose content is `new_content`. Sets `entry.superseded_by`
                on the original. Equivalent to `hippo supersede <id> "..."`.
+  - outcomes:  applies positive/negative outcomes to remembers[remember_index].
+               Calls `hippo outcome --good --id <id>` `good` times and
+               `hippo outcome --bad --id <id>` `bad` times. Used to set up
+               value-attribution scenarios for the vmPFC mechanic.
+               Example:
+                 {"type": "outcomes", "remember_index": 0, "good": 3, "bad": 0}
 
 Usage:
   python benchmarks/micro/run.py
@@ -139,6 +145,19 @@ def score_fixture(fixture: dict) -> FixtureResult:
                 run_hippo(
                     ["supersede", old_id, action["new_content"]], home
                 ).check_returncode()
+            elif atype == "outcomes":
+                idx = int(action["remember_index"])
+                target_id = remember_ids[idx]
+                if target_id is None:
+                    raise RuntimeError(
+                        f"fixture {name!r}: cannot apply outcomes to remember[{idx}] — id not captured"
+                    )
+                good_n = int(action.get("good", 0))
+                bad_n = int(action.get("bad", 0))
+                for _ in range(good_n):
+                    run_hippo(["outcome", "--good", "--id", target_id], home).check_returncode()
+                for _ in range(bad_n):
+                    run_hippo(["outcome", "--bad", "--id", target_id], home).check_returncode()
             else:
                 raise ValueError(f"fixture {name!r}: unknown action type {atype!r}")
 
