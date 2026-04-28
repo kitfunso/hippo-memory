@@ -15,7 +15,8 @@ Each fixture is a JSON file under fixtures/ with shape:
     "mechanic": "decay",                  # decay | recall | consolidation | salience | ...
     "remembers": [                         # ordered hippo remember calls
       "Bob's coffee order is oat milk latte",
-      "Alice prefers green tea"
+      "Alice prefers green tea",
+      {"text": "...", "tags": ["auth-rewrite"]}   # object form attaches --tag flags
     ],
     "actions": [                           # optional, run after remembers in order
       {"type": "supersede",
@@ -127,8 +128,24 @@ def score_fixture(fixture: dict) -> FixtureResult:
         # so each fixture runs against ONLY its declared `remembers`.
         run_hippo(["init", "--no-learn", "--no-hooks", "--no-schedule"], home).check_returncode()
         remember_ids: list[str | None] = []
-        for text in fixture["remembers"]:
-            cp = run_hippo(["remember", text], home)
+        for item in fixture["remembers"]:
+            # Item may be a plain string OR an object {"text": "...", "tags": ["foo", "bar"]}
+            # for fixtures that need per-memory metadata (e.g. dlPFC goal conditioning).
+            if isinstance(item, str):
+                text = item
+                tags: list[str] = []
+            elif isinstance(item, dict):
+                text = item["text"]
+                tags = list(item.get("tags") or [])
+            else:
+                raise ValueError(
+                    f"fixture {name!r}: remembers entries must be string or "
+                    f"{{text, tags}} object, got {type(item).__name__}"
+                )
+            cmd = ["remember", text]
+            for t in tags:
+                cmd.extend(["--tag", t])
+            cp = run_hippo(cmd, home)
             cp.check_returncode()
             remember_ids.append(_extract_remembered_id(cp.stdout))
 

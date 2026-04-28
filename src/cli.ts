@@ -857,6 +857,20 @@ async function cmdRecall(
       .sort((a, b) => b.score - a.score);
   }
 
+  // dlPFC goal-conditioned recall MVP (RESEARCH.md §PFC.dlPFC). When --goal
+  // <tag> is set, memories whose `tags` array contains the goal tag receive
+  // a 1.5x score boost and results are re-sorted. The full dlPFC spec
+  // (goal_stack + retrieval_policy tables) maintains a hierarchical task
+  // stack with weighted retrieval policies; this MVP collapses that to a
+  // single-tag boost — the smallest demonstrable goal-conditioning signal.
+  // Default off; opt-in via --goal <tag>. No schema change.
+  const goalTag = flags['goal'] !== undefined ? String(flags['goal']).trim() : '';
+  if (goalTag) {
+    results = results
+      .map((r) => (r.entry.tags?.includes(goalTag) ? { ...r, score: r.score * 1.5 } : r))
+      .sort((a, b) => b.score - a.score);
+  }
+
   // --outcome filter: drop trace entries whose trace_outcome !== target.
   // Non-trace entries pass through unaffected (traces are the only layer with
   // a meaningful outcome; filtering non-traces by outcome would be incoherent).
@@ -4222,6 +4236,9 @@ Commands:
                            = score * (0.5 + 0.5 * strength) * (1 - cost_factor)
                            where cost_factor = min(0.3, tokens / 10000). Re-sorts
                            results by utility. Default off. RESEARCH.md §PFC.OFC.
+    --goal <tag>           dlPFC goal-conditioned recall: memories tagged with
+                           the goal tag get a 1.5x score boost and results are
+                           re-sorted. Default off. RESEARCH.md §PFC.dlPFC.
   explain <query>          Show full score breakdown for each retrieved memory
     --budget <n>           Token budget (default: 4000)
     --limit <n>            Cap the number of results displayed

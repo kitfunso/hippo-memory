@@ -35,7 +35,8 @@ Plain JSON in `fixtures/`:
   "name": "decay-basic",
   "mechanic": "decay",
   "remembers": [
-    "Bob's coffee order is oat milk latte"
+    "Bob's coffee order is oat milk latte",
+    {"text": "Bob skips espresso", "tags": ["coffee"]}
   ],
   "actions": [
     {"type": "supersede", "remember_index": 0,
@@ -54,6 +55,10 @@ Plain JSON in `fixtures/`:
 Pass = at least one substring from `must_contain_any` (case-insensitive) appears
 in the top-k recall results AND none of the substrings in `must_not_contain_any`
 (if set) appear there. `must_not_contain_any` is optional.
+
+Each entry in `remembers` is either a string OR an object `{"text": "...",
+"tags": ["..."]}`. The object form is used for fixtures that need per-memory
+metadata, e.g. dlPFC goal conditioning (`--goal <tag>` boost).
 
 **Actions** run after `remembers` and before `queries`, in declared order:
 
