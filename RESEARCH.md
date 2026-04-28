@@ -868,6 +868,26 @@ If Hippo cannot do those five reliably, it is not yet a Company Brain.
 - ratio of promoted durable memories to raw receipts
 - usefulness of sleep-generated summaries and process updates
 
+### Measurement-first execution
+
+The repo is already strong enough to stop guessing and start grading Company Brain work:
+
+- retrieval quality already has `hippo eval <corpus>` and `hippo eval --suite`
+- sequential learning already has `tests/agent-eval.test.ts`
+- continuity already has snapshots, session events, handoffs, and token estimation
+- current truth already has `supersede` and `--as-of`
+
+The missing piece is one scorecard that turns those primitives into a go/no-go rule for new features. The execution rule is now:
+
+1. name one primary outcome before implementation
+2. compare against a baseline or feature-off condition
+3. keep retrieval and learning guardrails flat or better
+4. cut features that do not move the score
+
+The detailed plan lives in `docs/plans/2026-04-28-company-brain-measurement.md`.
+
+The first feature to build after the scorecard is not enterprise ingestion or graph work. It is continuity-first context assembly: active snapshot, recent trail, and the matching handoff in the default resume path, because that is the strongest Company Brain claim the current repo can measure now.
+
 ### Why this is defensible
 
 Most competitors will build one of two things:

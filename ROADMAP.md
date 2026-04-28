@@ -94,6 +94,12 @@ Status: Submitted. Decision expected summer 2026. Project runs August 2026 - Jan
 - [Committed] npm publish cadence for point releases
 - [Committed] Documentation updates for existing API surface
 
+### Company Brain execution order [Committed]
+
+- [Committed] Measurement-first scorecard for Company Brain work before broad feature rollout
+- [Committed] First product slice after the scorecard: continuity-first context assembly built from active snapshots, recent session trails, and handoffs
+- [Committed] Provenance-envelope work comes after continuity is measurable, not before
+
 ---
 
 ## Phase 2 (follow-on, contingent on Phase 1 success)
