@@ -788,6 +788,29 @@ async function cmdRecall(
     }
   }
 
+  // vlPFC interference filter (RESEARCH.md §PFC.vlPFC). Suppress task-irrelevant
+  // memories using *recorded* supersession + conflict structure only. Default
+  // off; opt-in via --filter-conflicts. Two effects, both surgical:
+  //   1. Drop entries with `superseded_by` set. (No-op under default recall,
+  //      which already filters them; matters when `--include-superseded` was
+  //      passed. The flag re-asserts the gate.)
+  //   2. Apply a 0.3x score multiplier to entries whose `conflicts_with` list
+  //      references another entry that ALSO appears in the result set. The
+  //      multiplier is conservative — we never delete on conflict, only
+  //      down-rank, so the user can still surface the loser via --include-*.
+  // We never infer conflicts from lexical overlap. The v1 salience gate did
+  // that and destroyed LoCoMo (0.28 → 0.02). Recorded structure only.
+  if (flags['filter-conflicts']) {
+    results = results.filter((r) => !r.entry.superseded_by);
+    const presentIds = new Set(results.map((r) => r.entry.id));
+    results = results.map((r) => {
+      const peers = r.entry.conflicts_with || [];
+      const hasPeerInResults = peers.some((peerId) => presentIds.has(peerId));
+      return hasPeerInResults ? { ...r, score: r.score * 0.3 } : r;
+    });
+    results.sort((a, b) => b.score - a.score);
+  }
+
   // --outcome filter: drop trace entries whose trace_outcome !== target.
   // Non-trace entries pass through unaffected (traces are the only layer with
   // a meaningful outcome; filtering non-traces by outcome would be incoherent).
@@ -4137,6 +4160,11 @@ Commands:
     --evc-adaptive         ACC-style: when top-K shows high inter-item overlap
                            (= conflict cluster), expand pool and re-rank by
                            recency. Default off. RESEARCH.md §PFC.ACC.
+    --filter-conflicts     vlPFC interference filter: drop superseded entries
+                           and 0.3x-downweight entries flagged in an open
+                           conflict with a peer in the same result set.
+                           Uses recorded supersession + conflicts only — never
+                           lexical inference. Default off. RESEARCH.md §PFC.vlPFC.
   explain <query>          Show full score breakdown for each retrieved memory
     --budget <n>           Token budget (default: 4000)
     --limit <n>            Cap the number of results displayed

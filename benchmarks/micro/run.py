@@ -17,12 +17,24 @@ Each fixture is a JSON file under fixtures/ with shape:
       "Bob's coffee order is oat milk latte",
       "Alice prefers green tea"
     ],
+    "actions": [                           # optional, run after remembers in order
+      {"type": "supersede",
+       "remember_index": 0,
+       "new_content": "Bob switched to oat milk flat white"}
+    ],
     "queries": [
       {"q": "what does Bob drink",
-       "must_contain_any": ["oat milk", "latte"],   # at least one substring in top-k recall
-       "top_k": 3}
+       "must_contain_any": ["oat milk", "latte"],     # at least one in top-k
+       "must_not_contain_any": ["espresso"],          # optional, all must be ABSENT
+       "top_k": 3,
+       "cli_args": ["--include-superseded"]}
     ]
   }
+
+Action types:
+  - supersede: marks remembers[remember_index] as superseded_by a new memory
+               whose content is `new_content`. Sets `entry.superseded_by`
+               on the original. Equivalent to `hippo supersede <id> "..."`.
 
 Usage:
   python benchmarks/micro/run.py
@@ -30,7 +42,8 @@ Usage:
   python benchmarks/micro/run.py --baseline results/baseline.json   # diff vs baseline
 
 Pass criterion: every query's top-k results must contain at least one
-substring from must_contain_any (case-insensitive).
+substring from must_contain_any (case-insensitive). If must_not_contain_any
+is set, NONE of those substrings may appear in the top-k.
 """
 
 from __future__ import annotations
@@ -71,7 +84,9 @@ def run_hippo(args: list[str], hippo_home: Path, timeout: int = 30) -> subproces
 class QueryResult:
     query: str
     expected_any: list[str]
+    forbidden: list[str]
     matched: str | None
+    leaked: str | None
     passed: bool
     top_k_text: list[str]
 
@@ -85,6 +100,17 @@ class FixtureResult:
     pass_rate: float
 
 
+# Match the "Remembered [<id>]" line that `hippo remember` prints to stdout.
+# IDs are short hex; keeping the regex permissive so we don't depend on length.
+import re
+_REMEMBER_ID_RE = re.compile(r"Remembered\s+\[([^\]]+)\]")
+
+
+def _extract_remembered_id(stdout: str) -> str | None:
+    m = _REMEMBER_ID_RE.search(stdout)
+    return m.group(1) if m else None
+
+
 def score_fixture(fixture: dict) -> FixtureResult:
     name = fixture["name"]
     mechanic = fixture.get("mechanic", "unknown")
@@ -94,8 +120,27 @@ def score_fixture(fixture: dict) -> FixtureResult:
         # --no-learn blocks both git history seeding and agent MEMORY.md auto-import
         # so each fixture runs against ONLY its declared `remembers`.
         run_hippo(["init", "--no-learn", "--no-hooks", "--no-schedule"], home).check_returncode()
+        remember_ids: list[str | None] = []
         for text in fixture["remembers"]:
-            run_hippo(["remember", text], home).check_returncode()
+            cp = run_hippo(["remember", text], home)
+            cp.check_returncode()
+            remember_ids.append(_extract_remembered_id(cp.stdout))
+
+        # Optional action steps (e.g. supersede). Run in declared order.
+        for action in fixture.get("actions", []) or []:
+            atype = action.get("type")
+            if atype == "supersede":
+                idx = int(action["remember_index"])
+                old_id = remember_ids[idx]
+                if old_id is None:
+                    raise RuntimeError(
+                        f"fixture {name!r}: cannot supersede remember[{idx}] — id not captured"
+                    )
+                run_hippo(
+                    ["supersede", old_id, action["new_content"]], home
+                ).check_returncode()
+            else:
+                raise ValueError(f"fixture {name!r}: unknown action type {atype!r}")
 
         query_results = []
         for q in fixture["queries"]:
@@ -110,11 +155,16 @@ def score_fixture(fixture: dict) -> FixtureResult:
             texts = [(m.get("text") or m.get("content") or "") for m in memories[:top_k]]
             joined = " || ".join(texts).lower()
             matched = next((s for s in q["must_contain_any"] if s.lower() in joined), None)
+            forbidden = q.get("must_not_contain_any", []) or []
+            leaked = next((s for s in forbidden if s.lower() in joined), None)
+            passed = matched is not None and leaked is None
             query_results.append(QueryResult(
                 query=q["q"],
                 expected_any=q["must_contain_any"],
+                forbidden=list(forbidden),
                 matched=matched,
-                passed=matched is not None,
+                leaked=leaked,
+                passed=passed,
                 top_k_text=texts,
             ))
 
@@ -161,7 +211,8 @@ def main() -> int:
         if args.verbose:
             for q in r.queries:
                 if not q.passed:
-                    print(f"      MISS  q={q.query!r}  expected_any={q.expected_any}")
+                    reason = "MISS" if q.matched is None else f"LEAKED({q.leaked!r})"
+                    print(f"      {reason}  q={q.query!r}  expected_any={q.expected_any}  forbidden={q.forbidden}")
                     for t in q.top_k_text:
                         print(f"            -> {t[:120]}")
 

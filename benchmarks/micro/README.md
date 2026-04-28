@@ -37,15 +37,30 @@ Plain JSON in `fixtures/`:
   "remembers": [
     "Bob's coffee order is oat milk latte"
   ],
+  "actions": [
+    {"type": "supersede", "remember_index": 0,
+     "new_content": "Bob switched to oat milk flat white"}
+  ],
   "queries": [
     {"q": "what does Bob drink",
      "must_contain_any": ["oat milk", "latte"],
-     "top_k": 3}
+     "must_not_contain_any": ["espresso"],
+     "top_k": 3,
+     "cli_args": ["--include-superseded"]}
   ]
 }
 ```
 
-Pass = at least one substring from `must_contain_any` (case-insensitive) appears in the top-k recall results.
+Pass = at least one substring from `must_contain_any` (case-insensitive) appears
+in the top-k recall results AND none of the substrings in `must_not_contain_any`
+(if set) appear there. `must_not_contain_any` is optional.
+
+**Actions** run after `remembers` and before `queries`, in declared order:
+
+- `supersede` — marks `remembers[remember_index]` as superseded by a new
+  memory whose content is `new_content`. Equivalent to running
+  `hippo supersede <id> "<new content>"`. Sets `entry.superseded_by` on the
+  original.
 
 ## When to add fixtures
 
