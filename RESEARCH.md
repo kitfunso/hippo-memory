@@ -578,6 +578,311 @@ The strongest version of Hippo is not a generic enterprise search product. It is
 
 That is the bet worth making.
 
+## Product spec: Hippo as the Company Brain
+
+### One-line product definition
+
+Hippo is a memory operating system for agents and teams. It turns raw company activity into scoped, queryable, correctable working knowledge that survives across sessions, people, and tools.
+
+### Product thesis
+
+The problem is not that companies lack documents. The problem is that the useful state of the company is fragmented, stale, and constantly re-explained. Agents and humans keep redoing orientation work because there is no durable layer that remembers what happened, what is true now, what changed, and what is currently in flight.
+
+Hippo solves that by separating memory into three layers:
+
+1. **Raw receipts**: append-only operational exhaust with provenance
+2. **Current truths**: distilled facts, decisions, processes, and policies that can be superseded cleanly
+3. **Active work state**: snapshots, handoffs, blockers, owners, and next actions
+
+The moat is not "stores everything". The moat is **continuity + correction + distillation**.
+
+### Primary users
+
+#### 1. AI-heavy builders and founders
+
+People running multiple projects with agents, where the pain is repeated re-explanation, forgotten decisions, and weak continuity between sessions.
+
+#### 2. Small engineering and operations teams
+
+Teams using Slack, GitHub, Linear/Jira, docs, and meeting notes, where institutional memory currently lives in scattered tools and individual heads.
+
+#### 3. Agent-first internal platforms
+
+Teams building assistants, coding agents, support agents, or automation workers that need durable memory with provenance and safe correction.
+
+### Jobs to be done
+
+- **Before work**: load the minimum useful context for the task without replaying full transcripts
+- **During work**: capture important decisions, blockers, errors, and outcomes as they happen
+- **After work**: consolidate activity into durable notes, facts, process updates, and handoffs
+- **When things change**: supersede stale knowledge without deleting historical truth
+- **Across people and agents**: make operational knowledge portable instead of trapped in one chat or one employee's memory
+
+### Core product principles
+
+1. **Append-only raw layer.** Source events are never rewritten.
+2. **Correction over deletion.** Current truth changes through supersession, not silent overwrite.
+3. **Continuity first.** Active-task state matters as much as long-term recall.
+4. **Scoped by default.** Every memory has scope, source, owner, timestamp, and confidence.
+5. **Cheap hot path.** Recall should stay fast; heavy extraction and synthesis belong in background sleep cycles.
+6. **Inspectability wins.** Users must be able to trace every output back to evidence.
+7. **Forgetting is a feature.** Not every raw event deserves long-term promotion.
+
+### Non-goals
+
+- Replacing Slack, Jira, GitHub, Notion, or email as systems of record
+- Becoming a generic enterprise search box over every transcript ever written
+- Building an always-on giant knowledge graph over uncurated raw text
+- Autonomously rewriting company truth without provenance or approval paths
+- Forcing the local zero-dependency core to become the default heavyweight enterprise backend
+
+### Memory model
+
+#### Layer 1: raw receipts
+
+Examples:
+- commit shipped
+- incident opened
+- customer call summary
+- meeting transcript slice
+- ticket updated
+- agent run capsule
+
+Required fields:
+- `source`
+- `scope`
+- `timestamp`
+- `owner`
+- `artifact_ref`
+- `session_id` or `run_id`
+- `confidence`
+- `kind` (`raw`, `distilled`, `superseded`)
+
+#### Layer 2: distilled operating knowledge
+
+First-class objects:
+- **fact**
+- **decision**
+- **process**
+- **policy**
+- **incident**
+- **handoff**
+- **skill**
+- **project brief**
+- **customer note**
+
+Each object should support:
+- provenance links back to receipts
+- confidence level
+- scope boundaries
+- invalidation/supersession
+- `as-of` historical lookup
+- optional structured fields per object type
+
+#### Layer 3: active work memory
+
+Objects:
+- **snapshot**
+- **current goal**
+- **blocked reason**
+- **next action**
+- **open thread**
+- **working set**
+
+This layer is the short-term continuity substrate for agents. It should be cheap to update, cheap to read, and easy to expire or roll forward.
+
+### Core workflows
+
+#### 1. Capture
+
+Hippo ingests raw operational receipts from:
+- CLI/manual capture
+- webhooks
+- cron slices
+- MCP/tool hooks
+- exported artifacts from source systems
+
+Default rule: ingest first as raw, not semantic.
+
+#### 2. Distil
+
+Background or human-in-the-loop flows convert receipts into:
+- decisions
+- incident capsules
+- process deltas
+- facts
+- handoffs
+- project briefs
+
+Promotion into long-term knowledge should require evidence and scope.
+
+#### 3. Recall
+
+`hippo context --auto` or API recall should assemble layered context in this order:
+1. active snapshot
+2. recent event trail
+3. current scoped decisions
+4. high-confidence facts
+5. process or policy notes
+6. optional deeper graph expansion only if needed
+
+This is the default retrieval shape because most tasks fail from missing recent state, not missing a distant fact.
+
+#### 4. Correct
+
+When knowledge changes:
+- supersede the old decision/fact/process
+- keep the old version queryable with `--as-of`
+- preserve provenance for both versions
+- record why the correction happened
+
+#### 5. Sleep
+
+Offline consolidation jobs should:
+- cluster related receipts
+- merge repetitive episodes
+- extract stable facts
+- surface conflicts
+- synthesise process updates
+- decay or archive low-value noise
+
+### User-facing surfaces
+
+#### Local/core
+
+- `hippo remember`
+- `hippo recall`
+- `hippo snapshot save/load`
+- `hippo decide`
+- `hippo supersede`
+- `hippo handoff`
+- `hippo sleep`
+- `hippo inspect`
+
+#### Agent/runtime surface
+
+- MCP tools for capture, recall, inspect, and handoff
+- context assembly endpoint for agents
+- trigger-based recall by repo, service, ticket type, customer, or workflow stage
+
+#### Team/service surface
+
+- optional shared service backend
+- scoped multi-user API
+- audit log and access control layer
+- exports into docs, runbooks, and skills
+
+### Ingestion strategy
+
+#### Phase 1: read-mostly bridge
+
+Connect existing tools through append-only ingestion:
+- Slack
+- GitHub
+- Jira/Linear
+- Notion/Docs
+- meetings/transcripts
+- email summaries
+- internal databases via export jobs
+
+The key constraint: source systems remain canonical. Hippo stores memory products, not shadow copies of whole apps.
+
+#### Phase 2: operating objects
+
+Add first-class handling for:
+- decisions
+- incidents
+- processes
+- project briefs
+- handoffs
+- policies
+- customer accounts
+
+This is where Hippo stops being just a memory store and becomes a company operating layer.
+
+#### Phase 3: graph on consolidated state
+
+Only build richer graph reasoning on top of consolidated entities and relationships, not raw transcript soup.
+
+### Retrieval and ranking
+
+Ranking should combine:
+- scope match
+- recency
+- strength/decay score
+- reward/outcome signal
+- explicit salience
+- provenance quality
+- object type relevance to the current task
+
+Important design choice: retrieval ranking is not only semantic similarity. It is operational relevance.
+
+### Security and trust model
+
+Enterprise use needs:
+- tenancy
+- RBAC
+- team/project/policy scopes
+- approval boundaries for write-backs
+- audit trails for memory creation, promotion, supersession, and recall
+- source provenance on every memory object
+- confidence labelling on all derived outputs
+
+Hippo should default to read-mostly integration until organisations explicitly enable write-back actions.
+
+### MVP definition
+
+A real V1 Company Brain should be able to do five things well:
+
+1. ingest raw receipts from a small set of tools
+2. maintain active-task continuity for agents
+3. promote decisions/facts/handoffs into durable memory with provenance
+4. correct current truth safely via supersession
+5. assemble high-signal task context faster than transcript replay
+
+If Hippo cannot do those five reliably, it is not yet a Company Brain.
+
+### Example user stories
+
+- **As a coding agent**, I want the last active snapshot, open blockers, and relevant decisions for a repo so I can resume work without re-reading the whole chat.
+- **As an engineering lead**, I want incidents, postmortem decisions, and current runbook deltas linked together so the next responder does not repeat the same mistake.
+- **As a founder**, I want meeting notes, customer objections, shipped changes, and strategic decisions turned into queryable truth with dates and provenance.
+- **As an ops teammate**, I want policy changes to supersede old versions without losing historical auditability.
+
+### Success metrics
+
+#### Product metrics
+
+- reduction in repeated orientation tokens per task
+- reduction in repeated human explanations across sessions
+- time-to-useful-context for a resumed agent or teammate
+- percentage of recalls with inspectable provenance
+- correction latency from changed fact to superseded truth
+- active-task resume success rate
+
+#### Quality metrics
+
+- precision of recalled context
+- stale-memory rate
+- unresolved conflict count
+- ratio of promoted durable memories to raw receipts
+- usefulness of sleep-generated summaries and process updates
+
+### Why this is defensible
+
+Most competitors will build one of two things:
+- a better filing cabinet with embeddings
+- a broad company search layer over everything
+
+Hippo's stronger position is narrower and deeper:
+- agent-first continuity
+- explicit memory lifecycle
+- correction as a core primitive
+- provenance-rich operating objects
+- background distillation into executable knowledge
+
+That makes Hippo less like "search for company data" and more like "the memory substrate that keeps agents and teams aligned over time."
+
 ## References
 
 - McClelland, J.L., McNaughton, B.L., & O'Reilly, R.C. (1995). Why there are complementary learning systems in the hippocampus and neocortex. *Psychological Review*.
