@@ -37,8 +37,8 @@ Action types:
                on the original. Equivalent to `hippo supersede <id> "..."`.
   - outcomes:  applies positive/negative outcomes to remembers[remember_index].
                Calls `hippo outcome --good --id <id>` `good` times and
-               `hippo outcome --bad --id <id>` `bad` times. Used to set up
-               value-attribution scenarios for the vmPFC mechanic.
+               `hippo outcome --bad --id <id>` `bad` times. Used by both
+               vmPFC value attribution and OFC option-value scenarios.
                Example:
                  {"type": "outcomes", "remember_index": 0, "good": 3, "bad": 0}
 
@@ -152,8 +152,8 @@ def score_fixture(fixture: dict) -> FixtureResult:
                     raise RuntimeError(
                         f"fixture {name!r}: cannot apply outcomes to remember[{idx}] — id not captured"
                     )
-                good_n = int(action.get("good", 0))
-                bad_n = int(action.get("bad", 0))
+                good_n = int(action.get("good", 0) or 0)
+                bad_n = int(action.get("bad", 0) or 0)
                 for _ in range(good_n):
                     run_hippo(["outcome", "--good", "--id", target_id], home).check_returncode()
                 for _ in range(bad_n):

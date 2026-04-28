@@ -831,6 +831,32 @@ async function cmdRecall(
     results.sort((a, b) => b.score - a.score);
   }
 
+  // OFC option-value re-ranker MVP (RESEARCH.md §PFC.OFC). Combine relevance,
+  // strength, and integration cost into a single utility score and re-sort.
+  // OFC neurons encode a "common currency" across heterogeneous attributes
+  // (Rangel et al., 2008); this is the simplest demonstration of that mechanism.
+  // Default off; opt-in via --rerank-utility.
+  //
+  //   utility = score * (0.5 + 0.5 * strength) * (1 - cost_factor)
+  //   cost_factor = min(0.3, tokens / 10000)
+  //
+  // The full OFC spec (option_valuation table in RESEARCH.md) decomposes value
+  // into reward / cost / risk / confidence components. The MVP collapses these
+  // to: score (relevance proxy), strength (persistence proxy), tokens (cost).
+  // CAVEAT: cost penalty is monotone with token count; LoCoMo's harder QAs
+  // often live in long evidence-rich memories. Default off — needs LoCoMo
+  // eval before enabling broadly.
+  if (flags['rerank-utility']) {
+    results = results
+      .map((r) => {
+        const strength = typeof r.entry.strength === 'number' ? r.entry.strength : 1.0;
+        const costFactor = Math.min(0.3, (r.tokens || 0) / 10000);
+        const utility = r.score * (0.5 + 0.5 * strength) * (1 - costFactor);
+        return { ...r, score: utility };
+      })
+      .sort((a, b) => b.score - a.score);
+  }
+
   // --outcome filter: drop trace entries whose trace_outcome !== target.
   // Non-trace entries pass through unaffected (traces are the only layer with
   // a meaningful outcome; filtering non-traces by outcome would be incoherent).
@@ -4191,6 +4217,11 @@ Commands:
                            clip(1 + 0.3*tanh(pos - neg), 0.7, 1.3). Reuses
                            outcome_positive / outcome_negative; no schema
                            change. Default off. RESEARCH.md §PFC.vmPFC.
+    --rerank-utility       OFC option-value re-ranker: combine relevance,
+                           strength, and integration cost into a single utility
+                           = score * (0.5 + 0.5 * strength) * (1 - cost_factor)
+                           where cost_factor = min(0.3, tokens / 10000). Re-sorts
+                           results by utility. Default off. RESEARCH.md §PFC.OFC.
   explain <query>          Show full score breakdown for each retrieved memory
     --budget <n>           Token budget (default: 4000)
     --limit <n>            Cap the number of results displayed
