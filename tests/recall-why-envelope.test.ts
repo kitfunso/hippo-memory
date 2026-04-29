@@ -32,6 +32,32 @@ describe('hippo recall --why exposes envelope', () => {
     }
   });
 
+  it('CLI rejects --kind raw (reserved for ingestion connectors, not user-facing)', () => {
+    if (!existsSync(cli)) {
+      throw new Error(`dist/cli.js not found at ${cli} — run \`npm run build\` first`);
+    }
+    const home = mkdtempSync(join(tmpdir(), 'hippo-kind-raw-'));
+    const env = { ...process.env, HIPPO_HOME: home };
+    try {
+      execSync(`node "${cli}" init`, { env, cwd: home });
+      execSync(`node "${cli}" init --global`, { env, cwd: home });
+      let threw = false;
+      let stderr = '';
+      try {
+        execSync(`node "${cli}" remember "should fail" --kind raw --global`, { env, cwd: home, stdio: 'pipe' });
+      } catch (e: unknown) {
+        threw = true;
+        const err = e as { stderr?: Buffer };
+        stderr = err.stderr ? err.stderr.toString() : '';
+      }
+      expect(threw).toBe(true);
+      expect(stderr).toContain('Invalid --kind: "raw"');
+      expect(stderr).toContain('reserved for ingestion connectors');
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   it('JSON output includes envelope object when --why is set', () => {
     if (!existsSync(cli)) {
       throw new Error(`dist/cli.js not found at ${cli} — run \`npm run build\` first`);
@@ -42,7 +68,7 @@ describe('hippo recall --why exposes envelope', () => {
       execSync(`node "${cli}" init`, { env, cwd: home });
       execSync(`node "${cli}" init --global`, { env, cwd: home });
       execSync(
-        `node "${cli}" remember "envelope-json-marker rollback-uniq43 token" --kind raw --owner agent:claude --artifact-ref slack://team/channel/1700.123 --global`,
+        `node "${cli}" remember "envelope-json-marker rollback-uniq43 token" --kind distilled --owner agent:claude --artifact-ref slack://team/channel/1700.123 --global`,
         { env, cwd: home },
       );
       const out = execSync(`node "${cli}" recall "envelope-json-marker rollback-uniq43" --why --json --global`, { env, cwd: home }).toString();
@@ -50,7 +76,7 @@ describe('hippo recall --why exposes envelope', () => {
       expect(parsed.results.length).toBeGreaterThan(0);
       const first = parsed.results[0];
       expect(first.envelope).toBeDefined();
-      expect(first.envelope.kind).toBe('raw');
+      expect(first.envelope.kind).toBe('distilled');
       expect(first.envelope.owner).toBe('agent:claude');
       expect(first.envelope.artifact_ref).toBe('slack://team/channel/1700.123');
     } finally {

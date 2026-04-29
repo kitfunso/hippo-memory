@@ -1,4 +1,5 @@
 import type { DatabaseSyncLike } from './db.js';
+import { isFtsAvailable } from './db.js';
 
 export interface ArchiveOpts {
   reason: string;
@@ -31,6 +32,18 @@ export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: Archive
     // Flip kind to 'archived' so the BEFORE DELETE trigger no longer fires, then delete.
     db.prepare(`UPDATE memories SET kind = 'archived' WHERE id = ?`).run(id);
     db.prepare(`DELETE FROM memories WHERE id = ?`).run(id);
+    // FTS5 is a virtual table — no FK CASCADE applies. Purge the FTS row so the
+    // archived content is not searchable after archive. Without this the original
+    // raw text remains in memories_fts until the next DB-open backfill, defeating
+    // GDPR right-to-be-forgotten.
+    if (isFtsAvailable(db)) {
+      try {
+        db.prepare(`DELETE FROM memories_fts WHERE id = ?`).run(id);
+      } catch {
+        // Best effort only. The DELETE on memories already succeeded; FTS will
+        // self-heal on next DB open via backfillFtsIndex.
+      }
+    }
     db.exec('COMMIT');
   } catch (e) {
     db.exec('ROLLBACK');

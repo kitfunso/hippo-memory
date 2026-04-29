@@ -523,15 +523,22 @@ async function cmdRemember(
   const schemaFit = computeSchemaFit(text, rawTags, existing);
 
   // A3 envelope flags
-  const kindFlag = typeof flags['kind'] === 'string' ? (flags['kind'] as string) : undefined;
-  const validKinds = ['raw', 'distilled', 'superseded', 'archived'] as const;
-  if (kindFlag !== undefined && !(validKinds as readonly string[]).includes(kindFlag)) {
-    console.error(`Invalid --kind: "${kindFlag}". Must be one of: ${validKinds.join(', ')}`);
+  const kindFlagRaw = typeof flags['kind'] === 'string' ? (flags['kind'] as string) : undefined;
+  const kindFlag = kindFlagRaw === undefined ? undefined : kindFlagRaw.toLowerCase();
+  // CLI surface intentionally restricted: 'raw' is reserved for ingestion connectors
+  // (E1.x: Slack/Jira/Gmail) that route deletions through archiveRawMemory. Existing
+  // forget/consolidate/conflict-resolve paths abort on kind='raw' via the append-only
+  // trigger, so exposing --kind raw here would create unforgettable memories.
+  // 'archived' is an internal sentinel set only inside archiveRawMemory's transaction.
+  const userVisibleKinds = ['distilled', 'superseded'] as const;
+  if (kindFlag !== undefined && !(userVisibleKinds as readonly string[]).includes(kindFlag)) {
+    console.error(`Invalid --kind: "${kindFlagRaw}". Must be one of: ${userVisibleKinds.join(', ')}`);
+    console.error(`(kind='raw' is reserved for ingestion connectors; kind='archived' is internal.)`);
     process.exit(1);
   }
   const ownerFlag = typeof flags['owner'] === 'string' ? (flags['owner'] as string) : null;
   const artifactRefFlag = typeof flags['artifact-ref'] === 'string' ? (flags['artifact-ref'] as string) : null;
-  const scopeForEnvelope = typeof flags['scope'] === 'string' ? (flags['scope'] as string) : null;
+  const scopeForEnvelope = typeof flags['scope'] === 'string' ? (flags['scope'] as string).trim() || null : null;
 
   const entry = createMemory(text, {
     layer: Layer.Episodic,

@@ -46,4 +46,35 @@ describe('archiveRawMemory', () => {
     closeHippoDb(db);
     rmSync(home, { recursive: true, force: true });
   });
+
+  it('purges memories_fts row so archived content is not searchable (GDPR)', () => {
+    const home = mkdtempSync(join(tmpdir(), 'hippo-arch-'));
+    const db = openHippoDb(home);
+    // Skip if FTS5 not available in this build
+    const ftsRow = db.prepare(`SELECT value FROM meta WHERE key='fts5_available'`).get() as
+      | { value: string }
+      | undefined;
+    if (!ftsRow || ftsRow.value !== '1') {
+      closeHippoDb(db);
+      rmSync(home, { recursive: true, force: true });
+      return;
+    }
+    db.prepare(
+      `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, kind) VALUES ('rfts','2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','classifiedsecret unique-canary-zylph','raw')`,
+    ).run();
+    db.prepare(`INSERT INTO memories_fts(id, content, tags) VALUES (?, ?, ?)`).run(
+      'rfts',
+      'classifiedsecret unique-canary-zylph',
+      '[]',
+    );
+    // Pre-condition: FTS finds it
+    const before = db.prepare(`SELECT id FROM memories_fts WHERE memories_fts MATCH ?`).all('zylph');
+    expect(before.length).toBe(1);
+    archiveRawMemory(db, 'rfts', { reason: 'GDPR delete', who: 'user:99' });
+    // Post-condition: FTS no longer finds it
+    const after = db.prepare(`SELECT id FROM memories_fts WHERE memories_fts MATCH ?`).all('zylph');
+    expect(after.length).toBe(0);
+    closeHippoDb(db);
+    rmSync(home, { recursive: true, force: true });
+  });
 });
