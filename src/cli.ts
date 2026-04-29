@@ -1134,8 +1134,10 @@ async function cmdExplain(
   }
   const globalRoot = getGlobalRoot();
 
-  let explainLocalEntries = loadSearchEntries(hippoRoot, query);
-  let explainGlobalEntries = isInitialized(globalRoot) ? loadSearchEntries(globalRoot, query) : [];
+  // A5: scope explain results to the active tenant.
+  const tenantId = resolveTenantId({});
+  let explainLocalEntries = loadSearchEntries(hippoRoot, query, undefined, tenantId);
+  let explainGlobalEntries = isInitialized(globalRoot) ? loadSearchEntries(globalRoot, query, undefined, tenantId) : [];
 
   // Bi-temporal filtering
   if (explainAsOf) {
@@ -1194,7 +1196,7 @@ async function cmdExplain(
   } else if (hasGlobal) {
     results = await searchBothHybrid(query, hippoRoot, globalRoot, {
       budget, explain: true, mmr: mmrEnabled, mmrLambda, localBump, scope: explainActiveScope,
-      includeSuperseded: explainIncludeSuperseded, asOf: explainAsOf,
+      includeSuperseded: explainIncludeSuperseded, asOf: explainAsOf, tenantId,
     });
     modeUsed = 'searchBothHybrid';
   } else {
@@ -3080,11 +3082,14 @@ async function cmdContext(
 
   const globalRoot = getGlobalRoot();
   const hasGlobal = isInitialized(globalRoot);
+  // A5: scope context-mode loads to the active tenant. Without this, every
+  // tenant's memories surface through the smart-context injection path.
+  const tenantId = resolveTenantId({});
   // When the local store isn't initialized (pinned-only path in a fresh dir),
   // skip the local load — loadAllEntries would auto-create .hippo here and
   // we don't want to pollute arbitrary cwds.
-  let localEntries = hasLocal ? loadAllEntries(hippoRoot) : [];
-  let globalEntries = hasGlobal ? loadAllEntries(globalRoot) : [];
+  let localEntries = hasLocal ? loadAllEntries(hippoRoot, tenantId) : [];
+  let globalEntries = hasGlobal ? loadAllEntries(globalRoot, tenantId) : [];
 
   // Default context always filters superseded (no --include-superseded / --as-of for context)
   localEntries = localEntries.filter(e => !e.superseded_by);
@@ -3175,7 +3180,7 @@ async function cmdContext(
   } else {
     let results;
     if (hasGlobal) {
-      const merged = await searchBothHybrid(query, hippoRoot, globalRoot, { budget, scope: ctxActiveScope });
+      const merged = await searchBothHybrid(query, hippoRoot, globalRoot, { budget, scope: ctxActiveScope, tenantId });
       const localIndex = loadIndex(hippoRoot);
       results = merged.map((r) => ({
         entry: r.entry,
@@ -3199,6 +3204,19 @@ async function cmdContext(
 
     selectedItems = results;
     totalTokens = results.reduce((sum, r) => sum + r.tokens, 0);
+
+    // A5 H4: emit recall audit event for context-mode searches. The recall
+    // handler emits one of these per `hippo recall` invocation; context mode
+    // is the same surface (search → user) and must leave the same audit trail.
+    // Skip pinned-only and '*' fallback (handled in branches above which never
+    // hit the search engines).
+    const ctxRecallMetadata: Record<string, unknown> = {
+      query: query.slice(0, 200),
+      results: selectedItems.length,
+      mode: 'context',
+    };
+    if (hasLocal) emitCliAudit(hippoRoot, 'recall', undefined, ctxRecallMetadata);
+    if (hasGlobal) emitCliAudit(globalRoot, 'recall', undefined, ctxRecallMetadata);
   }
 
   if (limit < selectedItems.length) {

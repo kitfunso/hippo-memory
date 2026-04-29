@@ -25,6 +25,7 @@ import { execSync } from 'child_process';
 import { fetchGitLog, extractLessons, deduplicateLesson, isGitRepo } from '../autolearn.js';
 import { loadConfig } from '../config.js';
 import { resolveConfidence } from '../memory.js';
+import { resolveTenantId } from '../tenant.js';
 
 // ── Find hippo root ──
 
@@ -222,12 +223,15 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
   if (!hippoRoot) return 'No .hippo/ store found. Run: hippo init';
 
   const config = loadConfig(hippoRoot);
+  // A5: every loadAllEntries() in this server returns to the caller and is
+  // tenant-isolated. Resolved once per tool call from HIPPO_TENANT (or default).
+  const tenantId = resolveTenantId({});
 
   switch (name) {
     case 'hippo_recall': {
       const query = String(args.query || '');
       const budget = Number(args.budget) || config.defaultBudget;
-      const entries = loadAllEntries(hippoRoot);
+      const entries = loadAllEntries(hippoRoot, tenantId);
       const usePhysics = config.physics?.enabled !== false;
       const results = usePhysics
         ? await physicsSearch(query, entries, { budget, hippoRoot, physicsConfig: config.physics })
@@ -247,7 +251,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
       const tags: string[] = [];
       if (args.error) tags.push('error');
       if (args.tag) tags.push(String(args.tag));
-      const existing = loadAllEntries(hippoRoot);
+      const existing = loadAllEntries(hippoRoot, tenantId);
       const schemaFit = computeSchemaFit(text, tags, existing);
       const entry = createMemory(text, {
         layer: Layer.Episodic,
@@ -262,7 +266,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
 
       // Auto-sleep check
       if (config.autoSleep.enabled) {
-        const allEntries = loadAllEntries(hippoRoot);
+        const allEntries = loadAllEntries(hippoRoot, tenantId);
         const recentCount = allEntries.filter((e) => {
           const age = (Date.now() - new Date(e.created).getTime()) / (1000 * 60 * 60);
           return age < 24; // created in last 24 hours
@@ -304,7 +308,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
 
       if (!query) query = 'project context general';
 
-      const entries = loadAllEntries(hippoRoot);
+      const entries = loadAllEntries(hippoRoot, tenantId);
       const usePhysicsCtx = config.physics?.enabled !== false;
       const results = usePhysicsCtx
         ? await physicsSearch(query, entries, { budget, hippoRoot, physicsConfig: config.physics })
@@ -335,7 +339,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
     }
 
     case 'hippo_status': {
-      const entries = loadAllEntries(hippoRoot);
+      const entries = loadAllEntries(hippoRoot, tenantId);
       const now = new Date();
       let atRisk = 0;
       let totalStrength = 0;
