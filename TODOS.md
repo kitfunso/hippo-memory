@@ -57,3 +57,19 @@ Redesign direction confirmed: warm parchment Field Notes aesthetic with 3D Three
 - [ ] Health dashboard — decay forecasts, consolidation stats
 - [ ] Memory playground — test recall queries live
 - [ ] Export/share memory snapshots
+
+---
+
+## A3 follow-ups (post-review, deferred)
+
+From `/review` on commits 41b1f4d..6456e7d (now hardened to 00764ce). Each item has a target track + revisit condition.
+
+- [ ] **--scope CLI semantics.** `hippo remember --scope <v>` writes both the envelope `scope` column AND a `scope:<v>` tag. Recall's `--scope` filter currently matches the tag form. Decide: rename envelope flag to `--envelope-scope`, OR teach recall to filter the envelope column. Belongs in **A5** (auth/multi-tenancy) where scope semantics tighten. Until then, dual-write is documented in MEMORY_ENVELOPE.md.
+
+- [ ] **Importers/capture relabel pass.** `src/importers.ts` (ChatGPT/Claude/Cursor pastes) and `src/capture.ts` (session capture) currently use `kind='distilled'` (default). When **E1.x** ingestion connectors land (Slack/Jira/Gmail webhooks), audit these callers and decide per-source whether the content is raw-transcript-grade (`kind='raw'` + `archiveRawMemory` deletion path) or curated (`kind='distilled'`). Inline comments in both files flag the decision.
+
+- [ ] **Wire `hippo forget` for raw rows.** Today `hippo forget <raw-id>` aborts via the append-only trigger with no user-facing recovery. Add a `--archive --reason --owner` mode to `hippo forget` that routes through `archiveRawMemory`. Belongs in **A4** (lifecycle compliance). Until then, `--kind raw` is gated at the CLI so users can't create unforgettable rows.
+
+- [ ] **--owner format validation.** Currently any string is accepted. The documented contract is `user:<id>` or `agent:<id>`. Add regex validation `^(user|agent):[A-Za-z0-9_-]+$` either as warn-only (log, accept) or strict-reject. Decide alongside A5.
+
+- [ ] **Defensive `kind != 'archived'` filter on recall.** `kind='archived'` is a transient sentinel inside `archiveRawMemory`'s SAVEPOINT and never persists (SQLite atomicity). Adding the filter to candidate queries is belt-and-suspenders against a future bug. Cheap to add when revisiting recall query construction.
