@@ -290,6 +290,34 @@ const MIGRATIONS: Migration[] = [
         )
       `);
       db.exec(`CREATE INDEX IF NOT EXISTS idx_raw_archive_memory_id ON raw_archive(memory_id)`);
+      // Append-only invariant: kind='raw' rows cannot be deleted directly.
+      // Use raw_archive flow: archive-then-update-then-delete (see src/raw-archive.ts).
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS trg_memories_raw_append_only
+        BEFORE DELETE ON memories
+        WHEN OLD.kind = 'raw'
+        BEGIN
+          SELECT RAISE(ABORT, 'raw is append-only');
+        END
+      `);
+      // CHECK substitute: ALTER TABLE cannot add CHECK, so enforce kind allowed-set
+      // via INSERT/UPDATE triggers.
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS trg_memories_kind_check_insert
+        BEFORE INSERT ON memories
+        WHEN NEW.kind IS NOT NULL AND NEW.kind NOT IN ('raw','distilled','superseded','archived')
+        BEGIN
+          SELECT RAISE(ABORT, 'invalid kind: must be raw|distilled|superseded|archived');
+        END
+      `);
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS trg_memories_kind_check_update
+        BEFORE UPDATE ON memories
+        WHEN NEW.kind IS NOT NULL AND NEW.kind NOT IN ('raw','distilled','superseded','archived')
+        BEGIN
+          SELECT RAISE(ABORT, 'invalid kind: must be raw|distilled|superseded|archived');
+        END
+      `);
     },
   },
 ];

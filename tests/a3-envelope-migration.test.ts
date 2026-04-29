@@ -28,7 +28,54 @@ describe('A3 envelope migration v14', () => {
     rmSync(home, { recursive: true, force: true });
   });
 
-  it.todo('rejects kind value outside CHECK set — Task 6');
+  it('rejects kind value outside the allowed set', () => {
+    const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
+    const db = openHippoDb(home);
+    expect(() =>
+      db.prepare(
+        `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, kind) VALUES ('b1','2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','c','bogus')`,
+      ).run(),
+    ).toThrow(/invalid kind/i);
+    closeHippoDb(db);
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('rejects UPDATE that sets kind to a value outside the allowed set', () => {
+    const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
+    const db = openHippoDb(home);
+    db.prepare(
+      `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, kind) VALUES ('u1','2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','c','distilled')`,
+    ).run();
+    expect(() => db.prepare(`UPDATE memories SET kind='bogus' WHERE id='u1'`).run()).toThrow(/invalid kind/i);
+    closeHippoDb(db);
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('CRITICAL REGRESSION: DELETE on kind=raw aborts via trigger', () => {
+    const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
+    const db = openHippoDb(home);
+    db.prepare(
+      `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, kind) VALUES ('r1','2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','c','raw')`,
+    ).run();
+    expect(() => db.prepare(`DELETE FROM memories WHERE id='r1'`).run()).toThrow(/raw is append-only/);
+    const row = db.prepare(`SELECT id FROM memories WHERE id='r1'`).get();
+    expect(row).toBeDefined();
+    closeHippoDb(db);
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('DELETE on kind=distilled proceeds normally', () => {
+    const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
+    const db = openHippoDb(home);
+    db.prepare(
+      `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, kind) VALUES ('d1','2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','c','distilled')`,
+    ).run();
+    db.prepare(`DELETE FROM memories WHERE id='d1'`).run();
+    const row = db.prepare(`SELECT id FROM memories WHERE id='d1'`).get();
+    expect(row).toBeUndefined();
+    closeHippoDb(db);
+    rmSync(home, { recursive: true, force: true });
+  });
 
   it.each(['scope', 'owner', 'artifact_ref'])('memories table has nullable %s column', (col) => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
