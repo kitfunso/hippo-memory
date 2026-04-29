@@ -60,6 +60,14 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v0.34.0
+
+- **Provenance envelope on every memory.** `kind` (raw / distilled / superseded), `scope`, `owner`, `artifact_ref` columns now ride alongside content. `hippo recall --why` shows them; `hippo remember --kind --scope --owner --artifact-ref` sets them. Foundation for ingestion connectors and right-to-be-forgotten.
+- **Append-only invariant on raw memories.** `kind='raw'` rows can only leave the store via `archiveRawMemory(db, id, { reason, who })`, which audits into the new `raw_archive` table. Direct DELETE aborts via trigger. Sets up A4 lifecycle compliance.
+- **Schema v14 + v15.** Auto-migrates on first open. Backwards compatible.
+- **Pineal salience v2.** `--salience-threshold` for tuning the recall salience gate.
+- **Enterprise execution roadmap.** New `ROADMAP-RESEARCH.md` re-sequences the 90-day plan after Codex + eng-review pass. Provenance first, then auth stub, then server mode, then first ingestion connector.
+
 ### What's new in v0.33.0
 
 - **Fact extraction at sleep time.** `hippo sleep` now extracts standalone facts from episodic memories via LLM, stored as semantic-layer entries that score 1.3x higher and auto-deduplicate against their raw source in search results.

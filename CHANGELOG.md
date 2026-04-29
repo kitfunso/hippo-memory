@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.34.0 (2026-04-29)
+
+### Added
+- **A3 provenance envelope.** Every memory now carries `kind` (`raw | distilled | superseded | archived`), `scope`, `owner`, and `artifact_ref` columns. `hippo recall --why` surfaces the envelope; `hippo remember` accepts `--kind`, `--scope`, `--owner`, `--artifact-ref` flags. See `MEMORY_ENVELOPE.md`.
+- **Append-only invariant on `kind='raw'`.** SQLite trigger `trg_memories_raw_append_only` aborts direct DELETE on raw rows. The only legitimate path is `archiveRawMemory(db, id, { reason, who })` which snapshots into the new `raw_archive` table, purges the FTS row, and removes the memory in one SAVEPOINT (sets up A4 right-to-be-forgotten).
+- **Schema v14 + v15.** v14 adds the envelope columns, the `raw_archive` table, the append-only trigger, and INSERT/UPDATE CHECK-substitute triggers (ALTER TABLE cannot add CHECK in SQLite). v15 closes a NULL-kind bypass in those triggers and adds `UNIQUE(memory_id, archived_at)` to `raw_archive`. Backwards compatible, auto-migrates.
+- **Pineal salience v2.** `--salience-threshold` flag for the recall pipeline (commit `50528a5`).
+- **Enterprise execution roadmap (`ROADMAP-RESEARCH.md`).** 90-day plan re-sequenced after Codex + eng-review pass: A3 envelope first (this release), then A5 stub auth, A1 server, E1.3 Slack ingestion. Cuts 7 deferred items into days 91-180.
+
+### Fixed
+- **FTS leak in `archiveRawMemory`.** Archived raw content stayed in `memories_fts` until next DB-open backfill; defeated GDPR right-to-be-forgotten. Archive now purges the FTS row inside the same SAVEPOINT.
+- **CLI `--kind raw` gated.** Existing `hippo forget` / consolidation / conflict-resolution paths abort on raw rows via the trigger. Until those paths route through `archiveRawMemory`, the CLI restricts `--kind` to `{distilled, superseded}` so users cannot create unforgettable memories.
+- **NULL-kind trigger bypass.** v14 triggers used `WHEN NEW.kind IS NOT NULL AND NEW.kind NOT IN (...)`, so a direct `kind=NULL` write silently bypassed the CHECK substitute. v15 rejects NULL.
+- **`archiveRawMemory` transaction safety.** Now uses `SAVEPOINT` (nestable) instead of `BEGIN`. BigInt-safe JSON serializer for the audit payload.
+- **`--scope` envelope trim.** Matched the pre-existing scope-tag trim behavior.
+
+### Internal
+- 730 tests (+15 from v0.33.0). New: `tests/a3-envelope-migration.test.ts`, `tests/raw-archive.test.ts`, `tests/recall-why-envelope.test.ts`.
+- Reviewed via `/codex`, `/plan-eng-review`, `/review` (Claude pass + adversarial subagent), `/self-review`, `/ship-check`. All ship-blockers resolved before release.
+
 ## 0.33.0 (2026-04-23)
 
 ### Added
