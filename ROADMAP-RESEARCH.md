@@ -44,10 +44,9 @@ Persistent daemon alongside CLI. `hippo serve` exposes HTTP + MCP, CLI becomes a
 Language-agnostic surface alongside MCP/CLI. RESTish + streaming for context assembly.
 **Effort:** 3-4w (depends on A1). **Success:** SDK-free curl examples in README cover remember/recall/snapshot/handoff/inspect.
 
-### A3. Provenance envelope [next]
-Every memory carries `scope`, `source`, `timestamp`, `owner`, `confidence`, `artifact_ref`, `session_id`, `kind` (raw|distilled|superseded). RESEARCH §"Phase 1: safest bridge" canonical envelope.
-**Effort:** 6-8w (revised from 2-3w after eng-review). The current `memories` table has no `kind` column and conflates the CLS `layer` with the company-brain three-layer model. A3 is a schema split + dual-write path + every prepared statement audited, not a column add.
-**Success:** schema migration with backfill; `hippo recall --why` exposes envelope; existing eval suites pass; `kind=raw` rows protected by SQLite trigger (see `## Schema migration order`).
+### A3. Provenance envelope [shipped]
+Every memory carries `scope`, `source`, `timestamp`, `owner`, `confidence`, `artifact_ref`, `session_id`, `kind` (raw|distilled|superseded|archived). RESEARCH §"Phase 1: safest bridge" canonical envelope.
+**Shipped:** schema v14 in commits `41b1f4d..df4b0b2` (plan + 10 implementation commits). 725 vitest pass, 9/9 micro-eval fixtures at 100% post-migration. Append-only invariant enforced via `trg_memories_raw_append_only`. `archiveRawMemory(db, id, { reason, who })` is the only legitimate raw-deletion path. See `MEMORY_ENVELOPE.md`.
 
 ### A4. Lifecycle compliance [planned]
 Retention policy enforcement, right-to-be-forgotten (`hippo forget --user X --everywhere`), encryption-at-rest config flag, secret-scrubbing at write-time, PII redaction (regex + simple model).
