@@ -21,7 +21,7 @@ const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: new (path: string) => DatabaseSyncLike;
 };
 
-const CURRENT_SCHEMA_VERSION = 13;
+const CURRENT_SCHEMA_VERSION = 14;
 
 type Migration = {
   version: number;
@@ -254,6 +254,12 @@ const MIGRATIONS: Migration[] = [
       }
       db.exec(`UPDATE memories SET dag_level = 1 WHERE extracted_from IS NOT NULL AND dag_level = 0`);
       db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_dag_parent ON memories(dag_parent_id) WHERE dag_parent_id IS NOT NULL`);
+    },
+  },
+  {
+    version: 14,
+    up: (_db) => {
+      // populated in subsequent tasks
     },
   },
 ];
