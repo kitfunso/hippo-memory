@@ -148,11 +148,28 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
 /**
  * Delete a memory by id. `deleteEntry` threads ctx.actor into its internal
  * audit hook, so exactly one 'forget' event lands with the supplied actor.
+ *
+ * Tenant scope: deleteEntry looks up the row by id alone, so without an
+ * explicit tenant guard a Bearer for tenant A could delete tenant B's row
+ * by guessing or leaking the id. Pre-check the row's tenant_id and deny
+ * cross-tenant access with a not-found error (no info leak about whether
+ * the id exists in another tenant).
  */
 export function forget(ctx: Context, id: string): { ok: true; id: string } {
+  const db = openHippoDb(ctx.hippoRoot);
+  try {
+    const row = db
+      .prepare(`SELECT tenant_id FROM memories WHERE id = ?`)
+      .get(id) as { tenant_id?: string } | undefined;
+    if (!row || row.tenant_id !== ctx.tenantId) {
+      throw new Error(`memory not found: ${id}`);
+    }
+  } finally {
+    closeHippoDb(db);
+  }
   const removed = deleteEntry(ctx.hippoRoot, id, { actor: ctx.actor });
   if (!removed) {
-    throw new Error(`Memory not found: ${id}`);
+    throw new Error(`memory not found: ${id}`);
   }
   return { ok: true, id };
 }
@@ -273,6 +290,17 @@ export function archiveRaw(
 ): { ok: true; archivedAt: string } {
   const db = openHippoDb(ctx.hippoRoot);
   try {
+    // Tenant scope: archiveRawMemory looks up the row by id alone, so a
+    // Bearer for tenant A could archive tenant B's raw row without this
+    // pre-check. Deny cross-tenant access with the same not-found message
+    // archiveRawMemory itself would throw on a missing row, so we don't
+    // leak whether the id exists in another tenant.
+    const row = db
+      .prepare(`SELECT tenant_id FROM memories WHERE id = ?`)
+      .get(id) as { tenant_id?: string } | undefined;
+    if (!row || row.tenant_id !== ctx.tenantId) {
+      throw new Error(`memory not found: ${id}`);
+    }
     archiveRawMemory(db, id, { reason, who: ctx.actor });
   } finally {
     closeHippoDb(db);
