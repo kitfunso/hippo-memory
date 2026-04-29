@@ -1,0 +1,27 @@
+{
+  "name": "vmpfc-value",
+  "mechanic": "vmpfc-value",
+  "description": "vmPFC continuous value attribution (RESEARCH.md §PFC.vmPFC). Two near-equal-topic memories. The 'good' option accumulates positive outcomes; the 'bad' option accumulates negative outcomes. Without --value-aware, the bad option wins on raw BM25 (it has more query-term repetitions). With --value-aware, the cumulative outcome value attribution boosts good and demotes bad enough to flip the ranking. Reuses outcome_positive / outcome_negative columns; no schema change.",
+  "remembers": [
+    "Postgres is good for backend database tasks",
+    "MongoDB is good for backend database storage and backend database queries"
+  ],
+  "actions": [
+    {"type": "outcomes", "remember_index": 0, "good": 3, "bad": 0},
+    {"type": "outcomes", "remember_index": 1, "good": 0, "bad": 3}
+  ],
+  "queries": [
+    {
+      "q": "backend database choice",
+      "must_contain_any": ["MongoDB"],
+      "top_k": 1
+    },
+    {
+      "q": "backend database choice",
+      "must_contain_any": ["Postgres"],
+      "must_not_contain_any": ["MongoDB"],
+      "top_k": 1,
+      "cli_args": ["--value-aware"]
+    }
+  ]
+}

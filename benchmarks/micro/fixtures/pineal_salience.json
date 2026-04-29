@@ -1,0 +1,37 @@
+{
+  "name": "pineal-salience",
+  "mechanic": "pineal-salience",
+  "description": "Pineal salience MVP (RESEARCH.md §AI Pineal Gland — Intuition and Awareness Module). When --salience-threshold T is set, memories whose retrieval_count is below T are downweighted: score *= max(0.5, retrieval_count / T). Above the threshold, no change. Salience emerges from USE: high-recall memories earn full ranking weight, low-recall memories get a 50% floor. INVERSE of v1's lexical-overlap creation-time gate (which destroyed LoCoMo 0.28 -> 0.02; see MEMORY.md 'Hippo salience gate destroys benchmark recall'). This v2 is retrieval-side only, default off, opt-in via --salience-threshold. Fixture setup: 5 deployment-related memories with unique markers. Memories 0 and 1 get pre-retrieved 3 times each via the new 'recall' action (retrieval_count -> 3). Memories 2, 3, 4 have stronger lexical match (extra repetitions of query terms) and stay un-retrieved. Without the flag: top-3 contains only the lexically-stronger un-retrieved entries (markers 3/4/5). With --salience-threshold 2: the 0.5x penalty on un-retrieved memories drops their effective score below the boosted retrieved pair, so markers 1 and 2 surface in top-3.",
+  "remembers": [
+    "Python deployment guide alphasalience marker-pineal-1.",
+    "Python deployment guide betasalience marker-pineal-2.",
+    "Python deployment guide notes marker-pineal-3.",
+    "Python deployment guide notes marker-pineal-4.",
+    "Python deployment guide notes marker-pineal-5."
+  ],
+  "actions": [
+    {"type": "recall", "query": "alphasalience", "remember_index": 0, "times": 3},
+    {"type": "recall", "query": "betasalience", "remember_index": 1, "times": 3}
+  ],
+  "queries": [
+    {
+      "q": "Python deployment",
+      "must_contain_any": ["marker-pineal-3", "marker-pineal-4", "marker-pineal-5"],
+      "must_not_contain_any": ["marker-pineal-1", "marker-pineal-2"],
+      "top_k": 3,
+      "cli_args": []
+    },
+    {
+      "q": "Python deployment",
+      "must_contain_any": ["marker-pineal-1"],
+      "top_k": 3,
+      "cli_args": ["--salience-threshold", "3"]
+    },
+    {
+      "q": "Python deployment",
+      "must_contain_any": ["marker-pineal-2"],
+      "top_k": 3,
+      "cli_args": ["--salience-threshold", "3"]
+    }
+  ]
+}

@@ -245,6 +245,664 @@ The key insight from this line of research: human-like memory storage produces h
 
 These papers were ahead of their time. The mechanisms they described (capacity limits, degradation curves, context-dependent recall) are now being rediscovered in the LLM agent memory space, fifteen years later.
 
+## Prefrontal Cortex: Cognitive Control for Memory
+
+Hippo implements seven hippocampal mechanisms. The hippocampus stores and retrieves. It does not decide *which* goal is active, *which* conflict matters, or *which* outcome to weight. That is the prefrontal cortex. Adding PFC-style cognitive control on top of hippo's hippocampal substrate is the next major direction. This section maps six PFC subregions to concrete agent-memory mechanisms, with SQL schema deltas, CLI commands, integration points, and implementation priority.
+
+### 1. PFC subregions and their functions
+
+**Dorsolateral PFC (dlPFC).** Maintains and manipulates hierarchical goal representations during task performance. Miller & Cohen (2001) proposed that PFC operates through sustained activity patterns that encode current goals and the rules to achieve them, providing bias signals to downstream regions. Koechlin et al. (2003) showed dlPFC is organized hierarchically: caudal dlPFC encodes immediate stimulus-response mappings while rostral dlPFC represents abstract task structure. Damage impairs the ability to maintain task context across delays and to suppress prepotent responses in favor of goal-aligned action.
+
+**Ventrolateral PFC (vlPFC).** Implements selective attention and inhibition. Right vlPFC (lateral BA 45/47) executes motor and semantic inhibition; left vlPFC (mid-lateral 45) performs semantic selection and controlled retrieval. These regions activate during Stroop interference, working memory filtering, and episodic retrieval under competition. Damage produces perseveration and increased susceptibility to interference. vlPFC is hierarchically subordinate to dlPFC: it executes the inhibition signals that dlPFC task representations generate.
+
+**Anterior Cingulate Cortex (ACC).** Computes the expected value of deploying cognitive control. Shenhav et al. (2013) formalized this as the Expected Value of Control (EVC): dACC integrates the expected payoff if control is applied, the cognitive effort required, and the probability of success, then allocates control resources proportionally. ACC neurons respond distinctly to conflict (Botvinick et al., 2001), to prediction errors, and to effort cost. The EVC framework unifies these: conflict is a signal that control allocation should be reconsidered.
+
+**Ventromedial PFC (vmPFC).** Encodes subjective value of outcomes and options, integrating emotional and reward-related signals to guide value-based decisions. vmPFC maintains associations between contextual cues and outcome values learned through experience. It works bidirectionally with amygdala (emotional significance) and ventral striatum (reward prediction). Unlike dlPFC's abstract task rules, vmPFC stores implicit emotional evaluations. Damage produces impaired decision-making in real-world situations where emotional consequences matter, while leaving abstract reasoning intact.
+
+**Orbitofrontal Cortex (OFC).** Computes economic value of specific choices, encoding a common currency across dissimilar outcomes (Rangel et al., 2008). OFC neurons show firing rates proportional to the subjective utility of available options, adjusting valuations based on context, satiation state, and learned associations. OFC is particularly engaged during decision-making in volatile environments or when multiple incommensurable goods must be compared.
+
+**Medial PFC (mPFC).** Integrates self-relevant information and autobiographical context. Activated during self-referential processing, mental time travel, and mentalizing about others' beliefs. mPFC maintains a meta-representation of the agent's own knowledge, goals, and competencies. It answers "what do I believe?" and "what goal am I pursuing?" mPFC shows elevated activity during sleep-stage consolidation, suggesting it guides which episodic memories are elevated to semantic schemas.
+
+### 2. Agent-memory analogues
+
+#### dlPFC → Goal stack & retrieval policy
+
+Active maintenance of hierarchical task goals, each tagged with a retrieval policy that shapes which memories are prioritized.
+
+Schema deltas:
+
+```sql
+CREATE TABLE goal_stack (
+  id TEXT PRIMARY KEY,
+  session_id TEXT, timestamp TEXT,
+  goal_name TEXT NOT NULL,
+  level INT,                              -- 0=root, 1=subgoal, 2=microgoal
+  parent_goal_id TEXT,
+  status TEXT,                            -- active|suspended|completed
+  success_condition TEXT,
+  memory_retrieval_context_json TEXT,
+  relevant_tag_filters_json TEXT,
+  created_at TEXT, updated_at TEXT
+);
+
+CREATE TABLE retrieval_policy (
+  id TEXT PRIMARY KEY,
+  goal_id TEXT REFERENCES goal_stack,
+  policy_type TEXT,                       -- schema-fit-biased|error-prioritized|recency-first|hybrid
+  weight_schema_fit REAL,
+  weight_error_tagged REAL,
+  weight_recency REAL,
+  weight_strength REAL,
+  apply_interference_filter BOOLEAN,
+  updated_at TEXT
+);
+```
+
+CLI:
+
+```bash
+hippo goal push "implement auth logging" --level 0 --success-condition "logs cover >80% of paths"
+hippo recall --goal-conditioned "implement auth logging" --top 10
+hippo goal complete "implement auth logging" --outcome-score 0.9
+```
+
+ML parallel: goal-conditioned RL (Chane-Sane et al., 2021) and hierarchical task-set representations in rostral dlPFC (Koechlin et al., 2003). Most existing agent memory systems retrieve on semantic similarity alone; goal conditioning injects task context into the retrieval ranking.
+
+#### vlPFC → Interference filter & semantic gate
+
+Suppress task-irrelevant memories and resolve semantic conflicts at retrieval time.
+
+```sql
+CREATE TABLE interference_suppression (
+  id TEXT PRIMARY KEY,
+  session_id TEXT,
+  memory_id TEXT REFERENCES memories,
+  suppression_reason TEXT,                -- conflict-with-goal|outdated-schema|error-tagged|context-switch
+  suppression_strength REAL,              -- 0-1, fraction to downweight
+  triggered_by_query TEXT,
+  expires_at TEXT,                        -- suppression fades over time
+  created_at TEXT
+);
+```
+
+CLI:
+
+```bash
+hippo recall "deployment strategy" --filter-conflicts --suppress-outdated
+hippo inspect <memory_id> --show-suppressions
+```
+
+ML parallel: Reflexion (Shinn et al., 2023) asks the model which past attempts are relevant to the current goal; vlPFC-style gating automates this by maintaining semantic conflict flags and relevance scores as persistent structure.
+
+#### ACC → Conflict monitor & EVC-adaptive retrieval
+
+Detect conflicts between retrieved memories and adaptively increase retrieval effort when uncertainty is high.
+
+```sql
+CREATE TABLE uncertainty_signal (
+  id TEXT PRIMARY KEY,
+  session_id TEXT, query TEXT,
+  retrieved_memory_ids_json TEXT,
+  semantic_entropy REAL,                  -- diversity of meanings in top-K
+  strength_variance REAL,                 -- spread in memory strengths
+  tag_agreement REAL,                     -- 0-1 agreement on tags
+  evc REAL,                               -- expected value of control
+  recommend_extra_retrieval BOOLEAN,
+  created_at TEXT
+);
+```
+
+EVC calculation: `evc = (expected_payoff × confidence) − cognitive_cost`. Gate extra retrieval depth on `evc > 0.4`.
+
+CLI:
+
+```bash
+hippo recall "deployment strategy" --evc-adaptive --conflict-report
+```
+
+ML parallel: Shenhav et al. (2013) formalized control allocation as expected payoff × probability of success − cognitive cost. Hippo's EVC would be: likelihood that resolving conflict improves outcome × memory-search cost.
+
+#### vmPFC → Outcome value attribution
+
+Continuous value scores per memory (−1 to +1), propagated backward to related memories.
+
+```sql
+CREATE TABLE memory_value_association (
+  id TEXT PRIMARY KEY,
+  memory_id TEXT REFERENCES memories,
+  outcome_label TEXT,                     -- positive|negative|neutral|uncertain
+  value_score REAL,                       -- -1 (very bad) to +1 (very good)
+  confidence REAL,
+  context_json TEXT,                      -- situational factors
+  temporal_decay_factor REAL,             -- 0.5-1.5
+  learned_from_source TEXT,               -- human-feedback|task-outcome|rollback|inference
+  created_at TEXT
+);
+```
+
+Replaces the current scalar `outcome_score`. Integrates with decay: `half_life = base_half_life × (1 + value_score × k)`. Positive-outcome memories persist longer; negative-outcome memories decay faster.
+
+ML parallel: Constitutional AI (Bai et al., 2022) uses model-generated feedback to refine outputs; Self-Refine (Madaan et al., 2023) iteratively improves via self-scoring. vmPFC-style value attribution makes the value signal a first-class persistent structure rather than a per-iteration score.
+
+#### OFC → Option value comparison
+
+Rank candidate memories and subgoals by expected utility across incommensurable axes.
+
+```sql
+CREATE TABLE option_valuation (
+  id TEXT PRIMARY KEY,
+  query_id TEXT,
+  memory_id TEXT REFERENCES memories,
+  option_value REAL,                      -- -1 to +1
+  component_reward REAL,                  -- expected utility if used
+  component_cost REAL,                    -- tokens-to-integrate + error risk
+  net_utility REAL,                       -- reward - cost
+  prediction_confidence REAL,
+  created_at TEXT
+);
+```
+
+ML parallel: Rangel et al. (2008) showed OFC neurons encode a common currency. `option_value` is this common currency across heterogeneous retrieval attributes (factual accuracy, relevance, effort, error risk).
+
+#### mPFC → Self-model & meta-memory
+
+Meta-representation of the agent's own knowledge state. Drives identity-aware consolidation.
+
+```sql
+CREATE TABLE self_model (
+  id TEXT PRIMARY KEY,
+  session_id TEXT,
+  knowledge_domain TEXT,                  -- e.g., "project-X-architecture"
+  known_confident TEXT,                   -- JSON list
+  known_uncertain TEXT,                   -- JSON list
+  unknown TEXT,                           -- known unknowns
+  competence_score REAL,                  -- 0-1
+  updated_at TEXT
+);
+
+CREATE TABLE meta_memory (
+  id TEXT PRIMARY KEY,
+  memory_id TEXT REFERENCES memories,
+  goal_relevance_score REAL,
+  consolidation_worthiness REAL,
+  identity_relevance REAL,
+  temporal_scope TEXT,                    -- immediate|session|long-term
+  created_at TEXT
+);
+```
+
+CLI:
+
+```bash
+hippo introspect                         # show self-model
+hippo goal align --to "expert in Rust"   # tag memories by identity relevance
+hippo consolidate --identity-aware       # prioritize consolidation by self-relevance
+```
+
+ML parallel: Reflexion agents maintain self-critique memory. mPFC systematizes this into a persistent evolving self-model that shapes which consolidations are worth doing.
+
+### 3. Integration with existing hippo mechanisms
+
+| PFC module | Interacts with | Synergy | Tension |
+|------------|----------------|---------|---------|
+| dlPFC (goal stack) | Decay, retrieval strengthening | Goal-retrieved memories with positive outcomes decay slower | Too many active goals → tag thrashing. Cap concurrent stack depth at 3-5 |
+| vlPFC (semantic gate) | Conflict detection, schema fit | Suppression extends existing `conflicts_with` with a soft downweight | Over-aggressive suppression hides valid context-dependent facts. Add `--show-suppressed` override |
+| ACC (EVC) | Physics engine, ambient state | High-EVC queries trigger arousal-weighted particle updates; low-EVC relaxes to stable clustering | Physics is deterministic today; arousal needs stochastic updates. Add `arousal` scalar to physics config |
+| vmPFC (value) | Reward-proportional decay | Replaces binary outcome with continuous value; context-aware value scores | Context-dependent: a memory valuable in project A may be harmful in B. Track value per goal/session |
+| OFC (option value) | Token budget, subgoal selection | Budget allocates tokens proportionally to expected utility | O(n) valuation per retrieval is expensive. Cache per (query, context) tuple |
+| mPFC (self-model) | Sleep consolidation | Identity-relevant episodic memories consolidate faster, tagged with goal/identity context | Risk of self-serving overweighting. Flag high-salience memories for human review before promotion |
+
+### 4. Implementation priority for hippo
+
+MVP ranking by effort × expected benchmark delta:
+
+| Rank | Module | Effort | LongMemEval Δ | LoCoMo Δ (agent learning) | Rationale |
+|------|--------|--------|---------------|---------------------------|-----------|
+| 1 | ACC (EVC-adaptive) | 20-25h | +2-4% | +5-8% | Extends existing conflict detection. Minimal new infra |
+| 2 | vmPFC (value attribution) | 18-22h | +3-5% | +8-12% | Synergizes with reward-proportional decay already in v0.11 |
+| 3 | dlPFC (goal stack) | 30-40h | +1-2% | +12-18% | Foundational for any goal-conditioned agent. Most structural change |
+| 4 | vlPFC (semantic gate) | 25-30h | +2-3% | +5-8% | Depends on dlPFC + conflict detection being in place |
+| 5 | OFC (option valuation) | 35-45h | +1-2% | +8-15% | Most per-memory computation. Cache-heavy |
+| 6 | mPFC (self-model) | 40-50h | +0-1% | +15-25% | Most ambitious. Highest long-term impact, slowest ROI |
+
+**Recommended first ship: ACC + vmPFC together.** Both extend infrastructure already present (conflict detection, outcome tracking). Smallest diff, largest immediate benchmark lift, cleanest story for release notes. Ships as hippo v0.35.0 with `--evc-adaptive` recall and extended outcome tracking.
+
+Goal stack (dlPFC) ships next as v0.36.0. This is where goal-conditioned retrieval unlocks multi-step task performance on LoCoMo.
+
+### 5. Open research questions
+
+1. **Goal-aware decay dynamics.** Should memories retrieved for Goal A but producing a bad outcome decay faster, or persist as "anti-pattern" memories tagged to avoid similar approaches? This tests whether outcome valence and goal relevance should be decoupled or coupled.
+
+2. **Conflict resolution under uncertainty.** When ACC detects high-conflict, high-EVC, how should the agent choose between retrieval-depth expansion (costlier, more comprehensive search) versus decision-deferral (flag for human review)? Current RL frameworks assume agents always decide; biological agents often don't. What loss function guides this trade-off? Does it vary by domain (safety-critical vs exploratory)?
+
+3. **Self-model calibration.** How can hippo prevent the model from becoming overconfident in its `competence_score` in domains where it is genuinely weak? Hippo's dataset could test whether consolidation-weighted self-models converge to ground truth or systematically overestimate competence. Directly testable: compare agent self-assessments against objective task success across many sessions.
+
+4. **Cross-session transfer via semantic gates.** Do vlPFC-style suppression patterns learned for one goal transfer to semantically similar goals? This is classical transfer learning at the memory-system level, not the model-weight level.
+
+5. **Ambient state as a behavioral proxy.** Does high ambient energy during low-EVC queries indicate the agent should *reduce* retrieval effort (contradicting EVC), or does it signal healthy exploration? This is a basic question about what the physics engine's ambient state actually means for agent behavior. Hippo's query+outcome dataset is unique for testing it.
+
+### References
+
+- Miller, E.K., & Cohen, J.D. (2001). An integrative theory of prefrontal cortex function. *Annual Review of Neuroscience*, 24, 167-202.
+- Koechlin, E., Ody, C., & Kouneiher, F. (2003). The architecture of cognitive control in the human prefrontal cortex. *Science*, 302(5648), 1181-1185.
+- Botvinick, M.M., Braver, T.S., Barch, D.M., Carter, C.S., & Cohen, J.D. (2001). Conflict monitoring and cognitive control. *Psychological Review*, 108(3), 624-652.
+- Shenhav, A., Botvinick, M.M., & Cohen, J.D. (2013). The expected value of control: An integrative theory of anterior cingulate cortex function. *Neuron*, 79(2), 217-240.
+- Rangel, A., Camerer, C., & Montague, P.R. (2008). A framework for studying the neurobiology of value-based decision making. *Nature Reviews Neuroscience*, 9, 545-556.
+- Bai, Y., Jones, A., Ndousse, K., et al. (2022). Constitutional AI: Harmlessness from AI feedback. *arXiv:2212.08073*.
+- Shinn, N., Cassano, F., Labash, B., Gopinath, A., Narasimhan, K., & Yao, S. (2023). Reflexion: Language agents with verbal reinforcement learning. *NeurIPS 2023*.
+- Madaan, A., Tandon, N., Gupta, P., et al. (2023). Self-Refine: Iterative refinement with self-feedback for LLMs. *arXiv:2303.17651*.
+- Chane-Sane, A., Leonardi, C., & Kottakis, A. (2021). Goal-conditioned reinforcement learning with imagined subgoals. *ICML 2021*.
+
+## Hippo as a Company Brain
+
+Yes, Hippo-Memory is a strong foundation for a true Company Brain. The reason is not just that it can store context. The reason is that it already models knowledge as a living system: decay, retrieval strengthening, sleep-based consolidation, error stickiness, reward-proportional half-lives, bi-temporal correction, extracted facts, and DAG summarisation. That is much closer to how real institutional memory works than a static vector database or a giant prompt log.
+
+This also matches the core YC Company Brain idea well: a dynamic, executable map of company know-how that stays current instead of expanding into stale noise. Hippo's current architecture already gives agents a plausible institutional memory substrate: session buffer to episodic to semantic compression, intelligent forgetting, SQLite as source of truth, human-readable Markdown mirrors, framework hooks, MCP exposure, active snapshots, handoffs, and scoped recall.
+
+### Current strengths for a Company Brain
+
+- **Adaptive knowledge hygiene.** Most memory systems only accumulate. Hippo forgets on purpose. Unused processes fade, successful lessons strengthen, and errors stay sticky enough to matter.
+- **Two-speed memory.** Buffer, episodic, and semantic layers already mirror the company pattern of turning raw chat and ticket history into stable playbooks.
+- **Correction without deletion.** `hippo supersede` and `--as-of` are unusually important for enterprise use because companies need both current truth and historical truth.
+- **Fact extraction and DAG summaries.** Sleep-time extraction plus hierarchical summaries are already the beginning of a usable company knowledge substrate, not just a personal notebook.
+- **Short-term continuity primitives.** Active task snapshots, session trails, handoffs, and working memory are exactly what agents need to resume work without replaying whole transcripts.
+- **Portable integration surface.** SQLite plus Markdown mirrors, hooks, MCP, and a small CLI are the right starting point for adoption. They are inspectable, debuggable, and easy to graft onto existing workflows.
+
+### Gaps to close
+
+Hippo is still primarily agent-centric and local-first. A full Company Brain needs extra layers that the current product only hints at:
+
+- **Enterprise ingestion.** Slack, Jira or Linear, Notion or Docs, PRs, incident tools, email, meeting transcripts, and databases need durable ingestion paths.
+- **Shared security model.** Multi-user tenancy, RBAC, audit logs, scoped access, and approval boundaries are required before this becomes real company infrastructure.
+- **Relationship-first reasoning.** Extracted facts and DAG summaries help, but deeper multi-hop reasoning across decisions, policies, owners, customers, systems, and exceptions needs a graph-shaped layer.
+- **First-class operating objects.** Processes, decisions, skills, incidents, run capsules, and policy exceptions should become first-class memory products rather than only free-text memories.
+- **Confidence and provenance.** Enterprise memory must answer: who said this, when, under what scope, from which system, and how strongly do we trust it?
+- **Scalable serving path.** SQLite is excellent for local and small-team use, but shared enterprise workloads eventually need an optional service/backend layer.
+
+### No-code integration design
+
+#### Phase 1: safest bridge
+
+Goal: make Hippo the memory spine without trying to replace the systems a company already uses.
+
+- Keep Slack, Jira, Notion, GitHub, docs, and internal databases as the systems of record.
+- Feed Hippo with **append-only exports, webhooks, and cron slices**, not direct source-of-truth rewrites.
+- Standardise a canonical memory envelope for imported items: `scope`, `source`, `timestamp`, `owner`, `confidence`, `artifact_ref`, `session_id`, and whether the record is raw, distilled, or superseded.
+- Use current Hippo primitives as the bridge layer: `hippo snapshot save`, session trails, handoffs, `hippo decide`, `hippo supersede`, extracted facts, DAG summaries, and scoped recall.
+- Distil externally. For example, turn a week of Slack incidents into a short run capsule or decision note before promotion. Do not mirror every raw message into the semantic layer.
+- Keep enterprise write-backs human-approved at first. The safest bridge is read-mostly ingestion plus structured exports back out.
+
+**Why this phase is right first:** it preserves existing tools, minimises migration risk, and lets Hippo prove value as the continuity layer before it becomes a platform.
+
+#### Phase 2: higher-leverage Hippo-native workflow
+
+Goal: move from "Hippo stores context" to "Hippo runs the company memory operating model."
+
+- Promote **processes, decisions, skills, incidents, and handoffs** into first-class objects with their own recall rules and lifecycle.
+- Make `hippo context --auto` assemble a layered operating view: active snapshot, recent event trail, scoped current decisions, high-confidence facts, DAG drill-down, then optional multi-hop expansion.
+- Treat extracted facts plus DAG summaries as the first version of the **executable skills file**. Later, export them via `hippo export skills` or a service endpoint for agents.
+- Add trigger-based recall around file path, service, repo, ticket type, customer, workflow stage, and on-call context. Cheap trigger routing should happen before expensive global recall.
+- Introduce an optional graph layer only over **consolidated facts, decisions, processes, and entities**, not over every raw transcript. That keeps graph quality high and cost sane.
+- Add company scopes, team scopes, and policy scopes early so multi-agent recall stays useful without leaking unrelated context.
+
+**Why this phase matters:** this is where Hippo becomes defensible. The edge is not "we connected Slack." The edge is that the system continuously turns raw activity into current, executable operational knowledge.
+
+#### Phase 3: what is not worth integrating at all
+
+Some integrations sound exciting and are mostly traps.
+
+- **Do not duplicate whole source systems inside Hippo.** Hippo should remember and distil, not become a second Jira or second Slack.
+- **Do not ingest every raw transcript forever.** Long-term value comes from slices, summaries, facts, decisions, and conflicts, not endless full-text hoarding.
+- **Do not build a giant always-on knowledge graph over uncurated raw text.** Graphs are most useful after consolidation, not before.
+- **Do not force the zero-dependency local core to become the heavy enterprise backend.** Keep the core small and reliable; add optional service layers beside it.
+- **Do not make browser automations the primary ingestion path** when APIs, exports, or event streams exist.
+- **Do not auto-promote workflows or skills without provenance, evidence, and invalidation paths.** Enterprise memory that cannot be corrected becomes dangerous quickly.
+- **Do not optimise for perfect recall of everything.** The product thesis is better forgetting, faster correction, and more useful continuity.
+
+### Additional recommendations from prior work
+
+These are the extra pieces worth adding because they keep coming up in real agent work and earlier Hippo sessions:
+
+1. **Active-task continuity is as important as long-term memory.** Most agent failures come from losing the current thread, not missing a distant fact. Snapshots, session trails, handoffs, and working memory should stay central to the enterprise story.
+2. **Append-only event logs plus slice recall beat transcript replay.** Fresh sessions should load the needed window, not the whole past. This is cheaper, faster, and much more auditable.
+3. **Bi-temporal memory is a major enterprise feature.** `supersede` and `--as-of` should be treated as core product pillars because policy drift, operational changes, and postmortems all depend on historical truth.
+4. **Keep canonical state separate from derived skills.** Repo briefs, process maps, run capsules, and exported skills should be distilled artifacts that point back to canonical sources, not copies of raw state.
+5. **Evaluation discipline should be part of the architecture.** Canonical harnesses, file-backed evidence, fail-closed judges, and explicit verification receipts are necessary if the Company Brain is going to update itself safely.
+6. **Use scopes, provenance, and RBAC early.** Most enterprise memory disasters are leakage and authority problems, not embedding problems.
+7. **Keep the hot path boring.** Expensive LLM extraction, graph building, and skill synthesis should mostly happen during sleep or background jobs. Recall-time should stay cheap unless the query genuinely needs deeper traversal.
+8. **Prefer contracts over duplication.** Hippo should interface with other systems through snapshots, artifacts, and explicit contracts rather than cloning whole foreign state models.
+
+### Strategic take
+
+The strongest version of Hippo is not a generic enterprise search product. It is a memory operating system for agents and teams: short-term continuity plus long-term consolidation, with correction, provenance, and executable outputs. Hybrid vector + graph + symbolic memory is the right direction, but only if the graph sits on top of good memory hygiene instead of replacing it.
+
+That is the bet worth making.
+
+## Product spec: Hippo as the Company Brain
+
+### One-line product definition
+
+Hippo is a memory operating system for agents and teams. It turns raw company activity into scoped, queryable, correctable working knowledge that survives across sessions, people, and tools.
+
+### Product thesis
+
+The problem is not that companies lack documents. The problem is that the useful state of the company is fragmented, stale, and constantly re-explained. Agents and humans keep redoing orientation work because there is no durable layer that remembers what happened, what is true now, what changed, and what is currently in flight.
+
+Hippo solves that by separating memory into three layers:
+
+1. **Raw receipts**: append-only operational exhaust with provenance
+2. **Current truths**: distilled facts, decisions, processes, and policies that can be superseded cleanly
+3. **Active work state**: snapshots, handoffs, blockers, owners, and next actions
+
+The moat is not "stores everything". The moat is **continuity + correction + distillation**.
+
+### Primary users
+
+#### 1. AI-heavy builders and founders
+
+People running multiple projects with agents, where the pain is repeated re-explanation, forgotten decisions, and weak continuity between sessions.
+
+#### 2. Small engineering and operations teams
+
+Teams using Slack, GitHub, Linear/Jira, docs, and meeting notes, where institutional memory currently lives in scattered tools and individual heads.
+
+#### 3. Agent-first internal platforms
+
+Teams building assistants, coding agents, support agents, or automation workers that need durable memory with provenance and safe correction.
+
+### Jobs to be done
+
+- **Before work**: load the minimum useful context for the task without replaying full transcripts
+- **During work**: capture important decisions, blockers, errors, and outcomes as they happen
+- **After work**: consolidate activity into durable notes, facts, process updates, and handoffs
+- **When things change**: supersede stale knowledge without deleting historical truth
+- **Across people and agents**: make operational knowledge portable instead of trapped in one chat or one employee's memory
+
+### Core product principles
+
+1. **Append-only raw layer.** Source events are never rewritten.
+2. **Correction over deletion.** Current truth changes through supersession, not silent overwrite.
+3. **Continuity first.** Active-task state matters as much as long-term recall.
+4. **Scoped by default.** Every memory has scope, source, owner, timestamp, and confidence.
+5. **Cheap hot path.** Recall should stay fast; heavy extraction and synthesis belong in background sleep cycles.
+6. **Inspectability wins.** Users must be able to trace every output back to evidence.
+7. **Forgetting is a feature.** Not every raw event deserves long-term promotion.
+
+### Non-goals
+
+- Replacing Slack, Jira, GitHub, Notion, or email as systems of record
+- Becoming a generic enterprise search box over every transcript ever written
+- Building an always-on giant knowledge graph over uncurated raw text
+- Autonomously rewriting company truth without provenance or approval paths
+- Forcing the local zero-dependency core to become the default heavyweight enterprise backend
+
+### Memory model
+
+#### Layer 1: raw receipts
+
+Examples:
+- commit shipped
+- incident opened
+- customer call summary
+- meeting transcript slice
+- ticket updated
+- agent run capsule
+
+Required fields:
+- `source`
+- `scope`
+- `timestamp`
+- `owner`
+- `artifact_ref`
+- `session_id` or `run_id`
+- `confidence`
+- `kind` (`raw`, `distilled`, `superseded`)
+
+#### Layer 2: distilled operating knowledge
+
+First-class objects:
+- **fact**
+- **decision**
+- **process**
+- **policy**
+- **incident**
+- **handoff**
+- **skill**
+- **project brief**
+- **customer note**
+
+Each object should support:
+- provenance links back to receipts
+- confidence level
+- scope boundaries
+- invalidation/supersession
+- `as-of` historical lookup
+- optional structured fields per object type
+
+#### Layer 3: active work memory
+
+Objects:
+- **snapshot**
+- **current goal**
+- **blocked reason**
+- **next action**
+- **open thread**
+- **working set**
+
+This layer is the short-term continuity substrate for agents. It should be cheap to update, cheap to read, and easy to expire or roll forward.
+
+### Core workflows
+
+#### 1. Capture
+
+Hippo ingests raw operational receipts from:
+- CLI/manual capture
+- webhooks
+- cron slices
+- MCP/tool hooks
+- exported artifacts from source systems
+
+Default rule: ingest first as raw, not semantic.
+
+#### 2. Distil
+
+Background or human-in-the-loop flows convert receipts into:
+- decisions
+- incident capsules
+- process deltas
+- facts
+- handoffs
+- project briefs
+
+Promotion into long-term knowledge should require evidence and scope.
+
+#### 3. Recall
+
+`hippo context --auto` or API recall should assemble layered context in this order:
+1. active snapshot
+2. recent event trail
+3. current scoped decisions
+4. high-confidence facts
+5. process or policy notes
+6. optional deeper graph expansion only if needed
+
+This is the default retrieval shape because most tasks fail from missing recent state, not missing a distant fact.
+
+#### 4. Correct
+
+When knowledge changes:
+- supersede the old decision/fact/process
+- keep the old version queryable with `--as-of`
+- preserve provenance for both versions
+- record why the correction happened
+
+#### 5. Sleep
+
+Offline consolidation jobs should:
+- cluster related receipts
+- merge repetitive episodes
+- extract stable facts
+- surface conflicts
+- synthesise process updates
+- decay or archive low-value noise
+
+### User-facing surfaces
+
+#### Local/core
+
+- `hippo remember`
+- `hippo recall`
+- `hippo snapshot save/load`
+- `hippo decide`
+- `hippo supersede`
+- `hippo handoff`
+- `hippo sleep`
+- `hippo inspect`
+
+#### Agent/runtime surface
+
+- MCP tools for capture, recall, inspect, and handoff
+- context assembly endpoint for agents
+- trigger-based recall by repo, service, ticket type, customer, or workflow stage
+
+#### Team/service surface
+
+- optional shared service backend
+- scoped multi-user API
+- audit log and access control layer
+- exports into docs, runbooks, and skills
+
+### Ingestion strategy
+
+#### Phase 1: read-mostly bridge
+
+Connect existing tools through append-only ingestion:
+- Slack
+- GitHub
+- Jira/Linear
+- Notion/Docs
+- meetings/transcripts
+- email summaries
+- internal databases via export jobs
+
+The key constraint: source systems remain canonical. Hippo stores memory products, not shadow copies of whole apps.
+
+#### Phase 2: operating objects
+
+Add first-class handling for:
+- decisions
+- incidents
+- processes
+- project briefs
+- handoffs
+- policies
+- customer accounts
+
+This is where Hippo stops being just a memory store and becomes a company operating layer.
+
+#### Phase 3: graph on consolidated state
+
+Only build richer graph reasoning on top of consolidated entities and relationships, not raw transcript soup.
+
+### Retrieval and ranking
+
+Ranking should combine:
+- scope match
+- recency
+- strength/decay score
+- reward/outcome signal
+- explicit salience
+- provenance quality
+- object type relevance to the current task
+
+Important design choice: retrieval ranking is not only semantic similarity. It is operational relevance.
+
+### Security and trust model
+
+Enterprise use needs:
+- tenancy
+- RBAC
+- team/project/policy scopes
+- approval boundaries for write-backs
+- audit trails for memory creation, promotion, supersession, and recall
+- source provenance on every memory object
+- confidence labelling on all derived outputs
+
+Hippo should default to read-mostly integration until organisations explicitly enable write-back actions.
+
+### MVP definition
+
+A real V1 Company Brain should be able to do five things well:
+
+1. ingest raw receipts from a small set of tools
+2. maintain active-task continuity for agents
+3. promote decisions/facts/handoffs into durable memory with provenance
+4. correct current truth safely via supersession
+5. assemble high-signal task context faster than transcript replay
+
+If Hippo cannot do those five reliably, it is not yet a Company Brain.
+
+### Example user stories
+
+- **As a coding agent**, I want the last active snapshot, open blockers, and relevant decisions for a repo so I can resume work without re-reading the whole chat.
+- **As an engineering lead**, I want incidents, postmortem decisions, and current runbook deltas linked together so the next responder does not repeat the same mistake.
+- **As a founder**, I want meeting notes, customer objections, shipped changes, and strategic decisions turned into queryable truth with dates and provenance.
+- **As an ops teammate**, I want policy changes to supersede old versions without losing historical auditability.
+
+### Success metrics
+
+#### Product metrics
+
+- reduction in repeated orientation tokens per task
+- reduction in repeated human explanations across sessions
+- time-to-useful-context for a resumed agent or teammate
+- percentage of recalls with inspectable provenance
+- correction latency from changed fact to superseded truth
+- active-task resume success rate
+
+#### Quality metrics
+
+- precision of recalled context
+- stale-memory rate
+- unresolved conflict count
+- ratio of promoted durable memories to raw receipts
+- usefulness of sleep-generated summaries and process updates
+
+### Measurement-first execution
+
+The repo is already strong enough to stop guessing and start grading Company Brain work:
+
+- retrieval quality already has `hippo eval <corpus>` and `hippo eval --suite`
+- sequential learning already has `tests/agent-eval.test.ts`
+- continuity already has snapshots, session events, handoffs, and token estimation
+- current truth already has `supersede` and `--as-of`
+
+The missing piece is one scorecard that turns those primitives into a go/no-go rule for new features. The execution rule is now:
+
+1. name one primary outcome before implementation
+2. compare against a baseline or feature-off condition
+3. keep retrieval and learning guardrails flat or better
+4. cut features that do not move the score
+
+The detailed plan lives in `docs/plans/2026-04-28-company-brain-measurement.md`.
+
+The first feature to build after the scorecard is not enterprise ingestion or graph work. It is continuity-first context assembly: active snapshot, recent trail, and the matching handoff in the default resume path, because that is the strongest Company Brain claim the current repo can measure now.
+
+### Why this is defensible
+
+Most competitors will build one of two things:
+- a better filing cabinet with embeddings
+- a broad company search layer over everything
+
+Hippo's stronger position is narrower and deeper:
+- agent-first continuity
+- explicit memory lifecycle
+- correction as a core primitive
+- provenance-rich operating objects
+- background distillation into executable knowledge
+
+That makes Hippo less like "search for company data" and more like "the memory substrate that keeps agents and teams aligned over time."
+
 ## References
 
 - McClelland, J.L., McNaughton, B.L., & O'Reilly, R.C. (1995). Why there are complementary learning systems in the hippocampus and neocortex. *Psychological Review*.

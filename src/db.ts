@@ -21,7 +21,7 @@ const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: new (path: string) => DatabaseSyncLike;
 };
 
-const CURRENT_SCHEMA_VERSION = 13;
+const CURRENT_SCHEMA_VERSION = 15;
 
 type Migration = {
   version: number;
@@ -256,6 +256,111 @@ const MIGRATIONS: Migration[] = [
       db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_dag_parent ON memories(dag_parent_id) WHERE dag_parent_id IS NOT NULL`);
     },
   },
+  {
+    version: 14,
+    up: (db) => {
+      // A3 provenance envelope: kind, scope, owner, artifact_ref.
+      // SQLite ALTER TABLE ADD COLUMN cannot add CHECK; CHECK enforcement lives
+      // in INSERT/UPDATE triggers added later in this migration.
+      if (!tableHasColumn(db, 'memories', 'kind')) {
+        db.exec(`ALTER TABLE memories ADD COLUMN kind TEXT DEFAULT 'distilled'`);
+      }
+      if (!tableHasColumn(db, 'memories', 'scope')) {
+        db.exec(`ALTER TABLE memories ADD COLUMN scope TEXT`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope) WHERE scope IS NOT NULL`);
+      }
+      if (!tableHasColumn(db, 'memories', 'owner')) {
+        db.exec(`ALTER TABLE memories ADD COLUMN owner TEXT`);
+      }
+      if (!tableHasColumn(db, 'memories', 'artifact_ref')) {
+        db.exec(`ALTER TABLE memories ADD COLUMN artifact_ref TEXT`);
+      }
+      // Backfill kind for any rows where it's NULL (pre-migration data).
+      db.exec(`UPDATE memories SET kind = 'superseded' WHERE kind IS NULL AND superseded_by IS NOT NULL`);
+      db.exec(`UPDATE memories SET kind = 'distilled' WHERE kind IS NULL`);
+      // raw_archive: legitimate path for kind='raw' removal (used by archiveRawMemory).
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS raw_archive (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          memory_id TEXT NOT NULL,
+          archived_at TEXT NOT NULL,
+          reason TEXT NOT NULL,
+          archived_by TEXT,
+          payload_json TEXT NOT NULL
+        )
+      `);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_raw_archive_memory_id ON raw_archive(memory_id)`);
+      // Append-only invariant: kind='raw' rows cannot be deleted directly.
+      // Use raw_archive flow: archive-then-update-then-delete (see src/raw-archive.ts).
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS trg_memories_raw_append_only
+        BEFORE DELETE ON memories
+        WHEN OLD.kind = 'raw'
+        BEGIN
+          SELECT RAISE(ABORT, 'raw is append-only');
+        END
+      `);
+      // CHECK substitute: ALTER TABLE cannot add CHECK, so enforce kind allowed-set
+      // via INSERT/UPDATE triggers.
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS trg_memories_kind_check_insert
+        BEFORE INSERT ON memories
+        WHEN NEW.kind IS NOT NULL AND NEW.kind NOT IN ('raw','distilled','superseded','archived')
+        BEGIN
+          SELECT RAISE(ABORT, 'invalid kind: must be raw|distilled|superseded|archived');
+        END
+      `);
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS trg_memories_kind_check_update
+        BEFORE UPDATE ON memories
+        WHEN NEW.kind IS NOT NULL AND NEW.kind NOT IN ('raw','distilled','superseded','archived')
+        BEGIN
+          SELECT RAISE(ABORT, 'invalid kind: must be raw|distilled|superseded|archived');
+        END
+      `);
+    },
+  },
+  {
+    version: 15,
+    up: (db) => {
+      // A3 hardening (post-review): close the NULL-kind bypass and add raw_archive
+      // dedup safety. Both findings landed in /review on commits 41b1f4d..6456e7d.
+      //
+      // (1) Original v14 triggers used `WHEN NEW.kind IS NOT NULL AND NEW.kind NOT IN (...)`.
+      //     A direct INSERT/UPDATE setting kind=NULL bypassed the CHECK substitute. Replace
+      //     with `WHEN NEW.kind IS NULL OR NEW.kind NOT IN (...)` so NULL is rejected too.
+      // (2) Add UNIQUE(memory_id, archived_at) to raw_archive so re-archiving the same id
+      //     in the same instant cannot produce ambiguous audit rows. Per-id history is still
+      //     allowed (different timestamps).
+      db.exec(`DROP TRIGGER IF EXISTS trg_memories_kind_check_insert`);
+      db.exec(`DROP TRIGGER IF EXISTS trg_memories_kind_check_update`);
+      db.exec(`
+        CREATE TRIGGER trg_memories_kind_check_insert
+        BEFORE INSERT ON memories
+        WHEN NEW.kind IS NULL OR NEW.kind NOT IN ('raw','distilled','superseded','archived')
+        BEGIN
+          SELECT RAISE(ABORT, 'invalid kind: must be raw|distilled|superseded|archived (not null)');
+        END
+      `);
+      db.exec(`
+        CREATE TRIGGER trg_memories_kind_check_update
+        BEFORE UPDATE ON memories
+        WHEN NEW.kind IS NULL OR NEW.kind NOT IN ('raw','distilled','superseded','archived')
+        BEGIN
+          SELECT RAISE(ABORT, 'invalid kind: must be raw|distilled|superseded|archived (not null)');
+        END
+      `);
+      // Defensive: any rows that somehow have NULL kind get fixed (shouldn't exist post-v14
+      // backfill, but cheap insurance).
+      db.exec(`UPDATE memories SET kind = 'distilled' WHERE kind IS NULL`);
+      // raw_archive uniqueness. SQLite cannot ADD CONSTRAINT, but a partial unique index
+      // on (memory_id, archived_at) is equivalent for INSERT-time enforcement.
+      db.exec(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_raw_archive_id_at
+        ON raw_archive(memory_id, archived_at)
+      `);
+    },
+  },
 ];
 
 function tableHasColumn(db: DatabaseSyncLike, tableName: string, columnName: string): boolean {
@@ -366,6 +471,10 @@ function ensureOptionalFts(db: DatabaseSyncLike): void {
 }
 
 function backfillFtsIndex(db: DatabaseSyncLike): void {
+  const memCount = (db.prepare(`SELECT COUNT(*) AS c FROM memories`).get() as { c?: number } | undefined)?.c ?? 0;
+  const ftsCount = (db.prepare(`SELECT COUNT(*) AS c FROM memories_fts`).get() as { c?: number } | undefined)?.c ?? 0;
+  if (memCount === ftsCount) return;
+
   db.exec(`
     INSERT INTO memories_fts(id, content, tags)
     SELECT m.id, m.content, m.tags_json

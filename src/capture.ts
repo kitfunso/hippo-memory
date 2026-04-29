@@ -560,6 +560,10 @@ function cmdCaptureCore(
     if (options.dryRun) {
       console.log(`  [capture] (${item.category}) ${item.content}`);
     } else {
+      // A3: kind defaults to 'distilled'. capture.ts extracts curated items from
+      // session output (not raw transcript chunks), so distilled is correct. If a
+      // future variant captures full raw session text, it MUST set kind: 'raw'
+      // and route deletions through archiveRawMemory(). See MEMORY_ENVELOPE.md.
       const entry = createMemory(item.content, {
         layer: Layer.Episodic,
         tags: item.tags,

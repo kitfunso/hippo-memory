@@ -7,7 +7,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { MemoryEntry, Layer, ConfidenceLevel } from './memory.js';
+import { MemoryEntry, Layer, ConfidenceLevel, MemoryKind } from './memory.js';
 import { dumpFrontmatter, parseFrontmatter } from './yaml.js';
 import {
   openHippoDb,
@@ -66,6 +66,10 @@ interface MemoryRow {
   extracted_from: string | null;
   dag_level: number;
   dag_parent_id: string | null;
+  kind: string | null;
+  scope: string | null;
+  owner: string | null;
+  artifact_ref: string | null;
 }
 
 interface ConsolidationRunRow {
@@ -144,7 +148,7 @@ export interface SessionEvent {
 }
 
 const INDEX_VERSION = 3;
-const MEMORY_SELECT_COLUMNS = `id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content, parents_json, starred, trace_outcome, source_session_id, valid_from, superseded_by, extracted_from, dag_level, dag_parent_id`;
+const MEMORY_SELECT_COLUMNS = `id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content, parents_json, starred, trace_outcome, source_session_id, valid_from, superseded_by, extracted_from, dag_level, dag_parent_id, kind, scope, owner, artifact_ref`;
 const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
 
 function layerDir(root: string, layer: Layer): string {
@@ -219,6 +223,10 @@ export function serializeEntry(entry: MemoryEntry): string {
     starred: entry.starred ?? false,
     trace_outcome: entry.trace_outcome ?? null,
     source_session_id: entry.source_session_id ?? null,
+    kind: entry.kind ?? 'distilled',
+    scope: entry.scope ?? null,
+    owner: entry.owner ?? null,
+    artifact_ref: entry.artifact_ref ?? null,
   });
   return `${fm}\n\n${entry.content}\n`;
 }
@@ -263,6 +271,10 @@ export function deserializeEntry(raw: string): MemoryEntry | null {
     extracted_from: (data['extracted_from'] as string) ?? null,
     dag_level: Number(data['dag_level'] ?? 0),
     dag_parent_id: (data['dag_parent_id'] as string) ?? null,
+    kind: ((data['kind'] as MemoryKind) ?? 'distilled'),
+    scope: data['scope'] === null || data['scope'] === undefined ? null : String(data['scope']),
+    owner: data['owner'] === null || data['owner'] === undefined ? null : String(data['owner']),
+    artifact_ref: data['artifact_ref'] === null || data['artifact_ref'] === undefined ? null : String(data['artifact_ref']),
   };
 }
 
@@ -300,6 +312,10 @@ function rowToEntry(row: MemoryRow): MemoryEntry {
     extracted_from: row.extracted_from ?? null,
     dag_level: Number(row.dag_level ?? 0),
     dag_parent_id: row.dag_parent_id ?? null,
+    kind: ((row.kind ?? 'distilled') as MemoryKind),
+    scope: row.scope ?? null,
+    owner: row.owner ?? null,
+    artifact_ref: row.artifact_ref ?? null,
   };
 }
 
@@ -661,8 +677,9 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
       valid_from, superseded_by,
       extracted_from,
       dag_level, dag_parent_id,
+      kind, scope, owner, artifact_ref,
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     ON CONFLICT(id) DO UPDATE SET
       created = excluded.created,
       last_retrieved = excluded.last_retrieved,
@@ -690,6 +707,10 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
       extracted_from = excluded.extracted_from,
       dag_level = excluded.dag_level,
       dag_parent_id = excluded.dag_parent_id,
+      kind = excluded.kind,
+      scope = excluded.scope,
+      owner = excluded.owner,
+      artifact_ref = excluded.artifact_ref,
       updated_at = datetime('now')
   `).run(
     entry.id,
@@ -719,6 +740,10 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
     entry.extracted_from ?? null,
     entry.dag_level ?? 0,
     entry.dag_parent_id ?? null,
+    entry.kind ?? 'distilled',
+    entry.scope ?? null,
+    entry.owner ?? null,
+    entry.artifact_ref ?? null,
   );
 
   syncFtsRow(db, entry);

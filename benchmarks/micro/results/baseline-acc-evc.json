@@ -1,0 +1,175 @@
+{
+  "overall_pass_rate": 1.0,
+  "total_duration_s": 10.91,
+  "fixtures": [
+    {
+      "name": "acc-evc",
+      "mechanic": "acc-evc",
+      "queries": [
+        {
+          "query": "Bob's coffee order",
+          "expected_any": [
+            "oat milk latte",
+            "switched"
+          ],
+          "matched": "oat milk latte",
+          "passed": true,
+          "top_k_text": [
+            "Bob switched his coffee order to an oat milk latte this week (most recent update)",
+            "Bob's coffee order is a macchiato",
+            "Bob's coffee order is an espresso"
+          ]
+        }
+      ],
+      "duration_s": 2.69,
+      "pass_rate": 1.0
+    },
+    {
+      "name": "distractors",
+      "mechanic": "recall",
+      "queries": [
+        {
+          "query": "what coffee does Bob drink",
+          "expected_any": [
+            "oat milk",
+            "latte"
+          ],
+          "matched": "oat milk",
+          "passed": true,
+          "top_k_text": [
+            "Bob's coffee order is oat milk latte",
+            "Bob's tea order is camomile",
+            "Bob's dinner reservation is at 7pm"
+          ]
+        },
+        {
+          "query": "what is Bob allergic to",
+          "expected_any": [
+            "peanuts",
+            "allergic"
+          ],
+          "matched": "peanuts",
+          "passed": true,
+          "top_k_text": [
+            "Bob is allergic to peanuts",
+            "Bob's address is 221B Baker Street",
+            "Bob's tea order is camomile"
+          ]
+        },
+        {
+          "query": "where does Bob live",
+          "expected_any": [
+            "221B",
+            "Baker Street"
+          ],
+          "matched": "221B",
+          "passed": true,
+          "top_k_text": [
+            "Bob's address is 221B Baker Street",
+            "Bob is allergic to peanuts",
+            "Bob's flight to Tokyo is on the 14th"
+          ]
+        }
+      ],
+      "duration_s": 3.6,
+      "pass_rate": 1.0
+    },
+    {
+      "name": "multi-hop",
+      "mechanic": "recall",
+      "queries": [
+        {
+          "query": "where is Carla based",
+          "expected_any": [
+            "Munich",
+            "Acme"
+          ],
+          "matched": "Munich",
+          "passed": true,
+          "top_k_text": [
+            "Carla works at Acme Robotics",
+            "Acme Robotics is headquartered in Munich"
+          ]
+        },
+        {
+          "query": "what database does the auth service use",
+          "expected_any": [
+            "PostgreSQL"
+          ],
+          "matched": "PostgreSQL",
+          "passed": true,
+          "top_k_text": [
+            "The auth service uses PostgreSQL",
+            "The platform team owns the auth service",
+            "Daniel manages the platform team"
+          ]
+        },
+        {
+          "query": "who manages the team that owns auth",
+          "expected_any": [
+            "Daniel",
+            "platform"
+          ],
+          "matched": "Daniel",
+          "passed": true,
+          "top_k_text": [
+            "The platform team owns the auth service",
+            "The auth service uses PostgreSQL",
+            "Daniel manages the platform team"
+          ]
+        }
+      ],
+      "duration_s": 2.48,
+      "pass_rate": 1.0
+    },
+    {
+      "name": "recall-basic",
+      "mechanic": "recall",
+      "queries": [
+        {
+          "query": "what does Bob drink",
+          "expected_any": [
+            "oat milk",
+            "latte"
+          ],
+          "matched": "oat milk",
+          "passed": true,
+          "top_k_text": [
+            "Bob's coffee order is oat milk latte"
+          ]
+        },
+        {
+          "query": "when is standup",
+          "expected_any": [
+            "10am",
+            "Tuesday",
+            "standup"
+          ],
+          "matched": "10am",
+          "passed": true,
+          "top_k_text": [
+            "The team standup is at 10am every Tuesday",
+            "Bob's coffee order is oat milk latte",
+            "Production database is hosted on us-east-1"
+          ]
+        },
+        {
+          "query": "where is the prod db",
+          "expected_any": [
+            "us-east-1",
+            "production database"
+          ],
+          "matched": "us-east-1",
+          "passed": true,
+          "top_k_text": [
+            "Production database is hosted on us-east-1",
+            "The team standup is at 10am every Tuesday",
+            "Bob's coffee order is oat milk latte"
+          ]
+        }
+      ],
+      "duration_s": 2.14,
+      "pass_rate": 1.0
+    }
+  ]
+}

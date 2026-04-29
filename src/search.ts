@@ -966,6 +966,15 @@ export interface MatchExplanation {
   hasEmbedding: boolean;
   /** Raw cosine similarity (0 when embeddings not used) */
   cosineSimilarity: number;
+  /** A3 provenance envelope (kind, scope, owner, artifact_ref, session_id, confidence) */
+  envelope?: {
+    kind: string;
+    scope: string | null;
+    owner: string | null;
+    artifact_ref: string | null;
+    session_id: string | null;
+    confidence: string;
+  };
 }
 
 /**
@@ -1004,6 +1013,14 @@ export function explainMatch(query: string, result: SearchResult): MatchExplanat
     hasBm25,
     hasEmbedding,
     cosineSimilarity: result.cosine,
+    envelope: {
+      kind: result.entry.kind ?? 'distilled',
+      scope: result.entry.scope ?? null,
+      owner: result.entry.owner ?? null,
+      artifact_ref: result.entry.artifact_ref ?? null,
+      session_id: result.entry.source_session_id ?? null,
+      confidence: result.entry.confidence ?? 'observed',
+    },
   };
 }
 

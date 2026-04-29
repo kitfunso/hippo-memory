@@ -11,4 +11,10 @@ benchmarks/longmemeval/data/
 benchmarks/longmemeval/results/
 benchmarks/longmemeval/hippo_store*/
 benchmarks/longmemeval/__pycache__/
+benchmarks/locomo/data/
+benchmarks/locomo/results/
+benchmarks/locomo/__pycache__/
 benchmarks/sequential-learning/results/
+ui/tsconfig.tsbuildinfo
+benchmarks/micro/results/latest.json
+.claude/worktrees/

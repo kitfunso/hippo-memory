@@ -1,0 +1,17 @@
+{
+  "name": "multi-hop",
+  "mechanic": "recall",
+  "description": "Answer requires combining two memories. Both must surface in top-k.",
+  "remembers": [
+    "Carla works at Acme Robotics",
+    "Acme Robotics is headquartered in Munich",
+    "Daniel manages the platform team",
+    "The platform team owns the auth service",
+    "The auth service uses PostgreSQL"
+  ],
+  "queries": [
+    {"q": "where is Carla based", "must_contain_any": ["Munich", "Acme"], "top_k": 5},
+    {"q": "what database does the auth service use", "must_contain_any": ["PostgreSQL"], "top_k": 5},
+    {"q": "who manages the team that owns auth", "must_contain_any": ["Daniel", "platform"], "top_k": 5}
+  ]
+}

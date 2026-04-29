@@ -27,8 +27,29 @@ pip install -r requirements.txt
 # Full pipeline: ingest one conv -> recall all its QAs -> judge -> aggregate
 python run.py --data data/locomo10.json --output-dir results/
 
+# Deterministic retrieval-only scoring: gold evidence dia_id recall@K, no judge
+python run.py --data data/locomo10.json --output-dir results/ \
+  --score-mode evidence
+
+# Rescore an existing result JSON deterministically from its saved top-K memories
+python score_evidence.py --data data/locomo10.json \
+  --result results/hippo-v0.32.0.json \
+  --output results/hippo-v0.32.0-evidence.json
+
+# Same harness with OpenAI as the judge
+python run.py --data data/locomo10.json --output-dir results/ \
+  --judge-backend openai --judge-model gpt-4.1-mini
+
+# Same harness with a local/custom judge command. The prompt is passed on stdin
+# and stdout must start with one of: equivalent, partial, wrong, none, weak, strong.
+python run.py --data data/locomo10.json --output-dir results/ \
+  --judge-backend command --judge-command 'python my_judge.py'
+
 # Cheap structural smoke: no judge, fresh temp store, truncated ingest
 python audit_matched_stores.py --data data/locomo10.json --max-conversations 1 --max-turns 50 --sample-qa 2
+
+# Offline analysis of an existing result JSON
+python analyze_results.py results/hippo-current-10conv-20qa-stable.json --allow-incomplete
 ```
 
 Flags:
@@ -36,7 +57,13 @@ Flags:
 - `--conversations K` — limit to first K conversations (default: all 10)
 - `--top-k N` — top-K memories to pass to judge (default: 5)
 - `--skip-adversarial` — exclude category 5 (no-answer) questions
-- `--judge-model` — override Claude judge model (default: claude-opus-4-7)
+- `--score-mode` — `judge` for LLM scoring, `evidence` for deterministic
+  gold evidence `dia_id` recall@K
+- `--judge-backend` — `claude-cli`, `openai`, or `command`
+- `--judge-model` — override judge model (defaults: claude-opus-4-7 for
+  `claude-cli`, gpt-4.1-mini for `openai`)
+- `--judge-command` — shell command for `--judge-backend command`
+- `--judge-timeout` — seconds per judge call (default: 60)
 - `HIPPO_BIN` — override the Hippo command for judged runs, for example
   `HIPPO_BIN='node C:/Users/skf_s/hippo-v032/bin/hippo.js'`
 
@@ -80,12 +107,27 @@ locomo10.json
 - Judge prompt: "Question: X. Expected answer: Y. Hippo returned: Z. Is Z equivalent to Y, partially equivalent, or wrong? Answer one word."
 - Equivalent = 1.0, partial = 0.5, wrong = 0.0
 - For adversarial (cat 5): correct if top-K returns no relevant memory or abstains.
+- Evidence mode: score = fraction of gold `qa[].evidence` dialogue ids found
+  in top-K retrieved memories. This is deterministic recall@K, not answer
+  equivalence. QAs with no gold evidence are marked unscored.
 - Overall score = mean across all QAs.
 - `--sample` uses a stable stratified sample per conversation so version
   comparisons can score the same QAs in separate processes.
-- Claude judge subprocess failures abort the current conversation, mark the
-  JSON as incomplete, and exit nonzero. They are not scored as wrong, because
-  that silently fabricates benchmark regressions.
+- Judge subprocess/API failures abort the current conversation, mark the JSON
+  as incomplete, and exit nonzero. They are not scored as wrong, because that
+  silently fabricates benchmark regressions.
+
+## Deterministic comparison (2026-04-28)
+
+`score_evidence.py` rescored the existing full v0.32 and no-salience current
+retrieval outputs by mapping returned memory text back to LoCoMo `dia_id`s.
+
+| Run | scored QAs | evidence recall@5 |
+|---|---:|---:|
+| `hippo-v0.32.0-evidence.json` | 1,982 | 0.172748 |
+| `hippo-v0.34.0-no-salience-evidence.json` | 1,982 | 0.172499 |
+
+Delta: -0.000249. The earlier judged gap is not a reliable retrieval signal.
 
 ## First run (2026-04-22): results/hippo-v0.31.0.json
 

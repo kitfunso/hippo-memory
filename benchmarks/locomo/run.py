@@ -5,16 +5,17 @@ For each LoCoMo conversation:
   2. hippo init.
   3. Ingest every session turn as a memory via `hippo remember`.
   4. For every QA in that conversation, run `hippo recall --json`.
-  5. LLM-judge (via `claude -p` CLI) whether the top-K memories answer the question.
+  5. Score the top-K memories with an LLM judge or deterministic gold
+     evidence dia_id recall.
 
-Outputs a single JSON at results/hippo-v{version}.json with per-QA judgments +
-overall + per-category accuracy.
+Outputs a single JSON at results/hippo-v{version}.json with per-QA scores +
+overall + per-category aggregates.
 
 Honors the brief's non-negotiables:
   - Uses globally installed `hippo` CLI.
   - Fresh HIPPO_HOME per conversation (no cross-conversation leakage).
   - No hippo source changes.
-  - Judge model id recorded in the output.
+  - Score mode, judge backend, and model id recorded in the output.
 """
 
 from __future__ import annotations
@@ -31,6 +32,8 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
+import urllib.request
 from collections import defaultdict
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
@@ -43,7 +46,15 @@ logger = logging.getLogger(__name__)
 # --- Configuration ---
 
 JUDGE_MODEL = "claude-opus-4-7"  # label for the `claude -p` CLI used; actual model governed by the CLI install
+OPENAI_JUDGE_MODEL = "gpt-4.1-mini"
 RECALL_PREFLIGHT_BUDGET = 1_000_000
+VERDICT_TOKENS = ("equivalent", "partial", "wrong", "none", "weak", "strong")
+FATAL_JUDGE_MARKERS = (
+    "monthly usage limit",
+    "insufficient_quota",
+    "invalid_api_key",
+    "billing",
+)
 
 
 class JudgeError(RuntimeError):
@@ -104,6 +115,13 @@ class QAResult:
     top_k_memories: list[dict[str, Any]]
     judge_verdict: str  # "equivalent" / "partial" / "wrong" OR "none"/"weak"/"strong" for adversarial
     score: float  # 0.0 / 0.5 / 1.0
+    gold_evidence: list[str] = field(default_factory=list)
+    gold_evidence_unmatched: list[str] = field(default_factory=list)
+    retrieved_dia_ids: list[str] = field(default_factory=list)
+    evidence_hits: list[str] = field(default_factory=list)
+    evidence_recall: float | None = None
+    evidence_precision: float | None = None
+    scored: bool = True
 
 # --- Helpers ---
 
@@ -200,9 +218,12 @@ def hippo_remember(hippo_home: str, text: str, tags: list[str]) -> bool:
 
 
 def hippo_recall(hippo_home: str, query: str, budget: int = 4000) -> list[dict[str, Any]]:
+    # HIPPO_RECALL_EXTRA_ARGS lets feature branches A/B compare on LoCoMo
+    # (e.g. HIPPO_RECALL_EXTRA_ARGS="--evc-adaptive"). Default empty.
+    extra = shlex.split(os.environ.get("HIPPO_RECALL_EXTRA_ARGS", ""))
     try:
         result = run_hippo(
-            ["recall", query, "--json", "--budget", str(budget)],
+            ["recall", query, "--json", "--budget", str(budget), *extra],
             cwd=hippo_home,
             hippo_home=hippo_home,
             timeout=120,
@@ -266,6 +287,104 @@ def format_memories_for_judge(memories: list[dict[str, Any]], top_k: int) -> str
     return "\n".join(lines)
 
 
+def normalize_dia_id(value: Any) -> str:
+    text = str(value).strip()
+    match = re.fullmatch(r"D(\d+):0*(\d+)", text, flags=re.IGNORECASE)
+    if match:
+        return f"D{int(match.group(1))}:{int(match.group(2))}"
+    return text
+
+
+def normalize_evidence_refs(values: Any) -> list[str]:
+    refs: list[str] = []
+    if not isinstance(values, list):
+        return refs
+    for value in values:
+        text = str(value)
+        matches = re.finditer(r"D(?:(\d+):0*(\d+)|:(\d+):0*(\d+))", text, flags=re.IGNORECASE)
+        for match in matches:
+            session = match.group(1) or match.group(3)
+            turn = match.group(2) or match.group(4)
+            ref = normalize_dia_id(f"D{session}:{turn}")
+            if ref and ref not in refs:
+                refs.append(ref)
+    return refs
+
+
+def dia_ids_from_memory(memory: dict[str, Any]) -> list[str]:
+    dia_ids: list[str] = []
+    raw_dia_ids = memory.get("dia_ids", [])
+    if isinstance(raw_dia_ids, list):
+        for raw in raw_dia_ids:
+            dia_id = normalize_dia_id(raw)
+            if dia_id and dia_id not in dia_ids:
+                dia_ids.append(dia_id)
+    tags = memory.get("tags", [])
+    if isinstance(tags, list):
+        for tag in tags:
+            text = str(tag)
+            if text.startswith("dia:"):
+                dia_id = normalize_dia_id(text.removeprefix("dia:"))
+                if dia_id and dia_id not in dia_ids:
+                    dia_ids.append(dia_id)
+    return dia_ids
+
+
+def summarize_memory(memory: dict[str, Any]) -> dict[str, Any]:
+    tags = memory.get("tags", [])
+    if not isinstance(tags, list):
+        tags = []
+    dia_ids = dia_ids_from_memory(memory)
+    return {
+        "content": memory.get("content", ""),
+        "score": memory.get("score", 0.0),
+        "tags": [str(tag) for tag in tags],
+        "dia_ids": dia_ids,
+    }
+
+
+def score_evidence_overlap(
+    gold_evidence: list[str],
+    memories: list[dict[str, Any]],
+    top_k: int,
+) -> tuple[str, float, list[str], list[str], float | None, float | None, bool]:
+    gold = normalize_evidence_refs(gold_evidence)
+    retrieved: list[str] = []
+    for memory in memories[:top_k]:
+        for dia_id in dia_ids_from_memory(memory):
+            if dia_id not in retrieved:
+                retrieved.append(dia_id)
+
+    if not gold:
+        return "evidence_unscored", 0.0, retrieved, [], None, None, False
+
+    gold_set = set(gold)
+    hits = [dia_id for dia_id in retrieved if dia_id in gold_set]
+    recall = len(set(hits)) / len(gold_set)
+    precision = len(set(hits)) / len(retrieved) if retrieved else 0.0
+    if recall >= 1.0:
+        verdict = "evidence_full"
+    elif hits:
+        verdict = "evidence_partial"
+    else:
+        verdict = "evidence_miss"
+    return verdict, recall, retrieved, hits, recall, precision, True
+
+
+def extract_verdict(text: str) -> str | None:
+    """Return the first supported verdict token near the start of judge output."""
+    words = text.strip().lower().split()
+    for token in VERDICT_TOKENS:
+        if words and token in words[:5]:
+            return token
+    return None
+
+
+def is_fatal_judge_error(detail: str) -> bool:
+    lowered = detail.lower()
+    return any(marker in lowered for marker in FATAL_JUDGE_MARKERS)
+
+
 def judge_with_claude_cli(prompt: str, timeout: int = 60, max_attempts: int = 4) -> str:
     """Invoke `claude -p` as the judge. Returns the one-word verdict.
 
@@ -295,14 +414,132 @@ def judge_with_claude_cli(prompt: str, timeout: int = 60, max_attempts: int = 4)
                 if "monthly usage limit" in detail.lower():
                     raise last_err
             else:
-                text = result.stdout.strip().lower()
-                for token in ("equivalent", "partial", "wrong", "none", "weak", "strong"):
-                    if token in text.split()[:5] if text else []:
-                        return token
+                verdict = extract_verdict(result.stdout)
+                if verdict:
+                    return verdict
                 last_err = JudgeError(f"judge returned no usable verdict: {result.stdout[:200]}")
         if attempt < max_attempts - 1:
             time.sleep(2 ** attempt)  # 1, 2, 4 seconds
     raise last_err if last_err else JudgeError("judge failed (unknown)")
+
+
+def extract_openai_text(data: dict[str, Any]) -> str:
+    if isinstance(data.get("output_text"), str):
+        return data["output_text"]
+    chunks: list[str] = []
+    for item in data.get("output", []):
+        if not isinstance(item, dict):
+            continue
+        for content in item.get("content", []):
+            if not isinstance(content, dict):
+                continue
+            if content.get("type") in {"output_text", "text"} and isinstance(content.get("text"), str):
+                chunks.append(content["text"])
+    return "\n".join(chunks)
+
+
+def judge_with_openai(
+    prompt: str,
+    model: str,
+    base_url: str,
+    timeout: int = 60,
+    max_attempts: int = 4,
+) -> str:
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise JudgeError("openai judge requires OPENAI_API_KEY")
+
+    url = base_url.rstrip("/") + "/responses"
+    payload = {
+        "model": model,
+        "input": prompt,
+        "max_output_tokens": 8,
+        "store": False,
+    }
+    body = json.dumps(payload).encode("utf-8")
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    last_err: Exception | None = None
+    for attempt in range(max_attempts):
+        request = urllib.request.Request(url, data=body, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                response_text = response.read().decode("utf-8", errors="replace")
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            last_err = JudgeError(f"openai judge http {exc.code}: {detail[:500]}")
+            if exc.code in {400, 401, 403} or is_fatal_judge_error(detail):
+                raise last_err
+        except urllib.error.URLError as exc:
+            last_err = JudgeError(f"openai judge url error: {exc}")
+        except TimeoutError as exc:
+            last_err = JudgeError("openai judge timed out")
+        else:
+            try:
+                data = json.loads(response_text)
+            except json.JSONDecodeError as exc:
+                last_err = JudgeError(f"openai judge returned non-json: {response_text[:200]}")
+            else:
+                verdict = extract_verdict(extract_openai_text(data))
+                if verdict:
+                    return verdict
+                last_err = JudgeError(f"openai judge returned no usable verdict: {response_text[:500]}")
+        if attempt < max_attempts - 1:
+            time.sleep(2 ** attempt)
+    raise last_err if last_err else JudgeError("openai judge failed (unknown)")
+
+
+def judge_with_command(prompt: str, command: str, timeout: int = 60, max_attempts: int = 4) -> str:
+    last_err: Exception | None = None
+    for attempt in range(max_attempts):
+        try:
+            result = subprocess.run(
+                command,
+                input=prompt,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+                shell=True,
+            )
+        except subprocess.TimeoutExpired as exc:
+            last_err = JudgeError("command judge timed out")
+        else:
+            detail = "\n".join(part for part in (result.stderr.strip(), result.stdout.strip()) if part)
+            if result.returncode != 0:
+                last_err = JudgeError(f"command judge rc={result.returncode}: {detail[:500]}")
+                if is_fatal_judge_error(detail):
+                    raise last_err
+            else:
+                verdict = extract_verdict(result.stdout)
+                if verdict:
+                    return verdict
+                last_err = JudgeError(f"command judge returned no usable verdict: {result.stdout[:200]}")
+        if attempt < max_attempts - 1:
+            time.sleep(2 ** attempt)
+    raise last_err if last_err else JudgeError("command judge failed (unknown)")
+
+
+def judge_prompt(
+    prompt: str,
+    backend: str,
+    model: str,
+    command: str | None,
+    openai_base_url: str,
+    timeout: int,
+) -> str:
+    if backend == "claude-cli":
+        return judge_with_claude_cli(prompt, timeout=timeout)
+    if backend == "openai":
+        return judge_with_openai(prompt, model=model, base_url=openai_base_url, timeout=timeout)
+    if backend == "command":
+        if not command:
+            raise JudgeError("command judge requires --judge-command")
+        return judge_with_command(prompt, command=command, timeout=timeout)
+    raise JudgeError(f"unknown judge backend: {backend}")
 
 
 def score_verdict(verdict: str, is_adversarial: bool) -> float:
@@ -321,6 +558,12 @@ def process_conversation(
     budget: int,
     flush_file=None,
     salience: bool = False,
+    judge_backend: str = "claude-cli",
+    judge_model: str = JUDGE_MODEL,
+    judge_command: str | None = None,
+    openai_base_url: str = "https://api.openai.com/v1",
+    judge_timeout: int = 60,
+    score_mode: str = "judge",
 ) -> list[QAResult]:
     sample_id = conv_entry["sample_id"]
     conv = conv_entry["conversation"]
@@ -357,6 +600,7 @@ def process_conversation(
 
         # Ingest all turns
         turns = collect_turns(conv)
+        valid_dia_ids = {dia_id for _, dia_id, _, _ in turns if dia_id}
         logger.info("[%s] ingesting %d turns", sample_id, len(turns))
         ingested = 0
         for (session_n, dia_id, speaker, text) in tqdm(
@@ -385,16 +629,47 @@ def process_conversation(
             expected = (
                 qa.get("adversarial_answer", "") if is_adv else str(qa.get("answer", ""))
             )
+            evidence_refs = normalize_evidence_refs(qa.get("evidence", []))
+            gold_evidence = [ref for ref in evidence_refs if ref in valid_dia_ids]
+            gold_evidence_unmatched = [ref for ref in evidence_refs if ref not in valid_dia_ids]
 
             memories = hippo_recall(hippo_home, question, budget=budget)
-            mem_block = format_memories_for_judge(memories, top_k)
+            retrieved_dia_ids: list[str] = []
+            evidence_hits: list[str] = []
+            evidence_recall: float | None = None
+            evidence_precision: float | None = None
+            scored = True
 
-            template = JUDGE_PROMPT_ADVERSARIAL if is_adv else JUDGE_PROMPT_TEMPLATE
-            prompt = template.format(
-                question=question, expected=expected, memories=mem_block, k=top_k
-            )
-            verdict = judge_with_claude_cli(prompt)
-            score = score_verdict(verdict, is_adv)
+            if score_mode == "evidence":
+                (
+                    verdict,
+                    score,
+                    retrieved_dia_ids,
+                    evidence_hits,
+                    evidence_recall,
+                    evidence_precision,
+                    scored,
+                ) = score_evidence_overlap(gold_evidence, memories, top_k)
+            else:
+                mem_block = format_memories_for_judge(memories, top_k)
+
+                template = JUDGE_PROMPT_ADVERSARIAL if is_adv else JUDGE_PROMPT_TEMPLATE
+                prompt = template.format(
+                    question=question, expected=expected, memories=mem_block, k=top_k
+                )
+                verdict = judge_prompt(
+                    prompt,
+                    backend=judge_backend,
+                    model=judge_model,
+                    command=judge_command,
+                    openai_base_url=openai_base_url,
+                    timeout=judge_timeout,
+                )
+                score = score_verdict(verdict, is_adv)
+                for memory in memories[:top_k]:
+                    for dia_id in dia_ids_from_memory(memory):
+                        if dia_id not in retrieved_dia_ids:
+                            retrieved_dia_ids.append(dia_id)
 
             qa_result = QAResult(
                 conversation_id=sample_id,
@@ -404,12 +679,16 @@ def process_conversation(
                 category=category,
                 category_name=CATEGORY_NAMES.get(category, f"cat{category}"),
                 is_adversarial=is_adv,
-                top_k_memories=[
-                    {"content": m.get("content", ""), "score": m.get("score", 0.0)}
-                    for m in memories[:top_k]
-                ],
+                top_k_memories=[summarize_memory(m) for m in memories[:top_k]],
                 judge_verdict=verdict,
                 score=score,
+                gold_evidence=gold_evidence,
+                gold_evidence_unmatched=gold_evidence_unmatched,
+                retrieved_dia_ids=retrieved_dia_ids,
+                evidence_hits=evidence_hits,
+                evidence_recall=evidence_recall,
+                evidence_precision=evidence_precision,
+                scored=scored,
             )
             results.append(qa_result)
             if flush_file is not None:
@@ -424,14 +703,15 @@ def process_conversation(
 
 
 def aggregate(results: list[QAResult]) -> dict[str, Any]:
-    total = len(results)
+    scored_results = [r for r in results if getattr(r, "scored", True)]
+    total = len(scored_results)
     if total == 0:
         return {"overall": {"total": 0, "score": 0.0}, "per_category": {}}
 
-    overall_score = sum(r.score for r in results) / total
+    overall_score = sum(r.score for r in scored_results) / total
 
     by_cat: dict[int, list[QAResult]] = defaultdict(list)
-    for r in results:
+    for r in scored_results:
         by_cat[r.category].append(r)
     per_cat = {}
     for cat, rs in sorted(by_cat.items()):
@@ -439,17 +719,19 @@ def aggregate(results: list[QAResult]) -> dict[str, Any]:
             "total": len(rs),
             "mean_score": sum(r.score for r in rs) / len(rs),
             "n_equivalent": sum(1 for r in rs if r.score == 1.0),
-            "n_partial": sum(1 for r in rs if r.score == 0.5),
+            "n_partial": sum(1 for r in rs if 0.0 < r.score < 1.0),
             "n_wrong": sum(1 for r in rs if r.score == 0.0),
+            "n_unscored": sum(1 for r in results if r.category == cat and not getattr(r, "scored", True)),
         }
 
     return {
         "overall": {
             "total": total,
             "mean_score": overall_score,
-            "n_equivalent": sum(1 for r in results if r.score == 1.0),
-            "n_partial": sum(1 for r in results if r.score == 0.5),
-            "n_wrong": sum(1 for r in results if r.score == 0.0),
+            "n_equivalent": sum(1 for r in scored_results if r.score == 1.0),
+            "n_partial": sum(1 for r in scored_results if 0.0 < r.score < 1.0),
+            "n_wrong": sum(1 for r in scored_results if r.score == 0.0),
+            "n_unscored": len(results) - total,
         },
         "per_category": per_cat,
     }
@@ -469,11 +751,33 @@ def main() -> None:
     parser.add_argument("--skip-adversarial", action="store_true")
     parser.add_argument("--resume", action="store_true",
                         help="Skip conversations already in incremental file.")
-    parser.add_argument("--judge-model", type=str, default=JUDGE_MODEL)
+    parser.add_argument("--score-mode", choices=["judge", "evidence"], default="judge",
+                        help="judge uses an LLM; evidence scores deterministic gold dia_id recall@K.")
+    parser.add_argument("--judge-backend", choices=["claude-cli", "openai", "command"],
+                        default="claude-cli")
+    parser.add_argument("--judge-model", type=str, default=None,
+                        help="Judge model label/name. Defaults depend on --judge-backend.")
+    parser.add_argument("--judge-command", type=str, default=None,
+                        help="Shell command for --judge-backend command; prompt is sent on stdin.")
+    parser.add_argument("--judge-timeout", type=int, default=60)
+    parser.add_argument("--openai-base-url", type=str,
+                        default=os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1"))
     parser.add_argument("--salience", action="store_true",
                         help="Enable pineal salience gate (default off, see hippo_init docstring).")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
+
+    if args.score_mode == "evidence":
+        args.judge_model = args.judge_model or "none"
+    elif args.judge_model is None:
+        if args.judge_backend == "openai":
+            args.judge_model = OPENAI_JUDGE_MODEL
+        elif args.judge_backend == "command":
+            args.judge_model = "command"
+        else:
+            args.judge_model = JUDGE_MODEL
+    if args.score_mode == "judge" and args.judge_backend == "command" and not args.judge_command:
+        parser.error("--judge-backend command requires --judge-command")
 
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
@@ -489,7 +793,9 @@ def main() -> None:
         shutil.rmtree(version_home, ignore_errors=True)
     logger.info("hippo --version: %s", hippo_version)
 
-    if args.output_name is None:
+    if args.output_name is None and args.score_mode == "evidence":
+        args.output_name = f"hippo-v{hippo_version}-evidence.json"
+    elif args.output_name is None:
         args.output_name = f"hippo-v{hippo_version}.json"
 
     data = load_dataset(args.data)
@@ -569,6 +875,12 @@ def main() -> None:
                     budget=args.budget,
                     flush_file=f,
                     salience=args.salience,
+                    judge_backend=args.judge_backend,
+                    judge_model=args.judge_model,
+                    judge_command=args.judge_command,
+                    openai_base_url=args.openai_base_url,
+                    judge_timeout=args.judge_timeout,
+                    score_mode=args.score_mode,
                 )
             except Exception as exc:
                 logger.exception("Conversation %s failed: %s", entry.get("sample_id"), exc)
@@ -595,12 +907,17 @@ def main() -> None:
         "judge_prompt_template_standard": JUDGE_PROMPT_TEMPLATE,
         "judge_prompt_template_adversarial": JUDGE_PROMPT_ADVERSARIAL,
         "config": {
+            "score_mode": args.score_mode,
             "top_k": args.top_k,
             "budget": args.budget,
             "recall_preflight_budget": RECALL_PREFLIGHT_BUDGET,
             "conversations_run": len(data),
             "sample_per_conv": args.sample,
             "skip_adversarial": args.skip_adversarial,
+            "judge_backend": args.judge_backend,
+            "judge_timeout": args.judge_timeout,
+            "judge_command_configured": args.judge_backend == "command",
+            "openai_base_url": args.openai_base_url if args.judge_backend == "openai" else None,
         },
         "elapsed_seconds": elapsed,
         "complete": not failed_conversations,

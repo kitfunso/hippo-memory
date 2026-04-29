@@ -140,9 +140,12 @@ import {
 import { cmdCapture, CaptureOptions } from './capture.js';
 import { auditMemories, type AuditResult } from './audit.js';
 import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from './eval.js';
+import { runFeatureEval, formatResult, resultToBaseline, detectRegressions, type EvalBaseline } from './eval-suite.js';
 import { refineStore } from './refine-llm.js';
 import { wmPush, wmRead, wmClear, wmFlush, WorkingMemoryItem } from './working-memory.js';
 import { multihopSearch } from './multihop.js';
+import { computeSalience } from './salience.js';
+import { computeAmbientState, renderAmbientSummary } from './ambient.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -519,6 +522,24 @@ async function cmdRemember(
   const existing = loadAllEntries(targetRoot);
   const schemaFit = computeSchemaFit(text, rawTags, existing);
 
+  // A3 envelope flags
+  const kindFlagRaw = typeof flags['kind'] === 'string' ? (flags['kind'] as string) : undefined;
+  const kindFlag = kindFlagRaw === undefined ? undefined : kindFlagRaw.toLowerCase();
+  // CLI surface intentionally restricted: 'raw' is reserved for ingestion connectors
+  // (E1.x: Slack/Jira/Gmail) that route deletions through archiveRawMemory. Existing
+  // forget/consolidate/conflict-resolve paths abort on kind='raw' via the append-only
+  // trigger, so exposing --kind raw here would create unforgettable memories.
+  // 'archived' is an internal sentinel set only inside archiveRawMemory's transaction.
+  const userVisibleKinds = ['distilled', 'superseded'] as const;
+  if (kindFlag !== undefined && !(userVisibleKinds as readonly string[]).includes(kindFlag)) {
+    console.error(`Invalid --kind: "${kindFlagRaw}". Must be one of: ${userVisibleKinds.join(', ')}`);
+    console.error(`(kind='raw' is reserved for ingestion connectors; kind='archived' is internal.)`);
+    process.exit(1);
+  }
+  const ownerFlag = typeof flags['owner'] === 'string' ? (flags['owner'] as string) : null;
+  const artifactRefFlag = typeof flags['artifact-ref'] === 'string' ? (flags['artifact-ref'] as string) : null;
+  const scopeForEnvelope = typeof flags['scope'] === 'string' ? (flags['scope'] as string).trim() || null : null;
+
   const entry = createMemory(text, {
     layer: Layer.Episodic,
     tags: rawTags,
@@ -526,6 +547,10 @@ async function cmdRemember(
     source: useGlobal ? 'cli-global' : 'cli',
     confidence,
     schema_fit: schemaFit,
+    kind: kindFlag as ('raw' | 'distilled' | 'superseded' | 'archived' | undefined),
+    scope: scopeForEnvelope,
+    owner: ownerFlag,
+    artifact_ref: artifactRefFlag,
   });
 
   // Auto-tag with path context
@@ -540,6 +565,26 @@ async function cmdRemember(
   if (activeScope) {
     const scopeTag = `scope:${activeScope}`;
     if (!entry.tags.includes(scopeTag)) entry.tags.push(scopeTag);
+  }
+
+  // Salience gate: decide if this memory is worth storing
+  const rememberConfig = loadConfig(targetRoot);
+  if (rememberConfig.salience.enabled && !Boolean(flags['pin']) && !Boolean(flags['force'])) {
+    const salienceResult = computeSalience(text, entry.tags, existing, {
+      recentWindow: rememberConfig.salience.recentWindow,
+      overlapThreshold: rememberConfig.salience.overlapThreshold,
+      minContentLength: rememberConfig.salience.minContentLength,
+      maxRepeatErrors: rememberConfig.salience.maxRepeatErrors,
+    });
+    if (salienceResult.decision === 'skip') {
+      console.log(`Skipped (salience: ${salienceResult.reason}, score ${salienceResult.score.toFixed(2)})`);
+      return;
+    }
+    if (salienceResult.decision === 'start_weak') {
+      entry.strength = salienceResult.score;
+      entry.half_life_days = Math.max(1, entry.half_life_days * 0.5);
+      console.log(`Weakened (salience: ${salienceResult.reason}, strength ${salienceResult.score.toFixed(2)})`);
+    }
   }
 
   writeEntry(targetRoot, entry);
@@ -727,6 +772,161 @@ async function cmdRecall(
     });
   }
 
+  // ACC EVC-adaptive recall (RESEARCH.md §PFC.ACC). When the initial top-K is
+  // dominated by lexically similar but distinct memories (high pairwise token
+  // overlap = same topic, different facts = conflict), allocate extra retrieval
+  // effort: take a wider candidate pool, drop low-relevance distractors, and
+  // re-rank by recency to surface the most up-to-date item from the cluster.
+  // Default off; opt-in via --evc-adaptive.
+  if (flags['evc-adaptive'] && results.length >= 2) {
+    const sliceSize = Math.min(3, results.length);
+    const slice = results.slice(0, sliceSize);
+    let pairs = 0;
+    let overlapSum = 0;
+    for (let i = 0; i < slice.length; i++) {
+      for (let j = i + 1; j < slice.length; j++) {
+        overlapSum += textOverlap(slice[i].entry.content, slice[j].entry.content);
+        pairs++;
+      }
+    }
+    const avgOverlap = pairs > 0 ? overlapSum / pairs : 0;
+    if (avgOverlap >= 0.4) {
+      const poolSize = Math.min(results.length, Math.max(sliceSize * 3, 9));
+      const pool = results.slice(0, poolSize);
+      const tail = results.slice(poolSize);
+      const maxScore = pool.reduce((m, r) => Math.max(m, r.score), 0);
+      const scoreFloor = maxScore * 0.5;
+      const onTopic: typeof pool = [];
+      const offTopic: typeof pool = [];
+      for (const r of pool) {
+        (r.score >= scoreFloor ? onTopic : offTopic).push(r);
+      }
+      onTopic.sort((a, b) => {
+        const ta = new Date(a.entry.created).getTime();
+        const tb = new Date(b.entry.created).getTime();
+        return tb - ta;
+      });
+      results = [...onTopic, ...offTopic, ...tail];
+    }
+  }
+
+  // vlPFC interference filter (RESEARCH.md §PFC.vlPFC). Suppress task-irrelevant
+  // memories using *recorded* supersession + conflict structure only. Default
+  // off; opt-in via --filter-conflicts. Two effects, both surgical:
+  //   1. Drop entries with `superseded_by` set. (No-op under default recall,
+  //      which already filters them; matters when `--include-superseded` was
+  //      passed. The flag re-asserts the gate.)
+  //   2. Apply a 0.3x score multiplier to entries whose `conflicts_with` list
+  //      references another entry that ALSO appears in the result set. The
+  //      multiplier is conservative — we never delete on conflict, only
+  //      down-rank, so the user can still surface the loser via --include-*.
+  // We never infer conflicts from lexical overlap. The v1 salience gate did
+  // that and destroyed LoCoMo (0.28 → 0.02). Recorded structure only.
+  if (flags['filter-conflicts']) {
+    results = results.filter((r) => !r.entry.superseded_by);
+    const presentIds = new Set(results.map((r) => r.entry.id));
+    results = results.map((r) => {
+      const peers = r.entry.conflicts_with || [];
+      const hasPeerInResults = peers.some((peerId) => presentIds.has(peerId));
+      return hasPeerInResults ? { ...r, score: r.score * 0.3 } : r;
+    });
+    results.sort((a, b) => b.score - a.score);
+  }
+
+  // vmPFC continuous value attribution (RESEARCH.md §PFC.vmPFC). Continuous
+  // value scoring per memory based on cumulative outcome attribution. Memories
+  // with positive cumulative outcomes are boosted; those with negative outcomes
+  // are demoted. The multiplier is a tanh-shaped function clamped to [0.7, 1.3]
+  // — wider than the always-on outcomeBoost (which clamps [0.85, 1.15]) so this
+  // flag has additional decisive effect when value attribution should drive
+  // ranking. Default off; opt-in via --value-aware. Reuses outcome_positive /
+  // outcome_negative columns; no schema change.
+  if (flags['value-aware'] && results.length >= 1) {
+    results = results.map((r) => {
+      const pos = r.entry.outcome_positive ?? 0;
+      const neg = r.entry.outcome_negative ?? 0;
+      if (pos === 0 && neg === 0) return r;
+      const raw = 1 + 0.3 * Math.tanh(pos - neg);
+      const valueMult = Math.max(0.7, Math.min(1.3, raw));
+      return { ...r, score: r.score * valueMult };
+    });
+    results.sort((a, b) => b.score - a.score);
+  }
+
+  // OFC option-value re-ranker MVP (RESEARCH.md §PFC.OFC). Combine relevance,
+  // strength, and integration cost into a single utility score and re-sort.
+  // OFC neurons encode a "common currency" across heterogeneous attributes
+  // (Rangel et al., 2008); this is the simplest demonstration of that mechanism.
+  // Default off; opt-in via --rerank-utility.
+  //
+  //   utility = score * (0.5 + 0.5 * strength) * (1 - cost_factor)
+  //   cost_factor = min(0.3, tokens / 10000)
+  //
+  // The full OFC spec (option_valuation table in RESEARCH.md) decomposes value
+  // into reward / cost / risk / confidence components. The MVP collapses these
+  // to: score (relevance proxy), strength (persistence proxy), tokens (cost).
+  // CAVEAT: cost penalty is monotone with token count; LoCoMo's harder QAs
+  // often live in long evidence-rich memories. Default off — needs LoCoMo
+  // eval before enabling broadly.
+  if (flags['rerank-utility']) {
+    results = results
+      .map((r) => {
+        const strength = typeof r.entry.strength === 'number' ? r.entry.strength : 1.0;
+        const costFactor = Math.min(0.3, (r.tokens || 0) / 10000);
+        const utility = r.score * (0.5 + 0.5 * strength) * (1 - costFactor);
+        return { ...r, score: utility };
+      })
+      .sort((a, b) => b.score - a.score);
+  }
+
+  // dlPFC goal-conditioned recall MVP (RESEARCH.md §PFC.dlPFC). When --goal
+  // <tag> is set, memories whose `tags` array contains the goal tag receive
+  // a 1.5x score boost and results are re-sorted. The full dlPFC spec
+  // (goal_stack + retrieval_policy tables) maintains a hierarchical task
+  // stack with weighted retrieval policies; this MVP collapses that to a
+  // single-tag boost — the smallest demonstrable goal-conditioning signal.
+  // Default off; opt-in via --goal <tag>. No schema change.
+  const goalTag = flags['goal'] !== undefined ? String(flags['goal']).trim() : '';
+  if (goalTag) {
+    results = results
+      .map((r) => (r.entry.tags?.includes(goalTag) ? { ...r, score: r.score * 1.5 } : r))
+      .sort((a, b) => b.score - a.score);
+  }
+
+  // Pineal salience MVP (RESEARCH.md §"AI Pineal Gland — Intuition and Awareness
+  // Module"). When --salience-threshold T is set (T > 0), memories whose
+  // retrieval_count is below T are downweighted: score *= max(0.5, count / T).
+  // At or above T, no change. This makes salience emerge from USE — high-recall
+  // memories earn full ranking weight, low-recall memories are softly demoted.
+  //
+  // CRITICAL HISTORY: The v1 salience gate (60% lexical-overlap gate at memory
+  // CREATION time) destroyed LoCoMo recall (0.28 -> 0.02) by dropping same-
+  // session relevant turns at intake. See MEMORY.md "Hippo salience gate
+  // destroys benchmark recall". This v2 is the inverse:
+  //   - retrieval-side only (no creation-time gating)
+  //   - retrieval_count signal only (no lexical overlap, no novelty heuristic)
+  //   - default OFF, opt-in via the flag (no behaviour change without it)
+  //   - 0.5 floor so non-salient entries stay reachable, never dropped
+  // Reuses the existing retrieval_count column; no schema change.
+  const salienceThresholdRaw = flags['salience-threshold'];
+  if (salienceThresholdRaw !== undefined) {
+    const T = Number(salienceThresholdRaw);
+    if (!Number.isFinite(T) || T <= 0) {
+      console.error(
+        `Invalid --salience-threshold: "${salienceThresholdRaw}". Must be a positive number.`,
+      );
+      process.exit(1);
+    }
+    results = results
+      .map((r) => {
+        const count = r.entry.retrieval_count ?? 0;
+        if (count >= T) return r;
+        const mult = Math.max(0.5, count / T);
+        return { ...r, score: r.score * mult };
+      })
+      .sort((a, b) => b.score - a.score);
+  }
+
   // --outcome filter: drop trace entries whose trace_outcome !== target.
   // Non-trace entries pass through unaffected (traces are the only layer with
   // a meaningful outcome; filtering non-traces by outcome would be incoherent).
@@ -807,6 +1007,9 @@ async function cmdRecall(
         base.reason = explanation.reason;
         base.bm25 = r.bm25;
         base.cosine = r.cosine;
+        if (explanation.envelope) {
+          base.envelope = explanation.envelope;
+        }
       }
       return base;
     });
@@ -832,6 +1035,15 @@ async function cmdRecall(
       const explanation = explainMatch(query, r);
       console.log(`    source:${sourceMark} | layer: [${e.layer}] | confidence: [${conf}]`);
       console.log(`    reason: ${explanation.reason}`);
+      if (explanation.envelope) {
+        const env = explanation.envelope;
+        console.log(`    kind: ${env.kind}`);
+        if (env.scope) console.log(`    scope: ${env.scope}`);
+        if (env.owner) console.log(`    owner: ${env.owner}`);
+        if (env.artifact_ref) console.log(`    artifact_ref: ${env.artifact_ref}`);
+        if (env.session_id) console.log(`    session_id: ${env.session_id}`);
+        console.log(`    confidence: ${env.confidence}`);
+      }
     }
     console.log();
     console.log(e.content);
@@ -1022,8 +1234,6 @@ async function cmdEval(
   corpusPath: string | null,
   flags: Record<string, string | boolean | string[]>
 ): Promise<void> {
-  requireInit(hippoRoot);
-
   const asJson = Boolean(flags['json']);
   const minMrr = flags['min-mrr'] !== undefined ? parseFloat(String(flags['min-mrr'])) : null;
   const showCases = Boolean(flags['show-cases']);
@@ -1032,7 +1242,14 @@ async function cmdEval(
   const mmrLambda = flags['mmr-lambda'] !== undefined ? parseFloat(String(flags['mmr-lambda'])) : undefined;
   const embeddingWeight = flags['embedding-weight'] !== undefined ? parseFloat(String(flags['embedding-weight'])) : undefined;
 
-  const entries = loadAllEntries(hippoRoot);
+  // Suite mode doesn't need an initialized store
+  if (flags['suite']) {
+    // handled below after bootstrap check
+  } else {
+    requireInit(hippoRoot);
+  }
+
+  const entries = flags['suite'] ? [] : loadAllEntries(hippoRoot);
 
   // Bootstrap mode: emit a synthetic corpus and exit.
   if (flags['bootstrap']) {
@@ -1050,8 +1267,44 @@ async function cmdEval(
     return;
   }
 
+  // Suite mode: run built-in feature eval (no corpus file needed, no init needed)
+  if (flags['suite']) {
+    const pkg = JSON.parse(fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1')), '..', 'package.json'), 'utf8'));
+    const version = pkg.version || 'unknown';
+
+    const baselinePath = flags['baseline'] ? String(flags['baseline']) : path.join(hippoRoot, 'eval-baseline.json');
+    let baseline: EvalBaseline | undefined;
+    if (fs.existsSync(baselinePath)) {
+      try { baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8')); } catch {}
+    }
+
+    const result = await runFeatureEval(version);
+
+    if (asJson) {
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      console.log(formatResult(result, baseline));
+    }
+
+    if (flags['save-baseline']) {
+      const newBaseline = resultToBaseline(result);
+      fs.mkdirSync(path.dirname(baselinePath), { recursive: true });
+      fs.writeFileSync(baselinePath, JSON.stringify(newBaseline, null, 2), 'utf8');
+      console.log(`\nBaseline saved to ${baselinePath}`);
+    }
+
+    if (baseline) {
+      const report = detectRegressions(baseline, result);
+      if (report.verdict === 'REGRESSION' && minMrr === null) {
+        process.exit(1);
+      }
+    }
+
+    return;
+  }
+
   if (!corpusPath) {
-    console.error('Usage: hippo eval <corpus.json>  OR  hippo eval --bootstrap [--out <path>]');
+    console.error('Usage: hippo eval <corpus.json>  OR  hippo eval --suite [--save-baseline]  OR  hippo eval --bootstrap');
     process.exit(1);
   }
 
@@ -1698,6 +1951,18 @@ async function cmdSleepCore(
       const shared = autoShare(hippoRoot, { minScore: 0.6 });
       if (shared.length > 0) {
         console.log(`\nAuto-shared ${shared.length} high-value memories to global store.`);
+      }
+    }
+  }
+
+  // Post-sleep ambient state summary
+  if (!dryRun) {
+    const postSleepConfig = loadConfig(hippoRoot);
+    if (postSleepConfig.ambient.enabled) {
+      const postSleepEntries = loadAllEntries(hippoRoot).filter(e => !e.superseded_by);
+      if (postSleepEntries.length > 0) {
+        const ambientState = computeAmbientState(postSleepEntries);
+        console.log(`\n${renderAmbientSummary(ambientState)}`);
       }
     }
   }
@@ -2762,18 +3027,21 @@ async function cmdContext(
   localEntries = localEntries.filter(e => !e.superseded_by);
   globalEntries = globalEntries.filter(e => !e.superseded_by);
 
-  const allEntries = [...localEntries];
-
-  if (allEntries.length === 0 && globalEntries.length === 0) return; // no memories, zero output
-
   let selectedItems: Array<{ entry: MemoryEntry; score: number; tokens: number; isGlobal?: boolean }> = [];
   let totalTokens = 0;
   // Task snapshots / session events live in the local store. Skip when
   // local isn't initialized — loading would auto-create .hippo in the cwd.
   const activeSnapshot = hasLocal ? loadActiveTaskSnapshot(hippoRoot) : null;
+  const sessionHandoff = hasLocal && activeSnapshot?.session_id
+    ? loadLatestHandoff(hippoRoot, activeSnapshot.session_id)
+    : null;
   const recentSessionEvents = hasLocal && activeSnapshot?.session_id
     ? listSessionEvents(hippoRoot, { session_id: activeSnapshot.session_id, limit: 5 })
     : [];
+
+  if (localEntries.length === 0 && globalEntries.length === 0 && !activeSnapshot && !sessionHandoff && recentSessionEvents.length === 0) {
+    return;
+  }
 
   // --pinned-only: restrict to pinned entries only. Used by the Claude Code
   // UserPromptSubmit hook so invariants stay in context every turn.
@@ -2875,7 +3143,7 @@ async function cmdContext(
     totalTokens = selectedItems.reduce((sum, r) => sum + r.tokens, 0);
   }
 
-  if (selectedItems.length === 0 && !activeSnapshot && recentSessionEvents.length === 0) return;
+  if (selectedItems.length === 0 && !activeSnapshot && !sessionHandoff && recentSessionEvents.length === 0) return;
 
   // --pinned-only is called by the UserPromptSubmit hook every turn. Treat it
   // as read-only so pinned memories don't inflate retrieval_count or extend
@@ -2913,7 +3181,7 @@ async function cmdContext(
       content: r.entry.content,
       global: r.isGlobal ?? false,
     }));
-    console.log(JSON.stringify({ query, activeSnapshot, recentSessionEvents, memories: output, tokens: totalTokens }));
+    console.log(JSON.stringify({ query, activeSnapshot, sessionHandoff, recentSessionEvents, memories: output, tokens: totalTokens }));
   } else if (format === 'additional-context') {
     // Claude Code UserPromptSubmit hook JSON shape. Capture the markdown that
     // printContextMarkdown would write and wrap it as `additionalContext`.
@@ -2922,17 +3190,20 @@ async function cmdContext(
     console.log = (...parts: unknown[]) => { lines.push(parts.map(String).join(' ')); };
     try {
       if (activeSnapshot) printActiveTaskSnapshot(activeSnapshot);
+      if (sessionHandoff) printHandoff(sessionHandoff);
       if (recentSessionEvents.length > 0) printSessionEvents(recentSessionEvents);
-      printContextMarkdown(
-        selectedItems.map((r) => ({
-          entry: updatedEntries.find((u) => u.id === r.entry.id) ?? r.entry,
-          score: r.score,
-          tokens: r.tokens,
-          isGlobal: r.isGlobal ?? false,
-        })),
-        totalTokens,
-        framing
-      );
+      if (selectedItems.length > 0) {
+        printContextMarkdown(
+          selectedItems.map((r) => ({
+            entry: updatedEntries.find((u) => u.id === r.entry.id) ?? r.entry,
+            score: r.score,
+            tokens: r.tokens,
+            isGlobal: r.isGlobal ?? false,
+          })),
+          totalTokens,
+          framing
+        );
+      }
     } finally {
       console.log = realLog;
     }
@@ -2949,19 +3220,34 @@ async function cmdContext(
     if (activeSnapshot) {
       printActiveTaskSnapshot(activeSnapshot);
     }
+    if (sessionHandoff) {
+      printHandoff(sessionHandoff);
+    }
     if (recentSessionEvents.length > 0) {
       printSessionEvents(recentSessionEvents);
     }
-    printContextMarkdown(
-      selectedItems.map((r) => ({
-        entry: updatedEntries.find((u) => u.id === r.entry.id) ?? r.entry,
-        score: r.score,
-        tokens: r.tokens,
-        isGlobal: r.isGlobal ?? false,
-      })),
-      totalTokens,
-      framing
-    );
+    if (selectedItems.length > 0) {
+      printContextMarkdown(
+        selectedItems.map((r) => ({
+          entry: updatedEntries.find((u) => u.id === r.entry.id) ?? r.entry,
+          score: r.score,
+          tokens: r.tokens,
+          isGlobal: r.isGlobal ?? false,
+        })),
+        totalTokens,
+        framing
+      );
+    }
+
+    // Ambient state summary (one-line landscape overview)
+    const ambientConfig = loadConfig(hippoRoot);
+    if (ambientConfig.ambient.enabled && !pinnedOnly) {
+      const allForAmbient = [...localEntries, ...globalEntries];
+      if (allForAmbient.length > 0) {
+        const ambientState = computeAmbientState(allForAmbient);
+        console.log(`\n${renderAmbientSummary(ambientState)}`);
+      }
+    }
   }
 }
 
@@ -3999,6 +4285,38 @@ Commands:
     --why                  Show match reasons and source annotations
     --no-mmr               Disable MMR diversity re-ranking
     --mmr-lambda <f>       MMR balance 0..1 (default: 0.7, 1.0 = pure relevance)
+    --evc-adaptive         ACC-style: when top-K shows high inter-item overlap
+                           (= conflict cluster), expand pool and re-rank by
+                           recency. Default off. RESEARCH.md §PFC.ACC.
+    --filter-conflicts     vlPFC interference filter: drop superseded entries
+                           and 0.3x-downweight entries flagged in an open
+                           conflict with a peer in the same result set.
+                           Uses recorded supersession + conflicts only — never
+                           lexical inference. Default off. RESEARCH.md §PFC.vlPFC.
+    --value-aware          vmPFC value attribution: boost memories with positive
+                           cumulative outcomes and demote those with negative
+                           outcomes during ranking. Multiplier
+                           clip(1 + 0.3*tanh(pos - neg), 0.7, 1.3). Reuses
+                           outcome_positive / outcome_negative; no schema
+                           change. Default off. RESEARCH.md §PFC.vmPFC.
+    --rerank-utility       OFC option-value re-ranker: combine relevance,
+                           strength, and integration cost into a single utility
+                           = score * (0.5 + 0.5 * strength) * (1 - cost_factor)
+                           where cost_factor = min(0.3, tokens / 10000). Re-sorts
+                           results by utility. Default off. RESEARCH.md §PFC.OFC.
+    --goal <tag>           dlPFC goal-conditioned recall: memories tagged with
+                           the goal tag get a 1.5x score boost and results are
+                           re-sorted. Default off. RESEARCH.md §PFC.dlPFC.
+    --salience-threshold <n>
+                           Pineal salience: down-weight memories whose
+                           retrieval_count is below n. score *= max(0.5,
+                           retrieval_count / n) for entries with count < n;
+                           entries at or above n are unchanged. Salience emerges
+                           from USE, not from lexical overlap. Default off.
+                           RESEARCH.md §"AI Pineal Gland". (v1's creation-time
+                           lexical gate destroyed LoCoMo 0.28 -> 0.02; this v2
+                           is retrieval-side, opt-in only — see MEMORY.md
+                           "Hippo salience gate destroys benchmark recall".)
   explain <query>          Show full score breakdown for each retrieved memory
     --budget <n>           Token budget (default: 4000)
     --limit <n>            Cap the number of results displayed
@@ -4232,7 +4550,12 @@ async function main(): Promise<void> {
       break;
 
     case 'remember': {
-      const text = args.join(' ').trim();
+      let text: string;
+      if (args.length === 1 && args[0] === '-') {
+        text = fs.readFileSync(0, 'utf-8').trim();
+      } else {
+        text = args.join(' ').trim();
+      }
       if (!text || text.length < 3) {
         console.error('Memory content too short (minimum 3 characters).');
         process.exit(1);

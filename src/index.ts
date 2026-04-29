@@ -89,3 +89,28 @@ export {
   ImportResult,
   ImportOptions,
 } from './importers.js';
+
+// Feature eval suite
+export {
+  runFeatureEval,
+  formatResult,
+  resultToBaseline,
+  detectRegressions,
+  buildSyntheticCorpus,
+} from './eval-suite.js';
+
+// Pineal gland: salience gate
+export {
+  computeSalience,
+  SalienceDecision,
+  SalienceResult,
+  SalienceOptions,
+} from './salience.js';
+
+// Pineal gland: ambient state vector
+export {
+  computeAmbientState,
+  renderAmbientSummary,
+  formatAmbientVector,
+  AmbientState,
+} from './ambient.js';

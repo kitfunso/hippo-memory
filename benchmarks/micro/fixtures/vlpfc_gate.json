@@ -1,0 +1,28 @@
+{
+  "name": "vlpfc-gate",
+  "mechanic": "vlpfc-gate",
+  "description": "vlPFC interference filter (RESEARCH.md §PFC.vlPFC). When --include-superseded surfaces an out-of-date fact alongside its successor, --filter-conflicts drops the superseded entry from results. Uses recorded supersession only (entry.superseded_by) — never lexical inference.",
+  "remembers": [
+    "Production deployment runs on Heroku Standard-2X dynos in eu-west-1 with Postgres add-on",
+    "Team standup is at 10am every Tuesday in the main meeting room",
+    "Alice prefers green tea in the morning before the daily sync"
+  ],
+  "actions": [
+    {"type": "supersede", "remember_index": 0, "new_content": "Production deployment now uses AWS Fargate in us-east-1 with an RDS Aurora cluster"}
+  ],
+  "queries": [
+    {
+      "q": "production deployment platform",
+      "must_contain_any": ["Heroku", "Standard-2X"],
+      "top_k": 3,
+      "cli_args": ["--include-superseded"]
+    },
+    {
+      "q": "production deployment platform",
+      "must_contain_any": ["AWS", "Fargate", "RDS"],
+      "must_not_contain_any": ["Heroku", "Standard-2X"],
+      "top_k": 3,
+      "cli_args": ["--include-superseded", "--filter-conflicts"]
+    }
+  ]
+}
