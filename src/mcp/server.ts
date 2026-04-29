@@ -63,6 +63,22 @@ interface McpResponse {
 
 export type { McpRequest, McpResponse };
 
+/**
+ * Optional execution context threaded from a non-stdio transport. When the
+ * HTTP transport in src/server.ts calls handleMcpRequest, it knows the
+ * server's bound hippoRoot and the auth-resolved tenantId/actor. Passing
+ * those through here lets executeTool skip the findHippoRoot() walk and
+ * the env-based resolveTenantId({}) fallback — both of which would
+ * otherwise produce the wrong store and the wrong tenant for HTTP callers.
+ *
+ * Stdio callers pass nothing; behavior stays unchanged for that path.
+ */
+export interface McpContext {
+  hippoRoot: string;
+  tenantId: string;
+  actor: string;
+}
+
 // MCP stdio transport spec: messages are newline-delimited JSON-RPC, no embedded newlines.
 // https://modelcontextprotocol.io/specification/.../basic/transports#stdio
 function send(msg: McpResponse): void {
@@ -220,14 +236,24 @@ let lastRecalledIds: string[] = [];
 
 // ── Tool execution ──
 
-async function executeTool(name: string, args: Record<string, unknown>): Promise<string> {
-  const hippoRoot = findHippoRoot();
+async function executeTool(
+  name: string,
+  args: Record<string, unknown>,
+  ctx?: McpContext,
+): Promise<string> {
+  // When a transport hands us a context (HTTP path), trust it: the HTTP
+  // server already resolved hippoRoot from its bound opts and tenantId
+  // from the Bearer token (or the loopback fallback). The stdio path
+  // continues to walk from cwd / fall back to the global root, and to
+  // resolve tenant from HIPPO_TENANT.
+  const hippoRoot = ctx?.hippoRoot ?? findHippoRoot();
   if (!hippoRoot) return 'No .hippo/ store found. Run: hippo init';
 
   const config = loadConfig(hippoRoot);
   // A5: every loadAllEntries() in this server returns to the caller and is
-  // tenant-isolated. Resolved once per tool call from HIPPO_TENANT (or default).
-  const tenantId = resolveTenantId({});
+  // tenant-isolated. Resolved once per tool call: prefer the transport's
+  // ctx.tenantId so an HTTP Bearer for tenant B doesn't drop to HIPPO_TENANT.
+  const tenantId = ctx?.tenantId ?? resolveTenantId({});
 
   switch (name) {
     case 'hippo_recall': {
@@ -263,6 +289,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
         confidence: 'verified',
         baseHalfLifeDays: config.defaultHalfLifeDays,
         schema_fit: schemaFit,
+        tenantId,
       });
       writeEntry(hippoRoot, entry);
 
@@ -379,6 +406,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
           source: 'git',
           confidence: 'observed',
           baseHalfLifeDays: config.defaultHalfLifeDays,
+          tenantId,
         });
         writeEntry(hippoRoot, entry);
         added++;
@@ -434,7 +462,10 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
  * expected) and a McpResponse otherwise. Errors thrown by `executeTool` are
  * the caller's problem — wrap with try/catch on the transport side.
  */
-export async function handleMcpRequest(req: McpRequest): Promise<McpResponse | null> {
+export async function handleMcpRequest(
+  req: McpRequest,
+  ctx?: McpContext,
+): Promise<McpResponse | null> {
   const { id, method, params } = req;
 
   switch (method) {
@@ -458,7 +489,7 @@ export async function handleMcpRequest(req: McpRequest): Promise<McpResponse | n
     case 'tools/call': {
       const toolName = (params as any)?.name;
       const toolArgs = (params as any)?.arguments ?? {};
-      const output = await executeTool(toolName, toolArgs);
+      const output = await executeTool(toolName, toolArgs, ctx);
       return {
         jsonrpc: '2.0',
         id,

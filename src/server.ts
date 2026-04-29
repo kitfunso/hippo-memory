@@ -526,7 +526,12 @@ async function handleRequest(
   // loopback no-auth fallback. SSE check runs once at stream-open.
 
   if (method === 'POST' && path === '/mcp') {
-    requireAuth(req, opts.hippoRoot);
+    // Build the same Context the /v1/* routes use so MCP tool calls inherit
+    // the server's bound hippoRoot and the auth-resolved tenantId / actor.
+    // Without this, executeTool would walk from cwd via findHippoRoot() and
+    // pull tenant from HIPPO_TENANT, dropping a valid Bearer for tenant B
+    // back to whatever the env says.
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const raw = await readBody(req);
     let mcpReq: McpRequest;
     try {
@@ -539,7 +544,11 @@ async function handleRequest(
     }
     let mcpRes;
     try {
-      mcpRes = await handleMcpRequest(mcpReq);
+      mcpRes = await handleMcpRequest(mcpReq, {
+        hippoRoot: ctx.hippoRoot,
+        tenantId: ctx.tenantId,
+        actor: ctx.actor,
+      });
     } catch (err) {
       mcpRes = {
         jsonrpc: '2.0' as const,

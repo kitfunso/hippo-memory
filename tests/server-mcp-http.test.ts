@@ -22,38 +22,19 @@ function makeRoot(): string {
 
 describe('MCP-over-HTTP transport', () => {
   let home: string;
-  let hippoDir: string;
   let handle: ServerHandle;
-  let prevHippoHome: string | undefined;
-  let prevHome: string | undefined;
-  let prevUserProfile: string | undefined;
 
   beforeEach(async () => {
     home = makeRoot();
-    hippoDir = join(home, '.hippo');
-    // The MCP dispatcher resolves its hippo root via findHippoRoot(), which
-    // walks up from cwd first and falls back to the global store. Vitest
-    // worker pools forbid process.chdir, so we can't redirect the cwd walk
-    // away from the repo root's own .hippo/. Instead we verify via the MCP
-    // recall tool itself, which lands in whatever store the dispatcher picks
-    // — same store the remember call wrote to, end-to-end through HTTP.
-    prevHippoHome = process.env.HIPPO_HOME;
-    prevHome = process.env.HOME;
-    prevUserProfile = process.env.USERPROFILE;
-    process.env.HIPPO_HOME = hippoDir;
-    process.env.HOME = home;
-    process.env.USERPROFILE = home;
+    // The HTTP transport now threads hippoRoot + auth-resolved tenant
+    // through handleMcpRequest, so executeTool no longer walks cwd via
+    // findHippoRoot() or reads HIPPO_TENANT from the env. No env hacks
+    // needed — the per-test temp root is the source of truth end-to-end.
     handle = await serve({ hippoRoot: home, port: 0 });
   });
 
   afterEach(async () => {
     await handle.stop();
-    if (prevHippoHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = prevHippoHome;
-    if (prevHome === undefined) delete process.env.HOME;
-    else process.env.HOME = prevHome;
-    if (prevUserProfile === undefined) delete process.env.USERPROFILE;
-    else process.env.USERPROFILE = prevUserProfile;
     try { rmSync(home, { recursive: true, force: true }); } catch { /* windows file locks */ }
   });
 
