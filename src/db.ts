@@ -21,7 +21,7 @@ const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: new (path: string) => DatabaseSyncLike;
 };
 
-const CURRENT_SCHEMA_VERSION = 15;
+const CURRENT_SCHEMA_VERSION = 16;
 
 type Migration = {
   version: number;
@@ -359,6 +359,35 @@ const MIGRATIONS: Migration[] = [
         CREATE UNIQUE INDEX IF NOT EXISTS idx_raw_archive_id_at
         ON raw_archive(memory_id, archived_at)
       `);
+    },
+  },
+  {
+    version: 16,
+    up: (db) => {
+      // A5 stub auth: add tenant_id to all data tables. Single-tenant per deployment;
+      // multi-tenant enforcement deferred to v2 (full A5). The columns are needed now
+      // so future B-track tables don't have to backfill.
+      if (!tableHasColumn(db, 'memories', 'tenant_id')) {
+        db.exec(`ALTER TABLE memories ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
+      }
+      if (!tableHasColumn(db, 'working_memory', 'tenant_id')) {
+        db.exec(`ALTER TABLE working_memory ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
+      }
+      if (!tableHasColumn(db, 'consolidation_runs', 'tenant_id')) {
+        db.exec(`ALTER TABLE consolidation_runs ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
+      }
+      if (!tableHasColumn(db, 'task_snapshots', 'tenant_id')) {
+        db.exec(`ALTER TABLE task_snapshots ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
+      }
+      if (!tableHasColumn(db, 'memory_conflicts', 'tenant_id')) {
+        db.exec(`ALTER TABLE memory_conflicts ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
+      }
+      // Composite indexes for recall hot paths. Leading column is tenant_id so
+      // single-tenant lookups are O(log n).
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_tenant_created ON memories(tenant_id, created)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_working_memory_tenant ON working_memory(tenant_id, importance DESC, created_at DESC)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_consolidation_runs_tenant_ts ON consolidation_runs(tenant_id, timestamp DESC)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_task_snapshots_tenant_status ON task_snapshots(tenant_id, status, updated_at DESC)`);
     },
   },
 ];
