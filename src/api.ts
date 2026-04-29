@@ -90,6 +90,16 @@ export interface RecallOpts {
   query: string;
   limit?: number;
   mode?: 'bm25' | 'hybrid' | 'physics';
+  /**
+   * Restrict results to memories whose `scope` equals this value exactly.
+   *
+   * When `scope` is undefined or empty, recall applies a DEFAULT-DENY rule:
+   * any memory whose scope starts with `'slack:private:'` is filtered out so
+   * a frontend caller passing `undefined` cannot accidentally surface
+   * private-channel content. Memories with scope=null (the common case for
+   * non-Slack content) are still returned.
+   */
+  scope?: string;
 }
 
 export interface RecallResultItem {
@@ -114,12 +124,24 @@ export interface RecallResult {
  */
 export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   const limit = opts.limit ?? 10;
-  const entries = loadSearchEntries(
+  const all = loadSearchEntries(
     ctx.hippoRoot,
     opts.query,
     undefined,
     ctx.tenantId,
   );
+  // Scope filtering runs AFTER the tenant filter inside loadSearchEntries, so
+  // a tenant-mismatched scope cannot surface another tenant's row even when
+  // both share the same scope string (e.g. 'slack:private:CSHARED').
+  let entries: typeof all;
+  if (opts.scope !== undefined && opts.scope !== '') {
+    entries = all.filter((e) => e.scope === opts.scope);
+  } else {
+    // Default-deny: a no-scope caller cannot see private slack channels. This
+    // is load-bearing because frontend callers will pass `undefined` and must
+    // not see `slack:private:*` rows by default.
+    entries = all.filter((e) => !(e.scope ?? '').startsWith('slack:private:'));
+  }
   // BM25 ordering already comes from loadSearchEntries; cap to `limit`.
   // Score is a placeholder — the physics/hybrid scorers in src/search.ts
   // produce richer breakdowns and will replace this when wired up.
