@@ -47,3 +47,51 @@ describe('A5 schema migration v16: tenant_id columns', () => {
     }
   });
 });
+
+describe('A5 schema migration v16: api_keys and audit_log tables', () => {
+  it('creates api_keys table with required columns', () => {
+    const home = mkdtempSync(join(tmpdir(), 'hippo-a5-'));
+    const db = openHippoDb(home);
+    try {
+      const cols = db.prepare(`PRAGMA table_info(api_keys)`).all() as Array<{ name: string }>;
+      const names = new Set(cols.map((c) => c.name));
+      for (const required of ['id', 'key_id', 'key_hash', 'tenant_id', 'created_at', 'revoked_at', 'label']) {
+        expect(names.has(required), `api_keys.${required} missing`).toBe(true);
+      }
+    } finally {
+      closeHippoDb(db);
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('enforces UNIQUE on api_keys.key_id', () => {
+    const home = mkdtempSync(join(tmpdir(), 'hippo-a5-'));
+    const db = openHippoDb(home);
+    try {
+      db.prepare(`INSERT INTO api_keys(key_id, key_hash, tenant_id, created_at) VALUES (?, ?, ?, ?)`)
+        .run('hk_abc', 'hash1', 'default', new Date().toISOString());
+      expect(() =>
+        db.prepare(`INSERT INTO api_keys(key_id, key_hash, tenant_id, created_at) VALUES (?, ?, ?, ?)`)
+          .run('hk_abc', 'hash2', 'default', new Date().toISOString()),
+      ).toThrow(/UNIQUE/i);
+    } finally {
+      closeHippoDb(db);
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('creates audit_log table with required columns', () => {
+    const home = mkdtempSync(join(tmpdir(), 'hippo-a5-'));
+    const db = openHippoDb(home);
+    try {
+      const cols = db.prepare(`PRAGMA table_info(audit_log)`).all() as Array<{ name: string }>;
+      const names = new Set(cols.map((c) => c.name));
+      for (const required of ['id', 'ts', 'tenant_id', 'actor', 'op', 'target_id', 'metadata_json']) {
+        expect(names.has(required), `audit_log.${required} missing`).toBe(true);
+      }
+    } finally {
+      closeHippoDb(db);
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
