@@ -8,7 +8,10 @@ export interface ServerInfo {
   started_at: string;
 }
 
-const PIDFILE = '.hippo/server.pid';
+// Pidfile sits directly inside hippoRoot. `hippoRoot` is the `.hippo`
+// directory itself (the same convention used by api.ts / store.ts /
+// openHippoDb), so this resolves to `${hippoRoot}/server.pid`.
+const PIDFILE = 'server.pid';
 
 /**
  * Read .hippo/server.pid and return the embedded ServerInfo if the recorded

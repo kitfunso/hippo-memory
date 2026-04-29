@@ -13,8 +13,9 @@ describe('server-detect', () => {
 
   it('returns null when pidfile exists but process is dead', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-pidf-'));
-    mkdirSync(join(home, '.hippo'), { recursive: true });
-    const pidfile = join(home, '.hippo', 'server.pid');
+    // hippoRoot is the .hippo directory itself, matching the api.ts/store.ts
+    // convention; pidfile sits directly inside it.
+    const pidfile = join(home, 'server.pid');
     writeFileSync(pidfile,
       JSON.stringify({ pid: 99999999, port: 6789, url: 'http://127.0.0.1:6789', started_at: new Date().toISOString() }));
     expect(detectServer(home)).toBeNull();
@@ -25,7 +26,6 @@ describe('server-detect', () => {
 
   it('writePidfile + removePidfile roundtrip', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-pidf-'));
-    mkdirSync(join(home, '.hippo'), { recursive: true });
     writePidfile(home, { port: 6789, url: 'http://127.0.0.1:6789' });
     const detected = detectServer(home);
     expect(detected?.url).toBe('http://127.0.0.1:6789');

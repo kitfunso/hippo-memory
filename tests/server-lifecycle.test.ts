@@ -59,7 +59,7 @@ describe('server lifecycle', () => {
   it('stop() removes the pidfile and closes the listener', async () => {
     const home = makeRoot();
     const handle = await serve({ hippoRoot: home, port: 0 });
-    const pidfile = join(home, '.hippo', 'server.pid');
+    const pidfile = join(home, 'server.pid');
     expect(existsSync(pidfile)).toBe(true);
 
     const port = handle.port;
