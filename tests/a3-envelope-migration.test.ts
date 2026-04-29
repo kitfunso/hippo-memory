@@ -6,15 +6,15 @@ import { openHippoDb, getCurrentSchemaVersion, getSchemaVersion, closeHippoDb } 
 import { createMemory, Layer } from '../src/memory.js';
 import { writeEntry, readEntry, initStore } from '../src/store.js';
 
-describe('A3 envelope migration v14', () => {
-  it('CURRENT_SCHEMA_VERSION is 14', () => {
-    expect(getCurrentSchemaVersion()).toBe(14);
+describe('A3 envelope migration v14+v15', () => {
+  it('CURRENT_SCHEMA_VERSION is 15 (v14 + v15 hardening)', () => {
+    expect(getCurrentSchemaVersion()).toBe(15);
   });
 
-  it('fresh db migrates to v14', () => {
+  it('fresh db migrates to v15', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
     const db = openHippoDb(home);
-    expect(getSchemaVersion(db)).toBe(14);
+    expect(getSchemaVersion(db)).toBe(15);
     closeHippoDb(db);
     rmSync(home, { recursive: true, force: true });
   });
@@ -93,15 +93,18 @@ describe('A3 envelope migration v14', () => {
   it('backfills kind=superseded for rows with superseded_by set, kind=distilled otherwise', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
     const db = openHippoDb(home);
-    // Simulate a pre-A3 state: insert two rows then null out their kind to mimic v13 data.
+    // The v14→v15 NULL guard means we cannot null out kind in app code to simulate
+    // pre-A3 state (the trigger aborts). Instead, drop the triggers, simulate, re-run
+    // the migration's backfill clause, then verify. This tests the SQL clause itself.
+    db.exec(`DROP TRIGGER IF EXISTS trg_memories_kind_check_insert`);
+    db.exec(`DROP TRIGGER IF EXISTS trg_memories_kind_check_update`);
     db.prepare(
-      `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, superseded_by) VALUES ('s1','2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','old','s2')`,
+      `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, superseded_by, kind) VALUES ('s1','2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','old','s2',NULL)`,
     ).run();
     db.prepare(
-      `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content) VALUES ('s2','2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','new')`,
+      `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, kind) VALUES ('s2','2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','new',NULL)`,
     ).run();
-    db.exec(`UPDATE memories SET kind = NULL WHERE id IN ('s1','s2')`);
-    // Re-run the migration's backfill SQL (idempotent by design).
+    // Re-run the v14 backfill SQL (idempotent by design)
     db.exec(`UPDATE memories SET kind = 'superseded' WHERE kind IS NULL AND superseded_by IS NOT NULL`);
     db.exec(`UPDATE memories SET kind = 'distilled' WHERE kind IS NULL`);
     const s1 = db.prepare(`SELECT kind FROM memories WHERE id='s1'`).get() as { kind: string };
@@ -162,6 +165,50 @@ describe('A3 envelope migration v14', () => {
     expect(read!.scope).toBeNull();
     expect(read!.owner).toBeNull();
     expect(read!.artifact_ref).toBeNull();
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  // v15 hardening: NULL-kind bypass closure + raw_archive uniqueness
+  it('v15: rejects INSERT with kind=NULL (closes the v14 NULL bypass)', () => {
+    const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
+    const db = openHippoDb(home);
+    expect(() =>
+      db.prepare(
+        `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, kind) VALUES ('null1','2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','c',NULL)`,
+      ).run(),
+    ).toThrow(/invalid kind/i);
+    closeHippoDb(db);
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('v15: rejects UPDATE that sets kind=NULL', () => {
+    const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
+    const db = openHippoDb(home);
+    db.prepare(
+      `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, kind) VALUES ('upd1','2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','c','distilled')`,
+    ).run();
+    expect(() => db.prepare(`UPDATE memories SET kind=NULL WHERE id='upd1'`).run()).toThrow(/invalid kind/i);
+    closeHippoDb(db);
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('v15: raw_archive (memory_id, archived_at) is unique', () => {
+    const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
+    const db = openHippoDb(home);
+    const ts = '2026-04-29T12:00:00.000Z';
+    db.prepare(
+      `INSERT INTO raw_archive (memory_id, archived_at, reason, archived_by, payload_json) VALUES (?, ?, ?, ?, ?)`,
+    ).run('m1', ts, 'test', 'user:1', '{}');
+    expect(() =>
+      db.prepare(
+        `INSERT INTO raw_archive (memory_id, archived_at, reason, archived_by, payload_json) VALUES (?, ?, ?, ?, ?)`,
+      ).run('m1', ts, 'duplicate at same instant', 'user:1', '{}'),
+    ).toThrow(/UNIQUE constraint/i);
+    // Different timestamps for the same memory_id are allowed (history)
+    db.prepare(
+      `INSERT INTO raw_archive (memory_id, archived_at, reason, archived_by, payload_json) VALUES (?, ?, ?, ?, ?)`,
+    ).run('m1', '2026-04-29T13:00:00.000Z', 'second event', 'user:1', '{}');
+    closeHippoDb(db);
     rmSync(home, { recursive: true, force: true });
   });
 });

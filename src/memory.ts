@@ -46,7 +46,7 @@ export interface MemoryEntry {
   valid_from: string;               // ISO 8601 timestamp when this belief became true
   superseded_by: string | null;     // ID of the memory that replaced this one; null = current
   extracted_from: string | null;
-  dag_level: number;            // 0=raw, 1=extracted_fact, 2=topic_summary, 3=entity_profile
+  dag_level: number;            // 0=leaf, 1=extracted_fact, 2=topic_summary, 3=entity_profile (independent of envelope `kind`)
   dag_parent_id: string | null; // ID of parent summary node in the DAG; null = root level
   // A3 provenance envelope (schema v14)
   kind: MemoryKind;             // raw | distilled | superseded | archived

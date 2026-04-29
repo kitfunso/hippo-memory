@@ -6,12 +6,19 @@ export interface ArchiveOpts {
   who: string;
 }
 
+// JSON.stringify cannot serialize BigInt by default. node:sqlite returns INTEGER
+// columns as bigint when the value exceeds Number.MAX_SAFE_INTEGER. Coerce to
+// string so the audit payload is always serializable.
+function bigintSafeReplacer(_key: string, value: unknown): unknown {
+  return typeof value === 'bigint' ? value.toString() : value;
+}
+
 /**
  * The only legitimate path to remove a `kind='raw'` row from `memories`.
  *
  * Snapshots the full row into `raw_archive`, flips `kind` to `'archived'` so the
  * append-only trigger lets the delete through, then deletes the row. All in one
- * transaction.
+ * SAVEPOINT so it can be nested inside an outer transaction (e.g. batchWriteAndDelete).
  *
  * Throws if the row does not exist or is not `kind='raw'`.
  */
@@ -24,11 +31,13 @@ export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: Archive
     throw new Error(`memory ${id} is not raw (kind=${String(row.kind)})`);
   }
 
-  db.exec('BEGIN');
+  // SAVEPOINT (not BEGIN) so this works whether or not we're already inside a
+  // transaction. SQLite refuses BEGIN within a transaction; SAVEPOINT nests safely.
+  db.exec('SAVEPOINT archive_raw');
   try {
     db.prepare(
       `INSERT INTO raw_archive (memory_id, archived_at, reason, archived_by, payload_json) VALUES (?, ?, ?, ?, ?)`,
-    ).run(id, new Date().toISOString(), opts.reason, opts.who, JSON.stringify(row));
+    ).run(id, new Date().toISOString(), opts.reason, opts.who, JSON.stringify(row, bigintSafeReplacer));
     // Flip kind to 'archived' so the BEFORE DELETE trigger no longer fires, then delete.
     db.prepare(`UPDATE memories SET kind = 'archived' WHERE id = ?`).run(id);
     db.prepare(`DELETE FROM memories WHERE id = ?`).run(id);
@@ -44,9 +53,10 @@ export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: Archive
         // self-heal on next DB open via backfillFtsIndex.
       }
     }
-    db.exec('COMMIT');
+    db.exec('RELEASE SAVEPOINT archive_raw');
   } catch (e) {
-    db.exec('ROLLBACK');
+    db.exec('ROLLBACK TO SAVEPOINT archive_raw');
+    db.exec('RELEASE SAVEPOINT archive_raw');
     throw e;
   }
 }
