@@ -110,3 +110,13 @@ by post-review fixes 2db5017..38339f4). Each item belongs in **A5 v2**
   honored on `rebuildIndex`. Side effect: hand-rolled markdown without the
   field defaults to `'default'` regardless of `HIPPO_TENANT`. Acceptable for
   single-tenant stub; revisit when tenants ship.
+
+- [ ] **L9 — Background pipelines bypass tenant filter.** `consolidate.ts`,
+  `embeddings.ts`, `invalidation.ts`, `refine-llm.ts`, `autolearn.ts`,
+  `capture.ts`, `importers.ts`, and `shared.ts` (autoShare,
+  syncGlobalToLocal, listPeers) all call `loadAllEntries(root)` with no
+  tenant filter. Consistent with the v0.35.0 "single tenant per deployment"
+  stub model, but a multi-tenant deployment running `hippo sleep` would
+  decay/merge/dedupe across tenants. Cross-tenant isolation must be threaded
+  through every background pass before flipping the deployment model. Track
+  with the same v2 audit as M2.
