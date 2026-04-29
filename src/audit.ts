@@ -133,7 +133,8 @@ export type AuditOp =
   | 'promote'
   | 'supersede'
   | 'forget'
-  | 'archive_raw';
+  | 'archive_raw'
+  | 'auth_revoke';
 
 export interface AppendAuditOpts {
   tenantId: string;

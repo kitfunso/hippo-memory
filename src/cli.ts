@@ -4429,18 +4429,23 @@ function cmdAuthRevoke(hippoRoot: string, keyId: string, flags: Record<string, s
 
   const db = openHippoDb(root);
   let exists = false;
+  let alreadyRevoked = false;
   let revokedAt: string | null = null;
+  let keyTenantId: string | null = null;
   try {
-    const row = db.prepare(`SELECT key_id, revoked_at FROM api_keys WHERE key_id = ?`).get(keyId) as
-      | { key_id: string; revoked_at: string | null }
+    const row = db.prepare(`SELECT key_id, tenant_id, revoked_at FROM api_keys WHERE key_id = ?`).get(keyId) as
+      | { key_id: string; tenant_id: string; revoked_at: string | null }
       | undefined;
     if (!row) {
-      closeHippoDb(db);
+      // Let the finally{} block close the db. M4: avoid manual close before
+      // process.exit() — the finally already handles it on every path.
       console.error(`Unknown key_id: ${keyId}`);
       process.exit(1);
     }
     exists = true;
+    keyTenantId = row.tenant_id;
     if (row.revoked_at) {
+      alreadyRevoked = true;
       revokedAt = row.revoked_at;
     } else {
       revokeApiKey(db, keyId);
@@ -4448,6 +4453,20 @@ function cmdAuthRevoke(hippoRoot: string, keyId: string, flags: Record<string, s
         | { revoked_at: string | null }
         | undefined;
       revokedAt = updated?.revoked_at ?? null;
+    }
+    // M1: emit auth_revoke audit event. Skip on no-op revoke (already revoked)
+    // so re-running the command doesn't pad the audit log with duplicates.
+    if (!alreadyRevoked && keyTenantId) {
+      try {
+        appendAuditEvent(db, {
+          tenantId: keyTenantId,
+          actor: 'cli',
+          op: 'auth_revoke',
+          targetId: keyId,
+        });
+      } catch {
+        // Audit must not crash a successful revoke.
+      }
     }
   } finally {
     closeHippoDb(db);
@@ -4473,6 +4492,7 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'supersede',
   'forget',
   'archive_raw',
+  'auth_revoke',
 ]);
 
 function formatAuditRow(ev: AuditEvent): string {

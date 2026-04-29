@@ -55,12 +55,13 @@ export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: Archive
       }
     }
     // A5 audit: emit archive_raw event inside the SAVEPOINT so the audit row is
-    // committed atomically with the row deletion. Inline env-based tenant
-    // resolution avoids importing src/tenant.ts (which would pull auth.ts and
-    // create a small import cycle for a leaf module).
+    // committed atomically with the row deletion. Use the row's own tenant_id
+    // (fetched above as part of SELECT *), not the env. Archives must be
+    // attributed to the tenant that owns the row, not whatever HIPPO_TENANT
+    // happens to be set to in the calling shell.
     try {
       appendAuditEvent(db, {
-        tenantId: process.env.HIPPO_TENANT ?? 'default',
+        tenantId: String(row.tenant_id ?? 'default'),
         actor: opts.who || 'cli',
         op: 'archive_raw',
         targetId: id,
