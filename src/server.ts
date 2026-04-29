@@ -1,6 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
 import { writePidfile, removePidfile } from './server-detect.js';
 import { resolveTenantId } from './tenant.js';
+import { openHippoDb, closeHippoDb } from './db.js';
+import { validateApiKey } from './auth.js';
 import {
   remember,
   recall,
@@ -181,11 +183,87 @@ function matchPath(pattern: string, path: string): Record<string, string> | null
   return params;
 }
 
-function buildContext(hippoRoot: string): Context {
+/**
+ * Recognise loopback remote addresses. Node reports IPv6-mapped IPv4 as
+ * '::ffff:127.0.0.1' on dual-stack sockets, so we accept that alongside
+ * the bare v4 and v6 loopbacks. Anything else is treated as remote.
+ */
+export function isLoopback(remoteAddress: string | undefined): boolean {
+  if (!remoteAddress) return false;
+  if (remoteAddress === '127.0.0.1') return true;
+  if (remoteAddress === '::1') return true;
+  if (remoteAddress === '::ffff:127.0.0.1') return true;
+  return false;
+}
+
+/**
+ * Read the Authorization header in a case-insensitive way and pull the
+ * bearer token out. Returns:
+ *   - { kind: 'absent' } when no Authorization header is present
+ *   - { kind: 'malformed' } when the header is set but not 'Bearer <token>'
+ *   - { kind: 'bearer', token } when a non-empty bearer token is present
+ *
+ * The header NAME is case-insensitive (Node lowercases all header names on
+ * IncomingMessage.headers); the SCHEME ('Bearer') is also matched
+ * case-insensitively per RFC 6750.
+ */
+type AuthHeader =
+  | { kind: 'absent' }
+  | { kind: 'malformed' }
+  | { kind: 'bearer'; token: string };
+
+function readAuthHeader(req: IncomingMessage): AuthHeader {
+  const raw = req.headers['authorization'];
+  if (raw === undefined) return { kind: 'absent' };
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (typeof value !== 'string' || value.length === 0) return { kind: 'malformed' };
+  const space = value.indexOf(' ');
+  if (space < 0) return { kind: 'malformed' };
+  const scheme = value.slice(0, space);
+  const token = value.slice(space + 1).trim();
+  if (scheme.toLowerCase() !== 'bearer') return { kind: 'malformed' };
+  if (token.length === 0) return { kind: 'malformed' };
+  return { kind: 'bearer', token };
+}
+
+/**
+ * Build a per-request Context from the Authorization header and remote
+ * address. Throws HttpError(401) for invalid / missing credentials. Opens
+ * the DB only when a Bearer token is present so loopback no-auth requests
+ * stay cheap.
+ */
+function buildContextWithAuth(req: IncomingMessage, hippoRoot: string): Context {
+  const auth = readAuthHeader(req);
+
+  if (auth.kind === 'malformed') {
+    throw new HttpError(401, 'invalid api key');
+  }
+
+  if (auth.kind === 'bearer') {
+    const db = openHippoDb(hippoRoot);
+    try {
+      const result = validateApiKey(db, auth.token);
+      if (!result.valid || !result.tenantId || !result.keyId) {
+        throw new HttpError(401, 'invalid api key');
+      }
+      return {
+        hippoRoot,
+        tenantId: result.tenantId,
+        actor: `api_key:${result.keyId}`,
+      };
+    } finally {
+      closeHippoDb(db);
+    }
+  }
+
+  // No Authorization header. Loopback-only fallback.
+  if (!isLoopback(req.socket.remoteAddress)) {
+    throw new HttpError(401, 'auth required');
+  }
+
   return {
     hippoRoot,
     tenantId: resolveTenantId({}),
-    // Task 9 (auth middleware) overrides this for authenticated requests.
     actor: 'localhost:cli',
   };
 }
@@ -231,7 +309,7 @@ async function handleRequest(
     if (kindRaw !== undefined && !VALID_KINDS.has(kindRaw as MemoryKind)) {
       throw new HttpError(400, `invalid kind: ${kindRaw}`);
     }
-    const ctx = buildContext(opts.hippoRoot);
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = remember(ctx, {
       content,
       kind: kindRaw as MemoryKind | undefined,
@@ -259,7 +337,7 @@ async function handleRequest(
     if (mode !== null && mode !== 'bm25' && mode !== 'hybrid' && mode !== 'physics') {
       throw new HttpError(400, "mode must be 'bm25', 'hybrid', or 'physics'");
     }
-    const ctx = buildContext(opts.hippoRoot);
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = recall(ctx, {
       query: q,
       limit,
@@ -277,7 +355,7 @@ async function handleRequest(
     if (!reason) {
       throw new HttpError(400, 'reason is required');
     }
-    const ctx = buildContext(opts.hippoRoot);
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = archiveRaw(ctx, archiveMatch.id!, reason);
     sendJson(res, 200, result);
     return;
@@ -290,7 +368,7 @@ async function handleRequest(
     if (!content) {
       throw new HttpError(400, 'content is required');
     }
-    const ctx = buildContext(opts.hippoRoot);
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = supersede(ctx, supersedeMatch.id!, content);
     sendJson(res, 200, result);
     return;
@@ -298,7 +376,7 @@ async function handleRequest(
 
   const promoteMatch = matchPath('/v1/memories/:id/promote', path);
   if (method === 'POST' && promoteMatch) {
-    const ctx = buildContext(opts.hippoRoot);
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = promote(ctx, promoteMatch.id!);
     sendJson(res, 200, result);
     return;
@@ -306,7 +384,7 @@ async function handleRequest(
 
   const idMatch = matchPath('/v1/memories/:id', path);
   if (method === 'DELETE' && idMatch) {
-    const ctx = buildContext(opts.hippoRoot);
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = forget(ctx, idMatch.id!);
     sendJson(res, 200, result);
     return;
@@ -325,7 +403,7 @@ async function handleRequest(
     if (tenantIdRaw !== undefined && typeof tenantIdRaw !== 'string') {
       throw new HttpError(400, 'tenantId must be a string');
     }
-    const ctx = buildContext(opts.hippoRoot);
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = authCreate(ctx, {
       label: labelRaw,
       tenantId: tenantIdRaw,
@@ -345,7 +423,7 @@ async function handleRequest(
       else if (activeRaw === 'false') active = false;
       else throw new HttpError(400, "active must be 'true' or 'false'");
     }
-    const ctx = buildContext(opts.hippoRoot);
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = authList(ctx, { active });
     sendJson(res, 200, result);
     return;
@@ -357,7 +435,7 @@ async function handleRequest(
   // surface revokedAt to the caller.
   const keyMatch = matchPath('/v1/auth/keys/:keyId', path);
   if (method === 'DELETE' && keyMatch) {
-    const ctx = buildContext(opts.hippoRoot);
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = authRevoke(ctx, keyMatch.keyId!);
     sendJson(res, 200, result);
     return;
@@ -393,7 +471,7 @@ async function handleRequest(
       }
       limit = parsed;
     }
-    const ctx = buildContext(opts.hippoRoot);
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = auditList(ctx, { op, since, limit });
     sendJson(res, 200, result);
     return;
