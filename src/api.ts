@@ -7,7 +7,7 @@
  * in exactly one place.
  */
 
-import { openHippoDb, closeHippoDb } from './db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import {
   writeEntry,
   readEntry,
@@ -49,6 +49,15 @@ export interface RememberOpts {
   owner?: string;
   artifactRef?: string;
   tags?: string[];
+  /**
+   * Optional hook invoked inside the same transaction as the underlying
+   * memories INSERT. Used by ingestion connectors (E1.3+) to stamp
+   * idempotency / cursor rows atomically with the memory row, so a crash
+   * mid-write cannot produce a memory without its corresponding side-effect
+   * log row (or vice versa). If the callback throws, the INSERT is rolled
+   * back and the error is rethrown.
+   */
+  afterWrite?: (db: DatabaseSyncLike, memoryId: string) => void;
 }
 
 export interface RememberResult {
@@ -68,7 +77,7 @@ export function remember(ctx: Context, opts: RememberOpts): RememberResult {
   });
   // writeEntry threads ctx.actor into its internal audit hook, so exactly
   // one 'remember' event lands in the log with the supplied actor.
-  writeEntry(ctx.hippoRoot, entry, { actor: ctx.actor });
+  writeEntry(ctx.hippoRoot, entry, { actor: ctx.actor, afterWrite: opts.afterWrite });
 
   return { id: entry.id, kind: entry.kind, tenantId: ctx.tenantId };
 }

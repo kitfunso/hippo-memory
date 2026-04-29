@@ -17,6 +17,7 @@ import {
   isFtsAvailable,
   pruneConsolidationRuns,
   getHippoDbPath,
+  type DatabaseSyncLike,
 } from './db.js';
 import { SessionHandoff, SessionHandoffRow, rowToSessionHandoff } from './handoff.js';
 import { tokenize } from './search.js';
@@ -939,16 +940,45 @@ export function saveIndex(hippoRoot: string, index: HippoIndex): void {
  * get the right audit attribution. The HTTP server (A1) and api.* layer pass
  * the resolved actor (`api_key:<key_id>` / `localhost:cli`) so audit events
  * land with one row per write, no double-emit.
+ *
+ * `opts.afterWrite` is invoked inside the same SAVEPOINT as the memories
+ * INSERT (mirrors archiveRawMemory's shape in raw-archive.ts). On callback
+ * throw, the SAVEPOINT rolls back — the memory row never lands, and the
+ * filesystem mirrors / audit emit never run. Used by E1.3+ connectors to
+ * stamp idempotency rows atomically with the memory write.
  */
 export function writeEntry(
   hippoRoot: string,
   entry: MemoryEntry,
-  opts?: { actor?: string },
+  opts?: {
+    actor?: string;
+    afterWrite?: (db: DatabaseSyncLike, memoryId: string) => void;
+  },
 ): void {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    upsertEntryRow(db, entry);
+    // SAVEPOINT (not BEGIN) so this nests safely inside any outer transaction
+    // a future caller might hold. SQLite refuses BEGIN within a transaction;
+    // SAVEPOINT is the only way to scope rollback without disturbing outers.
+    db.exec('SAVEPOINT write_entry');
+    try {
+      upsertEntryRow(db, entry);
+      if (opts?.afterWrite) {
+        opts.afterWrite(db, entry.id);
+      }
+      db.exec('RELEASE SAVEPOINT write_entry');
+    } catch (e) {
+      try {
+        db.exec('ROLLBACK TO SAVEPOINT write_entry');
+        db.exec('RELEASE SAVEPOINT write_entry');
+      } catch {
+        // Ignore rollback failures — the throw below is what matters.
+      }
+      throw e;
+    }
+    // Filesystem mirrors and audit emit run only after the SAVEPOINT releases,
+    // so a rolled-back write leaves no orphan markdown or index entries.
     writeMarkdownMirror(hippoRoot, entry);
     writeIndexMirror(hippoRoot, buildIndexFromDb(db));
     audit(
