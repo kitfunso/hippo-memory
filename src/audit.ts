@@ -1,4 +1,5 @@
 import type { MemoryEntry } from './memory.js';
+import type { DatabaseSyncLike } from './db.js';
 
 export type AuditSeverity = 'warning' | 'error';
 
@@ -120,4 +121,100 @@ export function isContentWorthStoring(content: string): boolean {
   if (substantiveWordCount(trimmed) < 2) return false;
   if (trimmed.length < 40 && hasNoSpecificity(trimmed)) return false;
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// A5 audit log primitives (append-only mutation trail)
+// ---------------------------------------------------------------------------
+
+export type AuditOp =
+  | 'remember'
+  | 'recall'
+  | 'promote'
+  | 'supersede'
+  | 'forget'
+  | 'archive_raw';
+
+export interface AppendAuditOpts {
+  tenantId: string;
+  actor: string; // 'cli' | 'api_key:hk_...' | 'system'
+  op: AuditOp;
+  targetId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export function appendAuditEvent(db: DatabaseSyncLike, opts: AppendAuditOpts): void {
+  db.prepare(
+    `INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES (?, ?, ?, ?, ?, ?)`,
+  ).run(
+    new Date().toISOString(),
+    opts.tenantId,
+    opts.actor,
+    opts.op,
+    opts.targetId ?? null,
+    JSON.stringify(opts.metadata ?? {}),
+  );
+}
+
+export interface QueryAuditOpts {
+  tenantId: string;
+  op?: AuditOp;
+  since?: string; // ISO timestamp
+  limit?: number;
+}
+
+export interface AuditEvent {
+  id: number;
+  ts: string;
+  tenantId: string;
+  actor: string;
+  op: AuditOp;
+  targetId: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export function queryAuditEvents(db: DatabaseSyncLike, opts: QueryAuditOpts): AuditEvent[] {
+  const where: string[] = ['tenant_id = ?'];
+  const params: unknown[] = [opts.tenantId];
+  if (opts.op) {
+    where.push('op = ?');
+    params.push(opts.op);
+  }
+  if (opts.since) {
+    where.push('ts >= ?');
+    params.push(opts.since);
+  }
+  const limit = Math.max(1, Math.min(opts.limit ?? 100, 10000));
+  const rows = db
+    .prepare(
+      `SELECT id, ts, tenant_id, actor, op, target_id, metadata_json
+       FROM audit_log WHERE ${where.join(' AND ')} ORDER BY ts DESC, id DESC LIMIT ?`,
+    )
+    .all(...params, limit) as Array<{
+    id: number;
+    ts: string;
+    tenant_id: string;
+    actor: string;
+    op: string;
+    target_id: string | null;
+    metadata_json: string;
+  }>;
+  return rows.map((r) => ({
+    id: r.id,
+    ts: r.ts,
+    tenantId: r.tenant_id,
+    actor: r.actor,
+    op: r.op as AuditOp,
+    targetId: r.target_id,
+    metadata: safeJsonParse(r.metadata_json),
+  }));
+}
+
+function safeJsonParse(raw: string): Record<string, unknown> {
+  try {
+    const v = JSON.parse(raw);
+    return typeof v === 'object' && v !== null ? (v as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
 }
