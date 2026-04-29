@@ -62,4 +62,14 @@ describe('A3 envelope migration v14', () => {
     closeHippoDb(db);
     rmSync(home, { recursive: true, force: true });
   });
+
+  it('raw_archive table exists with required columns', () => {
+    const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
+    const db = openHippoDb(home);
+    const cols = db.prepare(`PRAGMA table_info(raw_archive)`).all() as Array<{ name: string }>;
+    const names = cols.map((c) => c.name);
+    expect(names).toEqual(expect.arrayContaining(['id', 'memory_id', 'archived_at', 'reason', 'archived_by', 'payload_json']));
+    closeHippoDb(db);
+    rmSync(home, { recursive: true, force: true });
+  });
 });

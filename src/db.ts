@@ -278,6 +278,18 @@ const MIGRATIONS: Migration[] = [
       // Backfill kind for any rows where it's NULL (pre-migration data).
       db.exec(`UPDATE memories SET kind = 'superseded' WHERE kind IS NULL AND superseded_by IS NOT NULL`);
       db.exec(`UPDATE memories SET kind = 'distilled' WHERE kind IS NULL`);
+      // raw_archive: legitimate path for kind='raw' removal (used by archiveRawMemory).
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS raw_archive (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          memory_id TEXT NOT NULL,
+          archived_at TEXT NOT NULL,
+          reason TEXT NOT NULL,
+          archived_by TEXT,
+          payload_json TEXT NOT NULL
+        )
+      `);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_raw_archive_memory_id ON raw_archive(memory_id)`);
     },
   },
 ];
