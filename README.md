@@ -60,6 +60,14 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v0.35.0
+
+- **Stub auth landed.** API keys + audit log + per-tenant data isolation. `hippo auth create` mints a scrypt-hashed key shown plaintext exactly once. `hippo audit list` exposes the mutation trail.
+- **Cross-tenant safety.** Set `HIPPO_TENANT=acme` (or pass an API key) and recall, explain, context, MCP, and dashboard all filter by that tenant. Tenant A cannot see tenant B's memories, proven by negative test.
+- **Audit trail.** Every mutation writes to `audit_log`: remember, recall, promote, supersede, forget, archive, auth_revoke. Query with `hippo audit list --op recall --since 2026-04-01 --json`.
+- **Schema v16.** `tenant_id` columns added to memories and four other tables, default 'default'. Existing data is unaffected.
+- **SSO/SCIM stubs.** Hook points exist (throw `NotImplementedError`); full multi-tenant + OAuth deferred to v2.
+
 ### What's new in v0.34.0
 
 - **Provenance envelope on every memory.** `kind` (raw / distilled / superseded), `scope`, `owner`, `artifact_ref` columns now ride alongside content. `hippo recall --why` shows them; `hippo remember --kind --scope --owner --artifact-ref` sets them. Foundation for ingestion connectors and right-to-be-forgotten.
