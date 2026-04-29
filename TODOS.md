@@ -120,3 +120,30 @@ by post-review fixes 2db5017..38339f4). Each item belongs in **A5 v2**
   decay/merge/dedupe across tenants. Cross-tenant isolation must be threaded
   through every background pass before flipping the deployment model. Track
   with the same v2 audit as M2.
+
+---
+
+## v0.37.0 — A1 p99 latency hardening
+
+A1 (v0.36.0) ships `hippo serve` with a 10k-store p99 above the ROADMAP
+target. The architecture lands; the latency target slips to v0.37.0.
+
+- [ ] **A1 p99 latency hardening — current p99 = 58.42ms, target < 50ms.**
+  Measured via `benchmarks/a1/p99-recall.ts` on a 10k synthetic store
+  (1000 BM25 queries, cold cache, single SQLite connection, full HTTP
+  round trip). p50 = 39.5ms / p95 = 54.9ms / p99 = 58.4ms / mean = 41.0ms.
+  Distribution is tight (stddev 6.6ms) so the bottleneck is structural,
+  not tail flakes. Likely candidates to profile:
+    1. FTS5 candidate load in `loadSearchEntries` — current path scans
+       all rows then ranks; a tighter `MATCH` query plan + LIMIT inside
+       the FTS subquery should shave the tail.
+    2. JSON serialization of 10 results — `recall` walks each entry to
+       compute token count; pre-compute or stream.
+    3. Audit-emit roundtrip on every `recall` — opens + closes the DB to
+       insert one row. Cache the prepared stmt against a long-lived
+       handle, or batch via the same connection the recall already uses.
+    4. Hybrid embeddings: ROADMAP pins "hybrid ON" but `src/api.ts:recall`
+       is BM25-only today. Wiring hybrid will likely make p99 worse, not
+       better — re-baseline after that lands.
+  Re-run the bench after each candidate fix; gate ship of v0.37.0 on
+  p99 < 50ms.

@@ -17,4 +17,5 @@ benchmarks/locomo/__pycache__/
 benchmarks/sequential-learning/results/
 ui/tsconfig.tsbuildinfo
 benchmarks/micro/results/latest.json
+benchmarks/a1/results/
 .claude/worktrees/
