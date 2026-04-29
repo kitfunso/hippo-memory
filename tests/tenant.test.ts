@@ -21,6 +21,33 @@ describe('resolveTenantId', () => {
     }
   });
 
+  it('empty HIPPO_TENANT falls through to "default"', () => {
+    process.env.HIPPO_TENANT = '';
+    try {
+      expect(resolveTenantId({})).toBe('default');
+    } finally {
+      delete process.env.HIPPO_TENANT;
+    }
+  });
+
+  it('whitespace-only HIPPO_TENANT falls through to "default"', () => {
+    process.env.HIPPO_TENANT = '   ';
+    try {
+      expect(resolveTenantId({})).toBe('default');
+    } finally {
+      delete process.env.HIPPO_TENANT;
+    }
+  });
+
+  it('trims surrounding whitespace from HIPPO_TENANT', () => {
+    process.env.HIPPO_TENANT = '  acme  ';
+    try {
+      expect(resolveTenantId({})).toBe('acme');
+    } finally {
+      delete process.env.HIPPO_TENANT;
+    }
+  });
+
   it('api key tenant beats env', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-tenant-'));
     const db = openHippoDb(home);

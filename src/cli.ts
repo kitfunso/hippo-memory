@@ -4516,6 +4516,10 @@ function cmdAuditList(hippoRoot: string, flags: Record<string, string | boolean 
   const op = opFlag as AuditOp | undefined;
 
   const since = typeof flags['since'] === 'string' ? (flags['since'] as string) : undefined;
+  if (since !== undefined && !Number.isFinite(new Date(since).getTime())) {
+    console.error(`Invalid --since: ${since} (expected an ISO timestamp like 2026-04-22 or 2026-04-22T12:00:00Z).`);
+    process.exit(1);
+  }
 
   const limitRaw = flags['limit'];
   let limit = 100;
@@ -4831,6 +4835,27 @@ Commands:
   dashboard                Open web dashboard for memory health
     --port <n>             Port to serve on (default: 3333)
   mcp                      Start MCP server (stdio transport)
+  auth <sub>               Manage API keys (A5 stub auth)
+    auth create            Mint a new API key (plaintext shown ONCE)
+      --label <s>          Optional human label
+      --tenant <id>        Override tenant (defaults to HIPPO_TENANT)
+      --json               Output as JSON
+      --global             Operate on the global store
+    auth list              List API keys (active by default)
+      --all                Include revoked keys
+      --json               Output as JSON
+      --global             Operate on the global store
+    auth revoke <key_id>   Revoke an API key (subsequent validate fails)
+      --json               Output as JSON
+      --global             Operate on the global store
+  audit <sub>              Query the append-only audit log (A5 stub auth)
+    audit list             List audit events for the active tenant
+      --op <op>            Filter by op (remember | recall | promote |
+                           supersede | forget | archive_raw | auth_revoke)
+      --since <iso>        Lower bound on ts (ISO timestamp)
+      --limit <n>          Max events (default: 100, max: 10000)
+      --json               Output as JSON
+      --global             Operate on the global store
 
 Examples:
   hippo init

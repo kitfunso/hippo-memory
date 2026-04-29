@@ -144,6 +144,14 @@ export interface AppendAuditOpts {
   metadata?: Record<string, unknown>;
 }
 
+// node:sqlite returns INTEGER columns as bigint when the value exceeds
+// Number.MAX_SAFE_INTEGER. Audit metadata can carry such values (row ids,
+// counts), and JSON.stringify cannot serialize bigint without a replacer.
+// Mirrors the bigintSafeReplacer in src/raw-archive.ts.
+function bigintSafeReplacer(_key: string, value: unknown): unknown {
+  return typeof value === 'bigint' ? value.toString() : value;
+}
+
 export function appendAuditEvent(db: DatabaseSyncLike, opts: AppendAuditOpts): void {
   db.prepare(
     `INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES (?, ?, ?, ?, ?, ?)`,
@@ -153,7 +161,7 @@ export function appendAuditEvent(db: DatabaseSyncLike, opts: AppendAuditOpts): v
     opts.actor,
     opts.op,
     opts.targetId ?? null,
-    JSON.stringify(opts.metadata ?? {}),
+    JSON.stringify(opts.metadata ?? {}, bigintSafeReplacer),
   );
 }
 
