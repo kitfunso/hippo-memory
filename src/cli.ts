@@ -139,6 +139,7 @@ import {
 } from './importers.js';
 import { cmdCapture, CaptureOptions } from './capture.js';
 import { auditMemories, appendAuditEvent, type AuditOp, type AuditResult } from './audit.js';
+import { createApiKey, listApiKeys, revokeApiKey, type ApiKeyListItem } from './auth.js';
 import { resolveTenantId } from './tenant.js';
 import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from './eval.js';
 import { runFeatureEval, formatResult, resultToBaseline, detectRegressions, type EvalBaseline } from './eval-suite.js';
@@ -4316,6 +4317,155 @@ function cmdDag(hippoRoot: string, flags: Record<string, string | boolean | stri
   }
 }
 
+// ---------------------------------------------------------------------------
+// Auth subcommands (A5 stub auth)
+// ---------------------------------------------------------------------------
+
+function resolveAuthRoot(hippoRoot: string, flags: Record<string, string | boolean | string[]>): string {
+  if (flags['global']) {
+    initGlobal();
+    return getGlobalRoot();
+  }
+  requireInit(hippoRoot);
+  return hippoRoot;
+}
+
+function cmdAuthCreate(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
+  const root = resolveAuthRoot(hippoRoot, flags);
+  const tenantFlag = typeof flags['tenant'] === 'string' ? (flags['tenant'] as string) : undefined;
+  const labelFlag = typeof flags['label'] === 'string' ? (flags['label'] as string) : undefined;
+  const tenantId = tenantFlag ?? resolveTenantId({});
+  const asJson = Boolean(flags['json']);
+
+  const db = openHippoDb(root);
+  let result;
+  try {
+    result = createApiKey(db, { tenantId, label: labelFlag });
+  } finally {
+    closeHippoDb(db);
+  }
+
+  if (asJson) {
+    console.log(JSON.stringify({
+      keyId: result.keyId,
+      plaintext: result.plaintext,
+      tenantId,
+      label: labelFlag ?? null,
+    }));
+    return;
+  }
+
+  console.log(`key_id:    ${result.keyId}`);
+  console.log(`plaintext: ${result.plaintext}`);
+  console.log('');
+  console.log('!! WARNING: this is the ONLY time the plaintext key will be shown. !!');
+  console.log('!! Copy it now. Hippo stores only a scrypt hash and cannot recover it. !!');
+}
+
+function formatKeyRow(item: ApiKeyListItem): string {
+  const label = item.label ?? '-';
+  const created = item.createdAt;
+  const revoked = item.revokedAt ?? '-';
+  return `${item.keyId}  ${item.tenantId}  ${label}  ${created}  ${revoked}`;
+}
+
+function cmdAuthList(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
+  const root = resolveAuthRoot(hippoRoot, flags);
+  const includeRevoked = Boolean(flags['all']);
+  const asJson = Boolean(flags['json']);
+
+  const db = openHippoDb(root);
+  let items: ApiKeyListItem[];
+  try {
+    items = listApiKeys(db, { active: !includeRevoked });
+  } finally {
+    closeHippoDb(db);
+  }
+
+  if (asJson) {
+    console.log(JSON.stringify(items));
+    return;
+  }
+
+  if (items.length === 0) {
+    console.log(includeRevoked ? 'No API keys.' : 'No active API keys. (Use --all to include revoked.)');
+    return;
+  }
+
+  console.log('key_id  tenant  label  created  revoked');
+  for (const item of items) {
+    console.log(formatKeyRow(item));
+  }
+}
+
+function cmdAuthRevoke(hippoRoot: string, keyId: string, flags: Record<string, string | boolean | string[]>): void {
+  const root = resolveAuthRoot(hippoRoot, flags);
+  const asJson = Boolean(flags['json']);
+
+  const db = openHippoDb(root);
+  let exists = false;
+  let revokedAt: string | null = null;
+  try {
+    const row = db.prepare(`SELECT key_id, revoked_at FROM api_keys WHERE key_id = ?`).get(keyId) as
+      | { key_id: string; revoked_at: string | null }
+      | undefined;
+    if (!row) {
+      closeHippoDb(db);
+      console.error(`Unknown key_id: ${keyId}`);
+      process.exit(1);
+    }
+    exists = true;
+    if (row.revoked_at) {
+      revokedAt = row.revoked_at;
+    } else {
+      revokeApiKey(db, keyId);
+      const updated = db.prepare(`SELECT revoked_at FROM api_keys WHERE key_id = ?`).get(keyId) as
+        | { revoked_at: string | null }
+        | undefined;
+      revokedAt = updated?.revoked_at ?? null;
+    }
+  } finally {
+    closeHippoDb(db);
+  }
+
+  if (!exists) return;
+
+  if (asJson) {
+    console.log(JSON.stringify({ keyId, revokedAt }));
+    return;
+  }
+  console.log(`Revoked ${keyId} at ${revokedAt}`);
+}
+
+function cmdAuth(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
+  const sub = args[0];
+  if (!sub) {
+    console.error('Usage: hippo auth <create|list|revoke> [options]');
+    process.exit(1);
+  }
+  const subArgs = args.slice(1);
+  switch (sub) {
+    case 'create':
+      cmdAuthCreate(hippoRoot, flags);
+      return;
+    case 'list':
+      cmdAuthList(hippoRoot, flags);
+      return;
+    case 'revoke': {
+      const keyId = subArgs[0];
+      if (!keyId) {
+        console.error('Usage: hippo auth revoke <key_id>');
+        process.exit(1);
+      }
+      cmdAuthRevoke(hippoRoot, keyId, flags);
+      return;
+    }
+    default:
+      console.error(`Unknown auth subcommand: ${sub}. Expected: create | list | revoke.`);
+      process.exit(1);
+  }
+}
+
 function printUsage(): void {
   console.log(`
 Hippo - biologically-inspired memory system for AI agents
@@ -4709,6 +4859,10 @@ async function main(): Promise<void> {
 
     case 'dag':
       cmdDag(hippoRoot, flags);
+      break;
+
+    case 'auth':
+      cmdAuth(hippoRoot, args, flags);
       break;
 
     case 'audit': {
