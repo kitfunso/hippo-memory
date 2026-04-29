@@ -73,3 +73,40 @@ From `/review` on commits 41b1f4d..6456e7d (now hardened to 00764ce). Each item 
 - [ ] **--owner format validation.** Currently any string is accepted. The documented contract is `user:<id>` or `agent:<id>`. Add regex validation `^(user|agent):[A-Za-z0-9_-]+$` either as warn-only (log, accept) or strict-reject. Decide alongside A5.
 
 - [ ] **Defensive `kind != 'archived'` filter on recall.** `kind='archived'` is a transient sentinel inside `archiveRawMemory`'s SAVEPOINT and never persists (SQLite atomicity). Adding the filter to candidate queries is belt-and-suspenders against a future bug. Cheap to add when revisiting recall query construction.
+
+---
+
+## A5 follow-ups (post-review, deferred to v2)
+
+From `/review` on the A5 stub-auth branch (commits 4e7f8e9..fca9fa4, hardened
+by post-review fixes 2db5017..38339f4). Each item belongs in **A5 v2**
+(full multi-tenant) or **A6** (Postgres backend).
+
+- [ ] **M2 — `auth create` and `auth list` are unauthenticated and unaudited.**
+  Local FS access to the SQLite file is sufficient to mint or enumerate keys.
+  Acceptable for stub auth (single-tenant, single-machine deployment), but the
+  full A5 multi-tenant story needs a real authn boundary (operator API key
+  or admin session) plus audit events on `auth_create` / `auth_list`.
+
+- [ ] **M6 — Audit log unbounded growth.** No retention or rotation policy.
+  Add a daily `audit prune` cron + `hippo audit prune --older-than 90d` CLI
+  in v2. Mind regulatory retention floors (HIPAA, SOX, GDPR) — the prune
+  should be opt-in per tenant and emit its own audit trail event.
+
+- [ ] **M7 — `validateApiKey` timing on unknown key_id.** Constant-time scrypt
+  comparison only fires when the row exists; an unknown `key_id` short-circuits
+  before any hashing. Acceptable for the stub: the 24-char base32 keyspace is
+  ~5e36, so timing-side enumeration is not a realistic threat. Document in
+  `MEMORY_ENVELOPE.md` and revisit when keys are tenant-routed.
+
+- [ ] **L2 — `promote` emits both `remember` and `promote` on global root.**
+  Intentional: `writeEntry` always emits `remember` (the underlying upsert),
+  and `cmdPromote` adds a `promote` event so the user-facing intent is visible.
+  Side effect: `remember` event count overstates net new content by exactly the
+  promotion count. Document in CHANGELOG when surfacing audit metrics.
+
+- [ ] **L8 — `serializeEntry` omits `tenant_id` from frontmatter when value is
+  `'default'`.** Manual markdown edits with an explicit `tenant_id:` line are
+  honored on `rebuildIndex`. Side effect: hand-rolled markdown without the
+  field defaults to `'default'` regardless of `HIPPO_TENANT`. Acceptable for
+  single-tenant stub; revisit when tenants ship.
