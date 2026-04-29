@@ -275,6 +275,9 @@ const MIGRATIONS: Migration[] = [
       if (!tableHasColumn(db, 'memories', 'artifact_ref')) {
         db.exec(`ALTER TABLE memories ADD COLUMN artifact_ref TEXT`);
       }
+      // Backfill kind for any rows where it's NULL (pre-migration data).
+      db.exec(`UPDATE memories SET kind = 'superseded' WHERE kind IS NULL AND superseded_by IS NOT NULL`);
+      db.exec(`UPDATE memories SET kind = 'distilled' WHERE kind IS NULL`);
     },
   },
 ];
