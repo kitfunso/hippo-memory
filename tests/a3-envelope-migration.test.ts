@@ -3,6 +3,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, getCurrentSchemaVersion, getSchemaVersion, closeHippoDb } from '../src/db.js';
+import { createMemory, Layer } from '../src/memory.js';
+import { writeEntry, readEntry, initStore } from '../src/store.js';
 
 describe('A3 envelope migration v14', () => {
   it('CURRENT_SCHEMA_VERSION is 14', () => {
@@ -117,6 +119,49 @@ describe('A3 envelope migration v14', () => {
     const names = cols.map((c) => c.name);
     expect(names).toEqual(expect.arrayContaining(['id', 'memory_id', 'archived_at', 'reason', 'archived_by', 'payload_json']));
     closeHippoDb(db);
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('createMemory accepts envelope fields and round-trips through SQLite', () => {
+    const home = mkdtempSync(join(tmpdir(), 'hippo-mem-'));
+    initStore(home);
+    const e = createMemory('slack message ingested', {
+      layer: Layer.Episodic,
+      kind: 'raw',
+      scope: 'team:eng',
+      owner: 'user:42',
+      artifact_ref: 'slack://team/channel/1700000000.123',
+    });
+    expect(e.kind).toBe('raw');
+    expect(e.scope).toBe('team:eng');
+    expect(e.owner).toBe('user:42');
+    expect(e.artifact_ref).toBe('slack://team/channel/1700000000.123');
+
+    writeEntry(home, e);
+    const read = readEntry(home, e.id);
+    expect(read).not.toBeNull();
+    expect(read!.kind).toBe('raw');
+    expect(read!.scope).toBe('team:eng');
+    expect(read!.owner).toBe('user:42');
+    expect(read!.artifact_ref).toBe('slack://team/channel/1700000000.123');
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('createMemory defaults envelope fields when not provided', () => {
+    const home = mkdtempSync(join(tmpdir(), 'hippo-mem-'));
+    initStore(home);
+    const e = createMemory('some distilled fact', { layer: Layer.Episodic });
+    expect(e.kind).toBe('distilled');
+    expect(e.scope).toBeNull();
+    expect(e.owner).toBeNull();
+    expect(e.artifact_ref).toBeNull();
+
+    writeEntry(home, e);
+    const read = readEntry(home, e.id);
+    expect(read!.kind).toBe('distilled');
+    expect(read!.scope).toBeNull();
+    expect(read!.owner).toBeNull();
+    expect(read!.artifact_ref).toBeNull();
     rmSync(home, { recursive: true, force: true });
   });
 });

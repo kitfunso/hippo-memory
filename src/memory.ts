@@ -18,6 +18,8 @@ export type ConfidenceLevel = 'verified' | 'observed' | 'inferred' | 'stale';
 
 export type TraceOutcome = 'success' | 'failure' | 'partial' | null;
 
+export type MemoryKind = 'raw' | 'distilled' | 'superseded' | 'archived';
+
 export interface MemoryEntry {
   id: string;
   created: string;         // ISO 8601
@@ -46,6 +48,11 @@ export interface MemoryEntry {
   extracted_from: string | null;
   dag_level: number;            // 0=raw, 1=extracted_fact, 2=topic_summary, 3=entity_profile
   dag_parent_id: string | null; // ID of parent summary node in the DAG; null = root level
+  // A3 provenance envelope (schema v14)
+  kind: MemoryKind;             // raw | distilled | superseded | archived
+  scope: string | null;         // e.g. 'team:eng', 'project:foo'; null = global
+  owner: string | null;         // 'user:<id>' or 'agent:<id>'
+  artifact_ref: string | null;  // URI to source artifact (slack://, gh://, file://)
 }
 
 export const DECISION_HALF_LIFE_DAYS = 90;
@@ -244,6 +251,10 @@ export function createMemory(
     extracted_from?: string;
     dag_level?: number;
     dag_parent_id?: string;
+    kind?: MemoryKind;
+    scope?: string | null;
+    owner?: string | null;
+    artifact_ref?: string | null;
   } = {}
 ): MemoryEntry {
   const trimmed = content.trim();
@@ -293,6 +304,10 @@ export function createMemory(
     extracted_from: options.extracted_from ?? null,
     dag_level: options.dag_level ?? 0,
     dag_parent_id: options.dag_parent_id ?? null,
+    kind: options.kind ?? 'distilled',
+    scope: options.scope ?? null,
+    owner: options.owner ?? null,
+    artifact_ref: options.artifact_ref ?? null,
   };
 
   // Recalculate strength with the emotional multiplier applied
