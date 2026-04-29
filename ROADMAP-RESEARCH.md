@@ -46,7 +46,8 @@ Language-agnostic surface alongside MCP/CLI. RESTish + streaming for context ass
 
 ### A3. Provenance envelope [next]
 Every memory carries `scope`, `source`, `timestamp`, `owner`, `confidence`, `artifact_ref`, `session_id`, `kind` (raw|distilled|superseded). RESEARCH §"Phase 1: safest bridge" canonical envelope.
-**Effort:** 2-3w. **Success:** schema migration; `hippo recall --why` exposes envelope; existing eval suites pass.
+**Effort:** 6-8w (revised from 2-3w after eng-review). The current `memories` table has no `kind` column and conflates the CLS `layer` with the company-brain three-layer model. A3 is a schema split + dual-write path + every prepared statement audited, not a column add.
+**Success:** schema migration with backfill; `hippo recall --why` exposes envelope; existing eval suites pass; `kind=raw` rows protected by SQLite trigger (see `## Schema migration order`).
 
 ### A4. Lifecycle compliance [planned]
 Retention policy enforcement, right-to-be-forgotten (`hippo forget --user X --everywhere`), encryption-at-rest config flag, secret-scrubbing at write-time, PII redaction (regex + simple model).
@@ -54,7 +55,9 @@ Retention policy enforcement, right-to-be-forgotten (`hippo forget --user X --ev
 
 ### A5. Auth + multi-tenancy [planned]
 API keys -> OAuth + scoped tokens. Org > team > project > scope hierarchy. RBAC. Audit log of every read/write/promote/supersede.
-**Effort:** 6-8w. **Success:** two users on same server can't see each other's scopes; audit log captures every mutation; SSO/SCIM hook points stubbed (not implemented).
+**Effort:** 10-12w for full multi-tenant (revised from 6-8w). Only `working_memory` has `scope` today; `memories`, `consolidation_runs`, `task_snapshots`, `memory_conflicts` need scope/tenant columns + every query audited + RLS or app-layer enforcement.
+**Stub for v1 hosted (2-3w):** API keys + per-customer single-tenant deployments. Defer multi-tenant isolation to v2 unless a hosted customer needs it sooner.
+**Success:** two users on same server can't see each other's scopes; audit log captures every mutation; SSO/SCIM hook points stubbed (not implemented).
 
 ### A6. Postgres backend [planned]
 For shared deployments only. SQLite stays the local default.
@@ -78,6 +81,62 @@ Multi-tenant SaaS deployment, billing, free tier, paid org tier. After A1-A6.
 
 ### A11. Convergence proofs + operational envelope [grant: FAD]
 Lyapunov energy formalism, bounded-energy convergence proof, 100h continuous operation test. Already in `ROADMAP.md` O1.
+
+---
+
+## Schema migration order (cross-track invariant)
+
+Every new table introduced by Track B (B1-B5 depth migrations: `memory_value_association`, `goal_stack`, `retrieval_policy`, `interference_suppression`, `option_valuation`) and Track E (E2 first-class objects, E3 graph extraction queue) lands **after** A3 envelope so every row has provenance from day 1. Migration sequence:
+
+1. **A3 envelope** — adds `kind`, `scope`, `owner`, `confidence`, `artifact_ref`, `session_id` to `memories`. Backfills existing rows with `kind='distilled'` (best guess; existing memories are already not raw transcripts). Adds `BEFORE DELETE` trigger on `memories` rows where `kind='raw'` raising ABORT. Adds `kind='raw'` archive table for legitimate retention deletions (tied to A4 right-to-be-forgotten path).
+2. **A5 stub auth** — adds `tenant_id` to `memories`, `working_memory`, `consolidation_runs`, `task_snapshots`, `memory_conflicts`. Backfills with default tenant. Adds composite index `(tenant_id, created)` everywhere recall touches.
+3. **B-track depth tables** (B1-B5) — every new table includes `tenant_id`, `kind`, and FK to `memories.id` where applicable.
+4. **E2 first-class objects** — `decision`, `handoff`, `incident`, `process`, `policy`, `skill`, `project_brief`, `customer_note` all carry envelope.
+5. **E3 graph extraction queue** — `graph_extraction_queue` fed only by writes that set `kind=distilled` during `hippo sleep`. `entities` and `relations` tables FK to consolidated rows + `CHECK (source_kind IN ('distilled','superseded'))`.
+
+**Iron rule:** any migration that adds a table without `tenant_id` + `kind` is rejected at PR review.
+
+---
+
+## Test commitments (Track A required for ship)
+
+Per project preference: every new path tested against a real SQLite database (no mocks).
+
+### A3 envelope tests
+- Schema migration up + down (real DB, real existing data, including pre-migration rows)
+- Every existing recall path returns full envelope on `--why`
+- Backfill: existing memories assigned correct default `kind`
+- Existing eval suites pass post-migration (LongMemEval R@5, fire-rate harness)
+- **CRITICAL REGRESSION:** `DELETE FROM memories WHERE kind='raw'` aborts via trigger
+
+### A5 stub auth tests
+- API key auth path (positive + negative)
+- Audit log captures every mutation (no false negatives across remember / recall / promote / supersede)
+- Cross-tenant scope filter (negative test: tenant A's recall does not return tenant B's memories)
+- SSO/SCIM hook points exist as stubs with explicit not-implemented errors
+
+### A1 server mode tests
+- HTTP server lifecycle (start, drain, shutdown)
+- CLI thin-client → server → response round-trip parity with direct CLI
+- Concurrent recall + write under SQLite single-writer (real DB)
+- 24h soak test harness (success criterion exists; harness is its own item)
+
+### E1.3 Slack ingestion tests (per connector pattern)
+- Idempotency: replay same webhook payload → no duplicates
+- Cursor / backfill: resume from interrupted state
+- Source deletion: Slack message deleted → memory invalidated (GDPR)
+- Permission mirroring: Slack-private channel does not leak across scopes
+- Rate-limit handling: 429 backoff + retry, no message loss
+- Dead-letter queue: malformed events captured for review
+
+### E3 graph invariant tests
+- **CRITICAL REGRESSION:** direct INSERT into entities with raw FK fails (CHECK + FK)
+- Sleep is the only code path that produces graph nodes
+- Supersession of distilled object cascades to graph edges (no orphans)
+
+### Pinning success-criterion ambiguity
+- A1 "sub-50ms p99 recall on 10k store": query mix = top-10 BM25 against tier-1 micro-eval queries; cold cache; with hybrid embeddings on; on a single SQLite connection.
+- A9 "5x compute cost reduction vs vector RAG": baseline = LangChain + FAISS at the same recall@5 quality. Pin both at scoping time.
 
 ---
 
@@ -123,8 +182,8 @@ RESEARCH §"AI Pineal Gland". Three components.
 Basic novelty + tag-class scoring. Commit `50528a5`. v2 in flight on this branch.
 
 ### C2. Salience gate v3 [next]
-Physics-energy ambient state injected as scalar; salience tied to ambient delta; storage decision at write-time, not just retrieval.
-**Effort:** 8d. **Success:** storage rate −30% with no fire-rate regression.
+Physics-energy ambient state injected as scalar; salience tied to ambient delta. **Salience decides promotion (raw → distilled), not receipt capture.** Raw layer remains append-only per RESEARCH §"Phase 1" — every receipt is captured; salience controls whether the receipt promotes to consolidated state during `hippo sleep`.
+**Effort:** 8d. **Success:** promotion rate −30% with no fire-rate regression; raw-layer write rate unchanged.
 
 ### C3. Ambient state vector [next]
 Continuous background representation: physics-engine energy + velocity-distribution scalars injected alongside memory context. Gives the agent a "feel" for its knowledge landscape without retrieving specific memories.
@@ -239,9 +298,12 @@ During `hippo sleep`, extract canonical entities (person, project, customer, sys
 `hippo recall --hops 2 "incidents linked to decisions about retry-policy"` — traverses decision → policy → incident → owner.
 **Effort:** 10d (depends on E3.1). **Success:** answers a 5-question multi-hop benchmark suite faster + more accurately than flat retrieval baseline.
 
-#### E3.3. Graph-on-consolidated guard [next, design only]
-Hard rule: graph never indexes raw layer. Document it, enforce in code, add a CI check.
-**Effort:** 1d. **Success:** lint rule fails any PR that adds a raw-layer node to graph index.
+#### E3.3. Graph-on-consolidated guard [next]
+Hard rule: graph never indexes raw layer. Three-layer enforcement, not just lint:
+1. **DB-level:** `entities` and `relations` tables have FK to consolidated rows only; CHECK constraint `source_kind IN ('distilled','superseded')`.
+2. **Pipeline-level:** `graph_extraction_queue` table is fed only by `consolidation_runs` writes that set `kind=distilled`. Graph indexer reads from the queue, never from `memories` directly.
+3. **CI-level:** lint rule fails any PR that introduces a code path writing to graph from non-consolidated state.
+**Effort:** 4d (revised from 1d after eng-review). **Success:** regression test asserts `INSERT INTO entities` with raw-FK fails; lint catches direct-write code paths.
 
 #### E3.4. Graph quality maintenance [research]
 How does the graph stay clean as supersession + invalidation happen? Soft-delete vs cascade vs tombstone vs versioned edges.
@@ -302,9 +364,9 @@ Five abilities mapped to hippo features:
 | Knowledge updates | `hippo invalidate`, `hippo decide --supersedes`, conflict detection | shipped |
 | Abstention | confidence tiers (`stale`, `inferred`) | shipped |
 
-### F6. LongMemEval hybrid [next]
-Close gap from 74% (BM25 R@5) toward MemPalace's 96.6% by enabling embeddings + reranking.
-**Effort:** 6d. **Success:** R@5 ≥ 85%; ship with `hippo embed`.
+### F6. LongMemEval reranker hardening [next]
+**Scope correction (eng-review):** PLAN.md:285 already lists hybrid embeddings as shipped. The remaining gap is reranker quality, not embedding integration. Close gap from current R@5 toward MemPalace's 96.6% via reranker tuning + cross-encoder evaluation.
+**Effort:** 6d. **Success:** R@5 ≥ 85% on LongMemEval with the existing hybrid path.
 
 ### F7. LoCoMo first baseline [next]
 Informational only. Never run before. Do not gate any feature on it until baseline exists.
@@ -319,6 +381,8 @@ RESEARCH §"Near-term 1". 50-task / 10-trap standardised sequence. Compares no-m
 ## Track G — Long-horizon ML research (the bridge to hippocampal-circuits-in-LLMs)
 
 RESEARCH §"Long-term vision" + §"Seven mechanisms" open problems. These are research bets, not product commitments. Hippo's data is the evidence base.
+
+**Not part of the 90-day or 180-day execution plan.** Tracked here so the bridge from product data to architecture research remains visible. Productization of any G item requires a separate scoping pass and is gated on hippo-data-corpus volume (G8).
 
 ### G1. Adapter + base model continual loop [research]
 LoRA captures deployment interactions; background process distils adapter back into base; reset adapter. Maps to D1.
@@ -376,28 +440,54 @@ Does high ambient energy during low-EVC queries signal reduce-effort or healthy-
 
 ## Sequencing (next 90 days, single-engineer cadence)
 
-This is what gets done. Anything not on this list waits unless it shows up as a regression in the A/B harness.
+**Sequence revised after Codex + eng-review (consolidated patch).** Original sequence had Wks 1-4 over-budgeted ~3x and put A1 server before A3 provenance, despite A3 being a prerequisite for E1 ingestion. Cut to 4 items max for 90 days; everything else moves to days 91-180.
 
-### Weeks 1-4 (May)
-1. **A1 Server mode** (4w) — unblocks everything else in Track A
-2. **B3 dlPFC persistent goal stack** (12d, can interleave) — biggest expected trap-rate lever
-3. **F6 LongMemEval hybrid** (6d) — public comparability
+### Effort & calendar reconciliation
+Weeks of work (calendar) for Wks 1-12, single engineer, assuming 4 productive days/week:
+- A3 envelope: 6-8w
+- A5 stub auth (single-tenant API key path, multi-tenant deferred): 2-3w
+- A1 server: 4w
+- E1.3 Slack ingestion (with idempotency, cursors, source-deletion sync, permission mirroring): realistic 4-5w (not 12d)
 
-### Weeks 5-8 (June)
-4. **A2 HTTP API** (3w) — depends on A1
-5. **A3 Provenance envelope** (3w) — gates Phase E1 ingestion
-6. **B1 ACC EVC calibration** (8d)
-7. **F7 LoCoMo first baseline** (5d) — informational
+Total: 16-20 weeks of work compressed to 12 weeks calendar. Lane B parallelism (F6 reranker, F7 LoCoMo) buys some recovery; the budget is still tight by design.
 
-### Weeks 9-12 (July)
-8. **C3 Pineal ambient state vector** (6d) — smallest pineal item, highest information
-9. **E1.3 Slack ingestion** (12d) — first connector, requires A3
-10. **E2 `decision` table promotion to first-class** (4d)
-11. **B7 PFC-stack composition A/B** (5d)
+### Weeks 1-4 (May) — provenance first
+1. **A3 Provenance envelope** (6-8w, starts here, finishes early June) — gates everything in Track E + Track A. Real schema split, not a column add.
+2. **F6 reranker hardening** (6d, lane B parallel) — uses existing hybrid path; no schema dependency.
 
-**Cadence note:** This is a single-engineer sequence. With two engineers, parallelize Track A (server/API/provenance) against Track B+C (depth + pineal). With grant funding, A8 + A9 split out under WP3 + WP1.
+### Weeks 5-8 (June) — server + auth stub
+3. **A5 stub auth** (2-3w) — single-tenant API keys + audit log scaffolding. Multi-tenant isolation deferred to v2.
+4. **A1 Server mode** (4w) — daemon + HTTP/MCP surface, thin CLI client. Depends on A3 envelope being live.
+5. **F7 LoCoMo first baseline** (5d, lane B parallel) — informational.
 
-**mPFC (B6), graph layer (E3), framework adapters (A8), scale work (A9), AAAK compression (F1)** all explicitly off this 90-day sequence. Tracked, not scoped.
+### Weeks 9-12 (July) — first ingestion connector end-to-end
+6. **E1.3 Slack append-only ingestion** (4-5w) — first source-of-record connector. Tests the full A3 → A5 → A1 stack under realistic load. Includes idempotency, cursor / backfill, source-deletion sync, permission mirroring, rate-limit handling, dead-letter queue.
+
+### Days 91-180 (Aug–Oct) — deferred from current 90-day plan
+- **A2 HTTP API hardening** (was Wk 5-8) — A1 ships RESTish surface; A2 polishes contract + SDK examples
+- **B3 dlPFC persistent goal stack depth** (was Wk 1-4) — best trap-rate lever, but research not enterprise; ships after E1.3 proves the platform
+- **B1 ACC EVC calibration** (was Wk 5-8)
+- **C3 Pineal ambient state vector** (was Wk 9-12)
+- **E2 first-class `decision` object promotion** (was Wk 9-12)
+- **B7 PFC-stack composition A/B** (was Wk 9-12)
+- **A4 lifecycle compliance** (right-to-be-forgotten first; encryption/secret-scrub/PII split into separate items)
+
+### Days 181+ — research and platform
+- A6 Postgres backend (only when a hosted customer requires shared deployment)
+- A7 observability dashboard
+- A8 framework adapters (grant: AIC-P1 if funded)
+- A9 scale to 1M+ (grant: AIC-P1 if funded)
+- A10 managed cloud
+- A11 convergence proofs (grant: FAD if funded)
+- B6 mPFC self-model
+- E3 graph layer (E3.3 invariant lands with A3, but E3.1 / E3.2 wait for first-class objects to exist)
+- F1, F2 MemPalace borrows
+- F8 Memory-Augmented Agent Eval
+- All Track G research lines
+
+**Cadence note:** Single-engineer sequence. With two engineers, parallelize Lane A (A3 → A5 → A1 → E1.3, all touch `src/db.ts`) against Lane B (F6 reranker, F7 LoCoMo, observability scaffolding). With grant funding, A8 + A9 split out under WP3 + WP1.
+
+**Why this sequence:** A3 is a prerequisite for everything in Track E (E1 ingestion needs envelope), Track B depth (new tables need provenance from day 1), and A5 (auth scopes ride on the envelope). Codex correctly flagged the original ordering as putting research items (B3, F6) ahead of enterprise prerequisites. Eng-review math showed even the original ordering was 3x over its 4-week window.
 
 ---
 
@@ -426,8 +516,10 @@ Things hippo will not do. Each one is a deliberate position derived from the pro
 | 3 | Replacing Slack / Jira / GitHub / Notion / email as systems of record | Hippo distils; doesn't shadow. Source systems stay canonical | RESEARCH §"Phase 3" |
 | 4 | Auto-rewriting company truth without provenance + approval paths | Compliance disaster. Every truth change must be `supersede`d with reason and provenance | RESEARCH §"Phase 3" |
 | 5 | Forcing the zero-dep local core to be the heavyweight enterprise backend | Compromises local UX. Hosted enterprise is a separate deployment mode (A6 Postgres optional) | RESEARCH §"Phase 3" |
-| 6 | Custom LLM hosting | Hippo is memory infra, not inference infra. Out of thesis | thesis-derived |
-| 7 | Optimising for perfect recall of everything | The thesis is *better forgetting*. Pure recall optimisation is a different product | thesis-derived |
+| 6 | Becoming an inference provider (custom LLM hosting as a product) | Hippo is memory infra, not inference infra. Customer-supplied LLM endpoints (extraction, reranking, regulated deployments) are explicitly supported | thesis-derived; rephrased after Codex review |
+| 7 | Retaining everything forever | The thesis is *better forgetting*. Decay, supersession, and consolidation are features. This does not mean underperforming on correct recall of what is retained | RESEARCH §"Phase 3", RESEARCH §"forgetting is a feature" |
+| 8 | Autonomous write-back / actuation into source systems in V1 | Every write-back to Slack/Jira/Gmail/etc. must be human-approved. RESEARCH §"Phase 1" says write-backs stay human-approved. Auto-actuation invites compliance disasters and trust failures | RESEARCH §"Phase 1: safest bridge" |
+| 9 | Employee-surveillance / compliance-archive product | Hippo helps agents do the work, not record people. Surveillance use cases are out of scope and will be refused | thesis-derived (eng-review) |
 
 ## Deferred / speculative
 
@@ -456,8 +548,8 @@ Reviewed at end of each 4-week cycle by reading the A/B harness ledger; cuts log
 ## Cross-references
 
 - `RESEARCH.md` — full research narrative; this roadmap derives from it
-- `ROADMAP.md` — grant-funded deliverables (FAD + AIC-P1 + ARIA)
-- `PLAN.md` — architecture, CLS principles, strength formula
+- `ROADMAP.md` — grant-funded deliverables (FAD + AIC-P1 + ARIA) only. Execution claims removed; this file is the source of truth for non-grant sequencing. Drift between the two documents is a bug.
+- `PLAN.md` — architecture, CLS principles, strength formula. Note PLAN.md:285 says hybrid embeddings shipped; F6 scope corrected to reranker-only above.
 - `docs/plans/2026-04-28-company-brain-measurement.md` — measurement-first scorecard
 - `docs/plans/2026-04-21-hippocampal-mechanism-audit.md` — coverage audit
 - `docs/plans/2026-04-23-extraction-dag-multihop.md` — multi-hop retrieval foundation (shipped)
