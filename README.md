@@ -60,6 +60,15 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v0.36.0
+
+- **`hippo serve` daemon.** Persistent HTTP server on 127.0.0.1:6789. CLI auto-detects and becomes a thin client; one process owns the SQLite DB.
+- **MCP-over-HTTP.** MCP clients can now connect over HTTP/SSE in addition to stdio. Same tool surface.
+- **Bearer-token auth + loopback trust.** Set HIPPO_API_KEY for remote calls; loopback connections work without a key. Server refuses to bind to non-loopback host without auth.
+- **Audit log fix.** Mutations on non-default tenants are now correctly attributed in the audit log (was using HIPPO_TENANT env, now uses the row's tenant_id).
+- **Tenant deny on archive/forget.** A valid Bearer for tenant A can no longer affect tenant B's memories, cross-tenant requests return "memory not found".
+- **Known issue:** p99 recall latency is 58.4ms on a 10k store, target is 50ms. Architecture ships; latency hardening in v0.37.0.
+
 ### What's new in v0.35.0
 
 - **Stub auth landed.** API keys + audit log + per-tenant data isolation. `hippo auth create` mints a scrypt-hashed key shown plaintext exactly once. `hippo audit list` exposes the mutation trail.

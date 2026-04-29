@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.36.0 (2026-04-29)
+
+### Added
+- **A1 server mode.** `hippo serve` runs a persistent daemon on http://127.0.0.1:6789 (configurable via --port or HIPPO_PORT). Exposes /v1/memories, /v1/auth/keys, /v1/audit, MCP-over-HTTP at /mcp, and /health.
+- **CLI thin-client.** When `hippo serve` is running, CLI invocations auto-detect via .hippo/server.pid and route through HTTP. Stale pidfile self-heals on first ECONNREFUSED.
+- **MCP-over-HTTP/SSE transport.** Existing stdio MCP path unchanged. POST /mcp for synchronous JSON-RPC; GET /mcp/stream for SSE keepalive (server-pushed messages deferred to v0.37.0).
+- **Domain layer src/api.ts.** Pure functions for remember/recall/forget/promote/supersede/archiveRaw/auth*/audit. Both server and CLI handlers delegate through this surface.
+- **HTTP auth middleware.** Bearer token via Authorization header; loopback (127.0.0.1, ::1, ::ffff:127.0.0.1) accepts unauthenticated requests as actor='localhost:cli'. Non-loopback no-token returns 401. Server refuses to bind 0.0.0.0 without auth.
+- **24h soak harness skeleton** at benchmarks/a1/soak.ts. Manual run; results not gated.
+- **p99 recall benchmark** at benchmarks/a1/p99-recall.ts. 10k-memory store, top-10 BM25 against tier-1 queries.
+
+### Fixed
+- Audit-log tenant attribution: `audit()` helper now uses the entry's tenant_id instead of HIPPO_TENANT env (latent bug, exposed during A1 refactor).
+- api.archiveRaw and api.forget now enforce tenant scope: cross-tenant access returns "memory not found" rather than affecting another tenant's row.
+- SIGTERM drain: server.closeAllConnections() before server.close() so SSE keepalive streams don't block shutdown.
+- MCP-over-HTTP threads hippoRoot + tenantId from the auth context (was previously resolving its own root via cwd walk).
+
+### Internal
+- 99 new tests (730 baseline -> 829 + 2 skipped). Headline parity test (cli-thin-client) spawns real subprocess server and verifies audit discriminator. Concurrent recall+write under SQLite single-writer (10 readers x 50 reads + 1 writer x 50 writes) confirms zero locked errors.
+- All 5 /review ship blockers closed (C1 pidfile banner, C2 VERSION constants, C3 MCP context plumbing, H4 drain timeout, H5 tenant deny on archive/forget).
+
+### Known issues (tracked for v0.37.0 in TODOS.md)
+- **p99 latency:** measured 58.4ms vs 50ms target on 10k store. Architecture ships; latency hardening lands in v0.37.0. Profiling candidates: per-request DB open, audit-emit roundtrip, JSON serialization, hybrid embedding wiring.
+- HIPPO_API_KEY silently dropped on stale-pidfile fallback (HIPPO_REQUIRE_SERVER knob coming in v0.37.0).
+- Concurrent `hippo serve` on the same hippoRoot has no winner detection; second serve clobbers the first's pidfile.
+- Recall mode=hybrid query param accepted but ignored (BM25-only over HTTP). Hybrid wiring deferred.
+- MCP-over-HTTP SSE is keepalive-only; no server-pushed messages.
+
+### Deferred to v2 (full multi-tenant)
+No new deferrals. A5 v2 follow-ups still tracked in TODOS.md.
+
 ## 0.35.0 (2026-04-29)
 
 ### Added

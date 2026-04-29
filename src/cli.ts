@@ -147,6 +147,9 @@ import {
   type AuditResult,
 } from './audit.js';
 import { createApiKey, listApiKeys, revokeApiKey, type ApiKeyListItem } from './auth.js';
+import * as api from './api.js';
+import * as client from './client.js';
+import { detectServer, removePidfile, type ServerInfo } from './server-detect.js';
 import { resolveTenantId } from './tenant.js';
 import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from './eval.js';
 import { runFeatureEval, formatResult, resultToBaseline, detectRegressions, type EvalBaseline } from './eval-suite.js';
@@ -199,6 +202,37 @@ function requireInit(hippoRoot: string): void {
   if (!isInitialized(hippoRoot)) {
     console.error('No .hippo directory found. Run `hippo init` first.');
     process.exit(1);
+  }
+}
+
+/**
+ * Run an HTTP-routed command if a `hippo serve` instance is detected for
+ * `hippoRoot`. Returns:
+ *   - true  if the HTTP path ran (success OR a structured server error that
+ *           was already surfaced to stdout/stderr by `httpFn`),
+ *   - false if no server was detected, or if the detected pidfile turned out
+ *           to be stale (connection refused). On stale, the pidfile is removed
+ *           and the caller should fall back to the direct path.
+ *
+ * Per the A1 plan footgun #1: stale pidfiles must self-heal, not crash.
+ */
+async function runViaServerIfAvailable(
+  hippoRoot: string,
+  httpFn: (info: ServerInfo, apiKey: string | undefined) => Promise<void>,
+): Promise<boolean> {
+  const info = detectServer(hippoRoot);
+  if (!info) return false;
+  const apiKey = process.env['HIPPO_API_KEY'];
+  try {
+    await httpFn(info, apiKey);
+    return true;
+  } catch (err) {
+    if (client.isConnectionRefused(err)) {
+      console.error('hippo: stale server pidfile detected, falling back to direct mode');
+      removePidfile(hippoRoot);
+      return false;
+    }
+    throw err;
   }
 }
 
@@ -2468,11 +2502,16 @@ function cmdOutcome(
 function cmdForget(hippoRoot: string, id: string): void {
   requireInit(hippoRoot);
 
-  const ok = deleteEntry(hippoRoot, id);
-  if (ok) {
+  const ctx: api.Context = {
+    hippoRoot,
+    tenantId: resolveTenantId({}),
+    actor: 'cli',
+  };
+  try {
+    api.forget(ctx, id);
     updateStats(hippoRoot, { forgotten: 1 });
     console.log(`Forgot ${id}`);
-  } else {
+  } catch {
     console.error(`Memory not found: ${id}`);
     process.exit(1);
   }
@@ -3720,14 +3759,14 @@ function cmdPromote(hippoRoot: string, id: string): void {
     process.exit(1);
   }
 
+  const ctx: api.Context = {
+    hippoRoot,
+    tenantId: resolveTenantId({}),
+    actor: 'cli',
+  };
   try {
-    const globalEntry = promoteToGlobal(hippoRoot, id);
-    // Emit audit on the global store (where the promoted memory now lives).
-    // The writeEntry inside promoteToGlobal already fires a 'remember' on the
-    // global db; we add a separate 'promote' event so the audit trail keeps
-    // the user-facing intent distinct from the underlying upsert.
-    emitCliAudit(getGlobalRoot(), 'promote', globalEntry.id, { sourceId: id });
-    console.log(`Promoted ${id} to global store as ${globalEntry.id}`);
+    const result = api.promote(ctx, id);
+    console.log(`Promoted ${id} to global store as ${result.globalId}`);
     console.log(`   Global store: ${getGlobalRoot()}`);
   } catch (err) {
     console.error(`Failed to promote: ${(err as Error).message}`);
@@ -4359,22 +4398,20 @@ function cmdAuthCreate(hippoRoot: string, flags: Record<string, string | boolean
   const root = resolveAuthRoot(hippoRoot, flags);
   const tenantFlag = typeof flags['tenant'] === 'string' ? (flags['tenant'] as string) : undefined;
   const labelFlag = typeof flags['label'] === 'string' ? (flags['label'] as string) : undefined;
-  const tenantId = tenantFlag ?? resolveTenantId({});
   const asJson = Boolean(flags['json']);
 
-  const db = openHippoDb(root);
-  let result;
-  try {
-    result = createApiKey(db, { tenantId, label: labelFlag });
-  } finally {
-    closeHippoDb(db);
-  }
+  const ctx: api.Context = {
+    hippoRoot: root,
+    tenantId: resolveTenantId({}),
+    actor: 'cli',
+  };
+  const result = api.authCreate(ctx, { tenantId: tenantFlag, label: labelFlag });
 
   if (asJson) {
     console.log(JSON.stringify({
       keyId: result.keyId,
       plaintext: result.plaintext,
-      tenantId,
+      tenantId: result.tenantId,
       label: labelFlag ?? null,
     }));
     return;
@@ -4536,13 +4573,8 @@ function cmdAuditList(hippoRoot: string, flags: Record<string, string | boolean 
     process.exit(1);
   }
 
-  const db = openHippoDb(root);
-  let events: AuditEvent[];
-  try {
-    events = queryAuditEvents(db, { tenantId, op, since, limit });
-  } finally {
-    closeHippoDb(db);
-  }
+  const ctx: api.Context = { hippoRoot: root, tenantId, actor: 'cli' };
+  const events = api.auditList(ctx, { op, since, limit });
 
   if (asJson) {
     console.log(JSON.stringify(events));
@@ -4924,6 +4956,37 @@ async function main(): Promise<void> {
         console.error('Memory content too short (minimum 3 characters).');
         process.exit(1);
       }
+      // Thin-client routing. When a server is up, simple `remember` calls go
+      // over HTTP so the daemon stays single-writer (footgun #2). Rich CLI
+      // flags (--pin, --layer, --extract, --global, salience gates) still
+      // need the direct path; we only intercept the minimal envelope.
+      const richFlag =
+        flags['pin'] || flags['global'] || flags['extract'] || flags['force'] ||
+        flags['observed'] || flags['inferred'] || flags['verified'] ||
+        flags['layer'] !== undefined;
+      if (!richFlag) {
+        const rememberKindRaw = typeof flags['kind'] === 'string' ? (flags['kind'] as string).toLowerCase() : undefined;
+        const rememberKindAllowed = ['distilled', 'superseded'] as const;
+        if (rememberKindRaw === undefined || (rememberKindAllowed as readonly string[]).includes(rememberKindRaw)) {
+          const tagsRaw = flags['tag'];
+          const tags = Array.isArray(tagsRaw)
+            ? (tagsRaw as string[]).map(String)
+            : typeof tagsRaw === 'string' ? [tagsRaw] : undefined;
+          const remembered = await runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
+            const result = await client.remember(info.url, apiKey, {
+              content: text,
+              kind: rememberKindRaw as ('distilled' | 'superseded' | undefined),
+              scope: typeof flags['scope'] === 'string' ? (flags['scope'] as string) : undefined,
+              owner: typeof flags['owner'] === 'string' ? (flags['owner'] as string) : undefined,
+              artifactRef: typeof flags['artifact-ref'] === 'string' ? (flags['artifact-ref'] as string) : undefined,
+              tags,
+            });
+            console.log(`Remembered [${result.id}] (via ${info.url})`);
+            console.log(`   Kind: ${result.kind} | Tenant: ${result.tenantId}`);
+          });
+          if (remembered) break;
+        }
+      }
       await cmdRemember(hippoRoot, text, flags);
       break;
     }
@@ -5096,6 +5159,16 @@ async function main(): Promise<void> {
         console.error('Please provide a memory ID.');
         process.exit(1);
       }
+      const routed = await runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
+        try {
+          await client.forget(info.url, apiKey, id);
+          console.log(`Forgot ${id}`);
+        } catch (err) {
+          console.error((err as Error).message);
+          process.exit(1);
+        }
+      });
+      if (routed) break;
       cmdForget(hippoRoot, id);
       break;
     }
@@ -5146,6 +5219,16 @@ async function main(): Promise<void> {
         console.error('Please provide a memory ID.');
         process.exit(1);
       }
+      const promoted = await runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
+        try {
+          const result = await client.promote(info.url, apiKey, id);
+          console.log(`Promoted ${id} to global store as ${result.globalId}`);
+        } catch (err) {
+          console.error(`Failed to promote: ${(err as Error).message}`);
+          process.exit(1);
+        }
+      });
+      if (promoted) break;
       cmdPromote(hippoRoot, id);
       break;
     }
@@ -5293,12 +5376,36 @@ async function main(): Promise<void> {
       cmdWm(hippoRoot, args, flags);
       break;
 
-    case 'mcp':
-      // Start MCP server over stdio - dynamically import to keep main CLI lean
-      await import('./mcp/server.js');
+    case 'mcp': {
+      // Start MCP server over stdio. Dynamic import keeps main CLI lean; the
+      // dispatcher itself is transport-agnostic, so we explicitly attach the
+      // stdio loop here. (HTTP/SSE transport is wired in src/server.ts and
+      // imports the same module without triggering stdin handlers.)
+      const mod = await import('./mcp/server.js');
+      mod.startStdioLoop();
       // Server runs until stdin closes, so we never reach here
       await new Promise(() => {}); // hang forever
       break;
+    }
+
+    case 'serve': {
+      requireInit(hippoRoot);
+      const portRaw = flags['port'] ?? process.env['HIPPO_PORT'] ?? '6789';
+      const port = Number(portRaw);
+      if (!Number.isFinite(port) || port < 0) {
+        console.error(`Invalid --port: ${String(portRaw)}`);
+        process.exit(1);
+      }
+      const host = typeof flags['host'] === 'string' ? (flags['host'] as string) : '127.0.0.1';
+      const { serve } = await import('./server.js');
+      const handle = await serve({ hippoRoot, port, host });
+      console.log(`hippo serve listening on ${handle.url} (pid ${process.pid})`);
+      console.log(`pidfile: ${path.join(hippoRoot, 'server.pid')}`);
+      console.log('press Ctrl+C to stop');
+      // SIGINT/SIGTERM handlers wired in server.ts (skipped under VITEST). Hang.
+      await new Promise(() => {});
+      break;
+    }
 
     case 'invalidate': {
       requireInit(hippoRoot);

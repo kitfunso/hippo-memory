@@ -61,6 +61,24 @@ interface McpResponse {
   error?: { code: number; message: string };
 }
 
+export type { McpRequest, McpResponse };
+
+/**
+ * Optional execution context threaded from a non-stdio transport. When the
+ * HTTP transport in src/server.ts calls handleMcpRequest, it knows the
+ * server's bound hippoRoot and the auth-resolved tenantId/actor. Passing
+ * those through here lets executeTool skip the findHippoRoot() walk and
+ * the env-based resolveTenantId({}) fallback — both of which would
+ * otherwise produce the wrong store and the wrong tenant for HTTP callers.
+ *
+ * Stdio callers pass nothing; behavior stays unchanged for that path.
+ */
+export interface McpContext {
+  hippoRoot: string;
+  tenantId: string;
+  actor: string;
+}
+
 // MCP stdio transport spec: messages are newline-delimited JSON-RPC, no embedded newlines.
 // https://modelcontextprotocol.io/specification/.../basic/transports#stdio
 function send(msg: McpResponse): void {
@@ -218,14 +236,24 @@ let lastRecalledIds: string[] = [];
 
 // ── Tool execution ──
 
-async function executeTool(name: string, args: Record<string, unknown>): Promise<string> {
-  const hippoRoot = findHippoRoot();
+async function executeTool(
+  name: string,
+  args: Record<string, unknown>,
+  ctx?: McpContext,
+): Promise<string> {
+  // When a transport hands us a context (HTTP path), trust it: the HTTP
+  // server already resolved hippoRoot from its bound opts and tenantId
+  // from the Bearer token (or the loopback fallback). The stdio path
+  // continues to walk from cwd / fall back to the global root, and to
+  // resolve tenant from HIPPO_TENANT.
+  const hippoRoot = ctx?.hippoRoot ?? findHippoRoot();
   if (!hippoRoot) return 'No .hippo/ store found. Run: hippo init';
 
   const config = loadConfig(hippoRoot);
   // A5: every loadAllEntries() in this server returns to the caller and is
-  // tenant-isolated. Resolved once per tool call from HIPPO_TENANT (or default).
-  const tenantId = resolveTenantId({});
+  // tenant-isolated. Resolved once per tool call: prefer the transport's
+  // ctx.tenantId so an HTTP Bearer for tenant B doesn't drop to HIPPO_TENANT.
+  const tenantId = ctx?.tenantId ?? resolveTenantId({});
 
   switch (name) {
     case 'hippo_recall': {
@@ -261,6 +289,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
         confidence: 'verified',
         baseHalfLifeDays: config.defaultHalfLifeDays,
         schema_fit: schemaFit,
+        tenantId,
       });
       writeEntry(hippoRoot, entry);
 
@@ -377,6 +406,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
           source: 'git',
           confidence: 'observed',
           baseHalfLifeDays: config.defaultHalfLifeDays,
+          tenantId,
         });
         writeEntry(hippoRoot, entry);
         added++;
@@ -425,7 +455,17 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
 
 // ── Request handling ──
 
-async function handleRequest(req: McpRequest): Promise<McpResponse | null> {
+/**
+ * Transport-agnostic MCP dispatcher. Both the stdio loop (below) and the
+ * HTTP/SSE transport in src/server.ts route every incoming JSON-RPC message
+ * through this single function. Returns null for notifications (no response
+ * expected) and a McpResponse otherwise. Errors thrown by `executeTool` are
+ * the caller's problem — wrap with try/catch on the transport side.
+ */
+export async function handleMcpRequest(
+  req: McpRequest,
+  ctx?: McpContext,
+): Promise<McpResponse | null> {
   const { id, method, params } = req;
 
   switch (method) {
@@ -436,7 +476,7 @@ async function handleRequest(req: McpRequest): Promise<McpResponse | null> {
         result: {
           protocolVersion: '2024-11-05',
           capabilities: { tools: {} },
-          serverInfo: { name: 'hippo-memory', version: '0.19.1' },
+          serverInfo: { name: 'hippo-memory', version: '0.36.0' },
         },
       };
 
@@ -449,7 +489,7 @@ async function handleRequest(req: McpRequest): Promise<McpResponse | null> {
     case 'tools/call': {
       const toolName = (params as any)?.name;
       const toolArgs = (params as any)?.arguments ?? {};
-      const output = await executeTool(toolName, toolArgs);
+      const output = await executeTool(toolName, toolArgs, ctx);
       return {
         jsonrpc: '2.0',
         id,
@@ -485,29 +525,61 @@ function dispatch(body: string): void {
   }
   if (!req.method) return;
   if (req.method.startsWith('notifications/')) {
-    handleRequest(req).catch(() => {});
+    handleMcpRequest(req).catch(() => {});
     return;
   }
-  handleRequest(req).then((resp) => { if (resp) send(resp); }).catch((err) => {
+  handleMcpRequest(req).then((resp) => { if (resp) send(resp); }).catch((err) => {
     send({ jsonrpc: '2.0', id: req.id, error: { code: -32603, message: err?.message ?? 'Internal error' } });
   });
 }
 
-process.stdin.on('data', (chunk: Buffer) => {
-  buffer = Buffer.concat([buffer, chunk]);
-  while (true) {
-    const result = parseFrame(buffer);
-    if (result.kind === 'incomplete') break;
-    buffer = result.rest;
-    if (result.kind === 'message') dispatch(result.body);
+/**
+ * Wire stdin/stdout to the dispatcher. Idempotent — only the entrypoint
+ * (cli.ts `hippo mcp`, or running this file directly) should call this.
+ * src/server.ts imports `handleMcpRequest` without invoking this, so the
+ * HTTP daemon does not steal stdin or exit when its parent closes a pipe.
+ */
+export function startStdioLoop(): void {
+  process.stdin.on('data', (chunk: Buffer) => {
+    buffer = Buffer.concat([buffer, chunk]);
+    while (true) {
+      const result = parseFrame(buffer);
+      if (result.kind === 'incomplete') break;
+      buffer = result.rest;
+      if (result.kind === 'message') dispatch(result.body);
+    }
+  });
+
+  process.stdin.on('end', () => process.exit(0));
+
+  process.on('uncaughtException', (err) => {
+    process.stderr.write(`hippo-mcp uncaught: ${err?.message ?? err}\n`);
+  });
+  process.on('unhandledRejection', (err) => {
+    process.stderr.write(`hippo-mcp unhandled: ${err instanceof Error ? err.message : String(err)}\n`);
+  });
+}
+
+// Auto-start when invoked as the main module (node dist/mcp/server.js or via
+// the cli's `import('./mcp/server.js')`). Importing this file from another
+// module (e.g. src/server.ts wiring up the HTTP/SSE transport) will NOT
+// trigger the stdio loop. The cli imports this file specifically to start
+// stdio; that import is also `import.meta.url === main`-equivalent because
+// it's executed as the program, so we keep a fallback: if HIPPO_MCP_STDIO=1
+// or argv1 ends in /mcp/server.js we start.
+const isMainModule = (() => {
+  try {
+    const argv1 = process.argv[1] ?? '';
+    if (argv1.endsWith('mcp/server.js') || argv1.endsWith('mcp\\server.js')) return true;
+    if (process.env.HIPPO_MCP_STDIO === '1') return true;
+    // ESM main-module check
+    const mainUrl = `file://${argv1.replace(/\\/g, '/')}`;
+    return import.meta.url === mainUrl || import.meta.url === `file:///${argv1.replace(/\\/g, '/')}`;
+  } catch {
+    return false;
   }
-});
+})();
 
-process.stdin.on('end', () => process.exit(0));
-
-process.on('uncaughtException', (err) => {
-  process.stderr.write(`hippo-mcp uncaught: ${err?.message ?? err}\n`);
-});
-process.on('unhandledRejection', (err) => {
-  process.stderr.write(`hippo-mcp unhandled: ${err instanceof Error ? err.message : String(err)}\n`);
-});
+if (isMainModule) {
+  startStdioLoop();
+}
