@@ -265,6 +265,16 @@ const MIGRATIONS: Migration[] = [
       if (!tableHasColumn(db, 'memories', 'kind')) {
         db.exec(`ALTER TABLE memories ADD COLUMN kind TEXT DEFAULT 'distilled'`);
       }
+      if (!tableHasColumn(db, 'memories', 'scope')) {
+        db.exec(`ALTER TABLE memories ADD COLUMN scope TEXT`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope) WHERE scope IS NOT NULL`);
+      }
+      if (!tableHasColumn(db, 'memories', 'owner')) {
+        db.exec(`ALTER TABLE memories ADD COLUMN owner TEXT`);
+      }
+      if (!tableHasColumn(db, 'memories', 'artifact_ref')) {
+        db.exec(`ALTER TABLE memories ADD COLUMN artifact_ref TEXT`);
+      }
     },
   },
 ];

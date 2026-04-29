@@ -29,4 +29,15 @@ describe('A3 envelope migration v14', () => {
   });
 
   it.todo('rejects kind value outside CHECK set — Task 6');
+
+  it.each(['scope', 'owner', 'artifact_ref'])('memories table has nullable %s column', (col) => {
+    const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
+    const db = openHippoDb(home);
+    const cols = db.prepare(`PRAGMA table_info(memories)`).all() as Array<{ name: string; notnull: number }>;
+    const c = cols.find((x) => x.name === col);
+    expect(c).toBeDefined();
+    expect(c!.notnull).toBe(0);
+    closeHippoDb(db);
+    rmSync(home, { recursive: true, force: true });
+  });
 });
