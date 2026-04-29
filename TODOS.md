@@ -138,6 +138,16 @@ ranking improvements; none are correctness blockers.
 
 - [ ] **BM25 sentinel-token leakage in evals.** During E1.3 eval authoring, descriptive scenario IDs polluted the ambient noise messages and inflated recall scores. Opaque IDs (e.g. `S1A2B3`) work; document this in any future eval template so the next connector eval doesn't repeat the mistake.
 
+- [ ] **Lockdown test misses `/mcp/stream`.** `tests/server-bearer-lockdown.test.ts` covers `/v1/memories`, `/v1/auth/keys`, `/v1/audit` but not `GET /mcp/stream`. Both routes call `requireAuth` with the same shape, so any future regression there won't fail the lockdown. Add `{ method: 'GET', path: '/mcp/stream' }` to `v1Routes` and assert 401 without Bearer when `HIPPO_REQUIRE_AUTH=1`. Surfaced by /review on the E1.3 branch.
+
+- [ ] **DLQ-on-parse-failure tenant attribution.** When `JSON.parse(rawBody)` fails after a valid Slack signature, we cannot read `team_id` from un-parseable JSON, so the DLQ row lands under `process.env.HIPPO_TENANT ?? 'default'`. On multi-workspace deployments this means a parse failure from workspace A lands in the wrong tenant's DLQ. Document or revisit after multi-workspace adoption.
+
+- [ ] **Audit emit ordering vs mirror write.** `writeEntry` releases the SAVEPOINT before writing the markdown mirror and emitting the audit row. If the mirror write throws (ENOSPC, EACCES), the memory row commits without an audit entry — `bootstrapLegacyStore` self-heals the orphan-row state, but the audit log is permanently missing the `remember` event. Fix: either move audit emit before the mirror write, or wrap mirror writes in try/catch that still emits audit. Surfaced by /review (MEDIUM).
+
+- [ ] **`ingestMessage` skipped→duplicate status string.** Replay of an empty-body event returns `status: 'duplicate'` whereas the first call returned `status: 'skipped'`. Functionally idempotent (same memoryId of `null`), but the differing status strings could confuse a caller that switch/cases on the value. Either unify the status (always 'skipped' for empty bodies) or document the asymmetry.
+
+- [ ] **Multi-workspace tenant-routing e2e test.** `tests/slack-tenant-routing.test.ts` covers the helper unit; no end-to-end webhook test populates `slack_workspaces` and asserts the resolved tenant lands on the memory row. Add one webhook test that mints a row in `slack_workspaces` and asserts the ingested memory's `tenant_id` matches.
+
 ---
 
 ## v0.37.0 — A1 p99 latency hardening
