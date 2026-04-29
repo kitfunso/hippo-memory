@@ -61,6 +61,8 @@ interface McpResponse {
   error?: { code: number; message: string };
 }
 
+export type { McpRequest, McpResponse };
+
 // MCP stdio transport spec: messages are newline-delimited JSON-RPC, no embedded newlines.
 // https://modelcontextprotocol.io/specification/.../basic/transports#stdio
 function send(msg: McpResponse): void {
@@ -425,7 +427,14 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
 
 // ── Request handling ──
 
-async function handleRequest(req: McpRequest): Promise<McpResponse | null> {
+/**
+ * Transport-agnostic MCP dispatcher. Both the stdio loop (below) and the
+ * HTTP/SSE transport in src/server.ts route every incoming JSON-RPC message
+ * through this single function. Returns null for notifications (no response
+ * expected) and a McpResponse otherwise. Errors thrown by `executeTool` are
+ * the caller's problem — wrap with try/catch on the transport side.
+ */
+export async function handleMcpRequest(req: McpRequest): Promise<McpResponse | null> {
   const { id, method, params } = req;
 
   switch (method) {
@@ -485,29 +494,61 @@ function dispatch(body: string): void {
   }
   if (!req.method) return;
   if (req.method.startsWith('notifications/')) {
-    handleRequest(req).catch(() => {});
+    handleMcpRequest(req).catch(() => {});
     return;
   }
-  handleRequest(req).then((resp) => { if (resp) send(resp); }).catch((err) => {
+  handleMcpRequest(req).then((resp) => { if (resp) send(resp); }).catch((err) => {
     send({ jsonrpc: '2.0', id: req.id, error: { code: -32603, message: err?.message ?? 'Internal error' } });
   });
 }
 
-process.stdin.on('data', (chunk: Buffer) => {
-  buffer = Buffer.concat([buffer, chunk]);
-  while (true) {
-    const result = parseFrame(buffer);
-    if (result.kind === 'incomplete') break;
-    buffer = result.rest;
-    if (result.kind === 'message') dispatch(result.body);
+/**
+ * Wire stdin/stdout to the dispatcher. Idempotent — only the entrypoint
+ * (cli.ts `hippo mcp`, or running this file directly) should call this.
+ * src/server.ts imports `handleMcpRequest` without invoking this, so the
+ * HTTP daemon does not steal stdin or exit when its parent closes a pipe.
+ */
+export function startStdioLoop(): void {
+  process.stdin.on('data', (chunk: Buffer) => {
+    buffer = Buffer.concat([buffer, chunk]);
+    while (true) {
+      const result = parseFrame(buffer);
+      if (result.kind === 'incomplete') break;
+      buffer = result.rest;
+      if (result.kind === 'message') dispatch(result.body);
+    }
+  });
+
+  process.stdin.on('end', () => process.exit(0));
+
+  process.on('uncaughtException', (err) => {
+    process.stderr.write(`hippo-mcp uncaught: ${err?.message ?? err}\n`);
+  });
+  process.on('unhandledRejection', (err) => {
+    process.stderr.write(`hippo-mcp unhandled: ${err instanceof Error ? err.message : String(err)}\n`);
+  });
+}
+
+// Auto-start when invoked as the main module (node dist/mcp/server.js or via
+// the cli's `import('./mcp/server.js')`). Importing this file from another
+// module (e.g. src/server.ts wiring up the HTTP/SSE transport) will NOT
+// trigger the stdio loop. The cli imports this file specifically to start
+// stdio; that import is also `import.meta.url === main`-equivalent because
+// it's executed as the program, so we keep a fallback: if HIPPO_MCP_STDIO=1
+// or argv1 ends in /mcp/server.js we start.
+const isMainModule = (() => {
+  try {
+    const argv1 = process.argv[1] ?? '';
+    if (argv1.endsWith('mcp/server.js') || argv1.endsWith('mcp\\server.js')) return true;
+    if (process.env.HIPPO_MCP_STDIO === '1') return true;
+    // ESM main-module check
+    const mainUrl = `file://${argv1.replace(/\\/g, '/')}`;
+    return import.meta.url === mainUrl || import.meta.url === `file:///${argv1.replace(/\\/g, '/')}`;
+  } catch {
+    return false;
   }
-});
+})();
 
-process.stdin.on('end', () => process.exit(0));
-
-process.on('uncaughtException', (err) => {
-  process.stderr.write(`hippo-mcp uncaught: ${err?.message ?? err}\n`);
-});
-process.on('unhandledRejection', (err) => {
-  process.stderr.write(`hippo-mcp unhandled: ${err instanceof Error ? err.message : String(err)}\n`);
-});
+if (isMainModule) {
+  startStdioLoop();
+}

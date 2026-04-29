@@ -5376,12 +5376,17 @@ async function main(): Promise<void> {
       cmdWm(hippoRoot, args, flags);
       break;
 
-    case 'mcp':
-      // Start MCP server over stdio - dynamically import to keep main CLI lean
-      await import('./mcp/server.js');
+    case 'mcp': {
+      // Start MCP server over stdio. Dynamic import keeps main CLI lean; the
+      // dispatcher itself is transport-agnostic, so we explicitly attach the
+      // stdio loop here. (HTTP/SSE transport is wired in src/server.ts and
+      // imports the same module without triggering stdin handlers.)
+      const mod = await import('./mcp/server.js');
+      mod.startStdioLoop();
       // Server runs until stdin closes, so we never reach here
       await new Promise(() => {}); // hang forever
       break;
+    }
 
     case 'serve': {
       requireInit(hippoRoot);

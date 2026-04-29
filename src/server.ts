@@ -18,6 +18,7 @@ import {
 } from './api.js';
 import type { MemoryKind } from './memory.js';
 import type { AuditOp } from './audit.js';
+import { handleMcpRequest, type McpRequest } from './mcp/server.js';
 
 const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set([
   'remember',
@@ -268,6 +269,34 @@ function buildContextWithAuth(req: IncomingMessage, hippoRoot: string): Context 
   };
 }
 
+/**
+ * Auth check for routes that do not need a tenant Context (e.g. MCP transport,
+ * which builds its own root resolution via findHippoRoot). Throws HttpError
+ * 401 the same way buildContextWithAuth does, but skips building the Context
+ * envelope. Loopback no-auth still passes.
+ */
+function requireAuth(req: IncomingMessage, hippoRoot: string): void {
+  const auth = readAuthHeader(req);
+  if (auth.kind === 'malformed') {
+    throw new HttpError(401, 'invalid api key');
+  }
+  if (auth.kind === 'bearer') {
+    const db = openHippoDb(hippoRoot);
+    try {
+      const result = validateApiKey(db, auth.token);
+      if (!result.valid) {
+        throw new HttpError(401, 'invalid api key');
+      }
+    } finally {
+      closeHippoDb(db);
+    }
+    return;
+  }
+  if (!isLoopback(req.socket.remoteAddress)) {
+    throw new HttpError(401, 'auth required');
+  }
+}
+
 function getString(obj: Record<string, unknown>, key: string): string | undefined {
   const v = obj[key];
   return typeof v === 'string' ? v : undefined;
@@ -474,6 +503,81 @@ async function handleRequest(
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = auditList(ctx, { op, since, limit });
     sendJson(res, 200, result);
+    return;
+  }
+
+  // ── MCP-over-HTTP/SSE transport (Task 11) ──
+  //
+  // Two routes implement an MCP HTTP transport alongside the stdio one. Both
+  // dispatch to the same `handleMcpRequest` as the stdio loop in src/mcp/server.ts.
+  //
+  // POST /mcp        — Send a JSON-RPC request, get a JSON-RPC response synchronously
+  //                    in the body. Content-type: application/json both ways.
+  // GET  /mcp/stream — Open an SSE stream for server-initiated messages.
+  //                    v1 simplification: this stream is keepalive-only. Clients
+  //                    that need server-pushed notifications/progress will see
+  //                    only `: ping` comments every 30s. All real responses come
+  //                    back synchronously on POST /mcp. This matches the
+  //                    "synchronous JSON in body" leg of the MCP HTTP spec and
+  //                    is enough for `tools/list` / `tools/call` round-trips.
+  //                    Server-initiated SSE messages will be wired in a later task.
+  //
+  // Auth: same as /v1/* — Bearer token validated via `requireAuth`, with the
+  // loopback no-auth fallback. SSE check runs once at stream-open.
+
+  if (method === 'POST' && path === '/mcp') {
+    requireAuth(req, opts.hippoRoot);
+    const raw = await readBody(req);
+    let mcpReq: McpRequest;
+    try {
+      mcpReq = JSON.parse(raw) as McpRequest;
+    } catch {
+      throw new HttpError(400, 'invalid JSON-RPC body');
+    }
+    if (!mcpReq || typeof mcpReq !== 'object' || typeof mcpReq.method !== 'string') {
+      throw new HttpError(400, 'JSON-RPC body must include a method string');
+    }
+    let mcpRes;
+    try {
+      mcpRes = await handleMcpRequest(mcpReq);
+    } catch (err) {
+      mcpRes = {
+        jsonrpc: '2.0' as const,
+        id: mcpReq.id,
+        error: { code: -32603, message: err instanceof Error ? err.message : 'internal error' },
+      };
+    }
+    if (mcpRes === null) {
+      // Notification — no body, 202 Accepted.
+      res.writeHead(202);
+      res.end();
+      return;
+    }
+    sendJson(res, 200, mcpRes);
+    return;
+  }
+
+  if (method === 'GET' && path === '/mcp/stream') {
+    requireAuth(req, opts.hippoRoot);
+    res.writeHead(200, {
+      'content-type': 'text/event-stream',
+      'cache-control': 'no-cache',
+      connection: 'keep-alive',
+    });
+    // Initial ping so smoke tests can confirm the stream is live without
+    // waiting 30s for the first keepalive interval.
+    res.write(': ping\n\n');
+    const ping = setInterval(() => {
+      try {
+        res.write(': ping\n\n');
+      } catch {
+        clearInterval(ping);
+      }
+    }, 30000);
+    // Don't keep the event loop alive just for this timer — the server's
+    // listener already does that, and tests want the process to exit cleanly.
+    if (typeof ping.unref === 'function') ping.unref();
+    req.on('close', () => clearInterval(ping));
     return;
   }
 
