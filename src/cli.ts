@@ -522,6 +522,17 @@ async function cmdRemember(
   const existing = loadAllEntries(targetRoot);
   const schemaFit = computeSchemaFit(text, rawTags, existing);
 
+  // A3 envelope flags
+  const kindFlag = typeof flags['kind'] === 'string' ? (flags['kind'] as string) : undefined;
+  const validKinds = ['raw', 'distilled', 'superseded', 'archived'] as const;
+  if (kindFlag !== undefined && !(validKinds as readonly string[]).includes(kindFlag)) {
+    console.error(`Invalid --kind: "${kindFlag}". Must be one of: ${validKinds.join(', ')}`);
+    process.exit(1);
+  }
+  const ownerFlag = typeof flags['owner'] === 'string' ? (flags['owner'] as string) : null;
+  const artifactRefFlag = typeof flags['artifact-ref'] === 'string' ? (flags['artifact-ref'] as string) : null;
+  const scopeForEnvelope = typeof flags['scope'] === 'string' ? (flags['scope'] as string) : null;
+
   const entry = createMemory(text, {
     layer: Layer.Episodic,
     tags: rawTags,
@@ -529,6 +540,10 @@ async function cmdRemember(
     source: useGlobal ? 'cli-global' : 'cli',
     confidence,
     schema_fit: schemaFit,
+    kind: kindFlag as ('raw' | 'distilled' | 'superseded' | 'archived' | undefined),
+    scope: scopeForEnvelope,
+    owner: ownerFlag,
+    artifact_ref: artifactRefFlag,
   });
 
   // Auto-tag with path context
@@ -985,6 +1000,9 @@ async function cmdRecall(
         base.reason = explanation.reason;
         base.bm25 = r.bm25;
         base.cosine = r.cosine;
+        if (explanation.envelope) {
+          base.envelope = explanation.envelope;
+        }
       }
       return base;
     });
@@ -1010,6 +1028,15 @@ async function cmdRecall(
       const explanation = explainMatch(query, r);
       console.log(`    source:${sourceMark} | layer: [${e.layer}] | confidence: [${conf}]`);
       console.log(`    reason: ${explanation.reason}`);
+      if (explanation.envelope) {
+        const env = explanation.envelope;
+        console.log(`    kind: ${env.kind}`);
+        if (env.scope) console.log(`    scope: ${env.scope}`);
+        if (env.owner) console.log(`    owner: ${env.owner}`);
+        if (env.artifact_ref) console.log(`    artifact_ref: ${env.artifact_ref}`);
+        if (env.session_id) console.log(`    session_id: ${env.session_id}`);
+        console.log(`    confidence: ${env.confidence}`);
+      }
     }
     console.log();
     console.log(e.content);
