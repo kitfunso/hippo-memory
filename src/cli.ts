@@ -159,6 +159,8 @@ import { multihopSearch } from './multihop.js';
 import { computeSalience } from './salience.js';
 import { computeAmbientState, renderAmbientSummary } from './ambient.js';
 import { listDlq } from './connectors/slack/dlq.js';
+import { backfillChannel } from './connectors/slack/backfill.js';
+import { slackHistoryFetcher } from './connectors/slack/web-client.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -4642,7 +4644,7 @@ function printSlackBackfillUsage(): void {
   console.log('  --since    backfill from ISO timestamp (default: cursor)');
 }
 
-function cmdSlackBackfill(_hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
+function cmdSlackBackfill(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
   // M3: detect --help BEFORE token check so operators can read usage in
   // environments without SLACK_BOT_TOKEN configured.
   if (flags['help']) {
@@ -4655,13 +4657,34 @@ function cmdSlackBackfill(_hippoRoot: string, flags: Record<string, string | boo
     process.exit(1);
   }
   // Real fetcher requires SLACK_BOT_TOKEN with channels:history scope.
-  // (Full HTTP fetcher implementation lands in Task 15.)
   const token = process.env.SLACK_BOT_TOKEN;
   if (!token) {
     console.error('SLACK_BOT_TOKEN is not set. Backfill requires a Slack bot token with channels:history scope.');
     process.exit(2);
   }
-  console.log(`Backfill of ${channel} not yet wired to live HTTP fetcher (Task 15).`);
+  // --since is advisory in V1: the slack_cursors row drives resume, so the
+  // backfill loop always picks up where it last left off. Honoured-by-cursor
+  // semantics keep idempotency clean.
+  const sinceIso = flags['since'] as string | undefined;
+  void sinceIso;
+  const fetcher = slackHistoryFetcher(token);
+  const ctx = {
+    hippoRoot,
+    tenantId: process.env.HIPPO_TENANT ?? 'default',
+    actor: 'cli:slack-backfill',
+  };
+  backfillChannel(ctx, {
+    teamId: process.env.SLACK_TEAM_ID ?? 'T_UNKNOWN',
+    channel: { id: channel, is_private: false },
+    fetcher,
+  })
+    .then((r) => {
+      console.log(`backfill ${channel}: ${r.ingested} new messages across ${r.pages} pages`);
+    })
+    .catch((e: Error) => {
+      console.error('backfill failed:', e.message);
+      process.exit(3);
+    });
 }
 
 function cmdSlackDlqList(hippoRoot: string, _flags: Record<string, string | boolean | string[]>): void {
