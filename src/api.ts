@@ -13,6 +13,7 @@ import {
   readEntry,
   deleteEntry,
   loadSearchEntries,
+  removeEntryMirrors,
 } from './store.js';
 import {
   createMemory,
@@ -336,6 +337,13 @@ export function archiveRaw(
   } finally {
     closeHippoDb(db);
   }
+  // archiveRawMemory deletes the memories row but leaves any legacy markdown
+  // mirror in <root>/{buffer,episodic,semantic}/<id>.md untouched. If we left
+  // the mirror in place, a subsequent initStore() on an empty memories table
+  // would silently re-import the row via bootstrapLegacyStore — defeating the
+  // archive (and the GDPR right-to-be-forgotten promise on raw rows). Mirror
+  // forget() at src/store.ts:1046, which uses the same removeEntryMirrors call.
+  removeEntryMirrors(ctx.hippoRoot, id);
   // archiveRawMemory does not return the archive_at timestamp it wrote. We
   // emit a fresh ISO timestamp here for the API response. Within a millisecond
   // of the actual write, fine for a server response shape.

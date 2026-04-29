@@ -1,5 +1,3 @@
-import { existsSync, unlinkSync } from 'node:fs';
-import { join } from 'node:path';
 import { archiveRaw, type Context } from '../../api.js';
 import { openHippoDb, closeHippoDb } from '../../db.js';
 import { markEventSeen, hasSeenEvent } from './idempotency.js';
@@ -43,16 +41,9 @@ export function handleMessageDeleted(ctx: Context, input: DeletionInput): Deleti
     finally { closeHippoDb(db2); }
     return { status: 'not_found', memoryId: null };
   }
+  // api.archiveRaw now handles legacy mirror cleanup centrally so every caller
+  // (CLI, REST route, MCP tool, this connector) gets the GDPR-correct archive.
   archiveRaw(ctx, memoryId, `source_deleted:slack:${input.teamId}:${input.channelId}:${input.deletedTs}`);
-  // archiveRawMemory deletes the memories row but does not remove the legacy
-  // markdown mirror in <root>/{buffer,episodic,semantic}/<id>.md. If we leave
-  // the mirror in place, a subsequent initStore() on an empty memories table
-  // would re-import the row via bootstrapLegacyStore — silently undoing the
-  // archive. Drop the mirror so the GDPR-style deletion is complete.
-  for (const layer of ['buffer', 'episodic', 'semantic']) {
-    const file = join(ctx.hippoRoot, layer, `${memoryId}.md`);
-    if (existsSync(file)) unlinkSync(file);
-  }
   const db3 = openHippoDb(ctx.hippoRoot);
   try { markEventSeen(db3, input.eventId, memoryId); }
   finally { closeHippoDb(db3); }

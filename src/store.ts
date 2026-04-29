@@ -619,7 +619,7 @@ function writeMarkdownMirror(hippoRoot: string, entry: MemoryEntry): void {
   fs.writeFileSync(path.join(dir, `${entry.id}.md`), serializeEntry(entry), 'utf8');
 }
 
-function removeEntryMirrors(hippoRoot: string, id: string): void {
+export function removeEntryMirrors(hippoRoot: string, id: string): void {
   for (const layer of [Layer.Buffer, Layer.Episodic, Layer.Semantic]) {
     const file = path.join(layerDir(hippoRoot, layer), `${id}.md`);
     if (fs.existsSync(file)) {
