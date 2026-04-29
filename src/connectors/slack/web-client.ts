@@ -15,11 +15,12 @@ export function slackHistoryFetcher(
   token: string,
   fetchImpl?: typeof fetch,
 ): SlackHistoryFetcher {
-  return async ({ channelId, cursor }) => {
+  return async ({ channelId, cursor, oldest }) => {
     const url = new URL('https://slack.com/api/conversations.history');
     url.searchParams.set('channel', channelId);
     url.searchParams.set('limit', '200');
     if (cursor) url.searchParams.set('cursor', cursor);
+    if (oldest) url.searchParams.set('oldest', oldest);
     const r = await fetchWithRetry({
       url: url.toString(),
       init: { method: 'GET', headers: { authorization: `Bearer ${token}` } },
