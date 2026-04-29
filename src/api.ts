@@ -7,12 +7,13 @@
  * in exactly one place.
  */
 
-import { openHippoDb, closeHippoDb } from './db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import {
   writeEntry,
   readEntry,
   deleteEntry,
   loadSearchEntries,
+  removeEntryMirrors,
 } from './store.js';
 import {
   createMemory,
@@ -49,6 +50,15 @@ export interface RememberOpts {
   owner?: string;
   artifactRef?: string;
   tags?: string[];
+  /**
+   * Optional hook invoked inside the same transaction as the underlying
+   * memories INSERT. Used by ingestion connectors (E1.3+) to stamp
+   * idempotency / cursor rows atomically with the memory row, so a crash
+   * mid-write cannot produce a memory without its corresponding side-effect
+   * log row (or vice versa). If the callback throws, the INSERT is rolled
+   * back and the error is rethrown.
+   */
+  afterWrite?: (db: DatabaseSyncLike, memoryId: string) => void;
 }
 
 export interface RememberResult {
@@ -68,7 +78,7 @@ export function remember(ctx: Context, opts: RememberOpts): RememberResult {
   });
   // writeEntry threads ctx.actor into its internal audit hook, so exactly
   // one 'remember' event lands in the log with the supplied actor.
-  writeEntry(ctx.hippoRoot, entry, { actor: ctx.actor });
+  writeEntry(ctx.hippoRoot, entry, { actor: ctx.actor, afterWrite: opts.afterWrite });
 
   return { id: entry.id, kind: entry.kind, tenantId: ctx.tenantId };
 }
@@ -81,6 +91,16 @@ export interface RecallOpts {
   query: string;
   limit?: number;
   mode?: 'bm25' | 'hybrid' | 'physics';
+  /**
+   * Restrict results to memories whose `scope` equals this value exactly.
+   *
+   * When `scope` is undefined or empty, recall applies a DEFAULT-DENY rule:
+   * any memory whose scope starts with `'slack:private:'` is filtered out so
+   * a frontend caller passing `undefined` cannot accidentally surface
+   * private-channel content. Memories with scope=null (the common case for
+   * non-Slack content) are still returned.
+   */
+  scope?: string;
 }
 
 export interface RecallResultItem {
@@ -105,12 +125,24 @@ export interface RecallResult {
  */
 export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   const limit = opts.limit ?? 10;
-  const entries = loadSearchEntries(
+  const all = loadSearchEntries(
     ctx.hippoRoot,
     opts.query,
     undefined,
     ctx.tenantId,
   );
+  // Scope filtering runs AFTER the tenant filter inside loadSearchEntries, so
+  // a tenant-mismatched scope cannot surface another tenant's row even when
+  // both share the same scope string (e.g. 'slack:private:CSHARED').
+  let entries: typeof all;
+  if (opts.scope !== undefined && opts.scope !== '') {
+    entries = all.filter((e) => e.scope === opts.scope);
+  } else {
+    // Default-deny: a no-scope caller cannot see private slack channels. This
+    // is load-bearing because frontend callers will pass `undefined` and must
+    // not see `slack:private:*` rows by default.
+    entries = all.filter((e) => !(e.scope ?? '').startsWith('slack:private:'));
+  }
   // BM25 ordering already comes from loadSearchEntries; cap to `limit`.
   // Score is a placeholder — the physics/hybrid scorers in src/search.ts
   // produce richer breakdowns and will replace this when wired up.
@@ -305,6 +337,13 @@ export function archiveRaw(
   } finally {
     closeHippoDb(db);
   }
+  // archiveRawMemory deletes the memories row but leaves any legacy markdown
+  // mirror in <root>/{buffer,episodic,semantic}/<id>.md untouched. If we left
+  // the mirror in place, a subsequent initStore() on an empty memories table
+  // would silently re-import the row via bootstrapLegacyStore — defeating the
+  // archive (and the GDPR right-to-be-forgotten promise on raw rows). Mirror
+  // forget() at src/store.ts:1046, which uses the same removeEntryMirrors call.
+  removeEntryMirrors(ctx.hippoRoot, id);
   // archiveRawMemory does not return the archive_at timestamp it wrote. We
   // emit a fresh ISO timestamp here for the API response. Within a millisecond
   // of the actual write, fine for a server response shape.

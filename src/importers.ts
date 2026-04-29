@@ -87,9 +87,9 @@ export function importEntries(
 
     // A3: kind defaults to 'distilled'. ChatGPT/Claude/Cursor exports are curated
     // user pastes, not raw transcripts from a system of record, so distilled is
-    // correct here. When E1.x ingestion connectors land (Slack/Jira/Gmail webhooks),
-    // they MUST set kind: 'raw' explicitly and route deletions through
-    // archiveRawMemory(). See MEMORY_ENVELOPE.md.
+    // correct here. E1.3 (Slack ingestion) shipped 2026-04-29 in src/connectors/slack/
+    // and sets kind: 'raw' + routes deletions through archiveRawMemory() — these
+    // importers stay 'distilled' per the original reasoning. See MEMORY_ENVELOPE.md.
     const entry = createMemory(chunk, {
       layer: Layer.Episodic,
       tags: allTags,

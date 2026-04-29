@@ -1,0 +1,2587 @@
+[
+  {
+    "id": "S01-incident",
+    "channel": "C-incidents",
+    "query": "postgres database outage connection pool",
+    "answer_ts": [
+      "1700000300.000000",
+      "1700000310.000000"
+    ],
+    "transcript": [
+      {
+        "user": "U1",
+        "text": "morning all coffee machine broken again",
+        "ts": "1700000001.000000"
+      },
+      {
+        "user": "U2",
+        "text": "same here vending eating my coins",
+        "ts": "1700000010.000000"
+      },
+      {
+        "user": "U3",
+        "text": "anyone watching football tonight",
+        "ts": "1700000020.000000"
+      },
+      {
+        "user": "U4",
+        "text": "I might catch the second half",
+        "ts": "1700000030.000000"
+      },
+      {
+        "user": "U5",
+        "text": "lunch options thread please",
+        "ts": "1700000040.000000"
+      },
+      {
+        "user": "U6",
+        "text": "thai place down the road is decent",
+        "ts": "1700000050.000000"
+      },
+      {
+        "user": "U7",
+        "text": "weekly demo moved to thursday",
+        "ts": "1700000060.000000"
+      },
+      {
+        "user": "U8",
+        "text": "thanks for the heads up",
+        "ts": "1700000070.000000"
+      },
+      {
+        "user": "U1",
+        "text": "anyone deploying staging today",
+        "ts": "1700000080.000000"
+      },
+      {
+        "user": "U2",
+        "text": "I will be after standup",
+        "ts": "1700000090.000000"
+      },
+      {
+        "user": "U3",
+        "text": "remember to update the runbook",
+        "ts": "1700000100.000000"
+      },
+      {
+        "user": "U4",
+        "text": "got it will do",
+        "ts": "1700000110.000000"
+      },
+      {
+        "user": "U5",
+        "text": "office wifi flaky again",
+        "ts": "1700000120.000000"
+      },
+      {
+        "user": "U6",
+        "text": "tethering to phone",
+        "ts": "1700000130.000000"
+      },
+      {
+        "user": "U7",
+        "text": "hr lunch and learn at noon",
+        "ts": "1700000140.000000"
+      },
+      {
+        "user": "U8",
+        "text": "ack thanks",
+        "ts": "1700000150.000000"
+      },
+      {
+        "user": "U1",
+        "text": "did anyone see the new logo mock",
+        "ts": "1700000160.000000"
+      },
+      {
+        "user": "U2",
+        "text": "yeah it looks pretty clean",
+        "ts": "1700000170.000000"
+      },
+      {
+        "user": "U3",
+        "text": "engineering all hands at three",
+        "ts": "1700000180.000000"
+      },
+      {
+        "user": "U4",
+        "text": "I will be there",
+        "ts": "1700000190.000000"
+      },
+      {
+        "user": "U5",
+        "text": "checkout has been laggy this morning",
+        "ts": "1700000200.000000"
+      },
+      {
+        "user": "U6",
+        "text": "I noticed too p99 latency up",
+        "ts": "1700000210.000000"
+      },
+      {
+        "user": "U7",
+        "text": "checking grafana now",
+        "ts": "1700000220.000000"
+      },
+      {
+        "user": "U8",
+        "text": "looks elevated since 14:02 UTC",
+        "ts": "1700000230.000000"
+      },
+      {
+        "user": "U1",
+        "text": "checkout API throwing 500s now",
+        "ts": "1700000240.000000"
+      },
+      {
+        "user": "U2",
+        "text": "confirmed seeing 500s on checkout",
+        "ts": "1700000250.000000"
+      },
+      {
+        "user": "U3",
+        "text": "paging on call",
+        "ts": "1700000260.000000"
+      },
+      {
+        "user": "U4",
+        "text": "joined the bridge",
+        "ts": "1700000270.000000"
+      },
+      {
+        "user": "U5",
+        "text": "rolling back last deploy first",
+        "ts": "1700000280.000000"
+      },
+      {
+        "user": "U6",
+        "text": "rollback complete errors still climbing",
+        "ts": "1700000290.000000"
+      },
+      {
+        "user": "U7",
+        "text": "postgres database outage: connection pool exhausted on primary",
+        "ts": "1700000300.000000"
+      },
+      {
+        "user": "U8",
+        "text": "confirmed postgres outage from analytics query holding connection pool locks",
+        "ts": "1700000310.000000"
+      },
+      {
+        "user": "U1",
+        "text": "killing the analytics query now",
+        "ts": "1700000320.000000"
+      },
+      {
+        "user": "U2",
+        "text": "pool draining connections recovering",
+        "ts": "1700000330.000000"
+      },
+      {
+        "user": "U3",
+        "text": "checkout 500s back to baseline",
+        "ts": "1700000340.000000"
+      },
+      {
+        "user": "U4",
+        "text": "good work team postmortem tomorrow",
+        "ts": "1700000350.000000"
+      },
+      {
+        "user": "U5",
+        "text": "I will draft it",
+        "ts": "1700000360.000000"
+      },
+      {
+        "user": "U6",
+        "text": "thanks all",
+        "ts": "1700000370.000000"
+      },
+      {
+        "user": "U7",
+        "text": "going for coffee brb",
+        "ts": "1700000380.000000"
+      },
+      {
+        "user": "U8",
+        "text": "same need a break",
+        "ts": "1700000390.000000"
+      },
+      {
+        "user": "U1",
+        "text": "back what did I miss",
+        "ts": "1700000400.000000"
+      },
+      {
+        "user": "U2",
+        "text": "nothing new all calm",
+        "ts": "1700000410.000000"
+      },
+      {
+        "user": "U3",
+        "text": "sprint planning at four pm reminder",
+        "ts": "1700000420.000000"
+      },
+      {
+        "user": "U4",
+        "text": "ack",
+        "ts": "1700000430.000000"
+      },
+      {
+        "user": "U5",
+        "text": "anyone want dinner after",
+        "ts": "1700000440.000000"
+      },
+      {
+        "user": "U6",
+        "text": "I am in",
+        "ts": "1700000450.000000"
+      },
+      {
+        "user": "U7",
+        "text": "me too",
+        "ts": "1700000460.000000"
+      },
+      {
+        "user": "U8",
+        "text": "great place to be decided",
+        "ts": "1700000470.000000"
+      },
+      {
+        "user": "U1",
+        "text": "italian or sushi",
+        "ts": "1700000480.000000"
+      },
+      {
+        "user": "U2",
+        "text": "sushi",
+        "ts": "1700000490.000000"
+      },
+      {
+        "user": "U3",
+        "text": "sushi works",
+        "ts": "1700000500.000000"
+      },
+      {
+        "user": "U4",
+        "text": "ok sushi it is",
+        "ts": "1700000510.000000"
+      },
+      {
+        "user": "U5",
+        "text": "see you all at seven",
+        "ts": "1700000520.000000"
+      },
+      {
+        "user": "U6",
+        "text": "perfect",
+        "ts": "1700000530.000000"
+      },
+      {
+        "user": "U7",
+        "text": "leaving soon",
+        "ts": "1700000540.000000"
+      },
+      {
+        "user": "U8",
+        "text": "on my way",
+        "ts": "1700000550.000000"
+      },
+      {
+        "user": "U1",
+        "text": "ok bye all have a good evening",
+        "ts": "1700000560.000000"
+      }
+    ]
+  },
+  {
+    "id": "S02-incident",
+    "channel": "C-incidents",
+    "query": "helm chart memory limit oom kill",
+    "answer_ts": [
+      "1700100400.000000",
+      "1700100410.000000"
+    ],
+    "transcript": [
+      {
+        "user": "U1",
+        "text": "good morning team",
+        "ts": "1700100001.000000"
+      },
+      {
+        "user": "U2",
+        "text": "morning",
+        "ts": "1700100010.000000"
+      },
+      {
+        "user": "U3",
+        "text": "anyone reviewed my pr yet",
+        "ts": "1700100020.000000"
+      },
+      {
+        "user": "U4",
+        "text": "I will look after coffee",
+        "ts": "1700100030.000000"
+      },
+      {
+        "user": "U5",
+        "text": "ci is slow today",
+        "ts": "1700100040.000000"
+      },
+      {
+        "user": "U6",
+        "text": "yeah github actions queue is long",
+        "ts": "1700100050.000000"
+      },
+      {
+        "user": "U7",
+        "text": "lunch order going in",
+        "ts": "1700100060.000000"
+      },
+      {
+        "user": "U8",
+        "text": "burrito for me please",
+        "ts": "1700100070.000000"
+      },
+      {
+        "user": "U1",
+        "text": "salad please",
+        "ts": "1700100080.000000"
+      },
+      {
+        "user": "U2",
+        "text": "weekly survey reminder",
+        "ts": "1700100090.000000"
+      },
+      {
+        "user": "U3",
+        "text": "filled it in",
+        "ts": "1700100100.000000"
+      },
+      {
+        "user": "U4",
+        "text": "same",
+        "ts": "1700100110.000000"
+      },
+      {
+        "user": "U5",
+        "text": "demo went well yesterday",
+        "ts": "1700100120.000000"
+      },
+      {
+        "user": "U6",
+        "text": "the new dashboard looks great",
+        "ts": "1700100130.000000"
+      },
+      {
+        "user": "U7",
+        "text": "headphones found in meeting room three",
+        "ts": "1700100140.000000"
+      },
+      {
+        "user": "U8",
+        "text": "those are mine thanks",
+        "ts": "1700100150.000000"
+      },
+      {
+        "user": "U1",
+        "text": "starting the production deploy now",
+        "ts": "1700100160.000000"
+      },
+      {
+        "user": "U2",
+        "text": "ack",
+        "ts": "1700100170.000000"
+      },
+      {
+        "user": "U3",
+        "text": "watching the dashboard",
+        "ts": "1700100180.000000"
+      },
+      {
+        "user": "U4",
+        "text": "first canary looks ok",
+        "ts": "1700100190.000000"
+      },
+      {
+        "user": "U5",
+        "text": "second wave green",
+        "ts": "1700100200.000000"
+      },
+      {
+        "user": "U6",
+        "text": "third wave failing",
+        "ts": "1700100210.000000"
+      },
+      {
+        "user": "U7",
+        "text": "deploy paused",
+        "ts": "1700100220.000000"
+      },
+      {
+        "user": "U8",
+        "text": "looking at logs",
+        "ts": "1700100230.000000"
+      },
+      {
+        "user": "U1",
+        "text": "lots of pod crashloops",
+        "ts": "1700100240.000000"
+      },
+      {
+        "user": "U2",
+        "text": "out of memory kills suspected",
+        "ts": "1700100250.000000"
+      },
+      {
+        "user": "U3",
+        "text": "kubectl describe shows oom yes",
+        "ts": "1700100260.000000"
+      },
+      {
+        "user": "U4",
+        "text": "checking limits in helm chart",
+        "ts": "1700100270.000000"
+      },
+      {
+        "user": "U5",
+        "text": "increased memory limit recently",
+        "ts": "1700100280.000000"
+      },
+      {
+        "user": "U6",
+        "text": "no but the app might be loading more",
+        "ts": "1700100290.000000"
+      },
+      {
+        "user": "U7",
+        "text": "rollback to previous version please",
+        "ts": "1700100300.000000"
+      },
+      {
+        "user": "U8",
+        "text": "rolling back now",
+        "ts": "1700100310.000000"
+      },
+      {
+        "user": "U1",
+        "text": "rollback in progress",
+        "ts": "1700100320.000000"
+      },
+      {
+        "user": "U2",
+        "text": "still seeing crashes",
+        "ts": "1700100330.000000"
+      },
+      {
+        "user": "U3",
+        "text": "old image getting same crash",
+        "ts": "1700100340.000000"
+      },
+      {
+        "user": "U4",
+        "text": "weird",
+        "ts": "1700100350.000000"
+      },
+      {
+        "user": "U5",
+        "text": "looking at the chart values diff",
+        "ts": "1700100360.000000"
+      },
+      {
+        "user": "U6",
+        "text": "the new values bumped requests but not limits",
+        "ts": "1700100370.000000"
+      },
+      {
+        "user": "U7",
+        "text": "wait what changed exactly",
+        "ts": "1700100380.000000"
+      },
+      {
+        "user": "U8",
+        "text": "let me pull up the diff",
+        "ts": "1700100390.000000"
+      },
+      {
+        "user": "U1",
+        "text": "helm chart memory limit too low caused oom kill on pod startup",
+        "ts": "1700100400.000000"
+      },
+      {
+        "user": "U2",
+        "text": "confirmed: helm chart memory limit mismatch with request triggers oom kill",
+        "ts": "1700100410.000000"
+      },
+      {
+        "user": "U3",
+        "text": "patching the chart",
+        "ts": "1700100420.000000"
+      },
+      {
+        "user": "U4",
+        "text": "redeploy",
+        "ts": "1700100430.000000"
+      },
+      {
+        "user": "U5",
+        "text": "green",
+        "ts": "1700100440.000000"
+      },
+      {
+        "user": "U6",
+        "text": "deploy succeeded",
+        "ts": "1700100450.000000"
+      },
+      {
+        "user": "U7",
+        "text": "great recovery",
+        "ts": "1700100460.000000"
+      },
+      {
+        "user": "U8",
+        "text": "drink anyone",
+        "ts": "1700100470.000000"
+      },
+      {
+        "user": "U1",
+        "text": "yes please",
+        "ts": "1700100480.000000"
+      },
+      {
+        "user": "U2",
+        "text": "I am in",
+        "ts": "1700100490.000000"
+      },
+      {
+        "user": "U3",
+        "text": "bar across the street",
+        "ts": "1700100500.000000"
+      },
+      {
+        "user": "U4",
+        "text": "see you at six",
+        "ts": "1700100510.000000"
+      },
+      {
+        "user": "U5",
+        "text": "I will be late",
+        "ts": "1700100520.000000"
+      },
+      {
+        "user": "U6",
+        "text": "no worries",
+        "ts": "1700100530.000000"
+      },
+      {
+        "user": "U7",
+        "text": "see you",
+        "ts": "1700100540.000000"
+      },
+      {
+        "user": "U8",
+        "text": "later",
+        "ts": "1700100550.000000"
+      }
+    ]
+  },
+  {
+    "id": "S03-incident",
+    "channel": "C-incidents",
+    "query": "stripe payment api third party outage",
+    "answer_ts": [
+      "1700200300.000000",
+      "1700200310.000000"
+    ],
+    "transcript": [
+      {
+        "user": "U1",
+        "text": "morning",
+        "ts": "1700200001.000000"
+      },
+      {
+        "user": "U2",
+        "text": "morning",
+        "ts": "1700200010.000000"
+      },
+      {
+        "user": "U3",
+        "text": "great weekend",
+        "ts": "1700200020.000000"
+      },
+      {
+        "user": "U4",
+        "text": "yes had a hike",
+        "ts": "1700200030.000000"
+      },
+      {
+        "user": "U5",
+        "text": "sprint review at ten",
+        "ts": "1700200040.000000"
+      },
+      {
+        "user": "U6",
+        "text": "ack",
+        "ts": "1700200050.000000"
+      },
+      {
+        "user": "U7",
+        "text": "design team posted new mocks",
+        "ts": "1700200060.000000"
+      },
+      {
+        "user": "U8",
+        "text": "looking now",
+        "ts": "1700200070.000000"
+      },
+      {
+        "user": "U1",
+        "text": "office snacks restocked",
+        "ts": "1700200080.000000"
+      },
+      {
+        "user": "U2",
+        "text": "finally",
+        "ts": "1700200090.000000"
+      },
+      {
+        "user": "U3",
+        "text": "anyone going to the meetup tonight",
+        "ts": "1700200100.000000"
+      },
+      {
+        "user": "U4",
+        "text": "I am",
+        "ts": "1700200110.000000"
+      },
+      {
+        "user": "U5",
+        "text": "me too",
+        "ts": "1700200120.000000"
+      },
+      {
+        "user": "U6",
+        "text": "see you there",
+        "ts": "1700200130.000000"
+      },
+      {
+        "user": "U7",
+        "text": "support tickets spiking from billing",
+        "ts": "1700200200.000000"
+      },
+      {
+        "user": "U8",
+        "text": "users say payments not going through",
+        "ts": "1700200210.000000"
+      },
+      {
+        "user": "U1",
+        "text": "checking our dashboards",
+        "ts": "1700200220.000000"
+      },
+      {
+        "user": "U2",
+        "text": "checkout success rate down sixty percent",
+        "ts": "1700200230.000000"
+      },
+      {
+        "user": "U3",
+        "text": "logs showing 502 from upstream",
+        "ts": "1700200240.000000"
+      },
+      {
+        "user": "U4",
+        "text": "checking which upstream",
+        "ts": "1700200250.000000"
+      },
+      {
+        "user": "U5",
+        "text": "the billing upstream",
+        "ts": "1700200260.000000"
+      },
+      {
+        "user": "U6",
+        "text": "checking status page",
+        "ts": "1700200270.000000"
+      },
+      {
+        "user": "U7",
+        "text": "loading",
+        "ts": "1700200280.000000"
+      },
+      {
+        "user": "U8",
+        "text": "yep elevated errors reported",
+        "ts": "1700200290.000000"
+      },
+      {
+        "user": "U1",
+        "text": "stripe payment api third party outage causing failed charges",
+        "ts": "1700200300.000000"
+      },
+      {
+        "user": "U2",
+        "text": "confirmed: third party stripe payment api outage on their side not us",
+        "ts": "1700200310.000000"
+      },
+      {
+        "user": "U3",
+        "text": "post status banner on our site",
+        "ts": "1700200320.000000"
+      },
+      {
+        "user": "U4",
+        "text": "banner up",
+        "ts": "1700200330.000000"
+      },
+      {
+        "user": "U5",
+        "text": "support team has the comms",
+        "ts": "1700200340.000000"
+      },
+      {
+        "user": "U6",
+        "text": "fix in thirty minutes",
+        "ts": "1700200350.000000"
+      },
+      {
+        "user": "U7",
+        "text": "watching",
+        "ts": "1700200360.000000"
+      },
+      {
+        "user": "U8",
+        "text": "success rate climbing back",
+        "ts": "1700200370.000000"
+      },
+      {
+        "user": "U1",
+        "text": "back to normal",
+        "ts": "1700200380.000000"
+      },
+      {
+        "user": "U2",
+        "text": "removing banner",
+        "ts": "1700200390.000000"
+      },
+      {
+        "user": "U3",
+        "text": "great",
+        "ts": "1700200400.000000"
+      },
+      {
+        "user": "U4",
+        "text": "lunch",
+        "ts": "1700200410.000000"
+      },
+      {
+        "user": "U5",
+        "text": "yes please",
+        "ts": "1700200420.000000"
+      },
+      {
+        "user": "U6",
+        "text": "the tacos place",
+        "ts": "1700200430.000000"
+      },
+      {
+        "user": "U7",
+        "text": "in",
+        "ts": "1700200440.000000"
+      },
+      {
+        "user": "U8",
+        "text": "in",
+        "ts": "1700200450.000000"
+      },
+      {
+        "user": "U1",
+        "text": "leaving now",
+        "ts": "1700200460.000000"
+      },
+      {
+        "user": "U2",
+        "text": "right behind you",
+        "ts": "1700200470.000000"
+      },
+      {
+        "user": "U3",
+        "text": "back from lunch",
+        "ts": "1700200480.000000"
+      },
+      {
+        "user": "U4",
+        "text": "same",
+        "ts": "1700200490.000000"
+      },
+      {
+        "user": "U5",
+        "text": "afternoon focus block",
+        "ts": "1700200500.000000"
+      },
+      {
+        "user": "U6",
+        "text": "headphones on",
+        "ts": "1700200510.000000"
+      },
+      {
+        "user": "U7",
+        "text": "do not disturb",
+        "ts": "1700200520.000000"
+      },
+      {
+        "user": "U8",
+        "text": "shipping the auth refactor today",
+        "ts": "1700200530.000000"
+      },
+      {
+        "user": "U1",
+        "text": "good luck",
+        "ts": "1700200540.000000"
+      },
+      {
+        "user": "U2",
+        "text": "drinks at six",
+        "ts": "1700200550.000000"
+      },
+      {
+        "user": "U3",
+        "text": "see you",
+        "ts": "1700200560.000000"
+      }
+    ]
+  },
+  {
+    "id": "S04-incident",
+    "channel": "C-incidents",
+    "query": "jwt token expiry session logout bug",
+    "answer_ts": [
+      "1700300300.000000",
+      "1700300310.000000"
+    ],
+    "transcript": [
+      {
+        "user": "U1",
+        "text": "hello team",
+        "ts": "1700300001.000000"
+      },
+      {
+        "user": "U2",
+        "text": "hi",
+        "ts": "1700300010.000000"
+      },
+      {
+        "user": "U3",
+        "text": "any plans for the long weekend",
+        "ts": "1700300020.000000"
+      },
+      {
+        "user": "U4",
+        "text": "camping",
+        "ts": "1700300030.000000"
+      },
+      {
+        "user": "U5",
+        "text": "sounds great",
+        "ts": "1700300040.000000"
+      },
+      {
+        "user": "U6",
+        "text": "I am staying in",
+        "ts": "1700300050.000000"
+      },
+      {
+        "user": "U7",
+        "text": "weekly retro at two pm",
+        "ts": "1700300060.000000"
+      },
+      {
+        "user": "U8",
+        "text": "ack",
+        "ts": "1700300070.000000"
+      },
+      {
+        "user": "U1",
+        "text": "the new chairs arrived",
+        "ts": "1700300080.000000"
+      },
+      {
+        "user": "U2",
+        "text": "very comfortable",
+        "ts": "1700300090.000000"
+      },
+      {
+        "user": "U3",
+        "text": "engineering newsletter is out",
+        "ts": "1700300100.000000"
+      },
+      {
+        "user": "U4",
+        "text": "good read",
+        "ts": "1700300110.000000"
+      },
+      {
+        "user": "U5",
+        "text": "interview at eleven",
+        "ts": "1700300120.000000"
+      },
+      {
+        "user": "U6",
+        "text": "good luck",
+        "ts": "1700300130.000000"
+      },
+      {
+        "user": "U7",
+        "text": "thanks",
+        "ts": "1700300140.000000"
+      },
+      {
+        "user": "U8",
+        "text": "I am running late",
+        "ts": "1700300150.000000"
+      },
+      {
+        "user": "U1",
+        "text": "no worries",
+        "ts": "1700300160.000000"
+      },
+      {
+        "user": "U2",
+        "text": "support pinging us about logouts",
+        "ts": "1700300200.000000"
+      },
+      {
+        "user": "U3",
+        "text": "users complaining they get logged out every few minutes",
+        "ts": "1700300210.000000"
+      },
+      {
+        "user": "U4",
+        "text": "started after this morning release",
+        "ts": "1700300220.000000"
+      },
+      {
+        "user": "U5",
+        "text": "checking the auth service",
+        "ts": "1700300230.000000"
+      },
+      {
+        "user": "U6",
+        "text": "session table looks fine",
+        "ts": "1700300240.000000"
+      },
+      {
+        "user": "U7",
+        "text": "could be expiry",
+        "ts": "1700300250.000000"
+      },
+      {
+        "user": "U8",
+        "text": "we changed something earlier",
+        "ts": "1700300260.000000"
+      },
+      {
+        "user": "U1",
+        "text": "from twenty four hours to what",
+        "ts": "1700300270.000000"
+      },
+      {
+        "user": "U2",
+        "text": "by mistake",
+        "ts": "1700300280.000000"
+      },
+      {
+        "user": "U3",
+        "text": "found it",
+        "ts": "1700300290.000000"
+      },
+      {
+        "user": "U4",
+        "text": "auth bug: jwt token expiry set to five minutes causing session logout loop",
+        "ts": "1700300300.000000"
+      },
+      {
+        "user": "U5",
+        "text": "confirmed jwt token expiry typo is the auth bug behind the session logout storm",
+        "ts": "1700300310.000000"
+      },
+      {
+        "user": "U6",
+        "text": "patching now",
+        "ts": "1700300320.000000"
+      },
+      {
+        "user": "U7",
+        "text": "deployed",
+        "ts": "1700300330.000000"
+      },
+      {
+        "user": "U8",
+        "text": "logouts stopped",
+        "ts": "1700300340.000000"
+      },
+      {
+        "user": "U1",
+        "text": "support confirms users stable",
+        "ts": "1700300350.000000"
+      },
+      {
+        "user": "U2",
+        "text": "good catch",
+        "ts": "1700300360.000000"
+      },
+      {
+        "user": "U3",
+        "text": "writing it up",
+        "ts": "1700300370.000000"
+      },
+      {
+        "user": "U4",
+        "text": "tea break",
+        "ts": "1700300380.000000"
+      },
+      {
+        "user": "U5",
+        "text": "join you",
+        "ts": "1700300390.000000"
+      },
+      {
+        "user": "U6",
+        "text": "back",
+        "ts": "1700300400.000000"
+      },
+      {
+        "user": "U7",
+        "text": "afternoon standup in five",
+        "ts": "1700300410.000000"
+      },
+      {
+        "user": "U8",
+        "text": "ok",
+        "ts": "1700300420.000000"
+      },
+      {
+        "user": "U1",
+        "text": "all calm here",
+        "ts": "1700300430.000000"
+      },
+      {
+        "user": "U2",
+        "text": "same",
+        "ts": "1700300440.000000"
+      },
+      {
+        "user": "U3",
+        "text": "sprint demo prep",
+        "ts": "1700300450.000000"
+      },
+      {
+        "user": "U4",
+        "text": "I will record screens",
+        "ts": "1700300460.000000"
+      },
+      {
+        "user": "U5",
+        "text": "thanks",
+        "ts": "1700300470.000000"
+      },
+      {
+        "user": "U6",
+        "text": "wrapping up",
+        "ts": "1700300480.000000"
+      },
+      {
+        "user": "U7",
+        "text": "see you tomorrow",
+        "ts": "1700300490.000000"
+      },
+      {
+        "user": "U8",
+        "text": "have a good night",
+        "ts": "1700300500.000000"
+      },
+      {
+        "user": "U1",
+        "text": "you too",
+        "ts": "1700300510.000000"
+      }
+    ]
+  },
+  {
+    "id": "S05-incident",
+    "channel": "C-incidents",
+    "query": "search endpoint elasticsearch missing index latency regression",
+    "answer_ts": [
+      "1700400300.000000",
+      "1700400310.000000"
+    ],
+    "transcript": [
+      {
+        "user": "U1",
+        "text": "hi",
+        "ts": "1700400001.000000"
+      },
+      {
+        "user": "U2",
+        "text": "hi",
+        "ts": "1700400010.000000"
+      },
+      {
+        "user": "U3",
+        "text": "weekend recap thread",
+        "ts": "1700400020.000000"
+      },
+      {
+        "user": "U4",
+        "text": "watched a movie",
+        "ts": "1700400030.000000"
+      },
+      {
+        "user": "U5",
+        "text": "which one",
+        "ts": "1700400040.000000"
+      },
+      {
+        "user": "U6",
+        "text": "the new sci fi one",
+        "ts": "1700400050.000000"
+      },
+      {
+        "user": "U7",
+        "text": "any good",
+        "ts": "1700400060.000000"
+      },
+      {
+        "user": "U8",
+        "text": "decent",
+        "ts": "1700400070.000000"
+      },
+      {
+        "user": "U1",
+        "text": "review session at eleven",
+        "ts": "1700400080.000000"
+      },
+      {
+        "user": "U2",
+        "text": "sec",
+        "ts": "1700400090.000000"
+      },
+      {
+        "user": "U3",
+        "text": "back",
+        "ts": "1700400100.000000"
+      },
+      {
+        "user": "U4",
+        "text": "did the npm upgrade go ok yesterday",
+        "ts": "1700400110.000000"
+      },
+      {
+        "user": "U5",
+        "text": "yes mostly",
+        "ts": "1700400120.000000"
+      },
+      {
+        "user": "U6",
+        "text": "any flakes",
+        "ts": "1700400130.000000"
+      },
+      {
+        "user": "U7",
+        "text": "two tests rerun green",
+        "ts": "1700400140.000000"
+      },
+      {
+        "user": "U8",
+        "text": "ok",
+        "ts": "1700400150.000000"
+      },
+      {
+        "user": "U1",
+        "text": "lunch in thirty",
+        "ts": "1700400160.000000"
+      },
+      {
+        "user": "U2",
+        "text": "going to the gym first",
+        "ts": "1700400170.000000"
+      },
+      {
+        "user": "U3",
+        "text": "queries slow this afternoon",
+        "ts": "1700400200.000000"
+      },
+      {
+        "user": "U4",
+        "text": "p99 jumped from 200ms to 4 seconds",
+        "ts": "1700400210.000000"
+      },
+      {
+        "user": "U5",
+        "text": "users complaining",
+        "ts": "1700400220.000000"
+      },
+      {
+        "user": "U6",
+        "text": "looking at flame graphs",
+        "ts": "1700400230.000000"
+      },
+      {
+        "user": "U7",
+        "text": "cpu high upstream",
+        "ts": "1700400240.000000"
+      },
+      {
+        "user": "U8",
+        "text": "any recent changes",
+        "ts": "1700400250.000000"
+      },
+      {
+        "user": "U1",
+        "text": "we deployed a new feature this morning",
+        "ts": "1700400260.000000"
+      },
+      {
+        "user": "U2",
+        "text": "with sort by score plus recency",
+        "ts": "1700400270.000000"
+      },
+      {
+        "user": "U3",
+        "text": "full text scoring on every doc",
+        "ts": "1700400280.000000"
+      },
+      {
+        "user": "U4",
+        "text": "missing index",
+        "ts": "1700400290.000000"
+      },
+      {
+        "user": "U5",
+        "text": "search endpoint latency regression caused by missing elasticsearch index",
+        "ts": "1700400300.000000"
+      },
+      {
+        "user": "U6",
+        "text": "confirmed: missing elasticsearch index on search endpoint is the latency regression root cause",
+        "ts": "1700400310.000000"
+      },
+      {
+        "user": "U7",
+        "text": "creating it",
+        "ts": "1700400320.000000"
+      },
+      {
+        "user": "U8",
+        "text": "built",
+        "ts": "1700400330.000000"
+      },
+      {
+        "user": "U1",
+        "text": "p99 back to 250ms",
+        "ts": "1700400340.000000"
+      },
+      {
+        "user": "U2",
+        "text": "great",
+        "ts": "1700400350.000000"
+      },
+      {
+        "user": "U3",
+        "text": "ship it",
+        "ts": "1700400360.000000"
+      },
+      {
+        "user": "U4",
+        "text": "writeup tomorrow",
+        "ts": "1700400370.000000"
+      },
+      {
+        "user": "U5",
+        "text": "early dinner",
+        "ts": "1700400380.000000"
+      },
+      {
+        "user": "U6",
+        "text": "yep",
+        "ts": "1700400390.000000"
+      },
+      {
+        "user": "U7",
+        "text": "cya",
+        "ts": "1700400400.000000"
+      },
+      {
+        "user": "U8",
+        "text": "later",
+        "ts": "1700400410.000000"
+      },
+      {
+        "user": "U1",
+        "text": "morning check in",
+        "ts": "1700400420.000000"
+      },
+      {
+        "user": "U2",
+        "text": "all calm",
+        "ts": "1700400430.000000"
+      },
+      {
+        "user": "U3",
+        "text": "no alerts",
+        "ts": "1700400440.000000"
+      },
+      {
+        "user": "U4",
+        "text": "good",
+        "ts": "1700400450.000000"
+      },
+      {
+        "user": "U5",
+        "text": "moving on to the next ticket",
+        "ts": "1700400460.000000"
+      },
+      {
+        "user": "U6",
+        "text": "ack",
+        "ts": "1700400470.000000"
+      },
+      {
+        "user": "U7",
+        "text": "wrap up",
+        "ts": "1700400480.000000"
+      }
+    ]
+  },
+  {
+    "id": "S06-incident",
+    "channel": "C-incidents",
+    "query": "feature flag config production push staging mistake",
+    "answer_ts": [
+      "1700500300.000000",
+      "1700500310.000000"
+    ],
+    "transcript": [
+      {
+        "user": "U1",
+        "text": "morning all",
+        "ts": "1700500001.000000"
+      },
+      {
+        "user": "U2",
+        "text": "morning",
+        "ts": "1700500010.000000"
+      },
+      {
+        "user": "U3",
+        "text": "did anyone catch the game",
+        "ts": "1700500020.000000"
+      },
+      {
+        "user": "U4",
+        "text": "great match",
+        "ts": "1700500030.000000"
+      },
+      {
+        "user": "U5",
+        "text": "sprint planning at ten",
+        "ts": "1700500040.000000"
+      },
+      {
+        "user": "U6",
+        "text": "I will be there",
+        "ts": "1700500050.000000"
+      },
+      {
+        "user": "U7",
+        "text": "snack stash refilled",
+        "ts": "1700500060.000000"
+      },
+      {
+        "user": "U8",
+        "text": "thank god",
+        "ts": "1700500070.000000"
+      },
+      {
+        "user": "U1",
+        "text": "running our weekly cleanup",
+        "ts": "1700500080.000000"
+      },
+      {
+        "user": "U2",
+        "text": "need help with anything",
+        "ts": "1700500090.000000"
+      },
+      {
+        "user": "U3",
+        "text": "I got it",
+        "ts": "1700500100.000000"
+      },
+      {
+        "user": "U4",
+        "text": "thanks",
+        "ts": "1700500110.000000"
+      },
+      {
+        "user": "U5",
+        "text": "design reviews this afternoon",
+        "ts": "1700500120.000000"
+      },
+      {
+        "user": "U6",
+        "text": "ok",
+        "ts": "1700500130.000000"
+      },
+      {
+        "user": "U7",
+        "text": "one on one in five",
+        "ts": "1700500140.000000"
+      },
+      {
+        "user": "U8",
+        "text": "sec",
+        "ts": "1700500150.000000"
+      },
+      {
+        "user": "U1",
+        "text": "users seeing weird ui changes",
+        "ts": "1700500200.000000"
+      },
+      {
+        "user": "U2",
+        "text": "what kind",
+        "ts": "1700500210.000000"
+      },
+      {
+        "user": "U3",
+        "text": "experimental beta features showing up for everyone",
+        "ts": "1700500220.000000"
+      },
+      {
+        "user": "U4",
+        "text": "checking",
+        "ts": "1700500230.000000"
+      },
+      {
+        "user": "U5",
+        "text": "checking flag rollout",
+        "ts": "1700500240.000000"
+      },
+      {
+        "user": "U6",
+        "text": "all flags showing one hundred percent",
+        "ts": "1700500250.000000"
+      },
+      {
+        "user": "U7",
+        "text": "should be five percent or off",
+        "ts": "1700500260.000000"
+      },
+      {
+        "user": "U8",
+        "text": "git log on the repo",
+        "ts": "1700500270.000000"
+      },
+      {
+        "user": "U1",
+        "text": "someone pushed",
+        "ts": "1700500280.000000"
+      },
+      {
+        "user": "U2",
+        "text": "checking who",
+        "ts": "1700500290.000000"
+      },
+      {
+        "user": "U3",
+        "text": "feature flag config push from staging branch landed on production by mistake",
+        "ts": "1700500300.000000"
+      },
+      {
+        "user": "U4",
+        "text": "confirmed: staging feature flag config pushed to production main is the mistake",
+        "ts": "1700500310.000000"
+      },
+      {
+        "user": "U5",
+        "text": "reverting",
+        "ts": "1700500320.000000"
+      },
+      {
+        "user": "U6",
+        "text": "revert merged",
+        "ts": "1700500330.000000"
+      },
+      {
+        "user": "U7",
+        "text": "back to normal",
+        "ts": "1700500340.000000"
+      },
+      {
+        "user": "U8",
+        "text": "support team notified",
+        "ts": "1700500350.000000"
+      },
+      {
+        "user": "U1",
+        "text": "writing up the postmortem",
+        "ts": "1700500360.000000"
+      },
+      {
+        "user": "U2",
+        "text": "we should add a ci check",
+        "ts": "1700500370.000000"
+      },
+      {
+        "user": "U3",
+        "text": "agreed",
+        "ts": "1700500380.000000"
+      },
+      {
+        "user": "U4",
+        "text": "filing the ticket",
+        "ts": "1700500390.000000"
+      },
+      {
+        "user": "U5",
+        "text": "afternoon work focus",
+        "ts": "1700500400.000000"
+      },
+      {
+        "user": "U6",
+        "text": "back to work",
+        "ts": "1700500410.000000"
+      },
+      {
+        "user": "U7",
+        "text": "shipping my pr",
+        "ts": "1700500420.000000"
+      },
+      {
+        "user": "U8",
+        "text": "review please",
+        "ts": "1700500430.000000"
+      },
+      {
+        "user": "U1",
+        "text": "looking",
+        "ts": "1700500440.000000"
+      },
+      {
+        "user": "U2",
+        "text": "lgtm",
+        "ts": "1700500450.000000"
+      },
+      {
+        "user": "U3",
+        "text": "merging",
+        "ts": "1700500460.000000"
+      },
+      {
+        "user": "U4",
+        "text": "deployed",
+        "ts": "1700500470.000000"
+      },
+      {
+        "user": "U5",
+        "text": "great",
+        "ts": "1700500480.000000"
+      },
+      {
+        "user": "U6",
+        "text": "going home",
+        "ts": "1700500490.000000"
+      },
+      {
+        "user": "U7",
+        "text": "good night",
+        "ts": "1700500500.000000"
+      }
+    ]
+  },
+  {
+    "id": "S07-incident",
+    "channel": "C-incidents",
+    "query": "ssl tls certificate expired certbot renewal",
+    "answer_ts": [
+      "1700600300.000000",
+      "1700600310.000000"
+    ],
+    "transcript": [
+      {
+        "user": "U1",
+        "text": "morning team",
+        "ts": "1700600001.000000"
+      },
+      {
+        "user": "U2",
+        "text": "morning",
+        "ts": "1700600010.000000"
+      },
+      {
+        "user": "U3",
+        "text": "tea",
+        "ts": "1700600020.000000"
+      },
+      {
+        "user": "U4",
+        "text": "yes thanks",
+        "ts": "1700600030.000000"
+      },
+      {
+        "user": "U5",
+        "text": "any updates from yesterday",
+        "ts": "1700600040.000000"
+      },
+      {
+        "user": "U6",
+        "text": "all green",
+        "ts": "1700600050.000000"
+      },
+      {
+        "user": "U7",
+        "text": "engineering all hands at two",
+        "ts": "1700600060.000000"
+      },
+      {
+        "user": "U8",
+        "text": "ack",
+        "ts": "1700600070.000000"
+      },
+      {
+        "user": "U1",
+        "text": "the office plant looks sad",
+        "ts": "1700600080.000000"
+      },
+      {
+        "user": "U2",
+        "text": "watering it",
+        "ts": "1700600090.000000"
+      },
+      {
+        "user": "U3",
+        "text": "bug bash on friday reminder",
+        "ts": "1700600100.000000"
+      },
+      {
+        "user": "U4",
+        "text": "putting it on calendar",
+        "ts": "1700600110.000000"
+      },
+      {
+        "user": "U5",
+        "text": "lunch options",
+        "ts": "1700600120.000000"
+      },
+      {
+        "user": "U6",
+        "text": "salads or burgers",
+        "ts": "1700600130.000000"
+      },
+      {
+        "user": "U7",
+        "text": "burgers",
+        "ts": "1700600140.000000"
+      },
+      {
+        "user": "U8",
+        "text": "salads",
+        "ts": "1700600150.000000"
+      },
+      {
+        "user": "U1",
+        "text": "alerts firing on api endpoint",
+        "ts": "1700600200.000000"
+      },
+      {
+        "user": "U2",
+        "text": "what kind",
+        "ts": "1700600210.000000"
+      },
+      {
+        "user": "U3",
+        "text": "client connections failing",
+        "ts": "1700600220.000000"
+      },
+      {
+        "user": "U4",
+        "text": "users seeing connection refused errors",
+        "ts": "1700600230.000000"
+      },
+      {
+        "user": "U5",
+        "text": "openssl s_client check",
+        "ts": "1700600240.000000"
+      },
+      {
+        "user": "U6",
+        "text": "running it",
+        "ts": "1700600250.000000"
+      },
+      {
+        "user": "U7",
+        "text": "verify return code ten cert has expired",
+        "ts": "1700600260.000000"
+      },
+      {
+        "user": "U8",
+        "text": "the cert",
+        "ts": "1700600270.000000"
+      },
+      {
+        "user": "U1",
+        "text": "auto renew not set up",
+        "ts": "1700600280.000000"
+      },
+      {
+        "user": "U2",
+        "text": "checking",
+        "ts": "1700600290.000000"
+      },
+      {
+        "user": "U3",
+        "text": "ssl tls certificate expired and certbot renewal disabled three months ago",
+        "ts": "1700600300.000000"
+      },
+      {
+        "user": "U4",
+        "text": "confirmed ssl tls certificate expiry: certbot renewal job stopped, issuing new cert now",
+        "ts": "1700600310.000000"
+      },
+      {
+        "user": "U5",
+        "text": "issuing",
+        "ts": "1700600320.000000"
+      },
+      {
+        "user": "U6",
+        "text": "installed",
+        "ts": "1700600330.000000"
+      },
+      {
+        "user": "U7",
+        "text": "lb reloaded",
+        "ts": "1700600340.000000"
+      },
+      {
+        "user": "U8",
+        "text": "errors gone",
+        "ts": "1700600350.000000"
+      },
+      {
+        "user": "U1",
+        "text": "re enabling renewal job",
+        "ts": "1700600360.000000"
+      },
+      {
+        "user": "U2",
+        "text": "auto renew restored",
+        "ts": "1700600370.000000"
+      },
+      {
+        "user": "U3",
+        "text": "filing followup",
+        "ts": "1700600380.000000"
+      },
+      {
+        "user": "U4",
+        "text": "good catch all",
+        "ts": "1700600390.000000"
+      },
+      {
+        "user": "U5",
+        "text": "coffee",
+        "ts": "1700600400.000000"
+      },
+      {
+        "user": "U6",
+        "text": "yes",
+        "ts": "1700600410.000000"
+      },
+      {
+        "user": "U7",
+        "text": "back",
+        "ts": "1700600420.000000"
+      },
+      {
+        "user": "U8",
+        "text": "afternoon focus",
+        "ts": "1700600430.000000"
+      },
+      {
+        "user": "U1",
+        "text": "anyone reviewing my pr",
+        "ts": "1700600440.000000"
+      },
+      {
+        "user": "U2",
+        "text": "I will",
+        "ts": "1700600450.000000"
+      },
+      {
+        "user": "U3",
+        "text": "thanks",
+        "ts": "1700600460.000000"
+      },
+      {
+        "user": "U4",
+        "text": "wrapping up",
+        "ts": "1700600470.000000"
+      },
+      {
+        "user": "U5",
+        "text": "have a good night",
+        "ts": "1700600480.000000"
+      },
+      {
+        "user": "U6",
+        "text": "you too",
+        "ts": "1700600490.000000"
+      }
+    ]
+  },
+  {
+    "id": "S08-incident",
+    "channel": "C-incidents",
+    "query": "nightly batch job warehouse partition full table scan",
+    "answer_ts": [
+      "1700700300.000000",
+      "1700700310.000000"
+    ],
+    "transcript": [
+      {
+        "user": "U1",
+        "text": "morning",
+        "ts": "1700700001.000000"
+      },
+      {
+        "user": "U2",
+        "text": "morning",
+        "ts": "1700700010.000000"
+      },
+      {
+        "user": "U3",
+        "text": "did anyone bring donuts",
+        "ts": "1700700020.000000"
+      },
+      {
+        "user": "U4",
+        "text": "I did",
+        "ts": "1700700030.000000"
+      },
+      {
+        "user": "U5",
+        "text": "thanks legend",
+        "ts": "1700700040.000000"
+      },
+      {
+        "user": "U6",
+        "text": "standup in ten",
+        "ts": "1700700050.000000"
+      },
+      {
+        "user": "U7",
+        "text": "ack",
+        "ts": "1700700060.000000"
+      },
+      {
+        "user": "U8",
+        "text": "the new hire onboarding doc looks great",
+        "ts": "1700700070.000000"
+      },
+      {
+        "user": "U1",
+        "text": "thanks",
+        "ts": "1700700080.000000"
+      },
+      {
+        "user": "U2",
+        "text": "anyone want to pair on the migration ticket",
+        "ts": "1700700090.000000"
+      },
+      {
+        "user": "U3",
+        "text": "I am free at three",
+        "ts": "1700700100.000000"
+      },
+      {
+        "user": "U4",
+        "text": "great",
+        "ts": "1700700110.000000"
+      },
+      {
+        "user": "U5",
+        "text": "test flake on main",
+        "ts": "1700700120.000000"
+      },
+      {
+        "user": "U6",
+        "text": "rerunning",
+        "ts": "1700700130.000000"
+      },
+      {
+        "user": "U7",
+        "text": "green",
+        "ts": "1700700140.000000"
+      },
+      {
+        "user": "U8",
+        "text": "lunch",
+        "ts": "1700700150.000000"
+      },
+      {
+        "user": "U1",
+        "text": "yes",
+        "ts": "1700700160.000000"
+      },
+      {
+        "user": "U2",
+        "text": "salad bar across the street",
+        "ts": "1700700170.000000"
+      },
+      {
+        "user": "U3",
+        "text": "alerts firing on the data store",
+        "ts": "1700700200.000000"
+      },
+      {
+        "user": "U4",
+        "text": "cpu pegged at one hundred percent",
+        "ts": "1700700210.000000"
+      },
+      {
+        "user": "U5",
+        "text": "running queries piling up",
+        "ts": "1700700220.000000"
+      },
+      {
+        "user": "U6",
+        "text": "what is running",
+        "ts": "1700700230.000000"
+      },
+      {
+        "user": "U7",
+        "text": "the aggregation cron",
+        "ts": "1700700240.000000"
+      },
+      {
+        "user": "U8",
+        "text": "still going fourteen hours later",
+        "ts": "1700700250.000000"
+      },
+      {
+        "user": "U1",
+        "text": "should be thirty mins normally",
+        "ts": "1700700260.000000"
+      },
+      {
+        "user": "U2",
+        "text": "looking at the query plan",
+        "ts": "1700700270.000000"
+      },
+      {
+        "user": "U3",
+        "text": "missing where clause",
+        "ts": "1700700280.000000"
+      },
+      {
+        "user": "U4",
+        "text": "nightly batch job warehouse partition pruning lost: full table scan instead",
+        "ts": "1700700300.000000"
+      },
+      {
+        "user": "U5",
+        "text": "confirmed nightly batch job doing full table scan on warehouse, partition filter dropped",
+        "ts": "1700700310.000000"
+      },
+      {
+        "user": "U6",
+        "text": "killed",
+        "ts": "1700700320.000000"
+      },
+      {
+        "user": "U7",
+        "text": "recovering",
+        "ts": "1700700330.000000"
+      },
+      {
+        "user": "U8",
+        "text": "patching the query",
+        "ts": "1700700340.000000"
+      },
+      {
+        "user": "U1",
+        "text": "patch deployed",
+        "ts": "1700700350.000000"
+      },
+      {
+        "user": "U2",
+        "text": "rerun the job",
+        "ts": "1700700360.000000"
+      },
+      {
+        "user": "U3",
+        "text": "completed in twenty four minutes",
+        "ts": "1700700370.000000"
+      },
+      {
+        "user": "U4",
+        "text": "back to normal",
+        "ts": "1700700380.000000"
+      },
+      {
+        "user": "U5",
+        "text": "great",
+        "ts": "1700700390.000000"
+      },
+      {
+        "user": "U6",
+        "text": "writing it up",
+        "ts": "1700700400.000000"
+      },
+      {
+        "user": "U7",
+        "text": "drinks",
+        "ts": "1700700410.000000"
+      },
+      {
+        "user": "U8",
+        "text": "yes",
+        "ts": "1700700420.000000"
+      },
+      {
+        "user": "U1",
+        "text": "rooftop bar",
+        "ts": "1700700430.000000"
+      },
+      {
+        "user": "U2",
+        "text": "in",
+        "ts": "1700700440.000000"
+      },
+      {
+        "user": "U3",
+        "text": "see you at six",
+        "ts": "1700700450.000000"
+      },
+      {
+        "user": "U4",
+        "text": "running late",
+        "ts": "1700700460.000000"
+      },
+      {
+        "user": "U5",
+        "text": "no rush",
+        "ts": "1700700470.000000"
+      },
+      {
+        "user": "U6",
+        "text": "heading there",
+        "ts": "1700700480.000000"
+      },
+      {
+        "user": "U7",
+        "text": "goodnight all",
+        "ts": "1700700490.000000"
+      }
+    ]
+  },
+  {
+    "id": "S09-incident",
+    "channel": "C-incidents",
+    "query": "missing schema migration column does not exist",
+    "answer_ts": [
+      "1700800300.000000",
+      "1700800310.000000"
+    ],
+    "transcript": [
+      {
+        "user": "U1",
+        "text": "good morning",
+        "ts": "1700800001.000000"
+      },
+      {
+        "user": "U2",
+        "text": "morning",
+        "ts": "1700800010.000000"
+      },
+      {
+        "user": "U3",
+        "text": "anyone watch the keynote yesterday",
+        "ts": "1700800020.000000"
+      },
+      {
+        "user": "U4",
+        "text": "yes interesting",
+        "ts": "1700800030.000000"
+      },
+      {
+        "user": "U5",
+        "text": "agreed",
+        "ts": "1700800040.000000"
+      },
+      {
+        "user": "U6",
+        "text": "team breakfast on friday",
+        "ts": "1700800050.000000"
+      },
+      {
+        "user": "U7",
+        "text": "yum",
+        "ts": "1700800060.000000"
+      },
+      {
+        "user": "U8",
+        "text": "design sync at eleven",
+        "ts": "1700800070.000000"
+      },
+      {
+        "user": "U1",
+        "text": "ok",
+        "ts": "1700800080.000000"
+      },
+      {
+        "user": "U2",
+        "text": "pr queue is huge",
+        "ts": "1700800090.000000"
+      },
+      {
+        "user": "U3",
+        "text": "lets do reviews together",
+        "ts": "1700800100.000000"
+      },
+      {
+        "user": "U4",
+        "text": "good idea",
+        "ts": "1700800110.000000"
+      },
+      {
+        "user": "U5",
+        "text": "office cat is back",
+        "ts": "1700800120.000000"
+      },
+      {
+        "user": "U6",
+        "text": "yay",
+        "ts": "1700800130.000000"
+      },
+      {
+        "user": "U7",
+        "text": "weekly metrics email",
+        "ts": "1700800140.000000"
+      },
+      {
+        "user": "U8",
+        "text": "thanks",
+        "ts": "1700800150.000000"
+      },
+      {
+        "user": "U1",
+        "text": "lunch break",
+        "ts": "1700800160.000000"
+      },
+      {
+        "user": "U2",
+        "text": "back",
+        "ts": "1700800170.000000"
+      },
+      {
+        "user": "U3",
+        "text": "errors in api log",
+        "ts": "1700800200.000000"
+      },
+      {
+        "user": "U4",
+        "text": "many 500s on user profile",
+        "ts": "1700800210.000000"
+      },
+      {
+        "user": "U5",
+        "text": "stack trace shows undefined column",
+        "ts": "1700800220.000000"
+      },
+      {
+        "user": "U6",
+        "text": "which one",
+        "ts": "1700800230.000000"
+      },
+      {
+        "user": "U7",
+        "text": "users last seen at field",
+        "ts": "1700800240.000000"
+      },
+      {
+        "user": "U8",
+        "text": "we added that in the latest release",
+        "ts": "1700800250.000000"
+      },
+      {
+        "user": "U1",
+        "text": "did the schema upgrade run on prod",
+        "ts": "1700800260.000000"
+      },
+      {
+        "user": "U2",
+        "text": "checking",
+        "ts": "1700800270.000000"
+      },
+      {
+        "user": "U3",
+        "text": "version table only at forty seven",
+        "ts": "1700800280.000000"
+      },
+      {
+        "user": "U4",
+        "text": "should be forty eight",
+        "ts": "1700800290.000000"
+      },
+      {
+        "user": "U5",
+        "text": "missing schema migration: column does not exist on production",
+        "ts": "1700800300.000000"
+      },
+      {
+        "user": "U6",
+        "text": "confirmed missing schema migration v48: column does not exist error from skipped migration step",
+        "ts": "1700800310.000000"
+      },
+      {
+        "user": "U7",
+        "text": "running it now",
+        "ts": "1700800320.000000"
+      },
+      {
+        "user": "U8",
+        "text": "applied",
+        "ts": "1700800330.000000"
+      },
+      {
+        "user": "U1",
+        "text": "errors clearing",
+        "ts": "1700800340.000000"
+      },
+      {
+        "user": "U2",
+        "text": "all green",
+        "ts": "1700800350.000000"
+      },
+      {
+        "user": "U3",
+        "text": "fix pipeline",
+        "ts": "1700800360.000000"
+      },
+      {
+        "user": "U4",
+        "text": "filing it",
+        "ts": "1700800370.000000"
+      },
+      {
+        "user": "U5",
+        "text": "wrap up",
+        "ts": "1700800380.000000"
+      },
+      {
+        "user": "U6",
+        "text": "good day",
+        "ts": "1700800390.000000"
+      },
+      {
+        "user": "U7",
+        "text": "early dinner",
+        "ts": "1700800400.000000"
+      },
+      {
+        "user": "U8",
+        "text": "in",
+        "ts": "1700800410.000000"
+      },
+      {
+        "user": "U1",
+        "text": "going home",
+        "ts": "1700800420.000000"
+      },
+      {
+        "user": "U2",
+        "text": "see you",
+        "ts": "1700800430.000000"
+      },
+      {
+        "user": "U3",
+        "text": "have a good evening",
+        "ts": "1700800440.000000"
+      },
+      {
+        "user": "U4",
+        "text": "you too",
+        "ts": "1700800450.000000"
+      },
+      {
+        "user": "U5",
+        "text": "later",
+        "ts": "1700800460.000000"
+      },
+      {
+        "user": "U6",
+        "text": "morning",
+        "ts": "1700800470.000000"
+      },
+      {
+        "user": "U7",
+        "text": "morning",
+        "ts": "1700800480.000000"
+      }
+    ]
+  },
+  {
+    "id": "S10-incident",
+    "channel": "C-incidents",
+    "query": "hacker news traffic spike autoscaling overload",
+    "answer_ts": [
+      "1700900300.000000",
+      "1700900310.000000"
+    ],
+    "transcript": [
+      {
+        "user": "U1",
+        "text": "good morning",
+        "ts": "1700900001.000000"
+      },
+      {
+        "user": "U2",
+        "text": "morning",
+        "ts": "1700900010.000000"
+      },
+      {
+        "user": "U3",
+        "text": "great quarter close yesterday",
+        "ts": "1700900020.000000"
+      },
+      {
+        "user": "U4",
+        "text": "agreed",
+        "ts": "1700900030.000000"
+      },
+      {
+        "user": "U5",
+        "text": "marketing email going out today",
+        "ts": "1700900040.000000"
+      },
+      {
+        "user": "U6",
+        "text": "what time",
+        "ts": "1700900050.000000"
+      },
+      {
+        "user": "U7",
+        "text": "ten am",
+        "ts": "1700900060.000000"
+      },
+      {
+        "user": "U8",
+        "text": "ok we should be ready",
+        "ts": "1700900070.000000"
+      },
+      {
+        "user": "U1",
+        "text": "scaled the asg up a bit",
+        "ts": "1700900080.000000"
+      },
+      {
+        "user": "U2",
+        "text": "good",
+        "ts": "1700900090.000000"
+      },
+      {
+        "user": "U3",
+        "text": "watching dashboards",
+        "ts": "1700900100.000000"
+      },
+      {
+        "user": "U4",
+        "text": "all green",
+        "ts": "1700900110.000000"
+      },
+      {
+        "user": "U5",
+        "text": "blog post is on a popular site",
+        "ts": "1700900120.000000"
+      },
+      {
+        "user": "U6",
+        "text": "front page",
+        "ts": "1700900130.000000"
+      },
+      {
+        "user": "U7",
+        "text": "wow",
+        "ts": "1700900140.000000"
+      },
+      {
+        "user": "U8",
+        "text": "ticking up",
+        "ts": "1700900150.000000"
+      },
+      {
+        "user": "U1",
+        "text": "rps doubled",
+        "ts": "1700900160.000000"
+      },
+      {
+        "user": "U2",
+        "text": "tripled",
+        "ts": "1700900170.000000"
+      },
+      {
+        "user": "U3",
+        "text": "ten times baseline now",
+        "ts": "1700900200.000000"
+      },
+      {
+        "user": "U4",
+        "text": "load balancer queueing",
+        "ts": "1700900210.000000"
+      },
+      {
+        "user": "U5",
+        "text": "p95 latency at eight seconds",
+        "ts": "1700900220.000000"
+      },
+      {
+        "user": "U6",
+        "text": "users seeing timeouts",
+        "ts": "1700900230.000000"
+      },
+      {
+        "user": "U7",
+        "text": "scaling firing",
+        "ts": "1700900240.000000"
+      },
+      {
+        "user": "U8",
+        "text": "still not enough capacity",
+        "ts": "1700900250.000000"
+      },
+      {
+        "user": "U1",
+        "text": "increase max instances",
+        "ts": "1700900260.000000"
+      },
+      {
+        "user": "U2",
+        "text": "raising cap to two hundred",
+        "ts": "1700900270.000000"
+      },
+      {
+        "user": "U3",
+        "text": "where did the surge come from",
+        "ts": "1700900280.000000"
+      },
+      {
+        "user": "U4",
+        "text": "external referrer",
+        "ts": "1700900290.000000"
+      },
+      {
+        "user": "U5",
+        "text": "hacker news traffic spike overload, autoscaling lagged behind organic surge",
+        "ts": "1700900300.000000"
+      },
+      {
+        "user": "U6",
+        "text": "confirmed: hacker news front page traffic spike, autoscaling caps too low for the overload",
+        "ts": "1700900310.000000"
+      },
+      {
+        "user": "U7",
+        "text": "instances spinning up",
+        "ts": "1700900320.000000"
+      },
+      {
+        "user": "U8",
+        "text": "queue clearing",
+        "ts": "1700900330.000000"
+      },
+      {
+        "user": "U1",
+        "text": "p95 dropped to 800ms",
+        "ts": "1700900340.000000"
+      },
+      {
+        "user": "U2",
+        "text": "great",
+        "ts": "1700900350.000000"
+      },
+      {
+        "user": "U3",
+        "text": "still on the front page",
+        "ts": "1700900360.000000"
+      },
+      {
+        "user": "U4",
+        "text": "comments are positive",
+        "ts": "1700900370.000000"
+      },
+      {
+        "user": "U5",
+        "text": "marketing happy",
+        "ts": "1700900380.000000"
+      },
+      {
+        "user": "U6",
+        "text": "writing it up",
+        "ts": "1700900390.000000"
+      },
+      {
+        "user": "U7",
+        "text": "celebration drinks",
+        "ts": "1700900400.000000"
+      },
+      {
+        "user": "U8",
+        "text": "yes please",
+        "ts": "1700900410.000000"
+      },
+      {
+        "user": "U1",
+        "text": "rooftop",
+        "ts": "1700900420.000000"
+      },
+      {
+        "user": "U2",
+        "text": "in",
+        "ts": "1700900430.000000"
+      },
+      {
+        "user": "U3",
+        "text": "see you at six",
+        "ts": "1700900440.000000"
+      },
+      {
+        "user": "U4",
+        "text": "running late",
+        "ts": "1700900450.000000"
+      },
+      {
+        "user": "U5",
+        "text": "no rush",
+        "ts": "1700900460.000000"
+      },
+      {
+        "user": "U6",
+        "text": "heading out",
+        "ts": "1700900470.000000"
+      },
+      {
+        "user": "U7",
+        "text": "good evening",
+        "ts": "1700900480.000000"
+      },
+      {
+        "user": "U8",
+        "text": "later",
+        "ts": "1700900490.000000"
+      }
+    ]
+  }
+]

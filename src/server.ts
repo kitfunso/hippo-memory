@@ -19,6 +19,27 @@ import {
 import type { MemoryKind } from './memory.js';
 import type { AuditOp } from './audit.js';
 import { handleMcpRequest, type McpRequest } from './mcp/server.js';
+import { verifySlackSignature } from './connectors/slack/signature.js';
+import { isSlackEventEnvelope, isSlackMessageEvent } from './connectors/slack/types.js';
+import { ingestMessage } from './connectors/slack/ingest.js';
+import { handleMessageDeleted } from './connectors/slack/deletion.js';
+import { writeToDlq } from './connectors/slack/dlq.js';
+import { resolveTenantForTeam } from './connectors/slack/tenant-routing.js';
+
+// Review patch #2: explicit allow-list for unauthenticated /v1/* routes.
+// New unauth routes MUST be added here AND get a corresponding entry in
+// tests/server-bearer-lockdown.test.ts. Do not gate auth elsewhere by
+// `path.startsWith` — pattern-positional auth is bypass-by-accident.
+//
+// The route handlers consult `isPublicRoute` before invoking
+// `buildContextWithAuth` / `requireAuth`. Adding a route here without
+// adding the corresponding `isPublicRoute` short-circuit in a handler is
+// a no-op (auth still applies), so the failure mode is fail-closed.
+const PUBLIC_ROUTES: ReadonlySet<string> = new Set(['POST /v1/connectors/slack/events']);
+
+function isPublicRoute(method: string, path: string): boolean {
+  return PUBLIC_ROUTES.has(`${method} ${path}`);
+}
 
 const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set([
   'remember',
@@ -46,7 +67,7 @@ const VALID_KINDS: ReadonlySet<MemoryKind> = new Set([
 // HTTP /health response uses this; reading package.json synchronously here
 // would couple the daemon to its on-disk install path, which we want to
 // avoid for tests that mkdtemp a hippoRoot.
-const VERSION = '0.36.0';
+const VERSION = '0.37.0';
 
 // 1 MB body cap. The CLI never sends payloads near this; anything bigger is
 // almost certainly a misconfigured client or a deliberate memory-blowup attempt.
@@ -257,7 +278,12 @@ function buildContextWithAuth(req: IncomingMessage, hippoRoot: string): Context 
     }
   }
 
-  // No Authorization header. Loopback-only fallback.
+  // No Authorization header. Loopback-only fallback, unless explicitly
+  // disabled via HIPPO_REQUIRE_AUTH=1 (used by the bearer-lockdown test
+  // and by deployments that want to forbid the local-CLI escape hatch).
+  if (process.env.HIPPO_REQUIRE_AUTH === '1') {
+    throw new HttpError(401, 'auth required');
+  }
   if (!isLoopback(req.socket.remoteAddress)) {
     throw new HttpError(401, 'auth required');
   }
@@ -291,6 +317,9 @@ function requireAuth(req: IncomingMessage, hippoRoot: string): void {
       closeHippoDb(db);
     }
     return;
+  }
+  if (process.env.HIPPO_REQUIRE_AUTH === '1') {
+    throw new HttpError(401, 'auth required');
   }
   if (!isLoopback(req.socket.remoteAddress)) {
     throw new HttpError(401, 'auth required');
@@ -503,6 +532,150 @@ async function handleRequest(
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = auditList(ctx, { op, since, limit });
     sendJson(res, 200, result);
+    return;
+  }
+
+  // ── POST /v1/connectors/slack/events ──
+  //
+  // Slack Events API webhook. Auth is signature-based (HMAC over the raw
+  // body with SLACK_SIGNING_SECRET); Bearer is NOT required, which is why
+  // this route is in PUBLIC_ROUTES. The route is responsible for:
+  //   1. Echoing the one-time url_verification challenge.
+  //   2. Verifying the HMAC on every other inbound payload.
+  //   3. Resolving body.team_id → tenantId via slack_workspaces, falling
+  //      back to HIPPO_TENANT then 'default'.
+  //   4. Dispatching event_callback envelopes to ingestMessage /
+  //      handleMessageDeleted.
+  //   5. Parking malformed or unhandled payloads in slack_dlq and STILL
+  //      ACKing 200 — Slack retries forever otherwise.
+  //
+  // Review patch #7: when SLACK_SIGNING_SECRET is unset we return 404, not
+  // 503, so an external probe cannot distinguish "route gated off by config"
+  // from "route does not exist on this build".
+  if (method === 'POST' && path === '/v1/connectors/slack/events') {
+    // Bearer auth deliberately skipped — this route is in PUBLIC_ROUTES
+    // and authenticates via the Slack HMAC signature instead.
+    if (!isPublicRoute(method, path)) {
+      // Defensive: PUBLIC_ROUTES drift would land here. Fail closed.
+      throw new HttpError(401, 'auth required');
+    }
+    const rawBody = await readBody(req);
+    const secret = process.env.SLACK_SIGNING_SECRET;
+    if (!secret) {
+      res.writeHead(404, JSON_HEADERS);
+      res.end(JSON.stringify({ error: 'not found' }));
+      return;
+    }
+    const sig = req.headers['x-slack-signature'];
+    const tsHdr = req.headers['x-slack-request-timestamp'];
+    if (
+      typeof sig !== 'string' ||
+      typeof tsHdr !== 'string' ||
+      !verifySlackSignature({
+        rawBody,
+        timestamp: tsHdr,
+        signature: sig,
+        signingSecret: secret,
+      })
+    ) {
+      throw new HttpError(401, 'invalid Slack signature');
+    }
+    let body: unknown;
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      const db = openHippoDb(opts.hippoRoot);
+      try {
+        writeToDlq(db, {
+          tenantId: process.env.HIPPO_TENANT ?? 'default',
+          rawPayload: rawBody,
+          error: 'invalid JSON',
+        });
+      } finally {
+        closeHippoDb(db);
+      }
+      sendJson(res, 200, { ok: true, status: 'dlq' });
+      return;
+    }
+    if (
+      body &&
+      typeof body === 'object' &&
+      (body as Record<string, unknown>).type === 'url_verification'
+    ) {
+      sendJson(res, 200, {
+        challenge: String((body as Record<string, unknown>).challenge ?? ''),
+      });
+      return;
+    }
+    let resolvedTenant = process.env.HIPPO_TENANT ?? 'default';
+    if (isSlackEventEnvelope(body)) {
+      const db = openHippoDb(opts.hippoRoot);
+      try {
+        const mapped = resolveTenantForTeam(db, body.team_id);
+        if (mapped) resolvedTenant = mapped;
+      } finally {
+        closeHippoDb(db);
+      }
+    }
+    const ctx: Context = {
+      hippoRoot: opts.hippoRoot,
+      tenantId: resolvedTenant,
+      actor: 'connector:slack',
+    };
+    if (!isSlackEventEnvelope(body)) {
+      const db = openHippoDb(ctx.hippoRoot);
+      try {
+        writeToDlq(db, {
+          tenantId: ctx.tenantId,
+          rawPayload: rawBody,
+          error: 'not an event_callback envelope',
+        });
+      } finally {
+        closeHippoDb(db);
+      }
+      sendJson(res, 200, { ok: true, status: 'dlq' });
+      return;
+    }
+    const inner = body.event;
+    if (isSlackMessageEvent(inner)) {
+      if (inner.subtype === 'message_deleted' && inner.deleted_ts) {
+        const r = handleMessageDeleted(ctx, {
+          teamId: body.team_id,
+          channelId: inner.channel,
+          deletedTs: inner.deleted_ts,
+          eventId: body.event_id,
+        });
+        sendJson(res, 200, { ok: true, status: r.status });
+        return;
+      }
+      const r = ingestMessage(ctx, {
+        teamId: body.team_id,
+        // channel privacy isn't on the inner event; use channel_type as a
+        // proxy. 'group'|'im'|'mpim' → private. 'channel' → public. Unknown
+        // → private (fail closed).
+        channel: {
+          id: inner.channel,
+          is_private: inner.channel_type !== 'channel',
+          is_im: inner.channel_type === 'im',
+          is_mpim: inner.channel_type === 'mpim',
+        },
+        message: inner,
+        eventId: body.event_id,
+      });
+      sendJson(res, 200, { ok: true, status: r.status, memoryId: r.memoryId });
+      return;
+    }
+    const db = openHippoDb(ctx.hippoRoot);
+    try {
+      writeToDlq(db, {
+        tenantId: ctx.tenantId,
+        rawPayload: rawBody,
+        error: `unhandled event type: ${(inner as { type?: string })?.type ?? 'unknown'}`,
+      });
+    } finally {
+      closeHippoDb(db);
+    }
+    sendJson(res, 200, { ok: true, status: 'dlq' });
     return;
   }
 

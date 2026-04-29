@@ -1,6 +1,6 @@
 {
   "name": "hippo-memory",
-  "version": "0.36.0",
+  "version": "0.37.0",
   "description": "Biologically-inspired memory system for AI agents. Decay by default, strength through use.",
   "type": "module",
   "main": "./dist/index.js",
@@ -25,7 +25,7 @@
   ],
   "scripts": {
     "baseline": "npm run build && npm test",
-    "build": "tsc",
+    "build": "tsc && tsc -p tsconfig.benchmarks.json",
     "dev": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",

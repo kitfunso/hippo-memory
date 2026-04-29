@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.37.0 (2026-04-29)
+
+### Added
+- **E1.3 Slack append-only ingestion.** Webhook to kind='raw' memories with full provenance (slack:// artifact_ref, scope from channel privacy). Idempotency via slack_event_log, cursor-based backfill resume via slack_cursors, malformed payloads to slack_dlq. Source deletion (Slack message_deleted) routes through archiveRawMemory for GDPR compliance.
+- **PUBLIC_ROUTES allow-list + HIPPO_REQUIRE_AUTH knob.** Slack webhook (HMAC-signed, no Bearer) is the first explicit public /v1/* route. Bearer-lockdown test asserts every other /v1/* route returns 401 without auth when HIPPO_REQUIRE_AUTH=1.
+- **slack_workspaces tenant routing.** Multi-workspace deployments map team_id to tenant_id; single-workspace deployments fall back to HIPPO_TENANT.
+- **api.remember afterWrite hook.** Connectors now stamp idempotency rows atomically with the memory row via a SAVEPOINT-scoped callback, closing the Slack-retry race.
+- **Recall scope filter + default-deny on private channels.** No-scope queries cannot see scope='slack:private:*' memories; frontend callers passing undefined scope no longer leak private content.
+- **hippo slack CLI.** `hippo slack backfill --channel <id>` (requires SLACK_BOT_TOKEN), `hippo slack dlq list` for malformed-event review.
+
+### Fixed
+- **archiveRaw leaves no orphaned mirrors.** Centralized GDPR fix: api.archiveRaw now removes legacy markdown mirrors (mirroring forget()), so an archived raw row cannot be revived by bootstrapLegacyStore on the next process start. Surfaced by the Slack source-deletion test.
+- **Schema-version test pins.** Bumped a3-envelope-migration / a5-tenant-migration / pr2-session-continuity from 16 to 17 (was tracking "latest version", not "this migration's version").
+
+### Changed
+- Schema v17 adds slack_event_log, slack_cursors, slack_dlq, slack_workspaces tables.
+
 ## 0.36.0 (2026-04-29)
 
 ### Added

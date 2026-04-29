@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "./dist",
+    "declaration": false,
+    "declarationMap": false,
+    "noEmit": false
+  },
+  "include": ["benchmarks/e1.3/**/*", "src/**/*"],
+  "exclude": ["node_modules", "dist", "tests", "ui"]
+}

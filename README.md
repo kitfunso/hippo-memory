@@ -60,6 +60,14 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v0.37.0
+
+- **Slack ingestion (E1.3).** First end-to-end ingestion connector. `POST /v1/connectors/slack/events` accepts HMAC-signed Events API webhooks; messages land as `kind='raw'` memories with `slack://team/channel/ts` provenance and a `slack:public:*` or `slack:private:*` scope. Source deletions route through `archiveRawMemory` (GDPR). Backfill via `hippo slack backfill --channel <id>`; malformed events to `hippo slack dlq list`.
+- **Schema v17.** New tables: `slack_event_log` (idempotency), `slack_cursors` (backfill resume), `slack_dlq` (parse failures), `slack_workspaces` (team_id to tenant_id routing).
+- **PUBLIC_ROUTES allow-list + HIPPO_REQUIRE_AUTH knob.** Slack webhook is the first explicit public `/v1/*` route (HMAC-signed, no Bearer). Every other `/v1/*` route returns 401 without auth when `HIPPO_REQUIRE_AUTH=1`.
+- **Recall default-deny on private scopes.** No-scope queries cannot see `slack:private:*` memories. Frontend callers passing undefined scope no longer leak private content.
+- **api.remember afterWrite hook.** Connectors stamp idempotency rows atomically with the memory row via a SAVEPOINT-scoped callback.
+
 ### What's new in v0.36.0
 
 - **`hippo serve` daemon.** Persistent HTTP server on 127.0.0.1:6789. CLI auto-detects and becomes a thin client; one process owns the SQLite DB.
@@ -361,6 +369,14 @@ hippo capture --file conversation.md
 # Preview first
 hippo capture --file conversation.md --dry-run
 ```
+
+### Slack ingestion (E1.3)
+
+Hippo accepts Slack Events API webhooks at `POST /v1/connectors/slack/events`. Configure `SLACK_SIGNING_SECRET` (validated on every request) and point Slack at `https://<your-host>/v1/connectors/slack/events`. Messages land as `kind='raw'` memories with `slack://team/channel/ts` provenance and a `slack:public:Cxxx` or `slack:private:Cxxx` scope. Source deletions are honored (GDPR).
+
+Backfill an existing channel: `SLACK_BOT_TOKEN=xoxb-... hippo slack backfill --channel C0000`. Inspect malformed events: `hippo slack dlq list`.
+
+Multi-workspace deployments populate `slack_workspaces (team_id, tenant_id)` to route events per tenant; single-workspace falls back to `HIPPO_TENANT`.
 
 ### Active task snapshots
 

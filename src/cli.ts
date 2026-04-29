@@ -158,6 +158,9 @@ import { wmPush, wmRead, wmClear, wmFlush, WorkingMemoryItem } from './working-m
 import { multihopSearch } from './multihop.js';
 import { computeSalience } from './salience.js';
 import { computeAmbientState, renderAmbientSummary } from './ambient.js';
+import { listDlq } from './connectors/slack/dlq.js';
+import { backfillChannel } from './connectors/slack/backfill.js';
+import { slackHistoryFetcher } from './connectors/slack/web-client.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -4631,6 +4634,86 @@ function cmdAuth(hippoRoot: string, args: string[], flags: Record<string, string
   }
 }
 
+// ---------------------------------------------------------------------------
+// Slack subcommands (E1.3 — `hippo slack backfill` / `hippo slack dlq list`)
+// ---------------------------------------------------------------------------
+
+function printSlackBackfillUsage(): void {
+  console.log('hippo slack backfill --channel <id> [--since ISO]');
+  console.log('  --channel  Slack channel id (required, e.g. C0123ABC)');
+  console.log('  --since    backfill from ISO timestamp (default: cursor)');
+}
+
+function cmdSlackBackfill(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
+  // M3: detect --help BEFORE token check so operators can read usage in
+  // environments without SLACK_BOT_TOKEN configured.
+  if (flags['help']) {
+    printSlackBackfillUsage();
+    return;
+  }
+  const channel = typeof flags['channel'] === 'string' ? (flags['channel'] as string) : undefined;
+  if (!channel) {
+    printSlackBackfillUsage();
+    process.exit(1);
+  }
+  // Real fetcher requires SLACK_BOT_TOKEN with channels:history scope.
+  const token = process.env.SLACK_BOT_TOKEN;
+  if (!token) {
+    console.error('SLACK_BOT_TOKEN is not set. Backfill requires a Slack bot token with channels:history scope.');
+    process.exit(2);
+  }
+  // --since is advisory in V1: the slack_cursors row drives resume, so the
+  // backfill loop always picks up where it last left off. Honoured-by-cursor
+  // semantics keep idempotency clean.
+  const sinceIso = flags['since'] as string | undefined;
+  void sinceIso;
+  const fetcher = slackHistoryFetcher(token);
+  const ctx = {
+    hippoRoot,
+    tenantId: process.env.HIPPO_TENANT ?? 'default',
+    actor: 'cli:slack-backfill',
+  };
+  backfillChannel(ctx, {
+    teamId: process.env.SLACK_TEAM_ID ?? 'T_UNKNOWN',
+    channel: { id: channel, is_private: false },
+    fetcher,
+  })
+    .then((r) => {
+      console.log(`backfill ${channel}: ${r.ingested} new messages across ${r.pages} pages`);
+    })
+    .catch((e: Error) => {
+      console.error('backfill failed:', e.message);
+      process.exit(3);
+    });
+}
+
+function cmdSlackDlqList(hippoRoot: string, _flags: Record<string, string | boolean | string[]>): void {
+  const db = openHippoDb(hippoRoot);
+  try {
+    const tenantId = process.env.HIPPO_TENANT ?? 'default';
+    const items = listDlq(db, { tenantId });
+    for (const it of items) {
+      console.log(`${it.id}\t${it.receivedAt}\t${it.error}`);
+    }
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+function cmdSlack(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
+  const sub = args[0];
+  if (sub === 'backfill') {
+    cmdSlackBackfill(hippoRoot, flags);
+    return;
+  }
+  if (sub === 'dlq' && args[1] === 'list') {
+    cmdSlackDlqList(hippoRoot, flags);
+    return;
+  }
+  console.error('Usage: hippo slack <backfill|dlq list> [...]');
+  process.exit(1);
+}
+
 function printUsage(): void {
   console.log(`
 Hippo - biologically-inspired memory system for AI agents
@@ -5080,6 +5163,10 @@ async function main(): Promise<void> {
 
     case 'auth':
       cmdAuth(hippoRoot, args, flags);
+      break;
+
+    case 'slack':
+      cmdSlack(hippoRoot, args, flags);
       break;
 
     case 'audit': {
