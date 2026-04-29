@@ -445,7 +445,7 @@ export async function handleMcpRequest(req: McpRequest): Promise<McpResponse | n
         result: {
           protocolVersion: '2024-11-05',
           capabilities: { tools: {} },
-          serverInfo: { name: 'hippo-memory', version: '0.19.1' },
+          serverInfo: { name: 'hippo-memory', version: '0.36.0' },
         },
       };
 

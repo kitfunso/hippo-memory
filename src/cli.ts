@@ -5400,7 +5400,7 @@ async function main(): Promise<void> {
       const { serve } = await import('./server.js');
       const handle = await serve({ hippoRoot, port, host });
       console.log(`hippo serve listening on ${handle.url} (pid ${process.pid})`);
-      console.log(`pidfile: ${path.join(hippoRoot, '.hippo', 'server.pid')}`);
+      console.log(`pidfile: ${path.join(hippoRoot, 'server.pid')}`);
       console.log('press Ctrl+C to stop');
       // SIGINT/SIGTERM handlers wired in server.ts (skipped under VITEST). Hang.
       await new Promise(() => {});

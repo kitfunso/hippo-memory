@@ -46,7 +46,7 @@ const VALID_KINDS: ReadonlySet<MemoryKind> = new Set([
 // HTTP /health response uses this; reading package.json synchronously here
 // would couple the daemon to its on-disk install path, which we want to
 // avoid for tests that mkdtemp a hippoRoot.
-const VERSION = '0.35.0';
+const VERSION = '0.36.0';
 
 // 1 MB body cap. The CLI never sends payloads near this; anything bigger is
 // almost certainly a misconfigured client or a deliberate memory-blowup attempt.
@@ -657,6 +657,11 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     if (stopping) return;
     stopping = true;
     removePidfile(opts.hippoRoot);
+    // Force-close any long-lived idle connections (e.g. SSE keepalive streams
+    // on /mcp/stream) so server.close() can resolve. Without this, SIGTERM
+    // would hang the process until the SSE client cancels. Available on
+    // Node 18.2+; gate via optional chaining to avoid crashing on older runtimes.
+    server.closeAllConnections?.();
     await new Promise<void>((resolve) => {
       server.close(() => resolve());
     });
