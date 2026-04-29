@@ -70,6 +70,7 @@ interface MemoryRow {
   scope: string | null;
   owner: string | null;
   artifact_ref: string | null;
+  tenant_id: string | null;
 }
 
 interface ConsolidationRunRow {
@@ -148,7 +149,7 @@ export interface SessionEvent {
 }
 
 const INDEX_VERSION = 3;
-const MEMORY_SELECT_COLUMNS = `id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content, parents_json, starred, trace_outcome, source_session_id, valid_from, superseded_by, extracted_from, dag_level, dag_parent_id, kind, scope, owner, artifact_ref`;
+const MEMORY_SELECT_COLUMNS = `id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content, parents_json, starred, trace_outcome, source_session_id, valid_from, superseded_by, extracted_from, dag_level, dag_parent_id, kind, scope, owner, artifact_ref, tenant_id`;
 const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
 
 function layerDir(root: string, layer: Layer): string {
@@ -201,7 +202,7 @@ function ensureMirrorDirectories(hippoRoot: string): void {
  * Serialize a MemoryEntry to markdown with YAML frontmatter.
  */
 export function serializeEntry(entry: MemoryEntry): string {
-  const fm = dumpFrontmatter({
+  const frontmatter: Record<string, unknown> = {
     id: entry.id,
     created: entry.created,
     last_retrieved: entry.last_retrieved,
@@ -227,7 +228,14 @@ export function serializeEntry(entry: MemoryEntry): string {
     scope: entry.scope ?? null,
     owner: entry.owner ?? null,
     artifact_ref: entry.artifact_ref ?? null,
-  });
+  };
+  // Emit tenant_id only when not 'default' to keep diffs clean for the dominant
+  // single-tenant case (mirrors the plan's task 7 guidance).
+  const tenantId = entry.tenantId ?? 'default';
+  if (tenantId !== 'default') {
+    frontmatter['tenant_id'] = tenantId;
+  }
+  const fm = dumpFrontmatter(frontmatter);
   return `${fm}\n\n${entry.content}\n`;
 }
 
@@ -275,6 +283,7 @@ export function deserializeEntry(raw: string): MemoryEntry | null {
     scope: data['scope'] === null || data['scope'] === undefined ? null : String(data['scope']),
     owner: data['owner'] === null || data['owner'] === undefined ? null : String(data['owner']),
     artifact_ref: data['artifact_ref'] === null || data['artifact_ref'] === undefined ? null : String(data['artifact_ref']),
+    tenantId: data['tenant_id'] === null || data['tenant_id'] === undefined ? 'default' : String(data['tenant_id']),
   };
 }
 
@@ -316,6 +325,7 @@ function rowToEntry(row: MemoryRow): MemoryEntry {
     scope: row.scope ?? null,
     owner: row.owner ?? null,
     artifact_ref: row.artifact_ref ?? null,
+    tenantId: row.tenant_id ?? 'default',
   };
 }
 
@@ -678,8 +688,9 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
       extracted_from,
       dag_level, dag_parent_id,
       kind, scope, owner, artifact_ref,
+      tenant_id,
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     ON CONFLICT(id) DO UPDATE SET
       created = excluded.created,
       last_retrieved = excluded.last_retrieved,
@@ -711,6 +722,7 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
       scope = excluded.scope,
       owner = excluded.owner,
       artifact_ref = excluded.artifact_ref,
+      tenant_id = excluded.tenant_id,
       updated_at = datetime('now')
   `).run(
     entry.id,
@@ -744,6 +756,7 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
     entry.scope ?? null,
     entry.owner ?? null,
     entry.artifact_ref ?? null,
+    entry.tenantId ?? 'default',
   );
 
   syncFtsRow(db, entry);
