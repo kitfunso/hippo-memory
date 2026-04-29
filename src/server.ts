@@ -8,9 +8,29 @@ import {
   promote,
   supersede,
   archiveRaw,
+  authCreate,
+  authList,
+  authRevoke,
+  auditList,
   type Context,
 } from './api.js';
 import type { MemoryKind } from './memory.js';
+import type { AuditOp } from './audit.js';
+
+const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set([
+  'remember',
+  'recall',
+  'promote',
+  'supersede',
+  'forget',
+  'archive_raw',
+  'auth_revoke',
+]);
+
+// Cap on GET /v1/audit?limit=. Matches docs/api.md (when written) and is large
+// enough to dump a small deployment's full audit log without paginating, but
+// small enough that a malicious client can't ask for the world.
+const MAX_AUDIT_LIMIT = 10000;
 
 const VALID_KINDS: ReadonlySet<MemoryKind> = new Set([
   'raw',
@@ -288,6 +308,93 @@ async function handleRequest(
   if (method === 'DELETE' && idMatch) {
     const ctx = buildContext(opts.hippoRoot);
     const result = forget(ctx, idMatch.id!);
+    sendJson(res, 200, result);
+    return;
+  }
+
+  // POST /v1/auth/keys — mint a new API key. Plaintext lands in the response
+  // body (Task 8): the HTTP layer hands it to the client; the user-facing
+  // "store this somewhere safe" warning belongs in the CLI client, not here.
+  if (method === 'POST' && path === '/v1/auth/keys') {
+    const body = await parseJsonBody(req);
+    const labelRaw = body['label'];
+    if (labelRaw !== undefined && typeof labelRaw !== 'string') {
+      throw new HttpError(400, 'label must be a string');
+    }
+    const tenantIdRaw = body['tenantId'];
+    if (tenantIdRaw !== undefined && typeof tenantIdRaw !== 'string') {
+      throw new HttpError(400, 'tenantId must be a string');
+    }
+    const ctx = buildContext(opts.hippoRoot);
+    const result = authCreate(ctx, {
+      label: labelRaw,
+      tenantId: tenantIdRaw,
+    });
+    sendJson(res, 200, result);
+    return;
+  }
+
+  // GET /v1/auth/keys?active=true — list keys visible to ctx.tenantId.
+  // `active` defaults to true so the common case (show me usable keys) is
+  // a single GET; ?active=false includes revoked rows.
+  if (method === 'GET' && path === '/v1/auth/keys') {
+    const activeRaw = query.get('active');
+    let active = true;
+    if (activeRaw !== null) {
+      if (activeRaw === 'true') active = true;
+      else if (activeRaw === 'false') active = false;
+      else throw new HttpError(400, "active must be 'true' or 'false'");
+    }
+    const ctx = buildContext(opts.hippoRoot);
+    const result = authList(ctx, { active });
+    sendJson(res, 200, result);
+    return;
+  }
+
+  // DELETE /v1/auth/keys/:keyId — revoke. authRevoke throws "Unknown key_id"
+  // for missing OR cross-tenant keys (no info leak), which mapApiError
+  // converts to 404. We return 200 with the result body rather than 204 to
+  // surface revokedAt to the caller.
+  const keyMatch = matchPath('/v1/auth/keys/:keyId', path);
+  if (method === 'DELETE' && keyMatch) {
+    const ctx = buildContext(opts.hippoRoot);
+    const result = authRevoke(ctx, keyMatch.keyId!);
+    sendJson(res, 200, result);
+    return;
+  }
+
+  // GET /v1/audit?op=&since=&limit= — read audit events. All three filters
+  // validated at the route boundary so an invalid value lands a 400 before
+  // we hit the DB.
+  if (method === 'GET' && path === '/v1/audit') {
+    const opRaw = query.get('op');
+    let op: AuditOp | undefined;
+    if (opRaw !== null) {
+      if (!VALID_AUDIT_OPS.has(opRaw as AuditOp)) {
+        throw new HttpError(400, `invalid op: ${opRaw}`);
+      }
+      op = opRaw as AuditOp;
+    }
+    const sinceRaw = query.get('since');
+    let since: string | undefined;
+    if (sinceRaw !== null) {
+      const parsed = Date.parse(sinceRaw);
+      if (!Number.isFinite(parsed)) {
+        throw new HttpError(400, `invalid since: ${sinceRaw}`);
+      }
+      since = sinceRaw;
+    }
+    const limitRaw = query.get('limit');
+    let limit: number | undefined;
+    if (limitRaw !== null) {
+      const parsed = Number(limitRaw);
+      if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 1 || parsed > MAX_AUDIT_LIMIT) {
+        throw new HttpError(400, `limit must be an integer between 1 and ${MAX_AUDIT_LIMIT}`);
+      }
+      limit = parsed;
+    }
+    const ctx = buildContext(opts.hippoRoot);
+    const result = auditList(ctx, { op, since, limit });
     sendJson(res, 200, result);
     return;
   }
