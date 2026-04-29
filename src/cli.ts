@@ -138,7 +138,14 @@ import {
   ImportOptions,
 } from './importers.js';
 import { cmdCapture, CaptureOptions } from './capture.js';
-import { auditMemories, appendAuditEvent, type AuditOp, type AuditResult } from './audit.js';
+import {
+  auditMemories,
+  appendAuditEvent,
+  queryAuditEvents,
+  type AuditEvent,
+  type AuditOp,
+  type AuditResult,
+} from './audit.js';
 import { createApiKey, listApiKeys, revokeApiKey, type ApiKeyListItem } from './auth.js';
 import { resolveTenantId } from './tenant.js';
 import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from './eval.js';
@@ -4437,6 +4444,90 @@ function cmdAuthRevoke(hippoRoot: string, keyId: string, flags: Record<string, s
   console.log(`Revoked ${keyId} at ${revokedAt}`);
 }
 
+// ---------------------------------------------------------------------------
+// Audit log subcommands (A5 stub auth — `hippo audit list`)
+// ---------------------------------------------------------------------------
+
+const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
+  'remember',
+  'recall',
+  'promote',
+  'supersede',
+  'forget',
+  'archive_raw',
+]);
+
+function formatAuditRow(ev: AuditEvent): string {
+  const target = ev.targetId ?? '-';
+  const meta = JSON.stringify(ev.metadata ?? {});
+  return `${ev.ts}  ${ev.actor}  ${ev.op}  ${target}  ${meta}`;
+}
+
+function cmdAuditList(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
+  const root = resolveAuthRoot(hippoRoot, flags);
+  const asJson = Boolean(flags['json']);
+  const tenantId = resolveTenantId({});
+
+  const opFlag = typeof flags['op'] === 'string' ? (flags['op'] as string) : undefined;
+  if (opFlag && !VALID_AUDIT_OPS.has(opFlag as AuditOp)) {
+    console.error(
+      `Unknown --op value: ${opFlag}. Expected one of: remember | recall | promote | supersede | forget | archive_raw.`,
+    );
+    process.exit(1);
+  }
+  const op = opFlag as AuditOp | undefined;
+
+  const since = typeof flags['since'] === 'string' ? (flags['since'] as string) : undefined;
+
+  const limitRaw = flags['limit'];
+  let limit = 100;
+  if (limitRaw !== undefined && typeof limitRaw !== 'boolean') {
+    const parsed = parseInt(String(limitRaw), 10);
+    if (!Number.isFinite(parsed)) {
+      console.error(`Invalid --limit value: ${String(limitRaw)} (expected a positive integer).`);
+      process.exit(1);
+    }
+    limit = parsed;
+  }
+  if (limit < 1 || limit > 10000) {
+    console.error(`--limit must be between 1 and 10000 (got ${limit}).`);
+    process.exit(1);
+  }
+
+  const db = openHippoDb(root);
+  let events: AuditEvent[];
+  try {
+    events = queryAuditEvents(db, { tenantId, op, since, limit });
+  } finally {
+    closeHippoDb(db);
+  }
+
+  if (asJson) {
+    console.log(JSON.stringify(events));
+    return;
+  }
+
+  if (events.length === 0) {
+    console.log('No audit events.');
+    return;
+  }
+
+  console.log('ts  actor  op  target_id  metadata');
+  for (const ev of events) {
+    console.log(formatAuditRow(ev));
+  }
+}
+
+function cmdAuditLog(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
+  const sub = args[0];
+  if (sub === 'list') {
+    cmdAuditList(hippoRoot, flags);
+    return;
+  }
+  console.error(`Unknown audit subcommand: ${sub}. Expected: list.`);
+  process.exit(1);
+}
+
 function cmdAuth(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
   const sub = args[0];
   if (!sub) {
@@ -4866,6 +4957,12 @@ async function main(): Promise<void> {
       break;
 
     case 'audit': {
+      // `audit list` -> A5 audit-log viewer. Other forms (no sub, --fix) keep
+      // the existing memory-quality auditor for backwards compatibility.
+      if (args[0] === 'list') {
+        cmdAuditLog(hippoRoot, args, flags);
+        break;
+      }
       requireInit(hippoRoot);
       const entries = loadAllEntries(hippoRoot);
       const result = auditMemories(entries);
