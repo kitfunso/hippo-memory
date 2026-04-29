@@ -191,3 +191,118 @@ export function getActiveGoalsWithDb(db: DatabaseSyncLike, opts: GetActiveGoalsO
   `).all(opts.tenantId, opts.sessionId) as GoalRow[];
   return rows.map(rowToGoal);
 }
+
+const POSITIVE_OUTCOME_THRESHOLD = 0.7;
+const NEGATIVE_OUTCOME_THRESHOLD = 0.3;
+const STRENGTH_BOOST = 1.10;
+const STRENGTH_DECAY = 0.85;
+
+export interface CompleteGoalOpts {
+  outcomeScore?: number;
+}
+
+export function completeGoal(hippoRoot: string, goalId: string, opts: CompleteGoalOpts): void {
+  const db = openHippoDb(hippoRoot);
+  try {
+    const completedAt = new Date().toISOString();
+    const score = opts.outcomeScore ?? null;
+
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const goalRow = db.prepare(
+        `SELECT created_at FROM goal_stack WHERE id = ?`,
+      ).get(goalId) as { created_at: string } | undefined;
+      if (!goalRow) {
+        db.exec('COMMIT');
+        return;
+      }
+
+      db.prepare(`
+        UPDATE goal_stack
+        SET status = 'completed', completed_at = ?, outcome_score = ?
+        WHERE id = ?
+      `).run(completedAt, score, goalId);
+
+      if (score !== null) {
+        let multiplier = 1;
+        if (score >= POSITIVE_OUTCOME_THRESHOLD) multiplier = STRENGTH_BOOST;
+        else if (score < NEGATIVE_OUTCOME_THRESHOLD) multiplier = STRENGTH_DECAY;
+
+        if (multiplier !== 1) {
+          // Lifespan window: only memories whose recall happened during this
+          // goal's active life. UNIQUE(memory_id, goal_id) guarantees one
+          // adjustment per (memory, goal) pair.
+          db.prepare(`
+            UPDATE memories
+            SET strength = MIN(1.0, MAX(0.0, strength * ?))
+            WHERE id IN (
+              SELECT memory_id FROM goal_recall_log
+              WHERE goal_id = ?
+                AND recalled_at >= ?
+                AND recalled_at <= ?
+            )
+          `).run(multiplier, goalId, goalRow.created_at, completedAt);
+        }
+      }
+
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+export function suspendGoal(hippoRoot: string, goalId: string): void {
+  const db = openHippoDb(hippoRoot);
+  try {
+    db.prepare(`UPDATE goal_stack SET status = 'suspended' WHERE id = ? AND status = 'active'`).run(goalId);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+export function resumeGoal(hippoRoot: string, goalId: string): void {
+  const db = openHippoDb(hippoRoot);
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const row = db.prepare(
+        `SELECT session_id, tenant_id, status FROM goal_stack WHERE id = ?`,
+      ).get(goalId) as { session_id: string; tenant_id: string; status: string } | undefined;
+      if (!row || row.status !== 'suspended') {
+        db.exec('COMMIT');
+        return;
+      }
+
+      const activeCount = (db.prepare(`
+        SELECT COUNT(*) AS c FROM goal_stack
+        WHERE tenant_id = ? AND session_id = ? AND status = 'active'
+      `).get(row.tenant_id, row.session_id) as { c: number }).c;
+
+      if (activeCount >= MAX_ACTIVE_GOAL_DEPTH) {
+        const overflow = activeCount - MAX_ACTIVE_GOAL_DEPTH + 1;
+        db.prepare(`
+          UPDATE goal_stack
+          SET status = 'suspended'
+          WHERE id IN (
+            SELECT id FROM goal_stack
+            WHERE tenant_id = ? AND session_id = ? AND status = 'active'
+            ORDER BY created_at ASC
+            LIMIT ?
+          )
+        `).run(row.tenant_id, row.session_id, overflow);
+      }
+
+      db.prepare(`UPDATE goal_stack SET status = 'active' WHERE id = ?`).run(goalId);
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+  } finally {
+    closeHippoDb(db);
+  }
+}
