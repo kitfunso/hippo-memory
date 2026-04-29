@@ -66,8 +66,6 @@ From `/review` on commits 41b1f4d..6456e7d (now hardened to 00764ce). Each item 
 
 - [ ] **--scope CLI semantics.** `hippo remember --scope <v>` writes both the envelope `scope` column AND a `scope:<v>` tag. Recall's `--scope` filter currently matches the tag form. Decide: rename envelope flag to `--envelope-scope`, OR teach recall to filter the envelope column. Belongs in **A5** (auth/multi-tenancy) where scope semantics tighten. Until then, dual-write is documented in MEMORY_ENVELOPE.md.
 
-- [ ] **Importers/capture relabel pass.** `src/importers.ts` (ChatGPT/Claude/Cursor pastes) and `src/capture.ts` (session capture) currently use `kind='distilled'` (default). When **E1.x** ingestion connectors land (Slack/Jira/Gmail webhooks), audit these callers and decide per-source whether the content is raw-transcript-grade (`kind='raw'` + `archiveRawMemory` deletion path) or curated (`kind='distilled'`). Inline comments in both files flag the decision.
-
 - [ ] **Wire `hippo forget` for raw rows.** Today `hippo forget <raw-id>` aborts via the append-only trigger with no user-facing recovery. Add a `--archive --reason --owner` mode to `hippo forget` that routes through `archiveRawMemory`. Belongs in **A4** (lifecycle compliance). Until then, `--kind raw` is gated at the CLI so users can't create unforgettable rows.
 
 - [ ] **--owner format validation.** Currently any string is accepted. The documented contract is `user:<id>` or `agent:<id>`. Add regex validation `^(user|agent):[A-Za-z0-9_-]+$` either as warn-only (log, accept) or strict-reject. Decide alongside A5.
@@ -120,6 +118,25 @@ by post-review fixes 2db5017..38339f4). Each item belongs in **A5 v2**
   decay/merge/dedupe across tenants. Cross-tenant isolation must be threaded
   through every background pass before flipping the deployment model. Track
   with the same v2 audit as M2.
+
+---
+
+## v0.38.0 — E1.3 v2 follow-ups
+
+From the E1.3 Slack ingestion ship (v0.37.0). Operator UX, eval polish, and
+ranking improvements; none are correctness blockers.
+
+- [ ] **DLQ replay command.** `hippo slack dlq retry <id>` to re-run a parked event after fixing the underlying parser. Today the DLQ is read-only via `hippo slack dlq list`.
+
+- [ ] **Workspace registration CLI.** `hippo slack workspaces add --team <T> --tenant <t>`. Today the `slack_workspaces` table is populated via direct SQL, which is fine for single-machine deployments but awkward for multi-workspace operators.
+
+- [ ] **Eval scoring by `artifact_ref`.** The 10-scenario incident-recall eval matches on a per-message sentinel today. For real-traffic evals we want to score on `artifact_ref` so the eval doesn't depend on synthetic tokens in content. Would need to extend `RecallResultItem` (or a second SQL round-trip).
+
+- [ ] **Thread-aware ranking.** Treat `thread_ts` as a parent boost so replies surface their thread root in recall. V1 ranks each message independently.
+
+- [ ] **Incremental real-time backfill.** Today `backfillChannel` drains the channel until exhaustion. For live workspaces add a "stop at cursor" mode so the loop terminates when it catches up to the live cursor instead of paginating to history start.
+
+- [ ] **BM25 sentinel-token leakage in evals.** During E1.3 eval authoring, descriptive scenario IDs polluted the ambient noise messages and inflated recall scores. Opaque IDs (e.g. `S1A2B3`) work; document this in any future eval template so the next connector eval doesn't repeat the mistake.
 
 ---
 
