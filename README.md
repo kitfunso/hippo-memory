@@ -5,33 +5,56 @@
 [![npm](https://img.shields.io/npm/v/hippo-memory)](https://npmjs.com/package/hippo-memory)
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
+A memory layer for AI agents. Modeled on the hippocampus. Decay by default, strength through use, provenance on every memory. SQLite under the hood, zero runtime deps, works with every CLI agent you have.
+
+```bash
+npm install -g hippo-memory && hippo init --scan ~
 ```
-Works with:  Claude Code, Codex, Cursor, OpenClaw, OpenCode, Pi, any CLI agent
-Imports from: ChatGPT, Claude (CLAUDE.md), Cursor (.cursorrules), any markdown
-Storage:     SQLite backbone + markdown/YAML mirrors. Git-trackable and human-readable.
-Dependencies: Zero runtime deps. Requires Node.js 22.5+. Optional embeddings via @xenova/transformers.
+
+One command. Every git repo on your machine gets memory.
+
+```
+Works with:    Claude Code, Codex, Cursor, OpenClaw, OpenCode, Pi, any MCP client
+Imports from:  ChatGPT, Claude (CLAUDE.md), Cursor (.cursorrules), Slack, markdown
+Storage:       SQLite backbone with markdown mirrors. Git-trackable, human-readable.
+Dependencies:  Zero runtime deps. Node.js 22.5+. Optional embeddings via @xenova/transformers.
 ```
 
 ---
 
-## The Problem
+## Why this exists
 
-AI agents forget everything between sessions. Existing solutions just save everything and search later. That's a filing cabinet, not a brain.
+Most "AI memory" systems save everything and search later. That's storage with semantic search bolted on. It's why your agent kept hitting the same deploy bug last week. And the week before. The system saw the failure four times. It had no way to know it should remember.
 
-Your memories are also trapped. ChatGPT knows things Claude doesn't. Cursor rules don't travel to Codex. Switch tools and you start from zero.
+Hippo applies the thing brains have been getting right for 500 million years. Memories decay over time. Retrieval makes them stronger. Three biological layers (buffer, episodic, semantic) consolidate during sleep. Hard lessons stick because you used them. Trivia fades because you didn't.
 
----
-
-## Who Is This For
-
-- **Multi-tool developers.** You use Claude Code on Monday, Cursor on Tuesday, Codex on Wednesday. Context doesn't carry over. Hippo is the shared memory layer across all of them.
-- **Teams where agents repeat mistakes.** The agent hit the same deployment bug last week. And the week before. Hippo's error memories and decay mechanics mean hard lessons stick and noise fades.
-- **Anyone whose CLAUDE.md is a mess.** Your instruction file grew to 400 lines of mixed rules, preferences, and stale workarounds. Hippo gives that structure: tags, confidence levels, automatic decay of outdated info.
-- **People who want portable AI memory.** No vendor lock-in. Markdown files in your repo. Import from ChatGPT, Claude, Cursor. Export by copying a folder.
+It also fixes the portability problem. Your ChatGPT memories don't travel to Claude. Your `.cursorrules` don't travel to Codex. Hippo is one process behind every agent. CLAUDE.md, Cursor rules, ChatGPT exports, Slack history, all in one SQLite store, all queryable from any tool that speaks MCP or HTTP.
 
 ---
 
-## Quick Start
+## Receipts
+
+Numbers, not adjectives. Every claim links to the benchmark or the test that proves it.
+
+- **78% → 14% trap rate.** [Sequential Learning Benchmark](benchmarks/sequential-learning/). 50 tasks, 10 buried traps. Measures whether agents actually learn from past mistakes, not just retrieve text.
+- **R@5 = 74.0%** on [LongMemEval](benchmarks/longmemeval/). 500-question industry retrieval benchmark, BM25 only, no embeddings.
+- **10 of 10 incident scenarios beat transcript replay** on a staged Slack corpus ([benchmarks/e1.3/](benchmarks/e1.3/)). Recall surfaces the cause faster than scrolling the last N messages.
+- **0 outbound HTTP** on the 1000-event ingestion smoke. Proven by a `globalThis.fetch` spy that throws on call, not a hardcoded zero.
+- **886 tests, real DB, zero mocks.** Project rule. The one mocks-vs-prod divergence that bit us early is now the constraint that kept the next ten releases honest.
+
+---
+
+## What it does for your agent
+
+- **Stops repeating mistakes.** Tag a failure with `--tag error` once, the lesson surfaces every time the agent walks back into that part of the code. Errors decay slower than ordinary observations.
+- **Survives tool switches.** Use Claude Code on Monday, Cursor on Tuesday, Codex on Wednesday. Same `.hippo/` store. Same memories. Pick up exactly where you left off.
+- **Ingests systems of record.** Slack today (`POST /v1/connectors/slack/events`). GitHub, Jira, Notion next. Webhooks land as `kind='raw'` memories with full provenance and GDPR-correct deletion.
+- **Knows where every memory came from.** Every row carries `kind`, `scope`, `owner`, and `artifact_ref`. Right-to-be-forgotten is a single API call, not an audit nightmare.
+- **Plays nice with multi-tenant.** API keys, scrypt-hashed. Audit log on every mutation. Tenant A literally cannot see tenant B's memories. Proven by negative test.
+
+---
+
+## Quick start
 
 ```bash
 npm install -g hippo-memory
@@ -43,14 +66,15 @@ hippo init
 hippo init --scan ~
 ```
 
-`--scan` finds every git repo under your home directory, creates a `.hippo/` store in each one, and seeds it with lessons from your commit history. One command, instant memory across all your projects.
+`--scan` finds every git repo under your home directory, creates a `.hippo/` store in each one, and seeds it with lessons from the last 30 days of commit history. One command, instant memory across all your projects.
 
-After setup, `hippo sleep` runs automatically at session end (via agent hooks) and does five things:
+After setup, `hippo sleep` runs at session end (via auto-installed agent hooks) and does five things:
+
 1. **Learns** from today's git commits
 2. **Imports** new entries from Claude Code MEMORY.md files
 3. **Consolidates** memories (decay, merge, prune)
-4. **Deduplicates** near-identical memories (keeps the stronger copy)
-5. **Shares** high-value lessons to the global store so they surface in every project
+4. **Deduplicates** near-identical memories, keeping the stronger copy
+5. **Shares** high-value lessons to a global store so they surface in every project
 
 ```bash
 # Manual usage
@@ -64,252 +88,12 @@ hippo recall "data pipeline issues" --budget 2000
 
 - **Slack ingestion (E1.3).** First end-to-end ingestion connector. `POST /v1/connectors/slack/events` accepts HMAC-signed Events API webhooks; messages land as `kind='raw'` memories with `slack://team/channel/ts` provenance and a `slack:public:*` or `slack:private:*` scope. Source deletions route through `archiveRawMemory` (GDPR). Backfill via `hippo slack backfill --channel <id>`; malformed events to `hippo slack dlq list`.
 - **Schema v17.** New tables: `slack_event_log` (idempotency), `slack_cursors` (backfill resume), `slack_dlq` (parse failures), `slack_workspaces` (team_id to tenant_id routing).
-- **PUBLIC_ROUTES allow-list + HIPPO_REQUIRE_AUTH knob.** Slack webhook is the first explicit public `/v1/*` route (HMAC-signed, no Bearer). Every other `/v1/*` route returns 401 without auth when `HIPPO_REQUIRE_AUTH=1`.
+- **`PUBLIC_ROUTES` allow-list + `HIPPO_REQUIRE_AUTH` knob.** The Slack webhook is the first explicit public `/v1/*` route (HMAC-signed, no Bearer). Every other `/v1/*` route returns 401 without auth when `HIPPO_REQUIRE_AUTH=1`.
 - **Recall default-deny on private scopes.** No-scope queries cannot see `slack:private:*` memories. Frontend callers passing undefined scope no longer leak private content.
-- **api.remember afterWrite hook.** Connectors stamp idempotency rows atomically with the memory row via a SAVEPOINT-scoped callback.
+- **`api.remember.afterWrite` hook.** Connectors stamp idempotency rows atomically with the memory row via a SAVEPOINT-scoped callback.
 
-### What's new in v0.36.0
+For everything since v0.8.0, see [CHANGELOG.md](./CHANGELOG.md).
 
-- **`hippo serve` daemon.** Persistent HTTP server on 127.0.0.1:6789. CLI auto-detects and becomes a thin client; one process owns the SQLite DB.
-- **MCP-over-HTTP.** MCP clients can now connect over HTTP/SSE in addition to stdio. Same tool surface.
-- **Bearer-token auth + loopback trust.** Set HIPPO_API_KEY for remote calls; loopback connections work without a key. Server refuses to bind to non-loopback host without auth.
-- **Audit log fix.** Mutations on non-default tenants are now correctly attributed in the audit log (was using HIPPO_TENANT env, now uses the row's tenant_id).
-- **Tenant deny on archive/forget.** A valid Bearer for tenant A can no longer affect tenant B's memories, cross-tenant requests return "memory not found".
-- **Known issue:** p99 recall latency is 58.4ms on a 10k store, target is 50ms. Architecture ships; latency hardening in v0.37.0.
-
-### What's new in v0.35.0
-
-- **Stub auth landed.** API keys + audit log + per-tenant data isolation. `hippo auth create` mints a scrypt-hashed key shown plaintext exactly once. `hippo audit list` exposes the mutation trail.
-- **Cross-tenant safety.** Set `HIPPO_TENANT=acme` (or pass an API key) and recall, explain, context, MCP, and dashboard all filter by that tenant. Tenant A cannot see tenant B's memories, proven by negative test.
-- **Audit trail.** Every mutation writes to `audit_log`: remember, recall, promote, supersede, forget, archive, auth_revoke. Query with `hippo audit list --op recall --since 2026-04-01 --json`.
-- **Schema v16.** `tenant_id` columns added to memories and four other tables, default 'default'. Existing data is unaffected.
-- **SSO/SCIM stubs.** Hook points exist (throw `NotImplementedError`); full multi-tenant + OAuth deferred to v2.
-
-### What's new in v0.34.0
-
-- **Provenance envelope on every memory.** `kind` (raw / distilled / superseded), `scope`, `owner`, `artifact_ref` columns now ride alongside content. `hippo recall --why` shows them; `hippo remember --kind --scope --owner --artifact-ref` sets them. Foundation for ingestion connectors and right-to-be-forgotten.
-- **Append-only invariant on raw memories.** `kind='raw'` rows can only leave the store via `archiveRawMemory(db, id, { reason, who })`, which audits into the new `raw_archive` table. Direct DELETE aborts via trigger. Sets up A4 lifecycle compliance.
-- **Schema v14 + v15.** Auto-migrates on first open. Backwards compatible.
-- **Pineal salience v2.** `--salience-threshold` for tuning the recall salience gate.
-- **Enterprise execution roadmap.** New `ROADMAP-RESEARCH.md` re-sequences the 90-day plan after Codex + eng-review pass. Provenance first, then auth stub, then server mode, then first ingestion connector.
-
-### What's new in v0.33.0
-
-- **Fact extraction at sleep time.** `hippo sleep` now extracts standalone facts from episodic memories via LLM, stored as semantic-layer entries that score 1.3x higher and auto-deduplicate against their raw source in search results.
-- **DAG summarization.** Extracted facts cluster by entity similarity into summary nodes. When a summary matches your query, its children drill down into results automatically.
-- **Multi-hop retrieval.** `hippo recall --multihop` chains two search passes via entity tags discovered in the first pass, finding connections that single-pass search misses.
-- **`hippo dag --stats`** shows how your memory is organized across DAG levels.
-- **Performance fix.** Temporal scoring refactored from O(N^2) to O(N), eliminating stack overflow risk on large stores.
-
-### What's new in v0.32.0
-
-- **Correction without deletion.** `hippo supersede <old-id> "<new content>"` links the old memory as historical truth and creates a successor. Default recall shows only current beliefs; the old one stays in the store so you can audit what changed and when.
-- **`--include-superseded`** on `recall` and `explain` surfaces historical memories with a `[superseded]` marker. Useful for "what did I used to think about X?"
-- **`--as-of <ISO-date>`** returns the set of beliefs that were current at a past moment. Invalid dates exit with a clear format hint.
-- **Schema v11, zero breaking changes.** Adds `valid_from` + `superseded_by` columns. Existing v10 stores upgrade on first open, no data loss, no manual migration.
-- **Physics search ablation: CUT.** Benchmarked over 60 LongMemEval-oracle questions: physics-on is statistically worse than plain BM25 + embeddings on MRR, Recall@5, and NDCG@5 (paired bootstrap, 5000 iters, 95% CI excludes zero). Full results in `benchmarks/physics-ablation/`. Physics stays in the codebase this release; removal is a separate decision.
-
-### What's new in v0.31.0
-
-- **Scope-aware corrections.** Tag a memory with `hippo remember --scope plan-eng-review` and it only surfaces strongly when that scope is active again. Matching scope gets 1.5x boost, mismatching scope is suppressed 0.5x, unscoped memories stay neutral. Corrections said during one skill stop polluting unrelated contexts.
-- **Auto-detect from env.** `HIPPO_SCOPE`, `GSTACK_SKILL`, `OPENCLAW_SKILL` populate the scope automatically. Explicit `--scope` on any command overrides.
-- **`hippo explain --why`** now shows the `scope:` multiplier when it fires, so you can see why a memory got ranked up or down.
-
-### What's new in v0.30.1
-
-- **`hippo recall --layer <L>` is now a strict filter.** Previously the flag was accepted but silently dropped; other layers leaked into results. The RSI demo's `recall --layer trace` now does what it says.
-- **`hippo status` prints a `Trace:` counter.** The new layer is visible in status output.
-- **`hippo --version` / `-v`** works as expected. Previously errored.
-
-### What's new in v0.30.0
-
-- **Sequence binding for recursive-self-improvement agents.** New `Layer.Trace` memories store ordered `A → B → C → outcome` traces. Agents can `hippo trace record` explicitly, or just call `hippo session complete --outcome success` and let `hippo sleep` auto-promote completed sessions into queryable traces.
-- **`hippo recall --outcome success`** — retrieve only successful prior strategies. The missing RSI primitive: "what worked last time I tried this?"
-- **`examples/rsi-demo/`** — a minimal self-improving agent, deterministic and CI-runnable. Uses traces to learn. Current seed: 20% success on tasks 1-10 rising to 100% on tasks 41-50. Non-zero exit if the learning curve collapses — the demo is also the integration test.
-- **Schema v3 migration, with a regression test that preserves existing data.** Idempotent auto-promotion via indexed `source_session_id`. Four inheritance smoke tests lock the claim that traces get decay / search / replay / physics "for free."
-
-### What's new in v0.29.3
-
-- **Post-install banner for Claude Code users.** After `npm install -g hippo-memory`, if Claude Code is detected but the Hippo hook isn't wired yet, a three-line message points the user at `hippo init`. Silent on reinstalls or machines without Claude Code. Opt out via `HIPPO_SKIP_POSTINSTALL=1`.
-
-### What's new in v0.29.2
-
-- **Fix UserPromptSubmit hook in fresh directories.** In v0.29.0/0.29.1, the `hippo context --pinned-only` hook errored with "No .hippo directory found" every time Claude Code opened a session in a cwd without a local hippo store, and would silently auto-create `.hippo/` there. Fixed: pinned-only falls back to global-only, leaves cwd untouched.
-
-### What's new in v0.29.1
-
-- **Raise default `pinnedInject.budget` to 1500.** Smoke-testing on a real 10-pinned-memory store showed 500 tokens truncated new invariants off the bottom. 1500 matches `defaultContextBudget` and fits typical mature installs. Explicit `.hippo/config.json` overrides are untouched; only the default changes.
-
-### What's new in v0.29.0
-
-- **Mid-session pinned re-injection (Claude Code).** Pinned memories now re-enter context every turn via a new `UserPromptSubmit` hook — not just at SessionStart — so invariants survive long sessions where Opus 4.7 might otherwise forget them. `hippo context --pinned-only --format additional-context` is the command the hook runs; it's read-only so retrieval_count doesn't inflate. Existing users must re-run `hippo hook install claude-code` to pick it up. Opt out with `{"pinnedInject":{"enabled":false}}` in `.hippo/config.json`.
-- **Replay consolidation pass.** `hippo sleep` now rehearses 5 high-value memories per cycle (weighted by outcome feedback, emotional valence, under-rehearsal, idle time, strength). Closes the "replay" gap in the 7 hippocampal mechanisms. Non-destructive; opt out with `{"replay":{"count":0}}`.
-- **Model profile benchmark (null result).** New reusable eval harness at `evals/model-profile-bench.json` + `scripts/run-model-profile-bench.mjs` measures invariant honor, hallucination guard, noise rejection, and contradiction rejection. 4.6 and 4.7 both score 100% with hippo context injection — no per-model profile tuning needed. See `docs/plans/2026-04-21-phase-a-decision.md`.
-- **Physics soak test harness.** `scripts/soak-test.mjs` + 10 synthetic workload profiles. All 10 bounded at 100-tick smoke scale; grant-scale 100hr runs are separate follow-up work.
-
-### What's new in v0.28.0
-
-- **Budget saturation fix.** Large memories (14k+ chars) no longer starve retrieval. New `minResults` option guarantees at least N results regardless of token budget. `hippo recall <q> --min-results 5`.
-- **LongMemEval parity restored.** The 35pp R@10 gap vs v0.11 was a benchmark methodology issue (budget-limited vs unlimited comparison). Corrected: v0.28 R@3 67.0% (+0.4pp), answer_in_content@5 49.6% (+3.0pp), R@10 81.0% (-1.6pp). Top-5 results now more often contain the actual answer.
-- **MMR performance.** Re-ranking capped at top-100 candidates, dropping per-query time from ~50s to ~9s. `preparedCorpus` option skips per-query tokenization for batch callers.
-- **RRF scoring option.** `hybridSearch` accepts `scoring: 'rrf'` for reciprocal rank fusion as an alternative to score blending.
-- **`hippo refine` command.** LLM-powered semantic rewrite of memories for improved recall quality.
-
-### What's new in v0.27.0
-
-- **Recall is now debuggable.** `hippo explain <query>` prints the full score breakdown for each retrieved memory: BM25 + cosine, every multiplier (strength, recency, decision, path, source-bump, outcome), age, and final composite. Read-only so it's safe to run as a diagnostic.
-- **`hippo trace <id>`** gives a one-page dossier per memory: decay trajectory projected to 30/90 days, effective half-life, retrieval staleness, outcome counts, consolidation parents, open conflicts.
-- **MMR diversity** re-ranks near-duplicate results so you don't get five paraphrases at the top. Default `lambda=0.7`, tunable via config or `--no-mmr` / `--mmr-lambda`.
-- **Outcome feedback is immediate.** `hippo outcome --good` now nudges that memory up on the very next recall (not just via slow half-life decay). Bounded at +/-15%.
-- **`hippo eval`** measures recall quality against a test corpus (MRR, Recall@K, NDCG@K). Gate CI with `--min-mrr`. A real 15-case corpus ships at `evals/real-corpus.json`; baseline numbers in `evals/README.md`.
-
-### What's new in v0.26.0
-
-- **`hippo audit` catches junk memories.** New command flags too-short entries, release/merge/WIP commit noise, fragments, and vague single-clause notes. `--fix` removes the worst offenders. `hippo sleep` now runs audit automatically so commit-noise never survives consolidation.
-- **Conflict detector stops firing on English prepositions.** The v0.25 detector was scanning whole memory bodies and flagging 800+ bogus "polarity mismatch" conflicts anywhere the words `on` / `off` / `in` / `out` appeared together. Rewritten to use stopword-filtered Jaccard, a rare-token gate, and an opening-window polarity check.
-- **`hippo remember` rejects tiny inputs.** Content under 3 characters is blocked at the CLI with a clear error.
-
-### What's new in v0.24.2
-
-- **One daily runner per machine, not one task per project.** `hippo init` now registers each workspace and installs a machine-level `hippo daily-runner` job that sweeps every registered Hippo project at 6:15am.
-- **OpenClaw session-end autosleep no longer blocks shutdown.** The native OpenClaw plugin now detaches `hippo sleep` on `session_end` when `autoSleep` is enabled.
-- **Retrieval and refresh are now documented separately across tools.** Query-time recall still uses local plus global memory, while session-end hooks and the daily runner handle consolidation on their own paths.
-
-### What's new in v0.24.1
-
-- **Conflict detection stops over-weighting shared tags.** `feedback` / `policy` tags no longer make unrelated memories look contradictory on the next `hippo sleep`.
-- **Reworded contradictions still get caught.** Hippo keeps pairs like `API auth must be enabled in prod` / `Disable API auth in prod` while dropping the false positives that triggered the review.
-- **Broader regression coverage.** This release adds tests for the exact false-positive examples from the migrated store plus extra polarity cases like `must` vs `should not` and `available` vs `missing`.
-
-### What's new in v0.24.0
-
-- **Codex session-end memory is now automatic on install/update.** Hippo no longer tells Codex users to fix `PATH` by hand. The published package now attempts to wrap the detected `codex` launcher during install or upgrade, and it can self-heal on later Hippo commands if Codex shows up afterward.
-- **Codex wrapper now patches the real launcher in place.** Hippo renames the original launcher to a sibling backup such as `codex.hippo-real.cmd` / `codex.hippo-real.exe`, writes a wrapper at the command users already invoke, and runs `hippo sleep` plus `hippo capture --last-session` after `/exit`.
-- **Codex rollout transcripts are captured directly.** `hippo capture --last-session` now understands Codex `response_item` transcript JSONL, so session-end capture uses the real Codex transcript rather than a partial history reconstruction.
-
-### What's new in v0.23.0
-
-- **SessionEnd no longer gets killed by TUI teardown.** Claude Code / OpenCode send SIGTERM to hook children as the TUI shuts down. The old 0.22.x split entries (`hippo sleep` + `hippo capture`) ran in parallel and were both killed before completion, so the log rarely had the completion markers. 0.23.0 installs a single `hippo session-end --log-file <path>` entry that spawns a fully detached Node child (via `spawn({detached:true, stdio:'ignore', windowsHide:true}).unref()`), returns in <100ms, and lets the worker run sleep → capture to completion independently. Cross-platform — Windows, macOS, Linux.
-- **Auto-migration** collapses the old 0.22.x two-entry form into the new single entry on re-run of `hippo setup` / `hippo hook install <target>`.
-
-### What's new in v0.22.1
-
-- **SessionEnd capture output actually shows up.** 0.22.0 installed `hippo capture --last-session` without a log tee, so its output was swallowed by the TUI teardown. 0.22.1 adds `--log-file` to `hippo capture` and the installer now wires capture into the same log file as `hippo sleep` — you see both "sleep complete" and "capture complete" on the next session start via `hippo last-sleep`. Existing installs auto-migrate to the new form on re-run.
-
-### What's new in v0.22.0
-
-- **`hippo capture --last-session` works.** The placeholder from earlier releases is now implemented. It reads the JSONL transcript of the most recent agent session and extracts actionable memories (decisions, rules, errors, preferences). Resolves the transcript from `--transcript <path>`, stdin JSON payload (the shape SessionEnd hooks pass), or auto-discovery under `~/.claude/projects/`.
-- **SessionEnd auto-runs `hippo capture`.** `hippo init` / `hippo setup` now installs a second SessionEnd entry alongside `hippo sleep` — one summary per `/exit`, not per turn. Existing installs pick it up on re-run (idempotent).
-- **Claude Code plugin moved off `Stop`.** The plugin's `hooks.json` now fires sleep + capture + outcome on `SessionEnd`, matching the JSON-hook install path.
-
-```bash
-npm install -g hippo-memory
-hippo setup              # picks up the new SessionEnd capture hook
-```
-
-### What's new in v0.21.0
-
-- **`hippo setup` — one command, every tool.** Detects Claude Code, OpenCode, OpenClaw, Codex, Cursor, and Pi on your machine and installs all available SessionEnd + SessionStart hooks in one pass. It also repairs the machine-level daily runner. Idempotent — safe to re-run.
-- **OpenCode hooks.** SessionEnd + SessionStart install into `~/.config/opencode/opencode.json` (OpenCode added Claude-Code-compatible hooks in Jan 2026).
-- **You actually see consolidation output now.** New `SessionStart` hook prints the previous session's `hippo sleep` output between banners on the next startup. Previously, SessionEnd output was invisible because the TUI was tearing down when it ran.
-
-```bash
-npm install -g hippo-memory
-hippo setup                # or: hippo hook install claude-code
-```
-
-### What's new in v0.20.3
-
-- **Visible confirmation on session-end sleep.** The installed `SessionEnd` hook now echoes `[hippo] consolidating memory...` before running and `[hippo] sleep complete` / `[hippo] sleep failed` after, so you can see consolidation actually ran. Existing installs need a reinstall (`hippo hook uninstall claude-code && hippo hook install claude-code`) to pick up the new command.
-
-### What's new in v0.20.2
-
-- **Claude Code hook uses `SessionEnd`, not `Stop`.** Earlier versions ran `hippo sleep` after every assistant turn; now it runs once at session exit. Re-running `hippo hook install claude-code` migrates existing `Stop` entries automatically.
-- **No more accidental `CLAUDE.md` files.** `hippo hook install` and `hippo init` only patch agent-instruction files that already exist — they no longer create fresh ones in unrelated directories.
-
-### What's new in v0.20
-
-- **`hippo dedup`.** Scans for near-duplicate memories, shows you what's duplicated and why (redundant semantic patterns, same lesson from multiple sources, cross-layer overlap), and removes the weaker copy. Runs automatically during `hippo sleep`.
-- **MEMORY.md import.** `hippo init` and `hippo sleep` now scan Claude Code memory files and import new entries. Your agent memories from Claude Code flow into hippo automatically.
-
-### What's new in v0.19.1
-
-- **Configured embedding models now work end to end.** `hippo embed`, hybrid search, and physics search all respect `embeddings.model` from `.hippo/config.json`.
-- **Safe rebuild on model change.** If you switch embedding models, rerun `hippo embed`. Hippo now rebuilds cached embeddings and resets physics state so old vectors are not mixed with the new model.
-
-### What's new in v0.18
-
-- **Multi-project auto-discovery.** `hippo init --scan [dir]` finds all git repos under a directory and initializes each one. Seeds with a full year of git history by default. One command to set up memory across all your projects.
-
-### What's new in v0.17
-
-- **Auto-share to global.** `hippo sleep` now promotes high-value memories to the global store automatically. Universal lessons travel across projects; project-specific memories stay local. No manual `hippo promote` needed.
-
-### What's new in v0.16
-
-- **Auto-learn from git.** `hippo init` seeds the store with 30 days of commit history. `hippo sleep` captures today's commits before consolidation. New users get instant memory; existing users get continuous learning. Both skippable with `--no-learn`.
-
-### What's new in v0.15
-
-- **Adaptive decay for intermittent agents.** Memories now decay based on how often the agent actually runs, not wall-clock time. A weekly agent's memories persist ~7x longer automatically. Three modes via `decayBasis` in `.hippo/config.json`: `"adaptive"` (default), `"session"`, or `"clock"`.
-
-### What's new in v0.14
-
-- **OpenClaw backup cleanup.** Plugin updates no longer leave `hippo-memory.bak-*` directories that cause duplicate plugin ID errors. Cleanup runs automatically at boot.
-
-### What's new in v0.13
-
-- **Security: command injection fixed.** OpenClaw plugin now uses `execFileSync` (no shell). All user input is passed as array args, eliminating shell injection vectors.
-- **25+ bug fixes** across search, embeddings, physics, MCP server, store, and CLI: NaN propagation, token budget accuracy, atomic writes, FTS/LIKE escaping, Buffer-based MCP parsing, protocol compliance, and more. See [CHANGELOG](./CHANGELOG.md) for the full list.
-
-### What's new in v0.12
-
-- **Configurable global store.** Set `$HIPPO_HOME` or use XDG (`$XDG_DATA_HOME/hippo`) to put the global store wherever you want. Falls back to `~/.hippo/` if neither is set.
-
-### What's new in v0.11
-
-- **OpenClaw error capture filtering.** The `autoLearn` hook now applies three filters before storing tool errors: noise pattern filter, per-session rate limiting (max 5), and deduplication. Prevents memory pollution from infrastructure noise.
-- **Orphaned embedding pruning.** `hippo embed` removes cached vectors for deleted memories.
-- **Cross-platform path handling.** OpenClaw plugin uses `path/posix` for consistent `.hippo` detection on Unix with Windows-style paths.
-
-### What's new in v0.11.0
-
-- **Reward-proportional decay.** Outcome feedback now modulates decay rate continuously instead of fixed half-life deltas. Memories with consistent positive outcomes decay up to 1.5x slower; consistent negatives decay up to 2x faster. Mixed outcomes converge toward neutral. Inspired by R-STDP in spiking neural networks. `hippo inspect` now shows cumulative outcome counts and the computed reward factor.
-- **Public benchmarks.** Two benchmarks in `benchmarks/`: a [Sequential Learning Benchmark](benchmarks/sequential-learning/) (50 tasks, 10 traps, measures agent improvement over time) and a [LongMemEval integration](benchmarks/longmemeval/) (industry-standard 500-question retrieval benchmark, R@5=74.0% with BM25 only). The sequential learning benchmark is unique: no other public benchmark tests whether memory systems produce learning curves.
-
-### What's new in v0.10.0
-
-- **Active invalidation.** `hippo learn --git` detects migration and breaking-change commits and actively weakens memories referencing the old pattern. Manual invalidation via `hippo invalidate "REST API" --reason "migrated to GraphQL"`.
-- **Architectural decisions.** `hippo decide` stores one-off decisions with 90-day half-life and verified confidence. Supports `--context` for reasoning and `--supersedes` to chain decisions when the architecture evolves.
-- **Path-based memory triggers.** Memories auto-tagged with `path:<segment>` from your working directory. Recall boosts memories from the same location (up to 1.3x). Working in `src/api/`? API-related memories surface first.
-- **OpenCode integration.** `hippo hook install opencode` patches AGENTS.md. Auto-detected during `hippo init`. Integration guide with MCP config and skill for progressive discovery.
-- **`hippo export`** outputs all memories as JSON or markdown.
-- **Decision recall boost.** 1.2x scoring multiplier for decision-tagged memories so they surface despite low retrieval frequency.
-
-### What's new in v0.9.1
-
-- **Auto-sleep on session exit.** `hippo hook install claude-code` now installs a Stop hook in `~/.claude/settings.json` so `hippo sleep` runs automatically when Claude Code exits. `hippo init` does this too when Claude Code is detected. No cron needed, no manual sleep.
-
-### What's new in v0.9.0
-
-- **Working memory layer** (`hippo wm push/read/clear/flush`). Bounded buffer (max 20 per scope) with importance-based eviction. Current-state notes live separately from long-term memory.
-- **Session handoffs** (`hippo handoff create/latest/show`). Persist session summaries, next actions, and artifacts so successor sessions can resume without transcript archaeology.
-- **Session lifecycle** with explicit start/end events, fallback session IDs, and `hippo session resume` for continuity.
-- **Explainable recall** (`hippo recall --why`). See which terms matched, whether BM25 or embedding contributed, and the source bucket (layer, confidence, local/global).
-- **`hippo current show`** for compact current-state display (active task + recent session events), ready for agent injection.
-- **SQLite lock hardening**: `busy_timeout=5000`, `synchronous=NORMAL`, `wal_autocheckpoint=100`. Concurrent plugin calls no longer hit `SQLITE_BUSY`.
-- **Consolidation batching**: all writes/deletes happen in a single transaction instead of N open/close cycles.
-- **`--limit` flag** on `hippo recall` and `hippo context` to cap result count independently of token budget.
-- **Plugin injection dedup guard** prevents double context injection on reconnect.
-
-### What's new in v0.8.0
-
-- **Hybrid search** blends BM25 keywords with cosine embedding similarity. Install `@xenova/transformers`, run `hippo embed`, recall quality jumps. Falls back to BM25 otherwise.
-- Configure a custom embedding model with `embeddings.model` in `.hippo/config.json`. If you change models later, rerun `hippo embed` so Hippo rebuilds cached embeddings and physics state for the new vector space.
-- **Schema acceleration** auto-computes how well new memories fit existing patterns. Familiar memories consolidate faster; novel ones decay faster if unused.
-- **Multi-agent shared memory** with `hippo share`, `hippo peers`, and transfer scoring. Universal lessons travel between projects; project-specific config stays local.
-- **Conflict resolution** via `hippo resolve <id> --keep <mem_id>`. Closes the detect-inspect-resolve loop.
-- **Agent eval benchmark** validates the learning hypothesis: hippo agents drop from 78% trap rate to 14% over a 50-task sequence.
 
 ### Zero-config agent integration
 
