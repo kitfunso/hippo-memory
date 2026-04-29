@@ -139,6 +139,7 @@ import {
 } from './importers.js';
 import { cmdCapture, CaptureOptions } from './capture.js';
 import { auditMemories, type AuditResult } from './audit.js';
+import { resolveTenantId } from './tenant.js';
 import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from './eval.js';
 import { runFeatureEval, formatResult, resultToBaseline, detectRegressions, type EvalBaseline } from './eval-suite.js';
 import { refineStore } from './refine-llm.js';
@@ -540,6 +541,10 @@ async function cmdRemember(
   const artifactRefFlag = typeof flags['artifact-ref'] === 'string' ? (flags['artifact-ref'] as string) : null;
   const scopeForEnvelope = typeof flags['scope'] === 'string' ? (flags['scope'] as string).trim() || null : null;
 
+  // A5 stub auth: stamp tenant_id from env (HIPPO_TENANT) so recall isolation
+  // can filter on this row. Default tenant 'default' for unauthenticated CLI.
+  const tenantId = resolveTenantId({});
+
   const entry = createMemory(text, {
     layer: Layer.Episodic,
     tags: rawTags,
@@ -551,6 +556,7 @@ async function cmdRemember(
     scope: scopeForEnvelope,
     owner: ownerFlag,
     artifact_ref: artifactRefFlag,
+    tenantId,
   });
 
   // Auto-tag with path context
@@ -689,8 +695,12 @@ async function cmdRecall(
   }
   const globalRoot = getGlobalRoot();
 
-  let localEntries = loadSearchEntries(hippoRoot, query);
-  let globalEntries = isInitialized(globalRoot) ? loadSearchEntries(globalRoot, query) : [];
+  // A5 stub auth: resolve the active tenant once and thread it through every
+  // recall-time SELECT against `memories`. Cross-tenant rows must never surface.
+  const tenantId = resolveTenantId({});
+
+  let localEntries = loadSearchEntries(hippoRoot, query, undefined, tenantId);
+  let globalEntries = isInitialized(globalRoot) ? loadSearchEntries(globalRoot, query, undefined, tenantId) : [];
 
   // Bi-temporal filtering for physics path (hybridSearch handles it internally)
   if (asOf) {
@@ -764,7 +774,7 @@ async function cmdRecall(
   } else if (hasGlobal) {
     // Use searchBothHybrid for merged results with embedding support
     results = await searchBothHybrid(query, hippoRoot, globalRoot, {
-      budget, mmr: mmrEnabled, mmrLambda, localBump, minResults, scope: recallActiveScope,
+      budget, mmr: mmrEnabled, mmrLambda, localBump, minResults, scope: recallActiveScope, tenantId,
     });
   } else {
     results = await hybridSearch(query, localEntries, {

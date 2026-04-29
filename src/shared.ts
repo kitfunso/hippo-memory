@@ -71,6 +71,8 @@ export interface SearchOptions {
   budget?: number;
   now?: Date;
   minResults?: number;
+  /** Tenant scope for both stores. Undefined = no filter (legacy single-tenant). */
+  tenantId?: string;
 }
 
 /**
@@ -84,11 +86,11 @@ export function searchBoth(
   globalRoot: string,
   options: SearchOptions = {}
 ): SearchResult[] {
-  const { budget = 4000, now = new Date(), minResults } = options;
+  const { budget = 4000, now = new Date(), minResults, tenantId } = options;
   const effectiveMin = minResults ?? 1;
 
-  const localEntries = fs.existsSync(localRoot) ? loadSearchEntries(localRoot, query) : [];
-  const globalEntries = fs.existsSync(globalRoot) ? loadSearchEntries(globalRoot, query) : [];
+  const localEntries = fs.existsSync(localRoot) ? loadSearchEntries(localRoot, query, undefined, tenantId) : [];
+  const globalEntries = fs.existsSync(globalRoot) ? loadSearchEntries(globalRoot, query, undefined, tenantId) : [];
 
   if (localEntries.length === 0 && globalEntries.length === 0) return [];
 
@@ -161,10 +163,10 @@ export async function searchBothHybrid(
   globalRoot: string,
   options: HybridSearchOptions = {}
 ): Promise<SearchResult[]> {
-  const { budget = 4000, now = new Date(), embeddingWeight, explain, mmr, mmrLambda, localBump = 1.2, minResults, scope, includeSuperseded, asOf } = options;
+  const { budget = 4000, now = new Date(), embeddingWeight, explain, mmr, mmrLambda, localBump = 1.2, minResults, scope, includeSuperseded, asOf, tenantId } = options;
 
-  const localEntries = fs.existsSync(localRoot) ? loadSearchEntries(localRoot, query) : [];
-  const globalEntries = fs.existsSync(globalRoot) ? loadSearchEntries(globalRoot, query) : [];
+  const localEntries = fs.existsSync(localRoot) ? loadSearchEntries(localRoot, query, undefined, tenantId) : [];
+  const globalEntries = fs.existsSync(globalRoot) ? loadSearchEntries(globalRoot, query, undefined, tenantId) : [];
 
   if (localEntries.length === 0 && globalEntries.length === 0) return [];
 

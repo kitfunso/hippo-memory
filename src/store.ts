@@ -202,7 +202,7 @@ function ensureMirrorDirectories(hippoRoot: string): void {
  * Serialize a MemoryEntry to markdown with YAML frontmatter.
  */
 export function serializeEntry(entry: MemoryEntry): string {
-  const frontmatter: Record<string, unknown> = {
+  const frontmatter: Record<string, string | number | boolean | null | string[] | number[]> = {
     id: entry.id,
     created: entry.created,
     last_retrieved: entry.last_retrieved,
@@ -520,23 +520,40 @@ function canonicalConflictPair(aId: string, bId: string): { memory_a_id: string;
     : { memory_a_id: bId, memory_b_id: aId };
 }
 
-function loadSearchRows(db: ReturnType<typeof openHippoDb>, query: string, limit: number): MemoryRow[] {
+function loadSearchRows(
+  db: ReturnType<typeof openHippoDb>,
+  query: string,
+  limit: number,
+  tenantId: string | undefined,
+): MemoryRow[] {
+  // tenantId undefined = no tenant filter (legacy callers / cross-deployment
+  // helpers). tenantId set = strict tenant isolation, leveraging the composite
+  // idx_memories_tenant_created (leading column tenant_id, O(log n) lookup).
+  const tenantPredicate = tenantId !== undefined ? ` AND m.tenant_id = ?` : '';
+  const tenantPredicateNoAlias = tenantId !== undefined ? ` AND tenant_id = ?` : '';
+  const tenantOnlyPredicate = tenantId !== undefined ? ` WHERE tenant_id = ?` : '';
+  const tenantParams = tenantId !== undefined ? [tenantId] : [];
+
   const terms = Array.from(new Set(tokenize(query)));
   if (terms.length === 0) {
-    return db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`).all() as MemoryRow[];
+    const sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate} ORDER BY created ASC, id ASC`;
+    return db.prepare(sql).all(...tenantParams) as MemoryRow[];
   }
 
   if (isFtsAvailable(db)) {
     try {
       const ftsQuery = terms.map((t) => `"${t.replace(/"/g, '""')}"`).join(' OR ');
+      // memories_fts virtual table has no tenant_id column; filter via the
+      // joined memories row (cheap with idx_memories_tenant_created leading
+      // on tenant_id).
       const rows = db.prepare(`
         SELECT ${MEMORY_SELECT_COLUMNS}
         FROM memories m
         JOIN memories_fts f ON f.id = m.id
-        WHERE memories_fts MATCH ?
+        WHERE memories_fts MATCH ?${tenantPredicate}
         ORDER BY bm25(memories_fts), m.updated_at DESC
         LIMIT ?
-      `).all(ftsQuery, limit) as MemoryRow[];
+      `).all(ftsQuery, ...tenantParams, limit) as MemoryRow[];
 
       if (rows.length > 0) return rows;
     } catch {
@@ -554,14 +571,15 @@ function loadSearchRows(db: ReturnType<typeof openHippoDb>, query: string, limit
   const rows = db.prepare(`
     SELECT ${MEMORY_SELECT_COLUMNS}
     FROM memories
-    WHERE ${where}
+    WHERE (${where})${tenantPredicateNoAlias}
     ORDER BY updated_at DESC, created DESC
     LIMIT ?
-  `).all(...params, limit) as MemoryRow[];
+  `).all(...params, ...tenantParams, limit) as MemoryRow[];
 
   if (rows.length > 0) return rows;
 
-  return db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`).all() as MemoryRow[];
+  const fallback = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate} ORDER BY created ASC, id ASC`;
+  return db.prepare(fallback).all(...tenantParams) as MemoryRow[];
 }
 
 function writeMarkdownMirror(hippoRoot: string, entry: MemoryEntry): void {
@@ -902,12 +920,22 @@ export function writeEntry(hippoRoot: string, entry: MemoryEntry): void {
 
 /**
  * Read a memory entry by ID.
+ *
+ * When `tenantId` is provided, the read is scoped to that tenant (cross-tenant
+ * lookups return null). When omitted, no tenant filter is applied — preserves
+ * legacy single-tenant callers and the writeEntry/readEntry round-trip.
  */
-export function readEntry(hippoRoot: string, id: string): MemoryEntry | null {
+export function readEntry(hippoRoot: string, id: string, tenantId?: string): MemoryEntry | null {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    const row = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?`).get(id) as MemoryRow | undefined;
+    const row = tenantId !== undefined
+      ? db.prepare(
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ? AND tenant_id = ?`,
+        ).get(id, tenantId) as MemoryRow | undefined
+      : db.prepare(
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?`,
+        ).get(id) as MemoryRow | undefined;
     return row ? rowToEntry(row) : null;
   } finally {
     closeHippoDb(db);
@@ -976,12 +1004,22 @@ export function batchWriteAndDelete(
 
 /**
  * Load all entries from SQLite.
+ *
+ * When `tenantId` is provided, results are scoped to that tenant. Omitting it
+ * yields all rows (legacy behavior used by consolidate/autolearn etc.). Recall
+ * paths that surface results to a user MUST pass a resolved tenant.
  */
-export function loadAllEntries(hippoRoot: string): MemoryEntry[] {
+export function loadAllEntries(hippoRoot: string, tenantId?: string): MemoryEntry[] {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    const rows = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`).all() as MemoryRow[];
+    const rows = tenantId !== undefined
+      ? db.prepare(
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created ASC, id ASC`,
+        ).all(tenantId) as MemoryRow[]
+      : db.prepare(
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`,
+        ).all() as MemoryRow[];
     return rows.map(rowToEntry);
   } finally {
     closeHippoDb(db);
@@ -991,16 +1029,20 @@ export function loadAllEntries(hippoRoot: string): MemoryEntry[] {
 /**
  * Load likely search candidates directly from SQLite.
  * Uses FTS5 when available, falls back to LIKE matching, then full-store fallback.
+ *
+ * When `tenantId` is provided, every SELECT (FTS join, LIKE, fallback) filters
+ * by tenant_id. Cross-tenant memories never surface. Omitted = no filter.
  */
 export function loadSearchEntries(
   hippoRoot: string,
   query: string,
-  limit: number = DEFAULT_SEARCH_CANDIDATE_LIMIT
+  limit: number = DEFAULT_SEARCH_CANDIDATE_LIMIT,
+  tenantId?: string,
 ): MemoryEntry[] {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    return loadSearchRows(db, query, limit).map(rowToEntry);
+    return loadSearchRows(db, query, limit, tenantId).map(rowToEntry);
   } finally {
     closeHippoDb(db);
   }
