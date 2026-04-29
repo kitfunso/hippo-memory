@@ -1,5 +1,6 @@
 import type { DatabaseSyncLike } from './db.js';
 import { isFtsAvailable } from './db.js';
+import { appendAuditEvent } from './audit.js';
 
 export interface ArchiveOpts {
   reason: string;
@@ -52,6 +53,22 @@ export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: Archive
         // Best effort only. The DELETE on memories already succeeded; FTS will
         // self-heal on next DB open via backfillFtsIndex.
       }
+    }
+    // A5 audit: emit archive_raw event inside the SAVEPOINT so the audit row is
+    // committed atomically with the row deletion. Inline env-based tenant
+    // resolution avoids importing src/tenant.ts (which would pull auth.ts and
+    // create a small import cycle for a leaf module).
+    try {
+      appendAuditEvent(db, {
+        tenantId: process.env.HIPPO_TENANT ?? 'default',
+        actor: opts.who || 'cli',
+        op: 'archive_raw',
+        targetId: id,
+        metadata: { reason: opts.reason },
+      });
+    } catch {
+      // Audit must not crash the archive. Failures here mean the audit table
+      // is unwritable; the archive itself has already succeeded.
     }
     db.exec('RELEASE SAVEPOINT archive_raw');
   } catch (e) {

@@ -20,6 +20,33 @@ import {
 } from './db.js';
 import { SessionHandoff, SessionHandoffRow, rowToSessionHandoff } from './handoff.js';
 import { tokenize } from './search.js';
+import { appendAuditEvent, type AuditOp } from './audit.js';
+import { resolveTenantId } from './tenant.js';
+
+/**
+ * Emit an audit event for a mutation against `db`. Wrapped so a broken audit
+ * log can never crash the surrounding mutation — the SQLite store is still the
+ * source of truth and audit failures are diagnosable from the missing rows.
+ */
+function audit(
+  db: ReturnType<typeof openHippoDb>,
+  op: AuditOp,
+  targetId?: string,
+  metadata?: Record<string, unknown>,
+): void {
+  try {
+    appendAuditEvent(db, {
+      tenantId: resolveTenantId({}),
+      actor: 'cli',
+      op,
+      targetId,
+      metadata,
+    });
+  } catch {
+    // Audit must never crash a mutation. Failures here mean the audit_log
+    // table is broken; the mutation has already succeeded.
+  }
+}
 
 export interface IndexEntry {
   id: string;
@@ -913,6 +940,10 @@ export function writeEntry(hippoRoot: string, entry: MemoryEntry): void {
     upsertEntryRow(db, entry);
     writeMarkdownMirror(hippoRoot, entry);
     writeIndexMirror(hippoRoot, buildIndexFromDb(db));
+    audit(db, 'remember', entry.id, {
+      kind: entry.kind ?? 'distilled',
+      scope: entry.scope ?? null,
+    });
   } finally {
     closeHippoDb(db);
   }
@@ -956,6 +987,7 @@ export function deleteEntry(hippoRoot: string, id: string): boolean {
     deleteFtsRow(db, id);
     removeEntryMirrors(hippoRoot, id);
     writeIndexMirror(hippoRoot, buildIndexFromDb(db));
+    audit(db, 'forget', id);
     return true;
   } finally {
     closeHippoDb(db);

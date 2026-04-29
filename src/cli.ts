@@ -138,7 +138,7 @@ import {
   ImportOptions,
 } from './importers.js';
 import { cmdCapture, CaptureOptions } from './capture.js';
-import { auditMemories, type AuditResult } from './audit.js';
+import { auditMemories, appendAuditEvent, type AuditOp, type AuditResult } from './audit.js';
 import { resolveTenantId } from './tenant.js';
 import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from './eval.js';
 import { runFeatureEval, formatResult, resultToBaseline, detectRegressions, type EvalBaseline } from './eval-suite.js';
@@ -156,6 +156,35 @@ function parseLimitFlag(value: string | boolean | string[] | undefined): number 
   if (!value) return Infinity;
   const parsed = parseInt(String(value), 10);
   return Number.isFinite(parsed) && parsed >= 1 ? parsed : Infinity;
+}
+
+/**
+ * Emit an audit event against `hippoRoot`'s db. Opens its own short-lived
+ * connection so callers don't have to thread a db handle. Swallows all errors
+ * — audit must never crash a CLI command.
+ */
+function emitCliAudit(
+  hippoRoot: string,
+  op: AuditOp,
+  targetId?: string,
+  metadata?: Record<string, unknown>,
+): void {
+  try {
+    const db = openHippoDb(hippoRoot);
+    try {
+      appendAuditEvent(db, {
+        tenantId: resolveTenantId({}),
+        actor: 'cli',
+        op,
+        targetId,
+        metadata,
+      });
+    } finally {
+      closeHippoDb(db);
+    }
+  } catch {
+    // Audit is best-effort; surface failures only via missing rows.
+  }
 }
 
 function requireInit(hippoRoot: string): void {
@@ -670,6 +699,7 @@ function cmdSupersede(
   old.superseded_by = newEntry.id;
   writeEntry(hippoRoot, old);
   writeEntry(hippoRoot, newEntry);
+  emitCliAudit(hippoRoot, 'supersede', oldId, { newId: newEntry.id });
 
   console.log(`Superseded ${oldId} → ${newEntry.id}`);
 }
@@ -966,6 +996,21 @@ async function cmdRecall(
 
   if (limit < results.length) {
     results = results.slice(0, limit);
+  }
+
+  // A5 audit: emit one 'recall' event per query, capturing the (truncated)
+  // query text and the post-filter result count. Tenant resolved by emitCliAudit.
+  // Emit before the early-empty return so zero-result recalls are still logged.
+  // recall reads from BOTH local and global stores when both are initialized;
+  // log against every participating store so the audit trail in either db
+  // shows the read access (no false negatives across --global flows).
+  const recallMetadata: Record<string, unknown> = {
+    query: query.slice(0, 200),
+    results: results.length,
+  };
+  emitCliAudit(hippoRoot, 'recall', undefined, recallMetadata);
+  if (isInitialized(globalRoot) && globalRoot !== hippoRoot) {
+    emitCliAudit(globalRoot, 'recall', undefined, recallMetadata);
   }
 
   if (results.length === 0) {
@@ -3651,6 +3696,11 @@ function cmdPromote(hippoRoot: string, id: string): void {
 
   try {
     const globalEntry = promoteToGlobal(hippoRoot, id);
+    // Emit audit on the global store (where the promoted memory now lives).
+    // The writeEntry inside promoteToGlobal already fires a 'remember' on the
+    // global db; we add a separate 'promote' event so the audit trail keeps
+    // the user-facing intent distinct from the underlying upsert.
+    emitCliAudit(getGlobalRoot(), 'promote', globalEntry.id, { sourceId: id });
     console.log(`Promoted ${id} to global store as ${globalEntry.id}`);
     console.log(`   Global store: ${getGlobalRoot()}`);
   } catch (err) {
