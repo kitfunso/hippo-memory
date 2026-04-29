@@ -147,6 +147,7 @@ import {
   type AuditResult,
 } from './audit.js';
 import { createApiKey, listApiKeys, revokeApiKey, type ApiKeyListItem } from './auth.js';
+import * as api from './api.js';
 import { resolveTenantId } from './tenant.js';
 import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from './eval.js';
 import { runFeatureEval, formatResult, resultToBaseline, detectRegressions, type EvalBaseline } from './eval-suite.js';
@@ -2468,11 +2469,16 @@ function cmdOutcome(
 function cmdForget(hippoRoot: string, id: string): void {
   requireInit(hippoRoot);
 
-  const ok = deleteEntry(hippoRoot, id);
-  if (ok) {
+  const ctx: api.Context = {
+    hippoRoot,
+    tenantId: resolveTenantId({}),
+    actor: 'cli',
+  };
+  try {
+    api.forget(ctx, id);
     updateStats(hippoRoot, { forgotten: 1 });
     console.log(`Forgot ${id}`);
-  } else {
+  } catch {
     console.error(`Memory not found: ${id}`);
     process.exit(1);
   }
@@ -3720,14 +3726,14 @@ function cmdPromote(hippoRoot: string, id: string): void {
     process.exit(1);
   }
 
+  const ctx: api.Context = {
+    hippoRoot,
+    tenantId: resolveTenantId({}),
+    actor: 'cli',
+  };
   try {
-    const globalEntry = promoteToGlobal(hippoRoot, id);
-    // Emit audit on the global store (where the promoted memory now lives).
-    // The writeEntry inside promoteToGlobal already fires a 'remember' on the
-    // global db; we add a separate 'promote' event so the audit trail keeps
-    // the user-facing intent distinct from the underlying upsert.
-    emitCliAudit(getGlobalRoot(), 'promote', globalEntry.id, { sourceId: id });
-    console.log(`Promoted ${id} to global store as ${globalEntry.id}`);
+    const result = api.promote(ctx, id);
+    console.log(`Promoted ${id} to global store as ${result.globalId}`);
     console.log(`   Global store: ${getGlobalRoot()}`);
   } catch (err) {
     console.error(`Failed to promote: ${(err as Error).message}`);
@@ -4359,22 +4365,20 @@ function cmdAuthCreate(hippoRoot: string, flags: Record<string, string | boolean
   const root = resolveAuthRoot(hippoRoot, flags);
   const tenantFlag = typeof flags['tenant'] === 'string' ? (flags['tenant'] as string) : undefined;
   const labelFlag = typeof flags['label'] === 'string' ? (flags['label'] as string) : undefined;
-  const tenantId = tenantFlag ?? resolveTenantId({});
   const asJson = Boolean(flags['json']);
 
-  const db = openHippoDb(root);
-  let result;
-  try {
-    result = createApiKey(db, { tenantId, label: labelFlag });
-  } finally {
-    closeHippoDb(db);
-  }
+  const ctx: api.Context = {
+    hippoRoot: root,
+    tenantId: resolveTenantId({}),
+    actor: 'cli',
+  };
+  const result = api.authCreate(ctx, { tenantId: tenantFlag, label: labelFlag });
 
   if (asJson) {
     console.log(JSON.stringify({
       keyId: result.keyId,
       plaintext: result.plaintext,
-      tenantId,
+      tenantId: result.tenantId,
       label: labelFlag ?? null,
     }));
     return;
@@ -4536,13 +4540,8 @@ function cmdAuditList(hippoRoot: string, flags: Record<string, string | boolean 
     process.exit(1);
   }
 
-  const db = openHippoDb(root);
-  let events: AuditEvent[];
-  try {
-    events = queryAuditEvents(db, { tenantId, op, since, limit });
-  } finally {
-    closeHippoDb(db);
-  }
+  const ctx: api.Context = { hippoRoot: root, tenantId, actor: 'cli' };
+  const events = api.auditList(ctx, { op, since, limit });
 
   if (asJson) {
     console.log(JSON.stringify(events));

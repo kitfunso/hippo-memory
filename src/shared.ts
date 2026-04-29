@@ -49,7 +49,11 @@ export function initGlobal(): void {
  * Assigns a new ID (prefixed with 'g_') to avoid collisions.
  * Returns the new global entry.
  */
-export function promoteToGlobal(localRoot: string, id: string): MemoryEntry {
+export function promoteToGlobal(
+  localRoot: string,
+  id: string,
+  opts?: { actor?: string },
+): MemoryEntry {
   const entry = readEntry(localRoot, id);
   if (!entry) throw new Error(`Memory not found: ${id}`);
 
@@ -63,7 +67,7 @@ export function promoteToGlobal(localRoot: string, id: string): MemoryEntry {
     source: `promoted:${localRoot}`,
   };
 
-  writeEntry(globalRoot, globalEntry);
+  writeEntry(globalRoot, globalEntry, { actor: opts?.actor });
   return globalEntry;
 }
 

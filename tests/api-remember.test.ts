@@ -37,6 +37,8 @@ describe('api.remember', () => {
     const { queryAuditEvents } = await import('../src/audit.js');
     const db = openHippoDb(home);
     const events = queryAuditEvents(db, { tenantId: 'default', op: 'remember' });
+    // Task 4 dedupe: exactly one audit row, with the supplied actor.
+    expect(events.length).toBe(1);
     expect(events[0]!.actor).toBe('api_key:hk_test');
     closeHippoDb(db);
     rmSync(home, { recursive: true, force: true });

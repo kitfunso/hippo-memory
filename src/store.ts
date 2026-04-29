@@ -33,11 +33,13 @@ function audit(
   op: AuditOp,
   targetId?: string,
   metadata?: Record<string, unknown>,
+  actor: string = 'cli',
+  tenantId?: string,
 ): void {
   try {
     appendAuditEvent(db, {
-      tenantId: resolveTenantId({}),
-      actor: 'cli',
+      tenantId: tenantId ?? resolveTenantId({}),
+      actor,
       op,
       targetId,
       metadata,
@@ -932,18 +934,34 @@ export function saveIndex(hippoRoot: string, index: HippoIndex): void {
 
 /**
  * Write a memory entry to SQLite and refresh compatibility mirrors.
+ *
+ * `opts.actor` defaults to 'cli' so unauthenticated direct-CLI callers still
+ * get the right audit attribution. The HTTP server (A1) and api.* layer pass
+ * the resolved actor (`api_key:<key_id>` / `localhost:cli`) so audit events
+ * land with one row per write, no double-emit.
  */
-export function writeEntry(hippoRoot: string, entry: MemoryEntry): void {
+export function writeEntry(
+  hippoRoot: string,
+  entry: MemoryEntry,
+  opts?: { actor?: string },
+): void {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
     upsertEntryRow(db, entry);
     writeMarkdownMirror(hippoRoot, entry);
     writeIndexMirror(hippoRoot, buildIndexFromDb(db));
-    audit(db, 'remember', entry.id, {
-      kind: entry.kind ?? 'distilled',
-      scope: entry.scope ?? null,
-    });
+    audit(
+      db,
+      'remember',
+      entry.id,
+      {
+        kind: entry.kind ?? 'distilled',
+        scope: entry.scope ?? null,
+      },
+      opts?.actor ?? 'cli',
+      entry.tenantId,
+    );
   } finally {
     closeHippoDb(db);
   }
@@ -975,19 +993,29 @@ export function readEntry(hippoRoot: string, id: string, tenantId?: string): Mem
 
 /**
  * Delete an entry from SQLite and mirrors.
+ *
+ * `opts.actor` defaults to 'cli'. The api.* layer threads `ctx.actor` so HTTP
+ * callers land with `api_key:<key_id>` in the audit log without a duplicate
+ * emit from the api wrapper.
  */
-export function deleteEntry(hippoRoot: string, id: string): boolean {
+export function deleteEntry(
+  hippoRoot: string,
+  id: string,
+  opts?: { actor?: string },
+): boolean {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    const exists = db.prepare(`SELECT id FROM memories WHERE id = ?`).get(id) as { id?: string } | undefined;
-    if (!exists?.id) return false;
+    const row = db
+      .prepare(`SELECT id, tenant_id FROM memories WHERE id = ?`)
+      .get(id) as { id?: string; tenant_id?: string } | undefined;
+    if (!row?.id) return false;
 
     db.prepare(`DELETE FROM memories WHERE id = ?`).run(id);
     deleteFtsRow(db, id);
     removeEntryMirrors(hippoRoot, id);
     writeIndexMirror(hippoRoot, buildIndexFromDb(db));
-    audit(db, 'forget', id);
+    audit(db, 'forget', id, undefined, opts?.actor ?? 'cli', row.tenant_id);
     return true;
   } finally {
     closeHippoDb(db);

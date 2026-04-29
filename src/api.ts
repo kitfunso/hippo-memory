@@ -66,25 +66,9 @@ export function remember(ctx: Context, opts: RememberOpts): RememberResult {
     tags: opts.tags,
     tenantId: ctx.tenantId,
   });
-  writeEntry(ctx.hippoRoot, entry);
-
-  // TODO(a1-task-4): writeEntry already emits an audit event with actor='cli'
-  // via its internal hook (see src/store.ts:31 audit()). We append a second
-  // audit event here so the supplied ctx.actor lands in the log, which is
-  // what HTTP / api_key callers need. This is an intentional duplicate emit
-  // pending Task 4, which threads `actor` into writeEntry and dedupes.
-  const db = openHippoDb(ctx.hippoRoot);
-  try {
-    appendAuditEvent(db, {
-      tenantId: ctx.tenantId,
-      actor: ctx.actor,
-      op: 'remember',
-      targetId: entry.id,
-      metadata: { kind: entry.kind, scope: entry.scope ?? null },
-    });
-  } finally {
-    closeHippoDb(db);
-  }
+  // writeEntry threads ctx.actor into its internal audit hook, so exactly
+  // one 'remember' event lands in the log with the supplied actor.
+  writeEntry(ctx.hippoRoot, entry, { actor: ctx.actor });
 
   return { id: entry.id, kind: entry.kind, tenantId: ctx.tenantId };
 }
@@ -162,32 +146,14 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
 // ---------------------------------------------------------------------------
 
 /**
- * Delete a memory by id. The underlying `deleteEntry` already emits an audit
- * event with actor='cli'; we append a second event with `ctx.actor` so HTTP /
- * api_key callers land in the audit log. Task 4 will dedupe by threading the
- * actor through deleteEntry.
+ * Delete a memory by id. `deleteEntry` threads ctx.actor into its internal
+ * audit hook, so exactly one 'forget' event lands with the supplied actor.
  */
 export function forget(ctx: Context, id: string): { ok: true; id: string } {
-  const removed = deleteEntry(ctx.hippoRoot, id);
+  const removed = deleteEntry(ctx.hippoRoot, id, { actor: ctx.actor });
   if (!removed) {
     throw new Error(`Memory not found: ${id}`);
   }
-
-  // TODO(a1-task-4): deleteEntry's internal audit hook hardcodes actor='cli'.
-  // We append a second event with ctx.actor so the supplied actor lands in
-  // the log. Task 4 will thread `actor` through deleteEntry and dedupe.
-  const db = openHippoDb(ctx.hippoRoot);
-  try {
-    appendAuditEvent(db, {
-      tenantId: ctx.tenantId,
-      actor: ctx.actor,
-      op: 'forget',
-      targetId: id,
-    });
-  } finally {
-    closeHippoDb(db);
-  }
-
   return { ok: true, id };
 }
 
@@ -210,11 +176,12 @@ export function promote(
   ctx: Context,
   id: string,
 ): { ok: true; sourceId: string; globalId: string } {
-  const globalEntry = promoteToGlobal(ctx.hippoRoot, id);
+  // promoteToGlobal threads ctx.actor into the writeEntry call on the global
+  // db, which emits a 'remember' audit row. We then add the user-facing
+  // 'promote' event on the global db so the audit trail keeps the intent
+  // distinct from the underlying upsert.
+  const globalEntry = promoteToGlobal(ctx.hippoRoot, id, { actor: ctx.actor });
 
-  // Audit on the global store, since that's where the promoted memory now
-  // lives. Mirrors cmdPromote's emitCliAudit(getGlobalRoot(), ...).
-  // TODO(a1-task-4): collapse with writeEntry's audit hook.
   const db = openHippoDb(getGlobalRoot());
   try {
     appendAuditEvent(db, {
@@ -265,12 +232,11 @@ export function supersede(
     tenantId: ctx.tenantId,
   });
   old.superseded_by = newEntry.id;
-  writeEntry(ctx.hippoRoot, old);
-  writeEntry(ctx.hippoRoot, newEntry);
+  writeEntry(ctx.hippoRoot, old, { actor: ctx.actor });
+  writeEntry(ctx.hippoRoot, newEntry, { actor: ctx.actor });
 
-  // TODO(a1-task-4): writeEntry's audit hook emits 'remember' with actor='cli'
-  // for both writes above; the 'supersede' event below carries ctx.actor and is
-  // the user-facing intent. Task 4 will thread actor and unify.
+  // The two writeEntry calls above emit 'remember' audit rows; the 'supersede'
+  // event below carries the user-facing intent and the chained newId.
   const db = openHippoDb(ctx.hippoRoot);
   try {
     appendAuditEvent(db, {

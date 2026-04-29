@@ -68,6 +68,7 @@ describe('api domain — recall/forget/promote/supersede', () => {
     const db = openHippoDb(home);
     try {
       const events = queryAuditEvents(db, { tenantId: 'default', op: 'recall' });
+      expect(events.length).toBe(1);
       expect(events[0]!.actor).toBe('api_key:hk_recall');
     } finally {
       closeHippoDb(db);
@@ -91,9 +92,8 @@ describe('api domain — recall/forget/promote/supersede', () => {
     const db = openHippoDb(home);
     try {
       const events = queryAuditEvents(db, { tenantId: 'default', op: 'forget' });
-      // The api.forget event lands AFTER the cli-default audit emit from
-      // deleteEntry, so DESC ordering returns ours first (matches Task 1
-      // shape; Task 4 will dedupe).
+      // Task 4 dedupe: deleteEntry threads ctx.actor; exactly one event lands.
+      expect(events.length).toBe(1);
       expect(events[0]!.actor).toBe('api_key:hk_forget');
       expect(events[0]!.targetId).toBe(id);
     } finally {
@@ -122,6 +122,8 @@ describe('api domain — recall/forget/promote/supersede', () => {
     const db = openHippoDb(globalHome);
     try {
       const events = queryAuditEvents(db, { tenantId: 'default', op: 'promote' });
+      // Task 4 dedupe: exactly one 'promote' event on the global store.
+      expect(events.length).toBe(1);
       expect(events[0]!.actor).toBe('api_key:hk_promote');
       expect(events[0]!.targetId).toBe(result.globalId);
       expect(events[0]!.metadata).toMatchObject({ sourceId: id });
@@ -154,6 +156,10 @@ describe('api domain — recall/forget/promote/supersede', () => {
     const db = openHippoDb(home);
     try {
       const events = queryAuditEvents(db, { tenantId: 'default', op: 'supersede' });
+      // Task 4 dedupe: exactly one 'supersede' event with the supplied actor.
+      // (The two 'remember' events from the underlying writeEntry calls land
+      // under op='remember' and are not counted here.)
+      expect(events.length).toBe(1);
       expect(events[0]!.actor).toBe('api_key:hk_supersede');
       expect(events[0]!.targetId).toBe(oldId);
       expect(events[0]!.metadata).toMatchObject({ newId: result.newId });
