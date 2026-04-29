@@ -138,7 +138,16 @@ import {
   ImportOptions,
 } from './importers.js';
 import { cmdCapture, CaptureOptions } from './capture.js';
-import { auditMemories, type AuditResult } from './audit.js';
+import {
+  auditMemories,
+  appendAuditEvent,
+  queryAuditEvents,
+  type AuditEvent,
+  type AuditOp,
+  type AuditResult,
+} from './audit.js';
+import { createApiKey, listApiKeys, revokeApiKey, type ApiKeyListItem } from './auth.js';
+import { resolveTenantId } from './tenant.js';
 import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from './eval.js';
 import { runFeatureEval, formatResult, resultToBaseline, detectRegressions, type EvalBaseline } from './eval-suite.js';
 import { refineStore } from './refine-llm.js';
@@ -155,6 +164,35 @@ function parseLimitFlag(value: string | boolean | string[] | undefined): number 
   if (!value) return Infinity;
   const parsed = parseInt(String(value), 10);
   return Number.isFinite(parsed) && parsed >= 1 ? parsed : Infinity;
+}
+
+/**
+ * Emit an audit event against `hippoRoot`'s db. Opens its own short-lived
+ * connection so callers don't have to thread a db handle. Swallows all errors
+ * — audit must never crash a CLI command.
+ */
+function emitCliAudit(
+  hippoRoot: string,
+  op: AuditOp,
+  targetId?: string,
+  metadata?: Record<string, unknown>,
+): void {
+  try {
+    const db = openHippoDb(hippoRoot);
+    try {
+      appendAuditEvent(db, {
+        tenantId: resolveTenantId({}),
+        actor: 'cli',
+        op,
+        targetId,
+        metadata,
+      });
+    } finally {
+      closeHippoDb(db);
+    }
+  } catch {
+    // Audit is best-effort; surface failures only via missing rows.
+  }
 }
 
 function requireInit(hippoRoot: string): void {
@@ -540,6 +578,10 @@ async function cmdRemember(
   const artifactRefFlag = typeof flags['artifact-ref'] === 'string' ? (flags['artifact-ref'] as string) : null;
   const scopeForEnvelope = typeof flags['scope'] === 'string' ? (flags['scope'] as string).trim() || null : null;
 
+  // A5 stub auth: stamp tenant_id from env (HIPPO_TENANT) so recall isolation
+  // can filter on this row. Default tenant 'default' for unauthenticated CLI.
+  const tenantId = resolveTenantId({});
+
   const entry = createMemory(text, {
     layer: Layer.Episodic,
     tags: rawTags,
@@ -551,6 +593,7 @@ async function cmdRemember(
     scope: scopeForEnvelope,
     owner: ownerFlag,
     artifact_ref: artifactRefFlag,
+    tenantId,
   });
 
   // Auto-tag with path context
@@ -664,6 +707,7 @@ function cmdSupersede(
   old.superseded_by = newEntry.id;
   writeEntry(hippoRoot, old);
   writeEntry(hippoRoot, newEntry);
+  emitCliAudit(hippoRoot, 'supersede', oldId, { newId: newEntry.id });
 
   console.log(`Superseded ${oldId} → ${newEntry.id}`);
 }
@@ -689,8 +733,12 @@ async function cmdRecall(
   }
   const globalRoot = getGlobalRoot();
 
-  let localEntries = loadSearchEntries(hippoRoot, query);
-  let globalEntries = isInitialized(globalRoot) ? loadSearchEntries(globalRoot, query) : [];
+  // A5 stub auth: resolve the active tenant once and thread it through every
+  // recall-time SELECT against `memories`. Cross-tenant rows must never surface.
+  const tenantId = resolveTenantId({});
+
+  let localEntries = loadSearchEntries(hippoRoot, query, undefined, tenantId);
+  let globalEntries = isInitialized(globalRoot) ? loadSearchEntries(globalRoot, query, undefined, tenantId) : [];
 
   // Bi-temporal filtering for physics path (hybridSearch handles it internally)
   if (asOf) {
@@ -764,7 +812,7 @@ async function cmdRecall(
   } else if (hasGlobal) {
     // Use searchBothHybrid for merged results with embedding support
     results = await searchBothHybrid(query, hippoRoot, globalRoot, {
-      budget, mmr: mmrEnabled, mmrLambda, localBump, minResults, scope: recallActiveScope,
+      budget, mmr: mmrEnabled, mmrLambda, localBump, minResults, scope: recallActiveScope, tenantId,
     });
   } else {
     results = await hybridSearch(query, localEntries, {
@@ -958,6 +1006,21 @@ async function cmdRecall(
     results = results.slice(0, limit);
   }
 
+  // A5 audit: emit one 'recall' event per query, capturing the (truncated)
+  // query text and the post-filter result count. Tenant resolved by emitCliAudit.
+  // Emit before the early-empty return so zero-result recalls are still logged.
+  // recall reads from BOTH local and global stores when both are initialized;
+  // log against every participating store so the audit trail in either db
+  // shows the read access (no false negatives across --global flows).
+  const recallMetadata: Record<string, unknown> = {
+    query: query.slice(0, 200),
+    results: results.length,
+  };
+  emitCliAudit(hippoRoot, 'recall', undefined, recallMetadata);
+  if (isInitialized(globalRoot) && globalRoot !== hippoRoot) {
+    emitCliAudit(globalRoot, 'recall', undefined, recallMetadata);
+  }
+
   if (results.length === 0) {
     if (asJson) {
       console.log(JSON.stringify({ query, results: [], total: 0 }));
@@ -1071,8 +1134,10 @@ async function cmdExplain(
   }
   const globalRoot = getGlobalRoot();
 
-  let explainLocalEntries = loadSearchEntries(hippoRoot, query);
-  let explainGlobalEntries = isInitialized(globalRoot) ? loadSearchEntries(globalRoot, query) : [];
+  // A5: scope explain results to the active tenant.
+  const tenantId = resolveTenantId({});
+  let explainLocalEntries = loadSearchEntries(hippoRoot, query, undefined, tenantId);
+  let explainGlobalEntries = isInitialized(globalRoot) ? loadSearchEntries(globalRoot, query, undefined, tenantId) : [];
 
   // Bi-temporal filtering
   if (explainAsOf) {
@@ -1131,7 +1196,7 @@ async function cmdExplain(
   } else if (hasGlobal) {
     results = await searchBothHybrid(query, hippoRoot, globalRoot, {
       budget, explain: true, mmr: mmrEnabled, mmrLambda, localBump, scope: explainActiveScope,
-      includeSuperseded: explainIncludeSuperseded, asOf: explainAsOf,
+      includeSuperseded: explainIncludeSuperseded, asOf: explainAsOf, tenantId,
     });
     modeUsed = 'searchBothHybrid';
   } else {
@@ -3017,11 +3082,14 @@ async function cmdContext(
 
   const globalRoot = getGlobalRoot();
   const hasGlobal = isInitialized(globalRoot);
+  // A5: scope context-mode loads to the active tenant. Without this, every
+  // tenant's memories surface through the smart-context injection path.
+  const tenantId = resolveTenantId({});
   // When the local store isn't initialized (pinned-only path in a fresh dir),
   // skip the local load — loadAllEntries would auto-create .hippo here and
   // we don't want to pollute arbitrary cwds.
-  let localEntries = hasLocal ? loadAllEntries(hippoRoot) : [];
-  let globalEntries = hasGlobal ? loadAllEntries(globalRoot) : [];
+  let localEntries = hasLocal ? loadAllEntries(hippoRoot, tenantId) : [];
+  let globalEntries = hasGlobal ? loadAllEntries(globalRoot, tenantId) : [];
 
   // Default context always filters superseded (no --include-superseded / --as-of for context)
   localEntries = localEntries.filter(e => !e.superseded_by);
@@ -3112,7 +3180,7 @@ async function cmdContext(
   } else {
     let results;
     if (hasGlobal) {
-      const merged = await searchBothHybrid(query, hippoRoot, globalRoot, { budget, scope: ctxActiveScope });
+      const merged = await searchBothHybrid(query, hippoRoot, globalRoot, { budget, scope: ctxActiveScope, tenantId });
       const localIndex = loadIndex(hippoRoot);
       results = merged.map((r) => ({
         entry: r.entry,
@@ -3136,6 +3204,19 @@ async function cmdContext(
 
     selectedItems = results;
     totalTokens = results.reduce((sum, r) => sum + r.tokens, 0);
+
+    // A5 H4: emit recall audit event for context-mode searches. The recall
+    // handler emits one of these per `hippo recall` invocation; context mode
+    // is the same surface (search → user) and must leave the same audit trail.
+    // Skip pinned-only and '*' fallback (handled in branches above which never
+    // hit the search engines).
+    const ctxRecallMetadata: Record<string, unknown> = {
+      query: query.slice(0, 200),
+      results: selectedItems.length,
+      mode: 'context',
+    };
+    if (hasLocal) emitCliAudit(hippoRoot, 'recall', undefined, ctxRecallMetadata);
+    if (hasGlobal) emitCliAudit(globalRoot, 'recall', undefined, ctxRecallMetadata);
   }
 
   if (limit < selectedItems.length) {
@@ -3641,6 +3722,11 @@ function cmdPromote(hippoRoot: string, id: string): void {
 
   try {
     const globalEntry = promoteToGlobal(hippoRoot, id);
+    // Emit audit on the global store (where the promoted memory now lives).
+    // The writeEntry inside promoteToGlobal already fires a 'remember' on the
+    // global db; we add a separate 'promote' event so the audit trail keeps
+    // the user-facing intent distinct from the underlying upsert.
+    emitCliAudit(getGlobalRoot(), 'promote', globalEntry.id, { sourceId: id });
     console.log(`Promoted ${id} to global store as ${globalEntry.id}`);
     console.log(`   Global store: ${getGlobalRoot()}`);
   } catch (err) {
@@ -4256,6 +4342,263 @@ function cmdDag(hippoRoot: string, flags: Record<string, string | boolean | stri
   }
 }
 
+// ---------------------------------------------------------------------------
+// Auth subcommands (A5 stub auth)
+// ---------------------------------------------------------------------------
+
+function resolveAuthRoot(hippoRoot: string, flags: Record<string, string | boolean | string[]>): string {
+  if (flags['global']) {
+    initGlobal();
+    return getGlobalRoot();
+  }
+  requireInit(hippoRoot);
+  return hippoRoot;
+}
+
+function cmdAuthCreate(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
+  const root = resolveAuthRoot(hippoRoot, flags);
+  const tenantFlag = typeof flags['tenant'] === 'string' ? (flags['tenant'] as string) : undefined;
+  const labelFlag = typeof flags['label'] === 'string' ? (flags['label'] as string) : undefined;
+  const tenantId = tenantFlag ?? resolveTenantId({});
+  const asJson = Boolean(flags['json']);
+
+  const db = openHippoDb(root);
+  let result;
+  try {
+    result = createApiKey(db, { tenantId, label: labelFlag });
+  } finally {
+    closeHippoDb(db);
+  }
+
+  if (asJson) {
+    console.log(JSON.stringify({
+      keyId: result.keyId,
+      plaintext: result.plaintext,
+      tenantId,
+      label: labelFlag ?? null,
+    }));
+    return;
+  }
+
+  console.log(`key_id:    ${result.keyId}`);
+  console.log(`plaintext: ${result.plaintext}`);
+  console.log('');
+  console.log('!! WARNING: this is the ONLY time the plaintext key will be shown. !!');
+  console.log('!! Copy it now. Hippo stores only a scrypt hash and cannot recover it. !!');
+}
+
+function formatKeyRow(item: ApiKeyListItem): string {
+  const label = item.label ?? '-';
+  const created = item.createdAt;
+  const revoked = item.revokedAt ?? '-';
+  return `${item.keyId}  ${item.tenantId}  ${label}  ${created}  ${revoked}`;
+}
+
+function cmdAuthList(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
+  const root = resolveAuthRoot(hippoRoot, flags);
+  const includeRevoked = Boolean(flags['all']);
+  const asJson = Boolean(flags['json']);
+
+  const db = openHippoDb(root);
+  let items: ApiKeyListItem[];
+  try {
+    items = listApiKeys(db, { active: !includeRevoked });
+  } finally {
+    closeHippoDb(db);
+  }
+
+  if (asJson) {
+    console.log(JSON.stringify(items));
+    return;
+  }
+
+  if (items.length === 0) {
+    console.log(includeRevoked ? 'No API keys.' : 'No active API keys. (Use --all to include revoked.)');
+    return;
+  }
+
+  console.log('key_id  tenant  label  created  revoked');
+  for (const item of items) {
+    console.log(formatKeyRow(item));
+  }
+}
+
+function cmdAuthRevoke(hippoRoot: string, keyId: string, flags: Record<string, string | boolean | string[]>): void {
+  const root = resolveAuthRoot(hippoRoot, flags);
+  const asJson = Boolean(flags['json']);
+
+  const db = openHippoDb(root);
+  let exists = false;
+  let alreadyRevoked = false;
+  let revokedAt: string | null = null;
+  let keyTenantId: string | null = null;
+  try {
+    const row = db.prepare(`SELECT key_id, tenant_id, revoked_at FROM api_keys WHERE key_id = ?`).get(keyId) as
+      | { key_id: string; tenant_id: string; revoked_at: string | null }
+      | undefined;
+    if (!row) {
+      // Let the finally{} block close the db. M4: avoid manual close before
+      // process.exit() — the finally already handles it on every path.
+      console.error(`Unknown key_id: ${keyId}`);
+      process.exit(1);
+    }
+    exists = true;
+    keyTenantId = row.tenant_id;
+    if (row.revoked_at) {
+      alreadyRevoked = true;
+      revokedAt = row.revoked_at;
+    } else {
+      revokeApiKey(db, keyId);
+      const updated = db.prepare(`SELECT revoked_at FROM api_keys WHERE key_id = ?`).get(keyId) as
+        | { revoked_at: string | null }
+        | undefined;
+      revokedAt = updated?.revoked_at ?? null;
+    }
+    // M1: emit auth_revoke audit event. Skip on no-op revoke (already revoked)
+    // so re-running the command doesn't pad the audit log with duplicates.
+    if (!alreadyRevoked && keyTenantId) {
+      try {
+        appendAuditEvent(db, {
+          tenantId: keyTenantId,
+          actor: 'cli',
+          op: 'auth_revoke',
+          targetId: keyId,
+        });
+      } catch {
+        // Audit must not crash a successful revoke.
+      }
+    }
+  } finally {
+    closeHippoDb(db);
+  }
+
+  if (!exists) return;
+
+  if (asJson) {
+    console.log(JSON.stringify({ keyId, revokedAt }));
+    return;
+  }
+  console.log(`Revoked ${keyId} at ${revokedAt}`);
+}
+
+// ---------------------------------------------------------------------------
+// Audit log subcommands (A5 stub auth — `hippo audit list`)
+// ---------------------------------------------------------------------------
+
+const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
+  'remember',
+  'recall',
+  'promote',
+  'supersede',
+  'forget',
+  'archive_raw',
+  'auth_revoke',
+]);
+
+function formatAuditRow(ev: AuditEvent): string {
+  const target = ev.targetId ?? '-';
+  const meta = JSON.stringify(ev.metadata ?? {});
+  return `${ev.ts}  ${ev.actor}  ${ev.op}  ${target}  ${meta}`;
+}
+
+function cmdAuditList(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
+  const root = resolveAuthRoot(hippoRoot, flags);
+  const asJson = Boolean(flags['json']);
+  const tenantId = resolveTenantId({});
+
+  const opFlag = typeof flags['op'] === 'string' ? (flags['op'] as string) : undefined;
+  if (opFlag && !VALID_AUDIT_OPS.has(opFlag as AuditOp)) {
+    console.error(
+      `Unknown --op value: ${opFlag}. Expected one of: remember | recall | promote | supersede | forget | archive_raw.`,
+    );
+    process.exit(1);
+  }
+  const op = opFlag as AuditOp | undefined;
+
+  const since = typeof flags['since'] === 'string' ? (flags['since'] as string) : undefined;
+  if (since !== undefined && !Number.isFinite(new Date(since).getTime())) {
+    console.error(`Invalid --since: ${since} (expected an ISO timestamp like 2026-04-22 or 2026-04-22T12:00:00Z).`);
+    process.exit(1);
+  }
+
+  const limitRaw = flags['limit'];
+  let limit = 100;
+  if (limitRaw !== undefined && typeof limitRaw !== 'boolean') {
+    const parsed = parseInt(String(limitRaw), 10);
+    if (!Number.isFinite(parsed)) {
+      console.error(`Invalid --limit value: ${String(limitRaw)} (expected a positive integer).`);
+      process.exit(1);
+    }
+    limit = parsed;
+  }
+  if (limit < 1 || limit > 10000) {
+    console.error(`--limit must be between 1 and 10000 (got ${limit}).`);
+    process.exit(1);
+  }
+
+  const db = openHippoDb(root);
+  let events: AuditEvent[];
+  try {
+    events = queryAuditEvents(db, { tenantId, op, since, limit });
+  } finally {
+    closeHippoDb(db);
+  }
+
+  if (asJson) {
+    console.log(JSON.stringify(events));
+    return;
+  }
+
+  if (events.length === 0) {
+    console.log('No audit events.');
+    return;
+  }
+
+  console.log('ts  actor  op  target_id  metadata');
+  for (const ev of events) {
+    console.log(formatAuditRow(ev));
+  }
+}
+
+function cmdAuditLog(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
+  const sub = args[0];
+  if (sub === 'list') {
+    cmdAuditList(hippoRoot, flags);
+    return;
+  }
+  console.error(`Unknown audit subcommand: ${sub}. Expected: list.`);
+  process.exit(1);
+}
+
+function cmdAuth(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
+  const sub = args[0];
+  if (!sub) {
+    console.error('Usage: hippo auth <create|list|revoke> [options]');
+    process.exit(1);
+  }
+  const subArgs = args.slice(1);
+  switch (sub) {
+    case 'create':
+      cmdAuthCreate(hippoRoot, flags);
+      return;
+    case 'list':
+      cmdAuthList(hippoRoot, flags);
+      return;
+    case 'revoke': {
+      const keyId = subArgs[0];
+      if (!keyId) {
+        console.error('Usage: hippo auth revoke <key_id>');
+        process.exit(1);
+      }
+      cmdAuthRevoke(hippoRoot, keyId, flags);
+      return;
+    }
+    default:
+      console.error(`Unknown auth subcommand: ${sub}. Expected: create | list | revoke.`);
+      process.exit(1);
+  }
+}
+
 function printUsage(): void {
   console.log(`
 Hippo - biologically-inspired memory system for AI agents
@@ -4492,6 +4835,27 @@ Commands:
   dashboard                Open web dashboard for memory health
     --port <n>             Port to serve on (default: 3333)
   mcp                      Start MCP server (stdio transport)
+  auth <sub>               Manage API keys (A5 stub auth)
+    auth create            Mint a new API key (plaintext shown ONCE)
+      --label <s>          Optional human label
+      --tenant <id>        Override tenant (defaults to HIPPO_TENANT)
+      --json               Output as JSON
+      --global             Operate on the global store
+    auth list              List API keys (active by default)
+      --all                Include revoked keys
+      --json               Output as JSON
+      --global             Operate on the global store
+    auth revoke <key_id>   Revoke an API key (subsequent validate fails)
+      --json               Output as JSON
+      --global             Operate on the global store
+  audit <sub>              Query the append-only audit log (A5 stub auth)
+    audit list             List audit events for the active tenant
+      --op <op>            Filter by op (remember | recall | promote |
+                           supersede | forget | archive_raw | auth_revoke)
+      --since <iso>        Lower bound on ts (ISO timestamp)
+      --limit <n>          Max events (default: 100, max: 10000)
+      --json               Output as JSON
+      --global             Operate on the global store
 
 Examples:
   hippo init
@@ -4651,7 +5015,17 @@ async function main(): Promise<void> {
       cmdDag(hippoRoot, flags);
       break;
 
+    case 'auth':
+      cmdAuth(hippoRoot, args, flags);
+      break;
+
     case 'audit': {
+      // `audit list` -> A5 audit-log viewer. Other forms (no sub, --fix) keep
+      // the existing memory-quality auditor for backwards compatibility.
+      if (args[0] === 'list') {
+        cmdAuditLog(hippoRoot, args, flags);
+        break;
+      }
       requireInit(hippoRoot);
       const entries = loadAllEntries(hippoRoot);
       const result = auditMemories(entries);

@@ -53,6 +53,8 @@ export interface MemoryEntry {
   scope: string | null;         // e.g. 'team:eng', 'project:foo'; null = global
   owner: string | null;         // 'user:<id>' or 'agent:<id>'
   artifact_ref: string | null;  // URI to source artifact (slack://, gh://, file://)
+  // A5 stub auth (schema v16)
+  tenantId: string;             // 'default' for single-tenant deployments
 }
 
 export const DECISION_HALF_LIFE_DAYS = 90;
@@ -255,6 +257,7 @@ export function createMemory(
     scope?: string | null;
     owner?: string | null;
     artifact_ref?: string | null;
+    tenantId?: string;
   } = {}
 ): MemoryEntry {
   const trimmed = content.trim();
@@ -308,6 +311,7 @@ export function createMemory(
     scope: options.scope ?? null,
     owner: options.owner ?? null,
     artifact_ref: options.artifact_ref ?? null,
+    tenantId: options.tenantId ?? 'default',
   };
 
   // Recalculate strength with the emotional multiplier applied

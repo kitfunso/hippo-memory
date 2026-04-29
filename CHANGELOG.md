@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.35.0 (2026-04-29)
+
+### Added
+- **A5 stub auth track.** Schema v16 adds `tenant_id` to `memories`, `working_memory`, `consolidation_runs`, `task_snapshots`, `memory_conflicts` (default 'default') plus composite indexes. New tables: `api_keys` (scrypt-hashed) and `audit_log` (append-only mutation trail).
+- **API key primitives.** `createApiKey` / `validateApiKey` / `revokeApiKey` / `listApiKeys` in src/auth.ts. scrypt + timingSafeEqual. Plaintext returned exactly once on create.
+- **Audit log primitives.** `appendAuditEvent` / `queryAuditEvents` in src/audit.ts. Hooks on every mutation: remember, recall, promote, supersede, forget, archive_raw, auth_revoke.
+- **Tenant resolution.** `resolveTenantId({db?, apiKey?})` in src/tenant.ts. Order: explicit api key > HIPPO_TENANT env > 'default'.
+- **Cross-tenant isolation at recall.** Tenant A's recall does not return tenant B's memories. Enforced on CLI recall/explain/context, MCP server (`hippo_recall`, `hippo_context`, `hippo_status`), and dashboard.
+- **CLI surface.** `hippo auth create [--label X] [--tenant Y]`, `hippo auth list [--all]`, `hippo auth revoke <key_id>`, `hippo audit list [--op X] [--since Y] [--limit N] [--json]`.
+- **SSO/SCIM stubs** in src/sso.ts. `ssoLogin`, `scimProvisionUser`, `scimDeprovisionUser` throw `NotImplementedError` referencing v2.
+
+### Fixed
+- Empty `HIPPO_TENANT` env coerces to 'default' (whitespace-trimmed).
+- bigint-safe JSON serialization for audit metadata (mirrors the raw-archive pattern).
+- `archiveRawMemory` audit event now uses the row's tenant_id, not the operator's env.
+
+### Internal
+- 30 new tests across schema, auth, audit, tenant, store, CLI surfaces. Cross-tenant isolation negative test covers CLI + MCP + dashboard.
+- All review findings closed: 4 HIGH (tenant filter holes on MCP/explain/dashboard/context), 7 MEDIUM, 8 LOW.
+
+### Deferred to v2 (tracked in TODOS.md)
+- Multi-tenant per-key isolation (one key -> one tenant). Stub treats deployments as single-tenant.
+- OAuth/OIDC, SCIM provisioning.
+- Audit log retention policy.
+- RBAC, rate limiting per tenant.
+
 ## 0.34.0 (2026-04-29)
 
 ### Added

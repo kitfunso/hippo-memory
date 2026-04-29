@@ -13,6 +13,7 @@ import { calculateStrength, resolveConfidence, type MemoryEntry } from './memory
 import { loadConfig } from './config.js';
 import { listPeers } from './shared.js';
 import { loadEmbeddingIndex } from './embeddings.js';
+import { resolveTenantId } from './tenant.js';
 
 interface DashboardData {
   memories: Array<{
@@ -65,7 +66,10 @@ interface DashboardData {
 }
 
 function buildDashboardData(hippoRoot: string): DashboardData {
-  const entries = loadAllEntries(hippoRoot);
+  // A5: scope dashboard to active tenant. Without this, the UI surfaces every
+  // tenant's memories on a multi-tenant deployment.
+  const tenantId = resolveTenantId({});
+  const entries = loadAllEntries(hippoRoot, tenantId);
   const now = new Date();
   const config = loadConfig(hippoRoot);
   const conflicts = listMemoryConflicts(hippoRoot, 'open');

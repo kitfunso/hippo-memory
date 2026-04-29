@@ -20,6 +20,33 @@ import {
 } from './db.js';
 import { SessionHandoff, SessionHandoffRow, rowToSessionHandoff } from './handoff.js';
 import { tokenize } from './search.js';
+import { appendAuditEvent, type AuditOp } from './audit.js';
+import { resolveTenantId } from './tenant.js';
+
+/**
+ * Emit an audit event for a mutation against `db`. Wrapped so a broken audit
+ * log can never crash the surrounding mutation — the SQLite store is still the
+ * source of truth and audit failures are diagnosable from the missing rows.
+ */
+function audit(
+  db: ReturnType<typeof openHippoDb>,
+  op: AuditOp,
+  targetId?: string,
+  metadata?: Record<string, unknown>,
+): void {
+  try {
+    appendAuditEvent(db, {
+      tenantId: resolveTenantId({}),
+      actor: 'cli',
+      op,
+      targetId,
+      metadata,
+    });
+  } catch {
+    // Audit must never crash a mutation. Failures here mean the audit_log
+    // table is broken; the mutation has already succeeded.
+  }
+}
 
 export interface IndexEntry {
   id: string;
@@ -70,6 +97,7 @@ interface MemoryRow {
   scope: string | null;
   owner: string | null;
   artifact_ref: string | null;
+  tenant_id: string | null;
 }
 
 interface ConsolidationRunRow {
@@ -148,7 +176,7 @@ export interface SessionEvent {
 }
 
 const INDEX_VERSION = 3;
-const MEMORY_SELECT_COLUMNS = `id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content, parents_json, starred, trace_outcome, source_session_id, valid_from, superseded_by, extracted_from, dag_level, dag_parent_id, kind, scope, owner, artifact_ref`;
+const MEMORY_SELECT_COLUMNS = `id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content, parents_json, starred, trace_outcome, source_session_id, valid_from, superseded_by, extracted_from, dag_level, dag_parent_id, kind, scope, owner, artifact_ref, tenant_id`;
 const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
 
 function layerDir(root: string, layer: Layer): string {
@@ -201,7 +229,7 @@ function ensureMirrorDirectories(hippoRoot: string): void {
  * Serialize a MemoryEntry to markdown with YAML frontmatter.
  */
 export function serializeEntry(entry: MemoryEntry): string {
-  const fm = dumpFrontmatter({
+  const frontmatter: Record<string, string | number | boolean | null | string[] | number[]> = {
     id: entry.id,
     created: entry.created,
     last_retrieved: entry.last_retrieved,
@@ -227,7 +255,14 @@ export function serializeEntry(entry: MemoryEntry): string {
     scope: entry.scope ?? null,
     owner: entry.owner ?? null,
     artifact_ref: entry.artifact_ref ?? null,
-  });
+  };
+  // Emit tenant_id only when not 'default' to keep diffs clean for the dominant
+  // single-tenant case (mirrors the plan's task 7 guidance).
+  const tenantId = entry.tenantId ?? 'default';
+  if (tenantId !== 'default') {
+    frontmatter['tenant_id'] = tenantId;
+  }
+  const fm = dumpFrontmatter(frontmatter);
   return `${fm}\n\n${entry.content}\n`;
 }
 
@@ -275,6 +310,7 @@ export function deserializeEntry(raw: string): MemoryEntry | null {
     scope: data['scope'] === null || data['scope'] === undefined ? null : String(data['scope']),
     owner: data['owner'] === null || data['owner'] === undefined ? null : String(data['owner']),
     artifact_ref: data['artifact_ref'] === null || data['artifact_ref'] === undefined ? null : String(data['artifact_ref']),
+    tenantId: data['tenant_id'] === null || data['tenant_id'] === undefined ? 'default' : String(data['tenant_id']),
   };
 }
 
@@ -316,6 +352,7 @@ function rowToEntry(row: MemoryRow): MemoryEntry {
     scope: row.scope ?? null,
     owner: row.owner ?? null,
     artifact_ref: row.artifact_ref ?? null,
+    tenantId: row.tenant_id ?? 'default',
   };
 }
 
@@ -510,23 +547,40 @@ function canonicalConflictPair(aId: string, bId: string): { memory_a_id: string;
     : { memory_a_id: bId, memory_b_id: aId };
 }
 
-function loadSearchRows(db: ReturnType<typeof openHippoDb>, query: string, limit: number): MemoryRow[] {
+function loadSearchRows(
+  db: ReturnType<typeof openHippoDb>,
+  query: string,
+  limit: number,
+  tenantId: string | undefined,
+): MemoryRow[] {
+  // tenantId undefined = no tenant filter (legacy callers / cross-deployment
+  // helpers). tenantId set = strict tenant isolation, leveraging the composite
+  // idx_memories_tenant_created (leading column tenant_id, O(log n) lookup).
+  const tenantPredicate = tenantId !== undefined ? ` AND m.tenant_id = ?` : '';
+  const tenantPredicateNoAlias = tenantId !== undefined ? ` AND tenant_id = ?` : '';
+  const tenantOnlyPredicate = tenantId !== undefined ? ` WHERE tenant_id = ?` : '';
+  const tenantParams = tenantId !== undefined ? [tenantId] : [];
+
   const terms = Array.from(new Set(tokenize(query)));
   if (terms.length === 0) {
-    return db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`).all() as MemoryRow[];
+    const sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate} ORDER BY created ASC, id ASC`;
+    return db.prepare(sql).all(...tenantParams) as MemoryRow[];
   }
 
   if (isFtsAvailable(db)) {
     try {
       const ftsQuery = terms.map((t) => `"${t.replace(/"/g, '""')}"`).join(' OR ');
+      // memories_fts virtual table has no tenant_id column; filter via the
+      // joined memories row (cheap with idx_memories_tenant_created leading
+      // on tenant_id).
       const rows = db.prepare(`
         SELECT ${MEMORY_SELECT_COLUMNS}
         FROM memories m
         JOIN memories_fts f ON f.id = m.id
-        WHERE memories_fts MATCH ?
+        WHERE memories_fts MATCH ?${tenantPredicate}
         ORDER BY bm25(memories_fts), m.updated_at DESC
         LIMIT ?
-      `).all(ftsQuery, limit) as MemoryRow[];
+      `).all(ftsQuery, ...tenantParams, limit) as MemoryRow[];
 
       if (rows.length > 0) return rows;
     } catch {
@@ -544,14 +598,15 @@ function loadSearchRows(db: ReturnType<typeof openHippoDb>, query: string, limit
   const rows = db.prepare(`
     SELECT ${MEMORY_SELECT_COLUMNS}
     FROM memories
-    WHERE ${where}
+    WHERE (${where})${tenantPredicateNoAlias}
     ORDER BY updated_at DESC, created DESC
     LIMIT ?
-  `).all(...params, limit) as MemoryRow[];
+  `).all(...params, ...tenantParams, limit) as MemoryRow[];
 
   if (rows.length > 0) return rows;
 
-  return db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`).all() as MemoryRow[];
+  const fallback = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate} ORDER BY created ASC, id ASC`;
+  return db.prepare(fallback).all(...tenantParams) as MemoryRow[];
 }
 
 function writeMarkdownMirror(hippoRoot: string, entry: MemoryEntry): void {
@@ -678,8 +733,9 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
       extracted_from,
       dag_level, dag_parent_id,
       kind, scope, owner, artifact_ref,
+      tenant_id,
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     ON CONFLICT(id) DO UPDATE SET
       created = excluded.created,
       last_retrieved = excluded.last_retrieved,
@@ -711,6 +767,7 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
       scope = excluded.scope,
       owner = excluded.owner,
       artifact_ref = excluded.artifact_ref,
+      tenant_id = excluded.tenant_id,
       updated_at = datetime('now')
   `).run(
     entry.id,
@@ -744,6 +801,7 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
     entry.scope ?? null,
     entry.owner ?? null,
     entry.artifact_ref ?? null,
+    entry.tenantId ?? 'default',
   );
 
   syncFtsRow(db, entry);
@@ -882,6 +940,10 @@ export function writeEntry(hippoRoot: string, entry: MemoryEntry): void {
     upsertEntryRow(db, entry);
     writeMarkdownMirror(hippoRoot, entry);
     writeIndexMirror(hippoRoot, buildIndexFromDb(db));
+    audit(db, 'remember', entry.id, {
+      kind: entry.kind ?? 'distilled',
+      scope: entry.scope ?? null,
+    });
   } finally {
     closeHippoDb(db);
   }
@@ -889,12 +951,22 @@ export function writeEntry(hippoRoot: string, entry: MemoryEntry): void {
 
 /**
  * Read a memory entry by ID.
+ *
+ * When `tenantId` is provided, the read is scoped to that tenant (cross-tenant
+ * lookups return null). When omitted, no tenant filter is applied — preserves
+ * legacy single-tenant callers and the writeEntry/readEntry round-trip.
  */
-export function readEntry(hippoRoot: string, id: string): MemoryEntry | null {
+export function readEntry(hippoRoot: string, id: string, tenantId?: string): MemoryEntry | null {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    const row = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?`).get(id) as MemoryRow | undefined;
+    const row = tenantId !== undefined
+      ? db.prepare(
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ? AND tenant_id = ?`,
+        ).get(id, tenantId) as MemoryRow | undefined
+      : db.prepare(
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?`,
+        ).get(id) as MemoryRow | undefined;
     return row ? rowToEntry(row) : null;
   } finally {
     closeHippoDb(db);
@@ -915,6 +987,7 @@ export function deleteEntry(hippoRoot: string, id: string): boolean {
     deleteFtsRow(db, id);
     removeEntryMirrors(hippoRoot, id);
     writeIndexMirror(hippoRoot, buildIndexFromDb(db));
+    audit(db, 'forget', id);
     return true;
   } finally {
     closeHippoDb(db);
@@ -963,12 +1036,22 @@ export function batchWriteAndDelete(
 
 /**
  * Load all entries from SQLite.
+ *
+ * When `tenantId` is provided, results are scoped to that tenant. Omitting it
+ * yields all rows (legacy behavior used by consolidate/autolearn etc.). Recall
+ * paths that surface results to a user MUST pass a resolved tenant.
  */
-export function loadAllEntries(hippoRoot: string): MemoryEntry[] {
+export function loadAllEntries(hippoRoot: string, tenantId?: string): MemoryEntry[] {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    const rows = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`).all() as MemoryRow[];
+    const rows = tenantId !== undefined
+      ? db.prepare(
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created ASC, id ASC`,
+        ).all(tenantId) as MemoryRow[]
+      : db.prepare(
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`,
+        ).all() as MemoryRow[];
     return rows.map(rowToEntry);
   } finally {
     closeHippoDb(db);
@@ -978,16 +1061,20 @@ export function loadAllEntries(hippoRoot: string): MemoryEntry[] {
 /**
  * Load likely search candidates directly from SQLite.
  * Uses FTS5 when available, falls back to LIKE matching, then full-store fallback.
+ *
+ * When `tenantId` is provided, every SELECT (FTS join, LIKE, fallback) filters
+ * by tenant_id. Cross-tenant memories never surface. Omitted = no filter.
  */
 export function loadSearchEntries(
   hippoRoot: string,
   query: string,
-  limit: number = DEFAULT_SEARCH_CANDIDATE_LIMIT
+  limit: number = DEFAULT_SEARCH_CANDIDATE_LIMIT,
+  tenantId?: string,
 ): MemoryEntry[] {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    return loadSearchRows(db, query, limit).map(rowToEntry);
+    return loadSearchRows(db, query, limit, tenantId).map(rowToEntry);
   } finally {
     closeHippoDb(db);
   }
