@@ -19,6 +19,7 @@ import {
 } from './store.js';
 import {
   createMemory,
+  applyOutcome,
   type MemoryKind,
   type MemoryEntry,
   Layer,
@@ -173,6 +174,45 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   }
 
   return { results: ranked, total: entries.length, tokens };
+}
+
+// ---------------------------------------------------------------------------
+// outcome
+// ---------------------------------------------------------------------------
+
+/**
+ * Apply a positive/negative outcome to a list of recently-recalled memory ids.
+ * Used by the MCP `hippo_outcome` tool. Tenant-scoped: ids that don't belong
+ * to ctx.tenantId are silently skipped (matches the prior MCP semantics —
+ * a stale id from another tenant doesn't crash the call). Each successful
+ * outcome emits one audit_log row with op='outcome' tagged with ctx.actor.
+ */
+export function outcome(
+  ctx: Context,
+  ids: ReadonlyArray<string>,
+  good: boolean,
+): { applied: number } {
+  let applied = 0;
+  const db = openHippoDb(ctx.hippoRoot);
+  try {
+    for (const id of ids) {
+      const entry = readEntry(ctx.hippoRoot, id, ctx.tenantId);
+      if (!entry) continue;
+      const updated = applyOutcome(entry, good);
+      writeEntry(ctx.hippoRoot, updated, { actor: ctx.actor });
+      appendAuditEvent(db, {
+        tenantId: ctx.tenantId,
+        actor: ctx.actor,
+        op: 'outcome',
+        targetId: id,
+        metadata: { good },
+      });
+      applied++;
+    }
+  } finally {
+    closeHippoDb(db);
+  }
+  return { applied };
 }
 
 // ---------------------------------------------------------------------------

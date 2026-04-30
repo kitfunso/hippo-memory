@@ -26,7 +26,7 @@ import { fetchGitLog, extractLessons, deduplicateLesson, isGitRepo } from '../au
 import { loadConfig } from '../config.js';
 import { resolveConfidence } from '../memory.js';
 import { resolveTenantId } from '../tenant.js';
-import { recall as apiRecall, remember as apiRemember, type Context as ApiContext } from '../api.js';
+import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, type Context as ApiContext } from '../api.js';
 
 // ── Find hippo root ──
 
@@ -353,20 +353,16 @@ async function executeTool(
       const ids = lastRecalledIds.get(clientKey) ?? [];
       if (ids.length === 0) return 'No recent recalls to apply outcome to.';
 
-      let count = 0;
-      for (const id of ids) {
-        // Pass tenantId so a poisoned lastRecalledIds entry (or a stale one
-        // from a forget/supersede in another tenant) cannot leak existence
-        // via timing/error-path differences. readEntry returns null on
-        // cross-tenant lookups.
-        const entry = readEntry(hippoRoot, id, tenantId);
-        if (entry) {
-          const updated = applyOutcome(entry, good);
-          writeEntry(hippoRoot, updated);
-          count++;
-        }
-      }
-      return `Applied ${good ? 'positive' : 'negative'} outcome to ${count} memories`;
+      // Route through src/api.ts so audit_log captures actor='mcp' and
+      // tenant scoping is enforced uniformly (same surface as recall/remember).
+      // outcome() also handles cross-tenant id skip silently.
+      const apiCtx: ApiContext = {
+        hippoRoot,
+        tenantId,
+        actor: 'mcp',
+      };
+      const { applied } = apiOutcome(apiCtx, ids, good);
+      return `Applied ${good ? 'positive' : 'negative'} outcome to ${applied} memories`;
     }
 
     case 'hippo_context': {

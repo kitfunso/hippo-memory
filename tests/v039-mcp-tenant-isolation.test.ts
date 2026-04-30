@@ -159,6 +159,27 @@ describe('v039 mcp tenant + client-key isolation', () => {
     }
   });
 
+  // ---- Test 3.5: hippo_outcome routes through api.ts (audit_log actor=mcp) -
+  it('hippo_outcome via MCP routes through api.ts and writes audit_log with op=outcome actor=mcp', async () => {
+    const ctx = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', clientKey: 'http:t:addr-outcome' };
+    // Seed a memory + recall it so lastRecalledIds is populated for clientKey.
+    apiRemember({ hippoRoot: home, tenantId: 'alpha', actor: 'cli' }, { content: 'outcome-canary memory for audit shape lock' });
+    await callTool(1, 'hippo_recall', { query: 'outcome-canary' }, ctx);
+    // Apply positive outcome.
+    const res = await callTool(2, 'hippo_outcome', { good: true }, ctx);
+    expect(extractText(res)).toMatch(/Applied positive outcome to \d+ memories/);
+
+    const db = openHippoDb(home);
+    try {
+      const outcomeEvents = queryAuditEvents(db, { tenantId: 'alpha', op: 'outcome' });
+      const mcpOutcome = outcomeEvents.find((e) => e.actor === 'mcp');
+      expect(mcpOutcome).toBeDefined();
+      expect(mcpOutcome!.targetId).toMatch(/^mem_/);
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
   // ---- Test 4: stdio backward-compat — no clientKey → stdio-${pid} ---------
   it('McpContext with no clientKey falls back to stdio-${pid} and recall/outcome work end-to-end', async () => {
     apiRemember(

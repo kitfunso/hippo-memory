@@ -134,7 +134,8 @@ export type AuditOp =
   | 'supersede'
   | 'forget'
   | 'archive_raw'
-  | 'auth_revoke';
+  | 'auth_revoke'
+  | 'outcome';
 
 export interface AppendAuditOpts {
   tenantId: string;
