@@ -7,14 +7,14 @@ import { createMemory, Layer } from '../src/memory.js';
 import { writeEntry, readEntry, initStore } from '../src/store.js';
 
 describe('A3 envelope migration v14+v15', () => {
-  it('CURRENT_SCHEMA_VERSION is 18 (v14 + v15 hardening + v16 tenant_id + v17 slack tables + v18 B3 dlPFC depth)', () => {
-    expect(getCurrentSchemaVersion()).toBe(18);
+  it('CURRENT_SCHEMA_VERSION is 19 (v14 + v15 hardening + v16 tenant_id + v17 slack tables + v18 B3 dlPFC depth + v19 slack_dlq columns)', () => {
+    expect(getCurrentSchemaVersion()).toBe(19);
   });
 
-  it('fresh db migrates to v18', () => {
+  it('fresh db migrates to v19', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
     const db = openHippoDb(home);
-    expect(getSchemaVersion(db)).toBe(18);
+    expect(getSchemaVersion(db)).toBe(19);
     closeHippoDb(db);
     rmSync(home, { recursive: true, force: true });
   });

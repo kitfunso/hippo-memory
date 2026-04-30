@@ -161,7 +161,7 @@ import { wmPush, wmRead, wmClear, wmFlush, WorkingMemoryItem } from './working-m
 import { multihopSearch } from './multihop.js';
 import { computeSalience } from './salience.js';
 import { computeAmbientState, renderAmbientSummary } from './ambient.js';
-import { listDlq } from './connectors/slack/dlq.js';
+import { listDlq, replayDlqEntry } from './connectors/slack/dlq.js';
 import { backfillChannel } from './connectors/slack/backfill.js';
 import { slackHistoryFetcher } from './connectors/slack/web-client.js';
 
@@ -5086,6 +5086,41 @@ function cmdSlackDlqList(hippoRoot: string, _flags: Record<string, string | bool
   }
 }
 
+function cmdSlackDlqReplay(
+  hippoRoot: string,
+  args: string[],
+  flags: Record<string, string | boolean | string[]>,
+): void {
+  const idArg = args[2];
+  if (!idArg) {
+    console.error('Usage: hippo slack dlq replay <id> [--force]');
+    process.exit(1);
+  }
+  const id = Number(idArg);
+  if (!Number.isFinite(id) || !Number.isInteger(id) || id < 1) {
+    console.error(`replay: invalid id ${idArg}`);
+    process.exit(1);
+  }
+  const force = flags.force === true;
+  const result = replayDlqEntry(
+    { hippoRoot },
+    id,
+    {
+      force,
+      signingSecret: process.env.SLACK_SIGNING_SECRET,
+    },
+  );
+  if (!result.ok) {
+    console.error(
+      `replay failed: status=${result.status} retry_count=${result.retryCount}${result.reason ? ` reason=${result.reason}` : ''}`,
+    );
+    process.exit(1);
+  }
+  console.log(
+    `replay ok: status=${result.status} memory_id=${result.memoryId ?? '(none)'} retry_count=${result.retryCount}`,
+  );
+}
+
 function cmdSlack(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
   const sub = args[0];
   if (sub === 'backfill') {
@@ -5096,7 +5131,11 @@ function cmdSlack(hippoRoot: string, args: string[], flags: Record<string, strin
     cmdSlackDlqList(hippoRoot, flags);
     return;
   }
-  console.error('Usage: hippo slack <backfill|dlq list> [...]');
+  if (sub === 'dlq' && args[1] === 'replay') {
+    cmdSlackDlqReplay(hippoRoot, args, flags);
+    return;
+  }
+  console.error('Usage: hippo slack <backfill|dlq list|dlq replay <id> [--force]> [...]');
   process.exit(1);
 }
 

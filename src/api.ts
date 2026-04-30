@@ -422,10 +422,20 @@ export function supersede(
  * helpers hardcode actor='cli'). Instead we pass `ctx.actor` through as `who`,
  * and raw-archive.ts uses that for the audit row.
  */
+export interface ArchiveRawOpts {
+  /**
+   * Connector idempotency hook (v0.39 commit 3). Runs inside the same
+   * SAVEPOINT as the archive — throwing rolls the archive back. Used by the
+   * Slack deletion connector to mark the deletion event seen atomically.
+   */
+  afterArchive?: (db: DatabaseSyncLike, archivedMemoryId: string) => void;
+}
+
 export function archiveRaw(
   ctx: Context,
   id: string,
   reason: string,
+  opts: ArchiveRawOpts = {},
 ): { ok: true; archivedAt: string } {
   const db = openHippoDb(ctx.hippoRoot);
   try {
@@ -440,7 +450,11 @@ export function archiveRaw(
     if (!row || row.tenant_id !== ctx.tenantId) {
       throw new Error(`memory not found: ${id}`);
     }
-    archiveRawMemory(db, id, { reason, who: ctx.actor });
+    archiveRawMemory(db, id, {
+      reason,
+      who: ctx.actor,
+      afterArchive: opts.afterArchive,
+    });
   } finally {
     closeHippoDb(db);
   }

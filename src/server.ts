@@ -586,20 +586,30 @@ async function handleRequest(
       res.end(JSON.stringify({ error: 'not found' }));
       return;
     }
+    const previousSecret = process.env.SLACK_SIGNING_SECRET_PREVIOUS;
     const sig = req.headers['x-slack-signature'];
     const tsHdr = req.headers['x-slack-request-timestamp'];
+    const sigStr = typeof sig === 'string' ? sig : null;
+    const tsStr = typeof tsHdr === 'string' ? tsHdr : null;
     if (
-      typeof sig !== 'string' ||
-      typeof tsHdr !== 'string' ||
+      sigStr === null ||
+      tsStr === null ||
       !verifySlackSignature({
         rawBody,
-        timestamp: tsHdr,
-        signature: sig,
+        timestamp: tsStr,
+        signature: sigStr,
         signingSecret: secret,
+        previousSecret,
       })
     ) {
       throw new HttpError(401, 'invalid Slack signature');
     }
+    // Cheap regex extracts team_id from a (possibly malformed) raw body so the
+    // DLQ row carries it for triage even when JSON.parse fails.
+    const teamIdFromRaw = (() => {
+      const m = rawBody.match(/"team_id"\s*:\s*"([^"]+)"/);
+      return m ? m[1] : null;
+    })();
     let body: unknown;
     try {
       body = JSON.parse(rawBody);
@@ -608,8 +618,12 @@ async function handleRequest(
       try {
         writeToDlq(db, {
           tenantId: process.env.HIPPO_TENANT ?? 'default',
+          teamId: teamIdFromRaw,
           rawPayload: rawBody,
           error: 'invalid JSON',
+          bucket: 'parse_error',
+          signature: sigStr,
+          slackTimestamp: tsStr,
         });
       } finally {
         closeHippoDb(db);
@@ -627,15 +641,39 @@ async function handleRequest(
       });
       return;
     }
-    let resolvedTenant = process.env.HIPPO_TENANT ?? 'default';
+    // Resolve tenant. v0.39 fail-closed: when slack_workspaces is non-empty
+    // and the team_id is unknown, resolveTenantForTeam returns null and we
+    // park the envelope in slack_dlq with bucket='unroutable'. Mandatory ACK
+    // 200 so Slack stops retrying; do NOT call ingest.
+    let resolvedTenant: string | null = null;
     if (isSlackEventEnvelope(body)) {
       const db = openHippoDb(opts.hippoRoot);
       try {
-        const mapped = resolveTenantForTeam(db, body.team_id);
-        if (mapped) resolvedTenant = mapped;
+        resolvedTenant = resolveTenantForTeam(db, body.team_id);
       } finally {
         closeHippoDb(db);
       }
+      if (resolvedTenant === null) {
+        const db2 = openHippoDb(opts.hippoRoot);
+        try {
+          writeToDlq(db2, {
+            tenantId: null, // unroutable — stored as '__unroutable__'
+            teamId: body.team_id,
+            rawPayload: rawBody,
+            error: `unroutable team_id: ${body.team_id}`,
+            bucket: 'unroutable',
+            signature: sigStr,
+            slackTimestamp: tsStr,
+          });
+        } finally {
+          closeHippoDb(db2);
+        }
+        sendJson(res, 200, { ok: true, status: 'dlq' });
+        return;
+      }
+    } else {
+      // Non-envelope payload: use env tenant for the DLQ row's bookkeeping.
+      resolvedTenant = process.env.HIPPO_TENANT ?? 'default';
     }
     const ctx: Context = {
       hippoRoot: opts.hippoRoot,
@@ -647,8 +685,12 @@ async function handleRequest(
       try {
         writeToDlq(db, {
           tenantId: ctx.tenantId,
+          teamId: teamIdFromRaw,
           rawPayload: rawBody,
           error: 'not an event_callback envelope',
+          bucket: 'parse_error',
+          signature: sigStr,
+          slackTimestamp: tsStr,
         });
       } finally {
         closeHippoDb(db);
@@ -689,8 +731,12 @@ async function handleRequest(
     try {
       writeToDlq(db, {
         tenantId: ctx.tenantId,
+        teamId: body.team_id,
         rawPayload: rawBody,
         error: `unhandled event type: ${(inner as { type?: string })?.type ?? 'unknown'}`,
+        bucket: 'parse_error',
+        signature: sigStr,
+        slackTimestamp: tsStr,
       });
     } finally {
       closeHippoDb(db);

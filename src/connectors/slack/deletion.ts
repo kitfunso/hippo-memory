@@ -16,6 +16,16 @@ export interface DeletionResult {
   memoryId: string | null;
 }
 
+/**
+ * Handle Slack `message_deleted`. v0.39 commit 3 closes the prior race where
+ * the archive committed but `markEventSeen` ran on a second db handle — a
+ * crash between them left the deletion event un-acked, and the next retry
+ * hit a now-archived row and returned `not_found` instead of `duplicate`.
+ *
+ * Fix: pass `afterArchive` to `archiveRaw`, which runs inside the same
+ * SAVEPOINT as the archive itself. The slack_event_log row commits with the
+ * archive or not at all.
+ */
 export function handleMessageDeleted(ctx: Context, input: DeletionInput): DeletionResult {
   const db = openHippoDb(ctx.hippoRoot);
   let memoryId: string | null = null;
@@ -36,16 +46,26 @@ export function handleMessageDeleted(ctx: Context, input: DeletionInput): Deleti
     closeHippoDb(db);
   }
   if (!memoryId) {
+    // No row to archive — still mark the deletion event seen so a retry returns
+    // 'duplicate'. There is nothing to roll back here, so the second-handle
+    // pattern is fine for this branch.
     const db2 = openHippoDb(ctx.hippoRoot);
     try { markEventSeen(db2, input.eventId, null); }
     finally { closeHippoDb(db2); }
     return { status: 'not_found', memoryId: null };
   }
-  // api.archiveRaw now handles legacy mirror cleanup centrally so every caller
-  // (CLI, REST route, MCP tool, this connector) gets the GDPR-correct archive.
-  archiveRaw(ctx, memoryId, `source_deleted:slack:${input.teamId}:${input.channelId}:${input.deletedTs}`);
-  const db3 = openHippoDb(ctx.hippoRoot);
-  try { markEventSeen(db3, input.eventId, memoryId); }
-  finally { closeHippoDb(db3); }
+  // Archive + event-log mark commit together via afterArchive. The hook
+  // receives the same db handle the archive is using, so the INSERT lives
+  // inside the SAVEPOINT.
+  archiveRaw(
+    ctx,
+    memoryId,
+    `source_deleted:slack:${input.teamId}:${input.channelId}:${input.deletedTs}`,
+    {
+      afterArchive: (sameDb, archivedId) => {
+        markEventSeen(sameDb, input.eventId, archivedId);
+      },
+    },
+  );
   return { status: 'archived', memoryId };
 }

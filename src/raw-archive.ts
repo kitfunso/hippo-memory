@@ -5,6 +5,14 @@ import { appendAuditEvent } from './audit.js';
 export interface ArchiveOpts {
   reason: string;
   who: string;
+  /**
+   * Optional hook invoked inside the same SAVEPOINT as the archive INSERT/DELETE,
+   * after the audit row is appended and before RELEASE. Used by the Slack
+   * deletion connector to mark the deletion event seen atomically — a crash
+   * mid-archive must not leave the deletion event untracked. Throwing rolls
+   * back the entire archive (including the audit row).
+   */
+  afterArchive?: (db: DatabaseSyncLike, archivedMemoryId: string) => void;
 }
 
 // JSON.stringify cannot serialize BigInt by default. node:sqlite returns INTEGER
@@ -70,6 +78,14 @@ export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: Archive
     } catch {
       // Audit must not crash the archive. Failures here mean the audit table
       // is unwritable; the archive itself has already succeeded.
+    }
+    // afterArchive hook (v0.39 commit 3): connector-level idempotency markers
+    // (e.g. slack_event_log) must commit atomically with the archive itself.
+    // Throwing here rolls back the entire SAVEPOINT — both the archive and any
+    // hook side effects. The hook runs INSIDE the SAVEPOINT so its writes
+    // share the archive's transactional fate.
+    if (opts.afterArchive) {
+      opts.afterArchive(db, id);
     }
     db.exec('RELEASE SAVEPOINT archive_raw');
   } catch (e) {

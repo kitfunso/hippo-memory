@@ -21,7 +21,7 @@ const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: new (path: string) => DatabaseSyncLike;
 };
 
-const CURRENT_SCHEMA_VERSION = 18;
+const CURRENT_SCHEMA_VERSION = 19;
 
 type Migration = {
   version: number;
@@ -522,6 +522,32 @@ const MIGRATIONS: Migration[] = [
         CREATE UNIQUE INDEX IF NOT EXISTS uniq_goal_recall_log_memory_goal
           ON goal_recall_log(memory_id, goal_id);
       `);
+    },
+  },
+  {
+    version: 19,
+    up: (db) => {
+      // v0.39 commit 3 (Slack hardening): widen slack_dlq with bucketing,
+      // retry tracking, and the signature/timestamp pair that lets `hippo
+      // slack dlq replay` re-verify before re-running ingest. ALTER ADD
+      // COLUMN with DEFAULT is non-destructive — legacy rows take the
+      // default values. Idempotent via tableHasColumn().
+      if (!tableHasColumn(db, 'slack_dlq', 'team_id')) {
+        db.exec(`ALTER TABLE slack_dlq ADD COLUMN team_id TEXT`);
+      }
+      if (!tableHasColumn(db, 'slack_dlq', 'bucket')) {
+        db.exec(`ALTER TABLE slack_dlq ADD COLUMN bucket TEXT NOT NULL DEFAULT 'parse_error'`);
+        // SQLite ALTER TABLE cannot add CHECK; bucket value enforcement is app-level.
+      }
+      if (!tableHasColumn(db, 'slack_dlq', 'retry_count')) {
+        db.exec(`ALTER TABLE slack_dlq ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0`);
+      }
+      if (!tableHasColumn(db, 'slack_dlq', 'signature')) {
+        db.exec(`ALTER TABLE slack_dlq ADD COLUMN signature TEXT`);
+      }
+      if (!tableHasColumn(db, 'slack_dlq', 'slack_timestamp')) {
+        db.exec(`ALTER TABLE slack_dlq ADD COLUMN slack_timestamp TEXT`);
+      }
     },
   },
 ];
