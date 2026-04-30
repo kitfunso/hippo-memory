@@ -100,6 +100,7 @@ import { computeSystemEnergy, vecNorm } from './physics.js';
 import { loadConfig } from './config.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { getActiveGoalsWithDb, MAX_FINAL_MULTIPLIER } from './goals.js';
+import type { RetrievalPolicy } from './goals.js';
 import {
   captureError,
   extractLessons,
@@ -1014,14 +1015,71 @@ async function cmdRecall(
       });
       if (active.length > 0) {
         const goalsByTag = new Map(active.map((g) => [g.goalName, g]));
+
+        // Task 7: load retrieval_policy rows for active goals so per-policy
+        // multipliers can compose onto the base goal-tag boost. The composed
+        // result is hard-capped at MAX_FINAL_MULTIPLIER (3.0x) BEFORE applying
+        // to score — even an `errorPriority: 9.0` policy cannot exceed 3.0x.
+        const policiesByGoalId = new Map<string, RetrievalPolicy>();
+        for (const g of active) {
+          if (!g.retrievalPolicyId) continue;
+          const row = dbForGoals.prepare(`
+            SELECT id, goal_id, policy_type, weight_schema_fit, weight_recency, weight_outcome, error_priority
+            FROM retrieval_policy WHERE id = ?
+          `).get(g.retrievalPolicyId) as {
+            id: string;
+            goal_id: string;
+            policy_type: RetrievalPolicy['policyType'];
+            weight_schema_fit: number;
+            weight_recency: number;
+            weight_outcome: number;
+            error_priority: number;
+          } | undefined;
+          if (row) {
+            policiesByGoalId.set(g.id, {
+              id: row.id,
+              goalId: row.goal_id,
+              policyType: row.policy_type,
+              weightSchemaFit: row.weight_schema_fit,
+              weightRecency: row.weight_recency,
+              weightOutcome: row.weight_outcome,
+              errorPriority: row.error_priority,
+            });
+          }
+        }
+
         results = results
           .map((r) => {
             const tags = r.entry.tags ?? [];
             const matches = tags.filter((t) => goalsByTag.has(t));
             if (matches.length === 0) return r;
             // Base 2.0x for first match, +0.5x per additional, capped at 3.0x.
-            const rawMul = 2.0 + 0.5 * (matches.length - 1);
-            const multiplier = Math.min(rawMul, MAX_FINAL_MULTIPLIER);
+            let multiplier = Math.min(
+              2.0 + 0.5 * (matches.length - 1),
+              MAX_FINAL_MULTIPLIER,
+            );
+            // Compose per-policy multipliers per matched tag.
+            for (const tag of matches) {
+              const goal = goalsByTag.get(tag)!;
+              const policy = policiesByGoalId.get(goal.id);
+              if (!policy) continue;
+              if (policy.policyType === 'error-prioritized' && tags.includes('error')) {
+                multiplier *= policy.errorPriority;
+              } else if (policy.policyType === 'schema-fit-biased') {
+                // Linearly weight schema_fit in [0,1] up to (weightSchemaFit)x.
+                // Default 1.0 is a no-op.
+                multiplier *=
+                  1.0 +
+                  Math.max(0, policy.weightSchemaFit - 1.0) *
+                    (r.entry.schema_fit ?? 0.5);
+              } else if (policy.policyType === 'recency-first') {
+                multiplier *= policy.weightRecency;
+              } else if (policy.policyType === 'hybrid') {
+                multiplier *= policy.weightOutcome;
+              }
+            }
+            // Hard cap AFTER all composition.
+            multiplier = Math.min(multiplier, MAX_FINAL_MULTIPLIER);
             return {
               ...r,
               score: r.score * multiplier,
