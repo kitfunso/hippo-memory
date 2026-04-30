@@ -958,29 +958,44 @@ export function writeEntry(
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    // SAVEPOINT (not BEGIN) so this nests safely inside any outer transaction
-    // a future caller might hold. SQLite refuses BEGIN within a transaction;
-    // SAVEPOINT is the only way to scope rollback without disturbing outers.
-    db.exec('SAVEPOINT write_entry');
-    try {
-      upsertEntryRow(db, entry);
-      if (opts?.afterWrite) {
-        opts.afterWrite(db, entry.id);
-      }
-      db.exec('RELEASE SAVEPOINT write_entry');
-    } catch (e) {
-      try {
-        db.exec('ROLLBACK TO SAVEPOINT write_entry');
-        db.exec('RELEASE SAVEPOINT write_entry');
-      } catch {
-        // Ignore rollback failures — the throw below is what matters.
-      }
-      throw e;
+    writeEntryDbOnly(db, entry, opts);
+    writeEntryMirrors(hippoRoot, db, entry);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/**
+ * DB-only write path. Caller owns the open `db` handle. Runs SAVEPOINT +
+ * upsert + afterWrite hook + audit row inside the SAVEPOINT scope. Caller
+ * is responsible for opening `db`, optionally wrapping in a larger BEGIN/
+ * COMMIT (e.g. supersede's BEGIN IMMEDIATE), closing `db`, AND calling
+ * `writeEntryMirrors` after the larger tx commits — mirrors must run
+ * post-commit so a rolled-back tx never leaves orphan markdown.
+ *
+ * Audit-order note: the audit row is emitted INSIDE the SAVEPOINT, so audit
+ * commits atomically with the row INSERT. A subsequent mirror failure cannot
+ * leave a recorded audit entry without its corresponding DB row. This is a
+ * documented hardening over the prior writeEntry-as-monolith ordering.
+ */
+export function writeEntryDbOnly(
+  db: DatabaseSyncLike,
+  entry: MemoryEntry,
+  opts?: {
+    actor?: string;
+    afterWrite?: (db: DatabaseSyncLike, memoryId: string) => void;
+  },
+): void {
+  // SAVEPOINT (not BEGIN) so this nests safely inside any outer transaction
+  // a caller might hold (e.g. supersede's BEGIN IMMEDIATE). SQLite refuses
+  // BEGIN within a transaction; SAVEPOINT is the only way to scope rollback
+  // without disturbing outers.
+  db.exec('SAVEPOINT write_entry');
+  try {
+    upsertEntryRow(db, entry);
+    if (opts?.afterWrite) {
+      opts.afterWrite(db, entry.id);
     }
-    // Filesystem mirrors and audit emit run only after the SAVEPOINT releases,
-    // so a rolled-back write leaves no orphan markdown or index entries.
-    writeMarkdownMirror(hippoRoot, entry);
-    writeIndexMirror(hippoRoot, buildIndexFromDb(db));
     audit(
       db,
       'remember',
@@ -992,9 +1007,31 @@ export function writeEntry(
       opts?.actor ?? 'cli',
       entry.tenantId,
     );
-  } finally {
-    closeHippoDb(db);
+    db.exec('RELEASE SAVEPOINT write_entry');
+  } catch (e) {
+    try {
+      db.exec('ROLLBACK TO SAVEPOINT write_entry');
+      db.exec('RELEASE SAVEPOINT write_entry');
+    } catch {
+      // Ignore rollback failures — the throw below is what matters.
+    }
+    throw e;
   }
+}
+
+/**
+ * Filesystem mirrors path. Caller passes `hippoRoot` + an open `db` handle
+ * (used by `buildIndexFromDb` to derive the index from the source of truth).
+ * MUST be invoked AFTER the outer transaction commits — a mirror write
+ * during a tx that subsequently rolls back would leave orphan markdown.
+ */
+export function writeEntryMirrors(
+  hippoRoot: string,
+  db: DatabaseSyncLike,
+  entry: MemoryEntry,
+): void {
+  writeMarkdownMirror(hippoRoot, entry);
+  writeIndexMirror(hippoRoot, buildIndexFromDb(db));
 }
 
 /**

@@ -10,6 +10,8 @@
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import {
   writeEntry,
+  writeEntryDbOnly,
+  writeEntryMirrors,
   readEntry,
   deleteEntry,
   loadSearchEntries,
@@ -225,6 +227,24 @@ export function promote(
   ctx: Context,
   id: string,
 ): { ok: true; sourceId: string; globalId: string } {
+  // Tenant scope: promoteToGlobal reads the entry from the local root via
+  // readEntry without a tenant filter, so a Bearer for tenant A could
+  // promote tenant B's row by guessing or leaking the id. Pre-check the
+  // row's tenant_id and deny cross-tenant access with the same not-found
+  // wording archiveRaw uses (no info leak about whether the id exists in
+  // another tenant).
+  const ownerDb = openHippoDb(ctx.hippoRoot);
+  try {
+    const row = ownerDb
+      .prepare(`SELECT tenant_id FROM memories WHERE id = ?`)
+      .get(id) as { tenant_id?: string } | undefined;
+    if (!row || row.tenant_id !== ctx.tenantId) {
+      throw new Error(`memory not found: ${id}`);
+    }
+  } finally {
+    closeHippoDb(ownerDb);
+  }
+
   // promoteToGlobal threads ctx.actor into the writeEntry call on the global
   // db, which emits a 'remember' audit row. We then add the user-facing
   // 'promote' event on the global db so the audit trail keeps the intent
@@ -262,10 +282,16 @@ export function supersede(
   oldId: string,
   newContent: string,
 ): { ok: true; oldId: string; newId: string } {
+  // Read old (tenant-scoped). readEntry filters by tenantId, so a Bearer for
+  // tenant A on tenant B's id throws "Memory not found" here without any
+  // info leak.
   const old: MemoryEntry | null = readEntry(ctx.hippoRoot, oldId, ctx.tenantId);
   if (!old) {
     throw new Error(`Memory not found: ${oldId}`);
   }
+  // Guard: not already superseded. The CAS UPDATE below race-safely closes
+  // the window between this read and the write; this check just produces a
+  // clearer error in the common single-writer case.
   if (old.superseded_by) {
     throw new Error(
       `Memory ${oldId} is already superseded by ${old.superseded_by}. Supersede that one instead.`,
@@ -280,21 +306,62 @@ export function supersede(
     confidence: 'verified',
     tenantId: ctx.tenantId,
   });
-  old.superseded_by = newEntry.id;
-  writeEntry(ctx.hippoRoot, old, { actor: ctx.actor });
-  writeEntry(ctx.hippoRoot, newEntry, { actor: ctx.actor });
 
-  // The two writeEntry calls above emit 'remember' audit rows; the 'supersede'
-  // event below carries the user-facing intent and the chained newId.
+  // Race-safe transition: open a fresh db handle, BEGIN IMMEDIATE, run all
+  // three steps (CAS on old + writeEntryDbOnly(new) + supersede audit row)
+  // inside the same transaction. Two concurrent supersedes: exactly one CAS
+  // wins (changes=1), the other gets changes=0 and throws CONFLICT. No
+  // dangling-pointer window: the new memory's row commits atomically with
+  // the old.superseded_by pointer.
   const db = openHippoDb(ctx.hippoRoot);
   try {
-    appendAuditEvent(db, {
-      tenantId: ctx.tenantId,
-      actor: ctx.actor,
-      op: 'supersede',
-      targetId: oldId,
-      metadata: { newId: newEntry.id },
-    });
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      // 1. CAS update: only succeed if old.superseded_by IS NULL AND the
+      //    row still belongs to ctx.tenantId. Tenant filter is belt-and-
+      //    braces with the readEntry above — it costs nothing and closes
+      //    a hypothetical window where ownership changes between read and
+      //    update.
+      const result = db.prepare(`
+        UPDATE memories
+        SET superseded_by = ?
+        WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL
+      `).run(newEntry.id, oldId, ctx.tenantId);
+      if ((result.changes ?? 0) === 0) {
+        db.exec('ROLLBACK');
+        throw new Error(`Memory ${oldId} already superseded by another writer`);
+      }
+      // 2. Write new memory inside same tx via writeEntryDbOnly (DB-only
+      //    path). This emits its OWN 'remember' audit row for the new
+      //    memory inside the SAVEPOINT — atomic with the row INSERT.
+      writeEntryDbOnly(db, newEntry, { actor: ctx.actor });
+      // 3. User-facing 'supersede' audit row inside the same tx so the
+      //    chain pointer + audit trail commit atomically.
+      appendAuditEvent(db, {
+        tenantId: ctx.tenantId,
+        actor: ctx.actor,
+        op: 'supersede',
+        targetId: oldId,
+        metadata: { newId: newEntry.id },
+      });
+      db.exec('COMMIT');
+    } catch (err) {
+      try { db.exec('ROLLBACK'); } catch { /* already rolled back */ }
+      throw err;
+    }
+    // Mirrors after COMMIT, while the db handle is still open. Same
+    // invariant as the original writeEntry: a mirror failure leaves disk
+    // MISSING the markdown for the new memory (self-heals on next backfill
+    // via writeIndexMirror reading the DB) but DOES NOT desync the DB or
+    // roll back the supersede. Logged + swallowed, non-fatal.
+    try {
+      writeEntryMirrors(ctx.hippoRoot, db, newEntry);
+    } catch (mirrorErr) {
+      console.error(
+        'supersede: mirror write failed (non-fatal, will self-heal):',
+        mirrorErr,
+      );
+    }
   } finally {
     closeHippoDb(db);
   }
@@ -356,8 +423,6 @@ export function archiveRaw(
 
 export interface AuthCreateOpts {
   label?: string;
-  /** Override the calling tenant (e.g. admin minting a key for tenant B). */
-  tenantId?: string;
 }
 
 export interface AuthCreateResult {
@@ -367,16 +432,22 @@ export interface AuthCreateResult {
 }
 
 /**
- * Mint a new API key. Per A5 v2 follow-ups (TODOS.md), `auth_create` is currently
- * unaudited — we intentionally match that behavior here for consistency. When A5
- * v2 lands and adds the audit op, this function should mirror the cli handler.
+ * Mint a new API key. The new key is ALWAYS bound to `ctx.tenantId`. Callers
+ * cannot override the tenant via the opts bag — a previous `tenantId` field
+ * was removed because the HTTP layer would happily forward `body.tenantId`,
+ * letting tenant A mint a key for tenant B. The HTTP route handler at
+ * `src/server.ts` POST /v1/auth/keys mirrors this: it ignores any body
+ * `tenantId` and uses the resolved Bearer's tenant exclusively.
+ *
+ * Per A5 v2 follow-ups (TODOS.md), `auth_create` is currently unaudited —
+ * we intentionally match that behavior here for consistency. When A5 v2
+ * lands and adds the audit op, this function should mirror the cli handler.
  */
 export function authCreate(ctx: Context, opts: AuthCreateOpts): AuthCreateResult {
-  const tenantId = opts.tenantId ?? ctx.tenantId;
   const db = openHippoDb(ctx.hippoRoot);
   try {
-    const result = createApiKey(db, { tenantId, label: opts.label });
-    return { keyId: result.keyId, plaintext: result.plaintext, tenantId };
+    const result = createApiKey(db, { tenantId: ctx.tenantId, label: opts.label });
+    return { keyId: result.keyId, plaintext: result.plaintext, tenantId: ctx.tenantId };
   } finally {
     closeHippoDb(db);
   }

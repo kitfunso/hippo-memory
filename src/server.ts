@@ -457,14 +457,13 @@ async function handleRequest(
     if (labelRaw !== undefined && typeof labelRaw !== 'string') {
       throw new HttpError(400, 'label must be a string');
     }
-    const tenantIdRaw = body['tenantId'];
-    if (tenantIdRaw !== undefined && typeof tenantIdRaw !== 'string') {
-      throw new HttpError(400, 'tenantId must be a string');
-    }
+    // Security: any `tenantId` in the body is IGNORED. The minted key is
+    // bound to the caller's authenticated tenant (ctx.tenantId, resolved
+    // from the Bearer token). Forwarding body.tenantId here would let
+    // tenant A mint a key for tenant B — see authCreate doc comment.
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = authCreate(ctx, {
       label: labelRaw,
-      tenantId: tenantIdRaw,
     });
     sendJson(res, 200, result);
     return;

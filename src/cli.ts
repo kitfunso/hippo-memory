@@ -4558,12 +4558,17 @@ function cmdAuthCreate(hippoRoot: string, flags: Record<string, string | boolean
   const labelFlag = typeof flags['label'] === 'string' ? (flags['label'] as string) : undefined;
   const asJson = Boolean(flags['json']);
 
+  // The CLI's --tenant flag is the only legitimate cross-tenant override
+  // (admin minting a key for another tenant from the local machine). It
+  // flows through ctx.tenantId, NOT through opts — authCreate's opts no
+  // longer accepts a tenantId field, so the HTTP layer cannot smuggle a
+  // body.tenantId across.
   const ctx: api.Context = {
     hippoRoot: root,
-    tenantId: resolveTenantId({}),
+    tenantId: tenantFlag ?? resolveTenantId({}),
     actor: 'cli',
   };
-  const result = api.authCreate(ctx, { tenantId: tenantFlag, label: labelFlag });
+  const result = api.authCreate(ctx, { label: labelFlag });
 
   if (asJson) {
     console.log(JSON.stringify({
