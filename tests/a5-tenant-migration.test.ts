@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion } from '../src/db.js';
 
 describe('A5 schema migration v16: tenant_id columns', () => {
-  it('migrates to latest schema version (currently 20)', () => {
+  it('migrates to latest schema version (currently 21)', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-a5-'));
     const db = openHippoDb(home);
     try {
