@@ -22,7 +22,7 @@ const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: new (path: string) => DatabaseSyncLike;
 };
 
-const CURRENT_SCHEMA_VERSION = 20;
+const CURRENT_SCHEMA_VERSION = 21;
 
 type Migration = {
   version: number;
@@ -595,6 +595,20 @@ const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    version: 21,
+    up: (db) => {
+      // v0.39 codex round 3: per-row mirror cleanup tracking. Replaces the
+      // global gdpr_v20_mirror_cleanup meta gate (which made the reaper
+      // one-shot and silently swallowed failed unlinks). With this column the
+      // reaper processes only rows WHERE mirror_cleaned_at IS NULL, sets the
+      // timestamp on success, and leaves it NULL on any unlink failure so the
+      // next openHippoDb retries automatically.
+      if (!tableHasColumn(db, 'raw_archive', 'mirror_cleaned_at')) {
+        db.exec(`ALTER TABLE raw_archive ADD COLUMN mirror_cleaned_at TEXT`);
+      }
+    },
+  },
 ];
 
 function tableHasColumn(db: DatabaseSyncLike, tableName: string, columnName: string): boolean {
@@ -622,8 +636,8 @@ export function openHippoDb(hippoRoot: string): DatabaseSyncLike {
     db.exec('PRAGMA foreign_keys = ON');
     runMigrations(db);
     // Path A backfill: delete any orphan markdown mirrors for already-archived
-    // raw_archive rows. Idempotent via gdpr_v20_mirror_cleanup meta flag.
-    // Wrapped in try/catch — a filesystem failure must not prevent DB open.
+    // raw_archive rows. Idempotent via per-row raw_archive.mirror_cleaned_at
+    // (v21). Wrapped in try/catch — a filesystem failure must not prevent DB open.
     try {
       cleanupArchivedMirrors(hippoRoot, db);
     } catch (cleanupErr) {

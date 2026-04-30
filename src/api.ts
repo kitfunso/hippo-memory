@@ -448,6 +448,7 @@ export function archiveRaw(
   opts: ArchiveRawOpts = {},
 ): { ok: true; archivedAt: string } {
   const db = openHippoDb(ctx.hippoRoot);
+  let mirrorOk = false;
   try {
     // Tenant scope: archiveRawMemory looks up the row by id alone, so a
     // Bearer for tenant A could archive tenant B's raw row without this
@@ -465,27 +466,35 @@ export function archiveRaw(
       who: ctx.actor,
       afterArchive: opts.afterArchive,
     });
+    // archiveRawMemory deletes the memories row but leaves any legacy markdown
+    // mirror in <root>/{buffer,episodic,semantic}/<id>.md untouched. If we left
+    // the mirror in place, a subsequent initStore() on an empty memories table
+    // would silently re-import the row via bootstrapLegacyStore — defeating the
+    // archive (and the GDPR right-to-be-forgotten promise on raw rows). Mirror
+    // forget() at src/store.ts:1046, which uses the same removeEntryMirrors call.
+    // The DB transaction has already committed; if filesystem unlink fails here
+    // we log and continue. The mirror reaper in openHippoDb will catch it on
+    // next DB open: raw_archive.mirror_cleaned_at stays NULL until every layer
+    // mirror for this id is gone, so the reaper genuinely retries.
+    try {
+      removeEntryMirrors(ctx.hippoRoot, id);
+      mirrorOk = true;
+    } catch (mirrorErr) {
+      console.error(
+        `archiveRaw: mirror cleanup failed for ${id} (will retry via reaper on next openHippoDb):`,
+        mirrorErr,
+      );
+    }
+    if (mirrorOk) {
+      // Stamp mirror_cleaned_at now so the next openHippoDb reaper SELECT
+      // returns empty for this row. NULL stays untouched on failure -> retry.
+      db.prepare(`UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(
+        new Date().toISOString(),
+        id,
+      );
+    }
   } finally {
     closeHippoDb(db);
-  }
-  // archiveRawMemory deletes the memories row but leaves any legacy markdown
-  // mirror in <root>/{buffer,episodic,semantic}/<id>.md untouched. If we left
-  // the mirror in place, a subsequent initStore() on an empty memories table
-  // would silently re-import the row via bootstrapLegacyStore — defeating the
-  // archive (and the GDPR right-to-be-forgotten promise on raw rows). Mirror
-  // forget() at src/store.ts:1046, which uses the same removeEntryMirrors call.
-  // The DB transaction has already committed; if filesystem unlink fails here
-  // we log and continue. The mirror reaper in openHippoDb will catch it on
-  // next DB open (the row is in raw_archive, so the reaper will revisit it
-  // if the meta flag is reset; for v0.39 the reaper is one-shot post-v20 and
-  // will not auto-retry, so the orphan persists until a v0.40+ scheduled scan).
-  try {
-    removeEntryMirrors(ctx.hippoRoot, id);
-  } catch (mirrorErr) {
-    console.error(
-      `archiveRaw: mirror cleanup failed for ${id} (will retry on next DB open):`,
-      mirrorErr,
-    );
   }
   // archiveRawMemory does not return the archive_at timestamp it wrote. We
   // emit a fresh ISO timestamp here for the API response. Within a millisecond

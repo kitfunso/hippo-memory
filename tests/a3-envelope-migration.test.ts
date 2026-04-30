@@ -8,13 +8,13 @@ import { writeEntry, readEntry, initStore } from '../src/store.js';
 
 describe('A3 envelope migration v14+v15', () => {
   it('CURRENT_SCHEMA_VERSION is 20 (v14 + v15 hardening + v16 tenant_id + v17 slack tables + v18 B3 dlPFC depth + v19 slack_dlq columns + v20 GDPR Path A redact backfill)', () => {
-    expect(getCurrentSchemaVersion()).toBe(20);
+    expect(getCurrentSchemaVersion()).toBe(21);
   });
 
   it('fresh db migrates to v20', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
     const db = openHippoDb(home);
-    expect(getSchemaVersion(db)).toBe(20);
+    expect(getSchemaVersion(db)).toBe(21);
     closeHippoDb(db);
     rmSync(home, { recursive: true, force: true });
   });
