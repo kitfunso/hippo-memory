@@ -121,6 +121,37 @@ by post-review fixes 2db5017..38339f4). Each item belongs in **A5 v2**
 
 ---
 
+## v0.39.0 — B3 dlPFC depth follow-ups
+
+From the B3 dlPFC ship (v0.38.0). Deferred items that did not block the
+cluster-discrimination receipt but are required for full coverage of the
+mechanism on public benchmarks and across MCP/REST surfaces.
+
+- [ ] **B3 follow-up: sequential-learning adapter contract.** Extend
+  `benchmarks/sequential-learning/adapters/interface.mjs` with
+  `pushGoal/completeGoal` hooks; demonstrate or honestly retire the −10pp
+  trap-rate lift claim. Until this lands, the goal-stack mechanism cannot
+  be exercised on the public sequential-learning benchmark.
+
+- [ ] **B3 follow-up: MCP/REST session_id plumbing.** Thread `session_id`
+  through `Context` so `recall(ctx, opts)` applies the goal-stack boost on
+  MCP and `/v1/recall` callers, not just the CLI's env-driven path.
+
+- [ ] **B3 follow-up: vlPFC interference handling.** Multi-goal interference
+  suppression. RESEARCH.md folded this into dlPFC depth; v0.38 ships only
+  the dlPFC half. v0.39 adds the inhibitory companion.
+
+- [ ] **B3 follow-up: `--no-propagate` flag on `goal complete`.** For users
+  who want to close a goal without strength side-effects on recalled
+  memories. Default stays as propagate-on-complete with the lifespan window.
+
+- [ ] **B3 v0.39 follow-up: factor `enforceDepthCap` helper to remove DRY
+  duplication between `pushGoalWithDb` and `resumeGoal`.** Surfaced by
+  plan-eng-review during v0.38 planning; accepted as a post-ship refactor
+  rather than blocking the ship.
+
+---
+
 ## v0.38.0 — E1.3 v2 follow-ups
 
 From the E1.3 Slack ingestion ship (v0.37.0). Operator UX, eval polish, and

@@ -40,7 +40,8 @@ Numbers, not adjectives. Every claim links to the benchmark or the test that pro
 - **R@5 = 74.0%** on [LongMemEval](benchmarks/longmemeval/). 500-question industry retrieval benchmark, BM25 only, no embeddings.
 - **10 of 10 incident scenarios beat transcript replay** on a staged Slack corpus ([benchmarks/e1.3/](benchmarks/e1.3/)). Recall surfaces the cause faster than scrolling the last N messages.
 - **0 outbound HTTP** on the 1000-event ingestion smoke. Proven by a `globalThis.fetch` spy that throws on call, not a hardcoded zero.
-- **886 tests, real DB, zero mocks.** Project rule. The one mocks-vs-prod divergence that bit us early is now the constraint that kept the next ten releases honest.
+- **926 tests, real DB, zero mocks.** Project rule. The one mocks-vs-prod divergence that bit us early is now the constraint that kept the next ten releases honest.
+- **dlPFC goal-conditioned cluster discrimination, 3/3 queries pass** — full goal stack with policy weighting and lifespan-windowed outcome propagation. Per-goal lift on a 3-cluster fixture where BM25 alone cannot discriminate; deterministic test in [`benchmarks/micro/results/b3-depth.json`](benchmarks/micro/results/b3-depth.json).
 
 ---
 
@@ -83,6 +84,13 @@ hippo recall "data pipeline issues" --budget 2000
 ```
 
 ---
+
+### What's new in v0.38.0
+
+- **B3 dlPFC persistent goal stack (depth 3).** Schema v18 adds `goal_stack`, `retrieval_policy`, `goal_recall_log`. New CLI subcommands: `hippo goal push|list|complete|suspend|resume`. With `HIPPO_SESSION_ID` set, `hippo recall` auto-boosts memories tagged with the active goal (final multiplier hard-capped at 3.0x). Retrieval policies (`error-prioritized`, `schema-fit-biased`, `recency-first`, `hybrid`) further shape ranking.
+- **Outcome propagation with lifespan window.** `hippo goal complete --outcome <score>` adjusts strength only on memories actually recalled while the goal was alive. `outcome >= 0.7` boosts (×1.10), `outcome < 0.3` decays (×0.85), neutral band leaves strength alone. UNIQUE(memory_id, goal_id) prevents double-propagation.
+- **B3 cluster-discrimination micro-benchmark.** `benchmarks/micro/fixtures/dlpfc_depth.json` — 3 disjoint memory clusters under 3 named goals. Each query asserts the active goal's cluster is in top-3 AND the other two clusters are NOT, a deterministic test BM25 alone cannot pass. Receipt: 3/3 queries pass in [`benchmarks/micro/results/b3-depth.json`](benchmarks/micro/results/b3-depth.json).
+- **Deferred to v0.39:** sequential-learning trap-rate lift (needs adapter contract change), MCP/REST `session_id` plumbing, vlPFC interference handling, `--no-propagate` flag.
 
 ### What's new in v0.37.0
 

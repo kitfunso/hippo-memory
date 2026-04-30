@@ -2,7 +2,7 @@
   "id": "hippo-memory",
   "name": "Hippo Memory",
   "description": "Biologically-inspired memory for AI agents. Decay by default, retrieval strengthening, sleep consolidation.",
-  "version": "0.37.0",
+  "version": "0.38.0",
 
   "configSchema": {
     "type": "object",
