@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createRequire } from 'module';
 import { createPhysicsTable } from './physics-state.js';
+import { cleanupArchivedMirrors } from './raw-archive-mirror-cleanup.js';
 
 const require = createRequire(import.meta.url);
 
@@ -21,7 +22,7 @@ const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: new (path: string) => DatabaseSyncLike;
 };
 
-const CURRENT_SCHEMA_VERSION = 18;
+const CURRENT_SCHEMA_VERSION = 21;
 
 type Migration = {
   version: number;
@@ -524,6 +525,90 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    version: 19,
+    up: (db) => {
+      // v0.39 commit 3 (Slack hardening): widen slack_dlq with bucketing,
+      // retry tracking, and the signature/timestamp pair that lets `hippo
+      // slack dlq replay` re-verify before re-running ingest. ALTER ADD
+      // COLUMN with DEFAULT is non-destructive — legacy rows take the
+      // default values. Idempotent via tableHasColumn().
+      if (!tableHasColumn(db, 'slack_dlq', 'team_id')) {
+        db.exec(`ALTER TABLE slack_dlq ADD COLUMN team_id TEXT`);
+      }
+      if (!tableHasColumn(db, 'slack_dlq', 'bucket')) {
+        db.exec(`ALTER TABLE slack_dlq ADD COLUMN bucket TEXT NOT NULL DEFAULT 'parse_error'`);
+        // SQLite ALTER TABLE cannot add CHECK; bucket value enforcement is app-level.
+      }
+      if (!tableHasColumn(db, 'slack_dlq', 'retry_count')) {
+        db.exec(`ALTER TABLE slack_dlq ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0`);
+      }
+      if (!tableHasColumn(db, 'slack_dlq', 'signature')) {
+        db.exec(`ALTER TABLE slack_dlq ADD COLUMN signature TEXT`);
+      }
+      if (!tableHasColumn(db, 'slack_dlq', 'slack_timestamp')) {
+        db.exec(`ALTER TABLE slack_dlq ADD COLUMN slack_timestamp TEXT`);
+      }
+    },
+  },
+  {
+    version: 20,
+    up: (db) => {
+      // v0.39 commit 4 (GDPR Path A backfill): redact every existing
+      // raw_archive.payload_json so historical archives match the new
+      // metadata-only contract from src/raw-archive.ts. Read each row, parse
+      // the existing JSON to extract tenant_id and kind (best effort), then
+      // UPDATE with the redacted shape. Rows with unparseable legacy JSON get
+      // redacted with tenant_id='unknown', kind='unknown'. The audit_log
+      // remains the compliance record.
+      const rows = db
+        .prepare(`SELECT id, archived_at, reason, payload_json FROM raw_archive`)
+        .all() as Array<{
+        id: number;
+        archived_at: string;
+        reason: string;
+        payload_json: string;
+      }>;
+      const update = db.prepare(`UPDATE raw_archive SET payload_json = ? WHERE id = ?`);
+      for (const row of rows) {
+        let tenant = 'unknown';
+        let kind = 'unknown';
+        try {
+          const parsed = JSON.parse(row.payload_json) as {
+            tenant_id?: string;
+            kind?: string;
+          };
+          tenant = parsed.tenant_id ?? 'unknown';
+          kind = parsed.kind ?? 'unknown';
+        } catch {
+          // Unparseable legacy payload — redact with unknowns.
+        }
+        const redacted = JSON.stringify({
+          redacted: true,
+          archived_at: row.archived_at,
+          tenant_id: tenant,
+          kind,
+          reason: row.reason,
+          migration: 'v20_redact',
+        });
+        update.run(redacted, row.id);
+      }
+    },
+  },
+  {
+    version: 21,
+    up: (db) => {
+      // v0.39 codex round 3: per-row mirror cleanup tracking. Replaces the
+      // global gdpr_v20_mirror_cleanup meta gate (which made the reaper
+      // one-shot and silently swallowed failed unlinks). With this column the
+      // reaper processes only rows WHERE mirror_cleaned_at IS NULL, sets the
+      // timestamp on success, and leaves it NULL on any unlink failure so the
+      // next openHippoDb retries automatically.
+      if (!tableHasColumn(db, 'raw_archive', 'mirror_cleaned_at')) {
+        db.exec(`ALTER TABLE raw_archive ADD COLUMN mirror_cleaned_at TEXT`);
+      }
+    },
+  },
 ];
 
 function tableHasColumn(db: DatabaseSyncLike, tableName: string, columnName: string): boolean {
@@ -550,6 +635,14 @@ export function openHippoDb(hippoRoot: string): DatabaseSyncLike {
     db.exec('PRAGMA wal_autocheckpoint = 100');
     db.exec('PRAGMA foreign_keys = ON');
     runMigrations(db);
+    // Path A backfill: delete any orphan markdown mirrors for already-archived
+    // raw_archive rows. Idempotent via per-row raw_archive.mirror_cleaned_at
+    // (v21). Wrapped in try/catch — a filesystem failure must not prevent DB open.
+    try {
+      cleanupArchivedMirrors(hippoRoot, db);
+    } catch (cleanupErr) {
+      console.error('openHippoDb: cleanupArchivedMirrors failed (non-fatal):', cleanupErr);
+    }
     return db;
   } catch (error) {
     try {

@@ -7,9 +7,12 @@
  * in exactly one place.
  */
 
+import { createHash } from 'node:crypto';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import {
   writeEntry,
+  writeEntryDbOnly,
+  writeEntryMirrors,
   readEntry,
   deleteEntry,
   loadSearchEntries,
@@ -17,6 +20,7 @@ import {
 } from './store.js';
 import {
   createMemory,
+  applyOutcome,
   type MemoryKind,
   type MemoryEntry,
   Layer,
@@ -160,17 +164,65 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   // duplicate exists today, but we keep the same shape for symmetry.
   const db = openHippoDb(ctx.hippoRoot);
   try {
+    // GDPR Path A: store a sha256 hash (16 hex chars) of the query text
+    // instead of the truncated query itself. If a caller queries with content
+    // that matches an archived (RTBF) memory, the original text must not
+    // persist in audit_log. query_length is preserved for debugging
+    // long-prompt patterns and compliance metrics.
     appendAuditEvent(db, {
       tenantId: ctx.tenantId,
       actor: ctx.actor,
       op: 'recall',
-      metadata: { query: opts.query.slice(0, 200), results: ranked.length },
+      metadata: {
+        query_hash: createHash('sha256').update(opts.query).digest('hex').slice(0, 16),
+        query_length: opts.query.length,
+        results: ranked.length,
+      },
     });
   } finally {
     closeHippoDb(db);
   }
 
   return { results: ranked, total: entries.length, tokens };
+}
+
+// ---------------------------------------------------------------------------
+// outcome
+// ---------------------------------------------------------------------------
+
+/**
+ * Apply a positive/negative outcome to a list of recently-recalled memory ids.
+ * Used by the MCP `hippo_outcome` tool. Tenant-scoped: ids that don't belong
+ * to ctx.tenantId are silently skipped (matches the prior MCP semantics —
+ * a stale id from another tenant doesn't crash the call). Each successful
+ * outcome emits one audit_log row with op='outcome' tagged with ctx.actor.
+ */
+export function outcome(
+  ctx: Context,
+  ids: ReadonlyArray<string>,
+  good: boolean,
+): { applied: number } {
+  let applied = 0;
+  const db = openHippoDb(ctx.hippoRoot);
+  try {
+    for (const id of ids) {
+      const entry = readEntry(ctx.hippoRoot, id, ctx.tenantId);
+      if (!entry) continue;
+      const updated = applyOutcome(entry, good);
+      writeEntry(ctx.hippoRoot, updated, { actor: ctx.actor });
+      appendAuditEvent(db, {
+        tenantId: ctx.tenantId,
+        actor: ctx.actor,
+        op: 'outcome',
+        targetId: id,
+        metadata: { good },
+      });
+      applied++;
+    }
+  } finally {
+    closeHippoDb(db);
+  }
+  return { applied };
 }
 
 // ---------------------------------------------------------------------------
@@ -225,6 +277,24 @@ export function promote(
   ctx: Context,
   id: string,
 ): { ok: true; sourceId: string; globalId: string } {
+  // Tenant scope: promoteToGlobal reads the entry from the local root via
+  // readEntry without a tenant filter, so a Bearer for tenant A could
+  // promote tenant B's row by guessing or leaking the id. Pre-check the
+  // row's tenant_id and deny cross-tenant access with the same not-found
+  // wording archiveRaw uses (no info leak about whether the id exists in
+  // another tenant).
+  const ownerDb = openHippoDb(ctx.hippoRoot);
+  try {
+    const row = ownerDb
+      .prepare(`SELECT tenant_id FROM memories WHERE id = ?`)
+      .get(id) as { tenant_id?: string } | undefined;
+    if (!row || row.tenant_id !== ctx.tenantId) {
+      throw new Error(`memory not found: ${id}`);
+    }
+  } finally {
+    closeHippoDb(ownerDb);
+  }
+
   // promoteToGlobal threads ctx.actor into the writeEntry call on the global
   // db, which emits a 'remember' audit row. We then add the user-facing
   // 'promote' event on the global db so the audit trail keeps the intent
@@ -262,10 +332,16 @@ export function supersede(
   oldId: string,
   newContent: string,
 ): { ok: true; oldId: string; newId: string } {
+  // Read old (tenant-scoped). readEntry filters by tenantId, so a Bearer for
+  // tenant A on tenant B's id throws "Memory not found" here without any
+  // info leak.
   const old: MemoryEntry | null = readEntry(ctx.hippoRoot, oldId, ctx.tenantId);
   if (!old) {
     throw new Error(`Memory not found: ${oldId}`);
   }
+  // Guard: not already superseded. The CAS UPDATE below race-safely closes
+  // the window between this read and the write; this check just produces a
+  // clearer error in the common single-writer case.
   if (old.superseded_by) {
     throw new Error(
       `Memory ${oldId} is already superseded by ${old.superseded_by}. Supersede that one instead.`,
@@ -280,21 +356,62 @@ export function supersede(
     confidence: 'verified',
     tenantId: ctx.tenantId,
   });
-  old.superseded_by = newEntry.id;
-  writeEntry(ctx.hippoRoot, old, { actor: ctx.actor });
-  writeEntry(ctx.hippoRoot, newEntry, { actor: ctx.actor });
 
-  // The two writeEntry calls above emit 'remember' audit rows; the 'supersede'
-  // event below carries the user-facing intent and the chained newId.
+  // Race-safe transition: open a fresh db handle, BEGIN IMMEDIATE, run all
+  // three steps (CAS on old + writeEntryDbOnly(new) + supersede audit row)
+  // inside the same transaction. Two concurrent supersedes: exactly one CAS
+  // wins (changes=1), the other gets changes=0 and throws CONFLICT. No
+  // dangling-pointer window: the new memory's row commits atomically with
+  // the old.superseded_by pointer.
   const db = openHippoDb(ctx.hippoRoot);
   try {
-    appendAuditEvent(db, {
-      tenantId: ctx.tenantId,
-      actor: ctx.actor,
-      op: 'supersede',
-      targetId: oldId,
-      metadata: { newId: newEntry.id },
-    });
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      // 1. CAS update: only succeed if old.superseded_by IS NULL AND the
+      //    row still belongs to ctx.tenantId. Tenant filter is belt-and-
+      //    braces with the readEntry above — it costs nothing and closes
+      //    a hypothetical window where ownership changes between read and
+      //    update.
+      const result = db.prepare(`
+        UPDATE memories
+        SET superseded_by = ?
+        WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL
+      `).run(newEntry.id, oldId, ctx.tenantId);
+      if ((result.changes ?? 0) === 0) {
+        db.exec('ROLLBACK');
+        throw new Error(`Memory ${oldId} already superseded by another writer`);
+      }
+      // 2. Write new memory inside same tx via writeEntryDbOnly (DB-only
+      //    path). This emits its OWN 'remember' audit row for the new
+      //    memory inside the SAVEPOINT — atomic with the row INSERT.
+      writeEntryDbOnly(db, newEntry, { actor: ctx.actor });
+      // 3. User-facing 'supersede' audit row inside the same tx so the
+      //    chain pointer + audit trail commit atomically.
+      appendAuditEvent(db, {
+        tenantId: ctx.tenantId,
+        actor: ctx.actor,
+        op: 'supersede',
+        targetId: oldId,
+        metadata: { newId: newEntry.id },
+      });
+      db.exec('COMMIT');
+    } catch (err) {
+      try { db.exec('ROLLBACK'); } catch { /* already rolled back */ }
+      throw err;
+    }
+    // Mirrors after COMMIT, while the db handle is still open. Same
+    // invariant as the original writeEntry: a mirror failure leaves disk
+    // MISSING the markdown for the new memory (self-heals on next backfill
+    // via writeIndexMirror reading the DB) but DOES NOT desync the DB or
+    // roll back the supersede. Logged + swallowed, non-fatal.
+    try {
+      writeEntryMirrors(ctx.hippoRoot, db, newEntry);
+    } catch (mirrorErr) {
+      console.error(
+        'supersede: mirror write failed (non-fatal, will self-heal):',
+        mirrorErr,
+      );
+    }
   } finally {
     closeHippoDb(db);
   }
@@ -315,12 +432,23 @@ export function supersede(
  * helpers hardcode actor='cli'). Instead we pass `ctx.actor` through as `who`,
  * and raw-archive.ts uses that for the audit row.
  */
+export interface ArchiveRawOpts {
+  /**
+   * Connector idempotency hook (v0.39 commit 3). Runs inside the same
+   * SAVEPOINT as the archive — throwing rolls the archive back. Used by the
+   * Slack deletion connector to mark the deletion event seen atomically.
+   */
+  afterArchive?: (db: DatabaseSyncLike, archivedMemoryId: string) => void;
+}
+
 export function archiveRaw(
   ctx: Context,
   id: string,
   reason: string,
+  opts: ArchiveRawOpts = {},
 ): { ok: true; archivedAt: string } {
   const db = openHippoDb(ctx.hippoRoot);
+  let mirrorOk = false;
   try {
     // Tenant scope: archiveRawMemory looks up the row by id alone, so a
     // Bearer for tenant A could archive tenant B's raw row without this
@@ -333,17 +461,41 @@ export function archiveRaw(
     if (!row || row.tenant_id !== ctx.tenantId) {
       throw new Error(`memory not found: ${id}`);
     }
-    archiveRawMemory(db, id, { reason, who: ctx.actor });
+    archiveRawMemory(db, id, {
+      reason,
+      who: ctx.actor,
+      afterArchive: opts.afterArchive,
+    });
+    // archiveRawMemory deletes the memories row but leaves any legacy markdown
+    // mirror in <root>/{buffer,episodic,semantic}/<id>.md untouched. If we left
+    // the mirror in place, a subsequent initStore() on an empty memories table
+    // would silently re-import the row via bootstrapLegacyStore — defeating the
+    // archive (and the GDPR right-to-be-forgotten promise on raw rows). Mirror
+    // forget() at src/store.ts:1046, which uses the same removeEntryMirrors call.
+    // The DB transaction has already committed; if filesystem unlink fails here
+    // we log and continue. The mirror reaper in openHippoDb will catch it on
+    // next DB open: raw_archive.mirror_cleaned_at stays NULL until every layer
+    // mirror for this id is gone, so the reaper genuinely retries.
+    try {
+      removeEntryMirrors(ctx.hippoRoot, id);
+      mirrorOk = true;
+    } catch (mirrorErr) {
+      console.error(
+        `archiveRaw: mirror cleanup failed for ${id} (will retry via reaper on next openHippoDb):`,
+        mirrorErr,
+      );
+    }
+    if (mirrorOk) {
+      // Stamp mirror_cleaned_at now so the next openHippoDb reaper SELECT
+      // returns empty for this row. NULL stays untouched on failure -> retry.
+      db.prepare(`UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(
+        new Date().toISOString(),
+        id,
+      );
+    }
   } finally {
     closeHippoDb(db);
   }
-  // archiveRawMemory deletes the memories row but leaves any legacy markdown
-  // mirror in <root>/{buffer,episodic,semantic}/<id>.md untouched. If we left
-  // the mirror in place, a subsequent initStore() on an empty memories table
-  // would silently re-import the row via bootstrapLegacyStore — defeating the
-  // archive (and the GDPR right-to-be-forgotten promise on raw rows). Mirror
-  // forget() at src/store.ts:1046, which uses the same removeEntryMirrors call.
-  removeEntryMirrors(ctx.hippoRoot, id);
   // archiveRawMemory does not return the archive_at timestamp it wrote. We
   // emit a fresh ISO timestamp here for the API response. Within a millisecond
   // of the actual write, fine for a server response shape.
@@ -356,8 +508,6 @@ export function archiveRaw(
 
 export interface AuthCreateOpts {
   label?: string;
-  /** Override the calling tenant (e.g. admin minting a key for tenant B). */
-  tenantId?: string;
 }
 
 export interface AuthCreateResult {
@@ -367,16 +517,22 @@ export interface AuthCreateResult {
 }
 
 /**
- * Mint a new API key. Per A5 v2 follow-ups (TODOS.md), `auth_create` is currently
- * unaudited — we intentionally match that behavior here for consistency. When A5
- * v2 lands and adds the audit op, this function should mirror the cli handler.
+ * Mint a new API key. The new key is ALWAYS bound to `ctx.tenantId`. Callers
+ * cannot override the tenant via the opts bag — a previous `tenantId` field
+ * was removed because the HTTP layer would happily forward `body.tenantId`,
+ * letting tenant A mint a key for tenant B. The HTTP route handler at
+ * `src/server.ts` POST /v1/auth/keys mirrors this: it ignores any body
+ * `tenantId` and uses the resolved Bearer's tenant exclusively.
+ *
+ * Per A5 v2 follow-ups (TODOS.md), `auth_create` is currently unaudited —
+ * we intentionally match that behavior here for consistency. When A5 v2
+ * lands and adds the audit op, this function should mirror the cli handler.
  */
 export function authCreate(ctx: Context, opts: AuthCreateOpts): AuthCreateResult {
-  const tenantId = opts.tenantId ?? ctx.tenantId;
   const db = openHippoDb(ctx.hippoRoot);
   try {
-    const result = createApiKey(db, { tenantId, label: opts.label });
-    return { keyId: result.keyId, plaintext: result.plaintext, tenantId };
+    const result = createApiKey(db, { tenantId: ctx.tenantId, label: opts.label });
+    return { keyId: result.keyId, plaintext: result.plaintext, tenantId: ctx.tenantId };
   } finally {
     closeHippoDb(db);
   }

@@ -1,6 +1,11 @@
 import { remember, type Context } from '../../api.js';
 import { openHippoDb, closeHippoDb } from '../../db.js';
-import { hasSeenEvent, markEventSeen, lookupMemoryByEvent } from './idempotency.js';
+import {
+  hasSeenEvent,
+  markEventSeen,
+  lookupMemoryByEvent,
+  DuplicateEventError,
+} from './idempotency.js';
 import { messageToRememberOpts } from './transform.js';
 import type { ChannelMeta } from './scope.js';
 import type { SlackMessageEvent } from './types.js';
@@ -13,7 +18,7 @@ export interface IngestInput {
   eventId: string;
 }
 
-export type IngestStatus = 'ingested' | 'duplicate' | 'skipped';
+export type IngestStatus = 'ingested' | 'duplicate' | 'skipped' | 'skipped_duplicate';
 
 export interface IngestResult {
   status: IngestStatus;
@@ -27,6 +32,12 @@ export interface IngestResult {
  * - The memory write and the slack_event_log mark commit atomically through
  *   `api.remember`'s `afterWrite` hook — a crash between the two cannot
  *   produce a duplicate on the next retry.
+ * - The afterWrite hook uses an explicit `INSERT OR IGNORE` + changes-check:
+ *   if a concurrent worker beat us to slack_event_log between the pre-check
+ *   and the SAVEPOINT, we throw `DuplicateEventError` to roll back the memory
+ *   write. The pre-check `hasSeenEvent` stays as a fast path for the common
+ *   already-seen case, but the afterWrite throw is what makes idempotency
+ *   correct under two-worker concurrency (v0.39 commit 3 fix).
  * - Empty-body messages return 'skipped' but still mark seen so a replay
  *   returns 'duplicate' rather than re-running the transform.
  */
@@ -57,12 +68,40 @@ export function ingestMessage(ctx: Context, input: IngestInput): IngestResult {
   // so the memory row and the slack_event_log row commit (or roll back)
   // together. Slack's 1-minute retry window can no longer produce a duplicate
   // via the crash-between-handles race.
-  const result = remember(
-    { ...ctx, actor: ctx.actor || 'connector:slack' },
-    {
-      ...opts,
-      afterWrite: (db, memoryId) => markEventSeen(db, input.eventId, memoryId),
-    },
-  );
-  return { status: 'ingested', memoryId: result.id };
+  try {
+    const result = remember(
+      { ...ctx, actor: ctx.actor || 'connector:slack' },
+      {
+        ...opts,
+        afterWrite: (innerDb, memoryId) => {
+          const inserted = innerDb
+            .prepare(
+              `INSERT OR IGNORE INTO slack_event_log (event_id, ingested_at, memory_id) VALUES (?, ?, ?)`,
+            )
+            .run(input.eventId, new Date().toISOString(), memoryId);
+          if ((Number(inserted.changes ?? 0)) === 0) {
+            // Two-worker race: another writer reserved this event_id between
+            // the pre-check and the write. Throw to roll back the SAVEPOINT
+            // in writeEntry — the memory row gets discarded, idempotency
+            // holds, exactly one memory exists for this event_id.
+            throw new DuplicateEventError(input.eventId);
+          }
+        },
+      },
+    );
+    return { status: 'ingested', memoryId: result.id };
+  } catch (e) {
+    if (e instanceof DuplicateEventError) {
+      // The other worker's memory row is already committed. Return its id
+      // so the caller behaves identically to the fast-path 'duplicate' branch.
+      const db3 = openHippoDb(ctx.hippoRoot);
+      try {
+        const cachedId = lookupMemoryByEvent(db3, input.eventId);
+        return { status: 'skipped_duplicate', memoryId: cachedId };
+      } finally {
+        closeHippoDb(db3);
+      }
+    }
+    throw e;
+  }
 }

@@ -1,6 +1,10 @@
 /**
  * p99 recall benchmark — A1 ROADMAP success criterion.
  *
+ * v0.39 (2026-04-30): the <50ms p99 target stated in v0.36 plan is retracted.
+ * Measured ~58.4ms on 10k store, sequential single-thread.
+ * Server-mode concurrent measurement is a v0.40+ effort.
+ *
  * Pinned spec:
  *   - Query mix: top-10 BM25 against tier-1 micro-eval queries
  *   - Cold cache (fresh server start, no warmup)

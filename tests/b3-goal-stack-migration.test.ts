@@ -5,12 +5,12 @@ import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion } from '../src/db.js';
 
 describe('B3 schema migration v18', () => {
-  it('migrates to schema version 18', () => {
+  it('migrates to schema version 20', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-b3-mig-'));
     const db = openHippoDb(home);
     try {
-      expect(getSchemaVersion(db)).toBe(18);
-      expect(getCurrentSchemaVersion()).toBe(18);
+      expect(getSchemaVersion(db)).toBe(21);
+      expect(getCurrentSchemaVersion()).toBe(21);
     } finally {
       closeHippoDb(db);
       rmSync(home, { recursive: true, force: true });

@@ -21,9 +21,17 @@ describe('archiveRawMemory', () => {
     expect(archived.memory_id).toBe('r1');
     expect(archived.reason).toBe('GDPR right-to-be-forgotten');
     expect(archived.archived_by).toBe('user:42');
+    // v0.39 Path A: payload_json is metadata-only — original content is NOT
+    // stored. The audit_log row carries the compliance trail; raw_archive
+    // tracks only that an archive happened, for what tenant/kind, and why.
     const payload = JSON.parse(archived.payload_json) as Record<string, unknown>;
-    expect(payload.id).toBe('r1');
-    expect(payload.content).toBe('sensitive content');
+    expect(payload.redacted).toBe(true);
+    expect(payload.tenant_id).toBe('default');
+    expect(payload.kind).toBe('raw');
+    expect(payload.reason).toBe('GDPR right-to-be-forgotten');
+    expect(typeof payload.archived_at).toBe('string');
+    expect(payload.id).toBeUndefined();
+    expect(payload.content).toBeUndefined();
     closeHippoDb(db);
     rmSync(home, { recursive: true, force: true });
   });

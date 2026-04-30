@@ -1,6 +1,9 @@
 /**
  * 24h soak harness — A1 ROADMAP success criterion.
  *
+ * v0.39: scaffold for 24h soak runs. NOT a release gate. Operators can run
+ * manually; no CI integration. Real-soak-as-evidence is a v0.40+ effort.
+ *
  * Drives the server with a steady-state mixed workload (recall/remember/forget)
  * for N hours and tracks RSS, heap, FD count, SQLite WAL size, and request
  * latency in 60s windows. The actual 24h run is manual / scheduled; this

@@ -85,6 +85,10 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v0.39.0
+
+- Security hardening release: 5 CRITICAL cross-tenant fixes (CVE candidates), GDPR Path A on archive (true RTBF), MCP per-client isolation, Slack ingestion race + idempotency hardening, auth timing leak reduction.
+
 ### What's new in v0.38.0
 
 - **B3 dlPFC persistent goal stack (depth 3).** Schema v18 adds `goal_stack`, `retrieval_policy`, `goal_recall_log`. New CLI subcommands: `hippo goal push|list|complete|suspend|resume`. With `HIPPO_SESSION_ID` set, `hippo recall` auto-boosts memories tagged with the active goal (final multiplier hard-capped at 3.0x). Retrieval policies (`error-prioritized`, `schema-fit-biased`, `recency-first`, `hybrid`) further shape ranking.

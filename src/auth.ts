@@ -22,6 +22,15 @@ function hashKey(plaintext: string): string {
   return `scrypt$${salt.toString('hex')}$${hash.toString('hex')}`;
 }
 
+// Constant dummy hash precomputed once at module load. Used by validateApiKey
+// to pay the scrypt cost on the miss path (unknown / revoked / malformed key)
+// so the timing signal between hit and miss is reduced. The DB lookup branch
+// itself can still leak via cache effects — v0.40 follow-up: request-level
+// rate limit on /v1/* to bound key-id enumeration. Stored format identical to
+// real hashes: scrypt$saltHex$hashHex.
+const DUMMY_PLAINTEXT = 'hk_dummy_constant_padding_for_timing.dummy_secret_padding_for_timing_x';
+const DUMMY_HASH = hashKey(DUMMY_PLAINTEXT);
+
 function verifyKey(plaintext: string, stored: string): boolean {
   const parts = stored.split('$');
   if (parts.length !== 3 || parts[0] !== 'scrypt') return false;
@@ -60,13 +69,24 @@ export interface ValidateResult {
 
 export function validateApiKey(db: DatabaseSyncLike, plaintext: string): ValidateResult {
   const dot = plaintext.indexOf('.');
-  if (dot < 0) return { valid: false };
+  if (dot < 0) {
+    // Malformed input still pays the scrypt cost so caller cannot distinguish
+    // "no dot" from "unknown key_id" by timing.
+    verifyKey(DUMMY_PLAINTEXT, DUMMY_HASH);
+    return { valid: false };
+  }
   const keyId = plaintext.slice(0, dot);
   const row = db
     .prepare(`SELECT key_hash, tenant_id, revoked_at FROM api_keys WHERE key_id = ?`)
     .get(keyId) as { key_hash: string; tenant_id: string; revoked_at: string | null } | undefined;
-  if (!row || row.revoked_at) return { valid: false };
-  if (!verifyKey(plaintext, row.key_hash)) return { valid: false };
+
+  // Always run verifyKey — on miss/revoked, against DUMMY_HASH so scrypt cost
+  // is paid. This reduces timing signal between hit and miss, but the DB
+  // lookup itself can still leak via cache effects. v0.40 follow-up: add
+  // request-level rate limit on /v1/* to bound enumeration.
+  const target = (row && !row.revoked_at) ? row.key_hash : DUMMY_HASH;
+  const matches = verifyKey(plaintext, target);
+  if (!row || row.revoked_at || !matches) return { valid: false };
   return { valid: true, tenantId: row.tenant_id, keyId };
 }
 

@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
+import { createHash } from 'node:crypto';
 import { writePidfile, removePidfile } from './server-detect.js';
 import { resolveTenantId } from './tenant.js';
 import { openHippoDb, closeHippoDb } from './db.js';
@@ -67,7 +68,7 @@ const VALID_KINDS: ReadonlySet<MemoryKind> = new Set([
 // HTTP /health response uses this; reading package.json synchronously here
 // would couple the daemon to its on-disk install path, which we want to
 // avoid for tests that mkdtemp a hippoRoot.
-const VERSION = '0.38.0';
+const VERSION = '0.39.0';
 
 // 1 MB body cap. The CLI never sends payloads near this; anything bigger is
 // almost certainly a misconfigured client or a deliberate memory-blowup attempt.
@@ -246,6 +247,26 @@ function readAuthHeader(req: IncomingMessage): AuthHeader {
   if (scheme.toLowerCase() !== 'bearer') return { kind: 'malformed' };
   if (token.length === 0) return { kind: 'malformed' };
   return { kind: 'bearer', token };
+}
+
+/**
+ * Build a per-client key for MCP state isolation under HTTP-MCP. Used by
+ * mcp/server.ts to scope `lastRecalledIds` to the calling client so two
+ * clients on the same tenant cannot poison each other's outcome feedback.
+ *
+ * Token is hashed (sha256, 16-hex-char prefix) so we never log or persist
+ * the raw bearer. Combined with remoteAddress so two clients sharing a key
+ * (e.g. on a shared Postman environment) are still separable in the common
+ * case. 'noauth' covers loopback no-auth and is acceptable because that
+ * path is single-host single-user.
+ */
+function buildMcpClientKey(req: IncomingMessage): string {
+  const auth = readAuthHeader(req);
+  const tokenHash = auth.kind === 'bearer'
+    ? createHash('sha256').update(auth.token).digest('hex').slice(0, 16)
+    : 'noauth';
+  const addr = req.socket.remoteAddress ?? 'unknown';
+  return `http:${tokenHash}:${addr}`;
 }
 
 /**
@@ -457,14 +478,13 @@ async function handleRequest(
     if (labelRaw !== undefined && typeof labelRaw !== 'string') {
       throw new HttpError(400, 'label must be a string');
     }
-    const tenantIdRaw = body['tenantId'];
-    if (tenantIdRaw !== undefined && typeof tenantIdRaw !== 'string') {
-      throw new HttpError(400, 'tenantId must be a string');
-    }
+    // Security: any `tenantId` in the body is IGNORED. The minted key is
+    // bound to the caller's authenticated tenant (ctx.tenantId, resolved
+    // from the Bearer token). Forwarding body.tenantId here would let
+    // tenant A mint a key for tenant B — see authCreate doc comment.
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = authCreate(ctx, {
       label: labelRaw,
-      tenantId: tenantIdRaw,
     });
     sendJson(res, 200, result);
     return;
@@ -566,20 +586,30 @@ async function handleRequest(
       res.end(JSON.stringify({ error: 'not found' }));
       return;
     }
+    const previousSecret = process.env.SLACK_SIGNING_SECRET_PREVIOUS;
     const sig = req.headers['x-slack-signature'];
     const tsHdr = req.headers['x-slack-request-timestamp'];
+    const sigStr = typeof sig === 'string' ? sig : null;
+    const tsStr = typeof tsHdr === 'string' ? tsHdr : null;
     if (
-      typeof sig !== 'string' ||
-      typeof tsHdr !== 'string' ||
+      sigStr === null ||
+      tsStr === null ||
       !verifySlackSignature({
         rawBody,
-        timestamp: tsHdr,
-        signature: sig,
+        timestamp: tsStr,
+        signature: sigStr,
         signingSecret: secret,
+        previousSecret,
       })
     ) {
       throw new HttpError(401, 'invalid Slack signature');
     }
+    // Cheap regex extracts team_id from a (possibly malformed) raw body so the
+    // DLQ row carries it for triage even when JSON.parse fails.
+    const teamIdFromRaw = (() => {
+      const m = rawBody.match(/"team_id"\s*:\s*"([^"]+)"/);
+      return m ? m[1] : null;
+    })();
     let body: unknown;
     try {
       body = JSON.parse(rawBody);
@@ -588,8 +618,12 @@ async function handleRequest(
       try {
         writeToDlq(db, {
           tenantId: process.env.HIPPO_TENANT ?? 'default',
+          teamId: teamIdFromRaw,
           rawPayload: rawBody,
           error: 'invalid JSON',
+          bucket: 'parse_error',
+          signature: sigStr,
+          slackTimestamp: tsStr,
         });
       } finally {
         closeHippoDb(db);
@@ -607,15 +641,39 @@ async function handleRequest(
       });
       return;
     }
-    let resolvedTenant = process.env.HIPPO_TENANT ?? 'default';
+    // Resolve tenant. v0.39 fail-closed: when slack_workspaces is non-empty
+    // and the team_id is unknown, resolveTenantForTeam returns null and we
+    // park the envelope in slack_dlq with bucket='unroutable'. Mandatory ACK
+    // 200 so Slack stops retrying; do NOT call ingest.
+    let resolvedTenant: string | null = null;
     if (isSlackEventEnvelope(body)) {
       const db = openHippoDb(opts.hippoRoot);
       try {
-        const mapped = resolveTenantForTeam(db, body.team_id);
-        if (mapped) resolvedTenant = mapped;
+        resolvedTenant = resolveTenantForTeam(db, body.team_id);
       } finally {
         closeHippoDb(db);
       }
+      if (resolvedTenant === null) {
+        const db2 = openHippoDb(opts.hippoRoot);
+        try {
+          writeToDlq(db2, {
+            tenantId: null, // unroutable — stored as '__unroutable__'
+            teamId: body.team_id,
+            rawPayload: rawBody,
+            error: `unroutable team_id: ${body.team_id}`,
+            bucket: 'unroutable',
+            signature: sigStr,
+            slackTimestamp: tsStr,
+          });
+        } finally {
+          closeHippoDb(db2);
+        }
+        sendJson(res, 200, { ok: true, status: 'dlq' });
+        return;
+      }
+    } else {
+      // Non-envelope payload: use env tenant for the DLQ row's bookkeeping.
+      resolvedTenant = process.env.HIPPO_TENANT ?? 'default';
     }
     const ctx: Context = {
       hippoRoot: opts.hippoRoot,
@@ -627,8 +685,12 @@ async function handleRequest(
       try {
         writeToDlq(db, {
           tenantId: ctx.tenantId,
+          teamId: teamIdFromRaw,
           rawPayload: rawBody,
           error: 'not an event_callback envelope',
+          bucket: 'parse_error',
+          signature: sigStr,
+          slackTimestamp: tsStr,
         });
       } finally {
         closeHippoDb(db);
@@ -669,8 +731,12 @@ async function handleRequest(
     try {
       writeToDlq(db, {
         tenantId: ctx.tenantId,
+        teamId: body.team_id,
         rawPayload: rawBody,
         error: `unhandled event type: ${(inner as { type?: string })?.type ?? 'unknown'}`,
+        bucket: 'parse_error',
+        signature: sigStr,
+        slackTimestamp: tsStr,
       });
     } finally {
       closeHippoDb(db);
@@ -721,6 +787,7 @@ async function handleRequest(
         hippoRoot: ctx.hippoRoot,
         tenantId: ctx.tenantId,
         actor: ctx.actor,
+        clientKey: buildMcpClientKey(req),
       });
     } catch (err) {
       mcpRes = {
@@ -747,15 +814,53 @@ async function handleRequest(
       connection: 'keep-alive',
     });
     // Initial ping so smoke tests can confirm the stream is live without
-    // waiting 30s for the first keepalive interval.
+    // waiting for the first keepalive interval.
     res.write(': ping\n\n');
+
+    // v0.39 SSE hardening:
+    //   - Heartbeat re-validates the bearer (default 60s). If the key was
+    //     revoked or rotated, close the stream with reason='auth_revoked'.
+    //   - MCP_SSE_MAX_AGE_SEC (default 3600) caps stream lifetime; close
+    //     with reason='max_age_exceeded' when reached.
+    //   - MCP_SSE_HEARTBEAT_MS (default 60000) lets tests run with a short
+    //     interval without waiting a full minute.
+    const heartbeatMs =
+      parseInt(process.env.MCP_SSE_HEARTBEAT_MS ?? '60000', 10) || 60000;
+    const maxAgeMs =
+      (parseInt(process.env.MCP_SSE_MAX_AGE_SEC ?? '3600', 10) || 3600) * 1000;
+    const startedAt = Date.now();
+    let closed = false;
+    const closeWith = (reason: string): void => {
+      if (closed) return;
+      closed = true;
+      try {
+        res.write(`event: closed\ndata: ${JSON.stringify({ reason })}\n\n`);
+      } catch { /* socket already gone */ }
+      try { res.end(); } catch { /* socket already gone */ }
+    };
     const ping = setInterval(() => {
+      if (closed) {
+        clearInterval(ping);
+        return;
+      }
+      if (Date.now() - startedAt >= maxAgeMs) {
+        closeWith('max_age_exceeded');
+        clearInterval(ping);
+        return;
+      }
+      try {
+        requireAuth(req, opts.hippoRoot);
+      } catch {
+        closeWith('auth_revoked');
+        clearInterval(ping);
+        return;
+      }
       try {
         res.write(': ping\n\n');
       } catch {
         clearInterval(ping);
       }
-    }, 30000);
+    }, heartbeatMs);
     // Don't keep the event loop alive just for this timer — the server's
     // listener already does that, and tests want the process to exit cleanly.
     if (typeof ping.unref === 'function') ping.unref();
@@ -852,8 +957,21 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   // Skip signal handlers under vitest so each test run does not register a
   // stray SIGTERM/SIGINT listener that survives until the runner exits.
   if (!process.env.VITEST) {
-    process.once('SIGTERM', () => { void stop(); });
-    process.once('SIGINT', () => { void stop(); });
+    let shuttingDown = false;
+    const gracefulShutdown = async (signal: string): Promise<void> => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      console.error(`Received ${signal}, shutting down...`);
+      try {
+        await stop();
+      } catch (err) {
+        console.error('Error during stop:', err);
+      } finally {
+        process.exit(0);
+      }
+    };
+    process.once('SIGTERM', () => { void gracefulShutdown('SIGTERM'); });
+    process.once('SIGINT', () => { void gracefulShutdown('SIGINT'); });
   }
 
   return { port: actualPort, url, stop };

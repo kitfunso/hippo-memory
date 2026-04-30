@@ -272,9 +272,14 @@ export function transferScore(entry: MemoryEntry): number {
 export function shareMemory(
   localRoot: string,
   id: string,
-  options: { force?: boolean } = {}
+  options: { force?: boolean; tenantId?: string } = {}
 ): MemoryEntry | null {
-  const entry = readEntry(localRoot, id);
+  // tenantId is OPTIONAL for backward compat — autoShare's internal call at
+  // :370 passes only `{ force: true }` in a single-tenant context. MCP/REST
+  // hosts MUST pass tenantId so a Bearer for tenant A cannot share tenant
+  // B's memory to global. readEntry returns null on cross-tenant lookups
+  // when tenantId is provided.
+  const entry = readEntry(localRoot, id, options.tenantId);
   if (!entry) throw new Error(`Memory not found: ${id}`);
 
   const score = transferScore(entry);

@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.39.0 (2026-04-30)
+
+### Security (CRITICAL)
+- **Cross-tenant authorization:** `promote()` now verifies memory belongs to ctx.tenantId before promoteToGlobal. `authCreate` ignores body.tenantId and forces ctx.tenantId at HTTP layer.
+- **Supersede CAS race:** `supersede()` wraps the transition in BEGIN IMMEDIATE with `WHERE superseded_by IS NULL`; concurrent attempts now throw CONFLICT instead of producing double chains.
+- **MCP cross-tenant outcome poisoning:** `lastRecalledIds` now keyed by per-client `clientKey` (HTTP: hash(bearer + remote IP), stdio: 'stdio-${pid}'). Outcome from client B cannot touch client A's recall set.
+- **Slack unknown-team fallback:** when `slack_workspaces` is non-empty and the incoming `team_id` is unmapped, the event is sent to DLQ as `unroutable` instead of silently ingesting into the env-default tenant. Escape hatch: `SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK=1`.
+
+### Privacy (BREAKING data shape)
+- **GDPR Path A on raw_archive:** archived memories no longer retain content in `raw_archive.payload_json`. Stored shape is `{redacted:true, archived_at, tenant_id, kind, reason}`. Migration v20 redacts existing rows in place. Compliance audit trail preserved via `audit_log`.
+- **Recall audit hashes the query:** `audit_log` rows for op='recall' now store `query_hash` (sha256, first 16 hex chars) and `query_length` instead of the truncated query text. Prevents canary content from persisting in audit_log when a caller queries with text matching an archived (RTBF) memory.
+- **Mirror reaper post-migration:** `openHippoDb()` runs `cleanupArchivedMirrors` after migrations to delete `<hippoRoot>/{episodic,buffer,semantic}/<id>.md` for every `raw_archive` row. Closes the gap where pre-v0.39 archives left their original-content markdown mirrors on disk. Idempotent via the `gdpr_v20_mirror_cleanup` meta flag (one-shot per DB). `archiveRaw` mirror cleanup is wrapped in try/catch; orphan files self-heal on a future scheduled scan if the unlink ever fails.
+
+### Hardening
+- MCP HTTP handlers route through `src/api.ts` so audit + cross-tenant guards apply uniformly
+- Bearer lockdown test parameterized over the full 12-route table
+- Auth timing leak reduced: `DUMMY_HASH` precomputed at module load; miss path runs scrypt
+- `/mcp/stream` re-validates bearer on a 60s heartbeat; new `MCP_SSE_MAX_AGE_SEC` (default 3600s) caps stream age
+- Graceful shutdown awaits `server.stop()` before `process.exit`
+- Slack ingest race closed via `afterWrite` hook (atomic event_log + memory)
+- Slack deletion idempotency closed via new `afterArchive` hook in `archiveRawMemory`
+- Slack DLQ: schema additions (team_id, bucket, retry_count, signature, slack_timestamp); `hippo slack dlq replay <id>` command
+- Slack signing-secret rotation: accept `SLACK_SIGNING_SECRET_PREVIOUS` during rollover
+
+### Schema
+- Migration v19: slack_dlq columns (team_id, bucket, retry_count, signature, slack_timestamp)
+- Migration v20: raw_archive.payload_json redacted in place (Path A backfill)
+
+### Retracted
+- v0.36 <50ms p99 latency target. v0.36 ships at 58.4ms (sequential single-thread). No current target; revisit in v0.40+ if a real user asks.
+
+### Deferred to v0.40
+- Tenant-guard audit on remaining MCP tools (context, status, learn, conflicts, resolve, peers) + any unscoped readEntry/loadSearchEntries call sites in CLI/dashboard/refine
+- Request-level rate limit on /v1/* to bound key-id enumeration
+- p99 hardening
+- 24h soak harness as a real release gate (currently scaffold)
+- B3 dlPFC follow-ups (sequential-learning adapter contract, etc.)
+
 ## 0.38.0 (2026-04-29)
 
 ### Added

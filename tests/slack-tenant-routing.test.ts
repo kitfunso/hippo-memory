@@ -30,24 +30,30 @@ describe('resolveTenantForTeam', () => {
     }
   });
 
-  it('returns null when slack_workspaces is empty', () => {
+  it('falls back to env tenant when slack_workspaces is empty (single-workspace install)', () => {
     const db = openHippoDb(root);
+    const prev = process.env.HIPPO_TENANT;
+    process.env.HIPPO_TENANT = 'env-tenant';
     try {
-      expect(resolveTenantForTeam(db, 'TANY')).toBeNull();
+      // v0.39 fail-closed contract: empty slack_workspaces means single-
+      // workspace install, env fallback is safe.
+      expect(resolveTenantForTeam(db, 'TANY')).toBe('env-tenant');
     } finally {
+      if (prev === undefined) delete process.env.HIPPO_TENANT;
+      else process.env.HIPPO_TENANT = prev;
       closeHippoDb(db);
     }
   });
 
-  it('matches team_id exactly (no prefix bleed)', () => {
+  it('matches team_id exactly (no prefix bleed) — fails closed on unknown when workspaces non-empty', () => {
     const db = openHippoDb(root);
     try {
       db.prepare(
         `INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`,
       ).run('TTEAM', 'tenant-short', new Date().toISOString());
-      // Prefix-extended id must NOT match.
+      // Prefix-extended id must NOT match — fail closed (workspaces non-empty).
       expect(resolveTenantForTeam(db, 'TTEAMX')).toBeNull();
-      // Substring must NOT match.
+      // Substring must NOT match — fail closed.
       expect(resolveTenantForTeam(db, 'TTEA')).toBeNull();
       // Exact still works.
       expect(resolveTenantForTeam(db, 'TTEAM')).toBe('tenant-short');
