@@ -68,7 +68,7 @@ const VALID_KINDS: ReadonlySet<MemoryKind> = new Set([
 // HTTP /health response uses this; reading package.json synchronously here
 // would couple the daemon to its on-disk install path, which we want to
 // avoid for tests that mkdtemp a hippoRoot.
-const VERSION = '0.38.0';
+const VERSION = '0.39.0';
 
 // 1 MB body cap. The CLI never sends payloads near this; anything bigger is
 // almost certainly a misconfigured client or a deliberate memory-blowup attempt.

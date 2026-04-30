@@ -181,17 +181,55 @@ ranking improvements; none are correctness blockers.
 
 ---
 
-## v0.37.0 — A1 p99 latency hardening
+## v0.40.0 — Security + hardening follow-ups
 
-A1 (v0.36.0) ships `hippo serve` with a 10k-store p99 above the ROADMAP
-target. The architecture lands; the latency target slips to v0.37.0.
+From the v0.39 security hardening release. Items consciously deferred so
+v0.39 could ship the CRITICAL cross-tenant fixes without scope creep.
 
-- [ ] **A1 p99 latency hardening — current p99 = 58.42ms, target < 50ms.**
+- [ ] **Tenant-guard audit on remaining MCP tools.** v0.39 hardened
+  recall/remember/outcome/share via `src/api.ts`. The remaining MCP tools
+  (context, status, learn, conflicts, resolve, peers) plus any unscoped
+  `readEntry` / `loadSearchEntries` call sites in CLI / dashboard /
+  refine still need a tenant-isolation pass.
+
+- [ ] **Request-level rate limit on /v1/*.** The reduced auth-timing
+  leak in v0.39 narrows but does not eliminate key-id enumeration.
+  Bound enumeration attempts with a per-IP rate limit on /v1/* (token
+  bucket, configurable via `HIPPO_V1_RPS`).
+
+- [ ] **p99 hardening (long-term, no current target).** The v0.36 <50ms
+  target was retracted in v0.39 (CHANGELOG). v0.36 ships at 58.4ms
+  (sequential single-thread on a 10k store). No active target until a
+  real user asks. When/if revived, server-mode concurrent measurement
+  is the right baseline, not the current single-thread harness.
+
+- [ ] **24h soak harness as a real release gate.** `benchmarks/a1/soak.ts`
+  is scaffold-only in v0.39. Promote to a CI-integrated, evidence-bearing
+  release gate (RSS / heap / FD / WAL drift bounds) before claiming
+  "soak-tested" anywhere user-facing.
+
+- [ ] **B3 dlPFC stretch items.**
+  - Sequential-learning adapter contract (pushGoal/completeGoal hooks
+    on `benchmarks/sequential-learning/adapters/interface.mjs`).
+  - vlPFC interference suppression companion to dlPFC depth.
+  - `--no-propagate` flag on `goal complete` (close without strength
+    side-effects on recalled memories).
+  - Refactor `enforceDepthCap` helper to remove duplication between
+    `pushGoalWithDb` and `resumeGoal`.
+  - `goal_recall_log` compaction policy (table grows unbounded today).
+  - `paired_ab.py` for paired-comparison goal-stack evaluations.
+
+---
+
+## Long-term — no current target
+
+- [ ] **A1 p99 latency hardening — current p99 = 58.42ms, retracted target.**
   Measured via `benchmarks/a1/p99-recall.ts` on a 10k synthetic store
   (1000 BM25 queries, cold cache, single SQLite connection, full HTTP
   round trip). p50 = 39.5ms / p95 = 54.9ms / p99 = 58.4ms / mean = 41.0ms.
-  Distribution is tight (stddev 6.6ms) so the bottleneck is structural,
-  not tail flakes. Likely candidates to profile:
+  v0.39 retracted the <50ms target; the harness is sequential single-thread
+  and not representative of server-mode concurrent load. Likely candidates
+  if/when revived:
     1. FTS5 candidate load in `loadSearchEntries` — current path scans
        all rows then ranks; a tighter `MATCH` query plan + LIMIT inside
        the FTS subquery should shave the tail.
@@ -203,8 +241,10 @@ target. The architecture lands; the latency target slips to v0.37.0.
     4. Hybrid embeddings: ROADMAP pins "hybrid ON" but `src/api.ts:recall`
        is BM25-only today. Wiring hybrid will likely make p99 worse, not
        better — re-baseline after that lands.
-  Re-run the bench after each candidate fix; gate ship of v0.37.0 on
-  p99 < 50ms.
+
+---
+
+## v0.37.0 — server hardening follow-ups
 
 - [ ] **H1 — stale-pidfile + PID-reuse-with-different-port.** A
   detectServer caller can read a pidfile whose pid was reused by an
