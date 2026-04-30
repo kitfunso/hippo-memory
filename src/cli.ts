@@ -5760,12 +5760,13 @@ async function main(): Promise<void> {
       } else if (shareId) {
         requireInit(hippoRoot);
         const force = Boolean(flags['force']);
-        const result = shareMemory(hippoRoot, shareId, { force });
+        const tenantId = resolveTenantId({});
+        const result = shareMemory(hippoRoot, shareId, { force, tenantId });
         if (result) {
           console.log(`Shared [${result.id}] to global store.`);
           console.log(`  Source: ${result.source}`);
         } else {
-          const entry = readEntry(hippoRoot, shareId);
+          const entry = readEntry(hippoRoot, shareId, tenantId);
           if (entry) {
             const score = transferScore(entry);
             console.log(`Transfer score too low (${fmt(score)}). This memory looks project-specific.`);

@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
+import { createHash } from 'node:crypto';
 import { writePidfile, removePidfile } from './server-detect.js';
 import { resolveTenantId } from './tenant.js';
 import { openHippoDb, closeHippoDb } from './db.js';
@@ -246,6 +247,26 @@ function readAuthHeader(req: IncomingMessage): AuthHeader {
   if (scheme.toLowerCase() !== 'bearer') return { kind: 'malformed' };
   if (token.length === 0) return { kind: 'malformed' };
   return { kind: 'bearer', token };
+}
+
+/**
+ * Build a per-client key for MCP state isolation under HTTP-MCP. Used by
+ * mcp/server.ts to scope `lastRecalledIds` to the calling client so two
+ * clients on the same tenant cannot poison each other's outcome feedback.
+ *
+ * Token is hashed (sha256, 16-hex-char prefix) so we never log or persist
+ * the raw bearer. Combined with remoteAddress so two clients sharing a key
+ * (e.g. on a shared Postman environment) are still separable in the common
+ * case. 'noauth' covers loopback no-auth and is acceptable because that
+ * path is single-host single-user.
+ */
+function buildMcpClientKey(req: IncomingMessage): string {
+  const auth = readAuthHeader(req);
+  const tokenHash = auth.kind === 'bearer'
+    ? createHash('sha256').update(auth.token).digest('hex').slice(0, 16)
+    : 'noauth';
+  const addr = req.socket.remoteAddress ?? 'unknown';
+  return `http:${tokenHash}:${addr}`;
 }
 
 /**
@@ -720,6 +741,7 @@ async function handleRequest(
         hippoRoot: ctx.hippoRoot,
         tenantId: ctx.tenantId,
         actor: ctx.actor,
+        clientKey: buildMcpClientKey(req),
       });
     } catch (err) {
       mcpRes = {

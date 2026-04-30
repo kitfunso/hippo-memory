@@ -26,6 +26,7 @@ import { fetchGitLog, extractLessons, deduplicateLesson, isGitRepo } from '../au
 import { loadConfig } from '../config.js';
 import { resolveConfidence } from '../memory.js';
 import { resolveTenantId } from '../tenant.js';
+import { recall as apiRecall, remember as apiRemember, type Context as ApiContext } from '../api.js';
 
 // ── Find hippo root ──
 
@@ -77,6 +78,13 @@ export interface McpContext {
   hippoRoot: string;
   tenantId: string;
   actor: string;
+  /**
+   * Per-client key for state isolation under HTTP-MCP. For stdio: 'stdio-${pid}'
+   * (one process = one client). For HTTP-SSE / HTTP MCP: hash(bearer + remoteAddr)
+   * built by src/server.ts when constructing McpContext for the request.
+   * Optional for backwards compatibility; defaults to `${tenantId}:default`.
+   */
+  clientKey?: string;
 }
 
 // MCP stdio transport spec: messages are newline-delimited JSON-RPC, no embedded newlines.
@@ -232,7 +240,21 @@ const TOOLS = [
 ];
 
 // ── Track last recalled IDs for outcome feedback ──
-let lastRecalledIds: string[] = [];
+//
+// Keyed per-client so two HTTP-MCP clients hitting the same tenant cannot
+// poison each other's outcome feedback. The key is `ctx.clientKey` when the
+// transport supplies one (HTTP-MCP via src/server.ts builds
+// hash(bearer+remoteAddr)); stdio and any caller without a clientKey falls
+// back to `'stdio-${pid}'` (one process = one client) or
+// `${tenantId}:default` if a McpContext is constructed in tests without a
+// pid-bound transport.
+const lastRecalledIds = new Map<string, string[]>();
+
+function resolveClientKey(ctx: { clientKey?: string; tenantId: string } | undefined): string {
+  if (ctx?.clientKey) return ctx.clientKey;
+  if (ctx?.tenantId) return `stdio-${process.pid}:${ctx.tenantId}`;
+  return `stdio-${process.pid}:default`;
+}
 
 // ── Tool execution ──
 
@@ -259,6 +281,20 @@ async function executeTool(
     case 'hippo_recall': {
       const query = String(args.query || '');
       const budget = Number(args.budget) || config.defaultBudget;
+      // Route through api.ts so audit_log captures actor='mcp' uniformly with
+      // CLI/REST. api.ts.recall handles tenant-scoped BM25 candidate loading;
+      // we re-fetch full entries for ranking + the markRetrieved bookkeeping
+      // that the MCP path has always done.
+      const apiCtx: ApiContext = {
+        hippoRoot,
+        tenantId,
+        actor: 'mcp',
+      };
+      apiRecall(apiCtx, { query, limit: 50 });
+
+      // Existing physics/hybrid scorer continues to drive user-visible
+      // ordering and the strength bump on retrieval — unchanged shape for
+      // existing MCP HTTP clients.
       const entries = loadAllEntries(hippoRoot, tenantId);
       const usePhysics = config.physics?.enabled !== false;
       const results = usePhysics
@@ -268,7 +304,7 @@ async function executeTool(
       // Mark retrieved and persist
       const retrieved = markRetrieved(results.map((r) => r.entry));
       for (const entry of retrieved) writeEntry(hippoRoot, entry);
-      lastRecalledIds = retrieved.map((e) => e.id);
+      lastRecalledIds.set(resolveClientKey(ctx), retrieved.map((e) => e.id));
 
       return formatMemories(results, hippoRoot);
     }
@@ -279,19 +315,20 @@ async function executeTool(
       const tags: string[] = [];
       if (args.error) tags.push('error');
       if (args.tag) tags.push(String(args.tag));
-      const existing = loadAllEntries(hippoRoot, tenantId);
-      const schemaFit = computeSchemaFit(text, tags, existing);
-      const entry = createMemory(text, {
-        layer: Layer.Episodic,
-        tags,
-        pinned: Boolean(args.pin),
-        source: 'mcp',
-        confidence: 'verified',
-        baseHalfLifeDays: config.defaultHalfLifeDays,
-        schema_fit: schemaFit,
+      // Route through api.ts so audit_log captures actor='mcp' uniformly with
+      // CLI/REST. api.ts.remember writes the memory + audit row in one
+      // transaction-friendly path; we re-read the entry to surface the
+      // half-life used in the MCP human-readable response.
+      const apiCtx: ApiContext = {
+        hippoRoot,
         tenantId,
+        actor: 'mcp',
+      };
+      const result = apiRemember(apiCtx, {
+        content: text,
+        tags,
       });
-      writeEntry(hippoRoot, entry);
+      const entry = readEntry(hippoRoot, result.id, tenantId);
 
       // Auto-sleep check
       if (config.autoSleep.enabled) {
@@ -305,16 +342,24 @@ async function executeTool(
         }
       }
 
-      return `Remembered [${entry.id}] (half-life: ${entry.half_life_days}d, tags: ${entry.tags.join(', ') || 'none'})`;
+      const halfLife = entry?.half_life_days ?? config.defaultHalfLifeDays;
+      const tagStr = entry?.tags.join(', ') || tags.join(', ') || 'none';
+      return `Remembered [${result.id}] (half-life: ${halfLife}d, tags: ${tagStr})`;
     }
 
     case 'hippo_outcome': {
       const good = Boolean(args.good);
-      if (lastRecalledIds.length === 0) return 'No recent recalls to apply outcome to.';
+      const clientKey = resolveClientKey(ctx);
+      const ids = lastRecalledIds.get(clientKey) ?? [];
+      if (ids.length === 0) return 'No recent recalls to apply outcome to.';
 
       let count = 0;
-      for (const id of lastRecalledIds) {
-        const entry = readEntry(hippoRoot, id);
+      for (const id of ids) {
+        // Pass tenantId so a poisoned lastRecalledIds entry (or a stale one
+        // from a forget/supersede in another tenant) cannot leak existence
+        // via timing/error-path differences. readEntry returns null on
+        // cross-tenant lookups.
+        const entry = readEntry(hippoRoot, id, tenantId);
         if (entry) {
           const updated = applyOutcome(entry, good);
           writeEntry(hippoRoot, updated);
@@ -344,7 +389,7 @@ async function executeTool(
         : await hybridSearch(query, entries, { budget, hippoRoot });
       const retrieved = markRetrieved(results.map((r) => r.entry));
       for (const entry of retrieved) writeEntry(hippoRoot, entry);
-      lastRecalledIds = retrieved.map((e) => e.id);
+      lastRecalledIds.set(resolveClientKey(ctx), retrieved.map((e) => e.id));
 
       const snapshot = loadActiveTaskSnapshot(hippoRoot);
       const snapshotText = snapshot
@@ -437,7 +482,11 @@ async function executeTool(
       const shareId = String(args.id || '');
       if (!shareId) return 'Required: id (memory ID to share).';
       const force = Boolean(args.force);
-      const shared = shareMemory(hippoRoot, shareId, { force });
+      // Pass tenantId so shareMemory's readEntry filters by tenant. Without
+      // this, a Bearer for tenant A could call hippo_share with tenant B's
+      // id and copy the row to the global store. The 'Memory not found'
+      // error matches the cross-tenant deny shape elsewhere in the code.
+      const shared = shareMemory(hippoRoot, shareId, { force, tenantId });
       if (!shared) return 'Transfer score too low. Use force=true to override.';
       return `Shared [${shared.id}] to global store. Source: ${shared.source}`;
     }
