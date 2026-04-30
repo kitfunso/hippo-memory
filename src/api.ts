@@ -7,6 +7,7 @@
  * in exactly one place.
  */
 
+import { createHash } from 'node:crypto';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import {
   writeEntry,
@@ -163,11 +164,20 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   // duplicate exists today, but we keep the same shape for symmetry.
   const db = openHippoDb(ctx.hippoRoot);
   try {
+    // GDPR Path A: store a sha256 hash (16 hex chars) of the query text
+    // instead of the truncated query itself. If a caller queries with content
+    // that matches an archived (RTBF) memory, the original text must not
+    // persist in audit_log. query_length is preserved for debugging
+    // long-prompt patterns and compliance metrics.
     appendAuditEvent(db, {
       tenantId: ctx.tenantId,
       actor: ctx.actor,
       op: 'recall',
-      metadata: { query: opts.query.slice(0, 200), results: ranked.length },
+      metadata: {
+        query_hash: createHash('sha256').update(opts.query).digest('hex').slice(0, 16),
+        query_length: opts.query.length,
+        results: ranked.length,
+      },
     });
   } finally {
     closeHippoDb(db);
@@ -464,7 +474,19 @@ export function archiveRaw(
   // would silently re-import the row via bootstrapLegacyStore — defeating the
   // archive (and the GDPR right-to-be-forgotten promise on raw rows). Mirror
   // forget() at src/store.ts:1046, which uses the same removeEntryMirrors call.
-  removeEntryMirrors(ctx.hippoRoot, id);
+  // The DB transaction has already committed; if filesystem unlink fails here
+  // we log and continue. The mirror reaper in openHippoDb will catch it on
+  // next DB open (the row is in raw_archive, so the reaper will revisit it
+  // if the meta flag is reset; for v0.39 the reaper is one-shot post-v20 and
+  // will not auto-retry, so the orphan persists until a v0.40+ scheduled scan).
+  try {
+    removeEntryMirrors(ctx.hippoRoot, id);
+  } catch (mirrorErr) {
+    console.error(
+      `archiveRaw: mirror cleanup failed for ${id} (will retry on next DB open):`,
+      mirrorErr,
+    );
+  }
   // archiveRawMemory does not return the archive_at timestamp it wrote. We
   // emit a fresh ISO timestamp here for the API response. Within a millisecond
   // of the actual write, fine for a server response shape.

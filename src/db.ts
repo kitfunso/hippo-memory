@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createRequire } from 'module';
 import { createPhysicsTable } from './physics-state.js';
+import { cleanupArchivedMirrors } from './raw-archive-mirror-cleanup.js';
 
 const require = createRequire(import.meta.url);
 
@@ -620,6 +621,14 @@ export function openHippoDb(hippoRoot: string): DatabaseSyncLike {
     db.exec('PRAGMA wal_autocheckpoint = 100');
     db.exec('PRAGMA foreign_keys = ON');
     runMigrations(db);
+    // Path A backfill: delete any orphan markdown mirrors for already-archived
+    // raw_archive rows. Idempotent via gdpr_v20_mirror_cleanup meta flag.
+    // Wrapped in try/catch — a filesystem failure must not prevent DB open.
+    try {
+      cleanupArchivedMirrors(hippoRoot, db);
+    } catch (cleanupErr) {
+      console.error('openHippoDb: cleanupArchivedMirrors failed (non-fatal):', cleanupErr);
+    }
     return db;
   } catch (error) {
     try {

@@ -10,6 +10,8 @@
 
 ### Privacy (BREAKING data shape)
 - **GDPR Path A on raw_archive:** archived memories no longer retain content in `raw_archive.payload_json`. Stored shape is `{redacted:true, archived_at, tenant_id, kind, reason}`. Migration v20 redacts existing rows in place. Compliance audit trail preserved via `audit_log`.
+- **Recall audit hashes the query:** `audit_log` rows for op='recall' now store `query_hash` (sha256, first 16 hex chars) and `query_length` instead of the truncated query text. Prevents canary content from persisting in audit_log when a caller queries with text matching an archived (RTBF) memory.
+- **Mirror reaper post-migration:** `openHippoDb()` runs `cleanupArchivedMirrors` after migrations to delete `<hippoRoot>/{episodic,buffer,semantic}/<id>.md` for every `raw_archive` row. Closes the gap where pre-v0.39 archives left their original-content markdown mirrors on disk. Idempotent via the `gdpr_v20_mirror_cleanup` meta flag (one-shot per DB). `archiveRaw` mirror cleanup is wrapped in try/catch; orphan files self-heal on a future scheduled scan if the unlink ever fails.
 
 ### Hardening
 - MCP HTTP handlers route through `src/api.ts` so audit + cross-tenant guards apply uniformly

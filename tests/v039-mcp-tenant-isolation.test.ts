@@ -131,7 +131,16 @@ describe('v039 mcp tenant + client-key isolation', () => {
       const recallEvents = queryAuditEvents(db, { tenantId: 'alpha', op: 'recall' });
       const mcpRecall = recallEvents.find((e) => e.actor === 'mcp');
       expect(mcpRecall).toBeDefined();
-      expect((mcpRecall!.metadata as { query?: string }).query).toContain('audit-canary');
+      // GDPR Path A: recall audit stores query_hash (sha256/16) instead of
+      // truncated query text. Assert hash shape + length, not the original text.
+      const meta = mcpRecall!.metadata as {
+        query?: string;
+        query_hash?: string;
+        query_length?: number;
+      };
+      expect(meta.query).toBeUndefined();
+      expect(meta.query_hash).toMatch(/^[0-9a-f]{16}$/);
+      expect(typeof meta.query_length).toBe('number');
     } finally {
       closeHippoDb(db);
     }
