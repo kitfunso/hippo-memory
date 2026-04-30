@@ -1,0 +1,68 @@
+{
+  "overall_pass_rate": 1.0,
+  "total_duration_s": 7.32,
+  "fixtures": [
+    {
+      "name": "dlpfc-depth",
+      "mechanic": "dlpfc-depth",
+      "queries": [
+        {
+          "query": "rewrite step",
+          "expected_any": [
+            "XDB-MARKER"
+          ],
+          "forbidden": [
+            "XUI-MARKER",
+            "XDEP-MARKER"
+          ],
+          "matched": "XDB-MARKER",
+          "leaked": null,
+          "passed": true,
+          "top_k_text": [
+            "step 6: rollback database plan for the rewrite XDB-MARKER",
+            "step 3: backfill database rows for the rewrite XDB-MARKER",
+            "step 4: cut over the database for the rewrite XDB-MARKER"
+          ]
+        },
+        {
+          "query": "rewrite step",
+          "expected_any": [
+            "XUI-MARKER"
+          ],
+          "forbidden": [
+            "XDB-MARKER",
+            "XDEP-MARKER"
+          ],
+          "matched": "XUI-MARKER",
+          "leaked": null,
+          "passed": true,
+          "top_k_text": [
+            "step 1: scaffold the frontend route for the rewrite XUI-MARKER",
+            "step 6: ship the frontend for the rewrite XUI-MARKER",
+            "step 5: snapshot test the frontend for the rewrite XUI-MARKER"
+          ]
+        },
+        {
+          "query": "rewrite step",
+          "expected_any": [
+            "XDEP-MARKER"
+          ],
+          "forbidden": [
+            "XDB-MARKER",
+            "XUI-MARKER"
+          ],
+          "matched": "XDEP-MARKER",
+          "leaked": null,
+          "passed": true,
+          "top_k_text": [
+            "step 1: stage the deploy bucket for the rewrite XDEP-MARKER",
+            "step 6: archive deploy logs for the rewrite XDEP-MARKER",
+            "step 5: drain old deploy for the rewrite XDEP-MARKER"
+          ]
+        }
+      ],
+      "duration_s": 7.32,
+      "pass_rate": 1.0
+    }
+  ]
+}

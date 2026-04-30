@@ -476,7 +476,7 @@ export async function handleMcpRequest(
         result: {
           protocolVersion: '2024-11-05',
           capabilities: { tools: {} },
-          serverInfo: { name: 'hippo-memory', version: '0.37.0' },
+          serverInfo: { name: 'hippo-memory', version: '0.38.0' },
         },
       };
 

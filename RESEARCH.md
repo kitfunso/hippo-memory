@@ -467,7 +467,11 @@ MVP ranking by effort × expected benchmark delta:
 
 **Recommended first ship: ACC + vmPFC together.** Both extend infrastructure already present (conflict detection, outcome tracking). Smallest diff, largest immediate benchmark lift, cleanest story for release notes. Ships as hippo v0.35.0 with `--evc-adaptive` recall and extended outcome tracking.
 
-Goal stack (dlPFC) ships next as v0.36.0. This is where goal-conditioned retrieval unlocks multi-step task performance on LoCoMo.
+Goal stack (dlPFC) full depth shipped in v0.38.0 with deterministic
+cluster-discrimination evidence (3/3 queries pass) on a controlled 3-cluster
+fixture (benchmarks/micro/results/b3-depth.json). A statistical Wilcoxon-paired
+version and the sequential-learning trap-benchmark lift remain v0.39 stretch
+goals pending an adapter contract change.
 
 ### 5. Open research questions
 

@@ -99,6 +99,9 @@ import { loadPhysicsState, resetAllPhysicsState } from './physics-state.js';
 import { computeSystemEnergy, vecNorm } from './physics.js';
 import { loadConfig } from './config.js';
 import { openHippoDb, closeHippoDb } from './db.js';
+import { getActiveGoalsWithDb, MAX_FINAL_MULTIPLIER, pushGoal, getActiveGoals, completeGoal, suspendGoal, resumeGoal } from './goals.js';
+import type { RetrievalPolicy, PolicyType, Goal, GoalRow } from './goals.js';
+import { rowToGoal } from './goals.js';
 import {
   captureError,
   extractLessons,
@@ -976,6 +979,158 @@ async function cmdRecall(
     results = results
       .map((r) => (r.entry.tags?.includes(goalTag) ? { ...r, score: r.score * 1.5 } : r))
       .sort((a, b) => b.score - a.score);
+  }
+
+  // dlPFC depth (B3, v0.38). When HIPPO_SESSION_ID is set (env or
+  // --session-id flag) and the (tenant, session) has active goals, boost
+  // memories whose tags overlap any active goal's name. Final multiplier is
+  // hard-capped at MAX_FINAL_MULTIPLIER (3.0x). Each boosted (memory, goal)
+  // pair is logged into goal_recall_log for outcome propagation.
+  //
+  // Runs AFTER the explicit `--goal <tag>` block so an explicit flag always
+  // wins: if the user passed `--goal X`, this block is skipped entirely
+  // (gated on `goalTag === ''`).
+  //
+  // db-handle note (plan-eng-review fix #5): the surrounding cmdRecall path
+  // does NOT keep an open db handle in scope at this point — earlier search
+  // helpers (loadSearchEntries, hybridSearch, ...) each open and close their
+  // own short-lived handles. Reusing isn't practical here; we open a fresh
+  // short-lived handle for this block, mirroring the existing CLI pattern
+  // (e.g. emitCliAudit). Closed in `finally`.
+  const sessionId = (
+    flags['session-id'] !== undefined
+      ? String(flags['session-id'])
+      : process.env.HIPPO_SESSION_ID ?? ''
+  ).trim();
+  if (sessionId && goalTag === '') {
+    // Use the same tenant as the recall path — see cmdRecall:778.
+    const tenantIdForGoals = tenantId;
+    const dbForGoals = openHippoDb(hippoRoot);
+    try {
+      const active = getActiveGoalsWithDb(dbForGoals, {
+        sessionId,
+        tenantId: tenantIdForGoals,
+      });
+      if (active.length > 0) {
+        const goalsByTag = new Map(active.map((g) => [g.goalName, g]));
+
+        // Task 7: load retrieval_policy rows for active goals so per-policy
+        // multipliers can compose onto the base goal-tag boost. The composed
+        // result is hard-capped at MAX_FINAL_MULTIPLIER (3.0x) BEFORE applying
+        // to score — even an `errorPriority: 9.0` policy cannot exceed 3.0x.
+        const policiesByGoalId = new Map<string, RetrievalPolicy>();
+        for (const g of active) {
+          if (!g.retrievalPolicyId) continue;
+          const row = dbForGoals.prepare(`
+            SELECT id, goal_id, policy_type, weight_schema_fit, weight_recency, weight_outcome, error_priority
+            FROM retrieval_policy WHERE id = ?
+          `).get(g.retrievalPolicyId) as {
+            id: string;
+            goal_id: string;
+            policy_type: RetrievalPolicy['policyType'];
+            weight_schema_fit: number;
+            weight_recency: number;
+            weight_outcome: number;
+            error_priority: number;
+          } | undefined;
+          if (row) {
+            policiesByGoalId.set(g.id, {
+              id: row.id,
+              goalId: row.goal_id,
+              policyType: row.policy_type,
+              weightSchemaFit: row.weight_schema_fit,
+              weightRecency: row.weight_recency,
+              weightOutcome: row.weight_outcome,
+              errorPriority: row.error_priority,
+            });
+          }
+        }
+
+        results = results
+          .map((r) => {
+            const tags = r.entry.tags ?? [];
+            const matches = tags.filter((t) => goalsByTag.has(t));
+            if (matches.length === 0) return r;
+            // Base 2.0x for first match, +0.5x per additional, capped at 3.0x.
+            let multiplier = Math.min(
+              2.0 + 0.5 * (matches.length - 1),
+              MAX_FINAL_MULTIPLIER,
+            );
+            // Compose per-policy multipliers per matched tag.
+            for (const tag of matches) {
+              const goal = goalsByTag.get(tag)!;
+              const policy = policiesByGoalId.get(goal.id);
+              if (!policy) continue;
+              if (policy.policyType === 'error-prioritized' && tags.includes('error')) {
+                multiplier *= policy.errorPriority;
+              } else if (policy.policyType === 'schema-fit-biased') {
+                // Linearly weight schema_fit in [0,1] up to (weightSchemaFit)x.
+                // Default 1.0 is a no-op.
+                multiplier *=
+                  1.0 +
+                  Math.max(0, policy.weightSchemaFit - 1.0) *
+                    (r.entry.schema_fit ?? 0.5);
+              } else if (policy.policyType === 'recency-first') {
+                multiplier *= policy.weightRecency;
+              } else if (policy.policyType === 'hybrid') {
+                multiplier *= policy.weightOutcome;
+              }
+            }
+            // Hard cap AFTER all composition.
+            multiplier = Math.min(multiplier, MAX_FINAL_MULTIPLIER);
+            return {
+              ...r,
+              score: r.score * multiplier,
+              _goalMatches: matches,
+            } as typeof r & { _goalMatches: string[] };
+          })
+          .sort((a, b) => b.score - a.score);
+
+        // Filter to local memories only — global memory IDs aren't in this
+        // DB's memories table, so the FK on goal_recall_log.memory_id would
+        // fail. dlPFC depth's outcome propagation is session-scoped to local;
+        // boost on ranking still applies to global results, just no log row
+        // -> no propagation.
+        const topKIds = results.slice(0, limit).map((r) => r.entry.id);
+        const localIds = new Set<string>();
+        if (topKIds.length > 0) {
+          const placeholders = topKIds.map(() => '?').join(',');
+          const localRows = dbForGoals.prepare(
+            `SELECT id FROM memories WHERE id IN (${placeholders})`,
+          ).all(...topKIds) as Array<{ id: string }>;
+          for (const row of localRows) localIds.add(row.id);
+        }
+
+        // Log top-K boosted recalls. INSERT OR IGNORE because
+        // UNIQUE(memory_id, goal_id) means a re-recall during the same goal
+        // life is a no-op for outcome attribution.
+        const recalledAt = new Date().toISOString();
+        const insertLog = dbForGoals.prepare(`
+          INSERT OR IGNORE INTO goal_recall_log
+            (goal_id, memory_id, tenant_id, session_id, recalled_at, score)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `);
+        for (const r of results.slice(0, limit)) {
+          if (!localIds.has(r.entry.id)) continue; // global -> skip log insert
+          const matches = (r as { _goalMatches?: string[] })._goalMatches;
+          if (!matches || matches.length === 0) continue;
+          for (const tag of matches) {
+            const goal = goalsByTag.get(tag);
+            if (!goal) continue;
+            insertLog.run(
+              goal.id,
+              r.entry.id,
+              tenantIdForGoals,
+              sessionId,
+              recalledAt,
+              r.score,
+            );
+          }
+        }
+      }
+    } finally {
+      closeHippoDb(dbForGoals);
+    }
   }
 
   // Pineal salience MVP (RESEARCH.md §"AI Pineal Gland — Intuition and Awareness
@@ -4605,6 +4760,232 @@ function cmdAuditLog(hippoRoot: string, args: string[], flags: Record<string, st
   process.exit(1);
 }
 
+// ---------------------------------------------------------------------------
+// `hippo goal <push|list|complete|suspend|resume>` — B3 dlPFC depth (Task 10)
+// ---------------------------------------------------------------------------
+
+const GOAL_POLICY_TYPES: ReadonlyArray<PolicyType> = [
+  'schema-fit-biased',
+  'error-prioritized',
+  'recency-first',
+  'hybrid',
+];
+
+function sanitizeGoalName(s: string): string {
+  // Strip C0 control chars + DEL to prevent terminal escape injection.
+  return s.replace(/[\x00-\x1f\x7f]/g, '?');
+}
+
+function resolveGoalSession(flags: Record<string, string | boolean | string[]>): { sessionId: string; tenantId: string } {
+  const sessionId = (
+    flags['session-id'] !== undefined
+      ? String(flags['session-id'])
+      : process.env.HIPPO_SESSION_ID ?? ''
+  ).trim();
+  if (!sessionId) {
+    console.error('session id required (set HIPPO_SESSION_ID or pass --session-id)');
+    process.exit(1);
+  }
+  const tenantId = (
+    flags['tenant-id'] !== undefined
+      ? String(flags['tenant-id'])
+      : process.env.HIPPO_TENANT ?? 'default'
+  ).trim() || 'default';
+  return { sessionId, tenantId };
+}
+
+function cmdGoalPush(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
+  const rawName = args.join(' ').trim();
+  if (!rawName) {
+    console.error('Usage: hippo goal push <name> [--policy <type>] [--success "<condition>"] [--level N] [--parent <goalId>]');
+    process.exit(1);
+  }
+  // Sanitize at WRITE time so corrupt names never enter the DB.
+  const name = sanitizeGoalName(rawName);
+  if (name !== rawName) {
+    console.error('note: stripped control characters from goal name');
+  }
+  const { sessionId, tenantId } = resolveGoalSession(flags);
+
+  let policy: { policyType: PolicyType } | undefined;
+  const policyRaw = flags['policy'];
+  if (policyRaw === true) {
+    console.error('--policy requires a value (e.g., --policy error-prioritized)');
+    process.exit(1);
+  }
+  if (typeof policyRaw === 'string') {
+    if (!(GOAL_POLICY_TYPES as readonly string[]).includes(policyRaw)) {
+      console.error(`Unknown --policy '${policyRaw}'. Expected one of: ${GOAL_POLICY_TYPES.join(' | ')}.`);
+      process.exit(1);
+    }
+    policy = { policyType: policyRaw as PolicyType };
+  }
+
+  const successRaw = flags['success'];
+  if (successRaw === true) {
+    console.error('--success requires a value (e.g., --success "<condition>")');
+    process.exit(1);
+  }
+  const successCondition = typeof successRaw === 'string' ? successRaw : undefined;
+
+  const levelRaw = flags['level'];
+  let level: number | undefined;
+  if (levelRaw === true) {
+    console.error('--level requires a value (e.g., --level 1)');
+    process.exit(1);
+  }
+  if (levelRaw !== undefined) {
+    const parsed = Number(levelRaw);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 2 || !Number.isInteger(parsed)) {
+      console.error('--level must be an integer in [0, 2]');
+      process.exit(1);
+    }
+    level = parsed;
+  }
+
+  const parentRaw = flags['parent'];
+  if (parentRaw === true) {
+    console.error('--parent requires a value (e.g., --parent <goalId>)');
+    process.exit(1);
+  }
+  const parentGoalId = typeof parentRaw === 'string' ? parentRaw : undefined;
+
+  const goal = pushGoal(hippoRoot, {
+    sessionId,
+    tenantId,
+    goalName: name,
+    level,
+    parentGoalId,
+    successCondition,
+    policy,
+  });
+  console.log(goal.id);
+}
+
+function listAllGoals(hippoRoot: string, sessionId: string, tenantId: string): Goal[] {
+  const db = openHippoDb(hippoRoot);
+  try {
+    const rows = db.prepare(`
+      SELECT id, session_id, tenant_id, goal_name, level, parent_goal_id, status,
+             success_condition, retrieval_policy_id, created_at, completed_at, outcome_score
+      FROM goal_stack
+      WHERE tenant_id = ? AND session_id = ?
+      ORDER BY created_at ASC
+    `).all(tenantId, sessionId) as GoalRow[];
+    return rows.map(rowToGoal);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+function cmdGoalList(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
+  const { sessionId, tenantId } = resolveGoalSession(flags);
+  const showAll = Boolean(flags['all']);
+  const goals = showAll
+    ? listAllGoals(hippoRoot, sessionId, tenantId)
+    : getActiveGoals(hippoRoot, { sessionId, tenantId });
+
+  if (goals.length === 0) {
+    console.log('(no goals)');
+    return;
+  }
+
+  // 4-column table: id, status, goal_name, outcome. Plan calls it a "2-column"
+  // table but the assertion list (id, status, goal_name, outcome) needs four;
+  // tests check for substrings ('active', '0.9', name) so column count is
+  // observably four but not asserted.
+  const rows = goals.map(g => ({
+    id: g.id,
+    status: g.status,
+    name: sanitizeGoalName(g.goalName),
+    outcome: g.outcomeScore !== undefined ? g.outcomeScore.toString() : '-',
+  }));
+  const widths = {
+    id: Math.max(2, ...rows.map(r => r.id.length)),
+    status: Math.max(6, ...rows.map(r => r.status.length)),
+    name: Math.max(4, ...rows.map(r => r.name.length)),
+    outcome: Math.max(7, ...rows.map(r => r.outcome.length)),
+  };
+  const pad = (s: string, w: number): string => s + ' '.repeat(Math.max(0, w - s.length));
+  console.log(`${pad('id', widths.id)}  ${pad('status', widths.status)}  ${pad('name', widths.name)}  ${pad('outcome', widths.outcome)}`);
+  for (const r of rows) {
+    console.log(`${pad(r.id, widths.id)}  ${pad(r.status, widths.status)}  ${pad(r.name, widths.name)}  ${pad(r.outcome, widths.outcome)}`);
+  }
+}
+
+function cmdGoalComplete(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
+  const id = args[0];
+  if (!id) {
+    console.error('Usage: hippo goal complete <id> [--outcome <0..1>]');
+    process.exit(1);
+  }
+  let outcomeScore: number | undefined;
+  const outcomeRaw = flags['outcome'];
+  if (outcomeRaw === true) {
+    console.error('--outcome requires a value (e.g., --outcome 0.9)');
+    process.exit(1);
+  }
+  if (outcomeRaw !== undefined) {
+    const parsed = Number(outcomeRaw);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
+      console.error('--outcome must be a number in [0, 1]');
+      process.exit(1);
+    }
+    outcomeScore = parsed;
+  }
+  completeGoal(hippoRoot, id, { outcomeScore });
+  console.log('ok');
+}
+
+function cmdGoalSuspend(hippoRoot: string, args: string[]): void {
+  const id = args[0];
+  if (!id) {
+    console.error('Usage: hippo goal suspend <id>');
+    process.exit(1);
+  }
+  suspendGoal(hippoRoot, id);
+  console.log('ok');
+}
+
+function cmdGoalResume(hippoRoot: string, args: string[]): void {
+  const id = args[0];
+  if (!id) {
+    console.error('Usage: hippo goal resume <id>');
+    process.exit(1);
+  }
+  resumeGoal(hippoRoot, id);
+  console.log('ok');
+}
+
+function cmdGoal(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
+  const sub = args[0];
+  if (!sub) {
+    console.error('Usage: hippo goal <push|list|complete|suspend|resume> [args]');
+    process.exit(1);
+  }
+  const subArgs = args.slice(1);
+  switch (sub) {
+    case 'push':
+      cmdGoalPush(hippoRoot, subArgs, flags);
+      return;
+    case 'list':
+      cmdGoalList(hippoRoot, flags);
+      return;
+    case 'complete':
+      cmdGoalComplete(hippoRoot, subArgs, flags);
+      return;
+    case 'suspend':
+      cmdGoalSuspend(hippoRoot, subArgs);
+      return;
+    case 'resume':
+      cmdGoalResume(hippoRoot, subArgs);
+      return;
+    default:
+      console.error(`Unknown goal subcommand: ${sub}. Expected: push | list | complete | suspend | resume.`);
+      process.exit(1);
+  }
+}
+
 function cmdAuth(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
   const sub = args[0];
   if (!sub) {
@@ -4765,6 +5146,12 @@ Commands:
     --goal <tag>           dlPFC goal-conditioned recall: memories tagged with
                            the goal tag get a 1.5x score boost and results are
                            re-sorted. Default off. RESEARCH.md §PFC.dlPFC.
+    --session-id <id>      Session identifier for dlPFC goal-stack boost.
+                           Defaults to \$HIPPO_SESSION_ID. When set and the
+                           (tenant, session) has active goals (see
+                           'hippo goal push'), recall auto-boosts memories
+                           whose tags match an active goal name. Boost stacks
+                           on top of base BM25 score, capped at 3.0x.
     --salience-threshold <n>
                            Pineal salience: down-weight memories whose
                            retrieval_count is below n. score *= max(0.5,
@@ -4950,6 +5337,21 @@ Commands:
   dashboard                Open web dashboard for memory health
     --port <n>             Port to serve on (default: 3333)
   mcp                      Start MCP server (stdio transport)
+  goal <sub>               dlPFC goal stack (B3) — scoped per session
+    goal push <name>       Push a new active goal; prints the new goal id
+      --policy <type>      schema-fit-biased | error-prioritized |
+                           recency-first | hybrid
+      --success "<cond>"   Optional success condition text
+      --level <n>          Goal level (default: 0)
+      --parent <goalId>    Parent goal id (for sub-goals)
+      --session-id <s>     Override session (defaults to HIPPO_SESSION_ID)
+      --tenant-id <t>      Override tenant (defaults to HIPPO_TENANT)
+    goal list              Show active goals as a table
+      --all                Include suspended/completed goals
+    goal complete <id>     Mark a goal completed
+      --outcome <0..1>     Outcome score; >=0.7 boosts, <0.3 decays recalled mems
+    goal suspend <id>      Move an active goal to suspended
+    goal resume <id>       Move a suspended goal back to active (depth-capped)
   auth <sub>               Manage API keys (A5 stub auth)
     auth create            Mint a new API key (plaintext shown ONCE)
       --label <s>          Optional human label
@@ -5163,6 +5565,10 @@ async function main(): Promise<void> {
 
     case 'auth':
       cmdAuth(hippoRoot, args, flags);
+      break;
+
+    case 'goal':
+      cmdGoal(hippoRoot, args, flags);
       break;
 
     case 'slack':

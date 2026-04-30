@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.38.0 (2026-04-29)
+
+### Added
+- **B3 dlPFC persistent goal stack depth.** Schema v18 adds `goal_stack`, `retrieval_policy`, `goal_recall_log` (with FKs and CHECK constraints, tenant+session indexed). New CLI: `hippo goal push|list|complete|suspend|resume`. Active goals are tenant-and-session scoped, capped at depth 3 via `BEGIN IMMEDIATE` (oldest auto-suspends). When `HIPPO_SESSION_ID` is set, `hippo recall` auto-applies a goal-tag boost (final multiplier hard-capped at 3.0x). Retrieval policies (`error-prioritized`, `schema-fit-biased`, `recency-first`, `hybrid`) further shape ranking. Goal completion with `--outcome` propagates strength changes onto memories whose recall fell within the goal's lifespan window: `outcome >= 0.7` boosts (×1.10), `outcome < 0.3` decays (×0.85), neutral band leaves strength alone. UNIQUE(memory_id, goal_id) on the recall log prevents double-propagation.
+- **B3 cluster-discrimination benchmark.** New `benchmarks/micro/fixtures/dlpfc_depth.json` exercises three disjoint memory clusters under three named goals using the existing `run.py` harness. Each query asserts the active goal's cluster is in top-3 AND the other two clusters are NOT in top-3 — a deterministic test that BM25 alone cannot pass since all 18 memories share the query terms. Result captured in `benchmarks/micro/results/b3-depth.json` (3/3 queries pass). A statistical Wilcoxon-paired version moves to v0.39 stretch.
+
+### Deferred
+- **Sequential-learning trap-rate lift** moved from B3 success criterion to v0.39 stretch goal. Requires upstream contract change to `benchmarks/sequential-learning/adapters/interface.mjs` adding `pushGoal/completeGoal` hooks; current adapter shape (recall(query) / store(content,tags)) cannot exercise the goal-stack mechanism. Tracked in TODOS.md.
+- **MCP/REST goal-stack boost.** v0.38 surfaces the boost only via the CLI (env-driven `HIPPO_SESSION_ID`). v0.39 plumbs `session_id` through `Context` for `recall(ctx, opts)` so MCP and `/v1/recall` callers get the same boost.
+
+### Schema
+- Migration v18: `goal_stack` (tenant_id, session_id, goal_name, level CHECK 0..2, parent_goal_id self-FK, status CHECK, success_condition, retrieval_policy_id, created_at, completed_at, outcome_score CHECK 0..1), `retrieval_policy` (FK to goal_stack ON DELETE CASCADE), `goal_recall_log` (FKs to goal_stack and memories, UNIQUE(memory_id, goal_id)).
+
 ## 0.37.0 (2026-04-29)
 
 ### Added

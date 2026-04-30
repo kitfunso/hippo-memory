@@ -1,0 +1,51 @@
+{
+  "name": "dlpfc-depth",
+  "mechanic": "dlpfc-depth",
+  "description": "B3 dlPFC depth: three disjoint memory clusters (database, frontend, deploy), three named goals (db-rewrite, ui-rewrite, deploy-rewrite). Each query shares the ambiguous text 'rewrite step' so BM25 alone cannot discriminate (all 18 memories share 'rewrite step' tokens). A unique cluster-marker token (XDB-MARKER, XUI-MARKER, XDEP-MARKER) is seeded into EVERY memory of its cluster so top-3 ranking is fully deterministic against BM25 ties: any top-3 entry of the active cluster contains its marker and no other cluster's marker. Each query's pre_action does goal_push <cluster>-rewrite; the harness threads HIPPO_SESSION_ID into the recall subprocess. The asymmetric must_not_contain_any assertion (other two markers MUST NOT be in top-3) is what makes this load-bearing: only the goal-tag boost can satisfy it.",
+  "remembers": [
+    {"text": "step 1: drop the old database table for the rewrite XDB-MARKER", "tags": ["db-rewrite"]},
+    {"text": "step 2: rebuild the database schema for the rewrite XDB-MARKER", "tags": ["db-rewrite"]},
+    {"text": "step 3: backfill database rows for the rewrite XDB-MARKER", "tags": ["db-rewrite"]},
+    {"text": "step 4: cut over the database for the rewrite XDB-MARKER", "tags": ["db-rewrite"]},
+    {"text": "step 5: monitor database during the rewrite XDB-MARKER", "tags": ["db-rewrite"]},
+    {"text": "step 6: rollback database plan for the rewrite XDB-MARKER", "tags": ["db-rewrite"]},
+    {"text": "step 1: scaffold the frontend route for the rewrite XUI-MARKER", "tags": ["ui-rewrite"]},
+    {"text": "step 2: port the frontend components for the rewrite XUI-MARKER", "tags": ["ui-rewrite"]},
+    {"text": "step 3: redo the frontend styling for the rewrite XUI-MARKER", "tags": ["ui-rewrite"]},
+    {"text": "step 4: hook the frontend forms for the rewrite XUI-MARKER", "tags": ["ui-rewrite"]},
+    {"text": "step 5: snapshot test the frontend for the rewrite XUI-MARKER", "tags": ["ui-rewrite"]},
+    {"text": "step 6: ship the frontend for the rewrite XUI-MARKER", "tags": ["ui-rewrite"]},
+    {"text": "step 1: stage the deploy bucket for the rewrite XDEP-MARKER", "tags": ["deploy-rewrite"]},
+    {"text": "step 2: warm the deploy region for the rewrite XDEP-MARKER", "tags": ["deploy-rewrite"]},
+    {"text": "step 3: cut traffic to the new deploy for the rewrite XDEP-MARKER", "tags": ["deploy-rewrite"]},
+    {"text": "step 4: verify deploy health for the rewrite XDEP-MARKER", "tags": ["deploy-rewrite"]},
+    {"text": "step 5: drain old deploy for the rewrite XDEP-MARKER", "tags": ["deploy-rewrite"]},
+    {"text": "step 6: archive deploy logs for the rewrite XDEP-MARKER", "tags": ["deploy-rewrite"]}
+  ],
+  "queries": [
+    {
+      "pre_actions": [{"op": "goal_push", "name": "db-rewrite", "session_id": "s-db"}],
+      "q": "rewrite step",
+      "must_contain_any": ["XDB-MARKER"],
+      "must_not_contain_any": ["XUI-MARKER", "XDEP-MARKER"],
+      "top_k": 3,
+      "cli_args": ["--session-id", "s-db"]
+    },
+    {
+      "pre_actions": [{"op": "goal_push", "name": "ui-rewrite", "session_id": "s-ui"}],
+      "q": "rewrite step",
+      "must_contain_any": ["XUI-MARKER"],
+      "must_not_contain_any": ["XDB-MARKER", "XDEP-MARKER"],
+      "top_k": 3,
+      "cli_args": ["--session-id", "s-ui"]
+    },
+    {
+      "pre_actions": [{"op": "goal_push", "name": "deploy-rewrite", "session_id": "s-dep"}],
+      "q": "rewrite step",
+      "must_contain_any": ["XDEP-MARKER"],
+      "must_not_contain_any": ["XDB-MARKER", "XUI-MARKER"],
+      "top_k": 3,
+      "cli_args": ["--session-id", "s-dep"]
+    }
+  ]
+}

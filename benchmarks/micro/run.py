@@ -83,9 +83,16 @@ RESULTS_DIR = ROOT / "results"
 HIPPO_BIN = os.environ.get("HIPPO_BIN", "hippo").split()
 
 
-def run_hippo(args: list[str], hippo_home: Path, timeout: int = 30) -> subprocess.CompletedProcess:
+def run_hippo(
+    args: list[str],
+    hippo_home: Path,
+    timeout: int = 30,
+    extra_env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess:
     env = os.environ.copy()
     env["HIPPO_HOME"] = str(hippo_home)
+    if extra_env:
+        env.update(extra_env)
     return subprocess.run(
         HIPPO_BIN + args,
         env=env,
@@ -231,7 +238,59 @@ def score_fixture(fixture: dict) -> FixtureResult:
         for q in fixture["queries"]:
             top_k = q.get("top_k", 5)
             extra = q.get("cli_args", []) or []
-            cp = run_hippo(["recall", q["q"], "--json", "--budget", "4000", *extra], home)
+
+            # Per-query pre_actions (B3 dlPFC depth). Currently supports:
+            #   goal_push: shell out `hippo goal push <name> --session-id <sid>`
+            #              against the same temp HIPPO_HOME, BEFORE the recall
+            #              subprocess. Captures the session_id so we can also
+            #              thread HIPPO_SESSION_ID into the recall env (the CLI
+            #              auto-applies a goal-tag boost when the env var is
+            #              set, see src/cli.ts:resolveSessionForRecall).
+            pre_session_id: str | None = None
+            for pa in q.get("pre_actions", []) or []:
+                op = pa.get("op")
+                if op == "goal_push":
+                    goal_name = pa.get("name")
+                    sid = pa.get("session_id")
+                    if not goal_name or not sid:
+                        raise RuntimeError(
+                            f"fixture {name!r}: goal_push pre_action requires "
+                            f"'name' and 'session_id'"
+                        )
+                    run_hippo(
+                        ["goal", "push", goal_name, "--session-id", sid], home
+                    ).check_returncode()
+                    # First goal_push wins; later ones in the same query keep
+                    # the same session unless they override.
+                    if pre_session_id is None:
+                        pre_session_id = sid
+                else:
+                    raise ValueError(
+                        f"fixture {name!r}: unknown pre_action op {op!r}"
+                    )
+
+            # Thread HIPPO_SESSION_ID into the recall subprocess so the CLI's
+            # goal-tag boost actually fires. Source priority:
+            #   1) explicit --session-id in cli_args (already passed in `extra`)
+            #   2) pre_actions session_id
+            # The CLI itself prefers --session-id over $HIPPO_SESSION_ID, so
+            # setting both is safe and idempotent. See cli.ts:resolveGoalSession
+            # / resolveSessionForRecall.
+            recall_env: dict[str, str] = {}
+            cli_session_id: str | None = None
+            for i, tok in enumerate(extra):
+                if tok == "--session-id" and i + 1 < len(extra):
+                    cli_session_id = extra[i + 1]
+                    break
+            session_for_env = cli_session_id or pre_session_id
+            if session_for_env:
+                recall_env["HIPPO_SESSION_ID"] = session_for_env
+
+            cp = run_hippo(
+                ["recall", q["q"], "--json", "--budget", "4000", *extra],
+                home,
+                extra_env=recall_env or None,
+            )
             try:
                 payload = json.loads(cp.stdout) if cp.stdout.strip() else {}
             except json.JSONDecodeError:
