@@ -99,8 +99,9 @@ import { loadPhysicsState, resetAllPhysicsState } from './physics-state.js';
 import { computeSystemEnergy, vecNorm } from './physics.js';
 import { loadConfig } from './config.js';
 import { openHippoDb, closeHippoDb } from './db.js';
-import { getActiveGoalsWithDb, MAX_FINAL_MULTIPLIER } from './goals.js';
-import type { RetrievalPolicy } from './goals.js';
+import { getActiveGoalsWithDb, MAX_FINAL_MULTIPLIER, pushGoal, getActiveGoals, completeGoal, suspendGoal, resumeGoal } from './goals.js';
+import type { RetrievalPolicy, PolicyType, Goal, GoalRow } from './goals.js';
+import { rowToGoal } from './goals.js';
 import {
   captureError,
   extractLessons,
@@ -4746,6 +4747,198 @@ function cmdAuditLog(hippoRoot: string, args: string[], flags: Record<string, st
   process.exit(1);
 }
 
+// ---------------------------------------------------------------------------
+// `hippo goal <push|list|complete|suspend|resume>` — B3 dlPFC depth (Task 10)
+// ---------------------------------------------------------------------------
+
+const GOAL_POLICY_TYPES: ReadonlyArray<PolicyType> = [
+  'schema-fit-biased',
+  'error-prioritized',
+  'recency-first',
+  'hybrid',
+];
+
+function resolveGoalSession(flags: Record<string, string | boolean | string[]>): { sessionId: string; tenantId: string } {
+  const sessionId = (
+    flags['session-id'] !== undefined
+      ? String(flags['session-id'])
+      : process.env.HIPPO_SESSION_ID ?? ''
+  ).trim();
+  if (!sessionId) {
+    console.error('session id required (set HIPPO_SESSION_ID or pass --session-id)');
+    process.exit(1);
+  }
+  const tenantId = (
+    flags['tenant-id'] !== undefined
+      ? String(flags['tenant-id'])
+      : process.env.HIPPO_TENANT ?? 'default'
+  ).trim() || 'default';
+  return { sessionId, tenantId };
+}
+
+function cmdGoalPush(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
+  const name = args.join(' ').trim();
+  if (!name) {
+    console.error('Usage: hippo goal push <name> [--policy <type>] [--success "<condition>"] [--level N] [--parent <goalId>]');
+    process.exit(1);
+  }
+  const { sessionId, tenantId } = resolveGoalSession(flags);
+
+  let policy: { policyType: PolicyType } | undefined;
+  const policyRaw = typeof flags['policy'] === 'string' ? (flags['policy'] as string) : undefined;
+  if (policyRaw) {
+    if (!(GOAL_POLICY_TYPES as readonly string[]).includes(policyRaw)) {
+      console.error(`Unknown --policy '${policyRaw}'. Expected one of: ${GOAL_POLICY_TYPES.join(' | ')}.`);
+      process.exit(1);
+    }
+    policy = { policyType: policyRaw as PolicyType };
+  }
+
+  const successCondition = typeof flags['success'] === 'string' ? (flags['success'] as string) : undefined;
+  const levelRaw = flags['level'];
+  let level: number | undefined;
+  if (levelRaw !== undefined) {
+    const parsed = Number(levelRaw);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      console.error('--level must be a non-negative integer');
+      process.exit(1);
+    }
+    level = Math.floor(parsed);
+  }
+  const parentGoalId = typeof flags['parent'] === 'string' ? (flags['parent'] as string) : undefined;
+
+  const goal = pushGoal(hippoRoot, {
+    sessionId,
+    tenantId,
+    goalName: name,
+    level,
+    parentGoalId,
+    successCondition,
+    policy,
+  });
+  console.log(goal.id);
+}
+
+function listAllGoals(hippoRoot: string, sessionId: string, tenantId: string): Goal[] {
+  const db = openHippoDb(hippoRoot);
+  try {
+    const rows = db.prepare(`
+      SELECT id, session_id, tenant_id, goal_name, level, parent_goal_id, status,
+             success_condition, retrieval_policy_id, created_at, completed_at, outcome_score
+      FROM goal_stack
+      WHERE tenant_id = ? AND session_id = ?
+      ORDER BY created_at ASC
+    `).all(tenantId, sessionId) as GoalRow[];
+    return rows.map(rowToGoal);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+function cmdGoalList(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
+  const { sessionId, tenantId } = resolveGoalSession(flags);
+  const showAll = Boolean(flags['all']);
+  const goals = showAll
+    ? listAllGoals(hippoRoot, sessionId, tenantId)
+    : getActiveGoals(hippoRoot, { sessionId, tenantId });
+
+  if (goals.length === 0) {
+    console.log('(no goals)');
+    return;
+  }
+
+  // 4-column table: id, status, goal_name, outcome. Plan calls it a "2-column"
+  // table but the assertion list (id, status, goal_name, outcome) needs four;
+  // tests check for substrings ('active', '0.9', name) so column count is
+  // observably four but not asserted.
+  const rows = goals.map(g => ({
+    id: g.id,
+    status: g.status,
+    name: g.goalName,
+    outcome: g.outcomeScore !== undefined ? g.outcomeScore.toString() : '-',
+  }));
+  const widths = {
+    id: Math.max(2, ...rows.map(r => r.id.length)),
+    status: Math.max(6, ...rows.map(r => r.status.length)),
+    name: Math.max(4, ...rows.map(r => r.name.length)),
+    outcome: Math.max(7, ...rows.map(r => r.outcome.length)),
+  };
+  const pad = (s: string, w: number): string => s + ' '.repeat(Math.max(0, w - s.length));
+  console.log(`${pad('id', widths.id)}  ${pad('status', widths.status)}  ${pad('name', widths.name)}  ${pad('outcome', widths.outcome)}`);
+  for (const r of rows) {
+    console.log(`${pad(r.id, widths.id)}  ${pad(r.status, widths.status)}  ${pad(r.name, widths.name)}  ${pad(r.outcome, widths.outcome)}`);
+  }
+}
+
+function cmdGoalComplete(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
+  const id = args[0];
+  if (!id) {
+    console.error('Usage: hippo goal complete <id> [--outcome <0..1>]');
+    process.exit(1);
+  }
+  let outcomeScore: number | undefined;
+  const outcomeRaw = flags['outcome'];
+  if (outcomeRaw !== undefined && outcomeRaw !== true) {
+    const parsed = Number(outcomeRaw);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
+      console.error('--outcome must be a number in [0, 1]');
+      process.exit(1);
+    }
+    outcomeScore = parsed;
+  }
+  completeGoal(hippoRoot, id, { outcomeScore });
+  console.log('ok');
+}
+
+function cmdGoalSuspend(hippoRoot: string, args: string[]): void {
+  const id = args[0];
+  if (!id) {
+    console.error('Usage: hippo goal suspend <id>');
+    process.exit(1);
+  }
+  suspendGoal(hippoRoot, id);
+  console.log('ok');
+}
+
+function cmdGoalResume(hippoRoot: string, args: string[]): void {
+  const id = args[0];
+  if (!id) {
+    console.error('Usage: hippo goal resume <id>');
+    process.exit(1);
+  }
+  resumeGoal(hippoRoot, id);
+  console.log('ok');
+}
+
+function cmdGoal(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
+  const sub = args[0];
+  if (!sub) {
+    console.error('Usage: hippo goal <push|list|complete|suspend|resume> [args]');
+    process.exit(1);
+  }
+  const subArgs = args.slice(1);
+  switch (sub) {
+    case 'push':
+      cmdGoalPush(hippoRoot, subArgs, flags);
+      return;
+    case 'list':
+      cmdGoalList(hippoRoot, flags);
+      return;
+    case 'complete':
+      cmdGoalComplete(hippoRoot, subArgs, flags);
+      return;
+    case 'suspend':
+      cmdGoalSuspend(hippoRoot, subArgs);
+      return;
+    case 'resume':
+      cmdGoalResume(hippoRoot, subArgs);
+      return;
+    default:
+      console.error(`Unknown goal subcommand: ${sub}. Expected: push | list | complete | suspend | resume.`);
+      process.exit(1);
+  }
+}
+
 function cmdAuth(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
   const sub = args[0];
   if (!sub) {
@@ -5097,6 +5290,21 @@ Commands:
   dashboard                Open web dashboard for memory health
     --port <n>             Port to serve on (default: 3333)
   mcp                      Start MCP server (stdio transport)
+  goal <sub>               dlPFC goal stack (B3) — scoped per session
+    goal push <name>       Push a new active goal; prints the new goal id
+      --policy <type>      schema-fit-biased | error-prioritized |
+                           recency-first | hybrid
+      --success "<cond>"   Optional success condition text
+      --level <n>          Goal level (default: 0)
+      --parent <goalId>    Parent goal id (for sub-goals)
+      --session-id <s>     Override session (defaults to HIPPO_SESSION_ID)
+      --tenant-id <t>      Override tenant (defaults to HIPPO_TENANT)
+    goal list              Show active goals as a table
+      --all                Include suspended/completed goals
+    goal complete <id>     Mark a goal completed
+      --outcome <0..1>     Outcome score; >=0.7 boosts, <0.3 decays recalled mems
+    goal suspend <id>      Move an active goal to suspended
+    goal resume <id>       Move a suspended goal back to active (depth-capped)
   auth <sub>               Manage API keys (A5 stub auth)
     auth create            Mint a new API key (plaintext shown ONCE)
       --label <s>          Optional human label
@@ -5310,6 +5518,10 @@ async function main(): Promise<void> {
 
     case 'auth':
       cmdAuth(hippoRoot, args, flags);
+      break;
+
+    case 'goal':
+      cmdGoal(hippoRoot, args, flags);
       break;
 
     case 'slack':
