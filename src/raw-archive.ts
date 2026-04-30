@@ -15,13 +15,6 @@ export interface ArchiveOpts {
   afterArchive?: (db: DatabaseSyncLike, archivedMemoryId: string) => void;
 }
 
-// JSON.stringify cannot serialize BigInt by default. node:sqlite returns INTEGER
-// columns as bigint when the value exceeds Number.MAX_SAFE_INTEGER. Coerce to
-// string so the audit payload is always serializable.
-function bigintSafeReplacer(_key: string, value: unknown): unknown {
-  return typeof value === 'bigint' ? value.toString() : value;
-}
-
 /**
  * The only legitimate path to remove a `kind='raw'` row from `memories`.
  *
@@ -44,9 +37,21 @@ export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: Archive
   // transaction. SQLite refuses BEGIN within a transaction; SAVEPOINT nests safely.
   db.exec('SAVEPOINT archive_raw');
   try {
+    // GDPR Path A (v0.39): raw_archive stores ONLY metadata, not the original
+    // memory content. The audit_log row appended below carries op='archive_raw'
+    // for the compliance audit trail. True right-to-be-forgotten — the original
+    // content is unrecoverable from raw_archive after this point.
+    const archivedAt = new Date().toISOString();
+    const redactedPayload = JSON.stringify({
+      redacted: true,
+      archived_at: archivedAt,
+      tenant_id: row.tenant_id ?? 'default',
+      kind: row.kind,
+      reason: opts.reason,
+    });
     db.prepare(
       `INSERT INTO raw_archive (memory_id, archived_at, reason, archived_by, payload_json) VALUES (?, ?, ?, ?, ?)`,
-    ).run(id, new Date().toISOString(), opts.reason, opts.who, JSON.stringify(row, bigintSafeReplacer));
+    ).run(id, archivedAt, opts.reason, opts.who, redactedPayload);
     // Flip kind to 'archived' so the BEFORE DELETE trigger no longer fires, then delete.
     db.prepare(`UPDATE memories SET kind = 'archived' WHERE id = ?`).run(id);
     db.prepare(`DELETE FROM memories WHERE id = ?`).run(id);

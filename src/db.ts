@@ -21,7 +21,7 @@ const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: new (path: string) => DatabaseSyncLike;
 };
 
-const CURRENT_SCHEMA_VERSION = 19;
+const CURRENT_SCHEMA_VERSION = 20;
 
 type Migration = {
   version: number;
@@ -547,6 +547,50 @@ const MIGRATIONS: Migration[] = [
       }
       if (!tableHasColumn(db, 'slack_dlq', 'slack_timestamp')) {
         db.exec(`ALTER TABLE slack_dlq ADD COLUMN slack_timestamp TEXT`);
+      }
+    },
+  },
+  {
+    version: 20,
+    up: (db) => {
+      // v0.39 commit 4 (GDPR Path A backfill): redact every existing
+      // raw_archive.payload_json so historical archives match the new
+      // metadata-only contract from src/raw-archive.ts. Read each row, parse
+      // the existing JSON to extract tenant_id and kind (best effort), then
+      // UPDATE with the redacted shape. Rows with unparseable legacy JSON get
+      // redacted with tenant_id='unknown', kind='unknown'. The audit_log
+      // remains the compliance record.
+      const rows = db
+        .prepare(`SELECT id, archived_at, reason, payload_json FROM raw_archive`)
+        .all() as Array<{
+        id: number;
+        archived_at: string;
+        reason: string;
+        payload_json: string;
+      }>;
+      const update = db.prepare(`UPDATE raw_archive SET payload_json = ? WHERE id = ?`);
+      for (const row of rows) {
+        let tenant = 'unknown';
+        let kind = 'unknown';
+        try {
+          const parsed = JSON.parse(row.payload_json) as {
+            tenant_id?: string;
+            kind?: string;
+          };
+          tenant = parsed.tenant_id ?? 'unknown';
+          kind = parsed.kind ?? 'unknown';
+        } catch {
+          // Unparseable legacy payload — redact with unknowns.
+        }
+        const redacted = JSON.stringify({
+          redacted: true,
+          archived_at: row.archived_at,
+          tenant_id: tenant,
+          kind,
+          reason: row.reason,
+          migration: 'v20_redact',
+        });
+        update.run(redacted, row.id);
       }
     },
   },

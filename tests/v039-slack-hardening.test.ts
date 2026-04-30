@@ -43,10 +43,10 @@ describe('v0.39 commit 3 — Slack hardening + migration v19', () => {
 
   // 1. Migration v19 schema additions present.
   it('migration v19: slack_dlq has team_id, bucket, retry_count, signature, slack_timestamp', () => {
-    expect(getCurrentSchemaVersion()).toBe(19);
+    expect(getCurrentSchemaVersion()).toBe(20);
     const db = openHippoDb(root);
     try {
-      expect(getSchemaVersion(db)).toBe(19);
+      expect(getSchemaVersion(db)).toBe(20);
       const cols = db.prepare(`PRAGMA table_info(slack_dlq)`).all() as Array<{ name: string }>;
       const names = cols.map((c) => c.name);
       expect(names).toContain('team_id');

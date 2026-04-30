@@ -5,12 +5,12 @@ import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion } from '../src/db.js';
 
 describe('A5 schema migration v16: tenant_id columns', () => {
-  it('migrates to latest schema version (currently 19)', () => {
+  it('migrates to latest schema version (currently 20)', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-a5-'));
     const db = openHippoDb(home);
     try {
-      expect(getSchemaVersion(db)).toBe(19);
-      expect(getCurrentSchemaVersion()).toBe(19);
+      expect(getSchemaVersion(db)).toBe(20);
+      expect(getCurrentSchemaVersion()).toBe(20);
     } finally {
       closeHippoDb(db);
       rmSync(home, { recursive: true, force: true });
