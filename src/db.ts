@@ -494,10 +494,14 @@ const MIGRATIONS: Migration[] = [
           goal_id TEXT NOT NULL REFERENCES goal_stack(id) ON DELETE CASCADE,
           policy_type TEXT NOT NULL CHECK (policy_type IN
             ('schema-fit-biased','error-prioritized','recency-first','hybrid')),
-          weight_schema_fit REAL NOT NULL DEFAULT 1.0,
-          weight_recency REAL NOT NULL DEFAULT 1.0,
-          weight_outcome REAL NOT NULL DEFAULT 1.0,
+          weight_schema_fit REAL NOT NULL DEFAULT 1.0
+            CHECK (weight_schema_fit >= 0 AND weight_schema_fit <= 100),
+          weight_recency REAL NOT NULL DEFAULT 1.0
+            CHECK (weight_recency >= 0 AND weight_recency <= 100),
+          weight_outcome REAL NOT NULL DEFAULT 1.0
+            CHECK (weight_outcome >= 0 AND weight_outcome <= 100),
           error_priority REAL NOT NULL DEFAULT 1.0
+            CHECK (error_priority >= 0 AND error_priority <= 100)
         );
 
         CREATE INDEX IF NOT EXISTS idx_retrieval_policy_goal

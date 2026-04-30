@@ -1003,11 +1003,8 @@ async function cmdRecall(
       : process.env.HIPPO_SESSION_ID ?? ''
   ).trim();
   if (sessionId && goalTag === '') {
-    const tenantIdForGoals = (
-      flags['tenant-id'] !== undefined
-        ? String(flags['tenant-id'])
-        : process.env.HIPPO_TENANT ?? 'default'
-    ).trim() || 'default';
+    // Use the same tenant as the recall path — see cmdRecall:778.
+    const tenantIdForGoals = tenantId;
     const dbForGoals = openHippoDb(hippoRoot);
     try {
       const active = getActiveGoalsWithDb(dbForGoals, {
@@ -1089,6 +1086,21 @@ async function cmdRecall(
           })
           .sort((a, b) => b.score - a.score);
 
+        // Filter to local memories only — global memory IDs aren't in this
+        // DB's memories table, so the FK on goal_recall_log.memory_id would
+        // fail. dlPFC depth's outcome propagation is session-scoped to local;
+        // boost on ranking still applies to global results, just no log row
+        // -> no propagation.
+        const topKIds = results.slice(0, limit).map((r) => r.entry.id);
+        const localIds = new Set<string>();
+        if (topKIds.length > 0) {
+          const placeholders = topKIds.map(() => '?').join(',');
+          const localRows = dbForGoals.prepare(
+            `SELECT id FROM memories WHERE id IN (${placeholders})`,
+          ).all(...topKIds) as Array<{ id: string }>;
+          for (const row of localRows) localIds.add(row.id);
+        }
+
         // Log top-K boosted recalls. INSERT OR IGNORE because
         // UNIQUE(memory_id, goal_id) means a re-recall during the same goal
         // life is a no-op for outcome attribution.
@@ -1099,6 +1111,7 @@ async function cmdRecall(
           VALUES (?, ?, ?, ?, ?, ?)
         `);
         for (const r of results.slice(0, limit)) {
+          if (!localIds.has(r.entry.id)) continue; // global -> skip log insert
           const matches = (r as { _goalMatches?: string[] })._goalMatches;
           if (!matches || matches.length === 0) continue;
           for (const tag of matches) {
@@ -4758,6 +4771,11 @@ const GOAL_POLICY_TYPES: ReadonlyArray<PolicyType> = [
   'hybrid',
 ];
 
+function sanitizeGoalName(s: string): string {
+  // Strip C0 control chars + DEL to prevent terminal escape injection.
+  return s.replace(/[\x00-\x1f\x7f]/g, '?');
+}
+
 function resolveGoalSession(flags: Record<string, string | boolean | string[]>): { sessionId: string; tenantId: string } {
   const sessionId = (
     flags['session-id'] !== undefined
@@ -4777,16 +4795,25 @@ function resolveGoalSession(flags: Record<string, string | boolean | string[]>):
 }
 
 function cmdGoalPush(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
-  const name = args.join(' ').trim();
-  if (!name) {
+  const rawName = args.join(' ').trim();
+  if (!rawName) {
     console.error('Usage: hippo goal push <name> [--policy <type>] [--success "<condition>"] [--level N] [--parent <goalId>]');
     process.exit(1);
+  }
+  // Sanitize at WRITE time so corrupt names never enter the DB.
+  const name = sanitizeGoalName(rawName);
+  if (name !== rawName) {
+    console.error('note: stripped control characters from goal name');
   }
   const { sessionId, tenantId } = resolveGoalSession(flags);
 
   let policy: { policyType: PolicyType } | undefined;
-  const policyRaw = typeof flags['policy'] === 'string' ? (flags['policy'] as string) : undefined;
-  if (policyRaw) {
+  const policyRaw = flags['policy'];
+  if (policyRaw === true) {
+    console.error('--policy requires a value (e.g., --policy error-prioritized)');
+    process.exit(1);
+  }
+  if (typeof policyRaw === 'string') {
     if (!(GOAL_POLICY_TYPES as readonly string[]).includes(policyRaw)) {
       console.error(`Unknown --policy '${policyRaw}'. Expected one of: ${GOAL_POLICY_TYPES.join(' | ')}.`);
       process.exit(1);
@@ -4794,18 +4821,34 @@ function cmdGoalPush(hippoRoot: string, args: string[], flags: Record<string, st
     policy = { policyType: policyRaw as PolicyType };
   }
 
-  const successCondition = typeof flags['success'] === 'string' ? (flags['success'] as string) : undefined;
+  const successRaw = flags['success'];
+  if (successRaw === true) {
+    console.error('--success requires a value (e.g., --success "<condition>")');
+    process.exit(1);
+  }
+  const successCondition = typeof successRaw === 'string' ? successRaw : undefined;
+
   const levelRaw = flags['level'];
   let level: number | undefined;
+  if (levelRaw === true) {
+    console.error('--level requires a value (e.g., --level 1)');
+    process.exit(1);
+  }
   if (levelRaw !== undefined) {
     const parsed = Number(levelRaw);
-    if (!Number.isFinite(parsed) || parsed < 0) {
-      console.error('--level must be a non-negative integer');
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 2 || !Number.isInteger(parsed)) {
+      console.error('--level must be an integer in [0, 2]');
       process.exit(1);
     }
-    level = Math.floor(parsed);
+    level = parsed;
   }
-  const parentGoalId = typeof flags['parent'] === 'string' ? (flags['parent'] as string) : undefined;
+
+  const parentRaw = flags['parent'];
+  if (parentRaw === true) {
+    console.error('--parent requires a value (e.g., --parent <goalId>)');
+    process.exit(1);
+  }
+  const parentGoalId = typeof parentRaw === 'string' ? parentRaw : undefined;
 
   const goal = pushGoal(hippoRoot, {
     sessionId,
@@ -4854,7 +4897,7 @@ function cmdGoalList(hippoRoot: string, flags: Record<string, string | boolean |
   const rows = goals.map(g => ({
     id: g.id,
     status: g.status,
-    name: g.goalName,
+    name: sanitizeGoalName(g.goalName),
     outcome: g.outcomeScore !== undefined ? g.outcomeScore.toString() : '-',
   }));
   const widths = {
@@ -4878,7 +4921,11 @@ function cmdGoalComplete(hippoRoot: string, args: string[], flags: Record<string
   }
   let outcomeScore: number | undefined;
   const outcomeRaw = flags['outcome'];
-  if (outcomeRaw !== undefined && outcomeRaw !== true) {
+  if (outcomeRaw === true) {
+    console.error('--outcome requires a value (e.g., --outcome 0.9)');
+    process.exit(1);
+  }
+  if (outcomeRaw !== undefined) {
     const parsed = Number(outcomeRaw);
     if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
       console.error('--outcome must be a number in [0, 1]');

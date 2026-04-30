@@ -118,6 +118,20 @@ export function pushGoalWithDb(db: DatabaseSyncLike, opts: PushGoalOpts): Goal {
       `).run(opts.tenantId, opts.sessionId, overflow);
     }
 
+    if (opts.parentGoalId) {
+      const parent = db.prepare(
+        `SELECT tenant_id, session_id FROM goal_stack WHERE id = ?`,
+      ).get(opts.parentGoalId) as { tenant_id: string; session_id: string } | undefined;
+      if (!parent) {
+        throw new Error(`parent goal not found: ${opts.parentGoalId}`);
+      }
+      if (parent.tenant_id !== opts.tenantId || parent.session_id !== opts.sessionId) {
+        throw new Error(
+          `parent goal ${opts.parentGoalId} belongs to a different (tenant, session)`,
+        );
+      }
+    }
+
     // Parent goal_stack row first (FK target).
     db.prepare(`
       INSERT INTO goal_stack
@@ -210,9 +224,14 @@ export function completeGoal(hippoRoot: string, goalId: string, opts: CompleteGo
     db.exec('BEGIN IMMEDIATE');
     try {
       const goalRow = db.prepare(
-        `SELECT created_at FROM goal_stack WHERE id = ?`,
-      ).get(goalId) as { created_at: string } | undefined;
+        `SELECT created_at, status FROM goal_stack WHERE id = ?`,
+      ).get(goalId) as { created_at: string; status: string } | undefined;
       if (!goalRow) {
+        db.exec('COMMIT');
+        return;
+      }
+      if (goalRow.status === 'completed') {
+        // Already completed -- second call is a no-op for idempotency.
         db.exec('COMMIT');
         return;
       }
