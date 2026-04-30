@@ -294,8 +294,13 @@ async function executeTool(
 
       // Existing physics/hybrid scorer continues to drive user-visible
       // ordering and the strength bump on retrieval — unchanged shape for
-      // existing MCP HTTP clients.
-      const entries = loadAllEntries(hippoRoot, tenantId);
+      // existing MCP HTTP clients. v0.39 Fix 5.6: apply the same default-deny
+      // rule as src/api.ts.recall — when the caller passes no scope, drop
+      // `slack:private:*` rows so an MCP client cannot exfiltrate
+      // private-channel content via a bare query. (loadAllEntries is a
+      // tenant-only loader; scope filtering lives at the call site.)
+      const allEntries = loadAllEntries(hippoRoot, tenantId);
+      const entries = allEntries.filter((e) => !(e.scope ?? '').startsWith('slack:private:'));
       const usePhysics = config.physics?.enabled !== false;
       const results = usePhysics
         ? await physicsSearch(query, entries, { budget, hippoRoot, physicsConfig: config.physics })

@@ -814,15 +814,53 @@ async function handleRequest(
       connection: 'keep-alive',
     });
     // Initial ping so smoke tests can confirm the stream is live without
-    // waiting 30s for the first keepalive interval.
+    // waiting for the first keepalive interval.
     res.write(': ping\n\n');
+
+    // v0.39 SSE hardening:
+    //   - Heartbeat re-validates the bearer (default 60s). If the key was
+    //     revoked or rotated, close the stream with reason='auth_revoked'.
+    //   - MCP_SSE_MAX_AGE_SEC (default 3600) caps stream lifetime; close
+    //     with reason='max_age_exceeded' when reached.
+    //   - MCP_SSE_HEARTBEAT_MS (default 60000) lets tests run with a short
+    //     interval without waiting a full minute.
+    const heartbeatMs =
+      parseInt(process.env.MCP_SSE_HEARTBEAT_MS ?? '60000', 10) || 60000;
+    const maxAgeMs =
+      (parseInt(process.env.MCP_SSE_MAX_AGE_SEC ?? '3600', 10) || 3600) * 1000;
+    const startedAt = Date.now();
+    let closed = false;
+    const closeWith = (reason: string): void => {
+      if (closed) return;
+      closed = true;
+      try {
+        res.write(`event: closed\ndata: ${JSON.stringify({ reason })}\n\n`);
+      } catch { /* socket already gone */ }
+      try { res.end(); } catch { /* socket already gone */ }
+    };
     const ping = setInterval(() => {
+      if (closed) {
+        clearInterval(ping);
+        return;
+      }
+      if (Date.now() - startedAt >= maxAgeMs) {
+        closeWith('max_age_exceeded');
+        clearInterval(ping);
+        return;
+      }
+      try {
+        requireAuth(req, opts.hippoRoot);
+      } catch {
+        closeWith('auth_revoked');
+        clearInterval(ping);
+        return;
+      }
       try {
         res.write(': ping\n\n');
       } catch {
         clearInterval(ping);
       }
-    }, 30000);
+    }, heartbeatMs);
     // Don't keep the event loop alive just for this timer — the server's
     // listener already does that, and tests want the process to exit cleanly.
     if (typeof ping.unref === 'function') ping.unref();
@@ -919,8 +957,21 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   // Skip signal handlers under vitest so each test run does not register a
   // stray SIGTERM/SIGINT listener that survives until the runner exits.
   if (!process.env.VITEST) {
-    process.once('SIGTERM', () => { void stop(); });
-    process.once('SIGINT', () => { void stop(); });
+    let shuttingDown = false;
+    const gracefulShutdown = async (signal: string): Promise<void> => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      console.error(`Received ${signal}, shutting down...`);
+      try {
+        await stop();
+      } catch (err) {
+        console.error('Error during stop:', err);
+      } finally {
+        process.exit(0);
+      }
+    };
+    process.once('SIGTERM', () => { void gracefulShutdown('SIGTERM'); });
+    process.once('SIGINT', () => { void gracefulShutdown('SIGINT'); });
   }
 
   return { port: actualPort, url, stop };
