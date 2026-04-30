@@ -99,6 +99,7 @@ import { loadPhysicsState, resetAllPhysicsState } from './physics-state.js';
 import { computeSystemEnergy, vecNorm } from './physics.js';
 import { loadConfig } from './config.js';
 import { openHippoDb, closeHippoDb } from './db.js';
+import { getActiveGoalsWithDb, MAX_FINAL_MULTIPLIER } from './goals.js';
 import {
   captureError,
   extractLessons,
@@ -976,6 +977,88 @@ async function cmdRecall(
     results = results
       .map((r) => (r.entry.tags?.includes(goalTag) ? { ...r, score: r.score * 1.5 } : r))
       .sort((a, b) => b.score - a.score);
+  }
+
+  // dlPFC depth (B3, v0.38). When HIPPO_SESSION_ID is set (env or
+  // --session-id flag) and the (tenant, session) has active goals, boost
+  // memories whose tags overlap any active goal's name. Final multiplier is
+  // hard-capped at MAX_FINAL_MULTIPLIER (3.0x). Each boosted (memory, goal)
+  // pair is logged into goal_recall_log for outcome propagation.
+  //
+  // Runs AFTER the explicit `--goal <tag>` block so an explicit flag always
+  // wins: if the user passed `--goal X`, this block is skipped entirely
+  // (gated on `goalTag === ''`).
+  //
+  // db-handle note (plan-eng-review fix #5): the surrounding cmdRecall path
+  // does NOT keep an open db handle in scope at this point — earlier search
+  // helpers (loadSearchEntries, hybridSearch, ...) each open and close their
+  // own short-lived handles. Reusing isn't practical here; we open a fresh
+  // short-lived handle for this block, mirroring the existing CLI pattern
+  // (e.g. emitCliAudit). Closed in `finally`.
+  const sessionId = (
+    flags['session-id'] !== undefined
+      ? String(flags['session-id'])
+      : process.env.HIPPO_SESSION_ID ?? ''
+  ).trim();
+  if (sessionId && goalTag === '') {
+    const tenantIdForGoals = (
+      flags['tenant-id'] !== undefined
+        ? String(flags['tenant-id'])
+        : process.env.HIPPO_TENANT ?? 'default'
+    ).trim() || 'default';
+    const dbForGoals = openHippoDb(hippoRoot);
+    try {
+      const active = getActiveGoalsWithDb(dbForGoals, {
+        sessionId,
+        tenantId: tenantIdForGoals,
+      });
+      if (active.length > 0) {
+        const goalsByTag = new Map(active.map((g) => [g.goalName, g]));
+        results = results
+          .map((r) => {
+            const tags = r.entry.tags ?? [];
+            const matches = tags.filter((t) => goalsByTag.has(t));
+            if (matches.length === 0) return r;
+            // Base 2.0x for first match, +0.5x per additional, capped at 3.0x.
+            const rawMul = 2.0 + 0.5 * (matches.length - 1);
+            const multiplier = Math.min(rawMul, MAX_FINAL_MULTIPLIER);
+            return {
+              ...r,
+              score: r.score * multiplier,
+              _goalMatches: matches,
+            } as typeof r & { _goalMatches: string[] };
+          })
+          .sort((a, b) => b.score - a.score);
+
+        // Log top-K boosted recalls. INSERT OR IGNORE because
+        // UNIQUE(memory_id, goal_id) means a re-recall during the same goal
+        // life is a no-op for outcome attribution.
+        const recalledAt = new Date().toISOString();
+        const insertLog = dbForGoals.prepare(`
+          INSERT OR IGNORE INTO goal_recall_log
+            (goal_id, memory_id, tenant_id, session_id, recalled_at, score)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `);
+        for (const r of results.slice(0, limit)) {
+          const matches = (r as { _goalMatches?: string[] })._goalMatches;
+          if (!matches || matches.length === 0) continue;
+          for (const tag of matches) {
+            const goal = goalsByTag.get(tag);
+            if (!goal) continue;
+            insertLog.run(
+              goal.id,
+              r.entry.id,
+              tenantIdForGoals,
+              sessionId,
+              recalledAt,
+              r.score,
+            );
+          }
+        }
+      }
+    } finally {
+      closeHippoDb(dbForGoals);
+    }
   }
 
   // Pineal salience MVP (RESEARCH.md §"AI Pineal Gland — Intuition and Awareness
@@ -4765,6 +4848,12 @@ Commands:
     --goal <tag>           dlPFC goal-conditioned recall: memories tagged with
                            the goal tag get a 1.5x score boost and results are
                            re-sorted. Default off. RESEARCH.md §PFC.dlPFC.
+    --session-id <id>      Session identifier for dlPFC goal-stack boost.
+                           Defaults to \$HIPPO_SESSION_ID. When set and the
+                           (tenant, session) has active goals (see
+                           'hippo goal push'), recall auto-boosts memories
+                           whose tags match an active goal name. Boost stacks
+                           on top of base BM25 score, capped at 3.0x.
     --salience-threshold <n>
                            Pineal salience: down-weight memories whose
                            retrieval_count is below n. score *= max(0.5,
