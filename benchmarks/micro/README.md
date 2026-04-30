@@ -71,6 +71,13 @@ metadata, e.g. dlPFC goal conditioning (`--goal <tag>` boost).
   `hippo outcome --bad --id <id>` `bad` times. Used to set up
   value-attribution scenarios (vmPFC mechanic). Example:
   `{"type": "outcomes", "remember_index": 0, "good": 3, "bad": 0}`.
+**Per-query `pre_actions`** run before the query's recall subprocess (per query, in declared order):
+
+- `goal_push` — shells out `hippo goal push <name> --session-id <session_id>` against the same temp `HIPPO_HOME`. Used by the dlPFC depth fixture (`fixtures/dlpfc_depth.json`) to push a named goal so `hippo recall` auto-applies the goal-tag boost. The harness threads `HIPPO_SESSION_ID` into the recall subprocess from either an explicit `--session-id` in `cli_args` or from the pre_action's `session_id`. Example:
+  `{"op": "goal_push", "name": "db-rewrite", "session_id": "s-db"}`.
+
+The dlPFC depth fixture (`fixtures/dlpfc_depth.json`) uses three disjoint clusters of 6 memories (database / frontend / deploy), each tagged with a cluster-specific marker (`db-rewrite` / `ui-rewrite` / `deploy-rewrite`). All three queries share the same ambiguous text `"rewrite step"` so BM25 alone cannot discriminate clusters; each query pairs a `goal_push` pre_action with an asymmetric assertion: the active cluster's unique marker token (`XDB-MARKER` / `XUI-MARKER` / `XDEP-MARKER`) MUST be in top-3 AND the other two markers MUST NOT be. Each memory carries its cluster's marker token in its text, so any top-3 entry of the active cluster contains the right marker — top-3 ranking is fully deterministic against intra-cluster BM25 ties. Only the goal-tag boost can satisfy the asymmetric `must_not_contain_any` constraint (BM25 alone has no way to suppress the other two clusters), which is what makes this fixture load-bearing for B3 cluster discrimination.
+
 - `recall` — runs `hippo recall <query> --limit 1` `times` times to bump
   `retrieval_count` on the top-ranked match for `query`. The `--limit 1` is
   intentional: in `cli.ts`, results are sliced to `limit` BEFORE
