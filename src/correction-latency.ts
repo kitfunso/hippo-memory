@@ -65,7 +65,10 @@ export function buildCorrectionLatency(entries: MemoryEntry[]): CorrectionLatenc
         via = 'extraction';
       }
     }
-    const latencyMs = Math.max(0, new Date(correctedAt).getTime() - new Date(observedAt).getTime());
+    const correctedMs = new Date(correctedAt).getTime();
+    const observedMs = new Date(observedAt).getTime();
+    if (!Number.isFinite(correctedMs) || !Number.isFinite(observedMs)) continue;
+    const latencyMs = Math.max(0, correctedMs - observedMs);
     pairs.push({
       oldId: oldEntry.id,
       newId: newEntry.id,

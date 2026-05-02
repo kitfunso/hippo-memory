@@ -326,6 +326,27 @@ describe('Company Brain correction-latency scorecard', () => {
     expect(report.maxMs).toBe(30 * 60 * 1000);
   });
 
+  it('skips pairs with malformed timestamps so NaN never reaches percentiles', () => {
+    const oldEntry = createMemory('belief: tier is 100', {});
+    (oldEntry as { created: string }).created = '2026-04-01T00:00:00.000Z';
+    const newEntry = createMemory('belief: tier is 120', {});
+    (newEntry as { created: string }).created = 'not-a-date';
+    (oldEntry as { superseded_by: string | null }).superseded_by = newEntry.id;
+
+    const report = buildCorrectionLatency([oldEntry, newEntry]);
+    expect(report.count).toBe(0);
+    expect(report.p50Ms).toBeNull();
+  });
+
+  it('handles dangling superseded_by pointers without throwing', () => {
+    const oldEntry = createMemory('belief points at a missing successor', {});
+    (oldEntry as { superseded_by: string | null }).superseded_by = 'mem-does-not-exist';
+
+    const report = buildCorrectionLatency([oldEntry]);
+    expect(report.count).toBe(0);
+    expect(report.pairs).toEqual([]);
+  });
+
   it('computes p50/p95/max across multiple extraction-driven corrections', () => {
     const entries = [];
     const baseRaw = '2026-04-01T00:00:00.000Z';
