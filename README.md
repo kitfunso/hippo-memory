@@ -85,6 +85,11 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v0.40.0
+
+- **Company Brain measurement gates.** Two new diagnostic commands close the last blocked rows of the Company Brain scorecard. `hippo provenance [--json] [--strict]` audits every `kind='raw'` row for `owner` + `artifact_ref`; `--strict` exits non-zero so CI can block on coverage regressions. `hippo correction-latency [--json]` reports p50 / p95 / max wall-clock lag from receipt to supersession across `superseded_by` chains. Both helpers (`buildProvenanceCoverage`, `buildCorrectionLatency`) are importable from `src/`.
+- **No behavioral change to remember / recall.** Additive only: schema unchanged, retrieval untouched.
+
 ### What's new in v0.39.0
 
 - Security hardening release: 5 CRITICAL cross-tenant fixes (CVE candidates), GDPR Path A on archive (true RTBF), MCP per-client isolation, Slack ingestion race + idempotency hardening, auth timing leak reduction.

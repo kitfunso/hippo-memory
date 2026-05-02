@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.40.0 (2026-05-02)
+
+### Added
+- **Company Brain provenance gate.** `hippo provenance [--json] [--strict]` audits every `kind='raw'` row for `owner` + `artifact_ref`. Reports coverage and per-row gaps; `--strict` exits non-zero so CI can block ingestion regressions. Importable: `buildProvenanceCoverage(entries)` from `src/provenance-coverage.ts`.
+- **Correction-latency observability.** `hippo correction-latency [--json]` walks `superseded_by` chains, splits pairs into extraction-driven vs manual cohorts, and reports p50 / p95 / max wall-clock lag from receipt to supersession over the extraction cohort only (manual zeros excluded so they never mask real lag). Importable: `buildCorrectionLatency(entries)` from `src/correction-latency.ts`.
+- **NaN / cycle / dangling-pointer resilience.** Latency calculator skips pairs with malformed timestamps and tolerates supersession chains that point at unknown targets.
+
+### Docs
+- `docs/plans/2026-04-28-company-brain-measurement.md` scorecard updated: provenance and correction-latency rows moved from "blocked" to "measurable now". All 8 rows now have a runnable evidence path.
+
 ## 0.39.0 (2026-04-30)
 
 ### Security (CRITICAL)
