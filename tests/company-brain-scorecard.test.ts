@@ -37,7 +37,7 @@ interface ResumeScorecard {
 }
 
 function buildResumeScorecard(hippoRoot: string, sessionId: string): ResumeScorecard {
-  const snapshot = loadActiveTaskSnapshot(hippoRoot);
+  const snapshot = loadActiveTaskSnapshot(hippoRoot, 'default');
   const handoff = loadLatestHandoff(hippoRoot, sessionId);
   const events = listSessionEvents(hippoRoot, { session_id: sessionId, limit: 12 });
 
@@ -127,7 +127,7 @@ describe('Company Brain continuity scorecard scaffold', () => {
     expect(baseline.signals.eventTrail).toBe(true);
     expect(baseline.signals.task).toBe(false);
 
-    saveActiveTaskSnapshot(tmpDir, {
+    saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Ship the Company Brain measurement tranche',
       summary: 'Docs are updated and the continuity scorecard is the only code scaffold in scope.',
       next_step: 'Run the scorecard test, then verify the baseline red tests stayed unchanged.',
@@ -156,7 +156,7 @@ describe('Company Brain continuity scorecard scaffold', () => {
 
     appendVerboseTrail(tmpDir, currentSession);
 
-    saveActiveTaskSnapshot(tmpDir, {
+    saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Resume the current branch cleanly',
       summary: 'Current session is about the continuity-first slice.',
       next_step: 'Use the current-session handoff, not the stale one.',

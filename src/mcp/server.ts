@@ -392,7 +392,7 @@ async function executeTool(
       for (const entry of retrieved) writeEntry(hippoRoot, entry);
       lastRecalledIds.set(resolveClientKey(ctx), retrieved.map((e) => e.id));
 
-      const snapshot = loadActiveTaskSnapshot(hippoRoot);
+      const snapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
       const snapshotText = snapshot
         ? [
             '## Active Task Snapshot',

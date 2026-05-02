@@ -302,14 +302,14 @@ describe('active task snapshots', () => {
   it('persists and reloads the current active snapshot', () => {
     initStore(tmpDir);
 
-    const saved = saveActiveTaskSnapshot(tmpDir, {
+    const saved = saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Finish SQLite migration hardening',
       summary: 'Build, tests, and smoke pass locally.',
       next_step: 'Implement active session resume snapshot support.',
       source: 'test',
     });
 
-    const loaded = loadActiveTaskSnapshot(tmpDir);
+    const loaded = loadActiveTaskSnapshot(tmpDir, 'default');
     expect(loaded).not.toBeNull();
     expect(loaded!.id).toBe(saved.id);
     expect(loaded!.task).toBe('Finish SQLite migration hardening');
@@ -326,7 +326,7 @@ describe('active task snapshots', () => {
   it('persists an optional session link with the active snapshot', () => {
     initStore(tmpDir);
 
-    saveActiveTaskSnapshot(tmpDir, {
+    saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Ship session continuity',
       summary: 'Structured session events are flowing.',
       next_step: 'Surface the session trail in context output.',
@@ -334,7 +334,7 @@ describe('active task snapshots', () => {
       session_id: 'sess_alpha',
     });
 
-    const loaded = loadActiveTaskSnapshot(tmpDir);
+    const loaded = loadActiveTaskSnapshot(tmpDir, 'default');
     expect(loaded).not.toBeNull();
     expect(loaded!.session_id).toBe('sess_alpha');
 
@@ -345,21 +345,21 @@ describe('active task snapshots', () => {
   it('supersedes the previous active snapshot when a new one is saved', () => {
     initStore(tmpDir);
 
-    const first = saveActiveTaskSnapshot(tmpDir, {
+    const first = saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'First task',
       summary: 'First summary',
       next_step: 'First next step',
       source: 'test',
     });
 
-    const second = saveActiveTaskSnapshot(tmpDir, {
+    const second = saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Second task',
       summary: 'Second summary',
       next_step: 'Second next step',
       source: 'test',
     });
 
-    const loaded = loadActiveTaskSnapshot(tmpDir);
+    const loaded = loadActiveTaskSnapshot(tmpDir, 'default');
     expect(loaded).not.toBeNull();
     expect(loaded!.id).toBe(second.id);
     expect(loaded!.task).toBe('Second task');
@@ -376,15 +376,15 @@ describe('active task snapshots', () => {
   it('clears the active snapshot and removes the mirror file', () => {
     initStore(tmpDir);
 
-    saveActiveTaskSnapshot(tmpDir, {
+    saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Task to clear',
       summary: 'Some progress',
       next_step: 'Nothing else',
       source: 'test',
     });
 
-    expect(clearActiveTaskSnapshot(tmpDir)).toBe(true);
-    expect(loadActiveTaskSnapshot(tmpDir)).toBeNull();
+    expect(clearActiveTaskSnapshot(tmpDir, 'default')).toBe(true);
+    expect(loadActiveTaskSnapshot(tmpDir, 'default')).toBeNull();
     expect(fs.existsSync(path.join(tmpDir, 'buffer', 'active-task.md'))).toBe(false);
   });
 });

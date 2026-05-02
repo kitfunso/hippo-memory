@@ -36,7 +36,7 @@ function runHippo(args: string[]): string {
 function seedContinuityState(): void {
   initStore(hippoDir);
 
-  saveActiveTaskSnapshot(hippoDir, {
+  saveActiveTaskSnapshot(hippoDir, 'default', {
     task: 'Resume the current branch cleanly',
     summary: 'Current session is about the continuity-first slice.',
     next_step: 'Use the current-session handoff, not the stale one.',

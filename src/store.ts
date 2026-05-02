@@ -1319,25 +1319,28 @@ export function incrementSleepCount(hippoRoot: string): void {
 
 export function saveActiveTaskSnapshot(
   hippoRoot: string,
+  tenantId: string,
   snapshot: { task: string; summary: string; next_step: string; source?: string; session_id?: string | null }
 ): TaskSnapshot {
+  if (!tenantId) throw new Error('saveActiveTaskSnapshot: tenantId is required');
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   const now = new Date().toISOString();
 
   try {
     db.exec('BEGIN');
-    db.prepare(`UPDATE task_snapshots SET status = 'superseded', updated_at = ? WHERE status = 'active'`).run(now);
+    db.prepare(`UPDATE task_snapshots SET status = 'superseded', updated_at = ? WHERE status = 'active' AND tenant_id = ?`).run(now, tenantId);
 
     const result = db.prepare(`
-      INSERT INTO task_snapshots(task, summary, next_step, status, source, session_id, created_at, updated_at)
-      VALUES (?, ?, ?, 'active', ?, ?, ?, ?)
+      INSERT INTO task_snapshots(task, summary, next_step, status, source, session_id, tenant_id, created_at, updated_at)
+      VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?)
     `).run(
       snapshot.task,
       snapshot.summary,
       snapshot.next_step,
       snapshot.source ?? 'cli',
       snapshot.session_id ?? null,
+      tenantId,
       now,
       now,
     );
@@ -1370,17 +1373,18 @@ export function saveActiveTaskSnapshot(
   }
 }
 
-export function loadActiveTaskSnapshot(hippoRoot: string): TaskSnapshot | null {
+export function loadActiveTaskSnapshot(hippoRoot: string, tenantId: string): TaskSnapshot | null {
+  if (!tenantId) throw new Error('loadActiveTaskSnapshot: tenantId is required');
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
     const row = db.prepare(`
       SELECT id, task, summary, next_step, status, source, session_id, created_at, updated_at
       FROM task_snapshots
-      WHERE status = 'active'
+      WHERE status = 'active' AND tenant_id = ?
       ORDER BY updated_at DESC, id DESC
       LIMIT 1
-    `).get() as TaskSnapshotRow | undefined;
+    `).get(tenantId) as TaskSnapshotRow | undefined;
 
     if (!row) {
       removeActiveTaskMirror(hippoRoot);
@@ -1395,19 +1399,20 @@ export function loadActiveTaskSnapshot(hippoRoot: string): TaskSnapshot | null {
   }
 }
 
-export function clearActiveTaskSnapshot(hippoRoot: string, clearedStatus: string = 'cleared'): boolean {
+export function clearActiveTaskSnapshot(hippoRoot: string, tenantId: string, clearedStatus: string = 'cleared'): boolean {
+  if (!tenantId) throw new Error('clearActiveTaskSnapshot: tenantId is required');
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   const now = new Date().toISOString();
 
   try {
-    const active = db.prepare(`SELECT id FROM task_snapshots WHERE status = 'active' ORDER BY updated_at DESC, id DESC LIMIT 1`).get() as { id?: number } | undefined;
+    const active = db.prepare(`SELECT id FROM task_snapshots WHERE status = 'active' AND tenant_id = ? ORDER BY updated_at DESC, id DESC LIMIT 1`).get(tenantId) as { id?: number } | undefined;
     if (!active?.id) {
       removeActiveTaskMirror(hippoRoot);
       return false;
     }
 
-    db.prepare(`UPDATE task_snapshots SET status = ?, updated_at = ? WHERE id = ?`).run(clearedStatus, now, active.id);
+    db.prepare(`UPDATE task_snapshots SET status = ?, updated_at = ? WHERE id = ? AND tenant_id = ?`).run(clearedStatus, now, active.id, tenantId);
     removeActiveTaskMirror(hippoRoot);
     return true;
   } finally {

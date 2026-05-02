@@ -337,7 +337,7 @@ describe('session events integration with handoffs', () => {
   it('handoff + session latest returns combined view', () => {
     initStore(tmpDir);
 
-    saveActiveTaskSnapshot(tmpDir, {
+    saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'Ship PR2',
       summary: 'Implementing session continuity',
       next_step: 'Run tests',
@@ -357,7 +357,7 @@ describe('session events integration with handoffs', () => {
       nextAction: 'Create PR',
     });
 
-    const snapshot = loadActiveTaskSnapshot(tmpDir);
+    const snapshot = loadActiveTaskSnapshot(tmpDir, 'default');
     expect(snapshot).not.toBeNull();
     expect(snapshot!.session_id).toBe('sess-combined');
 

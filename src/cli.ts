@@ -2864,7 +2864,7 @@ function cmdSnapshot(
       process.exit(1);
     }
 
-    const snapshot = saveActiveTaskSnapshot(hippoRoot, {
+    const snapshot = saveActiveTaskSnapshot(hippoRoot, resolveTenantId({}), {
       task,
       summary,
       next_step: nextStep,
@@ -2882,7 +2882,7 @@ function cmdSnapshot(
   }
 
   if (subcommand === 'clear') {
-    const cleared = clearActiveTaskSnapshot(hippoRoot, String(flags['status'] ?? 'cleared'));
+    const cleared = clearActiveTaskSnapshot(hippoRoot, resolveTenantId({}), String(flags['status'] ?? 'cleared'));
     if (!cleared) {
       console.log('No active task snapshot to clear.');
       return;
@@ -2892,7 +2892,7 @@ function cmdSnapshot(
   }
 
   if (subcommand === 'show') {
-    const snapshot = loadActiveTaskSnapshot(hippoRoot);
+    const snapshot = loadActiveTaskSnapshot(hippoRoot, resolveTenantId({}));
     if (!snapshot) {
       if (flags['json']) {
         console.log(JSON.stringify({ snapshot: null }));
@@ -2967,7 +2967,7 @@ function cmdSession(
   }
 
   if (subcommand === 'latest') {
-    const snapshot = loadActiveTaskSnapshot(hippoRoot);
+    const snapshot = loadActiveTaskSnapshot(hippoRoot, resolveTenantId({}));
     const events = listSessionEvents(hippoRoot, {
       session_id: sessionId || snapshot?.session_id || undefined,
       limit,
@@ -3189,7 +3189,7 @@ function cmdCurrent(
 
   if (subcommand === 'show') {
     const asJson = Boolean(flags['json']);
-    const snapshot = loadActiveTaskSnapshot(hippoRoot);
+    const snapshot = loadActiveTaskSnapshot(hippoRoot, resolveTenantId({}));
     const sessionId = snapshot?.session_id ?? undefined;
     const events = listSessionEvents(hippoRoot, {
       session_id: sessionId,
@@ -3298,7 +3298,7 @@ async function cmdContext(
   let totalTokens = 0;
   // Task snapshots / session events live in the local store. Skip when
   // local isn't initialized — loading would auto-create .hippo in the cwd.
-  const activeSnapshot = hasLocal ? loadActiveTaskSnapshot(hippoRoot) : null;
+  const activeSnapshot = hasLocal ? loadActiveTaskSnapshot(hippoRoot, resolveTenantId({})) : null;
   const sessionHandoff = hasLocal && activeSnapshot?.session_id
     ? loadLatestHandoff(hippoRoot, activeSnapshot.session_id)
     : null;
