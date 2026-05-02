@@ -1430,7 +1430,6 @@ export function appendSessionEvent(
     task?: string | null;
     source?: string;
     metadata?: Record<string, unknown>;
-    scope?: string | null;
   }
 ): SessionEvent {
   if (!tenantId) throw new Error('appendSessionEvent: tenantId is required');
@@ -1438,10 +1437,13 @@ export function appendSessionEvent(
   const db = openHippoDb(hippoRoot);
   const now = new Date().toISOString();
 
+  // NOTE: schema v22 added a `scope` column to session_events for future use,
+  // but read paths do not filter by it yet. Writing it would create a false
+  // sense of security. Kept NULL until the read-side default-deny lands.
   try {
     const result = db.prepare(`
-      INSERT INTO session_events(session_id, task, event_type, content, source, metadata_json, tenant_id, scope, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO session_events(session_id, task, event_type, content, source, metadata_json, tenant_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       event.session_id,
       event.task ?? null,
@@ -1450,7 +1452,6 @@ export function appendSessionEvent(
       event.source ?? 'cli',
       JSON.stringify(event.metadata ?? {}),
       tenantId,
-      event.scope ?? null,
       now,
     );
 
@@ -1751,17 +1752,20 @@ export function resolveConflict(
 export function saveSessionHandoff(
   hippoRoot: string,
   tenantId: string,
-  handoff: Omit<SessionHandoff, 'updatedAt'> & { scope?: string | null },
+  handoff: Omit<SessionHandoff, 'updatedAt'>,
 ): SessionHandoff {
   if (!tenantId) throw new Error('saveSessionHandoff: tenantId is required');
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   const now = new Date().toISOString();
 
+  // NOTE: schema v22 added a `scope` column to session_handoffs for future use,
+  // but read paths do not filter by it yet. Writing it would create a false
+  // sense of security. Kept NULL until the read-side default-deny lands.
   try {
     const result = db.prepare(`
-      INSERT INTO session_handoffs(session_id, repo_root, task_id, summary, next_action, artifacts_json, tenant_id, scope, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO session_handoffs(session_id, repo_root, task_id, summary, next_action, artifacts_json, tenant_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       handoff.sessionId,
       handoff.repoRoot ?? null,
@@ -1770,7 +1774,6 @@ export function saveSessionHandoff(
       handoff.nextAction ?? null,
       JSON.stringify(handoff.artifacts ?? []),
       tenantId,
-      handoff.scope ?? null,
       now,
     );
 

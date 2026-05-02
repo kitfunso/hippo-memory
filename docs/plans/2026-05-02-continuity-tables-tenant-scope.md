@@ -141,4 +141,21 @@ Full vitest run must pass.
 
 ## GSTACK REVIEW REPORT
 
-(To be filled by `/codex review` before any task implementation.)
+Codex review 2026-05-02 round 3 (post-implementation):
+
+| # | Severity | Status | Note |
+|---|---|---|---|
+| 1 | P0 | FIXED | scope write-only on session_handoffs — code removed; column kept for future read-side enforcement |
+| 2 | P0 | FIXED | scope write-only on session_events — same fix |
+| 3 | P1 | FIXED | tableExists silent skip — replaced with self-healing CREATE TABLE IF NOT EXISTS |
+| 4 | P1 | DEFERRED | Backfill ambiguity (legacy 'default' vs real 'default'). Documented; conservative behavior is safe; refinement requires inferring legacy via row age + audit_log timestamps. |
+| 5 | P1 | DEFERRED | Public API break for JS callers. v0.41.0 should be bumped as MAJOR or include a JS-side runtime arg-shape guard. |
+| 6 | P1 | DEFERRED | Markdown mirror files (`buffer/active-task.md`, `buffer/recent-session.md`) are at fixed paths — multi-tenant deployments will overwrite cross-tenant. Tracked separately. |
+| 7 | P2 | KNOWN | Slack bot/system messages without `user` create raw rows with no owner. Documented in transform.ts. Connector workaround: emit `owner: 'agent:slack-bot:<bot_id>'` when bot_id is present. |
+
+## Remaining work for true continuity-first unblock
+
+- Read-side scope filter on session_events / session_handoffs (re-add the `scope` writer code AT THE SAME TIME).
+- Tenant-aware mirror paths.
+- Major-version bump or JS-side runtime guard against arg misbinding.
+- Per-tenant consolidate loop.

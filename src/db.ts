@@ -621,26 +621,44 @@ const MIGRATIONS: Migration[] = [
       // column so a private-channel-derived handoff can default-deny via the
       // same rule recall already enforces.
       //
-      // Tables are guarded with tableExists because some older code paths
-      // (legacy global stores partially initialized before v5) can reach this
-      // migration without the underlying tables present yet; the v5 schema
-      // creates them with IF NOT EXISTS so they will be created on a later
-      // openHippoDb call. Safer to skip than to fail the whole migration.
-      const eventsExists = tableExists(db, 'session_events');
-      const handoffsExists = tableExists(db, 'session_handoffs');
-      if (eventsExists && !tableHasColumn(db, 'session_events', 'tenant_id')) {
+      // Self-heal partial-init stores: re-run the v4/v5 CREATE TABLE IF NOT
+      // EXISTS bodies before ALTERing. A silent skip would otherwise stamp
+      // schema_version=22 on a DB missing the underlying tables, leaving
+      // them permanently absent.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS session_events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          session_id TEXT NOT NULL,
+          task TEXT,
+          event_type TEXT NOT NULL,
+          content TEXT NOT NULL,
+          source TEXT NOT NULL,
+          metadata_json TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS session_handoffs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          session_id TEXT NOT NULL,
+          repo_root TEXT,
+          task_id TEXT,
+          summary TEXT NOT NULL,
+          next_action TEXT,
+          artifacts_json TEXT NOT NULL DEFAULT '[]',
+          created_at TEXT NOT NULL
+        );
+      `);
+      if (!tableHasColumn(db, 'session_events', 'tenant_id')) {
         db.exec(`ALTER TABLE session_events ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
       }
-      if (eventsExists && !tableHasColumn(db, 'session_events', 'scope')) {
+      if (!tableHasColumn(db, 'session_events', 'scope')) {
         db.exec(`ALTER TABLE session_events ADD COLUMN scope TEXT`);
       }
-      if (handoffsExists && !tableHasColumn(db, 'session_handoffs', 'tenant_id')) {
+      if (!tableHasColumn(db, 'session_handoffs', 'tenant_id')) {
         db.exec(`ALTER TABLE session_handoffs ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
       }
-      if (handoffsExists && !tableHasColumn(db, 'session_handoffs', 'scope')) {
+      if (!tableHasColumn(db, 'session_handoffs', 'scope')) {
         db.exec(`ALTER TABLE session_handoffs ADD COLUMN scope TEXT`);
       }
-      if (!eventsExists || !handoffsExists) return;
 
       // Smart backfill: rows whose session_id maps to exactly one tenant in
       // task_snapshots inherit that tenant. Ambiguous or unmapped rows stay
