@@ -149,7 +149,7 @@ Codex review 2026-05-02 round 3 (post-implementation):
 | 2 | P0 | FIXED | scope write-only on session_events — same fix |
 | 3 | P1 | FIXED | tableExists silent skip — replaced with self-healing CREATE TABLE IF NOT EXISTS |
 | 4 | P1 | DEFERRED | Backfill ambiguity (legacy 'default' vs real 'default'). Documented; conservative behavior is safe; refinement requires inferring legacy via row age + audit_log timestamps. |
-| 5 | P1 | DEFERRED | Public API break for JS callers. v0.41.0 should be bumped as MAJOR or include a JS-side runtime arg-shape guard. |
+| 5 | P1 | FIXED | `assertTenantId` runtime guard in src/store.ts catches the most common misbinding (passing a `sess-*` session id where tenant id is expected). 3 regression tests in continuity-tables-tenant-isolation.test.ts cover empty / non-string / session-prefix shapes. |
 | 6 | P1 | FIXED | Mirror files now tenant-scoped: `buffer/active-task.<tenantId>.md` for non-default tenants. Default tenant keeps unsuffixed filename for on-disk back-compat. Two regression tests in snapshot-tenant-isolation.test.ts. |
 | 7 | P2 | KNOWN | Slack bot/system messages without `user` create raw rows with no owner. Documented in transform.ts. Connector workaround: emit `owner: 'agent:slack-bot:<bot_id>'` when bot_id is present. |
 

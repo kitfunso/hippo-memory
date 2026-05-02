@@ -143,4 +143,23 @@ describe('runtime guards', () => {
     expect(() => listSessionEvents(tmpDir, '', { session_id: 'x' })).toThrow(/tenantId is required/);
     expect(() => loadLatestHandoff(tmpDir, '', 'x')).toThrow(/tenantId is required/);
   });
+
+  it('rejects misbinding: passing a session_id where tenantId is expected', () => {
+    initStore(tmpDir);
+    // A JS caller from a v0.40 codebase that called loadLatestHandoff(root, sessionId)
+    // would now have 'sess-abc' bound to tenantId. The runtime guard catches this
+    // before it silently filters to a non-existent tenant.
+    expect(() => loadLatestHandoff(tmpDir, 'sess-abc' as never)).toThrow(/looks like a session id/i);
+    expect(() => listSessionEvents(tmpDir, 'sess_xyz' as never, { session_id: 'x' })).toThrow(/looks like a session id/i);
+    expect(() => saveSessionHandoff(tmpDir, 'SESS-uppercase' as never, {
+      version: 1, sessionId: 's', summary: 'x', artifacts: [],
+    })).toThrow(/looks like a session id/i);
+  });
+
+  it('rejects non-string tenantId values', () => {
+    initStore(tmpDir);
+    expect(() => loadLatestHandoff(tmpDir, undefined as never, 'x')).toThrow(/tenantId is required/);
+    expect(() => loadLatestHandoff(tmpDir, null as never, 'x')).toThrow(/tenantId is required/);
+    expect(() => loadLatestHandoff(tmpDir, 42 as never, 'x')).toThrow(/tenantId is required/);
+  });
 });

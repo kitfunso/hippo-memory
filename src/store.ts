@@ -1331,12 +1331,41 @@ export function incrementSleepCount(hippoRoot: string): void {
   }
 }
 
+/**
+ * Defensive runtime guard for tenant id arguments.
+ *
+ * The continuity helpers (saveActiveTaskSnapshot, listSessionEvents, etc.)
+ * gained a required `tenantId` parameter in v0.41 / schema v22 to close a
+ * cross-tenant data leak. TypeScript catches misbinding at compile time, but
+ * JavaScript callers from older versions can silently pass a `sessionId`
+ * where `tenantId` is now expected, e.g.
+ *   loadLatestHandoff(root, 'sess-abc')   // WRONG: 'sess-abc' becomes the tenant
+ * which would silently filter to a non-existent tenant and return null with
+ * no error. This guard rejects the most common shape of that mistake (any
+ * value beginning with the conventional `sess-` / `sess_` session prefix).
+ *
+ * False-positive cost: a tenant literally named `sess-...` will be rejected.
+ * Acceptable tradeoff for catching the silent-leak class.
+ */
+function assertTenantId(fnName: string, value: unknown): asserts value is string {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(`${fnName}: tenantId is required (got ${typeof value})`);
+  }
+  if (/^sess[-_]/i.test(value)) {
+    throw new Error(
+      `${fnName}: tenantId looks like a session id ('${value}'). ` +
+      `In v0.41+ these helpers take (hippoRoot, tenantId, ...). ` +
+      `Pass the tenant id (e.g. 'default') and the session id separately.`,
+    );
+  }
+}
+
 export function saveActiveTaskSnapshot(
   hippoRoot: string,
   tenantId: string,
   snapshot: { task: string; summary: string; next_step: string; source?: string; session_id?: string | null }
 ): TaskSnapshot {
-  if (!tenantId) throw new Error('saveActiveTaskSnapshot: tenantId is required');
+  assertTenantId('saveActiveTaskSnapshot', tenantId);
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   const now = new Date().toISOString();
@@ -1388,7 +1417,7 @@ export function saveActiveTaskSnapshot(
 }
 
 export function loadActiveTaskSnapshot(hippoRoot: string, tenantId: string): TaskSnapshot | null {
-  if (!tenantId) throw new Error('loadActiveTaskSnapshot: tenantId is required');
+  assertTenantId('loadActiveTaskSnapshot', tenantId);
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
@@ -1414,7 +1443,7 @@ export function loadActiveTaskSnapshot(hippoRoot: string, tenantId: string): Tas
 }
 
 export function clearActiveTaskSnapshot(hippoRoot: string, tenantId: string, clearedStatus: string = 'cleared'): boolean {
-  if (!tenantId) throw new Error('clearActiveTaskSnapshot: tenantId is required');
+  assertTenantId('clearActiveTaskSnapshot', tenantId);
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   const now = new Date().toISOString();
@@ -1446,7 +1475,7 @@ export function appendSessionEvent(
     metadata?: Record<string, unknown>;
   }
 ): SessionEvent {
-  if (!tenantId) throw new Error('appendSessionEvent: tenantId is required');
+  assertTenantId('appendSessionEvent', tenantId);
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   const now = new Date().toISOString();
@@ -1501,7 +1530,7 @@ export function listSessionEvents(
   tenantId: string,
   options: { session_id?: string; task?: string; limit?: number } = {}
 ): SessionEvent[] {
-  if (!tenantId) throw new Error('listSessionEvents: tenantId is required');
+  assertTenantId('listSessionEvents', tenantId);
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
@@ -1544,7 +1573,7 @@ export function findPromotableSessions(
   tenantId: string,
   sinceMs: number,
 ): Array<{ session_id: string }> {
-  if (!tenantId) throw new Error('findPromotableSessions: tenantId is required');
+  assertTenantId('findPromotableSessions', tenantId);
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
@@ -1563,7 +1592,7 @@ export function findPromotableSessions(
  * already exists.
  */
 export function traceExistsForSession(hippoRoot: string, tenantId: string, session_id: string): boolean {
-  if (!tenantId) throw new Error('traceExistsForSession: tenantId is required');
+  assertTenantId('traceExistsForSession', tenantId);
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
@@ -1768,7 +1797,7 @@ export function saveSessionHandoff(
   tenantId: string,
   handoff: Omit<SessionHandoff, 'updatedAt'>,
 ): SessionHandoff {
-  if (!tenantId) throw new Error('saveSessionHandoff: tenantId is required');
+  assertTenantId('saveSessionHandoff', tenantId);
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   const now = new Date().toISOString();
@@ -1812,7 +1841,7 @@ export function saveSessionHandoff(
  * Load the most recent handoff, optionally filtered by session ID.
  */
 export function loadLatestHandoff(hippoRoot: string, tenantId: string, sessionId?: string): SessionHandoff | null {
-  if (!tenantId) throw new Error('loadLatestHandoff: tenantId is required');
+  assertTenantId('loadLatestHandoff', tenantId);
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
 
@@ -1846,7 +1875,7 @@ export function loadLatestHandoff(hippoRoot: string, tenantId: string, sessionId
  * Load a specific handoff by its row ID.
  */
 export function loadHandoffById(hippoRoot: string, tenantId: string, id: number): SessionHandoff | null {
-  if (!tenantId) throw new Error('loadHandoffById: tenantId is required');
+  assertTenantId('loadHandoffById', tenantId);
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
 
