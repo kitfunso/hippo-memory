@@ -5684,7 +5684,7 @@ async function main(): Promise<void> {
         console.log(`Corrections: ${report.count} total (${report.extractionCount} extraction-driven, ${report.manualCount} manual)`);
         console.log(`Latency p50: ${fmt(report.p50Ms)}, p95: ${fmt(report.p95Ms)}, max: ${fmt(report.maxMs)}`);
         if (report.extractionCount === 0 && report.manualCount > 0) {
-          console.log(`\nAll ${report.manualCount} corrections were manual supersedes — no measurable observation lag.`);
+          console.log(`\nAll ${report.manualCount} corrections were manual supersedes: no measurable observation lag.`);
           console.log(`To measure latency, route corrections through extraction (set new.extracted_from to the raw receipt).`);
         }
       }
