@@ -422,8 +422,22 @@ function rowToSessionEvent(row: SessionEventRow): SessionEvent {
   };
 }
 
-function writeActiveTaskMirror(hippoRoot: string, snapshot: TaskSnapshot): void {
-  const filePath = path.join(hippoRoot, 'buffer', 'active-task.md');
+// Tenant-scoped mirror file paths. The single-tenant 'default' deployment
+// keeps the original `active-task.md` / `recent-session.md` filenames for
+// on-disk back-compat; multi-tenant deployments get a `.<tenantId>` suffix
+// so tenant B saving cannot overwrite tenant A's mirror file.
+function activeTaskMirrorPath(hippoRoot: string, tenantId: string): string {
+  const file = tenantId === 'default' ? 'active-task.md' : `active-task.${tenantId}.md`;
+  return path.join(hippoRoot, 'buffer', file);
+}
+
+function recentSessionMirrorPath(hippoRoot: string, tenantId: string): string {
+  const file = tenantId === 'default' ? 'recent-session.md' : `recent-session.${tenantId}.md`;
+  return path.join(hippoRoot, 'buffer', file);
+}
+
+function writeActiveTaskMirror(hippoRoot: string, tenantId: string, snapshot: TaskSnapshot): void {
+  const filePath = activeTaskMirrorPath(hippoRoot, tenantId);
   const fm = dumpFrontmatter({
     id: snapshot.id,
     task: snapshot.task,
@@ -457,15 +471,15 @@ function writeActiveTaskMirror(hippoRoot: string, snapshot: TaskSnapshot): void 
   fs.writeFileSync(filePath, `${fm}\n\n${body.join('\n')}`, 'utf8');
 }
 
-function removeActiveTaskMirror(hippoRoot: string): void {
-  const filePath = path.join(hippoRoot, 'buffer', 'active-task.md');
+function removeActiveTaskMirror(hippoRoot: string, tenantId: string): void {
+  const filePath = activeTaskMirrorPath(hippoRoot, tenantId);
   if (fs.existsSync(filePath)) {
     fs.unlinkSync(filePath);
   }
 }
 
-function writeRecentSessionMirror(hippoRoot: string, events: SessionEvent[]): void {
-  const filePath = path.join(hippoRoot, 'buffer', 'recent-session.md');
+function writeRecentSessionMirror(hippoRoot: string, tenantId: string, events: SessionEvent[]): void {
+  const filePath = recentSessionMirrorPath(hippoRoot, tenantId);
   if (events.length === 0) {
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
@@ -1359,7 +1373,7 @@ export function saveActiveTaskSnapshot(
     }
 
     const loaded = rowToTaskSnapshot(row);
-    writeActiveTaskMirror(hippoRoot, loaded);
+    writeActiveTaskMirror(hippoRoot, tenantId, loaded);
     return loaded;
   } catch (error) {
     try {
@@ -1387,12 +1401,12 @@ export function loadActiveTaskSnapshot(hippoRoot: string, tenantId: string): Tas
     `).get(tenantId) as TaskSnapshotRow | undefined;
 
     if (!row) {
-      removeActiveTaskMirror(hippoRoot);
+      removeActiveTaskMirror(hippoRoot, tenantId);
       return null;
     }
 
     const loaded = rowToTaskSnapshot(row);
-    writeActiveTaskMirror(hippoRoot, loaded);
+    writeActiveTaskMirror(hippoRoot, tenantId, loaded);
     return loaded;
   } finally {
     closeHippoDb(db);
@@ -1408,12 +1422,12 @@ export function clearActiveTaskSnapshot(hippoRoot: string, tenantId: string, cle
   try {
     const active = db.prepare(`SELECT id FROM task_snapshots WHERE status = 'active' AND tenant_id = ? ORDER BY updated_at DESC, id DESC LIMIT 1`).get(tenantId) as { id?: number } | undefined;
     if (!active?.id) {
-      removeActiveTaskMirror(hippoRoot);
+      removeActiveTaskMirror(hippoRoot, tenantId);
       return false;
     }
 
     db.prepare(`UPDATE task_snapshots SET status = ?, updated_at = ? WHERE id = ? AND tenant_id = ?`).run(clearedStatus, now, active.id, tenantId);
-    removeActiveTaskMirror(hippoRoot);
+    removeActiveTaskMirror(hippoRoot, tenantId);
     return true;
   } finally {
     closeHippoDb(db);
@@ -1475,7 +1489,7 @@ export function appendSessionEvent(
       LIMIT ?
     `).all(loaded.session_id, tenantId, 20) as SessionEventRow[];
     const recent = recentRows.map(rowToSessionEvent).reverse();
-    writeRecentSessionMirror(hippoRoot, recent);
+    writeRecentSessionMirror(hippoRoot, tenantId, recent);
     return loaded;
   } finally {
     closeHippoDb(db);

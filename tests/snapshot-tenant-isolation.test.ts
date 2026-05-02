@@ -89,6 +89,48 @@ describe('task_snapshot tenant isolation', () => {
     expect(bAfter!.task).toBe('B');
   });
 
+  it('mirror files are tenant-scoped: tenant B does not overwrite tenant A active-task.md', () => {
+    initStore(tmpDir);
+
+    saveActiveTaskSnapshot(tmpDir, 'tenantA', {
+      task: 'A keeps its mirror',
+      summary: 'A',
+      next_step: 'A',
+      session_id: 'sess-a',
+      source: 'test',
+    });
+    saveActiveTaskSnapshot(tmpDir, 'tenantB', {
+      task: 'B has its own',
+      summary: 'B',
+      next_step: 'B',
+      session_id: 'sess-b',
+      source: 'test',
+    });
+
+    const aMirror = path.join(tmpDir, 'buffer', 'active-task.tenantA.md');
+    const bMirror = path.join(tmpDir, 'buffer', 'active-task.tenantB.md');
+    const defaultMirror = path.join(tmpDir, 'buffer', 'active-task.md');
+
+    expect(fs.existsSync(aMirror)).toBe(true);
+    expect(fs.existsSync(bMirror)).toBe(true);
+    expect(fs.existsSync(defaultMirror)).toBe(false);
+    expect(fs.readFileSync(aMirror, 'utf8')).toContain('A keeps its mirror');
+    expect(fs.readFileSync(bMirror, 'utf8')).toContain('B has its own');
+  });
+
+  it('default tenant keeps the unsuffixed mirror filename for back-compat', () => {
+    initStore(tmpDir);
+    saveActiveTaskSnapshot(tmpDir, 'default', {
+      task: 'd',
+      summary: 'd',
+      next_step: 'd',
+      session_id: 'sess-d',
+      source: 'test',
+    });
+    expect(fs.existsSync(path.join(tmpDir, 'buffer', 'active-task.md'))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'buffer', 'active-task.default.md'))).toBe(false);
+  });
+
   it('same-tenant supersede still works: saving twice retires the older row', () => {
     initStore(tmpDir);
     saveActiveTaskSnapshot(tmpDir, 'tenantA', {
