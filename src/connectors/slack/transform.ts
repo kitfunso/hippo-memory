@@ -17,6 +17,8 @@ export interface TransformInput {
  * - kind is the literal 'raw' (E1.x connector boundary, see src/importers.ts).
  * - artifact_ref format MUST be exactly `slack://${teamId}/${channelId}/${ts}`;
  *   the deletion path (Task 9) looks up by this string.
+ * - owner is `user:<slack_user_id>` whenever the event carries a user. Required
+ *   by the v0.40.0 provenance gate (`hippo provenance --strict`).
  */
 export function messageToRememberOpts(input: TransformInput): RememberOpts | null {
   const text = input.message.text?.trim();
@@ -33,6 +35,7 @@ export function messageToRememberOpts(input: TransformInput): RememberOpts | nul
     kind: 'raw',
     scope: scopeFromChannel(input.channel),
     artifactRef,
+    owner: input.message.user ? `user:${input.message.user}` : undefined,
     tags,
   };
 }

@@ -6,6 +6,7 @@ import { createHmac } from 'node:crypto';
 import { initStore, loadAllEntries } from '../src/store.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { buildProvenanceCoverage } from '../src/provenance-coverage.js';
 
 const SECRET = 'shhh';
 
@@ -90,7 +91,15 @@ describe('POST /v1/connectors/slack/events', () => {
     });
     expect(res.status).toBe(200);
     const entries = loadAllEntries(root);
-    expect(entries.some((e) => e.tags.includes('source:slack') && e.kind === 'raw')).toBe(true);
+    const slackRow = entries.find((e) => e.tags.includes('source:slack') && e.kind === 'raw');
+    expect(slackRow).toBeDefined();
+    expect(slackRow!.owner).toBe('user:U1');
+    expect(slackRow!.artifact_ref).toBe('slack://T1/C1/1700000000.000100');
+
+    const coverage = buildProvenanceCoverage(entries);
+    expect(coverage.rawTotal).toBe(1);
+    expect(coverage.coverage).toBe(1);
+    expect(coverage.gaps).toEqual([]);
   });
 
   it('writes malformed payloads to DLQ but still ACKs 200', async () => {

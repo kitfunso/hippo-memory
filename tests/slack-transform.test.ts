@@ -33,4 +33,22 @@ describe('messageToRememberOpts', () => {
     });
     expect(opts!.scope).toBe('slack:private:C2');
   });
+
+  it('populates owner from message.user so provenance gate passes', () => {
+    const opts = messageToRememberOpts({
+      teamId: 'T1',
+      channel: { id: 'C1', is_private: false },
+      message: { type: 'message', channel: 'C1', user: 'U999', text: 'hello', ts: '1700000000.000100' },
+    });
+    expect(opts!.owner).toBe('user:U999');
+  });
+
+  it('leaves owner unset when the event has no user (bot/system message)', () => {
+    const opts = messageToRememberOpts({
+      teamId: 'T1',
+      channel: { id: 'C1', is_private: false },
+      message: { type: 'message', channel: 'C1', text: 'system note', ts: '1700000000.000100' },
+    });
+    expect(opts!.owner).toBeUndefined();
+  });
 });
