@@ -28,6 +28,7 @@ import { simulate, type ForceContext } from './physics.js';
 import { loadConfig } from './config.js';
 import { sampleForReplay } from './replay.js';
 import { renderTraceContent } from './trace.js';
+import { resolveTenantId } from './tenant.js';
 
 const DECAY_THRESHOLD = 0.05;
 const MERGE_OVERLAP_THRESHOLD = 0.35;  // Jaccard similarity for "related"
@@ -157,13 +158,18 @@ export async function consolidate(
   if (!dryRun && config.autoTraceCapture !== false) {
     const windowDays = config.autoTraceWindowDays ?? 7;
     const sinceMs = now.getTime() - windowDays * 24 * 60 * 60 * 1000;
-    const promotable = findPromotableSessions(hippoRoot, sinceMs);
+    // Auto-trace currently runs in a single-tenant context (the env-resolved
+    // tenant for this process). Multi-tenant deployments that want
+    // consolidation across all tenants need a per-tenant loop layered on top
+    // of this — tracked in docs/plans/2026-05-02-continuity-tables-tenant-scope.md.
+    const consolidationTenant = resolveTenantId({});
+    const promotable = findPromotableSessions(hippoRoot, consolidationTenant, sinceMs);
 
     for (const session of promotable) {
       // Idempotency: skip if a trace for this session already exists.
-      if (traceExistsForSession(hippoRoot, session.session_id)) continue;
+      if (traceExistsForSession(hippoRoot, consolidationTenant, session.session_id)) continue;
 
-      const events = listSessionEvents(hippoRoot, {
+      const events = listSessionEvents(hippoRoot, consolidationTenant, {
         session_id: session.session_id,
         limit: 1000,
       });

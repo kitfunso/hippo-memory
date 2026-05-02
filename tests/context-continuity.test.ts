@@ -44,14 +44,14 @@ function seedContinuityState(): void {
     source: 'test',
   });
 
-  appendSessionEvent(hippoDir, {
+  appendSessionEvent(hippoDir, 'default', {
     session_id: 'sess-current',
     event_type: 'note',
     content: 'Checked the latest branch state and confirmed the matching handoff should drive the next action.',
     source: 'test',
   });
 
-  saveSessionHandoff(hippoDir, {
+  saveSessionHandoff(hippoDir, 'default', {
     version: 1,
     sessionId: 'sess-old',
     summary: 'Old branch handoff',
@@ -59,7 +59,7 @@ function seedContinuityState(): void {
     artifacts: ['src/stale.ts'],
   });
 
-  saveSessionHandoff(hippoDir, {
+  saveSessionHandoff(hippoDir, 'default', {
     version: 1,
     sessionId: 'sess-current',
     summary: 'Current branch handoff',

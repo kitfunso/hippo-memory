@@ -1422,6 +1422,7 @@ export function clearActiveTaskSnapshot(hippoRoot: string, tenantId: string, cle
 
 export function appendSessionEvent(
   hippoRoot: string,
+  tenantId: string,
   event: {
     session_id: string;
     event_type: string;
@@ -1429,16 +1430,18 @@ export function appendSessionEvent(
     task?: string | null;
     source?: string;
     metadata?: Record<string, unknown>;
+    scope?: string | null;
   }
 ): SessionEvent {
+  if (!tenantId) throw new Error('appendSessionEvent: tenantId is required');
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   const now = new Date().toISOString();
 
   try {
     const result = db.prepare(`
-      INSERT INTO session_events(session_id, task, event_type, content, source, metadata_json, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO session_events(session_id, task, event_type, content, source, metadata_json, tenant_id, scope, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       event.session_id,
       event.task ?? null,
@@ -1446,6 +1449,8 @@ export function appendSessionEvent(
       event.content,
       event.source ?? 'cli',
       JSON.stringify(event.metadata ?? {}),
+      tenantId,
+      event.scope ?? null,
       now,
     );
 
@@ -1461,15 +1466,13 @@ export function appendSessionEvent(
     }
 
     const loaded = rowToSessionEvent(row);
-    // Query recent events inline using the already-open db handle
-    // (avoids opening a second connection via listSessionEvents)
     const recentRows = db.prepare(`
       SELECT id, session_id, task, event_type, content, source, metadata_json, created_at
       FROM session_events
-      WHERE session_id = ?
+      WHERE session_id = ? AND tenant_id = ?
       ORDER BY created_at DESC, id DESC
       LIMIT ?
-    `).all(loaded.session_id, 20) as SessionEventRow[];
+    `).all(loaded.session_id, tenantId, 20) as SessionEventRow[];
     const recent = recentRows.map(rowToSessionEvent).reverse();
     writeRecentSessionMirror(hippoRoot, recent);
     return loaded;
@@ -1480,13 +1483,15 @@ export function appendSessionEvent(
 
 export function listSessionEvents(
   hippoRoot: string,
+  tenantId: string,
   options: { session_id?: string; task?: string; limit?: number } = {}
 ): SessionEvent[] {
+  if (!tenantId) throw new Error('listSessionEvents: tenantId is required');
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    const clauses: string[] = [];
-    const params: Array<string | number> = [];
+    const clauses: string[] = ['tenant_id = ?'];
+    const params: Array<string | number> = [tenantId];
 
     if (options.session_id) {
       clauses.push('session_id = ?');
@@ -1500,7 +1505,7 @@ export function listSessionEvents(
     const limit = Math.max(1, Math.trunc(options.limit ?? 8));
     params.push(limit);
 
-    const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+    const where = `WHERE ${clauses.join(' AND ')}`;
     const rows = db.prepare(`
       SELECT id, session_id, task, event_type, content, source, metadata_json, created_at
       FROM session_events
@@ -1521,15 +1526,17 @@ export function listSessionEvents(
  */
 export function findPromotableSessions(
   hippoRoot: string,
+  tenantId: string,
   sinceMs: number,
 ): Array<{ session_id: string }> {
+  if (!tenantId) throw new Error('findPromotableSessions: tenantId is required');
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
     const rows = db.prepare(`
       SELECT DISTINCT session_id FROM session_events
-      WHERE event_type = 'session_complete' AND created_at >= ?
-    `).all(new Date(sinceMs).toISOString()) as { session_id: string }[];
+      WHERE event_type = 'session_complete' AND created_at >= ? AND tenant_id = ?
+    `).all(new Date(sinceMs).toISOString(), tenantId) as { session_id: string }[];
     return rows;
   } finally {
     closeHippoDb(db);
@@ -1540,15 +1547,16 @@ export function findPromotableSessions(
  * Idempotency guard — true if a trace-layer memory with this source_session_id
  * already exists.
  */
-export function traceExistsForSession(hippoRoot: string, session_id: string): boolean {
+export function traceExistsForSession(hippoRoot: string, tenantId: string, session_id: string): boolean {
+  if (!tenantId) throw new Error('traceExistsForSession: tenantId is required');
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
     const row = db.prepare(`
       SELECT 1 FROM memories
-      WHERE source_session_id = ? AND layer = 'trace'
+      WHERE source_session_id = ? AND layer = 'trace' AND tenant_id = ?
       LIMIT 1
-    `).get(session_id);
+    `).get(session_id, tenantId);
     return !!row;
   } finally {
     closeHippoDb(db);
@@ -1742,16 +1750,18 @@ export function resolveConflict(
  */
 export function saveSessionHandoff(
   hippoRoot: string,
-  handoff: Omit<SessionHandoff, 'updatedAt'>,
+  tenantId: string,
+  handoff: Omit<SessionHandoff, 'updatedAt'> & { scope?: string | null },
 ): SessionHandoff {
+  if (!tenantId) throw new Error('saveSessionHandoff: tenantId is required');
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   const now = new Date().toISOString();
 
   try {
     const result = db.prepare(`
-      INSERT INTO session_handoffs(session_id, repo_root, task_id, summary, next_action, artifacts_json, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO session_handoffs(session_id, repo_root, task_id, summary, next_action, artifacts_json, tenant_id, scope, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       handoff.sessionId,
       handoff.repoRoot ?? null,
@@ -1759,6 +1769,8 @@ export function saveSessionHandoff(
       handoff.summary,
       handoff.nextAction ?? null,
       JSON.stringify(handoff.artifacts ?? []),
+      tenantId,
+      handoff.scope ?? null,
       now,
     );
 
@@ -1782,7 +1794,8 @@ export function saveSessionHandoff(
 /**
  * Load the most recent handoff, optionally filtered by session ID.
  */
-export function loadLatestHandoff(hippoRoot: string, sessionId?: string): SessionHandoff | null {
+export function loadLatestHandoff(hippoRoot: string, tenantId: string, sessionId?: string): SessionHandoff | null {
+  if (!tenantId) throw new Error('loadLatestHandoff: tenantId is required');
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
 
@@ -1792,17 +1805,18 @@ export function loadLatestHandoff(hippoRoot: string, sessionId?: string): Sessio
       row = db.prepare(`
         SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, created_at
         FROM session_handoffs
-        WHERE session_id = ?
+        WHERE session_id = ? AND tenant_id = ?
         ORDER BY created_at DESC, id DESC
         LIMIT 1
-      `).get(sessionId) as SessionHandoffRow | undefined;
+      `).get(sessionId, tenantId) as SessionHandoffRow | undefined;
     } else {
       row = db.prepare(`
         SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, created_at
         FROM session_handoffs
+        WHERE tenant_id = ?
         ORDER BY created_at DESC, id DESC
         LIMIT 1
-      `).get() as SessionHandoffRow | undefined;
+      `).get(tenantId) as SessionHandoffRow | undefined;
     }
 
     return row ? rowToSessionHandoff(row) : null;
@@ -1814,7 +1828,8 @@ export function loadLatestHandoff(hippoRoot: string, sessionId?: string): Sessio
 /**
  * Load a specific handoff by its row ID.
  */
-export function loadHandoffById(hippoRoot: string, id: number): SessionHandoff | null {
+export function loadHandoffById(hippoRoot: string, tenantId: string, id: number): SessionHandoff | null {
+  if (!tenantId) throw new Error('loadHandoffById: tenantId is required');
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
 
@@ -1822,8 +1837,8 @@ export function loadHandoffById(hippoRoot: string, id: number): SessionHandoff |
     const row = db.prepare(`
       SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, created_at
       FROM session_handoffs
-      WHERE id = ?
-    `).get(id) as SessionHandoffRow | undefined;
+      WHERE id = ? AND tenant_id = ?
+    `).get(id, tenantId) as SessionHandoffRow | undefined;
 
     return row ? rowToSessionHandoff(row) : null;
   } finally {

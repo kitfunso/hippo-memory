@@ -39,7 +39,7 @@ describe('hippo session complete', () => {
       '--summary', 'refactored auth module',
     ]);
 
-    const events = listSessionEvents(hippoDir, { session_id: 'sess-x' });
+    const events = listSessionEvents(hippoDir, 'default', { session_id: 'sess-x' });
     const complete = events.find((e) => e.event_type === 'session_complete');
     expect(complete).toBeDefined();
     expect(complete!.content).toBe('success');

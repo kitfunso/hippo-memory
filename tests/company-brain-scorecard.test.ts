@@ -38,8 +38,8 @@ interface ResumeScorecard {
 
 function buildResumeScorecard(hippoRoot: string, sessionId: string): ResumeScorecard {
   const snapshot = loadActiveTaskSnapshot(hippoRoot, 'default');
-  const handoff = loadLatestHandoff(hippoRoot, sessionId);
-  const events = listSessionEvents(hippoRoot, { session_id: sessionId, limit: 12 });
+  const handoff = loadLatestHandoff(hippoRoot, 'default', sessionId);
+  const events = listSessionEvents(hippoRoot, 'default', { session_id: sessionId, limit: 12 });
 
   const signals = {
     task: Boolean(snapshot?.task?.trim()),
@@ -106,7 +106,7 @@ function appendVerboseTrail(hippoRoot: string, sessionId: string): void {
   ];
 
   steps.forEach((content, index) => {
-    appendSessionEvent(hippoRoot, {
+    appendSessionEvent(hippoRoot, 'default', {
       session_id: sessionId,
       event_type: index === 0 ? 'session_start' : 'note',
       content,
@@ -135,7 +135,7 @@ describe('Company Brain continuity scorecard scaffold', () => {
       source: 'test',
     });
 
-    saveSessionHandoff(tmpDir, {
+    saveSessionHandoff(tmpDir, 'default', {
       version: 1,
       sessionId,
       summary: 'Measurement plan is ready for review.',
@@ -164,7 +164,7 @@ describe('Company Brain continuity scorecard scaffold', () => {
       source: 'test',
     });
 
-    saveSessionHandoff(tmpDir, {
+    saveSessionHandoff(tmpDir, 'default', {
       version: 1,
       sessionId: 'sess-old',
       summary: 'Old branch handoff',
@@ -172,7 +172,7 @@ describe('Company Brain continuity scorecard scaffold', () => {
       artifacts: ['src/stale.ts'],
     });
 
-    saveSessionHandoff(tmpDir, {
+    saveSessionHandoff(tmpDir, 'default', {
       version: 1,
       sessionId: currentSession,
       summary: 'Current branch handoff',

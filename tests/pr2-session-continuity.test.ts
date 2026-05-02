@@ -36,8 +36,8 @@ describe('schema v5+v6 migration', () => {
     initStore(tmpDir);
     const db = openHippoDb(tmpDir);
     try {
-      expect(getSchemaVersion(db)).toBe(21);
-      expect(getCurrentSchemaVersion()).toBe(21);
+      expect(getSchemaVersion(db)).toBe(22);
+      expect(getCurrentSchemaVersion()).toBe(22);
     } finally {
       closeHippoDb(db);
     }
@@ -75,7 +75,7 @@ describe('session handoff create/save/load', () => {
   it('saves and loads a handoff', () => {
     initStore(tmpDir);
 
-    const handoff = saveSessionHandoff(tmpDir, {
+    const handoff = saveSessionHandoff(tmpDir, 'default', {
       version: 1,
       sessionId: 'sess-001',
       repoRoot: '/tmp/repo',
@@ -98,7 +98,7 @@ describe('session handoff create/save/load', () => {
   it('saves a minimal handoff without optional fields', () => {
     initStore(tmpDir);
 
-    const handoff = saveSessionHandoff(tmpDir, {
+    const handoff = saveSessionHandoff(tmpDir, 'default', {
       version: 1,
       sessionId: 'sess-min',
       summary: 'Minimal handoff',
@@ -116,26 +116,26 @@ describe('session handoff create/save/load', () => {
 describe('loadLatestHandoff', () => {
   it('returns null when no handoffs exist', () => {
     initStore(tmpDir);
-    const result = loadLatestHandoff(tmpDir);
+    const result = loadLatestHandoff(tmpDir, 'default');
     expect(result).toBeNull();
   });
 
   it('returns the most recent handoff', () => {
     initStore(tmpDir);
 
-    saveSessionHandoff(tmpDir, {
+    saveSessionHandoff(tmpDir, 'default', {
       version: 1,
       sessionId: 'sess-old',
       summary: 'First handoff',
     });
 
-    saveSessionHandoff(tmpDir, {
+    saveSessionHandoff(tmpDir, 'default', {
       version: 1,
       sessionId: 'sess-new',
       summary: 'Second handoff',
     });
 
-    const latest = loadLatestHandoff(tmpDir);
+    const latest = loadLatestHandoff(tmpDir, 'default');
     expect(latest).not.toBeNull();
     expect(latest!.sessionId).toBe('sess-new');
     expect(latest!.summary).toBe('Second handoff');
@@ -144,33 +144,33 @@ describe('loadLatestHandoff', () => {
   it('filters by session ID when provided', () => {
     initStore(tmpDir);
 
-    saveSessionHandoff(tmpDir, {
+    saveSessionHandoff(tmpDir, 'default', {
       version: 1,
       sessionId: 'sess-A',
       summary: 'Handoff A1',
     });
 
-    saveSessionHandoff(tmpDir, {
+    saveSessionHandoff(tmpDir, 'default', {
       version: 1,
       sessionId: 'sess-B',
       summary: 'Handoff B1',
     });
 
-    saveSessionHandoff(tmpDir, {
+    saveSessionHandoff(tmpDir, 'default', {
       version: 1,
       sessionId: 'sess-A',
       summary: 'Handoff A2',
     });
 
-    const latestA = loadLatestHandoff(tmpDir, 'sess-A');
+    const latestA = loadLatestHandoff(tmpDir, 'default', 'sess-A');
     expect(latestA).not.toBeNull();
     expect(latestA!.summary).toBe('Handoff A2');
 
-    const latestB = loadLatestHandoff(tmpDir, 'sess-B');
+    const latestB = loadLatestHandoff(tmpDir, 'default', 'sess-B');
     expect(latestB).not.toBeNull();
     expect(latestB!.summary).toBe('Handoff B1');
 
-    const latestC = loadLatestHandoff(tmpDir, 'sess-C');
+    const latestC = loadLatestHandoff(tmpDir, 'default', 'sess-C');
     expect(latestC).toBeNull();
   });
 });
@@ -180,7 +180,7 @@ describe('loadHandoffById', () => {
     initStore(tmpDir);
 
     // Save handoff and verify we can get it by ID from the DB
-    const handoff = saveSessionHandoff(tmpDir, {
+    const handoff = saveSessionHandoff(tmpDir, 'default', {
       version: 1,
       sessionId: 'sess-byid',
       summary: 'Find me by ID',
@@ -194,7 +194,7 @@ describe('loadHandoffById', () => {
       ).get() as { id: number } | undefined;
 
       expect(row).toBeTruthy();
-      const loaded = loadHandoffById(tmpDir, row!.id);
+      const loaded = loadHandoffById(tmpDir, 'default', row!.id);
       expect(loaded).not.toBeNull();
       expect(loaded!.sessionId).toBe('sess-byid');
       expect(loaded!.summary).toBe('Find me by ID');
@@ -205,7 +205,7 @@ describe('loadHandoffById', () => {
 
   it('returns null for non-existent ID', () => {
     initStore(tmpDir);
-    const result = loadHandoffById(tmpDir, 99999);
+    const result = loadHandoffById(tmpDir, 'default', 99999);
     expect(result).toBeNull();
   });
 });
@@ -306,28 +306,28 @@ describe('session events integration with handoffs', () => {
   it('session_start and session_end events can be recorded', () => {
     initStore(tmpDir);
 
-    appendSessionEvent(tmpDir, {
+    appendSessionEvent(tmpDir, 'default', {
       session_id: 'sess-lifecycle',
       event_type: 'session_start',
       content: 'Session started',
       source: 'openclaw',
     });
 
-    appendSessionEvent(tmpDir, {
+    appendSessionEvent(tmpDir, 'default', {
       session_id: 'sess-lifecycle',
       event_type: 'note',
       content: 'Did some work',
       source: 'openclaw',
     });
 
-    appendSessionEvent(tmpDir, {
+    appendSessionEvent(tmpDir, 'default', {
       session_id: 'sess-lifecycle',
       event_type: 'session_end',
       content: 'Session ended',
       source: 'openclaw',
     });
 
-    const events = listSessionEvents(tmpDir, { session_id: 'sess-lifecycle', limit: 10 });
+    const events = listSessionEvents(tmpDir, 'default', { session_id: 'sess-lifecycle', limit: 10 });
     expect(events).toHaveLength(3);
     expect(events[0]!.event_type).toBe('session_start');
     expect(events[1]!.event_type).toBe('note');
@@ -344,13 +344,13 @@ describe('session events integration with handoffs', () => {
       session_id: 'sess-combined',
     });
 
-    appendSessionEvent(tmpDir, {
+    appendSessionEvent(tmpDir, 'default', {
       session_id: 'sess-combined',
       event_type: 'session_start',
       content: 'Session started',
     });
 
-    saveSessionHandoff(tmpDir, {
+    saveSessionHandoff(tmpDir, 'default', {
       version: 1,
       sessionId: 'sess-combined',
       summary: 'Tests pass, ready for review',
@@ -361,10 +361,10 @@ describe('session events integration with handoffs', () => {
     expect(snapshot).not.toBeNull();
     expect(snapshot!.session_id).toBe('sess-combined');
 
-    const events = listSessionEvents(tmpDir, { session_id: 'sess-combined' });
+    const events = listSessionEvents(tmpDir, 'default', { session_id: 'sess-combined' });
     expect(events.length).toBeGreaterThanOrEqual(1);
 
-    const handoff = loadLatestHandoff(tmpDir, 'sess-combined');
+    const handoff = loadLatestHandoff(tmpDir, 'default', 'sess-combined');
     expect(handoff).not.toBeNull();
     expect(handoff!.summary).toBe('Tests pass, ready for review');
   });

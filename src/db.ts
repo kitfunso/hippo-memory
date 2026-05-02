@@ -22,7 +22,7 @@ const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: new (path: string) => DatabaseSyncLike;
 };
 
-const CURRENT_SCHEMA_VERSION = 21;
+const CURRENT_SCHEMA_VERSION = 22;
 
 type Migration = {
   version: number;
@@ -609,12 +609,82 @@ const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    version: 22,
+    up: (db) => {
+      // Tenant-isolation gap on continuity tables (codex review 2026-05-02).
+      // session_events and session_handoffs predate the v16 tenant migration
+      // and were never added to it, so the v0.40.0 provenance gate work
+      // exposed a real cross-tenant leak when continuity primitives are used.
+      // Adds tenant_id (NOT NULL DEFAULT 'default') with smart backfill from
+      // task_snapshots.session_id when unambiguous, plus an optional scope
+      // column so a private-channel-derived handoff can default-deny via the
+      // same rule recall already enforces.
+      //
+      // Tables are guarded with tableExists because some older code paths
+      // (legacy global stores partially initialized before v5) can reach this
+      // migration without the underlying tables present yet; the v5 schema
+      // creates them with IF NOT EXISTS so they will be created on a later
+      // openHippoDb call. Safer to skip than to fail the whole migration.
+      const eventsExists = tableExists(db, 'session_events');
+      const handoffsExists = tableExists(db, 'session_handoffs');
+      if (eventsExists && !tableHasColumn(db, 'session_events', 'tenant_id')) {
+        db.exec(`ALTER TABLE session_events ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
+      }
+      if (eventsExists && !tableHasColumn(db, 'session_events', 'scope')) {
+        db.exec(`ALTER TABLE session_events ADD COLUMN scope TEXT`);
+      }
+      if (handoffsExists && !tableHasColumn(db, 'session_handoffs', 'tenant_id')) {
+        db.exec(`ALTER TABLE session_handoffs ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
+      }
+      if (handoffsExists && !tableHasColumn(db, 'session_handoffs', 'scope')) {
+        db.exec(`ALTER TABLE session_handoffs ADD COLUMN scope TEXT`);
+      }
+      if (!eventsExists || !handoffsExists) return;
+
+      // Smart backfill: rows whose session_id maps to exactly one tenant in
+      // task_snapshots inherit that tenant. Ambiguous or unmapped rows stay
+      // at the column default ('default'). Conservative: never crosses
+      // tenant boundaries on guesses. The COUNT(DISTINCT) gate is the load-
+      // bearing check; without it, rows with multiple tenants under the same
+      // session_id would silently pick whichever group came first.
+      db.exec(`
+        UPDATE session_events
+           SET tenant_id = (
+             SELECT MAX(t.tenant_id) FROM task_snapshots t
+              WHERE t.session_id = session_events.session_id
+           )
+         WHERE tenant_id = 'default'
+           AND (SELECT COUNT(DISTINCT t.tenant_id) FROM task_snapshots t
+                 WHERE t.session_id = session_events.session_id) = 1
+      `);
+      db.exec(`
+        UPDATE session_handoffs
+           SET tenant_id = (
+             SELECT MAX(t.tenant_id) FROM task_snapshots t
+              WHERE t.session_id = session_handoffs.session_id
+           )
+         WHERE tenant_id = 'default'
+           AND (SELECT COUNT(DISTINCT t.tenant_id) FROM task_snapshots t
+                 WHERE t.session_id = session_handoffs.session_id) = 1
+      `);
+
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_session_events_tenant_session ON session_events(tenant_id, session_id, created_at DESC, id DESC)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_session_handoffs_tenant_session ON session_handoffs(tenant_id, session_id, created_at DESC)`);
+    },
+  },
 ];
 
 function tableHasColumn(db: DatabaseSyncLike, tableName: string, columnName: string): boolean {
   if (!/^[a-z_]+$/i.test(tableName)) throw new Error(`Invalid table name: ${tableName}`);
   const rows = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name?: string }>;
   return rows.some((row) => row.name === columnName);
+}
+
+function tableExists(db: DatabaseSyncLike, tableName: string): boolean {
+  if (!/^[a-z_]+$/i.test(tableName)) throw new Error(`Invalid table name: ${tableName}`);
+  const row = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name = ?`).get(tableName) as { name?: string } | undefined;
+  return !!row?.name;
 }
 
 export function getHippoDbPath(hippoRoot: string): string {

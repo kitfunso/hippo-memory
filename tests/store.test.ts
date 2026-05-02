@@ -393,7 +393,7 @@ describe('session events', () => {
   it('stores and reloads recent session events in chronological order', () => {
     initStore(tmpDir);
 
-    appendSessionEvent(tmpDir, {
+    appendSessionEvent(tmpDir, 'default', {
       session_id: 'sess_alpha',
       task: 'Ship continuity',
       event_type: 'plan',
@@ -402,7 +402,7 @@ describe('session events', () => {
       metadata: { step: 1 },
     });
 
-    appendSessionEvent(tmpDir, {
+    appendSessionEvent(tmpDir, 'default', {
       session_id: 'sess_alpha',
       task: 'Ship continuity',
       event_type: 'progress',
@@ -411,7 +411,7 @@ describe('session events', () => {
       metadata: { step: 2 },
     });
 
-    const events = listSessionEvents(tmpDir, { session_id: 'sess_alpha', limit: 5 });
+    const events = listSessionEvents(tmpDir, 'default', { session_id: 'sess_alpha', limit: 5 });
     expect(events).toHaveLength(2);
     expect(events[0]!.event_type).toBe('plan');
     expect(events[0]!.metadata).toEqual({ step: 1 });
@@ -426,7 +426,7 @@ describe('session events', () => {
   it('can filter down to the newest session trail', () => {
     initStore(tmpDir);
 
-    appendSessionEvent(tmpDir, {
+    appendSessionEvent(tmpDir, 'default', {
       session_id: 'sess_old',
       task: 'Old task',
       event_type: 'note',
@@ -434,7 +434,7 @@ describe('session events', () => {
       source: 'test',
     });
 
-    appendSessionEvent(tmpDir, {
+    appendSessionEvent(tmpDir, 'default', {
       session_id: 'sess_new',
       task: 'New task',
       event_type: 'note',
@@ -442,7 +442,7 @@ describe('session events', () => {
       source: 'test',
     });
 
-    const latest = listSessionEvents(tmpDir, { limit: 1 });
+    const latest = listSessionEvents(tmpDir, 'default', { limit: 1 });
     expect(latest).toHaveLength(1);
     expect(latest[0]!.session_id).toBe('sess_new');
     expect(latest[0]!.content).toBe('Newest event');

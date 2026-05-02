@@ -2936,7 +2936,7 @@ function cmdSession(
       process.exit(1);
     }
 
-    const event = appendSessionEvent(hippoRoot, {
+    const event = appendSessionEvent(hippoRoot, resolveTenantId({}), {
       session_id: sessionId,
       task: task || null,
       event_type: eventType || 'note',
@@ -2951,7 +2951,7 @@ function cmdSession(
   }
 
   if (subcommand === 'show') {
-    const events = listSessionEvents(hippoRoot, {
+    const events = listSessionEvents(hippoRoot, resolveTenantId({}), {
       session_id: sessionId || undefined,
       task: task || undefined,
       limit,
@@ -2968,7 +2968,7 @@ function cmdSession(
 
   if (subcommand === 'latest') {
     const snapshot = loadActiveTaskSnapshot(hippoRoot, resolveTenantId({}));
-    const events = listSessionEvents(hippoRoot, {
+    const events = listSessionEvents(hippoRoot, resolveTenantId({}), {
       session_id: sessionId || snapshot?.session_id || undefined,
       limit,
     });
@@ -3005,7 +3005,7 @@ function cmdSession(
     const metadata: Record<string, unknown> = { ended_at: new Date().toISOString() };
     if (summary) metadata.summary = summary;
 
-    const event = appendSessionEvent(hippoRoot, {
+    const event = appendSessionEvent(hippoRoot, resolveTenantId({}), {
       session_id: sessionId,
       task: task || null,
       event_type: 'session_complete',
@@ -3019,7 +3019,7 @@ function cmdSession(
   }
 
   if (subcommand === 'resume') {
-    const handoff = loadLatestHandoff(hippoRoot, sessionId || undefined);
+    const handoff = loadLatestHandoff(hippoRoot, resolveTenantId({}), sessionId || undefined);
     if (!handoff) {
       console.log('No handoff to resume from.');
       return;
@@ -3100,7 +3100,7 @@ function cmdHandoff(
       ? artifactFlag
       : (typeof artifactFlag === 'string' ? [artifactFlag] : []);
 
-    const handoff = saveSessionHandoff(hippoRoot, {
+    const handoff = saveSessionHandoff(hippoRoot, resolveTenantId({}), {
       version: 1,
       sessionId,
       repoRoot: process.cwd(),
@@ -3121,7 +3121,7 @@ function cmdHandoff(
 
   if (subcommand === 'latest') {
     const sessionId = String(flags['session'] ?? flags['id'] ?? '').trim() || undefined;
-    const handoff = loadLatestHandoff(hippoRoot, sessionId);
+    const handoff = loadLatestHandoff(hippoRoot, resolveTenantId({}), sessionId);
 
     if (!handoff) {
       if (flags['json']) {
@@ -3154,7 +3154,7 @@ function cmdHandoff(
       process.exit(1);
     }
 
-    const handoff = loadHandoffById(hippoRoot, handoffId);
+    const handoff = loadHandoffById(hippoRoot, resolveTenantId({}), handoffId);
 
     if (!handoff) {
       if (flags['json']) {
@@ -3191,7 +3191,7 @@ function cmdCurrent(
     const asJson = Boolean(flags['json']);
     const snapshot = loadActiveTaskSnapshot(hippoRoot, resolveTenantId({}));
     const sessionId = snapshot?.session_id ?? undefined;
-    const events = listSessionEvents(hippoRoot, {
+    const events = listSessionEvents(hippoRoot, resolveTenantId({}), {
       session_id: sessionId,
       limit: 5,
     });
@@ -3300,10 +3300,10 @@ async function cmdContext(
   // local isn't initialized — loading would auto-create .hippo in the cwd.
   const activeSnapshot = hasLocal ? loadActiveTaskSnapshot(hippoRoot, resolveTenantId({})) : null;
   const sessionHandoff = hasLocal && activeSnapshot?.session_id
-    ? loadLatestHandoff(hippoRoot, activeSnapshot.session_id)
+    ? loadLatestHandoff(hippoRoot, resolveTenantId({}), activeSnapshot.session_id)
     : null;
   const recentSessionEvents = hasLocal && activeSnapshot?.session_id
-    ? listSessionEvents(hippoRoot, { session_id: activeSnapshot.session_id, limit: 5 })
+    ? listSessionEvents(hippoRoot, resolveTenantId({}), { session_id: activeSnapshot.session_id, limit: 5 })
     : [];
 
   if (localEntries.length === 0 && globalEntries.length === 0 && !activeSnapshot && !sessionHandoff && recentSessionEvents.length === 0) {

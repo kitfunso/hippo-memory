@@ -26,13 +26,13 @@ describe('consolidate auto-promote: session -> trace', () => {
   it('promotes a session with a session_complete event into a trace', async () => {
     initStore(tmpDir);
     const sid = 'test-session-auto';
-    appendSessionEvent(tmpDir, {
+    appendSessionEvent(tmpDir, 'default', {
       session_id: sid, event_type: 'action', content: 'read x.ts', source: 'agent',
     });
-    appendSessionEvent(tmpDir, {
+    appendSessionEvent(tmpDir, 'default', {
       session_id: sid, event_type: 'action', content: 'edit line 42', source: 'agent',
     });
-    appendSessionEvent(tmpDir, {
+    appendSessionEvent(tmpDir, 'default', {
       session_id: sid,
       event_type: 'session_complete',
       content: 'success',
@@ -58,7 +58,7 @@ describe('consolidate auto-promote: session -> trace', () => {
   it('does NOT promote sessions that lack a session_complete event', async () => {
     initStore(tmpDir);
     const sid = 'test-no-outcome';
-    appendSessionEvent(tmpDir, {
+    appendSessionEvent(tmpDir, 'default', {
       session_id: sid, event_type: 'action', content: 'did stuff', source: 'agent',
     });
 
@@ -71,10 +71,10 @@ describe('consolidate auto-promote: session -> trace', () => {
   it('does NOT create duplicate traces across repeated sleep runs', async () => {
     initStore(tmpDir);
     const sid = 'test-idempotent';
-    appendSessionEvent(tmpDir, {
+    appendSessionEvent(tmpDir, 'default', {
       session_id: sid, event_type: 'action', content: 'action a', source: 'agent',
     });
-    appendSessionEvent(tmpDir, {
+    appendSessionEvent(tmpDir, 'default', {
       session_id: sid,
       event_type: 'session_complete',
       content: 'success',
@@ -101,14 +101,14 @@ describe('consolidate auto-promote: session -> trace', () => {
     const sharedTokens =
       'refactor auth module rotation strategy overlapping distinctive tokens here';
 
-    appendSessionEvent(tmpDir, {
+    appendSessionEvent(tmpDir, 'default', {
       session_id: 'sess-1',
       event_type: 'session_complete',
       content: 'success',
       source: 'agent',
       metadata: { summary: `${sharedTokens} always enable new flow` },
     });
-    appendSessionEvent(tmpDir, {
+    appendSessionEvent(tmpDir, 'default', {
       session_id: 'sess-2',
       event_type: 'session_complete',
       content: 'success',
