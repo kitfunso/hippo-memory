@@ -150,6 +150,8 @@ import {
   type AuditResult,
 } from './audit.js';
 import { createApiKey, listApiKeys, revokeApiKey, type ApiKeyListItem } from './auth.js';
+import { buildProvenanceCoverage } from './provenance-coverage.js';
+import { buildCorrectionLatency } from './correction-latency.js';
 import * as api from './api.js';
 import * as client from './client.js';
 import { detectServer, removePidfile, type ServerInfo } from './server-detect.js';
@@ -5252,6 +5254,11 @@ Commands:
     --threshold <n>        Overlap threshold 0-1 (default: 0.7)
   status                   Show memory health stats
   audit [--fix]            Check memory quality (--fix removes junk)
+  provenance               Provenance coverage gate for kind='raw' rows
+    --json                 Output as JSON
+    --strict               Exit non-zero when coverage < 100%
+  correction-latency       Wall-clock lag from receipt to supersession (p50/p95/max)
+    --json                 Output as JSON
   outcome                  Apply feedback to last recall
     --good                 Memories were helpful
     --bad                  Memories were irrelevant
@@ -5654,6 +5661,56 @@ async function main(): Promise<void> {
         } else {
           console.log(`\nRun with --fix to auto-remove error-severity issues.`);
         }
+      }
+      break;
+    }
+
+    case 'correction-latency': {
+      requireInit(hippoRoot);
+      const entries = loadAllEntries(hippoRoot);
+      const report = buildCorrectionLatency(entries);
+      if (flags['json']) {
+        console.log(JSON.stringify(report, null, 2));
+      } else if (report.count === 0) {
+        console.log('No supersessions found. Correction latency is undefined.');
+      } else {
+        const fmt = (ms: number | null) => {
+          if (ms === null) return 'n/a';
+          if (ms < 1000) return `${ms}ms`;
+          if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+          if (ms < 3_600_000) return `${(ms / 60_000).toFixed(1)}m`;
+          return `${(ms / 3_600_000).toFixed(1)}h`;
+        };
+        console.log(`Corrections: ${report.count} total (${report.extractionCount} extraction-driven, ${report.manualCount} manual)`);
+        console.log(`Latency p50: ${fmt(report.p50Ms)}, p95: ${fmt(report.p95Ms)}, max: ${fmt(report.maxMs)}`);
+        if (report.extractionCount === 0 && report.manualCount > 0) {
+          console.log(`\nAll ${report.manualCount} corrections were manual supersedes — no measurable observation lag.`);
+          console.log(`To measure latency, route corrections through extraction (set new.extracted_from to the raw receipt).`);
+        }
+      }
+      break;
+    }
+
+    case 'provenance': {
+      requireInit(hippoRoot);
+      const entries = loadAllEntries(hippoRoot);
+      const coverage = buildProvenanceCoverage(entries);
+      if (flags['json']) {
+        console.log(JSON.stringify(coverage, null, 2));
+      } else if (coverage.rawTotal === 0) {
+        console.log('No kind=raw memories present. Coverage gate trivially satisfied.');
+      } else {
+        const pct = (coverage.coverage * 100).toFixed(1);
+        console.log(`Provenance coverage: ${coverage.rawWithEnvelope}/${coverage.rawTotal} raw rows envelope-complete (${pct}%)`);
+        if (coverage.gaps.length > 0) {
+          console.log(`\nGaps:`);
+          for (const g of coverage.gaps) {
+            console.log(`  ${g.id}: missing ${g.missing.join(', ')}`);
+          }
+        }
+      }
+      if (flags['strict'] && coverage.coverage < 1) {
+        process.exit(1);
       }
       break;
     }

@@ -10,7 +10,12 @@ import {
   loadActiveTaskSnapshot,
   loadLatestHandoff,
   listSessionEvents,
+  writeEntry,
+  loadAllEntries,
 } from '../src/store.js';
+import { createMemory } from '../src/memory.js';
+import { buildProvenanceCoverage } from '../src/provenance-coverage.js';
+import { buildCorrectionLatency } from '../src/correction-latency.js';
 import { estimateTokens } from '../src/search.js';
 
 let tmpDir: string;
@@ -178,5 +183,180 @@ describe('Company Brain continuity scorecard scaffold', () => {
     const scorecard = buildResumeScorecard(tmpDir, currentSession);
     expect(scorecard.text).toContain('Open the PR for the current branch');
     expect(scorecard.text).not.toContain('Ship the stale branch');
+  });
+});
+
+describe('Company Brain provenance coverage scorecard', () => {
+  it('drops below 1.0 when any raw receipt is missing owner or artifact_ref', () => {
+    initStore(tmpDir);
+
+    writeEntry(
+      tmpDir,
+      createMemory('slack message from keith about the brand voice', {
+        kind: 'raw',
+        owner: 'user:keith',
+        artifact_ref: 'slack://team/eng/1714500000.001',
+        source: 'slack',
+      }),
+    );
+    writeEntry(
+      tmpDir,
+      createMemory('github PR body for the envelope migration', {
+        kind: 'raw',
+        owner: 'agent:hippo',
+        artifact_ref: 'gh://hippo/hippo-memory/pull/42',
+        source: 'github',
+      }),
+    );
+    writeEntry(
+      tmpDir,
+      createMemory('legacy distilled memory predating the envelope work', {
+        kind: 'distilled',
+        source: 'cli',
+      }),
+    );
+    writeEntry(
+      tmpDir,
+      createMemory('raw row from a misconfigured connector with no envelope', {
+        kind: 'raw',
+        source: 'broken-connector',
+      }),
+    );
+
+    const entries = loadAllEntries(tmpDir);
+    const coverage = buildProvenanceCoverage(entries);
+
+    expect(coverage.rawTotal).toBe(3);
+    expect(coverage.rawWithEnvelope).toBe(2);
+    expect(coverage.coverage).toBeCloseTo(2 / 3, 5);
+    expect(coverage.coverage).toBeLessThan(1);
+    expect(coverage.gaps).toHaveLength(1);
+    expect(coverage.gaps[0].missing.sort()).toEqual(['artifact_ref', 'owner']);
+
+    const distilledIds = entries.filter((e) => e.kind === 'distilled').map((e) => e.id);
+    const distilledLeak = coverage.gaps.some((g) => distilledIds.includes(g.id));
+    expect(distilledLeak).toBe(false);
+  });
+
+  it('reaches the 100% gate once every raw receipt carries owner and artifact_ref', () => {
+    initStore(tmpDir);
+
+    writeEntry(
+      tmpDir,
+      createMemory('slack message ingest with full envelope', {
+        kind: 'raw',
+        owner: 'user:keith',
+        artifact_ref: 'slack://team/eng/1714500001.002',
+        source: 'slack',
+      }),
+    );
+    writeEntry(
+      tmpDir,
+      createMemory('github PR body with full envelope', {
+        kind: 'raw',
+        owner: 'agent:hippo',
+        artifact_ref: 'gh://hippo/hippo-memory/pull/43',
+        source: 'github',
+      }),
+    );
+
+    const coverage = buildProvenanceCoverage(loadAllEntries(tmpDir));
+
+    expect(coverage.rawTotal).toBe(2);
+    expect(coverage.coverage).toBe(1);
+    expect(coverage.gaps).toHaveLength(0);
+  });
+});
+
+describe('Company Brain correction-latency scorecard', () => {
+  it('returns an empty report when no supersessions exist', () => {
+    const a = createMemory('belief: pricing tier is 100', {});
+    const report = buildCorrectionLatency([a]);
+    expect(report.count).toBe(0);
+    expect(report.manualCount).toBe(0);
+    expect(report.extractionCount).toBe(0);
+    expect(report.p50Ms).toBeNull();
+    expect(report.p95Ms).toBeNull();
+    expect(report.maxMs).toBeNull();
+    expect(report.pairs).toEqual([]);
+  });
+
+  it('flags direct supersedes as manual with zero measurable latency', () => {
+    const oldEntry = createMemory('belief: tier is 100', {});
+    (oldEntry as { created: string }).created = '2026-04-01T00:00:00.000Z';
+    const newEntry = createMemory('belief: tier is 120', {});
+    (newEntry as { created: string }).created = '2026-04-02T00:00:00.000Z';
+    (oldEntry as { superseded_by: string | null }).superseded_by = newEntry.id;
+
+    const report = buildCorrectionLatency([oldEntry, newEntry]);
+
+    expect(report.count).toBe(1);
+    expect(report.manualCount).toBe(1);
+    expect(report.extractionCount).toBe(0);
+    expect(report.p50Ms).toBeNull();
+    expect(report.pairs[0].via).toBe('manual');
+    expect(report.pairs[0].latencyMs).toBe(0);
+  });
+
+  it('measures extraction-driven latency from receipt to supersession', () => {
+    const rawReceipt = createMemory('slack: pricing tier moved to 120 today', {
+      kind: 'raw',
+      owner: 'user:keith',
+      artifact_ref: 'slack://team/eng/1714600100.001',
+    });
+    (rawReceipt as { created: string }).created = '2026-04-01T10:00:00.000Z';
+
+    const oldFact = createMemory('belief: tier is 100', {});
+    (oldFact as { created: string }).created = '2026-03-15T00:00:00.000Z';
+
+    const newFact = createMemory('belief: tier is 120', {
+      extracted_from: rawReceipt.id,
+    });
+    (newFact as { created: string }).created = '2026-04-01T10:30:00.000Z';
+    (oldFact as { superseded_by: string | null }).superseded_by = newFact.id;
+
+    const report = buildCorrectionLatency([rawReceipt, oldFact, newFact]);
+
+    expect(report.count).toBe(1);
+    expect(report.extractionCount).toBe(1);
+    expect(report.manualCount).toBe(0);
+    expect(report.pairs[0].via).toBe('extraction');
+    expect(report.pairs[0].latencyMs).toBe(30 * 60 * 1000);
+    expect(report.p50Ms).toBe(30 * 60 * 1000);
+    expect(report.maxMs).toBe(30 * 60 * 1000);
+  });
+
+  it('computes p50/p95/max across multiple extraction-driven corrections', () => {
+    const entries = [];
+    const baseRaw = '2026-04-01T00:00:00.000Z';
+    const lagsMin = [5, 10, 15, 20, 25, 30, 60, 120, 300, 600];
+
+    lagsMin.forEach((lagMin, i) => {
+      const raw = createMemory(`raw receipt ${i}`, {
+        kind: 'raw',
+        owner: 'user:keith',
+        artifact_ref: `slack://team/eng/${i}`,
+      });
+      (raw as { created: string }).created = baseRaw;
+
+      const oldFact = createMemory(`belief ${i} v1`, {});
+      (oldFact as { created: string }).created = '2026-03-01T00:00:00.000Z';
+
+      const newFact = createMemory(`belief ${i} v2`, { extracted_from: raw.id });
+      (newFact as { created: string }).created = new Date(
+        new Date(baseRaw).getTime() + lagMin * 60 * 1000,
+      ).toISOString();
+      (oldFact as { superseded_by: string | null }).superseded_by = newFact.id;
+
+      entries.push(raw, oldFact, newFact);
+    });
+
+    const report = buildCorrectionLatency(entries);
+
+    expect(report.extractionCount).toBe(10);
+    expect(report.maxMs).toBe(600 * 60 * 1000);
+    expect(report.p50Ms).toBe(((25 + 30) / 2) * 60 * 1000);
+    expect(report.p95Ms).toBeGreaterThan(300 * 60 * 1000);
+    expect(report.p95Ms).toBeLessThanOrEqual(600 * 60 * 1000);
   });
 });
