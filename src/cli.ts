@@ -1256,16 +1256,10 @@ async function cmdRecall(
       r: { scope?: string | null } | null | undefined,
     ): string | null => r?.scope ?? null;
     activeSnapshot =
-      rawSnapshot && passesScopeFilter(rowScope(rawSnapshot as TaskSnapshot & { scope?: string | null }))
-        ? rawSnapshot
-        : null;
+      rawSnapshot && passesScopeFilter(rowScope(rawSnapshot)) ? rawSnapshot : null;
     sessionHandoff =
-      rawHandoff && passesScopeFilter(rowScope(rawHandoff as SessionHandoff & { scope?: string | null }))
-        ? rawHandoff
-        : null;
-    recentSessionEvents = rawEvents.filter((e) =>
-      passesScopeFilter(rowScope(e as SessionEvent & { scope?: string | null })),
-    );
+      rawHandoff && passesScopeFilter(rowScope(rawHandoff)) ? rawHandoff : null;
+    recentSessionEvents = rawEvents.filter((e) => passesScopeFilter(rowScope(e)));
     const tokenize = (s?: string | null): number =>
       s ? Math.ceil(s.length / 4) : 0;
     continuityTokens =

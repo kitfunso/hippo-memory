@@ -244,6 +244,8 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
     const rowScope = (
       r: { scope?: string | null } | null | undefined,
     ): string | null => r?.scope ?? null;
+    // v1.2: TaskSnapshot / SessionHandoff / SessionEvent now carry scope; the
+    // wrapper just normalizes null vs undefined.
     const passesScopeFilter = (s: string | null): boolean => {
       if (opts.scope !== undefined && opts.scope !== '') {
         return s === opts.scope;
@@ -254,16 +256,10 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
       return true;
     };
     const filteredSnapshot =
-      snapshot && passesScopeFilter(rowScope(snapshot as TaskSnapshot & { scope?: string | null }))
-        ? snapshot
-        : null;
+      snapshot && passesScopeFilter(rowScope(snapshot)) ? snapshot : null;
     const filteredHandoff =
-      sessionHandoff && passesScopeFilter(rowScope(sessionHandoff as SessionHandoff & { scope?: string | null }))
-        ? sessionHandoff
-        : null;
-    const filteredEvents = recentSessionEvents.filter((e) =>
-      passesScopeFilter(rowScope(e as SessionEvent & { scope?: string | null })),
-    );
+      sessionHandoff && passesScopeFilter(rowScope(sessionHandoff)) ? sessionHandoff : null;
+    const filteredEvents = recentSessionEvents.filter((e) => passesScopeFilter(rowScope(e)));
     continuity = {
       activeSnapshot: filteredSnapshot,
       sessionHandoff: filteredHandoff,

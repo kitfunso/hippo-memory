@@ -11,9 +11,6 @@ import {
 } from '../src/store.js';
 import { createMemory } from '../src/memory.js';
 import { recall } from '../src/api.js';
-import type { TaskSnapshot } from '../src/store.js';
-
-type TaskSnapshotMaybeScope = TaskSnapshot & { scope?: string | null };
 
 let tmpDir: string;
 beforeEach(() => {
@@ -137,70 +134,36 @@ describe('api.recall continuity flag', () => {
     expect(result.continuity!.sessionHandoff).toBeNull();
   });
 
-  // codex round 3 P1: the default-deny scope rule must apply to continuity too,
-  // not just memory results. Once v1.2.0 continuity writers start setting scope,
-  // a no-scope caller must not see private-channel-derived continuity. Today
-  // scope is NULL on all continuity rows so this filter is a no-op, but we
-  // assert the filter path so the contract is locked in for v1.2.
-  it('default-deny scope rule applies to continuity rows with simulated private scope', async () => {
+  // v1.2: scope column ships on task_snapshots. Default-deny rule must reject
+  // private-scope continuity for no-scope callers; explicit-scope match works.
+  it('default-deny scope rule excludes private-scope continuity for no-scope callers', () => {
     initStore(tmpDir);
     saveActiveTaskSnapshot(tmpDir, 'default', {
-      task: 'public task',
-      summary: 'public',
-      next_step: 'public',
-      session_id: 'sess-public',
+      task: 'private task',
+      summary: 'private',
+      next_step: 'private',
+      session_id: 'sess-private',
       source: 'test',
+      scope: 'slack:private:Csecret',
     });
-    // Directly mark the snapshot row as private-scope. v1.1 has no writer for
-    // this column; we patch the row to simulate v1.2 ingestion. If recall()
-    // surfaces this snapshot to a no-scope caller, the bug is present.
-    const { openHippoDb, closeHippoDb } = await import('../src/db.js');
-    const db = openHippoDb(tmpDir);
-    try {
-      // Schema v22 added a `scope` column on session_events / session_handoffs;
-      // task_snapshots got it earlier. Just patch whatever exists.
-      try {
-        db.prepare(`UPDATE task_snapshots SET scope = 'slack:private:Csecret' WHERE session_id = 'sess-public'`).run();
-      } catch {
-        // task_snapshots may not have a scope column on every install; ignore.
-      }
-    } finally {
-      closeHippoDb(db);
-    }
 
     const noScopeResult = recall(
       { hippoRoot: tmpDir, tenantId: 'default', actor: 'test' },
       { query: 'anything', includeContinuity: true },
     );
-    // If task_snapshots has a scope column AND we set it private, the snapshot
-    // must be filtered out for a no-scope caller. If the column doesn't exist,
-    // the row keeps scope=null and IS surfaced (that is the v1.1.0 known
-    // limitation; the column just isn't there yet).
-    const snapshotHasScope = (noScopeResult.continuity?.activeSnapshot as
-      | (TaskSnapshotMaybeScope | null)
-      | undefined) ?? null;
-    const surfacedScope = snapshotHasScope?.scope ?? null;
-    if (surfacedScope === null) {
-      // Either column absent or row has null scope (v1.1.0 today). Snapshot
-      // surfaces. This is the documented v1.1.0 known limitation.
-      expect(noScopeResult.continuity!.activeSnapshot).not.toBeNull();
-    } else {
-      // Column present + private scope set → filter must reject.
-      expect(noScopeResult.continuity!.activeSnapshot).toBeNull();
-    }
+    expect(noScopeResult.continuity!.activeSnapshot).toBeNull();
 
-    // Explicit scope match: caller asking for the exact private scope DOES see it.
     const scopedResult = recall(
       { hippoRoot: tmpDir, tenantId: 'default', actor: 'test' },
       { query: 'anything', includeContinuity: true, scope: 'slack:private:Csecret' },
     );
-    expect(scopedResult.continuity).toBeDefined();
+    expect(scopedResult.continuity!.activeSnapshot?.task).toBe('private task');
   });
 
   // codex v1.2 round 1 P0: explicit scope must EXACT-match, not allow-all.
   // The v1.1.0 filter was `opts.scope || isPublic` which let any explicit
   // scope see every continuity row regardless of that row's scope.
-  it('explicit scope is exact-match, not allow-all (cross-scope leak guard)', async () => {
+  it('explicit scope is exact-match, not allow-all (cross-scope leak guard)', () => {
     initStore(tmpDir);
     saveActiveTaskSnapshot(tmpDir, 'default', {
       task: 'C1 task',
@@ -208,21 +171,8 @@ describe('api.recall continuity flag', () => {
       next_step: 'C1',
       session_id: 'sess-c1',
       source: 'test',
+      scope: 'slack:private:C1',
     });
-    const { openHippoDb, closeHippoDb } = await import('../src/db.js');
-    const db = openHippoDb(tmpDir);
-    try {
-      try {
-        db.prepare(`UPDATE task_snapshots SET scope = 'slack:private:C1' WHERE session_id = 'sess-c1'`).run();
-      } catch {
-        // task_snapshots scope column may not exist yet on this branch state.
-        // The test is meaningful once Task 1 (schema v23) lands; until then,
-        // it documents the intended semantics.
-        return;
-      }
-    } finally {
-      closeHippoDb(db);
-    }
 
     // Caller asks for C2 → must NOT see C1 snapshot.
     const c2Result = recall(
