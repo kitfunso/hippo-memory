@@ -1864,7 +1864,7 @@ export function loadLatestHandoff(hippoRoot: string, tenantId: string, sessionId
     let row: SessionHandoffRow | undefined;
     if (sessionId) {
       row = db.prepare(`
-        SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, created_at
+        SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, created_at
         FROM session_handoffs
         WHERE session_id = ? AND tenant_id = ?
         ORDER BY created_at DESC, id DESC
@@ -1872,7 +1872,7 @@ export function loadLatestHandoff(hippoRoot: string, tenantId: string, sessionId
       `).get(sessionId, tenantId) as SessionHandoffRow | undefined;
     } else {
       row = db.prepare(`
-        SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, created_at
+        SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, created_at
         FROM session_handoffs
         WHERE tenant_id = ?
         ORDER BY created_at DESC, id DESC

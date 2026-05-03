@@ -160,6 +160,45 @@ describe('api.recall continuity flag', () => {
     expect(scopedResult.continuity!.activeSnapshot?.task).toBe('private task');
   });
 
+  // codex v1.2 round 2 P1: loadLatestHandoff SELECTs were missing the scope
+  // column even after the writer set it. Without scope on the loaded row,
+  // a private handoff would surface to no-scope callers.
+  it('loadLatestHandoff returns scope on the row, default-deny rejects private', () => {
+    initStore(tmpDir);
+    saveActiveTaskSnapshot(tmpDir, 'default', {
+      task: 'Public anchor',
+      summary: 'public',
+      next_step: 'public',
+      session_id: 'sess-private-handoff',
+      source: 'test',
+    });
+    saveSessionHandoff(tmpDir, 'default', {
+      version: 1,
+      sessionId: 'sess-private-handoff',
+      summary: 'PRIVATE handoff content',
+      nextAction: 'secret next',
+      artifacts: [],
+      scope: 'slack:private:Csecret',
+    });
+
+    const noScopeResult = recall(
+      { hippoRoot: tmpDir, tenantId: 'default', actor: 'test' },
+      { query: 'anything', includeContinuity: true },
+    );
+    // Snapshot is public-scope (null) so it surfaces. Handoff is private,
+    // must NOT surface.
+    expect(noScopeResult.continuity!.activeSnapshot?.task).toBe('Public anchor');
+    expect(noScopeResult.continuity!.sessionHandoff).toBeNull();
+
+    const scopedResult = recall(
+      { hippoRoot: tmpDir, tenantId: 'default', actor: 'test' },
+      { query: 'anything', includeContinuity: true, scope: 'slack:private:Csecret' },
+    );
+    // Note: snapshot has scope=null and won't match 'slack:private:Csecret'
+    // exactly. Handoff has matching scope and DOES surface.
+    expect(scopedResult.continuity!.sessionHandoff?.summary).toBe('PRIVATE handoff content');
+  });
+
   // codex v1.2 round 1 P0: explicit scope must EXACT-match, not allow-all.
   // The v1.1.0 filter was `opts.scope || isPublic` which let any explicit
   // scope see every continuity row regardless of that row's scope.
