@@ -209,11 +209,15 @@ const TOOLS = [
   {
     name: 'hippo_context',
     description:
-      'Smart context injection: auto-detects current task from git state and returns relevant memories. Use at the start of any session.',
+      'Smart context injection: auto-detects current task from git state and returns relevant memories plus the active task snapshot. Use at the start of any session. Memories and snapshot are scope-filtered: a no-scope caller does NOT see slack:private:* or legacy-quarantine rows.',
     inputSchema: {
       type: 'object' as const,
       properties: {
         budget: { type: 'number', description: 'Max tokens (default: 1500)' },
+        scope: {
+          type: 'string',
+          description: 'Restrict memories and snapshot to this scope exactly. When omitted, default-deny applies to slack:private:* and unknown-legacy rows.',
+        },
       },
     },
   },
@@ -434,6 +438,9 @@ async function executeTool(
 
     case 'hippo_context': {
       const budget = Number(args.budget) || config.defaultContextBudget;
+      const explicitScope = typeof args.scope === 'string' && args.scope.length > 0
+        ? String(args.scope)
+        : undefined;
       // Auto-detect query from git
       let query = '';
       try {
@@ -445,7 +452,19 @@ async function executeTool(
 
       if (!query) query = 'project context general';
 
-      const entries = loadAllEntries(hippoRoot, tenantId);
+      // v1.2 codex audit: same scope filter as hippo_recall on BOTH the memory
+      // results and the snapshot. Pre-v1.2 this surface returned all memories
+      // and the snapshot unfiltered, which would have leaked private-channel
+      // content to no-scope MCP callers once scope writers shipped.
+      const passesScopeFilter = (s: string | null): boolean => {
+        if (explicitScope !== undefined) return s === explicitScope;
+        if (s === null) return true;
+        if (s.startsWith('slack:private:')) return false;
+        if (s === 'unknown:legacy') return false;
+        return true;
+      };
+      const allEntries = loadAllEntries(hippoRoot, tenantId);
+      const entries = allEntries.filter((e) => passesScopeFilter(e.scope ?? null));
       const usePhysicsCtx = config.physics?.enabled !== false;
       const results = usePhysicsCtx
         ? await physicsSearch(query, entries, { budget, hippoRoot, physicsConfig: config.physics })
@@ -454,7 +473,10 @@ async function executeTool(
       for (const entry of retrieved) writeEntry(hippoRoot, entry);
       lastRecalledIds.set(resolveClientKey(ctx), retrieved.map((e) => e.id));
 
-      const snapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
+      const rawSnapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
+      const snapshot = rawSnapshot && passesScopeFilter(rawSnapshot.scope)
+        ? rawSnapshot
+        : null;
       const snapshotText = snapshot
         ? [
             '## Active Task Snapshot',
