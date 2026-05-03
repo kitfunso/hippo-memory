@@ -85,6 +85,13 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.0.0
+
+- **Tenant-isolation security release.** v0.40.0's measurement gates surfaced a real cross-tenant data leak on the continuity tables (`task_snapshots`, `session_events`, `session_handoffs`). Schema migration v22 closes the gap: every continuity helper now scopes reads and writes by `tenantId`. Markdown mirror files (`buffer/active-task.md`, `buffer/recent-session.md`) are tenant-scoped too; the default tenant keeps the unsuffixed filename for on-disk back-compat.
+- **Slack envelope fix.** `messageToRememberOpts` now sets `owner: 'user:<slack_user_id>'` so ingested Slack rows pass the v0.40.0 `hippo provenance --strict` gate.
+- **Breaking change for JS callers.** 10 store helpers (`saveActiveTaskSnapshot`, `loadLatestHandoff`, `appendSessionEvent`, etc.) gained a required `tenantId` second argument. TypeScript callers get a compile error. JS callers get a runtime guard error (`assertTenantId`) that detects the most common misbinding (passing a `sess-*` session id) and points at the migration. See CHANGELOG for the full helper list.
+- **Schema v22 migration.** Idempotent, transactional, with smart tenant backfill via unambiguous `task_snapshots.session_id` joins.
+
 ### What's new in v0.40.0
 
 - **Company Brain measurement gates.** Two new diagnostic commands close the last blocked rows of the Company Brain scorecard. `hippo provenance [--json] [--strict]` audits every `kind='raw'` row for `owner` + `artifact_ref`; `--strict` exits non-zero so CI can block on coverage regressions. `hippo correction-latency [--json]` reports p50 / p95 / max wall-clock lag from receipt to supersession across `superseded_by` chains. Both helpers (`buildProvenanceCoverage`, `buildCorrectionLatency`) are importable from `src/`.

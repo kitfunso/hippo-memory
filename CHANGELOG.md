@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.0.0 (2026-05-03)
+
+Tenant-isolation security release. Closes a cross-tenant data leak on the
+continuity tables (snapshots, session events, session handoffs) that the
+v0.40.0 measurement gates uncovered. Bumped to 1.0.0 because 7 store
+helpers gained a required `tenantId` parameter.
+
+### Security (CRITICAL)
+- **task_snapshots cross-tenant leak.** `saveActiveTaskSnapshot`'s supersede UPDATE was tenant-blind: tenant B saving an active snapshot would mark tenant A's row as 'superseded'. Same gap on `loadActiveTaskSnapshot` and `clearActiveTaskSnapshot`. All three now scope reads and writes by `tenantId`.
+- **session_events / session_handoffs missing tenant_id.** Both tables predated the v16 tenant migration. Surfacing them through any continuity API would mix tenants. Schema v22 adds `tenant_id` (NOT NULL DEFAULT 'default') with smart backfill via `task_snapshots.session_id` joins. `appendSessionEvent`, `listSessionEvents`, `saveSessionHandoff`, `loadLatestHandoff`, `loadHandoffById`, `findPromotableSessions`, and `traceExistsForSession` are now tenant-scoped.
+- **Mirror file leak.** `buffer/active-task.md` and `buffer/recent-session.md` were at fixed paths regardless of tenant. Multi-tenant deployments would have tenant B overwrite tenant A's mirror. Non-default tenants now get `buffer/active-task.<tenantId>.md`; default tenant keeps the unsuffixed path for on-disk back-compat.
+- **Slack ingestion missing owner envelope.** `messageToRememberOpts` set `artifact_ref` but not `owner`, so every Slack-ingested raw row failed the v0.40.0 `hippo provenance --strict` gate. Now emits `owner: 'user:<slack_user_id>'` when present. Bot/system messages without `user` keep `owner=null` (correct signal: unattributable, investigate).
+
+### Breaking
+- **10 store helpers now take `tenantId` as their second positional argument.** TypeScript callers get a compile error. JS callers from older code would silently misbind a `sessionId` where `tenantId` is now expected. New `assertTenantId` runtime guard rejects the most common misbinding shape (any value matching `/^sess[-_]/i`) with a clear migration message. Affected helpers: `saveActiveTaskSnapshot`, `loadActiveTaskSnapshot`, `clearActiveTaskSnapshot`, `appendSessionEvent`, `listSessionEvents`, `saveSessionHandoff`, `loadLatestHandoff`, `loadHandoffById`, `findPromotableSessions`, `traceExistsForSession`.
+
+### Schema
+- Migration v22: `ALTER TABLE session_events ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'` plus a nullable `scope` column for future read-side default-deny work. Same on `session_handoffs`. Composite indexes on `(tenant_id, session_id, created_at)`. Self-heals partial-init stores via `CREATE TABLE IF NOT EXISTS` before the ALTERs. Migration runs inside the existing `BEGIN`/`ROLLBACK` transaction.
+- Smart backfill: rows whose session_id maps to exactly one tenant in `task_snapshots` inherit that tenant; ambiguous or unmapped rows stay at `'default'`. Conservative: never crosses tenant boundaries on guesses.
+
+### Known limitations
+- **`scope` column on continuity tables is currently NULL on all writes.** The column was added in v22 to support a future read-side default-deny rule (mirroring the existing private-Slack filter on memories), but the read path is not wired yet. Wiring both sides at once will land in a follow-up release. No regression vs v0.40.0; private-channel handoffs were not filtered there either.
+- **Backfill ambiguity.** A pre-v22 store with both real `default`-tenant data and unrelated legacy `default` rows could see legacy rows reassigned to a `default`-tenant `task_snapshots.session_id` if they share session ids. Low real-world impact; flagged for the multi-tenant rollout playbook.
+- **Slack bot/system messages without `user`** still produce `kind='raw'` rows with no `owner`, which fail `hippo provenance --strict`. Connectors that need bot attribution should emit `owner: 'agent:slack-bot:<bot_id>'` themselves until the connector grows that path natively.
+- **Transitive CVEs in `@xenova/transformers` (4 critical via `protobufjs`).** No clean upgrade in the v2 line; `@huggingface/transformers` v4.2.0 is the official successor and the upgrade is tracked for a follow-up release. The vulnerable code path is ONNX model file parsing, not network input — a real attack requires shipping a malicious model file to the user's machine.
+
+### Deferred from v0.40
+- Tenant-guard audit on remaining MCP tools (context, status, learn, conflicts, resolve, peers).
+- Request-level rate limit on `/v1/auth/keys` and `/v1/*` (mitigated by localhost-default binding).
+- p99 hardening, 24h soak harness as a real release gate, B3 dlPFC sequential-learning adapter contract.
+
 ## 0.40.0 (2026-05-02)
 
 ### Added
