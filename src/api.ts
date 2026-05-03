@@ -17,7 +17,13 @@ import {
   deleteEntry,
   loadSearchEntries,
   removeEntryMirrors,
+  loadActiveTaskSnapshot,
+  loadLatestHandoff,
+  listSessionEvents,
+  type TaskSnapshot,
+  type SessionEvent,
 } from './store.js';
+import type { SessionHandoff } from './handoff.js';
 import {
   createMemory,
   applyOutcome,
@@ -105,6 +111,27 @@ export interface RecallOpts {
    * non-Slack content) are still returned.
    */
   scope?: string;
+  /**
+   * When true, include a continuity block (active task snapshot, latest matching
+   * session handoff, recent session events) on the result. Default false to keep
+   * the hot path cheap; agent boot paths should set this to true.
+   *
+   * All three lookups are tenant-scoped to ctx.tenantId via the v0.40+ store
+   * helpers. No risk of cross-tenant leak.
+   *
+   * Note: when no active snapshot exists, sessionHandoff is null and
+   * recentSessionEvents is []. We deliberately do NOT fall back to the latest
+   * tenant handoff without a session anchor, to avoid resurrecting stale state
+   * after a session ends. The explicit handoff-without-snapshot path remains
+   * `hippo session resume`.
+   */
+  includeContinuity?: boolean;
+}
+
+export interface ContinuityBlock {
+  activeSnapshot: TaskSnapshot | null;
+  sessionHandoff: SessionHandoff | null;
+  recentSessionEvents: SessionEvent[];
 }
 
 export interface RecallResultItem {
@@ -119,6 +146,16 @@ export interface RecallResult {
   results: RecallResultItem[];
   total: number;
   tokens: number;
+  continuity?: ContinuityBlock;
+  /**
+   * Tokens consumed by the continuity block: snapshot (task + summary + next_step)
+   * + handoff (summary + nextAction + artifacts) + every event's full content
+   * across the last 5 events. Each measured by Math.ceil(len/4), matching
+   * the existing `tokens` count and src/search.ts estimateTokens().
+   * Undefined when continuity not requested. Callers needing a tighter budget
+   * should truncate event.content themselves before display.
+   */
+  continuityTokens?: number;
 }
 
 /**
@@ -183,7 +220,37 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
     closeHippoDb(db);
   }
 
-  return { results: ranked, total: entries.length, tokens };
+  let continuity: ContinuityBlock | undefined;
+  let continuityTokens: number | undefined;
+  if (opts.includeContinuity) {
+    const snapshot = loadActiveTaskSnapshot(ctx.hippoRoot, ctx.tenantId);
+    // No active snapshot = no anchor = no handoff/events. Avoids resurrecting
+    // a stale handoff from a deleted/completed session.
+    const sessionId = snapshot?.session_id ?? undefined;
+    const sessionHandoff = sessionId
+      ? loadLatestHandoff(ctx.hippoRoot, ctx.tenantId, sessionId)
+      : null;
+    const recentSessionEvents = sessionId
+      ? listSessionEvents(ctx.hippoRoot, ctx.tenantId, { session_id: sessionId, limit: 5 })
+      : [];
+    continuity = {
+      activeSnapshot: snapshot,
+      sessionHandoff,
+      recentSessionEvents,
+    };
+    const tokenize = (s?: string | null): number =>
+      s ? Math.ceil(s.length / 4) : 0;
+    continuityTokens =
+      tokenize(snapshot?.task) +
+      tokenize(snapshot?.summary) +
+      tokenize(snapshot?.next_step) +
+      tokenize(sessionHandoff?.summary) +
+      tokenize(sessionHandoff?.nextAction) +
+      (sessionHandoff?.artifacts ?? []).reduce((acc, a) => acc + tokenize(a), 0) +
+      recentSessionEvents.reduce((acc, e) => acc + tokenize(e.content), 0);
+  }
+
+  return { results: ranked, total: entries.length, tokens, continuity, continuityTokens };
 }
 
 // ---------------------------------------------------------------------------
