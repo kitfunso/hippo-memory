@@ -1241,16 +1241,19 @@ async function cmdRecall(
     // (matches existing memory recall behavior).
     const isPublicScope = (s: string | null | undefined): boolean =>
       !(s ?? '').startsWith('slack:private:');
-    const explicitScope = recallExplicitScope ?? '';
+    // Use recallActiveScope (which already merges --scope and detectScope())
+    // so an auto-scoped slack-channel context gets scope-matched continuity,
+    // not just default-denied. Aligns with the memory recall path above.
+    const effectiveScope = recallActiveScope ?? '';
     activeSnapshot =
-      rawSnapshot && (explicitScope || isPublicScope((rawSnapshot as TaskSnapshot & { scope?: string | null }).scope))
+      rawSnapshot && (effectiveScope || isPublicScope((rawSnapshot as TaskSnapshot & { scope?: string | null }).scope))
         ? rawSnapshot
         : null;
     sessionHandoff =
-      rawHandoff && (explicitScope || isPublicScope((rawHandoff as SessionHandoff & { scope?: string | null }).scope))
+      rawHandoff && (effectiveScope || isPublicScope((rawHandoff as SessionHandoff & { scope?: string | null }).scope))
         ? rawHandoff
         : null;
-    recentSessionEvents = explicitScope
+    recentSessionEvents = effectiveScope
       ? rawEvents
       : rawEvents.filter((e) =>
           isPublicScope((e as SessionEvent & { scope?: string | null }).scope),
