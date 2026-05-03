@@ -1215,12 +1215,65 @@ async function cmdRecall(
     emitCliAudit(globalRoot, 'recall', undefined, recallMetadata);
   }
 
+  // Continuity assembly (--continuity). Lives BEFORE the zero-result branch
+  // so a no-match query with active continuity state still returns a useful
+  // resume packet. Same three tenant-scoped store helpers as api.recall;
+  // continuityTokens uses the same Math.ceil(len/4) rule as the search-path
+  // estimateTokens() in src/search.ts.
+  const includeContinuity = Boolean(flags['continuity']);
+  let activeSnapshot: TaskSnapshot | null = null;
+  let sessionHandoff: SessionHandoff | null = null;
+  let recentSessionEvents: SessionEvent[] = [];
+  let continuityTokens = 0;
+  if (includeContinuity) {
+    activeSnapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
+    const sessionId = activeSnapshot?.session_id ?? undefined;
+    sessionHandoff = sessionId
+      ? loadLatestHandoff(hippoRoot, tenantId, sessionId)
+      : null;
+    recentSessionEvents = sessionId
+      ? listSessionEvents(hippoRoot, tenantId, { session_id: sessionId, limit: 5 })
+      : [];
+    const tokenize = (s?: string | null): number =>
+      s ? Math.ceil(s.length / 4) : 0;
+    continuityTokens =
+      tokenize(activeSnapshot?.task) +
+      tokenize(activeSnapshot?.summary) +
+      tokenize(activeSnapshot?.next_step) +
+      tokenize(sessionHandoff?.summary) +
+      tokenize(sessionHandoff?.nextAction) +
+      (sessionHandoff?.artifacts ?? []).reduce((acc, a) => acc + tokenize(a), 0) +
+      recentSessionEvents.reduce((acc, e) => acc + tokenize(e.content), 0);
+  }
+  const hasContinuity =
+    activeSnapshot !== null
+    || sessionHandoff !== null
+    || recentSessionEvents.length > 0;
+
   if (results.length === 0) {
     if (asJson) {
-      console.log(JSON.stringify({ query, results: [], total: 0 }));
-    } else {
-      console.log('No memories found for:', query);
+      const out: Record<string, unknown> = { query, results: [], total: 0 };
+      if (includeContinuity) {
+        out.continuity = {
+          activeSnapshot,
+          sessionHandoff,
+          recentSessionEvents,
+        };
+        out.continuityTokens = continuityTokens;
+      }
+      console.log(JSON.stringify(out));
+      return;
     }
+    if (hasContinuity) {
+      // Print continuity even when no memories matched. The resume packet
+      // is the whole point of `--continuity` and must not be dropped here.
+      if (activeSnapshot) printActiveTaskSnapshot(activeSnapshot);
+      if (sessionHandoff) printHandoff(sessionHandoff);
+      if (recentSessionEvents.length > 0) printSessionEvents(recentSessionEvents);
+      console.log(`(no memories matched "${query}")`);
+      return;
+    }
+    console.log('No memories found for:', query);
     return;
   }
 
@@ -1270,11 +1323,25 @@ async function cmdRecall(
       }
       return base;
     });
-    console.log(JSON.stringify({ query, budget, results: output, total: output.length }));
+    const jsonOut: Record<string, unknown> = { query, budget, results: output, total: output.length };
+    if (includeContinuity) {
+      jsonOut.continuity = {
+        activeSnapshot,
+        sessionHandoff,
+        recentSessionEvents,
+      };
+      jsonOut.continuityTokens = continuityTokens;
+    }
+    console.log(JSON.stringify(jsonOut));
     return;
   }
 
   const totalTokens = results.reduce((sum, r) => sum + r.tokens, 0);
+  if (includeContinuity && hasContinuity) {
+    if (activeSnapshot) printActiveTaskSnapshot(activeSnapshot);
+    if (sessionHandoff) printHandoff(sessionHandoff);
+    if (recentSessionEvents.length > 0) printSessionEvents(recentSessionEvents);
+  }
   console.log(`Found ${results.length} memories (${totalTokens} tokens) for: "${query}"\n`);
 
   for (const r of results) {
@@ -5208,6 +5275,14 @@ Commands:
                            lexical gate destroyed LoCoMo 0.28 -> 0.02; this v2
                            is retrieval-side, opt-in only — see MEMORY.md
                            "Hippo salience gate destroys benchmark recall".)
+    --continuity           Include continuity block (active task snapshot,
+                           latest matching session handoff, last 5 session
+                           events) above the memory list. Useful at agent
+                           boot when you want both relevant memories AND
+                           where you left off in one call. Anchored on the
+                           active snapshot's session_id; no anchor = no
+                           handoff/events (use 'hippo session resume' for
+                           the explicit handoff-without-snapshot path).
   explain <query>          Show full score breakdown for each retrieved memory
     --budget <n>           Token budget (default: 4000)
     --limit <n>            Cap the number of results displayed
