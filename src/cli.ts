@@ -1239,25 +1239,33 @@ async function cmdRecall(
     // private-channel-derived rows. Today scope is NULL on all continuity
     // rows so this is a no-op. Caller-supplied --scope bypasses the gate
     // (matches existing memory recall behavior).
-    const isPublicScope = (s: string | null | undefined): boolean =>
-      !(s ?? '').startsWith('slack:private:');
-    // Use recallActiveScope (which already merges --scope and detectScope())
-    // so an auto-scoped slack-channel context gets scope-matched continuity,
-    // not just default-denied. Aligns with the memory recall path above.
+    // Scope filter mirrors api.recall: exact match when scope is set, default-deny
+    // on slack:private:* and 'unknown:legacy' otherwise. recallActiveScope merges
+    // --scope flag and detectScope() so auto-detected slack contexts get matched.
     const effectiveScope = recallActiveScope ?? '';
+    const passesScopeFilter = (s: string | null): boolean => {
+      if (effectiveScope) {
+        return s === effectiveScope;
+      }
+      if (s === null) return true;
+      if (s.startsWith('slack:private:')) return false;
+      if (s === 'unknown:legacy') return false;
+      return true;
+    };
+    const rowScope = (
+      r: { scope?: string | null } | null | undefined,
+    ): string | null => r?.scope ?? null;
     activeSnapshot =
-      rawSnapshot && (effectiveScope || isPublicScope((rawSnapshot as TaskSnapshot & { scope?: string | null }).scope))
+      rawSnapshot && passesScopeFilter(rowScope(rawSnapshot as TaskSnapshot & { scope?: string | null }))
         ? rawSnapshot
         : null;
     sessionHandoff =
-      rawHandoff && (effectiveScope || isPublicScope((rawHandoff as SessionHandoff & { scope?: string | null }).scope))
+      rawHandoff && passesScopeFilter(rowScope(rawHandoff as SessionHandoff & { scope?: string | null }))
         ? rawHandoff
         : null;
-    recentSessionEvents = effectiveScope
-      ? rawEvents
-      : rawEvents.filter((e) =>
-          isPublicScope((e as SessionEvent & { scope?: string | null }).scope),
-        );
+    recentSessionEvents = rawEvents.filter((e) =>
+      passesScopeFilter(rowScope(e as SessionEvent & { scope?: string | null })),
+    );
     const tokenize = (s?: string | null): number =>
       s ? Math.ceil(s.length / 4) : 0;
     continuityTokens =

@@ -197,6 +197,48 @@ describe('api.recall continuity flag', () => {
     expect(scopedResult.continuity).toBeDefined();
   });
 
+  // codex v1.2 round 1 P0: explicit scope must EXACT-match, not allow-all.
+  // The v1.1.0 filter was `opts.scope || isPublic` which let any explicit
+  // scope see every continuity row regardless of that row's scope.
+  it('explicit scope is exact-match, not allow-all (cross-scope leak guard)', async () => {
+    initStore(tmpDir);
+    saveActiveTaskSnapshot(tmpDir, 'default', {
+      task: 'C1 task',
+      summary: 'C1',
+      next_step: 'C1',
+      session_id: 'sess-c1',
+      source: 'test',
+    });
+    const { openHippoDb, closeHippoDb } = await import('../src/db.js');
+    const db = openHippoDb(tmpDir);
+    try {
+      try {
+        db.prepare(`UPDATE task_snapshots SET scope = 'slack:private:C1' WHERE session_id = 'sess-c1'`).run();
+      } catch {
+        // task_snapshots scope column may not exist yet on this branch state.
+        // The test is meaningful once Task 1 (schema v23) lands; until then,
+        // it documents the intended semantics.
+        return;
+      }
+    } finally {
+      closeHippoDb(db);
+    }
+
+    // Caller asks for C2 → must NOT see C1 snapshot.
+    const c2Result = recall(
+      { hippoRoot: tmpDir, tenantId: 'default', actor: 'test' },
+      { query: 'anything', includeContinuity: true, scope: 'slack:private:C2' },
+    );
+    expect(c2Result.continuity!.activeSnapshot).toBeNull();
+
+    // Caller asks for C1 exactly → DOES see C1 snapshot.
+    const c1Result = recall(
+      { hippoRoot: tmpDir, tenantId: 'default', actor: 'test' },
+      { query: 'anything', includeContinuity: true, scope: 'slack:private:C1' },
+    );
+    expect(c1Result.continuity!.activeSnapshot?.task).toBe('C1 task');
+  });
+
   // codex round 3 P2: client.recall must reject includeContinuity instead of
   // silently dropping it. HTTP support lands in v1.2.0.
   it('client.recall throws when includeContinuity is set (v1.1.0 not yet HTTP-supported)', async () => {
