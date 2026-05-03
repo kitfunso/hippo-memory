@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.1.0 (2026-05-03)
+
+Continuity-first recall: one call returns both relevant memories AND where the agent left off. Opt-in via `includeContinuity` (api) or `--continuity` (CLI). Default-off keeps the hot path unchanged.
+
+### Added
+- **`api.recall` continuity block.** New `includeContinuity?: boolean` on `RecallOpts`. When true, `RecallResult` includes a `continuity` field (`activeSnapshot`, `sessionHandoff`, `recentSessionEvents`) plus `continuityTokens` for budget visibility. All three reads are tenant-scoped via the v1.0.0 helpers; no risk of cross-tenant leak. Importable: `ContinuityBlock` from `src/api.ts`.
+- **`hippo recall <query> --continuity` CLI flag.** Surfaces the snapshot, handoff, and last 5 session events above the memory list. Reuses `printActiveTaskSnapshot` / `printHandoff` / `printSessionEvents` formatters from `cmdContext` for on-screen parity. Zero-result queries with `--continuity` print the resume packet instead of the bare "No memories found" message.
+
+### Design notes
+- **No stale-handoff resurrection.** When there is no active snapshot, `sessionHandoff` is null and `recentSessionEvents` is empty. The explicit handoff-without-snapshot path remains `hippo session resume` (src/cli.ts:3022). This avoids surprise resurrection of post-session state in the implicit recall flow.
+- **`continuityTokens` reports the FULL payload** (snapshot + handoff + every event's full content). Callers needing a tight resume packet should truncate event content themselves before display. Same `Math.ceil(len/4)` rule used by the existing `tokens` count.
+- **Hot path unchanged.** When `includeContinuity` is omitted (or `--continuity` not set on the CLI), no continuity helpers run. The audit log entry for `recall` is identical.
+
+### Performance
+- Continuity-on adds ~17ms p99 over the BM25 path on a 2k-store warm-DB benchmark (in-process, no HTTP). Cost is dominated by three additional `openHippoDb`/`closeHippoDb` cycles plus the markdown mirror write inside `loadActiveTaskSnapshot`. This is an opt-in boot-time cost, not per-message hot-path overhead. Optimization (shared connection, readOnly snapshot path) tracked for v1.2.0+.
+
+### Deferred to v1.2.0
+- **MCP `hippo_recall` continuity** and **HTTP `GET /v1/memories?include_continuity=true`** are deferred and will land together with the `scope` read-side filter on continuity tables. Reason: continuity tables ship with `scope=NULL` (v1.0.0 known limitation). Exposing continuity on LLM-facing or remote surfaces before scope filtering widens the unfiltered private-channel surface beyond what v1.0.0 guarantees. The existing `hippo_context` MCP tool (which already exposes the active snapshot) is unchanged in this slice and is included in the v1.2.0 scope-filter audit.
+
 ## 1.0.0 (2026-05-03)
 
 Tenant-isolation security release. Closes a cross-tenant data leak on the

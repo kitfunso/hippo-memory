@@ -85,6 +85,13 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.1.0
+
+- **Continuity-first recall.** `api.recall` accepts `includeContinuity: true` to return the active task snapshot, latest matching session handoff, and last 5 session events alongside the ranked memories. One call, agent boot ready. CLI: `hippo recall <query> --continuity`.
+- **Anchored, no resurrection.** Continuity is anchored to the active snapshot's session_id. No anchor = no handoff/events. The explicit handoff-without-snapshot path is still `hippo session resume`.
+- **Hot path unchanged.** Default-off everywhere. Existing recall callers see no behavior change.
+- **Deferred to v1.2.0.** MCP `hippo_recall` continuity and HTTP `GET /v1/memories?include_continuity=true` ship together with the `scope` read-side filter on continuity tables.
+
 ### What's new in v1.0.0
 
 - **Tenant-isolation security release.** v0.40.0's measurement gates surfaced a real cross-tenant data leak on the continuity tables (`task_snapshots`, `session_events`, `session_handoffs`). Schema migration v22 closes the gap: every continuity helper now scopes reads and writes by `tenantId`. Markdown mirror files (`buffer/active-task.md`, `buffer/recent-session.md`) are tenant-scoped too; the default tenant keeps the unsuffixed filename for on-disk back-compat.
