@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.2.0 (2026-05-03)
+
+Closes the v1.0.0 + v1.1.0 known limitations on continuity scope. Continuity is now exposed through MCP and HTTP, and the existing `hippo_context` MCP tool retroactively gets the same scope filter that protects memory recall. The v1.0.0 "Known limitation: scope=NULL on continuity tables" is CLOSED.
+
+### Security (CRITICAL)
+- **Cross-scope leak fix on continuity recall.** v1.1.0's filter was `opts.scope || isPublic`, which let any explicit scope see ALL continuity rows regardless of the row's scope. Latent in v1.1 (no scope writers shipped), now fixed to exact-match. Same fix in `api.recall` and `cmdRecall`.
+- **`hippo_context` retroactive scope filter.** This MCP tool predates v1.1 and exposed all memories plus the active snapshot to no-scope MCP callers. Now applies the same default-deny rule as `hippo_recall`. Filters BOTH memory results AND the snapshot. New `scope` arg added to the MCP input schema.
+- **`loadLatestHandoff` was missing scope on the loaded row.** Caught by codex round 2: SELECTs on `session_handoffs` did not include the new column, so a private handoff would silently surface to no-scope callers because `rowToSessionHandoff` normalized scope to null. All SELECTs now include scope.
+
+### Added
+- **MCP `hippo_recall`** accepts `include_continuity: true` and `scope: string`. When continuity is requested, appends a "## Continuity" text section to the existing return string. No structured-shape change to the MCP contract.
+- **HTTP `GET /v1/memories?include_continuity=1&scope=...`** propagates both flags to `api.recall`. Sets `Cache-Control: no-store` on responses with continuity.
+- **`client.recall`** now sends `include_continuity` and `scope` query params (the v1.1.0 throw guard is gone).
+
+### Schema
+- Migration v23: `task_snapshots.scope` added (nullable). Composite index on `(tenant_id, scope, status)`.
+- Quarantine policy: pre-existing rows with NULL `scope` on all three continuity tables (`task_snapshots`, `session_events`, `session_handoffs`) are marked `'unknown:legacy'` so the default-deny filter excludes them for no-scope callers. Idempotent via `WHERE scope IS NULL`. Self-heals partial-init stores via `tableExists` guards.
+
+### Writer signatures
+- `saveActiveTaskSnapshot`, `appendSessionEvent`, `saveSessionHandoff` accept optional `scope: string | null`.
+- `TaskSnapshot`, `SessionEvent`, `SessionHandoff` types carry `scope`.
+
+### Closed from v1.0.0 / v1.1.0
+- v1.0.0 "Known limitation: scope=NULL on continuity tables" — CLOSED.
+- v1.1.0 "Deferred to v1.2.0: MCP `hippo_recall` continuity + HTTP `GET /v1/memories?include_continuity=true`" — CLOSED.
+- v1.1.0 "`client.recall` throws when `includeContinuity` is set" — CLOSED.
+
+### Out of scope (deferred)
+- Slack continuity producer. Continuity rows currently only originate from CLI session commands and hooks. Slack-derived continuity (which would set `slack:public:<ch>` / `slack:private:<ch>` automatically) is its own slice.
+- Per-scope active snapshots. Active snapshot remains tenant-global; scope is metadata for filtering reads, not a partition key for the active predicate.
+- Channel privacy reclassification. Source-time scope is immutable in v1.2. Periodic re-tagging is a v1.3+ concern.
+
 ## 1.1.0 (2026-05-03)
 
 Continuity-first recall: one call returns both relevant memories AND where the agent left off. Opt-in via `includeContinuity` (api) or `--continuity` (CLI). Default-off keeps the hot path unchanged.

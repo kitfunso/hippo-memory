@@ -95,6 +95,43 @@ function send(msg: McpResponse): void {
 
 // ── Format helpers ──
 
+import type { ContinuityBlock } from '../api.js';
+
+function formatContinuityBlock(block: ContinuityBlock): string {
+  const lines: string[] = ['## Continuity'];
+  if (block.activeSnapshot) {
+    lines.push('');
+    lines.push('### Active Task Snapshot');
+    lines.push(`- Task: ${block.activeSnapshot.task}`);
+    lines.push(`- Summary: ${block.activeSnapshot.summary}`);
+    lines.push(`- Next: ${block.activeSnapshot.next_step}`);
+  }
+  if (block.sessionHandoff) {
+    lines.push('');
+    lines.push('### Session Handoff');
+    lines.push(`- Summary: ${block.sessionHandoff.summary}`);
+    if (block.sessionHandoff.nextAction) {
+      lines.push(`- Next action: ${block.sessionHandoff.nextAction}`);
+    }
+    if ((block.sessionHandoff.artifacts ?? []).length > 0) {
+      lines.push(`- Artifacts: ${(block.sessionHandoff.artifacts ?? []).join(', ')}`);
+    }
+  }
+  if (block.recentSessionEvents.length > 0) {
+    lines.push('');
+    lines.push('### Recent Session Trail');
+    for (const e of block.recentSessionEvents) {
+      const preview = e.content.length > 200 ? e.content.slice(0, 200) + '…' : e.content;
+      lines.push(`- [${e.event_type}] ${preview}`);
+    }
+  }
+  if (lines.length === 1) {
+    lines.push('');
+    lines.push('(no active task snapshot, handoff, or recent events for this tenant)');
+  }
+  return lines.join('\n');
+}
+
 function formatMemories(results: ReturnType<typeof search>, hippoRoot: string): string {
   if (results.length === 0) return 'No relevant memories found.';
 
@@ -118,12 +155,20 @@ const TOOLS = [
   {
     name: 'hippo_recall',
     description:
-      'Retrieve relevant memories from the project memory store. Returns memories ranked by relevance, strength, and recency within the token budget. Use at session start or when you need context about a topic.',
+      'Retrieve relevant memories from the project memory store. Returns memories ranked by relevance, strength, and recency within the token budget. Use at session start or when you need context about a topic. Pass include_continuity=true to also surface the active task snapshot, latest matching session handoff, and recent session events as a "## Continuity" appendix.',
     inputSchema: {
       type: 'object' as const,
       properties: {
         query: { type: 'string', description: 'What to search for in memory (natural language)' },
         budget: { type: 'number', description: 'Max tokens to return (default: 1500)' },
+        include_continuity: {
+          type: 'boolean',
+          description: 'Append continuity context (active snapshot + handoff + last 5 session events) below the memory results. Useful at session boot.',
+        },
+        scope: {
+          type: 'string',
+          description: 'Restrict results and continuity to memories/rows matching this scope exactly. When omitted, default-deny applies to slack:private:* and unknown-legacy rows.',
+        },
       },
       required: ['query'],
     },
@@ -164,11 +209,15 @@ const TOOLS = [
   {
     name: 'hippo_context',
     description:
-      'Smart context injection: auto-detects current task from git state and returns relevant memories. Use at the start of any session.',
+      'Smart context injection: auto-detects current task from git state and returns relevant memories plus the active task snapshot. Use at the start of any session. Memories and snapshot are scope-filtered: a no-scope caller does NOT see slack:private:* or legacy-quarantine rows.',
     inputSchema: {
       type: 'object' as const,
       properties: {
         budget: { type: 'number', description: 'Max tokens (default: 1500)' },
+        scope: {
+          type: 'string',
+          description: 'Restrict memories and snapshot to this scope exactly. When omitted, default-deny applies to slack:private:* and unknown-legacy rows.',
+        },
       },
     },
   },
@@ -281,26 +330,39 @@ async function executeTool(
     case 'hippo_recall': {
       const query = String(args.query || '');
       const budget = Number(args.budget) || config.defaultBudget;
-      // Route through api.ts so audit_log captures actor='mcp' uniformly with
-      // CLI/REST. api.ts.recall handles tenant-scoped BM25 candidate loading;
-      // we re-fetch full entries for ranking + the markRetrieved bookkeeping
-      // that the MCP path has always done.
+      const includeContinuity = Boolean(args.include_continuity);
+      const explicitScope = typeof args.scope === 'string' && args.scope.length > 0
+        ? String(args.scope)
+        : undefined;
       const apiCtx: ApiContext = {
         hippoRoot,
         tenantId,
         actor: 'mcp',
       };
-      apiRecall(apiCtx, { query, limit: 50 });
+      // Route through api.recall for audit + (when requested) continuity block.
+      // api.recall already applies the same default-deny / exact-match rules
+      // we want here, so its continuity output is the source of truth.
+      const apiResult = apiRecall(apiCtx, {
+        query,
+        limit: 50,
+        scope: explicitScope,
+        includeContinuity,
+      });
 
       // Existing physics/hybrid scorer continues to drive user-visible
-      // ordering and the strength bump on retrieval — unchanged shape for
-      // existing MCP HTTP clients. v0.39 Fix 5.6: apply the same default-deny
-      // rule as src/api.ts.recall — when the caller passes no scope, drop
-      // `slack:private:*` rows so an MCP client cannot exfiltrate
-      // private-channel content via a bare query. (loadAllEntries is a
-      // tenant-only loader; scope filtering lives at the call site.)
+      // ordering and the strength bump on retrieval. Apply the same scope
+      // rule as api.recall: explicit scope = exact match; no scope =
+      // default-deny on slack:private:* AND 'unknown:legacy'.
       const allEntries = loadAllEntries(hippoRoot, tenantId);
-      const entries = allEntries.filter((e) => !(e.scope ?? '').startsWith('slack:private:'));
+      const entries = explicitScope
+        ? allEntries.filter((e) => e.scope === explicitScope)
+        : allEntries.filter((e) => {
+            const s = e.scope ?? null;
+            if (s === null) return true;
+            if (s.startsWith('slack:private:')) return false;
+            if (s === 'unknown:legacy') return false;
+            return true;
+          });
       const usePhysics = config.physics?.enabled !== false;
       const results = usePhysics
         ? await physicsSearch(query, entries, { budget, hippoRoot, physicsConfig: config.physics })
@@ -311,7 +373,11 @@ async function executeTool(
       for (const entry of retrieved) writeEntry(hippoRoot, entry);
       lastRecalledIds.set(resolveClientKey(ctx), retrieved.map((e) => e.id));
 
-      return formatMemories(results, hippoRoot);
+      let response = formatMemories(results, hippoRoot);
+      if (includeContinuity && apiResult.continuity) {
+        response += '\n\n' + formatContinuityBlock(apiResult.continuity);
+      }
+      return response;
     }
 
     case 'hippo_remember': {
@@ -372,6 +438,9 @@ async function executeTool(
 
     case 'hippo_context': {
       const budget = Number(args.budget) || config.defaultContextBudget;
+      const explicitScope = typeof args.scope === 'string' && args.scope.length > 0
+        ? String(args.scope)
+        : undefined;
       // Auto-detect query from git
       let query = '';
       try {
@@ -383,7 +452,19 @@ async function executeTool(
 
       if (!query) query = 'project context general';
 
-      const entries = loadAllEntries(hippoRoot, tenantId);
+      // v1.2 codex audit: same scope filter as hippo_recall on BOTH the memory
+      // results and the snapshot. Pre-v1.2 this surface returned all memories
+      // and the snapshot unfiltered, which would have leaked private-channel
+      // content to no-scope MCP callers once scope writers shipped.
+      const passesScopeFilter = (s: string | null): boolean => {
+        if (explicitScope !== undefined) return s === explicitScope;
+        if (s === null) return true;
+        if (s.startsWith('slack:private:')) return false;
+        if (s === 'unknown:legacy') return false;
+        return true;
+      };
+      const allEntries = loadAllEntries(hippoRoot, tenantId);
+      const entries = allEntries.filter((e) => passesScopeFilter(e.scope ?? null));
       const usePhysicsCtx = config.physics?.enabled !== false;
       const results = usePhysicsCtx
         ? await physicsSearch(query, entries, { budget, hippoRoot, physicsConfig: config.physics })
@@ -392,7 +473,10 @@ async function executeTool(
       for (const entry of retrieved) writeEntry(hippoRoot, entry);
       lastRecalledIds.set(resolveClientKey(ctx), retrieved.map((e) => e.id));
 
-      const snapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
+      const rawSnapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
+      const snapshot = rawSnapshot && passesScopeFilter(rawSnapshot.scope)
+        ? rawSnapshot
+        : null;
       const snapshotText = snapshot
         ? [
             '## Active Task Snapshot',

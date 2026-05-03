@@ -34,10 +34,10 @@ describe('v0.39 GDPR Path A redaction + migration v20', () => {
   });
 
   it('1. schema v20: getCurrentSchemaVersion() returns 20', () => {
-    expect(getCurrentSchemaVersion()).toBe(22);
+    expect(getCurrentSchemaVersion()).toBe(23);
     const db = openHippoDb(root);
     try {
-      expect(getSchemaVersion(db)).toBe(22);
+      expect(getSchemaVersion(db)).toBe(23);
     } finally {
       closeHippoDb(db);
     }
@@ -107,7 +107,7 @@ describe('v0.39 GDPR Path A redaction + migration v20', () => {
 
     const db2 = openHippoDb(root);
     try {
-      expect(getSchemaVersion(db2)).toBe(22);
+      expect(getSchemaVersion(db2)).toBe(23);
       const row = db2
         .prepare(`SELECT payload_json FROM raw_archive WHERE memory_id = ?`)
         .get('m-legacy-1') as { payload_json: string };
@@ -150,7 +150,7 @@ describe('v0.39 GDPR Path A redaction + migration v20', () => {
 
     const db2 = openHippoDb(root);
     try {
-      expect(getSchemaVersion(db2)).toBe(22);
+      expect(getSchemaVersion(db2)).toBe(23);
       const row = db2
         .prepare(`SELECT payload_json FROM raw_archive WHERE memory_id = ?`)
         .get('m-malformed-1') as { payload_json: string };

@@ -118,6 +118,7 @@ interface TaskSnapshotRow {
   status: string;
   source: string;
   session_id: string | null;
+  scope: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -140,6 +141,7 @@ interface SessionEventRow {
   event_type: string;
   content: string;
   source: string;
+  scope: string | null;
   metadata_json: string;
   created_at: string;
 }
@@ -152,6 +154,7 @@ export interface TaskSnapshot {
   status: string;
   source: string;
   session_id: string | null;
+  scope: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -174,6 +177,7 @@ export interface SessionEvent {
   event_type: string;
   content: string;
   source: string;
+  scope: string | null;
   metadata: Record<string, unknown>;
   created_at: string;
 }
@@ -391,6 +395,7 @@ function rowToTaskSnapshot(row: TaskSnapshotRow): TaskSnapshot {
     status: row.status,
     source: row.source,
     session_id: row.session_id ?? null,
+    scope: row.scope ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -417,6 +422,7 @@ function rowToSessionEvent(row: SessionEventRow): SessionEvent {
     event_type: row.event_type,
     content: row.content,
     source: row.source,
+    scope: row.scope ?? null,
     metadata: parseJsonObject(row.metadata_json),
     created_at: row.created_at,
   };
@@ -1363,7 +1369,14 @@ function assertTenantId(fnName: string, value: unknown): asserts value is string
 export function saveActiveTaskSnapshot(
   hippoRoot: string,
   tenantId: string,
-  snapshot: { task: string; summary: string; next_step: string; source?: string; session_id?: string | null }
+  snapshot: {
+    task: string;
+    summary: string;
+    next_step: string;
+    source?: string;
+    session_id?: string | null;
+    scope?: string | null;
+  }
 ): TaskSnapshot {
   assertTenantId('saveActiveTaskSnapshot', tenantId);
   initStore(hippoRoot);
@@ -1375,14 +1388,15 @@ export function saveActiveTaskSnapshot(
     db.prepare(`UPDATE task_snapshots SET status = 'superseded', updated_at = ? WHERE status = 'active' AND tenant_id = ?`).run(now, tenantId);
 
     const result = db.prepare(`
-      INSERT INTO task_snapshots(task, summary, next_step, status, source, session_id, tenant_id, created_at, updated_at)
-      VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?)
+      INSERT INTO task_snapshots(task, summary, next_step, status, source, session_id, scope, tenant_id, created_at, updated_at)
+      VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
     `).run(
       snapshot.task,
       snapshot.summary,
       snapshot.next_step,
       snapshot.source ?? 'cli',
       snapshot.session_id ?? null,
+      snapshot.scope ?? null,
       tenantId,
       now,
       now,
@@ -1392,7 +1406,7 @@ export function saveActiveTaskSnapshot(
 
     const id = Number(result.lastInsertRowid ?? 0);
     const row = db.prepare(`
-      SELECT id, task, summary, next_step, status, source, session_id, created_at, updated_at
+      SELECT id, task, summary, next_step, status, source, session_id, scope, created_at, updated_at
       FROM task_snapshots
       WHERE id = ?
     `).get(id) as TaskSnapshotRow | undefined;
@@ -1422,7 +1436,7 @@ export function loadActiveTaskSnapshot(hippoRoot: string, tenantId: string): Tas
   const db = openHippoDb(hippoRoot);
   try {
     const row = db.prepare(`
-      SELECT id, task, summary, next_step, status, source, session_id, created_at, updated_at
+      SELECT id, task, summary, next_step, status, source, session_id, scope, created_at, updated_at
       FROM task_snapshots
       WHERE status = 'active' AND tenant_id = ?
       ORDER BY updated_at DESC, id DESC
@@ -1472,6 +1486,7 @@ export function appendSessionEvent(
     content: string;
     task?: string | null;
     source?: string;
+    scope?: string | null;
     metadata?: Record<string, unknown>;
   }
 ): SessionEvent {
@@ -1480,19 +1495,19 @@ export function appendSessionEvent(
   const db = openHippoDb(hippoRoot);
   const now = new Date().toISOString();
 
-  // NOTE: schema v22 added a `scope` column to session_events for future use,
-  // but read paths do not filter by it yet. Writing it would create a false
-  // sense of security. Kept NULL until the read-side default-deny lands.
+  // v1.2: scope is wired through. Default-deny in api.recall + cmdRecall
+  // continuity reads applies to slack:private:* and 'unknown:legacy' rows.
   try {
     const result = db.prepare(`
-      INSERT INTO session_events(session_id, task, event_type, content, source, metadata_json, tenant_id, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO session_events(session_id, task, event_type, content, source, scope, metadata_json, tenant_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       event.session_id,
       event.task ?? null,
       event.event_type,
       event.content,
       event.source ?? 'cli',
+      event.scope ?? null,
       JSON.stringify(event.metadata ?? {}),
       tenantId,
       now,
@@ -1500,7 +1515,7 @@ export function appendSessionEvent(
 
     const id = Number(result.lastInsertRowid ?? 0);
     const row = db.prepare(`
-      SELECT id, session_id, task, event_type, content, source, metadata_json, created_at
+      SELECT id, session_id, task, event_type, content, source, scope, metadata_json, created_at
       FROM session_events
       WHERE id = ?
     `).get(id) as SessionEventRow | undefined;
@@ -1511,7 +1526,7 @@ export function appendSessionEvent(
 
     const loaded = rowToSessionEvent(row);
     const recentRows = db.prepare(`
-      SELECT id, session_id, task, event_type, content, source, metadata_json, created_at
+      SELECT id, session_id, task, event_type, content, source, scope, metadata_json, created_at
       FROM session_events
       WHERE session_id = ? AND tenant_id = ?
       ORDER BY created_at DESC, id DESC
@@ -1551,7 +1566,7 @@ export function listSessionEvents(
 
     const where = `WHERE ${clauses.join(' AND ')}`;
     const rows = db.prepare(`
-      SELECT id, session_id, task, event_type, content, source, metadata_json, created_at
+      SELECT id, session_id, task, event_type, content, source, scope, metadata_json, created_at
       FROM session_events
       ${where}
       ORDER BY created_at DESC, id DESC
@@ -1802,13 +1817,12 @@ export function saveSessionHandoff(
   const db = openHippoDb(hippoRoot);
   const now = new Date().toISOString();
 
-  // NOTE: schema v22 added a `scope` column to session_handoffs for future use,
-  // but read paths do not filter by it yet. Writing it would create a false
-  // sense of security. Kept NULL until the read-side default-deny lands.
+  // v1.2: scope is wired through. Read-side default-deny in api.recall +
+  // cmdRecall continuity excludes slack:private:* and 'unknown:legacy'.
   try {
     const result = db.prepare(`
-      INSERT INTO session_handoffs(session_id, repo_root, task_id, summary, next_action, artifacts_json, tenant_id, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO session_handoffs(session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, tenant_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       handoff.sessionId,
       handoff.repoRoot ?? null,
@@ -1816,13 +1830,14 @@ export function saveSessionHandoff(
       handoff.summary,
       handoff.nextAction ?? null,
       JSON.stringify(handoff.artifacts ?? []),
+      handoff.scope ?? null,
       tenantId,
       now,
     );
 
     const id = Number(result.lastInsertRowid ?? 0);
     const row = db.prepare(`
-      SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, created_at
+      SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, created_at
       FROM session_handoffs
       WHERE id = ?
     `).get(id) as SessionHandoffRow | undefined;
@@ -1849,7 +1864,7 @@ export function loadLatestHandoff(hippoRoot: string, tenantId: string, sessionId
     let row: SessionHandoffRow | undefined;
     if (sessionId) {
       row = db.prepare(`
-        SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, created_at
+        SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, created_at
         FROM session_handoffs
         WHERE session_id = ? AND tenant_id = ?
         ORDER BY created_at DESC, id DESC
@@ -1857,7 +1872,7 @@ export function loadLatestHandoff(hippoRoot: string, tenantId: string, sessionId
       `).get(sessionId, tenantId) as SessionHandoffRow | undefined;
     } else {
       row = db.prepare(`
-        SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, created_at
+        SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, created_at
         FROM session_handoffs
         WHERE tenant_id = ?
         ORDER BY created_at DESC, id DESC
@@ -1881,7 +1896,7 @@ export function loadHandoffById(hippoRoot: string, tenantId: string, id: number)
 
   try {
     const row = db.prepare(`
-      SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, created_at
+      SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, created_at
       FROM session_handoffs
       WHERE id = ? AND tenant_id = ?
     `).get(id, tenantId) as SessionHandoffRow | undefined;

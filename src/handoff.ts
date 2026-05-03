@@ -14,6 +14,7 @@ export interface SessionHandoff {
   summary: string;
   nextAction?: string;
   artifacts?: string[];
+  scope?: string | null;
   updatedAt: string;
 }
 
@@ -25,6 +26,7 @@ export interface SessionHandoffRow {
   summary: string;
   next_action: string | null;
   artifacts_json: string;
+  scope: string | null;
   created_at: string;
 }
 
@@ -47,6 +49,7 @@ export function rowToSessionHandoff(row: SessionHandoffRow): SessionHandoff {
     summary: row.summary,
     nextAction: row.next_action ?? undefined,
     artifacts,
+    scope: row.scope ?? null,
     updatedAt: row.created_at,
   };
 }

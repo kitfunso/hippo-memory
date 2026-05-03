@@ -233,25 +233,33 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
     const recentSessionEvents = sessionId
       ? listSessionEvents(ctx.hippoRoot, ctx.tenantId, { session_id: sessionId, limit: 5 })
       : [];
-    // Continuity tables ship with scope=NULL in v1.1.0 (no writer sets it yet).
-    // Forward-compat: when v1.2.0 writers start setting scope, mirror the
-    // memory recall default-deny rule here. A no-scope caller must not see
-    // private-channel-derived continuity even after writers wire scope.
-    const isPublicScope = (s: string | null | undefined): boolean =>
-      !(s ?? '').startsWith('slack:private:');
+    // Scope filtering on continuity. Mirrors the memory-recall path:
+    //   - opts.scope set: EXACT match required (no cross-scope leakage)
+    //   - opts.scope unset: default-deny on slack:private:* AND on legacy
+    //     'unknown:legacy' rows quarantined by the v23 migration. Public and
+    //     null scopes pass through.
+    // v1.1.0 wrongly wrote this as `opts.scope || isPublic`, which allowed
+    // ANY explicit scope to see ALL continuity rows. v1.2 closes the latent
+    // leak before scope writers ship.
+    const rowScope = (
+      r: { scope?: string | null } | null | undefined,
+    ): string | null => r?.scope ?? null;
+    // v1.2: TaskSnapshot / SessionHandoff / SessionEvent now carry scope; the
+    // wrapper just normalizes null vs undefined.
+    const passesScopeFilter = (s: string | null): boolean => {
+      if (opts.scope !== undefined && opts.scope !== '') {
+        return s === opts.scope;
+      }
+      if (s === null) return true;
+      if (s.startsWith('slack:private:')) return false;
+      if (s === 'unknown:legacy') return false;
+      return true;
+    };
     const filteredSnapshot =
-      snapshot && (opts.scope || isPublicScope((snapshot as TaskSnapshot & { scope?: string | null }).scope))
-        ? snapshot
-        : null;
+      snapshot && passesScopeFilter(rowScope(snapshot)) ? snapshot : null;
     const filteredHandoff =
-      sessionHandoff && (opts.scope || isPublicScope((sessionHandoff as SessionHandoff & { scope?: string | null }).scope))
-        ? sessionHandoff
-        : null;
-    const filteredEvents = opts.scope
-      ? recentSessionEvents
-      : recentSessionEvents.filter((e) =>
-          isPublicScope((e as SessionEvent & { scope?: string | null }).scope),
-        );
+      sessionHandoff && passesScopeFilter(rowScope(sessionHandoff)) ? sessionHandoff : null;
+    const filteredEvents = recentSessionEvents.filter((e) => passesScopeFilter(rowScope(e)));
     continuity = {
       activeSnapshot: filteredSnapshot,
       sessionHandoff: filteredHandoff,

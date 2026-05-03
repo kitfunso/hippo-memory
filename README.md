@@ -85,6 +85,14 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.2.0
+
+- **Continuity exposed everywhere.** MCP `hippo_recall` accepts `include_continuity: true`, HTTP `GET /v1/memories` accepts `?include_continuity=1`. CLI `--continuity` shipped in v1.1.
+- **Scope filter, end-to-end.** `api.recall`, `cmdRecall`, MCP `hippo_recall`, MCP `hippo_context`, and HTTP `GET /v1/memories` all enforce the same rule: explicit scope = exact match, no scope = default-deny on `slack:private:*` and quarantined legacy rows.
+- **Schema v23.** `task_snapshots` gains `scope`. Pre-existing rows with NULL scope are quarantined as `'unknown:legacy'` so they default-deny.
+- **Closes v1.0.0 + v1.1.0 known limitations.** Continuity tables no longer carry NULL scope as a load-bearing data state. The "Deferred to v1.2.0" line is gone.
+- **Security note.** Codex review caught two real issues that this release fixes: (1) v1.1's "explicit scope" actually meant "allow all" (latent leak), now exact-match; (2) `loadLatestHandoff` SELECTs were missing scope, would have leaked private handoffs to no-scope callers post-writers.
+
 ### What's new in v1.1.0
 
 - **Continuity-first recall.** `api.recall` accepts `includeContinuity: true` to return the active task snapshot, latest matching session handoff, and last 5 session events alongside the ranked memories. One call, agent boot ready. CLI: `hippo recall <query> --continuity`.
