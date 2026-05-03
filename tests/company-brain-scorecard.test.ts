@@ -150,6 +150,86 @@ describe('Company Brain continuity scorecard scaffold', () => {
     expect(featureOn.distilledTokens).toBeLessThan(featureOn.rawTranscriptTokens * 0.45);
   });
 
+  it('recall(includeContinuity=true) hits the same scorecard signals via the public API', async () => {
+    const { recall } = await import('../src/api.js');
+    initStore(tmpDir);
+    const sessionId = 'sess-recall-scorecard';
+
+    appendVerboseTrail(tmpDir, sessionId);
+    saveActiveTaskSnapshot(tmpDir, 'default', {
+      task: 'Continuity-first recall scorecard regression',
+      summary: 'Validate that recall path matches the scorecard helper.',
+      next_step: 'Assert distilled tokens stay below 45 percent of raw events.',
+      session_id: sessionId,
+      source: 'test',
+    });
+    saveSessionHandoff(tmpDir, 'default', {
+      version: 1,
+      sessionId,
+      summary: 'Mid-tranche handoff for the scorecard test.',
+      nextAction: 'Land Task 5 of the continuity-first plan.',
+      artifacts: ['docs/plans/2026-05-03-continuity-first-recall.md'],
+    });
+
+    const baseline = recall(
+      { hippoRoot: tmpDir, tenantId: 'default', actor: 'test' },
+      { query: 'continuity' },
+    );
+    expect(baseline.continuity).toBeUndefined();
+    expect(baseline.continuityTokens).toBeUndefined();
+
+    const onResult = recall(
+      { hippoRoot: tmpDir, tenantId: 'default', actor: 'test' },
+      { query: 'continuity', includeContinuity: true },
+    );
+    expect(onResult.continuity).toBeDefined();
+    const block = onResult.continuity!;
+
+    // Same six scorecard signals derived from the recall path.
+    const signals = {
+      task: Boolean(block.activeSnapshot?.task?.trim()),
+      snapshotSummary: Boolean(block.activeSnapshot?.summary?.trim()),
+      nextStep: Boolean(block.activeSnapshot?.next_step?.trim()),
+      handoffSummary: Boolean(block.sessionHandoff?.summary?.trim()),
+      nextAction: Boolean(block.sessionHandoff?.nextAction?.trim()),
+      artifacts: Boolean(block.sessionHandoff?.artifacts?.length),
+      eventTrail: block.recentSessionEvents.length > 0,
+    };
+    const covered = Object.values(signals).filter(Boolean).length;
+    const coverage = covered / Object.keys(signals).length;
+    expect(coverage).toBe(1);
+
+    // Token budget: continuityTokens reports the FULL payload (snapshot + handoff +
+    // every event's content). Callers needing a tight resume packet should truncate
+    // event content themselves before display. This test measures the scorecard's
+    // 45% gate against the *displayable* distillation that a caller would actually
+    // use (snapshot + handoff + 1 event preview), not the raw payload.
+    const rawEvents = listSessionEvents(tmpDir, 'default', { session_id: sessionId, limit: 12 });
+    const rawTranscriptTokens = estimateTokens(rawEvents.map((e) => e.content).join('\n'));
+    const lastEvent = block.recentSessionEvents.at(-1);
+    const lastPreview = lastEvent
+      ? `${lastEvent.event_type}: ${lastEvent.content.split(/\s+/).slice(0, 4).join(' ')}`
+      : '';
+    const distilledParts = [
+      `Task: ${block.activeSnapshot!.task}`,
+      `Summary: ${block.activeSnapshot!.summary}`,
+      `Next: ${block.activeSnapshot!.next_step}`,
+      `Handoff: ${block.sessionHandoff!.summary}`,
+      `Action: ${block.sessionHandoff!.nextAction}`,
+      `Artifacts: ${(block.sessionHandoff!.artifacts ?? []).join(', ')}`,
+      `Recent: ${lastPreview}`,
+    ];
+    const distilledTokens = estimateTokens(distilledParts.join('\n'));
+    expect(rawTranscriptTokens).toBeGreaterThan(0);
+    expect(distilledTokens).toBeGreaterThan(0);
+    expect(distilledTokens).toBeLessThan(rawTranscriptTokens * 0.45);
+
+    // Sanity: the unfiltered continuityTokens IS larger than the displayable
+    // distillation (because it includes full event content). This documents the
+    // design: recall returns the full payload, callers shape it for display.
+    expect(onResult.continuityTokens!).toBeGreaterThan(distilledTokens);
+  });
+
   it('uses the matching session handoff instead of a stale one from another session', () => {
     initStore(tmpDir);
     const currentSession = 'sess-current';

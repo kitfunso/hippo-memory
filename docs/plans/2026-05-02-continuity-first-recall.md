@@ -1,12 +1,9 @@
 # Continuity-First Recall Implementation Plan
 
-> **STATUS: PARKED (2026-05-02).** Codex review surfaced two P0 blockers:
-> (1) `session_events` and `session_handoffs` carry no `tenant_id`, so any
-> recall surface that returns continuity leaks across tenants;
-> (2) the same tables carry no `scope`, so a private-channel-derived handoff
-> would leak to undefined-scope callers.
-> Unblock first via `docs/plans/2026-05-02-continuity-tables-tenant-scope.md`
-> (schema v22 + backfill), then revisit this plan.
+> **STATUS: SUPERSEDED (2026-05-03).** Schema v22 shipped in v1.0.0 and unblocked
+> the tenant leak. The current plan is `docs/plans/2026-05-03-continuity-first-recall.md`,
+> which uses the v1.0.0 tenant-required helper signatures. This file is kept as
+> historical record (codex review trail).
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
