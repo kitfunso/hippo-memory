@@ -72,22 +72,12 @@ export async function recall(
   apiKey: string | undefined,
   opts: RecallOpts,
 ): Promise<RecallResult> {
-  // v1.1.0: includeContinuity is supported on the in-process api.recall but
-  // the HTTP route does not yet carry it. Fail loudly instead of silently
-  // dropping the flag and returning a result without the continuity block
-  // the caller asked for. HTTP support lands in v1.2.0 alongside the scope
-  // read-side filter.
-  if (opts.includeContinuity) {
-    throw new Error(
-      'recall(): includeContinuity is not yet supported over HTTP. ' +
-      'Call api.recall in-process, or wait for v1.2.0 which adds ' +
-      'GET /v1/memories?include_continuity=true alongside scope filtering.',
-    );
-  }
   const params = new URLSearchParams();
   params.set('q', opts.query);
   if (opts.limit !== undefined) params.set('limit', String(opts.limit));
   if (opts.mode !== undefined) params.set('mode', opts.mode);
+  if (opts.scope !== undefined && opts.scope !== '') params.set('scope', opts.scope);
+  if (opts.includeContinuity) params.set('include_continuity', '1');
   const res = await fetch(`${serverUrl}/v1/memories?${params.toString()}`, {
     method: 'GET',
     headers: buildHeaders(apiKey, false),

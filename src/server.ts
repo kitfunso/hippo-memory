@@ -401,7 +401,7 @@ async function handleRequest(
     return;
   }
 
-  // GET /v1/memories?q=...&limit=...&mode=...
+  // GET /v1/memories?q=...&limit=...&mode=...&scope=...&include_continuity=1
   if (method === 'GET' && path === '/v1/memories') {
     const q = query.get('q');
     if (!q) {
@@ -416,12 +416,23 @@ async function handleRequest(
     if (mode !== null && mode !== 'bm25' && mode !== 'hybrid' && mode !== 'physics') {
       throw new HttpError(400, "mode must be 'bm25', 'hybrid', or 'physics'");
     }
+    const scope = query.get('scope');
+    const includeContinuityRaw = query.get('include_continuity');
+    const includeContinuity = includeContinuityRaw === '1'
+      || includeContinuityRaw === 'true';
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = recall(ctx, {
       query: q,
       limit,
       mode: (mode ?? undefined) as 'bm25' | 'hybrid' | 'physics' | undefined,
+      scope: scope ?? undefined,
+      includeContinuity,
     });
+    // Continuity payloads should never be cached. The caller is asking for
+    // session-state-aware data; intermediaries must not reuse it across users.
+    if (includeContinuity) {
+      res.setHeader('Cache-Control', 'no-store');
+    }
     sendJson(res, 200, result);
     return;
   }

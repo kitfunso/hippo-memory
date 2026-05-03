@@ -189,16 +189,31 @@ describe('api.recall continuity flag', () => {
     expect(c1Result.continuity!.activeSnapshot?.task).toBe('C1 task');
   });
 
-  // codex round 3 P2: client.recall must reject includeContinuity instead of
-  // silently dropping it. HTTP support lands in v1.2.0.
-  it('client.recall throws when includeContinuity is set (v1.1.0 not yet HTTP-supported)', async () => {
+  // v1.2: client.recall propagates includeContinuity + scope as query params
+  // (the v1.1 throw guard was dropped now that HTTP supports it).
+  it('client.recall sends include_continuity and scope as query params', async () => {
     const { recall: clientRecall } = await import('../src/client.js');
-    await expect(
-      clientRecall('http://example.invalid', undefined, {
+    let capturedUrl: string | undefined;
+    const realFetch = globalThis.fetch;
+    // Stub fetch to capture the URL.
+    (globalThis as { fetch: typeof globalThis.fetch }).fetch = async (input: RequestInfo | URL) => {
+      capturedUrl = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url;
+      return new Response(JSON.stringify({ results: [], total: 0, tokens: 0 }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    };
+    try {
+      await clientRecall('http://example.invalid', undefined, {
         query: 'anything',
         includeContinuity: true,
-      }),
-    ).rejects.toThrow(/includeContinuity is not yet supported over HTTP/);
+        scope: 'slack:public:Cgeneral',
+      });
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    expect(capturedUrl).toContain('include_continuity=1');
+    expect(capturedUrl).toContain('scope=slack');
   });
 
   it('reports continuityTokens with Math.ceil(len/4) accounting', () => {
