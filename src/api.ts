@@ -233,21 +233,40 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
     const recentSessionEvents = sessionId
       ? listSessionEvents(ctx.hippoRoot, ctx.tenantId, { session_id: sessionId, limit: 5 })
       : [];
+    // Continuity tables ship with scope=NULL in v1.1.0 (no writer sets it yet).
+    // Forward-compat: when v1.2.0 writers start setting scope, mirror the
+    // memory recall default-deny rule here. A no-scope caller must not see
+    // private-channel-derived continuity even after writers wire scope.
+    const isPublicScope = (s: string | null | undefined): boolean =>
+      !(s ?? '').startsWith('slack:private:');
+    const filteredSnapshot =
+      snapshot && (opts.scope || isPublicScope((snapshot as TaskSnapshot & { scope?: string | null }).scope))
+        ? snapshot
+        : null;
+    const filteredHandoff =
+      sessionHandoff && (opts.scope || isPublicScope((sessionHandoff as SessionHandoff & { scope?: string | null }).scope))
+        ? sessionHandoff
+        : null;
+    const filteredEvents = opts.scope
+      ? recentSessionEvents
+      : recentSessionEvents.filter((e) =>
+          isPublicScope((e as SessionEvent & { scope?: string | null }).scope),
+        );
     continuity = {
-      activeSnapshot: snapshot,
-      sessionHandoff,
-      recentSessionEvents,
+      activeSnapshot: filteredSnapshot,
+      sessionHandoff: filteredHandoff,
+      recentSessionEvents: filteredEvents,
     };
     const tokenize = (s?: string | null): number =>
       s ? Math.ceil(s.length / 4) : 0;
     continuityTokens =
-      tokenize(snapshot?.task) +
-      tokenize(snapshot?.summary) +
-      tokenize(snapshot?.next_step) +
-      tokenize(sessionHandoff?.summary) +
-      tokenize(sessionHandoff?.nextAction) +
-      (sessionHandoff?.artifacts ?? []).reduce((acc, a) => acc + tokenize(a), 0) +
-      recentSessionEvents.reduce((acc, e) => acc + tokenize(e.content), 0);
+      tokenize(filteredSnapshot?.task) +
+      tokenize(filteredSnapshot?.summary) +
+      tokenize(filteredSnapshot?.next_step) +
+      tokenize(filteredHandoff?.summary) +
+      tokenize(filteredHandoff?.nextAction) +
+      (filteredHandoff?.artifacts ?? []).reduce((acc, a) => acc + tokenize(a), 0) +
+      filteredEvents.reduce((acc, e) => acc + tokenize(e.content), 0);
   }
 
   return { results: ranked, total: entries.length, tokens, continuity, continuityTokens };

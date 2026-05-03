@@ -16,6 +16,10 @@ Continuity-first recall: one call returns both relevant memories AND where the a
 ### Performance
 - Continuity-on adds ~17ms p99 over the BM25 path on a 2k-store warm-DB benchmark (in-process, no HTTP). Cost is dominated by three additional `openHippoDb`/`closeHippoDb` cycles plus the markdown mirror write inside `loadActiveTaskSnapshot`. This is an opt-in boot-time cost, not per-message hot-path overhead. Optimization (shared connection, readOnly snapshot path) tracked for v1.2.0+.
 
+### Known limitations
+- **Continuity tables ship with `scope=NULL`** (carried over from v1.0.0). v1.1.0 adds a forward-compatible default-deny filter in `api.recall` and `cmdRecall`: a no-`scope` caller will not see continuity rows whose `scope` starts with `slack:private:`. This is currently a no-op because no writer sets `scope` on snapshots / handoffs / events. v1.2.0 wires the writers and closes the loop. Until then, callers in multi-tenant deployments with private-channel ingestion should pass an explicit `scope` when calling `recall(..., { includeContinuity: true })` to make the intended scope explicit.
+- **`client.recall` throws** when `includeContinuity` is set. HTTP transport for the continuity block lands in v1.2.0; failing loudly is preferable to silently dropping the flag.
+
 ### Deferred to v1.2.0
 - **MCP `hippo_recall` continuity** and **HTTP `GET /v1/memories?include_continuity=true`** are deferred and will land together with the `scope` read-side filter on continuity tables. Reason: continuity tables ship with `scope=NULL` (v1.0.0 known limitation). Exposing continuity on LLM-facing or remote surfaces before scope filtering widens the unfiltered private-channel surface beyond what v1.0.0 guarantees. The existing `hippo_context` MCP tool (which already exposes the active snapshot) is unchanged in this slice and is included in the v1.2.0 scope-filter audit.
 

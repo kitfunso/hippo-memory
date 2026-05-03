@@ -1226,14 +1226,35 @@ async function cmdRecall(
   let recentSessionEvents: SessionEvent[] = [];
   let continuityTokens = 0;
   if (includeContinuity) {
-    activeSnapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
-    const sessionId = activeSnapshot?.session_id ?? undefined;
-    sessionHandoff = sessionId
+    const rawSnapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
+    const sessionId = rawSnapshot?.session_id ?? undefined;
+    const rawHandoff = sessionId
       ? loadLatestHandoff(hippoRoot, tenantId, sessionId)
       : null;
-    recentSessionEvents = sessionId
+    const rawEvents = sessionId
       ? listSessionEvents(hippoRoot, tenantId, { session_id: sessionId, limit: 5 })
       : [];
+    // Mirror the api.recall default-deny rule for forward compat: when v1.2.0
+    // continuity writers start setting scope, a no-scope caller must not see
+    // private-channel-derived rows. Today scope is NULL on all continuity
+    // rows so this is a no-op. Caller-supplied --scope bypasses the gate
+    // (matches existing memory recall behavior).
+    const isPublicScope = (s: string | null | undefined): boolean =>
+      !(s ?? '').startsWith('slack:private:');
+    const explicitScope = recallExplicitScope ?? '';
+    activeSnapshot =
+      rawSnapshot && (explicitScope || isPublicScope((rawSnapshot as TaskSnapshot & { scope?: string | null }).scope))
+        ? rawSnapshot
+        : null;
+    sessionHandoff =
+      rawHandoff && (explicitScope || isPublicScope((rawHandoff as SessionHandoff & { scope?: string | null }).scope))
+        ? rawHandoff
+        : null;
+    recentSessionEvents = explicitScope
+      ? rawEvents
+      : rawEvents.filter((e) =>
+          isPublicScope((e as SessionEvent & { scope?: string | null }).scope),
+        );
     const tokenize = (s?: string | null): number =>
       s ? Math.ceil(s.length / 4) : 0;
     continuityTokens =
