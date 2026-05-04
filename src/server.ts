@@ -26,6 +26,19 @@ import { ingestMessage } from './connectors/slack/ingest.js';
 import { handleMessageDeleted } from './connectors/slack/deletion.js';
 import { writeToDlq } from './connectors/slack/dlq.js';
 import { resolveTenantForTeam } from './connectors/slack/tenant-routing.js';
+import { verifyGitHubSignature } from './connectors/github/signature.js';
+import {
+  isGitHubWebhookEnvelope,
+  isGitHubIssueEvent,
+  isGitHubIssueCommentEvent,
+  isGitHubPullRequestEvent,
+  isGitHubPullRequestReviewCommentEvent,
+} from './connectors/github/types.js';
+import { ingestEvent as ingestGitHubEvent, type IngestEvent as GitHubIngestEvent } from './connectors/github/ingest.js';
+import { handleCommentDeleted as handleGitHubCommentDeleted } from './connectors/github/deletion.js';
+import { writeToDlq as writeToGitHubDlq } from './connectors/github/dlq.js';
+import { resolveTenantForGitHub } from './connectors/github/tenant-routing.js';
+import { computeIdempotencyKey as computeGitHubIdempotencyKey } from './connectors/github/signature.js';
 
 // Review patch #2: explicit allow-list for unauthenticated /v1/* routes.
 // New unauth routes MUST be added here AND get a corresponding entry in
@@ -36,7 +49,10 @@ import { resolveTenantForTeam } from './connectors/slack/tenant-routing.js';
 // `buildContextWithAuth` / `requireAuth`. Adding a route here without
 // adding the corresponding `isPublicRoute` short-circuit in a handler is
 // a no-op (auth still applies), so the failure mode is fail-closed.
-const PUBLIC_ROUTES: ReadonlySet<string> = new Set(['POST /v1/connectors/slack/events']);
+const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
+  'POST /v1/connectors/slack/events',
+  'POST /v1/connectors/github/events',
+]);
 
 function isPublicRoute(method: string, path: string): boolean {
   return PUBLIC_ROUTES.has(`${method} ${path}`);
@@ -754,6 +770,317 @@ async function handleRequest(
     }
     sendJson(res, 200, { ok: true, status: 'dlq' });
     return;
+  }
+
+  // ── POST /v1/connectors/github/events ──
+  //
+  // GitHub webhook receiver. Mirrors the Slack route shape but with
+  // GitHub-specific idioms:
+  //   1. HMAC SHA-256 over the raw body (X-Hub-Signature-256), no timestamp.
+  //   2. Event type discriminated by the X-GitHub-Event header (not body.type).
+  //   3. X-GitHub-Delivery is required audit metadata (NOT the dedupe seam — see
+  //      computeIdempotencyKey, which folds the signed body into the key so a
+  //      replayed body with a fresh delivery UUID still dedupes).
+  //   4. Tenant resolved by installation.id → github_installations, then by
+  //      repository.full_name → github_repositories (PAT-mode multi-tenant).
+  //   5. ALWAYS ACK 200 on signed envelopes (DLQ included). 401 only on bad
+  //      signature; 404 only when GITHUB_WEBHOOK_SECRET is unset (don't expose
+  //      the route's existence on builds where it's gated off).
+  if (method === 'POST' && path === '/v1/connectors/github/events') {
+    if (!isPublicRoute(method, path)) {
+      throw new HttpError(401, 'auth required');
+    }
+    const rawBody = await readBody(req);
+    const secret = process.env.GITHUB_WEBHOOK_SECRET;
+    if (!secret) {
+      res.writeHead(404, JSON_HEADERS);
+      res.end(JSON.stringify({ error: 'not found' }));
+      return;
+    }
+    const previousSecret = process.env.GITHUB_WEBHOOK_SECRET_PREVIOUS;
+    const sigHdr = req.headers['x-hub-signature-256'];
+    const eventHdr = req.headers['x-github-event'];
+    const deliveryHdr = req.headers['x-github-delivery'];
+    const sigStr = typeof sigHdr === 'string' ? sigHdr : null;
+    const eventName = typeof eventHdr === 'string' ? eventHdr : null;
+    const deliveryId = typeof deliveryHdr === 'string' ? deliveryHdr : null;
+
+    if (
+      sigStr === null ||
+      !verifyGitHubSignature({
+        rawBody,
+        signature: sigStr,
+        webhookSecret: secret,
+        previousSecret,
+      })
+    ) {
+      throw new HttpError(401, 'invalid GitHub signature');
+    }
+
+    // Signature OK from here on. Everything else is ACK-200; bad envelopes go
+    // to the DLQ and a human can replay later.
+
+    // Cheap regex extraction of installation_id / repo for DLQ rows that fail
+    // to JSON.parse — gives operators something to triage.
+    const installationFromRaw = (() => {
+      const m = rawBody.match(/"installation"\s*:\s*\{[^}]*"id"\s*:\s*(\d+)/);
+      return m ? m[1] : null;
+    })();
+    const repoFromRaw = (() => {
+      const m = rawBody.match(/"full_name"\s*:\s*"([^"]+)"/);
+      return m ? m[1] : null;
+    })();
+
+    if (deliveryId === null) {
+      // Body was signed but caller omitted the audit header. Park.
+      const db = openHippoDb(opts.hippoRoot);
+      try {
+        writeToGitHubDlq(db, {
+          tenantId: process.env.HIPPO_TENANT ?? 'default',
+          rawPayload: rawBody,
+          error: 'missing X-GitHub-Delivery header',
+          bucket: 'parse_error',
+          eventName,
+          deliveryId: null,
+          signature: sigStr,
+          installationId: installationFromRaw,
+          repoFullName: repoFromRaw,
+        });
+      } finally {
+        closeHippoDb(db);
+      }
+      sendJson(res, 200, { ok: true, status: 'dlq' });
+      return;
+    }
+
+    // Ping fires once at hook creation. Don't ingest, don't DLQ — just pong.
+    if (eventName === 'ping') {
+      sendJson(res, 200, { pong: true });
+      return;
+    }
+
+    const ALLOWED_EVENTS: ReadonlySet<string> = new Set([
+      'issues',
+      'issue_comment',
+      'pull_request',
+      'pull_request_review_comment',
+    ]);
+    if (eventName === null || !ALLOWED_EVENTS.has(eventName)) {
+      const db = openHippoDb(opts.hippoRoot);
+      try {
+        writeToGitHubDlq(db, {
+          tenantId: process.env.HIPPO_TENANT ?? 'default',
+          rawPayload: rawBody,
+          error: `unhandled event: ${eventName ?? '(missing X-GitHub-Event)'}`,
+          bucket: 'unhandled',
+          eventName,
+          deliveryId,
+          signature: sigStr,
+          installationId: installationFromRaw,
+          repoFullName: repoFromRaw,
+        });
+      } finally {
+        closeHippoDb(db);
+      }
+      sendJson(res, 200, { ok: true, status: 'dlq' });
+      return;
+    }
+
+    let body: unknown;
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      const db = openHippoDb(opts.hippoRoot);
+      try {
+        writeToGitHubDlq(db, {
+          tenantId: process.env.HIPPO_TENANT ?? 'default',
+          rawPayload: rawBody,
+          error: 'invalid JSON',
+          bucket: 'parse_error',
+          eventName,
+          deliveryId,
+          signature: sigStr,
+          installationId: installationFromRaw,
+          repoFullName: repoFromRaw,
+        });
+      } finally {
+        closeHippoDb(db);
+      }
+      sendJson(res, 200, { ok: true, status: 'dlq' });
+      return;
+    }
+
+    if (!isGitHubWebhookEnvelope(body)) {
+      const db = openHippoDb(opts.hippoRoot);
+      try {
+        writeToGitHubDlq(db, {
+          tenantId: process.env.HIPPO_TENANT ?? 'default',
+          rawPayload: rawBody,
+          error: 'not a GitHub webhook envelope',
+          bucket: 'parse_error',
+          eventName,
+          deliveryId,
+          signature: sigStr,
+          installationId: installationFromRaw,
+          repoFullName: repoFromRaw,
+        });
+      } finally {
+        closeHippoDb(db);
+      }
+      sendJson(res, 200, { ok: true, status: 'dlq' });
+      return;
+    }
+
+    const installationId = body.installation?.id != null ? String(body.installation.id) : null;
+    const repoFullName = body.repository?.full_name ?? null;
+
+    // Tenant resolution. Fail closed on multi-tenant installs with unknown
+    // routing — same policy as Slack.
+    let resolvedTenant: string | null;
+    {
+      const db = openHippoDb(opts.hippoRoot);
+      try {
+        resolvedTenant = resolveTenantForGitHub(db, {
+          installationId,
+          repoFullName,
+        });
+      } finally {
+        closeHippoDb(db);
+      }
+    }
+    if (resolvedTenant === null) {
+      const db = openHippoDb(opts.hippoRoot);
+      try {
+        writeToGitHubDlq(db, {
+          tenantId: null,
+          rawPayload: rawBody,
+          error: `unroutable: installation_id=${installationId ?? '(none)'} repo=${repoFullName ?? '(none)'}`,
+          bucket: 'unroutable',
+          eventName,
+          deliveryId,
+          signature: sigStr,
+          installationId,
+          repoFullName,
+        });
+      } finally {
+        closeHippoDb(db);
+      }
+      sendJson(res, 200, { ok: true, status: 'dlq' });
+      return;
+    }
+
+    const ctx: Context = {
+      hippoRoot: opts.hippoRoot,
+      tenantId: resolvedTenant,
+      actor: 'connector:github',
+    };
+
+    // Dispatch by event header. Type guards cross-check the body shape against
+    // the header so a payload of one event type cannot satisfy another's guard.
+    if (eventName === 'issues' && isGitHubIssueEvent(body, 'issues')) {
+      if (body.action === 'deleted') {
+        // GitHub does fire issues.deleted (admin-initiated). Don't archive — V1
+        // policy is to log and let an operator decide. Archive could lose the
+        // memory if the issue is being moved between accounts.
+        const db = openHippoDb(opts.hippoRoot);
+        try {
+          writeToGitHubDlq(db, {
+            tenantId: resolvedTenant,
+            rawPayload: rawBody,
+            error: 'issues.deleted requires manual review',
+            bucket: 'unhandled',
+            eventName,
+            deliveryId,
+            signature: sigStr,
+            installationId,
+            repoFullName,
+          });
+        } finally {
+          closeHippoDb(db);
+        }
+        sendJson(res, 200, { ok: true, status: 'dlq' });
+        return;
+      }
+      const ingestInput: GitHubIngestEvent = { eventName: 'issues', payload: body };
+      const r = ingestGitHubEvent(ctx, { event: ingestInput, rawBody, deliveryId });
+      sendJson(res, 200, { ok: true, status: r.status, memoryId: r.memoryId });
+      return;
+    }
+
+    if (eventName === 'issue_comment' && isGitHubIssueCommentEvent(body, 'issue_comment')) {
+      if (body.action === 'deleted') {
+        const repo = body.repository?.full_name ?? '';
+        const artifactRef = `github://${repo}/issue/${body.issue.number}/comment/${body.comment.id}`;
+        const idempotencyKey = computeGitHubIdempotencyKey(eventName, rawBody);
+        const r = handleGitHubCommentDeleted(ctx, {
+          artifactRef,
+          idempotencyKey,
+          deliveryId,
+          eventName,
+        });
+        sendJson(res, 200, { ok: true, status: r.status, archivedCount: r.archivedCount });
+        return;
+      }
+      const ingestInput: GitHubIngestEvent = { eventName: 'issue_comment', payload: body };
+      const r = ingestGitHubEvent(ctx, { event: ingestInput, rawBody, deliveryId });
+      sendJson(res, 200, { ok: true, status: r.status, memoryId: r.memoryId });
+      return;
+    }
+
+    if (eventName === 'pull_request' && isGitHubPullRequestEvent(body, 'pull_request')) {
+      const ingestInput: GitHubIngestEvent = { eventName: 'pull_request', payload: body };
+      const r = ingestGitHubEvent(ctx, { event: ingestInput, rawBody, deliveryId });
+      sendJson(res, 200, { ok: true, status: r.status, memoryId: r.memoryId });
+      return;
+    }
+
+    if (
+      eventName === 'pull_request_review_comment' &&
+      isGitHubPullRequestReviewCommentEvent(body, 'pull_request_review_comment')
+    ) {
+      if (body.action === 'deleted') {
+        const repo = body.repository?.full_name ?? '';
+        const artifactRef = `github://${repo}/pull/${body.pull_request.number}/review_comment/${body.comment.id}`;
+        const idempotencyKey = computeGitHubIdempotencyKey(eventName, rawBody);
+        const r = handleGitHubCommentDeleted(ctx, {
+          artifactRef,
+          idempotencyKey,
+          deliveryId,
+          eventName,
+        });
+        sendJson(res, 200, { ok: true, status: r.status, archivedCount: r.archivedCount });
+        return;
+      }
+      const ingestInput: GitHubIngestEvent = {
+        eventName: 'pull_request_review_comment',
+        payload: body,
+      };
+      const r = ingestGitHubEvent(ctx, { event: ingestInput, rawBody, deliveryId });
+      sendJson(res, 200, { ok: true, status: r.status, memoryId: r.memoryId });
+      return;
+    }
+
+    // Header allow-listed but body shape didn't satisfy the matching guard.
+    {
+      const db = openHippoDb(opts.hippoRoot);
+      try {
+        writeToGitHubDlq(db, {
+          tenantId: resolvedTenant,
+          rawPayload: rawBody,
+          error: `body shape did not match X-GitHub-Event=${eventName}`,
+          bucket: 'parse_error',
+          eventName,
+          deliveryId,
+          signature: sigStr,
+          installationId,
+          repoFullName,
+        });
+      } finally {
+        closeHippoDb(db);
+      }
+      sendJson(res, 200, { ok: true, status: 'dlq' });
+      return;
+    }
   }
 
   // ── MCP-over-HTTP/SSE transport (Task 11) ──

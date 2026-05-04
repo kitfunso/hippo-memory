@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.3.0 (2026-05-04)
+
+GitHub connector. Streams issues, issue comments, pull requests, and PR review comments into hippo as `kind='raw'` rows with full provenance, idempotency, scope tagging, and a dead-letter queue. Built on the v1.2.1 generic `*:private:*` default-deny filter so private GitHub rows cannot leak to no-scope callers.
+
+### Added
+
+- **`POST /v1/connectors/github/events`** webhook route. HMAC verification via `X-Hub-Signature-256`. Idempotency keyed on `sha256(eventName + ':' + rawBody)` — replay-safe even if an attacker mints fresh `X-GitHub-Delivery` UUIDs (codex P0 #3).
+- **`hippo github backfill --repo <owner/name>`** CLI. Three independent REST streams (issues, issue comments, PR review comments) with per-stream high-water marks. HWM advances only after a stream fully drains so a crash mid-backfill is safe to restart (codex P1 #3). PRs returned via the `/issues` endpoint are skipped (codex P1 #2).
+- **`hippo github dlq list` / `dlq replay <id> [--force]`** CLI. Full replay metadata in `github_dlq` (event_name, delivery_id, signature, installation_id, repo_full_name, retry_count) so replay reproduces the exact dispatch.
+- **Tenant routing.** `github_installations` (App-mode) + `github_repositories` (PAT-mode multi-tenant). Fail-closed: a PAT-mode webhook in a multi-tenant install with no repo mapping returns null and DLQs as `unroutable` (codex P0 #4).
+- **Comment deletion sync.** `issue_comment.deleted` and `pull_request_review_comment.deleted` archive matching rows via `archiveRaw`. Filtered by `tenant_id + kind='raw'`, archives ALL active matching rows (GitHub edit history can produce multiple rows with the same artifact_ref) — codex P0 #5.
+- **Scope mapping.** `github:public:owner/repo` for public repos; `github:private:owner/repo` for private. `repository.private === undefined` falls through to private (fail-safe). Backfilled rows default to private since the REST list endpoints don't reliably surface `private`.
+
+### Schema
+
+- **Migration v24.** Six tables: `github_event_log`, `github_cursors`, `github_dlq`, `github_installations`, `github_repositories`, plus a `meta.min_compatible_binary='1.2.1'` row that older binaries (<1.2.1, no generic-private filter) hit and refuse to open the DB. Rollback safety (codex P0 #2).
+
+### Tests
+
+- 1214 tests passing across the suite (up from 1087 at v1.2.1). 117+ new tests across github-schema, github-types, github-scope, github-transform, github-signature, github-idempotency, github-tenant-routing, github-ratelimit, github-octokit-client, github-ingest, github-deletion, github-backfill, github-dlq, github-webhook-route, github-cli, github-smoke-200, github-provenance-parity.
+- 200-event smoke test with explicit security-boundary assertions: idempotency, replay defense, no-scope private denial, cross-source generic-private denial (synthetic `acme:private:demo`), tenant routing failure (codex P2 #2 strengthening).
+- Real two-worker race test that exercises the SAVEPOINT collision path (not just the fast-path) — codex P1 #6.
+
+### Plan + audit trail
+
+- `docs/plans/2026-05-04-github-connector.md` — full plan with codex round 1 review report (5 P0, 8 P1, 2 P2 — all consolidated and patched into the plan before any code was written).
+
 ## 1.2.1 (2026-05-04)
 
 Pre-flight for v1.3.0 GitHub connector. Codex audit caught that the v1.2 default-deny scope filter only blocked `slack:private:*`, not source-agnostic `*:private:*`. Once a second connector landed (GitHub, Jira, Linear, etc.), no-scope recall would silently leak private rows. v1.2.1 generalizes the rule before any v1.3 work begins, so rolling back is safe.

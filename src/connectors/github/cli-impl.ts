@@ -1,0 +1,183 @@
+/**
+ * Implementation of `hippo github` CLI subcommands. Extracted from the main
+ * cli.ts so unit tests can import these functions directly without triggering
+ * the cli.ts main() side effects. The cli.ts dispatcher re-exports the
+ * top-level cmdGithub.
+ *
+ * Subcommands mirror the Slack connector shape (cli.ts §Slack subcommands):
+ *   - hippo github backfill --repo <owner/name> [--since ISO] [--max <N>]
+ *   - hippo github dlq list
+ *   - hippo github dlq replay <id> [--force]
+ */
+
+import type { Context } from '../../api.js';
+import { openHippoDb, closeHippoDb } from '../../db.js';
+import { resolveTenantId } from '../../tenant.js';
+import { backfillRepo } from './backfill.js';
+import { realGitHubFetcher, type GitHubFetcher } from './octokit-client.js';
+import { listDlq, replayDlqEntry } from './dlq.js';
+
+type Flags = Record<string, string | boolean | string[]>;
+
+export function printGithubBackfillUsage(): void {
+  console.log('hippo github backfill --repo <owner/name> [--since ISO] [--max <N>]');
+  console.log('  --repo   GitHub repository in owner/name format (required, e.g. acme/widgets)');
+  console.log('  --since  Initial high-water-mark for first run (optional, ISO 8601)');
+  console.log('  --max    Cap items per stream (optional, integer)');
+  console.log('  Requires GITHUB_TOKEN env var with repo read scope.');
+}
+
+/**
+ * `hippo github backfill`. The fetcher is injectable so tests can drive the
+ * code path without hitting the network. Defaults to `realGitHubFetcher`.
+ */
+export async function cmdGithubBackfill(
+  hippoRoot: string,
+  flags: Flags,
+  fetcher: GitHubFetcher = realGitHubFetcher,
+): Promise<void> {
+  if (flags['help']) {
+    printGithubBackfillUsage();
+    return;
+  }
+  const repo = flags['repo'];
+  if (typeof repo !== 'string' || !repo.includes('/')) {
+    printGithubBackfillUsage();
+    process.exit(2);
+  }
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) {
+    console.error(
+      'GITHUB_TOKEN is not set. Backfill requires a personal access token with repo read scope.',
+    );
+    process.exit(2);
+  }
+  const maxRaw = flags['max'];
+  let maxPerStream: number | undefined;
+  if (typeof maxRaw === 'string' || typeof maxRaw === 'number') {
+    const parsed = Number(maxRaw);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      maxPerStream = Math.floor(parsed);
+    }
+  }
+  const sinceIso = typeof flags['since'] === 'string' ? (flags['since'] as string) : undefined;
+  const tenantId = resolveTenantId({});
+
+  // Seed the github_cursors row so all 3 streams use --since on a fresh run.
+  // COALESCE preserves any existing HWM (subsequent runs ignore --since for
+  // streams that already drained at least once — same idempotency story as
+  // Slack's slack_cursors).
+  if (sinceIso) {
+    const db = openHippoDb(hippoRoot);
+    try {
+      db.prepare(
+        `INSERT INTO github_cursors (tenant_id, repo_full_name, issues_hwm, issue_comments_hwm, pr_review_comments_hwm, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(tenant_id, repo_full_name) DO UPDATE SET
+           issues_hwm = COALESCE(github_cursors.issues_hwm, excluded.issues_hwm),
+           issue_comments_hwm = COALESCE(github_cursors.issue_comments_hwm, excluded.issue_comments_hwm),
+           pr_review_comments_hwm = COALESCE(github_cursors.pr_review_comments_hwm, excluded.pr_review_comments_hwm),
+           updated_at = excluded.updated_at`,
+      ).run(tenantId, repo, sinceIso, sinceIso, sinceIso, new Date().toISOString());
+    } finally {
+      closeHippoDb(db);
+    }
+  }
+
+  const ctx: Context = {
+    hippoRoot,
+    tenantId,
+    actor: 'cli:github-backfill',
+  };
+  try {
+    const result = await backfillRepo(ctx, {
+      repoFullName: repo,
+      fetcher,
+      token: token as string,
+      maxPerStream,
+    });
+    console.log(JSON.stringify(result, null, 2));
+  } catch (e) {
+    console.error('backfill failed:', (e as Error).message);
+    process.exit(3);
+  }
+}
+
+export function cmdGithubDlqList(hippoRoot: string, _flags: Flags): void {
+  const db = openHippoDb(hippoRoot);
+  try {
+    const tenantId = resolveTenantId({});
+    const items = listDlq(db, { tenantId });
+    if (items.length === 0) {
+      console.log('no entries');
+      return;
+    }
+    for (const it of items) {
+      console.log(
+        `${it.id}\t${it.bucket}\t${it.tenantId}\t${it.eventName ?? '-'}\t${it.receivedAt}\t${it.error}`,
+      );
+    }
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+export async function cmdGithubDlqReplay(
+  hippoRoot: string,
+  args: string[],
+  flags: Flags,
+): Promise<void> {
+  const idArg = args[0];
+  if (!idArg) {
+    console.error('Usage: hippo github dlq replay <id> [--force]');
+    process.exit(1);
+  }
+  const id = Number(idArg);
+  if (!Number.isFinite(id) || !Number.isInteger(id) || id < 1) {
+    console.error(`replay: invalid id ${idArg}`);
+    process.exit(1);
+  }
+  const force = flags['force'] === true;
+  const ctx: Context = {
+    hippoRoot,
+    tenantId: resolveTenantId({}),
+    actor: 'cli:github-dlq-replay',
+  };
+  const result = await replayDlqEntry(ctx, id, {
+    force,
+    webhookSecret: process.env.GITHUB_WEBHOOK_SECRET,
+  });
+  if (!result.ok) {
+    console.error(
+      `replay failed: status=${result.status} retry_count=${result.retryCount}${
+        result.reason ? ` reason=${result.reason}` : ''
+      }`,
+    );
+    process.exit(1);
+  }
+  console.log(
+    `replay ok: status=${result.status} memory_id=${result.memoryId ?? '(none)'} retry_count=${result.retryCount}`,
+  );
+}
+
+export async function cmdGithub(
+  hippoRoot: string,
+  args: string[],
+  flags: Flags,
+): Promise<void> {
+  const sub = args[0];
+  if (sub === 'backfill') {
+    await cmdGithubBackfill(hippoRoot, flags);
+    return;
+  }
+  if (sub === 'dlq' && args[1] === 'list') {
+    cmdGithubDlqList(hippoRoot, flags);
+    return;
+  }
+  if (sub === 'dlq' && args[1] === 'replay') {
+    await cmdGithubDlqReplay(hippoRoot, args.slice(2), flags);
+    return;
+  }
+  console.error('Usage: hippo github <backfill|dlq list|dlq replay <id> [--force]> [...]');
+  process.exit(1);
+}

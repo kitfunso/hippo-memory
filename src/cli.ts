@@ -166,6 +166,7 @@ import { computeAmbientState, renderAmbientSummary } from './ambient.js';
 import { listDlq, replayDlqEntry } from './connectors/slack/dlq.js';
 import { backfillChannel } from './connectors/slack/backfill.js';
 import { slackHistoryFetcher } from './connectors/slack/web-client.js';
+import { cmdGithub } from './connectors/github/cli-impl.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -5357,6 +5358,12 @@ Commands:
     --threshold <n>        Overlap threshold 0-1 (default: 0.7)
   status                   Show memory health stats
   audit [--fix]            Check memory quality (--fix removes junk)
+  github                   GitHub connector subcommands (backfill, dlq)
+    backfill --repo <owner/name> [--since ISO] [--max <N>]
+                           Paginated backfill of issues + comments
+    dlq list               List DLQ entries for the active tenant
+    dlq replay <id> [--force]
+                           Re-ingest a DLQ entry (--force skips sig check)
   provenance               Provenance coverage gate for kind='raw' rows
     --json                 Output as JSON
     --strict               Exit non-zero when coverage < 100%
@@ -5727,6 +5734,10 @@ async function main(): Promise<void> {
 
     case 'slack':
       cmdSlack(hippoRoot, args, flags);
+      break;
+
+    case 'github':
+      await cmdGithub(hippoRoot, args, flags);
       break;
 
     case 'audit': {

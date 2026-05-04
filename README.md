@@ -85,6 +85,15 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.3.0
+
+- **GitHub connector.** Stream issues, issue comments, PRs, and PR review comments into hippo as `kind='raw'` rows. Webhook route at `POST /v1/connectors/github/events` (HMAC-verified). CLI: `hippo github backfill --repo <owner/name>`, `hippo github dlq list`, `hippo github dlq replay <id>`. Required env: `GITHUB_WEBHOOK_SECRET` (route), `GITHUB_TOKEN` (backfill).
+- **Replay-safe idempotency.** Keyed on `sha256(eventName + ':' + rawBody)`, not `X-GitHub-Delivery` (which GitHub does not sign). Attackers cannot bypass dedupe by minting fresh delivery UUIDs.
+- **Three-stream backfill.** Issues, issue comments, PR review comments each have their own high-water mark. A crash mid-stream-2 leaves stream-1's HWM intact and stream-2's HWM unchanged so resume is safe and idempotent.
+- **PAT and App tenant routing.** `github_installations` for App webhooks; `github_repositories` for PAT-mode multi-tenant. Fail-closed: an unknown installation in a multi-tenant install routes to the DLQ rather than to `HIPPO_TENANT`.
+- **Schema v24** with rollback safety. The migration writes `meta.min_compatible_binary='1.2.1'` so older binaries refuse to open the DB and cannot leak private rows.
+- 1214 tests passing. Independent codex audit on the plan caught 5 P0 and 8 P1 issues before coding began; all addressed.
+
 ### What's new in v1.2.1
 
 - **Source-agnostic default-deny.** The v1.2 filter only blocked `slack:private:*`. v1.2.1 generalizes to ANY `<source>:private:*` scope so the v1.3 GitHub connector (and future Jira/Linear/etc.) cannot leak private rows to no-scope callers. Single source of truth via the new `isPrivateScope` export.
