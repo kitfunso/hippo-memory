@@ -63,3 +63,27 @@ export function verifyGitHubSignature(opts: VerifyOpts): boolean {
 export function computeIdempotencyKey(artifactRef: string, updatedAt: string | null | undefined): string {
   return createHash('sha256').update(`${artifactRef}:${updatedAt ?? ''}`).digest('hex');
 }
+
+/**
+ * v1.3.2: deletion-specific idempotency key. Distinct namespace from
+ * computeIdempotencyKey so an ingest's row in github_event_log doesn't make
+ * a deletion event return 'duplicate' before it gets a chance to archive.
+ *
+ * The codex round 3 P0 fix on server.ts was to call computeIdempotencyKey
+ * with the right (artifactRef, updatedAt) shape for deletions. That made
+ * the deletion key MATCH the ingest key — which collapsed to a "deletion
+ * always returns duplicate" bug because both shared github_event_log.
+ *
+ * v1.3.2 splits the namespace: deletion key = sha256('deleted:' +
+ * artifactRef + ':' + updatedAt). Two retries of the SAME deletion event
+ * still dedupe (same artifact + same updatedAt + same prefix → same key).
+ * Ingest of the same artifact + same updatedAt produces a DIFFERENT key,
+ * so a deletion event does not get short-circuited by the ingest's prior
+ * log row.
+ *
+ * Kept as a separate exported function so the namespace prefix is explicit
+ * at every call site (server.ts deletion branches, deletion.ts, DLQ replay).
+ */
+export function computeDeletionKey(artifactRef: string, updatedAt: string | null | undefined): string {
+  return createHash('sha256').update(`deleted:${artifactRef}:${updatedAt ?? ''}`).digest('hex');
+}

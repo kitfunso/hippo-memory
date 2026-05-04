@@ -175,13 +175,17 @@ export interface ReplayResult {
  * the dispatch keeps this module free of every event-type handler — the
  * route already knows how to route an envelope, so it passes that capability
  * back in.
+ *
+ * v1.3.2 (claude review): the v1.3.1 contract advertised an `idempotencyKey`
+ * field, but the v1.3.1 ingest re-derives the key from the parsed event
+ * itself, so the field was a phantom — any future hook that trusted the
+ * passed-in value would dedupe against a stale key. Field removed.
  */
 export type IngestHook = (
   ctx: Context,
   args: {
     rawPayload: string;
     eventName: string;
-    idempotencyKey: string;
     deliveryId: string;
   },
 ) => Promise<{ memoryId: string | null }>;
@@ -293,16 +297,13 @@ export async function replayDlqEntry(
   // Real replay path. The route's IngestHook is responsible for routing,
   // idempotency, and writing the memory. The DLQ module only validates the
   // surface and bumps the retry counter.
+  // v1.3.2: dropped the stale idempotencyKey arg — the hook re-derives it
+  // from the parsed event (artifact_ref + updated_at) since v1.3.1.
   const eventName = row.eventName ?? '';
   const deliveryId = row.deliveryId ?? '';
-  const idempotencyKey = (await import('./signature.js')).computeIdempotencyKey(
-    eventName,
-    row.rawPayload,
-  );
   const { memoryId } = await opts.ingestHook(ctx, {
     rawPayload: row.rawPayload,
     eventName,
-    idempotencyKey,
     deliveryId,
   });
   bumpRetryCount(ctx.hippoRoot, id);

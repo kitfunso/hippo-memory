@@ -39,7 +39,7 @@ import { ingestEvent as ingestGitHubEvent, type IngestEvent as GitHubIngestEvent
 import { handleCommentDeleted as handleGitHubCommentDeleted } from './connectors/github/deletion.js';
 import { writeToDlq as writeToGitHubDlq } from './connectors/github/dlq.js';
 import { resolveTenantForGitHub } from './connectors/github/tenant-routing.js';
-import { computeIdempotencyKey as computeGitHubIdempotencyKey } from './connectors/github/signature.js';
+import { computeIdempotencyKey as computeGitHubIdempotencyKey, computeDeletionKey as computeGitHubDeletionKey } from './connectors/github/signature.js';
 
 // Review patch #2: explicit allow-list for unauthenticated /v1/* routes.
 // New unauth routes MUST be added here AND get a corresponding entry in
@@ -1013,7 +1013,12 @@ async function handleRequest(
       if (body.action === 'deleted') {
         const repo = body.repository?.full_name ?? '';
         const artifactRef = `github://${repo}/issue/${body.issue.number}/comment/${body.comment.id}`;
-        const idempotencyKey = computeGitHubIdempotencyKey(eventName, rawBody);
+        // v1.3.2: deletion key uses a 'deleted:' namespace so it doesn't collide
+        // with the ingest path's key for the same artifact. Without the prefix,
+        // a previously-ingested comment's log row would make hasSeenKey return
+        // true on the first deletion, short-circuiting archive. Codex round 3
+        // P0 fix evolved through two iterations to land here.
+        const idempotencyKey = computeGitHubDeletionKey(artifactRef, body.comment.updated_at ?? null);
         const r = handleGitHubCommentDeleted(ctx, {
           artifactRef,
           idempotencyKey,
@@ -1043,7 +1048,8 @@ async function handleRequest(
       if (body.action === 'deleted') {
         const repo = body.repository?.full_name ?? '';
         const artifactRef = `github://${repo}/pull/${body.pull_request.number}/review_comment/${body.comment.id}`;
-        const idempotencyKey = computeGitHubIdempotencyKey(eventName, rawBody);
+        // v1.3.2: see issue_comment branch comment above for the namespace rationale.
+        const idempotencyKey = computeGitHubDeletionKey(artifactRef, body.comment.updated_at ?? null);
         const r = handleGitHubCommentDeleted(ctx, {
           artifactRef,
           idempotencyKey,

@@ -85,6 +85,14 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.3.2
+
+- **Hotfix for v1.3.1.** Codex round 3 + senior code reviewer caught residual bugs in v1.3.1's own fix.
+- **Deletion idempotency uses a `deleted:` namespace** so it doesn't collide with the ingest path's key for the same artifact. v1.3.1 made them share a key (the obvious fix), which broke the deletion path: every first-deletion-of-an-ingested-comment short-circuited as `'duplicate'`. v1.3.2 splits the namespaces.
+- **DLQ replay routes deleted comments correctly.** v1.3.1 wrote replayed `*.deleted` rows as fresh raw memories; v1.3.2 dispatches to the deletion handler.
+- **`compareSemver` is loud on pre-release tags** instead of silently miscomparing `1.3.2-beta` as less than `1.3.2`. Defends the rollback guard.
+- **`IngestHook` type cleaned up** — phantom `idempotencyKey` arg removed.
+
 ### What's new in v1.3.1
 
 - **Hotfix for v1.3.0.** Retroactive `/codex review` (round 2) + `/review` (senior code reviewer) caught 3 P0s and 6 P1s the plan-only review missed. All addressed.

@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.3.2 (2026-05-04)
+
+Hotfix for v1.3.1. The retroactive review chain on v1.3.1 (codex round 3 + senior code reviewer) caught residual issues in v1.3.1's own fix, including one that the obvious "make ingest and deletion share keys" patch would have made worse.
+
+### Security (CRITICAL)
+
+- **Deletion key namespace.** v1.3.0 deletion call sites in `src/server.ts` still called `computeIdempotencyKey` with the v1.3.0 `(eventName, rawBody)` argument shape after v1.3.1 changed the signature to `(artifactRef, updatedAt)`. TypeScript didn't flag the drift since both signatures are `(string, string)`. Codex round 3 caught it. The naive fix (use the same artifact-based key for deletion) introduced a NEW bug: ingest had already written the same key to `github_event_log`, so deletion's fast-path `hasSeenKey` check returned `'duplicate'` immediately and refused to archive. v1.3.2 splits the namespace: new `computeDeletionKey(artifactRef, updatedAt)` prepends a `'deleted:'` prefix. Ingest and deletion of the same artifact + same `updated_at` now produce different keys, while two retries of the same deletion still dedupe correctly.
+
+### Fixed
+
+- **DLQ replay routes deleted comments through the deletion handler.** v1.3.1's `cli-impl.ts` ingestHook unconditionally called `ingestEvent`, which would have written a replayed `*.deleted` row as a NEW raw memory instead of archiving. Now branches on `body.action === 'deleted'` and dispatches to `handleCommentDeleted`.
+- **`IngestHook` contract dropped phantom `idempotencyKey` arg.** v1.3.1's hook re-derived the key from the parsed event, so the field was a phantom — any future hook that trusted it would dedupe against a stale value. Removed from the type.
+- **`compareSemver` throws on pre-release tags.** v1.3.1's implementation silently coerced `Number(n) || 0`, so `'1.3.2-beta'` parsed as `[1,3,0]` and compared LESS than `'1.3.2'`. If anyone ever stamped a pre-release into `meta.min_compatible_binary`, the rollback guard would silently misfire. Now throws on non-numeric segments.
+
+### Tests
+
+- 1232 passing (+7 from v1.3.1). New `tests/github-v1.3.2-hotfix.test.ts` covers the deletion-key namespace separation, two-retries-of-same-deletion dedupe, different-artifact deletion keys, `compareSemver` pre-release rejection, and the `IngestHook` shape.
+
 ## 1.3.1 (2026-05-04)
 
 Hotfix for v1.3.0. The retroactive review chain (codex round 2 + senior code reviewer) found 3 P0s and 6 P1s in the v1.3.0 ship that the plan-only review hadn't caught. All addressed here.
