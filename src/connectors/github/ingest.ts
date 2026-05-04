@@ -87,8 +87,44 @@ function transformEvent(event: IngestEvent): RememberOpts | null {
   }
 }
 
+/**
+ * v1.3.1: extract the source-normalized identifier the idempotency key needs.
+ * Backfill and webhook both produce IngestEvent objects describing the same
+ * source revision, so deriving the key from these fields collapses both paths
+ * onto the same dedupe row. Mirrors the artifactRef strings in transform.ts.
+ */
+function eventArtifactRef(event: IngestEvent): string {
+  const repo = event.payload.repository?.full_name ?? 'unknown/unknown';
+  switch (event.eventName) {
+    case 'issues':
+      return `github://${repo}/issue/${event.payload.issue.number}`;
+    case 'issue_comment':
+      return `github://${repo}/issue/${event.payload.issue.number}/comment/${event.payload.comment.id}`;
+    case 'pull_request':
+      return `github://${repo}/pull/${event.payload.pull_request.number}`;
+    case 'pull_request_review_comment':
+      return `github://${repo}/pull/${event.payload.pull_request.number}/review_comment/${event.payload.comment.id}`;
+  }
+}
+
+function eventUpdatedAt(event: IngestEvent): string | null {
+  switch (event.eventName) {
+    case 'issues':
+      return event.payload.issue.updated_at ?? null;
+    case 'issue_comment':
+      return event.payload.comment.updated_at ?? null;
+    case 'pull_request':
+      return event.payload.pull_request.updated_at ?? null;
+    case 'pull_request_review_comment':
+      return event.payload.comment.updated_at ?? null;
+  }
+}
+
 export function ingestEvent(ctx: Context, input: IngestInput): IngestResult {
-  const idempotencyKey = computeIdempotencyKey(input.event.eventName, input.rawBody);
+  const idempotencyKey = computeIdempotencyKey(
+    eventArtifactRef(input.event),
+    eventUpdatedAt(input.event),
+  );
 
   // Fast path: pre-check. Avoids running the transform / opening a write tx
   // for the common already-seen case (GitHub auto-retries with the same body).

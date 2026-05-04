@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.3.1 (2026-05-04)
+
+Hotfix for v1.3.0. The retroactive review chain (codex round 2 + senior code reviewer) found 3 P0s and 6 P1s in the v1.3.0 ship that the plan-only review hadn't caught. All addressed here.
+
+### Security (CRITICAL)
+
+- **P0: Rollback guard now enforced.** v1.3.0 stamped `meta.min_compatible_binary='1.2.1'` but never read it on DB open. Older binaries lacking the generic `*:private:*` filter could open a v1.3 DB and leak `github:private:*` rows. v1.3.1 adds the read-side check in `runMigrations` — opening throws if `min_compatible_binary > PACKAGE_VERSION`.
+- **P0: Comment-deletion atomicity.** v1.3.0 archived multi-row edit histories in independent transactions and committed the idempotency mark with the FIRST archive. If archives 2..N threw, idempotency was already marked, retries returned `'duplicate'` with `archivedCount: 0`, and survivors stayed searchable. v1.3.1 wraps all archives + idempotency mark in one outer SAVEPOINT — any failure rolls back the entire batch and leaves idempotency unset for retry.
+- **P0: Idempotency key now bridges backfill and webhook.** v1.3.0 derived the key from `sha256(eventName + ':' + rawBody)`. Backfill `rawBody = JSON.stringify(restItem)` differed from webhook `rawBody = envelope`, so the same source revision produced two different keys and two memory rows. v1.3.1 derives from `sha256(artifact_ref + ':' + (updated_at ?? ''))` — same revision = same key, regardless of delivery path.
+
+### Fixed
+
+- **DLQ replay actually replays.** v1.3.0's `cmdGithubDlqReplay` called `replayDlqEntry` without an `ingestHook`, hitting the dry-run branch that bumps `retry_count` and prints "replay ok" without re-ingesting. v1.3.1 wires the real ingest hook plus type-guard dispatch.
+- **Backfill HWM stays put on capped streams.** `--max N` returned `drained: false`; HWM advance is now gated on `drained: true`. Resume re-fetches the unprocessed tail.
+- **Backfill issues HWM advances past skipped PRs.** Items returned via `/issues` that have a `pull_request` field (PRs) are skipped from ingest, but their `updated_at` now still contributes to the HWM. PR-only pages no longer cause the next run to re-fetch the same window forever.
+- **DLQ replay supports `GITHUB_WEBHOOK_SECRET_PREVIOUS`.** Operators rotating the webhook secret can replay rows written under the old secret without `--force`.
+- **HTTP `/health` and MCP `serverInfo` report the real version.** Both were hardcoded to `0.39.0`. v1.3.1 sources from a single `src/version.ts` const.
+- **MCP tool descriptions reflect generic `*:private:*` default-deny.** Were stale on `slack:private:*`-only.
+
+### Internal
+
+- New `src/version.ts` — single source of truth for `PACKAGE_VERSION` plus a small `compareSemver` helper. Bumped manually alongside the four package manifests on every release.
+- New `tests/github-v1.3.1-hotfix.test.ts` — 8 regression tests for the rollback guard, deletion atomicity success path, idempotency key bridge, capped-stream HWM, and PR-only HWM advance.
+
 ## 1.3.0 (2026-05-04)
 
 GitHub connector. Streams issues, issue comments, pull requests, and PR review comments into hippo as `kind='raw'` rows with full provenance, idempotency, scope tagging, and a dead-letter queue. Built on the v1.2.1 generic `*:private:*` default-deny filter so private GitHub rows cannot leak to no-scope callers.

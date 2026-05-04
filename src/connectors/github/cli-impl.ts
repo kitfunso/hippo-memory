@@ -16,8 +16,39 @@ import { resolveTenantId } from '../../tenant.js';
 import { backfillRepo } from './backfill.js';
 import { realGitHubFetcher, type GitHubFetcher } from './octokit-client.js';
 import { listDlq, replayDlqEntry } from './dlq.js';
+import { ingestEvent, type IngestEvent } from './ingest.js';
+import {
+  isGitHubIssueEvent,
+  isGitHubIssueCommentEvent,
+  isGitHubPullRequestEvent,
+  isGitHubPullRequestReviewCommentEvent,
+} from './types.js';
 
 type Flags = Record<string, string | boolean | string[]>;
+
+/**
+ * Map a parsed envelope + eventName header to an IngestEvent discriminated
+ * union. Returns null for unknown event types or shapes that don't pass the
+ * type guards.
+ */
+function parsedToIngestEvent(parsed: unknown, eventName: string): IngestEvent | null {
+  if (eventName === 'issues' && isGitHubIssueEvent(parsed, eventName)) {
+    return { eventName: 'issues', payload: parsed };
+  }
+  if (eventName === 'issue_comment' && isGitHubIssueCommentEvent(parsed, eventName)) {
+    return { eventName: 'issue_comment', payload: parsed };
+  }
+  if (eventName === 'pull_request' && isGitHubPullRequestEvent(parsed, eventName)) {
+    return { eventName: 'pull_request', payload: parsed };
+  }
+  if (
+    eventName === 'pull_request_review_comment' &&
+    isGitHubPullRequestReviewCommentEvent(parsed, eventName)
+  ) {
+    return { eventName: 'pull_request_review_comment', payload: parsed };
+  }
+  return null;
+}
 
 export function printGithubBackfillUsage(): void {
   console.log('hippo github backfill --repo <owner/name> [--since ISO] [--max <N>]');
@@ -143,9 +174,26 @@ export async function cmdGithubDlqReplay(
     tenantId: resolveTenantId({}),
     actor: 'cli:github-dlq-replay',
   };
+  // v1.3.1 hotfix (codex P1): without an ingestHook the v1.3.0 CLI was a
+  // dry-run that printed "replay ok" while only bumping retry_count. Wire the
+  // real hook so `replay` actually re-runs the ingest path.
   const result = await replayDlqEntry(ctx, id, {
     force,
     webhookSecret: process.env.GITHUB_WEBHOOK_SECRET,
+    previousSecret: process.env.GITHUB_WEBHOOK_SECRET_PREVIOUS,
+    ingestHook: async (innerCtx, args) => {
+      const parsed = JSON.parse(args.rawPayload);
+      const event = parsedToIngestEvent(parsed, args.eventName);
+      if (!event) {
+        return { memoryId: null };
+      }
+      const r = ingestEvent(innerCtx, {
+        event,
+        rawBody: args.rawPayload,
+        deliveryId: args.deliveryId,
+      });
+      return { memoryId: r.memoryId };
+    },
   });
   if (!result.ok) {
     console.error(

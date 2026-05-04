@@ -143,6 +143,13 @@ function bumpRetryCount(hippoRoot: string, id: number): void {
 export interface ReplayDlqOpts {
   /** Current webhook secret. If omitted, signature check is skipped (force-only path). */
   webhookSecret?: string;
+  /**
+   * Previous webhook secret during rotation (v1.3.1 hotfix — claude P1).
+   * Operators rotating GITHUB_WEBHOOK_SECRET would otherwise be forced into
+   * --force on DLQ rows written under the old secret. Plumbed through to
+   * verifyGitHubSignature.previousSecret.
+   */
+  previousSecret?: string;
   /** When true, skip signature verification (used for legacy entries after secret rotation). */
   force?: boolean;
 }
@@ -231,6 +238,7 @@ export async function replayDlqEntry(
       rawBody: row.rawPayload,
       signature: row.signature,
       webhookSecret: opts.webhookSecret,
+      previousSecret: opts.previousSecret,
     });
     if (!sigOk) {
       bumpRetryCount(ctx.hippoRoot, id);

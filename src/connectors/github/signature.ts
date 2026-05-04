@@ -25,18 +25,41 @@ export function verifyGitHubSignature(opts: VerifyOpts): boolean {
 }
 
 /**
- * Replay-safe idempotency key (codex P0 #3).
+ * Source-aware idempotency key. v1.3.1 hotfix (codex round 1 P0 #3 + claude
+ * round 2 P0 #3).
  *
- * GitHub does NOT sign X-GitHub-Delivery, so an attacker who captures one
- * signed payload can replay the body with any new delivery UUID. Deriving
- * idempotency from the delivery_id is unsafe.
+ * Round 1 design: sha256(eventName + ':' + rawBody) so an attacker rotating
+ * X-GitHub-Delivery cannot bypass dedupe.
  *
- * Key = sha256(eventName + ':' + rawBody). Both inputs are tamper-evident:
- *   - eventName comes from X-GitHub-Event, gated by upstream type guards.
- *   - rawBody is signed by the HMAC.
- * A valid replay of (eventName, body) IS the same event. delivery_id is kept
- * as audit metadata only, not as the dedupe seam.
+ * Round 2 found that key produced different hashes for the SAME source event
+ * delivered via webhook vs via REST backfill, because backfill rawBody is the
+ * REST list-item shape while webhook rawBody is the envelope. Result:
+ * backfill + later webhook of the same issue created two `kind='raw'` rows
+ * with the same artifact_ref. Combined with the deletion bug, deletion could
+ * not archive both.
+ *
+ * v1.3.1 fix: key from the SOURCE-NORMALIZED identifier — artifact_ref plus
+ * the source-side updated_at timestamp. Same artifact + same revision = same
+ * key, regardless of which path delivered it. Different revisions of the same
+ * issue (an edit) get different keys, which is correct: each edit IS a new
+ * memory revision.
+ *
+ * Both inputs are upstream-derived from the parsed event, not from the
+ * unsigned delivery header — replay attacks still cannot bypass dedupe.
+ *
+ * Inputs:
+ *   - artifactRef: e.g. 'github://acme/repo/issue/42' or
+ *     'github://acme/repo/issue/42/comment/123'.
+ *   - updatedAt: source-side ISO timestamp (issue.updated_at,
+ *     comment.updated_at, pull_request.updated_at). Empty string when the
+ *     payload omits it (rare; older REST shapes).
+ *
+ * Migration note for v1.3.0 → v1.3.1: existing github_event_log rows from
+ * v1.3.0 used the round-1 key shape and will not collide with v1.3.1 keys.
+ * The first webhook delivery after upgrading creates a new log row with the
+ * new key. This is acceptable for a hotfix (no production users on v1.3.0)
+ * and correct semantics going forward.
  */
-export function computeIdempotencyKey(eventName: string, rawBody: string): string {
-  return createHash('sha256').update(`${eventName}:${rawBody}`).digest('hex');
+export function computeIdempotencyKey(artifactRef: string, updatedAt: string | null | undefined): string {
+  return createHash('sha256').update(`${artifactRef}:${updatedAt ?? ''}`).digest('hex');
 }

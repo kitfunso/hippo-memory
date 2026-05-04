@@ -3,6 +3,7 @@ import * as path from 'path';
 import { createRequire } from 'module';
 import { createPhysicsTable } from './physics-state.js';
 import { cleanupArchivedMirrors } from './raw-archive-mirror-cleanup.js';
+import { PACKAGE_VERSION, compareSemver } from './version.js';
 
 const require = createRequire(import.meta.url);
 
@@ -836,6 +837,18 @@ export function getCurrentSchemaVersion(): number {
   return CURRENT_SCHEMA_VERSION;
 }
 
+function readMinCompatibleBinary(db: DatabaseSyncLike): string | null {
+  // Tolerate the meta table not yet existing on a fresh DB.
+  try {
+    const row = db.prepare(`SELECT value FROM meta WHERE key = 'min_compatible_binary'`).get() as
+      | { value?: string }
+      | undefined;
+    return row?.value ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function openHippoDb(hippoRoot: string): DatabaseSyncLike {
   fs.mkdirSync(hippoRoot, { recursive: true });
   const db = new DatabaseSync(getHippoDbPath(hippoRoot));
@@ -867,6 +880,20 @@ export function openHippoDb(hippoRoot: string): DatabaseSyncLike {
 
 function runMigrations(db: DatabaseSyncLike): void {
   ensureMetaTable(db);
+
+  // v1.3.1 rollback-safety guard. Schema v24 stamped meta.min_compatible_binary;
+  // older binaries that lack the generic *:private:* default-deny filter would
+  // leak github:private:* rows on no-scope recall. Refuse to open a DB stamped
+  // with a min newer than this binary's version. Read BEFORE migrations so a
+  // stale v1.2.0 binary cannot apply unknown future migrations either.
+  const minRequired = readMinCompatibleBinary(db);
+  if (minRequired && compareSemver(minRequired, PACKAGE_VERSION) > 0) {
+    throw new Error(
+      `hippo-memory: this database requires hippo-memory >= ${minRequired}, but the running binary is ${PACKAGE_VERSION}. ` +
+      `Upgrade hippo-memory to open this database. Running an older binary against this DB would leak private rows that the ` +
+      `older filter does not recognize.`,
+    );
+  }
 
   let currentVersion = getSchemaVersion(db);
   for (const migration of MIGRATIONS) {

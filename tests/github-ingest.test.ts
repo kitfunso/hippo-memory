@@ -201,7 +201,7 @@ describe('ingestEvent', () => {
     // github_event_log row written.
     const db = openHippoDb(root);
     try {
-      const idempotencyKey = computeIdempotencyKey('issues', rawBody);
+      const idempotencyKey = computeIdempotencyKey('github://acme/demo/issue/42', null);
       const row = db
         .prepare(`SELECT idempotency_key, delivery_id, event_name, memory_id FROM github_event_log WHERE idempotency_key = ?`)
         .get(idempotencyKey) as
@@ -263,7 +263,7 @@ describe('ingestEvent', () => {
     // github_event_log row exists with memory_id=NULL.
     const db = openHippoDb(root);
     try {
-      const key = computeIdempotencyKey('issues', rawBody);
+      const key = computeIdempotencyKey('github://acme/demo/issue/42', null);
       const row = db
         .prepare(`SELECT memory_id FROM github_event_log WHERE idempotency_key = ?`)
         .get(key) as { memory_id: string | null } | undefined;
@@ -373,7 +373,7 @@ describe('ingestEvent', () => {
     // ingest's INSERT OR IGNORE was the loser of the race.
     const db = openHippoDb(root);
     try {
-      const key = computeIdempotencyKey('issues', rawBody);
+      const key = computeIdempotencyKey('github://acme/demo/issue/42', null);
       const row = db
         .prepare(`SELECT delivery_id, memory_id FROM github_event_log WHERE idempotency_key = ?`)
         .get(key) as { delivery_id: string; memory_id: string | null } | undefined;
@@ -398,13 +398,27 @@ describe('ingestEvent', () => {
     expect(r2.memoryId).toBe(r1.memoryId);
   });
 
-  it('7. different event names with the same body produce different idempotency keys', () => {
-    const payload = makeIssueEvent();
-    const rawBody = JSON.stringify(payload);
-
-    const k1 = computeIdempotencyKey('issues', rawBody);
-    const k2 = computeIdempotencyKey('issue_comment', rawBody);
+  it('7. v1.3.1: different artifact_refs produce different idempotency keys; same artifact + same updated_at collapses', () => {
+    // The v1.3.1 hotfix changed the key from sha256(eventName + ':' + rawBody)
+    // to sha256(artifactRef + ':' + updatedAt) so backfill and webhook ingests
+    // of the same source revision dedupe onto the same row.
+    const k1 = computeIdempotencyKey('github://acme/demo/issue/42', '2026-05-04T10:00:00Z');
+    const k2 = computeIdempotencyKey('github://acme/demo/issue/43', '2026-05-04T10:00:00Z');
     expect(k1).not.toBe(k2);
+
+    // Same artifact + same updated_at: same key (so backfill + later webhook of
+    // same revision collapse to one log row).
+    const k3 = computeIdempotencyKey('github://acme/demo/issue/42', '2026-05-04T10:00:00Z');
+    expect(k3).toBe(k1);
+
+    // Same artifact + different updated_at (an edit): different key.
+    const k4 = computeIdempotencyKey('github://acme/demo/issue/42', '2026-05-04T11:00:00Z');
+    expect(k4).not.toBe(k1);
+
+    // Null updated_at + missing updated_at fold to the same empty-string key.
+    const kNull = computeIdempotencyKey('github://acme/demo/issue/42', null);
+    const kUndef = computeIdempotencyKey('github://acme/demo/issue/42', undefined);
+    expect(kNull).toBe(kUndef);
   });
 
   it('8. race rollback verification: only the OTHER worker memory remains after DuplicateIdempotencyError', () => {

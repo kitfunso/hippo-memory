@@ -187,10 +187,19 @@ function isCommentItem(x: unknown): x is IssueCommentItem | PrReviewCommentItem 
 }
 
 /**
- * Drain one stream end-to-end. Pauses and retries on rate-limit. Throws
- * on any other fetch error so the caller leaves the HWM unchanged
- * (codex P1 #3 crash safety). Returns max(updated_at) seen so the caller
- * can advance the HWM only if the whole stream drained.
+ * Drain one stream end-to-end. Pauses and retries on rate-limit. Throws on
+ * any other fetch error so the caller leaves the HWM unchanged (round 1
+ * codex P1 #3 crash safety).
+ *
+ * v1.3.1 (round 2 codex P1s + claude P1):
+ *   - Tracks max(updated_at) across ALL fetched items, including ones
+ *     `toIngestEvent` rejects (e.g., PRs returned via `/issues`). Otherwise
+ *     a page of pure PRs would never advance the HWM and the next run would
+ *     re-fetch the same window forever.
+ *   - Returns `drained: boolean` — true only when the stream actually ran
+ *     to next=null. Callers MUST NOT advance the HWM when drained=false.
+ *     Was a bug in v1.3.0: hitting maxPerStream cap returned the partial
+ *     maxUpdatedAt and the caller persisted it, skipping the unfetched tail.
  */
 async function drainStream(
   ctx: Context,
@@ -200,7 +209,7 @@ async function drainStream(
   token: string,
   sleep: (ms: number) => Promise<void>,
   maxItems?: number,
-): Promise<{ ingested: number; pages: number; maxUpdatedAt: string | null }> {
+): Promise<{ ingested: number; pages: number; maxUpdatedAt: string | null; drained: boolean }> {
   let url: string | null = url0;
   let ingested = 0;
   let pages = 0;
@@ -220,31 +229,36 @@ async function drainStream(
     pages++;
 
     for (const item of page.items) {
-      const evt = toIngestEvent(item);
-      if (!evt) continue; // PRs returned by /issues, malformed shape, etc.
+      // v1.3.1: track updated_at on EVERY item, before the toIngestEvent
+      // filter. Skipped PRs from /issues still contribute to the HWM so
+      // PR-only pages don't loop forever.
       const updatedAt =
         item && typeof item === 'object'
           ? ((item as { updated_at?: string }).updated_at ?? null)
           : null;
+      if (updatedAt && (!maxUpdatedAt || updatedAt > maxUpdatedAt)) {
+        maxUpdatedAt = updatedAt;
+      }
+
+      const evt = toIngestEvent(item);
+      if (!evt) continue;
       const r = ingestEvent(ctx, {
         event: evt,
         rawBody: JSON.stringify(item),
         deliveryId: `backfill:${ctx.tenantId}:${updatedAt ?? ''}`,
       });
-      // Count anything we successfully processed (new ingest OR known dup).
       if (r.status === 'ingested' || r.status === 'skipped') ingested++;
-      if (updatedAt && (!maxUpdatedAt || updatedAt > maxUpdatedAt)) {
-        maxUpdatedAt = updatedAt;
-      }
+
       if (maxItems && ingested >= maxItems) {
-        return { ingested, pages, maxUpdatedAt };
+        // Capped mid-stream: caller MUST NOT advance the HWM (drained=false).
+        return { ingested, pages, maxUpdatedAt, drained: false };
       }
     }
 
     url = page.next;
   }
 
-  return { ingested, pages, maxUpdatedAt };
+  return { ingested, pages, maxUpdatedAt, drained: true };
 }
 
 export async function backfillRepo(
@@ -292,7 +306,10 @@ export async function backfillRepo(
   );
   result.ingested.issues = issuesRes.ingested;
   result.pages.issues = issuesRes.pages;
-  if (issuesRes.maxUpdatedAt) {
+  // v1.3.1: only advance HWM when the stream actually drained. A capped run
+  // (--max) must leave the HWM at its previous value so the next invocation
+  // re-fetches the unprocessed tail.
+  if (issuesRes.drained && issuesRes.maxUpdatedAt) {
     writeOneHwm(
       ctx.hippoRoot,
       ctx.tenantId,
@@ -336,7 +353,7 @@ export async function backfillRepo(
   );
   result.ingested.issueComments = commentsRes.ingested;
   result.pages.issueComments = commentsRes.pages;
-  if (commentsRes.maxUpdatedAt) {
+  if (commentsRes.drained && commentsRes.maxUpdatedAt) {
     writeOneHwm(
       ctx.hippoRoot,
       ctx.tenantId,
@@ -380,7 +397,7 @@ export async function backfillRepo(
   );
   result.ingested.prReviewComments = prCommentsRes.ingested;
   result.pages.prReviewComments = prCommentsRes.pages;
-  if (prCommentsRes.maxUpdatedAt) {
+  if (prCommentsRes.drained && prCommentsRes.maxUpdatedAt) {
     writeOneHwm(
       ctx.hippoRoot,
       ctx.tenantId,

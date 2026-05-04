@@ -85,6 +85,14 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.3.1
+
+- **Hotfix for v1.3.0.** Retroactive `/codex review` (round 2) + `/review` (senior code reviewer) caught 3 P0s and 6 P1s the plan-only review missed. All addressed.
+- **Rollback guard is now actually enforced.** Older binaries opening a v1.3-migrated DB throw on open instead of silently leaking private rows.
+- **Multi-row comment deletion is atomic.** Edit histories archive in one transaction; any failure rolls back the whole batch and leaves idempotency unset for retry.
+- **Backfill and webhook share an idempotency key.** Same source revision delivered via either path collapses to one memory row. Key derives from `sha256(artifact_ref + ':' + updated_at)` instead of `sha256(eventName + ':' + rawBody)`.
+- **DLQ replay actually replays** instead of being a dry-run that printed "replay ok". Plus `GITHUB_WEBHOOK_SECRET_PREVIOUS` support and proper HTTP/MCP version reporting.
+
 ### What's new in v1.3.0
 
 - **GitHub connector.** Stream issues, issue comments, PRs, and PR review comments into hippo as `kind='raw'` rows. Webhook route at `POST /v1/connectors/github/events` (HMAC-verified). CLI: `hippo github backfill --repo <owner/name>`, `hippo github dlq list`, `hippo github dlq replay <id>`. Required env: `GITHUB_WEBHOOK_SECRET` (route), `GITHUB_TOKEN` (backfill).

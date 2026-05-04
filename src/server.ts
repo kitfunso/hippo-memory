@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { writePidfile, removePidfile } from './server-detect.js';
 import { resolveTenantId } from './tenant.js';
 import { openHippoDb, closeHippoDb } from './db.js';
+import { PACKAGE_VERSION } from './version.js';
 import { validateApiKey } from './auth.js';
 import {
   remember,
@@ -84,7 +85,8 @@ const VALID_KINDS: ReadonlySet<MemoryKind> = new Set([
 // HTTP /health response uses this; reading package.json synchronously here
 // would couple the daemon to its on-disk install path, which we want to
 // avoid for tests that mkdtemp a hippoRoot.
-const VERSION = '0.39.0';
+// v1.3.1: source from src/version.ts so /health no longer reports stale 0.39.0.
+const VERSION = PACKAGE_VERSION;
 
 // 1 MB body cap. The CLI never sends payloads near this; anything bigger is
 // almost certainly a misconfigured client or a deliberate memory-blowup attempt.

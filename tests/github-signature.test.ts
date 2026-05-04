@@ -57,13 +57,28 @@ describe('verifyGitHubSignature', () => {
   });
 });
 
-describe('computeIdempotencyKey (codex P0 #3 replay defense)', () => {
-  it('produces a different key when eventName differs but body is identical', () => {
-    const body = '{"action":"opened","number":1}';
-    const keyA = computeIdempotencyKey('issues', body);
-    const keyB = computeIdempotencyKey('pull_request', body);
-    expect(keyA).not.toBe(keyB);
-    // Sanity: same inputs produce the same key.
-    expect(computeIdempotencyKey('issues', body)).toBe(keyA);
+describe('computeIdempotencyKey (codex P0 #3 replay defense + v1.3.1 source-aware fix)', () => {
+  it('different artifact_refs produce different keys', () => {
+    const k1 = computeIdempotencyKey('github://acme/demo/issue/1', '2026-05-04T10:00:00Z');
+    const k2 = computeIdempotencyKey('github://acme/demo/issue/2', '2026-05-04T10:00:00Z');
+    expect(k1).not.toBe(k2);
+  });
+
+  it('same artifact + same updated_at produces the same key (so backfill and webhook collapse)', () => {
+    const ref = 'github://acme/demo/issue/42';
+    const ts = '2026-05-04T10:00:00Z';
+    expect(computeIdempotencyKey(ref, ts)).toBe(computeIdempotencyKey(ref, ts));
+  });
+
+  it('same artifact + different updated_at produces different keys (edit revisions)', () => {
+    const ref = 'github://acme/demo/issue/42';
+    const k1 = computeIdempotencyKey(ref, '2026-05-04T10:00:00Z');
+    const k2 = computeIdempotencyKey(ref, '2026-05-04T11:00:00Z');
+    expect(k1).not.toBe(k2);
+  });
+
+  it('null and undefined updated_at fold to the same empty-string key', () => {
+    const ref = 'github://acme/demo/issue/42';
+    expect(computeIdempotencyKey(ref, null)).toBe(computeIdempotencyKey(ref, undefined));
   });
 });

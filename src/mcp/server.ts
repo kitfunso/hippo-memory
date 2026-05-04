@@ -27,6 +27,7 @@ import { loadConfig } from '../config.js';
 import { resolveConfidence } from '../memory.js';
 import { resolveTenantId } from '../tenant.js';
 import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, isPrivateScope, type Context as ApiContext } from '../api.js';
+import { PACKAGE_VERSION } from '../version.js';
 
 // ── Find hippo root ──
 
@@ -167,7 +168,7 @@ const TOOLS = [
         },
         scope: {
           type: 'string',
-          description: 'Restrict results and continuity to memories/rows matching this scope exactly. When omitted, default-deny applies to slack:private:* and unknown-legacy rows.',
+          description: 'Restrict results and continuity to memories/rows matching this scope exactly. When omitted, default-deny applies to ANY <source>:private:* (slack, github, ...) and unknown-legacy rows.',
         },
       },
       required: ['query'],
@@ -209,14 +210,14 @@ const TOOLS = [
   {
     name: 'hippo_context',
     description:
-      'Smart context injection: auto-detects current task from git state and returns relevant memories plus the active task snapshot. Use at the start of any session. Memories and snapshot are scope-filtered: a no-scope caller does NOT see slack:private:* or legacy-quarantine rows.',
+      'Smart context injection: auto-detects current task from git state and returns relevant memories plus the active task snapshot. Use at the start of any session. Memories and snapshot are scope-filtered: a no-scope caller does NOT see ANY <source>:private:* (slack, github, ...) or legacy-quarantine rows.',
     inputSchema: {
       type: 'object' as const,
       properties: {
         budget: { type: 'number', description: 'Max tokens (default: 1500)' },
         scope: {
           type: 'string',
-          description: 'Restrict memories and snapshot to this scope exactly. When omitted, default-deny applies to slack:private:* and unknown-legacy rows.',
+          description: 'Restrict memories and snapshot to this scope exactly. When omitted, default-deny applies to ANY <source>:private:* (slack, github, ...) and unknown-legacy rows.',
         },
       },
     },
@@ -612,7 +613,7 @@ export async function handleMcpRequest(
         result: {
           protocolVersion: '2024-11-05',
           capabilities: { tools: {} },
-          serverInfo: { name: 'hippo-memory', version: '0.39.0' },
+          serverInfo: { name: 'hippo-memory', version: PACKAGE_VERSION },
         },
       };
 
