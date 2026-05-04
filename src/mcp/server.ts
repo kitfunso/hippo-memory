@@ -26,7 +26,7 @@ import { fetchGitLog, extractLessons, deduplicateLesson, isGitRepo } from '../au
 import { loadConfig } from '../config.js';
 import { resolveConfidence } from '../memory.js';
 import { resolveTenantId } from '../tenant.js';
-import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, type Context as ApiContext } from '../api.js';
+import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, isPrivateScope, type Context as ApiContext } from '../api.js';
 
 // ── Find hippo root ──
 
@@ -352,14 +352,15 @@ async function executeTool(
       // Existing physics/hybrid scorer continues to drive user-visible
       // ordering and the strength bump on retrieval. Apply the same scope
       // rule as api.recall: explicit scope = exact match; no scope =
-      // default-deny on slack:private:* AND 'unknown:legacy'.
+      // default-deny on ANY `<source>:private:*` AND 'unknown:legacy'.
+      // v1.2.1: generic-private check via api.isPrivateScope.
       const allEntries = loadAllEntries(hippoRoot, tenantId);
       const entries = explicitScope
         ? allEntries.filter((e) => e.scope === explicitScope)
         : allEntries.filter((e) => {
             const s = e.scope ?? null;
             if (s === null) return true;
-            if (s.startsWith('slack:private:')) return false;
+            if (isPrivateScope(s)) return false;
             if (s === 'unknown:legacy') return false;
             return true;
           });
@@ -456,10 +457,11 @@ async function executeTool(
       // results and the snapshot. Pre-v1.2 this surface returned all memories
       // and the snapshot unfiltered, which would have leaked private-channel
       // content to no-scope MCP callers once scope writers shipped.
+      // v1.2.1: source-agnostic via api.isPrivateScope.
       const passesScopeFilter = (s: string | null): boolean => {
         if (explicitScope !== undefined) return s === explicitScope;
         if (s === null) return true;
-        if (s.startsWith('slack:private:')) return false;
+        if (isPrivateScope(s)) return false;
         if (s === 'unknown:legacy') return false;
         return true;
       };

@@ -53,6 +53,25 @@ export interface Context {
   actor: string;
 }
 
+/**
+ * v1.2.1: source-agnostic private-scope detector. A scope string is treated
+ * as private when it has the shape `<lowercase-source>:private:<rest>`.
+ *
+ * Examples that match:
+ *   slack:private:Cabc, github:private:owner/repo, jira:private:PROJ-1
+ * Examples that DO NOT match:
+ *   slack:public:Cgeneral, acme:public:my-private-channel, null, '',
+ *   'unknown:legacy', 'private' (alone), 'private:foo' (no source prefix).
+ *
+ * Used by api.recall, mcp/server.ts (hippo_recall + hippo_context),
+ * cli.ts (cmdRecall continuity). Keep these in sync — the export is the
+ * single source of truth so v1.3 GitHub work cannot drift.
+ */
+const PRIVATE_SCOPE_RE = /^[a-z][a-z0-9_-]*:private:/;
+export function isPrivateScope(scope: string | null | undefined): boolean {
+  return typeof scope === 'string' && PRIVATE_SCOPE_RE.test(scope);
+}
+
 export interface RememberOpts {
   content: string;
   kind?: MemoryKind;
@@ -179,10 +198,11 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   if (opts.scope !== undefined && opts.scope !== '') {
     entries = all.filter((e) => e.scope === opts.scope);
   } else {
-    // Default-deny: a no-scope caller cannot see private slack channels. This
-    // is load-bearing because frontend callers will pass `undefined` and must
-    // not see `slack:private:*` rows by default.
-    entries = all.filter((e) => !(e.scope ?? '').startsWith('slack:private:'));
+    // v1.2.1: generalize default-deny from `slack:private:*` to ANY
+    // `<source>:private:*` scope so adding a connector cannot silently
+    // surface private rows to no-scope callers. Frontend callers will pass
+    // `undefined` and must not see private rows from any source by default.
+    entries = all.filter((e) => !isPrivateScope(e.scope ?? null));
   }
   // BM25 ordering already comes from loadSearchEntries; cap to `limit`.
   // Score is a placeholder — the physics/hybrid scorers in src/search.ts
@@ -235,12 +255,13 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
       : [];
     // Scope filtering on continuity. Mirrors the memory-recall path:
     //   - opts.scope set: EXACT match required (no cross-scope leakage)
-    //   - opts.scope unset: default-deny on slack:private:* AND on legacy
-    //     'unknown:legacy' rows quarantined by the v23 migration. Public and
-    //     null scopes pass through.
+    //   - opts.scope unset: default-deny on ANY `<source>:private:*` AND on
+    //     legacy 'unknown:legacy' rows quarantined by the v23 migration.
+    //     Public and null scopes pass through.
     // v1.1.0 wrongly wrote this as `opts.scope || isPublic`, which allowed
-    // ANY explicit scope to see ALL continuity rows. v1.2 closes the latent
-    // leak before scope writers ship.
+    // ANY explicit scope to see ALL continuity rows. v1.2 closed the latent
+    // leak. v1.2.1 generalizes the private check from slack-only to any
+    // source so v1.3 GitHub (and future Jira/Linear/etc.) cannot leak.
     const rowScope = (
       r: { scope?: string | null } | null | undefined,
     ): string | null => r?.scope ?? null;
@@ -251,7 +272,7 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
         return s === opts.scope;
       }
       if (s === null) return true;
-      if (s.startsWith('slack:private:')) return false;
+      if (isPrivateScope(s)) return false;
       if (s === 'unknown:legacy') return false;
       return true;
     };

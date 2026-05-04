@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.1 (2026-05-04)
+
+Pre-flight for v1.3.0 GitHub connector. Codex audit caught that the v1.2 default-deny scope filter only blocked `slack:private:*`, not source-agnostic `*:private:*`. Once a second connector landed (GitHub, Jira, Linear, etc.), no-scope recall would silently leak private rows. v1.2.1 generalizes the rule before any v1.3 work begins, so rolling back is safe.
+
+### Security (CRITICAL)
+- **Generic `*:private:*` default-deny.** The recall, continuity, MCP `hippo_recall`, MCP `hippo_context`, and CLI `cmdRecall` filters now reject ANY scope matching `^[a-z][a-z0-9_-]*:private:` for no-scope callers, not just `slack:private:`. Public scopes, null scope, and exact-match scope queries are unchanged. Single source of truth: new `isPrivateScope` export from `src/api.ts`.
+- Closes the latent gap that would have exposed `github:private:owner/repo` rows to default-deny callers in v1.3.
+
+### Added
+- `tests/scope-filter-generic-private.test.ts`: 13 regression tests covering api.recall (memory + continuity), MCP hippo_recall, MCP hippo_context, with synthetic `acme:private:demo`, `github:private:*`, and `jira:private:*` scopes plus negative tests (substring "private" in middle of public scope, public scopes pass-through).
+
+### Internal
+- Comment + MCP tool description updates from "slack:private:* and unknown-legacy" to "ANY *:private:* and unknown-legacy" wherever the filter rule is documented.
+
 ## 1.2.0 (2026-05-03)
 
 Closes the v1.0.0 + v1.1.0 known limitations on continuity scope. Continuity is now exposed through MCP and HTTP, and the existing `hippo_context` MCP tool retroactively gets the same scope filter that protects memory recall. The v1.0.0 "Known limitation: scope=NULL on continuity tables" is CLOSED.

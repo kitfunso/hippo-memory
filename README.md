@@ -85,6 +85,12 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.2.1
+
+- **Source-agnostic default-deny.** The v1.2 filter only blocked `slack:private:*`. v1.2.1 generalizes to ANY `<source>:private:*` scope so the v1.3 GitHub connector (and future Jira/Linear/etc.) cannot leak private rows to no-scope callers. Single source of truth via the new `isPrivateScope` export.
+- **Pre-flight for v1.3.** Codex audit on the v1.3 plan flagged this as a P0 to fix BEFORE any GitHub work began, so rollback after v1.3 ships stays safe.
+- **No behavior change for existing users.** Public scopes, null scope, and exact-match queries are unchanged. Only no-scope callers facing a private row from any future connector see different behavior (which is the entire point).
+
 ### What's new in v1.2.0
 
 - **Continuity exposed everywhere.** MCP `hippo_recall` accepts `include_continuity: true`, HTTP `GET /v1/memories` accepts `?include_continuity=1`. CLI `--continuity` shipped in v1.1.

@@ -1240,15 +1240,17 @@ async function cmdRecall(
     // rows so this is a no-op. Caller-supplied --scope bypasses the gate
     // (matches existing memory recall behavior).
     // Scope filter mirrors api.recall: exact match when scope is set, default-deny
-    // on slack:private:* and 'unknown:legacy' otherwise. recallActiveScope merges
-    // --scope flag and detectScope() so auto-detected slack contexts get matched.
+    // on ANY `<source>:private:*` and 'unknown:legacy' otherwise. recallActiveScope
+    // merges --scope flag and detectScope() so auto-detected source contexts get
+    // matched. v1.2.1: generalized from slack-only to source-agnostic via
+    // api.isPrivateScope so v1.3 GitHub (and future sources) cannot leak.
     const effectiveScope = recallActiveScope ?? '';
     const passesScopeFilter = (s: string | null): boolean => {
       if (effectiveScope) {
         return s === effectiveScope;
       }
       if (s === null) return true;
-      if (s.startsWith('slack:private:')) return false;
+      if (api.isPrivateScope(s)) return false;
       if (s === 'unknown:legacy') return false;
       return true;
     };
