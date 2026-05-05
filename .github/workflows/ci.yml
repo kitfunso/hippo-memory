@@ -1,0 +1,47 @@
+# Repository-first CI. Runs on every PR + push to master.
+#
+# The "Provenance gate" step is the v0.40.0 / 2026-05-05 Company Brain
+# scorecard gate: every kind='raw' row must carry owner + artifact_ref. The
+# CI seed script exercises both connectors (Slack + GitHub) end-to-end then
+# runs `hippo provenance --strict`. Drop a connector's owner stamp and this
+# step fails the PR.
+#
+# See docs/plans/2026-04-28-company-brain-measurement.md (gate origin) and
+# docs/plans/2026-05-05-provenance-ci-gate.md (this workflow).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+# Read-only by default. Workflow does not need contents:write or id-token.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # First-run cold cache + @xenova/transformers optional install can be
+    # slow. 25 minutes gives headroom; subsequent PRs hit the npm cache.
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.5.0'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Vitest
+        run: npx vitest run
+      - name: Provenance gate
+        run: node scripts/ci-seed-provenance.mjs
+      - name: Upload provenance JSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: provenance-coverage
+          path: provenance-coverage.json
+          if-no-files-found: warn
+          retention-days: 14

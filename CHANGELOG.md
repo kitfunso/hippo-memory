@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+First repo-level CI workflow plus the v0.40.0 provenance gate enforced on every PR. The Slack connector transform also closes a gap that pre-v1.4 would have failed `hippo provenance --strict` on any `bot_message` event: userless messages now stamp `owner: bot:<bot_id>` instead of `undefined`.
+
+### Added
+
+- **GitHub Actions CI (`.github/workflows/ci.yml`).** Build + full vitest suite + a provenance gate. Read-only `permissions: contents: read`, 25-minute timeout, uploads `provenance-coverage.json` as a workflow artifact (14-day retention).
+- **`scripts/ci-seed-provenance.mjs`.** Ingests one GitHub issue webhook + one Slack message through the real connectors into a fresh hippo store, then runs `hippo provenance --strict --json` against that store. Drop a connector's owner stamp and CI fails.
+- **Slack provenance parity test (`tests/slack-provenance-parity.test.ts`).** Mirrors the GitHub parity test: 25 user messages + the bot_message + thread reply + message_changed cases all hold `coverage = 1.0`.
+- **`SlackMessageEvent.bot_id`.** Optional field on `src/connectors/slack/types.ts`. `bot_message` subtype payloads carry this instead of `user`.
+
+### Fixed
+
+- **Slack `bot_message` provenance gap.** `src/connectors/slack/transform.ts:38` shipped `owner: undefined` when `message.user` was absent. Now derives `owner: bot:<bot_id>` (or `bot:unknown` as a sentinel). Codex round 1 P1 on `docs/plans/2026-05-05-provenance-ci-gate.md` flagged that skipping userless messages would silently drop existing bot ingestion via the `ingest.ts:54-65` "skipped but seen" path.
+
+### Tests
+
+- 1237 passing (+5 from v1.3.2). New `tests/slack-provenance-parity.test.ts` plus one new `slack-transform` case for the `bot:<bot_id>` derivation.
+
 ## 1.3.2 (2026-05-04)
 
 Hotfix for v1.3.1. The retroactive review chain on v1.3.1 (codex round 3 + senior code reviewer) caught residual issues in v1.3.1's own fix, including one that the obvious "make ingest and deletion share keys" patch would have made worse.

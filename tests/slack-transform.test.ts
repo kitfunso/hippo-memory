@@ -43,12 +43,33 @@ describe('messageToRememberOpts', () => {
     expect(opts!.owner).toBe('user:U999');
   });
 
-  it('leaves owner unset when the event has no user (bot/system message)', () => {
+  it('falls back to bot:unknown when neither user nor bot_id is present', () => {
+    // v1.4.0: the v0.40.0 provenance gate requires a non-null owner on every
+    // raw row. Userless events without bot_id are rare (older REST shapes)
+    // but still need a sentinel so the gate stays clean. See codex round 1
+    // P1 in docs/plans/2026-05-05-provenance-ci-gate.md.
     const opts = messageToRememberOpts({
       teamId: 'T1',
       channel: { id: 'C1', is_private: false },
       message: { type: 'message', channel: 'C1', text: 'system note', ts: '1700000000.000100' },
     });
-    expect(opts!.owner).toBeUndefined();
+    expect(opts!.owner).toBe('bot:unknown');
+  });
+
+  it('derives bot:<bot_id> owner for bot_message subtype with no user', () => {
+    const opts = messageToRememberOpts({
+      teamId: 'T1',
+      channel: { id: 'C1', is_private: false },
+      message: {
+        type: 'message',
+        subtype: 'bot_message',
+        channel: 'C1',
+        text: 'bot says hi',
+        ts: '1700000000.000200',
+        bot_id: 'B01ABCD',
+      },
+    });
+    expect(opts!.owner).toBe('bot:B01ABCD');
+    expect(opts!.tags).toContain('bot:B01ABCD');
   });
 });

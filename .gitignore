@@ -19,3 +19,5 @@ ui/tsconfig.tsbuildinfo
 benchmarks/micro/results/latest.json
 benchmarks/a1/results/
 .claude/worktrees/
+.context/
+provenance-coverage.json
