@@ -36,6 +36,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      # Some CLI-driven tests (cli-multihop, cli-dag, etc.) shell out to
+      # `hippo` and expect it on PATH. Local devs have it via global install;
+      # CI gets it via npm link.
+      - run: npm link
       - name: Vitest
         run: npx vitest run
       - name: Provenance gate
