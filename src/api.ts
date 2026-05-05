@@ -721,6 +721,25 @@ export interface DrillDownResult {
 }
 
 /**
+ * v1.6.4 discriminated failure shape. Two reasons distinguishable:
+ *   - `not_found`: covers genuinely-missing, wrong-tenant, AND
+ *     scope-blocked (codex round 3 P1 — distinguishing scope_blocked
+ *     from not_found on non-HTTP surfaces leaked private-row existence
+ *     to no-scope callers, even though the HTTP route already collapsed
+ *     them. Collapse at the API layer.)
+ *   - `not_drillable`: id is a leaf row (level 0/1). Caller-actionable.
+ *
+ * If a future drillDown gains a `scope` opt for explicit-scope callers,
+ * a `scope_blocked` failure could be safely re-introduced ONLY for that
+ * code path (caller already proved authorization by passing a scope).
+ */
+export interface DrillDownFailure {
+  failure: 'not_found' | 'not_drillable';
+}
+
+export type DrillDownOutcome = DrillDownResult | DrillDownFailure;
+
+/**
  * Walk one step down the DAG from a level-2 (or higher) summary to its direct
  * children. Companion to `recall(... summarizeOverflow: true)` — when recall
  * surfaces a summary with `substitutedFor: [...]`, the caller drills into the
@@ -731,20 +750,34 @@ export interface DrillDownResult {
  * summary in `slack:public:CGEN` cannot leak `slack:private:*` children even
  * if the underlying DAG accidentally linked across scopes.
  *
- * Returns null when the id is unknown, belongs to another tenant, fails the
- * scope filter, or points at a non-summary row (level 0/1 leaves are not
- * drillable — they ARE the leaf).
+ * Returns a discriminated `DrillDownOutcome`: `DrillDownResult` on success,
+ * or `{failure: '...'}` for `not_found` (covers genuinely-missing AND wrong-
+ * tenant, intentionally indistinguishable), `not_drillable` (id is a leaf
+ * row), or `scope_blocked` (caller has no scope grant for the row's scope).
+ *
+ * Pre-v1.6.4 returned null for all four cases. JS callers migrate via
+ * `'failure' in result` checks; HTTP route maps `not_drillable` to 422.
  */
 export function drillDown(
   ctx: Context,
   summaryId: string,
   opts: DrillDownOpts = {},
-): DrillDownResult | null {
+): DrillDownOutcome {
   const limit = opts.limit ?? 50;
   const summary = readEntry(ctx.hippoRoot, summaryId, ctx.tenantId);
-  if (!summary) return null;
-  if ((summary.dag_level ?? 0) < 2) return null;
-  if (!passesScopeFilterForRecall(summary.scope ?? null, undefined)) return null;
+  // No unscoped cross-tenant probe here — readEntry's null return covers
+  // both "doesn't exist" and "exists in another tenant" by design.
+  // Distinguishing them via an unscoped lookup would leak existence to
+  // unauthorised tenants. The two cases collapse into not_found.
+  if (!summary) return { failure: 'not_found' };
+  if ((summary.dag_level ?? 0) < 2) return { failure: 'not_drillable' };
+  if (!passesScopeFilterForRecall(summary.scope ?? null, undefined)) {
+    // codex round 3 P1: collapse to not_found. A distinguishable
+    // "scope_blocked" tells a no-scope caller "this row exists, just
+    // not for you" — same existence-leak the HTTP 404 collapse was
+    // already preventing. Match the HTTP behaviour at the API level.
+    return { failure: 'not_found' };
+  }
 
   const allChildren = loadChildrenOf(ctx.hippoRoot, summaryId, ctx.tenantId);
   const eligible = allChildren.filter((c) => passesScopeFilterForRecall(c.scope ?? null, undefined));

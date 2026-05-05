@@ -379,12 +379,55 @@ function getStringArray(obj: Record<string, unknown>, key: string): string[] | u
   return v as string[];
 }
 
+/**
+ * Reject URL-encoded slashes in path segments BEFORE the URL parser decodes
+ * them — otherwise `%2F` becomes `/`, path-split runs, and the route either
+ * silently 404s or matches the wrong template.
+ *
+ * codex round 3 P2: only scan the PATHNAME portion of the raw URL, not the
+ * query string. Pre-fix, `?q=https%3A%2F%2Fexample.com` would 400 because
+ * the regex matched `%2F` anywhere in `req.url`. Recall queries containing
+ * URLs would have been rejected as bypass attempts. Splitting on the first
+ * `?` confines the check to the path.
+ */
+function rejectEncodedSlash(rawUrl: string): void {
+  const queryIdx = rawUrl.indexOf('?');
+  const pathname = queryIdx === -1 ? rawUrl : rawUrl.slice(0, queryIdx);
+  if (/%2[Ff]/.test(pathname)) {
+    throw new HttpError(400, 'URL-encoded slash (%2F) not allowed in path segments');
+  }
+}
+
+/**
+ * v1.6.4: charset + length validation for `:id` route captures. Routes call
+ * this immediately after `matchPath` to reject empty / overlong / illegal
+ * ids with a useful 400 instead of silently falling through to "not found".
+ *
+ * Allowed charset matches all production id shapes Hippo emits: `mem_<hex>`,
+ * `sum_<hex>`, `sess-<id>`, Slack bot ids like `B01ABCD`, etc. The `:` and
+ * `.` are allowed for forward-compat. The `/` is intentionally absent —
+ * Hippo never emits ids with slashes, and `rejectEncodedSlash` already
+ * stops `%2F`-smuggled ones at the front door.
+ */
+const ID_SEGMENT_RE = /^[A-Za-z0-9_:.\-]+$/;
+function validateIdSegment(id: string, fieldName: string): void {
+  if (id.length === 0) throw new HttpError(400, `${fieldName} is required`);
+  if (id.length > 256) throw new HttpError(400, `${fieldName} exceeds 256-character cap`);
+  if (!ID_SEGMENT_RE.test(id)) {
+    throw new HttpError(400, `${fieldName} contains invalid characters; allowed: A-Z a-z 0-9 _ : . -`);
+  }
+}
+
 async function handleRequest(
   req: IncomingMessage,
   res: ServerResponse,
   opts: ServeOpts,
   startedAt: string,
 ): Promise<void> {
+  // v1.6.4: pre-decode raw-URL slash check. Catches `%2F` / `%2f` before
+  // Node's URL parser collapses them and they slip past the route table.
+  rejectEncodedSlash(req.url ?? '/');
+
   const { method, path, query } = parseRequest(req);
 
   if (method === 'GET' && path === '/health') {
@@ -493,6 +536,7 @@ async function handleRequest(
   // Tenant scope from Bearer; default-deny on private rows.
   const assembleMatch = matchPath('/v1/sessions/:id/assemble', path);
   if (method === 'GET' && assembleMatch) {
+    validateIdSegment(assembleMatch.id!, 'session id');
     const budgetRaw = query.get('budget');
     const budget = budgetRaw === null ? undefined : Number(budgetRaw);
     if (budget !== undefined && (!Number.isFinite(budget) || budget <= 0)) {
@@ -532,6 +576,7 @@ async function handleRequest(
   // and children.
   const drillMatch = matchPath('/v1/recall/drill/:id', path);
   if (method === 'GET' && drillMatch) {
+    validateIdSegment(drillMatch.id!, 'summary id');
     const limitRaw = query.get('limit');
     const limit = limitRaw === null ? undefined : Number(limitRaw);
     if (limit !== undefined && (!Number.isFinite(limit) || limit <= 0)) {
@@ -547,7 +592,12 @@ async function handleRequest(
       ...(limit !== undefined ? { limit } : {}),
       ...(budget !== undefined ? { budget } : {}),
     });
-    if (!result) {
+    if ('failure' in result) {
+      // v1.6.4: leaf id maps to 422 (caller-actionable). Other cases stay
+      // as 404 to avoid leaking cross-tenant existence or scope grants.
+      if (result.failure === 'not_drillable') {
+        throw new HttpError(422, 'Id is a leaf row, not a level-2+ summary; nothing to drill into');
+      }
       throw new HttpError(404, 'No drillable summary at this id');
     }
     sendJson(res, 200, result);
@@ -557,6 +607,7 @@ async function handleRequest(
   // /v1/memories/:id/* and DELETE /v1/memories/:id
   const archiveMatch = matchPath('/v1/memories/:id/archive', path);
   if (method === 'POST' && archiveMatch) {
+    validateIdSegment(archiveMatch.id!, 'memory id');
     const body = await parseJsonBody(req);
     const reason = getString(body, 'reason');
     if (!reason) {
@@ -570,6 +621,7 @@ async function handleRequest(
 
   const supersedeMatch = matchPath('/v1/memories/:id/supersede', path);
   if (method === 'POST' && supersedeMatch) {
+    validateIdSegment(supersedeMatch.id!, 'memory id');
     const body = await parseJsonBody(req);
     const content = getString(body, 'content');
     if (!content) {
@@ -583,6 +635,7 @@ async function handleRequest(
 
   const promoteMatch = matchPath('/v1/memories/:id/promote', path);
   if (method === 'POST' && promoteMatch) {
+    validateIdSegment(promoteMatch.id!, 'memory id');
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = promote(ctx, promoteMatch.id!);
     sendJson(res, 200, result);
@@ -591,6 +644,7 @@ async function handleRequest(
 
   const idMatch = matchPath('/v1/memories/:id', path);
   if (method === 'DELETE' && idMatch) {
+    validateIdSegment(idMatch.id!, 'memory id');
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = forget(ctx, idMatch.id!);
     sendJson(res, 200, result);
@@ -641,6 +695,7 @@ async function handleRequest(
   // surface revokedAt to the caller.
   const keyMatch = matchPath('/v1/auth/keys/:keyId', path);
   if (method === 'DELETE' && keyMatch) {
+    validateIdSegment(keyMatch.keyId!, 'key id');
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = authRevoke(ctx, keyMatch.keyId!);
     sendJson(res, 200, result);

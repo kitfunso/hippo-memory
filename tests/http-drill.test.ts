@@ -76,7 +76,7 @@ describe('GET /v1/recall/drill/:id', () => {
     expect(res.status).toBe(404);
   });
 
-  it('404 for a leaf id (not drillable)', async () => {
+  it('422 for a leaf id (v1.6.4: distinguishable from missing)', async () => {
     const leaf = createMemory('plain leaf body', {
       layer: Layer.Buffer,
       confidence: 'observed',
@@ -84,7 +84,7 @@ describe('GET /v1/recall/drill/:id', () => {
     });
     writeEntry(home, leaf);
     const res = await fetch(`${handle.url}/v1/recall/drill/${leaf.id}`);
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(422);
   });
 
   it('400 on bad limit', async () => {

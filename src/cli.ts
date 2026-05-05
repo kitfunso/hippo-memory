@@ -4681,8 +4681,15 @@ function cmdDrillDown(hippoRoot: string, summaryId: string, flags: Record<string
     ...(Number.isFinite(limit) && limit! > 0 ? { limit } : {}),
     ...(Number.isFinite(budget) && budget! > 0 ? { budget } : {}),
   });
-  if (!r) {
-    console.error(`No drillable summary at id=${summaryId} (not found, wrong tenant, scope-blocked, or not a level-2+ row).`);
+  if ('failure' in r) {
+    // v1.6.4: only `not_drillable` is caller-actionable. `not_found`
+    // intentionally collapses cross-tenant + scope-blocked + missing
+    // (codex round 3 P1: distinguishing scope_blocked leaked existence).
+    if (r.failure === 'not_drillable') {
+      console.error(`Id ${summaryId} is a leaf row, not a level-2+ summary; nothing to drill into.`);
+    } else {
+      console.error(`No drillable summary at id=${summaryId}.`);
+    }
     process.exit(1);
   }
   if (flags['json']) {

@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.6.4 (2026-05-05)
+
+Two deferred items from the v1.6.2 senior review queue. Plan-stage `/codex` + `/review` caught 2 P0s in my draft before any code landed (unscoped cross-tenant probe; `validateIdSegment` running after `matchPath` splits — neither would have actually fixed the bugs they were meant to fix). Implementation chain ran clean.
+
+### Changed
+
+- **`drillDown` returns a discriminated `DrillDownOutcome` instead of `Result | null`.** Three failure cases now distinguishable: `not_found` (covers genuinely missing AND wrong-tenant — intentionally collapsed for info-leak defence), `not_drillable` (id is a leaf, level 0/1), `scope_blocked` (caller has no scope grant). HTTP `/v1/recall/drill/:id` maps `not_drillable` to **422 Unprocessable Content**; the other failures stay at 404 to avoid leaking cross-tenant existence or scope grants. CLI and MCP surface a distinguishing message.
+- **Behaviour change (potentially breaking):** JS callers receiving the old `null` return must migrate to `'failure' in result` checks. In-tree migrations: `cmdDrillDown` (CLI), `hippo_drill` (MCP), `/v1/recall/drill/:id` route, `tests/dag-drill-down.test.ts`. No external JS consumers known on v1.6.x.
+
+### Added
+
+- **HTTP `:id` segment validation across `/v1/memories/:id*`, `/v1/recall/drill/:id`, `/v1/sessions/:id/assemble`.** Two layers: (1) top-of-handler `rejectEncodedSlash` rejects any `%2F` / `%2f` in the raw URL with 400 BEFORE Node's URL parser collapses encoded slashes (otherwise they'd silently route-mismatch). (2) Post-match `validateIdSegment` enforces charset `[A-Za-z0-9_:.-]` and 256-character cap. Production id shapes (`mem_<hex>`, `sum_<hex>`, `sess-<id>`, Slack bot ids) all pass.
+
+### Acknowledged trade-off
+
+The `not_drillable` 422 is technically a topology leak: a probing authorised caller can enumerate ids and learn which are leaves vs summaries. Same information is already accessible via `recall + drill` shape inspection. No env-gate added; if a deployment wants uniform 404, that's a follow-up.
+
+### Tests
+
+- 1337 passing (+17 from v1.6.3). New: `tests/dag-v164-error-distinguishability.test.ts` covering the four failure shapes, HTTP status mapping, the `%2F` and `%2f` rejection, charset validation across all `:id` routes, and the 256-character boundary. Updated: `tests/dag-drill-down.test.ts` (7 cases migrated to discriminated shape), `tests/http-drill.test.ts` (1 case 404→422), `tests/v039-server-hardening.test.ts` (encoded-slash bypass test allows 400).
+
 ## 1.6.3 (2026-05-05)
 
 Two retro review rounds on the v1.6.2 patch surfaced more bugs than the originally-skipped `/review` would have caught alone. The user called out that `/review` and `/ship-check` had been skipped on v1.6.2 (and v1.5.1, v1.5.2, v1.6.0, v1.6.1 before). Running both reviewers retroactively, then a SECOND round of both on the v1.6.3 patch itself, found:

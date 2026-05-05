@@ -529,8 +529,15 @@ async function executeTool(
         ...(Number.isFinite(limit) && limit > 0 ? { limit } : {}),
         ...(Number.isFinite(budget) && budget > 0 ? { budget } : {}),
       });
-      if (!r) {
-        return `No drillable summary at id=${summaryId} (not found, wrong tenant, scope-blocked, or not a level-2+ row).`;
+      if ('failure' in r) {
+        // v1.6.4: only not_drillable is caller-actionable. not_found
+        // intentionally collapses cross-tenant + scope-blocked + missing
+        // (codex round 3 P1: distinguishing scope_blocked would leak
+        // private-row existence on this surface).
+        if (r.failure === 'not_drillable') {
+          return `Id ${summaryId} is a leaf row, not a level-2+ summary; nothing to drill into.`;
+        }
+        return `No drillable summary at id=${summaryId}.`;
       }
       const lines: string[] = [];
       lines.push(`Summary ${r.summary.id} — ${r.summary.descendantCount} descendants${r.summary.earliestAt ? ` (${r.summary.earliestAt} -> ${r.summary.latestAt})` : ''}`);

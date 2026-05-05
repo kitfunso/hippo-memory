@@ -298,14 +298,16 @@ describe('v039 server hardening', () => {
 
     it('encoded slash variant does not bypass', async () => {
       // %2F encoded slash creates a different path that does not match
-      // the public route. Must NOT 200 without bearer.
+      // the public route. Must NOT 200 without bearer. v1.6.4 added a
+      // top-of-handler reject for any %2F in the URL, so this now also
+      // returns 400 — same security outcome, more specific error code.
       const res = await fetch(`http://127.0.0.1:${handle.port}/v1/connectors/slack%2Fevents`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: '{}',
       });
       expect(res.status).not.toBe(200);
-      expect([401, 404]).toContain(res.status);
+      expect([400, 401, 404]).toContain(res.status);
     });
 
     it('wrong method (GET) on slack events route requires auth', async () => {

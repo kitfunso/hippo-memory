@@ -85,6 +85,12 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.6.4
+
+- **`drillDown` returns a discriminated outcome.** `not_found` / `not_drillable` / `scope_blocked` instead of `null`. HTTP maps `not_drillable` to 422; cross-tenant and scope-blocked stay at 404 (no info-leak). Breaking for JS callers that did `result === null`; migrate to `'failure' in result`.
+- **HTTP `:id` segment validation.** Reject URL-encoded slashes (`%2F`/`%2f`) before path matching; reject illegal charset and >256 chars after. Applied across all `:id` routes.
+- Plan-stage `/codex` + `/review` caught 2 P0s in the initial draft (unscoped cross-tenant probe; validator ordering bug) before any code landed. Discipline pays.
+
 ### What's new in v1.6.3
 
 - **One P0 + four P1s caught by `/review` after v1.6.2 shipped.** The user noticed `/review` had been skipped across multiple releases. Running it retroactively surfaced a misleading `assemble.totalRaw` semantic on long sessions, three transport-surface drifts on the new RecallOpts, and an HTTP input-validation gap. All addressed. Process correction documented honestly in CHANGELOG.
