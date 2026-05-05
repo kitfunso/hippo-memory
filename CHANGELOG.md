@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.6.2 (2026-05-05)
+
+`/codex review --base v1.5.0` (gpt-5.5, high reasoning) caught two functional bugs that v1.6.1's `/review` chain missed. Verdict from codex: "patch is incorrect." Fixed here.
+
+### Fixed
+
+- **`loadSessionRawMemories` cap returns NEWEST rows.** v1.6.1 introduced a 5000-row SQL cap with `ORDER BY created ASC LIMIT N`, which dropped the newest rows on a session larger than the cap and silently broke fresh-tail protection in `assemble`. v1.6.2 reverses the ORDER and reverses client-side: the cap now ALWAYS preserves the freshest window. The `truncated` flag still fires.
+- **`loadFreshRawMemories` accepts `sessionId`.** Pre-v1.6.2 was tenant-wide only — multi-session tenants surfaced cross-session rows tagged `isFreshTail=true` even though the docstring claimed "what did I just see in this session." Now an optional `sessionId` parameter constrains correctly.
+- **`RecallOpts.freshTailSessionId`.** Callers wanting session-scoped fresh-tail (the most common case) can now pass the active session id. Without it, fresh-tail stays tenant-wide for back-compat with v1.5.2 callers.
+
+### Process correction
+
+This is the third release where retroactive review caught real bugs that tests + CI missed. Codex via `codex review --base <tag>` works on Windows once you skip the custom prompt and let it use the diff-only mode. Lesson: when codex reads files via `git show | Select-String` (which the sandbox allows), it can review fully. The earlier failures came from prompts that asked codex to do filesystem-relative greps, which the Windows sandbox rejects.
+
+### Tests
+
+- 1307 passing (+6 from v1.6.1). New: `tests/dag-v162-codex-patch.test.ts` covering newest-cap semantics, session-scoped `loadFreshRawMemories`, and `recall` `freshTailSessionId` propagation.
+
 ## 1.6.1 (2026-05-05)
 
 Retroactive patch. v1.5.1 / v1.5.2 / v1.6.0 shipped without going through the full `/codex` + `/review` chain — tests + CI passed but a senior cross-model review of the cumulative diff `v1.5.0..HEAD` surfaced 0 P0, 9 P1, 8 P2 findings. This patch addresses the three real holes; the rest are documented or deferred.

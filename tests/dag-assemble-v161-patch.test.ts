@@ -51,7 +51,10 @@ describe('v1.6.1 — loadSessionRawMemories row cap', () => {
     expect(loadSessionRawMemories(root, 'sess-x', 'default').length).toBe(12);
   });
 
-  it('cap=5 returns the 5 oldest', () => {
+  it('cap=5 returns the 5 NEWEST in chronological order (v1.6.2 fix)', () => {
+    // Pre-v1.6.2 returned the 5 OLDEST due to ORDER BY ASC LIMIT, which
+    // silently dropped the newest rows on a session > cap and broke
+    // fresh-tail. v1.6.2 reverses the ORDER + reverses client-side.
     const ids: string[] = [];
     for (let i = 0; i < 12; i++) {
       const e = makeRaw(`message body row number ${i}`, 'sess-x');
@@ -61,7 +64,7 @@ describe('v1.6.1 — loadSessionRawMemories row cap', () => {
     }
     const got = loadSessionRawMemories(root, 'sess-x', 'default', 5);
     expect(got.length).toBe(5);
-    expect(got.map((e) => e.id)).toEqual(ids.slice(0, 5));
+    expect(got.map((e) => e.id)).toEqual(ids.slice(7));
   });
 });
 

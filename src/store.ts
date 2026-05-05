@@ -1122,17 +1122,18 @@ export function loadEntriesByIds(
 }
 
 /**
- * All `kind='raw'` rows for a given session, tenant-scoped, oldest first.
- * Used by `api.assemble` (docs/plans/2026-05-05-assemble-phase2.md Task 1)
- * to walk a session's chronological context. Excludes superseded rows.
+ * All `kind='raw'` rows for a given session, tenant-scoped, returned
+ * oldest-first. Used by `api.assemble` to walk a session's chronological
+ * context. Excludes superseded rows.
  *
- * v1.6.1 (senior review P1 #1): caller-supplied row cap. A degenerate
- * session with 100k raws would otherwise materialise 100k MemoryEntry
- * objects in JS heap before the budget loop runs. Default cap 5000;
- * caller can pass any positive integer or `undefined` for no cap (legacy).
- * The api.assemble path passes 5000 explicitly.
+ * Cap semantics (v1.6.2 codex review fix): when a `cap` is provided, the
+ * NEWEST `cap` rows are loaded — `ORDER BY created DESC LIMIT cap` server-
+ * side, then reversed to oldest-first client-side. Pre-v1.6.2 ordered ASC
+ * + LIMIT, which silently dropped the newest rows on a session larger
+ * than the cap and broke fresh-tail protection in api.assemble. The cap
+ * now ALWAYS preserves the freshest window.
  *
- * Returns `[]` for an empty sessionId. Order: `created ASC, id ASC`.
+ * Returns `[]` for an empty sessionId. Final order: `created ASC, id ASC`.
  */
 export function loadSessionRawMemories(
   hippoRoot: string,
@@ -1144,7 +1145,6 @@ export function loadSessionRawMemories(
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    const limitClause = cap !== undefined && cap > 0 ? ' LIMIT ?' : '';
     const params: Array<string | number> = [];
     let sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' AND source_session_id = ? AND superseded_by IS NULL`;
     params.push(sessionId);
@@ -1152,8 +1152,15 @@ export function loadSessionRawMemories(
       sql += ' AND tenant_id = ?';
       params.push(tenantId);
     }
-    sql += ' ORDER BY created ASC, id ASC' + limitClause;
-    if (cap !== undefined && cap > 0) params.push(cap);
+    if (cap !== undefined && cap > 0) {
+      // Load the NEWEST `cap` rows. The downstream consumer needs
+      // chronological order, so we reverse after fetch.
+      sql += ' ORDER BY created DESC, id DESC LIMIT ?';
+      params.push(cap);
+      const rows = db.prepare(sql).all(...params) as MemoryRow[];
+      return rows.reverse().map(rowToEntry);
+    }
+    sql += ' ORDER BY created ASC, id ASC';
     const rows = db.prepare(sql).all(...params) as MemoryRow[];
     return rows.map(rowToEntry);
   } finally {
@@ -1162,10 +1169,16 @@ export function loadSessionRawMemories(
 }
 
 /**
- * Last N kind='raw' memories by `created` desc, tenant scoped. Used by
- * api.recall's fresh-tail option (docs/plans/2026-05-05-dag-recall.md
- * Task 4) so a load-all-then-sort isn't needed for the common
- * "what did I just see in this session" continuity ask.
+ * Last N kind='raw' memories by `created` desc. Tenant scoped. When
+ * `sessionId` is supplied, also constrains to a specific session — that
+ * is the correct shape for "what did I just see in THIS session."
+ *
+ * v1.6.2 codex review fix: pre-v1.6.2 was tenant-wide only. With multiple
+ * concurrent sessions in a tenant, fresh-tail recall surfaced unrelated
+ * rows from other sessions and stamped them `isFreshTail=true`. Callers
+ * that want session-scoped fresh-tail now pass `sessionId`. The
+ * tenant-wide form (no sessionId) still exists for "anything new across
+ * the whole tenant" — pass undefined to opt in.
  *
  * Bounded count cap at 200 — beyond that the caller should filter via
  * tags/scope rather than time-windowed recall.
@@ -1174,19 +1187,26 @@ export function loadFreshRawMemories(
   hippoRoot: string,
   count: number,
   tenantId?: string,
+  sessionId?: string,
 ): MemoryEntry[] {
   if (count <= 0) return [];
   const capped = Math.min(count, 200);
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    const rows = tenantId !== undefined
-      ? db.prepare(
-          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' AND tenant_id = ? AND superseded_by IS NULL ORDER BY created DESC LIMIT ?`,
-        ).all(tenantId, capped) as MemoryRow[]
-      : db.prepare(
-          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' AND superseded_by IS NULL ORDER BY created DESC LIMIT ?`,
-        ).all(capped) as MemoryRow[];
+    const params: Array<string | number> = [];
+    let sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' AND superseded_by IS NULL`;
+    if (tenantId !== undefined) {
+      sql += ' AND tenant_id = ?';
+      params.push(tenantId);
+    }
+    if (sessionId !== undefined && sessionId !== '') {
+      sql += ' AND source_session_id = ?';
+      params.push(sessionId);
+    }
+    sql += ' ORDER BY created DESC LIMIT ?';
+    params.push(capped);
+    const rows = db.prepare(sql).all(...params) as MemoryRow[];
     return rows.map(rowToEntry);
   } finally {
     closeHippoDb(db);

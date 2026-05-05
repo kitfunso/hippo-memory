@@ -172,6 +172,14 @@ export interface RecallOpts {
    */
   freshTailCount?: number;
   /**
+   * v1.6.2 fresh-tail session scope. When set, restricts the fresh-tail
+   * window to a specific session. Without it, fresh-tail is tenant-wide,
+   * which surfaces newest rows across ALL sessions — useful for "anything
+   * new in this tenant", but wrong for "what did I just see in this one
+   * conversation". Set to ctx-supplied session id for the correct shape.
+   */
+  freshTailSessionId?: string;
+  /**
    * When true, include a continuity block (active task snapshot, latest matching
    * session handoff, recent session events) on the result. Default false to keep
    * the hot path cheap; agent boot paths should set this to true.
@@ -349,7 +357,12 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   const freshTailCount = opts.freshTailCount ?? 0;
   const freshRanked: RecallResultItem[] = [];
   if (freshTailCount > 0) {
-    const recent = loadFreshRawMemories(ctx.hippoRoot, freshTailCount, ctx.tenantId);
+    const recent = loadFreshRawMemories(
+      ctx.hippoRoot,
+      freshTailCount,
+      ctx.tenantId,
+      opts.freshTailSessionId,
+    );
     const recentScoped = recent.filter((m) =>
       passesScopeFilterForRecall(m.scope ?? null, opts.scope),
     );

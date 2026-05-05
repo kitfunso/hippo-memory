@@ -85,6 +85,10 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.6.2
+
+- **Two functional bugs caught by `/codex review` after v1.6.1.** (1) `loadSessionRawMemories` cap was returning the OLDEST rows instead of the newest, silently breaking fresh-tail protection in `assemble` for sessions > cap. Now reversed. (2) `loadFreshRawMemories` was tenant-wide only; multi-session tenants surfaced cross-session rows as `isFreshTail`. Now accepts `sessionId`; `RecallOpts.freshTailSessionId` lets callers scope fresh-tail correctly.
+
 ### What's new in v1.6.1
 
 - **Retroactive patch from a senior cross-model review of v1.5.1 + v1.5.2 + v1.6.0.** `assemble` gained a 5000-row cap on session loads (configurable, surfaces `truncated`), `totalRaw` is now post-scope-filter so all-private sessions don't look like missing-session bugs, and `AssembleOpts.scope` reaches parity with `RecallOpts.scope` so authorised callers can assemble a private session by passing scope explicitly.

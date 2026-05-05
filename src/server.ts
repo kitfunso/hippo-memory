@@ -440,6 +440,19 @@ async function handleRequest(
     const includeContinuityRaw = query.get('include_continuity');
     const includeContinuity = includeContinuityRaw === '1'
       || includeContinuityRaw === 'true';
+    // v1.6.2: surface the v1.5.0/v1.5.2 RecallOpts additions to HTTP
+    // callers. Pre-v1.6.2 the route silently ignored these so the
+    // session-scoped fresh-tail and summary substitution were JS-only.
+    const freshTailCountRaw = query.get('fresh_tail_count');
+    const freshTailCount = freshTailCountRaw === null ? undefined : Number(freshTailCountRaw);
+    if (freshTailCount !== undefined && (!Number.isFinite(freshTailCount) || freshTailCount < 0)) {
+      throw new HttpError(400, 'fresh_tail_count must be a non-negative number');
+    }
+    const freshTailSessionId = query.get('fresh_tail_session_id') ?? undefined;
+    const summarizeOverflowRaw = query.get('summarize_overflow');
+    const summarizeOverflow = summarizeOverflowRaw === null
+      ? undefined
+      : (summarizeOverflowRaw !== '0' && summarizeOverflowRaw !== 'false');
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = recall(ctx, {
       query: q,
@@ -447,6 +460,9 @@ async function handleRequest(
       mode: (mode ?? undefined) as 'bm25' | 'hybrid' | 'physics' | undefined,
       scope: scope ?? undefined,
       includeContinuity,
+      ...(freshTailCount !== undefined ? { freshTailCount } : {}),
+      ...(freshTailSessionId !== undefined ? { freshTailSessionId } : {}),
+      ...(summarizeOverflow !== undefined ? { summarizeOverflow } : {}),
     });
     // Continuity payloads should never be cached. The caller is asking for
     // session-state-aware data; intermediaries must not reuse it across users.
