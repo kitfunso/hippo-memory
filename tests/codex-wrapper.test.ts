@@ -30,7 +30,11 @@ function withFakeHome(): { cleanup: () => void; home: string } {
   };
 }
 
-describe('Codex wrapper install', () => {
+// The wrapper installer's behaviour is Windows-specific (it produces a
+// `codex.cmd` shim that re-launches `codex.exe` so hippo can intercept the
+// session transcript). Linux/macOS do not need a shim for the same flow,
+// so the assertions diverge by platform. Skip on non-Windows in CI.
+describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
   let env: { cleanup: () => void; home: string };
 
   beforeEach(() => {
