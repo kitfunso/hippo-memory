@@ -8,6 +8,7 @@ import { validateApiKey } from './auth.js';
 import {
   remember,
   recall,
+  drillDown,
   forget,
   promote,
   supersede,
@@ -450,6 +451,36 @@ async function handleRequest(
     // session-state-aware data; intermediaries must not reuse it across users.
     if (includeContinuity) {
       res.setHeader('Cache-Control', 'no-store');
+    }
+    sendJson(res, 200, result);
+    return;
+  }
+
+  // GET /v1/recall/drill/:id?limit=N&budget=N
+  // Companion to /v1/memories. When recall surfaces a level-2 summary in
+  // place of overflowed children (RecallResultItem.isSummary === true), the
+  // caller drills into the summary id to recover the originals. Tenant
+  // scoped via Bearer; default-deny on private scopes for both summary
+  // and children.
+  const drillMatch = matchPath('/v1/recall/drill/:id', path);
+  if (method === 'GET' && drillMatch) {
+    const limitRaw = query.get('limit');
+    const limit = limitRaw === null ? undefined : Number(limitRaw);
+    if (limit !== undefined && (!Number.isFinite(limit) || limit <= 0)) {
+      throw new HttpError(400, 'limit must be a positive number');
+    }
+    const budgetRaw = query.get('budget');
+    const budget = budgetRaw === null ? undefined : Number(budgetRaw);
+    if (budget !== undefined && (!Number.isFinite(budget) || budget <= 0)) {
+      throw new HttpError(400, 'budget must be a positive number');
+    }
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const result = drillDown(ctx, drillMatch.id!, {
+      ...(limit !== undefined ? { limit } : {}),
+      ...(budget !== undefined ? { budget } : {}),
+    });
+    if (!result) {
+      throw new HttpError(404, 'No drillable summary at this id');
     }
     sendJson(res, 200, result);
     return;

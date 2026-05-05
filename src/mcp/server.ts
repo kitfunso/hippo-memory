@@ -26,7 +26,7 @@ import { fetchGitLog, extractLessons, deduplicateLesson, isGitRepo } from '../au
 import { loadConfig } from '../config.js';
 import { resolveConfidence } from '../memory.js';
 import { resolveTenantId } from '../tenant.js';
-import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, isPrivateScope, type Context as ApiContext } from '../api.js';
+import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, drillDown as apiDrillDown, isPrivateScope, type Context as ApiContext } from '../api.js';
 import { PACKAGE_VERSION } from '../version.js';
 
 // ── Find hippo root ──
@@ -172,6 +172,29 @@ const TOOLS = [
         },
       },
       required: ['query'],
+    },
+  },
+  {
+    name: 'hippo_drill',
+    description:
+      'Walk one step down the DAG from a level-2+ topic summary to its direct children. Companion to hippo_recall: when recall returns an item with isSummary=true and substitutedFor=[ids], pass the summary id here to recover the original detail. Tenant-scoped; default-deny on private scopes.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        summary_id: {
+          type: 'string',
+          description: 'ID of the level-2 (or higher) summary to drill into. Must be a summary, not a leaf — leaves are not drillable.',
+        },
+        limit: {
+          type: 'number',
+          description: 'Max children to return (default 50).',
+        },
+        budget: {
+          type: 'number',
+          description: 'Max total token cost (≈ chars/4) of returned children. Truncates chronologically.',
+        },
+      },
+      required: ['summary_id'],
     },
   },
   {
@@ -380,6 +403,34 @@ async function executeTool(
         response += '\n\n' + formatContinuityBlock(apiResult.continuity);
       }
       return response;
+    }
+
+    case 'hippo_drill': {
+      const summaryId = String(args.summary_id || '');
+      if (!summaryId) return 'No summary_id provided.';
+      const limit = Number(args.limit);
+      const budget = Number(args.budget);
+      const apiCtx: ApiContext = {
+        hippoRoot,
+        tenantId,
+        actor: 'mcp',
+      };
+      const r = apiDrillDown(apiCtx, summaryId, {
+        ...(Number.isFinite(limit) && limit > 0 ? { limit } : {}),
+        ...(Number.isFinite(budget) && budget > 0 ? { budget } : {}),
+      });
+      if (!r) {
+        return `No drillable summary at id=${summaryId} (not found, wrong tenant, scope-blocked, or not a level-2+ row).`;
+      }
+      const lines: string[] = [];
+      lines.push(`Summary ${r.summary.id} — ${r.summary.descendantCount} descendants${r.summary.earliestAt ? ` (${r.summary.earliestAt} -> ${r.summary.latestAt})` : ''}`);
+      lines.push(`  ${r.summary.content}`);
+      lines.push('');
+      lines.push(`Children (${r.children.length}/${r.totalChildren}${r.truncated ? ', truncated' : ''}):`);
+      for (const c of r.children) {
+        lines.push(`  [L${c.dagLevel}] ${c.id} - ${c.content}`);
+      }
+      return lines.join('\n');
     }
 
     case 'hippo_remember': {
