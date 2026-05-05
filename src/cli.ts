@@ -4642,6 +4642,9 @@ function cmdAssemble(hippoRoot: string, sessionId: string, flags: Record<string,
   const budget = typeof flags['budget'] === 'string' ? Number(flags['budget']) : undefined;
   const freshTailCount = typeof flags['fresh-tail'] === 'string' ? Number(flags['fresh-tail']) : undefined;
   const summarizeOlder = flags['no-summarize-older'] !== true;
+  const scope = typeof flags['scope'] === 'string' && (flags['scope'] as string).length > 0
+    ? (flags['scope'] as string)
+    : undefined;
   const ctx: api.Context = {
     hippoRoot,
     tenantId: resolveTenantId({}),
@@ -4651,6 +4654,7 @@ function cmdAssemble(hippoRoot: string, sessionId: string, flags: Record<string,
     ...(Number.isFinite(budget) && budget! > 0 ? { budget } : {}),
     ...(Number.isFinite(freshTailCount) && freshTailCount! >= 0 ? { freshTailCount } : {}),
     summarizeOlder,
+    ...(scope !== undefined ? { scope } : {}),
   });
   if (flags['json']) {
     console.log(JSON.stringify(r, null, 2));
@@ -5431,6 +5435,7 @@ Commands:
     --budget N             Token budget (default 4000)
     --fresh-tail N         Recent rows always kept verbatim (default 10)
     --no-summarize-older   Disable older-row summary substitution
+    --scope <s>            Restrict to exact scope (default: deny *:private:*)
     --json                 Output as JSON
   correction-latency       Wall-clock lag from receipt to supersession (p50/p95/max)
     --json                 Output as JSON

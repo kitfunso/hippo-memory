@@ -475,6 +475,20 @@ export interface AssembleOpts {
   /** Substitute parent summaries for older raws when ≥2 share a level-2
    *  ancestor. Default true. */
   summarizeOlder?: boolean;
+  /**
+   * Restrict to a specific scope. v1.6.1 senior-review P1 #3 parity with
+   * `recall`: when set, exact match required (so an authorised caller can
+   * assemble a `slack:private:CSEC` session by passing scope explicitly).
+   * When undefined, default-deny applies to ANY `<source>:private:*` and
+   * `unknown:legacy` rows.
+   */
+  scope?: string;
+  /**
+   * Hard row cap on the SELECT that loads session raws. Default 5000 to
+   * protect against degenerate sessions. When the cap is hit, `truncated`
+   * is set on the result so the caller knows to widen.
+   */
+  rowCap?: number;
 }
 
 export interface AssembledContextItem {
@@ -499,9 +513,17 @@ export interface AssembleResult {
   sessionId: string;
   items: AssembledContextItem[];
   tokens: number;
+  /**
+   * v1.6.1 senior-review P1 #2: now POST-scope-filter. Counts the raws
+   * that survived tenant + scope filtering, before substitution / eviction.
+   * Pre-v1.6.1 reported pre-filter, which made `{totalRaw=N, items=[]}`
+   * for an all-private session look like a missing-session bug.
+   */
   totalRaw: number;
   summarized: number;
   evicted: number;
+  /** True when `loadSessionRawMemories` hit `rowCap` (default 5000). */
+  truncated: boolean;
 }
 
 /**
@@ -534,18 +556,23 @@ export function assemble(
   const budget = opts.budget ?? 4000;
   const freshTailCount = opts.freshTailCount ?? 10;
   const summarizeOlder = opts.summarizeOlder ?? true;
+  const rowCap = opts.rowCap ?? 5000;
 
   if (!sessionId) {
-    return { sessionId, items: [], tokens: 0, totalRaw: 0, summarized: 0, evicted: 0 };
+    return { sessionId, items: [], tokens: 0, totalRaw: 0, summarized: 0, evicted: 0, truncated: false };
   }
 
-  const rows = loadSessionRawMemories(ctx.hippoRoot, sessionId, ctx.tenantId);
-  const totalRaw = rows.length;
+  const rows = loadSessionRawMemories(ctx.hippoRoot, sessionId, ctx.tenantId, rowCap);
+  const truncated = rows.length === rowCap;
+  // v1.6.1 senior-review P1 #2: scoped count IS totalRaw. Pre-filter total
+  // is private to the implementation; the caller cares about what they
+  // could have seen given their scope grant.
   const scoped = rows.filter((r) =>
-    passesScopeFilterForRecall(r.scope ?? null, undefined),
+    passesScopeFilterForRecall(r.scope ?? null, opts.scope),
   );
+  const totalRaw = scoped.length;
   if (scoped.length === 0) {
-    return { sessionId, items: [], tokens: 0, totalRaw, summarized: 0, evicted: 0 };
+    return { sessionId, items: [], tokens: 0, totalRaw, summarized: 0, evicted: 0, truncated };
   }
 
   // Split newest N into fresh tail; rest is older.
@@ -570,7 +597,7 @@ export function assemble(
     const parents = eligibleParentIds.length > 0
       ? loadEntriesByIds(ctx.hippoRoot, eligibleParentIds, ctx.tenantId)
           .filter((p) => (p.dag_level ?? 0) === 2)
-          .filter((p) => passesScopeFilterForRecall(p.scope ?? null, undefined))
+          .filter((p) => passesScopeFilterForRecall(p.scope ?? null, opts.scope))
       : [];
     const claimedRawIds = new Set<string>();
     for (const parent of parents) {
@@ -637,7 +664,7 @@ export function assemble(
     evicted++;
   }
 
-  return { sessionId, items, tokens, totalRaw, summarized, evicted };
+  return { sessionId, items, tokens, totalRaw, summarized, evicted, truncated };
 }
 
 // ---------------------------------------------------------------------------

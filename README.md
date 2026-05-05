@@ -85,6 +85,10 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.6.1
+
+- **Retroactive patch from a senior cross-model review of v1.5.1 + v1.5.2 + v1.6.0.** `assemble` gained a 5000-row cap on session loads (configurable, surfaces `truncated`), `totalRaw` is now post-scope-filter so all-private sessions don't look like missing-session bugs, and `AssembleOpts.scope` reaches parity with `RecallOpts.scope` so authorised callers can assemble a private session by passing scope explicitly.
+
 ### What's new in v1.6.0
 
 - **`hippo assemble --session <id>`** + `api.assemble` + MCP `hippo_assemble` + HTTP `GET /v1/sessions/:id/assemble`. Phase 2 of the DAG plan: build a chronologically-ordered context window for a session — fresh-tail raw rows + level-2 summary substitutions for older rows + budget-fit. Adapted from [lossless-claw](https://github.com/Martian-Engineering/lossless-claw) but with bio-aware eviction: when over-budget, Hippo drops the lowest-strength non-fresh-tail item first instead of oldest-first, so high-importance older context survives while low-strength recent rows get evicted.

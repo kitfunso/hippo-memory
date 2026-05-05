@@ -195,7 +195,9 @@ describe('api.assemble', () => {
     const ids = r.items.map((it) => it.id);
     expect(ids).toContain(pub.id);
     expect(ids).not.toContain(priv.id);
-    expect(r.totalRaw).toBe(2);
+    // v1.6.1 senior-review P1 #2: totalRaw is post-scope. Only the public
+    // row survives the default-deny filter, so totalRaw=1 (not 2).
+    expect(r.totalRaw).toBe(1);
   });
 
   it('8. summarizeOlder=false keeps every older raw as-is', () => {

@@ -197,6 +197,10 @@ const TOOLS = [
           type: 'boolean',
           description: 'When true (default), older raws sharing a level-2 parent summary get substituted. Set false to keep every older raw as-is.',
         },
+        scope: {
+          type: 'string',
+          description: 'Restrict to memories whose scope matches exactly. When omitted, default-deny applies to ANY <source>:private:* scope and unknown:legacy rows. Pass an explicit scope to assemble a private session with consent.',
+        },
       },
       required: ['session_id'],
     },
@@ -443,10 +447,14 @@ async function executeTool(
         tenantId,
         actor: 'mcp',
       };
+      const explicitScope = typeof args.scope === 'string' && args.scope.length > 0
+        ? String(args.scope)
+        : undefined;
       const r = apiAssemble(apiCtx, sessionId, {
         ...(Number.isFinite(budget) && budget > 0 ? { budget } : {}),
         ...(Number.isFinite(freshTailCount) && freshTailCount >= 0 ? { freshTailCount } : {}),
         summarizeOlder,
+        ...(explicitScope !== undefined ? { scope: explicitScope } : {}),
       });
       const lines: string[] = [];
       lines.push(`Session ${r.sessionId} — ${r.items.length} items, ${r.tokens} tokens (raw=${r.totalRaw}, summarized=${r.summarized}, evicted=${r.evicted})`);

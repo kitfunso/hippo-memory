@@ -475,11 +475,14 @@ async function handleRequest(
     }
     const sumOlderRaw = query.get('summarizeOlder');
     const summarizeOlder = sumOlderRaw === null ? undefined : sumOlderRaw !== '0' && sumOlderRaw !== 'false';
+    const scopeQ = query.get('scope');
+    const scope = scopeQ !== null && scopeQ.length > 0 ? scopeQ : undefined;
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = assemble(ctx, assembleMatch.id!, {
       ...(budget !== undefined ? { budget } : {}),
       ...(freshTailCount !== undefined ? { freshTailCount } : {}),
       ...(summarizeOlder !== undefined ? { summarizeOlder } : {}),
+      ...(scope !== undefined ? { scope } : {}),
     });
     sendJson(res, 200, result);
     return;

@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.6.1 (2026-05-05)
+
+Retroactive patch. v1.5.1 / v1.5.2 / v1.6.0 shipped without going through the full `/codex` + `/review` chain — tests + CI passed but a senior cross-model review of the cumulative diff `v1.5.0..HEAD` surfaced 0 P0, 9 P1, 8 P2 findings. This patch addresses the three real holes; the rest are documented or deferred.
+
+### Fixed (P1 from senior review)
+
+- **`loadSessionRawMemories` row cap.** Pre-v1.6.1 had no SQL `LIMIT`, so a degenerate session with 100k raws would materialise 100k `MemoryEntry` objects in JS heap before the budget loop ran. Now caps at 5000 by default (configurable via `AssembleOpts.rowCap`); when the cap is hit, `AssembleResult.truncated: true` flags the caller.
+- **`assemble.totalRaw` is now post-scope-filter.** Pre-v1.6.1 reported pre-filter, so an all-private session returned `{totalRaw=N, items=[]}` which looked like a missing-session bug. Now `totalRaw` counts what the caller could actually have seen given their tenant + scope grant.
+- **`AssembleOpts.scope` parity with `RecallOpts.scope`.** Pre-v1.6.1, an authorised caller could not assemble a private session even with explicit consent. Now an exact-scope match unlocks the session, mirroring `recall`. Propagated through CLI (`--scope <s>`), MCP (`scope` arg), and HTTP (`?scope=...`).
+
+### Deferred (documented for follow-up)
+
+- P1 #4 drillDown 404 collapses 4 distinct cases (unknown / tenant / scope-blocked / leaf) — caller debuggability.
+- P1 #5 Path matcher behaviour with slashes in `sessionId` / `summary_id`.
+- P1 #6 Substitution path filters `dag_level === 2` only — design intent, document in plan.
+- P1 #7 Hardcoded `score: 0.5` for substituted summaries — re-rank semantics.
+- P1 #8 `localeCompare` on ISO timestamps — micro-perf.
+- P1 #9 CLI flag parsing `Number(undefined) = NaN` — cosmetic.
+- All P2s: comment density, eviction-only-fresh-tail edge case test, audit DB handle reuse.
+
+### Tests
+
+- 1301 passing (+8 from v1.6.0). New: `tests/dag-assemble-v161-patch.test.ts` covering row cap, `truncated` flag, post-scope `totalRaw`, and `scope` opt unlock.
+
+### Process note
+
+The senior cross-model review on the diff was the missing step. Self-driven analysis when codex bails on the Windows sandbox is not equivalent — the workflow chain exists because tests + CI catch build/test failures, not architectural drift, scope leaks, or silent contract bugs. This patch + the explicit retro audit are the correction.
+
 ## 1.6.0 (2026-05-05)
 
 Phase 2 of the DAG plan. New `assemble` API: chronologically-ordered context window for a session, with fresh-tail raw rows + level-2 summary substitutions for older rows + bio-aware budget eviction. The differentiator from lossless-claw is the eviction policy: when over budget, Hippo drops the lowest-strength non-fresh-tail item first instead of the oldest, so high-importance older rows survive while low-strength recent ones get summarized.

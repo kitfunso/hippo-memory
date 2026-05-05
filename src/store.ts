@@ -1125,23 +1125,36 @@ export function loadEntriesByIds(
  * All `kind='raw'` rows for a given session, tenant-scoped, oldest first.
  * Used by `api.assemble` (docs/plans/2026-05-05-assemble-phase2.md Task 1)
  * to walk a session's chronological context. Excludes superseded rows.
+ *
+ * v1.6.1 (senior review P1 #1): caller-supplied row cap. A degenerate
+ * session with 100k raws would otherwise materialise 100k MemoryEntry
+ * objects in JS heap before the budget loop runs. Default cap 5000;
+ * caller can pass any positive integer or `undefined` for no cap (legacy).
+ * The api.assemble path passes 5000 explicitly.
+ *
+ * Returns `[]` for an empty sessionId. Order: `created ASC, id ASC`.
  */
 export function loadSessionRawMemories(
   hippoRoot: string,
   sessionId: string,
   tenantId?: string,
+  cap?: number,
 ): MemoryEntry[] {
   if (!sessionId) return [];
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    const rows = tenantId !== undefined
-      ? db.prepare(
-          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' AND source_session_id = ? AND tenant_id = ? AND superseded_by IS NULL ORDER BY created ASC, id ASC`,
-        ).all(sessionId, tenantId) as MemoryRow[]
-      : db.prepare(
-          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' AND source_session_id = ? AND superseded_by IS NULL ORDER BY created ASC, id ASC`,
-        ).all(sessionId) as MemoryRow[];
+    const limitClause = cap !== undefined && cap > 0 ? ' LIMIT ?' : '';
+    const params: Array<string | number> = [];
+    let sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' AND source_session_id = ? AND superseded_by IS NULL`;
+    params.push(sessionId);
+    if (tenantId !== undefined) {
+      sql += ' AND tenant_id = ?';
+      params.push(tenantId);
+    }
+    sql += ' ORDER BY created ASC, id ASC' + limitClause;
+    if (cap !== undefined && cap > 0) params.push(cap);
+    const rows = db.prepare(sql).all(...params) as MemoryRow[];
     return rows.map(rowToEntry);
   } finally {
     closeHippoDb(db);
