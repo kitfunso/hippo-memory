@@ -448,11 +448,25 @@ async function handleRequest(
     if (freshTailCount !== undefined && (!Number.isFinite(freshTailCount) || freshTailCount < 0)) {
       throw new HttpError(400, 'fresh_tail_count must be a non-negative number');
     }
-    const freshTailSessionId = query.get('fresh_tail_session_id') ?? undefined;
+    // v1.6.3 senior-review P1-3: cap session_id length consistent with the
+    // rest of the API. Untrimmed strings round-trip through the SQL layer
+    // and through any downstream metric/log; 256 is generous for a session
+    // id and matches the rest of this file's id-shaped param parsers.
+    const freshTailSessionIdRaw = query.get('fresh_tail_session_id');
+    if (freshTailSessionIdRaw !== null && freshTailSessionIdRaw.length > 256) {
+      throw new HttpError(400, 'fresh_tail_session_id exceeds 256-character cap');
+    }
+    const freshTailSessionId = freshTailSessionIdRaw && freshTailSessionIdRaw.length > 0
+      ? freshTailSessionIdRaw
+      : undefined;
+    // v1.6.3 senior-review P1-4: tighten parser to match the includeContinuity
+    // convention. Pre-v1.6.3 accepted any non-'0'/'false' value as `true`,
+    // so `?summarize_overflow=banana` and `?summarize_overflow=` both
+    // turned it on. Surface convention drift fixed.
     const summarizeOverflowRaw = query.get('summarize_overflow');
     const summarizeOverflow = summarizeOverflowRaw === null
       ? undefined
-      : (summarizeOverflowRaw !== '0' && summarizeOverflowRaw !== 'false');
+      : (summarizeOverflowRaw === '1' || summarizeOverflowRaw === 'true');
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = recall(ctx, {
       query: q,
@@ -489,8 +503,14 @@ async function handleRequest(
     if (freshTailCount !== undefined && (!Number.isFinite(freshTailCount) || freshTailCount < 0)) {
       throw new HttpError(400, 'freshTail must be a non-negative number');
     }
+    // v1.6.3 senior review P1: same strict-parse convention as the v1.6.3
+    // summarize_overflow tighten on /v1/memories. Pre-v1.6.3 accepted any
+    // non-'0'/'false' as true; ?summarizeOlder=banana now correctly returns
+    // false (matches includeContinuity convention).
     const sumOlderRaw = query.get('summarizeOlder');
-    const summarizeOlder = sumOlderRaw === null ? undefined : sumOlderRaw !== '0' && sumOlderRaw !== 'false';
+    const summarizeOlder = sumOlderRaw === null
+      ? undefined
+      : (sumOlderRaw === '1' || sumOlderRaw === 'true');
     const scopeQ = query.get('scope');
     const scope = scopeQ !== null && scopeQ.length > 0 ? scopeQ : undefined;
     const ctx = buildContextWithAuth(req, opts.hippoRoot);

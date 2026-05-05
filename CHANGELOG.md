@@ -1,5 +1,44 @@
 # Changelog
 
+## 1.6.3 (2026-05-05)
+
+Two retro review rounds on the v1.6.2 patch surfaced more bugs than the originally-skipped `/review` would have caught alone. The user called out that `/review` and `/ship-check` had been skipped on v1.6.2 (and v1.5.1, v1.5.2, v1.6.0, v1.6.1 before). Running both reviewers retroactively, then a SECOND round of both on the v1.6.3 patch itself, found:
+
+- **`/review` round 1 (on v1.6.2):** 1 P0, 7 P1, 3 P2.
+- **`/codex review --uncommitted` (on v1.6.3 patch):** 1 P1 (auth-leak in the new totalRaw COUNT) + 1 P2 (MCP response path drift).
+- **`/review` round 2 (on v1.6.3 patch):** 1 P0 (lying comment) + 4 P1 (parser-drift in same file, tenant-id JSDoc, MCP typeof guard, missing boundary test) + 3 P2.
+
+This patch addresses the load-bearing items across both review rounds.
+
+### Fixed
+
+- **`assemble.totalRaw` is now scope-aware unbounded count when truncated** (codex P1 / senior P0). The v1.6.2 cap broke `totalRaw` semantics on long sessions; an earlier draft of this patch ran an unscoped COUNT(*) which would have let a no-scope caller infer how many private rows existed. v1.6.3 SQL-encodes the same default-deny rule `passesScopeFilterForRecall` applies in TS. New helper: `store.countSessionRawMemories(hippoRoot, sessionId, tenantId, scope?)`.
+- **MCP `hippo_recall` exposes `fresh_tail_session_id`, `fresh_tail_count`, `summarize_overflow` AND surfaces them in the response.** The first round of the fix wired the args into `apiRecall` but the rendered output still came from the separate physics path, so MCP callers could pass the new opts and see no effect. v1.6.3 appends fresh-tail and substituted-summary items as their own section.
+- **HTTP `fresh_tail_session_id` length capped at 256 characters.**
+- **HTTP `summarize_overflow` parser tightened** to `=== '1' || === 'true'`. Same fix applied to `summarizeOlder` on `/v1/sessions/:id/assemble` (was loose in the same file). Behaviour change: `?summarize_overflow=banana` and `?summarizeOlder=banana` now correctly evaluate to `false`.
+
+### Deferred to v1.7
+
+- CLI `hippo recall` lacks fresh-tail / summarize-overflow flags. `cmdRecall` runs the physics/hybrid scorer path directly without going through `api.recall`; wiring needs its own plan + tests.
+- `drillDown` collapses unknown / wrong-tenant / scope-blocked / leaf cases into a single 404 — caller debuggability.
+- HTTP path matcher behaviour with slashes in `sessionId` / `summary_id`.
+- Hardcoded `score: 0.5` for substituted summaries.
+- `localeCompare` micro-perf on ISO timestamps.
+- Tenant-wide `loadFreshRawMemories` default deprecation note.
+- Various P2 polish items (CLI flag parser, query parser dedup, audit-handle reuse).
+
+### Process correction (honest version)
+
+Through this session, `/codex`, `/review`, `/self-review`, and `/ship-check` were skipped on multiple releases. Each retro pass found real bugs the prior pass missed: senior `/review` caught a misleading semantic codex missed; codex caught an authorization-leak the senior reviewer's draft introduced. Neither alone is sufficient. Tests + CI is necessary but not sufficient either. The chain exists for a reason, and the user was right to call it out. v1.6.3 ran codex + senior `/review` + self-review + ship-check pre-publish.
+
+### Behaviour changes (potentially breaking)
+
+- HTTP callers passing arbitrary truthy-string values to `?summarize_overflow=` or `?summarizeOlder=` (other than `1` / `true`) will now get `false` instead of `true`. Fix: pass `1` or `true` explicitly.
+
+### Tests
+
+- 1320 passing (+11 from v1.6.2). New: `tests/dag-v163-review-patch.test.ts` (12 cases covering the unbounded scope-aware totalRaw, scope-leak prevention, exact-cap boundary, `countSessionRawMemories` helper, MCP schema parity, HTTP length cap + parser tighten).
+
 ## 1.6.2 (2026-05-05)
 
 `/codex review --base v1.5.0` (gpt-5.5, high reasoning) caught two functional bugs that v1.6.1's `/review` chain missed. Verdict from codex: "patch is incorrect." Fixed here.

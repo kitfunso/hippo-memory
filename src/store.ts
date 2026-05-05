@@ -1126,12 +1126,10 @@ export function loadEntriesByIds(
  * oldest-first. Used by `api.assemble` to walk a session's chronological
  * context. Excludes superseded rows.
  *
- * Cap semantics (v1.6.2 codex review fix): when a `cap` is provided, the
- * NEWEST `cap` rows are loaded — `ORDER BY created DESC LIMIT cap` server-
- * side, then reversed to oldest-first client-side. Pre-v1.6.2 ordered ASC
- * + LIMIT, which silently dropped the newest rows on a session larger
- * than the cap and broke fresh-tail protection in api.assemble. The cap
- * now ALWAYS preserves the freshest window.
+ * Cap semantics (v1.6.2 codex fix): when `cap` is provided, the NEWEST
+ * `cap` rows are loaded — `ORDER BY created DESC LIMIT cap` server-side,
+ * reversed to oldest-first client-side. Pre-v1.6.2 ordered ASC + LIMIT,
+ * which silently dropped the newest rows and broke fresh-tail in assemble.
  *
  * Returns `[]` for an empty sessionId. Final order: `created ASC, id ASC`.
  */
@@ -1153,8 +1151,6 @@ export function loadSessionRawMemories(
       params.push(tenantId);
     }
     if (cap !== undefined && cap > 0) {
-      // Load the NEWEST `cap` rows. The downstream consumer needs
-      // chronological order, so we reverse after fetch.
       sql += ' ORDER BY created DESC, id DESC LIMIT ?';
       params.push(cap);
       const rows = db.prepare(sql).all(...params) as MemoryRow[];
@@ -1163,6 +1159,55 @@ export function loadSessionRawMemories(
     sql += ' ORDER BY created ASC, id ASC';
     const rows = db.prepare(sql).all(...params) as MemoryRow[];
     return rows.map(rowToEntry);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/**
+ * Pre-cap, scope-aware row count for a session. Lets `assemble` report
+ * the full session size even when `rowCap` truncates the loaded window,
+ * WITHOUT leaking rows the caller wouldn't have been allowed to load.
+ *
+ * v1.6.3 codex P1 / senior P0: an earlier draft of this helper ran an
+ * unscoped COUNT, which let a no-scope caller infer the existence of
+ * private rows by comparing `totalRaw` against `items.length`. This
+ * version SQL-encodes the same default-deny rule `passesScopeFilterForRecall`
+ * applies in TS:
+ *   - explicit scope passed: exact-match
+ *   - no scope: rows where scope IS NULL, or scope is NOT a `<source>:private:*`
+ *     pattern AND not the `unknown:legacy` quarantine bucket.
+ *
+ * `tenantId` is optional for back-compat. Pass `undefined` only when
+ * intentionally counting cross-tenant; `assemble()` passes `ctx.tenantId`.
+ */
+export function countSessionRawMemories(
+  hippoRoot: string,
+  sessionId: string,
+  tenantId?: string,
+  scope?: string,
+): number {
+  if (!sessionId) return 0;
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    const params: Array<string> = [];
+    let sql = `SELECT COUNT(*) AS c FROM memories WHERE kind = 'raw' AND source_session_id = ? AND superseded_by IS NULL`;
+    params.push(sessionId);
+    if (tenantId !== undefined) {
+      sql += ' AND tenant_id = ?';
+      params.push(tenantId);
+    }
+    if (scope !== undefined && scope !== '') {
+      sql += ' AND scope = ?';
+      params.push(scope);
+    } else {
+      // SQL-ify the TS default-deny: scope IS NULL OR (NOT LIKE '%:private:%'
+      // AND != 'unknown:legacy'). Mirrors api.passesScopeFilterForRecall.
+      sql += ` AND (scope IS NULL OR (scope NOT LIKE '%:private:%' AND scope != 'unknown:legacy'))`;
+    }
+    const row = db.prepare(sql).get(...params) as { c?: number } | undefined;
+    return Number(row?.c ?? 0);
   } finally {
     closeHippoDb(db);
   }

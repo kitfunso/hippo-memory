@@ -20,6 +20,7 @@ import {
   loadChildrenOf,
   loadFreshRawMemories,
   loadSessionRawMemories,
+  countSessionRawMemories,
   removeEntryMirrors,
   loadActiveTaskSnapshot,
   loadLatestHandoff,
@@ -527,15 +528,22 @@ export interface AssembleResult {
   items: AssembledContextItem[];
   tokens: number;
   /**
-   * v1.6.1 senior-review P1 #2: now POST-scope-filter. Counts the raws
-   * that survived tenant + scope filtering, before substitution / eviction.
-   * Pre-v1.6.1 reported pre-filter, which made `{totalRaw=N, items=[]}`
-   * for an all-private session look like a missing-session bug.
+   * Tenant + scope-filtered raw row count for the session — what the caller
+   * could have seen given their grant. Pre-v1.6.1 was pre-filter (confusing
+   * for all-private sessions); pre-v1.6.3 was capped (under-reported on
+   * sessions > rowCap). v1.6.3 reports the FULL post-filter count via a
+   * separate COUNT(*) query so consumers can render "session has N msgs"
+   * accurately even when items[] is the windowed view.
    */
   totalRaw: number;
   summarized: number;
   evicted: number;
-  /** True when `loadSessionRawMemories` hit `rowCap` (default 5000). */
+  /**
+   * True when `rowCap` truncated the loaded window. With v1.6.2's NEWEST-cap
+   * semantics, the items[] array represents the freshest tail of the session;
+   * older rows beyond the cap are silently absent. Use `totalRaw - items.length
+   * - summarized + ...` to estimate how much you didn't see, or widen `rowCap`.
+   */
   truncated: boolean;
 }
 
@@ -577,13 +585,23 @@ export function assemble(
 
   const rows = loadSessionRawMemories(ctx.hippoRoot, sessionId, ctx.tenantId, rowCap);
   const truncated = rows.length === rowCap;
-  // v1.6.1 senior-review P1 #2: scoped count IS totalRaw. Pre-filter total
-  // is private to the implementation; the caller cares about what they
-  // could have seen given their scope grant.
+  // v1.6.3 senior-review P0-1: report the FULL post-filter row count even
+  // when the cap windows the loaded set. Pre-v1.6.3 used `scoped.length`
+  // which under-reported on long sessions and made consumers render
+  // wrong "session has N msgs" UX.
   const scoped = rows.filter((r) =>
     passesScopeFilterForRecall(r.scope ?? null, opts.scope),
   );
-  const totalRaw = scoped.length;
+  let totalRaw: number;
+  if (truncated) {
+    // v1.6.3 codex P1 / senior P0: scope-aware unbounded COUNT. The helper
+    // SQL-encodes the same default-deny rule passesScopeFilterForRecall
+    // applies in TS, so a no-scope caller cannot infer private rows by
+    // comparing totalRaw to items.length on a truncated session.
+    totalRaw = countSessionRawMemories(ctx.hippoRoot, sessionId, ctx.tenantId, opts.scope);
+  } else {
+    totalRaw = scoped.length;
+  }
   if (scoped.length === 0) {
     return { sessionId, items: [], tokens: 0, totalRaw, summarized: 0, evicted: 0, truncated };
   }

@@ -85,6 +85,10 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.6.3
+
+- **One P0 + four P1s caught by `/review` after v1.6.2 shipped.** The user noticed `/review` had been skipped across multiple releases. Running it retroactively surfaced a misleading `assemble.totalRaw` semantic on long sessions, three transport-surface drifts on the new RecallOpts, and an HTTP input-validation gap. All addressed. Process correction documented honestly in CHANGELOG.
+
 ### What's new in v1.6.2
 
 - **Two functional bugs caught by `/codex review` after v1.6.1.** (1) `loadSessionRawMemories` cap was returning the OLDEST rows instead of the newest, silently breaking fresh-tail protection in `assemble` for sessions > cap. Now reversed. (2) `loadFreshRawMemories` was tenant-wide only; multi-session tenants surfaced cross-session rows as `isFreshTail`. Now accepts `sessionId`; `RecallOpts.freshTailSessionId` lets callers scope fresh-tail correctly.

@@ -170,6 +170,18 @@ const TOOLS = [
           type: 'string',
           description: 'Restrict results and continuity to memories/rows matching this scope exactly. When omitted, default-deny applies to ANY <source>:private:* (slack, github, ...) and unknown-legacy rows.',
         },
+        fresh_tail_count: {
+          type: 'number',
+          description: 'When > 0, surface the last N kind=raw rows tagged isFreshTail=true regardless of query match. Useful for "what did I just see" continuity. Capped at 200.',
+        },
+        fresh_tail_session_id: {
+          type: 'string',
+          description: 'Restrict the fresh-tail window to a specific session. Without this, fresh-tail is tenant-wide (legacy v1.5.2 behaviour, pre-v1.6.3 default).',
+        },
+        summarize_overflow: {
+          type: 'boolean',
+          description: 'When true (default), entries that overflow the limit and share a level-2 parent summary cause that summary to be appended in their place. Set false for strict-limit behaviour.',
+        },
       },
       required: ['query'],
     },
@@ -389,6 +401,16 @@ async function executeTool(
       const explicitScope = typeof args.scope === 'string' && args.scope.length > 0
         ? String(args.scope)
         : undefined;
+      const freshTailCountArg = Number(args.fresh_tail_count);
+      const freshTailCount = Number.isFinite(freshTailCountArg) && freshTailCountArg > 0
+        ? freshTailCountArg
+        : undefined;
+      const freshTailSessionId = typeof args.fresh_tail_session_id === 'string' && args.fresh_tail_session_id.length > 0
+        ? String(args.fresh_tail_session_id)
+        : undefined;
+      const summarizeOverflow = typeof args.summarize_overflow === 'boolean'
+        ? args.summarize_overflow
+        : undefined;
       const apiCtx: ApiContext = {
         hippoRoot,
         tenantId,
@@ -402,6 +424,9 @@ async function executeTool(
         limit: 50,
         scope: explicitScope,
         includeContinuity,
+        ...(freshTailCount !== undefined ? { freshTailCount } : {}),
+        ...(freshTailSessionId !== undefined ? { freshTailSessionId } : {}),
+        ...(summarizeOverflow !== undefined ? { summarizeOverflow } : {}),
       });
 
       // Existing physics/hybrid scorer continues to drive user-visible
@@ -430,6 +455,31 @@ async function executeTool(
       lastRecalledIds.set(resolveClientKey(ctx), retrieved.map((e) => e.id));
 
       let response = formatMemories(results, hippoRoot);
+
+      // v1.6.3 codex P2 fix. The physics/hybrid scorer drives the primary
+      // ranked block above, so user-visible ordering is preserved. But
+      // when the v1.5.0+/v1.5.2 RecallOpts are passed, we MUST also surface
+      // the fresh-tail and substituted-summary items apiRecall produced —
+      // otherwise the advertised MCP fields are silently ignored. Append
+      // them as their own section, deduplicated against the physics ranking.
+      const physicsIds = new Set(results.map((r) => r.entry.id));
+      const tailOrSummary = apiResult.results.filter(
+        (r) => (r.isFreshTail || r.isSummary) && !physicsIds.has(r.id),
+      );
+      if (tailOrSummary.length > 0) {
+        const lines: string[] = ['', '## Fresh tail / substituted summaries'];
+        for (const r of tailOrSummary) {
+          const tag = r.isSummary ? '[summary]' : '[tail]';
+          const head = r.content.length > 200 ? r.content.slice(0, 200) + '…' : r.content;
+          if (r.isSummary && r.substitutedFor && r.substitutedFor.length > 0) {
+            lines.push(`- ${tag} ${r.id} (covers ${r.substitutedFor.length} rows): ${head}`);
+          } else {
+            lines.push(`- ${tag} ${r.id}: ${head}`);
+          }
+        }
+        response += '\n' + lines.join('\n');
+      }
+
       if (includeContinuity && apiResult.continuity) {
         response += '\n\n' + formatContinuityBlock(apiResult.continuity);
       }
