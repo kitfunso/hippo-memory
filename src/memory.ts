@@ -48,6 +48,12 @@ export interface MemoryEntry {
   extracted_from: string | null;
   dag_level: number;            // 0=leaf, 1=extracted_fact, 2=topic_summary, 3=entity_profile (independent of envelope `kind`)
   dag_parent_id: string | null; // ID of parent summary node in the DAG; null = root level
+  // Cached DAG metadata (schema v25). Populated for level-2+ summary rows so
+  // recall can reason about scope without re-walking the DAG. Always 0 / null
+  // for level-0 leaves and level-1 facts.
+  descendant_count?: number;
+  earliest_at?: string | null;
+  latest_at?: string | null;
   // A3 provenance envelope (schema v14)
   kind: MemoryKind;             // raw | distilled | superseded | archived
   scope: string | null;         // e.g. 'team:eng', 'project:foo'; null = global

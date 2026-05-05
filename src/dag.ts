@@ -133,12 +133,19 @@ export async function buildDag(
     );
     if (!summary) continue;
 
+    const memberCreatedAts = cluster.members.map((m) => m.created).sort();
     const summaryEntry = createMemory(summary, {
       layer: Layer.Semantic,
       tags: [...cluster.entityTags, 'dag-summary'],
       confidence: 'inferred',
       dag_level: 2,
     });
+    // Schema v25: cache descendant_count + earliest/latest_at on the summary
+    // row so DAG-aware recall (docs/plans/2026-05-05-dag-recall.md Task 2)
+    // can reason about scope without walking the children.
+    summaryEntry.descendant_count = cluster.members.length;
+    summaryEntry.earliest_at = memberCreatedAts[0];
+    summaryEntry.latest_at = memberCreatedAts[memberCreatedAts.length - 1];
     writeEntry(hippoRoot, summaryEntry);
     result.summariesCreated++;
 

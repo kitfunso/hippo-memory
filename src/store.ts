@@ -101,6 +101,9 @@ interface MemoryRow {
   owner: string | null;
   artifact_ref: string | null;
   tenant_id: string | null;
+  descendant_count: number | null;
+  earliest_at: string | null;
+  latest_at: string | null;
 }
 
 interface ConsolidationRunRow {
@@ -183,7 +186,7 @@ export interface SessionEvent {
 }
 
 const INDEX_VERSION = 3;
-const MEMORY_SELECT_COLUMNS = `id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content, parents_json, starred, trace_outcome, source_session_id, valid_from, superseded_by, extracted_from, dag_level, dag_parent_id, kind, scope, owner, artifact_ref, tenant_id`;
+const MEMORY_SELECT_COLUMNS = `id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content, parents_json, starred, trace_outcome, source_session_id, valid_from, superseded_by, extracted_from, dag_level, dag_parent_id, kind, scope, owner, artifact_ref, tenant_id, descendant_count, earliest_at, latest_at`;
 const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
 
 function layerDir(root: string, layer: Layer): string {
@@ -360,6 +363,9 @@ function rowToEntry(row: MemoryRow): MemoryEntry {
     owner: row.owner ?? null,
     artifact_ref: row.artifact_ref ?? null,
     tenantId: row.tenant_id ?? 'default',
+    descendant_count: Number(row.descendant_count ?? 0),
+    earliest_at: row.earliest_at ?? null,
+    latest_at: row.latest_at ?? null,
   };
 }
 
@@ -757,8 +763,9 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
       dag_level, dag_parent_id,
       kind, scope, owner, artifact_ref,
       tenant_id,
+      descendant_count, earliest_at, latest_at,
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     ON CONFLICT(id) DO UPDATE SET
       created = excluded.created,
       last_retrieved = excluded.last_retrieved,
@@ -791,6 +798,9 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
       owner = excluded.owner,
       artifact_ref = excluded.artifact_ref,
       tenant_id = excluded.tenant_id,
+      descendant_count = excluded.descendant_count,
+      earliest_at = excluded.earliest_at,
+      latest_at = excluded.latest_at,
       updated_at = datetime('now')
   `).run(
     entry.id,
@@ -825,6 +835,9 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
     entry.owner ?? null,
     entry.artifact_ref ?? null,
     entry.tenantId ?? 'default',
+    entry.descendant_count ?? 0,
+    entry.earliest_at ?? null,
+    entry.latest_at ?? null,
   );
 
   syncFtsRow(db, entry);
@@ -1073,6 +1086,62 @@ export function readEntry(hippoRoot: string, id: string, tenantId?: string): Mem
           `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?`,
         ).get(id) as MemoryRow | undefined;
     return row ? rowToEntry(row) : null;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/**
+ * Batched lookup. Caps at 500 ids per call to keep the IN(?,?,...) clause
+ * within SQLite limits. Tenant filter is enforced when `tenantId` is passed.
+ * Used by DAG-aware recall (docs/plans/2026-05-05-dag-recall.md Task 1.5)
+ * to fetch parent summaries for a set of overflowed leaves.
+ */
+export function loadEntriesByIds(
+  hippoRoot: string,
+  ids: readonly string[],
+  tenantId?: string,
+): MemoryEntry[] {
+  if (ids.length === 0) return [];
+  const capped = ids.slice(0, 500);
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    const placeholders = capped.map(() => '?').join(',');
+    const rows = tenantId !== undefined
+      ? db.prepare(
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders}) AND tenant_id = ?`,
+        ).all(...capped, tenantId) as MemoryRow[]
+      : db.prepare(
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders})`,
+        ).all(...capped) as MemoryRow[];
+    return rows.map(rowToEntry);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/**
+ * Direct DAG children of a parent summary. Tenant scoped. Returns only rows
+ * whose `dag_parent_id` matches `parentId`; does NOT walk recursively.
+ * Used by `drillDown` (Task 3).
+ */
+export function loadChildrenOf(
+  hippoRoot: string,
+  parentId: string,
+  tenantId?: string,
+): MemoryEntry[] {
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    const rows = tenantId !== undefined
+      ? db.prepare(
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE dag_parent_id = ? AND tenant_id = ? ORDER BY created ASC, id ASC`,
+        ).all(parentId, tenantId) as MemoryRow[]
+      : db.prepare(
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE dag_parent_id = ? ORDER BY created ASC, id ASC`,
+        ).all(parentId) as MemoryRow[];
+    return rows.map(rowToEntry);
   } finally {
     closeHippoDb(db);
   }
