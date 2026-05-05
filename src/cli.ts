@@ -4637,6 +4637,35 @@ function cmdDag(hippoRoot: string, flags: Record<string, string | boolean | stri
   }
 }
 
+function cmdDrillDown(hippoRoot: string, summaryId: string, flags: Record<string, string | boolean | string[]>): void {
+  requireInit(hippoRoot);
+  const limit = typeof flags['limit'] === 'string' ? Number(flags['limit']) : undefined;
+  const budget = typeof flags['budget'] === 'string' ? Number(flags['budget']) : undefined;
+  const ctx: api.Context = {
+    hippoRoot,
+    tenantId: resolveTenantId({}),
+    actor: 'cli:drill',
+  };
+  const r = api.drillDown(ctx, summaryId, {
+    ...(Number.isFinite(limit) && limit! > 0 ? { limit } : {}),
+    ...(Number.isFinite(budget) && budget! > 0 ? { budget } : {}),
+  });
+  if (!r) {
+    console.error(`No drillable summary at id=${summaryId} (not found, wrong tenant, scope-blocked, or not a level-2+ row).`);
+    process.exit(1);
+  }
+  if (flags['json']) {
+    console.log(JSON.stringify(r, null, 2));
+    return;
+  }
+  console.log(`Summary ${r.summary.id} — ${r.summary.descendantCount} descendants${r.summary.earliestAt ? ` (${r.summary.earliestAt} → ${r.summary.latestAt})` : ''}`);
+  console.log(`  ${r.summary.content.slice(0, 200)}${r.summary.content.length > 200 ? '…' : ''}`);
+  console.log(`\nChildren (${r.children.length}/${r.totalChildren}${r.truncated ? ', truncated' : ''}):`);
+  for (const c of r.children) {
+    console.log(`  [L${c.dagLevel}] ${c.id} — ${c.content.slice(0, 100)}${c.content.length > 100 ? '…' : ''}`);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Auth subcommands (A5 stub auth)
 // ---------------------------------------------------------------------------
@@ -5367,6 +5396,10 @@ Commands:
   provenance               Provenance coverage gate for kind='raw' rows
     --json                 Output as JSON
     --strict               Exit non-zero when coverage < 100%
+  drill <summary-id>       Walk down a DAG level-2 summary to its children
+    --limit N              Cap children list (default 50)
+    --budget N             Cap total child token cost (≈ chars/4)
+    --json                 Output as JSON
   correction-latency       Wall-clock lag from receipt to supersession (p50/p95/max)
     --json                 Output as JSON
   outcome                  Apply feedback to last recall
@@ -5644,6 +5677,16 @@ async function main(): Promise<void> {
         process.exit(1);
       }
       await cmdRecall(hippoRoot, query, flags);
+      break;
+    }
+
+    case 'drill': {
+      const summaryId = args[0];
+      if (!summaryId) {
+        console.error('Usage: hippo drill <summary-id> [--limit N] [--budget N]');
+        process.exit(1);
+      }
+      cmdDrillDown(hippoRoot, summaryId, flags);
       break;
     }
 

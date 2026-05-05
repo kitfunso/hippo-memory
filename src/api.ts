@@ -17,6 +17,7 @@ import {
   deleteEntry,
   loadSearchEntries,
   loadEntriesByIds,
+  loadChildrenOf,
   removeEntryMirrors,
   loadActiveTaskSnapshot,
   loadLatestHandoff,
@@ -405,6 +406,97 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   }
 
   return { results: ranked, total: entries.length, tokens, continuity, continuityTokens };
+}
+
+// ---------------------------------------------------------------------------
+// drillDown — DAG-aware recall Phase 1 Task 3
+// ---------------------------------------------------------------------------
+
+export interface DrillDownOpts {
+  /** Cap on number of children returned. Default 50. */
+  limit?: number;
+  /**
+   * Optional token budget. When set, children are appended in chronological
+   * order (created ASC) until adding the next child would exceed the budget.
+   * Token cost = ceil(content.length / 4) per child.
+   */
+  budget?: number;
+}
+
+export interface DrillDownResult {
+  summary: { id: string; content: string; descendantCount: number; earliestAt: string | null; latestAt: string | null };
+  children: Array<{ id: string; content: string; layer: string; dagLevel: number; created: string }>;
+  totalChildren: number;
+  truncated: boolean;
+}
+
+/**
+ * Walk one step down the DAG from a level-2 (or higher) summary to its direct
+ * children. Companion to `recall(... summarizeOverflow: true)` — when recall
+ * surfaces a summary with `substitutedFor: [...]`, the caller drills into the
+ * summary id to recover the original detail.
+ *
+ * Tenant scope: only summaries owned by `ctx.tenantId` are reachable. The same
+ * scope filter that recall applies is enforced on the children — a level-2
+ * summary in `slack:public:CGEN` cannot leak `slack:private:*` children even
+ * if the underlying DAG accidentally linked across scopes.
+ *
+ * Returns null when the id is unknown, belongs to another tenant, fails the
+ * scope filter, or points at a non-summary row (level 0/1 leaves are not
+ * drillable — they ARE the leaf).
+ */
+export function drillDown(
+  ctx: Context,
+  summaryId: string,
+  opts: DrillDownOpts = {},
+): DrillDownResult | null {
+  const limit = opts.limit ?? 50;
+  const summary = readEntry(ctx.hippoRoot, summaryId, ctx.tenantId);
+  if (!summary) return null;
+  if ((summary.dag_level ?? 0) < 2) return null;
+  if (!passesScopeFilterForRecall(summary.scope ?? null, undefined)) return null;
+
+  const allChildren = loadChildrenOf(ctx.hippoRoot, summaryId, ctx.tenantId);
+  const eligible = allChildren.filter((c) => passesScopeFilterForRecall(c.scope ?? null, undefined));
+  let children = eligible;
+  let truncated = false;
+  if (opts.budget !== undefined) {
+    const out: typeof eligible = [];
+    let used = 0;
+    for (const c of eligible) {
+      const t = Math.ceil(c.content.length / 4);
+      if (out.length > 0 && used + t > opts.budget) {
+        truncated = true;
+        break;
+      }
+      out.push(c);
+      used += t;
+    }
+    children = out;
+  }
+  if (children.length > limit) {
+    children = children.slice(0, limit);
+    truncated = true;
+  }
+
+  return {
+    summary: {
+      id: summary.id,
+      content: summary.content,
+      descendantCount: summary.descendant_count ?? eligible.length,
+      earliestAt: summary.earliest_at ?? null,
+      latestAt: summary.latest_at ?? null,
+    },
+    children: children.map((c) => ({
+      id: c.id,
+      content: c.content,
+      layer: c.layer,
+      dagLevel: c.dag_level ?? 0,
+      created: c.created,
+    })),
+    totalChildren: eligible.length,
+    truncated,
+  };
 }
 
 // ---------------------------------------------------------------------------
