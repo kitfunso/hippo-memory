@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.5.0 (2026-05-05)
+
+DAG-aware recall — Phase 1. The `dag_level`/`dag_parent_id` columns Hippo has carried since schema v14 are now load-bearing in the recall path. When a query overflows the result limit and ≥2 of the dropped leaves share a level-2 parent summary, recall appends that summary so the user sees a compact pointer to the missing detail. Companion `drillDown` API + `hippo drill <summary-id>` CLI walk down to recover the originals.
+
+Lifts the depth-stratified summary + drill-down patterns from [lossless-claw](https://github.com/Martian-Engineering/lossless-claw) (LCM paper from Voltropy / Martian Engineering) and adapts them to Hippo's score-ranked recall model. Substitution is additive (caps at ceil(limit * 0.3) extras), tenant-scoped, and respects the v1.2.1 `*:private:*` default-deny.
+
+### Added
+
+- **`api.drillDown(ctx, summaryId, opts)`.** Walk one step down the DAG from a level-2+ summary to its direct children. Tenant scoped, scope-filtered on both summary and children. Optional `limit` (default 50) and `budget` (token cap) options. Returns null for non-summaries (level 0/1 leaves are not drillable — they ARE the leaf).
+- **`hippo drill <summary-id> [--limit N] [--budget N] [--json]`.** CLI wrapper around `drillDown`. Pretty-prints the summary and its children, or emits JSON for piping.
+- **`RecallOpts.summarizeOverflow` (default true).** When entries overflow the limit and share a level-2 parent, the parent is appended. New optional fields on `RecallResultItem`: `isSummary`, `substitutedFor` (child ids), `descendantCount`.
+- **`store.loadEntriesByIds(hippoRoot, ids, tenantId)`.** Batched, tenant-scoped lookup capped at 500 ids. Used by the substitution path.
+- **`store.loadChildrenOf(hippoRoot, parentId, tenantId)`.** Direct DAG children, tenant-scoped, ordered by `created ASC`. Used by `drillDown`.
+
+### Changed
+
+- **Schema v25.** Added `descendant_count`, `earliest_at`, `latest_at` columns on `memories`. Idempotent ALTER + best-effort backfill from existing summary rows. No `min_compatible_binary` bump — pure metadata, older binaries can open a v25 DB and treat the columns as 0/null.
+- **`buildDag` populates the cached metadata at write time.** When sleep consolidation creates a level-2 topic summary, `descendant_count` = cluster size, `earliest_at`/`latest_at` = min/max of member `created` timestamps.
+
+### Tests
+
+- 1256 passing (+19 from v1.4.0). New suites: `tests/dag-summary-metadata.test.ts` (5 cases), `tests/dag-recall-substitution.test.ts` (7 cases), `tests/dag-drill-down.test.ts` (7 cases).
+
 ## 1.4.0 (2026-05-05)
 
 First repo-level CI workflow plus the v0.40.0 provenance gate enforced on every PR. The Slack connector transform also closes a gap that pre-v1.4 would have failed `hippo provenance --strict` on any `bot_message` event: userless messages now stamp `owner: bot:<bot_id>` instead of `undefined`.

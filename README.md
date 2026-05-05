@@ -85,6 +85,14 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.5.0
+
+- **DAG-aware recall.** When a query's matched leaves overflow the result limit and ≥2 of them share a level-2 parent summary, recall appends the summary so you see a compact pointer to the missing detail instead of silently dropping it. Capped at ceil(limit * 0.3) extras so a runaway DAG can't bloat results. Tenant-scoped, scope-filtered, opt-out via `summarizeOverflow: false`.
+- **`hippo drill <summary-id>`.** Companion command. Walks one step down the DAG from a level-2 summary to its direct children. `--limit N` and `--budget N` options for budgeted recovery. JSON output via `--json`.
+- **Schema v25** caches `descendant_count`, `earliest_at`, `latest_at` on summary rows. Idempotent ALTER + backfill on existing v24 DBs; no `min_compatible_binary` bump.
+- **Lifted from [lossless-claw](https://github.com/Martian-Engineering/lossless-claw)** (LCM paper, Voltropy / Martian Engineering): depth-stratified summaries + drill-down. Adapted to Hippo's score-ranked recall instead of conversation-order assembly. Phase 2 (context-engine assembler) and Phase 3 (sub-agent expansion) on the roadmap.
+- 1256 tests passing (+19 from v1.4.0).
+
 ### What's new in v1.4.0
 
 - **First repo-level CI workflow + provenance gate enforced on every PR.** `.github/workflows/ci.yml` runs build + 1237 vitest cases + a CI-only seed that ingests one GitHub webhook + one Slack message through the real connectors then runs `hippo provenance --strict`. Drop a connector's owner stamp and the PR fails. Read-only permissions, 25-minute timeout, uploads `provenance-coverage.json` as a workflow artifact.
