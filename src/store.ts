@@ -1122,6 +1122,38 @@ export function loadEntriesByIds(
 }
 
 /**
+ * Last N kind='raw' memories by `created` desc, tenant scoped. Used by
+ * api.recall's fresh-tail option (docs/plans/2026-05-05-dag-recall.md
+ * Task 4) so a load-all-then-sort isn't needed for the common
+ * "what did I just see in this session" continuity ask.
+ *
+ * Bounded count cap at 200 — beyond that the caller should filter via
+ * tags/scope rather than time-windowed recall.
+ */
+export function loadFreshRawMemories(
+  hippoRoot: string,
+  count: number,
+  tenantId?: string,
+): MemoryEntry[] {
+  if (count <= 0) return [];
+  const capped = Math.min(count, 200);
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    const rows = tenantId !== undefined
+      ? db.prepare(
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' AND tenant_id = ? AND superseded_by IS NULL ORDER BY created DESC LIMIT ?`,
+        ).all(tenantId, capped) as MemoryRow[]
+      : db.prepare(
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' AND superseded_by IS NULL ORDER BY created DESC LIMIT ?`,
+        ).all(capped) as MemoryRow[];
+    return rows.map(rowToEntry);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/**
  * Direct DAG children of a parent summary. Tenant scoped. Returns only rows
  * whose `dag_parent_id` matches `parentId`; does NOT walk recursively.
  * Used by `drillDown` (Task 3).

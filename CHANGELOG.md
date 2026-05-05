@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.5.2 (2026-05-05)
+
+Phase 1 fresh-tail. Closes the last item on docs/plans/2026-05-05-dag-recall.md.
+
+### Added
+
+- **`RecallOpts.freshTailCount` (default 0).** When > 0, recall surfaces the last N `kind='raw'` rows with `isFreshTail=true` regardless of whether they matched the BM25 query. Tenant + scope filtered, capped at 200. Useful for "what did I just see" continuity recall on top of the query path.
+- **Dual-membership semantics.** When a recent row also matches the query, the existing BM25 hit is stamped with `isFreshTail=true` rather than duplicated. Fresh-tail rows that are NOT BM25 hits prepend at score 1.0.
+- **`store.loadFreshRawMemories(hippoRoot, count, tenantId)`.** SQL `ORDER BY created DESC LIMIT N` with append-only filter (`superseded_by IS NULL`). Avoids the load-all-then-sort path.
+
+### Tests
+
+- 1273 passing (+6 from v1.5.1). New suite: `tests/dag-fresh-tail.test.ts` covering default-off, basic case, dedup, scope, tenant, prepend.
+
 ## 1.5.1 (2026-05-05)
 
 Completes the v1.5.0 drillDown surface area. The `api.drillDown` function shipped in v1.5.0 with CLI access only; this patch wires the same call through the two remaining transports.

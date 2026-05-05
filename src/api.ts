@@ -18,6 +18,7 @@ import {
   loadSearchEntries,
   loadEntriesByIds,
   loadChildrenOf,
+  loadFreshRawMemories,
   removeEntryMirrors,
   loadActiveTaskSnapshot,
   loadLatestHandoff,
@@ -163,6 +164,13 @@ export interface RecallOpts {
    */
   summarizeOverflow?: boolean;
   /**
+   * v1.5.2 fresh-tail. When > 0, prepend the last N kind='raw' rows
+   * (tenant + scope filtered, dedup against the BM25 hits) so an agent's
+   * "what did I just see" recall path always covers the recent window
+   * even when the query terms don't match. Capped at 200. Default 0 = off.
+   */
+  freshTailCount?: number;
+  /**
    * When true, include a continuity block (active task snapshot, latest matching
    * session handoff, recent session events) on the result. Default false to keep
    * the hot path cheap; agent boot paths should set this to true.
@@ -204,6 +212,12 @@ export interface RecallResultItem {
   substitutedFor?: string[];
   /** Cached descendant count from schema v25; non-zero for level-2+ rows. */
   descendantCount?: number;
+  /**
+   * v1.5.2 fresh-tail (docs/plans/2026-05-05-dag-recall.md Task 4). True
+   * for rows surfaced via the most-recent-N kind='raw' window, NOT by the
+   * BM25 query match. Caller can render them in a separate "recent" band.
+   */
+  isFreshTail?: boolean;
 }
 
 export interface RecallResult {
@@ -300,7 +314,7 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
     }
   }
 
-  const baseRanked = baseSlice.map((entry, idx) => ({
+  const baseRanked: RecallResultItem[] = baseSlice.map((entry, idx) => ({
     id: entry.id,
     content: entry.content,
     score: Math.max(0, 1 - idx / Math.max(1, limit)),
@@ -320,7 +334,47 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
     substitutedFor: s.childIds,
     descendantCount: s.entry.descendant_count ?? s.childIds.length,
   }));
-  const ranked = [...baseRanked, ...summaryRanked];
+  // v1.5.2 fresh-tail. Surface the last N kind='raw' rows so an agent's
+  // "what did I just see" recall path always covers the recent window even
+  // when the query terms don't match. Tenant + scope filtered.
+  //
+  // Dual-membership semantics: `loadSearchEntries` returns all tenant-scoped
+  // rows scored by BM25 (even rows with no token overlap can surface at
+  // score≈0), so a row in the recent window often ALSO appears as a BM25
+  // hit. We don't duplicate. Instead:
+  //   1. Mark any baseRanked entry that's in the recent set with isFreshTail.
+  //   2. Prepend genuinely-new recent rows (not in BM25 hits or summaries).
+  // Net: every recent row carries `isFreshTail=true`, exactly once.
+  const freshTailCount = opts.freshTailCount ?? 0;
+  const freshRanked: RecallResultItem[] = [];
+  if (freshTailCount > 0) {
+    const recent = loadFreshRawMemories(ctx.hippoRoot, freshTailCount, ctx.tenantId);
+    const recentScoped = recent.filter((m) =>
+      passesScopeFilterForRecall(m.scope ?? null, opts.scope),
+    );
+    const recentIdSet = new Set(recentScoped.map((m) => m.id));
+    for (const r of baseRanked) {
+      if (recentIdSet.has(r.id)) r.isFreshTail = true;
+    }
+    const seenIds = new Set([
+      ...baseRanked.map((r) => r.id),
+      ...summaryRanked.map((r) => r.id),
+    ]);
+    for (const m of recentScoped) {
+      if (seenIds.has(m.id)) continue;
+      freshRanked.push({
+        id: m.id,
+        content: m.content,
+        score: 1.0,
+        layer: m.layer,
+        strength: m.strength,
+        isFreshTail: true,
+      });
+      seenIds.add(m.id);
+    }
+  }
+
+  const ranked = [...freshRanked, ...baseRanked, ...summaryRanked];
   const tokens = ranked.reduce((acc, r) => acc + Math.ceil(r.content.length / 4), 0);
 
   // TODO(a1-task-4): emit via the shared audit hook in store.ts so we don't

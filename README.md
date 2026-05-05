@@ -85,6 +85,10 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.5.2
+
+- **Fresh-tail recall.** New `RecallOpts.freshTailCount` (default 0): when > 0, recall surfaces the last N `kind='raw'` rows tagged with `isFreshTail=true` regardless of whether the query matched them. Useful for "what did I just see in this session" continuity on top of the query path. Dual-membership: when a recent row also hits BM25, the existing result is flagged in place rather than duplicated.
+
 ### What's new in v1.5.1
 
 - **`hippo_drill` MCP tool + `GET /v1/recall/drill/:id` HTTP route.** Completes the v1.5.0 drillDown surface — the function was reachable via CLI + JS API; now it's also a first-class MCP tool and a Bearer-auth HTTP endpoint. Same shape, same tenant + scope guards, same 404 semantics on leaves and cross-tenant ids.
