@@ -85,6 +85,11 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.6.0
+
+- **`hippo assemble --session <id>`** + `api.assemble` + MCP `hippo_assemble` + HTTP `GET /v1/sessions/:id/assemble`. Phase 2 of the DAG plan: build a chronologically-ordered context window for a session — fresh-tail raw rows + level-2 summary substitutions for older rows + budget-fit. Adapted from [lossless-claw](https://github.com/Martian-Engineering/lossless-claw) but with bio-aware eviction: when over-budget, Hippo drops the lowest-strength non-fresh-tail item first instead of oldest-first, so high-importance older context survives while low-strength recent rows get evicted.
+- Phase 3 (sub-agent expansion, large file externalization) deferred as a non-fit for Hippo's memory-store role; `drillDown` already covers detail recovery.
+
 ### What's new in v1.5.2
 
 - **Fresh-tail recall.** New `RecallOpts.freshTailCount` (default 0): when > 0, recall surfaces the last N `kind='raw'` rows tagged with `isFreshTail=true` regardless of whether the query matched them. Useful for "what did I just see in this session" continuity on top of the query path. Dual-membership: when a recent row also hits BM25, the existing result is flagged in place rather than duplicated.

@@ -19,6 +19,7 @@ import {
   loadEntriesByIds,
   loadChildrenOf,
   loadFreshRawMemories,
+  loadSessionRawMemories,
   removeEntryMirrors,
   loadActiveTaskSnapshot,
   loadLatestHandoff,
@@ -460,6 +461,183 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   }
 
   return { results: ranked, total: entries.length, tokens, continuity, continuityTokens };
+}
+
+// ---------------------------------------------------------------------------
+// assemble — Hippo DAG Phase 2 (bio-aware context engine)
+// ---------------------------------------------------------------------------
+
+export interface AssembleOpts {
+  /** Token budget. Default 4000. */
+  budget?: number;
+  /** Recent raw rows always kept verbatim. Default 10. */
+  freshTailCount?: number;
+  /** Substitute parent summaries for older raws when ≥2 share a level-2
+   *  ancestor. Default true. */
+  summarizeOlder?: boolean;
+}
+
+export interface AssembledContextItem {
+  id: string;
+  content: string;
+  /** ISO timestamp of the source row's `created` field (or `earliest_at`
+   *  for substituted summaries). */
+  createdAt: string;
+  /** Fresh-tail protected window (last freshTailCount raws). */
+  isFreshTail?: boolean;
+  /** Level-2 summary substituted for older raw rows that share a parent. */
+  isSummary?: boolean;
+  /** When isSummary, the raw ids this summary covers. drillDown
+   *  recovers the originals. */
+  substitutedFor?: string[];
+  /** Decay × retrieval × emotional. Lets callers render a confidence
+   *  hint without re-deriving from MemoryEntry. */
+  strength: number;
+}
+
+export interface AssembleResult {
+  sessionId: string;
+  items: AssembledContextItem[];
+  tokens: number;
+  totalRaw: number;
+  summarized: number;
+  evicted: number;
+}
+
+/**
+ * Build a chronologically-ordered context window for a session. Adapts the
+ * lossless-claw context-engine pattern to Hippo's score-ranked memory store.
+ *
+ * Algorithm:
+ *   1. Load all kind='raw' rows for the session, tenant + scope filtered.
+ *   2. Split: newest `freshTailCount` are protected (fresh tail).
+ *   3. For older rows, when ≥2 share a level-2 parent, substitute the
+ *      summary; everything else passes through as raw.
+ *   4. Hippo-additive eviction: when over-budget, drop the lowest-strength
+ *      non-fresh-tail item first. Fresh-tail rows are never evicted.
+ *
+ * Strength-weighted eviction is the differentiator from lossless-claw,
+ * which evicts oldest-first. A high-strength older row (high retrieval
+ * count, slow decay) survives; a low-strength recent row (newer but
+ * unimportant) goes first.
+ *
+ * Returns `items: []` cleanly when:
+ *   - sessionId is empty
+ *   - no raws exist for the session
+ *   - all rows fail the scope/tenant filter
+ */
+export function assemble(
+  ctx: Context,
+  sessionId: string,
+  opts: AssembleOpts = {},
+): AssembleResult {
+  const budget = opts.budget ?? 4000;
+  const freshTailCount = opts.freshTailCount ?? 10;
+  const summarizeOlder = opts.summarizeOlder ?? true;
+
+  if (!sessionId) {
+    return { sessionId, items: [], tokens: 0, totalRaw: 0, summarized: 0, evicted: 0 };
+  }
+
+  const rows = loadSessionRawMemories(ctx.hippoRoot, sessionId, ctx.tenantId);
+  const totalRaw = rows.length;
+  const scoped = rows.filter((r) =>
+    passesScopeFilterForRecall(r.scope ?? null, undefined),
+  );
+  if (scoped.length === 0) {
+    return { sessionId, items: [], tokens: 0, totalRaw, summarized: 0, evicted: 0 };
+  }
+
+  // Split newest N into fresh tail; rest is older.
+  const tailStartIdx = Math.max(0, scoped.length - freshTailCount);
+  const olderRows = scoped.slice(0, tailStartIdx);
+  const tailRows = scoped.slice(tailStartIdx);
+
+  // Substitute parent summaries for older rows that share one.
+  const olderItems: AssembledContextItem[] = [];
+  let summarized = 0;
+  if (summarizeOlder && olderRows.length > 0) {
+    const olderByParent = new Map<string, MemoryEntry[]>();
+    for (const r of olderRows) {
+      if (!r.dag_parent_id) continue;
+      const list = olderByParent.get(r.dag_parent_id) ?? [];
+      list.push(r);
+      olderByParent.set(r.dag_parent_id, list);
+    }
+    const eligibleParentIds = Array.from(olderByParent.keys()).filter(
+      (pid) => (olderByParent.get(pid)?.length ?? 0) >= 2,
+    );
+    const parents = eligibleParentIds.length > 0
+      ? loadEntriesByIds(ctx.hippoRoot, eligibleParentIds, ctx.tenantId)
+          .filter((p) => (p.dag_level ?? 0) === 2)
+          .filter((p) => passesScopeFilterForRecall(p.scope ?? null, undefined))
+      : [];
+    const claimedRawIds = new Set<string>();
+    for (const parent of parents) {
+      const claimed = (olderByParent.get(parent.id) ?? []).map((r) => r.id);
+      claimed.forEach((id) => claimedRawIds.add(id));
+      olderItems.push({
+        id: parent.id,
+        content: parent.content,
+        createdAt: parent.earliest_at ?? parent.created,
+        isSummary: true,
+        substitutedFor: claimed,
+        strength: parent.strength,
+      });
+      summarized += claimed.length;
+    }
+    for (const r of olderRows) {
+      if (claimedRawIds.has(r.id)) continue;
+      olderItems.push({
+        id: r.id,
+        content: r.content,
+        createdAt: r.created,
+        strength: r.strength,
+      });
+    }
+  } else {
+    for (const r of olderRows) {
+      olderItems.push({
+        id: r.id,
+        content: r.content,
+        createdAt: r.created,
+        strength: r.strength,
+      });
+    }
+  }
+
+  const tailItems: AssembledContextItem[] = tailRows.map((r) => ({
+    id: r.id,
+    content: r.content,
+    createdAt: r.created,
+    isFreshTail: true,
+    strength: r.strength,
+  }));
+
+  olderItems.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  tailItems.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  let items: AssembledContextItem[] = [...olderItems, ...tailItems];
+
+  let tokens = items.reduce((acc, it) => acc + Math.ceil(it.content.length / 4), 0);
+  let evicted = 0;
+  while (tokens > budget && items.length > 0) {
+    let worstIdx = -1;
+    let worstStrength = Infinity;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].isFreshTail) continue;
+      if (items[i].strength < worstStrength) {
+        worstStrength = items[i].strength;
+        worstIdx = i;
+      }
+    }
+    if (worstIdx === -1) break;
+    const cost = Math.ceil(items[worstIdx].content.length / 4);
+    items = items.filter((_, i) => i !== worstIdx);
+    tokens -= cost;
+    evicted++;
+  }
+
+  return { sessionId, items, tokens, totalRaw, summarized, evicted };
 }
 
 // ---------------------------------------------------------------------------

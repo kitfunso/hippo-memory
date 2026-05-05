@@ -4637,6 +4637,33 @@ function cmdDag(hippoRoot: string, flags: Record<string, string | boolean | stri
   }
 }
 
+function cmdAssemble(hippoRoot: string, sessionId: string, flags: Record<string, string | boolean | string[]>): void {
+  requireInit(hippoRoot);
+  const budget = typeof flags['budget'] === 'string' ? Number(flags['budget']) : undefined;
+  const freshTailCount = typeof flags['fresh-tail'] === 'string' ? Number(flags['fresh-tail']) : undefined;
+  const summarizeOlder = flags['no-summarize-older'] !== true;
+  const ctx: api.Context = {
+    hippoRoot,
+    tenantId: resolveTenantId({}),
+    actor: 'cli:assemble',
+  };
+  const r = api.assemble(ctx, sessionId, {
+    ...(Number.isFinite(budget) && budget! > 0 ? { budget } : {}),
+    ...(Number.isFinite(freshTailCount) && freshTailCount! >= 0 ? { freshTailCount } : {}),
+    summarizeOlder,
+  });
+  if (flags['json']) {
+    console.log(JSON.stringify(r, null, 2));
+    return;
+  }
+  console.log(`Session ${r.sessionId} — ${r.items.length} items, ${r.tokens} tokens (raw=${r.totalRaw}, summarized=${r.summarized}, evicted=${r.evicted})`);
+  for (const it of r.items) {
+    const prefix = it.isSummary ? '[summary]' : it.isFreshTail ? '[tail]' : '[older]';
+    const head = it.content.slice(0, 120);
+    console.log(`  ${prefix} ${it.createdAt} ${it.id} — ${head}${it.content.length > 120 ? '…' : ''}`);
+  }
+}
+
 function cmdDrillDown(hippoRoot: string, summaryId: string, flags: Record<string, string | boolean | string[]>): void {
   requireInit(hippoRoot);
   const limit = typeof flags['limit'] === 'string' ? Number(flags['limit']) : undefined;
@@ -5400,6 +5427,11 @@ Commands:
     --limit N              Cap children list (default 50)
     --budget N             Cap total child token cost (≈ chars/4)
     --json                 Output as JSON
+  assemble --session <id>  Build a session's chronological context window
+    --budget N             Token budget (default 4000)
+    --fresh-tail N         Recent rows always kept verbatim (default 10)
+    --no-summarize-older   Disable older-row summary substitution
+    --json                 Output as JSON
   correction-latency       Wall-clock lag from receipt to supersession (p50/p95/max)
     --json                 Output as JSON
   outcome                  Apply feedback to last recall
@@ -5687,6 +5719,16 @@ async function main(): Promise<void> {
         process.exit(1);
       }
       cmdDrillDown(hippoRoot, summaryId, flags);
+      break;
+    }
+
+    case 'assemble': {
+      const sessionId = typeof flags['session'] === 'string' ? (flags['session'] as string) : args[0];
+      if (!sessionId) {
+        console.error('Usage: hippo assemble --session <id> [--budget N] [--fresh-tail N] [--no-summarize-older] [--json]');
+        process.exit(1);
+      }
+      cmdAssemble(hippoRoot, sessionId, flags);
       break;
     }
 

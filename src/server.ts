@@ -9,6 +9,7 @@ import {
   remember,
   recall,
   drillDown,
+  assemble,
   forget,
   promote,
   supersede,
@@ -452,6 +453,34 @@ async function handleRequest(
     if (includeContinuity) {
       res.setHeader('Cache-Control', 'no-store');
     }
+    sendJson(res, 200, result);
+    return;
+  }
+
+  // GET /v1/sessions/:id/assemble?budget=N&freshTail=N&summarizeOlder=0|1
+  // Phase 2 context-engine API. Returns ordered AssembledContextItem[]
+  // with fresh-tail raws + summary substitutions + bio-aware budget fit.
+  // Tenant scope from Bearer; default-deny on private rows.
+  const assembleMatch = matchPath('/v1/sessions/:id/assemble', path);
+  if (method === 'GET' && assembleMatch) {
+    const budgetRaw = query.get('budget');
+    const budget = budgetRaw === null ? undefined : Number(budgetRaw);
+    if (budget !== undefined && (!Number.isFinite(budget) || budget <= 0)) {
+      throw new HttpError(400, 'budget must be a positive number');
+    }
+    const ftRaw = query.get('freshTail');
+    const freshTailCount = ftRaw === null ? undefined : Number(ftRaw);
+    if (freshTailCount !== undefined && (!Number.isFinite(freshTailCount) || freshTailCount < 0)) {
+      throw new HttpError(400, 'freshTail must be a non-negative number');
+    }
+    const sumOlderRaw = query.get('summarizeOlder');
+    const summarizeOlder = sumOlderRaw === null ? undefined : sumOlderRaw !== '0' && sumOlderRaw !== 'false';
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const result = assemble(ctx, assembleMatch.id!, {
+      ...(budget !== undefined ? { budget } : {}),
+      ...(freshTailCount !== undefined ? { freshTailCount } : {}),
+      ...(summarizeOlder !== undefined ? { summarizeOlder } : {}),
+    });
     sendJson(res, 200, result);
     return;
   }

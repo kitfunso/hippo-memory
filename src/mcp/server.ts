@@ -26,7 +26,7 @@ import { fetchGitLog, extractLessons, deduplicateLesson, isGitRepo } from '../au
 import { loadConfig } from '../config.js';
 import { resolveConfidence } from '../memory.js';
 import { resolveTenantId } from '../tenant.js';
-import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, drillDown as apiDrillDown, isPrivateScope, type Context as ApiContext } from '../api.js';
+import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, drillDown as apiDrillDown, assemble as apiAssemble, isPrivateScope, type Context as ApiContext } from '../api.js';
 import { PACKAGE_VERSION } from '../version.js';
 
 // ── Find hippo root ──
@@ -172,6 +172,33 @@ const TOOLS = [
         },
       },
       required: ['query'],
+    },
+  },
+  {
+    name: 'hippo_assemble',
+    description:
+      'Build a chronologically-ordered context window for a session. Returns ordered items: fresh-tail raw rows + level-2 summary substitutions for older rows + budget-fit. Hippo-additive vs lossless-claw: eviction picks lowest-strength non-fresh-tail items first instead of oldest-first. Tenant-scoped; default-deny on private scopes.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        session_id: {
+          type: 'string',
+          description: 'Session identifier. Returns clean empty result if no kind=raw rows match.',
+        },
+        budget: {
+          type: 'number',
+          description: 'Token budget for the assembled context (default 4000). Eviction kicks in over budget.',
+        },
+        fresh_tail_count: {
+          type: 'number',
+          description: 'Recent raw rows always kept verbatim (default 10). These are never evicted.',
+        },
+        summarize_older: {
+          type: 'boolean',
+          description: 'When true (default), older raws sharing a level-2 parent summary get substituted. Set false to keep every older raw as-is.',
+        },
+      },
+      required: ['session_id'],
     },
   },
   {
@@ -403,6 +430,31 @@ async function executeTool(
         response += '\n\n' + formatContinuityBlock(apiResult.continuity);
       }
       return response;
+    }
+
+    case 'hippo_assemble': {
+      const sessionId = String(args.session_id || '');
+      if (!sessionId) return 'No session_id provided.';
+      const budget = Number(args.budget);
+      const freshTailCount = Number(args.fresh_tail_count);
+      const summarizeOlder = args.summarize_older !== false;
+      const apiCtx: ApiContext = {
+        hippoRoot,
+        tenantId,
+        actor: 'mcp',
+      };
+      const r = apiAssemble(apiCtx, sessionId, {
+        ...(Number.isFinite(budget) && budget > 0 ? { budget } : {}),
+        ...(Number.isFinite(freshTailCount) && freshTailCount >= 0 ? { freshTailCount } : {}),
+        summarizeOlder,
+      });
+      const lines: string[] = [];
+      lines.push(`Session ${r.sessionId} — ${r.items.length} items, ${r.tokens} tokens (raw=${r.totalRaw}, summarized=${r.summarized}, evicted=${r.evicted})`);
+      for (const it of r.items) {
+        const prefix = it.isSummary ? '[summary]' : it.isFreshTail ? '[tail]' : '[older]';
+        lines.push(`  ${prefix} ${it.createdAt} ${it.id} - ${it.content}`);
+      }
+      return lines.join('\n');
     }
 
     case 'hippo_drill': {

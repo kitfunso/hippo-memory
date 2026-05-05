@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.6.0 (2026-05-05)
+
+Phase 2 of the DAG plan. New `assemble` API: chronologically-ordered context window for a session, with fresh-tail raw rows + level-2 summary substitutions for older rows + bio-aware budget eviction. The differentiator from lossless-claw is the eviction policy: when over budget, Hippo drops the lowest-strength non-fresh-tail item first instead of the oldest, so high-importance older rows survive while low-strength recent ones get summarized.
+
+### Added
+
+- **`api.assemble(ctx, sessionId, opts)`.** Returns `AssembleResult { items, tokens, totalRaw, summarized, evicted }`. Each `AssembledContextItem` carries `id`, `content`, `createdAt`, `strength`, plus optional `isFreshTail` / `isSummary` / `substitutedFor`. Tenant-scoped, default-deny on private scopes, opt-out via `summarizeOlder: false`.
+- **`hippo assemble --session <id> [--budget N] [--fresh-tail N] [--no-summarize-older] [--json]`.** CLI wrapper.
+- **MCP `hippo_assemble` tool.** Args `session_id`, `budget`, `fresh_tail_count`, `summarize_older`. Renders human-readable items list.
+- **HTTP `GET /v1/sessions/:id/assemble?budget=N&freshTail=N&summarizeOlder=0|1`.** Bearer auth, tenant scope from key.
+- **`store.loadSessionRawMemories(hippoRoot, sessionId, tenantId)`.** SQL `WHERE kind='raw' AND source_session_id=? AND superseded_by IS NULL ORDER BY created ASC`.
+
+### Phase 3 deferred
+
+The original DAG plan flagged Phase 3 (sub-agent expansion + large file externalization). Both are lossless-claw-specific patterns that don't fit Hippo: `drillDown` already covers detail recovery without sub-process delegation, and Hippo memories are short text rather than multi-MB files. Documented in `docs/plans/2026-05-05-assemble-phase2.md`.
+
+### Tests
+
+- 1293 passing (+20 from v1.5.2). New suites: `tests/dag-assemble.test.ts` (11 cases), `tests/mcp-assemble.test.ts` (4), `tests/http-assemble.test.ts` (5).
+
 ## 1.5.2 (2026-05-05)
 
 Phase 1 fresh-tail. Closes the last item on docs/plans/2026-05-05-dag-recall.md.

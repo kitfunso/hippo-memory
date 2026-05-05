@@ -1122,6 +1122,33 @@ export function loadEntriesByIds(
 }
 
 /**
+ * All `kind='raw'` rows for a given session, tenant-scoped, oldest first.
+ * Used by `api.assemble` (docs/plans/2026-05-05-assemble-phase2.md Task 1)
+ * to walk a session's chronological context. Excludes superseded rows.
+ */
+export function loadSessionRawMemories(
+  hippoRoot: string,
+  sessionId: string,
+  tenantId?: string,
+): MemoryEntry[] {
+  if (!sessionId) return [];
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    const rows = tenantId !== undefined
+      ? db.prepare(
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' AND source_session_id = ? AND tenant_id = ? AND superseded_by IS NULL ORDER BY created ASC, id ASC`,
+        ).all(sessionId, tenantId) as MemoryRow[]
+      : db.prepare(
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' AND source_session_id = ? AND superseded_by IS NULL ORDER BY created ASC, id ASC`,
+        ).all(sessionId) as MemoryRow[];
+    return rows.map(rowToEntry);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/**
  * Last N kind='raw' memories by `created` desc, tenant scoped. Used by
  * api.recall's fresh-tail option (docs/plans/2026-05-05-dag-recall.md
  * Task 4) so a load-all-then-sort isn't needed for the common
