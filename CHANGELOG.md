@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.5.1 (2026-05-05)
+
+Completes the v1.5.0 drillDown surface area. The `api.drillDown` function shipped in v1.5.0 with CLI access only; this patch wires the same call through the two remaining transports.
+
+### Added
+
+- **MCP `hippo_drill` tool.** Companion to `hippo_recall`. When recall returns an item with `isSummary=true` and `substitutedFor=[ids]`, pass the summary id to `hippo_drill` to recover the original detail. Args: `summary_id` (required), `limit` (default 50), `budget` (token cap). Tenant scoped; default-deny on private scopes for both summary and children.
+- **HTTP `GET /v1/recall/drill/:id?limit=N&budget=N`.** Bearer auth, tenant scope from key. Returns `{summary, children, totalChildren, truncated}`. 404 on unknown id, leaf id, or scope-blocked. 400 on bad query params.
+
+### Tests
+
+- 1267 passing (+11 from v1.5.0). New suites: `tests/mcp-drill.test.ts` (5 cases), `tests/http-drill.test.ts` (6 cases).
+
 ## 1.5.0 (2026-05-05)
 
 DAG-aware recall — Phase 1. The `dag_level`/`dag_parent_id` columns Hippo has carried since schema v14 are now load-bearing in the recall path. When a query overflows the result limit and ≥2 of the dropped leaves share a level-2 parent summary, recall appends that summary so the user sees a compact pointer to the missing detail. Companion `drillDown` API + `hippo drill <summary-id>` CLI walk down to recover the originals.

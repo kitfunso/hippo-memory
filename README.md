@@ -85,6 +85,10 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.5.1
+
+- **`hippo_drill` MCP tool + `GET /v1/recall/drill/:id` HTTP route.** Completes the v1.5.0 drillDown surface — the function was reachable via CLI + JS API; now it's also a first-class MCP tool and a Bearer-auth HTTP endpoint. Same shape, same tenant + scope guards, same 404 semantics on leaves and cross-tenant ids.
+
 ### What's new in v1.5.0
 
 - **DAG-aware recall.** When a query's matched leaves overflow the result limit and ≥2 of them share a level-2 parent summary, recall appends the summary so you see a compact pointer to the missing detail instead of silently dropping it. Capped at ceil(limit * 0.3) extras so a runaway DAG can't bloat results. Tenant-scoped, scope-filtered, opt-out via `summarizeOverflow: false`.
