@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.4.0 (2026-05-05)
 
 First repo-level CI workflow plus the v0.40.0 provenance gate enforced on every PR. The Slack connector transform also closes a gap that pre-v1.4 would have failed `hippo provenance --strict` on any `bot_message` event: userless messages now stamp `owner: bot:<bot_id>` instead of `undefined`.
 

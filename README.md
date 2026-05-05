@@ -85,6 +85,13 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.4.0
+
+- **First repo-level CI workflow + provenance gate enforced on every PR.** `.github/workflows/ci.yml` runs build + 1237 vitest cases + a CI-only seed that ingests one GitHub webhook + one Slack message through the real connectors then runs `hippo provenance --strict`. Drop a connector's owner stamp and the PR fails. Read-only permissions, 25-minute timeout, uploads `provenance-coverage.json` as a workflow artifact.
+- **Slack `bot_message` provenance gap closed.** `slack/transform.ts` shipped `owner: undefined` for userless bot messages, which would have failed any future strict gate. Now derives `owner: bot:<bot_id>` (or `bot:unknown` as a sentinel). Skipping userless messages was rejected during plan review because `slack/ingest.ts:54-65` would have silently dropped existing bot ingestion via the "skipped but seen" path.
+- **`SlackMessageEvent.bot_id` added** as an optional field on the public type.
+- **Slack provenance parity test** mirrors `tests/github-provenance-parity.test.ts` and covers user, `bot_message`, threaded replies, and `message_changed` edits.
+
 ### What's new in v1.3.2
 
 - **Hotfix for v1.3.1.** Codex round 3 + senior code reviewer caught residual bugs in v1.3.1's own fix.
