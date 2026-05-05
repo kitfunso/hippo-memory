@@ -16,6 +16,7 @@ import {
   readEntry,
   deleteEntry,
   loadSearchEntries,
+  loadEntriesByIds,
   removeEntryMirrors,
   loadActiveTaskSnapshot,
   loadLatestHandoff,
@@ -68,6 +69,29 @@ export interface Context {
  * single source of truth so v1.3 GitHub work cannot drift.
  */
 const PRIVATE_SCOPE_RE = /^[a-z][a-z0-9_-]*:private:/;
+/**
+ * Recall-side scope filter. Mirrors the inline rule in `recall` continuity
+ * filtering and the row filter at api.ts:198-205. Lifted to a helper so
+ * the v1.5.0 DAG substitution path can reuse it without duplicating logic.
+ *
+ * - When `requested` is set and non-empty: exact match required.
+ * - When `requested` is undefined/empty: default-deny on any
+ *   `<source>:private:*` scope and on the `unknown:legacy` quarantine bucket.
+ *   `null` and public scopes pass.
+ */
+function passesScopeFilterForRecall(
+  scope: string | null,
+  requested: string | undefined,
+): boolean {
+  if (requested !== undefined && requested !== '') {
+    return scope === requested;
+  }
+  if (scope === null) return true;
+  if (isPrivateScope(scope)) return false;
+  if (scope === 'unknown:legacy') return false;
+  return true;
+}
+
 export function isPrivateScope(scope: string | null | undefined): boolean {
   return typeof scope === 'string' && PRIVATE_SCOPE_RE.test(scope);
 }
@@ -131,6 +155,13 @@ export interface RecallOpts {
    */
   scope?: string;
   /**
+   * v1.5.0 DAG-aware recall. When true (default), entries that overflow the
+   * `limit` and share a level-2 parent summary cause that summary to be
+   * appended in their place, capped at ceil(limit * 0.3) extra rows. Set to
+   * false to disable and get the pre-v1.5 strict-limit behaviour.
+   */
+  summarizeOverflow?: boolean;
+  /**
    * When true, include a continuity block (active task snapshot, latest matching
    * session handoff, recent session events) on the result. Default false to keep
    * the hot path cheap; agent boot paths should set this to true.
@@ -159,6 +190,19 @@ export interface RecallResultItem {
   score: number;
   layer: string;
   strength: number;
+  /**
+   * v1.5.0 DAG-aware recall (docs/plans/2026-05-05-dag-recall.md Task 2).
+   * True when this row is a level-2 topic summary substituted in for
+   * overflowed children that didn't fit the limit.
+   */
+  isSummary?: boolean;
+  /**
+   * IDs of the overflow leaves this summary covers. Caller can drill
+   * into these via `drillDown` (Task 3) to recover the original detail.
+   */
+  substitutedFor?: string[];
+  /** Cached descendant count from schema v25; non-zero for level-2+ rows. */
+  descendantCount?: number;
 }
 
 export interface RecallResult {
@@ -207,13 +251,75 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   // BM25 ordering already comes from loadSearchEntries; cap to `limit`.
   // Score is a placeholder — the physics/hybrid scorers in src/search.ts
   // produce richer breakdowns and will replace this when wired up.
-  const ranked = entries.slice(0, limit).map((entry, idx) => ({
+  const baseSlice = entries.slice(0, limit);
+
+  // v1.5.0 DAG-aware substitution (Phase 1, Task 2). When entries overflow the
+  // limit and ≥2 of them share a level-2 parent summary, append the parent
+  // summary so the user sees a compact pointer to the dropped detail. Capped
+  // at ceil(limit * 0.3) substitutions so a runaway DAG can't expand results.
+  // Each substituted summary is tenant-scoped via loadEntriesByIds and
+  // re-checked against the active scope filter (default-deny on private).
+  // Drill-down (Task 3) reverses substitution: caller passes substitutedFor[]
+  // ids back through `drillDown` to recover the children.
+  const summarizeOverflow = opts.summarizeOverflow ?? true;
+  type SummaryDecoration = { entry: typeof baseSlice[number]; childIds: string[] };
+  let substituted: SummaryDecoration[] = [];
+  if (summarizeOverflow && entries.length > limit) {
+    const overflow = entries.slice(limit);
+    const baseIds = new Set(baseSlice.map((e) => e.id));
+    const overflowByParent = new Map<string, typeof overflow>();
+    for (const e of overflow) {
+      const parentId = e.dag_parent_id;
+      if (!parentId) continue;
+      if ((e.dag_level ?? 0) > 1) continue;
+      const list = overflowByParent.get(parentId) ?? [];
+      list.push(e);
+      overflowByParent.set(parentId, list);
+    }
+    const eligibleParentIds = Array.from(overflowByParent.keys()).filter(
+      (pid) => (overflowByParent.get(pid)?.length ?? 0) >= 2 && !baseIds.has(pid),
+    );
+    if (eligibleParentIds.length > 0) {
+      const parents = loadEntriesByIds(ctx.hippoRoot, eligibleParentIds, ctx.tenantId);
+      const eligibleParents = parents.filter(
+        (p) => (p.dag_level ?? 0) === 2 && passesScopeFilterForRecall(p.scope ?? null, opts.scope),
+      );
+      const maxSub = Math.max(1, Math.ceil(limit * 0.3));
+      // Order parents by overflow count descending so the most
+      // information-dense substitutions come first.
+      eligibleParents.sort((a, b) => {
+        const ac = overflowByParent.get(a.id)?.length ?? 0;
+        const bc = overflowByParent.get(b.id)?.length ?? 0;
+        return bc - ac;
+      });
+      substituted = eligibleParents.slice(0, maxSub).map((p) => ({
+        entry: p,
+        childIds: (overflowByParent.get(p.id) ?? []).map((e) => e.id),
+      }));
+    }
+  }
+
+  const baseRanked = baseSlice.map((entry, idx) => ({
     id: entry.id,
     content: entry.content,
     score: Math.max(0, 1 - idx / Math.max(1, limit)),
     layer: entry.layer,
     strength: entry.strength,
   }));
+  // Substituted summaries land at the end with score = 0.5 (mid-rank), so
+  // they don't outrank top-N strong matches but stay above lowest-rank
+  // leaves on the consumer side. Caller sorts/filters as it sees fit.
+  const summaryRanked: RecallResultItem[] = substituted.map((s) => ({
+    id: s.entry.id,
+    content: s.entry.content,
+    score: 0.5,
+    layer: s.entry.layer,
+    strength: s.entry.strength,
+    isSummary: true,
+    substitutedFor: s.childIds,
+    descendantCount: s.entry.descendant_count ?? s.childIds.length,
+  }));
+  const ranked = [...baseRanked, ...summaryRanked];
   const tokens = ranked.reduce((acc, r) => acc + Math.ceil(r.content.length / 4), 0);
 
   // TODO(a1-task-4): emit via the shared audit hook in store.ts so we don't
