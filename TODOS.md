@@ -1,14 +1,13 @@
 # Hippo Brain Observatory — Roadmap
 
-## v1.7.2 — consolidation follow-ups from v1.7.1
+## v1.7.3 — review-tail from v1.7.2
 
-v1.7.1 fixed the `unknown:legacy` leak at the SQL producer layer via `loadRecallSearchEntries`. Other recall consumers still re-implement scope filtering JS-side; they filter correctly today but should consolidate onto the producer for single-source-of-truth.
+Lower-confidence items deferred from v1.7.2 review chain. All non-blocking.
 
-- [ ] **Migrate continuity / drillDown / assemble to `loadRecallSearchEntries`.** The continuity inline closure in `recall()` (api.ts:568+), `drillDown` (api.ts:~900), and `assemble` (api.ts:~715) each post-load filter via `passesScopeFilterForRecall`. They're correct today; consolidating onto the SQL producer eliminates parallel-rule drift risk.
-- [ ] **Migrate CLI `cmdRecall` and `shared.ts` cross-deployment helpers.** `cli.ts:783`, `cli.ts:1429`, `shared.ts:96`, `shared.ts:172` still call `loadSearchEntries`. Either migrate or document why CLI is intentionally full-visibility (operator local).
-- [ ] **`scorerWindow` transport exposure.** HTTP `/v1/memories` `scorer_window` query parse, MCP `hippo_recall` arg parse, `client.ts` thin-client serialize. Validation already lives in `recall()` — transport wiring is the remaining gap.
-- [ ] **Discriminated-union refactor of internal `recallScope?: { value: string | null }` parameter shape.** Boxed-nullable leaks SQL-builder internals into the `loadSearchRows` signature. A caller writing `{ value: undefined }` would bind `m.scope = undefined`. Today only one internal caller (`loadRecallSearchEntries`) so the trap is contained, but the shape is awkward. Refactor to `recallMode?: 'default-deny' | { exact: string }` or similar discriminated union.
-- [ ] **README "What's new" backfill for v1.6.5 + v1.7.0.** publish-repo skill mandates the section per release; v1.6.5 and v1.7.0 ships skipped it. Add both retroactively. v1.7.1 has been added.
+- [ ] **Module-load assertion runtime test.** `RECALL_DEFAULT_DENY_SCOPES.length === 0` throws on module import (codex P1-3). Current test pins the constant's current length; doesn't exercise the throw path. Add via `vi.mock` or extract `assertNonEmpty` helper for direct testing.
+- [ ] **`summarize_overflow=0` (false path) thin-client test.** `client-recall-opts-parity.test.ts` only asserts `summarize_overflow=1`. Add an assertion that `summarizeOverflow: false` produces `summarize_overflow=0` (not omitted). Codex P2-3.
+- [ ] **`RecallScopeFilter` parameter naming polish.** Internal-only; `recallScope: RecallScopeFilter` reads as a noun for the value; `recallScopeFilter` or `scopeFilter` would be clearer. Defer.
+- [ ] **README "What's new" backfill for v1.6.5 + v1.7.0.** publish-repo skill mandates the section per release; v1.6.5 and v1.7.0 ships skipped it. Add both retroactively. v1.7.1 + v1.7.2 are in.
 
 ## v0.26 — UI Redesign (warm parchment + 3D)
 
