@@ -59,6 +59,30 @@ export interface Context {
 }
 
 /**
+ * Thrown by `api.recall` when a caller's options violate a recall contract
+ * that has been opted into via env. Carries a stable `code` field for HTTP /
+ * MCP / CLI render paths to discriminate without parsing the message.
+ *
+ * Codes:
+ *   - 'fresh_tail_requires_session_id' — `freshTailCount > 0` AND no
+ *     `freshTailSessionId` AND `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1`.
+ *     Default behaviour (env unset) returns tenant-wide rows; the env gate
+ *     is opt-in so multi-session tenants can fail loud instead of silently
+ *     surfacing cross-session rows tagged `isFreshTail=true`.
+ */
+export class RecallContractError extends Error {
+  public readonly code: 'fresh_tail_requires_session_id';
+  constructor(
+    code: 'fresh_tail_requires_session_id',
+    message: string,
+  ) {
+    super(message);
+    this.name = 'RecallContractError';
+    this.code = code;
+  }
+}
+
+/**
  * v1.2.1: source-agnostic private-scope detector. A scope string is treated
  * as private when it has the shape `<lowercase-source>:private:<rest>`.
  *
@@ -358,6 +382,23 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   const freshTailCount = opts.freshTailCount ?? 0;
   const freshRanked: RecallResultItem[] = [];
   if (freshTailCount > 0) {
+    // F5 (v1.6.5): typed contract guard. When the deployment opts in via
+    // HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1, refuse tenant-wide
+    // fresh-tail. Default (env unset) preserves v1.6.x back-compat: tenant-
+    // wide rows are returned and tagged `isFreshTail=true`. The guard lives
+    // here in `api.recall` only — `api.assemble` is already session-scoped
+    // through `loadSessionRawMemories` and never calls tenant-wide
+    // `loadFreshRawMemories`, so a duplicate guard there would be a no-op.
+    if (
+      !opts.freshTailSessionId &&
+      process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL === '1'
+    ) {
+      throw new RecallContractError(
+        'fresh_tail_requires_session_id',
+        'fresh-tail requires a session id when HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1; ' +
+          'pass opts.freshTailSessionId or unset the env to allow tenant-wide fresh-tail.',
+      );
+    }
     const recent = loadFreshRawMemories(
       ctx.hippoRoot,
       freshTailCount,

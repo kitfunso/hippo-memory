@@ -8,6 +8,7 @@ import { validateApiKey } from './auth.js';
 import {
   remember,
   recall,
+  RecallContractError,
   drillDown,
   assemble,
   forget,
@@ -1409,6 +1410,13 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
       }
       if (err instanceof HttpError) {
         sendError(res, err.status, err.message);
+        return;
+      }
+      // F5 (v1.6.5): typed RecallContractError surfaces a structured body
+      // {error: code, message} so callers can discriminate without parsing
+      // the message string. 400 is correct (caller passed bad input).
+      if (err instanceof RecallContractError) {
+        sendJson(res, 400, { error: err.code, message: err.message });
         return;
       }
       const mapped = mapApiError(err);
