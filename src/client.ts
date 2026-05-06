@@ -78,6 +78,18 @@ export async function recall(
   if (opts.mode !== undefined) params.set('mode', opts.mode);
   if (opts.scope !== undefined && opts.scope !== '') params.set('scope', opts.scope);
   if (opts.includeContinuity) params.set('include_continuity', '1');
+  // v1.7.2 T4 — RecallOpts parity sweep. Pre-v1.7.2 the thin-client only
+  // serialized the five fields above; the HTTP server already accepted
+  // fresh_tail_count, fresh_tail_session_id, summarize_overflow. Adding
+  // scorer_window alone would have perpetuated the drift. Serializing all
+  // four together. Validation lives in api.recall(); transport just
+  // forwards.
+  if (opts.freshTailCount !== undefined) params.set('fresh_tail_count', String(opts.freshTailCount));
+  if (opts.freshTailSessionId !== undefined && opts.freshTailSessionId !== '')
+    params.set('fresh_tail_session_id', opts.freshTailSessionId);
+  if (opts.summarizeOverflow !== undefined)
+    params.set('summarize_overflow', opts.summarizeOverflow ? '1' : '0');
+  if (opts.scorerWindow !== undefined) params.set('scorer_window', String(opts.scorerWindow));
   const res = await fetch(`${serverUrl}/v1/memories?${params.toString()}`, {
     method: 'GET',
     headers: buildHeaders(apiKey, false),

@@ -18,7 +18,7 @@ import {
   calculateStrength,
 } from '../memory.js';
 import { search, hybridSearch, physicsSearch, markRetrieved, estimateTokens } from '../search.js';
-import { loadAllEntries, writeEntry, readEntry, initStore, loadActiveTaskSnapshot, listMemoryConflicts, resolveConflict } from '../store.js';
+import { loadAllEntries, writeEntry, readEntry, initStore, loadActiveTaskSnapshot, listMemoryConflicts, resolveConflict, RECALL_DEFAULT_DENY_SCOPES } from '../store.js';
 import { shareMemory, listPeers, getGlobalRoot } from '../shared.js';
 import { consolidate } from '../consolidate.js';
 import { execSync } from 'child_process';
@@ -181,6 +181,10 @@ const TOOLS = [
         summarize_overflow: {
           type: 'boolean',
           description: 'When true (default), entries that overflow the limit and share a level-2 parent summary cause that summary to be appended in their place. Set false for strict-limit behaviour.',
+        },
+        scorer_window: {
+          type: 'number',
+          description: 'Candidate pool size that api.recall evaluates. Affects fresh-tail / summarize-overflow appendix paths and continuity hits. Note: the primary ranked block over MCP is driven by a separate physics/hybrid scorer over the full tenant store, so scorer_window does NOT narrow the main results — only the appendix. Default 200. Rejected as RecallContractError code=invalid_scorer_window if 0/negative/non-finite/non-numeric.',
         },
       },
       required: ['query'],
@@ -411,6 +415,15 @@ async function executeTool(
       const summarizeOverflow = typeof args.summarize_overflow === 'boolean'
         ? args.summarize_overflow
         : undefined;
+      // v1.7.2 T4 — scorer_window: Number-coerce so non-numeric input
+      // (string 'abc', boolean, etc.) reaches api.recall() and produces
+      // the same typed RecallContractError(code='invalid_scorer_window')
+      // as HTTP. Codex CRITICAL[2]: do NOT use `typeof === 'number'` — that
+      // would silently default-200 on string `"5"` while HTTP 400s on the
+      // same value. Both transports must agree.
+      const scorerWindow = args.scorer_window === undefined
+        ? undefined
+        : Number(args.scorer_window);
       const apiCtx: ApiContext = {
         hippoRoot,
         tenantId,
@@ -419,6 +432,8 @@ async function executeTool(
       // Route through api.recall for audit + (when requested) continuity block.
       // api.recall already applies the same default-deny / exact-match rules
       // we want here, so its continuity output is the source of truth.
+      // RecallContractError throws propagate raw to the MCP caller (per the
+      // v1.6.5 F5 contract documented in mcp-recall-fresh-tail-policy.test.ts).
       const apiResult = apiRecall(apiCtx, {
         query,
         limit: 50,
@@ -427,6 +442,7 @@ async function executeTool(
         ...(freshTailCount !== undefined ? { freshTailCount } : {}),
         ...(freshTailSessionId !== undefined ? { freshTailSessionId } : {}),
         ...(summarizeOverflow !== undefined ? { summarizeOverflow } : {}),
+        ...(scorerWindow !== undefined ? { scorerWindow } : {}),
       });
 
       // Existing physics/hybrid scorer continues to drive user-visible
@@ -441,7 +457,9 @@ async function executeTool(
             const s = e.scope ?? null;
             if (s === null) return true;
             if (isPrivateScope(s)) return false;
-            if (s === 'unknown:legacy') return false;
+            // v1.7.2: read from RECALL_DEFAULT_DENY_SCOPES (single source of truth
+            // shared with SQL clause + passesScopeFilterForRecall).
+            if ((RECALL_DEFAULT_DENY_SCOPES as readonly string[]).includes(s)) return false;
             return true;
           });
       const usePhysics = config.physics?.enabled !== false;
@@ -631,7 +649,9 @@ async function executeTool(
         if (explicitScope !== undefined) return s === explicitScope;
         if (s === null) return true;
         if (isPrivateScope(s)) return false;
-        if (s === 'unknown:legacy') return false;
+        // v1.7.2: read from RECALL_DEFAULT_DENY_SCOPES (single source of truth
+        // shared with SQL + api.passesScopeFilterForRecall).
+        if ((RECALL_DEFAULT_DENY_SCOPES as readonly string[]).includes(s)) return false;
         return true;
       };
       const allEntries = loadAllEntries(hippoRoot, tenantId);

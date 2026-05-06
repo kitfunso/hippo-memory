@@ -203,6 +203,32 @@ const MEMORY_SEARCH_COLUMNS = `m.id AS id, m.created AS created, m.last_retrieve
  */
 export const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
 
+/**
+ * v1.7.2 — literal scopes excluded from recall by default-deny when the
+ * caller passes no `scope`. The SQL clause in `loadSearchRows` and the JS
+ * helper `passesScopeFilterForRecall` (src/api.ts) both read from this
+ * constant. Adding a deny scope is a one-place change.
+ *
+ * Regex-based denies (e.g. `<source>:private:*`) stay in
+ * `passesScopeFilterForRecall` as a separate JS step — they don't translate
+ * cleanly to SQL.
+ *
+ * Invariant: never empty. An empty array would silently allow quarantine
+ * scopes through both paths (SQL clause omitted, JS check vacuous). The
+ * module-load assertion below pins this loudly.
+ */
+export const RECALL_DEFAULT_DENY_SCOPES = ['unknown:legacy'] as const;
+
+// Cast to readonly string[] — `as const` makes this `readonly ['unknown:legacy']`
+// with literal length 1, so a direct `.length === 0` is "unreachable" per TS
+// even though the assertion is a real runtime guard against future maintainers
+// blanking the array. Cast widens the type so the check compiles.
+if ((RECALL_DEFAULT_DENY_SCOPES as readonly string[]).length === 0) {
+  throw new Error(
+    'RECALL_DEFAULT_DENY_SCOPES cannot be empty — would silently allow quarantine scopes',
+  );
+}
+
 function layerDir(root: string, layer: Layer): string {
   return path.join(root, layer);
 }
@@ -596,12 +622,31 @@ function canonicalConflictPair(aId: string, bId: string): { memory_a_id: string;
     : { memory_a_id: bId, memory_b_id: aId };
 }
 
+/**
+ * v1.7.2 — recall-mode scope filter shape, exported so callers
+ * (`loadRecallSearchEntries`) and tests can refer to it symbolically without
+ * `Parameters<typeof loadSearchRows>[N]` indirection.
+ *
+ * Two modes:
+ *   - 'default-deny' — exclude scopes in `RECALL_DEFAULT_DENY_SCOPES` (T2).
+ *   - 'exact' — exact match on `m.scope = value`.
+ *
+ * Background pipelines (`consolidate`, `embeddings`, `refine-llm`, ...) call
+ * `loadSearchEntries` (no recallScope arg) and see all rows including
+ * quarantine.
+ */
+/** @internal v1.7.2 — internal SQL-builder shape; not on the public API
+ *  surface (not re-exported from `src/index.ts`). Subject to change. */
+export type RecallScopeFilter =
+  | { mode: 'default-deny' }
+  | { mode: 'exact'; value: string };
+
 function loadSearchRows(
   db: ReturnType<typeof openHippoDb>,
   query: string,
   limit: number,
   tenantId: string | undefined,
-  recallScope?: { value: string | null },
+  recallScope?: RecallScopeFilter,
 ): MemoryRow[] {
   // tenantId undefined = no tenant filter (legacy callers / cross-deployment
   // helpers). tenantId set = strict tenant isolation, leveraging the composite
@@ -629,11 +674,20 @@ function loadSearchRows(
   let scopeClauseTenantOnly = '';
   const scopeParams: string[] = [];
   if (recallScope !== undefined) {
-    if (recallScope.value === null) {
-      scopeClauseAlias = ` AND (m.scope IS NULL OR m.scope != 'unknown:legacy')`;
-      scopeClauseNoAlias = ` AND (scope IS NULL OR scope != 'unknown:legacy')`;
+    if (recallScope.mode === 'default-deny') {
+      // T2: bind from RECALL_DEFAULT_DENY_SCOPES so SQL and JS share one
+      // source of truth. Module-load assertion at the top of this file
+      // guarantees length > 0, so NOT IN () (a SQL parse error) is impossible.
+      // NULL handling: m.scope NOT IN (?, ?) returns NULL on m.scope = NULL
+      // (three-valued logic). The `m.scope IS NULL OR ...` disjunct admits
+      // NULL rows.
+      const placeholders = RECALL_DEFAULT_DENY_SCOPES.map(() => '?').join(', ');
+      scopeClauseAlias = ` AND (m.scope IS NULL OR m.scope NOT IN (${placeholders}))`;
+      scopeClauseNoAlias = ` AND (scope IS NULL OR scope NOT IN (${placeholders}))`;
       scopeClauseTenantOnly = scopeClauseNoAlias;
+      scopeParams.push(...RECALL_DEFAULT_DENY_SCOPES);
     } else {
+      // mode === 'exact'
       scopeClauseAlias = ` AND m.scope = ?`;
       scopeClauseNoAlias = ` AND scope = ?`;
       scopeClauseTenantOnly = scopeClauseNoAlias;
@@ -1505,8 +1559,11 @@ export function loadRecallSearchEntries(
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    const scope = requestedScope && requestedScope !== '' ? requestedScope : null;
-    return loadSearchRows(db, query, limit, tenantId, { value: scope }).map(rowToEntry);
+    const recallScope: RecallScopeFilter =
+      requestedScope && requestedScope !== ''
+        ? { mode: 'exact', value: requestedScope }
+        : { mode: 'default-deny' };
+    return loadSearchRows(db, query, limit, tenantId, recallScope).map(rowToEntry);
   } finally {
     closeHippoDb(db);
   }

@@ -85,6 +85,13 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.7.2
+
+- **`scorerWindow` over the wire.** HTTP `/v1/memories?scorer_window=N`, MCP `hippo_recall.scorer_window`, thin-client serializes `scorerWindow`. Validation unchanged (`recall()` rejects 0/negative/non-finite/non-numeric with `RecallContractError code: invalid_scorer_window`).
+- **Thin-client parity sweep.** `client.ts` now serializes all four RecallOpts transport fields (`fresh_tail_count`, `fresh_tail_session_id`, `summarize_overflow`, `scorer_window`); previously only the first three over HTTP, all missing in client.
+- **Single source of truth for default-deny recall scopes.** `RECALL_DEFAULT_DENY_SCOPES` constant shared by SQL clause + 5 JS sites (api.recall, MCP physics-scorer, MCP assemble, CLI continuity, api continuity). Adding a literal deny scope is a one-place change.
+- **Internal type cleanup.** `loadSearchRows::recallScope` is a discriminated union (`@internal`); can't construct an invalid intermediate.
+
 ### What's new in v1.7.1
 
 - Fixed `unknown:legacy` scope leak in BM25 base recall, at the **producer layer** (SQL predicate in `loadSearchRows` via new `loadRecallSearchEntries` helper). Future recall consumers cannot silently re-introduce the leak. Operators investigating the quarantine bucket should pass explicit `scope: 'unknown:legacy'`.
