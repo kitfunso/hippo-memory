@@ -219,7 +219,11 @@ export const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
  */
 export const RECALL_DEFAULT_DENY_SCOPES = ['unknown:legacy'] as const;
 
-if (RECALL_DEFAULT_DENY_SCOPES.length === 0) {
+// Cast to readonly string[] — `as const` makes this `readonly ['unknown:legacy']`
+// with literal length 1, so a direct `.length === 0` is "unreachable" per TS
+// even though the assertion is a real runtime guard against future maintainers
+// blanking the array. Cast widens the type so the check compiles.
+if ((RECALL_DEFAULT_DENY_SCOPES as readonly string[]).length === 0) {
   throw new Error(
     'RECALL_DEFAULT_DENY_SCOPES cannot be empty — would silently allow quarantine scopes',
   );
