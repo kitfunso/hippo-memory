@@ -9,6 +9,7 @@ export {
   initStore,
   loadAllEntries,
   loadSearchEntries,
+  loadRecallSearchEntries,
   writeEntry,
   readEntry,
   deleteEntry,

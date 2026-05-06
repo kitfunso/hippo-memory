@@ -1041,18 +1041,7 @@ export function setMeta(db: DatabaseSyncLike, key: string, value: string): void 
   db.prepare(`INSERT INTO meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(key, value);
 }
 
-/**
- * v1.7.1 — test/diagnostic hook: when `HIPPO_DISABLE_FTS=1`, force the
- * LIKE-fallback path in `loadSearchRows`. Used by tests to deterministically
- * exercise the LIKE branch independent of FTS5 tokenizer behaviour.
- *
- * Lives here (not in `loadSearchRows`) so all consumers of FTS-availability
- * checks see the same answer. The override is intentionally pre-DB so it
- * also bypasses `ensureOptionalFts`'s meta-write — the meta value would be
- * overwritten on the next `openHippoDb` regardless.
- */
 export function isFtsAvailable(db: DatabaseSyncLike): boolean {
-  if (process.env.HIPPO_DISABLE_FTS === '1') return false;
   return getMeta(db, 'fts5_available', '0') === '1';
 }
 

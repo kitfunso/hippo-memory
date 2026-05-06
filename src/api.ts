@@ -380,6 +380,14 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   // - opts.scope non-empty: SQL exact-matches m.scope = opts.scope.
   // Tenant predicate still runs first, so a tenant-mismatched scope cannot
   // surface another tenant's row even when both share the same scope string.
+  //
+  // **CALLER CONTRACT:** any future recall-mode loader MUST go through
+  // `loadRecallSearchEntries` (or invoke the SQL scope predicate equivalently).
+  // Calling `loadSearchEntries` from this code path re-introduces the v1.6.5
+  // codex-flagged leak. See `passesScopeFilterForRecall` in this file for
+  // the canonical recall-side scope rule (kept in sync with the SQL clause
+  // in loadSearchRows).
+  //
   // Also fixes a latent code smell: pre-v1.7.1 passed `opts.scorerWindow`
   // (raw, possibly undefined) where `windowSize` was intended.
   const all = loadRecallSearchEntries(
@@ -391,8 +399,10 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   );
   let entries: typeof all;
   if (opts.scope !== undefined && opts.scope !== '') {
-    // SQL already exact-matched in loadRecallSearchEntries.
-    entries = all;
+    // SQL already exact-matched in loadRecallSearchEntries; keep the JS
+    // filter as defense-in-depth so a future SQL-clause regression cannot
+    // silently surface cross-scope rows.
+    entries = all.filter((e) => e.scope === opts.scope);
   } else {
     // SQL already excluded `unknown:legacy`. The remaining JS filter
     // covers the regex-only `<source>:private:*` rule (v1.2.1 generalization
@@ -400,7 +410,7 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
     // surface private rows to no-scope callers).
     entries = all.filter((e) => !isPrivateScope(e.scope ?? null));
   }
-  // BM25 ordering already comes from loadSearchEntries; cap to `limit`.
+  // BM25 ordering already comes from loadRecallSearchEntries; cap to `limit`.
   // Score is a placeholder — the physics/hybrid scorers in src/search.ts
   // produce richer breakdowns and will replace this when wired up.
   const baseSlice = entries.slice(0, limit);

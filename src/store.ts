@@ -619,6 +619,11 @@ function loadSearchRows(
   // Private-scope (`<source>:private:*`) regex filtering remains a JS
   // post-load step in `recall()` — the regex doesn't translate cleanly to
   // SQL, and the JS helper covers all four recall consumers consistently.
+  //
+  // **Cross-reference:** `passesScopeFilterForRecall` in src/api.ts encodes
+  // the same default-deny rule. If the deny list grows (e.g. add
+  // `unknown:purged`), update BOTH this SQL clause AND that helper AND the
+  // continuity inline closure. v1.7.2 will consolidate them.
   let scopeClauseAlias = '';
   let scopeClauseNoAlias = '';
   let scopeClauseTenantOnly = '';
@@ -646,7 +651,14 @@ function loadSearchRows(
     return db.prepare(sql).all(...tenantParams, ...scopeParams, limit) as MemoryRow[];
   }
 
-  if (isFtsAvailable(db)) {
+  // v1.7.1 — test/diagnostic hook: `HIPPO_FORCE_LIKE_PATH=1` forces the
+  // LIKE-fallback path here only. Gated at the read-call site so writes
+  // (`syncFtsRow`, `deleteFtsRow`, `raw-archive.ts::archiveRaw`) keep using
+  // `isFtsAvailable` honestly and never silently skip FTS index sync.
+  // Lets tests exercise the LIKE branch deterministically without
+  // poisoning the on-disk FTS state.
+  const forceLikePath = process.env.HIPPO_FORCE_LIKE_PATH === '1';
+  if (!forceLikePath && isFtsAvailable(db)) {
     try {
       const ftsQuery = terms.map((t) => `"${t.replace(/"/g, '""')}"`).join(' OR ');
       // memories_fts virtual table has no tenant_id column; filter via the

@@ -100,6 +100,10 @@ describe('loadSearchEntries bm25_score (F1, v1.7.0)', () => {
     // a future normalizer would silently break this test. Anchor explicitly.
     const probe = makeRaw('roundtrip probe');
     probe.created = '2026-05-06T00:00:00.000Z';
+    // codex P1[3]: stamp valid_from too — createMemory sets it to now() at
+    // construction; without alignment, valid_from > created is illegal-state
+    // bait for any future schema migration. Cheap future-proofing.
+    probe.valid_from = probe.created;
     writeEntry(root, probe);
     const reread = loadSearchEntries(root, '', 1, 'default');
     expect(reread.length).toBe(1);
@@ -125,23 +129,25 @@ describe('loadSearchEntries bm25_score (F1, v1.7.0)', () => {
     expect(got).toEqual(expectedOrder);
   });
 
-  it('LIKE fallback path: HIPPO_DISABLE_FTS=1 routes through LIKE deterministically; bm25_score undefined; expected row anchored (v1.7.1 senior P2.3 + INFO #7)', () => {
+  it('LIKE fallback path: HIPPO_FORCE_LIKE_PATH=1 routes through LIKE deterministically; bm25_score undefined; expected row anchored (v1.7.1 senior P2.3 + INFO #7)', () => {
     // v1.7.0 used a substring "alphab" tokenizer-miss to route through LIKE
     // — fragile under porter/trigram tokenizers (senior P2.3). Both rev.1
     // alternatives (DROP TABLE, setMeta('fts5_available','0')) are no-ops
     // because ensureOptionalFts runs CREATE+backfill+meta-write on every
     // openHippoDb (db.ts:998-1029).
     //
-    // v1.7.1 fix: HIPPO_DISABLE_FTS=1 short-circuits isFtsAvailable
-    // (db.ts) so loadSearchRows skips the FTS branch unconditionally and
-    // runs the LIKE query.
+    // v1.7.1 fix: HIPPO_FORCE_LIKE_PATH=1 is read at the start of
+    // loadSearchRows so loadSearchRows skips the FTS branch unconditionally
+    // and runs the LIKE query. Gated at the read site (NOT inside
+    // isFtsAvailable) so writes (syncFtsRow, deleteFtsRow, raw-archive)
+    // keep maintaining the FTS index honestly — no on-disk poisoning.
     //
     // INFO #7: anchor on the expected content so a partial hit cannot let
     // the test pass spuriously.
-    const prevEnv = process.env.HIPPO_DISABLE_FTS;
+    const prevEnv = process.env.HIPPO_FORCE_LIKE_PATH;
     try {
       writeEntry(root, makeRaw('alphabet soup contents'));
-      process.env.HIPPO_DISABLE_FTS = '1';
+      process.env.HIPPO_FORCE_LIKE_PATH = '1';
       const results = loadSearchEntries(root, 'alphabet', 200, 'default');
       expect(results.length).toBeGreaterThan(0);
       // Anchor: the expected row must come back via the LIKE branch.
@@ -151,8 +157,8 @@ describe('loadSearchEntries bm25_score (F1, v1.7.0)', () => {
         expect(e.bm25_score).toBeUndefined();
       }
     } finally {
-      if (prevEnv === undefined) delete process.env.HIPPO_DISABLE_FTS;
-      else process.env.HIPPO_DISABLE_FTS = prevEnv;
+      if (prevEnv === undefined) delete process.env.HIPPO_FORCE_LIKE_PATH;
+      else process.env.HIPPO_FORCE_LIKE_PATH = prevEnv;
     }
   });
 
