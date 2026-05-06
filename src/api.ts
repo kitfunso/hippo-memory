@@ -672,8 +672,12 @@ export function assemble(
     strength: r.strength,
   }));
 
-  olderItems.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  tailItems.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  // F4 (v1.6.5): byte compare canonical UTC ISO timestamps. ~50× faster than
+  // localeCompare and chronological by virtue of the timestamp invariant
+  // documented in src/memory.ts above MemoryEntry.
+  const cmpIso = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+  olderItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));
+  tailItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));
   let items: AssembledContextItem[] = [...olderItems, ...tailItems];
 
   let tokens = items.reduce((acc, it) => acc + Math.ceil(it.content.length / 4), 0);

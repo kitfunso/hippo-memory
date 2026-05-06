@@ -20,6 +20,22 @@ export type TraceOutcome = 'success' | 'failure' | 'partial' | null;
 
 export type MemoryKind = 'raw' | 'distilled' | 'superseded' | 'archived';
 
+/**
+ * Timestamp invariant.
+ *
+ * All timestamp fields on `MemoryEntry` (`created`, `last_retrieved`,
+ * `valid_from`) and on session-state types (SessionEvent, TaskSnapshot,
+ * SessionHandoff, AssembledContextItem.createdAt, etc.) are stored as
+ * canonical `Date.prototype.toISOString()` output: 24 characters, UTC,
+ * milliseconds precision, trailing `Z` (e.g. `2026-05-06T09:55:49.123Z`).
+ *
+ * Imports preserving local-time offsets MUST normalize to canonical UTC
+ * before write. Byte-comparison sort (`<` / `>`) is chronological by virtue
+ * of this invariant; callers that need to order timestamps SHOULD prefer
+ * byte compare over `localeCompare` (which is locale-aware Unicode collation
+ * and ~50× slower with no semantic gain on canonical UTC ISO).
+ */
+
 export interface MemoryEntry {
   id: string;
   created: string;         // ISO 8601
