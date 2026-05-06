@@ -84,6 +84,25 @@ export interface MemoryEntry {
   artifact_ref: string | null;  // URI to source artifact (slack://, gh://, file://)
   // A5 stub auth (schema v16)
   tenantId: string;             // 'default' for single-tenant deployments
+  /**
+   * F1 (v1.7.0): raw SQLite FTS5 bm25() score from the FTS path of
+   * `loadSearchEntries`.
+   *
+   * Populated ONLY when ALL of the following hold:
+   *   - `loadSearchEntries` was called with a non-empty query, AND
+   *   - FTS5 is available (meta `fts5_available = 1`), AND
+   *   - the FTS join returned at least one row (path 2 of `loadSearchRows`).
+   *
+   * `undefined` on every other path: empty query, FTS unavailable, LIKE
+   * fallback, full-store fallback, `readEntry`, `loadAllEntries`, manual
+   * upsert, deserializeEntry from markdown.
+   *
+   * SCALE: FTS5 bm25() is negative; lower = better match (ascending order).
+   * NOT a drop-in for the JS-side BM25 in `src/search.ts` — that is a
+   * different scorer (different tokenizer, different params, positive
+   * scale). Treat `bm25_score` as provenance/rank metadata only.
+   */
+  bm25_score?: number;
 }
 
 export const DECISION_HALF_LIFE_DAYS = 90;
