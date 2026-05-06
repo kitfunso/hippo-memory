@@ -135,4 +135,20 @@ describe('RecallOpts.scorerWindow (F3, v1.7.0)', () => {
     const freshOnes = result.results.filter((r) => r.isFreshTail);
     expect(freshOnes.length).toBeGreaterThan(0);
   });
+
+  it('scorerWindow=1 (smallest legal value) is accepted and honoured (v1.7.1 INFO #2)', () => {
+    // Validator at src/api.ts accepts `>= 1` integers. A regression flipping
+    // `< 1` to `<= 1` or `< 2` would not be caught by the existing 0-rejection
+    // test alone. Pin the lower bound: scorerWindow=1 must NOT throw and the
+    // candidate pool must shrink to exactly 1.
+    for (let i = 0; i < 5; i++) writeEntry(root, makeRaw(`tau ${i}`));
+    const result = recall(ctxFor(root), {
+      query: 'tau',
+      limit: 5,
+      scorerWindow: 1,
+    });
+    expect(result.windowSize).toBe(1);
+    // FTS5 LIMIT 1 against a >1-row matching population returns exactly 1.
+    expect(result.total).toBe(1);
+  });
 });
