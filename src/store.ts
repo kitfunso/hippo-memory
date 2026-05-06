@@ -104,6 +104,9 @@ interface MemoryRow {
   descendant_count: number | null;
   earliest_at: string | null;
   latest_at: string | null;
+  // F1 (v1.7.0): present only on rows from MEMORY_SEARCH_COLUMNS (FTS path).
+  // Other paths SELECT MEMORY_SELECT_COLUMNS, which does not include this.
+  bm25_score?: number;
 }
 
 interface ConsolidationRunRow {
@@ -187,7 +190,18 @@ export interface SessionEvent {
 
 const INDEX_VERSION = 3;
 const MEMORY_SELECT_COLUMNS = `id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content, parents_json, starred, trace_outcome, source_session_id, valid_from, superseded_by, extracted_from, dag_level, dag_parent_id, kind, scope, owner, artifact_ref, tenant_id, descendant_count, earliest_at, latest_at`;
-const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
+// F1 (v1.7.0): qualified-and-aliased columns for the FTS join in
+// loadSearchRows. Every column is `m.<col> AS <col>` so rowToEntry's
+// unqualified field reads keep working unchanged. The trailing
+// bm25(memories_fts) AS bm25_score adds the FTS rank as a result column.
+// Only used inside the FTS path; non-FTS paths keep MEMORY_SELECT_COLUMNS.
+const MEMORY_SEARCH_COLUMNS = `m.id AS id, m.created AS created, m.last_retrieved AS last_retrieved, m.retrieval_count AS retrieval_count, m.strength AS strength, m.half_life_days AS half_life_days, m.layer AS layer, m.tags_json AS tags_json, m.emotional_valence AS emotional_valence, m.schema_fit AS schema_fit, m.source AS source, m.outcome_score AS outcome_score, m.outcome_positive AS outcome_positive, m.outcome_negative AS outcome_negative, m.conflicts_with_json AS conflicts_with_json, m.pinned AS pinned, m.confidence AS confidence, m.content AS content, m.parents_json AS parents_json, m.starred AS starred, m.trace_outcome AS trace_outcome, m.source_session_id AS source_session_id, m.valid_from AS valid_from, m.superseded_by AS superseded_by, m.extracted_from AS extracted_from, m.dag_level AS dag_level, m.dag_parent_id AS dag_parent_id, m.kind AS kind, m.scope AS scope, m.owner AS owner, m.artifact_ref AS artifact_ref, m.tenant_id AS tenant_id, m.descendant_count AS descendant_count, m.earliest_at AS earliest_at, m.latest_at AS latest_at, bm25(memories_fts) AS bm25_score`;
+/**
+ * Default candidate-pool size for `loadSearchEntries` when called with
+ * `limit === undefined`. Single source of truth; `api.recall` imports
+ * this for `RecallResult.windowSize` reporting so the two cannot drift.
+ */
+export const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
 
 function layerDir(root: string, layer: Layer): string {
   return path.join(root, layer);
@@ -366,6 +380,12 @@ function rowToEntry(row: MemoryRow): MemoryEntry {
     descendant_count: Number(row.descendant_count ?? 0),
     earliest_at: row.earliest_at ?? null,
     latest_at: row.latest_at ?? null,
+    // F1 (v1.7.0): preserve bm25_score from the FTS path. `'bm25_score' in row`
+    // distinguishes "absent column" (non-FTS path) from "column present but
+    // value 0" — though FTS5 bm25() never returns 0, this is defensive.
+    ...('bm25_score' in row && row.bm25_score !== undefined && row.bm25_score !== null
+      ? { bm25_score: Number(row.bm25_score) }
+      : {}),
   };
 }
 
@@ -592,8 +612,12 @@ function loadSearchRows(
 
   const terms = Array.from(new Set(tokenize(query)));
   if (terms.length === 0) {
-    const sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate} ORDER BY created ASC, id ASC`;
-    return db.prepare(sql).all(...tenantParams) as MemoryRow[];
+    // F3 (v1.7.0) self-review: empty-query path is the second uncapped
+    // path (codex diff-pass caught the full-store fallback at the bottom;
+    // this no-terms path had the same shape). Apply LIMIT so all four
+    // candidate paths honour the caller's cap when set.
+    const sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate} ORDER BY created ASC, id ASC LIMIT ?`;
+    return db.prepare(sql).all(...tenantParams, limit) as MemoryRow[];
   }
 
   if (isFtsAvailable(db)) {
@@ -602,8 +626,11 @@ function loadSearchRows(
       // memories_fts virtual table has no tenant_id column; filter via the
       // joined memories row (cheap with idx_memories_tenant_created leading
       // on tenant_id).
+      // F1 (v1.7.0): MEMORY_SEARCH_COLUMNS adds bm25_score as the trailing
+      // result column. Every other column is m.<col> AS <col> so rowToEntry
+      // sees the same shape it always has.
       const rows = db.prepare(`
-        SELECT ${MEMORY_SELECT_COLUMNS}
+        SELECT ${MEMORY_SEARCH_COLUMNS}
         FROM memories m
         JOIN memories_fts f ON f.id = m.id
         WHERE memories_fts MATCH ?${tenantPredicate}
@@ -634,8 +661,13 @@ function loadSearchRows(
 
   if (rows.length > 0) return rows;
 
-  const fallback = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate} ORDER BY created ASC, id ASC`;
-  return db.prepare(fallback).all(...tenantParams) as MemoryRow[];
+  // F3 (v1.7.0) codex P1: pre-v1.7.0 the full-store fallback ignored
+  // `limit` and could return the whole tenant store. With scorerWindow
+  // now reported on RecallResult, an unbounded fallback would lie about
+  // candidate-pool size. Apply LIMIT here so all four paths honour the
+  // caller's cap.
+  const fallback = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate} ORDER BY created ASC, id ASC LIMIT ?`;
+  return db.prepare(fallback).all(...tenantParams, limit) as MemoryRow[];
 }
 
 function writeMarkdownMirror(hippoRoot: string, entry: MemoryEntry): void {
@@ -1227,6 +1259,14 @@ export function countSessionRawMemories(
  *
  * Bounded count cap at 200 — beyond that the caller should filter via
  * tags/scope rather than time-windowed recall.
+ *
+ * Deprecation note (v1.6.5) — the **tenant-wide call shape** (omitting
+ * `sessionId`) is rarely the right shape for "what did I just see in this
+ * conversation". `api.recall` enforces session scoping when
+ * `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1` is set, throwing
+ * `RecallContractError` instead. Tenant-wide remains the back-compat default
+ * but is discouraged for new callers. Passing `sessionId` is fully supported
+ * and recommended; this function is NOT deprecated as a whole.
  */
 export function loadFreshRawMemories(
   hippoRoot: string,

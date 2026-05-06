@@ -8,6 +8,7 @@ import { validateApiKey } from './auth.js';
 import {
   remember,
   recall,
+  RecallContractError,
   drillDown,
   assemble,
   forget,
@@ -1409,6 +1410,18 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
       }
       if (err instanceof HttpError) {
         sendError(res, err.status, err.message);
+        return;
+      }
+      // F5 (v1.6.5) + v1.7.0 api-contract review: RecallContractError lands
+      // at 400 with {error: <message>, code: <code>}. The `error` field
+      // matches `sendError`'s shape (human message, used by HttpError /
+      // BodyTooLargeError / mapApiError). The `code` field is the typed
+      // discriminator — clients can branch on `body.code` without parsing
+      // prose. Earlier draft used {error: code, message: text} but that
+      // diverged from the rest of v1/* and forced clients to special-case
+      // the error path.
+      if (err instanceof RecallContractError) {
+        sendJson(res, 400, { error: err.message, code: err.code });
         return;
       }
       const mapped = mapApiError(err);

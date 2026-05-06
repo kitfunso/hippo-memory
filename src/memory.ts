@@ -20,6 +20,29 @@ export type TraceOutcome = 'success' | 'failure' | 'partial' | null;
 
 export type MemoryKind = 'raw' | 'distilled' | 'superseded' | 'archived';
 
+/**
+ * Timestamp invariant.
+ *
+ * All in-process writes of timestamp fields on `MemoryEntry` (`created`,
+ * `last_retrieved`, `valid_from`) and on session-state types (SessionEvent,
+ * TaskSnapshot, SessionHandoff, AssembledContextItem.createdAt, etc.) emit
+ * canonical `Date.prototype.toISOString()` output: 24 characters, UTC,
+ * milliseconds precision, trailing `Z` (e.g. `2026-05-06T09:55:49.123Z`).
+ *
+ * Caveat — markdown rebuild. `deserializeEntry` / `rebuildIndex` preserve
+ * frontmatter timestamp strings as-is. Legacy markdown that recorded a
+ * non-canonical offset (e.g. `2026-05-06T05:55:49-04:00`) round-trips
+ * through SQLite without normalization, and DAG `earliest_at` / `latest_at`
+ * caches are computed from those strings. Importers SHOULD normalize on
+ * write; rebuild from drifted markdown is a known limitation.
+ *
+ * Byte-comparison sort (`<` / `>`) is chronological for any pair of
+ * canonical UTC ISO strings. ~50× faster than `localeCompare` with no
+ * semantic gain. F4 (v1.6.5) uses byte compare on `assemble`; if a future
+ * import path admits non-canonical timestamps, the F4 sort and any
+ * downstream chronological reasoning will need a normalization pass.
+ */
+
 export interface MemoryEntry {
   id: string;
   created: string;         // ISO 8601
@@ -61,6 +84,25 @@ export interface MemoryEntry {
   artifact_ref: string | null;  // URI to source artifact (slack://, gh://, file://)
   // A5 stub auth (schema v16)
   tenantId: string;             // 'default' for single-tenant deployments
+  /**
+   * F1 (v1.7.0): raw SQLite FTS5 bm25() score from the FTS path of
+   * `loadSearchEntries`.
+   *
+   * Populated ONLY when ALL of the following hold:
+   *   - `loadSearchEntries` was called with a non-empty query, AND
+   *   - FTS5 is available (meta `fts5_available = 1`), AND
+   *   - the FTS join returned at least one row (path 2 of `loadSearchRows`).
+   *
+   * `undefined` on every other path: empty query, FTS unavailable, LIKE
+   * fallback, full-store fallback, `readEntry`, `loadAllEntries`, manual
+   * upsert, deserializeEntry from markdown.
+   *
+   * SCALE: FTS5 bm25() is negative; lower = better match (ascending order).
+   * NOT a drop-in for the JS-side BM25 in `src/search.ts` — that is a
+   * different scorer (different tokenizer, different params, positive
+   * scale). Treat `bm25_score` as provenance/rank metadata only.
+   */
+  bm25_score?: number;
 }
 
 export const DECISION_HALF_LIFE_DAYS = 90;

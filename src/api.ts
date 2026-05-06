@@ -21,6 +21,7 @@ import {
   loadFreshRawMemories,
   loadSessionRawMemories,
   countSessionRawMemories,
+  DEFAULT_SEARCH_CANDIDATE_LIMIT,
   removeEntryMirrors,
   loadActiveTaskSnapshot,
   loadLatestHandoff,
@@ -56,6 +57,39 @@ export interface Context {
   tenantId: string;
   /** 'cli' | 'localhost:cli' | 'api_key:<key_id>' | 'mcp' */
   actor: string;
+}
+
+/**
+ * Thrown by `api.recall` when a caller's options violate a recall contract
+ * that has been opted into via env. Carries a stable `code` field for HTTP /
+ * MCP / CLI render paths to discriminate without parsing the message.
+ *
+ * Codes:
+ *   - 'fresh_tail_requires_session_id' — `freshTailCount > 0` AND no
+ *     `freshTailSessionId` AND `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1`.
+ *     Default behaviour (env unset) returns tenant-wide rows; the env gate
+ *     is opt-in so multi-session tenants can fail loud instead of silently
+ *     surfacing cross-session rows tagged `isFreshTail=true`.
+ *   - 'invalid_scorer_window' — `opts.scorerWindow` is set to a non-positive,
+ *     non-integer, or non-finite value. Pre-v1.7.0 the value 0 routed
+ *     through FTS/LIKE `LIMIT 0` and then fell through to an uncapped
+ *     full-store fallback (codex v1.7.0 diff-pass P1). Validated upfront
+ *     so the contract holds.
+ */
+export class RecallContractError extends Error {
+  public readonly code:
+    | 'fresh_tail_requires_session_id'
+    | 'invalid_scorer_window';
+  constructor(
+    code:
+      | 'fresh_tail_requires_session_id'
+      | 'invalid_scorer_window',
+    message: string,
+  ) {
+    super(message);
+    this.name = 'RecallContractError';
+    this.code = code;
+  }
 }
 
 /**
@@ -147,6 +181,38 @@ export function remember(ctx: Context, opts: RememberOpts): RememberResult {
 export interface RecallOpts {
   query: string;
   limit?: number;
+  /**
+   * F3 (v1.7.0): scorer-window opt-in. When set, `loadSearchEntries`
+   * loads up to `scorerWindow` candidates. When undefined (default),
+   * the existing behaviour is preserved: store-internal 200-row default,
+   * which every release before v1.7.0 silently relied on.
+   *
+   * `scorerWindow` lets callers decouple "how many candidates do I want
+   * the scorer to evaluate" from `limit` ("how many do I want returned").
+   * Useful when `summarizeOverflow=true` and you want a wider candidate
+   * pool to detect more level-2 parent clusters.
+   *
+   * NOT a hard cap on returned results. Fresh-tail and substituted
+   * summaries can extend the result count above `limit`. The CLI's
+   * existing slice in `cmdRecall` (cli.ts) is the CLI hard cap; library
+   * callers slice themselves if they want one.
+   *
+   * Validated as a positive finite integer when set. `scorerWindow: 0`
+   * or non-finite values throw `RecallContractError` with code
+   * `invalid_scorer_window` to prevent the v1.6.x footgun where 0 fell
+   * through to an uncapped fallback (codex v1.7.0 diff-pass P1).
+   *
+   * **Input is library-only at v1.7.0.** HTTP `/v1/memories`, MCP
+   * `hippo_recall`, and `client.ts` thin-client do NOT serialize this
+   * INPUT field; remote callers cannot send `scorerWindow` and will see
+   * the store default applied. The OUTPUT `RecallResult.windowSize` is
+   * always serialized over the wire (HTTP `sendJson` ships the whole
+   * RecallResult, so remote callers receive `windowSize: 200` in the
+   * response). Transport exposure for the input planned for v1.7.1
+   * alongside the deferred-queue items that need a wider candidate pool
+   * (e.g. mean-of-children summary re-rank).
+   */
+  scorerWindow?: number;
   mode?: 'bm25' | 'hybrid' | 'physics';
   /**
    * Restrict results to memories whose `scope` equals this value exactly.
@@ -244,6 +310,19 @@ export interface RecallResult {
    * should truncate event.content themselves before display.
    */
   continuityTokens?: number;
+  /**
+   * F3 (v1.7.0): scorer window actually used for this recall. Equals
+   * `opts.scorerWindow` when set, otherwise the store-internal default
+   * (200) used by `loadSearchEntries(undefined, ...)`. Reported so
+   * callers can introspect "did the scorer see enough candidates?"
+   * without re-deriving the value.
+   *
+   * Optional in the type to keep `RecallResult` literal-construction
+   * back-compatible with pre-v1.7 test fakes / mocks (senior review P1-2).
+   * Always present on values returned by `api.recall` itself; consumers
+   * reading from `api.recall` can treat it as defined.
+   */
+  windowSize?: number;
 }
 
 /**
@@ -254,10 +333,50 @@ export interface RecallResult {
  */
 export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   const limit = opts.limit ?? 10;
+  // F5 (v1.6.5) preflight — codex P1: original guard fired AFTER
+  // loadSearchEntries (which runs initStore, migrating legacy state on first
+  // call). For a true contract preflight we want the throw before any
+  // store-touching work. Single check here; the consumer site at
+  // `if (freshTailCount > 0)` does NOT re-validate (would be a no-op).
+  const freshTailCountPreflight = opts.freshTailCount ?? 0;
+  if (
+    freshTailCountPreflight > 0 &&
+    !opts.freshTailSessionId &&
+    process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL === '1'
+  ) {
+    throw new RecallContractError(
+      'fresh_tail_requires_session_id',
+      'fresh-tail requires a session id when HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1; ' +
+        'pass opts.freshTailSessionId or unset the env to allow tenant-wide fresh-tail.',
+    );
+  }
+  // F3 (v1.7.0): scorerWindow opt-in. When undefined (default),
+  // loadSearchEntries uses its own store-internal default — this
+  // preserves every pre-v1.7.0 caller's behaviour bit-for-bit (codex
+  // mk2-pass P0-1: defaulting to `limit` would have shrunk the
+  // candidate pool and killed overflow summaries).
+  // DEFAULT_SEARCH_CANDIDATE_LIMIT is imported from store.ts so the two
+  // values cannot drift (codex diff-pass P1 #3).
+  // Validate the input — codex diff-pass P1 #1 caught that scorerWindow=0
+  // would route through FTS/LIKE LIMIT 0 and then fall through to an
+  // uncapped full-store fallback. Reject non-positive / non-finite values.
+  if (opts.scorerWindow !== undefined) {
+    if (
+      !Number.isFinite(opts.scorerWindow) ||
+      !Number.isInteger(opts.scorerWindow) ||
+      opts.scorerWindow < 1
+    ) {
+      throw new RecallContractError(
+        'invalid_scorer_window',
+        `scorerWindow must be a positive integer; got ${opts.scorerWindow}`,
+      );
+    }
+  }
+  const windowSize = opts.scorerWindow ?? DEFAULT_SEARCH_CANDIDATE_LIMIT;
   const all = loadSearchEntries(
     ctx.hippoRoot,
     opts.query,
-    undefined,
+    opts.scorerWindow,
     ctx.tenantId,
   );
   // Scope filtering runs AFTER the tenant filter inside loadSearchEntries, so
@@ -358,6 +477,9 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   const freshTailCount = opts.freshTailCount ?? 0;
   const freshRanked: RecallResultItem[] = [];
   if (freshTailCount > 0) {
+    // F5 contract guard fires at recall() preflight (top of function).
+    // No re-check needed here — by the time we reach this block the
+    // env/session policy has already been validated.
     const recent = loadFreshRawMemories(
       ctx.hippoRoot,
       freshTailCount,
@@ -474,7 +596,7 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
       filteredEvents.reduce((acc, e) => acc + tokenize(e.content), 0);
   }
 
-  return { results: ranked, total: entries.length, tokens, continuity, continuityTokens };
+  return { results: ranked, total: entries.length, tokens, continuity, continuityTokens, windowSize };
 }
 
 // ---------------------------------------------------------------------------
@@ -672,8 +794,12 @@ export function assemble(
     strength: r.strength,
   }));
 
-  olderItems.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  tailItems.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  // F4 (v1.6.5): byte compare canonical UTC ISO timestamps. ~50× faster than
+  // localeCompare and chronological by virtue of the timestamp invariant
+  // documented in src/memory.ts above MemoryEntry.
+  const cmpIso = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+  olderItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));
+  tailItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));
   let items: AssembledContextItem[] = [...olderItems, ...tailItems];
 
   let tokens = items.reduce((acc, it) => acc + Math.ceil(it.content.length / 4), 0);

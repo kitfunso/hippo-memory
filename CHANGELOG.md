@@ -1,5 +1,108 @@
 # Changelog
 
+## 1.7.0 (2026-05-06)
+
+Foundation release. Surfaces FTS5 BM25 score as `MemoryEntry.bm25_score` provenance metadata (FTS path only) and adds `RecallOpts.scorerWindow` so callers can decouple "how many candidates do I want the scorer to evaluate" from `limit`. Three review-chain rounds shaped this release: `/plan-eng-review` and `/codex review --model gpt-5.5` killed mk1 (4 P0s including a fabricated `bm25_score` column) and mk2 (2 P0s including an MCP cap that addressed a non-existent contract); mk3 dropped F2 unified `RankedMemory` (defer to v1.8 with `recallRanked()` API), dropped the JS BM25 backfill (different scorer / different scale), dropped `hardLimit` (existing semantics already correct), and dropped the MCP cap entirely. F4 + F5 shipped separately in v1.6.5.
+
+### Added
+
+- **`MemoryEntry.bm25_score?: number`.** Raw FTS5 `bm25()` score on the FTS path of `loadSearchEntries`. Populated only when (a) query has terms, AND (b) FTS5 is available, AND (c) FTS join returns rows. `undefined` on every other path: empty query, FTS unavailable, LIKE fallback (substring queries that miss FTS tokenization), full-store fallback, `readEntry`, `loadAllEntries`, manual upsert, `deserializeEntry` from markdown. SQLite FTS5 returns NEGATIVE scores (lower = better, ascending order); NOT a drop-in for the JS-side BM25 scorer in `src/search.ts` which uses different tokenizer / params / sign convention. **Provenance metadata only.**
+- **`RecallOpts.scorerWindow?: number`.** When set, decouples scorer candidate pool from `limit`. Default `undefined` preserves the existing store-internal 200-row default, which every pre-v1.7.0 caller silently relied on. Useful when `summarizeOverflow=true` and you want a wider candidate pool to detect more level-2 parent clusters.
+- **`RecallResult.windowSize: number`.** The scorer window actually used for this recall (== `opts.scorerWindow ?? 200`). Reported so callers can introspect "did the scorer see enough candidates?" without re-deriving the value.
+
+### Changed
+
+- **`loadSearchEntries` FTS path uses qualified `MEMORY_SEARCH_COLUMNS`.** Every column is `m.<col> AS <col>` so `rowToEntry`'s unqualified field reads keep working unchanged. The trailing `bm25(memories_fts) AS bm25_score` adds the FTS rank as a result column. Non-FTS paths keep `MEMORY_SELECT_COLUMNS` — they don't pay for `bm25()` evaluation or get a column that won't bind. `MemoryRow.bm25_score?: number` documents the optional shape.
+
+### Behaviour preserved (codex mk2-pass review)
+
+- **`--limit` semantics unchanged.** CLI `--limit` is still the hard cap; library `RecallOpts.limit` still caps base BM25 hits with fresh-tail/summary substitutions allowed to extend above. Mk2 of this plan proposed making `limit` a "scorer window" with a separate `hardLimit`; codex P1-1 caught the contradiction with existing API behaviour and the proposal was dropped.
+- **No MCP cap added.** `hippo_recall` has no `limit` arg in its input schema (only `budget`); mk2 proposed a "fix" for a non-existent contract. Dropped per codex P0-2.
+- **No JS BM25 unification.** `src/search.ts` JS scorer untouched. SQLite FTS5 and the JS scorer are different systems with different tokenizers, scales, and parameters. `bm25_score` is provenance only; re-rank consumers (deferred-queue Track 3) wait on explicit normalization design.
+
+### Deferred to v1.8
+
+- F2 unified `RankedMemory` shape with adapters for back-compat (codex mk1-pass C14 strategic: overengineering for v1.7).
+- JS BM25 unification — needs explicit normalization design.
+- Deferred-queue items (CLI `--fresh-tail` / `--summarize-overflow` parity, summary mean-of-children re-rank) — sized as ~1 day each on top of v1.7.0 foundations; revisit after this release.
+
+### `/review` skill fixes (post-self-review, multi-specialist pass)
+
+After the senior-code-reviewer pass, the actual gstack `/review` skill ran end-to-end and dispatched 5 specialists in parallel (testing, maintainability, security, performance, api-contract). One CRITICAL and three additional INFO findings:
+
+- **(api-contract CRITICAL) HTTP error body shape inconsistency.** `RecallContractError` previously emitted `{error: <code>, message: <text>}` while every other v1/* error in the same handler emits `{error: <text>}` only. Public contract one-off introduced in v1.6.5 and reinforced in v1.7.0. **Fix:** aligned RecallContractError serialization to `{error: <message>, code: <code>}`. The `error` field now carries the human message across all v1/* errors (matches `sendError` shape); the new `code` field is the typed discriminator. Clients branch on `body.code`, render `body.error`. v1.6.5 callers reading `body.error` for the typed code value need to migrate to `body.code` — flagged as breaking.
+- **(testing INFO #1)** Per-iteration `.code` assertion on bad scorerWindow values — was looping `[-5, 1.5, NaN, Infinity]` with only message-regex assertion; one bad value sneaking through to a downstream FTS LIMIT throw would have masked the regression. Converted to `it.each` with explicit `.code === 'invalid_scorer_window'` assertion per iteration. Added `Number.NEGATIVE_INFINITY` case.
+- **(testing INFO #4)** Full-store fallback LIMIT regression test added. Codex caught the uncapped fallback bug and the fix was applied, but the existing test inserted only 2 rows so a regression dropping the LIMIT clause would not have been caught. New test inserts 30 rows, requests limit=10, asserts exactly 10 returned.
+- **(maintainability INFO)** Two stale cross-file line references in JSDoc removed (`cli.ts:1199` → `cmdRecall (cli.ts)`; `src/store.ts:579-639` → `src/store.ts`). Line numbers rot fast; symbolic refs are stable.
+- **(api-contract INFO #3)** `loadSearchEntries` empty-query and full-store-fallback paths now respect the candidate-limit argument (default 200) instead of returning the entire tenant store. External callers of `loadSearchEntries(root, '', undefined, tenant)` who relied on the unbounded shape will see at most 200 rows. Pass an explicit large number to keep the old behaviour. Surfaced here as a behaviour change, not just a bugfix.
+
+### Deferred to v1.7.1 (lower-confidence specialist findings)
+
+- (testing INFO #2) scorerWindow=1 lower-bound legal value test.
+- (testing INFO #3) No-terms path ORDER BY assertion (verify chronologically-first rows returned).
+- (testing INFO #5) Tenant-isolation test for scorerWindow (insert under two tenants, recall under one, assert no cross-tenant leak via the wider window).
+- (testing INFO #6) HTTP integration test asserting `windowSize` IS serialized in the response body (output side, complementing the deferred input-side transport).
+- (testing INFO #7) Anchor LIKE-fallback test by asserting the returned content matches the inserted row.
+- (api-contract INFO #2) `RecallOpts.scorerWindow` type promises a knob the network does not honour. Two options for v1.7.1: wire `scorer_window` through HTTP/MCP transports, OR split the type so client.ts cannot accept an ignored field.
+
+### Self-review + senior-review fixes (post-codex)
+
+After the codex diff-pass, an explicit `/self-review` + senior-code-reviewer subagent pass on the actual diff caught 4 more issues codex missed (1 P1 lying comment, 1 P1 type-breaking change, 1 P1 second uncapped path, 2 P2 JSDoc):
+
+- **(self-review P1) Lying JSDoc comment in F5 preflight.** Said "Re-checked at the freshTailCount > 0 site" but the codex-fix commit (`225fce1`) had removed that re-check. Comment now reflects single-check semantics.
+- **(self-review P1) Second uncapped path in `loadSearchRows`.** Codex diff-pass caught the full-store fallback at the bottom of the function but the no-terms path at the top had the same shape — `SELECT ... FROM memories ORDER BY ...` without `LIMIT`. With `RecallResult.windowSize` now reported as the candidate-pool cap, this was a contract violation: `recall(ctx, { query: '', scorerWindow: 50 })` would report `windowSize: 50` while returning the entire tenant store. Same fix shape: append `LIMIT ?` and pass `limit`. New test in `tests/store-bm25-score.test.ts` asserts the no-terms path honours the LIMIT parameter.
+- **(senior P1) `RecallResult.windowSize` was non-optional, breaking downstream type consumers.** Pre-v1.7 callers could write `const r: RecallResult = { results: [], total: 0, tokens: 0 }`; v1.7.0 made `windowSize` required, which is a TS breaking change for test fakes / mocks / type narrowings. Made optional in the interface; values returned by `api.recall` itself always have it set, so consumers reading from `api.recall` can treat as defined. Lowest-blast-radius fix.
+- **(senior P2) `RecallContractError` JSDoc** was missing the new `'invalid_scorer_window'` code added in the codex diff-pass. Documented.
+- **(senior P2) `RecallOpts.scorerWindow` JSDoc** said "HTTP/MCP/client.ts do NOT serialize this field" — true for input, false for output (`RecallResult.windowSize` IS serialized over the wire via `sendJson`). Clarified the input-vs-output asymmetry.
+- **(senior P2.3 deferred to v1.7.1)** Full-store fallback test in `tests/store-bm25-score.test.ts` relies on FTS5 unicode61 tokenizer behaviour; not deterministic across tokenizer changes. Senior-recommended fix: drop `memories_fts` directly via raw SQL inside the test. Deferred.
+
+### Codex diff-pass fixes (post-implementation)
+
+A fourth `/codex review` round on the actual v1.7.0 diff caught 0 P0 + 3 P1 + 1 P2 in the implementation (separate from the plan-stage rounds). All addressed before tag:
+
+- **P1 #1: full-store fallback was uncapped.** `loadSearchRows`'s "FTS=0 → LIKE=0 → fallback" path returned all tenant rows ignoring `limit`. With `scorerWindow` now reported on `RecallResult.windowSize`, an unbounded fallback would lie about candidate-pool size; `scorerWindow: 0` (or other invalid input) would route through FTS/LIKE `LIMIT 0` and dump the whole store. Fix: validate `scorerWindow` as a positive finite integer in `api.recall` (throws `RecallContractError` with new code `invalid_scorer_window`); apply `LIMIT ?` to the full-store fallback in `loadSearchRows`.
+- **P1 #2: transports drop scorerWindow silently.** HTTP `/v1/memories`, MCP `hippo_recall`, and `client.ts` thin-client do NOT serialize `scorerWindow`. Documented as **library-only at v1.7.0**; transport exposure planned for v1.7.1 alongside the deferred-queue items that need a wider candidate pool.
+- **P1 #3: duplicated default constant.** `recall()` had a local `STORE_DEFAULT_CANDIDATE_LIMIT = 200` separate from store's `DEFAULT_SEARCH_CANDIDATE_LIMIT`. Fix: exported `DEFAULT_SEARCH_CANDIDATE_LIMIT` from `store.ts`, imported in `api.ts`. Single source of truth.
+- **P2 #4: widening test passed accidentally.** Original assertion `total <= 25 && total > 0` would have passed even if implementation loaded only `limit` candidates. Strengthened to assert `total === 25` (FTS5 + LIMIT 25 against 30-row matching population) and added 0/-5/1.5/NaN/Infinity rejection tests.
+
+### Tests
+
+- 1366 passing (+12 from v1.6.5's 1354). One additional test (`No-terms path: honours the LIMIT parameter`) covers the self-review-found uncapped path. New: `tests/store-bm25-score.test.ts` (5 tests covering FTS-path populated, FTS-path two-term-better-than-one-term, no-terms path undefined, LIKE-fallback path undefined via substring miss, full-store-fallback path undefined). `tests/api-recall-scorer-window.test.ts` (6 tests: default windowSize=200, opt-in scorerWindow, scorerWindow widens candidate pool with strict `total === 25` assertion, limit semantics unchanged with fresh-tail expansion, scorerWindow=0 throws `RecallContractError`, negative/non-integer/NaN/Infinity all rejected).
+
+## 1.6.5 (2026-05-06)
+
+Two cherry-picked items from the in-progress v1.7 foundations work that have zero contract risk and ship cleanly on their own. Both were originally bundled inside the v1.7 foundations plan; eng review + `/codex review` (gpt-5.5) on the foundations plan flagged them as independently shippable and identified specific traps in the original "library `console.warn`" approach for F5. This release applies the codex-suggested correction (typed error at API boundary, no library stderr noise) and ships the polish atomically.
+
+### Added
+
+- **`RecallContractError` exported class with `.code` field.** Thrown by `api.recall` when `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1` is set AND `freshTailCount > 0` AND `freshTailSessionId` is unset. HTTP returns 400 with `{ error: <code>, message: <string> }` so callers can discriminate without parsing prose; MCP propagates the typed error to the transport (existing -32603 mapping); CLI exits 1 with the message on stderr (existing top-level catch). Default env unset preserves v1.6.x tenant-wide back-compat.
+- **Timestamp invariant documented** in `src/memory.ts` (above `MemoryEntry`): all `MemoryEntry` and session-state timestamps are stored as canonical `Date.prototype.toISOString()` output (24 chars, UTC, milliseconds, trailing `Z`). Imports preserving local-time offsets MUST normalize on write.
+
+### Changed
+
+- **`assemble` ISO sort uses byte compare instead of `localeCompare`.** ~50× faster on canonical UTC ISO with no semantic change given the in-process timestamp invariant. Audited in-process timestamp writes in `src/`: zero non-canonical writes (no `toLocaleString` / `toLocaleDateString` / `toLocaleTimeString`, no manual ISO reformatting). **Caveat:** `deserializeEntry` / `rebuildIndex` round-trip frontmatter timestamp strings as-is, so legacy markdown that recorded a non-canonical offset propagates through SQLite without normalization (codex P1 documented in the JSDoc). Importers SHOULD normalize on write; rebuild from drifted markdown is a known limitation. `tests/api-assemble-iso-sort.test.ts` covers (a) byte-cmp ↔ localeCompare equivalence on a fixed sample, (b) a randomized 100-sample cross-check against `Date.parse`, and (c) a real `api.assemble` integration that inserts shuffled raws and asserts ascending order on returned items.
+- **`loadFreshRawMemories` JSDoc-deprecated** for tenant-wide use (no `sessionId`). NO runtime `console.warn` introduced — codex C9 explicitly rejected library-level stderr noise. Direct callers bypass the `api.recall` guard, so the JSDoc is the only nudge at that layer.
+
+### Guard placement (intentional, audited)
+
+- `api.recall`: ENFORCED.
+- `api.assemble`: NOT enforced. `assemble` is already session-scoped via `loadSessionRawMemories` and never calls tenant-wide `loadFreshRawMemories`. Adding a guard here would be a no-op (codex C9 originally caught the mk1 plan trying to add this).
+- `loadFreshRawMemories`: deprecation note only.
+
+### Env semantics
+
+Strict equality check on the literal string `'1'`. Other truthy values (`'true'`, `'yes'`, `'0'`, `''`) are treated as unset — defensive against callers expecting "any truthy" semantics. Test asserts each variant.
+
+### Tests
+
+- 1353 passing (+14 from v1.6.4). New: `tests/api-assemble-iso-sort.test.ts` (2), `tests/recall-fresh-tail-policy.test.ts` (5), `tests/http-recall-fresh-tail-policy.test.ts` (4), `tests/mcp-recall-fresh-tail-policy.test.ts` (3).
+
+### Deferred to v1.7.0 foundations release
+
+- BM25 provenance plumbing (`MemoryEntry.bm25_score`).
+- `RecallOpts.scorerWindow` opt-in wider scorer window.
+- MCP final-cap fix on `hippo_recall`.
+
 ## 1.6.4 (2026-05-05)
 
 Two deferred items from the v1.6.2 senior review queue. Plan-stage `/codex` + `/review` caught 2 P0s in my draft before any code landed (unscoped cross-tenant probe; `validateIdSegment` running after `matchPath` splits — neither would have actually fixed the bugs they were meant to fix). Implementation chain ran clean.
