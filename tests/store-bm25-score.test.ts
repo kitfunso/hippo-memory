@@ -125,22 +125,34 @@ describe('loadSearchEntries bm25_score (F1, v1.7.0)', () => {
     expect(got).toEqual(expectedOrder);
   });
 
-  it('LIKE fallback path: substring query that misses FTS but matches LIKE → entries have bm25_score undefined', () => {
-    // FTS5 tokenizes on word boundaries (default unicode61); LIKE does
-    // raw substring. A query like "alphab" misses FTS (no whole word
-    // match) but LIKE %alphab% matches "alphabet". This deterministically
-    // routes through the LIKE branch without monkey-patching FTS state
-    // (which initStore resets on every loadSearchEntries call).
+  it('LIKE fallback path: HIPPO_DISABLE_FTS=1 routes through LIKE deterministically; bm25_score undefined; expected row anchored (v1.7.1 senior P2.3 + INFO #7)', () => {
+    // v1.7.0 used a substring "alphab" tokenizer-miss to route through LIKE
+    // — fragile under porter/trigram tokenizers (senior P2.3). Both rev.1
+    // alternatives (DROP TABLE, setMeta('fts5_available','0')) are no-ops
+    // because ensureOptionalFts runs CREATE+backfill+meta-write on every
+    // openHippoDb (db.ts:998-1029).
     //
-    // Codex P2-2 originally suggested forcing isFtsAvailable=false, but
-    // that's not stable: setMeta('fts5_available','0') is overwritten by
-    // ensureOptionalFts on the next initStore call. Substring miss is the
-    // robust route.
-    writeEntry(root, makeRaw('alphabet soup contents'));
-    const results = loadSearchEntries(root, 'alphab', 200, 'default');
-    expect(results.length).toBeGreaterThan(0);
-    for (const e of results) {
-      expect(e.bm25_score).toBeUndefined();
+    // v1.7.1 fix: HIPPO_DISABLE_FTS=1 short-circuits isFtsAvailable
+    // (db.ts) so loadSearchRows skips the FTS branch unconditionally and
+    // runs the LIKE query.
+    //
+    // INFO #7: anchor on the expected content so a partial hit cannot let
+    // the test pass spuriously.
+    const prevEnv = process.env.HIPPO_DISABLE_FTS;
+    try {
+      writeEntry(root, makeRaw('alphabet soup contents'));
+      process.env.HIPPO_DISABLE_FTS = '1';
+      const results = loadSearchEntries(root, 'alphabet', 200, 'default');
+      expect(results.length).toBeGreaterThan(0);
+      // Anchor: the expected row must come back via the LIKE branch.
+      expect(results.some((e) => e.content === 'alphabet soup contents')).toBe(true);
+      // No FTS path → no bm25_score on any returned row.
+      for (const e of results) {
+        expect(e.bm25_score).toBeUndefined();
+      }
+    } finally {
+      if (prevEnv === undefined) delete process.env.HIPPO_DISABLE_FTS;
+      else process.env.HIPPO_DISABLE_FTS = prevEnv;
     }
   });
 
