@@ -23,6 +23,7 @@ import {
   loadSessionRawMemories,
   countSessionRawMemories,
   DEFAULT_SEARCH_CANDIDATE_LIMIT,
+  RECALL_DEFAULT_DENY_SCOPES,
   removeEntryMirrors,
   loadActiveTaskSnapshot,
   loadLatestHandoff,
@@ -118,7 +119,7 @@ const PRIVATE_SCOPE_RE = /^[a-z][a-z0-9_-]*:private:/;
  *   `<source>:private:*` scope and on the `unknown:legacy` quarantine bucket.
  *   `null` and public scopes pass.
  */
-function passesScopeFilterForRecall(
+export function passesScopeFilterForRecall(
   scope: string | null,
   requested: string | undefined,
 ): boolean {
@@ -127,7 +128,12 @@ function passesScopeFilterForRecall(
   }
   if (scope === null) return true;
   if (isPrivateScope(scope)) return false;
-  if (scope === 'unknown:legacy') return false;
+  // v1.7.2 — read from RECALL_DEFAULT_DENY_SCOPES (single source of truth
+  // shared with the SQL clause in loadSearchRows). Cast the array to
+  // readonly string[] so .includes() accepts arbitrary string scopes
+  // without a cast on the input (codex P0-2: casting `scope` would defeat
+  // the constant's safety).
+  if ((RECALL_DEFAULT_DENY_SCOPES as readonly string[]).includes(scope)) return false;
   return true;
 }
 
