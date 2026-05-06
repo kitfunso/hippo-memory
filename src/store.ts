@@ -196,7 +196,12 @@ const MEMORY_SELECT_COLUMNS = `id, created, last_retrieved, retrieval_count, str
 // bm25(memories_fts) AS bm25_score adds the FTS rank as a result column.
 // Only used inside the FTS path; non-FTS paths keep MEMORY_SELECT_COLUMNS.
 const MEMORY_SEARCH_COLUMNS = `m.id AS id, m.created AS created, m.last_retrieved AS last_retrieved, m.retrieval_count AS retrieval_count, m.strength AS strength, m.half_life_days AS half_life_days, m.layer AS layer, m.tags_json AS tags_json, m.emotional_valence AS emotional_valence, m.schema_fit AS schema_fit, m.source AS source, m.outcome_score AS outcome_score, m.outcome_positive AS outcome_positive, m.outcome_negative AS outcome_negative, m.conflicts_with_json AS conflicts_with_json, m.pinned AS pinned, m.confidence AS confidence, m.content AS content, m.parents_json AS parents_json, m.starred AS starred, m.trace_outcome AS trace_outcome, m.source_session_id AS source_session_id, m.valid_from AS valid_from, m.superseded_by AS superseded_by, m.extracted_from AS extracted_from, m.dag_level AS dag_level, m.dag_parent_id AS dag_parent_id, m.kind AS kind, m.scope AS scope, m.owner AS owner, m.artifact_ref AS artifact_ref, m.tenant_id AS tenant_id, m.descendant_count AS descendant_count, m.earliest_at AS earliest_at, m.latest_at AS latest_at, bm25(memories_fts) AS bm25_score`;
-const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
+/**
+ * Default candidate-pool size for `loadSearchEntries` when called with
+ * `limit === undefined`. Single source of truth; `api.recall` imports
+ * this for `RecallResult.windowSize` reporting so the two cannot drift.
+ */
+export const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
 
 function layerDir(root: string, layer: Layer): string {
   return path.join(root, layer);
@@ -652,8 +657,13 @@ function loadSearchRows(
 
   if (rows.length > 0) return rows;
 
-  const fallback = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate} ORDER BY created ASC, id ASC`;
-  return db.prepare(fallback).all(...tenantParams) as MemoryRow[];
+  // F3 (v1.7.0) codex P1: pre-v1.7.0 the full-store fallback ignored
+  // `limit` and could return the whole tenant store. With scorerWindow
+  // now reported on RecallResult, an unbounded fallback would lie about
+  // candidate-pool size. Apply LIMIT here so all four paths honour the
+  // caller's cap.
+  const fallback = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate} ORDER BY created ASC, id ASC LIMIT ?`;
+  return db.prepare(fallback).all(...tenantParams, limit) as MemoryRow[];
 }
 
 function writeMarkdownMirror(hippoRoot: string, entry: MemoryEntry): void {

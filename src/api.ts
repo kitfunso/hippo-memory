@@ -21,6 +21,7 @@ import {
   loadFreshRawMemories,
   loadSessionRawMemories,
   countSessionRawMemories,
+  DEFAULT_SEARCH_CANDIDATE_LIMIT,
   removeEntryMirrors,
   loadActiveTaskSnapshot,
   loadLatestHandoff,
@@ -71,9 +72,13 @@ export interface Context {
  *     surfacing cross-session rows tagged `isFreshTail=true`.
  */
 export class RecallContractError extends Error {
-  public readonly code: 'fresh_tail_requires_session_id';
+  public readonly code:
+    | 'fresh_tail_requires_session_id'
+    | 'invalid_scorer_window';
   constructor(
-    code: 'fresh_tail_requires_session_id',
+    code:
+      | 'fresh_tail_requires_session_id'
+      | 'invalid_scorer_window',
     message: string,
   ) {
     super(message);
@@ -173,11 +178,9 @@ export interface RecallOpts {
   limit?: number;
   /**
    * F3 (v1.7.0): scorer-window opt-in. When set, `loadSearchEntries`
-   * loads up to `scorerWindow` candidates (capped at the store-internal
-   * default of 200 unless raised; see `loadSearchEntries`'s `limit`
-   * parameter). When undefined (default), the existing behaviour is
-   * preserved: `loadSearchEntries(undefined, ...)` uses its own 200-row
-   * default, which is what every release before v1.7.0 silently relied on.
+   * loads up to `scorerWindow` candidates. When undefined (default),
+   * the existing behaviour is preserved: store-internal 200-row default,
+   * which every release before v1.7.0 silently relied on.
    *
    * `scorerWindow` lets callers decouple "how many candidates do I want
    * the scorer to evaluate" from `limit` ("how many do I want returned").
@@ -188,6 +191,18 @@ export interface RecallOpts {
    * summaries can extend the result count above `limit`. The CLI's
    * existing slice at `cli.ts:1199` is the CLI hard cap; library
    * callers slice themselves if they want one.
+   *
+   * Validated as a positive finite integer when set. `scorerWindow: 0`
+   * or non-finite values throw `RecallContractError` with code
+   * `invalid_scorer_window` to prevent the v1.6.x footgun where 0 fell
+   * through to an uncapped fallback (codex v1.7.0 diff-pass P1).
+   *
+   * **Library-only at v1.7.0.** HTTP `/v1/memories`, MCP `hippo_recall`,
+   * and `client.ts` thin-client do NOT serialize this field; remote
+   * callers passing `scorerWindow` will see it silently dropped and
+   * `windowSize: 200` reported regardless. Transport exposure planned
+   * for v1.7.1 alongside the deferred-queue items that need a wider
+   * candidate pool (e.g. mean-of-children summary re-rank).
    */
   scorerWindow?: number;
   mode?: 'bm25' | 'hybrid' | 'physics';
@@ -323,13 +338,28 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
     );
   }
   // F3 (v1.7.0): scorerWindow opt-in. When undefined (default),
-  // loadSearchEntries uses its own store-internal 200-row default —
-  // this preserves every pre-v1.7.0 caller's behaviour bit-for-bit
-  // (codex mk2-pass P0-1: defaulting to `limit` would have shrunk the
-  // candidate pool and killed overflow summaries). When set, the value
-  // is passed through as the `limit` parameter to loadSearchEntries.
-  const STORE_DEFAULT_CANDIDATE_LIMIT = 200;
-  const windowSize = opts.scorerWindow ?? STORE_DEFAULT_CANDIDATE_LIMIT;
+  // loadSearchEntries uses its own store-internal default — this
+  // preserves every pre-v1.7.0 caller's behaviour bit-for-bit (codex
+  // mk2-pass P0-1: defaulting to `limit` would have shrunk the
+  // candidate pool and killed overflow summaries).
+  // DEFAULT_SEARCH_CANDIDATE_LIMIT is imported from store.ts so the two
+  // values cannot drift (codex diff-pass P1 #3).
+  // Validate the input — codex diff-pass P1 #1 caught that scorerWindow=0
+  // would route through FTS/LIKE LIMIT 0 and then fall through to an
+  // uncapped full-store fallback. Reject non-positive / non-finite values.
+  if (opts.scorerWindow !== undefined) {
+    if (
+      !Number.isFinite(opts.scorerWindow) ||
+      !Number.isInteger(opts.scorerWindow) ||
+      opts.scorerWindow < 1
+    ) {
+      throw new RecallContractError(
+        'invalid_scorer_window',
+        `scorerWindow must be a positive integer; got ${opts.scorerWindow}`,
+      );
+    }
+  }
+  const windowSize = opts.scorerWindow ?? DEFAULT_SEARCH_CANDIDATE_LIMIT;
   const all = loadSearchEntries(
     ctx.hippoRoot,
     opts.query,

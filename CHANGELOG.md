@@ -1,5 +1,44 @@
 # Changelog
 
+## 1.7.0 (2026-05-06)
+
+Foundation release. Surfaces FTS5 BM25 score as `MemoryEntry.bm25_score` provenance metadata (FTS path only) and adds `RecallOpts.scorerWindow` so callers can decouple "how many candidates do I want the scorer to evaluate" from `limit`. Three review-chain rounds shaped this release: `/plan-eng-review` and `/codex review --model gpt-5.5` killed mk1 (4 P0s including a fabricated `bm25_score` column) and mk2 (2 P0s including an MCP cap that addressed a non-existent contract); mk3 dropped F2 unified `RankedMemory` (defer to v1.8 with `recallRanked()` API), dropped the JS BM25 backfill (different scorer / different scale), dropped `hardLimit` (existing semantics already correct), and dropped the MCP cap entirely. F4 + F5 shipped separately in v1.6.5.
+
+### Added
+
+- **`MemoryEntry.bm25_score?: number`.** Raw FTS5 `bm25()` score on the FTS path of `loadSearchEntries`. Populated only when (a) query has terms, AND (b) FTS5 is available, AND (c) FTS join returns rows. `undefined` on every other path: empty query, FTS unavailable, LIKE fallback (substring queries that miss FTS tokenization), full-store fallback, `readEntry`, `loadAllEntries`, manual upsert, `deserializeEntry` from markdown. SQLite FTS5 returns NEGATIVE scores (lower = better, ascending order); NOT a drop-in for the JS-side BM25 scorer in `src/search.ts` which uses different tokenizer / params / sign convention. **Provenance metadata only.**
+- **`RecallOpts.scorerWindow?: number`.** When set, decouples scorer candidate pool from `limit`. Default `undefined` preserves the existing store-internal 200-row default, which every pre-v1.7.0 caller silently relied on. Useful when `summarizeOverflow=true` and you want a wider candidate pool to detect more level-2 parent clusters.
+- **`RecallResult.windowSize: number`.** The scorer window actually used for this recall (== `opts.scorerWindow ?? 200`). Reported so callers can introspect "did the scorer see enough candidates?" without re-deriving the value.
+
+### Changed
+
+- **`loadSearchEntries` FTS path uses qualified `MEMORY_SEARCH_COLUMNS`.** Every column is `m.<col> AS <col>` so `rowToEntry`'s unqualified field reads keep working unchanged. The trailing `bm25(memories_fts) AS bm25_score` adds the FTS rank as a result column. Non-FTS paths keep `MEMORY_SELECT_COLUMNS` — they don't pay for `bm25()` evaluation or get a column that won't bind. `MemoryRow.bm25_score?: number` documents the optional shape.
+
+### Behaviour preserved (codex mk2-pass review)
+
+- **`--limit` semantics unchanged.** CLI `--limit` is still the hard cap; library `RecallOpts.limit` still caps base BM25 hits with fresh-tail/summary substitutions allowed to extend above. Mk2 of this plan proposed making `limit` a "scorer window" with a separate `hardLimit`; codex P1-1 caught the contradiction with existing API behaviour and the proposal was dropped.
+- **No MCP cap added.** `hippo_recall` has no `limit` arg in its input schema (only `budget`); mk2 proposed a "fix" for a non-existent contract. Dropped per codex P0-2.
+- **No JS BM25 unification.** `src/search.ts` JS scorer untouched. SQLite FTS5 and the JS scorer are different systems with different tokenizers, scales, and parameters. `bm25_score` is provenance only; re-rank consumers (deferred-queue Track 3) wait on explicit normalization design.
+
+### Deferred to v1.8
+
+- F2 unified `RankedMemory` shape with adapters for back-compat (codex mk1-pass C14 strategic: overengineering for v1.7).
+- JS BM25 unification — needs explicit normalization design.
+- Deferred-queue items (CLI `--fresh-tail` / `--summarize-overflow` parity, summary mean-of-children re-rank) — sized as ~1 day each on top of v1.7.0 foundations; revisit after this release.
+
+### Codex diff-pass fixes (post-implementation)
+
+A fourth `/codex review` round on the actual v1.7.0 diff caught 0 P0 + 3 P1 + 1 P2 in the implementation (separate from the plan-stage rounds). All addressed before tag:
+
+- **P1 #1: full-store fallback was uncapped.** `loadSearchRows`'s "FTS=0 → LIKE=0 → fallback" path returned all tenant rows ignoring `limit`. With `scorerWindow` now reported on `RecallResult.windowSize`, an unbounded fallback would lie about candidate-pool size; `scorerWindow: 0` (or other invalid input) would route through FTS/LIKE `LIMIT 0` and dump the whole store. Fix: validate `scorerWindow` as a positive finite integer in `api.recall` (throws `RecallContractError` with new code `invalid_scorer_window`); apply `LIMIT ?` to the full-store fallback in `loadSearchRows`.
+- **P1 #2: transports drop scorerWindow silently.** HTTP `/v1/memories`, MCP `hippo_recall`, and `client.ts` thin-client do NOT serialize `scorerWindow`. Documented as **library-only at v1.7.0**; transport exposure planned for v1.7.1 alongside the deferred-queue items that need a wider candidate pool.
+- **P1 #3: duplicated default constant.** `recall()` had a local `STORE_DEFAULT_CANDIDATE_LIMIT = 200` separate from store's `DEFAULT_SEARCH_CANDIDATE_LIMIT`. Fix: exported `DEFAULT_SEARCH_CANDIDATE_LIMIT` from `store.ts`, imported in `api.ts`. Single source of truth.
+- **P2 #4: widening test passed accidentally.** Original assertion `total <= 25 && total > 0` would have passed even if implementation loaded only `limit` candidates. Strengthened to assert `total === 25` (FTS5 + LIMIT 25 against 30-row matching population) and added 0/-5/1.5/NaN/Infinity rejection tests.
+
+### Tests
+
+- 1365 passing (+11 from v1.6.5's 1354). New: `tests/store-bm25-score.test.ts` (5 tests covering FTS-path populated, FTS-path two-term-better-than-one-term, no-terms path undefined, LIKE-fallback path undefined via substring miss, full-store-fallback path undefined). `tests/api-recall-scorer-window.test.ts` (6 tests: default windowSize=200, opt-in scorerWindow, scorerWindow widens candidate pool with strict `total === 25` assertion, limit semantics unchanged with fresh-tail expansion, scorerWindow=0 throws `RecallContractError`, negative/non-integer/NaN/Infinity all rejected).
+
 ## 1.6.5 (2026-05-06)
 
 Two cherry-picked items from the in-progress v1.7 foundations work that have zero contract risk and ship cleanly on their own. Both were originally bundled inside the v1.7 foundations plan; eng review + `/codex review` (gpt-5.5) on the foundations plan flagged them as independently shippable and identified specific traps in the original "library `console.warn`" approach for F5. This release applies the codex-suggested correction (typed error at API boundary, no library stderr noise) and ships the polish atomically.

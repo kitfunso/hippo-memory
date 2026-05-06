@@ -59,21 +59,49 @@ describe('RecallOpts.scorerWindow (F3, v1.7.0)', () => {
     expect(result.windowSize).toBe(50);
   });
 
-  it('scorerWindow can widen the candidate pool above limit', () => {
-    // Insert 30 raws all matching the query; default candidate pool is
-    // 200 (more than enough), but verify result.total reflects what
-    // loadSearchEntries returned (the candidate pool size after FTS+LIMIT,
-    // pre-slice).
+  it('scorerWindow can widen the candidate pool above limit (proves widening)', () => {
+    // Codex diff-pass P2 #4: original assertion `total <= 25 && total > 0`
+    // would pass even if the implementation accidentally loaded only
+    // `limit` candidates. Strengthen: insert 30 raws all matching the
+    // query, request scorerWindow: 25, assert total > limit AND
+    // total === 25 (the FTS path under SQLite returns exactly LIMIT
+    // matching rows when more than LIMIT exist).
     for (let i = 0; i < 30; i++) writeEntry(root, makeRaw(`zeta ${i}`));
-    const result = recall(ctxFor(root), { query: 'zeta', limit: 5, scorerWindow: 25 });
-    // total reflects the candidate pool the scorer actually evaluated
-    // (capped at scorerWindow). limit caps base results in the returned
-    // ranked list, but fresh-tail/summary can extend.
+    const result = recall(ctxFor(root), {
+      query: 'zeta',
+      limit: 5,
+      scorerWindow: 25,
+    });
     expect(result.windowSize).toBe(25);
-    // Default-deny scope filter does not affect raws with scope=null,
-    // so we expect a non-empty candidate pool.
-    expect(result.total).toBeLessThanOrEqual(25);
-    expect(result.total).toBeGreaterThan(0);
+    // Wider than limit — proves scorerWindow actually widened the pool.
+    expect(result.total).toBeGreaterThan(5);
+    // FTS5 + LIMIT 25 against a 30-row matching population returns 25.
+    expect(result.total).toBe(25);
+  });
+
+  it('scorerWindow validation: 0 throws RecallContractError with invalid_scorer_window', () => {
+    writeEntry(root, makeRaw('alpha'));
+    let thrown: unknown = null;
+    try {
+      recall(ctxFor(root), { query: 'alpha', scorerWindow: 0 });
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeTruthy();
+    // Same RecallContractError class, distinguishable by code.
+    expect((thrown as { name: string; code?: string }).name).toBe(
+      'RecallContractError',
+    );
+    expect((thrown as { code?: string }).code).toBe('invalid_scorer_window');
+  });
+
+  it('scorerWindow validation: -5 / 1.5 / NaN / Infinity all throw', () => {
+    writeEntry(root, makeRaw('alpha'));
+    for (const bad of [-5, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() =>
+        recall(ctxFor(root), { query: 'alpha', scorerWindow: bad }),
+      ).toThrow(/scorerWindow must be a positive integer/);
+    }
   });
 
   it('limit semantics unchanged: caps base BM25 hits, fresh-tail/summary can expand', () => {
