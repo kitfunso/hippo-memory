@@ -16,6 +16,7 @@ import {
   readEntry,
   deleteEntry,
   loadSearchEntries,
+  loadRecallSearchEntries,
   loadEntriesByIds,
   loadChildrenOf,
   loadFreshRawMemories,
@@ -373,23 +374,30 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
     }
   }
   const windowSize = opts.scorerWindow ?? DEFAULT_SEARCH_CANDIDATE_LIMIT;
-  const all = loadSearchEntries(
+  // v1.7.1 — root-cause fix for the `unknown:legacy` leak. Scope predicate
+  // is now pushed into `loadSearchRows` SQL via `loadRecallSearchEntries`.
+  // - opts.scope undefined / '': SQL excludes `unknown:legacy`.
+  // - opts.scope non-empty: SQL exact-matches m.scope = opts.scope.
+  // Tenant predicate still runs first, so a tenant-mismatched scope cannot
+  // surface another tenant's row even when both share the same scope string.
+  // Also fixes a latent code smell: pre-v1.7.1 passed `opts.scorerWindow`
+  // (raw, possibly undefined) where `windowSize` was intended.
+  const all = loadRecallSearchEntries(
     ctx.hippoRoot,
     opts.query,
-    opts.scorerWindow,
+    windowSize,
     ctx.tenantId,
+    opts.scope,
   );
-  // Scope filtering runs AFTER the tenant filter inside loadSearchEntries, so
-  // a tenant-mismatched scope cannot surface another tenant's row even when
-  // both share the same scope string (e.g. 'slack:private:CSHARED').
   let entries: typeof all;
   if (opts.scope !== undefined && opts.scope !== '') {
-    entries = all.filter((e) => e.scope === opts.scope);
+    // SQL already exact-matched in loadRecallSearchEntries.
+    entries = all;
   } else {
-    // v1.2.1: generalize default-deny from `slack:private:*` to ANY
-    // `<source>:private:*` scope so adding a connector cannot silently
-    // surface private rows to no-scope callers. Frontend callers will pass
-    // `undefined` and must not see private rows from any source by default.
+    // SQL already excluded `unknown:legacy`. The remaining JS filter
+    // covers the regex-only `<source>:private:*` rule (v1.2.1 generalization
+    // from `slack:private:*` to any source: connector authors cannot silently
+    // surface private rows to no-scope callers).
     entries = all.filter((e) => !isPrivateScope(e.scope ?? null));
   }
   // BM25 ordering already comes from loadSearchEntries; cap to `limit`.
