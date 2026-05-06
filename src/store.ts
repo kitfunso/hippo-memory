@@ -596,12 +596,29 @@ function canonicalConflictPair(aId: string, bId: string): { memory_a_id: string;
     : { memory_a_id: bId, memory_b_id: aId };
 }
 
+/**
+ * v1.7.2 — recall-mode scope filter shape, exported so callers
+ * (`loadRecallSearchEntries`) and tests can refer to it symbolically without
+ * `Parameters<typeof loadSearchRows>[N]` indirection.
+ *
+ * Two modes:
+ *   - 'default-deny' — exclude scopes in `RECALL_DEFAULT_DENY_SCOPES` (T2).
+ *   - 'exact' — exact match on `m.scope = value`.
+ *
+ * Background pipelines (`consolidate`, `embeddings`, `refine-llm`, ...) call
+ * `loadSearchEntries` (no recallScope arg) and see all rows including
+ * quarantine.
+ */
+export type RecallScopeFilter =
+  | { mode: 'default-deny' }
+  | { mode: 'exact'; value: string };
+
 function loadSearchRows(
   db: ReturnType<typeof openHippoDb>,
   query: string,
   limit: number,
   tenantId: string | undefined,
-  recallScope?: { value: string | null },
+  recallScope?: RecallScopeFilter,
 ): MemoryRow[] {
   // tenantId undefined = no tenant filter (legacy callers / cross-deployment
   // helpers). tenantId set = strict tenant isolation, leveraging the composite
@@ -629,11 +646,14 @@ function loadSearchRows(
   let scopeClauseTenantOnly = '';
   const scopeParams: string[] = [];
   if (recallScope !== undefined) {
-    if (recallScope.value === null) {
+    if (recallScope.mode === 'default-deny') {
+      // T1: pre-T2 still uses literal 'unknown:legacy'. T2 swaps in the
+      // RECALL_DEFAULT_DENY_SCOPES constant with NOT IN (?, ?, ...) bindings.
       scopeClauseAlias = ` AND (m.scope IS NULL OR m.scope != 'unknown:legacy')`;
       scopeClauseNoAlias = ` AND (scope IS NULL OR scope != 'unknown:legacy')`;
       scopeClauseTenantOnly = scopeClauseNoAlias;
     } else {
+      // mode === 'exact'
       scopeClauseAlias = ` AND m.scope = ?`;
       scopeClauseNoAlias = ` AND scope = ?`;
       scopeClauseTenantOnly = scopeClauseNoAlias;
@@ -1505,8 +1525,11 @@ export function loadRecallSearchEntries(
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    const scope = requestedScope && requestedScope !== '' ? requestedScope : null;
-    return loadSearchRows(db, query, limit, tenantId, { value: scope }).map(rowToEntry);
+    const recallScope: RecallScopeFilter =
+      requestedScope && requestedScope !== ''
+        ? { mode: 'exact', value: requestedScope }
+        : { mode: 'default-deny' };
+    return loadSearchRows(db, query, limit, tenantId, recallScope).map(rowToEntry);
   } finally {
     closeHippoDb(db);
   }
