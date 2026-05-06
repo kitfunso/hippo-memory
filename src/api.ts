@@ -194,7 +194,7 @@ export interface RecallOpts {
    *
    * NOT a hard cap on returned results. Fresh-tail and substituted
    * summaries can extend the result count above `limit`. The CLI's
-   * existing slice at `cli.ts:1199` is the CLI hard cap; library
+   * existing slice in `cmdRecall` (cli.ts) is the CLI hard cap; library
    * callers slice themselves if they want one.
    *
    * Validated as a positive finite integer when set. `scorerWindow: 0`

@@ -1,5 +1,17 @@
 # Hippo Brain Observatory — Roadmap
 
+## v1.7.1 — `/review` specialist deferrals from v1.7.0
+
+Lower-confidence specialist findings deferred from v1.7.0 `/review` (5-specialist parallel pass). All INFO severity.
+
+- [ ] **scorerWindow=1 lower-bound test.** Validator accepts `>= 1` integers; smallest legal value unverified. A regression flipping `< 1` to `<= 1` or `< 2` would not be caught. (testing INFO #2)
+- [ ] **No-terms path ORDER BY assertion.** Empty-query SQL is `ORDER BY created ASC, id ASC LIMIT ?`; existing test asserts row count but not order. Insert 50 rows, request limit=10, assert chronologically-first 10. (testing INFO #3)
+- [ ] **Tenant-isolation test for scorerWindow.** Insert N rows under two tenants, recall under one with `scorerWindow=N+5`, assert no cross-tenant leak through the wider window. The store-side LIMIT is applied AFTER the tenant predicate; a future refactor could move it before. (testing INFO #5)
+- [ ] **HTTP integration test for `windowSize` serialization.** v1.7.0 JSDoc claims `windowSize` IS serialized over the wire (only `scorerWindow` INPUT is library-only). Add an integration test asserting `body.windowSize === 200` on a default `/v1/memories` recall. Complements the deferred transport input-side wiring. (testing INFO #6)
+- [ ] **Anchor LIKE-fallback test content.** Existing test asserts `bm25_score` undefined on whatever rows came back; if FTS unexpectedly matched, the per-row assertion fires correctly but the test does not confirm the LIKE branch produced the expected row. Add `expect(results.some(e => e.content === 'alphabet soup contents')).toBe(true)` to anchor. (testing INFO #7)
+- [ ] **Drop the FTS5-tokenizer-fragile LIKE-fallback test approach.** Replace with raw-SQL `DROP TABLE memories_fts` inside the test to deterministically exercise the LIKE branch without relying on tokenizer behaviour. (senior P2.3 from v1.7.0 review)
+- [ ] **scorerWindow transport exposure.** `RecallOpts.scorerWindow` is library-only at v1.7.0; HTTP `/v1/memories` and MCP `hippo_recall` do not parse it; client.ts thin-client does not serialize it. Two options: (a) wire `scorer_window` through transports (small addition, validation already lives in `recall()`), OR (b) split the type so client.ts cannot accept an ignored field. (api-contract INFO #2)
+
 ## v1.7 — codex finding from v1.6.5 review
 
 - [ ] **`unknown:legacy` leak in `api.recall` baseRanked.** No-scope base recall filters via `!isPrivateScope(...)` only (`src/api.ts:~298`); the helper `isPrivateScope`/default-deny logic at `src/api.ts:107` documents `unknown:legacy` as a quarantined scope, and continuity/fresh-tail honour it, but the BM25 base path does not. A quarantined `unknown:legacy` row can therefore surface in `baseRanked`. Pre-existing bug, surfaced by codex during the v1.6.5 review. Fix in v1.7 with the foundations recall surface refactor — adding the filter alone is one line, but worth doing alongside the unified `RankedMemory` work so all consumers pick it up consistently.

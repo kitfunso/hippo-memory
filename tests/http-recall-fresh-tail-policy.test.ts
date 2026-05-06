@@ -70,10 +70,13 @@ describe('GET /v1/memories fresh-tail policy F5 (v1.6.5)', () => {
     }
     const res = await fetch(`${handle.url}/v1/memories?q=event&fresh_tail_count=3`);
     expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string; message: string };
-    expect(body.error).toBe('fresh_tail_requires_session_id');
-    expect(typeof body.message).toBe('string');
-    expect(body.message).toContain('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL');
+    // Body shape (v1.7.0 api-contract review): `error` is the human message
+    // (matches sendError shape across v1/*), `code` is the typed
+    // discriminator. Clients branch on `body.code`, render `body.error`.
+    const body = (await res.json()) as { error: string; code: string };
+    expect(body.code).toBe('fresh_tail_requires_session_id');
+    expect(typeof body.error).toBe('string');
+    expect(body.error).toContain('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL');
   });
 
   it('env=1, session_id provided → 200 (no error)', async () => {

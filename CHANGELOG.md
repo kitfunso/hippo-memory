@@ -26,6 +26,25 @@ Foundation release. Surfaces FTS5 BM25 score as `MemoryEntry.bm25_score` provena
 - JS BM25 unification — needs explicit normalization design.
 - Deferred-queue items (CLI `--fresh-tail` / `--summarize-overflow` parity, summary mean-of-children re-rank) — sized as ~1 day each on top of v1.7.0 foundations; revisit after this release.
 
+### `/review` skill fixes (post-self-review, multi-specialist pass)
+
+After the senior-code-reviewer pass, the actual gstack `/review` skill ran end-to-end and dispatched 5 specialists in parallel (testing, maintainability, security, performance, api-contract). One CRITICAL and three additional INFO findings:
+
+- **(api-contract CRITICAL) HTTP error body shape inconsistency.** `RecallContractError` previously emitted `{error: <code>, message: <text>}` while every other v1/* error in the same handler emits `{error: <text>}` only. Public contract one-off introduced in v1.6.5 and reinforced in v1.7.0. **Fix:** aligned RecallContractError serialization to `{error: <message>, code: <code>}`. The `error` field now carries the human message across all v1/* errors (matches `sendError` shape); the new `code` field is the typed discriminator. Clients branch on `body.code`, render `body.error`. v1.6.5 callers reading `body.error` for the typed code value need to migrate to `body.code` — flagged as breaking.
+- **(testing INFO #1)** Per-iteration `.code` assertion on bad scorerWindow values — was looping `[-5, 1.5, NaN, Infinity]` with only message-regex assertion; one bad value sneaking through to a downstream FTS LIMIT throw would have masked the regression. Converted to `it.each` with explicit `.code === 'invalid_scorer_window'` assertion per iteration. Added `Number.NEGATIVE_INFINITY` case.
+- **(testing INFO #4)** Full-store fallback LIMIT regression test added. Codex caught the uncapped fallback bug and the fix was applied, but the existing test inserted only 2 rows so a regression dropping the LIMIT clause would not have been caught. New test inserts 30 rows, requests limit=10, asserts exactly 10 returned.
+- **(maintainability INFO)** Two stale cross-file line references in JSDoc removed (`cli.ts:1199` → `cmdRecall (cli.ts)`; `src/store.ts:579-639` → `src/store.ts`). Line numbers rot fast; symbolic refs are stable.
+- **(api-contract INFO #3)** `loadSearchEntries` empty-query and full-store-fallback paths now respect the candidate-limit argument (default 200) instead of returning the entire tenant store. External callers of `loadSearchEntries(root, '', undefined, tenant)` who relied on the unbounded shape will see at most 200 rows. Pass an explicit large number to keep the old behaviour. Surfaced here as a behaviour change, not just a bugfix.
+
+### Deferred to v1.7.1 (lower-confidence specialist findings)
+
+- (testing INFO #2) scorerWindow=1 lower-bound legal value test.
+- (testing INFO #3) No-terms path ORDER BY assertion (verify chronologically-first rows returned).
+- (testing INFO #5) Tenant-isolation test for scorerWindow (insert under two tenants, recall under one, assert no cross-tenant leak via the wider window).
+- (testing INFO #6) HTTP integration test asserting `windowSize` IS serialized in the response body (output side, complementing the deferred input-side transport).
+- (testing INFO #7) Anchor LIKE-fallback test by asserting the returned content matches the inserted row.
+- (api-contract INFO #2) `RecallOpts.scorerWindow` type promises a knob the network does not honour. Two options for v1.7.1: wire `scorer_window` through HTTP/MCP transports, OR split the type so client.ts cannot accept an ignored field.
+
 ### Self-review + senior-review fixes (post-codex)
 
 After the codex diff-pass, an explicit `/self-review` + senior-code-reviewer subagent pass on the actual diff caught 4 more issues codex missed (1 P1 lying comment, 1 P1 type-breaking change, 1 P1 second uncapped path, 2 P2 JSDoc):

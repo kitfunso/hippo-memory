@@ -2,7 +2,7 @@
  * F1 (v1.7.0) — `MemoryEntry.bm25_score` populated on the FTS path of
  * `loadSearchEntries` and `undefined` everywhere else.
  *
- * loadSearchRows has FOUR query paths (src/store.ts:579-639):
+ * loadSearchRows in src/store.ts has FOUR query paths:
  *   1. No-terms path (empty query)            → no FTS, score undefined
  *   2. FTS path (terms + FTS available)        → bm25_score populated
  *   3. LIKE fallback (terms + FTS unavailable) → no FTS, score undefined
@@ -131,6 +131,25 @@ describe('loadSearchEntries bm25_score (F1, v1.7.0)', () => {
     // None of the returned rows should carry bm25_score because we did
     // not enter the FTS path (FTS returned 0 → fell through to LIKE → 0
     // → full-store fallback).
+    for (const e of results) {
+      expect(e.bm25_score).toBeUndefined();
+    }
+  });
+
+  it('Full-store fallback path: honours LIMIT (regression for codex P1 — pre-v1.7.0 was uncapped)', () => {
+    // Codex caught that the full-store fallback returned the entire tenant
+    // store ignoring `limit`. Pre-v1.7.0 a query with no FTS hit and
+    // limit=10 returned all 30 rows; the fix added LIMIT ?. This test
+    // would FAIL on pre-v1.7.0 store.ts (returned 30) and PASSES on the
+    // fix (returns exactly 10).
+    for (let i = 0; i < 30; i++) writeEntry(root, makeRaw(`content ${i}`));
+    const results = loadSearchEntries(
+      root,
+      'zzzznonexistenttokenxxxxxx qqqqqqq',
+      10,
+      'default',
+    );
+    expect(results.length).toBe(10);
     for (const e of results) {
       expect(e.bm25_score).toBeUndefined();
     }

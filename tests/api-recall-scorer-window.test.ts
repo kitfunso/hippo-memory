@@ -95,14 +95,26 @@ describe('RecallOpts.scorerWindow (F3, v1.7.0)', () => {
     expect((thrown as { code?: string }).code).toBe('invalid_scorer_window');
   });
 
-  it('scorerWindow validation: -5 / 1.5 / NaN / Infinity all throw', () => {
-    writeEntry(root, makeRaw('alpha'));
-    for (const bad of [-5, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
-      expect(() =>
-        recall(ctxFor(root), { query: 'alpha', scorerWindow: bad }),
-      ).toThrow(/scorerWindow must be a positive integer/);
-    }
-  });
+  it.each([-5, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    'scorerWindow=%s throws RecallContractError with code invalid_scorer_window (testing specialist #1)',
+    (bad) => {
+      writeEntry(root, makeRaw('alpha'));
+      let thrown: unknown = null;
+      try {
+        recall(ctxFor(root), { query: 'alpha', scorerWindow: bad });
+      } catch (err) {
+        thrown = err;
+      }
+      // Per-iteration code assertion catches a regression where one of the
+      // bad values (e.g. NaN) sneaks through and the throw comes from a
+      // downstream FTS LIMIT instead of our typed validator.
+      expect((thrown as { name?: string })?.name).toBe('RecallContractError');
+      expect((thrown as { code?: string })?.code).toBe('invalid_scorer_window');
+      expect(String((thrown as { message?: string })?.message)).toMatch(
+        /scorerWindow must be a positive integer/,
+      );
+    },
+  );
 
   it('limit semantics unchanged: caps base BM25 hits, fresh-tail/summary can expand', () => {
     // Pre-v1.7.0 behaviour: limit caps BM25 base, fresh-tail and summary
