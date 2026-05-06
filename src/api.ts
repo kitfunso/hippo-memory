@@ -278,6 +278,23 @@ export interface RecallResult {
  */
 export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   const limit = opts.limit ?? 10;
+  // F5 (v1.6.5) preflight — codex P1: original guard fired AFTER
+  // loadSearchEntries (which runs initStore, migrating legacy state on first
+  // call). For a true contract preflight we want the throw before any
+  // store-touching work. Re-checked at the freshTailCount > 0 site so the
+  // logic is co-located with the consumer; this is the cheap upfront fail.
+  const freshTailCountPreflight = opts.freshTailCount ?? 0;
+  if (
+    freshTailCountPreflight > 0 &&
+    !opts.freshTailSessionId &&
+    process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL === '1'
+  ) {
+    throw new RecallContractError(
+      'fresh_tail_requires_session_id',
+      'fresh-tail requires a session id when HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1; ' +
+        'pass opts.freshTailSessionId or unset the env to allow tenant-wide fresh-tail.',
+    );
+  }
   const all = loadSearchEntries(
     ctx.hippoRoot,
     opts.query,
@@ -382,23 +399,9 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   const freshTailCount = opts.freshTailCount ?? 0;
   const freshRanked: RecallResultItem[] = [];
   if (freshTailCount > 0) {
-    // F5 (v1.6.5): typed contract guard. When the deployment opts in via
-    // HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1, refuse tenant-wide
-    // fresh-tail. Default (env unset) preserves v1.6.x back-compat: tenant-
-    // wide rows are returned and tagged `isFreshTail=true`. The guard lives
-    // here in `api.recall` only — `api.assemble` is already session-scoped
-    // through `loadSessionRawMemories` and never calls tenant-wide
-    // `loadFreshRawMemories`, so a duplicate guard there would be a no-op.
-    if (
-      !opts.freshTailSessionId &&
-      process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL === '1'
-    ) {
-      throw new RecallContractError(
-        'fresh_tail_requires_session_id',
-        'fresh-tail requires a session id when HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1; ' +
-          'pass opts.freshTailSessionId or unset the env to allow tenant-wide fresh-tail.',
-      );
-    }
+    // F5 contract guard fires at recall() preflight (top of function).
+    // No re-check needed here — by the time we reach this block the
+    // env/session policy has already been validated.
     const recent = loadFreshRawMemories(
       ctx.hippoRoot,
       freshTailCount,

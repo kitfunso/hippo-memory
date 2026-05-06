@@ -23,17 +23,24 @@ export type MemoryKind = 'raw' | 'distilled' | 'superseded' | 'archived';
 /**
  * Timestamp invariant.
  *
- * All timestamp fields on `MemoryEntry` (`created`, `last_retrieved`,
- * `valid_from`) and on session-state types (SessionEvent, TaskSnapshot,
- * SessionHandoff, AssembledContextItem.createdAt, etc.) are stored as
+ * All in-process writes of timestamp fields on `MemoryEntry` (`created`,
+ * `last_retrieved`, `valid_from`) and on session-state types (SessionEvent,
+ * TaskSnapshot, SessionHandoff, AssembledContextItem.createdAt, etc.) emit
  * canonical `Date.prototype.toISOString()` output: 24 characters, UTC,
  * milliseconds precision, trailing `Z` (e.g. `2026-05-06T09:55:49.123Z`).
  *
- * Imports preserving local-time offsets MUST normalize to canonical UTC
- * before write. Byte-comparison sort (`<` / `>`) is chronological by virtue
- * of this invariant; callers that need to order timestamps SHOULD prefer
- * byte compare over `localeCompare` (which is locale-aware Unicode collation
- * and ~50× slower with no semantic gain on canonical UTC ISO).
+ * Caveat — markdown rebuild. `deserializeEntry` / `rebuildIndex` preserve
+ * frontmatter timestamp strings as-is. Legacy markdown that recorded a
+ * non-canonical offset (e.g. `2026-05-06T05:55:49-04:00`) round-trips
+ * through SQLite without normalization, and DAG `earliest_at` / `latest_at`
+ * caches are computed from those strings. Importers SHOULD normalize on
+ * write; rebuild from drifted markdown is a known limitation.
+ *
+ * Byte-comparison sort (`<` / `>`) is chronological for any pair of
+ * canonical UTC ISO strings. ~50× faster than `localeCompare` with no
+ * semantic gain. F4 (v1.6.5) uses byte compare on `assemble`; if a future
+ * import path admits non-canonical timestamps, the F4 sort and any
+ * downstream chronological reasoning will need a normalization pass.
  */
 
 export interface MemoryEntry {

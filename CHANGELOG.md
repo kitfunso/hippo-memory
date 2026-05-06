@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.6.5 (2026-05-06)
+
+Two cherry-picked items from the in-progress v1.7 foundations work that have zero contract risk and ship cleanly on their own. Both were originally bundled inside the v1.7 foundations plan; eng review + `/codex review` (gpt-5.5) on the foundations plan flagged them as independently shippable and identified specific traps in the original "library `console.warn`" approach for F5. This release applies the codex-suggested correction (typed error at API boundary, no library stderr noise) and ships the polish atomically.
+
+### Added
+
+- **`RecallContractError` exported class with `.code` field.** Thrown by `api.recall` when `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1` is set AND `freshTailCount > 0` AND `freshTailSessionId` is unset. HTTP returns 400 with `{ error: <code>, message: <string> }` so callers can discriminate without parsing prose; MCP propagates the typed error to the transport (existing -32603 mapping); CLI exits 1 with the message on stderr (existing top-level catch). Default env unset preserves v1.6.x tenant-wide back-compat.
+- **Timestamp invariant documented** in `src/memory.ts` (above `MemoryEntry`): all `MemoryEntry` and session-state timestamps are stored as canonical `Date.prototype.toISOString()` output (24 chars, UTC, milliseconds, trailing `Z`). Imports preserving local-time offsets MUST normalize on write.
+
+### Changed
+
+- **`assemble` ISO sort uses byte compare instead of `localeCompare`.** ~50× faster on canonical UTC ISO with no semantic change given the in-process timestamp invariant. Audited in-process timestamp writes in `src/`: zero non-canonical writes (no `toLocaleString` / `toLocaleDateString` / `toLocaleTimeString`, no manual ISO reformatting). **Caveat:** `deserializeEntry` / `rebuildIndex` round-trip frontmatter timestamp strings as-is, so legacy markdown that recorded a non-canonical offset propagates through SQLite without normalization (codex P1 documented in the JSDoc). Importers SHOULD normalize on write; rebuild from drifted markdown is a known limitation. `tests/api-assemble-iso-sort.test.ts` covers (a) byte-cmp ↔ localeCompare equivalence on a fixed sample, (b) a randomized 100-sample cross-check against `Date.parse`, and (c) a real `api.assemble` integration that inserts shuffled raws and asserts ascending order on returned items.
+- **`loadFreshRawMemories` JSDoc-deprecated** for tenant-wide use (no `sessionId`). NO runtime `console.warn` introduced — codex C9 explicitly rejected library-level stderr noise. Direct callers bypass the `api.recall` guard, so the JSDoc is the only nudge at that layer.
+
+### Guard placement (intentional, audited)
+
+- `api.recall`: ENFORCED.
+- `api.assemble`: NOT enforced. `assemble` is already session-scoped via `loadSessionRawMemories` and never calls tenant-wide `loadFreshRawMemories`. Adding a guard here would be a no-op (codex C9 originally caught the mk1 plan trying to add this).
+- `loadFreshRawMemories`: deprecation note only.
+
+### Env semantics
+
+Strict equality check on the literal string `'1'`. Other truthy values (`'true'`, `'yes'`, `'0'`, `''`) are treated as unset — defensive against callers expecting "any truthy" semantics. Test asserts each variant.
+
+### Tests
+
+- 1353 passing (+14 from v1.6.4). New: `tests/api-assemble-iso-sort.test.ts` (2), `tests/recall-fresh-tail-policy.test.ts` (5), `tests/http-recall-fresh-tail-policy.test.ts` (4), `tests/mcp-recall-fresh-tail-policy.test.ts` (3).
+
+### Deferred to v1.7.0 foundations release
+
+- BM25 provenance plumbing (`MemoryEntry.bm25_score`).
+- `RecallOpts.scorerWindow` opt-in wider scorer window.
+- MCP final-cap fix on `hippo_recall`.
+
 ## 1.6.4 (2026-05-05)
 
 Two deferred items from the v1.6.2 senior review queue. Plan-stage `/codex` + `/review` caught 2 P0s in my draft before any code landed (unscoped cross-tenant probe; `validateIdSegment` running after `matchPath` splits — neither would have actually fixed the bugs they were meant to fix). Implementation chain ran clean.

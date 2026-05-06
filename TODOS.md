@@ -1,5 +1,9 @@
 # Hippo Brain Observatory — Roadmap
 
+## v1.7 — codex finding from v1.6.5 review
+
+- [ ] **`unknown:legacy` leak in `api.recall` baseRanked.** No-scope base recall filters via `!isPrivateScope(...)` only (`src/api.ts:~298`); the helper `isPrivateScope`/default-deny logic at `src/api.ts:107` documents `unknown:legacy` as a quarantined scope, and continuity/fresh-tail honour it, but the BM25 base path does not. A quarantined `unknown:legacy` row can therefore surface in `baseRanked`. Pre-existing bug, surfaced by codex during the v1.6.5 review. Fix in v1.7 with the foundations recall surface refactor — adding the filter alone is one line, but worth doing alongside the unified `RankedMemory` work so all consumers pick it up consistently.
+
 ## v0.26 — UI Redesign (warm parchment + 3D)
 
 Redesign direction confirmed: warm parchment Field Notes aesthetic with 3D Three.js memory map. Mockup at `mockups/hybrid-v4.html`.

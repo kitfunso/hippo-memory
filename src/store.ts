@@ -1228,13 +1228,13 @@ export function countSessionRawMemories(
  * Bounded count cap at 200 — beyond that the caller should filter via
  * tags/scope rather than time-windowed recall.
  *
- * @deprecated v1.6.5 — calling without `sessionId` returns tenant-wide rows.
- * Rarely the right shape for "what did I just see in this conversation".
- * `api.recall` enforces session scoping when
+ * Deprecation note (v1.6.5) — the **tenant-wide call shape** (omitting
+ * `sessionId`) is rarely the right shape for "what did I just see in this
+ * conversation". `api.recall` enforces session scoping when
  * `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1` is set, throwing
- * `RecallContractError` instead. Tenant-wide remains the back-compat default.
- * Direct callers of this helper bypass that enforcement; pass `sessionId`
- * explicitly to be safe.
+ * `RecallContractError` instead. Tenant-wide remains the back-compat default
+ * but is discouraged for new callers. Passing `sessionId` is fully supported
+ * and recommended; this function is NOT deprecated as a whole.
  */
 export function loadFreshRawMemories(
   hippoRoot: string,
