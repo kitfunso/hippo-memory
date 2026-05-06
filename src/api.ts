@@ -171,6 +171,25 @@ export function remember(ctx: Context, opts: RememberOpts): RememberResult {
 export interface RecallOpts {
   query: string;
   limit?: number;
+  /**
+   * F3 (v1.7.0): scorer-window opt-in. When set, `loadSearchEntries`
+   * loads up to `scorerWindow` candidates (capped at the store-internal
+   * default of 200 unless raised; see `loadSearchEntries`'s `limit`
+   * parameter). When undefined (default), the existing behaviour is
+   * preserved: `loadSearchEntries(undefined, ...)` uses its own 200-row
+   * default, which is what every release before v1.7.0 silently relied on.
+   *
+   * `scorerWindow` lets callers decouple "how many candidates do I want
+   * the scorer to evaluate" from `limit` ("how many do I want returned").
+   * Useful when `summarizeOverflow=true` and you want a wider candidate
+   * pool to detect more level-2 parent clusters.
+   *
+   * NOT a hard cap on returned results. Fresh-tail and substituted
+   * summaries can extend the result count above `limit`. The CLI's
+   * existing slice at `cli.ts:1199` is the CLI hard cap; library
+   * callers slice themselves if they want one.
+   */
+  scorerWindow?: number;
   mode?: 'bm25' | 'hybrid' | 'physics';
   /**
    * Restrict results to memories whose `scope` equals this value exactly.
@@ -268,6 +287,14 @@ export interface RecallResult {
    * should truncate event.content themselves before display.
    */
   continuityTokens?: number;
+  /**
+   * F3 (v1.7.0): scorer window actually used for this recall. Equals
+   * `opts.scorerWindow` when set, otherwise the store-internal default
+   * (200) used by `loadSearchEntries(undefined, ...)`. Reported so
+   * callers can introspect "did the scorer see enough candidates?"
+   * without re-deriving the value.
+   */
+  windowSize: number;
 }
 
 /**
@@ -295,10 +322,18 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
         'pass opts.freshTailSessionId or unset the env to allow tenant-wide fresh-tail.',
     );
   }
+  // F3 (v1.7.0): scorerWindow opt-in. When undefined (default),
+  // loadSearchEntries uses its own store-internal 200-row default —
+  // this preserves every pre-v1.7.0 caller's behaviour bit-for-bit
+  // (codex mk2-pass P0-1: defaulting to `limit` would have shrunk the
+  // candidate pool and killed overflow summaries). When set, the value
+  // is passed through as the `limit` parameter to loadSearchEntries.
+  const STORE_DEFAULT_CANDIDATE_LIMIT = 200;
+  const windowSize = opts.scorerWindow ?? STORE_DEFAULT_CANDIDATE_LIMIT;
   const all = loadSearchEntries(
     ctx.hippoRoot,
     opts.query,
-    undefined,
+    opts.scorerWindow,
     ctx.tenantId,
   );
   // Scope filtering runs AFTER the tenant filter inside loadSearchEntries, so
@@ -518,7 +553,7 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
       filteredEvents.reduce((acc, e) => acc + tokenize(e.content), 0);
   }
 
-  return { results: ranked, total: entries.length, tokens, continuity, continuityTokens };
+  return { results: ranked, total: entries.length, tokens, continuity, continuityTokens, windowSize };
 }
 
 // ---------------------------------------------------------------------------
