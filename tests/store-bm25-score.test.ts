@@ -94,22 +94,71 @@ describe('loadSearchEntries bm25_score (F1, v1.7.0)', () => {
     }
   });
 
-  it('LIKE fallback path: substring query that misses FTS but matches LIKE → entries have bm25_score undefined', () => {
-    // FTS5 tokenizes on word boundaries (default unicode61); LIKE does
-    // raw substring. A query like "alphab" misses FTS (no whole word
-    // match) but LIKE %alphab% matches "alphabet". This deterministically
-    // routes through the LIKE branch without monkey-patching FTS state
-    // (which initStore resets on every loadSearchEntries call).
+  it('No-terms path: returns rows ordered by created ASC then id ASC, with stamped created surviving writeEntry (v1.7.1 INFO #3 + P1)', () => {
+    // P1[5]: verify stamped `created` survives writeEntry → roundtrip read.
+    // upsertEntryRow (store.ts:860) passes entry.created straight through;
+    // a future normalizer would silently break this test. Anchor explicitly.
+    const probe = makeRaw('roundtrip probe');
+    probe.created = '2026-05-06T00:00:00.000Z';
+    // codex P1[3]: stamp valid_from too — createMemory sets it to now() at
+    // construction; without alignment, valid_from > created is illegal-state
+    // bait for any future schema migration. Cheap future-proofing.
+    probe.valid_from = probe.created;
+    writeEntry(root, probe);
+    const reread = loadSearchEntries(root, '', 1, 'default');
+    expect(reread.length).toBe(1);
+    expect(reread[0]!.created).toBe('2026-05-06T00:00:00.000Z');
+
+    // Now the actual ORDER BY assertion: src/store.ts no-terms SQL is
+    // `ORDER BY created ASC, id ASC LIMIT ?`. Existing test asserts row
+    // count but not order. Pin chronological ordering.
+    const created: string[] = [];
+    for (let i = 0; i < 50; i++) {
+      const e = makeRaw(`row-${i.toString().padStart(2, '0')}`);
+      // Spaced 1s apart so byte-cmp ordering is unambiguous.
+      e.created = new Date(Date.UTC(2026, 4, 6, 1, 0, i)).toISOString();
+      created.push(e.created);
+      writeEntry(root, e);
+    }
+    const results = loadSearchEntries(root, '', 10, 'default');
+    expect(results.length).toBe(10);
+    // Earliest 10 by created ASC: the 'roundtrip probe' at 00:00:00Z is first,
+    // then rows 0-8 at 01:00:00Z through 01:00:08Z.
+    const expectedOrder = ['2026-05-06T00:00:00.000Z', ...created.slice(0, 9)];
+    const got = results.map((e) => e.created);
+    expect(got).toEqual(expectedOrder);
+  });
+
+  it('LIKE fallback path: HIPPO_FORCE_LIKE_PATH=1 routes through LIKE deterministically; bm25_score undefined; expected row anchored (v1.7.1 senior P2.3 + INFO #7)', () => {
+    // v1.7.0 used a substring "alphab" tokenizer-miss to route through LIKE
+    // — fragile under porter/trigram tokenizers (senior P2.3). Both rev.1
+    // alternatives (DROP TABLE, setMeta('fts5_available','0')) are no-ops
+    // because ensureOptionalFts runs CREATE+backfill+meta-write on every
+    // openHippoDb (db.ts:998-1029).
     //
-    // Codex P2-2 originally suggested forcing isFtsAvailable=false, but
-    // that's not stable: setMeta('fts5_available','0') is overwritten by
-    // ensureOptionalFts on the next initStore call. Substring miss is the
-    // robust route.
-    writeEntry(root, makeRaw('alphabet soup contents'));
-    const results = loadSearchEntries(root, 'alphab', 200, 'default');
-    expect(results.length).toBeGreaterThan(0);
-    for (const e of results) {
-      expect(e.bm25_score).toBeUndefined();
+    // v1.7.1 fix: HIPPO_FORCE_LIKE_PATH=1 is read at the start of
+    // loadSearchRows so loadSearchRows skips the FTS branch unconditionally
+    // and runs the LIKE query. Gated at the read site (NOT inside
+    // isFtsAvailable) so writes (syncFtsRow, deleteFtsRow, raw-archive)
+    // keep maintaining the FTS index honestly — no on-disk poisoning.
+    //
+    // INFO #7: anchor on the expected content so a partial hit cannot let
+    // the test pass spuriously.
+    const prevEnv = process.env.HIPPO_FORCE_LIKE_PATH;
+    try {
+      writeEntry(root, makeRaw('alphabet soup contents'));
+      process.env.HIPPO_FORCE_LIKE_PATH = '1';
+      const results = loadSearchEntries(root, 'alphabet', 200, 'default');
+      expect(results.length).toBeGreaterThan(0);
+      // Anchor: the expected row must come back via the LIKE branch.
+      expect(results.some((e) => e.content === 'alphabet soup contents')).toBe(true);
+      // No FTS path → no bm25_score on any returned row.
+      for (const e of results) {
+        expect(e.bm25_score).toBeUndefined();
+      }
+    } finally {
+      if (prevEnv === undefined) delete process.env.HIPPO_FORCE_LIKE_PATH;
+      else process.env.HIPPO_FORCE_LIKE_PATH = prevEnv;
     }
   });
 

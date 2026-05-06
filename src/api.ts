@@ -16,6 +16,7 @@ import {
   readEntry,
   deleteEntry,
   loadSearchEntries,
+  loadRecallSearchEntries,
   loadEntriesByIds,
   loadChildrenOf,
   loadFreshRawMemories,
@@ -373,26 +374,43 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
     }
   }
   const windowSize = opts.scorerWindow ?? DEFAULT_SEARCH_CANDIDATE_LIMIT;
-  const all = loadSearchEntries(
+  // v1.7.1 — root-cause fix for the `unknown:legacy` leak. Scope predicate
+  // is now pushed into `loadSearchRows` SQL via `loadRecallSearchEntries`.
+  // - opts.scope undefined / '': SQL excludes `unknown:legacy`.
+  // - opts.scope non-empty: SQL exact-matches m.scope = opts.scope.
+  // Tenant predicate still runs first, so a tenant-mismatched scope cannot
+  // surface another tenant's row even when both share the same scope string.
+  //
+  // **CALLER CONTRACT:** any future recall-mode loader MUST go through
+  // `loadRecallSearchEntries` (or invoke the SQL scope predicate equivalently).
+  // Calling `loadSearchEntries` from this code path re-introduces the v1.6.5
+  // codex-flagged leak. See `passesScopeFilterForRecall` in this file for
+  // the canonical recall-side scope rule (kept in sync with the SQL clause
+  // in loadSearchRows).
+  //
+  // Also fixes a latent code smell: pre-v1.7.1 passed `opts.scorerWindow`
+  // (raw, possibly undefined) where `windowSize` was intended.
+  const all = loadRecallSearchEntries(
     ctx.hippoRoot,
     opts.query,
-    opts.scorerWindow,
+    windowSize,
     ctx.tenantId,
+    opts.scope,
   );
-  // Scope filtering runs AFTER the tenant filter inside loadSearchEntries, so
-  // a tenant-mismatched scope cannot surface another tenant's row even when
-  // both share the same scope string (e.g. 'slack:private:CSHARED').
   let entries: typeof all;
   if (opts.scope !== undefined && opts.scope !== '') {
+    // SQL already exact-matched in loadRecallSearchEntries; keep the JS
+    // filter as defense-in-depth so a future SQL-clause regression cannot
+    // silently surface cross-scope rows.
     entries = all.filter((e) => e.scope === opts.scope);
   } else {
-    // v1.2.1: generalize default-deny from `slack:private:*` to ANY
-    // `<source>:private:*` scope so adding a connector cannot silently
-    // surface private rows to no-scope callers. Frontend callers will pass
-    // `undefined` and must not see private rows from any source by default.
+    // SQL already excluded `unknown:legacy`. The remaining JS filter
+    // covers the regex-only `<source>:private:*` rule (v1.2.1 generalization
+    // from `slack:private:*` to any source: connector authors cannot silently
+    // surface private rows to no-scope callers).
     entries = all.filter((e) => !isPrivateScope(e.scope ?? null));
   }
-  // BM25 ordering already comes from loadSearchEntries; cap to `limit`.
+  // BM25 ordering already comes from loadRecallSearchEntries; cap to `limit`.
   // Score is a placeholder — the physics/hybrid scorers in src/search.ts
   // produce richer breakdowns and will replace this when wired up.
   const baseSlice = entries.slice(0, limit);

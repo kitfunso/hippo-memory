@@ -85,6 +85,12 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.7.1
+
+- Fixed `unknown:legacy` scope leak in BM25 base recall, at the **producer layer** (SQL predicate in `loadSearchRows` via new `loadRecallSearchEntries` helper). Future recall consumers cannot silently re-introduce the leak. Operators investigating the quarantine bucket should pass explicit `scope: 'unknown:legacy'`.
+- Hardened test coverage on the v1.7.0 foundations: `scorerWindow=1` lower bound, no-terms `ORDER BY`, tenant isolation across FTS / no-terms / LIKE-fallback paths, HTTP `windowSize` serialization.
+- Deterministic LIKE-fallback testing via new `HIPPO_FORCE_LIKE_PATH=1` env hook (read-only — never poisons the on-disk FTS index).
+
 ### What's new in v1.6.4
 
 - **`drillDown` returns a discriminated outcome.** `not_found` / `not_drillable` / `scope_blocked` instead of `null`. HTTP maps `not_drillable` to 422; cross-tenant and scope-blocked stay at 404 (no info-leak). Breaking for JS callers that did `result === null`; migrate to `'failure' in result`.

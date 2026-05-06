@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.7.1 (2026-05-06)
+
+Patch release closing the v1.7.0 `/review` 5-specialist deferred-INFO tail (6 items) plus the codex-flagged `unknown:legacy` leak from the v1.6.5 review. The leak fix is at the **producer layer** (root-cause-over-patches): scope predicate pushed into `loadSearchRows` SQL via a new `loadRecallSearchEntries` helper, so future recall consumers cannot silently re-introduce the leak.
+
+### Fixed
+
+- **`unknown:legacy` scope leaked into `recall` baseRanked.** Pre-existing bug surfaced by codex during the v1.6.5 review. Continuity, drillDown, and assemble already filtered correctly via `passesScopeFilterForRecall`; the BM25 base path at `src/api.ts:393` only filtered `isPrivateScope`. v1.7.1 fixes this at the SQL producer: new `loadRecallSearchEntries` helper in `src/store.ts` adds a recall-mode scope predicate to all four `loadSearchRows` paths (no-terms, FTS, LIKE fallback, full-store fallback). `recall()` migrated; redundant post-load filter kept as defense-in-depth (a future SQL-clause regression cannot silently surface cross-scope rows).
+- **Latent code smell in `recall()` candidate-window arg.** Pre-v1.7.1 `loadSearchEntries` was called with raw `opts.scorerWindow` (possibly undefined); the parallel default at the loader signature collapsed to 200 by accident. v1.7.1 passes `windowSize` (`opts.scorerWindow ?? DEFAULT_SEARCH_CANDIDATE_LIMIT`) explicitly. No observable behaviour change.
+
+### Added
+
+- **`loadRecallSearchEntries(hippoRoot, query, limit, tenantId, requestedScope?)`.** New public helper exported from `src/store.ts` and re-exported from `src/index.ts`. Pushes the recall-side scope predicate into SQL: `requestedScope` undefined / `''` → default-deny on `unknown:legacy`; non-empty string → exact match on `m.scope`. Background pipelines (`consolidate`, `embeddings`, `refine-llm`, ...) keep using `loadSearchEntries` so they can see quarantined rows when needed.
+- **`HIPPO_FORCE_LIKE_PATH=1` env-var hook in `loadSearchRows`.** Test/diagnostic flag to deterministically force the LIKE-fallback path. Gated at the read-call site only — `syncFtsRow`, `deleteFtsRow`, and `raw-archive.ts::archiveRaw` keep using `isFtsAvailable` honestly so the flag never poisons the on-disk FTS index. Lets tests exercise the LIKE branch independent of FTS5 tokenizer behaviour. Earlier "DROP TABLE memories_fts" / "setMeta('fts5_available','0')" approaches were no-ops because `ensureOptionalFts` (`src/db.ts:998-1029`) re-creates and re-backfills the FTS index on every `openHippoDb`.
+
+### Tests
+
+- `scorerWindow=1` lower-bound regression-pin (testing INFO #2).
+- No-terms `ORDER BY created ASC, id ASC` + `created` stamp roundtrip with stamped `valid_from` for future-proofing (testing INFO #3).
+- Tenant isolation under wide `scorerWindow` covering FTS, no-terms, AND LIKE-fallback paths — asserted on id-set + length, not metadata (testing INFO #5).
+- HTTP `GET /v1/memories?q=...` `body.windowSize === 200` serialization (testing INFO #6).
+- Deterministic LIKE fallback via `HIPPO_FORCE_LIKE_PATH=1`; expected row anchored on content (senior P2.3 + INFO #7).
+- `unknown:legacy` default-deny for unscoped recall, plus opt-in coverage for the explicit-scope branch and empty-string scope semantics (codex finding from v1.6.5 review).
+
+### Changed
+
+- **Default-deny on `unknown:legacy` is observable for unscoped recall callers.** Any external consumer that had silently grown to depend on the leak (recall returning `unknown:legacy` rows when no scope is set) will now miss those rows. Behaviour was always default-deny per `passesScopeFilterForRecall` JSDoc; the bug-fix-with-visible-effect is intentional. Operators investigating the quarantine bucket should pass explicit `scope: 'unknown:legacy'`.
+
+### Deferred to v1.7.2
+
+- **Migrate continuity / drillDown / assemble inline scope closures onto `loadRecallSearchEntries`.** Those paths already filter correctly via `passesScopeFilterForRecall`; consolidation onto the producer layer is hygiene, not bug-fix.
+- **Migrate CLI `cmdRecall` and `shared.ts` cross-deployment helpers** (`cli.ts:783`, `cli.ts:1429`, `shared.ts:96`, `shared.ts:172`) onto the new helper for consistency.
+- **`scorerWindow` transport exposure** — HTTP `/v1/memories` `scorer_window` parse, MCP `hippo_recall` arg parse, `client.ts` thin-client serialize. Validation already lives in `recall()`.
+- **Discriminated-union refactor** of internal `loadSearchRows` `recallScope?: { value: string | null }` parameter shape (boxed-nullable leaks SQL-builder internals into the loader signature).
+
 ## 1.7.0 (2026-05-06)
 
 Foundation release. Surfaces FTS5 BM25 score as `MemoryEntry.bm25_score` provenance metadata (FTS path only) and adds `RecallOpts.scorerWindow` so callers can decouple "how many candidates do I want the scorer to evaluate" from `limit`. Three review-chain rounds shaped this release: `/plan-eng-review` and `/codex review --model gpt-5.5` killed mk1 (4 P0s including a fabricated `bm25_score` column) and mk2 (2 P0s including an MCP cap that addressed a non-existent contract); mk3 dropped F2 unified `RankedMemory` (defer to v1.8 with `recallRanked()` API), dropped the JS BM25 backfill (different scorer / different scale), dropped `hardLimit` (existing semantics already correct), and dropped the MCP cap entirely. F4 + F5 shipped separately in v1.6.5.

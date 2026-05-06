@@ -601,6 +601,7 @@ function loadSearchRows(
   query: string,
   limit: number,
   tenantId: string | undefined,
+  recallScope?: { value: string | null },
 ): MemoryRow[] {
   // tenantId undefined = no tenant filter (legacy callers / cross-deployment
   // helpers). tenantId set = strict tenant isolation, leveraging the composite
@@ -610,17 +611,54 @@ function loadSearchRows(
   const tenantOnlyPredicate = tenantId !== undefined ? ` WHERE tenant_id = ?` : '';
   const tenantParams = tenantId !== undefined ? [tenantId] : [];
 
+  // v1.7.1 — recall-mode scope predicate (root-cause fix for the
+  // `unknown:legacy` leak codex flagged on the v1.6.5 review). Three forms:
+  //   undefined       → no scope filter (legacy callers; background pipelines)
+  //   { value: null } → recall-mode default-deny: exclude unknown:legacy
+  //   { value: 'X' }  → recall-mode exact match: m.scope = 'X'
+  // Private-scope (`<source>:private:*`) regex filtering remains a JS
+  // post-load step in `recall()` — the regex doesn't translate cleanly to
+  // SQL, and the JS helper covers all four recall consumers consistently.
+  //
+  // **Cross-reference:** `passesScopeFilterForRecall` in src/api.ts encodes
+  // the same default-deny rule. If the deny list grows (e.g. add
+  // `unknown:purged`), update BOTH this SQL clause AND that helper AND the
+  // continuity inline closure. v1.7.2 will consolidate them.
+  let scopeClauseAlias = '';
+  let scopeClauseNoAlias = '';
+  let scopeClauseTenantOnly = '';
+  const scopeParams: string[] = [];
+  if (recallScope !== undefined) {
+    if (recallScope.value === null) {
+      scopeClauseAlias = ` AND (m.scope IS NULL OR m.scope != 'unknown:legacy')`;
+      scopeClauseNoAlias = ` AND (scope IS NULL OR scope != 'unknown:legacy')`;
+      scopeClauseTenantOnly = scopeClauseNoAlias;
+    } else {
+      scopeClauseAlias = ` AND m.scope = ?`;
+      scopeClauseNoAlias = ` AND scope = ?`;
+      scopeClauseTenantOnly = scopeClauseNoAlias;
+      scopeParams.push(recallScope.value);
+    }
+  }
+
   const terms = Array.from(new Set(tokenize(query)));
   if (terms.length === 0) {
     // F3 (v1.7.0) self-review: empty-query path is the second uncapped
     // path (codex diff-pass caught the full-store fallback at the bottom;
     // this no-terms path had the same shape). Apply LIMIT so all four
     // candidate paths honour the caller's cap when set.
-    const sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate} ORDER BY created ASC, id ASC LIMIT ?`;
-    return db.prepare(sql).all(...tenantParams, limit) as MemoryRow[];
+    const sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate}${scopeClauseTenantOnly} ORDER BY created ASC, id ASC LIMIT ?`;
+    return db.prepare(sql).all(...tenantParams, ...scopeParams, limit) as MemoryRow[];
   }
 
-  if (isFtsAvailable(db)) {
+  // v1.7.1 — test/diagnostic hook: `HIPPO_FORCE_LIKE_PATH=1` forces the
+  // LIKE-fallback path here only. Gated at the read-call site so writes
+  // (`syncFtsRow`, `deleteFtsRow`, `raw-archive.ts::archiveRaw`) keep using
+  // `isFtsAvailable` honestly and never silently skip FTS index sync.
+  // Lets tests exercise the LIKE branch deterministically without
+  // poisoning the on-disk FTS state.
+  const forceLikePath = process.env.HIPPO_FORCE_LIKE_PATH === '1';
+  if (!forceLikePath && isFtsAvailable(db)) {
     try {
       const ftsQuery = terms.map((t) => `"${t.replace(/"/g, '""')}"`).join(' OR ');
       // memories_fts virtual table has no tenant_id column; filter via the
@@ -633,10 +671,10 @@ function loadSearchRows(
         SELECT ${MEMORY_SEARCH_COLUMNS}
         FROM memories m
         JOIN memories_fts f ON f.id = m.id
-        WHERE memories_fts MATCH ?${tenantPredicate}
+        WHERE memories_fts MATCH ?${tenantPredicate}${scopeClauseAlias}
         ORDER BY bm25(memories_fts), m.updated_at DESC
         LIMIT ?
-      `).all(ftsQuery, ...tenantParams, limit) as MemoryRow[];
+      `).all(ftsQuery, ...tenantParams, ...scopeParams, limit) as MemoryRow[];
 
       if (rows.length > 0) return rows;
     } catch {
@@ -654,10 +692,10 @@ function loadSearchRows(
   const rows = db.prepare(`
     SELECT ${MEMORY_SELECT_COLUMNS}
     FROM memories
-    WHERE (${where})${tenantPredicateNoAlias}
+    WHERE (${where})${tenantPredicateNoAlias}${scopeClauseNoAlias}
     ORDER BY updated_at DESC, created DESC
     LIMIT ?
-  `).all(...params, ...tenantParams, limit) as MemoryRow[];
+  `).all(...params, ...tenantParams, ...scopeParams, limit) as MemoryRow[];
 
   if (rows.length > 0) return rows;
 
@@ -666,8 +704,8 @@ function loadSearchRows(
   // now reported on RecallResult, an unbounded fallback would lie about
   // candidate-pool size. Apply LIMIT here so all four paths honour the
   // caller's cap.
-  const fallback = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate} ORDER BY created ASC, id ASC LIMIT ?`;
-  return db.prepare(fallback).all(...tenantParams, limit) as MemoryRow[];
+  const fallback = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate}${scopeClauseTenantOnly} ORDER BY created ASC, id ASC LIMIT ?`;
+  return db.prepare(fallback).all(...tenantParams, ...scopeParams, limit) as MemoryRow[];
 }
 
 function writeMarkdownMirror(hippoRoot: string, entry: MemoryEntry): void {
@@ -1436,6 +1474,39 @@ export function loadSearchEntries(
   const db = openHippoDb(hippoRoot);
   try {
     return loadSearchRows(db, query, limit, tenantId).map(rowToEntry);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/**
+ * v1.7.1 — recall-mode loader. Pushes the recall-side scope predicate into
+ * SQL so `unknown:legacy` cannot leak via any consumer that hasn't remembered
+ * to re-filter (root-cause-over-patches: codex flagged this on v1.6.5 review).
+ *
+ * - `requestedScope` undefined / '': default-deny on `unknown:legacy`.
+ * - `requestedScope` non-empty string: exact match on `m.scope = requestedScope`.
+ *
+ * Private-scope (`<source>:private:*`) regex filter remains a JS post-load
+ * step in `api.recall()` — the regex doesn't translate cleanly to SQL and the
+ * existing `passesScopeFilterForRecall` helper covers it consistently.
+ *
+ * Consumers: `api.recall` (v1.7.1+). Background pipelines (`consolidate`,
+ * `embeddings`, `refine-llm`, ...) keep using `loadSearchEntries` so they
+ * can see quarantined rows when needed.
+ */
+export function loadRecallSearchEntries(
+  hippoRoot: string,
+  query: string,
+  limit: number = DEFAULT_SEARCH_CANDIDATE_LIMIT,
+  tenantId: string,
+  requestedScope?: string,
+): MemoryEntry[] {
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    const scope = requestedScope && requestedScope !== '' ? requestedScope : null;
+    return loadSearchRows(db, query, limit, tenantId, { value: scope }).map(rowToEntry);
   } finally {
     closeHippoDb(db);
   }
