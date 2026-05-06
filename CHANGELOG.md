@@ -26,6 +26,17 @@ Foundation release. Surfaces FTS5 BM25 score as `MemoryEntry.bm25_score` provena
 - JS BM25 unification — needs explicit normalization design.
 - Deferred-queue items (CLI `--fresh-tail` / `--summarize-overflow` parity, summary mean-of-children re-rank) — sized as ~1 day each on top of v1.7.0 foundations; revisit after this release.
 
+### Self-review + senior-review fixes (post-codex)
+
+After the codex diff-pass, an explicit `/self-review` + senior-code-reviewer subagent pass on the actual diff caught 4 more issues codex missed (1 P1 lying comment, 1 P1 type-breaking change, 1 P1 second uncapped path, 2 P2 JSDoc):
+
+- **(self-review P1) Lying JSDoc comment in F5 preflight.** Said "Re-checked at the freshTailCount > 0 site" but the codex-fix commit (`225fce1`) had removed that re-check. Comment now reflects single-check semantics.
+- **(self-review P1) Second uncapped path in `loadSearchRows`.** Codex diff-pass caught the full-store fallback at the bottom of the function but the no-terms path at the top had the same shape — `SELECT ... FROM memories ORDER BY ...` without `LIMIT`. With `RecallResult.windowSize` now reported as the candidate-pool cap, this was a contract violation: `recall(ctx, { query: '', scorerWindow: 50 })` would report `windowSize: 50` while returning the entire tenant store. Same fix shape: append `LIMIT ?` and pass `limit`. New test in `tests/store-bm25-score.test.ts` asserts the no-terms path honours the LIMIT parameter.
+- **(senior P1) `RecallResult.windowSize` was non-optional, breaking downstream type consumers.** Pre-v1.7 callers could write `const r: RecallResult = { results: [], total: 0, tokens: 0 }`; v1.7.0 made `windowSize` required, which is a TS breaking change for test fakes / mocks / type narrowings. Made optional in the interface; values returned by `api.recall` itself always have it set, so consumers reading from `api.recall` can treat as defined. Lowest-blast-radius fix.
+- **(senior P2) `RecallContractError` JSDoc** was missing the new `'invalid_scorer_window'` code added in the codex diff-pass. Documented.
+- **(senior P2) `RecallOpts.scorerWindow` JSDoc** said "HTTP/MCP/client.ts do NOT serialize this field" — true for input, false for output (`RecallResult.windowSize` IS serialized over the wire via `sendJson`). Clarified the input-vs-output asymmetry.
+- **(senior P2.3 deferred to v1.7.1)** Full-store fallback test in `tests/store-bm25-score.test.ts` relies on FTS5 unicode61 tokenizer behaviour; not deterministic across tokenizer changes. Senior-recommended fix: drop `memories_fts` directly via raw SQL inside the test. Deferred.
+
 ### Codex diff-pass fixes (post-implementation)
 
 A fourth `/codex review` round on the actual v1.7.0 diff caught 0 P0 + 3 P1 + 1 P2 in the implementation (separate from the plan-stage rounds). All addressed before tag:
@@ -37,7 +48,7 @@ A fourth `/codex review` round on the actual v1.7.0 diff caught 0 P0 + 3 P1 + 1 
 
 ### Tests
 
-- 1365 passing (+11 from v1.6.5's 1354). New: `tests/store-bm25-score.test.ts` (5 tests covering FTS-path populated, FTS-path two-term-better-than-one-term, no-terms path undefined, LIKE-fallback path undefined via substring miss, full-store-fallback path undefined). `tests/api-recall-scorer-window.test.ts` (6 tests: default windowSize=200, opt-in scorerWindow, scorerWindow widens candidate pool with strict `total === 25` assertion, limit semantics unchanged with fresh-tail expansion, scorerWindow=0 throws `RecallContractError`, negative/non-integer/NaN/Infinity all rejected).
+- 1366 passing (+12 from v1.6.5's 1354). One additional test (`No-terms path: honours the LIMIT parameter`) covers the self-review-found uncapped path. New: `tests/store-bm25-score.test.ts` (5 tests covering FTS-path populated, FTS-path two-term-better-than-one-term, no-terms path undefined, LIKE-fallback path undefined via substring miss, full-store-fallback path undefined). `tests/api-recall-scorer-window.test.ts` (6 tests: default windowSize=200, opt-in scorerWindow, scorerWindow widens candidate pool with strict `total === 25` assertion, limit semantics unchanged with fresh-tail expansion, scorerWindow=0 throws `RecallContractError`, negative/non-integer/NaN/Infinity all rejected).
 
 ## 1.6.5 (2026-05-06)
 

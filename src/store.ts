@@ -612,8 +612,12 @@ function loadSearchRows(
 
   const terms = Array.from(new Set(tokenize(query)));
   if (terms.length === 0) {
-    const sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate} ORDER BY created ASC, id ASC`;
-    return db.prepare(sql).all(...tenantParams) as MemoryRow[];
+    // F3 (v1.7.0) self-review: empty-query path is the second uncapped
+    // path (codex diff-pass caught the full-store fallback at the bottom;
+    // this no-terms path had the same shape). Apply LIMIT so all four
+    // candidate paths honour the caller's cap when set.
+    const sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate} ORDER BY created ASC, id ASC LIMIT ?`;
+    return db.prepare(sql).all(...tenantParams, limit) as MemoryRow[];
   }
 
   if (isFtsAvailable(db)) {

@@ -82,6 +82,18 @@ describe('loadSearchEntries bm25_score (F1, v1.7.0)', () => {
     }
   });
 
+  it('No-terms path: honours the LIMIT parameter (self-review fix)', () => {
+    // Self-review found the no-terms path was uncapped pre-v1.7.0 (codex
+    // diff-pass only flagged the bottom-of-function full-store fallback).
+    // Insert 50 raws, request limit=10, assert exactly 10 returned.
+    for (let i = 0; i < 50; i++) writeEntry(root, makeRaw(`row ${i}`));
+    const results = loadSearchEntries(root, '', 10, 'default');
+    expect(results.length).toBe(10);
+    for (const e of results) {
+      expect(e.bm25_score).toBeUndefined();
+    }
+  });
+
   it('LIKE fallback path: substring query that misses FTS but matches LIKE → entries have bm25_score undefined', () => {
     // FTS5 tokenizes on word boundaries (default unicode61); LIKE does
     // raw substring. A query like "alphab" misses FTS (no whole word

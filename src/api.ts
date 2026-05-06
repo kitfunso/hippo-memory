@@ -70,6 +70,11 @@ export interface Context {
  *     Default behaviour (env unset) returns tenant-wide rows; the env gate
  *     is opt-in so multi-session tenants can fail loud instead of silently
  *     surfacing cross-session rows tagged `isFreshTail=true`.
+ *   - 'invalid_scorer_window' — `opts.scorerWindow` is set to a non-positive,
+ *     non-integer, or non-finite value. Pre-v1.7.0 the value 0 routed
+ *     through FTS/LIKE `LIMIT 0` and then fell through to an uncapped
+ *     full-store fallback (codex v1.7.0 diff-pass P1). Validated upfront
+ *     so the contract holds.
  */
 export class RecallContractError extends Error {
   public readonly code:
@@ -197,12 +202,15 @@ export interface RecallOpts {
    * `invalid_scorer_window` to prevent the v1.6.x footgun where 0 fell
    * through to an uncapped fallback (codex v1.7.0 diff-pass P1).
    *
-   * **Library-only at v1.7.0.** HTTP `/v1/memories`, MCP `hippo_recall`,
-   * and `client.ts` thin-client do NOT serialize this field; remote
-   * callers passing `scorerWindow` will see it silently dropped and
-   * `windowSize: 200` reported regardless. Transport exposure planned
-   * for v1.7.1 alongside the deferred-queue items that need a wider
-   * candidate pool (e.g. mean-of-children summary re-rank).
+   * **Input is library-only at v1.7.0.** HTTP `/v1/memories`, MCP
+   * `hippo_recall`, and `client.ts` thin-client do NOT serialize this
+   * INPUT field; remote callers cannot send `scorerWindow` and will see
+   * the store default applied. The OUTPUT `RecallResult.windowSize` is
+   * always serialized over the wire (HTTP `sendJson` ships the whole
+   * RecallResult, so remote callers receive `windowSize: 200` in the
+   * response). Transport exposure for the input planned for v1.7.1
+   * alongside the deferred-queue items that need a wider candidate pool
+   * (e.g. mean-of-children summary re-rank).
    */
   scorerWindow?: number;
   mode?: 'bm25' | 'hybrid' | 'physics';
@@ -308,8 +316,13 @@ export interface RecallResult {
    * (200) used by `loadSearchEntries(undefined, ...)`. Reported so
    * callers can introspect "did the scorer see enough candidates?"
    * without re-deriving the value.
+   *
+   * Optional in the type to keep `RecallResult` literal-construction
+   * back-compatible with pre-v1.7 test fakes / mocks (senior review P1-2).
+   * Always present on values returned by `api.recall` itself; consumers
+   * reading from `api.recall` can treat it as defined.
    */
-  windowSize: number;
+  windowSize?: number;
 }
 
 /**
@@ -323,8 +336,8 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   // F5 (v1.6.5) preflight — codex P1: original guard fired AFTER
   // loadSearchEntries (which runs initStore, migrating legacy state on first
   // call). For a true contract preflight we want the throw before any
-  // store-touching work. Re-checked at the freshTailCount > 0 site so the
-  // logic is co-located with the consumer; this is the cheap upfront fail.
+  // store-touching work. Single check here; the consumer site at
+  // `if (freshTailCount > 0)` does NOT re-validate (would be a no-op).
   const freshTailCountPreflight = opts.freshTailCount ?? 0;
   if (
     freshTailCountPreflight > 0 &&
