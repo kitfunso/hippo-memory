@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.7.2 (2026-05-06)
+
+Hygiene release closing the four consolidation items deferred from v1.7.1. **No behaviour change for in-spec callers not setting `scorer_window`; new opt-in transport surfaces for `scorer_window` and three pre-existing RecallOpts fields the thin-client was missing.** Additive on patch is permitted under semver since backward-compatible.
+
+### Added
+
+- **`scorerWindow` over the wire.** HTTP `/v1/memories?scorer_window=N`, MCP `hippo_recall.scorer_window`, `client.ts` thin-client serializes `scorerWindow`. Validation lives in `api.recall()` — both transports `Number()`-coerce and forward (string `"abc"`, `0`, negative, non-finite all reach `recall()` for typed rejection with `code: 'invalid_scorer_window'`). MCP `hippo_recall` dispatch verified to propagate `RecallContractError` with class and code intact via the v1.6.5 contract that exceptions reach the caller raw.
+- **Thin-client RecallOpts parity sweep.** `client.ts::recall` previously serialized only `q`, `limit`, `mode`, `scope`, `include_continuity` — the HTTP server already accepted three more (`fresh_tail_count`, `fresh_tail_session_id`, `summarize_overflow`). Adding `scorer_window` alone would have perpetuated the drift. All four pre-existing-on-server params plus the new `scorer_window` serialized in this release.
+- **`RECALL_DEFAULT_DENY_SCOPES` constant** in `src/store.ts` (NOT re-exported from `src/index.ts` — `@internal`). SQL clause in `loadSearchRows`, JS `passesScopeFilterForRecall` (src/api.ts), MCP physics-scorer branch, MCP `hippo_assemble` closure, CLI `cmdRecall` continuity closure, and `api.recall` continuity inline closure all read from the constant. Adding a literal deny scope is a one-place change. Module-load assertion fails loudly on empty array. Regex-based denies (`<source>:private:*`) stay in JS as a separate step.
+- **`RecallScopeFilter`** discriminated union exported from `src/store.ts` (NOT re-exported from `src/index.ts` — `@internal`) — `{ mode: 'default-deny' } | { mode: 'exact'; value: string }`. Internal-only consumer is `loadRecallSearchEntries`; public signature unchanged.
+- **`passesScopeFilterForRecall`** exported from `src/api.ts` for test parity with the constant (`@internal`; NOT re-exported from `src/index.ts`). Subject to change without semver bump. Direct deep-import works but is unstable.
+
+### Refactored (no behaviour change)
+
+- `loadSearchRows::recallScope` parameter shape replaced from boxed-nullable `{ value: string | null }` with the discriminated union above. Eliminates the `{ value: undefined }` foot-gun the v1.7.1 review flagged.
+
+### Documented (no migration — by design)
+
+- **CLI recall via `searchBoth` / `searchBothHybrid` (`src/shared.ts:96, 172`, used by `cli.ts:783, 1429`) does NOT default-deny on `unknown:legacy`.** Intentional asymmetry: CLI is an operator-local surface where investigating the quarantine bucket is a feature. Library `recall()` from `index.ts` (used by frontend / programmatic callers) goes through `loadRecallSearchEntries` and DOES default-deny. Import the library API for default-deny semantics; use the CLI for full operator visibility. No `--include-quarantine` flag added; revisit if friction surfaces.
+
+### Notes
+
+- MCP `scorer_window` only narrows `api.recall`'s candidate pool, which feeds the appendix paths (fresh-tail / summarize-overflow) and continuity hits. The primary ranked block over MCP is driven by a separate physics/hybrid scorer over the full tenant store, so `scorer_window` does NOT narrow the main results — only the appendix. Documented in the MCP `hippo_recall.scorer_window` description and the test acknowledges this honestly.
+
+### Deferred to v1.7.3
+
+- Module-load assertion runtime test for `RECALL_DEFAULT_DENY_SCOPES.length === 0` (codex P1-3). Current test pins the constant's current length; doesn't exercise the throw path.
+- `RecallScopeFilter` parameter naming polish (review maintainability INFO).
+- `summarize_overflow=0` (false path) explicit transport test for the thin-client (codex P2-3).
+
 ## 1.7.1 (2026-05-06)
 
 Patch release closing the v1.7.0 `/review` 5-specialist deferred-INFO tail (6 items) plus the codex-flagged `unknown:legacy` leak from the v1.6.5 review. The leak fix is at the **producer layer** (root-cause-over-patches): scope predicate pushed into `loadSearchRows` SQL via a new `loadRecallSearchEntries` helper, so future recall consumers cannot silently re-introduce the leak.
