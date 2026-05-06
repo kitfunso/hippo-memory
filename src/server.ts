@@ -511,6 +511,11 @@ async function handleRequest(
     const summarizeOverflow = summarizeOverflowRaw === null
       ? undefined
       : (summarizeOverflowRaw === '1' || summarizeOverflowRaw === 'true');
+    // v1.7.2 T4: forward as Number(...) — NaN, 0, negative all reach
+    // recall() which throws RecallContractError with code='invalid_scorer_window'.
+    // No transport-side validation; recall() owns the contract.
+    const scorerWindowRaw = query.get('scorer_window');
+    const scorerWindow = scorerWindowRaw === null ? undefined : Number(scorerWindowRaw);
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = recall(ctx, {
       query: q,
@@ -521,6 +526,7 @@ async function handleRequest(
       ...(freshTailCount !== undefined ? { freshTailCount } : {}),
       ...(freshTailSessionId !== undefined ? { freshTailSessionId } : {}),
       ...(summarizeOverflow !== undefined ? { summarizeOverflow } : {}),
+      ...(scorerWindow !== undefined ? { scorerWindow } : {}),
     });
     // Continuity payloads should never be cached. The caller is asking for
     // session-state-aware data; intermediaries must not reuse it across users.
