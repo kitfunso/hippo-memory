@@ -18,7 +18,7 @@ import {
   calculateStrength,
 } from '../memory.js';
 import { search, hybridSearch, physicsSearch, markRetrieved, estimateTokens } from '../search.js';
-import { loadAllEntries, writeEntry, readEntry, initStore, loadActiveTaskSnapshot, listMemoryConflicts, resolveConflict } from '../store.js';
+import { loadAllEntries, writeEntry, readEntry, initStore, loadActiveTaskSnapshot, listMemoryConflicts, resolveConflict, RECALL_DEFAULT_DENY_SCOPES } from '../store.js';
 import { shareMemory, listPeers, getGlobalRoot } from '../shared.js';
 import { consolidate } from '../consolidate.js';
 import { execSync } from 'child_process';
@@ -184,7 +184,7 @@ const TOOLS = [
         },
         scorer_window: {
           type: 'number',
-          description: 'Candidate pool size the scorer evaluates. Decoupled from "limit" (results returned). Default 200. Set higher to widen the pool when summarize_overflow is true. Rejected as RecallContractError code=invalid_scorer_window if 0/negative/non-finite/non-numeric.',
+          description: 'Candidate pool size that api.recall evaluates. Affects fresh-tail / summarize-overflow appendix paths and continuity hits. Note: the primary ranked block over MCP is driven by a separate physics/hybrid scorer over the full tenant store, so scorer_window does NOT narrow the main results — only the appendix. Default 200. Rejected as RecallContractError code=invalid_scorer_window if 0/negative/non-finite/non-numeric.',
         },
       },
       required: ['query'],
@@ -457,7 +457,9 @@ async function executeTool(
             const s = e.scope ?? null;
             if (s === null) return true;
             if (isPrivateScope(s)) return false;
-            if (s === 'unknown:legacy') return false;
+            // v1.7.2: read from RECALL_DEFAULT_DENY_SCOPES (single source of truth
+            // shared with SQL clause + passesScopeFilterForRecall).
+            if ((RECALL_DEFAULT_DENY_SCOPES as readonly string[]).includes(s)) return false;
             return true;
           });
       const usePhysics = config.physics?.enabled !== false;
@@ -647,7 +649,9 @@ async function executeTool(
         if (explicitScope !== undefined) return s === explicitScope;
         if (s === null) return true;
         if (isPrivateScope(s)) return false;
-        if (s === 'unknown:legacy') return false;
+        // v1.7.2: read from RECALL_DEFAULT_DENY_SCOPES (single source of truth
+        // shared with SQL + api.passesScopeFilterForRecall).
+        if ((RECALL_DEFAULT_DENY_SCOPES as readonly string[]).includes(s)) return false;
         return true;
       };
       const allEntries = loadAllEntries(hippoRoot, tenantId);

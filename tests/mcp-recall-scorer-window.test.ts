@@ -97,6 +97,38 @@ describe('MCP hippo_recall scorer_window (v1.7.2 T4)', () => {
     expect((thrown as RecallContractError).code).toBe('invalid_scorer_window');
   });
 
+  it('scorer_window+fresh_tail_count exercises the api.recall appendix path — review TESTING P1', async () => {
+    // The appendix-marker assertion is non-deterministic in this test
+    // because the physics scorer dedupes fresh-tail rows that already
+    // appear in the primary ranked block. With all alpha-matching content,
+    // fresh-tail rows are usually all in physics's top set → empty
+    // appendix. Mix in non-matching rows so fresh-tail surfaces unique IDs
+    // physics never scored.
+    //
+    // Insert beta rows AFTER the alpha seeds (set up in beforeEach) so
+    // they're newest. fresh_tail_count=5 surfaces last 5 regardless of
+    // query 'alpha'. BM25 / physics only score alpha rows. Beta rows in
+    // fresh-tail dedup-survive into the appendix.
+    for (let i = 0; i < 5; i++) {
+      writeEntry(home, createMemory(`beta ${i}`, {
+        layer: Layer.Buffer, kind: 'raw' as MemoryKind, tenantId: 'default',
+      }));
+    }
+    const result = await callTool(
+      'hippo_recall',
+      { query: 'alpha', budget: 5000, scorer_window: 2, fresh_tail_count: 5 },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
+    );
+    const text =
+      (result as { result?: { content: Array<{ text: string }> } }).result
+        ?.content?.[0]?.text ?? '';
+    expect(text.length).toBeGreaterThan(0);
+    // Appendix renders "## Fresh tail / substituted summaries" header
+    // (src/mcp/server.ts:470). Confirm the appendix path fired with the
+    // beta rows that physics didn't score.
+    expect(text).toContain('Fresh tail / substituted summaries');
+  });
+
   it('scorer_window="abc" (string, transport-coerced) rejects with invalid_scorer_window', async () => {
     // Codex CRITICAL[2]: MCP Number-coerces non-numeric input so the
     // rejection reaches recall() and produces the same typed code as HTTP.

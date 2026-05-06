@@ -83,6 +83,7 @@ import {
   loadHandoffById,
   TaskSnapshot,
   SessionEvent,
+  RECALL_DEFAULT_DENY_SCOPES,
 } from './store.js';
 import type { SessionHandoff } from './handoff.js';
 import { search, markRetrieved, estimateTokens, hybridSearch, physicsSearch, explainMatch, textOverlap } from './search.js';
@@ -1252,7 +1253,9 @@ async function cmdRecall(
       }
       if (s === null) return true;
       if (api.isPrivateScope(s)) return false;
-      if (s === 'unknown:legacy') return false;
+      // v1.7.2: read from RECALL_DEFAULT_DENY_SCOPES (single source of truth
+      // shared with SQL + api.passesScopeFilterForRecall).
+      if ((RECALL_DEFAULT_DENY_SCOPES as readonly string[]).includes(s)) return false;
       return true;
     };
     const rowScope = (

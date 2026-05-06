@@ -119,6 +119,11 @@ const PRIVATE_SCOPE_RE = /^[a-z][a-z0-9_-]*:private:/;
  *   `<source>:private:*` scope and on the `unknown:legacy` quarantine bucket.
  *   `null` and public scopes pass.
  */
+/**
+ * @internal v1.7.2 — exported for test parity with `RECALL_DEFAULT_DENY_SCOPES`
+ * (single-source-of-truth verification). NOT part of the public API surface;
+ * not re-exported from `src/index.ts`. Subject to change without semver bump.
+ */
 export function passesScopeFilterForRecall(
   scope: string | null,
   requested: string | undefined,
@@ -595,7 +600,9 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
       }
       if (s === null) return true;
       if (isPrivateScope(s)) return false;
-      if (s === 'unknown:legacy') return false;
+      // v1.7.2: read from RECALL_DEFAULT_DENY_SCOPES (single source of truth
+      // shared with SQL + passesScopeFilterForRecall).
+      if ((RECALL_DEFAULT_DENY_SCOPES as readonly string[]).includes(s)) return false;
       return true;
     };
     const filteredSnapshot =

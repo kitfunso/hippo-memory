@@ -631,6 +631,8 @@ function canonicalConflictPair(aId: string, bId: string): { memory_a_id: string;
  * `loadSearchEntries` (no recallScope arg) and see all rows including
  * quarantine.
  */
+/** @internal v1.7.2 — internal SQL-builder shape; not on the public API
+ *  surface (not re-exported from `src/index.ts`). Subject to change. */
 export type RecallScopeFilter =
   | { mode: 'default-deny' }
   | { mode: 'exact'; value: string };
