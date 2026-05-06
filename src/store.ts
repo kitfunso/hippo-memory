@@ -641,7 +641,7 @@ function canonicalConflictPair(aId: string, bId: string): { memory_a_id: string;
  *   - 'exact' — exact match on `m.scope = value`.
  *
  * Background pipelines (`consolidate`, `embeddings`, `refine-llm`, ...) call
- * `loadSearchEntries` (no recallScope arg) and see all rows including
+ * `loadSearchEntries` (no scopeFilter arg) and see all rows including
  * quarantine.
  */
 /** @internal v1.7.2 — internal SQL-builder shape; not on the public API
@@ -655,7 +655,7 @@ function loadSearchRows(
   query: string,
   limit: number,
   tenantId: string | undefined,
-  recallScope?: RecallScopeFilter,
+  scopeFilter?: RecallScopeFilter,
 ): MemoryRow[] {
   // tenantId undefined = no tenant filter (legacy callers / cross-deployment
   // helpers). tenantId set = strict tenant isolation, leveraging the composite
@@ -682,8 +682,8 @@ function loadSearchRows(
   let scopeClauseNoAlias = '';
   let scopeClauseTenantOnly = '';
   const scopeParams: string[] = [];
-  if (recallScope !== undefined) {
-    if (recallScope.mode === 'default-deny') {
+  if (scopeFilter !== undefined) {
+    if (scopeFilter.mode === 'default-deny') {
       // T2: bind from RECALL_DEFAULT_DENY_SCOPES so SQL and JS share one
       // source of truth. Module-load assertion at the top of this file
       // guarantees length > 0, so NOT IN () (a SQL parse error) is impossible.
@@ -700,7 +700,7 @@ function loadSearchRows(
       scopeClauseAlias = ` AND m.scope = ?`;
       scopeClauseNoAlias = ` AND scope = ?`;
       scopeClauseTenantOnly = scopeClauseNoAlias;
-      scopeParams.push(recallScope.value);
+      scopeParams.push(scopeFilter.value);
     }
   }
 
@@ -1568,11 +1568,11 @@ export function loadRecallSearchEntries(
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    const recallScope: RecallScopeFilter =
+    const scopeFilter: RecallScopeFilter =
       requestedScope && requestedScope !== ''
         ? { mode: 'exact', value: requestedScope }
         : { mode: 'default-deny' };
-    return loadSearchRows(db, query, limit, tenantId, recallScope).map(rowToEntry);
+    return loadSearchRows(db, query, limit, tenantId, scopeFilter).map(rowToEntry);
   } finally {
     closeHippoDb(db);
   }
