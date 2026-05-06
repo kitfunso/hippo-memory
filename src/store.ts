@@ -219,15 +219,24 @@ export const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
  */
 export const RECALL_DEFAULT_DENY_SCOPES = ['unknown:legacy'] as const;
 
-// Cast to readonly string[] — `as const` makes this `readonly ['unknown:legacy']`
-// with literal length 1, so a direct `.length === 0` is "unreachable" per TS
-// even though the assertion is a real runtime guard against future maintainers
-// blanking the array. Cast widens the type so the check compiles.
-if ((RECALL_DEFAULT_DENY_SCOPES as readonly string[]).length === 0) {
-  throw new Error(
-    'RECALL_DEFAULT_DENY_SCOPES cannot be empty — would silently allow quarantine scopes',
-  );
+/**
+ * @internal v1.7.3 — runtime guard against a future maintainer blanking a
+ * load-bearing literal array. Extracted from the inline guard so the throw
+ * path is directly testable. `as const` arrays widen via `readonly T[]` at
+ * the call site so the empty case is reachable at runtime.
+ */
+export function assertNonEmpty<T>(arr: readonly T[], name: string): void {
+  if (arr.length === 0) {
+    throw new Error(
+      `${name} cannot be empty — would silently allow quarantine scopes`,
+    );
+  }
 }
+
+assertNonEmpty(
+  RECALL_DEFAULT_DENY_SCOPES as readonly string[],
+  'RECALL_DEFAULT_DENY_SCOPES',
+);
 
 function layerDir(root: string, layer: Layer): string {
   return path.join(root, layer);
