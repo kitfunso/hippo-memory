@@ -85,6 +85,11 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.7.3
+
+- **Hygiene release.** Closes the v1.7.2 review-tail: module-load assertion runtime test, `summarize_overflow=0` thin-client pin, internal `scopeFilter` rename, and a README "What's new" backfill for v1.7.0 and v1.6.5.
+- No public API change. No behaviour change. No schema change.
+
 ### What's new in v1.7.2
 
 - **`scorerWindow` over the wire.** HTTP `/v1/memories?scorer_window=N`, MCP `hippo_recall.scorer_window`, thin-client serializes `scorerWindow`. Validation unchanged (`recall()` rejects 0/negative/non-finite/non-numeric with `RecallContractError code: invalid_scorer_window`).
