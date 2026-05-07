@@ -132,13 +132,23 @@ by post-review fixes 2db5017..38339f4). Each item belongs in **A5 v2**
 
 ## v0.39.0 — B3 dlPFC depth follow-ups
 
-From the B3 dlPFC ship (v0.38.0). 3 of 5 items closed in v1.7.4 (2026-05-07). 2 items remain — split out so each can ship cleanly with its own outside-voice review.
+From the B3 dlPFC ship (v0.38.0). 3 of 5 items closed in v1.7.4 (2026-05-07); contract+harness for the 4th closed in v1.7.5 (2026-05-07) but the eval was inconclusive. 1 item remains for v1.8.0 (vlPFC) plus a new v1.7.6+ followup for the discriminating workload.
 
-- [ ] **B3 follow-up: sequential-learning adapter contract** → **v1.7.5**. Extend
-  `benchmarks/sequential-learning/adapters/interface.mjs` with
-  `pushGoal/completeGoal` hooks; demonstrate or honestly retire the −10pp
-  trap-rate lift claim. Until this lands, the goal-stack mechanism cannot
-  be exercised on the public sequential-learning benchmark.
+- [x] **B3 follow-up: sequential-learning adapter contract.** Shipped v1.7.5.
+  `pushGoal`/`completeGoal` hooks on `interface.mjs`; `hippo.mjs` implements
+  both with `HIPPO_HOME`/`XDG_DATA_HOME` isolation; tag-fix on memory store
+  (`[task.trapCategory, ...category.tags, 'error']`); multi-seed harness
+  (`--seed`, `--n-seeds`, `--eval-strict`); `aggregate.mjs` with paired
+  permutation CI. The mechanism is now exercisable on the public benchmark.
+
+- [ ] **B3 follow-up: −10pp goal-stack hypothesis test** → **v1.7.6+**. The
+  v1.7.5 eval ran 4 conditions × 20 seeds × eval-strict but stopped per
+  pre-registered sanity gate due to floor effect (both hippo-base and
+  hippo+goal-stack saturate at 0% late-phase trap rate). Hypothesis remains
+  untested on a discriminating workload. Future eval: smaller `--budget`,
+  adversarial trap categories, or restricted late-phase window. See
+  `docs/evals/2026-05-07-v1.7.5-goal-stack-eval-result.md` for the full
+  investigation + design notes.
 
 - [x] **B3 follow-up: MCP/REST session_id plumbing.** Shipped v1.7.4 as
   `RecallOpts.sessionId` + `RecallOpts.goalTag`. Wired into `api.recall`
