@@ -100,7 +100,7 @@ import { loadPhysicsState, resetAllPhysicsState } from './physics-state.js';
 import { computeSystemEnergy, vecNorm } from './physics.js';
 import { loadConfig } from './config.js';
 import { openHippoDb, closeHippoDb } from './db.js';
-import { getActiveGoalsWithDb, MAX_FINAL_MULTIPLIER, pushGoal, getActiveGoals, completeGoal, suspendGoal, resumeGoal } from './goals.js';
+import { getActiveGoalsWithDb, MAX_FINAL_MULTIPLIER, pushGoal, getActiveGoals, completeGoal, suspendGoal, resumeGoal, applyGoalStackBoost } from './goals.js';
 import type { RetrievalPolicy, PolicyType, Goal, GoalRow } from './goals.js';
 import { rowToGoal } from './goals.js';
 import {
@@ -985,153 +985,25 @@ async function cmdRecall(
       .sort((a, b) => b.score - a.score);
   }
 
-  // dlPFC depth (B3, v0.38). When HIPPO_SESSION_ID is set (env or
-  // --session-id flag) and the (tenant, session) has active goals, boost
-  // memories whose tags overlap any active goal's name. Final multiplier is
-  // hard-capped at MAX_FINAL_MULTIPLIER (3.0x). Each boosted (memory, goal)
-  // pair is logged into goal_recall_log for outcome propagation.
-  //
-  // Runs AFTER the explicit `--goal <tag>` block so an explicit flag always
-  // wins: if the user passed `--goal X`, this block is skipped entirely
-  // (gated on `goalTag === ''`).
-  //
-  // db-handle note (plan-eng-review fix #5): the surrounding cmdRecall path
-  // does NOT keep an open db handle in scope at this point — earlier search
-  // helpers (loadSearchEntries, hybridSearch, ...) each open and close their
-  // own short-lived handles. Reusing isn't practical here; we open a fresh
-  // short-lived handle for this block, mirroring the existing CLI pattern
-  // (e.g. emitCliAudit). Closed in `finally`.
+  // dlPFC depth (B3, v0.38; lifted v1.7.4 into applyGoalStackBoost). When
+  // HIPPO_SESSION_ID is set (env or --session-id flag) and the
+  // (tenant, session) has active goals, the helper boosts memories whose tags
+  // overlap any active goal's name and logs (memory, goal) pairs into
+  // goal_recall_log. Runs AFTER the explicit `--goal <tag>` block so an
+  // explicit flag always wins (gated on `goalTag === ''`).
   const sessionId = (
     flags['session-id'] !== undefined
       ? String(flags['session-id'])
       : process.env.HIPPO_SESSION_ID ?? ''
   ).trim();
   if (sessionId && goalTag === '') {
-    // Use the same tenant as the recall path — see cmdRecall:778.
-    const tenantIdForGoals = tenantId;
     const dbForGoals = openHippoDb(hippoRoot);
     try {
-      const active = getActiveGoalsWithDb(dbForGoals, {
+      results = applyGoalStackBoost(dbForGoals, results, {
         sessionId,
-        tenantId: tenantIdForGoals,
+        tenantId,
+        limit,
       });
-      if (active.length > 0) {
-        const goalsByTag = new Map(active.map((g) => [g.goalName, g]));
-
-        // Task 7: load retrieval_policy rows for active goals so per-policy
-        // multipliers can compose onto the base goal-tag boost. The composed
-        // result is hard-capped at MAX_FINAL_MULTIPLIER (3.0x) BEFORE applying
-        // to score — even an `errorPriority: 9.0` policy cannot exceed 3.0x.
-        const policiesByGoalId = new Map<string, RetrievalPolicy>();
-        for (const g of active) {
-          if (!g.retrievalPolicyId) continue;
-          const row = dbForGoals.prepare(`
-            SELECT id, goal_id, policy_type, weight_schema_fit, weight_recency, weight_outcome, error_priority
-            FROM retrieval_policy WHERE id = ?
-          `).get(g.retrievalPolicyId) as {
-            id: string;
-            goal_id: string;
-            policy_type: RetrievalPolicy['policyType'];
-            weight_schema_fit: number;
-            weight_recency: number;
-            weight_outcome: number;
-            error_priority: number;
-          } | undefined;
-          if (row) {
-            policiesByGoalId.set(g.id, {
-              id: row.id,
-              goalId: row.goal_id,
-              policyType: row.policy_type,
-              weightSchemaFit: row.weight_schema_fit,
-              weightRecency: row.weight_recency,
-              weightOutcome: row.weight_outcome,
-              errorPriority: row.error_priority,
-            });
-          }
-        }
-
-        results = results
-          .map((r) => {
-            const tags = r.entry.tags ?? [];
-            const matches = tags.filter((t) => goalsByTag.has(t));
-            if (matches.length === 0) return r;
-            // Base 2.0x for first match, +0.5x per additional, capped at 3.0x.
-            let multiplier = Math.min(
-              2.0 + 0.5 * (matches.length - 1),
-              MAX_FINAL_MULTIPLIER,
-            );
-            // Compose per-policy multipliers per matched tag.
-            for (const tag of matches) {
-              const goal = goalsByTag.get(tag)!;
-              const policy = policiesByGoalId.get(goal.id);
-              if (!policy) continue;
-              if (policy.policyType === 'error-prioritized' && tags.includes('error')) {
-                multiplier *= policy.errorPriority;
-              } else if (policy.policyType === 'schema-fit-biased') {
-                // Linearly weight schema_fit in [0,1] up to (weightSchemaFit)x.
-                // Default 1.0 is a no-op.
-                multiplier *=
-                  1.0 +
-                  Math.max(0, policy.weightSchemaFit - 1.0) *
-                    (r.entry.schema_fit ?? 0.5);
-              } else if (policy.policyType === 'recency-first') {
-                multiplier *= policy.weightRecency;
-              } else if (policy.policyType === 'hybrid') {
-                multiplier *= policy.weightOutcome;
-              }
-            }
-            // Hard cap AFTER all composition.
-            multiplier = Math.min(multiplier, MAX_FINAL_MULTIPLIER);
-            return {
-              ...r,
-              score: r.score * multiplier,
-              _goalMatches: matches,
-            } as typeof r & { _goalMatches: string[] };
-          })
-          .sort((a, b) => b.score - a.score);
-
-        // Filter to local memories only — global memory IDs aren't in this
-        // DB's memories table, so the FK on goal_recall_log.memory_id would
-        // fail. dlPFC depth's outcome propagation is session-scoped to local;
-        // boost on ranking still applies to global results, just no log row
-        // -> no propagation.
-        const topKIds = results.slice(0, limit).map((r) => r.entry.id);
-        const localIds = new Set<string>();
-        if (topKIds.length > 0) {
-          const placeholders = topKIds.map(() => '?').join(',');
-          const localRows = dbForGoals.prepare(
-            `SELECT id FROM memories WHERE id IN (${placeholders})`,
-          ).all(...topKIds) as Array<{ id: string }>;
-          for (const row of localRows) localIds.add(row.id);
-        }
-
-        // Log top-K boosted recalls. INSERT OR IGNORE because
-        // UNIQUE(memory_id, goal_id) means a re-recall during the same goal
-        // life is a no-op for outcome attribution.
-        const recalledAt = new Date().toISOString();
-        const insertLog = dbForGoals.prepare(`
-          INSERT OR IGNORE INTO goal_recall_log
-            (goal_id, memory_id, tenant_id, session_id, recalled_at, score)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `);
-        for (const r of results.slice(0, limit)) {
-          if (!localIds.has(r.entry.id)) continue; // global -> skip log insert
-          const matches = (r as { _goalMatches?: string[] })._goalMatches;
-          if (!matches || matches.length === 0) continue;
-          for (const tag of matches) {
-            const goal = goalsByTag.get(tag);
-            if (!goal) continue;
-            insertLog.run(
-              goal.id,
-              r.entry.id,
-              tenantIdForGoals,
-              sessionId,
-              recalledAt,
-              r.score,
-            );
-          }
-        }
-      }
     } finally {
       closeHippoDb(dbForGoals);
     }

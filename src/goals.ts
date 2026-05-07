@@ -1,6 +1,7 @@
 // src/goals.ts
 import { randomUUID } from 'node:crypto';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
+import type { MemoryEntry } from './memory.js';
 
 export type GoalStatus = 'active' | 'suspended' | 'completed';
 export type PolicyType = 'schema-fit-biased' | 'error-prioritized' | 'recency-first' | 'hybrid';
@@ -224,6 +225,164 @@ export function getActiveGoalsWithDb(db: DatabaseSyncLike, opts: GetActiveGoalsO
     ORDER BY created_at ASC
   `).all(opts.tenantId, opts.sessionId) as GoalRow[];
   return rows.map(rowToGoal);
+}
+
+/**
+ * v1.7.4 -- dlPFC goal-stack boost helper. Applies the multi-goal boost to a
+ * list of entry-backed scored rows when (tenant, session) has active goals.
+ * Pre-v1.7.4 this logic lived inline in cmdRecall (src/cli.ts:988-1140);
+ * lifting here lets api.recall (primary band only) AND MCP physics/hybrid
+ * call it.
+ *
+ * Caller responsibilities:
+ *   - Do NOT call when an explicit `goalTag` is set (caller's gate)
+ *   - Pass entry-backed rows (with `entry.tags`, `entry.id`, optional
+ *     `entry.schema_fit`)
+ *   - Manage the db handle lifecycle (helper neither opens nor closes)
+ *   - Recompute `tokens` after if returned rows are projected to a budgeted
+ *     shape
+ *
+ * Side effects:
+ *   - INSERT OR IGNORE into `goal_recall_log` for each (boosted, goal) pair
+ *   - Local memory id filter applied before INSERT (skips global-only ids
+ *     to preserve FK invariant on goal_recall_log.memory_id)
+ *
+ * @internal v1.7.4 -- internal recall ranking helper. Subject to change.
+ */
+export function applyGoalStackBoost<R extends { entry: MemoryEntry; score: number }>(
+  db: DatabaseSyncLike,
+  results: R[],
+  opts: {
+    sessionId: string;
+    tenantId: string;
+    limit: number;
+  },
+): R[] {
+  const { sessionId, tenantId, limit } = opts;
+  const active = getActiveGoalsWithDb(db, { sessionId, tenantId });
+  if (active.length === 0) return results;
+
+  const goalsByTag = new Map(active.map((g) => [g.goalName, g]));
+
+  // Load retrieval_policy rows for active goals so per-policy multipliers
+  // can compose onto the base goal-tag boost. Composed result is hard-capped
+  // at MAX_FINAL_MULTIPLIER (3.0x) BEFORE applying to score -- even an
+  // `errorPriority: 9.0` policy cannot exceed 3.0x.
+  const policiesByGoalId = new Map<string, RetrievalPolicy>();
+  for (const g of active) {
+    if (!g.retrievalPolicyId) continue;
+    const row = db.prepare(`
+      SELECT id, goal_id, policy_type, weight_schema_fit, weight_recency, weight_outcome, error_priority
+      FROM retrieval_policy WHERE id = ?
+    `).get(g.retrievalPolicyId) as {
+      id: string;
+      goal_id: string;
+      policy_type: RetrievalPolicy['policyType'];
+      weight_schema_fit: number;
+      weight_recency: number;
+      weight_outcome: number;
+      error_priority: number;
+    } | undefined;
+    if (row) {
+      policiesByGoalId.set(g.id, {
+        id: row.id,
+        goalId: row.goal_id,
+        policyType: row.policy_type,
+        weightSchemaFit: row.weight_schema_fit,
+        weightRecency: row.weight_recency,
+        weightOutcome: row.weight_outcome,
+        errorPriority: row.error_priority,
+      });
+    }
+  }
+
+  let boosted = results
+    .map((r) => {
+      const tags = r.entry.tags ?? [];
+      const matches = tags.filter((t) => goalsByTag.has(t));
+      if (matches.length === 0) return r;
+      // Base 2.0x for first match, +0.5x per additional, capped at 3.0x.
+      let multiplier = Math.min(
+        2.0 + 0.5 * (matches.length - 1),
+        MAX_FINAL_MULTIPLIER,
+      );
+      // Compose per-policy multipliers per matched tag.
+      for (const tag of matches) {
+        const goal = goalsByTag.get(tag)!;
+        const policy = policiesByGoalId.get(goal.id);
+        if (!policy) continue;
+        if (policy.policyType === 'error-prioritized' && tags.includes('error')) {
+          multiplier *= policy.errorPriority;
+        } else if (policy.policyType === 'schema-fit-biased') {
+          // Linearly weight schema_fit in [0,1] up to (weightSchemaFit)x.
+          // Default 1.0 is a no-op.
+          multiplier *=
+            1.0 +
+            Math.max(0, policy.weightSchemaFit - 1.0) *
+              (r.entry.schema_fit ?? 0.5);
+        } else if (policy.policyType === 'recency-first') {
+          multiplier *= policy.weightRecency;
+        } else if (policy.policyType === 'hybrid') {
+          multiplier *= policy.weightOutcome;
+        }
+      }
+      // Hard cap AFTER all composition.
+      multiplier = Math.min(multiplier, MAX_FINAL_MULTIPLIER);
+      return {
+        ...r,
+        score: r.score * multiplier,
+        _goalMatches: matches,
+      } as R & { _goalMatches: string[] };
+    })
+    .sort((a, b) => b.score - a.score) as R[];
+
+  // Filter to local memories only -- global memory IDs aren't in this DB's
+  // memories table, so the FK on goal_recall_log.memory_id would fail.
+  // dlPFC depth's outcome propagation is session-scoped to local; boost on
+  // ranking still applies to global results, just no log row -> no
+  // propagation.
+  const topKIds = boosted.slice(0, limit).map((r) => r.entry.id);
+  const localIds = new Set<string>();
+  if (topKIds.length > 0) {
+    const placeholders = topKIds.map(() => '?').join(',');
+    const localRows = db.prepare(
+      `SELECT id FROM memories WHERE id IN (${placeholders})`,
+    ).all(...topKIds) as Array<{ id: string }>;
+    for (const row of localRows) localIds.add(row.id);
+  }
+
+  // Log top-K boosted recalls. INSERT OR IGNORE because
+  // UNIQUE(memory_id, goal_id) means a re-recall during the same goal life
+  // is a no-op for outcome attribution.
+  const recalledAt = new Date().toISOString();
+  const insertLog = db.prepare(`
+    INSERT OR IGNORE INTO goal_recall_log
+      (goal_id, memory_id, tenant_id, session_id, recalled_at, score)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  for (const r of boosted.slice(0, limit)) {
+    if (!localIds.has(r.entry.id)) continue; // global -> skip log insert
+    const matches = (r as R & { _goalMatches?: string[] })._goalMatches;
+    if (!matches || matches.length === 0) continue;
+    for (const tag of matches) {
+      const goal = goalsByTag.get(tag);
+      if (!goal) continue;
+      insertLog.run(
+        goal.id,
+        r.entry.id,
+        tenantId,
+        sessionId,
+        recalledAt,
+        r.score,
+      );
+    }
+  }
+
+  // Strip the internal _goalMatches marker so callers don't see it.
+  return boosted.map((r) => {
+    const { _goalMatches: _omit, ...rest } = r as R & { _goalMatches?: string[] };
+    return rest as R;
+  });
 }
 
 const POSITIVE_OUTCOME_THRESHOLD = 0.7;
