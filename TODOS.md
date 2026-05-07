@@ -132,32 +132,38 @@ by post-review fixes 2db5017..38339f4). Each item belongs in **A5 v2**
 
 ## v0.39.0 — B3 dlPFC depth follow-ups
 
-From the B3 dlPFC ship (v0.38.0). Deferred items that did not block the
-cluster-discrimination receipt but are required for full coverage of the
-mechanism on public benchmarks and across MCP/REST surfaces.
+From the B3 dlPFC ship (v0.38.0). 3 of 5 items closed in v1.7.4 (2026-05-07). 2 items remain — split out so each can ship cleanly with its own outside-voice review.
 
-- [ ] **B3 follow-up: sequential-learning adapter contract.** Extend
+- [ ] **B3 follow-up: sequential-learning adapter contract** → **v1.7.5**. Extend
   `benchmarks/sequential-learning/adapters/interface.mjs` with
   `pushGoal/completeGoal` hooks; demonstrate or honestly retire the −10pp
   trap-rate lift claim. Until this lands, the goal-stack mechanism cannot
   be exercised on the public sequential-learning benchmark.
 
-- [ ] **B3 follow-up: MCP/REST session_id plumbing.** Thread `session_id`
-  through `Context` so `recall(ctx, opts)` applies the goal-stack boost on
-  MCP and `/v1/recall` callers, not just the CLI's env-driven path.
+- [x] **B3 follow-up: MCP/REST session_id plumbing.** Shipped v1.7.4 as
+  `RecallOpts.sessionId` + `RecallOpts.goalTag`. Wired into `api.recall`
+  (primary BM25 band, single db handle, before fresh-tail / summary
+  appendix) AND MCP `hippo_recall`'s separate `physicsSearch`/`hybridSearch`
+  path. HTTP `/v1/memories?session_id=...` query param added. Lives on
+  `RecallOpts` not `Context` (codex finding: Context shared across all api
+  ops; goal-stack boost is recall-scoped only).
 
-- [ ] **B3 follow-up: vlPFC interference handling.** Multi-goal interference
-  suppression. RESEARCH.md folded this into dlPFC depth; v0.38 ships only
-  the dlPFC half. v0.39 adds the inhibitory companion.
+- [ ] **B3 follow-up: vlPFC interference handling** → **v1.8.0**. Multi-goal
+  interference suppression. RESEARCH.md folded this into dlPFC depth; v0.38
+  ships only the dlPFC half. v1.8.0 adds the inhibitory companion. Real
+  feature work — own plan + outside voice.
 
-- [ ] **B3 follow-up: `--no-propagate` flag on `goal complete`.** For users
-  who want to close a goal without strength side-effects on recalled
-  memories. Default stays as propagate-on-complete with the lifespan window.
+- [x] **B3 follow-up: `--no-propagate` flag on `goal complete`.** Shipped
+  v1.7.4. CLI flag + `CompleteGoalOpts.noPropagate?: boolean`. Default
+  unchanged (propagate). Status-check idempotency unaffected: a second call
+  after a propagating first call is a true no-op regardless of `noPropagate`.
 
-- [ ] **B3 v0.39 follow-up: factor `enforceDepthCap` helper to remove DRY
-  duplication between `pushGoalWithDb` and `resumeGoal`.** Surfaced by
-  plan-eng-review during v0.38 planning; accepted as a post-ship refactor
-  rather than blocking the ship.
+- [x] **B3 v0.39 follow-up: factor `enforceDepthCapWithinTx` helper to
+  remove DRY duplication between `pushGoalWithDb` and `resumeGoal`.**
+  Shipped v1.7.4. Renamed from `enforceDepthCap` per outside-voice review:
+  the explicit `WithinTx` suffix makes the transactional precondition
+  impossible to misread at a call site. Helper docstring documents that
+  caller MUST already be inside `BEGIN IMMEDIATE`.
 
 ---
 
