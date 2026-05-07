@@ -5089,7 +5089,7 @@ function cmdGoalList(hippoRoot: string, flags: Record<string, string | boolean |
 function cmdGoalComplete(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
   const id = args[0];
   if (!id) {
-    console.error('Usage: hippo goal complete <id> [--outcome <0..1>]');
+    console.error('Usage: hippo goal complete <id> [--outcome <0..1>] [--no-propagate]');
     process.exit(1);
   }
   let outcomeScore: number | undefined;
@@ -5106,7 +5106,8 @@ function cmdGoalComplete(hippoRoot: string, args: string[], flags: Record<string
     }
     outcomeScore = parsed;
   }
-  completeGoal(hippoRoot, id, { outcomeScore });
+  const noPropagate = flags['no-propagate'] === true;
+  completeGoal(hippoRoot, id, { outcomeScore, noPropagate });
   console.log('ok');
 }
 
@@ -5591,6 +5592,7 @@ Commands:
       --all                Include suspended/completed goals
     goal complete <id>     Mark a goal completed
       --outcome <0..1>     Outcome score; >=0.7 boosts, <0.3 decays recalled mems
+      --no-propagate       Close the goal without applying strength side-effects
     goal suspend <id>      Move an active goal to suspended
     goal resume <id>       Move a suspended goal back to active (depth-capped)
   auth <sub>               Manage API keys (A5 stub auth)

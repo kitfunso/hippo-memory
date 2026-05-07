@@ -233,6 +233,18 @@ const STRENGTH_DECAY = 0.85;
 
 export interface CompleteGoalOpts {
   outcomeScore?: number;
+  /**
+   * v1.7.4 — when true, skip the strength-multiplier propagation block.
+   * Default false (propagate). The goal's status still transitions to
+   * 'completed' and `outcome_score` is still recorded; only the side-effect
+   * on recalled memories' strength is suppressed.
+   *
+   * Note: the status-check idempotency guard short-circuits a second
+   * `completeGoal` call BEFORE this flag is read, so a noPropagate=true
+   * second call after a propagating first call is a true no-op (propagation
+   * already happened on call 1; call 2 returns early regardless).
+   */
+  noPropagate?: boolean;
 }
 
 export function completeGoal(hippoRoot: string, goalId: string, opts: CompleteGoalOpts): void {
@@ -262,7 +274,7 @@ export function completeGoal(hippoRoot: string, goalId: string, opts: CompleteGo
         WHERE id = ?
       `).run(completedAt, score, goalId);
 
-      if (score !== null) {
+      if (score !== null && !opts.noPropagate) {
         let multiplier = 1;
         if (score >= POSITIVE_OUTCOME_THRESHOLD) multiplier = STRENGTH_BOOST;
         else if (score < NEGATIVE_OUTCOME_THRESHOLD) multiplier = STRENGTH_DECAY;
