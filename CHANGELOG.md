@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.7.4 (2026-05-07)
+
+Internal hygiene release closing 3 of the 5 B3 dlPFC follow-ups deferred from v0.39.0. Adds optional `RecallOpts.sessionId` (and `RecallOpts.goalTag`) so MCP `hippo_recall` and HTTP `GET /v1/memories` callers get the dlPFC goal-stack boost — previously CLI-only. Adds `--no-propagate` flag on `goal complete`. Refactors `enforceDepthCapWithinTx` helper.
+
+### Added
+
+- **`RecallOpts.sessionId?: string`.** Optional session id on the recall input. When set AND `(tenant, session)` has active goals AND `goalTag` is unset, `api.recall` AND MCP `hippo_recall`'s primary band BOTH apply the dlPFC goal-stack boost lifted from v0.38's CLI-only path. Undefined preserves v1.7.3 behaviour (no boost). Lives on `RecallOpts` rather than `Context` because `Context` is shared across remember/recall/assemble/outcome and the boost is recall-only.
+- **`RecallOpts.goalTag?: string`.** Optional explicit-tag override. When set, the goal-stack boost is suppressed (mirrors the CLI `--goal X` precedence from v0.38).
+- **`applyGoalStackBoost` helper** (`@internal`, exported from `src/goals.ts`). Lifted ~140 lines of CLI ranking logic into a reusable helper. Operates on entry-backed scored rows (NOT projected `RecallResultItem`) so it can run before fresh-tail / summary-substitution appendix rendering. Side effects: `goal_recall_log INSERT OR IGNORE` filtered to local memory ids.
+- **MCP `hippo_recall.session_id`** input schema field added (256-char cap; mirrors `fresh_tail_session_id`). Was previously absent — `session_id` was on `hippo_assemble` only.
+- **MCP `hippo_recall` primary band boosted.** Boost applied to `physicsSearch`/`hybridSearch` result list before `formatMemories`. Pre-v1.7.4 the MCP primary ordering bypassed `api.recall` and so got no boost even when callers thought they were getting one.
+- **HTTP `GET /v1/memories?session_id=...`** query param added (256-char cap, 400 rejected when over).
+- **`completeGoal` accepts `noPropagate?: boolean`.** Defaults false (propagate, as in v1.6.x). When true, skips strength multiplier side-effects on recalled memories. CLI: `goal complete --no-propagate`. Status-check idempotency unaffected: a second call after a propagating first call is a true no-op regardless of `noPropagate`.
+
+### Refactored (no behaviour change)
+
+- **`enforceDepthCapWithinTx` helper** extracted from `pushGoalWithDb` and `resumeGoal` (`@internal`). Pure DRY cleanup. Name is explicit about its precondition (caller must already be inside `BEGIN IMMEDIATE`).
+
+### Deferred to v1.7.5
+
+- Sequential-learning adapter contract (`pushGoal/completeGoal` hooks on `benchmarks/sequential-learning/adapters/interface.mjs`). Demonstrate or honestly retire the −10pp trap-rate claim. Needs benchmark runs + honest reporting → own release.
+
+### Deferred to v1.8.0
+
+- vlPFC interference suppression. Real feature work per RESEARCH.md. Own plan + outside voice.
+
 ## 1.7.3 (2026-05-07)
 
 Hygiene release closing the four lower-confidence items deferred from the v1.7.2 review chain. No public API change. No behaviour change. No schema change.
