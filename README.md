@@ -85,6 +85,12 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.7.5
+
+- **Sequential-learning benchmark gains `pushGoal`/`completeGoal` hooks** + a multi-seed eval harness with seeded category-to-slot variance, exact paired permutation CI, and `--eval-strict` mode. The dlPFC goal-stack mechanism is now exercisable on the public benchmark.
+- **Tag-fix on memory store** so the goal-stack boost can actually match. Pre-fix the boost would have matched zero memories.
+- **Eval ran but stopped per pre-registered sanity gate.** Both hippo-base and hippo+goal-stack hit 0% late-phase trap rate across 20 seeds — floor effect prevents H1/H0 discrimination. The −10pp hypothesis remains untested on a discriminating workload. Mechanism shipped, hypothesis open. Pre-reg + result in `docs/evals/`.
+
 ### What's new in v1.7.4
 
 - **Goal-stack boost on MCP + HTTP.** Set `RecallOpts.sessionId` (or HTTP `?session_id=...`, or MCP `hippo_recall { session_id }`) and the dlPFC goal-stack boost — previously CLI-only — applies on MCP and HTTP too. Both `api.recall` (primary BM25 band, before fresh-tail / summary appendix) AND MCP's separate `physicsSearch`/`hybridSearch` path are boosted. New `RecallOpts.goalTag` lets callers opt out per-call.

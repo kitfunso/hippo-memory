@@ -1,0 +1,303 @@
+{
+  "benchmark": "hippo-sequential-learning",
+  "version": "1.7.5",
+  "timestamp": "2026-05-07T12:20:08.280Z",
+  "conditions": {
+    "hippo": {
+      "overall_trap_hit_rate": 0.36,
+      "phases": {
+        "early": 0.87,
+        "mid": 0.12,
+        "late": 0
+      },
+      "learns": true,
+      "improvement_pct": 87,
+      "hook_failures": {
+        "push": 0,
+        "complete": 0
+      },
+      "seeds": [
+        {
+          "seed": 145980072,
+          "overall": 0.36,
+          "phases": {
+            "early": 0.8889,
+            "mid": 0.1111,
+            "late": 0
+          },
+          "hook_failures": {
+            "push": 0,
+            "complete": 0
+          }
+        },
+        {
+          "seed": 2800415841,
+          "overall": 0.36,
+          "phases": {
+            "early": 0.8889,
+            "mid": 0.1111,
+            "late": 0
+          },
+          "hook_failures": {
+            "push": 0,
+            "complete": 0
+          }
+        },
+        {
+          "seed": 1159884314,
+          "overall": 0.36,
+          "phases": {
+            "early": 0.7778,
+            "mid": 0.2222,
+            "late": 0
+          },
+          "hook_failures": {
+            "push": 0,
+            "complete": 0
+          }
+        },
+        {
+          "seed": 3814320083,
+          "overall": 0.36,
+          "phases": {
+            "early": 0.8889,
+            "mid": 0.1111,
+            "late": 0
+          },
+          "hook_failures": {
+            "push": 0,
+            "complete": 0
+          }
+        },
+        {
+          "seed": 2173788556,
+          "overall": 0.32,
+          "phases": {
+            "early": 0.7778,
+            "mid": 0.1111,
+            "late": 0
+          },
+          "hook_failures": {
+            "push": 0,
+            "complete": 0
+          }
+        },
+        {
+          "seed": 533257029,
+          "overall": 0.32,
+          "phases": {
+            "early": 0.7778,
+            "mid": 0.1111,
+            "late": 0
+          },
+          "hook_failures": {
+            "push": 0,
+            "complete": 0
+          }
+        },
+        {
+          "seed": 3187692798,
+          "overall": 0.36,
+          "phases": {
+            "early": 0.8889,
+            "mid": 0.1111,
+            "late": 0
+          },
+          "hook_failures": {
+            "push": 0,
+            "complete": 0
+          }
+        },
+        {
+          "seed": 1547161271,
+          "overall": 0.36,
+          "phases": {
+            "early": 0.7778,
+            "mid": 0.2222,
+            "late": 0
+          },
+          "hook_failures": {
+            "push": 0,
+            "complete": 0
+          }
+        },
+        {
+          "seed": 4201597040,
+          "overall": 0.36,
+          "phases": {
+            "early": 0.8889,
+            "mid": 0.1111,
+            "late": 0
+          },
+          "hook_failures": {
+            "push": 0,
+            "complete": 0
+          }
+        },
+        {
+          "seed": 2561065513,
+          "overall": 0.36,
+          "phases": {
+            "early": 0.7778,
+            "mid": 0.2222,
+            "late": 0
+          },
+          "hook_failures": {
+            "push": 0,
+            "complete": 0
+          }
+        },
+        {
+          "seed": 920533986,
+          "overall": 0.36,
+          "phases": {
+            "early": 0.8889,
+            "mid": 0.1111,
+            "late": 0
+          },
+          "hook_failures": {
+            "push": 0,
+            "complete": 0
+          }
+        },
+        {
+          "seed": 3574969755,
+          "overall": 0.36,
+          "phases": {
+            "early": 1,
+            "mid": 0,
+            "late": 0
+          },
+          "hook_failures": {
+            "push": 0,
+            "complete": 0
+          }
+        },
+        {
+          "seed": 1934438228,
+          "overall": 0.36,
+          "phases": {
+            "early": 0.8889,
+            "mid": 0.1111,
+            "late": 0
+          },
+          "hook_failures": {
+            "push": 0,
+            "complete": 0
+          }
+        },
+        {
+          "seed": 293906701,
+          "overall": 0.36,
+          "phases": {
+            "early": 0.8889,
+            "mid": 0.1111,
+            "late": 0
+          },
+          "hook_failures": {
+            "push": 0,
+            "complete": 0
+          }
+        },
+        {
+          "seed": 2948342470,
+          "overall": 0.36,
+          "phases": {
+            "early": 0.8889,
+            "mid": 0.1111,
+            "late": 0
+          },
+          "hook_failures": {
+            "push": 0,
+            "complete": 0
+          }
+        },
+        {
+          "seed": 1307810943,
+          "overall": 0.36,
+          "phases": {
+            "early": 0.8889,
+            "mid": 0.1111,
+            "late": 0
+          },
+          "hook_failures": {
+            "push": 0,
+            "complete": 0
+          }
+        },
+        {
+          "seed": 3962246712,
+          "overall": 0.36,
+          "phases": {
+            "early": 1,
+            "mid": 0,
+            "late": 0
+          },
+          "hook_failures": {
+            "push": 0,
+            "complete": 0
+          }
+        },
+        {
+          "seed": 2321715185,
+          "overall": 0.36,
+          "phases": {
+            "early": 0.8889,
+            "mid": 0.1111,
+            "late": 0
+          },
+          "hook_failures": {
+            "push": 0,
+            "complete": 0
+          }
+        },
+        {
+          "seed": 681183658,
+          "overall": 0.36,
+          "phases": {
+            "early": 0.8889,
+            "mid": 0.1111,
+            "late": 0
+          },
+          "hook_failures": {
+            "push": 0,
+            "complete": 0
+          }
+        },
+        {
+          "seed": 3335619427,
+          "overall": 0.36,
+          "phases": {
+            "early": 0.8889,
+            "mid": 0.1111,
+            "late": 0
+          },
+          "hook_failures": {
+            "push": 0,
+            "complete": 0
+          }
+        }
+      ],
+      "phase_aggregate": {
+        "early": {
+          "mean": 0.8722222222222223,
+          "std": 0.06523810540137773,
+          "ci95": 0.03053202227728258
+        },
+        "mid": {
+          "mean": 0.1166666666666667,
+          "std": 0.05671308728156004,
+          "ci95": 0.026542236835981056
+        },
+        "late": {
+          "mean": 0,
+          "std": 0,
+          "ci95": 0
+        }
+      }
+    }
+  },
+  "tasks": 50,
+  "traps": 10,
+  "trap_encounters": 25
+}
