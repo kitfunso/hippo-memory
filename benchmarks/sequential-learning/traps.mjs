@@ -117,19 +117,134 @@ const CLEAN_DESCRIPTIONS = [
 ];
 
 // ---------------------------------------------------------------------------
+// Phase boundaries (PRE-LOCKED for v1.7.5 multi-seed harness)
+// ---------------------------------------------------------------------------
+//
+//   early = positions  1..17 (trap-slots: 2,4,6,8,10,12,14,16)             8 slots
+//   mid   = positions 18..34 (trap-slots: 18,20,22,24,26,28,30,32,34)      9 slots
+//   late  = positions 35..50 (trap-slots: 36,38,40,42,44,46,48,50)         8 slots
+//                                                                       --------
+//                                                                  total: 25 slots
+//
+// "phase shape" = the multiset of phases a category spans across its 2-3 slots.
+// Categories with the same shape form a "shape group". Seeded variance =
+// shuffle the assignment of categories to slot-tuples WITHIN each shape group.
+// Slot positions stay fixed; only WHICH category lands at each slot rotates.
+
+import { mulberry32 } from './aggregate.mjs';
+
+/**
+ * Classify a 1-indexed position into early/mid/late per the PRE-LOCKED
+ * phase boundaries.
+ * @param {number} pos
+ * @returns {'early' | 'mid' | 'late'}
+ */
+export function phaseOf(pos) {
+  if (pos <= 17) return 'early';
+  if (pos <= 34) return 'mid';
+  return 'late';
+}
+
+/**
+ * In-place Fisher-Yates shuffle keyed off a deterministic RNG.
+ * @template T
+ * @param {T[]} arr
+ * @param {() => number} rng
+ * @returns {T[]} the same array, shuffled
+ */
+function shuffleInPlace(arr, rng) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+/**
+ * Hash-derive a sub-seed for a shape group. Uses the golden-ratio constant
+ * (0x9E3779B9) so adjacent base seeds produce uncorrelated streams across
+ * groups.
+ * @param {number} baseSeed
+ * @param {number} groupSalt e.g. 1, 2, 3, 4 for the four shape groups
+ * @returns {number} uint32 sub-seed
+ */
+function deriveSubSeed(baseSeed, groupSalt) {
+  return (Math.imul(0x9E3779B9, (baseSeed + groupSalt) >>> 0)) >>> 0;
+}
+
+/**
+ * Build the seeded category->positions map. Categories within the same
+ * phase-shape group are shuffled to new slot-tuples; slot positions stay
+ * fixed.
+ *
+ * @param {number} seed
+ * @returns {Map<number, string>} position -> categoryId
+ */
+function buildSeededTrapMap(seed) {
+  // Group categories by their canonical phase shape (e.g. "early,mid,late").
+  const shapeGroups = new Map(); // shape -> [{category, positions}]
+  for (const tp of TRAP_PLACEMENTS) {
+    const shape = tp.positions.map(phaseOf).sort().join(',');
+    if (!shapeGroups.has(shape)) shapeGroups.set(shape, []);
+    shapeGroups.get(shape).push(tp);
+  }
+
+  // Salt per shape group keeps streams independent across groups. Sort by
+  // shape key for determinism (Map insertion order is non-deterministic
+  // across spec versions; explicit sort future-proofs the seeded output).
+  const sortedShapes = [...shapeGroups.keys()].sort();
+  const trapMap = new Map();
+
+  sortedShapes.forEach((shape, idx) => {
+    const group = shapeGroups.get(shape);
+    // Shuffle the array of category IDs within this group. The list of
+    // slot-tuples stays in canonical order; we only rotate which category
+    // attaches to which tuple.
+    const categoryIds = group.map((tp) => tp.category);
+    const slotTuples = group.map((tp) => tp.positions);
+    const rng = mulberry32(deriveSubSeed(seed, idx + 1));
+    shuffleInPlace(categoryIds, rng);
+    for (let i = 0; i < group.length; i++) {
+      for (const pos of slotTuples[i]) {
+        trapMap.set(pos, categoryIds[i]);
+      }
+    }
+  });
+
+  return trapMap;
+}
+
+// ---------------------------------------------------------------------------
 // Task generator
 // ---------------------------------------------------------------------------
 
 /**
- * Generate the 50-task sequence with traps placed at fixed positions.
+ * Generate the 50-task sequence.
  *
+ * - `generateTasks()` (no seed) -- canonical fixed-position output, identical
+ *   to pre-v1.7.5 behaviour. Used for any non-seeded callers (legacy tests,
+ *   single-run smoke).
+ * - `generateTasks(seed)` -- seeded category-to-slot assignment within each
+ *   phase-shape group. Slot positions stay fixed (so the early/mid/late
+ *   distribution is unchanged), but which category lands at each trap-slot
+ *   is shuffled deterministically. Same seed -> same output.
+ *
+ * Preserves: total trap-encounter count (25), per-category encounter count
+ * (matches TRAP_PLACEMENTS), and each category's native phase pattern.
+ *
+ * @param {number} [seed] optional integer seed
  * @returns {Array<{id: number, description: string, trapCategory: string|null, recallQuery: string}>}
  */
-export function generateTasks() {
-  const trapMap = new Map();
-  for (const tp of TRAP_PLACEMENTS) {
-    for (const pos of tp.positions) {
-      trapMap.set(pos, tp.category);
+export function generateTasks(seed) {
+  let trapMap;
+  if (typeof seed === 'number') {
+    trapMap = buildSeededTrapMap(seed);
+  } else {
+    trapMap = new Map();
+    for (const tp of TRAP_PLACEMENTS) {
+      for (const pos of tp.positions) {
+        trapMap.set(pos, tp.category);
+      }
     }
   }
 

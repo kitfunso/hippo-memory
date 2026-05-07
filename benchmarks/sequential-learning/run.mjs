@@ -21,6 +21,7 @@ import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { generateTasks, getTrapCategory } from './traps.mjs';
+import { aggregatePhases } from './aggregate.mjs';
 import baselineAdapter from './adapters/baseline.mjs';
 import staticAdapter from './adapters/static.mjs';
 import hippoAdapter from './adapters/hippo.mjs';
@@ -38,6 +39,8 @@ function parseArgs() {
     output: join(__dirname, 'results'),
     useGoalStack: false,
     evalStrict: false,
+    seed: undefined,
+    nSeeds: 1,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -51,6 +54,12 @@ function parseArgs() {
     } else if (args[i] === '--eval-strict') {
       // v1.7.5 -- hook errors hard-fail instead of being logged + swallowed.
       opts.evalStrict = true;
+    } else if (args[i] === '--seed' && args[i + 1]) {
+      // v1.7.5 -- explicit single-run seed. Implies nSeeds=1 unless overridden.
+      opts.seed = parseInt(args[++i], 10);
+    } else if (args[i] === '--n-seeds' && args[i + 1]) {
+      // v1.7.5 -- multi-seed run. Hash-derived seed list overrides --seed.
+      opts.nSeeds = parseInt(args[++i], 10);
     } else if (args[i] === '--help' || args[i] === '-h') {
       console.log(`
 Sequential Learning Benchmark
@@ -65,6 +74,11 @@ Options:
                       hooks. Only adapters that supply both are affected.
   --eval-strict       Hard-fail on any goal-stack hook error (default: log+continue).
                       Pair with --use-goal-stack for the eval pipeline.
+  --seed <int>        Single-run seed for deterministic category-to-slot
+                      assignment (v1.7.5). Ignored when --n-seeds > 1.
+  --n-seeds <int>     Multi-seed run. Hash-derives N seeds and reports
+                      mean / std / 95% CI per phase across seeds (v1.7.5).
+                      Default: 1.
   -h, --help          Show this help message
 `);
       process.exit(0);
@@ -72,6 +86,29 @@ Options:
   }
 
   return opts;
+}
+
+// ---------------------------------------------------------------------------
+// Seed list derivation (v1.7.5)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the seed list for a run. Hash-derived to avoid correlated mulberry32
+ * streams between adjacent base indices. Constant matches `aggregate.mjs`.
+ *
+ * @param {{seed: number|undefined, nSeeds: number}} opts
+ * @returns {Array<number|undefined>} undefined entry = canonical (no-seed) run
+ */
+function deriveSeedList(opts) {
+  if (opts.nSeeds > 1) {
+    return Array.from({ length: opts.nSeeds }, (_, i) =>
+      (Math.imul(0x9E3779B9, (1000 + i) >>> 0)) >>> 0,
+    );
+  }
+  if (typeof opts.seed === 'number') {
+    return [opts.seed];
+  }
+  return [undefined];
 }
 
 // ---------------------------------------------------------------------------
@@ -339,6 +376,11 @@ function printTable(conditions) {
 
 /**
  * Build the JSON output object.
+ *
+ * v1.7.5 -- when condition.seedRuns is present (length > 1) the output gains
+ * a `seeds` array (per-seed details) and a `phaseAggregate` block (mean / std
+ * / ci95 per phase across seeds). For single-seed/canonical runs the legacy
+ * shape is preserved.
  */
 function buildOutput(conditionResults) {
   const tasks = generateTasks();
@@ -366,12 +408,30 @@ function buildOutput(conditionResults) {
       entry.hook_failures = cond.hookFailures;
     }
 
+    // v1.7.5 -- multi-seed extras. Skipped for canonical (single, undefined-seed)
+    // runs to keep the legacy single-seed JSON shape unchanged.
+    if (cond.seedRuns && cond.seedRuns.length > 0) {
+      entry.seeds = cond.seedRuns.map((s) => ({
+        seed: s.seed,
+        overall: parseFloat(s.overall.toFixed(4)),
+        phases: {
+          early: parseFloat(s.phases.early.toFixed(4)),
+          mid: parseFloat(s.phases.mid.toFixed(4)),
+          late: parseFloat(s.phases.late.toFixed(4)),
+        },
+        hook_failures: s.hookFailures,
+      }));
+    }
+    if (cond.phaseAggregate) {
+      entry.phase_aggregate = cond.phaseAggregate;
+    }
+
     conditions[key] = entry;
   }
 
   return {
     benchmark: 'hippo-sequential-learning',
-    version: '1.0.0',
+    version: '1.7.5',
     timestamp: new Date().toISOString(),
     conditions,
     tasks: 50,
@@ -401,47 +461,92 @@ async function main() {
     }
   }
 
-  const tasks = generateTasks();
+  // v1.7.5 -- derive the seed list. nSeeds=1 with no --seed -> [undefined]
+  // (canonical fixed-position run, identical to pre-v1.7.5 behaviour).
+  const seedList = deriveSeedList(opts);
   const conditionResults = {};
 
   for (const key of adapterKeys) {
     const adapter = ADAPTERS[key];
-    process.stdout.write(`Running: ${adapter.name}...`);
+    const seedSuffix = seedList.length > 1 ? ` (${seedList.length} seeds)` : '';
+    process.stdout.write(`Running: ${adapter.name}${seedSuffix}...`);
 
     const startMs = performance.now();
+    const seedRuns = [];
+    let runFailed = false;
 
-    let results;
-    let hookFailures = { push: 0, complete: 0 };
-    try {
-      const out = await simulate(adapter, tasks, {
-        useGoalStack: opts.useGoalStack,
-        evalStrict: opts.evalStrict,
-      });
-      results = out.results;
-      hookFailures = out.hookFailures;
-    } catch (err) {
-      console.log(` FAILED`);
-      console.error(`  Error: ${err.message}`);
-      if (key === 'hippo' && err.message.includes('hippo')) {
-        console.error('  Hint: ensure hippo CLI is on PATH (npm link or global install)');
+    for (const seed of seedList) {
+      const tasks = generateTasks(seed);
+      let results;
+      let hookFailures = { push: 0, complete: 0 };
+      try {
+        const out = await simulate(adapter, tasks, {
+          useGoalStack: opts.useGoalStack,
+          evalStrict: opts.evalStrict,
+        });
+        results = out.results;
+        hookFailures = out.hookFailures;
+      } catch (err) {
+        console.log(` FAILED`);
+        console.error(`  Error (seed=${seed}): ${err.message}`);
+        if (key === 'hippo' && err.message.includes('hippo')) {
+          console.error('  Hint: ensure hippo CLI is on PATH (npm link or global install)');
+        }
+        // v1.7.5 -- in eval-strict mode propagate the failure so CI can detect it.
+        if (opts.evalStrict) throw err;
+        runFailed = true;
+        break;
       }
-      // v1.7.5 -- in eval-strict mode propagate the failure so CI can detect it.
-      if (opts.evalStrict) throw err;
-      continue;
+
+      seedRuns.push({
+        seed: seed ?? null,
+        results,
+        overall: trapHitRate(results),
+        phases: hitRateByPhase(results),
+        hookFailures,
+      });
     }
 
+    if (runFailed) continue;
+
     const elapsed = ((performance.now() - startMs) / 1000).toFixed(1);
-    const overall = trapHitRate(results);
-    const phases = hitRateByPhase(results);
+
+    // For single-run (canonical or --seed) reporting matches legacy shape.
+    // For multi-seed runs the headline numbers are means across seeds.
+    const overall =
+      seedRuns.reduce((a, r) => a + r.overall, 0) / seedRuns.length;
+    const phases = {
+      early: seedRuns.reduce((a, r) => a + r.phases.early, 0) / seedRuns.length,
+      mid: seedRuns.reduce((a, r) => a + r.phases.mid, 0) / seedRuns.length,
+      late: seedRuns.reduce((a, r) => a + r.phases.late, 0) / seedRuns.length,
+    };
     const learns = showsLearning(phases);
+    const hookFailures = seedRuns.reduce(
+      (acc, r) => ({
+        push: acc.push + r.hookFailures.push,
+        complete: acc.complete + r.hookFailures.complete,
+      }),
+      { push: 0, complete: 0 },
+    );
+
+    // v1.7.5 -- compute phase aggregate when multi-seed; aggregatePhases
+    // gracefully handles n=1 (mean=value, std=0, ci95=0 below n<5 floor).
+    const phaseAggregate =
+      seedRuns.length > 1
+        ? aggregatePhases(seedRuns.map((r) => r.phases))
+        : null;
 
     conditionResults[key] = {
       name: adapter.name,
       overall,
       phases,
       learns,
-      results,
+      // legacy single-run results array kept for compatibility (uses last
+      // seed's results when multi-seed; downstream code should use seedRuns)
+      results: seedRuns[seedRuns.length - 1].results,
       hookFailures,
+      seedRuns: seedList.length > 1 ? seedRuns : null,
+      phaseAggregate,
     };
 
     const hookSuffix =
