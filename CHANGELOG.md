@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.7.3 (2026-05-07)
+
+Hygiene release closing the four lower-confidence items deferred from the v1.7.2 review chain. No public API change. No behaviour change. No schema change.
+
+### Tests
+
+- Module-load assertion runtime test for `RECALL_DEFAULT_DENY_SCOPES` (codex P1-3 from v1.7.2). Extracted `assertNonEmpty` helper from inline guard so the throw path is directly testable.
+- `summarize_overflow=0` thin-client serialization on explicit `false` (codex P2-3 from v1.7.2). Pins that `false` produces `=0` rather than omission.
+
+### Refactored (no behaviour change)
+
+- Renamed `loadSearchRows` parameter `recallScope` → `scopeFilter` for readability (v1.7.2 maintainability INFO). Internal-only.
+
+### Documented
+
+- README "What's new" backfill for v1.7.0 and v1.6.5 (skipped at ship time, restored for chronological completeness).
+
 ## 1.7.2 (2026-05-06)
 
 Hygiene release closing the four consolidation items deferred from v1.7.1. **No behaviour change for in-spec callers not setting `scorer_window`; new opt-in transport surfaces for `scorer_window` and three pre-existing RecallOpts fields the thin-client was missing.** Additive on patch is permitted under semver since backward-compatible.

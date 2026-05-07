@@ -85,6 +85,11 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.7.3
+
+- **Hygiene release.** Closes the v1.7.2 review-tail: module-load assertion runtime test, `summarize_overflow=0` thin-client pin, internal `scopeFilter` rename, and a README "What's new" backfill for v1.7.0 and v1.6.5.
+- No public API change. No behaviour change. No schema change.
+
 ### What's new in v1.7.2
 
 - **`scorerWindow` over the wire.** HTTP `/v1/memories?scorer_window=N`, MCP `hippo_recall.scorer_window`, thin-client serializes `scorerWindow`. Validation unchanged (`recall()` rejects 0/negative/non-finite/non-numeric with `RecallContractError code: invalid_scorer_window`).
@@ -97,6 +102,21 @@ hippo recall "data pipeline issues" --budget 2000
 - Fixed `unknown:legacy` scope leak in BM25 base recall, at the **producer layer** (SQL predicate in `loadSearchRows` via new `loadRecallSearchEntries` helper). Future recall consumers cannot silently re-introduce the leak. Operators investigating the quarantine bucket should pass explicit `scope: 'unknown:legacy'`.
 - Hardened test coverage on the v1.7.0 foundations: `scorerWindow=1` lower bound, no-terms `ORDER BY`, tenant isolation across FTS / no-terms / LIKE-fallback paths, HTTP `windowSize` serialization.
 - Deterministic LIKE-fallback testing via new `HIPPO_FORCE_LIKE_PATH=1` env hook (read-only — never poisons the on-disk FTS index).
+
+### What's new in v1.7.0
+
+- **`MemoryEntry.bm25_score?: number`.** Raw FTS5 `bm25()` score surfaced as provenance metadata on the FTS path of `loadSearchEntries`. `undefined` on every other path (empty query, FTS unavailable, LIKE fallback, full-store fallback, `readEntry`, `loadAllEntries`, deserialize). NOT a drop-in for the JS-side BM25 scorer in `src/search.ts` — different tokenizer, scale, sign convention. Provenance only.
+- **`RecallOpts.scorerWindow?: number`.** Decouples scorer candidate pool from `limit`. Default `undefined` preserves the existing 200-row store-internal default. Useful when `summarizeOverflow=true` and you want a wider candidate pool to detect more level-2 parent clusters.
+- **`RecallResult.windowSize?: number`.** Reports the scorer window actually used so callers can introspect "did the scorer see enough candidates?" without re-deriving the value.
+- **API contract fix (CRITICAL).** `RecallContractError` HTTP serialization aligned to `{error: <message>, code: <code>}` to match every other v1/* error. The v1.6.5 one-off shape (`{error: <code>, message: <text>}`) was a public-contract drift caught by the api-contract specialist in `/review`. **Breaking for v1.6.5 callers reading `body.error` for the typed code value** — migrate to `body.code`.
+- Three review-chain rounds (`/plan-eng-review`, `/codex review --model gpt-5.5`, `/review`) shaped this release: 4 P0s killed mk1 (including a fabricated `bm25_score` column), 2 P0s killed mk2 (including an MCP cap addressing a non-existent contract), and the 5-specialist `/review` pass added the api-contract fix and 4 INFO-level test improvements.
+
+### What's new in v1.6.5
+
+- **`RecallContractError` exported class with `.code` field.** Thrown by `api.recall` when `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1` AND `freshTailCount > 0` AND `freshTailSessionId` is unset. HTTP returns 400 with the typed error; MCP propagates via `-32603`; CLI exits 1. Default env unset preserves v1.6.x tenant-wide back-compat.
+- **Timestamp invariant documented** in `src/memory.ts`: all in-process `MemoryEntry` and session-state timestamps are canonical `Date.prototype.toISOString()` (24 chars, UTC, ms, trailing `Z`). Importers preserving local-time offsets MUST normalize on write.
+- **`assemble` ISO sort uses byte compare** instead of `localeCompare` — ~50× faster on canonical UTC ISO with no semantic change given the in-process invariant. Caveat documented: `deserializeEntry` / `rebuildIndex` round-trip frontmatter timestamps as-is, so legacy markdown with non-canonical offsets propagates without normalization.
+- **`loadFreshRawMemories` JSDoc-deprecated** for tenant-wide use (no `sessionId`). NO runtime `console.warn` — codex C9 rejected library-level stderr noise. Direct callers bypass the `api.recall` guard, so the JSDoc is the only nudge at that layer.
 
 ### What's new in v1.6.4
 

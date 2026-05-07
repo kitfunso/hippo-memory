@@ -219,15 +219,24 @@ export const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
  */
 export const RECALL_DEFAULT_DENY_SCOPES = ['unknown:legacy'] as const;
 
-// Cast to readonly string[] — `as const` makes this `readonly ['unknown:legacy']`
-// with literal length 1, so a direct `.length === 0` is "unreachable" per TS
-// even though the assertion is a real runtime guard against future maintainers
-// blanking the array. Cast widens the type so the check compiles.
-if ((RECALL_DEFAULT_DENY_SCOPES as readonly string[]).length === 0) {
-  throw new Error(
-    'RECALL_DEFAULT_DENY_SCOPES cannot be empty — would silently allow quarantine scopes',
-  );
+/**
+ * @internal v1.7.3 — runtime guard against a future maintainer blanking a
+ * load-bearing literal array. Extracted from the inline guard so the throw
+ * path is directly testable. `as const` arrays widen via `readonly T[]` at
+ * the call site so the empty case is reachable at runtime.
+ */
+export function assertNonEmpty<T>(arr: readonly T[], name: string): void {
+  if (arr.length === 0) {
+    throw new Error(
+      `${name} cannot be empty — would silently allow quarantine scopes`,
+    );
+  }
 }
+
+assertNonEmpty(
+  RECALL_DEFAULT_DENY_SCOPES as readonly string[],
+  'RECALL_DEFAULT_DENY_SCOPES',
+);
 
 function layerDir(root: string, layer: Layer): string {
   return path.join(root, layer);
@@ -632,7 +641,7 @@ function canonicalConflictPair(aId: string, bId: string): { memory_a_id: string;
  *   - 'exact' — exact match on `m.scope = value`.
  *
  * Background pipelines (`consolidate`, `embeddings`, `refine-llm`, ...) call
- * `loadSearchEntries` (no recallScope arg) and see all rows including
+ * `loadSearchEntries` (no scopeFilter arg) and see all rows including
  * quarantine.
  */
 /** @internal v1.7.2 — internal SQL-builder shape; not on the public API
@@ -646,7 +655,7 @@ function loadSearchRows(
   query: string,
   limit: number,
   tenantId: string | undefined,
-  recallScope?: RecallScopeFilter,
+  scopeFilter?: RecallScopeFilter,
 ): MemoryRow[] {
   // tenantId undefined = no tenant filter (legacy callers / cross-deployment
   // helpers). tenantId set = strict tenant isolation, leveraging the composite
@@ -673,8 +682,8 @@ function loadSearchRows(
   let scopeClauseNoAlias = '';
   let scopeClauseTenantOnly = '';
   const scopeParams: string[] = [];
-  if (recallScope !== undefined) {
-    if (recallScope.mode === 'default-deny') {
+  if (scopeFilter !== undefined) {
+    if (scopeFilter.mode === 'default-deny') {
       // T2: bind from RECALL_DEFAULT_DENY_SCOPES so SQL and JS share one
       // source of truth. Module-load assertion at the top of this file
       // guarantees length > 0, so NOT IN () (a SQL parse error) is impossible.
@@ -691,7 +700,7 @@ function loadSearchRows(
       scopeClauseAlias = ` AND m.scope = ?`;
       scopeClauseNoAlias = ` AND scope = ?`;
       scopeClauseTenantOnly = scopeClauseNoAlias;
-      scopeParams.push(recallScope.value);
+      scopeParams.push(scopeFilter.value);
     }
   }
 
@@ -1559,11 +1568,11 @@ export function loadRecallSearchEntries(
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    const recallScope: RecallScopeFilter =
+    const scopeFilter: RecallScopeFilter =
       requestedScope && requestedScope !== ''
         ? { mode: 'exact', value: requestedScope }
         : { mode: 'default-deny' };
-    return loadSearchRows(db, query, limit, tenantId, recallScope).map(rowToEntry);
+    return loadSearchRows(db, query, limit, tenantId, scopeFilter).map(rowToEntry);
   } finally {
     closeHippoDb(db);
   }

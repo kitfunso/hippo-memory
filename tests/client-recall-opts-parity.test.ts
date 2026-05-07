@@ -71,4 +71,26 @@ describe('client RecallOpts parity sweep over the wire (v1.7.2 T4)', () => {
     expect(url).not.toContain('summarize_overflow');
     expect(url).not.toContain('scorer_window');
   });
+
+  it('serializes summarize_overflow=0 when summarizeOverflow is false (not omitted)', async () => {
+    originalFetch = globalThis.fetch;
+    const fetchSpy = vi.fn(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ results: [], total: 0, tokens: 0, windowSize: 200 }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      ),
+    );
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+    await recall('http://localhost:9999', undefined, {
+      query: 'alpha',
+      summarizeOverflow: false,
+    });
+
+    const url = String(fetchSpy.mock.calls[0]![0]);
+    expect(url).toContain('summarize_overflow=0');
+    expect(url).not.toContain('summarize_overflow=1');
+  });
 });
