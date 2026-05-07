@@ -516,6 +516,16 @@ async function handleRequest(
     // No transport-side validation; recall() owns the contract.
     const scorerWindowRaw = query.get('scorer_window');
     const scorerWindow = scorerWindowRaw === null ? undefined : Number(scorerWindowRaw);
+    // v1.7.4: session_id for the dlPFC goal-stack boost. 256-char cap mirrors
+    // fresh_tail_session_id (above). Trim then drop if empty so api.recall
+    // sees undefined when the param is omitted or whitespace-only.
+    const sessionIdRaw = query.get('session_id');
+    if (sessionIdRaw !== null && sessionIdRaw.length > 256) {
+      throw new HttpError(400, 'session_id exceeds 256-character cap');
+    }
+    const sessionId = sessionIdRaw && sessionIdRaw.trim().length > 0
+      ? sessionIdRaw.trim()
+      : undefined;
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = recall(ctx, {
       query: q,
@@ -527,6 +537,7 @@ async function handleRequest(
       ...(freshTailSessionId !== undefined ? { freshTailSessionId } : {}),
       ...(summarizeOverflow !== undefined ? { summarizeOverflow } : {}),
       ...(scorerWindow !== undefined ? { scorerWindow } : {}),
+      ...(sessionId !== undefined ? { sessionId } : {}),
     });
     // Continuity payloads should never be cached. The caller is asking for
     // session-state-aware data; intermediaries must not reuse it across users.

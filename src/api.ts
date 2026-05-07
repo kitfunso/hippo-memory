@@ -53,6 +53,7 @@ import {
   revokeApiKey,
   type ApiKeyListItem,
 } from './auth.js';
+import { applyGoalStackBoost } from './goals.js';
 
 export interface Context {
   hippoRoot: string;
@@ -273,6 +274,23 @@ export interface RecallOpts {
    * `hippo session resume`.
    */
   includeContinuity?: boolean;
+  /**
+   * v1.7.4 -- when set AND `(ctx.tenantId, sessionId)` has active goals AND
+   * `goalTag` is unset, `api.recall` applies the dlPFC goal-stack boost lifted
+   * from CLI cmdRecall. Pre-v1.7.4 the boost was CLI-only (env-driven via
+   * HIPPO_SESSION_ID). Undefined preserves v1.7.3 behaviour (no boost).
+   *
+   * Why on RecallOpts and not Context: Context is shared by remember/recall/
+   * assemble/outcome. Goal-stack boost is recall-scoped only.
+   */
+  sessionId?: string;
+  /**
+   * v1.7.4 -- explicit goal-tag override. When set, the goal-stack boost is
+   * SUPPRESSED (mirrors the CLI's `goalTag === ''` gate from v0.38). Use to
+   * pin recall ranking against one specific goal/tag without the multi-goal
+   * stack interfering.
+   */
+  goalTag?: string;
 }
 
 export interface ContinuityBlock {
@@ -424,7 +442,35 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   // BM25 ordering already comes from loadRecallSearchEntries; cap to `limit`.
   // Score is a placeholder — the physics/hybrid scorers in src/search.ts
   // produce richer breakdowns and will replace this when wired up.
-  const baseSlice = entries.slice(0, limit);
+  let baseSlice = entries.slice(0, limit);
+
+  // v1.7.4 -- single db handle for the goal-stack boost AND the audit-event
+  // emit below (codex P1: do not open a second short-lived handle for the
+  // appendAuditEvent call). The handle is closed in the matching `finally`
+  // immediately above the continuity block.
+  const db = openHippoDb(ctx.hippoRoot);
+  // v1.7.4 -- declared outside the try so the return statement (which lives
+  // outside, after the continuity block) can read the final values.
+  let rankedOut: RecallResultItem[] = [];
+  let tokensOut = 0;
+  let totalOut = 0;
+  // v1.7.4 -- dlPFC goal-stack boost on the PRIMARY band only. Appendix paths
+  // (fresh-tail, summary substitutions) are appended AFTER and keep their
+  // semantically-special placement.
+  let baseScored: Array<{ entry: typeof baseSlice[number]; score: number }> =
+    baseSlice.map((entry, idx) => ({
+      entry,
+      score: Math.max(0, 1 - idx / Math.max(1, limit)),
+    }));
+  try {
+    if (opts.sessionId && !opts.goalTag) {
+      baseScored = applyGoalStackBoost(db, baseScored, {
+        sessionId: opts.sessionId,
+        tenantId: ctx.tenantId,
+        limit,
+      });
+      baseSlice = baseScored.map((r) => r.entry);
+    }
 
   // v1.5.0 DAG-aware substitution (Phase 1, Task 2). When entries overflow the
   // limit and ≥2 of them share a level-2 parent summary, append the parent
@@ -472,12 +518,16 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
     }
   }
 
-  const baseRanked: RecallResultItem[] = baseSlice.map((entry, idx) => ({
-    id: entry.id,
-    content: entry.content,
-    score: Math.max(0, 1 - idx / Math.max(1, limit)),
-    layer: entry.layer,
-    strength: entry.strength,
+  // v1.7.4 -- baseScored carries the (possibly boosted) per-row scores. When
+  // the goal-stack boost did not run, scores are identical to the original
+  // positional placeholder; when it did run, scores reflect the boost AND the
+  // rows are in the boosted order (helper sort()).
+  const baseRanked: RecallResultItem[] = baseScored.map((r) => ({
+    id: r.entry.id,
+    content: r.entry.content,
+    score: r.score,
+    layer: r.entry.layer,
+    strength: r.entry.strength,
   }));
   // Substituted summaries land at the end with score = 0.5 (mid-rank), so
   // they don't outrank top-N strong matches but stay above lowest-rank
@@ -540,29 +590,30 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
     }
   }
 
-  const ranked = [...freshRanked, ...baseRanked, ...summaryRanked];
-  const tokens = ranked.reduce((acc, r) => acc + Math.ceil(r.content.length / 4), 0);
+  rankedOut = [...freshRanked, ...baseRanked, ...summaryRanked];
+  tokensOut = rankedOut.reduce((acc, r) => acc + Math.ceil(r.content.length / 4), 0);
+  totalOut = entries.length;
 
   // TODO(a1-task-4): emit via the shared audit hook in store.ts so we don't
   // double-emit. Recall does not currently write through writeEntry, so no
   // duplicate exists today, but we keep the same shape for symmetry.
-  const db = openHippoDb(ctx.hippoRoot);
-  try {
-    // GDPR Path A: store a sha256 hash (16 hex chars) of the query text
-    // instead of the truncated query itself. If a caller queries with content
-    // that matches an archived (RTBF) memory, the original text must not
-    // persist in audit_log. query_length is preserved for debugging
-    // long-prompt patterns and compliance metrics.
-    appendAuditEvent(db, {
-      tenantId: ctx.tenantId,
-      actor: ctx.actor,
-      op: 'recall',
-      metadata: {
-        query_hash: createHash('sha256').update(opts.query).digest('hex').slice(0, 16),
-        query_length: opts.query.length,
-        results: ranked.length,
-      },
-    });
+  // v1.7.4: reuse the `db` handle opened above for the goal-stack boost --
+  // single open/close spans both side effects.
+  // GDPR Path A: store a sha256 hash (16 hex chars) of the query text
+  // instead of the truncated query itself. If a caller queries with content
+  // that matches an archived (RTBF) memory, the original text must not
+  // persist in audit_log. query_length is preserved for debugging
+  // long-prompt patterns and compliance metrics.
+  appendAuditEvent(db, {
+    tenantId: ctx.tenantId,
+    actor: ctx.actor,
+    op: 'recall',
+    metadata: {
+      query_hash: createHash('sha256').update(opts.query).digest('hex').slice(0, 16),
+      query_length: opts.query.length,
+      results: rankedOut.length,
+    },
+  });
   } finally {
     closeHippoDb(db);
   }
@@ -627,7 +678,7 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
       filteredEvents.reduce((acc, e) => acc + tokenize(e.content), 0);
   }
 
-  return { results: ranked, total: entries.length, tokens, continuity, continuityTokens, windowSize };
+  return { results: rankedOut, total: totalOut, tokens: tokensOut, continuity, continuityTokens, windowSize };
 }
 
 // ---------------------------------------------------------------------------

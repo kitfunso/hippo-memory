@@ -85,6 +85,12 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.7.4
+
+- **Goal-stack boost on MCP + HTTP.** Set `RecallOpts.sessionId` (or HTTP `?session_id=...`, or MCP `hippo_recall { session_id }`) and the dlPFC goal-stack boost — previously CLI-only — applies on MCP and HTTP too. Both `api.recall` (primary BM25 band, before fresh-tail / summary appendix) AND MCP's separate `physicsSearch`/`hybridSearch` path are boosted. New `RecallOpts.goalTag` lets callers opt out per-call.
+- **`goal complete --no-propagate`.** New CLI flag and `CompleteGoalOpts.noPropagate` field for users who want to close a goal without strength side-effects on recalled memories. Default unchanged (propagate).
+- **Internal: `applyGoalStackBoost` and `enforceDepthCapWithinTx` helpers.** Lifted ~140 lines of duplicated logic into shared helpers. `@internal`, not on the public API surface.
+
 ### What's new in v1.7.3
 
 - **Hygiene release.** Closes the v1.7.2 review-tail: module-load assertion runtime test, `summarize_overflow=0` thin-client pin, internal `scopeFilter` rename, and a README "What's new" backfill for v1.7.0 and v1.6.5.

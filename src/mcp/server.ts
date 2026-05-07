@@ -27,6 +27,8 @@ import { loadConfig } from '../config.js';
 import { resolveConfidence } from '../memory.js';
 import { resolveTenantId } from '../tenant.js';
 import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, drillDown as apiDrillDown, assemble as apiAssemble, isPrivateScope, type Context as ApiContext } from '../api.js';
+import { applyGoalStackBoost } from '../goals.js';
+import { openHippoDb, closeHippoDb } from '../db.js';
 import { PACKAGE_VERSION } from '../version.js';
 
 // ── Find hippo root ──
@@ -185,6 +187,11 @@ const TOOLS = [
         scorer_window: {
           type: 'number',
           description: 'Candidate pool size that api.recall evaluates. Affects fresh-tail / summarize-overflow appendix paths and continuity hits. Note: the primary ranked block over MCP is driven by a separate physics/hybrid scorer over the full tenant store, so scorer_window does NOT narrow the main results — only the appendix. Default 200. Rejected as RecallContractError code=invalid_scorer_window if 0/negative/non-finite/non-numeric.',
+        },
+        session_id: {
+          type: 'string',
+          maxLength: 256,
+          description: 'Optional session id (v1.7.4). When set AND (tenant, session) has active goals, applies the dlPFC goal-stack boost to the primary physics/hybrid result band before formatting AND to api.recall\'s primary BM25 band (so the audit + appendix paths see the same session). Mirrors fresh_tail_session_id shape (256-char cap).',
         },
       },
       required: ['query'],
@@ -424,6 +431,17 @@ async function executeTool(
       const scorerWindow = args.scorer_window === undefined
         ? undefined
         : Number(args.scorer_window);
+      // v1.7.4 -- session_id for the dlPFC goal-stack boost. Mirrors
+      // fresh_tail_session_id shape: trim, 256-char cap. When set and the
+      // (tenant, session) has active goals, the boost is applied (a) inside
+      // api.recall on its primary BM25 band (so the audit + fresh-tail /
+      // summary appendix paths see consistent ranking), and (b) below on the
+      // physics/hybrid result list before formatMemories (since MCP's
+      // user-visible primary ordering does NOT come from api.recall).
+      const sessionIdRaw = typeof args.session_id === 'string' ? args.session_id.trim() : '';
+      const sessionId = sessionIdRaw.length > 0 && sessionIdRaw.length <= 256
+        ? sessionIdRaw
+        : undefined;
       const apiCtx: ApiContext = {
         hippoRoot,
         tenantId,
@@ -443,6 +461,7 @@ async function executeTool(
         ...(freshTailSessionId !== undefined ? { freshTailSessionId } : {}),
         ...(summarizeOverflow !== undefined ? { summarizeOverflow } : {}),
         ...(scorerWindow !== undefined ? { scorerWindow } : {}),
+        ...(sessionId !== undefined ? { sessionId } : {}),
       });
 
       // Existing physics/hybrid scorer continues to drive user-visible
@@ -463,9 +482,27 @@ async function executeTool(
             return true;
           });
       const usePhysics = config.physics?.enabled !== false;
-      const results = usePhysics
+      let results = usePhysics
         ? await physicsSearch(query, entries, { budget, hippoRoot, physicsConfig: config.physics })
         : await hybridSearch(query, entries, { budget, hippoRoot });
+
+      // v1.7.4 -- dlPFC goal-stack boost on the MCP physics/hybrid result
+      // list BEFORE formatMemories. MCP's user-visible primary ordering does
+      // NOT come from api.recall (apiResult above), so the boost has to run
+      // here too. Helper signature accepts any { entry, score } shape; the
+      // physics/hybrid result rows are already in that shape.
+      if (sessionId !== undefined) {
+        const dbForBoost = openHippoDb(hippoRoot);
+        try {
+          results = applyGoalStackBoost(dbForBoost, results, {
+            sessionId,
+            tenantId,
+            limit: results.length,
+          });
+        } finally {
+          closeHippoDb(dbForBoost);
+        }
+      }
 
       // Mark retrieved and persist
       const retrieved = markRetrieved(results.map((r) => r.entry));
