@@ -90,6 +90,44 @@ export function pushGoal(hippoRoot: string, opts: PushGoalOpts): Goal {
   }
 }
 
+/**
+ * v1.7.4 — depth-cap enforcer extracted from pushGoalWithDb and resumeGoal.
+ * If the (tenant, session) has >= MAX_ACTIVE_GOAL_DEPTH active goals,
+ * suspend the oldest `overflow` ones.
+ *
+ * **Precondition: caller MUST already be inside a `BEGIN IMMEDIATE`
+ * transaction.** Helper does not open or commit -- name reflects this so it
+ * is impossible to misread the contract at a call site. Both existing call
+ * sites (pushGoalWithDb, resumeGoal) wrap in `BEGIN IMMEDIATE` already.
+ *
+ * @internal v1.7.4 -- internal goal-stack invariant. Subject to change.
+ */
+export function enforceDepthCapWithinTx(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  sessionId: string,
+): void {
+  const activeCount = (db.prepare(`
+    SELECT COUNT(*) AS c
+    FROM goal_stack
+    WHERE tenant_id = ? AND session_id = ? AND status = 'active'
+  `).get(tenantId, sessionId) as { c: number }).c;
+
+  if (activeCount >= MAX_ACTIVE_GOAL_DEPTH) {
+    const overflow = activeCount - MAX_ACTIVE_GOAL_DEPTH + 1;
+    db.prepare(`
+      UPDATE goal_stack
+      SET status = 'suspended'
+      WHERE id IN (
+        SELECT id FROM goal_stack
+        WHERE tenant_id = ? AND session_id = ? AND status = 'active'
+        ORDER BY created_at ASC
+        LIMIT ?
+      )
+    `).run(tenantId, sessionId, overflow);
+  }
+}
+
 export function pushGoalWithDb(db: DatabaseSyncLike, opts: PushGoalOpts): Goal {
   const id = `g_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
   const createdAt = new Date().toISOString();
@@ -98,25 +136,7 @@ export function pushGoalWithDb(db: DatabaseSyncLike, opts: PushGoalOpts): Goal {
   db.exec('BEGIN IMMEDIATE');
   try {
     // Depth cap: count active for (tenant, session); suspend oldest if at cap.
-    const activeCount = (db.prepare(`
-      SELECT COUNT(*) AS c
-      FROM goal_stack
-      WHERE tenant_id = ? AND session_id = ? AND status = 'active'
-    `).get(opts.tenantId, opts.sessionId) as { c: number }).c;
-
-    if (activeCount >= MAX_ACTIVE_GOAL_DEPTH) {
-      const overflow = activeCount - MAX_ACTIVE_GOAL_DEPTH + 1;
-      db.prepare(`
-        UPDATE goal_stack
-        SET status = 'suspended'
-        WHERE id IN (
-          SELECT id FROM goal_stack
-          WHERE tenant_id = ? AND session_id = ? AND status = 'active'
-          ORDER BY created_at ASC
-          LIMIT ?
-        )
-      `).run(opts.tenantId, opts.sessionId, overflow);
-    }
+    enforceDepthCapWithinTx(db, opts.tenantId, opts.sessionId);
 
     if (opts.parentGoalId) {
       const parent = db.prepare(
@@ -296,24 +316,7 @@ export function resumeGoal(hippoRoot: string, goalId: string): void {
         return;
       }
 
-      const activeCount = (db.prepare(`
-        SELECT COUNT(*) AS c FROM goal_stack
-        WHERE tenant_id = ? AND session_id = ? AND status = 'active'
-      `).get(row.tenant_id, row.session_id) as { c: number }).c;
-
-      if (activeCount >= MAX_ACTIVE_GOAL_DEPTH) {
-        const overflow = activeCount - MAX_ACTIVE_GOAL_DEPTH + 1;
-        db.prepare(`
-          UPDATE goal_stack
-          SET status = 'suspended'
-          WHERE id IN (
-            SELECT id FROM goal_stack
-            WHERE tenant_id = ? AND session_id = ? AND status = 'active'
-            ORDER BY created_at ASC
-            LIMIT ?
-          )
-        `).run(row.tenant_id, row.session_id, overflow);
-      }
+      enforceDepthCapWithinTx(db, row.tenant_id, row.session_id);
 
       db.prepare(`UPDATE goal_stack SET status = 'active' WHERE id = ?`).run(goalId);
       db.exec('COMMIT');
