@@ -1,13 +1,13 @@
 # Hippo Brain Observatory — Roadmap
 
-## v1.7.3 — review-tail from v1.7.2
+## v1.7.3 — review-tail from v1.7.2 (SHIPPED 2026-05-07)
 
-Lower-confidence items deferred from v1.7.2 review chain. All non-blocking.
+All four items closed in v1.7.3. See `docs/plans/2026-05-06-v1.7.3-review-tail.md` and CHANGELOG.
 
-- [ ] **Module-load assertion runtime test.** `RECALL_DEFAULT_DENY_SCOPES.length === 0` throws on module import (codex P1-3). Current test pins the constant's current length; doesn't exercise the throw path. Add via `vi.mock` or extract `assertNonEmpty` helper for direct testing.
-- [ ] **`summarize_overflow=0` (false path) thin-client test.** `client-recall-opts-parity.test.ts` only asserts `summarize_overflow=1`. Add an assertion that `summarizeOverflow: false` produces `summarize_overflow=0` (not omitted). Codex P2-3.
-- [ ] **`RecallScopeFilter` parameter naming polish.** Internal-only; `recallScope: RecallScopeFilter` reads as a noun for the value; `recallScopeFilter` or `scopeFilter` would be clearer. Defer.
-- [ ] **README "What's new" backfill for v1.6.5 + v1.7.0.** publish-repo skill mandates the section per release; v1.6.5 and v1.7.0 ships skipped it. Add both retroactively. v1.7.1 + v1.7.2 are in.
+- [x] Module-load assertion runtime test for `RECALL_DEFAULT_DENY_SCOPES` (codex P1-3) — `assertNonEmpty` helper extracted, 3 cases in `tests/store-assert-non-empty.test.ts`.
+- [x] `summarize_overflow=0` (false path) thin-client test (codex P2-3) — pin added; serialization was already correct.
+- [x] `RecallScopeFilter` parameter naming polish — renamed `recallScope` → `scopeFilter` in `loadSearchRows`.
+- [x] README "What's new" backfill for v1.6.5 + v1.7.0 — both sections present in chronological order.
 
 ## v0.26 — UI Redesign (warm parchment + 3D)
 
