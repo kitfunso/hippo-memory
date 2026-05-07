@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.7.5 (2026-05-07)
+
+Sequential-learning benchmark infrastructure release. Closes the v0.39 B3 follow-up that gated public exercising of the dlPFC goal-stack mechanism. Eval ran but stopped per the pre-registered sanity gate due to a floor effect; hypothesis remains open.
+
+### Added
+
+- **Sequential-learning adapter contract — `pushGoal` / `completeGoal` hooks.** `benchmarks/sequential-learning/adapters/interface.mjs` accepts optional paired hooks. `hippo.mjs` adapter implements both via the existing `hippo goal push|complete` CLI commands, with `HIPPO_HOME` / `XDG_DATA_HOME` isolation so the eval can't contaminate the user's real store.
+- **Multi-seed eval harness with meaningful seed-driven variance.** `--seed N`, `--n-seeds N`, `--eval-strict` flags on `run.mjs`. `benchmarks/sequential-learning/aggregate.mjs` provides `mean` / `stdDev` / `ciHalfWidth95` (returns 0 for n<5) / `aggregatePhases` / `pairedPermutationCI` (10k resamples, no t-test). `traps.mjs::generateTasks(seed)` randomly assigns categories to position-slots within phase shape groups, preserving total trap count, per-category encounter count, and the early-then-later structure.
+- **`--use-goal-stack` runner flag.** When set AND adapter supplies the hooks, the simulator wraps each trap task in goal-push / goal-complete so the dlPFC boost activates. Eval-strict mode hard-fails on hook errors so silent fallback can't masquerade as a null result.
+- **Tag-fix on memory store.** Stored memories now include `task.trapCategory` (the category id) as the first tag so the goal-stack boost — which keys on `goalsByTag.has(memoryTag)` — can match. Pre-fix the boost would have matched zero memories regardless of mechanism truth.
+
+### Eval
+
+- **Goal-stack lift on sequential-learning benchmark — STOPPED per pre-registered sanity gate.** 4-condition × 20-seed paired eval ran cleanly (zero hook failures, eval-strict mode). Sanity gate fired before the decision rule could apply: hippo-base (C2) measured 0.0% late-phase trap rate (pre-registered band: [4%, 24%] around the README headline 14%). Both C2 and hippo+goal-stack (C3) saturate at 0% late-phase across all 20 seeds — floor effect, no headroom for the goal-stack mechanism to demonstrate further improvement. The −10pp hypothesis remains untested on a discriminating workload. Future eval needs a harder benchmark variant (smaller `--budget`, adversarial categories, or restricted late-phase window). Pre-registration: `docs/evals/2026-05-07-v1.7.5-goal-stack-eval-prereg.md`. Claim inventory: `docs/evals/2026-05-07-v1.7.5-claim-inventory.md`. Full result + investigation: `docs/evals/2026-05-07-v1.7.5-goal-stack-eval-result.md`. Re-derive numbers: `node benchmarks/sequential-learning/analyze-v1.7.5.mjs`.
+
+### Deferred to future release
+
+- Discriminating workload variant for the goal-stack hypothesis (v1.7.6+): reduce store budget, add adversarial trap categories, OR restrict the late-phase metric to last 4 trap encounters.
+- vlPFC interference suppression (v1.8.0): real feature work per RESEARCH.md, separate plan.
+
 ## 1.7.4 (2026-05-07)
 
 Internal hygiene release closing 3 of the 5 B3 dlPFC follow-ups deferred from v0.39.0. Adds optional `RecallOpts.sessionId` (and `RecallOpts.goalTag`) so MCP `hippo_recall` and HTTP `GET /v1/memories` callers get the dlPFC goal-stack boost — previously CLI-only. Adds `--no-propagate` flag on `goal complete`. Refactors `enforceDepthCapWithinTx` helper.
