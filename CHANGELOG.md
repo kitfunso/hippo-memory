@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Fresh-tail pinned context injection.** `hippo context --pinned-only --include-recent <n>` now includes the last N writes regardless of pinning, so memories saved mid-session can appear in the next Claude Code `UserPromptSubmit` injection before they are explicitly pinned. New Claude hook installs use `--include-recent 5`, and existing legacy pinned-only hooks are migrated on `hippo hook install`.
+
 ## 1.7.5 (2026-05-07)
 
 Sequential-learning benchmark infrastructure release. Closes the v0.39 B3 follow-up that gated public exercising of the dlPFC goal-stack mechanism. Eval ran but stopped per the pre-registered sanity gate due to a floor effect; hypothesis remains open.

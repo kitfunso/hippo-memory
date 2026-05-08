@@ -803,7 +803,7 @@ This adds a `<!-- hippo:start -->` ... `<!-- hippo:end -->` block that tells the
 For Claude Code, it also adds:
 - a `SessionEnd` hook so `hippo sleep` runs automatically when the session exits
 - a `SessionStart` hook that prints the previous session's consolidation output
-- a `UserPromptSubmit` hook that re-injects pinned memories (`hippo remember <text> --pin`) into every turn's context — so invariants survive long sessions where Opus 4.7 might otherwise "forget" them. Budget: 500 tokens per turn, skipped entirely when no pinned memories exist. Opt out with `{"pinnedInject":{"enabled":false}}` in `.hippo/config.json`.
+- a `UserPromptSubmit` hook that runs `hippo context --pinned-only --include-recent 5 --format additional-context` every turn. It re-injects pinned memories (`hippo remember <text> --pin`) plus the last 5 writes, so fresh same-session lessons appear on the next prompt before you pin them. Opt out with `{"pinnedInject":{"enabled":false}}` in `.hippo/config.json`.
 
 To remove: `hippo hook uninstall claude-code`
 

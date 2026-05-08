@@ -87,6 +87,7 @@ export interface InstallResult {
   installedSessionEnd: boolean;
   installedSessionStart: boolean;
   installedUserPromptSubmit: boolean;
+  migratedPinnedInjectRecent: boolean;
   migratedFromStop: boolean;
   migratedLegacySessionEnd: boolean;
   migratedSplitSessionEnd: boolean;
@@ -105,6 +106,7 @@ const HIPPO_LAST_SLEEP_MARKER = 'hippo last-sleep';
 const HIPPO_CAPTURE_MARKER = 'hippo capture --last-session';
 const HIPPO_SESSION_END_MARKER = 'hippo session-end';
 const HIPPO_PINNED_INJECT_MARKER = 'hippo context --pinned-only';
+const HIPPO_PINNED_INJECT_COMMAND = 'hippo context --pinned-only --include-recent 5 --format additional-context';
 const HIPPO_CODEX_WRAPPER_MARKER = 'hippo codex wrapper';
 
 function homeDir(): string {
@@ -519,6 +521,34 @@ function hookArrayContains(hookArray: unknown, marker: string): boolean {
   return JSON.stringify(hookArray).includes(marker);
 }
 
+function addIncludeRecentToPinnedCommand(command: string): string {
+  if (!command.includes(HIPPO_PINNED_INJECT_MARKER) || command.includes('--include-recent')) return command;
+  return command.includes(' --format ')
+    ? command.replace(' --format ', ' --include-recent 5 --format ')
+    : `${command} --include-recent 5`;
+}
+
+function migratePinnedInjectRecentCommands(hookArray: unknown): boolean {
+  if (!Array.isArray(hookArray)) return false;
+  let changed = false;
+  for (const entry of hookArray) {
+    if (!entry || typeof entry !== 'object') continue;
+    const hooks = (entry as { hooks?: unknown }).hooks;
+    if (!Array.isArray(hooks)) continue;
+    for (const hook of hooks) {
+      if (!hook || typeof hook !== 'object') continue;
+      const rec = hook as { command?: unknown };
+      if (typeof rec.command !== 'string') continue;
+      const next = addIncludeRecentToPinnedCommand(rec.command);
+      if (next !== rec.command) {
+        rec.command = next;
+        changed = true;
+      }
+    }
+  }
+  return changed;
+}
+
 function hasCurrentSessionEnd(hookArray: unknown): boolean {
   return hookArrayContains(hookArray, HIPPO_SESSION_END_MARKER);
 }
@@ -552,6 +582,7 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
         installedSessionEnd: false,
         installedSessionStart: false,
         installedUserPromptSubmit: false,
+        migratedPinnedInjectRecent: false,
         migratedFromStop: false,
         migratedLegacySessionEnd: false,
         migratedSplitSessionEnd: false,
@@ -621,16 +652,18 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
 
   // Mid-session pinned-rule re-injection: UserPromptSubmit runs every turn,
   // so pinned memories stay in context even after the model would otherwise
-  // "forget" them in a long session. `hippo context --pinned-only` prints
-  // nothing when no pinned memories exist, so this is zero-tax when unused.
+  // "forget" them in a long session. Include the fresh write tail so lessons
+  // saved earlier in the same session become visible on the next prompt even
+  // before the user pins them explicitly.
   let installedUserPromptSubmit = false;
+  const migratedPinnedInjectRecent = migratePinnedInjectRecentCommands(hooks.UserPromptSubmit);
   if (!hookArrayContains(hooks.UserPromptSubmit, HIPPO_PINNED_INJECT_MARKER)) {
     if (!Array.isArray(hooks.UserPromptSubmit)) hooks.UserPromptSubmit = [];
     hooks.UserPromptSubmit.push({
       hooks: [
         {
           type: 'command',
-          command: 'hippo context --pinned-only --format additional-context',
+          command: HIPPO_PINNED_INJECT_COMMAND,
           timeout: 5,
         },
       ],
@@ -642,6 +675,7 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
     installedSessionEnd ||
     installedSessionStart ||
     installedUserPromptSubmit ||
+    migratedPinnedInjectRecent ||
     migratedFromStop ||
     migratedLegacySessionEnd ||
     migratedSplitSessionEnd
@@ -655,6 +689,7 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
     installedSessionEnd,
     installedSessionStart,
     installedUserPromptSubmit,
+    migratedPinnedInjectRecent,
     migratedFromStop,
     migratedLegacySessionEnd,
     migratedSplitSessionEnd,
