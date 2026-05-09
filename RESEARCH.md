@@ -173,7 +173,7 @@ Strongest on knowledge-update (R@5=88.5%) and single-session-assistant (94.6%). 
 
 For context: MemPalace scores 96.6% (raw) using ChromaDB embeddings + spatial indexing. Hippo's 74.0% uses BM25 keyword matching alone. The gap is expected: BM25 misses semantic similarity. Adding embeddings (`hippo embed`) enables hybrid search and should close it.
 
-The benchmark tests retrieval accuracy, which is not hippo's primary thesis. Hippo's thesis is that memory lifecycle management (decay, strengthening, consolidation) produces better *agent behavior over time*, not better *retrieval precision on a fixed corpus*. The sequential learning benchmark (78% trap rate -> 14% over 50 tasks) tests this directly. Both benchmarks are needed: LongMemEval for public comparability, sequential learning for differentiation.
+The benchmark tests retrieval accuracy, which is not hippo's primary thesis. Hippo's thesis is that memory lifecycle management (decay, strengthening, consolidation) produces better *agent behavior over time*, not better *retrieval precision on a fixed corpus*. The sequential learning benchmark tests this directly. (v0.11.0 informal "78% → 14%" magnitude RETRACTED v1.7.9 — see `CHANGELOG.md` v1.7.9 entry. Mechanism remains shipped; no magnitude is currently claimed.) Both benchmarks are needed: LongMemEval for public comparability, sequential learning for differentiation.
 
 The five abilities map to hippo features:
 
