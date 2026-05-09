@@ -1,17 +1,12 @@
 # Changelog
 
-## Unreleased
+## 1.7.6 (2026-05-09)
+
+Calibration release. Two threads: (1) a `--budget` plumbing + calibration sweep that the v1.7.5 eval result called for as candidate #1 (budget reduction). The calibration showed budget reduction does not produce a discriminating workload — late-phase trap rate is 0% across all 5 budgets {200, 400, 600, 800, 1000} × 10 seeds. Per pre-registered escalation, v1.7.7 will sweep `--restrict-late-to last-4` instead. The −10pp goal-stack hypothesis remains untested. (2) Fresh-tail pinned context injection so memories saved mid-session can appear in the next Claude Code `UserPromptSubmit` injection before they are explicitly pinned.
 
 ### Added
 
 - **Fresh-tail pinned context injection.** `hippo context --pinned-only --include-recent <n>` now includes the last N writes regardless of pinning, so memories saved mid-session can appear in the next Claude Code `UserPromptSubmit` injection before they are explicitly pinned. New Claude hook installs use `--include-recent 5`, and existing legacy pinned-only hooks are migrated on `hippo hook install`.
-
-## 1.7.6 (2026-05-09)
-
-Calibration-only release. Adds `--budget` plumbing through the sequential-learning runner + a calibration script, then runs the calibration sweep that the v1.7.5 eval result called for as candidate #1 (budget reduction). The calibration showed budget reduction does not produce a discriminating workload — late-phase trap rate is 0% across all 5 budgets {200, 400, 600, 800, 1000} × 10 seeds. Per pre-registered escalation, v1.7.7 will sweep `--restrict-late-to last-4` instead. The −10pp goal-stack hypothesis remains untested.
-
-### Added
-
 - **`--budget` flag on `run.mjs`.** Plumbed end-to-end through `simulate()` → `adapter.recall(query, budget)`. `hippo.mjs` honors it, `baseline.mjs` and `static.mjs` ignore it cleanly. Default 2000 (backward-compat). Reusable by future eval variants.
 - **`benchmarks/sequential-learning/calibrate.mjs`.** Mechanical budget-sweep with pre-registered B* selection rule (`selectBStar`): largest budget where C2 late mean ∈ [4%, 24%] AND lower-CI > 0. Calibration seeds hash-derived from `1000 + 10000 + i` (distinct from hypothesis seeds 0..19). 11 unit tests.
 - **`docs/evals/2026-05-09-v1.7.6-calibration-result.md`.** Full sweep result + bug-fix note + escalation pre-commit.

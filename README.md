@@ -87,7 +87,8 @@ hippo recall "data pipeline issues" --budget 2000
 
 ### What's new in v1.7.6
 
-- **Calibration release.** Adds `--budget` plumbing through the sequential-learning runner + a calibration script (`calibrate.mjs`) with a mechanical B* selection rule. Used to test "would smaller budget recover headroom for the goal-stack hypothesis?" on the v1.7.5 floor.
+- **Fresh-tail pinned context injection.** `hippo context --pinned-only --include-recent <n>` now includes the last N writes regardless of pinning, so memories saved mid-session can appear in the next Claude Code `UserPromptSubmit` injection before they are explicitly pinned. New Claude hook installs use `--include-recent 5`; legacy pinned-only hooks are migrated on `hippo hook install`.
+- **Calibration sweep on the sequential-learning benchmark.** Adds `--budget` plumbing through the runner + a calibration script (`calibrate.mjs`) with a mechanical B* selection rule. Used to test "would smaller budget recover headroom for the goal-stack hypothesis?" on the v1.7.5 floor.
 - **Calibration verdict: budget reduction does not produce a discriminating workload.** 5 budgets × 10 seeds = 50 single-seed runs all returned 0% late-phase trap rate. Floor effect is structural, not budget-tunable. B\* = NULL. Per pre-registered escalation, v1.7.7 will sweep `--restrict-late-to last-4` instead.
 - **Bug-fix on `calibrate.mjs` starvation guard.** Read a non-existent JSON field; false-positive `starved=true` on every candidate. Did not affect the verdict (lateMean=0% was load-bearing). Fix: drop the broken extraction.
 - **Hypothesis still untested.** The −10pp goal-stack lift claim remains unsupported by a discriminating workload. Mechanism still shipped from v1.7.4. Honest reporting: see `docs/evals/2026-05-09-v1.7.6-calibration-result.md`.
