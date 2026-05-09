@@ -132,7 +132,7 @@ by post-review fixes 2db5017..38339f4). Each item belongs in **A5 v2**
 
 ## v0.39.0 — B3 dlPFC depth follow-ups
 
-From the B3 dlPFC ship (v0.38.0). 3 of 5 items closed in v1.7.4 (2026-05-07); contract+harness for the 4th closed in v1.7.5 (2026-05-07) but the eval was inconclusive. 1 item remains for v1.8.0 (vlPFC) plus a new v1.7.6+ followup for the discriminating workload.
+From the B3 dlPFC ship (v0.38.0). 3 of 5 items closed in v1.7.4 (2026-05-07); contract+harness for the 4th closed in v1.7.5 (2026-05-07) but the eval was inconclusive. v1.7.6 (2026-05-09) tested the budget-reduction workload knob and confirmed it is not discriminating. 1 item remains for v1.8.0 (vlPFC) plus a v1.7.7 followup for the next workload knob.
 
 - [x] **B3 follow-up: sequential-learning adapter contract.** Shipped v1.7.5.
   `pushGoal`/`completeGoal` hooks on `interface.mjs`; `hippo.mjs` implements
@@ -141,14 +141,26 @@ From the B3 dlPFC ship (v0.38.0). 3 of 5 items closed in v1.7.4 (2026-05-07); co
   (`--seed`, `--n-seeds`, `--eval-strict`); `aggregate.mjs` with paired
   permutation CI. The mechanism is now exercisable on the public benchmark.
 
-- [ ] **B3 follow-up: −10pp goal-stack hypothesis test** → **v1.7.6+**. The
-  v1.7.5 eval ran 4 conditions × 20 seeds × eval-strict but stopped per
-  pre-registered sanity gate due to floor effect (both hippo-base and
-  hippo+goal-stack saturate at 0% late-phase trap rate). Hypothesis remains
-  untested on a discriminating workload. Future eval: smaller `--budget`,
-  adversarial trap categories, or restricted late-phase window. See
-  `docs/evals/2026-05-07-v1.7.5-goal-stack-eval-result.md` for the full
-  investigation + design notes.
+- [x] **B3 follow-up: budget-reduction workload knob (v1.7.6 calibration).**
+  Shipped v1.7.6. `--budget` plumbed through `run.mjs` → `adapter.recall(query, budget)`;
+  `calibrate.mjs` with mechanical `selectBStar` rule. Calibration sweep
+  (5 budgets × 10 seeds) confirmed budget reduction does NOT produce a
+  discriminating workload — `phases.late = 0.0` on every run. B* = NULL.
+  Hypothesis still untested. Bug-fix on starvation guard (read non-existent
+  JSON field) shipped alongside. See `docs/evals/2026-05-09-v1.7.6-calibration-result.md`.
+
+- [ ] **B3 follow-up: −10pp goal-stack hypothesis test** → **v1.7.7**. v1.7.6
+  tested the budget-reduction workload knob and confirmed it is not
+  discriminating. Per pre-registered escalation, v1.7.7 will sweep
+  `--restrict-late-to last-4` (narrow the late-phase metric to last 4 trap
+  encounters where the floor effect is sharpest — single-line workload
+  tweak preserving the metric definition shift as the only knob). If v1.7.7
+  also fails, v1.8 explores adversarial trap categories.
+
+- [ ] **Re-enable starvation guard in `calibrate.mjs` with correct schema** → **v1.7.7+**.
+  v1.7.6 dropped the broken `j.conditions[cn].results[]` extraction (run.mjs::buildOutput
+  doesn't serialize per-task results in single-seed JSON). Either expose per-task
+  results from `buildOutput` or rewrite the guard against multi-seed `seeds[].phases`.
 
 - [x] **B3 follow-up: MCP/REST session_id plumbing.** Shipped v1.7.4 as
   `RecallOpts.sessionId` + `RecallOpts.goalTag`. Wired into `api.recall`
