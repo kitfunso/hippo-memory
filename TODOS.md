@@ -149,13 +149,18 @@ From the B3 dlPFC ship (v0.38.0). 3 of 5 items closed in v1.7.4 (2026-05-07); co
   Hypothesis still untested. Bug-fix on starvation guard (read non-existent
   JSON field) shipped alongside. See `docs/evals/2026-05-09-v1.7.6-calibration-result.md`.
 
-- [ ] **B3 follow-up: −10pp goal-stack hypothesis test** → **v1.7.7**. v1.7.6
-  tested the budget-reduction workload knob and confirmed it is not
-  discriminating. Per pre-registered escalation, v1.7.7 will sweep
-  `--restrict-late-to last-4` (narrow the late-phase metric to last 4 trap
-  encounters where the floor effect is sharpest — single-line workload
-  tweak preserving the metric definition shift as the only knob). If v1.7.7
-  also fails, v1.8 explores adversarial trap categories.
+- [ ] **B3 follow-up: −10pp goal-stack hypothesis test** → **v1.8**. v1.7.6
+  tested budget reduction (B\*=NULL); v1.7.7 tested `--restrict-late-to 4`
+  (C2 SANITY_FAIL, late mean 0.00% across 20 seeds, C3 NOT collected per
+  pre-reg). Three workload variants attempted; none discriminating. Per
+  pre-committed escalation in v1.7.7 prereg, v1.8 ships adversarial trap
+  categories with PRE-COMMITTED constraints: ≥3 new categories beyond the
+  existing 10; lessons must use vocabulary with <40% Jaccard overlap vs
+  v1.5 lessons; same N-lattice gate; same C2-before-C3 sanity preflight;
+  categories authored BEFORE running C3. If v1.8 also SANITY_FAIL or
+  NOT_SUPPORTED, treat the −10pp magnitude as falsified pending a
+  fundamentally different benchmark. See
+  `docs/evals/2026-05-09-v1.7.7-goal-stack-eval-result.md`.
 
 - [ ] **Re-enable starvation guard in `calibrate.mjs` with correct schema** → **v1.7.7+**.
   v1.7.6 dropped the broken `j.conditions[cn].results[]` extraction (run.mjs::buildOutput

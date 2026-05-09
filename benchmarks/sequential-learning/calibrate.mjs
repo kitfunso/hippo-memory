@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * v1.7.6 -- Calibration sweep for the discriminating-workload variant.
  *

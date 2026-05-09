@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.7.7 (2026-05-09)
+
+Window-restriction release. Tests the v1.7.6 pre-committed escalation: narrow the late-phase metric from "last 7 of 25 (chronological-third)" to "last 4 of 25" via a new `--restrict-late-to <int>` flag. C2 sanity preflight at the N=4 lattice gate FAILED (mean=0.00% across 20 seeds; 0 of 20 seeds non-zero). C3 (goal-stack ON) was NOT collected — no goal-stack data leak. Per pre-committed escalation, v1.8 retargets to adversarial trap categories. The −10pp goal-stack hypothesis remains untested for the third pre-registered workload variant.
+
+### Added
+
+- **`--restrict-late-to <int>` flag** end-to-end through `run.mjs::parseArgs` → `simulate()` → `hitRateByPhase(results, restrictLateTo)`. When set, late = last N trap encounters; early/mid re-split (Option A: `early = first ceil((n-N)/2)`, `mid = remainder`) so the three slices stay disjoint and exhaustive. Default `null` preserves chronological-third behavior (v1.7.0..v1.7.6 backward-compat). `buildOutput()` records `restrict_late_to` in JSON for audit.
+- **`benchmarks/sequential-learning/analyze-v1.7.7.mjs`** with extracted pure `computeVerdict({c2Late, c3Late, delta, ciLow, ciHigh, hookFailures, sanityPass, tiePass})` (post-review P1-2 tie-degeneracy guard) + `exactPairedPermutationCI` helper (post-review P1-3 sensitivity check at near-threshold). Both exported, both unit-tested.
+- **`docs/evals/2026-05-09-v1.7.7-goal-stack-eval-{prereg,claim-inventory,result}.md`** — full pre-registration audit trail with three verdict templates (SUPPORTED, NOT_SUPPORTED with cumulative-evidence + cliff-humility + hard-stop retraction, SANITY_FAIL), N=4 lattice-aware sanity gate (`mean ∈ [0.05, 0.50]` AND `≥3 distinct seeds non-zero`), and pre-committed v1.8 escalation constraints.
+- **17 new tests** (11 slice-math + 6 verdict). 1476 total passing, 0 regressions.
+
+### Eval
+
+- **v1.7.7 C2 sanity preflight — FAILED at N=4 lattice gate.** 20 seeds at `--restrict-late-to 4 --budget 2000`. C2 hippo-base late mean = 0.00%, with 0 of 20 seeds non-zero. Adapter NOT starved (early=77.28%, mid=4.50% — active recall in earlier phases). The 50-task workload's last 4 trap encounters saturate at 0 trap-hits across every seed regardless of window size. **C3 (goal-stack ON) was NOT collected** — no goal-stack data was produced under SANITY_FAIL. Per pre-committed escalation: v1.8 ships adversarial trap categories with constraints named in the v1.7.7 prereg (≥3 new categories, <40% Jaccard overlap with v1.7.5 lessons, same lattice gate, categories authored BEFORE C3). Result: `docs/evals/2026-05-09-v1.7.7-goal-stack-eval-result.md`.
+
+### Cumulative evidence (informational, magnitude not yet auto-retracted)
+
+Three pre-registered workload variants tested for the −10pp goal-stack hypothesis: v1.7.5 (full-late, SANITY_FAIL after running all 4 conditions), v1.7.6 (5 budgets × 10 seeds, B\*=NULL), v1.7.7 (`--restrict-late-to 4`, C2 SANITY_FAIL). The mechanism (v1.7.4 dlPFC goal-stack boost) remains shipped without a magnitude attached. The hard-stop retraction clause fires on NOT_SUPPORTED, not SANITY_FAIL — v1.7.7 was SANITY_FAIL. If v1.8 also fails, the magnitude claim should be treated as falsified pending a fundamentally different benchmark.
+
+### Fixed
+
+- **`run.mjs` and `calibrate.mjs` are now import-safe.** Both files had a leading `#!/usr/bin/env node` shebang that vitest 1.6.1's `node:vm.Script` transformer cannot parse, throwing SyntaxError on test import. Latent in v1.7.6. Stripped the shebangs; both files are always invoked as `node <file>.mjs` in the repo (never as `./<file>.mjs`). `run.mjs` also wraps its `main().catch(...)` in an `invokedAsScript` guard so tests can import `hitRateByPhase` and `parseRestrictLateTo` without spawning the benchmark.
+
+### Deferred to future release
+
+- **v1.8.0: adversarial trap categories** with pre-committed constraints (≥3 new categories, <40% Jaccard overlap with existing lessons, same N-lattice gate, same C2-before-C3 preflight, categories authored BEFORE C3). Last pre-registered escalation for the −10pp magnitude. If SANITY_FAIL or NOT_SUPPORTED, treat the magnitude as falsified.
+- **v1.7.8+: re-enable starvation guard in `calibrate.mjs`** with corrected schema (run.mjs::buildOutput doesn't serialize per-task results in single-seed JSON). Either expose per-task results from buildOutput, or rewrite the guard against multi-seed `seeds[].phases`.
+
 ## 1.7.6 (2026-05-09)
 
 Calibration release. Two threads: (1) a `--budget` plumbing + calibration sweep that the v1.7.5 eval result called for as candidate #1 (budget reduction). The calibration showed budget reduction does not produce a discriminating workload — late-phase trap rate is 0% across all 5 budgets {200, 400, 600, 800, 1000} × 10 seeds. Per pre-registered escalation, v1.7.7 will sweep `--restrict-late-to last-4` instead. The −10pp goal-stack hypothesis remains untested. (2) Fresh-tail pinned context injection so memories saved mid-session can appear in the next Claude Code `UserPromptSubmit` injection before they are explicitly pinned.
