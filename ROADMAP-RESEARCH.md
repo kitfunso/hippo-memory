@@ -155,6 +155,8 @@ Six MVPs shipped on this branch. The depth phase replaces toy heuristics with me
 **MVP:** commit `9af9962`. **Depth:** persistent `goal_stack` + `retrieval_policy` tables; multi-goal interference handling; cap concurrent stack depth at 3; `hippo goal push/complete` CLI; goal-completion outcome scoring.
 **Effort:** 12d. **Success:** sequential-learning trap-rate −10pp; fire-rate lift p<0.05 on goal-tagged subset.
 
+> **Status update 2026-05-09 (v1.7.8 audit honesty fix):** the −10pp magnitude has been tested across three pre-registered workload variants without discrimination — v1.7.5 SANITY_FAIL on full-late (last 7), v1.7.6 B*=NULL across 5 budgets × 10 seeds, v1.7.7 SANITY_FAIL on `--restrict-late-to 4` (last 4 of 25). Mechanism shipped from v1.7.4 (commit `9af9962` MVP + v1.7.4 depth). v1.8 is the last pre-registered escalation: adversarial trap categories with PRE-COMMITTED constraints (≥3 new categories, <40% Jaccard overlap with v1.7.5 lessons, same N-lattice gate, categories authored BEFORE C3). If v1.8 also fails, treat the −10pp magnitude as falsified pending a fundamentally different benchmark. See `docs/evals/2026-05-09-v1.7.7-goal-stack-eval-result.md`.
+
 ### B4. vlPFC interference filter [shipped MVP, depth next]
 **MVP:** commit `0f1d19e`. **Depth:** `interference_suppression` table with `expires_at`-based suppression decay; `--show-suppressed` override; goal-aware suppression reasons (conflict-with-goal | outdated-schema | error-tagged | context-switch).
 **Effort:** 7d. **Success:** conflict-resolution pass-rate >85% on synthetic test set.
