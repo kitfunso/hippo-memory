@@ -104,7 +104,7 @@ hippo recall "data pipeline issues" --budget 2000
 ### What's new in v1.7.7
 
 - **`--restrict-late-to <int>` flag** on the sequential-learning runner. Narrows the late-phase metric to the last N trap encounters; early/mid re-split (Option A) so the three slices stay disjoint. Default null preserves chronological-third behavior.
-- **C2 sanity preflight at N=4 lattice — FAILED.** 20 seeds at `--restrict-late-to 4`. Late mean = 0.00% across all seeds; floor effect persists at last-4 just as it did at last-7. **C3 (goal-stack ON) was NOT collected** — no goal-stack data leak under SANITY_FAIL. Adapter not starved (early=77%, mid=5%); the workload is structurally easy in late phase regardless of window size.
+- **C2 sanity preflight at N=4 lattice — FAILED.** 20 seeds at `--restrict-late-to 4`. Late mean = 0.00% across all seeds; floor effect persists at last-4 just as it did at last-7. **C3 (goal-stack ON) was NOT collected** — no goal-stack data leak under SANITY_FAIL. Adapter not starved (early=77.3%, mid=4.5%); the workload is structurally easy in late phase regardless of window size.
 - **Cumulative evidence:** three pre-registered workload variants tested (v1.7.5 full-late, v1.7.6 budget sweep, v1.7.7 window restriction); none discriminating. The −10pp goal-stack lift claim remains untested. Hard-stop retraction fires on NOT_SUPPORTED, not SANITY_FAIL — magnitude is not auto-retracted yet. v1.8 (adversarial trap categories) is the last pre-registered escalation.
 - **`run.mjs` + `calibrate.mjs` now import-safe.** Stripped leading shebangs that broke vitest's importer; `run.mjs` wraps `main()` in an `invokedAsScript` guard. Latent fix from v1.7.6.
 - **17 new tests** (11 slice-math + 6 verdict). 1476 total passing.
