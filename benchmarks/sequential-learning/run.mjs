@@ -2,7 +2,9 @@
  * Sequential Learning Benchmark Runner
  *
  * Tests whether a memory system helps an AI agent learn from mistakes
- * over a sequence of 50 tasks containing 10 trap categories.
+ * over a sequence of N_TASKS tasks containing TRAP_CATEGORIES.length trap
+ * categories. v1.7.x: 50 tasks, 10 categories. v1.8.0: 62 tasks, 13
+ * categories (10 v1.7.x + 3 adversarial).
  *
  * Usage:
  *   node run.mjs                           # Run all adapters
@@ -18,7 +20,7 @@
 import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { generateTasks, getTrapCategory } from './traps.mjs';
+import { generateTasks, getTrapCategory, TRAP_CATEGORIES, N_TASKS } from './traps.mjs';
 import { aggregatePhases } from './aggregate.mjs';
 import baselineAdapter from './adapters/baseline.mjs';
 import staticAdapter from './adapters/static.mjs';
@@ -404,8 +406,8 @@ function fmt(rate) {
  */
 function printTable(conditions) {
   const entries = Object.entries(conditions);
-  const trapCount = 10;
-  const taskCount = 50;
+  const trapCount = TRAP_CATEGORIES.length;
+  const taskCount = N_TASKS;
 
   // Count total trap encounters from the task sequence
   const tasks = generateTasks();
@@ -490,8 +492,8 @@ function buildOutput(conditionResults, opts = {}) {
     version: '1.7.7',  // v1.7.7 -- bump for audit
     timestamp: new Date().toISOString(),
     conditions,
-    tasks: 50,
-    traps: 10,
+    tasks: N_TASKS,
+    traps: TRAP_CATEGORIES.length,
     trap_encounters: trapEncounters,
     // v1.7.7 -- audit field. null preserves chronological-third behavior.
     restrict_late_to: opts.restrictLateTo ?? null,

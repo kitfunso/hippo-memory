@@ -162,22 +162,31 @@ From the B3 dlPFC ship (v0.38.0). 3 of 5 items closed in v1.7.4 (2026-05-07); co
   `docs/evals/2026-05-09-v1.7.9-retraction-inventory.md`,
   and `docs/RETRACTION.md`.
 
-- [ ] **B3 follow-up: adversarial trap categories** → **v1.8.0**.
-  **Mechanism characterisation only — NO magnitude claim, NO
-  pre-registered ≥Xpp threshold, NO pass/fail decision rule on a
-  magnitude.** Goal: characterise mechanism behaviour on adversarial
-  categories; report only on/off comparison and per-seed rates.
-  Workload-validity constraints inherited from the v1.7.7 prereg's
-  pre-committed escalation (≥3 new categories beyond the existing 10;
-  lessons must use vocabulary with <40% Jaccard overlap vs v1.5
-  lessons; C2-before-C3 sanity preflight; categories authored BEFORE
-  running C3). The N-lattice gate (`mean ∈ [0.05, 0.50]` AND ≥3
-  distinct seeds non-zero) inherited from v1.7.7 IS used as a
-  **discrimination check on workload validity**, NOT as a magnitude
-  claim about the mechanism. Any v1.8 result-doc framing must satisfy
-  the `docs/RETRACTION.md` magnitude-smuggling guard. See
-  `docs/evals/2026-05-09-v1.7.7-goal-stack-eval-result.md`
-  for the constraint set.
+- [x] **B3 follow-up: adversarial trap categories — v1.8.0 SHIPPED.**
+  Workload-validity verdict: PASS (C2 lateMean=0.25, 20/20 seeds non-zero).
+  Mechanism characterisation (sign-only): C3 = C2 on all 20 seeds
+  (0/0/20 STRICTLY_LOWER/STRICTLY_HIGHER/TIED). Hook failures: 0/0.
+  The goal-stack mechanism does not detectably change per-seed late-4
+  lattice rate on this workload. **This release does not re-assert
+  the retracted −10pp magnitude.** Per `docs/RETRACTION.md`, mechanism
+  remains shipped; no magnitude is currently claimed. See
+  `CHANGELOG.md` v1.8.0 entry and
+  `docs/evals/2026-05-09-v1.8.0-adversarial-eval-result.md`.
+
+- [ ] **B3 follow-up: LongMemEval R@5 cross-validation** → **v1.9.0**.
+  Pre-committed in v1.8.0 prereg's "Pre-committed v1.9 direction"
+  subsection BEFORE v1.8 ran (so the direction cannot be retroactively
+  justified by v1.8 outcome). Goal: cross-validate the dlPFC
+  goal-stack mechanism on a fundamentally different benchmark.
+  Different metric (R@5, not trap-rate), different corpus
+  (500-question public LongMemEval, not internal sequential learning),
+  different mechanism stress (retrieval-on-fixed-corpus vs
+  agent-improvement-over-time). RETRACTION.md compliance: any v1.9
+  result-doc framing must satisfy the magnitude-smuggling guard
+  (no Δ pp / no median pp / no ≥Xpp thresholds; sign-only direction
+  count if comparison reported). See
+  `docs/evals/2026-05-09-v1.8.0-adversarial-eval-prereg.md`
+  for the v1.9 pre-commitment.
 
 - [ ] **Re-enable starvation guard in `calibrate.mjs` with correct schema** → **v1.7.7+**.
   v1.7.6 dropped the broken `j.conditions[cn].results[]` extraction (run.mjs::buildOutput

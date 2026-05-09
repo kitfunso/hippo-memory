@@ -1,9 +1,16 @@
 /**
  * Trap definitions and task generator for the Sequential Learning Benchmark.
  *
- * 10 trap categories, each appearing 2-3 times across a 50-task sequence.
+ * v1.7.x: 10 trap categories, 25 trap encounters across a 50-task sequence.
+ * v1.8.0: 13 trap categories (10 v1.7.x + 3 adversarial), 31 trap encounters
+ *         across a 62-task sequence. Adversarial categories use fixed
+ *         positions (no shape-group shuffle) — see TRAP_PLACEMENTS' optional
+ *         `adversarial: true` flag and buildSeededTrapMap below.
+ *
  * Extracted from hippo's internal agent-eval test suite.
  */
+
+export const N_TASKS = 62; // v1.8: 50 v1.7.x slots + 12 new (6 adversarial trap + 6 clean)
 
 // ---------------------------------------------------------------------------
 // Trap categories
@@ -70,6 +77,28 @@ export const TRAP_CATEGORIES = [
     tags: ['verification', 'metrics', 'agent-output'],
     recallQueries: ['model upgrade metrics improved', 'verifying model performance claims'],
   },
+  // ---------------------------------------------------------------------------
+  // v1.8.0 adversarial categories (lesson vocabulary <0.30 Jaccard vs v1.7.x).
+  // Fixed positions, no shape-group shuffle. See TRAP_PLACEMENTS adversarial flag.
+  // ---------------------------------------------------------------------------
+  {
+    id: 'timezone_naive',
+    lesson: 'Persist instants in UTC. Wall-clock arithmetic across daylight-saving boundaries shifts events one hour; convert to local zone at presentation, never at storage.',
+    tags: ['timezone', 'utc', 'daylight-saving', 'instants'],
+    recallQueries: ['storing event times across regions', 'rendering schedules in user local zone'],
+  },
+  {
+    id: 'idempotency_retry',
+    lesson: 'Receivers must dedupe by request key. Network retries duplicate effects when the receiver lacks an idempotency token; pure best-effort APIs are not delivery guarantees.',
+    tags: ['idempotency', 'retry', 'distributed', 'request-id'],
+    recallQueries: ['handling network retries on payment processing', 'distributed task scheduler delivery'],
+  },
+  {
+    id: 'float_accumulation',
+    lesson: 'Loop-summed floats diverge from the analytic answer at high counts; Kahan summation or fixed-point integers preserve precision for monetary or scientific aggregates.',
+    tags: ['floating-point', 'kahan', 'accumulation', 'precision'],
+    recallQueries: ['summing transaction amounts in batch', 'aggregating sensor readings per second'],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -87,6 +116,11 @@ export const TRAP_PLACEMENTS = [
   { category: 'exit_code_trust',      positions: [16, 26] },
   { category: 'data_mining',          positions: [18, 40] },
   { category: 'unverified_metrics',   positions: [20, 50] },
+  // v1.8.0 adversarial: fixed positions (no shape-group shuffle), uniform across early/mid/late.
+  // Last 4 trap encounters by chronology = [48, 50, 51, 59] = 2 existing + 2 adversarial (mixed, NOT pure-adversarial).
+  { category: 'timezone_naive',       positions: [11, 41], adversarial: true },
+  { category: 'idempotency_retry',    positions: [21, 51], adversarial: true },
+  { category: 'float_accumulation',   positions: [33, 59], adversarial: true },
 ];
 
 // ---------------------------------------------------------------------------
@@ -114,6 +148,13 @@ const CLEAN_DESCRIPTIONS = [
   'Refactor error codes to enum',
   'Add pagination to list endpoint',
   'Update monitoring alerts threshold',
+  // v1.8.0: 6 new clean descriptions for the expanded 62-task workload.
+  'Add caching layer to user profile lookups',
+  'Update OpenAPI schema for new query params',
+  'Refactor session middleware to use middleware chain',
+  'Add background job for nightly aggregate export',
+  'Document the cron schedule for batch jobs',
+  'Add fixture data generator for integration tests',
 ];
 
 // ---------------------------------------------------------------------------
@@ -181,9 +222,22 @@ function deriveSubSeed(baseSeed, groupSalt) {
  * @returns {Map<number, string>} position -> categoryId
  */
 function buildSeededTrapMap(seed) {
-  // Group categories by their canonical phase shape (e.g. "early,mid,late").
-  const shapeGroups = new Map(); // shape -> [{category, positions}]
+  const trapMap = new Map();
+
+  // v1.8.0: adversarial categories use fixed positions (no shape-group shuffle).
+  // Place them first so existing-10 shape-group shuffling is unchanged from v1.7.x.
+  const nonAdversarialPlacements = [];
   for (const tp of TRAP_PLACEMENTS) {
+    if (tp.adversarial) {
+      for (const pos of tp.positions) trapMap.set(pos, tp.category);
+    } else {
+      nonAdversarialPlacements.push(tp);
+    }
+  }
+
+  // Group non-adversarial categories by their canonical phase shape (e.g. "early,mid,late").
+  const shapeGroups = new Map(); // shape -> [{category, positions}]
+  for (const tp of nonAdversarialPlacements) {
     const shape = tp.positions.map(phaseOf).sort().join(',');
     if (!shapeGroups.has(shape)) shapeGroups.set(shape, []);
     shapeGroups.get(shape).push(tp);
@@ -193,7 +247,6 @@ function buildSeededTrapMap(seed) {
   // shape key for determinism (Map insertion order is non-deterministic
   // across spec versions; explicit sort future-proofs the seeded output).
   const sortedShapes = [...shapeGroups.keys()].sort();
-  const trapMap = new Map();
 
   sortedShapes.forEach((shape, idx) => {
     const group = shapeGroups.get(shape);
@@ -219,18 +272,21 @@ function buildSeededTrapMap(seed) {
 // ---------------------------------------------------------------------------
 
 /**
- * Generate the 50-task sequence.
+ * Generate the N_TASKS-task sequence.
  *
- * - `generateTasks()` (no seed) -- canonical fixed-position output, identical
- *   to pre-v1.7.5 behaviour. Used for any non-seeded callers (legacy tests,
- *   single-run smoke).
+ * - `generateTasks()` (no seed) -- canonical fixed-position output. Used for
+ *   any non-seeded callers (legacy tests, single-run smoke).
  * - `generateTasks(seed)` -- seeded category-to-slot assignment within each
- *   phase-shape group. Slot positions stay fixed (so the early/mid/late
- *   distribution is unchanged), but which category lands at each trap-slot
- *   is shuffled deterministically. Same seed -> same output.
+ *   non-adversarial phase-shape group. Adversarial categories (v1.8.0+) keep
+ *   fixed positions regardless of seed. Slot positions stay fixed (so the
+ *   early/mid/late distribution is unchanged), but which existing-10 category
+ *   lands at each non-adversarial trap-slot is shuffled deterministically.
+ *   Same seed -> same output.
  *
- * Preserves: total trap-encounter count (25), per-category encounter count
- * (matches TRAP_PLACEMENTS), and each category's native phase pattern.
+ * Preserves: total trap-encounter count (31 for v1.8; was 25 for v1.7.x),
+ * per-category encounter count (matches TRAP_PLACEMENTS), each category's
+ * native phase pattern. v1.7.x existing-10 PRNG-stability holds because
+ * adversarial categories don't enter the shape-group shuffle.
  *
  * @param {number} [seed] optional integer seed
  * @returns {Array<{id: number, description: string, trapCategory: string|null, recallQuery: string}>}
@@ -251,7 +307,7 @@ export function generateTasks(seed) {
   const tasks = [];
   let cleanIdx = 0;
 
-  for (let pos = 1; pos <= 50; pos++) {
+  for (let pos = 1; pos <= N_TASKS; pos++) {
     const trapCatId = trapMap.get(pos);
 
     if (trapCatId) {

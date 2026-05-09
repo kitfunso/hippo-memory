@@ -85,6 +85,13 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.8.0
+
+- **Adversarial-categories release** for the sequential-learning benchmark. 10 → 13 categories (3 new: `timezone_naive`, `idempotency_retry`, `float_accumulation`). Lesson vocabulary verified <0.30 Jaccard overlap vs existing 10 (`tools/jaccard-overlap.mjs`; max=0.033). Workload 50 → 62 tasks; late-phase metric (`--restrict-late-to 4`) preserved.
+- **Workload-validity verdict: PASS.** C2 hippo-base lateMean = 0.25 (lattice rate), 20 of 20 seeds non-zero — first non-saturated workload across v1.7.5/6/7/8. Framed as workload-validity / non-saturation check per `docs/RETRACTION.md`, NOT a magnitude criterion.
+- **Mechanism characterisation: C3 = C2 on all 20 seeds.** Sign-only seed-pair direction count (vs C2): 0 STRICTLY_LOWER / 0 STRICTLY_HIGHER / 20 TIED. The goal-stack mechanism does not detectably change per-seed late-4 lattice rate on this workload. Hook failures: 0/0. **This release does not re-assert the retracted −10pp magnitude.** Per `docs/RETRACTION.md`, mechanism remains shipped; no magnitude is currently claimed.
+- **Pre-committed v1.9 direction:** LongMemEval R@5 cross-validation. Named BEFORE v1.8 ran; the v1.8 PASS verdict does not change the pre-commitment.
+
 ### What's new in v1.7.9
 
 - **−10pp goal-stack lift magnitude RETRACTED.** Three pre-registered workload variants (v1.7.5 full-late SANITY_FAIL, v1.7.6 budget sweep B*=NULL, v1.7.7 `--restrict-late-to 4` SANITY_FAIL) all returned C2 hippo-base late mean = 0.0% across every seed. The 78% → 14% headline does not reproduce on the formal harness. Mechanism (dlPFC goal-stack) remains shipped; **no magnitude is currently claimed.**
