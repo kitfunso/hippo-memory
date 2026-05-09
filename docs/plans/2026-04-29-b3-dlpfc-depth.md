@@ -2,6 +2,8 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
+> **2026-05-09 — v1.7.7 SANITY_FAIL on the −10pp magnitude (third pre-registered workload variant).** v1.7.5 ran the eval (saturated, SANITY_FAIL). v1.7.6 swept budgets (B\*=NULL). v1.7.7 narrowed the late metric to last-4 (C2 SANITY_FAIL, C3 not collected). Mechanism (B3 dlPFC goal-stack boost) remains shipped from v1.7.4. The −10pp magnitude remains formally untested on a discriminating workload. v1.8 retargets to adversarial trap categories with pre-committed constraints. See `docs/evals/2026-05-09-v1.7.7-goal-stack-eval-result.md`.
+
 > **Revision log:**
 > - **v2 (post-codex round 1):** mechanism rewrite (drop trap-rate −10pp claim; success becomes a controlled paired test on a new B3 micro-fixture), schema hardening (FKs, CHECKs, tenant+session on `goal_recall_log`, composite index), correctness fixes (insert order, push transaction, multiplier hard cap, lifespan-windowed outcome propagation), API surface (recall integration moves from `src/api.ts` to `src/cli.ts`; tests use `ctx`-form `remember(ctx, opts)` / `recall(ctx, opts)`).
 > - **v3 (post-codex round 2):** test env var fix `HIPPO_HOME` (not `HIPPO_ROOT`, src/shared.ts:27); CLI flag fix `--filter dlpfc-depth` (not `--fixture`); success metric simplified to "all 3 fixture queries pass under existing `run.py` semantics" (drop Wilcoxon `paired_ab.py` which doesn't exist; statistical version moves to v0.39 stretch); fixture keys corrected to `must_contain_any` / `must_not_contain_any` (drop `_top_3` suffix); accept `goal_stack.retrieval_policy_id` as denormalized non-FK pointer (reverse FK on retrieval_policy.goal_id already cascades).
