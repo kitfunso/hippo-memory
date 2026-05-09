@@ -23,19 +23,28 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createAdapter } from './interface.mjs';
 
-// v1.7.5 -- session id stays stable across the task lifespan. Set via env on
-// every hippo exec so goal push/complete and recall share state.
-let _sessionId = null;
-let _pushedCount = 0;
-let _completedCount = 0;
+// POST-AUDIT P1-4 (v1.7.8): session id and counters were module-level `let`
+// in v1.7.5..v1.7.7 — two parallel adapter consumers (e.g. future --workers N)
+// would clobber each other's HIPPO_SESSION_ID and corrupt counts. Counters
+// also never reset between init() calls; a second simulate() invocation in
+// the same process inherited the prior run's totals.
+//
+// Hoisted to instance fields on the returned adapter object; reset in init().
+// `hippoExec` now takes `sessionId` as an explicit arg so the env wiring is
+// per-call instead of reading module-level state.
 
 /**
  * Run a hippo CLI command in the temp store directory.
  * HOME/USERPROFILE/HIPPO_HOME are overridden to isolate from the user's
  * global store, and XDG_DATA_HOME is blanked so it cannot win the
- * getGlobalRoot precedence race. Returns stdout as a string, or null on failure.
+ * getGlobalRoot precedence race.
+ *
+ * @param {string} storeDir
+ * @param {string} args
+ * @param {string|null} [sessionId=null] - Optional HIPPO_SESSION_ID for this exec.
+ * @returns {string|null} stdout, or null on failure.
  */
-function hippoExec(storeDir, args) {
+function hippoExec(storeDir, args, sessionId = null) {
   try {
     const result = execSync(`hippo ${args}`, {
       cwd: storeDir,
@@ -48,7 +57,7 @@ function hippoExec(storeDir, args) {
         HOME: storeDir,
         USERPROFILE: storeDir,
         XDG_DATA_HOME: '',
-        ...(_sessionId ? { HIPPO_SESSION_ID: _sessionId } : {}),
+        ...(sessionId ? { HIPPO_SESSION_ID: sessionId } : {}),
       },
       encoding: 'utf-8',
       timeout: 15_000,
@@ -67,21 +76,32 @@ export default createAdapter({
 
   /** @type {string|null} */
   _storeDir: null,
+  /** @type {string|null} v1.7.8 -- per-instance, replaces module-level state. */
+  _sessionId: null,
+  /** @type {number} v1.7.8 -- per-instance counter. Reset in init(). */
+  _pushedCount: 0,
+  /** @type {number} v1.7.8 -- per-instance counter. Reset in init(). */
+  _completedCount: 0,
 
   async init() {
     this._storeDir = mkdtempSync(join(tmpdir(), 'hippo-bench-'));
+    // v1.7.8 -- reset per-instance state on each init so a second simulate()
+    // invocation in the same process gets a clean slate.
+    this._sessionId = null;
+    this._pushedCount = 0;
+    this._completedCount = 0;
     hippoExec(this._storeDir, 'init --no-schedule');
   },
 
   async store(content, tags) {
     const escaped = content.replace(/"/g, '\\"');
     const tagArgs = tags.map((t) => `--tag ${t}`).join(' ');
-    hippoExec(this._storeDir, `remember "${escaped}" ${tagArgs}`);
+    hippoExec(this._storeDir, `remember "${escaped}" ${tagArgs}`, this._sessionId);
   },
 
   async recall(query, budget = 2000) {
     const escaped = query.replace(/"/g, '\\"');
-    const raw = hippoExec(this._storeDir, `recall "${escaped}" --json --budget ${budget}`);
+    const raw = hippoExec(this._storeDir, `recall "${escaped}" --json --budget ${budget}`, this._sessionId);
 
     if (!raw) return [];
 
@@ -108,38 +128,38 @@ export default createAdapter({
   },
 
   async outcome(good) {
-    hippoExec(this._storeDir, `outcome ${good ? '--good' : '--bad'}`);
+    hippoExec(this._storeDir, `outcome ${good ? '--good' : '--bad'}`, this._sessionId);
   },
 
-  // v1.7.5 -- B3 goal-stack hooks.
+  // v1.7.5 -- B3 goal-stack hooks. v1.7.8 -- per-instance state.
   async pushGoal(name) {
-    _sessionId = `bench-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-    const out = hippoExec(this._storeDir, `goal push ${name}`);
+    this._sessionId = `bench-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    const out = hippoExec(this._storeDir, `goal push ${name}`, this._sessionId);
     if (!out) {
-      _sessionId = null;
+      this._sessionId = null;
       // v1.7.5 codex P1 -- HARD FAIL. Do not swallow. Eval-strict mode
       // wants the run to abort if the mechanism cannot fire.
       throw new Error(`hippo goal push failed for name='${name}'`);
     }
     const match = out.match(/g_[0-9a-f]{16}/);
     if (!match) {
-      _sessionId = null;
+      this._sessionId = null;
       throw new Error(`hippo goal push output did not contain a goal id: '${out}'`);
     }
-    _pushedCount++;
+    this._pushedCount++;
     return match[0];
   },
 
   async completeGoal(id, good) {
     const outcome = good ? '1.0' : '0.0';
-    hippoExec(this._storeDir, `goal complete ${id} --outcome ${outcome}`);
-    _completedCount++;
-    _sessionId = null;
+    hippoExec(this._storeDir, `goal complete ${id} --outcome ${outcome}`, this._sessionId);
+    this._completedCount++;
+    this._sessionId = null;
   },
 
   async cleanup() {
     // v1.7.5 codex P1 -- always clear cross-task state, even after exceptions.
-    _sessionId = null;
+    this._sessionId = null;
     if (this._storeDir && existsSync(this._storeDir)) {
       rmSync(this._storeDir, { recursive: true, force: true });
     }
@@ -148,6 +168,6 @@ export default createAdapter({
 
   // Expose counters so the runner / tests can assert non-zero in eval mode.
   _stats() {
-    return { pushed: _pushedCount, completed: _completedCount };
+    return { pushed: this._pushedCount, completed: this._completedCount };
   },
 });

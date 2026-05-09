@@ -173,8 +173,19 @@ function main() {
     row('C3 hippo+goalstack', e3),
   ];
 
-  // Sanity gate: C2 late within [0.04, 0.24]
-  const sanityPass = e2.late.length === 20 && rows[2].lateMean >= 0.04 && rows[2].lateMean <= 0.24;
+  // Sanity gate (POST-AUDIT P0-1, v1.7.8): N=4 lattice rule per
+  // docs/evals/2026-05-09-v1.7.7-goal-stack-eval-prereg.md "Stop conditions".
+  // Replaces the inherited [0.04, 0.24] band which was calibrated for the
+  // chronological-third late slice (last 7 of 25), not the N=4 lattice
+  // (lateMean = k/80 ∈ {0, 1.25%, ..., 100%}).
+  //
+  // Pre-registered rule: mean ∈ [0.05, 0.50] AND ≥3 distinct seeds non-zero.
+  const c2SeedsNonZero = e2.late.filter((r) => r > 0).length;
+  const sanityPass =
+    e2.late.length === 20 &&
+    rows[2].lateMean >= 0.05 &&
+    rows[2].lateMean <= 0.50 &&
+    c2SeedsNonZero >= 3;
 
   // Hook-failure gate (handled inside computeVerdict; kept here for the human-readable line)
   const hookFailuresOk =
@@ -217,7 +228,7 @@ function main() {
   // Human-readable decision string for the markdown report.
   const HARMS = ciHigh < 0;
   let decision;
-  if (verdict === 'SANITY_FAIL') decision = 'STOP — sanity gate failed (C2 late outside [4%, 24%])';
+  if (verdict === 'SANITY_FAIL') decision = 'STOP — sanity gate failed (C2 late outside [5%, 50%] OR <3 seeds non-zero on N=4 lattice)';
   else if (verdict === 'HOOK_FAIL') decision = 'STOP — hook failures detected, run contaminated';
   else if (verdict === 'SUPPORTED') decision = 'HYPOTHESIS SUPPORTED';
   else if (!tiePass) decision = 'HYPOTHESIS NOT SUPPORTED — degenerate (>70% paired diffs are zero on N=4 lattice)';
@@ -278,7 +289,7 @@ function main() {
   }
 
   console.log(`Hook failures: C3.push=${e3.hookFailures?.push ?? 'n/a'}, C3.complete=${e3.hookFailures?.complete ?? 'n/a'}.`);
-  console.log(`Sanity gate (C2 late ∈ [4%, 24%]): ${sanityPass ? 'PASS' : 'FAIL'} (measured ${pct(rows[2].lateMean)}).`);
+  console.log(`Sanity gate (N=4 lattice — C2 late ∈ [5%, 50%] AND ≥3 seeds non-zero): ${sanityPass ? 'PASS' : 'FAIL'} (measured mean=${pct(rows[2].lateMean)}, seeds non-zero=${c2SeedsNonZero}/20).`);
   console.log('');
 
   console.log('## Reproducibility anchors\n');
