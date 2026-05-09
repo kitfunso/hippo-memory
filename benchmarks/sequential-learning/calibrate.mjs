@@ -32,8 +32,23 @@ import { mean, ciHalfWidth95 } from './aggregate.mjs';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ---------------------------------------------------------------------------
-// B* selection rule (pre-registered in
-// docs/evals/2026-05-07-v1.7.6-goal-stack-eval-prereg.md).
+// B* selection rule.
+//
+// P2-4 (v1.7.9): provenance for BAND_LOW / BAND_HIGH.
+// Pre-registration anchor: v1.7.6 plan v2 (commit c670ac9, 2026-05-07) +
+// calibrate.mjs (commit 9cd83de, 2026-05-07).
+// Derivation: ±10pp around the v0.11.0 informal headline of 14% late-phase
+// trap-rate. The headline magnitude was RETRACTED v1.7.9 (see CHANGELOG and
+// docs/RETRACTION.md) based on cumulative evidence from v1.7.5/6/7 (every
+// C2 hippo-base late mean returned 0% across every seed across three
+// pre-registered variants). The band itself is preserved here for historical
+// reproducibility of the v1.7.6 calibration sweep. Future calibration should
+// use the v1.7.7 N=4 lattice gate ([0.05, 0.50] AND >=3 distinct seeds
+// non-zero) — see analyze-v1.7.7.mjs for the current sanity-gate shape.
+// NOTE: v1.7.6 did not have a separate prereg file; pre-reg lives in plan v2
+// + calibrate.mjs commits as cited above (the prior reference to
+// docs/evals/2026-05-07-v1.7.6-goal-stack-eval-prereg.md was a stale path
+// surfaced and corrected during the v1.7.8 audit).
 // ---------------------------------------------------------------------------
 
 const BAND_LOW = 0.04;

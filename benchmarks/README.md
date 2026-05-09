@@ -13,15 +13,16 @@ cd sequential-learning
 node run.mjs --adapter all
 ```
 
-**Results (hippo v0.11.0):**
+> **v0.11.0 informal results — RETRACTED v1.7.9.** v0.11.0 reported informal numbers that did not reproduce on the formal sequential-learning harness across three pre-registered workload variants (v1.7.5 full-late SANITY_FAIL, v1.7.6 budget sweep B*=NULL, v1.7.7 `--restrict-late-to 4` SANITY_FAIL). Every C2 hippo-base late mean returned 0% across every seed. **The magnitude is RETRACTED. The mechanism is shipped; no magnitude is currently claimed.** See top-level `CHANGELOG.md` v1.7.9 entry and `docs/RETRACTION.md`.
 
-| Condition | Overall | Early | Mid | Late | Learns? |
-|-----------|---------|-------|-----|------|---------|
-| No memory | 100% | 100% | 100% | 100% | No |
-| Static memory | 20% | 33% | 11% | 14% | No |
-| Hippo | 40% | 78% | 22% | 14% | Yes |
+<details>
+<summary>Original v0.11.0 informal numbers (RETRACTED — preserved as audit trail in git, not reproduced here)</summary>
 
-The hippo agent's trap-hit rate drops from 78% (early) to 14% (late) as it accumulates error memories. The no-memory baseline hits every trap. Static memory helps but doesn't improve over time.
+v0.11.0 reported a single-run informal headline citing late-phase trap-rate decline. The specific numbers are archived at git tag `v0.11.0`. Retained in version control, not reproduced here, since reproduction risks accidental re-citation.
+
+</details>
+
+The benchmark, harness, and adapter contract remain shipped.
 
 **Adding your own memory system:** Implement the adapter interface in `sequential-learning/adapters/interface.mjs` and run:
 
@@ -85,7 +86,7 @@ python run.py --data data/longmemeval_oracle.json
 |---|---|---|
 | Tests | Agent improvement over time | Retrieval accuracy on fixed corpus |
 | Unique to hippo? | Yes (no other benchmark tests this) | No (industry standard) |
-| Hippo result | 78% -> 14% trap rate (learns) | 74.0% R@5 (BM25 only) |
+| Hippo result | RETRACTED v1.7.9 — mechanism shipped, no magnitude claimed (see CHANGELOG v1.7.9) | 74.0% R@5 (BM25 only) |
 | What it proves | Decay + strengthening + outcome feedback produce learning curves | BM25 keyword search competes with embedding systems at zero dependency cost |
 | Metric | Trap-hit-rate decline (early vs late) | Recall@K, answer-in-content |
 | Dependencies | Node.js 22.5+ | Python 3.9+ (retrieval eval needs no API key) |

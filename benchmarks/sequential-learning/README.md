@@ -60,21 +60,23 @@ No npm dependencies. Uses only Node.js built-in modules.
 
 ### Console
 
+> **v0.11.0 informal sample output — RETRACTED v1.7.9.** The 78% / 22% / 14% phase numbers below were illustrative output from the v0.11.0 informal harness. They do NOT reproduce on the formal multi-seed sequential-learning benchmark across three pre-registered workload variants (v1.7.5/6/7). **The magnitude is RETRACTED. The mechanism is shipped; no magnitude is currently claimed.** See top-level `CHANGELOG.md` v1.7.9 entry and `docs/RETRACTION.md`. Sample output preserved below for shape illustration only — do not cite the numbers.
+
 ```
 ══ Sequential Learning Benchmark ═════════════════════════
 50 tasks · 10 trap categories · 25 trap encounters
 ────────────────────────────────────────────────────────────
 Condition      │ Overall │ Early │  Mid  │  Late │ Learns?
 ───────────────┼─────────┼───────┼───────┼───────┼────────
-No memory      │  100%   │ 100%  │ 100%  │ 100%  │   No
-Static memory  │    8%   │  11%  │   0%  │  14%  │   No
-Hippo          │   40%   │  78%  │  22%  │  14%  │  Yes
+(RETRACTED v1.7.9 — see top-level CHANGELOG; the v0.11.0
+ single-run sample numbers below do not reproduce on the
+ formal multi-seed harness; preserved for shape illustration)
 ════════════════════════════════════════════════════════════
 ```
 
 ### JSON
 
-Results are written to `results/latest.json` and `results/benchmark-<timestamp>.json`:
+Results are written to `results/latest.json` and `results/benchmark-<timestamp>.json`. **The values below are illustrative schema only — RETRACTED v1.7.9 (v0.11.0 informal numbers do not reproduce on the formal harness).** For actual recent benchmark output JSONs, see `results/v1.7.7-eval-*`.
 
 ```json
 {
@@ -83,10 +85,10 @@ Results are written to `results/latest.json` and `results/benchmark-<timestamp>.
   "timestamp": "2026-04-07T...",
   "conditions": {
     "hippo": {
-      "overall_trap_hit_rate": 0.40,
-      "phases": { "early": 0.78, "mid": 0.22, "late": 0.14 },
+      "overall_trap_hit_rate": <n>,
+      "phases": { "early": <n>, "mid": <n>, "late": <n> },
       "learns": true,
-      "improvement_pct": 64
+      "improvement_pct": <n>
     }
   },
   "tasks": 50,

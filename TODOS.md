@@ -149,18 +149,35 @@ From the B3 dlPFC ship (v0.38.0). 3 of 5 items closed in v1.7.4 (2026-05-07); co
   Hypothesis still untested. Bug-fix on starvation guard (read non-existent
   JSON field) shipped alongside. See `docs/evals/2026-05-09-v1.7.6-calibration-result.md`.
 
-- [ ] **B3 follow-up: −10pp goal-stack hypothesis test** → **v1.8**. v1.7.6
-  tested budget reduction (B\*=NULL); v1.7.7 tested `--restrict-late-to 4`
-  (C2 SANITY_FAIL, late mean 0.00% across 20 seeds, C3 NOT collected per
-  pre-reg). Three workload variants attempted; none discriminating. Per
-  pre-committed escalation in v1.7.7 prereg, v1.8 ships adversarial trap
-  categories with PRE-COMMITTED constraints: ≥3 new categories beyond the
-  existing 10; lessons must use vocabulary with <40% Jaccard overlap vs
-  v1.5 lessons; same N-lattice gate; same C2-before-C3 sanity preflight;
-  categories authored BEFORE running C3. If v1.8 also SANITY_FAIL or
-  NOT_SUPPORTED, treat the −10pp magnitude as falsified pending a
-  fundamentally different benchmark. See
-  `docs/evals/2026-05-09-v1.7.7-goal-stack-eval-result.md`.
+- [x] **B3 follow-up: −10pp goal-stack lift magnitude RETRACTED v1.7.9.**
+  Cumulative evidence across three pre-registered workload variants:
+  v1.7.5 SANITY_FAIL on full-late (last 7), v1.7.6 B\*=NULL across 5
+  budgets × 10 seeds, v1.7.7 SANITY_FAIL on `--restrict-late-to 4`
+  (last 4 of 25). Every C2 hippo-base late mean returned 0% across every
+  seed. v1.7.9 retracts on cumulative evidence rather than waiting for
+  v1.8 — the v1.7.7 prereg's SANITY_FAIL ≠ NOT_SUPPORTED distinction
+  was wrong. Mechanism (`pushGoal`/`completeGoal`,
+  `--use-goal-stack`, `applyGoalStackBoost`) remains shipped from v1.7.4.
+  See `CHANGELOG.md` v1.7.9 entry,
+  `docs/evals/2026-05-09-v1.7.9-retraction-inventory.md`,
+  and `docs/RETRACTION.md`.
+
+- [ ] **B3 follow-up: adversarial trap categories** → **v1.8.0**.
+  **Mechanism characterisation only — NO magnitude claim, NO
+  pre-registered ≥Xpp threshold, NO pass/fail decision rule on a
+  magnitude.** Goal: characterise mechanism behaviour on adversarial
+  categories; report only on/off comparison and per-seed rates.
+  Workload-validity constraints inherited from the v1.7.7 prereg's
+  pre-committed escalation (≥3 new categories beyond the existing 10;
+  lessons must use vocabulary with <40% Jaccard overlap vs v1.5
+  lessons; C2-before-C3 sanity preflight; categories authored BEFORE
+  running C3). The N-lattice gate (`mean ∈ [0.05, 0.50]` AND ≥3
+  distinct seeds non-zero) inherited from v1.7.7 IS used as a
+  **discrimination check on workload validity**, NOT as a magnitude
+  claim about the mechanism. Any v1.8 result-doc framing must satisfy
+  the `docs/RETRACTION.md` magnitude-smuggling guard. See
+  `docs/evals/2026-05-09-v1.7.7-goal-stack-eval-result.md`
+  for the constraint set.
 
 - [ ] **Re-enable starvation guard in `calibrate.mjs` with correct schema** → **v1.7.7+**.
   v1.7.6 dropped the broken `j.conditions[cn].results[]` extraction (run.mjs::buildOutput

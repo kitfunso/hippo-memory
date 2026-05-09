@@ -2,6 +2,8 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
+> **RETRACTED v1.7.9 — the −10pp goal-stack late-phase trap-rate lift magnitude cited in this plan was retracted publicly in v1.7.9.** Cumulative evidence across three pre-registered workload variants (v1.7.5 SANITY_FAIL, v1.7.6 B*=NULL, v1.7.7 SANITY_FAIL — every C2 hippo-base late mean returned 0% across every seed). The mechanism described here is shipped from v1.7.4; **no magnitude is currently claimed.** This plan is preserved as the original B3 design document; **do not cite the −10pp magnitude from it.** See `CHANGELOG.md` v1.7.9 entry, `docs/RETRACTION.md`, and `docs/evals/2026-05-09-v1.7.9-retraction-inventory.md`.
+
 > **2026-05-09 — v1.7.7 SANITY_FAIL on the −10pp magnitude (third pre-registered workload variant).** v1.7.5 ran the eval (saturated, SANITY_FAIL). v1.7.6 swept budgets (B\*=NULL). v1.7.7 narrowed the late metric to last-4 (C2 SANITY_FAIL, C3 not collected). Mechanism (B3 dlPFC goal-stack boost) remains shipped from v1.7.4. The −10pp magnitude remains formally untested on a discriminating workload. v1.8 retargets to adversarial trap categories with pre-committed constraints. See `docs/evals/2026-05-09-v1.7.7-goal-stack-eval-result.md`.
 
 > **Revision log:**

@@ -36,7 +36,7 @@ It also fixes the portability problem. Your ChatGPT memories don't travel to Cla
 
 Numbers, not adjectives. Every claim links to the benchmark or the test that proves it.
 
-- **78% → 14% trap rate.** [Sequential Learning Benchmark](benchmarks/sequential-learning/). 50 tasks, 10 buried traps. Measures whether agents actually learn from past mistakes, not just retrieve text.
+- **Sequential Learning Benchmark.** [benchmarks/sequential-learning/](benchmarks/sequential-learning/). 50 tasks, 10 buried traps. Measures whether agents learn from past mistakes, not just retrieve text. v0.11.0 informal magnitude RETRACTED v1.7.9; mechanism remains shipped. See "What's new in v1.7.9".
 - **R@5 = 74.0%** on [LongMemEval](benchmarks/longmemeval/). 500-question industry retrieval benchmark, BM25 only, no embeddings.
 - **10 of 10 incident scenarios beat transcript replay** on a staged Slack corpus ([benchmarks/e1.3/](benchmarks/e1.3/)). Recall surfaces the cause faster than scrolling the last N messages.
 - **0 outbound HTTP** on the 1000-event ingestion smoke. Proven by a `globalThis.fetch` spy that throws on call, not a hardcoded zero.
@@ -85,6 +85,13 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.7.9
+
+- **−10pp goal-stack lift magnitude RETRACTED.** Three pre-registered workload variants (v1.7.5 full-late SANITY_FAIL, v1.7.6 budget sweep B*=NULL, v1.7.7 `--restrict-late-to 4` SANITY_FAIL) all returned C2 hippo-base late mean = 0.0% across every seed. The 78% → 14% headline does not reproduce on the formal harness. Mechanism (dlPFC goal-stack) remains shipped; **no magnitude is currently claimed.**
+- **Pre-emptive retraction (deliberate departure from v1.7.7 prereg).** The prereg explicitly distinguished SANITY_FAIL (no retraction) from NOT_SUPPORTED (retraction). v1.7.9 deviates on cumulative-evidence grounds; the deviation is declared, not silent. v1.8 still runs as planned; retraction is independent of v1.8 outcome.
+- **`docs/RETRACTION.md`** pinned this release as a magnitude-smuggling guard for v1.8 and beyond.
+- **3 P2 polish items folded in** from the v1.7.8 audit (README/result.md rounding consistency with raw-data disclosure, `pairedPermutationCI` docstring, `BAND_LOW`/`BAND_HIGH` provenance comment). The 4th (Float64Array micro-opt in `analyze-v1.7.7.mjs`) is **deferred to v1.7.10** to keep this release doc-only and audit-clean.
+
 ### What's new in v1.7.8
 
 - **Audit-fix patch.** Retroactive `/review` on v1.7.5/v1.7.6/v1.7.7 found 9 P0+P1 items (the review chain was partially skipped on those releases). All 9 fixed surgically across 3 atomic commits. No behavior change for end users; integrity fixes for the eval audit trail.
@@ -92,13 +99,17 @@ hippo recall "data pipeline issues" --budget 2000
 - **(P1)** Hippo benchmark adapter instance state hoisted from module-level to per-instance fields (race-condition-free for future parallel benchmarks). `selectBStar` reason string honesty fix. v1.7.7 prereg SUPPORTED template band corrected. ROADMAP-RESEARCH:156 status update on the −10pp claim. Defensive throw in `runOneBudget`. Verdict-precedence and selectBStar defensive tests added.
 - **Tests:** 1480 passing (+4 from v1.7.7), 0 regressions.
 
+> Updated v1.7.9: the −10pp magnitude is RETRACTED. See "What's new in v1.7.9" above and `CHANGELOG.md` v1.7.9 entry.
+
 ### What's new in v1.7.7
 
 - **`--restrict-late-to <int>` flag** on the sequential-learning runner. Narrows the late-phase metric to the last N trap encounters; early/mid re-split (Option A) so the three slices stay disjoint. Default null preserves chronological-third behavior.
-- **C2 sanity preflight at N=4 lattice — FAILED.** 20 seeds at `--restrict-late-to 4`. Late mean = 0.00% across all seeds; floor effect persists at last-4 just as it did at last-7. **C3 (goal-stack ON) was NOT collected** — no goal-stack data leak under SANITY_FAIL. Adapter not starved (early=77%, mid=5%); the workload is structurally easy in late phase regardless of window size.
+- **C2 sanity preflight at N=4 lattice — FAILED.** 20 seeds at `--restrict-late-to 4`. Late mean = 0.00% across all seeds; floor effect persists at last-4 just as it did at last-7. **C3 (goal-stack ON) was NOT collected** — no goal-stack data leak under SANITY_FAIL. Adapter not starved (early=77.3%, mid=4.5%); the workload is structurally easy in late phase regardless of window size.
 - **Cumulative evidence:** three pre-registered workload variants tested (v1.7.5 full-late, v1.7.6 budget sweep, v1.7.7 window restriction); none discriminating. The −10pp goal-stack lift claim remains untested. Hard-stop retraction fires on NOT_SUPPORTED, not SANITY_FAIL — magnitude is not auto-retracted yet. v1.8 (adversarial trap categories) is the last pre-registered escalation.
 - **`run.mjs` + `calibrate.mjs` now import-safe.** Stripped leading shebangs that broke vitest's importer; `run.mjs` wraps `main()` in an `invokedAsScript` guard. Latent fix from v1.7.6.
 - **17 new tests** (11 slice-math + 6 verdict). 1476 total passing.
+
+> Updated v1.7.9: the −10pp magnitude is RETRACTED. See "What's new in v1.7.9" above and `CHANGELOG.md` v1.7.9 entry.
 
 ### What's new in v1.7.6
 
@@ -108,11 +119,15 @@ hippo recall "data pipeline issues" --budget 2000
 - **Bug-fix on `calibrate.mjs` starvation guard.** Read a non-existent JSON field; false-positive `starved=true` on every candidate. Did not affect the verdict (lateMean=0% was load-bearing). Fix: drop the broken extraction.
 - **Hypothesis still untested.** The −10pp goal-stack lift claim remains unsupported by a discriminating workload. Mechanism still shipped from v1.7.4. Honest reporting: see `docs/evals/2026-05-09-v1.7.6-calibration-result.md`.
 
+> Updated v1.7.9: the −10pp magnitude is RETRACTED. See "What's new in v1.7.9" above and `CHANGELOG.md` v1.7.9 entry.
+
 ### What's new in v1.7.5
 
 - **Sequential-learning benchmark gains `pushGoal`/`completeGoal` hooks** + a multi-seed eval harness with seeded category-to-slot variance, exact paired permutation CI, and `--eval-strict` mode. The dlPFC goal-stack mechanism is now exercisable on the public benchmark.
 - **Tag-fix on memory store** so the goal-stack boost can actually match. Pre-fix the boost would have matched zero memories.
 - **Eval ran but stopped per pre-registered sanity gate.** Both hippo-base and hippo+goal-stack hit 0% late-phase trap rate across 20 seeds — floor effect prevents H1/H0 discrimination. The −10pp hypothesis remains untested on a discriminating workload. Mechanism shipped, hypothesis open. Pre-reg + result in `docs/evals/`.
+
+> Updated v1.7.9: the −10pp magnitude is RETRACTED. See "What's new in v1.7.9" above and `CHANGELOG.md` v1.7.9 entry.
 
 ### What's new in v1.7.4
 
@@ -994,15 +1009,16 @@ No other public benchmark tests whether memory systems produce learning curves. 
 
 50 tasks, 10 trap categories, each appearing 2-3 times across the sequence.
 
-**Hippo v0.11.0 results:**
+> **v0.11.0 informal results — RETRACTED v1.7.9.** The 78% → 14% magnitude does NOT reproduce on the formal sequential-learning benchmark. Three pre-registered workload variants (v1.7.5 full-late, v1.7.6 budget sweep, v1.7.7 `--restrict-late-to 4`) all returned C2 hippo-base late mean = 0.0% across every seed (the workload's late phase saturates structurally). The mechanism (dlPFC goal-stack: `pushGoal`/`completeGoal` hooks, `--use-goal-stack`) is shipped and exercisable. **The magnitude is RETRACTED. The mechanism is shipped; no magnitude is currently claimed.** v1.8.0 (queued) explores adversarial trap categories as mechanism characterisation under the magnitude-smuggling guard in `docs/RETRACTION.md`. Pre-registration trail: `docs/evals/2026-05-07-v1.7.5-goal-stack-eval-prereg.md`, `docs/evals/2026-05-09-v1.7.6-calibration-result.md`, `docs/evals/2026-05-09-v1.7.7-goal-stack-eval-result.md`. CHANGELOG: see v1.7.9 entry.
 
-| Condition | Overall | Early | Mid | Late | Learns? |
-|-----------|---------|-------|-----|------|---------|
-| No memory | 100% | 100% | 100% | 100% | No |
-| Static memory | 20% | 33% | 11% | 14% | No |
-| Hippo | 40% | 78% | 22% | 14% | Yes |
+<details>
+<summary>Original v0.11.0 informal numbers (RETRACTED — preserved as audit trail in git, not reproduced here)</summary>
 
-The hippo agent's trap-hit rate drops from 78% to 14% as it accumulates error memories with 2x half-life. Static pre-loaded memory helps from the start but doesn't improve. Any memory system can run this benchmark by implementing the [adapter interface](benchmarks/sequential-learning/adapters/interface.mjs).
+v0.11.0 reported a single-run informal headline citing late-phase trap-rate decline on the sequential-learning benchmark. The specific numbers are archived at git tag `v0.11.0` and the corresponding `CHANGELOG.md` historical entry. Retained in version control, not reproduced here, since reproduction risks accidental re-citation. See `git show v0.11.0 -- README.md` for the original wording.
+
+</details>
+
+The benchmark, harness, and adapter contract remain shipped. Any memory system can run this benchmark by implementing the [adapter interface](benchmarks/sequential-learning/adapters/interface.mjs).
 
 ```bash
 cd benchmarks/sequential-learning

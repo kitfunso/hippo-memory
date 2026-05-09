@@ -68,15 +68,24 @@ export function mulberry32(seed) {
 }
 
 /**
- * Exact paired sign-flip permutation CI for mean(xsA - xsB).
+ * Paired permutation CI via recentred-percentile sign-flip Monte Carlo.
  *
- * v1.7.5 -- used in Task 3 instead of paired t-test: phase rates are bounded
- * binomial-like and t-test is fragile at n=20. Permutation makes no normality
- * assumption.
+ * Implementation: nResamples (default 10,000) sign-flip resamples of paired
+ * diffs (xsA[i] - xsB[i]). For each resample, multiply each diff by ±1
+ * (random sign), compute the mean, then take the (alpha/2) and (1 - alpha/2)
+ * percentiles of the resampled-mean distribution. The interval is then
+ * recentred onto the observed mean: ciLow = observed + (loPercentile - mean(resamples)).
  *
- * The CI is built around the observed mean by recentring the resampled-mean
- * distribution: ciLow = observed + (sortedResamples[loIdx] - mean(resamples)).
- * This gives a bias-corrected percentile interval.
+ * This is a recentred-percentile interval — NOT bias-corrected (BCa).
+ * Sufficient for the symmetric, bounded paired diffs in this benchmark
+ * (phase rates ∈ [0, 1], so |diff| ≤ 1).
+ *
+ * v1.7.5 chose permutation over paired t-test because phase rates are
+ * bounded-binomial-like and t-test is fragile at n=20. Permutation makes no
+ * normality assumption. P2-3 (v1.7.9): docstring tightened to clarify
+ * recentred-percentile (not BCa) and call out the n<5 short-circuit semantics.
+ *
+ * Throws on n < 5 (callers must ensure sufficient n) and on length mismatch.
  *
  * Internally seeded with mulberry32(0x9E3779B9) for determinism.
  *
