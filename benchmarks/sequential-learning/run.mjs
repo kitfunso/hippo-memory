@@ -41,6 +41,7 @@ function parseArgs() {
     evalStrict: false,
     seed: undefined,
     nSeeds: 1,
+    budget: 2000,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -60,6 +61,9 @@ function parseArgs() {
     } else if (args[i] === '--n-seeds' && args[i + 1]) {
       // v1.7.5 -- multi-seed run. Hash-derived seed list overrides --seed.
       opts.nSeeds = parseInt(args[++i], 10);
+    } else if (args[i] === '--budget' && args[i + 1]) {
+      // v1.7.6 -- recall budget for the discriminating-workload sweep.
+      opts.budget = parseInt(args[++i], 10);
     } else if (args[i] === '--help' || args[i] === '-h') {
       console.log(`
 Sequential Learning Benchmark
@@ -79,6 +83,9 @@ Options:
   --n-seeds <int>     Multi-seed run. Hash-derives N seeds and reports
                       mean / std / 95% CI per phase across seeds (v1.7.5).
                       Default: 1.
+  --budget <int>      Recall token budget passed to adapter.recall(query, budget).
+                      Adapters that honor token budgets (hippo) use it; baseline
+                      and static ignore it. Default: 2000. (v1.7.6)
   -h, --help          Show this help message
 `);
       process.exit(0);
@@ -220,7 +227,8 @@ async function simulate(adapter, tasks, opts = {}) {
 
     let matched = false;
     try {
-      const recalled = await adapter.recall(task.recallQuery);
+      const budget = opts.budget ?? 2000;
+      const recalled = await adapter.recall(task.recallQuery, budget);
       const top5 = recalled.slice(0, 5);
       matched = isRecalled(top5, category);
 
@@ -483,6 +491,7 @@ async function main() {
         const out = await simulate(adapter, tasks, {
           useGoalStack: opts.useGoalStack,
           evalStrict: opts.evalStrict,
+          budget: opts.budget,
         });
         results = out.results;
         hookFailures = out.hookFailures;

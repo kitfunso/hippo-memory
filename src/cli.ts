@@ -179,6 +179,12 @@ function parseLimitFlag(value: string | boolean | string[] | undefined): number 
   return Number.isFinite(parsed) && parsed >= 1 ? parsed : Infinity;
 }
 
+function parseCountFlag(value: string | boolean | string[] | undefined): number {
+  if (!value || value === true || Array.isArray(value)) return 0;
+  const parsed = parseInt(String(value), 10);
+  return Number.isFinite(parsed) && parsed >= 1 ? parsed : 0;
+}
+
 /**
  * Emit an audit event against `hippoRoot`'s db. Opens its own short-lived
  * connection so callers don't have to thread a db handle. Swallows all errors
@@ -3232,6 +3238,7 @@ async function cmdContext(
 
   const budget = parseInt(String(flags['budget'] ?? '1500'), 10);
   const limit = parseLimitFlag(flags['limit']);
+  const includeRecent = parseCountFlag(flags['include-recent']);
   const ctxExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
   const ctxActiveScope = ctxExplicitScope || detectScope();
 
@@ -3290,10 +3297,39 @@ async function cmdContext(
     if (!pinnedCfg.pinnedInject.enabled) return; // user disabled via config
     // Effective budget: explicit --budget wins over config.
     const effBudget = flags['budget'] !== undefined ? budget : pinnedCfg.pinnedInject.budget;
+    const nowP = new Date();
+    const selectedIds = new Set<string>();
+    let usedP = 0;
+
+    if (includeRecent > 0) {
+      const recent = [
+        ...localEntries.map((entry) => ({ entry, isGlobal: false })),
+        ...globalEntries.map((entry) => ({ entry, isGlobal: true })),
+      ]
+        .sort((a, b) => {
+          const byCreated = Date.parse(b.entry.created) - Date.parse(a.entry.created);
+          return byCreated !== 0 ? byCreated : b.entry.id.localeCompare(a.entry.id);
+        })
+        .slice(0, includeRecent)
+        .map(({ entry, isGlobal }) => ({
+          entry,
+          score: calculateStrength(entry, nowP) * (isGlobal ? 1 / 1.2 : 1),
+          tokens: estimateTokens(entry.content),
+          isGlobal,
+        }));
+
+      for (const r of recent) {
+        if (selectedIds.has(r.entry.id)) continue;
+        if (usedP + r.tokens > effBudget) continue;
+        selectedItems.push(r);
+        selectedIds.add(r.entry.id);
+        usedP += r.tokens;
+      }
+    }
+
     const pinnedLocal = localEntries.filter((e) => e.pinned);
     const pinnedGlobal = globalEntries.filter((e) => e.pinned);
-    if (pinnedLocal.length === 0 && pinnedGlobal.length === 0) return; // zero output
-    const nowP = new Date();
+    if (pinnedLocal.length === 0 && pinnedGlobal.length === 0 && selectedItems.length === 0) return; // zero output
     const rankedPinned = [
       ...pinnedLocal.map((e) => ({ entry: e, isGlobal: false })),
       ...pinnedGlobal.map((e) => ({ entry: e, isGlobal: true })),
@@ -3310,10 +3346,11 @@ async function cmdContext(
       })
       .sort((a, b) => b.score - a.score);
 
-    let usedP = 0;
     for (const r of rankedPinned) {
+      if (selectedIds.has(r.entry.id)) continue;
       if (usedP + r.tokens > effBudget) continue;
       selectedItems.push(r);
+      selectedIds.add(r.entry.id);
       usedP += r.tokens;
     }
     totalTokens = usedP;
@@ -5289,6 +5326,7 @@ Commands:
     --auto                 Auto-detect task from git state
     --budget <n>           Token budget (default: 1500)
     --pinned-only          Only inject pinned memories (used by UserPromptSubmit hook)
+    --include-recent <n>   With --pinned-only, also inject the last N writes regardless of pinning
     --format <fmt>         Output format: markdown (default), json, or additional-context (Claude Code hook JSON)
     --framing <mode>       Framing: observe (default), suggest, assert
   sleep                    Run consolidation pass (auto-learns + dedup + auto-shares)

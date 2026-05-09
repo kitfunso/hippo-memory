@@ -77,6 +77,40 @@ describe('hippo context --pinned-only', () => {
     expect(out.trim()).toBe('');
   });
 
+  it('--include-recent surfaces fresh unpinned entries alongside pinned-only context', () => {
+    initStore(hippoDir);
+    const oldPinned = createMemory('PINNED RULE: always verify the hook output', { pinned: true });
+    const oldUnpinned = createMemory('old unpinned note should not appear just because it exists', { pinned: false });
+    const recentA = createMemory('fresh same-session correction should appear on the next prompt', { pinned: false });
+    const recentB = createMemory('fresh same-session follow-up should also appear', { pinned: false });
+    oldPinned.created = '2026-05-08T10:00:00.000Z';
+    oldUnpinned.created = '2026-05-08T10:01:00.000Z';
+    recentA.created = '2026-05-08T10:02:00.000Z';
+    recentB.created = '2026-05-08T10:03:00.000Z';
+    writeEntry(hippoDir, oldPinned);
+    writeEntry(hippoDir, oldUnpinned);
+    writeEntry(hippoDir, recentA);
+    writeEntry(hippoDir, recentB);
+
+    const raw = runHippo(['context', '--pinned-only', '--include-recent', '2', '--format', 'additional-context', '--budget', '500']);
+    const parsed = JSON.parse(raw);
+    const context = parsed.hookSpecificOutput.additionalContext;
+    expect(context).toContain('PINNED RULE: always verify the hook output');
+    expect(context).toContain('fresh same-session correction should appear');
+    expect(context).toContain('fresh same-session follow-up should also appear');
+    expect(context).not.toContain('old unpinned note should not appear');
+  });
+
+  it('--include-recent works even when no memories are pinned', () => {
+    initStore(hippoDir);
+    const recent = createMemory('fresh unpinned lesson must not be invisible until next session', { pinned: false });
+    writeEntry(hippoDir, recent);
+
+    const raw = runHippo(['context', '--pinned-only', '--include-recent', '1', '--format', 'additional-context', '--budget', '500']);
+    const parsed = JSON.parse(raw);
+    expect(parsed.hookSpecificOutput.additionalContext).toContain('fresh unpinned lesson must not be invisible');
+  });
+
   it('is read-only — does NOT bump retrieval_count on pinned memories', async () => {
     // Hook fires every turn; if each call inflated retrieval_count the
     // under-rehearsal score for pinned memories would skew over time.

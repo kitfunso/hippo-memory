@@ -10,9 +10,9 @@ import { installJsonHooks, uninstallJsonHooks } from '../src/hooks.js';
  *
  * Phase C of docs/plans/2026-04-21-pinned-reinject.md: `installJsonHooks`
  * must add a UserPromptSubmit entry that invokes
- * `hippo context --pinned-only --format additional-context` every turn,
- * so pinned memories survive long sessions where the model would otherwise
- * "forget" them.
+ * `hippo context --pinned-only --include-recent 5 --format additional-context`
+ * every turn, so pinned memories and fresh same-session writes survive long
+ * sessions where the model would otherwise "forget" them.
  *
  * We override HOME + USERPROFILE to redirect `homeDir()` in src/hooks.ts to
  * a tmp directory — no signature change on installJsonHooks/uninstallJsonHooks.
@@ -49,6 +49,7 @@ describe('installJsonHooks — UserPromptSubmit pinned-inject (claude-code)', ()
     expect(entries).toHaveLength(1);
     const flat = JSON.stringify(entries);
     expect(flat).toContain('hippo context --pinned-only');
+    expect(flat).toContain('--include-recent 5');
     expect(flat).toContain('--format additional-context');
   });
 
@@ -59,6 +60,30 @@ describe('installJsonHooks — UserPromptSubmit pinned-inject (claude-code)', ()
 
     const settings = JSON.parse(fs.readFileSync(second.settingsPath, 'utf8'));
     expect(settings.hooks.UserPromptSubmit).toHaveLength(1);
+  });
+
+  it('migrates the legacy pinned-only hook to include the fresh write tail', () => {
+    const settingsPath = path.join(tmpHome, '.claude', 'settings.json');
+    fs.writeFileSync(settingsPath, JSON.stringify({
+      hooks: {
+        UserPromptSubmit: [{
+          hooks: [{
+            type: 'command',
+            command: 'hippo context --pinned-only --format additional-context',
+            timeout: 5,
+          }],
+        }],
+      },
+    }, null, 2));
+
+    const result = installJsonHooks('claude-code');
+    expect(result.installedUserPromptSubmit).toBe(false);
+    expect(result.migratedPinnedInjectRecent).toBe(true);
+
+    const settings = JSON.parse(fs.readFileSync(result.settingsPath, 'utf8'));
+    expect(settings.hooks.UserPromptSubmit).toHaveLength(1);
+    const flat = JSON.stringify(settings.hooks.UserPromptSubmit);
+    expect(flat).toContain('hippo context --pinned-only --include-recent 5 --format additional-context');
   });
 
   it('uninstallJsonHooks removes the UserPromptSubmit pinned-inject entry', () => {

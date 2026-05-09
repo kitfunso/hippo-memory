@@ -19,8 +19,8 @@ export default createAdapter({
     // No-op: lessons are discarded
   },
 
-  async recall(_query) {
-    // No memory to search
+  async recall(_query, _budget = undefined) {
+    // No memory to search; v1.7.6 -- accept budget arg for signature compat, ignore.
     return [];
   },
 

@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.7.6 (2026-05-09)
+
+Calibration release. Two threads: (1) a `--budget` plumbing + calibration sweep that the v1.7.5 eval result called for as candidate #1 (budget reduction). The calibration showed budget reduction does not produce a discriminating workload — late-phase trap rate is 0% across all 5 budgets {200, 400, 600, 800, 1000} × 10 seeds. Per pre-registered escalation, v1.7.7 will sweep `--restrict-late-to last-4` instead. The −10pp goal-stack hypothesis remains untested. (2) Fresh-tail pinned context injection so memories saved mid-session can appear in the next Claude Code `UserPromptSubmit` injection before they are explicitly pinned.
+
+### Added
+
+- **Fresh-tail pinned context injection.** `hippo context --pinned-only --include-recent <n>` now includes the last N writes regardless of pinning, so memories saved mid-session can appear in the next Claude Code `UserPromptSubmit` injection before they are explicitly pinned. New Claude hook installs use `--include-recent 5`, and existing legacy pinned-only hooks are migrated on `hippo hook install`.
+- **`--budget` flag on `run.mjs`.** Plumbed end-to-end through `simulate()` → `adapter.recall(query, budget)`. `hippo.mjs` honors it, `baseline.mjs` and `static.mjs` ignore it cleanly. Default 2000 (backward-compat). Reusable by future eval variants.
+- **`benchmarks/sequential-learning/calibrate.mjs`.** Mechanical budget-sweep with pre-registered B* selection rule (`selectBStar`): largest budget where C2 late mean ∈ [4%, 24%] AND lower-CI > 0. Calibration seeds hash-derived from `1000 + 10000 + i` (distinct from hypothesis seeds 0..19). 11 unit tests.
+- **`docs/evals/2026-05-09-v1.7.6-calibration-result.md`.** Full sweep result + bug-fix note + escalation pre-commit.
+
+### Eval
+
+- **v1.7.6 calibration — B\* = NULL (workload floor effect).** 5 budgets × 10 seeds = 50 single-seed runs. `phases.late = 0.0` on every run. The 50-task workload's late-phase trap rate is structurally 0% regardless of budget; budget reduction is not a discriminating knob. Per pre-registered escalation: v1.7.7 will use `--restrict-late-to last-4`. Calibration result: `docs/evals/2026-05-09-v1.7.6-calibration-result.md`. The −10pp goal-stack hypothesis remains untested on a discriminating workload (mechanism still shipped from v1.7.4).
+
+### Fixed
+
+- **`calibrate.mjs` starvation guard was structurally inert.** The implementation read `j.conditions[cn].results[]` to count per-task `memoryRecalled` flags, but `run.mjs::buildOutput` (line 393) does not serialize the per-task `results` array in single-seed JSON. False-positive `starved=true` on every candidate. The bug did not affect the v1.7.6 verdict — `lateMean=0%` was the load-bearing rejection signal. Fix: drop the broken extraction; `selectBStar` retains the optional `starved` field defensively. Re-enabling the guard with the corrected schema is tracked for v1.7.7+.
+
+### Deferred to future release
+
+- **v1.7.7: `--restrict-late-to last-4`.** Pre-committed escalation. Single-line workload tweak that narrows the late-phase metric to the last 4 trap encounters where the floor effect is sharpest. Will re-run the 4-condition × 20-seed paired eval at default budget on the restricted metric.
+- **v1.7.7+: re-enable starvation guard with corrected schema** (expose per-task results in single-seed JSON OR rewrite the guard against the multi-seed `seeds[].phases` block).
+- **v1.8.0: adversarial trap categories** (requires new lesson authoring + harness changes).
+- **v1.8.0: vlPFC interference suppression.** Real feature work per RESEARCH.md, separate plan.
+
 ## 1.7.5 (2026-05-07)
 
 Sequential-learning benchmark infrastructure release. Closes the v0.39 B3 follow-up that gated public exercising of the dlPFC goal-stack mechanism. Eval ran but stopped per the pre-registered sanity gate due to a floor effect; hypothesis remains open.
