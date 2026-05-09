@@ -79,9 +79,9 @@ export default createAdapter({
     hippoExec(this._storeDir, `remember "${escaped}" ${tagArgs}`);
   },
 
-  async recall(query) {
+  async recall(query, budget = 2000) {
     const escaped = query.replace(/"/g, '\\"');
-    const raw = hippoExec(this._storeDir, `recall "${escaped}" --json --budget 2000`);
+    const raw = hippoExec(this._storeDir, `recall "${escaped}" --json --budget ${budget}`);
 
     if (!raw) return [];
 

@@ -30,7 +30,8 @@ export default createAdapter({
     // No-op: static memory does not learn during the sequence
   },
 
-  async recall(query) {
+  async recall(query, _budget = undefined) {
+    // v1.7.6 -- accept budget arg for signature compat, ignore.
     const queryLower = query.toLowerCase();
     const queryWords = queryLower.split(/\s+/).filter((w) => w.length > 3);
 

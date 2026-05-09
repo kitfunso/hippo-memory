@@ -35,7 +35,7 @@
  * @property {string} name                                                    - Human-readable adapter name
  * @property {() => Promise<void>} init                                       - Set up the memory store (create temp dirs, initialize state)
  * @property {(content: string, tags: string[]) => Promise<void>} store       - Store a lesson learned from a trap hit
- * @property {(query: string) => Promise<RecallResult[]>} recall              - Retrieve memories relevant to a query (return top-5)
+ * @property {(query: string, budget?: number) => Promise<RecallResult[]>} recall - Retrieve memories relevant to a query (return top-5). v1.7.6: optional `budget` controls token budget for retrieval; adapter MAY ignore.
  * @property {(good: boolean) => Promise<void>} outcome                       - Feedback on the last recall (did it help?)
  * @property {() => Promise<void>} cleanup                                    - Tear down the memory store (remove temp dirs)
  *
