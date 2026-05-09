@@ -588,7 +588,14 @@ async function main() {
   writeFileSync(latestPath, JSON.stringify(output, null, 2));
 }
 
-main().catch((err) => {
-  console.error('Benchmark failed:', err);
-  process.exit(1);
-});
+// v1.7.7 P0-1 -- run.mjs is now import-safe. main() only runs when invoked as a
+// script (matches `calibrate.mjs::invokedAsScript` pattern). Tests can import
+// `hitRateByPhase` and `parseRestrictLateTo` without spawning hippo subprocesses.
+const invokedAsScript =
+  process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+if (invokedAsScript) {
+  main().catch((err) => {
+    console.error('Benchmark failed:', err);
+    process.exit(1);
+  });
+}
