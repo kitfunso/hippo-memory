@@ -1,5 +1,47 @@
 # Changelog
 
+## 1.8.0 (2026-05-09)
+
+Adversarial-categories release. Adds 3 new trap categories to `benchmarks/sequential-learning` (10 → 13). Lesson vocabulary verified <0.30 Jaccard overlap with v1.7.5 lessons (`tools/jaccard-overlap.mjs`; max=0.033). Workload expands 50 → 62 tasks; late-phase metric (`--restrict-late-to 4`) preserved. **Mechanism characterisation only — this release does not re-assert the retracted −10pp magnitude** per `docs/RETRACTION.md`.
+
+### Workload-validity verdict
+
+**PASS** — C2 hippo-base lateMean = 0.25 (lattice rate; 25% across 20 seeds), 20 of 20 seeds non-zero. Pre-registered N=4 lattice rule from v1.7.7 satisfied (`mean ∈ [0.05, 0.50] AND ≥3 distinct seeds non-zero`). Framed as workload-validity / non-saturation check per `docs/RETRACTION.md`, NOT a magnitude criterion.
+
+This is the first time across v1.7.5/6/7/8 that the C2 sanity gate has passed. Adversarial categories produce a non-saturated workload at the metric level (workload-validity sense, not magnitude).
+
+### C3 mechanism characterisation (sign-only direction count, NOT magnitude)
+
+C3 per-seed lattice histogram (over 20 seeds at adversarial-late N=4): 0/4=0 seeds, 1/4=20 seeds, 2/4=0 seeds, 3/4=0 seeds, 4/4=0 seeds. Every seed produced exactly 1 trap-hit out of the last 4 trap encounters.
+
+Sign-only seed-pair direction count (vs C2 hippo-base):
+- STRICTLY_LOWER (C3 < C2): **0**
+- STRICTLY_HIGHER (C3 > C2): **0**
+- TIED (C3 = C2): **20**
+
+The dlPFC goal-stack boost (`--use-goal-stack`, `applyGoalStackBoost`) does not detectably change the per-seed late-4 lattice rate on this workload at this scale. Hook failures: push=0, complete=0. Tie-degeneracy: tiePass=false (all 20 paired diffs are zero).
+
+> **Do not subtract.** Per `docs/RETRACTION.md`, magnitude differences between conditions are not reported in this release.
+
+### Added
+
+- **3 new adversarial trap categories** in `benchmarks/sequential-learning/traps.mjs::TRAP_CATEGORIES`: `timezone_naive`, `idempotency_retry`, `float_accumulation`. Lesson vocabulary verified <0.30 Jaccard overlap with v1.7.5 lessons via Porter-stem + extended stop-words (`tools/jaccard-overlap.mjs`; max=0.033, well under threshold).
+- **6 new trap-encounter positions** in `TRAP_PLACEMENTS` (positions 11, 21, 33, 41, 51, 59 — distributed uniformly across early/mid/late regions, NOT clustered in late). Workload size 50 → 62 tasks; trap encounters 25 → 31. Existing 10 categories' positions unchanged.
+- **`tools/jaccard-overlap.mjs` + `tests/jaccard-overlap.test.ts`**. Pre-registered Jaccard verification with Porter-stem stemming + extended stop-words (modal verbs, engineering function-verbs).
+- **`tests/sl-bm25-mismatch.test.ts`** — independent BM25 sim verification (complement to Jaccard). Confirms new-category lessons are not trivially BM25-matched by existing-10 recall queries.
+- **`tests/sl-traps-v1.8.test.ts`** — 17 schema invariants (13 categories, 31 trap encounters, 62 task slots, uniform position distribution, exact positions {11, 21, 33, 41, 51, 59}, adversarial-flag enforcement, existing-10 PRNG-stability vs v1.7.x).
+- **`benchmarks/sequential-learning/traps.mjs::N_TASKS`** exported constant (62). `run.mjs` uses `N_TASKS` and `TRAP_CATEGORIES.length` dynamically (no more hardcoded 50/10).
+- **`benchmarks/sequential-learning/traps.mjs::TRAP_PLACEMENTS` adversarial flag.** Adversarial categories use fixed positions (no shape-group shuffle). Preserves v1.7.x existing-10 placements unchanged.
+- **`docs/evals/2026-05-09-v1.8.0-{adversarial-eval-prereg, claim-inventory, jaccard-verification, category-authoring-iteration-log, adversarial-eval-result}.md|.txt`** — full pre-registration audit trail.
+
+### Pre-committed v1.9 direction (named BEFORE v1.8 ran)
+
+v1.9 will run the dlPFC goal-stack mechanism on the **LongMemEval R@5 corpus** as a cross-validation on a fundamentally different benchmark (different metric: R@5 not trap-rate; different corpus: 500-question public; different mechanism stress: retrieval-on-fixed-corpus vs agent-improvement-over-time). The v1.8 PASS verdict does not change this pre-commitment. Pre-registered in `docs/evals/2026-05-09-v1.8.0-adversarial-eval-prereg.md` "Pre-committed v1.9 direction" subsection.
+
+### Tests
+
+Test count to be re-verified by `npx vitest run` pre-publish; final count cited in commit message and `/ship-check` output.
+
 ## 1.7.9 (2026-05-09)
 
 Retraction patch + post-audit P2 polish (3 of 4; P2-1 deferred to v1.7.10). The "−10pp goal-stack lift on sequential-learning benchmark" magnitude claim is RETRACTED publicly across the README hero, benchmark READMEs, RESEARCH/ROADMAP-RESEARCH thesis lines, TODOS, the v1.7.5/6/7 eval result docs, the canonical B3 plan, AND the GitHub Release notes for every prior tag that asserted the magnitude (v0.11.0/v0.39.0/v1.7.4/v1.7.5/v1.7.6/v1.7.7). The mechanism (dlPFC goal-stack boost from v1.7.4) and the benchmark harness remain shipped. v1.8.0 (queued separately) explores adversarial trap categories as **mechanism characterisation** under the magnitude-smuggling guard pinned in `docs/RETRACTION.md` this release.

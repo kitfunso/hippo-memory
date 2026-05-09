@@ -48,3 +48,18 @@ This guard sunsets if and only if a future eval produces a discriminating worklo
 - `docs/evals/2026-05-09-v1.7.7-goal-stack-eval-prereg.md` (the prereg whose SANITY_FAIL ≠ NOT_SUPPORTED distinction v1.7.9 corrects)
 - `README.md` "What's new in v1.7.9" section
 - `ROADMAP-RESEARCH.md:158` v1.7.9 status update block
+
+## v1.8.0 outcome (2026-05-09)
+
+v1.8.0 ran adversarial trap categories (3 new: timezone_naive, idempotency_retry, float_accumulation; lesson vocabulary <0.30 Jaccard with v1.7.5 lessons; uniform position distribution; categories authored BEFORE C3) under the magnitude-smuggling guard pinned in this doc.
+
+**Did the guard hold?** Yes. The result doc, prereg, claim inventory, plan, CHANGELOG entry, README "What's new in v1.8.0" block, and this RETRACTION.md "v1.8.0 outcome" subsection ALL contain the verbatim sentence "This release does not re-assert the retracted −10pp magnitude" and reference this guard. Pre-publish staged-diff outside voice (Task 13 of the v1.8 plan) verifies compliance with the hardened magnitude grep + retraction-citation allowlist.
+
+**v1.8 result framing held:**
+- Workload-validity verdict: PASS (C2 lateMean=0.25, 20/20 seeds non-zero — first non-saturated workload across v1.7.5/6/7/8).
+- C3 reporting: per-seed lattice histogram (descriptive frequency distribution over discrete values) + sign-only direction count (0 STRICTLY_LOWER / 0 STRICTLY_HIGHER / 20 TIED).
+- NO magnitude framing. NO Δ pp, NO median pp, NO 5-number summary, NO juxtaposed condition late-mean reporting. Two-section result template enforced "Do not subtract across sections."
+
+**v1.9 direction:** LongMemEval R@5 cross-validation, pre-committed in v1.8.0 prereg BEFORE v1.8 ran. Different corpus, different metric, different mechanism stress. The v1.8 PASS verdict does not change the v1.9 pre-commitment. Any v1.9 result-doc framing must satisfy this guard.
+
+**Has the guard sunset?** No. The "When this guard sunsets" criteria require a future eval producing a discriminating workload AND a properly pre-registered hypothesis test returning SUPPORTED with paired CI lower bound > 0. v1.8 satisfied workload validity but reported sign-only direction (no SUPPORTED verdict; no magnitude claim). The guard remains in force for v1.9+.
