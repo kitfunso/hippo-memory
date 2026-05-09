@@ -118,7 +118,6 @@ function runOneBudget(budget, seeds, outputBase) {
   //
   // We invoke run.mjs once per calibration seed via --seed <hash>.
   const seedRates = [];
-  const seedResultCounts = []; // post-review P1-4 -- starvation guard.
   for (const seed of seeds) {
     const seedDir = join(outDir, `seed-${seed}`);
     if (!existsSync(seedDir)) mkdirSync(seedDir, { recursive: true });
@@ -137,32 +136,27 @@ function runOneBudget(budget, seeds, outputBase) {
     if (typeof lateRate !== 'number') {
       throw new Error(
         `runOneBudget: phases.late not numeric for ${seedDir} (got ${typeof lateRate}). ` +
-        `Schema may have changed; verify run.mjs:539-550 output shape.`,
+        `Schema may have changed; verify run.mjs::buildOutput output shape.`,
       );
     }
     seedRates.push(lateRate);
-
-    // Starvation guard -- count avg results returned per trap encounter.
-    // results[].memoryRecalled is true iff recall returned a matching memory;
-    // we approximate avg recall surface from `results.length` of trap tasks
-    // (which is fixed at ~25) vs how many had memoryRecalled. Real per-trap
-    // result-count is not surfaced in run.mjs JSON; use a simpler heuristic:
-    // if zero traps had memoryRecalled across the whole seed, the budget
-    // is starving the BM25 ranker.
-    const trapResults = (j.conditions[condName].results ?? []).filter(
-      (r) => r.trapCategory !== null,
-    );
-    const recalledCount = trapResults.filter((r) => r.memoryRecalled).length;
-    seedResultCounts.push(recalledCount);
   }
-  const starvationFlag =
-    seedResultCounts.length > 0 &&
-    seedResultCounts.reduce((a, b) => a + b, 0) / seedResultCounts.length < 1;
+  // Starvation guard (post-review P1-4) was originally intended to flag candidates
+  // where mean per-seed recall surface < 1. The implementation read
+  // `j.conditions[condName].results[]`, but `buildOutput` (run.mjs:393) does NOT
+  // serialize the per-task `results` array in single-seed JSON — it only writes
+  // `overall_trap_hit_rate`, `phases`, `learns`, `improvement_pct`, `hook_failures`.
+  // The 2026-05-09 v1.7.6 calibration confirmed this: false-positive `starved=true`
+  // on every candidate. The bug was masked because `lateMean=0%` was the
+  // load-bearing rejection signal across all 5 budgets (workload floor effect,
+  // not budget-tunable).
+  //
+  // Decision: drop the broken extraction in v1.7.6. Tracked for v1.7.7+ as
+  // "expose per-task results in single-seed JSON" + "re-enable starvation guard".
+  // selectBStar still respects an optional `starved` field defensively.
   return {
     budget,
     seedRates,
-    seedResultCounts,
-    starved: starvationFlag,
     lateMean: mean(seedRates),
     lateCI: ciHalfWidth95(seedRates),
   };
