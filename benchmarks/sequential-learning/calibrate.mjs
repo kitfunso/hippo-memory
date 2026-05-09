@@ -52,9 +52,16 @@ export function selectBStar(candidates) {
     return { budget: null, reason: 'No candidates supplied.' };
   }
   // Sort descending by budget; pick the first that qualifies.
+  // POST-AUDIT P1-3 (v1.7.8): only include "(not starved)" in the reason
+  // string when ANY candidate carries the `starved` flag. The starvation
+  // guard was deferred in v1.7.6 (broken extraction dropped); referencing
+  // it inertly in error messages overstates the rule.
+  const anyStarved = candidates.some((c) => c.starved === true);
+  const starvedClause = anyStarved ? ' AND (not starved)' : '';
+
   const sorted = [...candidates].sort((a, b) => b.budget - a.budget);
   for (const c of sorted) {
-    if (c.starved === true) continue; // P1-4 starvation exclusion
+    if (c.starved === true) continue; // starvation exclusion (defensive; flag deferred to v1.7.8+)
     const lowerCI = c.lateMean - c.lateCI;
     if (
       c.lateMean >= BAND_LOW &&
@@ -63,13 +70,13 @@ export function selectBStar(candidates) {
     ) {
       return {
         budget: c.budget,
-        reason: `largest budget in band [${BAND_LOW}, ${BAND_HIGH}] with lower-CI ${lowerCI.toFixed(4)} > 0 (not starved)`,
+        reason: `largest budget in band [${BAND_LOW}, ${BAND_HIGH}] with lower-CI ${lowerCI.toFixed(4)} > 0${anyStarved ? ' (not starved)' : ''}`,
       };
     }
   }
   return {
     budget: null,
-    reason: `No candidate satisfies (mean ∈ [${BAND_LOW}, ${BAND_HIGH}]) AND (lower-CI > 0) AND (not starved).`,
+    reason: `No candidate satisfies (mean ∈ [${BAND_LOW}, ${BAND_HIGH}]) AND (lower-CI > 0)${starvedClause}.`,
   };
 }
 
@@ -129,6 +136,15 @@ function runOneBudget(budget, seeds, outputBase) {
     if (files.length === 0) throw new Error(`No JSON output in ${seedDir}`);
     files.sort();
     const j = JSON.parse(readFileSync(join(seedDir, files[files.length - 1]), 'utf-8'));
+    // POST-AUDIT P1-6 (v1.7.8): defensive throw with context if the JSON shape
+    // is unexpected (e.g., wrong adapter ran, schema drift). Without this,
+    // `j.conditions[condName]` would TypeError with no hint of which file.
+    if (!j.conditions || Object.keys(j.conditions).length === 0) {
+      throw new Error(
+        `runOneBudget: ${seedDir}/${files[files.length - 1]} has no conditions. ` +
+        `Expected at least one adapter result; got ${JSON.stringify(j.conditions)}.`,
+      );
+    }
     const condName = Object.keys(j.conditions)[0];
     // Single-seed path -- read directly from `phases.late`.
     const lateRate = j.conditions[condName].phases.late;

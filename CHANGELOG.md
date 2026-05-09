@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.7.8 (2026-05-09)
+
+Audit-fix patch release. Closes 9 P0+P1 items found by retroactive `/review` of v1.7.5/v1.7.6/v1.7.7 (those releases shipped with the review chain partially skipped). No behavior change for end users; integrity fixes for the eval audit trail.
+
+### Fixed
+
+- **(P0-1) Analyzer sanity gate now matches the v1.7.7 pre-reg.** `analyze-v1.7.7.mjs::sanityPass` was using the inherited `[0.04, 0.24]` band (calibrated for chronological-third late slice = last 7 of 25), not the pre-reg's actual N=4 lattice rule (`mean ∈ [0.05, 0.50]` AND `≥3 distinct seeds non-zero`). Bug was dormant on v1.7.7 (eval was C2-only, verdict applied by hand) but would mis-fire on any future re-run or v1.8 reuse. Decision text + console.log updated to match.
+- **(P0-2) v1.7.6 calibration result-doc honesty.** Replaced overstated "pre-registration discipline is doing its job" framing with explicit citation of plan v2 (`c670ac9`) + `calibrate.mjs` (`9cd83de`) as the actual pre-registration anchors. v1.7.6 had no separate prereg/inventory/analyzer files — the calibration was a parameter sweep with a mechanical rule in code, not a hypothesis run with verdict templates. New "Pre-registration anchors" block makes this explicit.
+- **(P1-1) v1.7.7 prereg SUPPORTED template band drift.** Template still cited `[4%, 24%]` and `lower-CI > 0`. Corrected to match the actual pre-registered N=4 lattice rule (`[5%, 50%]` AND `≥3 distinct seeds non-zero`) so v1.8 reuse won't drift.
+- **(P1-3) `selectBStar` reason string honesty.** Reason string unconditionally referenced "(not starved)" even when no candidate carried the `starved` flag (the v1.7.6 reality — guard was deferred). Now conditional on whether any candidate carries the flag.
+- **(P1-4) Hippo adapter instance state.** `_sessionId / _pushedCount / _completedCount` were module-level `let` in v1.7.5..v1.7.7 — two parallel adapter consumers (future `--workers N`) would clobber each other's `HIPPO_SESSION_ID` and corrupt counts. Counters also never reset between `init()` calls. Hoisted to instance fields; `hippoExec` takes `sessionId` as explicit arg; `init()` resets all three. Race-condition free for future parallel benchmarks.
+- **(P1-5) `ROADMAP-RESEARCH.md:156` forward-pointer.** B3 success criterion cited "−10pp" without a status update; missed by v1.7.5's claim inventory. Added Status update block citing three pre-registered workload variants tested without discrimination (v1.7.5 SANITY_FAIL, v1.7.6 B*=NULL, v1.7.7 SANITY_FAIL), v1.8 as last escalation, falsifiability pre-committed.
+- **(P1-6) `runOneBudget` defensive throw.** Empty `j.conditions` would TypeError with no hint of which seed file. Now throws with file path + JSON shape context.
+
+### Tests
+
+- **(P1-2) Verdict-precedence chain locked** with 2 new tests in `tests/sl-analyze-v1.7.7.test.ts` covering `sanityPass=false` wins over hookFailures+tiePass+SUPPORTED-shaped numbers (rank 1) and `hookFailures` wins over tiePass+SUPPORTED when sanity passes (rank 2).
+- **(P1-7) `selectBStar` defensive starvation path** with 2 new tests in `tests/sl-calibrate.test.ts` covering skip-on-`starved=true` and reason-string omission when no candidate carries the flag.
+
+### Process note
+
+v1.7.5/v1.7.6/v1.7.7 each shipped without running the full `/self-review → /review → /ship-check → /publish-repo` workflow chain. v1.7.8 is the corrective patch + a memory entry locking the chain in for future releases. The 4 P2 items found in the audit (exact-enumeration `Float64Array` micro-opt; README rounding consistency; `pairedPermutationCI` docstring tightening; `BAND_LOW/BAND_HIGH` provenance comment) are deferred to v1.7.9 if appetite exists.
+
 ## 1.7.7 (2026-05-09)
 
 Window-restriction release. Tests the v1.7.6 pre-committed escalation: narrow the late-phase metric from "last 7 of 25 (chronological-third)" to "last 4 of 25" via a new `--restrict-late-to <int>` flag. C2 sanity preflight at the N=4 lattice gate FAILED (mean=0.00% across 20 seeds; 0 of 20 seeds non-zero). C3 (goal-stack ON) was NOT collected — no goal-stack data leak. Per pre-committed escalation, v1.8 retargets to adversarial trap categories. The −10pp goal-stack hypothesis remains untested for the third pre-registered workload variant.

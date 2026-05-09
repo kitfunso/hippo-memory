@@ -59,6 +59,32 @@ describe('v1.7.6 calibration B* selection', () => {
     expect(selectBStar(candidates).budget).toBeNull();
   });
 
+  // POST-AUDIT P1-7 (v1.7.8) — defensive `starved` exclusion path
+  it('skips a candidate flagged starved=true even when it would otherwise be selected', () => {
+    // Largest-budget candidate is in band AND has lower-CI > 0, but starved.
+    // selectBStar should skip it and return the next eligible one.
+    const candidates = [
+      { budget: 800, lateMean: 0.20, lateCI: 0.03, starved: true }, // would qualify; skipped
+      { budget: 600, lateMean: 0.10, lateCI: 0.04, starved: false }, // qualifies
+      { budget: 400, lateMean: 0.05, lateCI: 0.01, starved: false }, // qualifies but smaller
+    ];
+    const bStar = selectBStar(candidates);
+    expect(bStar.budget).toBe(600); // 800 starved, fall through to 600
+    expect(bStar.reason).toMatch(/not starved/i); // reason includes the clause when any starved
+  });
+
+  // POST-AUDIT P1-3 (v1.7.8) — reason string omits "(not starved)" when no
+  // candidate carries the flag (avoids referencing an inert rule).
+  it('reason string omits "(not starved)" when no candidate carries the flag', () => {
+    const candidates = [
+      { budget: 800, lateMean: 0.30, lateCI: 0.02 }, // out of band, no starved flag
+      { budget: 600, lateMean: 0.02, lateCI: 0.01 }, // out of band, no starved flag
+    ];
+    const bStar = selectBStar(candidates);
+    expect(bStar.budget).toBeNull();
+    expect(bStar.reason).not.toMatch(/not starved/i); // inert clause should not appear
+  });
+
   // Post-review P1-1 — calibration vs hypothesis seed-stream non-collision
   it('calibration and hypothesis mulberry32 streams are pairwise distinct in first 50 draws', () => {
     // Hypothesis seeds: 1000 + i for i in 0..19

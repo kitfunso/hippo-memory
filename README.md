@@ -85,6 +85,13 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.7.8
+
+- **Audit-fix patch.** Retroactive `/review` on v1.7.5/v1.7.6/v1.7.7 found 9 P0+P1 items (the review chain was partially skipped on those releases). All 9 fixed surgically across 3 atomic commits. No behavior change for end users; integrity fixes for the eval audit trail.
+- **(P0)** Analyzer sanity gate now matches the v1.7.7 pre-reg (N=4 lattice rule: mean ∈ [5%, 50%] AND ≥3 distinct seeds non-zero, not the inherited [4%, 24%] band). v1.7.6 calibration result doc replaces overstated "pre-registration discipline" framing with explicit citation of the plan v2 commit + calibrate.mjs commit as the actual pre-registration anchors.
+- **(P1)** Hippo benchmark adapter instance state hoisted from module-level to per-instance fields (race-condition-free for future parallel benchmarks). `selectBStar` reason string honesty fix. v1.7.7 prereg SUPPORTED template band corrected. ROADMAP-RESEARCH:156 status update on the −10pp claim. Defensive throw in `runOneBudget`. Verdict-precedence and selectBStar defensive tests added.
+- **Tests:** 1480 passing (+4 from v1.7.7), 0 regressions.
+
 ### What's new in v1.7.7
 
 - **`--restrict-late-to <int>` flag** on the sequential-learning runner. Narrows the late-phase metric to the last N trap encounters; early/mid re-split (Option A) so the three slices stay disjoint. Default null preserves chronological-third behavior.

@@ -57,4 +57,29 @@ describe('v1.7.7 computeVerdict', () => {
       tiePass: false, // degenerate
     })).toBe('NOT_SUPPORTED');
   });
+
+  // POST-AUDIT P1-2 (v1.7.8) — verdict-precedence chain locked.
+  // sanityPass=false MUST win over hookFailures, tiePass, AND a SUPPORTED-shaped
+  // delta+ciLow. SANITY_FAIL is the highest-precedence outcome.
+  it('precedence: sanityPass=false wins over hook+tie+SUPPORTED-shaped numbers', () => {
+    expect(computeVerdict({
+      c2Late: 0.18, c3Late: 0.05, delta: 0.13,
+      ciLow: 0.04, ciHigh: 0.22,
+      hookFailures: { push: 1, complete: 0 }, // would normally trigger HOOK_FAIL
+      sanityPass: false,                       // overrides everything
+      tiePass: false,                          // would normally trigger NOT_SUPPORTED
+    })).toBe('SANITY_FAIL');
+  });
+
+  // POST-AUDIT P1-2 (v1.7.8) — hookFailures wins over tiePass + SUPPORTED-shaped
+  // numbers when sanityPass is true. HOOK_FAIL is precedence rank 2.
+  it('precedence: hookFailures wins over tiePass+SUPPORTED-shaped numbers when sanity passes', () => {
+    expect(computeVerdict({
+      c2Late: 0.18, c3Late: 0.05, delta: 0.13,
+      ciLow: 0.04, ciHigh: 0.22,
+      hookFailures: { push: 0, complete: 1 }, // single complete failure -> HOOK_FAIL
+      sanityPass: true,
+      tiePass: false,
+    })).toBe('HOOK_FAIL');
+  });
 });
