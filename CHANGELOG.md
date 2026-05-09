@@ -1,5 +1,46 @@
 # Changelog
 
+## 1.7.9 (2026-05-09)
+
+Retraction patch + post-audit P2 polish (3 of 4; P2-1 deferred to v1.7.10). The "−10pp goal-stack lift on sequential-learning benchmark" magnitude claim is RETRACTED publicly across the README hero, benchmark READMEs, RESEARCH/ROADMAP-RESEARCH thesis lines, TODOS, the v1.7.5/6/7 eval result docs, the canonical B3 plan, AND the GitHub Release notes for every prior tag that asserted the magnitude (v0.11.0/v0.39.0/v1.7.4/v1.7.5/v1.7.6/v1.7.7). The mechanism (dlPFC goal-stack boost from v1.7.4) and the benchmark harness remain shipped. v1.8.0 (queued separately) explores adversarial trap categories as **mechanism characterisation** under the magnitude-smuggling guard pinned in `docs/RETRACTION.md` this release.
+
+### Retracted
+
+- **−10pp goal-stack late-phase trap-rate lift on the sequential-learning benchmark.** Three pre-registered workload variants tested without producing a discriminating workload: v1.7.5 (full-late = last 7 of 25, C2 SANITY_FAIL on saturation), v1.7.6 (5 budgets × 10 seeds, B*=NULL on workload floor), v1.7.7 (`--restrict-late-to 4`, C2 SANITY_FAIL on N=4 lattice gate). C2 hippo-base late mean = 0.0% across every seed in every variant. The original v0.39 informal "78% → 14% over 50 tasks" headline does not reproduce on the formal multi-seed harness across three pre-registered workload knobs. **The magnitude is RETRACTED. The mechanism is shipped; no magnitude is currently claimed.**
+- **Departure from v1.7.7 pre-reg (deliberate, declared).** The v1.7.7 prereg explicitly distinguished SANITY_FAIL (no retraction) from NOT_SUPPORTED (retraction). v1.7.9 deviates from that distinction on cumulative-evidence grounds. The original prereg's distinction was wrong: three SANITY_FAILs across distinct workload knobs is meaningful negative evidence regardless of formal verdict label. v1.7.9 retracts on cumulative evidence rather than waiting for v1.8. This prioritises public-surface honesty over completing the full pre-registered escalation chain. v1.8 still runs as planned; the retraction is independent of v1.8 outcome.
+
+### Preserved (NOT retracted)
+
+- **Mechanism:** `pushGoal` / `completeGoal` adapter hooks, `--use-goal-stack` flag, `applyGoalStackBoost` helper, MCP `hippo_recall` boost, HTTP `GET /v1/memories?session_id=` boost — all shipped from v1.7.4..v1.7.5, all working as designed.
+- **Benchmark harness:** multi-seed adapter contract, paired permutation CI, lattice gate framework, `--restrict-late-to`, `--budget`, `--eval-strict`, `analyze-v1.7.7.mjs`, `aggregate.mjs::pairedPermutationCI` — all shipped, all reusable for v1.8 and beyond.
+- **B3 line item:** continues into v1.8.0 as adversarial-categories **mechanism characterisation** with NO magnitude attached. Constraints pinned in `docs/RETRACTION.md`.
+
+### Added
+
+- **`docs/RETRACTION.md`** — pinned magnitude-smuggling guard. Any v1.8 (or later) result doc that contains pre-registered numeric pass/fail thresholds, "magnitude", "Δ = ", "≥Xpp", "lift", or any framing equivalent to a magnitude claim must reference this doc and explain why the framing does not constitute a retracted-magnitude re-assertion.
+- **README "What's new in v1.7.9"** + retraction wrapper at the trap-rate-table region; hero bullet at line 39 retracted; v1.7.5/6/7/8 What's-New blocks each carry a `> Updated v1.7.9: magnitude RETRACTED.` forward-pointer.
+- **`docs/evals/2026-05-09-v1.7.9-retraction-inventory.md`** captures every retracted location with literal grep anchor.
+- **Forward-pointer blocks on v1.7.5 / v1.7.6 / v1.7.7 eval result docs** linking to v1.7.9 retraction (anchored as `## Update 2026-05-09 (v1.7.9 release)` to disambiguate from same-date v1.7.6/7 update tails).
+- **GitHub Release retroactive retraction notes** (append-only) on v0.11.0, v0.39.0, v1.7.4, v1.7.5, v1.7.6, v1.7.7.
+- **`benchmarks/README.md` + `benchmarks/sequential-learning/README.md`** retraction wrappers — NPM-tarball-shipped surfaces previously missed.
+- **Retroactive notes** appended to `CHANGELOG.md` v1.7.4 entry (`> Retired v1.7.9.`) and to the v0.11.0-era benchmark-introduction line (`> RETRACTED v1.7.9`).
+- **Thesis-line retractions** in `RESEARCH.md:176` and `ROADMAP-RESEARCH.md:28`.
+- **Forward-pointer block** at top of `docs/plans/2026-04-29-b3-dlpfc-depth.md`.
+
+### Fixed (P2 polish from v1.7.8 audit — 3 of 4; P2-1 deferred)
+
+- **(P2-2) README ↔ result.md rounding consistency.** README "What's new in v1.7.7" cited "early=77%, mid=5%" while `docs/evals/2026-05-09-v1.7.7-goal-stack-eval-result.md` reported "77.28%, 4.50%". Both now use one decimal place: "77.3%, 4.5%". **Underlying values unchanged in raw JSON at `results/v1.7.7-eval-C2-hippo-base/benchmark-1778313821987.json`. Math unchanged; only display rounding adjusted. The retraction release does not modify any computed numbers.**
+- **(P2-3) `pairedPermutationCI` docstring.** Clarified the implementation as a recentred-percentile bootstrap (sign-flip Monte Carlo) rather than bias-corrected (BCa); documented the 10k resample default and the n<5 short-circuit semantics.
+- **(P2-4) `BAND_LOW` / `BAND_HIGH` provenance comment.** `calibrate.mjs` band constants now carry an inline comment citing the v1.7.6 plan v2 commit (`c670ac9`) as the pre-registration anchor and explaining the v1.7.6 derivation (±10pp around v0.11.0 informal headline, since superseded by v1.7.7's N=4 lattice gate `[0.05, 0.50]` — and now retracted v1.7.9).
+
+### Deferred to v1.7.10
+
+- **(P2-1) `Float64Array(1 << n)` micro-opt in `analyze-v1.7.7.mjs::exactPairedPermutationCI`.** Behavior-changing micro-opt in a retraction release would create a "fiddling with numbers in the same release that retracts numbers" audit smell. Deferred. To be shipped as a standalone v1.7.10 perf patch.
+
+### Tests
+
+- Test count unchanged vs v1.7.8 (P2-2/3/4 are rounding + comment + docstring; no new tests added). Actual count re-verified by `npx vitest run` pre-publish; final count cited in commit message and `/ship-check` output, not in this CHANGELOG entry.
+
 ## 1.7.8 (2026-05-09)
 
 Audit-fix patch release. Closes 9 P0+P1 items found by retroactive `/review` of v1.7.5/v1.7.6/v1.7.7 (those releases shipped with the review chain partially skipped). No behavior change for end users; integrity fixes for the eval audit trail.
@@ -118,6 +159,7 @@ Internal hygiene release closing 3 of the 5 B3 dlPFC follow-ups deferred from v0
 ### Deferred to v1.7.5
 
 - Sequential-learning adapter contract (`pushGoal/completeGoal` hooks on `benchmarks/sequential-learning/adapters/interface.mjs`). Demonstrate or honestly retire the −10pp trap-rate claim. Needs benchmark runs + honest reporting → own release.
+  > **Retired v1.7.9** — the −10pp magnitude is RETRACTED. See `## 1.7.9` at top of file.
 
 ### Deferred to v1.8.0
 
@@ -1325,6 +1367,7 @@ Closes the replay gap documented in `docs/plans/2026-04-21-hippocampal-mechanism
 - Schema acceleration: `schema_fit` is now auto-computed from tag + content overlap against existing memories. High-fit memories (>0.7) get 1.5x half-life; novel memories (<0.3) get 0.5x.
 - `computeSchemaFit()` exported for programmatic use.
 - Agent evaluation benchmark: 50-task sequential learning eval comparing no memory, static memory, and hippo. Validates the learning-over-time hypothesis (78% early trap rate -> 14% late).
+  > **RETRACTED v1.7.9** — the 78% → 14% magnitude does not reproduce on the formal sequential-learning harness across three pre-registered workload variants (v1.7.5/6/7). See `## 1.7.9` at top of file. Mechanism remains shipped.
 - `tests/hybrid-search.test.ts`, `tests/agent-eval.test.ts`, `tests/schema-fit.test.ts`.
 
 ### Changed
