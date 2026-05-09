@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 /**
  * Sequential Learning Benchmark Runner
  *
@@ -32,6 +30,23 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // CLI argument parsing
 // ---------------------------------------------------------------------------
 
+/**
+ * Parse and validate the --restrict-late-to flag value. Expects a non-negative
+ * integer; throws otherwise.
+ *
+ * @param {string} raw
+ * @returns {number}
+ */
+export function parseRestrictLateTo(raw) {
+  if (typeof raw !== 'string') {
+    throw new Error(`--restrict-late-to expects a string; got ${typeof raw}`);
+  }
+  if (!/^\d+$/.test(raw)) {
+    throw new Error(`--restrict-late-to expects a non-negative integer; got "${raw}"`);
+  }
+  return parseInt(raw, 10);
+}
+
 function parseArgs() {
   const args = process.argv.slice(2);
   const opts = {
@@ -42,6 +57,7 @@ function parseArgs() {
     seed: undefined,
     nSeeds: 1,
     budget: 2000,
+    restrictLateTo: null, // v1.7.7 -- null preserves chronological-third behavior.
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -64,6 +80,9 @@ function parseArgs() {
     } else if (args[i] === '--budget' && args[i + 1]) {
       // v1.7.6 -- recall budget for the discriminating-workload sweep.
       opts.budget = parseInt(args[++i], 10);
+    } else if (args[i] === '--restrict-late-to' && args[i + 1]) {
+      // v1.7.7 -- narrow the late-phase metric to last N trap encounters.
+      opts.restrictLateTo = parseRestrictLateTo(args[++i]);
     } else if (args[i] === '--help' || args[i] === '-h') {
       console.log(`
 Sequential Learning Benchmark
@@ -86,6 +105,11 @@ Options:
   --budget <int>      Recall token budget passed to adapter.recall(query, budget).
                       Adapters that honor token budgets (hippo) use it; baseline
                       and static ignore it. Default: 2000. (v1.7.6)
+  --restrict-late-to <int>  v1.7.7 -- narrow the late-phase metric to the last
+                      <int> trap encounters (early/mid re-split to keep the
+                      three slices disjoint). Default: chronological third
+                      (~last 7 of 25). Use --restrict-late-to 4 to reproduce
+                      the v1.7.7 hypothesis workload.
   -h, --help          Show this help message
 `);
       process.exit(0);
@@ -307,24 +331,48 @@ function trapHitRate(results) {
 }
 
 /**
- * Split trap results into thirds and compute hit rate for each phase.
+ * Split trap results into phases and compute hit rate for each.
+ *
+ * v1.7.7: when `restrictLateTo` is null (default), late = last third of traps
+ * (chronological third). When `restrictLateTo = N` (positive integer), late =
+ * last N traps; early/mid re-split to "first ceil((total-N)/2)" / "remainder"
+ * so the three slices stay disjoint and exhaustive.
+ *
+ * Post-review P2-2 -- `tests/agent-eval.test.ts` defines a local namesake
+ * `hitRateByPhase`. If you import this module function from elsewhere, alias
+ * to avoid shadowing the local in that test file.
+ *
  * @param {Array<{trapCategory: string|null, trapHit: boolean}>} results
+ * @param {number|null} [restrictLateTo=null] - Optional override for late slice size.
  * @returns {{early: number, mid: number, late: number}}
  */
-function hitRateByPhase(results) {
+export function hitRateByPhase(results, restrictLateTo = null) {
   const trapTasks = results.filter((r) => r.trapCategory !== null);
   const n = trapTasks.length;
-  const third = Math.ceil(n / 3);
 
   const rate = (slice) => {
     if (slice.length === 0) return 0;
     return slice.filter((r) => r.trapHit).length / slice.length;
   };
 
+  if (restrictLateTo === null) {
+    // Default: chronological third (v1.7.0..v1.7.6 behavior).
+    const third = Math.ceil(n / 3);
+    return {
+      early: rate(trapTasks.slice(0, third)),
+      mid: rate(trapTasks.slice(third, third * 2)),
+      late: rate(trapTasks.slice(third * 2)),
+    };
+  }
+
+  // v1.7.7: late = last N. early = first ceil((n-N)/2). mid = remainder.
+  const N = Math.max(0, Math.min(restrictLateTo, n));
+  const earlyEnd = Math.ceil((n - N) / 2);
+  const midEnd = n - N;
   return {
-    early: rate(trapTasks.slice(0, third)),
-    mid: rate(trapTasks.slice(third, third * 2)),
-    late: rate(trapTasks.slice(third * 2)),
+    early: rate(trapTasks.slice(0, earlyEnd)),
+    mid: rate(trapTasks.slice(earlyEnd, midEnd)),
+    late: rate(trapTasks.slice(midEnd)),
   };
 }
 
@@ -390,7 +438,7 @@ function printTable(conditions) {
  * / ci95 per phase across seeds). For single-seed/canonical runs the legacy
  * shape is preserved.
  */
-function buildOutput(conditionResults) {
+function buildOutput(conditionResults, opts = {}) {
   const tasks = generateTasks();
   const trapEncounters = tasks.filter((t) => t.trapCategory !== null).length;
 
@@ -439,12 +487,14 @@ function buildOutput(conditionResults) {
 
   return {
     benchmark: 'hippo-sequential-learning',
-    version: '1.7.5',
+    version: '1.7.7',  // v1.7.7 -- bump for audit
     timestamp: new Date().toISOString(),
     conditions,
     tasks: 50,
     traps: 10,
     trap_encounters: trapEncounters,
+    // v1.7.7 -- audit field. null preserves chronological-third behavior.
+    restrict_late_to: opts.restrictLateTo ?? null,
   };
 }
 
@@ -511,7 +561,7 @@ async function main() {
         seed: seed ?? null,
         results,
         overall: trapHitRate(results),
-        phases: hitRateByPhase(results),
+        phases: hitRateByPhase(results, opts.restrictLateTo),
         hookFailures,
       });
     }
@@ -578,7 +628,7 @@ async function main() {
     mkdirSync(opts.output, { recursive: true });
   }
 
-  const output = buildOutput(conditionResults);
+  const output = buildOutput(conditionResults, opts);
   const outputPath = join(opts.output, `benchmark-${Date.now()}.json`);
   writeFileSync(outputPath, JSON.stringify(output, null, 2));
   console.log(`Results written to: ${outputPath}`);
