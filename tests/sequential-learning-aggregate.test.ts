@@ -181,11 +181,11 @@ describe('generateTasks(seed) (v1.7.5)', () => {
     expect(differingSlots).toBeGreaterThanOrEqual(Math.floor(trapPositions.length / 2));
   });
 
-  it('preserves total trap-encounter count (25 across all seeds)', () => {
+  it('preserves total trap-encounter count (31 across all seeds — v1.8.0: 25 v1.7.x + 6 adversarial)', () => {
     for (const seed of [0, 1, 42, 100, 1000, 9999]) {
       const tasks = generateTasks(seed);
       const trapCount = tasks.filter((t: { trapCategory: string | null }) => t.trapCategory).length;
-      expect(trapCount).toBe(25);
+      expect(trapCount).toBe(31);
     }
   });
 
