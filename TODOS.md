@@ -173,20 +173,31 @@ From the B3 dlPFC ship (v0.38.0). 3 of 5 items closed in v1.7.4 (2026-05-07); co
   `CHANGELOG.md` v1.8.0 entry and
   `docs/evals/2026-05-09-v1.8.0-adversarial-eval-result.md`.
 
-- [ ] **B3 follow-up: LongMemEval R@5 cross-validation** → **v1.9.0**.
-  Pre-committed in v1.8.0 prereg's "Pre-committed v1.9 direction"
-  subsection BEFORE v1.8 ran (so the direction cannot be retroactively
-  justified by v1.8 outcome). Goal: cross-validate the dlPFC
-  goal-stack mechanism on a fundamentally different benchmark.
-  Different metric (R@5, not trap-rate), different corpus
-  (500-question public LongMemEval, not internal sequential learning),
-  different mechanism stress (retrieval-on-fixed-corpus vs
-  agent-improvement-over-time). RETRACTION.md compliance: any v1.9
-  result-doc framing must satisfy the magnitude-smuggling guard
-  (no Δ pp / no median pp / no ≥Xpp thresholds; sign-only direction
-  count if comparison reported). See
-  `docs/evals/2026-05-09-v1.8.0-adversarial-eval-prereg.md`
-  for the v1.9 pre-commitment.
+- [x] **B3 follow-up: v1.9 LongMemEval cross-validation pre-commitment RETRACTED v1.8.1.**
+  Outside-voice review on two v1.9 plan iterations (v1 + v2) identified six
+  structural barriers preventing the goal-stack mechanism from firing on the
+  LongMemEval corpus + canonical harness as shipped: (1) `retrieve_inprocess.mjs`
+  calls `hybridSearch` (no boost); (2) ingest tags = session_id + date only
+  (no content-derived stems for exact-equality match); (3) `pushGoal` API field
+  is `goalName` not `tag`; (4) `MAX_ACTIVE_GOAL_DEPTH=3` suspends first stem
+  with top-3 push; (5) cumulative-null trigger AND clause unreachable;
+  (6) workload-validity gate ceremonial. Three options (re-ingest, harness
+  rewrite, retract); option C chosen per `CLAUDE.md` "Root Cause Over Patches"
+  + v1.7.9 pre-emptive retraction precedent. **The dlPFC goal-stack mechanism
+  CODE remains shipped from v1.7.4.** No new eval pre-commitment in v1.8.1.
+  See `CHANGELOG.md` v1.8.1 entry, `docs/RETRACTION.md` "v1.9 pre-commitment
+  retraction" + "Mechanism-effect status" subsections, and
+  `docs/evals/2026-05-09-v1.9-pre-commitment-retraction.md`.
+
+- [ ] **Future eval direction (TBD; pre-registered under new discipline rule).**
+  Per `docs/RETRACTION.md` "Pre-registration discipline rule" added v1.8.1:
+  no pre-commitment is binding without (a) source-read of code paths the
+  design depends on, AND (b) a 1-question dry-run confirming the mechanism
+  FIRES before pre-reg locks. Candidate workloads where the goal-stack
+  mechanism is more likely to be testable: synthesised multi-turn
+  conversation eval with explicit per-conversation topic goals;
+  mechanism-removal A/B telemetry in dogfood usage; infrastructure-only
+  release with no eval. None pre-committed by this TODOS entry.
 
 - [ ] **Re-enable starvation guard in `calibrate.mjs` with correct schema** → **v1.7.7+**.
   v1.7.6 dropped the broken `j.conditions[cn].results[]` extraction (run.mjs::buildOutput

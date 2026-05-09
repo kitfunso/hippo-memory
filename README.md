@@ -85,6 +85,13 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.8.1
+
+- **v1.8 prereg's v1.9 LongMemEval cross-validation pre-commitment RETRACTED.** Outside-voice review on two iterations of the v1.9 plan found six structural barriers (canonical harness bypasses the boost path; ingest tag namespace excludes content-derived stems; pushGoal API field mismatch; depth-cap suspension; trigger AND clause unreachable; workload-validity gate ceremonial). Per Root Cause Over Patches, public retraction over re-architecture. **This release does not re-assert the retracted −10pp magnitude.** Per `docs/RETRACTION.md`.
+- **Pre-registration discipline rule pinned in `docs/RETRACTION.md`:** no future eval pre-commitment is binding without (a) source-read of the code paths the design depends on, AND (b) a 1-question dry-run confirming the mechanism FIRES before pre-reg locks.
+- **Mechanism-effect status (cumulative null escalation)** appended to `docs/RETRACTION.md`. Across every workload pre-registered and tested to date (v1.7.5/6/7 SANITY_FAILs, v1.8 SAME=20/20 sign-only, v1.9 untestable), the dlPFC goal-stack mechanism has not produced a detectable behavioural effect at the metric level. The mechanism's CODE is preserved; the THEORY is preserved; what is acknowledged is that its EFFECT on the workloads we have been able to test is undetectable.
+- **No new eval pre-commitment in v1.8.1.** Future eval directions drafted under the new discipline rule.
+
 ### What's new in v1.8.0
 
 - **Adversarial-categories release** for the sequential-learning benchmark. 10 → 13 categories (3 new: `timezone_naive`, `idempotency_retry`, `float_accumulation`). Lesson vocabulary verified <0.30 Jaccard overlap vs existing 10 (`tools/jaccard-overlap.mjs`; max=0.033). Workload 50 → 62 tasks; late-phase metric (`--restrict-late-to 4`) preserved.

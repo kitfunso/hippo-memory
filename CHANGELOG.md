@@ -1,5 +1,42 @@
 # Changelog
 
+## 1.8.1 (2026-05-09)
+
+Pre-commitment retraction patch. The v1.8.0 prereg's "Pre-committed v1.9 direction" — *"v1.9 will run the dlPFC goal-stack mechanism on the LongMemEval R@5 corpus as a cross-validation"* — is **RETRACTED publicly**. Outside-voice review on two iterations of the v1.9 plan (v1 and v2) found six structural barriers that preclude the mechanism from firing on the LongMemEval corpus + canonical harness as shipped, without substantial re-architecture. Per `CLAUDE.md` "Root Cause Over Patches" + the v1.7.9 pre-emptive retraction precedent: public retraction is the principled call. **This release does not re-assert the retracted −10pp magnitude.** Per `docs/RETRACTION.md`.
+
+### Retracted
+
+- **v1.8.0 prereg "Pre-committed v1.9 direction" (LongMemEval R@5 cross-validation).** Six structural barriers identified by source-reading: (1) canonical harness `retrieve_inprocess.mjs` calls `hybridSearch` directly, which never invokes `applyGoalStackBoost`; (2) LongMemEval ingest writes session-tag namespace as `[session_id, date:YYYY-MM-DD]` only — zero content-derived tokens, so boost match (exact-equality) is structurally 0; (3) v2 plan's `pushGoal` API field was wrong (`tag` vs `goalName`); (4) `MAX_ACTIVE_GOAL_DEPTH=3` interaction with top-3 stems would suspend stem[0]; (5) v2 cumulative-null trigger AND clause was unreachable; (6) workload-validity gate ceremonial. Three options considered (re-ingest, harness rewrite, retract); option C (retract) chosen per Root Cause Over Patches.
+- **v1.10 pre-commitment from v1.9 plan v2 ("iterate goal-tag mapping").** Downstream of v1.9 design that is now retracted; retracted alongside.
+
+### Added
+
+- **`docs/RETRACTION.md` "Pre-registration discipline rule" subsection at top.** Pre-registration discipline rule: **"No future eval pre-commitment is accepted as binding without (a) source-read of the code paths the design depends on, AND (b) a 1-question dry-run wired through the actual mechanism path that confirms the mechanism FIRES before pre-reg locks."** Codifies the lesson from v1.9.
+- **`docs/RETRACTION.md` "v1.9 pre-commitment retraction" subsection.** Full retraction with the 6 structural barriers cited and source-line anchored.
+- **`docs/RETRACTION.md` "Mechanism-effect status (cumulative null escalation)" subsection.** Pre-committed as a trigger in v1.9 plan v2; fires here on cumulative null evidence (v1.7.5 SANITY_FAIL, v1.7.6 B*=NULL, v1.7.7 SANITY_FAIL, v1.8.0 SAME=20/20 sign-only, v1.9 untestable). The mechanism's effect, AS MEASURED on the workloads tested, is null. The mechanism's CODE is preserved. Future eval releases will pre-register under the new discipline rule.
+- **`docs/evals/2026-05-09-v1.9-pre-commitment-retraction.md`** — full retraction document with audit trail.
+- **`docs/plans/2026-05-09-v1.9.0-longmemeval-cross-validation.md`** — preserved historical-retracted plan v2 (audit record of why retraction was the right call).
+
+### Preserved (NOT retracted)
+
+- **dlPFC goal-stack mechanism (CODE):** `pushGoal` / `completeGoal` hooks, `--use-goal-stack` flag (sequential-learning runner), `applyGoalStackBoost` helper, MCP `hippo_recall { session_id }` boost, HTTP `GET /v1/memories?session_id=` boost — all shipped from v1.7.4, all preserved.
+- **v1.7.5/6/7/8 results.** Stand. The cumulative null escalation builds on them; it does not retract them.
+- **All v1.7.x infrastructure** (adapter contract, calibration, `--restrict-late-to`, audit fixes, adversarial categories).
+
+### What this release does NOT do
+
+- Does NOT pre-commit a new v1.9.x or v1.10.x eval direction. Per the new discipline rule: pre-commit the *rule* (source-read + dry-run before pre-reg), NOT the next eval target. The next eval target will be drafted in a separate plan, with the rule applied.
+- Does NOT retract any shipped code. Mechanism remains in code.
+- Does NOT retract v1.7.5/6/7/8 results.
+
+### Tests
+
+- 1508 passing (no test changes; doc-only release). 0 regressions vs v1.8.0.
+
+### Process note
+
+Outside voice on v1.9 plan: round 1 found 4 architectural P0s in v1; round 2 found 6 P0s in v2 (3 of which were NEW structural barriers v1 review missed because v1 didn't read the source code). Total 49 findings across both rounds. The lesson is that pre-commitments without source-validation are not binding-quality commitments. v1.8.1 codifies that lesson.
+
 ## 1.8.0 (2026-05-09)
 
 Adversarial-categories release. Adds 3 new trap categories to `benchmarks/sequential-learning` (10 → 13). Lesson vocabulary verified <0.30 Jaccard overlap with v1.7.5 lessons (`tools/jaccard-overlap.mjs`; max=0.033). Workload expands 50 → 62 tasks; late-phase metric (`--restrict-late-to 4`) preserved. **Mechanism characterisation only — this release does not re-assert the retracted −10pp magnitude** per `docs/RETRACTION.md`.
