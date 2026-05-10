@@ -77,8 +77,16 @@ export const crossEncoderReranker: RerankerFn = async (
 
   const scored = await Promise.all(
     head.map(async (r, i) => {
-      const out = await pipe(query, r.entry.content);
-      const ceScore = Array.isArray(out) && out.length > 0 ? out[0].score : 0;
+      let ceScore: number;
+      try {
+        const out = await pipe(query, r.entry.content);
+        ceScore = Array.isArray(out) && out.length > 0 ? out[0].score : 0;
+      } catch {
+        // Per-call inference failure (transient tensor error, bad input,
+        // etc.): fall back to original score for this candidate so a
+        // single bad inference doesn't sink the whole rerank pass.
+        ceScore = r.score;
+      }
       return {
         ...r,
         rerankScore: ceScore,

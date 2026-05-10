@@ -51,11 +51,18 @@ describe('crossEncoderReranker', () => {
   });
 
   it('falls back to identity ordering when cross-encoder is unavailable', async () => {
-    // This test runs regardless. When the model is loadable it tests determinism;
-    // when not, it tests the unavailable path.
+    // Always runs. Common-path assertions hold regardless of model availability;
+    // identity-ordering assertions are gated on `!available` because a
+    // loaded cross-encoder may legitimately reorder.
     const inputs = [asResult('alpha', 1.0), asResult('beta', 0.5)];
     const out = await crossEncoderReranker('alpha', inputs);
     expect(out.length).toBe(2);
     expect(out.every((r) => r.rerankScore !== undefined)).toBe(true);
+    if (!available) {
+      // Lock the fallback contract: when the model isn't loadable, the
+      // reranker MUST preserve input ordering exactly.
+      expect(out[0].entry.content).toBe('alpha');
+      expect(out[1].entry.content).toBe('beta');
+    }
   });
 });
