@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 /**
  * Runs the LongMemEval retrieval harness across all reranker tracks plus
- * baseline, then evaluates each. Output:
+ * baseline. Output (one JSONL per run, in a timestamped dir):
  *   results/reranker_sweep_<timestamp>/
  *     baseline.jsonl
- *     features_topk50.jsonl
  *     features_topk20.jsonl
+ *     features_topk50.jsonl
  *     features_topk100.jsonl
  *     cross_encoder_topk50.jsonl
- *     summary.json (R@1/R@3/R@5/R@10 + firing rate per track)
+ *
+ * R@K aggregation is a separate post-step: run `evaluate.py` per file, then
+ * `scripts/aggregate_reranker_sweep.mjs` (per the plan's Task 10 Step 4) to
+ * produce summary.json. This script does not aggregate on its own.
  *
  * Per docs/plans/2026-05-10-f6-reranker-hardening.md Task 9.
  */
