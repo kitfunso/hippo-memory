@@ -997,7 +997,15 @@ async function cmdRecall(
       const tail = results.slice(topK);
       const rerankInput = head.map((r, i) => ({ ...r, preRerankRank: i + 1 }));
       const reranked = await rerankerFn(query, rerankInput, { topK });
-      const withPostRank = reranked.map((r, i) => ({ ...r, postRerankRank: i + 1 }));
+      // Copy rerankScore into score so downstream blocks (--goal, goal-stack,
+      // salience) that sort by `r.score` honor the reranker's order rather
+      // than unwinding it. Original score is preserved on rerankScore's
+      // input, but downstream sorters key on `score`.
+      const withPostRank = reranked.map((r, i) => ({
+        ...r,
+        score: r.rerankScore,
+        postRerankRank: i + 1,
+      }));
       results = [...withPostRank, ...tail];
     }
   }
