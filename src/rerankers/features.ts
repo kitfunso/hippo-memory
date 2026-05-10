@@ -20,7 +20,7 @@ const KIND_WEIGHT: Record<string, number> = {
  * MemoryEntry. No external dependencies, no network, no model load.
  *
  * Score = base_score * confidence_w * kind_w * (0.7 + 0.3*schema_fit)
- *       * (0.8 + 0.2*tanh(strength)) * (1 + 0.1*tanh(pos-neg))
+ *       * (0.8 + 0.2*tanh(strength)) * (1 + 0.1*tanh((pos-neg)/2))
  *       * exact_overlap_boost
  *
  * Weights are calibrated for sign and order, NOT a magnitude claim.

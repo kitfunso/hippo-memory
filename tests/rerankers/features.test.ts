@@ -41,7 +41,9 @@ describe('featuresReranker', () => {
     const a = createMemory('alpha bravo charlie');
     const b = createMemory('delta echo foxtrot');
 
-    const out = await featuresReranker('alpha', [asResult(a, 1.0), asResult(b, 0.5)]);
+    // Query 'zulu' has no overlap with either doc, so the only differentiator
+    // is the input score (1.0 > 0.5).
+    const out = await featuresReranker('zulu', [asResult(a, 1.0), asResult(b, 0.5)]);
 
     expect(out[0].entry.id).toBe(a.id);
     expect(out[1].entry.id).toBe(b.id);
