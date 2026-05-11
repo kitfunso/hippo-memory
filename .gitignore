@@ -21,3 +21,10 @@ benchmarks/a1/results/
 .claude/worktrees/
 .context/
 provenance-coverage.json
+# F6 reranker hardening: dataset (15MB) + ingested store + sweep outputs
+# are large and reproducible from the orchestrator. Don't commit.
+data/longmemeval_oracle.json
+data/longmemeval_*.json
+hippo_store2/
+hippo_store_synthetic/
+results/reranker_sweep_*/
