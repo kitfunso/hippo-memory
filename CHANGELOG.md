@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.9.0 — 2026-05-11 — F6 reranker hardening
+
+This release does not re-assert the retracted −10pp magnitude.
+
+**Shipped:**
+- `RerankerFn` seam in `hybridSearch` (`src/search.ts`); reranker runs after MMR, before budget filtering. Default off; opt-in via the `reranker` option.
+- `--reranker <name>` and `--reranker-top-k <n>` flags on `hippo recall` (`src/cli.ts`) and on the LongMemEval harness (`benchmarks/longmemeval/retrieve_inprocess.mjs`).
+- Track 1 features reranker (`src/rerankers/features.ts`): re-scores the top-K candidates using `MemoryEntry`-level signals (confidence tier, kind, schema_fit, strength, outcome counts, query-doc overlap). No external dependencies; sub-millisecond per query.
+- Track 2 cross-encoder reranker (`src/rerankers/cross-encoder.ts`): MS-MARCO MiniLM via `@xenova/transformers` optional peer dep. Falls back to identity ordering if the model fails to load (no transformers installed, no HF access for first-run download, etc.).
+- Track 3 LLM reranker skeleton (`src/rerankers/llm.ts`): listwise permutation rerank against an OpenAI-compatible endpoint. Env-gated on `HIPPO_LLM_RERANKER_URL` to prevent accidental cost. Skeleton only — full characterisation deferred.
+- LongMemEval sweep orchestrator (`benchmarks/longmemeval/run_reranker_sweep.mjs`) and `scripts/aggregate_reranker_sweep.mjs`.
+- Tier-1 micro-eval fixtures: `reranker-features` (smoke test for the CLI wire-up) and `reranker-cross-encoder` (semantic-over-lexical test, falls back to identity in sandboxed environments).
+
+**Eval result:** `docs/evals/2026-05-10-f6-reranker-result.md` (prereg: `docs/evals/2026-05-10-f6-reranker-prereg.md`).
+
+**Workload-validity verdicts (binding gates from the prereg):**
+- Gate-A (firing rate per track on 500-question LongMemEval): features track PASS (500/500). Cross-encoder PASS-with-caveat (500/500 invocations all took the identity-fallback branch because the MS-MARCO model was not downloadable in the test environment; this is NOT a real cross-encoder evaluation).
+- Gate-B (hyperparameter discrimination across features_topk{20,50,100}): FAIL. The three settings produced byte-identical R@K. Per the prereg, no per-hyperparameter R@5 effect is claimed.
+
+**Roadmap target framing:** `ROADMAP-RESEARCH.md` lists "R@5 ≥ 85% on LongMemEval with the existing hybrid path" as the F6 success criterion. The result doc reports R@5 = 75.4% (features, all three settings) and 75.6% (baseline) on the workload tested. The roadmap target is not met by the current workload + ingest path. Per the prereg this is descriptive characterisation, not a binding gate. The mechanism ships; the path to a real R@5 ≥ 85% attempt requires either a real cross-encoder evaluation (HF access) or a richer ingest path that populates entry-level signals the features reranker reads.
+
+**Mechanism cumulative-null status:** the dlPFC goal-stack mechanism's cumulative-null status (`docs/RETRACTION.md:94-113`) is independent of this release.
+
 ## 1.8.1 (2026-05-09)
 
 Pre-commitment retraction patch. The v1.8.0 prereg's "Pre-committed v1.9 direction" — *"v1.9 will run the dlPFC goal-stack mechanism on the LongMemEval R@5 corpus as a cross-validation"* — is **RETRACTED publicly**. Outside-voice review on two iterations of the v1.9 plan (v1 and v2) found six structural barriers that preclude the mechanism from firing on the LongMemEval corpus + canonical harness as shipped, without substantial re-architecture. Per `CLAUDE.md` "Root Cause Over Patches" + the v1.7.9 pre-emptive retraction precedent: public retraction is the principled call. **This release does not re-assert the retracted −10pp magnitude.** Per `docs/RETRACTION.md`.

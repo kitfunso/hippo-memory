@@ -85,6 +85,13 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.9.0
+
+- **F6 reranker hardening shipped.** New `RerankerFn` seam in `hybridSearch` with three reranker tracks: Track 1 features (`MemoryEntry`-level signals, no external deps), Track 2 cross-encoder (MS-MARCO MiniLM via optional `@xenova/transformers`, identity-fallback on load failure), Track 3 LLM (env-gated skeleton against an OpenAI-compatible endpoint). Opt in via `hippo recall --reranker <name>`.
+- **Workload-validity verdicts on the LongMemEval sweep** (`docs/evals/2026-05-10-f6-reranker-result.md`, prereg `docs/evals/2026-05-10-f6-reranker-prereg.md`): Gate-A (firing rate, binding) PASS for the features track, PASS-with-caveat for cross-encoder (500/500 invocations all took the identity-fallback branch — HF model download was blocked in the test environment, so this is NOT a real cross-encoder evaluation). Gate-B (hyperparameter discrimination, binding) FAIL — features_topk{20,50,100} produced byte-identical R@K, so no per-hyperparameter R@5 effect is claimed.
+- **Roadmap R@5 ≥ 85% target NOT met on the workload tested.** Observed R@5 = 75.4% (features, all three top-K settings) and 75.6% (baseline). Per the prereg this is descriptive characterisation, not a binding gate; the mechanism ships, and a real attempt at the target requires either a real cross-encoder evaluation (HF access) or a richer ingest path that populates entry-level reranker signals.
+- **This release does not re-assert the retracted −10pp magnitude.** Per `docs/RETRACTION.md`. The dlPFC goal-stack cumulative-null status (`docs/RETRACTION.md:94-113`) is independent of this release.
+
 ### What's new in v1.8.1
 
 - **v1.8 prereg's v1.9 LongMemEval cross-validation pre-commitment RETRACTED.** Outside-voice review on two iterations of the v1.9 plan found six structural barriers (canonical harness bypasses the boost path; ingest tag namespace excludes content-derived stems; pushGoal API field mismatch; depth-cap suspension; trigger AND clause unreachable; workload-validity gate ceremonial). Per Root Cause Over Patches, public retraction over re-architecture. **This release does not re-assert the retracted −10pp magnitude.** Per `docs/RETRACTION.md`.

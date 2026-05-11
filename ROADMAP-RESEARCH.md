@@ -369,9 +369,9 @@ Five abilities mapped to hippo features:
 | Knowledge updates | `hippo invalidate`, `hippo decide --supersedes`, conflict detection | shipped |
 | Abstention | confidence tiers (`stale`, `inferred`) | shipped |
 
-### F6. LongMemEval reranker hardening [next]
+### F6. LongMemEval reranker hardening [shipped]
 **Scope correction (eng-review):** PLAN.md:285 already lists hybrid embeddings as shipped. The remaining gap is reranker quality, not embedding integration. Close gap from current R@5 toward MemPalace's 96.6% via reranker tuning + cross-encoder evaluation.
-**Effort:** 6d. **Success:** R@5 ≥ 85% on LongMemEval with the existing hybrid path.
+**Effort:** 6d (actual: in-tree). **Result:** `docs/evals/2026-05-10-f6-reranker-result.md`. v1.9.0 ships the reranker seam and three reranker tracks (features, cross-encoder, LLM-skeleton). Workload-validity gates per the prereg: Gate-A PASS for the features track, Gate-A PASS-with-caveat for cross-encoder (identity-fallback only — HF model download was blocked in the test environment), Gate-B FAIL on features hyperparameters (the three top-K settings produced byte-identical R@K, so no per-hyperparameter effect is claimed). The "R@5 ≥ 85%" target is not met on the workload tested (observed 75.4% features / 75.6% baseline). Per the v1.8.1 retraction discipline (`docs/RETRACTION.md`) this is descriptive characterisation, not a binding gate; the mechanism ships and the path to a real R@5 ≥ 85% attempt requires either a real cross-encoder evaluation (HF access) or a richer ingest path that populates entry-level reranker signals.
 
 ### F7. LoCoMo first baseline [next]
 Informational only. Never run before. Do not gate any feature on it until baseline exists.
