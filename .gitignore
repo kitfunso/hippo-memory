@@ -29,3 +29,7 @@ hippo_store2/
 hippo_store_synthetic/
 results/reranker_sweep_*/
 results/hybrid_tuning_*/
+results/hybrid_tuning_best_v2/
+results/f9_baseline/
+results/f9_rerank/
+results/hybrid_tuning_*/
