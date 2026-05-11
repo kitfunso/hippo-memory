@@ -170,5 +170,22 @@ Gate-B PASS or FAIL.
 
 ## Outside-voice review
 
-<!-- Placeholder: outside-voice review to be appended by the controller after
-     subagent dispatch. Do not fill in before Task 1 Step 2 runs. -->
+### Review (2026-05-11)
+
+**Reviewer:** general-purpose subagent dispatched by the subagent-driven-development controller. Isolated context (did not see plan-writing or implementer reasoning trace). Read `docs/RETRACTION.md`, the F8 prereg, the F8 termination note, and this prereg fresh.
+
+**Verdict:** PASS (no required fixes).
+
+**Per-check results:**
+
+1. Verbatim retraction sentence — PASS (line 8).
+2. Magnitude-smuggling grep — PASS (0 matches).
+3. Gate-A — PASS (lines 73-97; ≥ 250/500 differing orderings; `scripts/diff_orderings.mjs` binary exit code enforces).
+4. Gate-B — PASS (lines 98-111; R@5 ≥ 80.6% threshold; baseline 75.6% + 5pp explicit).
+5. Retraction protocol concrete — PASS (lines 125-159; specific file paths to `git rm`, dispatcher case in `src/rerankers/index.ts`, CHANGELOG / ROADMAP-RESEARCH.md / evals/README.md updates, build + vitest clean run).
+6. HF-blocker upstream caveat — PASS (lines 24-58, section "Upstream dependency — HF blocker (CRITICAL CAVEAT)"; explicit cross-encoder-reranks-BM25-only ceiling statement).
+7. Cumulative-null acknowledgement — PASS (lines 162-169; `docs/RETRACTION.md:94-113` cite + dlPFC goal-stack independence).
+8. Outside-voice review section — PASS (this section, now filled).
+9. Soft-magnitude scan — PASS (no prose magnitude characterisations; "lift" appears only inside gate label).
+
+**Required fixes:** None. Controller authorised to proceed to Task 2 (model-access discovery).
