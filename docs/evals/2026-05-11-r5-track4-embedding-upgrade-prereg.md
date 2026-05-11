@@ -70,6 +70,27 @@ The plan that embeds this prereg verbatim was reviewed (verdict: PASS_WITH_NOTES
 - Smoke-load (filled in during Task 4): `<load time ms> / <first 5 normalized values of a sample vector>`.
 - Re-embed wall time (filled in during Task 5): `<seconds>` / final `embeddings.json` size: `<MB>`.
 
-## Outside-voice review trail (filled in after Task 1 step 3)
+## Outside-voice review trail
 
-`<reviewer verdict + per-check results + required fixes>`
+### Review (2026-05-11, isolated-context general-purpose subagent, Sonnet)
+
+**Verdict:** PASS (12/12 checks).
+
+Summary of per-check results:
+
+1. Verbatim retraction sentence — PASS (line 8 of this prereg).
+2. Strict magnitude grep declared — PASS (lines 20-22).
+3. Gate-A operational — PASS: key count == 940, vector dim == 768, L2-norm in [0.999, 1.001] for first 50 keys, `meta.embedding_model` row check.
+4. Gate-B operational, 81.8 matches F8 — PASS (arithmetic 76.8 + 5.0 = 81.8 confirmed against F8 result doc line 17).
+5. Stretch NON-binding stated verbatim — PASS.
+6. Failure handling concrete (both arms) — PASS, internally consistent with parent plan.
+7. Cumulative-null acknowledgement citing `docs/RETRACTION.md:94-113` — PASS.
+8. Outside-voice clauses (this prereg + future result doc) — PASS.
+9. Workload provenance (dataset SHA-256, store, model id, URL, MD5) — PASS.
+10. Baseline source honest — PASS, cross-references F8 result doc cleanly.
+11. FP16 ONNX risk acknowledged with mitigation — PASS.
+12. No conflicts with parent plan — PASS.
+
+**Required fixes:** none. The prereg is internally consistent and carries all required discipline boilerplate.
+
+Controller authorised to proceed with Task 4 (model fetch).
