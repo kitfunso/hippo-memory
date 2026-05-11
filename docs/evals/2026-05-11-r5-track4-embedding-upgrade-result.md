@@ -313,7 +313,7 @@ Aggregate R@5 = (78×94.9 + 133×85.7 + 56×100.0 + 30×40.0 + 70×70.0 + 133×8
 ### Gate verdicts (exploratory framing)
 
 - **Gate-A (workload validity):** PASS (router runs on all 500 queries; ordering source depends on `question_type` only).
-- **Gate-B (F11 prereg's R@5 ≥ 81.8%):** PASS at the *in-sample upper bound only*. Observed R@5 = 82.4. This is the only gate verdict across F8/F9/F10/F11/F11+F9 that crosses its threshold, and it does so under the in-sample caveat. The roadmap-target R@5 ≥ 85% remains NOT MET.
+- **Gate-B (F11 prereg's R@5 ≥ 81.8%):** PASS at the *in-sample upper bound only — not a deployable gate verdict*. Observed R@5 = 82.4. Under the in-sample caveat, this is the only threshold-crossing across F8/F9/F10/F11/F11+F9. The roadmap-target R@5 ≥ 85% remains NOT MET.
 - **R@10 = 85.2% crosses the 85% threshold at K=10** (in-sample). This is the first time any tracked configuration has reached 85% at any K on this workload.
 
 ### What this implies
@@ -388,3 +388,26 @@ Summary of per-check results (10 checks):
 **Applied fix:** Observation 3 in the appendix replaced the unsupported "below either lever's standalone contribution variance" phrasing with a raw-value comparison (76.8 / 77.0 / 78.0 / 78.2 across four conditions) plus an explicit acknowledgement that "overlap vs additive" is not isolatable from this four-point comparison.
 
 Controller authorised to proceed: the F11+F9 stack appendix is locked. No further pre-registered evaluations in scope.
+
+### Review of "Category-aware routing — in-sample upper-bound analysis" appendix (2026-05-11, third isolated-context subagent)
+
+**Verdict:** PASS_WITH_NOTES → PASS after fix.
+
+Summary of per-check results (12 checks):
+
+1. Exploratory / not pre-registered label — PASS (opening sentence, bolded).
+2. "In-sample for F11+F9" verbatim, prominent — PASS (first caveat, not buried).
+3. "Not a deployable mechanism without held-out validation" verbatim — PASS (in the lede).
+4. Router derivation honestly attributed (F9 v2 + F11+F9 per-type pattern) — PASS.
+5. Gate-B "PASS in-sample only" correctly hedged — PASS after fix (reordering suggested; applied to lead with the caveat).
+6. Roadmap target NOT MET in deployable form — PASS (explicit in caveat 4 and verdicts section).
+7. R@10 = 85.2 crossing 85 at K=10 correctly framed — PASS (qualified with "(in-sample)" and "at K=10"; not conflated with roadmap R@5 target).
+8. Strict magnitude grep clean in appendix — PASS (0 matches; "2.6pp short of 85%" reads as deficit-from-target, not as a lift/drop claim).
+9. Soft-magnitude scan clean — PASS (no small/marginal/substantial/etc.).
+10. CHANGELOG/README/ROADMAP do not propagate 82.4 — PASS (reviewer grep'd: zero matches in those files).
+11. Per-type-pattern causal claims hedged — PASS ("suggestive but not conclusive evidence", "evidence but not proof of generalisation").
+12. Four honest-framing caveats present — PASS (numbered, bolded, substantive).
+
+**Applied fix:** Gate-B verdict sentence reordered so the in-sample caveat leads, eliminating the spotlight-then-caveat ordering ("PASS at the *in-sample upper bound only — not a deployable gate verdict*").
+
+Controller authorised to lock. CHANGELOG/README/ROADMAP intentionally NOT updated with 82.4 — the cross-track-best in those documents (78.2 from F11+F9 stack) reflects deployable mechanisms only.
