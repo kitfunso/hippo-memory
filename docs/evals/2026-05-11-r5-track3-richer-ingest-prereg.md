@@ -80,6 +80,34 @@ The plan that embeds this prereg was reviewed (verdict PASS_WITH_NOTES at commit
 - Subagent dispatch: 19 invocations × ~50 sessions, model Sonnet (general-purpose subagents), 4 waves of 5. Actual wall time + token totals + cost recorded in result doc.
 - Signal distribution table (output of Task 5 step 2) recorded in result doc.
 
-## Outside-voice review trail (filled in after dispatch)
+## Outside-voice review trail
 
-`<reviewer verdict + per-check results + required fixes>`
+### Review (2026-05-11, isolated-context general-purpose subagent, Sonnet)
+
+**Verdict:** PASS_WITH_NOTES (14/14 checks).
+
+Summary of per-check results:
+
+1. Verbatim retraction sentence — PASS (line 7).
+2. Strict magnitude grep declared — PASS (lines 20-22).
+3. Gate-A operational — PASS (≥ 752/940, per-field 50%-on-3 thresholds; sqlite measurement procedure named).
+4. Gate-B operational, 80.4 matches F6 — PASS (F6 features baseline 75.4% + 5pp = 80.4; arithmetic confirmed).
+5. HARD RETRACTION protocol enumerated — PASS (4 file paths explicit, plus dispatcher case).
+6. Failure handling concrete — PASS (both arms non-contradictory).
+7. Stretch NON-binding stated verbatim — PASS.
+8. Cumulative-null cite `docs/RETRACTION.md:94-113` — PASS.
+9. Outside-voice clauses (this prereg + future result doc) — PASS.
+10. Cost / wall-time pre-registered — PASS (≤ $2, 15-25 min).
+11. Embedding-model compat gate cites F11 — PASS (with minor note: F11's hand-off value lives in its result doc's Gate-verdicts section, not a dedicated "hand-off" section; cross-reference is unambiguous).
+12. Provenance documented at the right level — PASS.
+13. Baseline source honest (75.4% from F6) — PASS.
+14. No conflict with parent plan — PASS (one minor parent-plan stale-naming observation: plan line 5 says `outcome_score`; the prereg and `features.ts` correctly use `outcome_positive` / `outcome_negative` separately. Prereg is more accurate; no gate-affecting conflict).
+
+**Required fixes:** none.
+
+**Observations for the result-doc author:**
+
+- Cite F11's hand-off explicitly at "F11 result doc, Gate-verdicts section" rather than the looser "F11 hand-off note".
+- Use `outcome_positive` and `outcome_negative` (not `outcome_score`) in all result-doc tables to stay consistent with the prereg and the actual schema.
+
+Controller authorised to proceed with Task 4 (subagent dispatch).
