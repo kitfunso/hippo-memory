@@ -31,8 +31,9 @@ Session-level signals (how confident-sounding a session is, what kind of session
 ### Cross-track R@5 status (as of this release)
 
 - F8 hybrid tuning on MiniLM: R@5 = 76.8 (Gate-B FAIL @ 77.6 = baseline + 2pp).
-- F9 v2 sub-agent LLM rerank on MiniLM: R@5 = 78.0 (Gate-B FAIL @ 80.6 = baseline + 5pp; highest R@5 across all tracks).
+- F9 v2 sub-agent LLM rerank on MiniLM: R@5 = 78.0 (Gate-B FAIL @ 80.6 = baseline + 5pp).
 - F11 BGE-base baseline (no reranker): R@5 = 77.0 (Gate-B FAIL @ 81.8 = F8 best + 5pp).
+- **F11 + F9 stack (BGE-base + sub-agent LLM rerank, exploratory follow-up appended to F11 result doc 2026-05-11): R@5 = 78.2** (Gate-B FAIL @ 81.8; new cross-track best, margin 0.2 over F9 v2).
 - F10 features-enriched (this release, retracted): R@5 = 59.2 (Gate-B FAIL @ 80.8; HARD RETRACTION).
 
 Roadmap target R@5 ≥ 85% is NOT MET by any track. NON-binding per each prereg.

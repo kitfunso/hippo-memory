@@ -232,7 +232,14 @@ After the standalone F11 Gate-B FAIL and the F10 features-enriched HARD RETRACTI
 
 2. Per-type movement repeats the F9 v2 pattern: multi-session, single-session-preference, and temporal-reasoning improve at R@5; knowledge-update, single-session-assistant, and single-session-user regress. The categories where regress occurs are those where the baseline retrieval is already very strong (knowledge-update 94.9, single-session-assistant 100.0) — the reranker has more downside-risk than upside on highly-confident retrievals.
 
-3. The combined "embedding upgrade + sub-agent rerank" lift at R@5 (76.8 baseline F6 MiniLM-no-rerank → 78.2 F11+F9 stack) is below either lever's standalone contribution variance. The two mechanisms move R@5 in similar directions and overlap rather than stack additively.
+3. Standalone movements vs the combined stack (raw values, all from same workload):
+
+   - F8 best MiniLM, no rerank: R@5 = 76.8.
+   - F11 BGE-base, no rerank: R@5 = 77.0.
+   - F9 v2 MiniLM, sub-agent rerank: R@5 = 78.0.
+   - F11 + F9 stack (BGE-base, sub-agent rerank): R@5 = 78.2.
+
+   If the two levers were independent and additive, the stack would land near 78.2 = 76.8 + (77.0 − 76.8) + (78.0 − 76.8). The observed 78.2 matches that arithmetic. The two mechanisms move R@5 in similar directions; whether this reflects "overlap" vs "additive" is not isolatable from the four-point comparison alone (no variance was computed across re-runs).
 
 ### Implication
 
@@ -284,3 +291,24 @@ Summary of per-check results:
 - Smoke-load line now lists the first-5 normalized values as called for in the prereg's provenance placeholder.
 
 Controller authorised to proceed with F10 execution.
+
+### Review of "F11 + F9 rerank stack" appendix (2026-05-11, second isolated-context subagent)
+
+**Verdict:** PASS_WITH_NOTES → PASS after fix.
+
+Summary of per-check results (10 checks):
+
+1. Honest exploratory framing — PASS (intro traces this back to the deferred Future-work item; gate-verdicts section labelled `(exploratory framing)`).
+2. Strict magnitude grep — PASS (0 real matches; the two grep hits are a model-name occurrence and a meta-quote of a prior review).
+3. Soft-magnitude scan in appendix prose — NOTE applied (see fix below).
+4. Gate verdicts raw — PASS (Gate-A PASS, Gate-B FAIL 78.2 < 81.8 shortfall 3.6pp, roadmap NOT MET shortfall 6.8pp).
+5. Cross-track informational comparison honest — PASS (78.2 named as new best, margin 0.2 over F9 v2, NOT framed as roadmap hit).
+6. Per-type table both directions — PASS (6 categories, gains + losses).
+7. Causal claims hedged — PASS after fix.
+8. Cumulative-null status unchanged — PASS.
+9. Setup reproducible — PASS.
+10. No new pre-registration claim — PASS.
+
+**Applied fix:** Observation 3 in the appendix replaced the unsupported "below either lever's standalone contribution variance" phrasing with a raw-value comparison (76.8 / 77.0 / 78.0 / 78.2 across four conditions) plus an explicit acknowledgement that "overlap vs additive" is not isolatable from this four-point comparison.
+
+Controller authorised to proceed: the F11+F9 stack appendix is locked. No further pre-registered evaluations in scope.
