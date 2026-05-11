@@ -259,6 +259,82 @@ This release does not re-assert the retracted −10pp magnitude.
 
 ---
 
+## Category-aware routing — in-sample upper-bound analysis (2026-05-11)
+
+This is a second exploratory follow-up. **Not a pre-registered evaluation. Not a deployable mechanism without held-out validation.** Reports an in-sample upper bound that characterises where the headroom is on this corpus.
+
+### Motivation
+
+Both F9 v2 (MiniLM + sub-agent rerank) and F11+F9 (BGE-base + sub-agent rerank) showed an identical per-type pattern:
+
+- Sub-agent rerank IMPROVES R@5 on: `multi-session`, `single-session-preference`, `temporal-reasoning`.
+- Sub-agent rerank REGRESSES R@5 on: `knowledge-update`, `single-session-assistant`, `single-session-user`.
+
+The pattern replicating across two independent runs (different embedding model, same 500-question workload, same rerank prompt structure) is suggestive but not conclusive evidence that the pattern is a property of the workload + LLM-rerank-mechanism interaction rather than a single-run artefact.
+
+### Mechanism (in-sample router)
+
+- For each query, look up `question_type` from the dataset.
+- If `question_type ∈ {multi-session, single-session-preference, temporal-reasoning}`: use the F11+F9 stack ordering.
+- Else: use the F11 baseline (no-rerank) ordering.
+
+Implementation: `results/f11_rerank_v2/router.jsonl` (built from the F11 baseline and F11+F9 rerank JSONLs already on disk). 296 queries received the rerank ordering; 204 received the baseline ordering.
+
+### Results
+
+| Metric | F11 baseline | F11+F9 stack | F11+F9 router (category-aware) |
+|---|---:|---:|---:|
+| recall@1 | 50.8% | 58.6% | 62.6% |
+| recall@3 | 66.8% | 72.8% | 77.2% |
+| recall@5 | 77.0% | 78.2% | **82.4%** |
+| recall@10 | 83.8% | 83.6% | 85.2% |
+| answer_in_content@5 | 49.8% | 48.0% | 49.0% |
+
+### Per-type R@5 (router)
+
+| Category | n | Source ordering | R@5 |
+|---|---:|---|---:|
+| knowledge-update | 78 | F11 baseline | 94.9% |
+| multi-session | 133 | F11+F9 rerank | 85.7% |
+| single-session-assistant | 56 | F11 baseline | 100.0% |
+| single-session-preference | 30 | F11+F9 rerank | 40.0% |
+| single-session-user | 70 | F11 baseline | 70.0% |
+| temporal-reasoning | 133 | F11+F9 rerank | 80.5% |
+
+Aggregate R@5 = (78×94.9 + 133×85.7 + 56×100.0 + 30×40.0 + 70×70.0 + 133×80.5) / 500 = 82.4% — confirmed by direct evaluation.
+
+### Honest in-sample framing (caveats)
+
+1. **The routing rule is in-sample for F11+F9.** The rule says "use rerank for these three categories" — that decision was made *after* seeing F9 v2's and F11+F9's per-type results. Applying the rule to the same data on which it was derived is an upper bound, not a deployment claim.
+2. **F9 v2 → F11+F9 replication is a partial cross-validation.** The routing rule's per-type direction (improve vs regress) was derived from F9 v2 on the MiniLM store and confirmed by F11+F9 on the BGE-base store. Different embedding model, same question set. The pattern's stability across embedding model is evidence but not proof of generalisation.
+3. **No held-out test was run.** A proper held-out evaluation would split the 500 questions in half, derive the per-type rule on one half, apply to the other. That was not done in this release.
+4. **The roadmap target was R@5 ≥ 85% in a deployable mechanism, not an in-sample upper bound.** This router is NOT a deployable mechanism by the standard of the roadmap target. It establishes that the per-type pattern, if stable at deployment, would put R@5 = 82.4% within reach — 2.6pp short of 85% even with that assumption.
+
+### Gate verdicts (exploratory framing)
+
+- **Gate-A (workload validity):** PASS (router runs on all 500 queries; ordering source depends on `question_type` only).
+- **Gate-B (F11 prereg's R@5 ≥ 81.8%):** PASS at the *in-sample upper bound only*. Observed R@5 = 82.4. This is the only gate verdict across F8/F9/F10/F11/F11+F9 that crosses its threshold, and it does so under the in-sample caveat. The roadmap-target R@5 ≥ 85% remains NOT MET.
+- **R@10 = 85.2% crosses the 85% threshold at K=10** (in-sample). This is the first time any tracked configuration has reached 85% at any K on this workload.
+
+### What this implies
+
+The headroom that the cross-track best F11+F9 = 78.2 leaves on the table is the regressing categories. If a deployable router can identify "this is a knowledge-update-type query, skip the rerank" at inference time (the dataset provides `question_type` as a known field; a production system would need a classifier or equivalent signal), R@5 reaches the in-sample upper bound of 82.4.
+
+The remaining 2.6pp to 85% is in categories where even the better-of-two ordering plateaus:
+
+- `single-session-preference` n=30: 40.0% (the rerank ordering wins here, but both orderings plateau)
+- `single-session-user` n=70: 70.0% (the baseline wins here, but the baseline itself plateaus)
+
+These plateaus reflect the underlying candidate-pool quality, not the ordering choice. To exceed 82.4 R@5 in-sample (and have any hope at 85% deployably), the mechanism would need to expand the candidate pool — a deeper top-K, a different embedding model not available in this sandbox, or a query-aware retrieval mechanism beyond top-K selection.
+
+### Cumulative-null status (unchanged)
+
+This second exploratory follow-up changes no mechanism in `src/`. The cumulative-null status of the dlPFC goal-stack mechanism (`docs/RETRACTION.md:94-113`) is unaffected. The router lives only in the result artefact; it has no production code path.
+
+This release does not re-assert the retracted −10pp magnitude.
+
+---
+
 ## Outside-voice review trail
 
 ### Review (2026-05-11, isolated-context general-purpose subagent, Sonnet)
