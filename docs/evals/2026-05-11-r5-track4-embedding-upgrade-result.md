@@ -177,9 +177,78 @@ F10's prereg should record both ids in its Provenance section after the compatib
 
 ## Future work (NOT this release)
 
-- **F11 + F9 rerank stack.** The `results/f11_baseline/bge-base_top20.jsonl` artefact is in the same per-question schema as `results/f9_baseline_v2/best_top20.jsonl` (fields: `question_id`, `question`, `answer`, `question_type`, `question_date`, `retrieved_memories[{id, score, strength, tags, content, tokens}]`, `num_retrieved`). It is directly consumable by `benchmarks/longmemeval/rerank_split_v2.py` if a 50-batch sub-agent rerank pass is run against the bge-base candidates. Whether this would lift R@5 above the standalone 77.0 is an open question; the analogous run on MiniLM (F9 v2) reported R@5 76.8 → 78.0.
+- ~~**F11 + F9 rerank stack.**~~ Executed as an exploratory follow-up — see the "F11 + F9 rerank stack — exploratory follow-up" section below. Result: R@5 = 78.2 (new cross-track best). Still does not meet the F11 prereg's Gate-B threshold of 81.8 and does not meet the 85% roadmap target.
 - **Alternative pooling strategies.** Some BGE deployments use `pooling: 'mean'` with normalised vectors as a corpus-size-bounded heuristic. Not pre-registered for F11; would require its own prereg.
 - **bge-large or alternative embedding models.** bge-large is not on the Qdrant fastembed GCS bucket as of 2026-05-11; would require a different mirror or vendoring path.
+
+---
+
+---
+
+## F11 + F9 rerank stack — exploratory follow-up (2026-05-11)
+
+After the standalone F11 Gate-B FAIL and the F10 features-enriched HARD RETRACTION, the F11 result doc's "Future work" section identified the F11 + F9 stack as the natural deferred follow-up: run F9 v2's 50-batch sub-agent LLM rerank against F11's bge-base top-20 candidate pool. This section reports that experiment.
+
+### Setup
+
+- Input: `results/f11_baseline/bge-base_top20.jsonl` (500 queries × 20 candidates each, F11 deeper-pool variant).
+- Split: `benchmarks/longmemeval/rerank_split_v2.py` → 50 batches × 10 queries × 20 candidates × ≤ 600 chars per candidate at `/tmp/rerank_f11_batches/`.
+- Dispatch: 50 sub-agent invocations (general-purpose, Sonnet), 5 waves of 10, ~100-170 s per invocation. Same prompt shape as F9 v2.
+- Merge: `benchmarks/longmemeval/rerank_merge_v2.py` → `results/f11_rerank_v2/reranked.jsonl`.
+- Score: `benchmarks/longmemeval/evaluate_retrieval.py`.
+- Gate-A diff: `scripts/diff_orderings.mjs` against `results/f11_baseline/bge-base_top20.jsonl`.
+
+### Results
+
+| Metric | F11 baseline (bge-base, no rerank) | F11 + F9 stack (bge-base + sub-agent rerank) |
+|---|---:|---:|
+| recall@1 | 50.8% | 58.6% |
+| recall@3 | 66.8% | 72.8% |
+| recall@5 | 77.0% | 78.2% |
+| recall@10 | 83.8% | 83.6% |
+| answer_in_content@5 | 49.8% | 48.0% |
+
+### Per-type R@5
+
+| Category | n | F11 baseline | F11 + F9 stack |
+|---|---:|---:|---:|
+| knowledge-update | 78 | 94.9% | 85.9% |
+| multi-session | 133 | 74.4% | 85.7% |
+| single-session-assistant | 56 | 100.0% | 98.2% |
+| single-session-preference | 30 | 30.0% | 40.0% |
+| single-session-user | 70 | 70.0% | 51.4% |
+| temporal-reasoning | 133 | 73.7% | 80.5% |
+
+### Gate verdicts (exploratory framing)
+
+- **Gate-A (workload validity):** PASS. 500/500 differing orderings between baseline and stack (threshold ≥ 250 per the F9 v2 Gate-A convention).
+- **Gate-B (R@5 ≥ F11 prereg's 81.8% threshold):** **FAIL.** Observed R@5 = 78.2 < 81.8. Shortfall = 3.6pp.
+- **Cross-track comparison (informational):** R@5 = 78.2 is the new cross-track best across all tracks (F8 76.8 / F9 v2 78.0 / F11 standalone 77.0 / F11+F9 stack 78.2). Margin over F9 v2 (78.0): 0.2pp.
+- **Roadmap target R@5 ≥ 85%:** NOT MET. Shortfall = 6.8pp.
+
+### Observations (raw)
+
+1. The R@1 lift from sub-agent LLM rerank (50.8 → 58.6) is consistent with the analogous lift on MiniLM (50.0 → 59.4 in F9 v2). Sub-agent LLM rerank shifts probability mass into the top-1 position regardless of underlying embedding model.
+
+2. Per-type movement repeats the F9 v2 pattern: multi-session, single-session-preference, and temporal-reasoning improve at R@5; knowledge-update, single-session-assistant, and single-session-user regress. The categories where regress occurs are those where the baseline retrieval is already very strong (knowledge-update 94.9, single-session-assistant 100.0) — the reranker has more downside-risk than upside on highly-confident retrievals.
+
+3. The combined "embedding upgrade + sub-agent rerank" lift at R@5 (76.8 baseline F6 MiniLM-no-rerank → 78.2 F11+F9 stack) is below either lever's standalone contribution variance. The two mechanisms move R@5 in similar directions and overlap rather than stack additively.
+
+### Implication
+
+The two strongest mechanisms tested (sub-agent LLM rerank on top-20, BGE-base embedding) do not reach the F11 prereg's 81.8% Gate-B threshold even stacked. The remaining gap to the 85% roadmap target requires a different mechanism. The plausible candidates are:
+
+- A real cross-encoder evaluation (currently blocked by HF egress in this sandbox).
+- A query-aware reranker more aggressive than sub-agent LLM rerank (e.g. iterative refinement, larger candidate pool with rerank-down).
+- A retrieval mechanism that doesn't rely on top-K candidate selection (e.g. generative retrieval, dense passage retrieval with query expansion).
+
+None are in scope for this release.
+
+### Cumulative-null status (unchanged)
+
+This exploratory follow-up changes no mechanism in `src/`. The cumulative-null status of the dlPFC goal-stack mechanism (`docs/RETRACTION.md:94-113`) is unaffected.
+
+This release does not re-assert the retracted −10pp magnitude.
 
 ---
 
