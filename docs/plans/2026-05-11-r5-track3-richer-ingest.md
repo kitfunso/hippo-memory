@@ -34,6 +34,20 @@ Note: Gate-B compares features-enriched vs features-default, not vs baseline. Th
 
 **Outside-voice review:** before Task 4 (subagent dispatch) starts, the prereg must pass an outside-voice subagent review.
 
+**Stretch target (NON-binding):** R@5 ≥ 85% (roadmap F6 target per `ROADMAP-RESEARCH.md`). NON-binding per this prereg; Gate-B remains the single binding R@5 number.
+
+**Cumulative-null acknowledgement:** the result doc must cite `docs/RETRACTION.md:94-113` and confirm the dlPFC goal-stack cumulative-null status is unaffected. F10 changes the contents of memory rows (entry-level signal columns) but does not alter the goal-stack mechanism in `src/`. The features reranker's removal on Gate-B FAIL is a per-mechanism honesty action and is independent of the cumulative-null escalation status documented in RETRACTION.md.
+
+**Pre-registered cost / wall-time estimate (subagent enrichment pass, Task 4):**
+
+- Dispatch shape: 19 subagent invocations, each receiving one batch of ~50 LongMemEval sessions, in 4 waves of 5 concurrent agents (last wave: 4 agents).
+- Per-prompt size: ~2 KB instructions + ~2 KB rubric + ~50 sessions × ~600 chars (truncated session text) ≈ 35-40 KB input per subagent. Output ≈ 50 × 200 B (signal JSON) = ~10 KB per subagent.
+- Token estimate: input ≈ 19 × 12K tokens ≈ 230K input tokens; output ≈ 19 × 3K tokens ≈ 60K output tokens. At Sonnet ~$3/MTok input + $15/MTok output: ~$0.70 + $0.90 ≈ **≤ $2 total**.
+- Wall-time estimate: each subagent ~90-180 s. 4 waves × ~3 min = **15-25 minutes wall** (subject to dispatch overhead).
+- Failure budget: re-dispatch up to 2 retries per batch; if any batch still fails after 3 attempts, partial-coverage handling fires (Task 4 step 6).
+
+These are upper-bound estimates pre-registered for honesty; actual numbers go in the result doc Provenance section.
+
 ---
 
 ## File structure
@@ -159,7 +173,7 @@ You are a signal extractor. You'll receive a JSON array of conversation sessions
 
 {
   "session_id": "<copy from input>",
-  "confidence": "stale" | "inferred" | "verified" | "canonical",
+  "confidence": "stale" | "inferred" | "observed" | "verified",
   "kind": "episodic" | "semantic" | "procedural",
   "schema_fit": 0.0-1.0,
   "strength": 0.0-2.0,
@@ -169,10 +183,10 @@ You are a signal extractor. You'll receive a JSON array of conversation sessions
 
 Rubrics:
 
-CONFIDENCE
-- "canonical": session contains a definitive, externally-verifiable fact (e.g. "The Eiffel Tower is in Paris", official policy, scheduled event).
-- "verified": session contains a clearly-stated user/assistant claim with no hedging ("I'll do X tomorrow", "the API returned 200").
-- "inferred": session contains a partial / hedged / multi-step claim that requires reading between the lines ("might", "probably", "I think").
+CONFIDENCE — tier values are the keys of `CONFIDENCE_WEIGHT` in `src/rerankers/features.ts` (verified=1.30, observed=1.10, inferred=0.90, stale=0.70). Mismatched tier names fall back to weight 1.0 and lose discrimination.
+- "verified": session contains a definitive, externally-verifiable fact OR a precisely-stated user/assistant claim with no hedging (e.g. "The Eiffel Tower is in Paris", "I'll do X tomorrow", "the API returned 200", official policy, scheduled event).
+- "observed": session contains a clearly-stated user/assistant preference, recurring habit, or direct observation that is true at the time of the session but not externally verifiable (e.g. "I like pizza", "I usually run on Tuesdays", "the build took longer than expected").
+- "inferred": session contains a partial / hedged / multi-step claim that requires reading between the lines ("might", "probably", "I think", inferred plan, paraphrased intent).
 - "stale": session is clearly time-bound and the time has passed, OR the claim was contradicted later in the session.
 
 KIND
@@ -392,6 +406,24 @@ Verify Gate-A: at least 3 of the 5 columns must be ≥ 50% of total; AND at leas
 If Plan F8 ran: read `results/hybrid_tuning_winners.json` and use those flags.
 Else: v0.27 defaults.
 
+**Embedding-model compatibility gate.** Before running the three retrieval passes, confirm that `hippo_store2` and `hippo_store_enriched` use the *same* embedding model — Gate-B's features-enriched vs features-default comparison is only valid if both stores share an embedding space. Run:
+
+```bash
+node -e "
+const {DatabaseSync} = require('node:sqlite');
+const m1 = new DatabaseSync('hippo_store2/.hippo/hippo.db', {readOnly:true}).prepare(\"select value from meta where key='embedding_model'\").get();
+const m2 = new DatabaseSync('hippo_store_enriched/.hippo/hippo.db', {readOnly:true}).prepare(\"select value from meta where key='embedding_model'\").get();
+const v1 = m1?.value || '(unset)';
+const v2 = m2?.value || '(unset)';
+console.log('hippo_store2.embedding_model       =', v1);
+console.log('hippo_store_enriched.embedding_model =', v2);
+if (v1 !== v2) { console.error('FAIL: embedding-model mismatch — re-ingest one of the stores with the other\\'s model before proceeding.'); process.exit(1); }
+console.log('PASS: embedding-model parity confirmed.');
+"
+```
+
+Record both model ids in the result doc Provenance section. If Plan F11 ran and upgraded `hippo_store2` to `BAAI/bge-base-en-v1.5`, then `hippo_store_enriched` must also be (re-)embedded with bge-base before Step 2. If F11 did not run or its Gate-A FAILed, both stores stay on MiniLM and the gate trivially passes.
+
 - [ ] **Step 2: Three runs (baseline, features-default-store, features-enriched-store)**
 
 ```bash
@@ -452,12 +484,13 @@ print('Gate-B:', 'PASS' if fe['overall']['recall@5'] >= threshold else 'FAIL')
 
 - Verbatim retraction sentence on its own line.
 - TL;DR with both gate verdicts.
-- Provenance: dataset SHA-256 + URL, signal-extraction methodology (which model/agent extracted, total subagent dispatches, total token estimate from Task 4).
+- Provenance: dataset SHA-256 + URL, signal-extraction methodology (which model/agent extracted, total subagent dispatches, total token estimate from Task 4, actual wall time vs the prereg's 15-25 min estimate, actual cost vs the prereg's ≤ $2 estimate), embedding model id for BOTH `hippo_store2` and `hippo_store_enriched` (the Task 8 step 1 compatibility-gate output goes here verbatim).
 - Signal distribution table (output of Task 5 step 2).
 - Gate-A signal coverage breakdown.
 - R@K table: baseline-on-default-store, baseline-on-enriched-store, features-on-default-store, features-on-enriched-store (overall + per-type).
 - Gate-B verdict.
-- Roadmap-target framing.
+- Roadmap-target framing: explicit "Roadmap target R@5 ≥ 85% NON-binding per prereg" line.
+- Cumulative-null acknowledgement: `docs/RETRACTION.md:94-113` cite + one-line confirmation that the dlPFC goal-stack cumulative-null status is unaffected by this plan.
 - If Gate-B PASS: "Mechanism shipped, proven valuable when given real signals. The default ingest path (`ingest_direct.py`) is recognized as a limitation; future ingest changes that populate signals will benefit the features reranker on real workloads."
 - If Gate-B FAIL: "Retraction protocol triggered — see Tasks 11-13. Features reranker removed from `src/`."
 - Outside-voice review (placeholder).

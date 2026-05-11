@@ -36,7 +36,7 @@ Must return zero matches in the result doc and CHANGELOG entry.
 **Failure handling:**
 
 - **Gate-A FAIL:** model loading or embedding population is broken; fix and re-run. Not a retraction trigger.
-- **Gate-B FAIL:** **descriptive only**, no retraction. F11 changes a config-level value (which embedding model is configured), not a `src/` mechanism. The original MiniLM model stays the project default. The result doc records the FAIL verdict and per-K / per-type numbers. F10 still proceeds, defaulting back to MiniLM unless F11 partially succeeds (Gate-A PASS but Gate-B FAIL → F10 runs on the new BGE store anyway and reports its own per-mechanism delta).
+- **Gate-B FAIL:** **descriptive only**, no retraction. F11 changes a config-level value (which embedding model is configured), not a `src/` mechanism. The original MiniLM model stays the project default. The result doc records the FAIL verdict and per-K / per-type numbers. F10 still proceeds, defaulting back to MiniLM unless F11 partially succeeds (Gate-A PASS but Gate-B FAIL → F10 runs on the new BGE store anyway and reports its own per-mechanism delta). The `poolingFor` dispatch added in Task 3 is **retained regardless of Gate-B outcome** — the dispatch is correct for both models, has zero effect while MiniLM is the active default, and is a pre-requisite for any future BGE / non-mean-pooling model use.
 
 **Outside-voice review:** the prereg (this section embedded in the plan) must pass outside-voice review before Task 3 (model fetch) starts. The result doc must pass outside-voice review before any CHANGELOG / README mention.
 
@@ -101,6 +101,7 @@ Must return zero matches in the result doc and CHANGELOG entry.
 3. TDD test asserts `poolingFor('Xenova/bge-base-en-v1.5') === 'cls'`, `poolingFor('Xenova/all-MiniLM-L6-v2') === 'mean'`, and that unknown model ids default to `'mean'` (the model-agnostic safe choice). Test file uses vitest, no network or model load.
 4. Rebuild dist (`npx tsc`).
 5. Existing `tests/embeddings/local-cache.test.ts` still passes (it embeds with MiniLM; pooling is still `'mean'`).
+6. The `quantized` flag in `loadPipeline` already auto-detects by file presence (see `src/embeddings.ts` lines 99-103 of the post-`4c53edc` tree). For BGE the Qdrant tarball ships only `model_optimized.onnx` (renamed to `onnx/model.onnx` by Task 2), so `model_quantized.onnx` will not exist and `quantized` will resolve to `false` — which is correct. No additional code change needed; this is called out so a future reader does not "fix" the auto-detection.
 
 **Commit:** `feat(embeddings): per-model pooling dispatch (bge=cls, default=mean)`.
 
@@ -119,7 +120,11 @@ Must return zero matches in the result doc and CHANGELOG entry.
 1. Snapshot the existing MiniLM embeddings: `cp hippo_store2/.hippo/embeddings.json hippo_store2/.hippo/embeddings.minilm.json.bak`. (Gitignored; lives in store dir.)
 2. Configure: edit `hippo_store2/.hippo/config.json` so `embeddings.model = "Xenova/bge-base-en-v1.5"`. (If the file doesn't exist, create with that single field + sensible defaults for any required keys.)
 3. Run: `HIPPO_MODEL_CACHE=$(pwd)/benchmarks/longmemeval/data/model-cache (cd hippo_store2 && node ../bin/hippo.js embed)`. The reindex path in `src/embeddings.ts` detects the model change and rebuilds embeddings.json from scratch.
-4. Verify: 940 vectors, each length 768, all L2-normalized (Gate-A check).
+4. Verify Gate-A with a concrete one-liner (saved into the result-doc Provenance section):
+   ```bash
+   node -e "const idx = JSON.parse(require('fs').readFileSync('hippo_store2/.hippo/embeddings.json','utf8')); const ids = Object.keys(idx); const dims = new Set(ids.map(i => idx[i].length)); const norms = ids.slice(0, 50).map(i => Math.sqrt(idx[i].reduce((s,x) => s + x*x, 0))); console.log({count: ids.length, dims: [...dims], minNorm: Math.min(...norms), maxNorm: Math.max(...norms)});"
+   ```
+   Required output: `count: 940`, `dims: [768]`, both `minNorm` and `maxNorm` in `[0.999, 1.001]`. Also verify the DB row: `node -e "const {DatabaseSync}=require('node:sqlite'); console.log(new DatabaseSync('hippo_store2/.hippo/hippo.db',{readOnly:true}).prepare(\"select value from meta where key='embedding_model'\").get())"`.
 5. Record wall time + final embeddings.json file size in the result doc.
 
 **Commit:** none.
@@ -129,7 +134,7 @@ Must return zero matches in the result doc and CHANGELOG entry.
 **Steps:**
 1. Run the F8 best-config harness against the bge-base store: `node benchmarks/longmemeval/retrieve_inprocess.mjs --data data/longmemeval_oracle.json --store-dir hippo_store2 --output results/f11_baseline/bge-base.jsonl --embedding-weight 0.5 --mmr-lambda 0.7 --budget 50 --min-results 5`. (Same hyperparameters as the F8 best-config confirmation run.)
 2. Score: `python3 benchmarks/longmemeval/evaluate_retrieval.py --retrieval results/f11_baseline/bge-base.jsonl --data data/longmemeval_oracle.json --output results/f11_baseline/bge-base.eval.json`.
-3. Also run a deeper-pool variant for downstream rerank: same flags but `--min-results 20 --budget 100` → `results/f11_baseline/bge-base_top20.jsonl`. Score: produces R@20 ceiling for F11 + F9 stacking.
+3. Also run a deeper-pool variant for downstream rerank: same flags but `--min-results 20 --budget 100` → `results/f11_baseline/bge-base_top20.jsonl`. Score: produces R@20 ceiling for F11 + F9 stacking. **JSONL schema**: same per-question shape as the F9 v2 baseline `results/f9_baseline_v2/best_top20.jsonl` (fields: `question_id`, `question`, `answer`, `question_type`, `question_date`, `retrieved_memories[{id, score, strength, tags, content, tokens}]`, `num_retrieved`). Directly consumable by `benchmarks/longmemeval/rerank_split_v2.py` if a future F9-on-BGE rerank is run.
 
 **Commit:** `feat(benchmarks): F11 bge-base baseline retrievals (gitignored)`.
 
