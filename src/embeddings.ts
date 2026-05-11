@@ -26,6 +26,19 @@ const _pipelineLoading = new Map<string, Promise<unknown>>();
 const DEFAULT_EMBEDDING_MODEL = 'Xenova/all-MiniLM-L6-v2';
 const EMBEDDING_MODEL_META_KEY = 'embedding_model';
 
+/**
+ * Per-model pooling dispatch for `@xenova/transformers`'s feature-extraction
+ * pipeline. BGE family models were trained with CLS pooling (per BAAI's
+ * official inference code in `FlagEmbedding`); MiniLM and most sentence-
+ * transformers models use mean pooling. Unknown model ids default to mean
+ * — that is the safe choice because most third-party models adopt the
+ * sentence-transformers convention, and the alternative ('cls') silently
+ * degrades vector quality for mean-pooling models.
+ */
+export function poolingFor(model: string): 'cls' | 'mean' {
+  return /\bbge\b/i.test(model) ? 'cls' : 'mean';
+}
+
 // Use Function constructor to bypass TypeScript static module resolution
 // for optional peer dependencies that may not be installed.
 const _dynImport = new Function('s', 'return import(s)') as (s: string) => Promise<unknown>;
@@ -221,7 +234,7 @@ export async function getEmbedding(
     if (!pipe) return [];
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const output = await pipe(text, { pooling: 'mean', normalize: true }) as any;
+    const output = await pipe(text, { pooling: poolingFor(model), normalize: true }) as any;
     return Array.from(output.data as Float32Array);
   } catch {
     return [];
