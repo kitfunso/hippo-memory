@@ -29,6 +29,7 @@ const LIMIT = parseInt(flag('--limit', '0'), 10);
 const EMB_WEIGHT = flag('--embedding-weight', null);
 const NO_MMR = process.argv.includes('--no-mmr');
 const MIN_RESULTS = parseInt(flag('--min-results', '10'), 10);
+const MMR_LAMBDA = flag('--mmr-lambda', null);
 const RERANKER = flag('--reranker', null);
 const RERANKER_TOP_K = parseInt(flag('--reranker-top-k', '50'), 10);
 
@@ -56,6 +57,8 @@ const reranker = getReranker(RERANKER);
 if (RERANKER) {
   console.error(`Reranker: ${RERANKER} (top-K=${RERANKER_TOP_K})`);
 }
+console.error('options:', { embeddingWeight: EMB_WEIGHT, mmrLambda: MMR_LAMBDA, budget: BUDGET, minResults: MIN_RESULTS });
+console.log('options:', { embeddingWeight: EMB_WEIGHT, mmrLambda: MMR_LAMBDA, budget: BUDGET, minResults: MIN_RESULTS });
 
 fs.mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
 // Truncate + use sync appendFileSync so progress is always visible on disk —
@@ -79,6 +82,7 @@ for (let i = 0; i < limit; i++) {
       hippoRoot,
       preparedCorpus: corpus,
       embeddingWeight: EMB_WEIGHT !== null ? parseFloat(EMB_WEIGHT) : undefined,
+      mmrLambda: MMR_LAMBDA !== null ? parseFloat(MMR_LAMBDA) : undefined,
       mmr: !NO_MMR,
       minResults: MIN_RESULTS,
       reranker: reranker ?? undefined,
