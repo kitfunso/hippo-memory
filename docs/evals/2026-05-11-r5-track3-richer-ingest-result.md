@@ -12,11 +12,11 @@ This release does not re-assert the retracted −10pp magnitude.
 ## TL;DR
 
 - **Gate-A (signal coverage):** PASS. 940/940 memories have at least one non-default signal value; 3 of 5 signal fields exceed 50% non-default coverage (`confidence` 75.4%, `schema_fit` 93.3%, `strength` 80.7%).
-- **Gate-B (proven value at R@5):** FAIL. features-enriched R@5 = 59.2%; features-default R@5 = 75.8% (re-measured on bge-base for apples-to-apples); threshold = 75.8 + 5pp = 80.8%; shortfall = 21.6pp.
+- **Gate-B (proven value at R@5):** FAIL. features-enriched R@5 = 59.2%. The prereg locked threshold = 80.4% (= F6's MiniLM-era features-default 75.4% + 5pp); the apples-to-apples re-measurement on bge-base gives features-default 75.8% and threshold 80.8%. The FAIL verdict holds under both thresholds (59.2 < 80.4 and 59.2 < 80.8); the result doc uses the re-measured 80.8% as the binding number for the same-embedding-space comparison.
 - **HARD RETRACTION triggers** per prereg failure-handling. `src/rerankers/features.ts` + `tests/rerankers/features.test.ts` + `benchmarks/micro/fixtures/reranker-features.json` + the `'features'` dispatcher case in `src/rerankers/index.ts` are removed in the follow-up commit (Tasks 11-13).
 - Roadmap target R@5 ≥ 85% NON-binding per prereg; NOT MET. Current cross-track best remains F9 v2's R@5 = 78.0% (sub-agent LLM rerank on MiniLM).
 
-The features reranker is empirically the wrong abstraction for this corpus: re-weighting candidates by session-level signals (confidence, kind, schema_fit, strength, outcome_pos/neg) introduces variance that is orthogonal to query-document relevance. The mechanism amplifies signal noise rather than discriminating answer-bearing memories.
+**Hypothesis (post-hoc, supported by but not isolated from the data):** the features reranker is the wrong abstraction for this corpus. Re-weighting candidates by session-level signals (confidence, kind, schema_fit, strength, outcome_pos/neg) appears to introduce variance that is orthogonal to query-document relevance. The hypothesised mechanism — re-weighting by signals that reflect SESSION-level properties rather than QUERY-DOCUMENT relevance — is consistent with the observed across-category regression (features-enriched is below features-default in all 6 categories), but a controlled mechanism-isolation experiment is out of scope for this release.
 
 ---
 
@@ -172,16 +172,40 @@ Per `docs/RETRACTION.md:94-113`, the dlPFC goal-stack mechanism's cumulative-nul
 
 ## What this implies for hippo's reranker abstraction
 
-The features reranker (Track 1 of the F6 reranker hardening) was hypothesised to add value when ingest populated entry-level signals. F10 tested that hypothesis with sub-agent-extracted signals on 75.4% of memories' `confidence`, 93.3% of `schema_fit`, 80.7% of `strength`, and partial coverage on outcome counters — a stronger signal density than any realistic production deployment would achieve via heuristic ingest. The reranker's R@5 still regressed by 16.6pp vs the features-default (uniform-signal) baseline on the same store.
+The features reranker (Track 1 of the F6 reranker hardening) was hypothesised to add value when ingest populated entry-level signals. F10 tested that hypothesis with sub-agent-extracted signals on 75.4% of memories' `confidence`, 93.3% of `schema_fit`, 80.7% of `strength`, and partial coverage on outcome counters — a stronger signal density than any realistic production deployment would achieve via heuristic ingest. Observed: features-enriched R@5 = 59.2 vs features-default R@5 = 75.8 on the same store.
 
-The empirical conclusion: session-level signals (how confident-sounding a session is, what content-type it represents, etc.) are not the right axis along which to discriminate candidate memories during retrieval. The right axis is query-document relevance — i.e., whether a candidate's content actually answers the query — and that requires query-aware scoring (cross-encoder rerank, LLM rerank, or query-conditioned features), not query-independent per-memory weights.
+Hypothesis consistent with the data: session-level signals (how confident-sounding a session is, what content-type it represents, etc.) are not the right axis along which to discriminate candidate memories during retrieval — the right axis is query-document relevance, which requires query-aware scoring (cross-encoder rerank, LLM rerank, or query-conditioned features). This is not isolated from confounds (signal-extraction noise, physics-state interactions, etc.) by a controlled mechanism-isolation experiment.
 
-The features reranker code path is therefore retired. The dispatcher case is removed in the follow-up commit.
+The features reranker code path is retired regardless of which causal hypothesis is correct: Gate-B requires features-enriched ≥ features-default + 5pp, and the FAIL is unambiguous. The dispatcher case is removed in the follow-up commit.
 
 ---
 
 ## Outside-voice review trail
 
-Result-doc outside-voice review pending. The controller will dispatch an isolated-context reviewer (general-purpose, Sonnet) after this commit lands; the verdict will be appended below.
+### Review (2026-05-11, isolated-context general-purpose subagent, Sonnet)
 
-`<reviewer verdict + per-check results>`
+**Verdict:** PASS_WITH_NOTES (15/15 checks).
+
+Summary of per-check results:
+
+1. Verbatim retraction sentence — PASS (line 8).
+2. Strict magnitude grep — PASS (0 matches).
+3. Soft-magnitude scan — PASS (no smuggling; one ordinal "largest" flagged as low-risk).
+4. Gate-A PASS with measurable evidence — PASS.
+5. Gate-B FAIL with both observed (59.2) and threshold shown — PASS (after fix).
+6. HARD RETRACTION 4 file paths enumerated — PASS.
+7. "Wrong abstraction" framing honest — PASS (after the hypothesis hedge fix).
+8. R@K table honest (raw values, no Δ-pp prose) — PASS.
+9. Per-type table both directions — PASS (all 6 categories shown).
+10. Known limitation (kind-namespace) honestly disclosed with src/db.ts + features.ts references — PASS.
+11. Roadmap NON-binding explicit — PASS.
+12. Cumulative-null cite `docs/RETRACTION.md:94-113` — PASS.
+13. Cross-track baseline honest (R@5=78.0 F9 v2 named as current best) — PASS.
+14. Provenance complete (both store ids, embedding-model parity, dispatch shape, signal distribution, wall times) — PASS.
+15. No causal over-claims — PASS (after the hypothesis hedge fix).
+
+**Required fixes:** none remaining after the two notes were applied:
+- Threshold deviation (prereg 80.4 vs re-measured 80.8) explicitly acknowledged; FAIL holds under both.
+- TL;DR causal claim softened from "is the wrong abstraction" to "Hypothesis (post-hoc, supported by but not isolated from the data)".
+
+Controller authorised to proceed with Tasks 11-13 (HARD RETRACTION).

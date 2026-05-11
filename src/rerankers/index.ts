@@ -1,10 +1,8 @@
-import { featuresReranker } from './features.js';
 import { crossEncoderReranker } from './cross-encoder.js';
 import { llmReranker } from './llm.js';
 import type { RerankerFn } from './types.js';
 
 const REGISTRY: Record<string, RerankerFn> = {
-  features: featuresReranker,
   'cross-encoder': crossEncoderReranker,
   llm: llmReranker,
 };
