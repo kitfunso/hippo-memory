@@ -95,8 +95,15 @@ async function loadPipeline(model: string): Promise<any> {
 
     if (!pipelineFn) return null;
 
+    // The Qdrant-vendored bundle (used in egress-restricted sandboxes) ships
+    // only `onnx/model.onnx` (FP32). The HF default ships `model_quantized.onnx`
+    // too. When pointing at a local cache, pick the variant that's on disk.
+    const cacheRoot = process.env.HIPPO_MODEL_CACHE?.trim();
+    const quantized = !cacheRoot
+      || fs.existsSync(path.join(cacheRoot, model, 'onnx', 'model_quantized.onnx'));
+
     try {
-      const instance = await pipelineFn('feature-extraction', model, { quantized: true });
+      const instance = await pipelineFn('feature-extraction', model, { quantized });
       _pipelineInstances.set(model, instance);
       return instance;
     } catch {
