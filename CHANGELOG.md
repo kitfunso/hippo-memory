@@ -1,5 +1,46 @@
 # Changelog
 
+## 1.9.1 (2026-05-11) — F10 features-reranker retraction
+
+This release does not re-assert the retracted −10pp magnitude.
+
+Plan F10 (LongMemEval R@5 target — Track 3: richer ingest, `docs/plans/2026-05-11-r5-track3-richer-ingest.md`) tested the hypothesis that the features reranker shipped in v1.9.0 would add measurable retrieval value when ingest populated entry-level signals (`confidence`, `kind`, `schema_fit`, `strength`, `outcome_positive`, `outcome_negative`). 19 Claude-sub-agent invocations extracted signals for all 940 LongMemEval sessions (Gate-A coverage: 100% any-field non-default; 3 of 5 fields with ≥ 50% per-field non-default coverage). The features reranker on the enriched store produced R@5 = 59.2 against features-default R@5 = 75.8 on the same bge-base embedding model — 21.6pp short of the prereg's Gate-B threshold of features-default + 5pp.
+
+Per the F10 prereg's HARD RETRACTION clause, the features track is removed from `src/`.
+
+### Retracted
+
+- **`src/rerankers/features.ts`** — the Track 1 features reranker shipped in v1.9.0.
+- **`tests/rerankers/features.test.ts`** — the corresponding unit tests.
+- **`benchmarks/micro/fixtures/reranker_features.json`** — the micro-eval fixture.
+- **The `'features'` case in `src/rerankers/index.ts`** — the dispatcher entry is removed; the registry now contains only `'cross-encoder'` and `'llm'`.
+
+Result doc: `docs/evals/2026-05-11-r5-track3-richer-ingest-result.md`. Prereg: `docs/evals/2026-05-11-r5-track3-richer-ingest-prereg.md`. Outside-voice review: PASS_WITH_NOTES (both notes applied — threshold-deviation acknowledged, TL;DR causal claim softened to hypothesis framing).
+
+### Hypothesis (post-hoc, not isolated from confounds)
+
+Session-level signals (how confident-sounding a session is, what kind of session it is, etc.) appear orthogonal to query-document relevance. The features reranker's per-memory weight variance (e.g. `confW ∈ [0.70, 1.30]` across the four confidence tiers) re-shuffles candidates on dimensions that do not correlate with whether the candidate contains the answer to a given query. A controlled mechanism-isolation experiment is out of scope for this release.
+
+### Preserved (NOT retracted)
+
+- **`src/rerankers/cross-encoder.ts`** — the Track 2 cross-encoder reranker (identity fallback in egress-restricted environments). Its real-evaluation gate is the responsibility of a future plan with HF access or a non-HF mirror that ships the MS-MARCO MiniLM reranker.
+- **`src/rerankers/llm.ts`** — the Track 3 LLM reranker skeleton.
+- **The `RerankerFn` seam in `hybridSearch`**, the `--reranker` / `--reranker-top-k` CLI flags, the LongMemEval harness flag plumbing, and `benchmarks/longmemeval/run_reranker_sweep.mjs` — all preserved. `run_reranker_sweep.mjs`'s `features_topk*` configs will now raise "Unknown reranker: features" at runtime; updating that sweep config is a separate housekeeping task and is NOT part of this retraction.
+- **F11 embedding upgrade (BGE-base):** the `poolingFor` dispatch in `src/embeddings.ts`, the `Xenova/bge-base-en-v1.5` support in `scripts/fetch_embedding_model.mjs`, and the per-model pooling test all stand; F11's standalone Gate-B failed but that result is config-level, not a `src/` retraction.
+
+### Cross-track R@5 status (as of this release)
+
+- F8 hybrid tuning on MiniLM: R@5 = 76.8 (Gate-B FAIL @ 77.6 = baseline + 2pp).
+- F9 v2 sub-agent LLM rerank on MiniLM: R@5 = 78.0 (Gate-B FAIL @ 80.6 = baseline + 5pp; highest R@5 across all tracks).
+- F11 BGE-base baseline (no reranker): R@5 = 77.0 (Gate-B FAIL @ 81.8 = F8 best + 5pp).
+- F10 features-enriched (this release, retracted): R@5 = 59.2 (Gate-B FAIL @ 80.8; HARD RETRACTION).
+
+Roadmap target R@5 ≥ 85% is NOT MET by any track. NON-binding per each prereg.
+
+### Mechanism cumulative-null status
+
+Per `docs/RETRACTION.md:94-113`. F10 changes the contents of memory rows but does not alter the goal-stack mechanism in `src/`. The cumulative-null status of the dlPFC goal-stack mechanism is independent of this evaluation.
+
 ## v1.9.0 — 2026-05-11 — F6 reranker hardening
 
 This release does not re-assert the retracted −10pp magnitude.
