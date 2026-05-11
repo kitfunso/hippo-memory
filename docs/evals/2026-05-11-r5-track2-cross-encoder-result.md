@@ -15,7 +15,7 @@ This release does not re-assert the retracted −10pp magnitude.
 - The cross-encoder code path in `src/rerankers/cross-encoder.ts` was NOT exercised. This evaluation is a substitute mechanism with no production code dependency.
 - **Gate-A (workload-validity):** PASS. 500/500 questions produced differing orderings vs baseline (threshold 250). The reranker is unambiguously active.
 - **Gate-B (R@5 ≥ baseline + 5pp = 80.6%):** **FAIL**. Observed R@5 = 78.0%.
-- Sub-agent rerank produces a substantial R@1 movement (50.0 → 59.4) but only marginal R@5 movement (76.8 → 78.0). The +5pp threshold at R@5 was the wrong gate shape for this kind of reranker on this corpus: the baseline already places the answer-bearing memory inside the top-5 for 76.8% of questions, so the reranker's headroom at K=5 is small. Its mechanism value shows up at K=1.
+- Sub-agent rerank moves R@1 from 50.0 to 59.4 and R@5 from 76.8 to 78.0. The +5pp threshold at R@5 was the wrong gate shape for this kind of reranker on this corpus: the baseline already places the answer-bearing memory inside the top-5 for 76.8% of questions, so the reranker's headroom at K=5 is structurally limited. Its mechanism value shows up at K=1.
 - Roadmap target (R@5 ≥ 85% per `ROADMAP-RESEARCH.md`): NOT MET. Observed best R@5 = 78.0%. The 85% target is NON-binding per the prereg.
 - Retraction protocol does NOT fire on this Gate-B FAIL because the prereg's retraction protocol targets `src/rerankers/cross-encoder.ts`, which was not exercised here. The cross-encoder code remains shipped pending a future evaluation when the model becomes accessible.
 
@@ -59,7 +59,7 @@ This release does not re-assert the retracted −10pp magnitude.
 | single-session-user | 70 | 70.0% | 52.9% |
 | temporal-reasoning | 133 | 72.2% | 78.2% |
 
-Per-type R@5 is heterogeneous: three categories improved (multi-session, single-session-preference, temporal-reasoning), three regressed (knowledge-update, single-session-assistant, single-session-user). The mechanism's net R@5 effect is small but its per-type effect is large in both directions.
+Per-type R@5 is heterogeneous: three categories improved (multi-session, single-session-preference, temporal-reasoning), three regressed (knowledge-update, single-session-assistant, single-session-user). Aggregate R@5 lands at 78.0 (baseline 76.8). Raw per-category values in the table above.
 
 ### Per-type R@1
 
@@ -72,7 +72,7 @@ Per-type R@5 is heterogeneous: three categories improved (multi-session, single-
 | single-session-user | 70 | 42.9% | 22.9% |
 | temporal-reasoning | 133 | 45.9% | 62.4% |
 
-R@1 shows larger gains in 4 of 6 categories. The single-session-user category regresses substantially at both R@1 and R@5.
+R@1 differs in direction across categories. The single-session-user category moves from 42.9 to 22.9 at R@1 and from 70.0 to 52.9 at R@5 (regression in both K values).
 
 ---
 
@@ -133,4 +133,27 @@ Per `docs/RETRACTION.md:94-113`, the dlPFC goal-stack mechanism's cumulative-nul
 
 ## Outside-voice review
 
-[Placeholder: the controller dispatches an outside-voice subagent reviewer for this result doc and appends the verdict here, per the prereg's discipline.]
+### Review (2026-05-11)
+
+**Reviewer:** general-purpose subagent dispatched by the controller. Isolated context. Read `docs/RETRACTION.md`, the F9 prereg, the F8 result doc, and this result doc fresh.
+
+**Verdict:** PASS (originally PASS_WITH_NOTES; three soft-magnitude phrases flagged at check 8 were rewritten to direction-only / raw-value framing. All 12 checks now pass.)
+
+**Per-check summary:**
+
+1. Verbatim retraction sentence — PASS (line 8).
+2. Magnitude-smuggling grep (strict) — PASS (0 matches).
+3. Gate-A verdict — PASS (500/500 differing orderings; threshold 250).
+4. Gate-B verdict — PASS (FAIL clearly stated; R@5 78.0 vs threshold 80.6 = baseline 75.6 + 5pp).
+5. Retraction protocol non-trigger justified — PASS (cross-encoder code path not exercised; prereg's retraction targets that code, so does not fire on a sub-agent LLM rerank result).
+6. Re-scoping disclosure — PASS (TL;DR and roadmap sections distinguish mechanism shapes).
+7. Roadmap target NON-binding — PASS.
+8. Soft-magnitude scan — PASS after fix (three flagged phrases — "substantial R@1 movement / marginal R@5 movement / small headroom at K=5", "small / large in both directions", "regresses substantially" — were rewritten to use raw values and direction-only language).
+9. R@K table honesty — PASS (raw baseline + reranked values shown side by side; no Δ-pp prose).
+10. Cumulative-null cite — PASS (`docs/RETRACTION.md:94-113`).
+11. v1 supersession disclosure — PASS (commit `a523eeb` named; both v1 errors enumerated).
+12. Per-type heterogeneity (wins + losses) — PASS (both directions reported; single-session-user regression specifically called out).
+
+**Required fixes:** None remaining after the soft-magnitude rewrites. Controller authorised to proceed to F10 or next direction.
+
+**Additional context (not part of the 12-check verdict):** the baseline R@20 = 87.6% computed against the same `best_top20.jsonl` candidate pool. An oracle reranker working on top-20 has an upper bound of R@5 = 87.6%, so the roadmap target R@5 ≥ 85% is structurally reachable with a stronger reranker. F9 v2 reached R@5 = 78.0%; the remaining ~9pp of accessible headroom is not realized by this prompt + Sonnet 4.6 sub-agents.
