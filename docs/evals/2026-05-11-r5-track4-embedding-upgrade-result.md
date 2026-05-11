@@ -27,7 +27,7 @@ This release does not re-assert the retracted −10pp magnitude.
 - Tarball MD5 (base64): `zD+/65myZ/5XsJN3BDO92w==` (verified during fetch).
 - Tarball internal layout: `fast-bge-base-en-v1.5/{config.json, tokenizer.json, tokenizer_config.json, special_tokens_map.json, vocab.txt, model_optimized.onnx, ort_config.json}`. `ort_config.json` declares `fp16: true, optimize_for_gpu: true`; CPU inference is functionally correct but slower than MiniLM's quantized INT8.
 - Fetch invocation: `node scripts/fetch_embedding_model.mjs --model Xenova/bge-base-en-v1.5`. Download: 195 MB in 1.2 s. Cache laid out under `benchmarks/longmemeval/data/model-cache/Xenova/bge-base-en-v1.5/{config.json, tokenizer.json, ..., onnx/model.onnx}`.
-- Smoke-load: `@xenova/transformers` `pipeline('feature-extraction', 'Xenova/bge-base-en-v1.5', { quantized: false })` initialised in 647 ms; sample embedding `pooling: 'cls', normalize: true` produced a 768-dim vector with L2-norm 1.000.
+- Smoke-load: `@xenova/transformers` `pipeline('feature-extraction', 'Xenova/bge-base-en-v1.5', { quantized: false })` initialised in 647 ms; sample embedding (`'The quick brown fox jumps over the lazy dog'`, `pooling: 'cls', normalize: true`) produced a 768-dim vector with L2-norm 1.000 and first-5 normalised values `[-0.042668, -0.060601, 0.039151, 0.025712, 0.027949]`.
 - Re-embed wall time: 6 min 33 s for 940 sessions (~4× slower than MiniLM's 1 min 33 s; consistent with FP16-on-CPU + larger model).
 - `embeddings.json` final size: 15 MB (vs MiniLM 7.3 MB; 2× the dimensions).
 - Pooling dispatch: `poolingFor('Xenova/bge-base-en-v1.5')` returns `'cls'` (BGE family); `poolingFor('Xenova/all-MiniLM-L6-v2')` returns `'mean'`. Verified by `tests/embeddings/pooling.test.ts` (7 tests, all pass).
@@ -177,7 +177,7 @@ F10's prereg should record both ids in its Provenance section after the compatib
 
 ## Future work (NOT this release)
 
-- **F11 + F9 rerank stack.** The `results/f11_baseline/bge-base_top20.jsonl` artefact is in the same per-question schema as `results/f9_baseline_v2/best_top20.jsonl` (fields: `question_id`, `question`, `answer`, `question_type`, `question_date`, `retrieved_memories[{id, score, strength, tags, content, tokens}]`, `num_retrieved`). It is directly consumable by `benchmarks/longmemeval/rerank_split_v2.py` if a 50-batch sub-agent rerank pass is run against the bge-base candidates. Whether this would lift R@5 above the standalone 77.0% is an open question; one analogous re-run for F9 v2 on MiniLM lifted R@5 by +1.2pp (76.8 → 78.0).
+- **F11 + F9 rerank stack.** The `results/f11_baseline/bge-base_top20.jsonl` artefact is in the same per-question schema as `results/f9_baseline_v2/best_top20.jsonl` (fields: `question_id`, `question`, `answer`, `question_type`, `question_date`, `retrieved_memories[{id, score, strength, tags, content, tokens}]`, `num_retrieved`). It is directly consumable by `benchmarks/longmemeval/rerank_split_v2.py` if a 50-batch sub-agent rerank pass is run against the bge-base candidates. Whether this would lift R@5 above the standalone 77.0 is an open question; the analogous run on MiniLM (F9 v2) reported R@5 76.8 → 78.0.
 - **Alternative pooling strategies.** Some BGE deployments use `pooling: 'mean'` with normalised vectors as a corpus-size-bounded heuristic. Not pre-registered for F11; would require its own prereg.
 - **bge-large or alternative embedding models.** bge-large is not on the Qdrant fastembed GCS bucket as of 2026-05-11; would require a different mirror or vendoring path.
 
@@ -185,6 +185,33 @@ F10's prereg should record both ids in its Provenance section after the compatib
 
 ## Outside-voice review trail
 
-Result-doc outside-voice review pending. The controller will dispatch an isolated-context reviewer (general-purpose, sonnet) after this commit lands; the verdict will be appended below.
+### Review (2026-05-11, isolated-context general-purpose subagent, Sonnet)
 
-`<reviewer verdict + per-check results>`
+**Verdict:** PASS (16/16 checks).
+
+Summary of per-check results:
+
+1. Verbatim retraction sentence — PASS (line 8).
+2. Strict magnitude grep — PASS (0 matches).
+3. Soft-magnitude scan — PASS (none of small/marginal/substantial/huge/barely/roughly/slightly/dramatic/significant appear).
+4. Gate-A verdict + evidence — PASS (940 × 768 × L2-norm [1.0, 1.0] + meta row verified).
+5. Gate-B verdict + threshold — PASS (77.0 vs 81.8 stated, arithmetic 76.8 + 5 = 81.8 confirmed).
+6. Failure handling honest — PASS ("descriptive only, no retraction"; `poolingFor` retention stated).
+7. Roadmap NON-binding — PASS (TL;DR names current cross-track best R@5 = 78.0).
+8. Cumulative-null cite — PASS (`docs/RETRACTION.md:94-113` + mechanism-independence statement).
+9. R@K table honest — PASS (raw side-by-side values; no Δ-pp prose).
+10. Per-type R@5 + R@1 tables both directions — PASS (gains and losses both reported).
+11. Provenance complete — PASS (dataset SHA, store, model id, URL, MD5, fetch invocation, smoke-load metrics, re-embed wall time, harness + evaluator commands all present).
+12. R@20 ceiling honestly framed — PASS (88.6 vs 87.6, oracle-headroom framing).
+13. F10 hand-off correct — PASS (model id specified for F10's Task 8 compatibility gate).
+14. Future-work in-scope distinction — PASS (3 deferred items, none re-asserted).
+15. No unsupported causal claims — PASS (hedged "may be", "could in principle").
+16. Cross-track baseline honest — PASS (current best R@5 = 78.0 named; F11 at 77.0 not framed as new best).
+
+**Required fixes:** none.
+
+**Optional improvements applied:**
+- "+1.2pp" prose in Future-work section paraphrased to raw values "R@5 76.8 → 78.0" (eliminates any appearance of magnitude prose, even though the strict grep already passed).
+- Smoke-load line now lists the first-5 normalized values as called for in the prereg's provenance placeholder.
+
+Controller authorised to proceed with F10 execution.
