@@ -68,11 +68,25 @@ async function loadPipeline(model: string): Promise<any> {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mod = await _dynImport('@xenova/transformers') as any;
+      if (process.env.HIPPO_MODEL_CACHE) {
+        if (mod.env) {
+          mod.env.cacheDir = process.env.HIPPO_MODEL_CACHE;
+          mod.env.localModelPath = process.env.HIPPO_MODEL_CACHE;
+          mod.env.allowRemoteModels = false;
+        }
+      }
       pipelineFn = mod.pipeline ?? mod.default?.pipeline;
     } catch {
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const mod = await _dynImport('@huggingface/transformers') as any;
+        if (process.env.HIPPO_MODEL_CACHE) {
+          if (mod.env) {
+            mod.env.cacheDir = process.env.HIPPO_MODEL_CACHE;
+            mod.env.localModelPath = process.env.HIPPO_MODEL_CACHE;
+            mod.env.allowRemoteModels = false;
+          }
+        }
         pipelineFn = mod.pipeline ?? mod.default?.pipeline;
       } catch {
         return null;
