@@ -114,4 +114,22 @@ therefore stands unchanged and is not affected by the outcomes of this sweep.
 
 ## Outside-voice review
 
-[Filled by the controller after the outside-voice subagent review completes.]
+### Review (2026-05-11)
+
+**Reviewer:** general-purpose subagent dispatched by the subagent-driven-development workflow controller. Isolated context (did not see plan-writing reasoning trace). Read `docs/RETRACTION.md`, the F6 prereg, and this prereg fresh.
+
+**Verdict:** PASS (originally FAIL on Check 8 — cumulative-null acknowledgement was missing; fix applied at commit `7bab04e` added a `## Cumulative null status` section citing `docs/RETRACTION.md:94-113`. Re-review confirms all 9 checks now PASS.)
+
+**Per-check results:**
+
+1. Verbatim retraction sentence — PASS (line 8).
+2. Magnitude-smuggling grep — PASS (0 matches).
+3. Gate-A (sweep completion) — PASS, all 28 runs required, binary verdict.
+4. Gate-B (best-config improvement) — PASS, threshold quantified (≥ baseline + 2pp / ≥ 77.6%).
+5. Sweep grid enumeration — PASS, all 28 cells named across Stages 1/2/3.
+6. Failure handling — PASS, Gate-B FAIL is descriptive only, no `src/` changes, Plans F9/F10 unaffected.
+7. Outside-voice review section — PASS (this section, now filled).
+8. Cumulative-null acknowledgement — PASS after fix (lines 107-113).
+9. Soft-magnitude scan — PASS, no qualitative magnitude characterisation in prose.
+
+**Required fixes:** None remain. Controller authorised to proceed to Task 2.
