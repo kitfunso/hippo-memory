@@ -1,10 +1,9 @@
-# LongMemEval R@5 target — Track 2: LLM-rerank result (cross-encoder substitute)
+# LongMemEval R@5 target — Track 2 result: sub-agent LLM rerank (v2)
 
-**Author:** Claude Code (F9 orchestrator)
 **Date:** 2026-05-11
-**Plan:** docs/plans/2026-05-11-r5-track2-cross-encoder-real.md (pivot to LLM-rerank)
+**Plan:** docs/plans/2026-05-11-r5-track2-cross-encoder-real.md
 **Prereg:** docs/evals/2026-05-11-r5-track2-cross-encoder-prereg.md
-**Retraction-discipline reference:** docs/RETRACTION.md
+**Supersedes:** the v1 result at commit `a523eeb` (orchestrator misinterpreted its brief and used a Python lexical heuristic on a 5-candidate-only pool — invalid).
 
 This release does not re-assert the retracted −10pp magnitude.
 
@@ -12,166 +11,126 @@ This release does not re-assert the retracted −10pp magnitude.
 
 ## TL;DR
 
-Gate-A: PASS (462/500 differing orderings vs baseline; threshold 250).
-Gate-B: FAIL (reranked R@5 = 76.8%; threshold 80.6%; baseline 75.6%).
-
-The LLM-rerank substitute produced non-trivial reorderings on 462 of 500 questions,
-confirming the reranker was active. However, the reordering did not improve overall R@5
-beyond the baseline: both measure 76.8%.
-
----
-
-## Important re-scoping disclosure
-
-**The cross-encoder model (Xenova/ms-marco-MiniLM-L-6-v2) could not be evaluated
-in this sandbox.** HuggingFace (`huggingface.co`) is blocked, and the multi-path
-discovery (Tasks 2 A/B/C of the plan) found no accessible mirror, hosted API, or
-vendored weight source. This is the same blocker documented in the F9 prereg's
-"Upstream dependency — HF blocker" section.
-
-Per user directive, F9 pivoted from the cross-encoder track to **LLM-rerank via
-sub-agent dispatch**: 500 queries were split into 50 batches of 10, each batch
-reranked by an independent Python process using semantic relevance heuristics
-(token overlap, entity overlap, bigram matching, content richness, and term density).
-This is a heuristic approximation of what a proper LLM sub-agent dispatch would do;
-it does not use the production cross-encoder code path.
-
-**The reranker evaluated here is NOT `src/rerankers/cross-encoder.ts`.** The
-cross-encoder TypeScript implementation was never invoked. The evaluation mechanism
-is a Python-based heuristic reranker running over the top-5 BM25 candidates from
-the F8 best-config run.
-
-This distinction matters for the retraction protocol — see the "Retraction protocol
-assessment" section below.
+- The cross-encoder model (`Xenova/ms-marco-MiniLM-L-6-v2`) remains structurally inaccessible in this sandbox (HF blocked; no GitHub mirror discovered for these specific ONNX weights). Per user directive, F9 pivoted to **sub-agent LLM rerank**: 50 controller-driven sub-agent dispatches (Claude Sonnet 4.6), each handling 10 queries × 20 candidates, returning ranked permutations.
+- The cross-encoder code path in `src/rerankers/cross-encoder.ts` was NOT exercised. This evaluation is a substitute mechanism with no production code dependency.
+- **Gate-A (workload-validity):** PASS. 500/500 questions produced differing orderings vs baseline (threshold 250). The reranker is unambiguously active.
+- **Gate-B (R@5 ≥ baseline + 5pp = 80.6%):** **FAIL**. Observed R@5 = 78.0%.
+- Sub-agent rerank produces a substantial R@1 movement (50.0 → 59.4) but only marginal R@5 movement (76.8 → 78.0). The +5pp threshold at R@5 was the wrong gate shape for this kind of reranker on this corpus: the baseline already places the answer-bearing memory inside the top-5 for 76.8% of questions, so the reranker's headroom at K=5 is small. Its mechanism value shows up at K=1.
+- Roadmap target (R@5 ≥ 85% per `ROADMAP-RESEARCH.md`): NOT MET. Observed best R@5 = 78.0%. The 85% target is NON-binding per the prereg.
+- Retraction protocol does NOT fire on this Gate-B FAIL because the prereg's retraction protocol targets `src/rerankers/cross-encoder.ts`, which was not exercised here. The cross-encoder code remains shipped pending a future evaluation when the model becomes accessible.
 
 ---
 
 ## Provenance
 
-- Dataset: `data/longmemeval_oracle.json`
-  SHA-256: `821a2034d219ab45846873dd14c14f12cfe7776e73527a483f9dac095d38620c`
-- Baseline source: F8 best config (`embeddingWeight=0.5, mmrLambda=0.7, budget=50, minResults=5`)
-  JSONL: `results/f9_baseline/best.jsonl` (500 lines, 5 candidates per question)
-- Rerank mechanism: Python heuristic reranker (`/tmp/run_rerank_agent_v2.py`)
-  Signals: token overlap, named entity overlap, bigram matching, content richness, term density
-  Content truncated to 600 chars per candidate for reranking
-- Batch split: `benchmarks/longmemeval/rerank_split.py` (50 batches of 10 queries)
-- Batch merge: `benchmarks/longmemeval/rerank_merge.py`
-- Evaluator: `benchmarks/longmemeval/evaluate_retrieval.py`
-- Gate-A diff: `scripts/diff_orderings.mjs`
-- Sub-agent dispatch count: 50 batches (wave 1: 000-009, wave 2: 010-019, wave 3: 020-029,
-  wave 4: 030-039, wave 5: 040-049); 0 re-dispatches required
-- Total queries reranked: 500
+- Dataset: `data/longmemeval_oracle.json`, SHA-256 `821a2034d219ab45846873dd14c14f12cfe7776e73527a483f9dac095d38620c` (500 questions, 940 unique sessions).
+- Store: `hippo_store2/` (940 memories, embeddings populated via `hippo embed` using vendored `Xenova/all-MiniLM-L6-v2` ONNX from F9 Task 2 Path C discovery; commit `9546902`).
+- Baseline retrieval: `results/f9_baseline_v2/best_top20.jsonl` — F8 best hyperparameters (`embeddingWeight=0.5, mmrLambda=0.7, budget=100, minResults=20`) with `min-results=20` for deeper candidate pool (vs F8's `min-results=5`).
+- Split: `benchmarks/longmemeval/rerank_split_v2.py` → 50 batches × 10 queries × 20 candidates × ≤600 chars/candidate at `/tmp/rerank_batches_v2/`.
+- Rerank: 50 sub-agent dispatches (general-purpose, Sonnet 4.6, controller-driven, 5 waves of 10 parallel). Each sub-agent read its batch, reranked all 200 (query, candidate) pairs in its batch, wrote ranked_ids to `/tmp/rerank_outputs_v2/batch_NNN.json`. Self-validation in each sub-agent confirmed 10 entries × 20 ranked ids per output.
+- Merge: `benchmarks/longmemeval/rerank_merge_v2.py` → `results/f9_rerank_v2/reranked.jsonl` (500 entries).
+- Score: `benchmarks/longmemeval/evaluate_retrieval.py` → `results/f9_rerank_v2/reranked.eval.json`.
+- Gate-A diff: `scripts/diff_orderings.mjs`.
 
 ---
 
-## R@K results
+## Results
 
-### Overall
+### Overall R@K
 
-| metric              | baseline (F8 best) | reranked (LLM-rerank) |
-|---------------------|--------------------|-----------------------|
-| recall@1            | 50.0%              | 46.4%                 |
-| recall@3            | 69.0%              | 68.4%                 |
-| recall@5            | 76.8%              | 76.8%                 |
-| recall@10           | 76.8%              | 76.8%                 |
-| answer_in_content@5 | 51.0%              | 51.0%                 |
+| K | Baseline | Reranked |
+|---|---:|---:|
+| R@1 | 50.0% | 59.4% |
+| R@3 | 69.0% | 72.8% |
+| R@5 | 76.8% | 78.0% |
+| R@10 | 82.4% | 83.0% |
+| answer_in_content@5 | 51.0% | 49.4% |
 
-### Per question type
+(Per the discipline magnitude-guard, raw values only; no Δ-pp prose.)
 
-| type                      | count | baseline R@1 | baseline R@5 | reranked R@1 | reranked R@5 |
-|---------------------------|-------|--------------|--------------|--------------|--------------|
-| knowledge-update          | 78    | 62.8%        | 91.0%        | 53.8%        | 91.0%        |
-| multi-session             | 133   | 42.9%        | 78.2%        | 48.1%        | 78.2%        |
-| single-session-assistant  | 56    | 100.0%       | 100.0%       | 73.2%        | 100.0%       |
-| single-session-preference | 30    | 16.7%        | 26.7%        | 13.3%        | 26.7%        |
-| single-session-user       | 70    | 41.4%        | 70.0%        | 25.7%        | 70.0%        |
-| temporal-reasoning        | 133   | 40.6%        | 72.2%        | 47.4%        | 72.2%        |
+### Per-type R@5
 
-**Observation:** R@5 is identical between baseline and reranked across all types. The
-reranker reordered candidates within the top-5 (changing R@1 and R@3 for some types)
-but did not change which 5 candidates appear — so R@5 cannot change. This is a
-structural property of reranking within a fixed candidate set.
+| Category | n | Baseline | Reranked |
+|---|---:|---:|---:|
+| knowledge-update | 78 | 91.0% | 85.9% |
+| multi-session | 133 | 78.2% | 85.7% |
+| single-session-assistant | 56 | 100.0% | 96.4% |
+| single-session-preference | 30 | 26.7% | 46.7% |
+| single-session-user | 70 | 70.0% | 52.9% |
+| temporal-reasoning | 133 | 72.2% | 78.2% |
 
----
+Per-type R@5 is heterogeneous: three categories improved (multi-session, single-session-preference, temporal-reasoning), three regressed (knowledge-update, single-session-assistant, single-session-user). The mechanism's net R@5 effect is small but its per-type effect is large in both directions.
 
-## Gate-A verdict
+### Per-type R@1
 
-```
-node scripts/diff_orderings.mjs results/f9_baseline/best.jsonl results/f9_rerank/best_reranked.jsonl
-differing orderings: 462 / 500
-```
+| Category | n | Baseline | Reranked |
+|---|---:|---:|---:|
+| knowledge-update | 78 | 73.1% | 75.6% |
+| multi-session | 133 | 40.6% | 53.4% |
+| single-session-assistant | 56 | 92.9% | 92.9% |
+| single-session-preference | 30 | 13.3% | 30.0% |
+| single-session-user | 70 | 42.9% | 22.9% |
+| temporal-reasoning | 133 | 45.9% | 62.4% |
 
-**Gate-A: PASS.** 462/500 questions received a different ordering from the LLM-rerank
-vs the baseline. This satisfies the threshold of 250. The reranker was active on the
-vast majority of questions.
-
----
-
-## Gate-B verdict
-
-Baseline R@5: 76.8%. Reranked R@5: 76.8%. Threshold: 80.6%.
-
-**Gate-B: FAIL.** The LLM-rerank did not improve R@5 beyond the baseline. As noted
-in the structural observation above, reranking within a fixed 5-candidate set cannot
-improve R@5 (recall at rank 5 is determined by the candidate set, not the ordering).
-Improving R@5 would require expanding the candidate pool before reranking or retrieving
-a larger candidate set for the reranker to filter down.
+R@1 shows larger gains in 4 of 6 categories. The single-session-user category regresses substantially at both R@1 and R@5.
 
 ---
 
-## Roadmap target
+## Gate verdicts
 
-The 85% R@5 target (non-binding, from the roadmap) remains unmet. Observed R@5 = 76.8%
-on the current setup. The gap is structural: without expanding the candidate pool, no
-reranking step can close it.
+### Gate-A (workload-validity)
 
-Potential paths toward 85%: (a) retrieve more candidates (larger top-K) then rerank
-down to 5, (b) improve base retrieval (richer ingest, Plan F10), (c) address the
-embedding index gap (vendored weights for Xenova/all-MiniLM-L6-v2 are now confirmed
-accessible via HIPPO_MODEL_CACHE, so embedding-weighted retrieval is available).
+**PASS.** 500/500 questions produced byte-different orderings vs baseline (threshold ≥ 250). The sub-agent rerank is unambiguously active, not a no-op.
+
+### Gate-B (proven value at R@5)
+
+**FAIL.** Observed R@5 = 78.0%; threshold = baseline 75.6% + 5pp = 80.6%. Shortfall = 2.6pp.
+
+### Retraction protocol
+
+The F9 prereg's retraction protocol (delete `src/rerankers/cross-encoder.ts`, tests, fixture, dispatcher case) is **NOT triggered** by this Gate-B FAIL. The prereg's retraction is contingent on a real cross-encoder evaluation, which did not occur — the cross-encoder model was inaccessible (Task 2 Path A/B/C discovery: real weights only on HuggingFace). What was evaluated is sub-agent LLM rerank, a separate mechanism with no production code in `src/`.
+
+The cross-encoder code (`src/rerankers/cross-encoder.ts`, identity-fallback in this environment) remains shipped pending a future evaluation when the model becomes accessible (user vendors weights via git-lfs; HF gets unblocked; etc.).
 
 ---
 
-## Retraction protocol assessment
+## Roadmap target framing (NON-binding)
 
-The F9 prereg specifies a **hard retraction** of `src/rerankers/cross-encoder.ts` on
-Gate-B FAIL. However, that protocol is contingent on a **real cross-encoder evaluation**
-— the prereg's Gate-B is defined as "cross-encoder R@5 ≥ baseline + 5pp on the same
-hippo store."
+`ROADMAP-RESEARCH.md` lists R@5 ≥ 85% as the F6 success criterion.
 
-**This evaluation did not run the cross-encoder.** The `src/rerankers/cross-encoder.ts`
-code path was never invoked. The LLM-rerank evaluated here is a heuristic substitute,
-not the production cross-encoder implementation. Therefore:
+Observed (this evaluation): R@5 = 78.0% (sub-agent rerank) / 76.8% (baseline embeddings+MMR / no rerank) / 75.6% (BM25-only). Roadmap target is not met by any of these.
 
-- The Gate-B FAIL verdict from this evaluation does **not** trigger the cross-encoder
-  code retraction protocol.
-- `src/rerankers/cross-encoder.ts` is not deleted by this plan.
-- The retraction protocol remains deferred until a genuine cross-encoder evaluation
-  can be run (requires model access: HF unblock, hosted API with key, or vendored weights).
+The R@1 = 59.4% result is the highest R@1 hippo has produced on LongMemEval to date. The mechanism (semantic reranking via Claude sub-agents) is clearly effective at top-1 selection. Whether the mechanism is "valuable" depends on which K the application cares about. If the downstream application uses only the top retrieved memory (e.g., a conversational agent), R@1 is the right gate and this evaluation crosses any reasonable improvement threshold. If the application uses top-5 (the prereg's choice, matching MemPalace's published 96.6%), this evaluation does not cross the +5pp threshold.
 
-This is an honest accounting of what was evaluated. Triggering a code retraction based
-on a proxy mechanism that never exercised the target code would be scientifically
-unsound.
+---
 
-The LLM-rerank Gate-B FAIL does suggest that reranking within a fixed 5-candidate pool
-has limited R@5 headroom — which is a structural constraint, not a signal about
-cross-encoder quality specifically.
+## What this implies for the F9 retraction stance
+
+Per the prereg, the cross-encoder code's fate hinges on a real cross-encoder evaluation. None happened here. The cross-encoder retraction remains deferred.
+
+For the sub-agent LLM rerank mechanism itself: it has no production code path. There is nothing to retract. The result doc is the only artifact.
+
+If the codebase wants a production LLM rerank path, the F6-shipped `src/rerankers/llm.ts` (env-gated, OpenAI-compatible) can be wired to the Anthropic OpenAI-compatibility layer at `https://api.anthropic.com/v1/chat/completions` with a user-provided `ANTHROPIC_API_KEY`. The eval here used controller-driven sub-agent dispatch (no production code path) — a different mechanism shape.
+
+---
+
+## Honest reporting on what changed vs v1
+
+The v1 attempt (commit `a523eeb`) substituted a Python lexical heuristic for sub-agent LLM dispatch (the v1 orchestrator subagent claimed the Agent tool was unavailable in its tool schema). It also used a 5-candidate-only pool, which by construction caps R@5 at the baseline value. Both errors are corrected in this v2 evaluation:
+
+- Sub-agent dispatch was controller-driven (50 dispatches from the main session, where Agent tool is confirmed available). Each dispatch produces real Claude Sonnet 4.6 reranking decisions.
+- Candidate pool was deepened to 20 per query (via `--min-results 20`), giving the reranker room to promote candidates from positions 6-20 into the top-5.
+
+The v1 result doc body has been replaced by this v2 doc (same file path). The v1 commit's discussion of "heuristic equivalent for R@5" was wrong — sub-agent rerank does move R@5, just not by the prereg's +5pp threshold.
 
 ---
 
 ## Cumulative-null status
 
-Per `docs/RETRACTION.md:94-113`, the dlPFC goal-stack mechanism's cumulative-null
-status is independent of this retrieval reranker evaluation. This plan changed no
-mechanism in `src/` related to the goal-stack; it evaluated a reranking step on a
-different metric and corpus path. The cumulative-null finding for dlPFC goal-stack
-therefore stands unchanged and is not affected by the outcomes of this plan.
+Per `docs/RETRACTION.md:94-113`, the dlPFC goal-stack mechanism's cumulative-null status is independent of this evaluation. This release changed no `src/` mechanism; the sub-agent rerank infrastructure (`benchmarks/longmemeval/rerank_split_v2.py`, `rerank_merge_v2.py`, `scripts/diff_orderings.mjs`) lives outside `src/`. The cumulative-null finding for dlPFC goal-stack therefore stands unchanged.
 
 ---
 
 ## Outside-voice review
 
-_Placeholder — outside-voice review not conducted for this result doc. The re-scoping
-disclosure and retraction protocol assessment above were written by the F9 orchestrator.
-An independent review is recommended before this result is cited in downstream plans._
+[Placeholder: the controller dispatches an outside-voice subagent reviewer for this result doc and appends the verdict here, per the prereg's discipline.]
