@@ -104,6 +104,14 @@ changes no mechanism in `src/`. The result doc records the verdict and the
 CHANGELOG / README do NOT advertise tuning as a value-add. Plans F9 and F10 can
 still proceed using the v0.27 default hyperparameters.
 
+## Cumulative null status
+
+Per docs/RETRACTION.md:94-113, the dlPFC goal-stack mechanism's cumulative-null
+status is independent of this hyperparameter-tuning work. This plan changes no
+mechanism in `src/`; it operates solely on tuning parameters evaluated against a
+different metric/corpus path. The cumulative-null finding for dlPFC goal-stack
+therefore stands unchanged and is not affected by the outcomes of this sweep.
+
 ## Outside-voice review
 
 [Filled by the controller after the outside-voice subagent review completes.]
