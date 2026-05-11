@@ -39,6 +39,32 @@ export function poolingFor(model: string): 'cls' | 'mean' {
   return /\bbge\b/i.test(model) ? 'cls' : 'mean';
 }
 
+/**
+ * Per-model input-prefix dispatch. The intfloat/e5 family was trained with
+ * asymmetric "query: " / "passage: " prefixes — the model only matches the
+ * two halves correctly when each side carries its prefix at inference. BGE
+ * also has prefix conventions for some downstream tasks, but symmetric use
+ * without prefixes is the documented default for `bge-*-en-v1.5`, so we leave
+ * BGE alone here. Symmetric models (MiniLM, BGE) and unknown models return
+ * an empty prefix.
+ *
+ * `role` semantics:
+ *   - 'query'   — the text is the user's question / search input.
+ *   - 'passage' — the text is a document being indexed.
+ *   - undefined or absent — symmetric path; no prefix is applied even for
+ *     asymmetric models (preserves backwards compatibility with the legacy
+ *     two-argument `getEmbedding(text, model)` API).
+ */
+export type EmbeddingRole = 'query' | 'passage';
+
+export function prefixFor(model: string, role?: EmbeddingRole): string {
+  if (!role) return '';
+  if (/\be5\b/i.test(model)) {
+    return role === 'query' ? 'query: ' : 'passage: ';
+  }
+  return '';
+}
+
 // Use Function constructor to bypass TypeScript static module resolution
 // for optional peer dependencies that may not be installed.
 const _dynImport = new Function('s', 'return import(s)') as (s: string) => Promise<unknown>;
@@ -69,6 +95,25 @@ export function isEmbeddingAvailable(): boolean {
   return false;
 }
 
+/**
+ * Some model families ship ONNX in external-data format (a tiny graph .onnx
+ * plus a multi-GB `model.onnx_data` sidecar). `@xenova/transformers` v2.17 loads
+ * the .onnx as an in-memory Buffer, which severs the external-data path
+ * resolution and produces an "Initializer model_path must not be empty" error.
+ * The maintained fork `@huggingface/transformers` v4 correctly passes the file
+ * path through to onnxruntime, so external-data resolves cleanly.
+ *
+ * We prefer the older `@xenova/transformers` by default (it's the historical
+ * peer dep with zero observed regressions on BGE / MiniLM), and dispatch to
+ * `@huggingface/transformers` only for families known to require it.
+ */
+function preferredBackend(model: string): 'xenova' | 'huggingface' {
+  // intfloat/e5 family ships external-data ONNX in the Qdrant fastembed
+  // mirror. Same dispatch shape as poolingFor / prefixFor.
+  if (/\be5\b/i.test(model)) return 'huggingface';
+  return 'xenova';
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function loadPipeline(model: string): Promise<any> {
   if (_pipelineInstances.has(model)) return _pipelineInstances.get(model);
@@ -78,21 +123,15 @@ async function loadPipeline(model: string): Promise<any> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let pipelineFn: any = null;
 
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mod = await _dynImport('@xenova/transformers') as any;
-      if (process.env.HIPPO_MODEL_CACHE) {
-        if (mod.env) {
-          mod.env.cacheDir = process.env.HIPPO_MODEL_CACHE;
-          mod.env.localModelPath = process.env.HIPPO_MODEL_CACHE;
-          mod.env.allowRemoteModels = false;
-        }
-      }
-      pipelineFn = mod.pipeline ?? mod.default?.pipeline;
-    } catch {
+    const backend = preferredBackend(model);
+    const order = backend === 'huggingface'
+      ? ['@huggingface/transformers', '@xenova/transformers']
+      : ['@xenova/transformers', '@huggingface/transformers'];
+
+    for (const pkg of order) {
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const mod = await _dynImport('@huggingface/transformers') as any;
+        const mod = await _dynImport(pkg) as any;
         if (process.env.HIPPO_MODEL_CACHE) {
           if (mod.env) {
             mod.env.cacheDir = process.env.HIPPO_MODEL_CACHE;
@@ -101,8 +140,9 @@ async function loadPipeline(model: string): Promise<any> {
           }
         }
         pipelineFn = mod.pipeline ?? mod.default?.pipeline;
+        if (pipelineFn) break;
       } catch {
-        return null;
+        // try next package
       }
     }
 
@@ -193,7 +233,7 @@ async function rebuildEmbeddingIndex(
 
   for (const entry of entries) {
     const text = `${entry.content} ${entry.tags.join(' ')}`.trim();
-    const vector = await getEmbedding(text, model);
+    const vector = await getEmbedding(text, model, 'passage');
     if (vector.length > 0) {
       rebuilt[entry.id] = vector;
     }
@@ -222,10 +262,16 @@ function resetPhysicsFromIndex(
 /**
  * Get an embedding vector for a piece of text.
  * Returns an empty array if transformers is not available or fails.
+ *
+ * Pass `role: 'query'` / `'passage'` to engage asymmetric prefixing for
+ * model families that require it (currently intfloat/e5-*). Omitting `role`
+ * keeps the legacy symmetric behavior (no prefix), so BGE / MiniLM callers
+ * don't need to change.
  */
 export async function getEmbedding(
   text: string,
-  model = DEFAULT_EMBEDDING_MODEL
+  model = DEFAULT_EMBEDDING_MODEL,
+  role?: EmbeddingRole,
 ): Promise<number[]> {
   if (!isEmbeddingAvailable()) return [];
 
@@ -233,8 +279,10 @@ export async function getEmbedding(
     const pipe = await loadPipeline(model);
     if (!pipe) return [];
 
+    const prefix = prefixFor(model, role);
+    const input = prefix ? `${prefix}${text}` : text;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const output = await pipe(text, { pooling: poolingFor(model), normalize: true }) as any;
+    const output = await pipe(input, { pooling: poolingFor(model), normalize: true }) as any;
     return Array.from(output.data as Float32Array);
   } catch {
     return [];
@@ -335,7 +383,7 @@ export async function embedMemory(
     }
 
     const text = `${entry.content} ${entry.tags.join(' ')}`.trim();
-    const vector = await getEmbedding(text, effectiveModel);
+    const vector = await getEmbedding(text, effectiveModel, 'passage');
     if (vector.length === 0) return;
 
     const index = existingIndex;
@@ -401,7 +449,7 @@ export async function embedAll(
       if (index[entry.id]) continue; // already embedded
 
       const text = `${entry.content} ${entry.tags.join(' ')}`.trim();
-      const vector = await getEmbedding(text, effectiveModel);
+      const vector = await getEmbedding(text, effectiveModel, 'passage');
       if (vector.length > 0) {
         index[entry.id] = vector;
         count++;

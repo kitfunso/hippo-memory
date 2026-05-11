@@ -44,3 +44,4 @@ benchmarks/longmemeval/data/enrichment_batches/
 benchmarks/longmemeval/data/enrichment_outputs/
 benchmarks/longmemeval/data/signals.jsonl
 hippo_store_enriched/
+results/f12_*/

@@ -326,7 +326,7 @@ export async function hybridSearch(
     try {
       const model = resolveEmbeddingModel(options.hippoRoot);
       if (!embeddingModelRequiresReindex(options.hippoRoot, model)) {
-        queryVector = await getEmbedding(query, model);
+        queryVector = await getEmbedding(query, model, 'query');
         if (queryVector.length > 0) {
           embeddingIndex = loadEmbeddingIndex(options.hippoRoot);
           useEmbeddings = true;
@@ -685,7 +685,7 @@ export async function physicsSearch(
     if (embeddingModelRequiresReindex(options.hippoRoot, model)) {
       return hybridSearch(query, entries, options);
     }
-    queryVector = await getEmbedding(query, model);
+    queryVector = await getEmbedding(query, model, 'query');
     if (queryVector.length === 0) {
       return hybridSearch(query, entries, options);
     }

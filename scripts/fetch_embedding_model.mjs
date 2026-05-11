@@ -12,8 +12,9 @@
  *
  * Supported models (`--model <id>`):
  *
- *   Xenova/all-MiniLM-L6-v2     (384-dim, mean pooling, FP32 model.onnx, ~80 MB tarball)
- *   Xenova/bge-base-en-v1.5     (768-dim, CLS pooling,  FP16 model_optimized.onnx, ~195 MB tarball)
+ *   Xenova/all-MiniLM-L6-v2          (384-dim,  mean pooling, FP32 model.onnx, ~80 MB tarball)
+ *   Xenova/bge-base-en-v1.5          (768-dim,  CLS pooling,  FP16 model_optimized.onnx, ~195 MB tarball)
+ *   Xenova/multilingual-e5-large     (1024-dim, mean pooling, FP32 model.onnx + model.onnx_data external-data, ~1.25 GB tarball)
  *
  * Layout produced (matches @xenova/transformers' local-model expectations):
  *
@@ -41,7 +42,7 @@
  * contains a non-empty `onnx/model.onnx`. Run with `--force` to re-fetch.
  */
 import { createHash } from 'node:crypto';
-import { createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { spawnSync } from 'node:child_process';
@@ -59,23 +60,35 @@ const MODELS = {
     md5Base64: 'ES1rh090kuh/nhAyKdCO0A==',
     tarPrefix: 'fast-all-MiniLM-L6-v2',
     onnxFileInTarball: 'model.onnx',
+    onnxExternalData: null,
   },
   'Xenova/bge-base-en-v1.5': {
     url: 'https://storage.googleapis.com/qdrant-fastembed/fast-bge-base-en-v1.5.tar.gz',
     md5Base64: 'zD+/65myZ/5XsJN3BDO92w==',
     tarPrefix: 'fast-bge-base-en-v1.5',
     onnxFileInTarball: 'model_optimized.onnx',
+    onnxExternalData: null,
+  },
+  'Xenova/multilingual-e5-large': {
+    url: 'https://storage.googleapis.com/qdrant-fastembed/fast-multilingual-e5-large.tar.gz',
+    md5Base64: 'qfG9AF6uyVOG9RgHd1XpLA==',
+    tarPrefix: 'fast-multilingual-e5-large',
+    onnxFileInTarball: 'model.onnx',
+    onnxExternalData: 'model.onnx_data',  // ONNX external-data sidecar, must live next to model.onnx
   },
 };
 
 const DEFAULT_MODEL = 'Xenova/all-MiniLM-L6-v2';
-const FILES_KEPT = [
+// Required files (must be present in the tarball)
+const FILES_REQUIRED = [
   'config.json',
   'tokenizer.json',
   'tokenizer_config.json',
   'special_tokens_map.json',
-  'vocab.txt',
-  // ONNX weights handled separately (moved into ./onnx/model.onnx)
+];
+// Optional files (copied if present; absent files do NOT fail extraction)
+const FILES_OPTIONAL = [
+  'vocab.txt',  // WordPiece-tokenized models (BERT family); absent for SentencePiece (XLM-R)
 ];
 
 function parseArgs(args) {
@@ -122,21 +135,23 @@ function md5Base64(filePath) {
 
 function extractTarball(tarPath, destDir) {
   mkdirSync(destDir, { recursive: true });
-  const res = spawnSync('tar', ['-xzf', tarPath, '-C', destDir], { stdio: ['ignore', 'pipe', 'pipe'] });
+  // --exclude='._*' drops macOS resource-fork files that fastembed tarballs
+  // produced on darwin sometimes ship (e.g. multilingual-e5-large).
+  const res = spawnSync('tar', ['-xzf', tarPath, '-C', destDir, '--exclude=._*'], { stdio: ['ignore', 'pipe', 'pipe'] });
   if (res.status !== 0) {
     throw new Error(`tar extraction failed (exit ${res.status}): ${res.stderr?.toString() || ''}`);
   }
 }
 
-function arrangeXenovaLayout(extractedRoot, targetDir, tarPrefix, onnxFileInTarball) {
-  const src = join(extractedRoot, tarPrefix);
+function arrangeXenovaLayout(extractedRoot, targetDir, cfg) {
+  const src = join(extractedRoot, cfg.tarPrefix);
   if (!existsSync(src)) {
     throw new Error(`expected directory not found after extraction: ${src}`);
   }
 
   mkdirSync(join(targetDir, 'onnx'), { recursive: true });
 
-  for (const name of FILES_KEPT) {
+  for (const name of FILES_REQUIRED) {
     const srcPath = join(src, name);
     if (!existsSync(srcPath)) {
       throw new Error(`missing required file in tarball: ${name}`);
@@ -144,11 +159,32 @@ function arrangeXenovaLayout(extractedRoot, targetDir, tarPrefix, onnxFileInTarb
     writeFileSync(join(targetDir, name), readFileSync(srcPath));
   }
 
-  const onnxSrc = join(src, onnxFileInTarball);
-  if (!existsSync(onnxSrc)) {
-    throw new Error(`missing ${onnxFileInTarball} in tarball`);
+  for (const name of FILES_OPTIONAL) {
+    const srcPath = join(src, name);
+    if (existsSync(srcPath)) {
+      writeFileSync(join(targetDir, name), readFileSync(srcPath));
+    }
   }
-  writeFileSync(join(targetDir, 'onnx', 'model.onnx'), readFileSync(onnxSrc));
+
+  const onnxSrc = join(src, cfg.onnxFileInTarball);
+  if (!existsSync(onnxSrc)) {
+    throw new Error(`missing ${cfg.onnxFileInTarball} in tarball`);
+  }
+  // copyFileSync streams; readFileSync/writeFileSync would hit Node's 2 GiB
+  // buffer cap (e5-large's external-data sidecar is 2.2 GB).
+  copyFileSync(onnxSrc, join(targetDir, 'onnx', 'model.onnx'));
+
+  // ONNX external-data: if the tarball ships a sidecar (e.g. model.onnx_data),
+  // it must live next to model.onnx for onnxruntime to resolve the weights.
+  if (cfg.onnxExternalData) {
+    const extSrc = join(src, cfg.onnxExternalData);
+    if (!existsSync(extSrc)) {
+      throw new Error(`missing onnx external-data sidecar in tarball: ${cfg.onnxExternalData}`);
+    }
+    // ONNX resolves external-data by exact filename reference inside the .onnx
+    // graph — keep the original name (model.onnx_data, not model.data).
+    copyFileSync(extSrc, join(targetDir, 'onnx', cfg.onnxExternalData));
+  }
 }
 
 async function main() {
@@ -187,7 +223,7 @@ async function main() {
 
   // Stage to a fresh target then move into place atomically.
   const stagingDir = join(tmpRoot, 'staged');
-  arrangeXenovaLayout(extractDir, stagingDir, cfg.tarPrefix, cfg.onnxFileInTarball);
+  arrangeXenovaLayout(extractDir, stagingDir, cfg);
 
   rmSync(modelDir, { recursive: true, force: true });
   mkdirSync(dirname(modelDir), { recursive: true });
