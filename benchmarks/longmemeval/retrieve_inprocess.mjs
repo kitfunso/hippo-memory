@@ -30,6 +30,10 @@ const EMB_WEIGHT = flag('--embedding-weight', null);
 const NO_MMR = process.argv.includes('--no-mmr');
 const MIN_RESULTS = parseInt(flag('--min-results', '10'), 10);
 const MMR_LAMBDA = flag('--mmr-lambda', null);
+if (MMR_LAMBDA !== null && Number.isNaN(parseFloat(MMR_LAMBDA))) {
+  console.error('--mmr-lambda must be a number, got:', MMR_LAMBDA);
+  process.exit(1);
+}
 const RERANKER = flag('--reranker', null);
 const RERANKER_TOP_K = parseInt(flag('--reranker-top-k', '50'), 10);
 
@@ -58,7 +62,6 @@ if (RERANKER) {
   console.error(`Reranker: ${RERANKER} (top-K=${RERANKER_TOP_K})`);
 }
 console.error('options:', { embeddingWeight: EMB_WEIGHT, mmrLambda: MMR_LAMBDA, budget: BUDGET, minResults: MIN_RESULTS });
-console.log('options:', { embeddingWeight: EMB_WEIGHT, mmrLambda: MMR_LAMBDA, budget: BUDGET, minResults: MIN_RESULTS });
 
 fs.mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
 // Truncate + use sync appendFileSync so progress is always visible on disk —
