@@ -1,72 +1,154 @@
-# F8 Stage-1 — discovery and termination note
+# LongMemEval R@5 target — Track 1 hybrid-tuning result
 
+**Author:** Claude Code (subagent-driven-development workflow)
 **Date:** 2026-05-11
 **Plan:** docs/plans/2026-05-11-r5-track1-hybrid-tuning.md
 **Prereg:** docs/evals/2026-05-11-r5-track1-tuning-prereg.md
-**Status:** Stages 2 and 3 not run. Plan paused pending HuggingFace access (see "Pivot" below).
 
 This release does not re-assert the retracted −10pp magnitude.
 
 ---
 
-## Discovery
+## TL;DR
 
-Stage-1 ran 7 LongMemEval runs against `hippo_store2/` with `embeddingWeight ∈ {0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8}`. Aggregator output (`results/hybrid_tuning_2026-05-11T09-30-50-737Z_stage1/leaderboard.json`):
+The full 28-run staged hyperparameter sweep over `hybridSearch` completed.
+Best config: `embeddingWeight=0.5, mmrLambda=0.7, budget=50, minResults=5`.
+Overall R@5 = 76.8% on LongMemEval 500-question workload.
+Gate-A: PASS (28/28 runs). Gate-B: FAIL (76.8% < 77.6% threshold).
 
-| label | recall@1 | recall@3 | recall@5 | recall@10 |
-|---|---:|---:|---:|---:|
-| ew_0.2 | 50.4 | 67.6 | 75.6 | 83.6 |
-| ew_0.3 | 50.4 | 67.6 | 75.6 | 83.6 |
-| ew_0.4 | 50.4 | 67.6 | 75.6 | 83.6 |
-| ew_0.5 | 50.4 | 67.6 | 75.6 | 83.6 |
-| ew_0.6 | 50.4 | 67.6 | 75.6 | 83.6 |
-| ew_0.7 | 50.4 | 67.6 | 75.6 | 83.6 |
-| ew_0.8 | 50.4 | 67.6 | 75.6 | 83.6 |
+---
 
-All seven runs produced byte-different JSONL retrievals (different orderings on individual queries) but identical R@K across all four K values. This is the byte-level equivalent of Gate-B FAIL, but the cause is upstream of the prereg's intent.
+## Provenance
 
-## Root cause
+- Dataset: `data/longmemeval_oracle.json`
+  SHA-256: `821a2034d219ab45846873dd14c14f12cfe7776e73527a483f9dac095d38620c`
+- Store: `hippo_store2/` (940 sessions, v0.27, embeddings populated via `hippo embed`
+  using vendored `Xenova/all-MiniLM-L6-v2` ONNX weights, `HIPPO_MODEL_CACHE` set)
+- Orchestrator: `benchmarks/longmemeval/run_hybrid_tuning_compact.mjs` (deletes each
+  JSONL after evaluation to avoid disk exhaustion)
+- Evaluator: `benchmarks/longmemeval/evaluate_retrieval.py`
+- F6 baseline R@5 (pure BM25, no embeddings): 75.6%
+- Gate-B threshold: 77.6% (baseline + 2pp)
 
-The `hippo_store2/` store at `.hippo/hippo.db` has 940 memories with raw session text and a working FTS index, but **no embeddings file exists at `.hippo/embeddings.json`**. The embeddings file is where `hybridSearch` reads cached cosine vectors (`src/embeddings.ts:233-247`). Without it, `loadEmbeddingIndex()` returns `{}`, every per-entry `cosine` is 0, and the BM25 + cosine combination collapses to a small perturbation of the BM25 ranking. Changing `embeddingWeight` only shuffles the rank order of ties; it does not change the answer-bearing top-K set for any of the 500 questions.
+---
 
-`ingest_direct.py` (used in F6 Task 10 to populate `hippo_store2/`) writes raw text and never invokes the embedding pipeline. `hippo embed` is the CLI command that builds the embeddings index, but it depends on the default embedding model `Xenova/all-MiniLM-L6-v2` (`src/embeddings.ts:26`), which is served from HuggingFace. The sandbox blocks `huggingface.co`. So:
+## Sweep results
 
-- F6 R@5 = 75.6% on this workload was always pure BM25.
-- F8's hybrid-tuning premise (sweep BM25 vs embedding weight) is null on this store.
-- F9's cross-encoder reranks whatever the BM25-only path returns (the cross-encoder is a separate model, also HF-hosted; same blocker).
-- F10's enrichment plan adds entry-level signal fields but does not address the embeddings absence.
+### Stage 1 — `embeddingWeight` sweep (7 runs)
 
-## Verdict against Gate-B
+Fixed: `mmrLambda=0.7` (default), `budget=1000000` (default), `minResults=10` (default).
 
-Gate-B as written ("best-config R@5 ≥ baseline + 2pp") is technically FAIL — the best config matches baseline. But the verdict is **trivially FAIL because the workload is invalid for hyperparameter discrimination, not because tuning is exhausted**. Per the prereg's failure-handling clause, Gate-B FAIL is descriptive only and triggers no `src/` retraction. This document is the result-doc artefact for the run that ran.
+Results dir: `results/hybrid_tuning_2026-05-11T10-19-25-968Z_stage1/`
 
-## Why Stages 2 and 3 were not executed
+| label   | recall@1 | recall@3 | recall@5 | recall@10 |
+|---------|----------|----------|----------|-----------|
+| ew_0.5  | 50.0     | 69.0     | 76.8     | 82.4      |
+| ew_0.6  | 49.6     | 68.8     | 76.2     | 82.8      |
+| ew_0.4  | 50.8     | 67.0     | 75.0     | 82.4      |
+| ew_0.3  | 52.2     | 67.2     | 74.8     | 82.0      |
+| ew_0.7  | 47.6     | 67.4     | 73.8     | 82.2      |
+| ew_0.2  | 52.6     | 67.2     | 73.0     | 81.2      |
+| ew_0.8  | 46.0     | 64.0     | 71.6     | 80.6      |
 
-Stages 2 and 3 vary `mmrLambda` and `(budget, min-results)` respectively. Both depend on a populated embedding index:
+Winner: `embeddingWeight=0.5`
 
-- MMR re-ranking computes diversification against pairwise cosine similarity. Without embeddings, MMR's diversity term is 0 for every candidate, so `mmrLambda` is degenerate.
-- Candidate budget and min-results affect how many BM25 candidates feed the embedding rerank. Without embeddings, larger candidate pools widen the BM25 ranking only.
+### Stage 2 — `mmrLambda` sweep (5 runs)
 
-Running Stages 2 and 3 against the current store would produce 21 more identical R@K rows and consume ~28 min of compute. Pausing the plan is the honest move.
+Fixed: `embeddingWeight=0.5`, `budget=1000000` (default), `minResults=10` (default).
 
-## Pivot
+Results dir: `results/hybrid_tuning_2026-05-11T10-41-04-045Z_stage2/`
 
-The right unblock is HuggingFace access (or a substitute embedding service). This is the same blocker called out in Plan F9 (`docs/plans/2026-05-11-r5-track2-cross-encoder-real.md`) Task 2, which scopes a multi-path discovery — try mirrors (`hf-mirror.com`), hosted reranker / embedding APIs (Cohere / Voyage / Jina), and vendored ONNX weights. The same discovery serves both:
+| label  | recall@1 | recall@3 | recall@5 | recall@10 |
+|--------|----------|----------|----------|-----------|
+| ml_0.7 | 50.0     | 69.0     | 76.8     | 82.4      |
+| ml_1   | 50.0     | 69.6     | 76.2     | 84.2      |
+| ml_0.5 | 50.0     | 65.0     | 70.6     | 77.2      |
+| ml_0.3 | 50.0     | 55.0     | 58.2     | 65.8      |
+| ml_0   | 50.0     | 50.6     | 51.6     | 53.4      |
 
-- F8 re-run: build `hippo_store2/.hippo/embeddings.json` via `hippo embed`, then re-run Stages 1-3.
-- F9: load the MS-MARCO cross-encoder for real-model rescoring.
+Winner: `mmrLambda=0.7`
 
-Next action: dispatch F9 Task 2 (model-access discovery) before continuing either plan. F10 (richer ingest) can run independently; its enrichment is signal-extraction, not embedding-generation.
+### Stage 3 — `budget` × `minResults` grid (16 runs)
 
-## Artefacts retained
+Fixed: `embeddingWeight=0.5`, `mmrLambda=0.7`.
 
-- `scripts/aggregate_hybrid_tuning.mjs` (Task 4) — reusable on the re-run.
-- `benchmarks/longmemeval/run_hybrid_tuning.mjs` (Task 3) — reusable on the re-run.
-- `results/hybrid_tuning_winners.json` — currently has `{"embeddingWeight": 0.2}` from a degenerate sort-stable tie; will be overwritten on re-run.
-- The Stage-1 sweep output dir is gitignored and will be regenerated.
+Results dir: `results/hybrid_tuning_2026-05-11T10-56-00-495Z_stage3/`
 
-The prereg, Stage-1 orchestrator, aggregator, and winners file are all kept on the branch; the result doc this note functions as documents the pause.
+All 16 cells produced R@5=76.8%, R@1=50.0%, R@3=69.0%.
+R@10 varies: 76.8% when `minResults=5` (result count capped at 5), 82.4% otherwise.
+
+| budget | minResults | recall@5 | recall@10 |
+|--------|------------|----------|-----------|
+| 50     | 5          | 76.8     | 76.8      |
+| 50     | 10         | 76.8     | 82.4      |
+| 50     | 20         | 76.8     | 82.4      |
+| 50     | 50         | 76.8     | 82.4      |
+| 100    | 5          | 76.8     | 76.8      |
+| 100    | 10         | 76.8     | 82.4      |
+| 100    | 20         | 76.8     | 82.4      |
+| 100    | 50         | 76.8     | 82.4      |
+| 500    | 5          | 76.8     | 76.8      |
+| 500    | 10         | 76.8     | 82.4      |
+| 500    | 20         | 76.8     | 82.4      |
+| 500    | 50         | 76.8     | 82.4      |
+| 1000   | 5          | 76.8     | 76.8      |
+| 1000   | 10         | 76.8     | 82.4      |
+| 1000   | 20         | 76.8     | 82.4      |
+| 1000   | 50         | 76.8     | 82.4      |
+
+Winner (sort-stable): `budget=50, minResults=5`.
+
+Stage-3 degeneracy explanation: `budget` is a character-count / 4 token budget applied
+after `minResults` are guaranteed. Since all tested `minResults` values are ≤ the
+actual number of BM25 candidates returned, the `minResults` guarantee fires for every
+query and the budget constraint is not active. All 16 cells are equivalent.
+
+---
+
+## Best-config confirmation run
+
+Config: `embeddingWeight=0.5, mmrLambda=0.7, budget=50, minResults=5`
+
+Artefact: `results/hybrid_tuning_best_v2/best.eval.json`
+
+| metric               | value  |
+|----------------------|--------|
+| recall@1             | 50.0%  |
+| recall@3             | 69.0%  |
+| recall@5             | 76.8%  |
+| recall@10            | 76.8%  |
+| answer_in_content@5  | 51.0%  |
+
+Per question type:
+
+| type                        | count | recall@1 | recall@5 | answer_in_content@5 |
+|-----------------------------|-------|----------|----------|---------------------|
+| knowledge-update            | 78    | 62.8%    | 91.0%    | 53.8%               |
+| multi-session               | 133   | 42.9%    | 78.2%    | 27.8%               |
+| single-session-assistant    | 56    | 100.0%   | 100.0%   | 78.6%               |
+| single-session-preference   | 30    | 16.7%    | 26.7%    | 73.3%               |
+| single-session-user         | 70    | 41.4%    | 70.0%    | 74.3%               |
+| temporal-reasoning          | 133   | 40.6%    | 72.2%    | 43.6%               |
+
+---
+
+## Gate verdicts
+
+**Gate-A (sweep completion):** PASS. All 28 planned runs completed with non-empty
+`*.eval.json` files. No harness crashes or evaluator errors.
+
+**Gate-B (best-config improvement):** FAIL. Best R@5 = 76.8% < threshold 77.6%
+(baseline 75.6% + 2pp). Per the prereg failure-handling clause, this verdict is
+descriptive only. No `src/` changes were made; no retraction protocol fires.
+The CHANGELOG and README do not advertise tuning as a value-add.
+Plans F9 and F10 can proceed using the v0.27 default hyperparameters.
+
+---
 
 ## Cumulative-null status
 
-Per `docs/RETRACTION.md:94-113`, the dlPFC goal-stack mechanism's cumulative-null status is independent of this plan, which changes no `src/` mechanism. The pause here does not alter that status.
+Per `docs/RETRACTION.md:94-113`, the dlPFC goal-stack mechanism's cumulative-null
+status is independent of this hyperparameter-tuning work. This plan changed no
+mechanism in `src/`; it operated solely on tuning parameters evaluated against a
+different metric/corpus path. The cumulative-null finding for dlPFC goal-stack
+therefore stands unchanged and is not affected by the outcomes of this sweep.
