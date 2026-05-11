@@ -31,5 +31,7 @@ results/reranker_sweep_*/
 results/hybrid_tuning_*/
 results/hybrid_tuning_best_v2/
 results/f9_baseline/
+results/f9_baseline_v2/
 results/f9_rerank/
+results/f9_rerank_v2/
 results/hybrid_tuning_*/
