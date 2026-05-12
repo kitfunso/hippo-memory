@@ -339,6 +339,14 @@ The Qdrant fastembed GCS bucket pattern is `https://storage.googleapis.com/qdran
 ls benchmarks/longmemeval/data/model-cache/ 2>/dev/null
 ```
 
+**Snapshot the model-cache BEFORE vendoring** (mandatory — this manifest is what the HARD RETRACTION arm uses to identify newly-added directories vs pre-F15 weights to retain):
+
+```bash
+mkdir -p /tmp/f15_manifests
+find benchmarks/longmemeval/data/model-cache -maxdepth 2 -type d | sort > /tmp/f15_manifests/model_cache_before_minilm.txt
+wc -l /tmp/f15_manifests/model_cache_before_minilm.txt
+```
+
 If `Xenova/` subdirectory exists, the layout is `Xenova/<model-name>/<files>`. To vendor `Xenova/ms-marco-MiniLM-L-6-v2`:
 
 ```bash
@@ -368,6 +376,18 @@ tar xzf /tmp/reranker.tar.gz
 ls Xenova/ms-marco-MiniLM-L-6-v2/  # or whatever path the tar extracted to
 ```
 Expected: `model.onnx` (or `onnx/model.onnx`), `tokenizer.json`, `config.json`, `tokenizer_config.json`.
+
+**Snapshot the model-cache AFTER vendoring** (mandatory — diff against the BEFORE manifest gives the precise list of directories the HARD RETRACTION arm should remove if Gate-B FAILs):
+
+```bash
+cd /home/user/hippo-memory  # back to repo root
+find benchmarks/longmemeval/data/model-cache -maxdepth 2 -type d | sort > /tmp/f15_manifests/model_cache_after_minilm.txt
+diff /tmp/f15_manifests/model_cache_before_minilm.txt /tmp/f15_manifests/model_cache_after_minilm.txt > /tmp/f15_manifests/minilm_added.txt
+echo "=== newly-added directories from MiniLM vendoring ==="
+grep '^>' /tmp/f15_manifests/minilm_added.txt
+```
+
+The `> ...` lines in `minilm_added.txt` are the only directories the HARD RETRACTION arm in Task 10 will delete for the MiniLM vendoring step. Pre-F15 weights (BGE-base, e5-large, MiniLM-L6 from F8) are NOT in this list and will be retained.
 
 - [ ] **Step 3: Run the toy test**
 
@@ -510,9 +530,12 @@ const out = createWriteStream(partialPath, { flags: 'a' });
 const tStart = Date.now();
 let totalPairs = 0;
 let qIdx = 0;
+let qProcessed = 0;
+const totalToProcess = entries.filter(e => !alreadyDone.has(e.question_id)).length;
 for (const entry of entries) {
   qIdx++;
   if (alreadyDone.has(entry.question_id)) continue;
+  qProcessed++;
   const cands = (entry.retrieved_memories || []).slice(0, MAX_CANDIDATES);
   const scored = [];
   for (const c of cands) {
@@ -534,12 +557,12 @@ for (const entry of entries) {
   scored.sort((a, b) => b.score - a.score);
   const outEntry = { ...entry, retrieved_memories: scored, num_retrieved: scored.length };
   out.write(JSON.stringify(outEntry) + '\n');
-  if (qIdx % 10 === 0) {
+  if (qProcessed % 10 === 0) {
     const dt = (Date.now() - tStart) / 1000;
     const rate = totalPairs / dt;
-    const remaining = entries.length - qIdx;
+    const remaining = totalToProcess - qProcessed;
     const eta = remaining * MAX_CANDIDATES / rate / 60;
-    console.log(`[F15] ${qIdx}/${entries.length} queries, ${totalPairs} pairs, ${rate.toFixed(1)} pair/s, ETA ${eta.toFixed(1)} min`);
+    console.log(`[F15] ${qProcessed}/${totalToProcess} queries (qIdx ${qIdx}), ${totalPairs} pairs, ${rate.toFixed(1)} pair/s, ETA ${eta.toFixed(1)} min`);
   }
 }
 out.end();
@@ -652,14 +675,14 @@ echo "started PID $!"
 
 Expected wall time per Task 4 spike. If throughput was 30 pair/s, ~28 min for 50,000 pairs. If 10 pair/s, ~84 min. Monitor with `tail -f /tmp/f15_minilm.log`.
 
-- [ ] **Step 3: After MiniLM completes, run the bge-reranker-base tier (only if Task 4 tier permitted)**
+- [ ] **Step 3: After MiniLM completes, run the bge-reranker-base tier (only if Task 4 tier permitted AND bge-reranker-specific throughput spike clears)**
 
-If Task 4's throughput-spike decision rule permits the quality tier, vendor + run `Xenova/bge-reranker-base`:
+If Task 4's throughput-spike decision rule permits the quality tier, vendor `Xenova/bge-reranker-base` then run a SEPARATE throughput spike on it (bge-reranker is ~6-10x slower than MiniLM regardless of MiniLM's measured rate, so the MiniLM-tier decision rule alone is not sufficient gating):
 
 ```bash
-# Vendor the bge-reranker-base ONNX. The Qdrant fastembed GCS bucket pattern
-# matches the F11/F13/F14 vendoring path; try each in order and stop on first
-# success.
+# Snapshot model-cache BEFORE bge-reranker vendoring
+find benchmarks/longmemeval/data/model-cache -maxdepth 2 -type d | sort > /tmp/f15_manifests/model_cache_before_bge.txt
+
 cd benchmarks/longmemeval/data/model-cache
 
 # Attempt 1: Xenova-namespaced tarball
@@ -675,7 +698,13 @@ curl -fsSL "https://storage.googleapis.com/qdrant-fastembed/Xenova--bge-reranker
 tar xzf /tmp/bge-reranker.tar.gz
 ls -la Xenova/bge-reranker-base/ 2>/dev/null || ls -la bge-reranker-base/ 2>/dev/null
 
-cd ../../../..
+cd /home/user/hippo-memory
+
+# Snapshot model-cache AFTER bge-reranker vendoring
+find benchmarks/longmemeval/data/model-cache -maxdepth 2 -type d | sort > /tmp/f15_manifests/model_cache_after_bge.txt
+diff /tmp/f15_manifests/model_cache_before_bge.txt /tmp/f15_manifests/model_cache_after_bge.txt > /tmp/f15_manifests/bge_added.txt
+echo "=== newly-added directories from bge-reranker vendoring ==="
+grep '^>' /tmp/f15_manifests/bge_added.txt
 
 # If neither tarball came through (both 404 on the GCS bucket), STOP. F15
 # quality tier cannot run. Document the failure in the result doc and proceed
@@ -686,7 +715,29 @@ HIPPO_MODEL_CACHE=$(pwd)/benchmarks/longmemeval/data/model-cache \
   node benchmarks/longmemeval/test_rerank_cross_encoder_toy.mjs Xenova/bge-reranker-base
 # Expected: PASS (winner: A).
 
-# Full run
+# bge-reranker-specific 100-pair throughput spike BEFORE committing to the full run
+HIPPO_MODEL_CACHE=$(pwd)/benchmarks/longmemeval/data/model-cache node -e "
+import('@huggingface/transformers').then(async ({ pipeline, env }) => {
+  env.cacheDir = process.env.HIPPO_MODEL_CACHE;
+  env.localModelPath = process.env.HIPPO_MODEL_CACHE;
+  env.allowRemoteModels = false;
+  const reranker = await pipeline('text-classification', 'Xenova/bge-reranker-base');
+  const t0 = Date.now();
+  for (let i = 0; i < 100; i++) {
+    await reranker({ text: 'What is the capital of France?', text_pair: 'Paris is the capital and largest city of France.' }, { topk: null });
+  }
+  const dt = (Date.now() - t0) / 1000;
+  console.log('bge-reranker throughput: ' + (100 / dt).toFixed(2) + ' pair/s, ETA for 50k pairs: ' + (50000 / (100/dt) / 3600).toFixed(1) + ' h');
+});
+"
+# Decision rule for bge-reranker quality tier:
+#   >= 2 pair/s (<= 7 h)        → proceed with the full run below
+#   1-2 pair/s (7-14 h)         → ask user before committing; recommend
+#                                  reducing max_candidates from 100 to 30
+#   < 1 pair/s (> 14 h)         → STOP. Quality tier infeasible on this CPU.
+#                                  Table only MiniLM result in Task 8.
+
+# Full run (only if bge-reranker spike clears the decision rule above)
 HIPPO_MODEL_CACHE=$(pwd)/benchmarks/longmemeval/data/model-cache \
   nohup node benchmarks/longmemeval/rerank_cross_encoder.mjs \
   Xenova/bge-reranker-base \
@@ -697,9 +748,7 @@ HIPPO_MODEL_CACHE=$(pwd)/benchmarks/longmemeval/data/model-cache \
 echo "started PID $!"
 ```
 
-Wall time will be larger than the MiniLM tier by the throughput ratio (bge-reranker-base is ~3-5 pair/s on CPU vs MiniLM at ~30 pair/s — i.e. roughly 6-10x slower).
-
-If Task 4's decision rule did NOT permit the quality tier, skip this step and table only the MiniLM result in Task 8.
+If Task 4's decision rule did NOT permit the quality tier OR the bge-reranker spike scores < 1 pair/s, skip this step and table only the MiniLM result in Task 8.
 
 - [ ] **Step 4: Verify both output files completed (no `.partial.jsonl` left)**
 
@@ -724,6 +773,7 @@ def check(path, name):
     n_perm_ok = 0
     n_stddev_ok = 0
     n_top1_changed = 0
+    n_tags_intact = 0
     with open(path) as f:
         for line in f:
             r = json.loads(line)
@@ -738,11 +788,25 @@ def check(path, name):
                 n_stddev_ok += 1
             if f14_ids[0] != f15_ids[0]:
                 n_top1_changed += 1
+            # Tags-passthrough check: every output candidate must have non-empty
+            # tags AND the tags must match the input candidate's tags exactly.
+            f14_by_id = {m['id']: m for m in f14[qid]['retrieved_memories'][:100]}
+            tags_ok_this_query = all(
+                m.get('tags') and m['tags'] == f14_by_id[m['id']]['tags']
+                for m in r['retrieved_memories']
+            )
+            if tags_ok_this_query:
+                n_tags_intact += 1
     print(f'  queries: {n_qs} (expected 500)')
     print(f'  permutation-invariant: {n_perm_ok}/{n_qs}')
+    print(f'  tags intact + match input: {n_tags_intact}/{n_qs} (need 100%)')
     print(f'  score-stddev > 0.01:   {n_stddev_ok}/{n_qs} (need >= 90%)')
     print(f'  top-1 changed vs F14:  {n_top1_changed}/{n_qs} (need >= 50%)')
-    ok = (n_qs == 500 and n_perm_ok == n_qs and n_stddev_ok / n_qs >= 0.90 and n_top1_changed / n_qs >= 0.50)
+    ok = (n_qs == 500
+          and n_perm_ok == n_qs
+          and n_tags_intact == n_qs
+          and n_stddev_ok / n_qs >= 0.90
+          and n_top1_changed / n_qs >= 0.50)
     print(f'  Gate-A: {"PASS" if ok else "FAIL"}')
 
 import os
@@ -752,7 +816,7 @@ for f in sorted(os.listdir('results/f15_cross_encoder')):
 PY
 ```
 
-Expected: Gate-A PASS for at least one variant. If both FAIL, surface the failure mode to the user (most likely cause: score-distribution degenerate — the cross-encoder isn't actually outputting a usable relevance score; debug the pipeline output shape).
+Expected: Gate-A PASS for at least one variant. If both FAIL, surface the failure mode to the user. The `tags intact` check is binding — without it, a future refactor that strips unknown keys from the rerank script's spread would silently zero out Gate-B hits (the canonical scorer at `evaluate_retrieval.py:check_session_hit` matches via three paths, two of which require `tags`).
 
 No commit step — results are gitignored.
 
@@ -760,78 +824,76 @@ No commit step — results are gitignored.
 
 ## Task 7: Score with `evaluate_retrieval.py` (Gate-B)
 
-- [ ] **Step 1: Score each reranked variant**
+The binding Gate-B verdict comes from the canonical `evaluate_retrieval.py` script (which matches via three paths: `sid in tags` exact, `[Session: sid]` content marker, `any(sid in t for t in tags)` partial). The inline Python below is a comparison helper for the cross-track table; if its R@5 ever diverges from `evaluate_retrieval.py`'s R@5, the canonical script's number is binding.
+
+- [ ] **Step 1: Score each reranked variant with the canonical scorer**
+
+```bash
+mkdir -p results/f15_cross_encoder/scores
+for f in results/f15_cross_encoder/*.jsonl; do
+  base=$(basename "$f" .jsonl)
+  echo "=== canonical Gate-B scoring: $base ==="
+  python3 benchmarks/longmemeval/evaluate_retrieval.py \
+    --retrieval "$f" \
+    --data data/lme_s/longmemeval_s_cleaned.json \
+    --output "results/f15_cross_encoder/scores/${base}_score.json" \
+    --k-values 1 3 5 10 20 50 100 \
+    2>&1 | tee "results/f15_cross_encoder/scores/${base}_score.txt"
+done
+```
+
+Expected: each variant emits a `_score.json` with per-K and per-type R@K + a tee'd console log. The `evaluate_retrieval.py` R@5 number is the binding Gate-B input — it is what the result doc and HARD RETRACTION arm decision use.
+
+If `evaluate_retrieval.py` rejects the input format (e.g. `--k-values` flag mismatch), inspect the script's CLI signature with `python3 benchmarks/longmemeval/evaluate_retrieval.py --help` and adjust the flags. Do NOT silently fall back to the inline scorer for the Gate-B verdict.
+
+- [ ] **Step 2: Build the cross-track comparison table from the canonical scores**
 
 ```bash
 python3 <<'PY'
-import json
-from collections import defaultdict
+import json, os
 
-with open('data/lme_s/longmemeval_s_cleaned.json') as f:
-    data = json.load(f)
-gt = {e['question_id']: e for e in data}
+# Load canonical scores
+results = {}
+for f in sorted(os.listdir('results/f15_cross_encoder/scores')):
+    if not f.endswith('_score.json'): continue
+    label = f.replace('_top100_score.json', '').replace('_', '-')
+    with open(f'results/f15_cross_encoder/scores/{f}') as fp:
+        results[label] = json.load(fp)
 
-def hit(memories, sids, k):
-    for mem in memories[:k]:
-        for tag in mem.get('tags', []):
-            for sid in sids:
-                if sid in tag:
-                    return True
-    return False
-
-def score(path):
-    res = defaultdict(list)
-    by_type = defaultdict(lambda: defaultdict(list))
-    with open(path) as f:
-        for line in f:
-            rec = json.loads(line)
-            qid = rec['question_id']
-            qtype = rec.get('question_type', 'unknown')
-            mems = rec.get('retrieved_memories', [])
-            sids = gt.get(qid, {}).get('answer_session_ids', [])
-            if not sids: continue
-            for k in (1, 3, 5, 10, 20, 50, 100):
-                h = hit(mems, sids, k)
-                res[k].append(h)
-                by_type[qtype][k].append(h)
-    return res, by_type
-
-def pct(xs): return round(100 * sum(xs) / len(xs), 1) if xs else 0.0
-
-import os
 print('| Variant | R@1 | R@3 | R@5 | R@10 | R@20 |')
 print('|---|---:|---:|---:|---:|---:|')
-print(f'| F14 baseline (BGE-base only) | 21.6 | 34.4 | 42.0 | 51.8 | 65.6 |')
-print(f'| F14+F9 stack (sub-agent rerank top-20) | 33.6 | 46.8 | 50.8 | 56.2 | 65.2 |')
-for fname in sorted(os.listdir('results/f15_cross_encoder')):
-    if not fname.endswith('.jsonl'): continue
-    r, t = score(f'results/f15_cross_encoder/{fname}')
-    label = fname.replace('_top100.jsonl', '').replace('_', '-')
-    print(f'| F15 {label} | {pct(r[1])} | {pct(r[3])} | {pct(r[5])} | {pct(r[10])} | {pct(r[20])} |')
-print(f'| gbrain v0.28.8 hybrid | — | — | 97.60 | — | — |')
-print(f'| F15 Gate-B threshold  | — | — | 97.7 | — | — |')
+print('| F14 baseline (BGE-base only) | 21.6 | 34.4 | 42.0 | 51.8 | 65.6 |')
+print('| F14+F9 stack (sub-agent rerank top-20) | 33.6 | 46.8 | 50.8 | 56.2 | 65.2 |')
+for label, score in results.items():
+    # The exact JSON shape depends on evaluate_retrieval.py's output schema.
+    # Inspect one _score.json file first; the shape is roughly
+    #   {"recall_at_k": {"1": 0.336, "3": 0.468, ...}}
+    # or per-type nested. Adjust the access pattern to match.
+    rk = score.get('recall_at_k', score.get('overall', {}))
+    def fmt(k):
+        v = rk.get(str(k), rk.get(k, None))
+        return f'{v*100:.1f}' if isinstance(v, float) else (f'{v:.1f}' if v is not None else '—')
+    print(f'| F15 {label} | {fmt(1)} | {fmt(3)} | {fmt(5)} | {fmt(10)} | {fmt(20)} |')
+print('| gbrain v0.28.8 hybrid | — | — | 97.60 | — | — |')
+print('| F15 Gate-B threshold  | — | — | 97.7 | — | — |')
 
-# Per-type for the best F15 variant
-print('\nPer-type R@5 for best F15 variant:')
-best_path = None
-best_r5 = -1
-for fname in sorted(os.listdir('results/f15_cross_encoder')):
-    if not fname.endswith('.jsonl'): continue
-    r, t = score(f'results/f15_cross_encoder/{fname}')
-    if pct(r[5]) > best_r5:
-        best_r5 = pct(r[5])
-        best_t = t
-        best_path = fname
-print(f'(best: {best_path}, R@5 = {best_r5})')
-for qt in sorted(best_t.keys()):
-    print(f'  {qt:<30s} n={len(best_t[qt][5]):>4d}  R@5={pct(best_t[qt][5]):>5.1f}%')
+# Determine best variant + Gate-B verdict from the canonical scores
+best_label, best_r5 = None, -1.0
+for label, score in results.items():
+    rk = score.get('recall_at_k', score.get('overall', {}))
+    r5 = rk.get('5', rk.get(5, 0))
+    r5 = r5 * 100 if isinstance(r5, float) and r5 <= 1.0 else float(r5 or 0)
+    if r5 > best_r5:
+        best_r5, best_label = r5, label
 
 print()
-print(f'=== Gate-B verdict: {"PASS" if best_r5 >= 97.7 else "FAIL"} (best R@5 = {best_r5} vs threshold 97.7) ===')
+print(f'=== Gate-B verdict (canonical evaluate_retrieval.py): {"PASS" if best_r5 >= 97.7 else "FAIL"}')
+print(f'    best R@5 = {best_r5:.1f} (variant: {best_label}) vs threshold 97.7')
+print(f'    structural ceiling: 86.2 (F14 R@100); Gate-B unreachable from this pool by design')
 PY
 ```
 
-Expected: the script prints a fully-formatted result table plus per-type breakdown plus the Gate-B verdict. Capture the output (e.g. `... | tee /tmp/f15_score.txt`) — it goes verbatim into the result doc.
+Expected: a comparison table + a Gate-B verdict line that quotes the canonical R@5 (NOT an inline reimplementation). Capture the output and use it verbatim in the F15 result doc.
 
 ---
 
@@ -926,7 +988,26 @@ If Gate-B PASS (best_r5 ≥ 97.7):
 
 If Gate-B FAIL (best_r5 < 97.7):
 - HARD RETRACTION: delete `data/lme_s/` and `results/f15_cross_encoder/`.
-- Delete any newly-vendored cross-encoder model weights from `benchmarks/longmemeval/data/model-cache/` (retain BGE-base, e5-large, and any pre-F15 reranker weights).
+- Delete ONLY the cross-encoder model weights F15 added, using the manifests captured in Task 4 and Task 6:
+
+```bash
+# Compose the exact retraction list from the diff manifests
+{
+  grep '^>' /tmp/f15_manifests/minilm_added.txt 2>/dev/null
+  grep '^>' /tmp/f15_manifests/bge_added.txt 2>/dev/null
+} | sed 's/^> //' | sort -u > /tmp/f15_manifests/retraction_list.txt
+echo "=== will delete these directories (F15-vendored only) ==="
+cat /tmp/f15_manifests/retraction_list.txt
+echo "=== will RETAIN all other directories under model-cache (pre-F15) ==="
+
+# Delete only those directories — pre-F15 weights (BGE-base, e5-large,
+# MiniLM-L6 from F8) are NOT in the list and are preserved.
+xargs rm -rf < /tmp/f15_manifests/retraction_list.txt
+```
+
+If `retraction_list.txt` is empty (i.e. neither MiniLM nor bge-reranker was successfully vendored — both 404'd in Task 4), no model-cache cleanup is needed for F15.
+
+- Delete `/tmp/f15_manifests/` once the retraction list is executed (no longer needed; provenance is in the git history of the result doc).
 - Do NOT update CHANGELOG / README / ROADMAP / RETRACTION canonical docs.
 - Retain the result doc as the negative-result audit trail.
 - Surface the next-track recommendation (likely F16) to the user.
