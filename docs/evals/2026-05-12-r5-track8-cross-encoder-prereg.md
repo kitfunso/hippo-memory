@@ -3,7 +3,7 @@
 **Date:** 2026-05-12
 **Predecessors:** F14 FAIL by 46.9pp (Gate-B R@5 = 50.8 vs threshold 97.7); F13 deployable at oracle R@5 = 86.8.
 
-**Motivation:** F14 established that BGE-base chunked turn-level retrieval places the answer-bearing session inside the top-100 candidate pool 86.2 % of the time on the `_s` split, but ranks it outside the top-5 in 49.2 % of queries. Cross-encoders score (query, candidate) jointly via cross-attention and are qualitatively stronger than bi-encoders at fine-grained relevance discrimination. F15 applies a cross-encoder reranker over F14's pre-computed top-100 candidate pool to measure how much of the within-pool ranking gap can be closed by a locally-runnable cross-encoder, without touching the embedder.
+**Motivation:** F14 established that BGE-base chunked turn-level retrieval places the answer-bearing session inside the top-100 candidate pool 86.2 % of the time on the `_s` split (F14 R@100 = 86.2), but ranks it inside the top-5 only 42.0 % of the time at the F14 baseline (58.0 % top-5 miss rate) and only 50.8 % even with F9 sub-agent rerank stacked on top (49.2 % top-5 miss rate). The answer is in F14's pool for ~86 % of queries; the bi-encoder cosine + sub-agent rerank just doesn't rank it high enough in roughly half of those. Cross-encoders score (query, candidate) jointly via cross-attention and are qualitatively stronger than bi-encoders at fine-grained relevance discrimination. F15 applies a cross-encoder reranker over F14's pre-computed top-100 candidate pool to measure how much of the within-pool ranking gap can be closed by a locally-runnable cross-encoder, without touching the embedder.
 
 This release does not re-assert the retracted −10pp magnitude.
 
