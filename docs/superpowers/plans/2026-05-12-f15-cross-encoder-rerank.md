@@ -4,7 +4,9 @@
 
 **Goal:** Apply a locally-runnable cross-encoder rerank to the top-100 candidates from F14 BGE-base retrieval on the LongMemEval `_s` split, with a hard prereg (Gate-A validity, Gate-B value, HARD RETRACTION on FAIL) — targeting the ~35-point within-pool ranking gap that F14's bi-encoder cosine alone leaves on the table.
 
-**Architecture:** Two-stage retrieve-then-rerank, no new bi-encoder index needed. F14's `results/f14_baseline/turn_bge_s_top100.jsonl` (27 MB, 500 queries × 100 candidates each with truncated turn text and parent `session_id` tag) is the input — no re-embed required. Stage 2 is a cross-encoder (start with `Xenova/ms-marco-MiniLM-L-6-v2` for the feasibility tier, escalate to `BAAI/bge-reranker-base` if Gate-A throughput allows) loaded via `@huggingface/transformers` ONNX runtime; for each (query, candidate) pair we get a relevance score and sort descending. Output is a new JSONL compatible with the existing `evaluate_retrieval.py`. Gate-B is binding at ≥ 97.7 R@5 (gbrain v0.28.8's 97.60 + 0.1 margin); FAIL triggers HARD RETRACTION of data artefacts per the F12/F14 precedent. The realistic-but-non-binding budget anchor for whether to run this experiment at all is "improves over F14+F9 stack of 50.8 R@5"; that is a budget anchor, NOT a discipline shortcut — the result doc reports R@5 honestly against the 97.7 threshold and executes the prereg's FAIL arm if it falls short.
+**Architecture:** Two-stage retrieve-then-rerank, no new bi-encoder index needed. F14's `results/f14_baseline/turn_bge_s_top100.jsonl` (27 MB, 500 queries × 100 candidates each with truncated turn text and parent `session_id` tag) is the input — no re-embed required. Stage 2 is a cross-encoder (start with `Xenova/ms-marco-MiniLM-L-6-v2` for the feasibility tier, escalate to `Xenova/bge-reranker-base` if Gate-A throughput allows) loaded via `@huggingface/transformers` ONNX runtime; for each (query, candidate) pair we get a relevance score and sort descending. Output is a new JSONL compatible with the existing `evaluate_retrieval.py`. Gate-B is binding at ≥ 97.7 R@5 (gbrain v0.28.8's 97.60 + 0.1 margin); FAIL triggers HARD RETRACTION of data artefacts per the F12/F14 precedent. The realistic-but-non-binding budget anchor for whether to run this experiment at all is "improves over F14+F9 stack of 50.8 R@5"; that is a budget anchor, NOT a discipline shortcut — the result doc reports R@5 honestly against the 97.7 threshold and executes the prereg's FAIL arm if it falls short.
+
+**Structural ceiling acknowledgement (binding):** F14's R@100 on `_s` is 86.2 — for 14 % of queries the answer-bearing session is not in F14's top-100 candidate pool at all. A cross-encoder rerank can only reorder within the pool; it cannot promote a session from outside top-100 into top-5. Therefore the maximum achievable F15 R@5 on this candidate set is bounded above by 86.2, regardless of how well the cross-encoder ranks. Since 86.2 < 97.7, F15 cannot mathematically clear Gate-B. **F15 is a mechanism-characterisation track**: its value is measuring how much of the within-pool ranking gap a locally-runnable cross-encoder closes (F14+F9 sub-agent rerank closed 8.8 of the ~44 within-pool points; F15 quantifies whether a model-based cross-encoder closes more). Gate-B remains binding at 97.7 with the HARD RETRACTION arm — this is the project's standard "no soft tiered gates" discipline — but the engineer should not expect Gate-B PASS. The path to actually clearing Gate-B is F15 + F16 combined (cross-encoder rerank on top of a stronger embedder that lifts R@100 closer to 100). F16 is queued in `ROADMAP-RESEARCH.md`.
 
 **Tech Stack:** Node 22 + `@huggingface/transformers` (already in `package.json`); Python 3 for scoring + sub-agent dispatch; Qdrant fastembed GCS bucket for model artefacts (HF Hub is host-blocked from this sandbox, verified 2026-05-11 and 2026-05-12).
 
@@ -53,7 +55,7 @@ Use `Edit` to insert the following block AFTER the F13 bullet (currently `ROADMA
 
 ```markdown
 - **F14 chunk-per-turn pipeline on `_s` split** (`docs/evals/2026-05-12-r5-track7-s-split-result.md`): the first F-track measurement against gbrain v0.28.8's split rather than the easier `oracle` (~48 sessions per haystack, 19,195 unique sessions, 500 questions). Source data re-acquired via `Sanderhoff-alt/longmemeval-zh` GitHub mirror (SHA-256 d6f21ea9d..., 500/500 question_id match with oracle, no signed chain-of-custody to canonical HF release). Gate-A PASS (199,509 turns indexed across all 19,195 sessions, dim 768, L2-norms in [0.999999, 1.000000], session_id tag coverage 19,195/19,195). Gate-B FAIL @ 97.7 with F14 + F9 stack R@5 = 50.8 (F14 baseline alone = 42.0). Shortfall 46.9pp dominated by the embedder: gbrain's own ablation shows their pure-vector adapter (text-embedding-3-large alone) at R@5 = 97.40 vs their hybrid+RRF at 97.60 — a 0.2-point top-up over the embedder. F14's BGE-base baseline (42.0) sits between gbrain's BM25-only (19.80) and gbrain's vector-only (97.40), consistent with BGE-base being meaningfully better-than-keyword but qualitatively below text-embedding-3-large at this distractor density. **HARD RETRACTION executed:** `data/lme_s/` (265 MB) and `benchmarks/longmemeval/data/turn_index_bge_s.json.jsonl` (3.3 GiB) deleted; CHANGELOG/README/ROADMAP/RETRACTION canonical docs NOT updated; result doc retained as negative-result audit trail. Cleanest scaling measurement produced: F13 vs F14 (same pipeline, same embedder, oracle vs `_s`) shows R@5 collapses 86.8 → 50.8 under a 16x increase in distractors per haystack.
-- **F15 cross-encoder rerank on top-100 (this track)** [next]: replace F9's sub-agent rerank with a locally-runnable cross-encoder (`Xenova/ms-marco-MiniLM-L-6-v2` feasibility tier or `BAAI/bge-reranker-base` quality tier, both via Qdrant fastembed GCS). Reuses F14's existing top-100 retrieval; no new bi-encoder index. Cross-encoders score (query, candidate) jointly via cross-attention rather than via post-hoc cosine on independent encodings — qualitatively stronger at fine-grained relevance ranking, and the F14 result doc identifies a ~35pp ranking gap within F14's top-100 candidate pool that this lever directly targets. Gate-B = ≥ 97.7 R@5 (gbrain's 97.60 + 0.1 margin), binding, HARD RETRACTION on FAIL. Plan: `docs/superpowers/plans/2026-05-12-f15-cross-encoder-rerank.md`.
+- **F15 cross-encoder rerank on top-100 (this track)** [next]: replace F9's sub-agent rerank with a locally-runnable cross-encoder (`Xenova/ms-marco-MiniLM-L-6-v2` feasibility tier or `Xenova/bge-reranker-base` quality tier, both via Qdrant fastembed GCS). Reuses F14's existing top-100 retrieval; no new bi-encoder index. Cross-encoders score (query, candidate) jointly via cross-attention rather than via post-hoc cosine on independent encodings — qualitatively stronger at fine-grained relevance ranking, and the F14 result doc identifies a ~35pp ranking gap within F14's top-100 candidate pool that this lever directly targets. Gate-B = ≥ 97.7 R@5 (gbrain's 97.60 + 0.1 margin), binding, HARD RETRACTION on FAIL. Plan: `docs/superpowers/plans/2026-05-12-f15-cross-encoder-rerank.md`.
 - **F16 stronger locally-runnable embedder on `_s`** [planned]: re-run the F14 pipeline with `mxbai-embed-large-v1` or `bge-large-en-v1.5` (1024-dim) or `bge-m3` (dense + sparse + multivector). Probably +5–10pp R@5 alone on `_s`; the multivector path of `bge-m3` is the closest in spirit to gbrain's `text-embedding-3-large` full late-interaction. Cost: ~7h re-embed wall on the CPU sandbox. Predecessor: F15 result determines whether the rerank lever is sufficient or whether the embedder needs to move too.
 - **F17 `text-embedding-3-large` via OpenAI API** [deferred]: would essentially close the gap with gbrain, but `api.openai.com` is host-blocked from this sandbox (verified 2026-05-11 and 2026-05-12 egress audits). Changes the deployable from "MIT locally-runnable" to "needs external service". Revisit when sandbox egress to `api.openai.com` (or a self-hosted equivalent like Vespa's E5-Mistral endpoint) becomes available.
 - **F18 fine-tune BGE-base on LongMemEval-style contrastive pairs** [research]: hard-negative mining from F14's R@100-misses (the 14% of queries where the answer-bearing session is outside top-100 even at BGE-base level). Training-on-eval contamination risk is real; would require a held-out subset and pre-registered split discipline. Probably not the next track to pursue unless F15 + F16 stall.
@@ -108,7 +110,7 @@ mechanism characterisation:
 Cross-track aggregate updated to reflect the split-matched F14
 measurement and queue F15.
 
-This release does not re-assert the retracted -10pp magnitude.
+This release does not re-assert the retracted −10pp magnitude.
 
 https://claude.ai/code/session_017YFPsgCUC1i2PqoqAfcCUR
 EOF
@@ -193,7 +195,7 @@ The full prereg structure (all sections required, no placeholders):
 1. **Header block:** date, predecessors (F14 FAIL by 46.9pp; F13 deployable at oracle R@5 = 86.8), single-line motivation, verbatim retraction line.
 2. **Provenance disclosure (binding):** restate F14's `Sanderhoff-alt` mirror provenance and SHA-256 verbatim; note F15 inherits the same provenance, no new data source.
 3. **Embedder-mismatch disclosure (binding):** restate gbrain's `text-embedding-3-large@1536` vs F15's `BGE-base + cross-encoder` stack. Clarify that the cross-encoder is a NEW component beyond what F14 measured.
-4. **Cross-encoder model selection rationale (new section, binding):** state which model(s) will be used. Default: `Xenova/ms-marco-MiniLM-L-6-v2` (feasibility tier, 22M params, ~30 pair/s on CPU) AND `BAAI/bge-reranker-base` (quality tier, 278M params, ~3-5 pair/s on CPU). Both via Qdrant fastembed GCS bucket (HF Hub host-blocked). Both run end-to-end; both tabled in result regardless of Gate-B outcome. Best variant selected post-hoc for the Gate-B verdict.
+4. **Cross-encoder model selection rationale (new section, binding):** state which model(s) will be used. Default: `Xenova/ms-marco-MiniLM-L-6-v2` (feasibility tier, 22M params, ~30 pair/s on CPU) AND `Xenova/bge-reranker-base` (quality tier, 278M params, ~3-5 pair/s on CPU). Both via Qdrant fastembed GCS bucket (HF Hub host-blocked). Both run end-to-end; both tabled in result regardless of Gate-B outcome. Best variant selected post-hoc for the Gate-B verdict.
 5. **Goal:** describe the pipeline in 4 bullet points (load F14 top-100, score with cross-encoder, sort descending, evaluate with existing `evaluate_retrieval.py`).
 6. **Magnitude-smuggling guard:** verbatim grep command from F14 prereg + verbatim retraction sentence on its own line.
 7. **Gate-A — workload validity (binding):** five PASS conditions:
@@ -203,6 +205,7 @@ The full prereg structure (all sections required, no placeholders):
    - At least 50% of queries have a different top-1 from F14 baseline (rejects no-op rerank).
    - Wall-time per query logged; aggregate throughput within 2x of the feasibility-spike estimate (rejects silent OOM-thrash).
 8. **Gate-B — proven value at R@5 (binding, HARD RETRACTION on FAIL):** threshold = ≥ 97.7 R@5 (gbrain v0.28.8's 97.60 + 0.1 margin). Best F15 variant selected post-hoc from the two cross-encoders run. PASS triggers conventional release update (CHANGELOG / README / ROADMAP / RETRACTION). FAIL triggers HARD RETRACTION arm.
+   **Structural ceiling subsection (required in the prereg doc):** explicitly state that F14's R@100 on `_s` = 86.2 is the absolute upper bound on F15's achievable R@5 (since a rerank can only reorder within the candidate pool; it cannot promote a session from outside top-100 into top-5). 86.2 < 97.7, therefore F15 cannot mathematically clear Gate-B from the F14 candidate pool alone. The Gate-B threshold remains 97.7 because the project's discipline forbids retargeting gates to what an experiment can achieve (that pattern is exactly the magnitude-smuggling the project's RETRACTION.md disciplines against). F15's legitimate value is mechanism characterisation: measuring how much of the within-pool ranking gap a locally-runnable cross-encoder closes. The path to actually clearing Gate-B is F15 + F16 combined (cross-encoder on a stronger embedder that lifts R@100 closer to 100); F16 is queued in `ROADMAP-RESEARCH.md`.
 9. **HARD RETRACTION arm (binding):** four actions identical to F14:
    - `data/lme_s/` deleted from disk
    - `results/f15_cross_encoder/` deleted from disk
@@ -236,7 +239,7 @@ and are qualitatively stronger at fine-grained relevance.
 
 Two reranker variants run end-to-end:
   - Xenova/ms-marco-MiniLM-L-6-v2 (feasibility tier, 22M params)
-  - BAAI/bge-reranker-base (quality tier, 278M params)
+  - Xenova/bge-reranker-base (quality tier, 278M params)
 Both via Qdrant fastembed GCS bucket (HF Hub host-blocked).
 
 Gate-A: model loads, candidate-set permutation invariant,
@@ -253,7 +256,7 @@ file (results/f14_baseline/turn_bge_s_top100.jsonl, 27 MB) is
 retained on disk and used as the candidate input — no new
 bi-encoder index needed.
 
-This release does not re-assert the retracted -10pp magnitude.
+This release does not re-assert the retracted −10pp magnitude.
 
 https://claude.ai/code/session_017YFPsgCUC1i2PqoqAfcCUR
 EOF
@@ -309,10 +312,14 @@ const candidates = [
 
 const scored = [];
 for (const c of candidates) {
-  const out = await reranker({ text: query, text_pair: c.content });
-  const score = Array.isArray(out) ? out[0].score : out.score;
+  // Use { topk: null } + positive-class extraction so the toy test exercises
+  // the same code path as the real rerank script (Task 5).
+  const out = await reranker({ text: query, text_pair: c.content }, { topk: null });
+  const arr = Array.isArray(out) ? out : [out];
+  const positive = arr.slice().sort((a, b) => String(a.label).localeCompare(String(b.label))).pop();
+  const score = positive.score;
   scored.push({ id: c.id, score });
-  console.log(`  ${c.id}: score=${score.toFixed(4)}`);
+  console.log(`  ${c.id}: score=${score.toFixed(4)}  label=${positive.label}`);
 }
 scored.sort((a, b) => b.score - a.score);
 const winner = scored[0].id;
@@ -398,9 +405,18 @@ Expected output line: `throughput: XX.X pair/s (Y.YYs for 100 pairs)`.
 - [ ] **Step 5: Record the throughput and decide the tier**
 
 Compute the full-run wall time: `50000 / throughput / 60 = minutes`. Decision rule:
-- ≥ 10 pair/s (≤ 84 min) — proceed with MiniLM-L-6-v2 AND also vendor `BAAI/bge-reranker-base` for the quality tier (Step 6).
+- ≥ 10 pair/s (≤ 84 min) — proceed with MiniLM-L-6-v2 AND also vendor `Xenova/bge-reranker-base` for the quality tier (Step 6).
 - 2-10 pair/s (84 min – 7 h) — proceed with MiniLM only as the F15 default; defer bge-reranker-base to a follow-up if MiniLM clears Gate-A.
 - < 2 pair/s (> 7 h) — STOP, surface to user. F15 budget is exceeded; consider reducing top-100 to top-30 (cuts to 15k pairs) or switching to an even smaller cross-encoder.
+
+- [ ] **Step 6 (optional pilot — recommended): 50-query pilot before the full 500-query run**
+
+Because Gate-B is structurally unreachable from this candidate pool (R@100 = 86.2 < 97.7), the full 500-query run cannot clear Gate-B. The legitimate value of F15 is mechanism characterisation — measuring within-pool ranking-gap closure. A 50-query stratified pilot (10 queries per question_type weighted by category n) gives a useful within-pool R@5 estimate at ~10% of the wall time. Decision rule:
+
+- If 50-query pilot shows F15 R@5 > F14+F9-stack R@5 (= 50.8) by ≥ 5 points on the matched subset — proceed to full 500-query run.
+- If 50-query pilot shows F15 R@5 ≤ F14+F9-stack on the matched subset — STOP. The cross-encoder is not closing the within-pool gap; running the full 500 won't change that conclusion. Document the pilot result in the F15 result doc as the negative finding; execute HARD RETRACTION arm.
+
+This pilot is optional but recommended. If the engineer chooses to skip the pilot, the full 500-query run is the binding measurement; if the engineer runs the pilot and proceeds based on it, the full 500-query R@5 (not the pilot R@5) is the binding Gate-B measurement.
 
 No commit step — this is exploratory scaffolding; the toy-test file gets committed with the rerank script in Task 5.
 
@@ -458,6 +474,17 @@ console.log(`[F15] loading cross-encoder ${MODEL}...`);
 const reranker = await pipeline('text-classification', MODEL);
 console.log(`[F15] loaded.`);
 
+// Cross-encoder pipeline notes:
+//   - Pass { topk: null } on each call so the pipeline returns the full
+//     score array rather than collapsing to argmax. Without this, bge-reranker
+//     returns only the highest-probability label which is NOT the raw relevance
+//     score; ms-marco-MiniLM returns a usable score either way but topk:null
+//     is harmless. See @huggingface/transformers TextClassificationPipeline docs.
+//   - Tokenizer max length is 512 (BERT). For candidate.content > ~1800 chars
+//     the tail is silently truncated. F14's turn-level content is typically
+//     <600 chars (turn_index emits content with ~512-token-window truncation
+//     applied at embed time), so this is rarely binding.
+
 // Load all input entries
 const entries = [];
 const rl = createInterface({ input: createReadStream(INPUT) });
@@ -489,8 +516,18 @@ for (const entry of entries) {
   const cands = (entry.retrieved_memories || []).slice(0, MAX_CANDIDATES);
   const scored = [];
   for (const c of cands) {
-    const r = await reranker({ text: entry.question || '', text_pair: c.content || '' });
-    const score = Array.isArray(r) ? r[0].score : r.score;
+    const r = await reranker(
+      { text: entry.question || '', text_pair: c.content || '' },
+      { topk: null }
+    );
+    // r is either an array of {label, score} or a single object depending on
+    // model + topk. For cross-encoders we want the positive-class score
+    // (label "LABEL_1" on Xenova/ms-marco, label "1" or "LABEL_1" on
+    // Xenova/bge-reranker). Take the score whose label sorts last (i.e. the
+    // positive class) — falls back to r[0].score for single-output models.
+    const arr = Array.isArray(r) ? r : [r];
+    const positive = arr.slice().sort((a, b) => String(a.label).localeCompare(String(b.label))).pop();
+    const score = positive.score;
     scored.push({ ...c, score });
     totalPairs++;
   }
@@ -577,7 +614,7 @@ Two new benchmark scaffolding files (no src/ changes):
 No src/ changes. Model vendoring uses the Qdrant fastembed GCS
 bucket pattern (HF Hub host-blocked).
 
-This release does not re-assert the retracted -10pp magnitude.
+This release does not re-assert the retracted −10pp magnitude.
 
 https://claude.ai/code/session_017YFPsgCUC1i2PqoqAfcCUR
 EOF
@@ -617,11 +654,39 @@ Expected wall time per Task 4 spike. If throughput was 30 pair/s, ~28 min for 50
 
 - [ ] **Step 3: After MiniLM completes, run the bge-reranker-base tier (only if Task 4 tier permitted)**
 
-If Task 4's throughput-spike decision rule permits the quality tier:
+If Task 4's throughput-spike decision rule permits the quality tier, vendor + run `Xenova/bge-reranker-base`:
 
 ```bash
-# First vendor bge-reranker-base (same pattern as Task 4 Step 2)
-# Then:
+# Vendor the bge-reranker-base ONNX. The Qdrant fastembed GCS bucket pattern
+# matches the F11/F13/F14 vendoring path; try each in order and stop on first
+# success.
+cd benchmarks/longmemeval/data/model-cache
+
+# Attempt 1: Xenova-namespaced tarball
+curl -fsSL "https://storage.googleapis.com/qdrant-fastembed/Xenova--bge-reranker-base.tar.gz" \
+  -o /tmp/bge-reranker.tar.gz && echo "got Xenova path" || echo "404 Xenova path"
+
+# Attempt 2: fast-bge-reranker-base (fastembed-native naming)
+[ ! -s /tmp/bge-reranker.tar.gz ] && \
+  curl -fsSL "https://storage.googleapis.com/qdrant-fastembed/fast-bge-reranker-base.tar.gz" \
+    -o /tmp/bge-reranker.tar.gz && echo "got fast- path" || echo "404 fast- path"
+
+# Extract whichever succeeded
+tar xzf /tmp/bge-reranker.tar.gz
+ls -la Xenova/bge-reranker-base/ 2>/dev/null || ls -la bge-reranker-base/ 2>/dev/null
+
+cd ../../../..
+
+# If neither tarball came through (both 404 on the GCS bucket), STOP. F15
+# quality tier cannot run. Document the failure in the result doc and proceed
+# with MiniLM only.
+
+# Smoke-test the model loads via transformers.js before launching the full run
+HIPPO_MODEL_CACHE=$(pwd)/benchmarks/longmemeval/data/model-cache \
+  node benchmarks/longmemeval/test_rerank_cross_encoder_toy.mjs Xenova/bge-reranker-base
+# Expected: PASS (winner: A).
+
+# Full run
 HIPPO_MODEL_CACHE=$(pwd)/benchmarks/longmemeval/data/model-cache \
   nohup node benchmarks/longmemeval/rerank_cross_encoder.mjs \
   Xenova/bge-reranker-base \
@@ -632,7 +697,7 @@ HIPPO_MODEL_CACHE=$(pwd)/benchmarks/longmemeval/data/model-cache \
 echo "started PID $!"
 ```
 
-Wall time will be larger by the throughput ratio.
+Wall time will be larger than the MiniLM tier by the throughput ratio (bge-reranker-base is ~3-5 pair/s on CPU vs MiniLM at ~30 pair/s — i.e. roughly 6-10x slower).
 
 If Task 4's decision rule did NOT permit the quality tier, skip this step and table only the MiniLM result in Task 8.
 
@@ -909,7 +974,7 @@ Per-type R@5: see result doc Section 9.
 Outside-voice review: PASS_WITH_NOTES (<n>/13 checks). Trail in
 result doc Section 12.
 
-This release does not re-assert the retracted -10pp magnitude.
+This release does not re-assert the retracted −10pp magnitude.
 
 https://claude.ai/code/session_017YFPsgCUC1i2PqoqAfcCUR
 EOF
@@ -928,7 +993,7 @@ git commit -m "$(cat <<'EOF'
 docs(evals): F15 result — cross-encoder rerank, GATE-B FAIL, HARD RETRACTION
 
 F15 swapped F14's F9 sub-agent rerank for a locally-runnable
-cross-encoder (Xenova/ms-marco-MiniLM-L-6-v2 + BAAI/bge-reranker-base
+cross-encoder (Xenova/ms-marco-MiniLM-L-6-v2 + Xenova/bge-reranker-base
 variants) over the existing F14 top-100 retrieval. Both ran
 end-to-end on _s; best R@5 = X.X (variant: Y).
 
@@ -953,7 +1018,7 @@ on _s) or, conditional on egress, F17 (text-embedding-3-large).
 Outside-voice review: PASS_WITH_NOTES (Y/13 checks). Trail in
 the result doc Section 12.
 
-This release does not re-assert the retracted -10pp magnitude.
+This release does not re-assert the retracted −10pp magnitude.
 
 https://claude.ai/code/session_017YFPsgCUC1i2PqoqAfcCUR
 EOF
@@ -972,7 +1037,7 @@ docs(roadmap): F15 status -> shipped (verdict: <PASS|FAIL>)
 
 [short commit body matching the arm]
 
-This release does not re-assert the retracted -10pp magnitude.
+This release does not re-assert the retracted −10pp magnitude.
 
 https://claude.ai/code/session_017YFPsgCUC1i2PqoqAfcCUR
 EOF
