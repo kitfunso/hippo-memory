@@ -50,3 +50,4 @@ benchmarks/longmemeval/data/turn_index_bge.json
 results/f13_*/
 /data/lme_s/
 benchmarks/longmemeval/data/turn_index_bge_s.json
+results/f14_*/
