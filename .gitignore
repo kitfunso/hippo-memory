@@ -45,3 +45,6 @@ benchmarks/longmemeval/data/enrichment_outputs/
 benchmarks/longmemeval/data/signals.jsonl
 hippo_store_enriched/
 results/f12_*/
+benchmarks/longmemeval/data/turn_index_e5.json
+benchmarks/longmemeval/data/turn_index_bge.json
+results/f13_*/
