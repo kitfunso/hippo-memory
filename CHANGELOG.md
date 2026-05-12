@@ -1,5 +1,63 @@
 # Changelog
 
+## 1.9.2 (2026-05-12) — F13 chunk-per-turn LongMemEval R@5 = 86.8 on oracle (Gate-B PASS)
+
+This release does not re-assert the retracted −10pp magnitude.
+
+Plan F13 (LongMemEval R@5 target — Track 6: chunk-per-turn ingestion, `docs/evals/2026-05-12-r5-track6-chunk-per-turn-prereg.md`) addresses the structural pathology that limited every prior LongMemEval track (F8 / F9 / F10 / F11 / F11+F9 / F12): sessions in `data/longmemeval_oracle.json` are 14,292 chars median (~3,500 tokens), but the embedders we can reach (MiniLM, BGE-base, multilingual-e5-large) cap at 512–514 tokens. Every prior track was embedding only the first ~2 turns of each 12-turn session and truncating the rest. F13 replaces session-level embedding with turn-level embedding: each ~550-char turn → one vector, no truncation. At retrieval time the query is scored against all turn vectors and max-pooled by source `session_id` to return top-K sessions. The existing `evaluate_retrieval.py` scorer's session-id matching contract is preserved verbatim (each F13 retrieval result tags itself with `[session_id]`).
+
+Gate-A PASS: 10,866 turns indexed across all 940 oracle sessions. Vector dim 768 (BGE-base), L2-norms in [0.999, 1.001], session_id tags on every turn.
+
+Gate-B PASS: F13 + F9 sub-agent rerank stack R@5 = 86.8 on `data/longmemeval_oracle.json` (threshold ≥ 83.2 = F11+F9 deployable best 78.2 + 5pp). The F13 chunked baseline alone scored 79.0; the F9 rerank converted 7.8/14.4 = 54% of the top-20 headroom — substantially above the ~7-10% capture rate observed on F11+F9 and F12+F9 session-level inputs. Plausible mechanism: a sub-agent reading a focused 500-char turn judges relevance cleanly; a sub-agent reading a 14,000-char session has to skim 12 turns and often picks the first plausible-looking one.
+
+### Roadmap target met (oracle split)
+
+The R@5 ≥ 85 % roadmap target (`ROADMAP-RESEARCH.md` F6) is now met on `data/longmemeval_oracle.json`: 86.8 ≥ 85.0. The target was NON-binding per every prior prereg; the description here is retrospective, not a re-assertion of any retracted magnitude. The figure is descriptive characterisation, not a claim about a different split or embedder.
+
+### Split-mismatch with gbrain (unchanged)
+
+`longmemeval_oracle` carries 3 sessions per haystack; gbrain v0.28.8's published 97.60 figure is on `longmemeval_s_cleaned` (~40 sessions per haystack) with OpenAI `text-embedding-3-large@1536`. Both HF Hub (the `_s` distribution channel) and the OpenAI API are host-blocked from this sandbox (verified 2026-05-12 via `curl -sSI ... 403 host_not_allowed`). F13's 86.8 is NOT directly comparable to gbrain's 97.60 — the split mismatch AND the embedder mismatch are documented in the F13 result doc's binding split-mismatch disclosure.
+
+### Per-K spread (F13 baseline → F13+F9 stack, oracle)
+
+| K | F13 baseline | F13 + F9 stack |
+|---:|---:|---:|
+| 1 | 51.0 | 70.8 |
+| 3 | 72.2 | 84.2 |
+| 5 | 79.0 | 86.8 |
+| 10 | 86.6 | 90.2 |
+| 20 | 93.4 | 93.4 |
+
+### Cross-track R@5 status (as of this release, oracle)
+
+- F8 hybrid tuning on MiniLM:                    76.8 (Gate-B FAIL @ 77.6).
+- F9 v2 sub-agent LLM rerank on MiniLM:          78.0 (Gate-B FAIL @ 80.6).
+- F11 BGE-base baseline:                         77.0 (Gate-B FAIL @ 81.8).
+- F11 + F9 stack:                                78.2 (Gate-B FAIL @ 81.8).
+- F10 features-enriched (retracted v1.9.1):      59.2 (Gate-B FAIL @ 80.8).
+- F12 multilingual-e5-large + top-100 + F9:      78.8 (Gate-B FAIL @ 83.2, HARD RETRACTION executed 2026-05-11).
+- **F13 + F9 stack (new deployable best):        86.8 (Gate-B PASS @ 83.2, margin +3.6).**
+
+### Changes shipped
+
+- `benchmarks/longmemeval/chunk_per_turn_embed.mjs` — one-off turn-level ingestion script. Accepts `--model <id>` (defaults to e5-large; BGE-base supported with appropriate pooling / no prefix).
+- `benchmarks/longmemeval/chunk_per_turn_retrieve.mjs` — max-pool turn-to-session retrieval. Output is `evaluate_retrieval.py`-compatible JSONL.
+- `docs/evals/2026-05-12-r5-track6-chunk-per-turn-{prereg,result}.md` — F13 prereg + result.
+- `.gitignore` — adds `benchmarks/longmemeval/data/turn_index_*.json` and `results/f13_*/`.
+
+No `src/` changes. F13 reuses F11/F12's existing `poolingFor` / `prefixFor` / `preferredBackend` dispatch helpers (retained in `src/embeddings.ts` per F11's and F12's dispatch-shape carve-outs); the cumulative-null status of the dlPFC goal-stack mechanism (`docs/RETRACTION.md:94-113`) is unaffected by this release.
+
+### Outside-voice reviews
+
+- Prereg: PASS_WITH_NOTES (13/13 checks). Three optional improvements applied: eval-contract explicit, session-coverage Gate-A floor, ~40-session count reconciled with the official LongMemEval README.
+- Result doc: PASS_WITH_NOTES (14/14 checks). One required fix applied (Provenance section embedder was copied incorrectly from F12 and read e5-large; corrected to BGE-base, the prereg-authorised fallback). One optional fix applied (duplicate cumulative-null section removed).
+
+### Notes for next track
+
+The F13 + F9 sub-agent rerank stack costs 50 sub-agent dispatches per LongMemEval run (~10 min of controller wall time per run on average), and the turn-level index is a 181 MiB JSON artifact that lives at `benchmarks/longmemeval/data/turn_index_bge.json` (gitignored). A future track could harden this into a hippo-store-shaped ingestion path (currently the F13 retriever bypasses the hippo store entirely and reads from `data/longmemeval_oracle.json` directly), but the structural lever — chunk per turn, not per session — is the part that moves the number; making it production-shaped is plumbing, not retrieval research.
+
+---
+
 ## 1.9.1 (2026-05-11) — F10 features-reranker retraction
 
 This release does not re-assert the retracted −10pp magnitude.
