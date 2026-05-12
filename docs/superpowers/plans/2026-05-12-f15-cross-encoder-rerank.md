@@ -208,7 +208,7 @@ The full prereg structure (all sections required, no placeholders):
    **Structural ceiling subsection (required in the prereg doc):** explicitly state that F14's R@100 on `_s` = 86.2 is the absolute upper bound on F15's achievable R@5 (since a rerank can only reorder within the candidate pool; it cannot promote a session from outside top-100 into top-5). 86.2 < 97.7, therefore F15 cannot mathematically clear Gate-B from the F14 candidate pool alone. The Gate-B threshold remains 97.7 because the project's discipline forbids retargeting gates to what an experiment can achieve (that pattern is exactly the magnitude-smuggling the project's RETRACTION.md disciplines against). F15's legitimate value is mechanism characterisation: measuring how much of the within-pool ranking gap a locally-runnable cross-encoder closes. The path to actually clearing Gate-B is F15 + F16 combined (cross-encoder on a stronger embedder that lifts R@100 closer to 100); F16 is queued in `ROADMAP-RESEARCH.md`.
 9. **HARD RETRACTION arm (binding):** four actions identical to F14:
    - `data/lme_s/` deleted from disk
-   - `results/f15_cross_encoder/` deleted from disk
+   - `results/f15_subagent_rerank/` deleted from disk
    - Cross-encoder model weights under `benchmarks/longmemeval/data/model-cache/` deleted ONLY for newly-downloaded models; existing F11/F13/F14 model weights retained
    - CHANGELOG / README / ROADMAP / RETRACTION canonical docs NOT updated
    - Result doc retained as negative-result audit trail
@@ -265,504 +265,198 @@ EOF
 
 ---
 
-## Task 4: Cross-encoder feasibility spike
+## PIVOT NOTE (2026-05-12)
 
-**Files:**
-- Create: `benchmarks/longmemeval/test_rerank_cross_encoder_toy.mjs`
-
-This is the TDD anchor for the rerank script. Before writing the full pipeline, prove the cross-encoder runs locally and produces sensible scores on a known toy case.
-
-- [ ] **Step 1: Write the failing toy test**
-
-Create `benchmarks/longmemeval/test_rerank_cross_encoder_toy.mjs`:
-
-```js
-#!/usr/bin/env node
-/**
- * F15 TDD anchor: cross-encoder toy case.
- *
- * Three candidates, one obviously correct. The cross-encoder must rank
- * the correct candidate first. Exits 0 on PASS, 1 on FAIL.
- *
- * Set HIPPO_MODEL_CACHE before running (defaults to local).
- */
-import { resolve } from 'node:path';
-
-if (!process.env.HIPPO_MODEL_CACHE) {
-  process.env.HIPPO_MODEL_CACHE = resolve('benchmarks/longmemeval/data/model-cache');
-}
-
-const { pipeline, env } = await import('@huggingface/transformers');
-env.cacheDir = process.env.HIPPO_MODEL_CACHE;
-env.localModelPath = process.env.HIPPO_MODEL_CACHE;
-env.allowRemoteModels = false;
-
-const MODEL = process.argv[2] || 'Xenova/ms-marco-MiniLM-L-6-v2';
-
-console.log(`[F15 toy] loading cross-encoder ${MODEL}...`);
-const reranker = await pipeline('text-classification', MODEL);
-console.log(`[F15 toy] loaded.`);
-
-const query = 'What degree did I graduate with?';
-const candidates = [
-  { id: 'A', content: "I'm a graduate with a degree in Business Administration." },
-  { id: 'B', content: "I love eating pizza on weekends." },
-  { id: 'C', content: "The weather in Paris is mild in May." },
-];
-
-const scored = [];
-for (const c of candidates) {
-  // Use { topk: null } + positive-class extraction so the toy test exercises
-  // the same code path as the real rerank script (Task 5).
-  const out = await reranker({ text: query, text_pair: c.content }, { topk: null });
-  const arr = Array.isArray(out) ? out : [out];
-  const positive = arr.slice().sort((a, b) => String(a.label).localeCompare(String(b.label))).pop();
-  const score = positive.score;
-  scored.push({ id: c.id, score });
-  console.log(`  ${c.id}: score=${score.toFixed(4)}  label=${positive.label}`);
-}
-scored.sort((a, b) => b.score - a.score);
-const winner = scored[0].id;
-console.log(`[F15 toy] winner: ${winner}`);
-if (winner !== 'A') {
-  console.error(`FAIL: expected A to rank first, got ${winner}`);
-  process.exit(1);
-}
-console.log('PASS');
-```
-
-- [ ] **Step 2: Vendor the cross-encoder model into the local cache**
-
-The Qdrant fastembed GCS bucket pattern is `https://storage.googleapis.com/qdrant-fastembed/<model_dir>.tar.gz`. The reranker model dir name varies — check the existing model-cache for the BGE-base layout used by F11/F13/F14:
-
-```bash
-ls benchmarks/longmemeval/data/model-cache/ 2>/dev/null
-```
-
-**Snapshot the model-cache BEFORE vendoring** (mandatory — this manifest is what the HARD RETRACTION arm uses to identify newly-added directories vs pre-F15 weights to retain):
-
-```bash
-mkdir -p /tmp/f15_manifests
-find benchmarks/longmemeval/data/model-cache -maxdepth 2 -type d | sort > /tmp/f15_manifests/model_cache_before_minilm.txt
-wc -l /tmp/f15_manifests/model_cache_before_minilm.txt
-```
-
-If `Xenova/` subdirectory exists, the layout is `Xenova/<model-name>/<files>`. To vendor `Xenova/ms-marco-MiniLM-L-6-v2`:
-
-```bash
-cd benchmarks/longmemeval/data/model-cache
-mkdir -p Xenova
-curl -fsSL https://storage.googleapis.com/qdrant-fastembed/Xenova--ms-marco-MiniLM-L-6-v2.tar.gz \
-  -o /tmp/reranker.tar.gz 2>&1 | tail
-```
-
-If that URL 404s (the fastembed bucket uses `--` as a path separator inconsistently across models), try the alternative path:
-```bash
-curl -fsSL https://storage.googleapis.com/qdrant-fastembed/fast-bge-reranker-base.tar.gz \
-  -o /tmp/reranker.tar.gz
-```
-
-If both 404, the fallback is to attempt a direct HF Hub fetch (will likely fail with host-blocked, but documents the failure for the prereg):
-```bash
-curl -fsSL https://huggingface.co/Xenova/ms-marco-MiniLM-L-6-v2/resolve/main/onnx/model.onnx -o /tmp/test 2>&1 | head -5
-```
-
-If all three fail, STOP and surface to the user — F15 cannot run without a vendored cross-encoder. Possible mitigation paths to discuss: (a) ask the user to copy a model tarball from a non-sandboxed machine, (b) defer F15 and proceed to F16 with a different non-cross-encoder mechanism.
-
-If one URL works, extract:
-```bash
-cd benchmarks/longmemeval/data/model-cache
-tar xzf /tmp/reranker.tar.gz
-ls Xenova/ms-marco-MiniLM-L-6-v2/  # or whatever path the tar extracted to
-```
-Expected: `model.onnx` (or `onnx/model.onnx`), `tokenizer.json`, `config.json`, `tokenizer_config.json`.
-
-**Snapshot the model-cache AFTER vendoring** (mandatory — diff against the BEFORE manifest gives the precise list of directories the HARD RETRACTION arm should remove if Gate-B FAILs):
-
-```bash
-cd /home/user/hippo-memory  # back to repo root
-find benchmarks/longmemeval/data/model-cache -maxdepth 2 -type d | sort > /tmp/f15_manifests/model_cache_after_minilm.txt
-diff /tmp/f15_manifests/model_cache_before_minilm.txt /tmp/f15_manifests/model_cache_after_minilm.txt > /tmp/f15_manifests/minilm_added.txt
-echo "=== newly-added directories from MiniLM vendoring ==="
-grep '^>' /tmp/f15_manifests/minilm_added.txt
-```
-
-The `> ...` lines in `minilm_added.txt` are the only directories the HARD RETRACTION arm in Task 10 will delete for the MiniLM vendoring step. Pre-F15 weights (BGE-base, e5-large, MiniLM-L6 from F8) are NOT in this list and will be retained.
-
-- [ ] **Step 3: Run the toy test**
-
-```bash
-HIPPO_MODEL_CACHE=$(pwd)/benchmarks/longmemeval/data/model-cache \
-  node benchmarks/longmemeval/test_rerank_cross_encoder_toy.mjs Xenova/ms-marco-MiniLM-L-6-v2
-```
-
-Expected: `PASS` and exit 0. If FAIL, the cross-encoder is loading but not behaving as a reranker (most likely cause: wrong pipeline name; cross-encoders sometimes need `text-classification` with `top_k: null` or `feature-extraction`-then-pooling). Debug by inspecting the raw output of `pipeline()` on one (query, candidate) pair before continuing.
-
-- [ ] **Step 4: Throughput spike**
-
-Once the toy test passes, measure throughput on a realistic batch:
-
-```bash
-HIPPO_MODEL_CACHE=$(pwd)/benchmarks/longmemeval/data/model-cache node -e "
-import('@huggingface/transformers').then(async ({ pipeline, env }) => {
-  env.cacheDir = process.env.HIPPO_MODEL_CACHE;
-  env.localModelPath = process.env.HIPPO_MODEL_CACHE;
-  env.allowRemoteModels = false;
-  const reranker = await pipeline('text-classification', 'Xenova/ms-marco-MiniLM-L-6-v2');
-  const t0 = Date.now();
-  const N = 100;
-  for (let i = 0; i < N; i++) {
-    await reranker({ text: 'What is the capital of France?', text_pair: 'Paris is the capital and largest city of France.' });
-  }
-  const dt = (Date.now() - t0) / 1000;
-  console.log('throughput: ' + (N / dt).toFixed(1) + ' pair/s (' + dt.toFixed(2) + 's for ' + N + ' pairs)');
-});
-"
-```
-
-Expected output line: `throughput: XX.X pair/s (Y.YYs for 100 pairs)`.
-
-- [ ] **Step 5: Record the throughput and decide the tier**
-
-Compute the full-run wall time: `50000 / throughput / 60 = minutes`. Decision rule:
-- ≥ 10 pair/s (≤ 84 min) — proceed with MiniLM-L-6-v2 AND also vendor `Xenova/bge-reranker-base` for the quality tier (Step 6).
-- 2-10 pair/s (84 min – 7 h) — proceed with MiniLM only as the F15 default; defer bge-reranker-base to a follow-up if MiniLM clears Gate-A.
-- < 2 pair/s (> 7 h) — STOP, surface to user. F15 budget is exceeded; consider reducing top-100 to top-30 (cuts to 15k pairs) or switching to an even smaller cross-encoder.
-
-- [ ] **Step 6 (optional pilot — recommended): 50-query pilot before the full 500-query run**
-
-Because Gate-B is structurally unreachable from this candidate pool (R@100 = 86.2 < 97.7), the full 500-query run cannot clear Gate-B. The legitimate value of F15 is mechanism characterisation — measuring within-pool ranking-gap closure. A 50-query stratified pilot (10 queries per question_type weighted by category n) gives a useful within-pool R@5 estimate at ~10% of the wall time. Decision rule:
-
-- If 50-query pilot shows F15 R@5 > F14+F9-stack R@5 (= 50.8) by ≥ 5 points on the matched subset — proceed to full 500-query run.
-- If 50-query pilot shows F15 R@5 ≤ F14+F9-stack on the matched subset — STOP. The cross-encoder is not closing the within-pool gap; running the full 500 won't change that conclusion. Document the pilot result in the F15 result doc as the negative finding; execute HARD RETRACTION arm.
-
-This pilot is optional but recommended. If the engineer chooses to skip the pilot, the full 500-query run is the binding measurement; if the engineer runs the pilot and proceeds based on it, the full 500-query R@5 (not the pilot R@5) is the binding Gate-B measurement.
-
-No commit step — this is exploratory scaffolding; the toy-test file gets committed with the rerank script in Task 5.
+Tasks 4-6 below were rewritten on 2026-05-12 after the original Task 4 (cross-encoder feasibility spike) discovered the sandbox cannot reach any cross-encoder ONNX source. See commit `458f006` and the revised prereg `docs/evals/2026-05-12-r5-track8-subagent-rerank-prereg.md` for the full pivot history. The replacement mechanism is a maximally-equipped LLM-as-reranker using Claude Opus 4.7 sub-agents, configured with deeper pool, richer context, structured rubric, and smaller batches. Tasks 1-3 above and Tasks 7-10 below are otherwise unchanged at the methodology level (path slugs updated from `f15_cross_encoder` to `f15_subagent_rerank`).
 
 ---
 
-## Task 5: Implement `rerank_cross_encoder.mjs`
+## Task 4: Generate per-batch rerank input files
 
 **Files:**
-- Create: `benchmarks/longmemeval/rerank_cross_encoder.mjs`
+- (Reuse) `benchmarks/longmemeval/rerank_split_v2.py` — no changes needed; CLI already supports the F15 parameters.
+- Write: `/tmp/rerank_f15_batches/batch_000.json` … `batch_099.json` (100 files, 5 queries × 100 candidates each, gitignored under `/tmp/`).
 
-- [ ] **Step 1: Write the script**
+- [ ] **Step 1: Verify F14 retrieval input is present and well-formed**
 
-Create `benchmarks/longmemeval/rerank_cross_encoder.mjs`:
-
-```js
-#!/usr/bin/env node
-/**
- * F15: cross-encoder rerank over an F14-style top-100 candidate JSONL.
- *
- * Input format (each JSONL line):
- *   { question_id, question, retrieved_memories: [{ id, content, tags, score, ... }] }
- *
- * Output format (same shape, with retrieved_memories reordered by cross-encoder score
- * and each candidate's `score` field replaced by the cross-encoder relevance score).
- *
- * Supports resume: writes to `<out>.partial.jsonl` and renames on completion.
- *
- * Usage:
- *   HIPPO_MODEL_CACHE=... node rerank_cross_encoder.mjs <model_id> <input.jsonl> <output.jsonl> [max_candidates]
- */
-import { readFileSync, writeFileSync, createReadStream, createWriteStream, existsSync, renameSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { createInterface } from 'node:readline';
-
-if (process.argv.length < 5) {
-  console.error('usage: rerank_cross_encoder.mjs <model_id> <input.jsonl> <output.jsonl> [max_candidates]');
-  process.exit(2);
-}
-
-const MODEL = process.argv[2];
-const INPUT = process.argv[3];
-const OUTPUT = process.argv[4];
-const MAX_CANDIDATES = parseInt(process.argv[5] || '100', 10);
-
-if (!process.env.HIPPO_MODEL_CACHE) {
-  process.env.HIPPO_MODEL_CACHE = resolve('benchmarks/longmemeval/data/model-cache');
-}
-
-const { pipeline, env } = await import('@huggingface/transformers');
-env.cacheDir = process.env.HIPPO_MODEL_CACHE;
-env.localModelPath = process.env.HIPPO_MODEL_CACHE;
-env.allowRemoteModels = false;
-
-console.log(`[F15] loading cross-encoder ${MODEL}...`);
-const reranker = await pipeline('text-classification', MODEL);
-console.log(`[F15] loaded.`);
-
-// Cross-encoder pipeline notes:
-//   - Pass { topk: null } on each call so the pipeline returns the full
-//     score array rather than collapsing to argmax. Without this, bge-reranker
-//     returns only the highest-probability label which is NOT the raw relevance
-//     score; ms-marco-MiniLM returns a usable score either way but topk:null
-//     is harmless. See @huggingface/transformers TextClassificationPipeline docs.
-//   - Tokenizer max length is 512 (BERT). For candidate.content > ~1800 chars
-//     the tail is silently truncated. F14's turn-level content is typically
-//     <600 chars (turn_index emits content with ~512-token-window truncation
-//     applied at embed time), so this is rarely binding.
-
-// Load all input entries
-const entries = [];
-const rl = createInterface({ input: createReadStream(INPUT) });
-for await (const line of rl) {
-  if (!line.trim()) continue;
-  entries.push(JSON.parse(line));
-}
-console.log(`[F15] loaded ${entries.length} queries from ${INPUT}`);
-
-// Resume support: if <output>.partial.jsonl exists, count completed lines
-const partialPath = OUTPUT + '.partial.jsonl';
-let alreadyDone = new Set();
-if (existsSync(partialPath)) {
-  const existing = readFileSync(partialPath, 'utf8').split('\n').filter(l => l.trim());
-  for (const line of existing) {
-    try { alreadyDone.add(JSON.parse(line).question_id); } catch {}
-  }
-  console.log(`[F15] resuming: ${alreadyDone.size} queries already done`);
-}
-
-const out = createWriteStream(partialPath, { flags: 'a' });
-
-const tStart = Date.now();
-let totalPairs = 0;
-let qIdx = 0;
-let qProcessed = 0;
-const totalToProcess = entries.filter(e => !alreadyDone.has(e.question_id)).length;
-for (const entry of entries) {
-  qIdx++;
-  if (alreadyDone.has(entry.question_id)) continue;
-  qProcessed++;
-  const cands = (entry.retrieved_memories || []).slice(0, MAX_CANDIDATES);
-  const scored = [];
-  for (const c of cands) {
-    const r = await reranker(
-      { text: entry.question || '', text_pair: c.content || '' },
-      { topk: null }
-    );
-    // r is either an array of {label, score} or a single object depending on
-    // model + topk. For cross-encoders we want the positive-class score
-    // (label "LABEL_1" on Xenova/ms-marco, label "1" or "LABEL_1" on
-    // Xenova/bge-reranker). Take the score whose label sorts last (i.e. the
-    // positive class) — falls back to r[0].score for single-output models.
-    const arr = Array.isArray(r) ? r : [r];
-    const positive = arr.slice().sort((a, b) => String(a.label).localeCompare(String(b.label))).pop();
-    const score = positive.score;
-    scored.push({ ...c, score });
-    totalPairs++;
-  }
-  scored.sort((a, b) => b.score - a.score);
-  const outEntry = { ...entry, retrieved_memories: scored, num_retrieved: scored.length };
-  out.write(JSON.stringify(outEntry) + '\n');
-  if (qProcessed % 10 === 0) {
-    const dt = (Date.now() - tStart) / 1000;
-    const rate = totalPairs / dt;
-    const remaining = totalToProcess - qProcessed;
-    const eta = remaining * MAX_CANDIDATES / rate / 60;
-    console.log(`[F15] ${qProcessed}/${totalToProcess} queries (qIdx ${qIdx}), ${totalPairs} pairs, ${rate.toFixed(1)} pair/s, ETA ${eta.toFixed(1)} min`);
-  }
-}
-out.end();
-await new Promise(resolve => out.on('close', resolve));
-
-renameSync(partialPath, OUTPUT);
-console.log(`[F15] wrote ${OUTPUT}`);
-```
-
-- [ ] **Step 2: Smoke-test on a 10-query slice**
+Run this verification before generating batches:
 
 ```bash
-head -10 results/f14_baseline/turn_bge_s_top100.jsonl > /tmp/f14_top100_smoke.jsonl
-mkdir -p results/f15_cross_encoder
-HIPPO_MODEL_CACHE=$(pwd)/benchmarks/longmemeval/data/model-cache \
-  node benchmarks/longmemeval/rerank_cross_encoder.mjs \
-  Xenova/ms-marco-MiniLM-L-6-v2 \
-  /tmp/f14_top100_smoke.jsonl \
-  /tmp/f15_smoke_minilm.jsonl \
-  100
-```
-
-Expected: completes in ~30s on MiniLM tier; produces `/tmp/f15_smoke_minilm.jsonl` with 10 lines, each with `retrieved_memories` reordered.
-
-- [ ] **Step 3: Verify the smoke output**
-
-```bash
-python3 <<'PY'
-import json
-with open('/tmp/f15_smoke_minilm.jsonl') as f:
-    out = [json.loads(l) for l in f if l.strip()]
-with open('/tmp/f14_top100_smoke.jsonl') as f:
-    inp = [json.loads(l) for l in f if l.strip()]
-assert len(out) == len(inp) == 10
-for o, i in zip(out, inp):
-    assert o['question_id'] == i['question_id']
-    inp_ids = {m['id'] for m in i['retrieved_memories'][:100]}
-    out_ids = {m['id'] for m in o['retrieved_memories']}
-    assert inp_ids == out_ids, f"id-set mismatch on {o['question_id']}"
-    # Score distribution non-degenerate (Gate-A condition 3)
-    scores = [m['score'] for m in o['retrieved_memories']]
-    import statistics
-    sd = statistics.stdev(scores)
-    print(f"{o['question_id']}: top1={o['retrieved_memories'][0]['id']}, stddev={sd:.4f}")
-print('PASS: smoke output schema OK')
-PY
-```
-
-Expected: all 10 queries print `top1=... stddev=X` with stddev > 0.01, ending in `PASS`.
-
-- [ ] **Step 4: Commit the script + toy test**
-
-```bash
-git add benchmarks/longmemeval/rerank_cross_encoder.mjs \
-        benchmarks/longmemeval/test_rerank_cross_encoder_toy.mjs
-git commit -m "$(cat <<'EOF'
-feat(benchmarks): cross-encoder rerank script for F15
-
-Two new benchmark scaffolding files (no src/ changes):
-
-- rerank_cross_encoder.mjs: loads an F14-style top-100 JSONL,
-  scores each (query, candidate.content) pair with a transformers.js
-  cross-encoder pipeline, sorts descending, writes a reranked JSONL
-  compatible with evaluate_retrieval.py. Resume-on-restart via
-  <output>.partial.jsonl. Tunable max_candidates flag.
-
-- test_rerank_cross_encoder_toy.mjs: TDD anchor. Three-candidate
-  toy case with one obviously correct answer. Exits 0 on PASS,
-  1 on FAIL. Used as the first smoke gate before running the full
-  500-query rerank.
-
-No src/ changes. Model vendoring uses the Qdrant fastembed GCS
-bucket pattern (HF Hub host-blocked).
-
-This release does not re-assert the retracted −10pp magnitude.
-
-https://claude.ai/code/session_017YFPsgCUC1i2PqoqAfcCUR
-EOF
-)"
-```
-
----
-
-## Task 6: Run cross-encoder rerank on the full 500-query top-100
-
-**Files:**
-- Create: `results/f15_cross_encoder/<model_id>_top100.jsonl` (gitignored sibling of `results/f14_baseline/`)
-
-- [ ] **Step 1: Set up the output directory + log file**
-
-```bash
-mkdir -p results/f15_cross_encoder
-# Confirm input still on disk
+ls -lh results/f14_baseline/turn_bge_s_top100.jsonl
 wc -l results/f14_baseline/turn_bge_s_top100.jsonl
-```
-Expected: `500 results/f14_baseline/turn_bge_s_top100.jsonl`.
-
-- [ ] **Step 2: Run the MiniLM tier in the background**
-
-```bash
-HIPPO_MODEL_CACHE=$(pwd)/benchmarks/longmemeval/data/model-cache \
-  nohup node benchmarks/longmemeval/rerank_cross_encoder.mjs \
-  Xenova/ms-marco-MiniLM-L-6-v2 \
-  results/f14_baseline/turn_bge_s_top100.jsonl \
-  results/f15_cross_encoder/minilm_l6_top100.jsonl \
-  100 \
-  > /tmp/f15_minilm.log 2>&1 &
-echo "started PID $!"
-```
-
-Expected wall time per Task 4 spike. If throughput was 30 pair/s, ~28 min for 50,000 pairs. If 10 pair/s, ~84 min. Monitor with `tail -f /tmp/f15_minilm.log`.
-
-- [ ] **Step 3: After MiniLM completes, run the bge-reranker-base tier (only if Task 4 tier permitted AND bge-reranker-specific throughput spike clears)**
-
-If Task 4's throughput-spike decision rule permits the quality tier, vendor `Xenova/bge-reranker-base` then run a SEPARATE throughput spike on it (bge-reranker is ~6-10x slower than MiniLM regardless of MiniLM's measured rate, so the MiniLM-tier decision rule alone is not sufficient gating):
-
-```bash
-# Snapshot model-cache BEFORE bge-reranker vendoring
-find benchmarks/longmemeval/data/model-cache -maxdepth 2 -type d | sort > /tmp/f15_manifests/model_cache_before_bge.txt
-
-cd benchmarks/longmemeval/data/model-cache
-
-# Attempt 1: Xenova-namespaced tarball
-curl -fsSL "https://storage.googleapis.com/qdrant-fastembed/Xenova--bge-reranker-base.tar.gz" \
-  -o /tmp/bge-reranker.tar.gz && echo "got Xenova path" || echo "404 Xenova path"
-
-# Attempt 2: fast-bge-reranker-base (fastembed-native naming)
-[ ! -s /tmp/bge-reranker.tar.gz ] && \
-  curl -fsSL "https://storage.googleapis.com/qdrant-fastembed/fast-bge-reranker-base.tar.gz" \
-    -o /tmp/bge-reranker.tar.gz && echo "got fast- path" || echo "404 fast- path"
-
-# Extract whichever succeeded
-tar xzf /tmp/bge-reranker.tar.gz
-ls -la Xenova/bge-reranker-base/ 2>/dev/null || ls -la bge-reranker-base/ 2>/dev/null
-
-cd /home/user/hippo-memory
-
-# Snapshot model-cache AFTER bge-reranker vendoring
-find benchmarks/longmemeval/data/model-cache -maxdepth 2 -type d | sort > /tmp/f15_manifests/model_cache_after_bge.txt
-diff /tmp/f15_manifests/model_cache_before_bge.txt /tmp/f15_manifests/model_cache_after_bge.txt > /tmp/f15_manifests/bge_added.txt
-echo "=== newly-added directories from bge-reranker vendoring ==="
-grep '^>' /tmp/f15_manifests/bge_added.txt
-
-# If neither tarball came through (both 404 on the GCS bucket), STOP. F15
-# quality tier cannot run. Document the failure in the result doc and proceed
-# with MiniLM only.
-
-# Smoke-test the model loads via transformers.js before launching the full run
-HIPPO_MODEL_CACHE=$(pwd)/benchmarks/longmemeval/data/model-cache \
-  node benchmarks/longmemeval/test_rerank_cross_encoder_toy.mjs Xenova/bge-reranker-base
-# Expected: PASS (winner: A).
-
-# bge-reranker-specific 100-pair throughput spike BEFORE committing to the full run
-HIPPO_MODEL_CACHE=$(pwd)/benchmarks/longmemeval/data/model-cache node -e "
-import('@huggingface/transformers').then(async ({ pipeline, env }) => {
-  env.cacheDir = process.env.HIPPO_MODEL_CACHE;
-  env.localModelPath = process.env.HIPPO_MODEL_CACHE;
-  env.allowRemoteModels = false;
-  const reranker = await pipeline('text-classification', 'Xenova/bge-reranker-base');
-  const t0 = Date.now();
-  for (let i = 0; i < 100; i++) {
-    await reranker({ text: 'What is the capital of France?', text_pair: 'Paris is the capital and largest city of France.' }, { topk: null });
-  }
-  const dt = (Date.now() - t0) / 1000;
-  console.log('bge-reranker throughput: ' + (100 / dt).toFixed(2) + ' pair/s, ETA for 50k pairs: ' + (50000 / (100/dt) / 3600).toFixed(1) + ' h');
-});
+python3 -c "
+import json
+with open('results/f14_baseline/turn_bge_s_top100.jsonl') as f:
+    first = json.loads(f.readline())
+keys = sorted(first.keys())
+print('keys:', keys)
+mems = first.get('retrieved_memories', [])
+print('n_memories:', len(mems))
+print('sample memory keys:', sorted(mems[0].keys()) if mems else 'none')
+print('sample content[:80]:', (mems[0].get('content') or '')[:80] if mems else '')
+print('sample tags:', mems[0].get('tags') if mems else None)
 "
-# Decision rule for bge-reranker quality tier:
-#   >= 2 pair/s (<= 7 h)        → proceed with the full run below
-#   1-2 pair/s (7-14 h)         → ask user before committing; recommend
-#                                  reducing max_candidates from 100 to 30
-#   < 1 pair/s (> 14 h)         → STOP. Quality tier infeasible on this CPU.
-#                                  Table only MiniLM result in Task 8.
-
-# Full run (only if bge-reranker spike clears the decision rule above)
-HIPPO_MODEL_CACHE=$(pwd)/benchmarks/longmemeval/data/model-cache \
-  nohup node benchmarks/longmemeval/rerank_cross_encoder.mjs \
-  Xenova/bge-reranker-base \
-  results/f14_baseline/turn_bge_s_top100.jsonl \
-  results/f15_cross_encoder/bge_reranker_base_top100.jsonl \
-  100 \
-  > /tmp/f15_bge.log 2>&1 &
-echo "started PID $!"
 ```
 
-If Task 4's decision rule did NOT permit the quality tier OR the bge-reranker spike scores < 1 pair/s, skip this step and table only the MiniLM result in Task 8.
+Expected: file is ~27 MB, 500 lines, each line has `retrieved_memories` with 100 entries, each entry has `id`, `score`, `tags`, `content`. If anything looks off, STOP and surface to the controller.
 
-- [ ] **Step 4: Verify both output files completed (no `.partial.jsonl` left)**
+- [ ] **Step 2: Generate the 100 batch input files with F15 parameters**
 
 ```bash
-ls -la results/f15_cross_encoder/
-wc -l results/f15_cross_encoder/*.jsonl
+rm -rf /tmp/rerank_f15_batches
+mkdir -p /tmp/rerank_f15_batches
+python3 benchmarks/longmemeval/rerank_split_v2.py \
+    --retrieval results/f14_baseline/turn_bge_s_top100.jsonl \
+    --out-dir /tmp/rerank_f15_batches \
+    --batch-size 5 \
+    --max-candidates 100 \
+    --content-chars 1000
 ```
-Expected: each `*.jsonl` is 500 lines. No `.partial.jsonl` should exist.
 
-- [ ] **Step 5: Gate-A validity checks**
+Expected stderr: `Wrote 100 batches (500 queries) to /tmp/rerank_f15_batches`.
+
+- [ ] **Step 3: Verify the batches**
 
 ```bash
-python3 <<'PY'
-import json, statistics
+ls /tmp/rerank_f15_batches/ | wc -l    # expect 100
+ls /tmp/rerank_f15_batches/ | head -3
+ls /tmp/rerank_f15_batches/ | tail -3
+python3 -c "
+import json, glob
+files = sorted(glob.glob('/tmp/rerank_f15_batches/batch_*.json'))
+print(f'batches: {len(files)}')
+b0 = json.loads(open(files[0]).read())
+print(f'batch 0: {len(b0)} queries')
+q = b0[0]
+print(f'  q0: question_id={q["question_id"]} n_cands={len(q["candidates"])}')
+print(f'  q0 first cand content[:80]: {q["candidates"][0]["content"][:80]!r}')
+print(f'  q0 last cand content[:80]: {q["candidates"][-1]["content"][:80]!r}')
+total_qs = sum(len(json.loads(open(f).read())) for f in files)
+print(f'total queries across all batches: {total_qs} (expect 500)')
+"
+```
+
+Expected: 100 batch files, each containing 5 query objects, each query carrying 100 candidates with 1000-char-truncated content. Total queries = 500.
+
+No commit step — `/tmp/rerank_f15_batches/` is ephemeral scaffolding.
+
+---
+
+## Task 5: Dispatch 100 Opus-4.7 sub-agent rerank batches
+
+**Files:**
+- Write: `/tmp/rerank_f15_outputs/batch_000.json` … `batch_099.json` (100 files).
+
+This task runs in the controller (the orchestrating Claude session). The controller dispatches 100 `Agent` calls with `subagent_type=general-purpose` and `model=opus`, running up to 10 in parallel per message. Each sub-agent processes one batch — 5 queries × 100 candidates each — and emits a JSON file with `ranked_ids` per query.
+
+- [ ] **Step 1: Define the rubric prompt template**
+
+The controller uses this exact prompt template for each batch dispatch (substituting `<BATCH_NUM>` and inlining the batch's JSON):
+
+```
+You are a relevance reranker for a long-conversation retrieval benchmark (LongMemEval). For each of the 5 questions in this batch, you receive 100 candidate turns retrieved from a chat history. Each candidate is a turn from a specific session; the goal is to identify which sessions are most likely to contain the ground-truth answer.
+
+Score each candidate against its query on three independent 0-3 scales:
+
+1. TOPICAL_MATCH (0-3): how closely the candidate's subject matches the query's subject. 0 = unrelated; 1 = same general domain; 2 = same specific topic; 3 = identical claim space.
+2. EVIDENCE_SPECIFICITY (0-3): how precisely the candidate addresses the query's particular fact. 0 = vague/general; 1 = mentions the topic but not the fact; 2 = mentions the fact partially; 3 = explicit statement of the fact.
+3. RECENCY_OF_CLAIM (0-3): for questions about current state ("what do I prefer", "what's my latest"), prefer claims that read as current/standalone. 0 = clearly superseded or outdated context; 1 = unclear; 2 = current-ish; 3 = clearly current/canonical.
+
+Compute total = TOPICAL_MATCH + EVIDENCE_SPECIFICITY + RECENCY_OF_CLAIM (0-9 per candidate). Rank candidates within each query by total descending. Break ties first by TOPICAL_MATCH descending, then by EVIDENCE_SPECIFICITY descending, then preserve the input order.
+
+Output strict JSON only — no prose, no markdown — to `/tmp/rerank_f15_outputs/batch_<BATCH_NUM>.json`:
+
+[
+  {"question_id": "<qid>", "ranked_ids": ["<id1>", "<id2>", ..., "<id100>"]},
+  ...   // exactly one entry per question in the batch
+]
+
+Constraints:
+- `ranked_ids` for each question must be a permutation of the 100 input candidate ids — same set, no duplicates, no inventions.
+- Output exactly 5 entries (one per question in the batch).
+- Write the file with the Write tool. Use the absolute path `/tmp/rerank_f15_outputs/batch_<BATCH_NUM>.json`.
+
+Batch input (5 questions, 100 candidates each, 1000-char content):
+
+<inline the contents of /tmp/rerank_f15_batches/batch_<BATCH_NUM>.json here>
+
+Report back when written. No prose summary needed; the JSON file is the deliverable.
+```
+
+- [ ] **Step 2: Prepare output directory and dispatch**
+
+```bash
+mkdir -p /tmp/rerank_f15_outputs
+```
+
+The controller dispatches batches in groups of up to 10 parallel `Agent` calls per message. With 100 batches total and 10-at-a-time parallelism, this is 10 controller messages.
+
+For each batch NNN (000..099): the controller reads `/tmp/rerank_f15_batches/batch_NNN.json`, formats the rubric prompt with that JSON inlined, and dispatches an `Agent` call with:
+- `subagent_type=general-purpose`
+- `model=opus`
+- `description=F15 rerank batch NNN`
+- `prompt` = the rubric template with `<BATCH_NUM>` substituted and the batch JSON inlined
+
+Each sub-agent's task is purely to read the inlined input, do the ranking, and Write the JSON output to the prescribed path. No other tools needed.
+
+- [ ] **Step 3: Verify completeness**
+
+```bash
+ls /tmp/rerank_f15_outputs/ | wc -l    # expect 100
+python3 <<'PYV'
+import json, glob
+files = sorted(glob.glob('/tmp/rerank_f15_outputs/batch_*.json'))
+print(f'output files: {len(files)} (expect 100)')
+missing = [f'batch_{i:03d}.json' for i in range(100) if not any(f.endswith(f'batch_{i:03d}.json') for f in files)]
+if missing:
+    print(f'MISSING: {missing[:10]}{"..." if len(missing) > 10 else ""}')
+else:
+    print('all 100 batch outputs present')
+total_qs = 0
+bad = []
+for f in files:
+    try:
+        d = json.loads(open(f).read())
+        assert isinstance(d, list)
+        total_qs += len(d)
+    except Exception as e:
+        bad.append((f, str(e)))
+print(f'total queries in outputs: {total_qs} (expect 500)')
+print(f'malformed files: {len(bad)}')
+for f, e in bad[:5]:
+    print(f'  {f}: {e}')
+PYV
+```
+
+Expected: 100 files, 500 queries total, 0 malformed. If any batches are missing or malformed, re-dispatch JUST the failing batches; do NOT re-run the entire 100.
+
+No commit step — `/tmp/rerank_f15_outputs/` is ephemeral.
+
+---
+
+## Task 6: Merge rerank outputs into the reranked JSONL and Gate-A validity
+
+**Files:**
+- (Reuse) `benchmarks/longmemeval/rerank_merge_v2.py`
+- Write: `results/f15_subagent_rerank/opus_top100_reranked.jsonl` (gitignored under `results/`)
+
+- [ ] **Step 1: Merge**
+
+```bash
+mkdir -p results/f15_subagent_rerank
+python3 benchmarks/longmemeval/rerank_merge_v2.py \
+    --retrieval results/f14_baseline/turn_bge_s_top100.jsonl \
+    --ranks-dir /tmp/rerank_f15_outputs \
+    --out results/f15_subagent_rerank/opus_top100_reranked.jsonl
+```
+
+Expected stderr: `Loaded rerank for 500 questions` and `Wrote 500 reranked entries (0 kept as-is) to results/f15_subagent_rerank/opus_top100_reranked.jsonl`. If kept-as-is > 0, some queries did not have a matching rerank output — investigate and re-dispatch.
+
+- [ ] **Step 2: Gate-A validity checks**
+
+```bash
+python3 <<'PYG'
+import json
 
 with open('results/f14_baseline/turn_bge_s_top100.jsonl') as f:
     f14 = {json.loads(l)['question_id']: json.loads(l) for l in f}
@@ -771,7 +465,6 @@ def check(path, name):
     print(f"\n=== Gate-A for {name} ===")
     n_qs = 0
     n_perm_ok = 0
-    n_stddev_ok = 0
     n_top1_changed = 0
     n_tags_intact = 0
     with open(path) as f:
@@ -783,40 +476,32 @@ def check(path, name):
             f15_ids = [m['id'] for m in r['retrieved_memories']]
             if set(f14_ids) == set(f15_ids) and len(f14_ids) == len(f15_ids):
                 n_perm_ok += 1
-            scores = [m['score'] for m in r['retrieved_memories']]
-            if len(scores) > 1 and statistics.stdev(scores) > 0.01:
-                n_stddev_ok += 1
             if f14_ids[0] != f15_ids[0]:
                 n_top1_changed += 1
-            # Tags-passthrough check: every output candidate must have non-empty
-            # tags AND the tags must match the input candidate's tags exactly.
             f14_by_id = {m['id']: m for m in f14[qid]['retrieved_memories'][:100]}
-            tags_ok_this_query = all(
+            tags_ok = all(
                 m.get('tags') and m['tags'] == f14_by_id[m['id']]['tags']
                 for m in r['retrieved_memories']
             )
-            if tags_ok_this_query:
+            if tags_ok:
                 n_tags_intact += 1
     print(f'  queries: {n_qs} (expected 500)')
-    print(f'  permutation-invariant: {n_perm_ok}/{n_qs}')
+    print(f'  permutation-invariant: {n_perm_ok}/{n_qs} (need 100%)')
     print(f'  tags intact + match input: {n_tags_intact}/{n_qs} (need 100%)')
-    print(f'  score-stddev > 0.01:   {n_stddev_ok}/{n_qs} (need >= 90%)')
-    print(f'  top-1 changed vs F14:  {n_top1_changed}/{n_qs} (need >= 50%)')
+    print(f'  top-1 changed vs F14: {n_top1_changed}/{n_qs} (need >= 50%)')
     ok = (n_qs == 500
           and n_perm_ok == n_qs
           and n_tags_intact == n_qs
-          and n_stddev_ok / n_qs >= 0.90
           and n_top1_changed / n_qs >= 0.50)
-    print(f'  Gate-A: {"PASS" if ok else "FAIL"}')
+    print(f'  Gate-A (dispatch + permutation + tags + top-1): {"PASS" if ok else "FAIL"}')
 
-import os
-for f in sorted(os.listdir('results/f15_cross_encoder')):
-    if f.endswith('.jsonl'):
-        check(f'results/f15_cross_encoder/{f}', f)
-PY
+check('results/f15_subagent_rerank/opus_top100_reranked.jsonl', 'F15 opus rerank')
+PYG
 ```
 
-Expected: Gate-A PASS for at least one variant. If both FAIL, surface the failure mode to the user. The `tags intact` check is binding — without it, a future refactor that strips unknown keys from the rerank script's spread would silently zero out Gate-B hits (the canonical scorer at `evaluate_retrieval.py:check_session_hit` matches via three paths, two of which require `tags`).
+Expected: Gate-A PASS. Conditions: 500 queries, permutation-invariant for all, tags intact for all, top-1 changed vs F14 baseline for ≥ 50%. If FAIL on permutation or tags, the rerank output has structural issues — surface to the controller before scoring.
+
+The fifth Gate-A condition (dispatch-success, 100/100 batches returning without error) was already verified in Task 5 Step 3.
 
 No commit step — results are gitignored.
 
@@ -829,16 +514,16 @@ The binding Gate-B verdict comes from the canonical `evaluate_retrieval.py` scri
 - [ ] **Step 1: Score each reranked variant with the canonical scorer**
 
 ```bash
-mkdir -p results/f15_cross_encoder/scores
-for f in results/f15_cross_encoder/*.jsonl; do
+mkdir -p results/f15_subagent_rerank/scores
+for f in results/f15_subagent_rerank/*.jsonl; do
   base=$(basename "$f" .jsonl)
   echo "=== canonical Gate-B scoring: $base ==="
   python3 benchmarks/longmemeval/evaluate_retrieval.py \
     --retrieval "$f" \
     --data data/lme_s/longmemeval_s_cleaned.json \
-    --output "results/f15_cross_encoder/scores/${base}_score.json" \
+    --output "results/f15_subagent_rerank/scores/${base}_score.json" \
     --k-values 1 3 5 10 20 50 100 \
-    2>&1 | tee "results/f15_cross_encoder/scores/${base}_score.txt"
+    2>&1 | tee "results/f15_subagent_rerank/scores/${base}_score.txt"
 done
 ```
 
@@ -854,10 +539,10 @@ import json, os
 
 # Load canonical scores
 results = {}
-for f in sorted(os.listdir('results/f15_cross_encoder/scores')):
+for f in sorted(os.listdir('results/f15_subagent_rerank/scores')):
     if not f.endswith('_score.json'): continue
     label = f.replace('_top100_score.json', '').replace('_', '-')
-    with open(f'results/f15_cross_encoder/scores/{f}') as fp:
+    with open(f'results/f15_subagent_rerank/scores/{f}') as fp:
         results[label] = json.load(fp)
 
 print('| Variant | R@1 | R@3 | R@5 | R@10 | R@20 |')
@@ -987,7 +672,7 @@ If Gate-B PASS (best_r5 ≥ 97.7):
 - Update `docs/RETRACTION.md` with a one-line entry: F15 PASS at R@5 = X, gbrain matched / bested, no retraction.
 
 If Gate-B FAIL (best_r5 < 97.7):
-- HARD RETRACTION: delete `data/lme_s/` and `results/f15_cross_encoder/`.
+- HARD RETRACTION: delete `data/lme_s/` and `results/f15_subagent_rerank/`.
 - Delete ONLY the cross-encoder model weights F15 added, using the manifests captured in Task 4 and Task 6:
 
 ```bash
@@ -1066,7 +751,7 @@ git push -u origin claude/plan-implementation-workflow-sasNp
 For FAIL arm:
 ```bash
 rm -rf data/lme_s
-rm -rf results/f15_cross_encoder
+rm -rf results/f15_subagent_rerank
 # (selective model-cache cleanup — confirm with user before bulk delete)
 
 git add docs/evals/2026-05-12-r5-track8-cross-encoder-result.md
@@ -1088,7 +773,7 @@ text-embedding-3-large at this distractor density.
 
 Per the F15 prereg HARD RETRACTION clause:
 - data/lme_s/ deleted (re-acquirable from Sanderhoff-alt mirror)
-- results/f15_cross_encoder/ deleted
+- results/f15_subagent_rerank/ deleted
 - CHANGELOG / README / ROADMAP / RETRACTION canonical docs NOT
   updated. Result doc retained.
 - Deployable cross-track best remains F13 + F9 on oracle = 86.8.
@@ -1142,7 +827,7 @@ Run before handing the plan off:
 
 2. **Placeholder scan:** every code block, command, and file path is concrete. Section headings in the result doc and prereg are listed by name (the engineer fills in the prose). No `TBD` / `TODO` / `fill in`.
 
-3. **Type consistency:** `rerank_cross_encoder.mjs` arg order is `<model_id> <input.jsonl> <output.jsonl> [max_candidates]` everywhere it appears. Output path `results/f15_cross_encoder/<model_id>_top100.jsonl` consistent across Tasks 6, 7, 10. JSONL schema (`retrieved_memories[].{id, content, tags, score}`) consistent with F14's existing format.
+3. **Type consistency:** `rerank_cross_encoder.mjs` arg order is `<model_id> <input.jsonl> <output.jsonl> [max_candidates]` everywhere it appears. Output path `results/f15_subagent_rerank/<model_id>_top100.jsonl` consistent across Tasks 6, 7, 10. JSONL schema (`retrieved_memories[].{id, content, tags, score}`) consistent with F14's existing format.
 
 4. **Discipline coverage:** every commit body includes the verbatim retraction line. Magnitude-smuggling grep runs on every doc edit (Tasks 1, 3, 8, 10). HARD RETRACTION arm is fully spelled out (Task 10 Step 1 FAIL branch).
 
