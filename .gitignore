@@ -48,3 +48,5 @@ results/f12_*/
 benchmarks/longmemeval/data/turn_index_e5.json
 benchmarks/longmemeval/data/turn_index_bge.json
 results/f13_*/
+/data/lme_s/
+benchmarks/longmemeval/data/turn_index_bge_s.json

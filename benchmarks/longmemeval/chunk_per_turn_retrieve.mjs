@@ -21,10 +21,10 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
-const DATA = 'data/longmemeval_oracle.json';
 const INDEX = process.argv[2] || 'benchmarks/longmemeval/data/turn_index_e5.json';
 const OUT = process.argv[3] || 'results/f13_baseline/turn_top100.jsonl';
 const TOP_K = parseInt(process.argv[4] || '100', 10);
+const DATA = process.argv[5] || 'data/longmemeval_oracle.json';
 
 if (!process.env.HIPPO_MODEL_CACHE) {
   process.env.HIPPO_MODEL_CACHE = resolve('benchmarks/longmemeval/data/model-cache');

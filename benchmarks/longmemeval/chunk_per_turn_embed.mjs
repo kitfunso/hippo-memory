@@ -23,15 +23,15 @@
  * Cost: ~11k turns × ~150-300 ms inference = 30-60 min wall time.
  * Set HIPPO_MODEL_CACHE=$(pwd)/benchmarks/longmemeval/data/model-cache before running.
  */
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
-const DATA = 'data/longmemeval_oracle.json';
 const MODEL = process.argv[2] || 'Xenova/multilingual-e5-large';
 const OUT = process.argv[3] || (
   MODEL.includes('bge') ? 'benchmarks/longmemeval/data/turn_index_bge.json' :
   'benchmarks/longmemeval/data/turn_index_e5.json'
 );
+const DATA = process.argv[4] || 'data/longmemeval_oracle.json';
 const IS_E5 = /\be5\b/i.test(MODEL);
 const IS_BGE = /\bbge\b/i.test(MODEL);
 const POOLING = IS_BGE ? 'cls' : 'mean';
@@ -70,17 +70,61 @@ for (const q of data) {
   }
 }
 
-const turns = [...uniq.values()];
-console.log(`[F13] unique turns to embed: ${turns.length}`);
-console.log(`[F13] unique sessions:        ${new Set(turns.map(t => t.session_id)).size}`);
+const allTurns = [...uniq.values()];
+console.log(`[F13] unique turns total: ${allTurns.length}`);
+console.log(`[F13] unique sessions:    ${new Set(allTurns.map(t => t.session_id)).size}`);
 
 mkdirSync(dirname(OUT), { recursive: true });
 
-const embedT0 = Date.now();
+// Resumable mode: if OUT (or OUT.partial) already exists from a prior run,
+// load it and skip turns whose (session_id, turn_idx) is already embedded.
+// This lets a 9 h run survive crashes / restarts.
+const PARTIAL = OUT + '.partial';
 const out = [];
+const done = new Set(); // keys "sid|tidx" already embedded
+for (const candidate of [OUT, PARTIAL]) {
+  if (existsSync(candidate)) {
+    try {
+      const prev = JSON.parse(readFileSync(candidate, 'utf8'));
+      if (prev && Array.isArray(prev.turns)) {
+        for (const t of prev.turns) {
+          const key = `${t.session_id}|${t.turn_idx}`;
+          if (!done.has(key)) {
+            done.add(key);
+            out.push(t);
+          }
+        }
+        console.log(`[F13] resuming from ${candidate}: ${out.length} turns already embedded`);
+      }
+    } catch (e) {
+      console.log(`[F13] could not parse ${candidate}: ${e.message}; ignoring`);
+    }
+    break;
+  }
+}
+
+const remaining = allTurns.filter(t => !done.has(`${t.session_id}|${t.turn_idx}`));
+console.log(`[F13] turns remaining to embed: ${remaining.length}`);
+
+const CHECKPOINT_EVERY = 2000; // turns per partial flush; ~6 min on BGE-base
+function flushPartial(label) {
+  const obj = {
+    model: MODEL,
+    dim: out.length ? out[0].vec.length : 0,
+    count: out.length,
+    turns: out,
+  };
+  const tmp = PARTIAL + '.tmp';
+  writeFileSync(tmp, JSON.stringify(obj));
+  renameSync(tmp, PARTIAL);
+  console.log(`[F13] ${label}: checkpointed ${out.length} turns -> ${PARTIAL}`);
+}
+
+const embedT0 = Date.now();
 let lastLog = embedT0;
-for (let i = 0; i < turns.length; i++) {
-  const t = turns[i];
+let sinceLastCheckpoint = 0;
+for (let i = 0; i < remaining.length; i++) {
+  const t = remaining[i];
   const input = IS_E5 ? `passage: ${t.content}` : t.content;
   const res = await pipe(input, { pooling: POOLING, normalize: true });
   out.push({
@@ -90,22 +134,34 @@ for (let i = 0; i < turns.length; i++) {
     content: t.content,
     vec: Array.from(res.data),
   });
+  sinceLastCheckpoint++;
   const now = Date.now();
-  if (now - lastLog > 5_000 || i === turns.length - 1) {
+  if (now - lastLog > 30_000 || i === remaining.length - 1) {
     const rate = (i + 1) / ((now - embedT0) / 1000);
-    const eta = (turns.length - i - 1) / rate;
-    console.log(`[F13] ${i + 1}/${turns.length}  ${rate.toFixed(2)}/s  ETA ${eta.toFixed(0)}s`);
+    const eta = (remaining.length - i - 1) / rate;
+    console.log(`[F13] ${i + 1}/${remaining.length}  ${rate.toFixed(2)}/s  ETA ${eta.toFixed(0)}s  (total ${out.length}/${allTurns.length})`);
     lastLog = now;
+  }
+  if (sinceLastCheckpoint >= CHECKPOINT_EVERY) {
+    flushPartial(`step ${i+1}`);
+    sinceLastCheckpoint = 0;
   }
 }
 
 const wall = (Date.now() - embedT0) / 1000;
-console.log(`[F13] embed wall: ${wall.toFixed(1)}s for ${turns.length} turns (${(turns.length / wall).toFixed(2)}/s)`);
+console.log(`[F13] embed wall: ${wall.toFixed(1)}s for ${remaining.length} new turns (${(remaining.length / wall || 0).toFixed(2)}/s)`);
 
-writeFileSync(OUT, JSON.stringify({
+// Final write to OUT (and clean up the partial)
+const finalObj = {
   model: MODEL,
   dim: out[0].vec.length,
   count: out.length,
   turns: out,
-}));
+};
+const tmp = OUT + '.tmp';
+writeFileSync(tmp, JSON.stringify(finalObj));
+renameSync(tmp, OUT);
+if (existsSync(PARTIAL)) {
+  try { renameSync(PARTIAL, PARTIAL + '.completed'); } catch { /* best-effort */ }
+}
 console.log(`[F13] wrote ${OUT}`);
