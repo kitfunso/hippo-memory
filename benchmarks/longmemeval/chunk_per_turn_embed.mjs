@@ -23,8 +23,9 @@
  * Cost: ~11k turns × ~150-300 ms inference = 30-60 min wall time.
  * Set HIPPO_MODEL_CACHE=$(pwd)/benchmarks/longmemeval/data/model-cache before running.
  */
-import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync, openSync, writeSync, closeSync, createReadStream } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { createInterface } from 'node:readline';
 
 const MODEL = process.argv[2] || 'Xenova/multilingual-e5-large';
 const OUT = process.argv[3] || (
@@ -76,92 +77,141 @@ console.log(`[F13] unique sessions:    ${new Set(allTurns.map(t => t.session_id)
 
 mkdirSync(dirname(OUT), { recursive: true });
 
-// Resumable mode: if OUT (or OUT.partial) already exists from a prior run,
-// load it and skip turns whose (session_id, turn_idx) is already embedded.
-// This lets a 9 h run survive crashes / restarts.
-const PARTIAL = OUT + '.partial';
-const out = [];
+// Output format: JSONL (one turn per line, no trailing array wrap).
+// First line is metadata { "_meta": { model, dim, count } }; subsequent
+// lines are turn objects. JSONL avoids Node's ~512 MB string-length cap on
+// JSON.stringify, which crashes any large embed (~50k turns at 768-dim FP32
+// ≈ 600 MB encoded). Each turn is appended atomically, so the file is
+// always parseable line-by-line up to the last fully-written line.
+// Read side: streams line-by-line; never materialises the whole file as a
+// single string. See chunk_per_turn_retrieve.mjs for the matching loader.
+const PARTIAL = OUT + '.partial.jsonl';
+const FINAL_JSONL = OUT + '.jsonl';
 const done = new Set(); // keys "sid|tidx" already embedded
-for (const candidate of [OUT, PARTIAL]) {
-  if (existsSync(candidate)) {
-    try {
-      const prev = JSON.parse(readFileSync(candidate, 'utf8'));
-      if (prev && Array.isArray(prev.turns)) {
-        for (const t of prev.turns) {
-          const key = `${t.session_id}|${t.turn_idx}`;
-          if (!done.has(key)) {
-            done.add(key);
-            out.push(t);
-          }
-        }
-        console.log(`[F13] resuming from ${candidate}: ${out.length} turns already embedded`);
+let resumedCount = 0;
+let resumedDim = 0;
+
+// Helper: load resume state from JSONL.
+async function loadJsonlIntoDone(path) {
+  const rl = createInterface({ input: createReadStream(path), crlfDelay: Infinity });
+  for await (const line of rl) {
+    if (!line) continue;
+    let t;
+    try { t = JSON.parse(line); } catch { continue; }
+    if (t && t._meta) continue; // skip metadata line
+    if (t && t.session_id != null && t.turn_idx != null && Array.isArray(t.vec)) {
+      const key = `${t.session_id}|${t.turn_idx}`;
+      if (!done.has(key)) {
+        done.add(key);
+        if (!resumedDim) resumedDim = t.vec.length;
+        resumedCount++;
       }
-    } catch (e) {
-      console.log(`[F13] could not parse ${candidate}: ${e.message}; ignoring`);
     }
-    break;
   }
+}
+
+// Helper: load resume state from legacy single-blob JSON (pre-v1.9.3 format).
+function loadLegacyJsonIntoDone(path) {
+  const prev = JSON.parse(readFileSync(path, 'utf8'));
+  if (prev && Array.isArray(prev.turns)) {
+    for (const t of prev.turns) {
+      const key = `${t.session_id}|${t.turn_idx}`;
+      if (!done.has(key)) {
+        done.add(key);
+        if (!resumedDim) resumedDim = t.vec?.length || 0;
+        resumedCount++;
+      }
+    }
+  }
+  return prev?.turns ?? [];
+}
+
+// Resume sequence:
+// 1. If FINAL_JSONL exists, treat as complete: rehydrate done set, then re-check whether anything is missing.
+// 2. Else if PARTIAL (.jsonl) exists, resume from it.
+// 3. Else if legacy .json.partial exists, convert it to JSONL, then resume.
+// 4. Else if legacy .json (the final from a prior good run) exists, convert and finish.
+const LEGACY_PARTIAL = OUT + '.partial';
+const LEGACY_FINAL = OUT;
+
+let appendFd = null;
+function openAppend(path) {
+  return openSync(path, 'a');
+}
+
+if (existsSync(FINAL_JSONL)) {
+  await loadJsonlIntoDone(FINAL_JSONL);
+  console.log(`[F13] found existing JSONL: ${FINAL_JSONL} (${resumedCount} turns)`);
+} else if (existsSync(PARTIAL)) {
+  await loadJsonlIntoDone(PARTIAL);
+  console.log(`[F13] resuming from JSONL partial: ${PARTIAL} (${resumedCount} turns)`);
+} else if (existsSync(LEGACY_PARTIAL)) {
+  // Migrate legacy .json.partial -> .partial.jsonl
+  console.log(`[F13] migrating legacy partial ${LEGACY_PARTIAL} -> ${PARTIAL}`);
+  const legacyTurns = loadLegacyJsonIntoDone(LEGACY_PARTIAL);
+  // Write JSONL atomically.
+  const tmp = PARTIAL + '.tmp';
+  const fd = openSync(tmp, 'w');
+  writeSync(fd, JSON.stringify({ _meta: { model: MODEL, dim: resumedDim, count: legacyTurns.length } }) + '\n');
+  for (const t of legacyTurns) writeSync(fd, JSON.stringify(t) + '\n');
+  closeSync(fd);
+  renameSync(tmp, PARTIAL);
+  console.log(`[F13] migrated ${legacyTurns.length} turns to JSONL`);
+} else if (existsSync(LEGACY_FINAL)) {
+  console.log(`[F13] migrating legacy final ${LEGACY_FINAL} -> ${FINAL_JSONL}`);
+  const legacyTurns = loadLegacyJsonIntoDone(LEGACY_FINAL);
+  const tmp = PARTIAL + '.tmp';
+  const fd = openSync(tmp, 'w');
+  writeSync(fd, JSON.stringify({ _meta: { model: MODEL, dim: resumedDim, count: legacyTurns.length } }) + '\n');
+  for (const t of legacyTurns) writeSync(fd, JSON.stringify(t) + '\n');
+  closeSync(fd);
+  renameSync(tmp, PARTIAL);
 }
 
 const remaining = allTurns.filter(t => !done.has(`${t.session_id}|${t.turn_idx}`));
 console.log(`[F13] turns remaining to embed: ${remaining.length}`);
 
-const CHECKPOINT_EVERY = 2000; // turns per partial flush; ~6 min on BGE-base
-function flushPartial(label) {
-  const obj = {
-    model: MODEL,
-    dim: out.length ? out[0].vec.length : 0,
-    count: out.length,
-    turns: out,
-  };
-  const tmp = PARTIAL + '.tmp';
-  writeFileSync(tmp, JSON.stringify(obj));
-  renameSync(tmp, PARTIAL);
-  console.log(`[F13] ${label}: checkpointed ${out.length} turns -> ${PARTIAL}`);
+// Append-mode writer. Each turn is one line; flushes via fsync are
+// expensive at this rate, so we rely on the OS page cache + fast
+// `writeSync` semantics. A SIGKILL mid-line truncates one record at
+// worst — the resume loader skips malformed last lines.
+appendFd = openAppend(PARTIAL);
+// If file is empty (fresh start), write the metadata header.
+if (resumedCount === 0) {
+  writeSync(appendFd, JSON.stringify({ _meta: { model: MODEL, dim: 0, count: 0, note: 'dim filled in by retrieve loader if 0' } }) + '\n');
 }
 
 const embedT0 = Date.now();
 let lastLog = embedT0;
-let sinceLastCheckpoint = 0;
+let dimObserved = resumedDim || 0;
 for (let i = 0; i < remaining.length; i++) {
   const t = remaining[i];
   const input = IS_E5 ? `passage: ${t.content}` : t.content;
   const res = await pipe(input, { pooling: POOLING, normalize: true });
-  out.push({
+  const vec = Array.from(res.data);
+  if (!dimObserved) dimObserved = vec.length;
+  const rec = {
     session_id: t.session_id,
     turn_idx: t.turn_idx,
     role: t.role,
     content: t.content,
-    vec: Array.from(res.data),
-  });
-  sinceLastCheckpoint++;
+    vec,
+  };
+  writeSync(appendFd, JSON.stringify(rec) + '\n');
   const now = Date.now();
   if (now - lastLog > 30_000 || i === remaining.length - 1) {
     const rate = (i + 1) / ((now - embedT0) / 1000);
     const eta = (remaining.length - i - 1) / rate;
-    console.log(`[F13] ${i + 1}/${remaining.length}  ${rate.toFixed(2)}/s  ETA ${eta.toFixed(0)}s  (total ${out.length}/${allTurns.length})`);
+    const total = resumedCount + i + 1;
+    console.log(`[F13] ${i + 1}/${remaining.length}  ${rate.toFixed(2)}/s  ETA ${eta.toFixed(0)}s  (total ${total}/${allTurns.length})`);
     lastLog = now;
-  }
-  if (sinceLastCheckpoint >= CHECKPOINT_EVERY) {
-    flushPartial(`step ${i+1}`);
-    sinceLastCheckpoint = 0;
   }
 }
 
+closeSync(appendFd);
 const wall = (Date.now() - embedT0) / 1000;
 console.log(`[F13] embed wall: ${wall.toFixed(1)}s for ${remaining.length} new turns (${(remaining.length / wall || 0).toFixed(2)}/s)`);
 
-// Final write to OUT (and clean up the partial)
-const finalObj = {
-  model: MODEL,
-  dim: out[0].vec.length,
-  count: out.length,
-  turns: out,
-};
-const tmp = OUT + '.tmp';
-writeFileSync(tmp, JSON.stringify(finalObj));
-renameSync(tmp, OUT);
-if (existsSync(PARTIAL)) {
-  try { renameSync(PARTIAL, PARTIAL + '.completed'); } catch { /* best-effort */ }
-}
-console.log(`[F13] wrote ${OUT}`);
+// Atomically promote PARTIAL -> FINAL_JSONL by renaming.
+renameSync(PARTIAL, FINAL_JSONL);
+console.log(`[F13] wrote ${FINAL_JSONL}`);

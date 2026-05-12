@@ -18,8 +18,9 @@
  *
  * Set HIPPO_MODEL_CACHE before running.
  */
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, createReadStream } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { createInterface } from 'node:readline';
 
 const INDEX = process.argv[2] || 'benchmarks/longmemeval/data/turn_index_e5.json';
 const OUT = process.argv[3] || 'results/f13_baseline/turn_top100.jsonl';
@@ -36,28 +37,88 @@ env.localModelPath = process.env.HIPPO_MODEL_CACHE;
 env.allowRemoteModels = false;
 
 console.log(`[F13r] loading turn index from ${INDEX}...`);
-const idx = JSON.parse(readFileSync(INDEX, 'utf8'));
-console.log(`[F13r]   ${idx.count} turns, dim=${idx.dim}, model=${idx.model}`);
-const MODEL = idx.model;
+
+// Auto-detect JSONL vs legacy single-blob JSON. JSONL is the v1.9.3+ format
+// (one turn per line; first line is metadata). Legacy is one big JSON object.
+function isJsonlPath(p) {
+  return p.endsWith('.jsonl') || p.endsWith('.jsonl.partial') || existsSync(p + '.jsonl') || existsSync(p);
+}
+
+// If user passed the .json (legacy) path but a .jsonl sibling exists, prefer it.
+let effectiveIndex = INDEX;
+if (!INDEX.endsWith('.jsonl') && existsSync(INDEX + '.jsonl')) {
+  effectiveIndex = INDEX + '.jsonl';
+  console.log(`[F13r] using JSONL sibling: ${effectiveIndex}`);
+}
+
+let MODEL = null;
+let stagedSessionIds = [];
+let stagedTurnIdxs = [];
+let stagedContents = [];
+let stagedVecs = []; // each entry is a Float32Array view of one row
+
+if (effectiveIndex.endsWith('.jsonl')) {
+  const rl = createInterface({ input: createReadStream(effectiveIndex), crlfDelay: Infinity });
+  let dim = 0;
+  for await (const line of rl) {
+    if (!line) continue;
+    let t;
+    try { t = JSON.parse(line); } catch { continue; }
+    if (t._meta) {
+      MODEL = t._meta.model;
+      if (t._meta.dim) dim = t._meta.dim;
+      continue;
+    }
+    if (!t.vec || !Array.isArray(t.vec)) continue;
+    if (!dim) dim = t.vec.length;
+    stagedSessionIds.push(t.session_id);
+    stagedTurnIdxs.push(t.turn_idx);
+    stagedContents.push(t.content);
+    stagedVecs.push(new Float32Array(t.vec));
+  }
+  // MODEL may not have been set if metadata line is missing (legacy partial migration).
+  // Recover from the embed-script convention: BGE-base or e5-large default.
+  if (!MODEL) {
+    console.error('[F13r] no _meta line found; refusing to guess model');
+    process.exit(2);
+  }
+  console.log(`[F13r]   ${stagedSessionIds.length} turns, dim=${dim}, model=${MODEL}`);
+  var N = stagedSessionIds.length;
+  var D = dim;
+  var mat = new Float32Array(N * D);
+  for (let i = 0; i < N; i++) {
+    const v = stagedVecs[i];
+    const off = i * D;
+    for (let j = 0; j < D; j++) mat[off + j] = v[j];
+  }
+  stagedVecs = null; // release
+  var sessionIds = stagedSessionIds;
+  var turnIdxs = stagedTurnIdxs;
+  var contents = stagedContents;
+} else {
+  const idx = JSON.parse(readFileSync(effectiveIndex, 'utf8'));
+  console.log(`[F13r]   ${idx.count} turns, dim=${idx.dim}, model=${idx.model}`);
+  MODEL = idx.model;
+  var N = idx.count;
+  var D = idx.dim;
+  var mat = new Float32Array(N * D);
+  var sessionIds = new Array(N);
+  var turnIdxs = new Array(N);
+  var contents = new Array(N);
+  for (let i = 0; i < N; i++) {
+    const t = idx.turns[i];
+    sessionIds[i] = t.session_id;
+    turnIdxs[i] = t.turn_idx;
+    contents[i] = t.content;
+    const off = i * D;
+    for (let j = 0; j < D; j++) mat[off + j] = t.vec[j];
+  }
+}
+
 const IS_E5 = /\be5\b/i.test(MODEL);
 const IS_BGE = /\bbge\b/i.test(MODEL);
 const POOLING = IS_BGE ? 'cls' : 'mean';
 
-// Pack vectors into a single Float32Array for fast dot product.
-const N = idx.count;
-const D = idx.dim;
-const mat = new Float32Array(N * D);
-const sessionIds = new Array(N);
-const turnIdxs = new Array(N);
-const contents = new Array(N);
-for (let i = 0; i < N; i++) {
-  const t = idx.turns[i];
-  sessionIds[i] = t.session_id;
-  turnIdxs[i] = t.turn_idx;
-  contents[i] = t.content;
-  const off = i * D;
-  for (let j = 0; j < D; j++) mat[off + j] = t.vec[j];
-}
 console.log(`[F13r] index packed: ${(mat.byteLength / 1024 / 1024).toFixed(1)} MB`);
 
 console.log(`[F13r] loading ${MODEL}...`);
