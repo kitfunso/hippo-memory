@@ -19,8 +19,8 @@
 Files this plan touches (relative to `/home/user/hippo-memory`):
 
 **Reuse (no edits):**
-- `benchmarks/longmemeval/chunk_per_turn_embed.mjs` — already parameterised: defaults to `Xenova/multilingual-e5-large`, applies e5 "passage: " prefix automatically, mean-pools per the e5 convention. Plan invokes with `--model Xenova/multilingual-e5-large --data data/lme_s/longmemeval_s_cleaned.json --out benchmarks/longmemeval/data/turn_index_e5_s.json`.
-- `benchmarks/longmemeval/chunk_per_turn_retrieve.mjs` — already parameterised: applies e5 "query: " prefix, max-pools by `session_id`. Plan invokes with `<index> <out> <topK> <data>` positional args.
+- `benchmarks/longmemeval/chunk_per_turn_embed.mjs` — already parameterised. Positional args: `argv[2] = MODEL`, `argv[3] = OUT`, `argv[4] = DATA`. Defaults to `Xenova/multilingual-e5-large`. Applies e5 "passage: " prefix automatically and mean-pools per the e5 convention (model-name regex: `IS_E5 = /\be5\b/i.test(MODEL)`). Plan invokes with `node chunk_per_turn_embed.mjs Xenova/multilingual-e5-large benchmarks/longmemeval/data/turn_index_e5_s.json data/lme_s/longmemeval_s_cleaned.json` (positional args). The OUT path has `.jsonl` appended by the script.
+- `benchmarks/longmemeval/chunk_per_turn_retrieve.mjs` — already parameterised. Positional args: `argv[2] = INDEX`, `argv[3] = OUT`, `argv[4] = TOP_K`, `argv[5] = DATA`. Applies e5 "query: " prefix, max-pools by `session_id`. Auto-resolves `INDEX + '.jsonl'` if the bare `INDEX` path doesn't end in `.jsonl` but the `.jsonl` sibling exists — so passing `turn_index_e5_s.json` Just Works.
 - `benchmarks/longmemeval/rerank_split_v2.py` — used only if F16 baseline FAILs Gate-B. Same invocation as F15: `--batch-size 5 --max-candidates 100 --content-chars 1000`.
 - `benchmarks/longmemeval/rerank_merge_v2.py` — used only if rerank stage dispatched.
 - `benchmarks/longmemeval/evaluate_retrieval.py` — canonical scorer. Binding for Gate-B verdict.
@@ -34,9 +34,10 @@ Files this plan touches (relative to `/home/user/hippo-memory`):
 
 **Stage (gitignored, do NOT commit):**
 - `data/lme_s/` — Sanderhoff-alt mirror copy of `longmemeval_s_cleaned.json`. Re-acquired (was deleted by F15 HARD RETRACTION).
-- `benchmarks/longmemeval/data/turn_index_e5_s.json` — F16's chunked-turn index. ~1–2 GB on disk (199,509 turns × 1024-dim float32 + metadata).
+- `benchmarks/longmemeval/data/turn_index_e5_s.json.jsonl` — F16's chunked-turn index. ~1–2 GB on disk (199,509 turns × 1024-dim float32 + metadata as JSONL records). Note: `chunk_per_turn_embed.mjs` accepts an OUT argument and appends `.jsonl` automatically — passing `turn_index_e5_s.json` produces `turn_index_e5_s.json.jsonl`. Also creates `turn_index_e5_s.json.partial.jsonl` during the build (resume scaffold), removed on successful completion.
 - `results/f16_e5_large/` — retrieval JSONL outputs + canonical-score JSON outputs.
 - `/tmp/rerank_f16_batches/`, `/tmp/rerank_f16_outputs/` — only if rerank stage dispatched.
+- `/tmp/f16_build.log`, `/tmp/f16_retrieve.log` — wall-time + progress logs from Tasks 4–5.
 
 **Already on disk (NOT vendored by this plan, retained from F12 HARD RETRACTION carve-out):**
 - `benchmarks/longmemeval/data/model-cache/Xenova/multilingual-e5-large/` — config.json, onnx/, tokenizer files. Confirmed present 2026-05-14.
@@ -244,9 +245,13 @@ PASS = F16 best variant `recall@5 ≥ 0.977` → conventional release update (CH
 
 #### Structural ceiling (acknowledged)
 
-F14's R@100 on `_s` = 86.2. If F16's R@100 turns out to be ≤ 86.2, then F16 has not lifted the embedder ceiling and Gate-B is structurally still 86.2 < 97.7 ⇒ unreachable. If F16's R@100 lifts to, say, 92, the structural ceiling moves to 92 — still < 97.7. To clear Gate-B from this sandbox with a 1-axis embedder swap alone, F16's R@100 would need to reach ≥ 97.7 in the baseline (no rerank, since rerank only re-orders within the pool). MTEB Retrieval delta from BGE-base-en-v1.5 to multilingual-e5-large is ~0–2 percentage points on standard benchmarks; LongMemEval `_s` is non-standard (mostly user-generated chat content, 48 distractors per haystack) so the delta could in principle be larger or smaller, but the prior is small. **F16's Gate-B FAIL is the expected outcome per this prereg.** The legitimate value F16 delivers is mechanism characterisation: measuring (a) whether the chunking lever amplifies the embedder swap (F16 R@100 vs F14 R@100), and (b) whether F16 + Opus rerank materially closes the gap further (F16+Opus R@5 vs F15 R@5).
+F14's R@100 on `_s` = 86.2. If F16's R@100 turns out to be ≤ 86.2, then F16 has not lifted the embedder ceiling and Gate-B is structurally still 86.2 < 97.7 ⇒ unreachable. If F16's R@100 lifts to, say, 92, the structural ceiling moves to 92 — still < 97.7. **A R@100 lift from 86.2 to any value strictly below 97.7 does NOT change the Gate-B verdict; the 97.7 threshold is immovable.** To clear Gate-B from this sandbox with a 1-axis embedder swap alone, F16's R@100 would need to reach ≥ 97.7 in the baseline (since rerank only re-orders within the pool, the post-rerank R@5 is bounded above by the pre-rerank R@100). MTEB Retrieval delta from BGE-base-en-v1.5 to multilingual-e5-large is ~0–2 percentage points on standard benchmarks; LongMemEval `_s` is non-standard (mostly user-generated chat content, 48 distractors per haystack) so the delta could in principle be larger or smaller, but the prior is small. **F16's Gate-B FAIL is the expected outcome per this prereg.**
 
-The path to actually clearing Gate-B from this sandbox is blocked on either HF egress widening (enabling `bge-large-en-v1.5` or `mxbai-embed-large-v1`), a user-supplied pre-downloaded model tarball, or OpenAI API egress for `text-embedding-3-large`. All three are queued in `ROADMAP-RESEARCH.md`.
+The legitimate value F16 delivers is mechanism characterisation: measuring (a) whether the chunking lever amplifies the embedder swap (F16 R@100 vs F14 R@100), and (b) whether F16 + Opus rerank materially closes the gap further (F16+Opus R@5 vs F15 R@5). **Important comparability caveat for mechanism finding (a):** F12 measured `multilingual-e5-large` at session-level granularity on the *oracle* split, observing a 0.6-percentage-point R@5 delta over BGE-base. F16 measures the same embedder at chunked-turn granularity on the `_s` split. The two configurations differ on TWO axes (split and granularity); the F12 vs F16 delta comparison is therefore directional, not strictly apples-to-apples.
+
+**F16 is a single-configuration track**, not a sweep across embedder variants. The pre-flight ruled out `bge-large-en-v1.5`, `mxbai-embed-large-v1`, `e5-large-v2`, and `gte-large` (all HF-only), leaving exactly one GCS-reachable stronger embedder to test. The result doc must not imply an ablation space was considered and rejected; the constraint is purely a sandbox-reachability artefact.
+
+The path to actually clearing Gate-B from this sandbox is blocked on either HF egress widening (enabling `bge-large-en-v1.5` or `mxbai-embed-large-v1`), a user-supplied pre-downloaded model tarball, or OpenAI API egress for `text-embedding-3-large`. All three are queued in `ROADMAP-RESEARCH.md`. **F16 is therefore the last locally-executable embedder-swap track on `_s` until at least one of those three sandbox constraints relaxes.**
 
 ## HARD RETRACTION arm (binding)
 
@@ -254,8 +259,8 @@ On Gate-B FAIL, the following actions are executed in full:
 
 1. `data/lme_s/` deleted from disk (entire directory; gitignored data artefact).
 2. `results/f16_e5_large/` deleted from disk (all F16 output files).
-3. `benchmarks/longmemeval/data/turn_index_e5_s.json` deleted (the ~1–2 GB F16 chunked-turn index; gitignored).
-4. `/tmp/rerank_f16_batches/` and `/tmp/rerank_f16_outputs/` deleted (only if the rerank stage was dispatched; otherwise no-op).
+3. `benchmarks/longmemeval/data/turn_index_e5_s.json.jsonl` and `benchmarks/longmemeval/data/turn_index_e5_s.json.partial.jsonl` deleted (the ~1–2 GB F16 chunked-turn index and any partial-build scaffold; both gitignored).
+4. `/tmp/rerank_f16_batches/`, `/tmp/rerank_f16_outputs/`, `/tmp/f16_build.log`, `/tmp/f16_retrieve.log` deleted (rerank dirs only if the rerank stage was dispatched; otherwise no-op).
 5. `benchmarks/longmemeval/data/model-cache/Xenova/multilingual-e5-large/` is **retained**, NOT deleted. These weights pre-date F16 (vendored by F12 in commit history pre-dating this plan) and were preserved by the F12 HARD RETRACTION carve-out. They are not newly downloaded by F16.
 6. CHANGELOG / README / ROADMAP / RETRACTION canonical docs are NOT updated to cite F16 numbers.
 
@@ -263,7 +268,7 @@ The F16 result doc is retained as a negative-result audit trail regardless of Ga
 
 ## Cumulative-null acknowledgement
 
-Per `docs/RETRACTION.md:94-113`. F16 continues the cumulative null trajectory established through v1.7.5/6/7/8 + v1.8.1 across the dlPFC goal-stack mechanism evaluations. F16 introduces (i) a staged `results/f16_e5_large/` directory (gitignored), (ii) a chunked-turn index `benchmarks/longmemeval/data/turn_index_e5_s.json` (gitignored, ~1–2 GB), (iii) F16 prereg + result docs. F16 reuses F14's `chunk_per_turn_embed.mjs` + `chunk_per_turn_retrieve.mjs` (already parameterised for both bge and e5 model families per F13's original design); no `src/` changes. The mechanism-null framing is unaffected.
+Per `docs/RETRACTION.md:94-113`. F16 continues the cumulative null trajectory established through v1.7.5/6/7/8 + v1.8.1 across the dlPFC goal-stack mechanism evaluations. F16 introduces (i) a staged `results/f16_e5_large/` directory (gitignored), (ii) a chunked-turn index `benchmarks/longmemeval/data/turn_index_e5_s.json.jsonl` (gitignored, ~1–2 GB), (iii) F16 prereg + result docs. F16 reuses F14's `chunk_per_turn_embed.mjs` + `chunk_per_turn_retrieve.mjs` (already parameterised for both bge and e5 model families per F13's original design); no `src/` changes. The mechanism-null framing is unaffected.
 ```
 
 - [ ] **Step 2: Discipline grep + retraction-sentence check**
@@ -327,7 +332,7 @@ Expected: clean commit + push.
 ## Task 4: Build the F16 chunked-turn index
 
 **Files:**
-- Stage: `benchmarks/longmemeval/data/turn_index_e5_s.json` (~1–2 GB; gitignored)
+- Stage: `benchmarks/longmemeval/data/turn_index_e5_s.json.jsonl` (~1–2 GB; gitignored). The embed script's OUT arg is `turn_index_e5_s.json` but `.jsonl` is appended automatically; the on-disk filename is `turn_index_e5_s.json.jsonl`.
 
 The `chunk_per_turn_embed.mjs` script is already parameterised. F16's invocation differs from F14's only in the `--model` and `--out` arguments (and the implicit pooling/prefix logic, which the script handles automatically based on the model name).
 
@@ -364,33 +369,44 @@ node benchmarks/longmemeval/chunk_per_turn_embed.mjs \
   2>&1 | tee /tmp/f16_build.log
 ```
 
-Expected stderr: progress logs every few hundred turns, ending with something like `Wrote N turns (1024-dim) to benchmarks/longmemeval/data/turn_index_e5_s.json`. Wall time: ~4–6 hours on the 4-core CPU (e5-large is ~4× the BGE-base inference cost; F14's BGE-base on `_s` took ~2 hours). Run in a long-lived terminal or via `nohup`/`screen` if disconnect risk is high.
+Expected stderr: progress logs every few hundred turns, ending with something like `Wrote N turns (1024-dim) to benchmarks/longmemeval/data/turn_index_e5_s.json.jsonl`. Wall time: ~4–6 hours on the 4-core CPU (e5-large is heavier than BGE-base; F14's BGE-base on `_s` took roughly 5 hours per the F14 result doc, so e5-large is likely 5–8 hours — the 4–6 hour estimate is a lower bound; budget for up to 8). Run in a long-lived terminal or via `nohup`/`screen` if disconnect risk is high.
 
 If the build dies partway, the script supports resuming — re-run the same command; it skips already-embedded (session_id, turn_idx) pairs (verify in the script source if uncertain).
 
 - [ ] **Step 3: Verify the index**
 
+Note: the actual file is `turn_index_e5_s.json.jsonl` (the embed script appends `.jsonl` to the OUT argument), one JSON record per line.
+
 ```bash
+ls -lh benchmarks/longmemeval/data/turn_index_e5_s.json.jsonl
 python3 <<'PY'
-import json
-with open('benchmarks/longmemeval/data/turn_index_e5_s.json') as f:
-    idx = json.load(f)
-print(f"model: {idx.get('model')}")
-print(f"dim: {idx.get('dim')}")
-turns = idx.get('turns', [])
-print(f"turns: {len(turns)}")
-if turns:
-    t0 = turns[0]
-    print(f"sample keys: {sorted(t0.keys())}")
-    import math
-    norm = math.sqrt(sum(x*x for x in t0['vec']))
-    print(f"sample L2-norm: {norm:.6f}")
-    sids = {t['session_id'] for t in turns}
-    print(f"unique session_ids: {len(sids)}")
+import json, math
+path = 'benchmarks/longmemeval/data/turn_index_e5_s.json.jsonl'
+header = None
+turns = []
+norms_sample = []
+sids = set()
+with open(path) as f:
+    for i, line in enumerate(f):
+        rec = json.loads(line)
+        if i == 0 and 'model' in rec and 'turns' not in rec:
+            # First record is a header (model/dim metadata)
+            header = rec
+            continue
+        turns.append(1)  # count only
+        sids.add(rec.get('session_id'))
+        if len(norms_sample) < 20:
+            v = rec.get('vec')
+            if v:
+                norms_sample.append(math.sqrt(sum(x*x for x in v)))
+print(f"header: {header}")
+print(f"turn records: {len(turns)}")
+print(f"unique session_ids: {len(sids)}")
+print(f"sample L2-norms (first 20): {[f'{n:.4f}' for n in norms_sample[:5]]} ... (min={min(norms_sample):.4f}, max={max(norms_sample):.4f})")
 PY
 ```
 
-Expected: `model: Xenova/multilingual-e5-large`, `dim: 1024`, `turns:` close to 199,509 (matching F14's BGE-base turn count to within 0.1 %), sample L2-norm ≈ 1.0, `unique session_ids: 19195` (covering all _s sessions).
+Expected: `header` has `"model": "Xenova/multilingual-e5-large"` and `"dim": 1024`. `turn records` close to 199,509 (matching F14's BGE-base turn count to within 0.1 %). All sample L2-norms ≈ 1.0 (within ±1e-4). `unique session_ids: 19195`.
 
 If `turns` is materially off from 199,509, investigate before proceeding — the chunking pass should be embedder-independent.
 
@@ -543,6 +559,8 @@ If Gate-B PASS, skip Task 7 and Task 8 and proceed to Task 9 with the baseline-o
 - Stage: `results/f16_e5_large/opus_top100_reranked.jsonl` (gitignored)
 
 This stage replicates the F15 rerank workflow exactly, but on F16's top-100 instead of F14's. **Skip this entire task if F16 baseline already cleared Gate-B in Task 6 Step 3.**
+
+Cost note: F15 measured ~2 h 15 min wall time at 10× parallel dispatch over 100 batches. Dollar cost is not directly anchored to a prior F-track measurement (F15's result doc logged timing but not dollar cost); a ~$300–500 Opus 4.7 envelope is a forward estimate based on F15's input+output token volume × Opus 4.7 pricing, not a measured F-track figure.
 
 - [ ] **Step 1: Generate rerank batches**
 
@@ -888,20 +906,24 @@ echo "=== HARD RETRACTION: F16 ==="
 echo "--- before deletion ---"
 du -sh data/lme_s/ 2>/dev/null
 du -sh results/f16_e5_large/ 2>/dev/null
-du -sh benchmarks/longmemeval/data/turn_index_e5_s.json 2>/dev/null
+du -sh benchmarks/longmemeval/data/turn_index_e5_s.json.jsonl 2>/dev/null
+du -sh benchmarks/longmemeval/data/turn_index_e5_s.json.partial.jsonl 2>/dev/null
 du -sh /tmp/rerank_f16_batches/ 2>/dev/null
 du -sh /tmp/rerank_f16_outputs/ 2>/dev/null
+du -sh /tmp/f16_build.log /tmp/f16_retrieve.log 2>/dev/null
 
 rm -rf data/lme_s
 rm -rf results/f16_e5_large
-rm -f benchmarks/longmemeval/data/turn_index_e5_s.json
+rm -f benchmarks/longmemeval/data/turn_index_e5_s.json.jsonl
+rm -f benchmarks/longmemeval/data/turn_index_e5_s.json.partial.jsonl
 rm -rf /tmp/rerank_f16_batches /tmp/rerank_f16_outputs
+rm -f /tmp/f16_build.log /tmp/f16_retrieve.log
 
 echo ""
 echo "--- after deletion ---"
 ls data/lme_s 2>&1 | head -1
 ls results/f16_e5_large 2>&1 | head -1
-ls benchmarks/longmemeval/data/turn_index_e5_s.json 2>&1 | head -1
+ls benchmarks/longmemeval/data/turn_index_e5_s.json.jsonl 2>&1 | head -1
 
 echo ""
 echo "--- model-cache preserved (per prereg carve-out) ---"
@@ -912,7 +934,7 @@ echo "--- canonical docs NOT updated ---"
 echo "CHANGELOG, README, ROADMAP-RESEARCH cross-track aggregate, RETRACTION.md left unchanged"
 ```
 
-Expected: ~1.3 GB freed (data 265 MB + results 30 MB + index 1 GB + tmp scaffolding). Model-cache retained at 2.24 GB.
+Expected: ~1.3 GB freed (data 265 MB + results 30 MB + index 1 GB + tmp scaffolding + logs). Model-cache retained at 2.24 GB.
 
 - [ ] **Step 4: No final commit** — the deletions happen on gitignored paths; the result doc (committed in Step 1) and roadmap bullet (committed in Step 2) are the audit trail.
 
