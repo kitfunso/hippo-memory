@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace BGE-base with `intfloat/multilingual-e5-large` in the F14 chunked-turn pipeline, measure on the LongMemEval `_s` split, and gate at gbrain v0.28.8's R@5 = 97.6 + 0.1 margin (= 97.7). The legitimate experimental question this track answers: does the chunking lever (F13's contribution) amplify the embedder lever for multilingual-e5-large vs BGE-base on `_s`? F12 measured +0.6pp at session-level on oracle; F16 measures at chunked-turn on `_s`.
+**Goal:** Replace BGE-base with `intfloat/multilingual-e5-large` in the F14 chunked-turn pipeline, measure on the LongMemEval `_s` split, and gate at gbrain v0.28.8's R@5 = 97.6 + 0.1 margin (= 97.7). **Scope:** F16 measures the bi-encoder swap only — no LLM-reranker stage. The Opus-rerank lever was characterised end-to-end by F15 (which stacked it on F14's BGE-base pool and reached R@5 = 63.6, +13 over the F14+F9-Sonnet stack at 50.8). Stacking Opus rerank on F16 would cost ~$300–500 in Opus credits and ~2–3 hours wall time to confirm a Gate-B FAIL the priors already predict; the cost-of-information value is low. F16 instead measures the bi-encoder lever cleanly and cheaply (~$5–10 inference cost, ~5–8 hours CPU wall time end-to-end). If F16 baseline R@5 surprises us (e.g. ≥ 70), a follow-up `F16b` track can stack the F15 rerank on F16's pool under a fresh prereg.
 
-**Architecture:** Same chunked-turn retrieval pipeline as F14 (`chunk_per_turn_embed.mjs` → `chunk_per_turn_retrieve.mjs` → `evaluate_retrieval.py`) but with `Xenova/multilingual-e5-large` (335M params, 1024-dim, mean pooling, e5 "query: " / "passage: " prefix convention) substituted for `Xenova/bge-base-en-v1.5` (110M params, 768-dim, CLS pooling). Optional second stage: F15-style Opus-4.7 sub-agent rerank dispatched only if the F16 baseline doesn't clear Gate-B (budget optimisation: rerank costs ~$300-500 on Opus credits and ~3 hours wall time, vs ~$0 to skip; the prereg pre-commits to dispatching iff baseline R@5 < 97.7). Both variants tabled in the result regardless of Gate-B outcome; the verdict uses max.
+**Architecture:** Same chunked-turn retrieval pipeline as F14 (`chunk_per_turn_embed.mjs` → `chunk_per_turn_retrieve.mjs` → `evaluate_retrieval.py`) but with `Xenova/multilingual-e5-large` (335M params, 1024-dim, mean pooling, e5 "query: " / "passage: " prefix convention) substituted for `Xenova/bge-base-en-v1.5` (110M params, 768-dim, CLS pooling). One-axis swap: only the embedder model changes from F14. F16 baseline is the only measured variant; the Gate-B verdict is unambiguously F16's R@5 from the canonical scorer.
 
-**Tech Stack:** Node 20+ with `@huggingface/transformers` v4 fork (NOT `@xenova/transformers` v2.17 — F12 documented that v2.17 cannot load multilingual-e5-large's ONNX external-data format; the v4 fork is the only working backend in this sandbox). Python 3 for the canonical scorer and rerank-stage merge. fastembed for the model download (only used to ensure the GCS-vendored weights are present on disk — actual inference uses transformers.js per the F12 dispatch pattern). The model weights are already on-disk under `benchmarks/longmemeval/data/model-cache/Xenova/multilingual-e5-large/` from the F12 track (HARD RETRACTION carve-out retained them); this plan re-uses them.
+**Tech Stack:** Node 20+ with `@huggingface/transformers` v4 fork (NOT `@xenova/transformers` v2.17 — F12 documented that v2.17 cannot load multilingual-e5-large's ONNX external-data format; the v4 fork is the only working backend in this sandbox). Python 3 for the canonical scorer. The model weights are already on-disk under `benchmarks/longmemeval/data/model-cache/Xenova/multilingual-e5-large/` from the F12 track (HARD RETRACTION carve-out retained them); this plan re-uses them, so no model vendoring step is required.
 
 **Predecessor context:** F12 measured `multilingual-e5-large` at session-level granularity on oracle: R@5 = 78.8 with F9 stack (margin +0.6 over BGE-base session-level F11+F9 = 78.2). F13 then showed the chunk-per-turn lever lifted BGE-base from 78.2 → 86.8 R@5 on oracle (+8.6pp). F14 used BGE-base chunked-turn on `_s` and measured R@5 = 42.0, R@100 = 86.2 (Gate-B FAIL, HARD RETRACTION). F15 stacked Opus-4.7 sub-agent rerank on F14's top-100 and reached R@5 = 63.6 (Gate-B FAIL, HARD RETRACTION). F15's mechanism finding: a maximally-equipped LLM-as-reranker closes 48.9% of the within-pool gap; the R@100 = 86.2 ceiling is now the structural bottleneck. F16 attacks that ceiling.
 
@@ -21,9 +21,9 @@ Files this plan touches (relative to `/home/user/hippo-memory`):
 **Reuse (no edits):**
 - `benchmarks/longmemeval/chunk_per_turn_embed.mjs` — already parameterised. Positional args: `argv[2] = MODEL`, `argv[3] = OUT`, `argv[4] = DATA`. Defaults to `Xenova/multilingual-e5-large`. Applies e5 "passage: " prefix automatically and mean-pools per the e5 convention (model-name regex: `IS_E5 = /\be5\b/i.test(MODEL)`). Plan invokes with `node chunk_per_turn_embed.mjs Xenova/multilingual-e5-large benchmarks/longmemeval/data/turn_index_e5_s.json data/lme_s/longmemeval_s_cleaned.json` (positional args). The OUT path has `.jsonl` appended by the script.
 - `benchmarks/longmemeval/chunk_per_turn_retrieve.mjs` — already parameterised. Positional args: `argv[2] = INDEX`, `argv[3] = OUT`, `argv[4] = TOP_K`, `argv[5] = DATA`. Applies e5 "query: " prefix, max-pools by `session_id`. Auto-resolves `INDEX + '.jsonl'` if the bare `INDEX` path doesn't end in `.jsonl` but the `.jsonl` sibling exists — so passing `turn_index_e5_s.json` Just Works.
-- `benchmarks/longmemeval/rerank_split_v2.py` — used only if F16 baseline FAILs Gate-B. Same invocation as F15: `--batch-size 5 --max-candidates 100 --content-chars 1000`.
-- `benchmarks/longmemeval/rerank_merge_v2.py` — used only if rerank stage dispatched.
 - `benchmarks/longmemeval/evaluate_retrieval.py` — canonical scorer. Binding for Gate-B verdict.
+
+(F16 baseline-only scope: `rerank_split_v2.py` / `rerank_merge_v2.py` are NOT used in this plan. They remain available if a follow-up `F16b` track elects to stack F15-style Opus rerank on F16's top-100 under a fresh prereg.)
 
 **Create:**
 - `docs/evals/2026-05-14-r5-track9-f16-e5-large-chunked-prereg.md` — F16 pre-registration.
@@ -35,8 +35,7 @@ Files this plan touches (relative to `/home/user/hippo-memory`):
 **Stage (gitignored, do NOT commit):**
 - `data/lme_s/` — Sanderhoff-alt mirror copy of `longmemeval_s_cleaned.json`. Re-acquired (was deleted by F15 HARD RETRACTION).
 - `benchmarks/longmemeval/data/turn_index_e5_s.json.jsonl` — F16's chunked-turn index. ~1–2 GB on disk (199,509 turns × 1024-dim float32 + metadata as JSONL records). Note: `chunk_per_turn_embed.mjs` accepts an OUT argument and appends `.jsonl` automatically — passing `turn_index_e5_s.json` produces `turn_index_e5_s.json.jsonl`. Also creates `turn_index_e5_s.json.partial.jsonl` during the build (resume scaffold), removed on successful completion.
-- `results/f16_e5_large/` — retrieval JSONL outputs + canonical-score JSON outputs.
-- `/tmp/rerank_f16_batches/`, `/tmp/rerank_f16_outputs/` — only if rerank stage dispatched.
+- `results/f16_e5_large/` — retrieval JSONL output + canonical-score JSON output.
 - `/tmp/f16_build.log`, `/tmp/f16_retrieve.log` — wall-time + progress logs from Tasks 4–5.
 
 **Already on disk (NOT vendored by this plan, retained from F12 HARD RETRACTION carve-out):**
@@ -64,7 +63,7 @@ Expected: a few mentions in the cross-track aggregate (post-F15) and possibly pl
 Locate the section listing forward tracks (after the F15 retrospective bullet, before any F17/F18 placeholders). Insert this exact text:
 
 ```markdown
-- **F16 multilingual-e5-large chunked-turn on `_s`** [next, queued]: pre-flight on 2026-05-14 (post-F15) confirmed `intfloat/multilingual-e5-large` (1024-dim, 2.24 GB, mean pooling, e5 "query: " / "passage: " prefix convention) is the only GCS-reachable embedder structurally stronger than F14's `BAAI/bge-base-en-v1.5`. `bge-large-en-v1.5`, `mxbai-embed-large-v1`, `e5-large-v2`, `gte-large` are all HF-only and unreachable from this sandbox. F12 measured the same embedder at session-level granularity on oracle: R@5 = 78.8 with F9 stack, +0.6pp over BGE-base session-level (Gate-B FAIL, HARD RETRACTION). F16 attacks the question F12 left open: does the F13 chunking lever (which lifted BGE-base by +8.6pp on oracle) amplify the embedder swap? Configuration: F14 pipeline with e5-large substituted; optional F15-style Opus rerank dispatched only if F16 baseline R@5 < 97.7 (budget optimisation). Gate-B threshold = 97.7 binding. R@100 lift over F14's 86.2 is the secondary mechanism question — if F16 baseline R@100 > 86.2 by ≥ 3 percentage points, the embedder lever materially survives chunked-turn; if ≤ 86.2, the F14 ceiling is structurally embedder-independent at this scale. Plan: `docs/superpowers/plans/2026-05-14-f16-stronger-embedder.md`. Prereg: `docs/evals/2026-05-14-r5-track9-f16-e5-large-chunked-prereg.md` (TBD).
+- **F16 multilingual-e5-large chunked-turn on `_s`** [next, queued, baseline-only scope]: pre-flight on 2026-05-14 (post-F15) confirmed `intfloat/multilingual-e5-large` (1024-dim, 2.24 GB, mean pooling, e5 "query: " / "passage: " prefix convention) is the only GCS-reachable embedder structurally stronger than F14's `BAAI/bge-base-en-v1.5`. `bge-large-en-v1.5`, `mxbai-embed-large-v1`, `e5-large-v2`, `gte-large` are all HF-only and unreachable from this sandbox. F12 measured the same embedder at session-level granularity on oracle: R@5 = 78.8 with F9 stack, +0.6 percentage points over BGE-base session-level (Gate-B FAIL, HARD RETRACTION). F16 attacks the question F12 left open: does the F13 chunking lever (which lifted BGE-base by 8.6 percentage points on oracle) amplify the embedder swap? **Scope: baseline-only** — F16 measures the bi-encoder lever in isolation (no LLM-reranker stage). The Opus-rerank lever was already characterised end-to-end by F15 (+13 percentage points over F14+F9-Sonnet at the same parameters). Stacking Opus on F16 would cost ~$300–500 + ~3 hours wall to confirm a Gate-B FAIL the priors predict; cost-of-information value is low. If F16 baseline surprises us (e.g. R@5 ≥ 70), a follow-up `F16b` track can stack F15-style rerank on F16's pool under a fresh prereg. Configuration: F14 pipeline with e5-large substituted, one-axis swap. Gate-B threshold = 97.7 binding. R@100 lift over F14's 86.2 is the secondary mechanism question — if F16 R@100 > 86.2 by ≥ 3 percentage points, the embedder lever materially survives chunked-turn; if ≤ 86.2, the F14 ceiling is structurally embedder-independent at this scale within the GCS-reachable embedder set. Plan: `docs/superpowers/plans/2026-05-14-f16-stronger-embedder.md`. Prereg: `docs/evals/2026-05-14-r5-track9-f16-e5-large-chunked-prereg.md` (TBD).
 ```
 
 Use Edit with `old_string` matching the location after F15 and `new_string` inserting the bullet.
@@ -187,7 +186,7 @@ This release does not re-assert the retracted −10pp magnitude.
 
 ## Provenance disclosure (binding)
 
-F16 inherits the same data source as F14/F15. The `_s` data used in F16 is re-acquired from `https://raw.githubusercontent.com/Sanderhoff-alt/longmemeval-zh/main/datasets/longmemeval_s_cleaned.json.gz` (decompressed SHA-256 `d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442`). The Sanderhoff-alt repo is an unaffiliated third-party personal GitHub account with no documented institutional or provenance link to the LongMemEval authors (xiaowu0162) or to the canonical HF release at `huggingface.co/datasets/xiaowu0162/longmemeval-cleaned`. There is no signed chain-of-custody from HF to this mirror. The only integrity signal available is the 500/500 question_id match with our independently verified `data/longmemeval_oracle.json` (SHA-256 `821a2034a...`) plus the canonical-schema match — same posture as F14 and F15. F16 introduces no new data source; the candidate pairs scored by the optional Opus rerank stage are drawn from F16's own retrieval output `results/f16_e5_large/turn_e5_s_top100.jsonl`.
+F16 inherits the same data source as F14/F15. The `_s` data used in F16 is re-acquired from `https://raw.githubusercontent.com/Sanderhoff-alt/longmemeval-zh/main/datasets/longmemeval_s_cleaned.json.gz` (decompressed SHA-256 `d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442`). The Sanderhoff-alt repo is an unaffiliated third-party personal GitHub account with no documented institutional or provenance link to the LongMemEval authors (xiaowu0162) or to the canonical HF release at `huggingface.co/datasets/xiaowu0162/longmemeval-cleaned`. There is no signed chain-of-custody from HF to this mirror. The only integrity signal available is the 500/500 question_id match with our independently verified `data/longmemeval_oracle.json` (SHA-256 `821a2034a...`) plus the canonical-schema match — same posture as F14 and F15. F16 introduces no new data source.
 
 ## Embedder selection rationale (binding)
 
@@ -195,18 +194,18 @@ Pre-flight on 2026-05-14 enumerated fastembed's text-embedding catalog and confi
 
 ## Embedder mismatch with gbrain (binding)
 
-gbrain v0.28.8 uses OpenAI `text-embedding-3-large@1536` (`api.openai.com` host-blocked, confirmed 2026-05-11 + 2026-05-12 egress audits). F16 uses `Xenova/multilingual-e5-large` (335M params, 1024-dim, mean pooling, e5 prefix convention; vendored via Qdrant fastembed GCS, weights present on disk from F12's HARD RETRACTION carve-out). gbrain's published gbrain-vector adapter (pure-embedding ablation) scored 97.40 % R@5 on `_s`; the embedder is the dominant factor in gbrain's headline. **F16 measures multilingual-e5-large chunked-turn + optional Opus rerank on `_s`; gbrain measures text-embedding-3-large + sessions-as-chunks + RRF on `_s`. The split is matched; the embedder is not.** The chunking lever F13 contributed (and F14/F15 inherited) is preserved here — F16 is a 1-axis swap from F14 (the bi-encoder model), holding all other pipeline knobs constant.
+gbrain v0.28.8 uses OpenAI `text-embedding-3-large@1536` (`api.openai.com` host-blocked, confirmed 2026-05-11 + 2026-05-12 egress audits). F16 uses `Xenova/multilingual-e5-large` (335M params, 1024-dim, mean pooling, e5 prefix convention; vendored via Qdrant fastembed GCS, weights present on disk from F12's HARD RETRACTION carve-out). gbrain's published gbrain-vector adapter (pure-embedding ablation) scored 97.40 % R@5 on `_s`; the embedder is the dominant factor in gbrain's headline. **F16 measures multilingual-e5-large chunked-turn baseline on `_s`; gbrain measures text-embedding-3-large + sessions-as-chunks + RRF on `_s`. The split is matched; the embedder is not.** The chunking lever F13 contributed (and F14/F15 inherited) is preserved here — F16 is a 1-axis swap from F14 (the bi-encoder model), holding all other pipeline knobs constant. F16 includes no LLM-reranker stage (see Goal section for the cost-of-information rationale).
 
 ## Goal
 
-Apply F14's chunked-turn retrieval pipeline with multilingual-e5-large substituted for BGE-base. Concretely:
+Apply F14's chunked-turn retrieval pipeline with multilingual-e5-large substituted for BGE-base. **Scope: baseline-only — no LLM-reranker stage in F16.** Concretely:
 
 1. Build a chunked-turn index over all 19,195 unique sessions in `_s`, embedding each turn separately with `passage: <content>` and L2-normalising.
 2. For each of the 500 queries, embed with `query: <text>`, compute cosine similarity against every turn vector, max-pool by `session_id`, and retain the top-100 sessions per query.
 3. Evaluate the resulting retrieval JSONL with `benchmarks/longmemeval/evaluate_retrieval.py` (the canonical scorer; same invocation as F14/F15).
-4. **Contingent second stage:** if F16 baseline R@5 ≥ 97.7, the Gate-B verdict is PASS and the rerank stage is skipped. If F16 baseline R@5 < 97.7, dispatch a F15-style Opus-4.7 sub-agent rerank over F16's top-100 (same parameters: 100 batches × 5 queries × 100 candidates × 1000-char content × structured rubric prompt). Re-score with the canonical scorer. Gate-B verdict uses the max of {F16 baseline R@5, F16 + Opus rerank R@5}.
+4. Gate-B verdict is unambiguously F16 baseline R@5 from the canonical scorer.
 
-Both variants (or just the baseline if rerank is skipped) are tabled in the result document regardless of Gate-B outcome.
+The Opus-rerank lever was already characterised end-to-end by F15 (+13 percentage-point lift over F14+F9-Sonnet at top-100, structured rubric, 1000-char context). Stacking the same lever on F16's top-100 would cost ~$300–500 in Opus credits and ~2–3 hours wall time to confirm a Gate-B FAIL the priors predict; the cost-of-information value is low. If F16 baseline produces a surprising result (e.g. R@5 ≥ 70 or R@100 ≥ 95), a follow-up `F16b` track can stack F15-style rerank on F16's pool under a fresh prereg with a fresh Gate-B verdict. The current F16 prereg pre-commits to baseline-only and does not invoke max-of-variants logic.
 
 ## Magnitude-smuggling guard
 
@@ -234,20 +233,20 @@ PASS = all five conditions. FAIL = fix and re-run; not a retraction trigger.
 
 ### Gate-B — proven value at R@5 (binding, HARD RETRACTION on FAIL)
 
-F16's best variant — defined as max(R@5) across (a) F16 baseline (e5-large chunked-turn alone) and (b) F16 + Opus rerank (only if (a) does not already clear Gate-B) — measured by `evaluate_retrieval.py` against the Sanderhoff-alt mirror of `longmemeval_s_cleaned.json`, must satisfy:
+F16's only measured variant is the baseline (e5-large chunked-turn, no rerank), measured by `evaluate_retrieval.py` against the Sanderhoff-alt mirror of `longmemeval_s_cleaned.json`, must satisfy:
 
 **R@5 ≥ 97.7 %** on `_s`.
 
 The 97.7 threshold is gbrain v0.28.8's published 97.60 % R@5 on `_s` plus a 0.1 % margin. The Gate-B verdict binds on the canonical scorer; if any inline scorer diverges, the canonical script's number is binding.
 
-PASS = F16 best variant `recall@5 ≥ 0.977` → conventional release update (CHANGELOG / README / ROADMAP / RETRACTION canonical docs updated to cite F16 numbers).
-**FAIL** = F16 best variant `recall@5 < 0.977` → **HARD RETRACTION** (see below).
+PASS = F16 baseline `recall@5 ≥ 0.977` → conventional release update (CHANGELOG / README / ROADMAP / RETRACTION canonical docs updated to cite F16 numbers).
+**FAIL** = F16 baseline `recall@5 < 0.977` → **HARD RETRACTION** (see below).
 
 #### Structural ceiling (acknowledged)
 
 F14's R@100 on `_s` = 86.2. If F16's R@100 turns out to be ≤ 86.2, then F16 has not lifted the embedder ceiling and Gate-B is structurally still 86.2 < 97.7 ⇒ unreachable. If F16's R@100 lifts to, say, 92, the structural ceiling moves to 92 — still < 97.7. **A R@100 lift from 86.2 to any value strictly below 97.7 does NOT change the Gate-B verdict; the 97.7 threshold is immovable.** To clear Gate-B from this sandbox with a 1-axis embedder swap alone, F16's R@100 would need to reach ≥ 97.7 in the baseline (since rerank only re-orders within the pool, the post-rerank R@5 is bounded above by the pre-rerank R@100). MTEB Retrieval delta from BGE-base-en-v1.5 to multilingual-e5-large is ~0–2 percentage points on standard benchmarks; LongMemEval `_s` is non-standard (mostly user-generated chat content, 48 distractors per haystack) so the delta could in principle be larger or smaller, but the prior is small. **F16's Gate-B FAIL is the expected outcome per this prereg.**
 
-The legitimate value F16 delivers is mechanism characterisation: measuring (a) whether the chunking lever amplifies the embedder swap (F16 R@100 vs F14 R@100), and (b) whether F16 + Opus rerank materially closes the gap further (F16+Opus R@5 vs F15 R@5). **Important comparability caveat for mechanism finding (a):** F12 measured `multilingual-e5-large` at session-level granularity on the *oracle* split, observing a 0.6-percentage-point R@5 delta over BGE-base. F16 measures the same embedder at chunked-turn granularity on the `_s` split. The two configurations differ on TWO axes (split and granularity); the F12 vs F16 delta comparison is therefore directional, not strictly apples-to-apples.
+The legitimate value F16 delivers is mechanism characterisation: measuring whether the chunking lever amplifies the embedder swap (F16 R@100 vs F14 R@100, and F16 R@5 vs F14 R@5). **Important comparability caveat:** F12 measured `multilingual-e5-large` at session-level granularity on the *oracle* split, observing a 0.6-percentage-point R@5 delta over BGE-base. F16 measures the same embedder at chunked-turn granularity on the `_s` split. The two configurations differ on TWO axes (split and granularity); the F12 vs F16 delta comparison is therefore directional, not strictly apples-to-apples. The F15-vs-F16 comparison (within-pool LLM rerank vs stronger embedder, both on `_s`) is also out of scope here — F16 does not stack an LLM rerank stage; if F16 baseline produces a result that would benefit from the LLM-rerank lever, a follow-up `F16b` track under its own prereg can measure that.
 
 **F16 is a single-configuration track**, not a sweep across embedder variants. The pre-flight ruled out `bge-large-en-v1.5`, `mxbai-embed-large-v1`, `e5-large-v2`, and `gte-large` (all HF-only), leaving exactly one GCS-reachable stronger embedder to test. The result doc must not imply an ablation space was considered and rejected; the constraint is purely a sandbox-reachability artefact.
 
@@ -260,7 +259,7 @@ On Gate-B FAIL, the following actions are executed in full:
 1. `data/lme_s/` deleted from disk (entire directory; gitignored data artefact).
 2. `results/f16_e5_large/` deleted from disk (all F16 output files).
 3. `benchmarks/longmemeval/data/turn_index_e5_s.json.jsonl` and `benchmarks/longmemeval/data/turn_index_e5_s.json.partial.jsonl` deleted (the ~1–2 GB F16 chunked-turn index and any partial-build scaffold; both gitignored).
-4. `/tmp/rerank_f16_batches/`, `/tmp/rerank_f16_outputs/`, `/tmp/f16_build.log`, `/tmp/f16_retrieve.log` deleted (rerank dirs only if the rerank stage was dispatched; otherwise no-op).
+4. `/tmp/f16_build.log` and `/tmp/f16_retrieve.log` deleted. (No `/tmp/rerank_f16_*` directories under the baseline-only scope.)
 5. `benchmarks/longmemeval/data/model-cache/Xenova/multilingual-e5-large/` is **retained**, NOT deleted. These weights pre-date F16 (vendored by F12 in commit history pre-dating this plan) and were preserved by the F12 HARD RETRACTION carve-out. They are not newly downloaded by F16.
 6. CHANGELOG / README / ROADMAP / RETRACTION canonical docs are NOT updated to cite F16 numbers.
 
@@ -301,14 +300,17 @@ fastembed's catalog: 6 models GCS-reachable, only e5-large beats
 bge-base on parameter count and dimension).
 
 F16 swaps the embedder, keeps F14's chunked-turn pipeline + F13's
-max-pool aggregation. Optional F15-style Opus rerank dispatched
-contingently iff baseline does not clear Gate-B (budget
-optimisation; Gate-B uses max of {baseline, baseline+rerank}).
+max-pool aggregation. Scope: baseline-only — no LLM-reranker
+stage. The Opus rerank lever was already characterised end-to-end
+by F15 (+13 percentage-point lift over F14+F9-Sonnet at top-100
+with structured rubric); stacking the same lever on F16 would
+cost ~$300-500 + ~3 hours wall to confirm a Gate-B FAIL the priors
+already predict. Cost-of-information value is low.
 
 Gate-B = R@5 >= 97.7 (gbrain 97.60 + 0.1 margin), binding, HARD
 RETRACTION on FAIL. Structural ceiling acknowledged: F14 R@100 =
-86.2; F16 needs R@100 >= 97.7 in baseline OR rerank to close
-within-pool ranking gap to clear Gate-B. MTEB delta from bge-base
+86.2; F16 baseline R@5 is bounded above by F16 R@100 (rerank-only
+within-pool reshuffling is out-of-scope). MTEB delta from bge-base
 to e5-large is ~0-2 percentage points on standard benchmarks; F12
 saw 0.6-pp delta at session-level on oracle. Gate-B FAIL is the
 expected outcome.
@@ -525,7 +527,7 @@ python3 benchmarks/longmemeval/evaluate_retrieval.py \
 
 Expected output: per-K breakdown (R@1, R@3, R@5, R@10, R@100) and per-question-type breakdown for n=500. Record the R@5 number — this is the F16 baseline Gate-B verdict candidate.
 
-- [ ] **Step 3: Decision point**
+- [ ] **Step 3: Record final Gate-B verdict**
 
 ```bash
 python3 -c "
@@ -535,204 +537,22 @@ r5 = d['overall']['recall@5']
 r100 = d['overall'].get('recall@100', None)
 print(f'F16 baseline R@5 = {r5*100:.1f}%')
 if r100 is not None:
-    print(f'F16 baseline R@100 = {r100*100:.1f}%')
+    print(f'F16 baseline R@100 = {r100*100:.1f}% (vs F14 R@100 = 86.2%, lift = {(r100*100 - 86.2):+.1f} percentage points)')
 print(f'Gate-B threshold = 97.7%')
-print(f'F14 R@100 = 86.2% (reference)')
 if r5 >= 0.977:
-    print('-> Gate-B PASS on baseline alone; skip rerank stage')
+    print(f'-> Gate-B PASS: {r5*100:.1f} >= 97.7')
 else:
-    print(f'-> Gate-B FAIL on baseline ({r5*100:.1f} < 97.7); proceed to rerank stage (Task 7)')
+    print(f'-> Gate-B FAIL: {r5*100:.1f} < 97.7 (shortfall {(97.7 - r5*100):.1f} percentage points)')
 "
 ```
 
-If Gate-B PASS, skip Task 7 and Task 8 and proceed to Task 9 with the baseline-only result. If Gate-B FAIL, proceed to Task 7.
+Record both numbers for the result doc (Task 7). The verdict is final — no rerank stage in this plan.
 
 - [ ] **Step 4: No commit** — results are gitignored.
 
 ---
 
-## Task 7: Optional Opus rerank stage (only if Task 6 says Gate-B FAIL)
-
-**Files:**
-- Stage: `/tmp/rerank_f16_batches/batch_NNN.json` × 100
-- Stage: `/tmp/rerank_f16_outputs/batch_NNN.json` × 100
-- Stage: `results/f16_e5_large/opus_top100_reranked.jsonl` (gitignored)
-
-This stage replicates the F15 rerank workflow exactly, but on F16's top-100 instead of F14's. **Skip this entire task if F16 baseline already cleared Gate-B in Task 6 Step 3.**
-
-Cost note: F15 measured ~2 h 15 min wall time at 10× parallel dispatch over 100 batches. Dollar cost is not directly anchored to a prior F-track measurement (F15's result doc logged timing but not dollar cost); a ~$300–500 Opus 4.7 envelope is a forward estimate based on F15's input+output token volume × Opus 4.7 pricing, not a measured F-track figure.
-
-- [ ] **Step 1: Generate rerank batches**
-
-```bash
-rm -rf /tmp/rerank_f16_batches
-mkdir -p /tmp/rerank_f16_batches
-python3 benchmarks/longmemeval/rerank_split_v2.py \
-    --retrieval results/f16_e5_large/turn_e5_s_top100.jsonl \
-    --out-dir /tmp/rerank_f16_batches \
-    --batch-size 5 \
-    --max-candidates 100 \
-    --content-chars 1000 2>&1
-ls /tmp/rerank_f16_batches/ | wc -l
-```
-
-Expected: 100 batch files (5 queries × 100 candidates × 1000 chars each).
-
-- [ ] **Step 2: Dispatch 100 Opus-4.7 sub-agents (10 parallel per wave, 10 waves total)**
-
-This step runs in the controller (the orchestrating Claude session). For each batch NNN (000..099), dispatch an `Agent` call with `subagent_type=general-purpose`, `model=opus`, `run_in_background=true`, and the F15 rerank prompt (verbatim copy from F15's plan Task 5 Step 1).
-
-The prompt template (substitute `<BATCH_NUM>` per dispatch):
-
-```
-You are a relevance-judgment reranker for the LongMemEval long-conversation retrieval benchmark.
-
-# Critical methodology constraint
-
-This is a **direct LLM judgment task**. Read each candidate yourself and judge its relevance using your own reading comprehension. **Forbidden:** writing Python or any scripting to "automate" the scoring; using Bash to grep / regex / word-overlap as a scoring proxy; computing scores via lexical similarity or algorithmic shortcuts. F15/F16 measure what Opus-4.7 as a *reading* reranker can do.
-
-# The task
-
-5 questions, 100 candidate turns each. Rank candidates per question by likelihood of indicating the answer-bearing session.
-
-Load `/tmp/rerank_f16_batches/batch_<BATCH_NUM>.json`. Structure: `[{"question_id", "question", "candidates": [{"id", "content"}, ...100...]}, ...5...]`.
-
-For each (query, candidate), read the content and score on three 0-3 scales:
-1. **TOPICAL_MATCH**: 0=unrelated; 1=same domain; 2=same topic; 3=identical claim space.
-2. **EVIDENCE_SPECIFICITY**: 0=vague; 1=mentions topic; 2=partial; 3=explicit statement of the fact.
-3. **RECENCY_OF_CLAIM**: for current-state questions, prefer current/canonical. 0=superseded; 1=unclear; 2=current-ish; 3=current.
-
-total = sum. Rank by total desc; tie-break: topical desc, evidence desc, input-order.
-
-# Output
-
-Write `/tmp/rerank_f16_outputs/batch_<BATCH_NUM>.json`:
-[{"question_id": "...", "ranked_ids": ["id1",...,"id100"], "scores": [{"id": "id1", "topical": 3, "evidence": 3, "recency": 2, "total": 8}, ...100...]}, ...5...]
-
-Constraints: 5 entries; each `ranked_ids` is permutation of 100 input ids; each `scores` has 100 entries; all integer scores 0-3.
-
-When done: "PASS: wrote 5 entries with full scoring tables" or "PARTIAL: ..." with details.
-```
-
-Dispatch pattern: 10 parallel `Agent` tool calls per message, 10 messages total to cover batches 000-099. Wait for each wave's completion notifications before dispatching the next; redispatch any that error out (F15 had 1 streaming-timeout retry on batch 035).
-
-- [ ] **Step 3: Verify all 100 outputs present**
-
-```bash
-ls /tmp/rerank_f16_outputs/batch_*.json | wc -l
-python3 <<'PY'
-import json, os
-files = sorted([f for f in os.listdir('/tmp/rerank_f16_outputs/') if f.startswith('batch_') and f.endswith('.json')])
-expected = set(f'batch_{i:03d}.json' for i in range(100))
-present = set(files)
-missing = expected - present
-print(f'files: {len(files)} (expect 100)')
-print(f'missing: {sorted(missing)}')
-total_qs = 0
-for f in files:
-    d = json.loads(open(f'/tmp/rerank_f16_outputs/{f}').read())
-    total_qs += len(d)
-print(f'total queries: {total_qs} (expect 500)')
-PY
-```
-
-Expected: 100 files, 500 queries total, no missing. If any missing, redispatch only the missing batches.
-
-- [ ] **Step 4: Merge**
-
-```bash
-python3 benchmarks/longmemeval/rerank_merge_v2.py \
-    --retrieval results/f16_e5_large/turn_e5_s_top100.jsonl \
-    --ranks-dir /tmp/rerank_f16_outputs \
-    --out results/f16_e5_large/opus_top100_reranked.jsonl
-```
-
-Expected: `Wrote 500 reranked entries (0 kept as-is)` — same merge invariant as F15.
-
-- [ ] **Step 5: Gate-A on the merged rerank output** (identical to F15's Task 6 Step 2; same script)
-
-```bash
-python3 <<'PYG'
-import json
-with open('results/f16_e5_large/turn_e5_s_top100.jsonl') as f:
-    f16 = {json.loads(l)['question_id']: json.loads(l) for l in f}
-
-print("=== Gate-A for F16 + Opus rerank ===")
-n_qs = 0; n_perm_ok = 0; n_top1_changed = 0; n_tags_intact = 0
-with open('results/f16_e5_large/opus_top100_reranked.jsonl') as f:
-    for line in f:
-        r = json.loads(line)
-        n_qs += 1
-        qid = r['question_id']
-        f16_ids = [m['id'] for m in f16[qid]['retrieved_memories'][:100]]
-        f16r_ids = [m['id'] for m in r['retrieved_memories']]
-        if set(f16_ids) == set(f16r_ids) and len(f16_ids) == len(f16r_ids):
-            n_perm_ok += 1
-        if f16_ids[0] != f16r_ids[0]:
-            n_top1_changed += 1
-        f16_by_id = {m['id']: m for m in f16[qid]['retrieved_memories'][:100]}
-        tags_ok = all(m.get('tags') and m['tags'] == f16_by_id[m['id']]['tags'] for m in r['retrieved_memories'])
-        if tags_ok:
-            n_tags_intact += 1
-print(f'  queries: {n_qs} (expected 500)')
-print(f'  permutation-invariant: {n_perm_ok}/{n_qs}')
-print(f'  tags intact + match input: {n_tags_intact}/{n_qs}')
-print(f'  top-1 changed vs F16 baseline: {n_top1_changed}/{n_qs}')
-ok = (n_qs == 500 and n_perm_ok == n_qs and n_tags_intact == n_qs and n_top1_changed / n_qs >= 0.50)
-print(f'  Gate-A (post-rerank): {"PASS" if ok else "FAIL"}')
-PYG
-```
-
-Expected: all four conditions PASS — 500 queries, 500/500 permutation-invariant, 500/500 tags intact, ≥ 250 top-1 changed vs F16 baseline (50 % threshold, same as F15 used).
-
-- [ ] **Step 6: No commit** — results gitignored.
-
----
-
-## Task 8: Canonical scorer on F16+rerank (only if Task 7 ran), final Gate-B verdict
-
-**Files:**
-- Stage: `results/f16_e5_large/scores/opus_score.json` (gitignored, only if Task 7 ran)
-
-- [ ] **Step 1: Score F16+rerank**
-
-```bash
-python3 benchmarks/longmemeval/evaluate_retrieval.py \
-    --retrieval results/f16_e5_large/opus_top100_reranked.jsonl \
-    --data data/lme_s/longmemeval_s_cleaned.json \
-    --output results/f16_e5_large/scores/opus_score.json 2>&1 | tee results/f16_e5_large/scores/opus_score.txt
-```
-
-Expected: per-K and per-type breakdown.
-
-- [ ] **Step 2: Compute final Gate-B verdict**
-
-```bash
-python3 <<'PY'
-import json, os
-b = json.load(open('results/f16_e5_large/scores/baseline_score.json'))
-b_r5 = b['overall']['recall@5']
-if os.path.exists('results/f16_e5_large/scores/opus_score.json'):
-    o = json.load(open('results/f16_e5_large/scores/opus_score.json'))
-    o_r5 = o['overall']['recall@5']
-else:
-    o_r5 = None
-best = max(b_r5, o_r5 or 0)
-print(f'F16 baseline R@5 = {b_r5*100:.1f}%')
-print(f'F16 + Opus R@5 = {o_r5*100:.1f}%' if o_r5 is not None else 'F16 + Opus: not run (baseline already PASS)')
-print(f'F16 best variant R@5 = {best*100:.1f}%')
-print(f'Gate-B threshold = 97.7%')
-print(f'Gate-B verdict: {"PASS" if best >= 0.977 else f"FAIL (shortfall {(0.977-best)*100:.1f}pp)"}')
-PY
-```
-
-Record the final verdict for the result doc.
-
-- [ ] **Step 3: No commit** — results gitignored.
-
----
-
-## Task 9: Write the F16 result doc
+## Task 7: Write the F16 result doc
 
 **Files:**
 - Create: `docs/evals/2026-05-14-r5-track9-f16-e5-large-chunked-result.md`
@@ -751,23 +571,21 @@ Use the F15 result doc as the structural template (`docs/evals/2026-05-12-r5-tra
 8. **Per-K table** — F14 baseline, F14+F9 stack, F15 Opus, F16 baseline, F16+rerank (if run), F14 R@100 ceiling reference, F16 R@100 (the new ceiling), gbrain 97.60.
 9. **Per-type breakdown at R@5** — same 6 question_types as F14/F15, with F16 column(s) added.
 10. **Cross-track summary at R@5** — append F16 rows to the F15 table.
-11. **Methodology caveats (binding)** — disclose any sub-agent shortcuts observed (if rerank ran), any retries (streaming timeouts), the e5-large external-data ONNX dispatch path.
+11. **Methodology caveats (binding)** — disclose the e5-large external-data ONNX dispatch path (v4 fork required), any partial-build resumes, any non-determinism observed.
 12. **HARD RETRACTION arm (executing per prereg)** — list the 6 actions from the prereg verbatim with the actual sizes-on-disk filled in.
 13. **Cumulative-null acknowledgement** — `docs/RETRACTION.md:94-113` cite, mechanism-null framing.
-14. **Outside-voice review trail** — placeholder, filled by Task 10.
+14. **Outside-voice review trail** — placeholder, filled by Task 8.
 
-**Key data points to populate (from Tasks 6-8 measurements):**
+**Key data points to populate (from Task 6 measurements):**
 
 | Field | Source |
 |---|---|
 | F16 baseline R@K table | `results/f16_e5_large/scores/baseline_score.json` |
 | F16 baseline per-type | same file, `per_type` section |
-| F16+rerank R@K table | `results/f16_e5_large/scores/opus_score.json` (if exists) |
-| F16 R@100 ceiling | baseline_score.json `recall@100` |
-| F16 chunked-turn index turn count | `wc` on the index or the build log |
+| F16 R@100 ceiling | `baseline_score.json` `recall@100` |
+| F16 chunked-turn index turn count | first line of `turn_index_e5_s.json.jsonl` header record or the build log |
 | F16 build wall time | `/tmp/f16_build.log` final timing line |
 | F16 baseline retrieval wall time | `/tmp/f16_retrieve.log` final timing line |
-| (if rerank ran) batch durations | sub-agent completion notifications |
 | disk usage of artefacts to be deleted | `du -sh` on each path |
 
 **Mechanism finding framing (key — the legitimate value F16 produces):**
@@ -795,7 +613,7 @@ Expected: discipline grep exits 1; retraction sentence present on its own line; 
 
 ---
 
-## Task 10: Outside-voice review
+## Task 8: Outside-voice review
 
 **Files:**
 - Modify: `docs/evals/2026-05-14-r5-track9-f16-e5-large-chunked-result.md` (review trail section)
@@ -805,7 +623,7 @@ Expected: discipline grep exits 1; retraction sentence present on its own line; 
 Use the F15 review prompt as the template (`docs/evals/2026-05-12-r5-track8-subagent-rerank-result.md` outside-voice review section). Adjust the checks for F16:
 
 - 13 checks: verbatim retraction sentence (with U+2212 minus); provenance disclosure; embedder mismatch; pre-flight finding disclosure; Gate-A 5 conditions; Gate-B arithmetic; per-K table consistency (numbers match JSON); per-type table consistency (n sums to 500, F16 ≥ F14 in most rows); cross-track table consistency; HARD RETRACTION arm fully specified (6 actions, including the model-cache *retention* carve-out); cumulative-null cite; magnitude-smuggling grep returns 0; methodology caveat honest.
-- Reviewer must spot-check 3–5 numbers from the result doc against `results/f16_e5_large/scores/baseline_score.json` and `opus_score.json` (if exists).
+- Reviewer must spot-check 3–5 numbers from the result doc against `results/f16_e5_large/scores/baseline_score.json` (the canonical scorer output is the binding source).
 - Reviewer must verify the "embedder-swap survival ratio" and "R@100 ceiling lift" computations are arithmetically correct.
 
 Dispatch via `Agent` with `subagent_type=general-purpose`, `model=sonnet`, fresh context (the reviewer must not have any F-track history in their session).
@@ -829,7 +647,7 @@ Expected: exit 1. If the review trail introduced a violation (rare — reviewer 
 
 ---
 
-## Task 11: Commit + push + execute Gate-B arm
+## Task 9: Commit + push + execute Gate-B arm
 
 **Files:**
 - Modify: `ROADMAP-RESEARCH.md` (F16 status: queued → shipped)
@@ -845,11 +663,13 @@ docs(evals): F16 result — e5-large chunked-turn on _s, Gate-B [PASS|FAIL]
 [Fill in commit body with F16 numbers, mechanism findings, and which
 HARD RETRACTION clauses (if any) are about to execute. Mirror the
 F15 commit body structure (commit 2b2edd2). Include:
-  - F16 baseline R@K
-  - F16 + Opus R@K (if run)
-  - R@100 ceiling status (lifted by Xpp or not)
-  - Embedder-swap survival ratio vs F12
-  - Per-type biggest wins
+  - F16 baseline R@K (R@1, R@5, R@10, R@100)
+  - R@100 ceiling status (lifted by X percentage points or not; the
+    binding 3-percentage-point threshold the prereg pre-committed)
+  - Embedder-swap survival ratio vs F12 session-level oracle delta
+    (with the comparability caveat — different split, different
+    granularity)
+  - Per-type biggest wins/losses vs F14 baseline
   - HARD RETRACTION arm execution preview
   - Outside-voice review PASS verdict]
 
@@ -883,7 +703,7 @@ git push -u origin claude/plan-implementation-workflow-sasNp 2>&1 | tail -3
 
 - [ ] **Step 3: Execute the Gate-B arm**
 
-**If Gate-B PASS (F16 best variant R@5 ≥ 97.7):**
+**If Gate-B PASS (F16 baseline R@5 ≥ 97.7):**
 
 This would be the first `_s` track to clear Gate-B. Update canonical docs:
 
@@ -897,7 +717,7 @@ git commit -m "[appropriate message]"
 git push -u origin claude/plan-implementation-workflow-sasNp 2>&1 | tail -3
 ```
 
-**If Gate-B FAIL (F16 best variant R@5 < 97.7):**
+**If Gate-B FAIL (F16 baseline R@5 < 97.7):**
 
 Execute the prereg's HARD RETRACTION arm (the expected outcome per the prereg's structural-ceiling clause):
 
@@ -908,15 +728,12 @@ du -sh data/lme_s/ 2>/dev/null
 du -sh results/f16_e5_large/ 2>/dev/null
 du -sh benchmarks/longmemeval/data/turn_index_e5_s.json.jsonl 2>/dev/null
 du -sh benchmarks/longmemeval/data/turn_index_e5_s.json.partial.jsonl 2>/dev/null
-du -sh /tmp/rerank_f16_batches/ 2>/dev/null
-du -sh /tmp/rerank_f16_outputs/ 2>/dev/null
 du -sh /tmp/f16_build.log /tmp/f16_retrieve.log 2>/dev/null
 
 rm -rf data/lme_s
 rm -rf results/f16_e5_large
 rm -f benchmarks/longmemeval/data/turn_index_e5_s.json.jsonl
 rm -f benchmarks/longmemeval/data/turn_index_e5_s.json.partial.jsonl
-rm -rf /tmp/rerank_f16_batches /tmp/rerank_f16_outputs
 rm -f /tmp/f16_build.log /tmp/f16_retrieve.log
 
 echo ""
@@ -942,23 +759,22 @@ Expected: ~1.3 GB freed (data 265 MB + results 30 MB + index 1 GB + tmp scaffold
 
 ## Self-review
 
-**Spec coverage:** The plan covers (a) ROADMAP forward bullet, (b) data re-acquisition, (c) prereg, (d) index build, (e) baseline retrieval, (f) Gate-A on baseline, (g) optional Opus rerank (contingent on Gate-B), (h) canonical score + final Gate-B verdict, (i) result doc, (j) outside-voice review, (k) commit + push + Gate-B arm. Both PASS and FAIL Gate-B branches have explicit action lists. No section of the user-approved scope is missing.
+**Spec coverage:** The plan covers (a) ROADMAP forward bullet, (b) data re-acquisition, (c) prereg, (d) index build, (e) baseline retrieval, (f) Gate-A validity + canonical scorer + Gate-B verdict, (g) result doc, (h) outside-voice review, (i) commit + push + Gate-B arm. Both PASS and FAIL Gate-B branches have explicit action lists. The baseline-only scope (no LLM-reranker stage) is committed in the Goal section and the prereg's Gate-B clause — the post-baseline `F16b` rerank track is a future option, not a deferred part of F16. No section of the user-approved scope is missing.
 
 **Placeholder scan:** Three "TBD" / template-style elements remain in the plan, all justified:
 
-1. Task 9 Step 1 says the result doc must include `[Fill in commit body...]` markers — these are inside the embedded commit-message HEREDOCS, meaning the result-doc-authoring engineer fills them in with measured numbers after Tasks 6-8. The numbers cannot be known at plan-write time. The plan documents exactly which JSON files to source each number from (the table in Task 9 Step 1).
-2. Task 11 Step 1 and Step 2 commit messages contain `[Fill in ...]` markers for the same reason: F16 numbers + verdict don't exist until measurement.
-3. Task 11 Step 3 "If Gate-B PASS" branch contains `[appropriate message]` — this is the standard precedent across F-track release commits; the engineer adapts to whether F16 is shipping deployably or just reporting.
+1. Task 7 Step 1 says the result doc must include `[Fill in commit body...]` markers — these are inside the embedded commit-message HEREDOCS, meaning the result-doc-authoring engineer fills them in with measured numbers after Tasks 6-8. The numbers cannot be known at plan-write time. The plan documents exactly which JSON files to source each number from (the table in Task 7 Step 1).
+2. Task 7 Step 1 and Step 2 commit messages contain `[Fill in ...]` markers for the same reason: F16 numbers + verdict don't exist until measurement.
+3. Task 9 Step 3 "If Gate-B PASS" branch contains `[appropriate message]` — this is the standard precedent across F-track release commits; the engineer adapts to whether F16 is shipping deployably or just reporting.
 
 None of these are vague step-skips; they're parameterised commit bodies that the engineer fills in from measured data.
 
 **Type/path consistency:**
-- `data/lme_s/longmemeval_s_cleaned.json` (Task 2, 4, 5, 8): consistent.
-- `benchmarks/longmemeval/data/turn_index_e5_s.json` (Task 4, 5, 11): consistent. Note F13's original output path was `turn_index_e5.json` (no `_s`); the `_s` suffix disambiguates F16 from F13 since both used the same embedder.
-- `results/f16_e5_large/turn_e5_s_top100.jsonl` (Task 5, 6, 7, 8): consistent.
-- `results/f16_e5_large/opus_top100_reranked.jsonl` (Task 7, 8): consistent.
-- `/tmp/rerank_f16_batches/`, `/tmp/rerank_f16_outputs/` (Task 7, 11): consistent.
-- `benchmarks/longmemeval/data/model-cache/Xenova/multilingual-e5-large/` (Task 4 pre-flight, Task 11 retention): consistent.
+- `data/lme_s/longmemeval_s_cleaned.json` (Task 2, 4, 5, 6): consistent.
+- `benchmarks/longmemeval/data/turn_index_e5_s.json.jsonl` (Task 4, 5, 9): consistent. Note F13's original output path was `turn_index_e5.json` (no `_s`); the `_s` suffix disambiguates F16 from F13 since both used the same embedder. The script appends `.jsonl` automatically, so OUT arg `turn_index_e5_s.json` produces on-disk file `turn_index_e5_s.json.jsonl`.
+- `results/f16_e5_large/turn_e5_s_top100.jsonl` (Task 5, 6, 7): consistent.
+- `results/f16_e5_large/scores/baseline_score.json` (Task 6, 7): consistent. No `opus_score.json` produced in this plan's scope.
+- `benchmarks/longmemeval/data/model-cache/Xenova/multilingual-e5-large/` (Task 4 pre-flight, Task 9 retention): consistent.
 
 **One thing I rechecked:** `chunk_per_turn_embed.mjs` and `chunk_per_turn_retrieve.mjs` are `.mjs` files (Node ES modules), invoked via `node`. The Python scripts are `.py`. Plan consistently uses the right interpreter per file.
 
