@@ -21,6 +21,7 @@ Active branch: `feat/pineal-salience-v2`
 - **[research]** open question, needs investigation before scoping
 - **[grant]** funded conditional on FAD or AIC-P1 award (see `ROADMAP.md`)
 - **[cut]** explicit non-goal; here so it stays cut
+- **[critical]** priority overlay, not a lifecycle status — highest-urgency item; always paired with a lifecycle tag, e.g. `[critical, next]`
 
 ## Benchmarks (priority order for shipping decisions)
 
@@ -397,6 +398,21 @@ Informational only. Never run before. Do not gate any feature on it until baseli
 ### F8. Memory-Augmented Agent Eval benchmark [planned]
 RESEARCH §"Near-term 1". 50-task / 10-trap standardised sequence. Compares no-memory baseline vs static memory (CLAUDE.md/AGENTS.md) vs full hippo.
 **Effort:** 15d to design + harness. **Success:** hippo-equipped agents show downward trap-rate trend; static-memory agents flat. Released as open benchmark.
+
+### F9. Hybrid-retrieval parity + competitive consolidation [critical, next]
+
+Triggered by a 2026-05-16 review of `rohitg00/agentmemory` (GitHub), an open agent-memory project that overlaps hippo's concept space heavily: SQLite-local, MCP-first, sleep-tiered 4-stage consolidation (Working→Episodic→Semantic→Procedural), write-time secret-scrubbing. Its README claims **95.2 % R@5 on LongMemEval-S** via **triple-stream retrieval** — BM25 + dense vector + knowledge-graph traversal, fused with Reciprocal Rank Fusion (RRF, k=60) and session-level diversification. These are the project's own README claims, unverified by hippo — treat as directional, not established.
+
+**Why critical.** An independent open project corroborates what the F-track's own gbrain comparison target already shows: the frontier on LongMemEval `_s` is *hybrid retrieval + RRF fusion*, not pure-vector. Yet the entire F8–F18 retrieval experiment log has measured only (a) pure dense-vector retrieval and (b) vector + LLM-rerank. **The F-track has never measured BM25 + dense-vector RRF fusion locally** — even though hippo's own `recall` already combines BM25 + embeddings (see the F5 ability matrix) and both signals run inside the sandbox with no blocked egress. With the F16/F17 embedder paths dead-ending on egress limits, local hybrid fusion is the single highest-value retrieval lever still untried.
+
+**Consolidate (table-stakes — reach parity with open projects):**
+- **F-track hybrid-RRF experiment.** Pre-register a track fusing BM25 + BGE-base chunked-turn dense vectors via RRF on `_s` (and oracle for cross-comparison). **Success:** pre-registered, measurable R@5 lift over F14's pure-vector baseline (42.0 on `_s`); gbrain's published ablation (BM25-only 19.8, vector-only 97.4, hybrid 97.6) sets the expected shape. **Effort:** ~5d — reuses the F13/F14 chunked-turn index plus a local BM25 index; no blocked dependency.
+- **Graph retrieval stream.** Once E3 `entities`/`relations` tables land, add knowledge-graph traversal as a third RRF input — the agentmemory pattern, and the HippoRAG idea already filed as F4. **Success:** graph-stream ablation measured against the 2-stream fusion. **Effort:** depends on E3.
+- **Auto-capture hooks.** agentmemory captures with zero manual effort via SessionStart / PostToolUse / Stop hooks; hippo today needs explicit `hippo remember` / `capture`. **Success:** a Claude Code session auto-populates hippo with no manual call, opt-in. **Effort:** ~4d. Adoption lever, distinct from the retrieval gap.
+
+**Differentiate (the moat — do NOT converge here):** agentmemory, gbrain, mem0 and Letta all do *static* hybrid retrieval over an effectively append-only store; none rank by memory *state*. Hippo's differentiated retrieval is *dynamic* — ranking modulated by decay half-life, strengthening history, supersession status, and goal-stack context. The B-track PFC modules (B1 ACC EVC-adaptive recall, B3 dlPFC goal-conditioned recall, B5 OFC option-value re-ranker) ARE that differentiated retrieval system. Frontier position: **table-stakes hybrid+RRF retrieval as the candidate generator, lifecycle-aware PFC-modulated re-ranking as the differentiator.** This is consistent with Bet #1 ("memory lifecycle is the moat, not retrieval quality") — hybrid retrieval is the parity floor, not the moat; the moat is what hippo does to the ranking *after* candidate generation, and what it forgets.
+
+**Do NOT borrow:** agentmemory's "iii engine" substrate (HTTP-trigger / KV / stream primitives) — hippo has its own server-mode path (A1). Scope this item to retrieval architecture and capture ergonomics only.
 
 ---
 
