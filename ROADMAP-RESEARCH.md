@@ -476,6 +476,34 @@ Does high ambient energy during low-EVC queries signal reduce-effort or healthy-
 
 ---
 
+## Track I — Generative memory (constructive episodic recombination)
+
+The hippocampus does not only store and retrieve. During rest and sleep it replays and recombines stored fragments into novel constructions — the same constructive machinery that lets a person imagine a future scene they have never experienced, and the substrate of remote-associative insight ("connecting dots across unrelated fields"). A hippocampal memory system that only retrieves leaves its namesake mechanism unbuilt. This track builds the analog: spontaneous cross-domain ideation over hippo's own stored memories. Hippo itself was born from one such connection (neuroscience ↔ AI memory systems); Track I is hippo doing to its contents what that connection did to two fields.
+
+**Differentiator:** agentmemory, mem0, Letta and gbrain retrieve and store; none *generate*. "Memory that has ideas" is a categorically different product, and it is squarely on the hippocampal thesis rather than a bolt-on.
+
+**Dependency gate (binding):** Track I is gated on **E3 (typed entity/relation graph)** — this is the key milestone, not an optional accelerant. Embedding distance measures *semantic* distance; analogy is *relational* match, a different axis. "Hippocampus consolidates memory ↔ hippo consolidates memory" is an analogy because the relation matches across domains whose surface terms are embedding-distant. Finding such pairs is a graph-topology operation — semantically-distant subgraphs with isomorphic relational shape (Gentner structure-mapping) — that embeddings cannot do. An embeddings-only v1 is possible but "occasionally-surfaces" rather than "reliably-finds." See I4: E3 must additionally be built with a *domain-general relation vocabulary* or no cross-domain isomorphism is visible.
+
+### I1. Incubation pass [research]
+A new pass inside `hippo sleep`: sample memory pairs that are (a) mid-range in embedding distance — the "remote associates" band, far enough to surprise, near enough to mean something — and (b) biased toward pairs whose E3 subgraphs share relational topology with differing node types. An LLM judges each candidate: is there a non-obvious, useful connection, and if so, what is the hypothesis? Maps to constructive episodic simulation; reuses the existing sleep/idle-compute loop.
+**Pre-req:** E3 typed graph (I4). **Effort:** 15d after E3. **Success:** on a pre-registered held-out set of memory pairs seeded with planted analogies + distractor non-analogies, the pass surfaces planted analogies at precision/recall measurably above an embedding-distance-only baseline.
+
+### I2. Novelty/usefulness filter [research]
+The make-or-break component. Most random recombinations are slop; too loose drowns the user in junk, too tight surfaces only the obvious. The salience gate (Track C) feeds the surfacing decision.
+**Effort:** TBD (depends on I1 findings). **Success:** on a human-rated sample, conjectures the filter surfaces rate "non-obvious AND plausibly useful" at a pre-registered rate materially above the I1 embedding-distance-only baseline.
+
+### I3. Conjecture lifecycle [planned]
+Surviving connections are written as a new memory kind `kind='conjecture'` — tagged speculative, provenance pointing at both parent memories, **never auto-promoted to `distilled`**. Conjectures participate in normal decay/strengthening: one the user acts on is strengthened; one ignored decays out. This is Bet #1 applied to creativity — ideas earn persistence, and ideas that do not pan out are forgotten.
+**Pre-req:** A3 envelope + E3. **Effort:** 8d. **Success:** a conjecture acted-upon by the user is strengthened and survives ≥ N sleep cycles; an ignored conjecture decays below the recall threshold within N cycles.
+
+### I4. E3 domain-general relation vocabulary [research, feeds E3]
+A spec constraint on E3's relation extraction, surfaced here so E3 is built recombination-ready rather than retrofitted. The same relation concept (e.g. "X consolidates Y") must receive the same relation type across distinct knowledge domains, or relational isomorphism between domains is invisible.
+**Effort:** folded into E3 design. **Success:** a relation-typing audit shows one relation concept receiving a consistent type across ≥ 3 distinct knowledge domains in the corpus.
+
+**Discipline note (binding).** Track I produces unverifiable speculative claims by design — it collides with `docs/RETRACTION.md`'s "earn persistence / do not assert what you cannot verify." The resolution is quarantine: conjectures are explicitly speculative, never auto-promoted, and must earn their way up through use. Any release framing must say hippo's recombination *surfaces candidate connections*; it does not assert them as facts. This keeps Track I consistent with the retraction discipline rather than exempt from it.
+
+---
+
 ## Sequencing (next 90 days, single-engineer cadence)
 
 **Sequence revised after Codex + eng-review (consolidated patch).** Original sequence had Wks 1-4 over-budgeted ~3x and put A1 server before A3 provenance, despite A3 being a prerequisite for E1 ingestion. Cut to 4 items max for 90 days; everything else moves to days 91-180.
