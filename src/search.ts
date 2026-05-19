@@ -173,6 +173,11 @@ export interface SearchResult {
   tokens: number;
   /** Populated when search is called with options.explain === true. */
   breakdown?: ScoreBreakdown;
+  /** Populated when a reranker ran. Replaces `score` for ordering;
+   *  original `score` preserved here. See src/rerankers/types.ts. */
+  rerankScore?: number;
+  preRerankRank?: number;
+  postRerankRank?: number;
 }
 
 export interface ScoreBreakdown {
@@ -262,6 +267,11 @@ export async function hybridSearch(
     includeSuperseded?: boolean;
     /** Filter to memories current at this ISO date string. */
     asOf?: string;
+    /** Optional reranker. Runs after MMR, before budget filtering.
+     *  See src/rerankers/types.ts. */
+    reranker?: import('./rerankers/types.js').RerankerFn;
+    /** Options passed through to the reranker. */
+    rerankerOptions?: import('./rerankers/types.js').RerankerOptions;
   } = {}
 ): Promise<SearchResult[]> {
   const now = options.now ?? new Date();
@@ -316,7 +326,7 @@ export async function hybridSearch(
     try {
       const model = resolveEmbeddingModel(options.hippoRoot);
       if (!embeddingModelRequiresReindex(options.hippoRoot, model)) {
-        queryVector = await getEmbedding(query, model);
+        queryVector = await getEmbedding(query, model, 'query');
         if (queryVector.length > 0) {
           embeddingIndex = loadEmbeddingIndex(options.hippoRoot);
           useEmbeddings = true;
@@ -542,6 +552,22 @@ export async function hybridSearch(
     ordered = scoredDeduped;
   }
 
+  // Reranker pass: see src/rerankers/types.ts and
+  // docs/plans/2026-05-10-f6-reranker-hardening.md.
+  if (options.reranker) {
+    const topK = options.rerankerOptions?.topK ?? 50;
+    const head = ordered.slice(0, topK);
+    const tail = ordered.slice(topK);
+    const rerankInputWithRank = head.map((r, i) => ({ ...r, preRerankRank: i + 1 }));
+    const reranked = await options.reranker(
+      query,
+      rerankInputWithRank,
+      options.rerankerOptions,
+    );
+    const withPostRank = reranked.map((r, i) => ({ ...r, postRerankRank: i + 1 }));
+    ordered = [...withPostRank, ...tail];
+  }
+
   // Apply token budget (guarantee at least minResults items)
   const results: SearchResult[] = [];
   let usedTokens = 0;
@@ -659,7 +685,7 @@ export async function physicsSearch(
     if (embeddingModelRequiresReindex(options.hippoRoot, model)) {
       return hybridSearch(query, entries, options);
     }
-    queryVector = await getEmbedding(query, model);
+    queryVector = await getEmbedding(query, model, 'query');
     if (queryVector.length === 0) {
       return hybridSearch(query, entries, options);
     }

@@ -21,3 +21,33 @@ benchmarks/a1/results/
 .claude/worktrees/
 .context/
 provenance-coverage.json
+# F6 reranker hardening: dataset (15MB) + ingested store + sweep outputs
+# are large and reproducible from the orchestrator. Don't commit.
+data/longmemeval_oracle.json
+data/longmemeval_*.json
+hippo_store2/
+hippo_store_synthetic/
+results/reranker_sweep_*/
+results/hybrid_tuning_*/
+results/hybrid_tuning_best_v2/
+results/f9_baseline/
+results/f9_baseline_v2/
+results/f9_rerank/
+results/f9_rerank_v2/
+results/hybrid_tuning_*/
+results/f10_*/
+results/f11_*/
+results/richer_ingest_*/
+
+# F10 enrichment intermediates (gitignored — reproducible from orchestrator)
+benchmarks/longmemeval/data/enrichment_batches/
+benchmarks/longmemeval/data/enrichment_outputs/
+benchmarks/longmemeval/data/signals.jsonl
+hippo_store_enriched/
+results/f12_*/
+benchmarks/longmemeval/data/turn_index_e5.json
+benchmarks/longmemeval/data/turn_index_bge.json
+results/f13_*/
+/data/lme_s/
+benchmarks/longmemeval/data/turn_index_bge_s.json
+results/f14_*/

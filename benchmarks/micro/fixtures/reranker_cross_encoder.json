@@ -1,0 +1,27 @@
+{
+  "name": "reranker-cross-encoder",
+  "mechanic": "reranker",
+  "description": "Track 2 cross-encoder — semantic similarity over lexical surface form.",
+  "remembers": [
+    "Production deployment runbook: run scripts/deploy.sh after CI passes",
+    "The word production appears in many internal docs and meeting notes",
+    "Customer escalation procedure for outages: page the on-call",
+    "An outage of the customer database happened in 2025"
+  ],
+  "queries": [
+    {
+      "q": "how do I ship code to prod",
+      "must_contain_any": ["runbook", "deploy.sh"],
+      "must_not_contain_any": ["meeting notes"],
+      "top_k": 1,
+      "cli_args": ["--reranker", "cross-encoder"]
+    },
+    {
+      "q": "what to do during a customer-impacting incident",
+      "must_contain_any": ["escalation", "on-call"],
+      "must_not_contain_any": ["2025"],
+      "top_k": 1,
+      "cli_args": ["--reranker", "cross-encoder"]
+    }
+  ]
+}

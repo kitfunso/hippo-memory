@@ -1,5 +1,128 @@
 # Changelog
 
+## 1.9.2 (2026-05-12) — F13 chunk-per-turn LongMemEval R@5 = 86.8 on oracle (Gate-B PASS)
+
+This release does not re-assert the retracted −10pp magnitude.
+
+Plan F13 (LongMemEval R@5 target — Track 6: chunk-per-turn ingestion, `docs/evals/2026-05-12-r5-track6-chunk-per-turn-prereg.md`) addresses the structural pathology that limited every prior LongMemEval track (F8 / F9 / F10 / F11 / F11+F9 / F12): sessions in `data/longmemeval_oracle.json` are 14,292 chars median (~3,500 tokens), but the embedders we can reach (MiniLM, BGE-base, multilingual-e5-large) cap at 512–514 tokens. Every prior track was embedding only the first ~2 turns of each 12-turn session and truncating the rest. F13 replaces session-level embedding with turn-level embedding: each ~550-char turn → one vector, no truncation. At retrieval time the query is scored against all turn vectors and max-pooled by source `session_id` to return top-K sessions. The existing `evaluate_retrieval.py` scorer's session-id matching contract is preserved verbatim (each F13 retrieval result tags itself with `[session_id]`).
+
+Gate-A PASS: 10,866 turns indexed across all 940 oracle sessions. Vector dim 768 (BGE-base), L2-norms in [0.999, 1.001], session_id tags on every turn.
+
+Gate-B PASS: F13 + F9 sub-agent rerank stack R@5 = 86.8 on `data/longmemeval_oracle.json` (threshold ≥ 83.2 = F11+F9 deployable best 78.2 + 5pp). The F13 chunked baseline alone scored 79.0; the F9 rerank converted 7.8/14.4 = 54% of the top-20 headroom — substantially above the ~7-10% capture rate observed on F11+F9 and F12+F9 session-level inputs. Plausible mechanism: a sub-agent reading a focused 500-char turn judges relevance cleanly; a sub-agent reading a 14,000-char session has to skim 12 turns and often picks the first plausible-looking one.
+
+### Roadmap target met (oracle split)
+
+The R@5 ≥ 85 % roadmap target (`ROADMAP-RESEARCH.md` F6) is now met on `data/longmemeval_oracle.json`: 86.8 ≥ 85.0. The target was NON-binding per every prior prereg; the description here is retrospective, not a re-assertion of any retracted magnitude. The figure is descriptive characterisation, not a claim about a different split or embedder.
+
+### Split-mismatch with gbrain (unchanged)
+
+`longmemeval_oracle` carries 3 sessions per haystack; gbrain v0.28.8's published 97.60 figure is on `longmemeval_s_cleaned` (~40 sessions per haystack) with OpenAI `text-embedding-3-large@1536`. Both HF Hub (the `_s` distribution channel) and the OpenAI API are host-blocked from this sandbox (verified 2026-05-12 via `curl -sSI ... 403 host_not_allowed`). F13's 86.8 is NOT directly comparable to gbrain's 97.60 — the split mismatch AND the embedder mismatch are documented in the F13 result doc's binding split-mismatch disclosure.
+
+### Per-K spread (F13 baseline → F13+F9 stack, oracle)
+
+| K | F13 baseline | F13 + F9 stack |
+|---:|---:|---:|
+| 1 | 51.0 | 70.8 |
+| 3 | 72.2 | 84.2 |
+| 5 | 79.0 | 86.8 |
+| 10 | 86.6 | 90.2 |
+| 20 | 93.4 | 93.4 |
+
+### Cross-track R@5 status (as of this release, oracle)
+
+- F8 hybrid tuning on MiniLM:                    76.8 (Gate-B FAIL @ 77.6).
+- F9 v2 sub-agent LLM rerank on MiniLM:          78.0 (Gate-B FAIL @ 80.6).
+- F11 BGE-base baseline:                         77.0 (Gate-B FAIL @ 81.8).
+- F11 + F9 stack:                                78.2 (Gate-B FAIL @ 81.8).
+- F10 features-enriched (retracted v1.9.1):      59.2 (Gate-B FAIL @ 80.8).
+- F12 multilingual-e5-large + top-100 + F9:      78.8 (Gate-B FAIL @ 83.2, HARD RETRACTION executed 2026-05-11).
+- **F13 + F9 stack (new deployable best):        86.8 (Gate-B PASS @ 83.2, margin +3.6).**
+
+### Changes shipped
+
+- `benchmarks/longmemeval/chunk_per_turn_embed.mjs` — one-off turn-level ingestion script. Accepts `--model <id>` (defaults to e5-large; BGE-base supported with appropriate pooling / no prefix).
+- `benchmarks/longmemeval/chunk_per_turn_retrieve.mjs` — max-pool turn-to-session retrieval. Output is `evaluate_retrieval.py`-compatible JSONL.
+- `docs/evals/2026-05-12-r5-track6-chunk-per-turn-{prereg,result}.md` — F13 prereg + result.
+- `.gitignore` — adds `benchmarks/longmemeval/data/turn_index_*.json` and `results/f13_*/`.
+
+No `src/` changes. F13 reuses F11/F12's existing `poolingFor` / `prefixFor` / `preferredBackend` dispatch helpers (retained in `src/embeddings.ts` per F11's and F12's dispatch-shape carve-outs); the cumulative-null status of the dlPFC goal-stack mechanism (`docs/RETRACTION.md:94-113`) is unaffected by this release.
+
+### Outside-voice reviews
+
+- Prereg: PASS_WITH_NOTES (13/13 checks). Three optional improvements applied: eval-contract explicit, session-coverage Gate-A floor, ~40-session count reconciled with the official LongMemEval README.
+- Result doc: PASS_WITH_NOTES (14/14 checks). One required fix applied (Provenance section embedder was copied incorrectly from F12 and read e5-large; corrected to BGE-base, the prereg-authorised fallback). One optional fix applied (duplicate cumulative-null section removed).
+
+### Notes for next track
+
+The F13 + F9 sub-agent rerank stack costs 50 sub-agent dispatches per LongMemEval run (~10 min of controller wall time per run on average), and the turn-level index is a 181 MiB JSON artifact that lives at `benchmarks/longmemeval/data/turn_index_bge.json` (gitignored). A future track could harden this into a hippo-store-shaped ingestion path (currently the F13 retriever bypasses the hippo store entirely and reads from `data/longmemeval_oracle.json` directly), but the structural lever — chunk per turn, not per session — is the part that moves the number; making it production-shaped is plumbing, not retrieval research.
+
+---
+
+## 1.9.1 (2026-05-11) — F10 features-reranker retraction
+
+This release does not re-assert the retracted −10pp magnitude.
+
+Plan F10 (LongMemEval R@5 target — Track 3: richer ingest, `docs/plans/2026-05-11-r5-track3-richer-ingest.md`) tested the hypothesis that the features reranker shipped in v1.9.0 would add measurable retrieval value when ingest populated entry-level signals (`confidence`, `kind`, `schema_fit`, `strength`, `outcome_positive`, `outcome_negative`). 19 Claude-sub-agent invocations extracted signals for all 940 LongMemEval sessions (Gate-A coverage: 100% any-field non-default; 3 of 5 fields with ≥ 50% per-field non-default coverage). The features reranker on the enriched store produced R@5 = 59.2 against features-default R@5 = 75.8 on the same bge-base embedding model — 21.6pp short of the prereg's Gate-B threshold of features-default + 5pp.
+
+Per the F10 prereg's HARD RETRACTION clause, the features track is removed from `src/`.
+
+### Retracted
+
+- **`src/rerankers/features.ts`** — the Track 1 features reranker shipped in v1.9.0.
+- **`tests/rerankers/features.test.ts`** — the corresponding unit tests.
+- **`benchmarks/micro/fixtures/reranker_features.json`** — the micro-eval fixture.
+- **The `'features'` case in `src/rerankers/index.ts`** — the dispatcher entry is removed; the registry now contains only `'cross-encoder'` and `'llm'`.
+
+Result doc: `docs/evals/2026-05-11-r5-track3-richer-ingest-result.md`. Prereg: `docs/evals/2026-05-11-r5-track3-richer-ingest-prereg.md`. Outside-voice review: PASS_WITH_NOTES (both notes applied — threshold-deviation acknowledged, TL;DR causal claim softened to hypothesis framing).
+
+### Hypothesis (post-hoc, not isolated from confounds)
+
+Session-level signals (how confident-sounding a session is, what kind of session it is, etc.) appear orthogonal to query-document relevance. The features reranker's per-memory weight variance (e.g. `confW ∈ [0.70, 1.30]` across the four confidence tiers) re-shuffles candidates on dimensions that do not correlate with whether the candidate contains the answer to a given query. A controlled mechanism-isolation experiment is out of scope for this release.
+
+### Preserved (NOT retracted)
+
+- **`src/rerankers/cross-encoder.ts`** — the Track 2 cross-encoder reranker (identity fallback in egress-restricted environments). Its real-evaluation gate is the responsibility of a future plan with HF access or a non-HF mirror that ships the MS-MARCO MiniLM reranker.
+- **`src/rerankers/llm.ts`** — the Track 3 LLM reranker skeleton.
+- **The `RerankerFn` seam in `hybridSearch`**, the `--reranker` / `--reranker-top-k` CLI flags, the LongMemEval harness flag plumbing, and `benchmarks/longmemeval/run_reranker_sweep.mjs` — all preserved. `run_reranker_sweep.mjs`'s `features_topk*` configs will now raise "Unknown reranker: features" at runtime; updating that sweep config is a separate housekeeping task and is NOT part of this retraction.
+- **F11 embedding upgrade (BGE-base):** the `poolingFor` dispatch in `src/embeddings.ts`, the `Xenova/bge-base-en-v1.5` support in `scripts/fetch_embedding_model.mjs`, and the per-model pooling test all stand; F11's standalone Gate-B failed but that result is config-level, not a `src/` retraction.
+
+### Cross-track R@5 status (as of this release)
+
+- F8 hybrid tuning on MiniLM: R@5 = 76.8 (Gate-B FAIL @ 77.6 = baseline + 2pp).
+- F9 v2 sub-agent LLM rerank on MiniLM: R@5 = 78.0 (Gate-B FAIL @ 80.6 = baseline + 5pp).
+- F11 BGE-base baseline (no reranker): R@5 = 77.0 (Gate-B FAIL @ 81.8 = F8 best + 5pp).
+- **F11 + F9 stack (BGE-base + sub-agent LLM rerank, exploratory follow-up appended to F11 result doc 2026-05-11): R@5 = 78.2** (Gate-B FAIL @ 81.8; new cross-track best, margin 0.2 over F9 v2).
+- F10 features-enriched (this release, retracted): R@5 = 59.2 (Gate-B FAIL @ 80.8; HARD RETRACTION).
+
+Roadmap target R@5 ≥ 85% is NOT MET by any track. NON-binding per each prereg.
+
+### Mechanism cumulative-null status
+
+Per `docs/RETRACTION.md:94-113`. F10 changes the contents of memory rows but does not alter the goal-stack mechanism in `src/`. The cumulative-null status of the dlPFC goal-stack mechanism is independent of this evaluation.
+
+## v1.9.0 — 2026-05-11 — F6 reranker hardening
+
+This release does not re-assert the retracted −10pp magnitude.
+
+**Shipped:**
+- `RerankerFn` seam in `hybridSearch` (`src/search.ts`); reranker runs after MMR, before budget filtering. Default off; opt-in via the `reranker` option.
+- `--reranker <name>` and `--reranker-top-k <n>` flags on `hippo recall` (`src/cli.ts`) and on the LongMemEval harness (`benchmarks/longmemeval/retrieve_inprocess.mjs`).
+- Track 1 features reranker (`src/rerankers/features.ts`): re-scores the top-K candidates using `MemoryEntry`-level signals (confidence tier, kind, schema_fit, strength, outcome counts, query-doc overlap). No external dependencies; sub-millisecond per query.
+- Track 2 cross-encoder reranker (`src/rerankers/cross-encoder.ts`): MS-MARCO MiniLM via `@xenova/transformers` optional peer dep. Falls back to identity ordering if the model fails to load (no transformers installed, no HF access for first-run download, etc.).
+- Track 3 LLM reranker skeleton (`src/rerankers/llm.ts`): listwise permutation rerank against an OpenAI-compatible endpoint. Env-gated on `HIPPO_LLM_RERANKER_URL` to prevent accidental cost. Skeleton only — full characterisation deferred.
+- LongMemEval sweep orchestrator (`benchmarks/longmemeval/run_reranker_sweep.mjs`) and `scripts/aggregate_reranker_sweep.mjs`.
+- Tier-1 micro-eval fixtures: `reranker-features` (smoke test for the CLI wire-up) and `reranker-cross-encoder` (semantic-over-lexical test, falls back to identity in sandboxed environments).
+
+**Eval result:** `docs/evals/2026-05-10-f6-reranker-result.md` (prereg: `docs/evals/2026-05-10-f6-reranker-prereg.md`).
+
+**Workload-validity verdicts (binding gates from the prereg):**
+- Gate-A (firing rate per track on 500-question LongMemEval): features track PASS (500/500). Cross-encoder PASS-with-caveat (500/500 invocations all took the identity-fallback branch because the MS-MARCO model was not downloadable in the test environment; this is NOT a real cross-encoder evaluation).
+- Gate-B (hyperparameter discrimination across features_topk{20,50,100}): FAIL. The three settings produced byte-identical R@K. Per the prereg, no per-hyperparameter R@5 effect is claimed.
+
+**Roadmap target framing:** `ROADMAP-RESEARCH.md` lists "R@5 ≥ 85% on LongMemEval with the existing hybrid path" as the F6 success criterion. The result doc reports R@5 = 75.4% (features, all three settings) and 75.6% (baseline) on the workload tested. The roadmap target is not met by the current workload + ingest path. Per the prereg this is descriptive characterisation, not a binding gate. The mechanism ships; the path to a real R@5 ≥ 85% attempt requires either a real cross-encoder evaluation (HF access) or a richer ingest path that populates entry-level signals the features reranker reads.
+
+**Mechanism cumulative-null status:** the dlPFC goal-stack mechanism's cumulative-null status (`docs/RETRACTION.md:94-113`) is independent of this release.
+
 ## 1.8.1 (2026-05-09)
 
 Pre-commitment retraction patch. The v1.8.0 prereg's "Pre-committed v1.9 direction" — *"v1.9 will run the dlPFC goal-stack mechanism on the LongMemEval R@5 corpus as a cross-validation"* — is **RETRACTED publicly**. Outside-voice review on two iterations of the v1.9 plan (v1 and v2) found six structural barriers that preclude the mechanism from firing on the LongMemEval corpus + canonical harness as shipped, without substantial re-architecture. Per `CLAUDE.md` "Root Cause Over Patches" + the v1.7.9 pre-emptive retraction precedent: public retraction is the principled call. **This release does not re-assert the retracted −10pp magnitude.** Per `docs/RETRACTION.md`.
