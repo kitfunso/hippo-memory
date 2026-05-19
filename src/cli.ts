@@ -982,10 +982,12 @@ async function cmdRecall(
   // --reranker <name> is set, look up the reranker fn from the registry
   // (src/rerankers/index.ts) and apply it to the top-K candidates. The
   // reranker reorders (and may rescale) results; the post-budget set is
-  // returned. Default off; opt-in via --reranker <features|...>. The
+  // returned. Default off; opt-in via --reranker <cross-encoder|llm>. The
   // structurally similar --rerank-utility block above is the OFC MVP and is
   // independent — both can run in the same recall, with --rerank-utility
-  // applied first. Available rerankers: features (Track 1, no model dep).
+  // applied first. Available rerankers: cross-encoder, llm (see
+  // src/rerankers/index.ts). The Track 1 `features` reranker was removed in
+  // v1.9.1 per the F10 HARD RETRACTION; it is no longer a valid value.
   const rerankerName = flags['reranker'] !== undefined ? String(flags['reranker']).trim() : '';
   if (rerankerName) {
     const rerankerFn = getReranker(rerankerName);
@@ -5299,7 +5301,7 @@ Commands:
                            where cost_factor = min(0.3, tokens / 10000). Re-sorts
                            results by utility. Default off. RESEARCH.md §PFC.OFC.
     --reranker <name>      Apply a reranker pass after retrieval
-                           (features|cross-encoder|llm). Looks up the named
+                           (cross-encoder|llm). Looks up the named
                            reranker from src/rerankers/index.ts and re-orders
                            the top-K candidates. Default unset (no reranker).
                            See docs/plans/2026-05-10-f6-reranker-hardening.md.

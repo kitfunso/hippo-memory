@@ -15,6 +15,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'child_process';
+import { existsSync } from 'fs';
 import * as path from 'path';
 import * as url from 'url';
 
@@ -22,8 +23,20 @@ const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '../../');
 const MODEL_CACHE = path.join(REPO_ROOT, 'benchmarks/longmemeval/data/model-cache');
 
+// This is an integration test, not a pure unit test: it shells out to the
+// compiled dist/embeddings.js and loads a vendored model from
+// HIPPO_MODEL_CACHE. Neither is available in a clean CI checkout — `npm test`
+// does not run `npm run build`, and the model cache under
+// benchmarks/longmemeval/data/model-cache/ is gitignored (vendored weights).
+// When those prerequisites are absent the test skips rather than failing, so
+// the default `npm test` stays reliably green; it runs in full for a developer
+// who has run `npm run build` and vendored the Xenova/all-MiniLM-L6-v2 weights.
+const DIST_EMBEDDINGS = path.join(REPO_ROOT, 'dist/embeddings.js');
+const MINILM_DIR = path.join(MODEL_CACHE, 'Xenova/all-MiniLM-L6-v2');
+const prereqsMet = existsSync(DIST_EMBEDDINGS) && existsSync(MINILM_DIR);
+
 describe('local-cache: HIPPO_MODEL_CACHE', () => {
-  it('produces a 384-dim embedding vector without network access', () => {
+  it.skipIf(!prereqsMet)('produces a 384-dim embedding vector without network access', () => {
     // Build a tiny Node.js script that exercises getEmbedding() directly.
     // We use dist/embeddings.js (compiled output) so the regular import()
     // call works outside vitest's VM context.
