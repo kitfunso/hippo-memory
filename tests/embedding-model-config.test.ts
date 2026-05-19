@@ -62,7 +62,11 @@ describe('embedding model configuration', () => {
 
     await hybridSearch('query text', [entry], { hippoRoot: tmpDir, budget: 1000 });
 
-    expect(getEmbeddingMock).toHaveBeenCalledWith('query text', 'custom/model');
+    // hybridSearch passes a third `role` argument ('query'|'passage') so e5-family
+    // models receive the correct "query: " / "passage: " prefix; non-e5 models
+    // ignore it. The query path always passes 'query'. (Added with the F12
+    // multilingual-e5-large embedding work; see src/embeddings.ts + src/search.ts.)
+    expect(getEmbeddingMock).toHaveBeenCalledWith('query text', 'custom/model', 'query');
   });
 
   it('treats a legacy embedding index as stale when the configured model changes', async () => {
