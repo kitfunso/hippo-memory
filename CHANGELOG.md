@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.9.3 (2026-05-20) — reranker review-tail patch
+
+This release does not re-assert the retracted −10pp magnitude.
+
+Post-merge cleanup of the three review-tail items called out on PR #25, plus the version-bump that aligns `package.json` with the v1.9.x docs shipped on master. No new research; no canonical-doc changes beyond this entry, the README "What's new" block, and the package version.
+
+### Shipped
+
+- **`src/rerankers/llm.ts`** — wires `AbortController` + `setTimeout` around the `fetch` call. Default timeout 30 s; overridable via the new `HIPPO_LLM_RERANKER_TIMEOUT_MS` env var. On timeout (or any other fetch failure) the reranker silently falls back to identity ordering — recall must not hang on a wedged endpoint.
+- **`src/rerankers/cross-encoder.ts`** — emits a single `console.warn` on first identity-fallback per process. Prevents the silent-fallback failure mode where a user believes the cross-encoder is doing work it isn't. Subsequent fallbacks within the same process are silent.
+- **`src/rerankers/index.ts` + `src/rerankers/types.ts`** — drop the orphaned `RerankSignals` type. Its sole consumer (`src/rerankers/features.ts`) was retracted in v1.9.1 (F10 HARD RETRACTION); the type is now dead code and is removed at both the re-export and the definition.
+- **`package.json` / `package-lock.json`** — version 1.8.1 → 1.9.3, aligning the npm-published version with the v1.9.0 / v1.9.1 / v1.9.2 entries already documented on master. No v1.9.0/1/2 line items were ever published to npm; this is the first published `1.9.x` release and it carries the cumulative scope from F6 (rerankers) through F13 (chunk-per-turn) plus the F10 retraction.
+
+### Mechanism cumulative-null status
+
+Per `docs/RETRACTION.md:94-113`. No `src/` change in this patch touches the dlPFC goal-stack mechanism. The cumulative-null status is unaffected.
+
+### Tests
+
+- **`tests/rerankers/llm.test.ts`** — new case asserting the AbortController wires through: a 5 ms timeout + a fetch that respects `init.signal` proves the reranker aborts and falls back to identity ordering without throwing.
+- **`tests/rerankers/cross-encoder.test.ts`** — new case asserting `console.warn` is called at most once across three repeated calls (the "don't spam" contract).
+
+### Not in this patch
+
+The Track 2 cross-encoder's real-evaluation gate, the LLM reranker's full characterisation, the cross-encoder model-fetch path under HF egress restrictions — all remain queued per v1.9.0's deferred-characterisation note. F9 hybrid-retrieval parity (BM25 + dense-vector RRF on `_s`, the `[critical, next]` track in `ROADMAP-RESEARCH.md`) is the recommended next research arc.
+
 ## 1.9.2 (2026-05-12) — F13 chunk-per-turn LongMemEval R@5 = 86.8 on oracle (Gate-B PASS)
 
 This release does not re-assert the retracted −10pp magnitude.

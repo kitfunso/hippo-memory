@@ -1,5 +1,7 @@
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
 
+const DEFAULT_TIMEOUT_MS = 30_000;
+
 /**
  * Track 3 reranker: listwise LLM rerank. Uses a customer-supplied
  * OpenAI-compatible endpoint. Gated on HIPPO_LLM_RERANKER_URL to prevent
@@ -7,6 +9,10 @@ import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
  *
  * Skeleton only — see docs/plans/2026-05-10-f6-reranker-hardening.md Task 8.
  * Full characterisation deferred to a follow-on plan.
+ *
+ * Timeout: defaults to 30s; overridable via HIPPO_LLM_RERANKER_TIMEOUT_MS.
+ * On timeout or any fetch failure, the reranker silently falls back to
+ * identity ordering — recall must not hang on a wedged endpoint.
  */
 export const llmReranker: RerankerFn = async (
   query,
@@ -29,6 +35,13 @@ export const llmReranker: RerankerFn = async (
     `Output format: [<int>, <int>, ...] with all ${head.length} indices.`,
   ].join('\n');
 
+  const timeoutMs = Number.parseInt(
+    process.env.HIPPO_LLM_RERANKER_TIMEOUT_MS ?? '',
+    10,
+  ) || DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
   let permutation: number[] | null = null;
   try {
     const resp = await fetch(`${url.replace(/\/$/, '')}/chat/completions`, {
@@ -42,6 +55,7 @@ export const llmReranker: RerankerFn = async (
         messages: [{ role: 'user', content: prompt }],
         temperature: 0,
       }),
+      signal: controller.signal,
     });
     if (resp.ok) {
       const j = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> };
@@ -59,7 +73,10 @@ export const llmReranker: RerankerFn = async (
       }
     }
   } catch {
-    // Fall through to identity
+    // Fall through to identity. Includes AbortError on timeout — see
+    // DEFAULT_TIMEOUT_MS / HIPPO_LLM_RERANKER_TIMEOUT_MS above.
+  } finally {
+    clearTimeout(timer);
   }
 
   const ordered = permutation

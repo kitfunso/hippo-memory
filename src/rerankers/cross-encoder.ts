@@ -11,6 +11,7 @@ const _dynImport = new Function('s', 'return import(s)') as (
 
 type CrossEncoderFn = (query: string, candidate: string) => Promise<{ score: number }[]>;
 let cachedPipeline: CrossEncoderFn | null = null;
+let warnedOnFallback = false;
 
 /**
  * True if @xenova/transformers is importable. Note: this does NOT confirm
@@ -66,7 +67,16 @@ export const crossEncoderReranker: RerankerFn = async (
 
   const pipe = await loadPipeline();
   if (!pipe) {
-    // Fallback: identity ordering with rerankScore = original score
+    // Fallback: identity ordering with rerankScore = original score. Warn
+    // once per process so a silent identity-fallback doesn't mislead users
+    // into thinking the cross-encoder is doing work it isn't.
+    if (!warnedOnFallback) {
+      warnedOnFallback = true;
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[hippo] cross-encoder reranker unavailable (no @xenova/transformers, or model fetch blocked); falling back to identity ordering. Subsequent calls will not repeat this warning.',
+      );
+    }
     return head.map((r, i) => ({
       ...r,
       rerankScore: r.score,
