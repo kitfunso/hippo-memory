@@ -1,0 +1,287 @@
+[
+  {
+    "question_id": "syn_001",
+    "question": "When does the new authentication flow ship to production?",
+    "answer": "March 15, 2026",
+    "question_type": "single-session-user",
+    "question_date": "2026-04-01",
+    "haystack_sessions": [
+      [
+        {"role": "user", "content": "Quick check on the auth project — when are we cutting over?"},
+        {"role": "assistant", "content": "The security team finalized the schedule yesterday. Production rollout is locked in for March 15, 2026, right after the penetration test signs off."},
+        {"role": "user", "content": "Great, I'll let the support team know."},
+        {"role": "assistant", "content": "Sounds good. I'll also update the rollout tracker so on-call knows."}
+      ],
+      [
+        {"role": "user", "content": "What's the standup schedule for this week?"},
+        {"role": "assistant", "content": "Standups are every weekday at 10am Pacific. Friday's slot is reserved for the retro instead."}
+      ],
+      [
+        {"role": "user", "content": "Who is leading the dashboard rewrite?"},
+        {"role": "assistant", "content": "The dashboard rewrite is owned by the platform team, with Priya as tech lead."}
+      ],
+      [
+        {"role": "user", "content": "Did marketing approve the launch banner copy?"},
+        {"role": "assistant", "content": "Yes, marketing signed off on the banner copy on Tuesday. The visual assets are still in review."}
+      ]
+    ],
+    "haystack_session_ids": ["s_001a", "s_001b", "s_001c", "s_001d"],
+    "haystack_dates": ["2026-03-20", "2026-03-22", "2026-03-25", "2026-03-28"],
+    "answer_session_ids": ["s_001a"]
+  },
+  {
+    "question_id": "syn_002",
+    "question": "Which conference room did we book for the offsite kickoff?",
+    "answer": "Cypress Hall",
+    "question_type": "single-session-user",
+    "question_date": "2026-05-02",
+    "haystack_sessions": [
+      [
+        {"role": "user", "content": "Did facilities confirm a room for the offsite kickoff?"},
+        {"role": "assistant", "content": "Yes, the kickoff is booked in Cypress Hall on the third floor. Capacity is 40, so we should be comfortable."},
+        {"role": "user", "content": "Perfect, I'll add it to the invite."}
+      ],
+      [
+        {"role": "user", "content": "Where are we doing the engineering all-hands next month?"},
+        {"role": "assistant", "content": "Engineering all-hands will be held in the main auditorium, same as last quarter."}
+      ],
+      [
+        {"role": "user", "content": "Any update on parking validation for guests?"},
+        {"role": "assistant", "content": "Reception now hands out one-day garage passes — no need to pre-register guests."}
+      ],
+      [
+        {"role": "user", "content": "Is the catering order in for the QBR?"},
+        {"role": "assistant", "content": "Catering for the QBR is confirmed with the usual vendor; sandwiches and salads for 60."}
+      ]
+    ],
+    "haystack_session_ids": ["s_002a", "s_002b", "s_002c", "s_002d"],
+    "haystack_dates": ["2026-04-18", "2026-04-20", "2026-04-22", "2026-04-25"],
+    "answer_session_ids": ["s_002a"]
+  },
+  {
+    "question_id": "syn_003",
+    "question": "Across our planning chats, who ended up owning the migration runbook?",
+    "answer": "Devika Rao",
+    "question_type": "multi-session",
+    "question_date": "2026-05-09",
+    "haystack_sessions": [
+      [
+        {"role": "user", "content": "We need someone to drive the migration runbook end-to-end. Any volunteers?"},
+        {"role": "assistant", "content": "Looking at recent capacity, the SRE team has the bandwidth. I can flag it to their lead in tomorrow's sync."}
+      ],
+      [
+        {"role": "user", "content": "Update on runbook ownership?"},
+        {"role": "assistant", "content": "SRE leadership reviewed the ask. They proposed Devika Rao as the directly responsible individual since she ran the last database cutover."},
+        {"role": "user", "content": "Sounds right, let's lock it in."},
+        {"role": "assistant", "content": "Confirmed. Devika Rao will own the migration runbook from start to finish."}
+      ],
+      [
+        {"role": "user", "content": "Is the staging environment ready for the dry run?"},
+        {"role": "assistant", "content": "Staging will be ready by end of week. The seed data refresh finishes Thursday."}
+      ],
+      [
+        {"role": "user", "content": "What's the rollback budget if the migration goes sideways?"},
+        {"role": "assistant", "content": "We have a 90-minute rollback window before customer-visible impact. Beyond that we trigger the incident bridge."}
+      ]
+    ],
+    "haystack_session_ids": ["s_003a", "s_003b", "s_003c", "s_003d"],
+    "haystack_dates": ["2026-04-12", "2026-04-26", "2026-04-30", "2026-05-03"],
+    "answer_session_ids": ["s_003b"]
+  },
+  {
+    "question_id": "syn_004",
+    "question": "What did the team finally settle on for the project's external code name?",
+    "answer": "Project Lighthouse",
+    "question_type": "multi-session",
+    "question_date": "2026-04-30",
+    "haystack_sessions": [
+      [
+        {"role": "user", "content": "We need an external code name for the new analytics product. Any thoughts?"},
+        {"role": "assistant", "content": "A few options on the table: Beacon, Lighthouse, Compass, and Pathfinder. Brand wants something nautical-adjacent."}
+      ],
+      [
+        {"role": "user", "content": "Did the brand review come back on the name shortlist?"},
+        {"role": "assistant", "content": "Brand narrowed it to Lighthouse and Compass. They flagged Beacon as too close to a competitor product."}
+      ],
+      [
+        {"role": "user", "content": "Final decision on the code name?"},
+        {"role": "assistant", "content": "Leadership signed off this morning. We're going with Project Lighthouse for all external communications."},
+        {"role": "user", "content": "I'll update the docs."}
+      ],
+      [
+        {"role": "user", "content": "Reminder about the all-hands next week?"},
+        {"role": "assistant", "content": "All-hands is Wednesday at 11am. Bring your own coffee — the espresso machine is still being serviced."}
+      ]
+    ],
+    "haystack_session_ids": ["s_004a", "s_004b", "s_004c", "s_004d"],
+    "haystack_dates": ["2026-04-05", "2026-04-15", "2026-04-22", "2026-04-25"],
+    "answer_session_ids": ["s_004c"]
+  },
+  {
+    "question_id": "syn_005",
+    "question": "What is the latest official deploy frequency policy?",
+    "answer": "twice per week",
+    "question_type": "knowledge-update",
+    "question_date": "2026-05-08",
+    "haystack_sessions": [
+      [
+        {"role": "user", "content": "What's our deploy cadence again?"},
+        {"role": "assistant", "content": "Right now production deploys go out once a week, on Wednesdays."}
+      ],
+      [
+        {"role": "user", "content": "I heard the deploy policy changed — what's the current rule?"},
+        {"role": "assistant", "content": "Yes, as of last sprint the policy was updated. Production deploys now happen twice per week, Tuesdays and Thursdays, to shrink batch sizes."},
+        {"role": "user", "content": "Got it, will update the team wiki."}
+      ],
+      [
+        {"role": "user", "content": "Any change to the on-call rotation schedule?"},
+        {"role": "assistant", "content": "On-call rotates weekly on Monday mornings. Shadow shifts are still optional."}
+      ],
+      [
+        {"role": "user", "content": "Can we deploy on Fridays in an emergency?"},
+        {"role": "assistant", "content": "Friday deploys require a VP approval and an active incident. Otherwise the freeze stands."}
+      ]
+    ],
+    "haystack_session_ids": ["s_005a", "s_005b", "s_005c", "s_005d"],
+    "haystack_dates": ["2026-03-10", "2026-04-28", "2026-05-01", "2026-05-04"],
+    "answer_session_ids": ["s_005b"]
+  },
+  {
+    "question_id": "syn_006",
+    "question": "What's the current opening hours for the downtown branch after the recent change?",
+    "answer": "9am to 7pm",
+    "question_type": "knowledge-update",
+    "question_date": "2026-05-10",
+    "haystack_sessions": [
+      [
+        {"role": "user", "content": "When is the downtown branch open?"},
+        {"role": "assistant", "content": "Until last month, downtown was open from 10am to 6pm on weekdays."}
+      ],
+      [
+        {"role": "user", "content": "Hours updated for downtown right?"},
+        {"role": "assistant", "content": "Correct. Following the customer survey, downtown branch hours were extended to 9am to 7pm Monday through Friday, effective May 1."},
+        {"role": "user", "content": "Helpful, thanks."}
+      ],
+      [
+        {"role": "user", "content": "What's the weekend coverage like?"},
+        {"role": "assistant", "content": "Weekends remain unchanged: Saturday 10am to 4pm, Sunday closed."}
+      ]
+    ],
+    "haystack_session_ids": ["s_006a", "s_006b", "s_006c"],
+    "haystack_dates": ["2026-03-15", "2026-05-02", "2026-05-05"],
+    "answer_session_ids": ["s_006b"]
+  },
+  {
+    "question_id": "syn_007",
+    "question": "How long had the reliability lead been at the company by the time of the architecture review?",
+    "answer": "seven years",
+    "question_type": "temporal-reasoning",
+    "question_date": "2026-05-09",
+    "haystack_sessions": [
+      [
+        {"role": "user", "content": "When did Marcus first join the company?"},
+        {"role": "assistant", "content": "Marcus, our reliability lead, started on April 3, 2018."}
+      ],
+      [
+        {"role": "user", "content": "When was the architecture review held?"},
+        {"role": "assistant", "content": "The architecture review took place in early April 2025, just before the spring planning summit."}
+      ],
+      [
+        {"role": "user", "content": "Marcus mentioned a tenure milestone at the architecture review — how long had he been with us by then?"},
+        {"role": "assistant", "content": "By the time of the architecture review, Marcus had been with the company for seven years. He referenced his anniversary in the opening remarks."},
+        {"role": "user", "content": "Nice, that lines up."}
+      ],
+      [
+        {"role": "user", "content": "What was the main outcome of the architecture review?"},
+        {"role": "assistant", "content": "The big outcome was a decision to consolidate the three regional data planes into a single unified control plane over the next two quarters."}
+      ]
+    ],
+    "haystack_session_ids": ["s_007a", "s_007b", "s_007c", "s_007d"],
+    "haystack_dates": ["2025-02-10", "2025-03-20", "2025-04-15", "2025-04-18"],
+    "answer_session_ids": ["s_007c"]
+  },
+  {
+    "question_id": "syn_008",
+    "question": "How many sprints elapsed between the alpha demo and general availability of the search feature?",
+    "answer": "eight sprints",
+    "question_type": "temporal-reasoning",
+    "question_date": "2026-04-22",
+    "haystack_sessions": [
+      [
+        {"role": "user", "content": "When did we first show off the new search internally?"},
+        {"role": "assistant", "content": "The alpha demo of search was at the engineering all-hands on August 12, 2025."}
+      ],
+      [
+        {"role": "user", "content": "When did search hit GA?"},
+        {"role": "assistant", "content": "Search reached general availability on April 6, 2026, after the final round of perf tuning."}
+      ],
+      [
+        {"role": "user", "content": "Roughly how many sprints did the search team take to get from alpha to GA?"},
+        {"role": "assistant", "content": "Counting our two-week sprint cadence, the search team shipped GA eight sprints after the alpha demo. That includes the two-sprint scope freeze before launch."}
+      ],
+      [
+        {"role": "user", "content": "Did the launch hit the marketing window?"},
+        {"role": "assistant", "content": "Yes, launch landed within the marketing window with a few days of buffer."}
+      ]
+    ],
+    "haystack_session_ids": ["s_008a", "s_008b", "s_008c", "s_008d"],
+    "haystack_dates": ["2025-08-15", "2026-04-08", "2026-04-12", "2026-04-15"],
+    "answer_session_ids": ["s_008c"]
+  },
+  {
+    "question_id": "syn_009",
+    "question": "Which teammate did our user say they pair best with on debugging sessions?",
+    "answer": "Hannah Kim",
+    "question_type": "single-session-user",
+    "question_date": "2026-05-07",
+    "haystack_sessions": [
+      [
+        {"role": "user", "content": "Honestly the person I pair best with for nasty debugging sessions is Hannah Kim — she keeps the hypotheses really tight."},
+        {"role": "assistant", "content": "Noted. Want me to default to suggesting Hannah Kim as a pairing partner when you flag debugging-heavy tickets?"},
+        {"role": "user", "content": "Yes, please do that."},
+        {"role": "assistant", "content": "Will do. I'll keep that pairing preference on file."}
+      ],
+      [
+        {"role": "user", "content": "Who runs the weekly architecture office hours?"},
+        {"role": "assistant", "content": "Architecture office hours are hosted by Theo on Thursdays at 2pm."}
+      ],
+      [
+        {"role": "user", "content": "Any feedback from the user research interviews this week?"},
+        {"role": "assistant", "content": "Three interviews wrapped up. The headline finding was that onboarding still feels too text-heavy for new admins."}
+      ]
+    ],
+    "haystack_session_ids": ["s_009a", "s_009b", "s_009c"],
+    "haystack_dates": ["2026-04-30", "2026-05-02", "2026-05-04"],
+    "answer_session_ids": ["s_009a"]
+  },
+  {
+    "question_id": "syn_010",
+    "question": "What was the final agreed retention period for raw application logs?",
+    "answer": "45 days",
+    "question_type": "multi-session",
+    "question_date": "2026-05-09",
+    "haystack_sessions": [
+      [
+        {"role": "user", "content": "We need to lock in a retention policy for raw application logs. Compliance is asking."},
+        {"role": "assistant", "content": "Current default is 30 days. Compliance flagged that some audit workflows want longer retention, so we should revisit."}
+      ],
+      [
+        {"role": "user", "content": "Where did the retention conversation land?"},
+        {"role": "assistant", "content": "After the working session, we settled on 45 days for raw application logs. Aggregated metrics will keep their existing 13-month retention."},
+        {"role": "user", "content": "Will 45 days fit our storage budget?"},
+        {"role": "assistant", "content": "Yes — finance reviewed the projected storage cost and signed off on the 45 days plan."}
+      ],
+      [
+        {"role": "user", "content": "Any update on the SOC2 audit prep?"},
+        {"role": "assistant", "content": "SOC2 prep is on track. The auditor visit is scheduled for late June."}
+      ],
+      [
+        {"role": "user", "content": "Did we ever publish the data classification policy?"},
+        {"role": "assistant", "content": "Yes, the data classification policy was published in early March and lives on the security wiki."}
+      ]
+    ],
+    "haystack_session_ids": ["s_010a", "s_010b", "s_010c", "s_010d"],
+    "haystack_dates": ["2026-04-05", "2026-04-28", "2026-05-01", "2026-05-04"],
+    "answer_session_ids": ["s_010b"]
+  }
+]

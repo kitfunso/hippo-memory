@@ -162,6 +162,7 @@ import { runFeatureEval, formatResult, resultToBaseline, detectRegressions, type
 import { refineStore } from './refine-llm.js';
 import { wmPush, wmRead, wmClear, wmFlush, WorkingMemoryItem } from './working-memory.js';
 import { multihopSearch } from './multihop.js';
+import { getReranker } from './rerankers/index.js';
 import { computeSalience } from './salience.js';
 import { computeAmbientState, renderAmbientSummary } from './ambient.js';
 import { listDlq, replayDlqEntry } from './connectors/slack/dlq.js';
@@ -858,15 +859,19 @@ async function cmdRecall(
       physicsConfig: config.physics,
       minResults,
       scope: recallActiveScope,
+      includeSuperseded,
+      asOf,
     });
   } else if (hasGlobal) {
     // Use searchBothHybrid for merged results with embedding support
     results = await searchBothHybrid(query, hippoRoot, globalRoot, {
       budget, mmr: mmrEnabled, mmrLambda, localBump, minResults, scope: recallActiveScope, tenantId,
+      includeSuperseded, asOf,
     });
   } else {
     results = await hybridSearch(query, localEntries, {
       budget, hippoRoot, mmr: mmrEnabled, mmrLambda, minResults, scope: recallActiveScope,
+      includeSuperseded, asOf,
     });
   }
 
@@ -975,6 +980,40 @@ async function cmdRecall(
         return { ...r, score: utility };
       })
       .sort((a, b) => b.score - a.score);
+  }
+
+  // F6 reranker pass (docs/plans/2026-05-10-f6-reranker-hardening.md). When
+  // --reranker <name> is set, look up the reranker fn from the registry
+  // (src/rerankers/index.ts) and apply it to the top-K candidates. The
+  // reranker reorders (and may rescale) results; the post-budget set is
+  // returned. Default off; opt-in via --reranker <cross-encoder|llm>. The
+  // structurally similar --rerank-utility block above is the OFC MVP and is
+  // independent — both can run in the same recall, with --rerank-utility
+  // applied first. Available rerankers: cross-encoder, llm (see
+  // src/rerankers/index.ts). The Track 1 `features` reranker was removed in
+  // v1.9.1 per the F10 HARD RETRACTION; it is no longer a valid value.
+  const rerankerName = flags['reranker'] !== undefined ? String(flags['reranker']).trim() : '';
+  if (rerankerName) {
+    const rerankerFn = getReranker(rerankerName);
+    if (rerankerFn) {
+      const topK = flags['reranker-top-k'] !== undefined
+        ? parseInt(String(flags['reranker-top-k']), 10)
+        : 50;
+      const head = results.slice(0, topK);
+      const tail = results.slice(topK);
+      const rerankInput = head.map((r, i) => ({ ...r, preRerankRank: i + 1 }));
+      const reranked = await rerankerFn(query, rerankInput, { topK });
+      // Copy rerankScore into score so downstream blocks (--goal, goal-stack,
+      // salience) that sort by `r.score` honor the reranker's order rather
+      // than unwinding it. Original score is preserved on rerankScore's
+      // input, but downstream sorters key on `score`.
+      const withPostRank = reranked.map((r, i) => ({
+        ...r,
+        score: r.rerankScore,
+        postRerankRank: i + 1,
+      }));
+      results = [...withPostRank, ...tail];
+    }
   }
 
   // dlPFC goal-conditioned recall MVP (RESEARCH.md §PFC.dlPFC). When --goal
@@ -5265,6 +5304,12 @@ Commands:
                            = score * (0.5 + 0.5 * strength) * (1 - cost_factor)
                            where cost_factor = min(0.3, tokens / 10000). Re-sorts
                            results by utility. Default off. RESEARCH.md §PFC.OFC.
+    --reranker <name>      Apply a reranker pass after retrieval
+                           (cross-encoder|llm). Looks up the named
+                           reranker from src/rerankers/index.ts and re-orders
+                           the top-K candidates. Default unset (no reranker).
+                           See docs/plans/2026-05-10-f6-reranker-hardening.md.
+    --reranker-top-k <n>   Cap candidates passed to the reranker (default 50).
     --goal <tag>           dlPFC goal-conditioned recall: memories tagged with
                            the goal tag get a 1.5x score boost and results are
                            re-sorted. Default off. RESEARCH.md §PFC.dlPFC.

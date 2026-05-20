@@ -1,0 +1,6 @@
+{
+  "embeddingWeight": 0.5,
+  "mmrLambda": 0.7,
+  "budget": 50,
+  "minResults": 5
+}

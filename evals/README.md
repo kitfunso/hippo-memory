@@ -159,6 +159,25 @@ knowledge-update R@10 (+2.6pp). v0.11 wins on single-session-user R@1
 (-10pp). Overall, hybrid scoring trades some R@1 accuracy for better
 content relevance (answer_in_content@5 +3pp).
 
+#### v1.9.0 reranker sweep (2026-05-11, full 500 questions)
+
+F6 reranker hardening (`docs/evals/2026-05-10-f6-reranker-result.md`,
+prereg `docs/evals/2026-05-10-f6-reranker-prereg.md`). Sweep ran the
+v1.9.0 hybrid path against the same 500-question LongMemEval workload
+with three reranker tracks plus a no-reranker baseline. This release
+does not re-assert the retracted −10pp magnitude.
+
+| Version | R@1 | R@3 | R@5 | R@10 | answer_in_content@5 | Notes |
+|---|---|---|---|---|---|---|
+| v1.9.0 baseline | 50.4 | 67.6 | 75.6 | 83.6 | 49.2 | no reranker; same hybrid path as v0.27 with current ingest |
+| v1.9.0 features (any topK) | 51.6 | 68.2 | 75.4 | 83.4 | 48.6 | Track 1 features reranker; topK 20/50/100 byte-identical (Gate-B FAIL) |
+| v1.9.0 cross_encoder | 50.4 | 67.6 | 75.6 | 83.6 | 49.2 | Track 2; identity-fallback in test env (HF blocked); not a real cross-encoder evaluation |
+
+See `docs/evals/2026-05-10-f6-reranker-result.md` for the full
+workload-validity verdicts, per-type breakdowns, provenance, and the
+roadmap-target (R@5 ≥ 85%) framing — that target is not met on the
+workload tested.
+
 #### Fix: `minResults` option
 
 Added `minResults` parameter to `hybridSearch`, `physicsSearch`, `search`,

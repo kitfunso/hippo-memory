@@ -14,6 +14,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { hybridSearch, buildCorpus } from '../../dist/search.js';
 import { loadAllEntries } from '../../dist/store.js';
+import { getReranker } from '../../dist/rerankers/index.js';
 
 function flag(name, fallback) {
   const i = process.argv.indexOf(name);
@@ -28,6 +29,13 @@ const LIMIT = parseInt(flag('--limit', '0'), 10);
 const EMB_WEIGHT = flag('--embedding-weight', null);
 const NO_MMR = process.argv.includes('--no-mmr');
 const MIN_RESULTS = parseInt(flag('--min-results', '10'), 10);
+const MMR_LAMBDA = flag('--mmr-lambda', null);
+if (MMR_LAMBDA !== null && Number.isNaN(parseFloat(MMR_LAMBDA))) {
+  console.error('--mmr-lambda must be a number, got:', MMR_LAMBDA);
+  process.exit(1);
+}
+const RERANKER = flag('--reranker', null);
+const RERANKER_TOP_K = parseInt(flag('--reranker-top-k', '50'), 10);
 
 const hippoRoot = path.resolve(STORE_DIR, '.hippo');
 if (!fs.existsSync(hippoRoot)) {
@@ -49,6 +57,12 @@ const raw = JSON.parse(fs.readFileSync(DATA_PATH, 'utf8'));
 const questions = Array.isArray(raw) ? raw : (raw.data ?? raw.questions ?? raw.entries);
 console.error(`  ${questions.length} questions${LIMIT > 0 ? ` (limit ${LIMIT})` : ''}`);
 
+const reranker = getReranker(RERANKER);
+if (RERANKER) {
+  console.error(`Reranker: ${RERANKER} (top-K=${RERANKER_TOP_K})`);
+}
+console.error('options:', { embeddingWeight: EMB_WEIGHT, mmrLambda: MMR_LAMBDA, budget: BUDGET, minResults: MIN_RESULTS });
+
 fs.mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
 // Truncate + use sync appendFileSync so progress is always visible on disk —
 // buffered streams made it look like the job was stuck earlier.
@@ -60,6 +74,7 @@ function writeLine(obj) {
 const start = Date.now();
 const limit = LIMIT > 0 ? Math.min(LIMIT, questions.length) : questions.length;
 let empty = 0;
+let rerankerFired = 0;
 
 for (let i = 0; i < limit; i++) {
   const q = questions[i];
@@ -70,8 +85,11 @@ for (let i = 0; i < limit; i++) {
       hippoRoot,
       preparedCorpus: corpus,
       embeddingWeight: EMB_WEIGHT !== null ? parseFloat(EMB_WEIGHT) : undefined,
+      mmrLambda: MMR_LAMBDA !== null ? parseFloat(MMR_LAMBDA) : undefined,
       mmr: !NO_MMR,
       minResults: MIN_RESULTS,
+      reranker: reranker ?? undefined,
+      rerankerOptions: reranker ? { topK: RERANKER_TOP_K } : undefined,
     });
     const memories = results.map((r) => ({
       id: r.entry.id,
@@ -82,6 +100,9 @@ for (let i = 0; i < limit; i++) {
       tokens: r.tokens,
     }));
     if (memories.length === 0) empty++;
+    if (reranker && results.some((r) => r.rerankScore !== undefined)) {
+      rerankerFired++;
+    }
     const record = {
       question_id: q.question_id,
       question,
@@ -116,4 +137,4 @@ for (let i = 0; i < limit; i++) {
 }
 
 const totalSec = (Date.now() - start) / 1000;
-console.error(`Done in ${totalSec.toFixed(1)}s. ${limit} queries, ${empty} empty, output: ${OUTPUT_PATH}`);
+console.error(`Done in ${totalSec.toFixed(1)}s. ${limit} queries, ${empty} empty, reranker fired on ${rerankerFired}/${limit}, output: ${OUTPUT_PATH}`);
