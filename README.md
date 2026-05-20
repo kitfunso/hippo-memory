@@ -85,6 +85,12 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.9.3
+
+- **Reranker review-tail patch.** Closes the three follow-ups raised on PR #25: `src/rerankers/llm.ts` now wires `AbortController` + `setTimeout` around the fetch (default 30 s, overridable via `HIPPO_LLM_RERANKER_TIMEOUT_MS`) so recall never hangs on a wedged endpoint; `src/rerankers/cross-encoder.ts` emits a single `console.warn` on first identity-fallback per process so silent fallback no longer masquerades as a working reranker; the orphan `RerankSignals` type (sole consumer retracted in v1.9.1) is removed at both the re-export and the definition.
+- **Version alignment.** `package.json` bumped 1.8.1 → 1.9.3. v1.9.0 / v1.9.1 / v1.9.2 were on-master research milestones never published to npm; v1.9.3 is the first published `1.9.x` release and carries the cumulative scope from F6 (rerankers) through F13 (chunk-per-turn) plus the F10 HARD RETRACTION.
+- **Mechanism cumulative-null status unaffected.** Per `docs/RETRACTION.md:94-113`. No `src/` change in this patch touches the dlPFC goal-stack mechanism. **This release does not re-assert the retracted −10pp magnitude.**
+
 ### What's new in v1.9.2
 
 - **F13 chunk-per-turn LongMemEval R@5 = 86.8 on oracle (Gate-B PASS).** Plan F13 (`docs/evals/2026-05-12-r5-track6-chunk-per-turn-prereg.md`) addresses the structural pathology that limited every prior LongMemEval track (F8–F12): sessions in `data/longmemeval_oracle.json` are ~14k chars median (~3,500 tokens), but the embedders we can reach (MiniLM, BGE-base, multilingual-e5-large) cap at 512–514 tokens. Every prior track embedded only the first ~2 turns of each 12-turn session and truncated the rest. F13 replaces session-level embedding with turn-level embedding (10,866 turns over the 940 oracle sessions, max-pool by `session_id` at retrieval). Gate-A PASS (10,866 turns, all 940 sessions covered, 768-dim normalized). **Gate-B PASS:** F13 + F9 sub-agent rerank stack R@5 = 86.8 on `data/longmemeval_oracle.json` (threshold ≥ 83.2 = F11+F9 deployable best 78.2 + 5pp; margin 3.6). R@1 = 70.8, R@10 = 90.2, R@20 = 93.4.
