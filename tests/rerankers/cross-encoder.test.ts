@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import {
   crossEncoderReranker,
   isCrossEncoderAvailable,
@@ -64,5 +64,18 @@ describe('crossEncoderReranker', () => {
       expect(out[0].entry.content).toBe('alpha');
       expect(out[1].entry.content).toBe('beta');
     }
+  });
+
+  it('does not spam console.warn on repeated fallback calls', async () => {
+    // The warn fires at most once per process on first identity-fallback.
+    // beforeAll's probe call may have already consumed the warn on
+    // fallback-mode machines, so the upper bound holds in both modes.
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const inputs = [asResult('alpha', 1.0), asResult('beta', 0.5)];
+    await crossEncoderReranker('q', inputs);
+    await crossEncoderReranker('q', inputs);
+    await crossEncoderReranker('q', inputs);
+    expect(warnSpy.mock.calls.length).toBeLessThanOrEqual(1);
+    warnSpy.mockRestore();
   });
 });

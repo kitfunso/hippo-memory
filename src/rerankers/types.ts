@@ -34,18 +34,3 @@ export interface RerankResult extends SearchResult {
   /** 1-indexed rank in the reranker output. */
   postRerankRank: number;
 }
-
-/**
- * Signals available to feature-based rerankers, extracted once per
- * candidate to avoid re-tokenizing or re-fetching.
- */
-export interface RerankSignals {
-  confidence: 'verified' | 'observed' | 'inferred' | 'stale' | null;
-  schemaFit: number;
-  kind: 'raw' | 'distilled' | 'superseded' | 'archived' | null;
-  strength: number;
-  retrievalCount: number;
-  outcomePositive: number;
-  outcomeNegative: number;
-  emotionalValence: 'neutral' | 'error' | 'success' | 'critical' | null;
-}

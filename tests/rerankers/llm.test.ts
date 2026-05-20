@@ -54,4 +54,32 @@ describe('llmReranker', () => {
     delete process.env.HIPPO_LLM_RERANKER_KEY;
     await expect(llmReranker('q', [asResult('xyz', 1.0)])).rejects.toThrow(/HIPPO_LLM_RERANKER_URL/);
   });
+
+  it('aborts the fetch and falls back to input ordering on timeout', async () => {
+    // Tiny timeout + a fetch that respects AbortSignal proves the
+    // AbortController is wired through. Falls back to identity ordering,
+    // does NOT throw.
+    process.env.HIPPO_LLM_RERANKER_TIMEOUT_MS = '5';
+    let abortedFromSignal = false;
+    vi.spyOn(globalThis, 'fetch' as never).mockImplementation((async (
+      _url: unknown,
+      init?: { signal?: AbortSignal },
+    ) => {
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          abortedFromSignal = true;
+          reject(new DOMException('aborted', 'AbortError'));
+        });
+        // never resolves on its own; only the abort can complete it
+      });
+    }) as never);
+
+    const inputs = [asResult('alpha', 1.0), asResult('beta', 0.5)];
+    const out = await llmReranker('q', inputs);
+
+    expect(abortedFromSignal).toBe(true);
+    expect(out.map((r) => r.entry.content)).toEqual(['alpha', 'beta']);
+
+    delete process.env.HIPPO_LLM_RERANKER_TIMEOUT_MS;
+  });
 });

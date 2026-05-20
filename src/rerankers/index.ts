@@ -18,4 +18,4 @@ export function getReranker(name: string | null | undefined): RerankerFn | null 
   return fn;
 }
 
-export type { RerankerFn, RerankResult, RerankerOptions, RerankSignals } from './types.js';
+export type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
