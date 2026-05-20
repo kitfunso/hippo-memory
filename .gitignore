@@ -51,3 +51,7 @@ results/f13_*/
 /data/lme_s/
 benchmarks/longmemeval/data/turn_index_bge_s.json
 results/f14_*/
+benchmarks/longmemeval/data/bm25_corpus_*.json
+benchmarks/longmemeval/data/turn_index_bge_oracle.json*
+results/f9_phase1/
+results/f9_phase2/
