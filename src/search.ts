@@ -665,6 +665,13 @@ export async function physicsSearch(
     minResults?: number;
     /** Active scope for scope-boost scoring. Auto-detected if not provided. */
     scope?: string | null;
+    /** Include superseded memories. Default false. Must be threaded through
+     *  from the CLI so `recall --include-superseded` reaches the inner
+     *  bi-temporal filter at line ~844; otherwise the superseded entries are
+     *  re-filtered out here even when the caller deliberately retained them. */
+    includeSuperseded?: boolean;
+    /** Bi-temporal filter: memories current at this ISO date string. */
+    asOf?: string;
   } = {}
 ): Promise<SearchResult[]> {
   const now = options.now ?? new Date();

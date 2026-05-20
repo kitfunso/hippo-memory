@@ -859,15 +859,19 @@ async function cmdRecall(
       physicsConfig: config.physics,
       minResults,
       scope: recallActiveScope,
+      includeSuperseded,
+      asOf,
     });
   } else if (hasGlobal) {
     // Use searchBothHybrid for merged results with embedding support
     results = await searchBothHybrid(query, hippoRoot, globalRoot, {
       budget, mmr: mmrEnabled, mmrLambda, localBump, minResults, scope: recallActiveScope, tenantId,
+      includeSuperseded, asOf,
     });
   } else {
     results = await hybridSearch(query, localEntries, {
       budget, hippoRoot, mmr: mmrEnabled, mmrLambda, minResults, scope: recallActiveScope,
+      includeSuperseded, asOf,
     });
   }
 
