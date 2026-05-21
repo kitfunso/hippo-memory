@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.10.1 (2026-05-21): stop() pidfile-ownership guard
+
+A single-fix patch release closing the last open item in the v0.37 server-hardening cluster, deferred from v1.10.0. Plan: `docs/plans/2026-05-21-stop-pidfile-ownership.md`.
+
+### Shipped
+
+- **`stop()` no longer unlinks a newer server's pidfile.** `serve()`'s `stop()` and the `cli.ts` `runViaServerIfAvailable` stale-pidfile self-heal both removed `server.pid` unconditionally. If a second server had started on the same hippoRoot and rewritten the pidfile, the first server's shutdown deleted the second one's pidfile and orphaned it (no longer discoverable by `detectServer` or the thin client). The new `removePidfileIfOwned` (`src/server-detect.ts`) unlinks the pidfile only when its recorded `(pid, started_at)` identity matches the caller's own; `stop()` and the cli self-heal are rewired to it. `removePidfile` (unconditional removal) is retained as a primitive. A residual microsecond read-to-unlink window is documented and accepted, consistent with `detectServer`.
+- **`openclaw.plugin.json` version parity.** The root OpenClaw manifest was left at `1.9.3` by v1.10.0; it now tracks `package.json` at `1.10.1`, which `tests/openclaw-package.test.ts` enforces.
+
+### Tests
+
+`tests/server-detect.test.ts` adds 7 `removePidfileIfOwned` unit cases (identity match, `started_at` mismatch, `pid` mismatch, missing pidfile, malformed JSON, valid JSON without identity fields, literal `null`). `tests/server-lifecycle.test.ts` adds an integration test proving a foreign pidfile survives `stop()`. `tests/cli-thin-client.test.ts` adds a spawned-CLI test driving the connection-refused self-heal branch. Full suite: 216 files, 1566 tests, green.
+
+### Not in this release
+
+- `src/version.ts` `PACKAGE_VERSION` is still `1.8.1`, and `extensions/openclaw-plugin/package.json` and `extensions/openclaw-plugin/openclaw.plugin.json` are still `1.9.3`: version-field drift left by the v1.9.x and v1.10.0 releases. None is version-parity-tested, so none blocked this release, but `/health` and the MCP `serverInfo` consequently under-report the version. Tracked in `TODOS.md` together with the root cause: the release process does not sync every version field.
+- `hippo forget --archive` over the server-routed HTTP path (tracked in `TODOS.md`).
+
 ## 1.10.0 (2026-05-21): server and lifecycle hardening
 
 A pivot from the F-track research arc to product hardening. This release closes the "server / lifecycle hardening" cluster from `TODOS.md`: deferred follow-ups from the v0.37 server-mode work, the v0.40 security pass, and the A3 envelope review. Plan: `docs/plans/2026-05-21-server-lifecycle-hardening.md`.
