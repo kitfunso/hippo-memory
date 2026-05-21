@@ -10,7 +10,7 @@ const CLI = join(process.cwd(), 'dist', 'cli.js');
 function hippo(home: string, cmd: string): string {
   return execSync(`node "${CLI}" ${cmd}`, {
     cwd: home,
-    env: { ...process.env, HIPPO_HOME: '' },
+    env: { ...process.env, HIPPO_HOME: home },
     encoding: 'utf8',
     timeout: 15000,
   }).trim();
@@ -20,7 +20,7 @@ function hippoErr(home: string, cmd: string): string {
   try {
     execSync(`node "${CLI}" ${cmd}`, {
       cwd: home,
-      env: { ...process.env, HIPPO_HOME: '' },
+      env: { ...process.env, HIPPO_HOME: home },
       encoding: 'utf8',
       timeout: 15000,
     });

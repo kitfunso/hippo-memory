@@ -6,8 +6,13 @@ import { join } from 'node:path';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 
-function hippo(env: Record<string, string>, ...args: string[]): string {
+// `cwd` MUST be an isolated temp dir. The CLI resolves the local store by
+// walking up from cwd to find `.hippo`; without isolation it finds the real
+// project store. HIPPO_HOME only redirects the *global* store, so it cannot
+// substitute for cwd isolation here.
+function hippo(cwd: string, env: Record<string, string>, ...args: string[]): string {
   return execFileSync('node', [HIPPO_BIN, ...args], {
+    cwd,
     env: { ...process.env, ...env },
     encoding: 'utf-8',
     shell: process.platform === 'win32',
@@ -25,11 +30,12 @@ describe('hippo remember --extract', () => {
   it('saves memory even when extraction skips (no API key)', () => {
     home = mkdtempSync(join(tmpdir(), 'hippo-extract-'));
     env = { HIPPO_HOME: join(home, '.hippo'), ANTHROPIC_API_KEY: '' };
-    hippo(env, 'init', '--no-hooks', '--no-schedule', '--no-learn');
+    hippo(home, env, 'init', '--no-hooks', '--no-schedule', '--no-learn');
 
     let stderr = '';
     try {
       execFileSync('node', [HIPPO_BIN, 'remember', 'John loves basketball', '--extract'], {
+        cwd: home,
         env: { ...process.env, ...env },
         encoding: 'utf-8',
         shell: process.platform === 'win32',
@@ -38,18 +44,18 @@ describe('hippo remember --extract', () => {
       stderr = String((e as { stderr?: Buffer }).stderr ?? '');
     }
 
-    const out = hippo(env, 'recall', 'basketball', '--json');
+    const out = hippo(home, env, 'recall', 'basketball', '--json');
     expect(out).toContain('basketball');
   });
 
   it('remember works without --extract flag', () => {
     home = mkdtempSync(join(tmpdir(), 'hippo-extract-'));
     env = { HIPPO_HOME: join(home, '.hippo'), ANTHROPIC_API_KEY: '' };
-    hippo(env, 'init', '--no-hooks', '--no-schedule', '--no-learn');
+    hippo(home, env, 'init', '--no-hooks', '--no-schedule', '--no-learn');
 
-    hippo(env, 'remember', 'Alice enjoys reading');
+    hippo(home, env, 'remember', 'Alice enjoys reading');
 
-    const out = hippo(env, 'recall', 'reading', '--json');
+    const out = hippo(home, env, 'recall', 'reading', '--json');
     expect(out).toContain('reading');
   });
 });

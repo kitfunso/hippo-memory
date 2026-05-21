@@ -47,13 +47,21 @@ describe('getGlobalRoot', () => {
 describe('promoteToGlobal', () => {
   let localRoot: string;
   let globalRoot: string;
+  let prevHippoHome: string | undefined;
 
   beforeEach(() => {
     localRoot = makeTmpStore();
     globalRoot = makeTmpStore();
+    // promoteToGlobal() resolves its destination via getGlobalRoot(), which
+    // reads HIPPO_HOME. Without this override it writes into the developer's
+    // real ~/.hippo store. Point it at the temp global store for isolation.
+    prevHippoHome = process.env.HIPPO_HOME;
+    process.env.HIPPO_HOME = globalRoot;
   });
 
   afterEach(() => {
+    if (prevHippoHome === undefined) delete process.env.HIPPO_HOME;
+    else process.env.HIPPO_HOME = prevHippoHome;
     cleanUp(localRoot, globalRoot);
   });
 
@@ -61,8 +69,8 @@ describe('promoteToGlobal', () => {
     const entry = createMemory('shared lesson about pipeline errors');
     writeEntry(localRoot, entry);
 
-    // Override global root by using promoteToGlobal with a temp global
-    // We test the logic by calling syncGlobalToLocal path
+    // HIPPO_HOME is pointed at a temp global store in beforeEach, so this
+    // promote lands in that temp store, not the developer's real ~/.hippo.
     const promoted = promoteToGlobal(localRoot, entry.id);
     expect(promoted.id).toMatch(/^g_/);
     expect(promoted.content).toBe(entry.content);

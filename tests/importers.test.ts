@@ -329,8 +329,13 @@ describe('dry-run: nothing written', () => {
 describe('--global: writes to global store', () => {
   it('persists entries to a custom global root, not local root', () => {
     const globalRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-global-test-'));
+    const prevHippoHome = process.env.HIPPO_HOME;
     try {
       initStore(globalRoot);
+      // importChatGPT({ global: true }) resolves its destination via
+      // getGlobalRoot() -> HIPPO_HOME. Without this it writes into the
+      // developer's real ~/.hippo store.
+      process.env.HIPPO_HOME = globalRoot;
 
       const file = writeTmp('prefs.json', JSON.stringify([
         'Prefer explicit over implicit in all code',
@@ -354,6 +359,8 @@ describe('--global: writes to global store', () => {
       const localEntries = loadAllEntries(tmpDir);
       expect(localEntries).toHaveLength(2);
     } finally {
+      if (prevHippoHome === undefined) delete process.env.HIPPO_HOME;
+      else process.env.HIPPO_HOME = prevHippoHome;
       fs.rmSync(globalRoot, { recursive: true, force: true });
     }
   });

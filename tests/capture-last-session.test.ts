@@ -228,7 +228,14 @@ describe('hippo capture --last-session --log-file (end-to-end via CLI)', () => {
     const init = spawnSync(
       process.execPath,
       [binPath, 'init', '--no-hooks', '--no-schedule', '--no-learn'],
-      { cwd: tmp.dir, stdio: 'ignore' },
+      {
+        cwd: tmp.dir,
+        // HIPPO_HOME isolates the global store. `hippo init` registers the
+        // workspace into <globalRoot>/workspaces.json; without this it writes
+        // the developer's real ~/.hippo registry.
+        env: { ...process.env, HIPPO_HOME: tmp.dir },
+        stdio: 'ignore',
+      },
     );
     expect(init.status).toBe(0);
 
@@ -249,6 +256,7 @@ describe('hippo capture --last-session --log-file (end-to-end via CLI)', () => {
       ],
       {
         cwd: tmp.dir,
+        env: { ...process.env, HIPPO_HOME: tmp.dir },
         stdio: ['ignore', 'pipe', 'pipe'],
         encoding: 'utf8',
       },
