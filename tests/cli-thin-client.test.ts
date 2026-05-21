@@ -134,6 +134,28 @@ function runCli(workspace: string, ...cliArgs: string[]): { stdout: string; stde
   }
 }
 
+/**
+ * Async variant of runCli: spawns the CLI without blocking the test event
+ * loop, so an in-process stub HTTP server can serve the spawned CLI's
+ * requests. execFileSync (used by runCli) freezes this process's event loop
+ * for the whole child run, which starves any in-process server.
+ */
+function runCliAsync(workspace: string, ...cliArgs: string[]): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [CLI_PATH, ...cliArgs], {
+      cwd: workspace,
+      env: { ...process.env },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (c: Buffer) => { stdout += c.toString('utf8'); });
+    child.stderr.on('data', (c: Buffer) => { stderr += c.toString('utf8'); });
+    child.on('close', () => resolve({ stdout, stderr }));
+  });
+}
+
 function getActorForContent(workspace: string, contentNeedle: string): string | null {
   const db = openHippoDb(join(workspace, '.hippo'));
   try {
@@ -288,6 +310,55 @@ describe('cli thin-client mode', () => {
       }
     } finally {
       if (server) await server.stop();
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  it('connection-refused fallback clears the pidfile only when it still owns it (cli.ts removePidfileIfOwned)', async () => {
+    const workspace = makeWorkspace();
+    const { createServer } = await import('node:http');
+    const startedAt = new Date().toISOString();
+    const port = await pickFreePort();
+    const pidfilePath = join(workspace, '.hippo', 'server.pid');
+
+    // A stub that answers ONE /health probe (so detectServer returns a live
+    // ServerInfo) then shuts its listener down. detectServer succeeds; the
+    // subsequent HTTP command request hits a closed port and fails
+    // connection-refused — the exact branch that calls removePidfileIfOwned.
+    const stub = createServer((req, res) => {
+      if (req.url === '/health') {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({
+          ok: true, version: '0.0.0', started_at: startedAt, pid: process.pid,
+        }));
+        res.on('finish', () => stub.close());
+        return;
+      }
+      res.writeHead(404);
+      res.end();
+    });
+    await new Promise<void>((resolve) => stub.listen(port, '127.0.0.1', () => resolve()));
+
+    try {
+      // Pidfile names this stub: pid is the (alive) test process so
+      // detectServer's liveness check passes, started_at matches /health.
+      writeFileSync(pidfilePath, JSON.stringify({
+        schema: 1, pid: process.pid, port,
+        url: `http://127.0.0.1:${port}`, started_at: startedAt,
+      }));
+
+      const run = await runCliAsync(workspace, 'remember', 'conn-refused-canary-55');
+      expect(run.stdout + run.stderr).toMatch(/Remembered|fallback/i);
+
+      // The pidfile named the (now dead) server detectServer probed, so
+      // removePidfileIfOwned cleared it and the command completed direct.
+      expect(existsSync(pidfilePath)).toBe(false);
+      expect(getActorForContent(workspace, 'conn-refused-canary-55')).toBe('cli');
+    } finally {
+      if (stub.listening) {
+        stub.closeAllConnections?.();
+        await new Promise<void>((resolve) => stub.close(() => resolve()));
+      }
       rmSync(workspace, { recursive: true, force: true });
     }
   }, 30_000);

@@ -179,8 +179,50 @@ export function writePidfile(
 /**
  * Best-effort pidfile removal. Silent on ENOENT or any other error so the
  * caller can use this in shutdown paths without fear of throwing.
+ *
+ * Identity-blind: deletes whatever pidfile is on disk. A shutdown path that
+ * must not clobber a newer server's pidfile should use removePidfileIfOwned.
  */
 export function removePidfile(hippoRoot: string): void {
   const path = join(hippoRoot, PIDFILE);
   try { unlinkSync(path); } catch {}
+}
+
+/**
+ * Remove the pidfile only if it still describes the caller's own server.
+ * Reads and parses the pidfile and unlinks it ONLY when both `pid` and
+ * `started_at` match `owner`. A pidfile rewritten by a newer server is left
+ * intact, so a shutting-down older server cannot orphan the newer one by
+ * deleting its pidfile out from under it.
+ *
+ * Best-effort and never throws: a missing, unreadable, malformed, or
+ * non-object pidfile (including a literal JSON `null`) is "not provably mine"
+ * and left alone — detectServer unlinks a malformed pidfile on its next
+ * probe, so it does not leak. Returns true iff a matching pidfile was removed.
+ *
+ * Residual TOCTOU: the pidfile could be rewritten between the read and the
+ * unlink. The window is microseconds and the shape is the same read-check-
+ * unlink detectServer already uses; this narrows the clobber from an
+ * unbounded window (any time between writePidfile and stop) to a negligible
+ * one.
+ */
+export function removePidfileIfOwned(
+  hippoRoot: string,
+  owner: { pid: number; startedAt: string },
+): boolean {
+  const path = join(hippoRoot, PIDFILE);
+  try {
+    const info: ServerInfo = JSON.parse(readFileSync(path, 'utf8'));
+    // A literal JSON `null` parses cleanly but throws on property access;
+    // that lands in the catch below, which is the intended "not mine" path.
+    if (info.pid !== owner.pid || info.started_at !== owner.startedAt) {
+      return false; // a different server owns the pidfile now
+    }
+    unlinkSync(path);
+    return true;
+  } catch {
+    // Missing, unreadable, malformed, or non-object pidfile, or an unlink
+    // failure: none is a provable own-removal, so report not-removed.
+    return false;
+  }
 }

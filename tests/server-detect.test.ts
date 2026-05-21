@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer, type Server } from 'node:http';
-import { detectServer, writePidfile, removePidfile } from '../src/server-detect.js';
+import { detectServer, writePidfile, removePidfile, removePidfileIfOwned } from '../src/server-detect.js';
 import { serve } from '../src/server.js';
 
 // hippoRoot is the directory the pidfile sits directly inside, matching the
@@ -168,6 +168,118 @@ describe('server-detect', () => {
       }));
       expect(await detectServer(home)).toBeNull();
       expect(existsSync(pidfile)).toBe(false);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('removePidfileIfOwned removes the pidfile when pid and started_at both match', () => {
+    const home = makeRoot();
+    const pidfile = join(home, 'server.pid');
+    try {
+      const startedAt = new Date().toISOString();
+      writeFileSync(pidfile, JSON.stringify({
+        schema: 1, pid: process.pid, port: 6789,
+        url: 'http://127.0.0.1:6789', started_at: startedAt,
+      }));
+      expect(removePidfileIfOwned(home, { pid: process.pid, startedAt })).toBe(true);
+      expect(existsSync(pidfile)).toBe(false);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('removePidfileIfOwned keeps the pidfile when started_at differs (a newer server rewrote it)', () => {
+    const home = makeRoot();
+    const pidfile = join(home, 'server.pid');
+    try {
+      // Same pid (a second server could share this process), different
+      // started_at. The (pid, started_at) tuple must treat this as not-ours.
+      writeFileSync(pidfile, JSON.stringify({
+        schema: 1, pid: process.pid, port: 6790,
+        url: 'http://127.0.0.1:6790', started_at: '2099-01-01T00:00:00.000Z',
+      }));
+      expect(removePidfileIfOwned(home, {
+        pid: process.pid, startedAt: '2026-01-01T00:00:00.000Z',
+      })).toBe(false);
+      expect(existsSync(pidfile)).toBe(true);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('removePidfileIfOwned keeps the pidfile when pid differs', () => {
+    const home = makeRoot();
+    const pidfile = join(home, 'server.pid');
+    try {
+      const startedAt = new Date().toISOString();
+      // started_at matches but the pid is a different process. The pid value
+      // is arbitrary — removePidfileIfOwned compares it, never probes it.
+      writeFileSync(pidfile, JSON.stringify({
+        schema: 1, pid: process.pid + 1, port: 6789,
+        url: 'http://127.0.0.1:6789', started_at: startedAt,
+      }));
+      expect(removePidfileIfOwned(home, { pid: process.pid, startedAt })).toBe(false);
+      expect(existsSync(pidfile)).toBe(true);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('removePidfileIfOwned returns false without throwing when no pidfile exists', () => {
+    const home = makeRoot();
+    try {
+      expect(removePidfileIfOwned(home, {
+        pid: process.pid, startedAt: new Date().toISOString(),
+      })).toBe(false);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('removePidfileIfOwned leaves a malformed pidfile in place without throwing', () => {
+    const home = makeRoot();
+    const pidfile = join(home, 'server.pid');
+    try {
+      writeFileSync(pidfile, 'not json at all');
+      expect(removePidfileIfOwned(home, {
+        pid: process.pid, startedAt: new Date().toISOString(),
+      })).toBe(false);
+      // Not provably ours, so left alone; detectServer unlinks malformed
+      // pidfiles on its next probe.
+      expect(existsSync(pidfile)).toBe(true);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('removePidfileIfOwned keeps a valid-JSON pidfile that lacks pid and started_at', () => {
+    const home = makeRoot();
+    const pidfile = join(home, 'server.pid');
+    try {
+      // Parses as JSON but carries no pid/started_at — info.pid is undefined,
+      // so the identity check fails closed and the file is left in place.
+      writeFileSync(pidfile, JSON.stringify({ schema: 1, port: 6789 }));
+      expect(removePidfileIfOwned(home, {
+        pid: process.pid, startedAt: new Date().toISOString(),
+      })).toBe(false);
+      expect(existsSync(pidfile)).toBe(true);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('removePidfileIfOwned leaves a pidfile that is literally JSON null without throwing', () => {
+    const home = makeRoot();
+    const pidfile = join(home, 'server.pid');
+    try {
+      // `null` parses cleanly but is not an object — property access on it
+      // throws. removePidfileIfOwned must absorb that, not propagate it.
+      writeFileSync(pidfile, 'null');
+      expect(removePidfileIfOwned(home, {
+        pid: process.pid, startedAt: new Date().toISOString(),
+      })).toBe(false);
+      expect(existsSync(pidfile)).toBe(true);
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
