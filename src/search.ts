@@ -20,6 +20,7 @@ import type { PhysicsConfig } from './physics-config.js';
 import { DEFAULT_PHYSICS_CONFIG } from './physics-config.js';
 import { loadPhysicsState } from './physics-state.js';
 import { openHippoDb, closeHippoDb } from './db.js';
+import { rrfFuse } from './rrf.js';
 
 // ---------------------------------------------------------------------------
 // Tokenizer
@@ -350,27 +351,22 @@ export async function hybridSearch(
     }
   }
 
-  // For RRF: build rank maps from BM25 and cosine orderings
+  // RRF fusion: shared with the F9 LongMemEval benchmark via src/rrf.ts.
+  // `absentRank: entries.length + 1` preserves the pre-extraction convention
+  // (rrfFuse's default would otherwise use the max ranked-list length, which
+  // matches in the current filter path but differs if filtering ever changes).
   let rrfScores: Map<number, number> | null = null;
   if (useEmbeddings && scoringMode === 'rrf') {
-    const RRF_K = 60;
-    const bm25Ranked = entries.map((_, i) => i).filter(i => bm25Scores[i] > 0 || cosineScores[i] > 0);
-    bm25Ranked.sort((a, b) => bm25Scores[b] - bm25Scores[a]);
-    const cosineRanked = entries.map((_, i) => i).filter(i => bm25Scores[i] > 0 || cosineScores[i] > 0);
-    cosineRanked.sort((a, b) => cosineScores[b] - cosineScores[a]);
-
-    const bm25RankMap = new Map<number, number>();
-    bm25Ranked.forEach((idx, rank) => bm25RankMap.set(idx, rank + 1));
-    const cosineRankMap = new Map<number, number>();
-    cosineRanked.forEach((idx, rank) => cosineRankMap.set(idx, rank + 1));
-
-    rrfScores = new Map();
-    const allCandidates = new Set([...bm25Ranked, ...cosineRanked]);
-    for (const idx of allCandidates) {
-      const bm25Rank = bm25RankMap.get(idx) ?? (entries.length + 1);
-      const cosineRank = cosineRankMap.get(idx) ?? (entries.length + 1);
-      rrfScores.set(idx, bm25Weight / (RRF_K + bm25Rank) + embeddingWeight / (RRF_K + cosineRank));
-    }
+    const eligible = entries
+      .map((_, i) => i)
+      .filter((i) => bm25Scores[i] > 0 || cosineScores[i] > 0);
+    const bm25Ranked = [...eligible].sort((a, b) => bm25Scores[b] - bm25Scores[a]);
+    const cosineRanked = [...eligible].sort((a, b) => cosineScores[b] - cosineScores[a]);
+    rrfScores = rrfFuse(
+      [bm25Ranked, cosineRanked],
+      [bm25Weight, embeddingWeight],
+      { absentRank: entries.length + 1 },
+    );
   }
 
   // Score each entry
