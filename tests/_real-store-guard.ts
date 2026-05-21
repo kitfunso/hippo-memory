@@ -14,9 +14,20 @@ import { existsSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
+// Resolve the global store the way src/shared.ts getGlobalRoot() does:
+// HIPPO_HOME, then XDG_DATA_HOME/hippo, then ~/.hippo. Watching only
+// ~/.hippo would miss a leak when XDG_DATA_HOME or HIPPO_HOME is set.
+function globalStoreRoot(): string {
+  const hippoHome = process.env.HIPPO_HOME?.trim();
+  if (hippoHome) return hippoHome;
+  const xdg = process.env.XDG_DATA_HOME?.trim();
+  if (xdg) return join(xdg, 'hippo');
+  return join(homedir(), '.hippo');
+}
+
 const REAL_STORES = [
   join(process.cwd(), '.hippo'), // project-local store
-  join(homedir(), '.hippo'), // global store
+  globalStoreRoot(), // global store
 ];
 
 function snapshot(dir: string): string {
@@ -28,7 +39,8 @@ function snapshot(dir: string): string {
       const r = rel ? `${rel}/${name}` : name;
       const st = statSync(abs);
       if (st.isDirectory()) walk(abs, r);
-      else files.push(`${r}:${st.size}`);
+      // size + mtime so a same-size in-place rewrite is still caught.
+      else files.push(`${r}:${st.size}:${st.mtimeMs}`);
     }
   };
   walk(dir, '');
