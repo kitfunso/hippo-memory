@@ -193,11 +193,12 @@ Dense index re-build: 199,509 turns, BGE-base, 7,226.9s wall (27.61 turns/s — 
 
 **FAIL.** Best hybrid variant `turn_sym` R@5 = 50.8 on `_s`, against the binding threshold of 97.7 (gbrain v0.28.8 + the prior-track cushion — the same threshold F14/F15/F16 were measured against, not lowered).
 
-Per the prereg's HARD RETRACTION clause, F9's eval artifacts are retracted:
-- BM25 corpus artifacts (`benchmarks/longmemeval/data/bm25_corpus_*.json`) — gitignored, deleted post-eval.
-- `_s` dense rebuild (`turn_index_bge_s.json.jsonl`, 3.45 GB) — gitignored, deleted post-eval.
+Per the prereg's HARD RETRACTION clause, F9's eval artifacts are retracted (all gitignored — never in version control — and deleted from disk post-eval, 2026-05-21):
+- BM25 corpus artifacts: `benchmarks/longmemeval/data/bm25_corpus_*.json` (oracle, `_s`, and the smoke-fixture corpora — ~512 MB).
+- Dense turn indices: `benchmarks/longmemeval/data/turn_index_bge_s.json.jsonl` (3.45 GB) and `turn_index_bge_oracle.json.jsonl` (182 MB).
+- Retained: the per-query retrieval JSONLs + `summary.json` under `results/f9_phase{1,2}/` (the result data this doc tabulates; gitignored, small) and the `model-cache/Xenova/bge-base-en-v1.5/` weights (vendored, pre-date F9, reusable). The two BM25 corpora + both dense indices are rebuildable from the committed scripts (`chunk_per_turn_bm25_index.mjs` ~17 s, `chunk_per_turn_embed.mjs` ~9 min oracle / ~2 h `_s`) if a follow-up needs them.
 - This result doc is retained as the negative-result audit trail.
-- No CHANGELOG / README / ROADMAP-RESEARCH number claim. ROADMAP-RESEARCH F9 status moves to `[shipped]` only in the sense of "measured and retracted" (the F14/F15/F16 pattern), NOT "Gate-B PASS".
+- No CHANGELOG / README / ROADMAP-RESEARCH number claim. ROADMAP-RESEARCH F9 status stays unchanged per the prereg (no FAIL-track ROADMAP update).
 
 ### Soft-criterion characterisation (descriptive, NOT a magnitude claim)
 
