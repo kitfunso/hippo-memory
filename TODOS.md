@@ -75,7 +75,9 @@ From `/review` on commits 41b1f4d..6456e7d (now hardened to 00764ce). Each item 
 
 - [ ] **--scope CLI semantics.** `hippo remember --scope <v>` writes both the envelope `scope` column AND a `scope:<v>` tag. Recall's `--scope` filter currently matches the tag form. Decide: rename envelope flag to `--envelope-scope`, OR teach recall to filter the envelope column. Belongs in **A5** (auth/multi-tenancy) where scope semantics tighten. Until then, dual-write is documented in MEMORY_ENVELOPE.md.
 
-- [ ] **Wire `hippo forget` for raw rows.** Today `hippo forget <raw-id>` aborts via the append-only trigger with no user-facing recovery. Add a `--archive --reason --owner` mode to `hippo forget` that routes through `archiveRawMemory`. Belongs in **A4** (lifecycle compliance). Until then, `--kind raw` is gated at the CLI so users can't create unforgettable rows.
+- [x] **Wire `hippo forget` for raw rows.** Shipped 2026-05-21 (`docs/plans/2026-05-21-server-lifecycle-hardening.md`, item A3): `hippo forget <id> --archive --reason "<why>"` routes through `api.archiveRaw`, and the non-archive path now distinguishes the append-only abort from a true not-found. Per eng-review decision D1, no `--owner` flag; the envelope owner is a separate A3 concern.
+
+- [ ] **`hippo forget --archive` HTTP route.** `--archive` always takes the direct path (`cmdForget` → `api.archiveRaw`): the `forget` dispatch skips server routing for archive requests, since the HTTP `forget` route does not carry `--archive`. Correct and WAL-safe, but archive is the one `forget` path that does not route through a running server. If strict single-writer routing matters, extend the HTTP `forget` route + `client.forget` to carry the archive intent. Low priority. Noted 2026-05-21.
 
 - [ ] **--owner format validation.** Currently any string is accepted. The documented contract is `user:<id>` or `agent:<id>`. Add regex validation `^(user|agent):[A-Za-z0-9_-]+$` either as warn-only (log, accept) or strict-reject. Decide alongside A5.
 
@@ -356,3 +358,11 @@ v0.39 could ship the CRITICAL cross-tenant fixes without scope creep.
   `req.destroy()` on the BodyTooLargeError path so the socket closes
   cleanly instead of accepting another MB of bytes the server will
   immediately discard.
+
+- [ ] **`stop()` can unlink a newer server's pidfile.** `serve()`'s `stop()`
+  calls `removePidfile` unconditionally. If server A is shutting down while
+  server B has already started and rewritten the pidfile, A's stop deletes
+  B's pidfile and orphans the live B. Flagged by codex review 2026-05-21;
+  out of scope for the 2026-05-21 lifecycle-hardening release (`stop()` /
+  `removePidfile` were not in that diff). Fix: in `stop()`, unlink only when
+  the pidfile's `pid` + `started_at` match this server handle.

@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
 import { createHash } from 'node:crypto';
-import { writePidfile, removePidfile } from './server-detect.js';
+import { detectServer, writePidfile, removePidfile } from './server-detect.js';
 import { resolveTenantId } from './tenant.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { PACKAGE_VERSION } from './version.js';
@@ -1413,6 +1413,21 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     );
   }
 
+  // H3: refuse to start if a live hippo server already serves this hippoRoot.
+  // detectServer probes the recorded /health — a stale pidfile is unlinked and
+  // ignored, but a live peer means a concurrent `hippo serve` would race for
+  // the port and clobber the pidfile.
+  const existing = await detectServer(opts.hippoRoot);
+  if (existing) {
+    throw new Error(
+      `hippo serve: already running on port ${existing.port} (pid ${existing.pid}). ` +
+      `Stop that server before starting another on the same hippoRoot.`,
+    );
+  }
+
+  // The server's start time. Single source of truth: it is returned by every
+  // GET /health response and (below) written into the pidfile, so detectServer
+  // can match the two and prove a pid-reusing impostor is not the real server.
   const startedAt = new Date().toISOString();
 
   const server: Server = createServer((req, res) => {
@@ -1423,6 +1438,11 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
       }
       if (err instanceof BodyTooLargeError) {
         sendError(res, 413, err.message);
+        // M3: readBody hit the 1 MB cap mid-stream, so the request body is
+        // only partially consumed. Destroy the socket rather than let the
+        // client's remaining (unbounded) bytes drain into an exchange we have
+        // already answered.
+        req.destroy();
         return;
       }
       if (err instanceof HttpError) {
@@ -1467,7 +1487,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const actualPort = address.port;
   const url = `http://${host}:${actualPort}`;
 
-  writePidfile(opts.hippoRoot, { port: actualPort, url });
+  writePidfile(opts.hippoRoot, { port: actualPort, url, startedAt });
 
   let stopping = false;
   const stop = async (): Promise<void> => {

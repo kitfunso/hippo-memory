@@ -232,4 +232,63 @@ describe('cli thin-client mode', () => {
       rmSync(workspace, { recursive: true, force: true });
     }
   }, 15_000);
+
+  it('errors instead of silently falling back when HIPPO_REQUIRE_SERVER is set (H2)', () => {
+    const workspace = makeWorkspace();
+    try {
+      // No server running. With HIPPO_REQUIRE_SERVER set the CLI must NOT
+      // quietly drop to direct mode — that masks a misconfiguration (and
+      // silently discards a configured HIPPO_API_KEY). It must fail loudly.
+      process.env.HIPPO_REQUIRE_SERVER = '1';
+      const run = runCli(workspace, 'remember', 'require-server-canary-66');
+      expect(run.stdout + run.stderr).toMatch(/HIPPO_REQUIRE_SERVER/);
+      // The memory must not have been written via the direct path.
+      expect(getActorForContent(workspace, 'require-server-canary-66')).toBeNull();
+    } finally {
+      delete process.env.HIPPO_REQUIRE_SERVER;
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  }, 15_000);
+
+  it('hippo forget --archive bypasses the server and archives directly (A3)', async () => {
+    const workspace = makeWorkspace();
+    let server: SpawnedServer | null = null;
+    try {
+      // Insert a raw memory directly; connectors create these, the CLI gates --kind raw.
+      const hippoRoot = join(workspace, '.hippo');
+      const db = openHippoDb(hippoRoot);
+      try {
+        db.prepare(
+          `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, ` +
+          `half_life_days, layer, tags_json, emotional_valence, schema_fit, source, ` +
+          `conflicts_with_json, pinned, confidence, content, kind) VALUES ` +
+          `('mem_rawthin', '2026-01-01', '2026-01-01', 0, 1.0, 7, 'episodic', '[]', ` +
+          `'neutral', 0.5, 'connector', '[]', 0, 'observed', 'connector raw content', 'raw')`,
+        ).run();
+      } finally {
+        closeHippoDb(db);
+      }
+
+      const port = await pickFreePort();
+      server = await startServer(workspace, port);
+
+      // With the server up, a plain forget routes over HTTP. forget --archive must
+      // not route there (the HTTP path cannot archive); it takes the direct path.
+      const run = runCli(workspace, 'forget', 'mem_rawthin', '--archive', '--reason', 'thin-client archive test');
+      expect(run.stdout, `stderr: ${run.stderr}`).toMatch(/Archived mem_rawthin/);
+
+      // Row archived: gone from memories, archive_raw audit emitted.
+      const db2 = openHippoDb(hippoRoot);
+      try {
+        expect(db2.prepare(`SELECT id FROM memories WHERE id = 'mem_rawthin'`).get()).toBeUndefined();
+        const events = queryAuditEvents(db2, { tenantId: 'default', op: 'archive_raw', limit: 10 });
+        expect(events.length).toBeGreaterThan(0);
+      } finally {
+        closeHippoDb(db2);
+      }
+    } finally {
+      if (server) await server.stop();
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  }, 30_000);
 });

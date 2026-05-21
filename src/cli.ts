@@ -14,7 +14,7 @@
  *   hippo session <log|show|latest|resume|complete>
  *   hippo handoff <create|latest|show>
  *   hippo current <show>
- *   hippo forget <id>
+ *   hippo forget <id> [--archive --reason "<why>"]
  *   hippo inspect <id>
  *   hippo embed [--status]
  *   hippo watch "<command>"
@@ -223,6 +223,22 @@ function requireInit(hippoRoot: string): void {
 }
 
 /**
+ * H2: when HIPPO_REQUIRE_SERVER is set, the CLI must not silently fall back to
+ * direct DB mode — a missing server then masks a real misconfiguration (the
+ * configured HIPPO_API_KEY is also silently discarded on fallback). Throws a
+ * clear, actionable error in that case; a no-op when the knob is unset, so
+ * default behaviour is unchanged.
+ */
+function failIfServerRequired(reason: string): void {
+  if (process.env['HIPPO_REQUIRE_SERVER']) {
+    throw new Error(
+      `hippo: HIPPO_REQUIRE_SERVER is set but ${reason}. ` +
+      `Start \`hippo serve\`, or unset HIPPO_REQUIRE_SERVER to allow direct-mode fallback.`,
+    );
+  }
+}
+
+/**
  * Run an HTTP-routed command if a `hippo serve` instance is detected for
  * `hippoRoot`. Returns:
  *   - true  if the HTTP path ran (success OR a structured server error that
@@ -232,19 +248,26 @@ function requireInit(hippoRoot: string): void {
  *           and the caller should fall back to the direct path.
  *
  * Per the A1 plan footgun #1: stale pidfiles must self-heal, not crash.
+ * H2: when HIPPO_REQUIRE_SERVER is set, both fallback paths throw instead of
+ * returning false, so a missing server fails loudly rather than silently
+ * degrading to direct mode.
  */
 async function runViaServerIfAvailable(
   hippoRoot: string,
   httpFn: (info: ServerInfo, apiKey: string | undefined) => Promise<void>,
 ): Promise<boolean> {
-  const info = detectServer(hippoRoot);
-  if (!info) return false;
+  const info = await detectServer(hippoRoot);
+  if (!info) {
+    failIfServerRequired('no running server was detected for this hippoRoot');
+    return false;
+  }
   const apiKey = process.env['HIPPO_API_KEY'];
   try {
     await httpFn(info, apiKey);
     return true;
   } catch (err) {
     if (client.isConnectionRefused(err)) {
+      failIfServerRequired('the server pidfile was stale (connection refused)');
       console.error('hippo: stale server pidfile detected, falling back to direct mode');
       removePidfile(hippoRoot);
       return false;
@@ -2675,7 +2698,11 @@ function cmdOutcome(
   console.log(`Applied ${good ? 'positive' : 'negative'} outcome to ${updated} memor${updated === 1 ? 'y' : 'ies'}`);
 }
 
-function cmdForget(hippoRoot: string, id: string): void {
+function cmdForget(
+  hippoRoot: string,
+  id: string,
+  flags: Record<string, string | boolean | string[]>,
+): void {
   requireInit(hippoRoot);
 
   const ctx: api.Context = {
@@ -2683,12 +2710,43 @@ function cmdForget(hippoRoot: string, id: string): void {
     tenantId: resolveTenantId({}),
     actor: 'cli',
   };
+
+  // A3: raw memories (Slack / GitHub connector ingestion) are append-only — a
+  // BEFORE-DELETE trigger aborts any delete. archiveRaw is the sanctioned
+  // removal path; it records ctx.actor as the archiver for provenance.
+  if (flags['archive'] === true) {
+    const reason = typeof flags['reason'] === 'string' ? flags['reason'] : null;
+    if (!reason) {
+      console.error('hippo forget --archive requires --reason "<why>" (recorded on the archive).');
+      process.exit(1);
+    }
+    try {
+      api.archiveRaw(ctx, id, reason);
+      updateStats(hippoRoot, { forgotten: 1 });
+      console.log(`Archived ${id}`);
+    } catch (err) {
+      console.error(`Could not archive ${id}: ${err instanceof Error ? err.message : String(err)}`);
+      process.exit(1);
+    }
+    return;
+  }
+
   try {
     api.forget(ctx, id);
     updateStats(hippoRoot, { forgotten: 1 });
     console.log(`Forgot ${id}`);
-  } catch {
-    console.error(`Memory not found: ${id}`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/append-only/i.test(msg)) {
+      // The delete was refused by the append-only trigger — this is a raw
+      // memory, not a missing one. Point the user at the archive path.
+      console.error(
+        `Cannot forget ${id}: it is a raw, append-only memory. ` +
+        `Archive it instead: hippo forget ${id} --archive --reason "<why>"`,
+      );
+    } else {
+      console.error(`Memory not found: ${id}`);
+    }
     process.exit(1);
   }
 }
@@ -5458,6 +5516,8 @@ Commands:
     current show           Active task + recent session events (default)
       --json               Output as JSON
   forget <id>              Force remove a memory
+    --archive              Archive a raw (append-only) memory instead of deleting
+    --reason "<why>"       Reason recorded on the archive (required with --archive)
   inspect <id>             Show full memory detail
   embed                    Embed all memories for semantic search
     --status               Show embedding coverage
@@ -5924,17 +5984,22 @@ async function main(): Promise<void> {
         console.error('Please provide a memory ID.');
         process.exit(1);
       }
-      const routed = await runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
-        try {
-          await client.forget(info.url, apiKey, id);
-          console.log(`Forgot ${id}`);
-        } catch (err) {
-          console.error((err as Error).message);
-          process.exit(1);
-        }
-      });
-      if (routed) break;
-      cmdForget(hippoRoot, id);
+      // A3: --archive is a direct-DB operation (raw archival via archiveRaw);
+      // the HTTP forget route does not carry it, so archive requests always
+      // take the direct path rather than silently no-op'ing over a server.
+      if (flags['archive'] !== true) {
+        const routed = await runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
+          try {
+            await client.forget(info.url, apiKey, id);
+            console.log(`Forgot ${id}`);
+          } catch (err) {
+            console.error((err as Error).message);
+            process.exit(1);
+          }
+        });
+        if (routed) break;
+      }
+      cmdForget(hippoRoot, id, flags);
       break;
     }
 
