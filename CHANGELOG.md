@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.10.0 (2026-05-21): server and lifecycle hardening
+
+A pivot from the F-track research arc to product hardening. This release closes the "server / lifecycle hardening" cluster from `TODOS.md`: deferred follow-ups from the v0.37 server-mode work, the v0.40 security pass, and the A3 envelope review. Plan: `docs/plans/2026-05-21-server-lifecycle-hardening.md`.
+
+### Shipped
+
+- **H1: stale-pidfile and PID-reuse detection.** `detectServer` (`src/server-detect.ts`) is now async. After the `process.kill(pid, 0)` liveness check it issues a `GET /health` and confirms the answering process is this hippo server by matching `started_at`, so a reused pid that passes the signal check but belongs to a different or non-hippo process is caught. `serve()` threads one `startedAt` into both the pidfile and `/health` so the values are comparable. The probe runs only when a pidfile exists and the pid is live, so the common no-server path is unchanged. The probe target is validated as a loopback `http` url, the response body is read under a 64 KB cap, and a probe timeout (ambiguous, since the server may be alive but busy) returns null without unlinking the pidfile.
+- **L3: pidfile schema version.** The pidfile now carries `schema: 1`; readers treat a missing `schema` as legacy and still accept it.
+- **H3: concurrent `hippo serve` detection.** `serve()` probes for a live peer before `listen()` and refuses to start with a clear "already running on port N" error instead of racing for the pidfile.
+- **M3: oversized-body socket leak.** The `BodyTooLargeError` (413) path now calls `req.destroy()` so the remainder of an over-cap request body is not drained into an already-answered exchange.
+- **H2: `HIPPO_REQUIRE_SERVER` env knob.** When set, the CLI errors instead of silently falling back to direct mode (which discards a configured `HIPPO_API_KEY`). Default behaviour is unchanged.
+- **A3: `hippo forget --archive --reason`.** `hippo forget <id>` on a raw, append-only memory previously failed with a misleading "Memory not found". It now reports the append-only nature and points at `--archive`, which routes to the sanctioned `api.archiveRaw` path. `--archive` always takes the direct path; the HTTP `forget` route does not carry it.
+
+### Tests
+
+New `tests/cli-forget.test.ts` (4 cases). `tests/server-detect.test.ts` rewritten (9 cases: the H1 probe matrix, the L3 schema cases, and a forged-pidfile rejection). `tests/server-lifecycle.test.ts` gains H3 and M3 cases; `tests/cli-thin-client.test.ts` gains H2 and a `forget --archive` bypass case. Full suite: 216 files, 1557 tests, green.
+
+### Not in this release
+
+- Phase 3 tenant-guard threading (deferred to its own plan).
+- `hippo forget --archive` over the server-routed HTTP path, and a `stop()` pidfile-ownership check (both tracked in `TODOS.md`).
+
 ## 1.9.3 (2026-05-20) — reranker review-tail patch
 
 This release does not re-assert the retracted −10pp magnitude.

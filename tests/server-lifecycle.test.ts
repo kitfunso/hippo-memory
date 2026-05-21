@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serve } from '../src/server.js';
@@ -104,6 +104,57 @@ describe('server lifecycle', () => {
       expect(body.ok).toBe(true);
     } finally {
       await second.stop();
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses to start a second server on a hippoRoot already served (H3)', async () => {
+    const home = makeRoot();
+    const first = await serve({ hippoRoot: home, port: 0 });
+    try {
+      // A concurrent `hippo serve` on the same root must be rejected before it
+      // can listen or clobber the pidfile.
+      await expect(serve({ hippoRoot: home, port: 0 }))
+        .rejects.toThrow(/already running/i);
+
+      // The pidfile must still describe the first (real) server, uncorrupted.
+      const info = JSON.parse(readFileSync(join(home, 'server.pid'), 'utf8'));
+      expect(info.port).toBe(first.port);
+      expect(info.pid).toBe(process.pid);
+    } finally {
+      await first.stop();
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects an over-1MB request body with 413 and destroys the socket (M3)', async () => {
+    const home = makeRoot();
+    const handle = await serve({ hippoRoot: home, port: 0 });
+    // Exactly one byte over readBody's 1 MB cap. The +1 matters: the server
+    // reads the whole body before `total > cap` trips, so the request is fully
+    // consumed and req.destroy() is a clean close (no RST) — the 413 reaches
+    // the client deterministically. A larger body leaves the client mid-upload
+    // when the socket dies, which fetch cannot resolve into a response.
+    const oversize = 'x'.repeat(1024 * 1024 + 1);
+    const postOversize = async (path: string): Promise<number> => {
+      const res = await fetch(`${handle.url}${path}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: oversize,
+      });
+      await res.text().catch(() => { /* body stream may be cut by req.destroy */ });
+      return res.status;
+    };
+    try {
+      // The cap lives in readBody, shared by every route — exercise the generic
+      // /v1 route and a webhook route, which both call it before any auth.
+      expect(await postOversize('/v1/memories')).toBe(413);
+      expect(await postOversize('/v1/connectors/slack/events')).toBe(413);
+      // The server shed the oversized requests without wedging — still serving.
+      const health = await fetch(`${handle.url}/health`);
+      expect(health.status).toBe(200);
+    } finally {
+      await handle.stop();
       rmSync(home, { recursive: true, force: true });
     }
   });

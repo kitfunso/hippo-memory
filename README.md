@@ -85,6 +85,11 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.10.0
+
+- **Server and lifecycle hardening.** Closes the `TODOS.md` "server / lifecycle hardening" cluster (deferred follow-ups from the v0.37 server-mode work, the v0.40 security pass, and the A3 envelope review), six items in all. `detectServer` is now async and confirms a recorded server is genuinely this hippo process by matching a `/health` `started_at` before the CLI routes to it (H1). The pidfile carries a `schema` version (L3). `hippo serve` refuses to start when a live peer already serves the hippoRoot (H3). The 413 over-cap-body path closes the socket instead of draining the rest (M3). A `HIPPO_REQUIRE_SERVER` env knob turns a missing server into a loud error instead of a silent direct-mode fallback that discards `HIPPO_API_KEY` (H2). And `hippo forget --archive --reason` gives raw, append-only memories a real removal path via `archiveRaw` instead of a misleading "not found" (A3).
+- **Reviewed via the dev-framework chain.** self-review, an independent code review, a cross-model codex (gpt-5.5) pass, and a security pass. Four findings were fixed before ship: the `forget --archive` server-routing bypass, an unbounded `/health` response parse, a timeout that wrongly unlinked a busy server's pidfile, and pidfile-url validation against off-box redirection. Full suite green: 216 files, 1557 tests.
+
 ### What's new in v1.9.3
 
 - **Reranker review-tail patch.** Closes the three follow-ups raised on PR #25: `src/rerankers/llm.ts` now wires `AbortController` + `setTimeout` around the fetch (default 30 s, overridable via `HIPPO_LLM_RERANKER_TIMEOUT_MS`) so recall never hangs on a wedged endpoint; `src/rerankers/cross-encoder.ts` emits a single `console.warn` on first identity-fallback per process so silent fallback no longer masquerades as a working reranker; the orphan `RerankSignals` type (sole consumer retracted in v1.9.1) is removed at both the re-export and the definition.
