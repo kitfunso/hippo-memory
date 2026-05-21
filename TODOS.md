@@ -327,32 +327,32 @@ v0.39 could ship the CRITICAL cross-tenant fixes without scope creep.
 
 ## v0.37.0 — server hardening follow-ups
 
-- [ ] **H1 — stale-pidfile + PID-reuse-with-different-port.** A
+- [x] **H1 — stale-pidfile + PID-reuse-with-different-port.** A
   detectServer caller can read a pidfile whose pid was reused by an
   unrelated process on a different port; current detection only checks
   pid liveness. Fix: round-trip the `started_at` value from `/health`
   against the pidfile's recorded server start so a reused pid with a
   fresh boot timestamp is treated as stale.
 
-- [ ] **H2 — HIPPO_API_KEY silently dropped on fallback.** When the CLI
+- [x] **H2 — HIPPO_API_KEY silently dropped on fallback.** When the CLI
   thin-client cannot reach the server, it falls back to direct mode and
   silently ignores the configured api key. That's the right default for
   dev ergonomics but masks production misconfiguration. Add a
   `HIPPO_REQUIRE_SERVER` env knob: when set, the fallback is an error
   instead of a silent direct-mode call.
 
-- [ ] **H3 — concurrent serve, no winner detection.** Two `hippo serve`
+- [x] **H3 — concurrent serve, no winner detection.** Two `hippo serve`
   invocations on the same hippoRoot race the listen() and overwrite
   each other's pidfile; the loser exits with EADDRINUSE but the winner
   may already have lost its pidfile entry. Call `detectServer` at boot
   and refuse to start if a live peer responds on the recorded port.
 
-- [ ] **L3 — pidfile JSON has no schema version.** Adding a field today
+- [x] **L3 — pidfile JSON has no schema version.** Adding a field today
   requires sniffing the shape. Add a `schema: 1` field so future
   pidfile readers can branch on a real version instead of `'startedAt'
   in payload` checks.
 
-- [ ] **M3 — BodyTooLargeError mid-stream leaves the socket open.**
+- [x] **M3 — BodyTooLargeError mid-stream leaves the socket open.**
   When `readBody` aborts on the 1MB cap, the rest of the request body
   drains into the listener after the response is sent. Call
   `req.destroy()` on the BodyTooLargeError path so the socket closes
