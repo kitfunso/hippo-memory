@@ -1,6 +1,6 @@
 # Conflict-subsystem tenant isolation (E2)
 
-Status: PLANNED — dev-framework-rl episode 01KS7HH20Y6SE3T898P3AE8CPM
+Status: SHIPPED v1.11.0 — dev-framework-rl episode 01KS7HH20Y6SE3T898P3AE8CPM
 Roadmap: v0.40.0 security follow-ups — "Tenant-guard audit on remaining MCP tools"
 
 ## Context
