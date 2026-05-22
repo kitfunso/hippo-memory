@@ -2,12 +2,12 @@
 
 ## 1.10.1 (2026-05-21): stop() pidfile-ownership guard
 
-A single-fix patch release closing the last open item in the v0.37 server-hardening cluster, deferred from v1.10.0. Plan: `docs/plans/2026-05-21-stop-pidfile-ownership.md`.
+A patch release closing the last open item in the v0.37 server-hardening cluster (deferred from v1.10.0), plus a sync of every version field to `1.10.1`. Plan: `docs/plans/2026-05-21-stop-pidfile-ownership.md`.
 
 ### Shipped
 
 - **`stop()` no longer unlinks a newer server's pidfile.** `serve()`'s `stop()` and the `cli.ts` `runViaServerIfAvailable` stale-pidfile self-heal both removed `server.pid` unconditionally. If a second server had started on the same hippoRoot and rewritten the pidfile, the first server's shutdown deleted the second one's pidfile and orphaned it (no longer discoverable by `detectServer` or the thin client). The new `removePidfileIfOwned` (`src/server-detect.ts`) unlinks the pidfile only when its recorded `(pid, started_at)` identity matches the caller's own; `stop()` and the cli self-heal are rewired to it. `removePidfile` (unconditional removal) is retained as a primitive. A residual microsecond read-to-unlink window is documented and accepted, consistent with `detectServer`.
-- **`openclaw.plugin.json` version parity.** The root OpenClaw manifest was left at `1.9.3` by v1.10.0; it now tracks `package.json` at `1.10.1`, which `tests/openclaw-package.test.ts` enforces.
+- **Every version field synced to `1.10.1`.** `package.json`, the lockfile, `openclaw.plugin.json`, `src/version.ts` (`PACKAGE_VERSION`), and both `extensions/openclaw-plugin` manifests are now consistent. v1.9.x and v1.10.0 had bumped only some: `openclaw.plugin.json` was stranded at `1.9.3` (caught by `tests/openclaw-package.test.ts`), and `src/version.ts` at `1.8.1` left `/health` and the MCP `serverInfo` under-reporting the version. A version-parity guard covering every manifest is tracked in `TODOS.md` so the drift cannot recur.
 
 ### Tests
 
@@ -15,7 +15,6 @@ A single-fix patch release closing the last open item in the v0.37 server-harden
 
 ### Not in this release
 
-- `src/version.ts` `PACKAGE_VERSION` is still `1.8.1`, and `extensions/openclaw-plugin/package.json` and `extensions/openclaw-plugin/openclaw.plugin.json` are still `1.9.3`: version-field drift left by the v1.9.x and v1.10.0 releases. None is version-parity-tested, so none blocked this release, but `/health` and the MCP `serverInfo` consequently under-report the version. Tracked in `TODOS.md` together with the root cause: the release process does not sync every version field.
 - `hippo forget --archive` over the server-routed HTTP path (tracked in `TODOS.md`).
 
 ## 1.10.0 (2026-05-21): server and lifecycle hardening
