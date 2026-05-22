@@ -79,7 +79,7 @@ From `/review` on commits 41b1f4d..6456e7d (now hardened to 00764ce). Each item 
 
 - [ ] **`hippo forget --archive` HTTP route.** `--archive` always takes the direct path (`cmdForget` → `api.archiveRaw`): the `forget` dispatch skips server routing for archive requests, since the HTTP `forget` route does not carry `--archive`. Correct and WAL-safe, but archive is the one `forget` path that does not route through a running server. If strict single-writer routing matters, extend the HTTP `forget` route + `client.forget` to carry the archive intent. Low priority. Noted 2026-05-21.
 
-- [ ] **--owner format validation.** Currently any string is accepted. The documented contract is `user:<id>` or `agent:<id>`. Add regex validation `^(user|agent):[A-Za-z0-9_-]+$` either as warn-only (log, accept) or strict-reject. Decide alongside A5.
+- [ ] **--owner format validation.** Currently any string is accepted. The documented contract is `user:<id>` or `agent:<id>`. Add regex validation `^(user|agent):[A-Za-z0-9_-]+$` either as warn-only (log, accept) or strict-reject. Decide alongside A5. (Scope note 2026-05-22: `--owner` is parsed by `hippo remember` (`cmdRemember`, `cli.ts:654`) and the Slack backfill path (`cli.ts:5726`), NOT `hippo forget`; `cmdForget` has no `--owner` flag. Target those two call sites.)
 
 - [ ] **Defensive `kind != 'archived'` filter on recall.** `kind='archived'` is a transient sentinel inside `archiveRawMemory`'s SAVEPOINT and never persists (SQLite atomicity). Adding the filter to candidate queries is belt-and-suspenders against a future bug. Cheap to add when revisiting recall query construction.
 
@@ -250,11 +250,11 @@ ranking improvements; none are correctness blockers.
 
 - [ ] **BM25 sentinel-token leakage in evals.** During E1.3 eval authoring, descriptive scenario IDs polluted the ambient noise messages and inflated recall scores. Opaque IDs (e.g. `S1A2B3`) work; document this in any future eval template so the next connector eval doesn't repeat the mistake.
 
-- [ ] **Lockdown test misses `/mcp/stream`.** `tests/server-bearer-lockdown.test.ts` covers `/v1/memories`, `/v1/auth/keys`, `/v1/audit` but not `GET /mcp/stream`. Both routes call `requireAuth` with the same shape, so any future regression there won't fail the lockdown. Add `{ method: 'GET', path: '/mcp/stream' }` to `v1Routes` and assert 401 without Bearer when `HIPPO_REQUIRE_AUTH=1`. Surfaced by /review on the E1.3 branch.
+- [x] **Lockdown test misses `/mcp/stream`.** Already covered: `tests/server-bearer-lockdown.test.ts:49` includes `{ method: 'GET', path: '/mcp/stream' }` in its authed-routes array, exercised by both the missing-header and bad-token `it.each` blocks asserting 401 under `HIPPO_REQUIRE_AUTH=1`. Verified present 2026-05-22 during the roadmap reproduce-check sweep; the box was simply never ticked.
 
 - [ ] **DLQ-on-parse-failure tenant attribution.** When `JSON.parse(rawBody)` fails after a valid Slack signature, we cannot read `team_id` from un-parseable JSON, so the DLQ row lands under `process.env.HIPPO_TENANT ?? 'default'`. On multi-workspace deployments this means a parse failure from workspace A lands in the wrong tenant's DLQ. Document or revisit after multi-workspace adoption.
 
-- [ ] **Audit emit ordering vs mirror write.** `writeEntry` releases the SAVEPOINT before writing the markdown mirror and emitting the audit row. If the mirror write throws (ENOSPC, EACCES), the memory row commits without an audit entry — `bootstrapLegacyStore` self-heals the orphan-row state, but the audit log is permanently missing the `remember` event. Fix: either move audit emit before the mirror write, or wrap mirror writes in try/catch that still emits audit. Surfaced by /review (MEDIUM).
+- [x] **Audit emit ordering vs mirror write.** Already fixed in v0.39 (commit `39bbee6`, "security hardening + GDPR Path A"): that release split the `writeEntry` monolith into `writeEntryDbOnly` + `writeEntryMirrors`, and `writeEntryDbOnly` emits the `audit('remember', ...)` row INSIDE the `write_entry` SAVEPOINT (`store.ts:1165`), committed atomically with the memory row before `writeEntryMirrors` runs. A markdown-mirror failure (ENOSPC, EACCES) is post-RELEASE and cannot lose the audit event. The `/review` that flagged this ran on the pre-v0.37 E1.3 branch when `writeEntry` was still a monolith; the box was simply never ticked. Verified stale 2026-05-22 via /dev-framework-rl episode 01KS7FRH40M69DBESH8CG75TX4.
 
 - [ ] **`ingestMessage` skipped→duplicate status string.** Replay of an empty-body event returns `status: 'duplicate'` whereas the first call returned `status: 'skipped'`. Functionally idempotent (same memoryId of `null`), but the differing status strings could confuse a caller that switch/cases on the value. Either unify the status (always 'skipped' for empty bodies) or document the asymmetry.
 
@@ -267,16 +267,34 @@ ranking improvements; none are correctness blockers.
 From the v0.39 security hardening release. Items consciously deferred so
 v0.39 could ship the CRITICAL cross-tenant fixes without scope creep.
 
-- [ ] **Tenant-guard audit on remaining MCP tools.** v0.39 hardened
-  recall/remember/outcome/share via `src/api.ts`. The remaining MCP tools
-  (context, status, learn, conflicts, resolve, peers) plus any unscoped
-  `readEntry` / `loadSearchEntries` call sites in CLI / dashboard /
-  refine still need a tenant-isolation pass.
+- [x] **Tenant-guard audit on remaining MCP tools.** Audited in v0.40
+  (dev-framework-rl episode 01KS7HH20Y6SE3T898P3AE8CPM). Of the six tools,
+  `context`/`status`/`learn` were already tenant-scoped; `hippo_conflicts` and
+  `hippo_resolve` (and `hippo_status`'s conflict count) were not, and are fixed
+  in v1.11.0 — the conflict subsystem,
+  `docs/plans/2026-05-22-conflict-tenant-isolation.md`; `hippo_peers` reads the
+  cross-project global store by design. Residual work is split to the
+  follow-up below.
 
-- [ ] **Request-level rate limit on /v1/*.** The reduced auth-timing
-  leak in v0.39 narrows but does not eliminate key-id enumeration.
-  Bound enumeration attempts with a per-IP rate limit on /v1/* (token
-  bucket, configurable via `HIPPO_V1_RPS`).
+- [ ] **Tenant-isolation residue from the v1.11.0 conflict-subsystem pass.**
+  (a) Audit and tenant-scope the unscoped `readEntry` / `loadSearchEntries`
+  call sites in `cli.ts` / `dashboard.ts` / `refine-llm.ts` (lower severity:
+  CLI direct mode is single-tenant per process). (b) `replaceDetectedConflicts`
+  skips a stale pre-fix cross-tenant conflict row but never resolves it, so it
+  lingers `status='open'` (inert: hidden from scoped reads and the refMap
+  rebuild). Auto-resolve such rows in the detector's resolve-stale loop so they
+  self-heal — flagged by the v1.11.0 independent-review critic. (c) Confirm
+  `hippo_peers`' intentionally cross-project read is the right trust boundary
+  when multi-tenancy ships (A5 v2).
+
+- [x] **Request-level rate limit on /v1/*.** Shipped in v1.11.0
+  (`docs/plans/2026-05-22-v1-rate-limit.md`): a token-bucket limiter
+  (`src/rate-limit.ts`) built in `serve()` from `HIPPO_V1_RPS` (default 20
+  rps, burst 2x; a non-positive value disables it), checked in
+  `handleRequest` for `/v1/` paths, 429 on exhaustion. Note: under
+  loopback-only serving the per-IP key is effectively one global bucket;
+  true per-client keying with a trusted `X-Forwarded-For` belongs with the
+  A5 v2 non-loopback serving work.
 
 - [ ] **p99 hardening (long-term, no current target).** The v0.36 <50ms
   target was retracted in v0.39 (CHANGELOG). v0.36 ships at 58.4ms

@@ -136,3 +136,116 @@ describe('resolveConflict', () => {
     expect(aAfter.half_life_days).toBeLessThan(7); // default is 7
   });
 });
+
+describe('conflict tenant isolation (E2)', () => {
+  function seedTenantConflict(tenant: string): { aId: string; bId: string; conflictId: number } {
+    const a = createMemory(`semicolons rule for ${tenant}`, { tenantId: tenant, tags: ['x'] });
+    const b = createMemory(`chaining rule for ${tenant}`, { tenantId: tenant, tags: ['x'] });
+    writeEntry(tmpDir, a);
+    writeEntry(tmpDir, b);
+    replaceDetectedConflicts(tmpDir, [{
+      memory_a_id: a.id,
+      memory_b_id: b.id,
+      reason: `contradictory advice for ${tenant}`,
+      score: 0.8,
+    }]);
+    const open = listMemoryConflicts(tmpDir, 'open', tenant);
+    expect(open.length).toBe(1);
+    return { aId: a.id, bId: b.id, conflictId: open[0].id };
+  }
+
+  it('listMemoryConflicts with tenantId returns only that tenant; omitted returns all', () => {
+    // Both tenants' conflicts must be seeded in ONE replaceDetectedConflicts
+    // call — it is a global replace and resolves any open conflict absent
+    // from the detected set.
+    const a1 = createMemory('tenant-a rule one', { tenantId: 'tenant-a', tags: ['x'] });
+    const a2 = createMemory('tenant-a rule two', { tenantId: 'tenant-a', tags: ['x'] });
+    const b1 = createMemory('tenant-b rule one', { tenantId: 'tenant-b', tags: ['x'] });
+    const b2 = createMemory('tenant-b rule two', { tenantId: 'tenant-b', tags: ['x'] });
+    for (const m of [a1, a2, b1, b2]) writeEntry(tmpDir, m);
+
+    replaceDetectedConflicts(tmpDir, [
+      { memory_a_id: a1.id, memory_b_id: a2.id, reason: 'tenant-a conflict', score: 0.8 },
+      { memory_a_id: b1.id, memory_b_id: b2.id, reason: 'tenant-b conflict', score: 0.8 },
+    ]);
+
+    expect(listMemoryConflicts(tmpDir, 'open', 'tenant-a').length).toBe(1);
+    expect(listMemoryConflicts(tmpDir, 'open', 'tenant-b').length).toBe(1);
+    // Omitted tenantId = legacy unscoped behaviour: every tenant's conflicts.
+    expect(listMemoryConflicts(tmpDir, 'open').length).toBe(2);
+  });
+
+  it('resolveConflict with a non-owning tenantId returns null and leaves the conflict open', () => {
+    const { aId, conflictId } = seedTenantConflict('tenant-a');
+
+    const result = resolveConflict(tmpDir, conflictId, aId, false, 'tenant-b');
+    expect(result).toBeNull();
+
+    // The conflict is untouched — still open for its real owner.
+    expect(listMemoryConflicts(tmpDir, 'open', 'tenant-a').length).toBe(1);
+  });
+
+  it('resolveConflict --forget with a foreign tenantId cannot delete the loser memory', () => {
+    const { aId, bId, conflictId } = seedTenantConflict('tenant-a');
+
+    const result = resolveConflict(tmpDir, conflictId, aId, true, 'tenant-b');
+    expect(result).toBeNull();
+
+    // The cross-tenant DELETE never fires — both memories survive.
+    expect(readEntry(tmpDir, aId)).not.toBeNull();
+    expect(readEntry(tmpDir, bId)).not.toBeNull();
+  });
+
+  it('resolveConflict with the owning tenantId still resolves normally', () => {
+    const { aId, conflictId } = seedTenantConflict('tenant-a');
+
+    const result = resolveConflict(tmpDir, conflictId, aId, false, 'tenant-a');
+    expect(result).not.toBeNull();
+    expect(result!.conflict.status).toBe('resolved');
+    expect(listMemoryConflicts(tmpDir, 'resolved', 'tenant-a').length).toBe(1);
+  });
+
+  it('replaceDetectedConflicts skips a cross-tenant pair, keeps a within-tenant pair', () => {
+    const a = createMemory('tenant-a memory one', { tenantId: 'tenant-a', tags: ['x'] });
+    const b = createMemory('tenant-b memory one', { tenantId: 'tenant-b', tags: ['x'] });
+    const c = createMemory('tenant-a memory two', { tenantId: 'tenant-a', tags: ['x'] });
+    writeEntry(tmpDir, a);
+    writeEntry(tmpDir, b);
+    writeEntry(tmpDir, c);
+
+    replaceDetectedConflicts(tmpDir, [
+      { memory_a_id: a.id, memory_b_id: b.id, reason: 'cross-tenant', score: 0.9 },
+      { memory_a_id: a.id, memory_b_id: c.id, reason: 'within-tenant', score: 0.9 },
+    ]);
+
+    // Only the within-tenant (a, c) conflict is persisted.
+    expect(listMemoryConflicts(tmpDir, 'open').length).toBe(1);
+    expect(listMemoryConflicts(tmpDir, 'open', 'tenant-a').length).toBe(1);
+  });
+
+  it('replaceDetectedConflicts does not seed a foreign id into conflicts_with for a stale cross-tenant row', () => {
+    // Seed a within-tenant conflict, then re-home one member to another tenant
+    // so the existing conflict row becomes cross-tenant — simulating a row
+    // persisted before this fix.
+    const a = createMemory('stale-row memory a', { tenantId: 'tenant-a', tags: ['x'] });
+    const b = createMemory('stale-row memory b', { tenantId: 'tenant-a', tags: ['x'] });
+    writeEntry(tmpDir, a);
+    writeEntry(tmpDir, b);
+    replaceDetectedConflicts(tmpDir, [
+      { memory_a_id: a.id, memory_b_id: b.id, reason: 'same-tenant at first', score: 0.8 },
+    ]);
+    expect(readEntry(tmpDir, a.id)!.conflicts_with).toContain(b.id);
+
+    // Re-home b to tenant-b — the (a, b) conflict row is now cross-tenant.
+    writeEntry(tmpDir, { ...b, tenantId: 'tenant-b' });
+
+    // Re-run detection passing the same pair, so the row stays open and the
+    // refMap rebuild — not the resolve-stale path — is what must exclude it.
+    replaceDetectedConflicts(tmpDir, [
+      { memory_a_id: a.id, memory_b_id: b.id, reason: 'now cross-tenant', score: 0.8 },
+    ]);
+
+    // a's conflicts_with must no longer carry b's id.
+    expect(readEntry(tmpDir, a.id)!.conflicts_with).not.toContain(b.id);
+  });
+});

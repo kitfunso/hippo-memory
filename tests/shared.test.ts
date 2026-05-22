@@ -33,10 +33,42 @@ function cleanUp(...dirs: string[]): void {
 // ---------------------------------------------------------------------------
 
 describe('getGlobalRoot', () => {
-  it('returns a path under the home directory', () => {
-    const globalRoot = getGlobalRoot();
-    expect(globalRoot).toContain(os.homedir());
-    expect(globalRoot).toContain('.hippo');
+  // getGlobalRoot() reads HIPPO_HOME / XDG_DATA_HOME, and the test run sets
+  // HIPPO_HOME to an isolated temp dir (vitest.config.ts). Each case controls
+  // its own environment and restores it, so the test is hermetic rather than
+  // dependent on the ambient ~/.hippo fallback.
+  let prevHippoHome: string | undefined;
+  let prevXdg: string | undefined;
+
+  beforeEach(() => {
+    prevHippoHome = process.env.HIPPO_HOME;
+    prevXdg = process.env.XDG_DATA_HOME;
+  });
+
+  afterEach(() => {
+    if (prevHippoHome === undefined) delete process.env.HIPPO_HOME;
+    else process.env.HIPPO_HOME = prevHippoHome;
+    if (prevXdg === undefined) delete process.env.XDG_DATA_HOME;
+    else process.env.XDG_DATA_HOME = prevXdg;
+  });
+
+  it('falls back to ~/.hippo when neither env var is set', () => {
+    delete process.env.HIPPO_HOME;
+    delete process.env.XDG_DATA_HOME;
+    expect(getGlobalRoot()).toBe(path.join(os.homedir(), '.hippo'));
+  });
+
+  it('honours HIPPO_HOME when it is set', () => {
+    const custom = path.join(os.tmpdir(), 'hippo-getglobalroot-hh');
+    process.env.HIPPO_HOME = custom;
+    expect(getGlobalRoot()).toBe(custom);
+  });
+
+  it('uses XDG_DATA_HOME/hippo when HIPPO_HOME is unset', () => {
+    delete process.env.HIPPO_HOME;
+    const xdg = path.join(os.tmpdir(), 'hippo-getglobalroot-xdg');
+    process.env.XDG_DATA_HOME = xdg;
+    expect(getGlobalRoot()).toBe(path.join(xdg, 'hippo'));
   });
 });
 
