@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
 import { createHash } from 'node:crypto';
-import { detectServer, writePidfile, removePidfile } from './server-detect.js';
+import { detectServer, writePidfile, removePidfileIfOwned } from './server-detect.js';
 import { resolveTenantId } from './tenant.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { PACKAGE_VERSION } from './version.js';
@@ -1493,7 +1493,10 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const stop = async (): Promise<void> => {
     if (stopping) return;
     stopping = true;
-    removePidfile(opts.hippoRoot);
+    // Remove the pidfile only if it still names this server. A newer server
+    // may have started on this hippoRoot and rewritten the pidfile; an
+    // unconditional unlink here would orphan it. (v0.37.0 server-hardening.)
+    removePidfileIfOwned(opts.hippoRoot, { pid: process.pid, startedAt });
     // Force-close any long-lived idle connections (e.g. SSE keepalive streams
     // on /mcp/stream) so server.close() can resolve. Without this, SIGTERM
     // would hang the process until the SSE client cancels. Available on

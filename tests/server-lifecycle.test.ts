@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serve } from '../src/server.js';
@@ -166,6 +166,36 @@ describe('server lifecycle', () => {
         .rejects.toThrow(/auth/i);
       await expect(serve({ hippoRoot: home, port: 0, host: '192.168.1.1' }))
         .rejects.toThrow(/loopback/i);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('stop() does not remove a pidfile that a newer server rewrote (ownership guard)', async () => {
+    const home = makeRoot();
+    const handle = await serve({ hippoRoot: home, port: 0 });
+    const pidfile = join(home, 'server.pid');
+    try {
+      // A is live and owns the pidfile. Simulate a newer server B taking over
+      // this hippoRoot: overwrite the pidfile with a foreign identity (a
+      // different pid AND a different started_at). The forged pid value is
+      // arbitrary — removePidfileIfOwned compares it, never probes liveness.
+      const forged = {
+        schema: 1,
+        pid: process.pid + 12345,
+        port: handle.port + 1,
+        url: `http://127.0.0.1:${handle.port + 1}`,
+        started_at: '2099-12-31T23:59:59.000Z',
+      };
+      writeFileSync(pidfile, JSON.stringify(forged));
+
+      // A shuts down. Its stop() must NOT delete B's pidfile.
+      await handle.stop();
+
+      expect(existsSync(pidfile)).toBe(true);
+      const after = JSON.parse(readFileSync(pidfile, 'utf8'));
+      expect(after.pid).toBe(forged.pid);
+      expect(after.started_at).toBe(forged.started_at);
     } finally {
       rmSync(home, { recursive: true, force: true });
     }

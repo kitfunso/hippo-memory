@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.10.1 (2026-05-21): stop() pidfile-ownership guard
+
+A patch release closing the last open item in the v0.37 server-hardening cluster (deferred from v1.10.0), plus a sync of every version field to `1.10.1`. Plan: `docs/plans/2026-05-21-stop-pidfile-ownership.md`.
+
+### Shipped
+
+- **`stop()` no longer unlinks a newer server's pidfile.** `serve()`'s `stop()` and the `cli.ts` `runViaServerIfAvailable` stale-pidfile self-heal both removed `server.pid` unconditionally. If a second server had started on the same hippoRoot and rewritten the pidfile, the first server's shutdown deleted the second one's pidfile and orphaned it (no longer discoverable by `detectServer` or the thin client). The new `removePidfileIfOwned` (`src/server-detect.ts`) unlinks the pidfile only when its recorded `(pid, started_at)` identity matches the caller's own; `stop()` and the cli self-heal are rewired to it. `removePidfile` (unconditional removal) is retained as a primitive. A residual microsecond read-to-unlink window is documented and accepted, consistent with `detectServer`.
+- **Every version field synced to `1.10.1`.** `package.json`, the lockfile, `openclaw.plugin.json`, `src/version.ts` (`PACKAGE_VERSION`), and both `extensions/openclaw-plugin` manifests are now consistent. v1.9.x and v1.10.0 had bumped only some: `openclaw.plugin.json` was stranded at `1.9.3` (caught by `tests/openclaw-package.test.ts`), and `src/version.ts` at `1.8.1` left `/health` and the MCP `serverInfo` under-reporting the version. A version-parity guard covering every manifest is tracked in `TODOS.md` so the drift cannot recur.
+
+### Tests
+
+`tests/server-detect.test.ts` adds 7 `removePidfileIfOwned` unit cases (identity match, `started_at` mismatch, `pid` mismatch, missing pidfile, malformed JSON, valid JSON without identity fields, literal `null`). `tests/server-lifecycle.test.ts` adds an integration test proving a foreign pidfile survives `stop()`. `tests/cli-thin-client.test.ts` adds a spawned-CLI test driving the connection-refused self-heal branch. Full suite: 216 files, 1566 tests, green.
+
+### Not in this release
+
+- `hippo forget --archive` over the server-routed HTTP path (tracked in `TODOS.md`).
+
 ## 1.10.0 (2026-05-21): server and lifecycle hardening
 
 A pivot from the F-track research arc to product hardening. This release closes the "server / lifecycle hardening" cluster from `TODOS.md`: deferred follow-ups from the v0.37 server-mode work, the v0.40 security pass, and the A3 envelope review. Plan: `docs/plans/2026-05-21-server-lifecycle-hardening.md`.

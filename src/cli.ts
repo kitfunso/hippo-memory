@@ -155,7 +155,7 @@ import { buildProvenanceCoverage } from './provenance-coverage.js';
 import { buildCorrectionLatency } from './correction-latency.js';
 import * as api from './api.js';
 import * as client from './client.js';
-import { detectServer, removePidfile, type ServerInfo } from './server-detect.js';
+import { detectServer, removePidfileIfOwned, type ServerInfo } from './server-detect.js';
 import { resolveTenantId } from './tenant.js';
 import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from './eval.js';
 import { runFeatureEval, formatResult, resultToBaseline, detectRegressions, type EvalBaseline } from './eval-suite.js';
@@ -245,7 +245,8 @@ function failIfServerRequired(reason: string): void {
  *           was already surfaced to stdout/stderr by `httpFn`),
  *   - false if no server was detected, or if the detected pidfile turned out
  *           to be stale (connection refused). On stale, the pidfile is removed
- *           and the caller should fall back to the direct path.
+ *           if it still names that dead server (a newer one may have replaced
+ *           it) and the caller should fall back to the direct path.
  *
  * Per the A1 plan footgun #1: stale pidfiles must self-heal, not crash.
  * H2: when HIPPO_REQUIRE_SERVER is set, both fallback paths throw instead of
@@ -269,7 +270,9 @@ async function runViaServerIfAvailable(
     if (client.isConnectionRefused(err)) {
       failIfServerRequired('the server pidfile was stale (connection refused)');
       console.error('hippo: stale server pidfile detected, falling back to direct mode');
-      removePidfile(hippoRoot);
+      // Clear the pidfile only if it still names the dead server we just
+      // probed — a newer server may have rewritten it (removePidfileIfOwned).
+      removePidfileIfOwned(hippoRoot, { pid: info.pid, startedAt: info.started_at });
       return false;
     }
     throw err;
