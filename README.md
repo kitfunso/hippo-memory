@@ -85,6 +85,11 @@ hippo recall "data pipeline issues" --budget 2000
 
 ---
 
+### What's new in v1.10.1
+
+- **`stop()` pidfile-ownership guard.** Closes the last open item in the v0.37 server-hardening cluster. `serve()`'s `stop()` and the `cli.ts` stale-pidfile self-heal removed `server.pid` unconditionally, so a shutting-down server could delete a newer live server's pidfile and orphan it. The new `removePidfileIfOwned` unlinks the pidfile only on a `(pid, started_at)` identity match; both call sites are rewired to it. Built via the `/dev-framework-rl` pipeline (plan-eng 91, code-review 88, independent-review 88, ship-readiness 92, canary 96).
+- **Version-field sync.** `package.json`, the lockfile, `openclaw.plugin.json`, `src/version.ts`, and both `extensions/openclaw-plugin` manifests are now all `1.10.1`, correcting drift left by v1.9.x/v1.10.0 that left `/health` and the MCP `serverInfo` under-reporting the version.
+
 ### What's new in v1.10.0
 
 - **Server and lifecycle hardening.** Closes the `TODOS.md` "server / lifecycle hardening" cluster (deferred follow-ups from the v0.37 server-mode work, the v0.40 security pass, and the A3 envelope review), six items in all. `detectServer` is now async and confirms a recorded server is genuinely this hippo process by matching a `/health` `started_at` before the CLI routes to it (H1). The pidfile carries a `schema` version (L3). `hippo serve` refuses to start when a live peer already serves the hippoRoot (H3). The 413 over-cap-body path closes the socket instead of draining the rest (M3). A `HIPPO_REQUIRE_SERVER` env knob turns a missing server into a loud error instead of a silent direct-mode fallback that discards `HIPPO_API_KEY` (H2). And `hippo forget --archive --reason` gives raw, append-only memories a real removal path via `archiveRaw` instead of a misleading "not found" (A3).

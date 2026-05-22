@@ -359,10 +359,21 @@ v0.39 could ship the CRITICAL cross-tenant fixes without scope creep.
   cleanly instead of accepting another MB of bytes the server will
   immediately discard.
 
-- [ ] **`stop()` can unlink a newer server's pidfile.** `serve()`'s `stop()`
-  calls `removePidfile` unconditionally. If server A is shutting down while
-  server B has already started and rewritten the pidfile, A's stop deletes
-  B's pidfile and orphans the live B. Flagged by codex review 2026-05-21;
-  out of scope for the 2026-05-21 lifecycle-hardening release (`stop()` /
-  `removePidfile` were not in that diff). Fix: in `stop()`, unlink only when
-  the pidfile's `pid` + `started_at` match this server handle.
+- [x] **`stop()` can unlink a newer server's pidfile.** Shipped 2026-05-21 in
+  v1.10.1 (`docs/plans/2026-05-21-stop-pidfile-ownership.md`). `serve()`'s
+  `stop()` and the `cli.ts` stale-pidfile self-heal both called `removePidfile`
+  unconditionally; the new `removePidfileIfOwned` (`src/server-detect.ts`)
+  unlinks the pidfile only when its recorded `pid` + `started_at` match the
+  caller, and both call sites are rewired to it. A residual microsecond
+  read-to-unlink window is documented and accepted, consistent with
+  `detectServer`.
+
+- [ ] **Version-parity guard across all manifests.** The v1.10.1 release found
+  `src/version.ts` `PACKAGE_VERSION` stranded at `1.8.1` and the
+  `extensions/openclaw-plugin` manifests at `1.9.3`: v1.9.x and v1.10.0 bumped
+  only some version fields. `tests/openclaw-package.test.ts` checks the root
+  `openclaw.plugin.json` against `package.json` only. Add a test or
+  release-script check asserting `package.json`, `openclaw.plugin.json`,
+  `src/version.ts`, and both `extensions/openclaw-plugin` manifests all carry
+  the same version, so the drift cannot recur. All five were synced to
+  `1.10.1` in that release.
