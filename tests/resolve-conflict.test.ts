@@ -15,6 +15,7 @@ import {
   replaceDetectedConflicts,
   resolveConflict,
 } from '../src/store.js';
+import { openHippoDb, closeHippoDb } from '../src/db.js';
 
 let tmpDir: string;
 
@@ -183,6 +184,50 @@ describe('conflict tenant isolation (E2)', () => {
 
     // The conflict is untouched — still open for its real owner.
     expect(listMemoryConflicts(tmpDir, 'open', 'tenant-a').length).toBe(1);
+  });
+
+  it('auto-resolves an existing open cross-tenant row when the pair is re-detected (v1.11.0 residue)', () => {
+    // Seed two memories under different tenants.
+    const a = createMemory('tenant-a content', { tenantId: 'tenant-a', tags: ['x'] });
+    const b = createMemory('tenant-b content', { tenantId: 'tenant-b', tags: ['x'] });
+    writeEntry(tmpDir, a);
+    writeEntry(tmpDir, b);
+    const [memA, memB] = a.id < b.id ? [a.id, b.id] : [b.id, a.id];
+
+    // Manually insert a pre-fix open cross-tenant conflict row (the kind that
+    // could exist from before E2's tenant guard).
+    const db = openHippoDb(tmpDir);
+    try {
+      db.prepare(
+        `INSERT INTO memory_conflicts ` +
+          `(memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at) ` +
+          `VALUES (?, ?, ?, ?, 'open', '2026-01-01', '2026-01-01')`,
+      ).run(memA, memB, 'pre-fix cross-tenant', 0.9);
+    } finally {
+      closeHippoDb(db);
+    }
+    expect(listMemoryConflicts(tmpDir, 'open').find((c) => c.memory_a_id === memA && c.memory_b_id === memB)).toBeDefined();
+
+    // Simulate an unscoped detector re-detecting the cross-tenant pair. Before
+    // the fix, the resolve-stale loop saw the key in detectedKeys and skipped
+    // resolution; the insert loop skipped re-inserting (cross-tenant); the
+    // refMap rebuild skipped it. The row lingered status='open' forever.
+    replaceDetectedConflicts(
+      tmpDir,
+      [{ memory_a_id: a.id, memory_b_id: b.id, reason: 're-detected cross-tenant', score: 0.9 }],
+      '2026-05-22T12:00:00.000Z',
+    );
+
+    // The cross-tenant row is now resolved.
+    const resolved = listMemoryConflicts(tmpDir, 'resolved');
+    const ours = resolved.find((c) => c.memory_a_id === memA && c.memory_b_id === memB);
+    expect(ours).toBeDefined();
+    expect(ours!.updated_at).toBe('2026-05-22T12:00:00.000Z');
+
+    // No open cross-tenant row remains.
+    expect(
+      listMemoryConflicts(tmpDir, 'open').find((c) => c.memory_a_id === memA && c.memory_b_id === memB),
+    ).toBeUndefined();
   });
 
   it('resolveConflict --forget with a foreign tenantId cannot delete the loser memory', () => {

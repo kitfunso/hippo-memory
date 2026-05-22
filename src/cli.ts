@@ -754,7 +754,7 @@ function cmdSupersede(
 ): void {
   requireInit(hippoRoot);
 
-  const old = readEntry(hippoRoot, oldId);
+  const old = readEntry(hippoRoot, oldId, resolveTenantId({}));
   if (!old) {
     console.error(`Error: memory ${oldId} not found.`);
     process.exit(1);
@@ -1794,13 +1794,14 @@ function cmdTrace(
 ): void {
   requireInit(hippoRoot);
   const asJson = Boolean(flags['json']);
+  const tenantId = resolveTenantId({});
 
   // Look in local store first, then global.
-  let entry = readEntry(hippoRoot, id);
+  let entry = readEntry(hippoRoot, id, tenantId);
   let sourceLabel: 'local' | 'global' = 'local';
   const globalRoot = getGlobalRoot();
   if (!entry && isInitialized(globalRoot)) {
-    entry = readEntry(globalRoot, id);
+    entry = readEntry(globalRoot, id, tenantId);
     sourceLabel = 'global';
   }
   if (!entry) {
@@ -1826,14 +1827,14 @@ function cmdTrace(
   // Parents (consolidation lineage) — schema v9 field.
   const parents = Array.isArray(entry.parents) ? entry.parents : [];
   const parentPreviews = parents.map((pid) => {
-    const p = readEntry(hippoRoot, pid) ?? (isInitialized(globalRoot) ? readEntry(globalRoot, pid) : null);
+    const p = readEntry(hippoRoot, pid, tenantId) ?? (isInitialized(globalRoot) ? readEntry(globalRoot, pid, tenantId) : null);
     return { id: pid, content: p ? p.content.replace(/\s+/g, ' ').slice(0, 70) : '(not found)' };
   });
 
   // Open conflicts involving this memory.
   const allConflicts = [
-    ...listMemoryConflicts(hippoRoot, 'open'),
-    ...(isInitialized(globalRoot) ? listMemoryConflicts(globalRoot, 'open') : []),
+    ...listMemoryConflicts(hippoRoot, 'open', tenantId),
+    ...(isInitialized(globalRoot) ? listMemoryConflicts(globalRoot, 'open', tenantId) : []),
   ];
   const myConflicts = allConflicts.filter((c) => c.memory_a_id === id || c.memory_b_id === id);
 
@@ -2691,7 +2692,7 @@ function cmdOutcome(
 
   let updated = 0;
   for (const id of ids) {
-    const entry = readEntry(hippoRoot, id);
+    const entry = readEntry(hippoRoot, id, resolveTenantId({}));
     if (!entry) continue;
     const upd = applyOutcome(entry, good);
     writeEntry(hippoRoot, upd);
@@ -2757,7 +2758,7 @@ function cmdForget(
 function cmdInspect(hippoRoot: string, id: string): void {
   requireInit(hippoRoot);
 
-  const entry = readEntry(hippoRoot, id);
+  const entry = readEntry(hippoRoot, id, resolveTenantId({}));
   if (!entry) {
     console.error(`Memory not found: ${id}`);
     process.exit(1);
@@ -2879,10 +2880,11 @@ function cmdResolve(
     process.exit(1);
   }
 
+  const tenantId = resolveTenantId({});
   const keepId = String(flags['keep'] ?? '').trim();
   if (!keepId) {
     // Show the conflict details to help the user decide
-    const conflicts = listMemoryConflicts(hippoRoot, 'open');
+    const conflicts = listMemoryConflicts(hippoRoot, 'open', tenantId);
     const conflict = conflicts.find((c) => c.id === conflictId);
     if (!conflict) {
       console.error(`Conflict ${conflictId} not found or already resolved.`);
@@ -2894,8 +2896,8 @@ function cmdResolve(
     console.log(`  Reason: ${conflict.reason}`);
     console.log('');
 
-    const entryA = readEntry(hippoRoot, conflict.memory_a_id);
-    const entryB = readEntry(hippoRoot, conflict.memory_b_id);
+    const entryA = readEntry(hippoRoot, conflict.memory_a_id, tenantId);
+    const entryB = readEntry(hippoRoot, conflict.memory_b_id, tenantId);
     if (entryA) {
       console.log(`  [A] ${conflict.memory_a_id}:`);
       console.log(`      ${entryA.content.slice(0, 120)}${entryA.content.length > 120 ? '...' : ''}`);
@@ -2910,7 +2912,7 @@ function cmdResolve(
   }
 
   const forgetLoser = Boolean(flags['forget']);
-  const result = resolveConflict(hippoRoot, conflictId, keepId, forgetLoser);
+  const result = resolveConflict(hippoRoot, conflictId, keepId, forgetLoser, tenantId);
 
   if (!result) {
     console.error(`Could not resolve conflict ${conflictId}. Check the ID and --keep value.`);
@@ -4971,7 +4973,7 @@ function resolveGoalSession(flags: Record<string, string | boolean | string[]>):
   const tenantId = (
     flags['tenant-id'] !== undefined
       ? String(flags['tenant-id'])
-      : process.env.HIPPO_TENANT ?? 'default'
+      : resolveTenantId({})
   ).trim() || 'default';
   return { sessionId, tenantId };
 }
@@ -5234,7 +5236,7 @@ function cmdSlackBackfill(hippoRoot: string, flags: Record<string, string | bool
   const fetcher = slackHistoryFetcher(token);
   const ctx = {
     hippoRoot,
-    tenantId: process.env.HIPPO_TENANT ?? 'default',
+    tenantId: resolveTenantId({}),
     actor: 'cli:slack-backfill',
   };
   backfillChannel(ctx, {
@@ -5254,7 +5256,7 @@ function cmdSlackBackfill(hippoRoot: string, flags: Record<string, string | bool
 function cmdSlackDlqList(hippoRoot: string, _flags: Record<string, string | boolean | string[]>): void {
   const db = openHippoDb(hippoRoot);
   try {
-    const tenantId = process.env.HIPPO_TENANT ?? 'default';
+    const tenantId = resolveTenantId({});
     const items = listDlq(db, { tenantId });
     for (const it of items) {
       console.log(`${it.id}\t${it.receivedAt}\t${it.error}`);
@@ -6280,7 +6282,7 @@ async function main(): Promise<void> {
 
       // Handle supersession
       if (supersedesId) {
-        const oldEntry = readEntry(hippoRoot, supersedesId);
+        const oldEntry = readEntry(hippoRoot, supersedesId, resolveTenantId({}));
         if (!oldEntry) {
           console.error(`Memory ${supersedesId} not found.`);
           process.exit(1);

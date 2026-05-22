@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.11.1 (2026-05-23): v1.11.0 tenant-isolation residue
+
+A patch release closing the two named residues from the v1.11.0 conflict-subsystem pass, flagged by its independent-review critic and tracked in `TODOS.md`. Plan: `docs/plans/2026-05-22-tenant-isolation-residue.md`.
+
+### Shipped
+
+- **`readEntry` call-site audit.** v0.39 made the `readEntry(hippoRoot, id, tenantId?)` primitive tenant-aware (adds `AND tenant_id = ?` when set) but preserved the unscoped legacy behaviour on omitted `tenantId`, so each downstream caller had to opt in. Twelve sites still passed nothing: nine in `src/cli.ts` (`cmdSupersede`, `cmdTrace`'s local + global + parent walk, `cmdOutcome`, `cmdInspect`, `cmdResolve`'s conflict-display reads, `cmdDecide --supersedes`), one in `src/dashboard.ts` (`POST /api/star/:id`), one in `src/api.ts` (the `promoteToGlobal` call), one in `src/shared.ts` (the `promoteToGlobal` lookup). Each now passes the in-scope `tenantId` via the existing `resolveTenantId({})` helper from `src/tenant.ts`. `cmdResolve`'s sibling `listMemoryConflicts`/`resolveConflict` calls and `cmdTrace`'s `listMemoryConflicts` enumeration (same defect class in the same functions) are folded in. `promoteToGlobal` gains a `tenantId?` opt; `api.promote` passes `ctx.tenantId`. Three legacy `process.env.HIPPO_TENANT ?? 'default'` reads in `cli.ts` (4974, 5237, 5257) are switched to the helper, which uses the strictly-safer `?.trim() || 'default'` form. In a single-tenant deployment (`HIPPO_TENANT` unset, every memory carries `'default'`) nothing changes; in a multi-tenant deployment a CLI / dashboard process running under `HIPPO_TENANT=tenant_b` no longer reads or mutates a `tenant_a` memory by id, and `cmdTrace` no longer surfaces a memory promoted to global under `tenant_a`.
+- **Cross-tenant stale conflict auto-resolve.** `replaceDetectedConflicts` already built a `tenantById` map and a `sameTenant(a, b)` helper, and used them in the insert loop and the `conflicts_with_json` rebuild to skip cross-tenant pairs. The resolve-stale loop did not: a re-detected cross-tenant pair sat in `detectedKeys`, the insert skipped it (cross-tenant), and the open row lingered `status='open'` forever (inert, hidden from scoped reads and from the refMap rebuild, but untidy). The resolve-stale condition is extended to `(stale || crossTenant)`, so a pre-fix cross-tenant row now self-heals on the next detector pass. No schema change; no new query (the `tenantById` map is already built one block up).
+- **`serveDashboard` returns the `http.Server`.** Small testability change: the return type widens from `void` to `http.Server` with `return server;` at the end. The new dashboard tenant-scoping test depends on it to `server.close()` cleanly. Existing CLI callers discard the return; no behaviour change.
+
+### Tests
+
+`tests/resolve-conflict.test.ts` adds one cross-tenant auto-resolve case (seeds memories under two tenants via `createMemory({tenantId})`, manually inserts a pre-fix open cross-tenant `memory_conflicts` row, runs `replaceDetectedConflicts` with the cross-tenant pair in the detected set, asserts the row is `status='resolved'` with the run's `detectedAt` timestamp). `tests/cli-tenant-scoping.test.ts` is new and adds two `cmdTrace` cases via real CLI spawn (local-store cross-tenant denial under `HIPPO_TENANT=tenant_b`; cross-store global denial for a `g_*` memory promoted under another tenant). `tests/dashboard-tenant-scoping.test.ts` is new and adds one `POST /api/star/:id` cross-tenant mutation denial via real `http.request` against `serveDashboard`. `tests/shared.test.ts` adds one `promoteToGlobal` `opts.tenantId` case. All against the real DB / real CLI / real HTTP. Full suite: 219 files, 1588 tests, green.
+
+### Not in this release
+
+- `refine-llm.ts:151` is intentionally deferred. Its per-parent `readEntry` cannot be safely scoped in isolation because the upstream `loadAllEntries(hippoRoot)` on line 130 is itself unscoped (the L9 "background pipelines bypass tenant filter" item in `TODOS.md`). Scoping the per-parent read alone would silently drop parent text for cross-tenant lineage rows. Refine lands together with the rest of L9 / A5 v2; `TODOS.md` now carries a cross-reference on the L9 entry.
+- `hippo_peers`' intentionally cross-project read (A5 v2 trust-boundary work).
+- Three other unscoped `listMemoryConflicts` call sites (`cli.ts:2602` `cmdStats`, `cli.ts:2848` `cmdConflicts`, `dashboard.ts:75` `buildDashboardData`) and the five remaining `HIPPO_TENANT ?? 'default'` legacy reads in `src/server.ts`. Same defect class, narrower exposure (no mutation paths); tracked in `TODOS.md` for a follow-up pass.
+
 ## 1.11.0 (2026-05-22): v0.40 security and hardening
 
 A minor release working the v0.40 security and hardening follow-ups as a batch. Plans: `docs/plans/2026-05-22-conflict-tenant-isolation.md`, `docs/plans/2026-05-22-v1-rate-limit.md`, `docs/plans/2026-05-22-test-store-isolation.md`.

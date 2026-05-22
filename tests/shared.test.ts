@@ -111,6 +111,23 @@ describe('promoteToGlobal', () => {
   it('throws when ID does not exist in local store', () => {
     expect(() => promoteToGlobal(localRoot, 'nonexistent_id')).toThrow();
   });
+
+  it('honors opts.tenantId for cross-tenant isolation (v1.11.0 residue)', () => {
+    const a = createMemory('tenant-a content', { tenantId: 'tenant-a' });
+    const b = createMemory('tenant-b content', { tenantId: 'tenant-b' });
+    writeEntry(localRoot, a);
+    writeEntry(localRoot, b);
+
+    // Promoting tenant-a's entry with opts.tenantId='tenant-a' succeeds.
+    const promoted = promoteToGlobal(localRoot, a.id, { tenantId: 'tenant-a' });
+    expect(promoted.id).toMatch(/^g_/);
+    expect(promoted.content).toBe('tenant-a content');
+
+    // Promoting tenant-a's entry with opts.tenantId='tenant-b' throws —
+    // readEntry returns null on a cross-tenant lookup, and promoteToGlobal
+    // then surfaces 'Memory not found'.
+    expect(() => promoteToGlobal(localRoot, a.id, { tenantId: 'tenant-b' })).toThrow(/Memory not found/);
+  });
 });
 
 // ---------------------------------------------------------------------------
