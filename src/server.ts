@@ -5,6 +5,7 @@ import { resolveTenantId } from './tenant.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { PACKAGE_VERSION } from './version.js';
 import { validateApiKey } from './auth.js';
+import { createRateLimiter, type RateLimiter } from './rate-limit.js';
 import {
   remember,
   recall,
@@ -424,6 +425,7 @@ async function handleRequest(
   res: ServerResponse,
   opts: ServeOpts,
   startedAt: string,
+  limiter?: RateLimiter,
 ): Promise<void> {
   // v1.6.4: pre-decode raw-URL slash check. Catches `%2F` / `%2f` before
   // Node's URL parser collapses them and they slip past the route table.
@@ -439,6 +441,22 @@ async function handleRequest(
       pid: process.pid,
     });
     return;
+  }
+
+  // E3: per-IP rate limit on /v1/* to bound api-key-id enumeration. /health
+  // (a liveness probe) and non-/v1 paths are never throttled. A 429 thrown
+  // here lands in the createServer catch like any other HttpError.
+  //
+  // Keyed on the socket's remote address. serve() binds loopback-only today,
+  // so in the default deployment this is effectively one global /v1 bucket,
+  // which still bounds enumeration. True per-client keying (and trusting an
+  // X-Forwarded-For only from a known proxy) belongs with the non-loopback
+  // serving that A5 v2 unlocks.
+  if (limiter && path.startsWith('/v1/')) {
+    const ip = req.socket.remoteAddress ?? 'unknown';
+    if (!limiter.check(ip)) {
+      throw new HttpError(429, 'rate limit exceeded');
+    }
   }
 
   // POST /v1/memories
@@ -1430,8 +1448,18 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   // can match the two and prove a pid-reusing impostor is not the real server.
   const startedAt = new Date().toISOString();
 
+  // E3: per-IP rate limiter for /v1/*. Built here (not at module scope) so
+  // HIPPO_V1_RPS is read at boot, matching HIPPO_PORT above and letting a test
+  // set the rate before serve(). A non-positive or non-finite value disables
+  // limiting (the opt-out knob).
+  const v1Rps = Number(process.env.HIPPO_V1_RPS ?? 20);
+  const limiter: RateLimiter | undefined =
+    Number.isFinite(v1Rps) && v1Rps > 0
+      ? createRateLimiter({ ratePerSec: v1Rps, burst: v1Rps * 2, idleEvictMs: 60000, maxKeys: 10000 })
+      : undefined;
+
   const server: Server = createServer((req, res) => {
-    handleRequest(req, res, opts, startedAt).catch((err: unknown) => {
+    handleRequest(req, res, opts, startedAt, limiter).catch((err: unknown) => {
       if (res.headersSent) {
         try { res.end(); } catch { /* socket already gone */ }
         return;

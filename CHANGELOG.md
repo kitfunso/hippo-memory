@@ -1,16 +1,17 @@
 # Changelog
 
-## 1.11.0 (2026-05-22): conflict-subsystem tenant isolation
+## 1.11.0 (2026-05-22): v0.40 security and hardening
 
-A minor release closing the most severe of the v0.40 tenant-isolation follow-ups: the conflict subsystem. Plan: `docs/plans/2026-05-22-conflict-tenant-isolation.md`.
+A minor release working the v0.40 security and hardening follow-ups as a batch. Plans: `docs/plans/2026-05-22-conflict-tenant-isolation.md`, `docs/plans/2026-05-22-v1-rate-limit.md`.
 
 ### Shipped
 
 - **Tenant-isolated conflict subsystem.** `listMemoryConflicts` and `resolveConflict` (`src/store.ts`) took no tenant identifier, so a Bearer scoped to tenant A could enumerate tenant B's conflicts through the `hippo_conflicts` MCP tool and, through `hippo_resolve` with `forget=true`, delete tenant B's memory by id. Both functions gain an optional trailing `tenantId`. When it is set, `listMemoryConflicts` JOINs `memory_conflicts` to `memories` on both conflict members and requires each in-tenant, and `resolveConflict` does the same on its lookup and also carries `AND tenant_id = ?` on every `memories` mutation. The detector `replaceDetectedConflicts` builds an id-to-tenant map and skips cross-tenant pairs both when inserting rows and when rebuilding `conflicts_with_json`, so a cross-tenant conflict row is never persisted and a stale one cannot leak a foreign id. The MCP handlers `hippo_conflicts`, `hippo_resolve` and `hippo_status` pass the resolved tenant. An omitted `tenantId` preserves the pre-existing unscoped behaviour, so the single-tenant CLI and the consolidation pass are unchanged, and the parameter addition is non-breaking.
+- **Request-level rate limit on `/v1/*`.** The HTTP server applied no per-client throttle, leaving api-key-id enumeration unbounded against the timing/cache side channel `src/auth.ts` describes. A new `src/rate-limit.ts` token-bucket limiter, built in `serve()` from `HIPPO_V1_RPS` (default 20 rps, burst 2x; a non-positive or non-finite value disables it), is checked in `handleRequest` for `/v1/` paths and throws `429` on exhaustion via the existing `HttpError` path. Memory is bounded by a throttled idle sweep and a hard `maxKeys` LRU cap. `/health` and non-`/v1/` paths are never throttled.
 
 ### Tests
 
-`tests/resolve-conflict.test.ts` adds 6 tenant-isolation cases against the real DB: scoped versus unscoped `listMemoryConflicts`, cross-tenant `resolveConflict` denial, cross-tenant `--forget` failing to delete the loser, the detector skipping a cross-tenant pair, and a stale cross-tenant row not seeding `conflicts_with`. Full suite: 216 files, 1572 tests, green.
+`tests/resolve-conflict.test.ts` adds 6 tenant-isolation cases (scoped versus unscoped `listMemoryConflicts`, cross-tenant `resolveConflict` denial, cross-tenant `--forget` failing to delete the loser, the detector skipping a cross-tenant pair, a stale cross-tenant row not seeding `conflicts_with`). `tests/rate-limit.test.ts` adds 7 token-bucket unit cases; `tests/server-lifecycle.test.ts` adds 2 real-server integration cases (a `/v1/` burst drawing `429`s with `/health` exempt, and the `HIPPO_V1_RPS=0` disable knob). All against the real DB / real server. Full suite: 217 files, 1581 tests, green.
 
 ### Not in this release
 

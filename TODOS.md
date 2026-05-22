@@ -287,10 +287,14 @@ v0.39 could ship the CRITICAL cross-tenant fixes without scope creep.
   `hippo_peers`' intentionally cross-project read is the right trust boundary
   when multi-tenancy ships (A5 v2).
 
-- [ ] **Request-level rate limit on /v1/*.** The reduced auth-timing
-  leak in v0.39 narrows but does not eliminate key-id enumeration.
-  Bound enumeration attempts with a per-IP rate limit on /v1/* (token
-  bucket, configurable via `HIPPO_V1_RPS`).
+- [x] **Request-level rate limit on /v1/*.** Shipped in v1.11.0
+  (`docs/plans/2026-05-22-v1-rate-limit.md`): a token-bucket limiter
+  (`src/rate-limit.ts`) built in `serve()` from `HIPPO_V1_RPS` (default 20
+  rps, burst 2x; a non-positive value disables it), checked in
+  `handleRequest` for `/v1/` paths, 429 on exhaustion. Note: under
+  loopback-only serving the per-IP key is effectively one global bucket;
+  true per-client keying with a trusted `X-Forwarded-For` belongs with the
+  A5 v2 non-loopback serving work.
 
 - [ ] **p99 hardening (long-term, no current target).** The v0.36 <50ms
   target was retracted in v0.39 (CHANGELOG). v0.36 ships at 58.4ms

@@ -29,6 +29,11 @@ describe('server concurrency — recall + write under single-writer', () => {
         );
       }
 
+      // This test bursts ~550 /v1/* requests from one IP to stress SQLite
+      // single-writer locking, an axis orthogonal to the /v1 rate limiter.
+      // Disable the limiter (HIPPO_V1_RPS=0) so every request reaches the DB.
+      const prevRps = process.env.HIPPO_V1_RPS;
+      process.env.HIPPO_V1_RPS = '0';
       const handle: ServerHandle = await serve({ hippoRoot: home, port: 0 });
       const lockedErrors: string[] = [];
 
@@ -136,6 +141,8 @@ describe('server concurrency — recall + write under single-writer', () => {
       } finally {
         await handle.stop();
         rmSync(home, { recursive: true, force: true });
+        if (prevRps === undefined) delete process.env.HIPPO_V1_RPS;
+        else process.env.HIPPO_V1_RPS = prevRps;
       }
     },
     60_000,
