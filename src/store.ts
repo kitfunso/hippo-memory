@@ -2005,16 +2005,34 @@ export function traceExistsForSession(hippoRoot: string, tenantId: string, sessi
   }
 }
 
-export function listMemoryConflicts(hippoRoot: string, status: string = 'open'): MemoryConflict[] {
+export function listMemoryConflicts(
+  hippoRoot: string,
+  status: string = 'open',
+  tenantId?: string,
+): MemoryConflict[] {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    const rows = db.prepare(`
-      SELECT id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at
-      FROM memory_conflicts
-      WHERE status = ?
-      ORDER BY updated_at DESC, id DESC
-    `).all(status) as MemoryConflictRow[];
+    // When tenantId is provided, JOIN to memories on BOTH conflict members
+    // and require each in-tenant, so neither a normal cross-tenant pair nor a
+    // stale pre-fix row surfaces (consistent with resolveConflict). Omitted
+    // tenantId = legacy unscoped query (CLI direct mode, tests, consolidate).
+    const rows = tenantId !== undefined
+      ? db.prepare(`
+          SELECT mc.id, mc.memory_a_id, mc.memory_b_id, mc.reason, mc.score,
+                 mc.status, mc.detected_at, mc.updated_at
+          FROM memory_conflicts mc
+          JOIN memories ma ON ma.id = mc.memory_a_id
+          JOIN memories mb ON mb.id = mc.memory_b_id
+          WHERE mc.status = ? AND ma.tenant_id = ? AND mb.tenant_id = ?
+          ORDER BY mc.updated_at DESC, mc.id DESC
+        `).all(status, tenantId, tenantId) as MemoryConflictRow[]
+      : db.prepare(`
+          SELECT id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at
+          FROM memory_conflicts
+          WHERE status = ?
+          ORDER BY updated_at DESC, id DESC
+        `).all(status) as MemoryConflictRow[];
     return rows.map(rowToMemoryConflict);
   } finally {
     closeHippoDb(db);
@@ -2031,6 +2049,20 @@ export function replaceDetectedConflicts(
 
   try {
     db.exec('BEGIN');
+
+    // Tenant guard (E2): a conflict is meaningful only within one tenant.
+    // Build id -> tenant_id once and skip cross-tenant pairs both when
+    // inserting rows and when rebuilding conflicts_with_json, so a stale
+    // cross-tenant row can neither persist nor leak a foreign id.
+    const tenantById = new Map<string, string>();
+    for (const r of db.prepare(`SELECT id, tenant_id FROM memories`).all() as Array<{ id: string; tenant_id: string }>) {
+      tenantById.set(r.id, r.tenant_id);
+    }
+    const sameTenant = (a: string, b: string): boolean => {
+      const ta = tenantById.get(a);
+      const tb = tenantById.get(b);
+      return ta !== undefined && tb !== undefined && ta === tb;
+    };
 
     const canonicalDetected = detected.map((conflict) => ({
       ...canonicalConflictPair(conflict.memory_a_id, conflict.memory_b_id),
@@ -2054,6 +2086,8 @@ export function replaceDetectedConflicts(
     }
 
     for (const conflict of canonicalDetected) {
+      // Skip cross-tenant pairs — never persist a conflict spanning tenants.
+      if (!sameTenant(conflict.memory_a_id, conflict.memory_b_id)) continue;
       db.prepare(`
         INSERT INTO memory_conflicts(memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at)
         VALUES (?, ?, ?, ?, 'open', ?, ?)
@@ -2080,6 +2114,9 @@ export function replaceDetectedConflicts(
 
     const refMap = new Map<string, Set<string>>();
     for (const row of openConflicts) {
+      // Skip cross-tenant pairs so a stale row never seeds a foreign id
+      // into conflicts_with_json.
+      if (!sameTenant(row.memory_a_id, row.memory_b_id)) continue;
       if (!refMap.has(row.memory_a_id)) refMap.set(row.memory_a_id, new Set());
       if (!refMap.has(row.memory_b_id)) refMap.set(row.memory_b_id, new Set());
       refMap.get(row.memory_a_id)!.add(row.memory_b_id);
@@ -2117,16 +2154,33 @@ export function resolveConflict(
   hippoRoot: string,
   conflictId: number,
   keepId: string,
-  forgetLoser: boolean = false
+  forgetLoser: boolean = false,
+  tenantId?: string,
 ): { conflict: MemoryConflict; loserId: string } | null {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
 
+  // When tenantId is set, the conflict lookup requires BOTH members in-tenant
+  // and every memories mutation carries AND tenant_id = ?. A cross-tenant probe
+  // then returns null, indistinguishable from a bad id. Omitted tenantId =
+  // legacy unscoped behaviour (CLI direct mode, tests, consolidate.ts).
+  const memScope = tenantId !== undefined ? ' AND tenant_id = ?' : '';
+  const memArgs: string[] = tenantId !== undefined ? [tenantId] : [];
+
   try {
-    const row = db.prepare(`
-      SELECT id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at
-      FROM memory_conflicts WHERE id = ?
-    `).get(conflictId) as MemoryConflictRow | undefined;
+    const row = (tenantId !== undefined
+      ? db.prepare(`
+          SELECT mc.id, mc.memory_a_id, mc.memory_b_id, mc.reason, mc.score,
+                 mc.status, mc.detected_at, mc.updated_at
+          FROM memory_conflicts mc
+          JOIN memories ma ON ma.id = mc.memory_a_id
+          JOIN memories mb ON mb.id = mc.memory_b_id
+          WHERE mc.id = ? AND ma.tenant_id = ? AND mb.tenant_id = ?
+        `).get(conflictId, tenantId, tenantId)
+      : db.prepare(`
+          SELECT id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at
+          FROM memory_conflicts WHERE id = ?
+        `).get(conflictId)) as MemoryConflictRow | undefined;
 
     if (!row) return null;
 
@@ -2149,29 +2203,29 @@ export function resolveConflict(
 
     if (forgetLoser) {
       // Delete the losing memory
-      db.prepare(`DELETE FROM memories WHERE id = ?`).run(loserId);
+      db.prepare(`DELETE FROM memories WHERE id = ?${memScope}`).run(loserId, ...memArgs);
     } else {
       // Halve the loser's half-life (weakens it over time)
-      db.prepare(`UPDATE memories SET half_life_days = MAX(1, half_life_days / 2), updated_at = datetime('now') WHERE id = ?`)
-        .run(loserId);
+      db.prepare(`UPDATE memories SET half_life_days = MAX(1, half_life_days / 2), updated_at = datetime('now') WHERE id = ?${memScope}`)
+        .run(loserId, ...memArgs);
     }
 
     // Clean up conflicts_with references
-    const keepRow = db.prepare(`SELECT conflicts_with_json FROM memories WHERE id = ?`).get(keepId) as { conflicts_with_json: string } | undefined;
+    const keepRow = db.prepare(`SELECT conflicts_with_json FROM memories WHERE id = ?${memScope}`).get(keepId, ...memArgs) as { conflicts_with_json: string } | undefined;
     if (keepRow) {
       const refs: string[] = JSON.parse(keepRow.conflicts_with_json || '[]');
       const cleaned = refs.filter((r: string) => r !== loserId);
-      db.prepare(`UPDATE memories SET conflicts_with_json = ?, updated_at = datetime('now') WHERE id = ?`)
-        .run(JSON.stringify(cleaned), keepId);
+      db.prepare(`UPDATE memories SET conflicts_with_json = ?, updated_at = datetime('now') WHERE id = ?${memScope}`)
+        .run(JSON.stringify(cleaned), keepId, ...memArgs);
     }
 
     if (!forgetLoser) {
-      const loserRow = db.prepare(`SELECT conflicts_with_json FROM memories WHERE id = ?`).get(loserId) as { conflicts_with_json: string } | undefined;
+      const loserRow = db.prepare(`SELECT conflicts_with_json FROM memories WHERE id = ?${memScope}`).get(loserId, ...memArgs) as { conflicts_with_json: string } | undefined;
       if (loserRow) {
         const refs: string[] = JSON.parse(loserRow.conflicts_with_json || '[]');
         const cleaned = refs.filter((r: string) => r !== keepId);
-        db.prepare(`UPDATE memories SET conflicts_with_json = ?, updated_at = datetime('now') WHERE id = ?`)
-          .run(JSON.stringify(cleaned), loserId);
+        db.prepare(`UPDATE memories SET conflicts_with_json = ?, updated_at = datetime('now') WHERE id = ?${memScope}`)
+          .run(JSON.stringify(cleaned), loserId, ...memArgs);
       }
     }
 

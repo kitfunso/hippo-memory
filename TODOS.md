@@ -267,11 +267,25 @@ ranking improvements; none are correctness blockers.
 From the v0.39 security hardening release. Items consciously deferred so
 v0.39 could ship the CRITICAL cross-tenant fixes without scope creep.
 
-- [ ] **Tenant-guard audit on remaining MCP tools.** v0.39 hardened
-  recall/remember/outcome/share via `src/api.ts`. The remaining MCP tools
-  (context, status, learn, conflicts, resolve, peers) plus any unscoped
-  `readEntry` / `loadSearchEntries` call sites in CLI / dashboard /
-  refine still need a tenant-isolation pass.
+- [x] **Tenant-guard audit on remaining MCP tools.** Audited in v0.40
+  (dev-framework-rl episode 01KS7HH20Y6SE3T898P3AE8CPM). Of the six tools,
+  `context`/`status`/`learn` were already tenant-scoped; `hippo_conflicts` and
+  `hippo_resolve` (and `hippo_status`'s conflict count) were not, and are fixed
+  in v1.11.0 — the conflict subsystem,
+  `docs/plans/2026-05-22-conflict-tenant-isolation.md`; `hippo_peers` reads the
+  cross-project global store by design. Residual work is split to the
+  follow-up below.
+
+- [ ] **Tenant-isolation residue from the v1.11.0 conflict-subsystem pass.**
+  (a) Audit and tenant-scope the unscoped `readEntry` / `loadSearchEntries`
+  call sites in `cli.ts` / `dashboard.ts` / `refine-llm.ts` (lower severity:
+  CLI direct mode is single-tenant per process). (b) `replaceDetectedConflicts`
+  skips a stale pre-fix cross-tenant conflict row but never resolves it, so it
+  lingers `status='open'` (inert: hidden from scoped reads and the refMap
+  rebuild). Auto-resolve such rows in the detector's resolve-stale loop so they
+  self-heal — flagged by the v1.11.0 independent-review critic. (c) Confirm
+  `hippo_peers`' intentionally cross-project read is the right trust boundary
+  when multi-tenancy ships (A5 v2).
 
 - [ ] **Request-level rate limit on /v1/*.** The reduced auth-timing
   leak in v0.39 narrows but does not eliminate key-id enumeration.

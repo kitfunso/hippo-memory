@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.11.0 (2026-05-22): conflict-subsystem tenant isolation
+
+A minor release closing the most severe of the v0.40 tenant-isolation follow-ups: the conflict subsystem. Plan: `docs/plans/2026-05-22-conflict-tenant-isolation.md`.
+
+### Shipped
+
+- **Tenant-isolated conflict subsystem.** `listMemoryConflicts` and `resolveConflict` (`src/store.ts`) took no tenant identifier, so a Bearer scoped to tenant A could enumerate tenant B's conflicts through the `hippo_conflicts` MCP tool and, through `hippo_resolve` with `forget=true`, delete tenant B's memory by id. Both functions gain an optional trailing `tenantId`. When it is set, `listMemoryConflicts` JOINs `memory_conflicts` to `memories` on both conflict members and requires each in-tenant, and `resolveConflict` does the same on its lookup and also carries `AND tenant_id = ?` on every `memories` mutation. The detector `replaceDetectedConflicts` builds an id-to-tenant map and skips cross-tenant pairs both when inserting rows and when rebuilding `conflicts_with_json`, so a cross-tenant conflict row is never persisted and a stale one cannot leak a foreign id. The MCP handlers `hippo_conflicts`, `hippo_resolve` and `hippo_status` pass the resolved tenant. An omitted `tenantId` preserves the pre-existing unscoped behaviour, so the single-tenant CLI and the consolidation pass are unchanged, and the parameter addition is non-breaking.
+
+### Tests
+
+`tests/resolve-conflict.test.ts` adds 6 tenant-isolation cases against the real DB: scoped versus unscoped `listMemoryConflicts`, cross-tenant `resolveConflict` denial, cross-tenant `--forget` failing to delete the loser, the detector skipping a cross-tenant pair, and a stale cross-tenant row not seeding `conflicts_with`. Full suite: 216 files, 1572 tests, green.
+
+### Not in this release
+
+- The unscoped `readEntry` / `loadSearchEntries` call-site audit in CLI, dashboard and refine; `hippo_peers` (intentionally cross-project); and garbage collection of stale pre-fix cross-tenant conflict rows. All tracked in `TODOS.md`.
+
 ## 1.10.1 (2026-05-21): stop() pidfile-ownership guard
 
 A patch release closing the last open item in the v0.37 server-hardening cluster (deferred from v1.10.0), plus a sync of every version field to `1.10.1`. Plan: `docs/plans/2026-05-21-stop-pidfile-ownership.md`.

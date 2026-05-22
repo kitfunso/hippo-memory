@@ -738,7 +738,7 @@ async function executeTool(
       const avgStrength = entries.length > 0 ? (totalStrength / entries.length).toFixed(2) : '0';
       const pinned = entries.filter((e) => e.pinned).length;
       const errors = entries.filter((e) => e.tags.includes('error')).length;
-      const conflicts = listMemoryConflicts(hippoRoot).length;
+      const conflicts = listMemoryConflicts(hippoRoot, 'open', tenantId).length;
       return [
         `Memories: ${entries.length} (${pinned} pinned, ${errors} errors)`,
         `Avg strength: ${avgStrength}`,
@@ -773,7 +773,7 @@ async function executeTool(
     }
 
     case 'hippo_conflicts': {
-      const conflicts = listMemoryConflicts(hippoRoot, 'open');
+      const conflicts = listMemoryConflicts(hippoRoot, 'open', tenantId);
       if (conflicts.length === 0) return 'No open conflicts.';
       return conflicts.map((c) =>
         `conflict_${c.id}: ${c.memory_a_id} <-> ${c.memory_b_id} (score=${c.score.toFixed(2)}) — ${c.reason}`
@@ -785,7 +785,7 @@ async function executeTool(
       const keepId = String(args.keep || '');
       const forget = Boolean(args.forget);
       if (isNaN(conflictId) || !keepId) return 'Required: conflict_id and keep.';
-      const result = resolveConflict(hippoRoot, conflictId, keepId, forget);
+      const result = resolveConflict(hippoRoot, conflictId, keepId, forget, tenantId);
       if (!result) return 'Could not resolve. Check the conflict ID and --keep value.';
       const action = forget ? 'deleted' : 'weakened';
       return `Resolved conflict ${conflictId}: kept ${keepId}, ${action} ${result.loserId}`;
