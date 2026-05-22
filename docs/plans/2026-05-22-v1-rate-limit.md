@@ -1,6 +1,6 @@
 # Request-level rate limit on /v1/* (E3)
 
-Status: PLANNED — dev-framework-rl episode 01KS7NX422KF1WMZ3RR7JZPZS8
+Status: SHIPPED v1.11.0 — dev-framework-rl episode 01KS7NX422KF1WMZ3RR7JZPZS8
 Roadmap: v0.40.0 security follow-ups — "Request-level rate limit on /v1/*"
 
 Revision 2 addresses the plan-eng critic's three must-fix items (initial bucket
