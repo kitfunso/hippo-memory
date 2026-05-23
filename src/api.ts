@@ -28,6 +28,7 @@ import {
   loadActiveTaskSnapshot,
   loadLatestHandoff,
   listSessionEvents,
+  loadIndex,
   type TaskSnapshot,
   type SessionEvent,
 } from './store.js';
@@ -1617,8 +1618,12 @@ export async function sleep(
  * Stub — real implementation lands in Task 3 of the Episode A plan.
  */
 export function outcomeForLastRecall(
-  _ctx: Context,
-  _good: boolean,
+  ctx: Context,
+  good: boolean,
 ): { applied: number; ids: string[] } {
-  throw new Error('outcomeForLastRecall() not yet implemented');
+  const idx = loadIndex(ctx.hippoRoot);
+  const ids = idx.last_retrieval_ids;
+  if (ids.length === 0) return { applied: 0, ids: [] };
+  const { applied } = outcome(ctx, ids, good);
+  return { applied, ids };
 }
