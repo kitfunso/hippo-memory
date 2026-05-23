@@ -186,4 +186,36 @@ describe('POST /v1/outcome', () => {
       closeHippoDb(db);
     }
   });
+
+  it('cross-tenant last-recall path: response ids field does NOT leak other-tenant ids', async () => {
+    // Regression test for the v1.11.4 security fix.
+    // Pre-fix: tenant_b POSTing {good:true} (no ids) would receive
+    //   {applied:0, ids:[<tenant_a's mem_*>]} — tenant_a's memory ids
+    //   surfaced verbatim to tenant_b through last_retrieval_ids (which
+    //   is per-hippoRoot, not tenant-scoped at the index layer).
+    // Post-fix: api.outcomeForLastRecall returns appliedIds (tenant-filtered)
+    //   as the ids field, so non-applied (cross-tenant) ids are excluded.
+    // This route hit has no Bearer, so ctx.tenantId = 'default'. We seed
+    // last_retrieval_ids with a tenant_b memory id and verify the
+    // 'default' caller cannot see it.
+    const tenantBCtx = { hippoRoot: home, tenantId: 'tenant_b', actor: 'localhost:cli' };
+    const tenantBMem = remember(tenantBCtx, { content: 'tenant-b-secret-id' });
+    const idx = loadIndex(home);
+    idx.last_retrieval_ids = [tenantBMem.id];
+    saveIndex(home, idx);
+
+    const res = await fetch(`${handle.url}/v1/outcome`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ good: true }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json() as { applied: number; ids: string[] };
+    expect(body.applied).toBe(0);
+    // The critical assertion: response ids must NOT contain the
+    // cross-tenant id. Pre-v1.11.4 this was [tenantBMem.id], leaking
+    // tenant_b's memory id to the default caller.
+    expect(body.ids).toEqual([]);
+    expect(body.ids).not.toContain(tenantBMem.id);
+  });
 });

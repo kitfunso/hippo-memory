@@ -1049,17 +1049,26 @@ export function drillDown(
 
 /**
  * Apply a positive/negative outcome to a list of recently-recalled memory ids.
- * Used by the MCP `hippo_outcome` tool. Tenant-scoped: ids that don't belong
- * to ctx.tenantId are silently skipped (matches the prior MCP semantics —
- * a stale id from another tenant doesn't crash the call). Each successful
- * outcome emits one audit_log row with op='outcome' tagged with ctx.actor.
+ * Used by the MCP `hippo_outcome` tool and the HTTP `POST /v1/outcome` route.
+ * Tenant-scoped: ids that don't belong to ctx.tenantId are silently skipped
+ * (matches the prior MCP semantics — a stale id from another tenant doesn't
+ * crash the call). Each successful outcome emits one audit_log row with
+ * op='outcome' tagged with ctx.actor.
+ *
+ * Returns `{applied, appliedIds}`. `appliedIds` is the tenant-filtered subset
+ * of input ids that actually had `applyOutcome` run on them (i.e. ids whose
+ * `readEntry(..., ctx.tenantId)` resolved). Callers that surface the id list
+ * over a multi-tenant boundary (HTTP /v1/outcome last-recall path, Python SDK)
+ * MUST return `appliedIds` instead of the raw input list — otherwise the
+ * non-applied (cross-tenant) ids leak to the caller. Added in v1.11.4 to
+ * close that disclosure path on POST /v1/outcome.
  */
 export function outcome(
   ctx: Context,
   ids: ReadonlyArray<string>,
   good: boolean,
-): { applied: number } {
-  let applied = 0;
+): { applied: number; appliedIds: string[] } {
+  const appliedIds: string[] = [];
   const db = openHippoDb(ctx.hippoRoot);
   try {
     for (const id of ids) {
@@ -1074,12 +1083,12 @@ export function outcome(
         targetId: id,
         metadata: { good },
       });
-      applied++;
+      appliedIds.push(id);
     }
   } finally {
     closeHippoDb(db);
   }
-  return { applied };
+  return { applied: appliedIds.length, appliedIds };
 }
 
 // ---------------------------------------------------------------------------
@@ -2010,9 +2019,18 @@ export async function sleep(
  *
  * Reads `loadIndex(ctx.hippoRoot).last_retrieval_ids` (per-hippoRoot local
  * state; not tenant-scoped at the index layer) and forwards to `outcome()`,
- * which DOES tenant-filter via `readEntry(..., ctx.tenantId)` — cross-tenant
+ * which DOES tenant-filter via `readEntry(..., ctx.tenantId)`. Cross-tenant
  * ids in `last_retrieval_ids` are silently skipped, matching the MCP
  * `hippo_outcome` semantics.
+ *
+ * **Tenant-safe response shape (v1.11.4 security fix):** the returned `ids`
+ * field contains ONLY the tenant-filtered subset that actually had outcomes
+ * applied (i.e. `appliedIds` from the inner `outcome()` call). Earlier
+ * versions returned the raw `last_retrieval_ids` regardless of tenant, which
+ * leaked cross-tenant memory IDs to the caller via POST /v1/outcome's
+ * no-body last-recall response. The fix is at this helper so all callers
+ * (CLI cmdOutcome, HTTP /v1/outcome, MCP `hippo_outcome` if added later)
+ * inherit the tenant-safe contract.
  *
  * Do NOT tighten `loadIndex` with `tenantId` inside this helper — doing so
  * would break the (correct) cross-tenant-silent-skip behavior covered by
@@ -2025,6 +2043,6 @@ export function outcomeForLastRecall(
   const idx = loadIndex(ctx.hippoRoot);
   const ids = idx.last_retrieval_ids;
   if (ids.length === 0) return { applied: 0, ids: [] };
-  const { applied } = outcome(ctx, ids, good);
-  return { applied, ids };
+  const { applied, appliedIds } = outcome(ctx, ids, good);
+  return { applied, ids: appliedIds };
 }

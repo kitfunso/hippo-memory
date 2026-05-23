@@ -789,9 +789,11 @@ async function handleRequest(
   // The loopback-only guard is the trust boundary today. Future non-loopback
   // serving needs an admin-role gate before exposing this route.
   if (method === 'POST' && path === '/v1/sleep') {
-    const remote = req.socket.remoteAddress ?? '';
-    const isLoopback = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
-    if (!isLoopback) {
+    // Defensive per-request loopback guard. Uses the canonical isLoopback()
+    // helper above so any future extension (additional mapped/IPv6 forms,
+    // NAT64 prefixes) flows through without drift. serve()'s boot-time host
+    // check is the primary trust boundary; this is belt-and-suspenders.
+    if (!isLoopback(req.socket.remoteAddress)) {
       throw new HttpError(403, '/v1/sleep is loopback-only (host-wide consolidation; see CHANGELOG v1.11.4)');
     }
     const body = await parseJsonBody(req);

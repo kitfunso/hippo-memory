@@ -79,13 +79,16 @@ describe('api.outcomeForLastRecall', () => {
     }
   });
 
-  it('silently skips cross-tenant ids in last_retrieval_ids (returns id but applied=0)', () => {
+  it('silently skips cross-tenant ids AND filters them out of the response (no leak)', () => {
     const home = tmpHome();
     try {
       // The id belongs to tenant_b. last_retrieval_ids is hippoRoot-level
       // (NOT tenant-scoped at the index layer) so the cross-tenant id can
-      // legally appear there. outcome() then filters via readEntry(..., tenantId)
-      // and silently skips the row — matches existing MCP outcome semantics.
+      // legally appear there. outcome() filters via readEntry(..., tenantId)
+      // and silently skips the row — matches MCP outcome semantics for the
+      // WRITE path. v1.11.4: also filter the RESPONSE so cross-tenant ids
+      // do not leak via the returned `ids` list (fix for the HTTP /v1/outcome
+      // no-body last-recall disclosure path; see api.outcome JSDoc).
       const tenantBId = seedMemory(home, 'belongs-to-tenant-b', 'tenant_b');
       seedLastRetrievalIds(home, [tenantBId]);
 
@@ -97,7 +100,10 @@ describe('api.outcomeForLastRecall', () => {
       const result = outcomeForLastRecall(ctxA, true);
 
       expect(result.applied).toBe(0);
-      expect(result.ids).toEqual([tenantBId]);
+      // ids must NOT contain tenant_b's id — that would be a cross-tenant
+      // ID enumeration vector via the HTTP route.
+      expect(result.ids).toEqual([]);
+      expect(result.ids).not.toContain(tenantBId);
     } finally {
       cleanup(home);
     }

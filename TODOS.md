@@ -1,5 +1,15 @@
 # Hippo Brain Observatory — Roadmap
 
+## v1.11.4 (Episode B) — follow-ups for Episode C / future
+
+Surfaced by independent-review-critic on PR #37 round 1 (returned FAIL on a cross-tenant ID leak in /v1/outcome which was fixed in the same PR; remaining MED + LOW deferred to TODOS):
+
+- **`/v1/sleep` response shape leaks aggregate cross-tenant counts.** `SleepResult.deduped.crossDups` / `audit.errorsRemoved` / `audit.warningCount` / `ambient.totalMemories` etc. aggregate across ALL tenants in the hippoRoot. Today the loopback-only guard limits blast radius (only the host operator can read), but once non-loopback serving lands (TODOS "Episode A follow-ups" above), this response shape becomes a metadata leak path. Mitigation: scope api.sleep counters by ctx.tenantId before returning, OR redact aggregated counts to the caller's own tenant when non-admin.
+- **`GET /v1/context?q=` is not length-capped.** Breaks the 256-char-cap convention established by `scope`, `session_id`, and `fresh_tail_session_id` on the adjacent GET /v1/memories route. Node's 16KB URL header is the de-facto bound but the structural drift makes future audits harder. Add a 1024-char cap on `q` (queries can legitimately be longer than 256 but should still bound).
+- **`POST /v1/outcome` does not cap `ids.length`.** A caller could POST `{ids: [10000 ids], good: true}` (within the 1 MB body cap), spawning 10000 sequential `readEntry` + `writeEntry` + `appendAuditEvent` cycles in a single request. /v1/* rate limit is per-request, not per-id. Add a 1000-id cap (or similar) with a clear 400 error. Consistent with the adjacent routes' patterns; worth raising priority because /v1/outcome WRITES per id.
+- **`/v1/context?q=foo` test gap.** Existing tests in server-context-route hit no-query default + pinned-only paths only. The hybrid-search path (`q` provided + hasGlobal) emits a 'recall' audit row per api.getContext; this emission is not asserted in any HTTP-level test. Add a test that seeds memories, calls `GET /v1/context?q=foo`, and asserts both the response shape and the `recall` audit_log row.
+- **`/v1/sleep` non-loopback 403 test gap.** The 3-line per-request guard is exercised on every request but the negative case (non-loopback origin -> 403) is hard to simulate with vitest+`serve(port:0)` which binds 127.0.0.1. Options: (a) extract the guard logic into a small helper + unit-test the helper directly; (b) once `HIPPO_BIND_ALL` (or similar) env knob exists, spawn serve with a non-loopback bind and assert 403 from a fake-IP socket.
+
 ## v1.11.3 (Episode A) — follow-ups for Episode B / Episode C
 
 Surfaced by independent-review-critic on PR #36 (`refactor/api-context-sleep-outcome`). All deferred deliberately — none block the v1.11.3 PATCH release but each should be addressed before the corresponding Episode B / Episode C work.
