@@ -2,18 +2,18 @@
 
 ## Python SDK v0.1.0 (2026-05-23): initial PyPI release
 
-First release of `hippo-memory` on PyPI. Async Python SDK wrapping the 14 HTTP endpoints from `hippo-memory@1.11.4`.
+First release of `hippo-memory-sdk` on PyPI. Async Python SDK wrapping the 14 HTTP endpoints from `hippo-memory@1.11.4`. The PyPI distribution name is `hippo-memory-sdk` (the bare `hippo-memory` name was blocked by PyPI's similarity check against an existing `hippomem` project); the Python import name remains `hippo_memory` so user code is `from hippo_memory import Hippo`.
 
-- Live at https://pypi.org/project/hippo-memory (once the PyPI trusted publisher is configured for `kitfunso/hippo-memory` / workflow `pypi-publish.yml` / environment `pypi`).
+- Live at https://pypi.org/project/hippo-memory-sdk (once the PyPI trusted publisher is configured for `kitfunso/hippo-memory` / workflow `pypi-publish.yml` / environment `pypi`).
 - Source in `python/` of the kitfunso/hippo-memory monorepo.
-- Install: `pip install hippo-memory`. Requires Python 3.10+.
+- Install: `pip install hippo-memory-sdk`. Requires Python 3.10+.
 - Pins: `httpx>=0.27`, `pydantic>=2.0`. Tested against `hippo-memory@1.11.4` server.
 - Async-first: `async with Hippo(...) as client: await client.remember(...)`.
 - 14 SDK methods covering health, remember, recall, drill, forget, archive, supersede, promote, outcome, get_context, sleep, assemble, auth_create/list/revoke, audit.
 - Tag scheme: push `python-v0.1.0` triggers PyPI publish via GitHub Actions trusted-publisher OIDC (no tokens in repo).
 - 13 model round-trip tests + 10 real-server integration tests (function-scoped subprocess fixture spawning `hippo serve` per test, `hippo init` bootstrap before serve to satisfy the requireInit gate).
 
-**Post-merge action for Keith:** configure the trusted publisher at https://pypi.org/manage/account/publishing/ (owner `kitfunso`, repo `hippo-memory`, workflow `pypi-publish.yml`, environment `pypi`) BEFORE pushing the `python-v0.1.0` tag. Otherwise the workflow runs and fails noisily with an OIDC auth error.
+**Post-merge action for Keith:** configure the trusted publisher at https://pypi.org/manage/account/publishing/ (PyPI Project Name `hippo-memory-sdk`, owner `kitfunso`, repo `hippo-memory`, workflow `pypi-publish.yml`, environment `pypi`) BEFORE pushing the `python-v0.1.0` tag. Otherwise the workflow runs and fails noisily with an OIDC auth error.
 
 See `python/README.md` for quickstart + API + auth + limitations.
 

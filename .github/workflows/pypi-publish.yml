@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/project/hippo-memory
+      url: https://pypi.org/project/hippo-memory-sdk
 
     steps:
       - uses: actions/checkout@v4

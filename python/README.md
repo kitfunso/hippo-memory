@@ -1,4 +1,4 @@
-# hippo-memory (Python SDK)
+# hippo-memory-sdk (Python SDK)
 
 Async Python SDK for [hippo-memory](https://github.com/kitfunso/hippo-memory), a biologically-inspired memory system for AI agents. Decay by default, strength through use, sleep consolidation.
 
@@ -7,8 +7,10 @@ This package is a thin async HTTP wrapper. Run `hippo serve` from the npm packag
 ## Install
 
 ```bash
-pip install hippo-memory
+pip install hippo-memory-sdk
 ```
+
+The Python import name is `hippo_memory` (the distribution name `hippo-memory-sdk` only matters at install time; `pip install hippo-memory-sdk` was chosen because PyPI's similarity check blocked the bare `hippo-memory` name due to an existing `hippomem` project).
 
 Requires Python 3.10+. Runtime deps: `httpx>=0.27`, `pydantic>=2.0`.
 

@@ -1,9 +1,9 @@
 [build-system]
-requires = ["uv_build>=0.5.0"]
+requires = ["uv_build>=0.5.0,<0.11"]
 build-backend = "uv_build"
 
 [project]
-name = "hippo-memory"
+name = "hippo-memory-sdk"
 version = "0.1.0"
 description = "Async Python SDK for hippo-memory (biologically-inspired memory for AI agents). Wraps the HTTP API of the hippo-memory npm package."
 readme = "README.md"
@@ -34,6 +34,11 @@ test = ["pytest>=8", "pytest-asyncio>=0.23"]
 Repository = "https://github.com/kitfunso/hippo-memory"
 Issues = "https://github.com/kitfunso/hippo-memory/issues"
 Changelog = "https://github.com/kitfunso/hippo-memory/blob/master/CHANGELOG.md"
+
+[tool.uv.build-backend]
+# Distribution name is hippo-memory-sdk (PyPI similarity blocker on hippo-memory),
+# but the Python import name stays hippo_memory so user code is unchanged.
+module-name = "hippo_memory"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
