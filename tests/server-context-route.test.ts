@@ -23,6 +23,8 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, saveActiveTaskSnapshot } from '../src/store.js';
+import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { queryAuditEvents } from '../src/audit.js';
 import { remember } from '../src/api.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
@@ -168,5 +170,43 @@ describe('GET /v1/context', () => {
     const contents = body.entries.map((e) => e.entry.content);
     expect(contents).toContain('belongs-to-default');
     expect(contents).not.toContain('belongs-to-tenant-B');
+  });
+
+  // v1.11.5: DoS cap on q-param + recall-audit-row HTTP test
+  it('q exceeding 1024 chars returns 400', async () => {
+    const q = 'a'.repeat(1025);
+    const res = await fetch(`${handle.url}/v1/context?q=${q}`);
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain('1024-character cap');
+  });
+
+  it('q at 1024-char boundary returns 200', async () => {
+    const ctx = { hippoRoot: home, tenantId: 'default', actor: 'localhost:cli' };
+    remember(ctx, { content: 'boundary-test' });
+    const q = 'a'.repeat(1024);
+    const res = await fetch(`${handle.url}/v1/context?q=${q}`);
+    expect(res.status).toBe(200);
+  });
+
+  it('q=foo emits exactly one recall audit row (row-count delta)', async () => {
+    const ctx = { hippoRoot: home, tenantId: 'default', actor: 'localhost:cli' };
+    remember(ctx, { content: 'foo bar baz' });
+    remember(ctx, { content: 'foo qux' });
+    remember(ctx, { content: 'unrelated content' });
+
+    // Snapshot audit_log count BEFORE the request.
+    const db1 = openHippoDb(home);
+    const before = queryAuditEvents(db1, { tenantId: 'default', op: 'recall' });
+    closeHippoDb(db1);
+
+    const res = await fetch(`${handle.url}/v1/context?q=foo&budget=1000`);
+    expect(res.status).toBe(200);
+
+    // Assert EXACTLY one new 'recall' row from THIS request.
+    const db2 = openHippoDb(home);
+    const after = queryAuditEvents(db2, { tenantId: 'default', op: 'recall' });
+    closeHippoDb(db2);
+    expect(after.length).toBe(before.length + 1);
   });
 });

@@ -22,6 +22,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store.js';
+import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { queryAuditEvents } from '../src/audit.js';
 import { remember, sleep, type Context } from '../src/api.js';
 
 function tmpHome(): { home: string; restore: () => void } {
@@ -141,4 +143,90 @@ describe('api.sleep', () => {
       restore();
     }
   });
+
+  // v1.11.5: consolidate audit emission
+  it('emits exactly one consolidate audit_log row per invocation with phase counters', async () => {
+    const { home, restore } = tmpHome();
+    try {
+      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: 'cli' };
+      remember(ctx, { content: 'before-sleep-1' });
+      remember(ctx, { content: 'before-sleep-2' });
+
+      await sleep(ctx, { dryRun: false, noShare: true });
+
+      const db = openHippoDb(home);
+      const rows = queryAuditEvents(db, { tenantId: 'default', op: 'consolidate' });
+      closeHippoDb(db);
+
+      expect(rows.length).toBe(1);
+      expect(rows[0]?.actor).toBe('cli');
+      expect(rows[0]?.op).toBe('consolidate');
+      // Metadata should carry phase counters with the keys we expect.
+      const meta = rows[0]?.metadata as Record<string, unknown>;
+      expect(meta).toBeDefined();
+      expect(meta).toHaveProperty('consolidationCount');
+      expect(meta).toHaveProperty('dedupCount');
+      expect(meta).toHaveProperty('auditDeletedCount');
+      expect(meta).toHaveProperty('ambientTotal');
+      expect(meta.dryRun).toBe(false);
+      expect(meta.noShare).toBe(true);
+      expect(meta.partial).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
+  it('dryRun also emits one consolidate audit row (with dryRun:true)', async () => {
+    const { home, restore } = tmpHome();
+    try {
+      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: 'cli' };
+      remember(ctx, { content: 'dry-run-target' });
+
+      await sleep(ctx, { dryRun: true });
+
+      const db = openHippoDb(home);
+      const rows = queryAuditEvents(db, { tenantId: 'default', op: 'consolidate' });
+      closeHippoDb(db);
+
+      expect(rows.length).toBe(1);
+      const meta = rows[0]?.metadata as Record<string, unknown>;
+      expect(meta.dryRun).toBe(true);
+      expect(meta.partial).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
+  it('actor field threads through from ctx (non-cli actor surfaces in audit row)', async () => {
+    const { home, restore } = tmpHome();
+    try {
+      const ctx: Context = {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'api_key:hk_test_xyz',
+      };
+      remember(ctx, { content: 'mcp-actor-target' });
+
+      await sleep(ctx, { dryRun: true });
+
+      const db = openHippoDb(home);
+      const rows = queryAuditEvents(db, { tenantId: 'default', op: 'consolidate' });
+      closeHippoDb(db);
+
+      expect(rows.length).toBe(1);
+      expect(rows[0]?.actor).toBe('api_key:hk_test_xyz');
+    } finally {
+      restore();
+    }
+  });
+
+  // NOTE: a partial-failure path test (assert partial:true + errorMessage when
+  // a phase throws) was attempted in v1.11.5 but the api.sleep pipeline is
+  // resilient enough that the obvious sabotage (rm -rf .hippo mid-test) does
+  // not produce a throw — openHippoDb auto-creates state. The path IS reachable
+  // (the try/catch/finally in api.sleep correctly preserves phaseError and
+  // logs audit-emit failures separately, per independent-review HIGH fix).
+  // Tracked in TODOS.md for v1.12.0: forcing a deterministic mid-phase throw
+  // requires either a DI seam (e.g. inject the phase helpers) or a fault-injection
+  // hook in db.ts. Out of v1.11.5 scope; documented contract suffices.
 });

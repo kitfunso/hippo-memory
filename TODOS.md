@@ -4,9 +4,20 @@
 
 Cross-referenced from `ROADMAP-RESEARCH.md` §"Next 90 days". The full execution roadmap (Tracks A-I, sequencing, bets, non-goals) lives there. This file owns the operational post-ship tail.
 
-### v1.11.5 / v1.12.0 — post-Episode A/B/C tail (~5d)
+### v1.11.5 — SHIPPED 2026-05-23
 
-All A-sized, all touch `src/server.ts` / `src/api.ts` / `tests/server-*` / `tests/api-*` — bundle into one episode to reuse one critic pass and one ship gate.
+7 of 8 items closed in v1.11.5 (see `CHANGELOG.md` v1.11.5 entry). Items #1, #2, #3, #4, #6, #7, #8 done. Item #5 (per-tenant /v1/sleep scoping) deferred to v1.12.0 because plan-eng-critic surfaced it as MINOR-scope structural work.
+
+### v1.12.0 — items deferred from v1.11.5 hardening pass
+
+- [ ] **Per-tenant `/v1/sleep` scoping** (item #5 from v1.11.5 plan). Requires `Context.actor` change from `string` to `{subject, role}` object, `api_keys` schema migration to add `role TEXT NOT NULL DEFAULT 'admin'`, `ValidateResult` shape change, `buildContextWithAuth` signature change, ~12 call site updates across `src/api.ts`. Bundle with non-loopback serving (`HIPPO_BIND_ALL` env knob) and A5 v2 multi-tenant work.
+- [ ] **`api.sleep` mid-phase failure test coverage.** The `partial:true` + `errorMessage` audit-row branch is reachable + the contract is locked in code comments (api.ts:2034-2074), but forcing a deterministic mid-phase throw requires DI seams (inject phase helpers) or fault-injection hooks in db.ts. Independent-review-critic MED #2 on v1.11.5.
+- [ ] **Consolidate audit row tenant tag.** Currently tagged with `ctx.tenantId` but `api.sleep` is host-wide (cross-tenant dedup is intentional). When `/v1/sleep` moves off loopback-only, either tag with synthetic "host" tenant or scope api.sleep per-tenant. Independent-review-critic MED #3 on v1.11.5. TODO inlined at `src/api.ts:2050`.
+- [ ] **Snapshot test belt-and-braces `afterAll(useRealTimers)`.** Today the `beforeEach`/`afterEach` pair is correct, but a test throwing before reaching afterEach would leak fake timers. Independent-review-critic LOW #5 on v1.11.5.
+
+### Remaining post-Episode A/B/C tail (deferred items that don't fit v1.11.5 / v1.12.0)
+
+All B-sized originally; bundle when needed.
 
 - [ ] **HTTP DoS cap on `POST /v1/outcome` `ids.length`** (1000 max, B follow-up). A caller could POST `{ids: [10000 ids], good: true}` (within the 1 MB body cap), spawning 10000 sequential `readEntry` + `writeEntry` + `appendAuditEvent` cycles. /v1/* rate limit is per-request, not per-id. Worth raising priority because /v1/outcome WRITES per id.
 - [ ] **HTTP DoS cap on `GET /v1/context?q=`** (1024 chars, B follow-up). Breaks the 256-char-cap convention on adjacent `scope`/`session_id`/`fresh_tail_session_id`. Node's 16KB URL header is the de-facto bound but the structural drift makes future audits harder. 1024-char cap on `q` (queries can legitimately be longer than 256 but should still bound).

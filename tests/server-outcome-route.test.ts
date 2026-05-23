@@ -218,4 +218,55 @@ describe('POST /v1/outcome', () => {
     expect(body.ids).toEqual([]);
     expect(body.ids).not.toContain(tenantBMem.id);
   });
+
+  // v1.11.5: DoS caps + body-cap interaction
+  it('1001 ids returns 400 with cap-exceeded message', async () => {
+    const ids = Array(1001).fill(0).map((_, i) => `mem_fake_${i}`);
+    const res = await fetch(`${handle.url}/v1/outcome`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ids, good: true }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain('1000-id cap');
+  });
+
+  it('1000 ids at boundary returns 200 (cap-exclusive)', async () => {
+    const ctx = { hippoRoot: home, tenantId: 'default', actor: 'localhost:cli' };
+    // Seed 3 real memories so applied > 0 confirms route ran.
+    const m1 = remember(ctx, { content: 'boundary-mem-1' });
+    const m2 = remember(ctx, { content: 'boundary-mem-2' });
+    const m3 = remember(ctx, { content: 'boundary-mem-3' });
+    // Pad with fake ids that will silently miss (still within cap).
+    // 997 readEntry-misses + 3 real takes ~5-10 seconds on real SQLite —
+    // bump timeout above vitest default 5s.
+    const ids = [m1.id, m2.id, m3.id, ...Array(997).fill(0).map((_, i) => `mem_pad_${i}`)];
+    expect(ids.length).toBe(1000);
+    const res = await fetch(`${handle.url}/v1/outcome`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ids, good: true }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json() as { applied: number };
+    expect(body.applied).toBe(3); // only the 3 real ids applied
+  }, 30_000);
+
+  it('1MB+ body returns 413 from body cap before id cap fires', async () => {
+    // Synthesise ~1.2MB of ids — body cap (1MB) at the HTTP layer fires
+    // before our id cap (1000) at the route layer. Locks ordering: body
+    // cap < id cap, attack vectors can't slip through by sending huge
+    // payloads with <=1000 ids. BodyTooLargeError returns HTTP 413
+    // (Payload Too Large), distinct from the route-level 400.
+    const giantIds = Array(50000).fill(0).map((_, i) => `mem_giant_${i.toString().padStart(20, '0')}`);
+    const payload = JSON.stringify({ ids: giantIds, good: true });
+    expect(payload.length).toBeGreaterThan(1_000_000);
+    const res = await fetch(`${handle.url}/v1/outcome`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: payload,
+    });
+    expect(res.status).toBe(413);
+  });
 });

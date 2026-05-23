@@ -2128,7 +2128,8 @@ async function cmdSleep(
  * Render an api.sleep result as console output, byte-identical to the
  * pre-extraction inline implementation in cmdSleepCore.
  */
-function renderSleepResult(result: api.SleepResult): void {
+/** @internal — exported for snapshot tests (tests/cli-context-render-snapshot.test.ts). NOT a stable public API. */
+export function renderSleepResult(result: api.SleepResult): void {
   console.log(`Running consolidation${result.dryRun ? ' (dry run)' : ''}...`);
 
   console.log(`\nResults:`);
@@ -3413,7 +3414,8 @@ async function cmdContext(
   }
 }
 
-function printContextMarkdown(
+/** @internal — exported for snapshot tests (tests/cli-context-render-snapshot.test.ts). NOT a stable public API. */
+export function printContextMarkdown(
   items: Array<{ entry: MemoryEntry; score: number; tokens: number; isGlobal: boolean }>,
   totalTokens: number,
   framing: string = 'observe'
@@ -4684,6 +4686,8 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'forget',
   'archive_raw',
   'auth_revoke',
+  'outcome',     // v1.11.5: pre-existing drift — emitted today but rejected by old Set
+  'consolidate', // v1.11.5: emitted by api.sleep / hippo sleep
 ]);
 
 function formatAuditRow(ev: AuditEvent): string {
@@ -4699,9 +4703,10 @@ function cmdAuditList(hippoRoot: string, flags: Record<string, string | boolean 
 
   const opFlag = typeof flags['op'] === 'string' ? (flags['op'] as string) : undefined;
   if (opFlag && !VALID_AUDIT_OPS.has(opFlag as AuditOp)) {
-    console.error(
-      `Unknown --op value: ${opFlag}. Expected one of: remember | recall | promote | supersede | forget | archive_raw.`,
-    );
+    // Regenerate from Set to prevent future drift (v1.11.5: pre-v1.11.5 message
+    // was hand-maintained and had drifted — missed 'auth_revoke' and 'outcome').
+    const expected = Array.from(VALID_AUDIT_OPS).join(' | ');
+    console.error(`Unknown --op value: ${opFlag}. Expected one of: ${expected}.`);
     process.exit(1);
   }
   const op = opFlag as AuditOp | undefined;
