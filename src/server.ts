@@ -20,6 +20,10 @@ import {
   authList,
   authRevoke,
   auditList,
+  outcome,
+  outcomeForLastRecall,
+  getContext,
+  sleep,
   type Context,
 } from './api.js';
 import type { MemoryKind } from './memory.js';
@@ -683,6 +687,129 @@ async function handleRequest(
     validateIdSegment(idMatch.id!, 'memory id');
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = forget(ctx, idMatch.id!);
+    sendJson(res, 200, result);
+    return;
+  }
+
+  // POST /v1/outcome — apply a positive/negative outcome to memory ids.
+  // Body: {ids?: string[], good: boolean}. If ids omitted, falls back to
+  // the last-recall path (api.outcomeForLastRecall); returned shape is
+  // {applied, ids} in that case so callers can disambiguate "no recent
+  // recall" from "all ids skipped". Each applied id writes one audit_log
+  // row (op='outcome', actor from Bearer).
+  if (method === 'POST' && path === '/v1/outcome') {
+    const body = await parseJsonBody(req);
+    const good = body['good'];
+    if (typeof good !== 'boolean') {
+      throw new HttpError(400, 'good is required (boolean)');
+    }
+    const idsRaw = body['ids'];
+    let ids: string[] | undefined;
+    if (idsRaw !== undefined) {
+      if (!Array.isArray(idsRaw)) {
+        throw new HttpError(400, 'ids must be an array of non-empty strings');
+      }
+      for (const id of idsRaw) {
+        if (typeof id !== 'string' || id.length === 0) {
+          throw new HttpError(400, 'ids must be an array of non-empty strings');
+        }
+      }
+      ids = idsRaw;
+    }
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    if (ids !== undefined) {
+      const { applied } = outcome(ctx, ids, good);
+      sendJson(res, 200, { applied });
+    } else {
+      const result = outcomeForLastRecall(ctx, good);
+      sendJson(res, 200, result);
+    }
+    return;
+  }
+
+  // GET /v1/context — assemble a budget-bounded context bundle. Returns
+  // ContextResult JSON (entries + tokens + activeSnapshot + sessionHandoff
+  // + recentEvents). No server-side rendering; clients render. Tenant-scoped
+  // via the Bearer. Pinned-only + '*' fallback skip the recall audit emit
+  // (matches cmdContext); real-query hybrid search emits one 'recall' row.
+  if (method === 'GET' && path === '/v1/context') {
+    const q = query.get('q') ?? undefined;
+    const budgetRaw = query.get('budget');
+    let budget: number | undefined;
+    if (budgetRaw !== null) {
+      budget = Number(budgetRaw);
+      if (!Number.isFinite(budget) || budget < 0) {
+        throw new HttpError(400, 'budget must be a non-negative number');
+      }
+    }
+    const limitRaw = query.get('limit');
+    let limit: number | undefined;
+    if (limitRaw !== null) {
+      limit = Number(limitRaw);
+      if (!Number.isFinite(limit) || limit <= 0) {
+        throw new HttpError(400, 'limit must be a positive number');
+      }
+    }
+    const pinnedOnlyRaw = query.get('pinned_only');
+    const pinnedOnly = pinnedOnlyRaw === '1' || pinnedOnlyRaw === 'true';
+    const scopeRaw = query.get('scope');
+    if (scopeRaw !== null && scopeRaw.length > 256) {
+      throw new HttpError(400, 'scope exceeds 256-character cap');
+    }
+    const scope = scopeRaw === null ? undefined : scopeRaw;
+    const includeRecentRaw = query.get('include_recent');
+    let includeRecent: number | undefined;
+    if (includeRecentRaw !== null) {
+      includeRecent = Number(includeRecentRaw);
+      if (!Number.isFinite(includeRecent) || includeRecent < 0) {
+        throw new HttpError(400, 'include_recent must be a non-negative number');
+      }
+    }
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const result = await getContext(ctx, {
+      q,
+      budget,
+      limit,
+      pinnedOnly,
+      scope,
+      includeRecent,
+    });
+    sendJson(res, 200, result);
+    return;
+  }
+
+  // POST /v1/sleep — host-wide consolidation pipeline (consolidate + dedup +
+  // audit + share + ambient). serve() refuses non-loopback hosts at boot, AND
+  // this per-request loopback assertion makes the host-wide semantic fail-
+  // closed regardless of any future serve() boot-config change. Body:
+  // {dry_run?, no_share?}. Returns SleepResult JSON.
+  //
+  // Tenant scope (Episode A follow-up tracked in TODOS.md): api.sleep operates
+  // on the WHOLE hippoRoot (cross-tenant by design, matching CLI cmdSleep).
+  // The loopback-only guard is the trust boundary today. Future non-loopback
+  // serving needs an admin-role gate before exposing this route.
+  if (method === 'POST' && path === '/v1/sleep') {
+    // Defensive per-request loopback guard. Uses the canonical isLoopback()
+    // helper above so any future extension (additional mapped/IPv6 forms,
+    // NAT64 prefixes) flows through without drift. serve()'s boot-time host
+    // check is the primary trust boundary; this is belt-and-suspenders.
+    if (!isLoopback(req.socket.remoteAddress)) {
+      throw new HttpError(403, '/v1/sleep is loopback-only (host-wide consolidation; see CHANGELOG v1.11.4)');
+    }
+    const body = await parseJsonBody(req);
+    const dryRunRaw = body['dry_run'];
+    if (dryRunRaw !== undefined && typeof dryRunRaw !== 'boolean') {
+      throw new HttpError(400, 'dry_run must be a boolean');
+    }
+    const noShareRaw = body['no_share'];
+    if (noShareRaw !== undefined && typeof noShareRaw !== 'boolean') {
+      throw new HttpError(400, 'no_share must be a boolean');
+    }
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const result = await sleep(ctx, {
+      dryRun: dryRunRaw === true,
+      noShare: noShareRaw === true,
+    });
     sendJson(res, 200, result);
     return;
   }

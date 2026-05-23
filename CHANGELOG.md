@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.11.4 (2026-05-23): HTTP routes for outcome / context / sleep
+
+Three new HTTP routes added to `src/server.ts`, wrapping the api exports shipped in v1.11.3. Each route is loopback-only (the same trust boundary the rest of the v1 surface already uses).
+
+All three routes inherit the existing `/v1/*` per-IP token-bucket rate limit (`HIPPO_V1_RPS`, default 20 rps with 2x burst; `src/rate-limit.ts`). Operators sweeping sleep / context at high frequency will see 429s once the bucket drains.
+
+- **POST /v1/outcome**: apply a positive / negative outcome to memory ids. Body: `{"ids"?: string[], "good": boolean}`. If `ids` omitted, falls back to the last-recall path (`api.outcomeForLastRecall`); returned shape is `{applied, ids}` in that case where `ids` is the **tenant-filtered applied subset** (NOT the raw `last_retrieval_ids`). Each applied id writes one `audit_log` row (op='outcome', actor from Bearer). Cross-tenant ids silently skip (no audit row, not surfaced in response).
+- **GET /v1/context**: assemble a budget-bounded context bundle. Query params: `q?`, `budget?`, `limit?`, `pinned_only?`, `scope?`, `include_recent?`. Returns `ContextResult` JSON (entries + tokens + activeSnapshot + sessionHandoff + recentEvents). No server-side rendering; clients render markdown / json / additional-context. Tenant-scoped via the Bearer.
+- **POST /v1/sleep**: run the storage consolidation pipeline. Body: `{"dry_run"?: boolean, "no_share"?: boolean}`. Returns `SleepResult` JSON. **Host-wide semantic** (operates on the whole hippoRoot, not per-tenant), matching CLI `hippo sleep`. Two layers of loopback-only enforcement: serve()'s boot-time host check rejects non-loopback binds, AND the per-request guard in the handler rejects non-loopback connections with 403 (belt-and-suspenders so a future config relaxation doesn't silently expose the host-wide semantic). Tracked in TODOS.md for the day non-loopback serving lands — at that point the route needs an admin-role gate OR api.sleep needs to scope dedup / audit / delete by ctx.tenantId.
+
+Unlocks the v0.1.0 Python SDK (`pip install hippo-memory`, planned Episode C) which thin-wraps these HTTP routes.
+
+### Security fix (in scope)
+
+`api.outcome` and `api.outcomeForLastRecall` now return the tenant-filtered `appliedIds` subset (added field on `outcome`, replaces the raw `last_retrieval_ids` echo in `outcomeForLastRecall`'s `ids` field). Pre-v1.11.4, `outcomeForLastRecall` returned the full `last_retrieval_ids` regardless of tenant, which would have leaked cross-tenant memory IDs to the caller via the new POST /v1/outcome's no-body last-recall response. The CLI (`hippo outcome --good`) is single-operator and was unaffected in practice, but the HTTP route was the first multi-tenant surface to expose this path. Closed before the route shipped; regression test in `tests/server-outcome-route.test.ts` ("cross-tenant last-recall path: response ids field does NOT leak other-tenant ids").
+
+### Shipped
+
+- Three new routes in `src/server.ts` following the established if-block pattern (`buildContextWithAuth` + body / query validation + `sendJson` + `HttpError(400)` for invalid input).
+- Defensive per-request loopback assertion on `/v1/sleep` using the canonical `isLoopback()` helper (server.ts:240) so any future extension to recognise additional mapped/IPv6 forms flows through without drift.
+- `src/api.ts` `sleep()` JSDoc updated to reflect the loopback-only enforcement is now in place (Episode B preflight item closed; per-tenant scoping deferral remains in TODOS.md).
+- Imports for the 4 Episode A api exports (outcome, outcomeForLastRecall, getContext, sleep) added to the api.js import in `src/server.ts`.
+
+### Tests
+
+Three new test files (22 real-HTTP cases total): `server-outcome-route` (8 cases incl. cross-tenant silent skip + audit emission), `server-context-route` (8 cases incl. tenant scoping + pinned_only + activeSnapshot + budget cap), `server-sleep-route` (6 cases incl. dry-run gating + host-wide intentional contract pin). Each spawns a real `serve(port: 0)` instance against an isolated tmp HIPPO_HOME. Full suite green: 1650 passed, 4 skipped, 0 failed.
+
+### Out of scope
+
+- Per-tenant sleep scoping for `/v1/sleep` (tracked in TODOS.md "Episode A follow-ups"; needs non-loopback serving + admin-role gate).
+- `POST /v1/sleep` does not emit `audit_log` rows for the dedup / audit-delete phases (matches `api.sleep` parity). Tracked in TODOS.md as the audit-emission follow-up.
+- Render helpers in `api.ts` for shared markdown / json / additional-context output (Python SDK consumers render client-side for v0.1; tracked in TODOS.md).
+- `ContextResult.entries` returned by GET /v1/context exposes the full `MemoryEntry` surface (not the CLI's projected json subset). Python SDK consumers in Episode C will receive richer payloads than `hippo context --format json` renders. Documented in TODOS.md.
+
 ## 1.11.3 (2026-05-23): api.ts refactor (getContext + sleep + outcomeForLastRecall)
 
 An internal refactor enabling future HTTP API expansion (planned v1.11.4) and the Python SDK (planned v0.1.0). Three new exports added to `src/api.ts`:
