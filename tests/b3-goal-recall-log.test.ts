@@ -51,7 +51,7 @@ function runRecall(env: TestEnv, query: string, sessionId: string, extraArgs: st
   );
 }
 
-const ctx = (root: string) => ({ hippoRoot: root, tenantId: 'default', actor: 'cli' });
+const ctx = (root: string) => ({ hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } });
 
 describe('goal_recall_log captured from real CLI recall', () => {
   let env: TestEnv;

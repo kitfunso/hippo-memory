@@ -25,7 +25,7 @@ function makeRoot(prefix: string): string {
 }
 function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
 function ctxFor(root: string, tenantId: string = 'default'): Context {
-  return { hippoRoot: root, tenantId, actor: 'test:v163' };
+  return { hippoRoot: root, tenantId, actor: { subject: 'test:v163', role: 'admin' } };
 }
 function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
   const e = createMemory(text, {
@@ -165,7 +165,7 @@ describe('v1.6.3 P1-1 — MCP hippo_recall exposes fresh_tail_session_id', () =>
   it('hippo_recall tool schema lists fresh_tail_session_id', async () => {
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/list' },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'mcp', role: 'admin' } },
     );
     const tools = (res as { result?: { tools?: Array<{ name?: string; inputSchema?: { properties?: Record<string, unknown> } }> } }).result?.tools ?? [];
     const recall = tools.find((t) => t.name === 'hippo_recall');

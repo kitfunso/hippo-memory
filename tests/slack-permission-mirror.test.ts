@@ -9,7 +9,7 @@ import { recall } from '../src/api.js';
 const ctx = (root: string) => ({
   hippoRoot: root,
   tenantId: 'default',
-  actor: 'connector:slack',
+  actor: { subject: 'connector:slack', role: 'admin' },
 });
 
 describe('slack permission mirroring', () => {
@@ -76,8 +76,8 @@ describe('slack permission mirroring', () => {
   // with scope='slack:private:CSHARED'. Tenant A queries the same scope string
   // and must get nothing — recall is tenant-scoped before scope-scoped.
   it('tenant-mismatched scope does not leak across tenants', () => {
-    const ctxA = (r: string) => ({ hippoRoot: r, tenantId: 'tenantA', actor: 'cli' });
-    const ctxB = (r: string) => ({ hippoRoot: r, tenantId: 'tenantB', actor: 'cli' });
+    const ctxA = (r: string) => ({ hippoRoot: r, tenantId: 'tenantA', actor: { subject: 'cli', role: 'admin' } });
+    const ctxB = (r: string) => ({ hippoRoot: r, tenantId: 'tenantB', actor: { subject: 'cli', role: 'admin' } });
     ingestMessage(ctxB(root), {
       teamId: 'T1',
       channel: { id: 'CSHARED', is_private: true },

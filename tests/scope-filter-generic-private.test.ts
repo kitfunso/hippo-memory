@@ -35,7 +35,7 @@ function makeRoot(prefix: string): string {
 }
 
 function ctx(home: string) {
-  return { hippoRoot: home, tenantId: 'default', actor: 'test' };
+  return { hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' } };
 }
 
 function callMcpTool(
@@ -50,7 +50,7 @@ function callMcpTool(
       method: 'tools/call',
       params: { name, arguments: args },
     },
-    { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
+    { hippoRoot: home, tenantId: 'default', actor: { subject: 'mcp', role: 'admin' } },
   );
 }
 

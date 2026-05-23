@@ -69,8 +69,13 @@ export function ingestMessage(ctx: Context, input: IngestInput): IngestResult {
   // together. Slack's 1-minute retry window can no longer produce a duplicate
   // via the crash-between-handles race.
   try {
+    // v1.12.0: drop the legacy `|| 'connector:slack'` fallback — ctx is always
+    // provided by server.ts:1039 which constructs it with the connector subject.
+    // Under the new object-shaped Context.actor, an OR-fallback would evaluate
+    // an object as truthy and skip the fallback anyway (logic bug if ctx were
+    // ever missing); explicit reliance on the caller is safer.
     const result = remember(
-      { ...ctx, actor: ctx.actor || 'connector:slack' },
+      ctx,
       {
         ...opts,
         afterWrite: (innerDb, memoryId) => {

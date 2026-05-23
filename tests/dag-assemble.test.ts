@@ -23,7 +23,7 @@ function makeRoot(prefix: string): string {
 }
 function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
 function ctxFor(root: string, tenantId: string = 'default'): Context {
-  return { hippoRoot: root, tenantId, actor: 'test:assemble' };
+  return { hippoRoot: root, tenantId, actor: { subject: 'test:assemble', role: 'admin' } };
 }
 
 function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {

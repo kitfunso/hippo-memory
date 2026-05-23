@@ -56,7 +56,7 @@ describe('applyGoalStackBoost (v1.7.4)', () => {
   it('writes one goal_recall_log row per (boosted_memory, goal) -- INSERT OR IGNORE on repeat', async () => {
     const goal = pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
     // Memory must exist locally so the FK-safe INSERT path fires.
-    const m = remember({ hippoRoot, tenantId, actor: 'test' }, {
+    const m = remember({ hippoRoot, tenantId, actor: { subject: 'test', role: 'admin' } }, {
       content: 'fix auth bug',
       tags: ['fix-auth'],
     });

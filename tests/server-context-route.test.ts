@@ -61,7 +61,7 @@ describe('GET /v1/context', () => {
   });
 
   it('returns entries within budget (200)', async () => {
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: 'localhost:cli' };
+    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     for (let i = 0; i < 5; i++) {
       remember(ctx, { content: `ctx-route-mem-${i}` });
     }
@@ -74,7 +74,7 @@ describe('GET /v1/context', () => {
   });
 
   it('honors tight budget cap', async () => {
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: 'localhost:cli' };
+    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     for (let i = 0; i < 10; i++) {
       remember(ctx, { content: `padding ${'x'.repeat(200)} content ${i}` });
     }
@@ -86,7 +86,7 @@ describe('GET /v1/context', () => {
   });
 
   it('budget=0 short-circuits to empty result', async () => {
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: 'localhost:cli' };
+    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     remember(ctx, { content: 'budget-zero' });
 
     const res = await fetch(`${handle.url}/v1/context?budget=0`);
@@ -108,7 +108,7 @@ describe('GET /v1/context', () => {
 
   it('pinned_only filters to pinned entries only', async () => {
     // Seed: 2 unpinned + 1 pinned. Default-tenant memories.
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: 'localhost:cli' };
+    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     remember(ctx, { content: 'unpinned-1' });
     remember(ctx, { content: 'unpinned-2' });
     // Use store-level write for pinned to keep the test simple.
@@ -142,7 +142,7 @@ describe('GET /v1/context', () => {
       session_id: 'sess-ctx-route',
       scope: null,
     });
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: 'localhost:cli' };
+    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     remember(ctx, { content: 'snapshot-companion' });
 
     const res = await fetch(`${handle.url}/v1/context?budget=1500`);
@@ -156,8 +156,8 @@ describe('GET /v1/context', () => {
   });
 
   it('tenant scoping: default Bearer does not see tenant_b memories', async () => {
-    const ctxA = { hippoRoot: home, tenantId: 'default', actor: 'localhost:cli' };
-    const ctxB = { hippoRoot: home, tenantId: 'tenant_b', actor: 'localhost:cli' };
+    const ctxA = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
+    const ctxB = { hippoRoot: home, tenantId: 'tenant_b', actor: { subject: 'localhost:cli', role: 'admin' } };
     remember(ctxA, { content: 'belongs-to-default' });
     remember(ctxB, { content: 'belongs-to-tenant-B' });
 
@@ -182,7 +182,7 @@ describe('GET /v1/context', () => {
   });
 
   it('q at 1024-char boundary returns 200', async () => {
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: 'localhost:cli' };
+    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     remember(ctx, { content: 'boundary-test' });
     const q = 'a'.repeat(1024);
     const res = await fetch(`${handle.url}/v1/context?q=${q}`);
@@ -190,7 +190,7 @@ describe('GET /v1/context', () => {
   });
 
   it('q=foo emits exactly one recall audit row (row-count delta)', async () => {
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: 'localhost:cli' };
+    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     remember(ctx, { content: 'foo bar baz' });
     remember(ctx, { content: 'foo qux' });
     remember(ctx, { content: 'unrelated content' });

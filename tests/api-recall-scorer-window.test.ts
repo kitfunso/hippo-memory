@@ -31,7 +31,7 @@ function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
 function ctxFor(root: string, tenantId: string = 'default'): Context {
-  return { hippoRoot: root, tenantId, actor: 'test:f3' };
+  return { hippoRoot: root, tenantId, actor: { subject: 'test:f3', role: 'admin' } };
 }
 function makeRaw(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
   return createMemory(text, {

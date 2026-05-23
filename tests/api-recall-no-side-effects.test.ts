@@ -48,7 +48,7 @@ describe('api.recall divergence from cmdRecall (no last_retrieval_ids side-effec
   it('api.recall does NOT write last_retrieval_ids; api.getContext DOES', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: 'cli' };
+      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
       remember(ctx, { content: 'recall-divergence-target-1' });
       remember(ctx, { content: 'recall-divergence-target-2 also matches' });
 
@@ -77,7 +77,7 @@ describe('api.recall divergence from cmdRecall (no last_retrieval_ids side-effec
   it('batched api.recall calls leave last_retrieval_ids untouched (no overwrite race)', () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: 'cli' };
+      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
       remember(ctx, { content: 'batched-A' });
       remember(ctx, { content: 'batched-B' });
       remember(ctx, { content: 'batched-C' });

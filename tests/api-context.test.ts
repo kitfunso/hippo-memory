@@ -57,7 +57,7 @@ describe('api.getContext', () => {
       const ctx: Context = {
         hippoRoot: home,
         tenantId: 'default',
-        actor: 'cli',
+        actor: { subject: 'cli', role: 'admin' },
       };
       const result = await getContext(ctx, {});
       expect(result.entries).toEqual([]);
@@ -75,7 +75,7 @@ describe('api.getContext', () => {
       const ctx: Context = {
         hippoRoot: home,
         tenantId: 'default',
-        actor: 'cli',
+        actor: { subject: 'cli', role: 'admin' },
       };
       for (let i = 0; i < 5; i++) {
         remember(ctx, {
@@ -105,7 +105,7 @@ describe('api.getContext', () => {
       const ctx: Context = {
         hippoRoot: home,
         tenantId: 'default',
-        actor: 'cli',
+        actor: { subject: 'cli', role: 'admin' },
       };
       // Seed 10 longish memories so total tokens >> tight budget
       for (let i = 0; i < 10; i++) {
@@ -131,12 +131,12 @@ describe('api.getContext', () => {
       const ctxA: Context = {
         hippoRoot: home,
         tenantId: 'tenant_a',
-        actor: 'cli',
+        actor: { subject: 'cli', role: 'admin' },
       };
       const ctxB: Context = {
         hippoRoot: home,
         tenantId: 'tenant_b',
-        actor: 'cli',
+        actor: { subject: 'cli', role: 'admin' },
       };
       remember(ctxA, { content: 'belongs-to-tenant-A', kind: 'distilled' });
       remember(ctxB, { content: 'belongs-to-tenant-B', kind: 'distilled' });
@@ -162,7 +162,7 @@ describe('api.getContext', () => {
       const ctx: Context = {
         hippoRoot: home,
         tenantId: 'default',
-        actor: 'cli',
+        actor: { subject: 'cli', role: 'admin' },
       };
       saveActiveTaskSnapshot(home, ctx.tenantId, {
         task: 'Test task for api.getContext',
@@ -190,7 +190,7 @@ describe('api.getContext', () => {
       const ctx: Context = {
         hippoRoot: home,
         tenantId: 'default',
-        actor: 'cli',
+        actor: { subject: 'cli', role: 'admin' },
       };
       remember(ctx, { content: 'budget-zero-test', kind: 'distilled' });
 

@@ -77,7 +77,7 @@ function setStrength(root: string, memId: string, strength: number) {
   }
 }
 
-const ctx = (root: string) => ({ hippoRoot: root, tenantId: 'default', actor: 'cli' });
+const ctx = (root: string) => ({ hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } });
 
 describe('outcome propagation E2E (recall -> log -> completeGoal)', () => {
   let env: TestEnv;

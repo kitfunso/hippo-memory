@@ -5,7 +5,7 @@ import { join } from 'path';
 import { initStore, loadAllEntries } from '../src/store.js';
 import { ingestMessage } from '../src/connectors/slack/ingest.js';
 
-const ctx = (root: string) => ({ hippoRoot: root, tenantId: 'default', actor: 'connector:slack' });
+const ctx = (root: string) => ({ hippoRoot: root, tenantId: 'default', actor: { subject: 'connector:slack', role: 'admin' } });
 
 describe('ingestMessage', () => {
   let root: string;

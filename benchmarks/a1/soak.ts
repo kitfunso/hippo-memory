@@ -89,7 +89,7 @@ function seedStore(home: string, count: number): void {
   for (let i = 0; i < count; i++) {
     const tag = SEED_TAGS[i % SEED_TAGS.length]!;
     apiRemember(
-      { hippoRoot: home, tenantId: 'default', actor: 'localhost:cli' },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } },
       {
         content: `seed-${i} ${tag} ${QUERIES[i % QUERIES.length]} payload number ${i}`,
         tags: [tag],

@@ -16,6 +16,7 @@
 
 import { ingestMessage } from '../../src/connectors/slack/ingest.js';
 import { loadAllEntries } from '../../src/store.js';
+import { adminActor } from '../../src/api.js';
 
 export interface SmokeOpts {
   hippoRoot: string;
@@ -34,7 +35,7 @@ export async function runSlackSmoke(opts: SmokeOpts): Promise<SmokeResult> {
   const ctx = {
     hippoRoot: opts.hippoRoot,
     tenantId: 'default',
-    actor: 'connector:slack',
+    actor: adminActor('connector:slack'),
   };
   const start = Date.now();
   let calls = 0;

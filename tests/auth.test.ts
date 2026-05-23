@@ -29,7 +29,7 @@ describe('auth', () => {
     try {
       const { plaintext } = createApiKey(db, { tenantId: 'default', label: 'test' });
       const ctx = validateApiKey(db, plaintext);
-      expect(ctx).toEqual({ valid: true, tenantId: 'default', keyId: expect.stringMatching(/^hk_/) });
+      expect(ctx).toEqual({ valid: true, tenantId: 'default', keyId: expect.stringMatching(/^hk_/), role: 'admin' });
     } finally {
       closeHippoDb(db);
       rmSync(home, { recursive: true, force: true });

@@ -78,7 +78,7 @@ describe('mcp hippo_recall fresh-tail policy F5 (v1.6.5)', () => {
       await callTool(
         'hippo_recall',
         { query: 'event', fresh_tail_count: 3 },
-        { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
+        { hippoRoot: home, tenantId: 'default', actor: { subject: 'mcp', role: 'admin' } },
       );
     } catch (err) {
       thrown = err;
@@ -104,7 +104,7 @@ describe('mcp hippo_recall fresh-tail policy F5 (v1.6.5)', () => {
     const res = await callTool(
       'hippo_recall',
       { query: 'event', fresh_tail_count: 3, fresh_tail_session_id: 'sess-A' },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'mcp', role: 'admin' } },
     );
     const r = res as {
       error?: { code: number; message: string };
@@ -124,7 +124,7 @@ describe('mcp hippo_recall fresh-tail policy F5 (v1.6.5)', () => {
     const res = await callTool(
       'hippo_recall',
       { query: 'event', fresh_tail_count: 3 },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'mcp', role: 'admin' } },
     );
     const r = res as {
       error?: { code: number; message: string };

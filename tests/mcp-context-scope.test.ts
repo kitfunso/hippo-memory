@@ -61,7 +61,7 @@ describe('mcp hippo_context scope filter', () => {
     const res = await callTool(1, 'hippo_context', {}, {
       hippoRoot: home,
       tenantId: 'default',
-      actor: 'mcp',
+      actor: { subject: 'mcp', role: 'admin' },
     });
     const text = extractText(res);
     expect(text).not.toContain('private memory secret');
@@ -82,7 +82,7 @@ describe('mcp hippo_context scope filter', () => {
     const res = await callTool(2, 'hippo_context', { scope: 'slack:private:Csecret' }, {
       hippoRoot: home,
       tenantId: 'default',
-      actor: 'mcp',
+      actor: { subject: 'mcp', role: 'admin' },
     });
     const text = extractText(res);
     expect(text).toContain('Private task');

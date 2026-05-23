@@ -14,7 +14,7 @@ const SCOPE_PRIVATE = 'github:private:acme/secret';
 const ctxFor = (root: string, tenantId = 'default'): Context => ({
   hippoRoot: root,
   tenantId,
-  actor: 'connector:github',
+  actor: { subject: 'connector:github', role: 'admin' },
 });
 
 interface SeedOpts {

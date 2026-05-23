@@ -29,7 +29,7 @@ const TENANT = 'default';
 const ctx = (root: string) => ({
   hippoRoot: root,
   tenantId: TENANT,
-  actor: 'connector:github',
+  actor: { subject: 'connector:github', role: 'admin' },
 });
 
 interface CursorRow {

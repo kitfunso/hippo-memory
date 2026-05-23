@@ -43,10 +43,10 @@ describe('v0.39 commit 3 — Slack hardening + migration v19', () => {
 
   // 1. Migration v19 schema additions present.
   it('migration v19: slack_dlq has team_id, bucket, retry_count, signature, slack_timestamp', () => {
-    expect(getCurrentSchemaVersion()).toBe(25);
+    expect(getCurrentSchemaVersion()).toBe(26);
     const db = openHippoDb(root);
     try {
-      expect(getSchemaVersion(db)).toBe(25);
+      expect(getSchemaVersion(db)).toBe(26);
       const cols = db.prepare(`PRAGMA table_info(slack_dlq)`).all() as Array<{ name: string }>;
       const names = cols.map((c) => c.name);
       expect(names).toContain('team_id');
@@ -188,7 +188,7 @@ describe('v0.39 commit 3 — Slack hardening + migration v19', () => {
   it('ingest race: duplicate event_id yields exactly one memory + skipped_duplicate via afterWrite throw', async () => {
     const { remember } = await import('../src/api.js');
     const { DuplicateEventError } = await import('../src/connectors/slack/idempotency.js');
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: 'connector:slack' };
+    const ctx = { hippoRoot: root, tenantId: 'default', actor: { subject: 'connector:slack', role: 'admin' } };
 
     // First call: ordinary ingest succeeds and writes to slack_event_log.
     const r1 = ingestMessage(ctx, {

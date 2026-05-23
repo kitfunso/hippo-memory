@@ -24,7 +24,7 @@ const PUBLIC_CHANNEL: ChannelMeta = { id: 'C01PUB', name: 'general', isPrivate: 
 const TEAM_ID = 'T01TEAM';
 
 function ctxFor(root: string): Context {
-  return { hippoRoot: root, tenantId: 'default', actor: 'connector:slack' };
+  return { hippoRoot: root, tenantId: 'default', actor: { subject: 'connector:slack', role: 'admin' } };
 }
 
 function makeMessage(i: number, opts: Partial<SlackMessageEvent> = {}): SlackMessageEvent {

@@ -24,6 +24,7 @@ import {
   outcomeForLastRecall,
   getContext,
   sleep,
+  adminActor,
   type Context,
 } from './api.js';
 import type { MemoryKind } from './memory.js';
@@ -314,13 +315,16 @@ function buildContextWithAuth(req: IncomingMessage, hippoRoot: string): Context 
     const db = openHippoDb(hippoRoot);
     try {
       const result = validateApiKey(db, auth.token);
-      if (!result.valid || !result.tenantId || !result.keyId) {
+      if (!result.valid || !result.tenantId || !result.keyId || !result.role) {
         throw new HttpError(401, 'invalid api key');
       }
       return {
         hippoRoot,
         tenantId: result.tenantId,
-        actor: `api_key:${result.keyId}`,
+        actor: {
+          subject: `api_key:${result.keyId}`,
+          role: result.role,
+        },
       };
     } finally {
       closeHippoDb(db);
@@ -337,10 +341,11 @@ function buildContextWithAuth(req: IncomingMessage, hippoRoot: string): Context 
     throw new HttpError(401, 'auth required');
   }
 
+  // v1.12.0: loopback fallback is process-local, treat as admin.
   return {
     hippoRoot,
     tenantId: resolveTenantId({}),
-    actor: 'localhost:cli',
+    actor: { subject: 'localhost:cli', role: 'admin' },
   };
 }
 
@@ -811,6 +816,15 @@ async function handleRequest(
     if (!isLoopback(req.socket.remoteAddress)) {
       throw new HttpError(403, '/v1/sleep is loopback-only (host-wide consolidation; see CHANGELOG v1.11.4)');
     }
+    // v1.12.0 A5 v2 sub-1: admin-role gate. Forward-defensive — exists today
+    // under loopback-only enforcement (loopback fallback is admin by default;
+    // any Bearer-authed caller now carries an explicit role from the api_keys
+    // row). When non-loopback serving lands, this gate is the actual auth
+    // boundary on host-wide sleep.
+    const sleepCtx = buildContextWithAuth(req, opts.hippoRoot);
+    if (sleepCtx.actor.role !== 'admin') {
+      throw new HttpError(403, '/v1/sleep requires admin role');
+    }
     const body = await parseJsonBody(req);
     const dryRunRaw = body['dry_run'];
     if (dryRunRaw !== undefined && typeof dryRunRaw !== 'boolean') {
@@ -820,8 +834,8 @@ async function handleRequest(
     if (noShareRaw !== undefined && typeof noShareRaw !== 'boolean') {
       throw new HttpError(400, 'no_share must be a boolean');
     }
-    const ctx = buildContextWithAuth(req, opts.hippoRoot);
-    const result = await sleep(ctx, {
+    // v1.12.0: sleepCtx already built above for the admin-role gate; reuse.
+    const result = await sleep(sleepCtx, {
       dryRun: dryRunRaw === true,
       noShare: noShareRaw === true,
     });
@@ -1039,7 +1053,7 @@ async function handleRequest(
     const ctx: Context = {
       hippoRoot: opts.hippoRoot,
       tenantId: resolvedTenant,
-      actor: 'connector:slack',
+      actor: adminActor('connector:slack'),
     };
     if (!isSlackEventEnvelope(body)) {
       const db = openHippoDb(ctx.hippoRoot);
@@ -1306,7 +1320,7 @@ async function handleRequest(
     const ctx: Context = {
       hippoRoot: opts.hippoRoot,
       tenantId: resolvedTenant,
-      actor: 'connector:github',
+      actor: adminActor('connector:github'),
     };
 
     // Dispatch by event header. Type guards cross-check the body shape against
@@ -1464,7 +1478,8 @@ async function handleRequest(
       mcpRes = await handleMcpRequest(mcpReq, {
         hippoRoot: ctx.hippoRoot,
         tenantId: ctx.tenantId,
-        actor: ctx.actor,
+        // v1.12.0: McpContext.actor stays string; extract subject at the boundary.
+        actor: ctx.actor.subject,
         clientKey: buildMcpClientKey(req),
       });
     } catch (err) {

@@ -10,7 +10,7 @@
  *   - hippo github dlq replay <id> [--force]
  */
 
-import type { Context } from '../../api.js';
+import { type Context, adminActor } from '../../api.js';
 import { openHippoDb, closeHippoDb } from '../../db.js';
 import { resolveTenantId } from '../../tenant.js';
 import { backfillRepo } from './backfill.js';
@@ -120,7 +120,7 @@ export async function cmdGithubBackfill(
   const ctx: Context = {
     hippoRoot,
     tenantId,
-    actor: 'cli:github-backfill',
+    actor: adminActor('cli:github-backfill'),
   };
   try {
     const result = await backfillRepo(ctx, {
@@ -174,7 +174,7 @@ export async function cmdGithubDlqReplay(
   const ctx: Context = {
     hippoRoot,
     tenantId: resolveTenantId({}),
-    actor: 'cli:github-dlq-replay',
+    actor: adminActor('cli:github-dlq-replay'),
   };
   // v1.3.1 hotfix (codex P1): without an ingestHook the v1.3.0 CLI was a
   // dry-run that printed "replay ok" while only bumping retry_count. Wire the

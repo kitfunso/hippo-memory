@@ -23,7 +23,7 @@ const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: new (path: string) => DatabaseSyncLike;
 };
 
-const CURRENT_SCHEMA_VERSION = 25;
+const CURRENT_SCHEMA_VERSION = 26;
 
 type Migration = {
   version: number;
@@ -857,6 +857,20 @@ const MIGRATIONS: Migration[] = [
          WHERE dag_level >= 2
            AND earliest_at IS NULL
       `);
+    },
+  },
+  {
+    version: 26,
+    up: (db) => {
+      // v1.12.0 A5 v2 sub-1: add role column to api_keys for the admin/member
+      // distinction that gates /v1/sleep. Additive — existing keys backfill to
+      // 'admin' via DEFAULT (single-tenant operator = admin by definition).
+      // No min_compatible_binary bump: old binaries (v1.11.x) ignore the
+      // column on SELECTs that don't name it; new binaries on old data run
+      // this migration at openHippoDb time before any createApiKey call.
+      if (!tableHasColumn(db, 'api_keys', 'role')) {
+        db.exec(`ALTER TABLE api_keys ADD COLUMN role TEXT NOT NULL DEFAULT 'admin'`);
+      }
     },
   },
 ];

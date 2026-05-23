@@ -20,7 +20,7 @@ describe('github DLQ', () => {
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'hippo-github-dlq-'));
     initStore(root);
-    ctx = { hippoRoot: root, tenantId: 'default', actor: 'cli' };
+    ctx = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
   });
 
   afterEach(() => rmSync(root, { recursive: true, force: true }));

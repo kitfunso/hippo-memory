@@ -26,7 +26,7 @@ import { fetchGitLog, extractLessons, deduplicateLesson, isGitRepo } from '../au
 import { loadConfig } from '../config.js';
 import { resolveConfidence } from '../memory.js';
 import { resolveTenantId } from '../tenant.js';
-import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, drillDown as apiDrillDown, assemble as apiAssemble, isPrivateScope, type Context as ApiContext } from '../api.js';
+import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, drillDown as apiDrillDown, assemble as apiAssemble, isPrivateScope, adminActor, type Context as ApiContext } from '../api.js';
 import { applyGoalStackBoost } from '../goals.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { PACKAGE_VERSION } from '../version.js';
@@ -445,7 +445,7 @@ async function executeTool(
       const apiCtx: ApiContext = {
         hippoRoot,
         tenantId,
-        actor: 'mcp',
+        actor: adminActor('mcp'),
       };
       // Route through api.recall for audit + (when requested) continuity block.
       // api.recall already applies the same default-deny / exact-match rules
@@ -550,7 +550,7 @@ async function executeTool(
       const apiCtx: ApiContext = {
         hippoRoot,
         tenantId,
-        actor: 'mcp',
+        actor: adminActor('mcp'),
       };
       const explicitScope = typeof args.scope === 'string' && args.scope.length > 0
         ? String(args.scope)
@@ -578,7 +578,7 @@ async function executeTool(
       const apiCtx: ApiContext = {
         hippoRoot,
         tenantId,
-        actor: 'mcp',
+        actor: adminActor('mcp'),
       };
       const r = apiDrillDown(apiCtx, summaryId, {
         ...(Number.isFinite(limit) && limit > 0 ? { limit } : {}),
@@ -618,7 +618,7 @@ async function executeTool(
       const apiCtx: ApiContext = {
         hippoRoot,
         tenantId,
-        actor: 'mcp',
+        actor: adminActor('mcp'),
       };
       const result = apiRemember(apiCtx, {
         content: text,
@@ -655,7 +655,7 @@ async function executeTool(
       const apiCtx: ApiContext = {
         hippoRoot,
         tenantId,
-        actor: 'mcp',
+        actor: adminActor('mcp'),
       };
       const { applied } = apiOutcome(apiCtx, ids, good);
       return `Applied ${good ? 'positive' : 'negative'} outcome to ${applied} memories`;

@@ -68,11 +68,36 @@ import { loadConfig } from './config.js';
 import { deduplicateStore } from './dedupe.js';
 import { computeAmbientState, type AmbientState } from './ambient.js';
 
+/**
+ * Actor identity + authorization role for a Context. v1.12.0 A5 v2 sub-1.
+ *
+ * Before v1.12.0, Context.actor was a bare string. v1.12.0 promotes it to an
+ * object carrying both the audit-log subject (formerly the string itself) and
+ * a role for /v1/sleep admin gating. Audit helpers continue accepting `string`
+ * — callers pass `ctx.actor.subject`. Role checks happen at the request
+ * boundary (e.g. /v1/sleep), not inside api functions.
+ */
+export interface Actor {
+  /** 'cli' | 'localhost:cli' | 'api_key:<key_id>' | 'mcp' | 'connector:slack' | 'connector:github' */
+  subject: string;
+  role: 'admin' | 'member';
+}
+
 export interface Context {
   hippoRoot: string;
   tenantId: string;
-  /** 'cli' | 'localhost:cli' | 'api_key:<key_id>' | 'mcp' */
-  actor: string;
+  actor: Actor;
+}
+
+/**
+ * Helper for building process-local (admin-by-default) Actor values. v1.12.0
+ * factory used by CLI / MCP / connector Context constructors so the role
+ * boilerplate isn't repeated at every site. Bearer-authed callers (HTTP
+ * /v1/*) construct Actor directly from the api_keys row's role column via
+ * buildContextWithAuth in src/server.ts.
+ */
+export function adminActor(subject: string): Actor {
+  return { subject, role: 'admin' };
 }
 
 /**
@@ -193,9 +218,9 @@ export function remember(ctx: Context, opts: RememberOpts): RememberResult {
     tags: opts.tags,
     tenantId: ctx.tenantId,
   });
-  // writeEntry threads ctx.actor into its internal audit hook, so exactly
+  // writeEntry threads ctx.actor.subject into its internal audit hook, so exactly
   // one 'remember' event lands in the log with the supplied actor.
-  writeEntry(ctx.hippoRoot, entry, { actor: ctx.actor, afterWrite: opts.afterWrite });
+  writeEntry(ctx.hippoRoot, entry, { actor: ctx.actor.subject, afterWrite: opts.afterWrite });
 
   return { id: entry.id, kind: entry.kind, tenantId: ctx.tenantId };
 }
@@ -629,7 +654,7 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   // long-prompt patterns and compliance metrics.
   appendAuditEvent(db, {
     tenantId: ctx.tenantId,
-    actor: ctx.actor,
+    actor: ctx.actor.subject,
     op: 'recall',
     metadata: {
       query_hash: createHash('sha256').update(opts.query).digest('hex').slice(0, 16),
@@ -1063,7 +1088,7 @@ export function drillDown(
  * Tenant-scoped: ids that don't belong to ctx.tenantId are silently skipped
  * (matches the prior MCP semantics — a stale id from another tenant doesn't
  * crash the call). Each successful outcome emits one audit_log row with
- * op='outcome' tagged with ctx.actor.
+ * op='outcome' tagged with ctx.actor.subject.
  *
  * Returns `{applied, appliedIds}`. `appliedIds` is the tenant-filtered subset
  * of input ids that actually had `applyOutcome` run on them (i.e. ids whose
@@ -1085,10 +1110,10 @@ export function outcome(
       const entry = readEntry(ctx.hippoRoot, id, ctx.tenantId);
       if (!entry) continue;
       const updated = applyOutcome(entry, good);
-      writeEntry(ctx.hippoRoot, updated, { actor: ctx.actor });
+      writeEntry(ctx.hippoRoot, updated, { actor: ctx.actor.subject });
       appendAuditEvent(db, {
         tenantId: ctx.tenantId,
-        actor: ctx.actor,
+        actor: ctx.actor.subject,
         op: 'outcome',
         targetId: id,
         metadata: { good },
@@ -1106,7 +1131,7 @@ export function outcome(
 // ---------------------------------------------------------------------------
 
 /**
- * Delete a memory by id. `deleteEntry` threads ctx.actor into its internal
+ * Delete a memory by id. `deleteEntry` threads ctx.actor.subject into its internal
  * audit hook, so exactly one 'forget' event lands with the supplied actor.
  *
  * Tenant scope: deleteEntry looks up the row by id alone, so without an
@@ -1127,7 +1152,7 @@ export function forget(ctx: Context, id: string): { ok: true; id: string } {
   } finally {
     closeHippoDb(db);
   }
-  const removed = deleteEntry(ctx.hippoRoot, id, { actor: ctx.actor });
+  const removed = deleteEntry(ctx.hippoRoot, id, { actor: ctx.actor.subject });
   if (!removed) {
     throw new Error(`memory not found: ${id}`);
   }
@@ -1171,17 +1196,17 @@ export function promote(
     closeHippoDb(ownerDb);
   }
 
-  // promoteToGlobal threads ctx.actor into the writeEntry call on the global
+  // promoteToGlobal threads ctx.actor.subject into the writeEntry call on the global
   // db, which emits a 'remember' audit row. We then add the user-facing
   // 'promote' event on the global db so the audit trail keeps the intent
   // distinct from the underlying upsert.
-  const globalEntry = promoteToGlobal(ctx.hippoRoot, id, { actor: ctx.actor, tenantId: ctx.tenantId });
+  const globalEntry = promoteToGlobal(ctx.hippoRoot, id, { actor: ctx.actor.subject, tenantId: ctx.tenantId });
 
   const db = openHippoDb(getGlobalRoot());
   try {
     appendAuditEvent(db, {
       tenantId: ctx.tenantId,
-      actor: ctx.actor,
+      actor: ctx.actor.subject,
       op: 'promote',
       targetId: globalEntry.id,
       metadata: { sourceId: id },
@@ -1260,12 +1285,12 @@ export function supersede(
       // 2. Write new memory inside same tx via writeEntryDbOnly (DB-only
       //    path). This emits its OWN 'remember' audit row for the new
       //    memory inside the SAVEPOINT — atomic with the row INSERT.
-      writeEntryDbOnly(db, newEntry, { actor: ctx.actor });
+      writeEntryDbOnly(db, newEntry, { actor: ctx.actor.subject });
       // 3. User-facing 'supersede' audit row inside the same tx so the
       //    chain pointer + audit trail commit atomically.
       appendAuditEvent(db, {
         tenantId: ctx.tenantId,
-        actor: ctx.actor,
+        actor: ctx.actor.subject,
         op: 'supersede',
         targetId: oldId,
         metadata: { newId: newEntry.id },
@@ -1305,7 +1330,7 @@ export function supersede(
  * `archiveRawMemory` audits the operation internally (op='archive_raw') using the
  * row's own tenant_id. We DO NOT emit a second audit event here to avoid double-
  * emitting the archive_raw op (unlike Task 1 remember/forget where the underlying
- * helpers hardcode actor='cli'). Instead we pass `ctx.actor` through as `who`,
+ * helpers hardcode actor='cli'). Instead we pass `ctx.actor.subject` through as `who`,
  * and raw-archive.ts uses that for the audit row.
  */
 export interface ArchiveRawOpts {
@@ -1339,7 +1364,7 @@ export function archiveRaw(
     }
     archiveRawMemory(db, id, {
       reason,
-      who: ctx.actor,
+      who: ctx.actor.subject,
       afterArchive: opts.afterArchive,
     });
     // archiveRawMemory deletes the memories row but leaves any legacy markdown
@@ -1482,7 +1507,7 @@ export function authRevoke(
       try {
         appendAuditEvent(db, {
           tenantId: row.tenant_id, // M1: KEY's tenant, not ctx.tenantId.
-          actor: ctx.actor,
+          actor: ctx.actor.subject,
           op: 'auth_revoke',
           targetId: keyId,
         });
@@ -1804,7 +1829,7 @@ export async function getContext(
       try {
         appendAuditEvent(localDb, {
           tenantId: ctx.tenantId,
-          actor: ctx.actor,
+          actor: ctx.actor.subject,
           op: 'recall',
           metadata: ctxRecallMetadata,
         });
@@ -1817,7 +1842,7 @@ export async function getContext(
       try {
         appendAuditEvent(globalDb, {
           tenantId: ctx.tenantId,
-          actor: ctx.actor,
+          actor: ctx.actor.subject,
           op: 'recall',
           metadata: ctxRecallMetadata,
         });
@@ -2060,7 +2085,7 @@ export async function sleep(
       try {
         appendAuditEvent(db, {
           tenantId: ctx.tenantId,
-          actor: ctx.actor,
+          actor: ctx.actor.subject,
           op: 'consolidate',
           metadata: {
             consolidationCount,

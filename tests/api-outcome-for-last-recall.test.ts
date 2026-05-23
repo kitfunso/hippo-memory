@@ -29,7 +29,7 @@ function cleanup(home: string): void {
 
 function seedMemory(home: string, content: string, tenantId = 'default'): string {
   const res = remember(
-    { hippoRoot: home, tenantId, actor: 'cli' },
+    { hippoRoot: home, tenantId, actor: { subject: 'cli', role: 'admin' } },
     { content, kind: 'distilled' },
   );
   return res.id;
@@ -48,7 +48,7 @@ describe('api.outcomeForLastRecall', () => {
       const ctx: Context = {
         hippoRoot: home,
         tenantId: 'default',
-        actor: 'cli',
+        actor: { subject: 'cli', role: 'admin' },
       };
       const result = outcomeForLastRecall(ctx, true);
       expect(result).toEqual({ applied: 0, ids: [] });
@@ -68,7 +68,7 @@ describe('api.outcomeForLastRecall', () => {
       const ctx: Context = {
         hippoRoot: home,
         tenantId: 'default',
-        actor: 'cli',
+        actor: { subject: 'cli', role: 'admin' },
       };
       const result = outcomeForLastRecall(ctx, true);
 
@@ -95,7 +95,7 @@ describe('api.outcomeForLastRecall', () => {
       const ctxA: Context = {
         hippoRoot: home,
         tenantId: 'tenant_a',
-        actor: 'cli',
+        actor: { subject: 'cli', role: 'admin' },
       };
       const result = outcomeForLastRecall(ctxA, true);
 
@@ -119,7 +119,7 @@ describe('api.outcomeForLastRecall', () => {
       const ctx: Context = {
         hippoRoot: home,
         tenantId: 'default',
-        actor: 'api_key:hk_ofr_test',
+        actor: { subject: 'api_key:hk_ofr_test', role: 'admin' },
       };
       const result = outcomeForLastRecall(ctx, false);
       expect(result.applied).toBe(2);

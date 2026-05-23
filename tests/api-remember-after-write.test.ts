@@ -12,7 +12,7 @@ describe('remember.afterWrite is transactional', () => {
 
   it('rolls back the memory row when afterWrite throws', () => {
     expect(() =>
-      remember({ hippoRoot: root, tenantId: 'default', actor: 'test' }, {
+      remember({ hippoRoot: root, tenantId: 'default', actor: { subject: 'test', role: 'admin' } }, {
         content: 'doomed',
         afterWrite: () => { throw new Error('boom'); },
       }),

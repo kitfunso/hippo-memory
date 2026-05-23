@@ -6,7 +6,7 @@ import { initStore, loadAllEntries } from '../src/store.js';
 import { backfillChannel, type SlackHistoryFetcher } from '../src/connectors/slack/backfill.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
-const ctx = (root: string) => ({ hippoRoot: root, tenantId: 'default', actor: 'connector:slack' });
+const ctx = (root: string) => ({ hippoRoot: root, tenantId: 'default', actor: { subject: 'connector:slack', role: 'admin' } });
 
 describe('backfillChannel', () => {
   let root: string;

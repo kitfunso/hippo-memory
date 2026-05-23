@@ -56,13 +56,13 @@ describe('v039 api tenant isolation', () => {
   // ---- Test 1: promote cross-tenant denied ----------------------------------
   it('promote refuses to promote a row that belongs to another tenant', () => {
     const created = remember(
-      { hippoRoot: home, tenantId: 'alpha', actor: 'cli' },
+      { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
       { content: 'alpha-row promote-cross-tenant canary' },
     );
 
     expect(() =>
       promote(
-        { hippoRoot: home, tenantId: 'bravo', actor: 'api_key:bravo-key' },
+        { hippoRoot: home, tenantId: 'bravo', actor: { subject: 'api_key:bravo-key', role: 'admin' } },
         created.id,
       ),
     ).toThrow(/memory not found/i);
@@ -93,13 +93,13 @@ describe('v039 api tenant isolation', () => {
   // ---- Test 2: forget cross-tenant denied -----------------------------------
   it('forget refuses to delete a row that belongs to another tenant (lock invariant)', () => {
     const created = remember(
-      { hippoRoot: home, tenantId: 'alpha', actor: 'cli' },
+      { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
       { content: 'alpha-row forget-cross-tenant canary' },
     );
 
     expect(() =>
       forget(
-        { hippoRoot: home, tenantId: 'bravo', actor: 'api_key:bravo-key' },
+        { hippoRoot: home, tenantId: 'bravo', actor: { subject: 'api_key:bravo-key', role: 'admin' } },
         created.id,
       ),
     ).toThrow(/memory not found/i);
@@ -119,13 +119,13 @@ describe('v039 api tenant isolation', () => {
   // ---- Test 3: archiveRaw cross-tenant denied -------------------------------
   it('archiveRaw refuses to archive a row that belongs to another tenant (lock invariant)', () => {
     const created = remember(
-      { hippoRoot: home, tenantId: 'alpha', actor: 'cli' },
+      { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
       { content: 'alpha-raw archiveraw-cross-tenant canary', kind: 'raw' },
     );
 
     expect(() =>
       archiveRaw(
-        { hippoRoot: home, tenantId: 'bravo', actor: 'api_key:bravo-key' },
+        { hippoRoot: home, tenantId: 'bravo', actor: { subject: 'api_key:bravo-key', role: 'admin' } },
         created.id,
         'cross-tenant probe',
       ),
@@ -163,7 +163,7 @@ describe('v039 api tenant isolation', () => {
   //       early-readEntry guard still fires.
   it('supersede CAS: pre-superseded row throws + WHERE clause returns changes=0', () => {
     const created = remember(
-      { hippoRoot: home, tenantId: 'alpha', actor: 'cli' },
+      { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
       { content: 'alpha-row supersede CAS race canary' },
     );
 
@@ -181,7 +181,7 @@ describe('v039 api tenant isolation', () => {
     // (a) supersede() throws with the canonical wording.
     expect(() =>
       supersede(
-        { hippoRoot: home, tenantId: 'alpha', actor: 'cli' },
+        { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
         created.id,
         'replacement content',
       ),
@@ -211,12 +211,12 @@ describe('v039 api tenant isolation', () => {
   // ---- Test 6: supersede CAS — clean path -----------------------------------
   it('supersede CAS clean path: both rows present, audit row written, chain pointer set', () => {
     const created = remember(
-      { hippoRoot: home, tenantId: 'alpha', actor: 'cli' },
+      { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
       { content: 'alpha-row supersede clean-path canary' },
     );
 
     const result = supersede(
-      { hippoRoot: home, tenantId: 'alpha', actor: 'cli' },
+      { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
       created.id,
       'fresh replacement content',
     );
@@ -255,13 +255,13 @@ describe('v039 api tenant isolation', () => {
   // ---- Test 7: supersede CAS — tenant-scoped --------------------------------
   it('supersede across tenants throws "Memory not found" via readEntry tenant scope', () => {
     const created = remember(
-      { hippoRoot: home, tenantId: 'alpha', actor: 'cli' },
+      { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
       { content: 'alpha-row supersede tenant-scope canary' },
     );
 
     expect(() =>
       supersede(
-        { hippoRoot: home, tenantId: 'bravo', actor: 'api_key:bravo-key' },
+        { hippoRoot: home, tenantId: 'bravo', actor: { subject: 'api_key:bravo-key', role: 'admin' } },
         created.id,
         'cross-tenant supersede attempt',
       ),

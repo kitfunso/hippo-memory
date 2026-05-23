@@ -30,7 +30,7 @@ function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
 function ctxFor(root: string): Context {
-  return { hippoRoot: root, tenantId: 'default', actor: 'test:legacy' };
+  return { hippoRoot: root, tenantId: 'default', actor: { subject: 'test:legacy', role: 'admin' } };
 }
 function makeWithScope(text: string, scope: string | null): MemoryEntry {
   return createMemory(text, {

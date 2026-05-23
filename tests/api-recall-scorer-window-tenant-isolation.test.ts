@@ -26,7 +26,7 @@ function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
 function ctxFor(root: string, tenantId: string): Context {
-  return { hippoRoot: root, tenantId, actor: 'test:tenant-iso' };
+  return { hippoRoot: root, tenantId, actor: { subject: 'test:tenant-iso', role: 'admin' } };
 }
 function makeRaw(text: string, tenantId: string): MemoryEntry {
   return createMemory(text, {

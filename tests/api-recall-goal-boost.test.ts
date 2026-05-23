@@ -24,7 +24,7 @@ describe('api.recall + RecallOpts.sessionId goal-stack boost (v1.7.4)', () => {
   beforeEach(async () => {
     hippoRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'hippo-1.7.4-api-'));
     initStore(hippoRoot);
-    ctx = { hippoRoot, tenantId, actor: 'test' };
+    ctx = { hippoRoot, tenantId, actor: { subject: 'test', role: 'admin' } };
   });
 
   it('boosts the goal-tagged memory above an unrelated, query-matching one when sessionId set', () => {

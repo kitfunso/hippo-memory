@@ -354,19 +354,19 @@ describe('v039 server hardening', () => {
   it('MCP recall with no scope hides slack:private:* memories (default-deny)', async () => {
     // Seed a private slack memory + a regular memory under the same tenant.
     apiRemember(
-      { hippoRoot: root, tenantId: 'default', actor: 'cli' },
+      { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } },
       {
         content: 'private-slack-canary should not surface in default recall',
         scope: 'slack:private:CSECRET',
       },
     );
     apiRemember(
-      { hippoRoot: root, tenantId: 'default', actor: 'cli' },
+      { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } },
       { content: 'public-canary should surface in default recall' },
     );
 
     // Call MCP recall with no scope.
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: 'mcp', clientKey: 'http:t:test' };
+    const ctx = { hippoRoot: root, tenantId: 'default', actor: { subject: 'mcp', role: 'admin' }, clientKey: 'http:t:test' };
     const res = await handleMcpRequest(
       {
         jsonrpc: '2.0',

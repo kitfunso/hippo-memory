@@ -51,7 +51,7 @@ describe('mcp hippo_assemble', () => {
   it('hippo_assemble is in the tools catalogue', async () => {
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/list' },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'mcp', role: 'admin' } },
     );
     const tools = (res as { result?: { tools?: Array<{ name?: string }> } }).result?.tools ?? [];
     expect(tools.map((t) => t.name)).toContain('hippo_assemble');
@@ -70,7 +70,7 @@ describe('mcp hippo_assemble', () => {
       writeEntry(home, e);
     }
     const res = await callTool(2, 'hippo_assemble', { session_id: 'sess-mcp' }, {
-      hippoRoot: home, tenantId: 'default', actor: 'mcp',
+      hippoRoot: home, tenantId: 'default', actor: { subject: 'mcp', role: 'admin' },
     });
     const text = extractText(res);
     expect(text).toContain('sess-mcp');
@@ -80,14 +80,14 @@ describe('mcp hippo_assemble', () => {
 
   it('rejects empty session_id', async () => {
     const res = await callTool(3, 'hippo_assemble', { session_id: '' }, {
-      hippoRoot: home, tenantId: 'default', actor: 'mcp',
+      hippoRoot: home, tenantId: 'default', actor: { subject: 'mcp', role: 'admin' },
     });
     expect(extractText(res).toLowerCase()).toContain('no session_id');
   });
 
   it('clean empty result for unknown session', async () => {
     const res = await callTool(4, 'hippo_assemble', { session_id: 'sess-nope' }, {
-      hippoRoot: home, tenantId: 'default', actor: 'mcp',
+      hippoRoot: home, tenantId: 'default', actor: { subject: 'mcp', role: 'admin' },
     });
     const text = extractText(res);
     expect(text).toContain('0 items');

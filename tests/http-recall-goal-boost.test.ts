@@ -30,7 +30,7 @@ const sessionId = 'sess-http-1.7.4';
 
 beforeEach(async () => {
   home = makeRoot();
-  remember({ hippoRoot: home, tenantId, actor: 'test' }, {
+  remember({ hippoRoot: home, tenantId, actor: { subject: 'test', role: 'admin' } }, {
     content: 'auth bug fix details',
     tags: ['fix-auth'],
   });

@@ -2198,7 +2198,7 @@ async function cmdSleepCore(
   const ctx: api.Context = {
     hippoRoot,
     tenantId: resolveTenantId({}),
-    actor: 'cli',
+    actor: api.adminActor('cli'),
   };
   const result = await api.sleep(ctx, {
     dryRun: Boolean(flags['dry-run']),
@@ -2625,7 +2625,7 @@ function cmdOutcome(
   const ctx: api.Context = {
     hippoRoot,
     tenantId: resolveTenantId({}),
-    actor: 'cli',
+    actor: api.adminActor('cli'),
   };
   const specificId = flags['id'] ? String(flags['id']) : null;
 
@@ -2654,7 +2654,7 @@ function cmdForget(
   const ctx: api.Context = {
     hippoRoot,
     tenantId: resolveTenantId({}),
-    actor: 'cli',
+    actor: api.adminActor('cli'),
   };
 
   // A3: raw memories (Slack / GitHub connector ingestion) are append-only — a
@@ -3299,7 +3299,7 @@ async function cmdContext(
   const ctx: api.Context = {
     hippoRoot,
     tenantId: resolveTenantId({}),
-    actor: 'cli',
+    actor: api.adminActor('cli'),
   };
   const opts: api.ContextOpts = {
     q: query,
@@ -3806,7 +3806,7 @@ function cmdPromote(hippoRoot: string, id: string): void {
   const ctx: api.Context = {
     hippoRoot,
     tenantId: resolveTenantId({}),
-    actor: 'cli',
+    actor: api.adminActor('cli'),
   };
   try {
     const result = api.promote(ctx, id);
@@ -4476,7 +4476,7 @@ function cmdAssemble(hippoRoot: string, sessionId: string, flags: Record<string,
   const ctx: api.Context = {
     hippoRoot,
     tenantId: resolveTenantId({}),
-    actor: 'cli:assemble',
+    actor: api.adminActor('cli:assemble'),
   };
   const r = api.assemble(ctx, sessionId, {
     ...(Number.isFinite(budget) && budget! > 0 ? { budget } : {}),
@@ -4503,7 +4503,7 @@ function cmdDrillDown(hippoRoot: string, summaryId: string, flags: Record<string
   const ctx: api.Context = {
     hippoRoot,
     tenantId: resolveTenantId({}),
-    actor: 'cli:drill',
+    actor: api.adminActor('cli:drill'),
   };
   const r = api.drillDown(ctx, summaryId, {
     ...(Number.isFinite(limit) && limit! > 0 ? { limit } : {}),
@@ -4559,7 +4559,7 @@ function cmdAuthCreate(hippoRoot: string, flags: Record<string, string | boolean
   const ctx: api.Context = {
     hippoRoot: root,
     tenantId: tenantFlag ?? resolveTenantId({}),
-    actor: 'cli',
+    actor: api.adminActor('cli'),
   };
   const result = api.authCreate(ctx, { label: labelFlag });
 
@@ -4732,7 +4732,7 @@ function cmdAuditList(hippoRoot: string, flags: Record<string, string | boolean 
     process.exit(1);
   }
 
-  const ctx: api.Context = { hippoRoot: root, tenantId, actor: 'cli' };
+  const ctx: api.Context = { hippoRoot: root, tenantId, actor: { subject: 'cli', role: 'admin' } };
   const events = api.auditList(ctx, { op, since, limit });
 
   if (asJson) {
@@ -5054,7 +5054,7 @@ function cmdSlackBackfill(hippoRoot: string, flags: Record<string, string | bool
   const ctx = {
     hippoRoot,
     tenantId: resolveTenantId({}),
-    actor: 'cli:slack-backfill',
+    actor: api.adminActor('cli:slack-backfill'),
   };
   backfillChannel(ctx, {
     teamId: process.env.SLACK_TEAM_ID ?? 'T_UNKNOWN',

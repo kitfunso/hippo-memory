@@ -46,16 +46,16 @@ describe('api domain — recall/forget/promote/supersede', () => {
 
   it('recall returns BM25 candidates and audits with the supplied actor', () => {
     remember(
-      { hippoRoot: home, tenantId: 'default', actor: 'cli' },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } },
       { content: 'recall-canary alpha-token sentinel' },
     );
     remember(
-      { hippoRoot: home, tenantId: 'default', actor: 'cli' },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } },
       { content: 'unrelated content for noise' },
     );
 
     const result = recall(
-      { hippoRoot: home, tenantId: 'default', actor: 'api_key:hk_recall' },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'api_key:hk_recall', role: 'admin' } },
       { query: 'alpha-token' },
     );
 
@@ -77,13 +77,13 @@ describe('api domain — recall/forget/promote/supersede', () => {
 
   it('forget deletes the row and audits with the supplied actor', () => {
     const { id } = remember(
-      { hippoRoot: home, tenantId: 'default', actor: 'cli' },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } },
       { content: 'forget-me-please' },
     );
     expect(readEntry(home, id)?.id).toBe(id);
 
     const result = forget(
-      { hippoRoot: home, tenantId: 'default', actor: 'api_key:hk_forget' },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'api_key:hk_forget', role: 'admin' } },
       id,
     );
     expect(result).toEqual({ ok: true, id });
@@ -103,12 +103,12 @@ describe('api domain — recall/forget/promote/supersede', () => {
 
   it('promote copies a memory into the global store and audits with the supplied actor', () => {
     const { id } = remember(
-      { hippoRoot: home, tenantId: 'default', actor: 'cli' },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } },
       { content: 'promote-me-to-global' },
     );
 
     const result = promote(
-      { hippoRoot: home, tenantId: 'default', actor: 'api_key:hk_promote' },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'api_key:hk_promote', role: 'admin' } },
       id,
     );
     expect(result.ok).toBe(true);
@@ -134,12 +134,12 @@ describe('api domain — recall/forget/promote/supersede', () => {
 
   it('supersede chains old -> new and audits with the supplied actor', () => {
     const { id: oldId } = remember(
-      { hippoRoot: home, tenantId: 'default', actor: 'cli' },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } },
       { content: 'original-belief' },
     );
 
     const result = supersede(
-      { hippoRoot: home, tenantId: 'default', actor: 'api_key:hk_supersede' },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'api_key:hk_supersede', role: 'admin' } },
       oldId,
       'updated-belief',
     );
@@ -209,7 +209,7 @@ describe('api domain — archive_raw / auth / audit', () => {
     }
 
     const result = archiveRaw(
-      { hippoRoot: home, tenantId: 'default', actor: 'api_key:hk_archive' },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'api_key:hk_archive', role: 'admin' } },
       rawId,
       'gdpr-request',
     );
@@ -240,8 +240,8 @@ describe('api domain — archive_raw / auth / audit', () => {
   });
 
   it('authCreate + authList + authRevoke flow with cross-tenant guard', () => {
-    const ctxA = { hippoRoot: home, tenantId: 'tenant-a', actor: 'cli' };
-    const ctxB = { hippoRoot: home, tenantId: 'tenant-b', actor: 'cli' };
+    const ctxA = { hippoRoot: home, tenantId: 'tenant-a', actor: { subject: 'cli', role: 'admin' } };
+    const ctxB = { hippoRoot: home, tenantId: 'tenant-b', actor: { subject: 'cli', role: 'admin' } };
 
     const k1 = authCreate(ctxA, { label: 'first' });
     expect(k1.keyId).toMatch(/^hk_/);
@@ -304,21 +304,21 @@ describe('api domain — archive_raw / auth / audit', () => {
     }
 
     const aAll = auditList(
-      { hippoRoot: home, tenantId: 'tenant-a', actor: 'cli' },
+      { hippoRoot: home, tenantId: 'tenant-a', actor: { subject: 'cli', role: 'admin' } },
       {},
     );
     expect(aAll.length).toBe(2);
     expect(aAll.every((e) => e.tenantId === 'tenant-a')).toBe(true);
 
     const aRemember = auditList(
-      { hippoRoot: home, tenantId: 'tenant-a', actor: 'cli' },
+      { hippoRoot: home, tenantId: 'tenant-a', actor: { subject: 'cli', role: 'admin' } },
       { op: 'remember' },
     );
     expect(aRemember.length).toBe(1);
     expect(aRemember[0]!.targetId).toBe('a1');
 
     const bAll = auditList(
-      { hippoRoot: home, tenantId: 'tenant-b', actor: 'cli' },
+      { hippoRoot: home, tenantId: 'tenant-b', actor: { subject: 'cli', role: 'admin' } },
       {},
     );
     expect(bAll.length).toBe(1);

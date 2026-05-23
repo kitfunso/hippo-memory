@@ -172,14 +172,14 @@ describe('Company Brain continuity scorecard scaffold', () => {
     });
 
     const baseline = recall(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: 'test' },
+      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
       { query: 'continuity' },
     );
     expect(baseline.continuity).toBeUndefined();
     expect(baseline.continuityTokens).toBeUndefined();
 
     const onResult = recall(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: 'test' },
+      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
       { query: 'continuity', includeContinuity: true },
     );
     expect(onResult.continuity).toBeDefined();

@@ -12,7 +12,7 @@ import { openHippoDb, closeHippoDb } from '../src/db.js';
 const ctx = (root: string) => ({
   hippoRoot: root,
   tenantId: 'default',
-  actor: 'connector:slack',
+  actor: { subject: 'connector:slack', role: 'admin' },
 });
 
 describe('backfillChannel cursor / oldest semantics', () => {

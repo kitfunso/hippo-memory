@@ -59,8 +59,8 @@ describe('MCP hippo_recall session_id goal-stack boost (v1.7.4)', () => {
   afterEach(() => rmSync(home, { recursive: true, force: true }));
 
   it('session_id schema field is accepted (no validation error) and reaches the boost', async () => {
-    const ctx = { hippoRoot: home, tenantId, actor: 'mcp' };
-    remember({ hippoRoot: home, tenantId, actor: 'test' }, {
+    const ctx = { hippoRoot: home, tenantId, actor: { subject: 'mcp', role: 'admin' } };
+    remember({ hippoRoot: home, tenantId, actor: { subject: 'test', role: 'admin' } }, {
       content: 'auth bug fix details',
       tags: ['fix-auth'],
     });
@@ -87,8 +87,8 @@ describe('MCP hippo_recall session_id goal-stack boost (v1.7.4)', () => {
   });
 
   it('without session_id, no boost runs and goal_recall_log stays empty (v1.7.3 baseline)', async () => {
-    const ctx = { hippoRoot: home, tenantId, actor: 'mcp' };
-    remember({ hippoRoot: home, tenantId, actor: 'test' }, {
+    const ctx = { hippoRoot: home, tenantId, actor: { subject: 'mcp', role: 'admin' } };
+    remember({ hippoRoot: home, tenantId, actor: { subject: 'test', role: 'admin' } }, {
       content: 'auth bug fix details',
       tags: ['fix-auth'],
     });

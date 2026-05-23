@@ -7,7 +7,7 @@ import { ingestMessage } from '../src/connectors/slack/ingest.js';
 import { handleMessageDeleted } from '../src/connectors/slack/deletion.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
-const ctx = (root: string) => ({ hippoRoot: root, tenantId: 'default', actor: 'connector:slack' });
+const ctx = (root: string) => ({ hippoRoot: root, tenantId: 'default', actor: { subject: 'connector:slack', role: 'admin' } });
 
 describe('handleMessageDeleted', () => {
   let root: string;
@@ -52,7 +52,7 @@ describe('handleMessageDeleted', () => {
 
   it('cross-tenant deletion event cannot archive another tenants row (review patch #1)', () => {
     // Ingest under tenant 'acme'.
-    const acmeCtx = { hippoRoot: root, tenantId: 'acme', actor: 'connector:slack' };
+    const acmeCtx = { hippoRoot: root, tenantId: 'acme', actor: { subject: 'connector:slack', role: 'admin' } };
     const ingested = ingestMessage(acmeCtx, {
       teamId: 'T1',
       channel: { id: 'C1', is_private: false },
@@ -62,7 +62,7 @@ describe('handleMessageDeleted', () => {
     expect(ingested.status).toBe('ingested');
 
     // Fire deletion under tenant 'default' for the same artifact_ref.
-    const defaultCtx = { hippoRoot: root, tenantId: 'default', actor: 'connector:slack' };
+    const defaultCtx = { hippoRoot: root, tenantId: 'default', actor: { subject: 'connector:slack', role: 'admin' } };
     const r = handleMessageDeleted(defaultCtx, {
       teamId: 'T1', channelId: 'C1', deletedTs: '1700.0001', eventId: 'EvDelCross',
     });
