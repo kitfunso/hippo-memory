@@ -80,7 +80,7 @@ export function handleCommentDeleted(ctx: Context, input: DeletionInput): Deleti
       for (const id of memoryIds) {
         archiveRawMemory(db, id, {
           reason: `source_deleted:github:${input.eventName}:${input.deliveryId}`,
-          who: ctx.actor || 'connector:github',
+          who: ctx.actor.subject,
         });
       }
       markKeySeen(db, {

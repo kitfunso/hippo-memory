@@ -1,5 +1,5 @@
 import type { DatabaseSyncLike } from '../../db.js';
-import type { Context } from '../../api.js';
+import { type Context, adminActor } from '../../api.js';
 import { openHippoDb, closeHippoDb } from '../../db.js';
 import { ingestMessage } from './ingest.js';
 import { resolveTenantForTeam } from './tenant-routing.js';
@@ -244,7 +244,7 @@ export function replayDlqEntry(
   const replayCtx: Context = {
     hippoRoot: ctx.hippoRoot,
     tenantId: tenant,
-    actor: 'connector:slack:replay',
+    actor: adminActor('connector:slack:replay'),
   };
 
   const inner = parsed.event;

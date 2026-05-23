@@ -43,6 +43,8 @@ function verifyKey(plaintext: string, stored: string): boolean {
 export interface CreateApiKeyOpts {
   tenantId: string;
   label?: string;
+  /** v1.12.0 A5 v2 sub-1: 'admin' | 'member'. Defaults to 'admin' (backward-compat for callers that don't specify). */
+  role?: 'admin' | 'member';
 }
 
 export interface CreateApiKeyResult {
@@ -55,9 +57,13 @@ export function createApiKey(db: DatabaseSyncLike, opts: CreateApiKeyOpts): Crea
   const secret = randBase32(SECRET_LEN);
   const plaintext = `${keyId}.${secret}`;
   const hash = hashKey(plaintext);
+  // v1.12.0: 6-column INSERT including role. Boot-order guarantee:
+  // openHippoDb runs runMigrations synchronously before returning the db
+  // handle, so migration v26 (adds role column) is in place before this
+  // INSERT runs.
   db.prepare(
-    `INSERT INTO api_keys (key_id, key_hash, tenant_id, label, created_at) VALUES (?, ?, ?, ?, ?)`,
-  ).run(keyId, hash, opts.tenantId, opts.label ?? null, new Date().toISOString());
+    `INSERT INTO api_keys (key_id, key_hash, tenant_id, label, created_at, role) VALUES (?, ?, ?, ?, ?, ?)`,
+  ).run(keyId, hash, opts.tenantId, opts.label ?? null, new Date().toISOString(), opts.role ?? 'admin');
   return { keyId, plaintext };
 }
 
@@ -65,6 +71,8 @@ export interface ValidateResult {
   valid: boolean;
   tenantId?: string;
   keyId?: string;
+  /** v1.12.0 A5 v2 sub-1: 'admin' | 'member'. Present only when valid=true. */
+  role?: 'admin' | 'member';
 }
 
 export function validateApiKey(db: DatabaseSyncLike, plaintext: string): ValidateResult {
@@ -77,8 +85,8 @@ export function validateApiKey(db: DatabaseSyncLike, plaintext: string): Validat
   }
   const keyId = plaintext.slice(0, dot);
   const row = db
-    .prepare(`SELECT key_hash, tenant_id, revoked_at FROM api_keys WHERE key_id = ?`)
-    .get(keyId) as { key_hash: string; tenant_id: string; revoked_at: string | null } | undefined;
+    .prepare(`SELECT key_hash, tenant_id, revoked_at, role FROM api_keys WHERE key_id = ?`)
+    .get(keyId) as { key_hash: string; tenant_id: string; revoked_at: string | null; role: string } | undefined;
 
   // Always run verifyKey — on miss/revoked, against DUMMY_HASH so scrypt cost
   // is paid. This reduces timing signal between hit and miss, but the DB
@@ -87,7 +95,12 @@ export function validateApiKey(db: DatabaseSyncLike, plaintext: string): Validat
   const target = (row && !row.revoked_at) ? row.key_hash : DUMMY_HASH;
   const matches = verifyKey(plaintext, target);
   if (!row || row.revoked_at || !matches) return { valid: false };
-  return { valid: true, tenantId: row.tenant_id, keyId };
+  // v1.12.0: fail-safe to least privilege — only 'admin' is admitted as admin,
+  // anything else (including future schema drift, manual DB tampering inserting
+  // 'superuser', or a NULL slipped past the NOT NULL constraint) downgrades to
+  // 'member'. The migration constrains to 'admin' DEFAULT, but defense-in-depth.
+  const role: 'admin' | 'member' = row.role === 'admin' ? 'admin' : 'member';
+  return { valid: true, tenantId: row.tenant_id, keyId, role };
 }
 
 export function revokeApiKey(db: DatabaseSyncLike, keyId: string): void {

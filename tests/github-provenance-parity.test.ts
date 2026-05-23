@@ -28,7 +28,7 @@ const PUBLIC_REPO = {
 } as const;
 
 function ctxFor(root: string): Context {
-  return { hippoRoot: root, tenantId: 'default', actor: 'connector:github' };
+  return { hippoRoot: root, tenantId: 'default', actor: { subject: 'connector:github', role: 'admin' } };
 }
 
 function makeIssue(i: number): IngestEvent {

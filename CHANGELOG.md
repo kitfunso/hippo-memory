@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.12.0 (2026-05-23): A5 v2 sub-1 — auth/role plumbing (admin gate on /v1/sleep)
+
+MINOR release. Adds an authorization-role layer to api_keys + Context.actor, gates `POST /v1/sleep` on `admin` role. Sub-1 of 2 in the v1.12.0 A5 v2 multi-tenant cluster — sub-2 (L9 background pipelines tenant-scoping across 8 files) deferred to a follow-up release. The Context.actor shape change is the largest public-API surface change since v0.39 (the A3 envelope refactor); existing single-tenant deployments behave identically (legacy keys backfill to `'admin'`, loopback fallback is `'admin'` by default).
+
+### Shipped
+
+- **`Actor` interface + `Context.actor: Actor` shape change.** Previously `Context.actor` was a bare `string` (`'cli'` | `'localhost:cli'` | `'api_key:<key_id>'` | `'mcp'`). v1.12.0 promotes it to `{subject: string, role: 'admin' | 'member'}`. Role checks happen at request boundaries (e.g. `/v1/sleep`); audit helpers continue accepting `actor: string` so callers pass `ctx.actor.subject`.
+- **`adminActor(subject)` helper.** New factory in `src/api.ts` returning `{subject, role: 'admin'}`. Used by CLI / MCP / connector entry points (process-local trust). Bearer-authed callers (HTTP `/v1/*`) get their role from the api_keys row via `buildContextWithAuth`.
+- **api_keys schema migration v26.** Adds `role TEXT NOT NULL DEFAULT 'admin'`. Migration runs synchronously inside `openHippoDb` before any `createApiKey` INSERT, so the 6-column INSERT in `createApiKey` is safe. Existing keys backfill to `'admin'` via DEFAULT — no behavior change for single-tenant operator deployments.
+- **`createApiKey({..., role})` option.** Defaults to `'admin'` (backward-compat). Tests construct member keys via direct DB insert; a `hippo auth create-key --role` CLI flag is deferred to a follow-up (avoids v1.11.5-style scope creep).
+- **`ValidateResult.role?: 'admin' | 'member'`.** `validateApiKey` SELECT extended to read the role column; returned on success.
+- **Admin-role gate on `POST /v1/sleep`.** Defense-in-depth: today `/v1/sleep` is loopback-only, so the loopback fallback's default `admin` role passes naturally. The gate exists ALREADY so that when non-loopback serving lands (`HIPPO_BIND_ALL` or A5 v2 v2 multi-tenant deployment), `member`-role Bearer tokens are 403'd at the route boundary BEFORE any host-wide consolidation runs.
+- **Connector audit-identity fix.** `src/connectors/slack/ingest.ts:73` and `github/ingest.ts:167` previously had `{ ...ctx, actor: ctx.actor || 'connector:slack' }` — the `||` fallback evaluated an object as truthy under the new Context.actor shape, causing connectors to silently lose audit identity. Fix: drop the fallback entirely (ctx is always provided by the route Context construction at server.ts).
+
+### Tests
+
+3 new test files (12 tests total): `tests/auth-role-migration.test.ts` (5 cases incl. legacy 5-col INSERT backfill verification), `tests/api-context-actor-shape.test.ts` (4 cases incl. audit_log subject-string preservation round-trip), `tests/server-sleep-admin-gate.test.ts` (3 cases: loopback no-Bearer 200, admin Bearer 200, member Bearer 403). ~20 existing test files updated for the new Context.actor shape via bulk sed. Suite: 1688 → 1700 passing, 0 fail.
+
+### Migration notes
+
+- **Schema rollback:** v1.11.5 binary opens a v26-migrated DB without issue — the `role` column is ignored on SELECTs that don't name it, and INSERTs without it use the DEFAULT. No explicit downgrade path in the in-code MIGRATIONS array (project convention).
+- **External callers of `Context`:** type-level breaking change. SDK consumers using `import { type Context } from 'hippo-memory'` will see `actor: Actor` instead of `actor: string`. The Python SDK (`hippo-memory-sdk` 0.1.0) is HTTP-only and unaffected (`AuditLogEntry.actor` is `str`).
+
+### Out of scope (deferred to v1.12.0 sub-2 / later)
+
+- **L9 background pipelines tenant-scoping** (8 files: `consolidate.ts`, `embeddings.ts`, `invalidation.ts`, `refine-llm.ts`, `autolearn.ts`, `capture.ts`, `importers.ts`, `shared.ts`). Sub-2 of the v1.12.0 A5 v2 cluster — depends on this Actor shape change.
+- **`hippo auth create-key --role` CLI flag.** Tests use direct DB insert.
+- **`hippo auth list` role column display.**
+- **Multi-role RBAC beyond admin/member** (editor/viewer/etc.).
+- **Non-loopback serving (`HIPPO_BIND_ALL`).**
+- **Per-tenant `/v1/sleep` semantics** (tenant plumbing into `deduplicateStore` — A5 v2 v2 territory).
+
 ## 1.11.5 (2026-05-23): Episode A/B/C critic-deferral hardening pass
 
 PATCH release closing 7 of 8 deferrals from the v1.11.3 + v1.11.4 + python-v0.1.0 ship chain. Additive + backward-compatible. Item #5 (per-tenant `/v1/sleep` scoping) deferred to v1.12.0 because plan-eng-critic round 1 surfaced it as MINOR-scope structural work (Context.actor object shape + api_keys schema migration + 12+ call sites).

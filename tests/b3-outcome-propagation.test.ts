@@ -8,7 +8,7 @@ import { remember } from '../src/api.js';
 import { pushGoal, completeGoal } from '../src/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
-const ctx = (root: string) => ({ hippoRoot: root, tenantId: 'default', actor: 'cli' });
+const ctx = (root: string) => ({ hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } });
 
 function readStrength(root: string, memId: string): number {
   const db = openHippoDb(root);

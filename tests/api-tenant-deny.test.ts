@@ -27,14 +27,14 @@ describe('api tenant deny — archiveRaw and forget', () => {
   it('archiveRaw refuses to archive a row that belongs to another tenant', () => {
     // Tenant A creates a kind='raw' memory.
     const created = remember(
-      { hippoRoot: home, tenantId: 'alpha', actor: 'cli' },
+      { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
       { content: 'raw-row-from-alpha tenant-deny canary', kind: 'raw' },
     );
 
     // Tenant B (bravo) tries to archive it. Should fail with not-found.
     expect(() =>
       archiveRaw(
-        { hippoRoot: home, tenantId: 'bravo', actor: 'api_key:bravo-key' },
+        { hippoRoot: home, tenantId: 'bravo', actor: { subject: 'api_key:bravo-key', role: 'admin' } },
         created.id,
         'cross-tenant probe',
       ),
@@ -57,14 +57,14 @@ describe('api tenant deny — archiveRaw and forget', () => {
   it('forget refuses to delete a row that belongs to another tenant', () => {
     // Tenant A creates a kind='distilled' memory.
     const created = remember(
-      { hippoRoot: home, tenantId: 'alpha', actor: 'cli' },
+      { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
       { content: 'distilled-row-from-alpha tenant-deny canary', kind: 'distilled' },
     );
 
     // Tenant B tries to forget it.
     expect(() =>
       forget(
-        { hippoRoot: home, tenantId: 'bravo', actor: 'api_key:bravo-key' },
+        { hippoRoot: home, tenantId: 'bravo', actor: { subject: 'api_key:bravo-key', role: 'admin' } },
         created.id,
       ),
     ).toThrow(/memory not found/i);
@@ -84,11 +84,11 @@ describe('api tenant deny — archiveRaw and forget', () => {
 
   it('forget still works for the owning tenant', () => {
     const created = remember(
-      { hippoRoot: home, tenantId: 'alpha', actor: 'cli' },
+      { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
       { content: 'owning-tenant forget happy-path' },
     );
     const result = forget(
-      { hippoRoot: home, tenantId: 'alpha', actor: 'cli' },
+      { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
       created.id,
     );
     expect(result.ok).toBe(true);

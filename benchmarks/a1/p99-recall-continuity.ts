@@ -177,7 +177,7 @@ function measure(
   const warmup = Math.max(5, Math.floor(iterations * 0.1));
   for (let i = 0; i < warmup; i++) {
     apiRecall(
-      { hippoRoot: home, tenantId: 'default', actor: 'bench' },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'bench', role: 'admin' } },
       { query: queries[i % queries.length]!, includeContinuity },
     );
   }
@@ -187,7 +187,7 @@ function measure(
     const q = queries[i % queries.length]!;
     const t0 = performance.now();
     apiRecall(
-      { hippoRoot: home, tenantId: 'default', actor: 'bench' },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'bench', role: 'admin' } },
       { query: q, includeContinuity },
     );
     samples.push(performance.now() - t0);
@@ -210,7 +210,7 @@ function main(): void {
     const cluster = pick(rng, TAG_CLUSTERS);
     const content = buildContent(rng, cluster);
     apiRemember(
-      { hippoRoot: home, tenantId: 'default', actor: 'bench' },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'bench', role: 'admin' } },
       { content, tags: [cluster.tag] },
     );
     if ((i + 1) % 1000 === 0) {

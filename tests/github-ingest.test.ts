@@ -19,7 +19,7 @@ import type {
 const ctx = (root: string) => ({
   hippoRoot: root,
   tenantId: 'default',
-  actor: 'connector:github',
+  actor: { subject: 'connector:github', role: 'admin' },
 });
 
 function makeIssueEvent(overrides: Partial<GitHubIssueEvent['issue']> = {}): GitHubIssueEvent {

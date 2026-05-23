@@ -101,7 +101,7 @@ describe('assemble ISO sort (F4) — integration', () => {
       writeEntry(root, e);
     }
 
-    const ctx: Context = { hippoRoot: root, tenantId: 'default', actor: 'test:f4-int' };
+    const ctx: Context = { hippoRoot: root, tenantId: 'default', actor: { subject: 'test:f4-int', role: 'admin' } };
     const result = assemble(ctx, sess, { budget: 10_000 });
 
     // Strip down to the createdAt strings on returned items, in returned order.

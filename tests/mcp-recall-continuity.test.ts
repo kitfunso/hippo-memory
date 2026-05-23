@@ -62,7 +62,7 @@ describe('mcp hippo_recall include_continuity', () => {
     const res = await callTool(1, 'hippo_recall', { query: 'deploys' }, {
       hippoRoot: home,
       tenantId: 'default',
-      actor: 'mcp',
+      actor: { subject: 'mcp', role: 'admin' },
     });
     const text = extractText(res);
     expect(text).not.toContain('## Continuity');
@@ -97,7 +97,7 @@ describe('mcp hippo_recall include_continuity', () => {
     }, {
       hippoRoot: home,
       tenantId: 'default',
-      actor: 'mcp',
+      actor: { subject: 'mcp', role: 'admin' },
     });
     const text = extractText(res);
     expect(text).toContain('## Continuity');
@@ -123,7 +123,7 @@ describe('mcp hippo_recall include_continuity', () => {
     }, {
       hippoRoot: home,
       tenantId: 'default',
-      actor: 'mcp',
+      actor: { subject: 'mcp', role: 'admin' },
     });
     const text = extractText(res);
     expect(text).toContain('## Continuity');
@@ -148,7 +148,7 @@ describe('mcp hippo_recall include_continuity', () => {
     }, {
       hippoRoot: home,
       tenantId: 'default',
-      actor: 'mcp',
+      actor: { subject: 'mcp', role: 'admin' },
     });
     const text = extractText(res);
     expect(text).toContain('Private task');

@@ -73,7 +73,7 @@ describe('cli recall + active goal stack', () => {
   });
 
   it('without active goals (no HIPPO_SESSION_ID), top-3 unchanged from baseline', () => {
-    const ctx = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: 'cli' };
+    const ctx = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
     remember(ctx, { content: 'plan note one for the auth migration' });
     remember(ctx, { content: 'plan note two for the auth migration' });
     remember(ctx, { content: 'plan note three for the auth migration' });
@@ -86,7 +86,7 @@ describe('cli recall + active goal stack', () => {
   });
 
   it('with HIPPO_SESSION_ID set and an active goal whose name matches a tag, tagged memories surface in top-2', () => {
-    const ctx = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: 'cli' };
+    const ctx = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
     remember(ctx, { content: 'plan note one for the auth migration' });
     remember(ctx, { content: 'plan note two for the auth migration' });
     remember(ctx, { content: 'plan note three for the auth migration' });
@@ -102,7 +102,7 @@ describe('cli recall + active goal stack', () => {
   });
 
   it('completed goals do not affect ranking (test asserts ORDER, not just length)', () => {
-    const ctx = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: 'cli' };
+    const ctx = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
     remember(ctx, { content: 'plan note one for the auth migration' });
     remember(ctx, { content: 'plan note two for the auth migration' });
     remember(ctx, { content: 'marker tagged A: auth migration step', tags: ['auth-rewrite'] });
@@ -128,7 +128,7 @@ describe('cli recall + active goal stack', () => {
   });
 
   it('explicit --goal still works as a manual override (MVP behavior preserved)', () => {
-    const ctx = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: 'cli' };
+    const ctx = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
     remember(ctx, { content: 'plan note one for the auth migration' });
     remember(ctx, { content: 'plan note two for the auth migration' });
     remember(ctx, { content: 'plan note three for the auth migration' });
@@ -144,7 +144,7 @@ describe('cli recall + active goal stack', () => {
   // Active goal `auth-rewrite` on session, but CLI passes --goal other-tag. Top
   // results should contain other-tag-tagged memories, NOT auth-rewrite ones.
   it('explicit --goal flag overrides the active goal stack (MVP wins)', () => {
-    const ctx = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: 'cli' };
+    const ctx = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
     remember(ctx, { content: 'plan note alpha untagged content one' });
     remember(ctx, { content: 'plan note beta untagged content two' });
     remember(ctx, { content: 'plan note gamma untagged content three' });
@@ -176,7 +176,7 @@ describe('cli recall + active goal stack', () => {
   // HIPPO_SESSION_ID is set but the (tenant, session) has zero active goals.
   // Recall must succeed and produce the same baseline ordering as the no-session case.
   it('empty active-goal list is a no-op (no errors, baseline ranking)', () => {
-    const ctx = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: 'cli' };
+    const ctx = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
     remember(ctx, { content: 'plan note one for the auth migration' });
     remember(ctx, { content: 'plan note two for the auth migration' });
     remember(ctx, { content: 'plan note three for the auth migration' });

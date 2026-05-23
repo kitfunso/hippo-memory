@@ -219,7 +219,7 @@ function makeRoot(): string {
 const ctxFor = (root: string, tenantId = 'default'): Context => ({
   hippoRoot: root,
   tenantId,
-  actor: 'connector:github',
+  actor: { subject: 'connector:github', role: 'admin' },
 });
 
 function rawCount(root: string): number {

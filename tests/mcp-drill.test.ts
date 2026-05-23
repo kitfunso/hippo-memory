@@ -65,7 +65,7 @@ describe('mcp hippo_drill', () => {
   it('hippo_drill is registered in the tools catalogue', async () => {
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/list' },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'mcp', role: 'admin' } },
     );
     const tools = (res as { result?: { tools?: Array<{ name?: string }> } }).result?.tools ?? [];
     const names = tools.map((t) => t.name);
@@ -94,7 +94,7 @@ describe('mcp hippo_drill', () => {
     const res = await callTool(2, 'hippo_drill', { summary_id: summary.id }, {
       hippoRoot: home,
       tenantId: 'default',
-      actor: 'mcp',
+      actor: { subject: 'mcp', role: 'admin' },
     });
     const text = extractText(res);
     expect(text).toContain(summary.id);
@@ -112,7 +112,7 @@ describe('mcp hippo_drill', () => {
     const res = await callTool(3, 'hippo_drill', { summary_id: leaf.id }, {
       hippoRoot: home,
       tenantId: 'default',
-      actor: 'mcp',
+      actor: { subject: 'mcp', role: 'admin' },
     });
     const text = extractText(res);
     expect(text.toLowerCase()).toContain('leaf row');
@@ -130,7 +130,7 @@ describe('mcp hippo_drill', () => {
     const res = await callTool(4, 'hippo_drill', { summary_id: summary.id }, {
       hippoRoot: home,
       tenantId: 'default',
-      actor: 'mcp',
+      actor: { subject: 'mcp', role: 'admin' },
     });
     const text = extractText(res);
     expect(text.toLowerCase()).toContain('no drillable summary');
@@ -140,7 +140,7 @@ describe('mcp hippo_drill', () => {
     const res = await callTool(5, 'hippo_drill', { summary_id: '' }, {
       hippoRoot: home,
       tenantId: 'default',
-      actor: 'mcp',
+      actor: { subject: 'mcp', role: 'admin' },
     });
     const text = extractText(res);
     expect(text.toLowerCase()).toContain('no summary_id');

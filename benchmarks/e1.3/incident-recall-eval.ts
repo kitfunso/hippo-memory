@@ -21,7 +21,7 @@ import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { ingestMessage } from '../../src/connectors/slack/ingest.js';
-import { recall, type Context } from '../../src/api.js';
+import { recall, adminActor, type Context } from '../../src/api.js';
 
 interface TranscriptMessage {
   user: string;
@@ -59,7 +59,7 @@ export async function runIncidentRecallEval(opts: {
   const ctx: Context = {
     hippoRoot: opts.hippoRoot,
     tenantId: 'default',
-    actor: 'eval:slack',
+    actor: adminActor('eval:slack'),
   };
   const results: ScenarioResult[] = [];
 

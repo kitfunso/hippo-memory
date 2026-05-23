@@ -28,9 +28,9 @@ All B-sized originally; bundle when needed.
 - [ ] **`api.recall` last-retrieval-ids parity with `cmdRecall`** (C follow-up). HTTP `GET /v1/memories` (recall) does NOT populate `last_retrieval_ids` — only `GET /v1/context` (get_context) does. CLI `hippo recall` populates it; the SDK's `recall` does not. To prime the last-recall outcome path, callers must use `get_context` first. Either teach `api.recall` to populate, or document the divergence permanently.
 - [ ] **CLI render snapshot tests** (`printContextMarkdown`, `renderSleepResult`) (A follow-up). Plan T5 Step 1b mandated 10 snapshot tests in `tests/cli-context-render-snapshot.test.ts` as the byte-identical gate. Deferred to keep T5 manageable; replaced with manual smokes. Add real snapshot tests so future drift is caught at CI. Cover: pinnedOnly, markdown default, json, additional-context, framing observe / suggest / assert, query='*' fallback, hybrid local-only, hybrid with global.
 
-### F9 hybrid retrieval — first local BM25+vector RRF measurement (~5d)
+### ~~F9 hybrid retrieval~~ — DONE 2026-05-20 (PR #27)
 
-See `ROADMAP-RESEARCH.md` §"F9". The F-track has measured pure-vector (F14) and vector+LLM-rerank (F9/F15) but never local BM25+vector RRF fusion. Pre-register a track on `_s` (and oracle). gbrain's ablation (BM25 19.8 / vector 97.4 / hybrid 97.6) sets the directional shape.
+See `docs/evals/2026-05-20-f9-hybrid-rrf-result.md`. Phase 1 oracle: best `turn_asym` R@5=82.0 (+3.0 over dense-only 79.0). Phase 2 `_s` Gate-B FAIL @ 97.7 (best `turn_sym` R@5=50.8 vs F14 baseline 41.0, +9.8 lift at zero LLM cost; ties F14+F9-Sonnet stack). HARD RETRACTION executed on artifacts per prereg. `src/rrf.ts` shipped. Follow-up candidates: F9+F13-stacked rerank on oracle (~+3pp), per-type-routed ensemble (~+4-5pp), F17 once egress opens.
 
 ### Conflict-subsystem tenant-isolation residue (~3d)
 

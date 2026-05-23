@@ -56,7 +56,7 @@ describe('GET /v1/audit?op=<op> — consolidate + outcome wiring', () => {
 
   it('round-trips a consolidate row written by api.sleep', async () => {
     // Seed: write one row by invoking api.sleep, then query via HTTP.
-    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: 'cli' };
+    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
     remember(ctx, { content: 'seed-for-consolidate' });
     await sleep(ctx, { dryRun: true });
 
@@ -69,7 +69,7 @@ describe('GET /v1/audit?op=<op> — consolidate + outcome wiring', () => {
   });
 
   it('round-trips an outcome row (pre-existing drift the v1.11.5 Set update closes)', async () => {
-    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: 'cli' };
+    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
     const m1 = remember(ctx, { content: 'outcome-target' });
     outcome(ctx, [m1.id], true);
 

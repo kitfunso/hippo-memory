@@ -12,7 +12,7 @@ describe('api.remember', () => {
     const result = remember({
       hippoRoot: home,
       tenantId: 'default',
-      actor: 'cli',
+      actor: { subject: 'cli', role: 'admin' },
     }, {
       content: 'api-canary-remember-77',
       kind: 'distilled',
@@ -30,7 +30,7 @@ describe('api.remember', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-api-rem-'));
     initStore(home);
     remember(
-      { hippoRoot: home, tenantId: 'default', actor: 'api_key:hk_test' },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'api_key:hk_test', role: 'admin' } },
       { content: 'audit-trail-canary' },
     );
     const { openHippoDb, closeHippoDb } = await import('../src/db.js');

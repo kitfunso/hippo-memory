@@ -9,7 +9,7 @@ import { slackHistoryFetcher } from '../src/connectors/slack/web-client.js';
 const ctx = (root: string) => ({
   hippoRoot: root,
   tenantId: 'default',
-  actor: 'connector:slack',
+  actor: { subject: 'connector:slack', role: 'admin' },
 });
 
 /**

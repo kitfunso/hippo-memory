@@ -24,7 +24,7 @@ describe('server concurrency — recall + write under single-writer', () => {
       for (let i = 0; i < 100; i++) {
         const term = seedTerms[i % seedTerms.length]!;
         apiRemember(
-          { hippoRoot: home, tenantId: 'default', actor: 'localhost:cli' },
+          { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } },
           { content: `seed-${term}-doc-${i} reference content for recall test` },
         );
       }

@@ -25,7 +25,7 @@ function makeRoot(prefix: string): string {
 }
 function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
 function ctxFor(root: string, tenantId: string = 'default'): Context {
-  return { hippoRoot: root, tenantId, actor: 'test:v164' };
+  return { hippoRoot: root, tenantId, actor: { subject: 'test:v164', role: 'admin' } };
 }
 function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
   return createMemory(text, {

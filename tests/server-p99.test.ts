@@ -29,7 +29,7 @@ describe.skip('p99 recall benchmark plumbing — manual run', () => {
     for (let i = 0; i < 1000; i++) {
       const tag = tags[i % tags.length]!;
       apiRemember(
-        { hippoRoot: home, tenantId: 'default', actor: 'localhost:cli' },
+        { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } },
         { content: `seed-${tag}-doc-${i} reference content for p99 plumbing test`, tags: [tag] },
       );
     }

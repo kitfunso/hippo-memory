@@ -55,7 +55,7 @@ function runRecall(env: TestEnv, query: string, sessionId: string): string {
   );
 }
 
-const ctx = (root: string) => ({ hippoRoot: root, tenantId: 'default', actor: 'cli' });
+const ctx = (root: string) => ({ hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } });
 
 describe('B3 /review fixes', () => {
   let env: TestEnv;

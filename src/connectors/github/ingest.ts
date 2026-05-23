@@ -163,8 +163,9 @@ export function ingestEvent(ctx: Context, input: IngestInput): IngestResult {
   //      the test injection) beat us, changes=0 -> throw -> SAVEPOINT rolls
   //      back our memory row. Other worker's commit stands.
   try {
+    // v1.12.0: drop the legacy `|| 'connector:github'` fallback (see slack/ingest.ts:73 for rationale).
     const result = remember(
-      { ...ctx, actor: ctx.actor || 'connector:github' },
+      ctx,
       {
         ...opts,
         afterWrite: (innerDb, memoryId) => {

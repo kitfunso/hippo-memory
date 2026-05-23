@@ -30,7 +30,7 @@ function makeRoot(prefix: string): string {
 }
 
 function ctx(home: string) {
-  return { hippoRoot: home, tenantId: 'default', actor: 'test' };
+  return { hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' } };
 }
 
 // Windows can hold a brief lock on SQLite WAL/shm files after close. Make

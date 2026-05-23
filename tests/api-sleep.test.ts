@@ -54,7 +54,7 @@ describe('api.sleep', () => {
       const ctx: Context = {
         hippoRoot: home,
         tenantId: 'default',
-        actor: 'cli',
+        actor: { subject: 'cli', role: 'admin' },
       };
       remember(ctx, { content: 'sleep-dry-mem-1', kind: 'distilled' });
 
@@ -77,7 +77,7 @@ describe('api.sleep', () => {
       const ctx: Context = {
         hippoRoot: home,
         tenantId: 'default',
-        actor: 'cli',
+        actor: { subject: 'cli', role: 'admin' },
       };
 
       const result = await sleep(ctx, { dryRun: false });
@@ -101,7 +101,7 @@ describe('api.sleep', () => {
       const ctx: Context = {
         hippoRoot: home,
         tenantId: 'default',
-        actor: 'cli',
+        actor: { subject: 'cli', role: 'admin' },
       };
       for (let i = 0; i < 5; i++) {
         remember(ctx, {
@@ -129,7 +129,7 @@ describe('api.sleep', () => {
       const ctx: Context = {
         hippoRoot: home,
         tenantId: 'default',
-        actor: 'cli',
+        actor: { subject: 'cli', role: 'admin' },
       };
       remember(ctx, {
         content: 'high-value-pattern that might trigger auto-share',
@@ -148,7 +148,7 @@ describe('api.sleep', () => {
   it('emits exactly one consolidate audit_log row per invocation with phase counters', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: 'cli' };
+      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
       remember(ctx, { content: 'before-sleep-1' });
       remember(ctx, { content: 'before-sleep-2' });
 
@@ -179,7 +179,7 @@ describe('api.sleep', () => {
   it('dryRun also emits one consolidate audit row (with dryRun:true)', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: 'cli' };
+      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
       remember(ctx, { content: 'dry-run-target' });
 
       await sleep(ctx, { dryRun: true });
@@ -203,7 +203,7 @@ describe('api.sleep', () => {
       const ctx: Context = {
         hippoRoot: home,
         tenantId: 'default',
-        actor: 'api_key:hk_test_xyz',
+        actor: { subject: 'api_key:hk_test_xyz', role: 'admin' },
       };
       remember(ctx, { content: 'mcp-actor-target' });
 

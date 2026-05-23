@@ -34,17 +34,17 @@ describe('v0.39 GDPR Path A redaction + migration v20', () => {
   });
 
   it('1. schema v20: getCurrentSchemaVersion() returns 20', () => {
-    expect(getCurrentSchemaVersion()).toBe(25);
+    expect(getCurrentSchemaVersion()).toBe(26);
     const db = openHippoDb(root);
     try {
-      expect(getSchemaVersion(db)).toBe(25);
+      expect(getSchemaVersion(db)).toBe(26);
     } finally {
       closeHippoDb(db);
     }
   });
 
   it('2. fresh archive Path A: payload_json is metadata-only (no original content)', () => {
-    const ctx = { hippoRoot: root, tenantId: 'tenant-A', actor: 'cli' };
+    const ctx = { hippoRoot: root, tenantId: 'tenant-A', actor: { subject: 'cli', role: 'admin' } };
     const { id } = remember(ctx, {
       content: 'a-very-distinctive-secret-string-zylph123',
       kind: 'raw',
@@ -107,7 +107,7 @@ describe('v0.39 GDPR Path A redaction + migration v20', () => {
 
     const db2 = openHippoDb(root);
     try {
-      expect(getSchemaVersion(db2)).toBe(25);
+      expect(getSchemaVersion(db2)).toBe(26);
       const row = db2
         .prepare(`SELECT payload_json FROM raw_archive WHERE memory_id = ?`)
         .get('m-legacy-1') as { payload_json: string };
@@ -150,7 +150,7 @@ describe('v0.39 GDPR Path A redaction + migration v20', () => {
 
     const db2 = openHippoDb(root);
     try {
-      expect(getSchemaVersion(db2)).toBe(25);
+      expect(getSchemaVersion(db2)).toBe(26);
       const row = db2
         .prepare(`SELECT payload_json FROM raw_archive WHERE memory_id = ?`)
         .get('m-malformed-1') as { payload_json: string };
@@ -167,7 +167,7 @@ describe('v0.39 GDPR Path A redaction + migration v20', () => {
   });
 
   it('5. audit row preserved: archiveRaw writes audit_log op=archive_raw even though raw_archive is gone', () => {
-    const ctx = { hippoRoot: root, tenantId: 'tenant-B', actor: 'user:42' };
+    const ctx = { hippoRoot: root, tenantId: 'tenant-B', actor: { subject: 'user:42', role: 'admin' } };
     const { id } = remember(ctx, { content: 'audit-trail-content', kind: 'raw' });
     archiveRaw(ctx, id, 'compliance test');
 
@@ -198,7 +198,7 @@ describe('v0.39 GDPR Path A redaction + migration v20', () => {
   });
 
   it('6. no re-recall after archive: original content text returns 0 results', () => {
-    const ctx = { hippoRoot: root, tenantId: 'tenant-C', actor: 'cli' };
+    const ctx = { hippoRoot: root, tenantId: 'tenant-C', actor: { subject: 'cli', role: 'admin' } };
     const distinctive = 'gdpr-canary-token-quaxle';
     const { id } = remember(ctx, { content: distinctive, kind: 'raw' });
 

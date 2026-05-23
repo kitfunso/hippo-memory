@@ -125,7 +125,7 @@ describe('v0.39 GDPR Path A completeness fixes', () => {
   it('2b. mirror reaper does NOT delete mirrors of non-archived (live) memories', () => {
     // Plant a raw_archive row + a UNRELATED live memory with a mirror; reaper
     // must only touch files whose id appears in raw_archive.
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: 'cli' };
+    const ctx = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
     const live = remember(ctx, { content: 'i-am-still-alive-content' });
 
     const db1 = openHippoDb(root);
@@ -257,7 +257,7 @@ describe('v0.39 GDPR Path A completeness fixes', () => {
   // ---------------------------------------------------------------------------
 
   it('3. recall audit_log row stores query_hash + query_length, no query field', () => {
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: 'cli' };
+    const ctx = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
     remember(ctx, { content: 'something to find with the canary query' });
 
     const distinctive = 'gdpr-canary-quaxle-2026';
@@ -282,7 +282,7 @@ describe('v0.39 GDPR Path A completeness fixes', () => {
   // ---------------------------------------------------------------------------
 
   it('4. full RTBF: original content + query text appear in zero persistent tables after archive', () => {
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: 'cli' };
+    const ctx = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
     const canary = 'gdpr-canary-99-special-token-xyz';
 
     // Seed: kind='raw' so it can be archived. Content embeds the canary.
@@ -335,7 +335,7 @@ describe('v0.39 GDPR Path A completeness fixes', () => {
   });
 
   it('5. cross-recall non-leakage: two recalls before/after archive both leave hash-only audit rows', () => {
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: 'cli' };
+    const ctx = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
     const queryText = 'special-private-cross-recall-string';
     const { id } = remember(ctx, {
       content: `contains ${queryText} as content`,

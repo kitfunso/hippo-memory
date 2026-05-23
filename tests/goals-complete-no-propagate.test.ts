@@ -26,7 +26,7 @@ const tenantId = 'default';
 const sessionId = 'sess-no-prop';
 
 function ctx(root: string): Context {
-  return { hippoRoot: root, tenantId, actor: 'cli' };
+  return { hippoRoot: root, tenantId, actor: { subject: 'cli', role: 'admin' } };
 }
 
 function getStrength(root: string, memId: string): number {

@@ -27,7 +27,7 @@ function safeRmSync(p: string): void {
 }
 
 function ctxFor(root: string, tenantId: string = 'default'): Context {
-  return { hippoRoot: root, tenantId, actor: 'test:drill' };
+  return { hippoRoot: root, tenantId, actor: { subject: 'test:drill', role: 'admin' } };
 }
 
 function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
