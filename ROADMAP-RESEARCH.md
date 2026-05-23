@@ -4,8 +4,21 @@ This is the canonical execution roadmap. Every actionable item from `RESEARCH.md
 
 This file supersedes the prior research-only frame. `ROADMAP.md` continues to track grant-tied deliverables. `PLAN.md` documents architecture and CLS principles.
 
-Current version: v0.33.0
-Active branch: `feat/pineal-salience-v2`
+Current version: 1.11.4 (npm `hippo-memory`) + python-v0.1.0 (PyPI `hippo-memory-sdk`)
+Active branch: `master`
+
+## Status as of 2026-05-23
+
+The original 90-day plan (lines below, scoped April→July) is **functionally complete**: A3 envelope shipped v0.39 (security hardening), A5 stub auth shipped, A1 server shipped v0.36, E1.3 Slack ingestion shipped v0.37, F6 reranker hardening shipped v1.9.0, and the F-track hit its roadmap R@5 ≥ 85% target on the oracle split (v1.9.2, F13 chunk-per-turn + F9 sub-agent rerank = R@5 = 86.8). E1.4 GitHub ingestion shipped v1.3.0. The v1.10.x-v1.11.x arc added pidfile-ownership guards, conflict-subsystem tenant isolation, per-IP rate limiting on `/v1`, the opencode plugin installer fix, and the api.ts refactor that unlocked the v0.1.0 Python SDK on PyPI. 32 npm releases from v0.33 (2026-04-23) to v1.11.4 (2026-05-23).
+
+**Next 90 days (2026-05-23 → 2026-08-23) priority queue** (revised at end-of-arc):
+- Episode A/B/C tail → v1.11.5 patch or v1.12.0 minor: HTTP DoS caps on `/v1/outcome` + `/v1/context`, per-tenant `/v1/sleep` scoping decision, audit-emission on sleep consolidation phases, `api.recall` last-retrieval-ids parity, CLI render snapshot tests.
+- Python SDK v0.2: sync wrappers (HippoSync), ContextResult.projected() helper, 204 handling in `_request`.
+- F9 hybrid retrieval — the BM25+vector RRF fusion the F-track never actually measured locally, with gbrain's ablation (BM25 19.8 / vector 97.4 / hybrid 97.6) as the directional shape.
+- Conflict-subsystem tenant-isolation residue (unscoped `readEntry` / `loadSearchEntries` in `cli.ts` / `dashboard.ts` / `refine-llm.ts` from v1.11.0).
+- v0.26 UI redesign port — `mockups/hybrid-v4.html` (warm parchment + 3D Three.js scene with OrbitControls, golden hour sky, mycelium network, Field Notes sidebar) into `ui/src/`. Design locked at v0.26, never ported. Track in TODOS.md "v0.26 — UI Redesign".
+
+The per-track status tags below are updated to reflect shipped-vs-active state. Section structure, bets, non-goals, and cross-track invariants are unchanged.
 
 ## North star
 
@@ -37,13 +50,16 @@ Active branch: `feat/pineal-salience-v2`
 
 Hippo today: local CLI + MCP, single user, single project, SQLite + markdown. The gaps below are dependency-ordered.
 
-### A1. Server mode [next]
-Persistent daemon alongside CLI. `hippo serve` exposes HTTP + MCP, CLI becomes a thin client. SQLite single-writer for v1.
-**Effort:** 4-6w. **Success:** runs >24h with no leaks, sub-50ms p99 recall on 10k-memory store. **Unblocks:** every other A item.
+### A1. Server mode [shipped v0.36.0]
+Persistent daemon alongside CLI. `hippo serve` exposes HTTP + MCP, CLI becomes a thin client. SQLite single-writer.
+**Shipped:** v0.36.0 added `hippo serve` (default 127.0.0.1:6789, configurable via `--port` / `HIPPO_PORT`), thin-client auto-routing via `.hippo/server.pid`, stale-pidfile self-heal. v1.10.x added lifecycle hardening (H1-H3 + L3 + M3: stale-pidfile + PID-reuse detection, `HIPPO_REQUIRE_SERVER`, concurrent-serve detection, pidfile schema version, BodyTooLargeError socket cleanup). v1.10.1 added `removePidfileIfOwned` (pid + started_at match required for unlink). 24h soak harness is scaffold-only (`benchmarks/a1/soak.ts`) — promoting to a CI-integrated release gate remains in TODOS.md. p99 target retracted v0.39 (current p99 = 58.4ms sequential single-thread; not a regression — the harness is not representative of server-mode concurrent load).
 
-### A2. HTTP API [next]
-Language-agnostic surface alongside MCP/CLI. RESTish + streaming for context assembly.
-**Effort:** 3-4w (depends on A1). **Success:** SDK-free curl examples in README cover remember/recall/snapshot/handoff/inspect.
+### A2. HTTP API [shipped through v1.11.4]
+Language-agnostic surface alongside MCP/CLI. RESTish.
+**Shipped:** 14 routes on `/v1/*`: memories (remember/recall/drill/forget/archive/supersede/promote), auth (keys list/create/revoke), audit, connectors (slack/github webhooks), sessions/assemble, plus v1.11.4's outcome/context/sleep. Per-IP token-bucket rate limit (`HIPPO_V1_RPS`, default 20 rps) added v1.11.0. All routes Bearer-authed and tenant-scoped except `/v1/sleep` (loopback-only, host-wide; per-tenant scoping deferred to TODOS.md once non-loopback serving lands).
+
+### A12. Python SDK [shipped python-v0.1.0]
+Async httpx + Pydantic v2 thin wrapper over the 14 HTTP routes. PyPI distribution name `hippo-memory-sdk` (the bare `hippo-memory` was blocked by PyPI's similarity check against an existing `hippomem` project); Python import name stays `hippo_memory`. Trusted-publisher OIDC workflow at `.github/workflows/pypi-publish.yml`. v0.2 follow-ups in TODOS.md: sync wrappers (HippoSync), ContextResult.projected() helper, 204 handling in `_request`.
 
 ### A3. Provenance envelope [shipped]
 Every memory carries `scope`, `source`, `timestamp`, `owner`, `confidence`, `artifact_ref`, `session_id`, `kind` (raw|distilled|superseded|archived). RESEARCH §"Phase 1: safest bridge" canonical envelope.
@@ -53,19 +69,19 @@ Every memory carries `scope`, `source`, `timestamp`, `owner`, `confidence`, `art
 Retention policy enforcement, right-to-be-forgotten (`hippo forget --user X --everywhere`), encryption-at-rest config flag, secret-scrubbing at write-time, PII redaction (regex + simple model).
 **Effort:** 4-6w. **Success:** demo "delete everything for user X across all scopes" in one command; secret-scrub catches AWS/OpenAI/Anthropic/GitHub key formats with <1% false positive on synthetic corpus.
 
-### A5. Auth + multi-tenancy [planned]
-API keys -> OAuth + scoped tokens. Org > team > project > scope hierarchy. RBAC. Audit log of every read/write/promote/supersede.
-**Effort:** 10-12w for full multi-tenant (revised from 6-8w). Only `working_memory` has `scope` today; `memories`, `consolidation_runs`, `task_snapshots`, `memory_conflicts` need scope/tenant columns + every query audited + RLS or app-layer enforcement.
-**Stub for v1 hosted (2-3w):** API keys + per-customer single-tenant deployments. Defer multi-tenant isolation to v2 unless a hosted customer needs it sooner.
-**Success:** two users on same server can't see each other's scopes; audit log captures every mutation; SSO/SCIM hook points stubbed (not implemented).
+### A5. Auth + multi-tenancy [shipped stub; v2 multi-tenant deferred]
+API keys + audit log of every read/write/promote/supersede. Tenant scoping added.
+**Shipped:** stub auth (v0.34-v0.35): API keys via `hippo auth create-key`, Bearer on `/v1/*` and MCP, `validateApiKey` with constant-time scrypt comparison, `audit_log` table. Tenant_id column added to `memories` + scoped reads (`ctx.tenantId`). Conflict-subsystem tenant isolation shipped v1.11.0 (`hippo_conflicts` / `hippo_resolve` / `hippo_status`). v1.11.1 closed `replaceDetectedConflicts` stale-resolve + `readEntry` audit cleanup. Per-IP rate limit on `/v1/*` shipped v1.11.0.
+**v2 deferred to TODOS.md:** unscoped `readEntry`/`loadSearchEntries` in `cli.ts`/`dashboard.ts`/`refine-llm.ts` (CLI is single-tenant per process; flagged for the day non-loopback serving lands); `auth create`/`list` are unauthenticated locally (FS access is the trust boundary); audit-log retention/rotation; SSO/SCIM; OAuth scoped tokens; full multi-tenant org > team > project > scope hierarchy.
 
 ### A6. Postgres backend [planned]
 For shared deployments only. SQLite stays the local default.
 **Effort:** 3-4w. **Success:** `--db postgres://...` boots; eval suites pass; concurrent-write smoke test green.
 
-### A7. Observability [planned]
-Per-query cost, retrieval traces, decay/strengthening rates, conflict counts, sleep-cycle metrics. Dashboard + Prometheus exporter.
-**Effort:** 4-6w. **Success:** "why did my agent recall X" answerable in <30 seconds via dashboard.
+### A7. Observability [partial: audit + rate-limit shipped; dashboard pending]
+Per-query cost, retrieval traces, decay/strengthening rates, conflict counts, sleep-cycle metrics.
+**Shipped:** `audit_log` table (every remember/recall/promote/supersede/outcome/forget with actor + tenant). Per-IP rate-limit visibility via 429 responses (`HIPPO_V1_RPS`). Brain Observatory UI (v0.25) surfaces memory state, conflicts, embeddings via JSON API at `/api/{memories,stats,conflicts,embeddings,peers,config}`.
+**Pending:** retrieval-trace API ("why did my agent recall X"), per-tenant cost/usage rollups, Prometheus exporter, decay-curve telemetry (D8 below).
 
 ### A8. Framework adapter breadth [grant: AIC-P1]
 LangChain, LlamaIndex, Letta, CrewAI, AutoGen. Consistent semantics across all five. Already in `ROADMAP.md` WP3.
@@ -247,13 +263,14 @@ Active snapshot + recent trail + matching handoff in the default resume path. Co
 #### E1.2. Provenance envelope [next] — see A3
 Required for everything below.
 
-#### E1.3. Slack append-only ingestion [next]
+#### E1.3. Slack append-only ingestion [shipped v0.37.0]
 Webhook -> raw layer with full provenance. Source remains canonical; hippo distils, doesn't shadow.
-**Effort:** 12d. **Success:** 1000-event smoke test with no source-system writes; recall surfaces incident context faster than transcript replay on 10 staged scenarios.
+**Shipped:** signed webhook handler, idempotency on `(team_id, event_id)`, cursor-based backfill, DLQ for malformed events (`hippo slack dlq list`), tenant routing via `slack_workspaces` table, rate-limit handling, owner envelope (`user:<slack_user_id>` since v1.1+). v0.38 added test pass + workspace registration plumbing.
+**Open follow-ups (TODOS.md):** DLQ replay command, workspace registration CLI (vs direct SQL), thread-aware ranking, eval scoring by `artifact_ref`, multi-workspace tenant-routing e2e test.
 
-#### E1.4. GitHub append-only ingestion [planned]
+#### E1.4. GitHub append-only ingestion [shipped v1.3.0]
 PRs, commits, issues, releases. Same model as E1.3.
-**Effort:** 10d. **Success:** PR-context recall beats `gh pr view` for "what changed and why" queries.
+**Shipped:** v1.3.0 streams issues + issue comments + PRs + PR review comments into hippo as `kind='raw'` rows with full provenance, idempotency, scope tagging, DLQ. Built on the v1.2.1 generic `*:private:*` default-deny filter (codex-flagged pre-flight) so private GitHub rows cannot leak to no-scope callers.
 
 #### E1.5. Jira / Linear ingestion [planned]
 Ticket lifecycle events into raw layer; distil to incident / decision objects.
@@ -517,28 +534,23 @@ Weeks of work (calendar) for Wks 1-12, single engineer, assuming 4 productive da
 
 Total: 16-20 weeks of work compressed to 12 weeks calendar. Lane B parallelism (F6 reranker, F7 LoCoMo) buys some recovery; the budget is still tight by design.
 
-### Weeks 1-4 (May) — provenance first
-1. **A3 Provenance envelope** (6-8w, starts here, finishes early June) — gates everything in Track E + Track A. Real schema split, not a column add.
-2. **F6 reranker hardening** (6d, lane B parallel) — uses existing hybrid path; no schema dependency.
+### v0.33 → v1.11.4 arc (2026-04-23 → 2026-05-23) — 90-day plan delivered
 
-### Weeks 5-8 (June) — server + auth stub
-3. **A5 stub auth** (2-3w) — single-tenant API keys + audit log scaffolding. Multi-tenant isolation deferred to v2.
-4. **A1 Server mode** (4w) — daemon + HTTP/MCP surface, thin CLI client. Depends on A3 envelope being live.
-5. **F7 LoCoMo first baseline** (5d, lane B parallel) — informational.
+The original Weeks 1-12 plan landed in 30 calendar days through 32 npm releases. Shipped in dependency order: A3 envelope (v0.39), A5 stub auth (v0.34-v0.35), A1 server (v0.36), E1.3 Slack ingestion (v0.37), F6 reranker hardening (v1.9.0), E1.4 GitHub ingestion (v1.3.0), A2 HTTP API completion (v1.11.4), Python SDK A12 (python-v0.1.0). Plus v1.10.x lifecycle hardening, v1.11.0 tenant-isolation + rate-limit, v1.11.1 isolation residue, v1.11.2 opencode plugin installer fix, v1.11.3 api.ts refactor.
 
-### Weeks 9-12 (July) — first ingestion connector end-to-end
-6. **E1.3 Slack append-only ingestion** (4-5w) — first source-of-record connector. Tests the full A3 → A5 → A1 stack under realistic load. Includes idempotency, cursor / backfill, source-deletion sync, permission mirroring, rate-limit handling, dead-letter queue.
+### Next 90 days (2026-05-23 → 2026-08-23) — priority queue
 
-### Days 91-180 (Aug–Oct) — deferred from current 90-day plan
-- **A2 HTTP API hardening** (was Wk 5-8) — A1 ships RESTish surface; A2 polishes contract + SDK examples
-- **B3 dlPFC persistent goal stack depth** (was Wk 1-4) — best trap-rate lever, but research not enterprise; ships after E1.3 proves the platform
-- **B1 ACC EVC calibration** (was Wk 5-8)
-- **C3 Pineal ambient state vector** (was Wk 9-12)
-- **E2 first-class `decision` object promotion** (was Wk 9-12)
-- **B7 PFC-stack composition A/B** (was Wk 9-12)
-- **A4 lifecycle compliance** (right-to-be-forgotten first; encryption/secret-scrub/PII split into separate items)
+Priority overlay: short post-ship tail first (close the Episode A/B/C critic-deferred items), then the structural leverage items.
 
-### Days 181+ — research and platform
+1. **Episode A/B/C tail → v1.11.5 / v1.12.0** (~5d): HTTP DoS caps on `/v1/outcome` ids.length + `/v1/context` q length; per-tenant `/v1/sleep` scoping decision (admin-role gate or plumb `ctx.tenantId` into `deduplicateStore` + `auditMemories` + `deleteEntry`); `audit_log` emission on sleep consolidation phases; `api.recall` last-retrieval-ids parity with `cmdRecall`; CLI render snapshot tests for `printContextMarkdown` + `renderSleepResult`.
+2. **F9 hybrid retrieval — first measurement** (~5d): BM25 + BGE-base chunked-turn dense vectors via RRF on `_s` (and oracle for cross-comparison). gbrain's ablation (BM25 19.8 / vector 97.4 / hybrid 97.6) sets the directional shape. The F-track has measured pure-vector and vector+LLM-rerank but never local BM25+vector RRF fusion. Highest-value retrieval lever still untried.
+3. **Conflict-subsystem tenant-isolation residue** (~3d): audit and tenant-scope the unscoped `readEntry` / `loadSearchEntries` call sites in `cli.ts` / `dashboard.ts` / `refine-llm.ts` (deferred from v1.11.0 because half-scoping without first scoping upstream `loadAllEntries(hippoRoot)` would silently drop parent text).
+4. **Python SDK v0.2** (~5d): sync wrappers (HippoSync), ContextResult.projected() helper, 204 handling in `_request`.
+5. **v0.26 UI redesign port** (~15-20d): port `mockups/hybrid-v4.html` (warm parchment + 3D Three.js scene with OrbitControls, golden hour sky dome, mycelium network, Field Notes sidebar, bottom drawer memory list) from mockup to `ui/src/` React codebase. Design locked at v0.26 (2026-04-20); port has never started. Track in TODOS.md "v0.26 — UI Redesign".
+6. **B1 ACC EVC calibration, B3 dlPFC goal-stack depth (already shipped MVP+depth)**: B-track depth items are research-not-enterprise — re-prioritise only after platform items 1-5 above.
+7. **E2 first-class `decision` / `handoff` object promotion** (~4-7d each): partial today via `hippo decide` / `hippo handoff`; promote to first-class objects with own lifecycle.
+
+### Days 181+ (Aug 2026 onwards) — research and platform
 - A6 Postgres backend (only when a hosted customer requires shared deployment)
 - A7 observability dashboard
 - A8 framework adapters (grant: AIC-P1 if funded)
