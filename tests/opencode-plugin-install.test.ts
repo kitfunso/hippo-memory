@@ -20,6 +20,7 @@ import {
   installOpencodePlugin,
   uninstallOpencodePlugin,
   resolveOpencodePluginPath,
+  detectInstalledTools,
 } from '../src/hooks.js';
 
 describe('OPENCODE_PLUGIN_SOURCE', () => {
@@ -217,5 +218,23 @@ describe('uninstallOpencodePlugin (real-FS)', () => {
     expect(uninstallOpencodePlugin()).toBe(true);
     const after = JSON.parse(fs.readFileSync(opencodeJsonPath, 'utf8'));
     expect(after.hooks).toBeUndefined();
+  });
+});
+
+describe('detectInstalledTools opencode entry', () => {
+  let env: { cleanup: () => void; home: string };
+  beforeEach(() => {
+    env = withFakeHome('hippo-detect-');
+  });
+  afterEach(() => {
+    env.cleanup();
+  });
+
+  it('marks opencode as kind:"plugin" with the plugin path in notes', () => {
+    fs.mkdirSync(path.join(env.home, '.config', 'opencode'), { recursive: true });
+    const tool = detectInstalledTools().find((t) => t.name === 'opencode');
+    expect(tool?.kind).toBe('plugin');
+    expect(tool?.notes).toContain('plugins/hippo.ts');
+    expect(tool?.detected).toBe(true);
   });
 });

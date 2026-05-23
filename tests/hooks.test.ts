@@ -216,33 +216,10 @@ describe('JSON hook installer', () => {
     });
   });
 
-  describe('installJsonHooks(opencode)', () => {
-    it('writes to ~/.config/opencode/opencode.json with the same schema', () => {
-      const result = installJsonHooks('opencode');
-
-      expect(result.installedSessionEnd).toBe(true);
-      expect(result.installedSessionStart).toBe(true);
-      expect(result.settingsPath).toMatch(/opencode[/\\]opencode\.json$/);
-
-      const settings = JSON.parse(fs.readFileSync(result.settingsPath, 'utf8'));
-      expect(settings.hooks.SessionEnd[0].hooks[0].command).toContain('hippo session-end --log-file');
-      expect(settings.hooks.SessionStart[0].hooks[0].command).toContain('hippo last-sleep');
-    });
-
-    it('uses a per-tool log path so claude-code and opencode do not collide', () => {
-      const claudeResult = installJsonHooks('claude-code');
-      const opencodeResult = installJsonHooks('opencode');
-
-      const claudeCmd = JSON.parse(fs.readFileSync(claudeResult.settingsPath, 'utf8'))
-        .hooks.SessionEnd[0].hooks[0].command as string;
-      const opencodeCmd = JSON.parse(fs.readFileSync(opencodeResult.settingsPath, 'utf8'))
-        .hooks.SessionEnd[0].hooks[0].command as string;
-
-      expect(claudeCmd).toContain('claude-code-sleep.log');
-      expect(opencodeCmd).toContain('opencode-sleep.log');
-      expect(claudeCmd).not.toEqual(opencodeCmd);
-    });
-  });
+  // The former 'installJsonHooks(opencode)' describe block was removed
+  // 2026-05-23 when opencode flipped from JSON-hook integration to a TS plugin.
+  // Coverage for the new plugin installer lives in
+  // tests/opencode-plugin-install.test.ts.
 
   describe('uninstallJsonHooks', () => {
     it('removes SessionEnd, SessionStart, and legacy Stop entries', () => {
@@ -340,7 +317,7 @@ describe('JSON hook installer', () => {
     it('classifies tool kinds correctly', () => {
       const tools = detectInstalledTools();
       expect(tools.find((t) => t.name === 'claude-code')?.kind).toBe('json-hook');
-      expect(tools.find((t) => t.name === 'opencode')?.kind).toBe('json-hook');
+      expect(tools.find((t) => t.name === 'opencode')?.kind).toBe('plugin');
       expect(tools.find((t) => t.name === 'openclaw')?.kind).toBe('plugin');
       expect(tools.find((t) => t.name === 'codex')?.kind).toBe('wrapper');
       expect(tools.find((t) => t.name === 'cursor')?.kind).toBe('markdown-instruction');

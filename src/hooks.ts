@@ -1,23 +1,32 @@
 /**
- * JSON-hook install/uninstall for AI coding tools.
+ * Hook install/uninstall for AI coding tools.
  *
- * Currently supports Claude Code and OpenCode, which share the same
- * SessionStart/SessionEnd schema. Hippo installs two entries:
- *   - SessionEnd: `hippo session-end --log-file <path>` - spawns a detached
- *     child that runs `hippo sleep` then `hippo capture --last-session`
- *     in sequence, writing both outputs to the log file. The parent returns
- *     in <100ms so the TUI teardown can't kill the child before it finishes.
- *   - SessionStart: `hippo last-sleep --path <path>` - prints the log written
- *     by the previous session's detached worker and then clears it, so the
- *     user actually sees what was consolidated.
+ * Two integration models live in this file:
  *
- * Earlier forms are detected and migrated automatically:
- *   - < 0.20.2: `Stop` hook firing `hippo sleep` on every assistant turn.
- *   - < 0.21.0: bare `hippo sleep` in SessionEnd, no `--log-file`.
- *   - 0.22.x: separate sleep + capture SessionEnd entries. Ran in parallel
- *     and were both SIGTERM'd by TUI teardown, so completion lines rarely
- *     made it to the log. 0.23.0+ collapses them into the single
- *     `hippo session-end` entry above.
+ * 1. JSON-hook install (Claude Code only). Writes a `hooks` block into the
+ *    tool's settings.json with two entries:
+ *      - SessionEnd: `hippo session-end --log-file <path>` - spawns a detached
+ *        child that runs `hippo sleep` then `hippo capture --last-session` in
+ *        sequence, writing both outputs to the log file. The parent returns in
+ *        <100ms so the TUI teardown can't kill the child before it finishes.
+ *      - SessionStart: `hippo last-sleep --path <path>` - prints the log
+ *        written by the previous session's detached worker and then clears it,
+ *        so the user actually sees what was consolidated.
+ *    Earlier Claude Code forms are detected and migrated automatically:
+ *      - < 0.20.2: `Stop` hook firing `hippo sleep` on every assistant turn.
+ *      - < 0.21.0: bare `hippo sleep` in SessionEnd, no `--log-file`.
+ *      - 0.22.x: separate sleep + capture SessionEnd entries.
+ *
+ * 2. Plugin install (OpenCode only). OpenCode does NOT share Claude Code's
+ *    JSON-hook schema — its config has `additionalProperties: false` and no
+ *    `hooks` key, so v1.10.x-v1.11.1's JSON-hook installer broke opencode
+ *    launch (issue #24). Hippo now installs a TypeScript plugin at
+ *    `~/.config/opencode/plugins/hippo.ts` subscribing to opencode's
+ *    `session.idle` (→ `hippo session-end`) and `session.created` (→
+ *    `hippo last-sleep`) events. See OPENCODE_PLUGIN_SOURCE below for the
+ *    plugin file content + design rationale; see installOpencodePlugin for
+ *    the installer + the migration that removes any pre-existing broken
+ *    `hooks` block from opencode.json.
  */
 
 import * as fs from 'fs';
@@ -25,7 +34,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 
-export type JsonHookTarget = 'claude-code' | 'opencode';
+export type JsonHookTarget = 'claude-code';
 
 export interface CodexWrapperPaths {
   wrapperDir: string;
@@ -573,12 +582,6 @@ export function resolveJsonHookPaths(target: JsonHookTarget): JsonHookPaths {
         logFile: path.join(logsDir, 'claude-code-sleep.log'),
         display: 'Claude Code',
       };
-    case 'opencode':
-      return {
-        settings: path.join(home, '.config', 'opencode', 'opencode.json'),
-        logFile: path.join(logsDir, 'opencode-sleep.log'),
-        display: 'OpenCode',
-      };
   }
 }
 
@@ -939,7 +942,7 @@ export function detectInstalledTools(): ToolDetection[] {
   const exists = (...parts: string[]) => fs.existsSync(path.join(home, ...parts));
   return [
     { name: 'claude-code', configDir: '~/.claude', detected: exists('.claude'), kind: 'json-hook' },
-    { name: 'opencode', configDir: '~/.config/opencode', detected: exists('.config', 'opencode'), kind: 'json-hook' },
+    { name: 'opencode', configDir: '~/.config/opencode', detected: exists('.config', 'opencode'), kind: 'plugin', notes: 'installs a TS plugin at ~/.config/opencode/plugins/hippo.ts' },
     { name: 'openclaw', configDir: '~/.openclaw', detected: exists('.openclaw'), kind: 'plugin', notes: 'install via `openclaw plugins install hippo-memory`' },
     { name: 'codex', configDir: '~/.codex', detected: exists('.codex'), kind: 'wrapper', notes: 'wraps the detected codex launcher for session-end consolidation' },
     { name: 'cursor', configDir: '~/.cursor', detected: exists('.cursor'), kind: 'markdown-instruction', notes: 'no hook API - patches .cursorrules in the project' },

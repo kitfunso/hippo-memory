@@ -42,6 +42,9 @@ import {
   uninstallCodexWrapper,
   resolveCodexSessionTranscript,
   resolveCodexWrapperPaths,
+  installOpencodePlugin,
+  uninstallOpencodePlugin,
+  resolveOpencodePluginPath,
   type CodexWrapperMetadata,
   type JsonHookTarget,
 } from './hooks.js';
@@ -521,10 +524,10 @@ function autoInstallHooks(quiet: boolean): void {
       console.log(`   Auto-installed ${hook} hook in ${hookDef.file}`);
     }
 
-    // For JSON-hook tools, also install SessionEnd+SessionStart entries.
-    // Keeps `hippo init` in lockstep with `hippo hook install <target>` and
-    // `hippo setup`, which both cover claude-code + opencode now.
-    if (hook === 'claude-code' || hook === 'opencode') {
+    // For Claude Code, also install SessionEnd+SessionStart entries in its
+    // settings.json. Keeps `hippo init` in lockstep with `hippo hook install
+    // claude-code` and `hippo setup`.
+    if (hook === 'claude-code') {
       const result = installJsonHooks(hook);
       if (result.installedSessionEnd) {
         console.log(`   Auto-installed hippo session-end SessionEnd hook in ${hook} settings`);
@@ -542,6 +545,20 @@ function autoInstallHooks(quiet: boolean): void {
         console.log(`   Migrated split sleep+capture SessionEnd entries → single detached hippo session-end`);
       } else if (result.migratedLegacySessionEnd) {
         console.log(`   Migrated legacy SessionEnd entry to the new detached form`);
+      }
+    } else if (hook === 'opencode') {
+      // opencode uses a TS plugin, not Claude Code's JSON-hook schema.
+      // See OPENCODE_PLUGIN_SOURCE in src/hooks.ts for the plugin file
+      // content + design rationale.
+      const result = installOpencodePlugin();
+      if (result.installed) {
+        console.log(`   Auto-installed hippo opencode plugin -> ${result.pluginPath}`);
+      }
+      if (result.migratedLegacyHooks) {
+        console.log(`   Removed legacy Claude Code-style hooks block from opencode.json — opencode can now launch`);
+      }
+      if (result.jsonRepairFailed) {
+        console.log(`   WARNING: opencode.json is unparseable; legacy hooks block could not be auto-removed. Fix the file manually.`);
       }
     }
   }
@@ -4296,9 +4313,9 @@ function cmdHook(
       console.log(`   Create ${hook.file} and re-run \`hippo hook install ${target}\` if you want the agent prompt.`);
     }
 
-    // For tools with JSON hook systems, also install SessionEnd+SessionStart
-    // entries in their settings file. Currently: claude-code + opencode.
-    if (target === 'claude-code' || target === 'opencode') {
+    // For Claude Code, also install SessionEnd+SessionStart entries in its
+    // settings file.
+    if (target === 'claude-code') {
       const result = installJsonHooks(target);
       if (result.installedSessionEnd) {
         console.log(`Installed hippo session-end SessionEnd hook in ${result.target} settings`);
@@ -4316,6 +4333,20 @@ function cmdHook(
         console.log(`Migrated split sleep+capture SessionEnd entries → single detached hippo session-end`);
       } else if (result.migratedLegacySessionEnd) {
         console.log(`Migrated legacy SessionEnd entry to the new detached form`);
+      }
+    } else if (target === 'opencode') {
+      // opencode uses a TS plugin, not JSON hooks. See src/hooks.ts.
+      const result = installOpencodePlugin();
+      if (result.installed) {
+        console.log(`Installed hippo opencode plugin at ${result.pluginPath}`);
+      } else {
+        console.log(`opencode plugin already up to date at ${result.pluginPath}`);
+      }
+      if (result.migratedLegacyHooks) {
+        console.log(`Removed legacy Claude Code-style hooks block from opencode.json — opencode can now launch`);
+      }
+      if (result.jsonRepairFailed) {
+        console.log(`WARNING: opencode.json is unparseable; legacy hooks block could not be auto-removed. Fix the file manually.`);
       }
     } else if (target === 'codex') {
       const result = installCodexWrapper();
@@ -4352,10 +4383,17 @@ function cmdHook(
       console.log(`${hook.file} not found, skipping agent-instructions uninstall.`);
     }
 
-    // For JSON-hook tools, also strip their SessionEnd/SessionStart entries.
-    if (target === 'claude-code' || target === 'opencode') {
+    // For Claude Code, also strip its SessionEnd/SessionStart entries.
+    if (target === 'claude-code') {
       if (uninstallJsonHooks(target)) {
         console.log(`Removed hippo hooks from ${target} settings`);
+      }
+    } else if (target === 'opencode') {
+      // opencode uses a TS plugin; uninstall removes the plugin file AND
+      // also runs the legacy-hooks migration so the downgrade/remove path
+      // leaves opencode launchable.
+      if (uninstallOpencodePlugin()) {
+        console.log(`Removed hippo opencode plugin (and any legacy hooks block from opencode.json)`);
       }
     } else if (target === 'codex') {
       if (uninstallCodexWrapper()) {
@@ -4393,7 +4431,7 @@ function cmdSetup(flags: Record<string, string | boolean | string[]>): void {
   const pluginTools = tools.filter((t) => t.kind === 'plugin' && t.detected);
 
   if (jsonTools.length === 0 && !forceAll) {
-    console.log('No JSON-hook-capable tools detected (checked: claude-code, opencode).');
+    console.log('No JSON-hook-capable tools detected (checked: claude-code).');
     console.log('Run with --all to install hooks anyway.');
   }
 
@@ -4445,7 +4483,26 @@ function cmdSetup(flags: Record<string, string | boolean | string[]>): void {
     console.log('');
     console.log('Plugin-based tools (hook API via plugin, not JSON):');
     for (const tool of pluginTools) {
-      console.log(`  ${tool.name.padEnd(14)} ${tool.notes}`);
+      if (tool.name === 'opencode') {
+        if (dryRun) {
+          console.log(`  ${tool.name.padEnd(14)} [dry-run] would install hippo plugin at ${resolveOpencodePluginPath()}`);
+          continue;
+        }
+        const result = installOpencodePlugin();
+        const bits: string[] = [];
+        if (result.installed) bits.push('installed plugin');
+        if (result.migratedLegacyHooks) bits.push('migrated legacy hooks block');
+        if (result.jsonRepairFailed) bits.push('WARNING: opencode.json unparseable — manual fix needed');
+        if (bits.length === 0) {
+          console.log(`  ${tool.name.padEnd(14)} already configured (${result.pluginPath})`);
+        } else {
+          console.log(`  ${tool.name.padEnd(14)} ${bits.join(', ')} -> ${result.pluginPath}`);
+        }
+      } else {
+        // Other plugin tools (openclaw) have their own installer; the notes
+        // line points the user at it.
+        console.log(`  ${tool.name.padEnd(14)} ${tool.notes}`);
+      }
     }
   }
 
