@@ -34,7 +34,7 @@ async def main() -> None:
         ]:
             await client.remember(content=content, tags=["rule"])
 
-        ctx = await client.get_context(budget=500, framing=None) if False else await client.get_context(budget=500)
+        ctx = await client.get_context(budget=500)
         print(render(ctx))
 
 

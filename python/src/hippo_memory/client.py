@@ -87,7 +87,15 @@ class Hippo:
         await self._client.aclose()
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
-        """Internal HTTP wrapper. Raises HippoError on non-2xx; returns parsed JSON on success."""
+        """Internal HTTP wrapper. Raises HippoError on non-2xx; returns parsed JSON on success.
+
+        Returns None for 204 / empty-body 200 responses. Callers that expect
+        a payload should treat None defensively (today every Hippo method
+        passes the response straight to ``Model.model_validate`` which would
+        raise on None; in practice no server route returns 204, so this code
+        path is dead today. v0.2 should add either a typed empty-result
+        sentinel here or a per-caller is-None check before model_validate).
+        """
         response = await self._client.request(method, path, **kwargs)
         if response.status_code >= 400:
             body: dict[str, Any] | None = None

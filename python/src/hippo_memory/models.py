@@ -18,7 +18,7 @@ detail; tighter types can land in v0.2 once usage patterns surface.
 
 from __future__ import annotations
 from typing import Any
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
 
@@ -88,7 +88,7 @@ class MemoryEnvelope(_Base):
     layer: str | None = None
     strength: float | None = None
     confidence: str | None = None
-    tags: list[str] = []
+    tags: list[str] = Field(default_factory=list)
     scope: str | None = None
     owner: str | None = None
     artifact_ref: str | None = None
@@ -110,7 +110,7 @@ class RecallEntry(_Base):
     score: float | None = None
     tokens: int | None = None
     layer: str | None = None
-    tags: list[str] = []
+    tags: list[str] = Field(default_factory=list)
     confidence: str | None = None
     strength: float | None = None
     is_global: bool | None = None
@@ -203,7 +203,7 @@ class DrillResult(_Base):
     """
 
     parent: dict[str, Any] | None = None
-    children: list[dict[str, Any]] = []
+    children: list[dict[str, Any]] = Field(default_factory=list)
     total_children: int | None = None
     truncated: bool | None = None
 
@@ -250,7 +250,7 @@ class AssembleResult(_Base):
     """
 
     session_id: str | None = None
-    items: list[dict[str, Any]] = []
+    items: list[dict[str, Any]] = Field(default_factory=list)
     tokens: int | None = None
 
 
