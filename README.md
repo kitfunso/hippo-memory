@@ -746,34 +746,36 @@ For how these mechanisms connect to LLM training, continual learning, and open r
 
 ## Comparison
 
-The AI-memory category matured fast in 2026. Hippo's specific take — bio-decay, strengthen-on-use, outcome-weighted half-lives — is one stance among several. The table below is a feature snapshot, not a verdict: graph-first systems ([gbrain](https://hermesatlas.com/projects/garrytan/gbrain), [Zep](https://www.getzep.com/), [Cognee](https://www.cognee.ai/)) and agent-managed systems ([Letta](https://github.com/letta-ai/letta)) solve adjacent problems with different mechanics.
+The AI-memory category matured fast in 2026. Hippo's specific take — bio-decay, strengthen-on-use, outcome-weighted half-lives — is one stance among several. The table below is a feature snapshot, not a verdict: graph-first systems ([gbrain](https://hermesatlas.com/projects/garrytan/gbrain), [Zep](https://www.getzep.com/), [Cognee](https://www.cognee.ai/)), agent-managed systems ([Letta](https://github.com/letta-ai/letta)), and version-control / skill-distillation takes ([Memoria](https://github.com/matrixorigin/Memoria), [EverMind](https://evermind.ai/)) all solve adjacent problems with different mechanics.
 
-| Feature | Hippo | MemPalace | Mem0 | Basic Memory | [gbrain](https://hermesatlas.com/projects/garrytan/gbrain) | [Zep](https://www.getzep.com/) | [Letta](https://github.com/letta-ai/letta) | [Cognee](https://www.cognee.ai/) |
-|---------|-------|-----------|------|-------------|--------|-----|-------|--------|
-| Decay by default | Yes | No | No | No | No | No | No | No |
-| Retrieval strengthening | Yes | No | No | No | No | No | No | Partial (recall tuning compounds) |
-| Reward-proportional decay | Yes | No | No | No | No | No | No | No |
-| Hybrid search (BM25 + embeddings) | Yes | Embeddings + spatial | Embeddings only | No | Yes (vec + rerank + graph) | Yes (graph + vec) | ? | Yes (GraphRAG) |
-| Schema acceleration / knowledge graph | Yes (schema) | No | No | No | Yes (typed KG, self-wiring) | Yes (temporal KG) | No | Yes (auto-ontologies) |
-| Conflict detection + resolution | Yes | No | No | No | Yes (eval-surfaced) | Yes (auto-invalidate stale facts) | No | No |
-| Multi-agent shared memory | Yes | No | No | No | Yes (brain repo, team mounts) | Yes | No (single-agent state) | Yes |
-| Transfer scoring | Yes | No | No | No | No | No | No | No |
-| Outcome tracking | Yes | No | No | No | No | No | No | No |
-| Confidence tiers | Yes | No | No | No | No (typed facts) | No | No | No |
-| Spatial organization | No | Yes (wings/halls/rooms) | No | No | No | No | No | No |
-| Lossless compression | No | Yes (AAAK, 30x) | No | No | No | No | No | No |
-| Cross-tool import (ChatGPT/Claude/Cursor) | Yes | No | No | No | Partial (data sources) | ? | No | Partial (28 data sources) |
-| Auto-hook install | Yes | No | No | No | No | No | No | No |
-| MCP server | Yes | Yes | No | No | Yes (stdio + HTTP/OAuth) | Partial (managed) | Yes (via Letta Code) | Yes (first-party Claude/LangGraph) |
-| Zero runtime deps | Yes | No (ChromaDB) | No | No | No (PGLite or PG+pgvector) | No (managed service) | No (Python deps) | No (Python deps) |
-| LongMemEval R@5 (retrieval) | 86.8% (F13+F9, oracle\*) | 96.6% raw / 100% reranked | ~49-85% | N/A | 97.6-97.9% (s_cleaned) | N/A (LoCoMo 80.3%) | N/A | N/A |
-| Git-friendly | Yes | No | No | Yes | Yes | No | No | No |
-| Framework agnostic | Yes | Yes | Partial | Yes | Yes | Yes | Yes | Yes |
-| License | MIT | (open) | Apache-2.0 | (open) | MIT | Apache-2.0 (community) | Apache-2.0 | MIT (core) |
+| Feature | Hippo | MemPalace | Mem0 | Basic Memory | [gbrain](https://hermesatlas.com/projects/garrytan/gbrain) | [Zep](https://www.getzep.com/) | [Letta](https://github.com/letta-ai/letta) | [Cognee](https://www.cognee.ai/) | [Memoria](https://github.com/matrixorigin/Memoria) | [EverMind](https://evermind.ai/) |
+|---------|-------|-----------|------|-------------|--------|-----|-------|--------|---------|----------|
+| Decay by default | Yes | No | No | No | No | No | No | No | No | No |
+| Retrieval strengthening | Yes | No | No | No | No | No | No | Partial (recall tuning) | No | Partial (Skill Memory distills patterns) |
+| Reward-proportional decay | Yes | No | No | No | No | No | No | No | No | No |
+| Hybrid search (BM25 + embeddings) | Yes | Embeddings + spatial | Embeddings only | No | Yes (vec + rerank + graph) | Yes (graph + vec) | ? | Yes (GraphRAG) | Yes (vector + full-text) | Yes (mRAG, multi-modal) |
+| Schema acceleration / knowledge graph | Yes (schema) | No | No | No | Yes (typed KG, self-wiring) | Yes (temporal KG) | No | Yes (auto-ontologies) | No (typed claims) | Yes (hierarchical: user/group/agent) |
+| Conflict detection + resolution | Yes | No | No | No | Yes (eval-surfaced) | Yes (auto-invalidate stale facts) | No | No | Yes (auto-detect + quarantine) | Partial (temporal tracking) |
+| Multi-agent shared memory | Yes | No | No | No | Yes (brain repo, team mounts) | Yes | No (single-agent state) | Yes | Yes (branch/merge across sessions) | Yes (multi-agent coordination) |
+| Transfer scoring | Yes | No | No | No | No | No | No | No | No | No |
+| Outcome tracking | Yes | No | No | No | No | No | No | No | No | Partial (Cases: agent trajectories) |
+| Confidence tiers | Yes | No | No | No | No (typed facts) | No | No | No | No | No |
+| Spatial organization | No | Yes (wings/halls/rooms) | No | No | No | No | No | No | No | No |
+| Lossless compression | No | Yes (AAAK, 30x) | No | No | No | No | No | No | No | No |
+| Cross-tool import (ChatGPT/Claude/Cursor) | Yes | No | No | No | Partial (data sources) | ? | No | Partial (28 data sources) | No (Git ops) | Partial (mRAG: PDFs/images/URLs) |
+| Auto-hook install | Yes | No | No | No | No | No | No | No | No | No |
+| MCP server | Yes | Yes | No | No | Yes (stdio + HTTP/OAuth) | Partial (managed) | Yes (via Letta Code) | Yes (first-party Claude/LangGraph) | Yes | ? |
+| Zero runtime deps | Yes | No (ChromaDB) | No | No | No (PGLite or PG+pgvector) | No (managed service) | No (Python deps) | No (Python deps) | Yes (single Rust binary) | No (managed + OSS) |
+| LongMemEval (best published) | 86.8% R@5 (F13+F9, oracle\*) | 96.6% raw / 100% reranked R@5 | ~49-85% R@5 | N/A | 97.6-97.9% R@5 (s_cleaned\*) | N/A (LoCoMo 80.3%) | N/A | N/A | 88.78% overall accuracy w/ reader\*\* | 83.00% overall\*\* (LoCoMo 93.05%, HaluMem 93.04%) |
+| Git-friendly | Yes | No | No | Yes | Yes | No | No | No | Yes (Git is the model) | ? |
+| Framework agnostic | Yes | Yes | Partial | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| License | MIT | (open) | Apache-2.0 | (open) | MIT | Apache-2.0 (community) | Apache-2.0 | MIT (core) | Apache-2.0 | Apache-2.0 (OSS) + cloud |
 
-\* Hippo's 86.8% is on the `longmemeval_oracle` split (3 sessions per haystack); gbrain's 97.6% is on `longmemeval_s_cleaned` (~40 sessions per haystack). Different splits = different difficulty. Not directly comparable.
+\* Split-mismatched: Hippo's 86.8% is on `longmemeval_oracle` (3 sessions per haystack); gbrain's 97.6% is on `longmemeval_s_cleaned` (~40 sessions per haystack). Different splits, different difficulty. Not directly comparable.
 
-Different tools answer different questions. Mem0 and Basic Memory implement "save everything, search later." MemPalace implements "store everything, organize spatially for retrieval." gbrain, Zep, and Cognee implement "extract typed entities and relationships into a knowledge graph." Letta implements "the agent edits its own memory blocks." Hippo implements "forget by default, earn persistence through use." These are complementary takes, not a single-axis ranking: bio-lifecycle (Hippo) + GraphRAG (gbrain/Cognee) + agent-self-edit (Letta) cover different parts of the same problem.
+\*\* Different metric: Memoria's 88.78% and EverMind's 83% are reported as overall accuracy with a reader LLM, not retrieval R@5. Higher denominator + LLM helps. Not directly comparable to retrieval-only R@5 numbers above.
+
+Different tools answer different questions. Mem0 and Basic Memory implement "save everything, search later." MemPalace implements "store everything, organize spatially for retrieval." gbrain, Zep, and Cognee implement "extract typed entities and relationships into a knowledge graph." Letta implements "the agent edits its own memory blocks." Memoria implements "Git-style version control over the memory state itself." EverMind implements "self-evolving Skill Memory + multi-modal retrieval over hierarchical scopes." Hippo implements "forget by default, earn persistence through use." These are complementary takes, not a single-axis ranking: bio-lifecycle (Hippo) + GraphRAG (gbrain/Cognee/Zep) + agent-self-edit (Letta) + memory-VCS (Memoria) + skill-distillation (EverMind) cover different parts of the same problem.
 
 ---
 
