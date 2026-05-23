@@ -1,9 +1,11 @@
 /**
  * Single source of truth for the hippo-memory binary's package version.
  *
- * Bumped manually on every release alongside the four package manifests
- * (package.json, openclaw.plugin.json, extensions/openclaw-plugin/package.json,
- * extensions/openclaw-plugin/openclaw.plugin.json) and the lockfile.
+ * Bumped manually on every release alongside this file + four other package
+ * manifests (package.json, openclaw.plugin.json,
+ * extensions/openclaw-plugin/package.json,
+ * extensions/openclaw-plugin/openclaw.plugin.json) and the lockfile —
+ * five manifests in total carrying the version field.
  *
  * Used by:
  *   - src/db.ts rollback-safety guard (refuses to open a DB stamped with
@@ -17,7 +19,7 @@
  * any packager that drops .json files.
  */
 export const PACKAGE_VERSION = '1.11.2';
-// Bump on every release alongside the 4 manifests + lockfile.
+// Bump on every release alongside the 4 other manifests + lockfile.
 
 /**
  * Compare two semver strings. Returns positive if a > b, 0 if equal, negative

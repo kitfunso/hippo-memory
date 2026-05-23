@@ -55,3 +55,8 @@ benchmarks/longmemeval/data/bm25_corpus_*.json
 benchmarks/longmemeval/data/turn_index_bge_oracle.json*
 results/f9_phase1/
 results/f9_phase2/
+
+# Local agent + benchmark workspace artifacts (not part of the package)
+.claude/settings.local.json
+benchmarks/stateful-frontier/
+nlnet-application/
