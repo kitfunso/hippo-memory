@@ -95,7 +95,12 @@ export function validateApiKey(db: DatabaseSyncLike, plaintext: string): Validat
   const target = (row && !row.revoked_at) ? row.key_hash : DUMMY_HASH;
   const matches = verifyKey(plaintext, target);
   if (!row || row.revoked_at || !matches) return { valid: false };
-  return { valid: true, tenantId: row.tenant_id, keyId, role: row.role as 'admin' | 'member' };
+  // v1.12.0: fail-safe to least privilege — only 'admin' is admitted as admin,
+  // anything else (including future schema drift, manual DB tampering inserting
+  // 'superuser', or a NULL slipped past the NOT NULL constraint) downgrades to
+  // 'member'. The migration constrains to 'admin' DEFAULT, but defense-in-depth.
+  const role: 'admin' | 'member' = row.role === 'admin' ? 'admin' : 'member';
+  return { valid: true, tenantId: row.tenant_id, keyId, role };
 }
 
 export function revokeApiKey(db: DatabaseSyncLike, keyId: string): void {
