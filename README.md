@@ -266,6 +266,28 @@ flowchart TD
 
 ## Key Features
 
+A memory's life across a typical session, before walking each feature in turn:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Agent
+    participant B as Buffer
+    participant E as Episodic
+    participant S as Semantic
+    Agent->>B: hippo remember "cache dropped tips_10y" --error
+    B->>E: encode (half_life=14d, valence=neg)
+    Note over E: strength=1.0
+    Agent->>E: hippo recall "data pipeline"
+    E-->>Agent: returns memory (rank 1)
+    Note over E: half_life 14d → 16d, retrieval_count++
+    Agent->>E: hippo outcome --good
+    Note over E: reward_factor 1.0 → 1.15
+    Agent->>S: hippo sleep
+    S->>E: merge 3 related episodic → 1 semantic
+    Note over E,S: original episodic decays, pattern survives
+```
+
 ### Decay by default
 
 Every memory has a half-life. 7 days by default. Persistence is earned.
