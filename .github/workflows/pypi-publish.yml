@@ -1,0 +1,42 @@
+name: Publish Python SDK to PyPI
+
+# Trigger: tag push matching python-v*.*.* (e.g., python-v0.1.0).
+# Distinct from v*.*.* which is the npm release tag scheme — keeps the two
+# publish surfaces independent.
+on:
+  push:
+    tags:
+      - 'python-v*.*.*'
+
+permissions:
+  contents: read    # required for actions/checkout@v4 (top-level permissions defaults unlisted to none)
+  id-token: write   # required for PyPI trusted publisher OIDC
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/hippo-memory
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv (pinned)
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.10.9"  # uv_build backend requires >= 0.5.0
+
+      - name: Build wheel + sdist
+        working-directory: python
+        run: uv build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: python/dist/
