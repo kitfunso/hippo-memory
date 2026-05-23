@@ -801,6 +801,135 @@ export function uninstallJsonHooks(target: JsonHookTarget): boolean {
   return true;
 }
 
+// ---------------------------------------------------------------------------
+// OpenCode plugin installer (fix for issue #24).
+//
+// OpenCode does NOT share Claude Code's JSON-hook schema. Its config has
+// `additionalProperties: false` and no `hooks` key, so the v1.10.x-v1.11.1
+// installer broke opencode launch. The fix writes a TS plugin at the canonical
+// plugin path and surgically migrates any pre-existing broken hooks block out
+// of opencode.json.
+// ---------------------------------------------------------------------------
+
+export interface OpencodePluginInstallResult {
+  installed: boolean;
+  pluginPath: string;
+  migratedLegacyHooks: boolean;
+  jsonRepairFailed: boolean;
+}
+
+export function resolveOpencodePluginPath(): string {
+  return path.join(homeDir(), '.config', 'opencode', 'plugins', 'hippo.ts');
+}
+
+function resolveOpencodeConfigPath(): string {
+  return path.join(homeDir(), '.config', 'opencode', 'opencode.json');
+}
+
+/**
+ * Return true iff a single hook-array entry's command string starts with
+ * `hippo ` (the verb-prefix). Used to surgically remove only hippo-owned
+ * entries when migrating an opencode.json. We own the install side, so only
+ * the canonical `hippo <verb>` form needs to match.
+ *
+ * Critic-mandated structural check (Rev 0): substring matching against
+ * arbitrary user content is unsafe — a user's
+ * `echo "remember to hippo sleep your laptop"` is not a hippo-owned hook.
+ */
+function entryIsHippoOwned(entry: unknown): boolean {
+  if (!entry || typeof entry !== 'object') return false;
+  const hooks = (entry as { hooks?: unknown }).hooks;
+  if (!Array.isArray(hooks)) return false;
+  return hooks.some((h) => {
+    if (!h || typeof h !== 'object') return false;
+    const cmd = (h as { command?: unknown }).command;
+    return typeof cmd === 'string' && /^\s*hippo\s/.test(cmd);
+  });
+}
+
+/**
+ * Structurally strip every hippo-owned entry from opencode.json's hooks key.
+ * Returns one of:
+ *   { migrated: true,  jsonRepairFailed: false } — at least one entry removed.
+ *   { migrated: false, jsonRepairFailed: false } — file fine, nothing to do.
+ *   { migrated: false, jsonRepairFailed: true  } — file present but unparseable.
+ *
+ * When all hippo-owned entries are removed and a hook key becomes empty, that
+ * key is deleted. When the top-level hooks object becomes empty it is deleted
+ * too. Other keys (theme, etc.) are preserved.
+ */
+function migrateLegacyOpencodeHooksBlock(): { migrated: boolean; jsonRepairFailed: boolean } {
+  const configPath = resolveOpencodeConfigPath();
+  if (!fs.existsSync(configPath)) return { migrated: false, jsonRepairFailed: false };
+
+  let settings: Record<string, unknown>;
+  try {
+    settings = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  } catch {
+    return { migrated: false, jsonRepairFailed: true };
+  }
+
+  const hooks = settings.hooks;
+  // Non-object hooks values (string, array, null) are user content we don't
+  // recognise — leave them alone, return migrated=false.
+  if (!hooks || typeof hooks !== 'object' || Array.isArray(hooks)) {
+    return { migrated: false, jsonRepairFailed: false };
+  }
+
+  const hooksObj = hooks as Record<string, unknown[]>;
+  let changed = false;
+  for (const key of Object.keys(hooksObj)) {
+    if (!Array.isArray(hooksObj[key])) continue;
+    const before = hooksObj[key].length;
+    hooksObj[key] = hooksObj[key].filter((entry) => !entryIsHippoOwned(entry));
+    if (hooksObj[key].length !== before) {
+      changed = true;
+      if (hooksObj[key].length === 0) delete hooksObj[key];
+    }
+  }
+
+  if (!changed) return { migrated: false, jsonRepairFailed: false };
+
+  if (Object.keys(hooksObj).length === 0) delete settings.hooks;
+  fs.writeFileSync(configPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
+  return { migrated: true, jsonRepairFailed: false };
+}
+
+export function installOpencodePlugin(): OpencodePluginInstallResult {
+  const pluginPath = resolveOpencodePluginPath();
+  const { migrated, jsonRepairFailed } = migrateLegacyOpencodeHooksBlock();
+
+  // Idempotence: skip the write only if BOTH the marker is present AND the
+  // content matches the current source. Marker-only matches (with stale
+  // content) overwrite cleanly so future plugin-source patches reach
+  // existing installs.
+  if (fs.existsSync(pluginPath)) {
+    const existing = fs.readFileSync(pluginPath, 'utf8');
+    if (existing.includes(HIPPO_OPENCODE_PLUGIN_MARKER) && existing === OPENCODE_PLUGIN_SOURCE) {
+      return { installed: false, pluginPath, migratedLegacyHooks: migrated, jsonRepairFailed };
+    }
+  }
+  fs.mkdirSync(path.dirname(pluginPath), { recursive: true });
+  fs.writeFileSync(pluginPath, OPENCODE_PLUGIN_SOURCE, 'utf8');
+  return { installed: true, pluginPath, migratedLegacyHooks: migrated, jsonRepairFailed };
+}
+
+export function uninstallOpencodePlugin(): boolean {
+  const pluginPath = resolveOpencodePluginPath();
+  let removedFile = false;
+  if (fs.existsSync(pluginPath)) {
+    const existing = fs.readFileSync(pluginPath, 'utf8');
+    if (existing.includes(HIPPO_OPENCODE_PLUGIN_MARKER)) {
+      fs.unlinkSync(pluginPath);
+      removedFile = true;
+    }
+  }
+  // Always run the legacy migration on uninstall — the downgrade path (user
+  // removing hippo entirely) must leave opencode launchable.
+  const { migrated } = migrateLegacyOpencodeHooksBlock();
+  return removedFile || migrated;
+}
+
 /**
  * Detect which AI coding tools are installed based on config directory presence.
  * Used by `hippo setup` to decide which JSON-hook installs to run.
