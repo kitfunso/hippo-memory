@@ -46,15 +46,12 @@ describe('api contract types — Episode A scaffolding', () => {
     }>();
   });
 
-  it('ContextOpts exposes the documented flag set', () => {
+  it('ContextOpts exposes the data-loading flag set (rendering opts CLI-only)', () => {
     expectTypeOf<ContextOpts>().toMatchTypeOf<{
       q?: string;
-      auto?: boolean;
       budget?: number;
       limit?: number;
       pinnedOnly?: boolean;
-      framing?: 'observe' | 'suggest' | 'assert';
-      format?: 'markdown' | 'json' | 'additional-context';
       scope?: string;
       includeRecent?: number;
     }>();

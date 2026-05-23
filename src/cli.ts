@@ -3267,238 +3267,67 @@ async function cmdContext(
 ): Promise<void> {
   // --pinned-only fires on every UserPromptSubmit — including in directories
   // that don't have a local .hippo. Skip requireInit for that path and fall
-  // back to global-only below. The non-pinned path still requires init.
+  // back to global-only inside api.getContext. The non-pinned path still
+  // requires init (handled by CLI for user-friendly error messaging).
   const pinnedOnly = flags['pinned-only'] === true;
-  const hasLocal = isInitialized(hippoRoot);
   if (!pinnedOnly) {
     requireInit(hippoRoot);
   }
 
   const budget = parseInt(String(flags['budget'] ?? '1500'), 10);
-  const limit = parseLimitFlag(flags['limit']);
-  const includeRecent = parseCountFlag(flags['include-recent']);
-  const ctxExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
-  const ctxActiveScope = ctxExplicitScope || detectScope();
-
-  // If budget is 0, skip entirely (zero token cost)
   if (budget <= 0) return;
 
-  // Determine query: explicit args, --auto (git diff), or fallback
+  // Resolve query: explicit args, --auto (git diff via CLI-side helper), or
+  // fall through to api.getContext's '*' fallback. api.getContext is host-
+  // agnostic so the auto-detect (which shells out to git) stays CLI-side.
   let query = args.join(' ').trim();
-
   if (!query && flags['auto']) {
     query = autoDetectContext();
   }
 
-  if (!query) {
-    // Fallback: return strongest memories regardless of query
-    query = '*';
-  }
+  // Scope detection (CLI-side: uses cwd). api.getContext takes the resolved
+  // scope via opts.scope to stay host-agnostic.
+  const ctxExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
+  const ctxActiveScope = ctxExplicitScope || detectScope();
 
-  const globalRoot = getGlobalRoot();
-  const hasGlobal = isInitialized(globalRoot);
-  // A5: scope context-mode loads to the active tenant. Without this, every
-  // tenant's memories surface through the smart-context injection path.
-  const tenantId = resolveTenantId({});
-  // When the local store isn't initialized (pinned-only path in a fresh dir),
-  // skip the local load — loadAllEntries would auto-create .hippo here and
-  // we don't want to pollute arbitrary cwds.
-  let localEntries = hasLocal ? loadAllEntries(hippoRoot, tenantId) : [];
-  let globalEntries = hasGlobal ? loadAllEntries(globalRoot, tenantId) : [];
+  const ctx: api.Context = {
+    hippoRoot,
+    tenantId: resolveTenantId({}),
+    actor: 'cli',
+  };
+  const opts: api.ContextOpts = {
+    q: query,
+    budget,
+    limit: parseLimitFlag(flags['limit']),
+    pinnedOnly,
+    scope: ctxActiveScope ?? undefined,
+    includeRecent: parseCountFlag(flags['include-recent']),
+  };
 
-  // Default context always filters superseded (no --include-superseded / --as-of for context)
-  localEntries = localEntries.filter(e => !e.superseded_by);
-  globalEntries = globalEntries.filter(e => !e.superseded_by);
+  const result = await api.getContext(ctx, opts);
 
-  let selectedItems: Array<{ entry: MemoryEntry; score: number; tokens: number; isGlobal?: boolean }> = [];
-  let totalTokens = 0;
-  // Task snapshots / session events live in the local store. Skip when
-  // local isn't initialized — loading would auto-create .hippo in the cwd.
-  const activeSnapshot = hasLocal ? loadActiveTaskSnapshot(hippoRoot, resolveTenantId({})) : null;
-  const sessionHandoff = hasLocal && activeSnapshot?.session_id
-    ? loadLatestHandoff(hippoRoot, resolveTenantId({}), activeSnapshot.session_id)
-    : null;
-  const recentSessionEvents = hasLocal && activeSnapshot?.session_id
-    ? listSessionEvents(hippoRoot, resolveTenantId({}), { session_id: activeSnapshot.session_id, limit: 5 })
-    : [];
+  // Early exit when there's nothing to render (matches pre-extraction behavior).
+  const hasContextData =
+    result.entries.length > 0 ||
+    result.activeSnapshot ||
+    result.sessionHandoff ||
+    (result.recentEvents && result.recentEvents.length > 0);
+  if (!hasContextData) return;
 
-  if (localEntries.length === 0 && globalEntries.length === 0 && !activeSnapshot && !sessionHandoff && recentSessionEvents.length === 0) {
-    return;
-  }
-
-  // --pinned-only: restrict to pinned entries only. Used by the Claude Code
-  // UserPromptSubmit hook so invariants stay in context every turn.
-  // (pinnedOnly and hasLocal are declared at the top of this function.)
-  if (pinnedOnly) {
-    // loadConfig is safe even when local isn't initialized — it returns defaults.
-    const pinnedCfg = loadConfig(hippoRoot);
-    if (!pinnedCfg.pinnedInject.enabled) return; // user disabled via config
-    // Effective budget: explicit --budget wins over config.
-    const effBudget = flags['budget'] !== undefined ? budget : pinnedCfg.pinnedInject.budget;
-    const nowP = new Date();
-    const selectedIds = new Set<string>();
-    let usedP = 0;
-
-    if (includeRecent > 0) {
-      const recent = [
-        ...localEntries.map((entry) => ({ entry, isGlobal: false })),
-        ...globalEntries.map((entry) => ({ entry, isGlobal: true })),
-      ]
-        .sort((a, b) => {
-          const byCreated = Date.parse(b.entry.created) - Date.parse(a.entry.created);
-          return byCreated !== 0 ? byCreated : b.entry.id.localeCompare(a.entry.id);
-        })
-        .slice(0, includeRecent)
-        .map(({ entry, isGlobal }) => ({
-          entry,
-          score: calculateStrength(entry, nowP) * (isGlobal ? 1 / 1.2 : 1),
-          tokens: estimateTokens(entry.content),
-          isGlobal,
-        }));
-
-      for (const r of recent) {
-        if (selectedIds.has(r.entry.id)) continue;
-        if (usedP + r.tokens > effBudget) continue;
-        selectedItems.push(r);
-        selectedIds.add(r.entry.id);
-        usedP += r.tokens;
-      }
-    }
-
-    const pinnedLocal = localEntries.filter((e) => e.pinned);
-    const pinnedGlobal = globalEntries.filter((e) => e.pinned);
-    if (pinnedLocal.length === 0 && pinnedGlobal.length === 0 && selectedItems.length === 0) return; // zero output
-    const rankedPinned = [
-      ...pinnedLocal.map((e) => ({ entry: e, isGlobal: false })),
-      ...pinnedGlobal.map((e) => ({ entry: e, isGlobal: true })),
-    ]
-      .map(({ entry, isGlobal }) => {
-        const scopeSig = scopeMatch(entry.tags, ctxActiveScope);
-        const sBst = scopeSig === 1 ? 1.5 : scopeSig === -1 ? 0.5 : 1.0;
-        return {
-          entry,
-          score: calculateStrength(entry, nowP) * (isGlobal ? 1 / 1.2 : 1) * sBst,
-          tokens: estimateTokens(entry.content),
-          isGlobal,
-        };
-      })
-      .sort((a, b) => b.score - a.score);
-
-    for (const r of rankedPinned) {
-      if (selectedIds.has(r.entry.id)) continue;
-      if (usedP + r.tokens > effBudget) continue;
-      selectedItems.push(r);
-      selectedIds.add(r.entry.id);
-      usedP += r.tokens;
-    }
-    totalTokens = usedP;
-  } else if (query === '*') {
-    // No query: return strongest memories by strength, up to budget
-    const now = new Date();
-    const localRanked = localEntries
-      .map((e) => ({
-        entry: e,
-        score: calculateStrength(e, now),
-        tokens: estimateTokens(e.content),
-        isGlobal: false,
-      }))
-      .sort((a, b) => b.score - a.score);
-
-    const globalRanked = globalEntries
-      .map((e) => ({
-        entry: e,
-        score: calculateStrength(e, now) * (1 / 1.2), // global slightly lower
-        tokens: estimateTokens(e.content),
-        isGlobal: true,
-      }))
-      .sort((a, b) => b.score - a.score);
-
-    const combined = [...localRanked, ...globalRanked].sort((a, b) => b.score - a.score);
-
-    let used = 0;
-    for (const r of combined) {
-      if (used + r.tokens > budget) continue;
-      selectedItems.push(r);
-      used += r.tokens;
-    }
-    totalTokens = used;
-  } else {
-    let results;
-    if (hasGlobal) {
-      const merged = await searchBothHybrid(query, hippoRoot, globalRoot, { budget, scope: ctxActiveScope, tenantId });
-      const localIndex = loadIndex(hippoRoot);
-      results = merged.map((r) => ({
-        entry: r.entry,
-        score: r.score,
-        tokens: r.tokens,
-        isGlobal: !localIndex.entries[r.entry.id],
-      }));
-    } else {
-      const ctxConfig = loadConfig(hippoRoot);
-      const usePhysicsCtx = ctxConfig.physics?.enabled !== false;
-      const ctxResults = usePhysicsCtx
-        ? await physicsSearch(query, localEntries, { budget, hippoRoot, physicsConfig: ctxConfig.physics, scope: ctxActiveScope })
-        : await hybridSearch(query, localEntries, { budget, hippoRoot, scope: ctxActiveScope });
-      results = ctxResults.map((r) => ({
-        entry: r.entry,
-        score: r.score,
-        tokens: r.tokens,
-        isGlobal: false,
-      }));
-    }
-
-    selectedItems = results;
-    totalTokens = results.reduce((sum, r) => sum + r.tokens, 0);
-
-    // A5 H4: emit recall audit event for context-mode searches. The recall
-    // handler emits one of these per `hippo recall` invocation; context mode
-    // is the same surface (search → user) and must leave the same audit trail.
-    // Skip pinned-only and '*' fallback (handled in branches above which never
-    // hit the search engines).
-    const ctxRecallMetadata: Record<string, unknown> = {
-      query: query.slice(0, 200),
-      results: selectedItems.length,
-      mode: 'context',
-    };
-    if (hasLocal) emitCliAudit(hippoRoot, 'recall', undefined, ctxRecallMetadata);
-    if (hasGlobal) emitCliAudit(globalRoot, 'recall', undefined, ctxRecallMetadata);
-  }
-
-  if (limit < selectedItems.length) {
-    selectedItems = selectedItems.slice(0, limit);
-    totalTokens = selectedItems.reduce((sum, r) => sum + r.tokens, 0);
-  }
-
-  if (selectedItems.length === 0 && !activeSnapshot && !sessionHandoff && recentSessionEvents.length === 0) return;
-
-  // --pinned-only is called by the UserPromptSubmit hook every turn. Treat it
-  // as read-only so pinned memories don't inflate retrieval_count or extend
-  // their half_life by 2 days * turn-count over a long session.
-  let updatedEntries: MemoryEntry[];
-  if (pinnedOnly) {
-    updatedEntries = selectedItems.map((s) => s.entry);
-  } else {
-    // Mark retrieved and persist
-    const toUpdate = selectedItems.map((s) => s.entry);
-    updatedEntries = markRetrieved(toUpdate);
-    const localIndex = loadIndex(hippoRoot);
-
-    for (const u of updatedEntries) {
-      const targetRoot = localIndex.entries[u.id] ? hippoRoot : (hasGlobal ? globalRoot : hippoRoot);
-      writeEntry(targetRoot, u);
-    }
-
-    localIndex.last_retrieval_ids = updatedEntries.map((u) => u.id);
-    saveIndex(hippoRoot, localIndex);
-    updateStats(hippoRoot, { recalled: selectedItems.length });
-  }
-
+  // Format + framing are CLI rendering concerns; api.getContext doesn't see them.
   const format = String(flags['format'] ?? 'markdown');
-
   const framing = String(flags['framing'] ?? 'observe');
 
+  // Adapter: ContextResultEntry -> the print-helper input shape.
+  const renderItems = result.entries.map((r) => ({
+    entry: r.entry,
+    score: r.score,
+    tokens: r.tokens,
+    isGlobal: r.isGlobal ?? false,
+  }));
+
   if (format === 'json') {
-    const output = selectedItems.map((r) => ({
+    const output = result.entries.map((r) => ({
       id: r.entry.id,
       score: r.score,
       strength: r.entry.strength,
@@ -3507,28 +3336,28 @@ async function cmdContext(
       content: r.entry.content,
       global: r.isGlobal ?? false,
     }));
-    console.log(JSON.stringify({ query, activeSnapshot, sessionHandoff, recentSessionEvents, memories: output, tokens: totalTokens }));
+    console.log(JSON.stringify({
+      query: query || '*',
+      activeSnapshot: result.activeSnapshot ?? null,
+      sessionHandoff: result.sessionHandoff ?? null,
+      recentSessionEvents: result.recentEvents ?? [],
+      memories: output,
+      tokens: result.tokens,
+    }));
   } else if (format === 'additional-context') {
-    // Claude Code UserPromptSubmit hook JSON shape. Capture the markdown that
-    // printContextMarkdown would write and wrap it as `additionalContext`.
+    // Claude Code UserPromptSubmit hook JSON shape. Capture print* helpers'
+    // output into a string buffer and wrap as `additionalContext`.
     const lines: string[] = [];
     const realLog = console.log;
     console.log = (...parts: unknown[]) => { lines.push(parts.map(String).join(' ')); };
     try {
-      if (activeSnapshot) printActiveTaskSnapshot(activeSnapshot);
-      if (sessionHandoff) printHandoff(sessionHandoff);
-      if (recentSessionEvents.length > 0) printSessionEvents(recentSessionEvents);
-      if (selectedItems.length > 0) {
-        printContextMarkdown(
-          selectedItems.map((r) => ({
-            entry: updatedEntries.find((u) => u.id === r.entry.id) ?? r.entry,
-            score: r.score,
-            tokens: r.tokens,
-            isGlobal: r.isGlobal ?? false,
-          })),
-          totalTokens,
-          framing
-        );
+      if (result.activeSnapshot) printActiveTaskSnapshot(result.activeSnapshot);
+      if (result.sessionHandoff) printHandoff(result.sessionHandoff);
+      if (result.recentEvents && result.recentEvents.length > 0) {
+        printSessionEvents(result.recentEvents);
+      }
+      if (renderItems.length > 0) {
+        printContextMarkdown(renderItems, result.tokens, framing);
       }
     } finally {
       console.log = realLog;
@@ -3543,32 +3372,34 @@ async function cmdContext(
     };
     process.stdout.write(JSON.stringify(payload));
   } else {
-    if (activeSnapshot) {
-      printActiveTaskSnapshot(activeSnapshot);
+    // markdown (default)
+    if (result.activeSnapshot) {
+      printActiveTaskSnapshot(result.activeSnapshot);
     }
-    if (sessionHandoff) {
-      printHandoff(sessionHandoff);
+    if (result.sessionHandoff) {
+      printHandoff(result.sessionHandoff);
     }
-    if (recentSessionEvents.length > 0) {
-      printSessionEvents(recentSessionEvents);
+    if (result.recentEvents && result.recentEvents.length > 0) {
+      printSessionEvents(result.recentEvents);
     }
-    if (selectedItems.length > 0) {
-      printContextMarkdown(
-        selectedItems.map((r) => ({
-          entry: updatedEntries.find((u) => u.id === r.entry.id) ?? r.entry,
-          score: r.score,
-          tokens: r.tokens,
-          isGlobal: r.isGlobal ?? false,
-        })),
-        totalTokens,
-        framing
-      );
+    if (renderItems.length > 0) {
+      printContextMarkdown(renderItems, result.tokens, framing);
     }
 
-    // Ambient state summary (one-line landscape overview)
+    // Ambient state summary (CLI-side: api.getContext doesn't load all entries
+    // post-selection, so we re-load here for the landscape summary).
     const ambientConfig = loadConfig(hippoRoot);
     if (ambientConfig.ambient.enabled && !pinnedOnly) {
-      const allForAmbient = [...localEntries, ...globalEntries];
+      const tenantId = ctx.tenantId;
+      const globalRoot = getGlobalRoot();
+      const hasGlobalForAmbient = isInitialized(globalRoot);
+      const localForAmbient = isInitialized(hippoRoot)
+        ? loadAllEntries(hippoRoot, tenantId).filter(e => !e.superseded_by)
+        : [];
+      const globalForAmbient = hasGlobalForAmbient
+        ? loadAllEntries(globalRoot, tenantId).filter(e => !e.superseded_by)
+        : [];
+      const allForAmbient = [...localForAmbient, ...globalForAmbient];
       if (allForAmbient.length > 0) {
         const ambientState = computeAmbientState(allForAmbient);
         console.log(`\n${renderAmbientSummary(ambientState)}`);
