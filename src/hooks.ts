@@ -109,6 +109,72 @@ const HIPPO_PINNED_INJECT_MARKER = 'hippo context --pinned-only';
 const HIPPO_PINNED_INJECT_COMMAND = 'hippo context --pinned-only --include-recent 5 --format additional-context';
 const HIPPO_CODEX_WRAPPER_MARKER = 'hippo codex wrapper';
 
+const HIPPO_OPENCODE_PLUGIN_MARKER = 'HIPPO_OPENCODE_PLUGIN_V1';
+
+/**
+ * The opencode plugin file we install at ~/.config/opencode/plugins/hippo.ts.
+ *
+ * Per https://opencode.ai/docs/plugins/, plugins are TS/JS modules exporting an
+ * async function returning hooks. We subscribe to `event` and route:
+ *   session.idle    → `hippo session-end` (Claude Code's SessionEnd equiv)
+ *   session.created → `hippo last-sleep` (Claude Code's SessionStart equiv)
+ *
+ * Design choices forced by plan-eng-critic Rev 0 review (2026-05-23):
+ *
+ * 1. No `import type { Plugin } from "@opencode-ai/plugin"`. The package's npm
+ *    publication status was unverifiable from the build sandbox (npmjs.com
+ *    returned 403); an unresolved type-only import would still crash the TS
+ *    runtime opencode uses to load the plugin. opencode infers plugin shape
+ *    from the returned object, so the type was convenience-only.
+ *
+ * 2. Defensive `typeof $ !== 'function'` guard. opencode runs in Bun (where
+ *    `$` is the shell-template helper), but a future Node-mode deployment
+ *    would have `$` undefined in the destructured context and the plugin
+ *    would throw on every session.idle, killing opencode sessions in a
+ *    hard-to-recover way (the idempotence marker prevents auto-reinstall).
+ *    Fail closed, let opencode continue.
+ *
+ * 3. `.quiet().nothrow()` on each `$\`...\`` so a missing hippo binary
+ *    (e.g. PATH-misconfigured user) does NOT throw out of the event handler.
+ *    The surrounding try/catch is belt-and-braces.
+ *
+ * 4. UserPromptSubmit equivalent NOT wired. opencode's `message.updated`
+ *    fires per-token, not per-prompt-submit; no clean per-prompt event.
+ *    Users wanting pinned-context auto-injection can call `hippo context`
+ *    via the MCP server (`hippo mcp`).
+ *
+ * 5. Versioned marker `HIPPO_OPENCODE_PLUGIN_V1` allows future versions to
+ *    overwrite cleanly. The installer's idempotence check requires BOTH
+ *    marker match AND content equality, so a plugin-source revision under
+ *    the same V1 marker re-writes the file on next install.
+ */
+export const OPENCODE_PLUGIN_SOURCE = `// ${HIPPO_OPENCODE_PLUGIN_MARKER}
+// hippo-memory opencode plugin. Re-install with \`hippo hook install opencode\`.
+// Source of truth: src/hooks.ts OPENCODE_PLUGIN_SOURCE in https://github.com/kitfunso/hippo-memory
+
+export const HippoPlugin = async ({ $ }) => {
+  return {
+    event: async ({ event }) => {
+      // Defense in depth: opencode currently runs in Bun where $ is the shell
+      // template helper. A non-Bun runtime would have $ as undefined; fail
+      // closed instead of crashing the host session.
+      if (typeof $ !== "function") return;
+      try {
+        if (event.type === "session.idle") {
+          await $\`hippo session-end\`.quiet().nothrow();
+        } else if (event.type === "session.created") {
+          await $\`hippo last-sleep\`.quiet().nothrow();
+        }
+      } catch {
+        // hippo CLI not on PATH or other failure — never crash the host session.
+      }
+    },
+  };
+};
+`;
+
+export { HIPPO_OPENCODE_PLUGIN_MARKER };
+
 function homeDir(): string {
   return process.env.HOME || process.env.USERPROFILE || os.homedir();
 }
