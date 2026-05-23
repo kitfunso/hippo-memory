@@ -5,6 +5,10 @@
 [![npm](https://img.shields.io/npm/v/hippo-memory)](https://npmjs.com/package/hippo-memory)
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
+<p align="center">
+  <img src="./assets/hippo-init.svg" alt="hippo init --scan ~ — initializing memory across all repos" width="720">
+</p>
+
 A memory layer for AI agents. Modeled on the hippocampus. Decay by default, strength through use, provenance on every memory. SQLite under the hood, zero runtime deps, works with every CLI agent you have.
 
 ```bash
