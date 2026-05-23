@@ -1,0 +1,15 @@
+# Python build + cache artifacts (committed lockfile + sources only)
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtualenv
+.venv/
+
+# Build outputs
+dist/
+build/
