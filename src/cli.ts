@@ -92,6 +92,7 @@ import type { SessionHandoff } from './handoff.js';
 import { search, markRetrieved, estimateTokens, hybridSearch, physicsSearch, explainMatch, textOverlap } from './search.js';
 import { renderTraceContent, parseSteps } from './trace.js';
 import { consolidate } from './consolidate.js';
+import { deduplicateStore } from './dedupe.js';
 import {
   isEmbeddingAvailable,
   embedAll,
@@ -2020,73 +2021,6 @@ function learnFromMemoryMd(hippoRoot: string): number {
   return imported;
 }
 
-/**
- * Scan the store for near-duplicate memories and remove the weaker copy.
- * Two memories are duplicates if their content has > threshold Jaccard overlap.
- * Keeps the one with higher strength (or more retrievals if tied).
- */
-interface DedupPair {
-  kept: string;
-  keptContent: string;
-  keptLayer: string;
-  keptStrength: number;
-  removed: string;
-  removedContent: string;
-  removedLayer: string;
-  removedStrength: number;
-  similarity: number;
-}
-
-function deduplicateStore(
-  hippoRoot: string,
-  options: { threshold?: number; dryRun?: boolean } = {}
-): { removed: number; pairs: DedupPair[] } {
-  const threshold = options.threshold ?? 0.7;
-  const dryRun = options.dryRun ?? false;
-  const entries = loadAllEntries(hippoRoot);
-
-  // Sort by strength desc, then retrieval count, so we keep the most valuable copy
-  entries.sort((a, b) => {
-    const sDiff = (b.strength ?? 0) - (a.strength ?? 0);
-    if (Math.abs(sDiff) > 0.01) return sDiff;
-    return (b.retrieval_count ?? 0) - (a.retrieval_count ?? 0);
-  });
-
-  const removed = new Set<string>();
-  const pairs: DedupPair[] = [];
-
-  for (let i = 0; i < entries.length; i++) {
-    if (removed.has(entries[i].id)) continue;
-    for (let j = i + 1; j < entries.length; j++) {
-      if (removed.has(entries[j].id)) continue;
-
-      const similarity = textOverlap(entries[i].content, entries[j].content);
-      if (similarity <= threshold) continue;
-
-      removed.add(entries[j].id);
-      pairs.push({
-        kept: entries[i].id,
-        keptContent: entries[i].content,
-        keptLayer: entries[i].layer,
-        keptStrength: entries[i].strength ?? 0,
-        removed: entries[j].id,
-        removedContent: entries[j].content,
-        removedLayer: entries[j].layer,
-        removedStrength: entries[j].strength ?? 0,
-        similarity,
-      });
-    }
-  }
-
-  if (!dryRun) {
-    for (const id of removed) {
-      deleteEntry(hippoRoot, id);
-    }
-  }
-
-  return { removed: removed.size, pairs };
-}
-
 function cmdDedup(
   hippoRoot: string,
   flags: Record<string, string | boolean | string[]>
@@ -2190,13 +2124,63 @@ async function cmdSleep(
   }
 }
 
+/**
+ * Render an api.sleep result as console output, byte-identical to the
+ * pre-extraction inline implementation in cmdSleepCore.
+ */
+function renderSleepResult(result: api.SleepResult): void {
+  console.log(`Running consolidation${result.dryRun ? ' (dry run)' : ''}...`);
+
+  console.log(`\nResults:`);
+  console.log(`   Active memories:  ${result.active}`);
+  console.log(`   Removed (decayed): ${result.removed}`);
+  console.log(`   Merged episodic:   ${result.mergedEpisodic}`);
+  console.log(`   New semantic:      ${result.newSemantic}`);
+
+  if (result.details && result.details.length > 0) {
+    console.log('\nDetails:');
+    for (const d of result.details) {
+      console.log(d);
+    }
+  }
+
+  if (result.dryRun) console.log('\n(dry run  - nothing written)');
+
+  if (result.deduped && result.deduped.removed > 0) {
+    const { removed, semDups, epiDups, crossDups } = result.deduped;
+    const parts: string[] = [];
+    if (semDups > 0) parts.push(`${semDups} redundant semantic patterns`);
+    if (epiDups > 0) parts.push(`${epiDups} duplicate episodic lessons`);
+    if (crossDups > 0) parts.push(`${crossDups} cross-layer duplicates`);
+    console.log(`\nDeduped ${removed} duplicates (${parts.join(', ')}). Kept stronger copies.`);
+  }
+
+  if (result.audit) {
+    if (result.audit.errorsRemoved > 0) {
+      console.log(`\nAudit: removed ${result.audit.errorsRemoved} junk memories (too short/empty).`);
+    }
+    if (result.audit.warningCount > 0) {
+      console.log(`Audit: ${result.audit.warningCount} low-quality memories detected (run \`hippo audit\` for details).`);
+    }
+  }
+
+  if (result.shared !== undefined && result.shared > 0) {
+    console.log(`\nAuto-shared ${result.shared} high-value memories to global store.`);
+  }
+
+  if (result.ambient) {
+    console.log(`\n${renderAmbientSummary(result.ambient)}`);
+  }
+}
+
 async function cmdSleepCore(
   hippoRoot: string,
   flags: Record<string, string | boolean | string[]>
 ): Promise<void> {
   requireInit(hippoRoot);
 
-  // Auto-learn from git before consolidating (unless --no-learn)
+  // Phase 1: Auto-learn from git + MEMORY.md (CLI-only, uses process.cwd() / os.homedir()).
+  // Stays in cli.ts; api.sleep covers Phase 2-6 only.
   if (!flags['no-learn']) {
     const config = loadConfig(hippoRoot);
     if (config.autoLearnOnSleep && isGitRepo(process.cwd())) {
@@ -2209,82 +2193,17 @@ async function cmdSleepCore(
     if (memImported > 0) console.log(`Imported ${memImported} memories from Claude Code MEMORY.md files.`);
   }
 
-  const dryRun = Boolean(flags['dry-run']);
-  console.log(`Running consolidation${dryRun ? ' (dry run)' : ''}...`);
-
-  const result = await consolidate(hippoRoot, { dryRun });
-
-  console.log(`\nResults:`);
-  console.log(`   Active memories:  ${result.decayed}`);
-  console.log(`   Removed (decayed): ${result.removed}`);
-  console.log(`   Merged episodic:   ${result.merged}`);
-  console.log(`   New semantic:      ${result.semanticCreated}`);
-
-  if (result.details.length > 0) {
-    console.log('\nDetails:');
-    for (const d of result.details) {
-      console.log(d);
-    }
-  }
-
-  if (dryRun) console.log('\n(dry run  - nothing written)');
-
-  // Auto-dedup after consolidation (unless dry-run)
-  if (!dryRun) {
-    const dedupResult = deduplicateStore(hippoRoot);
-    if (dedupResult.removed > 0) {
-      const semDups = dedupResult.pairs.filter(p => p.keptLayer === 'semantic' && p.removedLayer === 'semantic').length;
-      const epiDups = dedupResult.pairs.filter(p => p.keptLayer === 'episodic' && p.removedLayer === 'episodic').length;
-      const crossDups = dedupResult.pairs.filter(p => p.keptLayer !== p.removedLayer).length;
-      const parts: string[] = [];
-      if (semDups > 0) parts.push(`${semDups} redundant semantic patterns`);
-      if (epiDups > 0) parts.push(`${epiDups} duplicate episodic lessons`);
-      if (crossDups > 0) parts.push(`${crossDups} cross-layer duplicates`);
-      console.log(`\nDeduped ${dedupResult.removed} duplicates (${parts.join(', ')}). Kept stronger copies.`);
-    }
-  }
-
-  // Quality audit — remove junk, report warnings
-  if (!dryRun) {
-    const allEntries = loadAllEntries(hippoRoot);
-    const audit = auditMemories(allEntries);
-    if (audit.issues.length > 0) {
-      const errors = audit.issues.filter(i => i.severity === 'error');
-      const warnings = audit.issues.filter(i => i.severity === 'warning');
-      if (errors.length > 0) {
-        for (const issue of errors) {
-          deleteEntry(hippoRoot, issue.memoryId);
-        }
-        console.log(`\nAudit: removed ${errors.length} junk memories (too short/empty).`);
-      }
-      if (warnings.length > 0) {
-        console.log(`Audit: ${warnings.length} low-quality memories detected (run \`hippo audit\` for details).`);
-      }
-    }
-  }
-
-  // Auto-share high-transfer-score memories to global (unless --no-share or dry-run)
-  if (!dryRun && !flags['no-share']) {
-    const sleepConfig = loadConfig(hippoRoot);
-    if (sleepConfig.autoShareOnSleep) {
-      const shared = autoShare(hippoRoot, { minScore: 0.6 });
-      if (shared.length > 0) {
-        console.log(`\nAuto-shared ${shared.length} high-value memories to global store.`);
-      }
-    }
-  }
-
-  // Post-sleep ambient state summary
-  if (!dryRun) {
-    const postSleepConfig = loadConfig(hippoRoot);
-    if (postSleepConfig.ambient.enabled) {
-      const postSleepEntries = loadAllEntries(hippoRoot).filter(e => !e.superseded_by);
-      if (postSleepEntries.length > 0) {
-        const ambientState = computeAmbientState(postSleepEntries);
-        console.log(`\n${renderAmbientSummary(ambientState)}`);
-      }
-    }
-  }
+  // Phase 2-6: Pure-storage pipeline (consolidate + dedup + audit + share + ambient).
+  const ctx: api.Context = {
+    hippoRoot,
+    tenantId: resolveTenantId({}),
+    actor: 'cli',
+  };
+  const result = await api.sleep(ctx, {
+    dryRun: Boolean(flags['dry-run']),
+    noShare: Boolean(flags['no-share']),
+  });
+  renderSleepResult(result);
 }
 
 /**

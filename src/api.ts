@@ -29,6 +29,7 @@ import {
   loadLatestHandoff,
   listSessionEvents,
   loadIndex,
+  loadAllEntries,
   type TaskSnapshot,
   type SessionEvent,
 } from './store.js';
@@ -43,10 +44,11 @@ import {
 import {
   appendAuditEvent,
   queryAuditEvents,
+  auditMemories,
   type AuditEvent,
   type AuditOp,
 } from './audit.js';
-import { promoteToGlobal, getGlobalRoot } from './shared.js';
+import { promoteToGlobal, getGlobalRoot, autoShare } from './shared.js';
 import { archiveRawMemory } from './raw-archive.js';
 import {
   createApiKey,
@@ -55,7 +57,10 @@ import {
   type ApiKeyListItem,
 } from './auth.js';
 import { applyGoalStackBoost } from './goals.js';
-import type { AmbientState } from './ambient.js';
+import { consolidate } from './consolidate.js';
+import { loadConfig } from './config.js';
+import { deduplicateStore } from './dedupe.js';
+import { computeAmbientState, type AmbientState } from './ambient.js';
 
 export interface Context {
   hippoRoot: string;
@@ -1554,18 +1559,24 @@ export async function getContext(
 }
 
 // ---------------------------------------------------------------------------
-// sleep (extracted from cmdSleepCore — Task 4 of the api.ts refactor)
+// sleep (extracted from cmdSleepCore Phase 2-6 — Task 4 of the api.ts refactor)
 // ---------------------------------------------------------------------------
 
 /**
- * Options for `sleep` — run the consolidation / audit / dedup / share
- * pipeline and return structured counts. Extracted from `cmdSleepCore` in
- * `cli.ts` in Episode A. The CLI `cmdSleep` wrapper continues to own the
- * log-file tee + console rendering + `process.exit`; `api.sleep` is pure.
+ * Options for `sleep` — run the pure-storage consolidation pipeline
+ * (consolidate + dedup + audit + share + ambient) and return structured counts.
+ *
+ * Extracted from `cmdSleepCore` Phase 2-6 in Episode A. NOT covered by api.sleep:
+ * the cli-only auto-learn phase (Phase 1: learnFromRepo + learnFromMemoryMd),
+ * which is intrinsically host-bound (uses `process.cwd()` / `os.homedir()`).
+ * Auto-learn stays in cli.ts cmdSleepCore as a pre-api block.
+ *
+ * The CLI `cmdSleep` wrapper continues to own the log-file tee + console
+ * rendering + `process.exit`; `api.sleep` is pure (no console.log, no IO
+ * beyond the store).
  */
 export interface SleepOpts {
   dryRun?: boolean;
-  noLearn?: boolean;
   noShare?: boolean;
 }
 
@@ -1575,7 +1586,6 @@ export interface SleepResult {
   mergedEpisodic: number;
   newSemantic: number;
   dryRun: boolean;
-  autoLearned?: { fromGit: number; fromMemoryMd: number };
   deduped?: {
     removed: number;
     semDups: number;
@@ -1589,13 +1599,95 @@ export interface SleepResult {
 }
 
 /**
- * Stub — real implementation lands in Task 4 of the Episode A plan.
+ * Run the pure-storage consolidation pipeline.
+ *
+ * Tenant scope note: sleep operates on the WHOLE hippoRoot (all tenants in
+ * it), matching the pre-refactor cmdSleepCore behavior. This is correct for
+ * a maintenance operation, but Episode B (HTTP /v1/sleep) may want to
+ * reconsider per-tenant invocation policy.
  */
 export async function sleep(
-  _ctx: Context,
-  _opts: SleepOpts = {},
+  ctx: Context,
+  opts: SleepOpts = {},
 ): Promise<SleepResult> {
-  throw new Error('sleep() not yet implemented');
+  const dryRun = Boolean(opts.dryRun);
+
+  // Phase 1: Consolidation.
+  const consolidateResult = await consolidate(ctx.hippoRoot, { dryRun });
+
+  const result: SleepResult = {
+    active: consolidateResult.decayed,
+    removed: consolidateResult.removed,
+    mergedEpisodic: consolidateResult.merged,
+    newSemantic: consolidateResult.semanticCreated,
+    dryRun,
+    details: consolidateResult.details,
+  };
+
+  if (dryRun) return result;
+
+  // Phase 2: Dedup (post-consolidate near-duplicate cleanup).
+  const dedupResult = deduplicateStore(ctx.hippoRoot);
+  if (dedupResult.removed > 0) {
+    const semDups = dedupResult.pairs.filter(
+      (p) => p.keptLayer === 'semantic' && p.removedLayer === 'semantic',
+    ).length;
+    const epiDups = dedupResult.pairs.filter(
+      (p) => p.keptLayer === 'episodic' && p.removedLayer === 'episodic',
+    ).length;
+    const crossDups = dedupResult.pairs.filter(
+      (p) => p.keptLayer !== p.removedLayer,
+    ).length;
+    result.deduped = {
+      removed: dedupResult.removed,
+      semDups,
+      epiDups,
+      crossDups,
+    };
+  }
+
+  // Phase 3: Quality audit (remove junk, report warnings).
+  const allEntries = loadAllEntries(ctx.hippoRoot);
+  const auditOut = auditMemories(allEntries);
+  if (auditOut.issues.length > 0) {
+    const errors = auditOut.issues.filter((i) => i.severity === 'error');
+    const warnings = auditOut.issues.filter((i) => i.severity === 'warning');
+    if (errors.length > 0) {
+      for (const issue of errors) {
+        deleteEntry(ctx.hippoRoot, issue.memoryId);
+      }
+    }
+    if (errors.length > 0 || warnings.length > 0) {
+      result.audit = {
+        errorsRemoved: errors.length,
+        warningCount: warnings.length,
+      };
+    }
+  }
+
+  // Phase 4: Auto-share high-transfer-score memories to global.
+  if (!opts.noShare) {
+    const sleepConfig = loadConfig(ctx.hippoRoot);
+    if (sleepConfig.autoShareOnSleep) {
+      const shared = autoShare(ctx.hippoRoot, { minScore: 0.6 });
+      if (shared.length > 0) {
+        result.shared = shared.length;
+      }
+    }
+  }
+
+  // Phase 5: Post-sleep ambient state summary.
+  const postSleepConfig = loadConfig(ctx.hippoRoot);
+  if (postSleepConfig.ambient.enabled) {
+    const postSleepEntries = loadAllEntries(ctx.hippoRoot).filter(
+      (e) => !e.superseded_by,
+    );
+    if (postSleepEntries.length > 0) {
+      result.ambient = computeAmbientState(postSleepEntries);
+    }
+  }
+
+  return result;
 }
 
 // ---------------------------------------------------------------------------

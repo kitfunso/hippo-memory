@@ -60,10 +60,9 @@ describe('api contract types — Episode A scaffolding', () => {
     }>();
   });
 
-  it('SleepOpts exposes dryRun + noLearn + noShare', () => {
+  it('SleepOpts exposes dryRun + noShare (auto-learn is CLI-only)', () => {
     expectTypeOf<SleepOpts>().toMatchTypeOf<{
       dryRun?: boolean;
-      noLearn?: boolean;
       noShare?: boolean;
     }>();
   });
