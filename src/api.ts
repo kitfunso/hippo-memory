@@ -54,6 +54,7 @@ import {
   type ApiKeyListItem,
 } from './auth.js';
 import { applyGoalStackBoost } from './goals.js';
+import type { AmbientState } from './ambient.js';
 
 export interface Context {
   hippoRoot: string;
@@ -1492,4 +1493,132 @@ export function auditList(ctx: Context, opts: AuditListOpts): AuditEvent[] {
   } finally {
     closeHippoDb(db);
   }
+}
+
+// ---------------------------------------------------------------------------
+// getContext (extracted from cmdContext — Task 5 of the api.ts refactor)
+// ---------------------------------------------------------------------------
+
+/**
+ * Options for `getContext` — assemble a budget-bounded context bundle
+ * (recalled memories + active task snapshot + handoff + recent events,
+ * rendered as markdown / json / additional-context). Extracted from
+ * `cmdContext` in `cli.ts` in Episode A of the api.ts refactor.
+ *
+ * Named `getContext` (not `context`) to avoid collision with the
+ * `Context` interface above and the ubiquitous `ctx: Context` convention.
+ * Follows the existing `getEntry` naming pattern in store.ts.
+ */
+export interface ContextOpts {
+  q?: string;
+  auto?: boolean;
+  /** Default 1500 tokens. */
+  budget?: number;
+  limit?: number;
+  pinnedOnly?: boolean;
+  framing?: 'observe' | 'suggest' | 'assert';
+  format?: 'markdown' | 'json' | 'additional-context';
+  scope?: string;
+  includeRecent?: number;
+}
+
+export interface ContextResultEntry {
+  entry: MemoryEntry;
+  score: number;
+  tokens: number;
+  isGlobal?: boolean;
+  isFreshTail?: boolean;
+}
+
+export interface ContextResult {
+  entries: ContextResultEntry[];
+  tokens: number;
+  format: 'markdown' | 'json' | 'additional-context';
+  activeSnapshot?: TaskSnapshot | null;
+  sessionHandoff?: SessionHandoff | null;
+  recentEvents?: SessionEvent[];
+  /** Rendered markdown / additional-context payload; absent for json. */
+  rendered?: string;
+}
+
+/**
+ * Stub — real implementation lands in Task 5 of the Episode A plan
+ * (`docs/plans/2026-05-23-api-refactor-context-sleep-outcome.md`).
+ */
+export async function getContext(
+  _ctx: Context,
+  _opts: ContextOpts = {},
+): Promise<ContextResult> {
+  throw new Error('getContext() not yet implemented');
+}
+
+// ---------------------------------------------------------------------------
+// sleep (extracted from cmdSleepCore — Task 4 of the api.ts refactor)
+// ---------------------------------------------------------------------------
+
+/**
+ * Options for `sleep` — run the consolidation / audit / dedup / share
+ * pipeline and return structured counts. Extracted from `cmdSleepCore` in
+ * `cli.ts` in Episode A. The CLI `cmdSleep` wrapper continues to own the
+ * log-file tee + console rendering + `process.exit`; `api.sleep` is pure.
+ */
+export interface SleepOpts {
+  dryRun?: boolean;
+  noLearn?: boolean;
+  noShare?: boolean;
+}
+
+export interface SleepResult {
+  active: number;
+  removed: number;
+  mergedEpisodic: number;
+  newSemantic: number;
+  dryRun: boolean;
+  autoLearned?: { fromGit: number; fromMemoryMd: number };
+  deduped?: {
+    removed: number;
+    semDups: number;
+    epiDups: number;
+    crossDups: number;
+  };
+  audit?: { errorsRemoved: number; warningCount: number };
+  shared?: number;
+  ambient?: AmbientState | null;
+  details?: string[];
+}
+
+/**
+ * Stub — real implementation lands in Task 4 of the Episode A plan.
+ */
+export async function sleep(
+  _ctx: Context,
+  _opts: SleepOpts = {},
+): Promise<SleepResult> {
+  throw new Error('sleep() not yet implemented');
+}
+
+// ---------------------------------------------------------------------------
+// outcomeForLastRecall (last-recall wrapper around outcome — Task 3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Apply an outcome to the ids most recently returned by `recall()`.
+ *
+ * Reads `loadIndex(ctx.hippoRoot).last_retrieval_ids` (per-hippoRoot local
+ * state; not tenant-scoped at the index layer) and forwards to `outcome()`,
+ * which DOES tenant-filter via `readEntry(..., ctx.tenantId)` — cross-tenant
+ * ids in `last_retrieval_ids` are silently skipped, matching the MCP
+ * `hippo_outcome` semantics.
+ *
+ * Do NOT tighten `loadIndex` with `tenantId` inside this helper — doing so
+ * would break the (correct) cross-tenant-silent-skip behavior covered by
+ * the test in `tests/api-outcome-for-last-recall.test.ts`.
+ *
+ * Stub — real implementation lands in Task 3 of the Episode A plan.
+ */
+export function outcomeForLastRecall(
+  _ctx: Context,
+  _good: boolean,
+): { applied: number; ids: string[] } {
+  throw new Error('outcomeForLastRecall() not yet implemented');
 }
