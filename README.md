@@ -626,7 +626,7 @@ hippo watch "npm run build"
 | Codex | `AGENTS.md` or `.codex` | `AGENTS.md` + automatic in-place Codex launcher wrapper |
 | Cursor | `.cursorrules` or `.cursor/rules` | `.cursorrules` |
 | OpenClaw | `.openclaw` or `AGENTS.md` | native OpenClaw plugin or `AGENTS.md` |
-| OpenCode | `.opencode/` or `opencode.json` | `AGENTS.md` |
+| OpenCode | `.opencode/` or `opencode.json` | `AGENTS.md` + TS plugin at `~/.config/opencode/plugins/hippo.ts` (subscribes to `session.idle` + `session.created`) |
 
 No extra commands needed. Just `hippo init` and your agent knows about Hippo.
 
@@ -639,7 +639,7 @@ hippo hook install claude-code   # patches CLAUDE.md + adds SessionStart/Session
 hippo hook install codex         # optional repair/manual run: patches AGENTS.md + wraps the detected Codex launcher
 hippo hook install cursor        # patches .cursorrules
 hippo hook install openclaw      # patches AGENTS.md
-hippo hook install opencode      # patches AGENTS.md
+hippo hook install opencode      # patches AGENTS.md + installs the opencode TS plugin
 ```
 
 This adds a `<!-- hippo:start -->` ... `<!-- hippo:end -->` block that tells the agent to:

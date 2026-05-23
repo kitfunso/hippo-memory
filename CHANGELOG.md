@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.11.2 (2026-05-23): opencode plugin installer
+
+A patch release fixing [#24](https://github.com/kitfunso/hippo-memory/issues/24) at root.
+
+### Shipped
+
+- **OpenCode integration switched from JSON hooks to a TS plugin.** v1.10.x-v1.11.1 wrote a Claude Code-style `hooks` block into `~/.config/opencode/opencode.json`, which opencode's strict schema (`additionalProperties: false`) rejects with `ConfigInvalidError: Unrecognized key: hooks` — preventing opencode from launching. Root cause: `src/hooks.ts:4` assumed "Claude Code and OpenCode share the same SessionStart/SessionEnd schema." They don't. OpenCode's actual integration surface is its plugin system (`~/.config/opencode/plugins/`, TS/JS modules with `event` hooks per https://opencode.ai/docs/plugins/). The fix: narrow `JsonHookTarget` to `'claude-code'` (compile-time guard), add `installOpencodePlugin()` that writes a type-free TS plugin at `~/.config/opencode/plugins/hippo.ts` subscribing to `session.idle` (→ `hippo session-end`) and `session.created` (→ `hippo last-sleep`).
+- **Surgical migration of broken installs.** On the next `hippo hook install opencode`, the installer detects and removes any hippo-owned hook entries from `opencode.json` so opencode can launch again. The migration is structural — per-entry filter on commands starting with `hippo ` — not substring-matched, so user content that coincidentally mentions `hippo sleep` survives unchanged. When opencode.json is unparseable (the literal failure-mode that motivated the fix), the installer surfaces a `jsonRepairFailed=true` signal that the CLI logs as a clear "manual fix needed" warning.
+- **`hippo setup` `pluginTools` branch wired.** Pre-fix this branch only printed `tool.notes` without calling any installer; the fix adds an opencode special-case so `hippo setup` actually installs the plugin for opencode users (was a silent regression hidden behind the original bug).
+- **`detectInstalledTools`** marks opencode as `kind: 'plugin'` (was `'json-hook'`), aligning with the actual integration model.
+- **Uninstall also runs the legacy migration.** A user running `hippo hook uninstall opencode` to remove hippo entirely now also strips any leftover broken hooks block from `opencode.json` — the downgrade/remove path leaves opencode launchable.
+- **Deferred to a future release:** pinned-context auto-injection on opencode. `message.updated` fires per token, not per prompt submit, so there's no clean opencode plugin event equivalent to Claude Code's `UserPromptSubmit`. Users can still call `hippo context --pinned-only` via the MCP server (`hippo mcp`).
+
+### Tests
+
+`tests/opencode-plugin-install.test.ts` is new and covers (real FS, no mocks): plugin source content (marker + event types + no type imports + Bun-$ guard); fresh install writes the plugin file with marker; idempotence when content matches; overwrite when marker matches but content differs (future-proof); surgical migration preserving non-hippo entries; empty-hooks-key cleanup; `jsonRepairFailed=true` on unparseable JSON; no creation of opencode.json when none existed; false-positive defense on coincidental `hippo sleep` substrings; non-object hooks values (string + array) handled gracefully; uninstall removes only marker-bearing files; uninstall refuses user-written files; uninstall runs migration on downgrade path; detectInstalledTools marks opencode as plugin. `tests/_helpers/with-fake-home.ts` is a new shared HOME-isolation helper extracted from `tests/hooks.test.ts`. Full suite green: 220 files, 1605 tests.
+
+### Migration
+
+Users on v1.10.x-v1.11.1 with the broken opencode hooks block recover automatically by running `hippo hook install opencode` on v1.11.2 (the install path auto-migrates). Manual alternative: delete the `hooks` key from `~/.config/opencode/opencode.json`.
+
 ## 1.11.1 (2026-05-23): v1.11.0 tenant-isolation residue
 
 A patch release closing the two named residues from the v1.11.0 conflict-subsystem pass, flagged by its independent-review critic and tracked in `TODOS.md`. Plan: `docs/plans/2026-05-22-tenant-isolation-residue.md`.
