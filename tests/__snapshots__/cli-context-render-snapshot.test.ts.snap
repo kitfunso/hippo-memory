@@ -1,0 +1,109 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`printContextMarkdown snapshots > empty items 1`] = `
+"## Project Memory (0 entries, 0 tokens)
+"
+`;
+
+exports[`printContextMarkdown snapshots > framing=assert 1`] = `
+"## Project Memory (3 entries, 44 tokens)
+
+- **[verified] always use real DB for tests** [path:skf_s, path:hippo] (100%)
+- **[stale] ⚠️ session 2025-08-12 debugging notes** [debug] (100%)
+- **[inferred] ⚠️ [global] inferred fact from telemetry** [inferred] (100%)"
+`;
+
+exports[`printContextMarkdown snapshots > framing=suggest 1`] = `
+"## Project Memory (3 entries, 44 tokens)
+
+- **[verified] Consider checking: always use real DB for tests** [path:skf_s, path:hippo] (100%)
+- **[stale] ⚠️ Consider checking: session 2025-08-12 debugging notes** [debug] (100%)
+- **[inferred] ⚠️ Consider checking: [global] inferred fact from telemetry** [inferred] (100%)"
+`;
+
+exports[`printContextMarkdown snapshots > global item only (isGlobal=true) 1`] = `
+"## Project Memory (1 entries, 14 tokens)
+
+- **[inferred] ⚠️ Previously observed (2026-05-22): [global] inferred fact from telemetry** [inferred] (100%)"
+`;
+
+exports[`printContextMarkdown snapshots > items with no tags 1`] = `
+"## Project Memory (3 entries, 44 tokens)
+
+- **[verified] always use real DB for tests** (100%)
+- **[stale] ⚠️ Previously observed (2025-08-12): session 2025-08-12 debugging notes** (100%)
+- **[inferred] ⚠️ Previously observed (2026-05-22): [global] inferred fact from telemetry** (100%)"
+`;
+
+exports[`printContextMarkdown snapshots > markdown default (framing=observe) 1`] = `
+"## Project Memory (3 entries, 44 tokens)
+
+- **[verified] always use real DB for tests** [path:skf_s, path:hippo] (100%)
+- **[stale] ⚠️ Previously observed (2025-08-12): session 2025-08-12 debugging notes** [debug] (100%)
+- **[inferred] ⚠️ Previously observed (2026-05-22): [global] inferred fact from telemetry** [inferred] (100%)"
+`;
+
+exports[`printContextMarkdown snapshots > single item with many tags 1`] = `
+"## Project Memory (1 entries, 20 tokens)
+
+- **[verified] always use real DB for tests** [a, b, c, d, e] (100%)"
+`;
+
+exports[`printContextMarkdown snapshots > verified-only items (no stale/inferred tags) 1`] = `
+"## Project Memory (1 entries, 12 tokens)
+
+- **[verified] always use real DB for tests** [path:skf_s, path:hippo] (100%)"
+`;
+
+exports[`renderSleepResult snapshots > audit warnings only (no errors) 1`] = `
+"Running consolidation...
+
+Results:
+   Active memories:  20
+   Removed (decayed): 0
+   Merged episodic:   0
+   New semantic:      0
+Audit: 5 low-quality memories detected (run \`hippo audit\` for details)."
+`;
+
+exports[`renderSleepResult snapshots > dry run with no details 1`] = `
+"Running consolidation (dry run)...
+
+Results:
+   Active memories:  10
+   Removed (decayed): 0
+   Merged episodic:   0
+   New semantic:      0
+
+(dry run  - nothing written)"
+`;
+
+exports[`renderSleepResult snapshots > full run with dedup + audit + shared 1`] = `
+"Running consolidation...
+
+Results:
+   Active memories:  50
+   Removed (decayed): 3
+   Merged episodic:   5
+   New semantic:      2
+
+Details:
+Merged: 3 entries about caching strategy
+
+Deduped 4 duplicates (2 redundant semantic patterns, 1 duplicate episodic lessons, 1 cross-layer duplicates). Kept stronger copies.
+
+Audit: removed 1 junk memories (too short/empty).
+Audit: 3 low-quality memories detected (run \`hippo audit\` for details).
+
+Auto-shared 2 high-value memories to global store."
+`;
+
+exports[`renderSleepResult snapshots > minimal full run (no optional fields) 1`] = `
+"Running consolidation...
+
+Results:
+   Active memories:  5
+   Removed (decayed): 0
+   Merged episodic:   0
+   New semantic:      0"
+`;

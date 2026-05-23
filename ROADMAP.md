@@ -2,7 +2,9 @@
 
 This roadmap tracks planned work for the hippo-memory codebase. Items are grouped by funding status: committed, conditional on grant award, and speculative.
 
-Current version: v0.33.0
+Current version: 1.11.4 (npm `hippo-memory`) + python-v0.1.0 (PyPI `hippo-memory-sdk`)
+
+For non-grant execution status (Tracks A-I, sequencing, shipped items, bets, non-goals) see `ROADMAP-RESEARCH.md`. For operational follow-ups and per-version post-ship tails see `TODOS.md`. For the research lineage and seven-mechanisms backgrounder see `RESEARCH.md`.
 
 ## How to read this document
 

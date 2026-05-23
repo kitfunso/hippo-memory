@@ -1,5 +1,58 @@
 # Hippo Brain Observatory — Roadmap
 
+## Next 90 days (2026-05-23 →) — priority queue
+
+Cross-referenced from `ROADMAP-RESEARCH.md` §"Next 90 days". The full execution roadmap (Tracks A-I, sequencing, bets, non-goals) lives there. This file owns the operational post-ship tail.
+
+### v1.11.5 — SHIPPED 2026-05-23
+
+7 of 8 items closed in v1.11.5 (see `CHANGELOG.md` v1.11.5 entry). Items #1, #2, #3, #4, #6, #7, #8 done. Item #5 (per-tenant /v1/sleep scoping) deferred to v1.12.0 because plan-eng-critic surfaced it as MINOR-scope structural work.
+
+### v1.12.0 — items deferred from v1.11.5 hardening pass
+
+- [ ] **Per-tenant `/v1/sleep` scoping** (item #5 from v1.11.5 plan). Requires `Context.actor` change from `string` to `{subject, role}` object, `api_keys` schema migration to add `role TEXT NOT NULL DEFAULT 'admin'`, `ValidateResult` shape change, `buildContextWithAuth` signature change, ~12 call site updates across `src/api.ts`. Bundle with non-loopback serving (`HIPPO_BIND_ALL` env knob) and A5 v2 multi-tenant work.
+- [ ] **`api.sleep` mid-phase failure test coverage.** The `partial:true` + `errorMessage` audit-row branch is reachable + the contract is locked in code comments (api.ts:2034-2074), but forcing a deterministic mid-phase throw requires DI seams (inject phase helpers) or fault-injection hooks in db.ts. Independent-review-critic MED #2 on v1.11.5.
+- [ ] **Consolidate audit row tenant tag.** Currently tagged with `ctx.tenantId` but `api.sleep` is host-wide (cross-tenant dedup is intentional). When `/v1/sleep` moves off loopback-only, either tag with synthetic "host" tenant or scope api.sleep per-tenant. Independent-review-critic MED #3 on v1.11.5. TODO inlined at `src/api.ts:2050`.
+- [ ] **Snapshot test belt-and-braces `afterAll(useRealTimers)`.** Today the `beforeEach`/`afterEach` pair is correct, but a test throwing before reaching afterEach would leak fake timers. Independent-review-critic LOW #5 on v1.11.5.
+
+### Remaining post-Episode A/B/C tail (deferred items that don't fit v1.11.5 / v1.12.0)
+
+All B-sized originally; bundle when needed.
+
+- [ ] **HTTP DoS cap on `POST /v1/outcome` `ids.length`** (1000 max, B follow-up). A caller could POST `{ids: [10000 ids], good: true}` (within the 1 MB body cap), spawning 10000 sequential `readEntry` + `writeEntry` + `appendAuditEvent` cycles. /v1/* rate limit is per-request, not per-id. Worth raising priority because /v1/outcome WRITES per id.
+- [ ] **HTTP DoS cap on `GET /v1/context?q=`** (1024 chars, B follow-up). Breaks the 256-char-cap convention on adjacent `scope`/`session_id`/`fresh_tail_session_id`. Node's 16KB URL header is the de-facto bound but the structural drift makes future audits harder. 1024-char cap on `q` (queries can legitimately be longer than 256 but should still bound).
+- [ ] **`/v1/context?q=foo` test gap** (B follow-up). Existing tests hit no-query default + pinned-only paths only. The hybrid-search path (`q` provided + hasGlobal) emits a 'recall' audit row per `api.getContext`; this emission is not asserted in any HTTP-level test.
+- [ ] **`/v1/sleep` non-loopback 403 test gap** (B follow-up). The 3-line per-request guard is exercised on every request but the negative case (non-loopback origin → 403) is hard to simulate with vitest+`serve(port:0)` which binds 127.0.0.1. Extract the guard logic into a small helper + unit-test the helper directly.
+- [ ] **Per-tenant `/v1/sleep` scoping decision** (A follow-up). `api.sleep` invokes `deduplicateStore(ctx.hippoRoot)` + `deleteEntry(ctx.hippoRoot, ...)` without `ctx.tenantId` / `ctx.actor`. Today the loopback-only guard limits blast radius. Once non-loopback serving lands, choose (a) gate the route to a global-admin actor / API-key role, or (b) plumb `ctx.tenantId` into `deduplicateStore` + `auditMemories` + `deleteEntry`. Likely (a) for simplicity.
+- [ ] **`audit_log` emission on sleep consolidation phases** (A follow-up). `api.sleep`'s dedup / audit-delete phases emit no `audit_log` rows. Same CLI/MCP parity gap that T6 fixed for `cmdOutcome`. Decide between (a) one `'consolidate'` audit row per `api.sleep` invocation with phase counters in metadata, or (b) per-phase rows tagged with `ctx.actor`.
+- [ ] **`api.recall` last-retrieval-ids parity with `cmdRecall`** (C follow-up). HTTP `GET /v1/memories` (recall) does NOT populate `last_retrieval_ids` — only `GET /v1/context` (get_context) does. CLI `hippo recall` populates it; the SDK's `recall` does not. To prime the last-recall outcome path, callers must use `get_context` first. Either teach `api.recall` to populate, or document the divergence permanently.
+- [ ] **CLI render snapshot tests** (`printContextMarkdown`, `renderSleepResult`) (A follow-up). Plan T5 Step 1b mandated 10 snapshot tests in `tests/cli-context-render-snapshot.test.ts` as the byte-identical gate. Deferred to keep T5 manageable; replaced with manual smokes. Add real snapshot tests so future drift is caught at CI. Cover: pinnedOnly, markdown default, json, additional-context, framing observe / suggest / assert, query='*' fallback, hybrid local-only, hybrid with global.
+
+### F9 hybrid retrieval — first local BM25+vector RRF measurement (~5d)
+
+See `ROADMAP-RESEARCH.md` §"F9". The F-track has measured pure-vector (F14) and vector+LLM-rerank (F9/F15) but never local BM25+vector RRF fusion. Pre-register a track on `_s` (and oracle). gbrain's ablation (BM25 19.8 / vector 97.4 / hybrid 97.6) sets the directional shape.
+
+### Conflict-subsystem tenant-isolation residue (~3d)
+
+Audit and tenant-scope the unscoped `readEntry` / `loadSearchEntries` call sites in `cli.ts` / `dashboard.ts` / `refine-llm.ts`. Deferred from v1.11.0 because half-scoping without first scoping upstream `loadAllEntries(hippoRoot)` would silently drop parent text. Plus: `replaceDetectedConflicts` skips a stale pre-fix cross-tenant conflict row but never resolves it, so it lingers `status='open'` (inert but harder to audit). Auto-resolve such rows in the detector's resolve-stale loop so they self-heal.
+
+### Python SDK v0.2 (~5d)
+
+From Episode C follow-ups:
+- [ ] Sync wrappers (`HippoSync`) — async-only is documented limitation in v0.1 README; v0.2 closes it.
+- [ ] `ContextResult.projected()` helper — projects the full `MemoryEntry` surface to the CLI's `hippo context --format json` subset for SDK consumers who want the leaner shape.
+- [ ] 204 handling in `_request` — defensive; current code paths return 200 always but no harm in being explicit.
+
+### v0.26 UI redesign port — warm parchment + 3D (~15-20d)
+
+Detail in §"v0.26 — UI Redesign (warm parchment + 3D)" below. Design locked at `mockups/hybrid-v4.html` (2026-04-20); port to `ui/src/` React codebase never started. Dark-theme Brain Observatory shipped v0.25.0 and is what `hippo dashboard` serves today.
+
+### B / C / E track depth items (deferred to days 91-180)
+
+Research-not-enterprise items; re-prioritise only after items 1-5 above. B1 ACC EVC calibration, B3 dlPFC goal-stack depth (MVP+depth shipped, but research workload-validity gates returned mixed signals — see `docs/RETRACTION.md`), C3 Pineal ambient state vector, E2 first-class `decision` / `handoff` object promotion.
+
+---
+
 ## v1.11.4 (Episode B) — follow-ups for Episode C / future
 
 Surfaced by independent-review-critic on PR #37 round 1 (returned FAIL on a cross-tenant ID leak in /v1/outcome which was fixed in the same PR; remaining MED + LOW deferred to TODOS):

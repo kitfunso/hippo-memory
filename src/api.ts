@@ -373,6 +373,16 @@ export interface RecallResult {
  * `ctx.tenantId`. The `mode` flag is accepted for forward compatibility (the
  * CLI exposes hybrid/physics paths) but Task 2 wires only the BM25 candidate
  * loader; later tasks can extend this to call the physics/hybrid scorer.
+ *
+ * **api.recall does NOT mutate `index.last_retrieval_ids`** (v1.11.5 contract
+ * lock). The CLI `cmdRecall` (cli.ts) writes `last_retrieval_ids` because the
+ * CLI is interactive (user is about to run `hippo outcome --good`). SDK callers
+ * are programmatic: they either pass explicit ids to `api.outcome` or call
+ * `api.getContext` first for the context-then-outcome workflow (getContext
+ * DOES write `last_retrieval_ids`). Adding the side-effect here would change
+ * `api.recall` from a pure read into a read+write, breaking SDK callers who
+ * batch recall calls in a row. Locked by
+ * `tests/api-recall-no-side-effects.test.ts`.
  */
 export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   const limit = opts.limit ?? 10;
@@ -1932,82 +1942,152 @@ export async function sleep(
 ): Promise<SleepResult> {
   const dryRun = Boolean(opts.dryRun);
 
-  // Phase 1: Consolidation.
-  const consolidateResult = await consolidate(ctx.hippoRoot, { dryRun });
+  // v1.11.5: phase counters for the consolidate audit emit (in finally).
+  // Accumulated as each phase completes so partial-failure paths still report
+  // accurate "what got done before the failure" data.
+  let consolidationCount = 0;
+  let dedupCount = 0;
+  let auditDeletedCount = 0;
+  let ambientTotal = 0;
+  let phaseError: Error | null = null;
 
-  const result: SleepResult = {
-    active: consolidateResult.decayed,
-    removed: consolidateResult.removed,
-    mergedEpisodic: consolidateResult.merged,
-    newSemantic: consolidateResult.semanticCreated,
-    dryRun,
-    details: consolidateResult.details,
-  };
+  let result: SleepResult | null = null;
+  try {
+    // Phase 1: Consolidation.
+    const consolidateResult = await consolidate(ctx.hippoRoot, { dryRun });
+    consolidationCount = consolidateResult.semanticCreated + consolidateResult.merged;
 
-  if (dryRun) return result;
-
-  // Phase 2: Dedup (post-consolidate near-duplicate cleanup).
-  const dedupResult = deduplicateStore(ctx.hippoRoot);
-  if (dedupResult.removed > 0) {
-    const semDups = dedupResult.pairs.filter(
-      (p) => p.keptLayer === 'semantic' && p.removedLayer === 'semantic',
-    ).length;
-    const epiDups = dedupResult.pairs.filter(
-      (p) => p.keptLayer === 'episodic' && p.removedLayer === 'episodic',
-    ).length;
-    const crossDups = dedupResult.pairs.filter(
-      (p) => p.keptLayer !== p.removedLayer,
-    ).length;
-    result.deduped = {
-      removed: dedupResult.removed,
-      semDups,
-      epiDups,
-      crossDups,
+    result = {
+      active: consolidateResult.decayed,
+      removed: consolidateResult.removed,
+      mergedEpisodic: consolidateResult.merged,
+      newSemantic: consolidateResult.semanticCreated,
+      dryRun,
+      details: consolidateResult.details,
     };
-  }
 
-  // Phase 3: Quality audit (remove junk, report warnings).
-  const allEntries = loadAllEntries(ctx.hippoRoot);
-  const auditOut = auditMemories(allEntries);
-  if (auditOut.issues.length > 0) {
-    const errors = auditOut.issues.filter((i) => i.severity === 'error');
-    const warnings = auditOut.issues.filter((i) => i.severity === 'warning');
-    if (errors.length > 0) {
-      for (const issue of errors) {
-        deleteEntry(ctx.hippoRoot, issue.memoryId);
-      }
-    }
-    if (errors.length > 0 || warnings.length > 0) {
-      result.audit = {
-        errorsRemoved: errors.length,
-        warningCount: warnings.length,
+    if (dryRun) return result;
+
+    // Phase 2: Dedup (post-consolidate near-duplicate cleanup).
+    const dedupResult = deduplicateStore(ctx.hippoRoot);
+    dedupCount = dedupResult.removed;
+    if (dedupResult.removed > 0) {
+      const semDups = dedupResult.pairs.filter(
+        (p) => p.keptLayer === 'semantic' && p.removedLayer === 'semantic',
+      ).length;
+      const epiDups = dedupResult.pairs.filter(
+        (p) => p.keptLayer === 'episodic' && p.removedLayer === 'episodic',
+      ).length;
+      const crossDups = dedupResult.pairs.filter(
+        (p) => p.keptLayer !== p.removedLayer,
+      ).length;
+      result.deduped = {
+        removed: dedupResult.removed,
+        semDups,
+        epiDups,
+        crossDups,
       };
     }
-  }
 
-  // Phase 4: Auto-share high-transfer-score memories to global.
-  if (!opts.noShare) {
-    const sleepConfig = loadConfig(ctx.hippoRoot);
-    if (sleepConfig.autoShareOnSleep) {
-      const shared = autoShare(ctx.hippoRoot, { minScore: 0.6 });
-      if (shared.length > 0) {
-        result.shared = shared.length;
+    // Phase 3: Quality audit (remove junk, report warnings).
+    const allEntries = loadAllEntries(ctx.hippoRoot);
+    const auditOut = auditMemories(allEntries);
+    if (auditOut.issues.length > 0) {
+      const errors = auditOut.issues.filter((i) => i.severity === 'error');
+      const warnings = auditOut.issues.filter((i) => i.severity === 'warning');
+      if (errors.length > 0) {
+        for (const issue of errors) {
+          deleteEntry(ctx.hippoRoot, issue.memoryId);
+        }
+      }
+      auditDeletedCount = errors.length;
+      if (errors.length > 0 || warnings.length > 0) {
+        result.audit = {
+          errorsRemoved: errors.length,
+          warningCount: warnings.length,
+        };
       }
     }
-  }
 
-  // Phase 5: Post-sleep ambient state summary.
-  const postSleepConfig = loadConfig(ctx.hippoRoot);
-  if (postSleepConfig.ambient.enabled) {
-    const postSleepEntries = loadAllEntries(ctx.hippoRoot).filter(
-      (e) => !e.superseded_by,
-    );
-    if (postSleepEntries.length > 0) {
-      result.ambient = computeAmbientState(postSleepEntries);
+    // Phase 4: Auto-share high-transfer-score memories to global.
+    if (!opts.noShare) {
+      const sleepConfig = loadConfig(ctx.hippoRoot);
+      if (sleepConfig.autoShareOnSleep) {
+        const shared = autoShare(ctx.hippoRoot, { minScore: 0.6 });
+        if (shared.length > 0) {
+          result.shared = shared.length;
+        }
+      }
+    }
+
+    // Phase 5: Post-sleep ambient state summary.
+    const postSleepConfig = loadConfig(ctx.hippoRoot);
+    if (postSleepConfig.ambient.enabled) {
+      const postSleepEntries = loadAllEntries(ctx.hippoRoot).filter(
+        (e) => !e.superseded_by,
+      );
+      if (postSleepEntries.length > 0) {
+        result.ambient = computeAmbientState(postSleepEntries);
+        ambientTotal = result.ambient.totalMemories;
+      }
+    }
+
+    return result;
+  } catch (err) {
+    phaseError = err as Error;
+    throw err;
+  } finally {
+    // v1.11.5: emit one 'consolidate' audit_log row per api.sleep invocation,
+    // with phase counters in metadata. Closes the CLI/MCP parity gap that T6
+    // fixed for cmdOutcome (Episode A follow-up). In finally so partial-failure
+    // paths still emit; `partial: true` + errorMessage flag the failure.
+    // Dedicated handle for this emit only (phase helpers above each open their
+    // own handle via hippoRoot — SQLite single-writer makes parallel handles
+    // safe for the read-heavy phases).
+    //
+    // TODO(v1.12.0 + A5 v2): the audit row is tagged with ctx.tenantId but
+    // api.sleep is host-wide (cross-tenant dedup is intentional). When
+    // /v1/sleep moves off loopback-only, either tag with a synthetic "host"
+    // tenant or scope api.sleep per-tenant. Independent-review-critic flag,
+    // v1.11.5 ship.
+    //
+    // Error preservation: if openHippoDb or appendAuditEvent throws here, we
+    // do NOT let it replace the original phaseError (independent-review HIGH:
+    // would mask the underlying consolidation failure). Audit emit failure
+    // is logged to stderr but the original throw wins.
+    try {
+      const db = openHippoDb(ctx.hippoRoot);
+      try {
+        appendAuditEvent(db, {
+          tenantId: ctx.tenantId,
+          actor: ctx.actor,
+          op: 'consolidate',
+          metadata: {
+            consolidationCount,
+            dedupCount,
+            auditDeletedCount,
+            ambientTotal,
+            dryRun,
+            noShare: opts.noShare ?? false,
+            partial: phaseError !== null,
+            ...(phaseError ? { errorMessage: phaseError.message } : {}),
+          },
+        });
+      } finally {
+        closeHippoDb(db);
+      }
+    } catch (auditErr) {
+      // Audit emit failure must NOT mask the original phaseError. Log to
+      // stderr so the secondary failure is observable but does not throw.
+      // This guards the case where consolidation AND audit-emit fail in the
+      // same invocation against the same DB (correlated: same disk, same
+      // schema state) — losing the original error makes diagnosis much harder.
+      // eslint-disable-next-line no-console
+      console.error(
+        `[hippo] api.sleep audit emit failed: ${(auditErr as Error).message}`,
+      );
     }
   }
-
-  return result;
 }
 
 // ---------------------------------------------------------------------------

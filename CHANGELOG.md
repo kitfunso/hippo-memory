@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.11.5 (2026-05-23): Episode A/B/C critic-deferral hardening pass
+
+PATCH release closing 7 of 8 deferrals from the v1.11.3 + v1.11.4 + python-v0.1.0 ship chain. Additive + backward-compatible. Item #5 (per-tenant `/v1/sleep` scoping) deferred to v1.12.0 because plan-eng-critic round 1 surfaced it as MINOR-scope structural work (Context.actor object shape + api_keys schema migration + 12+ call sites).
+
+### Shipped
+
+- **HTTP DoS caps.** `POST /v1/outcome` now rejects `ids.length > 1000` with 400 (each id costs ~3 DB ops; 1000 keeps per-request work bounded). Cap fires BEFORE `buildContextWithAuth` so attack traffic doesn't pay the api-key lookup cost. `GET /v1/context` now rejects `q.length > 1024` with 400 (mirrors the existing scope-cap pattern; 1024 covers real multi-clause queries while bounding BM25 tokenisation).
+- **`audit_log` emission on `api.sleep`.** One `'consolidate'` audit row emitted per invocation with phase counters in metadata (`consolidationCount`, `dedupCount`, `auditDeletedCount`, `ambientTotal`, `dryRun`, `noShare`, `partial`). Closes the CLI/MCP parity gap that v1.11.3 T6 fixed for `cmdOutcome`. Emit lives in a `try/finally` so partial-failure paths still emit (`partial: true` + `errorMessage`); the audit emit is itself wrapped in a defensive try/catch so an audit-emit failure does NOT mask the original phase error (logs to stderr instead).
+- **Additive `AuditOp` extension: `'consolidate'`.** New union member at `src/audit.ts:130-138`. The Python SDK is unaffected — `python/src/hippo_memory/models.py:298` types `op` as `str` (no enum constraint).
+- **Pre-existing `'outcome'` allow-list drift closed.** `VALID_AUDIT_OPS` Sets at `src/cli.ts:4679` and `src/server.ts:70` already missed `'outcome'` despite the union including it and rows being emitted today — `GET /v1/audit?op=outcome` returned 400 "invalid op" and `hippo audit list --op=outcome` exited 1 "Unknown --op value". Both Sets now carry both `'outcome'` and `'consolidate'`. The CLI error message is now regenerated from `Array.from(VALID_AUDIT_OPS).join(' | ')` so future drift can't recur on the message side. **Behaviour change:** `hippo audit list --op=outcome` and `GET /v1/audit?op=outcome` previously errored; they now return the outcome rows. Downstream consumers that caught the error as a "not supported" signal will see a behavior change.
+- **`isLoopback` helper unit-tested.** 11 cases at `tests/server-isloopback-helper.test.ts` lock the helper's accepted forms (`'127.0.0.1'`, `'::1'`, `'::ffff:127.0.0.1'`) and rejected forms (RFC1918, IPv4-mapped non-loopback, link-local, fully-expanded `'0:0:0:0:0:0:0:1'`, `undefined`, empty string). No behaviour change to the helper itself — extending it to recognise additional IPv6 forms is a security-adjacent decision out of v1.11.5 scope.
+- **`api.recall` no-side-effects contract locked.** Test + JSDoc + `python/README.md` note. `api.recall` does NOT mutate `index.last_retrieval_ids` (only `api.getContext` and CLI `cmdRecall` do). Adding the side-effect would break SDK callers who batch recall calls in a row. SDK callers needing the last-recall outcome path should call `api.getContext` first.
+- **CLI render helpers exported for snapshot tests.** `printContextMarkdown` and `renderSleepResult` now exported from `cli.ts` with `@internal` JSDoc tags (NOT a stable public API). 12 snapshot tests at `tests/cli-context-render-snapshot.test.ts` lock the byte-identical output of both render branches across pinnedOnly / markdown default / json / additional-context / framing observe-suggest-assert / hybrid local-only / hybrid with global / dry-run + full sleep. Uses `vi.useFakeTimers({ now: '2026-05-23T20:00:00Z' })` for determinism (resolveConfidence-driven tags would otherwise churn).
+
+### Tests
+
+7 new test cases across `tests/api-sleep.test.ts`, `tests/server-context-route.test.ts`, `tests/server-outcome-route.test.ts`. 4 new test files: `tests/api-recall-no-side-effects.test.ts` (2 tests), `tests/cli-context-render-snapshot.test.ts` (12 snapshots), `tests/server-audit-route-consolidate.test.ts` (3 tests including round-trip + outcome-drift coverage), `tests/server-isloopback-helper.test.ts` (11 cases). Total suite: 1657 → 1688 tests passing, 0 failures.
+
+### Out of scope (deferred to v1.12.0)
+
+- Per-tenant `/v1/sleep` scoping (item #5). Requires Context.actor object shape, api_keys role column, ValidateResult signature change, and 12+ call site updates across api.ts. Bundled with non-loopback serving (`HIPPO_BIND_ALL`) and A5 v2 multi-tenant work.
+- Mid-phase failure test for the `partial:true` audit row branch. The path is reachable + the contract is locked in code, but forcing a deterministic mid-phase throw requires DI seams or fault-injection hooks not yet in db.ts. Tracked in TODOS.md.
+
 ## Python SDK v0.1.0 (2026-05-23): initial PyPI release
 
 First release of `hippo-memory-sdk` on PyPI. Async Python SDK wrapping the 14 HTTP endpoints from `hippo-memory@1.11.4`. The PyPI distribution name is `hippo-memory-sdk` (the bare `hippo-memory` name was blocked by PyPI's similarity check against an existing `hippomem` project); the Python import name remains `hippo_memory` so user code is `from hippo_memory import Hippo`.

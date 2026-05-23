@@ -67,7 +67,7 @@ function isPublicRoute(method: string, path: string): boolean {
   return PUBLIC_ROUTES.has(`${method} ${path}`);
 }
 
-const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set([
+const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'remember',
   'recall',
   'promote',
@@ -75,6 +75,8 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set([
   'forget',
   'archive_raw',
   'auth_revoke',
+  'outcome',     // v1.11.5: pre-existing drift — emitted today but rejected by old Set
+  'consolidate', // v1.11.5: emitted by api.sleep / POST /v1/sleep
 ]);
 
 // Cap on GET /v1/audit?limit=. Matches docs/api.md (when written) and is large
@@ -714,6 +716,13 @@ async function handleRequest(
           throw new HttpError(400, 'ids must be an array of non-empty strings');
         }
       }
+      // v1.11.5: DoS cap on ids.length. Each id triggers ~3 DB ops (readEntry +
+      // writeEntry + appendAuditEvent). N=1000 keeps per-request work bounded
+      // to sub-second wall time on SQLite hot path. Cap BEFORE buildContextWithAuth
+      // so attack traffic doesn't pay the api-key lookup cost.
+      if (idsRaw.length > 1000) {
+        throw new HttpError(400, 'ids exceeds 1000-id cap');
+      }
       ids = idsRaw;
     }
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
@@ -734,6 +743,12 @@ async function handleRequest(
   // (matches cmdContext); real-query hybrid search emits one 'recall' row.
   if (method === 'GET' && path === '/v1/context') {
     const q = query.get('q') ?? undefined;
+    // v1.11.5: DoS cap on q-param length. 1024 covers real multi-clause queries
+    // (pasted error messages, multi-stem searches) while bounding BM25
+    // tokenisation cost (~150 tokens worst case at 1024 chars).
+    if (q !== undefined && q.length > 1024) {
+      throw new HttpError(400, 'q exceeds 1024-character cap');
+    }
     const budgetRaw = query.get('budget');
     let budget: number | undefined;
     if (budgetRaw !== null) {

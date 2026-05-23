@@ -135,7 +135,8 @@ export type AuditOp =
   | 'forget'
   | 'archive_raw'
   | 'auth_revoke'
-  | 'outcome';
+  | 'outcome'
+  | 'consolidate'; // v1.11.5: emitted once per api.sleep invocation
 
 export interface AppendAuditOpts {
   tenantId: string;
