@@ -44,6 +44,12 @@
         0%, 50%  { opacity: 1; }
         50.01%, 100% { opacity: 0; }
       }
+
+      /* Respect the OS-level reduced-motion preference: freeze the demo
+         on its fully-revealed final frame instead of looping. WCAG 2.3.3. */
+      @media (prefers-reduced-motion: reduce) {
+        .line, .cursor { animation: none; opacity: 1; }
+      }
     </style>
   </defs>
 
