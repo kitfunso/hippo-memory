@@ -92,6 +92,7 @@ import type { SessionHandoff } from './handoff.js';
 import { search, markRetrieved, estimateTokens, hybridSearch, physicsSearch, explainMatch, textOverlap } from './search.js';
 import { renderTraceContent, parseSteps } from './trace.js';
 import { consolidate } from './consolidate.js';
+import { deduplicateStore } from './dedupe.js';
 import {
   isEmbeddingAvailable,
   embedAll,
@@ -2020,73 +2021,6 @@ function learnFromMemoryMd(hippoRoot: string): number {
   return imported;
 }
 
-/**
- * Scan the store for near-duplicate memories and remove the weaker copy.
- * Two memories are duplicates if their content has > threshold Jaccard overlap.
- * Keeps the one with higher strength (or more retrievals if tied).
- */
-interface DedupPair {
-  kept: string;
-  keptContent: string;
-  keptLayer: string;
-  keptStrength: number;
-  removed: string;
-  removedContent: string;
-  removedLayer: string;
-  removedStrength: number;
-  similarity: number;
-}
-
-function deduplicateStore(
-  hippoRoot: string,
-  options: { threshold?: number; dryRun?: boolean } = {}
-): { removed: number; pairs: DedupPair[] } {
-  const threshold = options.threshold ?? 0.7;
-  const dryRun = options.dryRun ?? false;
-  const entries = loadAllEntries(hippoRoot);
-
-  // Sort by strength desc, then retrieval count, so we keep the most valuable copy
-  entries.sort((a, b) => {
-    const sDiff = (b.strength ?? 0) - (a.strength ?? 0);
-    if (Math.abs(sDiff) > 0.01) return sDiff;
-    return (b.retrieval_count ?? 0) - (a.retrieval_count ?? 0);
-  });
-
-  const removed = new Set<string>();
-  const pairs: DedupPair[] = [];
-
-  for (let i = 0; i < entries.length; i++) {
-    if (removed.has(entries[i].id)) continue;
-    for (let j = i + 1; j < entries.length; j++) {
-      if (removed.has(entries[j].id)) continue;
-
-      const similarity = textOverlap(entries[i].content, entries[j].content);
-      if (similarity <= threshold) continue;
-
-      removed.add(entries[j].id);
-      pairs.push({
-        kept: entries[i].id,
-        keptContent: entries[i].content,
-        keptLayer: entries[i].layer,
-        keptStrength: entries[i].strength ?? 0,
-        removed: entries[j].id,
-        removedContent: entries[j].content,
-        removedLayer: entries[j].layer,
-        removedStrength: entries[j].strength ?? 0,
-        similarity,
-      });
-    }
-  }
-
-  if (!dryRun) {
-    for (const id of removed) {
-      deleteEntry(hippoRoot, id);
-    }
-  }
-
-  return { removed: removed.size, pairs };
-}
-
 function cmdDedup(
   hippoRoot: string,
   flags: Record<string, string | boolean | string[]>
@@ -2190,13 +2124,63 @@ async function cmdSleep(
   }
 }
 
+/**
+ * Render an api.sleep result as console output, byte-identical to the
+ * pre-extraction inline implementation in cmdSleepCore.
+ */
+function renderSleepResult(result: api.SleepResult): void {
+  console.log(`Running consolidation${result.dryRun ? ' (dry run)' : ''}...`);
+
+  console.log(`\nResults:`);
+  console.log(`   Active memories:  ${result.active}`);
+  console.log(`   Removed (decayed): ${result.removed}`);
+  console.log(`   Merged episodic:   ${result.mergedEpisodic}`);
+  console.log(`   New semantic:      ${result.newSemantic}`);
+
+  if (result.details && result.details.length > 0) {
+    console.log('\nDetails:');
+    for (const d of result.details) {
+      console.log(d);
+    }
+  }
+
+  if (result.dryRun) console.log('\n(dry run  - nothing written)');
+
+  if (result.deduped && result.deduped.removed > 0) {
+    const { removed, semDups, epiDups, crossDups } = result.deduped;
+    const parts: string[] = [];
+    if (semDups > 0) parts.push(`${semDups} redundant semantic patterns`);
+    if (epiDups > 0) parts.push(`${epiDups} duplicate episodic lessons`);
+    if (crossDups > 0) parts.push(`${crossDups} cross-layer duplicates`);
+    console.log(`\nDeduped ${removed} duplicates (${parts.join(', ')}). Kept stronger copies.`);
+  }
+
+  if (result.audit) {
+    if (result.audit.errorsRemoved > 0) {
+      console.log(`\nAudit: removed ${result.audit.errorsRemoved} junk memories (too short/empty).`);
+    }
+    if (result.audit.warningCount > 0) {
+      console.log(`Audit: ${result.audit.warningCount} low-quality memories detected (run \`hippo audit\` for details).`);
+    }
+  }
+
+  if (result.shared !== undefined && result.shared > 0) {
+    console.log(`\nAuto-shared ${result.shared} high-value memories to global store.`);
+  }
+
+  if (result.ambient) {
+    console.log(`\n${renderAmbientSummary(result.ambient)}`);
+  }
+}
+
 async function cmdSleepCore(
   hippoRoot: string,
   flags: Record<string, string | boolean | string[]>
 ): Promise<void> {
   requireInit(hippoRoot);
 
-  // Auto-learn from git before consolidating (unless --no-learn)
+  // Phase 1: Auto-learn from git + MEMORY.md (CLI-only, uses process.cwd() / os.homedir()).
+  // Stays in cli.ts; api.sleep covers Phase 2-6 only.
   if (!flags['no-learn']) {
     const config = loadConfig(hippoRoot);
     if (config.autoLearnOnSleep && isGitRepo(process.cwd())) {
@@ -2209,82 +2193,17 @@ async function cmdSleepCore(
     if (memImported > 0) console.log(`Imported ${memImported} memories from Claude Code MEMORY.md files.`);
   }
 
-  const dryRun = Boolean(flags['dry-run']);
-  console.log(`Running consolidation${dryRun ? ' (dry run)' : ''}...`);
-
-  const result = await consolidate(hippoRoot, { dryRun });
-
-  console.log(`\nResults:`);
-  console.log(`   Active memories:  ${result.decayed}`);
-  console.log(`   Removed (decayed): ${result.removed}`);
-  console.log(`   Merged episodic:   ${result.merged}`);
-  console.log(`   New semantic:      ${result.semanticCreated}`);
-
-  if (result.details.length > 0) {
-    console.log('\nDetails:');
-    for (const d of result.details) {
-      console.log(d);
-    }
-  }
-
-  if (dryRun) console.log('\n(dry run  - nothing written)');
-
-  // Auto-dedup after consolidation (unless dry-run)
-  if (!dryRun) {
-    const dedupResult = deduplicateStore(hippoRoot);
-    if (dedupResult.removed > 0) {
-      const semDups = dedupResult.pairs.filter(p => p.keptLayer === 'semantic' && p.removedLayer === 'semantic').length;
-      const epiDups = dedupResult.pairs.filter(p => p.keptLayer === 'episodic' && p.removedLayer === 'episodic').length;
-      const crossDups = dedupResult.pairs.filter(p => p.keptLayer !== p.removedLayer).length;
-      const parts: string[] = [];
-      if (semDups > 0) parts.push(`${semDups} redundant semantic patterns`);
-      if (epiDups > 0) parts.push(`${epiDups} duplicate episodic lessons`);
-      if (crossDups > 0) parts.push(`${crossDups} cross-layer duplicates`);
-      console.log(`\nDeduped ${dedupResult.removed} duplicates (${parts.join(', ')}). Kept stronger copies.`);
-    }
-  }
-
-  // Quality audit — remove junk, report warnings
-  if (!dryRun) {
-    const allEntries = loadAllEntries(hippoRoot);
-    const audit = auditMemories(allEntries);
-    if (audit.issues.length > 0) {
-      const errors = audit.issues.filter(i => i.severity === 'error');
-      const warnings = audit.issues.filter(i => i.severity === 'warning');
-      if (errors.length > 0) {
-        for (const issue of errors) {
-          deleteEntry(hippoRoot, issue.memoryId);
-        }
-        console.log(`\nAudit: removed ${errors.length} junk memories (too short/empty).`);
-      }
-      if (warnings.length > 0) {
-        console.log(`Audit: ${warnings.length} low-quality memories detected (run \`hippo audit\` for details).`);
-      }
-    }
-  }
-
-  // Auto-share high-transfer-score memories to global (unless --no-share or dry-run)
-  if (!dryRun && !flags['no-share']) {
-    const sleepConfig = loadConfig(hippoRoot);
-    if (sleepConfig.autoShareOnSleep) {
-      const shared = autoShare(hippoRoot, { minScore: 0.6 });
-      if (shared.length > 0) {
-        console.log(`\nAuto-shared ${shared.length} high-value memories to global store.`);
-      }
-    }
-  }
-
-  // Post-sleep ambient state summary
-  if (!dryRun) {
-    const postSleepConfig = loadConfig(hippoRoot);
-    if (postSleepConfig.ambient.enabled) {
-      const postSleepEntries = loadAllEntries(hippoRoot).filter(e => !e.superseded_by);
-      if (postSleepEntries.length > 0) {
-        const ambientState = computeAmbientState(postSleepEntries);
-        console.log(`\n${renderAmbientSummary(ambientState)}`);
-      }
-    }
-  }
+  // Phase 2-6: Pure-storage pipeline (consolidate + dedup + audit + share + ambient).
+  const ctx: api.Context = {
+    hippoRoot,
+    tenantId: resolveTenantId({}),
+    actor: 'cli',
+  };
+  const result = await api.sleep(ctx, {
+    dryRun: Boolean(flags['dry-run']),
+    noShare: Boolean(flags['no-share']),
+  });
+  renderSleepResult(result);
 }
 
 /**
@@ -2697,23 +2616,28 @@ function cmdOutcome(
     process.exit(1);
   }
 
+  // Behavior fix (v1.11.3): cmdOutcome used to bypass api.outcome and do its
+  // own readEntry/writeEntry inline, which silently skipped the audit_log
+  // emission that the MCP outcome path already has via api.outcome. T6
+  // rewires through api.outcome so every successful CLI 'outcome' call now
+  // writes one audit_log row per affected id, matching MCP parity.
+  const ctx: api.Context = {
+    hippoRoot,
+    tenantId: resolveTenantId({}),
+    actor: 'cli',
+  };
   const specificId = flags['id'] ? String(flags['id']) : null;
-  const index = loadIndex(hippoRoot);
 
-  const ids = specificId ? [specificId] : index.last_retrieval_ids;
-
-  if (ids.length === 0) {
-    console.log('No recent recall to apply outcome to. Use --id <id> to target a specific memory.');
-    return;
-  }
-
-  let updated = 0;
-  for (const id of ids) {
-    const entry = readEntry(hippoRoot, id, resolveTenantId({}));
-    if (!entry) continue;
-    const upd = applyOutcome(entry, good);
-    writeEntry(hippoRoot, upd);
-    updated++;
+  let updated: number;
+  if (specificId) {
+    updated = api.outcome(ctx, [specificId], good).applied;
+  } else {
+    const r = api.outcomeForLastRecall(ctx, good);
+    if (r.ids.length === 0) {
+      console.log('No recent recall to apply outcome to. Use --id <id> to target a specific memory.');
+      return;
+    }
+    updated = r.applied;
   }
 
   console.log(`Applied ${good ? 'positive' : 'negative'} outcome to ${updated} memor${updated === 1 ? 'y' : 'ies'}`);
@@ -3348,238 +3272,67 @@ async function cmdContext(
 ): Promise<void> {
   // --pinned-only fires on every UserPromptSubmit — including in directories
   // that don't have a local .hippo. Skip requireInit for that path and fall
-  // back to global-only below. The non-pinned path still requires init.
+  // back to global-only inside api.getContext. The non-pinned path still
+  // requires init (handled by CLI for user-friendly error messaging).
   const pinnedOnly = flags['pinned-only'] === true;
-  const hasLocal = isInitialized(hippoRoot);
   if (!pinnedOnly) {
     requireInit(hippoRoot);
   }
 
   const budget = parseInt(String(flags['budget'] ?? '1500'), 10);
-  const limit = parseLimitFlag(flags['limit']);
-  const includeRecent = parseCountFlag(flags['include-recent']);
-  const ctxExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
-  const ctxActiveScope = ctxExplicitScope || detectScope();
-
-  // If budget is 0, skip entirely (zero token cost)
   if (budget <= 0) return;
 
-  // Determine query: explicit args, --auto (git diff), or fallback
+  // Resolve query: explicit args, --auto (git diff via CLI-side helper), or
+  // fall through to api.getContext's '*' fallback. api.getContext is host-
+  // agnostic so the auto-detect (which shells out to git) stays CLI-side.
   let query = args.join(' ').trim();
-
   if (!query && flags['auto']) {
     query = autoDetectContext();
   }
 
-  if (!query) {
-    // Fallback: return strongest memories regardless of query
-    query = '*';
-  }
+  // Scope detection (CLI-side: uses cwd). api.getContext takes the resolved
+  // scope via opts.scope to stay host-agnostic.
+  const ctxExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
+  const ctxActiveScope = ctxExplicitScope || detectScope();
 
-  const globalRoot = getGlobalRoot();
-  const hasGlobal = isInitialized(globalRoot);
-  // A5: scope context-mode loads to the active tenant. Without this, every
-  // tenant's memories surface through the smart-context injection path.
-  const tenantId = resolveTenantId({});
-  // When the local store isn't initialized (pinned-only path in a fresh dir),
-  // skip the local load — loadAllEntries would auto-create .hippo here and
-  // we don't want to pollute arbitrary cwds.
-  let localEntries = hasLocal ? loadAllEntries(hippoRoot, tenantId) : [];
-  let globalEntries = hasGlobal ? loadAllEntries(globalRoot, tenantId) : [];
+  const ctx: api.Context = {
+    hippoRoot,
+    tenantId: resolveTenantId({}),
+    actor: 'cli',
+  };
+  const opts: api.ContextOpts = {
+    q: query,
+    budget,
+    limit: parseLimitFlag(flags['limit']),
+    pinnedOnly,
+    scope: ctxActiveScope ?? undefined,
+    includeRecent: parseCountFlag(flags['include-recent']),
+  };
 
-  // Default context always filters superseded (no --include-superseded / --as-of for context)
-  localEntries = localEntries.filter(e => !e.superseded_by);
-  globalEntries = globalEntries.filter(e => !e.superseded_by);
+  const result = await api.getContext(ctx, opts);
 
-  let selectedItems: Array<{ entry: MemoryEntry; score: number; tokens: number; isGlobal?: boolean }> = [];
-  let totalTokens = 0;
-  // Task snapshots / session events live in the local store. Skip when
-  // local isn't initialized — loading would auto-create .hippo in the cwd.
-  const activeSnapshot = hasLocal ? loadActiveTaskSnapshot(hippoRoot, resolveTenantId({})) : null;
-  const sessionHandoff = hasLocal && activeSnapshot?.session_id
-    ? loadLatestHandoff(hippoRoot, resolveTenantId({}), activeSnapshot.session_id)
-    : null;
-  const recentSessionEvents = hasLocal && activeSnapshot?.session_id
-    ? listSessionEvents(hippoRoot, resolveTenantId({}), { session_id: activeSnapshot.session_id, limit: 5 })
-    : [];
+  // Early exit when there's nothing to render (matches pre-extraction behavior).
+  const hasContextData =
+    result.entries.length > 0 ||
+    result.activeSnapshot ||
+    result.sessionHandoff ||
+    (result.recentEvents && result.recentEvents.length > 0);
+  if (!hasContextData) return;
 
-  if (localEntries.length === 0 && globalEntries.length === 0 && !activeSnapshot && !sessionHandoff && recentSessionEvents.length === 0) {
-    return;
-  }
-
-  // --pinned-only: restrict to pinned entries only. Used by the Claude Code
-  // UserPromptSubmit hook so invariants stay in context every turn.
-  // (pinnedOnly and hasLocal are declared at the top of this function.)
-  if (pinnedOnly) {
-    // loadConfig is safe even when local isn't initialized — it returns defaults.
-    const pinnedCfg = loadConfig(hippoRoot);
-    if (!pinnedCfg.pinnedInject.enabled) return; // user disabled via config
-    // Effective budget: explicit --budget wins over config.
-    const effBudget = flags['budget'] !== undefined ? budget : pinnedCfg.pinnedInject.budget;
-    const nowP = new Date();
-    const selectedIds = new Set<string>();
-    let usedP = 0;
-
-    if (includeRecent > 0) {
-      const recent = [
-        ...localEntries.map((entry) => ({ entry, isGlobal: false })),
-        ...globalEntries.map((entry) => ({ entry, isGlobal: true })),
-      ]
-        .sort((a, b) => {
-          const byCreated = Date.parse(b.entry.created) - Date.parse(a.entry.created);
-          return byCreated !== 0 ? byCreated : b.entry.id.localeCompare(a.entry.id);
-        })
-        .slice(0, includeRecent)
-        .map(({ entry, isGlobal }) => ({
-          entry,
-          score: calculateStrength(entry, nowP) * (isGlobal ? 1 / 1.2 : 1),
-          tokens: estimateTokens(entry.content),
-          isGlobal,
-        }));
-
-      for (const r of recent) {
-        if (selectedIds.has(r.entry.id)) continue;
-        if (usedP + r.tokens > effBudget) continue;
-        selectedItems.push(r);
-        selectedIds.add(r.entry.id);
-        usedP += r.tokens;
-      }
-    }
-
-    const pinnedLocal = localEntries.filter((e) => e.pinned);
-    const pinnedGlobal = globalEntries.filter((e) => e.pinned);
-    if (pinnedLocal.length === 0 && pinnedGlobal.length === 0 && selectedItems.length === 0) return; // zero output
-    const rankedPinned = [
-      ...pinnedLocal.map((e) => ({ entry: e, isGlobal: false })),
-      ...pinnedGlobal.map((e) => ({ entry: e, isGlobal: true })),
-    ]
-      .map(({ entry, isGlobal }) => {
-        const scopeSig = scopeMatch(entry.tags, ctxActiveScope);
-        const sBst = scopeSig === 1 ? 1.5 : scopeSig === -1 ? 0.5 : 1.0;
-        return {
-          entry,
-          score: calculateStrength(entry, nowP) * (isGlobal ? 1 / 1.2 : 1) * sBst,
-          tokens: estimateTokens(entry.content),
-          isGlobal,
-        };
-      })
-      .sort((a, b) => b.score - a.score);
-
-    for (const r of rankedPinned) {
-      if (selectedIds.has(r.entry.id)) continue;
-      if (usedP + r.tokens > effBudget) continue;
-      selectedItems.push(r);
-      selectedIds.add(r.entry.id);
-      usedP += r.tokens;
-    }
-    totalTokens = usedP;
-  } else if (query === '*') {
-    // No query: return strongest memories by strength, up to budget
-    const now = new Date();
-    const localRanked = localEntries
-      .map((e) => ({
-        entry: e,
-        score: calculateStrength(e, now),
-        tokens: estimateTokens(e.content),
-        isGlobal: false,
-      }))
-      .sort((a, b) => b.score - a.score);
-
-    const globalRanked = globalEntries
-      .map((e) => ({
-        entry: e,
-        score: calculateStrength(e, now) * (1 / 1.2), // global slightly lower
-        tokens: estimateTokens(e.content),
-        isGlobal: true,
-      }))
-      .sort((a, b) => b.score - a.score);
-
-    const combined = [...localRanked, ...globalRanked].sort((a, b) => b.score - a.score);
-
-    let used = 0;
-    for (const r of combined) {
-      if (used + r.tokens > budget) continue;
-      selectedItems.push(r);
-      used += r.tokens;
-    }
-    totalTokens = used;
-  } else {
-    let results;
-    if (hasGlobal) {
-      const merged = await searchBothHybrid(query, hippoRoot, globalRoot, { budget, scope: ctxActiveScope, tenantId });
-      const localIndex = loadIndex(hippoRoot);
-      results = merged.map((r) => ({
-        entry: r.entry,
-        score: r.score,
-        tokens: r.tokens,
-        isGlobal: !localIndex.entries[r.entry.id],
-      }));
-    } else {
-      const ctxConfig = loadConfig(hippoRoot);
-      const usePhysicsCtx = ctxConfig.physics?.enabled !== false;
-      const ctxResults = usePhysicsCtx
-        ? await physicsSearch(query, localEntries, { budget, hippoRoot, physicsConfig: ctxConfig.physics, scope: ctxActiveScope })
-        : await hybridSearch(query, localEntries, { budget, hippoRoot, scope: ctxActiveScope });
-      results = ctxResults.map((r) => ({
-        entry: r.entry,
-        score: r.score,
-        tokens: r.tokens,
-        isGlobal: false,
-      }));
-    }
-
-    selectedItems = results;
-    totalTokens = results.reduce((sum, r) => sum + r.tokens, 0);
-
-    // A5 H4: emit recall audit event for context-mode searches. The recall
-    // handler emits one of these per `hippo recall` invocation; context mode
-    // is the same surface (search → user) and must leave the same audit trail.
-    // Skip pinned-only and '*' fallback (handled in branches above which never
-    // hit the search engines).
-    const ctxRecallMetadata: Record<string, unknown> = {
-      query: query.slice(0, 200),
-      results: selectedItems.length,
-      mode: 'context',
-    };
-    if (hasLocal) emitCliAudit(hippoRoot, 'recall', undefined, ctxRecallMetadata);
-    if (hasGlobal) emitCliAudit(globalRoot, 'recall', undefined, ctxRecallMetadata);
-  }
-
-  if (limit < selectedItems.length) {
-    selectedItems = selectedItems.slice(0, limit);
-    totalTokens = selectedItems.reduce((sum, r) => sum + r.tokens, 0);
-  }
-
-  if (selectedItems.length === 0 && !activeSnapshot && !sessionHandoff && recentSessionEvents.length === 0) return;
-
-  // --pinned-only is called by the UserPromptSubmit hook every turn. Treat it
-  // as read-only so pinned memories don't inflate retrieval_count or extend
-  // their half_life by 2 days * turn-count over a long session.
-  let updatedEntries: MemoryEntry[];
-  if (pinnedOnly) {
-    updatedEntries = selectedItems.map((s) => s.entry);
-  } else {
-    // Mark retrieved and persist
-    const toUpdate = selectedItems.map((s) => s.entry);
-    updatedEntries = markRetrieved(toUpdate);
-    const localIndex = loadIndex(hippoRoot);
-
-    for (const u of updatedEntries) {
-      const targetRoot = localIndex.entries[u.id] ? hippoRoot : (hasGlobal ? globalRoot : hippoRoot);
-      writeEntry(targetRoot, u);
-    }
-
-    localIndex.last_retrieval_ids = updatedEntries.map((u) => u.id);
-    saveIndex(hippoRoot, localIndex);
-    updateStats(hippoRoot, { recalled: selectedItems.length });
-  }
-
+  // Format + framing are CLI rendering concerns; api.getContext doesn't see them.
   const format = String(flags['format'] ?? 'markdown');
-
   const framing = String(flags['framing'] ?? 'observe');
 
+  // Adapter: ContextResultEntry -> the print-helper input shape.
+  const renderItems = result.entries.map((r) => ({
+    entry: r.entry,
+    score: r.score,
+    tokens: r.tokens,
+    isGlobal: r.isGlobal ?? false,
+  }));
+
   if (format === 'json') {
-    const output = selectedItems.map((r) => ({
+    const output = result.entries.map((r) => ({
       id: r.entry.id,
       score: r.score,
       strength: r.entry.strength,
@@ -3588,28 +3341,28 @@ async function cmdContext(
       content: r.entry.content,
       global: r.isGlobal ?? false,
     }));
-    console.log(JSON.stringify({ query, activeSnapshot, sessionHandoff, recentSessionEvents, memories: output, tokens: totalTokens }));
+    console.log(JSON.stringify({
+      query: query || '*',
+      activeSnapshot: result.activeSnapshot ?? null,
+      sessionHandoff: result.sessionHandoff ?? null,
+      recentSessionEvents: result.recentEvents ?? [],
+      memories: output,
+      tokens: result.tokens,
+    }));
   } else if (format === 'additional-context') {
-    // Claude Code UserPromptSubmit hook JSON shape. Capture the markdown that
-    // printContextMarkdown would write and wrap it as `additionalContext`.
+    // Claude Code UserPromptSubmit hook JSON shape. Capture print* helpers'
+    // output into a string buffer and wrap as `additionalContext`.
     const lines: string[] = [];
     const realLog = console.log;
     console.log = (...parts: unknown[]) => { lines.push(parts.map(String).join(' ')); };
     try {
-      if (activeSnapshot) printActiveTaskSnapshot(activeSnapshot);
-      if (sessionHandoff) printHandoff(sessionHandoff);
-      if (recentSessionEvents.length > 0) printSessionEvents(recentSessionEvents);
-      if (selectedItems.length > 0) {
-        printContextMarkdown(
-          selectedItems.map((r) => ({
-            entry: updatedEntries.find((u) => u.id === r.entry.id) ?? r.entry,
-            score: r.score,
-            tokens: r.tokens,
-            isGlobal: r.isGlobal ?? false,
-          })),
-          totalTokens,
-          framing
-        );
+      if (result.activeSnapshot) printActiveTaskSnapshot(result.activeSnapshot);
+      if (result.sessionHandoff) printHandoff(result.sessionHandoff);
+      if (result.recentEvents && result.recentEvents.length > 0) {
+        printSessionEvents(result.recentEvents);
+      }
+      if (renderItems.length > 0) {
+        printContextMarkdown(renderItems, result.tokens, framing);
       }
     } finally {
       console.log = realLog;
@@ -3624,32 +3377,34 @@ async function cmdContext(
     };
     process.stdout.write(JSON.stringify(payload));
   } else {
-    if (activeSnapshot) {
-      printActiveTaskSnapshot(activeSnapshot);
+    // markdown (default)
+    if (result.activeSnapshot) {
+      printActiveTaskSnapshot(result.activeSnapshot);
     }
-    if (sessionHandoff) {
-      printHandoff(sessionHandoff);
+    if (result.sessionHandoff) {
+      printHandoff(result.sessionHandoff);
     }
-    if (recentSessionEvents.length > 0) {
-      printSessionEvents(recentSessionEvents);
+    if (result.recentEvents && result.recentEvents.length > 0) {
+      printSessionEvents(result.recentEvents);
     }
-    if (selectedItems.length > 0) {
-      printContextMarkdown(
-        selectedItems.map((r) => ({
-          entry: updatedEntries.find((u) => u.id === r.entry.id) ?? r.entry,
-          score: r.score,
-          tokens: r.tokens,
-          isGlobal: r.isGlobal ?? false,
-        })),
-        totalTokens,
-        framing
-      );
+    if (renderItems.length > 0) {
+      printContextMarkdown(renderItems, result.tokens, framing);
     }
 
-    // Ambient state summary (one-line landscape overview)
+    // Ambient state summary (CLI-side: api.getContext doesn't load all entries
+    // post-selection, so we re-load here for the landscape summary).
     const ambientConfig = loadConfig(hippoRoot);
     if (ambientConfig.ambient.enabled && !pinnedOnly) {
-      const allForAmbient = [...localEntries, ...globalEntries];
+      const tenantId = ctx.tenantId;
+      const globalRoot = getGlobalRoot();
+      const hasGlobalForAmbient = isInitialized(globalRoot);
+      const localForAmbient = isInitialized(hippoRoot)
+        ? loadAllEntries(hippoRoot, tenantId).filter(e => !e.superseded_by)
+        : [];
+      const globalForAmbient = hasGlobalForAmbient
+        ? loadAllEntries(globalRoot, tenantId).filter(e => !e.superseded_by)
+        : [];
+      const allForAmbient = [...localForAmbient, ...globalForAmbient];
       if (allForAmbient.length > 0) {
         const ambientState = computeAmbientState(allForAmbient);
         console.log(`\n${renderAmbientSummary(ambientState)}`);

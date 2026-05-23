@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.11.3 (2026-05-23): api.ts refactor (getContext + sleep + outcomeForLastRecall)
+
+An internal refactor enabling future HTTP API expansion (planned v1.11.4) and the Python SDK (planned v0.1.0). Three new exports added to `src/api.ts`:
+
+- `getContext(ctx, opts): Promise<ContextResult>` extracted from `cmdContext` (~315 inline lines collapsed into a pure async function plus a presentation renderer in the CLI). Named `getContext` rather than `context` to avoid collision with the `Context` interface. Covers pinnedOnly fast path, '*' fallback (strength-sorted), and hybrid search (searchBothHybrid for global, physicsSearch / hybridSearch for local-only). markRetrieved + last_retrieval_ids write-back + updateStats(recalled) + recall audit row stay inside api.getContext for parity with `api.recall`.
+- `sleep(ctx, opts): Promise<SleepResult>` extracted from `cmdSleepCore` Phase 2-6 (consolidate / dedup / audit / share / ambient). Returns structured counts instead of console-printing. The CLI log-file tee, console rendering, and the auto-learn pre-phase (Phase 1: learnFromRepo + learnFromMemoryMd, intrinsically host-bound via `process.cwd()` / `os.homedir()`) stay in the `cmdSleep` + `cmdSleepCore` wrappers. `deduplicateStore` moved to its own module (`src/dedupe.ts`).
+- `outcomeForLastRecall(ctx, good): {applied, ids}` small wrapper around the existing `outcome()` that resolves `loadIndex().last_retrieval_ids` first.
+
+CLI commands (`hippo context`, `hippo sleep`) keep byte-identical stdout. Manual smoke verified all 3 cmdContext format branches (markdown / json / additional-context) and both sleep paths (dry-run / full).
+
+**Behavior fix:** `hippo outcome` now emits one `audit_log` row per affected memory (op='outcome', actor='cli'), matching the MCP `outcome` tool path. Previously the CLI bypassed `api.outcome` and silently skipped the audit emission, an inconsistency between the CLI and MCP surfaces. Downstream consumers of `audit_log` will see new rows from CLI `outcome` invocations going forward; if you rely on counting CLI vs MCP audit rows separately, filter on the `actor` field (`'cli'` vs `'mcp'`).
+
+No public TypeScript API breakage. All `src/api.ts` exports are additive. Tenant-scoping audited: every `loadAllEntries` / `readEntry` in the new `api.getContext` uses `ctx.tenantId`, not `resolveTenantId({})`.
+
+### Shipped
+
+- **`api.outcomeForLastRecall(ctx, good)`**: small (~10 LoC) helper that loads `last_retrieval_ids` and forwards to `api.outcome`. Used by the v1.11.3 `cmdOutcome` rewire and ready for Episode B's HTTP `/v1/outcome` route. Tests (4 real-DB): empty index, multi-id, cross-tenant silent skip, audit emission per id.
+- **`api.sleep(ctx, opts)`**: pure async function over the consolidation pipeline. Auto-learn from git + MEMORY.md stays CLI-side. `deduplicateStore` extracted to `src/dedupe.ts` for cross-module access (api.sleep + cmdDedup). Tests (4 real-DB): dryRun, empty store, populated pipeline, noShare gating. Per-test `HIPPO_HOME` isolation prevents auto-share leaks.
+- **`api.getContext(ctx, opts)`**: pure async function over cmdContext's data-loading + selection. Render helpers (`printContextMarkdown` etc.) stay CLI-side because they are shared with cmdRecall / cmdSnapshot / cmdHandoffShow. Tests (6 real-DB): empty store, '*' fallback ordering, budget cap, tenant scoping, activeSnapshot return, budget=0 short-circuit.
+- **`cmdOutcome` rewired** through `api.outcomeForLastRecall` + `api.outcome`. See the behavior fix above.
+- **`cmdSleepCore` / `cmdContext` thin-wrapped** through their respective api functions, with byte-identical stdout via dedicated render helpers (`renderSleepResult` for sleep; existing `printContextMarkdown` for context).
+
+### Tests
+
+Five new test files: `api-context-sleep-contracts` (7 type-level), `api-outcome-for-last-recall` (4 real-DB), `api-sleep` (4 real-DB), `api-context` (6 real-DB). Full suite: 1628 tests passed, 4 skipped, 0 failed.
+
+### Out of scope (planned for v1.11.4 / v0.1.0)
+
+- HTTP routes for `/v1/outcome`, `/v1/context`, `/v1/sleep` (Episode B, v1.11.4).
+- Python SDK `hippo-memory` on PyPI (Episode C, v0.1.0).
+- Shared `api.renderContext`: print helpers in cli.ts still own the markdown / additional-context rendering. Episode B can extract this if the Python SDK wants server-rendered output.
+
 ## 1.11.2 (2026-05-23): opencode plugin installer
 
 A patch release fixing [#24](https://github.com/kitfunso/hippo-memory/issues/24) at root.

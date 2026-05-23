@@ -28,6 +28,11 @@ import {
   loadActiveTaskSnapshot,
   loadLatestHandoff,
   listSessionEvents,
+  loadIndex,
+  saveIndex,
+  loadAllEntries,
+  updateStats,
+  isInitialized,
   type TaskSnapshot,
   type SessionEvent,
 } from './store.js';
@@ -35,6 +40,7 @@ import type { SessionHandoff } from './handoff.js';
 import {
   createMemory,
   applyOutcome,
+  calculateStrength,
   type MemoryKind,
   type MemoryEntry,
   Layer,
@@ -42,10 +48,11 @@ import {
 import {
   appendAuditEvent,
   queryAuditEvents,
+  auditMemories,
   type AuditEvent,
   type AuditOp,
 } from './audit.js';
-import { promoteToGlobal, getGlobalRoot } from './shared.js';
+import { promoteToGlobal, getGlobalRoot, autoShare, searchBothHybrid } from './shared.js';
 import { archiveRawMemory } from './raw-archive.js';
 import {
   createApiKey,
@@ -54,6 +61,12 @@ import {
   type ApiKeyListItem,
 } from './auth.js';
 import { applyGoalStackBoost } from './goals.js';
+import { markRetrieved, estimateTokens, hybridSearch, physicsSearch } from './search.js';
+import { scopeMatch } from './scope.js';
+import { consolidate } from './consolidate.js';
+import { loadConfig } from './config.js';
+import { deduplicateStore } from './dedupe.js';
+import { computeAmbientState, type AmbientState } from './ambient.js';
 
 export interface Context {
   hippoRoot: string;
@@ -1492,4 +1505,526 @@ export function auditList(ctx: Context, opts: AuditListOpts): AuditEvent[] {
   } finally {
     closeHippoDb(db);
   }
+}
+
+// ---------------------------------------------------------------------------
+// getContext (extracted from cmdContext — Task 5 of the api.ts refactor)
+// ---------------------------------------------------------------------------
+
+/**
+ * Options for `getContext` — assemble a budget-bounded context bundle
+ * (recalled memories + active task snapshot + handoff + recent events).
+ * Extracted from `cmdContext` in `cli.ts` in Episode A of the api.ts refactor.
+ *
+ * Named `getContext` (not `context`) to avoid collision with the `Context`
+ * interface above and the ubiquitous `ctx: Context` convention. Follows the
+ * existing `getEntry` naming pattern in store.ts.
+ *
+ * Scope narrow (T5 execute decision): rendering opts (`format`, `framing`,
+ * `rendered`) and host-side opts (`auto`) are NOT included here. The print
+ * helpers (`printContextMarkdown`, `printActiveTaskSnapshot`, `printHandoff`,
+ * `printSessionEvents`) are shared with `cmdRecall` / `cmdSnapshot` /
+ * `cmdHandoffShow` — moving them into api.ts would expand T5 to also rewire
+ * those commands. CLI handles rendering + auto-resolution. Episode B can add
+ * `api.renderContext` once a shared rendering need actually materializes.
+ */
+export interface ContextOpts {
+  q?: string;
+  /** Default 1500 tokens. */
+  budget?: number;
+  limit?: number;
+  pinnedOnly?: boolean;
+  scope?: string;
+  includeRecent?: number;
+}
+
+export interface ContextResultEntry {
+  entry: MemoryEntry;
+  score: number;
+  tokens: number;
+  isGlobal?: boolean;
+  isFreshTail?: boolean;
+}
+
+export interface ContextResult {
+  entries: ContextResultEntry[];
+  tokens: number;
+  activeSnapshot?: TaskSnapshot | null;
+  sessionHandoff?: SessionHandoff | null;
+  recentEvents?: SessionEvent[];
+}
+
+/**
+ * Assemble a context bundle: recalled memories (pinned-only / strength-sorted
+ * fallback / hybrid search) + active task snapshot + session handoff + recent
+ * session events. Budget-bounded, tenant-scoped. Mutates `last_retrieval_ids`
+ * + emits a 'recall' audit row for non-pinned, non-'*' queries.
+ *
+ * Behaves like the pre-extraction `cmdContext` data-loading + selection
+ * pipeline. CLI presentation (markdown / json / additional-context rendering)
+ * stays in `cli.ts`.
+ *
+ * Tenant scope: all `loadAllEntries` / snapshot / handoff / events reads use
+ * `ctx.tenantId`. Cross-tenant rows are filtered out.
+ *
+ * Returns an empty result (`entries: []`, snapshot/handoff/events undefined)
+ * when there's nothing to surface (no memories AND no snapshot AND no handoff
+ * AND no recent events).
+ */
+export async function getContext(
+  ctx: Context,
+  opts: ContextOpts = {},
+): Promise<ContextResult> {
+  const pinnedOnly = opts.pinnedOnly === true;
+  const budget = opts.budget ?? 1500;
+  const limit = opts.limit ?? Number.POSITIVE_INFINITY;
+  const includeRecent = opts.includeRecent ?? 0;
+  const activeScope = opts.scope ?? '';
+
+  if (budget <= 0) {
+    return { entries: [], tokens: 0 };
+  }
+
+  // Pinned-only path is allowed against an un-initialised local store (the
+  // UserPromptSubmit hook can run in directories without a .hippo). Non-pinned
+  // path requires an initialised local store; callers should check first.
+  const hasLocal = isInitialized(ctx.hippoRoot);
+
+  const query = (opts.q ?? '').trim() || '*';
+
+  const globalRoot = getGlobalRoot();
+  const hasGlobal = isInitialized(globalRoot);
+
+  // Tenant-scoped loads (v1.11.1 lesson: NEVER resolveTenantId({}) here).
+  let localEntries = hasLocal ? loadAllEntries(ctx.hippoRoot, ctx.tenantId) : [];
+  let globalEntries = hasGlobal ? loadAllEntries(globalRoot, ctx.tenantId) : [];
+
+  // Filter superseded — context never includes superseded rows.
+  localEntries = localEntries.filter((e) => !e.superseded_by);
+  globalEntries = globalEntries.filter((e) => !e.superseded_by);
+
+  const activeSnapshot = hasLocal
+    ? loadActiveTaskSnapshot(ctx.hippoRoot, ctx.tenantId)
+    : null;
+  const sessionHandoff = hasLocal && activeSnapshot?.session_id
+    ? loadLatestHandoff(ctx.hippoRoot, ctx.tenantId, activeSnapshot.session_id)
+    : null;
+  const recentSessionEvents = hasLocal && activeSnapshot?.session_id
+    ? listSessionEvents(ctx.hippoRoot, ctx.tenantId, {
+        session_id: activeSnapshot.session_id,
+        limit: 5,
+      })
+    : [];
+
+  if (
+    localEntries.length === 0 &&
+    globalEntries.length === 0 &&
+    !activeSnapshot &&
+    !sessionHandoff &&
+    recentSessionEvents.length === 0
+  ) {
+    return { entries: [], tokens: 0 };
+  }
+
+  let selectedItems: ContextResultEntry[] = [];
+  let totalTokens = 0;
+
+  if (pinnedOnly) {
+    // loadConfig is safe even when local isn't initialised — returns defaults.
+    const pinnedCfg = loadConfig(ctx.hippoRoot);
+    if (!pinnedCfg.pinnedInject.enabled) {
+      return { entries: [], tokens: 0 };
+    }
+    // Effective budget: explicit opts.budget wins over config.
+    const effBudget = opts.budget !== undefined ? budget : pinnedCfg.pinnedInject.budget;
+    const nowP = new Date();
+    const selectedIds = new Set<string>();
+    let usedP = 0;
+
+    if (includeRecent > 0) {
+      const recent = [
+        ...localEntries.map((entry) => ({ entry, isGlobal: false })),
+        ...globalEntries.map((entry) => ({ entry, isGlobal: true })),
+      ]
+        .sort((a, b) => {
+          const byCreated = Date.parse(b.entry.created) - Date.parse(a.entry.created);
+          return byCreated !== 0 ? byCreated : b.entry.id.localeCompare(a.entry.id);
+        })
+        .slice(0, includeRecent)
+        .map(({ entry, isGlobal }) => ({
+          entry,
+          score: calculateStrength(entry, nowP) * (isGlobal ? 1 / 1.2 : 1),
+          tokens: estimateTokens(entry.content),
+          isGlobal,
+        }));
+
+      for (const r of recent) {
+        if (selectedIds.has(r.entry.id)) continue;
+        if (usedP + r.tokens > effBudget) continue;
+        selectedItems.push(r);
+        selectedIds.add(r.entry.id);
+        usedP += r.tokens;
+      }
+    }
+
+    const pinnedLocal = localEntries.filter((e) => e.pinned);
+    const pinnedGlobal = globalEntries.filter((e) => e.pinned);
+    if (
+      pinnedLocal.length === 0 &&
+      pinnedGlobal.length === 0 &&
+      selectedItems.length === 0
+    ) {
+      return { entries: [], tokens: 0 };
+    }
+    const rankedPinned = [
+      ...pinnedLocal.map((e) => ({ entry: e, isGlobal: false })),
+      ...pinnedGlobal.map((e) => ({ entry: e, isGlobal: true })),
+    ]
+      .map(({ entry, isGlobal }) => {
+        const scopeSig = scopeMatch(entry.tags, activeScope);
+        const sBst = scopeSig === 1 ? 1.5 : scopeSig === -1 ? 0.5 : 1.0;
+        return {
+          entry,
+          score: calculateStrength(entry, nowP) * (isGlobal ? 1 / 1.2 : 1) * sBst,
+          tokens: estimateTokens(entry.content),
+          isGlobal,
+        };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    for (const r of rankedPinned) {
+      if (selectedIds.has(r.entry.id)) continue;
+      if (usedP + r.tokens > effBudget) continue;
+      selectedItems.push(r);
+      selectedIds.add(r.entry.id);
+      usedP += r.tokens;
+    }
+    totalTokens = usedP;
+  } else if (query === '*') {
+    // No query: return strongest memories by strength, up to budget.
+    const now = new Date();
+    const localRanked = localEntries
+      .map((e) => ({
+        entry: e,
+        score: calculateStrength(e, now),
+        tokens: estimateTokens(e.content),
+        isGlobal: false,
+      }))
+      .sort((a, b) => b.score - a.score);
+
+    const globalRanked = globalEntries
+      .map((e) => ({
+        entry: e,
+        score: calculateStrength(e, now) * (1 / 1.2),
+        tokens: estimateTokens(e.content),
+        isGlobal: true,
+      }))
+      .sort((a, b) => b.score - a.score);
+
+    const combined = [...localRanked, ...globalRanked].sort((a, b) => b.score - a.score);
+
+    let used = 0;
+    for (const r of combined) {
+      if (used + r.tokens > budget) continue;
+      selectedItems.push(r);
+      used += r.tokens;
+    }
+    totalTokens = used;
+  } else {
+    // Real query: hybrid search (global + local) or physics+hybrid (local only).
+    let results: ContextResultEntry[];
+    if (hasGlobal) {
+      const merged = await searchBothHybrid(query, ctx.hippoRoot, globalRoot, {
+        budget,
+        scope: activeScope,
+        tenantId: ctx.tenantId,
+      });
+      const localIndex = loadIndex(ctx.hippoRoot);
+      results = merged.map((r) => ({
+        entry: r.entry,
+        score: r.score,
+        tokens: r.tokens,
+        isGlobal: !localIndex.entries[r.entry.id],
+      }));
+    } else {
+      const ctxConfig = loadConfig(ctx.hippoRoot);
+      const usePhysicsCtx = ctxConfig.physics?.enabled !== false;
+      const ctxResults = usePhysicsCtx
+        ? await physicsSearch(query, localEntries, {
+            budget,
+            hippoRoot: ctx.hippoRoot,
+            physicsConfig: ctxConfig.physics,
+            scope: activeScope,
+          })
+        : await hybridSearch(query, localEntries, {
+            budget,
+            hippoRoot: ctx.hippoRoot,
+            scope: activeScope,
+          });
+      results = ctxResults.map((r) => ({
+        entry: r.entry,
+        score: r.score,
+        tokens: r.tokens,
+        isGlobal: false,
+      }));
+    }
+
+    selectedItems = results;
+    totalTokens = results.reduce((sum, r) => sum + r.tokens, 0);
+
+    // A5 H4: emit recall audit row for context-mode searches (matches the
+    // 'recall' op emitted by api.recall for parity). pinnedOnly + '*' fallback
+    // never hit the search engines, so they don't emit (matches cmdContext).
+    const ctxRecallMetadata = {
+      query: query.slice(0, 200),
+      results: selectedItems.length,
+      mode: 'context',
+    };
+    if (hasLocal) {
+      const localDb = openHippoDb(ctx.hippoRoot);
+      try {
+        appendAuditEvent(localDb, {
+          tenantId: ctx.tenantId,
+          actor: ctx.actor,
+          op: 'recall',
+          metadata: ctxRecallMetadata,
+        });
+      } finally {
+        closeHippoDb(localDb);
+      }
+    }
+    if (hasGlobal) {
+      const globalDb = openHippoDb(globalRoot);
+      try {
+        appendAuditEvent(globalDb, {
+          tenantId: ctx.tenantId,
+          actor: ctx.actor,
+          op: 'recall',
+          metadata: ctxRecallMetadata,
+        });
+      } finally {
+        closeHippoDb(globalDb);
+      }
+    }
+  }
+
+  if (limit < selectedItems.length) {
+    selectedItems = selectedItems.slice(0, limit);
+    totalTokens = selectedItems.reduce((sum, r) => sum + r.tokens, 0);
+  }
+
+  if (
+    selectedItems.length === 0 &&
+    !activeSnapshot &&
+    !sessionHandoff &&
+    recentSessionEvents.length === 0
+  ) {
+    return { entries: [], tokens: 0 };
+  }
+
+  // pinnedOnly is the UserPromptSubmit hot path — read-only so pinned
+  // memories don't inflate retrieval_count or extend half_life by 2 days per
+  // turn over a long session.
+  if (!pinnedOnly) {
+    const toUpdate = selectedItems.map((s) => s.entry);
+    const updatedEntries = markRetrieved(toUpdate);
+    const localIndex = loadIndex(ctx.hippoRoot);
+
+    for (const u of updatedEntries) {
+      const targetRoot = localIndex.entries[u.id]
+        ? ctx.hippoRoot
+        : hasGlobal
+          ? globalRoot
+          : ctx.hippoRoot;
+      writeEntry(targetRoot, u);
+    }
+
+    localIndex.last_retrieval_ids = updatedEntries.map((u) => u.id);
+    saveIndex(ctx.hippoRoot, localIndex);
+    updateStats(ctx.hippoRoot, { recalled: selectedItems.length });
+
+    // Replace selectedItems entries with markRetrieved-updated copies so
+    // the returned ContextResult reflects post-recall state.
+    selectedItems = selectedItems.map((s) => ({
+      ...s,
+      entry: updatedEntries.find((u) => u.id === s.entry.id) ?? s.entry,
+    }));
+  }
+
+  return {
+    entries: selectedItems,
+    tokens: totalTokens,
+    activeSnapshot: activeSnapshot ?? undefined,
+    sessionHandoff: sessionHandoff ?? undefined,
+    recentEvents: recentSessionEvents.length > 0 ? recentSessionEvents : undefined,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// sleep (extracted from cmdSleepCore Phase 2-6 — Task 4 of the api.ts refactor)
+// ---------------------------------------------------------------------------
+
+/**
+ * Options for `sleep` — run the pure-storage consolidation pipeline
+ * (consolidate + dedup + audit + share + ambient) and return structured counts.
+ *
+ * Extracted from `cmdSleepCore` Phase 2-6 in Episode A. NOT covered by api.sleep:
+ * the cli-only auto-learn phase (Phase 1: learnFromRepo + learnFromMemoryMd),
+ * which is intrinsically host-bound (uses `process.cwd()` / `os.homedir()`).
+ * Auto-learn stays in cli.ts cmdSleepCore as a pre-api block.
+ *
+ * The CLI `cmdSleep` wrapper continues to own the log-file tee + console
+ * rendering + `process.exit`; `api.sleep` is pure (no console.log, no IO
+ * beyond the store).
+ */
+export interface SleepOpts {
+  dryRun?: boolean;
+  noShare?: boolean;
+}
+
+export interface SleepResult {
+  active: number;
+  removed: number;
+  mergedEpisodic: number;
+  newSemantic: number;
+  dryRun: boolean;
+  deduped?: {
+    removed: number;
+    semDups: number;
+    epiDups: number;
+    crossDups: number;
+  };
+  audit?: { errorsRemoved: number; warningCount: number };
+  shared?: number;
+  ambient?: AmbientState | null;
+  details?: string[];
+}
+
+/**
+ * Run the pure-storage consolidation pipeline.
+ *
+ * Tenant scope note: sleep operates on the WHOLE hippoRoot (all tenants in
+ * it), matching the pre-refactor cmdSleepCore behavior. Correct for a CLI
+ * maintenance op invoked by the operator. But once Episode B exposes this
+ * over HTTP `/v1/sleep`, the route MUST gate to a global-admin actor or
+ * scope dedup/audit/delete by ctx.tenantId — otherwise a tenant-A Bearer
+ * could dedupe and delete tenant-B's rows. See TODOS.md "Episode A
+ * follow-ups" for the Episode B preflight checklist.
+ *
+ * Audit emission gap: the consolidation phases (dedup, audit-delete) do
+ * NOT emit audit_log rows today, matching pre-refactor cmdSleepCore. Same
+ * CLI/MCP parity gap that T6 fixed for cmdOutcome, now visible at the api
+ * surface. Episode B should decide whether `/v1/sleep` writes a single
+ * 'consolidate' audit row per invocation or per-phase rows per deletion.
+ */
+export async function sleep(
+  ctx: Context,
+  opts: SleepOpts = {},
+): Promise<SleepResult> {
+  const dryRun = Boolean(opts.dryRun);
+
+  // Phase 1: Consolidation.
+  const consolidateResult = await consolidate(ctx.hippoRoot, { dryRun });
+
+  const result: SleepResult = {
+    active: consolidateResult.decayed,
+    removed: consolidateResult.removed,
+    mergedEpisodic: consolidateResult.merged,
+    newSemantic: consolidateResult.semanticCreated,
+    dryRun,
+    details: consolidateResult.details,
+  };
+
+  if (dryRun) return result;
+
+  // Phase 2: Dedup (post-consolidate near-duplicate cleanup).
+  const dedupResult = deduplicateStore(ctx.hippoRoot);
+  if (dedupResult.removed > 0) {
+    const semDups = dedupResult.pairs.filter(
+      (p) => p.keptLayer === 'semantic' && p.removedLayer === 'semantic',
+    ).length;
+    const epiDups = dedupResult.pairs.filter(
+      (p) => p.keptLayer === 'episodic' && p.removedLayer === 'episodic',
+    ).length;
+    const crossDups = dedupResult.pairs.filter(
+      (p) => p.keptLayer !== p.removedLayer,
+    ).length;
+    result.deduped = {
+      removed: dedupResult.removed,
+      semDups,
+      epiDups,
+      crossDups,
+    };
+  }
+
+  // Phase 3: Quality audit (remove junk, report warnings).
+  const allEntries = loadAllEntries(ctx.hippoRoot);
+  const auditOut = auditMemories(allEntries);
+  if (auditOut.issues.length > 0) {
+    const errors = auditOut.issues.filter((i) => i.severity === 'error');
+    const warnings = auditOut.issues.filter((i) => i.severity === 'warning');
+    if (errors.length > 0) {
+      for (const issue of errors) {
+        deleteEntry(ctx.hippoRoot, issue.memoryId);
+      }
+    }
+    if (errors.length > 0 || warnings.length > 0) {
+      result.audit = {
+        errorsRemoved: errors.length,
+        warningCount: warnings.length,
+      };
+    }
+  }
+
+  // Phase 4: Auto-share high-transfer-score memories to global.
+  if (!opts.noShare) {
+    const sleepConfig = loadConfig(ctx.hippoRoot);
+    if (sleepConfig.autoShareOnSleep) {
+      const shared = autoShare(ctx.hippoRoot, { minScore: 0.6 });
+      if (shared.length > 0) {
+        result.shared = shared.length;
+      }
+    }
+  }
+
+  // Phase 5: Post-sleep ambient state summary.
+  const postSleepConfig = loadConfig(ctx.hippoRoot);
+  if (postSleepConfig.ambient.enabled) {
+    const postSleepEntries = loadAllEntries(ctx.hippoRoot).filter(
+      (e) => !e.superseded_by,
+    );
+    if (postSleepEntries.length > 0) {
+      result.ambient = computeAmbientState(postSleepEntries);
+    }
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// outcomeForLastRecall (last-recall wrapper around outcome — Task 3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Apply an outcome to the ids most recently returned by `recall()`.
+ *
+ * Reads `loadIndex(ctx.hippoRoot).last_retrieval_ids` (per-hippoRoot local
+ * state; not tenant-scoped at the index layer) and forwards to `outcome()`,
+ * which DOES tenant-filter via `readEntry(..., ctx.tenantId)` — cross-tenant
+ * ids in `last_retrieval_ids` are silently skipped, matching the MCP
+ * `hippo_outcome` semantics.
+ *
+ * Do NOT tighten `loadIndex` with `tenantId` inside this helper — doing so
+ * would break the (correct) cross-tenant-silent-skip behavior covered by
+ * the test in `tests/api-outcome-for-last-recall.test.ts`.
+ */
+export function outcomeForLastRecall(
+  ctx: Context,
+  good: boolean,
+): { applied: number; ids: string[] } {
+  const idx = loadIndex(ctx.hippoRoot);
+  const ids = idx.last_retrieval_ids;
+  if (ids.length === 0) return { applied: 0, ids: [] };
+  const { applied } = outcome(ctx, ids, good);
+  return { applied, ids };
 }
