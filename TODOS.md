@@ -128,7 +128,11 @@ by post-review fixes 2db5017..38339f4). Each item belongs in **A5 v2**
   stub model, but a multi-tenant deployment running `hippo sleep` would
   decay/merge/dedupe across tenants. Cross-tenant isolation must be threaded
   through every background pass before flipping the deployment model. Track
-  with the same v2 audit as M2.
+  with the same v2 audit as M2. (Dependent site: `refine-llm.ts:151`'s
+  per-parent `readEntry` was deferred from the v1.11.0 tenant-isolation
+  residue episode (01KS8W156) because half-scoping it without first scoping
+  the upstream `loadAllEntries(hippoRoot)` on line 130 would silently drop
+  parent text; lands together with this L9 work.)
 
 ---
 

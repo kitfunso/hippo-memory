@@ -398,7 +398,7 @@ function serveStaticFile(res: http.ServerResponse, filePath: string): boolean {
   }
 }
 
-export function serveDashboard(hippoRoot: string, port: number = 3333): void {
+export function serveDashboard(hippoRoot: string, port: number = 3333): http.Server {
   const distUiDir = path.resolve(import.meta.dirname, '..', 'dist-ui');
   const hasDistUi = fs.existsSync(path.join(distUiDir, 'index.html'));
 
@@ -412,7 +412,7 @@ export function serveDashboard(hippoRoot: string, port: number = 3333): void {
       const starMatch = pathname.match(/^\/api\/star\/([A-Za-z0-9_\-]+)$/);
       if (starMatch && req.method === 'POST') {
         const id = starMatch[1];
-        const entry = readEntry(hippoRoot, id);
+        const entry = readEntry(hippoRoot, id, resolveTenantId({}));
         if (!entry) return jsonResponse(res, { error: 'Not found' }, 404);
         entry.starred = !entry.starred;
         writeEntry(hippoRoot, entry);
@@ -468,4 +468,6 @@ export function serveDashboard(hippoRoot: string, port: number = 3333): void {
     if (hasDistUi) console.log(`Serving React UI from ${distUiDir}`);
     console.log('Press Ctrl+C to stop.');
   });
+
+  return server;
 }

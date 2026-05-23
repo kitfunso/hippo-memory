@@ -1143,7 +1143,7 @@ export function promote(
   // db, which emits a 'remember' audit row. We then add the user-facing
   // 'promote' event on the global db so the audit trail keeps the intent
   // distinct from the underlying upsert.
-  const globalEntry = promoteToGlobal(ctx.hippoRoot, id, { actor: ctx.actor });
+  const globalEntry = promoteToGlobal(ctx.hippoRoot, id, { actor: ctx.actor, tenantId: ctx.tenantId });
 
   const db = openHippoDb(getGlobalRoot());
   try {

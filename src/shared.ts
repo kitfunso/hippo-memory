@@ -52,9 +52,9 @@ export function initGlobal(): void {
 export function promoteToGlobal(
   localRoot: string,
   id: string,
-  opts?: { actor?: string },
+  opts?: { actor?: string; tenantId?: string },
 ): MemoryEntry {
-  const entry = readEntry(localRoot, id);
+  const entry = readEntry(localRoot, id, opts?.tenantId);
   if (!entry) throw new Error(`Memory not found: ${id}`);
 
   initGlobal();

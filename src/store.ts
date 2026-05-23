@@ -2080,7 +2080,14 @@ export function replaceDetectedConflicts(
 
     for (const row of openRows) {
       const key = `${row.memory_a_id}::${row.memory_b_id}`;
-      if (!detectedKeys.has(key)) {
+      const stale = !detectedKeys.has(key);
+      // v1.11.0 residue: auto-resolve any open cross-tenant row. The insert
+      // loop below (line 2089) and the refMap rebuild (line 2117) skip
+      // cross-tenant pairs, but the resolve-stale loop previously left
+      // re-detected cross-tenant rows lingering status='open'. The
+      // sameTenant() helper is already built one block up; no extra query.
+      const crossTenant = !sameTenant(row.memory_a_id, row.memory_b_id);
+      if (stale || crossTenant) {
         db.prepare(`UPDATE memory_conflicts SET status = 'resolved', updated_at = ? WHERE id = ?`).run(detectedAt, row.id);
       }
     }
