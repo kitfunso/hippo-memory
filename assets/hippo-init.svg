@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 360" width="800" height="360" role="img" aria-labelledby="t d">
+  <title id="t">hippo init --scan ~ — initializing memory across all repos</title>
+  <desc id="d">Animated terminal demonstration of installing the hippo-memory npm package globally and running hippo init with the --scan flag to find every git repo under the home directory and seed each with memory.</desc>
+
+  <defs>
+    <style>
+      /* Color palette matches the README's amber/cream bio tones for visual cohesion */
+      .frame  { fill: #1a1a1f; }
+      .titlebar { fill: #2b2b33; }
+      .dot-r  { fill: #ff5f56; }
+      .dot-y  { fill: #ffbd2e; }
+      .dot-g  { fill: #27c93f; }
+      .title-text { fill: #888; font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 12px; }
+
+      .term   { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 16px; }
+      .prompt { fill: #27c93f; }
+      .cmd    { fill: #e5e5e5; }
+      .ok     { fill: #27c93f; }
+      .info   { fill: #a8a8a8; }
+      .accent { fill: #ffbd2e; }
+      .done   { fill: #fff4dc; font-weight: 600; }
+
+      /* Each line: starts invisible, fades in at its cue, then the whole loop restarts every 10.5s */
+      .line { opacity: 0; animation: reveal 10.5s linear infinite; }
+      .l1 { animation-delay: 0.0s; }
+      .l2 { animation-delay: 1.0s; }
+      .l3 { animation-delay: 2.0s; }
+      .l4 { animation-delay: 3.0s; }
+      .l5 { animation-delay: 4.0s; }
+      .l6 { animation-delay: 5.0s; }
+      .l7 { animation-delay: 6.0s; }
+      .l8 { animation-delay: 7.0s; }
+      .l9 { animation-delay: 8.0s; }
+
+      @keyframes reveal {
+        0%       { opacity: 0; }
+        3%       { opacity: 1; }
+        90%      { opacity: 1; }
+        100%     { opacity: 0; }
+      }
+
+      .cursor { fill: #e5e5e5; animation: blink 1s steps(2, end) infinite; }
+      @keyframes blink {
+        0%, 50%  { opacity: 1; }
+        50.01%, 100% { opacity: 0; }
+      }
+
+      /* Respect the OS-level reduced-motion preference: freeze the demo
+         on its fully-revealed final frame instead of looping. WCAG 2.3.3. */
+      @media (prefers-reduced-motion: reduce) {
+        .line, .cursor { animation: none; opacity: 1; }
+      }
+    </style>
+  </defs>
+
+  <!-- Terminal frame -->
+  <rect class="frame"    x="0"  y="0"  width="800" height="360" rx="10" />
+  <rect class="titlebar" x="0"  y="0"  width="800" height="28"  rx="10" />
+  <rect class="titlebar" x="0"  y="18" width="800" height="10"  />
+  <circle class="dot-r" cx="18" cy="14" r="6"/>
+  <circle class="dot-y" cx="38" cy="14" r="6"/>
+  <circle class="dot-g" cx="58" cy="14" r="6"/>
+  <text class="title-text" x="400" y="18" text-anchor="middle">~/projects — hippo</text>
+
+  <!-- Terminal content. Each text element fades in at its staggered delay. -->
+  <g class="term">
+    <!-- t = 0.0s -->
+    <text class="line l1" x="20" y="68"><tspan class="prompt">$</tspan> <tspan class="cmd">npm install -g hippo-memory</tspan></text>
+    <!-- t = 1.0s -->
+    <text class="line l2 info" x="20" y="92">added 1 package in 1.2s</text>
+    <text class="line l2" x="20" y="112"><tspan class="info">+ hippo-memory@</tspan><tspan class="accent">1.11.1</tspan></text>
+
+    <!-- t = 2.0s -->
+    <text class="line l3" x="20" y="148"><tspan class="prompt">$</tspan> <tspan class="cmd">hippo init --scan ~</tspan></text>
+
+    <!-- t = 3.0s -->
+    <text class="line l4 info" x="20" y="176">Scanning ~ for git repositories...</text>
+    <!-- t = 4.0s -->
+    <text class="line l5" x="20" y="200"><tspan class="ok">✓</tspan> <tspan class="cmd">Found </tspan><tspan class="accent">23</tspan><tspan class="cmd"> git repositories</tspan></text>
+    <!-- t = 5.0s -->
+    <text class="line l6" x="20" y="224"><tspan class="ok">✓</tspan> <tspan class="cmd">Initialized </tspan><tspan class="accent">.hippo/</tspan><tspan class="cmd"> in all 23 projects</tspan></text>
+    <!-- t = 6.0s -->
+    <text class="line l7" x="20" y="248"><tspan class="ok">✓</tspan> <tspan class="cmd">Seeded </tspan><tspan class="accent">412 lessons</tspan><tspan class="cmd"> from 30 days of commit history</tspan></text>
+    <!-- t = 7.0s -->
+    <text class="line l8" x="20" y="272"><tspan class="ok">✓</tspan> <tspan class="cmd">Installed Stop hook in </tspan><tspan class="accent">CLAUDE.md</tspan></text>
+
+    <!-- t = 8.0s — closing line, brighter -->
+    <text class="line l9 done" x="20" y="312">Done. Your agents have memory.</text>
+  </g>
+
+  <!-- Blinking cursor at the final prompt position -->
+  <rect class="cursor" x="20" y="328" width="9" height="16"/>
+</svg>
