@@ -149,32 +149,46 @@ Locate the actual `loadIndex` import path during execute (likely `./index-io.js`
 
 ---
 
-## Task 4: Implement `sleep()` (extract from cmdSleepCore)
+## Task 4: Implement `sleep()` (extract from cmdSleepCore — narrowed per option-B factoring)
 
-**Files:** Modify `src/api.ts` (replace stub) + `tests/api-sleep.test.ts` (new) + `src/cli.ts` cmdSleepCore (rewire to call api.sleep + render).
+**Files:** Modify `src/api.ts` (replace stub + narrow SleepOpts/SleepResult) + `tests/api-sleep.test.ts` (new) + `src/cli.ts` cmdSleepCore (rewire to call api.sleep + render) + `src/dedupe.ts` (new, extracted from cli.ts) + `tests/api-context-sleep-contracts.test.ts` (T2 contract test, minor update for the narrowed types).
 
-**Boundary discipline (required):** `cmdSleep` (the wrapper at `cli.ts:2142-2191`) STAYS UNTOUCHED. The log-file tee, `process.exit`, and any `[hippo] sleep complete` console lines stay in the CLI layer. `api.sleep` is pure: no console.log, no process.exit, no log-file IO. The prior bundled episode's CRIT finding (sleep HTTP route bypassing CLI side effects) is prevented by keeping all presentation/side-effects in cli.ts.
+**Scope correction (caught at execute, 2026-05-23):** the plan-eng-critic's "verbatim port" assumption missed that 3 helpers used by cmdSleepCore are cli-private and host-bound:
+- `learnFromRepo` (cli.ts:3830) uses `process.cwd()` — intrinsically CLI-bound
+- `learnFromMemoryMd` (cli.ts:1963) uses `os.homedir()` — intrinsically CLI-bound
+- `deduplicateStore` (cli.ts:2040) is pure (hippoRoot-only) — moveable
+
+The structurally correct factoring: **api.sleep covers only the pure-storage phases** (consolidate + dedup + audit + share + ambient). The auto-learn phases stay in `cmdSleepCore` as CLI-pre-api work. HTTP `/v1/sleep` in Episode B doesn't need auto-learn — the server has no business cwd or client home dir to scan. `deduplicateStore` moves to its own module (`src/dedupe.ts`) so both cli.ts and api.ts can import it.
+
+This narrows `SleepOpts` (drops `noLearn`) and `SleepResult` (drops `autoLearned`). T2's already-committed types are amended.
+
+**Boundary discipline (required):** `cmdSleep` wrapper (`cli.ts:2142-2191`) STAYS UNTOUCHED. The log-file tee, `process.exit`, and `[hippo] sleep complete` console lines stay in CLI. `api.sleep` is pure: no console.log, no process.exit, no log-file IO. The prior bundled episode's CRIT finding (sleep HTTP route bypassing CLI side effects) is prevented by keeping all presentation/side-effects + auto-learn in cli.ts.
 
 **Step 1: Failing tests** (real-DB):
 - `dryRun returns counts, no writes` — verify SleepResult.dryRun=true, no audit/dedup/share runs.
-- `non-dry-run runs full pipeline; returns populated SleepResult` — verify each phase's counters populate (autoLearned, deduped, audit, shared, ambient).
-- `noLearn skips git + MEMORY.md learning` — SleepResult.autoLearned is undefined.
+- `non-dry-run runs full pipeline; returns populated SleepResult` — verify each phase's counters populate (deduped, audit, shared, ambient).
 - `noShare skips auto-share` — SleepResult.shared is undefined.
 
-**Step 2:** Port cmdSleepCore logic to api.sleep verbatim, swapping console.log → result-object population:
+**Step 2:** Port cmdSleepCore's pure-storage phases (Phase 2-6 of the current implementation) to api.sleep, swapping console.log → result-object population:
 
-- Phase 1 (auto-learn, gated on !opts.noLearn): learnFromRepo + learnFromMemoryMd → result.autoLearned = `{fromGit, fromMemoryMd}`.
-- Phase 2: `await consolidate(ctx.hippoRoot, {dryRun: opts.dryRun})` → populate active/removed/mergedEpisodic/newSemantic/details.
-- Phase 3 (gated on !dryRun): deduplicateStore → result.deduped.
-- Phase 4 (gated on !dryRun): auditMemories + delete junk → result.audit.
-- Phase 5 (gated on !dryRun && !opts.noShare && config.autoShareOnSleep): autoShare → result.shared.
-- Phase 6 (gated on !dryRun && config.ambient.enabled): computeAmbientState → result.ambient.
+- Phase 1: `await consolidate(ctx.hippoRoot, {dryRun: opts.dryRun})` → populate active/removed/mergedEpisodic/newSemantic/details.
+- Phase 2 (gated on !dryRun): `deduplicateStore(ctx.hippoRoot)` (from new src/dedupe.ts) → result.deduped {removed, semDups, epiDups, crossDups}.
+- Phase 3 (gated on !dryRun): `auditMemories(loadAllEntries(...))` → for error issues, deleteEntry each; result.audit {errorsRemoved, warningCount}.
+- Phase 4 (gated on !dryRun && !opts.noShare && config.autoShareOnSleep): `autoShare(ctx.hippoRoot, {minScore: 0.6})` → result.shared.
+- Phase 5 (gated on !dryRun && config.ambient.enabled): `computeAmbientState(loadAllEntries(...).filter(!superseded_by))` → result.ambient.
 
-**Step 3:** Rewire `cmdSleepCore` to call `api.sleep(ctx, {dryRun, noLearn, noShare})` and pass the result to a new local `renderSleepResult(result)` function that produces byte-identical console output to the current implementation. The render function lives in cli.ts (or src/cli-render.ts if it grows past ~60 lines).
+NOT in api.sleep: the auto-learn phase (learnFromRepo + learnFromMemoryMd). Stays in `cmdSleepCore` as CLI-pre-api work.
 
-**Step 4:** Run full suite. Existing CLI tests pass byte-identically (compare output snapshots if any exist). New api.sleep tests pass. Manual smoke: `hippo sleep --dry-run` output identical to master.
+**Step 3:** Rewire `cmdSleepCore` to: (a) keep the existing auto-learn block before calling api, (b) build `api.Context` + `SleepOpts {dryRun, noShare}`, (c) `await api.sleep(ctx, opts)`, (d) pass the result to a new local `renderSleepResult(result)` function that produces byte-identical console output for Phase 2-6 lines. The auto-learn console lines ("Auto-learned N lessons...", "Imported N memories...") stay as-is in the CLI block. The render function lives in cli.ts (or src/cli-render.ts if it grows past ~60 lines).
 
-**Step 5: Commit** `feat(api): extract sleep() from cmdSleepCore — pure result, CLI thin-wraps for render`.
+**Step 4:** Move `deduplicateStore` + `DedupPair` interface from cli.ts to new `src/dedupe.ts`. Update `cmdDedup` (cli.ts:2090) to import from the new module. Function signature and behavior unchanged.
+
+**Step 5:** Run full suite. Existing CLI tests pass byte-identically (compare output snapshots if any exist). New api.sleep tests pass. Manual smoke: `hippo sleep --dry-run` and `hippo sleep` output identical to master.
+
+**Step 6: Commits** (3 commits for clarity):
+- `refactor(dedup): extract deduplicateStore to src/dedupe.ts (prep for api.sleep)` — pure move, no behavior change.
+- `refactor(api): narrow SleepOpts/SleepResult per option-B factoring` — drops noLearn/autoLearned (CLI-only concerns).
+- `feat(api): extract sleep() from cmdSleepCore (consolidate+dedup+audit+share+ambient)` — main extraction + renderSleepResult + cmdSleepCore rewire + tests.
 
 ---
 
@@ -270,7 +284,7 @@ CHANGELOG entry (1.11.3, prepended above 1.11.2):
 >
 > Internal refactor enabling future HTTP API expansion (planned v1.11.4) and the Python SDK (planned v0.1.0). Three new exports added to `src/api.ts`:
 > - `getContext(ctx, opts): Promise<ContextResult>` — extracted from `cmdContext` (~315 inline lines collapsed into a pure async function + a presentation renderer in the CLI). Named `getContext` rather than `context` to avoid collision with the `Context` interface.
-> - `sleep(ctx, opts): Promise<SleepResult>` — extracted from `cmdSleepCore`; returns structured counts for active/removed/merged/newSemantic/deduped/audit/shared/ambient instead of console-printing inside the core. The CLI log-file tee and console rendering stay in the `cmdSleep` wrapper.
+> - `sleep(ctx, opts): Promise<SleepResult>` — extracted from `cmdSleepCore` (Phase 2-6: consolidate / dedup / audit / share / ambient); returns structured counts for active/removed/merged/newSemantic/deduped/audit/shared/ambient instead of console-printing inside the core. The CLI log-file tee, console rendering, and the auto-learn pre-phase (Phase 1: learnFromRepo + learnFromMemoryMd, intrinsically host-bound) stay in the `cmdSleep` + `cmdSleepCore` wrappers. `deduplicateStore` moved to its own module (`src/dedupe.ts`).
 > - `outcomeForLastRecall(ctx, good): {applied, ids}` — small wrapper around the existing `outcome()` that resolves `loadIndex().last_retrieval_ids` first.
 >
 > CLI commands (`hippo context`, `hippo sleep`) keep byte-identical stdout (covered by 10 new render-snapshot tests in `tests/cli-context-render-snapshot.test.ts` and the existing sleep smokes).
@@ -332,7 +346,7 @@ Version pins (6 manifests):
 - [ ] `hippo outcome` emits one `audit_log` row per affected id (new test green); no existing test broken by the new rows.
 - [ ] Tenant scoping audit clean (zero `resolveTenantId({})` inside api.getContext or api.sleep body).
 - [ ] Full suite green, exit=0.
-- [ ] 5 new test files: api-context-sleep-contracts, api-outcome-for-last-recall, api-sleep, api-context, cli-context-render-snapshot.
+- [ ] 5 new test files: api-context-sleep-contracts, api-outcome-for-last-recall, api-sleep, api-context, cli-context-render-snapshot. (Plus existing cli-dedup tests continue to pass after deduplicateStore moves to src/dedupe.ts.)
 - [ ] CHANGELOG 1.11.3 entry present (including the audit-emission behavior-fix note).
 - [ ] Version 1.11.3 across all 6 manifests.
 - [ ] PR merged, npm published.
