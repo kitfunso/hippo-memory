@@ -1,6 +1,5 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -10,26 +9,15 @@ import {
   detectInstalledTools,
   defaultSleepLogPath,
 } from '../src/hooks.js';
+import { withFakeHome as withFakeHomeShared } from './_helpers/with-fake-home.js';
 
 /**
  * Each test gets its own fake $HOME so we never touch the real
  * ~/.claude/settings.json or ~/.config/opencode/opencode.json on the machine
- * running the tests.
+ * running the tests. Delegates to the shared helper extracted 2026-05-23.
  */
 function withFakeHome(): { cleanup: () => void; home: string } {
-  const prevHome = process.env.HOME;
-  const prevUserProfile = process.env.USERPROFILE;
-  const fake = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-hooks-test-'));
-  process.env.HOME = fake;
-  process.env.USERPROFILE = fake;
-  return {
-    home: fake,
-    cleanup: () => {
-      process.env.HOME = prevHome;
-      process.env.USERPROFILE = prevUserProfile;
-      fs.rmSync(fake, { recursive: true, force: true });
-    },
-  };
+  return withFakeHomeShared('hippo-hooks-test-');
 }
 
 describe('JSON hook installer', () => {
