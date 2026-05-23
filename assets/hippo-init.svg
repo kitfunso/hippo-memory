@@ -79,7 +79,7 @@
     <text class="line l8" x="20" y="272"><tspan class="ok">✓</tspan> <tspan class="cmd">Installed Stop hook in </tspan><tspan class="accent">CLAUDE.md</tspan></text>
 
     <!-- t = 8.0s — closing line, brighter -->
-    <text class="line l9" x="20" y="312" class="done">Done. Your agents have memory.</text>
+    <text class="line l9 done" x="20" y="312">Done. Your agents have memory.</text>
   </g>
 
   <!-- Blinking cursor at the final prompt position -->
