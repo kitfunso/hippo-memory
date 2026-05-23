@@ -1,5 +1,18 @@
 # Hippo Brain Observatory — Roadmap
 
+## v1.11.3 (Episode A) — follow-ups for Episode B / Episode C
+
+Surfaced by independent-review-critic on PR #36 (`refactor/api-context-sleep-outcome`). All deferred deliberately — none block the v1.11.3 PATCH release but each should be addressed before the corresponding Episode B / Episode C work.
+
+- **Episode B preflight: tenant scoping for `api.sleep`.** `api.sleep` invokes `deduplicateStore(ctx.hippoRoot)` and `deleteEntry(ctx.hippoRoot, ...)` without `ctx.tenantId` / `ctx.actor`. Matches CLI pre-refactor (operator-invoked, single-tenant assumption). Episode B HTTP `/v1/sleep` MUST either (a) gate the route to a global-admin actor / API-key role, or (b) plumb `ctx.tenantId` into `deduplicateStore` + `auditMemories` + `deleteEntry` so a tenant-A Bearer can't dedupe / delete tenant-B's rows. Likely (a) for simplicity; (b) only if multi-tenant per-tenant sleep is a real product requirement.
+- **Episode B preflight: audit_log on consolidation phases.** `api.sleep`'s dedup / audit-delete phases emit no `audit_log` rows. Same CLI/MCP parity gap that T6 just fixed for `cmdOutcome`. Episode B should decide between (a) one `'consolidate'` audit row per `api.sleep` invocation with phase counters in metadata, or (b) per-phase rows (one per dedup deletion, one per audit-delete) tagged with `ctx.actor`. Either is correct; pick before exposing the route.
+- **CLI byte-identical regression coverage.** Plan T5 Step 1b mandated 10 CLI render snapshot tests in `tests/cli-context-render-snapshot.test.ts` as the byte-identical gate. Deferred to keep T5 manageable; replaced with manual smokes in the Verify section. Add real snapshot tests so future drift in `printContextMarkdown` / `renderSleepResult` is caught at CI rather than manually. Cover: pinnedOnly, markdown default, json, additional-context, framing observe / suggest / assert, query='*' fallback, hybrid local-only, hybrid with global.
+- **Ambient block redundant DB load.** `cmdContext` calls `loadAllEntries` for the ambient summary after `api.getContext` already loaded the same entries internally. Pre-refactor was a single load. Optimisation: have `api.getContext` either return the loaded sets (extends ContextResult) or expose an `api.ambientFromEntries(entries)` helper so the CLI computes ambient from the same in-memory rows.
+- **Episode C consideration: `ContextResult.entries` exposes full `MemoryEntry`.** `cmdContext`'s json format projects to `{id, score, strength, tags, confidence, content, global}`. Python SDK consumers reading the api directly will receive the full MemoryEntry surface (including `superseded_by`, `embeddings`, `goal_associations`, etc.). Either add a sibling `ContextResultEntryProjected` variant for SDK ergonomics, or document `MemoryEntry` as the stable shape.
+- **`api.getContext` pinnedOnly hot-path optimisation (low priority).** pinnedOnly path runs every UserPromptSubmit and currently does `loadAllEntries(...).filter(e => e.pinned)`. A `loadPinnedEntries(hippoRoot, tenantId)` helper with a SQLite `WHERE pinned = 1` would short-circuit the full-scan + filter on stores with thousands of memories. Not a regression vs master; flagged for future indexing work.
+
+
+
 ## v1.7.3 — review-tail from v1.7.2 (SHIPPED 2026-05-07)
 
 All four items closed in v1.7.3. See `docs/plans/2026-05-06-v1.7.3-review-tail.md` and CHANGELOG.

@@ -1904,9 +1904,18 @@ export interface SleepResult {
  * Run the pure-storage consolidation pipeline.
  *
  * Tenant scope note: sleep operates on the WHOLE hippoRoot (all tenants in
- * it), matching the pre-refactor cmdSleepCore behavior. This is correct for
- * a maintenance operation, but Episode B (HTTP /v1/sleep) may want to
- * reconsider per-tenant invocation policy.
+ * it), matching the pre-refactor cmdSleepCore behavior. Correct for a CLI
+ * maintenance op invoked by the operator. But once Episode B exposes this
+ * over HTTP `/v1/sleep`, the route MUST gate to a global-admin actor or
+ * scope dedup/audit/delete by ctx.tenantId — otherwise a tenant-A Bearer
+ * could dedupe and delete tenant-B's rows. See TODOS.md "Episode A
+ * follow-ups" for the Episode B preflight checklist.
+ *
+ * Audit emission gap: the consolidation phases (dedup, audit-delete) do
+ * NOT emit audit_log rows today, matching pre-refactor cmdSleepCore. Same
+ * CLI/MCP parity gap that T6 fixed for cmdOutcome, now visible at the api
+ * surface. Episode B should decide whether `/v1/sleep` writes a single
+ * 'consolidate' audit row per invocation or per-phase rows per deletion.
  */
 export async function sleep(
   ctx: Context,
@@ -2008,8 +2017,6 @@ export async function sleep(
  * Do NOT tighten `loadIndex` with `tenantId` inside this helper — doing so
  * would break the (correct) cross-tenant-silent-skip behavior covered by
  * the test in `tests/api-outcome-for-last-recall.test.ts`.
- *
- * Stub — real implementation lands in Task 3 of the Episode A plan.
  */
 export function outcomeForLastRecall(
   ctx: Context,
