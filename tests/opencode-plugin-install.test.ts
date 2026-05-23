@@ -177,6 +177,51 @@ describe('installOpencodePlugin (real-FS)', () => {
     expect(result.installed).toBe(true);
     expect(result.migratedLegacyHooks).toBe(false);
   });
+
+  it('preserves user-authored hooks in the same inner array as a hippo hook (per-hook surgery)', () => {
+    // Independent-review-critic flagged this as the missed surgical case:
+    // if an entry's inner `hooks` array mixes a hippo command and a user
+    // command, the user command must survive.
+    const opencodeJsonPath = path.join(env.home, '.config', 'opencode', 'opencode.json');
+    fs.mkdirSync(path.dirname(opencodeJsonPath), { recursive: true });
+    fs.writeFileSync(opencodeJsonPath, JSON.stringify({
+      hooks: {
+        SessionEnd: [{
+          hooks: [
+            { type: 'command', command: 'hippo session-end --log-file foo', timeout: 5 },
+            { type: 'command', command: 'echo "my custom cleanup"', timeout: 10 },
+          ],
+        }],
+      },
+    }, null, 2));
+
+    const result = installOpencodePlugin();
+    expect(result.migratedLegacyHooks).toBe(true);
+
+    const after = JSON.parse(fs.readFileSync(opencodeJsonPath, 'utf8'));
+    expect(after.hooks.SessionEnd).toHaveLength(1);
+    expect(after.hooks.SessionEnd[0].hooks).toHaveLength(1);
+    expect(after.hooks.SessionEnd[0].hooks[0].command).toBe('echo "my custom cleanup"');
+    // timeout preserved on the surviving entry
+    expect(after.hooks.SessionEnd[0].hooks[0].timeout).toBe(10);
+  });
+
+  it('does NOT match a third-party `hippo` binary that lacks a canonical hippo verb', () => {
+    // entryIsHippoOwned regex now requires a known hippo verb. A user with a
+    // wrapper script literally named 'hippo' that takes non-hippo args should
+    // not have their entry deleted.
+    const opencodeJsonPath = path.join(env.home, '.config', 'opencode', 'opencode.json');
+    fs.mkdirSync(path.dirname(opencodeJsonPath), { recursive: true });
+    fs.writeFileSync(opencodeJsonPath, JSON.stringify({
+      hooks: {
+        SessionEnd: [{ hooks: [{ type: 'command', command: 'hippo deploy', timeout: 5 }] }],
+      },
+    }, null, 2));
+    const result = installOpencodePlugin();
+    expect(result.migratedLegacyHooks).toBe(false);
+    const after = JSON.parse(fs.readFileSync(opencodeJsonPath, 'utf8'));
+    expect(after.hooks.SessionEnd).toHaveLength(1);
+  });
 });
 
 describe('uninstallOpencodePlugin (real-FS)', () => {

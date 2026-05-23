@@ -158,8 +158,9 @@ const HIPPO_OPENCODE_PLUGIN_MARKER = 'HIPPO_OPENCODE_PLUGIN_V1';
  *    the same V1 marker re-writes the file on next install.
  */
 export const OPENCODE_PLUGIN_SOURCE = `// ${HIPPO_OPENCODE_PLUGIN_MARKER}
-// hippo-memory opencode plugin. Re-install with \`hippo hook install opencode\`.
-// Source of truth: src/hooks.ts OPENCODE_PLUGIN_SOURCE in https://github.com/kitfunso/hippo-memory
+// hippo-memory opencode plugin. DO NOT EDIT — regenerated on every
+// \`hippo hook install opencode\` from src/hooks.ts OPENCODE_PLUGIN_SOURCE
+// in https://github.com/kitfunso/hippo-memory. Local changes will be lost.
 
 export const HippoPlugin = async ({ $ }) => {
   return {
@@ -832,34 +833,44 @@ function resolveOpencodeConfigPath(): string {
 /**
  * Return true iff a single hook-array entry's command string starts with
  * `hippo ` (the verb-prefix). Used to surgically remove only hippo-owned
- * entries when migrating an opencode.json. We own the install side, so only
- * the canonical `hippo <verb>` form needs to match.
+ * commands when migrating an opencode.json. We own the install side, so only
+ * the canonical `hippo <verb>` form needs to match — and only canonical verbs
+ * hippo itself installs (session-end, last-sleep, sleep, capture, context),
+ * not any third-party tool that happens to be named `hippo`.
  *
  * Critic-mandated structural check (Rev 0): substring matching against
  * arbitrary user content is unsafe — a user's
  * `echo "remember to hippo sleep your laptop"` is not a hippo-owned hook.
+ *
+ * Per-hook (not per-entry) granularity (Rev 1 review): an entry whose inner
+ * hooks array mixes hippo-installed commands with user-authored commands
+ * must NOT lose the user-authored commands. The migration filters the inner
+ * array per-hook, then drops the entry only when its inner array is empty.
  */
-function entryIsHippoOwned(entry: unknown): boolean {
-  if (!entry || typeof entry !== 'object') return false;
-  const hooks = (entry as { hooks?: unknown }).hooks;
-  if (!Array.isArray(hooks)) return false;
-  return hooks.some((h) => {
-    if (!h || typeof h !== 'object') return false;
-    const cmd = (h as { command?: unknown }).command;
-    return typeof cmd === 'string' && /^\s*hippo\s/.test(cmd);
-  });
+const HIPPO_OWNED_COMMAND_RE = /^\s*hippo\s+(session-end|last-sleep|sleep|capture|context)\b/;
+
+function hookIsHippoOwned(hook: unknown): boolean {
+  if (!hook || typeof hook !== 'object') return false;
+  const cmd = (hook as { command?: unknown }).command;
+  return typeof cmd === 'string' && HIPPO_OWNED_COMMAND_RE.test(cmd);
 }
 
 /**
- * Structurally strip every hippo-owned entry from opencode.json's hooks key.
+ * Structurally strip every hippo-owned hook from opencode.json's hooks key.
  * Returns one of:
- *   { migrated: true,  jsonRepairFailed: false } — at least one entry removed.
+ *   { migrated: true,  jsonRepairFailed: false } — at least one hook removed.
  *   { migrated: false, jsonRepairFailed: false } — file fine, nothing to do.
  *   { migrated: false, jsonRepairFailed: true  } — file present but unparseable.
  *
- * When all hippo-owned entries are removed and a hook key becomes empty, that
- * key is deleted. When the top-level hooks object becomes empty it is deleted
- * too. Other keys (theme, etc.) are preserved.
+ * Per-hook surgery:
+ *   - For each entry in each event-key array, filter the inner `hooks` array
+ *     to remove hippo-owned hooks only. User-authored hooks in the same
+ *     inner array are preserved.
+ *   - When an entry's inner `hooks` array becomes empty, that entry is
+ *     removed from the outer array.
+ *   - When an event-key array becomes empty, the key is deleted.
+ *   - When the top-level `hooks` object becomes empty, it is deleted.
+ *   - Other keys (theme, etc.) are always preserved.
  */
 function migrateLegacyOpencodeHooksBlock(): { migrated: boolean; jsonRepairFailed: boolean } {
   const configPath = resolveOpencodeConfigPath();
@@ -883,12 +894,27 @@ function migrateLegacyOpencodeHooksBlock(): { migrated: boolean; jsonRepairFaile
   let changed = false;
   for (const key of Object.keys(hooksObj)) {
     if (!Array.isArray(hooksObj[key])) continue;
-    const before = hooksObj[key].length;
-    hooksObj[key] = hooksObj[key].filter((entry) => !entryIsHippoOwned(entry));
-    if (hooksObj[key].length !== before) {
-      changed = true;
-      if (hooksObj[key].length === 0) delete hooksObj[key];
+    const survivingEntries: unknown[] = [];
+    for (const entry of hooksObj[key]) {
+      if (!entry || typeof entry !== 'object') {
+        survivingEntries.push(entry);
+        continue;
+      }
+      const innerHooks = (entry as { hooks?: unknown }).hooks;
+      if (!Array.isArray(innerHooks)) {
+        survivingEntries.push(entry);
+        continue;
+      }
+      const beforeInner = innerHooks.length;
+      const survivingInner = innerHooks.filter((h) => !hookIsHippoOwned(h));
+      if (survivingInner.length !== beforeInner) changed = true;
+      if (survivingInner.length === 0) continue; // drop entry, nothing left
+      (entry as { hooks: unknown[] }).hooks = survivingInner;
+      survivingEntries.push(entry);
     }
+    if (survivingEntries.length !== hooksObj[key].length) changed = true;
+    hooksObj[key] = survivingEntries;
+    if (hooksObj[key].length === 0) delete hooksObj[key];
   }
 
   if (!changed) return { migrated: false, jsonRepairFailed: false };
