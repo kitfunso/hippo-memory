@@ -249,28 +249,17 @@ hippo recall "data pipeline" --why --limit 5
 
 Input enters the buffer. Important things get encoded into episodic memory. During "sleep," repeated episodes compress into semantic patterns. Weak memories decay and disappear.
 
-```
-New information
-      |
-      v
-+-----------+
-|  Buffer   |  Working memory. Current session only. No decay.
-| (session) |
-+-----+-----+
-      |  encoded (tags, strength, half-life assigned)
-      v
-+-----------+
-|  Episodic |  Timestamped memories. Decay by default.
-|   Store   |  Retrieval strengthens. Errors stick longer.
-+-----+-----+
-      |  consolidation (hippo sleep)
-      v
-+-----------+
-|  Semantic |  Compressed patterns. Stable. Schema-aware.
-|   Store   |  Extracted from repeated episodes.
-+-----------+
-
-         hippo sleep: decay + replay + merge
+```mermaid
+flowchart TD
+    I[New information] --> B[Buffer<br/>session-only, no decay]
+    B -->|encode: tags, strength, half-life| E[Episodic Store<br/>timestamped, decay by default<br/>retrieval strengthens, errors stick]
+    E -->|hippo sleep<br/>replay + merge| S[Semantic Store<br/>compressed patterns, stable<br/>schema-aware]
+    E -.->|decay| X[forgotten]
+    S -.->|recall| E
+    classDef bio fill:#fff4dc,stroke:#a8742d,color:#2b1b00
+    classDef forgotten fill:#f5f5f5,stroke:#999,color:#666,stroke-dasharray:5 5
+    class B,E,S bio
+    class X forgotten
 ```
 
 ---
