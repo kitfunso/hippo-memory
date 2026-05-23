@@ -61,14 +61,14 @@
     <!-- t = 0.0s -->
     <text class="line l1" x="20" y="68"><tspan class="prompt">$</tspan> <tspan class="cmd">npm install -g hippo-memory</tspan></text>
     <!-- t = 1.0s -->
-    <text class="line l2" x="20" y="92"  class="info">added 1 package in 1.2s</text>
+    <text class="line l2 info" x="20" y="92">added 1 package in 1.2s</text>
     <text class="line l2" x="20" y="112"><tspan class="info">+ hippo-memory@</tspan><tspan class="accent">1.11.1</tspan></text>
 
     <!-- t = 2.0s -->
     <text class="line l3" x="20" y="148"><tspan class="prompt">$</tspan> <tspan class="cmd">hippo init --scan ~</tspan></text>
 
     <!-- t = 3.0s -->
-    <text class="line l4" x="20" y="176" class="info">Scanning ~ for git repositories...</text>
+    <text class="line l4 info" x="20" y="176">Scanning ~ for git repositories...</text>
     <!-- t = 4.0s -->
     <text class="line l5" x="20" y="200"><tspan class="ok">✓</tspan> <tspan class="cmd">Found </tspan><tspan class="accent">23</tspan><tspan class="cmd"> git repositories</tspan></text>
     <!-- t = 5.0s -->
