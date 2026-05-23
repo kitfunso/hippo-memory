@@ -1905,17 +1905,17 @@ export interface SleepResult {
  *
  * Tenant scope note: sleep operates on the WHOLE hippoRoot (all tenants in
  * it), matching the pre-refactor cmdSleepCore behavior. Correct for a CLI
- * maintenance op invoked by the operator. But once Episode B exposes this
- * over HTTP `/v1/sleep`, the route MUST gate to a global-admin actor or
- * scope dedup/audit/delete by ctx.tenantId — otherwise a tenant-A Bearer
- * could dedupe and delete tenant-B's rows. See TODOS.md "Episode A
- * follow-ups" for the Episode B preflight checklist.
+ * maintenance op invoked by the operator. Episode B (v1.11.4) exposed this
+ * over HTTP `/v1/sleep` with loopback-only enforcement (per-request guard
+ * in the handler plus serve()'s boot-time host check). The TODOS.md
+ * per-tenant scoping follow-up remains open for the day non-loopback
+ * serving lands — at that point the route will need an admin-role gate OR
+ * api.sleep itself will need to scope dedup / audit / delete by ctx.tenantId.
  *
  * Audit emission gap: the consolidation phases (dedup, audit-delete) do
  * NOT emit audit_log rows today, matching pre-refactor cmdSleepCore. Same
  * CLI/MCP parity gap that T6 fixed for cmdOutcome, now visible at the api
- * surface. Episode B should decide whether `/v1/sleep` writes a single
- * 'consolidate' audit row per invocation or per-phase rows per deletion.
+ * surface. Tracked in TODOS.md "Episode A follow-ups" for a future minor.
  */
 export async function sleep(
   ctx: Context,
