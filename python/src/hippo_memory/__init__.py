@@ -1,6 +1,6 @@
 """Async Python SDK for hippo-memory.
 
-Wraps the HTTP API of the hippo-memory npm package. See `hippo_memory.Hippo`
+Wraps the HTTP API of the hippo-memory npm package. See :class:`Hippo`
 for the main client class.
 
 Quickstart::
@@ -11,10 +11,56 @@ Quickstart::
         mem = await client.remember(content="bug fix lesson")
         results = await client.recall(q="bug fix")
         ctx = await client.get_context(budget=1500)
+        await client.outcome(good=True)  # last-recall path
+
+Requires a running ``hippo serve`` (npm package ``hippo-memory@>=1.11.4``).
 """
+
+from hippo_memory.client import Hippo
+from hippo_memory.models import (
+    HealthInfo,
+    MemoryEnvelope,
+    RecallEntry,
+    RecallResult,
+    ContextEntry,
+    ContextResult,
+    OutcomeResult,
+    SleepResult,
+    DrillResult,
+    ArchiveResult,
+    SupersedeResult,
+    PromoteResult,
+    ForgetResult,
+    AssembleResult,
+    AuthCreated,
+    AuthKey,
+    AuthRevoked,
+    AuditEvent,
+    HippoError,
+)
 
 __version__ = "0.1.0"
 
-# Models + client land in T3 and T4; for the scaffold commit (T2), expose
-# only the version constant so `python -c "import hippo_memory"` works.
-__all__ = ["__version__"]
+__all__ = [
+    "Hippo",
+    "HealthInfo",
+    "MemoryEnvelope",
+    "RecallEntry",
+    "RecallResult",
+    "ContextEntry",
+    "ContextResult",
+    "OutcomeResult",
+    "SleepResult",
+    "DrillResult",
+    "ArchiveResult",
+    "SupersedeResult",
+    "PromoteResult",
+    "ForgetResult",
+    "AssembleResult",
+    "AuthCreated",
+    "AuthKey",
+    "AuthRevoked",
+    "AuditEvent",
+    "HippoError",
+    "__version__",
+]
