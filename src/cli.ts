@@ -2616,23 +2616,28 @@ function cmdOutcome(
     process.exit(1);
   }
 
+  // Behavior fix (v1.11.3): cmdOutcome used to bypass api.outcome and do its
+  // own readEntry/writeEntry inline, which silently skipped the audit_log
+  // emission that the MCP outcome path already has via api.outcome. T6
+  // rewires through api.outcome so every successful CLI 'outcome' call now
+  // writes one audit_log row per affected id, matching MCP parity.
+  const ctx: api.Context = {
+    hippoRoot,
+    tenantId: resolveTenantId({}),
+    actor: 'cli',
+  };
   const specificId = flags['id'] ? String(flags['id']) : null;
-  const index = loadIndex(hippoRoot);
 
-  const ids = specificId ? [specificId] : index.last_retrieval_ids;
-
-  if (ids.length === 0) {
-    console.log('No recent recall to apply outcome to. Use --id <id> to target a specific memory.');
-    return;
-  }
-
-  let updated = 0;
-  for (const id of ids) {
-    const entry = readEntry(hippoRoot, id, resolveTenantId({}));
-    if (!entry) continue;
-    const upd = applyOutcome(entry, good);
-    writeEntry(hippoRoot, upd);
-    updated++;
+  let updated: number;
+  if (specificId) {
+    updated = api.outcome(ctx, [specificId], good).applied;
+  } else {
+    const r = api.outcomeForLastRecall(ctx, good);
+    if (r.ids.length === 0) {
+      console.log('No recent recall to apply outcome to. Use --id <id> to target a specific memory.');
+      return;
+    }
+    updated = r.applied;
   }
 
   console.log(`Applied ${good ? 'positive' : 'negative'} outcome to ${updated} memor${updated === 1 ? 'y' : 'ies'}`);
