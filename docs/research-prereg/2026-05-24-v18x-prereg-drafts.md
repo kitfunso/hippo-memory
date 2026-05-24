@@ -148,17 +148,26 @@ it doesn't, today's `dict[str, Any]` is fine for single-machine users.
 
 ## Card 4 — Sequential-learning adapter contract eval (re-run)
 
-**Status:** DRAFT — BLOCKED on workload regression. See
-`docs/evals/2026-05-24-card4-dryrun.md` for full dry-run report.
+**Status:** DRAFT — (a) source-read PASS + (b) dry-run PASS. **Pre-reg lock
+unblocked, pending Keith's signoff.** See
+`docs/evals/2026-05-24-card4-dryrun.md` for the full report (including the
+2026-05-24 13:50 retraction of the earlier "regression" claim — apples-to-
+oranges error on `--restrict-late-to` flag).
 
-**Update 2026-05-24:** (a) source-read PASSED — mechanism wired clean end-to-end
-(no regression at the wiring level since v1.8.0). (b) dry-run FAILED workload
-validity: C2 lateMean dropped from 0.25 (v1.8 baseline, hippo 1.7.7) to 0.11
-(master, hippo 1.12.6) on the same deterministic seed sequence. Per v1.8.1
-discipline rule, pre-reg lock is BLOCKED until the regression is investigated.
-Candidate root causes (in `docs/evals/2026-05-24-card4-dryrun.md` §Investigation
-paths) are git-bisectable in ~4 minutes of compute using the 3-seed dry-run as
-the fitness function.
+**v1.8 baseline reproduced.** Master v1.12.6 with `--restrict-late-to 4`
+produces lateMean=0.25 across all 3 seeds — identical to v1.8 baseline.
+Mechanism FIRES on master. Hook failures 0/0.
+
+**Pre-reg gates (config now explicit):**
+- Workload-validity preserved: **C2 lateMean ≥ 0.20, 20/20 seeds non-zero,
+  using `--restrict-late-to 4`** ← flag is part of the gate definition
+- C3 lateMean STRICTLY_HIGHER than C2 on ≥ 12/20 seeds (paired permutation CI)
+- C3 − C2 delta ≥ +5pp (effect-size floor)
+
+**Retraction conditions:** Gate fail → RETRACT mechanism-effect claim.
+**4th retraction in this family freezes the line per v1.8.1 retraction
+discipline** — that's the catastrophic-cost outcome any pre-reg lock here
+must price in.
 
 **Mechanism claim.** With the v1.7.5 sequential-learning adapter contract
 shipped (`pushGoal`/`completeGoal` hooks on `interface.mjs`,
