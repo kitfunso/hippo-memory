@@ -1,5 +1,62 @@
 # Changelog
 
+## 1.12.7 (2026-05-24): migration v27 self-heal for partial-v16 DB state
+
+Fixes a real user-facing bug: on a hippo DB where migration v16 had
+partial-applied (api_keys + audit_log tables missing despite
+schema_version recorded as >= 16), every `hippo context` invocation
+printed `Error: no such table: api_keys` to stderr. Surfaced on Keith's
+~/.hippo/hippo.db on 2026-05-24, visible as repeated noise on every
+UserPromptSubmit hook firing.
+
+### Shipped
+
+- **Migration v27 self-heal.** Re-asserts the v16 schema via
+  `CREATE TABLE IF NOT EXISTS api_keys + audit_log` plus their indexes.
+  Idempotent — zero cost for DBs without the bug, fixes any DB that has it
+  on next open. Also includes the v26 `role` column directly in the
+  CREATE so v26's ALTER doesn't have to run on this heal path.
+- **Migration v26 defensive guard.** Added `tableExists(db, 'api_keys')`
+  check to v26's existing `tableHasColumn` guard. Without this, v26's
+  ALTER would crash on the partial-v16-state and block v27 (the heal)
+  from ever running. Now v26 no-ops gracefully when api_keys is missing.
+
+### Root cause investigation
+
+Surprising finding: the migration runner has wrapped each migration's
+`up()` in `BEGIN ... COMMIT` since the very first SQLite commit
+(`2cf72e7`). So the partial-apply on Keith's DB did NOT happen through
+missing atomicity — the wrapping has always been correct. Possible causes
+of the observed state:
+
+1. `DROP TABLE api_keys` issued post-migration (operator action or
+   external SQL).
+2. Restore / import from a pre-v16 backup over a v16+ schema_version.
+3. Some edge case the BEGIN/COMMIT wrapping doesn't catch (unknown).
+
+Without forensic logs the precise cause stays unknown. The fix is the
+same regardless: v27 heals the symptom, v26 won't crash on the input.
+
+### Tests
+- 5 cases in `tests/db-migration-v27-self-heal.test.ts`: heals
+  partial-v16 state, api_keys has role column, audit_log has v16 shape,
+  v27 is no-op on healthy DB, v26 ALTER no-ops when api_keys is missing.
+- 18 brittle `.toBe(26)` assertions across 8 test files bumped to
+  `.toBe(27)` for the new schema head.
+
+### Full suite
+
+1791 passed / 4 skipped / 0 failed across 248 files.
+
+### Notes
+
+- No min_compatible_binary bump — v27 is a heal migration, not a
+  contract-breaking change. Old binaries can still open the DB; they
+  just won't see the heal (and don't need to).
+- Long-term: `TODOS.md` carries a follow-up to investigate WHY v16
+  partial-applied in the first place (transaction wrapping is intact;
+  cause unknown).
+
 ## 1.12.6 (2026-05-24): D-batch hardening pass — 5 follow-ups
 
 Bundles 5 long-deferred B-sized items from `TODOS.md` per the
