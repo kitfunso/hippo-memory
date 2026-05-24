@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.12.2 (2026-05-24): api.sleep mid-phase test coverage via __phases DI seam
+
+PATCH release. Adds a test-only `__phases?: Partial<SleepPhases>` field on `SleepOpts` so test files can inject deterministic throws at each of `api.sleep`'s 5 phase boundaries (consolidate / deduplicateStore / auditMemories / autoShare / computeAmbientState). Closes the v1.11.5 deferral (independent-review-critic MED #2) where the `partial: true` + `errorMessage` audit-row branch at `src/api.ts:~2098` was reachable but not test-locked. Back-compat: no public-API change for non-test consumers; the `DEFAULT_SLEEP_PHASES` map preserves all current behaviour when `__phases` is undefined.
+
+### Shipped
+
+- **`SleepPhases` interface** in `src/api.ts` listing the 8 phase dependencies of `api.sleep`.
+- **`DEFAULT_SLEEP_PHASES` const** binding each field to the real production implementation (`consolidate`, `deduplicateStore`, `auditMemories`, `autoShare`, `loadAllEntries`, `deleteEntry`, `computeAmbientState`, `loadConfig`).
+- **`SleepOpts.__phases?: Partial<SleepPhases>`** test-only field. `@internal` JSDoc warns production callers off. Runtime resolution at `api.sleep` entry is `{ ...DEFAULT_SLEEP_PHASES, ...(opts.__phases ?? {}) }` so partial overrides work cleanly.
+- **`api.sleep` body**: all 7 phase-dependency call sites in the try-block rewritten to use `phases.X(...)` instead of the directly-imported `X(...)`. Default behaviour unchanged.
+
+### Tests
+- 6 cases in `tests/api-sleep-phase-faults.test.ts`:
+  - Phase 1-5 fault injection: each asserts the rejected promise + `consolidate` audit row with `partial: true` + `errorMessage` matching the thrown error + earlier-phase counter preservation.
+  - Happy path: `partial: false` + no `errorMessage`.
+- Per-test HIPPO_HOME isolation for the autoShare phase 4 (which calls `initGlobal()`).
+- Real DB per project convention.
+
+### Migration notes
+- **No public-API change.** External library consumers calling `sleep(ctx, { dryRun: true })` see no signature delta. `SleepOpts.__phases` is opt-in test-only.
+- **No DB migration.**
+
+### Out of scope (deferred)
+- `audit_log` emission on sleep consolidation phases (still TODOS — separate from this test-coverage work).
+- `api.recall` last-retrieval-ids parity (separate item).
+- `hippo auth create-key --role` / `hippo auth list` role-column CLI surfacing.
+
 ## 1.12.1 (2026-05-24): A5 v2 sub-2 — L9 conflict-subsystem tenant-scoping
 
 PATCH release. Closes the L9 deferral (conflict-subsystem tenant-scoping residue) from v1.11.0 + v1.12.0 sub-1. 11 unscoped `loadAllEntries` / `readEntry` sites across 8 background-pipeline files re-classified into 6 PER-TENANT-OPT-IN (`tenantId` plumbed through as optional parameter) + 7 HOST-WIDE-DOCUMENTED (inline JSDoc locks the intentional cross-tenant contract). Back-compat-safe: every new parameter is OPTIONAL with default behaviour matching v1.12.0; no public-API consumer breaks. No schema migration.
