@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import type { Memory, Conflict, Stats, EmbeddingIndex } from "../../types.js";
 import { useCanvasEngine } from "./useCanvasEngine.js";
 import { MemoryTooltip } from "../../components/MemoryTooltip.js";
 import { Header } from "../../components/Header.js";
+import { Sidebar } from "../../components/Sidebar.js";
 import { LAYER_COLORS } from "../../engine/types.js";
-import type { FilterState } from "../../state/filterState.js";
+import { deriveVisibleIds, type FilterState, type Layer, type Confidence } from "../../state/filterState.js";
 
 interface LivingMapProps {
   memories: Memory[];
@@ -14,6 +15,10 @@ interface LivingMapProps {
   filterState: FilterState;
   setQuery: (query: string) => void;
   setFrozen: (frozen: boolean) => void;
+  setLayers: (layers: Set<Layer>) => void;
+  setStrengthRange: (range: [number, number]) => void;
+  setConfidences: (confidences: Set<Confidence>) => void;
+  setAgeMaxDays: (days: number | null) => void;
 }
 
 function StrengthBar({ value }: { value: number }) {
@@ -96,12 +101,19 @@ function DetailPanel({ memory, onClose, open }: { memory: Memory | null; onClose
   );
 }
 
-export function LivingMap({ memories, embeddings, stats, conflicts, filterState, setQuery, setFrozen }: LivingMapProps) {
+export function LivingMap({
+  memories, embeddings, stats, conflicts, filterState,
+  setQuery, setFrozen, setLayers, setStrengthRange, setConfidences, setAgeMaxDays,
+}: LivingMapProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [hoveredMemory, setHoveredMemory] = useState<{ memory: Memory; x: number; y: number } | null>(null);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
   const [showHint, setShowHint] = useState(true);
+
+  // E3: derive the visible-id set once per render so Sidebar (tag cloud +
+  // stats) and the scene filter wiring share the same source of truth.
+  const visibleIds = useMemo(() => deriveVisibleIds(memories, filterState), [memories, filterState]);
 
   useEffect(() => {
     const el = wrapperRef.current;
@@ -135,6 +147,7 @@ export function LivingMap({ memories, embeddings, stats, conflicts, filterState,
     onHover, onClick: onClickMemory,
     searchQuery: filterState.query,
     frozen: filterState.frozen,
+    visibleIds,
   });
 
   const matchCount = filterState.query.trim().length > 0
@@ -150,7 +163,7 @@ export function LivingMap({ memories, embeddings, stats, conflicts, filterState,
     <div ref={wrapperRef} style={{ width: "100%", height: "100%", position: "relative", overflow: "hidden" }} onKeyDown={handleKeyDown} tabIndex={0}>
 
       <div ref={containerRef} onMouseMove={handleMouseMove} onClick={handleClick}
-        style={{ position: "absolute", inset: 0, zIndex: 0 }} />
+        style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: 340, zIndex: 0 }} />
 
       <Header
         memoryCount={memories.length}
@@ -159,6 +172,18 @@ export function LivingMap({ memories, embeddings, stats, conflicts, filterState,
         filterState={filterState}
         setQuery={setQuery}
         setFrozen={setFrozen}
+      />
+
+      <Sidebar
+        memories={memories}
+        stats={stats}
+        visibleIds={visibleIds}
+        filterState={filterState}
+        setQuery={setQuery}
+        setLayers={setLayers}
+        setStrengthRange={setStrengthRange}
+        setConfidences={setConfidences}
+        setAgeMaxDays={setAgeMaxDays}
       />
 
       {matchCount === 0 && filterState.query.trim().length > 0 && (

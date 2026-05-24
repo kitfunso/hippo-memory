@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import type { Memory, Stats, Conflict, EmbeddingIndex } from "./types.js";
 import { fetchMemories, fetchStats, fetchConflicts, fetchEmbeddings } from "./api/client.js";
 import { LivingMap } from "./views/LivingMap/LivingMap.js";
-import { INITIAL_FILTER_STATE, type FilterState } from "./state/filterState.js";
+import { INITIAL_FILTER_STATE, type FilterState, type Layer, type Confidence } from "./state/filterState.js";
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -30,6 +30,23 @@ export function App() {
 
   const setFrozen = useCallback((frozen: boolean) => {
     setFilterState((prev) => ({ ...prev, frozen }));
+  }, []);
+
+  // E3: per-filter setters for FilterPanel.
+  const setLayers = useCallback((layers: Set<Layer>) => {
+    setFilterState((prev) => ({ ...prev, layers }));
+  }, []);
+
+  const setStrengthRange = useCallback((strengthRange: [number, number]) => {
+    setFilterState((prev) => ({ ...prev, strengthRange }));
+  }, []);
+
+  const setConfidences = useCallback((confidences: Set<Confidence>) => {
+    setFilterState((prev) => ({ ...prev, confidences }));
+  }, []);
+
+  const setAgeMaxDays = useCallback((ageMaxDays: number | null) => {
+    setFilterState((prev) => ({ ...prev, ageMaxDays }));
   }, []);
 
   // E2: keyboard shortcut "F" toggles freeze (matches Header button's title hint).
@@ -143,6 +160,10 @@ export function App() {
       filterState={filterState}
       setQuery={setQuery}
       setFrozen={setFrozen}
+      setLayers={setLayers}
+      setStrengthRange={setStrengthRange}
+      setConfidences={setConfidences}
+      setAgeMaxDays={setAgeMaxDays}
     />
   );
 }
