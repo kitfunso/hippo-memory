@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import type { Memory } from "../types.js";
 import { LAYER_COLORS } from "../engine/types.js";
+import { isFading } from "../state/filterState.js";
 
 interface DrawerProps {
   memories: Memory[];
@@ -249,8 +250,26 @@ export function Drawer({
                           height: 7,
                           borderRadius: "50%",
                           background: LAYER_COLORS[m.layer],
+                          verticalAlign: "middle",
                         }}
                       />
+                      {/* v0.26.1 — rust dot for fading memories.
+                          4th cohesion surface (header pill / stats band /
+                          canvas ring / drawer dot). */}
+                      {isFading(m) && (
+                        <span
+                          title="fading (strength < 0.1, unpinned)"
+                          style={{
+                            display: "inline-block",
+                            width: 5,
+                            height: 5,
+                            borderRadius: "50%",
+                            background: "var(--accent)",
+                            verticalAlign: "middle",
+                            marginLeft: 4,
+                          }}
+                        />
+                      )}
                     </td>
                     <td style={{ ...tdStyle, fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text)" }}>
                       {m.strength.toFixed(2)}

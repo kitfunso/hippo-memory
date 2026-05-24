@@ -22,6 +22,7 @@ interface SidebarProps {
   setStrengthRange: (range: [number, number]) => void;
   setConfidences: (confidences: Set<Confidence>) => void;
   setAgeMaxDays: (days: number | null) => void;
+  setFadingOnly: (v: boolean) => void;
   /** P4: reset all filters back to INITIAL_FILTER_STATE (keeping frozen flag). */
   resetFilters: () => void;
 }
@@ -38,6 +39,7 @@ export function Sidebar({
   setStrengthRange,
   setConfidences,
   setAgeMaxDays,
+  setFadingOnly,
   resetFilters,
 }: SidebarProps) {
   // Code-review-critic HIGH #1 fix: when filter is active and matches zero,
@@ -63,7 +65,7 @@ export function Sidebar({
         boxSizing: "border-box",
       }}
     >
-      <StatsPanel stats={stats} totalVisible={totalVisible} />
+      <StatsPanel stats={stats} totalVisible={totalVisible} fadingOnly={filterState.fadingOnly} />
 
       {/* P2 mockup chrome: selected-memory hint when nothing selected, so
           the sidebar doesn't dead-end visually. Per plan-design-critic HIGH. */}
@@ -117,10 +119,12 @@ export function Sidebar({
 
       <FilterPanel
         filterState={filterState}
+        stats={stats}
         setLayers={setLayers}
         setStrengthRange={setStrengthRange}
         setConfidences={setConfidences}
         setAgeMaxDays={setAgeMaxDays}
+        setFadingOnly={setFadingOnly}
       />
 
       {/* Empty filter-match state */}

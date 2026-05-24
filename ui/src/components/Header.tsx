@@ -23,9 +23,11 @@ interface HeaderProps {
   frozenOrigin: "os" | "user" | null;
   setQuery: (query: string) => void;
   setFrozen: (frozen: boolean) => void;
+  /** v0.26.1: toggles fading-only shortcut filter. */
+  setFadingOnly: (v: boolean) => void;
 }
 
-export function Header({ memoryCount, matchCount, stats, filterState, frozenOrigin, setQuery, setFrozen }: HeaderProps) {
+export function Header({ memoryCount, matchCount, stats, filterState, frozenOrigin, setQuery, setFrozen, setFadingOnly }: HeaderProps) {
   // Local input state - debounced before propagating to FilterState. This
   // keeps typing snappy while delaying the scene re-highlight by 150ms.
   const [inputValue, setInputValue] = useState(filterState.query);
@@ -82,10 +84,29 @@ export function Header({ memoryCount, matchCount, stats, filterState, frozenOrig
         <span style={{ color: "var(--dim)", fontSize: 10, fontFamily: "var(--font-mono)" }}>
           {memoryCount} memories
         </span>
+        {/* v0.26.1 — clickable fading pill. Hides at at_risk===0 (empty state).
+            Active state matches freeze button: text+border+bg all rust. */}
         {(stats?.at_risk ?? 0) > 0 && (
-          <span style={{ color: "var(--yellow)", fontSize: 10, fontFamily: "var(--font-mono)" }}>
+          <button
+            type="button"
+            onClick={() => setFadingOnly(!filterState.fadingOnly)}
+            aria-pressed={filterState.fadingOnly}
+            aria-label={`${stats?.at_risk} fading, ${filterState.fadingOnly ? "click to show all memories" : "click to filter to fading memories only"}`}
+            title={filterState.fadingOnly ? "Showing only fading memories — click to clear" : "Show only fading memories"}
+            style={{
+              fontSize: 10,
+              fontFamily: "var(--font-mono)",
+              padding: "2px 8px",
+              borderRadius: 3,
+              cursor: "pointer",
+              transition: "color 150ms ease, border-color 150ms ease, background 150ms ease",
+              background: filterState.fadingOnly ? "rgba(196, 92, 60, 0.10)" : "transparent",
+              border: filterState.fadingOnly ? "1px solid var(--accent)" : "1px solid transparent",
+              color: filterState.fadingOnly ? "var(--accent)" : "var(--yellow)",
+            }}
+          >
             {stats?.at_risk} fading
-          </span>
+          </button>
         )}
       </div>
 

@@ -13,6 +13,7 @@ import {
   COLOR_GRID_HEX,
   COLOR_CONFLICT_HEX,
 } from "../tokens.js";
+import { isFading } from "../state/filterState.js";
 
 const SPREAD = 20;
 const LAYER_Y_OFFSET: Record<string, number> = { buffer: 6, episodic: 0, semantic: -6 };
@@ -29,6 +30,13 @@ interface MemoryNode {
   halo: THREE.Mesh;
   phase: number;
   driftSpeed: number;
+  /**
+   * v0.26.1 — TorusGeometry ring rendered for nodes where isFading(m) is true.
+   * Constant 0.5 opacity, rust color, always-on signal independent of hover/
+   * search dimming state. Billboarded each frame via lookAt(camera).
+   * Shape disambiguates from selection sphere-halo (plan-design-critic R1 HIGH #1).
+   */
+  fadingRing?: THREE.Mesh;
 }
 
 export class BrainScene {
@@ -189,6 +197,12 @@ export class BrainScene {
       this.scene.remove(node.halo);
       node.mesh.geometry.dispose();
       node.halo.geometry.dispose();
+      // v0.26.1 — dispose fading ring if present (plan-eng-critic R2 MED).
+      if (node.fadingRing) {
+        this.scene.remove(node.fadingRing);
+        node.fadingRing.geometry.dispose();
+        (node.fadingRing.material as THREE.Material).dispose();
+      }
     }
     for (const line of this.tendrils) {
       this.scene.remove(line);
@@ -249,6 +263,25 @@ export class BrainScene {
       halo.position.copy(sphere.position);
       this.scene.add(halo);
 
+      // v0.26.1 — fading ring (TorusGeometry) for at-risk memories. Constant
+      // 0.5 opacity rust ring; shape (ring) disambiguates from sphere-halo
+      // selection emphasis. Plan-design-critic R1 HIGH #1.
+      let fadingRing: THREE.Mesh | undefined;
+      if (isFading(mem)) {
+        const ringGeo = new THREE.RingGeometry(radius * 1.4, radius * 1.7, 32);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: COLOR_CONFLICT_HEX,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.6,
+          depthWrite: false,
+        });
+        fadingRing = new THREE.Mesh(ringGeo, ringMat);
+        fadingRing.position.copy(sphere.position);
+        fadingRing.lookAt(this.camera.position); // initial billboard
+        this.scene.add(fadingRing);
+      }
+
       this.nodes.push({
         id: mem.id,
         memory: mem,
@@ -257,6 +290,7 @@ export class BrainScene {
         basePosition: sphere.position.clone(),
         phase: Math.random() * Math.PI * 2,
         driftSpeed: 0.2 + Math.random() * 0.3,
+        fadingRing,
       });
     }
 
@@ -459,6 +493,13 @@ export class BrainScene {
         const pulse = 1.3 + 0.1 * Math.sin(elapsed * 3 + node.phase);
         node.mesh.scale.setScalar(pulse);
       }
+
+      // v0.26.1 — billboard fading rings to face camera. Cheap (≤at_risk
+      // nodes total, typically <20). Position follows drifting mesh.
+      if (node.fadingRing) {
+        node.fadingRing.position.copy(node.mesh.position);
+        node.fadingRing.lookAt(this.camera.position);
+      }
     }
 
     // E1.5: notify per-frame subscribers (E4's label overlay). Single-line
@@ -595,6 +636,11 @@ export class BrainScene {
       (node.mesh.material as THREE.Material).dispose();
       node.halo.geometry.dispose();
       (node.halo.material as THREE.Material).dispose();
+      // v0.26.1 — clean up fading ring resources on full teardown.
+      if (node.fadingRing) {
+        node.fadingRing.geometry.dispose();
+        (node.fadingRing.material as THREE.Material).dispose();
+      }
     }
     for (const line of [...this.tendrils, ...this.conflictLines]) {
       line.geometry.dispose();

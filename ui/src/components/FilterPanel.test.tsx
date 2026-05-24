@@ -14,16 +14,19 @@ function renderPanel(overrides: { filterState?: Partial<FilterState> } = {}) {
   const setConfidences = vi.fn();
   const setAgeMaxDays = vi.fn();
   const filterState: FilterState = { ...INITIAL_FILTER_STATE, ...overrides.filterState };
+  const setFadingOnly = vi.fn();
   render(
     <FilterPanel
       filterState={filterState}
+      stats={null}
       setLayers={setLayers}
       setStrengthRange={setStrengthRange}
       setConfidences={setConfidences}
       setAgeMaxDays={setAgeMaxDays}
+      setFadingOnly={setFadingOnly}
     />,
   );
-  return { setLayers, setStrengthRange, setConfidences, setAgeMaxDays };
+  return { setLayers, setStrengthRange, setConfidences, setAgeMaxDays, setFadingOnly };
 }
 
 describe("FilterPanel (E3)", () => {

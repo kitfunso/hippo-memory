@@ -9,9 +9,13 @@ import { LAYER_COLORS } from "../engine/types.js";
 interface StatsPanelProps {
   stats: Stats | null;
   totalVisible: number; // visible after filters
+  /** v0.26.1 — cohesion band: when fadingOnly filter is active, highlight
+   * the "at risk" line with rust border so the rust theme runs from header
+   * pill → stats band → canvas rings → drawer dots. */
+  fadingOnly: boolean;
 }
 
-export function StatsPanel({ stats, totalVisible }: StatsPanelProps) {
+export function StatsPanel({ stats, totalVisible, fadingOnly }: StatsPanelProps) {
   if (!stats) return null;
 
   const layerEntries: Array<["buffer" | "episodic" | "semantic", string]> = [
@@ -51,7 +55,16 @@ export function StatsPanel({ stats, totalVisible }: StatsPanelProps) {
         })}
       </div>
 
-      <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--dim)" }}>
+      <div style={{
+        display: "flex", justifyContent: "space-between",
+        fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--dim)",
+        // v0.26.1 — rust border + padding when fadingOnly active.
+        padding: fadingOnly ? "4px 8px" : "0",
+        border: fadingOnly ? "1px solid var(--accent)" : "1px solid transparent",
+        borderRadius: 3,
+        background: fadingOnly ? "rgba(196, 92, 60, 0.06)" : "transparent",
+        transition: "background 150ms ease, border-color 150ms ease, padding 150ms ease",
+      }}>
         <span>{stats.pinned} pinned</span>
         {stats.at_risk > 0 && <span style={{ color: "var(--accent)", fontWeight: 600 }}>{stats.at_risk} at risk</span>}
         <span>avg {stats.avg_strength.toFixed(2)}</span>
