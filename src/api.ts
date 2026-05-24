@@ -1924,6 +1924,14 @@ export async function getContext(
 export interface SleepOpts {
   dryRun?: boolean;
   noShare?: boolean;
+  /**
+   * @internal Test-only DI seam — see `tests/api-sleep-phase-faults.test.ts`.
+   * Override one or more phase dependencies (typically a throwing stub) to
+   * force mid-phase failure paths deterministically. Production callers
+   * MUST NOT use this field. The runtime defaults at `DEFAULT_SLEEP_PHASES`
+   * preserve all current behaviour when `__phases` is undefined.
+   */
+  __phases?: Partial<SleepPhases>;
 }
 
 export interface SleepResult {
@@ -1961,11 +1969,50 @@ export interface SleepResult {
  * CLI/MCP parity gap that T6 fixed for cmdOutcome, now visible at the api
  * surface. Tracked in TODOS.md "Episode A follow-ups" for a future minor.
  */
+/**
+ * v1.12.2: Test-only DI seam shape for `sleep`'s phase dependencies.
+ *
+ * Each field defaults to the real production implementation imported at the
+ * top of this file. Test files pass a `Partial<SleepPhases>` override via
+ * `SleepOpts.__phases` (note the `__` prefix — internal-only) to inject
+ * deterministic throws for mid-phase failure-path coverage (the
+ * `partial: true` + `errorMessage` audit-row branch at line ~2098).
+ *
+ * Production callers MUST NOT use `__phases`. The field exists solely so
+ * `tests/api-sleep-phase-faults.test.ts` can force each phase boundary to
+ * throw without depending on store-corruption fragility.
+ */
+export interface SleepPhases {
+  consolidate: typeof consolidate;
+  deduplicateStore: typeof deduplicateStore;
+  auditMemories: typeof auditMemories;
+  autoShare: typeof autoShare;
+  loadAllEntries: typeof loadAllEntries;
+  deleteEntry: typeof deleteEntry;
+  computeAmbientState: typeof computeAmbientState;
+  loadConfig: typeof loadConfig;
+}
+
+const DEFAULT_SLEEP_PHASES: SleepPhases = {
+  consolidate,
+  deduplicateStore,
+  auditMemories,
+  autoShare,
+  loadAllEntries,
+  deleteEntry,
+  computeAmbientState,
+  loadConfig,
+};
+
 export async function sleep(
   ctx: Context,
   opts: SleepOpts = {},
 ): Promise<SleepResult> {
   const dryRun = Boolean(opts.dryRun);
+
+  // v1.12.2: resolve phase dependencies, allowing test-only `__phases`
+  // override to inject deterministic throws for mid-phase failure coverage.
+  const phases: SleepPhases = { ...DEFAULT_SLEEP_PHASES, ...(opts.__phases ?? {}) };
 
   // v1.11.5: phase counters for the consolidate audit emit (in finally).
   // Accumulated as each phase completes so partial-failure paths still report
@@ -1979,7 +2026,7 @@ export async function sleep(
   let result: SleepResult | null = null;
   try {
     // Phase 1: Consolidation.
-    const consolidateResult = await consolidate(ctx.hippoRoot, { dryRun });
+    const consolidateResult = await phases.consolidate(ctx.hippoRoot, { dryRun });
     consolidationCount = consolidateResult.semanticCreated + consolidateResult.merged;
 
     result = {
@@ -1994,7 +2041,7 @@ export async function sleep(
     if (dryRun) return result;
 
     // Phase 2: Dedup (post-consolidate near-duplicate cleanup).
-    const dedupResult = deduplicateStore(ctx.hippoRoot);
+    const dedupResult = phases.deduplicateStore(ctx.hippoRoot);
     dedupCount = dedupResult.removed;
     if (dedupResult.removed > 0) {
       const semDups = dedupResult.pairs.filter(
@@ -2015,14 +2062,14 @@ export async function sleep(
     }
 
     // Phase 3: Quality audit (remove junk, report warnings).
-    const allEntries = loadAllEntries(ctx.hippoRoot);
-    const auditOut = auditMemories(allEntries);
+    const allEntries = phases.loadAllEntries(ctx.hippoRoot);
+    const auditOut = phases.auditMemories(allEntries);
     if (auditOut.issues.length > 0) {
       const errors = auditOut.issues.filter((i) => i.severity === 'error');
       const warnings = auditOut.issues.filter((i) => i.severity === 'warning');
       if (errors.length > 0) {
         for (const issue of errors) {
-          deleteEntry(ctx.hippoRoot, issue.memoryId);
+          phases.deleteEntry(ctx.hippoRoot, issue.memoryId);
         }
       }
       auditDeletedCount = errors.length;
@@ -2036,9 +2083,9 @@ export async function sleep(
 
     // Phase 4: Auto-share high-transfer-score memories to global.
     if (!opts.noShare) {
-      const sleepConfig = loadConfig(ctx.hippoRoot);
+      const sleepConfig = phases.loadConfig(ctx.hippoRoot);
       if (sleepConfig.autoShareOnSleep) {
-        const shared = autoShare(ctx.hippoRoot, { minScore: 0.6 });
+        const shared = phases.autoShare(ctx.hippoRoot, { minScore: 0.6 });
         if (shared.length > 0) {
           result.shared = shared.length;
         }
@@ -2046,13 +2093,13 @@ export async function sleep(
     }
 
     // Phase 5: Post-sleep ambient state summary.
-    const postSleepConfig = loadConfig(ctx.hippoRoot);
+    const postSleepConfig = phases.loadConfig(ctx.hippoRoot);
     if (postSleepConfig.ambient.enabled) {
-      const postSleepEntries = loadAllEntries(ctx.hippoRoot).filter(
+      const postSleepEntries = phases.loadAllEntries(ctx.hippoRoot).filter(
         (e) => !e.superseded_by,
       );
       if (postSleepEntries.length > 0) {
-        result.ambient = computeAmbientState(postSleepEntries);
+        result.ambient = phases.computeAmbientState(postSleepEntries);
         ambientTotal = result.ambient.totalMemories;
       }
     }
