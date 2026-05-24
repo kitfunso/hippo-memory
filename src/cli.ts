@@ -4717,6 +4717,7 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'forget',
   'archive_raw',
   'auth_revoke',
+  'auth_create', // v1.12.4: emitted by api.authCreate
   'outcome',     // v1.11.5: pre-existing drift — emitted today but rejected by old Set
   'consolidate', // v1.11.5: emitted by api.sleep / hippo sleep
 ]);
