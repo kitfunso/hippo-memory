@@ -49,6 +49,12 @@ export function App() {
     setFilterState((prev) => ({ ...prev, ageMaxDays }));
   }, []);
 
+  // P4: reset everything except the user's freeze preference (rerunning
+  // the simulation just because they cleared filters would surprise).
+  const resetFilters = useCallback(() => {
+    setFilterState((prev) => ({ ...INITIAL_FILTER_STATE, frozen: prev.frozen }));
+  }, []);
+
   // E2: keyboard shortcut "F" toggles freeze (matches Header button's title hint).
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
@@ -164,6 +170,7 @@ export function App() {
       setStrengthRange={setStrengthRange}
       setConfidences={setConfidences}
       setAgeMaxDays={setAgeMaxDays}
+      resetFilters={resetFilters}
     />
   );
 }

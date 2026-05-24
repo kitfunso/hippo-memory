@@ -40,6 +40,37 @@ export const INITIAL_FILTER_STATE: FilterState = {
 };
 
 /**
+ * Is ANY filter currently active? Disambiguates "no filter, show all" from
+ * "filter matches zero rows" (round 2 code-review-critic HIGH #1 fix).
+ *
+ * Used by useCanvasEngine to decide between `scene.setFiltered(visibleIds)`
+ * and `scene.setFiltered(new Set())` — never use `visibleIds.size > 0` as
+ * the gate; an empty filtered set is a meaningful state.
+ */
+export function isFilterActive(state: FilterState): boolean {
+  if (state.query.trim().length > 0) return true;
+  if (state.layers.size > 0) return true;
+  if (state.confidences.size > 0) return true;
+  if (state.strengthRange[0] > 0) return true;
+  if (state.strengthRange[1] < 1) return true;
+  if (state.ageMaxDays !== null) return true;
+  return false;
+}
+
+/**
+ * Predicate matching a memory against the search query. Shared by
+ * deriveVisibleIds (filter pipeline) + the highlighted-id derivation in
+ * useCanvasEngine + the Header matchCount display, so the three sites
+ * cannot drift (round-2 code-review-critic MED).
+ */
+export function matchesQuery(memory: { content: string; tags: string[] }, q: string): boolean {
+  const needle = q.trim().toLowerCase();
+  if (!needle) return true;
+  if (memory.content.toLowerCase().includes(needle)) return true;
+  return memory.tags.some((t) => t.toLowerCase().includes(needle));
+}
+
+/**
  * Compute the set of memory IDs that pass all active filters in the
  * given state. Pure function — testable in isolation. Empty result =
  * nothing visible.
@@ -50,7 +81,6 @@ export const INITIAL_FILTER_STATE: FilterState = {
  */
 export function deriveVisibleIds(memories: Memory[], state: FilterState): Set<string> {
   const ids = new Set<string>();
-  const q = state.query.trim().toLowerCase();
   const filterLayers = state.layers.size > 0;
   const filterConfidences = state.confidences.size > 0;
   const [strMin, strMax] = state.strengthRange;
@@ -58,7 +88,7 @@ export function deriveVisibleIds(memories: Memory[], state: FilterState): Set<st
   const filterAge = state.ageMaxDays !== null;
 
   for (const m of memories) {
-    if (q && !m.content.toLowerCase().includes(q) && !m.tags.some((t) => t.toLowerCase().includes(q))) continue;
+    if (!matchesQuery(m, state.query)) continue;
     if (filterLayers && !state.layers.has(m.layer as Layer)) continue;
     if (filterConfidences && !state.confidences.has(m.confidence as Confidence)) continue;
     if (filterStrength && (m.strength < strMin || m.strength > strMax)) continue;
