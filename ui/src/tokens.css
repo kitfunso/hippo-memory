@@ -1,0 +1,54 @@
+/**
+ * Parchment design tokens — single source of truth for the hybrid-v4 revamp.
+ *
+ * DO NOT add hex literals elsewhere — `scripts/check-token-drift.mjs`
+ * (E1 deliverable) will fail CI on drift.
+ *
+ * Mirrors `ui/src/tokens.ts` exactly.
+ */
+
+:root {
+  /* Surfaces */
+  --bg: #f4efe6;            /* parchment body bg */
+  --map-bg: #faf7f2;        /* lighter parchment for map area */
+  --surface: #f0ebe0;       /* tag bg, panel surface */
+
+  /* Text */
+  --text: #3a3228;          /* warm dark */
+  --dim: #9b8e7e;           /* warm grey, panel labels, muted text */
+  --muted: #9b8e7e;         /* alias for backward-compat with old --muted refs */
+
+  /* Borders */
+  --border: #c4b9a8;        /* parchment border */
+
+  /* Accent */
+  --accent: #c45c3c;        /* rust — selected, focus, primary CTA */
+  --accent-dim: #a04832;    /* darker rust — conflicts, errors */
+
+  /* Layer tints (hybrid-v4 spec) */
+  --buffer: #7c6caf;        /* muted purple */
+  --episodic: #4a8ca3;      /* blue (was orange in legacy theme) */
+  --semantic: #5a8f6b;      /* muted green */
+
+  /* Semantic colors (mapped to parchment palette) */
+  --green: #5a8f6b;         /* maps to semantic */
+  --yellow: #b8983e;        /* warm yellow on parchment */
+  --red: #c45c3c;           /* maps to accent (rust reads as warning on parchment) */
+  --purple: #7c6caf;        /* maps to buffer */
+
+  /* Typography */
+  --font-serif: Georgia, "Palatino Linotype", serif;
+  --font-mono: "Consolas", "Monaco", monospace;
+  --font-body: var(--font-serif);
+
+  /* Geometry */
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 6px;
+  --border-w: 1px;
+
+  /* Cross-hatch texture for body bg */
+  --texture-cross-hatch:
+    repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(180,170,150,0.015) 2px, rgba(180,170,150,0.015) 3px),
+    repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(180,170,150,0.015) 2px, rgba(180,170,150,0.015) 3px);
+}

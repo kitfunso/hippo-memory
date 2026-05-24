@@ -1,0 +1,13 @@
+hybrid-v4-baseline.png — capture reproducibility record
+
+Captured: 2026-05-24 via E0 of UI hybrid-v4 revamp (episode 01KSDD8S6KXQPQDHJEYPP5N9ZQ).
+Source mockup: mockups/hybrid-v4.html
+Viewport: 1440x900
+Browser: Playwright Chromium (default channel)
+Command:
+  cd C:/Users/skf_s/hippo && npx playwright screenshot \
+    --browser=chromium --viewport-size=1440,900 \
+    mockups/hybrid-v4.html mockups/hybrid-v4-baseline.png
+
+Used by: E4 acceptance test (pixelmatch diff against ui/dist/index.html render
+on the chrome regions; canvas region excluded — non-deterministic).
