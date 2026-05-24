@@ -1006,10 +1006,21 @@ async function handleRequest(
     try {
       body = JSON.parse(rawBody);
     } catch {
+      // v1.12.6 (B4): parse-failure tenant attribution. Pre-fix this path
+      // wrote tenant_id=HIPPO_TENANT regardless of the originating workspace,
+      // silently routing parse failures from workspace A into the deployment's
+      // tenant DLQ. Fix: use the regex-extracted teamIdFromRaw to resolve
+      // tenant via the same slack_workspaces table the happy path uses
+      // (resolveTenantForTeam at line ~1044). When teamIdFromRaw is null
+      // (totally unparseable body) OR the team is unknown, write with
+      // tenantId=null so the row lands as '__unroutable__' (matching the
+      // existing unroutable bucket convention).
       const db = openHippoDb(opts.hippoRoot);
       try {
+        const parseFailTenant =
+          teamIdFromRaw !== null ? resolveTenantForTeam(db, teamIdFromRaw) : null;
         writeToDlq(db, {
-          tenantId: process.env.HIPPO_TENANT ?? 'default',
+          tenantId: parseFailTenant, // null → '__unroutable__' sentinel
           teamId: teamIdFromRaw,
           rawPayload: rawBody,
           error: 'invalid JSON',
