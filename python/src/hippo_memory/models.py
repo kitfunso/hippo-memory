@@ -131,11 +131,10 @@ class RecallResult(_Base):
 class ContextEntry(_Base):
     """One entry inside a ContextResult.
 
-    Note: ``entry`` contains the full MemoryEntry shape (typed as
-    MemoryEnvelope here since the wire shape matches). Episode B's
-    independent-review-critic flagged that the SDK exposes the full surface;
-    a v0.2 ``projected()`` helper could mirror the CLI's narrower json
-    projection. See TODOS.md.
+    ``entry`` contains the full MemoryEntry shape (typed as MemoryEnvelope
+    here since the wire shape matches). For SDK consumers who want the
+    leaner CLI shape (id + score + strength + tags + confidence + content +
+    global only), call :meth:`projected` — added v0.2.0.
     """
 
     entry: MemoryEnvelope
@@ -143,6 +142,35 @@ class ContextEntry(_Base):
     tokens: int
     is_global: bool | None = None
     is_fresh_tail: bool | None = None
+
+    def projected(self) -> dict[str, Any]:
+        """v0.2.0: project the full entry surface to the CLI's narrower shape.
+
+        Mirrors `hippo context --format json` per-row output (src/cli.ts
+        printContextMarkdown json branch). Returned dict shape:
+
+        - ``id``: memory id
+        - ``score``: scorer score (float)
+        - ``strength``: decay-adjusted strength (float | None)
+        - ``tags``: list[str]
+        - ``confidence``: 'verified' | 'observed' | 'inferred' | 'stale' | None
+        - ``content``: memory text
+        - ``global``: bool (true when sourced from global store)
+
+        Use this when piping SDK results into LLM context or CLI-shaped
+        downstream consumers. The full ``entry`` shape stays available on
+        the model for callers who need it (e.g. for ``superseded_by``,
+        ``embeddings``, ``goal_associations``).
+        """
+        return {
+            "id": self.entry.id,
+            "score": self.score,
+            "strength": self.entry.strength,
+            "tags": self.entry.tags,
+            "confidence": self.entry.confidence,
+            "content": self.entry.content,
+            "global": bool(self.is_global),
+        }
 
 
 class ContextResult(_Base):
@@ -260,17 +288,31 @@ class AssembleResult(_Base):
 
 
 class AuthCreated(_Base):
-    """Returned by POST /v1/auth/keys. Plaintext ``key`` lands ONCE."""
+    """Returned by POST /v1/auth/keys. Plaintext lands ONCE.
+
+    v0.2.0: field renamed ``key`` → ``plaintext`` to match the server wire
+    shape (the v0.1 `key` field was a doc/test bug that no integration test
+    exercised). Pre-v0.2.0 consumers reading ``result.key`` will see an
+    AttributeError; switch to ``result.plaintext``.
+
+    v1.12.3+ server populates ``role`` ('admin' | 'member'). Optional here
+    for back-compat with hippo-memory server <1.12.3.
+    """
 
     key_id: str
-    key: str  # plaintext, displayed once
+    plaintext: str  # plaintext key, displayed once on mint
     tenant_id: str | None = None
     label: str | None = None
     created_at: str | None = None
+    role: str | None = None
 
 
 class AuthKey(_Base):
-    """Returned by GET /v1/auth/keys (no plaintext)."""
+    """Returned by GET /v1/auth/keys (no plaintext).
+
+    v1.12.3+ server populates ``role`` ('admin' | 'member'). Optional here
+    for back-compat with hippo-memory server <1.12.3.
+    """
 
     key_id: str
     tenant_id: str | None = None
@@ -278,6 +320,7 @@ class AuthKey(_Base):
     created_at: str | None = None
     last_used_at: str | None = None
     revoked_at: str | None = None
+    role: str | None = None
 
 
 class AuthRevoked(_Base):

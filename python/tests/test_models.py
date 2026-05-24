@@ -115,13 +115,17 @@ def test_archive_supersede_promote_forget_roundtrip():
 
 
 def test_auth_models_roundtrip():
+    # v0.2.0: AuthCreated.key → AuthCreated.plaintext (server returns 'plaintext';
+    # v0.1 'key' was a model bug never exercised by an integration test).
+    # role field is v1.12.3+ server, optional here for back-compat.
     _roundtrip(AuthCreated, {
-        "keyId": "hk_abc", "key": "sk_secret_plaintext",
+        "keyId": "hk_abc", "plaintext": "hk_abc.secret_body",
         "tenantId": "default", "label": "test-key", "createdAt": "2026-05-23T18:00:00Z",
+        "role": "admin",
     })
     _roundtrip(AuthKey, {
         "keyId": "hk_abc", "tenantId": "default", "label": "test-key",
-        "createdAt": "2026-05-23T18:00:00Z",
+        "createdAt": "2026-05-23T18:00:00Z", "role": "admin",
     })
     _roundtrip(AuthRevoked, {"ok": True, "keyId": "hk_abc", "revokedAt": "2026-05-23T18:00:00Z"})
 

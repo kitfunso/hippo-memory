@@ -47,12 +47,13 @@ The 8-file background-pipelines slice shipped as v1.12.1 (A5 v2 sub-2 — `feat/
 - `dedupe.ts` / `memory.ts` unscoped reader sites — separate audit pass.
 - `replaceDetectedConflicts` stale cross-tenant rows lingering `status='open'` — auto-resolve in the detector's resolve-stale loop so they self-heal.
 
-### Python SDK v0.2 (~5d)
+### ~~Python SDK v0.2~~ — SHIPPED 2026-05-24 (PyPI `hippo-memory-sdk@0.2.0`)
 
-From Episode C follow-ups:
-- [ ] Sync wrappers (`HippoSync`) — async-only is documented limitation in v0.1 README; v0.2 closes it.
-- [ ] `ContextResult.projected()` helper — projects the full `MemoryEntry` surface to the CLI's `hippo context --format json` subset for SDK consumers who want the leaner shape.
-- [ ] 204 handling in `_request` — defensive; current code paths return 200 always but no harm in being explicit.
+- [x] **Sync wrappers (`HippoSync`)**. SHIPPED — line-for-line mirror of `Hippo` using `httpx.Client`. Wire-compatible. 8 integration tests.
+- [x] **`ContextEntry.projected()` helper**. SHIPPED — projects to CLI shape (id, score, strength, tags, confidence, content, global). 4 unit tests.
+- [ ] **204 handling in `_request`** — deferred to v0.3 (current code paths return 200 always; tightening would be 14 method wrappers for a dead code path).
+- [x] **`auth_create(role=)` parameter + `AuthCreated.role`/`AuthKey.role`** — BONUS in v0.2.0. Matches hippo-memory v1.12.3 server. Tests cover admin + member roles.
+- [x] **Breaking model fix:** `AuthCreated.key` → `AuthCreated.plaintext`. v0.1 had a model bug never exercised by integration tests; v0.2 fixes it. Caught while writing sync test coverage.
 
 ### v0.26 UI redesign port — warm parchment + 3D (~15-20d)
 
