@@ -1,5 +1,45 @@
 # Changelog
 
+## 1.12.8 (2026-05-24): multi-workspace tenant-routing e2e coverage
+
+Closes a coherent test story after this week's Slack multi-workspace
+work: v1.12.5 (workspaces CLI) added the registration surface, v1.12.6 B4
+fixed parse-failure tenant attribution, and v1.12.8 now locks the
+happy-path e2e: registered team → webhook → memory written with the
+mapped tenant_id.
+
+### Shipped
+- **`tests/slack-webhook-multi-workspace-tenant.test.ts`** (4 new cases):
+  - Registered team routes the ingested memory to the mapped tenant
+    (NOT HIPPO_TENANT fallback when slack_workspaces is non-empty)
+  - Two-workspace isolation: team-A messages NEVER produce tenant-B
+    memories, and vice versa (explicit cross-tenant leak guard)
+  - Foreign team (not registered, table non-empty) does NOT leak into
+    HIPPO_TENANT — fail-closed contract per v0.39 commit 3
+  - Single-workspace install (empty slack_workspaces) preserves
+    HIPPO_TENANT fallback ergonomics
+
+### Coverage map after this release
+
+| Layer | Test |
+|---|---|
+| `resolveTenantForTeam` unit | `tests/slack-tenant-routing.test.ts` |
+| Workspaces CLI add/list/remove unit | `tests/slack-workspaces.test.ts` |
+| Workspaces CLI integration | `tests/slack-workspaces-cli.test.ts` |
+| Unroutable foreign team → DLQ | `tests/v039-slack-hardening.test.ts` |
+| Parse-failure tenant attribution | `tests/slack-webhook-parse-failure-tenant.test.ts` |
+| **e2e happy path + isolation** | **`tests/slack-webhook-multi-workspace-tenant.test.ts` (NEW)** |
+
+### Tests
+
+1795 passed / 4 skipped / 0 failed across 249 files.
+
+### Notes
+
+- No code changes — additive test coverage only. Closes the TODOS gap
+  "Multi-workspace tenant-routing e2e test" surfaced in v0.38 Slack tail.
+- 12th ship of the 2026-05-24 session arc; natural high-water mark.
+
 ## 1.12.7 (2026-05-24): migration v27 self-heal for partial-v16 DB state
 
 Fixes a real user-facing bug: on a hippo DB where migration v16 had
