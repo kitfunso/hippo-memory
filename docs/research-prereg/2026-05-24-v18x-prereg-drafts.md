@@ -148,7 +148,17 @@ it doesn't, today's `dict[str, Any]` is fine for single-machine users.
 
 ## Card 4 — Sequential-learning adapter contract eval (re-run)
 
-**Status:** DRAFT — possible follow-up to v1.7.5 shipped contract.
+**Status:** DRAFT — BLOCKED on workload regression. See
+`docs/evals/2026-05-24-card4-dryrun.md` for full dry-run report.
+
+**Update 2026-05-24:** (a) source-read PASSED — mechanism wired clean end-to-end
+(no regression at the wiring level since v1.8.0). (b) dry-run FAILED workload
+validity: C2 lateMean dropped from 0.25 (v1.8 baseline, hippo 1.7.7) to 0.11
+(master, hippo 1.12.6) on the same deterministic seed sequence. Per v1.8.1
+discipline rule, pre-reg lock is BLOCKED until the regression is investigated.
+Candidate root causes (in `docs/evals/2026-05-24-card4-dryrun.md` §Investigation
+paths) are git-bisectable in ~4 minutes of compute using the 3-seed dry-run as
+the fitness function.
 
 **Mechanism claim.** With the v1.7.5 sequential-learning adapter contract
 shipped (`pushGoal`/`completeGoal` hooks on `interface.mjs`,
