@@ -4,6 +4,13 @@ import { fetchMemories, fetchStats, fetchConflicts, fetchEmbeddings } from "./ap
 import { LivingMap } from "./views/LivingMap/LivingMap.js";
 import { INITIAL_FILTER_STATE, type FilterState, type Layer, type Confidence } from "./state/filterState.js";
 
+/**
+ * E5 S6 — Origin of the current freeze state. Lets the freeze button surface
+ * an OS-source hint when applicable, and the title attribute revert to
+ * standard wording when the user takes manual control.
+ */
+type FrozenOrigin = "os" | "user" | null;
+
 type LoadState = "loading" | "ready" | "error";
 
 const loadingStyles = `
@@ -23,13 +30,29 @@ export function App() {
 
   // E2: shared filter state, prop-drilled to LivingMap + Header.
   const [filterState, setFilterState] = useState<FilterState>(INITIAL_FILTER_STATE);
+  // E5 S6: track whether the current frozen state originated from OS or user.
+  const [frozenOrigin, setFrozenOrigin] = useState<FrozenOrigin>(null);
 
   const setQuery = useCallback((query: string) => {
     setFilterState((prev) => ({ ...prev, query }));
   }, []);
 
+  /** E5 S6: user-initiated freeze toggle. Clears OS-origin so the hint goes away. */
   const setFrozen = useCallback((frozen: boolean) => {
     setFilterState((prev) => ({ ...prev, frozen }));
+    setFrozenOrigin("user");
+  }, []);
+
+  // E5 S6 — one-shot prefers-reduced-motion check on mount. Per plan-eng R1
+  // HIGH #2: NOT subscribing to media query changes — the user's override
+  // would otherwise be silently undone on every focus/blur event.
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    if (mq.matches) {
+      setFilterState((prev) => ({ ...prev, frozen: true }));
+      setFrozenOrigin("os");
+    }
   }, []);
 
   // E3: per-filter setters for FilterPanel.
@@ -55,10 +78,13 @@ export function App() {
     setFilterState((prev) => ({ ...INITIAL_FILTER_STATE, frozen: prev.frozen }));
   }, []);
 
-  // E2: keyboard shortcut "F" toggles freeze (matches Header button's title hint).
+  // E2 + E5: keyboard shortcut "F" toggles freeze. Per plan-eng R2 MED #3:
+  // skip when target is inside the drawer (data-drawer="memory-list") so the
+  // user's keyboard nav over rows doesn't accidentally freeze the scene.
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.target instanceof HTMLElement && e.target.closest('[data-drawer="memory-list"]')) return;
       if (e.key === "f" || e.key === "F") setFrozen(!filterState.frozen);
     }
     window.addEventListener("keydown", handleKey);
@@ -82,7 +108,7 @@ export function App() {
 
   if (state === "loading") {
     return (
-      <div style={centerStyle}>
+      <div style={centerStyle} role="status" aria-live="polite">
         <style>{loadingStyles}</style>
         <div style={{ textAlign: "center" }}>
           <div style={{
@@ -158,20 +184,24 @@ export function App() {
   }
 
   return (
-    <LivingMap
-      memories={memories}
-      embeddings={embeddings}
-      stats={stats}
-      conflicts={conflicts}
-      filterState={filterState}
-      setQuery={setQuery}
-      setFrozen={setFrozen}
-      setLayers={setLayers}
-      setStrengthRange={setStrengthRange}
-      setConfidences={setConfidences}
-      setAgeMaxDays={setAgeMaxDays}
-      resetFilters={resetFilters}
-    />
+    // E5 fix: <main> landmark for Lighthouse landmark-one-main audit.
+    <main style={{ width: "100%", height: "100%" }}>
+      <LivingMap
+        memories={memories}
+        embeddings={embeddings}
+        stats={stats}
+        conflicts={conflicts}
+        filterState={filterState}
+        frozenOrigin={frozenOrigin}
+        setQuery={setQuery}
+        setFrozen={setFrozen}
+        setLayers={setLayers}
+        setStrengthRange={setStrengthRange}
+        setConfidences={setConfidences}
+        setAgeMaxDays={setAgeMaxDays}
+        resetFilters={resetFilters}
+      />
+    </main>
   );
 }
 

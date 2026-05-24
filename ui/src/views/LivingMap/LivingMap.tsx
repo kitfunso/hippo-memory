@@ -6,6 +6,8 @@ import { Header } from "../../components/Header.js";
 import { Sidebar } from "../../components/Sidebar.js";
 import { BottomBar } from "../../components/BottomBar.js";
 import { LabelOverlay } from "../../components/LabelOverlay.js";
+import { Drawer } from "../../components/Drawer.js";
+import { SkipLink } from "../../components/SkipLink.js";
 import { LAYER_COLORS } from "../../engine/types.js";
 import {
   deriveVisibleIds,
@@ -23,6 +25,8 @@ interface LivingMapProps {
   stats: Stats | null;
   conflicts: Conflict[];
   filterState: FilterState;
+  /** E5 S6: OS vs user origin of the current freeze. */
+  frozenOrigin: "os" | "user" | null;
   setQuery: (query: string) => void;
   setFrozen: (frozen: boolean) => void;
   setLayers: (layers: Set<Layer>) => void;
@@ -113,7 +117,7 @@ function DetailPanel({ memory, onClose, open }: { memory: Memory | null; onClose
 }
 
 export function LivingMap({
-  memories, embeddings, stats, conflicts, filterState,
+  memories, embeddings, stats, conflicts, filterState, frozenOrigin,
   setQuery, setFrozen, setLayers, setStrengthRange, setConfidences, setAgeMaxDays,
   resetFilters,
 }: LivingMapProps) {
@@ -121,6 +125,9 @@ export function LivingMap({
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [hoveredMemory, setHoveredMemory] = useState<{ memory: Memory; x: number; y: number } | null>(null);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
+  // E5 S1: transient UI state for the drawer mirror. Lives here, NOT in
+  // FilterState (FilterState is for data filters, not viewport chrome).
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   // E3: derive the visible-id set once per render so Sidebar (tag cloud +
   // stats) and the scene filter wiring share the same source of truth.
@@ -133,6 +140,21 @@ export function LivingMap({
   // E4 marquee: store the BrainScene instance so LabelOverlay can subscribe
   // to per-frame onRender callbacks for projection.
   const [sceneInstance, setSceneInstance] = useState<BrainScene | null>(null);
+
+  // E5 S2: L key toggles drawer. Skip when target is in a form input or
+  // already inside the drawer (so arrow nav over rows isn't shadowed).
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.target instanceof HTMLElement && e.target.closest('[data-drawer="memory-list"]')) return;
+      if (e.key === "l" || e.key === "L") {
+        e.preventDefault();
+        setDrawerOpen((prev) => !prev);
+      }
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, []);
 
   useEffect(() => {
     const el = wrapperRef.current;
@@ -175,27 +197,49 @@ export function LivingMap({
   return (
     <div ref={wrapperRef} style={{ width: "100%", height: "100%", position: "relative", overflow: "hidden" }} onKeyDown={handleKeyDown} tabIndex={0}>
 
-      {/* P2 mockup chrome: framed map-area container so the canvas no
-          longer bleeds edge-to-edge under the header. 1px border + map-bg
-          tint + 24px margin matches hybrid-v4 .map-container. */}
-      <div style={{
-        position: "absolute",
-        top: 48 + 24,
-        left: 24,
-        right: 340 + 24,
-        bottom: 36 + 24,
-        border: "1px solid var(--border)",
-        borderRadius: 2,
-        background: "var(--map-bg)",
-        overflow: "hidden",
-        zIndex: 0,
-      }}>
-        <div ref={containerRef} onMouseMove={handleMouseMove} onClick={handleClick}
-          style={{ position: "absolute", inset: 0 }} />
+      {/* E5 S3: skip-link is the FIRST focusable element so SR/keyboard
+          users land on it on Tab. */}
+      <SkipLink onActivate={() => setDrawerOpen(true)} />
 
-        {/* In-map hint dropped (round-2 design-critic MED #8): BottomBar
-            already shows the kbd shortcuts; duplicating them in the map
-            footer crowds the canvas. */}
+      {/* P2 mockup chrome: framed map-area container. E5 S4: role="region"
+          on the outer container, aria-hidden="true" on the INNER canvas
+          wrapper. The SR escape hatch button is a SIBLING of the
+          aria-hidden wrapper (plan-eng R2 MED fix: aria-hidden cascades,
+          so the button could not live inside it). */}
+      <div
+        role="region"
+        aria-label="Memory graph (visual representation)"
+        style={{
+          position: "absolute",
+          top: 48 + 24,
+          left: 24,
+          right: 340 + 24,
+          bottom: 36 + 24,
+          border: "1px solid var(--border)",
+          borderRadius: 2,
+          background: "var(--map-bg)",
+          overflow: "hidden",
+          zIndex: 0,
+        }}
+      >
+        <div aria-hidden="true" style={{ position: "absolute", inset: 0 }}>
+          <div
+            ref={containerRef}
+            onMouseMove={handleMouseMove}
+            onClick={handleClick}
+            style={{ position: "absolute", inset: 0 }}
+          />
+        </div>
+
+        {/* SR escape hatch — sibling of aria-hidden wrapper. SR users
+            who Tab INTO this region get an actionable way out. */}
+        <button
+          type="button"
+          className="sr-only"
+          onClick={() => setDrawerOpen(true)}
+        >
+          For a tabular alternative, view the memory list ({memories.length} memories)
+        </button>
       </div>
 
       <Header
@@ -203,6 +247,7 @@ export function LivingMap({
         matchCount={matchCount}
         stats={stats}
         filterState={filterState}
+        frozenOrigin={frozenOrigin}
         setQuery={setQuery}
         setFrozen={setFrozen}
       />
@@ -246,9 +291,28 @@ export function LivingMap({
 
       <DetailPanel memory={selectedMemory} onClose={() => setSelectedMemory(null)} open={panelOpen} />
 
-      {/* P2 mockup chrome: bottom-bar with shortcuts + affordance key. Was
-          silently dropped from E2/E3 scope; plan-design-critic HIGH. */}
-      <BottomBar />
+      {/* E5 S1: drawer mirror. Always rendered (CSS transform-hide), so SR
+          users always have access. */}
+      <Drawer
+        memories={memories}
+        visibleIds={visibleIds}
+        filterActive={filterActive}
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        onMemorySelect={(m) => {
+          setSelectedMemory(m);
+          setHoveredMemory(null);
+        }}
+        selectedMemoryId={selectedMemory?.id ?? null}
+        resetFilters={resetFilters}
+      />
+
+      {/* P2 mockup chrome: bottom-bar with shortcuts + affordance key + drawer toggle. */}
+      <BottomBar
+        drawerOpen={drawerOpen}
+        onToggleDrawer={() => setDrawerOpen((prev) => !prev)}
+        visibleCount={filterActive ? visibleIds.size : memories.length}
+      />
     </div>
   );
 }

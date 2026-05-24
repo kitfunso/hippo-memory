@@ -61,3 +61,25 @@
     repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(180,170,150,0.015) 2px, rgba(180,170,150,0.015) 3px),
     repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(180,170,150,0.015) 2px, rgba(180,170,150,0.015) 3px);
 }
+
+/* E5 S5 — global :focus-visible rings. Matches mockup hybrid-v4.html L233.
+   Rust accent on parchment hits ~4.8:1 contrast (WCAG AA). */
+*:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* E5 S3 — sr-only utility for visually-hidden but SR-readable content.
+   Standard a11y pattern. */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}

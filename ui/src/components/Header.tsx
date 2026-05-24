@@ -18,11 +18,14 @@ interface HeaderProps {
   matchCount: number | null;
   stats: Stats | null;
   filterState: FilterState;
+  /** E5 S6: when freeze was triggered by OS prefers-reduced-motion, surface
+   * an explanatory title + sr-only span so the user knows why the map is paused. */
+  frozenOrigin: "os" | "user" | null;
   setQuery: (query: string) => void;
   setFrozen: (frozen: boolean) => void;
 }
 
-export function Header({ memoryCount, matchCount, stats, filterState, setQuery, setFrozen }: HeaderProps) {
+export function Header({ memoryCount, matchCount, stats, filterState, frozenOrigin, setQuery, setFrozen }: HeaderProps) {
   // Local input state - debounced before propagating to FilterState. This
   // keeps typing snappy while delaying the scene re-highlight by 150ms.
   const [inputValue, setInputValue] = useState(filterState.query);
@@ -88,7 +91,7 @@ export function Header({ memoryCount, matchCount, stats, filterState, setQuery, 
 
       <div style={{ flex: 1 }} />
 
-      <div style={{ position: "relative", width: 240 }}>
+      <div role="search" style={{ position: "relative", width: 240 }}>
         <input
           ref={inputRef}
           type="text"
@@ -163,7 +166,13 @@ export function Header({ memoryCount, matchCount, stats, filterState, setQuery, 
         onClick={() => setFrozen(!filterState.frozen)}
         aria-pressed={filterState.frozen}
         aria-label={filterState.frozen ? "Resume animation" : "Freeze animation"}
-        title={filterState.frozen ? "Click to resume animation (or press F)" : "Click to freeze animation (or press F)"}
+        title={
+          filterState.frozen && frozenOrigin === "os"
+            ? "Frozen because your system requests reduced motion. Click to override."
+            : filterState.frozen
+              ? "Click to resume animation (or press F)"
+              : "Click to freeze animation (or press F)"
+        }
         style={{
           fontFamily: "var(--font-mono)",
           fontSize: 10,
@@ -180,6 +189,12 @@ export function Header({ memoryCount, matchCount, stats, filterState, setQuery, 
       >
         {filterState.frozen ? "frozen" : "freeze"}
       </button>
+      {/* E5 S6 — sr-only explanation for OS-origin freeze. */}
+      {filterState.frozen && frozenOrigin === "os" && (
+        <span className="sr-only">
+          Animation paused: prefers-reduced-motion enabled in OS settings. Activate the freeze button to override.
+        </span>
+      )}
     </div>
   );
 }

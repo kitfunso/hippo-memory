@@ -1,5 +1,84 @@
 # Changelog
 
+## ui-brain-observatory v0.2.0 (2026-05-24): hybrid-v4 parchment revamp + a11y
+
+Final ship of the UI hybrid-v4 parchment revamp through 7 stacked PRs
+(E0-E5) via `/dev-framework-rl` with all 5 critic gates per stage active.
+
+### What shipped
+
+- **Parchment aesthetic** end-to-end: warm `#f4efe6` bg, Georgia serif body,
+  rust accent, three muted layer tints (buffer purple, episodic blue,
+  semantic green), cross-hatch texture, framed map area.
+- **Header chrome**: hippo + italic 'brain observatory' tagline, 305-count,
+  fading badge, parchment search input with clear-X + `/` shortcut + Esc
+  to clear, freeze button with F shortcut.
+- **Sidebar (340px right)**: Memory Layers panel with per-layer bars,
+  Selected memory hint, Filters with reset, Tag cloud with log-scaled
+  weight + path:* demotion.
+- **Map area framed** with persistent 1px border + map-bg tint + 24px gutter.
+- **Three.js node rendering**: parchment clearColor, NoToneMapping,
+  bloom disabled, solid spheres (emissive removed), subtle halos.
+- **HTML serif label overlay** (E4 marquee): per-frame screen-projection
+  via `BrainScene.onRender`, AABB collision avoidance, top-10 selection
+  by `strength × log(retrievals+2)`, bracket-wrapped synthetic content
+  filtered out.
+- **BottomBar**: layer legend + kbd shortcuts (/search · esc clear · f freeze
+  · click open · L list) + italic affordance key (size=retrievals
+  opacity=strength lines=similarity).
+- **Drawer mirror (E5)**: 280px slide-up table with id/content/layer/strength
+  /age columns, keyboard nav (arrows + Enter + Esc), filter-aware row count,
+  empty state with reset button. Always renders to DOM for SR access.
+- **A11y full pass**: `<main>` landmark, role=search, role=region on canvas,
+  aria-hidden on inner canvas, sr-only escape hatch, skip-link first
+  focusable, 12 aria-labels on interactive elements, focus-visible 2px
+  rust outline at WCAG AA contrast.
+- **prefers-reduced-motion**: one-shot OS check seeds `frozen=true` on mount;
+  freeze button gets explanatory title + sr-only hint when origin is OS.
+
+### Performance — honest shortfall (per plan §S7 honest-reporting protocol)
+
+**Lighthouse perf: 32/100. Target was 80. Shipping with known miss.**
+
+Root cause: Three.js (510KB) + WebGL canvas init dominates LCP on
+Lighthouse's simulated cellular3G profile. Real users on local hardware
+experience near-instant load; the metric is worst-case simulated.
+
+**v0.27 perf epic queued:** lazy-load Three.js behind splash; static
+chrome prerender for first paint; preload three chunk; SW for repeat-visit.
+
+Full audit: `docs/evals/2026-05-24-e5-lighthouse-report.md`.
+
+### Tests
+
+43 vitest specs (Header, FilterPanel, TagCloud, filterState). New components
+(Drawer, SkipLink) ship without dedicated tests in v0.26 — deferred to v0.27
+hardening pass. Manual keyboard + SR walkthrough verified.
+
+### Critics that ran (all gates active)
+
+- E5 plan: plan-eng-critic R1 82→R2 88 PASS; plan-design-critic R1 87→R2 92 PASS
+- E4 retroactive: plan-design-critic R1 64→R2 84→R3 88 PASS; code-review-critic R1 72→R2 78→R3 88 PASS
+- E0-E3 plan: plan-eng-critic R1 62→R2 78→R3 78 (cap-hit, human override)
+
+### PR stack
+
+- #53 E0 parchment tokens + test infra + baseline PNG
+- #54 E1 wire tokens + delete dashboardHTML + drift guard
+- #55 E1.5 BrainScene API extensions (setReducedMotion/setFiltered/onRender)
+- #56 E2 Header + debounced search + freeze toggle + FilterState
+- #57 E3 Sidebar (StatsPanel + FilterPanel + TagCloud) + 37 tests
+- #58 E4 proper (4 HIGH bugs + label overlay + bottom-bar + map frame)
+- #59 E5 a11y + drawer + lighthouse + final ship
+
+### v0.27 follow-up epic
+
+- E4 LOW MEDs: AABB layout thrash caching, vestigial width/height props,
+  shared panelTitle const, topN JSDoc drift, global collision priority
+- Perf: lazy-load Three.js, static prerender, preload chunk, service worker
+- Drawer polish: sortable columns, hover preview, row highlight on map-hover
+- Mockup-deferred: sortable timeline, minimap, snapshot button, drawer rich features
+
 ## 1.12.10 (2026-05-24): D1+D2+D3+D4+D5 design picks bundled ship
 
 All five design decisions from `docs/design-decisions/2026-05-24-blocked-items.md`

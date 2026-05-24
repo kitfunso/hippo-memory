@@ -12,6 +12,12 @@
 
 import { LAYER_COLORS } from "../engine/types.js";
 
+interface BottomBarProps {
+  drawerOpen: boolean;
+  onToggleDrawer: () => void;
+  visibleCount: number;
+}
+
 function Kbd({ children }: { children: React.ReactNode }) {
   return (
     <span style={{
@@ -37,7 +43,7 @@ const LAYERS: Array<{ key: keyof typeof LAYER_COLORS; label: string }> = [
   { key: "semantic", label: "semantic" },
 ];
 
-export function BottomBar() {
+export function BottomBar({ drawerOpen, onToggleDrawer, visibleCount }: BottomBarProps) {
   return (
     <div style={{
       position: "absolute",
@@ -74,12 +80,42 @@ export function BottomBar() {
 
       <div style={{ flex: 1 }} />
 
-      {/* Center: keyboard shortcuts */}
+      {/* Center: keyboard shortcuts + drawer toggle (L) */}
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         <span><Kbd>/</Kbd> search</span>
         <span><Kbd>esc</Kbd> clear</span>
         <span><Kbd>f</Kbd> freeze</span>
         <span><Kbd>click</Kbd> open</span>
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={onToggleDrawer}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onToggleDrawer();
+            }
+          }}
+          aria-controls="memory-drawer"
+          aria-expanded={drawerOpen}
+          // E5 fix: aria-label STARTS with visible text to satisfy
+          // Lighthouse label-content-name-mismatch (audit wants the
+          // visible label substring to be inside the accessible name).
+          aria-label={drawerOpen ? `L map, close memory list view` : `L list (${visibleCount}), open memory list view`}
+          style={{
+            cursor: "pointer",
+            color: drawerOpen ? "var(--accent)" : "var(--dim)",
+            transition: "color 150ms ease",
+            userSelect: "none",
+            // E5 fix: bump padding for Lighthouse target-size audit (>=24px).
+            padding: "6px 4px",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 3,
+          }}
+        >
+          <Kbd>L</Kbd> {drawerOpen ? "map" : `list (${visibleCount})`}
+        </span>
       </div>
 
       <div style={{ flex: 1 }} />
