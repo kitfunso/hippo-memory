@@ -238,6 +238,13 @@ export interface CaptureOptions {
   logFile?: string;
   dryRun: boolean;
   global: boolean;
+  /**
+   * L9: tenant scope for the dedup read in `cmdCaptureCore`. When provided
+   * AND `global` is false, the dedup check only considers this tenant's
+   * existing memories. Undefined preserves pre-1.12.1 host-wide dedup
+   * behaviour. Ignored when `global: true` (global captures are host-wide).
+   */
+  tenantId?: string;
 }
 
 /**
@@ -542,8 +549,13 @@ function cmdCaptureCore(
     return;
   }
 
-  // Load existing for dedup
-  const existing = loadAllEntries(targetRoot);
+  // Load existing for dedup. L9: when options.tenantId is set on a non-global
+  // capture, scope the dedup read so tenant A's captures don't get suppressed
+  // by tenant B's existing content. Undefined preserves host-wide behaviour.
+  const existing = loadAllEntries(
+    targetRoot,
+    useGlobal ? undefined : options.tenantId,
+  );
 
   let captured = 0;
   let skipped = 0;

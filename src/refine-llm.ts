@@ -31,6 +31,14 @@ export interface RefineOptions {
   all?: boolean;
   /** Injected for testing — defaults to the real fetch. */
   fetcher?: typeof fetch;
+  /**
+   * L9: tenant scope. When provided, refineStore only scans consolidated
+   * entries belonging to this tenant, and parent lookups are scoped to the
+   * same tenant. Cross-tenant parents return null from readEntry and are
+   * silently skipped (refine still produces output from merged content).
+   * Undefined preserves pre-1.12.1 host-wide scan behaviour.
+   */
+  tenantId?: string;
 }
 
 export interface RefineResult {
@@ -127,7 +135,9 @@ export async function refineStore(
     details: [],
   };
 
-  const entries = loadAllEntries(hippoRoot);
+  // L9: when opts.tenantId is provided, scope the top-level scan to this
+  // tenant's consolidated entries.
+  const entries = loadAllEntries(hippoRoot, opts.tenantId);
   let processed = 0;
 
   for (const entry of entries) {
@@ -148,7 +158,11 @@ export async function refineStore(
     const sources: MemoryEntry[] = [];
     const parentIds = Array.isArray(entry.parents) ? entry.parents : [];
     for (const pid of parentIds) {
-      const p = readEntry(hippoRoot, pid);
+      // L9: parent lookup scoped by opts.tenantId when provided.
+      // Cross-tenant parents return null and are silently skipped — refine
+      // still produces output from the merged content alone (graceful
+      // degradation rather than refuse-to-refine).
+      const p = readEntry(hippoRoot, pid, opts.tenantId);
       if (p) sources.push(p);
     }
 

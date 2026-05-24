@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.12.1 (2026-05-24): A5 v2 sub-2 — L9 conflict-subsystem tenant-scoping
+
+PATCH release. Closes the L9 deferral (conflict-subsystem tenant-scoping residue) from v1.11.0 + v1.12.0 sub-1. 11 unscoped `loadAllEntries` / `readEntry` sites across 8 background-pipeline files re-classified into 6 PER-TENANT-OPT-IN (`tenantId` plumbed through as optional parameter) + 7 HOST-WIDE-DOCUMENTED (inline JSDoc locks the intentional cross-tenant contract). Back-compat-safe: every new parameter is OPTIONAL with default behaviour matching v1.12.0; no public-API consumer breaks. No schema migration.
+
+### Shipped
+
+- **`tenantId?: string` (optional) on `invalidateMatching(hippoRoot, target, tenantId?)`** (`src/invalidation.ts`). Callers passing `tenantId` get per-tenant invalidation; undefined keeps the host-wide behaviour (pre-1.12.1 default).
+- **`tenantId?: string` (optional) in `RefineOptions`** (`src/refine-llm.ts`). Per-tenant refining + parent lookup. Cross-tenant parents return null from `readEntry` and are silently skipped — refine still produces output from merged content alone (graceful degradation).
+- **`tenantId?: string` (optional) on `deduplicateLesson` root-string overload** (`src/autolearn.ts`). Pre-loaded-entries overload unchanged (caller controls scope on that path).
+- **`tenantId?: string` (optional) in `CaptureOptions`** (`src/capture.ts`). Per-tenant dedup during capture; ignored when `global: true`.
+- **`tenantId?: string` (optional) in `ImportOptions`** (`src/importers.ts`). Per-tenant dedup during import; ignored when `global: true`. The 5 typed sibling importers (`importChatGPT/Claude/Cursor/GenericFile/Markdown`) pass options through unchanged.
+- **`tenantId?: string` (optional) in `autoShare` options bag** (`src/shared.ts`). Per-tenant local-entries read; global read stays unioned (the global root IS the cross-tenant aggregate by design).
+- **6 host-wide reader sites documented with L9 JSDoc** — `consolidate.ts:106`, `embeddings.ts:377+425`, `shared.ts:310+353+390`. No behaviour change; the comments lock the contract so a future pass doesn't accidentally "fix" them.
+- **Internal callers updated** to pass `resolveTenantId({})` (CLI) or the in-scope `tenantId` (MCP): `cli.ts:1941, 2322, 2471, 3618, 3625, 5899, 6008, 6076`; `mcp/server.ts:760`.
+- **`src/api.ts:2041` `api.sleep` autoShare call intentionally unchanged.** `api.sleep` is host-wide by intent per the api.ts:2073-2077 TODO; admin-gated at the HTTP boundary since v1.12.0.
+
+### Tests
+- 13 cases in `tests/l9-tenant-scoping.test.ts` — 7 per-tenant negative (cross-tenant leak prevention) + 6 host-wide back-compat parity. Real DB per project convention; multi-tenant fixtures via `createMemory({ tenantId })`.
+
+### Migration notes
+- **No DB migration** (schema v26 unchanged).
+- **No required updates for existing callers.** All new parameters are optional with defaults preserving v1.12.0 host-wide behaviour. Library consumers gain per-tenant capability opt-in only.
+- **To opt in to per-tenant correctness**, library consumers pass `tenantId` on these 6 entry points: `invalidateMatching`, `refineStore` (via `RefineOptions`), `deduplicateLesson` (root-string overload), `cmdCapture` / `cmdCaptureCore` (via `CaptureOptions`), `importEntries` (via `ImportOptions`), `autoShare` (via options bag). The TypeScript types will accept undefined as well as `string`.
+- **Future direction:** the optional-now / required-next-major deprecation cycle could land in 1.13.x and the breaking change in 2.0.
+
+### Out of scope (deferred)
+- `cli.ts` / `dashboard.ts` unscoped reader sites (single-tenant-per-process trust holds until non-loopback serving lands).
+- `dedupe.ts` / `memory.ts` unscoped reader sites (separate audit; not in L9 brief).
+- `hippo auth create-key --role` / `hippo auth list` role-column CLI surfacing (v1.12.0 follow-up; tracked in TODOS.md).
+
 ## 1.12.0 (2026-05-23): A5 v2 sub-1 — auth/role plumbing (admin gate on /v1/sleep)
 
 MINOR release. Adds an authorization-role layer to api_keys + Context.actor, gates `POST /v1/sleep` on `admin` role. Sub-1 of 2 in the v1.12.0 A5 v2 multi-tenant cluster — sub-2 (L9 background pipelines tenant-scoping across 8 files) deferred to a follow-up release. The Context.actor shape change is the largest public-API surface change since v0.39 (the A3 envelope refactor); existing single-tenant deployments behave identically (legacy keys backfill to `'admin'`, loopback fallback is `'admin'` by default).

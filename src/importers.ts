@@ -25,6 +25,13 @@ export interface ImportOptions {
   global?: boolean;
   extraTags?: string[];
   hippoRoot: string;
+  /**
+   * L9: tenant scope for the dedup read. When provided AND `global` is
+   * false, the dedup check only considers this tenant's existing entries.
+   * Ignored when `global: true` (global writes are host-wide by definition).
+   * Undefined preserves pre-1.12.1 host-wide dedup behaviour.
+   */
+  tenantId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -48,7 +55,10 @@ export function importEntries(
     initGlobal();
   }
 
-  const existing = loadAllEntries(targetRoot);
+  const existing = loadAllEntries(
+    targetRoot,
+    options.global ? undefined : options.tenantId,
+  );
   const allTags = [...new Set([...tags, ...(options.extraTags ?? [])])];
 
   let total = 0;

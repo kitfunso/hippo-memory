@@ -68,9 +68,13 @@ export function extractInvalidationTarget(message: string): InvalidationTarget |
  */
 export function invalidateMatching(
   hippoRoot: string,
-  target: InvalidationTarget
+  target: InvalidationTarget,
+  tenantId?: string,
 ): InvalidationResult {
-  const entries = loadAllEntries(hippoRoot);
+  // L9: tenantId opt-in. When provided, only this tenant's memories are
+  // considered for weakening. When undefined, behaves as it did pre-1.12.1
+  // (host-wide invalidation across all tenants in the store).
+  const entries = loadAllEntries(hippoRoot, tenantId);
   const fromTokens = invalidationTokenize(target.from);
   const result: InvalidationResult = { invalidated: 0, targets: [] };
 

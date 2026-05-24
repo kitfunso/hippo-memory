@@ -1938,7 +1938,14 @@ async function cmdRefine(
   const model = flags['model'] ? String(flags['model']) : undefined;
   const asJson = Boolean(flags['json']);
 
-  const result = await refineStore(hippoRoot, { apiKey, model, limit, dryRun, all });
+  const result = await refineStore(hippoRoot, {
+    apiKey,
+    model,
+    limit,
+    dryRun,
+    all,
+    tenantId: resolveTenantId({}),
+  });
 
   if (asJson) {
     console.log(JSON.stringify(result, null, 2));
@@ -2318,6 +2325,7 @@ function cmdSessionEndWorker(
         : undefined,
       dryRun: false,
       global: false,
+      tenantId: resolveTenantId({}),
     };
     cmdCapture(hippoRoot, captureOpts);
   } catch {
@@ -2467,6 +2475,7 @@ function cmdCodexSessionEndWorker(
       logFile,
       dryRun: false,
       global: false,
+      tenantId: resolveTenantId({}),
     };
     cmdCapture(hippoRoot, captureOpts);
   } catch {
@@ -3615,14 +3624,19 @@ function learnFromRepo(
   const existingForSchema = loadAllEntries(hippoRoot);
 
   for (const lesson of lessons) {
-    if (deduplicateLesson(existingForSchema, lesson)) {
+    // L9: learnFromRepo's existingForSchema load (line 3615 above) is
+    // host-wide and intentionally out-of-L9-scope per plan §11 (cli.ts is
+    // single-tenant-per-process). The tenantId arg here is a defensive no-op:
+    // deduplicateLesson's array overload ignores it; the parameter exists
+    // only to mirror the canonical caller pattern used elsewhere in cli.ts.
+    if (deduplicateLesson(existingForSchema, lesson, 0.7, resolveTenantId({}))) {
       skipped++;
       continue;
     }
 
     const target = extractInvalidationTarget(lesson);
     if (target) {
-      const invResult = invalidateMatching(hippoRoot, target);
+      const invResult = invalidateMatching(hippoRoot, target, resolveTenantId({}));
       if (invResult.invalidated > 0) {
         console.log(`${prefix}   Invalidated ${invResult.invalidated} memories referencing "${target.from}"`);
       }
@@ -5896,7 +5910,7 @@ async function main(): Promise<void> {
         requireInit(hippoRoot);
         const minScore = parseFloat(String(flags['min-score'] ?? '0.6'));
         const dryRun = Boolean(flags['dry-run']);
-        const results = autoShare(hippoRoot, { minScore, dryRun });
+        const results = autoShare(hippoRoot, { minScore, dryRun, tenantId: resolveTenantId({}) });
         if (results.length === 0) {
           console.log('No memories meet the sharing threshold.');
         } else if (dryRun) {
@@ -6012,6 +6026,7 @@ async function main(): Promise<void> {
         logFile: typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined,
         dryRun: Boolean(flags['dry-run']),
         global: Boolean(flags['global']),
+        tenantId: resolveTenantId({}),
       });
       break;
     }
@@ -6073,7 +6088,7 @@ async function main(): Promise<void> {
         to: reason,
         type: 'migration',
       };
-      const result = invalidateMatching(hippoRoot, invTarget);
+      const result = invalidateMatching(hippoRoot, invTarget, resolveTenantId({}));
       if (result.invalidated === 0) {
         console.log(`No memories matched "${target}".`);
       } else {
