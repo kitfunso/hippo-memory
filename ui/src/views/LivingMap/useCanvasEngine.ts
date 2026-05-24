@@ -12,6 +12,8 @@ interface UseSceneOptions {
   onHover: (memory: Memory | null, x: number, y: number) => void;
   onClick: (memory: Memory | null) => void;
   searchQuery: string;
+  /** E2: when true, calls scene.setReducedMotion(true) to halt animation. */
+  frozen: boolean;
 }
 
 export function useCanvasEngine({
@@ -23,6 +25,7 @@ export function useCanvasEngine({
   onHover,
   onClick,
   searchQuery,
+  frozen,
 }: UseSceneOptions) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<BrainScene | null>(null);
@@ -74,6 +77,11 @@ export function useCanvasEngine({
     }
     sceneRef.current?.setHighlighted(ids);
   }, [searchQuery, memories]);
+
+  // E2: drive scene freeze/resume from the FilterState.frozen flag.
+  useEffect(() => {
+    sceneRef.current?.setReducedMotion(frozen);
+  }, [frozen]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     sceneRef.current?.handleMouseMove(e.nativeEvent);

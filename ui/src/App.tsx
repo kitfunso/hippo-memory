@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { Memory, Stats, Conflict, EmbeddingIndex } from "./types.js";
 import { fetchMemories, fetchStats, fetchConflicts, fetchEmbeddings } from "./api/client.js";
 import { LivingMap } from "./views/LivingMap/LivingMap.js";
+import { INITIAL_FILTER_STATE, type FilterState } from "./state/filterState.js";
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -9,12 +10,6 @@ const loadingStyles = `
   @keyframes hippo-float {
     0%, 100% { transform: translateY(0px); opacity: 0.4; }
     50% { transform: translateY(-6px); opacity: 1; }
-  }
-  @keyframes hippo-dots {
-    0% { content: ''; }
-    33% { content: '.'; }
-    66% { content: '..'; }
-    100% { content: '...'; }
   }
 `;
 
@@ -25,6 +20,27 @@ export function App() {
   const [embeddings, setEmbeddings] = useState<EmbeddingIndex>({});
   const [state, setState] = useState<LoadState>("loading");
   const [error, setError] = useState("");
+
+  // E2: shared filter state, prop-drilled to LivingMap + Header.
+  const [filterState, setFilterState] = useState<FilterState>(INITIAL_FILTER_STATE);
+
+  const setQuery = useCallback((query: string) => {
+    setFilterState((prev) => ({ ...prev, query }));
+  }, []);
+
+  const setFrozen = useCallback((frozen: boolean) => {
+    setFilterState((prev) => ({ ...prev, frozen }));
+  }, []);
+
+  // E2: keyboard shortcut "F" toggles freeze (matches Header button's title hint).
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === "f" || e.key === "F") setFrozen(!filterState.frozen);
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [filterState.frozen, setFrozen]);
 
   useEffect(() => {
     Promise.all([fetchMemories(), fetchStats(), fetchConflicts(), fetchEmbeddings()])
@@ -55,7 +71,7 @@ export function App() {
             🧠
           </div>
           <div style={{
-            color: "rgba(255,255,255,0.2)",
+            color: "var(--dim)",
             fontFamily: "var(--font-mono)",
             fontSize: 11,
             letterSpacing: "2px",
@@ -80,7 +96,7 @@ export function App() {
             {error}
           </div>
           <div style={{
-            color: "rgba(255,255,255,0.15)",
+            color: "var(--text-faint)",
             fontSize: 10,
             fontFamily: "var(--font-mono)",
           }}>
@@ -97,7 +113,7 @@ export function App() {
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: 32, marginBottom: 16, opacity: 0.5 }}>🧠</div>
           <div style={{
-            color: "rgba(255,255,255,0.4)",
+            color: "var(--dim)",
             fontSize: 12,
             fontFamily: "var(--font-mono)",
             marginBottom: 8,
@@ -105,7 +121,7 @@ export function App() {
             no memories yet
           </div>
           <div style={{
-            color: "rgba(255,255,255,0.15)",
+            color: "var(--text-faint)",
             fontSize: 10,
             fontFamily: "var(--font-mono)",
           }}>
@@ -118,7 +134,17 @@ export function App() {
     );
   }
 
-  return <LivingMap memories={memories} embeddings={embeddings} stats={stats} conflicts={conflicts} />;
+  return (
+    <LivingMap
+      memories={memories}
+      embeddings={embeddings}
+      stats={stats}
+      conflicts={conflicts}
+      filterState={filterState}
+      setQuery={setQuery}
+      setFrozen={setFrozen}
+    />
+  );
 }
 
 const centerStyle: React.CSSProperties = {
