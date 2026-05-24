@@ -60,7 +60,10 @@ describe('GET /v1/audit?op=<op> — consolidate + outcome wiring', () => {
     remember(ctx, { content: 'seed-for-consolidate' });
     await sleep(ctx, { dryRun: true });
 
-    const res = await fetch(`${handle.url}/v1/audit?op=consolidate`);
+    // D2 v1.12.10: consolidate rows now tagged tenant='__host__' (api.sleep
+    // is host-wide). The HTTP audit route accepts ?tenant=<t> to query the
+    // synthetic __host__ tenant explicitly.
+    const res = await fetch(`${handle.url}/v1/audit?op=consolidate&tenant=__host__`);
     expect(res.status).toBe(200);
     // auditList returns AuditEvent[] directly (not {events: [...]}).
     const body = await res.json() as Array<{ op: string; actor: string }>;

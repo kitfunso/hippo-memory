@@ -2158,8 +2158,17 @@ export async function sleep(
     try {
       const db = openHippoDb(ctx.hippoRoot);
       try {
+        // D2 v1.12.10: tag with '__host__' synthetic tenant since api.sleep
+        // is host-wide (cross-tenant dedup is intentional). Tagging with
+        // ctx.tenantId would mislead tenant-scoped audit queries — a
+        // consolidate row labeled tenant=acme is wrong when the underlying
+        // work touched all tenants' rows. '__host__' is a system-reserved
+        // tenant string for host-wide ops; admins query it explicitly via
+        // `hippo audit list --tenant __host__`. The actor field still
+        // carries ctx.actor.subject so the operator who triggered the
+        // consolidation is traceable.
         appendAuditEvent(db, {
-          tenantId: ctx.tenantId,
+          tenantId: '__host__',
           actor: ctx.actor.subject,
           op: 'consolidate',
           metadata: {
@@ -2170,6 +2179,7 @@ export async function sleep(
             dryRun,
             noShare: opts.noShare ?? false,
             partial: phaseError !== null,
+            triggeredByTenant: ctx.tenantId, // preserve for audit forensics
             ...(phaseError ? { errorMessage: phaseError.message } : {}),
           },
         });

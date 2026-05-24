@@ -73,7 +73,9 @@ function buildDashboardData(hippoRoot: string): DashboardData {
   const now = new Date();
   const config = loadConfig(hippoRoot);
   const conflicts = listMemoryConflicts(hippoRoot, 'open');
-  const peers = listPeers();
+  // D4 v1.12.10: tenant-scope peer discovery in the dashboard (matches the
+  // tenantId already used for loadAllEntries on line 72).
+  const peers = listPeers(undefined, tenantId);
   const embeddingIndex = loadEmbeddingIndex(hippoRoot);
   const embeddedCount = Object.keys(embeddingIndex).length;
 

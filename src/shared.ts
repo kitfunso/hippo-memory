@@ -302,15 +302,27 @@ export function shareMemory(
 /**
  * List all projects that have contributed memories to the global store.
  * Parses the source field for 'shared:<project>:' or 'promoted:<path>' patterns.
+ *
+ * D4 v1.12.10: `tenantId` is now optional. When provided, the global entries
+ * are filtered to that tenant before aggregation — matches every other
+ * read path's default-safe behaviour. When undefined, host-wide (back-compat
+ * for legacy callers like CLI standalone + dashboard internal use). Operators
+ * who genuinely want cross-tenant peer discovery can pass undefined or
+ * use direct SQL.
  */
-export function listPeers(globalRoot?: string): Array<{ project: string; count: number; latest: string }> {
+export function listPeers(
+  globalRoot?: string,
+  tenantId?: string,
+): Array<{ project: string; count: number; latest: string }> {
   const root = globalRoot ?? getGlobalRoot();
   if (!fs.existsSync(root)) return [];
 
-  // L9: host-wide aggregate. listPeers is a metadata function showing peer
-  // projects that have contributed to the global store; per-tenant filtering
-  // would be meaningless.
-  const entries = loadAllEntries(root);
+  // D4: tenant-scoped by default when tenantId provided. Host-wide when
+  // undefined (preserves back-compat).
+  const allEntries = loadAllEntries(root);
+  const entries = tenantId !== undefined
+    ? allEntries.filter((e) => e.tenantId === tenantId)
+    : allEntries;
   const peerMap = new Map<string, { count: number; latest: string }>();
 
   for (const entry of entries) {

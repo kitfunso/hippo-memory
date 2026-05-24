@@ -6142,11 +6142,17 @@ async function main(): Promise<void> {
     }
 
     case 'peers': {
-      const peers = listPeers();
+      // D4 v1.12.10: tenant-scoped by default. --all-tenants restores the
+      // pre-D4 host-wide view for the rare operator who genuinely wants
+      // cross-tenant peer discovery.
+      const allTenants = flags['all-tenants'] === true;
+      const tenantScope = allTenants ? undefined : resolveTenantId({});
+      const peers = listPeers(undefined, tenantScope);
       if (peers.length === 0) {
         console.log('No peers found. Share memories with: hippo share <id>');
       } else {
-        console.log(`${peers.length} project${peers.length === 1 ? '' : 's'} contributing to global store:\n`);
+        const scopeLabel = allTenants ? 'global store (all tenants)' : `global store (tenant "${tenantScope}")`;
+        console.log(`${peers.length} project${peers.length === 1 ? '' : 's'} contributing to ${scopeLabel}:\n`);
         for (const p of peers) {
           console.log(`  ${p.project.padEnd(25)} ${String(p.count).padStart(4)} memories  (latest: ${p.latest.slice(0, 10)})`);
         }

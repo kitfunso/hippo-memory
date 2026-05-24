@@ -70,7 +70,7 @@ full ops visibility. (a) is the structurally pure answer but the
 cross-tenant `crossDups` counter is genuinely useful for a host
 operator and (a) deletes that observability.
 
-**Decision:**
+**Decision:** DECIDED-(b) redact-on-egress (Keith 2026-05-24, shipped v1.12.10). See `src/sleep-redact.ts` + `tests/sleep-redact.test.ts`.
 
 ---
 
@@ -119,7 +119,7 @@ data was touched."
 D1 = (b) redact-on-egress. The two go together: (b) preserves host-wide
 dedup, and `__host__` audit tag honestly records that scope.
 
-**Decision:**
+**Decision:** DECIDED-(a) `__host__` synthetic tenant (Keith 2026-05-24, shipped v1.12.10). `api.sleep` consolidate row now tags `tenant_id=__host__`; `triggeredByTenant` preserved in metadata for forensics. HTTP `/v1/audit?tenant=__host__` query param added. See `src/api.ts:~2161` + `tests/api-sleep-host-tenant.test.ts`.
 
 ---
 
@@ -174,7 +174,7 @@ flipped before the gates close." If multi-machine demand is genuine,
 1-2 weeks of focused work is cheaper than the alternative incident
 postmortem.
 
-**Decision:**
+**Decision:** DECIDED-(a) lock-step (Keith 2026-05-24). Committed in `docs/process/non-loopback-sequencing.md`. Required-firsts tracked there; non-loopback bind flag does NOT ship until every `[x]` is verified.
 
 ---
 
@@ -203,7 +203,7 @@ decision). Once multi-tenancy is real (A5 v2), the question is whether
 path's default. Operators who actually want cross-tenant peer discovery
 are a) rare, b) capable of using direct SQL.
 
-**Decision:**
+**Decision:** DECIDED-(a) tenant-scope (Keith 2026-05-24, shipped v1.12.10). `listPeers(globalRoot, tenantId?)` filters when tenantId provided. MCP `hippo_peers` now passes ctx.tenantId; dashboard passes its tenantId; CLI defaults to tenant-scope with `--all-tenants` flag for legacy host-wide. See `src/shared.ts:306` + `tests/shared-listpeers-tenant.test.ts`.
 
 ---
 
@@ -232,7 +232,7 @@ mentions "soak-tested" without it being actually wired.
 v1.12.x patches don't need a soak. (a) is a real ops cost for no
 current pain.
 
-**Decision:**
+**Decision:** DECIDED-(c) for now (Keith 2026-05-24, shipped v1.12.10). Grep of `docs/`/`ROADMAP*.md`/`README.md` confirmed no active doc currently claims `soak-tested` — historical `docs/plans/` files correctly call it `scaffold only`. Lock-step doc commits the recommitment if 1.x→2.x lands without (a) shipping.
 
 ---
 
