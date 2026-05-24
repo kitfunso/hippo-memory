@@ -51,6 +51,8 @@ export class BrainScene {
   private onClickCb: ((memory: Memory | null) => void) | null = null;
   private disposed = false;
   private rafId = 0;
+  /** E1.5: per-frame render callbacks for screen-space label overlay (E4). */
+  private onRenderCbs: Array<(camera: THREE.PerspectiveCamera, scene: THREE.Scene) => void> = [];
 
   constructor(private container: HTMLDivElement) {
     this.initRenderer();
@@ -434,8 +436,104 @@ export class BrainScene {
       }
     }
 
+    // E1.5: notify per-frame subscribers (E4's label overlay). Single-line
+    // hot-path insertion per plan v2 round-2 LOW #7 carve-out. Refactoring
+    // this loop is out of scope; only the forEach is in-scope here.
+    if (this.onRenderCbs.length > 0) {
+      for (const cb of this.onRenderCbs) cb(this.camera, this.scene);
+    }
+
     this.composer.render();
   };
+
+  // -------------------------------------------------------------------------
+  // E1.5 — Engine surface API extensions for E2 (freeze), E4 (label overlay),
+  // and E5 (prefers-reduced-motion + drawer mirror).
+  //
+  // Internals (layout algorithm, particle physics, render order) remain
+  // out of scope. Only single-line insertions in animate() are in-scope
+  // per plan v2 round-2 LOW #7 carve-out.
+  // -------------------------------------------------------------------------
+
+  /**
+   * Freeze or restart the animation loop. Used by E2's freeze-toggle and E5's
+   * prefers-reduced-motion media query.
+   *
+   * Implementation note (round-2 HIGH #1 + round-3 HIGH #1 fixes): matches
+   * scene.ts's existing rafId-based loop. Does NOT use Three.js's
+   * setAnimationLoop API (which scene.ts never adopted). When freezing,
+   * snaps particles to their basePosition rather than iterating to convergence
+   * (the sin/cos drift physics at L423-L435 never converges).
+   */
+  setReducedMotion(reduced: boolean): void {
+    if (reduced) {
+      if (this.rafId) {
+        cancelAnimationFrame(this.rafId);
+        this.rafId = 0;
+      }
+      this.snapParticlesToFinal();
+    } else if (!this.rafId) {
+      this.animate(); // restart the existing loop
+    }
+  }
+
+  /**
+   * Toggle node visibility based on a filter set. Used by E3's FilterPanel.
+   * Layout is NOT re-run; filtered nodes are hidden in place. To restore
+   * full visibility, pass an empty set.
+   */
+  setFiltered(visibleIds: Set<string>): void {
+    const filterActive = visibleIds.size > 0;
+    for (const node of this.nodes) {
+      const visible = !filterActive || visibleIds.has(node.id);
+      node.mesh.visible = visible;
+      node.halo.visible = visible;
+    }
+  }
+
+  /**
+   * Register a per-frame render callback. Used by E4's LabelOverlay to
+   * project node world-coords to screen-coords each frame.
+   *
+   * Returns an unsubscribe function. Callbacks fire once per animate()
+   * tick AFTER drift physics + BEFORE composer.render(). Keep them cheap;
+   * with N=1000 nodes the perf budget is ~8ms/frame to hold 60fps.
+   */
+  onRender(cb: (camera: THREE.PerspectiveCamera, scene: THREE.Scene) => void): () => void {
+    this.onRenderCbs.push(cb);
+    return () => {
+      const i = this.onRenderCbs.indexOf(cb);
+      if (i >= 0) this.onRenderCbs.splice(i, 1);
+    };
+  }
+
+  /**
+   * Accessor for the perspective camera. Used by E4's LabelOverlay so it
+   * can call `vector.project(camera)` without reaching into private fields.
+   *
+   * Returns the actual PerspectiveCamera (not the wider THREE.Camera base)
+   * so consumers can access `.aspect`, `.updateProjectionMatrix()`, etc.
+   * (round-3 LOW #4 fix.)
+   */
+  getCamera(): THREE.PerspectiveCamera {
+    return this.camera;
+  }
+
+  /**
+   * Snap drifting particles to their basePosition (freeze pose). Called by
+   * setReducedMotion(true). The drift physics is pure sin oscillation
+   * (L423-L435 of animate) — there is no convergence target other than
+   * basePosition itself, so we copy it directly.
+   */
+  private snapParticlesToFinal(): void {
+    for (const node of this.nodes) {
+      node.mesh.position.copy(node.basePosition);
+      node.halo.position.copy(node.basePosition);
+    }
+    // One final paint so reduced-motion users see the static layout, not
+    // the last animated frame.
+    this.composer.render();
+  }
 
   dispose(): void {
     this.disposed = true;
