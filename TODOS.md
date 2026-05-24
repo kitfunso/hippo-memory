@@ -497,3 +497,20 @@ v0.39 could ship the CRITICAL cross-tenant fixes without scope creep.
   `src/version.ts`, and both `extensions/openclaw-plugin` manifests all carry
   the same version, so the drift cannot recur. All five were synced to
   `1.10.1` in that release.
+
+- [ ] **Migration runner: wrap each migration in BEGIN/COMMIT to prevent
+  partial-apply.** Surfaced 2026-05-24 on Keith's `~/.hippo/hippo.db`. Schema
+  version was recorded as 25, but tables from migration v16 (`api_keys` +
+  `audit_log`) were missing — the v16 `ALTER TABLE` statements succeeded but
+  the `CREATE TABLE` statements somehow didn't, and `schema_version` was bumped
+  to 16 regardless. Every later migration ran on top of the partial state,
+  shipping it forward through v25. Symptom: every `hippo context` invocation
+  (the UserPromptSubmit hook) printed "no such table: api_keys" to stderr.
+  Fixed Keith's DB by manually creating the two tables (CREATE statements
+  lifted from `src/db.ts` v16 migration body — idempotent).
+  **Root-cause fix:** wrap every migration `up()` body in `BEGIN IMMEDIATE` /
+  `COMMIT` so a mid-migration failure rolls back ALL its statements AND the
+  `schema_version` bump together. Add a regression test that injects a
+  forced-fail mid-migration and asserts the DB returns to the prior version.
+  Audit existing migrations for non-idempotent statements that would fail on
+  re-run after this fix lands.
