@@ -332,7 +332,7 @@ ranking improvements; none are correctness blockers.
 
 - [ ] **DLQ replay command.** `hippo slack dlq retry <id>` to re-run a parked event after fixing the underlying parser. Today the DLQ is read-only via `hippo slack dlq list`.
 
-- [ ] **Workspace registration CLI.** `hippo slack workspaces add --team <T> --tenant <t>`. Today the `slack_workspaces` table is populated via direct SQL, which is fine for single-machine deployments but awkward for multi-workspace operators.
+- [x] **Workspace registration CLI.** SHIPPED 2026-05-24 — `hippo slack workspaces <add|list|remove>`. `add --team <T> --tenant <t>` upserts on team_id conflict (operators move workspaces between tenants). `list` returns tab-separated rows sorted by team_id. `remove --team <T>` reports not-found on miss. Helper module at `src/connectors/slack/workspaces.ts`; 7 unit + 10 CLI tests at `tests/slack-workspaces.test.ts` + `tests/slack-workspaces-cli.test.ts`.
 
 - [ ] **Eval scoring by `artifact_ref`.** The 10-scenario incident-recall eval matches on a per-message sentinel today. For real-traffic evals we want to score on `artifact_ref` so the eval doesn't depend on synthetic tokens in content. Would need to extend `RecallResultItem` (or a second SQL round-trip).
 

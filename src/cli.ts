@@ -172,6 +172,11 @@ import { computeAmbientState, renderAmbientSummary } from './ambient.js';
 import { listDlq, replayDlqEntry } from './connectors/slack/dlq.js';
 import { backfillChannel } from './connectors/slack/backfill.js';
 import { slackHistoryFetcher } from './connectors/slack/web-client.js';
+import {
+  addWorkspace as addSlackWorkspace,
+  listWorkspaces as listSlackWorkspaces,
+  removeWorkspace as removeSlackWorkspace,
+} from './connectors/slack/workspaces.js';
 import { cmdGithub } from './connectors/github/cli-impl.js';
 
 // ---------------------------------------------------------------------------
@@ -5150,6 +5155,78 @@ function cmdSlackDlqReplay(
   );
 }
 
+function printSlackWorkspacesUsage(): void {
+  console.log('hippo slack workspaces <add|list|remove> [options]');
+  console.log('  add --team <T> --tenant <t>   Register a workspace (upserts on existing team-id)');
+  console.log('  list                          List all registered workspaces');
+  console.log('  remove --team <T>             Remove a workspace registration');
+}
+
+function cmdSlackWorkspacesAdd(
+  hippoRoot: string,
+  flags: Record<string, string | boolean | string[]>,
+): void {
+  if (flags['help']) {
+    printSlackWorkspacesUsage();
+    return;
+  }
+  const teamId = typeof flags['team'] === 'string' ? (flags['team'] as string).trim() : '';
+  const tenantId = typeof flags['tenant'] === 'string' ? (flags['tenant'] as string).trim() : '';
+  if (!teamId || !tenantId) {
+    console.error('Usage: hippo slack workspaces add --team <T> --tenant <t>');
+    process.exit(1);
+  }
+  const db = openHippoDb(hippoRoot);
+  try {
+    const ws = addSlackWorkspace(db, { teamId, tenantId });
+    console.log(`added: ${ws.teamId} -> ${ws.tenantId} (${ws.addedAt})`);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+function cmdSlackWorkspacesList(hippoRoot: string): void {
+  const db = openHippoDb(hippoRoot);
+  try {
+    const items = listSlackWorkspaces(db);
+    if (items.length === 0) {
+      console.log('(no registered workspaces; routing via HIPPO_TENANT fallback)');
+      return;
+    }
+    for (const ws of items) {
+      console.log(`${ws.teamId}\t${ws.tenantId}\t${ws.addedAt}`);
+    }
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+function cmdSlackWorkspacesRemove(
+  hippoRoot: string,
+  flags: Record<string, string | boolean | string[]>,
+): void {
+  if (flags['help']) {
+    printSlackWorkspacesUsage();
+    return;
+  }
+  const teamId = typeof flags['team'] === 'string' ? (flags['team'] as string).trim() : '';
+  if (!teamId) {
+    console.error('Usage: hippo slack workspaces remove --team <T>');
+    process.exit(1);
+  }
+  const db = openHippoDb(hippoRoot);
+  try {
+    const removed = removeSlackWorkspace(db, teamId);
+    if (!removed) {
+      console.error(`no workspace registered for team ${teamId}`);
+      process.exit(1);
+    }
+    console.log(`removed: ${teamId}`);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 function cmdSlack(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
   const sub = args[0];
   if (sub === 'backfill') {
@@ -5164,7 +5241,26 @@ function cmdSlack(hippoRoot: string, args: string[], flags: Record<string, strin
     cmdSlackDlqReplay(hippoRoot, args, flags);
     return;
   }
-  console.error('Usage: hippo slack <backfill|dlq list|dlq replay <id> [--force]> [...]');
+  if (sub === 'workspaces') {
+    const action = args[1];
+    if (action === 'add') {
+      cmdSlackWorkspacesAdd(hippoRoot, flags);
+      return;
+    }
+    if (action === 'list') {
+      cmdSlackWorkspacesList(hippoRoot);
+      return;
+    }
+    if (action === 'remove') {
+      cmdSlackWorkspacesRemove(hippoRoot, flags);
+      return;
+    }
+    printSlackWorkspacesUsage();
+    process.exit(1);
+  }
+  console.error(
+    'Usage: hippo slack <backfill|dlq list|dlq replay <id> [--force]|workspaces add|workspaces list|workspaces remove> [...]',
+  );
   process.exit(1);
 }
 

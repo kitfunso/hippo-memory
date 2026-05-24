@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.12.5 (2026-05-24): `hippo slack workspaces` CLI (T2B operator UX)
+
+Closes the v0.38 E1.3 v2 follow-up: "workspace registration CLI". Today operators populating the `slack_workspaces` table for multi-workspace deployments had to write direct SQL. This release adds the CLI surface.
+
+### Shipped
+- **`hippo slack workspaces add --team <T> --tenant <t>`** — registers a Slack team_id → hippo tenant_id mapping. Upserts on team_id conflict (operators moving workspaces between tenants shouldn't need a delete+add dance).
+- **`hippo slack workspaces list`** — tab-separated rows (team_id, tenant_id, added_at) sorted by team_id. Empty-state message routes operators to the HIPPO_TENANT fallback explanation.
+- **`hippo slack workspaces remove --team <T>`** — deletes a registration; reports not-found on miss with non-zero exit.
+- Helper module at `src/connectors/slack/workspaces.ts` keeps SQL apart from CLI for unit-testability (mirrors the `connectors/slack/dlq.ts` pattern).
+
+### Tests
+- 7 unit cases in `tests/slack-workspaces.test.ts` (real-DB per project rule): insert+envelope, upsert behaviour, empty-state list, stable sort, remove returns true/false, monotonic addedAt.
+- 10 CLI integration cases in `tests/slack-workspaces-cli.test.ts`: add/list/remove happy paths, upsert via two adds, not-found-on-remove, usage errors for missing flags, --help short-circuit.
+
+### Notes
+- No schema migration — `slack_workspaces` table has existed since v17 (migration in `src/db.ts`).
+- No HTTP route — workspace registration is an operator-CLI concern, not a runtime API. The existing `resolveTenantForTeam` (server.ts) already reads this table on every Slack webhook.
+- 6th reproduce-check WIN of the v1.12.x sweep arc surfaced that `hippo slack dlq replay` (the sibling follow-up) was already shipped at `cli.ts:5118` — only the workspaces half remained.
+
 ## Python SDK v0.2.0 (2026-05-24): HippoSync + ContextEntry.projected() + auth role
 
 PyPI: `hippo-memory-sdk@0.2.0`. Closes 3 of 5 v0.1.0 README-documented limitations. The 4th (`recall` last_retrieval_ids gap) is reframed as a deliberate design choice locked in hippo-memory v1.11.5 (see `tests/api-recall-no-side-effects.test.ts`); the 5th (connector webhooks) is by-design (server-only routes).
