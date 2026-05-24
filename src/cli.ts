@@ -169,6 +169,7 @@ import { multihopSearch } from './multihop.js';
 import { getReranker } from './rerankers/index.js';
 import { computeSalience } from './salience.js';
 import { computeAmbientState, renderAmbientSummary } from './ambient.js';
+import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
 import { listDlq, replayDlqEntry } from './connectors/slack/dlq.js';
 import { backfillChannel } from './connectors/slack/backfill.js';
 import { slackHistoryFetcher } from './connectors/slack/web-client.js';
@@ -674,7 +675,14 @@ async function cmdRemember(
     console.error(`(kind='raw' is reserved for ingestion connectors; kind='archived' is internal.)`);
     process.exit(1);
   }
-  const ownerFlag = typeof flags['owner'] === 'string' ? (flags['owner'] as string) : null;
+  const ownerRaw = typeof flags['owner'] === 'string' ? (flags['owner'] as string) : null;
+  const ownerCheck = validateOwner(ownerRaw, { strict: isStrictOwnerEnv() });
+  if (!ownerCheck.ok) {
+    console.error(ownerCheck.message);
+    process.exit(1);
+  }
+  if (ownerCheck.message) console.error(ownerCheck.message);
+  const ownerFlag = ownerCheck.value ?? null;
   const artifactRefFlag = typeof flags['artifact-ref'] === 'string' ? (flags['artifact-ref'] as string) : null;
   const scopeForEnvelope = typeof flags['scope'] === 'string' ? (flags['scope'] as string).trim() || null : null;
 
@@ -5666,12 +5674,22 @@ async function main(): Promise<void> {
           const tags = Array.isArray(tagsRaw)
             ? (tagsRaw as string[]).map(String)
             : typeof tagsRaw === 'string' ? [tagsRaw] : undefined;
+          // B2 v1.12.6 — validate --owner on the thin-client path too.
+          // Failure on this path exits early so the user gets the same
+          // validation experience whether or not a server is up.
+          const thinOwnerRaw = typeof flags['owner'] === 'string' ? (flags['owner'] as string) : undefined;
+          const thinOwnerCheck = validateOwner(thinOwnerRaw, { strict: isStrictOwnerEnv() });
+          if (!thinOwnerCheck.ok) {
+            console.error(thinOwnerCheck.message);
+            process.exit(1);
+          }
+          if (thinOwnerCheck.message) console.error(thinOwnerCheck.message);
           const remembered = await runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
             const result = await client.remember(info.url, apiKey, {
               content: text,
               kind: rememberKindRaw as ('distilled' | 'superseded' | undefined),
               scope: typeof flags['scope'] === 'string' ? (flags['scope'] as string) : undefined,
-              owner: typeof flags['owner'] === 'string' ? (flags['owner'] as string) : undefined,
+              owner: thinOwnerCheck.value,
               artifactRef: typeof flags['artifact-ref'] === 'string' ? (flags['artifact-ref'] as string) : undefined,
               tags,
             });

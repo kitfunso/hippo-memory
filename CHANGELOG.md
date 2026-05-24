@@ -1,5 +1,98 @@
 # Changelog
 
+## 1.12.6 (2026-05-24): D-batch hardening pass — 5 follow-ups
+
+Bundles 5 long-deferred B-sized items from `TODOS.md` per the
+`/dev-framework-rl` "batch 4-6 trivial Bs into one hardening pass" rule.
+Each item reproduce-checked against current master before drafting per
+the new SKILL §3b pre-plan-audit step shipped earlier today.
+
+### B1 — Defensive `kind != 'archived'` filter in `loadSearchRows`
+
+`archivedClauseAlias` / `archivedClauseNoAlias` / `archivedClauseTenantOnly`
+added to all 4 candidate-loading paths (empty-terms full-scan, FTS path,
+LIKE fallback, full-store fallback). Belt-and-suspenders against future
+SAVEPOINT regressions in `archiveRawMemory`, future bugs introducing
+`kind='archived'` as a persisted state, and external direct-SQL writes
+bypassing the archive helper.
+
+4 tests at `tests/store-recall-archived-filter.test.ts` cover all 4
+paths via a SAVEPOINT-bypass simulation (direct SQL UPDATE to leave
+`kind='archived'` visible to a concurrent reader).
+
+### B2 — `--owner` format validation (warn-only default)
+
+`OWNER_RE = /^(user|agent):[A-Za-z0-9_-]+$/` + `validateOwner(owner, {strict})`
+helper at `src/owner-validation.ts`. Wired into both `cmdRemember` paths:
+direct (`cli.ts:677`) and thin-client HTTP fallback (`cli.ts:5680`).
+
+- **Default:** warn-only (log to stderr + accept) to preserve back-compat
+  with existing scripted callers passing legacy owner strings.
+- **Strict mode:** set `HIPPO_STRICT_OWNER=1` env var → reject + exit 1.
+- **Future:** strict will become default once A5 v2 lands (multi-tenant
+  owner enforcement).
+
+28 unit tests at `tests/owner-validation.test.ts`.
+
+Scope correction from the 2026-05-22 TODO: "Slack backfill" was a
+mis-reference — Slack derives owner from `user_id` in
+`messageToRememberOpts` (no CLI flag). Both `--owner` call sites are
+`hippo remember` paths.
+
+### B3 — `ingestMessage` status string consistency
+
+Option (a) chosen (unify), not (b) document. `src/connectors/slack/ingest.ts:50`
+now returns `status: 'skipped'` (not `'duplicate'`) when `lookupMemoryByEvent`
+returns null on a `hasSeenEvent` hit. The cached `memory_id IS NULL` is the
+discriminator — non-null still returns `'duplicate'` (an actual memory was
+written before).
+
+Closes the paper-cut where a downstream caller's switch/case on `status`
+treated functionally-identical outcomes (memory_id=null) as different
+branches.
+
+3 new cases at `tests/slack-ingest-empty-body-replay.test.ts`; existing
+`tests/slack-ingest.test.ts:46` updated to assert the new contract.
+
+### B4 — DLQ parse-failure tenant attribution (promoted to root-cause fix)
+
+The TODO sanctioned "document or revisit" but the root-cause fix was
+small enough to ship: `server.ts:1008` JSON.parse-catch path now uses
+`resolveTenantForTeam(db, teamIdFromRaw)` (the same helper the happy path
+uses at line 1044) instead of `process.env.HIPPO_TENANT ?? 'default'`.
+
+Pre-fix: parse failure from workspace A landed in the deployment's
+tenant DLQ. Post-fix: lands in workspace A's tenant DLQ. Unknown /
+un-extractable team → `null` → `'__unroutable__'` sentinel (matches
+the existing unroutable bucket convention from v0.39 commit 3).
+
+4 HTTP integration tests at `tests/slack-webhook-parse-failure-tenant.test.ts`:
+known team routes correctly, unknown team → unroutable, garbage body →
+unroutable, single-workspace install (empty slack_workspaces) preserves
+env-fallback ergonomics.
+
+### B5 — `docs/evals/AUTHORING.md` with sentinel-token leakage lesson
+
+Documents the E1.3 (v0.37 Slack ingestion) eval bug: descriptive
+scenario IDs (`login_500_error_after_deploy`) leaked into ambient noise
+fixtures via shared tokens, inflating BM25 recall from ~30% to ~88%.
+
+Pre-commit checklist:
+1. List every string in both signal-data and noise-data fixtures.
+2. For each, confirm intentional signal OR opaque enough (e.g. `S1A2B3`,
+   ULID).
+3. Run a noise-only baseline; recall on signal-side tokens should be at
+   floor. If not, there's a leak.
+
+Plus 3 other lessons (pre-registration discipline per v1.8.1,
+multi-seed harnesses + paired-comparison statistics, workload-validity
+gate before mechanism gate) and an eval-card template.
+
+### Notes
+- No schema migration. No breaking changes. All 5 changes are additive
+  hardening.
+- Full suite: see ship report.
+
 ## 1.12.5 (2026-05-24): `hippo slack workspaces` CLI (T2B operator UX)
 
 Closes the v0.38 E1.3 v2 follow-up: "workspace registration CLI". Today operators populating the `slack_workspaces` table for multi-workspace deployments had to write direct SQL. This release adds the CLI surface.

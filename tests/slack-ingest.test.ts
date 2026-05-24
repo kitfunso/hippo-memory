@@ -42,7 +42,10 @@ describe('ingestMessage', () => {
     };
     const r = ingestMessage(ctx(root), evt);
     expect(r.status).toBe('skipped');
-    // Replay still returns duplicate, not skipped, because seen is marked.
-    expect(ingestMessage(ctx(root), evt).status).toBe('duplicate');
+    // v1.12.6 (B3): replay of an empty-body event now returns 'skipped' too
+    // (the cached memory_id is NULL, so 'duplicate' would be a status-string
+    // asymmetry for the same logical outcome). See
+    // tests/slack-ingest-empty-body-replay.test.ts for the full B3 contract.
+    expect(ingestMessage(ctx(root), evt).status).toBe('skipped');
   });
 });

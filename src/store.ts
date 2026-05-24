@@ -665,6 +665,28 @@ function loadSearchRows(
   const tenantOnlyPredicate = tenantId !== undefined ? ` WHERE tenant_id = ?` : '';
   const tenantParams = tenantId !== undefined ? [tenantId] : [];
 
+  // v1.12.6 — belt-and-suspenders against `kind='archived'` leaking into recall.
+  // `kind='archived'` is a transient sentinel inside `archiveRawMemory`'s
+  // SAVEPOINT (src/raw-archive.ts:56): UPDATE kind = 'archived' immediately
+  // followed by DELETE, both inside one savepoint that commits or rolls back
+  // atomically. SQLite atomicity guarantees no concurrent reader sees the
+  // intermediate state. This filter is defensive-only against:
+  //   (a) future bugs that drop the SAVEPOINT,
+  //   (b) future bugs that introduce kind='archived' as a persisted state,
+  //   (c) external direct-SQL writes that bypass archiveRawMemory.
+  // tenantOnlyPredicate starts with " WHERE tenant_id = ?" when tenant is set;
+  // when unset, we have no WHERE yet, so the archived clause needs both AND
+  // and WHERE forms. The "tenant-only" path always has WHERE (from tenant or
+  // we synthesize one).
+  const archivedClauseAlias = ` AND m.kind != 'archived'`;
+  const archivedClauseNoAlias = ` AND kind != 'archived'`;
+  // For the "tenant-only" path: if no tenant set, tenantOnlyPredicate is '',
+  // so prepend WHERE; if tenant set, append AND. handled in each call site
+  // by always joining `tenantOnlyPredicate + archivedClauseTenantOnly` where
+  // the latter switches between " AND" and " WHERE" based on caller context.
+  const archivedClauseTenantOnly =
+    tenantId !== undefined ? ` AND kind != 'archived'` : ` WHERE kind != 'archived'`;
+
   // v1.7.1 — recall-mode scope predicate (root-cause fix for the
   // `unknown:legacy` leak codex flagged on the v1.6.5 review). Three forms:
   //   undefined       → no scope filter (legacy callers; background pipelines)
@@ -710,7 +732,7 @@ function loadSearchRows(
     // path (codex diff-pass caught the full-store fallback at the bottom;
     // this no-terms path had the same shape). Apply LIMIT so all four
     // candidate paths honour the caller's cap when set.
-    const sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate}${scopeClauseTenantOnly} ORDER BY created ASC, id ASC LIMIT ?`;
+    const sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate}${archivedClauseTenantOnly}${scopeClauseTenantOnly} ORDER BY created ASC, id ASC LIMIT ?`;
     return db.prepare(sql).all(...tenantParams, ...scopeParams, limit) as MemoryRow[];
   }
 
@@ -734,7 +756,7 @@ function loadSearchRows(
         SELECT ${MEMORY_SEARCH_COLUMNS}
         FROM memories m
         JOIN memories_fts f ON f.id = m.id
-        WHERE memories_fts MATCH ?${tenantPredicate}${scopeClauseAlias}
+        WHERE memories_fts MATCH ?${tenantPredicate}${archivedClauseAlias}${scopeClauseAlias}
         ORDER BY bm25(memories_fts), m.updated_at DESC
         LIMIT ?
       `).all(ftsQuery, ...tenantParams, ...scopeParams, limit) as MemoryRow[];
@@ -755,7 +777,7 @@ function loadSearchRows(
   const rows = db.prepare(`
     SELECT ${MEMORY_SELECT_COLUMNS}
     FROM memories
-    WHERE (${where})${tenantPredicateNoAlias}${scopeClauseNoAlias}
+    WHERE (${where})${tenantPredicateNoAlias}${archivedClauseNoAlias}${scopeClauseNoAlias}
     ORDER BY updated_at DESC, created DESC
     LIMIT ?
   `).all(...params, ...tenantParams, ...scopeParams, limit) as MemoryRow[];
@@ -767,7 +789,7 @@ function loadSearchRows(
   // now reported on RecallResult, an unbounded fallback would lie about
   // candidate-pool size. Apply LIMIT here so all four paths honour the
   // caller's cap.
-  const fallback = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate}${scopeClauseTenantOnly} ORDER BY created ASC, id ASC LIMIT ?`;
+  const fallback = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate}${archivedClauseTenantOnly}${scopeClauseTenantOnly} ORDER BY created ASC, id ASC LIMIT ?`;
   return db.prepare(fallback).all(...tenantParams, ...scopeParams, limit) as MemoryRow[];
 }
 

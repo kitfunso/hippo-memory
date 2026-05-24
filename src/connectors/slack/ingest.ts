@@ -47,7 +47,14 @@ export function ingestMessage(ctx: Context, input: IngestInput): IngestResult {
   const db = openHippoDb(ctx.hippoRoot);
   try {
     if (hasSeenEvent(db, input.eventId)) {
-      return { status: 'duplicate', memoryId: lookupMemoryByEvent(db, input.eventId) };
+      // v1.12.6 fix (B3): empty-body events mark seen with memory_id=NULL on
+      // first call (see line further down). Their replay should return the
+      // same 'skipped' status they originally returned, not 'duplicate' —
+      // the asymmetry was a paper-cut for callers that switch/case on
+      // status. memory_id=NULL is the discriminator. Non-NULL memory_id
+      // means an actual memory was ingested before, so 'duplicate' is correct.
+      const cachedId = lookupMemoryByEvent(db, input.eventId);
+      return { status: cachedId === null ? 'skipped' : 'duplicate', memoryId: cachedId };
     }
   } finally {
     closeHippoDb(db);
