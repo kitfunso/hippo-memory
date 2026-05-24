@@ -5,6 +5,13 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import type { Memory, Conflict } from "../types.js";
 import { LAYER_COLORS } from "./types.js";
+import {
+  COLOR_BG,
+  COLOR_ACCENT_HEX,
+  COLOR_AMBIENT_LIGHT_HEX,
+  COLOR_GRID_HEX,
+  COLOR_CONFLICT_HEX,
+} from "../tokens.js";
 
 const SPREAD = 20;
 const LAYER_Y_OFFSET: Record<string, number> = { buffer: 6, episodic: 0, semantic: -6 };
@@ -67,13 +74,16 @@ export class BrainScene {
 
   private initScene(): void {
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color("#050709");
-    this.scene.fog = new THREE.FogExp2("#050709", 0.012);
+    this.scene.background = new THREE.Color(COLOR_BG);
+    // Lighter fog density for parchment bg — heavy fog reads as fog of war on
+    // dark, as haze on light; halve density to preserve depth without muddying.
+    this.scene.fog = new THREE.FogExp2(COLOR_BG, 0.008);
 
-    const ambient = new THREE.AmbientLight(0x111122, 0.5);
+    // Warmer + brighter ambient for parchment (was 0x111122 @ 0.5 on dark)
+    const ambient = new THREE.AmbientLight(COLOR_AMBIENT_LIGHT_HEX, 0.65);
     this.scene.add(ambient);
 
-    const point = new THREE.PointLight(0x7c5cff, 0.4, 100);
+    const point = new THREE.PointLight(COLOR_ACCENT_HEX, 0.4, 100);
     point.position.set(0, 15, 10);
     this.scene.add(point);
   }
@@ -115,7 +125,10 @@ export class BrainScene {
   private initGrid(): void {
     this.gridHelper = new THREE.Group();
 
-    const gridMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.03 });
+    // Parchment grid: warm border color, slightly higher opacity than the
+    // pre-revamp 0xffffff/0.03 (white on dark) since darker-on-light needs
+    // more presence to read at the same visual weight.
+    const gridMaterial = new THREE.LineBasicMaterial({ color: COLOR_GRID_HEX, transparent: true, opacity: 0.06 });
     const size = 40;
     const divisions = 20;
     const step = size / divisions;
@@ -285,7 +298,7 @@ export class BrainScene {
       const points = curve.getPoints(16);
       const geo = new THREE.BufferGeometry().setFromPoints(points);
       const mat = new THREE.LineDashedMaterial({
-        color: 0xff4466,
+        color: COLOR_CONFLICT_HEX,
         transparent: true,
         opacity: 0.3 + c.score * 0.4,
         dashSize: 0.3,

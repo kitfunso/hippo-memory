@@ -1,6 +1,15 @@
 import type { Memory } from "../types.js";
 import type { Particle } from "./types.js";
 import { LAYER_COLORS } from "./types.js";
+import {
+  COLOR_ACCENT_DIM,
+  COLOR_BG_GRADIENT_INNER,
+  COLOR_BG_GRADIENT_MID,
+  COLOR_BG_GRADIENT_OUTER,
+  COLOR_BUFFER,
+  COLOR_EPISODIC,
+  COLOR_SEMANTIC,
+} from "../tokens.js";
 
 function hexToRgb(hex: string): [number, number, number] {
   return [
@@ -109,9 +118,10 @@ export class ParticleEngine {
 
   private renderDeep(ctx: CanvasRenderingContext2D, w: number, h: number, time: number): void {
     const bg = ctx.createRadialGradient(w * 0.5, h * 0.45, 0, w * 0.5, h * 0.45, Math.max(w, h) * 0.75);
-    bg.addColorStop(0, "#0c0e14");
-    bg.addColorStop(0.6, "#080a10");
-    bg.addColorStop(1, "#050709");
+    // Parchment bg gradient (inner brightest, outer warm parchment)
+    bg.addColorStop(0, COLOR_BG_GRADIENT_INNER);
+    bg.addColorStop(0.6, COLOR_BG_GRADIENT_MID);
+    bg.addColorStop(1, COLOR_BG_GRADIENT_OUTER);
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, w, h);
 
@@ -197,10 +207,12 @@ export class ParticleEngine {
     ctx.textBaseline = "middle";
     ctx.font = "10px 'JetBrains Mono', monospace";
 
+    // Zones use the parchment layer tints with low alpha. Tints come from
+    // tokens.ts so any future palette change cascades here automatically.
     const zones: [number, string, string][] = [
-      [0.18, "BUFFER", "rgba(124,92,255,0.09)"],
-      [0.50, "EPISODIC", "rgba(240,160,48,0.09)"],
-      [0.82, "SEMANTIC", "rgba(52,211,153,0.09)"],
+      [0.18, "BUFFER", colorAlpha(COLOR_BUFFER, 0.12)],
+      [0.50, "EPISODIC", colorAlpha(COLOR_EPISODIC, 0.12)],
+      [0.82, "SEMANTIC", colorAlpha(COLOR_SEMANTIC, 0.12)],
     ];
 
     for (const [yFrac, label, color] of zones) {
@@ -234,9 +246,9 @@ export class ParticleEngine {
 
       const alpha = 0.15 + c.score * 0.4;
       const grad = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
-      grad.addColorStop(0, colorAlpha("#ff4466", alpha * 0.3));
-      grad.addColorStop(0.5, colorAlpha("#ff4466", alpha));
-      grad.addColorStop(1, colorAlpha("#ff4466", alpha * 0.3));
+      grad.addColorStop(0, colorAlpha(COLOR_ACCENT_DIM, alpha * 0.3));
+      grad.addColorStop(0.5, colorAlpha(COLOR_ACCENT_DIM, alpha));
+      grad.addColorStop(1, colorAlpha(COLOR_ACCENT_DIM, alpha * 0.3));
 
       ctx.save();
       ctx.strokeStyle = grad;
