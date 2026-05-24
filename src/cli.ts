@@ -3624,8 +3624,9 @@ function learnFromRepo(
   const existingForSchema = loadAllEntries(hippoRoot);
 
   for (const lesson of lessons) {
-    // L9: learnFromRepo's existingForSchema load (line 3615 above) is
-    // host-wide and intentionally out-of-L9-scope per plan §11 (cli.ts is
+    // L9: learnFromRepo's existingForSchema load just above (the
+    // `loadAllEntries(hippoRoot)` call a few lines up) is host-wide and
+    // intentionally out-of-L9-scope per plan §11 (cli.ts is
     // single-tenant-per-process). The tenantId arg here is a defensive no-op:
     // deduplicateLesson's array overload ignores it; the parameter exists
     // only to mirror the canonical caller pattern used elsewhere in cli.ts.

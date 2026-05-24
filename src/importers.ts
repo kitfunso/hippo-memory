@@ -100,11 +100,18 @@ export function importEntries(
     // correct here. E1.3 (Slack ingestion) shipped 2026-04-29 in src/connectors/slack/
     // and sets kind: 'raw' + routes deletions through archiveRawMemory() — these
     // importers stay 'distilled' per the original reasoning. See MEMORY_ENVELOPE.md.
+    // L9: the dedup read above is scoped by options.tenantId — the WRITE
+    // must match, or scoped-dedup-passes-then-default-tenant-write breaks
+    // the per-tenant contract. Mirror the dedup-read guard: global=true
+    // → host-wide write to global store (tenantId irrelevant, createMemory
+    // defaults to 'default'). global=false → write to the same tenant as
+    // the dedup read.
     const entry = createMemory(chunk, {
       layer: Layer.Episodic,
       tags: allTags,
       source,
       confidence: 'observed',
+      tenantId: options.global ? undefined : options.tenantId,
     });
 
     entries.push(entry);

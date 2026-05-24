@@ -576,11 +576,18 @@ function cmdCaptureCore(
       // session output (not raw transcript chunks), so distilled is correct. If a
       // future variant captures full raw session text, it MUST set kind: 'raw'
       // and route deletions through archiveRawMemory(). See MEMORY_ENVELOPE.md.
+      // L9: the dedup read above is scoped by options.tenantId — the WRITE
+      // must match, or scoped-dedup-passes-then-default-tenant-write breaks
+      // the per-tenant contract. Mirror the dedup-read guard: when
+      // global: true, the global store is host-wide and tenant is irrelevant
+      // (createMemory's default 'default' applies). When global: false,
+      // options.tenantId scopes the write to the same tenant as the dedup.
       const entry = createMemory(item.content, {
         layer: Layer.Episodic,
         tags: item.tags,
         source: 'capture',
         confidence: 'observed',
+        tenantId: useGlobal ? undefined : options.tenantId,
       });
 
       writeEntry(targetRoot, entry);

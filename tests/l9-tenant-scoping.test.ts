@@ -189,36 +189,62 @@ describe('L9: per-tenant scoping (cross-tenant leak prevention)', () => {
     expect(isDupB).toBe(true);
   });
 
-  it('case 5: cmdCapture (file source) dedup with options.tenantId scopes to that tenant', () => {
-    // Seed tenant-b with content that would be a dedup-hit for a tenant-a capture
-    seedFor(hippoRoot, 'tenant-b', 'Always validate user input on the server side', { tags: ['security'] });
+  it('case 5: cmdCapture (file source) dedup AND write are both tenant-scoped via options.tenantId', () => {
+    // Use a fixture that actually triggers extractFromText.
+    // 'we decided to X' matches DECISION_PATTERNS and extracts as a decision.
+    const fixtureText = 'we decided to use Bearer tokens for HTTP authentication next quarter.';
+    // The extracted content (post-regex-capture) is the post-pattern text:
+    const extractedContent = 'use Bearer tokens for HTTP authentication next quarter';
 
-    // Write a fixture file with the same content; cmdCapture in file mode
-    // reads it, runs extractFromText, and calls dedup against
-    // loadAllEntries(targetRoot, options.tenantId).
+    // Seed tenant-b with the SAME extracted content as a dedup-hit target
+    seedFor(hippoRoot, 'tenant-b', extractedContent, { tags: ['decision'] });
+
     const fs = require('node:fs') as typeof import('node:fs');
     const fixturePath = join(tmpDir, 'capture-fixture.txt');
-    fs.writeFileSync(fixturePath, '- ALWAYS validate user input on the server side\n', 'utf8');
+    fs.writeFileSync(fixturePath, fixtureText, 'utf8');
 
-    // tenant-a scope: the existing tenant-b entry is invisible to dedup, so
-    // the captured chunk gets through (not skipped).
+    // Sanity: tenant-b's view confirms seed; tenant-a's view is empty pre-capture.
+    expect(loadAllEntries(hippoRoot, 'tenant-b').length).toBe(1);
+    expect(loadAllEntries(hippoRoot, 'tenant-a').length).toBe(0);
+
+    // Capture with tenant-a scope. The dedup branch in cmdCaptureCore calls
+    // loadAllEntries(targetRoot, options.tenantId='tenant-a') and sees NOTHING
+    // (tenant-b's seed is invisible), so the extracted decision IS written.
     cmdCapture(hippoRoot, {
       source: 'file',
       filePath: fixturePath,
-      dryRun: true, // dryRun avoids writing; we assert via post-state visibility
+      dryRun: false,
       global: false,
       tenantId: 'tenant-a',
     });
 
-    // Post-condition: tenant-a's view should not have the captured entry
-    // (because dryRun) but the dedup decision was scoped correctly. Verify the
-    // tenant-a slice didn't get the cross-tenant entry leaked.
-    const aOnly = loadAllEntries(hippoRoot, 'tenant-a');
-    expect(aOnly.length).toBe(0); // dryRun, no writes; tenant-a still empty
-    // Positive control: the fixture content is present in the seed (tenant-b)
-    // but not in tenant-a, proving the scope query is per-tenant.
-    const bOnly = loadAllEntries(hippoRoot, 'tenant-b');
-    expect(bOnly.length).toBe(1);
+    // ASSERTION 1 (READ-side L9): the scoped dedup correctly missed,
+    // so the captured entry was written into tenant-a.
+    const aAfter = loadAllEntries(hippoRoot, 'tenant-a');
+    expect(aAfter.length).toBe(1);
+    expect(aAfter[0].content).toContain('Bearer tokens');
+
+    // ASSERTION 2 (WRITE-side L9): the entry's tenant_id IS 'tenant-a',
+    // not 'default'. This catches the scoped-dedup-passes-then-default-write
+    // bug class (i.e. plumbing only the READ but not the WRITE).
+    expect(aAfter[0].tenantId).toBe('tenant-a');
+
+    // ASSERTION 3 (cross-tenant invariant): tenant-b unchanged.
+    expect(loadAllEntries(hippoRoot, 'tenant-b').length).toBe(1);
+
+    // ASSERTION 4 (host-wide negative control): a second capture without
+    // tenantId on the same content would skip-as-duplicate (host-wide dedup
+    // sees both tenant-a's and tenant-b's entries).
+    const fixturePath2 = join(tmpDir, 'capture-fixture2.txt');
+    fs.writeFileSync(fixturePath2, fixtureText, 'utf8');
+    cmdCapture(hippoRoot, {
+      source: 'file',
+      filePath: fixturePath2,
+      dryRun: false,
+      global: false,
+    });
+    // No new entry. Total stays at 2 (tenant-a:1, tenant-b:1).
+    expect(loadAllEntries(hippoRoot).length).toBe(2);
   });
 
   it('case 6: importEntries({ tenantId: tenant-a, global: false }) dedup ignores tenant-b entries', () => {
@@ -299,18 +325,27 @@ describe('L9: host-wide back-compat parity (current behaviour preserved)', () =>
     expect(result.scanned).toBe(2);
   });
 
-  it('case 10: consolidate runs across all tenants in one pass (host-wide by design)', async () => {
+  it('case 10: consolidate runs across all tenants (signature/contract test)', async () => {
+    // Signature/contract test, same shape as case 11. The L9 JSDoc at
+    // consolidate.ts:106 locks the host-wide intent; this test asserts that
+    // the exact reader call shape consolidate uses (loadAllEntries(hippoRoot)
+    // with no tenantId) returns both tenants' entries. A future PR that adds
+    // tenant scoping to consolidate's internal reader would not directly fail
+    // this test — it would fail at the JSDoc-review step and break the
+    // documented contract. Genuine end-to-end coverage of consolidate's
+    // internal reader behaviour would require asserting on consolidation
+    // side-effects across both tenants (decay, dedup, extraction), which
+    // depends on decay timing that this test doesn't control. The L9
+    // assertion is the reader-shape contract.
     seedFor(hippoRoot, 'tenant-a', 'tenant-a episodic memory', {});
     seedFor(hippoRoot, 'tenant-b', 'tenant-b episodic memory', {});
 
-    // consolidate does not take a tenantId arg — host-wide by design.
-    // dryRun: true so no writes; we just confirm both tenants' entries are visible.
     await consolidate(hippoRoot, { dryRun: true });
 
-    // The internal loadAllEntries(hippoRoot) returns both tenants' entries.
-    // Direct assertion: both tenants visible to a host-wide reader.
+    // Reader-shape contract: host-wide reader returns both tenants.
     const all = loadAllEntries(hippoRoot);
     expect(all.length).toBe(2);
+    expect(all.map((e) => e.tenantId).sort()).toEqual(['tenant-a', 'tenant-b']);
   });
 
   it('case 11: host-wide reader semantics for embeddings.ts (signature-only test)', async () => {
