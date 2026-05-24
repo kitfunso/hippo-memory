@@ -1443,6 +1443,24 @@ export function authCreate(ctx: Context, opts: AuthCreateOpts): AuthCreateResult
   try {
     const role = opts.role ?? 'admin';
     const result = createApiKey(db, { tenantId: ctx.tenantId, label: opts.label, role });
+    // v1.12.4: audit emit (closes the gap v1.12.3 CHANGELOG flagged as deferred).
+    // Mirrors the auth_revoke pattern at authRevoke — same try/catch so audit
+    // failure can't crash a successful mint. The plaintext is NEVER logged;
+    // metadata carries label + role + the keyId (which is non-secret).
+    try {
+      appendAuditEvent(db, {
+        tenantId: ctx.tenantId,
+        actor: ctx.actor.subject,
+        op: 'auth_create',
+        targetId: result.keyId,
+        metadata: {
+          label: opts.label ?? null,
+          role,
+        },
+      });
+    } catch {
+      // Audit must not crash a successful mint.
+    }
     return { keyId: result.keyId, plaintext: result.plaintext, tenantId: ctx.tenantId, role };
   } finally {
     closeHippoDb(db);

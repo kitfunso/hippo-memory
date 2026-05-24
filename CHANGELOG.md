@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.12.4 (2026-05-24): auth_create audit emit (closes v1.12.3 deferral)
+
+PATCH release. Closes the v1.12.3 CHANGELOG-flagged deferral (auth_create un-audited). Mirrors the existing `auth_revoke` audit pattern in `authRevoke` — one audit row per successful mint, plaintext NEVER logged.
+
+### Shipped
+
+- **`api.authCreate` emits `auth_create` audit row** on every successful mint. Same try/catch guard as `authRevoke` so audit failure can't crash a successful mint. Metadata: `{ label, role }`. `targetId`: the new `key_id`. `actor`: `ctx.actor.subject`.
+- **`'auth_create'` added to `AuditOp` union** (`src/audit.ts`) + both `VALID_AUDIT_OPS` Sets (`src/cli.ts:4712`, `src/server.ts:71`). `hippo audit list --op auth_create` and `GET /v1/audit?op=auth_create` now work.
+
+### Tests
+- 6 cases in `tests/auth-create-audit.test.ts`:
+  - Default emit: label + role in metadata, targetId matches keyId, actor matches ctx.
+  - Default role logs admin; explicit member logs member.
+  - Null label logs `label: null` (not the string `"undefined"`).
+  - **Security invariant: plaintext key NEVER appears in audit metadata** (asserted by full JSON-stringified scan).
+  - Mint + revoke pair: 1 `auth_create` row + 1 `auth_revoke` row, both `targetId` match.
+- Full suite: 1730 passed + 4 skipped + 0 failures.
+
+### Migration notes
+- **No DB migration.** `audit_log` table already supports the new op (the column is `TEXT`).
+- **No required updates for existing callers.** Audit emit is a side-effect; mint return shape unchanged.
+
 ## 1.12.3 (2026-05-24): hippo auth CLI role surfacing (v1.12.0 sub-1 follow-ups)
 
 PATCH release. Bundles two LOW-priority v1.12.0 sub-1 follow-ups: surface the `api_keys.role` column (added in schema v26 by v1.12.0 sub-1) through the CLI and the HTTP route. Pure additive; no behaviour change for callers omitting the new flag/field.
