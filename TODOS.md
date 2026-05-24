@@ -360,7 +360,7 @@ ranking improvements; none are correctness blockers.
 
 - [x] **`ingestMessage` skipped→duplicate status string.** SHIPPED v1.12.6 — option (a) chosen (unify), not (b) document. `src/connectors/slack/ingest.ts:50` now returns `status: 'skipped'` (not `'duplicate'`) when `lookupMemoryByEvent` returns null on a hasSeenEvent hit (the cached memory_id IS NULL discriminator). Non-null cached memory_id still returns `'duplicate'` (an actual memory was written before). Existing `tests/slack-ingest.test.ts:46` updated to assert the new contract; 3 new cases at `tests/slack-ingest-empty-body-replay.test.ts` cover first-call/replay/real-content paths.
 
-- [ ] **Multi-workspace tenant-routing e2e test.** `tests/slack-tenant-routing.test.ts` covers the helper unit; no end-to-end webhook test populates `slack_workspaces` and asserts the resolved tenant lands on the memory row. Add one webhook test that mints a row in `slack_workspaces` and asserts the ingested memory's `tenant_id` matches.
+- [x] **Multi-workspace tenant-routing e2e test.** SHIPPED v1.12.8 — `tests/slack-webhook-multi-workspace-tenant.test.ts` (4 cases): registered team → memory in mapped tenant; two-workspace isolation (no cross-tenant leak); foreign team fail-closed (no HIPPO_TENANT leak); single-workspace install env-fallback preserved. Closes the gap left after v1.12.5 (workspaces CLI) + v1.12.6 B4 (parse-failure tenant attribution).
 
 ---
 
