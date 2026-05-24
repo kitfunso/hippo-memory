@@ -298,6 +298,22 @@ From the B3 dlPFC ship (v0.38.0). 3 of 5 items closed in v1.7.4 (2026-05-07); co
   doesn't serialize per-task results in single-seed JSON). Either expose per-task
   results from `buildOutput` or rewrite the guard against multi-seed `seeds[].phases`.
 
+- [ ] **Sequential-learning C2 lateMean regression: 0.25 (v1.7.7) → 0.11 (v1.12.6).**
+  Surfaced 2026-05-24 by Card 4 pre-reg dry-run (see
+  `docs/evals/2026-05-24-card4-dryrun.md`). Same deterministic 3 seeds, same
+  workload generator, but the C2 (hippo-base, no goal-stack) lateMean dropped
+  from 0.25 to 0.11 between hippo 1.7.7 (May 9) and hippo 1.12.6 (May 24).
+  Phase shape shifted: early +0.11, mid +0.12, late −0.14 — recall is succeeding
+  at early/mid trap encounters but failing on late ones. Suggests a retrieval
+  ranking change against older episodic memories, not a total break. Blocks
+  Card 4 pre-reg lock (workload-validity gate `C2 lateMean ≥ 0.20` fails).
+  Investigation: git-bisect across v1.8.0 (adversarial traps), v1.11.0 (conflict
+  subsystem), v1.11.5 (critic-deferral hardening), v1.12.0 (admin gate), v1.12.1
+  (L9 tenant scoping), v1.12.6 (kind!=archived filter). Each bisect step ~1min
+  using the 3-seed dry-run as fitness function. 6 candidates → 3 bisects ≈ 4min
+  to root cause. Mechanism CODE remains shipped (v1.7.4); this is a recall-path
+  regression that affects the eval workload, not the mechanism wiring.
+
 - [x] **B3 follow-up: MCP/REST session_id plumbing.** Shipped v1.7.4 as
   `RecallOpts.sessionId` + `RecallOpts.goalTag`. Wired into `api.recall`
   (primary BM25 band, single db handle, before fresh-tail / summary

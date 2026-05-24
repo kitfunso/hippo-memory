@@ -1,0 +1,83 @@
+{
+  "benchmark": "hippo-sequential-learning",
+  "version": "1.7.7",
+  "timestamp": "2026-05-24T12:35:06.956Z",
+  "conditions": {
+    "hippo": {
+      "overall_trap_hit_rate": 0.42,
+      "phases": {
+        "early": 0.88,
+        "mid": 0.21,
+        "late": 0.11
+      },
+      "learns": true,
+      "improvement_pct": 77,
+      "hook_failures": {
+        "push": 0,
+        "complete": 0
+      },
+      "seeds": [
+        {
+          "seed": 145980072,
+          "overall": 0.4194,
+          "phases": {
+            "early": 0.9091,
+            "mid": 0.1818,
+            "late": 0.1111
+          },
+          "hook_failures": {
+            "push": 0,
+            "complete": 0
+          }
+        },
+        {
+          "seed": 2800415841,
+          "overall": 0.4194,
+          "phases": {
+            "early": 0.9091,
+            "mid": 0.1818,
+            "late": 0.1111
+          },
+          "hook_failures": {
+            "push": 0,
+            "complete": 0
+          }
+        },
+        {
+          "seed": 1159884314,
+          "overall": 0.4194,
+          "phases": {
+            "early": 0.8182,
+            "mid": 0.2727,
+            "late": 0.1111
+          },
+          "hook_failures": {
+            "push": 0,
+            "complete": 0
+          }
+        }
+      ],
+      "phase_aggregate": {
+        "early": {
+          "mean": 0.8787878787878788,
+          "std": 0.05248638810814775,
+          "ci95": 0
+        },
+        "mid": {
+          "mean": 0.21212121212121213,
+          "std": 0.052486388108147784,
+          "ci95": 0
+        },
+        "late": {
+          "mean": 0.1111111111111111,
+          "std": 0,
+          "ci95": 0
+        }
+      }
+    }
+  },
+  "tasks": 62,
+  "traps": 13,
+  "trap_encounters": 31,
+  "restrict_late_to": null
+}
