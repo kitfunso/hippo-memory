@@ -92,7 +92,7 @@ export function Header({ memoryCount, matchCount, stats, filterState, frozenOrig
             onClick={() => setFadingOnly(!filterState.fadingOnly)}
             aria-pressed={filterState.fadingOnly}
             aria-label={`${stats?.at_risk} fading, ${filterState.fadingOnly ? "click to show all memories" : "click to filter to fading memories only"}`}
-            title={filterState.fadingOnly ? "Showing only fading memories — click to clear" : "Show only fading memories"}
+            title={filterState.fadingOnly ? "Showing only fading memories: click to clear" : "Show only fading memories"}
             style={{
               fontSize: 10,
               fontFamily: "var(--font-mono)",
