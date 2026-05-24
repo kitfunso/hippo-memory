@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.12.3 (2026-05-24): hippo auth CLI role surfacing (v1.12.0 sub-1 follow-ups)
+
+PATCH release. Bundles two LOW-priority v1.12.0 sub-1 follow-ups: surface the `api_keys.role` column (added in schema v26 by v1.12.0 sub-1) through the CLI and the HTTP route. Pure additive; no behaviour change for callers omitting the new flag/field.
+
+### Shipped
+
+- **`hippo auth create --role admin|member` CLI flag** (defaults to `admin`). Invalid values exit 1 with a typed error — no silent admin fallback on typos. JSON output now includes `role`. Non-JSON output includes `role:` line after `plaintext:`.
+- **`hippo auth list` table includes role column.** Header: `key_id  tenant  role  label  created  revoked`. Inserted between tenant and label.
+- **`POST /v1/auth/keys` accepts optional `body.role: 'admin' | 'member'`.** Anything else is a 400 (no silent fallback). Mirrors the CLI flag exactly. The mint surface remains permissive (member Bearer can mint admin keys for the same tenant) — gated routes (`/v1/sleep`) enforce the role check, not the mint endpoint.
+- **`AuthCreateOpts.role?: 'admin' | 'member'`** (`src/api.ts`). Optional. Defaults to `'admin'`. `AuthCreateResult.role: 'admin' | 'member'` always set.
+- **`ApiKeyListItem.role: 'admin' | 'member'`** (`src/auth.ts`). `listApiKeys` SELECT extended to read the column. Fail-safe-to-member cast: any non-`'admin'` value (legacy NULL, corrupted row, future-unknown enum value) reads as `'member'` — never silently grants admin.
+
+### Tests
+- 5 cases in `tests/auth-role-cli-surfacing.test.ts`: authCreate default-admin, explicit-admin, member; listApiKeys returns role per row; fail-safe-to-member on corrupted role value.
+- Existing `tests/auth.test.ts` 5 cases still pass (back-compat invariant).
+
+### Migration notes
+- **No DB migration.** `api_keys.role` column already exists since v1.12.0 sub-1 (schema v26).
+- **No required updates for existing callers.** Pre-v1.12.3 mints default to 'admin' on the wire, exactly as they did pre-v1.12.3 implicitly through the DB DEFAULT.
+- **To mint a member key:** `hippo auth create --role member --label service:reporter` or `POST /v1/auth/keys {"role":"member","label":"..."}`.
+
+### Out of scope (deferred)
+- Member-bearer-cannot-mint-admin-key restriction (mint surface stays permissive; gated routes carry the role check).
+- `audit_log` emit on `auth_create` (still un-audited, matching pre-v1.12.3 behaviour).
+
 ## 1.12.2 (2026-05-24): api.sleep mid-phase test coverage via __phases DI seam
 
 PATCH release. Adds a test-only `__phases?: Partial<SleepPhases>` field on `SleepOpts` so test files can inject deterministic throws at each of `api.sleep`'s 5 phase boundaries (consolidate / deduplicateStore / auditMemories / autoShare / computeAmbientState). Closes the v1.11.5 deferral (independent-review-critic MED #2) where the `partial: true` + `errorMessage` audit-row branch at `src/api.ts:~2098` was reachable but not test-locked. Back-compat: no public-API change for non-test consumers; the `DEFAULT_SLEEP_PHASES` map preserves all current behaviour when `__phases` is undefined.
