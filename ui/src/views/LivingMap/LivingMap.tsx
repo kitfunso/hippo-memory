@@ -15,7 +15,7 @@ interface LivingMapProps {
 
 function StrengthBar({ value }: { value: number }) {
   return (
-    <div style={{ width: "100%", height: 3, background: "rgba(255,255,255,0.06)", borderRadius: 2, overflow: "hidden" }}>
+    <div style={{ width: "100%", height: 3, background: "var(--glass-border)", borderRadius: 2, overflow: "hidden" }}>
       <div style={{
         width: `${value * 100}%`, height: "100%", borderRadius: 2,
         background: `linear-gradient(90deg, var(--accent), ${value > 0.5 ? "var(--green)" : "var(--yellow)"})`,
@@ -31,24 +31,24 @@ function DetailPanel({ memory, onClose, open }: { memory: Memory | null; onClose
   return (
     <div role="dialog" aria-label="Memory details" style={{
       position: "absolute", top: 0, right: 0, width: "min(360px, 48vw)", height: "100%",
-      background: "rgba(8, 10, 14, 0.92)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)",
-      borderLeft: "1px solid rgba(255,255,255,0.04)", overflowY: "auto", zIndex: 50,
+      background: "var(--glass-bg-strong)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)",
+      borderLeft: "1px solid var(--glass-border)", overflowY: "auto", zIndex: 50,
       transform: open ? "translateX(0)" : "translateX(100%)",
       transition: "transform 250ms cubic-bezier(0.16, 1, 0.3, 1)",
     }}>
       {memory && (
         <>
           <div style={{
-            padding: "20px 24px 16px", borderBottom: "1px solid rgba(255,255,255,0.04)",
+            padding: "20px 24px 16px", borderBottom: "1px solid var(--glass-border)",
             display: "flex", justifyContent: "space-between", alignItems: "flex-start",
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ width: 8, height: 8, borderRadius: "50%", background: layerColor, boxShadow: `0 0 8px ${layerColor}40` }} />
-              <span style={{ color: "var(--muted)", fontSize: 10, fontFamily: "var(--font-mono)", letterSpacing: "0.5px", textTransform: "uppercase" }}>{memory.layer}</span>
+              <span style={{ color: "var(--dim)", fontSize: 10, fontFamily: "var(--font-mono)", letterSpacing: "0.5px", textTransform: "uppercase" }}>{memory.layer}</span>
             </div>
             <button onClick={onClose} style={{
-              background: "rgba(255,255,255,0.04)", border: "none", borderRadius: 4,
-              color: "var(--muted)", cursor: "pointer", padding: "4px 10px", fontSize: 11, fontFamily: "var(--font-mono)",
+              background: "var(--ink-faint)", border: "none", borderRadius: 4,
+              color: "var(--dim)", cursor: "pointer", padding: "4px 10px", fontSize: 11, fontFamily: "var(--font-mono)",
             }}>esc</button>
           </div>
           <div style={{ padding: "20px 24px" }}>
@@ -57,7 +57,7 @@ function DetailPanel({ memory, onClose, open }: { memory: Memory | null; onClose
             </div>
             <div style={{ marginBottom: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                <span style={{ color: "var(--muted)", fontSize: 10, fontFamily: "var(--font-mono)" }}>STRENGTH</span>
+                <span style={{ color: "var(--dim)", fontSize: 10, fontFamily: "var(--font-mono)" }}>STRENGTH</span>
                 <span style={{ color: "var(--text)", fontSize: 11, fontFamily: "var(--font-mono)" }}>{memory.strength.toFixed(3)}</span>
               </div>
               <StrengthBar value={memory.strength} />
@@ -70,7 +70,7 @@ function DetailPanel({ memory, onClose, open }: { memory: Memory | null; onClose
                 ["+7d", memory.projected_strength_7d.toFixed(3)], ["+30d", memory.projected_strength_30d.toFixed(3)],
               ] as [string, string][]).map(([label, val]) => (
                 <div key={label}>
-                  <div style={{ color: "var(--muted)", fontSize: 9, fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 2 }}>{label}</div>
+                  <div style={{ color: "var(--dim)", fontSize: 9, fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 2 }}>{label}</div>
                   <div style={{ color: "var(--text)", fontFamily: "var(--font-mono)" }}>{val}</div>
                 </div>
               ))}
@@ -78,11 +78,11 @@ function DetailPanel({ memory, onClose, open }: { memory: Memory | null; onClose
             {memory.tags.length > 0 && (
               <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 16 }}>
                 {memory.tags.map((tag) => (
-                  <span key={tag} style={{ background: "rgba(255,255,255,0.04)", color: "var(--muted)", padding: "3px 10px", borderRadius: 12, fontSize: 10, fontFamily: "var(--font-mono)" }}>{tag}</span>
+                  <span key={tag} style={{ background: "var(--ink-faint)", color: "var(--dim)", padding: "3px 10px", borderRadius: 12, fontSize: 10, fontFamily: "var(--font-mono)" }}>{tag}</span>
                 ))}
               </div>
             )}
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", fontFamily: "var(--font-mono)", borderTop: "1px solid rgba(255,255,255,0.04)", paddingTop: 12 }}>
+            <div style={{ fontSize: 10, color: "var(--text-faint)", fontFamily: "var(--font-mono)", borderTop: "1px solid var(--glass-border)", paddingTop: 12 }}>
               <div>{memory.id}</div>
               <div style={{ marginTop: 4 }}>{new Date(memory.created).toLocaleDateString()} &rarr; {new Date(memory.last_retrieved).toLocaleDateString()}</div>
             </div>
@@ -150,15 +150,15 @@ export function LivingMap({ memories, embeddings, stats, conflicts }: LivingMapP
 
       <div style={{
         position: "absolute", top: 0, left: 0, right: 0, height: 48, zIndex: 20,
-        background: "rgba(8, 10, 14, 0.75)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
-        borderBottom: "1px solid rgba(255,255,255,0.06)",
+        background: "var(--glass-bg)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
+        borderBottom: "1px solid var(--glass-border)",
         display: "flex", alignItems: "center", padding: "0 24px", gap: 20,
         pointerEvents: "auto",
       }}>
         <div style={{ flex: "0 0 auto", display: "flex", alignItems: "baseline", gap: 12 }}>
-          <span style={{ color: "var(--text)", fontSize: 14, fontWeight: 600, fontFamily: "var(--font-mono)", letterSpacing: "0.5px" }}>hippo</span>
-          <span style={{ color: "var(--accent)", fontSize: 10, fontFamily: "var(--font-mono)", opacity: 0.7 }}>brain observatory</span>
-          <span style={{ color: "var(--muted)", fontSize: 10, fontFamily: "var(--font-mono)" }}>{memories.length} memories</span>
+          <span style={{ color: "var(--text)", fontSize: 14, fontWeight: 600, fontFamily: "var(--font-serif)", letterSpacing: "0.3px" }}>hippo</span>
+          <span style={{ color: "var(--accent)", fontSize: 11, fontFamily: "var(--font-serif)", fontStyle: "italic" }}>brain observatory</span>
+          <span style={{ color: "var(--dim)", fontSize: 10, fontFamily: "var(--font-mono)" }}>{memories.length} memories</span>
           {(stats?.at_risk ?? 0) > 0 && (
             <span style={{ color: "var(--yellow)", fontSize: 10, fontFamily: "var(--font-mono)" }}>{stats?.at_risk} fading</span>
           )}
@@ -171,8 +171,8 @@ export function LivingMap({ memories, embeddings, stats, conflicts }: LivingMapP
       {matchCount === 0 && searchQuery.trim().length > 0 && (
         <div style={{
           position: "absolute", top: 56, right: 24, zIndex: 21,
-          background: "rgba(255,255,255,0.03)", padding: "4px 12px", borderRadius: 12,
-          fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--muted)",
+          background: "var(--ink-faint)", padding: "4px 12px", borderRadius: 12,
+          fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--dim)",
         }}>
           no matches
         </div>
@@ -181,7 +181,7 @@ export function LivingMap({ memories, embeddings, stats, conflicts }: LivingMapP
       {showHint && memories.length > 0 && (
         <div style={{
           position: "absolute", bottom: 32, left: "50%", transform: "translateX(-50%)",
-          fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(255,255,255,0.25)",
+          fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-faint)",
           opacity: showHint ? 1 : 0, transition: "opacity 1s ease-out",
           pointerEvents: "none", zIndex: 5, letterSpacing: "3px",
         }}>

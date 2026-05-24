@@ -18,13 +18,13 @@ export function SearchBar({ value, onChange, memoryCount, matchCount }: SearchBa
         onChange={(e) => onChange(e.target.value)}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        placeholder="search\u2026"
+        placeholder="search…"
         style={{
           width: "100%",
           padding: "5px 10px",
           paddingRight: matchCount !== null ? 48 : 10,
-          background: focused ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.03)",
-          border: focused ? "1px solid rgba(124,92,255,0.4)" : "1px solid rgba(255,255,255,0.08)",
+          background: focused ? "var(--ink-faint)" : "var(--glass-bg)",
+          border: focused ? "1px solid var(--accent-focus)" : "1px solid var(--glass-border)",
           borderRadius: 8,
           color: "var(--text)",
           fontSize: 11,
@@ -41,7 +41,7 @@ export function SearchBar({ value, onChange, memoryCount, matchCount }: SearchBa
           right: 8,
           top: "50%",
           transform: "translateY(-50%)",
-          color: "rgba(255,255,255,0.25)",
+          color: "var(--text-faint)",
           fontSize: 9,
           fontFamily: "var(--font-mono)",
           pointerEvents: "none",

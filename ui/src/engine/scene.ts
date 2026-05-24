@@ -68,8 +68,12 @@ export class BrainScene {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.2;
+    // E1 fix: was ACESFilmicToneMapping @ exposure 1.2 — designed for HDR
+    // scenes on dark; on parchment it crushed the light bg into mid-grey.
+    // NoToneMapping preserves linear sRGB values so the parchment clearColor
+    // renders as authored.
+    this.renderer.toneMapping = THREE.NoToneMapping;
+    this.renderer.toneMappingExposure = 1.0;
     this.container.appendChild(this.renderer.domElement);
     this.renderer.domElement.style.display = "block";
   }
@@ -115,13 +119,14 @@ export class BrainScene {
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
 
-    const bloom = new UnrealBloomPass(
-      new THREE.Vector2(w, h),
-      1.2,
-      0.5,
-      0.2,
-    );
-    this.composer.addPass(bloom);
+    // E1 fix: bloom disabled for parchment aesthetic. UnrealBloomPass is
+    // designed for "stars in dark sky" — on parchment it whitewashed the
+    // bg and merged adjacent nodes into a single glow cloud. The hybrid-v4
+    // mockup uses crisp spheres without bloom; matching that. If needed
+    // for selected-node emphasis, re-enable with strength <= 0.2 + threshold
+    // >= 0.9 (very selective).
+    // const bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.0, 0.4, 0.95);
+    // this.composer.addPass(bloom);
   }
 
   private initGrid(): void {
@@ -197,26 +202,32 @@ export class BrainScene {
       const logRatio = Math.log2(mem.retrieval_count + 1) / Math.log2(maxRetrieval + 1);
       const radius = 0.15 + logRatio * 0.35;
 
+      // E1 fix: solid parchment-friendly spheres. Pre-revamp had emissive
+      // glow + transparency designed for dark-bg "stars in space" look —
+      // on parchment those blurred into a cyan cloud blob. Now: no emissive,
+      // high opacity, slightly higher roughness for matte parchment feel.
       const sphereGeo = new THREE.SphereGeometry(radius, 24, 24);
       const sphereMat = new THREE.MeshStandardMaterial({
         color,
-        emissive: color,
-        emissiveIntensity: 0.6 + mem.strength * 0.8,
-        roughness: 0.3,
-        metalness: 0.1,
+        emissiveIntensity: 0,
+        roughness: 0.55,
+        metalness: 0.05,
         transparent: true,
-        opacity: 0.3 + mem.strength * 0.7,
+        opacity: 0.78 + mem.strength * 0.22,
       });
       const sphere = new THREE.Mesh(sphereGeo, sphereMat);
       sphere.position.set(x, y, z);
       sphere.userData = { memoryId: mem.id };
       this.scene.add(sphere);
 
-      const haloGeo = new THREE.SphereGeometry(radius * 3, 16, 16);
+      // E1 fix: halo near-invisible by default (was 0.06+ which created the
+      // cloud blob on parchment). Hover/select paths still bump opacity in
+      // applyDimming() / hover handlers for the interaction signal.
+      const haloGeo = new THREE.SphereGeometry(radius * 2.2, 16, 16);
       const haloMat = new THREE.MeshBasicMaterial({
         color,
         transparent: true,
-        opacity: 0.06 + mem.strength * 0.08,
+        opacity: 0.015 + mem.strength * 0.025,
         side: THREE.BackSide,
         depthWrite: false,
       });

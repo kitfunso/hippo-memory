@@ -14,7 +14,7 @@ export function LayerLegend() {
       gap: 12,
       fontSize: 9,
       fontFamily: "var(--font-mono)",
-      color: "rgba(255,255,255,0.5)",
+      color: "var(--dim)",
       letterSpacing: "0.3px",
     }}>
       {LAYERS.map(({ key, label }) => (
