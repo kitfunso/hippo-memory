@@ -19,7 +19,7 @@
  * The renderSleepResult snapshots exercise the existing render output only.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
 import { printContextMarkdown, renderSleepResult } from '../src/cli.js';
 import type { MemoryEntry } from '../src/memory.js';
 import type { SleepResult } from '../src/api.js';
@@ -79,6 +79,13 @@ describe('printContextMarkdown snapshots', () => {
     vi.useFakeTimers({ now: new Date('2026-05-23T20:00:00.000Z') });
   });
   afterEach(() => {
+    vi.useRealTimers();
+  });
+  // v1.11.5 follow-up (LOW #5 from independent-review-critic): a test that
+  // throws before reaching afterEach would leak fake timers into the next
+  // describe block. afterAll(useRealTimers) is defence-in-depth so the
+  // file's timer state is always restored at suite end.
+  afterAll(() => {
     vi.useRealTimers();
   });
 
@@ -170,6 +177,10 @@ describe('renderSleepResult snapshots', () => {
     vi.useFakeTimers({ now: new Date('2026-05-23T20:00:00.000Z') });
   });
   afterEach(() => {
+    vi.useRealTimers();
+  });
+  // Belt-and-braces (same rationale as printContextMarkdown block above).
+  afterAll(() => {
     vi.useRealTimers();
   });
 
