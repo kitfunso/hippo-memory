@@ -4566,6 +4566,19 @@ function cmdAuthCreate(hippoRoot: string, flags: Record<string, string | boolean
   const labelFlag = typeof flags['label'] === 'string' ? (flags['label'] as string) : undefined;
   const asJson = Boolean(flags['json']);
 
+  // v1.12.3: --role flag surfaces the api_keys.role column added v1.12.0
+  // sub-1. Accepts 'admin' | 'member' only; anything else exits 1 with a
+  // typed error so a typo doesn't silently default to admin.
+  const roleFlag = typeof flags['role'] === 'string' ? (flags['role'] as string) : undefined;
+  let role: 'admin' | 'member' = 'admin';
+  if (roleFlag !== undefined) {
+    if (roleFlag !== 'admin' && roleFlag !== 'member') {
+      console.error(`Invalid --role value: '${roleFlag}'. Use 'admin' or 'member'.`);
+      process.exit(1);
+    }
+    role = roleFlag;
+  }
+
   // The CLI's --tenant flag is the only legitimate cross-tenant override
   // (admin minting a key for another tenant from the local machine). It
   // flows through ctx.tenantId, NOT through opts — authCreate's opts no
@@ -4576,7 +4589,7 @@ function cmdAuthCreate(hippoRoot: string, flags: Record<string, string | boolean
     tenantId: tenantFlag ?? resolveTenantId({}),
     actor: api.adminActor('cli'),
   };
-  const result = api.authCreate(ctx, { label: labelFlag });
+  const result = api.authCreate(ctx, { label: labelFlag, role });
 
   if (asJson) {
     console.log(JSON.stringify({
@@ -4584,12 +4597,14 @@ function cmdAuthCreate(hippoRoot: string, flags: Record<string, string | boolean
       plaintext: result.plaintext,
       tenantId: result.tenantId,
       label: labelFlag ?? null,
+      role: result.role,
     }));
     return;
   }
 
   console.log(`key_id:    ${result.keyId}`);
   console.log(`plaintext: ${result.plaintext}`);
+  console.log(`role:      ${result.role}`);
   console.log('');
   console.log('!! WARNING: this is the ONLY time the plaintext key will be shown. !!');
   console.log('!! Copy it now. Hippo stores only a scrypt hash and cannot recover it. !!');
@@ -4599,7 +4614,8 @@ function formatKeyRow(item: ApiKeyListItem): string {
   const label = item.label ?? '-';
   const created = item.createdAt;
   const revoked = item.revokedAt ?? '-';
-  return `${item.keyId}  ${item.tenantId}  ${label}  ${created}  ${revoked}`;
+  // v1.12.3: role column surfaced
+  return `${item.keyId}  ${item.tenantId}  ${item.role}  ${label}  ${created}  ${revoked}`;
 }
 
 function cmdAuthList(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
@@ -4625,7 +4641,7 @@ function cmdAuthList(hippoRoot: string, flags: Record<string, string | boolean |
     return;
   }
 
-  console.log('key_id  tenant  label  created  revoked');
+  console.log('key_id  tenant  role  label  created  revoked');
   for (const item of items) {
     console.log(formatKeyRow(item));
   }
@@ -5450,6 +5466,7 @@ Commands:
   auth <sub>               Manage API keys (A5 stub auth)
     auth create            Mint a new API key (plaintext shown ONCE)
       --label <s>          Optional human label
+      --role <r>           admin | member (default: admin; member blocked from /v1/sleep)
       --tenant <id>        Override tenant (defaults to HIPPO_TENANT)
       --json               Output as JSON
       --global             Operate on the global store
