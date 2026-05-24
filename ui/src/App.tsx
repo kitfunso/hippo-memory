@@ -78,6 +78,22 @@ export function App() {
     setFilterState((prev) => ({ ...INITIAL_FILTER_STATE, frozen: prev.frozen }));
   }, []);
 
+  // v0.26.1: fadingOnly toggle wired from Header pill + FilterPanel toggle.
+  const setFadingOnly = useCallback((fadingOnly: boolean) => {
+    setFilterState((prev) => ({ ...prev, fadingOnly }));
+  }, []);
+
+  // v0.26.1 design-critic MED: auto-clear fadingOnly when at_risk drops to 0
+  // (e.g. user pinned the last fading memory) so they're not stranded with
+  // an empty canvas + drawer. aria-live announces the change for SR users.
+  const [autoClearAnnouncement, setAutoClearAnnouncement] = useState("");
+  useEffect(() => {
+    if (filterState.fadingOnly && stats && stats.at_risk === 0) {
+      setFilterState((prev) => ({ ...prev, fadingOnly: false }));
+      setAutoClearAnnouncement("No more fading memories — fading filter cleared.");
+    }
+  }, [filterState.fadingOnly, stats?.at_risk]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // E2 + E5: keyboard shortcut "F" toggles freeze. Per plan-eng R2 MED #3:
   // skip when target is inside the drawer (data-drawer="memory-list") so the
   // user's keyboard nav over rows doesn't accidentally freeze the scene.
@@ -199,8 +215,11 @@ export function App() {
         setStrengthRange={setStrengthRange}
         setConfidences={setConfidences}
         setAgeMaxDays={setAgeMaxDays}
+        setFadingOnly={setFadingOnly}
         resetFilters={resetFilters}
       />
+      {/* v0.26.1 — aria-live announcement for auto-clear (design-critic LOW). */}
+      <div role="status" aria-live="polite" className="sr-only">{autoClearAnnouncement}</div>
     </main>
   );
 }

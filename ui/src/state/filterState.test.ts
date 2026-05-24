@@ -10,6 +10,8 @@ import type { Memory } from "../types.js";
 import {
   deriveVisibleIds,
   INITIAL_FILTER_STATE,
+  isFading,
+  isFilterActive,
   type FilterState,
   type Layer,
   type Confidence,
@@ -175,5 +177,82 @@ describe("deriveVisibleIds (E3 FilterState)", () => {
       };
       expect(ids(deriveVisibleIds(FIXTURE, state))).toEqual([]);
     });
+  });
+});
+
+// v0.26.1 — fading-only filter tests (plan-eng-critic R1 MED #3)
+describe("isFading helper (v0.26.1)", () => {
+  it("true when strength < 0.1 and not pinned", () => {
+    expect(isFading({ strength: 0.05, pinned: false })).toBe(true);
+    expect(isFading({ strength: 0.099, pinned: false })).toBe(true);
+  });
+
+  it("false at threshold boundary (0.1)", () => {
+    expect(isFading({ strength: 0.1, pinned: false })).toBe(false);
+  });
+
+  it("false when pinned (regardless of strength)", () => {
+    expect(isFading({ strength: 0.001, pinned: true })).toBe(false);
+    expect(isFading({ strength: 0.0, pinned: true })).toBe(false);
+  });
+
+  it("false when strength >= 0.1", () => {
+    expect(isFading({ strength: 0.5, pinned: false })).toBe(false);
+    expect(isFading({ strength: 1.0, pinned: false })).toBe(false);
+  });
+});
+
+describe("isFilterActive + fadingOnly (v0.26.1)", () => {
+  it("returns true when only fadingOnly is set, all others default", () => {
+    const state: FilterState = { ...INITIAL_FILTER_STATE, fadingOnly: true };
+    expect(isFilterActive(state)).toBe(true);
+  });
+
+  it("returns false on full default state", () => {
+    expect(isFilterActive(INITIAL_FILTER_STATE)).toBe(false);
+  });
+});
+
+describe("deriveVisibleIds + fadingOnly (v0.26.1)", () => {
+  // Build a fading-aware fixture: A & B pinned (never fade), C low-strength
+  // unpinned (fading), D normal strength.
+  const FADING_FIXTURE: Memory[] = [
+    mem({ id: "A", strength: 0.05, pinned: true, layer: "buffer" }), // low but pinned
+    mem({ id: "B", strength: 0.5, pinned: true }),                   // normal pinned
+    mem({ id: "C", strength: 0.05, pinned: false, layer: "buffer" }), // fading
+    mem({ id: "D", strength: 0.05, pinned: false, layer: "episodic" }), // fading
+    mem({ id: "E", strength: 0.8, pinned: false }),                   // normal
+  ];
+
+  it("fadingOnly true: returns only fading memories", () => {
+    const state: FilterState = { ...INITIAL_FILTER_STATE, fadingOnly: true };
+    expect(ids(deriveVisibleIds(FADING_FIXTURE, state))).toEqual(["C", "D"]);
+  });
+
+  it("fadingOnly true: pinned memories NEVER returned even when strength < 0.1", () => {
+    const state: FilterState = { ...INITIAL_FILTER_STATE, fadingOnly: true };
+    const result = ids(deriveVisibleIds(FADING_FIXTURE, state));
+    expect(result).not.toContain("A"); // A has strength 0.05 but pinned
+    expect(result).not.toContain("B");
+  });
+
+  it("fadingOnly composes (AND) with layer filter", () => {
+    const state: FilterState = {
+      ...INITIAL_FILTER_STATE,
+      fadingOnly: true,
+      layers: new Set<Layer>(["buffer"]),
+    };
+    // Only C is buffer AND fading (D is episodic)
+    expect(ids(deriveVisibleIds(FADING_FIXTURE, state))).toEqual(["C"]);
+  });
+
+  it("fadingOnly composes (AND) with query filter", () => {
+    const query = "content-C"; // C's default content via mem() helper
+    const state: FilterState = { ...INITIAL_FILTER_STATE, fadingOnly: true, query };
+    expect(ids(deriveVisibleIds(FADING_FIXTURE, state))).toEqual(["C"]);
+  });
+
+  it("fadingOnly false (default): returns all memories", () => {
+    expect(ids(deriveVisibleIds(FADING_FIXTURE, INITIAL_FILTER_STATE))).toHaveLength(5);
   });
 });

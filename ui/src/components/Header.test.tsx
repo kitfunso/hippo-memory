@@ -31,6 +31,7 @@ function renderHeader(overrides: {
       frozenOrigin={null}
       setQuery={setQuery}
       setFrozen={setFrozen}
+      setFadingOnly={vi.fn()}
     />,
   );
   return { setQuery, setFrozen };
@@ -93,6 +94,7 @@ describe("Header (E2)", () => {
         frozenOrigin={null}
         setQuery={vi.fn()}
         setFrozen={setFrozen}
+        setFadingOnly={vi.fn()}
       />,
     );
 
@@ -113,6 +115,7 @@ describe("Header (E2)", () => {
         frozenOrigin={null}
         setQuery={vi.fn()}
         setFrozen={setFrozen}
+        setFadingOnly={vi.fn()}
       />,
     );
 

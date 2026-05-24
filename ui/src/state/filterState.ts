@@ -28,6 +28,11 @@ export interface FilterState {
   ageMaxDays: number | null;
   /** E2 — when true, scene.setReducedMotion(true) freezes the simulation. */
   frozen: boolean;
+  /**
+   * v0.26.1 — shortcut filter: when true, deriveVisibleIds returns only
+   * memories where isFading(m) is true. Composes (AND) with other filters.
+   */
+  fadingOnly: boolean;
 }
 
 export const INITIAL_FILTER_STATE: FilterState = {
@@ -37,7 +42,27 @@ export const INITIAL_FILTER_STATE: FilterState = {
   confidences: new Set(),
   ageMaxDays: null,
   frozen: false,
+  fadingOnly: false,
 };
+
+/**
+ * "Fading" / at-risk threshold. Matches BE: src/dashboard.ts:95 and
+ * src/mcp/server.ts:736 both use 0.1. Note src/cli.ts:2541 uses 0.2 —
+ * documented inconsistency to align in v0.27.
+ */
+export const FADING_STRENGTH_THRESHOLD = 0.1;
+
+/**
+ * A memory is "fading" when its strength is below threshold AND it's not
+ * pinned. Pinned memories are user-protected; they cannot fade by definition.
+ *
+ * Used by the engine ring emphasis (scene.ts), the filterOnly shortcut
+ * (deriveVisibleIds), and drawer row indicator. Pick<Memory> signature
+ * documents that only these two fields are read.
+ */
+export function isFading(m: Pick<Memory, "strength" | "pinned">): boolean {
+  return m.strength < FADING_STRENGTH_THRESHOLD && !m.pinned;
+}
 
 /**
  * Is ANY filter currently active? Disambiguates "no filter, show all" from
@@ -54,6 +79,10 @@ export function isFilterActive(state: FilterState): boolean {
   if (state.strengthRange[0] > 0) return true;
   if (state.strengthRange[1] < 1) return true;
   if (state.ageMaxDays !== null) return true;
+  // v0.26.1 — without this branch, pill-only activation would silently
+  // no-op the engine + Sidebar + BottomBar + Drawer + TagCloud which all
+  // gate on filterActive (plan-eng-critic R1 HIGH #1).
+  if (state.fadingOnly) return true;
   return false;
 }
 
@@ -93,6 +122,7 @@ export function deriveVisibleIds(memories: Memory[], state: FilterState): Set<st
     if (filterConfidences && !state.confidences.has(m.confidence as Confidence)) continue;
     if (filterStrength && (m.strength < strMin || m.strength > strMax)) continue;
     if (filterAge && state.ageMaxDays !== null && m.age_days > state.ageMaxDays) continue;
+    if (state.fadingOnly && !isFading(m)) continue;
     ids.add(m.id);
   }
   return ids;

@@ -33,6 +33,7 @@ interface LivingMapProps {
   setStrengthRange: (range: [number, number]) => void;
   setConfidences: (confidences: Set<Confidence>) => void;
   setAgeMaxDays: (days: number | null) => void;
+  setFadingOnly: (v: boolean) => void;
   resetFilters: () => void;
 }
 
@@ -118,7 +119,7 @@ function DetailPanel({ memory, onClose, open }: { memory: Memory | null; onClose
 
 export function LivingMap({
   memories, embeddings, stats, conflicts, filterState, frozenOrigin,
-  setQuery, setFrozen, setLayers, setStrengthRange, setConfidences, setAgeMaxDays,
+  setQuery, setFrozen, setLayers, setStrengthRange, setConfidences, setAgeMaxDays, setFadingOnly,
   resetFilters,
 }: LivingMapProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -250,6 +251,7 @@ export function LivingMap({
         frozenOrigin={frozenOrigin}
         setQuery={setQuery}
         setFrozen={setFrozen}
+        setFadingOnly={setFadingOnly}
       />
 
       {/* P3 marquee feature: per-frame HTML node-label overlay. */}
@@ -272,6 +274,7 @@ export function LivingMap({
         setStrengthRange={setStrengthRange}
         setConfidences={setConfidences}
         setAgeMaxDays={setAgeMaxDays}
+        setFadingOnly={setFadingOnly}
         resetFilters={resetFilters}
       />
 

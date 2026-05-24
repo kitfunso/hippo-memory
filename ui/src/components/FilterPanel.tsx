@@ -5,14 +5,17 @@
  */
 
 import type { FilterState, Layer, Confidence } from "../state/filterState.js";
+import type { Stats } from "../types.js";
 import { LAYER_COLORS } from "../engine/types.js";
 
 interface FilterPanelProps {
   filterState: FilterState;
+  stats: Stats | null;
   setLayers: (layers: Set<Layer>) => void;
   setStrengthRange: (range: [number, number]) => void;
   setConfidences: (confidences: Set<Confidence>) => void;
   setAgeMaxDays: (days: number | null) => void;
+  setFadingOnly: (v: boolean) => void;
 }
 
 const ALL_LAYERS: Array<{ key: Layer; label: string }> = [
@@ -35,8 +38,10 @@ function toggleSet<T>(set: Set<T>, value: T): Set<T> {
   return next;
 }
 
-export function FilterPanel({ filterState, setLayers, setStrengthRange, setConfidences, setAgeMaxDays }: FilterPanelProps) {
+export function FilterPanel({ filterState, stats, setLayers, setStrengthRange, setConfidences, setAgeMaxDays, setFadingOnly }: FilterPanelProps) {
   const [strMin, strMax] = filterState.strengthRange;
+  const atRisk = stats?.at_risk ?? 0;
+  const totalMemories = stats?.total ?? 0;
 
   return (
     <div style={{ marginBottom: 20 }}>
@@ -127,6 +132,32 @@ export function FilterPanel({ filterState, setLayers, setStrengthRange, setConfi
             style={rangeStyle}
           />
         </div>
+      </div>
+
+      {/* v0.26.1 — Fading-only shortcut. Position AFTER Strength, BEFORE
+          Confidence (plan-design-critic MED: derived predicate of
+          strength+pinned, belongs adjacent to its raw counterpart). */}
+      <div style={filterGroup}>
+        <div style={filterLabel}>
+          <span>Fading only</span>
+          <span style={filterValue}>
+            {atRisk === 0 ? "(none)" : `${atRisk} of ${totalMemories}`}
+          </span>
+        </div>
+        <label style={{ ...chkRow, opacity: atRisk === 0 ? 0.5 : 1, cursor: atRisk === 0 ? "not-allowed" : "pointer" }}>
+          <input
+            type="checkbox"
+            checked={filterState.fadingOnly}
+            disabled={atRisk === 0}
+            onChange={(e) => setFadingOnly(e.target.checked)}
+            aria-label="Show only fading memories"
+            style={{ accentColor: "var(--accent)", cursor: "inherit" }}
+          />
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>fading</span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-faint)", marginLeft: 6 }}>
+            &lt; 0.1 strength, unpinned
+          </span>
+        </label>
       </div>
 
       {/* Confidence multi-select (same HIGH #2 fix as layer: first
