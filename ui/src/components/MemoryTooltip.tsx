@@ -8,7 +8,7 @@ interface MemoryTooltipProps {
 }
 
 export function MemoryTooltip({ memory, x, y }: MemoryTooltipProps) {
-  const preview = memory.content.length > 100 ? memory.content.slice(0, 100) + "\u2026" : memory.content;
+  const preview = memory.content.length > 100 ? memory.content.slice(0, 100) + "…" : memory.content;
   const layerColor = LAYER_COLORS[memory.layer];
 
   return (
@@ -16,16 +16,16 @@ export function MemoryTooltip({ memory, x, y }: MemoryTooltipProps) {
       position: "fixed",
       left: x + 16,
       top: y - 12,
-      background: "rgba(8, 10, 14, 0.92)",
+      background: "var(--glass-bg-strong)",
       backdropFilter: "blur(20px)",
       WebkitBackdropFilter: "blur(20px)",
-      border: "1px solid rgba(255,255,255,0.06)",
+      border: "1px solid var(--glass-border)",
       borderRadius: 12,
       padding: "12px 14px",
       maxWidth: 280,
       pointerEvents: "none" as const,
       zIndex: 100,
-      boxShadow: `0 4px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.02), inset 0 1px 0 rgba(255,255,255,0.03)`,
+      boxShadow: `0 4px 24px var(--ink-shadow), 0 0 0 1px var(--glass-border)`,
     }}>
       <div style={{
         display: "flex",
@@ -41,7 +41,7 @@ export function MemoryTooltip({ memory, x, y }: MemoryTooltipProps) {
           boxShadow: `0 0 6px ${layerColor}60`,
         }} />
         <span style={{
-          color: "var(--muted)",
+          color: "var(--dim)",
           fontSize: 9,
           fontFamily: "var(--font-mono)",
           textTransform: "uppercase",
@@ -49,9 +49,9 @@ export function MemoryTooltip({ memory, x, y }: MemoryTooltipProps) {
         }}>
           {memory.layer}
         </span>
-        <span style={{ color: "rgba(255,255,255,0.1)", fontSize: 9 }}>&middot;</span>
+        <span style={{ color: "var(--text-faint)", fontSize: 9 }}>&middot;</span>
         <span style={{
-          color: "var(--muted)",
+          color: "var(--dim)",
           fontSize: 9,
           fontFamily: "var(--font-mono)",
         }}>
@@ -70,7 +70,7 @@ export function MemoryTooltip({ memory, x, y }: MemoryTooltipProps) {
         marginTop: 8,
         display: "flex",
         gap: 8,
-        color: "rgba(255,255,255,0.2)",
+        color: "var(--text-faint)",
         fontSize: 9,
         fontFamily: "var(--font-mono)",
       }}>

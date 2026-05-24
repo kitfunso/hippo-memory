@@ -47,6 +47,15 @@
   --radius-lg: 6px;
   --border-w: 1px;
 
+  /* Glass / overlay surfaces (parchment-tinted, replacing dark rgba inlines) */
+  --glass-bg-strong: rgba(244, 239, 230, 0.95);   /* DetailPanel, MemoryTooltip - opaque on canvas */
+  --glass-bg: rgba(250, 247, 242, 0.85);          /* Header bar - translucent over canvas */
+  --glass-border: rgba(58, 50, 40, 0.10);         /* subtle dark-on-parchment separator */
+  --ink-faint: rgba(58, 50, 40, 0.06);            /* tag bg, button bg */
+  --ink-shadow: rgba(58, 50, 40, 0.15);           /* drop shadows */
+  --accent-focus: rgba(196, 92, 60, 0.35);        /* focus ring (rust) */
+  --text-faint: rgba(58, 50, 40, 0.45);           /* hint text, very subtle ids */
+
   /* Cross-hatch texture for body bg */
   --texture-cross-hatch:
     repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(180,170,150,0.015) 2px, rgba(180,170,150,0.015) 3px),
