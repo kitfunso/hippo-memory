@@ -1409,12 +1409,21 @@ export function archiveRaw(
 
 export interface AuthCreateOpts {
   label?: string;
+  /**
+   * v1.12.3: authorization role for the new key. Defaults to `'admin'` for
+   * back-compat with v1.12.0-v1.12.2 (the api_keys.role column DEFAULT also
+   * resolves to 'admin' if omitted from the INSERT). Member keys are
+   * 403-blocked from admin-gated routes (e.g. `POST /v1/sleep`).
+   */
+  role?: 'admin' | 'member';
 }
 
 export interface AuthCreateResult {
   keyId: string;
   plaintext: string;
   tenantId: string;
+  /** v1.12.3: the role bound to the new key (admin | member). */
+  role: 'admin' | 'member';
 }
 
 /**
@@ -1432,8 +1441,9 @@ export interface AuthCreateResult {
 export function authCreate(ctx: Context, opts: AuthCreateOpts): AuthCreateResult {
   const db = openHippoDb(ctx.hippoRoot);
   try {
-    const result = createApiKey(db, { tenantId: ctx.tenantId, label: opts.label });
-    return { keyId: result.keyId, plaintext: result.plaintext, tenantId: ctx.tenantId };
+    const role = opts.role ?? 'admin';
+    const result = createApiKey(db, { tenantId: ctx.tenantId, label: opts.label, role });
+    return { keyId: result.keyId, plaintext: result.plaintext, tenantId: ctx.tenantId, role };
   } finally {
     closeHippoDb(db);
   }

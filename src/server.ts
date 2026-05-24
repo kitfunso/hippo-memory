@@ -852,6 +852,21 @@ async function handleRequest(
     if (labelRaw !== undefined && typeof labelRaw !== 'string') {
       throw new HttpError(400, 'label must be a string');
     }
+    // v1.12.3: optional body.role mirrors the --role CLI flag. Validated
+    // strictly — anything other than 'admin'|'member' is a 400 (no silent
+    // fallback to admin). Required note: admin Bearer can mint a member
+    // key for the same tenant; member Bearer minting an admin key is NOT
+    // blocked here today (auth_create is currently unaudited per the A5 v2
+    // note in authCreate doc). The HTTP layer trusts the buildContextWithAuth
+    // role check at admin-gated routes; mint surface remains permissive.
+    const roleRaw = body['role'];
+    let role: 'admin' | 'member' | undefined;
+    if (roleRaw !== undefined) {
+      if (roleRaw !== 'admin' && roleRaw !== 'member') {
+        throw new HttpError(400, "role must be 'admin' or 'member'");
+      }
+      role = roleRaw;
+    }
     // Security: any `tenantId` in the body is IGNORED. The minted key is
     // bound to the caller's authenticated tenant (ctx.tenantId, resolved
     // from the Bearer token). Forwarding body.tenantId here would let
@@ -859,6 +874,7 @@ async function handleRequest(
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = authCreate(ctx, {
       label: labelRaw,
+      role,
     });
     sendJson(res, 200, result);
     return;

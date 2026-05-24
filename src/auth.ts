@@ -114,17 +114,24 @@ export interface ApiKeyListItem {
   label: string | null;
   createdAt: string;
   revokedAt: string | null;
+  /**
+   * v1.12.3: authorization role bound to the key. SELECT extended to read
+   * the `role` column (added in schema migration v26 by v1.12.0 sub-1).
+   * Fail-safe-to-member cast: any non-'admin' value reads as 'member'.
+   */
+  role: 'admin' | 'member';
 }
 
 export function listApiKeys(db: DatabaseSyncLike, opts: { active: boolean }): ApiKeyListItem[] {
   const sql = opts.active
-    ? `SELECT key_id, tenant_id, label, created_at, revoked_at FROM api_keys WHERE revoked_at IS NULL ORDER BY id DESC`
-    : `SELECT key_id, tenant_id, label, created_at, revoked_at FROM api_keys ORDER BY id DESC`;
+    ? `SELECT key_id, tenant_id, label, created_at, revoked_at, role FROM api_keys WHERE revoked_at IS NULL ORDER BY id DESC`
+    : `SELECT key_id, tenant_id, label, created_at, revoked_at, role FROM api_keys ORDER BY id DESC`;
   const rows = db.prepare(sql).all() as Array<{
-    key_id: string; tenant_id: string; label: string | null; created_at: string; revoked_at: string | null;
+    key_id: string; tenant_id: string; label: string | null; created_at: string; revoked_at: string | null; role: string;
   }>;
   return rows.map(r => ({
     keyId: r.key_id, tenantId: r.tenant_id, label: r.label,
     createdAt: r.created_at, revokedAt: r.revoked_at,
+    role: r.role === 'admin' ? 'admin' : 'member',
   }));
 }
