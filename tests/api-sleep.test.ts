@@ -155,7 +155,7 @@ describe('api.sleep', () => {
       await sleep(ctx, { dryRun: false, noShare: true });
 
       const db = openHippoDb(home);
-      const rows = queryAuditEvents(db, { tenantId: 'default', op: 'consolidate' });
+      const rows = queryAuditEvents(db, { tenantId: '__host__', op: 'consolidate' });
       closeHippoDb(db);
 
       expect(rows.length).toBe(1);
@@ -185,7 +185,7 @@ describe('api.sleep', () => {
       await sleep(ctx, { dryRun: true });
 
       const db = openHippoDb(home);
-      const rows = queryAuditEvents(db, { tenantId: 'default', op: 'consolidate' });
+      const rows = queryAuditEvents(db, { tenantId: '__host__', op: 'consolidate' });
       closeHippoDb(db);
 
       expect(rows.length).toBe(1);
@@ -210,7 +210,7 @@ describe('api.sleep', () => {
       await sleep(ctx, { dryRun: true });
 
       const db = openHippoDb(home);
-      const rows = queryAuditEvents(db, { tenantId: 'default', op: 'consolidate' });
+      const rows = queryAuditEvents(db, { tenantId: '__host__', op: 'consolidate' });
       closeHippoDb(db);
 
       expect(rows.length).toBe(1);

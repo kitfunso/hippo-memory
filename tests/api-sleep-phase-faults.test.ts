@@ -69,7 +69,7 @@ function getLastConsolidateAuditRow(hippoRoot: string, tenantId = 'default'): {
 } | null {
   const db = openHippoDb(hippoRoot);
   try {
-    const rows = queryAuditEvents(db, { tenantId, op: 'consolidate', limit: 1 });
+    const rows = queryAuditEvents(db, { tenantId: '__host__', op: 'consolidate', limit: 1 });
     if (rows.length === 0) return null;
     return { metadata: rows[0].metadata as Record<string, unknown> };
   } finally {

@@ -805,7 +805,10 @@ async function executeTool(
     }
 
     case 'hippo_peers': {
-      const peers = listPeers();
+      // D4 v1.12.10: tenant-scope the cross-project peer discovery.
+      // tenantId is the caller's tenant (matches hippo_share above);
+      // passing undefined would restore the pre-D4 host-wide behaviour.
+      const peers = listPeers(undefined, tenantId);
       if (peers.length === 0) return 'No peers found.';
       return peers.map((p) => `${p.project}: ${p.count} memories (latest: ${p.latest.slice(0, 10)})`).join('\n');
     }

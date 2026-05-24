@@ -1,5 +1,81 @@
 # Changelog
 
+## 1.12.10 (2026-05-24): D1+D2+D3+D4+D5 design picks bundled ship
+
+All five design decisions from `docs/design-decisions/2026-05-24-blocked-items.md`
+authorized via Keith's "go with your picks for all 5" — shipped as one
+release. Multi-tenant story now coherent end-to-end.
+
+### D1 — `/v1/sleep` response shape redact-on-egress
+- New `src/sleep-redact.ts`: `redactSleepResultForCaller(result, ctx)`
+- Non-loopback non-self admin gets cross-tenant counters zeroed
+  (`deduped.crossDups`, `.semDups`, `.epiDups`; `audit.errorsRemoved`,
+  `.warningCount`; `ambient.totalMemories`, `.avgStrength`).
+- Loopback admin + `__host__` system caller: pass-through unchanged.
+- Per-invocation counters (`active`, `removed`, `mergedEpisodic`, etc)
+  preserved regardless — they describe THIS call's work, not host-wide
+  accounting.
+- Layered defence: loopback-only gate is upstream today, so this is
+  dead code until D3 ships non-loopback serving — lands now so the
+  gate is in place when needed.
+- Tests: `tests/sleep-redact.test.ts` (5 cases).
+
+### D2 — Consolidate audit row tagged `__host__` synthetic tenant
+- `api.sleep` consolidate row now tags `tenant_id='__host__'` instead
+  of `ctx.tenantId`. Honest about scope: `api.sleep` is host-wide.
+- `actor` field unchanged (operator traceable).
+- New `triggeredByTenant` metadata field preserves the forensic trail.
+- HTTP `/v1/audit?tenant=__host__` query param added so admins can
+  query the synthetic tenant. Defaults to caller's `ctx.tenantId`.
+- Tests: `tests/api-sleep-host-tenant.test.ts` (3 cases).
+- **Breaking for audit consumers** querying consolidate rows by
+  `tenant_id='default'` — switch to `'__host__'`. Test suite updated
+  (4 existing tests across `api-sleep.test.ts`, `api-sleep-phase-faults.test.ts`,
+  `server-audit-route-consolidate.test.ts`).
+
+### D3 — Non-loopback serving: lock-step commitment
+- New `docs/process/non-loopback-sequencing.md` — single-source-of-truth
+  for what gates close BEFORE `HIPPO_BIND_ALL` (or equivalent) ships.
+- Decision: no flag-first / "behind a feature flag" shipping. Lock-step
+  every prerequisite first, then flip in one additive change.
+- Current state: D1, D2, L9 (v1.12.1), M6 (v1.12.9) all `[x]`. Still
+  `[ ]`: M7 timing, conflict-subsystem residue, the bind-flag design.
+- No code change; commitment doc only.
+
+### D4 — `hippo_peers` tenant-scope by default
+- `listPeers(globalRoot?, tenantId?)` — when `tenantId` provided,
+  filters global entries to that tenant before aggregating projects.
+  Undefined = host-wide (back-compat).
+- MCP `hippo_peers`: now passes ctx.tenantId. AI consumers see only
+  their tenant's contributing projects.
+- Dashboard: now passes its tenantId (matches `loadAllEntries(hippoRoot, tenantId)`
+  already in scope).
+- CLI `hippo peers`: tenant-scoped by default with `--all-tenants`
+  opt-out for legacy host-wide view. Output label disambiguates the
+  scope.
+- Tests: `tests/shared-listpeers-tenant.test.ts` (5 cases).
+- **Default behavior change** for MCP + dashboard + CLI. Operators
+  genuinely needing cross-tenant peer discovery: `--all-tenants` on
+  CLI, `listPeers(root, undefined)` programmatically, or direct SQL.
+
+### D5 — 24h soak harness: confirmed no active "soak-tested" claim
+- Grep of `docs/` / `ROADMAP*.md` / `README.md` confirmed: no active
+  doc currently claims `soak-tested`. Historical `docs/plans/` files
+  correctly call it `scaffold only`.
+- Lock-step doc (D3) records the recommitment if 1.x→2.x looms.
+- No code or doc change required.
+
+### Tests
+1842 passed / 4 skipped / 0 failed across 254 files (+8 since v1.12.9).
+
+### Notes
+- Bundled ship lets the multi-tenant story land coherently in one
+  release rather than spread across 5 incremental patches.
+- D1 + D3 are layered-defence work for the future non-loopback story;
+  D2 + D4 are user-facing today (admins querying audit + MCP/CLI peer
+  discovery semantics).
+- 14th ship of the 2026-05-24 session arc.
+
 ## 1.12.9 (2026-05-24): `hippo audit prune --older-than` operator hygiene
 
 Closes A5 v2 M6 from `TODOS.md`: "Audit log unbounded growth." The
