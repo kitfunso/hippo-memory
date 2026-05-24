@@ -16,8 +16,10 @@ import {
   type FilterState,
   type Layer,
   type Confidence,
+  type ColorMode,
 } from "../../state/filterState.js";
 import type { BrainScene } from "../../engine/scene.js";
+import { pickColorTag } from "../../engine/tagPalette.js";
 
 interface LivingMapProps {
   memories: Memory[];
@@ -34,6 +36,8 @@ interface LivingMapProps {
   setConfidences: (confidences: Set<Confidence>) => void;
   setAgeMaxDays: (days: number | null) => void;
   setFadingOnly: (v: boolean) => void;
+  /** v0.27 color-by-tag — drives ViewPanel segmented radio. */
+  setColorMode: (mode: ColorMode) => void;
   resetFilters: () => void;
 }
 
@@ -120,7 +124,7 @@ function DetailPanel({ memory, onClose, open }: { memory: Memory | null; onClose
 export function LivingMap({
   memories, embeddings, stats, conflicts, filterState, frozenOrigin,
   setQuery, setFrozen, setLayers, setStrengthRange, setConfidences, setAgeMaxDays, setFadingOnly,
-  resetFilters,
+  setColorMode, resetFilters,
 }: LivingMapProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -185,8 +189,18 @@ export function LivingMap({
     frozen: filterState.frozen,
     visibleIds,
     filterActive,
+    colorMode: filterState.colorMode,
     onSceneReady: setSceneInstance,
   });
+
+  // v0.27 — derive the color-driving tag for the currently hovered memory
+  // so MemoryTooltip can surface it in tag/path mode (a11y non-color channel
+  // per plan-design-critic R1 must-fix #1).
+  const hoveredColorTag = useMemo(() => {
+    if (!hoveredMemory) return null;
+    if (filterState.colorMode === "layer") return null;
+    return pickColorTag(hoveredMemory.memory, filterState.colorMode);
+  }, [hoveredMemory, filterState.colorMode]);
 
   // Uses the shared matchesQuery so this can't drift from deriveVisibleIds.
   const matchCount = filterState.query.trim().length > 0
@@ -275,6 +289,7 @@ export function LivingMap({
         setConfidences={setConfidences}
         setAgeMaxDays={setAgeMaxDays}
         setFadingOnly={setFadingOnly}
+        setColorMode={setColorMode}
         resetFilters={resetFilters}
       />
 
@@ -289,7 +304,13 @@ export function LivingMap({
       )}
 
       {hoveredMemory && !selectedMemory && (
-        <MemoryTooltip memory={hoveredMemory.memory} x={hoveredMemory.x} y={hoveredMemory.y} />
+        <MemoryTooltip
+          memory={hoveredMemory.memory}
+          x={hoveredMemory.x}
+          y={hoveredMemory.y}
+          colorMode={filterState.colorMode}
+          colorTag={hoveredColorTag}
+        />
       )}
 
       <DetailPanel memory={selectedMemory} onClose={() => setSelectedMemory(null)} open={panelOpen} />
@@ -300,6 +321,7 @@ export function LivingMap({
         memories={memories}
         visibleIds={visibleIds}
         filterActive={filterActive}
+        colorMode={filterState.colorMode}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         onMemorySelect={(m) => {
@@ -315,6 +337,7 @@ export function LivingMap({
         drawerOpen={drawerOpen}
         onToggleDrawer={() => setDrawerOpen((prev) => !prev)}
         visibleCount={filterActive ? visibleIds.size : memories.length}
+        colorMode={filterState.colorMode}
       />
     </div>
   );

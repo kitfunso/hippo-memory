@@ -10,12 +10,20 @@
 import { useEffect, useMemo, useRef } from "react";
 import type { Memory } from "../types.js";
 import { LAYER_COLORS } from "../engine/types.js";
-import { isFading } from "../state/filterState.js";
+import { isFading, type ColorMode } from "../state/filterState.js";
+import { pickColorTag } from "../engine/tagPalette.js";
 
 interface DrawerProps {
   memories: Memory[];
   visibleIds: Set<string>;
   filterActive: boolean;
+  /**
+   * v0.27 color-by-tag — when "tag" or "path", show a conditional "tag"
+   * column with the color-driving tag (non-color a11y channel for
+   * color-blind / keyboard-only users). Hidden in "layer" mode so no
+   * empty labelled column appears. Default "layer" preserves baseline.
+   */
+  colorMode?: ColorMode;
   open: boolean;
   onClose: () => void;
   onMemorySelect: (m: Memory) => void;
@@ -35,12 +43,14 @@ export function Drawer({
   memories,
   visibleIds,
   filterActive,
+  colorMode = "layer",
   open,
   onClose,
   onMemorySelect,
   selectedMemoryId,
   resetFilters,
 }: DrawerProps) {
+  const showTagColumn = colorMode === "tag" || colorMode === "path";
   const rows = useMemo(() => {
     return filterActive ? memories.filter((m) => visibleIds.has(m.id)) : memories;
   }, [memories, visibleIds, filterActive]);
@@ -203,6 +213,9 @@ export function Drawer({
                 <th style={thStyle} scope="col">id</th>
                 <th style={thStyle} scope="col">content</th>
                 <th style={{ ...thStyle, width: 60 }} scope="col">layer</th>
+                {showTagColumn && (
+                  <th style={{ ...thStyle, width: 80 }} scope="col">tag</th>
+                )}
                 <th style={{ ...thStyle, width: 70 }} scope="col">strength</th>
                 <th style={{ ...thStyle, width: 60 }} scope="col">age</th>
               </tr>
@@ -271,6 +284,18 @@ export function Drawer({
                         />
                       )}
                     </td>
+                    {showTagColumn && (() => {
+                      // code-review-critic R1 MED: compute pickColorTag once
+                      // per row instead of twice (cell text + title). Cheap
+                      // per call but adds up across 1373 rows.
+                      const tag = pickColorTag(m, colorMode as "tag" | "path") ?? "";
+                      return (
+                        <td style={{ ...tdStyle, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                            title={tag}>
+                          {tag}
+                        </td>
+                      );
+                    })()}
                     <td style={{ ...tdStyle, fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text)" }}>
                       {m.strength.toFixed(2)}
                     </td>

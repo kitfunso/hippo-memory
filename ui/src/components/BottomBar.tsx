@@ -11,11 +11,19 @@
  */
 
 import { LAYER_COLORS } from "../engine/types.js";
+import type { ColorMode } from "../state/filterState.js";
 
 interface BottomBarProps {
   drawerOpen: boolean;
   onToggleDrawer: () => void;
   visibleCount: number;
+  /**
+   * v0.27 color-by-tag — the active color mode. When != "layer", the
+   * affordance key appends ` · color: <mode>` so users see which channel
+   * is encoding their data right now. Default "layer" preserves the
+   * pre-v0.27 affordance key.
+   */
+  colorMode?: ColorMode;
 }
 
 function Kbd({ children }: { children: React.ReactNode }) {
@@ -43,7 +51,7 @@ const LAYERS: Array<{ key: keyof typeof LAYER_COLORS; label: string }> = [
   { key: "semantic", label: "semantic" },
 ];
 
-export function BottomBar({ drawerOpen, onToggleDrawer, visibleCount }: BottomBarProps) {
+export function BottomBar({ drawerOpen, onToggleDrawer, visibleCount, colorMode = "layer" }: BottomBarProps) {
   return (
     <div style={{
       position: "absolute",
@@ -128,7 +136,7 @@ export function BottomBar({ drawerOpen, onToggleDrawer, visibleCount }: BottomBa
         color: "var(--dim)",
         letterSpacing: "0.2px",
       }}>
-        size = retrievals · opacity = strength · lines = similarity
+        size = retrievals · opacity = strength · lines = similarity{colorMode !== "layer" ? ` · color = ${colorMode}` : ""}
       </div>
     </div>
   );

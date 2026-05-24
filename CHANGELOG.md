@@ -1,5 +1,75 @@
 # Changelog
 
+## ui-brain-observatory v0.2.1 (2026-05-24): color-by-tag (Obsidian-inspired graph upgrades, E1 of 4)
+
+Adds a "Color by" segmented radio to the Sidebar so users can recolor the
+3D memory graph by `tag` or project `path` instead of the default `layer`.
+Addresses the "everything looks the same" problem on the live fixture
+(1232 of 1373 memories are episodic, so layer-only mode reads as one blue
+blob). Tag dimension (156 unique tags) was sitting unused.
+
+E1 of 4 in the Obsidian-inspired graph upgrades stack (E2 real edges from
+parents/conflicts/shared-tags, E3 local graph view, E4 force-directed
+layout from real edges are queued).
+
+### What shipped
+
+- **3 view modes**: `layer` (default, unchanged), `tag` (top-10 non-path
+  tags + grey fallback), `path` (top-8 project paths + grey fallback).
+- **`ViewPanel` component** in the Sidebar above the Filters section.
+  Three-button segmented radio with full ARIA semantics (radiogroup,
+  role=radio, aria-checked, descriptive aria-labels).
+- **Stable per-tag palette**: FNV-1a hash with linear-probe collision
+  resolution into a 10-color (TAG) / 8-color (PATH) parchment-tuned
+  palette. Same tag → same color across sessions. All palette colors
+  verified >= 4.5:1 WCAG contrast vs `COLOR_MAP_BG` at test time.
+- **Engine wiring**: `BrainScene.setColorMode(mode, memories)` recolors
+  every node (sphere + halo material) in O(N) without rebuilding geometry
+  or tendrils. `populate()` re-applies the current mode at its tail so
+  memory refreshes never flash layer colors.
+- **A11y non-color channel**: `MemoryTooltip` surfaces `color: <tag>` in
+  tag/path modes; `Drawer` gains a conditional `tag` column (keyboard-
+  navigable rows from E5) so color-blind / keyboard-only users have an
+  equivalent channel.
+- **`BottomBar` affordance key** appends ` · color = <mode>` when non-layer
+  so the active encoding is always visible.
+- **`resetFilters` preserves `colorMode`** alongside `frozen` (view state,
+  not filter state).
+
+### Plan
+
+`docs/plans/2026-05-24-color-by-tag.md`: drafted v1 → v2 → v3 through
+three full `/dev-framework-rl` plan critic rounds (plan-eng + plan-design,
+final score 86 + 86). v3 dropped the proposed `confidence` mode after R2
+caught unavoidable palette-hex collisions with the tag palette; confidence
+remains a filter in the existing FilterPanel.
+
+### Tests
+
+- `tagPalette.test.ts`: palette engine determinism + top-N cap + include/
+  exclude prefix + linear-probe collision uniqueness + pickColorTag rule
+  (shortest tag wins, alpha tiebreak) + resolveColor dispatch + AC10
+  contrast assertions for both TAG_PALETTE and PATH_PALETTE.
+- `contrast.test.ts`: WCAG luminance + contrastRatio helpers.
+- `ViewPanel.test.tsx`: 3-button render + aria-checked + click handler
+  + radiogroup labelling.
+- `filterState.test.ts`: colorMode is NOT in isFilterActive; deriveVisibleIds
+  output is invariant under colorMode change.
+
+97/97 tests pass; vite build clean (60 modules, three chunk 510KB =
+baseline, no regression).
+
+### Out of scope (follow-ups)
+
+- E2 real edges from parents/conflicts/shared-tags
+- E3 local graph view (N-hop neighbourhood from selected)
+- E4 force-directed layout (replaces PCA proximity)
+- Confidence-by-color mode (needs separate hue family, deferred)
+- User-assignable per-tag colors (Obsidian color groups full parity)
+- `colorMode` persistence across sessions (localStorage)
+- `trace` layer color (Layer type doesn't include `trace`; 4 memories
+  affected; separate ticket)
+
 ## ui-brain-observatory v0.2.0 (2026-05-24): hybrid-v4 parchment revamp + a11y
 
 Final ship of the UI hybrid-v4 parchment revamp through 7 stacked PRs
