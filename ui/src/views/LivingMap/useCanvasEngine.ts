@@ -14,6 +14,8 @@ interface UseSceneOptions {
   searchQuery: string;
   /** E2: when true, calls scene.setReducedMotion(true) to halt animation. */
   frozen: boolean;
+  /** E3: filtered visible-id set from FilterPanel. Engine hides others. */
+  visibleIds: Set<string>;
 }
 
 export function useCanvasEngine({
@@ -26,6 +28,7 @@ export function useCanvasEngine({
   onClick,
   searchQuery,
   frozen,
+  visibleIds,
 }: UseSceneOptions) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<BrainScene | null>(null);
@@ -82,6 +85,15 @@ export function useCanvasEngine({
   useEffect(() => {
     sceneRef.current?.setReducedMotion(frozen);
   }, [frozen]);
+
+  // E3: drive scene filtered visibility from FilterPanel selections.
+  // visibleIds.size === memories.length means "no filter active" — pass an
+  // empty set so the engine restores full visibility (scene.setFiltered
+  // empty-set semantics).
+  useEffect(() => {
+    const filterActive = visibleIds.size > 0 && visibleIds.size < memories.length;
+    sceneRef.current?.setFiltered(filterActive ? visibleIds : new Set());
+  }, [visibleIds, memories.length]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     sceneRef.current?.handleMouseMove(e.nativeEvent);

@@ -12,7 +12,8 @@
 import type { Memory } from "../types.js";
 
 export type Layer = "buffer" | "episodic" | "semantic";
-export type Confidence = "verified" | "inferred" | "observed" | "tentative";
+// Matches Memory.confidence in ../types.ts
+export type Confidence = "verified" | "observed" | "inferred" | "stale";
 
 export interface FilterState {
   /** E2 — search input substring; matched against content + tags. */
