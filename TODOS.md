@@ -498,19 +498,34 @@ v0.39 could ship the CRITICAL cross-tenant fixes without scope creep.
   the same version, so the drift cannot recur. All five were synced to
   `1.10.1` in that release.
 
-- [ ] **Migration runner: wrap each migration in BEGIN/COMMIT to prevent
-  partial-apply.** Surfaced 2026-05-24 on Keith's `~/.hippo/hippo.db`. Schema
-  version was recorded as 25, but tables from migration v16 (`api_keys` +
-  `audit_log`) were missing — the v16 `ALTER TABLE` statements succeeded but
-  the `CREATE TABLE` statements somehow didn't, and `schema_version` was bumped
-  to 16 regardless. Every later migration ran on top of the partial state,
-  shipping it forward through v25. Symptom: every `hippo context` invocation
-  (the UserPromptSubmit hook) printed "no such table: api_keys" to stderr.
-  Fixed Keith's DB by manually creating the two tables (CREATE statements
-  lifted from `src/db.ts` v16 migration body — idempotent).
-  **Root-cause fix:** wrap every migration `up()` body in `BEGIN IMMEDIATE` /
-  `COMMIT` so a mid-migration failure rolls back ALL its statements AND the
-  `schema_version` bump together. Add a regression test that injects a
-  forced-fail mid-migration and asserts the DB returns to the prior version.
-  Audit existing migrations for non-idempotent statements that would fail on
-  re-run after this fix lands.
+- [x] **Migration v16 partial-apply self-heal.** SHIPPED v1.12.7 — migration
+  v27 re-asserts the v16 schema (`api_keys` + `audit_log` + indexes,
+  CREATE IF NOT EXISTS). Idempotent, zero cost for healthy DBs, fixes any
+  DB in the partial state on next open. v26's ALTER also got a
+  defensive `tableExists` guard so it can't crash on the partial state
+  before v27 can heal. 5 tests at `tests/db-migration-v27-self-heal.test.ts`.
+
+  **Correction to the original 2026-05-24 TODO entry** (which proposed
+  wrapping each migration in BEGIN/COMMIT as the root-cause fix): the
+  runner has ALWAYS wrapped each migration in BEGIN/COMMIT (since the
+  first SQLite commit `2cf72e7`). So atomicity was NOT the bug.
+  Possible causes of the observed partial state: (1) `DROP TABLE
+  api_keys` issued post-migration (operator action or external SQL),
+  (2) restore / import from a pre-v16 backup over a v16+
+  schema_version, (3) some edge case the wrapping doesn't catch. Cause
+  unknown without forensic logs. The v27 self-heal fixes the symptom
+  for all paths.
+
+- [ ] **Migration robustness: investigate why v16 partial-applied at all.**
+  The BEGIN/COMMIT wrapping is intact since `2cf72e7`. SQLite DDL inside
+  a transaction should be atomic. The partial state on Keith's
+  ~/.hippo/hippo.db suggests EITHER (a) the bug exists in some
+  SQLite/Node-SQLite edge case we don't understand, OR (b) the partial
+  state was induced post-migration (DROP TABLE / restore / import).
+  Defense-in-depth options if (a): add a post-migration validation
+  step that checks expected tables exist for the current
+  schema_version, log a warning + auto-heal if anything's missing.
+  This would catch future cases where someone drops a table or
+  restores from a stale backup. Low priority since v27 already
+  self-heals the known broken table-pair; revisit if a different
+  partial-apply surfaces.
