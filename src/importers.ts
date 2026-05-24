@@ -25,6 +25,13 @@ export interface ImportOptions {
   global?: boolean;
   extraTags?: string[];
   hippoRoot: string;
+  /**
+   * L9: tenant scope for the dedup read. When provided AND `global` is
+   * false, the dedup check only considers this tenant's existing entries.
+   * Ignored when `global: true` (global writes are host-wide by definition).
+   * Undefined preserves pre-1.12.1 host-wide dedup behaviour.
+   */
+  tenantId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -48,7 +55,10 @@ export function importEntries(
     initGlobal();
   }
 
-  const existing = loadAllEntries(targetRoot);
+  const existing = loadAllEntries(
+    targetRoot,
+    options.global ? undefined : options.tenantId,
+  );
   const allTags = [...new Set([...tags, ...(options.extraTags ?? [])])];
 
   let total = 0;
@@ -90,11 +100,18 @@ export function importEntries(
     // correct here. E1.3 (Slack ingestion) shipped 2026-04-29 in src/connectors/slack/
     // and sets kind: 'raw' + routes deletions through archiveRawMemory() — these
     // importers stay 'distilled' per the original reasoning. See MEMORY_ENVELOPE.md.
+    // L9: the dedup read above is scoped by options.tenantId — the WRITE
+    // must match, or scoped-dedup-passes-then-default-tenant-write breaks
+    // the per-tenant contract. Mirror the dedup-read guard: global=true
+    // → host-wide write to global store (tenantId irrelevant, createMemory
+    // defaults to 'default'). global=false → write to the same tenant as
+    // the dedup read.
     const entry = createMemory(chunk, {
       layer: Layer.Episodic,
       tags: allTags,
       source,
       confidence: 'observed',
+      tenantId: options.global ? undefined : options.tenantId,
     });
 
     entries.push(entry);

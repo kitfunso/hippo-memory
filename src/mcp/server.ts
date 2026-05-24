@@ -757,7 +757,7 @@ async function executeTool(
       let added = 0;
       let skipped = 0;
       for (const lesson of lessons) {
-        if (deduplicateLesson(hippoRoot, lesson)) { skipped++; continue; }
+        if (deduplicateLesson(hippoRoot, lesson, 0.7, tenantId)) { skipped++; continue; }
         const entry = createMemory(lesson, {
           layer: Layer.Episodic,
           tags: ['git-learned'],

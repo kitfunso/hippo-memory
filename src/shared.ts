@@ -307,6 +307,9 @@ export function listPeers(globalRoot?: string): Array<{ project: string; count: 
   const root = globalRoot ?? getGlobalRoot();
   if (!fs.existsSync(root)) return [];
 
+  // L9: host-wide aggregate. listPeers is a metadata function showing peer
+  // projects that have contributed to the global store; per-tenant filtering
+  // would be meaningless.
   const entries = loadAllEntries(root);
   const peerMap = new Map<string, { count: number; latest: string }>();
 
@@ -340,16 +343,26 @@ export function listPeers(globalRoot?: string): Array<{ project: string; count: 
 /**
  * Auto-share: find local memories with high transfer scores that aren't already global.
  * Returns the list of shared entries.
+ *
+ * L9: `options.tenantId` is opt-in. When provided, the LOCAL-entries read is
+ * scoped to that tenant. When undefined, the local read is host-wide (current
+ * behaviour). The GLOBAL-entries read is always unioned — the global root IS
+ * the cross-tenant aggregate by design. The only intentional unscoped
+ * internal caller as of v1.12.1 is `api.sleep` (`src/api.ts:2041`), which
+ * passes options without tenantId because `sleep` is host-wide by intent;
+ * see `src/api.ts:2073-2077` for the cross-tenant dedup rationale.
  */
 export function autoShare(
   localRoot: string,
-  options: { minScore?: number; dryRun?: boolean } = {}
+  options: { minScore?: number; dryRun?: boolean; tenantId?: string } = {},
 ): MemoryEntry[] {
   const { minScore = 0.6, dryRun = false } = options;
 
-  const localEntries = loadAllEntries(localRoot);
+  const localEntries = loadAllEntries(localRoot, options.tenantId);
   initGlobal();
   const globalRoot = getGlobalRoot();
+  // L9: host-wide read. The global store IS the union across all tenants;
+  // per-tenant filtering on the global root would defeat the purpose.
   const globalEntries = loadAllEntries(globalRoot);
 
   // Build set of global content hashes to avoid duplicates
@@ -387,6 +400,9 @@ export function autoShare(
 export function syncGlobalToLocal(localRoot: string, globalRoot: string): number {
   if (!fs.existsSync(globalRoot)) return 0;
 
+  // L9: host-wide read. syncGlobalToLocal copies the global union into a
+  // tenant-scoped local store; writeEntry on each row carries the tenant if
+  // the local-root context provides one.
   const globalEntries = loadAllEntries(globalRoot);
   const localIndex = loadIndex(localRoot);
   let count = 0;

@@ -38,9 +38,14 @@ All B-sized originally; bundle when needed.
 
 See `docs/evals/2026-05-20-f9-hybrid-rrf-result.md`. Phase 1 oracle: best `turn_asym` R@5=82.0 (+3.0 over dense-only 79.0). Phase 2 `_s` Gate-B FAIL @ 97.7 (best `turn_sym` R@5=50.8 vs F14 baseline 41.0, +9.8 lift at zero LLM cost; ties F14+F9-Sonnet stack). HARD RETRACTION executed on artifacts per prereg. `src/rrf.ts` shipped. Follow-up candidates: F9+F13-stacked rerank on oracle (~+3pp), per-type-routed ensemble (~+4-5pp), F17 once egress opens.
 
-### Conflict-subsystem tenant-isolation residue (~3d)
+### ~~Conflict-subsystem tenant-isolation residue~~ — SHIPPED v1.12.1 (2026-05-24) for the background-pipelines slice
 
-Audit and tenant-scope the unscoped `readEntry` / `loadSearchEntries` call sites in `cli.ts` / `dashboard.ts` / `refine-llm.ts`. Deferred from v1.11.0 because half-scoping without first scoping upstream `loadAllEntries(hippoRoot)` would silently drop parent text. Plus: `replaceDetectedConflicts` skips a stale pre-fix cross-tenant conflict row but never resolves it, so it lingers `status='open'` (inert but harder to audit). Auto-resolve such rows in the detector's resolve-stale loop so they self-heal.
+The 8-file background-pipelines slice shipped as v1.12.1 (A5 v2 sub-2 — `feat/v1.12.1-l9-tenant-scoping`). `tenantId?: string` plumbed as optional through `invalidateMatching`, `RefineOptions`, `deduplicateLesson`, `CaptureOptions`, `ImportOptions`, `autoShare` options bag. 6 host-wide reader sites (consolidate, embeddings×2, shared.ts×3) documented with L9 JSDoc as intentionally cross-tenant. 13-case test file `tests/l9-tenant-scoping.test.ts`. See CHANGELOG.md v1.12.1 entry.
+
+**Still deferred (not in the L9 brief):**
+- `cli.ts` / `dashboard.ts` unscoped reader sites — single-tenant-per-process trust holds until non-loopback serving lands.
+- `dedupe.ts` / `memory.ts` unscoped reader sites — separate audit pass.
+- `replaceDetectedConflicts` stale cross-tenant rows lingering `status='open'` — auto-resolve in the detector's resolve-stale loop so they self-heal.
 
 ### Python SDK v0.2 (~5d)
 

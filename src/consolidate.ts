@@ -103,6 +103,10 @@ export async function consolidate(
     physicsSimulated: 0,
   };
 
+  // L9: host-wide by design. Consolidation runs across all tenants in one
+  // pass — per-tenant filtering would create N consolidation runs per host
+  // with no cross-tenant dedup. The api.sleep audit row tags this with the
+  // admin synthetic actor; see api.ts:2050 for the rationale.
   const all = loadAllEntries(hippoRoot);
 
   // Load decay options from config + session context

@@ -85,14 +85,20 @@ export function extractLessons(gitLog: string, customPatterns?: string[]): strin
 /**
  * Check if a substantially similar memory already exists.
  * Returns true if overlap > threshold (default 0.7).
+ *
+ * L9: `tenantId` is opt-in. Only takes effect when the first argument is a
+ * root string (string-overload path). When the first argument is a
+ * pre-loaded MemoryEntry[], the caller has already scoped — tenantId is
+ * ignored on that path.
  */
 export function deduplicateLesson(
   hippoRootOrEntries: string | MemoryEntry[],
   lesson: string,
-  threshold = 0.7
+  threshold = 0.7,
+  tenantId?: string,
 ): boolean {
   const entries = typeof hippoRootOrEntries === 'string'
-    ? loadAllEntries(hippoRootOrEntries)
+    ? loadAllEntries(hippoRootOrEntries, tenantId)
     : hippoRootOrEntries;
 
   for (const entry of entries) {

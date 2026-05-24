@@ -238,6 +238,13 @@ export interface CaptureOptions {
   logFile?: string;
   dryRun: boolean;
   global: boolean;
+  /**
+   * L9: tenant scope for the dedup read in `cmdCaptureCore`. When provided
+   * AND `global` is false, the dedup check only considers this tenant's
+   * existing memories. Undefined preserves pre-1.12.1 host-wide dedup
+   * behaviour. Ignored when `global: true` (global captures are host-wide).
+   */
+  tenantId?: string;
 }
 
 /**
@@ -542,8 +549,13 @@ function cmdCaptureCore(
     return;
   }
 
-  // Load existing for dedup
-  const existing = loadAllEntries(targetRoot);
+  // Load existing for dedup. L9: when options.tenantId is set on a non-global
+  // capture, scope the dedup read so tenant A's captures don't get suppressed
+  // by tenant B's existing content. Undefined preserves host-wide behaviour.
+  const existing = loadAllEntries(
+    targetRoot,
+    useGlobal ? undefined : options.tenantId,
+  );
 
   let captured = 0;
   let skipped = 0;
@@ -564,11 +576,18 @@ function cmdCaptureCore(
       // session output (not raw transcript chunks), so distilled is correct. If a
       // future variant captures full raw session text, it MUST set kind: 'raw'
       // and route deletions through archiveRawMemory(). See MEMORY_ENVELOPE.md.
+      // L9: the dedup read above is scoped by options.tenantId — the WRITE
+      // must match, or scoped-dedup-passes-then-default-tenant-write breaks
+      // the per-tenant contract. Mirror the dedup-read guard: when
+      // global: true, the global store is host-wide and tenant is irrelevant
+      // (createMemory's default 'default' applies). When global: false,
+      // options.tenantId scopes the write to the same tenant as the dedup.
       const entry = createMemory(item.content, {
         layer: Layer.Episodic,
         tags: item.tags,
         source: 'capture',
         confidence: 'observed',
+        tenantId: useGlobal ? undefined : options.tenantId,
       });
 
       writeEntry(targetRoot, entry);
