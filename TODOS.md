@@ -185,10 +185,7 @@ by post-review fixes 2db5017..38339f4). Each item belongs in **A5 v2**
   full A5 multi-tenant story needs a real authn boundary (operator API key
   or admin session) plus audit events on `auth_create` / `auth_list`.
 
-- [ ] **M6 — Audit log unbounded growth.** No retention or rotation policy.
-  Add a daily `audit prune` cron + `hippo audit prune --older-than 90d` CLI
-  in v2. Mind regulatory retention floors (HIPAA, SOX, GDPR) — the prune
-  should be opt-in per tenant and emit its own audit trail event.
+- [x] **M6 — Audit log unbounded growth.** SHIPPED v1.12.9 — `hippo audit prune --older-than <Nd> [--dry-run] [--tenant <t>] [--json]`. Per-tenant by default (matches audit CLI conventions). Emits an `audit_prune` event with metadata `{cutoff, count, dryRun, olderThanDays}` after each prune so the maintenance op is itself recorded in the audit trail (regulatory floor friendly). `src/audit-prune.ts` with 23 unit + 8 CLI tests. Daily cron deferred — operators can wrap the CLI in cron/systemd/scheduler of their choice.
 
 - [ ] **M7 — `validateApiKey` timing on unknown key_id.** Constant-time scrypt
   comparison only fires when the row exists; an unknown `key_id` short-circuits

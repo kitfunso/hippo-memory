@@ -1,5 +1,54 @@
 # Changelog
 
+## 1.12.9 (2026-05-24): `hippo audit prune --older-than` operator hygiene
+
+Closes A5 v2 M6 from `TODOS.md`: "Audit log unbounded growth." The
+`audit_log` table grows by one row per recall/write/outcome/sleep/
+supersede/promote/forget/archive_raw/auth_revoke/auth_create call. On a
+long-running deployment this accumulates to millions of rows. Keith's
+own DB has `total_recalled: 17256` — every one of those left an audit
+row.
+
+### Shipped
+- **`hippo audit prune --older-than <Nd> [--dry-run] [--tenant <t>]`**
+  CLI. Accepts both plain integer days (`30`) and `d`-suffixed form
+  (`30d`). Per-tenant by default (matches existing audit CLI
+  conventions). `--dry-run` shows count without deleting (operator
+  safety). `--json` for scripted callers.
+- **`src/audit-prune.ts`** — `pruneAuditLog(db, opts)` helper +
+  `parseOlderThanFlag()` + `computeCutoff()`. DELETE wrapped in
+  BEGIN/COMMIT so a crash leaves audit_log consistent. The prune itself
+  emits an `audit_prune` event with metadata
+  `{cutoff, count, dryRun, olderThanDays}` so the maintenance op is
+  itself recorded in the audit trail (regulatory floor friendly: even
+  after pruning 90+ day rows, there's one audit_prune row left to find).
+- **`audit_prune` added to AuditOp**. All 3 parallel allow-lists synced:
+  `src/audit.ts` type union, `src/cli.ts` `VALID_AUDIT_OPS`,
+  `src/server.ts` `VALID_AUDIT_OPS`. Per the new SKILL §3b
+  parallel-allow-list audit step.
+
+### Tests
+- 23 unit cases in `tests/audit-prune.test.ts`: parseOlderThanFlag
+  (12 cases), computeCutoff (2), pruneAuditLog (9 — delete + preserve,
+  per-tenant isolation, dry-run, audit_prune metadata, zero-count
+  prune, invalid input rejection, the audit_prune row not pruning
+  itself).
+- 8 CLI integration cases in `tests/audit-prune-cli.test.ts`: prune
+  + report count, --dry-run, --json output, plain integer days,
+  --tenant scope, missing --older-than, invalid --older-than, --help.
+
+### Full suite
+1829 passed / 4 skipped / 0 failed across 251 files.
+
+### Notes
+- Regulatory floor friendly: every prune emits an `audit_prune` row in
+  the audit trail with cutoff + count, so the maintenance op itself is
+  recorded.
+- No schema change; `audit_log` table has existed since v16.
+- No HTTP route — audit prune is an operator-CLI concern (matches the
+  existing `audit list` shape).
+- 13th ship of the 2026-05-24 session arc.
+
 ## 1.12.8 (2026-05-24): multi-workspace tenant-routing e2e coverage
 
 Closes a coherent test story after this week's Slack multi-workspace

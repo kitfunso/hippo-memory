@@ -79,6 +79,7 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'auth_create', // v1.12.4: emitted by api.authCreate
   'outcome',     // v1.11.5: pre-existing drift — emitted today but rejected by old Set
   'consolidate', // v1.11.5: emitted by api.sleep / POST /v1/sleep
+  'audit_prune', // v1.12.9: emitted by pruneAuditLog
 ]);
 
 // Cap on GET /v1/audit?limit=. Matches docs/api.md (when written) and is large
