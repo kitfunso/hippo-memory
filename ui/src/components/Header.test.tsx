@@ -28,6 +28,7 @@ function renderHeader(overrides: {
       matchCount={overrides.matchCount ?? null}
       stats={null}
       filterState={filterState}
+      frozenOrigin={null}
       setQuery={setQuery}
       setFrozen={setFrozen}
     />,
@@ -89,6 +90,7 @@ describe("Header (E2)", () => {
         matchCount={null}
         stats={null}
         filterState={INITIAL_FILTER_STATE}
+        frozenOrigin={null}
         setQuery={vi.fn()}
         setFrozen={setFrozen}
       />,
@@ -108,6 +110,7 @@ describe("Header (E2)", () => {
         matchCount={null}
         stats={null}
         filterState={{ ...INITIAL_FILTER_STATE, frozen: true }}
+        frozenOrigin={null}
         setQuery={vi.fn()}
         setFrozen={setFrozen}
       />,
