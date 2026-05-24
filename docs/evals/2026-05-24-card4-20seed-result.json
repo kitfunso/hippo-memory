@@ -1,0 +1,68 @@
+{
+  "card": 4,
+  "run_date": "2026-05-24",
+  "config": {
+    "adapter": "hippo",
+    "restrict_late_to": 4,
+    "n_seeds": 20,
+    "seed_range": "1000..1019",
+    "seed_derivation": "hash-derived via Math.imul(0x9E3779B9, (1000+i) >>> 0) >>> 0 (run.mjs deriveSeedList, --n-seeds 20 path)",
+    "use_goal_stack": false,
+    "budget": 2000,
+    "benchmark_version": "1.7.7",
+    "hippo_cli_version": "1.12.10",
+    "command": "node benchmarks/sequential-learning/run.mjs --adapter hippo --n-seeds 20 --restrict-late-to 4 --output /c/Users/skf_s/hippo/tmp-card4-20seed"
+  },
+  "per_seed": [
+    {"seed": 145980072,  "base_index": 1000, "phases_late": 0.25, "non_zero": true},
+    {"seed": 2800415841, "base_index": 1001, "phases_late": 0.25, "non_zero": true},
+    {"seed": 1159884314, "base_index": 1002, "phases_late": 0.25, "non_zero": true},
+    {"seed": 3814320083, "base_index": 1003, "phases_late": 0.25, "non_zero": true},
+    {"seed": 2173788556, "base_index": 1004, "phases_late": 0.25, "non_zero": true},
+    {"seed": 533257029,  "base_index": 1005, "phases_late": 0.25, "non_zero": true},
+    {"seed": 3187692798, "base_index": 1006, "phases_late": 0.25, "non_zero": true},
+    {"seed": 1547161271, "base_index": 1007, "phases_late": 0.25, "non_zero": true},
+    {"seed": 4201597040, "base_index": 1008, "phases_late": 0.25, "non_zero": true},
+    {"seed": 2561065513, "base_index": 1009, "phases_late": 0.25, "non_zero": true},
+    {"seed": 920533986,  "base_index": 1010, "phases_late": 0.25, "non_zero": true},
+    {"seed": 3574969755, "base_index": 1011, "phases_late": 0.25, "non_zero": true},
+    {"seed": 1934438228, "base_index": 1012, "phases_late": 0.25, "non_zero": true},
+    {"seed": 293906701,  "base_index": 1013, "phases_late": 0.25, "non_zero": true},
+    {"seed": 2948342470, "base_index": 1014, "phases_late": 0.25, "non_zero": true},
+    {"seed": 1307810943, "base_index": 1015, "phases_late": 0.25, "non_zero": true},
+    {"seed": 3962246712, "base_index": 1016, "phases_late": 0.25, "non_zero": true},
+    {"seed": 2321715185, "base_index": 1017, "phases_late": 0.25, "non_zero": true},
+    {"seed": 681183658,  "base_index": 1018, "phases_late": 0.25, "non_zero": true},
+    {"seed": 3335619427, "base_index": 1019, "phases_late": 0.25, "non_zero": true}
+  ],
+  "aggregate": {
+    "lateMean": 0.25,
+    "lateStd": 0.0,
+    "lateCi95": 0.0,
+    "n_non_zero": 20,
+    "n_seeds": 20,
+    "early_mean": 0.7678571428571430,
+    "early_std": 0.03173297559423708,
+    "mid_mean": 0.0923076923076923,
+    "mid_std": 0.0315685646795432,
+    "overall_trap_hit_rate_mean": 0.42
+  },
+  "gate_result": {
+    "lateMean_gte_0.20": true,
+    "all_seeds_non_zero": true,
+    "PASS": true
+  },
+  "hook_failures": {
+    "push": 0,
+    "complete": 0
+  },
+  "wallclock": {
+    "start": "2026-05-24T17:35:53+01:00",
+    "end": "2026-05-24T17:43:38+01:00",
+    "elapsed_seconds": 464.8,
+    "elapsed_human": "7m44s"
+  },
+  "raw_artifact": "C:/Users/skf_s/hippo/tmp-card4-20seed/latest.json (also benchmark-1779641018677.json)",
+  "stdout_log": "C:/Users/skf_s/hippo/tmp-card4-20seed/stdout.log",
+  "notes": "All 20 seeds returned phases.late=0.25 exactly. lateStd=0 reflects structural determinism of the workload under restrict_late_to=4 (matches v1.8 baseline + 3-seed dry-run pattern). early/mid vary by seed (early 0.71-0.79, mid 0.08-0.15) because the slot-assignment changes which categories land where. Late slice covers the same final 4 trap encounters across seeds, all of which produce trap hits for hippo-base condition. Hook failures 0/0 as expected (no --use-goal-stack flag; C2 baseline). Result consistent with 2026-05-24 3-seed dry-run report and v1.8 baseline."
+}

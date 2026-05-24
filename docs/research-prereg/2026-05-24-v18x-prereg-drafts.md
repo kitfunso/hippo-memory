@@ -20,7 +20,16 @@ deferred indefinitely stay as DRAFT.
 
 ## Card 1 — vlPFC interference suppression (v1.8.x)
 
-**Status:** DRAFT (v1.8.1 discipline-rule unmet on both (a) and (b)).
+**Status:** DRAFT — **(a) source-read NOW POSSIBLE** against the
+`--filter-conflicts` flag shipped in 4 active worktrees
+(agent-a43dd0244fb8b9e82, agent-a7dd0d244fb8b9e82, agent-ad0fe6099e1d6306e,
+agent-ae4d6aee9b688b63f) under commits `0f1d19e` ("feat(recall): vlPFC
+interference filter via --filter-conflicts"). (b) 1-question dry-run still
+TODO. Worktree discovery: 2026-05-24 by Claude during Card-recommendation
+pass triggered by the UI revamp ask. Implication: my prior recommendation
+to "defer Card 1 until (a) and (b) clear" was based on stale state and is
+revised to "execute (a) source-read against the shipped flag, then (b)
+dry-run, then lock decision."
 
 **Mechanism claim.** Adding vlPFC-style interference suppression (a
 companion to the v1.7.4 dlPFC goal-stack push/pop) should improve
@@ -80,7 +89,14 @@ all? If NO → mechanism does not FIRE; do not lock pre-reg.
 
 ## Card 2 — C3 Pineal ambient state vector (research track)
 
-**Status:** DRAFT (v1.8.1 discipline-rule unmet on both (a) and (b)).
+**Status:** DRAFT — **(a) source-read NOW POSSIBLE** against the
+`--salience-threshold` flag shipped in worktree agent-a8dfaa645721500d6
+under commit `feaa154` ("feat(recall): pineal salience MVP via
+--salience-threshold"). (b) 1-question dry-run still TODO. Same
+worktree-discovery context as Card 1. Implication: my prior recommendation
+to "keep DRAFT indefinitely / move to v1.10.x" was based on stale state
+and is revised to "execute (a) source-read against the shipped flag, then
+(b) dry-run, then lock decision."
 
 **Mechanism claim.** A "Pineal" ambient state vector that scores
 incoming recall queries against a slowly-drifting ambient embedding (vs
@@ -148,11 +164,28 @@ it doesn't, today's `dict[str, Any]` is fine for single-machine users.
 
 ## Card 4 — Sequential-learning adapter contract eval (re-run)
 
-**Status:** DRAFT — (a) source-read PASS + (b) dry-run PASS. **Pre-reg lock
-unblocked, pending Keith's signoff.** See
-`docs/evals/2026-05-24-card4-dryrun.md` for the full report (including the
-2026-05-24 13:50 retraction of the earlier "regression" claim — apples-to-
-oranges error on `--restrict-late-to` flag).
+**Status:** DRAFT — **(a) source-read PASS + (b) 20-seed confirmation PASS**.
+20-seed run completed 2026-05-24 17:43, 7m44s wallclock:
+- lateMean = 0.25 exactly (lateStd = 0)
+- n_non_zero = 20/20 seeds
+- both pre-reg gate clauses met
+- hook failures 0/0
+- result: `docs/evals/2026-05-24-card4-20seed-result.json`
+
+**PREREG-LOCK 2026-05-24** — Keith signed off on the lock at ~18:00 BST after
+the 20-seed PASS report. The pre-reg gates below are now binding; any future
+C3-vs-C2 comparison failing them triggers RETRACT per v1.8.1 discipline. The
+structural determinism (lateStd=0) means n_non_zero=20/20 is structurally
+guaranteed once any one seed returns non-zero — worth knowing because the
+gate is effectively a "does it FIRE" check, not a statistical one under this
+workload + adapter configuration. See `docs/evals/2026-05-24-card4-dryrun.md`
+for the full pre-lock report (including the 2026-05-24 13:50 retraction of
+the earlier "regression" claim — apples-to-oranges error on
+`--restrict-late-to` flag).
+
+**Risk acknowledged:** a 4th retraction (if the eventual C3 vs C2 comparison
+fails the gates above) freezes the goal-stack mechanism family per v1.8.1
+discipline. Keith priced this in at lock time.
 
 **v1.8 baseline reproduced.** Master v1.12.6 with `--restrict-late-to 4`
 produces lateMean=0.25 across all 3 seeds — identical to v1.8 baseline.
@@ -231,7 +264,7 @@ high (4th in family freezes the line), so (b)'s dry-run is critical.
 
 For each card:
 
-- Card 1 (vlPFC): [ ] LOCK → execute (a) source-read + (b) dry-run, return for lock | [ ] REJECT → reason: ___ | [x] DRAFT (default)
-- Card 2 (Pineal): [ ] LOCK | [ ] REJECT → reason: ___ | [x] DRAFT (default — research seedling, not pre-reg ready)
-- Card 3 (E2 decision/handoff): [ ] PROMOTE to `/plan-eng-review` track | [ ] REJECT → reason: ___ | [x] DRAFT (parked behind D3)
-- Card 4 (sequential-learning re-run): [ ] LOCK → execute (a) source-read + (b) dry-run, return for lock | [ ] REJECT → reason: ___ | [x] DRAFT (default)
+- Card 1 (vlPFC): [ ] LOCK → execute (a) source-read + (b) dry-run, return for lock | [ ] REJECT → reason: ___ | [x] DRAFT (worktree discovery: code SHIPPED, source-read now possible)
+- Card 2 (Pineal): [ ] LOCK | [ ] REJECT → reason: ___ | [x] DRAFT (worktree discovery: code SHIPPED in agent-a8d, source-read now possible)
+- Card 3 (E2 decision/handoff): [x] PROMOTE to `/plan-eng-review` track (D-batch shipped in v1.12.10; SDK contract changes now higher-leverage)
+- Card 4 (sequential-learning re-run): [x] **LOCK 2026-05-24** ← 20-seed PASS (lateMean=0.25, 20/20 non-zero); Keith signed off ~18:00 BST | [ ] REJECT | [ ] DRAFT
