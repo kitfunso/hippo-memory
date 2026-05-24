@@ -256,3 +256,28 @@ describe("deriveVisibleIds + fadingOnly (v0.26.1)", () => {
     expect(ids(deriveVisibleIds(FADING_FIXTURE, INITIAL_FILTER_STATE))).toHaveLength(5);
   });
 });
+
+// v0.27 — colorMode is VIEW state, not a filter. Plan v3 S1.
+describe("colorMode + isFilterActive (v0.27)", () => {
+  it("INITIAL state has colorMode = 'layer'", () => {
+    expect(INITIAL_FILTER_STATE.colorMode).toBe("layer");
+  });
+
+  it("isFilterActive returns false when only colorMode changes from 'layer'", () => {
+    const state: FilterState = { ...INITIAL_FILTER_STATE, colorMode: "tag" };
+    expect(isFilterActive(state)).toBe(false);
+  });
+
+  it("isFilterActive remains true when other filters are set alongside colorMode", () => {
+    const state: FilterState = { ...INITIAL_FILTER_STATE, colorMode: "path", query: "alpha" };
+    expect(isFilterActive(state)).toBe(true);
+  });
+
+  it("colorMode does NOT change deriveVisibleIds output", () => {
+    const a = ids(deriveVisibleIds(FIXTURE, { ...INITIAL_FILTER_STATE, colorMode: "layer" }));
+    const b = ids(deriveVisibleIds(FIXTURE, { ...INITIAL_FILTER_STATE, colorMode: "tag" }));
+    const c = ids(deriveVisibleIds(FIXTURE, { ...INITIAL_FILTER_STATE, colorMode: "path" }));
+    expect(a).toEqual(b);
+    expect(b).toEqual(c);
+  });
+});

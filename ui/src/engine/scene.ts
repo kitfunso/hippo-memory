@@ -13,7 +13,8 @@ import {
   COLOR_GRID_HEX,
   COLOR_CONFLICT_HEX,
 } from "../tokens.js";
-import { isFading } from "../state/filterState.js";
+import { isFading, type ColorMode } from "../state/filterState.js";
+import { buildPalette, resolveColor, TAG_PALETTE, PATH_PALETTE } from "./tagPalette.js";
 
 const SPREAD = 20;
 const LAYER_Y_OFFSET: Record<string, number> = { buffer: 6, episodic: 0, semantic: -6 };
@@ -70,6 +71,15 @@ export class BrainScene {
   private paused = false;
   /** E1.5: per-frame render callbacks for screen-space label overlay (E4). */
   private onRenderCbs: Array<(camera: THREE.PerspectiveCamera, scene: THREE.Scene) => void> = [];
+  /**
+   * v0.27 color-by-tag — current view mode + per-mode palette caches.
+   * Defaults to "layer" so pre-v0.27 render path is back-compat.
+   * Palettes are rebuilt by setColorMode() when memories change or the
+   * mode switches.
+   */
+  private currentColorMode: ColorMode = "layer";
+  private tagPalette: Map<string, string> = new Map();
+  private pathPalette: Map<string, string> = new Map();
 
   constructor(private container: HTMLDivElement) {
     this.initRenderer();
@@ -296,6 +306,50 @@ export class BrainScene {
 
     this.buildTendrils();
     this.buildConflictLines(conflicts);
+
+    // v0.27 color-by-tag: re-apply the current colorMode at populate tail.
+    // Single source of truth for the populate-vs-setColorMode race fix
+    // (plan-eng-critic R2 HIGH #5): when memories refresh and rebuild nodes
+    // via populate(), the current view mode is automatically re-applied so
+    // the user doesn't see a layer-color flash if they're in tag/path mode.
+    this.setColorMode(this.currentColorMode, memories);
+  }
+
+  /**
+   * v0.27 color-by-tag — recompute material color for every node in O(N)
+   * without rebuilding geometry or tendrils.
+   *
+   * Performance: ~1373 calls to material.color.set() targeted under 10ms
+   * on the live fixture. Tendril color rebuild is SKIPPED — tendrils
+   * represent spatial proximity (layer-agnostic), AND scene.ts's n>500
+   * early bail in buildTendrils means tendrils are not drawn on the live
+   * fixture anyway. Plan v3 S3 + AC3.
+   */
+  setColorMode(mode: ColorMode, memories: readonly Memory[]): void {
+    if (mode === "tag") {
+      this.tagPalette = buildPalette(memories, {
+        excludePrefix: "path:",
+        topN: 10,
+        palette: TAG_PALETTE,
+      });
+    }
+    if (mode === "path") {
+      this.pathPalette = buildPalette(memories, {
+        includePrefix: "path:",
+        topN: 8,
+        palette: PATH_PALETTE,
+      });
+    }
+    this.currentColorMode = mode;
+    for (const node of this.nodes) {
+      const hex = resolveColor(node.memory, mode, this.tagPalette, this.pathPalette);
+      const color = hexToColor(hex);
+      (node.mesh.material as THREE.MeshStandardMaterial).color.copy(color);
+      // Halo material is independent — keep it tracking the node color too
+      // so selection/hover halo reads correctly under the new mode.
+      (node.halo.material as THREE.MeshBasicMaterial).color.copy(color);
+      // Tendrils intentionally NOT updated. See class-level comment.
+    }
   }
 
   private buildTendrils(): void {

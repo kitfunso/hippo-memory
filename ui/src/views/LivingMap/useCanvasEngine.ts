@@ -2,6 +2,7 @@ import { useRef, useEffect, useCallback } from "react";
 import type { Memory, Conflict, EmbeddingIndex } from "../../types.js";
 import { BrainScene } from "../../engine/scene.js";
 import { projectTo3D } from "../../engine/projection.js";
+import type { ColorMode } from "../../state/filterState.js";
 
 interface UseSceneOptions {
   memories: Memory[];
@@ -23,6 +24,14 @@ interface UseSceneOptions {
    * visibleIds is empty, scene receives empty visible set = hide all.
    */
   filterActive: boolean;
+  /**
+   * v0.27 — color mode for node rendering. Threaded through to
+   * scene.setColorMode(). populate() also re-applies the current mode at
+   * its tail, so this effect is mostly redundant on memory refresh — it
+   * remains for the case where ONLY colorMode changes (user clicks the
+   * ViewPanel radio).
+   */
+  colorMode: ColorMode;
   /** E4 marquee: callback fires when the scene is constructed (and again
    * with null on unmount). LabelOverlay subscribes via this. */
   onSceneReady?: (scene: BrainScene | null) => void;
@@ -40,6 +49,7 @@ export function useCanvasEngine({
   frozen,
   visibleIds,
   filterActive,
+  colorMode,
   onSceneReady,
 }: UseSceneOptions) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -127,6 +137,18 @@ export function useCanvasEngine({
   useEffect(() => {
     sceneRef.current?.setFiltered(visibleIds, filterActive);
   }, [visibleIds, filterActive]);
+
+  // v0.27 color-by-tag: drive scene.setColorMode from filterState.colorMode.
+  // populate() also re-applies the current mode at its tail (single source
+  // of truth for the populate-vs-setColorMode race fix), so this effect
+  // handles ONLY pure mode-change events (user toggles ViewPanel radio).
+  // Memory refreshes go through populate's tail call — no need to listen on
+  // `memories` here too (code-review-critic R1 LOW: removes a redundant
+  // setColorMode call per memory refresh).
+  useEffect(() => {
+    sceneRef.current?.setColorMode(colorMode, memories);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colorMode]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     sceneRef.current?.handleMouseMove(e.nativeEvent);

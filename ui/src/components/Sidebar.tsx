@@ -5,10 +5,11 @@
  */
 
 import type { Memory, Stats } from "../types.js";
-import type { FilterState, Layer, Confidence } from "../state/filterState.js";
+import type { FilterState, Layer, Confidence, ColorMode } from "../state/filterState.js";
 import { StatsPanel } from "./StatsPanel.js";
 import { FilterPanel } from "./FilterPanel.js";
 import { TagCloud } from "./TagCloud.js";
+import { ViewPanel } from "./ViewPanel.js";
 
 interface SidebarProps {
   memories: Memory[];
@@ -23,6 +24,8 @@ interface SidebarProps {
   setConfidences: (confidences: Set<Confidence>) => void;
   setAgeMaxDays: (days: number | null) => void;
   setFadingOnly: (v: boolean) => void;
+  /** v0.27 color-by-tag — drives ViewPanel segmented radio. */
+  setColorMode: (mode: ColorMode) => void;
   /** P4: reset all filters back to INITIAL_FILTER_STATE (keeping frozen flag). */
   resetFilters: () => void;
 }
@@ -40,6 +43,7 @@ export function Sidebar({
   setConfidences,
   setAgeMaxDays,
   setFadingOnly,
+  setColorMode,
   resetFilters,
 }: SidebarProps) {
   // Code-review-critic HIGH #1 fix: when filter is active and matches zero,
@@ -91,6 +95,11 @@ export function Sidebar({
           </div>
         )}
       </div>
+
+      {/* v0.27 — ViewPanel sits between "Selected memory" and "Filters"
+          (plan-design-critic R2 must-fix #3: literal "above the Filters
+          header"). Renders the "Color by" segmented radio. */}
+      <ViewPanel filterState={filterState} setColorMode={setColorMode} />
 
       {/* P4 reset button row */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, paddingBottom: 6, borderBottom: "1px solid var(--glass-border)" }}>
