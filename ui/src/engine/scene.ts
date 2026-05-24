@@ -522,11 +522,18 @@ export class BrainScene {
 
   /**
    * Toggle node visibility based on a filter set. Used by E3's FilterPanel.
-   * Layout is NOT re-run; filtered nodes are hidden in place. To restore
-   * full visibility, pass an empty set.
+   * Layout is NOT re-run; filtered nodes are hidden in place.
+   *
+   * **filterActive disambiguates** (round-2 code-review-critic HIGH #1):
+   *   - filterActive=false → no filter; show all (visibleIds ignored).
+   *   - filterActive=true + empty set → filter matched zero; hide all.
+   *   - filterActive=true + populated set → show only ids in set.
+   *
+   * The old `size > 0` gate collapsed cases 1 and 2 into the same behavior
+   * (show all), creating a silent UI/engine state divergence when filters
+   * matched zero rows.
    */
-  setFiltered(visibleIds: Set<string>): void {
-    const filterActive = visibleIds.size > 0;
+  setFiltered(visibleIds: Set<string>, filterActive: boolean): void {
     for (const node of this.nodes) {
       const visible = !filterActive || visibleIds.has(node.id);
       node.mesh.visible = visible;

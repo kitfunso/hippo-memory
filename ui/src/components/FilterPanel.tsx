@@ -191,16 +191,7 @@ export function FilterPanel({ filterState, setLayers, setStrengthRange, setConfi
   );
 }
 
-const panelTitle = {
-  fontSize: 11,
-  fontVariant: "small-caps" as const,
-  letterSpacing: "1px",
-  fontWeight: 400,
-  color: "var(--dim)",
-  marginBottom: 10,
-  paddingBottom: 6,
-  borderBottom: "1px solid var(--glass-border)",
-};
+// (panelTitle removed - Sidebar.tsx now owns the panel header.)
 
 const filterGroup = {
   marginBottom: 14,

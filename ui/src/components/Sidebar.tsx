@@ -5,7 +5,7 @@
  */
 
 import type { Memory, Stats } from "../types.js";
-import { INITIAL_FILTER_STATE, type FilterState, type Layer, type Confidence } from "../state/filterState.js";
+import type { FilterState, Layer, Confidence } from "../state/filterState.js";
 import { StatsPanel } from "./StatsPanel.js";
 import { FilterPanel } from "./FilterPanel.js";
 import { TagCloud } from "./TagCloud.js";
