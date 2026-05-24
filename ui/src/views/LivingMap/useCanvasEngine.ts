@@ -79,9 +79,26 @@ export function useCanvasEngine({
     scene.populate(memories, positions, conflicts);
   }, [memories, embeddings, conflicts]);
 
+  // Round-2 code-review-critic HIGH: observe the actual canvas container
+  // (which lives inside the map-frame post-E4), not the outer wrapper. The
+  // wrapper-based prop sizing overflowed by ~24px on all sides + 48 top
+  // + 36 bottom, giving the camera the wrong aspect ratio.
   useEffect(() => {
-    sceneRef.current?.resize(width, height);
-  }, [width, height]);
+    const el = containerRef.current;
+    if (!el) return;
+    const apply = () => {
+      const w = Math.floor(el.clientWidth);
+      const h = Math.floor(el.clientHeight);
+      if (w > 0 && h > 0) sceneRef.current?.resize(w, h);
+    };
+    apply();
+    const observer = new ResizeObserver(apply);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  // The width/height props are now ignored (kept for backward-compat with
+  // existing callers; can be deprecated in a follow-up).
+  void width; void height;
 
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -103,11 +120,12 @@ export function useCanvasEngine({
     sceneRef.current?.setReducedMotion(frozen);
   }, [frozen]);
 
-  // E3 + code-review-critic HIGH #1 fix: distinguish "no filter active"
-  // from "filter matches zero rows". When filterActive is false, restore
-  // full visibility. When true, honor visibleIds even if empty (hides all).
+  // E3 + code-review-critic HIGH #1 fix (round 2): pass filterActive through
+  // to the engine so scene/canvas honors the same "filter matched zero"
+  // state the React UI shows. Round-1 fix was incomplete — the React layer
+  // disambiguated but scene.setFiltered re-coalesced via its own size gate.
   useEffect(() => {
-    sceneRef.current?.setFiltered(filterActive ? visibleIds : new Set());
+    sceneRef.current?.setFiltered(visibleIds, filterActive);
   }, [visibleIds, filterActive]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {

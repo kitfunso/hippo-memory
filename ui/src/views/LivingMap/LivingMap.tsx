@@ -193,23 +193,9 @@ export function LivingMap({
         <div ref={containerRef} onMouseMove={handleMouseMove} onClick={handleClick}
           style={{ position: "absolute", inset: 0 }} />
 
-        {/* Persistent map-hint footer per mockup line 62-65. Not auto-hidden
-            because the kbd shortcut model is genuinely undiscoverable
-            without it. */}
-        <div style={{
-          position: "absolute",
-          bottom: 12,
-          left: "50%",
-          transform: "translateX(-50%)",
-          fontFamily: "var(--font-mono)",
-          fontSize: 10,
-          color: "var(--text-faint)",
-          opacity: 0.6,
-          pointerEvents: "none",
-          letterSpacing: "2px",
-        }}>
-          drag · zoom · click · f to freeze · / to search
-        </div>
+        {/* In-map hint dropped (round-2 design-critic MED #8): BottomBar
+            already shows the kbd shortcuts; duplicating them in the map
+            footer crowds the canvas. */}
       </div>
 
       <Header
@@ -224,7 +210,8 @@ export function LivingMap({
       {/* P3 marquee feature: per-frame HTML node-label overlay. */}
       <LabelOverlay
         memories={memories}
-        visibleIds={filterActive ? visibleIds : new Set()}
+        visibleIds={visibleIds}
+        filterActive={filterActive}
         scene={sceneInstance}
       />
 

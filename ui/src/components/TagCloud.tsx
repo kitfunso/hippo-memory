@@ -61,9 +61,13 @@ export function TagCloud({ memories, visibleIds, onTagClick, topN = 30 }: TagClo
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
         {top.map(([tag, count]) => {
-          // Scale font size 10-13 based on frequency for "cloud" feel.
-          const weight = count / maxCount;
-          const fontSize = 10 + weight * 3;
+          // Round-2 design-critic MED: scale chip font + opacity by log of
+          // count so high-count tags read as prominent and 1-count tags fade.
+          const logRatio = Math.log2(count + 1) / Math.log2(maxCount + 1);
+          const fontSize = 9 + logRatio * 5; // 9..14
+          const opacity = 0.55 + logRatio * 0.45; // 0.55..1.0
+          // Demote path:* tags — they're routing artifacts, not topic tags.
+          const isPath = tag.startsWith("path:");
           return (
             <button
               key={tag}
@@ -81,11 +85,13 @@ export function TagCloud({ memories, visibleIds, onTagClick, topN = 30 }: TagClo
                 fontFamily: "var(--font-mono)",
                 letterSpacing: "0.2px",
                 cursor: "pointer",
-                transition: "background 150ms ease, border-color 150ms ease",
+                transition: "background 150ms ease, border-color 150ms ease, opacity 150ms ease",
+                opacity: isPath ? opacity * 0.6 : opacity,
+                fontStyle: isPath ? "italic" : "normal",
               }}
             >
               {tag}
-              <span style={{ marginLeft: 4, color: "var(--text-faint)", fontSize: Math.max(fontSize - 2, 9) }}>{count}</span>
+              <span style={{ marginLeft: 4, color: "var(--text-faint)", fontSize: Math.max(fontSize - 3, 8) }}>{count}</span>
             </button>
           );
         })}
