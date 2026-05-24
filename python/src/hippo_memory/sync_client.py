@@ -1,18 +1,28 @@
-"""Async httpx client for hippo-memory HTTP API.
+"""Sync httpx client for hippo-memory HTTP API (v0.2.0).
 
-The main public class is :class:`Hippo`. Construct it pointing at a running
-``hippo serve`` instance (loopback by default), then call any of the 14
-endpoint methods. All methods are async.
+The main public class is :class:`HippoSync`. A line-for-line mirror of
+:class:`hippo_memory.client.Hippo` using ``httpx.Client`` instead of
+``httpx.AsyncClient``. Each method is the sync equivalent; the wire shape,
+return models, and error semantics are identical.
+
+Use when:
+- Your code already runs synchronously (CLI scripts, notebooks).
+- You can't ``await`` cleanly (e.g. inside a ``threading.Thread`` callback).
+- You don't want to manage an event loop.
 
 Example::
 
-    from hippo_memory import Hippo
+    from hippo_memory import HippoSync
 
-    async with Hippo(base_url="http://127.0.0.1:3737") as client:
-        mem = await client.remember(content="bug fix lesson", tags=["error"])
-        results = await client.recall(q="bug fix")
-        ctx = await client.get_context(budget=1500)
-        await client.outcome(good=True)  # last-recall path
+    with HippoSync(base_url="http://127.0.0.1:3737") as client:
+        mem = client.remember(content="bug fix lesson")
+        results = client.recall(q="bug fix")
+        ctx = client.get_context(budget=1500)
+        client.outcome(good=True)
+
+The async :class:`Hippo` class remains the recommended default — only
+adopt :class:`HippoSync` when you have a specific reason to avoid
+``asyncio``.
 """
 
 from __future__ import annotations
@@ -40,25 +50,29 @@ from hippo_memory.models import (
     HippoError,
 )
 
-__all__ = ["Hippo"]
+__all__ = ["HippoSync"]
 
 
-class Hippo:
-    """Async client for the hippo-memory HTTP API.
+class HippoSync:
+    """Sync client for the hippo-memory HTTP API.
 
-    All methods are coroutines. Use as an async context manager to ensure
-    the underlying httpx connection pool is closed::
+    All methods are synchronous. Use as a context manager to ensure the
+    underlying httpx connection pool is closed::
 
-        async with Hippo() as client:
-            await client.remember(content="...")
+        with HippoSync() as client:
+            client.remember(content="...")
 
     Or manage the lifetime explicitly::
 
-        client = Hippo()
+        client = HippoSync()
         try:
-            await client.remember(content="...")
+            client.remember(content="...")
         finally:
-            await client.close()
+            client.close()
+
+    Wire-compatible with the async :class:`Hippo` — same routes, same
+    request/response models, same errors. The only difference is the
+    `async`/`await` keywords and the underlying httpx client class.
     """
 
     def __init__(
@@ -70,33 +84,31 @@ class Hippo:
         headers: dict[str, str] = {"content-type": "application/json"}
         if api_key:
             headers["authorization"] = f"Bearer {api_key}"
-        self._client = httpx.AsyncClient(
+        self._client = httpx.Client(
             base_url=base_url,
             headers=headers,
             timeout=timeout,
         )
 
-    async def __aenter__(self) -> "Hippo":
+    def __enter__(self) -> "HippoSync":
         return self
 
-    async def __aexit__(self, *args: Any) -> None:
-        await self.close()
+    def __exit__(self, *args: Any) -> None:
+        self.close()
 
-    async def close(self) -> None:
-        """Close the underlying httpx AsyncClient. Safe to call multiple times."""
-        await self._client.aclose()
+    def close(self) -> None:
+        """Close the underlying httpx Client. Safe to call multiple times."""
+        self._client.close()
 
-    async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
+    def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         """Internal HTTP wrapper. Raises HippoError on non-2xx; returns parsed JSON on success.
 
         Returns None for 204 / empty-body 200 responses. Callers that expect
-        a payload should treat None defensively (today every Hippo method
-        passes the response straight to ``Model.model_validate`` which would
-        raise on None; in practice no server route returns 204, so this code
-        path is dead today. v0.2 should add either a typed empty-result
-        sentinel here or a per-caller is-None check before model_validate).
+        a payload pass the result straight to ``Model.model_validate`` which
+        will raise on None — no server route currently returns 204, but if
+        one ever does, switch to ``_expect_body`` (v0.3 candidate).
         """
-        response = await self._client.request(method, path, **kwargs)
+        response = self._client.request(method, path, **kwargs)
         if response.status_code >= 400:
             body: dict[str, Any] | None = None
             try:
@@ -113,16 +125,16 @@ class Hippo:
     # Health
     # -------------------------------------------------------------------
 
-    async def health(self) -> HealthInfo:
+    def health(self) -> HealthInfo:
         """GET /health. Returns server version + pid + boot timestamp."""
-        data = await self._request("GET", "/health")
+        data = self._request("GET", "/health")
         return HealthInfo.model_validate(data)
 
     # -------------------------------------------------------------------
     # Memory CRUD
     # -------------------------------------------------------------------
 
-    async def remember(
+    def remember(
         self,
         content: str,
         *,
@@ -144,10 +156,10 @@ class Hippo:
             body["artifactRef"] = artifact_ref
         if tags is not None:
             body["tags"] = tags
-        data = await self._request("POST", "/v1/memories", json=body)
+        data = self._request("POST", "/v1/memories", json=body)
         return MemoryEnvelope.model_validate(data)
 
-    async def recall(
+    def recall(
         self,
         q: str,
         *,
@@ -159,7 +171,13 @@ class Hippo:
         fresh_tail_session_id: str | None = None,
         session_id: str | None = None,
     ) -> RecallResult:
-        """GET /v1/memories. Search the store; returns scored results + token usage."""
+        """GET /v1/memories. Search the store; returns scored results + token usage.
+
+        Note: as of hippo-memory v1.12.4, this does NOT populate
+        ``last_retrieval_ids`` (the SDK + HTTP recall path mirrors api.recall's
+        documented divergence from CLI). Use :meth:`get_context` to prime the
+        last-recall outcome workflow.
+        """
         params: dict[str, Any] = {"q": q}
         if limit is not None:
             params["limit"] = limit
@@ -175,10 +193,10 @@ class Hippo:
             params["fresh_tail_session_id"] = fresh_tail_session_id
         if session_id is not None:
             params["session_id"] = session_id
-        data = await self._request("GET", "/v1/memories", params=params)
+        data = self._request("GET", "/v1/memories", params=params)
         return RecallResult.model_validate(data)
 
-    async def drill(
+    def drill(
         self,
         memory_id: str,
         *,
@@ -191,60 +209,55 @@ class Hippo:
             params["limit"] = limit
         if budget is not None:
             params["budget"] = budget
-        data = await self._request("GET", f"/v1/recall/drill/{memory_id}", params=params)
+        data = self._request("GET", f"/v1/recall/drill/{memory_id}", params=params)
         return DrillResult.model_validate(data)
 
-    async def forget(self, memory_id: str) -> ForgetResult:
+    def forget(self, memory_id: str) -> ForgetResult:
         """DELETE /v1/memories/:id. Hard-delete a memory."""
-        data = await self._request("DELETE", f"/v1/memories/{memory_id}")
+        data = self._request("DELETE", f"/v1/memories/{memory_id}")
         return ForgetResult.model_validate(data)
 
-    async def archive(self, memory_id: str, *, reason: str | None = None) -> ArchiveResult:
+    def archive(self, memory_id: str, *, reason: str | None = None) -> ArchiveResult:
         """POST /v1/memories/:id/archive. Soft-archive (for append-only raw memories)."""
         body: dict[str, Any] = {}
         if reason is not None:
             body["reason"] = reason
-        data = await self._request("POST", f"/v1/memories/{memory_id}/archive", json=body)
+        data = self._request("POST", f"/v1/memories/{memory_id}/archive", json=body)
         return ArchiveResult.model_validate(data)
 
-    async def supersede(self, memory_id: str, *, new_id: str) -> SupersedeResult:
+    def supersede(self, memory_id: str, *, new_id: str) -> SupersedeResult:
         """POST /v1/memories/:id/supersede. Mark a memory as superseded by another."""
-        data = await self._request(
+        data = self._request(
             "POST", f"/v1/memories/{memory_id}/supersede", json={"newId": new_id}
         )
         return SupersedeResult.model_validate(data)
 
-    async def promote(self, memory_id: str) -> PromoteResult:
+    def promote(self, memory_id: str) -> PromoteResult:
         """POST /v1/memories/:id/promote. Promote a local memory to the global store."""
-        data = await self._request("POST", f"/v1/memories/{memory_id}/promote")
+        data = self._request("POST", f"/v1/memories/{memory_id}/promote")
         return PromoteResult.model_validate(data)
 
     # -------------------------------------------------------------------
     # Outcome (Episode B)
     # -------------------------------------------------------------------
 
-    async def outcome(
+    def outcome(
         self,
         good: bool,
         ids: list[str] | None = None,
     ) -> OutcomeResult:
-        """POST /v1/outcome. Apply a positive/negative outcome to memory ids.
-
-        If ``ids`` is None, the server uses the last-recall path
-        (``last_retrieval_ids``) and returns ``{applied, ids}`` where ids is
-        the tenant-filtered applied subset (v1.11.4 security guarantee).
-        """
+        """POST /v1/outcome. Apply a positive/negative outcome to memory ids."""
         body: dict[str, Any] = {"good": good}
         if ids is not None:
             body["ids"] = ids
-        data = await self._request("POST", "/v1/outcome", json=body)
+        data = self._request("POST", "/v1/outcome", json=body)
         return OutcomeResult.model_validate(data)
 
     # -------------------------------------------------------------------
     # Context (Episode B)
     # -------------------------------------------------------------------
 
-    async def get_context(
+    def get_context(
         self,
         *,
         q: str | None = None,
@@ -268,14 +281,14 @@ class Hippo:
             params["scope"] = scope
         if include_recent is not None:
             params["include_recent"] = include_recent
-        data = await self._request("GET", "/v1/context", params=params)
+        data = self._request("GET", "/v1/context", params=params)
         return ContextResult.model_validate(data)
 
     # -------------------------------------------------------------------
-    # Sleep (Episode B) - loopback-only on the server side
+    # Sleep (Episode B) - loopback-only on the server side, admin-gated since v1.12.0
     # -------------------------------------------------------------------
 
-    async def sleep(
+    def sleep(
         self,
         *,
         dry_run: bool = False,
@@ -283,33 +296,32 @@ class Hippo:
     ) -> SleepResult:
         """POST /v1/sleep. Run the consolidation pipeline.
 
-        Server-side enforces loopback-only (per-request guard + boot-time
-        host check). Off-host callers will receive HippoError(403). The route
-        operates host-wide (cross-tenant by design today); see hippo-memory
-        v1.11.4 CHANGELOG for the per-tenant scoping follow-up.
+        Server-side enforces loopback-only + admin role (v1.12.0 sub-1).
+        Off-host callers receive HippoError(403); member-Bearer callers
+        receive HippoError(403).
         """
         body: dict[str, Any] = {}
         if dry_run:
             body["dry_run"] = True
         if no_share:
             body["no_share"] = True
-        data = await self._request("POST", "/v1/sleep", json=body)
+        data = self._request("POST", "/v1/sleep", json=body)
         return SleepResult.model_validate(data)
 
     # -------------------------------------------------------------------
     # Assemble (Phase 2 context engine)
     # -------------------------------------------------------------------
 
-    async def assemble(self, session_id: str) -> AssembleResult:
+    def assemble(self, session_id: str) -> AssembleResult:
         """GET /v1/sessions/:id/assemble. Phase 2 context-engine assembly."""
-        data = await self._request("GET", f"/v1/sessions/{session_id}/assemble")
+        data = self._request("GET", f"/v1/sessions/{session_id}/assemble")
         return AssembleResult.model_validate(data)
 
     # -------------------------------------------------------------------
     # Auth keys
     # -------------------------------------------------------------------
 
-    async def auth_create(
+    def auth_create(
         self,
         *,
         label: str | None = None,
@@ -325,29 +337,28 @@ class Hippo:
             body["label"] = label
         if role is not None:
             body["role"] = role
-        data = await self._request("POST", "/v1/auth/keys", json=body)
+        data = self._request("POST", "/v1/auth/keys", json=body)
         return AuthCreated.model_validate(data)
 
-    async def auth_list(self, *, active: bool | None = None) -> list[AuthKey]:
+    def auth_list(self, *, active: bool | None = None) -> list[AuthKey]:
         """GET /v1/auth/keys. List keys visible to the caller's tenant."""
         params: dict[str, Any] = {}
         if active is not None:
             params["active"] = "true" if active else "false"
-        data = await self._request("GET", "/v1/auth/keys", params=params)
-        # Server returns either a list directly or {keys: [...]}; handle both.
+        data = self._request("GET", "/v1/auth/keys", params=params)
         items = data if isinstance(data, list) else data.get("keys", [])
         return [AuthKey.model_validate(item) for item in items]
 
-    async def auth_revoke(self, key_id: str) -> AuthRevoked:
+    def auth_revoke(self, key_id: str) -> AuthRevoked:
         """DELETE /v1/auth/keys/:keyId. Revoke a key."""
-        data = await self._request("DELETE", f"/v1/auth/keys/{key_id}")
+        data = self._request("DELETE", f"/v1/auth/keys/{key_id}")
         return AuthRevoked.model_validate(data)
 
     # -------------------------------------------------------------------
     # Audit
     # -------------------------------------------------------------------
 
-    async def audit(
+    def audit(
         self,
         *,
         op: str | None = None,
@@ -362,7 +373,6 @@ class Hippo:
             params["since"] = since
         if limit is not None:
             params["limit"] = limit
-        data = await self._request("GET", "/v1/audit", params=params)
-        # Server may return a list directly or {events: [...]}.
+        data = self._request("GET", "/v1/audit", params=params)
         items = data if isinstance(data, list) else data.get("events", [])
         return [AuditEvent.model_validate(item) for item in items]

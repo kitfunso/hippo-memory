@@ -96,18 +96,22 @@ async with Hippo(api_key="sk_...") as client:
 
 Every method returns a Pydantic v2 model. Failed HTTP responses raise `HippoError` with `status_code` and parsed `body`.
 
-## Limitations (v0.1)
+## What's new in v0.2.0
 
-- **Async-only.** Sync wrappers (`HippoSync`) are a v0.2 candidate.
-- **`/v1/sleep` is loopback-only on the server side.** The route refuses non-loopback connections; this SDK is intended for use against a co-located `hippo serve`.
-- **`/v1/sleep` operates host-wide (cross-tenant).** Matches the CLI's `hippo sleep` semantic. Per-tenant scoping is tracked for a future hippo-memory minor release.
-- **`get_context` `last_retrieval_ids` parity gap.** HTTP `GET /v1/memories` (recall) does NOT populate `last_retrieval_ids` — only `GET /v1/context` (get_context) does. CLI `hippo recall` populates it; the SDK's `recall` does not. To prime the last-recall outcome path, call `get_context` first. Tracked in TODOS.md.
-- **`ContextResult.entries` exposes the full `MemoryEntry` surface** (richer than `hippo context --format json` which projects to a subset). A `.projected()` helper is a v0.2 candidate.
+- **Sync client (`HippoSync`).** A line-for-line mirror of `Hippo` using `httpx.Client`. Use when your code already runs synchronously (CLI scripts, notebooks, `threading.Thread` callbacks) and you don't want to manage an event loop. Wire-compatible: same routes, same models, same errors.
+- **`ContextEntry.projected()` helper.** Projects the full `MemoryEntry` surface to the CLI's narrower json shape (`id`, `score`, `strength`, `tags`, `confidence`, `content`, `global`). Use when piping SDK results into LLM context or CLI-shaped downstream consumers.
+- **`auth_create(role=)` parameter.** Matches hippo-memory v1.12.3 server: pass `role="admin"` or `role="member"`. Member keys are 403-blocked from admin-gated routes (e.g. `/v1/sleep`). Both `AuthCreated.role` and `AuthKey.role` populated by v1.12.3+ servers.
+
+## Limitations (v0.2)
+
+- **`/v1/sleep` is loopback-only + admin-gated on the server side.** The route refuses non-loopback connections (v1.11.4) and member-role Bearer tokens (v1.12.0 sub-1). This SDK is intended for use against a co-located `hippo serve` with an admin key.
+- **`/v1/sleep` operates host-wide (cross-tenant).** Matches the CLI's `hippo sleep` semantic. Per-tenant scoping deferred until non-loopback serving lands.
+- **`recall` does NOT populate `last_retrieval_ids` — by design** (locked in hippo-memory v1.11.5). To prime the last-recall outcome path, call `get_context` first. The CLI's `hippo recall` populates it because the CLI is interactive (user is about to run `hippo outcome --good`); the SDK is programmatic and SDK callers batch recall calls, where overwriting `last_retrieval_ids` each call would break the outcome workflow. Source: `api.ts:412-421` JSDoc + `tests/api-recall-no-side-effects.test.ts`.
 - **Server connector webhook routes (`/v1/connectors/{slack,github}/events`)** are not wrapped in the SDK — they are server-side facing, not client-shaped.
 
 ## Versioning
 
-PyPI: `hippo-memory v0.1.0`. npm: `hippo-memory@1.11.4` (the server). The two version lines move independently; the SDK reads the server's `/health` version to confirm compatibility.
+PyPI: `hippo-memory-sdk v0.2.0`. npm: `hippo-memory@>=1.12.4` (the server). The two version lines move independently; the SDK reads the server's `/health` version to confirm compatibility.
 
 ## Source
 

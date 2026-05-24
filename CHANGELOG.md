@@ -1,5 +1,31 @@
 # Changelog
 
+## Python SDK v0.2.0 (2026-05-24): HippoSync + ContextEntry.projected() + auth role
+
+PyPI: `hippo-memory-sdk@0.2.0`. Closes 3 of 5 v0.1.0 README-documented limitations. The 4th (`recall` last_retrieval_ids gap) is reframed as a deliberate design choice locked in hippo-memory v1.11.5 (see `tests/api-recall-no-side-effects.test.ts`); the 5th (connector webhooks) is by-design (server-only routes).
+
+### Shipped
+
+- **`HippoSync` class** — sync mirror of `Hippo` using `httpx.Client`. Wire-compatible: same routes, same models, same errors. Use when your code already runs synchronously (CLI scripts, notebooks, `threading.Thread` callbacks). Async `Hippo` remains the recommended default.
+- **`ContextEntry.projected()` helper** — projects the full MemoryEntry surface to the CLI's narrower json shape (`id`, `score`, `strength`, `tags`, `confidence`, `content`, `global`). Mirrors `hippo context --format json` per-row output.
+- **`auth_create(role=)` parameter** on both `Hippo` and `HippoSync` — matches hippo-memory v1.12.3 server. Pass `role="admin"` (default) or `role="member"`. Member keys are 403-blocked from admin-gated routes (e.g. `/v1/sleep`).
+- **`AuthCreated.role` + `AuthKey.role` fields** — populated by hippo-memory v1.12.3+ server. Optional (None on older servers).
+
+### Breaking changes
+
+- **`AuthCreated.key` renamed to `AuthCreated.plaintext`** — the v0.1 `key` field was a model bug never exercised by any integration test (the server returns `plaintext`, not `key`; the model would have raised `ValidationError` on any real auth_create call). v0.2 fixes this. Consumers reading `result.key` see `AttributeError`; switch to `result.plaintext`. Caught while writing the v0.2 sync integration tests.
+
+### Tests
+- 8 cases in `tests/test_sync_client.py` covering health, remember+recall roundtrip, get_context, outcome, auth_create (admin + member), auth_list with role, error handling.
+- 4 cases in `tests/test_projected.py` (pure unit) covering cli-shape projection, global=True/None handling, optional-fields pass-through.
+- Updated `tests/test_models.py` `test_auth_models_roundtrip` for the `key` → `plaintext` rename + role field.
+- Full Python suite: **35 passed in 26s** (real-server integration via `node bin/hippo.js serve` fixture).
+
+### Migration notes
+- **Sync mode opt-in:** `from hippo_memory import HippoSync` (alongside existing `Hippo`).
+- **Server compatibility:** v0.2.0 SDK works against hippo-memory server >=1.11.4 (role fields are optional in models). For full role support (admin gate + audit emit), use server >=1.12.4.
+- **AuthCreated breaking change:** rename `result.key` → `result.plaintext` in any v0.1 caller code. The v0.1 field was never functional end-to-end.
+
 ## 1.12.4 (2026-05-24): auth_create audit emit (closes v1.12.3 deferral)
 
 PATCH release. Closes the v1.12.3 CHANGELOG-flagged deferral (auth_create un-audited). Mirrors the existing `auth_revoke` audit pattern in `authRevoke` — one audit row per successful mint, plaintext NEVER logged.
