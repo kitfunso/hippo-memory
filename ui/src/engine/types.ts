@@ -1,3 +1,8 @@
+/**
+ * Engine-internal types. LAYER_COLORS re-exported from the single source of
+ * truth at ui/src/tokens.ts (the parchment palette per hybrid-v4 revamp E1).
+ */
+
 export interface Particle {
   id: string;
   x: number;
@@ -13,8 +18,4 @@ export interface Particle {
   selected: boolean;
 }
 
-export const LAYER_COLORS = {
-  buffer: "#7c5cff",
-  episodic: "#f0a030",
-  semantic: "#34d399",
-} as const;
+export { LAYER_COLORS, LAYER_COLORS_HEX } from "../tokens.js";
