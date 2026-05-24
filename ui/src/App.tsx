@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import type { Memory, Stats, Conflict, EmbeddingIndex } from "./types.js";
 import { fetchMemories, fetchStats, fetchConflicts, fetchEmbeddings } from "./api/client.js";
 import { LivingMap } from "./views/LivingMap/LivingMap.js";
-import { INITIAL_FILTER_STATE, type FilterState, type Layer, type Confidence } from "./state/filterState.js";
+import { INITIAL_FILTER_STATE, type FilterState, type Layer, type Confidence, type ColorMode } from "./state/filterState.js";
 
 /**
  * E5 S6 — Origin of the current freeze state. Lets the freeze button surface
@@ -74,13 +74,23 @@ export function App() {
 
   // P4: reset everything except the user's freeze preference (rerunning
   // the simulation just because they cleared filters would surprise).
+  // v0.27 — also preserve colorMode (VIEW state, not filter state).
   const resetFilters = useCallback(() => {
-    setFilterState((prev) => ({ ...INITIAL_FILTER_STATE, frozen: prev.frozen }));
+    setFilterState((prev) => ({
+      ...INITIAL_FILTER_STATE,
+      frozen: prev.frozen,
+      colorMode: prev.colorMode,
+    }));
   }, []);
 
   // v0.26.1: fadingOnly toggle wired from Header pill + FilterPanel toggle.
   const setFadingOnly = useCallback((fadingOnly: boolean) => {
     setFilterState((prev) => ({ ...prev, fadingOnly }));
+  }, []);
+
+  // v0.27: colorMode toggle wired from ViewPanel segmented radio.
+  const setColorMode = useCallback((colorMode: ColorMode) => {
+    setFilterState((prev) => ({ ...prev, colorMode }));
   }, []);
 
   // v0.26.1 design-critic MED: auto-clear fadingOnly when at_risk drops to 0
@@ -216,6 +226,7 @@ export function App() {
         setConfidences={setConfidences}
         setAgeMaxDays={setAgeMaxDays}
         setFadingOnly={setFadingOnly}
+        setColorMode={setColorMode}
         resetFilters={resetFilters}
       />
       {/* v0.26.1 — aria-live announcement for auto-clear (design-critic LOW). */}

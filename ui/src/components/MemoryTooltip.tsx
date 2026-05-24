@@ -1,15 +1,29 @@
 import type { Memory } from "../types.js";
+import type { ColorMode } from "../state/filterState.js";
 import { LAYER_COLORS } from "../engine/types.js";
 
 interface MemoryTooltipProps {
   memory: Memory;
   x: number;
   y: number;
+  /**
+   * v0.27 — current view's color mode. When "tag" or "path" AND colorTag
+   * is non-null, the tooltip surfaces the color-driving tag as a non-color
+   * channel for color-blind users.
+   * Default "layer" preserves pre-v0.27 rendering (no extra line shown).
+   */
+  colorMode?: ColorMode;
+  /**
+   * v0.27 — the color-driving tag for this memory under the current mode
+   * (derived by LivingMap via pickColorTag). Null when no qualifying tag.
+   */
+  colorTag?: string | null;
 }
 
-export function MemoryTooltip({ memory, x, y }: MemoryTooltipProps) {
+export function MemoryTooltip({ memory, x, y, colorMode = "layer", colorTag = null }: MemoryTooltipProps) {
   const preview = memory.content.length > 100 ? memory.content.slice(0, 100) + "…" : memory.content;
   const layerColor = LAYER_COLORS[memory.layer];
+  const showColorTag = colorTag !== null && (colorMode === "tag" || colorMode === "path");
 
   return (
     <div style={{
@@ -58,6 +72,17 @@ export function MemoryTooltip({ memory, x, y }: MemoryTooltipProps) {
           {memory.strength.toFixed(2)} str
         </span>
       </div>
+      {showColorTag && (
+        <div style={{
+          marginBottom: 6,
+          color: "var(--dim)",
+          fontSize: 9,
+          fontFamily: "var(--font-mono)",
+          letterSpacing: "0.4px",
+        }}>
+          color: {colorTag}
+        </div>
+      )}
       <div style={{
         color: "var(--text)",
         fontSize: 12,

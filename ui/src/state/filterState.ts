@@ -15,6 +15,14 @@ export type Layer = "buffer" | "episodic" | "semantic";
 // Matches Memory.confidence in ../types.ts
 export type Confidence = "verified" | "observed" | "inferred" | "stale";
 
+/**
+ * v0.27 — color-by-tag (E1 of Obsidian-inspired graph upgrades stack).
+ * Mode determines what axis drives node color in the scene engine.
+ * VIEW state, not filter state — NOT included in isFilterActive, and
+ * resetFilters preserves it.
+ */
+export type ColorMode = "layer" | "tag" | "path";
+
 export interface FilterState {
   /** E2 — search input substring; matched against content + tags. */
   query: string;
@@ -33,6 +41,13 @@ export interface FilterState {
    * memories where isFading(m) is true. Composes (AND) with other filters.
    */
   fadingOnly: boolean;
+  /**
+   * v0.27 — selects which attribute drives node color. "layer" is default
+   * (back-compat with pre-v0.27 render). VIEW state — NOT a filter, so
+   * NOT included in isFilterActive, and resetFilters preserves the user's
+   * choice.
+   */
+  colorMode: ColorMode;
 }
 
 export const INITIAL_FILTER_STATE: FilterState = {
@@ -43,6 +58,7 @@ export const INITIAL_FILTER_STATE: FilterState = {
   ageMaxDays: null,
   frozen: false,
   fadingOnly: false,
+  colorMode: "layer",
 };
 
 /**
