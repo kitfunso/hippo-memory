@@ -247,17 +247,42 @@ describe('L9: per-tenant scoping (cross-tenant leak prevention)', () => {
     expect(loadAllEntries(hippoRoot).length).toBe(2);
   });
 
-  it('case 6: importEntries({ tenantId: tenant-a, global: false }) dedup ignores tenant-b entries', () => {
-    seedFor(hippoRoot, 'tenant-b', 'session-based auth with httpOnly cookies', { tags: ['auth'] });
+  it('case 6: importEntries dedup AND write are both tenant-scoped via options.tenantId', () => {
+    const content = 'session-based auth with httpOnly cookies';
+    seedFor(hippoRoot, 'tenant-b', content, { tags: ['auth'] });
 
+    // dryRun: false so the write path is exercised (symmetric to case 5).
     const result = importEntries(
-      ['session-based auth with httpOnly cookies'],
+      [content],
       'import:test',
       ['imported'],
-      { hippoRoot, dryRun: true, tenantId: 'tenant-a', global: false },
+      { hippoRoot, dryRun: false, tenantId: 'tenant-a', global: false },
     );
-    // tenant-a's import sees no dupe because tenant-b is invisible
+    // ASSERTION 1 (READ-side L9): tenant-a's import dedup misses tenant-b
     expect(result.entries.length).toBe(1);
+    expect(result.imported).toBe(1);
+
+    // ASSERTION 2 (WRITE-side L9): the imported entry IS in tenant-a's slice
+    // with tenantId === 'tenant-a' (NOT 'default'). Catches the same
+    // scoped-dedup-then-default-write bug class case 5 catches for capture.
+    const aAfter = loadAllEntries(hippoRoot, 'tenant-a');
+    expect(aAfter.length).toBe(1);
+    expect(aAfter[0].tenantId).toBe('tenant-a');
+    expect(aAfter[0].content).toBe(content);
+
+    // ASSERTION 3 (cross-tenant invariant): tenant-b unchanged.
+    expect(loadAllEntries(hippoRoot, 'tenant-b').length).toBe(1);
+
+    // ASSERTION 4 (host-wide negative control): a host-wide import (no
+    // tenantId) of the same content would skip-as-duplicate.
+    const result2 = importEntries(
+      [content],
+      'import:test',
+      ['imported'],
+      { hippoRoot, dryRun: false, global: false },
+    );
+    expect(result2.imported).toBe(0);
+    expect(loadAllEntries(hippoRoot).length).toBe(2); // tenant-a:1, tenant-b:1
   });
 
   it('case 7: autoShare({ tenantId: tenant-a }) only considers tenant-a local memories', () => {
