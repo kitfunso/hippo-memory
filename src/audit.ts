@@ -137,7 +137,8 @@ export type AuditOp =
   | 'auth_revoke'
   | 'auth_create' // v1.12.4: emitted by api.authCreate (closes the gap v1.12.3 CHANGELOG flagged)
   | 'outcome'
-  | 'consolidate'; // v1.11.5: emitted once per api.sleep invocation
+  | 'consolidate' // v1.11.5: emitted once per api.sleep invocation
+  | 'audit_prune'; // v1.12.9: emitted by pruneAuditLog after each retention prune
 
 export interface AppendAuditOpts {
   tenantId: string;

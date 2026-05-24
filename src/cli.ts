@@ -170,6 +170,7 @@ import { getReranker } from './rerankers/index.js';
 import { computeSalience } from './salience.js';
 import { computeAmbientState, renderAmbientSummary } from './ambient.js';
 import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
+import { pruneAuditLog, parseOlderThanFlag } from './audit-prune.js';
 import { listDlq, replayDlqEntry } from './connectors/slack/dlq.js';
 import { backfillChannel } from './connectors/slack/backfill.js';
 import { slackHistoryFetcher } from './connectors/slack/web-client.js';
@@ -4733,6 +4734,7 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'auth_create', // v1.12.4: emitted by api.authCreate
   'outcome',     // v1.11.5: pre-existing drift — emitted today but rejected by old Set
   'consolidate', // v1.11.5: emitted by api.sleep / hippo sleep
+  'audit_prune', // v1.12.9: emitted by pruneAuditLog
 ]);
 
 function formatAuditRow(ev: AuditEvent): string {
@@ -4796,13 +4798,67 @@ function cmdAuditList(hippoRoot: string, flags: Record<string, string | boolean 
   }
 }
 
+function printAuditPruneUsage(): void {
+  console.log('hippo audit prune --older-than <Nd> [--dry-run] [--tenant <t>]');
+  console.log('  --older-than <Nd>  Delete audit_log rows with ts older than N days (e.g. 90d).');
+  console.log('  --dry-run          Count matching rows without deleting (operator safety).');
+  console.log('  --tenant <t>       Tenant scope. Defaults to HIPPO_TENANT or "default".');
+  console.log('  --json             Output the result as JSON {cutoff, count, dryRun}.');
+}
+
+function cmdAuditPrune(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
+  if (flags['help']) {
+    printAuditPruneUsage();
+    return;
+  }
+  const olderThanRaw = typeof flags['older-than'] === 'string' ? (flags['older-than'] as string) : '';
+  if (!olderThanRaw) {
+    console.error('Usage: hippo audit prune --older-than <Nd> [--dry-run] [--tenant <t>]');
+    process.exit(1);
+  }
+  let olderThanDays: number;
+  try {
+    olderThanDays = parseOlderThanFlag(olderThanRaw);
+  } catch (e) {
+    console.error((e as Error).message);
+    process.exit(1);
+  }
+  const tenantId = typeof flags['tenant'] === 'string'
+    ? (flags['tenant'] as string).trim() || resolveTenantId({})
+    : resolveTenantId({});
+  const dryRun = flags['dry-run'] === true;
+  const asJson = Boolean(flags['json']);
+
+  const db = openHippoDb(hippoRoot);
+  let result;
+  try {
+    result = pruneAuditLog(db, { olderThanDays, tenantId, dryRun, actor: 'cli' });
+  } finally {
+    closeHippoDb(db);
+  }
+
+  if (asJson) {
+    console.log(JSON.stringify(result));
+    return;
+  }
+  const verb = dryRun ? 'would delete' : 'deleted';
+  console.log(`audit prune: ${verb} ${result.count} row${result.count === 1 ? '' : 's'} for tenant "${tenantId}" with ts < ${result.cutoff}`);
+  if (dryRun) {
+    console.log('(dry-run; re-run without --dry-run to actually delete)');
+  }
+}
+
 function cmdAuditLog(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
   const sub = args[0];
   if (sub === 'list') {
     cmdAuditList(hippoRoot, flags);
     return;
   }
-  console.error(`Unknown audit subcommand: ${sub}. Expected: list.`);
+  if (sub === 'prune') {
+    cmdAuditPrune(hippoRoot, flags);
+    return;
+  }
+  console.error(`Unknown audit subcommand: ${sub}. Expected: list | prune.`);
   process.exit(1);
 }
 
@@ -5827,9 +5883,10 @@ async function main(): Promise<void> {
       break;
 
     case 'audit': {
-      // `audit list` -> A5 audit-log viewer. Other forms (no sub, --fix) keep
-      // the existing memory-quality auditor for backwards compatibility.
-      if (args[0] === 'list') {
+      // `audit list` and `audit prune` -> A5 audit-log subcommands.
+      // Other forms (no sub, --fix) keep the existing memory-quality auditor
+      // for backwards compatibility.
+      if (args[0] === 'list' || args[0] === 'prune') {
         cmdAuditLog(hippoRoot, args, flags);
         break;
       }
