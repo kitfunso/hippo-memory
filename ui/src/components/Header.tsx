@@ -8,10 +8,9 @@
  * for a 10-character query.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { Stats } from "../types.js";
 import type { FilterState } from "../state/filterState.js";
-import { LayerLegend } from "./LayerLegend.js";
 import { useDebouncedValue } from "../hooks/useDebouncedValue.js";
 
 interface HeaderProps {
@@ -29,17 +28,38 @@ export function Header({ memoryCount, matchCount, stats, filterState, setQuery, 
   const [inputValue, setInputValue] = useState(filterState.query);
   const debounced = useDebouncedValue(inputValue, 150);
   const [focused, setFocused] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Forward debounced changes to parent. The parent's filterState.query
   // is what useCanvasEngine actually consumes.
+  // Narrow deps intentional: triggering on filterState.query would loop.
   useEffect(() => {
     if (debounced !== filterState.query) setQuery(debounced);
   }, [debounced]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // External clears (e.g. "esc to clear search") should reset the local input.
+  // Narrow deps intentional: inputValue in deps would loop.
   useEffect(() => {
     if (filterState.query === "" && inputValue !== "") setInputValue("");
   }, [filterState.query]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // P5 fix: `/` to focus search, Esc to clear (matches BottomBar shortcut hint).
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      const inInput = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
+      if (e.key === "/" && !inInput) {
+        e.preventDefault();
+        inputRef.current?.focus();
+      } else if (e.key === "Escape" && document.activeElement === inputRef.current) {
+        setInputValue("");
+        setQuery("");
+        inputRef.current?.blur();
+      }
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [setQuery]);
 
   return (
     <div style={{
@@ -68,17 +88,16 @@ export function Header({ memoryCount, matchCount, stats, filterState, setQuery, 
 
       <div style={{ flex: 1 }} />
 
-      <LayerLegend />
-
-      <div style={{ position: "relative", width: 200 }}>
+      <div style={{ position: "relative", width: 240 }}>
         <input
+          ref={inputRef}
           type="text"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           aria-label="Search memories"
-          placeholder="search…"
+          placeholder="search memories and tags (/)"
           style={{
             width: "100%",
             padding: "5px 10px",
@@ -95,6 +114,34 @@ export function Header({ memoryCount, matchCount, stats, filterState, setQuery, 
             letterSpacing: "0.2px",
           }}
         />
+        {inputValue.length > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              setInputValue("");
+              setQuery("");
+              inputRef.current?.focus();
+            }}
+            aria-label="Clear search"
+            title="Clear search (Esc)"
+            style={{
+              position: "absolute",
+              right: matchCount !== null ? 44 : 4,
+              top: "50%",
+              transform: "translateY(-50%)",
+              background: "transparent",
+              border: "none",
+              color: "var(--dim)",
+              cursor: "pointer",
+              fontSize: 14,
+              lineHeight: 1,
+              padding: "2px 6px",
+              fontFamily: "var(--font-mono)",
+            }}
+          >
+            ×
+          </button>
+        )}
         {matchCount !== null && (
           <span style={{
             position: "absolute",

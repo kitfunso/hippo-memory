@@ -40,9 +40,13 @@ export function FilterPanel({ filterState, setLayers, setStrengthRange, setConfi
 
   return (
     <div style={{ marginBottom: 20 }}>
-      <h3 style={panelTitle}>Filters</h3>
+      {/* Panel title moved to Sidebar.tsx so the 'reset' button can live
+          next to it. */}
 
-      {/* Layer checkboxes */}
+      {/* Layer checkboxes (code-review-critic HIGH #2 fix: invert semantics
+          so the displayed checkbox state matches the data state, and the
+          first uncheck-from-all-shown takes user intent literally rather
+          than producing the inverse). */}
       <div style={filterGroup}>
         <div style={filterLabel}>
           <span>Layer</span>
@@ -52,13 +56,26 @@ export function FilterPanel({ filterState, setLayers, setStrengthRange, setConfi
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 14px" }}>
           {ALL_LAYERS.map(({ key, label }) => {
+            // When set is empty (no filter), all show as visually checked.
             const checked = filterState.layers.size === 0 || filterState.layers.has(key);
             return (
               <label key={key} style={chkRow}>
                 <input
                   type="checkbox"
                   checked={checked}
-                  onChange={() => setLayers(toggleSet(filterState.layers, key))}
+                  onChange={() => {
+                    // From the "all" state (size===0), first uncheck means
+                    // "exclude this one, keep the other two". Seed with the
+                    // other layers so the user's mental model matches.
+                    if (filterState.layers.size === 0) {
+                      const others = ALL_LAYERS.filter((l) => l.key !== key).map((l) => l.key);
+                      setLayers(new Set(others));
+                    } else {
+                      const next = toggleSet(filterState.layers, key);
+                      // If unchecking would leave 0 selected, reset to "all".
+                      setLayers(next.size === 0 ? new Set() : next);
+                    }
+                  }}
                   aria-label={`Filter ${label}`}
                   style={{ accentColor: "var(--accent)", cursor: "pointer" }}
                 />
@@ -70,7 +87,11 @@ export function FilterPanel({ filterState, setLayers, setStrengthRange, setConfi
         </div>
       </div>
 
-      {/* Strength range */}
+      {/* Strength range (code-review-critic HIGH #3 fix: crossover SWAPS
+          rather than collapsing to a point. Old behavior: dragging min past
+          max would clamp to [max, max], hiding every memory except those
+          with strength exactly equal to that value. New: dragging min past
+          max swaps them so the range stays meaningful at all positions). */}
       <div style={filterGroup}>
         <div style={filterLabel}>
           <span>Strength</span>
@@ -87,8 +108,8 @@ export function FilterPanel({ filterState, setLayers, setStrengthRange, setConfi
             value={strMin}
             aria-label="Strength minimum"
             onChange={(e) => {
-              const next = Math.min(parseFloat(e.target.value), strMax);
-              setStrengthRange([next, strMax]);
+              const v = parseFloat(e.target.value);
+              setStrengthRange(v > strMax ? [strMax, v] : [v, strMax]);
             }}
             style={rangeStyle}
           />
@@ -100,15 +121,16 @@ export function FilterPanel({ filterState, setLayers, setStrengthRange, setConfi
             value={strMax}
             aria-label="Strength maximum"
             onChange={(e) => {
-              const next = Math.max(parseFloat(e.target.value), strMin);
-              setStrengthRange([strMin, next]);
+              const v = parseFloat(e.target.value);
+              setStrengthRange(v < strMin ? [v, strMin] : [strMin, v]);
             }}
             style={rangeStyle}
           />
         </div>
       </div>
 
-      {/* Confidence multi-select */}
+      {/* Confidence multi-select (same HIGH #2 fix as layer: first
+          uncheck-from-all seeds the other three rather than inverting). */}
       <div style={filterGroup}>
         <div style={filterLabel}>
           <span>Confidence</span>
@@ -124,7 +146,15 @@ export function FilterPanel({ filterState, setLayers, setStrengthRange, setConfi
                 <input
                   type="checkbox"
                   checked={checked}
-                  onChange={() => setConfidences(toggleSet(filterState.confidences, key))}
+                  onChange={() => {
+                    if (filterState.confidences.size === 0) {
+                      const others = ALL_CONFIDENCES.filter((l) => l.key !== key).map((l) => l.key);
+                      setConfidences(new Set(others));
+                    } else {
+                      const next = toggleSet(filterState.confidences, key);
+                      setConfidences(next.size === 0 ? new Set() : next);
+                    }
+                  }}
                   aria-label={`Filter ${label}`}
                   style={{ accentColor: "var(--accent)", cursor: "pointer" }}
                 />

@@ -16,6 +16,16 @@ interface UseSceneOptions {
   frozen: boolean;
   /** E3: filtered visible-id set from FilterPanel. Engine hides others. */
   visibleIds: Set<string>;
+  /**
+   * E4 proper: is any filter active? Disambiguates "no filter, show all"
+   * from "filter matched zero memories" (code-review-critic HIGH #1 fix).
+   * When false, scene receives empty set = restore all. When true and
+   * visibleIds is empty, scene receives empty visible set = hide all.
+   */
+  filterActive: boolean;
+  /** E4 marquee: callback fires when the scene is constructed (and again
+   * with null on unmount). LabelOverlay subscribes via this. */
+  onSceneReady?: (scene: BrainScene | null) => void;
 }
 
 export function useCanvasEngine({
@@ -29,6 +39,8 @@ export function useCanvasEngine({
   searchQuery,
   frozen,
   visibleIds,
+  filterActive,
+  onSceneReady,
 }: UseSceneOptions) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<BrainScene | null>(null);
@@ -47,12 +59,17 @@ export function useCanvasEngine({
       (mem) => onClickRef.current(mem),
     );
     sceneRef.current = scene;
+    // E4 marquee: notify the LabelOverlay so it can subscribe per-frame.
+    onSceneReady?.(scene);
 
     return () => {
+      onSceneReady?.(null);
       scene.dispose();
       sceneRef.current = null;
     };
-  }, []);
+    // onSceneReady intentionally omitted; if it changes the scene shouldn't
+    // be recreated. Caller passes a stable setState dispatcher.
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -86,14 +103,12 @@ export function useCanvasEngine({
     sceneRef.current?.setReducedMotion(frozen);
   }, [frozen]);
 
-  // E3: drive scene filtered visibility from FilterPanel selections.
-  // visibleIds.size === memories.length means "no filter active" — pass an
-  // empty set so the engine restores full visibility (scene.setFiltered
-  // empty-set semantics).
+  // E3 + code-review-critic HIGH #1 fix: distinguish "no filter active"
+  // from "filter matches zero rows". When filterActive is false, restore
+  // full visibility. When true, honor visibleIds even if empty (hides all).
   useEffect(() => {
-    const filterActive = visibleIds.size > 0 && visibleIds.size < memories.length;
     sceneRef.current?.setFiltered(filterActive ? visibleIds : new Set());
-  }, [visibleIds, memories.length]);
+  }, [visibleIds, filterActive]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     sceneRef.current?.handleMouseMove(e.nativeEvent);

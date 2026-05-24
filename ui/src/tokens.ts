@@ -11,8 +11,9 @@
  *
  * Imported by:
  *   - ui/src/engine/scene.ts (replaces line ~70 `#050709`, line ~76 `0x7c5cff`, etc.)
- *   - ui/src/engine/particles.ts (replaces gradient stops + `#ff4466` conflict color)
  *   - ui/src/engine/types.ts (replaces `LAYER_COLORS`)
+ *
+ * (engine/particles.ts deleted in E4 — was dead code from a pre-Three.js draft.)
  */
 
 // ---------------------------------------------------------------------------

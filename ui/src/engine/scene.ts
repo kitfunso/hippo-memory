@@ -2,11 +2,12 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
-import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+// UnrealBloomPass removed (E1 disabled bloom for parchment; import was dead).
 import type { Memory, Conflict } from "../types.js";
 import { LAYER_COLORS } from "./types.js";
 import {
   COLOR_BG,
+  COLOR_BG_HEX,
   COLOR_ACCENT_HEX,
   COLOR_AMBIENT_LIGHT_HEX,
   COLOR_GRID_HEX,
@@ -51,6 +52,14 @@ export class BrainScene {
   private onClickCb: ((memory: Memory | null) => void) | null = null;
   private disposed = false;
   private rafId = 0;
+  /**
+   * E4 fix (code-review-critic HIGH #4): freeze race on mount. Constructor
+   * used to call `this.animate()` unconditionally, kicking off rAF before
+   * useCanvasEngine could observe `frozen` and call setReducedMotion. Now
+   * the loop only runs when `paused === false`; setReducedMotion flips this
+   * flag without depending on rafId-cancel timing.
+   */
+  private paused = false;
   /** E1.5: per-frame render callbacks for screen-space label overlay (E4). */
   private onRenderCbs: Array<(camera: THREE.PerspectiveCamera, scene: THREE.Scene) => void> = [];
 
@@ -74,6 +83,11 @@ export class BrainScene {
     // renders as authored.
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.toneMappingExposure = 1.0;
+    // E4 fix: explicit clearColor matches scene.background (parchment). Defense
+    // against the initial-frame flash when scene.background hasn't been set
+    // yet, or when a render is skipped. Acceptance test reads
+    // renderer.getClearColor().getHex() === COLOR_BG_HEX.
+    this.renderer.setClearColor(COLOR_BG_HEX, 1);
     this.container.appendChild(this.renderer.domElement);
     this.renderer.domElement.style.display = "block";
   }
@@ -427,7 +441,7 @@ export class BrainScene {
   }
 
   private animate = (): void => {
-    if (this.disposed) return;
+    if (this.disposed || this.paused) return;
     this.rafId = requestAnimationFrame(this.animate);
 
     const elapsed = this.clock.getElapsedTime();
@@ -477,6 +491,7 @@ export class BrainScene {
    * (the sin/cos drift physics at L423-L435 never converges).
    */
   setReducedMotion(reduced: boolean): void {
+    this.paused = reduced;
     if (reduced) {
       if (this.rafId) {
         cancelAnimationFrame(this.rafId);
@@ -484,8 +499,25 @@ export class BrainScene {
       }
       this.snapParticlesToFinal();
     } else if (!this.rafId) {
-      this.animate(); // restart the existing loop
+      this.animate(); // animate() bails immediately if paused, so safe to call
     }
+  }
+
+  /**
+   * E4 marquee feature support — returns the node's basePosition by id so
+   * the LabelOverlay can project it to screen coords each frame without
+   * reaching into the private nodes array.
+   */
+  getNodePosition(id: string): THREE.Vector3 | null {
+    for (const node of this.nodes) {
+      if (node.id === id) return node.basePosition;
+    }
+    return null;
+  }
+
+  /** E4: expose renderer so LabelOverlay can read canvas size accurately. */
+  getRenderer(): THREE.WebGLRenderer {
+    return this.renderer;
   }
 
   /**

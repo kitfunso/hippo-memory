@@ -4,8 +4,18 @@ import { useCanvasEngine } from "./useCanvasEngine.js";
 import { MemoryTooltip } from "../../components/MemoryTooltip.js";
 import { Header } from "../../components/Header.js";
 import { Sidebar } from "../../components/Sidebar.js";
+import { BottomBar } from "../../components/BottomBar.js";
+import { LabelOverlay } from "../../components/LabelOverlay.js";
 import { LAYER_COLORS } from "../../engine/types.js";
-import { deriveVisibleIds, type FilterState, type Layer, type Confidence } from "../../state/filterState.js";
+import {
+  deriveVisibleIds,
+  isFilterActive,
+  matchesQuery,
+  type FilterState,
+  type Layer,
+  type Confidence,
+} from "../../state/filterState.js";
+import type { BrainScene } from "../../engine/scene.js";
 
 interface LivingMapProps {
   memories: Memory[];
@@ -19,6 +29,7 @@ interface LivingMapProps {
   setStrengthRange: (range: [number, number]) => void;
   setConfidences: (confidences: Set<Confidence>) => void;
   setAgeMaxDays: (days: number | null) => void;
+  resetFilters: () => void;
 }
 
 function StrengthBar({ value }: { value: number }) {
@@ -104,16 +115,24 @@ function DetailPanel({ memory, onClose, open }: { memory: Memory | null; onClose
 export function LivingMap({
   memories, embeddings, stats, conflicts, filterState,
   setQuery, setFrozen, setLayers, setStrengthRange, setConfidences, setAgeMaxDays,
+  resetFilters,
 }: LivingMapProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [hoveredMemory, setHoveredMemory] = useState<{ memory: Memory; x: number; y: number } | null>(null);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
-  const [showHint, setShowHint] = useState(true);
 
   // E3: derive the visible-id set once per render so Sidebar (tag cloud +
   // stats) and the scene filter wiring share the same source of truth.
   const visibleIds = useMemo(() => deriveVisibleIds(memories, filterState), [memories, filterState]);
+
+  // E4 proper: code-review-critic HIGH #1 — disambiguate "no filter" from
+  // "filter matched zero". Passed to useCanvasEngine + Sidebar.
+  const filterActive = useMemo(() => isFilterActive(filterState), [filterState]);
+
+  // E4 marquee: store the BrainScene instance so LabelOverlay can subscribe
+  // to per-frame onRender callbacks for projection.
+  const [sceneInstance, setSceneInstance] = useState<BrainScene | null>(null);
 
   useEffect(() => {
     const el = wrapperRef.current;
@@ -125,12 +144,6 @@ export function LivingMap({
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
-
-  useEffect(() => {
-    if (memories.length === 0) return;
-    const timer = setTimeout(() => setShowHint(false), 4000);
-    return () => clearTimeout(timer);
-  }, [memories.length]);
 
   const onHover = useCallback((memory: Memory | null, x: number, y: number) => {
     if (selectedMemory) return;
@@ -148,13 +161,13 @@ export function LivingMap({
     searchQuery: filterState.query,
     frozen: filterState.frozen,
     visibleIds,
+    filterActive,
+    onSceneReady: setSceneInstance,
   });
 
+  // Uses the shared matchesQuery so this can't drift from deriveVisibleIds.
   const matchCount = filterState.query.trim().length > 0
-    ? memories.filter((m) => {
-        const q = filterState.query.toLowerCase();
-        return m.content.toLowerCase().includes(q) || m.tags.some((t) => t.toLowerCase().includes(q));
-      }).length
+    ? memories.filter((m) => matchesQuery(m, filterState.query)).length
     : null;
 
   const panelOpen = selectedMemory !== null;
@@ -162,8 +175,42 @@ export function LivingMap({
   return (
     <div ref={wrapperRef} style={{ width: "100%", height: "100%", position: "relative", overflow: "hidden" }} onKeyDown={handleKeyDown} tabIndex={0}>
 
-      <div ref={containerRef} onMouseMove={handleMouseMove} onClick={handleClick}
-        style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: 340, zIndex: 0 }} />
+      {/* P2 mockup chrome: framed map-area container so the canvas no
+          longer bleeds edge-to-edge under the header. 1px border + map-bg
+          tint + 24px margin matches hybrid-v4 .map-container. */}
+      <div style={{
+        position: "absolute",
+        top: 48 + 24,
+        left: 24,
+        right: 340 + 24,
+        bottom: 36 + 24,
+        border: "1px solid var(--border)",
+        borderRadius: 2,
+        background: "var(--map-bg)",
+        overflow: "hidden",
+        zIndex: 0,
+      }}>
+        <div ref={containerRef} onMouseMove={handleMouseMove} onClick={handleClick}
+          style={{ position: "absolute", inset: 0 }} />
+
+        {/* Persistent map-hint footer per mockup line 62-65. Not auto-hidden
+            because the kbd shortcut model is genuinely undiscoverable
+            without it. */}
+        <div style={{
+          position: "absolute",
+          bottom: 12,
+          left: "50%",
+          transform: "translateX(-50%)",
+          fontFamily: "var(--font-mono)",
+          fontSize: 10,
+          color: "var(--text-faint)",
+          opacity: 0.6,
+          pointerEvents: "none",
+          letterSpacing: "2px",
+        }}>
+          drag · zoom · click · f to freeze · / to search
+        </div>
+      </div>
 
       <Header
         memoryCount={memories.length}
@@ -174,16 +221,26 @@ export function LivingMap({
         setFrozen={setFrozen}
       />
 
+      {/* P3 marquee feature: per-frame HTML node-label overlay. */}
+      <LabelOverlay
+        memories={memories}
+        visibleIds={filterActive ? visibleIds : new Set()}
+        scene={sceneInstance}
+      />
+
       <Sidebar
         memories={memories}
         stats={stats}
         visibleIds={visibleIds}
+        filterActive={filterActive}
+        selectedMemory={selectedMemory}
         filterState={filterState}
         setQuery={setQuery}
         setLayers={setLayers}
         setStrengthRange={setStrengthRange}
         setConfidences={setConfidences}
         setAgeMaxDays={setAgeMaxDays}
+        resetFilters={resetFilters}
       />
 
       {matchCount === 0 && filterState.query.trim().length > 0 && (
@@ -196,22 +253,15 @@ export function LivingMap({
         </div>
       )}
 
-      {showHint && memories.length > 0 && (
-        <div style={{
-          position: "absolute", bottom: 32, left: "50%", transform: "translateX(-50%)",
-          fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-faint)",
-          opacity: showHint ? 1 : 0, transition: "opacity 1s ease-out",
-          pointerEvents: "none", zIndex: 5, letterSpacing: "3px",
-        }}>
-          orbit &middot; zoom &middot; click &middot; f to freeze
-        </div>
-      )}
-
       {hoveredMemory && !selectedMemory && (
         <MemoryTooltip memory={hoveredMemory.memory} x={hoveredMemory.x} y={hoveredMemory.y} />
       )}
 
       <DetailPanel memory={selectedMemory} onClose={() => setSelectedMemory(null)} open={panelOpen} />
+
+      {/* P2 mockup chrome: bottom-bar with shortcuts + affordance key. Was
+          silently dropped from E2/E3 scope; plan-design-critic HIGH. */}
+      <BottomBar />
     </div>
   );
 }
