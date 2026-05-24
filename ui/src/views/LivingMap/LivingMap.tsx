@@ -2,15 +2,18 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import type { Memory, Conflict, Stats, EmbeddingIndex } from "../../types.js";
 import { useCanvasEngine } from "./useCanvasEngine.js";
 import { MemoryTooltip } from "../../components/MemoryTooltip.js";
-import { SearchBar } from "../../components/SearchBar.js";
-import { LayerLegend } from "../../components/LayerLegend.js";
+import { Header } from "../../components/Header.js";
 import { LAYER_COLORS } from "../../engine/types.js";
+import type { FilterState } from "../../state/filterState.js";
 
 interface LivingMapProps {
   memories: Memory[];
   embeddings: EmbeddingIndex;
   stats: Stats | null;
   conflicts: Conflict[];
+  filterState: FilterState;
+  setQuery: (query: string) => void;
+  setFrozen: (frozen: boolean) => void;
 }
 
 function StrengthBar({ value }: { value: number }) {
@@ -93,12 +96,11 @@ function DetailPanel({ memory, onClose, open }: { memory: Memory | null; onClose
   );
 }
 
-export function LivingMap({ memories, embeddings, stats, conflicts }: LivingMapProps) {
+export function LivingMap({ memories, embeddings, stats, conflicts, filterState, setQuery, setFrozen }: LivingMapProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [hoveredMemory, setHoveredMemory] = useState<{ memory: Memory; x: number; y: number } | null>(null);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
   const [showHint, setShowHint] = useState(true);
 
   useEffect(() => {
@@ -130,12 +132,14 @@ export function LivingMap({ memories, embeddings, stats, conflicts }: LivingMapP
 
   const { containerRef, handleMouseMove, handleClick, handleKeyDown } = useCanvasEngine({
     memories, embeddings, conflicts, width: size.width, height: size.height,
-    onHover, onClick: onClickMemory, searchQuery,
+    onHover, onClick: onClickMemory,
+    searchQuery: filterState.query,
+    frozen: filterState.frozen,
   });
 
-  const matchCount = searchQuery.trim().length > 0
+  const matchCount = filterState.query.trim().length > 0
     ? memories.filter((m) => {
-        const q = searchQuery.toLowerCase();
+        const q = filterState.query.toLowerCase();
         return m.content.toLowerCase().includes(q) || m.tags.some((t) => t.toLowerCase().includes(q));
       }).length
     : null;
@@ -148,27 +152,16 @@ export function LivingMap({ memories, embeddings, stats, conflicts }: LivingMapP
       <div ref={containerRef} onMouseMove={handleMouseMove} onClick={handleClick}
         style={{ position: "absolute", inset: 0, zIndex: 0 }} />
 
-      <div style={{
-        position: "absolute", top: 0, left: 0, right: 0, height: 48, zIndex: 20,
-        background: "var(--glass-bg)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
-        borderBottom: "1px solid var(--glass-border)",
-        display: "flex", alignItems: "center", padding: "0 24px", gap: 20,
-        pointerEvents: "auto",
-      }}>
-        <div style={{ flex: "0 0 auto", display: "flex", alignItems: "baseline", gap: 12 }}>
-          <span style={{ color: "var(--text)", fontSize: 14, fontWeight: 600, fontFamily: "var(--font-serif)", letterSpacing: "0.3px" }}>hippo</span>
-          <span style={{ color: "var(--accent)", fontSize: 11, fontFamily: "var(--font-serif)", fontStyle: "italic" }}>brain observatory</span>
-          <span style={{ color: "var(--dim)", fontSize: 10, fontFamily: "var(--font-mono)" }}>{memories.length} memories</span>
-          {(stats?.at_risk ?? 0) > 0 && (
-            <span style={{ color: "var(--yellow)", fontSize: 10, fontFamily: "var(--font-mono)" }}>{stats?.at_risk} fading</span>
-          )}
-        </div>
-        <div style={{ flex: 1 }} />
-        <LayerLegend />
-        <SearchBar value={searchQuery} onChange={setSearchQuery} memoryCount={memories.length} matchCount={matchCount} />
-      </div>
+      <Header
+        memoryCount={memories.length}
+        matchCount={matchCount}
+        stats={stats}
+        filterState={filterState}
+        setQuery={setQuery}
+        setFrozen={setFrozen}
+      />
 
-      {matchCount === 0 && searchQuery.trim().length > 0 && (
+      {matchCount === 0 && filterState.query.trim().length > 0 && (
         <div style={{
           position: "absolute", top: 56, right: 24, zIndex: 21,
           background: "var(--ink-faint)", padding: "4px 12px", borderRadius: 12,
@@ -185,7 +178,7 @@ export function LivingMap({ memories, embeddings, stats, conflicts }: LivingMapP
           opacity: showHint ? 1 : 0, transition: "opacity 1s ease-out",
           pointerEvents: "none", zIndex: 5, letterSpacing: "3px",
         }}>
-          orbit &middot; zoom &middot; click
+          orbit &middot; zoom &middot; click &middot; f to freeze
         </div>
       )}
 

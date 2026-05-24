@@ -10,7 +10,8 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true
+    "noEmit": true,
+    "types": ["@testing-library/jest-dom"]
   },
-  "include": ["src"]
+  "include": ["src", "vitest.config.ts", "vitest.setup.ts"]
 }
