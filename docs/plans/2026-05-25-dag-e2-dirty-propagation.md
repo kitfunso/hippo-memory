@@ -106,21 +106,26 @@ if (row.dag_parent_id) {
 }
 ```
 
-### S5 — `markSummaryDirtyInTx` helper export
+### S5 — `markSummaryDirtyInTx` helper (EXPORTED)
 
-New private helper in `src/store.ts` (mirrors E1's `markSummaryDirty` but takes an open db):
+New exported helper in `src/store.ts` (mirrors E1's `markSummaryDirty` but takes an open db). Used by 5 hook sites (writeEntryDbOnly + api.supersede CAS + deleteEntry + archiveRawMemory + batchWriteAndDelete).
 
 ```typescript
 /**
  * v0.30 / E2 — in-transaction variant of markSummaryDirty. Takes an open
- * db (caller is responsible for the SAVEPOINT/BEGIN). Used by writeEntryDbOnly
- * + api.supersede CAS + deleteEntry + archiveRawMemory hooks so each child
- * mutation's dirty-mark is atomic with the mutation itself.
+ * db (caller is responsible for SAVEPOINT/BEGIN). Used by E2's 5 hook
+ * sites: writeEntryDbOnly, api.supersede CAS, deleteEntry,
+ * archiveRawMemory, batchWriteAndDelete.
  *
- * Same idempotency contract as markSummaryDirty: 0->1 transition only,
- * audit row only on transition, no-op on non-summary / archived / unknown id.
+ * EXPORTED (required for cross-module use by api.ts + raw-archive.ts).
+ * Risk of misuse (caller without open tx) is mitigated by the InTx
+ * suffix + DatabaseSyncLike-typed param. Public end-user surface stays
+ * at markSummaryDirty (own-connection).
+ *
+ * Same idempotency contract: 0->1 transition only, audit row only on
+ * transition, no-op on non-summary / archived / unknown id / cross-tenant.
  */
-function markSummaryDirtyInTx(
+export function markSummaryDirtyInTx(
   db: DatabaseSyncLike,
   summaryId: string,
   tenantId: string,
@@ -142,6 +147,43 @@ function markSummaryDirtyInTx(
 ```
 
 **EXPORTED** (required for cross-module use by api.ts + raw-archive.ts which call from inside their own open transactions). Misuse risk (caller without open tx) is mitigated by the `InTx` suffix + DatabaseSyncLike-typed param. Public end-user surface for the dirty-mark stays at the own-connection `markSummaryDirty` (E1) helper. **R1 amendment to original draft's "private" claim.**
+
+### S7 — Hook 5: `batchWriteAndDelete` (independent-review-critic R1 HIGH fold-in)
+
+R1 independent-review found that `batchWriteAndDelete` in `src/store.ts:1512` bypasses all 4 prior hooks. `consolidate.ts:432`/sleep flushes pendingWrites + pendingDeletes through this path every cycle (decay-survivor updates, sub-threshold deletes, merge weakening). Without this 5th hook, parent summaries NEVER get marked dirty for the dominant mutation source — the live-coupling contract silently broken.
+
+Inside the BEGIN, BEFORE the DELETE loop, snapshot dag_parent_id for every doomed row via a single IN-list SELECT. Collect parent ids from `toWrite` via `entry.dag_parent_id`. Fire `markSummaryDirtyInTx` for every unique parent BEFORE COMMIT (dedup via Set so audit volume = O(distinct parents) not O(rows)).
+
+```typescript
+const dirtyParents = new Set<string>();
+const tenantById = new Map<string, string>();
+if (toDeleteIds.length > 0) {
+  const placeholders = toDeleteIds.map(() => '?').join(',');
+  const rows = db.prepare(
+    `SELECT dag_parent_id, tenant_id FROM memories WHERE id IN (${placeholders})`,
+  ).all(...toDeleteIds) as Array<{ dag_parent_id: string | null; tenant_id: string | null }>;
+  for (const row of rows) {
+    if (row.dag_parent_id) {
+      dirtyParents.add(row.dag_parent_id);
+      tenantById.set(row.dag_parent_id, row.tenant_id ?? 'default');
+    }
+  }
+}
+for (const entry of toWrite) {
+  upsertEntryRow(db, entry);
+  if (entry.dag_parent_id) {
+    dirtyParents.add(entry.dag_parent_id);
+    tenantById.set(entry.dag_parent_id, entry.tenantId);
+  }
+}
+// ... existing DELETE loop ...
+for (const parentId of dirtyParents) {
+  markSummaryDirtyInTx(db, parentId, tenantById.get(parentId) ?? 'default', 'batch');
+}
+db.exec('COMMIT');
+```
+
+Performance: single IN-list SELECT runs only when toDeleteIds is non-empty; dedup via Set caps audit volume at 1 per unique parent per batch. With consolidate flushing ~50-200 changes per sleep cycle and ~10 unique parents typical, overhead is ~3-5 SQL statements per cycle. Test #9 locks the contract.
 
 ### S6 — Tests `tests/dag-dirty-propagation.test.ts`
 
@@ -172,6 +214,7 @@ NEW test file. 8 cases per brainstorm matrix + the discover refinement:
 | AC10 | metadata.source = 'E2' (distinguishes from E1 'summary_marked_dirty' debug) | S5/S6 |
 | AC11 | All existing tests pass (invalidation, supersede, forget, archive paths untouched) | regression |
 | AC12 | tsc + build clean | regression |
+| AC13 | `batchWriteAndDelete` hooks markSummaryDirtyInTx for writes AND deletes (dedup via Set + IN-list snapshot SELECT) | S7/test #9 |
 
 ## Risks
 
