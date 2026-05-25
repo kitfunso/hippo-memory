@@ -931,8 +931,9 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
       kind, scope, owner, artifact_ref,
       tenant_id,
       descendant_count, earliest_at, latest_at,
+      dag_level_3_built_at,
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     ON CONFLICT(id) DO UPDATE SET
       created = excluded.created,
       last_retrieved = excluded.last_retrieved,
@@ -968,6 +969,7 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
       descendant_count = excluded.descendant_count,
       earliest_at = excluded.earliest_at,
       latest_at = excluded.latest_at,
+      dag_level_3_built_at = excluded.dag_level_3_built_at,
       updated_at = datetime('now')
   `).run(
     entry.id,
@@ -1005,6 +1007,7 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
     entry.descendant_count ?? 0,
     entry.earliest_at ?? null,
     entry.latest_at ?? null,
+    entry.dag_level_3_built_at ?? null,
   );
 
   syncFtsRow(db, entry);
@@ -2516,17 +2519,21 @@ export function markSummaryDirtyInTx(
   tenantId: string,
   actor: string,
 ): void {
+  // v0.30 / E5: widened dag_level=2 -> IN (2, 3). RETURNING dag_level reads
+  // actual level in same round trip so audit metadata stays accurate without
+  // a SELECT-before-UPDATE extra DB op on this hot path (5 caller sites).
   const result = db.prepare(`
     UPDATE memories
        SET summary_dirty = 1
      WHERE id = ?
        AND tenant_id = ?
-       AND dag_level = 2
+       AND dag_level IN (2, 3)
        AND summary_dirty = 0
        AND kind != 'archived'
-  `).run(summaryId, tenantId);
-  if ((result.changes ?? 0) > 0) {
-    audit(db, 'summary_marked_dirty', summaryId, { dag_level: 2, source: 'E2' }, actor, tenantId);
+    RETURNING dag_level
+  `).get(summaryId, tenantId) as { dag_level: number } | undefined;
+  if (result) {
+    audit(db, 'summary_marked_dirty', summaryId, { dag_level: result.dag_level, source: 'E2' }, actor, tenantId);
   }
 }
 
@@ -2553,21 +2560,23 @@ export function markSummaryDirty(
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
+    // v0.30 / E5: widened dag_level=2 -> IN (2, 3). RETURNING dag_level reads
+    // actual level in same round trip.
     const result = db.prepare(`
       UPDATE memories
          SET summary_dirty = 1
        WHERE id = ?
          AND tenant_id = ?
-         AND dag_level = 2
+         AND dag_level IN (2, 3)
          AND summary_dirty = 0
          AND kind != 'archived'
-    `).run(summaryId, tenantId);
-    if ((result.changes ?? 0) > 0) {
-      // audit() wraps appendAuditEvent in try/catch — defends against the
-      // v16-partial-state where audit_log is missing (fixed by v27 heal).
+      RETURNING dag_level
+    `).get(summaryId, tenantId) as { dag_level: number } | undefined;
+    if (result) {
+      // audit() wraps appendAuditEvent in try/catch (v27 heal scenario).
       // metadata.source=E1 leaves a breadcrumb so E2-E5 debugging can
       // distinguish dirty-marks across the arc's wiring layers.
-      audit(db, 'summary_marked_dirty', summaryId, { dag_level: 2, source: 'E1' }, actor, tenantId);
+      audit(db, 'summary_marked_dirty', summaryId, { dag_level: result.dag_level, source: 'E1' }, actor, tenantId);
     }
   } finally {
     closeHippoDb(db);
@@ -2583,6 +2592,34 @@ export function markSummaryDirty(
 // syncFtsRow, assertTenantId. dag.ts owns only the thin orchestrator
 // rebuildDirtySummaries() that calls into these.
 // ---------------------------------------------------------------------------
+
+/**
+ * v0.30 / E5 — host-wide loader for L2 topic summaries without an L3 parent.
+ * Used by consolidate phase 1.9 (buildEntityProfiles) to cluster L2s into
+ * L3 entity profiles. Mirrors loadAllDirtySummaries pattern (E3): SQL-level
+ * filter is cheaper than reusing in-memory `survivors` (which doesn't
+ * contain L2s freshly created by phase 1.7 buildDag).
+ *
+ * Returns entries with tenantId attached so per-cluster writes stay
+ * tenant-scoped via summary.tenantId.
+ */
+export function loadAllL2Summaries(hippoRoot: string): MemoryEntry[] {
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    const rows = db.prepare(`
+      SELECT ${MEMORY_SELECT_COLUMNS}
+        FROM memories
+       WHERE dag_level = 2
+         AND dag_parent_id IS NULL
+         AND kind != 'archived'
+       ORDER BY created ASC, id ASC
+    `).all() as MemoryRow[];
+    return rows.map(rowToEntry);
+  } finally {
+    closeHippoDb(db);
+  }
+}
 
 /**
  * v0.30 / E3 — host-wide variant of loadDirtySummaries. Iterates all tenants
@@ -2676,6 +2713,7 @@ export function applyRebuildResult(
     try {
       const nowIso = new Date().toISOString();
       // ONE prepared UPDATE per branch. Test #8 inspects the SQL string.
+      // v0.30 / E5: widened dag_level=2 -> IN (2, 3) on both branches.
       const sql = patch.bumpRebuildCount
         ? `UPDATE memories
               SET content = ?,
@@ -2687,7 +2725,7 @@ export function applyRebuildResult(
                   summary_dirty = 0
             WHERE id = ?
               AND tenant_id = ?
-              AND dag_level = 2
+              AND dag_level IN (2, 3)
               AND summary_dirty = 1
               AND kind != 'archived'`
         : `UPDATE memories
@@ -2697,7 +2735,7 @@ export function applyRebuildResult(
                   summary_dirty = 0
             WHERE id = ?
               AND tenant_id = ?
-              AND dag_level = 2
+              AND dag_level IN (2, 3)
               AND summary_dirty = 1
               AND kind != 'archived'`;
 
@@ -2745,7 +2783,9 @@ export function applyRebuildResult(
           'summary_rebuilt',
           summary.id,
           {
-            dag_level: 2,
+            // v0.30 / E5: read actual level from the summary in scope
+            // (NOT hardcoded 2). L2 -> 2, L3 -> 3.
+            dag_level: summary.dag_level,
             source: 'E3-rebuild',
             zero_children: patch.zeroChildren,
             descendant_count: patch.descendant_count,
@@ -2786,22 +2826,28 @@ export function clearSummaryDirtyAfterBuild(
   summaryId: string,
   tenantId: string,
   actor: string = 'cli',
+  source: string = 'buildDag-clean',
 ): void {
   assertTenantId('clearSummaryDirtyAfterBuild', tenantId);
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
+    // v0.30 / E5: widened dag_level=2 -> IN (2, 3). RETURNING dag_level reads
+    // actual level so audit metadata stays accurate without an extra SELECT.
     const result = db.prepare(`
       UPDATE memories
          SET summary_dirty = 0
        WHERE id = ?
          AND tenant_id = ?
-         AND dag_level = 2
+         AND dag_level IN (2, 3)
          AND summary_dirty = 1
          AND kind != 'archived'
-    `).run(summaryId, tenantId);
-    if ((result.changes ?? 0) > 0) {
-      audit(db, 'summary_marked_clean', summaryId, { dag_level: 2, source: 'buildDag-clean' }, actor, tenantId);
+      RETURNING dag_level
+    `).get(summaryId, tenantId) as { dag_level: number } | undefined;
+    if (result) {
+      // v0.30 / E5: source param distinguishes buildDag-clean (L2) from
+      // buildEntityProfiles-clean (L3) and any future build path.
+      audit(db, 'summary_marked_clean', summaryId, { dag_level: result.dag_level, source }, actor, tenantId);
     }
   } finally {
     closeHippoDb(db);

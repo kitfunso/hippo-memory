@@ -281,3 +281,111 @@ export async function rebuildDirtySummaries(
 
   return result;
 }
+
+// ---------------------------------------------------------------------------
+// v0.30 / E5 of DAG live-coupling — L3 entity profile build path
+// ---------------------------------------------------------------------------
+
+export interface EntityProfilesBuildResult {
+  candidateClusters: number;
+  profilesCreated: number;
+  l2sLinked: number;
+  // independent-review MED #3 fold: surface failure counter so operators
+  // see LLM null / rate-limit / 401 signal (parity with DagRebuildResult.failed).
+  failed: number;
+}
+
+/**
+ * v0.30 / E5 — build L3 entity profiles by clustering L2 summaries with
+ * shared entity tags. Threshold 2+ L2s per entity. Mirrors buildDag L1->L2
+ * pattern, one level up.
+ *
+ * Born-dirty cancellation (E3 lesson): after linking L2 children to the new
+ * L3 (each link write fires E2 hook on L3 via widened markSummaryDirtyInTx),
+ * call clearSummaryDirtyAfterBuild with source='buildEntityProfiles-clean'
+ * so E3 sleep-cycle rebuild doesn't re-rebuild the freshly-built L3 this
+ * same cycle.
+ */
+export async function buildEntityProfiles(
+  hippoRoot: string,
+  l2Summaries: MemoryEntry[],
+  opts: DagSummaryOptions,
+): Promise<EntityProfilesBuildResult> {
+  const result: EntityProfilesBuildResult = {
+    candidateClusters: 0,
+    profilesCreated: 0,
+    l2sLinked: 0,
+    failed: 0,
+  };
+
+  // Only L2 with no L3 parent yet (avoid re-clustering already-profiled L2s).
+  const unparented = l2Summaries.filter(
+    (s) => s.dag_level === 2 && !s.dag_parent_id,
+  );
+
+  // independent-review HIGH #1 fold: cluster ONLY within-tenant.
+  // clusterFacts has no tenant awareness; without this partition step a
+  // multi-tenant host could form a cluster spanning tenants and produce
+  // a single L3 with tenantId='default' that doesn't belong to either
+  // child tenant. Fix: bucket by tenantId, run clusterFacts per-tenant,
+  // pass tenantId to createMemory.
+  const byTenant = new Map<string, MemoryEntry[]>();
+  for (const l2 of unparented) {
+    const tid = l2.tenantId ?? 'default';
+    const list = byTenant.get(tid) ?? [];
+    list.push(l2);
+    byTenant.set(tid, list);
+  }
+
+  for (const [tenantId, tenantL2s] of byTenant) {
+    const clusters = clusterFacts(tenantL2s);
+    const eligible = clusters.filter((c) => c.members.length >= 2);
+    result.candidateClusters += eligible.length;
+
+    for (const cluster of eligible) {
+      const summary = await generateDagSummary(
+        cluster.label,
+        cluster.members.map((m) => m.content),
+        opts,
+      );
+      if (!summary) {
+        result.failed++;
+        continue;
+      }
+
+      const memberCreatedAts = cluster.members.map((m) => m.created).sort();
+      const nowIso = new Date().toISOString();
+      const profileEntry = createMemory(summary, {
+        layer: Layer.Semantic,
+        tags: [...cluster.entityTags, 'dag-entity-profile'],
+        confidence: 'inferred',
+        dag_level: 3,
+        tenantId, // HIGH #1 fold: thread tenant explicitly
+      });
+      profileEntry.descendant_count = cluster.members.length;
+      profileEntry.earliest_at = memberCreatedAts[0];
+      profileEntry.latest_at = memberCreatedAts[memberCreatedAts.length - 1];
+      profileEntry.dag_level_3_built_at = nowIso;
+      writeEntry(hippoRoot, profileEntry);
+      result.profilesCreated++;
+
+      for (const member of cluster.members) {
+        const updated: MemoryEntry = { ...member, dag_parent_id: profileEntry.id };
+        writeEntry(hippoRoot, updated);
+        result.l2sLinked++;
+      }
+      // E3 born-dirty cancellation, same dance as buildDag L161-168 but for
+      // L3. Pass source='buildEntityProfiles-clean' to distinguish in audit.
+      // Args: (root, id, tenantId, actor, source).
+      clearSummaryDirtyAfterBuild(
+        hippoRoot,
+        profileEntry.id,
+        tenantId,
+        'buildEntityProfiles',
+        'buildEntityProfiles-clean',
+      );
+    }
+  }
+
+  return result;
+}

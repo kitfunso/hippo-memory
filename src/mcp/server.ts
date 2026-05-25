@@ -245,7 +245,13 @@ const TOOLS = [
         },
         budget: {
           type: 'number',
-          description: 'Max total token cost (≈ chars/4) of returned children. Truncates chronologically.',
+          description: 'Max total token cost (~ chars/4) of returned children. Truncates chronologically.',
+        },
+        depth: {
+          type: 'number',
+          minimum: 1,
+          maximum: 10,
+          description: 'v0.30 / E5: walk N levels down (default 1 = direct children only). Higher values include children of children. Token budget remains GLOBAL across levels. Hard cap 10.',
         },
       },
       required: ['summary_id'],
@@ -575,6 +581,17 @@ async function executeTool(
       if (!summaryId) return 'No summary_id provided.';
       const limit = Number(args.limit);
       const budget = Number(args.budget);
+      // v0.30 / E5: depth walks N levels (default 1, hard cap 10).
+      // independent-review MED #5 fold: reject out-of-range explicitly
+      // (no silent clamp) so MCP callers see the constraint at their layer.
+      let depth: number | undefined;
+      if (args.depth !== undefined) {
+        const depthRaw = Number(args.depth);
+        if (!Number.isFinite(depthRaw) || depthRaw < 1 || depthRaw > 10) {
+          return `depth must be an integer between 1 and 10 (got ${args.depth})`;
+        }
+        depth = depthRaw;
+      }
       const apiCtx: ApiContext = {
         hippoRoot,
         tenantId,
@@ -583,6 +600,7 @@ async function executeTool(
       const r = apiDrillDown(apiCtx, summaryId, {
         ...(Number.isFinite(limit) && limit > 0 ? { limit } : {}),
         ...(Number.isFinite(budget) && budget > 0 ? { budget } : {}),
+        ...(depth !== undefined ? { depth } : {}),
       });
       if ('failure' in r) {
         // v1.6.4: only not_drillable is caller-actionable. not_found
