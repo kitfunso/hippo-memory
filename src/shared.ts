@@ -155,6 +155,11 @@ export interface HybridSearchOptions extends SearchOptions {
   includeSuperseded?: boolean;
   /** Filter to memories current at this ISO date string. */
   asOf?: string;
+  /** v0.30 / E4 — propagated to underlying hybridSearch calls.
+   *  Per-call > env HIPPO_SUMMARY_DEBOOST > 0.85 default. */
+  summaryDeboost?: number;
+  /** v0.30 / E4 — propagated. Default true (1.05 boost if rebuilt within 7d). */
+  summaryFreshness?: boolean;
 }
 
 /**
@@ -167,7 +172,7 @@ export async function searchBothHybrid(
   globalRoot: string,
   options: HybridSearchOptions = {}
 ): Promise<SearchResult[]> {
-  const { budget = 4000, now = new Date(), embeddingWeight, explain, mmr, mmrLambda, localBump = 1.2, minResults, scope, includeSuperseded, asOf, tenantId } = options;
+  const { budget = 4000, now = new Date(), embeddingWeight, explain, mmr, mmrLambda, localBump = 1.2, minResults, scope, includeSuperseded, asOf, tenantId, summaryDeboost, summaryFreshness } = options;
 
   const localEntries = fs.existsSync(localRoot) ? loadSearchEntries(localRoot, query, undefined, tenantId) : [];
   const globalEntries = fs.existsSync(globalRoot) ? loadSearchEntries(globalRoot, query, undefined, tenantId) : [];
@@ -175,10 +180,10 @@ export async function searchBothHybrid(
   if (localEntries.length === 0 && globalEntries.length === 0) return [];
 
   const localResults = await hybridSearch(query, localEntries, {
-    budget, now, hippoRoot: localRoot, embeddingWeight, explain, mmr, mmrLambda, minResults, scope, includeSuperseded, asOf,
+    budget, now, hippoRoot: localRoot, embeddingWeight, explain, mmr, mmrLambda, minResults, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness,
   });
   const globalResults = await hybridSearch(query, globalEntries, {
-    budget, now, hippoRoot: globalRoot, embeddingWeight, explain, mmr, mmrLambda, minResults, scope, includeSuperseded, asOf,
+    budget, now, hippoRoot: globalRoot, embeddingWeight, explain, mmr, mmrLambda, minResults, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness,
   });
 
   // Tag global results. Local memories get a configurable priority bump.
