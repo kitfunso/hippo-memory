@@ -104,6 +104,13 @@ interface MemoryRow {
   descendant_count: number | null;
   earliest_at: string | null;
   latest_at: string | null;
+  // v0.30 / E1 of DAG live-coupling (schema v28). Symmetric with v25 DAG
+  // cache: included in MEMORY_SELECT_COLUMNS so every read path populates
+  // these alongside descendant_count / earliest_at / latest_at.
+  summary_dirty: number | null;
+  last_rebuilt_at: string | null;
+  rebuild_count: number | null;
+  dag_level_3_built_at: string | null;
   // F1 (v1.7.0): present only on rows from MEMORY_SEARCH_COLUMNS (FTS path).
   // Other paths SELECT MEMORY_SELECT_COLUMNS, which does not include this.
   bm25_score?: number;
@@ -189,7 +196,7 @@ export interface SessionEvent {
 }
 
 const INDEX_VERSION = 3;
-const MEMORY_SELECT_COLUMNS = `id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content, parents_json, starred, trace_outcome, source_session_id, valid_from, superseded_by, extracted_from, dag_level, dag_parent_id, kind, scope, owner, artifact_ref, tenant_id, descendant_count, earliest_at, latest_at`;
+const MEMORY_SELECT_COLUMNS = `id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content, parents_json, starred, trace_outcome, source_session_id, valid_from, superseded_by, extracted_from, dag_level, dag_parent_id, kind, scope, owner, artifact_ref, tenant_id, descendant_count, earliest_at, latest_at, summary_dirty, last_rebuilt_at, rebuild_count, dag_level_3_built_at`;
 // F1 (v1.7.0): qualified-and-aliased columns for the FTS join in
 // loadSearchRows. Every column is `m.<col> AS <col>` so rowToEntry's
 // unqualified field reads keep working unchanged. The trailing
@@ -415,6 +422,11 @@ function rowToEntry(row: MemoryRow): MemoryEntry {
     descendant_count: Number(row.descendant_count ?? 0),
     earliest_at: row.earliest_at ?? null,
     latest_at: row.latest_at ?? null,
+    // v0.30 / E1 of DAG live-coupling (schema v28). Symmetric with v25 cache.
+    summary_dirty: (Number(row.summary_dirty ?? 0) === 1 ? 1 : 0) as 0 | 1,
+    last_rebuilt_at: row.last_rebuilt_at ?? null,
+    rebuild_count: Number(row.rebuild_count ?? 0),
+    dag_level_3_built_at: row.dag_level_3_built_at ?? null,
     // F1 (v1.7.0): preserve bm25_score from the FTS path. `'bm25_score' in row`
     // distinguishes "absent column" (non-FTS path) from "column present but
     // value 0" — though FTS5 bm25() never returns 0, this is defensive.
@@ -2392,6 +2404,90 @@ export function loadHandoffById(hippoRoot: string, tenantId: string, id: number)
     `).get(id, tenantId) as SessionHandoffRow | undefined;
 
     return row ? rowToSessionHandoff(row) : null;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// v0.30 / E1 of DAG live-coupling — dirty-flag helpers for the existing
+// DAG layer's level-2 summaries.
+//
+// Used by E2 (child-write propagation in invalidation.ts / writeEntry /
+// forgetMemory / archiveRawMemory) to mark a summary dirty when one of its
+// children changes, and by E3's sleep-cycle rebuildDirtySummaries phase to
+// enumerate candidates without scanning every memory row.
+// ---------------------------------------------------------------------------
+
+/**
+ * Load summaries flagged dirty for the given tenant. Sorted by latest_at
+ * DESC (NULLS LAST) so E3's rebuild cap (HIPPO_DAG_REBUILD_CAP, default 20)
+ * takes the most-recently-changed summaries first.
+ *
+ * Returns full MemoryEntry shape via MEMORY_SELECT_COLUMNS + rowToEntry
+ * (v28 fields are part of the standard read path).
+ */
+export function loadDirtySummaries(
+  hippoRoot: string,
+  tenantId: string,
+): MemoryEntry[] {
+  assertTenantId('loadDirtySummaries', tenantId);
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    const rows = db.prepare(`
+      SELECT ${MEMORY_SELECT_COLUMNS}
+        FROM memories
+       WHERE summary_dirty = 1
+         AND tenant_id = ?
+         AND kind != 'archived'
+       ORDER BY latest_at DESC NULLS LAST, id ASC
+    `).all(tenantId) as MemoryRow[];
+    return rows.map(rowToEntry);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/**
+ * Mark a summary as dirty. Idempotent (re-marking dirty is a no-op + no
+ * second audit row). Tenant-scoped to prevent cross-tenant writes via
+ * parent-lookup. Called by E2 from invalidation.ts / writeEntry /
+ * forgetMemory / archiveRawMemory whenever a child is invalidated,
+ * superseded, forgotten, or archived.
+ *
+ * Quietly no-ops if the target row doesn't exist or isn't a level-2
+ * summary (E5 will widen the dag_level guard to IN (2, 3) when level-3
+ * build path lands). Emits a 'summary_marked_dirty' audit row on actual
+ * state transitions (0 -> 1) via the audit() helper, which try/catches
+ * for missing audit_log (the v27 self-heal scenario).
+ */
+export function markSummaryDirty(
+  hippoRoot: string,
+  summaryId: string,
+  tenantId: string,
+  actor: string = 'cli',
+): void {
+  assertTenantId('markSummaryDirty', tenantId);
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    const result = db.prepare(`
+      UPDATE memories
+         SET summary_dirty = 1
+       WHERE id = ?
+         AND tenant_id = ?
+         AND dag_level = 2
+         AND summary_dirty = 0
+         AND kind != 'archived'
+    `).run(summaryId, tenantId);
+    if ((result.changes ?? 0) > 0) {
+      // audit() wraps appendAuditEvent in try/catch — defends against the
+      // v16-partial-state where audit_log is missing (fixed by v27 heal).
+      // metadata.source=E1 leaves a breadcrumb so E2-E5 debugging can
+      // distinguish dirty-marks across the arc's wiring layers.
+      audit(db, 'summary_marked_dirty', summaryId, { dag_level: 2, source: 'E1' }, actor, tenantId);
+    }
   } finally {
     closeHippoDb(db);
   }

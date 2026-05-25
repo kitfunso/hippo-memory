@@ -4735,6 +4735,7 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'outcome',     // v1.11.5: pre-existing drift — emitted today but rejected by old Set
   'consolidate', // v1.11.5: emitted by api.sleep / hippo sleep
   'audit_prune', // v1.12.9: emitted by pruneAuditLog
+  'summary_marked_dirty', // v0.30 / E1 — lockstep with AuditOp union + server.ts VALID_AUDIT_OPS (v1.11.5 CRIT A institutional rule)
 ]);
 
 function formatAuditRow(ev: AuditEvent): string {

@@ -77,6 +77,21 @@ export interface MemoryEntry {
   descendant_count?: number;
   earliest_at?: string | null;
   latest_at?: string | null;
+  // DAG live-coupling (schema v28, E1 of 5-episode arc).
+  /** v28: 1 when this summary row has at least one child invalidated,
+   *  superseded, forgotten, or archived since it was last rebuilt. Cleared
+   *  by E3's rebuildDirtySummaries during sleep. Always 0 for non-summary
+   *  rows (dag_level !== 2; E5 widens to include 3). */
+  summary_dirty?: 0 | 1;
+  /** v28: ISO 8601 timestamp of the last successful rebuild for this
+   *  summary, or null if never rebuilt. */
+  last_rebuilt_at?: string | null;
+  /** v28: monotonically-increasing counter of successful rebuilds for this
+   *  summary. 0 for initial buildDag write; bumped by E3. */
+  rebuild_count?: number;
+  /** v28 (reserved for E5): ISO 8601 timestamp the level-3 entity profile
+   *  was built. Only ever populated on dag_level=3 rows. */
+  dag_level_3_built_at?: string | null;
   // A3 provenance envelope (schema v14)
   kind: MemoryKind;             // raw | distilled | superseded | archived
   scope: string | null;         // e.g. 'team:eng', 'project:foo'; null = global
