@@ -228,6 +228,68 @@ export interface ScoreBreakdown {
   final: number;
   /** Age of the memory in whole days, at scoring time. */
   ageDays: number;
+  /** v0.30 / E4 — entry.dag_level (0=raw, 1=extracted, 2=topic, 3=entity). */
+  dagLevel?: number;
+  /** v0.30 / E4 — descendant_count column (refreshed by E3 rebuild). */
+  descendantCount?: number;
+  /** v0.30 / E4 — last_rebuilt_at ISO; null if never rebuilt. L2 only. */
+  lastRebuiltAt?: string | null;
+  /** v0.30 / E4 — cumulative rebuild_count from E3. L2 only. */
+  rebuildCount?: number;
+  /** v0.30 / E4 — deboost applied (1.0 for non-summaries; default 0.85 for L2). */
+  summaryDeboost?: number;
+  /** v0.30 / E4 — 1.05 if L2 + rebuilt within 7 days; 1.0 otherwise. */
+  summaryFreshnessBoost?: number;
+}
+
+// ---------------------------------------------------------------------------
+// v0.30 / E4 — DAG L2 summary scoring helpers
+// ---------------------------------------------------------------------------
+
+const DEFAULT_SUMMARY_DEBOOST = 0.85;
+const DEFAULT_FRESHNESS_BOOST = 1.05;
+const FRESHNESS_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * v0.30 / E4 — single source of truth for "is this a DAG L2 summary".
+ * Existing drill-down at search.ts:506-529/923-946 uses tag check
+ * ('dag-summary'); structural truth is dag_level === 2. New E4 code uses
+ * this helper. Existing drill-down NOT modified (separate refactor flagged).
+ */
+export function isDagSummary(entry: MemoryEntry): boolean {
+  return entry.dag_level === 2;
+}
+
+/**
+ * v0.30 / E4 — resolve summaryDeboost: per-call > env > 0.85 default.
+ * Invalid values (≤0, >1, NaN) at any level fall back to 0.85.
+ */
+function resolveSummaryDeboost(perCall?: number): number {
+  if (perCall !== undefined && Number.isFinite(perCall) && perCall > 0 && perCall <= 1) {
+    return perCall;
+  }
+  const raw = process.env.HIPPO_SUMMARY_DEBOOST;
+  if (raw !== undefined) {
+    const parsed = parseFloat(raw);
+    if (Number.isFinite(parsed) && parsed > 0 && parsed <= 1) {
+      return parsed;
+    }
+  }
+  return DEFAULT_SUMMARY_DEBOOST;
+}
+
+/**
+ * v0.30 / E4 — micro-boost for L2 summaries rebuilt within window.
+ * Returns 1.05 only when isDagSummary AND last_rebuilt_at parses to a
+ * finite timestamp within FRESHNESS_WINDOW_MS of `now`. Handles null +
+ * garbage string + future-dated via the Number.isFinite + ageMs >= 0 gates.
+ */
+function summaryFreshnessMultiplier(entry: MemoryEntry, now: Date): number {
+  if (!isDagSummary(entry) || !entry.last_rebuilt_at) return 1.0;
+  const rebuiltMs = new Date(entry.last_rebuilt_at).getTime();
+  if (!Number.isFinite(rebuiltMs)) return 1.0;
+  const ageMs = now.getTime() - rebuiltMs;
+  return ageMs >= 0 && ageMs <= FRESHNESS_WINDOW_MS ? DEFAULT_FRESHNESS_BOOST : 1.0;
 }
 
 /**
@@ -273,6 +335,12 @@ export async function hybridSearch(
     reranker?: import('./rerankers/types.js').RerankerFn;
     /** Options passed through to the reranker. */
     rerankerOptions?: import('./rerankers/types.js').RerankerOptions;
+    /** v0.30 / E4 — multiplier on L2 summary composite scores. Default 0.85
+     *  (env HIPPO_SUMMARY_DEBOOST overrides). Per-call wins. Use 1.0 to disable. */
+    summaryDeboost?: number;
+    /** v0.30 / E4 — enable rebuilt-within-7-days micro-boost (1.05) on L2
+     *  summaries with fresh last_rebuilt_at. Default true. */
+    summaryFreshness?: boolean;
   } = {}
 ): Promise<SearchResult[]> {
   const now = options.now ?? new Date();
@@ -284,6 +352,9 @@ export async function hybridSearch(
   const explain = options.explain ?? false;
   const mmrEnabled = options.mmr ?? true;
   const mmrLambda = options.mmrLambda ?? 0.7;
+  // v0.30 / E4 — DAG L2 summary scoring controls
+  const summaryDeboost = resolveSummaryDeboost(options.summaryDeboost);
+  const summaryFreshness = options.summaryFreshness ?? true;
 
   // Bi-temporal filtering
   if (options.asOf) {
@@ -437,6 +508,18 @@ export async function hybridSearch(
 
     compositeScore *= temporalBoost(entries[i], temporalDirAsync, temporalRangeAsync);
 
+    // v0.30 / E4 — DAG L2 summary deboost + freshness micro-boost.
+    // Applied last so it composes with all other multipliers.
+    let summaryDeboostMultiplier = 1.0;
+    let freshnessMultiplier = 1.0;
+    if (isDagSummary(entries[i])) {
+      summaryDeboostMultiplier = summaryDeboost;
+      if (summaryFreshness) {
+        freshnessMultiplier = summaryFreshnessMultiplier(entries[i], now);
+      }
+    }
+    compositeScore *= summaryDeboostMultiplier * freshnessMultiplier;
+
     if (compositeScore <= 0) continue;
 
     const tokens = estimateTokens(entries[i].content);
@@ -474,6 +557,19 @@ export async function hybridSearch(
         final: compositeScore,
         ageDays,
       };
+      // v0.30 / E4 — DAG metadata
+      if (entries[i].dag_level !== undefined) {
+        result.breakdown.dagLevel = entries[i].dag_level;
+      }
+      if (entries[i].descendant_count !== undefined) {
+        result.breakdown.descendantCount = entries[i].descendant_count;
+      }
+      if (isDagSummary(entries[i])) {
+        result.breakdown.lastRebuiltAt = entries[i].last_rebuilt_at ?? null;
+        result.breakdown.rebuildCount = entries[i].rebuild_count ?? 0;
+        result.breakdown.summaryDeboost = summaryDeboostMultiplier;
+        result.breakdown.summaryFreshnessBoost = freshnessMultiplier;
+      }
     }
 
     scored.push(result);
@@ -668,6 +764,11 @@ export async function physicsSearch(
     includeSuperseded?: boolean;
     /** Bi-temporal filter: memories current at this ISO date string. */
     asOf?: string;
+    /** v0.30 / E4 — same deboost as hybridSearch. Inherited via options spread
+     *  when physicsSearch falls back to hybridSearch (L685/689/693/707). */
+    summaryDeboost?: number;
+    /** v0.30 / E4 — same freshness boost as hybridSearch. */
+    summaryFreshness?: boolean;
   } = {}
 ): Promise<SearchResult[]> {
   const now = options.now ?? new Date();
@@ -675,6 +776,9 @@ export async function physicsSearch(
   const minResults = options.minResults ?? 1;
   const config = options.physicsConfig ?? DEFAULT_PHYSICS_CONFIG;
   const explain = options.explain ?? false;
+  // v0.30 / E4 — DAG L2 summary scoring controls (same as hybridSearch)
+  const summaryDeboost = resolveSummaryDeboost(options.summaryDeboost);
+  const summaryFreshness = options.summaryFreshness ?? true;
 
   if (entries.length === 0 || !options.hippoRoot) return [];
 
@@ -737,9 +841,20 @@ export async function physicsSearch(
       if (s.finalScore <= 0) continue;
       const entry = entryMap.get(s.memoryId);
       if (!entry) continue;
+      // v0.30 / E4 — apply DAG L2 summary deboost + freshness in physics path.
+      let summaryDeboostMultiplier = 1.0;
+      let freshnessMultiplier = 1.0;
+      if (isDagSummary(entry)) {
+        summaryDeboostMultiplier = summaryDeboost;
+        if (summaryFreshness) {
+          freshnessMultiplier = summaryFreshnessMultiplier(entry, now);
+        }
+      }
+      const finalScore = s.finalScore * summaryDeboostMultiplier * freshnessMultiplier;
+      if (finalScore <= 0) continue;
       const result: SearchResult = {
         entry,
-        score: s.finalScore,
+        score: finalScore,
         bm25: 0,
         cosine: s.baseScore,
         tokens: estimateTokens(entry.content),
@@ -764,9 +879,22 @@ export async function physicsSearch(
           sourceBump: 1,
           outcomeBoost: 1,
           matchedTerms: [],
-          final: s.finalScore,
+          final: finalScore,
           ageDays,
         };
+        // v0.30 / E4 — DAG metadata
+        if (entry.dag_level !== undefined) {
+          result.breakdown.dagLevel = entry.dag_level;
+        }
+        if (entry.descendant_count !== undefined) {
+          result.breakdown.descendantCount = entry.descendant_count;
+        }
+        if (isDagSummary(entry)) {
+          result.breakdown.lastRebuiltAt = entry.last_rebuilt_at ?? null;
+          result.breakdown.rebuildCount = entry.rebuild_count ?? 0;
+          result.breakdown.summaryDeboost = summaryDeboostMultiplier;
+          result.breakdown.summaryFreshnessBoost = freshnessMultiplier;
+        }
       }
       physicsResults.push(result);
     }
