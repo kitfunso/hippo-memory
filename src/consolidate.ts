@@ -77,6 +77,8 @@ export interface ConsolidationResult {
   summariesRebuildFailed: number;
   summariesZeroChildSkipped: number;
   summariesRebuildCapped: boolean;
+  // v0.30 / E5 — L3 entity-profile build count
+  entityProfilesCreated: number;
   dryRun: boolean;
   details: string[];
   physicsSimulated: number;
@@ -109,6 +111,7 @@ export async function consolidate(
     summariesRebuildFailed: 0,
     summariesZeroChildSkipped: 0,
     summariesRebuildCapped: false,
+    entityProfilesCreated: 0,
     dryRun,
     details: [],
     physicsSimulated: 0,
@@ -358,6 +361,35 @@ export async function consolidate(
       }
     } catch {
       // Best-effort — same posture as buildDag block above.
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // 1.9. DAG entity profiles — cluster L2 topic summaries into L3 profiles
+  // -------------------------------------------------------------------------
+  // E5 phase: aggregate per-entity L2 summaries (e.g. all the speaker:Alice
+  // topic summaries) into a single L3 entity profile. Runs even when phase
+  // 1.7 buildDag was skipped (re-clusters existing L2s every sleep).
+  //
+  // Uses loadAllL2Summaries (not `survivors`) because phase 1.7 wrote new
+  // L2s directly via writeEntry without pushing back into survivors.
+  if (apiKey && !dryRun) {
+    try {
+      const { buildEntityProfiles } = await import('./dag.js');
+      const { loadAllL2Summaries } = await import('./store.js');
+      const l2Summaries = loadAllL2Summaries(hippoRoot);
+      if (l2Summaries.length >= 2) {
+        const profileResult = await buildEntityProfiles(hippoRoot, l2Summaries, {
+          apiKey,
+          model: config.extraction.model,
+        });
+        result.entityProfilesCreated = profileResult.profilesCreated;
+        if (profileResult.profilesCreated > 0) {
+          result.details.push(`  🌲 DAG L3: ${profileResult.profilesCreated} entity profiles, ${profileResult.l2sLinked} L2s linked`);
+        }
+      }
+    } catch {
+      // Best-effort.
     }
   }
 
