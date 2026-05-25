@@ -70,6 +70,13 @@ export interface ConsolidationResult {
   extracted: number;
   dagCandidateClusters: number;
   dagSummariesCreated: number;
+  // v0.30 / E3 — rebuild phase observability. Failed and zero-child counts
+  // are first-class so downstream callers (CLI eval, HTTP /v1/sleep response)
+  // see structured data, not a parsed details string.
+  summariesRebuilt: number;
+  summariesRebuildFailed: number;
+  summariesZeroChildSkipped: number;
+  summariesRebuildCapped: boolean;
   dryRun: boolean;
   details: string[];
   physicsSimulated: number;
@@ -98,6 +105,10 @@ export async function consolidate(
     extracted: 0,
     dagCandidateClusters: 0,
     dagSummariesCreated: 0,
+    summariesRebuilt: 0,
+    summariesRebuildFailed: 0,
+    summariesZeroChildSkipped: 0,
+    summariesRebuildCapped: false,
     dryRun,
     details: [],
     physicsSimulated: 0,
@@ -308,6 +319,45 @@ export async function consolidate(
       }
     } catch {
       // Best-effort
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // 1.8. DAG summary rebuild — drain dirty queue from E2's child-write hooks
+  // -------------------------------------------------------------------------
+  // Consumer of E2's summary_dirty flag. Walks dirty L2 summaries, regenerates
+  // each via generateDagSummary, atomically refreshes content + 6 metadata
+  // columns + clears summary_dirty (with FTS sync). Same apiKey/dryRun gate
+  // as buildDag above. Cap HIPPO_DAG_REBUILD_CAP (default 20, hard ceiling
+  // 1000) prevents runaway LLM cost.
+  if (apiKey && !dryRun) {
+    try {
+      const { rebuildDirtySummaries } = await import('./dag.js');
+      const rawCap = parseInt(process.env.HIPPO_DAG_REBUILD_CAP ?? '20', 10);
+      // R1 MED must-fix: hard ceiling so misconfigured env can't burn
+      // unbounded LLM cost.
+      const cap = Number.isFinite(rawCap) && rawCap > 0
+        ? Math.min(rawCap, 1000)
+        : 20;
+      const rebuildResult = await rebuildDirtySummaries(hippoRoot, {
+        apiKey,
+        model: config.extraction.model,
+        cap,
+      });
+      result.summariesRebuilt = rebuildResult.rebuilt;
+      result.summariesRebuildFailed = rebuildResult.failed;
+      result.summariesZeroChildSkipped = rebuildResult.zeroChildSkipped;
+      result.summariesRebuildCapped = rebuildResult.capped;
+      if (rebuildResult.rebuilt > 0 || rebuildResult.zeroChildSkipped > 0 || rebuildResult.failed > 0) {
+        const parts: string[] = [];
+        if (rebuildResult.rebuilt > 0) parts.push(`${rebuildResult.rebuilt} rebuilt`);
+        if (rebuildResult.zeroChildSkipped > 0) parts.push(`${rebuildResult.zeroChildSkipped} zero-child-skipped`);
+        if (rebuildResult.failed > 0) parts.push(`${rebuildResult.failed} failed`);
+        if (rebuildResult.capped) parts.push(`CAPPED@${cap}`);
+        result.details.push(`  🌳 DAG rebuild: ${parts.join(', ')}`);
+      }
+    } catch {
+      // Best-effort — same posture as buildDag block above.
     }
   }
 

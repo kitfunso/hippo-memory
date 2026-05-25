@@ -2574,4 +2574,238 @@ export function markSummaryDirty(
   }
 }
 
+// ---------------------------------------------------------------------------
+// v0.30 / E3 of DAG live-coupling — sleep-cycle rebuild surface.
+//
+// loadAllDirtySummaries / loadChildrenOfSummary / applyRebuildResult /
+// clearSummaryDirtyAfterBuild live HERE (not in dag.ts) because they need
+// module-private MEMORY_SELECT_COLUMNS, MemoryRow, rowToEntry, audit,
+// syncFtsRow, assertTenantId. dag.ts owns only the thin orchestrator
+// rebuildDirtySummaries() that calls into these.
+// ---------------------------------------------------------------------------
+
+/**
+ * v0.30 / E3 — host-wide variant of loadDirtySummaries. Iterates all tenants
+ * in one query so consolidate.ts (host-wide per L106-109) does not need a
+ * per-tenant loop. Each returned MemoryEntry carries its own tenantId (via
+ * rowToEntry), so per-summary children + rebuild UPDATE stay tenant-scoped.
+ *
+ * Sort: latest_at DESC NULLS LAST, id ASC — same as per-tenant variant so
+ * HIPPO_DAG_REBUILD_CAP takes most-recently-changed summaries first.
+ */
+export function loadAllDirtySummaries(hippoRoot: string): MemoryEntry[] {
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    const rows = db.prepare(`
+      SELECT ${MEMORY_SELECT_COLUMNS}
+        FROM memories
+       WHERE summary_dirty = 1
+         AND kind != 'archived'
+       ORDER BY latest_at DESC NULLS LAST, id ASC
+    `).all() as MemoryRow[];
+    return rows.map(rowToEntry);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/**
+ * v0.30 / E3 — load live children of a DAG summary. Used by
+ * rebuildDirtySummaries to regenerate content from the CURRENT child set
+ * (not the children at create-time). Skips archived. Tenant-scoped
+ * (defence in depth — dag_parent_id is unique-ish but tenant guard is
+ * cheap). created column is TEXT NOT NULL since db.ts schema v1.
+ */
+export function loadChildrenOfSummary(
+  hippoRoot: string,
+  summaryId: string,
+  tenantId: string,
+): MemoryEntry[] {
+  assertTenantId('loadChildrenOfSummary', tenantId);
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    const rows = db.prepare(`
+      SELECT ${MEMORY_SELECT_COLUMNS}
+        FROM memories
+       WHERE dag_parent_id = ?
+         AND tenant_id = ?
+         AND kind != 'archived'
+       ORDER BY created ASC
+    `).all(summaryId, tenantId) as MemoryRow[];
+    return rows.map(rowToEntry);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/**
+ * v0.30 / E3 — patch applied by applyRebuildResult. Two-branch shape
+ * (bumpRebuildCount false for zero-child case, true for normal rebuild).
+ */
+export interface RebuildPatch {
+  content: string;            // new content for normal rebuild; summary.content for zero-child
+  descendant_count: number;
+  earliest_at: string | null;
+  latest_at: string | null;
+  bumpRebuildCount: boolean;
+  zeroChildren: boolean;
+  actor: string;
+}
+
+/**
+ * v0.30 / E3 — apply a rebuild result to a dirty summary. Atomic: one
+ * prepared UPDATE statement plus syncFtsRow inside one SAVEPOINT.
+ * WHERE includes `AND summary_dirty = 1` so concurrent sleep's race-loser
+ * becomes a no-op (no rebuild_count bump, no audit row).
+ *
+ * Returns true on actual rebuild (changes > 0), false on race-loss /
+ * unknown id / archived / wrong dag_level.
+ */
+export function applyRebuildResult(
+  hippoRoot: string,
+  summary: MemoryEntry,
+  patch: RebuildPatch,
+): boolean {
+  assertTenantId('applyRebuildResult', summary.tenantId);
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    db.exec('SAVEPOINT rebuild_summary');
+    try {
+      const nowIso = new Date().toISOString();
+      // ONE prepared UPDATE per branch. Test #8 inspects the SQL string.
+      const sql = patch.bumpRebuildCount
+        ? `UPDATE memories
+              SET content = ?,
+                  descendant_count = ?,
+                  earliest_at = ?,
+                  latest_at = ?,
+                  last_rebuilt_at = ?,
+                  rebuild_count = COALESCE(rebuild_count, 0) + 1,
+                  summary_dirty = 0
+            WHERE id = ?
+              AND tenant_id = ?
+              AND dag_level = 2
+              AND summary_dirty = 1
+              AND kind != 'archived'`
+        : `UPDATE memories
+              SET descendant_count = ?,
+                  earliest_at = ?,
+                  latest_at = ?,
+                  summary_dirty = 0
+            WHERE id = ?
+              AND tenant_id = ?
+              AND dag_level = 2
+              AND summary_dirty = 1
+              AND kind != 'archived'`;
+
+      const result = patch.bumpRebuildCount
+        ? db.prepare(sql).run(
+            patch.content,
+            patch.descendant_count,
+            patch.earliest_at,
+            patch.latest_at,
+            nowIso,
+            summary.id,
+            summary.tenantId,
+          )
+        : db.prepare(sql).run(
+            patch.descendant_count,
+            patch.earliest_at,
+            patch.latest_at,
+            summary.id,
+            summary.tenantId,
+          );
+
+      const changed = (result.changes ?? 0) > 0;
+
+      if (changed) {
+        // FTS sync — bare UPDATE on memories does NOT update memories_fts.
+        // R1 HIGH must-fix from plan-eng-r1. Construct the patched entry in
+        // memory and reuse the existing syncFtsRow helper (delete-then-insert).
+        // earliest_at/latest_at preserve null semantics (R2 must-fix).
+        const patchedEntry: MemoryEntry = {
+          ...summary,
+          content: patch.content,
+          descendant_count: patch.descendant_count,
+          earliest_at: patch.earliest_at,
+          latest_at: patch.latest_at,
+          summary_dirty: 0,
+          last_rebuilt_at: patch.bumpRebuildCount ? nowIso : summary.last_rebuilt_at,
+          rebuild_count: patch.bumpRebuildCount
+            ? (summary.rebuild_count ?? 0) + 1
+            : summary.rebuild_count,
+        };
+        syncFtsRow(db, patchedEntry);
+
+        audit(
+          db,
+          'summary_rebuilt',
+          summary.id,
+          {
+            dag_level: 2,
+            source: 'E3-rebuild',
+            zero_children: patch.zeroChildren,
+            descendant_count: patch.descendant_count,
+          },
+          patch.actor,
+          summary.tenantId,
+        );
+      }
+
+      db.exec('RELEASE SAVEPOINT rebuild_summary');
+      return changed;
+    } catch (e) {
+      try {
+        db.exec('ROLLBACK TO SAVEPOINT rebuild_summary');
+        db.exec('RELEASE SAVEPOINT rebuild_summary');
+      } catch {
+        // Ignore rollback failures — throw below is what matters.
+      }
+      throw e;
+    }
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/**
+ * v0.30 / E3 — clear summary_dirty on a freshly-built summary. Called by
+ * buildDag immediately after the child-link loop finishes. Without this,
+ * each member's writeEntry call fires markSummaryDirtyInTx on the just-
+ * created parent (E2 hook at store.ts:1214), and the same sleep cycle's
+ * E3 rebuild phase would re-rebuild every new summary (2x LLM cost).
+ *
+ * Idempotent: no-op + no audit if summary isn't dirty. Audit
+ * source='buildDag-clean' distinguishes from E3-rebuild source.
+ */
+export function clearSummaryDirtyAfterBuild(
+  hippoRoot: string,
+  summaryId: string,
+  tenantId: string,
+  actor: string = 'cli',
+): void {
+  assertTenantId('clearSummaryDirtyAfterBuild', tenantId);
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    const result = db.prepare(`
+      UPDATE memories
+         SET summary_dirty = 0
+       WHERE id = ?
+         AND tenant_id = ?
+         AND dag_level = 2
+         AND summary_dirty = 1
+         AND kind != 'archived'
+    `).run(summaryId, tenantId);
+    if ((result.changes ?? 0) > 0) {
+      audit(db, 'summary_marked_clean', summaryId, { dag_level: 2, source: 'buildDag-clean' }, actor, tenantId);
+    }
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 export { getHippoDbPath };
