@@ -1207,6 +1207,13 @@ export function writeEntryDbOnly(
       opts?.actor ?? 'cli',
       entry.tenantId,
     );
+    // v0.30 / E2 — DAG live-coupling: child write under a level-2 summary
+    // marks the parent dirty for E3 sleep-cycle rebuild. Early-exit on
+    // null dag_parent_id (vast majority of writes); cost is one null check
+    // on the hot path.
+    if (entry.dag_parent_id) {
+      markSummaryDirtyInTx(db, entry.dag_parent_id, entry.tenantId, opts?.actor ?? 'cli');
+    }
     db.exec('RELEASE SAVEPOINT write_entry');
   } catch (e) {
     try {
@@ -1475,8 +1482,8 @@ export function deleteEntry(
   const db = openHippoDb(hippoRoot);
   try {
     const row = db
-      .prepare(`SELECT id, tenant_id FROM memories WHERE id = ?`)
-      .get(id) as { id?: string; tenant_id?: string } | undefined;
+      .prepare(`SELECT id, tenant_id, dag_parent_id FROM memories WHERE id = ?`)
+      .get(id) as { id?: string; tenant_id?: string; dag_parent_id?: string | null } | undefined;
     if (!row?.id) return false;
 
     db.prepare(`DELETE FROM memories WHERE id = ?`).run(id);
@@ -1484,6 +1491,14 @@ export function deleteEntry(
     removeEntryMirrors(hippoRoot, id);
     writeIndexMirror(hippoRoot, buildIndexFromDb(db));
     audit(db, 'forget', id, undefined, opts?.actor ?? 'cli', row.tenant_id);
+    // v0.30 / E2 — DAG live-coupling: forget of a child under a level-2
+    // summary marks parent dirty. Non-atomic with the DELETE (deleteEntry
+    // has no SAVEPOINT wrapper); markSummaryDirtyInTx is idempotent so any
+    // future child mutation re-marks parent if this fails. Acceptable
+    // degradation, mirrors deleteEntry's existing audit best-effort posture.
+    if (row.dag_parent_id) {
+      markSummaryDirtyInTx(db, row.dag_parent_id, row.tenant_id ?? 'default', opts?.actor ?? 'cli');
+    }
     return true;
   } finally {
     closeHippoDb(db);
@@ -2446,6 +2461,39 @@ export function loadDirtySummaries(
     return rows.map(rowToEntry);
   } finally {
     closeHippoDb(db);
+  }
+}
+
+/**
+ * v0.30 / E2 — in-transaction variant of markSummaryDirty. Takes an open
+ * db (caller is responsible for any SAVEPOINT/BEGIN). Used by E2's hook
+ * sites (writeEntryDbOnly, api.supersede CAS, deleteEntry, archiveRawMemory)
+ * so each child mutation's dirty-mark is atomic with the mutation itself
+ * (where the mutation IS in a SAVEPOINT — deleteEntry is the exception,
+ * acceptably non-atomic by design).
+ *
+ * Same idempotency contract as the public markSummaryDirty: 0->1 transition
+ * only, audit row only on transition, no-op on non-summary / archived /
+ * unknown id / cross-tenant. Private (no export) — public surface stays at
+ * markSummaryDirty.
+ */
+export function markSummaryDirtyInTx(
+  db: DatabaseSyncLike,
+  summaryId: string,
+  tenantId: string,
+  actor: string,
+): void {
+  const result = db.prepare(`
+    UPDATE memories
+       SET summary_dirty = 1
+     WHERE id = ?
+       AND tenant_id = ?
+       AND dag_level = 2
+       AND summary_dirty = 0
+       AND kind != 'archived'
+  `).run(summaryId, tenantId);
+  if ((result.changes ?? 0) > 0) {
+    audit(db, 'summary_marked_dirty', summaryId, { dag_level: 2, source: 'E2' }, actor, tenantId);
   }
 }
 

@@ -1,6 +1,7 @@
 import type { DatabaseSyncLike } from './db.js';
 import { isFtsAvailable } from './db.js';
 import { appendAuditEvent } from './audit.js';
+import { markSummaryDirtyInTx } from './store.js';
 
 export interface ArchiveOpts {
   reason: string;
@@ -83,6 +84,18 @@ export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: Archive
     } catch {
       // Audit must not crash the archive. Failures here mean the audit table
       // is unwritable; the archive itself has already succeeded.
+    }
+    // v0.30 / E2 — DAG live-coupling: archive of a child under a level-2
+    // summary marks parent dirty. Inside the SAVEPOINT so the dirty-mark
+    // commits atomically with the archive. row.dag_parent_id was fetched
+    // via SELECT * at L28 (schema v28 includes it).
+    if (row.dag_parent_id) {
+      markSummaryDirtyInTx(
+        db,
+        String(row.dag_parent_id),
+        String(row.tenant_id ?? 'default'),
+        opts.who || 'cli',
+      );
     }
     // afterArchive hook (v0.39 commit 3): connector-level idempotency markers
     // (e.g. slack_event_log) must commit atomically with the archive itself.
