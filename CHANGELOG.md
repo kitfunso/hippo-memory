@@ -1,5 +1,77 @@
 # Changelog
 
+## 1.12.12 (2026-05-26): bundled E1-E5 DAG live-coupling arc
+
+Bundles 5 episodes of DAG live-coupling into one npm release. Makes the
+existing DAG hierarchy (level 1 facts, level 2 topic summaries, level 3
+entity profiles) "live" by wiring rebuild on child mutation and exposing
+DAG metadata in recall.
+
+For per-episode detail, see commits 1d5fa93 (E1), 8bed912 (E2 fold),
+1022695 (E3), 486940b (E4), 3a6ec19 (E5). PRs #66 through #70.
+
+### What ships
+
+- **E1 schema v28**: 4 new memories columns (summary_dirty,
+  last_rebuilt_at, rebuild_count, dag_level_3_built_at). Migration
+  is idempotent ALTER + 0 default; safe to roll forward.
+- **E2 child-write hooks**: 5 mutation paths fire markSummaryDirty
+  on the parent summary (writeEntryDbOnly, supersede CAS,
+  deleteEntry, archiveRawMemory, batchWriteAndDelete).
+- **E3 sleep-cycle rebuild**: new rebuildDirtySummaries phase
+  consumes the dirty queue, regenerates summary content via
+  generateDagSummary, atomically refreshes 6 metadata columns,
+  syncs the FTS index. Cap via HIPPO_DAG_REBUILD_CAP env (default
+  20, hard ceiling 1000).
+- **E4 first-class DAG recall**: scoring-layer deboost
+  (HIPPO_SUMMARY_DEBOOST, default 0.85) on L2 + L3 summaries in
+  hybridSearch and physicsSearch. Freshness micro-boost (1.05)
+  when summary was rebuilt within 7 days. 6 new optional
+  ScoreBreakdown fields visible with explain=true.
+- **E5 level-3 entity profiles**: new buildEntityProfiles phase
+  clusters L2 topic summaries by entity tag into L3 entity
+  profiles (one per speaker / topic). drillDown gains
+  depth?:number opt (default 1, backward compat, hard cap 10)
+  with BFS visited-Set dedup. cmdDag tree view renders L3 roots
+  with L2 children indented.
+
+### API additions
+
+- store.ts: loadDirtySummaries, loadAllDirtySummaries,
+  loadAllL2Summaries, loadChildrenOfSummary, applyRebuildResult,
+  markSummaryDirty, markSummaryDirtyInTx,
+  clearSummaryDirtyAfterBuild (new 5th param source?:string)
+- dag.ts: rebuildDirtySummaries, buildEntityProfiles,
+  DagRebuildResult, EntityProfilesBuildResult
+- api.ts: DrillDownOpts.depth?:number
+- search.ts: isDagSummary (exported helper)
+- consolidate.ts: ConsolidationResult gains 5 new fields
+  (summariesRebuilt, summariesRebuildFailed,
+  summariesZeroChildSkipped, summariesRebuildCapped,
+  entityProfilesCreated)
+- audit.ts: 2 new AuditOp variants (summary_marked_clean,
+  summary_rebuilt)
+- HTTP /v1/drill?depth=N and MCP hippo_drill { depth }
+
+### Tests
+
+- E1: 8 cases in tests/dag-dirty-flag-schema.test.ts
+- E2: 10 cases in tests/dag-dirty-propagation.test.ts
+- E3: 12 cases in tests/dag-rebuild-summaries.test.ts
+- E4: 17 cases in tests/dag-recall-first-class.test.ts
+- E5: 14 cases in tests/dag-e5-entity-profiles.test.ts
+- Full suite: 1906 passed, 4 skipped, 0 failed
+
+### Known follow-ups (deferred)
+
+- E4.5: thread hybridSearch through api.recall for SDK callers
+  (MCP + cmdContext already inherit)
+- Sleep-cycle mutex for parallel sleep concurrency
+- Differentiated L2 vs L3 deboost
+- L3 substitution in api.recall overflow path
+- buildEntityProfiles re-clustering of late-arriving L2s after L3
+  formed
+
 ## 1.12.11 (2026-05-25): bundled E1-E5 ui-brain-observatory publish (Obsidian-inspired graph upgrades)
 
 Bundles ui-brain-observatory v0.2.1 through v0.2.5 into one npm release.
