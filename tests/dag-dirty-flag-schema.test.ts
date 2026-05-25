@@ -123,6 +123,31 @@ describe('v28 schema migration + dirty-flag plumbing (E1)', () => {
     expect(auditRows).toEqual([]);
   });
 
+  it('markSummaryDirty rejects cross-tenant attack write (locks WHERE tenant_id=? guard against future regression)', () => {
+    // Write summaryB as tenant2, then attempt to mark it dirty as 'default'
+    // tenant. WHERE id=? AND tenant_id=? guard should match 0 rows; no
+    // audit row emitted; tenant2's loadDirtySummaries still returns empty.
+    // Independent-review-critic MED: without this test, dropping the
+    // tenant_id clause from markSummaryDirty's UPDATE would pass all
+    // prior 7 cases.
+    const summaryB = createMemory('cross-tenant target', { layer: Layer.Semantic, dag_level: 2 });
+    writeEntry(hippoRoot, summaryB);
+    const db = openHippoDb(hippoRoot);
+    db.prepare(`UPDATE memories SET tenant_id = ? WHERE id = ?`).run('tenant2', summaryB.id);
+    db.close();
+    // Attack: mark dirty using the WRONG tenant.
+    markSummaryDirty(hippoRoot, summaryB.id, 'default', 'attacker');
+    // Verify: tenant2 still sees no dirty rows, no audit row written.
+    expect(loadDirtySummaries(hippoRoot, 'tenant2')).toEqual([]);
+    expect(loadDirtySummaries(hippoRoot, 'default')).toEqual([]);
+    const db2 = openHippoDb(hippoRoot);
+    const auditRows = db2.prepare(
+      `SELECT * FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`,
+    ).all(summaryB.id);
+    db2.close();
+    expect(auditRows).toEqual([]);
+  });
+
   it('audit-query round-trip: markSummaryDirty + queryAuditEvents(op=summary_marked_dirty) returns the row (R2 institutional VALID_AUDIT_OPS lockstep test)', () => {
     // Locks the v1.11.5 hardening pass institutional rule: a new AuditOp
     // is useless without VALID_AUDIT_OPS Set extensions in BOTH cli.ts +
