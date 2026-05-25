@@ -33,6 +33,7 @@ import {
   loadAllEntries,
   updateStats,
   isInitialized,
+  markSummaryDirtyInTx,
   type TaskSnapshot,
   type SessionEvent,
 } from './store.js';
@@ -1281,6 +1282,15 @@ export function supersede(
       if ((result.changes ?? 0) === 0) {
         db.exec('ROLLBACK');
         throw new Error(`Memory ${oldId} already superseded by another writer`);
+      }
+      // v0.30 / E2 — DAG live-coupling: OLD entry just transitioned to
+      // superseded. Its parent (if any) needs rebuild. Lands strictly
+      // between the rollback guard above and the writeEntryDbOnly(NEW)
+      // below so a failed CAS hits throw before this hook. The NEW
+      // entry's parent (typically same parent) is auto-marked by the
+      // writeEntryDbOnly hook (same parent → idempotent, audits once).
+      if (old.dag_parent_id) {
+        markSummaryDirtyInTx(db, old.dag_parent_id, ctx.tenantId, ctx.actor.subject);
       }
       // 2. Write new memory inside same tx via writeEntryDbOnly (DB-only
       //    path). This emits its OWN 'remember' audit row for the new
