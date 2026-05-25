@@ -17,6 +17,8 @@ import {
 import { isFading, type ColorMode } from "../state/filterState.js";
 import { buildPalette, resolveColor, TAG_PALETTE, PATH_PALETTE } from "./tagPalette.js";
 import { computeSharedTagPairs } from "./sharedTagPairs.js";
+import type { AdjacencyMap } from "./localNeighborhood.js";
+import { buildForceLayout, type ForceLayoutHandle, type SettleSource } from "./forceLayout.js";
 
 // v0.28 (E2 real-edges) — pathological-filter mitigation. Module const so
 // it's referenced as HARD_EDGE_CAP without a class prefix.
@@ -103,6 +105,22 @@ export class BrainScene {
    */
   private sharedTagEdges: THREE.Line[] = [];
   private sharedTagBailed = false;
+  /**
+   * v0.28+ E4 — force-layout state. Built fresh per populate(). lastSettledPositions
+   * caches the final positions for warm-starting subsequent populates so existing
+   * memories barely move.
+   */
+  private forceLayout: ForceLayoutHandle | null = null;
+  private lastSettledPositions: Map<string, { x: number; z: number }> | null = null;
+  /**
+   * v0.28+ E4 — scene-level onSettleStateChange subscribers + forwarding glue.
+   * Each populate() builds a new forceLayout, so the scene re-subscribes
+   * internally and forwards (settling, source) events to scene-level subscribers.
+   * Replay-on-subscribe ensures React-effect-after-paint timing doesn't drop
+   * the first settling=true event.
+   */
+  private settleSubscribers = new Set<(settling: boolean, source: SettleSource) => void>();
+  private currentForceUnsubscribe: (() => void) | null = null;
 
   constructor(private container: HTMLDivElement) {
     this.initRenderer();
@@ -231,6 +249,7 @@ export class BrainScene {
     memories: Memory[],
     positions: Record<string, [number, number, number]>,
     conflicts: Conflict[],
+    adjacency: AdjacencyMap,
   ): void {
     for (const node of this.nodes) {
       this.scene.remove(node.mesh);
@@ -272,7 +291,10 @@ export class BrainScene {
       const layerY = LAYER_Y_OFFSET[mem.layer] ?? 0;
 
       const x = pos[0] * SPREAD + (Math.random() - 0.5) * 3;
-      const y = pos[1] * SPREAD * 0.5 + layerY + (Math.random() - 0.5) * 2;
+      // v0.28+ E4 — drop PCA-y contribution; basePosition.y is layer-Y + jitter ONLY.
+      // Force layout drives XZ-plane positioning (S2(a) plan v3); Y stays as layer
+      // stratification per E1+E5.
+      const y = layerY + (Math.random() - 0.5) * 2;
       const z = pos[2] * SPREAD + (Math.random() - 0.5) * 3;
 
       const color = hexToColor(LAYER_COLORS[mem.layer]);
@@ -348,6 +370,38 @@ export class BrainScene {
     // v0.28 (E2 real-edges) — build shared-tag edges. Bails on n>500 with
     // the sharedTagBailed flag so BottomBar can surface a hint.
     this.buildSharedTagEdges(memories);
+
+    // v0.28+ E4 — build force layout from E3 adjacency. Seeds from POST-jitter
+    // basePositions (first populate) OR lastSettledPositions (subsequent), so
+    // existing memories barely move and there's no first-frame snap.
+    // Tear down previous subscription forwarding before rebuilding.
+    if (this.currentForceUnsubscribe) {
+      this.currentForceUnsubscribe();
+      this.currentForceUnsubscribe = null;
+    }
+    const memorySet = new Set(memories.map((m) => m.id));
+    // Prune lastSettledPositions of deleted ids (AC20).
+    if (this.lastSettledPositions) {
+      for (const id of [...this.lastSettledPositions.keys()]) {
+        if (!memorySet.has(id)) this.lastSettledPositions.delete(id);
+      }
+    }
+    // Assemble seed: lastSettledPositions for existing memories, jittered
+    // basePositions for new ones (or all of them on first populate).
+    const seedPositions = new Map<string, { x: number; z: number }>();
+    for (const node of this.nodes) {
+      const prior = this.lastSettledPositions?.get(node.id);
+      seedPositions.set(
+        node.id,
+        prior ?? { x: node.basePosition.x, z: node.basePosition.z },
+      );
+    }
+    this.forceLayout = buildForceLayout(memories, adjacency, seedPositions);
+    // Forward forceLayout events to scene-level subscribers + replay current
+    // state for any subscriber that attached before this populate.
+    this.currentForceUnsubscribe = this.forceLayout.onSettleStateChange((settling, source) => {
+      for (const cb of this.settleSubscribers) cb(settling, source);
+    });
 
     // v0.27 color-by-tag: re-apply the current colorMode at populate tail.
     // Single source of truth for the populate-vs-setColorMode race fix
@@ -667,12 +721,41 @@ export class BrainScene {
     const elapsed = this.clock.getElapsedTime();
     this.controls.update();
 
+    // v0.28+ E4 — force-tick BEFORE drift so drift oscillates around the
+    // freshly-set basePositions. Snapshot settled positions when convergence
+    // happens this frame so next populate can warm-start from them.
+    const forceSettling = this.forceLayout !== null && !this.forceLayout.done();
+    if (forceSettling) {
+      this.forceLayout!.tick();
+      for (const node of this.nodes) {
+        const p = this.forceLayout!.position(node.id);
+        if (!p) continue;
+        node.basePosition.x = p.x;
+        node.basePosition.z = p.z;
+        // basePosition.y intentionally UNCHANGED (layer-Y preserved per S2a).
+      }
+      if (this.forceLayout!.done()) {
+        this.lastSettledPositions = this.forceLayout!.settledPositions();
+      }
+    }
+
     for (const node of this.nodes) {
-      const drift = Math.sin(elapsed * node.driftSpeed + node.phase);
-      const driftY = Math.cos(elapsed * node.driftSpeed * 0.7 + node.phase * 1.3);
-      node.mesh.position.x = node.basePosition.x + drift * 0.15;
-      node.mesh.position.y = node.basePosition.y + driftY * 0.1;
-      node.mesh.position.z = node.basePosition.z + Math.sin(elapsed * node.driftSpeed * 0.5 + node.phase * 0.7) * 0.12;
+      // v0.28+ E4 — drift offset gated on forceSettling per plan v3 S2(b) +
+      // R4 must-fix #3 clarification: ONLY the basePosition->mesh.position
+      // drift offset is gated. Selection pulse + fadingRing billboard run
+      // unconditionally so a selected node keeps pulsing during settle.
+      if (forceSettling) {
+        // During settle: mesh tracks basePosition exactly (no drift offset)
+        // so the rendered mesh doesn't lag a frame behind the force-driven
+        // basePosition update.
+        node.mesh.position.copy(node.basePosition);
+      } else {
+        const drift = Math.sin(elapsed * node.driftSpeed + node.phase);
+        const driftY = Math.cos(elapsed * node.driftSpeed * 0.7 + node.phase * 1.3);
+        node.mesh.position.x = node.basePosition.x + drift * 0.15;
+        node.mesh.position.y = node.basePosition.y + driftY * 0.1;
+        node.mesh.position.z = node.basePosition.z + Math.sin(elapsed * node.driftSpeed * 0.5 + node.phase * 0.7) * 0.12;
+      }
       node.halo.position.copy(node.mesh.position);
 
       if (node === this.selectedNode) {
@@ -682,6 +765,7 @@ export class BrainScene {
 
       // v0.26.1 — billboard fading rings to face camera. Cheap (≤at_risk
       // nodes total, typically <20). Position follows drifting mesh.
+      // Runs unconditionally during settle so rings stay billboarded.
       if (node.fadingRing) {
         node.fadingRing.position.copy(node.mesh.position);
         node.fadingRing.lookAt(this.camera.position);
@@ -717,12 +801,43 @@ export class BrainScene {
    * snaps particles to their basePosition rather than iterating to convergence
    * (the sin/cos drift physics at L423-L435 never converges).
    */
+  /**
+   * v0.28+ E4 — scene-level settling subscription. useCanvasEngine subscribes
+   * once; scene forwards from the current forceLayout (rebuilt per populate).
+   * Replay-on-subscribe ensures React-effect-after-paint timing doesn't drop
+   * the first settling=true event (plan-eng R4 must-fix #2).
+   */
+  onSettleStateChange(cb: (settling: boolean, source: SettleSource) => void): () => void {
+    this.settleSubscribers.add(cb);
+    if (this.forceLayout?.isSettling()) cb(true, "tick");
+    return () => {
+      this.settleSubscribers.delete(cb);
+    };
+  }
+
   setReducedMotion(reduced: boolean): void {
     this.paused = reduced;
     if (reduced) {
+      // PRESERVE rAF cleanup (plan-eng R3 catch). Without zeroing rafId,
+      // unfreeze guard below never fires on subsequent freeze->unfreeze.
       if (this.rafId) {
         cancelAnimationFrame(this.rafId);
         this.rafId = 0;
+      }
+      // v0.28+ E4 — finish force settle (bounded to 80 ticks ~= 400ms main-thread
+      // block worst case, sub-perceptual per RAIL) BEFORE snapping so the snapped
+      // pose is the converged layout, not a mid-settle interim.
+      if (this.forceLayout && !this.forceLayout.done()) {
+        this.forceLayout.runToCompletion(80);
+        for (const node of this.nodes) {
+          const p = this.forceLayout.position(node.id);
+          if (!p) continue;
+          node.basePosition.x = p.x;
+          node.basePosition.z = p.z;
+        }
+        if (this.forceLayout.done()) {
+          this.lastSettledPositions = this.forceLayout.settledPositions();
+        }
       }
       this.snapParticlesToFinal();
     } else if (!this.rafId) {

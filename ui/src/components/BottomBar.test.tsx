@@ -127,6 +127,43 @@ describe("buildAffordance + localView (v0.28+ E3)", () => {
   });
 });
 
+// v0.28+ E4 — forceSettling affordance clause
+describe("buildAffordance + forceSettling (v0.28+ E4)", () => {
+  it("'initial' appends 'layout: settling (initial)'", () => {
+    const copy = buildAffordance("layer", NO_EDGES, undefined, "initial");
+    expect(copy).toBe("size = retrievals · opacity = strength · layout: settling (initial)");
+  });
+
+  it("'refresh' appends 'layout: settling (refresh)'", () => {
+    const copy = buildAffordance("layer", NO_EDGES, undefined, "refresh");
+    expect(copy).toBe("size = retrievals · opacity = strength · layout: settling (refresh)");
+  });
+
+  it("undefined = no clause (reduced-motion users get this)", () => {
+    const copy = buildAffordance("layer", NO_EDGES, undefined, undefined);
+    expect(copy).not.toContain("layout:");
+  });
+
+  it("composes after localView clause", () => {
+    const copy = buildAffordance("layer", NO_EDGES, { size: 12 }, "initial");
+    expect(copy).toBe(
+      "size = retrievals · opacity = strength · view = local (12) · layout: settling (initial)",
+    );
+  });
+
+  it("composes with full clause stack (9 clauses, near worst-case)", () => {
+    const copy = buildAffordance(
+      "tag",
+      { openConflicts: 3, resolvedConflicts: 5, sharedTag: 12, sharedTagBailed: false },
+      { size: 18 },
+      "refresh",
+    );
+    expect(copy).toBe(
+      "size = retrievals · opacity = strength · lines = conflicts (open) / conflicts (resolved) / shared tags · color = tag · view = local (18) · layout: settling (refresh)",
+    );
+  });
+});
+
 describe("BottomBar component", () => {
   it("renders the dynamic affordance string", () => {
     render(

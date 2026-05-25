@@ -40,6 +40,13 @@ interface BottomBarProps {
    * = no local view = no clause (back-compat).
    */
   localView?: { size: number; cappedFrom?: number };
+  /**
+   * v0.28+ (E4 force layout) — when scene is animating into its force-
+   * settled equilibrium, append `· layout: settling (initial|refresh)`
+   * to the affordance. Suppressed for reduced-motion users (they don't
+   * see the animation). undefined = not settling = no clause.
+   */
+  forceSettling?: "initial" | "refresh";
 }
 
 /**
@@ -51,6 +58,7 @@ export function buildAffordance(
   colorMode: ColorMode,
   edges: EdgeCounts | undefined,
   localView?: { size: number; cappedFrom?: number },
+  forceSettling?: "initial" | "refresh",
 ): string {
   const parts: string[] = ["size = retrievals", "opacity = strength"];
 
@@ -71,6 +79,12 @@ export function buildAffordance(
       ? `view = local (${localView.size}, capped from ${localView.cappedFrom})`
       : `view = local (${localView.size})`;
     parts.push(note);
+  }
+
+  // v0.28+ (E4 force layout) — settle-animation cue. Suppressed for
+  // reduced-motion users (caller passes undefined in that case).
+  if (forceSettling) {
+    parts.push(`layout: settling (${forceSettling})`);
   }
 
   let copy = parts.join(" · ");
@@ -106,8 +120,8 @@ const LAYERS: Array<{ key: keyof typeof LAYER_COLORS; label: string }> = [
   { key: "semantic", label: "semantic" },
 ];
 
-export function BottomBar({ drawerOpen, onToggleDrawer, visibleCount, colorMode = "layer", edgeCounts, localView }: BottomBarProps) {
-  const affordance = buildAffordance(colorMode, edgeCounts, localView);
+export function BottomBar({ drawerOpen, onToggleDrawer, visibleCount, colorMode = "layer", edgeCounts, localView, forceSettling }: BottomBarProps) {
+  const affordance = buildAffordance(colorMode, edgeCounts, localView, forceSettling);
   return (
     <div style={{
       position: "absolute",
@@ -184,13 +198,20 @@ export function BottomBar({ drawerOpen, onToggleDrawer, visibleCount, colorMode 
 
       <div style={{ flex: 1 }} />
 
-      {/* Right: affordance key */}
+      {/* Right: affordance key. v0.28+ E4 — overflow ellipsis to handle
+          the 9-clause-stack case (plan-design R4 must-fix). max-width
+          caps at ~50% of BottomBar width so left/center regions aren't
+          crowded out. */}
       <div style={{
         fontStyle: "italic",
         fontFamily: "var(--font-serif)",
         fontSize: 11,
         color: "var(--dim)",
         letterSpacing: "0.2px",
+        maxWidth: "50%",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
       }}>
         {affordance}
       </div>

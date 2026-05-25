@@ -2,6 +2,7 @@ import { useRef, useEffect, useCallback, useState } from "react";
 import type { Memory, Conflict, EmbeddingIndex } from "../../types.js";
 import { BrainScene, type EdgeCounts } from "../../engine/scene.js";
 import { projectTo3D } from "../../engine/projection.js";
+import type { AdjacencyMap } from "../../engine/localNeighborhood.js";
 import type { ColorMode } from "../../state/filterState.js";
 
 const INITIAL_EDGE_COUNTS: EdgeCounts = {
@@ -39,6 +40,13 @@ interface UseSceneOptions {
    * ViewPanel radio).
    */
   colorMode: ColorMode;
+  /**
+   * v0.28+ E4 — pre-built adjacency (LivingMap owns the memo). Passed in
+   * rather than built here to break the circular dep with visibleIds
+   * (visibleIds needs localNeighborhood needs adjacency; useCanvasEngine
+   * receives visibleIds as prop).
+   */
+  adjacency: AdjacencyMap;
   /** E4 marquee: callback fires when the scene is constructed (and again
    * with null on unmount). LabelOverlay subscribes via this. */
   onSceneReady?: (scene: BrainScene | null) => void;
@@ -57,6 +65,7 @@ export function useCanvasEngine({
   visibleIds,
   filterActive,
   colorMode,
+  adjacency,
   onSceneReady,
 }: UseSceneOptions) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -70,6 +79,15 @@ export function useCanvasEngine({
   // re-renders BottomBar with fresh affordance copy / bail hint.
   // No render-time getter polling = no stale-data race.
   const [edgeCounts, setEdgeCounts] = useState<EdgeCounts>(INITIAL_EDGE_COUNTS);
+  // v0.28+ E4 — settling state for BottomBar affordance. settlingKindRef
+  // flips from "initial" to "refresh" after first settle stops. Suppressed
+  // entirely when fired from reduced-motion path (user doesn't see animation).
+  const [forceSettling, setForceSettling] = useState<"initial" | "refresh" | undefined>(undefined);
+  const settlingKindRef = useRef<"initial" | "refresh">("initial");
+
+  // v0.28+ E4 — adjacency is passed in as a prop (LivingMap owns the memo).
+  // Single source of truth; scene.populate consumes the same instance LivingMap
+  // uses for localNeighborhood.
 
   useEffect(() => {
     const el = containerRef.current;
@@ -98,12 +116,35 @@ export function useCanvasEngine({
     if (!scene || memories.length === 0) return;
 
     const positions = projectTo3D(embeddings);
-    scene.populate(memories, positions, conflicts);
+    scene.populate(memories, positions, conflicts, adjacency);
     // v0.28 (E2 real-edges) — populate is synchronous, so reading edge
     // counts immediately after returns the freshly-built state. Triggers
     // a React re-render of BottomBar with the new affordance copy.
     setEdgeCounts(scene.getEdgeCounts());
-  }, [memories, embeddings, conflicts]);
+  }, [memories, embeddings, conflicts, adjacency]);
+
+  // v0.28+ E4 — subscribe once to scene-level settling events. Scene forwards
+  // from current forceLayout (rebuilt per populate). Replay-on-subscribe
+  // handles the React-effect-after-paint race (forceLayout.onSettleStateChange
+  // fires immediately if already settling).
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    return scene.onSettleStateChange((settling, source) => {
+      if (source === "reduced-motion") {
+        // Suppress affordance for reduced-motion users — they don't see the
+        // animation, so the "settling" text would flash for no reason.
+        setForceSettling(undefined);
+        return;
+      }
+      if (settling) {
+        setForceSettling(settlingKindRef.current);
+      } else {
+        setForceSettling(undefined);
+        settlingKindRef.current = "refresh"; // all subsequent settles
+      }
+    });
+  }, []);
 
   // Round-2 code-review-critic HIGH: observe the actual canvas container
   // (which lives inside the map-frame post-E4), not the outer wrapper. The
@@ -178,5 +219,5 @@ export function useCanvasEngine({
     if (e.key === "Escape") sceneRef.current?.deselect();
   }, []);
 
-  return { containerRef, handleMouseMove, handleClick, handleKeyDown, edgeCounts };
+  return { containerRef, handleMouseMove, handleClick, handleKeyDown, edgeCounts, forceSettling };
 }

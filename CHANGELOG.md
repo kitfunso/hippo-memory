@@ -1,5 +1,160 @@
 # Changelog
 
+## ui-brain-observatory v0.2.4 (2026-05-25): force-directed layout (Obsidian-inspired graph upgrades, E4 of 4)
+
+Replaces the PCA-based 3D positioning with a d3-force layout driven by
+the explicit edges from E2. Memories sharing conflicts or shared-tag
+pairs pull together; isolated memories float at the periphery. Final
+positions become a function of STRUCTURE, not embedding-variance.
+
+E4 closes the Obsidian-inspired graph upgrades stack:
+- v0.2.1 E1 color-by-tag (PR #61)
+- v0.2.2 E2 real edges (PR #62)
+- v0.2.3 E3 local graph view (PR #63)
+- v0.2.4 E4 force-directed layout (this release)
+
+A 5th episode, **per-project anchor forces (E5)**, was spun out of E4's
+plan iteration (task #106) when scope grew too large for one episode.
+That work will land separately.
+
+### What shipped
+
+**Pure helper `ui/src/engine/forceLayout.ts`.**
+- `buildForceLayout(memories, adjacency, seedPositions, config)` factory.
+- 2D simulation on the XZ plane; scene-Y stays as layer offset
+  (LAYER_Y_OFFSET) so layer stratification is preserved.
+- Forces: `forceLink` from E3 adjacency (strength 0.4, distance 2.5),
+  `forceManyBody` (charge -30, Barnes-Hut quadtree), `forceCenter`
+  (strength 0.05), `forceCollide` (radius 0.6).
+- `alphaDecay` auto-aligned: `1 - Math.pow(alphaMin, 1 / maxTicks)` so
+  alpha reaches `alphaMin=0.01` at exactly `maxTicks=300`.
+- O(1) `position(id)` via internal `Map<string, ForceNode>`.
+- `runToCompletion(maxTicks?)` bounded for freeze case (default 80 ticks,
+  ~400ms worst-case main-thread block, within RAIL's acceptable band for
+  deliberate user actions).
+- `onSettleStateChange((settling, source: 'tick' | 'reduced-motion'))`:
+  callback fires once on start, once on done. Source param lets the
+  BottomBar suppress the affordance for reduced-motion users.
+- Stale-adjacency filter: links whose endpoints are not in `memorySet`
+  are dropped at init (no throw on deleted-memory race).
+
+**Scene engine integration (`ui/src/engine/scene.ts`).**
+- `BrainScene.populate` signature gains an `adjacency` arg; LivingMap
+  owns the memoization and passes both to scene.populate (for force
+  layout) AND to its own `localNeighborhood` useMemo (E3). Single
+  `buildAdjacency` call per `[memories, conflicts]` change.
+- `populate()` ends by building forceLayout from POST-jitter
+  basePositions (first populate) OR cached `lastSettledPositions`
+  (subsequent populates). Existing memories barely move; new ones
+  settle into available space.
+- `lastSettledPositions` pruned of deleted ids at populate-tail.
+- `animate()` ticks force layout BEFORE drift physics; during settle,
+  `mesh.position.copy(basePosition)` directly so the rendered mesh
+  doesn't lag the force-driven basePosition update. After settle, the
+  existing sin/cos drift resumes around the settled positions. Selection
+  pulse and fading-ring billboard run unconditionally so a selected node
+  keeps pulsing during settle.
+- `setReducedMotion(true)` preserves the existing rafId cleanup
+  (`cancelAnimationFrame + rafId = 0`) then `runToCompletion(80)` then
+  applies the converged positions then `snapParticlesToFinal()`. Freeze
+  pose is the converged layout, not a mid-settle interim.
+- Scene-level `onSettleStateChange(cb)` owns its subscriber list and
+  forwards from the current forceLayout. Re-subscribes on each populate.
+  Replay-on-subscribe handles the React-effect-after-paint race.
+
+**Layer-Y drop (the original "blue blob" root cause).**
+- `scene.ts:275` y formula was `pos[1] * SPREAD * 0.5 + layerY + jitter`
+  (PCA-y bled into vertical position). Now `layerY + jitter` only. The
+  3D shape becomes a clean 3-tier layered slab with structural XZ
+  clustering; layer stratification is unambiguous.
+
+**React wiring.**
+- `useCanvasEngine` accepts `adjacency` as a prop (owned by LivingMap),
+  subscribes once to `scene.onSettleStateChange`, exposes `forceSettling`
+  state (typed `"initial" | "refresh" | undefined`). The "initial" /
+  "refresh" discriminator distinguishes first-load mass-drift from a
+  memory-refresh re-settle.
+- `LivingMap` builds `adjacency = useMemo(buildAdjacency, [memories,
+  conflicts])` BEFORE the `localNeighborhood` + `visibleIds` useMemos so
+  no TDZ on first render (code-review-critic R1 caught this exact crash
+  when adjacency was originally hoisted to useCanvasEngine's return).
+- `BottomBar.buildAffordance` gains a 4th `forceSettling` arg; when set,
+  appends `· layout: settling (initial|refresh)`. Affordance div gets
+  `max-width: 50%` + `text-overflow: ellipsis` + `overflow: hidden` so
+  the worst-case 6-clause string doesn't crowd out the left/center
+  regions.
+- Reduced-motion users: `useCanvasEngine` checks `source ===
+  "reduced-motion"` in the subscription and skips the React state
+  update, so the affordance never appears for users who don't see the
+  animation.
+
+### Plan
+
+`docs/plans/2026-05-25-force-layout.md` (v1 -> v2 -> v3 across 4 plan
+critic rounds + 2 code-review rounds + 1 independent-review round).
+
+Scope reduction in v3: per-project anchor forces were initially in scope
+(Keith's option-3 pick) but the per-anchor design surfaced 3 separate
+HIGH issues in R2 critic. Splitting to E5 (task #106) lowered cumulative
+risk; E4 ships the lean d3-force replacement.
+
+### Critic record
+
+| Critic | Round | Verdict | Score |
+|---|---|---|---|
+| plan-eng-critic | R1 | fail | 50 |
+| plan-design-critic | R1 | fail | 55 |
+| plan-eng-critic | R2 | fail | 70 |
+| plan-design-critic | R2 | fail | 70 |
+| plan-eng-critic | R3 | fail | 78 |
+| plan-design-critic | R3 | PASS | 82 |
+| plan-eng-critic | R4 | PASS | 80 |
+| plan-design-critic | R4 | PASS | 70 |
+| code-review-critic | R1 | fail | 35 |
+| code-review-critic | R2 | PASS | 90 |
+| independent-review-critic | R1 | PASS | 85 |
+
+code-review-critic R1 caught a real TDZ ReferenceError on `adjacency`
+that tests + vite build both missed. R2 verified the flow-inversion fix.
+
+### Tests
+
+- `ui/src/engine/forceLayout.test.ts` (21 tests):
+  - Factory contract (8 surface methods)
+  - tick / done / runToCompletion (including freeze cap)
+  - Clamp to bound on init + per-tick
+  - Stale-adjacency filter (R4)
+  - `settledPositions` snapshot is consistent with current node state
+  - `onSettleStateChange` start + stop firing semantics
+  - **Replay-on-subscribe**: subscribing while settling fires `true`
+    immediately
+  - `position(id)` O(1) microbench (10K calls <10ms)
+  - Perf: 300 ticks on 1373-node + ~4000-edge fixture <2.0s with
+    `mulberry32(42)` for determinism
+- `ui/src/components/BottomBar.test.tsx` (5 new tests):
+  - "initial" appends `layout: settling (initial)`
+  - "refresh" appends `layout: settling (refresh)`
+  - undefined emits no clause (reduced-motion path)
+  - Composes after localView clause
+  - Full 9-clause stack reads cleanly
+
+Full repo: 1846 tests pass / 4 skipped / 252 test files.
+UI: 173 tests pass / 11 test files.
+Build: tsc --noEmit clean; vite clean (60 modules; three chunk 510KB no
+regression).
+
+### Out of scope (follow-ups)
+
+- **E5: per-project anchor forces** (task #106): separate episode with
+  own design budget for legend + anchor-order persistence + refresh
+  signaling.
+- 3D force (d3-force-3d): would break layer-Y semantic; defer.
+- Web Worker offload: only if main-thread jank shows in smoke.
+- User-adjustable force parameters: lock taste first.
+- Animate transition INTO local view: separate animation system.
+- Drag-to-pin (sticky node positions): defer.
+- `projection.ts` deletion: kept as warm-start dependency.
+
 ## ui-brain-observatory v0.2.3 (2026-05-25): local graph view (Obsidian-inspired graph upgrades, E3 of 4)
 
 Adds the Obsidian-most-used feature: click a memory, click the new
