@@ -12,9 +12,25 @@ import {
   COLOR_AMBIENT_LIGHT_HEX,
   COLOR_GRID_HEX,
   COLOR_CONFLICT_HEX,
+  COLOR_EDGE_HEX,
 } from "../tokens.js";
 import { isFading, type ColorMode } from "../state/filterState.js";
 import { buildPalette, resolveColor, TAG_PALETTE, PATH_PALETTE } from "./tagPalette.js";
+import { computeSharedTagPairs } from "./sharedTagPairs.js";
+
+// v0.28 (E2 real-edges) — pathological-filter mitigation. Module const so
+// it's referenced as HARD_EDGE_CAP without a class prefix.
+const HARD_EDGE_CAP = 2000;
+
+/** v0.28 — edge-count signal returned by BrainScene.getEdgeCounts() and
+ * passed via the populate onComplete callback. Drives BottomBar dynamic
+ * affordance copy + bail hint. */
+export interface EdgeCounts {
+  openConflicts: number;
+  resolvedConflicts: number;
+  sharedTag: number;
+  sharedTagBailed: boolean;
+}
 
 const SPREAD = 20;
 const LAYER_Y_OFFSET: Record<string, number> = { buffer: 6, episodic: 0, semantic: -6 };
@@ -80,6 +96,13 @@ export class BrainScene {
   private currentColorMode: ColorMode = "layer";
   private tagPalette: Map<string, string> = new Map();
   private pathPalette: Map<string, string> = new Map();
+  /**
+   * v0.28 (E2 real-edges) — explicit shared-tag edges as faint warm-grey
+   * hairlines. Computed by computeSharedTagPairs() (pure helper) and
+   * filtered to the n<=500 case via sharedTagBailed flag.
+   */
+  private sharedTagEdges: THREE.Line[] = [];
+  private sharedTagBailed = false;
 
   constructor(private container: HTMLDivElement) {
     this.initRenderer();
@@ -197,6 +220,13 @@ export class BrainScene {
     this.onClickCb = onClick;
   }
 
+  /**
+   * **MUST STAY SYNCHRONOUS.** useCanvasEngine reads `getEdgeCounts()`
+   * immediately after this returns to update React state without a race;
+   * any async-ification here (rAF, promise, microtask) would silently
+   * stale-read the counts. If a future change needs async work, change
+   * useCanvasEngine to a callback pattern AT THE SAME TIME.
+   */
   populate(
     memories: Memory[],
     positions: Record<string, [number, number, number]>,
@@ -222,9 +252,18 @@ export class BrainScene {
       this.scene.remove(line);
       line.geometry.dispose();
     }
+    // v0.28 (E2): dispose BOTH geometry AND material for shared-tag edges.
+    // (Pre-existing tendril/conflictLines material-leak deferred to a separate
+    // ticket per plan-eng-critic R1 reconciliation.)
+    for (const line of this.sharedTagEdges) {
+      this.scene.remove(line);
+      line.geometry.dispose();
+      (line.material as THREE.Material).dispose();
+    }
     this.nodes = [];
     this.tendrils = [];
     this.conflictLines = [];
+    this.sharedTagEdges = [];
 
     const maxRetrieval = memories.reduce((m, mem) => Math.max(m, mem.retrieval_count), 1);
 
@@ -306,6 +345,9 @@ export class BrainScene {
 
     this.buildTendrils();
     this.buildConflictLines(conflicts);
+    // v0.28 (E2 real-edges) — build shared-tag edges. Bails on n>500 with
+    // the sharedTagBailed flag so BottomBar can surface a hint.
+    this.buildSharedTagEdges(memories);
 
     // v0.27 color-by-tag: re-apply the current colorMode at populate tail.
     // Single source of truth for the populate-vs-setColorMode race fix
@@ -313,6 +355,82 @@ export class BrainScene {
     // via populate(), the current view mode is automatically re-applied so
     // the user doesn't see a layer-color flash if they're in tag/path mode.
     this.setColorMode(this.currentColorMode, memories);
+  }
+
+  /**
+   * v0.28 (E2 real-edges) — build explicit shared-tag edges between memory
+   * pairs sharing >=2 non-path tags. Bails on n>500 (matches buildTendrils
+   * proximity bail; live fixture currently 1373 = no edges, but filtering
+   * to a subset under 500 reveals structure).
+   *
+   * Bounded by HARD_EDGE_CAP (2000) regardless of helper output — protects
+   * against adversarial filters yielding pathological pair explosions.
+   */
+  private buildSharedTagEdges(memories: Memory[]): void {
+    const n = this.nodes.length;
+    if (n > 500) {
+      this.sharedTagBailed = true;
+      return;
+    }
+    this.sharedTagBailed = false;
+
+    const pairs = computeSharedTagPairs(memories, {
+      excludePrefix: "path:",
+      softCap: 50,
+      hardCap: 300,
+      perTagTopK: 15,
+      minShared: 2,
+    });
+
+    const nodeMap = new Map<string, MemoryNode>();
+    for (const node of this.nodes) nodeMap.set(node.id, node);
+
+    for (const p of pairs) {
+      if (this.sharedTagEdges.length >= HARD_EDGE_CAP) break;
+      const a = nodeMap.get(p.a);
+      const b = nodeMap.get(p.b);
+      if (!a || !b) continue;
+      const geo = new THREE.BufferGeometry().setFromPoints([a.basePosition, b.basePosition]);
+      const mat = new THREE.LineBasicMaterial({
+        color: COLOR_EDGE_HEX,
+        transparent: true,
+        // Opacity floor raised from v1's 0.05 to v2's 0.18 baseline
+        // (plan-design-critic R1 CRIT #2 — sub-perceptual on parchment).
+        opacity: 0.18 + p.count * 0.04, // 2-shared 0.26, 6-shared 0.42
+        depthWrite: false,
+      });
+      const line = new THREE.Line(geo, mat);
+      this.scene.add(line);
+      this.sharedTagEdges.push(line);
+    }
+  }
+
+  /**
+   * v0.28 (E2 real-edges) — consolidated edge-state accessor. Returns the
+   * scene's edge-count signal in one call so the consumer doesn't sample
+   * stale state across multiple getters. Drives BottomBar dynamic copy
+   * + bail hint.
+   *
+   * **PAIRED WITH `populate()`'s MUST-STAY-SYNCHRONOUS contract.** The
+   * useCanvasEngine effect calls populate() then this method back-to-back
+   * to feed React state. If populate ever becomes async, this getter will
+   * silently return stale counts — change the consumer to a callback
+   * pattern at the same time.
+   */
+  public getEdgeCounts(): EdgeCounts {
+    let open = 0;
+    let resolved = 0;
+    for (const line of this.conflictLines) {
+      const status = (line.userData as { status?: string }).status;
+      if (status === "open") open++;
+      else if (status === "resolved") resolved++;
+    }
+    return {
+      openConflicts: open,
+      resolvedConflicts: resolved,
+      sharedTag: this.sharedTagEdges.length,
+      sharedTagBailed: this.sharedTagBailed,
+    };
   }
 
   /**
@@ -412,16 +530,23 @@ export class BrainScene {
       const curve = new THREE.QuadraticBezierCurve3(a.basePosition, mid, b.basePosition);
       const points = curve.getPoints(16);
       const geo = new THREE.BufferGeometry().setFromPoints(points);
+      // v0.28 (E2 real-edges) — encode status in SHAPE (open = dashed,
+      // resolved = dotted) rather than opacity, so opacity stays a strength
+      // signal (plan-design-critic R1 HIGH on differentiation).
+      const isResolved = c.status === "resolved";
       const mat = new THREE.LineDashedMaterial({
         color: COLOR_CONFLICT_HEX,
         transparent: true,
         opacity: 0.3 + c.score * 0.4,
-        dashSize: 0.3,
-        gapSize: 0.2,
+        dashSize: isResolved ? 0.05 : 0.3,
+        gapSize: isResolved ? 0.15 : 0.2,
         depthWrite: false,
       });
       const line = new THREE.Line(geo, mat);
       line.computeLineDistances();
+      // v0.28 (E2) — stash status on userData so getEdgeCounts() can count
+      // open vs resolved without re-querying the source array.
+      line.userData = { status: c.status };
       this.scene.add(line);
       this.conflictLines.push(line);
     }
@@ -696,7 +821,12 @@ export class BrainScene {
         (node.fadingRing.material as THREE.Material).dispose();
       }
     }
-    for (const line of [...this.tendrils, ...this.conflictLines]) {
+    // v0.28 (E2 real-edges) — include sharedTagEdges in full-teardown
+    // disposal. populate() already disposes them between rebuilds; this
+    // is the unmount/HMR path that independent-review-critic R1 caught
+    // as a real leak (bounded by HARD_EDGE_CAP=2000 LineBasicMaterial +
+    // BufferGeometry per dashboard unmount cycle).
+    for (const line of [...this.tendrils, ...this.conflictLines, ...this.sharedTagEdges]) {
       line.geometry.dispose();
       (line.material as THREE.Material).dispose();
     }

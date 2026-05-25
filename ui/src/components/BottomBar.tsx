@@ -12,6 +12,7 @@
 
 import { LAYER_COLORS } from "../engine/types.js";
 import type { ColorMode } from "../state/filterState.js";
+import type { EdgeCounts } from "../engine/scene.js";
 
 interface BottomBarProps {
   drawerOpen: boolean;
@@ -24,6 +25,42 @@ interface BottomBarProps {
    * pre-v0.27 affordance key.
    */
   colorMode?: ColorMode;
+  /**
+   * v0.28 (E2 real-edges) — edge-count signal from the scene. Drives
+   * the dynamic affordance copy (which line classes actually render)
+   * and the bail hint (when shared-tag rendering bailed on n>500).
+   * Default = no-edges state for tests + back-compat.
+   */
+  edgeCounts?: EdgeCounts;
+}
+
+/**
+ * v0.28 (E2 real-edges) — dynamic affordance string. Lists ONLY edge
+ * classes that actually render right now; appends the bail hint when
+ * shared-tag bailed AND nothing visible.
+ */
+export function buildAffordance(
+  colorMode: ColorMode,
+  edges: EdgeCounts | undefined,
+): string {
+  const parts: string[] = ["size = retrievals", "opacity = strength"];
+
+  const lineKinds: string[] = [];
+  if (edges) {
+    if (edges.openConflicts > 0) lineKinds.push("conflicts (open)");
+    if (edges.resolvedConflicts > 0) lineKinds.push("conflicts (resolved)");
+    if (edges.sharedTag > 0) lineKinds.push("shared tags");
+  }
+  if (lineKinds.length > 0) parts.push(`lines = ${lineKinds.join(" / ")}`);
+
+  if (colorMode !== "layer") parts.push(`color = ${colorMode}`);
+
+  let copy = parts.join(" · ");
+
+  if (edges?.sharedTagBailed && edges.sharedTag === 0) {
+    copy += " · filter to <500 for tag edges";
+  }
+  return copy;
 }
 
 function Kbd({ children }: { children: React.ReactNode }) {
@@ -51,7 +88,8 @@ const LAYERS: Array<{ key: keyof typeof LAYER_COLORS; label: string }> = [
   { key: "semantic", label: "semantic" },
 ];
 
-export function BottomBar({ drawerOpen, onToggleDrawer, visibleCount, colorMode = "layer" }: BottomBarProps) {
+export function BottomBar({ drawerOpen, onToggleDrawer, visibleCount, colorMode = "layer", edgeCounts }: BottomBarProps) {
+  const affordance = buildAffordance(colorMode, edgeCounts);
   return (
     <div style={{
       position: "absolute",
@@ -136,7 +174,7 @@ export function BottomBar({ drawerOpen, onToggleDrawer, visibleCount, colorMode 
         color: "var(--dim)",
         letterSpacing: "0.2px",
       }}>
-        size = retrievals · opacity = strength · lines = similarity{colorMode !== "layer" ? ` · color = ${colorMode}` : ""}
+        {affordance}
       </div>
     </div>
   );

@@ -1,8 +1,15 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import type { Memory, Conflict, EmbeddingIndex } from "../../types.js";
-import { BrainScene } from "../../engine/scene.js";
+import { BrainScene, type EdgeCounts } from "../../engine/scene.js";
 import { projectTo3D } from "../../engine/projection.js";
 import type { ColorMode } from "../../state/filterState.js";
+
+const INITIAL_EDGE_COUNTS: EdgeCounts = {
+  openConflicts: 0,
+  resolvedConflicts: 0,
+  sharedTag: 0,
+  sharedTagBailed: false,
+};
 
 interface UseSceneOptions {
   memories: Memory[];
@@ -58,6 +65,11 @@ export function useCanvasEngine({
   const onClickRef = useRef(onClick);
   onHoverRef.current = onHover;
   onClickRef.current = onClick;
+  // v0.28 (E2 real-edges) — edge counts derived from scene state.
+  // setEdgeCounts is called synchronously after each populate() so React
+  // re-renders BottomBar with fresh affordance copy / bail hint.
+  // No render-time getter polling = no stale-data race.
+  const [edgeCounts, setEdgeCounts] = useState<EdgeCounts>(INITIAL_EDGE_COUNTS);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -87,6 +99,10 @@ export function useCanvasEngine({
 
     const positions = projectTo3D(embeddings);
     scene.populate(memories, positions, conflicts);
+    // v0.28 (E2 real-edges) — populate is synchronous, so reading edge
+    // counts immediately after returns the freshly-built state. Triggers
+    // a React re-render of BottomBar with the new affordance copy.
+    setEdgeCounts(scene.getEdgeCounts());
   }, [memories, embeddings, conflicts]);
 
   // Round-2 code-review-critic HIGH: observe the actual canvas container
@@ -162,5 +178,5 @@ export function useCanvasEngine({
     if (e.key === "Escape") sceneRef.current?.deselect();
   }, []);
 
-  return { containerRef, handleMouseMove, handleClick, handleKeyDown };
+  return { containerRef, handleMouseMove, handleClick, handleKeyDown, edgeCounts };
 }
