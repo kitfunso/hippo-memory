@@ -20,6 +20,7 @@ import {
   TAG_FALLBACK_COLOR,
   buildPalette,
   pickColorTag,
+  pickShortestPathTag,
   resolveColor,
 } from "./tagPalette.js";
 import { contrastRatio } from "./contrast.js";
@@ -201,5 +202,46 @@ describe("palette contrast (AC10)", () => {
 
   it("TAG_FALLBACK_COLOR has >= 4.5:1 contrast vs COLOR_MAP_BG", () => {
     expect(contrastRatio(TAG_FALLBACK_COLOR, COLOR_MAP_BG)).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+/**
+ * v0.29 (E5 HIGH-3) — pickShortestPathTag direct tests. The helper is now
+ * exported (shared with computeProjectAnchors) so its contract is part of
+ * the module surface, not just an internal pickColorTag detail.
+ */
+describe("pickShortestPathTag", () => {
+  it("returns null when tag list is empty", () => {
+    expect(pickShortestPathTag([])).toBeNull();
+  });
+
+  it("returns null when no path:* tag exists", () => {
+    expect(pickShortestPathTag(["topic:foo", "agent:bar"])).toBeNull();
+  });
+
+  it("picks the shortest path tag", () => {
+    expect(
+      pickShortestPathTag(["path:hippo-tests", "path:hippo", "path:longer-name"]),
+    ).toBe("path:hippo");
+  });
+
+  it("alpha tiebreak on equal-length path tags", () => {
+    expect(pickShortestPathTag(["path:zzz", "path:aaa"])).toBe("path:aaa");
+  });
+
+  it("excludeSet filters out matched tags before picking", () => {
+    expect(
+      pickShortestPathTag(["path:skf_s", "path:hippo"], new Set(["path:skf_s"])),
+    ).toBe("path:hippo");
+  });
+
+  it("excludeSet excluding all path tags returns null", () => {
+    expect(
+      pickShortestPathTag(["path:skf_s"], new Set(["path:skf_s"])),
+    ).toBeNull();
+  });
+
+  it("undefined excludeSet behaves like empty (no exclusions)", () => {
+    expect(pickShortestPathTag(["path:hippo"])).toBe("path:hippo");
   });
 });

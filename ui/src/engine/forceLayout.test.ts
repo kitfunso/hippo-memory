@@ -10,7 +10,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import type { Memory, Conflict } from "../types.js";
-import { buildForceLayout, type ForceNode } from "./forceLayout.js";
+import { buildForceLayout, type ForceNode, LAYOUT_BOUND } from "./forceLayout.js";
 import { buildAdjacency } from "./localNeighborhood.js";
 
 function mem(over: Partial<Memory> & { id: string }): Memory {
@@ -310,5 +310,101 @@ describe("perf budget (AC18 + AC19)", () => {
     handle.runToCompletion();
     const ms = performance.now() - t0;
     expect(ms).toBeLessThan(2000);
+  });
+});
+
+/**
+ * v0.29 (E5) — projectAnchors config branch. Plan v2.1 S7 + AC10/AC11/AC12.
+ *
+ * Locks: forceX/forceY added when projectAnchors set; back-compat without;
+ * anchored memories settle near their anchor; LAYOUT_BOUND export equals 30.
+ */
+describe("buildForceLayout projectAnchors (E5)", () => {
+  it("exports LAYOUT_BOUND === 30 (shared constant for scene + ProjectsPanel)", () => {
+    expect(LAYOUT_BOUND).toBe(30);
+  });
+
+  // Helper: settle a 1-node graph with the given config and return the
+  // final position. Single-node avoids charge repulsion in the comparison.
+  function settleOne(
+    config: Parameters<typeof buildForceLayout>[3],
+  ): { x: number; z: number } {
+    const memories = [mem({ id: "A" })];
+    const seed = new Map([["A", { x: 0, z: 0 }]]);
+    const handle = buildForceLayout(memories, new Map(), seed, {
+      maxTicks: 200,
+      randomSource: mulberry32(7),
+      ...config,
+    });
+    handle.runToCompletion();
+    return handle.position("A")!;
+  }
+
+  it("AC10: projectAnchors config pulls the anchored node MEASURABLY toward the anchor (compared to no-anchor baseline)", () => {
+    const anchor = { x: 10, y: 5 };
+    // Baseline: no projectAnchors → node settles via center+charge alone.
+    const withoutAnchor = settleOne({});
+    // With anchor: node should settle measurably closer to (10, 5).
+    const withAnchor = settleOne({
+      projectAnchors: new Map([["A", { ...anchor, strength: 0.5 }]]),
+    });
+
+    const baselineDist = Math.hypot(withoutAnchor.x - anchor.x, withoutAnchor.z - anchor.y);
+    const withAnchorDist = Math.hypot(withAnchor.x - anchor.x, withAnchor.z - anchor.y);
+
+    // The anchor must noticeably reduce distance to the target. d3-force's
+    // alphaDecay limits how much force is applied across maxTicks (default
+    // ~200 ticks × strength × alpha → finite pull, not infinite). A 1+ unit
+    // reduction proves the force is wired and acting, vs the baseline drift.
+    expect(withAnchorDist).toBeLessThan(baselineDist - 1);
+  });
+
+  it("AC11: without projectAnchors config, no project forces are added (back-compat with E4)", () => {
+    // Two parallel runs with the SAME seed + maxTicks. They MUST produce
+    // identical settle positions when neither has projectAnchors — i.e.
+    // the projectAnchors-absent code path is byte-equivalent to E4.
+    const a = settleOne({});
+    const b = settleOne({});
+    expect(a.x).toBe(b.x);
+    expect(a.z).toBe(b.z);
+    // And the position is NOT near (10, 5) — there's no force pulling there.
+    const distToAnchor = Math.hypot(a.x - 10, a.z - 5);
+    expect(distToAnchor).toBeGreaterThan(5); // anchor would have pulled it to <2
+  });
+
+  it("empty projectAnchors map = same as no anchors (no force registered)", () => {
+    // Edge case: passing an empty Map should skip the force registration
+    // (factory checks `size > 0`).
+    const memories = [mem({ id: "A" })];
+    const handle = buildForceLayout(memories, new Map(), null, {
+      projectAnchors: new Map(),
+    });
+    // No throw; ticks work.
+    handle.tick();
+    expect(handle.ticksRun()).toBe(1);
+  });
+
+  it("memories absent from projectAnchors get strength=0 (no pull)", () => {
+    // A is anchored at (10, 5) with strength 0.5; B is NOT in the map.
+    // After runToCompletion, A drifts toward (10, 5) but B stays near origin
+    // (only center + charge act on it).
+    const memories = [mem({ id: "A" }), mem({ id: "B" })];
+    const projectAnchors = new Map([
+      ["A", { x: 10, y: 5, strength: 0.5 }],
+      // B absent — no entry
+    ]);
+    const seed = new Map([["A", { x: 0, z: 0 }], ["B", { x: 0, z: 0 }]]);
+    const handle = buildForceLayout(memories, new Map(), seed, {
+      maxTicks: 50,
+      projectAnchors,
+      randomSource: mulberry32(7),
+    });
+    handle.runToCompletion();
+    const pA = handle.position("A")!;
+    const pB = handle.position("B")!;
+    // A pulled toward (10, 5).
+    expect(Math.hypot(pA.x - 10, pA.z - 5)).toBeLessThan(Math.hypot(pA.x, pA.z));
+    // B near origin (no anchor pull).
+    expect(Math.hypot(pB.x, pB.z)).toBeLessThan(Math.hypot(pB.x - 10, pB.z - 5));
   });
 });

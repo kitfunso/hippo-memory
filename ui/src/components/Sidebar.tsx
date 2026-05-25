@@ -10,6 +10,7 @@ import { StatsPanel } from "./StatsPanel.js";
 import { FilterPanel } from "./FilterPanel.js";
 import { TagCloud } from "./TagCloud.js";
 import { ViewPanel } from "./ViewPanel.js";
+import { ProjectsPanel } from "./ProjectsPanel.js";
 
 interface SidebarProps {
   memories: Memory[];
@@ -28,6 +29,15 @@ interface SidebarProps {
   setColorMode: (mode: ColorMode) => void;
   /** P4: reset all filters back to INITIAL_FILTER_STATE (keeping frozen flag). */
   resetFilters: () => void;
+  /** v0.29 (E5) — per-project list for the Projects mini-panel. Each row
+   *  shows a tag, count, and SVG dot at the project's anchor position.
+   *  Empty array → panel renders nothing (e.g. memories with no path
+   *  tags, or LivingMap before first populate). */
+  projects: ReadonlyArray<{
+    tag: string;
+    count: number;
+    anchor: { x: number; y: number };
+  }>;
 }
 
 export function Sidebar({
@@ -45,6 +55,7 @@ export function Sidebar({
   setFadingOnly,
   setColorMode,
   resetFilters,
+  projects,
 }: SidebarProps) {
   // Code-review-critic HIGH #1 fix: when filter is active and matches zero,
   // totalVisible should be 0, not memories.length.
@@ -100,6 +111,11 @@ export function Sidebar({
           (plan-design-critic R2 must-fix #3: literal "above the Filters
           header"). Renders the "Color by" segmented radio. */}
       <ViewPanel filterState={filterState} setColorMode={setColorMode} />
+
+      {/* v0.29 (E5) — Projects mini-panel between ViewPanel and Filters.
+          Each row = one path:* project with a tiny anchor-position dot
+          + click-to-filter. Renders null when projects is empty. */}
+      <ProjectsPanel projects={projects} onSelectProject={setQuery} />
 
       {/* P4 reset button row */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, paddingBottom: 6, borderBottom: "1px solid var(--glass-border)" }}>

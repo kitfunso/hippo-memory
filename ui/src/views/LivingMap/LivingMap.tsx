@@ -314,7 +314,15 @@ export function LivingMap({
     }
   }, [setLocalView]);
 
-  const { containerRef, handleMouseMove, handleClick, handleKeyDown, edgeCounts, forceSettling } = useCanvasEngine({
+  const {
+    containerRef,
+    handleMouseMove,
+    handleClick,
+    handleKeyDown,
+    edgeCounts,
+    forceSettling,
+    projectAnchorLayout,
+  } = useCanvasEngine({
     memories, embeddings, conflicts, width: size.width, height: size.height,
     onHover, onClick: onClickMemory,
     searchQuery: filterState.query,
@@ -325,6 +333,26 @@ export function LivingMap({
     adjacency,
     onSceneReady: setSceneInstance,
   });
+
+  // v0.29 (E5) — Sidebar projects list with counts. Memoized on memories
+  // + the anchor-layout reference (which scene caches per populate, so
+  // this memo only rebuilds when populate fires — exactly what we want).
+  const projectsForSidebar = useMemo(() => {
+    if (!projectAnchorLayout) return [];
+    const counts = new Map<string, number>();
+    for (const m of memories) {
+      for (const t of m.tags) {
+        if (projectAnchorLayout.byTag.has(t)) {
+          counts.set(t, (counts.get(t) ?? 0) + 1);
+        }
+      }
+    }
+    return projectAnchorLayout.orderedTags.map((tag) => ({
+      tag,
+      count: counts.get(tag) ?? 0,
+      anchor: projectAnchorLayout.byTag.get(tag)!,
+    }));
+  }, [memories, projectAnchorLayout]);
 
   // v0.27 — derive the color-driving tag for the currently hovered memory
   // so MemoryTooltip can surface it in tag/path mode (a11y non-color channel
@@ -424,6 +452,7 @@ export function LivingMap({
         setFadingOnly={setFadingOnly}
         setColorMode={setColorMode}
         resetFilters={resetFilters}
+        projects={projectsForSidebar}
       />
 
       {matchCount === 0 && filterState.query.trim().length > 0 && (

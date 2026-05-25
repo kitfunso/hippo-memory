@@ -3,6 +3,7 @@ import type { Memory, Conflict, EmbeddingIndex } from "../../types.js";
 import { BrainScene, type EdgeCounts } from "../../engine/scene.js";
 import { projectTo3D } from "../../engine/projection.js";
 import type { AdjacencyMap } from "../../engine/localNeighborhood.js";
+import type { AnchorLayout } from "../../engine/projectAnchors.js";
 import type { ColorMode } from "../../state/filterState.js";
 
 const INITIAL_EDGE_COUNTS: EdgeCounts = {
@@ -79,6 +80,12 @@ export function useCanvasEngine({
   // re-renders BottomBar with fresh affordance copy / bail hint.
   // No render-time getter polling = no stale-data race.
   const [edgeCounts, setEdgeCounts] = useState<EdgeCounts>(INITIAL_EDGE_COUNTS);
+  // v0.29 (E5) — project anchor layout in React state. Set in the same
+  // effect as setEdgeCounts (right after scene.populate returns) so the
+  // populate-driven layout change triggers a re-render that propagates
+  // to the Sidebar Projects panel. Ref-read at render time would NOT
+  // trigger re-render — useState is the structural fix (CRIT-2).
+  const [projectAnchorLayout, setProjectAnchorLayout] = useState<AnchorLayout | null>(null);
   // v0.28+ E4 — settling state for BottomBar affordance. settlingKindRef
   // flips from "initial" to "refresh" after first settle stops. Suppressed
   // entirely when fired from reduced-motion path (user doesn't see animation).
@@ -121,6 +128,11 @@ export function useCanvasEngine({
     // counts immediately after returns the freshly-built state. Triggers
     // a React re-render of BottomBar with the new affordance copy.
     setEdgeCounts(scene.getEdgeCounts());
+    // v0.29 (E5) — same idea for the project anchor layout. populate
+    // computes + caches it on the scene; we read + set React state in
+    // the SAME synchronous block so the Sidebar Projects panel sees
+    // it as soon as the canvas does.
+    setProjectAnchorLayout(scene.getProjectAnchorLayout());
   }, [memories, embeddings, conflicts, adjacency]);
 
   // v0.28+ E4 — subscribe once to scene-level settling events. Scene forwards
@@ -219,5 +231,13 @@ export function useCanvasEngine({
     if (e.key === "Escape") sceneRef.current?.deselect();
   }, []);
 
-  return { containerRef, handleMouseMove, handleClick, handleKeyDown, edgeCounts, forceSettling };
+  return {
+    containerRef,
+    handleMouseMove,
+    handleClick,
+    handleKeyDown,
+    edgeCounts,
+    forceSettling,
+    projectAnchorLayout,
+  };
 }

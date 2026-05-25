@@ -70,6 +70,12 @@
   border-radius: var(--radius-sm);
 }
 
+/* v0.29 (E5 ProjectsPanel) — hover affordance for Sidebar project rows.
+   No :focus-visible override here — global *:focus-visible (above, 2px/2px)
+   intentionally wins so all interactive elements share one focus standard.
+   Plan v2.1 design must-fix. */
+.project-row:hover { background: var(--ink-faint); }
+
 /* E5 S3 — sr-only utility for visually-hidden but SR-readable content.
    Standard a11y pattern. */
 .sr-only {

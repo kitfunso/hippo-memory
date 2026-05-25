@@ -1,5 +1,254 @@
 # Changelog
 
+## 1.12.11 (2026-05-25): bundled E1-E5 ui-brain-observatory publish (Obsidian-inspired graph upgrades)
+
+Bundles ui-brain-observatory v0.2.1 through v0.2.5 into one npm release.
+The E1 through E4 commits landed on master at 8d6cc47 across PRs #60-#64
+but were never `npm publish`ed. v1.12.11 makes the cumulative dashboard
+work user-available alongside the v0.2.5 E5 release.
+
+For per-episode detail, see the ui-brain-observatory entries below:
+- v0.2.1 E1: tag-based coloring
+- v0.2.2 E2: real edges (parents / conflicts / shared-tag pairs)
+- v0.2.3 E3: local graph view (N-hop neighborhood)
+- v0.2.4 E4: force-directed layout (replaces PCA on XZ)
+- v0.2.5 E5: per-project anchor forces (this release)
+
+No SDK / HTTP API / CLI / DB / migration / env changes. Pure UI bundle.
+
+### What ships in the tarball
+
+- `dist/` (SDK + CLI), `dist-ui/` (built dashboard), `bin/` (CLI shims).
+- `prepublishOnly` runs `build:all` (root tsc + UI vite build).
+
+## ui-brain-observatory v0.2.5 (2026-05-25): per-project anchor forces (Obsidian-inspired graph upgrades, E5 of 5)
+
+Adds per-project anchor forces to the d3-force layout from E4. Each
+unique `path:*` tag gets a stable position on a golden-angle-packed
+circle around origin; memories carrying that tag get a gentle pull
+toward it (strength 0.08 vs linkStrength 0.4 so edges still dominate).
+A new Sidebar Projects mini-panel lets users read which cluster is which
+project and click to filter. localStorage persists the project ordering
+across sessions, append-only, so existing anchors stay byte-identical
+when new project tags appear.
+
+E5 closes the Obsidian-inspired graph upgrades stack. The E4 R2 critic
+surfaced three anchor-specific HIGH issues (mass-resettle on new tags,
+no in-app legend, no refresh signaling) that demanded proper design
+budget; E5 was spun out of E4 at task #106 and addressed each.
+
+### What shipped
+
+**Pure helper `ui/src/state/projectAnchorOrder.ts`.**
+- `loadProjectAnchorOrder()` reads `hippo:projectAnchorOrder:v1` from
+  localStorage. Two-layer validation: try/catch for JSON.parse, plus
+  explicit shape check (Array.isArray(tags), nextIndex is number, every
+  inner tuple is `[string, finite-number]`). Inner-tuple validation
+  defends against `new Map([['hello']])` silently producing
+  `{key:'hello', value:undefined}` and NaN-propagating through anchor
+  math.
+- `saveProjectAnchorOrder()` JSON-serializes and writes. Silent no-op on
+  QuotaExceededError or disabled storage. Layout still works
+  session-local without persistence.
+- `reconcileProjectOrder(currentTags, order)` appends NEW tags with
+  `nextIndex` (alpha-sorted batch order), leaves existing indices
+  unchanged. Returns SAME object reference when nothing changed, so
+  callers can skip the save call via reference equality.
+- `clearProjectAnchorOrder()` exported as `@internal` for tests / a
+  future Reset Layout button (v0.3.0).
+
+**Pure helper `ui/src/engine/projectAnchors.ts`.**
+- `computeProjectAnchors(memories, order, bound, anchorStrength?)`
+  returns `{byTag, byMemoryId, orderedTags}`.
+- Anchor angle: `(index * GOLDEN_ANGLE) % 2π` where `GOLDEN_ANGLE = π *
+  (3 - sqrt(5))`. Vogel sunflower spiral, dense + collision-free for any
+  N up to ~50 indices. Each index has a permanent fixed angle, so
+  adding new tags leaves existing anchor positions byte-identical (the
+  AC20 stability guarantee, the structural fix for the E4 R2 issue v1
+  reintroduced with a slotCount-mod formula).
+- `EXCLUDED_PATH_TAGS = new Set(["path:skf_s"])` filters the filesystem
+  root tag (60% of memories, would dominate layout).
+- Per-memory anchor pick uses the shared `pickShortestPathTag` helper
+  (path-mode dedup with `pickColorTag`).
+- `orderedTags` lists only tags actually picked as the anchored tag for
+  at least one memory, so the Sidebar legend never shows ghost rows for
+  longer path tags subsumed by a shorter sibling
+  (e.g. `path:hippo-tests` when `path:hippo` is the shorter winner).
+
+**`ui/src/engine/tagPalette.ts` refactor.**
+- New exported `pickShortestPathTag(tags, excludeSet?)` extracted from
+  `pickColorTag`'s "path" branch. Shared with `computeProjectAnchors`
+  (which passes `EXCLUDED_PATH_TAGS` as excludeSet). The "tag" branch
+  keeps its inline filter (excludes path:\*, picks shortest non-path),
+  structurally inverse of the path-tag rule and not worth a second
+  shared helper for one caller.
+
+**`ui/src/engine/forceLayout.ts` extension.**
+- Exports `LAYOUT_BOUND = 30` constant. Consumers (scene.populate,
+  computeProjectAnchors, ProjectsPanel mini-SVG) now share the magic
+  number instead of duplicating `30`.
+- `ForceLayoutConfig.projectAnchors?: Map<string, {x, y, strength}>`.
+  When present and non-empty, registers `forceX` + `forceY` with
+  per-node accessors (memories absent from the map get strength=0).
+  Absent or empty config keeps E4 behavior byte-identical (back-compat).
+
+**`ui/src/engine/scene.ts` wiring.**
+- `populate()` loads the persisted order, reconciles current `path:*`
+  tags, saves only when changed (reference-equality skip), computes
+  AnchorLayout, caches it as `this.projectAnchorLayout`, and passes
+  `projectAnchors.byMemoryId` to `buildForceLayout`. All synchronous,
+  preserving the MUST-STAY-SYNCHRONOUS populate contract.
+- New `getProjectAnchorLayout()` accessor returns the cached layout
+  (same object reference until next populate, safe as a React useMemo
+  dep).
+
+**React state flow `useCanvasEngine.ts` + `LivingMap.tsx`.**
+- `useState<AnchorLayout | null>(null)` in `useCanvasEngine`, set in the
+  same effect as `setEdgeCounts` right after `scene.populate()` returns
+  (the synchronous read on the same render). Returned from the hook.
+  Ref-only reads would never trigger re-render; this is the structural
+  fix for the CRIT-2 race the plan-eng R1 critic caught on v1.
+- `LivingMap` destructures `projectAnchorLayout`, builds a memoized
+  `projectsForSidebar` array (tag, count, anchor target), passes it to
+  Sidebar.
+
+**Sidebar Projects mini-panel `ui/src/components/ProjectsPanel.tsx`.**
+- Lists projects in persistent-anchor-index order (first-seen across
+  sessions). Subtitle `(ordered by first-seen)` so users aren't
+  surprised by non-alpha order.
+- Each row: 20x20 SVG with outer ring + dot at the anchor's screen
+  position (`MINI_CENTER + (anchor.x / LAYOUT_BOUND) * MINI_INNER_RADIUS`),
+  project name (with `path:` prefix stripped), memory count.
+- Button has `aria-label="Filter to project X, N memor(y|ies)"` with
+  grammatical pluralization. Decorative SVG is `aria-hidden`. Click
+  fires `setQuery(tag)` to filter memories to that project.
+- Caps display at 10 rows with passive `+N more` italic label for
+  overflow (cluster still visible on canvas; expansion deferred to
+  v0.3.0).
+- Returns null on empty input so the panel hides itself when no
+  qualifying path tags exist.
+
+**`ui/src/components/Header.tsx` external sync mirror.**
+- The external query sync effect now mirrors ANY non-equal external
+  change into the local input (was: only empty-clear). Click on a
+  ProjectsPanel row sets `filterState.query = "path:hippo"` via
+  `setQuery`; the Header search input now visibly reflects the active
+  query instead of staying blank. Race safety: mirrors only when
+  `filterState.query !== debounced`, so during typing the local input
+  never gets clobbered by an echo of its own pipeline.
+
+**`ui/src/components/Sidebar.tsx`.**
+- New `projects` prop. ProjectsPanel mounted between ViewPanel and the
+  Filters header, matching the established between-section pattern from
+  E1's ViewPanel insertion.
+
+**`ui/src/tokens.css`.**
+- New `.project-row:hover { background: var(--ink-faint); }` rule for
+  the new Sidebar rows. Intentionally NO `:focus-visible` override on
+  this class: the global `*:focus-visible` rule (2px outline) already
+  covers it, and a more-specific rule would downgrade the sitewide
+  focus indicator on these rows (a11y regression).
+
+### Plan
+
+`docs/plans/2026-05-25-project-anchors.md` (v1 -> v2 -> v2.1 across 2
+plan critic rounds + 1 code-review round + 1 independent-review round +
+1 ship-readiness round).
+
+Major v1 -> v2 changes (R1 critic carry-over):
+- Switched anchor angle from `slotCount = max(1, nextIndex)` mod-N
+  formula (which shifts every existing anchor when N grows, the exact
+  E4 R2 bug E5 was spun out to fix) to golden-angle packing where each
+  index has a permanent angle independent of total count.
+- Wired explicit React state for the AnchorLayout in `useCanvasEngine`
+  (ref-only reads at render time would never re-render on populate).
+- Extracted `LAYOUT_BOUND` so the bound is one source of truth for
+  scene + computeProjectAnchors + ProjectsPanel mini-SVG.
+- Added explicit JSON shape validation in load to defend against
+  malformed payloads.
+- Extracted shared `pickShortestPathTag` to remove the path-tag pick
+  duplication between tagPalette and projectAnchors.
+- Fixed `orderedTags` to include only actually-anchored tags.
+- Added aria-label + aria-hidden + first-seen-order subtitle in
+  ProjectsPanel.
+- Fixed SVG mini-map geometry to a single coordinate system.
+
+v2 -> v2.1 surgical (R2 PASS-with-must-fix carry-over):
+- Scoped `pickShortestPathTag` to path-mode only; tag-mode keeps its
+  inline non-path filter.
+- Tightened load validation to verify every inner tuple is
+  `[string, finite-number]`.
+- Dropped a redundant `.project-row:focus-visible` override that would
+  have downgraded the global focus standard.
+
+Review fold-in (independent-review-critic must-fix):
+- Header search input mirrors non-empty external query changes so the
+  ProjectsPanel click affords visible feedback.
+- Pluralization in aria-label: `1 memory` vs `N memories`.
+
+### Critic record
+
+| Critic | Round | Verdict | Score |
+|---|---|---|---|
+| plan-eng-critic | R1 | fail | 4 |
+| plan-design-critic | R1 | PASS-with-fixes | 8 |
+| plan-eng-critic | R2 | PASS-with-fixes | 7 |
+| plan-design-critic | R2 | PASS-with-fixes | 8 |
+| code-review-critic | R1 | fail | 7 |
+| code-review-critic | R2 | PASS | 9 |
+| independent-review-critic | R1 | PASS-with-fixes | 78 |
+| ship-readiness-critic | R1 | PASS-with-fixes | 78 |
+
+plan-eng R1 caught two CRIT issues that would have shipped a broken
+stability guarantee: the slotCount-mod angle formula reintroduced the
+exact mass-resettle bug E5 was created to fix, and the ref-read at
+render time would never trigger a re-render on populate. Both fixed in
+v2 (golden-angle + explicit useState).
+
+code-review R1 caught that the plan's S7 test list (4 forceLayout
+entries to lock AC10/AC11/AC12) was not actually added. R2 folded all
+4 plus 7 direct pickShortestPathTag tests.
+
+independent-review R1 caught the Header search-input desync (clicking a
+ProjectsPanel row filtered memories silently, with no UI feedback in the
+Header search box) and the ungrammatical `1 memories` aria-label. Both
+folded in-stage.
+
+### Tests
+
+`npm test --run` from `ui/`: 220 / 220 pass across 14 test files.
+- `projectAnchorOrder.test.ts` 16 new (load/save, append-only,
+  reference-equality skip, JSON shape, inner-tuple corruption,
+  QuotaExceededError silent-skip).
+- `projectAnchors.test.ts` 10 new (path:skf_s filter, golden-angle
+  formula, AC20 byte-identical stability, multi-tag shortest-wins,
+  orderedTags anchored-only filter, strength override).
+- `ProjectsPanel.test.tsx` 9 new (empty state, top-N truncation, +N
+  more, aria-label with pluralization, SVG aria-hidden, dot position
+  formula, click forwards tag, type='button').
+- `forceLayout.test.ts` 5 new (LAYOUT_BOUND export, projectAnchors
+  config pulls, back-compat byte equality, empty Map no-op, per-node
+  strength=0).
+- `tagPalette.test.ts` 7 new pickShortestPathTag direct (empty, no path,
+  shortest, alpha tiebreak, excludeSet filter, excludeSet excluding
+  all, undefined excludeSet).
+
+`npm run build` clean (~1s). `npx tsc --noEmit` clean.
+
+### Out of scope (named, deferred)
+
+- Reset Layout button to clear localStorage ordering (v0.3.0).
+- Per-project color customization in the Sidebar legend.
+- Drag-to-rearrange projects on the canvas.
+- BottomBar `anchors: N` clause.
+- Animated transition when a new anchor appears.
+- Hover-preview of project spheres on Sidebar-row hover (highlight
+  spheres in canvas).
+- Query input rewrite to a `project: X` chip pill (instead of raw
+  `path:X` text).
+- Cross-tab localStorage sync via the storage event.
+- Cross-session anchor sync (cloud-persisted ordering).
+
 ## ui-brain-observatory v0.2.4 (2026-05-25): force-directed layout (Obsidian-inspired graph upgrades, E4 of 4)
 
 Replaces the PCA-based 3D positioning with a d3-force layout driven by

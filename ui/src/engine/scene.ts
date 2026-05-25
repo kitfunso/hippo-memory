@@ -18,7 +18,13 @@ import { isFading, type ColorMode } from "../state/filterState.js";
 import { buildPalette, resolveColor, TAG_PALETTE, PATH_PALETTE } from "./tagPalette.js";
 import { computeSharedTagPairs } from "./sharedTagPairs.js";
 import type { AdjacencyMap } from "./localNeighborhood.js";
-import { buildForceLayout, type ForceLayoutHandle, type SettleSource } from "./forceLayout.js";
+import { buildForceLayout, type ForceLayoutHandle, type SettleSource, LAYOUT_BOUND } from "./forceLayout.js";
+import { computeProjectAnchors, type AnchorLayout } from "./projectAnchors.js";
+import {
+  loadProjectAnchorOrder,
+  reconcileProjectOrder,
+  saveProjectAnchorOrder,
+} from "../state/projectAnchorOrder.js";
 
 // v0.28 (E2 real-edges) — pathological-filter mitigation. Module const so
 // it's referenced as HARD_EDGE_CAP without a class prefix.
@@ -121,6 +127,16 @@ export class BrainScene {
    */
   private settleSubscribers = new Set<(settling: boolean, source: SettleSource) => void>();
   private currentForceUnsubscribe: (() => void) | null = null;
+  /**
+   * v0.29 (E5) — cached AnchorLayout from the most recent populate(). Same
+   * reference returned by getProjectAnchorLayout() until the next populate
+   * runs. This stability lets LivingMap's projectsForSidebar useMemo skip
+   * rebuilds when populate hasn't fired (between populates). The reference
+   * IS replaced on every populate (computeProjectAnchors returns a fresh
+   * object each call) — that's the trigger React state needs to re-render
+   * the Sidebar with up-to-date anchor + count info.
+   */
+  private projectAnchorLayout: AnchorLayout | null = null;
 
   constructor(private container: HTMLDivElement) {
     this.initRenderer();
@@ -396,7 +412,27 @@ export class BrainScene {
         prior ?? { x: node.basePosition.x, z: node.basePosition.z },
       );
     }
-    this.forceLayout = buildForceLayout(memories, adjacency, seedPositions);
+    // v0.29 (E5) — per-project anchor computation. Persisted append-only
+    // ordering (localStorage) + golden-angle packing keep existing anchors
+    // STABLE when new project tags appear (the core E4 R2 fix). Computed
+    // BEFORE buildForceLayout so the result feeds the projectAnchors config.
+    const persistedOrder = loadProjectAnchorOrder();
+    const allPathTags = new Set<string>();
+    for (const m of memories) {
+      for (const t of m.tags) if (t.startsWith("path:")) allPathTags.add(t);
+    }
+    const reconciledOrder = reconcileProjectOrder([...allPathTags], persistedOrder);
+    if (reconciledOrder !== persistedOrder) {
+      // reconcileProjectOrder returns SAME ref when nothing changed — only
+      // touch localStorage when there's actually something new to write.
+      saveProjectAnchorOrder(reconciledOrder);
+    }
+    const projectAnchors = computeProjectAnchors(memories, reconciledOrder, LAYOUT_BOUND);
+    this.projectAnchorLayout = projectAnchors;
+
+    this.forceLayout = buildForceLayout(memories, adjacency, seedPositions, {
+      projectAnchors: projectAnchors.byMemoryId,
+    });
     // Forward forceLayout events to scene-level subscribers + replay current
     // state for any subscriber that attached before this populate.
     this.currentForceUnsubscribe = this.forceLayout.onSettleStateChange((settling, source) => {
@@ -475,6 +511,15 @@ export class BrainScene {
    * silently return stale counts — change the consumer to a callback
    * pattern at the same time.
    */
+  /**
+   * v0.29 (E5) — Returns the latest computed AnchorLayout, or null if
+   * populate has not yet run. Returns the SAME object reference until
+   * the next populate() call — safe to use as a React useMemo dep.
+   */
+  public getProjectAnchorLayout(): AnchorLayout | null {
+    return this.projectAnchorLayout;
+  }
+
   public getEdgeCounts(): EdgeCounts {
     let open = 0;
     let resolved = 0;
