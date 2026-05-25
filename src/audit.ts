@@ -138,7 +138,8 @@ export type AuditOp =
   | 'auth_create' // v1.12.4: emitted by api.authCreate (closes the gap v1.12.3 CHANGELOG flagged)
   | 'outcome'
   | 'consolidate' // v1.11.5: emitted once per api.sleep invocation
-  | 'audit_prune'; // v1.12.9: emitted by pruneAuditLog after each retention prune
+  | 'audit_prune' // v1.12.9: emitted by pruneAuditLog after each retention prune
+  | 'summary_marked_dirty'; // v0.30 / E1 of DAG live-coupling — emitted by markSummaryDirty on 0->1 transition
 
 export interface AppendAuditOpts {
   tenantId: string;
