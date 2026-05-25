@@ -1520,12 +1520,42 @@ export function batchWriteAndDelete(
   const db = openHippoDb(hippoRoot);
   try {
     db.exec('BEGIN');
+    // v0.30 / E2 — DAG live-coupling: BEFORE deletes, snapshot dag_parent_id
+    // for every doomed row so we can mark parents dirty post-COMMIT. Done
+    // inside the same BEGIN so the SELECT sees pre-delete state.
+    // independent-review-critic R1 HIGH: consolidate.ts/sleep flushes through
+    // this path every cycle; without these hooks parents NEVER get marked
+    // dirty for the dominant mutation source (decay, merge, garbage-collect).
+    const dirtyParents = new Set<string>();
+    const tenantById = new Map<string, string>();
+    if (toDeleteIds.length > 0) {
+      const placeholders = toDeleteIds.map(() => '?').join(',');
+      const rows = db.prepare(
+        `SELECT dag_parent_id, tenant_id FROM memories WHERE id IN (${placeholders})`,
+      ).all(...toDeleteIds) as Array<{ dag_parent_id: string | null; tenant_id: string | null }>;
+      for (const row of rows) {
+        if (row.dag_parent_id) {
+          dirtyParents.add(row.dag_parent_id);
+          tenantById.set(row.dag_parent_id, row.tenant_id ?? 'default');
+        }
+      }
+    }
     for (const entry of toWrite) {
       upsertEntryRow(db, entry);
+      // Hook for writes: child upserted under a level-2 summary marks parent dirty.
+      if (entry.dag_parent_id) {
+        dirtyParents.add(entry.dag_parent_id);
+        tenantById.set(entry.dag_parent_id, entry.tenantId);
+      }
     }
     for (const id of toDeleteIds) {
       db.prepare('DELETE FROM memories WHERE id = ?').run(id);
       deleteFtsRow(db, id);
+    }
+    // Fire dirty-mark for every collected parent INSIDE the BEGIN, so the
+    // dirty flag commits atomically with the writes + deletes.
+    for (const parentId of dirtyParents) {
+      markSummaryDirtyInTx(db, parentId, tenantById.get(parentId) ?? 'default', 'batch');
     }
     db.exec('COMMIT');
 
@@ -2467,15 +2497,18 @@ export function loadDirtySummaries(
 /**
  * v0.30 / E2 — in-transaction variant of markSummaryDirty. Takes an open
  * db (caller is responsible for any SAVEPOINT/BEGIN). Used by E2's hook
- * sites (writeEntryDbOnly, api.supersede CAS, deleteEntry, archiveRawMemory)
- * so each child mutation's dirty-mark is atomic with the mutation itself
- * (where the mutation IS in a SAVEPOINT — deleteEntry is the exception,
- * acceptably non-atomic by design).
+ * sites: writeEntryDbOnly, api.supersede CAS, deleteEntry, archiveRawMemory,
+ * batchWriteAndDelete. Each child mutation's dirty-mark is atomic with the
+ * mutation itself (where the mutation IS in a SAVEPOINT/BEGIN — deleteEntry
+ * is the exception, acceptably non-atomic by design).
  *
- * Same idempotency contract as the public markSummaryDirty: 0->1 transition
- * only, audit row only on transition, no-op on non-summary / archived /
- * unknown id / cross-tenant. Private (no export) — public surface stays at
- * markSummaryDirty.
+ * EXPORTED (required for cross-module use by api.ts + raw-archive.ts).
+ * Risk of misuse (caller without open tx) is mitigated by the InTx
+ * suffix + the DatabaseSyncLike typed param. Public surface for end users
+ * stays at the markSummaryDirty (own-connection) variant.
+ *
+ * Same idempotency contract: 0->1 transition only, audit row only on
+ * transition, no-op on non-summary / archived / unknown id / cross-tenant.
  */
 export function markSummaryDirtyInTx(
   db: DatabaseSyncLike,
