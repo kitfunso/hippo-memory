@@ -1,5 +1,11 @@
 import { createMemory, Layer, type MemoryEntry } from './memory.js';
-import { writeEntry } from './store.js';
+import {
+  writeEntry,
+  loadAllDirtySummaries,
+  loadChildrenOfSummary,
+  applyRebuildResult,
+  clearSummaryDirtyAfterBuild,
+} from './store.js';
 
 export interface FactCluster {
   label: string;
@@ -153,6 +159,123 @@ export async function buildDag(
       const updated: MemoryEntry = { ...member, dag_parent_id: summaryEntry.id };
       writeEntry(hippoRoot, updated);
       result.factsLinked++;
+    }
+    // v0.30 / E3 — cancel the cascade of dirty-marks fired by member
+    // writeEntry calls (E2 hook on writeEntryDbOnly at store.ts:1214).
+    // The summary we just built IS fresh, no rebuild needed. Without this,
+    // E3 in the SAME sleep cycle would re-rebuild every new summary
+    // (2x LLM cost). plan-eng-r1 HIGH must-fix.
+    clearSummaryDirtyAfterBuild(hippoRoot, summaryEntry.id, summaryEntry.tenantId, 'buildDag');
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// v0.30 / E3 of DAG live-coupling — rebuildDirtySummaries orchestrator
+// ---------------------------------------------------------------------------
+
+export interface DagRebuildResult {
+  attempted: number;            // summaries we tried (<= cap)
+  rebuilt: number;              // successful regenerations
+  zeroChildSkipped: number;     // dirty-cleared without LLM (descendants all gone)
+  failed: number;               // LLM null, fetch error, or applyRebuildResult throw
+  capped: boolean;              // true if queue had more than cap entries
+}
+
+/**
+ * v0.30 / E3 — sleep-cycle phase that drains the dirty L2 summary queue.
+ * Thin orchestrator; the heavy lifting lives in store.ts (load + apply)
+ * and dag.ts:generateDagSummary (LLM call).
+ *
+ * Per-summary try/catch isolation (plan-eng-r1 MED must-fix) — one
+ * throwing rebuild does NOT abort the rest of the queue.
+ *
+ * Race-loser handling: applyRebuildResult's UPDATE WHERE includes
+ * AND summary_dirty=1, so concurrent sleep's second writer returns
+ * changed=false. Silent skip (neither rebuilt++ nor failed++).
+ */
+export async function rebuildDirtySummaries(
+  hippoRoot: string,
+  opts: DagSummaryOptions & { cap?: number },
+): Promise<DagRebuildResult> {
+  const cap = opts.cap ?? 20;
+  const dirty = loadAllDirtySummaries(hippoRoot);
+  const capped = dirty.length > cap;
+  const queue = dirty.slice(0, cap);
+
+  const result: DagRebuildResult = {
+    attempted: queue.length,
+    rebuilt: 0,
+    zeroChildSkipped: 0,
+    failed: 0,
+    capped,
+  };
+
+  for (const summary of queue) {
+    try {
+      const children = loadChildrenOfSummary(hippoRoot, summary.id, summary.tenantId);
+
+      if (children.length === 0) {
+        // Zero-child case: clear dirty + zero counts, no LLM call, no rebuild_count bump.
+        const changed = applyRebuildResult(hippoRoot, summary, {
+          content: summary.content,
+          descendant_count: 0,
+          earliest_at: null,
+          latest_at: null,
+          bumpRebuildCount: false,
+          zeroChildren: true,
+          actor: 'sleep',
+        });
+        if (changed) result.zeroChildSkipped++;
+        // changed=false → race lost / row vanished; silently skip
+        continue;
+      }
+
+      // Derive label from summary's existing entity tags (mirrors clusterFacts)
+      const entityTags = summary.tags.filter(
+        (t) => t.startsWith('speaker:') || t.startsWith('topic:'),
+      );
+      const label = entityTags.length > 0
+        ? entityTags.map((t) => t.split(':')[1]).join(': ')
+        : summary.content.slice(0, 40);
+
+      const newContent = await generateDagSummary(
+        label,
+        children.map((c) => c.content),
+        opts,
+      );
+
+      if (!newContent) {
+        // LLM null / fetch error → leave dirty for next cycle
+        result.failed++;
+        continue;
+      }
+
+      const childCreatedAts = children.map((c) => c.created).sort();
+      const changed = applyRebuildResult(hippoRoot, summary, {
+        content: newContent,
+        descendant_count: children.length,
+        earliest_at: childCreatedAts[0],
+        latest_at: childCreatedAts[childCreatedAts.length - 1],
+        bumpRebuildCount: true,
+        zeroChildren: false,
+        actor: 'sleep',
+      });
+      if (changed) result.rebuilt++;
+      // changed=false → race lost; not failure, not success, silently skip
+    } catch (err) {
+      // Per-summary failure isolation — one throw doesn't abort the queue.
+      // independent-review MED #2 fold: log enough to triage in production
+      // (audit() wraps its own writes try/catch per store.ts:2566, so a
+      // throw here is exotic: SQLite I/O error, prepare failure, etc).
+      result.failed++;
+      // eslint-disable-next-line no-console
+      console.error(
+        `[rebuildDirtySummaries] summary ${summary.id} (tenant ${summary.tenantId}) failed: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
     }
   }
 
