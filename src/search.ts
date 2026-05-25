@@ -251,13 +251,17 @@ const DEFAULT_FRESHNESS_BOOST = 1.05;
 const FRESHNESS_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
- * v0.30 / E4 — single source of truth for "is this a DAG L2 summary".
+ * v0.30 / E4-E5 — single source of truth for "is this a DAG summary".
+ * E4 originally checked dag_level === 2; E5 widens to L2 + L3 since L3
+ * entity profiles also get the same deboost factor. Differentiated
+ * deboost (e.g. 0.7 for L3) is flagged as follow-up.
+ *
  * Existing drill-down at search.ts:506-529/923-946 uses tag check
- * ('dag-summary'); structural truth is dag_level === 2. New E4 code uses
- * this helper. Existing drill-down NOT modified (separate refactor flagged).
+ * ('dag-summary'); structural truth is dag_level === 2 || === 3. New
+ * E4/E5 code uses this helper; existing drill-down NOT modified.
  */
 export function isDagSummary(entry: MemoryEntry): boolean {
-  return entry.dag_level === 2;
+  return entry.dag_level === 2 || entry.dag_level === 3;
 }
 
 /**

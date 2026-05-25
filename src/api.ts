@@ -966,8 +966,18 @@ export interface DrillDownOpts {
    * Optional token budget. When set, children are appended in chronological
    * order (created ASC) until adding the next child would exceed the budget.
    * Token cost = ceil(content.length / 4) per child.
+   *
+   * For depth > 1, the budget is GLOBAL cumulative (NOT per-level).
    */
   budget?: number;
+  /**
+   * v0.30 / E5 — walk N levels down (default 1 = direct children only).
+   * Higher values include children of children, etc. Internal hard cap 10
+   * to prevent pathological depth walks. BFS uses visited Set for dedup
+   * (defensive against shared-child data anomalies; DAG is acyclic by
+   * construction).
+   */
+  depth?: number;
 }
 
 export interface DrillDownResult {
@@ -1021,6 +1031,9 @@ export function drillDown(
   opts: DrillDownOpts = {},
 ): DrillDownOutcome {
   const limit = opts.limit ?? 50;
+  // v0.30 / E5: depth defaults 1 (backward compat); hard cap 10 levels
+  // prevents pathological deep trees. CLI/HTTP/MCP layers also clamp.
+  const depth = Math.max(1, Math.min(opts.depth ?? 1, 10));
   const summary = readEntry(ctx.hippoRoot, summaryId, ctx.tenantId);
   // No unscoped cross-tenant probe here — readEntry's null return covers
   // both "doesn't exist" and "exists in another tenant" by design.
@@ -1036,14 +1049,41 @@ export function drillDown(
     return { failure: 'not_found' };
   }
 
-  const allChildren = loadChildrenOf(ctx.hippoRoot, summaryId, ctx.tenantId);
-  const eligible = allChildren.filter((c) => passesScopeFilterForRecall(c.scope ?? null, undefined));
-  let children = eligible;
+  // v0.30 / E5: BFS walk levels 1..depth with visited-Set dedup. Defensive
+  // against shared-child data anomalies (dag_parent_id has no uniqueness
+  // constraint, so a misconfigured tree could double-emit at depth > 1).
+  // Each level uses loadChildrenOf which is tenant-scoped via ctx.tenantId.
+  const collected: MemoryEntry[] = [];
+  const visited = new Set<string>([summaryId]);
+  let frontier: string[] = [summaryId];
+  // independent-review MED #4 fold: track level-0 direct-children count
+  // separately so the descendantCount fallback (for legacy summaries with
+  // null descendant_count) reflects DIRECT children, not BFS-collected total.
+  let level0DirectCount = 0;
+  for (let level = 0; level < depth; level++) {
+    const nextFrontier: string[] = [];
+    for (const parentId of frontier) {
+      const kids = loadChildrenOf(ctx.hippoRoot, parentId, ctx.tenantId);
+      const eligibleKids = kids.filter((c) => passesScopeFilterForRecall(c.scope ?? null, undefined));
+      for (const k of eligibleKids) {
+        if (visited.has(k.id)) continue;
+        visited.add(k.id);
+        collected.push(k);
+        nextFrontier.push(k.id);
+        if (level === 0) level0DirectCount++;
+      }
+    }
+    if (nextFrontier.length === 0) break;
+    frontier = nextFrontier;
+  }
+
+  // Apply global cumulative token budget + limit cap on collected.
+  let children = collected;
   let truncated = false;
   if (opts.budget !== undefined) {
-    const out: typeof eligible = [];
+    const out: MemoryEntry[] = [];
     let used = 0;
-    for (const c of eligible) {
+    for (const c of collected) {
       const t = Math.ceil(c.content.length / 4);
       if (out.length > 0 && used + t > opts.budget) {
         truncated = true;
@@ -1063,7 +1103,12 @@ export function drillDown(
     summary: {
       id: summary.id,
       content: summary.content,
-      descendantCount: summary.descendant_count ?? eligible.length,
+      // v0.30 / E5: descendant_count stays the summary's STORED value
+      // (direct children at creation time). totalChildren below reflects
+      // the full BFS collection at the requested depth.
+      // independent-review MED #4 fold: legacy fallback uses level-0 direct
+      // count (NOT collected.length which is BFS-depth-N total).
+      descendantCount: summary.descendant_count ?? level0DirectCount,
       earliestAt: summary.earliest_at ?? null,
       latestAt: summary.latest_at ?? null,
     },
@@ -1074,7 +1119,10 @@ export function drillDown(
       dagLevel: c.dag_level ?? 0,
       created: c.created,
     })),
-    totalChildren: eligible.length,
+    // v0.30 / E5: totalChildren = BFS-collected count (depth-aware). For
+    // depth=1 this equals the eligible direct-children count (backward
+    // compat). For depth>1 it is the cumulative count across levels.
+    totalChildren: collected.length,
     truncated,
   };
 }

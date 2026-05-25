@@ -4475,18 +4475,47 @@ function cmdDag(hippoRoot: string, flags: Record<string, string | boolean | stri
     return;
   }
 
-  // Tree view: show summaries and their children
-  const summaries = entries.filter((e) => e.dag_level === 2);
-  if (summaries.length === 0) {
+  // Tree view: v0.30 / E5 renders L3 entity profiles as roots (with L2
+  // children indented), then orphan L2 summaries (no L3 parent) at top
+  // level. Pre-E5 behavior was L2-only roots; rendering now covers L3.
+  const profiles = entries.filter((e) => e.dag_level === 3);
+  const l2List = entries.filter((e) => e.dag_level === 2);
+  const orphanL2 = l2List.filter((e) => !e.dag_parent_id);
+  const childL2ByProfile = new Map<string, typeof l2List>();
+  for (const l2 of l2List) {
+    if (!l2.dag_parent_id) continue;
+    const list = childL2ByProfile.get(l2.dag_parent_id) ?? [];
+    list.push(l2);
+    childL2ByProfile.set(l2.dag_parent_id, list);
+  }
+
+  if (profiles.length === 0 && orphanL2.length === 0) {
     console.log('No DAG summaries yet. Run `hippo sleep` with ANTHROPIC_API_KEY set.');
     return;
   }
 
-  for (const summary of summaries) {
+  // L3 entity profiles as tree roots with their L2 children.
+  for (const profile of profiles) {
+    const profileTags = profile.tags.filter((t) => t !== 'dag-entity-profile').join(', ');
+    console.log(`\n🌲 ${profile.content.slice(0, 80)}`);
+    if (profileTags) console.log(`   [${profileTags}]`);
+    const l2Children = childL2ByProfile.get(profile.id) ?? [];
+    for (const l2 of l2Children) {
+      const l2Tags = l2.tags.filter((t) => t !== 'dag-summary').join(', ');
+      console.log(`   └─ 📌 ${l2.content.slice(0, 70)}`);
+      if (l2Tags) console.log(`      [${l2Tags}]`);
+      const facts = entries.filter((e) => e.dag_parent_id === l2.id);
+      for (const f of facts) {
+        console.log(`      └─ ${f.content.slice(0, 60)}`);
+      }
+    }
+  }
+
+  // Orphan L2 summaries (no L3 parent) at top level — pre-E5 default shape.
+  for (const summary of orphanL2) {
     const summaryTags = summary.tags.filter((t) => t !== 'dag-summary').join(', ');
     console.log(`\n📌 ${summary.content.slice(0, 80)}`);
     if (summaryTags) console.log(`   [${summaryTags}]`);
-
     const children = entries.filter((e) => e.dag_parent_id === summary.id);
     for (const child of children) {
       console.log(`   └─ ${child.content.slice(0, 70)}`);
@@ -4529,6 +4558,17 @@ function cmdDrillDown(hippoRoot: string, summaryId: string, flags: Record<string
   requireInit(hippoRoot);
   const limit = typeof flags['limit'] === 'string' ? Number(flags['limit']) : undefined;
   const budget = typeof flags['budget'] === 'string' ? Number(flags['budget']) : undefined;
+  // v0.30 / E5: --depth N walks N levels down (default 1, hard cap 10).
+  // L4 fold: reject out-of-range explicitly (no silent clamp).
+  const rawDepth = typeof flags['depth'] === 'string' ? Number(flags['depth']) : undefined;
+  let depth: number | undefined;
+  if (rawDepth !== undefined) {
+    if (!Number.isFinite(rawDepth) || rawDepth < 1 || rawDepth > 10) {
+      console.error(`--depth must be an integer between 1 and 10 (got ${flags['depth']})`);
+      process.exit(2);
+    }
+    depth = rawDepth;
+  }
   const ctx: api.Context = {
     hippoRoot,
     tenantId: resolveTenantId({}),
@@ -4537,6 +4577,7 @@ function cmdDrillDown(hippoRoot: string, summaryId: string, flags: Record<string
   const r = api.drillDown(ctx, summaryId, {
     ...(Number.isFinite(limit) && limit! > 0 ? { limit } : {}),
     ...(Number.isFinite(budget) && budget! > 0 ? { budget } : {}),
+    ...(depth !== undefined ? { depth } : {}),
   });
   if ('failure' in r) {
     // v1.6.4: only `not_drillable` is caller-actionable. `not_found`

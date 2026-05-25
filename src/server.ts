@@ -639,10 +639,22 @@ async function handleRequest(
     if (budget !== undefined && (!Number.isFinite(budget) || budget <= 0)) {
       throw new HttpError(400, 'budget must be a positive number');
     }
+    // v0.30 / E5: depth query param walks N levels (default 1, hard cap 10).
+    const depthRaw = query.get('depth');
+    let depth: number | undefined;
+    if (depthRaw !== null) {
+      const parsed = Number(depthRaw);
+      // L4 fold: reject out-of-range explicitly (no silent clamp).
+      if (!Number.isFinite(parsed) || parsed < 1 || parsed > 10) {
+        throw new HttpError(400, 'depth must be a positive integer between 1 and 10');
+      }
+      depth = parsed;
+    }
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = drillDown(ctx, drillMatch.id!, {
       ...(limit !== undefined ? { limit } : {}),
       ...(budget !== undefined ? { budget } : {}),
+      ...(depth !== undefined ? { depth } : {}),
     });
     if ('failure' in result) {
       // v1.6.4: leaf id maps to 422 (caller-actionable). Other cases stay
