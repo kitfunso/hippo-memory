@@ -1,5 +1,124 @@
 # Changelog
 
+## ui-brain-observatory v0.2.3 (2026-05-25): local graph view (Obsidian-inspired graph upgrades, E3 of 4)
+
+Adds the Obsidian-most-used feature: click a memory, click the new
+"focus" button in the DetailPanel, and the graph collapses to that
+memory plus its N-hop neighborhood (default depth 2) via the explicit
+edges added in E2. Esc clears both the focus AND the selection together.
+
+E3 of 4 in the Obsidian-inspired graph upgrades stack:
+- v0.2.1 E1 color-by-tag (PR #61)
+- v0.2.2 E2 real edges (PR #62)
+- v0.2.3 E3 local graph view (this release)
+- v0.2.4 E4 force-directed layout (queued)
+
+### What shipped
+
+**`FilterState` extension.**
+- New `LocalViewState { centerId, depth }` interface + `localView` field on
+  `FilterState`. View AND filter state: included in `isFilterActive` (drives
+  scene.setFiltered line-visibility filter) and cleared by `resetFilters`
+  (matches "reset = back to full graph").
+- `deriveVisibleIds` gains optional 3rd arg `localNeighborhood?: Set<string>`.
+  When state.localView is set AND the Set is provided, intersects visible
+  memories with the neighborhood. Safe degradation when set but Set is
+  undefined.
+
+**Pure helper: `ui/src/engine/localNeighborhood.ts`.**
+- `buildAdjacency(memories, conflicts)` unions conflict pairs (both
+  directions) + shared-tag pairs from E2's `computeSharedTagPairs`. Hoisted
+  to a `useMemo` in LivingMap so it rebuilds only when memories or
+  conflicts change (not per localView toggle).
+- `computeLocalNeighborhood(adjacency, centerId, depth)` BFS visited-on-
+  enqueue, depth-capped at 5 internally, with a NEIGHBORHOOD_CAP of 60
+  nodes that triggers a depth-1 fallback (with `cappedFrom` payload) when
+  exceeded. Pure + deterministic. Performance budget: <5ms BFS at depth=2
+  on a 1373-memory + ~3000-edge adjacency (verified at test time).
+
+**Scene engine extension (Obsidian default: both endpoints must be visible).**
+- `BrainScene.setFiltered` extends to filter line visibility too: a line
+  is visible only when both endpoint IDs are in the visible set. No frayed
+  half-lines. Applies to conflictLines + sharedTagEdges + tendrils (the
+  latter is defensive for E4 force-layout).
+- `buildConflictLines` userData payload merged: `{status, aId, bId}`.
+- `buildSharedTagEdges` userData payload added: `{aId, bId}`.
+
+**`FocusButton` component (DetailPanel header LEFT, distinct from esc on right).**
+- Three labels: `focus` (idle) / `focused` (this memory is the center, rust
+  accent, non-interactive) / `recenter here` (focus active elsewhere, rust
+  text). aria-labels disambiguate each state for screen readers.
+- Click sets `{centerId: memory.id, depth: 2}`. Click on "focused" is a
+  no-op (`if (isCenter) return`).
+
+**BottomBar dynamic affordance.**
+- `buildAffordance` gains an optional 3rd arg `localView?: {size, cappedFrom?}`.
+  When local view is active, appends `view = local (N)` to the affordance
+  string (or `view = local (N, capped from M)` when the depth-1 fallback
+  triggered). Orientation cue when DetailPanel is closed.
+
+**Esc-clears-both wire.**
+- `onClickMemory(null)` is the convergence point for all 3 selection-clear
+  paths (Esc key via scene.deselect, esc button via DetailPanel onClose,
+  click-empty-space via scene.handleClick). All three paths clear both
+  `selectedMemory` and `localView`. Stepped Esc deferred to v0.3.0+.
+
+**Stale-centerId guard.**
+- App.tsx `setLocalView` callback verifies `centerId` exists in current
+  `memories` at set-time. LivingMap `useEffect` clears `localView` if the
+  memory is later deleted from the visible set. Both windows covered.
+
+### Plan
+
+`docs/plans/2026-05-25-local-view.md` (v1 to v2 through 2 plan critic
+rounds).
+
+### Critic record
+
+| Critic | Round | Verdict | Score |
+|---|---|---|---|
+| plan-eng-critic | R1 | fail | 62 |
+| plan-design-critic | R1 | fail | 58 |
+| plan-eng-critic | R2 | PASS | 88 |
+| plan-design-critic | R2 | PASS | 84 |
+| code-review-critic | R1 | PASS | 88 |
+| independent-review-critic | R1 | PASS | 89 |
+
+### Tests
+
+- `ui/src/engine/localNeighborhood.test.ts`: 15 tests covering
+  `buildAdjacency` (conflict-only / shared-tag-only / mixed / path-prefix
+  exclusion), `computeLocalNeighborhood` (centerId-not-in-adjacency,
+  depth=0, depth=1 on line graph, depth=2 on line graph, triangle via
+  shared tags, determinism, HARD_DEPTH_CAP=5 enforcement), neighborhood
+  cap fallback (3 cases: no-fallback / falls-back / under-cap), and AC8
+  perf budget enforcement (<5ms BFS at depth=2 on 1373-node synthesized
+  adjacency).
+- `ui/src/state/filterState.test.ts`: 8 new tests for `localView`
+  composition with other filters, `isFilterActive` branch, safe
+  degradation, `resetFilters` clears, survives `setColorMode` change.
+- `ui/src/components/BottomBar.test.tsx`: 5 new tests for the
+  `view = local (N)` affordance clause, cap-fallback annotation,
+  composition with edge counts + color mode, ordering before the bail
+  hint.
+
+Full repo: 1846 tests pass / 4 skipped / 252 test files.
+UI: 147 tests pass / 10 test files.
+Build: vite clean, 60 modules, three chunk 510KB (no regression vs E2).
+
+### Out of scope (follow-ups)
+
+- Depth slider (1-3): hardcoded depth=2 for v1; v0.3.0+.
+- Stepped Esc (first clears focus, second clears selection): v0.3.0+ if
+  user feedback wants separation.
+- Animated zoom-to-cluster: v0.3.0 polish.
+- Breadcrumb history (drill into a neighbor of a neighbor): v0.3.0+.
+- Sidebar status row: BottomBar covers orientation; defer Sidebar
+  duplicate.
+- scene.ts unit tests: needs WebGL stubs; deferred.
+- Conflict info in Drawer / MemoryTooltip for a11y completeness:
+  deferred.
+
 ## ui-brain-observatory v0.2.2 (2026-05-25): real edges (Obsidian-inspired graph upgrades, E2 of 4)
 
 Adds explicit edges to the 3D graph: open + resolved conflict lines (shape-

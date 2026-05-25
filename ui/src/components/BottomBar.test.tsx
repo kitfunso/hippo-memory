@@ -87,6 +87,46 @@ describe("buildAffordance (BottomBar dynamic copy)", () => {
   });
 });
 
+// v0.28+ (E3 local view) — affordance localView clause
+describe("buildAffordance + localView (v0.28+ E3)", () => {
+  it("local view active appends 'view = local (N)' to affordance", () => {
+    const copy = buildAffordance("layer", NO_EDGES, { size: 12 });
+    expect(copy).toBe("size = retrievals · opacity = strength · view = local (12)");
+  });
+
+  it("local view with cap-fallback appends 'view = local (N, capped from M)'", () => {
+    const copy = buildAffordance("layer", NO_EDGES, { size: 6, cappedFrom: 152 });
+    expect(copy).toBe("size = retrievals · opacity = strength · view = local (6, capped from 152)");
+  });
+
+  it("local view composes with color mode + edge counts", () => {
+    const copy = buildAffordance("tag",
+      { ...NO_EDGES, openConflicts: 3, resolvedConflicts: 5, sharedTag: 12 },
+      { size: 18 },
+    );
+    expect(copy).toBe(
+      "size = retrievals · opacity = strength · lines = conflicts (open) / conflicts (resolved) / shared tags · color = tag · view = local (18)",
+    );
+  });
+
+  it("no localView arg = no view clause (back-compat)", () => {
+    const copy = buildAffordance("layer", NO_EDGES);
+    expect(copy).toBe("size = retrievals · opacity = strength");
+    expect(copy).not.toContain("view = local");
+  });
+
+  it("localView clause appears BEFORE the bail hint when both apply", () => {
+    const copy = buildAffordance("layer",
+      { ...NO_EDGES, sharedTagBailed: true, sharedTag: 0 },
+      { size: 5 },
+    );
+    // affordance string ends with bail hint; view = local sits before it
+    expect(copy).toContain("view = local (5)");
+    expect(copy).toContain("filter to <500 for tag edges");
+    expect(copy.indexOf("view = local")).toBeLessThan(copy.indexOf("filter to <500"));
+  });
+});
+
 describe("BottomBar component", () => {
   it("renders the dynamic affordance string", () => {
     render(

@@ -258,6 +258,74 @@ describe("deriveVisibleIds + fadingOnly (v0.26.1)", () => {
 });
 
 // v0.27 — colorMode is VIEW state, not a filter. Plan v3 S1.
+// v0.28+ (E3 local view)
+describe("localView + isFilterActive + deriveVisibleIds (v0.28+ E3)", () => {
+  it("INITIAL state has localView === null", () => {
+    expect(INITIAL_FILTER_STATE.localView).toBeNull();
+  });
+
+  it("isFilterActive returns true when only localView is set", () => {
+    const state: FilterState = { ...INITIAL_FILTER_STATE, localView: { centerId: "A", depth: 2 } };
+    expect(isFilterActive(state)).toBe(true);
+  });
+
+  it("localView survives a colorMode change (both VIEW state, compose)", () => {
+    const state1: FilterState = { ...INITIAL_FILTER_STATE, localView: { centerId: "A", depth: 2 }, colorMode: "layer" };
+    const state2: FilterState = { ...state1, colorMode: "tag" };
+    expect(state2.localView).toEqual({ centerId: "A", depth: 2 });
+    expect(isFilterActive(state2)).toBe(true);
+  });
+
+  it("deriveVisibleIds with localView + neighborhood returns intersection", () => {
+    const state: FilterState = { ...INITIAL_FILTER_STATE, localView: { centerId: "A", depth: 1 } };
+    const neighborhood = new Set<string>(["A", "B"]);
+    expect(ids(deriveVisibleIds(FIXTURE, state, neighborhood))).toEqual(["A", "B"]);
+  });
+
+  it("deriveVisibleIds with localView set but undefined neighborhood: silently skips (safe degradation)", () => {
+    const state: FilterState = { ...INITIAL_FILTER_STATE, localView: { centerId: "A", depth: 1 } };
+    // No neighborhood arg -> filter skips, returns all (only localView is active)
+    expect(ids(deriveVisibleIds(FIXTURE, state, undefined))).toEqual(["A", "B", "C", "D", "E"]);
+  });
+
+  it("deriveVisibleIds without localView ignores neighborhood arg", () => {
+    const neighborhood = new Set<string>(["A"]);
+    expect(ids(deriveVisibleIds(FIXTURE, INITIAL_FILTER_STATE, neighborhood)).length).toBe(5);
+  });
+
+  it("resetFilters clears localView (plan AC4)", () => {
+    // Simulate the App.tsx resetFilters pattern: spread INITIAL with
+    // preserved frozen + colorMode. Since INITIAL.localView is null, the
+    // spread MUST clear localView regardless of prior value.
+    const stateWithFocus: FilterState = {
+      ...INITIAL_FILTER_STATE,
+      localView: { centerId: "A", depth: 2 },
+      colorMode: "tag",
+      frozen: true,
+    };
+    const resetState: FilterState = {
+      ...INITIAL_FILTER_STATE,
+      frozen: stateWithFocus.frozen,
+      colorMode: stateWithFocus.colorMode,
+    };
+    expect(resetState.localView).toBeNull();
+    expect(resetState.colorMode).toBe("tag");
+    expect(resetState.frozen).toBe(true);
+    expect(isFilterActive(resetState)).toBe(false);
+  });
+
+  it("localView + other filter composes (AND)", () => {
+    const state: FilterState = {
+      ...INITIAL_FILTER_STATE,
+      localView: { centerId: "A", depth: 1 },
+      layers: new Set(["episodic"]),
+    };
+    const neighborhood = new Set<string>(["A", "C", "D"]);
+    // A is buffer (excluded by layer filter); C is episodic; D is episodic
+    expect(ids(deriveVisibleIds(FIXTURE, state, neighborhood))).toEqual(["C", "D"]);
+  });
+});
+
 describe("colorMode + isFilterActive (v0.27)", () => {
   it("INITIAL state has colorMode = 'layer'", () => {
     expect(INITIAL_FILTER_STATE.colorMode).toBe("layer");

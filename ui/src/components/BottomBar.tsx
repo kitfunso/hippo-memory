@@ -32,6 +32,14 @@ interface BottomBarProps {
    * Default = no-edges state for tests + back-compat.
    */
   edgeCounts?: EdgeCounts;
+  /**
+   * v0.28+ (E3 local view) — when local view is active, this carries
+   * the resulting neighborhood size + whether the depth-2 fallback
+   * triggered. Drives the `view = local (N)` (or `view = local (N,
+   * capped from M)`) clause in the affordance string. Default undefined
+   * = no local view = no clause (back-compat).
+   */
+  localView?: { size: number; cappedFrom?: number };
 }
 
 /**
@@ -42,6 +50,7 @@ interface BottomBarProps {
 export function buildAffordance(
   colorMode: ColorMode,
   edges: EdgeCounts | undefined,
+  localView?: { size: number; cappedFrom?: number },
 ): string {
   const parts: string[] = ["size = retrievals", "opacity = strength"];
 
@@ -54,6 +63,15 @@ export function buildAffordance(
   if (lineKinds.length > 0) parts.push(`lines = ${lineKinds.join(" / ")}`);
 
   if (colorMode !== "layer") parts.push(`color = ${colorMode}`);
+
+  // v0.28+ (E3 local view) — orientation cue when DetailPanel is closed.
+  // Matches the existing `size = retrievals` / `color = path` pattern.
+  if (localView) {
+    const note = localView.cappedFrom !== undefined
+      ? `view = local (${localView.size}, capped from ${localView.cappedFrom})`
+      : `view = local (${localView.size})`;
+    parts.push(note);
+  }
 
   let copy = parts.join(" · ");
 
@@ -88,8 +106,8 @@ const LAYERS: Array<{ key: keyof typeof LAYER_COLORS; label: string }> = [
   { key: "semantic", label: "semantic" },
 ];
 
-export function BottomBar({ drawerOpen, onToggleDrawer, visibleCount, colorMode = "layer", edgeCounts }: BottomBarProps) {
-  const affordance = buildAffordance(colorMode, edgeCounts);
+export function BottomBar({ drawerOpen, onToggleDrawer, visibleCount, colorMode = "layer", edgeCounts, localView }: BottomBarProps) {
+  const affordance = buildAffordance(colorMode, edgeCounts, localView);
   return (
     <div style={{
       position: "absolute",
