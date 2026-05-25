@@ -139,7 +139,9 @@ export type AuditOp =
   | 'outcome'
   | 'consolidate' // v1.11.5: emitted once per api.sleep invocation
   | 'audit_prune' // v1.12.9: emitted by pruneAuditLog after each retention prune
-  | 'summary_marked_dirty'; // v0.30 / E1 of DAG live-coupling — emitted by markSummaryDirty on 0->1 transition
+  | 'summary_marked_dirty' // v0.30 / E1 of DAG live-coupling — emitted by markSummaryDirty on 0->1 transition
+  | 'summary_marked_clean' // v0.30 / E3 — emitted by clearSummaryDirtyAfterBuild after buildDag child-link loop
+  | 'summary_rebuilt'; // v0.30 / E3 — emitted by applyRebuildResult on successful sleep-cycle rebuild
 
 export interface AppendAuditOpts {
   tenantId: string;
