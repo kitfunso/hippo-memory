@@ -42,10 +42,22 @@ export function Header({ memoryCount, matchCount, stats, filterState, frozenOrig
     if (debounced !== filterState.query) setQuery(debounced);
   }, [debounced]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // External clears (e.g. "esc to clear search") should reset the local input.
-  // Narrow deps intentional: inputValue in deps would loop.
+  // External query changes (esc-to-clear, ProjectsPanel click-to-filter,
+  // tag-cloud chip click, etc.) should mirror into the local input box
+  // so the user sees WHY their memories filtered.
+  //
+  // Race safety: during typing, debounced lags inputValue by 150ms then
+  // catches up to filterState.query. If filterState.query === debounced
+  // we're already in sync (typing-driven change), don't echo it back —
+  // would cause cursor-jump artifacts. Mirror only when the external
+  // query diverges from our own pipeline.
+  //
+  // v0.29 (E5 review HIGH): pre-v0.29 this was `filterState.query === ""`
+  // (clears only), which silently dropped non-empty external syncs like
+  // ProjectsPanel.onSelectProject("path:hippo"). Narrow deps intentional:
+  // inputValue / debounced in deps would loop on every keystroke.
   useEffect(() => {
-    if (filterState.query === "" && inputValue !== "") setInputValue("");
+    if (filterState.query !== debounced) setInputValue(filterState.query);
   }, [filterState.query]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // P5 fix: `/` to focus search, Esc to clear (matches BottomBar shortcut hint).

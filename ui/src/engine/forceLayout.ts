@@ -4,7 +4,10 @@
  * Y axis is kept as the layer-stratification offset (LAYER_Y_OFFSET in
  * scene.ts) so the visual layer metaphor is preserved.
  *
- * Per-project anchor forces are deferred to E5 (task #106).
+ * Per-project anchor forces (v0.29 E5): optional `projectAnchors` config
+ * adds forceX/forceY per node, pulling toward the project's anchor point.
+ * See projectAnchors.ts for the golden-angle packing that keeps anchors
+ * stable as new project tags appear.
  *
  * Pure factory. Caller drives tick() from BrainScene.animate. Disposal
  * is just dropping the returned reference (the simulation is .stop()'d
@@ -45,7 +48,22 @@ export interface ForceLayoutConfig {
   collideRadius?: number;
   bound?: number;
   randomSource?: () => number;
+  /**
+   * v0.29 (E5) — per-memory anchor targets. Memory id → {x, y, strength}.
+   * Memories present in this map get forceX/forceY pulls toward (x, y)
+   * with the given strength. Memories absent get strength=0 (no pull).
+   * Absent or empty config → no project forces (back-compat with E4).
+   */
+  projectAnchors?: Map<string, { x: number; y: number; strength: number }>;
 }
+
+/**
+ * v0.29 (E5) — layout coordinate bound. Memories are clamped within
+ * ±LAYOUT_BOUND on each axis by the simulation tick loop. Exported so
+ * consumers (scene.populate, computeProjectAnchors, ProjectsPanel
+ * mini-map) share the same magic number instead of re-hardcoding 30.
+ */
+export const LAYOUT_BOUND = 30;
 
 const DEFAULTS = {
   alphaMin: 0.01,
@@ -55,7 +73,7 @@ const DEFAULTS = {
   chargeStrength: -30,
   centerStrength: 0.05,
   collideRadius: 0.6,
-  bound: 30,
+  bound: LAYOUT_BOUND,
 } as const;
 
 export type SettleSource = "tick" | "reduced-motion";
@@ -163,6 +181,26 @@ export function buildForceLayout(
     .alphaMin(alphaMin)
     .alphaDecay(alphaDecay)
     .stop();
+
+  // v0.29 (E5) — optional per-project anchor forces. forceX/forceY accept
+  // per-node accessors so memories WITHOUT an entry in projectAnchors get
+  // strength=0 (no pull). Composes additively with link/charge/center.
+  const projectAnchors = config.projectAnchors;
+  if (projectAnchors && projectAnchors.size > 0) {
+    simulation
+      .force(
+        "project-x",
+        d3
+          .forceX<ForceNode>((d) => projectAnchors.get(d.id)?.x ?? 0)
+          .strength((d) => projectAnchors.get(d.id)?.strength ?? 0),
+      )
+      .force(
+        "project-y",
+        d3
+          .forceY<ForceNode>((d) => projectAnchors.get(d.id)?.y ?? 0)
+          .strength((d) => projectAnchors.get(d.id)?.strength ?? 0),
+      );
+  }
 
   if (config.randomSource) {
     simulation.randomSource(config.randomSource);

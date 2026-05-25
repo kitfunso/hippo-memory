@@ -129,15 +129,45 @@ export function buildPalette(
 }
 
 /**
+ * v0.29 (E5 HIGH-3) — Pick the SHORTEST qualifying path:* tag from a tag
+ * list, with alpha tiebreak. **Path-mode only** — does not handle the
+ * non-path tag-mode pick (pickColorTag's "tag" branch keeps its own inline
+ * filter for those, which excludes path:* tags and is structurally
+ * different from a "pick from prefix" rule).
+ *
+ * Used by:
+ *   - pickColorTag's "path" branch (refactored to call this) — no exclusion
+ *   - computeProjectAnchors (projectAnchors.ts) — excludes filesystem-root
+ *     tags via excludeSet
+ */
+export function pickShortestPathTag(
+  tags: readonly string[],
+  excludeSet?: ReadonlySet<string>,
+): string | null {
+  const qualifying = tags.filter(
+    (t) => t.startsWith(PATH_PREFIX) && !(excludeSet?.has(t) ?? false),
+  );
+  if (qualifying.length === 0) return null;
+  qualifying.sort((a, b) => a.length - b.length || a.localeCompare(b));
+  return qualifying[0] ?? null;
+}
+
+/**
  * Pick the color-driving tag for a memory under tag/path mode.
  * Rule: shortest qualifying tag wins; alphabetical tiebreak.
  * Returns null if no qualifying tag exists → caller uses fallback color.
+ *
+ * v0.29: "path" branch now delegates to pickShortestPathTag (shared with
+ * computeProjectAnchors). "tag" branch keeps its inline filter (excludes
+ * path:* tags; structurally inverse of the path-tag rule, not worth a
+ * second shared helper).
  */
 export function pickColorTag(memory: Memory, mode: "tag" | "path"): string | null {
-  const qualifying = memory.tags.filter((tag) => {
-    if (mode === "path") return tag.startsWith(PATH_PREFIX);
-    return !tag.startsWith(PATH_PREFIX);
-  });
+  if (mode === "path") {
+    return pickShortestPathTag(memory.tags);
+  }
+  // "tag" mode: shortest non-path tag, alpha tiebreak.
+  const qualifying = memory.tags.filter((tag) => !tag.startsWith(PATH_PREFIX));
   if (qualifying.length === 0) return null;
   qualifying.sort((a, b) => a.length - b.length || a.localeCompare(b));
   return qualifying[0] ?? null;
