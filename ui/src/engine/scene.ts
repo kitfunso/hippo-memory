@@ -400,6 +400,10 @@ export class BrainScene {
         depthWrite: false,
       });
       const line = new THREE.Line(geo, mat);
+      // v0.28+ (E3) — endpoint IDs on userData so setFiltered's
+      // both-endpoints-visible check can hide cross-region lines under
+      // local view.
+      line.userData = { aId: p.a, bId: p.b };
       this.scene.add(line);
       this.sharedTagEdges.push(line);
     }
@@ -546,7 +550,10 @@ export class BrainScene {
       line.computeLineDistances();
       // v0.28 (E2) — stash status on userData so getEdgeCounts() can count
       // open vs resolved without re-querying the source array.
-      line.userData = { status: c.status };
+      // v0.28+ (E3) — also stash endpoint IDs so setFiltered's
+      // both-endpoints-visible check can hide cross-region lines under
+      // local view.
+      line.userData = { status: c.status, aId: c.memory_a_id, bId: c.memory_b_id };
       this.scene.add(line);
       this.conflictLines.push(line);
     }
@@ -758,6 +765,25 @@ export class BrainScene {
       const visible = !filterActive || visibleIds.has(node.id);
       node.mesh.visible = visible;
       node.halo.visible = visible;
+    }
+    // v0.28+ (E3 local view) — Obsidian default: a line is visible ONLY
+    // when both endpoints are visible. No "frayed half-lines" — eliminates
+    // the reads-as-bug ambiguity flagged by plan-design-critic R1.
+    // Tendrils included for defensive future-proofing (currently bailed at
+    // n>500 so never built; when E4 force-layout populates them with
+    // aId/bId on userData, this filter just works).
+    for (const line of [...this.conflictLines, ...this.sharedTagEdges, ...this.tendrils]) {
+      if (!filterActive) {
+        line.visible = true;
+        continue;
+      }
+      const ud = line.userData as { aId?: string; bId?: string };
+      if (!ud.aId || !ud.bId) {
+        // Lines without endpoint IDs (legacy tendrils today) — keep
+        // visibility unchanged so we don't accidentally hide them.
+        continue;
+      }
+      line.visible = visibleIds.has(ud.aId) && visibleIds.has(ud.bId);
     }
   }
 

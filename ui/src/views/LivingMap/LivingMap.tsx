@@ -17,9 +17,11 @@ import {
   type Layer,
   type Confidence,
   type ColorMode,
+  type LocalViewState,
 } from "../../state/filterState.js";
 import type { BrainScene } from "../../engine/scene.js";
 import { pickColorTag } from "../../engine/tagPalette.js";
+import { buildAdjacency, computeLocalNeighborhood } from "../../engine/localNeighborhood.js";
 
 interface LivingMapProps {
   memories: Memory[];
@@ -38,6 +40,8 @@ interface LivingMapProps {
   setFadingOnly: (v: boolean) => void;
   /** v0.27 color-by-tag — drives ViewPanel segmented radio. */
   setColorMode: (mode: ColorMode) => void;
+  /** v0.28+ (E3 local view) — set/clear focus on a memory's neighborhood. */
+  setLocalView: (v: LocalViewState | null) => void;
   resetFilters: () => void;
 }
 
@@ -52,7 +56,85 @@ function StrengthBar({ value }: { value: number }) {
   );
 }
 
-function DetailPanel({ memory, onClose, open }: { memory: Memory | null; onClose: () => void; open: boolean }) {
+/**
+ * v0.28+ (E3 local view) — three-label button.
+ * - idle (no focus active): "focus"
+ * - this memory IS the focus center: "focused" (rust accent, non-interactive)
+ * - focus active on a different memory: "recenter here" (rust text)
+ *
+ * Styling distinct from the esc button (border vs no border, position
+ * LEFT next to layer label vs esc on RIGHT) so the two buttons don't
+ * read as a single segmented control (plan-design-critic R1 must-fix #5).
+ */
+function FocusButton({ memory, localView, setLocalView }: {
+  memory: Memory;
+  localView: LocalViewState | null;
+  setLocalView: (v: LocalViewState | null) => void;
+}) {
+  const isCenter = localView?.centerId === memory.id;
+  const focusActive = localView !== null;
+  let label: string;
+  let style: React.CSSProperties;
+  let aria: string;
+  if (isCenter) {
+    label = "focused";
+    style = { ...focusBtnStyleActive, cursor: "default" };
+    aria = "This memory is the focused center";
+  } else if (focusActive) {
+    label = "recenter here";
+    style = focusBtnStyleRecenter;
+    aria = "Recenter the focused view on this memory";
+  } else {
+    label = "focus";
+    style = focusBtnStyleIdle;
+    aria = "Focus the graph on this memory's neighborhood (depth 2)";
+  }
+  return (
+    <button
+      type="button"
+      aria-label={aria}
+      title={aria}
+      onClick={() => {
+        if (isCenter) return;
+        setLocalView({ centerId: memory.id, depth: 2 });
+      }}
+      style={style}
+    >
+      {label}
+    </button>
+  );
+}
+
+const focusBtnStyleIdle: React.CSSProperties = {
+  background: "var(--ink-faint)",
+  border: "1px solid var(--glass-border)",
+  color: "var(--dim)",
+  borderRadius: 4,
+  padding: "4px 12px",
+  fontFamily: "var(--font-mono)",
+  fontSize: 11,
+  cursor: "pointer",
+};
+const focusBtnStyleActive: React.CSSProperties = {
+  ...focusBtnStyleIdle,
+  background: "rgba(196, 92, 60, 0.18)",
+  border: "1px solid var(--accent)",
+  color: "var(--accent)",
+};
+const focusBtnStyleRecenter: React.CSSProperties = {
+  ...focusBtnStyleIdle,
+  background: "transparent",
+  border: "1px solid transparent",
+  color: "var(--accent)",
+};
+
+function DetailPanel({ memory, onClose, open, localView, setLocalView }: {
+  memory: Memory | null;
+  onClose: () => void;
+  open: boolean;
+  localView: LocalViewState | null;
+  setLocalView: (v: LocalViewState | null) => void;
+}) {
   if (!memory && !open) return null;
   const layerColor = memory ? LAYER_COLORS[memory.layer] : "var(--accent)";
 
@@ -73,6 +155,9 @@ function DetailPanel({ memory, onClose, open }: { memory: Memory | null; onClose
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ width: 8, height: 8, borderRadius: "50%", background: layerColor, boxShadow: `0 0 8px ${layerColor}40` }} />
               <span style={{ color: "var(--dim)", fontSize: 10, fontFamily: "var(--font-mono)", letterSpacing: "0.5px", textTransform: "uppercase" }}>{memory.layer}</span>
+              {/* v0.28+ (E3) — Focus button. Position LEFT (with layer label),
+                  distinct from esc on right. */}
+              <FocusButton memory={memory} localView={localView} setLocalView={setLocalView} />
             </div>
             <button onClick={onClose} style={{
               background: "var(--ink-faint)", border: "none", borderRadius: 4,
@@ -124,7 +209,7 @@ function DetailPanel({ memory, onClose, open }: { memory: Memory | null; onClose
 export function LivingMap({
   memories, embeddings, stats, conflicts, filterState, frozenOrigin,
   setQuery, setFrozen, setLayers, setStrengthRange, setConfidences, setAgeMaxDays, setFadingOnly,
-  setColorMode, resetFilters,
+  setColorMode, setLocalView, resetFilters,
 }: LivingMapProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -134,9 +219,46 @@ export function LivingMap({
   // FilterState (FilterState is for data filters, not viewport chrome).
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  // v0.28+ (E3 local view) — hoist adjacency build to a single useMemo per
+  // [memories, conflicts]. computeSharedTagPairs runs once per dataset
+  // change, NOT per localView change. (plan-eng-critic R1 must-fix #3.)
+  const adjacency = useMemo(
+    () => buildAdjacency(memories, conflicts),
+    [memories, conflicts],
+  );
+
+  // v0.28+ (E3) — compute neighborhood only when localView is active.
+  // Cheap (BFS only, <5ms on 1373) so the dep on filterState.localView is fine.
+  const localNeighborhood = useMemo(() => {
+    if (!filterState.localView) return undefined;
+    return computeLocalNeighborhood(
+      adjacency,
+      filterState.localView.centerId,
+      filterState.localView.depth,
+    );
+  }, [adjacency, filterState.localView]);
+
+  // v0.28+ (E3) — stale-guard: if the centerId memory was deleted AFTER
+  // setLocalView was called (race between refetch + previous click), clear
+  // localView. setLocalView's identity churns on memory refetch (App.tsx
+  // useCallback deps include [memories]) — eslint-disable is correct
+  // anyway: the effect already re-runs on [memories, localView] and closes
+  // over the latest setLocalView at each render.
+  useEffect(() => {
+    if (filterState.localView && !memories.some((m) => m.id === filterState.localView!.centerId)) {
+      setLocalView(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memories, filterState.localView]);
+
   // E3: derive the visible-id set once per render so Sidebar (tag cloud +
   // stats) and the scene filter wiring share the same source of truth.
-  const visibleIds = useMemo(() => deriveVisibleIds(memories, filterState), [memories, filterState]);
+  // v0.28+ (E3 local view) — passes localNeighborhood.memoryIds (if set)
+  // so deriveVisibleIds composes the local-view filter.
+  const visibleIds = useMemo(
+    () => deriveVisibleIds(memories, filterState, localNeighborhood?.memoryIds),
+    [memories, filterState, localNeighborhood],
+  );
 
   // E4 proper: code-review-critic HIGH #1 — disambiguate "no filter" from
   // "filter matched zero". Passed to useCanvasEngine + Sidebar.
@@ -180,7 +302,14 @@ export function LivingMap({
   const onClickMemory = useCallback((memory: Memory | null) => {
     setSelectedMemory(memory);
     setHoveredMemory(null);
-  }, []);
+    // v0.28+ (E3 local view) — Esc-clears-both wire. ALL selection-clear
+    // paths (Escape key via scene.deselect, esc button via DetailPanel
+    // onClose, click-empty-space via scene.handleClick) terminate here
+    // with null. Plan v2 S5 / AC3.
+    if (memory === null) {
+      setLocalView(null);
+    }
+  }, [setLocalView]);
 
   const { containerRef, handleMouseMove, handleClick, handleKeyDown, edgeCounts } = useCanvasEngine({
     memories, embeddings, conflicts, width: size.width, height: size.height,
@@ -313,7 +442,19 @@ export function LivingMap({
         />
       )}
 
-      <DetailPanel memory={selectedMemory} onClose={() => setSelectedMemory(null)} open={panelOpen} />
+      <DetailPanel
+        memory={selectedMemory}
+        onClose={() => {
+          setSelectedMemory(null);
+          // v0.28+ (E3) — esc-button-click path ALSO clears localView,
+          // mirroring the Esc-key + empty-space-click paths that go
+          // through onClickMemory(null).
+          setLocalView(null);
+        }}
+        open={panelOpen}
+        localView={filterState.localView}
+        setLocalView={setLocalView}
+      />
 
       {/* E5 S1: drawer mirror. Always rendered (CSS transform-hide), so SR
           users always have access. */}
@@ -339,6 +480,13 @@ export function LivingMap({
         visibleCount={filterActive ? visibleIds.size : memories.length}
         colorMode={filterState.colorMode}
         edgeCounts={edgeCounts}
+        // v0.28+ (E3 local view) — surface "view = local (N)" in the
+        // affordance string so users have an orientation cue even when
+        // DetailPanel is closed (plan-design-critic R1 must-fix #1).
+        localView={localNeighborhood ? {
+          size: localNeighborhood.memoryIds.size,
+          cappedFrom: localNeighborhood.cappedFrom?.wouldHaveBeen,
+        } : undefined}
       />
     </div>
   );

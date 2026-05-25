@@ -23,6 +23,21 @@ export type Confidence = "verified" | "observed" | "inferred" | "stale";
  */
 export type ColorMode = "layer" | "tag" | "path";
 
+/**
+ * v0.28+ (E3 local view) — when set, scene + Sidebar derive visibleIds
+ * intersected with the N-hop neighborhood of `centerId`. View AND filter
+ * state (it composes with other filters AND hides memories); included in
+ * isFilterActive and CLEARED by resetFilters.
+ */
+export interface LocalViewState {
+  /** Memory ID at the center of the focus. App.tsx setLocalView guards
+   * that this exists in current memories at set-time; a useEffect in
+   * LivingMap also clears it if the memory is later deleted. */
+  centerId: string;
+  /** N-hop depth from center. v1 default = 2. Hard-capped by helper at 5. */
+  depth: number;
+}
+
 export interface FilterState {
   /** E2 — search input substring; matched against content + tags. */
   query: string;
@@ -48,6 +63,14 @@ export interface FilterState {
    * choice.
    */
   colorMode: ColorMode;
+  /**
+   * v0.28+ (E3 local view) — when non-null, deriveVisibleIds intersects
+   * with the N-hop neighborhood of centerId via explicit edges (conflicts
+   * + shared-tag pairs). IS a filter (hides memories), so DOES appear in
+   * isFilterActive AND is cleared by resetFilters. Composes with colorMode
+   * (both VIEW state).
+   */
+  localView: LocalViewState | null;
 }
 
 export const INITIAL_FILTER_STATE: FilterState = {
@@ -59,6 +82,7 @@ export const INITIAL_FILTER_STATE: FilterState = {
   frozen: false,
   fadingOnly: false,
   colorMode: "layer",
+  localView: null,
 };
 
 /**
@@ -99,6 +123,10 @@ export function isFilterActive(state: FilterState): boolean {
   // no-op the engine + Sidebar + BottomBar + Drawer + TagCloud which all
   // gate on filterActive (plan-eng-critic R1 HIGH #1).
   if (state.fadingOnly) return true;
+  // v0.28+ (E3) — local view IS a filter (hides memories outside the
+  // N-hop neighborhood). Same trap as fadingOnly: without this branch,
+  // line-visibility extension in scene.setFiltered would silently no-op.
+  if (state.localView !== null) return true;
   return false;
 }
 
@@ -124,7 +152,19 @@ export function matchesQuery(memory: { content: string; tags: string[] }, q: str
  * for now (LivingMap.tsx still derives matchCount inline for the header
  * pill). E3 PR will unify both paths through this function.
  */
-export function deriveVisibleIds(memories: Memory[], state: FilterState): Set<string> {
+export function deriveVisibleIds(
+  memories: Memory[],
+  state: FilterState,
+  /**
+   * v0.28+ (E3 local view) — when state.localView is set AND this Set is
+   * provided, filter memories to those in the neighborhood. Caller
+   * (LivingMap) builds this via computeLocalNeighborhood + useMemo so
+   * deriveVisibleIds stays pure. If state.localView is set but this is
+   * undefined, the local-view filter silently skips (safe degradation;
+   * tested).
+   */
+  localNeighborhood?: Set<string>,
+): Set<string> {
   const ids = new Set<string>();
   const filterLayers = state.layers.size > 0;
   const filterConfidences = state.confidences.size > 0;
@@ -139,6 +179,10 @@ export function deriveVisibleIds(memories: Memory[], state: FilterState): Set<st
     if (filterStrength && (m.strength < strMin || m.strength > strMax)) continue;
     if (filterAge && state.ageMaxDays !== null && m.age_days > state.ageMaxDays) continue;
     if (state.fadingOnly && !isFading(m)) continue;
+    // v0.28+ (E3) — local-view filter. Only apply when both the state flag
+    // AND the neighborhood Set are present (safe degradation otherwise).
+    if (state.localView !== null && localNeighborhood !== undefined
+        && !localNeighborhood.has(m.id)) continue;
     ids.add(m.id);
   }
   return ids;

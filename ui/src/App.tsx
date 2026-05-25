@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import type { Memory, Stats, Conflict, EmbeddingIndex } from "./types.js";
 import { fetchMemories, fetchStats, fetchConflicts, fetchEmbeddings } from "./api/client.js";
 import { LivingMap } from "./views/LivingMap/LivingMap.js";
-import { INITIAL_FILTER_STATE, type FilterState, type Layer, type Confidence, type ColorMode } from "./state/filterState.js";
+import { INITIAL_FILTER_STATE, type FilterState, type Layer, type Confidence, type ColorMode, type LocalViewState } from "./state/filterState.js";
 
 /**
  * E5 S6 — Origin of the current freeze state. Lets the freeze button surface
@@ -92,6 +92,18 @@ export function App() {
   const setColorMode = useCallback((colorMode: ColorMode) => {
     setFilterState((prev) => ({ ...prev, colorMode }));
   }, []);
+
+  // v0.28+ (E3 local view) — focus-on-neighborhood setter. Guards stale
+  // centerId at set-time (no-op if memory was deleted in a race). A
+  // useEffect in LivingMap also clears localView if the memory is deleted
+  // AFTER set-time. Together they cover both windows. (plan-design-critic
+  // R1 must-fix #7.)
+  const setLocalView = useCallback((v: LocalViewState | null) => {
+    if (v !== null && !memories.some((m) => m.id === v.centerId)) {
+      return; // stale centerId — silently ignore
+    }
+    setFilterState((prev) => ({ ...prev, localView: v }));
+  }, [memories]);
 
   // v0.26.1 design-critic MED: auto-clear fadingOnly when at_risk drops to 0
   // (e.g. user pinned the last fading memory) so they're not stranded with
@@ -227,6 +239,7 @@ export function App() {
         setAgeMaxDays={setAgeMaxDays}
         setFadingOnly={setFadingOnly}
         setColorMode={setColorMode}
+        setLocalView={setLocalView}
         resetFilters={resetFilters}
       />
       {/* v0.26.1 — aria-live announcement for auto-clear (design-critic LOW). */}
