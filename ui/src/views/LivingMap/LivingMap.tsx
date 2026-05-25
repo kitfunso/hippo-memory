@@ -182,7 +182,7 @@ export function LivingMap({
     setHoveredMemory(null);
   }, []);
 
-  const { containerRef, handleMouseMove, handleClick, handleKeyDown } = useCanvasEngine({
+  const { containerRef, handleMouseMove, handleClick, handleKeyDown, edgeCounts } = useCanvasEngine({
     memories, embeddings, conflicts, width: size.width, height: size.height,
     onHover, onClick: onClickMemory,
     searchQuery: filterState.query,
@@ -338,6 +338,7 @@ export function LivingMap({
         onToggleDrawer={() => setDrawerOpen((prev) => !prev)}
         visibleCount={filterActive ? visibleIds.size : memories.length}
         colorMode={filterState.colorMode}
+        edgeCounts={edgeCounts}
       />
     </div>
   );

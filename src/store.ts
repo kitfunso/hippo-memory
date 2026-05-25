@@ -2035,26 +2035,50 @@ export function listMemoryConflicts(
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    // When tenantId is provided, JOIN to memories on BOTH conflict members
-    // and require each in-tenant, so neither a normal cross-tenant pair nor a
-    // stale pre-fix row surfaces (consistent with resolveConflict). Omitted
-    // tenantId = legacy unscoped query (CLI direct mode, tests, consolidate).
-    const rows = tenantId !== undefined
-      ? db.prepare(`
-          SELECT mc.id, mc.memory_a_id, mc.memory_b_id, mc.reason, mc.score,
-                 mc.status, mc.detected_at, mc.updated_at
-          FROM memory_conflicts mc
-          JOIN memories ma ON ma.id = mc.memory_a_id
-          JOIN memories mb ON mb.id = mc.memory_b_id
-          WHERE mc.status = ? AND ma.tenant_id = ? AND mb.tenant_id = ?
-          ORDER BY mc.updated_at DESC, mc.id DESC
-        `).all(status, tenantId, tenantId) as MemoryConflictRow[]
-      : db.prepare(`
-          SELECT id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at
-          FROM memory_conflicts
-          WHERE status = ?
-          ORDER BY updated_at DESC, id DESC
-        `).all(status) as MemoryConflictRow[];
+    // v0.28 — '*' is a sentinel meaning "no status filter, return all rows".
+    // Pre-v0.28 callers (cli/mcp/dashboard) always passed 'open' or default,
+    // so this sentinel is purely additive. The 4 SQL branches below cover
+    // {tenanted | unscoped} × {all-statuses | specific-status}.
+    const allStatuses = status === '*';
+    let rows: MemoryConflictRow[];
+    if (tenantId !== undefined) {
+      // Tenanted query — JOIN to memories on both conflict members and require
+      // each in-tenant, so neither a normal cross-tenant pair nor a stale
+      // pre-fix row surfaces (consistent with resolveConflict).
+      rows = allStatuses
+        ? db.prepare(`
+            SELECT mc.id, mc.memory_a_id, mc.memory_b_id, mc.reason, mc.score,
+                   mc.status, mc.detected_at, mc.updated_at
+            FROM memory_conflicts mc
+            JOIN memories ma ON ma.id = mc.memory_a_id
+            JOIN memories mb ON mb.id = mc.memory_b_id
+            WHERE ma.tenant_id = ? AND mb.tenant_id = ?
+            ORDER BY mc.updated_at DESC, mc.id DESC
+          `).all(tenantId, tenantId) as MemoryConflictRow[]
+        : db.prepare(`
+            SELECT mc.id, mc.memory_a_id, mc.memory_b_id, mc.reason, mc.score,
+                   mc.status, mc.detected_at, mc.updated_at
+            FROM memory_conflicts mc
+            JOIN memories ma ON ma.id = mc.memory_a_id
+            JOIN memories mb ON mb.id = mc.memory_b_id
+            WHERE mc.status = ? AND ma.tenant_id = ? AND mb.tenant_id = ?
+            ORDER BY mc.updated_at DESC, mc.id DESC
+          `).all(status, tenantId, tenantId) as MemoryConflictRow[];
+    } else {
+      // Unscoped query — legacy direct-mode (CLI, tests, consolidate).
+      rows = allStatuses
+        ? db.prepare(`
+            SELECT id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at
+            FROM memory_conflicts
+            ORDER BY updated_at DESC, id DESC
+          `).all() as MemoryConflictRow[]
+        : db.prepare(`
+            SELECT id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at
+            FROM memory_conflicts
+            WHERE status = ?
+            ORDER BY updated_at DESC, id DESC
+          `).all(status) as MemoryConflictRow[];
+    }
     return rows.map(rowToMemoryConflict);
   } finally {
     closeHippoDb(db);

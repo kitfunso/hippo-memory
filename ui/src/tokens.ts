@@ -30,6 +30,12 @@ export const COLOR_BORDER = '#c4b9a8'; // parchment border
 export const COLOR_ACCENT = '#c45c3c'; // rust — selected, focus, primary CTA
 export const COLOR_ACCENT_DIM = '#a04832'; // darker rust — conflicts, errors
 
+// v0.28 (E2 real-edges) — shared-tag edge hairline color. Warm dark grey.
+// Distinct from COLOR_DIM (panel-label color, lighter) AND from
+// TAG_FALLBACK_COLOR (E1 untagged-memory swatch, neutral grey). Computed
+// contrast vs COLOR_MAP_BG #faf7f2 = 4.58:1 for the swatch.
+export const COLOR_EDGE = '#7a6f63';
+
 // Layer tints (hybrid-v4 mockup lines 11-12)
 export const COLOR_BUFFER = '#7c6caf'; // muted purple
 export const COLOR_EPISODIC = '#4a8ca3'; // blue (NEW — was orange in legacy)
@@ -50,6 +56,8 @@ export const COLOR_BUFFER_HEX = 0x7c6caf;
 export const COLOR_EPISODIC_HEX = 0x4a8ca3;
 export const COLOR_SEMANTIC_HEX = 0x5a8f6b;
 export const COLOR_CONFLICT_HEX = 0xa04832;
+// v0.28 (E2 real-edges) — numeric form of COLOR_EDGE for THREE.LineBasicMaterial.
+export const COLOR_EDGE_HEX = 0x7a6f63;
 export const COLOR_GRID_HEX = 0xc4b9a8; // matches --border
 export const COLOR_AMBIENT_LIGHT_HEX = 0xfffcf6; // warm parchment ambient
 

@@ -1,5 +1,129 @@
 # Changelog
 
+## ui-brain-observatory v0.2.2 (2026-05-25): real edges (Obsidian-inspired graph upgrades, E2 of 4)
+
+Adds explicit edges to the 3D graph: open + resolved conflict lines (shape-
+encoded by status), plus a new shared-tag edge class for pairs of memories
+sharing >=2 non-path tags. Makes the live 1373-memory fixture visibly-edged
+for the first time (1117 resolved conflicts now render where 0 did before).
+
+E2 of 4 in the Obsidian-inspired graph upgrades stack:
+- v0.2.1 E1 color-by-tag (PR #61)
+- v0.2.2 E2 real edges (this release)
+- v0.2.3 E3 local graph view (queued)
+- v0.2.4 E4 force-directed layout (queued)
+
+### What shipped
+
+**BE: `listMemoryConflicts` `'*'` sentinel.**
+- `src/store.ts:2030` adds a `'*'` sentinel that skips the WHERE-on-status
+  clause. 4 SQL branches (tenanted vs unscoped, all-statuses vs specific).
+  All 7 existing callers (cli x5, mcp x2, dashboard x1) pass `'open'` or
+  default; the sentinel is purely additive.
+- `src/dashboard.ts:75` uses `'*'` to fetch all conflict statuses for
+  rendering; `dashboard.ts:155` explicitly filters `c.status === 'open'`
+  for the `open_conflicts` badge stat so its meaning stays unchanged.
+
+**UI: shared-tag edge engine.**
+- New `ui/src/engine/sharedTagPairs.ts`: pure helper
+  `computeSharedTagPairs(memories, opts)` with tiered cap (softCap=50,
+  hardCap=300, perTagTopK=15). Tags under softCap enumerate all pairs;
+  tags in 50-300 emit top-K strongest pairs (preserves `openclaw` 162,
+  `claude-code-memory` 68); tags >=300 fully skipped (excludes `error`
+  986, `git-learned` 669, `path:*` namespace tags). Pure + deterministic;
+  same input -> same output.
+- `BrainScene.buildSharedTagEdges()` bails on n>500 (matches existing
+  tendril bail); HARD_EDGE_CAP=2000 protects against pathological filters.
+  Renders `COLOR_EDGE` (#7a6f63 warm grey, distinct from COLOR_DIM and
+  TAG_FALLBACK_COLOR) hairlines at opacity 0.18 + 0.04 * sharedCount
+  (range 0.26-0.42; perceptible on parchment).
+
+**UI: conflict edges status-aware.**
+- `BrainScene.buildConflictLines()` encodes status in SHAPE (open dashed
+  0.3/0.2, resolved dotted 0.05/0.15) not opacity. Opacity stays a score-
+  scaled strength signal. Stores `status` on `line.userData` for use by
+  `getEdgeCounts()`.
+
+**UI: race-free affordance plumbing.**
+- New `BrainScene.getEdgeCounts(): EdgeCounts` (public). useCanvasEngine
+  reads it synchronously immediately after `populate()` so React state
+  matches scene state without a getter-polling race. populate() has a
+  MUST-STAY-SYNCHRONOUS JSDoc warning; getEdgeCounts mirrors the warning.
+- `BottomBar.buildAffordance()` is a new pure function that builds the
+  affordance string from the current `edgeCounts` + `colorMode`. Lists
+  only edge classes that actually render right now; appends a "filter
+  to <500 for tag edges" hint when shared-tag rendering bailed.
+- Full prop chain: useCanvasEngine -> LivingMap -> BottomBar via the
+  `EdgeCounts` interface exported from scene.ts.
+
+**dispose() leak fix.**
+- `BrainScene.dispose()` now disposes sharedTagEdges geometry+material on
+  full unmount (independent-review-critic R1 catch; populate-teardown
+  path was already correct).
+
+### Tokens
+
+- New `COLOR_EDGE = '#7a6f63'` / `COLOR_EDGE_HEX = 0x7a6f63` in tokens.ts.
+  Computed WCAG contrast vs parchment `#faf7f2` is 4.58:1 (above 3:1 non-
+  text bar for the swatch; hairline composite at 0.26 opacity is sub-WCAG
+  but perceptible via delta-E, accepted as a hairline trade-off).
+
+### Plan
+
+`docs/plans/2026-05-25-real-edges.md` (v1 -> v2 through 2 plan critic
+rounds, final PASS score 82 each).
+
+Scope reduction from Keith's original "BE producer backfill" pick:
+discover overturned the premise. `parents` data is 0% populated across
+all 1391 memories (no superseded_by, no dag_parent_id), so no source
+data to backfill. Conflict producer already writes correctly; only
+exposure was needed. Net scope ~1.5d (down from 3-4d).
+
+### Critic record
+
+| Critic | Round | Verdict | Score |
+|---|---|---|---|
+| plan-eng-critic | R1 | fail | 62 |
+| plan-design-critic | R1 | fail | 58 |
+| plan-eng-critic | R2 | **PASS** | **82** |
+| plan-design-critic | R2 | **PASS** | **82** |
+| code-review-critic | R1 | **PASS** | **88** |
+| independent-review-critic | R1 | fail | 84 |
+| independent-review-critic | R2 | **PASS** | **92** |
+
+Independent-review-critic R1 caught a real dispose() leak that 4 prior
+critic rounds missed. Fresh-eyes review earned its keep.
+
+### Tests
+
+- `tests/store-list-conflicts-all.test.ts`: 4 BE tests for the `'*'`
+  sentinel (open-only, all-statuses, default, resolved-empty).
+- `ui/src/engine/sharedTagPairs.test.ts`: 11 tests including determinism,
+  excludePrefix, tiered cap math (under-softCap, soft-band-emits-top-K,
+  hardCap-skips), sort stability, AC7 perf budget <50ms on 500-memory
+  fixture (10 tags/memory).
+- `ui/src/components/BottomBar.test.tsx`: 11 tests covering 4 affordance
+  modes (base / open conflicts / resolved conflicts / shared tags /
+  bail hint / color-mode carryover / undefined edges fallback).
+
+Full repo: 1846 tests pass / 4 skipped / 252 test files.
+UI: 119 tests pass / 9 test files.
+
+### Out of scope (follow-ups)
+
+- `parents` edges: no source data; deferred until supersede-chain
+  producer added (separate BE epic).
+- Sidebar toggle for edge-class visibility: v0.2.3+.
+- Edge-hover tooltip ("these memories share [error, openclaw]"):
+  needs canvas raycaster for THREE.Line picking; v0.2.3+.
+- N-hop local view from selected: E3.
+- Force-directed layout: E4.
+- Pre-existing material-leak on tendril/conflictLine populate teardown
+  (geometry-only dispose): separate ticket; unmount-path leak fixed
+  here.
+- `scene.test.ts` direct BrainScene tests: needs WebGL stubs; defer.
+- Conflict info in Drawer / MemoryTooltip for a11y completeness: defer.
+
 ## ui-brain-observatory v0.2.1 (2026-05-24): color-by-tag (Obsidian-inspired graph upgrades, E1 of 4)
 
 Adds a "Color by" segmented radio to the Sidebar so users can recolor the

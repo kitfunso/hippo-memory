@@ -72,7 +72,11 @@ function buildDashboardData(hippoRoot: string): DashboardData {
   const entries = loadAllEntries(hippoRoot, tenantId);
   const now = new Date();
   const config = loadConfig(hippoRoot);
-  const conflicts = listMemoryConflicts(hippoRoot, 'open');
+  // v0.28 — fetch ALL conflict statuses (open + resolved) so the UI can
+  // render resolved conflicts as faded historical context, not just open
+  // conflicts. The open_conflicts stat below still counts only 'open' rows
+  // to preserve the existing badge meaning.
+  const conflicts = listMemoryConflicts(hippoRoot, '*');
   // D4 v1.12.10: tenant-scope peer discovery in the dashboard (matches the
   // tenantId already used for loadAllEntries on line 72).
   const peers = listPeers(undefined, tenantId);
@@ -145,7 +149,10 @@ function buildDashboardData(hippoRoot: string): DashboardData {
       by_layer: byLayer,
       by_confidence: byConfidence,
       embedding_coverage: entries.length > 0 ? embeddedCount / entries.length : 0,
-      open_conflicts: conflicts.length,
+      // v0.28 — open_conflicts must count only 'open' rows now that
+      // `conflicts` includes all statuses. Preserves the existing badge
+      // meaning (plan-eng-critic R1 must-fix #2).
+      open_conflicts: conflicts.filter((c) => c.status === 'open').length,
     },
     peers,
     config: {
