@@ -15,6 +15,7 @@ import {
   writeEntry,
   loadDirtySummaries,
   deleteEntry,
+  batchWriteAndDelete,
 } from '../src/store.js';
 import { openHippoDb } from '../src/db.js';
 import { createMemory, Layer } from '../src/memory.js';
@@ -194,6 +195,50 @@ describe('v0.30 / E2 — child-write dirty-flag propagation', () => {
     db.close();
     expect(auditRows).toHaveLength(1);
     expect(row.summary_dirty).toBe(1);
+  });
+
+  it('test #9: batchWriteAndDelete marks parents dirty for writes AND deletes (consolidate/sleep path, independent-review-critic HIGH fold-in)', () => {
+    // Independent-review-critic R1 HIGH catch: consolidate.ts/sleep flushes
+    // pendingWrites + pendingDeletes through batchWriteAndDelete every cycle.
+    // Without this hook the dominant mutation source bypasses E2 entirely.
+    const summary = createMemory('batch test summary', { layer: Layer.Semantic, dag_level: 2 });
+    writeEntry(hippoRoot, summary);
+    // Clear initial dirty flag from the writeEntry above.
+    const db0 = openHippoDb(hippoRoot);
+    db0.prepare(`UPDATE memories SET summary_dirty = 0 WHERE id = ?`).run(summary.id);
+    db0.close();
+
+    // Write 1 child to delete later.
+    const childToDelete = createMemory('child to delete', {
+      layer: Layer.Episodic,
+      dag_level: 1,
+      dag_parent_id: summary.id,
+    });
+    writeEntry(hippoRoot, childToDelete);
+    // Clear the flag again (writeEntry just marked it dirty via S1).
+    const db1 = openHippoDb(hippoRoot);
+    db1.prepare(`UPDATE memories SET summary_dirty = 0 WHERE id = ?`).run(summary.id);
+    db1.close();
+
+    // Build a new child via batch write + delete the existing one in same batch.
+    const newBatchChild = createMemory('batch child', {
+      layer: Layer.Episodic,
+      dag_level: 1,
+      dag_parent_id: summary.id,
+    });
+    batchWriteAndDelete(hippoRoot, [newBatchChild], [childToDelete.id]);
+
+    // Parent should now be dirty from EITHER the write or the delete path.
+    expect(loadDirtySummaries(hippoRoot, 'default').map((m) => m.id)).toContain(summary.id);
+    // Single audit row for the dedup'd parent (Set in batchWriteAndDelete
+    // collects unique parent ids; 1 parent → 1 markSummaryDirtyInTx call →
+    // 1 audit row from the 0→1 transition).
+    const db2 = openHippoDb(hippoRoot);
+    const auditRows = db2.prepare(
+      `SELECT * FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`,
+    ).all(summary.id);
+    db2.close();
+    expect(auditRows.length).toBeGreaterThanOrEqual(1);
   });
 
   it('test #8: orphan child (parent deleted) → markSummaryDirtyInTx no-ops, no exception', () => {

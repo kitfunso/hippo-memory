@@ -141,14 +141,14 @@ function markSummaryDirtyInTx(
 }
 ```
 
-**No `export` keyword** (private; the public surface stays at E1's `markSummaryDirty`). Confirms AC9.
+**EXPORTED** (required for cross-module use by api.ts + raw-archive.ts which call from inside their own open transactions). Misuse risk (caller without open tx) is mitigated by the `InTx` suffix + DatabaseSyncLike-typed param. Public end-user surface for the dirty-mark stays at the own-connection `markSummaryDirty` (E1) helper. **R1 amendment to original draft's "private" claim.**
 
 ### S6 — Tests `tests/dag-dirty-propagation.test.ts`
 
 NEW test file. 8 cases per brainstorm matrix + the discover refinement:
 
 1. `writeEntry` on existing fact with dag_parent_id → parent marked dirty. **Explicitly call invalidateMatching() in the test** (not a direct writeEntry) so the invalidation.ts:97 routing is exercised end-to-end, not just the underlying writeEntry hook
-2. `api.supersede` on a fact with dag_parent_id → OLD's parent marked dirty AND NEW's parent marked dirty (both fire; same parent, idempotent so audit emits once)
+2. `api.supersede` on a fact with dag_parent_id → OLD's parent marked dirty. NEW entry's `dag_parent_id` is NULL because `createMemory` inside `supersede` (api.ts:1253-1260) does not copy `dag_parent_id` (lineage-break is intentional — superseded = new identity); S1 hook early-exits for NEW. Exactly +1 audit row from S2 alone. Test asserts `afterCount - beforeCount === 1` (delta, not total) to lock the 1-transition guarantee independent of any setup writes.
 3. `api.forget` on a fact with dag_parent_id → parent marked dirty
 4. `archiveRawMemory` on a raw row with dag_parent_id → parent marked dirty
 5. `writeEntry` on a fact WITHOUT dag_parent_id → no parent dirty-mark (early-exit verified)
@@ -168,7 +168,7 @@ NEW test file. 8 cases per brainstorm matrix + the discover refinement:
 | AC6 | Cross-tenant attack write: child.tenantId mismatched with parent's tenant → no dirty-mark | S6 #6 |
 | AC7 | Idempotency: 5 child writes → 1 audit row + parent stays summary_dirty=1 | S6 #7 |
 | AC8 | Orphan child (parent deleted): markSummaryDirtyInTx no-ops, no exception | S6 #8 |
-| AC9 | `markSummaryDirtyInTx` is private (not exported) | S5 |
+| AC9 | `markSummaryDirtyInTx` is exported (required for cross-module use by api.ts + raw-archive.ts) | S5 |
 | AC10 | metadata.source = 'E2' (distinguishes from E1 'summary_marked_dirty' debug) | S5/S6 |
 | AC11 | All existing tests pass (invalidation, supersede, forget, archive paths untouched) | regression |
 | AC12 | tsc + build clean | regression |
