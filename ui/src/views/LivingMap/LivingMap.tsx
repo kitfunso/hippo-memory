@@ -219,9 +219,12 @@ export function LivingMap({
   // FilterState (FilterState is for data filters, not viewport chrome).
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  // v0.28+ (E3 local view) — hoist adjacency build to a single useMemo per
-  // [memories, conflicts]. computeSharedTagPairs runs once per dataset
-  // change, NOT per localView change. (plan-eng-critic R1 must-fix #3.)
+  // v0.28+ E4 — adjacency owned by LivingMap, passed INTO useCanvasEngine.
+  // Inverted from the v3 plan ("hoist to useCanvasEngine") to break the
+  // circular dep with visibleIds (caught by code-review-critic R1 as a TDZ
+  // crash on first render). Single buildAdjacency call per [memories,
+  // conflicts] change; consumed by both scene.populate (via prop) AND
+  // localNeighborhood (below).
   const adjacency = useMemo(
     () => buildAdjacency(memories, conflicts),
     [memories, conflicts],
@@ -311,7 +314,7 @@ export function LivingMap({
     }
   }, [setLocalView]);
 
-  const { containerRef, handleMouseMove, handleClick, handleKeyDown, edgeCounts } = useCanvasEngine({
+  const { containerRef, handleMouseMove, handleClick, handleKeyDown, edgeCounts, forceSettling } = useCanvasEngine({
     memories, embeddings, conflicts, width: size.width, height: size.height,
     onHover, onClick: onClickMemory,
     searchQuery: filterState.query,
@@ -319,6 +322,7 @@ export function LivingMap({
     visibleIds,
     filterActive,
     colorMode: filterState.colorMode,
+    adjacency,
     onSceneReady: setSceneInstance,
   });
 
@@ -487,6 +491,7 @@ export function LivingMap({
           size: localNeighborhood.memoryIds.size,
           cappedFrom: localNeighborhood.cappedFrom?.wouldHaveBeen,
         } : undefined}
+        forceSettling={forceSettling}
       />
     </div>
   );
