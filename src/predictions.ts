@@ -239,10 +239,17 @@ export function closePrediction(
   try {
     db.exec('BEGIN IMMEDIATE');
     try {
+      // Codex review finding 2026-05-26: WHERE clause requires
+      // closure_state='open' so duplicate close requests / retries against
+      // an already-closed prediction return a clear error instead of
+      // silently overwriting actual_value + emitting a duplicate
+      // predict_close audit row. Zero changed rows → caller decides
+      // whether it's a "not found" or "already closed" case based on the
+      // load-then-close pattern.
       const updateResult = db.prepare(`
         UPDATE predictions
         SET actual_value = ?, closure_state = ?, closed_at = ?, closure_note = ?
-        WHERE id = ? AND tenant_id = ?
+        WHERE id = ? AND tenant_id = ? AND closure_state = 'open'
       `).run(
         opts.actualValue ?? null,
         opts.closureState,
@@ -253,7 +260,18 @@ export function closePrediction(
       );
 
       if (updateResult.changes === 0) {
-        throw new Error(`closePrediction: prediction ${id} not found for tenant ${tenantId}`);
+        // Distinguish "not found" from "already closed" so callers (CLI, HTTP)
+        // can surface the right error to the user.
+        const existing = db.prepare(`
+          SELECT closure_state FROM predictions WHERE id = ? AND tenant_id = ?
+        `).get(id, tenantId) as { closure_state: string } | undefined;
+        if (!existing) {
+          throw new Error(`closePrediction: prediction ${id} not found for tenant ${tenantId}`);
+        }
+        throw new Error(
+          `closePrediction: prediction ${id} is already closed (state='${existing.closure_state}'); ` +
+          `cannot re-close. Open predictions only.`,
+        );
       }
 
       const row = db.prepare(`

@@ -280,6 +280,85 @@ describe('predictions store (E2 first-class object, v0.31)', () => {
     expect(cResults.length).toBe(0);
   });
 
+  it('UPDATE trigger blocks tenant_id-only mutation (codex round-1 P2 fix)', () => {
+    // Create memory under tenant-a + a prediction referencing it
+    const memA = createMemory('tenant-a prediction memory', {
+      tags: ['prediction', 'x'],
+      layer: Layer.Semantic,
+      confidence: 'observed',
+      source: 'prediction',
+      kind: 'distilled' as MemoryKind,
+      tenantId: 'tenant-a',
+    });
+    writeEntry(home, memA);
+
+    const db = openHippoDb(home);
+    try {
+      db.prepare(`
+        INSERT INTO predictions(memory_id, tenant_id, class_tag, claim_text, closure_state, created_at)
+        VALUES (?, 'tenant-a', 'x', 'open prediction', 'open', ?)
+      `).run(memA.id, new Date().toISOString());
+
+      // Attempt UPDATE that mutates tenant_id only (memory_id unchanged).
+      // Pre-fix: trigger only fired when memory_id changed; this would silently land.
+      // Post-fix: WHEN clause covers tenant_id changes too, trigger ABORTs.
+      expect(() => {
+        db.prepare(`UPDATE predictions SET tenant_id = 'tenant-b' WHERE memory_id = ?`).run(memA.id);
+      }).toThrow(/tenant_id must match memories\.tenant_id/);
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
+  it('closePrediction rejects already-closed predictions (codex round-1 P2 fix)', () => {
+    const pred = savePrediction(home, 'default', {
+      classTag: 'reclose-test',
+      claimText: 'predict and close once',
+      estimateValue: 1,
+    });
+
+    // First close succeeds
+    closePrediction(home, 'default', pred.id, {
+      closureState: 'closed',
+      actualValue: 2,
+      closureNote: 'first close',
+    });
+
+    // Second close throws — cannot re-close
+    expect(() => {
+      closePrediction(home, 'default', pred.id, {
+        closureState: 'closed',
+        actualValue: 99,
+        closureNote: 'should be rejected',
+      });
+    }).toThrow(/already closed/);
+
+    // Confirm the original close survived (actual_value unchanged)
+    const reloaded = loadPredictionById(home, 'default', pred.id);
+    expect(reloaded!.actualValue).toBe(2);
+    expect(reloaded!.closureNote).toBe('first close');
+
+    // Confirm only ONE predict_close audit landed (not two)
+    const db = openHippoDb(home);
+    try {
+      const auditRows = db.prepare(
+        `SELECT id FROM audit_log WHERE op = 'predict_close' AND target_id = ?`
+      ).all(String(pred.id)) as Array<{ id: number }>;
+      expect(auditRows.length).toBe(1);
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
+  it('closePrediction throws clear error on missing id', () => {
+    expect(() => {
+      closePrediction(home, 'default', 99999, {
+        closureState: 'closed',
+        actualValue: 1,
+      });
+    }).toThrow(/not found for tenant/);
+  });
+
   it('schema v29 migration produces predictions table + triggers + indexes', () => {
     const db = openHippoDb(home);
     try {

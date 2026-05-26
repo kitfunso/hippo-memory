@@ -1036,7 +1036,8 @@ const MIGRATIONS: Migration[] = [
         db.exec(`
           CREATE TRIGGER IF NOT EXISTS trg_predictions_tenant_match_update
           BEFORE UPDATE ON predictions
-          WHEN NEW.memory_id IS NOT NULL AND NEW.memory_id IS NOT OLD.memory_id
+          WHEN NEW.memory_id IS NOT NULL
+            AND (NEW.memory_id IS NOT OLD.memory_id OR NEW.tenant_id IS NOT OLD.tenant_id)
           BEGIN
             SELECT CASE
               WHEN NEW.tenant_id != (SELECT tenant_id FROM memories WHERE id = NEW.memory_id)
