@@ -41,6 +41,21 @@
   (without `suppressionSummary`) still parse cleanly on both the TS
   `RecallResult` type and the Python SDK Pydantic model.
 
+### Known limitation (v1.12.14 follow-up)
+
+- MCP `suppressionSummary.droppedByBudget` is an UPPER BOUND, not an
+  exact budget-cut count. On the MCP physics/hybrid pipeline, the
+  difference `entries.length - results.length` includes three things
+  conflated: rows hybridSearch/physicsSearch internally dropped because
+  they scored zero (no query match), rows the search engine filtered
+  internally (e.g. superseded), and rows that genuinely didn't fit the
+  `budget` token cap. For no-match or sparse-match MCP queries, this
+  upper bound over-reports budget drops. Independent-review-critic and
+  codex-review-critic both flagged this as non-blocking for v1.12.13;
+  the honest fix needs `hybridSearch`/`physicsSearch` to expose their
+  pre-budget-cut scored count. Tracked as TODO(c5.1) at
+  `src/mcp/server.ts`.
+
 ## 1.12.12 (2026-05-26): bundled E1-E5 DAG live-coupling arc
 
 Bundles 5 episodes of DAG live-coupling into one npm release. Makes the

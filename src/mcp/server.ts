@@ -500,8 +500,23 @@ async function executeTool(
       let results = usePhysics
         ? await physicsSearch(query, entries, { budget, hippoRoot, physicsConfig: config.physics })
         : await hybridSearch(query, entries, { budget, hippoRoot });
-      // v1.12.13 / C5 — dropped_by_budget for MCP = entries that scored but
-      // didn't fit physicsSearch/hybridSearch's internal `budget` cut.
+      // v1.12.13 / C5 — droppedByBudget for MCP is an UPPER BOUND. The
+      // difference (entries.length - results.length) lumps three things
+      // together: rows hybridSearch/physicsSearch internally dropped because
+      // they scored zero (didn't match the query at all), rows the search
+      // engine filtered internally (e.g. superseded when --include-
+      // superseded isn't set), and rows that genuinely didn't fit the
+      // `budget` token cap. The honest fix needs hybridSearch/physicsSearch
+      // to expose their pre-budget-cut scored-count. Until then this is an
+      // upper bound that conflates "not relevant" with "no budget" on
+      // no-match / sparse-match queries. Plan-eng-critic round 1 MED and
+      // codex-review-critic P2 both flagged this; documented + tracked as
+      // a v1.12.14 follow-up. Independent-review-critic and code-review-
+      // critic both graded as non-blocking for v1.12.13 ship.
+      // TODO(c5.1): expose scoredCount from hybridSearch/physicsSearch and
+      // compute droppedByBudget = scoredCount - results.length, with the
+      // remainder (entries.length - scoredCount) attributed to
+      // droppedPreRank or a new "noQueryMatch" counter.
       const droppedByBudgetCountMcp = Math.max(0, entries.length - results.length);
 
       // v1.7.4 -- dlPFC goal-stack boost on the MCP physics/hybrid result
