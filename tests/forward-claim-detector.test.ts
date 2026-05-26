@@ -49,6 +49,23 @@ describe('detectForwardClaim — positive matches', () => {
     expect(m).not.toBeNull();
   });
 
+  // Codex review round 1 caught: \b before ~ requires a word char
+  // immediately preceding. These three cases previously failed silently.
+  it('matches "~3 days for migration" (tilde at start of string)', () => {
+    const m = detectForwardClaim('~3 days for migration');
+    expect(m).not.toBeNull();
+  });
+
+  it('matches "estimate ~3 days" (tilde after whitespace)', () => {
+    const m = detectForwardClaim('estimate ~3 days');
+    expect(m).not.toBeNull();
+  });
+
+  it('matches "~5 hour build" (tilde after newline)', () => {
+    const m = detectForwardClaim('build target:\n~5 hour build');
+    expect(m).not.toBeNull();
+  });
+
   it('matches "should finish by"', () => {
     const m = detectForwardClaim('should finish by Tuesday');
     expect(m).not.toBeNull();

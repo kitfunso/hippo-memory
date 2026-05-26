@@ -291,3 +291,19 @@ def test_recall_result_without_planning_fallacy_hint_defaults_to_none():
     }
     instance = RecallResult.model_validate(payload_no_hint)
     assert instance.planning_fallacy_hint is None
+
+
+def test_planning_fallacy_hint_source_accepts_future_variants():
+    """Forward-compat: PlanningFallacyHint.source is `str`, not `Literal['j3.2-auto']`,
+    so a future server emitting 'j3.2-auto-v2', 'j3.3-auto', etc. does not break
+    existing SDK consumers (independent-review-critic round 1 MED catch)."""
+    for future_source in ("j3.2-auto-v2", "j3.3-auto", "j4-auto", "manual-override"):
+        hint = PlanningFallacyHint.model_validate({
+            "classTag": "migration-effort",
+            "baserateSummary": "Last 3 estimates in class migration-effort averaged 2.00x actual.",
+            "source": future_source,
+            "detectedPhrase": "will take",
+            "nClosed": 3,
+            "meanRatio": 2.0,
+        })
+        assert hint.source == future_source

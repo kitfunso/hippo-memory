@@ -35,7 +35,13 @@ const FORWARD_CLAIM_PATTERNS: ReadonlyArray<RegExp> = [
   /\b(?:by|in|within)\s+(?:about|around|~)?\s*\d+\s*(?:day|week|month|hour)s?\b/i,
   /\bETA\s*(?:is|:)?\s*\d+/i,
   /\b(?:by|before)\s+next\s+(?:week|month|sprint|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
-  /\b~\s*\d+\s*(?:day|week|month|hour)s?\b/i,
+  // Standalone tilde duration: '~3 days for migration', 'estimate ~3 days'.
+  // Lookbehind asserts start-of-string OR whitespace before the tilde
+  // because \b before ~ requires a word char immediately preceding (~ is
+  // not a word character), so /\b~/ would only match in 'foo~3 days'
+  // (malformed) and silently miss the legitimate cases. Codex review
+  // round 1 catch.
+  /(?<=^|\s)~\s*\d+\s*(?:day|week|month|hour)s?\b/i,
   /\bshould\s+(?:be|ship|finish|complete|land)\s+(?:by|in|within)\b/i,
 ];
 

@@ -1316,6 +1316,13 @@ async function cmdRecall(
         results: [],
         total: 0,
         suppressionSummary: cmdSuppressionSummary,
+        // v0.32 / J3.2 — preserve planningFallacyHint on zero-result
+        // recalls. Codex review round 1 catch: hint was previously only
+        // included in the populated-results JSON branch, breaking parity
+        // with HTTP/MCP which surface the hint regardless of memory
+        // matches. A forward-claim query that finds no memories STILL
+        // produces useful planning-fallacy debias when the class resolves.
+        ...(cmdPlanningFallacyHint ? { planningFallacyHint: cmdPlanningFallacyHint } : {}),
       };
       if (includeContinuity) {
         out.continuity = {
@@ -1327,6 +1334,17 @@ async function cmdRecall(
       }
       console.log(JSON.stringify(out));
       return;
+    }
+    // v0.32 / J3.2 — render hint BEFORE the no-memories message so the
+    // calling agent sees its track record even when the query missed
+    // every memory. Same single-line shape + JSON.stringify-safe phrase
+    // as the populated-results path below.
+    if (cmdPlanningFallacyHint) {
+      const safePhrase = JSON.stringify(cmdPlanningFallacyHint.detectedPhrase);
+      console.log(
+        `Planning fallacy hint (class: ${cmdPlanningFallacyHint.classTag}): ${cmdPlanningFallacyHint.baserateSummary} [detected: ${safePhrase}]`,
+      );
+      console.log();
     }
     if (hasContinuity) {
       // Print continuity even when no memories matched. The resume packet

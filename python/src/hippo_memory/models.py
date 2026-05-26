@@ -17,7 +17,7 @@ detail; tighter types can land in v0.2 once usage patterns surface.
 """
 
 from __future__ import annotations
-from typing import Any, Literal
+from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
@@ -160,7 +160,16 @@ class PlanningFallacyHint(_Base):
     """Verbatim PredictionBaserate.summary, e.g.
     'Last 5 estimates in class migration-effort averaged 2.10x actual (MAE 1.40).'"""
     baserate_summary: str
-    source: Literal["j3.2-auto"]
+    # Discriminator for hint origin. Current v1 server emits 'j3.2-auto';
+    # future variants (e.g. 'j3.2-auto-v2', 'j3.3-auto' once embedding
+    # fallback ships) are accepted as plain strings to honour the SDK's
+    # forward-compat promise (see _Base docstring: "server adding new
+    # fields in a future release doesn't break the SDK"). Pydantic
+    # ``extra='allow'`` relaxes unknown FIELDS but does NOT relax Literal
+    # validation, so typing this as Literal would raise ValidationError
+    # mid-recall when a future server tightens the enum. Independent-
+    # review-critic round 1 catch.
+    source: str
     """Regex match snippet that triggered detection. Lets the calling agent
     see WHY the hint appeared and self-correct if detection misfires."""
     detected_phrase: str

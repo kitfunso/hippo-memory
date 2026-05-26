@@ -169,6 +169,28 @@ describe('api.recall planningFallacyHint (J3.2, v0.32)', () => {
     expect(countAuditOps(root, 'predict_baserate')).toBe(baselineBaserate);
   });
 
+  it('class_tag selection is tenant-global, NOT scope-filtered (documented v1 behavior)', () => {
+    // Independent-review-critic round 1 MED locked here: PlanningFallacyHint.classTag
+    // surfaces across recall scopes. Base-rate reasoning needs the full historical
+    // sample; the hint payload itself carries no memory content (only summary string
+    // + numeric stats). Lock so a future "fix" that scope-filters the resolver trips
+    // CI and forces an explicit revisit of the trade-off.
+    // 1. Seed a prediction in a private-channel scope. predictions table has no
+    //    scope column; the relationship is via memory_id → memories.scope.
+    seedMigrationEffortBaserate(root);
+    // 2. A no-scope recall (the agent didn't specify --scope) should STILL surface
+    //    the migration-effort class hint, even though the predictions were created
+    //    via tenant-global savePrediction calls without scope segregation.
+    const result = recall(ctxFor(root), { query: 'the migration effort will take 3 days' });
+    expect(result.planningFallacyHint).toBeDefined();
+    expect(result.planningFallacyHint!.classTag).toBe('migration-effort');
+    // Sanity: the same data with an explicit scope filter on recall still surfaces
+    // the hint (the resolver doesn't consult opts.scope by design).
+    const scopedResult = recall(ctxFor(root), { query: 'the migration effort will take 3 days', scope: 'channel:work' });
+    expect(scopedResult.planningFallacyHint).toBeDefined();
+    expect(scopedResult.planningFallacyHint!.classTag).toBe('migration-effort');
+  });
+
   it('cross-tenant scoping: tenant-b query gets no hint from tenant-a predictions', () => {
     // Seed tenant-a only.
     const ctxA: Context = { hippoRoot: root, tenantId: 'tenant-a', actor: { subject: 'cli', role: 'admin' } };

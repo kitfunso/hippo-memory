@@ -627,6 +627,23 @@ interface ClassResolution {
  *
  * Indexed via idx_predictions_tenant_class (db.ts:1015) → O(log n) seek
  * plus a small DISTINCT scan over the per-tenant class-tag set.
+ *
+ * Scope behaviour (v1 design choice, independent-review-critic round 1
+ * MED): class_tag selection is TENANT-GLOBAL, NOT scope-filtered against
+ * the recall's opts.scope. The class_tag is an aggregator label across
+ * historical predictions in the class, not a per-memory scope-bound
+ * property. A no-scope recall CAN surface a class_tag from a privately-
+ * scoped prediction's class in PlanningFallacyHint.classTag — by design,
+ * because base-rate reasoning needs the full historical sample.
+ * Implications:
+ *   - The hint payload itself carries no memory content (only the aggregate
+ *     summary string + numeric stats), so memory bodies do not leak.
+ *   - The class_tag NAME is the side-channel. If sensitive labels are a
+ *     concern, callers should either use opaque class names (e.g. hashes
+ *     or numeric tokens) or set HIPPO_AUTODEBIAS=off.
+ *   - tests/api-recall-autodebias.test.ts locks this with an explicit
+ *     test asserting that scope-set predictions surface via no-scope
+ *     recalls (so future "fix" attempts that scope-filter trip CI).
  */
 function resolveClassFromTokens(
   hippoRoot: string,
