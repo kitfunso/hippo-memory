@@ -26,7 +26,7 @@ import { fetchGitLog, extractLessons, deduplicateLesson, isGitRepo } from '../au
 import { loadConfig } from '../config.js';
 import { resolveConfidence } from '../memory.js';
 import { resolveTenantId } from '../tenant.js';
-import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, drillDown as apiDrillDown, assemble as apiAssemble, isPrivateScope, adminActor, type Context as ApiContext } from '../api.js';
+import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, drillDown as apiDrillDown, assemble as apiAssemble, isPrivateScope, adminActor, buildSuppressionSummary, type Context as ApiContext } from '../api.js';
 import { applyGoalStackBoost } from '../goals.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { PACKAGE_VERSION } from '../version.js';
@@ -476,6 +476,14 @@ async function executeTool(
       // default-deny on ANY `<source>:private:*` AND 'unknown:legacy'.
       // v1.2.1: generic-private check via api.isPrivateScope.
       const allEntries = loadAllEntries(hippoRoot, tenantId);
+      // v1.12.13 / C5 — WYSIATI counters for the MCP physics/hybrid pipeline.
+      // Per the plan-eng-critic round 1 CRIT resolution: MCP's user-visible
+      // memory list comes from THIS pipeline (loadAllEntries -> scope filter
+      // -> physicsSearch/hybridSearch), NOT from apiResult. The MCP
+      // suppressionSummary must describe what the user actually sees, so we
+      // track filter activity here and replace apiResult.suppressionSummary
+      // in the user-facing response.
+      const totalCandidatesCountMcp = allEntries.length;
       const entries = explicitScope
         ? allEntries.filter((e) => e.scope === explicitScope)
         : allEntries.filter((e) => {
@@ -487,10 +495,14 @@ async function executeTool(
             if ((RECALL_DEFAULT_DENY_SCOPES as readonly string[]).includes(s)) return false;
             return true;
           });
+      const droppedPreRankCountMcp = allEntries.length - entries.length;
       const usePhysics = config.physics?.enabled !== false;
       let results = usePhysics
         ? await physicsSearch(query, entries, { budget, hippoRoot, physicsConfig: config.physics })
         : await hybridSearch(query, entries, { budget, hippoRoot });
+      // v1.12.13 / C5 — dropped_by_budget for MCP = entries that scored but
+      // didn't fit physicsSearch/hybridSearch's internal `budget` cut.
+      const droppedByBudgetCountMcp = Math.max(0, entries.length - results.length);
 
       // v1.7.4 -- dlPFC goal-stack boost on the MCP physics/hybrid result
       // list BEFORE formatMemories. MCP's user-visible primary ordering does
@@ -541,8 +553,39 @@ async function executeTool(
         response += '\n' + lines.join('\n');
       }
 
+      // v1.12.13 / C5 — Build MCP-pipeline suppressionSummary. The fresh-tail
+      // and substitution rows surfaced to the MCP user come from apiResult
+      // (the tailOrSummary append block above), so attribute them here. The
+      // MCP-pipeline summary REPLACES apiResult.suppressionSummary in the
+      // user-facing response; the api-pipeline counters described a different
+      // pipeline and would mislead.
+      const freshTailAddedMcp = tailOrSummary.filter((r) => r.isFreshTail && !r.isSummary).length;
+      const summarySubsAddedMcp = tailOrSummary.filter((r) => r.isSummary).length;
+      const mcpSuppressionSummary = buildSuppressionSummary({
+        totalCandidates: totalCandidatesCountMcp,
+        droppedPreRank: droppedPreRankCountMcp,
+        droppedByBudget: droppedByBudgetCountMcp,
+        summarySubstitutionsAdded: summarySubsAddedMcp,
+        freshTailAdded: freshTailAddedMcp,
+        suppressedByInterference: 0,
+      });
+
       if (includeContinuity && apiResult.continuity) {
         response += '\n\n' + formatContinuityBlock(apiResult.continuity);
+      }
+
+      // v1.12.13 / C5 — WYSIATI summary appended to the MCP text response
+      // when at least one non-budget-cut counter is non-zero. Tells the
+      // calling agent how much was filtered before the visible result list.
+      const sMcp = mcpSuppressionSummary;
+      const wysiatiClauses: string[] = [];
+      if (sMcp.droppedByBudget > 0) wysiatiClauses.push(`${sMcp.droppedByBudget} dropped by budget`);
+      if (sMcp.droppedPreRank > 0) wysiatiClauses.push(`${sMcp.droppedPreRank} pre-rank filtered`);
+      if (sMcp.summarySubstitutionsAdded > 0) wysiatiClauses.push(`${sMcp.summarySubstitutionsAdded} summary substitutions added`);
+      if (sMcp.freshTailAdded > 0) wysiatiClauses.push(`${sMcp.freshTailAdded} fresh-tail added`);
+      if (sMcp.suppressedByInterference > 0) wysiatiClauses.push(`${sMcp.suppressedByInterference} suppressed by interference`);
+      if (wysiatiClauses.length > 0) {
+        response += `\n\nWYSIATI: showing ${results.length}/${sMcp.totalCandidates}; ${wysiatiClauses.join('; ')}.`;
       }
       return response;
     }

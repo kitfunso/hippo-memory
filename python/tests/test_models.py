@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from hippo_memory import (
     HealthInfo, MemoryEnvelope, RecallEntry, RecallResult,
+    RecallSuppressionSummary,
     ContextEntry, ContextResult, OutcomeResult, SleepResult,
     DrillResult, ArchiveResult, SupersedeResult, PromoteResult,
     ForgetResult, AssembleResult, AuthCreated, AuthKey, AuthRevoked,
@@ -155,3 +156,73 @@ def test_hippo_error_carries_status_and_body():
     assert err.body == {"error": "good is required"}
     assert "400" in str(err)
     assert "good is required" in str(err)
+
+
+# ---------------------------------------------------------------------------
+# v1.12.13 / C5 — WYSIATI cutoff transparency (RecallSuppressionSummary)
+# ---------------------------------------------------------------------------
+
+
+def test_recall_suppression_summary_roundtrip():
+    """Server emits camelCase wire keys (totalCandidates etc.); Python sees
+    snake_case attribute names. _Base's alias_generator=to_camel + populate_
+    by_name=True handle both directions."""
+    payload = {
+        "totalCandidates": 47,
+        "droppedPreRank": 2,
+        "droppedByBudget": 38,
+        "summarySubstitutionsAdded": 1,
+        "freshTailAdded": 4,
+        "suppressedByInterference": 0,
+    }
+    _roundtrip(RecallSuppressionSummary, payload)
+
+
+def test_recall_suppression_summary_defaults_to_zero():
+    """All 6 counters default to 0; the model can be hand-constructed for
+    test fixtures without supplying every field."""
+    s = RecallSuppressionSummary()
+    assert s.total_candidates == 0
+    assert s.dropped_pre_rank == 0
+    assert s.dropped_by_budget == 0
+    assert s.summary_substitutions_added == 0
+    assert s.fresh_tail_added == 0
+    assert s.suppressed_by_interference == 0
+
+
+def test_recall_result_with_suppression_summary():
+    """RecallResult parses suppressionSummary nested field over the wire."""
+    payload = {
+        "results": [{"id": "mem_a", "content": "a", "score": 0.9, "tokens": 5}],
+        "total": 1,
+        "tokens": 5,
+        "suppressionSummary": {
+            "totalCandidates": 47,
+            "droppedPreRank": 2,
+            "droppedByBudget": 41,
+            "summarySubstitutionsAdded": 0,
+            "freshTailAdded": 0,
+            "suppressedByInterference": 0,
+        },
+    }
+    instance = RecallResult.model_validate(payload)
+    assert instance.suppression_summary is not None
+    assert instance.suppression_summary.total_candidates == 47
+    assert instance.suppression_summary.dropped_by_budget == 41
+
+
+def test_recall_result_back_compat_without_suppression_summary():
+    """Pre-v1.12.13 server payloads omit suppressionSummary; SDK must still
+    parse cleanly. suppression_summary defaults to None."""
+    payload_pre_v1_12_13 = {
+        "results": [{"id": "mem_a", "content": "a", "score": 0.9, "tokens": 5}],
+        "total": 1,
+        "tokens": 5,
+        # NOTE: no suppressionSummary key (legacy server shape).
+    }
+    instance = RecallResult.model_validate(payload_pre_v1_12_13)
+    assert instance.suppression_summary is None
+    # All existing fields still populate normally.
+    assert instance.results[0].id == "mem_a"
+    assert instance.total == 1
+    assert instance.tokens == 5

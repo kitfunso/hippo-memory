@@ -27,6 +27,7 @@ __all__ = [
     "MemoryEnvelope",
     "RecallEntry",
     "RecallResult",
+    "RecallSuppressionSummary",
     "ContextEntry",
     "ContextResult",
     "OutcomeResult",
@@ -117,10 +118,41 @@ class RecallEntry(_Base):
     is_fresh_tail: bool | None = None
 
 
+class RecallSuppressionSummary(_Base):
+    """v1.12.13 / C5 — WYSIATI cutoff transparency.
+
+    Surfaces what the recall pipeline excluded from ``results[]`` so the
+    calling agent does not treat the cutoff as the full picture (Kahneman's
+    "What You See Is All There Is" failure mode, TFAS ch. 7).
+
+    Counters are honest per-path reports, NOT normalised cross-pipeline
+    numbers. api.recall, cmdRecall (CLI), and MCP hippo_recall each populate
+    this with their own pipeline state. See the server-side TS interface
+    ``RecallSuppressionSummary`` for per-pipeline field semantics.
+
+    All fields default to 0; the server-side ``buildSuppressionSummary``
+    helper always populates them, but defaults make this back-compatible
+    with hand-constructed test fixtures.
+    """
+
+    total_candidates: int = 0
+    dropped_pre_rank: int = 0
+    dropped_by_budget: int = 0
+    summary_substitutions_added: int = 0
+    fresh_tail_added: int = 0
+    suppressed_by_interference: int = 0
+
+
 class RecallResult(_Base):
     results: list[RecallEntry]
     total: int | None = None
     tokens: int | None = None
+    # v1.12.13 / C5 — WYSIATI cutoff transparency. Optional for back-compat
+    # with pre-v1.12.13 server payloads (field omitted is fine). When
+    # present, gives the calling agent a per-pipeline breakdown of what was
+    # excluded from results[] and why. Wire alias `suppressionSummary` is
+    # generated automatically by _Base.alias_generator=to_camel.
+    suppression_summary: RecallSuppressionSummary | None = None
 
 
 # ---------------------------------------------------------------------------
