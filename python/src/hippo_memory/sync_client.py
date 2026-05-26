@@ -47,6 +47,7 @@ from hippo_memory.models import (
     AuthKey,
     AuthRevoked,
     AuditEvent,
+    Prediction,
     HippoError,
 )
 
@@ -376,3 +377,68 @@ class HippoSync:
         data = self._request("GET", "/v1/audit", params=params)
         items = data if isinstance(data, list) else data.get("events", [])
         return [AuditEvent.model_validate(item) for item in items]
+
+    # -------------------------------------------------------------------
+    # E2 prediction first-class object (v0.31)
+    # docs/plans/2026-05-26-e2-prediction-object.md
+    # -------------------------------------------------------------------
+
+    def predict(
+        self,
+        claim: str,
+        *,
+        class_tag: str,
+        estimate: float | None = None,
+        unit: str | None = None,
+        target_date: str | None = None,
+    ) -> Prediction:
+        """POST /v1/predictions. Sync mirror of Hippo.predict."""
+        body: dict[str, Any] = {"claim": claim, "classTag": class_tag}
+        if estimate is not None:
+            body["estimate"] = estimate
+        if unit is not None:
+            body["unit"] = unit
+        if target_date is not None:
+            body["targetDate"] = target_date
+        data = self._request("POST", "/v1/predictions", json=body)
+        return Prediction.model_validate(data["prediction"])
+
+    def predict_close(
+        self,
+        prediction_id: int,
+        *,
+        state: Literal["closed", "closed-unknown"],
+        actual: float | None = None,
+        note: str | None = None,
+    ) -> Prediction:
+        """POST /v1/predictions/:id/close. Sync mirror of Hippo.predict_close."""
+        body: dict[str, Any] = {"state": state}
+        if actual is not None:
+            body["actual"] = actual
+        if note is not None:
+            body["note"] = note
+        data = self._request("POST", f"/v1/predictions/{prediction_id}/close", json=body)
+        return Prediction.model_validate(data["prediction"])
+
+    def list_predictions(
+        self,
+        *,
+        class_tag: str | None = None,
+        status: Literal["open", "closed", "closed-unknown", "all"] | None = None,
+        limit: int | None = None,
+    ) -> list[Prediction]:
+        """GET /v1/predictions. Sync mirror of Hippo.list_predictions."""
+        params: dict[str, Any] = {}
+        if class_tag is not None:
+            params["class"] = class_tag
+        if status is not None:
+            params["status"] = status
+        if limit is not None:
+            params["limit"] = limit
+        data = self._request("GET", "/v1/predictions", params=params)
+        return [Prediction.model_validate(p) for p in data["predictions"]]
+
+    def get_prediction(self, prediction_id: int) -> Prediction:
+        """GET /v1/predictions/:id. Sync mirror of Hippo.get_prediction."""
+        data = self._request("GET", f"/v1/predictions/{prediction_id}")
+        return Prediction.model_validate(data["prediction"])

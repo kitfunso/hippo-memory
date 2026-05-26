@@ -42,6 +42,7 @@ __all__ = [
     "AuthKey",
     "AuthRevoked",
     "AuditEvent",
+    "Prediction",
     "HippoError",
 ]
 
@@ -379,6 +380,43 @@ class AuditEvent(_Base):
 # ---------------------------------------------------------------------------
 # Errors
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# v0.31 / E2 — prediction first-class object
+# (docs/plans/2026-05-26-e2-prediction-object.md)
+# ---------------------------------------------------------------------------
+
+
+class Prediction(_Base):
+    """Prediction first-class object. Mirrors the TS Prediction interface
+    in src/predictions.ts.
+
+    Three closure states: ``open``, ``closed``, ``closed-unknown``. J3
+    (reference-class / planning-fallacy detector) computes accuracy
+    (clean vs regressed) from ``(estimate_value, actual_value)`` at query
+    time; this model carries the raw numerics + the closure state, not
+    the derived accuracy class.
+
+    ``memory_id`` is nullable: ``ON DELETE SET NULL`` on the server side
+    means memory deletion (forget / consolidate / archive) gracefully
+    orphans the prediction. The prediction row survives with all fields
+    populated; only the back-reference is lost.
+    """
+
+    id: int
+    memory_id: str | None = None
+    tenant_id: str
+    class_tag: str
+    claim_text: str
+    estimate_value: float | None = None
+    estimate_unit: str | None = None
+    target_date: str | None = None
+    actual_value: float | None = None
+    closure_state: str = "open"
+    closed_at: str | None = None
+    closure_note: str | None = None
+    created_at: str
 
 
 class HippoError(Exception):

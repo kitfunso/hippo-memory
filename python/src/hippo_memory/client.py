@@ -37,6 +37,7 @@ from hippo_memory.models import (
     AuthKey,
     AuthRevoked,
     AuditEvent,
+    Prediction,
     HippoError,
 )
 
@@ -366,3 +367,87 @@ class Hippo:
         # Server may return a list directly or {events: [...]}.
         items = data if isinstance(data, list) else data.get("events", [])
         return [AuditEvent.model_validate(item) for item in items]
+
+    # -------------------------------------------------------------------
+    # E2 prediction first-class object (v0.31)
+    # docs/plans/2026-05-26-e2-prediction-object.md
+    # -------------------------------------------------------------------
+
+    async def predict(
+        self,
+        claim: str,
+        *,
+        class_tag: str,
+        estimate: float | None = None,
+        unit: str | None = None,
+        target_date: str | None = None,
+    ) -> Prediction:
+        """POST /v1/predictions. Record an ex-ante claim. Returns the
+        canonical prediction row.
+
+        ``class_tag`` is the base-rate cohort J3 will compute against
+        ("migration-effort", "rollout-risk", etc.). ``estimate`` + ``unit``
+        are optional numeric fields; categorical predictions omit both.
+        """
+        body: dict[str, Any] = {"claim": claim, "classTag": class_tag}
+        if estimate is not None:
+            body["estimate"] = estimate
+        if unit is not None:
+            body["unit"] = unit
+        if target_date is not None:
+            body["targetDate"] = target_date
+        data = await self._request("POST", "/v1/predictions", json=body)
+        return Prediction.model_validate(data["prediction"])
+
+    async def predict_close(
+        self,
+        prediction_id: int,
+        *,
+        state: Literal["closed", "closed-unknown"],
+        actual: float | None = None,
+        note: str | None = None,
+    ) -> Prediction:
+        """POST /v1/predictions/:id/close. Close an open prediction with
+        the ex-post outcome.
+
+        ``state="closed"`` carries a numeric ``actual``; ``"closed-unknown"``
+        is for predictions whose actual outcome was not numerically
+        measurable. The memory mirror is NOT mutated; the predictions row
+        is canonical.
+        """
+        body: dict[str, Any] = {"state": state}
+        if actual is not None:
+            body["actual"] = actual
+        if note is not None:
+            body["note"] = note
+        data = await self._request("POST", f"/v1/predictions/{prediction_id}/close", json=body)
+        return Prediction.model_validate(data["prediction"])
+
+    async def list_predictions(
+        self,
+        *,
+        class_tag: str | None = None,
+        status: Literal["open", "closed", "closed-unknown", "all"] | None = None,
+        limit: int | None = None,
+    ) -> list[Prediction]:
+        """GET /v1/predictions. List predictions, optionally filtered by
+        class_tag and status.
+
+        ``status="all"`` returns everything for the class (or just open
+        across classes if class_tag is omitted). Non-"open" status filters
+        require a class_tag.
+        """
+        params: dict[str, Any] = {}
+        if class_tag is not None:
+            params["class"] = class_tag
+        if status is not None:
+            params["status"] = status
+        if limit is not None:
+            params["limit"] = limit
+        data = await self._request("GET", "/v1/predictions", params=params)
+        return [Prediction.model_validate(p) for p in data["predictions"]]
+
+    async def get_prediction(self, prediction_id: int) -> Prediction:
+        """GET /v1/predictions/:id. Fetch a single prediction by id."""
+        data = await self._request("GET", f"/v1/predictions/{prediction_id}")
+        return Prediction.model_validate(data["prediction"])

@@ -4,6 +4,37 @@
 
 ### Added
 
+- **E2 prediction first-class object** (E2 row from ROADMAP-RESEARCH.md L314,
+  Track J pre-req). New canonical `predictions` table (schema v29) for
+  ex-ante claims that can be closed against ex-post outcomes. Enables J3
+  (reference-class / planning-fallacy detector) as a follow-up episode.
+  Surfaces:
+  - CLI: `hippo predict "<claim>" --class X [--estimate N] [--unit U] [--target YYYY-MM-DD]`,
+    `hippo predict close <id> --state closed|closed-unknown [--actual N] [--note "..."]`,
+    `hippo predict list [--class X] [--status open|closed|closed-unknown|all]`,
+    `hippo predict show <id>`.
+  - HTTP: `POST /v1/predictions`, `GET /v1/predictions`, `GET /v1/predictions/:id`,
+    `POST /v1/predictions/:id/close` (Bearer-auth, tenant-scoped, DoS-capped
+    on claim 4096 chars + note 2048 chars).
+  - Python SDK: `Hippo.predict()`, `predict_close()`, `list_predictions()`,
+    `get_prediction()` (async); same on `HippoSync`. New `Prediction`
+    Pydantic model.
+  - 2 new audit ops: `predict_create`, `predict_close` (lockstep update
+    across `src/cli.ts`, `src/server.ts` VALID_AUDIT_OPS sets + `AuditOp`
+    union per v1.11.5 CRIT A institutional rule).
+  - Each `hippo predict` writes both a memory mirror (tagged
+    `['prediction', class_tag]`, recallable) AND a structured predictions
+    table row (canonical for J3 base-rate queries). Memory + table dual
+    write is atomic via `writeEntry`'s `afterWrite` hook inside SAVEPOINT
+    `write_entry`.
+  - Cross-tenant safety enforced by BEFORE INSERT + BEFORE UPDATE triggers
+    on `predictions` (RAISE ABORT on tenant_id mismatch against referenced
+    memory). Memory deletion (forget / consolidate / archive) gracefully
+    orphans the prediction via `ON DELETE SET NULL` on `memory_id`; the
+    predictions row survives with all fields populated.
+  - Closure states: `open` | `closed` | `closed-unknown` (DB CHECK
+    constraint + `VALID_CLOSURE_STATES` Set in `src/predictions.ts`).
+    J3 computes accuracy from (estimate_value, actual_value) at query time.
 - **C5 WYSIATI cutoff transparency** (Track C Pineal Gland, C5 [next] from
   ROADMAP-RESEARCH.md L219). New optional `RecallSuppressionSummary` on
   `RecallResult` with 6 counters describing what the recall pipeline
