@@ -48,6 +48,7 @@ from hippo_memory.models import (
     AuthRevoked,
     AuditEvent,
     Prediction,
+    PredictionBaserate,
     HippoError,
 )
 
@@ -442,3 +443,10 @@ class HippoSync:
         """GET /v1/predictions/:id. Sync mirror of Hippo.get_prediction."""
         data = self._request("GET", f"/v1/predictions/{prediction_id}")
         return Prediction.model_validate(data["prediction"])
+
+    def get_prediction_baserate(self, class_tag: str) -> PredictionBaserate:
+        """GET /v1/predictions/stats. Sync mirror of Hippo.get_prediction_baserate.
+        J3 reference-class / planning-fallacy detector."""
+        params: dict[str, Any] = {"class": class_tag}
+        data = self._request("GET", "/v1/predictions/stats", params=params)
+        return PredictionBaserate.model_validate(data["baserate"])

@@ -15,6 +15,7 @@ from hippo_memory import (
     Hippo,
     HippoSync,
     Prediction,
+    PredictionBaserate,
 )
 
 
@@ -119,3 +120,46 @@ def test_hippo_sync_has_prediction_methods():
     assert hasattr(HippoSync, "predict_close")
     assert hasattr(HippoSync, "list_predictions")
     assert hasattr(HippoSync, "get_prediction")
+
+
+# ---------------------------------------------------------------------------
+# v0.31 / J3 — reference-class / planning-fallacy detector
+# ---------------------------------------------------------------------------
+
+
+def test_prediction_baserate_roundtrip_full_shape():
+    """Server emits camelCase wire keys (classTag, nClosed, etc.); Python
+    sees snake_case attribute names via _Base.alias_generator=to_camel."""
+    payload = {
+        "classTag": "migration-effort",
+        "nClosed": 5,
+        "nRatioEligible": 5,
+        "meanEstimate": 2.4,
+        "meanActual": 5.1,
+        "meanRatio": 2.125,
+        "p50Ratio": 2.0,
+        "mae": 2.7,
+        "summary": "Last 5 estimates in class migration-effort averaged 2.13x actual (MAE 2.70).",
+    }
+    _roundtrip(PredictionBaserate, payload)
+
+
+def test_prediction_baserate_empty_class_defaults():
+    """When n_closed=0 (no closed predictions yet), numeric fields default
+    to None and summary is empty string."""
+    br = PredictionBaserate(class_tag="empty")
+    assert br.class_tag == "empty"
+    assert br.n_closed == 0
+    assert br.n_ratio_eligible == 0
+    assert br.mean_estimate is None
+    assert br.mean_actual is None
+    assert br.mean_ratio is None
+    assert br.p50_ratio is None
+    assert br.mae is None
+    assert br.summary == ""
+
+
+def test_hippo_has_get_prediction_baserate():
+    """Shape-only check: both Hippo + HippoSync expose get_prediction_baserate."""
+    assert hasattr(Hippo, "get_prediction_baserate")
+    assert hasattr(HippoSync, "get_prediction_baserate")

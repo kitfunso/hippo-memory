@@ -375,6 +375,142 @@ export function loadPredictionsByClass(
   }
 }
 
+// ---------------------------------------------------------------------------
+// v0.31 / J3 — reference-class / planning-fallacy detector
+// ---------------------------------------------------------------------------
+
+export interface PredictionBaserate {
+  classTag: string;
+  /** Count of closed predictions with a numeric actual_value (excludes
+   *  open + closed-unknown). The denominator for MAE. */
+  nClosed: number;
+  /** Count of closed rows where estimate_value > 0 (i.e. ratio is defined).
+   *  Subset of nClosed used for meanRatio + p50Ratio. */
+  nRatioEligible: number;
+  meanEstimate: number | null;
+  meanActual: number | null;
+  /** mean(actual / estimate) over the nRatioEligible subset. Null when
+   *  nRatioEligible = 0 (e.g. all closed predictions had estimate=0). */
+  meanRatio: number | null;
+  /** Median ratio over the nRatioEligible subset. */
+  p50Ratio: number | null;
+  /** Mean absolute error = mean(|actual - estimate|) over the nClosed set. */
+  mae: number | null;
+  /** Human-readable summary string for direct surface in CLI / MCP / HTTP.
+   *  Empty when nClosed = 0. */
+  summary: string;
+}
+
+interface BaserateRow {
+  estimate_value: number;
+  actual_value: number;
+}
+
+/**
+ * Compute base-rate stats for closed predictions in a class. Used by J3
+ * reference-class / planning-fallacy detector. Direct application of
+ * Lovallo-Kahneman (2003) inside-vs-outside view.
+ *
+ * Filter: closure_state='closed' AND estimate_value IS NOT NULL AND
+ * actual_value IS NOT NULL. Excludes closed-unknown (no actual to
+ * compare against) and open (not yet resolved).
+ *
+ * Audit-emit is BUILT IN here (single source of truth, no caller-site
+ * drift risk). Plan-eng-critic round 1 HIGH recommendation: emit inside
+ * helper, not at 3 call sites.
+ */
+export function computePredictionBaserate(
+  hippoRoot: string,
+  tenantId: string,
+  classTag: string,
+  actor: string = 'cli',
+): PredictionBaserate {
+  assertTenantId('computePredictionBaserate', tenantId);
+  if (!classTag) throw new Error('computePredictionBaserate: classTag is required');
+
+  const db = openHippoDb(hippoRoot);
+  try {
+    const rows = db.prepare(`
+      SELECT estimate_value, actual_value
+      FROM predictions
+      WHERE tenant_id = ?
+        AND class_tag = ?
+        AND closure_state = 'closed'
+        AND estimate_value IS NOT NULL
+        AND actual_value IS NOT NULL
+    `).all(tenantId, classTag) as BaserateRow[];
+
+    const nClosed = rows.length;
+    if (nClosed === 0) {
+      // Audit zero-result reads too — agents probing empty classes is
+      // a signal worth recording.
+      appendAuditEvent(db, {
+        tenantId,
+        actor,
+        op: 'predict_baserate',
+        targetId: classTag,
+        metadata: { class_tag: classTag, n_closed: 0 },
+      });
+      return {
+        classTag,
+        nClosed: 0,
+        nRatioEligible: 0,
+        meanEstimate: null,
+        meanActual: null,
+        meanRatio: null,
+        p50Ratio: null,
+        mae: null,
+        summary: '',
+      };
+    }
+
+    const ratioEligible = rows.filter((r) => r.estimate_value > 0);
+    const nRatioEligible = ratioEligible.length;
+
+    const meanEstimate = rows.reduce((s, r) => s + r.estimate_value, 0) / nClosed;
+    const meanActual = rows.reduce((s, r) => s + r.actual_value, 0) / nClosed;
+    const mae = rows.reduce((s, r) => s + Math.abs(r.actual_value - r.estimate_value), 0) / nClosed;
+
+    let meanRatio: number | null = null;
+    let p50Ratio: number | null = null;
+    if (nRatioEligible > 0) {
+      const ratios = ratioEligible.map((r) => r.actual_value / r.estimate_value);
+      meanRatio = ratios.reduce((s, x) => s + x, 0) / nRatioEligible;
+      const sorted = ratios.slice().sort((a, b) => a - b);
+      p50Ratio = nRatioEligible % 2 === 1
+        ? sorted[(nRatioEligible - 1) / 2]
+        : (sorted[nRatioEligible / 2 - 1] + sorted[nRatioEligible / 2]) / 2;
+    }
+
+    const ratioPart = meanRatio !== null
+      ? `averaged ${meanRatio.toFixed(2)}x actual`
+      : 'no ratio-eligible rows (all estimates were 0)';
+    const summary = `Last ${nClosed} estimate${nClosed === 1 ? '' : 's'} in class ${classTag} ${ratioPart} (MAE ${mae.toFixed(2)}).`;
+
+    appendAuditEvent(db, {
+      tenantId,
+      actor,
+      op: 'predict_baserate',
+      targetId: classTag,
+      metadata: { class_tag: classTag, n_closed: nClosed },
+    });
+
+    return {
+      classTag,
+      nClosed,
+      nRatioEligible,
+      meanEstimate,
+      meanActual,
+      meanRatio,
+      p50Ratio,
+      mae,
+      summary,
+    };
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 export function loadOpenPredictions(
   hippoRoot: string,
   tenantId: string,
