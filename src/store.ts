@@ -1818,7 +1818,7 @@ export function incrementSleepCount(hippoRoot: string): void {
  * False-positive cost: a tenant literally named `sess-...` will be rejected.
  * Acceptable tradeoff for catching the silent-leak class.
  */
-function assertTenantId(fnName: string, value: unknown): asserts value is string {
+export function assertTenantId(fnName: string, value: unknown): asserts value is string {
   if (typeof value !== 'string' || value.length === 0) {
     throw new Error(`${fnName}: tenantId is required (got ${typeof value})`);
   }

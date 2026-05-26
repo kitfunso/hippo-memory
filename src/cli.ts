@@ -158,6 +158,7 @@ import { createApiKey, listApiKeys, revokeApiKey, type ApiKeyListItem } from './
 import { buildProvenanceCoverage } from './provenance-coverage.js';
 import { buildCorrectionLatency } from './correction-latency.js';
 import * as api from './api.js';
+import * as predictionsModule from './predictions.js';
 import * as client from './client.js';
 import { detectServer, removePidfileIfOwned, type ServerInfo } from './server-detect.js';
 import { resolveTenantId } from './tenant.js';
@@ -3287,6 +3288,182 @@ function cmdHandoff(
   process.exit(1);
 }
 
+// ---------------------------------------------------------------------------
+// E2 prediction first-class object (v0.31)
+// docs/plans/2026-05-26-e2-prediction-object.md
+// ---------------------------------------------------------------------------
+
+function cmdPredict(
+  hippoRoot: string,
+  args: string[],
+  flags: Record<string, string | boolean | string[]>
+): void {
+  requireInit(hippoRoot);
+  const tenantId = resolveTenantId({});
+  const subcommand = args[0] ?? '';
+
+  if (subcommand === 'close') {
+    const idRaw = args[1];
+    if (!idRaw) {
+      console.error('Usage: hippo predict close <id> --state <closed|closed-unknown> [--actual <v>] [--note "..."]');
+      process.exit(1);
+    }
+    const id = parseInt(String(idRaw), 10);
+    if (!Number.isFinite(id) || id <= 0) {
+      console.error(`Invalid prediction id: "${idRaw}"`);
+      process.exit(1);
+    }
+    const stateRaw = typeof flags['state'] === 'string' ? flags['state'].trim() : '';
+    if (!predictionsModule.VALID_CLOSURE_STATES.has(stateRaw as predictionsModule.ClosureState) || stateRaw === 'open') {
+      console.error(`Invalid --state: "${stateRaw}". Must be one of: closed | closed-unknown.`);
+      process.exit(1);
+    }
+    const actualRaw = flags['actual'];
+    const actualValue = actualRaw !== undefined ? Number(actualRaw) : undefined;
+    if (actualRaw !== undefined && !Number.isFinite(actualValue)) {
+      console.error(`Invalid --actual: "${actualRaw}". Must be a number.`);
+      process.exit(1);
+    }
+    const noteRaw = flags['note'];
+    const closureNote = typeof noteRaw === 'string' ? noteRaw : undefined;
+
+    const closed = predictionsModule.closePrediction(hippoRoot, tenantId, id, {
+      closureState: stateRaw as predictionsModule.ClosureState,
+      actualValue,
+      closureNote,
+    });
+    console.log(`Prediction ${closed.id} closed: state=${closed.closureState}${closed.actualValue !== null ? ` actual=${closed.actualValue}` : ''}`);
+    return;
+  }
+
+  if (subcommand === 'list') {
+    const classTagRaw = flags['class'];
+    const classTag = typeof classTagRaw === 'string' ? classTagRaw.trim() : '';
+    const statusRaw = flags['status'];
+    const status = typeof statusRaw === 'string' ? statusRaw.trim() : 'all';
+    const limitRaw = flags['limit'];
+    const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : 100;
+    if (!Number.isFinite(limit) || limit <= 0) {
+      console.error(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
+      process.exit(1);
+    }
+
+    let results;
+    if (status === 'open') {
+      results = predictionsModule.loadOpenPredictions(hippoRoot, tenantId, {
+        classTag: classTag || undefined,
+        limit,
+      });
+    } else if (status === 'all') {
+      // No closure-state filter; pull both via loadPredictionsByClass if class given
+      if (classTag) {
+        results = predictionsModule.loadPredictionsByClass(hippoRoot, tenantId, classTag, { limit });
+      } else {
+        // No class filter + status=all = pull open + closed across all classes
+        // (kept simple: report open via loadOpenPredictions; closed via two
+        // class scans isn't symmetrical. v1 callers typically pass --class.)
+        results = predictionsModule.loadOpenPredictions(hippoRoot, tenantId, { limit });
+      }
+    } else {
+      if (!predictionsModule.VALID_CLOSURE_STATES.has(status as predictionsModule.ClosureState)) {
+        console.error(`Invalid --status: "${status}". Must be one of: open | closed | closed-unknown | all.`);
+        process.exit(1);
+      }
+      if (classTag) {
+        results = predictionsModule.loadPredictionsByClass(hippoRoot, tenantId, classTag, {
+          closureState: status as predictionsModule.ClosureState,
+          limit,
+        });
+      } else {
+        // status filter without class — scan all classes is more complex; v1 requires --class for non-default status
+        console.error('--status filter (non-open) requires --class to be set.');
+        process.exit(1);
+      }
+    }
+
+    if (results.length === 0) {
+      console.log(classTag ? `No predictions in class "${classTag}".` : 'No predictions.');
+      return;
+    }
+    console.log(`Found ${results.length} predictions:\n`);
+    for (const p of results) {
+      const estPart = p.estimateValue !== null ? ` estimate=${p.estimateValue}${p.estimateUnit ? ` ${p.estimateUnit}` : ''}` : '';
+      const actPart = p.actualValue !== null ? ` actual=${p.actualValue}` : '';
+      const tgtPart = p.targetDate ? ` target=${p.targetDate}` : '';
+      console.log(`#${p.id} [${p.closureState}] class=${p.classTag}${estPart}${actPart}${tgtPart}`);
+      console.log(`    ${p.claimText}`);
+      if (p.closureNote) console.log(`    note: ${p.closureNote}`);
+    }
+    return;
+  }
+
+  if (subcommand === 'show') {
+    const idRaw = args[1];
+    if (!idRaw) {
+      console.error('Usage: hippo predict show <id>');
+      process.exit(1);
+    }
+    const id = parseInt(String(idRaw), 10);
+    if (!Number.isFinite(id) || id <= 0) {
+      console.error(`Invalid prediction id: "${idRaw}"`);
+      process.exit(1);
+    }
+    const pred = predictionsModule.loadPredictionById(hippoRoot, tenantId, id);
+    if (!pred) {
+      console.error(`Prediction ${id} not found.`);
+      process.exit(1);
+    }
+    console.log(`Prediction #${pred.id}`);
+    console.log(`  class: ${pred.classTag}`);
+    console.log(`  claim: ${pred.claimText}`);
+    console.log(`  state: ${pred.closureState}`);
+    if (pred.estimateValue !== null) console.log(`  estimate: ${pred.estimateValue}${pred.estimateUnit ? ' ' + pred.estimateUnit : ''}`);
+    if (pred.targetDate) console.log(`  target: ${pred.targetDate}`);
+    if (pred.actualValue !== null) console.log(`  actual: ${pred.actualValue}`);
+    if (pred.closedAt) console.log(`  closed: ${pred.closedAt}`);
+    if (pred.closureNote) console.log(`  note: ${pred.closureNote}`);
+    if (pred.memoryId) console.log(`  memory: ${pred.memoryId}`);
+    console.log(`  created: ${pred.createdAt}`);
+    return;
+  }
+
+  // Default subcommand: create. args[0] is the claim text.
+  const claimText = subcommand;
+  if (!claimText) {
+    console.error('Usage: hippo predict "<claim>" --class <c> [--estimate <v>] [--unit <u>] [--target <YYYY-MM-DD>]');
+    console.error('       hippo predict close <id> --state <closed|closed-unknown> [--actual <v>] [--note "..."]');
+    console.error('       hippo predict list [--class X] [--status open|closed|closed-unknown|all] [--limit N]');
+    console.error('       hippo predict show <id>');
+    process.exit(1);
+  }
+  const classTagRaw = flags['class'];
+  if (typeof classTagRaw !== 'string' || !classTagRaw.trim()) {
+    console.error('--class is required for prediction creation.');
+    process.exit(1);
+  }
+  const classTag = classTagRaw.trim();
+  const estimateRaw = flags['estimate'];
+  const estimateValue = estimateRaw !== undefined ? Number(estimateRaw) : undefined;
+  if (estimateRaw !== undefined && !Number.isFinite(estimateValue)) {
+    console.error(`Invalid --estimate: "${estimateRaw}". Must be a number.`);
+    process.exit(1);
+  }
+  const unitRaw = flags['unit'];
+  const estimateUnit = typeof unitRaw === 'string' ? unitRaw : undefined;
+  const targetRaw = flags['target'];
+  const targetDate = typeof targetRaw === 'string' ? targetRaw : undefined;
+
+  const created = predictionsModule.savePrediction(hippoRoot, tenantId, {
+    classTag,
+    claimText,
+    estimateValue,
+    estimateUnit,
+    targetDate,
+  });
+  console.log(`Prediction recorded: #${created.id} class=${created.classTag}`);
+  if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
+}
+
 function cmdCurrent(
   hippoRoot: string,
   args: string[],
@@ -4844,6 +5021,8 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'summary_marked_dirty', // v0.30 / E1 — lockstep with AuditOp union + server.ts VALID_AUDIT_OPS (v1.11.5 CRIT A institutional rule)
   'summary_marked_clean', // v0.30 / E3 — buildDag post-link clean op; lockstep
   'summary_rebuilt',      // v0.30 / E3 — sleep-cycle rebuild op; lockstep
+  'predict_create',       // v0.31 / E2 prediction first-class object — emitted by savePrediction
+  'predict_close',        // v0.31 / E2 — emitted by closePrediction
 ]);
 
 function formatAuditRow(ev: AuditEvent): string {
@@ -6107,6 +6286,10 @@ async function main(): Promise<void> {
 
     case 'handoff':
       cmdHandoff(hippoRoot, args, flags);
+      break;
+
+    case 'predict':
+      cmdPredict(hippoRoot, args, flags);
       break;
 
     case 'current':

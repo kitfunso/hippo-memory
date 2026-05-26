@@ -29,6 +29,15 @@ import {
 } from './api.js';
 import type { MemoryKind } from './memory.js';
 import type { AuditOp } from './audit.js';
+import {
+  savePrediction,
+  closePrediction,
+  loadPredictionById,
+  loadPredictionsByClass,
+  loadOpenPredictions,
+  VALID_CLOSURE_STATES,
+  type ClosureState,
+} from './predictions.js';
 import { handleMcpRequest, type McpRequest } from './mcp/server.js';
 import { verifySlackSignature } from './connectors/slack/signature.js';
 import { isSlackEventEnvelope, isSlackMessageEvent } from './connectors/slack/types.js';
@@ -83,6 +92,8 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'summary_marked_dirty', // v0.30 / E1 — lockstep with AuditOp union + cli.ts VALID_AUDIT_OPS (v1.11.5 CRIT A institutional rule)
   'summary_marked_clean', // v0.30 / E3 — buildDag post-link clean op; lockstep
   'summary_rebuilt',      // v0.30 / E3 — sleep-cycle rebuild op; lockstep
+  'predict_create',       // v0.31 / E2 prediction first-class object — emitted by savePrediction
+  'predict_close',        // v0.31 / E2 — emitted by closePrediction
 ]);
 
 // Cap on GET /v1/audit?limit=. Matches docs/api.md (when written) and is large
@@ -970,6 +981,161 @@ async function handleRequest(
       : ctx;
     const result = auditList(effectiveCtx, { op, since, limit });
     sendJson(res, 200, result);
+    return;
+  }
+
+  // ── E2 prediction first-class object (v0.31) ──
+  // docs/plans/2026-05-26-e2-prediction-object.md
+  //
+  // 4 routes: POST /v1/predictions (create), GET /v1/predictions (list),
+  // GET /v1/predictions/:id (show), POST /v1/predictions/:id/close (close).
+  // All Bearer-authed + tenant-scoped via buildContextWithAuth. closure_state
+  // validated against VALID_CLOSURE_STATES (3 states). DoS caps on claim
+  // (4096 chars) + closureNote (2048 chars) per v1.11.4 pattern.
+
+  if (method === 'POST' && path === '/v1/predictions') {
+    const body = await parseJsonBody(req);
+    const claim = body['claim'];
+    if (typeof claim !== 'string' || claim.length === 0) {
+      throw new HttpError(400, 'claim is required (non-empty string)');
+    }
+    if (claim.length > 4096) {
+      throw new HttpError(400, 'claim exceeds 4096-character cap');
+    }
+    const classTag = body['classTag'];
+    if (typeof classTag !== 'string' || classTag.length === 0) {
+      throw new HttpError(400, 'classTag is required (non-empty string)');
+    }
+    const estimate = body['estimate'];
+    let estimateValue: number | undefined;
+    if (estimate !== undefined && estimate !== null) {
+      if (typeof estimate !== 'number' || !Number.isFinite(estimate)) {
+        throw new HttpError(400, 'estimate must be a finite number');
+      }
+      estimateValue = estimate;
+    }
+    const unit = body['unit'];
+    let estimateUnit: string | undefined;
+    if (unit !== undefined && unit !== null) {
+      if (typeof unit !== 'string') {
+        throw new HttpError(400, 'unit must be a string');
+      }
+      estimateUnit = unit;
+    }
+    const targetDate = body['targetDate'];
+    let targetDateValue: string | undefined;
+    if (targetDate !== undefined && targetDate !== null) {
+      if (typeof targetDate !== 'string') {
+        throw new HttpError(400, 'targetDate must be an ISO date string');
+      }
+      targetDateValue = targetDate;
+    }
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const prediction = savePrediction(opts.hippoRoot, ctx.tenantId, {
+      classTag,
+      claimText: claim,
+      estimateValue,
+      estimateUnit,
+      targetDate: targetDateValue,
+    }, ctx.actor.subject);
+    sendJson(res, 201, { prediction });
+    return;
+  }
+
+  if (method === 'GET' && path === '/v1/predictions') {
+    const classTag = query.get('class') ?? undefined;
+    const status = query.get('status') ?? 'all';
+    const limitRaw = query.get('limit');
+    let limit = 100;
+    if (limitRaw !== null) {
+      limit = Number(limitRaw);
+      if (!Number.isFinite(limit) || limit <= 0 || limit > 1000) {
+        throw new HttpError(400, 'limit must be a positive integer <= 1000');
+      }
+    }
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    let predictions;
+    if (status === 'all') {
+      if (classTag) {
+        predictions = loadPredictionsByClass(opts.hippoRoot, ctx.tenantId, classTag, { limit });
+      } else {
+        predictions = loadOpenPredictions(opts.hippoRoot, ctx.tenantId, { limit });
+      }
+    } else if (status === 'open') {
+      predictions = loadOpenPredictions(opts.hippoRoot, ctx.tenantId, {
+        classTag: classTag || undefined,
+        limit,
+      });
+    } else {
+      if (!VALID_CLOSURE_STATES.has(status as ClosureState)) {
+        throw new HttpError(400, `status must be one of: open | closed | closed-unknown | all (got "${status}")`);
+      }
+      if (!classTag) {
+        throw new HttpError(400, 'status filter (non-open) requires class param');
+      }
+      predictions = loadPredictionsByClass(opts.hippoRoot, ctx.tenantId, classTag, {
+        closureState: status as ClosureState,
+        limit,
+      });
+    }
+    sendJson(res, 200, { predictions });
+    return;
+  }
+
+  const predictionByIdMatch = path.match(/^\/v1\/predictions\/(\d+)$/);
+  if (method === 'GET' && predictionByIdMatch) {
+    const id = parseInt(predictionByIdMatch[1], 10);
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const prediction = loadPredictionById(opts.hippoRoot, ctx.tenantId, id);
+    if (!prediction) {
+      throw new HttpError(404, `prediction ${id} not found`);
+    }
+    sendJson(res, 200, { prediction });
+    return;
+  }
+
+  const predictionCloseMatch = path.match(/^\/v1\/predictions\/(\d+)\/close$/);
+  if (method === 'POST' && predictionCloseMatch) {
+    const id = parseInt(predictionCloseMatch[1], 10);
+    const body = await parseJsonBody(req);
+    const state = body['state'];
+    if (typeof state !== 'string' || !VALID_CLOSURE_STATES.has(state as ClosureState) || state === 'open') {
+      throw new HttpError(400, 'state is required and must be one of: closed | closed-unknown');
+    }
+    const actual = body['actual'];
+    let actualValue: number | undefined;
+    if (actual !== undefined && actual !== null) {
+      if (typeof actual !== 'number' || !Number.isFinite(actual)) {
+        throw new HttpError(400, 'actual must be a finite number');
+      }
+      actualValue = actual;
+    }
+    const note = body['note'];
+    let closureNote: string | undefined;
+    if (note !== undefined && note !== null) {
+      if (typeof note !== 'string') {
+        throw new HttpError(400, 'note must be a string');
+      }
+      if (note.length > 2048) {
+        throw new HttpError(400, 'note exceeds 2048-character cap');
+      }
+      closureNote = note;
+    }
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    try {
+      const prediction = closePrediction(opts.hippoRoot, ctx.tenantId, id, {
+        closureState: state as ClosureState,
+        actualValue,
+        closureNote,
+      }, ctx.actor.subject);
+      sendJson(res, 200, { prediction });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) {
+        throw new HttpError(404, msg);
+      }
+      throw e;
+    }
     return;
   }
 
