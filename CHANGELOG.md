@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.13.0 (2026-05-26): Track J bundled release (C5 + E2 + J3 + openclaw hygiene)
 
 ### Added
 
