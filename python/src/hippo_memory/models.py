@@ -28,6 +28,7 @@ __all__ = [
     "RecallEntry",
     "RecallResult",
     "RecallSuppressionSummary",
+    "PlanningFallacyHint",
     "ContextEntry",
     "ContextResult",
     "OutcomeResult",
@@ -145,6 +146,38 @@ class RecallSuppressionSummary(_Base):
     suppressed_by_interference: int = 0
 
 
+class PlanningFallacyHint(_Base):
+    """v0.32 / J3.2 — auto-injected planning-fallacy hint surfaced on
+    RecallResult when the recall query carries a forward-prediction phrase
+    AND the closest matching prediction class has closed historical data.
+
+    Wire shape matches src/api.ts ``PlanningFallacyHint`` (camelCase via
+    ``_Base.alias_generator=to_camel``). Disabled server-side by setting
+    ``HIPPO_AUTODEBIAS=off``.
+    """
+
+    class_tag: str
+    """Verbatim PredictionBaserate.summary, e.g.
+    'Last 5 estimates in class migration-effort averaged 2.10x actual (MAE 1.40).'"""
+    baserate_summary: str
+    # Discriminator for hint origin. Current v1 server emits 'j3.2-auto';
+    # future variants (e.g. 'j3.2-auto-v2', 'j3.3-auto' once embedding
+    # fallback ships) are accepted as plain strings to honour the SDK's
+    # forward-compat promise (see _Base docstring: "server adding new
+    # fields in a future release doesn't break the SDK"). Pydantic
+    # ``extra='allow'`` relaxes unknown FIELDS but does NOT relax Literal
+    # validation, so typing this as Literal would raise ValidationError
+    # mid-recall when a future server tightens the enum. Independent-
+    # review-critic round 1 catch.
+    source: str
+    """Regex match snippet that triggered detection. Lets the calling agent
+    see WHY the hint appeared and self-correct if detection misfires."""
+    detected_phrase: str
+    n_closed: int
+    """Null only when every closed-row in the class had estimate_value=0."""
+    mean_ratio: float | None = None
+
+
 class RecallResult(_Base):
     results: list[RecallEntry]
     total: int | None = None
@@ -155,6 +188,11 @@ class RecallResult(_Base):
     # excluded from results[] and why. Wire alias `suppressionSummary` is
     # generated automatically by _Base.alias_generator=to_camel.
     suppression_summary: RecallSuppressionSummary | None = None
+    # v0.32 / J3.2 — auto-injected reference-class baserate hint when the
+    # query carries a forward-prediction phrase. Absent (None) when env
+    # disabled (HIPPO_AUTODEBIAS=off), no forward-claim detected, no class
+    # resolved, ambiguous tiebreak, or no closed data in resolved class.
+    planning_fallacy_hint: PlanningFallacyHint | None = None
 
 
 # ---------------------------------------------------------------------------

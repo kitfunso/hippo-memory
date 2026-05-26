@@ -68,6 +68,7 @@ import { consolidate } from './consolidate.js';
 import { loadConfig } from './config.js';
 import { deduplicateStore } from './dedupe.js';
 import { computeAmbientState, type AmbientState } from './ambient.js';
+import { computePlanningFallacyHint, type PlanningFallacyHint } from './predictions.js';
 
 /**
  * Actor identity + authorization role for a Context. v1.12.0 A5 v2 sub-1.
@@ -407,6 +408,26 @@ export interface RecallResult {
    * counts.
    */
   suppressionSummary?: RecallSuppressionSummary;
+  /**
+   * v0.32 / J3.2 — auto-injected planning-fallacy hint. When the recall
+   * query carries a forward-prediction phrase ("will take ~3 days", "ship
+   * by Friday", "ETA in 2 weeks") AND the closest matching prediction
+   * class has closed historical data, this carries the base-rate stats so
+   * the calling agent sees its track record at the moment of forecasting
+   * (Lovallo-Kahneman 2003 inside-vs-outside view).
+   *
+   * Populated by `api.recall` itself via `computePlanningFallacyHint`.
+   * Pipeline-invariant: the value depends only on (queryText, tenantId,
+   * predictions table state) — all three are identical regardless of
+   * which downstream search pipeline produces the memory list, so MCP
+   * and CLI both read this field as the single source of truth (unlike
+   * `suppressionSummary` which is per-pipeline).
+   *
+   * Optional in the type so existing test fakes / mocks of RecallResult
+   * remain valid (same pattern as `windowSize?` / `suppressionSummary?`).
+   * Disabled by setting `HIPPO_AUTODEBIAS=off`.
+   */
+  planningFallacyHint?: PlanningFallacyHint;
 }
 
 /**
@@ -852,6 +873,21 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
       filteredEvents.reduce((acc, e) => acc + tokenize(e.content), 0);
   }
 
+  // v0.32 / J3.2 — auto-injection of reference-class baserate when the
+  // query carries a forward-prediction phrase AND the closest matching
+  // class has closed historical data. Pipeline-invariant (queryText-
+  // derived), so MCP and CLI both read this as the single source of
+  // truth instead of recomputing (unlike suppressionSummary which IS
+  // per-pipeline). opts.actor threads through to the inner
+  // computePredictionBaserate call so MCP/HTTP-originated hints attribute
+  // correctly instead of defaulting to 'cli'. Disabled by HIPPO_AUTODEBIAS=off.
+  const planningFallacyHint = computePlanningFallacyHint(
+    ctx.hippoRoot,
+    ctx.tenantId,
+    opts.query,
+    { actor: ctx.actor.subject },
+  );
+
   return {
     results: rankedOut,
     total: totalOut,
@@ -867,6 +903,7 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
       freshTailAdded: freshTailAddedCount,
       suppressedByInterference: 0,
     }),
+    ...(planningFallacyHint ? { planningFallacyHint } : {}),
   };
 }
 

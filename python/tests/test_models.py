@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from hippo_memory import (
     HealthInfo, MemoryEnvelope, RecallEntry, RecallResult,
-    RecallSuppressionSummary,
+    RecallSuppressionSummary, PlanningFallacyHint,
     ContextEntry, ContextResult, OutcomeResult, SleepResult,
     DrillResult, ArchiveResult, SupersedeResult, PromoteResult,
     ForgetResult, AssembleResult, AuthCreated, AuthKey, AuthRevoked,
@@ -226,3 +226,84 @@ def test_recall_result_back_compat_without_suppression_summary():
     assert instance.results[0].id == "mem_a"
     assert instance.total == 1
     assert instance.tokens == 5
+
+
+# ---------------------------------------------------------------------------
+# v0.32 / J3.2 — PlanningFallacyHint round-trips
+# ---------------------------------------------------------------------------
+
+
+def test_planning_fallacy_hint_roundtrip():
+    """Wire shape: camelCase -> snake_case attrs preserved on dump."""
+    _roundtrip(PlanningFallacyHint, {
+        "classTag": "migration-effort",
+        "baserateSummary": "Last 3 estimates in class migration-effort averaged 2.00x actual (MAE 2.00).",
+        "source": "j3.2-auto",
+        "detectedPhrase": "will take",
+        "nClosed": 3,
+        "meanRatio": 2.0,
+    })
+
+
+def test_planning_fallacy_hint_mean_ratio_null_allowed():
+    """meanRatio is None when all closed rows had estimate_value=0 (no ratio)."""
+    hint = PlanningFallacyHint.model_validate({
+        "classTag": "zero-estimates",
+        "baserateSummary": "Last 1 estimate in class zero-estimates no ratio-eligible rows (all estimates were 0) (MAE 3.00).",
+        "source": "j3.2-auto",
+        "detectedPhrase": "estimate 0",
+        "nClosed": 1,
+        "meanRatio": None,
+    })
+    assert hint.mean_ratio is None
+    assert hint.n_closed == 1
+
+
+def test_recall_result_with_planning_fallacy_hint():
+    """RecallResult parses planningFallacyHint when present + populates attribute."""
+    payload = {
+        "results": [{"id": "mem_a", "content": "a", "score": 0.9, "tokens": 5}],
+        "total": 1,
+        "tokens": 5,
+        "planningFallacyHint": {
+            "classTag": "migration-effort",
+            "baserateSummary": "Last 3 estimates in class migration-effort averaged 2.00x actual (MAE 2.00).",
+            "source": "j3.2-auto",
+            "detectedPhrase": "will take",
+            "nClosed": 3,
+            "meanRatio": 2.0,
+        },
+    }
+    instance = RecallResult.model_validate(payload)
+    assert instance.planning_fallacy_hint is not None
+    assert instance.planning_fallacy_hint.class_tag == "migration-effort"
+    assert instance.planning_fallacy_hint.source == "j3.2-auto"
+    assert instance.planning_fallacy_hint.n_closed == 3
+    assert instance.planning_fallacy_hint.mean_ratio == 2.0
+
+
+def test_recall_result_without_planning_fallacy_hint_defaults_to_none():
+    """Back-compat: pre-v0.32 server payload (no planningFallacyHint key) still parses."""
+    payload_no_hint = {
+        "results": [{"id": "mem_a", "content": "a", "score": 0.9, "tokens": 5}],
+        "total": 1,
+        "tokens": 5,
+    }
+    instance = RecallResult.model_validate(payload_no_hint)
+    assert instance.planning_fallacy_hint is None
+
+
+def test_planning_fallacy_hint_source_accepts_future_variants():
+    """Forward-compat: PlanningFallacyHint.source is `str`, not `Literal['j3.2-auto']`,
+    so a future server emitting 'j3.2-auto-v2', 'j3.3-auto', etc. does not break
+    existing SDK consumers (independent-review-critic round 1 MED catch)."""
+    for future_source in ("j3.2-auto-v2", "j3.3-auto", "j4-auto", "manual-override"):
+        hint = PlanningFallacyHint.model_validate({
+            "classTag": "migration-effort",
+            "baserateSummary": "Last 3 estimates in class migration-effort averaged 2.00x actual.",
+            "source": future_source,
+            "detectedPhrase": "will take",
+            "nClosed": 3,
+            "meanRatio": 2.0,
+        })
+        assert hint.source == future_source

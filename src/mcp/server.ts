@@ -558,7 +558,29 @@ async function executeTool(
       for (const entry of retrieved) writeEntry(hippoRoot, entry);
       lastRecalledIds.set(resolveClientKey(ctx), retrieved.map((e) => e.id));
 
-      let response = formatMemories(results, hippoRoot);
+      // v0.32 / J3.2 — auto-injection of reference-class baserate hint
+      // when the query carries a forward-prediction phrase. Read from
+      // apiResult.planningFallacyHint (already computed inside api.recall
+      // with actor='mcp' threaded through ctx.actor.subject). The hint is
+      // pipeline-INVARIANT — same (hippoRoot, tenantId, query) inputs
+      // produce the same hint regardless of which downstream search
+      // pipeline (api.recall band vs physics/hybrid) renders the memory
+      // list, so re-computing here would double the audit emission for
+      // identical telemetry. C5 per-pipeline rule does NOT apply here
+      // because the hint depends on queryText, not on the matched memory
+      // set. Prepend BEFORE the memory list so the agent sees it first.
+      let response = '';
+      if (apiResult.planningFallacyHint) {
+        const h = apiResult.planningFallacyHint;
+        const safePhrase = JSON.stringify(h.detectedPhrase);
+        response =
+          `## Planning fallacy hint\n` +
+          `Class: ${h.classTag}\n` +
+          `${h.baserateSummary}\n` +
+          `(detected: ${safePhrase})\n` +
+          `\n---\n\n`;
+      }
+      response += formatMemories(results, hippoRoot);
 
       // v1.6.3 codex P2 fix. The physics/hybrid scorer drives the primary
       // ranked block above, so user-visible ordering is preserved. But

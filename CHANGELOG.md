@@ -1,5 +1,44 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **J3.2 auto-injection of planning-fallacy hints on recall.** When a
+  recall query contains a forward-prediction phrase (`will take ~3 days`,
+  `ship by Friday`, `ETA in 2 weeks`), hippo automatically resolves the
+  closest matching prediction class via token overlap and surfaces its
+  base-rate stats on the new `planningFallacyHint` field of
+  `RecallResult`. CLI, HTTP, and MCP all carry the hint. Tunable via
+  `HIPPO_AUTODEBIAS=off|regex` (default `regex`). Silent on ambiguous
+  class match (multiple classes tie at best overlap score). Builds on
+  the J3 prediction substrate shipped in v1.13.0.
+  - New CLI render line: `Planning fallacy hint (class: X): <summary>
+    [detected: "..."]` appears above the result list when a hint fires.
+  - New MCP text block: `## Planning fallacy hint` prepended to the
+    `hippo_recall` response when a hint fires.
+  - New HTTP wire-shape: optional `planningFallacyHint` field on the
+    `GET /v1/memories` response body (camelCase per existing convention).
+  - Python SDK: new `PlanningFallacyHint` Pydantic model; `RecallResult`
+    extended with optional `planning_fallacy_hint`.
+  - Three new audit ops: `recall_autodebias_hint` (fires when hint
+    returned), `recall_autodebias_hint_no_class_match` (telemetry for
+    embedding-fallback decision), `recall_autodebias_hint_tiebreak`
+    (telemetry for ambiguous-class queries).
+  - `computePredictionBaserate` gained an optional `emitAudit` flag
+    (default `true`, preserves existing behaviour for the 3 direct
+    callers) so the J3.2 orchestrator can avoid polluting the
+    `predict_baserate` audit channel.
+
+### Fixed
+
+- **Nested openclaw plugin manifests now match root version.**
+  `extensions/openclaw-plugin/package.json` and
+  `extensions/openclaw-plugin/openclaw.plugin.json` were stuck at
+  `1.12.11` from a pre-v1.13.0 drift the prior ship missed.
+  `tests/openclaw-package.test.ts` extended to assert nested parity so
+  the drift cannot recur silently.
+
 ## 1.13.0 (2026-05-26): Track J bundled release (C5 + E2 + J3 + openclaw hygiene)
 
 ### Added
