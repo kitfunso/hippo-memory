@@ -28,9 +28,23 @@
  * `~5 days_ago` from matching, and prevent `ETA` substring matches inside
  * a longer token (e.g. `BETAtesting`).
  */
+// Reused fragment for ALL duration-suffix patterns. Requires a digit + unit
+// so 'will take ownership' / 'ship in Docker' (no time component) don't
+// match. Codex round 2 P2: patterns that allowed verb-only matches fired
+// on every-day non-estimate queries that happened to share a class-token.
+// Accepts `<N> unit` (3 days), `a/an unit` (a week — implicit 1), and
+// `one unit` so natural English forward-claims aren't lost.
+const DURATION_TAIL = String.raw`(?:about|around|~|≈)?\s*(?:\d+|a|an|one)\s*(?:day|week|month|hour|hr|min(?:ute)?|sec(?:ond)?)s?\b`;
+
 const FORWARD_CLAIM_PATTERNS: ReadonlyArray<RegExp> = [
-  /\b(?:will|should|gonna|going\s+to)\s+take\b/i,
-  /\bship(?:ping|s)?\s+(?:by|in)\b/i,
+  // Verb + duration tail. Old pattern `/\b(?:will|should...) take\b/i`
+  // matched `who will take ownership of auth?` because there was no
+  // quantifier requirement. Now requires `<verb> take <N> <unit>`.
+  new RegExp(String.raw`\b(?:will|should|gonna|going\s+to)\s+take\s+${DURATION_TAIL}`, 'i'),
+  // Ship + by/in + duration-or-day. Old pattern `/\bship(?:ping)?\s+(?:by|in)\b/i`
+  // matched `how does this ship in Docker?`. Now requires either a
+  // duration tail OR a literal day-of-week reference.
+  new RegExp(String.raw`\bship(?:ping|s)?\s+(?:by|in)\s+(?:(?:about|around)\s+)?(?:next\s+)?(?:${DURATION_TAIL}|(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b`, 'i'),
   /\bestimate(?:d)?\s+(?:at\s+)?(?:~|≈|about|around)?\s*\d+/i,
   /\b(?:by|in|within)\s+(?:about|around|~)?\s*\d+\s*(?:day|week|month|hour)s?\b/i,
   /\bETA\s*(?:is|:)?\s*\d+/i,
@@ -42,7 +56,9 @@ const FORWARD_CLAIM_PATTERNS: ReadonlyArray<RegExp> = [
   // (malformed) and silently miss the legitimate cases. Codex review
   // round 1 catch.
   /(?<=^|\s)~\s*\d+\s*(?:day|week|month|hour)s?\b/i,
-  /\bshould\s+(?:be|ship|finish|complete|land)\s+(?:by|in|within)\b/i,
+  // Should + verb + duration tail. Same tightening as the leading 'will
+  // take' rule: 'should ship by EOD' must include a quantifier.
+  new RegExp(String.raw`\bshould\s+(?:be|ship|finish|complete|land)\s+(?:by|in|within)\s+(?:(?:about|around)\s+)?(?:next\s+)?(?:${DURATION_TAIL}|(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b`, 'i'),
 ];
 
 /**
@@ -62,6 +78,14 @@ const STOP_WORDS: ReadonlySet<string> = new Set([
   // they don't pollute the classQueryTokens overlap score.
   'take', 'taken', 'takes', 'ship', 'ships', 'finish', 'complete', 'land',
   'eta', 'estimate', 'estimated', 'next', 'about', 'around',
+  // Duration units appear in every forward-claim phrase by design (the
+  // regex set REQUIRES a `<N> <unit>` quantifier after the verb). Letting
+  // them through to class resolution lets a class tag containing 'days'
+  // win or tie on the unit token instead of the domain token. Codex round
+  // 2 P3 catch.
+  'day', 'days', 'week', 'weeks', 'month', 'months',
+  'hour', 'hours', 'hr', 'hrs',
+  'min', 'mins', 'minute', 'minutes', 'sec', 'secs', 'second', 'seconds',
 ]);
 
 export interface ForwardClaimMatch {

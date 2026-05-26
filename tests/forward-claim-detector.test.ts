@@ -110,6 +110,30 @@ describe('detectForwardClaim — negative cases (no false positives)', () => {
   it('returns null for "BETAtesting" — word boundary respected on ETA', () => {
     expect(detectForwardClaim('BETAtesting documentation')).toBeNull();
   });
+
+  // Codex round 2 P2: verb-only matches without a quantifier produced
+  // cry-wolf hints on non-estimate queries. These cases used to match
+  // and produce planning-fallacy hints when the query shared a token
+  // with an existing prediction class.
+  it('returns null for "who will take ownership of auth?" (no time quantifier)', () => {
+    expect(detectForwardClaim('who will take ownership of auth?')).toBeNull();
+  });
+
+  it('returns null for "how does this ship in Docker?" (ship-in without duration)', () => {
+    expect(detectForwardClaim('how does this ship in Docker?')).toBeNull();
+  });
+
+  it('returns null for "should ship by EOD" (no duration unit)', () => {
+    expect(detectForwardClaim('should ship by EOD')).toBeNull();
+  });
+
+  it('returns null for "ship by close of business" (no duration unit)', () => {
+    expect(detectForwardClaim('ship by close of business')).toBeNull();
+  });
+
+  it('returns null for "estimate ownership transfer" (no digit after estimate)', () => {
+    expect(detectForwardClaim('estimate ownership transfer')).toBeNull();
+  });
 });
 
 describe('detectForwardClaim — token extraction', () => {
@@ -143,5 +167,32 @@ describe('detectForwardClaim — token extraction', () => {
     expect(m).not.toBeNull();
     expect(m!.classQueryTokens).toContain('migration');
     expect(m!.classQueryTokens).toContain('effort');
+  });
+
+  // Codex round 2 P3: duration units leaking into class tokens caused
+  // wrong-class wins / ties when a tenant had a class containing 'days'
+  // or 'weeks'. These tokens MUST drop from class resolution because
+  // every forward-claim regex requires them as the quantifier suffix.
+  it('strips duration units (days, weeks, etc.) from class tokens', () => {
+    const m = detectForwardClaim('migration effort will take 3 days');
+    expect(m).not.toBeNull();
+    expect(m!.classQueryTokens).toContain('migration');
+    expect(m!.classQueryTokens).toContain('effort');
+    expect(m!.classQueryTokens).not.toContain('days');
+    expect(m!.classQueryTokens).not.toContain('day');
+  });
+
+  it('strips week, month, hour, minute units too', () => {
+    const m = detectForwardClaim('auth refactor will take 2 weeks');
+    expect(m).not.toBeNull();
+    expect(m!.classQueryTokens).not.toContain('weeks');
+    expect(m!.classQueryTokens).not.toContain('week');
+  });
+
+  it('strips singular and plural duration units', () => {
+    const m = detectForwardClaim('this should take 1 hour');
+    expect(m).not.toBeNull();
+    expect(m!.classQueryTokens).not.toContain('hour');
+    expect(m!.classQueryTokens).not.toContain('hours');
   });
 });
