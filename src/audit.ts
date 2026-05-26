@@ -144,7 +144,10 @@ export type AuditOp =
   | 'summary_rebuilt' // v0.30 / E3 — emitted by applyRebuildResult on successful sleep-cycle rebuild
   | 'predict_create' // v0.31 / E2 prediction first-class object — emitted by savePrediction
   | 'predict_close' // v0.31 / E2 — emitted by closePrediction
-  | 'predict_baserate'; // v0.31 / J3 — emitted by computePredictionBaserate (read-side; meaningful agent signal worth auditing)
+  | 'predict_baserate' // v0.31 / J3 — emitted by computePredictionBaserate (read-side; meaningful agent signal worth auditing)
+  | 'recall_autodebias_hint' // v0.32 / J3.2 — emitted by computePlanningFallacyHint on success (forward-claim detected, class resolved, hint returned)
+  | 'recall_autodebias_hint_no_class_match' // v0.32 / J3.2 — telemetry: forward-claim detected, no class scored >= 1 (drives J3.3 embedding-fallback decision)
+  | 'recall_autodebias_hint_tiebreak'; // v0.32 / J3.2 — telemetry: forward-claim detected, >=2 classes tied at best overlap (silent to caller)
 
 export interface AppendAuditOpts {
   tenantId: string;

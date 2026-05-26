@@ -96,6 +96,9 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'predict_create',       // v0.31 / E2 prediction first-class object — emitted by savePrediction
   'predict_close',        // v0.31 / E2 — emitted by closePrediction
   'predict_baserate',     // v0.31 / J3 — emitted by computePredictionBaserate
+  'recall_autodebias_hint',                   // v0.32 / J3.2 — emitted by computePlanningFallacyHint on success
+  'recall_autodebias_hint_no_class_match',    // v0.32 / J3.2 — telemetry: forward-claim, no class scored
+  'recall_autodebias_hint_tiebreak',          // v0.32 / J3.2 — telemetry: forward-claim, >=2 classes tied
 ]);
 
 // Cap on GET /v1/audit?limit=. Matches docs/api.md (when written) and is large

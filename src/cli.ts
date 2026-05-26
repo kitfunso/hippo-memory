@@ -159,6 +159,7 @@ import { buildProvenanceCoverage } from './provenance-coverage.js';
 import { buildCorrectionLatency } from './correction-latency.js';
 import * as api from './api.js';
 import * as predictionsModule from './predictions.js';
+import { computePlanningFallacyHint } from './predictions.js';
 import * as client from './client.js';
 import { detectServer, removePidfileIfOwned, type ServerInfo } from './server-detect.js';
 import { resolveTenantId } from './tenant.js';
@@ -1212,6 +1213,22 @@ async function cmdRecall(
     suppressedByInterference: 0,
   });
 
+  // v0.32 / J3.2 — auto-injection of reference-class baserate when the
+  // CLI query carries a forward-prediction phrase AND a class matches.
+  // cmdRecall runs its own pipeline (doesn't go through api.recall for
+  // the memory list), so it computes the hint here. The hint VALUE is
+  // pipeline-invariant — same (hippoRoot, tenantId, query) inputs would
+  // produce the same hint in api.recall — but the audit emission is
+  // pipeline-local (one audit row per actual call, actor='cli' here).
+  // computePlanningFallacyHint short-circuits BEFORE the regex gate
+  // when HIPPO_AUTODEBIAS=off so the no-match path is effectively free.
+  const cmdPlanningFallacyHint = computePlanningFallacyHint(
+    hippoRoot,
+    tenantId,
+    query,
+    { actor: 'cli' },
+  );
+
   // A5 audit: emit one 'recall' event per query, capturing the (truncated)
   // query text and the post-filter result count. Tenant resolved by emitCliAudit.
   // Emit before the early-empty return so zero-result recalls are still logged.
@@ -1376,6 +1393,7 @@ async function cmdRecall(
       results: output,
       total: output.length,
       suppressionSummary: cmdSuppressionSummary,
+      ...(cmdPlanningFallacyHint ? { planningFallacyHint: cmdPlanningFallacyHint } : {}),
     };
     if (includeContinuity) {
       jsonOut.continuity = {
@@ -1394,6 +1412,19 @@ async function cmdRecall(
     if (activeSnapshot) printActiveTaskSnapshot(activeSnapshot);
     if (sessionHandoff) printHandoff(sessionHandoff);
     if (recentSessionEvents.length > 0) printSessionEvents(recentSessionEvents);
+  }
+  // v0.32 / J3.2 — render planning-fallacy hint ABOVE the result list so
+  // the agent sees its track record before scrolling. Hint absent (env
+  // disabled or no forward-claim match) is silent. detectedPhrase is
+  // sanitised against control chars and ASCII quotes via JSON.stringify
+  // to head off rendering ambiguity when a regex match contains quotes
+  // or parens (plan-eng-critic round 2 LOW).
+  if (cmdPlanningFallacyHint) {
+    const safePhrase = JSON.stringify(cmdPlanningFallacyHint.detectedPhrase);
+    console.log(
+      `Planning fallacy hint (class: ${cmdPlanningFallacyHint.classTag}): ${cmdPlanningFallacyHint.baserateSummary} [detected: ${safePhrase}]`,
+    );
+    console.log();
   }
   console.log(`Found ${results.length} memories (${totalTokens} tokens) for: "${query}"\n`);
 
@@ -5053,6 +5084,9 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'predict_create',       // v0.31 / E2 prediction first-class object — emitted by savePrediction
   'predict_close',        // v0.31 / E2 — emitted by closePrediction
   'predict_baserate',     // v0.31 / J3 — emitted by computePredictionBaserate
+  'recall_autodebias_hint',                   // v0.32 / J3.2 — emitted by computePlanningFallacyHint on success
+  'recall_autodebias_hint_no_class_match',    // v0.32 / J3.2 — telemetry: forward-claim, no class scored
+  'recall_autodebias_hint_tiebreak',          // v0.32 / J3.2 — telemetry: forward-claim, >=2 classes tied
 ]);
 
 function formatAuditRow(ev: AuditEvent): string {

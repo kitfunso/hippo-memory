@@ -17,7 +17,7 @@ detail; tighter types can land in v0.2 once usage patterns surface.
 """
 
 from __future__ import annotations
-from typing import Any
+from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
@@ -28,6 +28,7 @@ __all__ = [
     "RecallEntry",
     "RecallResult",
     "RecallSuppressionSummary",
+    "PlanningFallacyHint",
     "ContextEntry",
     "ContextResult",
     "OutcomeResult",
@@ -145,6 +146,29 @@ class RecallSuppressionSummary(_Base):
     suppressed_by_interference: int = 0
 
 
+class PlanningFallacyHint(_Base):
+    """v0.32 / J3.2 — auto-injected planning-fallacy hint surfaced on
+    RecallResult when the recall query carries a forward-prediction phrase
+    AND the closest matching prediction class has closed historical data.
+
+    Wire shape matches src/api.ts ``PlanningFallacyHint`` (camelCase via
+    ``_Base.alias_generator=to_camel``). Disabled server-side by setting
+    ``HIPPO_AUTODEBIAS=off``.
+    """
+
+    class_tag: str
+    """Verbatim PredictionBaserate.summary, e.g.
+    'Last 5 estimates in class migration-effort averaged 2.10x actual (MAE 1.40).'"""
+    baserate_summary: str
+    source: Literal["j3.2-auto"]
+    """Regex match snippet that triggered detection. Lets the calling agent
+    see WHY the hint appeared and self-correct if detection misfires."""
+    detected_phrase: str
+    n_closed: int
+    """Null only when every closed-row in the class had estimate_value=0."""
+    mean_ratio: float | None = None
+
+
 class RecallResult(_Base):
     results: list[RecallEntry]
     total: int | None = None
@@ -155,6 +179,11 @@ class RecallResult(_Base):
     # excluded from results[] and why. Wire alias `suppressionSummary` is
     # generated automatically by _Base.alias_generator=to_camel.
     suppression_summary: RecallSuppressionSummary | None = None
+    # v0.32 / J3.2 — auto-injected reference-class baserate hint when the
+    # query carries a forward-prediction phrase. Absent (None) when env
+    # disabled (HIPPO_AUTODEBIAS=off), no forward-claim detected, no class
+    # resolved, ambiguous tiebreak, or no closed data in resolved class.
+    planning_fallacy_hint: PlanningFallacyHint | None = None
 
 
 # ---------------------------------------------------------------------------
