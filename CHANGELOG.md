@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.13.1 (2026-05-26): J3.2 auto-injection of planning-fallacy hints on recall
 
 ### Added
 
