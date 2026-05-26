@@ -38,6 +38,7 @@ from hippo_memory.models import (
     AuthRevoked,
     AuditEvent,
     Prediction,
+    PredictionBaserate,
     HippoError,
 )
 
@@ -451,3 +452,22 @@ class Hippo:
         """GET /v1/predictions/:id. Fetch a single prediction by id."""
         data = await self._request("GET", f"/v1/predictions/{prediction_id}")
         return Prediction.model_validate(data["prediction"])
+
+    async def get_prediction_baserate(self, class_tag: str) -> PredictionBaserate:
+        """GET /v1/predictions/stats?class=X. J3 reference-class /
+        planning-fallacy detector.
+
+        Returns base-rate stats for closed predictions in the class:
+        count, mean estimate, mean actual, mean ratio, median ratio, MAE,
+        plus a human-readable summary. ``n_closed = 0`` indicates no
+        closed predictions yet; numeric fields will be ``None`` in that
+        case and ``summary`` will be empty.
+
+        Use when you're about to make a forward-looking claim (effort
+        estimate, rollout risk, deadline) to anchor on your track record
+        rather than the inside view. Lovallo-Kahneman (2003) inside-vs-
+        outside view.
+        """
+        params: dict[str, Any] = {"class": class_tag}
+        data = await self._request("GET", "/v1/predictions/stats", params=params)
+        return PredictionBaserate.model_validate(data["baserate"])

@@ -51,6 +51,7 @@ from hippo_memory.models import (
     AuthRevoked,
     AuditEvent,
     Prediction,
+    PredictionBaserate,
     HippoError,
 )
 
@@ -79,6 +80,7 @@ __all__ = [
     "AuthRevoked",
     "AuditEvent",
     "Prediction",
+    "PredictionBaserate",
     "HippoError",
     "__version__",
 ]

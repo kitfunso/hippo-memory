@@ -4,6 +4,37 @@
 
 ### Added
 
+- **J3 reference-class / planning-fallacy detector** (Track J [next] from
+  ROADMAP-RESEARCH.md L542). Reads from the E2 predictions table (shipped
+  earlier this release cycle) and computes per-class base-rate stats so
+  the calling agent can anchor on its past track record rather than the
+  inside view (Lovallo-Kahneman 2003). Reactive in v1 (agent calls
+  explicitly via MCP / CLI / HTTP / SDK); auto-injection on recall is a
+  future episode. Surfaces:
+  - CLI: `hippo predict baserate --class <c>` prints summary + 5 stats.
+  - HTTP: `GET /v1/predictions/stats?class=X` returns
+    `{ baserate: PredictionBaserate }` (Bearer-auth + tenant-scoped, 256
+    char class cap).
+  - MCP: new `hippo_predict_baserate` tool with description anchoring the
+    use case ("call when you make a forward-looking claim..."). Returns
+    text-only formatted response.
+  - Python SDK: `Hippo.get_prediction_baserate(class_tag)` async +
+    `HippoSync.get_prediction_baserate(class_tag)` sync mirror. New
+    `PredictionBaserate` Pydantic model.
+  - 1 new audit op `predict_baserate` lockstep across `src/cli.ts` +
+    `src/server.ts` VALID_AUDIT_OPS + `src/audit.ts` AuditOp union per
+    v1.11.5 CRIT A institutional rule. Emitted INSIDE
+    `computePredictionBaserate` (single source of truth, no caller-site
+    drift; folds plan-eng-critic round-1 HIGH advisory).
+  - `PredictionBaserate` shape: `{ classTag, nClosed, nRatioEligible,
+    meanEstimate?, meanActual?, meanRatio?, p50Ratio?, mae?, summary }`.
+    Estimate=0 rows count in `nClosed` + MAE but excluded from ratio calc
+    (avoids div-by-zero); `nRatioEligible` exposes the subset for
+    consumer transparency.
+  - Edge cases: `nClosed=0` returns null stats + empty summary;
+    `closed-unknown` predictions excluded (no actual to compare);
+    cross-tenant queries return empty. All covered by 8 store + 4 HTTP +
+    3 MCP + 3 Python tests.
 - **E2 prediction first-class object** (E2 row from ROADMAP-RESEARCH.md L314,
   Track J pre-req). New canonical `predictions` table (schema v29) for
   ex-ante claims that can be closed against ex-post outcomes. Enables J3

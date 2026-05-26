@@ -143,7 +143,8 @@ export type AuditOp =
   | 'summary_marked_clean' // v0.30 / E3 — emitted by clearSummaryDirtyAfterBuild after buildDag child-link loop
   | 'summary_rebuilt' // v0.30 / E3 — emitted by applyRebuildResult on successful sleep-cycle rebuild
   | 'predict_create' // v0.31 / E2 prediction first-class object — emitted by savePrediction
-  | 'predict_close'; // v0.31 / E2 — emitted by closePrediction
+  | 'predict_close' // v0.31 / E2 — emitted by closePrediction
+  | 'predict_baserate'; // v0.31 / J3 — emitted by computePredictionBaserate (read-side; meaningful agent signal worth auditing)
 
 export interface AppendAuditOpts {
   tenantId: string;

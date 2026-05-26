@@ -35,6 +35,7 @@ import {
   loadPredictionById,
   loadPredictionsByClass,
   loadOpenPredictions,
+  computePredictionBaserate,
   VALID_CLOSURE_STATES,
   type ClosureState,
 } from './predictions.js';
@@ -94,6 +95,7 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'summary_rebuilt',      // v0.30 / E3 — sleep-cycle rebuild op; lockstep
   'predict_create',       // v0.31 / E2 prediction first-class object — emitted by savePrediction
   'predict_close',        // v0.31 / E2 — emitted by closePrediction
+  'predict_baserate',     // v0.31 / J3 — emitted by computePredictionBaserate
 ]);
 
 // Cap on GET /v1/audit?limit=. Matches docs/api.md (when written) and is large
@@ -1079,6 +1081,24 @@ async function handleRequest(
       });
     }
     sendJson(res, 200, { predictions });
+    return;
+  }
+
+  // J3 reference-class / planning-fallacy detector (v0.31).
+  // Order matters: this must match BEFORE /v1/predictions/:id since 'stats'
+  // is not a number — the :id regex requires \d+ so they don't conflict,
+  // but routing this first avoids the dispatch order risk.
+  if (method === 'GET' && path === '/v1/predictions/stats') {
+    const classTag = query.get('class');
+    if (!classTag || classTag.length === 0) {
+      throw new HttpError(400, 'class param is required');
+    }
+    if (classTag.length > 256) {
+      throw new HttpError(400, 'class exceeds 256-character cap');
+    }
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const baserate = computePredictionBaserate(opts.hippoRoot, ctx.tenantId, classTag, ctx.actor.subject);
+    sendJson(res, 200, { baserate });
     return;
   }
 

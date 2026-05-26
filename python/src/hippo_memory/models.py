@@ -43,6 +43,7 @@ __all__ = [
     "AuthRevoked",
     "AuditEvent",
     "Prediction",
+    "PredictionBaserate",
     "HippoError",
 ]
 
@@ -417,6 +418,37 @@ class Prediction(_Base):
     closed_at: str | None = None
     closure_note: str | None = None
     created_at: str
+
+
+# ---------------------------------------------------------------------------
+# v0.31 / J3 — reference-class / planning-fallacy detector
+# (docs/plans/2026-05-26-j3-baserate-detector.md)
+# ---------------------------------------------------------------------------
+
+
+class PredictionBaserate(_Base):
+    """Base-rate stats for closed predictions in a class. Surfaces from
+    `Hippo.get_prediction_baserate(class_tag)` / the `hippo_predict_baserate`
+    MCP tool / `GET /v1/predictions/stats?class=X`.
+
+    J3 (reference-class / planning-fallacy detector) returns this when the
+    agent queries its past track record on forward-looking claims. Lovallo-
+    Kahneman (2003) inside-vs-outside view.
+
+    Numeric fields are None when ``n_closed = 0`` (or ``n_ratio_eligible = 0``
+    for ratio fields). ``summary`` is empty when there are no closed
+    predictions yet; callers should render "no data" messaging.
+    """
+
+    class_tag: str
+    n_closed: int = 0
+    n_ratio_eligible: int = 0
+    mean_estimate: float | None = None
+    mean_actual: float | None = None
+    mean_ratio: float | None = None
+    p50_ratio: float | None = None
+    mae: float | None = None
+    summary: str = ""
 
 
 class HippoError(Exception):

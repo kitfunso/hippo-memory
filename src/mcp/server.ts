@@ -27,6 +27,7 @@ import { loadConfig } from '../config.js';
 import { resolveConfidence } from '../memory.js';
 import { resolveTenantId } from '../tenant.js';
 import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, drillDown as apiDrillDown, assemble as apiAssemble, isPrivateScope, adminActor, buildSuppressionSummary, type Context as ApiContext } from '../api.js';
+import { computePredictionBaserate } from '../predictions.js';
 import { applyGoalStackBoost } from '../goals.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { PACKAGE_VERSION } from '../version.js';
@@ -370,6 +371,21 @@ const TOOLS = [
       properties: {},
     },
   },
+  {
+    name: 'hippo_predict_baserate',
+    description:
+      'J3 reference-class / planning-fallacy detector. Get base-rate stats for closed predictions in a class. Call this when you make a forward-looking claim (effort estimate, rollout risk, deadline) to anchor on the past track record rather than the inside view. Returns count + mean estimate + mean actual + mean ratio + median ratio + MAE + a human-readable summary. Tenant-scoped.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        class_tag: {
+          type: 'string',
+          description: 'Cohort label, e.g. "migration-effort", "rollout-risk", "deadline-week". Must match the class_tag used when the predictions were created via hippo_predict (or `hippo predict ...`).',
+        },
+      },
+      required: ['class_tag'],
+    },
+  },
 ];
 
 // ── Track last recalled IDs for outcome feedback ──
@@ -678,6 +694,29 @@ async function executeTool(
       for (const c of r.children) {
         lines.push(`  [L${c.dagLevel}] ${c.id} - ${c.content}`);
       }
+      return lines.join('\n');
+    }
+
+    case 'hippo_predict_baserate': {
+      // J3 reference-class / planning-fallacy detector. Reads from the E2
+      // predictions table; returns text-only response matching the existing
+      // MCP tool convention (no structured JSON over the wire). Direct call
+      // to computePredictionBaserate; helper opens its own db + emits audit
+      // (single source of truth, no caller-site drift).
+      const classTag = String(args.class_tag || '').trim();
+      if (!classTag) return 'No class_tag provided. Usage: pass class_tag matching a class used in past predictions (e.g. "migration-effort").';
+      const baserate = computePredictionBaserate(hippoRoot, tenantId, classTag, 'mcp');
+      if (baserate.nClosed === 0) {
+        return `No closed predictions in class "${classTag}" yet. Create one via hippo_predict (or 'hippo predict ...' CLI) and close it with hippo_predict_close once the actual outcome is known. Base rates need closed predictions with numeric actual_value to compute.`;
+      }
+      const lines: string[] = [baserate.summary, ''];
+      lines.push(`n_closed:         ${baserate.nClosed}`);
+      lines.push(`n_ratio_eligible: ${baserate.nRatioEligible}`);
+      if (baserate.meanEstimate !== null) lines.push(`mean_estimate:    ${baserate.meanEstimate.toFixed(3)}`);
+      if (baserate.meanActual !== null)   lines.push(`mean_actual:      ${baserate.meanActual.toFixed(3)}`);
+      if (baserate.meanRatio !== null)    lines.push(`mean_ratio:       ${baserate.meanRatio.toFixed(3)}x`);
+      if (baserate.p50Ratio !== null)     lines.push(`p50_ratio:        ${baserate.p50Ratio.toFixed(3)}x`);
+      if (baserate.mae !== null)          lines.push(`mae:              ${baserate.mae.toFixed(3)}`);
       return lines.join('\n');
     }
 

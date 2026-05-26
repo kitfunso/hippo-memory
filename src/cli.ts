@@ -3427,6 +3427,35 @@ function cmdPredict(
     return;
   }
 
+  if (subcommand === 'baserate') {
+    // J3 reference-class / planning-fallacy detector
+    const classTagRaw = flags['class'];
+    if (typeof classTagRaw !== 'string' || !classTagRaw.trim()) {
+      console.error('Usage: hippo predict baserate --class <c>');
+      process.exit(1);
+    }
+    const baserate = predictionsModule.computePredictionBaserate(
+      hippoRoot,
+      tenantId,
+      classTagRaw.trim(),
+    );
+    if (baserate.nClosed === 0) {
+      console.log(`No closed predictions in class "${baserate.classTag}" yet.`);
+      console.log(`  Create one with: hippo predict "<claim>" --class ${baserate.classTag} --estimate N`);
+      console.log(`  Close it later:  hippo predict close <id> --state closed --actual N`);
+      return;
+    }
+    console.log(baserate.summary);
+    console.log(`  n_closed:         ${baserate.nClosed}`);
+    console.log(`  n_ratio_eligible: ${baserate.nRatioEligible}`);
+    if (baserate.meanEstimate !== null) console.log(`  mean_estimate:    ${baserate.meanEstimate.toFixed(3)}`);
+    if (baserate.meanActual !== null)   console.log(`  mean_actual:      ${baserate.meanActual.toFixed(3)}`);
+    if (baserate.meanRatio !== null)    console.log(`  mean_ratio:       ${baserate.meanRatio.toFixed(3)}x`);
+    if (baserate.p50Ratio !== null)     console.log(`  p50_ratio:        ${baserate.p50Ratio.toFixed(3)}x`);
+    if (baserate.mae !== null)          console.log(`  mae:              ${baserate.mae.toFixed(3)}`);
+    return;
+  }
+
   // Default subcommand: create. args[0] is the claim text.
   const claimText = subcommand;
   if (!claimText) {
@@ -5023,6 +5052,7 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'summary_rebuilt',      // v0.30 / E3 — sleep-cycle rebuild op; lockstep
   'predict_create',       // v0.31 / E2 prediction first-class object — emitted by savePrediction
   'predict_close',        // v0.31 / E2 — emitted by closePrediction
+  'predict_baserate',     // v0.31 / J3 — emitted by computePredictionBaserate
 ]);
 
 function formatAuditRow(ev: AuditEvent): string {
