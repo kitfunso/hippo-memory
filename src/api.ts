@@ -392,6 +392,106 @@ export interface RecallResult {
    * reading from `api.recall` can treat it as defined.
    */
   windowSize?: number;
+  /**
+   * v1.12.13 / C5 — WYSIATI cutoff transparency. When present, gives the
+   * calling agent a per-pipeline breakdown of what was excluded from
+   * `results[]` and why. Always populated by `api.recall`, `cmdRecall`, and
+   * the MCP `hippo_recall` handler. Optional in the type for back-compat
+   * with test fakes / mocks (same pattern as `windowSize?`).
+   *
+   * Counters reflect actual filter activity in the pipeline that produced
+   * THIS specific RecallResult. api.recall counts its own filter sites;
+   * cmdRecall counts its (richer) filter sites; MCP counts the physics/
+   * hybrid pipeline's filter sites. Shape is identical across surfaces;
+   * numbers are honest per-path reports, NOT normalised cross-pipeline
+   * counts.
+   */
+  suppressionSummary?: RecallSuppressionSummary;
+}
+
+/**
+ * v1.12.13 / C5 — WYSIATI cutoff transparency (Track C Pineal Gland, C5).
+ *
+ * Surfaces what the recall pipeline excluded from `results[]` so the calling
+ * agent does not treat the cutoff as the full picture (Kahneman's "What You
+ * See Is All There Is" failure mode, TFAS ch. 7). Each counter reflects
+ * filter activity in the pipeline that produced this RecallResult; counts
+ * are honest per-path reports, not normalised cross-pipeline numbers.
+ *
+ * See `buildSuppressionSummary` for the shared construction helper used by
+ * all three pipelines (api.recall, cmdRecall, MCP).
+ */
+export interface RecallSuppressionSummary {
+  /** Total candidates loaded from the store, before any post-load filter or
+   *  limit cut. Per-pipeline source:
+   *  - api.recall: `all.length` immediately after `loadRecallSearchEntries`
+   *  - cmdRecall: candidate count immediately after the initial load
+   *  - MCP physics/hybrid: count of entries passed to physicsSearch/hybridSearch
+   */
+  totalCandidates: number;
+  /** Candidates dropped by any non-budget filter site (pre-rank OR post-rank,
+   *  but NOT the final budget cut). Field name retains the `preRank` label
+   *  for the original framing; semantically: any filter drop that is not the
+   *  final limit slice. Per-pipeline source:
+   *  - api.recall: `all.length - entries.length` (private-scope JS filter + scope-mismatch defense; pre-rank)
+   *  - cmdRecall: SUM of drops from `--as-of`, default-drop of superseded (when `--include-superseded` not set), `--filter-conflicts` (`.filter` drop only), `--outcome` (post-rank), `--layer` (post-rank). `--salience-threshold` HARD drops would also land here; current implementation is soft-rebalance only (logged in `ScoreBreakdown`, not here).
+   *  - MCP physics/hybrid: scope-filter drops at the MCP handler before physicsSearch
+   */
+  droppedPreRank: number;
+  /** Candidates loaded but excluded by the final `limit` slice after scoring.
+   *  Per-pipeline source:
+   *  - api.recall: `entries.length - baseSlice.length`
+   *  - cmdRecall: pre-slice candidate count minus final slice count
+   *  - MCP physics/hybrid: pre-slice minus post-slice at the physics/hybrid limit
+   */
+  droppedByBudget: number;
+  /** Substituted DAG-L2 summaries added back to mitigate overflow.
+   *  Per-pipeline source:
+   *  - api.recall: `substituted.length` after the `summarizeOverflow` block
+   *  - cmdRecall: 0 (CLI does not run summarizeOverflow)
+   *  - MCP physics/hybrid: count of summary rows appended from apiResult.tailOrSummary
+   */
+  summarySubstitutionsAdded: number;
+  /** Fresh-tail `kind='raw'` rows prepended.
+   *  Per-pipeline source:
+   *  - api.recall: `freshRanked.length` when `freshTailCount > 0`; else 0
+   *  - cmdRecall: 0 (CLI does not currently expose fresh-tail)
+   *  - MCP physics/hybrid: count of fresh-tail rows appended from apiResult.tailOrSummary
+   */
+  freshTailAdded: number;
+  /** Placeholder for future B4 vlPFC interference-suppression counts.
+   *  Always 0 in v1.12.13. Populated by future B4-depth or J1-anchoring work
+   *  that reads from the `interference_suppression` table during recall. The
+   *  field is surfaced now so consumers can do
+   *  `.suppressedByInterference > 0` checks without waiting for a wire-
+   *  format bump.
+   */
+  suppressedByInterference: number;
+}
+
+/**
+ * Shared construction helper for `RecallSuppressionSummary`. Used by
+ * `api.recall`, `cmdRecall`, and the MCP `hippo_recall` handler so all three
+ * pipelines produce the same shape without duplicating field-construction
+ * logic. Pass-through identity today; kept as a helper so future field
+ * additions (B4 interference counter wiring, etc.) land at one site.
+ */
+export function buildSuppressionSummary(counts: {
+  totalCandidates: number;
+  droppedPreRank: number;
+  droppedByBudget: number;
+  summarySubstitutionsAdded: number;
+  freshTailAdded: number;
+  suppressedByInterference: number;
+}): RecallSuppressionSummary {
+  return {
+    totalCandidates: counts.totalCandidates,
+    droppedPreRank: counts.droppedPreRank,
+    droppedByBudget: counts.droppedByBudget,
+    summarySubstitutionsAdded: counts.summarySubstitutionsAdded,
+    freshTailAdded: counts.freshTailAdded,
+    suppressedByInterference: counts.suppressedByInterference,
+  };
 }
 
 /**
@@ -468,6 +568,16 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   //
   // Also fixes a latent code smell: pre-v1.7.1 passed `opts.scorerWindow`
   // (raw, possibly undefined) where `windowSize` was intended.
+  // v1.12.13 / C5 — WYSIATI counters. Declared BEFORE the load step so the
+  // assignments at the existing filter sites (load / scope-filter / limit-
+  // slice / substitution / fresh-tail) are after declaration. The return at
+  // end-of-function reads them via buildSuppressionSummary.
+  let totalCandidatesCount = 0;
+  let droppedPreRankCount = 0;
+  let droppedByBudgetCount = 0;
+  let summarySubstitutionsCount = 0;
+  let freshTailAddedCount = 0;
+
   const all = loadRecallSearchEntries(
     ctx.hippoRoot,
     opts.query,
@@ -475,6 +585,9 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
     ctx.tenantId,
     opts.scope,
   );
+  // v1.12.13 / C5 — WYSIATI totalCandidates counter (post tenant + SQL scope
+  // predicate, pre JS scope filter).
+  totalCandidatesCount = all.length;
   let entries: typeof all;
   if (opts.scope !== undefined && opts.scope !== '') {
     // SQL already exact-matched in loadRecallSearchEntries; keep the JS
@@ -488,10 +601,17 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
     // surface private rows to no-scope callers).
     entries = all.filter((e) => !isPrivateScope(e.scope ?? null));
   }
+  // v1.12.13 / C5 — WYSIATI dropped_pre_rank counter (JS scope filter drops
+  // for api.recall; cmdRecall pipeline rolls --outcome/--layer/--as-of/etc.
+  // into the same field per the plan's Task 3 mapping table).
+  droppedPreRankCount = all.length - entries.length;
   // BM25 ordering already comes from loadRecallSearchEntries; cap to `limit`.
   // Score is a placeholder — the physics/hybrid scorers in src/search.ts
   // produce richer breakdowns and will replace this when wired up.
   let baseSlice = entries.slice(0, limit);
+  // v1.12.13 / C5 — WYSIATI dropped_by_budget counter (candidates loaded but
+  // excluded by the final limit slice).
+  droppedByBudgetCount = entries.length - baseSlice.length;
 
   // v1.7.4 -- single db handle for the goal-stack boost AND the audit-event
   // emit below (codex P1: do not open a second short-lived handle for the
@@ -566,6 +686,8 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
       }));
     }
   }
+  // v1.12.13 / C5 — WYSIATI summary_substitutions_added counter.
+  summarySubstitutionsCount = substituted.length;
 
   // v1.7.4 -- baseScored carries the (possibly boosted) per-row scores. When
   // the goal-stack boost did not run, scores are identical to the original
@@ -638,6 +760,9 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
       seenIds.add(m.id);
     }
   }
+  // v1.12.13 / C5 — WYSIATI fresh_tail_added counter. Captures the new rows
+  // prepended (NOT rows already in baseRanked that got tagged isFreshTail).
+  freshTailAddedCount = freshRanked.length;
 
   rankedOut = [...freshRanked, ...baseRanked, ...summaryRanked];
   tokensOut = rankedOut.reduce((acc, r) => acc + Math.ceil(r.content.length / 4), 0);
@@ -727,7 +852,22 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
       filteredEvents.reduce((acc, e) => acc + tokenize(e.content), 0);
   }
 
-  return { results: rankedOut, total: totalOut, tokens: tokensOut, continuity, continuityTokens, windowSize };
+  return {
+    results: rankedOut,
+    total: totalOut,
+    tokens: tokensOut,
+    continuity,
+    continuityTokens,
+    windowSize,
+    suppressionSummary: buildSuppressionSummary({
+      totalCandidates: totalCandidatesCount,
+      droppedPreRank: droppedPreRankCount,
+      droppedByBudget: droppedByBudgetCount,
+      summarySubstitutionsAdded: summarySubstitutionsCount,
+      freshTailAdded: freshTailAddedCount,
+      suppressedByInterference: 0,
+    }),
+  };
 }
 
 // ---------------------------------------------------------------------------

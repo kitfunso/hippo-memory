@@ -216,6 +216,10 @@ Continuous background representation: physics-engine energy + velocity-distribut
 Sub-millisecond pre-LLM classifier. Cosine of query embedding against particle-cluster centroids. Predicts: relevant knowledge present? familiar vs novel? about to repeat known mistake?
 **Effort:** 8d. **Success:** ≥70% accuracy on labeled trace; <1ms p99 latency.
 
+### C5. WYSIATI cutoff transparency [next]
+When `hippo recall --budget N` truncates the candidate set, surface the suppressed-set summary in the response: "showing 5/47 by strength; 38 below decay threshold; 4 suppressed by interference filter." Today the cut is silent and the calling agent treats the cutoff as the full picture (Kahneman, "What You See Is All There Is", TFAS ch. 7). Hippo's lifecycle metadata is uniquely positioned to surface *what was excluded and why* -- a signal no static-store competitor has.
+**Effort:** 1-2d. **Success:** `recall --why` output includes a suppressed-tier breakdown on every truncated recall; integration test asserts the breakdown appears whenever total_candidates > budget; paired tier-1 micro-eval shows agent decision quality non-regression with the breakdown injected.
+
 ---
 
 ## Track D — Hippocampal mechanism foundations (the seven CLS mappings)
@@ -307,6 +311,7 @@ RESEARCH §"Phase 2: operating objects". Each object gets its own table, recall 
 | `skill` | planned | 12d | executable; exports to AGENTS.md / CLAUDE.md |
 | `project_brief` | planned | 8d | repo-scoped; auto-refreshes from receipts |
 | `customer_note` | planned | 6d | scoped to account/customer entity |
+| `prediction` | planned [Track J pre-req] | 6d | ex-ante claim closed against ex-post outcome; enables reference-class forecasting (J3 / planning-fallacy correction) |
 
 ### Phase E3 — graph layer over consolidated state
 
@@ -521,6 +526,46 @@ A spec constraint on E3's relation extraction, surfaced here so E3 is built reco
 **Effort:** folded into E3 design. **Success:** a relation-typing audit shows one relation concept receiving a consistent type across ≥ 3 distinct knowledge domains in the corpus.
 
 **Discipline note (binding).** Track I produces unverifiable speculative claims by design — it collides with `docs/RETRACTION.md`'s "earn persistence / do not assert what you cannot verify." The resolution is quarantine: conjectures are explicitly speculative, never auto-promoted, and must earn their way up through use. Any release framing must say hippo's recombination *surfaces candidate connections*; it does not assert them as facts. This keeps Track I consistent with the retraction discipline rather than exempt from it.
+
+---
+
+## Track J — Cognitive diagnostics (biases-over-memory-state)
+
+Existing agent-memory systems retrieve (D) and store. Track I generates. Track J *flags*: pre-recall and post-recall diagnostics that score the query + current memory state for known cognitive-bias surfaces and emit soft warnings the calling agent can choose to act on. Distinct from the cognitive-biases-in-LLMs literature (anchoring in GPT-4, etc.) which studies the model itself; this is biases over the *memory substrate* the model retrieves against. Hippo's lifecycle metadata (decay state, conflict pointers, retrieval history, schema-fit, sleep-cycle accounting) is the unique signal source -- no other agent-memory system has the substrate to do this.
+
+Inspired by Kahneman's *Thinking, Fast and Slow* (2011) and the Tversky-Kahneman heuristics-and-biases program (1974), but the framing is **biases-over-memory-state** rather than dual-process (which Track C Pineal Gland + B1 ACC already cover via the more rigorous PFC / neuroscience substrate). TFAS vocabulary is not used in user-facing surfaces -- the neuroscience-rigor framing is an explicit moat (RESEARCH §"Strategic positioning"); TFAS is the *concept source*, not the *brand*.
+
+**Differentiator:** adds a fourth verb to the lineage -- Track D retrieves, Track E consolidates, Track I generates, Track J diagnoses. "Memory that notices when the calling agent is about to fool itself" is a categorically different surface than retrieval-quality benchmarks measure.
+
+**Dependency gate (binding):** built on existing PFC plumbing rather than a parallel stack. J3 needs the `prediction` first-class object (E2 row above). J4 needs C4 fast-path landing. J1 / J2 / J5 / J6 / J7 stand alone.
+
+### J3. Reference-class / planning-fallacy detector [next]
+When the agent makes a forward-looking claim ("this will take 2 days", "the change is low-risk", "rollout in 1 week"), hippo automatically surfaces base-rate stats from closed `prediction` objects in the same class: "your last 5 estimates in class `migration-effort` averaged 2.1x actual". Direct application of Lovallo-Kahneman (2003) inside-vs-outside view; no agent-memory competitor tracks ex-ante claim closure against ex-post outcome.
+**Pre-req:** E2 `prediction` object. **Effort:** 6d after pre-req. **Success:** on a 30-task estimation workload, agent-side estimates with J3 active have lower mean absolute error than without; paired Wilcoxon p<0.05.
+
+### J1. Anchoring detector [planned]
+Flag when a query phrase reuses a stale top-1 result from the last N recalls, OR when one memory has been top-result for >N consecutive semantically-distinct queries in a session. Surface as `[anchored_on: mem_xyz]` in `recall --why`. **Effort:** 4d. **Success:** on a synthetic 50-trace test set with planted anchoring sequences, J1 fires at >80% precision and >60% recall vs hand-labeled.
+
+### J2. Availability-bias detector [planned]
+Flag when top-K is dominated by recent entries (>70% in last 24h) on a query class whose historical answers have averaged older. Uses tag-class base rates from `audit_log`. **Effort:** 4d. **Success:** on the LongMemEval temporal-reasoning slice, fires on queries whose correct-answer `created` predates top-K median by >X days at >70% precision.
+
+### J4. Substitution detector [research]
+Detect when an agent's recall query is a heuristic substitute for the harder question being asked. Concretely: query embedding is >cos 0.4 from any cluster centroid but a high-strength fast-path hit exists at a different abstraction -- flag that the agent may be answering an easier related question. **Pre-req:** C4 fast-path. **Effort:** TBD. **Success:** human-labeled accuracy on a 100-query substitution test set >65% precision.
+
+### J5. Loss-aversion calibration [next]
+TFAS empirics: losses loom ~2x larger than equivalent gains. Hippo's current emotional multipliers are error=1.5 / success=1.3 (nearly symmetric, slightly wrong direction). Move default to error=2.0 / success=1.0; expose `HIPPO_LOSS_AVERSION_RATIO` env var for per-domain tuning. Tiny code change; the framing + calibration eval is the contribution. **Effort:** 1d code + 2d eval. **Success:** retrieval-relevance of error-tagged memories at 30d holds at >baseline; success-tagged memory recall does not regress on tier-1 micro-eval.
+
+### J6. Cognitive-load-aware EVC [planned, B1 extension]
+Add `turns_since_last_sleep` as a fatigue scalar in B1's EVC formula. When fatigue > threshold, lower the System-2-escalation threshold (force more deliberate retrieval). TFAS: System 2 over-trusts System 1 under cognitive load; hippo's sleep accounting is the natural fatigue proxy. **Effort:** 3d. **Success:** A/B on a sleep-deprived synthetic workload (no sleep cycle for >20 turns) shows fire-rate non-regression with J6 on; off-baseline shows the expected degradation.
+
+### J7. Peak-end outcome weighting [planned, B2 extension]
+Strength formula today uses cumulative reward ratio. TFAS remembering-self: peak intensity + final state dominate, not average. Add `peak_outcome_magnitude` to `memory_value_association`; weight peak ~equally with cumulative so one critically-correct recall counts heavily without needing many mild successes to average up. **Effort:** 2-3d. **Success:** memories with one critical-positive outcome survive 30d decay; equivalent memories with twenty mild-positive outcomes also survive (within 10%).
+
+### J8. Bias-detector composition matrix [research]
+Do J1-J7 compound or cancel? J1 (anchoring, recurrence-biased) + J2 (availability, recency-biased) can fire on the same query in opposite directions. Documented interaction matrix per pair; recommended default-on combinations. **Effort:** 5d after J1-J7 ship.
+
+### Discipline note (binding)
+J1-J8 emit *soft warnings* the calling agent decides whether to act on; hippo never auto-rewrites a recall result or suppresses a memory based on a bias score. Same quarantine logic as Track I conjectures: surface, don't assert. Detector firing rates are observability-first; precision/recall reported in `recall --why` and the brain observatory dashboard, never silently applied as a filter. This keeps Track J consistent with `docs/RETRACTION.md` discipline.
 
 ---
 

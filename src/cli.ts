@@ -849,6 +849,14 @@ async function cmdRecall(
   let localEntries = loadSearchEntries(hippoRoot, query, undefined, tenantId);
   let globalEntries = isInitialized(globalRoot) ? loadSearchEntries(globalRoot, query, undefined, tenantId) : [];
 
+  // v1.12.13 / C5 — WYSIATI counters. Track filter activity per the plan v3
+  // Task 3 mapping table. dropped_pre_rank is the SUM of all non-budget
+  // filter drops (pre-rank AND post-rank). Search-engine internal drops
+  // (scored-to-zero rows that hybridSearch/physicsSearch returns fewer of)
+  // are NOT counted in v1 — they are part of the rank step, not a filter.
+  const totalCandidatesCountCmd = localEntries.length + globalEntries.length;
+  let droppedPreRankCountCmd = 0;
+
   // Bi-temporal filtering for physics path (hybridSearch handles it internally)
   if (asOf) {
     const filterAsOf = (entries: MemoryEntry[]) => {
@@ -867,11 +875,15 @@ async function cmdRecall(
         return succVf ? new Date(succVf) > asOfDate : true;
       });
     };
+    const beforeAsOf = localEntries.length + globalEntries.length;
     localEntries = filterAsOf(localEntries);
     globalEntries = filterAsOf(globalEntries);
+    droppedPreRankCountCmd += beforeAsOf - (localEntries.length + globalEntries.length);
   } else if (!includeSuperseded) {
+    const beforeSupersededDrop = localEntries.length + globalEntries.length;
     localEntries = localEntries.filter(e => !e.superseded_by);
     globalEntries = globalEntries.filter(e => !e.superseded_by);
+    droppedPreRankCountCmd += beforeSupersededDrop - (localEntries.length + globalEntries.length);
   }
 
   const hasGlobal = globalEntries.length > 0;
@@ -984,7 +996,9 @@ async function cmdRecall(
   // We never infer conflicts from lexical overlap. The v1 salience gate did
   // that and destroyed LoCoMo (0.28 → 0.02). Recorded structure only.
   if (flags['filter-conflicts']) {
+    const beforeFilterConflicts = results.length;
     results = results.filter((r) => !r.entry.superseded_by);
+    droppedPreRankCountCmd += beforeFilterConflicts - results.length;
     const presentIds = new Set(results.map((r) => r.entry.id));
     results = results.map((r) => {
       const peers = r.entry.conflicts_with || [];
@@ -1156,10 +1170,12 @@ async function cmdRecall(
       console.error(`Invalid --outcome: "${outcomeFilter}". Must be one of: ${validOutcomes.join(', ')}.`);
       process.exit(1);
     }
+    const beforeOutcomeFilter = results.length;
     results = results.filter((r) => {
       if (r.entry.layer !== Layer.Trace) return true;
       return r.entry.trace_outcome === outcomeFilter;
     });
+    droppedPreRankCountCmd += beforeOutcomeFilter - results.length;
   }
 
   // --layer filter: strict, drops entries whose layer does not match.
@@ -1170,12 +1186,30 @@ async function cmdRecall(
       console.error(`Invalid --layer: "${layerFilter}". Must be one of: ${validLayers.join(', ')}.`);
       process.exit(1);
     }
+    const beforeLayerFilter = results.length;
     results = results.filter((r) => r.entry.layer === layerFilter);
+    droppedPreRankCountCmd += beforeLayerFilter - results.length;
   }
 
+  // v1.12.13 / C5 — WYSIATI dropped_by_budget counter (final limit cut).
+  let droppedByBudgetCountCmd = 0;
   if (limit < results.length) {
+    droppedByBudgetCountCmd = results.length - limit;
     results = results.slice(0, limit);
   }
+
+  // v1.12.13 / C5 — Build suppressionSummary for cmdRecall pipeline. Surfaced
+  // in --why text output and in the --json JSON output. cmdRecall does not
+  // run the summarizeOverflow path (api.recall does) and does not currently
+  // expose fresh-tail in the CLI, so those two counters are 0 here.
+  const cmdSuppressionSummary = api.buildSuppressionSummary({
+    totalCandidates: totalCandidatesCountCmd,
+    droppedPreRank: droppedPreRankCountCmd,
+    droppedByBudget: droppedByBudgetCountCmd,
+    summarySubstitutionsAdded: 0,
+    freshTailAdded: 0,
+    suppressedByInterference: 0,
+  });
 
   // A5 audit: emit one 'recall' event per query, capturing the (truncated)
   // query text and the post-filter result count. Tenant resolved by emitCliAudit.
@@ -1259,7 +1293,12 @@ async function cmdRecall(
 
   if (results.length === 0) {
     if (asJson) {
-      const out: Record<string, unknown> = { query, results: [], total: 0 };
+      const out: Record<string, unknown> = {
+        query,
+        results: [],
+        total: 0,
+        suppressionSummary: cmdSuppressionSummary,
+      };
       if (includeContinuity) {
         out.continuity = {
           activeSnapshot,
@@ -1330,7 +1369,13 @@ async function cmdRecall(
       }
       return base;
     });
-    const jsonOut: Record<string, unknown> = { query, budget, results: output, total: output.length };
+    const jsonOut: Record<string, unknown> = {
+      query,
+      budget,
+      results: output,
+      total: output.length,
+      suppressionSummary: cmdSuppressionSummary,
+    };
     if (includeContinuity) {
       jsonOut.continuity = {
         activeSnapshot,
@@ -1379,6 +1424,26 @@ async function cmdRecall(
     console.log();
     console.log(e.content);
     console.log();
+  }
+
+  // v1.12.13 / C5 — WYSIATI cutoff transparency in --why text output.
+  // Single-line summary after the result list, emitted only when --why is
+  // set AND at least one counter is non-zero. Skip zero-count clauses to
+  // keep the line tight. The calling agent uses this to spot when the
+  // shown set is a small slice of a much larger candidate pool (Kahneman
+  // "What You See Is All There Is" failure mode).
+  if (showWhy) {
+    const s = cmdSuppressionSummary;
+    const clauses: string[] = [];
+    if (s.droppedByBudget > 0) clauses.push(`${s.droppedByBudget} dropped by limit`);
+    if (s.droppedPreRank > 0) clauses.push(`${s.droppedPreRank} pre-rank filtered`);
+    if (s.summarySubstitutionsAdded > 0) clauses.push(`${s.summarySubstitutionsAdded} summary substitutions added`);
+    if (s.freshTailAdded > 0) clauses.push(`${s.freshTailAdded} fresh-tail added`);
+    if (s.suppressedByInterference > 0) clauses.push(`${s.suppressedByInterference} suppressed by interference`);
+    if (clauses.length > 0) {
+      console.log(`WYSIATI: showing ${results.length}/${s.totalCandidates}; ${clauses.join('; ')}.`);
+      console.log();
+    }
   }
 }
 

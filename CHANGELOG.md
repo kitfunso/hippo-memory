@@ -1,5 +1,61 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **C5 WYSIATI cutoff transparency** (Track C Pineal Gland, C5 [next] from
+  ROADMAP-RESEARCH.md L219). New optional `RecallSuppressionSummary` on
+  `RecallResult` with 6 counters describing what the recall pipeline
+  excluded from `results[]`: `totalCandidates`, `droppedPreRank`,
+  `droppedByBudget`, `summarySubstitutionsAdded`, `freshTailAdded`,
+  `suppressedByInterference` (placeholder for future B4 vlPFC work, always 0
+  in v1.12.13). Populated by all three recall surfaces: `api.recall` (HTTP
+  /v1/memories + Python SDK), `cmdRecall` (CLI), and MCP `hippo_recall`.
+  Each pipeline counts its OWN filter activity (per-path honest reports,
+  not normalised cross-pipeline numbers); shape is identical across all
+  three. CLI surfaces a WYSIATI line in `--why` text output and in JSON
+  output. MCP appends a WYSIATI line to the text response when any
+  counter is non-zero. New shared helper `buildSuppressionSummary` in
+  src/api.ts.
+- **Python SDK**: new `RecallSuppressionSummary` Pydantic model
+  (snake_case Python attributes; camelCase wire format via `_Base` inherited
+  `alias_generator=to_camel`). New optional `suppression_summary` field on
+  the existing `RecallResult` model. Exported from `hippo_memory`.
+
+### Tests
+
+- New `tests/api-recall-suppression-summary.test.ts`: 8 cases covering
+  shape presence, counter semantics, helper round-trip.
+- New `tests/http-recall-suppression-summary.test.ts`: 4 cases covering
+  wire-format parity and back-compat (pre-v1.12.13 payloads still parse).
+- New `tests/mcp-recall-suppression-summary.test.ts`: 3 cases covering the
+  MCP physics/hybrid pipeline parity (proof-of-fix for the plan-eng-critic
+  round 1 CRIT: MCP returns MCP-pipeline counters, not api.recall counters).
+- New cases in `python/tests/test_models.py`: round-trip + back-compat for
+  `RecallSuppressionSummary` and nested-field parse on `RecallResult`.
+
+### Back-compat
+
+- The new field is optional everywhere. Pre-v1.12.13 server payloads
+  (without `suppressionSummary`) still parse cleanly on both the TS
+  `RecallResult` type and the Python SDK Pydantic model.
+
+### Known limitation (v1.12.14 follow-up)
+
+- MCP `suppressionSummary.droppedByBudget` is an UPPER BOUND, not an
+  exact budget-cut count. On the MCP physics/hybrid pipeline, the
+  difference `entries.length - results.length` includes three things
+  conflated: rows hybridSearch/physicsSearch internally dropped because
+  they scored zero (no query match), rows the search engine filtered
+  internally (e.g. superseded), and rows that genuinely didn't fit the
+  `budget` token cap. For no-match or sparse-match MCP queries, this
+  upper bound over-reports budget drops. Independent-review-critic and
+  codex-review-critic both flagged this as non-blocking for v1.12.13;
+  the honest fix needs `hybridSearch`/`physicsSearch` to expose their
+  pre-budget-cut scored count. Tracked as TODO(c5.1) at
+  `src/mcp/server.ts`.
+
 ## 1.12.12 (2026-05-26): bundled E1-E5 DAG live-coupling arc
 
 Bundles 5 episodes of DAG live-coupling into one npm release. Makes the
