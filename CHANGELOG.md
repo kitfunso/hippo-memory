@@ -1,5 +1,92 @@
 # Changelog
 
+## 1.13.5 (2026-05-27): J5 loss-aversion calibration (Track J [next])
+
+### Added
+
+- **`HIPPO_LOSS_AVERSION_RATIO` env var.** Numeric scalar (default 1.0)
+  applied to the `negative` (error-tagged) emotional multiplier at
+  strength-calculation time. Per-domain tuning hook per `ROADMAP-RESEARCH.md`
+  L555. **Valid range: finite numbers >= 0.5.** Module-level lazy cache
+  reads the env once per process lifetime; reset hook
+  `_resetLossAversionRatioCacheForTests` exported for test isolation.
+- **23 new tests** in `tests/emotional-multipliers-j5.test.ts` covering
+  defaults, env scaling, env off, env rejection (below 0.5 floor),
+  permissive parse semantics (whitespace, scientific notation, hex), the
+  negative-only invariant (env does NOT affect positive / critical /
+  neutral multipliers), and the behavioral assertion that v1.13.4-equivalent
+  ratio (0.5) yields strength <= default-ratio (1.0) strength in real recall.
+
+### Changed
+
+- **`EMOTIONAL_MULTIPLIERS` defaults rebalanced per TFAS empirics**
+  (Lovallo-Kahneman 2003: losses ~2x larger than equivalent gains):
+  - `positive`: 1.3 -> **1.0**
+  - `negative`: 1.5 -> **2.0**
+  - `critical`: unchanged at 2.0 (roadmap is silent on critical; literal
+    reading; ranking signal in `consolidate.ts` / `salience.ts` /
+    `ambient.ts` is unchanged because those modules read the valence
+    LABEL not the multiplier value)
+  - `neutral`: unchanged at 1.0
+- Stale comment in `tests/benchmark.test.ts:593` updated from `(1.5x)`
+  to `(2.0x as of v1.13.5 / J5; was 1.5x in v1.13.4 and earlier)`.
+
+### Migration
+
+A 0.5-point shift on `negative` (1.5 -> 2.0) is a 33% boost to
+error-tagged memory strength in the recall ranking. Existing memory
+stores will see error-tagged memories rise in recall position
+post-upgrade. The ambient state vector (`src/ambient.ts:143`) and
+physics particle mass (`src/physics-state.ts:160-225`) both consume
+the dynamic strength output, so existing stores will see modest shifts
+in those derived values too.
+
+Recovery paths:
+
+- `HIPPO_LOSS_AVERSION_RATIO=0.75`: 2.0 x 0.75 = 1.5, matching v1.13.4
+  effective multiplier exactly.
+- `HIPPO_LOSS_AVERSION_RATIO=0.5` (minimum valid): 2.0 x 0.5 = 1.0,
+  collapsing the error multiplier to the neutral baseline (most
+  conservative).
+
+**Values below 0.5 are silently rejected and fall back to ratio=1.0
+(default).** The 0.5 floor exists because at very low ratios the
+negative multiplier becomes small enough that `calculateStrength` can
+fall below `DECAY_THRESHOLD = 0.05` in `src/consolidate.ts:146`, which
+would permanently delete non-pinned error-tagged memories on the next
+`hippo sleep` cycle. The 30-day retrieval-relevance eval gate from the
+J5 roadmap entry defers to natural usage; we cannot validate the
+calibration in-PR.
+
+### Known limitations
+
+- Users wanting LESS loss aversion than v1.13.4 (i.e. ratio < 0.5) are
+  blocked by the floor. A future J5-v2 could add a separate
+  `HIPPO_NEGATIVE_MULTIPLIER` override that bypasses the loss-aversion
+  framing entirely if a real use case emerges.
+- **Pipeline divergence on dynamic runtime tuning (pre-existing
+  architectural gap, surfaced by codex-review-critic round 2 P2-A).**
+  `api.recall` (the HTTP/MCP public path) returns stored entry strength
+  values from disk; the env var only affects strength VALUES that get
+  RECOMPUTED via `calculateStrength`. This means:
+  - **New writes** under v1.13.5 see the env var immediately (calculateStrength
+    runs at createMemory and the result is persisted on the entry).
+  - **Existing memories** see the env var only when their strength gets
+    recomputed (e.g. on next retrieval-strengthening cycle, sleep
+    consolidation, or explicit recompute).
+  - **CLI hybrid/physics recall** (cmdRecall in `src/cli.ts`) DOES call
+    calculateStrength per result and thus reflects the env var dynamically.
+  - **HTTP/MCP recall** returns stored values only.
+
+  Workaround: to force a full re-calibration of an existing store after
+  changing `HIPPO_LOSS_AVERSION_RATIO`, run `hippo sleep` to trigger
+  consolidation, which rewrites strength values. A future J5-v3 could
+  add an opt-in `recompute_strength=true` flag on `RecallOpts` so HTTP
+  callers can request dynamic recomputation per call. Not in scope for
+  v1.13.5: the architectural pattern of "stored strength, retrieval
+  strengthening refresh" predates Track J and changing it has wider
+  implications.
+
 ## 1.13.4 (2026-05-27): J3.2 watching variant for silent no-class-match / tiebreak paths
 
 ### Added

@@ -368,7 +368,7 @@ Tag a memory as an error and it gets 2x the half-life automatically.
 hippo remember "deployment failed: forgot to run migrations" --error
 # half_life: 14d instead of 7d
 # emotional_valence: negative
-# strength formula applies 1.5x multiplier
+# strength formula applies 2.0x multiplier (HIPPO_LOSS_AVERSION_RATIO=0.75 to keep v1.13.4 1.5x)
 
 # production incidents don't fade quietly
 ```

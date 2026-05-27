@@ -590,7 +590,8 @@ describe('Decay mechanics', () => {
     const sError = calculateStrength(agedError, now);
     const sNeutral = calculateStrength(agedNeutral, now);
 
-    // Error gets: longer half_life + negative emotional_multiplier (1.5x)
+    // Error gets: longer half_life + negative emotional_multiplier (2.0x as of
+    // v1.13.5 / J5; was 1.5x in v1.13.4 and earlier).
     expect(sError).toBeGreaterThan(sNeutral);
   });
 });
