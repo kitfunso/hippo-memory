@@ -160,6 +160,41 @@ import { buildCorrectionLatency } from './correction-latency.js';
 import * as api from './api.js';
 import * as predictionsModule from './predictions.js';
 import { computePlanningFallacyHint } from './predictions.js';
+import { createHash } from 'node:crypto';
+import {
+  detectAnchoring,
+  hashQueryText,
+  buildSessionKey,
+  getOrCreateRing,
+  appendRecall,
+  snapshotRing,
+  RingBuffer,
+  type AnchoringHint,
+} from './recall-history.js';
+
+// v0.33 / J1 — Module-level per-(tenant, session) recall-history ring map.
+// Each CLI process maintains its OWN Map; no IPC / no cross-process sharing
+// (plan v3 decision: per-pipeline rings, see docs/plans/2026-05-26-j1-anchoring-detector.md).
+//
+// IMPORTANT single-shot CLI limitation (codex round-2 catch): in normal
+// terminal usage each `hippo recall` invocation spawns a fresh Node
+// process, so this Map is recreated empty every time and J1 cannot
+// accumulate history across invocations. CLI J1 only fires in
+// long-running processes (the cmdSleep / consolidate loops, batch
+// scripts that call cmdRecall in-process, or tests). MCP and HTTP
+// pipelines DO accumulate because their host processes are long-lived
+// (hippo serve, MCP server). For CLI users who want per-session
+// anchoring in single-shot mode, the recommendation is to run via
+// `hippo serve` and call HTTP /v1/memories?session_id=... (the HTTP
+// ring persists across calls within the server process). A J1-v1.1
+// follow-up may add SQLite-backed CLI persistence (migration v30
+// recall_history table per the original brainstorm option D).
+const sessionRecallHistoryCli = new Map<string, RingBuffer>();
+
+/** Test-only: reset the module-level recall-history Map. Call from beforeEach. */
+export function __resetSessionRecallHistoryCli(): void {
+  sessionRecallHistoryCli.clear();
+}
 import * as client from './client.js';
 import { detectServer, removePidfileIfOwned, type ServerInfo } from './server-detect.js';
 import { resolveTenantId } from './tenant.js';
@@ -1200,18 +1235,66 @@ async function cmdRecall(
     results = results.slice(0, limit);
   }
 
+  // v0.33 / J1 — CLI per-pipeline anchoring detector. Each pipeline (api.recall,
+  // cmdRecall, MCP) computes its own AnchoringHint via the shared detectAnchoring
+  // helper against its own top-1 + its own per-(tenant, session) ring buffer.
+  // HIPPO_ANCHORING=off short-circuits BEFORE both the ring lookup and the
+  // detect call so disabled tenants pay truly zero work. When sessionId is
+  // absent we emit recall_anchor_skipped_no_session for J1-v2 telemetry.
+  let cmdAnchoringHint: AnchoringHint | null = null;
+  if (process.env.HIPPO_ANCHORING !== 'off') {
+    if (sessionId) {
+      const ringKey = buildSessionKey(tenantId, sessionId);
+      const ring = getOrCreateRing(sessionRecallHistoryCli, ringKey);
+      const queryHash = hashQueryText(query);
+      const topId = results[0]?.entry.id ?? null;
+      cmdAnchoringHint = detectAnchoring(snapshotRing(ring), queryHash, topId);
+      // Append AFTER detect (snapshot was taken before). anchoredOn carries
+      // the memoryId of any hint that fired, feeding the cooldown logic for
+      // the NEXT cmdRecall on this session.
+      appendRecall(ring, queryHash, topId, cmdAnchoringHint?.memoryId);
+    } else {
+      // Telemetry: caller had no sessionId so ring tracking is skipped.
+      // Per the recall-audit convention at api.ts:854, use SHA-256/16
+      // for prompt hashing (NOT hashQueryText which is FNV-1a 32-bit
+      // for recall matching; brute-force trivial for low-entropy
+      // queries). Codex round-1 P1 / round-2 P2 catch.
+      emitCliAudit(hippoRoot, 'recall_anchor_skipped_no_session', undefined, {
+        query_hash: createHash('sha256').update(query).digest('hex').slice(0, 16),
+        query_length: query.length,
+      });
+    }
+  }
+
   // v1.12.13 / C5 — Build suppressionSummary for cmdRecall pipeline. Surfaced
   // in --why text output and in the --json JSON output. cmdRecall does not
   // run the summarizeOverflow path (api.recall does) and does not currently
   // expose fresh-tail in the CLI, so those two counters are 0 here.
+  // v0.33 / J1: suppressedByInterference is bumped by 1 when cmdAnchoringHint
+  // fires with reason='memory_dominance' (the only reason that counts as
+  // interference; query_repeat is a re-ask, not memory competition).
+  const cmdSuppressedByInterference = cmdAnchoringHint?.reason === 'memory_dominance' ? 1 : 0;
   const cmdSuppressionSummary = api.buildSuppressionSummary({
     totalCandidates: totalCandidatesCountCmd,
     droppedPreRank: droppedPreRankCountCmd,
     droppedByBudget: droppedByBudgetCountCmd,
     summarySubstitutionsAdded: 0,
     freshTailAdded: 0,
-    suppressedByInterference: 0,
+    suppressedByInterference: cmdSuppressedByInterference,
   });
+
+  // v0.33 / J1 — emit pipeline-local audit op when a hint fires (lockstep
+  // with api.recall's audit pattern; each pipeline emits for its own hits).
+  if (cmdAnchoringHint?.reason === 'memory_dominance') {
+    emitCliAudit(hippoRoot, 'recall_anchor_detected_memory_dominance', cmdAnchoringHint.memoryId, {
+      memory_id: cmdAnchoringHint.memoryId,
+      query_count: cmdAnchoringHint.queryCount ?? null,
+    });
+  } else if (cmdAnchoringHint?.reason === 'query_repeat') {
+    emitCliAudit(hippoRoot, 'recall_anchor_detected_query_repeat', cmdAnchoringHint.memoryId, {
+      memory_id: cmdAnchoringHint.memoryId,
+    });
+  }
 
   // v0.32 / J3.2 — auto-injection of reference-class baserate when the
   // CLI query carries a forward-prediction phrase AND a class matches.
@@ -1323,6 +1406,7 @@ async function cmdRecall(
         // matches. A forward-claim query that finds no memories STILL
         // produces useful planning-fallacy debias when the class resolves.
         ...(cmdPlanningFallacyHint ? { planningFallacyHint: cmdPlanningFallacyHint } : {}),
+        ...(cmdAnchoringHint ? { anchoringHint: cmdAnchoringHint } : {}),
       };
       if (includeContinuity) {
         out.continuity = {
@@ -1334,6 +1418,13 @@ async function cmdRecall(
       }
       console.log(JSON.stringify(out));
       return;
+    }
+    // v0.33 / J1 — render anchoring hint above planning hint (anchoring
+    // is the stronger cognitive-pull warning so it gets first position).
+    if (cmdAnchoringHint) {
+      console.log(
+        `[anchored_on: ${cmdAnchoringHint.memoryId}] ${cmdAnchoringHint.summary}`,
+      );
     }
     // v0.32 / J3.2 — render hint BEFORE the no-memories message so the
     // calling agent sees its track record even when the query missed
@@ -1412,6 +1503,7 @@ async function cmdRecall(
       total: output.length,
       suppressionSummary: cmdSuppressionSummary,
       ...(cmdPlanningFallacyHint ? { planningFallacyHint: cmdPlanningFallacyHint } : {}),
+      ...(cmdAnchoringHint ? { anchoringHint: cmdAnchoringHint } : {}),
     };
     if (includeContinuity) {
       jsonOut.continuity = {
@@ -1430,6 +1522,16 @@ async function cmdRecall(
     if (activeSnapshot) printActiveTaskSnapshot(activeSnapshot);
     if (sessionHandoff) printHandoff(sessionHandoff);
     if (recentSessionEvents.length > 0) printSessionEvents(recentSessionEvents);
+  }
+  // v0.33 / J1 — render anchoring hint above planning-fallacy hint
+  // (anchoring is the stronger cognitive-pull warning so it gets first
+  // position). Hint absent (env disabled, no sessionId, or no R1/R2)
+  // is silent.
+  if (cmdAnchoringHint) {
+    console.log(
+      `[anchored_on: ${cmdAnchoringHint.memoryId}] ${cmdAnchoringHint.summary}`,
+    );
+    console.log();
   }
   // v0.32 / J3.2 — render planning-fallacy hint ABOVE the result list so
   // the agent sees its track record before scrolling. Hint absent (env
@@ -5105,6 +5207,9 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'recall_autodebias_hint',                   // v0.32 / J3.2 — emitted by computePlanningFallacyHint on success
   'recall_autodebias_hint_no_class_match',    // v0.32 / J3.2 — telemetry: forward-claim, no class scored
   'recall_autodebias_hint_tiebreak',          // v0.32 / J3.2 — telemetry: forward-claim, >=2 classes tied
+  'recall_anchor_detected_query_repeat',      // v0.33 / J1 — emitted by detector on R1 fire
+  'recall_anchor_detected_memory_dominance',  // v0.33 / J1 — emitted by detector on R2 fire
+  'recall_anchor_skipped_no_session',         // v0.33 / J1 — telemetry: no sessionId, ring skipped
 ]);
 
 function formatAuditRow(ev: AuditEvent): string {

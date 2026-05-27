@@ -69,6 +69,12 @@ import { loadConfig } from './config.js';
 import { deduplicateStore } from './dedupe.js';
 import { computeAmbientState, type AmbientState } from './ambient.js';
 import { computePlanningFallacyHint, type PlanningFallacyHint } from './predictions.js';
+import {
+  detectAnchoring,
+  hashQueryText,
+  type AnchoringHint,
+  type RecallHistorySnapshot,
+} from './recall-history.js';
 
 /**
  * Actor identity + authorization role for a Context. v1.12.0 A5 v2 sub-1.
@@ -331,6 +337,21 @@ export interface RecallOpts {
    * stack interfering.
    */
   goalTag?: string;
+  /**
+   * v0.33 / J1 anchoring detector. Caller-supplied snapshot of the per-
+   * (tenant, session) recall ring. When present, api.recall computes
+   * `RecallResult.anchoringHint` against this snapshot + the just-computed
+   * top-1. When undefined (default), no anchoring detection runs on the
+   * api.recall surface — but a calling pipeline (CLI cmdRecall, MCP
+   * hippo_recall) MAY compute its own hint via the shared
+   * `detectAnchoring()` helper against its own ring + top-1.
+   *
+   * Pure read: api.recall NEVER mutates the snapshot or any caller-side
+   * Map. Caller is responsible for appending to its own ring after the
+   * recall (passing the resulting hint's memoryId as `anchoredOn` to feed
+   * the cooldown logic on the NEXT recall).
+   */
+  recallHistory?: RecallHistorySnapshot;
 }
 
 export interface ContinuityBlock {
@@ -428,6 +449,24 @@ export interface RecallResult {
    * Disabled by setting `HIPPO_AUTODEBIAS=off`.
    */
   planningFallacyHint?: PlanningFallacyHint;
+  /**
+   * v0.33 / J1 (v1.13.2) — recall-recurrence anchoring hint. Populated
+   * when api.recall's `opts.recallHistory` snapshot + the just-computed
+   * top-1 satisfy R1 (query_repeat) or R2 (memory_dominance).
+   *
+   * Per-pipeline detection: each pipeline (api.recall, cmdRecall, MCP)
+   * computes its OWN hint against its OWN top-1. This field reflects
+   * api.recall's compute ONLY. On CLI-routed call paths cmdRecall does
+   * NOT thread its ring snapshot through `opts.recallHistory`, so this
+   * field is null on CLI-routed calls even when CLI's own hint fires
+   * (the user-visible hint there comes from cmdRecall's parallel
+   * compute, surfaced via the CLI render path + cmdSuppressionSummary).
+   * Non-null on direct SDK / HTTP-routed invocations where the caller
+   * threads its own ring snapshot.
+   *
+   * Disabled by setting `HIPPO_ANCHORING=off`.
+   */
+  anchoringHint?: AnchoringHint;
 }
 
 /**
@@ -480,12 +519,20 @@ export interface RecallSuppressionSummary {
    *  - MCP physics/hybrid: count of fresh-tail rows appended from apiResult.tailOrSummary
    */
   freshTailAdded: number;
-  /** Placeholder for future B4 vlPFC interference-suppression counts.
-   *  Always 0 in v1.12.13. Populated by future B4-depth or J1-anchoring work
-   *  that reads from the `interference_suppression` table during recall. The
-   *  field is surfaced now so consumers can do
-   *  `.suppressedByInterference > 0` checks without waiting for a wire-
-   *  format bump.
+  /** Counter of memories suppressed by detected interference patterns.
+   *  v0.33 / J1 (v1.13.2): incremented by 1 PER PIPELINE when that
+   *  pipeline's own R2 memory_dominance verdict fires (via the J1
+   *  anchoring detector — see `detectAnchoring()` in src/recall-history.ts).
+   *  Each pipeline (api.recall, cmdRecall, MCP physics/hybrid) bumps its
+   *  OWN suppressionSummary independently because each runs its own
+   *  detector against its own top-1 + its own per-(tenant, session) ring
+   *  buffer. The number reflects this-pipeline interference only; not a
+   *  cross-pipeline aggregate.
+   *
+   *  Future B4-depth work may add additional sources (e.g. vlPFC inhibition
+   *  scores). No `interference_suppression` table is built — the v1.12.13
+   *  doc that referenced one was speculative; J1 uses caller-side in-memory
+   *  rings instead.
    */
   suppressedByInterference: number;
 }
@@ -888,6 +935,54 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
     { actor: ctx.actor.subject },
   );
 
+  // v0.33 / J1 (v1.13.2) — recall-recurrence anchoring detection.
+  // Uses opts.recallHistory (caller-supplied snapshot) + this pipeline's
+  // own top-1 from rankedOut[0]. PURE read — does NOT mutate the snapshot
+  // or any caller-side Map. Disabled by HIPPO_ANCHORING=off (which gates
+  // even the detectAnchoring call so disabled tenants pay zero work on
+  // this surface). On CLI-routed call paths opts.recallHistory is
+  // undefined because cmdRecall computes its own hint separately; the
+  // detect call returns null and api.recall's anchoringHint stays absent.
+  let anchoringHint: AnchoringHint | null = null;
+  let suppressedByInterferenceCount = 0;
+  if (process.env.HIPPO_ANCHORING !== 'off' && opts.recallHistory) {
+    const queryHash = hashQueryText(opts.query);
+    const topMemoryId = rankedOut[0]?.id ?? null;
+    anchoringHint = detectAnchoring(opts.recallHistory, queryHash, topMemoryId);
+    if (anchoringHint?.reason === 'memory_dominance') {
+      suppressedByInterferenceCount = 1;
+      // Emit audit op for the memory-dominance detection.
+      const db = openHippoDb(ctx.hippoRoot);
+      try {
+        appendAuditEvent(db, {
+          tenantId: ctx.tenantId,
+          actor: ctx.actor.subject,
+          op: 'recall_anchor_detected_memory_dominance',
+          targetId: anchoringHint.memoryId,
+          metadata: {
+            memory_id: anchoringHint.memoryId,
+            query_count: anchoringHint.queryCount ?? null,
+          },
+        });
+      } finally {
+        closeHippoDb(db);
+      }
+    } else if (anchoringHint?.reason === 'query_repeat') {
+      const db = openHippoDb(ctx.hippoRoot);
+      try {
+        appendAuditEvent(db, {
+          tenantId: ctx.tenantId,
+          actor: ctx.actor.subject,
+          op: 'recall_anchor_detected_query_repeat',
+          targetId: anchoringHint.memoryId,
+          metadata: { memory_id: anchoringHint.memoryId },
+        });
+      } finally {
+        closeHippoDb(db);
+      }
+    }
+  }
+
   return {
     results: rankedOut,
     total: totalOut,
@@ -901,9 +996,10 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
       droppedByBudget: droppedByBudgetCount,
       summarySubstitutionsAdded: summarySubstitutionsCount,
       freshTailAdded: freshTailAddedCount,
-      suppressedByInterference: 0,
+      suppressedByInterference: suppressedByInterferenceCount,
     }),
     ...(planningFallacyHint ? { planningFallacyHint } : {}),
+    ...(anchoringHint ? { anchoringHint } : {}),
   };
 }
 

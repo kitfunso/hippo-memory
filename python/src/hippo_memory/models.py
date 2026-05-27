@@ -29,6 +29,7 @@ __all__ = [
     "RecallResult",
     "RecallSuppressionSummary",
     "PlanningFallacyHint",
+    "AnchoringHint",
     "ContextEntry",
     "ContextResult",
     "OutcomeResult",
@@ -146,6 +147,34 @@ class RecallSuppressionSummary(_Base):
     suppressed_by_interference: int = 0
 
 
+class AnchoringHint(_Base):
+    """v0.33 / J1 anchoring detector (recall-recurrence) — hint surfaced on
+    RecallResult when the per-(tenant, session) recall history shows
+    either R1 (same query phrasing returning same top-1 within recent
+    window) or R2 (same memory wins top-1 across >=3 distinct queries).
+
+    Wire shape matches src/recall-history.ts ``AnchoringHint`` (camelCase
+    via ``_Base.alias_generator=to_camel``). Disabled server-side by
+    setting ``HIPPO_ANCHORING=off``.
+    """
+
+    # 'query_repeat' | 'memory_dominance'; widened to str for forward-compat
+    # (same lesson as PlanningFallacyHint.source — never dispatch on this
+    # field for control flow; future server may emit new reasons).
+    reason: str
+    """The memory id that is anchoring the agent's reasoning."""
+    memory_id: str
+    """For 'memory_dominance': how many distinct queries in the recent
+    window had this memory as top-1. Always >= 3 when emitted."""
+    query_count: int | None = None
+    """Human-readable summary surfaced to the agent."""
+    summary: str
+    # Discriminator for hint origin. Current v1 server emits 'j1-recurrence';
+    # future variants accepted as plain strings (same forward-compat lesson
+    # as PlanningFallacyHint.source).
+    source: str = "j1-recurrence"
+
+
 class PlanningFallacyHint(_Base):
     """v0.32 / J3.2 — auto-injected planning-fallacy hint surfaced on
     RecallResult when the recall query carries a forward-prediction phrase
@@ -193,6 +222,12 @@ class RecallResult(_Base):
     # disabled (HIPPO_AUTODEBIAS=off), no forward-claim detected, no class
     # resolved, ambiguous tiebreak, or no closed data in resolved class.
     planning_fallacy_hint: PlanningFallacyHint | None = None
+    # v0.33 / J1 — recall-recurrence anchoring hint. Absent (None) when
+    # env disabled (HIPPO_ANCHORING=off), no sessionId, no R1/R2 pattern
+    # detected, or pipeline does not run J1 detection. On CLI-routed
+    # call paths this is always None (CLI computes its own hint
+    # separately); non-None on direct SDK / HTTP-routed invocations.
+    anchoring_hint: AnchoringHint | None = None
 
 
 # ---------------------------------------------------------------------------

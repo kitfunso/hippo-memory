@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from hippo_memory import (
     HealthInfo, MemoryEnvelope, RecallEntry, RecallResult,
-    RecallSuppressionSummary, PlanningFallacyHint,
+    RecallSuppressionSummary, PlanningFallacyHint, AnchoringHint,
     ContextEntry, ContextResult, OutcomeResult, SleepResult,
     DrillResult, ArchiveResult, SupersedeResult, PromoteResult,
     ForgetResult, AssembleResult, AuthCreated, AuthKey, AuthRevoked,
@@ -291,6 +291,77 @@ def test_recall_result_without_planning_fallacy_hint_defaults_to_none():
     }
     instance = RecallResult.model_validate(payload_no_hint)
     assert instance.planning_fallacy_hint is None
+
+
+# ---------------------------------------------------------------------------
+# v0.33 / J1 — AnchoringHint round-trips
+# ---------------------------------------------------------------------------
+
+
+def test_anchoring_hint_roundtrip_memory_dominance():
+    """Wire shape: camelCase to snake_case attrs preserved on dump."""
+    _roundtrip(AnchoringHint, {
+        "reason": "memory_dominance",
+        "memoryId": "mem_abc",
+        "queryCount": 4,
+        "summary": "Memory mem_abc has been the top result for 4 distinct queries.",
+        "source": "j1-recurrence",
+    })
+
+
+def test_anchoring_hint_roundtrip_query_repeat_no_query_count():
+    """queryCount is None for query_repeat reason."""
+    hint = AnchoringHint.model_validate({
+        "reason": "query_repeat",
+        "memoryId": "mem_xyz",
+        "summary": "Same query phrasing returned same top result.",
+        "source": "j1-recurrence",
+    })
+    assert hint.reason == "query_repeat"
+    assert hint.query_count is None
+
+
+def test_recall_result_with_anchoring_hint():
+    """RecallResult parses anchoringHint when present + populates attribute."""
+    payload = {
+        "results": [{"id": "mem_a", "content": "a", "score": 0.9, "tokens": 5}],
+        "total": 1,
+        "tokens": 5,
+        "anchoringHint": {
+            "reason": "memory_dominance",
+            "memoryId": "mem_a",
+            "queryCount": 3,
+            "summary": "Memory mem_a anchors your reasoning.",
+            "source": "j1-recurrence",
+        },
+    }
+    instance = RecallResult.model_validate(payload)
+    assert instance.anchoring_hint is not None
+    assert instance.anchoring_hint.memory_id == "mem_a"
+    assert instance.anchoring_hint.query_count == 3
+
+
+def test_recall_result_without_anchoring_hint_defaults_to_none():
+    """Back-compat: pre-v0.33 server payload (no anchoringHint key) parses."""
+    payload = {
+        "results": [{"id": "mem_a", "content": "a", "score": 0.9, "tokens": 5}],
+        "total": 1,
+        "tokens": 5,
+    }
+    instance = RecallResult.model_validate(payload)
+    assert instance.anchoring_hint is None
+
+
+def test_anchoring_hint_source_accepts_future_variants():
+    """Forward-compat: AnchoringHint.source is `str`, not Literal['j1-recurrence']."""
+    for future_source in ("j1-recurrence-v2", "j1-embedding", "j8-composition"):
+        hint = AnchoringHint.model_validate({
+            "reason": "memory_dominance",
+            "memoryId": "mem_x",
+            "summary": "...",
+            "source": future_source,
+        })
+        assert hint.source == future_source
 
 
 def test_planning_fallacy_hint_source_accepts_future_variants():

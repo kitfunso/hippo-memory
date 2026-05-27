@@ -3,6 +3,28 @@ import { createHash } from 'node:crypto';
 import { detectServer, writePidfile, removePidfileIfOwned } from './server-detect.js';
 import { resolveTenantId } from './tenant.js';
 import { openHippoDb, closeHippoDb } from './db.js';
+import {
+  buildSessionKey,
+  getOrCreateRing,
+  appendRecall,
+  snapshotRing,
+  hashQueryText,
+  RingBuffer,
+} from './recall-history.js';
+import { appendAuditEvent } from './audit.js';
+
+// v0.33 / J1 — Module-level per-(tenant, session) recall-history ring map
+// for the HTTP pipeline. Separate from CLI/MCP rings per plan v3 (per-
+// pipeline rings; no IPC). HTTP is the only caller that threads its
+// snapshot through opts.recallHistory to api.recall — api.recall's
+// anchoringHint on the returned RecallResult IS the user-visible hint
+// here (no separate compute needed).
+const sessionRecallHistoryHttp = new Map<string, RingBuffer>();
+
+/** Test-only: reset the module-level recall-history Map. Call from beforeEach. */
+export function __resetSessionRecallHistoryHttp(): void {
+  sessionRecallHistoryHttp.clear();
+}
 import { PACKAGE_VERSION } from './version.js';
 import { validateApiKey } from './auth.js';
 import { createRateLimiter, type RateLimiter } from './rate-limit.js';
@@ -99,6 +121,9 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'recall_autodebias_hint',                   // v0.32 / J3.2 — emitted by computePlanningFallacyHint on success
   'recall_autodebias_hint_no_class_match',    // v0.32 / J3.2 — telemetry: forward-claim, no class scored
   'recall_autodebias_hint_tiebreak',          // v0.32 / J3.2 — telemetry: forward-claim, >=2 classes tied
+  'recall_anchor_detected_query_repeat',      // v0.33 / J1 — emitted by detector on R1 fire
+  'recall_anchor_detected_memory_dominance',  // v0.33 / J1 — emitted by detector on R2 fire
+  'recall_anchor_skipped_no_session',         // v0.33 / J1 — telemetry: no sessionId, ring skipped
 ]);
 
 // Cap on GET /v1/audit?limit=. Matches docs/api.md (when written) and is large
@@ -577,6 +602,55 @@ async function handleRequest(
       ? sessionIdRaw.trim()
       : undefined;
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
+
+    // v0.33 / J1 — HTTP per-pipeline anchoring detector. HTTP threads its
+    // ring snapshot via opts.recallHistory so api.recall's own
+    // anchoringHint compute path activates. Unlike CLI (which computes
+    // its own hint separately because cmdRecall runs its own physics/
+    // hybrid pipeline outside api.recall), HTTP's /v1/memories response
+    // body IS api.recall's result directly. So the api.recall-computed
+    // hint flows through. HIPPO_ANCHORING=off short-circuits.
+    let httpRecallHistory: ReturnType<typeof snapshotRing> | undefined;
+    let httpRingKey: string | undefined;
+    if (process.env.HIPPO_ANCHORING !== 'off') {
+      if (sessionId) {
+        // Codex round-5 P2 catch: do NOT mutate sessionRecallHistoryHttp
+        // before recall() preflight runs. A request with an invalid
+        // scorer_window / fresh_tail_count would create-or-touch the
+        // session ring (LRU-evicting valid sessions) even though recall
+        // throws 400. Snapshot the EXISTING ring if present; only
+        // create-or-touch after the recall returns successfully.
+        httpRingKey = buildSessionKey(ctx.tenantId, sessionId);
+        const existingRing = sessionRecallHistoryHttp.get(httpRingKey);
+        httpRecallHistory = existingRing ? snapshotRing(existingRing) : [];
+      } else {
+        // Telemetry: caller had no session_id so ring tracking skipped.
+        // Per the normal recall-audit convention (api.ts:854 stores
+        // SHA-256/16 hash of the query, NOT raw text), avoid retaining
+        // prompts in audit_log here too — query content can contain
+        // secrets, PII, or RTBF-restricted material. Codex round-2 P2
+        // catch: hashQueryText is a 32-bit FNV-1a designed for recall
+        // matching, NOT a privacy hash; brute-force trivial for low-
+        // entropy queries. Use the same SHA-256/16 truncation as the
+        // canonical recall audit.
+        const dbForAudit = openHippoDb(opts.hippoRoot);
+        try {
+          appendAuditEvent(dbForAudit, {
+            tenantId: ctx.tenantId,
+            actor: ctx.actor.subject,
+            op: 'recall_anchor_skipped_no_session',
+            targetId: undefined,
+            metadata: {
+              query_hash: createHash('sha256').update(q).digest('hex').slice(0, 16),
+              query_length: q.length,
+            },
+          });
+        } finally {
+          closeHippoDb(dbForAudit);
+        }
+      }
+    }
+
     const result = recall(ctx, {
       query: q,
       limit,
@@ -588,7 +662,22 @@ async function handleRequest(
       ...(summarizeOverflow !== undefined ? { summarizeOverflow } : {}),
       ...(scorerWindow !== undefined ? { scorerWindow } : {}),
       ...(sessionId !== undefined ? { sessionId } : {}),
+      ...(httpRecallHistory !== undefined ? { recallHistory: httpRecallHistory } : {}),
     });
+
+    // v0.33 / J1 — append AFTER recall completes (snapshot was taken before
+    // recall() ran). anchoredOn carries the memoryId of any hint that fired
+    // (api.recall computed it from the same snapshot we passed in), feeding
+    // the cooldown logic for the NEXT recall on this session.
+    // Codex round-5 P2 fix: create-or-touch the ring ONLY HERE, after recall
+    // returns successfully. Invalid requests that throw 400 in recall()
+    // never reach this point, so they cannot LRU-evict valid sessions.
+    if (httpRingKey) {
+      const httpRing = getOrCreateRing(sessionRecallHistoryHttp, httpRingKey);
+      const topId = result.results[0]?.id ?? null;
+      appendRecall(httpRing, hashQueryText(q), topId, result.anchoringHint?.memoryId);
+    }
+
     // Continuity payloads should never be cached. The caller is asking for
     // session-state-aware data; intermediaries must not reuse it across users.
     if (includeContinuity) {

@@ -1,5 +1,90 @@
 # Changelog
 
+## 1.13.2 (2026-05-27): J1 anchoring detector (recall-recurrence)
+
+### Added
+
+- **J1 anchoring detector (recall-recurrence).** When a session's recall
+  history shows the same memory winning top-1 across N >= 3 semantically-
+  distinct queries (R2 memory_dominance), OR the same query is re-issued
+  within 5 turns returning the same top-1 (R1 query_repeat), hippo
+  surfaces an `anchoringHint` on `RecallResult` flagging the anchoring
+  pattern. Caller-tracked ring buffer keeps api.recall pure. Composes
+  with J3.2: planning-fallacy + anchoring hints can fire on the same
+  recall.
+  - CLI `recall --why`: prints `[anchored_on: mem_xyz] <summary>` line
+    above the result list when a hint fires.
+  - MCP `hippo_recall`: `## Anchoring hint` text block prepended to the
+    response when a hint fires (above any planning-fallacy block).
+  - HTTP `GET /v1/memories`: optional `anchoringHint` field on the
+    response body (camelCase per existing convention).
+  - Python SDK: new `AnchoringHint` Pydantic model. `RecallResult`
+    extended with optional `anchoring_hint`. `source: str` (widened from
+    Literal for forward-compat).
+  - `HIPPO_ANCHORING=off|track` env knob (default `track`); `off`
+    short-circuits both the detector and the caller-side ring writes
+    (zero work on disabled tenants).
+  - Three new audit ops: `recall_anchor_detected_query_repeat`,
+    `recall_anchor_detected_memory_dominance`,
+    `recall_anchor_skipped_no_session` (telemetry for J1-v2 embedding-
+    fallback decision when sessionId absent).
+  - First wire-up of the `suppressedByInterference` counter on
+    `RecallResult.suppressionSummary` (always 0 since v1.12.13).
+    Per-pipeline: api.recall, cmdRecall, and MCP each bump their OWN
+    suppressionSummary by 1 when their own R2 fires. Visible on every
+    user-facing WYSIATI line.
+  - New module `src/recall-history.ts` (pure detector + ring buffer
+    helpers); per-pipeline rings in cli.ts + mcp/server.ts + server.ts
+    (no IPC; per-pipeline architecture).
+
+### Known limitations
+
+- **CLI J1 single-shot mode does NOT accumulate history.** Each `hippo
+  recall` invocation spawns a fresh Node process, so the module-level
+  ring buffer is recreated empty per invocation. J1 detection in CLI
+  fires only when cmdRecall is called multiple times within a single
+  long-running process (test harnesses, batch scripts that invoke
+  cmdRecall in-process). MCP and HTTP pipelines accumulate correctly
+  because their host processes are long-lived. CLI users who want
+  per-session anchoring in single-shot terminal usage should route
+  recalls through `hippo serve` + HTTP `GET /v1/memories?session_id=`.
+  A J1-v1.1 follow-up will add SQLite-backed CLI persistence (the
+  recall_history table from the original brainstorm option D).
+- **Single-process per-pipeline rings.** Multi-process deployments
+  (separate MCP + HTTP server) do not share J1 state. Cross-pipeline
+  anchoring (same memory anchors agent across CLI + MCP in the same
+  session) is a separate signal worth J8 composition matrix work; v1
+  is per-pipeline.
+- **`hashQueryText` normalization is approximate.** The detector hashes
+  queries via lowercase + Unicode-aware tokenization + sorted dedup of
+  tokens >= 3 chars, with a fallback to all tokens when the >=3 filter
+  empties (CJK / acronym queries). Two known residual edges:
+  (a) all-short-token queries like `AI` vs `UI` may collide via the
+  empty-filter fallback when no longer tokens are present;
+  (b) acronym-plus-longer queries like `AI login bug` vs `UI login bug`
+  collide because the >=3 filter keeps only `[login, bug]` shared.
+  Both produce a small rate of false R1 query_repeat collisions in
+  practice. Workarounds: callers can prepend a unique session-scoped
+  prefix to anchor queries that include acronyms. J1-v1.1 will adopt
+  a richer tokenizer (likely with optional embedding-based distinctness
+  per the J1 plan's J1-v2 follow-up).
+
+### Changed
+
+- `RecallResult.suppressionSummary.suppressedByInterference` semantics:
+  was hardcoded 0 (placeholder for B4-depth or J1 work), now reflects
+  J1 R2 detections per recall pipeline. Downstream consumers reading
+  the field as a reliable zero need to update.
+- `src/api.ts:483-489` JSDoc on `suppressedByInterference` updated:
+  removed reference to a never-built `interference_suppression` table;
+  now correctly describes the in-memory ring data source.
+
+### Fixed
+
+- `tests/api-recall-suppression-summary.test.ts:105` "always 0 in
+  v1.12.13" lock relaxed to "0 when J1 is off or no R2; non-zero when
+  R2 fires". The relaxation is documented in the test header.
+
 ## 1.13.1 (2026-05-26): J3.2 auto-injection of planning-fallacy hints on recall
 
 ### Added

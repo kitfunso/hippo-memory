@@ -102,7 +102,13 @@ describe('RecallResult.suppressionSummary (C5 WYSIATI, v1.12.13)', () => {
     expect(s.suppressedByInterference).toBeGreaterThanOrEqual(0);
   });
 
-  it('suppressedByInterference is always 0 in v1.12.13 (placeholder for future B4/J1 work)', () => {
+  // v0.33 / J1 (v1.13.2): the original "always 0 in v1.12.13" assertion is
+  // RELAXED. J1 lights up the counter via R2 memory_dominance detection,
+  // so the counter now reads 0 when J1 is off OR no R2 fires, and non-zero
+  // when R2 fires. This test asserts the no-history / no-snapshot case
+  // (which keeps the counter at 0). The non-zero-on-R2 case is tested by
+  // tests/api-recall-suppressed-interference-j1.test.ts.
+  it('suppressedByInterference is 0 when J1 is off or no R2 detected (default no-history path)', () => {
     writeEntry(root, makeRaw('iota'));
     const result = recall(ctxFor(root), { query: 'iota' });
     expect(result.suppressionSummary!.suppressedByInterference).toBe(0);
