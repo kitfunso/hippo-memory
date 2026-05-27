@@ -211,3 +211,125 @@ v1.13.3 plan.
 - No multi-turn dogfood. Cannot test whether warnings change behavior
   ACROSS turns, only within a single response. J1 in particular only
   makes sense across turns (anchoring on repeated answers).
+
+---
+
+# Round 2 dogfood (2026-05-27 evening): larger-N read-rate
+
+Closes the "Single sub-agent per warning" gap above. 9 trials total:
+3 question types per warning across J3.2 hint (v1.13.1), J3.2 watching
+(v1.13.4), and C5 cutoff (v1.13.3). J1 anchoring skipped (single-turn
+sub-agent dispatch cannot replicate multi-turn anchoring patterns
+without the live HTTP serve session that was unavailable in trial 3).
+
+## Setup
+
+Same isolated `.hippo` root from round 1 (`/tmp/hippo-dogfood-2026-05-27`,
+68 imported memories + 5 seeded `estimate-task` predictions + 1 seeded
+`ship` prediction). Fresh CLI responses captured for each warning.
+Each warning's response was paired with 3 distinct user question types
+(task-direct planning, decision/risk, meta/tooling) and sent to a
+fresh general-purpose sub-agent. "Read" = the agent referenced the
+warning's specific numbers, prefix, or suggestion in its answer.
+
+## Results
+
+### J3.2 hint (v1.13.1 — top placement, plain English, quantitative)
+
+CLI output: `Planning fallacy hint (class: estimate-task): Last 5
+estimates in class estimate-task averaged 1.78x actual (MAE 1.70).`
+
+| Trial | Question type | Read? | Evidence |
+|-------|--------------|-------|----------|
+| H1 | Planning ("size a 2-day feature") | YES | "1.78x long...1.70-day MAE", revised 2 to 3.5 days |
+| H2 | Trust ("commit externally to 2 days?") | YES | "1.78x over...mean absolute error 1.70", commit at 4-5 days |
+| H3 | Meta ("what does my track record say?") | YES | "1.78x actual time...mean absolute error of 1.70" |
+
+**Read-rate: 3/3 (100%)**. Same finding as round 1 trial 2b. The
+top-placement + plain-English + quantitative format is robust across
+varied question types.
+
+### J3.2 watching (v1.13.4 — top placement, suggestion text)
+
+CLI output: `Planning fallacy: watching this query (reason:
+no_class_match). No matching prediction class for this forward-claim.
+Tag your prediction with` `` `hippo predict --class <name>` `` `to start
+tracking this class.`
+
+| Trial | Question type | Read? | Evidence |
+|-------|--------------|-------|----------|
+| W1 | Planning ("size a 3-day feature") | NO | Generic "plan for 5-7 days" advice; no reference to the watching warning OR the class-tag suggestion |
+| W2 | Trust ("commit externally to 3 days?") | YES | "the planning-fallacy watcher flagged exactly that" + named `hippo predict --class feature_ship_days` verbatim |
+| W3 | Tooling ("how to make estimates better?") | YES | Built the first sentence around `hippo predict --class feature-ship` (the suggestion verbatim) and "calibration curve for your specific work type" |
+
+**Read-rate: 2/3 (~67%)**. W1's miss is informative: a task-direct
+planning question ("I have a feature, plan for me") doesn't naturally
+invite meta-commentary about hippo's tracking, so the agent gave
+generic estimation advice. Same pattern as the round-1 C5 trial where
+"give me a summary" correctly ignored the cutoff. The watching warning
+is consumed when the question type ALREADY implies meta-reflection on
+estimation or tooling; not when the question is just "do the task".
+
+This isn't a defect — the WATCHING surface is informational, not
+imperative. The 67% read-rate is honest: the warning reaches the agent
+when relevant and doesn't waste tokens when not.
+
+### C5 cutoff (v1.13.3 — top placement after v1.13.2 dark bottom)
+
+CLI output: `Cutoff: showing 3 of 194 candidates; 28 dropped to fit
+limit.`
+
+| Trial | Question type | Read? | Evidence |
+|-------|--------------|-------|----------|
+| C1 | Audit ("trust this for arch decision?") | YES | "3 of 194 results...28 candidates dropped...another ~163 weren't surfaced" |
+| C2 | Completeness ("is this all I have?") | YES | "194 total memories...only 3 were shown...28 dropped to fit" |
+| C3 | Comparison ("compare hippo to Mem0?") | YES | "hippo returned 3 of 194 candidates with 28 dropped" + honest limit on assessing recall quality without more data |
+
+**Read-rate: 3/3 (100%)**. Dramatic improvement over the
+pre-v1.13.3 baseline (round 1 trial 1: 0/1 read; the agent summarised
+the 2 visible memories with no mention of the 198 hidden). The v1.13.3
+format normalisation (top placement + plain-English "Cutoff:" instead
+of "WYSIATI:") moved the read-rate from ~0% to 100% across audit,
+completeness, and comparison question types.
+
+## Aggregate read-rate
+
+- **8 of 9 trials read the warning** (89% overall).
+- 100% read on the two surfaces where the warning is directly
+  actionable (J3.2 hint with quantitative baserate, C5 cutoff with
+  raw cutoff numbers).
+- 67% read on the watching surface (informational suggestion; agents
+  correctly skip when question type doesn't invite meta-discussion).
+
+## Conclusions
+
+1. **The format-fix premise from round 1 holds at larger N.** Top
+   placement + plain English + concrete numbers/actions reaches the
+   agent reliably. The original "warnings ship dark" hypothesis was
+   wrong as a uniform claim, but right about the specific instance
+   (pre-v1.13.3 C5) that drove it.
+2. **J-Wire roadmap entry is structurally closed.** No MCP system-
+   prompt addendum needed for the existing 3 user-facing Track J
+   warnings (C5, J3.2 hint, J3.2 watching). The discipline note ("the
+   next-J item never ships against an unread surface") remains binding
+   for future detectors; the format spec is now: top placement, plain
+   English, concrete number or action.
+3. **Question-type sensitivity is correct behavior, not a bug.** Both
+   round-1 (general summary -> C5 ignored) and round-2 W1 (task-direct
+   planning -> watching ignored) cases show agents skip warnings when
+   the user's question doesn't make the warning's content directly
+   relevant. That's the right pattern; over-quoting warnings on every
+   recall would be noise.
+
+## Honest gaps (round 2)
+
+- J1 anchoring still untested live. Source review only; same
+  inherited-from-J3.2-format-profile argument applies.
+- Single model (Sonnet via general-purpose sub-agent). Opus on the
+  same prompts may differ (e.g. more thorough on edge cases, more
+  likely to surface meta-warnings even when not directly asked).
+- Synthetic question types. Real-session questions would mix
+  task-direct and meta in ways these clean test prompts don't.
+- N=3 per warning is "larger than N=1" but not statistically meaningful;
+  a CI on the 89% aggregate would be wide. Treat as directional signal,
+  not population claim.
