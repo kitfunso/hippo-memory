@@ -83,6 +83,24 @@ describe('hashQueryText', () => {
     // Accents should NOT collapse; café and cafe are linguistically distinct.
     expect(hashQueryText('café')).not.toBe(hashQueryText('cafe'));
   });
+
+  // Codex round-4 P2 catch: 1-2 char filler tokens inflated distinct-query
+  // counts and caused false R2 memory_dominance fires on phrasing variants.
+  // Filter is length >= 3, so `a` / `is` / `to` / `of` drop but `the` /
+  // `bug` / `login` stay. (Forward-claim-detector applies a richer STOP_WORDS
+  // set; hashQueryText keeps it minimal — length >=3 alone — to avoid
+  // baking domain vocabulary into the hash.)
+  it('collapses queries differing only by 1-2 char filler tokens', () => {
+    // 1-char filler.
+    expect(hashQueryText('a login bug')).toBe(hashQueryText('login bug'));
+    // 2-char filler.
+    expect(hashQueryText('is login bug')).toBe(hashQueryText('login bug'));
+    // Multiple 1-2 char fillers.
+    expect(hashQueryText('is a login bug')).toBe(hashQueryText('login bug'));
+    // 3+ char tokens (including `the`) are intentionally kept; they may
+    // carry domain meaning so we don't try to filter all stop words.
+    expect(hashQueryText('the login bug')).not.toBe(hashQueryText('login bug'));
+  });
 });
 
 describe('buildSessionKey', () => {

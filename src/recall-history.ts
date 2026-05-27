@@ -105,7 +105,13 @@ export function hashQueryText(query: string): number {
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\p{M}\s]/gu, ' ')
     .split(/\s+/)
-    .filter((t) => t.length > 0);
+    // Drop tokens shorter than 3 chars to match the normalizer contract
+    // (filler / stop words). Without this, `a login bug` vs `login bug`
+    // hash differently and inflate R2 distinct-query counts, firing
+    // memory_dominance on repeated phrasings of the same question.
+    // Codex round-4 P2 catch. Matches the same >=3 filter used in
+    // src/forward-claim-detector.ts for class-resolver tokens.
+    .filter((t) => t.length >= 3);
   const deduped = Array.from(new Set(tokens)).sort();
   return fnv1a32(deduped.join(' '));
 }
