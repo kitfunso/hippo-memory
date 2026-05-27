@@ -147,7 +147,10 @@ export type AuditOp =
   | 'predict_baserate' // v0.31 / J3 — emitted by computePredictionBaserate (read-side; meaningful agent signal worth auditing)
   | 'recall_autodebias_hint' // v0.32 / J3.2 — emitted by computePlanningFallacyHint on success (forward-claim detected, class resolved, hint returned)
   | 'recall_autodebias_hint_no_class_match' // v0.32 / J3.2 — telemetry: forward-claim detected, no class scored >= 1 (drives J3.3 embedding-fallback decision)
-  | 'recall_autodebias_hint_tiebreak'; // v0.32 / J3.2 — telemetry: forward-claim detected, >=2 classes tied at best overlap (silent to caller)
+  | 'recall_autodebias_hint_tiebreak' // v0.32 / J3.2 — telemetry: forward-claim detected, >=2 classes tied at best overlap (silent to caller)
+  | 'recall_anchor_detected_query_repeat' // v0.33 / J1 — emitted by detector when R1 fires (same query phrasing returning same top-1 within recentRepeatWindow)
+  | 'recall_anchor_detected_memory_dominance' // v0.33 / J1 — emitted by detector when R2 fires (same memory wins top-1 across >=minDominance distinct queries)
+  | 'recall_anchor_skipped_no_session'; // v0.33 / J1 — telemetry: caller skipped ring tracking because no sessionId; drives J1-v2 decision on persisting cross-session history
 
 export interface AppendAuditOpts {
   tenantId: string;

@@ -3,6 +3,28 @@ import { createHash } from 'node:crypto';
 import { detectServer, writePidfile, removePidfileIfOwned } from './server-detect.js';
 import { resolveTenantId } from './tenant.js';
 import { openHippoDb, closeHippoDb } from './db.js';
+import {
+  buildSessionKey,
+  getOrCreateRing,
+  appendRecall,
+  snapshotRing,
+  hashQueryText,
+  RingBuffer,
+} from './recall-history.js';
+import { appendAuditEvent } from './audit.js';
+
+// v0.33 / J1 — Module-level per-(tenant, session) recall-history ring map
+// for the HTTP pipeline. Separate from CLI/MCP rings per plan v3 (per-
+// pipeline rings; no IPC). HTTP is the only caller that threads its
+// snapshot through opts.recallHistory to api.recall — api.recall's
+// anchoringHint on the returned RecallResult IS the user-visible hint
+// here (no separate compute needed).
+const sessionRecallHistoryHttp = new Map<string, RingBuffer>();
+
+/** Test-only: reset the module-level recall-history Map. Call from beforeEach. */
+export function __resetSessionRecallHistoryHttp(): void {
+  sessionRecallHistoryHttp.clear();
+}
 import { PACKAGE_VERSION } from './version.js';
 import { validateApiKey } from './auth.js';
 import { createRateLimiter, type RateLimiter } from './rate-limit.js';
@@ -99,6 +121,9 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'recall_autodebias_hint',                   // v0.32 / J3.2 — emitted by computePlanningFallacyHint on success
   'recall_autodebias_hint_no_class_match',    // v0.32 / J3.2 — telemetry: forward-claim, no class scored
   'recall_autodebias_hint_tiebreak',          // v0.32 / J3.2 — telemetry: forward-claim, >=2 classes tied
+  'recall_anchor_detected_query_repeat',      // v0.33 / J1 — emitted by detector on R1 fire
+  'recall_anchor_detected_memory_dominance',  // v0.33 / J1 — emitted by detector on R2 fire
+  'recall_anchor_skipped_no_session',         // v0.33 / J1 — telemetry: no sessionId, ring skipped
 ]);
 
 // Cap on GET /v1/audit?limit=. Matches docs/api.md (when written) and is large
@@ -577,6 +602,38 @@ async function handleRequest(
       ? sessionIdRaw.trim()
       : undefined;
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
+
+    // v0.33 / J1 — HTTP per-pipeline anchoring detector. HTTP threads its
+    // ring snapshot via opts.recallHistory so api.recall's own
+    // anchoringHint compute path activates. Unlike CLI (which computes
+    // its own hint separately because cmdRecall runs its own physics/
+    // hybrid pipeline outside api.recall), HTTP's /v1/memories response
+    // body IS api.recall's result directly. So the api.recall-computed
+    // hint flows through. HIPPO_ANCHORING=off short-circuits.
+    let httpRecallHistory: ReturnType<typeof snapshotRing> | undefined;
+    let httpRing: RingBuffer | undefined;
+    if (process.env.HIPPO_ANCHORING !== 'off') {
+      if (sessionId) {
+        const ringKey = buildSessionKey(ctx.tenantId, sessionId);
+        httpRing = getOrCreateRing(sessionRecallHistoryHttp, ringKey);
+        httpRecallHistory = snapshotRing(httpRing);
+      } else {
+        // Telemetry: caller had no session_id so ring tracking skipped.
+        const dbForAudit = openHippoDb(opts.hippoRoot);
+        try {
+          appendAuditEvent(dbForAudit, {
+            tenantId: ctx.tenantId,
+            actor: ctx.actor.subject,
+            op: 'recall_anchor_skipped_no_session',
+            targetId: undefined,
+            metadata: { query: q.slice(0, 200) },
+          });
+        } finally {
+          closeHippoDb(dbForAudit);
+        }
+      }
+    }
+
     const result = recall(ctx, {
       query: q,
       limit,
@@ -588,7 +645,18 @@ async function handleRequest(
       ...(summarizeOverflow !== undefined ? { summarizeOverflow } : {}),
       ...(scorerWindow !== undefined ? { scorerWindow } : {}),
       ...(sessionId !== undefined ? { sessionId } : {}),
+      ...(httpRecallHistory !== undefined ? { recallHistory: httpRecallHistory } : {}),
     });
+
+    // v0.33 / J1 — append AFTER recall completes (snapshot was taken before).
+    // anchoredOn carries the memoryId of any hint that fired (api.recall
+    // computed it from the same snapshot we passed in), feeding the cooldown
+    // logic for the NEXT recall on this session.
+    if (httpRing) {
+      const topId = result.results[0]?.id ?? null;
+      appendRecall(httpRing, hashQueryText(q), topId, result.anchoringHint?.memoryId);
+    }
+
     // Continuity payloads should never be cached. The caller is asking for
     // session-state-aware data; intermediaries must not reuse it across users.
     if (includeContinuity) {

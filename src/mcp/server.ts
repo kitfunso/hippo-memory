@@ -28,6 +28,27 @@ import { resolveConfidence } from '../memory.js';
 import { resolveTenantId } from '../tenant.js';
 import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, drillDown as apiDrillDown, assemble as apiAssemble, isPrivateScope, adminActor, buildSuppressionSummary, type Context as ApiContext } from '../api.js';
 import { computePredictionBaserate } from '../predictions.js';
+import { appendAuditEvent } from '../audit.js';
+import {
+  detectAnchoring,
+  hashQueryText,
+  buildSessionKey,
+  getOrCreateRing,
+  appendRecall,
+  snapshotRing,
+  RingBuffer,
+  type AnchoringHint,
+} from '../recall-history.js';
+
+// v0.33 / J1 — Module-level per-(tenant, session) recall-history ring map
+// for the MCP pipeline. Separate from CLI/HTTP rings per plan v3
+// architecture (per-pipeline rings; no IPC).
+const sessionRecallHistoryMcp = new Map<string, RingBuffer>();
+
+/** Test-only: reset the module-level recall-history Map. Call from beforeEach. */
+export function __resetSessionRecallHistoryMcp(): void {
+  sessionRecallHistoryMcp.clear();
+}
 import { applyGoalStackBoost } from '../goals.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { PACKAGE_VERSION } from '../version.js';
@@ -558,6 +579,70 @@ async function executeTool(
       for (const entry of retrieved) writeEntry(hippoRoot, entry);
       lastRecalledIds.set(resolveClientKey(ctx), retrieved.map((e) => e.id));
 
+      // v0.33 / J1 — MCP per-pipeline anchoring detector. UNLIKE J3.2's
+      // planningFallacyHint (which is pipeline-invariant because it
+      // depends only on queryText + predictions table state), the
+      // anchoring hint depends on (a) per-pipeline top-1 ranking (MCP's
+      // physics/hybrid winner can differ from api.recall's BM25 winner)
+      // and (b) per-pipeline ring buffer. So MCP computes its OWN hint
+      // against MCP's own top-1, mirroring the C5 per-pipeline rule.
+      let mcpAnchoringHint: AnchoringHint | null = null;
+      if (process.env.HIPPO_ANCHORING !== 'off') {
+        if (sessionId) {
+          const ringKey = buildSessionKey(tenantId, sessionId);
+          const ring = getOrCreateRing(sessionRecallHistoryMcp, ringKey);
+          const queryHash = hashQueryText(query);
+          const topId = results[0]?.entry.id ?? null;
+          mcpAnchoringHint = detectAnchoring(snapshotRing(ring), queryHash, topId);
+          appendRecall(ring, queryHash, topId, mcpAnchoringHint?.memoryId);
+          // Pipeline-local audit emission (lockstep with CLI / api.recall).
+          if (mcpAnchoringHint?.reason === 'memory_dominance') {
+            const dbForAudit = openHippoDb(hippoRoot);
+            try {
+              appendAuditEvent(dbForAudit, {
+                tenantId,
+                actor: 'mcp',
+                op: 'recall_anchor_detected_memory_dominance',
+                targetId: mcpAnchoringHint.memoryId,
+                metadata: {
+                  memory_id: mcpAnchoringHint.memoryId,
+                  query_count: mcpAnchoringHint.queryCount ?? null,
+                },
+              });
+            } finally {
+              closeHippoDb(dbForAudit);
+            }
+          } else if (mcpAnchoringHint?.reason === 'query_repeat') {
+            const dbForAudit = openHippoDb(hippoRoot);
+            try {
+              appendAuditEvent(dbForAudit, {
+                tenantId,
+                actor: 'mcp',
+                op: 'recall_anchor_detected_query_repeat',
+                targetId: mcpAnchoringHint.memoryId,
+                metadata: { memory_id: mcpAnchoringHint.memoryId },
+              });
+            } finally {
+              closeHippoDb(dbForAudit);
+            }
+          }
+        } else {
+          // Telemetry: caller had no sessionId so ring tracking skipped.
+          const dbForAudit = openHippoDb(hippoRoot);
+          try {
+            appendAuditEvent(dbForAudit, {
+              tenantId,
+              actor: 'mcp',
+              op: 'recall_anchor_skipped_no_session',
+              targetId: undefined,
+              metadata: { query: query.slice(0, 200) },
+            });
+          } finally {
+            closeHippoDb(dbForAudit);
+          }
+        }
+      }
+
       // v0.32 / J3.2 — auto-injection of reference-class baserate hint
       // when the query carries a forward-prediction phrase. Read from
       // apiResult.planningFallacyHint (already computed inside api.recall
@@ -569,11 +654,20 @@ async function executeTool(
       // identical telemetry. C5 per-pipeline rule does NOT apply here
       // because the hint depends on queryText, not on the matched memory
       // set. Prepend BEFORE the memory list so the agent sees it first.
+      // v0.33 / J1: Anchoring hint goes ABOVE planning-fallacy hint
+      // (anchoring is the stronger cognitive-pull warning).
       let response = '';
+      if (mcpAnchoringHint) {
+        response =
+          `## Anchoring hint\n` +
+          `${mcpAnchoringHint.summary}\n` +
+          `[anchored_on: ${mcpAnchoringHint.memoryId}]\n` +
+          `\n---\n\n`;
+      }
       if (apiResult.planningFallacyHint) {
         const h = apiResult.planningFallacyHint;
         const safePhrase = JSON.stringify(h.detectedPhrase);
-        response =
+        response +=
           `## Planning fallacy hint\n` +
           `Class: ${h.classTag}\n` +
           `${h.baserateSummary}\n` +
@@ -614,13 +708,15 @@ async function executeTool(
       // pipeline and would mislead.
       const freshTailAddedMcp = tailOrSummary.filter((r) => r.isFreshTail && !r.isSummary).length;
       const summarySubsAddedMcp = tailOrSummary.filter((r) => r.isSummary).length;
+      // v0.33 / J1: suppressedByInterference bumped on MCP's R2 fire.
+      const mcpSuppressedByInterference = mcpAnchoringHint?.reason === 'memory_dominance' ? 1 : 0;
       const mcpSuppressionSummary = buildSuppressionSummary({
         totalCandidates: totalCandidatesCountMcp,
         droppedPreRank: droppedPreRankCountMcp,
         droppedByBudget: droppedByBudgetCountMcp,
         summarySubstitutionsAdded: summarySubsAddedMcp,
         freshTailAdded: freshTailAddedMcp,
-        suppressedByInterference: 0,
+        suppressedByInterference: mcpSuppressedByInterference,
       });
 
       if (includeContinuity && apiResult.continuity) {
