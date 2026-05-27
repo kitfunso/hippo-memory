@@ -4,7 +4,9 @@
   "description": "Hippo Memory plugin for OpenClaw - biologically-inspired agent memory",
   "main": "index.ts",
   "openclaw": {
-    "extensions": ["./index.ts"]
+    "extensions": [
+      "./index.ts"
+    ]
   },
   "peerDependencies": {
     "hippo-memory": ">=0.4.0"

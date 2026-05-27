@@ -67,9 +67,9 @@ Research-not-enterprise items; re-prioritise only after items 1-5 above. B1 ACC 
 
 Cross-cutting tickets surfaced by the week-of-2026-05-21 retro. Small, automate-or-die scope.
 
-- [ ] **`prepublishOnly` version-disagreement check** (1-2h). Add a script that greps the repo for any manifest `version` field disagreeing with `package.json`, and fail the publish if they don't match. Kills the v1.12.11 / v1.13.1 nested-manifest drift class for good (3 slips in 7 days, 2026-05-21 -> 2026-05-27).
-- [ ] **`pre-commit` em-dash guard** (~30min). Scan commit message bodies for em-dash in restricted contexts (commit body, CHANGELOG-pasted blocks, release-notes blocks). Multiple `git commit --amend` rounds this week prove the post-commit grep backstop isn't sticking at write time.
-- [ ] **`/codex` skill iteration-threshold heuristic** (~15min doc edit). Formalize the "rounds 4-5 producing only P2 issues -> ship with Known Limitations" rule that we hit organically on J1 round 6. Saves the threshold question for future episodes.
+- [x] **`prepublishOnly` version-disagreement check** (DONE v1.13.5 ship cycle, 2026-05-27). `scripts/check-manifest-versions.mjs` reads `package.json` version, asserts the 4 lockstep manifests (`package.json`, `openclaw.plugin.json`, `extensions/openclaw-plugin/package.json`, `extensions/openclaw-plugin/openclaw.plugin.json`) match. Wired into `prepublishOnly`. Allowlist-based to skip historical eval snapshots, independent subpackages (`ui/`, `extensions/claude-code-plugin/`).
+- [x] **Em-dash guard for release notes** (DONE v1.13.5 ship cycle, 2026-05-27). `scripts/check-em-dashes-in-release-notes.mjs` scoped to the CHANGELOG section for the current `package.json` version. Wired into `prepublishOnly`. Historical entries not in scope. (Pivoted from "pre-commit hook" to "pre-publish hook" because hippo has no husky and a pre-publish gate catches what matters most.)
+- [x] **Codex iteration-threshold heuristic** (DONE v1.13.5 ship cycle, 2026-05-27). Lives at `docs/release-policy.md` "Critic chain iteration threshold". Rule: two rounds of only-P2/LOW catches = ship with Known Limitations. Derived from observed convergence on J1/J3.2/J5.
 
 ---
 
