@@ -60,6 +60,29 @@ describe('hashQueryText', () => {
   it('distinguishes different token sets', () => {
     expect(hashQueryText('foo bar')).not.toBe(hashQueryText('foo baz'));
   });
+
+  // Codex round-3 P2 catch: ASCII-only regex collapsed Unicode to empty
+  // hash 0, false R1 collisions across distinct non-English queries.
+  it('preserves Unicode letters across scripts (CJK, Cyrillic, Arabic)', () => {
+    const jp = hashQueryText('テスト 環境');
+    const cn = hashQueryText('测试 环境');
+    const ru = hashQueryText('тест окружение');
+    const ar = hashQueryText('اختبار بيئة');
+    // None should hash to 0 (empty token set).
+    expect(jp).not.toBe(0);
+    expect(cn).not.toBe(0);
+    expect(ru).not.toBe(0);
+    expect(ar).not.toBe(0);
+    // Distinct scripts produce distinct hashes (no false R1 collision).
+    expect(jp).not.toBe(cn);
+    expect(jp).not.toBe(ru);
+    expect(ru).not.toBe(ar);
+  });
+
+  it('preserves accented Latin (composed forms)', () => {
+    // Accents should NOT collapse; café and cafe are linguistically distinct.
+    expect(hashQueryText('café')).not.toBe(hashQueryText('cafe'));
+  });
 });
 
 describe('buildSessionKey', () => {

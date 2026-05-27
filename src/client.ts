@@ -90,6 +90,18 @@ export async function recall(
   if (opts.summarizeOverflow !== undefined)
     params.set('summarize_overflow', opts.summarizeOverflow ? '1' : '0');
   if (opts.scorerWindow !== undefined) params.set('scorer_window', String(opts.scorerWindow));
+  // v1.7.4 sessionId for dlPFC goal-stack boost + v0.33 / J1 sessionId
+  // for per-session anchoring ring. Pre-v0.33 the thin-client silently
+  // dropped opts.sessionId, so HTTP-routed SDK callers got no goal
+  // boost and (post-J1) the HTTP ring logged recall_anchor_skipped_no_session.
+  // Codex round-3 P2 catch: align serialization with the RecallOpts type.
+  // Note: opts.recallHistory is intentionally NOT serialized — it is an
+  // in-process snapshot only; the HTTP server maintains its own ring per
+  // sessionId, so passing recallHistory over the wire would be a no-op
+  // at best and a tenant-leak risk at worst.
+  if (opts.sessionId !== undefined && opts.sessionId !== '') {
+    params.set('session_id', opts.sessionId);
+  }
   const res = await fetch(`${serverUrl}/v1/memories?${params.toString()}`, {
     method: 'GET',
     headers: buildHeaders(apiKey, false),

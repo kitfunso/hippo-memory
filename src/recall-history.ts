@@ -94,9 +94,16 @@ export function hashQueryText(query: string): number {
   // variations (typos, doubled tokens, intensifiers) would inflate
   // distinct-query counts and trip R2 on essentially the same question.
   // Codex round-1 catch.
+  // Unicode-aware tokenization (codex round-3 P2 catch): the prior
+  // ASCII-only [^a-z0-9\s] pattern stripped every non-Latin letter, so
+  // Japanese, Arabic, Cyrillic, accented-Latin etc. queries collapsed
+  // to empty token set -> hash 0 -> false R1 collisions across distinct
+  // non-English queries. \p{L} = any Unicode letter, \p{N} = any Unicode
+  // number, \p{M} = combining marks (preserve composed accented chars).
+  // Requires the /u flag and Node >= 12.
   const tokens = query
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/[^\p{L}\p{N}\p{M}\s]/gu, ' ')
     .split(/\s+/)
     .filter((t) => t.length > 0);
   const deduped = Array.from(new Set(tokens)).sort();
