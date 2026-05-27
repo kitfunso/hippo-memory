@@ -546,6 +546,9 @@ When the agent makes a forward-looking claim ("this will take 2 days", "the chan
 ### J1. Anchoring detector [planned]
 Flag when a query phrase reuses a stale top-1 result from the last N recalls, OR when one memory has been top-result for >N consecutive semantically-distinct queries in a session. Surface as `[anchored_on: mem_xyz]` in `recall --why`. **Effort:** 4d. **Success:** on a synthetic 50-trace test set with planted anchoring sequences, J1 fires at >80% precision and >60% recall vs hand-labeled.
 
+### J-Wire. Agent-prompt wiring + dogfood validation [next, blocks J5+]
+Track J ships *soft warnings* on `RecallResult`: C5 `suppressionSummary` (v1.13.0), J3.2 `planningFallacyHint` (v1.13.1), J1 `anchoringHint` (v1.13.2). All three are passive fields the calling agent must KNOW to read. No agent prompt today instructs Claude to scan them on every recall, which means the warnings may ship dark. Before J5 / J2 / J6 / J7 add more detectors to the same unread surface, prove (or disprove) that the existing three reach the agent. **Deliverable:** MCP-host system-prompt addendum + dogfood diary capturing whether Claude organically references each warning. **Effort:** 1-3h smoke test; 1-2d wiring if smoke test confirms warnings do not surface organically. **Success:** during dogfood, >=1 instance of Claude either (a) quoting the warning verbatim, (b) changing recommended action based on it, or (c) asking the user to confirm in light of it. Failure -> ship J-Wire prompt addendum, then re-run dogfood. **Blocks:** J5, J2, J6, J7 (do not ship more Track J detectors against an unread surface).
+
 ### J2. Availability-bias detector [planned]
 Flag when top-K is dominated by recent entries (>70% in last 24h) on a query class whose historical answers have averaged older. Uses tag-class base rates from `audit_log`. **Effort:** 4d. **Success:** on the LongMemEval temporal-reasoning slice, fires on queries whose correct-answer `created` predates top-K median by >X days at >70% precision.
 
@@ -566,6 +569,8 @@ Do J1-J7 compound or cancel? J1 (anchoring, recurrence-biased) + J2 (availabilit
 
 ### Discipline note (binding)
 J1-J8 emit *soft warnings* the calling agent decides whether to act on; hippo never auto-rewrites a recall result or suppresses a memory based on a bias score. Same quarantine logic as Track I conjectures: surface, don't assert. Detector firing rates are observability-first; precision/recall reported in `recall --why` and the brain observatory dashboard, never silently applied as a filter. This keeps Track J consistent with `docs/RETRACTION.md` discipline.
+
+**Wire-or-don't-ship discipline (added 2026-05-27):** detectors land on the response payload AND in the MCP host system prompt within the same arc; the next-J item never ships against an unread surface. J-Wire dogfood gates J5+.
 
 ---
 

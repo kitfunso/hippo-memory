@@ -63,6 +63,14 @@ Detail in §"v0.26 — UI Redesign (warm parchment + 3D)" below. Design locked a
 
 Research-not-enterprise items; re-prioritise only after items 1-5 above. B1 ACC EVC calibration, B3 dlPFC goal-stack depth (MVP+depth shipped, but research workload-validity gates returned mixed signals — see `docs/RETRACTION.md`), C3 Pineal ambient state vector, E2 first-class `decision` / `handoff` object promotion.
 
+### Engineering hygiene (release pipeline)
+
+Cross-cutting tickets surfaced by the week-of-2026-05-21 retro. Small, automate-or-die scope.
+
+- [ ] **`prepublishOnly` version-disagreement check** (1-2h). Add a script that greps the repo for any manifest `version` field disagreeing with `package.json`, and fail the publish if they don't match. Kills the v1.12.11 / v1.13.1 nested-manifest drift class for good (3 slips in 7 days, 2026-05-21 -> 2026-05-27).
+- [ ] **`pre-commit` em-dash guard** (~30min). Scan commit message bodies for em-dash in restricted contexts (commit body, CHANGELOG-pasted blocks, release-notes blocks). Multiple `git commit --amend` rounds this week prove the post-commit grep backstop isn't sticking at write time.
+- [ ] **`/codex` skill iteration-threshold heuristic** (~15min doc edit). Formalize the "rounds 4-5 producing only P2 issues -> ship with Known Limitations" rule that we hit organically on J1 round 6. Saves the threshold question for future episodes.
+
 ---
 
 ## v1.11.4 (Episode B) — follow-ups for Episode C / future
