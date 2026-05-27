@@ -619,10 +619,14 @@ async function handleRequest(
         httpRecallHistory = snapshotRing(httpRing);
       } else {
         // Telemetry: caller had no session_id so ring tracking skipped.
-        // Per the normal recall-audit convention (api.ts:802 logs only
-        // query_hash + query_length, NOT raw query text), avoid retaining
+        // Per the normal recall-audit convention (api.ts:854 stores
+        // SHA-256/16 hash of the query, NOT raw text), avoid retaining
         // prompts in audit_log here too — query content can contain
-        // secrets, PII, or RTBF-restricted material. Codex round-1 P1 catch.
+        // secrets, PII, or RTBF-restricted material. Codex round-2 P2
+        // catch: hashQueryText is a 32-bit FNV-1a designed for recall
+        // matching, NOT a privacy hash; brute-force trivial for low-
+        // entropy queries. Use the same SHA-256/16 truncation as the
+        // canonical recall audit.
         const dbForAudit = openHippoDb(opts.hippoRoot);
         try {
           appendAuditEvent(dbForAudit, {
@@ -630,7 +634,10 @@ async function handleRequest(
             actor: ctx.actor.subject,
             op: 'recall_anchor_skipped_no_session',
             targetId: undefined,
-            metadata: { query_hash: hashQueryText(q), query_length: q.length },
+            metadata: {
+              query_hash: createHash('sha256').update(q).digest('hex').slice(0, 16),
+              query_length: q.length,
+            },
           });
         } finally {
           closeHippoDb(dbForAudit);

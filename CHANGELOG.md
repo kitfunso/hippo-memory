@@ -37,6 +37,25 @@
     helpers); per-pipeline rings in cli.ts + mcp/server.ts + server.ts
     (no IPC; per-pipeline architecture).
 
+### Known limitations
+
+- **CLI J1 single-shot mode does NOT accumulate history.** Each `hippo
+  recall` invocation spawns a fresh Node process, so the module-level
+  ring buffer is recreated empty per invocation. J1 detection in CLI
+  fires only when cmdRecall is called multiple times within a single
+  long-running process (test harnesses, batch scripts that invoke
+  cmdRecall in-process). MCP and HTTP pipelines accumulate correctly
+  because their host processes are long-lived. CLI users who want
+  per-session anchoring in single-shot terminal usage should route
+  recalls through `hippo serve` + HTTP `GET /v1/memories?session_id=`.
+  A J1-v1.1 follow-up will add SQLite-backed CLI persistence (the
+  recall_history table from the original brainstorm option D).
+- **Single-process per-pipeline rings.** Multi-process deployments
+  (separate MCP + HTTP server) do not share J1 state. Cross-pipeline
+  anchoring (same memory anchors agent across CLI + MCP in the same
+  session) is a separate signal worth J8 composition matrix work; v1
+  is per-pipeline.
+
 ### Changed
 
 - `RecallResult.suppressionSummary.suppressedByInterference` semantics:

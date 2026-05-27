@@ -29,6 +29,7 @@ import { resolveTenantId } from '../tenant.js';
 import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, drillDown as apiDrillDown, assemble as apiAssemble, isPrivateScope, adminActor, buildSuppressionSummary, type Context as ApiContext } from '../api.js';
 import { computePredictionBaserate } from '../predictions.js';
 import { appendAuditEvent } from '../audit.js';
+import { createHash } from 'node:crypto';
 import {
   detectAnchoring,
   hashQueryText,
@@ -628,9 +629,10 @@ async function executeTool(
           }
         } else {
           // Telemetry: caller had no sessionId so ring tracking skipped.
-          // Per the normal recall-audit convention (hash + length only,
-          // no raw query text), avoid retaining prompts in audit_log.
-          // Codex round-1 P1 catch.
+          // Per the recall-audit convention at api.ts:854, use SHA-256/16
+          // for prompt hashing (NOT hashQueryText which is FNV-1a 32-bit
+          // for recall matching; brute-force trivial for low-entropy
+          // queries). Codex round-2 P2 catch.
           const dbForAudit = openHippoDb(hippoRoot);
           try {
             appendAuditEvent(dbForAudit, {
@@ -638,7 +640,10 @@ async function executeTool(
               actor: 'mcp',
               op: 'recall_anchor_skipped_no_session',
               targetId: undefined,
-              metadata: { query_hash: hashQueryText(query), query_length: query.length },
+              metadata: {
+                query_hash: createHash('sha256').update(query).digest('hex').slice(0, 16),
+                query_length: query.length,
+              },
             });
           } finally {
             closeHippoDb(dbForAudit);

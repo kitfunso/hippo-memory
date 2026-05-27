@@ -160,6 +160,7 @@ import { buildCorrectionLatency } from './correction-latency.js';
 import * as api from './api.js';
 import * as predictionsModule from './predictions.js';
 import { computePlanningFallacyHint } from './predictions.js';
+import { createHash } from 'node:crypto';
 import {
   detectAnchoring,
   hashQueryText,
@@ -174,6 +175,20 @@ import {
 // v0.33 / J1 — Module-level per-(tenant, session) recall-history ring map.
 // Each CLI process maintains its OWN Map; no IPC / no cross-process sharing
 // (plan v3 decision: per-pipeline rings, see docs/plans/2026-05-26-j1-anchoring-detector.md).
+//
+// IMPORTANT single-shot CLI limitation (codex round-2 catch): in normal
+// terminal usage each `hippo recall` invocation spawns a fresh Node
+// process, so this Map is recreated empty every time and J1 cannot
+// accumulate history across invocations. CLI J1 only fires in
+// long-running processes (the cmdSleep / consolidate loops, batch
+// scripts that call cmdRecall in-process, or tests). MCP and HTTP
+// pipelines DO accumulate because their host processes are long-lived
+// (hippo serve, MCP server). For CLI users who want per-session
+// anchoring in single-shot mode, the recommendation is to run via
+// `hippo serve` and call HTTP /v1/memories?session_id=... (the HTTP
+// ring persists across calls within the server process). A J1-v1.1
+// follow-up may add SQLite-backed CLI persistence (migration v30
+// recall_history table per the original brainstorm option D).
 const sessionRecallHistoryCli = new Map<string, RingBuffer>();
 
 /** Test-only: reset the module-level recall-history Map. Call from beforeEach. */
@@ -1240,12 +1255,12 @@ async function cmdRecall(
       appendRecall(ring, queryHash, topId, cmdAnchoringHint?.memoryId);
     } else {
       // Telemetry: caller had no sessionId so ring tracking is skipped.
-      // Per the normal recall-audit convention (hash + length only, no
-      // raw query text), avoid retaining prompts in audit_log here too —
-      // query content can carry secrets, PII, or RTBF-restricted material.
-      // Codex round-1 P1 catch.
+      // Per the recall-audit convention at api.ts:854, use SHA-256/16
+      // for prompt hashing (NOT hashQueryText which is FNV-1a 32-bit
+      // for recall matching; brute-force trivial for low-entropy
+      // queries). Codex round-1 P1 / round-2 P2 catch.
       emitCliAudit(hippoRoot, 'recall_anchor_skipped_no_session', undefined, {
-        query_hash: hashQueryText(query),
+        query_hash: createHash('sha256').update(query).digest('hex').slice(0, 16),
         query_length: query.length,
       });
     }
