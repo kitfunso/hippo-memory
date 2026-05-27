@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from hippo_memory import (
     HealthInfo, MemoryEnvelope, RecallEntry, RecallResult,
-    RecallSuppressionSummary, PlanningFallacyHint, AnchoringHint,
+    RecallSuppressionSummary, PlanningFallacyHint, PlanningFallacyWatching, AnchoringHint,
     ContextEntry, ContextResult, OutcomeResult, SleepResult,
     DrillResult, ArchiveResult, SupersedeResult, PromoteResult,
     ForgetResult, AssembleResult, AuthCreated, AuthKey, AuthRevoked,
@@ -290,6 +290,65 @@ def test_recall_result_without_planning_fallacy_hint_defaults_to_none():
         "tokens": 5,
     }
     instance = RecallResult.model_validate(payload_no_hint)
+    assert instance.planning_fallacy_hint is None
+    # v0.2.1 / v1.13.4 fold: watching is also None when not present.
+    assert instance.planning_fallacy_watching is None
+
+
+# ---------------------------------------------------------------------------
+# v0.2.1 / v1.13.4 — PlanningFallacyWatching round-trips
+# ---------------------------------------------------------------------------
+
+
+def test_planning_fallacy_watching_roundtrip_no_class_match():
+    """Wire shape: camelCase -> snake_case attrs preserved on dump."""
+    _roundtrip(PlanningFallacyWatching, {
+        "detectedPhrase": "will take 3 days",
+        "reason": "no_class_match",
+        "suggestion": "No matching prediction class for this forward-claim. Tag your prediction with `hippo predict --class <name>` to start tracking this class.",
+    })
+
+
+def test_planning_fallacy_watching_roundtrip_tiebreak():
+    """Tiebreak reason serializes alongside no_class_match."""
+    _roundtrip(PlanningFallacyWatching, {
+        "detectedPhrase": "ship by Friday",
+        "reason": "tiebreak",
+        "suggestion": "Multiple prediction classes tied on this query. Refine the query or rename overlapping classes to break the tie.",
+    })
+
+
+def test_planning_fallacy_watching_unknown_reason_forward_compat():
+    """v1 server emits 'no_class_match' | 'tiebreak'; future variants must not break SDK."""
+    watching = PlanningFallacyWatching.model_validate({
+        "detectedPhrase": "will land in 2 weeks",
+        "reason": "embedding_fallback_failed",  # hypothetical future reason
+        "suggestion": "...",
+    })
+    assert watching.reason == "embedding_fallback_failed"
+
+
+def test_recall_result_with_planning_fallacy_watching():
+    """RecallResult parses planningFallacyWatching when present + populates attribute.
+
+    Asserts mutual exclusivity: watching present, hint absent.
+    """
+    payload = {
+        "results": [{"id": "mem_a", "content": "a", "score": 0.9, "tokens": 5}],
+        "total": 1,
+        "tokens": 5,
+        "planningFallacyWatching": {
+            "detectedPhrase": "will take 3 days",
+            "reason": "no_class_match",
+            "suggestion": "Tag your prediction with `hippo predict --class <name>`.",
+        },
+    }
+    instance = RecallResult.model_validate(payload)
+    assert instance.planning_fallacy_watching is not None
+    assert instance.planning_fallacy_watching.reason == "no_class_match"
+    assert instance.planning_fallacy_watching.detected_phrase == "will take 3 days"
+    assert "hippo predict --class" in instance.planning_fallacy_watching.suggestion
+    # Mutual exclusivity: hint is absent on this payload.
     assert instance.planning_fallacy_hint is None
 
 

@@ -207,6 +207,37 @@ class PlanningFallacyHint(_Base):
     mean_ratio: float | None = None
 
 
+class PlanningFallacyWatching(_Base):
+    """v1.13.4 / J3.2 follow-up — "watching" variant surfaced on
+    RecallResult when the forward-claim regex matched but no
+    PlanningFallacyHint baserate could be produced. Mutually exclusive
+    with PlanningFallacyHint: at most one of the two is set per recall.
+
+    The pre-v1.13.4 silent paths (no class match, tiebreak) were the
+    dominant J3.2 failure mode — natural-language queries carrying
+    forward-claim phrases often share no non-stopword tokens with any
+    prediction class tag, so hippo emitted nothing despite the regex
+    match. The watching variant surfaces the detection event plus a
+    one-line suggestion so the agent can either re-tag the prediction
+    or pass the suggestion through to the user.
+
+    Wire shape matches src/api.ts ``PlanningFallacyWatching`` (camelCase
+    via ``_Base.alias_generator=to_camel``). Disabled server-side by
+    setting ``HIPPO_AUTODEBIAS=off``.
+    """
+
+    """The forward-claim phrase the detector matched (verbatim regex match)."""
+    detected_phrase: str
+    # 'no_class_match' | 'tiebreak'; widened to str for forward-compat
+    # (same lesson as PlanningFallacyHint.source — never dispatch on this
+    # field for control flow; future server may emit new reasons such as
+    # 'embedding_fallback_failed' once J3.3 ships).
+    reason: str
+    """One-line agent-facing suggestion for how the user can give hippo
+    enough signal to produce a baserate next time (e.g. tag a class)."""
+    suggestion: str
+
+
 class RecallResult(_Base):
     results: list[RecallEntry]
     total: int | None = None
@@ -222,6 +253,13 @@ class RecallResult(_Base):
     # disabled (HIPPO_AUTODEBIAS=off), no forward-claim detected, no class
     # resolved, ambiguous tiebreak, or no closed data in resolved class.
     planning_fallacy_hint: PlanningFallacyHint | None = None
+    # v1.13.4 / J3.2 follow-up — "watching" variant surfaced when the
+    # forward-claim regex matched but no PlanningFallacyHint could be
+    # produced (no class match, or tiebreak). Mutually exclusive with
+    # planning_fallacy_hint above. Closes the v1.13.4-era silent-failure
+    # path where natural-language forward-claims without overlapping
+    # class tokens emitted nothing despite the regex match.
+    planning_fallacy_watching: PlanningFallacyWatching | None = None
     # v0.33 / J1 — recall-recurrence anchoring hint. Absent (None) when
     # env disabled (HIPPO_ANCHORING=off), no sessionId, no R1/R2 pattern
     # detected, or pipeline does not run J1 detection. On CLI-routed

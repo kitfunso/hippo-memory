@@ -37,6 +37,7 @@ from hippo_memory.models import (
     RecallResult,
     RecallSuppressionSummary,
     PlanningFallacyHint,
+    PlanningFallacyWatching,
     AnchoringHint,
     ContextEntry,
     ContextResult,
@@ -57,7 +58,7 @@ from hippo_memory.models import (
     HippoError,
 )
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 __all__ = [
     "Hippo",
@@ -68,6 +69,7 @@ __all__ = [
     "RecallResult",
     "RecallSuppressionSummary",
     "PlanningFallacyHint",
+    "PlanningFallacyWatching",
     "AnchoringHint",
     "ContextEntry",
     "ContextResult",
