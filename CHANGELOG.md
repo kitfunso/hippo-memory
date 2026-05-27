@@ -1,5 +1,58 @@
 # Changelog
 
+## 1.13.3 (2026-05-27): C5 cutoff format normalisation (top placement + plain English)
+
+### Fixed
+
+- **C5 WYSIATI cutoff transparency no longer ships dark.** The dogfood
+  diary at `docs/dogfood/2026-05-27-track-j-warnings.md` captured a fresh
+  sub-agent reading a v1.13.2 hippo response: it summarised the visible
+  memories with zero mention of the 198 dropped candidates, the exact
+  WYSIATI failure mode C5 was supposed to flag. Two format defects caused
+  the dark-ship:
+  - **Bottom placement.** The line rendered AFTER the result list, so an
+    agent reading top-down never reached it before completing its answer.
+  - **Opaque jargon.** The `WYSIATI:` prefix is a Kahneman acronym; an
+    agent without Track J system-prompt context cannot parse it.
+- v1.13.3 moves the cutoff to a `## Cutoff` block at the TOP of the
+  response (alongside `## Anchoring hint` and `## Planning fallacy hint`)
+  and rewrites the prefix to plain English. New format:
+
+      ## Cutoff
+      Showing 2 of 200 candidates; 28 dropped to fit limit, 1 suppressed by interference.
+
+      ---
+
+  CLI single-liner remains compact: `Cutoff: showing 2 of 200 candidates;
+  28 dropped to fit limit.`
+
+### Changed
+
+- `src/mcp/server.ts`: `mcpSuppressionSummary` computation moved up so the
+  Cutoff block can render at TOP. `tailOrSummary` filter moved up to feed
+  both the Cutoff counters and the (unchanged) bottom rendering. Bottom
+  `WYSIATI:` append removed.
+- `src/cli.ts`: `Cutoff:` line moved from after the result list to
+  before. Old `WYSIATI:` block removed.
+- `tests/mcp-recall-suppression-summary.test.ts`: three regex assertions
+  updated from `WYSIATI: showing N/M` to `Showing N of M candidates`. New
+  **top-placement guard test** locks `## Cutoff` strictly before the
+  formatMemories `Found N memories:` header so a future refactor cannot
+  silently regress to bottom-placement.
+- The JSON wire-shape (`suppressionSummary` field on `RecallResult`) is
+  UNCHANGED. Consumers parsing the structured field see no difference.
+  Only the text-rendering changes.
+
+### Known limitations
+
+- The dogfood that motivated this fix tested a single sub-agent per warning
+  with one model. The v1.13.3 ship validates the architectural fix
+  (placement + wording) but a larger-N dogfood is the right follow-up
+  before declaring the J-Wire roadmap entry closed.
+- J3.2 silent-no-class-match path (also surfaced by the 2026-05-27 dogfood
+  diary) is NOT addressed in v1.13.3. Targeted for a separate small
+  patch with its own dogfood.
+
 ## 1.13.2 (2026-05-27): J1 anchoring detector (recall-recurrence)
 
 ### Added

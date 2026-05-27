@@ -1546,6 +1546,26 @@ async function cmdRecall(
     );
     console.log();
   }
+  // v1.13.3 / C5 follow-up — Cutoff line ABOVE the result list (was a
+  // "WYSIATI:" line BELOW the result list in v1.12.13-v1.13.2). Dogfood
+  // proof at docs/dogfood/2026-05-27-track-j-warnings.md: a fresh sub-agent
+  // reading the v1.13.2 bottom-placed line ignored it entirely and
+  // summarised the visible memories as if the dropped pool didn't exist
+  // (the exact WYSIATI failure mode C5 is supposed to flag). Top placement
+  // + plain English ("Cutoff:" not "WYSIATI:") closes the read gap.
+  if (showWhy) {
+    const s = cmdSuppressionSummary;
+    const clauses: string[] = [];
+    if (s.droppedByBudget > 0) clauses.push(`${s.droppedByBudget} dropped to fit limit`);
+    if (s.droppedPreRank > 0) clauses.push(`${s.droppedPreRank} filtered pre-rank`);
+    if (s.summarySubstitutionsAdded > 0) clauses.push(`${s.summarySubstitutionsAdded} summary substitutions added`);
+    if (s.freshTailAdded > 0) clauses.push(`${s.freshTailAdded} fresh-tail added`);
+    if (s.suppressedByInterference > 0) clauses.push(`${s.suppressedByInterference} suppressed by interference`);
+    if (clauses.length > 0) {
+      console.log(`Cutoff: showing ${results.length} of ${s.totalCandidates} candidates; ${clauses.join('; ')}.`);
+      console.log();
+    }
+  }
   console.log(`Found ${results.length} memories (${totalTokens} tokens) for: "${query}"\n`);
 
   for (const r of results) {
@@ -1578,25 +1598,9 @@ async function cmdRecall(
     console.log();
   }
 
-  // v1.12.13 / C5 — WYSIATI cutoff transparency in --why text output.
-  // Single-line summary after the result list, emitted only when --why is
-  // set AND at least one counter is non-zero. Skip zero-count clauses to
-  // keep the line tight. The calling agent uses this to spot when the
-  // shown set is a small slice of a much larger candidate pool (Kahneman
-  // "What You See Is All There Is" failure mode).
-  if (showWhy) {
-    const s = cmdSuppressionSummary;
-    const clauses: string[] = [];
-    if (s.droppedByBudget > 0) clauses.push(`${s.droppedByBudget} dropped by limit`);
-    if (s.droppedPreRank > 0) clauses.push(`${s.droppedPreRank} pre-rank filtered`);
-    if (s.summarySubstitutionsAdded > 0) clauses.push(`${s.summarySubstitutionsAdded} summary substitutions added`);
-    if (s.freshTailAdded > 0) clauses.push(`${s.freshTailAdded} fresh-tail added`);
-    if (s.suppressedByInterference > 0) clauses.push(`${s.suppressedByInterference} suppressed by interference`);
-    if (clauses.length > 0) {
-      console.log(`WYSIATI: showing ${results.length}/${s.totalCandidates}; ${clauses.join('; ')}.`);
-      console.log();
-    }
-  }
+  // v1.12.13 / C5 -> v1.13.3 follow-up: the WYSIATI bottom block was
+  // moved above the result list (see comment near the Cutoff render
+  // above). Function ends here.
 }
 
 async function cmdExplain(

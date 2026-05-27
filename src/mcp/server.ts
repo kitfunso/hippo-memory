@@ -664,6 +664,30 @@ async function executeTool(
       // set. Prepend BEFORE the memory list so the agent sees it first.
       // v0.33 / J1: Anchoring hint goes ABOVE planning-fallacy hint
       // (anchoring is the stronger cognitive-pull warning).
+      // v1.13.3 / C5 follow-up — Build MCP-pipeline suppressionSummary BEFORE
+      // the response is assembled so the Cutoff block can render at TOP
+      // alongside the other Track J hints. The dogfood
+      // (docs/dogfood/2026-05-27-track-j-warnings.md) showed the v1.13.0-v1.13.2
+      // bottom-placement was dark: a fresh sub-agent summarised the visible
+      // memories with zero mention of the dropped pool. Top-placement + plain-
+      // English rewrite fixes the read-rate without any system-prompt addendum.
+      const physicsIds = new Set(results.map((r) => r.entry.id));
+      const tailOrSummary = apiResult.results.filter(
+        (r) => (r.isFreshTail || r.isSummary) && !physicsIds.has(r.id),
+      );
+      const freshTailAddedMcp = tailOrSummary.filter((r) => r.isFreshTail && !r.isSummary).length;
+      const summarySubsAddedMcp = tailOrSummary.filter((r) => r.isSummary).length;
+      // v0.33 / J1: suppressedByInterference bumped on MCP's R2 fire.
+      const mcpSuppressedByInterference = mcpAnchoringHint?.reason === 'memory_dominance' ? 1 : 0;
+      const mcpSuppressionSummary = buildSuppressionSummary({
+        totalCandidates: totalCandidatesCountMcp,
+        droppedPreRank: droppedPreRankCountMcp,
+        droppedByBudget: droppedByBudgetCountMcp,
+        summarySubstitutionsAdded: summarySubsAddedMcp,
+        freshTailAdded: freshTailAddedMcp,
+        suppressedByInterference: mcpSuppressedByInterference,
+      });
+
       let response = '';
       if (mcpAnchoringHint) {
         response =
@@ -682,6 +706,26 @@ async function executeTool(
           `(detected: ${safePhrase})\n` +
           `\n---\n\n`;
       }
+
+      // v1.13.3 / C5 follow-up — Cutoff block (was "WYSIATI:" line at bottom
+      // in v1.13.0-v1.13.2). Top placement so the agent reads the cutoff
+      // before scrolling the result list. "Cutoff" is plain English; the old
+      // "WYSIATI:" acronym was opaque to agents without Kahneman context per
+      // the 2026-05-27 dogfood Trial 1.
+      const sMcp = mcpSuppressionSummary;
+      const cutoffClauses: string[] = [];
+      if (sMcp.droppedByBudget > 0) cutoffClauses.push(`${sMcp.droppedByBudget} dropped to fit limit`);
+      if (sMcp.droppedPreRank > 0) cutoffClauses.push(`${sMcp.droppedPreRank} filtered pre-rank`);
+      if (sMcp.summarySubstitutionsAdded > 0) cutoffClauses.push(`${sMcp.summarySubstitutionsAdded} summary substitutions added`);
+      if (sMcp.freshTailAdded > 0) cutoffClauses.push(`${sMcp.freshTailAdded} fresh-tail added`);
+      if (sMcp.suppressedByInterference > 0) cutoffClauses.push(`${sMcp.suppressedByInterference} suppressed by interference`);
+      if (cutoffClauses.length > 0) {
+        response +=
+          `## Cutoff\n` +
+          `Showing ${results.length} of ${sMcp.totalCandidates} candidates; ${cutoffClauses.join('; ')}.\n` +
+          `\n---\n\n`;
+      }
+
       response += formatMemories(results, hippoRoot);
 
       // v1.6.3 codex P2 fix. The physics/hybrid scorer drives the primary
@@ -690,10 +734,6 @@ async function executeTool(
       // the fresh-tail and substituted-summary items apiRecall produced —
       // otherwise the advertised MCP fields are silently ignored. Append
       // them as their own section, deduplicated against the physics ranking.
-      const physicsIds = new Set(results.map((r) => r.entry.id));
-      const tailOrSummary = apiResult.results.filter(
-        (r) => (r.isFreshTail || r.isSummary) && !physicsIds.has(r.id),
-      );
       if (tailOrSummary.length > 0) {
         const lines: string[] = ['', '## Fresh tail / substituted summaries'];
         for (const r of tailOrSummary) {
@@ -708,42 +748,10 @@ async function executeTool(
         response += '\n' + lines.join('\n');
       }
 
-      // v1.12.13 / C5 — Build MCP-pipeline suppressionSummary. The fresh-tail
-      // and substitution rows surfaced to the MCP user come from apiResult
-      // (the tailOrSummary append block above), so attribute them here. The
-      // MCP-pipeline summary REPLACES apiResult.suppressionSummary in the
-      // user-facing response; the api-pipeline counters described a different
-      // pipeline and would mislead.
-      const freshTailAddedMcp = tailOrSummary.filter((r) => r.isFreshTail && !r.isSummary).length;
-      const summarySubsAddedMcp = tailOrSummary.filter((r) => r.isSummary).length;
-      // v0.33 / J1: suppressedByInterference bumped on MCP's R2 fire.
-      const mcpSuppressedByInterference = mcpAnchoringHint?.reason === 'memory_dominance' ? 1 : 0;
-      const mcpSuppressionSummary = buildSuppressionSummary({
-        totalCandidates: totalCandidatesCountMcp,
-        droppedPreRank: droppedPreRankCountMcp,
-        droppedByBudget: droppedByBudgetCountMcp,
-        summarySubstitutionsAdded: summarySubsAddedMcp,
-        freshTailAdded: freshTailAddedMcp,
-        suppressedByInterference: mcpSuppressedByInterference,
-      });
-
       if (includeContinuity && apiResult.continuity) {
         response += '\n\n' + formatContinuityBlock(apiResult.continuity);
       }
 
-      // v1.12.13 / C5 — WYSIATI summary appended to the MCP text response
-      // when at least one non-budget-cut counter is non-zero. Tells the
-      // calling agent how much was filtered before the visible result list.
-      const sMcp = mcpSuppressionSummary;
-      const wysiatiClauses: string[] = [];
-      if (sMcp.droppedByBudget > 0) wysiatiClauses.push(`${sMcp.droppedByBudget} dropped by budget`);
-      if (sMcp.droppedPreRank > 0) wysiatiClauses.push(`${sMcp.droppedPreRank} pre-rank filtered`);
-      if (sMcp.summarySubstitutionsAdded > 0) wysiatiClauses.push(`${sMcp.summarySubstitutionsAdded} summary substitutions added`);
-      if (sMcp.freshTailAdded > 0) wysiatiClauses.push(`${sMcp.freshTailAdded} fresh-tail added`);
-      if (sMcp.suppressedByInterference > 0) wysiatiClauses.push(`${sMcp.suppressedByInterference} suppressed by interference`);
-      if (wysiatiClauses.length > 0) {
-        response += `\n\nWYSIATI: showing ${results.length}/${sMcp.totalCandidates}; ${wysiatiClauses.join('; ')}.`;
-      }
       return response;
     }
 

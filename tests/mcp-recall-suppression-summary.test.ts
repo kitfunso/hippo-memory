@@ -1,5 +1,5 @@
 /**
- * v1.12.13 / C5 — WYSIATI cutoff transparency for the MCP hippo_recall path.
+ * v1.12.13 / C5 — cutoff transparency for the MCP hippo_recall path.
  *
  * Proof-of-fix for the plan-eng-critic round 1 CRIT: MCP runs a SECOND
  * physics/hybrid pipeline (src/mcp/server.ts loadAllEntries -> scope filter
@@ -12,8 +12,15 @@
  *
  * This test seeds memories such that the MCP physics/hybrid path
  * (loadAllEntries) sees MORE candidates than the api.recall path
- * (loadRecallSearchEntries returns BM25-pruned set), then asserts the WYSIATI
+ * (loadRecallSearchEntries returns BM25-pruned set), then asserts the Cutoff
  * line in the MCP text response reflects the LARGER pipeline's count.
+ *
+ * v1.13.3 update: the WYSIATI line at the BOTTOM of the response was moved
+ * to a "## Cutoff" block at the TOP (alongside other Track J hints) and
+ * the "WYSIATI:" prefix was rewritten to plain English. Dogfood proof at
+ * docs/dogfood/2026-05-27-track-j-warnings.md showed the bottom-placed
+ * jargon-prefixed line did not reach the calling agent. Tests updated +
+ * a new top-placement guard added below.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -53,7 +60,7 @@ function extractText(res: unknown): string {
   return r?.result?.content?.[0]?.text ?? '';
 }
 
-describe('mcp hippo_recall WYSIATI suppressionSummary (C5, v1.12.13)', () => {
+describe('mcp hippo_recall Cutoff suppressionSummary (C5, v1.12.13 + v1.13.3)', () => {
   let home: string;
   let originalHome: string | undefined;
 
@@ -69,9 +76,9 @@ describe('mcp hippo_recall WYSIATI suppressionSummary (C5, v1.12.13)', () => {
     else process.env.HIPPO_HOME = originalHome;
   });
 
-  it('MCP text response includes WYSIATI line when filter activity is non-zero', async () => {
+  it('MCP text response includes Cutoff block when filter activity is non-zero', async () => {
     // Seed 30 query-matching rows with content padded to force the physics/
-    // hybrid budget to drop some, so droppedByBudget > 0 and WYSIATI fires.
+    // hybrid budget to drop some, so droppedByBudget > 0 and Cutoff fires.
     // Each row ~100 chars; tight budget = 200 tokens forces ~10 rows max.
     for (let i = 0; i < 30; i++) {
       writeEntry(home, createMemory(`omega ${i} ${'padding text '.repeat(20)}`, {
@@ -86,18 +93,18 @@ describe('mcp hippo_recall WYSIATI suppressionSummary (C5, v1.12.13)', () => {
       actor: { subject: 'mcp:test', role: 'admin' },
     });
     const text = extractText(res);
-    // The MCP-pipeline WYSIATI line surfaces in text response when any
-    // non-zero counter exists. Format: "WYSIATI: showing N/M; ..."
-    expect(text).toMatch(/WYSIATI: showing \d+\/\d+;/);
+    // v1.13.3: format is "## Cutoff\nShowing N of M candidates; ..." (was
+    // bottom-placed "WYSIATI: showing N/M; ..." in v1.12.13-v1.13.2).
+    expect(text).toMatch(/## Cutoff\nShowing \d+ of \d+ candidates;/);
   });
 
-  it('MCP WYSIATI line reflects MCP physics/hybrid pipeline counts (NOT api.recall pipeline counts)', async () => {
+  it('MCP Cutoff line reflects MCP physics/hybrid pipeline counts (NOT api.recall pipeline counts)', async () => {
     // MCP pipeline uses loadAllEntries (all 30 rows). api.recall pipeline
     // uses loadRecallSearchEntries with a query-specific BM25 prune.
     // For a generic query that matches every row, both pipelines see all 30,
     // but the MCP pipeline's totalCandidates derives from loadAllEntries
     // which has no per-query LIMIT, so it should reflect the full store size.
-    // Tight budget forces droppedByBudget > 0 so WYSIATI emits.
+    // Tight budget forces droppedByBudget > 0 so Cutoff emits.
     for (let i = 0; i < 30; i++) {
       writeEntry(home, createMemory(`omega ${i} ${'padding text '.repeat(20)}`, {
         layer: Layer.Buffer,
@@ -111,8 +118,8 @@ describe('mcp hippo_recall WYSIATI suppressionSummary (C5, v1.12.13)', () => {
       actor: { subject: 'mcp:test', role: 'admin' },
     });
     const text = extractText(res);
-    // Extract WYSIATI totalCandidates value via regex.
-    const match = text.match(/WYSIATI: showing (\d+)\/(\d+);/);
+    // Extract Cutoff totalCandidates value via regex.
+    const match = text.match(/Showing (\d+) of (\d+) candidates;/);
     expect(match).not.toBeNull();
     if (match) {
       const totalShown = parseInt(match[1], 10);
@@ -126,14 +133,46 @@ describe('mcp hippo_recall WYSIATI suppressionSummary (C5, v1.12.13)', () => {
     }
   });
 
-  it('no WYSIATI line when memory store is empty (no non-zero counters)', async () => {
-    // Empty store -> 0 candidates, 0 of everything -> WYSIATI not emitted.
+  it('no Cutoff block when memory store is empty (no non-zero counters)', async () => {
+    // Empty store -> 0 candidates, 0 of everything -> Cutoff not emitted.
     const res = await callTool(3, 'hippo_recall', { query: 'nothing' }, {
       hippoRoot: home,
       tenantId: 'default',
       actor: { subject: 'mcp:test', role: 'admin' },
     });
     const text = extractText(res);
+    expect(text).not.toMatch(/## Cutoff/);
+    // v1.13.3 regression guard: the OLD "WYSIATI:" prefix must never appear
+    // again — its bottom-placement was the dogfood-confirmed read failure.
     expect(text).not.toMatch(/WYSIATI:/);
+  });
+
+  it('v1.13.3 top-placement guard: Cutoff block appears BEFORE the first memory row', async () => {
+    // Dogfood (docs/dogfood/2026-05-27-track-j-warnings.md) confirmed the
+    // pre-v1.13.3 bottom-placement was the read-failure root cause. This
+    // test locks the new top-placement so a future refactor cannot regress
+    // the warning back below the result list without breaking the suite.
+    for (let i = 0; i < 30; i++) {
+      writeEntry(home, createMemory(`omega ${i} ${'padding text '.repeat(20)}`, {
+        layer: Layer.Buffer,
+        kind: 'raw' as MemoryKind,
+        tenantId: 'default',
+      }));
+    }
+    const res = await callTool(4, 'hippo_recall', { query: 'omega', budget: 200 }, {
+      hippoRoot: home,
+      tenantId: 'default',
+      actor: { subject: 'mcp:test', role: 'admin' },
+    });
+    const text = extractText(res);
+    const cutoffIdx = text.indexOf('## Cutoff');
+    // formatMemories starts with "Found N memories:" header; that's the
+    // robust anchor for "where the result list begins". Lock the Cutoff
+    // block strictly before it so a future refactor cannot regress to
+    // bottom-placement.
+    const firstMemoryIdx = text.search(/^Found \d+ memories:/m);
+    expect(cutoffIdx).toBeGreaterThanOrEqual(0);
+    expect(firstMemoryIdx).toBeGreaterThanOrEqual(0);
+    expect(cutoffIdx).toBeLessThan(firstMemoryIdx);
   });
 });
