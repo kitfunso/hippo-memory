@@ -611,12 +611,18 @@ async function handleRequest(
     // body IS api.recall's result directly. So the api.recall-computed
     // hint flows through. HIPPO_ANCHORING=off short-circuits.
     let httpRecallHistory: ReturnType<typeof snapshotRing> | undefined;
-    let httpRing: RingBuffer | undefined;
+    let httpRingKey: string | undefined;
     if (process.env.HIPPO_ANCHORING !== 'off') {
       if (sessionId) {
-        const ringKey = buildSessionKey(ctx.tenantId, sessionId);
-        httpRing = getOrCreateRing(sessionRecallHistoryHttp, ringKey);
-        httpRecallHistory = snapshotRing(httpRing);
+        // Codex round-5 P2 catch: do NOT mutate sessionRecallHistoryHttp
+        // before recall() preflight runs. A request with an invalid
+        // scorer_window / fresh_tail_count would create-or-touch the
+        // session ring (LRU-evicting valid sessions) even though recall
+        // throws 400. Snapshot the EXISTING ring if present; only
+        // create-or-touch after the recall returns successfully.
+        httpRingKey = buildSessionKey(ctx.tenantId, sessionId);
+        const existingRing = sessionRecallHistoryHttp.get(httpRingKey);
+        httpRecallHistory = existingRing ? snapshotRing(existingRing) : [];
       } else {
         // Telemetry: caller had no session_id so ring tracking skipped.
         // Per the normal recall-audit convention (api.ts:854 stores
@@ -659,11 +665,15 @@ async function handleRequest(
       ...(httpRecallHistory !== undefined ? { recallHistory: httpRecallHistory } : {}),
     });
 
-    // v0.33 / J1 — append AFTER recall completes (snapshot was taken before).
-    // anchoredOn carries the memoryId of any hint that fired (api.recall
-    // computed it from the same snapshot we passed in), feeding the cooldown
-    // logic for the NEXT recall on this session.
-    if (httpRing) {
+    // v0.33 / J1 — append AFTER recall completes (snapshot was taken before
+    // recall() ran). anchoredOn carries the memoryId of any hint that fired
+    // (api.recall computed it from the same snapshot we passed in), feeding
+    // the cooldown logic for the NEXT recall on this session.
+    // Codex round-5 P2 fix: create-or-touch the ring ONLY HERE, after recall
+    // returns successfully. Invalid requests that throw 400 in recall()
+    // never reach this point, so they cannot LRU-evict valid sessions.
+    if (httpRingKey) {
+      const httpRing = getOrCreateRing(sessionRecallHistoryHttp, httpRingKey);
       const topId = result.results[0]?.id ?? null;
       appendRecall(httpRing, hashQueryText(q), topId, result.anchoringHint?.memoryId);
     }

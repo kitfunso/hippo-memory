@@ -101,17 +101,24 @@ export function hashQueryText(query: string): number {
   // non-English queries. \p{L} = any Unicode letter, \p{N} = any Unicode
   // number, \p{M} = combining marks (preserve composed accented chars).
   // Requires the /u flag and Node >= 12.
-  const tokens = query
+  const normalized = query
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\p{M}\s]/gu, ' ')
     .split(/\s+/)
-    // Drop tokens shorter than 3 chars to match the normalizer contract
-    // (filler / stop words). Without this, `a login bug` vs `login bug`
-    // hash differently and inflate R2 distinct-query counts, firing
-    // memory_dominance on repeated phrasings of the same question.
-    // Codex round-4 P2 catch. Matches the same >=3 filter used in
-    // src/forward-claim-detector.ts for class-resolver tokens.
-    .filter((t) => t.length >= 3);
+    .filter((t) => t.length > 0);
+  // Drop tokens shorter than 3 chars to match the normalizer contract
+  // (filler / stop words). Without this, `a login bug` vs `login bug`
+  // hash differently and inflate R2 distinct-query counts, firing
+  // memory_dominance on repeated phrasings of the same question.
+  // Codex round-4 P2 catch. Matches the same >=3 filter in
+  // src/forward-claim-detector.ts for class-resolver tokens.
+  const filtered = normalized.filter((t) => t.length >= 3);
+  // Fallback when the >=3 filter would collapse the entire query to
+  // empty: CJK queries like `测试` / `环境` are 2-char tokens; English
+  // acronyms like `AI` / `UI` are 2 chars. Without this fallback they
+  // all hash to fnv1a32(''), producing false R1 collisions across
+  // distinct short-token queries. Codex round-5 P2 catch.
+  const tokens = filtered.length > 0 ? filtered : normalized;
   const deduped = Array.from(new Set(tokens)).sort();
   return fnv1a32(deduped.join(' '));
 }

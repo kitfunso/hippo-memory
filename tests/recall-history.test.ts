@@ -101,6 +101,22 @@ describe('hashQueryText', () => {
     // carry domain meaning so we don't try to filter all stop words.
     expect(hashQueryText('the login bug')).not.toBe(hashQueryText('login bug'));
   });
+
+  // Codex round-5 P2 catch: when all tokens are short (<3 chars), the
+  // >=3 filter would collapse the entire query to empty -> hash 0.
+  // Fallback: use the unfiltered normalized tokens when filter empties.
+  it('does NOT collapse all-short-token queries to hash 0 (CJK + acronyms)', () => {
+    const cn = hashQueryText('测试 环境'); // 2-char CJK tokens
+    const ai = hashQueryText('AI UI'); // 2-char acronyms
+    const jp = hashQueryText('テスト'); // 3-char ok, but verify still
+    expect(cn).not.toBe(0);
+    expect(ai).not.toBe(0);
+    expect(jp).not.toBe(0);
+    // Distinct all-short-token queries produce distinct hashes (no false R1).
+    expect(cn).not.toBe(ai);
+    expect(hashQueryText('测试')).not.toBe(hashQueryText('环境'));
+    expect(hashQueryText('AI')).not.toBe(hashQueryText('UI'));
+  });
 });
 
 describe('buildSessionKey', () => {
