@@ -82,7 +82,7 @@ describe('mcp hippo_recall anchoringHint (J1, v0.33)', () => {
     __resetSessionRecallHistoryMcp();
   });
 
-  it('R2 fires after >=3 recalls with same query on same session (memory_dominance)', async () => {
+  it('R2 fires after >=3 recalls with same query on same session (memory_dominance + suppressedByInterference bumped)', async () => {
     const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'mcp' as const, role: 'admin' as const } };
     // Three recalls with DIFFERENT queries on the same session — same top
     // memory should win each time and trigger R2 on the 3rd.
@@ -93,6 +93,12 @@ describe('mcp hippo_recall anchoringHint (J1, v0.33)', () => {
     expect(text).toContain('## Anchoring hint');
     expect(text).toContain('[anchored_on:');
     expect(countAuditOps(home, 'recall_anchor_detected_memory_dominance')).toBeGreaterThanOrEqual(1);
+    // Plan v3 Acceptance §6: suppressedByInterference must bump on ALL THREE
+    // user-facing surfaces when R2 fires. MCP's WYSIATI line surfaces the
+    // mcpSuppressionSummary counter — assert the bump is visible there.
+    // Independent-review-critic round 1 catch: prior test docstring claimed
+    // this assertion but had no actual expect() — now backed.
+    expect(text).toMatch(/suppressed by interference|interference/i);
   });
 
   it('does NOT render anchoring block on the first recall (no history yet)', async () => {
