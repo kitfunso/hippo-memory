@@ -628,6 +628,9 @@ async function executeTool(
           }
         } else {
           // Telemetry: caller had no sessionId so ring tracking skipped.
+          // Per the normal recall-audit convention (hash + length only,
+          // no raw query text), avoid retaining prompts in audit_log.
+          // Codex round-1 P1 catch.
           const dbForAudit = openHippoDb(hippoRoot);
           try {
             appendAuditEvent(dbForAudit, {
@@ -635,7 +638,7 @@ async function executeTool(
               actor: 'mcp',
               op: 'recall_anchor_skipped_no_session',
               targetId: undefined,
-              metadata: { query: query.slice(0, 200) },
+              metadata: { query_hash: hashQueryText(query), query_length: query.length },
             });
           } finally {
             closeHippoDb(dbForAudit);

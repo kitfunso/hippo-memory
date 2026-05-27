@@ -88,14 +88,19 @@ const DEFAULT_COOLDOWN = 3;
  */
 export function hashQueryText(query: string): number {
   if (!query) return 0;
-  const normalized = query
+  // Token dedup before join: the R2 contract says "distinct queries"
+  // means semantically distinct, so `foo bar` and `foo foo bar` should
+  // collapse to the same hash. Without dedup, simple phrasing
+  // variations (typos, doubled tokens, intensifiers) would inflate
+  // distinct-query counts and trip R2 on essentially the same question.
+  // Codex round-1 catch.
+  const tokens = query
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, ' ')
     .split(/\s+/)
-    .filter((t) => t.length > 0)
-    .sort()
-    .join(' ');
-  return fnv1a32(normalized);
+    .filter((t) => t.length > 0);
+  const deduped = Array.from(new Set(tokens)).sort();
+  return fnv1a32(deduped.join(' '));
 }
 
 function fnv1a32(text: string): number {

@@ -1240,8 +1240,13 @@ async function cmdRecall(
       appendRecall(ring, queryHash, topId, cmdAnchoringHint?.memoryId);
     } else {
       // Telemetry: caller had no sessionId so ring tracking is skipped.
+      // Per the normal recall-audit convention (hash + length only, no
+      // raw query text), avoid retaining prompts in audit_log here too —
+      // query content can carry secrets, PII, or RTBF-restricted material.
+      // Codex round-1 P1 catch.
       emitCliAudit(hippoRoot, 'recall_anchor_skipped_no_session', undefined, {
-        query: query.slice(0, 200),
+        query_hash: hashQueryText(query),
+        query_length: query.length,
       });
     }
   }
@@ -1483,6 +1488,7 @@ async function cmdRecall(
       total: output.length,
       suppressionSummary: cmdSuppressionSummary,
       ...(cmdPlanningFallacyHint ? { planningFallacyHint: cmdPlanningFallacyHint } : {}),
+      ...(cmdAnchoringHint ? { anchoringHint: cmdAnchoringHint } : {}),
     };
     if (includeContinuity) {
       jsonOut.continuity = {
