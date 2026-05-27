@@ -55,6 +55,19 @@
   anchoring (same memory anchors agent across CLI + MCP in the same
   session) is a separate signal worth J8 composition matrix work; v1
   is per-pipeline.
+- **`hashQueryText` normalization is approximate.** The detector hashes
+  queries via lowercase + Unicode-aware tokenization + sorted dedup of
+  tokens >= 3 chars, with a fallback to all tokens when the >=3 filter
+  empties (CJK / acronym queries). Two known residual edges:
+  (a) all-short-token queries like `AI` vs `UI` may collide via the
+  empty-filter fallback when no longer tokens are present;
+  (b) acronym-plus-longer queries like `AI login bug` vs `UI login bug`
+  collide because the >=3 filter keeps only `[login, bug]` shared.
+  Both produce a small rate of false R1 query_repeat collisions in
+  practice. Workarounds: callers can prepend a unique session-scoped
+  prefix to anchor queries that include acronyms. J1-v1.1 will adopt
+  a richer tokenizer (likely with optional embedding-based distinctness
+  per the J1 plan's J1-v2 follow-up).
 
 ### Changed
 
