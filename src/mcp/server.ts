@@ -705,6 +705,21 @@ async function executeTool(
           `${h.baserateSummary}\n` +
           `(detected: ${safePhrase})\n` +
           `\n---\n\n`;
+      } else if (apiResult.planningFallacyWatching) {
+        // v1.13.4 / J3.2 follow-up — surface the watching variant when
+        // the regex matched but no baserate could be produced
+        // (no_class_match / tiebreak). Mutually exclusive with the hint
+        // block above. Suggestion text directs the user toward an action
+        // (typically: tag a prediction class) that would unblock the
+        // hint next time.
+        const w = apiResult.planningFallacyWatching;
+        const safePhrase = JSON.stringify(w.detectedPhrase);
+        response +=
+          `## Planning fallacy watch\n` +
+          `Reason: ${w.reason}\n` +
+          `${w.suggestion}\n` +
+          `(detected: ${safePhrase})\n` +
+          `\n---\n\n`;
       }
 
       // v1.13.3 / C5 follow-up — Cutoff block (was "WYSIATI:" line at bottom

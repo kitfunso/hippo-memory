@@ -68,7 +68,11 @@ import { consolidate } from './consolidate.js';
 import { loadConfig } from './config.js';
 import { deduplicateStore } from './dedupe.js';
 import { computeAmbientState, type AmbientState } from './ambient.js';
-import { computePlanningFallacyHint, type PlanningFallacyHint } from './predictions.js';
+import {
+  computePlanningFallacyOutput,
+  type PlanningFallacyHint,
+  type PlanningFallacyWatching,
+} from './predictions.js';
 import {
   detectAnchoring,
   hashQueryText,
@@ -449,6 +453,24 @@ export interface RecallResult {
    * Disabled by setting `HIPPO_AUTODEBIAS=off`.
    */
   planningFallacyHint?: PlanningFallacyHint;
+  /**
+   * v1.13.4 / J3.2 follow-up — "watching" variant emitted when the
+   * forward-claim regex matched but no baserate could be produced
+   * (either because no prediction class scored ≥ 1 on token overlap,
+   * or because ≥2 classes tied at the best score). Mutually exclusive
+   * with `planningFallacyHint`: at most one of the two is set per
+   * recall. Dogfood diary (docs/dogfood/2026-05-27-track-j-warnings.md)
+   * Trial 2a confirmed the pre-v1.13.4 silent-no-class-match path was
+   * the dominant J3.2 failure mode, because natural-language queries
+   * rarely share non-stopword tokens with class tags. The watching
+   * variant gives the agent enough signal to either re-tag the
+   * prediction or pass the suggestion through to the user.
+   *
+   * Pipeline-invariant same as `planningFallacyHint`. Honoured by
+   * api.recall, cmdRecall, and MCP handler render paths.
+   * Disabled by setting `HIPPO_AUTODEBIAS=off`.
+   */
+  planningFallacyWatching?: PlanningFallacyWatching;
   /**
    * v0.33 / J1 (v1.13.2) — recall-recurrence anchoring hint. Populated
    * when api.recall's `opts.recallHistory` snapshot + the just-computed
@@ -928,12 +950,18 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   // per-pipeline). opts.actor threads through to the inner
   // computePredictionBaserate call so MCP/HTTP-originated hints attribute
   // correctly instead of defaulting to 'cli'. Disabled by HIPPO_AUTODEBIAS=off.
-  const planningFallacyHint = computePlanningFallacyHint(
+  // v1.13.4: switched from computePlanningFallacyHint to
+  // computePlanningFallacyOutput so the no-class-match / tiebreak
+  // watching variant can also reach the caller surface. The two
+  // outputs are mutually exclusive; we splat both as optional fields.
+  const planningFallacyOutput = computePlanningFallacyOutput(
     ctx.hippoRoot,
     ctx.tenantId,
     opts.query,
     { actor: ctx.actor.subject },
   );
+  const planningFallacyHint = planningFallacyOutput.hint ?? null;
+  const planningFallacyWatching = planningFallacyOutput.watching ?? null;
 
   // v0.33 / J1 (v1.13.2) — recall-recurrence anchoring detection.
   // Uses opts.recallHistory (caller-supplied snapshot) + this pipeline's
@@ -999,6 +1027,7 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
       suppressedByInterference: suppressedByInterferenceCount,
     }),
     ...(planningFallacyHint ? { planningFallacyHint } : {}),
+    ...(planningFallacyWatching ? { planningFallacyWatching } : {}),
     ...(anchoringHint ? { anchoringHint } : {}),
   };
 }

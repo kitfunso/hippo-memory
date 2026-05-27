@@ -596,6 +596,45 @@ export interface PlanningFallacyHint {
   meanRatio: number | null;
 }
 
+/**
+ * v1.13.4 / J3.2 follow-up — "watching" variant emitted when the
+ * forward-claim regex matched but no PlanningFallacyHint baserate was
+ * returned. Dogfood diary (docs/dogfood/2026-05-27-track-j-warnings.md)
+ * Trial 2a confirmed the pre-v1.13.4 silent paths were the most common
+ * real-world J3.2 failure mode: a natural-language query carries a
+ * forward-claim phrase but its non-stopword tokens don't overlap with
+ * any prediction class tag, so hippo silently emitted nothing despite
+ * the regex match. The watching variant surfaces the detection event
+ * + a one-line suggestion so the agent can either re-tag the prediction
+ * or pass the suggestion through to the user.
+ */
+export interface PlanningFallacyWatching {
+  /** The forward-claim phrase the detector matched (verbatim regex match snippet). */
+  detectedPhrase: string;
+  /** Why hippo couldn't produce a baserate hint despite the match.
+   *  - 'no_class_match': no class scored >=1 on token overlap.
+   *  - 'tiebreak': >=2 classes tied at the same best score (silent on ambiguity). */
+  reason: 'no_class_match' | 'tiebreak';
+  /** One-line agent-facing suggestion for how the user can give hippo
+   *  enough signal to produce a baserate next time. */
+  suggestion: string;
+}
+
+/**
+ * v1.13.4 / J3.2 follow-up — richer return type for
+ * `computePlanningFallacyOutput`. Carries EITHER `hint` (baserate
+ * available) OR `watching` (regex fired, no baserate), or NEITHER (mode=off,
+ * no queryText, no regex match, or nClosed=0 silent path). Never both.
+ *
+ * Existing `computePlanningFallacyHint` (preserved as a backward-compat
+ * wrapper) returns only the hint variant; new code should call
+ * `computePlanningFallacyOutput` directly to surface the watching variant.
+ */
+export interface PlanningFallacyOutput {
+  hint?: PlanningFallacyHint;
+  watching?: PlanningFallacyWatching;
+}
+
 export type AutodebiasMode = 'off' | 'regex';
 
 export interface ComputePlanningFallacyHintOpts {
@@ -691,50 +730,57 @@ function resolveClassFromTokens(
 }
 
 /**
- * J3.2 orchestrator. Composes the forward-claim detector + class resolver +
- * baserate compute, with telemetry-grade audit emission at every decision
- * point (success, no-class-match, tiebreak).
+ * J3.2 orchestrator (v1.13.4: richer return type — see computePlanningFallacyHint
+ * below for the backward-compat wrapper that returns only the hint variant).
  *
- * Returns null on any of:
+ * Composes the forward-claim detector + class resolver + baserate compute,
+ * with telemetry-grade audit emission at every decision point (success,
+ * no-class-match, tiebreak).
+ *
+ * Returns `{}` (neither hint nor watching) on:
  *   - mode === 'off' (env-disabled; pays only the env read, skips regex)
  *   - empty queryText
  *   - no forward-claim regex match
- *   - resolver returns no class (no overlap ≥ 1; emits no_class_match audit)
- *   - resolver returns tiebreak (≥2 classes tied at best; emits tiebreak audit)
  *   - resolved class has nClosed=0 (no historical data yet; silent)
  *
- * On success: calls computePredictionBaserate(..., emitAudit=false) so the
- * predict_baserate audit channel stays scoped to deliberate predict-
- * baserate calls (the orchestrator's own recall_autodebias_hint audit
- * carries n_closed + mean_ratio in metadata so no telemetry is lost), then
- * emits recall_autodebias_hint audit + returns the hint.
+ * Returns `{ watching: ... }` on (v1.13.4 NEW — was silent null pre-1.13.4):
+ *   - resolver returns no class (no overlap ≥ 1; emits no_class_match audit)
+ *   - resolver returns tiebreak (≥2 classes tied at best; emits tiebreak audit)
+ *
+ * Returns `{ hint: ... }` on success: calls computePredictionBaserate(...,
+ * emitAudit=false) so the predict_baserate audit channel stays scoped to
+ * deliberate predict-baserate calls (the orchestrator's own recall_autodebias_hint
+ * audit carries n_closed + mean_ratio in metadata so no telemetry is lost),
+ * then emits recall_autodebias_hint audit + returns the hint.
  *
  * Latency budget (plan §Latency): ~50us regex-only on miss; ~750-850us
  * on full match+resolve+baserate path. Well under 50ms target.
  */
-export function computePlanningFallacyHint(
+export function computePlanningFallacyOutput(
   hippoRoot: string,
   tenantId: string,
   queryText: string,
   opts: ComputePlanningFallacyHintOpts = {},
-): PlanningFallacyHint | null {
+): PlanningFallacyOutput {
   // Env read FIRST so AUTODEBIAS=off pays zero regex cost. Per-call read
   // (rather than module-load cache) is deliberate: tests env-toggle this
   // via process.env mutation without module reload.
   const mode: AutodebiasMode =
     opts.mode ?? (process.env.HIPPO_AUTODEBIAS === 'off' ? 'off' : 'regex');
-  if (mode === 'off') return null;
-  if (!queryText) return null;
+  if (mode === 'off') return {};
+  if (!queryText) return {};
 
   const match = detectForwardClaim(queryText);
-  if (!match) return null;
+  if (!match) return {};
 
   const actor = opts.actor ?? 'recall';
 
   const resolution = resolveClassFromTokens(hippoRoot, tenantId, match.classQueryTokens);
   if (resolution.tiebreak) {
     // Telemetry: forward-claim detected, ≥2 classes tied at best overlap.
-    // Silent to caller; surfaces in audit only.
+    // v1.13.4: now ALSO returns a watching variant so the caller surface
+    // can render a "watching but no baserate (tiebreak)" line. Audit emission
+    // unchanged (the audit channel is the telemetry-grade source of truth).
     const db = openHippoDb(hippoRoot);
     try {
       appendAuditEvent(db, {
@@ -747,13 +793,22 @@ export function computePlanningFallacyHint(
     } finally {
       closeHippoDb(db);
     }
-    return null;
+    return {
+      watching: {
+        detectedPhrase: match.phrase,
+        reason: 'tiebreak',
+        suggestion:
+          'Multiple prediction classes tied on this query. Refine the query or rename overlapping classes to break the tie.',
+      },
+    };
   }
   if (!resolution.classTag) {
     // Telemetry: forward-claim detected, no class scored ≥ 1.
     // This is the channel that drives the embedding-fallback decision
     // for J3.3 — high volume here = regex+token-overlap is missing
     // legitimate forward-claims that have NO obvious class signal.
+    // v1.13.4: now ALSO returns a watching variant so the caller surface
+    // can render a "watching but no baserate (no class match)" line.
     const db = openHippoDb(hippoRoot);
     try {
       appendAuditEvent(db, {
@@ -766,7 +821,14 @@ export function computePlanningFallacyHint(
     } finally {
       closeHippoDb(db);
     }
-    return null;
+    return {
+      watching: {
+        detectedPhrase: match.phrase,
+        reason: 'no_class_match',
+        suggestion:
+          'No matching prediction class for this forward-claim. Tag your prediction with `hippo predict --class <name>` to start tracking this class.',
+      },
+    };
   }
 
   // emitAudit=false: avoid double-write to predict_baserate channel.
@@ -778,7 +840,7 @@ export function computePlanningFallacyHint(
     actor,
     /*emitAudit=*/ false,
   );
-  if (baserate.nClosed === 0) return null; // Silent — wait for closed data.
+  if (baserate.nClosed === 0) return {}; // Silent — wait for closed data.
 
   const db = openHippoDb(hippoRoot);
   try {
@@ -799,11 +861,31 @@ export function computePlanningFallacyHint(
   }
 
   return {
-    classTag: resolution.classTag,
-    baserateSummary: baserate.summary,
-    source: 'j3.2-auto',
-    detectedPhrase: match.phrase,
-    nClosed: baserate.nClosed,
-    meanRatio: baserate.meanRatio,
+    hint: {
+      classTag: resolution.classTag,
+      baserateSummary: baserate.summary,
+      source: 'j3.2-auto',
+      detectedPhrase: match.phrase,
+      nClosed: baserate.nClosed,
+      meanRatio: baserate.meanRatio,
+    },
   };
+}
+
+/**
+ * v1.13.4 backward-compat wrapper: thin shim around
+ * computePlanningFallacyOutput that returns only the hint variant.
+ * Existing callers (api.recall, cmdRecall, MCP handler) that don't yet
+ * consume the watching variant continue to work unchanged.
+ *
+ * New callers that want to surface the silent no-class-match / tiebreak
+ * paths to users should call computePlanningFallacyOutput directly.
+ */
+export function computePlanningFallacyHint(
+  hippoRoot: string,
+  tenantId: string,
+  queryText: string,
+  opts: ComputePlanningFallacyHintOpts = {},
+): PlanningFallacyHint | null {
+  return computePlanningFallacyOutput(hippoRoot, tenantId, queryText, opts).hint ?? null;
 }

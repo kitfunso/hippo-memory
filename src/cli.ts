@@ -159,7 +159,7 @@ import { buildProvenanceCoverage } from './provenance-coverage.js';
 import { buildCorrectionLatency } from './correction-latency.js';
 import * as api from './api.js';
 import * as predictionsModule from './predictions.js';
-import { computePlanningFallacyHint } from './predictions.js';
+import { computePlanningFallacyOutput } from './predictions.js';
 import { createHash } from 'node:crypto';
 import {
   detectAnchoring,
@@ -1303,14 +1303,18 @@ async function cmdRecall(
   // pipeline-invariant — same (hippoRoot, tenantId, query) inputs would
   // produce the same hint in api.recall — but the audit emission is
   // pipeline-local (one audit row per actual call, actor='cli' here).
-  // computePlanningFallacyHint short-circuits BEFORE the regex gate
+  // computePlanningFallacyOutput short-circuits BEFORE the regex gate
   // when HIPPO_AUTODEBIAS=off so the no-match path is effectively free.
-  const cmdPlanningFallacyHint = computePlanningFallacyHint(
+  // v1.13.4: switched to the richer Output type so the watching variant
+  // (regex fired, no class matched OR tiebreak) can also surface.
+  const cmdPlanningFallacyOutput = computePlanningFallacyOutput(
     hippoRoot,
     tenantId,
     query,
     { actor: 'cli' },
   );
+  const cmdPlanningFallacyHint = cmdPlanningFallacyOutput.hint ?? null;
+  const cmdPlanningFallacyWatching = cmdPlanningFallacyOutput.watching ?? null;
 
   // A5 audit: emit one 'recall' event per query, capturing the (truncated)
   // query text and the post-filter result count. Tenant resolved by emitCliAudit.
@@ -1406,6 +1410,7 @@ async function cmdRecall(
         // matches. A forward-claim query that finds no memories STILL
         // produces useful planning-fallacy debias when the class resolves.
         ...(cmdPlanningFallacyHint ? { planningFallacyHint: cmdPlanningFallacyHint } : {}),
+        ...(cmdPlanningFallacyWatching ? { planningFallacyWatching: cmdPlanningFallacyWatching } : {}),
         ...(cmdAnchoringHint ? { anchoringHint: cmdAnchoringHint } : {}),
       };
       if (includeContinuity) {
@@ -1434,6 +1439,15 @@ async function cmdRecall(
       const safePhrase = JSON.stringify(cmdPlanningFallacyHint.detectedPhrase);
       console.log(
         `Planning fallacy hint (class: ${cmdPlanningFallacyHint.classTag}): ${cmdPlanningFallacyHint.baserateSummary} [detected: ${safePhrase}]`,
+      );
+      console.log();
+    } else if (cmdPlanningFallacyWatching) {
+      // v1.13.4: render the watching variant when the regex matched but no
+      // baserate could be produced. Suggestion text directs the user to
+      // tag a prediction class so future queries can produce a baserate.
+      const safePhrase = JSON.stringify(cmdPlanningFallacyWatching.detectedPhrase);
+      console.log(
+        `Planning fallacy: watching this query (reason: ${cmdPlanningFallacyWatching.reason}). ${cmdPlanningFallacyWatching.suggestion} [detected: ${safePhrase}]`,
       );
       console.log();
     }
@@ -1503,6 +1517,7 @@ async function cmdRecall(
       total: output.length,
       suppressionSummary: cmdSuppressionSummary,
       ...(cmdPlanningFallacyHint ? { planningFallacyHint: cmdPlanningFallacyHint } : {}),
+      ...(cmdPlanningFallacyWatching ? { planningFallacyWatching: cmdPlanningFallacyWatching } : {}),
       ...(cmdAnchoringHint ? { anchoringHint: cmdAnchoringHint } : {}),
     };
     if (includeContinuity) {
@@ -1543,6 +1558,16 @@ async function cmdRecall(
     const safePhrase = JSON.stringify(cmdPlanningFallacyHint.detectedPhrase);
     console.log(
       `Planning fallacy hint (class: ${cmdPlanningFallacyHint.classTag}): ${cmdPlanningFallacyHint.baserateSummary} [detected: ${safePhrase}]`,
+    );
+    console.log();
+  } else if (cmdPlanningFallacyWatching) {
+    // v1.13.4: render the watching variant when the regex matched but no
+    // baserate could be produced (no_class_match / tiebreak). Suggestion
+    // text directs the user toward an action that would unblock the
+    // hint next time (typically: tag a prediction class).
+    const safePhrase = JSON.stringify(cmdPlanningFallacyWatching.detectedPhrase);
+    console.log(
+      `Planning fallacy: watching this query (reason: ${cmdPlanningFallacyWatching.reason}). ${cmdPlanningFallacyWatching.suggestion} [detected: ${safePhrase}]`,
     );
     console.log();
   }

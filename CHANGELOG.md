@@ -1,5 +1,76 @@
 # Changelog
 
+## 1.13.4 (2026-05-27): J3.2 watching variant for silent no-class-match / tiebreak paths
+
+### Added
+
+- **`PlanningFallacyWatching` type** on `RecallResult.planningFallacyWatching`,
+  mutually exclusive with `planningFallacyHint`. Surfaces a one-line agent-
+  facing suggestion when the J3.2 forward-claim regex matched but no
+  baserate could be produced. Two reasons:
+  - `no_class_match`: no prediction class scored >=1 on token overlap with
+    the query (typical for natural-language queries whose non-stopword
+    tokens don't share signal with any class tag).
+  - `tiebreak`: two or more classes tied at the same best overlap score.
+- **`computePlanningFallacyOutput`** new function exporting the richer
+  return type `{ hint?, watching? }`. Existing
+  `computePlanningFallacyHint` is preserved as a thin backward-compat
+  wrapper (returns `hint` or null), so external SDK consumers don't break.
+- **New CLI render**: `Planning fallacy: watching this query (reason: X).
+  <suggestion> [detected: "..."]` appears above the result list when the
+  watching variant fires. Same top placement as the hint.
+- **New MCP block**: `## Planning fallacy watch` prepended to the
+  `hippo_recall` text response when the watching variant fires
+  (mutually exclusive with `## Planning fallacy hint`).
+- **8 new tests** in `tests/predictions-planning-fallacy-watching.test.ts`
+  covering: no_class_match path, tiebreak path, backward-compat
+  wrapper returns null on watching paths, AUTODEBIAS=off short-circuit,
+  non-forward-claim queries return empty, hint-not-watching regression
+  guard, api.recall integration on no_class_match, mutual exclusivity.
+
+### Fixed
+
+- **Closes the dogfood-identified silent J3.2 failure mode.** Per
+  `docs/dogfood/2026-05-27-track-j-warnings.md` Trial 2a, a natural-
+  language query "will take 2 days to ship the next feature" matched
+  the regex but silently returned no signal because its post-stopword
+  tokens (`[feature]`) didn't overlap with the seeded class
+  `estimate-task` tokens (`[estimate, task]`). Pre-v1.13.4, the audit
+  log captured the detection event via `recall_autodebias_hint_no_class_match`
+  but the user surface was empty. v1.13.4 surfaces the watching
+  variant with an actionable suggestion: "Tag your prediction with
+  `hippo predict --class <name>` to start tracking this class."
+
+### Changed
+
+- `src/predictions.ts`: `computePlanningFallacyHint` body refactored
+  into `computePlanningFallacyOutput`; the old function name is now a
+  thin wrapper. Audit emission contract unchanged (same 3 ops:
+  `recall_autodebias_hint`, `recall_autodebias_hint_no_class_match`,
+  `recall_autodebias_hint_tiebreak`).
+- `src/api.ts`: `RecallResult` extended with optional
+  `planningFallacyWatching` field; `api.recall` now calls
+  `computePlanningFallacyOutput` and splats both `hint` and `watching`
+  conditionally.
+- `src/cli.ts`: `cmdRecall` switched to `computePlanningFallacyOutput`;
+  both zero-result and populated branches render the watching variant
+  in both JSON and text output paths.
+- `src/mcp/server.ts`: handler reads `apiResult.planningFallacyWatching`
+  and renders the new `## Planning fallacy watch` block when present.
+
+### Known limitations
+
+- Python SDK (`hippo-memory-sdk`) is NOT updated in this release. The
+  new `planningFallacyWatching` field appears in the JSON response;
+  Python clients deserialising into `RecallResult` will see it as an
+  unknown extra field (ignored). A follow-up patch will add the
+  Pydantic model for parity.
+- The watching variant's read-rate is unmeasured. Pre-v1.13.4 dogfood
+  showed J3.2 hint reads organically when the format profile is right
+  (top + plain English + quantitative); the watching variant uses the
+  same format but the suggestion text is the load-bearing part. A
+  follow-up dogfood will confirm agent uptake.
+
 ## 1.13.3 (2026-05-27): C5 cutoff format normalisation (top placement + plain English)
 
 ### Fixed
