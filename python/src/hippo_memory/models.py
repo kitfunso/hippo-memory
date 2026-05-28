@@ -44,6 +44,7 @@ __all__ = [
     "AuthKey",
     "AuthRevoked",
     "AuditEvent",
+    "Decision",
     "Prediction",
     "PredictionBaserate",
     "HippoError",
@@ -599,6 +600,34 @@ class PredictionBaserate(_Base):
     p50_ratio: float | None = None
     mae: float | None = None
     summary: str = ""
+
+
+class Decision(_Base):
+    """Decision first-class object. Mirrors the TS Decision interface in
+    src/decisions.ts.
+
+    Three statuses: ``active``, ``superseded`` (replaced by a newer decision;
+    ``superseded_by`` points to the successor), and ``closed`` (retired with no
+    successor). The decisions table is canonical, so an in-force decision stays
+    ``active`` regardless of memory decay - this fixes the pre-promotion bug
+    where decision-tagged memories decayed on a 90-day half-life while the
+    decision was still in force.
+
+    ``memory_id`` is nullable: ``ON DELETE SET NULL`` server-side means memory
+    deletion (forget / consolidate / archive) gracefully orphans the decision
+    row, which survives with all fields populated.
+    """
+
+    id: int
+    memory_id: str | None = None
+    tenant_id: str
+    decision_text: str
+    context: str | None = None
+    status: str = "active"
+    superseded_by: int | None = None
+    superseded_at: str | None = None
+    closed_at: str | None = None
+    created_at: str
 
 
 class HippoError(Exception):

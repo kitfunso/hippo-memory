@@ -37,6 +37,7 @@ from hippo_memory.models import (
     AuthKey,
     AuthRevoked,
     AuditEvent,
+    Decision,
     Prediction,
     PredictionBaserate,
     HippoError,
@@ -471,3 +472,66 @@ class Hippo:
         params: dict[str, Any] = {"class": class_tag}
         data = await self._request("GET", "/v1/predictions/stats", params=params)
         return PredictionBaserate.model_validate(data["baserate"])
+
+    # ── decisions (E2 first-class object) ──────────────────────────────
+
+    async def decide(
+        self,
+        text: str,
+        *,
+        context: str | None = None,
+    ) -> Decision:
+        """POST /v1/decisions. Record a decision as a first-class object.
+
+        Returns the canonical decision row. The decisions table is the source
+        of truth, so the decision stays ``active`` regardless of memory decay
+        (unlike the old decision-tagged memory, which decayed in 90 days).
+        """
+        body: dict[str, Any] = {"text": text}
+        if context is not None:
+            body["context"] = context
+        data = await self._request("POST", "/v1/decisions", json=body)
+        return Decision.model_validate(data["decision"])
+
+    async def supersede_decision(
+        self,
+        decision_id: int,
+        text: str,
+        *,
+        context: str | None = None,
+    ) -> Decision:
+        """POST /v1/decisions/:id/supersede. Create a successor decision and
+        mark ``decision_id`` superseded, atomically. Returns the NEW decision.
+        """
+        body: dict[str, Any] = {"text": text}
+        if context is not None:
+            body["context"] = context
+        data = await self._request("POST", f"/v1/decisions/{decision_id}/supersede", json=body)
+        return Decision.model_validate(data["decision"])
+
+    async def close_decision(self, decision_id: int) -> Decision:
+        """POST /v1/decisions/:id/close. Retire an active decision (no
+        successor). Returns the closed decision row.
+        """
+        data = await self._request("POST", f"/v1/decisions/{decision_id}/close", json={})
+        return Decision.model_validate(data["decision"])
+
+    async def list_decisions(
+        self,
+        *,
+        status: Literal["active", "superseded", "closed", "all"] | None = None,
+        limit: int | None = None,
+    ) -> list[Decision]:
+        """GET /v1/decisions. List decisions, optionally filtered by status."""
+        params: dict[str, Any] = {}
+        if status is not None:
+            params["status"] = status
+        if limit is not None:
+            params["limit"] = limit
+        data = await self._request("GET", "/v1/decisions", params=params)
+        return [Decision.model_validate(d) for d in data["decisions"]]
+
+    async def get_decision(self, decision_id: int) -> Decision:
+        """GET /v1/decisions/:id. Fetch a single decision by id."""
+        data = await self._request("GET", f"/v1/decisions/{decision_id}")
+        return Decision.model_validate(data["decision"])

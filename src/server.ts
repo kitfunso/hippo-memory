@@ -61,6 +61,14 @@ import {
   VALID_CLOSURE_STATES,
   type ClosureState,
 } from './predictions.js';
+import {
+  saveDecision,
+  closeDecision,
+  loadDecisionById,
+  loadDecisions,
+  VALID_DECISION_STATES,
+  type DecisionStatus,
+} from './decisions.js';
 import { handleMcpRequest, type McpRequest } from './mcp/server.js';
 import { verifySlackSignature } from './connectors/slack/signature.js';
 import { isSlackEventEnvelope, isSlackMessageEvent } from './connectors/slack/types.js';
@@ -125,6 +133,9 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'recall_anchor_detected_memory_dominance',  // v0.33 / J1 — emitted by detector on R2 fire
   'recall_anchor_skipped_no_session',         // v0.33 / J1 — telemetry: no sessionId, ring skipped
   'recall_availability_detected',             // v1.13.x / J2 - emitted when availability/recency-bias hint fires
+  'decision_create',       // E2 decision first-class object — emitted by saveDecision
+  'decision_supersede',    // E2 — emitted by saveDecision when --supersedes resolves to an active decision row
+  'decision_close',        // E2 — emitted by closeDecision
 ]);
 
 // Cap on GET /v1/audit?limit=. Matches docs/api.md (when written) and is large
@@ -1249,6 +1260,164 @@ async function handleRequest(
       }
       throw e;
     }
+    return;
+  }
+
+  // ── decisions (E2 first-class object) ──
+  //
+  // 5 routes: POST /v1/decisions (create, optional supersedesDecisionId),
+  // GET /v1/decisions (list, status filter), GET /v1/decisions/:id (show),
+  // POST /v1/decisions/:id/supersede (create a successor + supersede :id),
+  // POST /v1/decisions/:id/close (retire). Bearer-authed + tenant-scoped via
+  // buildContextWithAuth. status validated against VALID_DECISION_STATES.
+  // DoS caps: text 4096, context 4096 (v1.11.4 pattern). The HTTP surface is
+  // new (no legacy --supersedes <memory-id> constraint), so it supersedes by
+  // table id and never weakens a memory mirror.
+  if (method === 'POST' && path === '/v1/decisions') {
+    const body = await parseJsonBody(req);
+    const text = body['text'];
+    if (typeof text !== 'string' || text.length === 0) {
+      throw new HttpError(400, 'text is required (non-empty string)');
+    }
+    if (text.length > 4096) {
+      throw new HttpError(400, 'text exceeds 4096-character cap');
+    }
+    const contextRaw = body['context'];
+    let context: string | undefined;
+    if (contextRaw !== undefined && contextRaw !== null) {
+      if (typeof contextRaw !== 'string') {
+        throw new HttpError(400, 'context must be a string');
+      }
+      if (contextRaw.length > 4096) {
+        throw new HttpError(400, 'context exceeds 4096-character cap');
+      }
+      context = contextRaw;
+    }
+    const supRaw = body['supersedesDecisionId'];
+    let supersedesDecisionId: number | undefined;
+    if (supRaw !== undefined && supRaw !== null) {
+      if (typeof supRaw !== 'number' || !Number.isInteger(supRaw) || supRaw <= 0) {
+        throw new HttpError(400, 'supersedesDecisionId must be a positive integer');
+      }
+      supersedesDecisionId = supRaw;
+    }
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    try {
+      const decision = saveDecision(opts.hippoRoot, ctx.tenantId, {
+        decisionText: text,
+        context,
+        supersedesDecisionId,
+      }, ctx.actor.subject);
+      sendJson(res, 201, { decision });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found') || msg.includes('not active')) {
+        throw new HttpError(409, msg);
+      }
+      throw e;
+    }
+    return;
+  }
+
+  if (method === 'GET' && path === '/v1/decisions') {
+    const status = query.get('status') ?? 'all';
+    const limitRaw = query.get('limit');
+    let limit = 100;
+    if (limitRaw !== null) {
+      limit = Number(limitRaw);
+      if (!Number.isFinite(limit) || limit <= 0 || limit > 1000) {
+        throw new HttpError(400, 'limit must be a positive integer <= 1000');
+      }
+    }
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    let decisions;
+    if (status === 'all') {
+      decisions = loadDecisions(opts.hippoRoot, ctx.tenantId, { limit });
+    } else {
+      if (!VALID_DECISION_STATES.has(status as DecisionStatus)) {
+        throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
+      }
+      decisions = loadDecisions(opts.hippoRoot, ctx.tenantId, {
+        status: status as DecisionStatus,
+        limit,
+      });
+    }
+    sendJson(res, 200, { decisions });
+    return;
+  }
+
+  const decisionSupersedeMatch = path.match(/^\/v1\/decisions\/(\d+)\/supersede$/);
+  if (method === 'POST' && decisionSupersedeMatch) {
+    const oldId = parseInt(decisionSupersedeMatch[1], 10);
+    const body = await parseJsonBody(req);
+    const text = body['text'];
+    if (typeof text !== 'string' || text.length === 0) {
+      throw new HttpError(400, 'text is required (non-empty string)');
+    }
+    if (text.length > 4096) {
+      throw new HttpError(400, 'text exceeds 4096-character cap');
+    }
+    const contextRaw = body['context'];
+    let context: string | undefined;
+    if (contextRaw !== undefined && contextRaw !== null) {
+      if (typeof contextRaw !== 'string') {
+        throw new HttpError(400, 'context must be a string');
+      }
+      if (contextRaw.length > 4096) {
+        throw new HttpError(400, 'context exceeds 4096-character cap');
+      }
+      context = contextRaw;
+    }
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    try {
+      const decision = saveDecision(opts.hippoRoot, ctx.tenantId, {
+        decisionText: text,
+        context,
+        supersedesDecisionId: oldId,
+      }, ctx.actor.subject);
+      sendJson(res, 201, { decision });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) {
+        throw new HttpError(404, msg);
+      }
+      if (msg.includes('not active')) {
+        throw new HttpError(409, msg);
+      }
+      throw e;
+    }
+    return;
+  }
+
+  const decisionCloseMatch = path.match(/^\/v1\/decisions\/(\d+)\/close$/);
+  if (method === 'POST' && decisionCloseMatch) {
+    const id = parseInt(decisionCloseMatch[1], 10);
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    try {
+      const decision = closeDecision(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
+      sendJson(res, 200, { decision });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) {
+        throw new HttpError(404, msg);
+      }
+      if (msg.includes('not active')) {
+        throw new HttpError(409, msg);
+      }
+      throw e;
+    }
+    return;
+  }
+
+  const decisionByIdMatch = path.match(/^\/v1\/decisions\/(\d+)$/);
+  if (method === 'GET' && decisionByIdMatch) {
+    const id = parseInt(decisionByIdMatch[1], 10);
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const decision = loadDecisionById(opts.hippoRoot, ctx.tenantId, id);
+    if (!decision) {
+      throw new HttpError(404, `decision ${id} not found`);
+    }
+    sendJson(res, 200, { decision });
     return;
   }
 

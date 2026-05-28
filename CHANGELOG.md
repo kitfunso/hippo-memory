@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **E2 decision first-class object.** `hippo decide` is promoted from a tagged
+  memory (which decayed on a 90-day half-life even while the decision was still
+  in force) to a canonical `decisions` table that is the source of truth: an
+  active decision survives memory decay and `hippo decide list --status active`
+  is authoritative. The memory mirror is kept for recall; forget / consolidate /
+  archive gracefully orphans the row via ON DELETE SET NULL.
+- **Lifecycle ops.** A decision goes `active` to `superseded` (a newer decision
+  replaces it; `superseded_by` points to the successor) or `active` to `closed`
+  (retired with no successor). New CLI subcommands `hippo decide list|get|close`;
+  the existing `hippo decide "<text>" [--context] [--supersedes <memory-id>]`
+  keeps its exact signature, now also writing the table row and, for
+  `--supersedes`, marking the prior decision row superseded.
+- **HTTP `/v1/decisions` routes** (create, list with status filter, get,
+  supersede, close) and **Python SDK** methods `decide`, `supersede_decision`,
+  `close_decision`, `list_decisions`, `get_decision` (async + sync) plus the
+  `Decision` model.
+- **Three audit ops** `decision_create`, `decision_supersede`, `decision_close`
+  in the 3-site lockstep (audit.ts union, cli.ts and server.ts VALID_AUDIT_OPS),
+  pinned by a new `audit-ops-decision-lockstep` test.
+- **Schema migration v30:** `decisions` table + 2 indexes + 3 tenant-safety
+  triggers (memory-tenant match on insert and update; successor same-tenant on
+  supersede). Additive and non-breaking; no backfill of existing
+  decision-tagged memories.
+- **Tests:** store-layer (real DB: dual-write SAVEPOINT atomicity, supersede
+  CAS, close guard, cross-tenant triggers, ON DELETE SET NULL), HTTP route
+  parity, and Python SDK Pydantic round-trip.
+
 ## 1.14.0 (2026-05-28): J2 availability-bias detector (Track J)
 
 ### Added

@@ -47,6 +47,7 @@ from hippo_memory.models import (
     AuthKey,
     AuthRevoked,
     AuditEvent,
+    Decision,
     Prediction,
     PredictionBaserate,
     HippoError,
@@ -450,3 +451,53 @@ class HippoSync:
         params: dict[str, Any] = {"class": class_tag}
         data = self._request("GET", "/v1/predictions/stats", params=params)
         return PredictionBaserate.model_validate(data["baserate"])
+
+    # ── decisions (E2 first-class object) ──────────────────────────────
+
+    def decide(self, text: str, *, context: str | None = None) -> Decision:
+        """POST /v1/decisions. Sync mirror of Hippo.decide."""
+        body: dict[str, Any] = {"text": text}
+        if context is not None:
+            body["context"] = context
+        data = self._request("POST", "/v1/decisions", json=body)
+        return Decision.model_validate(data["decision"])
+
+    def supersede_decision(
+        self,
+        decision_id: int,
+        text: str,
+        *,
+        context: str | None = None,
+    ) -> Decision:
+        """POST /v1/decisions/:id/supersede. Sync mirror of
+        Hippo.supersede_decision. Returns the NEW decision."""
+        body: dict[str, Any] = {"text": text}
+        if context is not None:
+            body["context"] = context
+        data = self._request("POST", f"/v1/decisions/{decision_id}/supersede", json=body)
+        return Decision.model_validate(data["decision"])
+
+    def close_decision(self, decision_id: int) -> Decision:
+        """POST /v1/decisions/:id/close. Sync mirror of Hippo.close_decision."""
+        data = self._request("POST", f"/v1/decisions/{decision_id}/close", json={})
+        return Decision.model_validate(data["decision"])
+
+    def list_decisions(
+        self,
+        *,
+        status: Literal["active", "superseded", "closed", "all"] | None = None,
+        limit: int | None = None,
+    ) -> list[Decision]:
+        """GET /v1/decisions. Sync mirror of Hippo.list_decisions."""
+        params: dict[str, Any] = {}
+        if status is not None:
+            params["status"] = status
+        if limit is not None:
+            params["limit"] = limit
+        data = self._request("GET", "/v1/decisions", params=params)
+        return [Decision.model_validate(d) for d in data["decisions"]]
+
+    def get_decision(self, decision_id: int) -> Decision:
+        """GET /v1/decisions/:id. Sync mirror of Hippo.get_decision."""
+        data = self._request("GET", f"/v1/decisions/{decision_id}")
+        return Decision.model_validate(data["decision"])
