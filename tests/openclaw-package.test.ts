@@ -40,4 +40,17 @@ describe('openclaw package metadata', () => {
     expect(nestedPkg.version).toBe(pkg.version);
     expect(nestedPlugin.version).toBe(pkg.version);
   });
+
+  // v1.15.0: src/version.ts PACKAGE_VERSION is the "fifth manifest" named in its
+  // own header but was excluded from check-manifest-versions.mjs, so it drifted
+  // to 1.12.10 while the package shipped 1.14.0 (user-facing via MCP serverInfo,
+  // HTTP /health, and the DB rollback-compat gate). Assert parity here too so a
+  // future refactor of the prepublish script cannot reintroduce the drift.
+  it('keeps src/version.ts PACKAGE_VERSION aligned with the package version', () => {
+    const pkg = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'));
+    const versionTs = readFileSync(join(repoRoot, 'src/version.ts'), 'utf8');
+    const match = versionTs.match(/export const PACKAGE_VERSION = '([^']+)'/);
+    expect(match, 'PACKAGE_VERSION constant should be present in src/version.ts').not.toBeNull();
+    expect(match?.[1]).toBe(pkg.version);
+  });
 });

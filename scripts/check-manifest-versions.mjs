@@ -55,6 +55,25 @@ for (const path of LOCKSTEP_MANIFESTS) {
   }
 }
 
+// src/version.ts carries PACKAGE_VERSION as a TS constant (not JSON). Its own
+// header names it the "fifth manifest" bumped manually every release, but it was
+// historically excluded from this guard, so it silently drifted (1.12.10 vs
+// published 1.14.0) across two releases while feeding MCP serverInfo, the HTTP
+// /health endpoint, and the DB rollback-compat gate. Assert it here so the
+// documented manual bump can never be silently skipped again.
+const VERSION_TS = 'src/version.ts';
+if (!existsSync(VERSION_TS)) {
+  drifts.push({ path: VERSION_TS, found: '(missing)', expected: expectedVersion });
+} else {
+  const src = readFileSync(VERSION_TS, 'utf8');
+  const m = src.match(/export const PACKAGE_VERSION = '([^']+)'/);
+  if (!m) {
+    drifts.push({ path: VERSION_TS, found: '(PACKAGE_VERSION not found)', expected: expectedVersion });
+  } else if (m[1] !== expectedVersion) {
+    drifts.push({ path: VERSION_TS, found: m[1], expected: expectedVersion });
+  }
+}
+
 if (drifts.length > 0) {
   console.error('');
   console.error('VERSION DRIFT detected. The following manifests do not match package.json:');
@@ -68,4 +87,4 @@ if (drifts.length > 0) {
   process.exit(1);
 }
 
-console.log(`All ${LOCKSTEP_MANIFESTS.length} lockstep manifests at version ${expectedVersion}. OK.`);
+console.log(`All ${LOCKSTEP_MANIFESTS.length} lockstep manifests + src/version.ts at version ${expectedVersion}. OK.`);

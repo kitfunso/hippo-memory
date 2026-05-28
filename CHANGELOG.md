@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.15.0 (2026-05-28): E2 decisions first-class object
 
 ### Added
 
@@ -30,6 +30,22 @@
 - **Tests:** store-layer (real DB: dual-write SAVEPOINT atomicity, supersede
   CAS, close guard, cross-tenant triggers, ON DELETE SET NULL), HTTP route
   parity, and Python SDK Pydantic round-trip.
+
+### Fixed
+
+- **`PACKAGE_VERSION` version drift.** The binary self-reported version
+  (`src/version.ts`, surfaced via MCP `serverInfo`, the HTTP `/health` endpoint,
+  and the DB rollback-safety compatibility gate) had drifted to 1.12.10 while the
+  published package was 1.14.0. It is now bumped in lockstep and guarded by
+  `scripts/check-manifest-versions.mjs`, which previously validated only the four
+  JSON manifests and not the version.ts constant.
+
+### Packaging
+
+- **Python SDK `hippo-memory-sdk` 0.3.0** carries the new `Decision` API (model
+  plus async and sync `decide`, `supersede_decision`, `close_decision`,
+  `list_decisions`, `get_decision`) alongside the earlier J2 `AvailabilityHint`
+  model.
 
 ## 1.14.0 (2026-05-28): J2 availability-bias detector (Track J)
 
