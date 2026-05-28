@@ -124,6 +124,7 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'recall_anchor_detected_query_repeat',      // v0.33 / J1 — emitted by detector on R1 fire
   'recall_anchor_detected_memory_dominance',  // v0.33 / J1 — emitted by detector on R2 fire
   'recall_anchor_skipped_no_session',         // v0.33 / J1 — telemetry: no sessionId, ring skipped
+  'recall_availability_detected',             // v1.13.x / J2 - emitted when availability/recency-bias hint fires
 ]);
 
 // Cap on GET /v1/audit?limit=. Matches docs/api.md (when written) and is large

@@ -10,6 +10,7 @@ from __future__ import annotations
 from hippo_memory import (
     HealthInfo, MemoryEnvelope, RecallEntry, RecallResult,
     RecallSuppressionSummary, PlanningFallacyHint, PlanningFallacyWatching, AnchoringHint,
+    AvailabilityHint,
     ContextEntry, ContextResult, OutcomeResult, SleepResult,
     DrillResult, ArchiveResult, SupersedeResult, PromoteResult,
     ForgetResult, AssembleResult, AuthCreated, AuthKey, AuthRevoked,
@@ -435,5 +436,135 @@ def test_planning_fallacy_hint_source_accepts_future_variants():
             "detectedPhrase": "will take",
             "nClosed": 3,
             "meanRatio": 2.0,
+        })
+        assert hint.source == future_source
+
+
+# ---------------------------------------------------------------------------
+# v1.13.x / J2 — AvailabilityHint round-trips
+# ---------------------------------------------------------------------------
+
+
+def test_availability_hint_roundtrip():
+    """Wire shape: camelCase in -> snake_case attrs preserved on dump."""
+    _roundtrip(AvailabilityHint, {
+        "recentCount": 4,
+        "returnedCount": 5,
+        "recentFraction": 0.8,
+        "topKMedianAgeDays": 0.3,
+        "poolMedianAgeDays": 60.0,
+        "olderCandidatesPassedOver": 10,
+        "summary": "Availability bias risk: 4 of 5 returned results are recent.",
+        "source": "j2-recency",
+    })
+
+
+def test_availability_hint_camelcase_maps_to_snake_attrs():
+    """camelCase JSON keys populate the snake_case Python attributes."""
+    hint = AvailabilityHint.model_validate({
+        "recentCount": 4,
+        "returnedCount": 5,
+        "recentFraction": 0.8,
+        "topKMedianAgeDays": 0.3,
+        "poolMedianAgeDays": 60.0,
+        "olderCandidatesPassedOver": 10,
+        "summary": "Availability bias risk.",
+        "source": "j2-recency",
+    })
+    assert hint.recent_count == 4
+    assert hint.returned_count == 5
+    assert hint.recent_fraction == 0.8
+    assert hint.top_k_median_age_days == 0.3
+    assert hint.pool_median_age_days == 60.0
+    assert hint.older_candidates_passed_over == 10
+    assert hint.source == "j2-recency"
+
+
+def test_recall_result_with_availability_hint():
+    """RecallResult parses availabilityHint when present + populates attribute."""
+    payload = {
+        "results": [{"id": "mem_a", "content": "a", "score": 0.9, "tokens": 5}],
+        "total": 1,
+        "tokens": 5,
+        "availabilityHint": {
+            "recentCount": 4,
+            "returnedCount": 5,
+            "recentFraction": 0.8,
+            "topKMedianAgeDays": 0.3,
+            "poolMedianAgeDays": 60.0,
+            "olderCandidatesPassedOver": 10,
+            "summary": "Availability bias risk.",
+            "source": "j2-recency",
+        },
+    }
+    instance = RecallResult.model_validate(payload)
+    assert instance.availability_hint is not None
+    assert instance.availability_hint.recent_count == 4
+    assert instance.availability_hint.older_candidates_passed_over == 10
+
+
+def test_recall_result_without_availability_hint_defaults_to_none():
+    """Back-compat: pre-J2 server payload (no availabilityHint key) parses."""
+    payload = {
+        "results": [{"id": "mem_a", "content": "a", "score": 0.9, "tokens": 5}],
+        "total": 1,
+        "tokens": 5,
+    }
+    instance = RecallResult.model_validate(payload)
+    assert instance.availability_hint is None
+
+
+def test_recall_result_all_track_j_hints_coexist():
+    """availabilityHint coexists with anchoringHint + planningFallacyHint
+    on the same RecallResult (the three Track J signals are independent)."""
+    payload = {
+        "results": [{"id": "mem_a", "content": "a", "score": 0.9, "tokens": 5}],
+        "total": 1,
+        "tokens": 5,
+        "anchoringHint": {
+            "reason": "memory_dominance",
+            "memoryId": "mem_a",
+            "queryCount": 3,
+            "summary": "Memory mem_a anchors your reasoning.",
+            "source": "j1-recurrence",
+        },
+        "planningFallacyHint": {
+            "classTag": "migration-effort",
+            "baserateSummary": "Last 3 estimates averaged 2.00x actual.",
+            "source": "j3.2-auto",
+            "detectedPhrase": "will take",
+            "nClosed": 3,
+            "meanRatio": 2.0,
+        },
+        "availabilityHint": {
+            "recentCount": 4,
+            "returnedCount": 5,
+            "recentFraction": 0.8,
+            "topKMedianAgeDays": 0.3,
+            "poolMedianAgeDays": 60.0,
+            "olderCandidatesPassedOver": 10,
+            "summary": "Availability bias risk.",
+            "source": "j2-recency",
+        },
+    }
+    instance = RecallResult.model_validate(payload)
+    assert instance.anchoring_hint is not None
+    assert instance.planning_fallacy_hint is not None
+    assert instance.availability_hint is not None
+    assert instance.availability_hint.recent_fraction == 0.8
+
+
+def test_availability_hint_source_accepts_future_variants():
+    """Forward-compat: AvailabilityHint.source is `str`, not Literal['j2-recency']."""
+    for future_source in ("j2-recency-v2", "j2-embedding", "j8-composition"):
+        hint = AvailabilityHint.model_validate({
+            "recentCount": 4,
+            "returnedCount": 5,
+            "recentFraction": 0.8,
+            "topKMedianAgeDays": 0.3,
+            "poolMedianAgeDays": 60.0,
+            "olderCandidatesPassedOver": 10,
+            "summary": "...",
+            "source": future_source,
         })
         assert hint.source == future_source

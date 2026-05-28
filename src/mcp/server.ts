@@ -40,6 +40,7 @@ import {
   RingBuffer,
   type AnchoringHint,
 } from '../recall-history.js';
+import { detectAvailabilityBias, type AvailabilityHint } from '../availability.js';
 
 // v0.33 / J1 — Module-level per-(tenant, session) recall-history ring map
 // for the MCP pipeline. Separate from CLI/HTTP rings per plan v3
@@ -501,6 +502,10 @@ async function executeTool(
         limit: 50,
         scope: explicitScope,
         includeContinuity,
+        // v1.13.x / J2 — MCP computes its OWN availability hint over the
+        // physics/hybrid result set below; suppress api.recall's BM25-band copy
+        // so one MCP recall does not emit recall_availability_detected twice.
+        suppressAvailabilityHint: true,
         ...(freshTailCount !== undefined ? { freshTailCount } : {}),
         ...(freshTailSessionId !== undefined ? { freshTailSessionId } : {}),
         ...(summarizeOverflow !== undefined ? { summarizeOverflow } : {}),
@@ -688,6 +693,37 @@ async function executeTool(
         suppressedByInterference: mcpSuppressedByInterference,
       });
 
+      // v1.13.x / J2 — MCP per-pipeline availability/recency-bias detector.
+      // Like the anchoring hint above (and unlike J3.2's pipeline-invariant
+      // planningFallacyHint), this depends on MCP's OWN returned top-K and the
+      // scope-filtered candidate pool (entries) it was drawn from, so MCP
+      // computes its own hint here. Soft warning only. Gated by
+      // HIPPO_AVAILABILITY=off; audit emission is pipeline-local (actor='mcp').
+      let mcpAvailabilityHint: AvailabilityHint | null = null;
+      if (process.env.HIPPO_AVAILABILITY !== 'off') {
+        mcpAvailabilityHint = detectAvailabilityBias({
+          topK: results.map((r) => ({ id: r.entry.id, created: r.entry.created })),
+          pool: entries.map((e) => ({ id: e.id, created: e.created })),
+        });
+        if (mcpAvailabilityHint) {
+          const dbForAudit = openHippoDb(hippoRoot);
+          try {
+            appendAuditEvent(dbForAudit, {
+              tenantId,
+              actor: 'mcp',
+              op: 'recall_availability_detected',
+              metadata: {
+                recent_fraction: mcpAvailabilityHint.recentFraction,
+                older_passed_over: mcpAvailabilityHint.olderCandidatesPassedOver,
+                returned_count: mcpAvailabilityHint.returnedCount,
+              },
+            });
+          } finally {
+            closeHippoDb(dbForAudit);
+          }
+        }
+      }
+
       let response = '';
       if (mcpAnchoringHint) {
         response =
@@ -695,6 +731,11 @@ async function executeTool(
           `${mcpAnchoringHint.summary}\n` +
           `[anchored_on: ${mcpAnchoringHint.memoryId}]\n` +
           `\n---\n\n`;
+      }
+      // v1.13.x / J2 — availability/recency-bias hint, rendered below the
+      // anchoring hint and above the planning-fallacy hint. Soft warning only.
+      if (mcpAvailabilityHint) {
+        response += `## Availability bias\n${mcpAvailabilityHint.summary}\n\n---\n\n`;
       }
       if (apiResult.planningFallacyHint) {
         const h = apiResult.planningFallacyHint;

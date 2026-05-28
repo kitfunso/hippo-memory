@@ -150,7 +150,8 @@ export type AuditOp =
   | 'recall_autodebias_hint_tiebreak' // v0.32 / J3.2 — telemetry: forward-claim detected, >=2 classes tied at best overlap (silent to caller)
   | 'recall_anchor_detected_query_repeat' // v0.33 / J1 — emitted by detector when R1 fires (same query phrasing returning same top-1 within recentRepeatWindow)
   | 'recall_anchor_detected_memory_dominance' // v0.33 / J1 — emitted by detector when R2 fires (same memory wins top-1 across >=minDominance distinct queries)
-  | 'recall_anchor_skipped_no_session'; // v0.33 / J1 — telemetry: caller skipped ring tracking because no sessionId; drives J1-v2 decision on persisting cross-session history
+  | 'recall_anchor_skipped_no_session' // v0.33 / J1 — telemetry: caller skipped ring tracking because no sessionId; drives J1-v2 decision on persisting cross-session history
+  | 'recall_availability_detected'; // v1.13.x / J2 - emitted when availability/recency-bias hint fires
 
 export interface AppendAuditOpts {
   tenantId: string;

@@ -1,5 +1,52 @@
 # Changelog
 
+## 1.14.0 (2026-05-28): J2 availability-bias detector (Track J)
+
+### Added
+
+- **`availabilityHint` on `RecallResult` (Track J, J2).** A soft warning that
+  fires when a recall's returned top-K is dominated by recent entries (over 70
+  percent created in the last 24h) while substantially older relevant matches in
+  the same candidate pool were passed over. This is the availability / recency
+  heuristic (Tversky-Kahneman): what is most recent gets over-weighted relative
+  to what is most relevant. Surfaced on the CLI recall output, the MCP recall
+  response, and the HTTP / SDK `RecallResult`, alongside the existing J1
+  `anchoringHint`, J3 `planningFallacyHint`, and C5 `suppressionSummary`.
+- **`detectAvailabilityBias` pure detector** in `src/availability.ts`. Fires
+  only when there are enough returned results and pool candidates, the returned
+  slice is genuinely recency-dominated, the pool skews older, and at least 3
+  older matches were passed over. Soft warning only: it never filters, reorders,
+  or suppresses a result.
+- **`HIPPO_AVAILABILITY=off` env knob** to disable the detector per deployment
+  (gates even the detect call, so disabled tenants pay zero work).
+- **`recall_availability_detected` audit op** emitted once per pipeline when the
+  hint fires (observability-first, mirroring J1).
+- **Python SDK `AvailabilityHint` model** and `availability_hint` field on
+  `RecallResult` (`hippo-memory-sdk`).
+- **Tests:** 16 pure-detector cases (gates, success-criterion, exact boundaries,
+  even/odd median, malformed-timestamp drop) plus 5 `api.recall` integration
+  cases (env gate, audit emission, MCP double-emit guard, private-row pool
+  exclusion, result immutability).
+
+### Notes
+
+- `availabilityHint` is computed per-pipeline (like `suppressionSummary`)
+  because each pipeline's candidate pool differs. The MCP handler computes its
+  own over the physics/hybrid result set and passes `suppressAvailabilityHint`
+  to `api.recall`, so a single recall never double-emits the audit op.
+- The detector reads each pipeline's scope-filtered candidate pool, so private
+  or cross-scope rows never contribute to the signal.
+
+### Known limitations
+
+- In a genuinely recency-heavy corpus the hint can fire on correct behavior
+  (recent really is most relevant). It is a soft warning the agent may ignore,
+  and the older-passed-over gate keeps it quiet unless older matches actually
+  existed.
+- Deferred to a follow-up (J2.2): `audit_log` tag-class historical-answer-age
+  base rates for per-class calibration (the literal `ROADMAP-RESEARCH.md` L553
+  spec).
+
 ## 1.13.5 (2026-05-27): J5 loss-aversion calibration (Track J [next])
 
 ### Added
