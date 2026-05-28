@@ -175,6 +175,39 @@ class AnchoringHint(_Base):
     source: str = "j1-recurrence"
 
 
+class AvailabilityHint(_Base):
+    """v1.13.x / J2 availability/recency-bias detector - hint surfaced on
+    RecallResult when the returned top-K is recency-dominated while
+    substantially older relevant matches in the same candidate pool were
+    passed over (Tversky-Kahneman availability heuristic).
+
+    Soft warning ONLY: never filters, reorders, or suppresses a result.
+    Wire shape matches src/availability.ts ``AvailabilityHint`` (camelCase
+    via ``_Base.alias_generator=to_camel``). Disabled server-side by setting
+    ``HIPPO_AVAILABILITY=off``.
+    """
+
+    # Count of returned top-K entries created within the recency window.
+    recent_count: int
+    # Total returned top-K size considered (after dropping unparseable rows).
+    returned_count: int
+    # recent_count / returned_count, in [0, 1].
+    recent_fraction: float
+    # Median age in days of the returned top-K.
+    top_k_median_age_days: float
+    # Median age in days of the matched candidate pool it was drawn from.
+    pool_median_age_days: float
+    # Count of pool entries older than the top-K median age that were NOT
+    # returned (older relevant matches passed over).
+    older_candidates_passed_over: int
+    # Human-readable summary surfaced to the agent.
+    summary: str
+    # Discriminator for hint origin. Current v1 server emits 'j2-recency';
+    # future variants accepted as plain strings (same forward-compat lesson
+    # as PlanningFallacyHint.source / AnchoringHint.source).
+    source: str = "j2-recency"
+
+
 class PlanningFallacyHint(_Base):
     """v0.32 / J3.2 — auto-injected planning-fallacy hint surfaced on
     RecallResult when the recall query carries a forward-prediction phrase
@@ -266,6 +299,12 @@ class RecallResult(_Base):
     # call paths this is always None (CLI computes its own hint
     # separately); non-None on direct SDK / HTTP-routed invocations.
     anchoring_hint: AnchoringHint | None = None
+    # v1.13.x / J2 — availability/recency-bias hint. Absent (None) when env
+    # disabled (HIPPO_AVAILABILITY=off), the returned slice is not
+    # recency-dominated, the pool is not older than the returned slice, or
+    # fewer than the threshold of older candidates were passed over. Per-
+    # pipeline: each pipeline computes its own hint against its own top-K.
+    availability_hint: AvailabilityHint | None = None
 
 
 # ---------------------------------------------------------------------------

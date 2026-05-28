@@ -171,6 +171,7 @@ import {
   RingBuffer,
   type AnchoringHint,
 } from './recall-history.js';
+import { detectAvailabilityBias, type AvailabilityHint } from './availability.js';
 
 // v0.33 / J1 — Module-level per-(tenant, session) recall-history ring map.
 // Each CLI process maintains its OWN Map; no IPC / no cross-process sharing
@@ -1296,6 +1297,28 @@ async function cmdRecall(
     });
   }
 
+  // v1.13.x / J2 — CLI per-pipeline availability/recency-bias detector. Each
+  // pipeline computes its own hint (this one against the CLI's returned top-K
+  // and the full local+global candidate pool). Soft warning only. Gated by
+  // HIPPO_AVAILABILITY=off, which short-circuits BEFORE the detect call so
+  // disabled tenants pay zero work. Audit emission is pipeline-local, lockstep
+  // with the anchoring emitCliAudit calls above. cmdAvailabilityHint is null on
+  // the zero-result branch (topK < minReturned), so the splat is a no-op there.
+  let cmdAvailabilityHint: AvailabilityHint | null = null;
+  if (process.env.HIPPO_AVAILABILITY !== 'off') {
+    cmdAvailabilityHint = detectAvailabilityBias({
+      topK: results.map((r) => ({ id: r.entry.id, created: r.entry.created })),
+      pool: [...localEntries, ...globalEntries].map((e) => ({ id: e.id, created: e.created })),
+    });
+    if (cmdAvailabilityHint) {
+      emitCliAudit(hippoRoot, 'recall_availability_detected', undefined, {
+        recent_fraction: cmdAvailabilityHint.recentFraction,
+        older_passed_over: cmdAvailabilityHint.olderCandidatesPassedOver,
+        returned_count: cmdAvailabilityHint.returnedCount,
+      });
+    }
+  }
+
   // v0.32 / J3.2 — auto-injection of reference-class baserate when the
   // CLI query carries a forward-prediction phrase AND a class matches.
   // cmdRecall runs its own pipeline (doesn't go through api.recall for
@@ -1412,6 +1435,7 @@ async function cmdRecall(
         ...(cmdPlanningFallacyHint ? { planningFallacyHint: cmdPlanningFallacyHint } : {}),
         ...(cmdPlanningFallacyWatching ? { planningFallacyWatching: cmdPlanningFallacyWatching } : {}),
         ...(cmdAnchoringHint ? { anchoringHint: cmdAnchoringHint } : {}),
+        ...(cmdAvailabilityHint ? { availabilityHint: cmdAvailabilityHint } : {}),
       };
       if (includeContinuity) {
         out.continuity = {
@@ -1429,6 +1453,15 @@ async function cmdRecall(
     if (cmdAnchoringHint) {
       console.log(
         `[anchored_on: ${cmdAnchoringHint.memoryId}] ${cmdAnchoringHint.summary}`,
+      );
+    }
+    // v1.13.x / J2 — render availability/recency-bias hint below anchoring and
+    // above the planning-fallacy hint. Soft warning; absent (env disabled or no
+    // bias detected) is silent. Null on this zero-result branch anyway since
+    // topK < minReturned, so this is effectively a no-op here; wired for parity.
+    if (cmdAvailabilityHint) {
+      console.log(
+        `Availability bias (${cmdAvailabilityHint.recentCount}/${cmdAvailabilityHint.returnedCount} recent): ${cmdAvailabilityHint.summary}`,
       );
     }
     // v0.32 / J3.2 — render hint BEFORE the no-memories message so the
@@ -1519,6 +1552,7 @@ async function cmdRecall(
       ...(cmdPlanningFallacyHint ? { planningFallacyHint: cmdPlanningFallacyHint } : {}),
       ...(cmdPlanningFallacyWatching ? { planningFallacyWatching: cmdPlanningFallacyWatching } : {}),
       ...(cmdAnchoringHint ? { anchoringHint: cmdAnchoringHint } : {}),
+      ...(cmdAvailabilityHint ? { availabilityHint: cmdAvailabilityHint } : {}),
     };
     if (includeContinuity) {
       jsonOut.continuity = {
@@ -1545,6 +1579,15 @@ async function cmdRecall(
   if (cmdAnchoringHint) {
     console.log(
       `[anchored_on: ${cmdAnchoringHint.memoryId}] ${cmdAnchoringHint.summary}`,
+    );
+    console.log();
+  }
+  // v1.13.x / J2 — render availability/recency-bias hint below anchoring and
+  // above the planning-fallacy hint. Soft warning; absent (env disabled or no
+  // bias detected) is silent.
+  if (cmdAvailabilityHint) {
+    console.log(
+      `Availability bias (${cmdAvailabilityHint.recentCount}/${cmdAvailabilityHint.returnedCount} recent): ${cmdAvailabilityHint.summary}`,
     );
     console.log();
   }
@@ -5239,6 +5282,7 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'recall_anchor_detected_query_repeat',      // v0.33 / J1 — emitted by detector on R1 fire
   'recall_anchor_detected_memory_dominance',  // v0.33 / J1 — emitted by detector on R2 fire
   'recall_anchor_skipped_no_session',         // v0.33 / J1 — telemetry: no sessionId, ring skipped
+  'recall_availability_detected',             // v1.13.x / J2 - emitted when availability/recency-bias hint fires
 ]);
 
 function formatAuditRow(ev: AuditEvent): string {

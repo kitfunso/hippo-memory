@@ -79,6 +79,7 @@ import {
   type AnchoringHint,
   type RecallHistorySnapshot,
 } from './recall-history.js';
+import { detectAvailabilityBias, type AvailabilityHint } from './availability.js';
 
 /**
  * Actor identity + authorization role for a Context. v1.12.0 A5 v2 sub-1.
@@ -356,6 +357,16 @@ export interface RecallOpts {
    * the cooldown logic on the NEXT recall).
    */
   recallHistory?: RecallHistorySnapshot;
+  /**
+   * v1.13.x / J2 — when true, api.recall does NOT compute or emit the
+   * availabilityHint. Callers that run their OWN per-pipeline availability
+   * detection over a different result set (the MCP handler computes it over
+   * physics/hybrid results, not api.recall's BM25 band) pass this to avoid a
+   * double audit emission and a hint describing a result set the caller never
+   * surfaces. Mirrors how J1 only computes anchoring when opts.recallHistory
+   * is supplied. HTTP / direct SDK callers leave this unset and receive the hint.
+   */
+  suppressAvailabilityHint?: boolean;
 }
 
 export interface ContinuityBlock {
@@ -489,6 +500,16 @@ export interface RecallResult {
    * Disabled by setting `HIPPO_ANCHORING=off`.
    */
   anchoringHint?: AnchoringHint;
+
+  /**
+   * v1.13.x / J2 — availability/recency-bias hint. Per-pipeline (computed
+   * against this pipeline's own returned top-K + the matched candidate pool
+   * it was drawn from), soft-warning ONLY: never filters, reorders, or
+   * suppresses a result. Fires when the returned slice is recency-dominated
+   * while substantially older relevant matches in the same pool were passed
+   * over. Disabled by setting `HIPPO_AVAILABILITY=off`.
+   */
+  availabilityHint?: AvailabilityHint;
 }
 
 /**
@@ -1011,6 +1032,43 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
     }
   }
 
+  // v1.13.x / J2 — availability/recency-bias detection. PURE read: compares
+  // the age distribution of the returned top-K (baseSlice, the post-goal-boost
+  // slice) against the matched candidate pool it was drawn from (entries, the
+  // scope/private-FILTERED candidate set baseSlice is sliced from — NOT `all`,
+  // which still holds private/cross-scope rows the caller is not eligible to see
+  // and that could never enter the top-K; counting them would leak hidden pool
+  // shape and inflate the signal). Soft warning only — does NOT filter, reorder,
+  // or suppress. Disabled by HIPPO_AVAILABILITY=off (gates even the detect call
+  // so disabled tenants pay zero work). Suppressed via opts.suppressAvailabilityHint
+  // when the caller computes its own per-pipeline hint (MCP), mirroring the J1
+  // opts.recallHistory gate above so we never double-emit the audit op. Audit
+  // emission is pipeline-local, mirroring the J1 block above.
+  let availabilityHint: AvailabilityHint | null = null;
+  if (process.env.HIPPO_AVAILABILITY !== 'off' && !opts.suppressAvailabilityHint) {
+    availabilityHint = detectAvailabilityBias({
+      topK: baseSlice.map((e) => ({ id: e.id, created: e.created })),
+      pool: entries.map((e) => ({ id: e.id, created: e.created })),
+    });
+    if (availabilityHint) {
+      const db = openHippoDb(ctx.hippoRoot);
+      try {
+        appendAuditEvent(db, {
+          tenantId: ctx.tenantId,
+          actor: ctx.actor.subject,
+          op: 'recall_availability_detected',
+          metadata: {
+            recent_fraction: availabilityHint.recentFraction,
+            older_passed_over: availabilityHint.olderCandidatesPassedOver,
+            returned_count: availabilityHint.returnedCount,
+          },
+        });
+      } finally {
+        closeHippoDb(db);
+      }
+    }
+  }
+
   return {
     results: rankedOut,
     total: totalOut,
@@ -1029,6 +1087,7 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
     ...(planningFallacyHint ? { planningFallacyHint } : {}),
     ...(planningFallacyWatching ? { planningFallacyWatching } : {}),
     ...(anchoringHint ? { anchoringHint } : {}),
+    ...(availabilityHint ? { availabilityHint } : {}),
   };
 }
 

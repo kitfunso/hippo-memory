@@ -539,23 +539,24 @@ Inspired by Kahneman's *Thinking, Fast and Slow* (2011) and the Tversky-Kahneman
 
 **Dependency gate (binding):** built on existing PFC plumbing rather than a parallel stack. J3 needs the `prediction` first-class object (E2 row above). J4 needs C4 fast-path landing. J1 / J2 / J5 / J6 / J7 stand alone.
 
-### J3. Reference-class / planning-fallacy detector [next]
+### J3. Reference-class / planning-fallacy detector [shipped v1.13.1 + v1.13.4]
 When the agent makes a forward-looking claim ("this will take 2 days", "the change is low-risk", "rollout in 1 week"), hippo automatically surfaces base-rate stats from closed `prediction` objects in the same class: "your last 5 estimates in class `migration-effort` averaged 2.1x actual". Direct application of Lovallo-Kahneman (2003) inside-vs-outside view; no agent-memory competitor tracks ex-ante claim closure against ex-post outcome.
 **Pre-req:** E2 `prediction` object. **Effort:** 6d after pre-req. **Success:** on a 30-task estimation workload, agent-side estimates with J3 active have lower mean absolute error than without; paired Wilcoxon p<0.05.
 
-### J1. Anchoring detector [planned]
+### J1. Anchoring detector [shipped v1.13.2]
 Flag when a query phrase reuses a stale top-1 result from the last N recalls, OR when one memory has been top-result for >N consecutive semantically-distinct queries in a session. Surface as `[anchored_on: mem_xyz]` in `recall --why`. **Effort:** 4d. **Success:** on a synthetic 50-trace test set with planted anchoring sequences, J1 fires at >80% precision and >60% recall vs hand-labeled.
 
-### J-Wire. Agent-prompt wiring + dogfood validation [next, blocks J5+]
+### J-Wire. Agent-prompt wiring + dogfood validation [done 2026-05-27: dogfood 8/9 organic read-rate, no system-prompt addendum needed]
 Track J ships *soft warnings* on `RecallResult`: C5 `suppressionSummary` (v1.13.0), J3.2 `planningFallacyHint` (v1.13.1), J1 `anchoringHint` (v1.13.2). All three are passive fields the calling agent must KNOW to read. No agent prompt today instructs Claude to scan them on every recall, which means the warnings may ship dark. Before J5 / J2 / J6 / J7 add more detectors to the same unread surface, prove (or disprove) that the existing three reach the agent. **Deliverable:** MCP-host system-prompt addendum + dogfood diary capturing whether Claude organically references each warning. **Effort:** 1-3h smoke test; 1-2d wiring if smoke test confirms warnings do not surface organically. **Success:** during dogfood, >=1 instance of Claude either (a) quoting the warning verbatim, (b) changing recommended action based on it, or (c) asking the user to confirm in light of it. Failure -> ship J-Wire prompt addendum, then re-run dogfood. **Blocks:** J5, J2, J6, J7 (do not ship more Track J detectors against an unread surface).
 
-### J2. Availability-bias detector [planned]
+### J2. Availability-bias detector [shipped v1.14.0]
 Flag when top-K is dominated by recent entries (>70% in last 24h) on a query class whose historical answers have averaged older. Uses tag-class base rates from `audit_log`. **Effort:** 4d. **Success:** on the LongMemEval temporal-reasoning slice, fires on queries whose correct-answer `created` predates top-K median by >X days at >70% precision.
+**Shipped v1.14.0** as Framing B+: compares the returned top-K age distribution against the same query's MATCHED candidate pool (`src/availability.ts` `detectAvailabilityBias`), soft warning only on `RecallResult.availabilityHint`, per-pipeline. The `audit_log` tag-class historical-answer-age base rate is deferred to follow-up J2.2 (cold-start + complexity; mirrors J3.1 -> J3.2 incremental shipping).
 
 ### J4. Substitution detector [research]
 Detect when an agent's recall query is a heuristic substitute for the harder question being asked. Concretely: query embedding is >cos 0.4 from any cluster centroid but a high-strength fast-path hit exists at a different abstraction -- flag that the agent may be answering an easier related question. **Pre-req:** C4 fast-path. **Effort:** TBD. **Success:** human-labeled accuracy on a 100-query substitution test set >65% precision.
 
-### J5. Loss-aversion calibration [next]
+### J5. Loss-aversion calibration [shipped v1.13.5]
 TFAS empirics: losses loom ~2x larger than equivalent gains. Hippo's current emotional multipliers are error=1.5 / success=1.3 (nearly symmetric, slightly wrong direction). Move default to error=2.0 / success=1.0; expose `HIPPO_LOSS_AVERSION_RATIO` env var for per-domain tuning. Tiny code change; the framing + calibration eval is the contribution. **Effort:** 1d code + 2d eval. **Success:** retrieval-relevance of error-tagged memories at 30d holds at >baseline; success-tagged memory recall does not regress on tier-1 micro-eval.
 
 ### J6. Cognitive-load-aware EVC [planned, B1 extension]
