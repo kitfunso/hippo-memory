@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "hippo-memory-sdk"
-version = "0.2.2"
+version = "0.3.0"
 description = "Python SDK (async + sync) for hippo-memory (biologically-inspired memory for AI agents). Wraps the HTTP API of the hippo-memory npm package."
 readme = "README.md"
 requires-python = ">=3.10"
