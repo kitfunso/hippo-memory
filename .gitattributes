@@ -1,0 +1,6 @@
+# Normalize all text files to LF in the repo; git auto-detects binaries.
+# Fixes the mixed-eol state (TS=LF, Python/manifests=CRLF, no prior
+# .gitattributes, autocrlf=false) that caused spurious whole-file diffs when
+# tools rewrote files. A one-time `git add --renormalize .` is applied in the
+# same commit so the whole tree is uniformly LF going forward.
+* text=auto eol=lf
