@@ -151,7 +151,10 @@ export type AuditOp =
   | 'recall_anchor_detected_query_repeat' // v0.33 / J1 — emitted by detector when R1 fires (same query phrasing returning same top-1 within recentRepeatWindow)
   | 'recall_anchor_detected_memory_dominance' // v0.33 / J1 — emitted by detector when R2 fires (same memory wins top-1 across >=minDominance distinct queries)
   | 'recall_anchor_skipped_no_session' // v0.33 / J1 — telemetry: caller skipped ring tracking because no sessionId; drives J1-v2 decision on persisting cross-session history
-  | 'recall_availability_detected'; // v1.13.x / J2 - emitted when availability/recency-bias hint fires
+  | 'recall_availability_detected' // v1.13.x / J2 - emitted when availability/recency-bias hint fires
+  | 'decision_create' // E2 decision first-class object — emitted by saveDecision
+  | 'decision_supersede' // E2 — emitted by saveDecision when --supersedes resolves to an active decision row
+  | 'decision_close'; // E2 — emitted by closeDecision (active -> closed, retire without successor)
 
 export interface AppendAuditOpts {
   tenantId: string;

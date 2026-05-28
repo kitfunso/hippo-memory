@@ -59,7 +59,6 @@ import {
   Layer,
   MemoryEntry,
   ConfidenceLevel,
-  DECISION_HALF_LIFE_DAYS,
 } from './memory.js';
 import {
   getHippoRoot,
@@ -160,6 +159,7 @@ import { buildCorrectionLatency } from './correction-latency.js';
 import * as api from './api.js';
 import * as predictionsModule from './predictions.js';
 import { computePlanningFallacyOutput } from './predictions.js';
+import * as decisionsModule from './decisions.js';
 import { createHash } from 'node:crypto';
 import {
   detectAnchoring,
@@ -3716,6 +3716,170 @@ function cmdPredict(
   if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
 }
 
+function cmdDecide(
+  hippoRoot: string,
+  args: string[],
+  flags: Record<string, string | boolean | string[]>
+): void {
+  requireInit(hippoRoot);
+  const tenantId = resolveTenantId({});
+  const subcommand = args[0] ?? '';
+
+  if (subcommand === 'list') {
+    const statusRaw = flags['status'];
+    const status = typeof statusRaw === 'string' ? statusRaw.trim() : 'all';
+    const limitRaw = flags['limit'];
+    const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : 100;
+    if (!Number.isFinite(limit) || limit <= 0) {
+      console.error(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
+      process.exit(1);
+    }
+    let results;
+    if (status === 'all') {
+      results = decisionsModule.loadDecisions(hippoRoot, tenantId, { limit });
+    } else {
+      if (!decisionsModule.VALID_DECISION_STATES.has(status as decisionsModule.DecisionStatus)) {
+        console.error(`Invalid --status: "${status}". Must be one of: active | superseded | closed | all.`);
+        process.exit(1);
+      }
+      results = decisionsModule.loadDecisions(hippoRoot, tenantId, {
+        status: status as decisionsModule.DecisionStatus,
+        limit,
+      });
+    }
+    if (results.length === 0) {
+      console.log('No decisions.');
+      return;
+    }
+    console.log(`Found ${results.length} decisions:\n`);
+    for (const d of results) {
+      const supPart = d.supersededBy !== null ? ` superseded_by=#${d.supersededBy}` : '';
+      console.log(`#${d.id} [${d.status}]${supPart} memory=${d.memoryId ?? '-'}`);
+      console.log(`    ${d.decisionText}`);
+      if (d.context) console.log(`    context: ${d.context}`);
+    }
+    return;
+  }
+
+  if (subcommand === 'get') {
+    const idRaw = args[1];
+    if (!idRaw) {
+      console.error('Usage: hippo decide get <id>');
+      process.exit(1);
+    }
+    const id = parseInt(String(idRaw), 10);
+    if (!Number.isFinite(id) || id <= 0) {
+      console.error(`Invalid decision id: "${idRaw}"`);
+      process.exit(1);
+    }
+    const decision = decisionsModule.loadDecisionById(hippoRoot, tenantId, id);
+    if (!decision) {
+      console.error(`Decision ${id} not found.`);
+      process.exit(1);
+    }
+    console.log(`Decision #${decision.id}`);
+    console.log(`  status: ${decision.status}`);
+    console.log(`  text: ${decision.decisionText}`);
+    if (decision.context) console.log(`  context: ${decision.context}`);
+    if (decision.supersededBy !== null) console.log(`  superseded_by: #${decision.supersededBy}`);
+    if (decision.supersededAt) console.log(`  superseded_at: ${decision.supersededAt}`);
+    if (decision.closedAt) console.log(`  closed_at: ${decision.closedAt}`);
+    if (decision.memoryId) console.log(`  memory: ${decision.memoryId}`);
+    console.log(`  created: ${decision.createdAt}`);
+    return;
+  }
+
+  if (subcommand === 'close') {
+    const idRaw = args[1];
+    if (!idRaw) {
+      console.error('Usage: hippo decide close <id>');
+      process.exit(1);
+    }
+    const id = parseInt(String(idRaw), 10);
+    if (!Number.isFinite(id) || id <= 0) {
+      console.error(`Invalid decision id: "${idRaw}"`);
+      process.exit(1);
+    }
+    const closed = decisionsModule.closeDecision(hippoRoot, tenantId, id);
+    console.log(`Decision #${closed.id} closed.`);
+    return;
+  }
+
+  // Default subcommand: create. args[0] is the decision text.
+  const decisionText = subcommand;
+  if (!decisionText) {
+    console.error('Usage: hippo decide "<decision>" [--context "<why>"] [--supersedes <memory-id>]');
+    console.error('       hippo decide list [--status active|superseded|closed|all] [--limit N]');
+    console.error('       hippo decide get <id>');
+    console.error('       hippo decide close <id>');
+    process.exit(1);
+  }
+  const contextRaw = flags['context'];
+  const context = typeof contextRaw === 'string' && contextRaw ? contextRaw : undefined;
+  // A value-less `--supersedes` (parseArgs stores boolean true) is a malformed
+  // request: the user asked to supersede but gave no memory id. Reject it rather
+  // than silently creating a non-superseding decision (codex review 2026-05-28).
+  if (flags['supersedes'] === true) {
+    console.error('--supersedes requires a memory id, e.g. hippo decide "<text>" --supersedes mem_abc123.');
+    process.exit(1);
+  }
+  const supersedesMemId = typeof flags['supersedes'] === 'string' ? flags['supersedes'] : null;
+
+  // Backward-compat: --supersedes takes a MEMORY id. Validate it exists and
+  // resolve it to the active decision row (if any). Grill fix: commit the
+  // canonical table create+supersede FIRST (inside saveDecision's SAVEPOINT),
+  // weaken the old memory LAST (best-effort) so a memory-write failure cannot
+  // leave the memory stale without the table reflecting the supersession.
+  let supersedesDecisionId: number | undefined;
+  let oldEntry: MemoryEntry | null = null;
+  if (supersedesMemId) {
+    oldEntry = readEntry(hippoRoot, supersedesMemId, tenantId) ?? null;
+    if (!oldEntry) {
+      console.error(`Memory ${supersedesMemId} not found.`);
+      process.exit(1);
+    }
+    supersedesDecisionId =
+      decisionsModule.resolveActiveDecisionIdByMemory(hippoRoot, tenantId, supersedesMemId) ?? undefined;
+  }
+
+  const decisionPathTags = extractPathTags(process.cwd());
+  const created = decisionsModule.saveDecision(hippoRoot, tenantId, {
+    decisionText,
+    context,
+    supersedesDecisionId,
+    extraTags: decisionPathTags,
+  });
+
+  // Legacy memory-weaken (best-effort, LAST): half-life halved, marked stale +
+  // 'superseded' tag. Preserves the exact pre-promotion behavior for the memory
+  // mirror; the canonical table supersession already committed above.
+  if (oldEntry) {
+    // Best-effort: saveDecision already committed the canonical mutation (new
+    // decision created + old row superseded). If this legacy memory-weaken
+    // throws, do NOT fail the command — a retry would find no active decision
+    // for the old memory and create a duplicate active successor. Warn instead
+    // (codex review 2026-05-28).
+    try {
+      oldEntry.half_life_days = Math.max(1, Math.floor(oldEntry.half_life_days / 2));
+      oldEntry.confidence = 'stale';
+      if (!oldEntry.tags.includes('superseded')) oldEntry.tags.push('superseded');
+      writeEntry(hippoRoot, oldEntry);
+    } catch (e) {
+      console.error(`  warning: decision recorded and superseded, but failed to weaken the prior memory ${supersedesMemId}: ${(e as Error).message}`);
+    }
+  }
+
+  console.log(`Decision recorded: #${created.id}`);
+  if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
+  if (supersedesMemId) {
+    const tail =
+      supersedesDecisionId !== undefined
+        ? ` (decision #${supersedesDecisionId} superseded)`
+        : ' (no active decision row; memory weakened only)';
+    console.log(`  supersedes memory: ${supersedesMemId}${tail}`);
+  }
+}
+
 function cmdCurrent(
   hippoRoot: string,
   args: string[],
@@ -5283,6 +5447,9 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'recall_anchor_detected_memory_dominance',  // v0.33 / J1 — emitted by detector on R2 fire
   'recall_anchor_skipped_no_session',         // v0.33 / J1 — telemetry: no sessionId, ring skipped
   'recall_availability_detected',             // v1.13.x / J2 - emitted when availability/recency-bias hint fires
+  'decision_create',       // E2 decision first-class object — emitted by saveDecision
+  'decision_supersede',    // E2 — emitted by saveDecision when --supersedes resolves to an active decision row
+  'decision_close',        // E2 — emitted by closeDecision
 ]);
 
 function formatAuditRow(ev: AuditEvent): string {
@@ -6130,9 +6297,13 @@ Commands:
                            claude-code/opencode install SessionEnd+SessionStart;
                            codex wraps the detected launcher in place
     hook uninstall <target> Remove hook
-  decide "<decision>"      Record an architectural decision (90-day half-life)
+  decide "<decision>"      Record a decision (first-class object + memory mirror)
     --context "<why>"      Why this decision was made
-    --supersedes <id>      Supersede a previous decision (weakens it)
+    --supersedes <mem-id>  Supersede the decision backed by this memory id
+  decide list [--status active|superseded|closed|all] [--limit N]
+                           List decisions (table is authoritative, survives decay)
+  decide get <id>          Show a decision by its table id
+  decide close <id>        Retire (close) an active decision by its table id
   invalidate "<pattern>"   Actively weaken memories matching an old pattern
     --reason "<why>"       Optional: what replaced it
   wm <sub>                 Working memory — bounded buffer for current state
@@ -6846,57 +7017,9 @@ async function main(): Promise<void> {
       break;
     }
 
-    case 'decide': {
-      requireInit(hippoRoot);
-      const text = args[0];
-      if (!text) {
-        console.error('Usage: hippo decide "<decision>" [--context "<why>"] [--supersedes <id>]');
-        process.exit(1);
-      }
-
-      const context = flags['context'] as string || '';
-      const supersedesId = flags['supersedes'] as string || null;
-
-      // Build content with context
-      const decisionContent = context ? `${text}\n\nContext: ${context}` : text;
-
-      // Handle supersession
-      if (supersedesId) {
-        const oldEntry = readEntry(hippoRoot, supersedesId, resolveTenantId({}));
-        if (!oldEntry) {
-          console.error(`Memory ${supersedesId} not found.`);
-          process.exit(1);
-        }
-        oldEntry.half_life_days = Math.max(1, Math.floor(oldEntry.half_life_days / 2));
-        oldEntry.confidence = 'stale';
-        if (!oldEntry.tags.includes('superseded')) oldEntry.tags.push('superseded');
-        writeEntry(hippoRoot, oldEntry);
-        console.log(`Superseded ${supersedesId} (half-life halved, marked stale)`);
-      }
-
-      // Create decision memory
-      const mem = createMemory(decisionContent, {
-        tags: ['decision'],
-        layer: Layer.Semantic,
-        confidence: 'verified',
-        source: 'decision',
-      });
-      mem.half_life_days = DECISION_HALF_LIFE_DAYS;
-
-      // Auto-tag with path context
-      const decisionPathTags = extractPathTags(process.cwd());
-      for (const pt of decisionPathTags) {
-        if (!mem.tags.includes(pt)) mem.tags.push(pt);
-      }
-
-      writeEntry(hippoRoot, mem);
-
-      console.log(`Decision recorded: ${mem.id}`);
-      if (supersedesId) {
-        console.log(`   Supersedes: ${supersedesId}`);
-      }
+    case 'decide':
+      cmdDecide(hippoRoot, args, flags);
       break;
-    }
 
     case 'help':
     case '--help':
