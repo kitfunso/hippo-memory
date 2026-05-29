@@ -161,6 +161,7 @@ import * as predictionsModule from './predictions.js';
 import { computePlanningFallacyOutput } from './predictions.js';
 import * as decisionsModule from './decisions.js';
 import * as incidentsModule from './incidents.js';
+import * as processesModule from './processes.js';
 import { createHash } from 'node:crypto';
 import {
   detectAnchoring,
@@ -350,8 +351,8 @@ function parseArgs(argv: string[]): { command: string; args: string[]; flags: Re
         flags[key] = true;
         i++;
       } else {
-        // Check if it's a repeatable flag (tag, artifact, link)
-        if (key === 'tag' || key === 'artifact' || key === 'link') {
+        // Check if it's a repeatable flag (tag, artifact, link, step)
+        if (key === 'tag' || key === 'artifact' || key === 'link' || key === 'step') {
           if (Array.isArray(flags[key])) {
             (flags[key] as string[]).push(next);
           } else {
@@ -4038,6 +4039,184 @@ function cmdIncident(
   }
 }
 
+// Strict positive-integer id parse for the mutating process subcommands.
+// parseInt alone accepts trailing junk ('1abc' -> 1), which would let
+// `process close 1abc` / `supersede 1abc` silently hit the wrong row; require
+// the whole arg to be digits. (Mirrors parsePositiveIncidentId; codex P2,
+// 2026-05-29.)
+function parsePositiveProcessId(idRaw: unknown): number {
+  const s = String(idRaw ?? '').trim();
+  const id = parseInt(s, 10);
+  if (!/^\d+$/.test(s) || id <= 0) {
+    console.error(`Invalid process id: "${idRaw}" (expected a positive integer).`);
+    process.exit(1);
+  }
+  return id;
+}
+
+// --step is a repeatable flag (collected into an array by parseArgs). A single
+// --step yields a string; normalize both to string[]. A value-less --step errors.
+function collectProcessSteps(stepRaw: string | boolean | string[] | undefined): string[] {
+  if (Array.isArray(stepRaw)) return stepRaw;
+  if (typeof stepRaw === 'string') return [stepRaw];
+  if (stepRaw === true) {
+    console.error('--step requires a value, e.g. hippo process new "<name>" --step "do X".');
+    process.exit(1);
+  }
+  return [];
+}
+
+function cmdProcess(
+  hippoRoot: string,
+  args: string[],
+  flags: Record<string, string | boolean | string[]>
+): void {
+  requireInit(hippoRoot);
+  const tenantId = resolveTenantId({});
+  const subcommand = args[0] ?? '';
+
+  if (subcommand === 'list') {
+    const statusRaw = flags['status'];
+    const status = typeof statusRaw === 'string' ? statusRaw.trim() : 'all';
+    const limitRaw = flags['limit'];
+    const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : 100;
+    if (!Number.isFinite(limit) || limit <= 0) {
+      console.error(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
+      process.exit(1);
+    }
+    let results;
+    if (status === 'all') {
+      results = processesModule.loadProcesses(hippoRoot, tenantId, { limit });
+    } else {
+      if (!processesModule.VALID_PROCESS_STATES.has(status as processesModule.ProcessStatus)) {
+        console.error(`Invalid --status: "${status}". Must be one of: active | superseded | closed | all.`);
+        process.exit(1);
+      }
+      results = processesModule.loadProcesses(hippoRoot, tenantId, {
+        status: status as processesModule.ProcessStatus,
+        limit,
+      });
+    }
+    if (results.length === 0) {
+      console.log('No processes.');
+      return;
+    }
+    console.log(`Found ${results.length} processes:\n`);
+    for (const proc of results) {
+      console.log(`#${proc.id} [${proc.status}] v${proc.version} steps=${proc.steps.length} memory=${proc.memoryId ?? '-'}`);
+      console.log(`    ${proc.processName}`);
+      if (proc.changeSummary) console.log(`    change: ${proc.changeSummary}`);
+    }
+    return;
+  }
+
+  if (subcommand === 'get') {
+    const idRaw = args[1];
+    if (!idRaw) {
+      console.error('Usage: hippo process get <id>');
+      process.exit(1);
+    }
+    const id = parsePositiveProcessId(idRaw);
+    const proc = processesModule.loadProcessById(hippoRoot, tenantId, id);
+    if (!proc) {
+      console.error(`Process ${id} not found.`);
+      process.exit(1);
+    }
+    console.log(`Process #${proc.id}`);
+    console.log(`  name: ${proc.processName}`);
+    console.log(`  status: ${proc.status}`);
+    console.log(`  version: ${proc.version}`);
+    if (proc.description) console.log(`  description: ${proc.description}`);
+    if (proc.steps.length > 0) {
+      console.log(`  steps:`);
+      proc.steps.forEach((s, i) => console.log(`    ${i + 1}. ${s}`));
+    }
+    if (proc.changeSummary) console.log(`  change_summary: ${proc.changeSummary}`);
+    if (proc.supersededBy !== null) console.log(`  superseded_by: #${proc.supersededBy}`);
+    if (proc.supersededAt) console.log(`  superseded_at: ${proc.supersededAt}`);
+    if (proc.closedAt) console.log(`  closed_at: ${proc.closedAt}`);
+    if (proc.memoryId) console.log(`  memory: ${proc.memoryId}`);
+    console.log(`  created: ${proc.createdAt}`);
+    return;
+  }
+
+  if (subcommand === 'supersede') {
+    const idRaw = args[1];
+    if (!idRaw) {
+      console.error('Usage: hippo process supersede <id> --step "<text>" [--step ...] [--change "<summary>"] [--description "<text>"]');
+      process.exit(1);
+    }
+    const id = parsePositiveProcessId(idRaw);
+    const steps = collectProcessSteps(flags['step']);
+    if (steps.length === 0) {
+      console.error('hippo process supersede requires at least one --step "<text>" for the new version.');
+      process.exit(1);
+    }
+    // A supersession is a new version of the SAME process, so the new row reuses
+    // the predecessor's name (stable identity across versions). loadProcessById
+    // gives an early not-found before the write; saveProcess's in-SAVEPOINT
+    // preflight is the authoritative active-state check.
+    const existing = processesModule.loadProcessById(hippoRoot, tenantId, id);
+    if (!existing) {
+      console.error(`Process ${id} not found.`);
+      process.exit(1);
+    }
+    const changeRaw = flags['change'];
+    const changeSummary = typeof changeRaw === 'string' && changeRaw ? changeRaw : undefined;
+    const descRaw = flags['description'];
+    const description = typeof descRaw === 'string' && descRaw ? descRaw : undefined;
+    const procPathTags = extractPathTags(process.cwd());
+    const created = processesModule.saveProcess(hippoRoot, tenantId, {
+      processName: existing.processName,
+      steps,
+      description,
+      changeSummary,
+      supersedesProcessId: id,
+      extraTags: procPathTags,
+    });
+    console.log(`Process #${created.id} recorded (v${created.version}), superseding #${id}.`);
+    if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
+    return;
+  }
+
+  if (subcommand === 'close') {
+    const idRaw = args[1];
+    if (!idRaw) {
+      console.error('Usage: hippo process close <id>');
+      process.exit(1);
+    }
+    const id = parsePositiveProcessId(idRaw);
+    const closed = processesModule.closeProcess(hippoRoot, tenantId, id);
+    console.log(`Process #${closed.id} closed.`);
+    return;
+  }
+
+  // Default subcommand: new (create). Accept both the documented
+  // `process new "<name>"` form and the bare `process "<name>"` form: for the
+  // `new` keyword the name is args[1], otherwise args[0] IS the name.
+  const processName = subcommand === 'new' ? (args[1] ?? '') : subcommand;
+  if (!processName) {
+    console.error('Usage: hippo process new "<name>" --step "<text>" [--step ...] [--description "<text>"]');
+    console.error('       hippo process list [--status active|superseded|closed|all] [--limit N]');
+    console.error('       hippo process get <id>');
+    console.error('       hippo process supersede <id> --step "<text>" [--change "<summary>"]');
+    console.error('       hippo process close <id>');
+    process.exit(1);
+  }
+  const steps = collectProcessSteps(flags['step']);
+  const descRaw = flags['description'];
+  const description = typeof descRaw === 'string' && descRaw ? descRaw : undefined;
+  const procPathTags = extractPathTags(process.cwd());
+  const created = processesModule.saveProcess(hippoRoot, tenantId, {
+    processName,
+    steps,
+    description,
+    extraTags: procPathTags,
+  });
+  console.log(`Process recorded: #${created.id} (v${created.version}, ${created.steps.length} steps)`);
+  if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
+}
+
 function cmdCurrent(
   hippoRoot: string,
   args: string[],
@@ -5611,6 +5790,9 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'incident_open',         // E2 incident first-class object — emitted by saveIncident
   'incident_resolve',      // E2 — emitted by resolveIncident (open -> resolved)
   'incident_close',        // E2 — emitted by closeIncident (open|resolved -> closed)
+  'process_create',        // E2 process first-class object — emitted by saveProcess
+  'process_supersede',     // E2 — emitted by saveProcess on a supersession
+  'process_close',         // E2 — emitted by closeProcess
 ]);
 
 function formatAuditRow(ev: AuditEvent): string {
@@ -6474,6 +6656,17 @@ Commands:
   incident resolve <id>    Resolve an open incident (open -> resolved)
     --resolution "<text>"  How it was resolved (required)
   incident close <id>      Retire (close) an open or resolved incident by its table id
+  process new "<name>"     Record a process map (first-class object + memory mirror)
+    --step "<text>"        An ordered step (repeatable)
+    --description "<text>" Optional summary of the process
+  process list [--status active|superseded|closed|all] [--limit N]
+                           List processes (table is authoritative, survives decay)
+  process get <id>         Show a process (with its steps) by its table id
+  process supersede <id>   Record a new version that supersedes an active process
+    --step "<text>"        A step of the new version (repeatable, required)
+    --change "<summary>"   What changed in this version (the delta note)
+    --description "<text>" Optional summary of the new version
+  process close <id>       Retire (close) an active process by its table id
   invalidate "<pattern>"   Actively weaken memories matching an old pattern
     --reason "<why>"       Optional: what replaced it
   wm <sub>                 Working memory — bounded buffer for current state
@@ -6556,6 +6749,7 @@ Examples:
   hippo hook install claude-code
   hippo decide "Use PostgreSQL for new services" --context "JSONB support"
   hippo incident "Prod outage: DB connection pool exhausted" --context "spike at 14:00"
+  hippo process new "Release" --step "run tests" --step "bump version" --step "publish"
   hippo invalidate "REST API" --reason "migrated to GraphQL"
   hippo export memories.json
   hippo export --format markdown memories.md
@@ -7194,6 +7388,10 @@ async function main(): Promise<void> {
 
     case 'incident':
       cmdIncident(hippoRoot, args, flags);
+      break;
+
+    case 'process':
+      cmdProcess(hippoRoot, args, flags);
       break;
 
     case 'help':

@@ -124,6 +124,8 @@ export const DECISION_HALF_LIFE_DAYS = 90;
 
 export const INCIDENT_HALF_LIFE_DAYS = 90;
 
+export const PROCESS_HALF_LIFE_DAYS = 90;
+
 // Emotional multipliers from PLAN.md.
 //
 // v1.13.5 / J5 loss-aversion calibration (Lovallo-Kahneman TFAS empirics:

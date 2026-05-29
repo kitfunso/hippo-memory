@@ -19,6 +19,25 @@
   and sync) plus the `Incident` model, three audit ops (`incident_open`,
   `incident_resolve`, `incident_close`) in the 3-site lockstep, and schema
   migration v31 (`incidents` table, 2 indexes, 2 tenant-safety triggers).
+- E2 process first-class object. `hippo process` records a living process map (a
+  named, ordered list of steps) as a canonical `processes` table row (source of
+  truth, survives memory decay) plus a memory mirror for recall; forget /
+  consolidate / archive gracefully orphans the row via ON DELETE SET NULL. The
+  delta lifecycle reuses the decision supersede path: a process evolves by being
+  superseded by a NEW VERSION that records what changed (`change_summary`) and
+  the full new step list, carrying a server-derived `version` counter (1 on a
+  fresh create, predecessor.version + 1 on supersede). Lifecycle is active ->
+  superseded (replaced by a newer version) or active -> closed (retired with no
+  successor). `steps` are validated as non-empty strings with DoS caps (200
+  steps, 2000 chars each). New CLI subcommands `hippo process new|list|get|
+  supersede|close`, HTTP routes (`POST /v1/processes`, `GET /v1/processes`,
+  `GET /v1/processes/:id`, `POST /v1/processes/:id/supersede`,
+  `POST /v1/processes/:id/close`), Python SDK methods (`new_process`,
+  `supersede_process`, `close_process`, `list_processes`, `get_process`, async
+  and sync) plus the `Process` model, three audit ops (`process_create`,
+  `process_supersede`, `process_close`) in the 3-site lockstep, and schema
+  migration v32 (`processes` table, 2 indexes, 3 tenant-safety triggers
+  including the supersede self-FK trigger).
 
 ## 1.15.0 (2026-05-28): E2 decisions first-class object
 
