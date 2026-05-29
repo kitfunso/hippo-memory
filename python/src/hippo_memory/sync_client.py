@@ -48,6 +48,7 @@ from hippo_memory.models import (
     AuthRevoked,
     AuditEvent,
     Decision,
+    Incident,
     Prediction,
     PredictionBaserate,
     HippoError,
@@ -501,3 +502,52 @@ class HippoSync:
         """GET /v1/decisions/:id. Sync mirror of Hippo.get_decision."""
         data = self._request("GET", f"/v1/decisions/{decision_id}")
         return Decision.model_validate(data["decision"])
+
+    # ── incidents (E2 first-class object) ──────────────────────────────
+
+    def open_incident(
+        self,
+        text: str,
+        *,
+        context: str | None = None,
+        linked_memory_ids: list[str] | None = None,
+    ) -> Incident:
+        """POST /v1/incidents. Sync mirror of Hippo.open_incident."""
+        body: dict[str, Any] = {"text": text}
+        if context is not None:
+            body["context"] = context
+        if linked_memory_ids is not None:
+            body["linkedMemoryIds"] = linked_memory_ids
+        data = self._request("POST", "/v1/incidents", json=body)
+        return Incident.model_validate(data["incident"])
+
+    def resolve_incident(self, incident_id: int, resolution_text: str) -> Incident:
+        """POST /v1/incidents/:id/resolve. Sync mirror of Hippo.resolve_incident."""
+        body: dict[str, Any] = {"resolutionText": resolution_text}
+        data = self._request("POST", f"/v1/incidents/{incident_id}/resolve", json=body)
+        return Incident.model_validate(data["incident"])
+
+    def close_incident(self, incident_id: int) -> Incident:
+        """POST /v1/incidents/:id/close. Sync mirror of Hippo.close_incident."""
+        data = self._request("POST", f"/v1/incidents/{incident_id}/close", json={})
+        return Incident.model_validate(data["incident"])
+
+    def list_incidents(
+        self,
+        *,
+        status: Literal["open", "resolved", "closed", "all"] | None = None,
+        limit: int | None = None,
+    ) -> list[Incident]:
+        """GET /v1/incidents. Sync mirror of Hippo.list_incidents."""
+        params: dict[str, Any] = {}
+        if status is not None:
+            params["status"] = status
+        if limit is not None:
+            params["limit"] = limit
+        data = self._request("GET", "/v1/incidents", params=params)
+        return [Incident.model_validate(i) for i in data["incidents"]]
+
+    def get_incident(self, incident_id: int) -> Incident:
+        """GET /v1/incidents/:id. Sync mirror of Hippo.get_incident."""
+        data = self._request("GET", f"/v1/incidents/{incident_id}")
+        return Incident.model_validate(data["incident"])

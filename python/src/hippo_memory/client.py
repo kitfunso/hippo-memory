@@ -38,6 +38,7 @@ from hippo_memory.models import (
     AuthRevoked,
     AuditEvent,
     Decision,
+    Incident,
     Prediction,
     PredictionBaserate,
     HippoError,
@@ -535,3 +536,63 @@ class Hippo:
         """GET /v1/decisions/:id. Fetch a single decision by id."""
         data = await self._request("GET", f"/v1/decisions/{decision_id}")
         return Decision.model_validate(data["decision"])
+
+    # ── incidents (E2 first-class object) ──────────────────────────────
+
+    async def open_incident(
+        self,
+        text: str,
+        *,
+        context: str | None = None,
+        linked_memory_ids: list[str] | None = None,
+    ) -> Incident:
+        """POST /v1/incidents. Record an incident as a first-class object.
+
+        Returns the canonical incident row (status ``open``). The incidents
+        table is the source of truth, so the incident stays ``open`` regardless
+        of memory decay. ``linked_memory_ids`` are evidence receipts; each must
+        exist in the same tenant or the call is rejected.
+        """
+        body: dict[str, Any] = {"text": text}
+        if context is not None:
+            body["context"] = context
+        if linked_memory_ids is not None:
+            body["linkedMemoryIds"] = linked_memory_ids
+        data = await self._request("POST", "/v1/incidents", json=body)
+        return Incident.model_validate(data["incident"])
+
+    async def resolve_incident(self, incident_id: int, resolution_text: str) -> Incident:
+        """POST /v1/incidents/:id/resolve. Resolve an open incident
+        (open -> resolved), recording ``resolution_text``. Returns the resolved
+        incident row.
+        """
+        body: dict[str, Any] = {"resolutionText": resolution_text}
+        data = await self._request("POST", f"/v1/incidents/{incident_id}/resolve", json=body)
+        return Incident.model_validate(data["incident"])
+
+    async def close_incident(self, incident_id: int) -> Incident:
+        """POST /v1/incidents/:id/close. Retire an incident (open|resolved ->
+        closed). Returns the closed incident row.
+        """
+        data = await self._request("POST", f"/v1/incidents/{incident_id}/close", json={})
+        return Incident.model_validate(data["incident"])
+
+    async def list_incidents(
+        self,
+        *,
+        status: Literal["open", "resolved", "closed", "all"] | None = None,
+        limit: int | None = None,
+    ) -> list[Incident]:
+        """GET /v1/incidents. List incidents, optionally filtered by status."""
+        params: dict[str, Any] = {}
+        if status is not None:
+            params["status"] = status
+        if limit is not None:
+            params["limit"] = limit
+        data = await self._request("GET", "/v1/incidents", params=params)
+        return [Incident.model_validate(i) for i in data["incidents"]]
+
+    async def get_incident(self, incident_id: int) -> Incident:
+        """GET /v1/incidents/:id. Fetch a single incident by id."""
+        data = await self._request("GET", f"/v1/incidents/{incident_id}")
+        return Incident.model_validate(data["incident"])

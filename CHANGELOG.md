@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- E2 incident first-class object. `hippo incident` records an operational event
+  as a canonical `incidents` table row (source of truth, survives memory decay)
+  plus a memory mirror for recall; forget / consolidate / archive gracefully
+  orphans the row via ON DELETE SET NULL. Lifecycle is open -> resolved ->
+  closed (not supersede): `resolve` records a resolution and keeps the incident
+  on record, `close` retires it from either open or resolved. Incidents carry
+  `linked_memory_ids`, a list of evidence-receipt memory ids validated against
+  the same tenant on save. New CLI subcommands `hippo incident open|list|get|
+  resolve|close`, HTTP routes (`POST /v1/incidents`, `GET /v1/incidents`,
+  `GET /v1/incidents/:id`, `POST /v1/incidents/:id/resolve`,
+  `POST /v1/incidents/:id/close`), Python SDK methods (`open_incident`,
+  `resolve_incident`, `close_incident`, `list_incidents`, `get_incident`, async
+  and sync) plus the `Incident` model, three audit ops (`incident_open`,
+  `incident_resolve`, `incident_close`) in the 3-site lockstep, and schema
+  migration v31 (`incidents` table, 2 indexes, 2 tenant-safety triggers).
+
 ## 1.15.0 (2026-05-28): E2 decisions first-class object
 
 ### Added

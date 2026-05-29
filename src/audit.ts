@@ -154,7 +154,10 @@ export type AuditOp =
   | 'recall_availability_detected' // v1.13.x / J2 - emitted when availability/recency-bias hint fires
   | 'decision_create' // E2 decision first-class object — emitted by saveDecision
   | 'decision_supersede' // E2 — emitted by saveDecision when --supersedes resolves to an active decision row
-  | 'decision_close'; // E2 — emitted by closeDecision (active -> closed, retire without successor)
+  | 'decision_close' // E2 — emitted by closeDecision (active -> closed, retire without successor)
+  | 'incident_open' // E2 incident first-class object — emitted by saveIncident
+  | 'incident_resolve' // E2 — emitted by resolveIncident (open -> resolved)
+  | 'incident_close'; // E2 — emitted by closeIncident (open|resolved -> closed)
 
 export interface AppendAuditOpts {
   tenantId: string;
