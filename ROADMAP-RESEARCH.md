@@ -4,7 +4,7 @@ This is the canonical execution roadmap. Every actionable item from `RESEARCH.md
 
 This file supersedes the prior research-only frame. `ROADMAP.md` continues to track grant-tied deliverables. `PLAN.md` documents architecture and CLS principles.
 
-Current version: 1.12.0 (npm `hippo-memory`) + python-v0.1.0 (PyPI `hippo-memory-sdk`)
+Current version: 1.15.0 (npm `hippo-memory`) + python-v0.3.0 (PyPI `hippo-memory-sdk`) — both published 2026-05-29
 Active branch: `master`
 
 ## Status as of 2026-05-24
@@ -13,10 +13,10 @@ The original 90-day plan (lines below, scoped April→July) is **functionally co
 
 **Next 90 days (2026-05-23 → 2026-08-23) priority queue** (revised at end-of-arc):
 - ~~Episode A/B/C tail → v1.11.5 patch or v1.12.0 minor: per-tenant `/v1/sleep` scoping decision~~ — **DONE** in v1.11.5 (7/8 items) + v1.12.0 sub-1 (admin-gate option (a)). Remaining v1.12.0 follow-ups (HTTP DoS caps on outcome+context, audit-emission on sleep phases, api.recall parity, CLI snapshot tests, mid-phase test coverage, afterAll guard) tracked in `TODOS.md` §"v1.12.0 sub-2 / later".
-- Python SDK v0.2: sync wrappers (HippoSync), ContextResult.projected() helper, 204 handling in `_request`.
+- ~~Python SDK v0.2: sync wrappers (HippoSync), ContextResult.projected() helper~~ — **SHIPPED** python-v0.2.0 (2026-05-24); v0.3.0 (2026-05-28, Decision API). 204 handling deferred-by-design (dead code path).
 - ~~F9 hybrid retrieval — the BM25+vector RRF fusion the F-track never actually measured locally~~ — **SHIPPED 2026-05-20** via PR #27 (`feat/f9-hybrid-retrieval-parity`). Phase 1 oracle: 4 hybrid cells all beat dense-only baseline 79.0; best `turn_asym` R@5=82.0 (+3.0). Phase 2 `_s` Gate-B FAIL @ 97.7 (best `turn_sym` R@5=50.8 vs F14 baseline 41.0, +9.8 lift at zero LLM cost; ties the F14+F9-Sonnet-rerank stack). HARD RETRACTION executed per prereg discipline — that's why the canonical-doc trail (CHANGELOG/README/this file pre-correction) didn't mention it. Result + audit trail at `docs/evals/2026-05-20-f9-hybrid-rrf-result.md`. The locally-runnable embedder is the structural ceiling on `_s` (F14 R@100=86.2 confirmed in F16; F9 doesn't lift it).
-- Conflict-subsystem tenant-isolation residue (unscoped `readEntry` / `loadSearchEntries` in `cli.ts` / `dashboard.ts` / `refine-llm.ts` from v1.11.0).
-- v0.26 UI redesign port — `mockups/hybrid-v4.html` (warm parchment + 3D Three.js scene with OrbitControls, golden hour sky, mycelium network, Field Notes sidebar) into `ui/src/`. Design locked at v0.26, never ported. Track in TODOS.md "v0.26 — UI Redesign".
+- Conflict-subsystem tenant-isolation residue — **deferred-by-design**: unscoped readers in `cli.ts` / `dashboard.ts` / `refine-llm.ts` are host-wide-correct under single-tenant-per-process + loopback trust; stale cross-tenant rows already auto-resolved by `replaceDetectedConflicts`. Revisit only when non-loopback multi-tenant serving lands.
+- v0.26 UI redesign — **partial / diverged**: an "Obsidian-inspired graph" revamp shipped instead (E1-E5, v0.2.0-v0.2.5) + parchment tokens added (not yet fully wired to components). The hybrid-v4 mockup (3D golden-hour sky / terrain / mycelium + full parchment Field Notes) was NOT pursued — keep/drop decision pending. Track in TODOS.md "v0.26 — UI Redesign".
 
 The per-track status tags below are updated to reflect shipped-vs-active state. Section structure, bets, non-goals, and cross-track invariants are unchanged.
 
@@ -58,8 +58,8 @@ Persistent daemon alongside CLI. `hippo serve` exposes HTTP + MCP, CLI becomes a
 Language-agnostic surface alongside MCP/CLI. RESTish.
 **Shipped:** 14 routes on `/v1/*`: memories (remember/recall/drill/forget/archive/supersede/promote), auth (keys list/create/revoke), audit, connectors (slack/github webhooks), sessions/assemble, plus v1.11.4's outcome/context/sleep. Per-IP token-bucket rate limit (`HIPPO_V1_RPS`, default 20 rps) added v1.11.0. All routes Bearer-authed and tenant-scoped except `/v1/sleep` (loopback-only, host-wide; per-tenant scoping deferred to TODOS.md once non-loopback serving lands).
 
-### A12. Python SDK [shipped python-v0.1.0]
-Async httpx + Pydantic v2 thin wrapper over the 14 HTTP routes. PyPI distribution name `hippo-memory-sdk` (the bare `hippo-memory` was blocked by PyPI's similarity check against an existing `hippomem` project); Python import name stays `hippo_memory`. Trusted-publisher OIDC workflow at `.github/workflows/pypi-publish.yml`. v0.2 follow-ups in TODOS.md: sync wrappers (HippoSync), ContextResult.projected() helper, 204 handling in `_request`.
+### A12. Python SDK [shipped python-v0.3.0]
+Async httpx + Pydantic v2 thin wrapper over the 14 HTTP routes. PyPI distribution name `hippo-memory-sdk` (the bare `hippo-memory` was blocked by PyPI's similarity check against an existing `hippomem` project); Python import name stays `hippo_memory`. Trusted-publisher OIDC workflow at `.github/workflows/pypi-publish.yml`. v0.2.0 (sync wrappers HippoSync + ContextResult.projected()) shipped 2026-05-24; v0.3.0 (Decision API) shipped 2026-05-28; 204 handling deferred-by-design.
 
 ### A3. Provenance envelope [shipped]
 Every memory carries `scope`, `source`, `timestamp`, `owner`, `confidence`, `artifact_ref`, `session_id`, `kind` (raw|distilled|superseded|archived). RESEARCH §"Phase 1: safest bridge" canonical envelope.
@@ -303,7 +303,7 @@ RESEARCH §"Phase 2: operating objects". Each object gets its own table, recall 
 
 | Object | Status | Effort to first-class | Notes |
 |--------|--------|----------------------|-------|
-| `decision` | partial (`hippo decide`) | 4d to fully promote | 90-day half-life shipped |
+| `decision` | **shipped v1.15.0** (`decisions` table + lifecycle) | done | first-class object; supersede/close ops |
 | `handoff` | partial (`hippo handoff`) | 3d to fully promote | session-scoped today |
 | `incident` | planned | 8d | postmortem capsules with linked receipts |
 | `process` | planned | 10d | living process maps with deltas |
@@ -311,7 +311,7 @@ RESEARCH §"Phase 2: operating objects". Each object gets its own table, recall 
 | `skill` | planned | 12d | executable; exports to AGENTS.md / CLAUDE.md |
 | `project_brief` | planned | 8d | repo-scoped; auto-refreshes from receipts |
 | `customer_note` | planned | 6d | scoped to account/customer entity |
-| `prediction` | planned [Track J pre-req] | 6d | ex-ante claim closed against ex-post outcome; enables reference-class forecasting (J3 / planning-fallacy correction) |
+| `prediction` | **shipped v1.13.0** | done | ex-ante claim closed against ex-post outcome; powers J3 reference-class forecasting |
 
 ### Phase E3 — graph layer over consolidated state
 
@@ -539,7 +539,7 @@ Inspired by Kahneman's *Thinking, Fast and Slow* (2011) and the Tversky-Kahneman
 
 **Dependency gate (binding):** built on existing PFC plumbing rather than a parallel stack. J3 needs the `prediction` first-class object (E2 row above). J4 needs C4 fast-path landing. J1 / J2 / J5 / J6 / J7 stand alone.
 
-### J3. Reference-class / planning-fallacy detector [shipped v1.13.1 + v1.13.4]
+### J3. Reference-class / planning-fallacy detector [shipped v1.13.1 + v1.13.4 + v1.14.0]
 When the agent makes a forward-looking claim ("this will take 2 days", "the change is low-risk", "rollout in 1 week"), hippo automatically surfaces base-rate stats from closed `prediction` objects in the same class: "your last 5 estimates in class `migration-effort` averaged 2.1x actual". Direct application of Lovallo-Kahneman (2003) inside-vs-outside view; no agent-memory competitor tracks ex-ante claim closure against ex-post outcome.
 **Pre-req:** E2 `prediction` object. **Effort:** 6d after pre-req. **Success:** on a 30-task estimation workload, agent-side estimates with J3 active have lower mean absolute error than without; paired Wilcoxon p<0.05.
 
@@ -599,10 +599,10 @@ Priority overlay: short post-ship tail first (close the Episode A/B/C critic-def
 1. **Episode A/B/C tail → v1.11.5 / v1.12.0** (~5d): HTTP DoS caps on `/v1/outcome` ids.length + `/v1/context` q length; per-tenant `/v1/sleep` scoping decision (admin-role gate or plumb `ctx.tenantId` into `deduplicateStore` + `auditMemories` + `deleteEntry`); `audit_log` emission on sleep consolidation phases; `api.recall` last-retrieval-ids parity with `cmdRecall`; CLI render snapshot tests for `printContextMarkdown` + `renderSleepResult`.
 2. **~~F9 hybrid retrieval — first measurement~~ — DONE 2026-05-20 (PR #27).** See F9 §status update for full result. Follow-up candidates from the F9 result doc §"Next steps": (a) F9 + F13-stacked rerank on oracle (plausible +3pp to ~89.8 R@5), (b) per-type-routed ensemble (~+4-5pp on oracle at no inference cost), (c) F17 if `api.openai.com` egress ever opens.
 3. **Conflict-subsystem tenant-isolation residue** (~3d): audit and tenant-scope the unscoped `readEntry` / `loadSearchEntries` call sites in `cli.ts` / `dashboard.ts` / `refine-llm.ts` (deferred from v1.11.0 because half-scoping without first scoping upstream `loadAllEntries(hippoRoot)` would silently drop parent text).
-4. **Python SDK v0.2** (~5d): sync wrappers (HippoSync), ContextResult.projected() helper, 204 handling in `_request`.
-5. **v0.26 UI redesign port** (~15-20d): port `mockups/hybrid-v4.html` (warm parchment + 3D Three.js scene with OrbitControls, golden hour sky dome, mycelium network, Field Notes sidebar, bottom drawer memory list) from mockup to `ui/src/` React codebase. Design locked at v0.26 (2026-04-20); port has never started. Track in TODOS.md "v0.26 — UI Redesign".
+4. ~~**Python SDK v0.2**~~ — **SHIPPED** v0.2.0 (2026-05-24) + v0.3.0 (2026-05-28). 204 handling deferred-by-design.
+5. **v0.26 UI redesign** — *partial / diverged*: an Obsidian-inspired graph revamp shipped (E1-E5, v0.2.0-v0.2.5) + parchment tokens (not fully wired); the hybrid-v4 3D-sky mockup was not pursued. Open: keep/drop the hybrid-v4 direction + finish wiring components to the parchment tokens. Track in TODOS.md "v0.26 — UI Redesign".
 6. **B1 ACC EVC calibration, B3 dlPFC goal-stack depth (already shipped MVP+depth)**: B-track depth items are research-not-enterprise — re-prioritise only after platform items 1-5 above.
-7. **E2 first-class `decision` / `handoff` object promotion** (~4-7d each): partial today via `hippo decide` / `hippo handoff`; promote to first-class objects with own lifecycle.
+7. **E2 first-class objects**: `decision` **shipped v1.15.0**, `prediction` **shipped v1.13.0**, `handoff` built (session-scoped). Remaining: incident / process / policy / skill / project_brief / customer_note (~4-7d each).
 
 ### Days 181+ (Aug 2026 onwards) — research and platform
 - A6 Postgres backend (only when a hosted customer requires shared deployment)

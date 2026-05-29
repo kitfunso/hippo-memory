@@ -16,7 +16,7 @@ A5 v2 auth/role plumbing: `Actor` interface promotion (`Context.actor: string` �
 
 - [x] **Per-tenant `/v1/sleep` scoping** (item #5 from v1.11.5 plan). DONE in v1.12.0 sub-1 via admin-gate option (a): `POST /v1/sleep` now returns 403 for non-admin Bearer; loopback path stays open. `Context.actor` promoted to `{subject, role}` object across all 5 manifests, `api_keys` migration v26 added `role TEXT NOT NULL DEFAULT 'admin'`.
 - [x] **`api.sleep` mid-phase failure test coverage.** SHIPPED v1.12.2 (PR pending) via `SleepOpts.__phases` test-only DI seam. 6 cases in `tests/api-sleep-phase-faults.test.ts` lock the `partial: true` + `errorMessage` audit row for faults at each of the 5 phase boundaries + happy path.
-- [ ] **Consolidate audit row tenant tag.** Currently tagged with `ctx.tenantId` but `api.sleep` is host-wide (cross-tenant dedup is intentional). When `/v1/sleep` moves off loopback-only, either tag with synthetic "host" tenant or scope api.sleep per-tenant. Independent-review-critic MED #3 on v1.11.5. TODO inlined at `src/api.ts:2050`. Note: v1.12.0 sub-1 admin-gate limits blast radius (only admin Bearers can call); aggregate counts still reach the admin caller.
+- [x] **Consolidate audit row tenant tag.** SHIPPED v1.12.10 — `api.sleep` tags the consolidate audit row with the synthetic `__host__` tenant (host-wide cross-tenant dedup is intentional); see `src/api.ts:2580`. Closed Independent-review-critic MED #3 from v1.11.5.
 - [x] **Snapshot test belt-and-braces `afterAll(useRealTimers)`.** DONE 2026-05-24 — `afterAll(useRealTimers)` added to both describe blocks in `tests/cli-context-render-snapshot.test.ts` as defence-in-depth.
 - [x] **`hippo auth create --role` CLI flag.** SHIPPED v1.12.3 — `--role admin|member` accepted (defaults to admin), invalid values exit 1. Mirrored on HTTP route via `body.role`. Tests in `tests/auth-role-cli-surfacing.test.ts`.
 - [x] **`hippo auth list` role column.** SHIPPED v1.12.3 — `ApiKeyListItem.role` populated by extending the SELECT to read the column; CLI table header updated to `key_id  tenant  role  label  created  revoked`. Fail-safe-to-member cast on unrecognised values.
@@ -40,7 +40,7 @@ See `docs/evals/2026-05-20-f9-hybrid-rrf-result.md`. Phase 1 oracle: best `turn_
 
 ### ~~Conflict-subsystem tenant-isolation residue~~ — SHIPPED v1.12.1 (2026-05-24) for the background-pipelines slice
 
-The 8-file background-pipelines slice shipped as v1.12.1 (A5 v2 sub-2 — `feat/v1.12.1-l9-tenant-scoping`). `tenantId?: string` plumbed as optional through `invalidateMatching`, `RefineOptions`, `deduplicateLesson`, `CaptureOptions`, `ImportOptions`, `autoShare` options bag. 6 host-wide reader sites (consolidate, embeddings×2, shared.ts×3) documented with L9 JSDoc as intentionally cross-tenant. 13-case test file `tests/l9-tenant-scoping.test.ts`. See CHANGELOG.md v1.12.1 entry.
+The 8-file background-pipelines slice shipped as v1.12.1 (A5 v2 sub-2 — `feat/v1.12.1-l9-tenant-scoping`). `tenantId?: string` plumbed as optional through `invalidateMatching`, `RefineOptions`, `deduplicateLesson`, `CaptureOptions`, `ImportOptions`, `autoShare` options bag. 6 host-wide reader sites (consolidate, embeddings×2, shared.ts×3) documented with L9 JSDoc as intentionally cross-tenant. 13-case test file `tests/l9-tenant-scoping.test.ts`. See CHANGELOG.md v1.12.1 entry. RECONCILED 2026-05-29: the residual unscoped readers (cli.ts/dashboard.ts/dedupe.ts/memory.ts) are deferred-by-design under single-tenant-per-process + loopback trust (host-wide reads are correct for operator/maintenance commands); the stale cross-tenant conflict-row cleanup is ALREADY handled by `replaceDetectedConflicts` (store.ts:2148, sameTenant()+crossTenant auto-resolve). Revisit the readers only when non-loopback multi-tenant serving lands.
 
 **Still deferred (not in the L9 brief):**
 - `cli.ts` / `dashboard.ts` unscoped reader sites — single-tenant-per-process trust holds until non-loopback serving lands.
@@ -55,13 +55,13 @@ The 8-file background-pipelines slice shipped as v1.12.1 (A5 v2 sub-2 — `feat/
 - [x] **`auth_create(role=)` parameter + `AuthCreated.role`/`AuthKey.role`** — BONUS in v0.2.0. Matches hippo-memory v1.12.3 server. Tests cover admin + member roles.
 - [x] **Breaking model fix:** `AuthCreated.key` → `AuthCreated.plaintext`. v0.1 had a model bug never exercised by integration tests; v0.2 fixes it. Caught while writing sync test coverage.
 
-### v0.26 UI redesign port — warm parchment + 3D (~15-20d)
+### v0.26 UI redesign port — warm parchment + 3D (PARTIAL / DIVERGED, reconciled 2026-05-29)
 
-Detail in §"v0.26 — UI Redesign (warm parchment + 3D)" below. Design locked at `mockups/hybrid-v4.html` (2026-04-20); port to `ui/src/` React codebase never started. Dark-theme Brain Observatory shipped v0.25.0 and is what `hippo dashboard` serves today.
+Detail in §"v0.26 — UI Redesign (warm parchment + 3D)" below. STATUS (reconciled 2026-05-29): a UI revamp DID ship — the "Obsidian-inspired graph" series E1-E5 (v0.2.0-v0.2.5: color-by-tag, real edges, local graph, force-directed layout, per-project anchors) plus Header/Sidebar/FilterPanel/TagCloud + a11y (lighthouse 97). Parchment design tokens exist (`ui/src/tokens.ts`/`tokens.css`, `#f4efe6`) but components are NOT yet fully wired to them (only `SkipLink` consumes them). The specific hybrid-v4 mockup direction (warm-parchment Field Notes + 3D golden-hour sky dome / terrain / mycelium) was NOT pursued. OPEN DECISION: keep the hybrid-v4 3D-sky direction (re-port) or bless the shipped Obsidian-graph as the v0.26 outcome + finish wiring components to the parchment tokens. The `ui-revamp-e0..e5` branches are dead (57 behind master, unmergeable).
 
 ### B / C / E track depth items (deferred to days 91-180)
 
-Research-not-enterprise items; re-prioritise only after items 1-5 above. B1 ACC EVC calibration, B3 dlPFC goal-stack depth (MVP+depth shipped, but research workload-validity gates returned mixed signals — see `docs/RETRACTION.md`), C3 Pineal ambient state vector, E2 first-class `decision` / `handoff` object promotion.
+Research-not-enterprise items; re-prioritise only after items 1-5 above. B1 ACC EVC calibration, B3 dlPFC goal-stack depth (MVP+depth shipped, but research workload-validity gates returned mixed signals — see `docs/RETRACTION.md`), C3 Pineal ambient state vector. E2 first-class `decision` SHIPPED v1.15.0; `prediction` SHIPPED v1.13.0; `handoff` already built (session-scoped). Remaining E2 objects: incident / process / policy / skill / project_brief / customer_note.
 
 ### Engineering hygiene (release pipeline)
 
