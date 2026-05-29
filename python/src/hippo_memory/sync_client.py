@@ -49,6 +49,7 @@ from hippo_memory.models import (
     AuditEvent,
     Decision,
     Incident,
+    Process,
     Prediction,
     PredictionBaserate,
     HippoError,
@@ -551,3 +552,61 @@ class HippoSync:
         """GET /v1/incidents/:id. Sync mirror of Hippo.get_incident."""
         data = self._request("GET", f"/v1/incidents/{incident_id}")
         return Incident.model_validate(data["incident"])
+
+    def new_process(
+        self,
+        process_name: str,
+        *,
+        steps: list[str] | None = None,
+        description: str | None = None,
+    ) -> Process:
+        """POST /v1/processes. Sync mirror of Hippo.new_process."""
+        body: dict[str, Any] = {"processName": process_name}
+        if steps is not None:
+            body["steps"] = steps
+        if description is not None:
+            body["description"] = description
+        data = self._request("POST", "/v1/processes", json=body)
+        return Process.model_validate(data["process"])
+
+    def supersede_process(
+        self,
+        process_id: int,
+        steps: list[str],
+        *,
+        change_summary: str | None = None,
+        description: str | None = None,
+    ) -> Process:
+        """POST /v1/processes/:id/supersede. Sync mirror of Hippo.supersede_process."""
+        body: dict[str, Any] = {"steps": steps}
+        if change_summary is not None:
+            body["changeSummary"] = change_summary
+        if description is not None:
+            body["description"] = description
+        data = self._request("POST", f"/v1/processes/{process_id}/supersede", json=body)
+        return Process.model_validate(data["process"])
+
+    def close_process(self, process_id: int) -> Process:
+        """POST /v1/processes/:id/close. Sync mirror of Hippo.close_process."""
+        data = self._request("POST", f"/v1/processes/{process_id}/close", json={})
+        return Process.model_validate(data["process"])
+
+    def list_processes(
+        self,
+        *,
+        status: Literal["active", "superseded", "closed", "all"] | None = None,
+        limit: int | None = None,
+    ) -> list[Process]:
+        """GET /v1/processes. Sync mirror of Hippo.list_processes."""
+        params: dict[str, Any] = {}
+        if status is not None:
+            params["status"] = status
+        if limit is not None:
+            params["limit"] = limit
+        data = self._request("GET", "/v1/processes", params=params)
+        return [Process.model_validate(p) for p in data["processes"]]
+
+    def get_process(self, process_id: int) -> Process:
+        """GET /v1/processes/:id. Sync mirror of Hippo.get_process."""
+        data = self._request("GET", f"/v1/processes/{process_id}")
+        return Process.model_validate(data["process"])

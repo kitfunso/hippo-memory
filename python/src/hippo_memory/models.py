@@ -46,6 +46,7 @@ __all__ = [
     "AuditEvent",
     "Decision",
     "Incident",
+    "Process",
     "Prediction",
     "PredictionBaserate",
     "HippoError",
@@ -662,6 +663,39 @@ class Incident(_Base):
     resolved_at: str | None = None
     closed_at: str | None = None
     linked_memory_ids: list[str] = Field(default_factory=list)
+    created_at: str
+
+
+class Process(_Base):
+    """Process first-class object. Mirrors the TS Process interface in
+    src/processes.ts.
+
+    A process is a living process map: a named, ordered list of ``steps`` that
+    evolves. Its delta lifecycle reuses decision's supersede path - a process
+    evolves by being superseded by a NEW VERSION recording ``change_summary``
+    and the full new ``steps``, with a server-derived ``version`` counter (1 on
+    a fresh create, predecessor.version + 1 on supersede). Three statuses:
+    ``active``, ``superseded`` (replaced by a newer version; ``superseded_by``
+    points to the successor), and ``closed`` (retired with no successor; only an
+    active head closes).
+
+    The processes table is canonical, so an active process stays ``active``
+    regardless of memory decay. ``memory_id`` is nullable: ``ON DELETE SET
+    NULL`` server-side gracefully orphans the process row.
+    """
+
+    id: int
+    memory_id: str | None = None
+    tenant_id: str
+    process_name: str
+    description: str | None = None
+    steps: list[str] = Field(default_factory=list)
+    version: int = 1
+    status: str = "active"
+    superseded_by: int | None = None
+    superseded_at: str | None = None
+    change_summary: str | None = None
+    closed_at: str | None = None
     created_at: str
 
 

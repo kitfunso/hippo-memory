@@ -78,6 +78,14 @@ import {
   VALID_INCIDENT_STATES,
   type IncidentStatus,
 } from './incidents.js';
+import {
+  saveProcess,
+  closeProcess,
+  loadProcessById,
+  loadProcesses,
+  VALID_PROCESS_STATES,
+  type ProcessStatus,
+} from './processes.js';
 import { handleMcpRequest, type McpRequest } from './mcp/server.js';
 import { verifySlackSignature } from './connectors/slack/signature.js';
 import { isSlackEventEnvelope, isSlackMessageEvent } from './connectors/slack/types.js';
@@ -148,12 +156,40 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'incident_open',         // E2 incident first-class object — emitted by saveIncident
   'incident_resolve',      // E2 — emitted by resolveIncident (open -> resolved)
   'incident_close',        // E2 — emitted by closeIncident (open|resolved -> closed)
+  'process_create',        // E2 process first-class object — emitted by saveProcess
+  'process_supersede',     // E2 — emitted by saveProcess on a supersession
+  'process_close',         // E2 — emitted by closeProcess
 ]);
 
 // Cap on GET /v1/audit?limit=. Matches docs/api.md (when written) and is large
 // enough to dump a small deployment's full audit log without paginating, but
 // small enough that a malicious client can't ask for the world.
 const MAX_AUDIT_LIMIT = 10000;
+
+// HTTP-boundary validation for a process `steps` body (untrusted). Returns the
+// step strings (saveProcess re-validates + trims, this is the fail-fast 400
+// gate). Caps mirror src/processes.ts MAX_PROCESS_STEPS / MAX_PROCESS_STEP_LEN.
+function validateProcessStepsBody(raw: unknown): string[] {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw)) {
+    throw new HttpError(400, 'steps must be an array of strings');
+  }
+  if (raw.length > 200) {
+    throw new HttpError(400, 'steps exceeds 200-step cap');
+  }
+  for (const item of raw) {
+    if (typeof item !== 'string') {
+      throw new HttpError(400, 'each step must be a string');
+    }
+    if (item.trim().length === 0) {
+      throw new HttpError(400, 'a step is empty');
+    }
+    if (item.length > 2000) {
+      throw new HttpError(400, 'a step exceeds the 2000-character cap');
+    }
+  }
+  return raw as string[];
+}
 
 const VALID_KINDS: ReadonlySet<MemoryKind> = new Set([
   'raw',
@@ -1582,6 +1618,167 @@ async function handleRequest(
       throw new HttpError(404, `incident ${id} not found`);
     }
     sendJson(res, 200, { incident });
+    return;
+  }
+
+  // ── processes (E2 first-class object) ──
+  //
+  // 5 routes: POST /v1/processes (new; body processName + steps[] + description),
+  // GET /v1/processes (list, status filter), GET /v1/processes/:id (show),
+  // POST /v1/processes/:id/supersede (active -> superseded by a new version; body
+  // steps[] + changeSummary + description; reuses the predecessor's name),
+  // POST /v1/processes/:id/close (active -> closed). Bearer-authed + tenant-scoped
+  // via buildContextWithAuth. status validated against VALID_PROCESS_STATES. DoS
+  // caps: processName/description/changeSummary 4096, steps 200x2000
+  // (validateProcessStepsBody). Mirrors /v1/decisions; the delta lifecycle is the
+  // decision supersede path.
+  if (method === 'POST' && path === '/v1/processes') {
+    const body = await parseJsonBody(req);
+    const processName = body['processName'];
+    if (typeof processName !== 'string' || processName.trim().length === 0) {
+      throw new HttpError(400, 'processName is required (non-empty string)');
+    }
+    if (processName.length > 4096) {
+      throw new HttpError(400, 'processName exceeds 4096-character cap');
+    }
+    const steps = validateProcessStepsBody(body['steps']);
+    const descriptionRaw = body['description'];
+    let description: string | undefined;
+    if (descriptionRaw !== undefined && descriptionRaw !== null) {
+      if (typeof descriptionRaw !== 'string') {
+        throw new HttpError(400, 'description must be a string');
+      }
+      if (descriptionRaw.length > 4096) {
+        throw new HttpError(400, 'description exceeds 4096-character cap');
+      }
+      description = descriptionRaw;
+    }
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const process = saveProcess(opts.hippoRoot, ctx.tenantId, {
+      processName,
+      steps,
+      description,
+    }, ctx.actor.subject);
+    sendJson(res, 201, { process });
+    return;
+  }
+
+  if (method === 'GET' && path === '/v1/processes') {
+    const status = query.get('status') ?? 'all';
+    const limitRaw = query.get('limit');
+    let limit = 100;
+    if (limitRaw !== null) {
+      limit = Number(limitRaw);
+      if (!Number.isFinite(limit) || limit <= 0 || limit > 1000) {
+        throw new HttpError(400, 'limit must be a positive integer <= 1000');
+      }
+    }
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    let processes;
+    if (status === 'all') {
+      processes = loadProcesses(opts.hippoRoot, ctx.tenantId, { limit });
+    } else {
+      if (!VALID_PROCESS_STATES.has(status as ProcessStatus)) {
+        throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
+      }
+      processes = loadProcesses(opts.hippoRoot, ctx.tenantId, {
+        status: status as ProcessStatus,
+        limit,
+      });
+    }
+    sendJson(res, 200, { processes });
+    return;
+  }
+
+  const processSupersedeMatch = path.match(/^\/v1\/processes\/(\d+)\/supersede$/);
+  if (method === 'POST' && processSupersedeMatch) {
+    const id = parseInt(processSupersedeMatch[1], 10);
+    const body = await parseJsonBody(req);
+    const steps = validateProcessStepsBody(body['steps']);
+    if (steps.length === 0) {
+      throw new HttpError(400, 'steps is required (at least one step) for a supersession');
+    }
+    const changeRaw = body['changeSummary'];
+    let changeSummary: string | undefined;
+    if (changeRaw !== undefined && changeRaw !== null) {
+      if (typeof changeRaw !== 'string') {
+        throw new HttpError(400, 'changeSummary must be a string');
+      }
+      if (changeRaw.length > 4096) {
+        throw new HttpError(400, 'changeSummary exceeds 4096-character cap');
+      }
+      changeSummary = changeRaw;
+    }
+    const descRaw = body['description'];
+    let description: string | undefined;
+    if (descRaw !== undefined && descRaw !== null) {
+      if (typeof descRaw !== 'string') {
+        throw new HttpError(400, 'description must be a string');
+      }
+      if (descRaw.length > 4096) {
+        throw new HttpError(400, 'description exceeds 4096-character cap');
+      }
+      description = descRaw;
+    }
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    // A supersession is a new version of the SAME process: reuse the
+    // predecessor's name. 404 if the target does not exist; saveProcess's
+    // in-SAVEPOINT preflight is the authoritative active-state check (409).
+    const existing = loadProcessById(opts.hippoRoot, ctx.tenantId, id);
+    if (!existing) {
+      throw new HttpError(404, `process ${id} not found`);
+    }
+    try {
+      const process = saveProcess(opts.hippoRoot, ctx.tenantId, {
+        processName: existing.processName,
+        steps,
+        description,
+        changeSummary,
+        supersedesProcessId: id,
+      }, ctx.actor.subject);
+      sendJson(res, 200, { process });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) {
+        throw new HttpError(404, msg);
+      }
+      if (msg.includes('not active') || msg.includes('could not be superseded')) {
+        throw new HttpError(409, msg);
+      }
+      throw e;
+    }
+    return;
+  }
+
+  const processCloseMatch = path.match(/^\/v1\/processes\/(\d+)\/close$/);
+  if (method === 'POST' && processCloseMatch) {
+    const id = parseInt(processCloseMatch[1], 10);
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    try {
+      const process = closeProcess(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
+      sendJson(res, 200, { process });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) {
+        throw new HttpError(404, msg);
+      }
+      if (msg.includes('not active')) {
+        throw new HttpError(409, msg);
+      }
+      throw e;
+    }
+    return;
+  }
+
+  const processByIdMatch = path.match(/^\/v1\/processes\/(\d+)$/);
+  if (method === 'GET' && processByIdMatch) {
+    const id = parseInt(processByIdMatch[1], 10);
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const process = loadProcessById(opts.hippoRoot, ctx.tenantId, id);
+    if (!process) {
+      throw new HttpError(404, `process ${id} not found`);
+    }
+    sendJson(res, 200, { process });
     return;
   }
 

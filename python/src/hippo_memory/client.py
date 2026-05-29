@@ -39,6 +39,7 @@ from hippo_memory.models import (
     AuditEvent,
     Decision,
     Incident,
+    Process,
     Prediction,
     PredictionBaserate,
     HippoError,
@@ -596,3 +597,72 @@ class Hippo:
         """GET /v1/incidents/:id. Fetch a single incident by id."""
         data = await self._request("GET", f"/v1/incidents/{incident_id}")
         return Incident.model_validate(data["incident"])
+
+    async def new_process(
+        self,
+        process_name: str,
+        *,
+        steps: list[str] | None = None,
+        description: str | None = None,
+    ) -> Process:
+        """POST /v1/processes. Record a process map as a first-class object.
+
+        Returns the canonical process row (status ``active``, ``version`` 1).
+        The processes table is the source of truth, so the process stays
+        ``active`` regardless of memory decay. ``steps`` is the ordered body.
+        """
+        body: dict[str, Any] = {"processName": process_name}
+        if steps is not None:
+            body["steps"] = steps
+        if description is not None:
+            body["description"] = description
+        data = await self._request("POST", "/v1/processes", json=body)
+        return Process.model_validate(data["process"])
+
+    async def supersede_process(
+        self,
+        process_id: int,
+        steps: list[str],
+        *,
+        change_summary: str | None = None,
+        description: str | None = None,
+    ) -> Process:
+        """POST /v1/processes/:id/supersede. Record a new version that
+        supersedes an active process (active -> superseded). The new version
+        reuses the predecessor's name and carries an incremented ``version``;
+        ``change_summary`` is the delta note. Returns the new active version.
+        """
+        body: dict[str, Any] = {"steps": steps}
+        if change_summary is not None:
+            body["changeSummary"] = change_summary
+        if description is not None:
+            body["description"] = description
+        data = await self._request("POST", f"/v1/processes/{process_id}/supersede", json=body)
+        return Process.model_validate(data["process"])
+
+    async def close_process(self, process_id: int) -> Process:
+        """POST /v1/processes/:id/close. Retire an active process
+        (active -> closed). Returns the closed process row.
+        """
+        data = await self._request("POST", f"/v1/processes/{process_id}/close", json={})
+        return Process.model_validate(data["process"])
+
+    async def list_processes(
+        self,
+        *,
+        status: Literal["active", "superseded", "closed", "all"] | None = None,
+        limit: int | None = None,
+    ) -> list[Process]:
+        """GET /v1/processes. List processes, optionally filtered by status."""
+        params: dict[str, Any] = {}
+        if status is not None:
+            params["status"] = status
+        if limit is not None:
+            params["limit"] = limit
+        data = await self._request("GET", "/v1/processes", params=params)
+        return [Process.model_validate(p) for p in data["processes"]]
+
+    async def get_process(self, process_id: int) -> Process:
+        """GET /v1/processes/:id. Fetch a single process by id."""
+        data = await self._request("GET", f"/v1/processes/{process_id}")
+        return Process.model_validate(data["process"])
