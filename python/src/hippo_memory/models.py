@@ -45,6 +45,7 @@ __all__ = [
     "AuthRevoked",
     "AuditEvent",
     "Decision",
+    "Incident",
     "Prediction",
     "PredictionBaserate",
     "HippoError",
@@ -627,6 +628,40 @@ class Decision(_Base):
     superseded_by: int | None = None
     superseded_at: str | None = None
     closed_at: str | None = None
+    created_at: str
+
+
+class Incident(_Base):
+    """Incident first-class object. Mirrors the TS Incident interface in
+    src/incidents.ts.
+
+    An incident is a postmortem capsule: a recorded operational event with a
+    lifecycle and optional linked receipts (the memories that are its
+    evidence). Three statuses: ``open`` (active; default on create),
+    ``resolved`` (a resolution was recorded in ``resolution_text`` /
+    ``resolved_at``; the incident stays on record), and ``closed`` (retired;
+    ``closed_at`` set, reachable from open or resolved). This is NOT decision's
+    supersede - there is no ``superseded_by``.
+
+    The incidents table is canonical, so an open incident stays ``open``
+    regardless of memory decay. ``memory_id`` is nullable: ``ON DELETE SET
+    NULL`` server-side means memory deletion (forget / consolidate / archive)
+    gracefully orphans the incident row.
+
+    ``linked_memory_ids`` is the linked-receipts list: memory ids validated
+    against the same tenant on save.
+    """
+
+    id: int
+    memory_id: str | None = None
+    tenant_id: str
+    incident_text: str
+    context: str | None = None
+    status: str = "open"
+    resolution_text: str | None = None
+    resolved_at: str | None = None
+    closed_at: str | None = None
+    linked_memory_ids: list[str] = Field(default_factory=list)
     created_at: str
 
 

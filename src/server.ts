@@ -69,6 +69,15 @@ import {
   VALID_DECISION_STATES,
   type DecisionStatus,
 } from './decisions.js';
+import {
+  saveIncident,
+  resolveIncident,
+  closeIncident,
+  loadIncidentById,
+  loadIncidents,
+  VALID_INCIDENT_STATES,
+  type IncidentStatus,
+} from './incidents.js';
 import { handleMcpRequest, type McpRequest } from './mcp/server.js';
 import { verifySlackSignature } from './connectors/slack/signature.js';
 import { isSlackEventEnvelope, isSlackMessageEvent } from './connectors/slack/types.js';
@@ -136,6 +145,9 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'decision_create',       // E2 decision first-class object — emitted by saveDecision
   'decision_supersede',    // E2 — emitted by saveDecision when --supersedes resolves to an active decision row
   'decision_close',        // E2 — emitted by closeDecision
+  'incident_open',         // E2 incident first-class object — emitted by saveIncident
+  'incident_resolve',      // E2 — emitted by resolveIncident (open -> resolved)
+  'incident_close',        // E2 — emitted by closeIncident (open|resolved -> closed)
 ]);
 
 // Cap on GET /v1/audit?limit=. Matches docs/api.md (when written) and is large
@@ -1418,6 +1430,158 @@ async function handleRequest(
       throw new HttpError(404, `decision ${id} not found`);
     }
     sendJson(res, 200, { decision });
+    return;
+  }
+
+  // ── incidents (E2 first-class object) ──
+  //
+  // 5 routes: POST /v1/incidents (open; body text + context + linkedMemoryIds[]),
+  // GET /v1/incidents (list, status filter), GET /v1/incidents/:id (show),
+  // POST /v1/incidents/:id/resolve (open -> resolved; body resolutionText),
+  // POST /v1/incidents/:id/close (open|resolved -> closed). Bearer-authed +
+  // tenant-scoped via buildContextWithAuth. status validated against
+  // VALID_INCIDENT_STATES. DoS caps: text 4096, context 4096, resolutionText
+  // 4096 (v1.11.4 pattern). Mirrors /v1/decisions; lifecycle is
+  // open->resolved->closed (no supersede), so linkedMemoryIds replaces
+  // supersedesDecisionId on create.
+  if (method === 'POST' && path === '/v1/incidents') {
+    const body = await parseJsonBody(req);
+    const text = body['text'];
+    if (typeof text !== 'string' || text.length === 0) {
+      throw new HttpError(400, 'text is required (non-empty string)');
+    }
+    if (text.length > 4096) {
+      throw new HttpError(400, 'text exceeds 4096-character cap');
+    }
+    const contextRaw = body['context'];
+    let context: string | undefined;
+    if (contextRaw !== undefined && contextRaw !== null) {
+      if (typeof contextRaw !== 'string') {
+        throw new HttpError(400, 'context must be a string');
+      }
+      if (contextRaw.length > 4096) {
+        throw new HttpError(400, 'context exceeds 4096-character cap');
+      }
+      context = contextRaw;
+    }
+    const linkedRaw = body['linkedMemoryIds'];
+    let linkedMemoryIds: string[] | undefined;
+    if (linkedRaw !== undefined && linkedRaw !== null) {
+      if (!Array.isArray(linkedRaw)) {
+        throw new HttpError(400, 'linkedMemoryIds must be an array of memory ids');
+      }
+      if (linkedRaw.length > 256) {
+        throw new HttpError(400, 'linkedMemoryIds exceeds 256-item cap');
+      }
+      for (const item of linkedRaw) {
+        if (typeof item !== 'string' || item.length === 0 || item.length > 4096) {
+          throw new HttpError(400, 'each linkedMemoryIds entry must be a non-empty string <= 4096 chars');
+        }
+      }
+      linkedMemoryIds = linkedRaw as string[];
+    }
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    try {
+      const incident = saveIncident(opts.hippoRoot, ctx.tenantId, {
+        incidentText: text,
+        context,
+        linkedMemoryIds,
+      }, ctx.actor.subject);
+      sendJson(res, 201, { incident });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) {
+        throw new HttpError(409, msg);
+      }
+      throw e;
+    }
+    return;
+  }
+
+  if (method === 'GET' && path === '/v1/incidents') {
+    const status = query.get('status') ?? 'all';
+    const limitRaw = query.get('limit');
+    let limit = 100;
+    if (limitRaw !== null) {
+      limit = Number(limitRaw);
+      if (!Number.isFinite(limit) || limit <= 0 || limit > 1000) {
+        throw new HttpError(400, 'limit must be a positive integer <= 1000');
+      }
+    }
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    let incidents;
+    if (status === 'all') {
+      incidents = loadIncidents(opts.hippoRoot, ctx.tenantId, { limit });
+    } else {
+      if (!VALID_INCIDENT_STATES.has(status as IncidentStatus)) {
+        throw new HttpError(400, `status must be one of: open | resolved | closed | all (got "${status}")`);
+      }
+      incidents = loadIncidents(opts.hippoRoot, ctx.tenantId, {
+        status: status as IncidentStatus,
+        limit,
+      });
+    }
+    sendJson(res, 200, { incidents });
+    return;
+  }
+
+  const incidentResolveMatch = path.match(/^\/v1\/incidents\/(\d+)\/resolve$/);
+  if (method === 'POST' && incidentResolveMatch) {
+    const id = parseInt(incidentResolveMatch[1], 10);
+    const body = await parseJsonBody(req);
+    const resolutionText = body['resolutionText'];
+    if (typeof resolutionText !== 'string' || resolutionText.trim().length === 0) {
+      throw new HttpError(400, 'resolutionText is required (non-empty string)');
+    }
+    if (resolutionText.length > 4096) {
+      throw new HttpError(400, 'resolutionText exceeds 4096-character cap');
+    }
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    try {
+      const incident = resolveIncident(opts.hippoRoot, ctx.tenantId, id, resolutionText, ctx.actor.subject);
+      sendJson(res, 200, { incident });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) {
+        throw new HttpError(404, msg);
+      }
+      if (msg.includes('not open')) {
+        throw new HttpError(409, msg);
+      }
+      throw e;
+    }
+    return;
+  }
+
+  const incidentCloseMatch = path.match(/^\/v1\/incidents\/(\d+)\/close$/);
+  if (method === 'POST' && incidentCloseMatch) {
+    const id = parseInt(incidentCloseMatch[1], 10);
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    try {
+      const incident = closeIncident(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
+      sendJson(res, 200, { incident });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) {
+        throw new HttpError(404, msg);
+      }
+      if (msg.includes('already closed')) {
+        throw new HttpError(409, msg);
+      }
+      throw e;
+    }
+    return;
+  }
+
+  const incidentByIdMatch = path.match(/^\/v1\/incidents\/(\d+)$/);
+  if (method === 'GET' && incidentByIdMatch) {
+    const id = parseInt(incidentByIdMatch[1], 10);
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const incident = loadIncidentById(opts.hippoRoot, ctx.tenantId, id);
+    if (!incident) {
+      throw new HttpError(404, `incident ${id} not found`);
+    }
+    sendJson(res, 200, { incident });
     return;
   }
 

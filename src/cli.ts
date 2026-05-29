@@ -160,6 +160,7 @@ import * as api from './api.js';
 import * as predictionsModule from './predictions.js';
 import { computePlanningFallacyOutput } from './predictions.js';
 import * as decisionsModule from './decisions.js';
+import * as incidentsModule from './incidents.js';
 import { createHash } from 'node:crypto';
 import {
   detectAnchoring,
@@ -349,8 +350,8 @@ function parseArgs(argv: string[]): { command: string; args: string[]; flags: Re
         flags[key] = true;
         i++;
       } else {
-        // Check if it's a repeatable flag (tag, artifact)
-        if (key === 'tag' || key === 'artifact') {
+        // Check if it's a repeatable flag (tag, artifact, link)
+        if (key === 'tag' || key === 'artifact' || key === 'link') {
           if (Array.isArray(flags[key])) {
             (flags[key] as string[]).push(next);
           } else {
@@ -3880,6 +3881,163 @@ function cmdDecide(
   }
 }
 
+// Strict positive-integer parse for incident id args. parseInt() alone accepts
+// trailing junk ("1abc" -> 1), which would let a mutating subcommand (close/
+// resolve) silently hit the wrong row; require the whole arg to be digits.
+// (codex P2, 2026-05-29.)
+function parsePositiveIncidentId(idRaw: unknown): number {
+  const s = String(idRaw ?? '').trim();
+  const id = parseInt(s, 10);
+  if (!/^\d+$/.test(s) || id <= 0) {
+    console.error(`Invalid incident id: "${idRaw}" (expected a positive integer).`);
+    process.exit(1);
+  }
+  return id;
+}
+
+function cmdIncident(
+  hippoRoot: string,
+  args: string[],
+  flags: Record<string, string | boolean | string[]>
+): void {
+  requireInit(hippoRoot);
+  const tenantId = resolveTenantId({});
+  const subcommand = args[0] ?? '';
+
+  if (subcommand === 'list') {
+    const statusRaw = flags['status'];
+    const status = typeof statusRaw === 'string' ? statusRaw.trim() : 'all';
+    const limitRaw = flags['limit'];
+    const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : 100;
+    if (!Number.isFinite(limit) || limit <= 0) {
+      console.error(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
+      process.exit(1);
+    }
+    let results;
+    if (status === 'all') {
+      results = incidentsModule.loadIncidents(hippoRoot, tenantId, { limit });
+    } else {
+      if (!incidentsModule.VALID_INCIDENT_STATES.has(status as incidentsModule.IncidentStatus)) {
+        console.error(`Invalid --status: "${status}". Must be one of: open | resolved | closed | all.`);
+        process.exit(1);
+      }
+      results = incidentsModule.loadIncidents(hippoRoot, tenantId, {
+        status: status as incidentsModule.IncidentStatus,
+        limit,
+      });
+    }
+    if (results.length === 0) {
+      console.log('No incidents.');
+      return;
+    }
+    console.log(`Found ${results.length} incidents:\n`);
+    for (const inc of results) {
+      const linkPart = inc.linkedMemoryIds.length > 0 ? ` links=${inc.linkedMemoryIds.length}` : '';
+      console.log(`#${inc.id} [${inc.status}]${linkPart} memory=${inc.memoryId ?? '-'}`);
+      console.log(`    ${inc.incidentText}`);
+      if (inc.context) console.log(`    context: ${inc.context}`);
+    }
+    return;
+  }
+
+  if (subcommand === 'get') {
+    const idRaw = args[1];
+    if (!idRaw) {
+      console.error('Usage: hippo incident get <id>');
+      process.exit(1);
+    }
+    const id = parsePositiveIncidentId(idRaw);
+    const incident = incidentsModule.loadIncidentById(hippoRoot, tenantId, id);
+    if (!incident) {
+      console.error(`Incident ${id} not found.`);
+      process.exit(1);
+    }
+    console.log(`Incident #${incident.id}`);
+    console.log(`  status: ${incident.status}`);
+    console.log(`  text: ${incident.incidentText}`);
+    if (incident.context) console.log(`  context: ${incident.context}`);
+    if (incident.resolutionText) console.log(`  resolution: ${incident.resolutionText}`);
+    if (incident.resolvedAt) console.log(`  resolved_at: ${incident.resolvedAt}`);
+    if (incident.closedAt) console.log(`  closed_at: ${incident.closedAt}`);
+    if (incident.linkedMemoryIds.length > 0) {
+      console.log(`  linked memories: ${incident.linkedMemoryIds.join(', ')}`);
+    }
+    if (incident.memoryId) console.log(`  memory: ${incident.memoryId}`);
+    console.log(`  created: ${incident.createdAt}`);
+    return;
+  }
+
+  if (subcommand === 'resolve') {
+    const idRaw = args[1];
+    if (!idRaw) {
+      console.error('Usage: hippo incident resolve <id> --resolution "<text>"');
+      process.exit(1);
+    }
+    const id = parsePositiveIncidentId(idRaw);
+    const resolutionRaw = flags['resolution'];
+    if (typeof resolutionRaw !== 'string' || !resolutionRaw.trim()) {
+      console.error('--resolution requires a non-empty value, e.g. hippo incident resolve <id> --resolution "root cause fixed".');
+      process.exit(1);
+    }
+    const resolved = incidentsModule.resolveIncident(hippoRoot, tenantId, id, resolutionRaw);
+    console.log(`Incident #${resolved.id} resolved.`);
+    return;
+  }
+
+  if (subcommand === 'close') {
+    const idRaw = args[1];
+    if (!idRaw) {
+      console.error('Usage: hippo incident close <id>');
+      process.exit(1);
+    }
+    const id = parsePositiveIncidentId(idRaw);
+    const closed = incidentsModule.closeIncident(hippoRoot, tenantId, id);
+    console.log(`Incident #${closed.id} closed.`);
+    return;
+  }
+
+  // Default subcommand: open (create). Accept both the documented
+  // `incident open "<text>"` form and the bare `incident "<text>"` form: for the
+  // `open` keyword the text is args[1], otherwise args[0] IS the text.
+  const incidentText = subcommand === 'open' ? (args[1] ?? '') : subcommand;
+  if (!incidentText) {
+    console.error('Usage: hippo incident "<incident>" [--context "<details>"] [--link <memory-id>]...');
+    console.error('       hippo incident list [--status open|resolved|closed|all] [--limit N]');
+    console.error('       hippo incident get <id>');
+    console.error('       hippo incident resolve <id> --resolution "<text>"');
+    console.error('       hippo incident close <id>');
+    process.exit(1);
+  }
+  const contextRaw = flags['context'];
+  const context = typeof contextRaw === 'string' && contextRaw ? contextRaw : undefined;
+  // --link is a repeatable flag (collected into an array by parseArgs). A
+  // single --link <id> yields a string; normalize both to string[].
+  const linkRaw = flags['link'];
+  let linkedMemoryIds: string[] | undefined;
+  if (Array.isArray(linkRaw)) {
+    linkedMemoryIds = linkRaw;
+  } else if (typeof linkRaw === 'string') {
+    linkedMemoryIds = [linkRaw];
+  } else if (linkRaw === true) {
+    console.error('--link requires a memory id, e.g. hippo incident "<text>" --link mem_abc123.');
+    process.exit(1);
+  }
+
+  const incidentPathTags = extractPathTags(process.cwd());
+  const created = incidentsModule.saveIncident(hippoRoot, tenantId, {
+    incidentText,
+    context,
+    linkedMemoryIds,
+    extraTags: incidentPathTags,
+  });
+
+  console.log(`Incident recorded: #${created.id}`);
+  if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
+  if (created.linkedMemoryIds.length > 0) {
+    console.log(`  linked memories: ${created.linkedMemoryIds.join(', ')}`);
+  }
+}
+
 function cmdCurrent(
   hippoRoot: string,
   args: string[],
@@ -5450,6 +5608,9 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'decision_create',       // E2 decision first-class object — emitted by saveDecision
   'decision_supersede',    // E2 — emitted by saveDecision when --supersedes resolves to an active decision row
   'decision_close',        // E2 — emitted by closeDecision
+  'incident_open',         // E2 incident first-class object — emitted by saveIncident
+  'incident_resolve',      // E2 — emitted by resolveIncident (open -> resolved)
+  'incident_close',        // E2 — emitted by closeIncident (open|resolved -> closed)
 ]);
 
 function formatAuditRow(ev: AuditEvent): string {
@@ -6304,6 +6465,15 @@ Commands:
                            List decisions (table is authoritative, survives decay)
   decide get <id>          Show a decision by its table id
   decide close <id>        Retire (close) an active decision by its table id
+  incident "<incident>"    Record an incident (first-class object + memory mirror)
+    --context "<details>"  What happened / surrounding detail
+    --link <mem-id>        Link a memory as evidence (repeatable)
+  incident list [--status open|resolved|closed|all] [--limit N]
+                           List incidents (table is authoritative, survives decay)
+  incident get <id>        Show an incident by its table id
+  incident resolve <id>    Resolve an open incident (open -> resolved)
+    --resolution "<text>"  How it was resolved (required)
+  incident close <id>      Retire (close) an open or resolved incident by its table id
   invalidate "<pattern>"   Actively weaken memories matching an old pattern
     --reason "<why>"       Optional: what replaced it
   wm <sub>                 Working memory — bounded buffer for current state
@@ -6385,6 +6555,7 @@ Examples:
   hippo setup
   hippo hook install claude-code
   hippo decide "Use PostgreSQL for new services" --context "JSONB support"
+  hippo incident "Prod outage: DB connection pool exhausted" --context "spike at 14:00"
   hippo invalidate "REST API" --reason "migrated to GraphQL"
   hippo export memories.json
   hippo export --format markdown memories.md
@@ -7019,6 +7190,10 @@ async function main(): Promise<void> {
 
     case 'decide':
       cmdDecide(hippoRoot, args, flags);
+      break;
+
+    case 'incident':
+      cmdIncident(hippoRoot, args, flags);
       break;
 
     case 'help':
