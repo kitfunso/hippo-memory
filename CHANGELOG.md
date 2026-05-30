@@ -80,6 +80,31 @@
   `trigger_text` to avoid the SQLite reserved keyword). The skills list route uses
   the shared integer-validated `?limit=` parsing established for the other
   first-class-object list routes.
+- E2 project_brief first-class object (repo-scoped / auto-refreshes from receipts).
+  `hippo brief` records a repo-scoped project brief (a `summary` body keyed to a
+  `repo`) as a canonical `project_briefs` table row (source of truth, survives
+  memory decay) plus a memory mirror. The distinguishing feature is `hippo brief
+  refresh "<repo>"`, which deterministically (no LLM) assembles the brief body from
+  the repo's receipts (the tenant's memory rows tagged `path:<repo>`, excluding the
+  brief's own mirror) and records it as a new version, superseding the repo's
+  current active brief or creating v1; `--dry-run` prints the assembled brief
+  without writing. The delta lifecycle reuses the skill supersede path: a new
+  version supersedes the prior one with a `change_summary` and a server-derived
+  `version`; active -> superseded or active -> closed. New CLI subcommands
+  `hippo brief new|list|get|supersede|close|refresh`, HTTP routes
+  (`POST /v1/project-briefs`, `GET /v1/project-briefs`,
+  `POST /v1/project-briefs/refresh`, `GET /v1/project-briefs/:id`,
+  `POST /v1/project-briefs/:id/supersede`, `POST /v1/project-briefs/:id/close`),
+  Python SDK methods (`new_project_brief`, `supersede_project_brief`,
+  `close_project_brief`, `list_project_briefs`, `get_project_brief`,
+  `refresh_project_brief`, async and sync) plus the `ProjectBrief` model, three
+  audit ops (`project_brief_create`, `project_brief_supersede`,
+  `project_brief_close`) in the 3-site lockstep, and schema migration v35
+  (`project_briefs` table, 3 indexes, 3 tenant-safety triggers including the
+  supersede self-FK trigger). The receipt query is tenant-scoped, LIKE-escaped on
+  the operator-supplied repo, and capped; the list route reuses the shared
+  integer-validated `?limit=` parsing. LLM summarization and async-on-write refresh
+  are deferred.
 
 ## 1.15.0 (2026-05-28): E2 decisions first-class object
 

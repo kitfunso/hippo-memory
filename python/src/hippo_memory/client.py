@@ -42,6 +42,7 @@ from hippo_memory.models import (
     Process,
     Policy,
     Skill,
+    ProjectBrief,
     Prediction,
     PredictionBaserate,
     HippoError,
@@ -821,3 +822,64 @@ class Hippo:
         """
         data = await self._request("GET", "/v1/skills/export")
         return data["markdown"]
+
+    async def new_project_brief(self, repo: str, summary: str) -> ProjectBrief:
+        """POST /v1/project-briefs. Record a repo-scoped project brief. The
+        project_briefs table is the source of truth.
+        """
+        body: dict[str, Any] = {"repo": repo, "summary": summary}
+        data = await self._request("POST", "/v1/project-briefs", json=body)
+        return ProjectBrief.model_validate(data["brief"])
+
+    async def supersede_project_brief(
+        self,
+        brief_id: int,
+        summary: str,
+        *,
+        change_summary: str | None = None,
+    ) -> ProjectBrief:
+        """POST /v1/project-briefs/:id/supersede. Record a new version that
+        supersedes an active brief (active -> superseded). Reuses the
+        predecessor's repo.
+        """
+        body: dict[str, Any] = {"summary": summary}
+        if change_summary is not None:
+            body["changeSummary"] = change_summary
+        data = await self._request("POST", f"/v1/project-briefs/{brief_id}/supersede", json=body)
+        return ProjectBrief.model_validate(data["brief"])
+
+    async def close_project_brief(self, brief_id: int) -> ProjectBrief:
+        """POST /v1/project-briefs/:id/close. Retire an active brief (active -> closed)."""
+        data = await self._request("POST", f"/v1/project-briefs/{brief_id}/close", json={})
+        return ProjectBrief.model_validate(data["brief"])
+
+    async def list_project_briefs(
+        self,
+        *,
+        status: Literal["active", "superseded", "closed", "all"] | None = None,
+        repo: str | None = None,
+        limit: int | None = None,
+    ) -> list[ProjectBrief]:
+        """GET /v1/project-briefs. List briefs, optionally filtered by status / repo."""
+        params: dict[str, Any] = {}
+        if status is not None:
+            params["status"] = status
+        if repo is not None:
+            params["repo"] = repo
+        if limit is not None:
+            params["limit"] = limit
+        data = await self._request("GET", "/v1/project-briefs", params=params)
+        return [ProjectBrief.model_validate(b) for b in data["briefs"]]
+
+    async def get_project_brief(self, brief_id: int) -> ProjectBrief:
+        """GET /v1/project-briefs/:id. Fetch a single brief by id."""
+        data = await self._request("GET", f"/v1/project-briefs/{brief_id}")
+        return ProjectBrief.model_validate(data["brief"])
+
+    async def refresh_project_brief(self, repo: str) -> ProjectBrief:
+        """POST /v1/project-briefs/refresh. Auto-assemble the repo's brief from its
+        receipts (memory rows tagged ``path:<repo>``) and record it as a new version
+        (supersedes the repo's current active brief, or creates v1).
+        """
+        data = await self._request("POST", "/v1/project-briefs/refresh", json={"repo": repo})
+        return ProjectBrief.model_validate(data["brief"])

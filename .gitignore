@@ -61,3 +61,5 @@ results/f9_phase2/
 benchmarks/stateful-frontier/
 nlnet-application/
 tmp-card4-20seed/
+# dev-framework-rl episode run metadata (local orchestrator artifacts, not the package)
+trajectories/

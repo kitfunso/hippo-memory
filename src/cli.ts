@@ -164,6 +164,7 @@ import * as incidentsModule from './incidents.js';
 import * as processesModule from './processes.js';
 import * as policiesModule from './policies.js';
 import * as skillsModule from './skills.js';
+import * as briefsModule from './project-briefs.js';
 import { createHash } from 'node:crypto';
 import {
   detectAnchoring,
@@ -4587,6 +4588,188 @@ function cmdSkill(
   }
 }
 
+function parsePositiveBriefId(idRaw: unknown): number {
+  const s = String(idRaw ?? '').trim();
+  const id = parseInt(s, 10);
+  if (!/^\d+$/.test(s) || id <= 0) {
+    console.error(`Invalid brief id: "${idRaw}" (expected a positive integer).`);
+    process.exit(1);
+  }
+  return id;
+}
+
+function printBriefRow(b: briefsModule.ProjectBrief): void {
+  console.log(`#${b.id} [${b.status}] v${b.version} repo="${b.repo}" memory=${b.memoryId ?? '-'}`);
+  if (b.changeSummary) console.log(`    change: ${b.changeSummary}`);
+}
+
+function briefUsage(): void {
+  console.error('Usage: hippo brief new "<repo>" --summary "<text>"');
+  console.error('       hippo brief list [--status active|superseded|closed|all] [--repo "<repo>"] [--limit N]');
+  console.error('       hippo brief get <id>');
+  console.error('       hippo brief supersede <id> --summary "<text>" [--change "<summary>"]');
+  console.error('       hippo brief close <id>');
+  console.error('       hippo brief refresh "<repo>" [--dry-run]   (auto-assemble the brief from the repo\'s receipts)');
+}
+
+function cmdProjectBrief(
+  hippoRoot: string,
+  args: string[],
+  flags: Record<string, string | boolean | string[]>
+): void {
+  requireInit(hippoRoot);
+  const tenantId = resolveTenantId({});
+  const subcommand = args[0] ?? '';
+
+  if (subcommand === 'list') {
+    const statusRaw = flags['status'];
+    const status = typeof statusRaw === 'string' ? statusRaw.trim() : 'all';
+    const repoRaw = flags['repo'];
+    const repo = typeof repoRaw === 'string' && repoRaw.trim() ? repoRaw.trim() : undefined;
+    const limitRaw = flags['limit'];
+    const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : 100;
+    if (!Number.isFinite(limit) || limit <= 0) {
+      console.error(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
+      process.exit(1);
+    }
+    const opts: briefsModule.ListProjectBriefsOpts = { limit, repo };
+    if (status !== 'all') {
+      if (!briefsModule.VALID_BRIEF_STATES.has(status as briefsModule.BriefStatus)) {
+        console.error(`Invalid --status: "${status}". Must be one of: active | superseded | closed | all.`);
+        process.exit(1);
+      }
+      opts.status = status as briefsModule.BriefStatus;
+    }
+    const results = briefsModule.loadProjectBriefs(hippoRoot, tenantId, opts);
+    if (results.length === 0) {
+      console.log('No project briefs.');
+      return;
+    }
+    console.log(`Found ${results.length} project briefs:\n`);
+    for (const b of results) printBriefRow(b);
+    return;
+  }
+
+  if (subcommand === 'refresh') {
+    const repoRaw = args[1];
+    if (!repoRaw) {
+      console.error('Usage: hippo brief refresh "<repo>" [--dry-run]');
+      process.exit(1);
+    }
+    const dryRun = Boolean(flags['dry-run']);
+    try {
+      if (dryRun) {
+        const { markdown, receiptCount } = briefsModule.assembleBriefFromReceipts(hippoRoot, tenantId, repoRaw);
+        console.error(`(dry-run: assembled from ${receiptCount} receipt(s); brief NOT written)`);
+        console.log(markdown);
+        return;
+      }
+      const created = briefsModule.refreshBrief(hippoRoot, tenantId, repoRaw, 'cli');
+      console.log(`Project brief #${created.id} recorded (v${created.version}) for repo "${created.repo}".`);
+      if (created.changeSummary) console.log(`  change: ${created.changeSummary}`);
+      if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
+    } catch (e) {
+      console.error((e as Error).message);
+      process.exit(1);
+    }
+    return;
+  }
+
+  if (subcommand === 'get') {
+    const idRaw = args[1];
+    if (!idRaw) {
+      console.error('Usage: hippo brief get <id>');
+      process.exit(1);
+    }
+    const id = parsePositiveBriefId(idRaw);
+    const b = briefsModule.loadProjectBriefById(hippoRoot, tenantId, id);
+    if (!b) {
+      console.error(`Project brief ${id} not found.`);
+      process.exit(1);
+    }
+    console.log(`Project brief #${b.id}`);
+    console.log(`  repo: ${b.repo}`);
+    console.log(`  status: ${b.status}`);
+    console.log(`  version: ${b.version}`);
+    console.log(`  summary: ${b.summary}`);
+    if (b.changeSummary) console.log(`  change_summary: ${b.changeSummary}`);
+    if (b.supersededBy !== null) console.log(`  superseded_by: #${b.supersededBy}`);
+    if (b.supersededAt) console.log(`  superseded_at: ${b.supersededAt}`);
+    if (b.closedAt) console.log(`  closed_at: ${b.closedAt}`);
+    if (b.memoryId) console.log(`  memory: ${b.memoryId}`);
+    console.log(`  created: ${b.createdAt}`);
+    return;
+  }
+
+  if (subcommand === 'supersede') {
+    const idRaw = args[1];
+    if (!idRaw) {
+      console.error('Usage: hippo brief supersede <id> --summary "<text>" [--change "<summary>"]');
+      process.exit(1);
+    }
+    const id = parsePositiveBriefId(idRaw);
+    const summaryRaw = flags['summary'];
+    if (typeof summaryRaw !== 'string' || !summaryRaw.trim()) {
+      console.error('hippo brief supersede requires --summary "<text>" for the new version.');
+      process.exit(1);
+    }
+    const existing = briefsModule.loadProjectBriefById(hippoRoot, tenantId, id);
+    if (!existing) {
+      console.error(`Project brief ${id} not found.`);
+      process.exit(1);
+    }
+    const changeRaw = flags['change'];
+    try {
+      const created = briefsModule.saveProjectBrief(hippoRoot, tenantId, {
+        repo: existing.repo,
+        summary: summaryRaw,
+        changeSummary: typeof changeRaw === 'string' && changeRaw ? changeRaw : undefined,
+        supersedesBriefId: id,
+        extraTags: extractPathTags(process.cwd()),
+      });
+      console.log(`Project brief #${created.id} recorded (v${created.version}), superseding #${id}.`);
+      if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
+    } catch (e) {
+      console.error((e as Error).message);
+      process.exit(1);
+    }
+    return;
+  }
+
+  if (subcommand === 'close') {
+    const idRaw = args[1];
+    if (!idRaw) {
+      console.error('Usage: hippo brief close <id>');
+      process.exit(1);
+    }
+    const id = parsePositiveBriefId(idRaw);
+    const closed = briefsModule.closeProjectBrief(hippoRoot, tenantId, id);
+    console.log(`Project brief #${closed.id} closed.`);
+    return;
+  }
+
+  // Default subcommand: new (create). Accept both `brief new "<repo>"` and the
+  // bare `brief "<repo>"` form: for the `new` keyword the repo is args[1].
+  const repo = subcommand === 'new' ? (args[1] ?? '') : subcommand;
+  const summaryRaw = flags['summary'];
+  if (!repo || typeof summaryRaw !== 'string' || !summaryRaw.trim()) {
+    briefUsage();
+    process.exit(1);
+  }
+  try {
+    const created = briefsModule.saveProjectBrief(hippoRoot, tenantId, {
+      repo,
+      summary: summaryRaw,
+      extraTags: extractPathTags(process.cwd()),
+    });
+    console.log(`Project brief recorded: #${created.id} (v${created.version}) for repo "${created.repo}"`);
+    if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
+  } catch (e) {
+    console.error((e as Error).message);
+    process.exit(1);
+  }
+}
+
 function cmdCurrent(
   hippoRoot: string,
   args: string[],
@@ -6169,6 +6352,9 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'skill_create',          // E2 skill first-class object — emitted by saveSkill
   'skill_supersede',       // E2 — emitted by saveSkill on a supersession
   'skill_close',           // E2 — emitted by closeSkill
+  'project_brief_create',  // E2 project_brief first-class object — emitted by saveProjectBrief
+  'project_brief_supersede', // E2 — emitted by saveProjectBrief on a supersession (incl. refresh)
+  'project_brief_close',   // E2 — emitted by closeProjectBrief
 ]);
 
 function formatAuditRow(ev: AuditEvent): string {
@@ -7070,6 +7256,17 @@ Commands:
     --trigger "<when>"     Optional new trigger
     --change "<summary>"   What changed in this version (the delta note)
   skill close <id>         Retire (close) an active skill by its table id
+  brief new "<repo>"       Record a repo-scoped project brief
+    --summary "<text>"     The brief body (required)
+  brief list [--status active|superseded|closed|all] [--repo "<repo>"] [--limit N]
+                           List project briefs (table is authoritative, survives decay)
+  brief get <id>           Show a project brief by its table id
+  brief supersede <id>     Record a new version that supersedes an active brief
+    --summary "<text>"     The new brief body (required)
+    --change "<summary>"   What changed in this version (the delta note)
+  brief close <id>         Retire (close) an active project brief by its table id
+  brief refresh "<repo>"   Auto-assemble the brief from the repo's receipts (path:<repo>)
+    --dry-run              Print the assembled brief without writing it
   invalidate "<pattern>"   Actively weaken memories matching an old pattern
     --reason "<why>"       Optional: what replaced it
   wm <sub>                 Working memory — bounded buffer for current state
@@ -7157,6 +7354,8 @@ Examples:
   hippo policy asof 2026-03-01 --name "Data retention"
   hippo skill new "Run tests" --instructions "npm test before every commit" --trigger "before commit"
   hippo skill export
+  hippo brief new "hippo" --summary "Agent-memory library; E2 first-class objects in progress"
+  hippo brief refresh "hippo"
   hippo invalidate "REST API" --reason "migrated to GraphQL"
   hippo export memories.json
   hippo export --format markdown memories.md
@@ -7807,6 +8006,11 @@ async function main(): Promise<void> {
 
     case 'skill':
       cmdSkill(hippoRoot, args, flags);
+      break;
+
+    case 'brief':
+    case 'project-brief':
+      cmdProjectBrief(hippoRoot, args, flags);
       break;
 
     case 'help':

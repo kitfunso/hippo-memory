@@ -104,6 +104,16 @@ import {
   VALID_SKILL_STATES,
   type SkillStatus,
 } from './skills.js';
+import {
+  saveProjectBrief,
+  closeProjectBrief,
+  loadProjectBriefById,
+  loadProjectBriefs,
+  assembleBriefFromReceipts,
+  refreshBrief,
+  VALID_BRIEF_STATES,
+  type BriefStatus,
+} from './project-briefs.js';
 import { handleMcpRequest, type McpRequest } from './mcp/server.js';
 import { verifySlackSignature } from './connectors/slack/signature.js';
 import { isSlackEventEnvelope, isSlackMessageEvent } from './connectors/slack/types.js';
@@ -183,6 +193,9 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'skill_create',          // E2 skill first-class object — emitted by saveSkill
   'skill_supersede',       // E2 — emitted by saveSkill on a supersession
   'skill_close',           // E2 — emitted by closeSkill
+  'project_brief_create',  // E2 project_brief first-class object — emitted by saveProjectBrief
+  'project_brief_supersede', // E2 — emitted by saveProjectBrief on a supersession (incl. refresh)
+  'project_brief_close',   // E2 — emitted by closeProjectBrief
 ]);
 
 // Cap on GET /v1/audit?limit=. Matches docs/api.md (when written) and is large
@@ -2147,6 +2160,184 @@ async function handleRequest(
       throw new HttpError(404, `skill ${id} not found`);
     }
     sendJson(res, 200, { skill });
+    return;
+  }
+
+  // ── E2 project_brief routes ──
+  //
+  // 6 routes: POST /v1/project-briefs (new; body repo + summary), GET
+  // /v1/project-briefs (list; status + repo filter; shared parseListLimit), POST
+  // /v1/project-briefs/refresh (body {repo, dryRun?} -> auto-assemble the brief
+  // from the repo's receipts; dryRun returns {markdown} without writing; ordered
+  // before /:id), GET /v1/project-briefs/:id, POST /v1/project-briefs/:id/supersede,
+  // POST /v1/project-briefs/:id/close. DoS caps: repo 256, summary 8192,
+  // changeSummary 4096. The store validates + throws; the boundary maps validation
+  // -> 400, not-found -> 404, not-active -> 409. Mirrors /v1/skills.
+  if (method === 'POST' && path === '/v1/project-briefs') {
+    const body = await parseJsonBody(req);
+    const repo = body['repo'];
+    if (typeof repo !== 'string' || repo.trim().length === 0) {
+      throw new HttpError(400, 'repo is required (non-empty string)');
+    }
+    if (repo.length > 256) {
+      throw new HttpError(400, 'repo exceeds 256-character cap');
+    }
+    const summary = body['summary'];
+    if (typeof summary !== 'string' || summary.trim().length === 0) {
+      throw new HttpError(400, 'summary is required (non-empty string)');
+    }
+    if (summary.length > 8192) {
+      throw new HttpError(400, 'summary exceeds 8192-character cap');
+    }
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    try {
+      const brief = saveProjectBrief(opts.hippoRoot, ctx.tenantId, {
+        repo,
+        summary,
+      }, ctx.actor.subject);
+      sendJson(res, 201, { brief });
+    } catch (e) {
+      // saveProjectBrief throws on validation (single-line repo etc.) -> 400.
+      throw new HttpError(400, (e as Error).message);
+    }
+    return;
+  }
+
+  if (method === 'GET' && path === '/v1/project-briefs') {
+    const status = query.get('status') ?? 'all';
+    const repoFilter = query.get('repo');
+    const limit = parseListLimit(query.get('limit'));
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const listOpts: { status?: BriefStatus; repo?: string; limit: number } = { limit };
+    if (repoFilter !== null && repoFilter.trim().length > 0) {
+      listOpts.repo = repoFilter.trim();
+    }
+    if (status !== 'all') {
+      if (!VALID_BRIEF_STATES.has(status as BriefStatus)) {
+        throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
+      }
+      listOpts.status = status as BriefStatus;
+    }
+    const briefs = loadProjectBriefs(opts.hippoRoot, ctx.tenantId, listOpts);
+    sendJson(res, 200, { briefs });
+    return;
+  }
+
+  // The refresh op: must precede the /:id routes (literal 'refresh' is non-numeric
+  // so the /(\d+)/ routes would not match it, but order it first).
+  if (method === 'POST' && path === '/v1/project-briefs/refresh') {
+    const body = await parseJsonBody(req);
+    const repo = body['repo'];
+    if (typeof repo !== 'string' || repo.trim().length === 0) {
+      throw new HttpError(400, 'repo is required (non-empty string)');
+    }
+    if (repo.length > 256) {
+      throw new HttpError(400, 'repo exceeds 256-character cap');
+    }
+    const dryRun = body['dryRun'] === true;
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    try {
+      if (dryRun) {
+        const { markdown, receiptCount } = assembleBriefFromReceipts(opts.hippoRoot, ctx.tenantId, repo);
+        sendJson(res, 200, { markdown, receiptCount });
+        return;
+      }
+      const brief = refreshBrief(opts.hippoRoot, ctx.tenantId, repo, ctx.actor.subject);
+      sendJson(res, 200, { brief });
+    } catch (e) {
+      // A refresh race (the active brief is closed/superseded between
+      // loadActiveBriefForRepo and the supersede CAS) is a state conflict, not a
+      // validation error — map it to 409 like the explicit supersede route
+      // (codex-review 2026-05-30, P3).
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) {
+        throw new HttpError(404, msg);
+      }
+      if (msg.includes('not active') || msg.includes('could not be superseded')) {
+        throw new HttpError(409, msg);
+      }
+      throw new HttpError(400, msg);
+    }
+    return;
+  }
+
+  const briefSupersedeMatch = path.match(/^\/v1\/project-briefs\/(\d+)\/supersede$/);
+  if (method === 'POST' && briefSupersedeMatch) {
+    const id = parseInt(briefSupersedeMatch[1], 10);
+    const body = await parseJsonBody(req);
+    const summary = body['summary'];
+    if (typeof summary !== 'string' || summary.trim().length === 0) {
+      throw new HttpError(400, 'summary is required (non-empty string)');
+    }
+    if (summary.length > 8192) {
+      throw new HttpError(400, 'summary exceeds 8192-character cap');
+    }
+    const changeRaw = body['changeSummary'];
+    let changeSummary: string | undefined;
+    if (changeRaw !== undefined && changeRaw !== null) {
+      if (typeof changeRaw !== 'string') {
+        throw new HttpError(400, 'changeSummary must be a string');
+      }
+      if (changeRaw.length > 4096) {
+        throw new HttpError(400, 'changeSummary exceeds 4096-character cap');
+      }
+      changeSummary = changeRaw;
+    }
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const existing = loadProjectBriefById(opts.hippoRoot, ctx.tenantId, id);
+    if (!existing) {
+      throw new HttpError(404, `project brief ${id} not found`);
+    }
+    try {
+      const brief = saveProjectBrief(opts.hippoRoot, ctx.tenantId, {
+        repo: existing.repo,
+        summary,
+        changeSummary,
+        supersedesBriefId: id,
+      }, ctx.actor.subject);
+      sendJson(res, 200, { brief });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) {
+        throw new HttpError(404, msg);
+      }
+      if (msg.includes('not active') || msg.includes('could not be superseded')) {
+        throw new HttpError(409, msg);
+      }
+      throw new HttpError(400, msg);
+    }
+    return;
+  }
+
+  const briefCloseMatch = path.match(/^\/v1\/project-briefs\/(\d+)\/close$/);
+  if (method === 'POST' && briefCloseMatch) {
+    const id = parseInt(briefCloseMatch[1], 10);
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    try {
+      const brief = closeProjectBrief(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
+      sendJson(res, 200, { brief });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) {
+        throw new HttpError(404, msg);
+      }
+      if (msg.includes('not active')) {
+        throw new HttpError(409, msg);
+      }
+      throw e;
+    }
+    return;
+  }
+
+  const briefByIdMatch = path.match(/^\/v1\/project-briefs\/(\d+)$/);
+  if (method === 'GET' && briefByIdMatch) {
+    const id = parseInt(briefByIdMatch[1], 10);
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const brief = loadProjectBriefById(opts.hippoRoot, ctx.tenantId, id);
+    if (!brief) {
+      throw new HttpError(404, `project brief ${id} not found`);
+    }
+    sendJson(res, 200, { brief });
     return;
   }
 

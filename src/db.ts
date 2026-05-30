@@ -23,7 +23,7 @@ const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: new (path: string) => DatabaseSyncLike;
 };
 
-const CURRENT_SCHEMA_VERSION = 34;
+const CURRENT_SCHEMA_VERSION = 35;
 
 type Migration = {
   version: number;
@@ -1472,6 +1472,95 @@ const MIGRATIONS: Migration[] = [
             SELECT CASE
               WHEN NEW.tenant_id != (SELECT tenant_id FROM skills WHERE id = NEW.superseded_by)
               THEN RAISE(ABORT, 'skills.superseded_by must reference a skill in the same tenant')
+            END;
+          END
+        `);
+      }
+    },
+  },
+  {
+    version: 35,
+    up: (db) => {
+      // E2 project_brief first-class object
+      // (docs/plans/2026-05-30-e2-project-brief-object.md). A project_brief is the
+      // living, repo-scoped summary of a repository's state: a `summary` body
+      // scoped to a `repo`, evolving via the v34 skills supersede machinery
+      // (superseded_by self-FK + supersede tenant-match trigger + version +
+      // change_summary). This table = the v34 skills table with
+      // skill_name/trigger_text replaced by `repo` (the repo-scoping dimension)
+      // PLUS `summary` (the brief body). The distinguishing op (refreshBrief, in
+      // src/project-briefs.ts) auto-assembles the summary from the repo's receipts
+      // (memory rows tagged path:<repo>); it needs no schema support beyond `repo`.
+      // All column names were checked against SQLite reserved words (skill-episode
+      // lesson re: `trigger`): repo/summary/version/status/etc. are non-reserved.
+      if (!tableExists(db, 'project_briefs')) {
+        db.exec(`
+          CREATE TABLE project_briefs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            memory_id TEXT,
+            tenant_id TEXT NOT NULL,
+            repo TEXT NOT NULL,
+            summary TEXT NOT NULL,
+            version INTEGER NOT NULL DEFAULT 1,
+            status TEXT NOT NULL DEFAULT 'active'
+              CHECK (status IN ('active', 'superseded', 'closed')),
+            superseded_by INTEGER,
+            superseded_at TEXT,
+            change_summary TEXT,
+            closed_at TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (memory_id) REFERENCES memories(id) ON DELETE SET NULL,
+            FOREIGN KEY (superseded_by) REFERENCES project_briefs(id) ON DELETE SET NULL
+          )
+        `);
+        db.exec(`
+          CREATE INDEX IF NOT EXISTS idx_project_briefs_tenant_status
+          ON project_briefs(tenant_id, status)
+        `);
+        db.exec(`
+          CREATE INDEX IF NOT EXISTS idx_project_briefs_memory
+          ON project_briefs(memory_id) WHERE memory_id IS NOT NULL
+        `);
+        db.exec(`
+          CREATE INDEX IF NOT EXISTS idx_project_briefs_repo
+          ON project_briefs(tenant_id, repo, status)
+        `);
+        // Cross-tenant safety vs the referenced memory (verbatim mirror of the
+        // v34 skills tenant-match triggers).
+        db.exec(`
+          CREATE TRIGGER IF NOT EXISTS trg_project_briefs_tenant_match_insert
+          BEFORE INSERT ON project_briefs
+          WHEN NEW.memory_id IS NOT NULL
+          BEGIN
+            SELECT CASE
+              WHEN NEW.tenant_id != (SELECT tenant_id FROM memories WHERE id = NEW.memory_id)
+              THEN RAISE(ABORT, 'project_briefs.tenant_id must match memories.tenant_id for the referenced memory')
+            END;
+          END
+        `);
+        db.exec(`
+          CREATE TRIGGER IF NOT EXISTS trg_project_briefs_tenant_match_update
+          BEFORE UPDATE ON project_briefs
+          WHEN NEW.memory_id IS NOT NULL
+            AND (NEW.memory_id IS NOT OLD.memory_id OR NEW.tenant_id IS NOT OLD.tenant_id)
+          BEGIN
+            SELECT CASE
+              WHEN NEW.tenant_id != (SELECT tenant_id FROM memories WHERE id = NEW.memory_id)
+              THEN RAISE(ABORT, 'project_briefs.tenant_id must match memories.tenant_id for the referenced memory')
+            END;
+          END
+        `);
+        // Cross-tenant safety vs the successor brief (self-FK; verbatim mirror of
+        // the v34 skills supersede trigger).
+        db.exec(`
+          CREATE TRIGGER IF NOT EXISTS trg_project_briefs_supersede_tenant_match_update
+          BEFORE UPDATE ON project_briefs
+          WHEN NEW.superseded_by IS NOT NULL
+            AND NEW.superseded_by IS NOT OLD.superseded_by
+          BEGIN
+            SELECT CASE
+              WHEN NEW.tenant_id != (SELECT tenant_id FROM project_briefs WHERE id = NEW.superseded_by)
+              THEN RAISE(ABORT, 'project_briefs.superseded_by must reference a project_brief in the same tenant')
             END;
           END
         `);
