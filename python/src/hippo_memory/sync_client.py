@@ -52,6 +52,7 @@ from hippo_memory.models import (
     Process,
     Policy,
     Skill,
+    ProjectBrief,
     Prediction,
     PredictionBaserate,
     HippoError,
@@ -748,3 +749,58 @@ class HippoSync:
         """GET /v1/skills/export. Sync mirror of Hippo.export_skills."""
         data = self._request("GET", "/v1/skills/export")
         return data["markdown"]
+
+    def new_project_brief(self, repo: str, summary: str) -> ProjectBrief:
+        """POST /v1/project-briefs. Sync mirror of Hippo.new_project_brief."""
+        body: dict[str, Any] = {"repo": repo, "summary": summary}
+        data = self._request("POST", "/v1/project-briefs", json=body)
+        return ProjectBrief.model_validate(data["brief"])
+
+    def supersede_project_brief(
+        self,
+        brief_id: int,
+        summary: str,
+        *,
+        change_summary: str | None = None,
+    ) -> ProjectBrief:
+        """POST /v1/project-briefs/:id/supersede. Sync mirror of
+        Hippo.supersede_project_brief.
+        """
+        body: dict[str, Any] = {"summary": summary}
+        if change_summary is not None:
+            body["changeSummary"] = change_summary
+        data = self._request("POST", f"/v1/project-briefs/{brief_id}/supersede", json=body)
+        return ProjectBrief.model_validate(data["brief"])
+
+    def close_project_brief(self, brief_id: int) -> ProjectBrief:
+        """POST /v1/project-briefs/:id/close. Sync mirror of Hippo.close_project_brief."""
+        data = self._request("POST", f"/v1/project-briefs/{brief_id}/close", json={})
+        return ProjectBrief.model_validate(data["brief"])
+
+    def list_project_briefs(
+        self,
+        *,
+        status: Literal["active", "superseded", "closed", "all"] | None = None,
+        repo: str | None = None,
+        limit: int | None = None,
+    ) -> list[ProjectBrief]:
+        """GET /v1/project-briefs. Sync mirror of Hippo.list_project_briefs."""
+        params: dict[str, Any] = {}
+        if status is not None:
+            params["status"] = status
+        if repo is not None:
+            params["repo"] = repo
+        if limit is not None:
+            params["limit"] = limit
+        data = self._request("GET", "/v1/project-briefs", params=params)
+        return [ProjectBrief.model_validate(b) for b in data["briefs"]]
+
+    def get_project_brief(self, brief_id: int) -> ProjectBrief:
+        """GET /v1/project-briefs/:id. Sync mirror of Hippo.get_project_brief."""
+        data = self._request("GET", f"/v1/project-briefs/{brief_id}")
+        return ProjectBrief.model_validate(data["brief"])
+
+    def refresh_project_brief(self, repo: str) -> ProjectBrief:
+        """POST /v1/project-briefs/refresh. Sync mirror of Hippo.refresh_project_brief."""
+        data = self._request("POST", "/v1/project-briefs/refresh", json={"repo": repo})
+        return ProjectBrief.model_validate(data["brief"])

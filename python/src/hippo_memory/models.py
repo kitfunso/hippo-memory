@@ -49,6 +49,7 @@ __all__ = [
     "Process",
     "Policy",
     "Skill",
+    "ProjectBrief",
     "Prediction",
     "PredictionBaserate",
     "HippoError",
@@ -759,6 +760,35 @@ class Skill(_Base):
     skill_name: str
     instructions: str
     trigger: str | None = None
+    version: int = 1
+    status: str = "active"
+    superseded_by: int | None = None
+    superseded_at: str | None = None
+    change_summary: str | None = None
+    closed_at: str | None = None
+    created_at: str
+
+
+class ProjectBrief(_Base):
+    """ProjectBrief first-class object (repo-scoped / auto-refreshes from receipts).
+    Mirrors the TS ProjectBrief interface in src/project-briefs.ts.
+
+    A project_brief is the living, repo-scoped summary of a repository's state: a
+    ``summary`` body scoped to a ``repo``, evolving via the supersede delta
+    lifecycle (active -> superseded or active -> closed). The ``refresh`` endpoint
+    deterministically (no LLM) assembles the summary from the repo's receipts
+    (memory rows tagged ``path:<repo>``). ``version`` is server-derived;
+    ``change_summary`` is set on a successor row only.
+
+    The project_briefs table is canonical (survives memory decay). ``memory_id``
+    is nullable (ON DELETE SET NULL gracefully orphans the row).
+    """
+
+    id: int
+    memory_id: str | None = None
+    tenant_id: str
+    repo: str
+    summary: str
     version: int = 1
     status: str = "active"
     superseded_by: int | None = None
