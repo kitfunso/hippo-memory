@@ -16,14 +16,14 @@ import { createApiKey, validateApiKey } from '../src/auth.js';
 
 describe('v1.12.0 migration v26: api_keys.role', () => {
   it('CURRENT_SCHEMA_VERSION is 26', () => {
-    expect(getCurrentSchemaVersion()).toBe(32);
+    expect(getCurrentSchemaVersion()).toBe(33);
   });
 
   it('fresh DB has api_keys.role column with DEFAULT admin', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-v26-fresh-'));
     const db = openHippoDb(home);
     try {
-      expect(getSchemaVersion(db)).toBe(32);
+      expect(getSchemaVersion(db)).toBe(33);
       const cols = db.prepare(`PRAGMA table_info(api_keys)`).all() as Array<{ name: string; type: string; dflt_value: string | null; notnull: number }>;
       const role = cols.find((c) => c.name === 'role');
       expect(role).toBeDefined();

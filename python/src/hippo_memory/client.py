@@ -40,6 +40,7 @@ from hippo_memory.models import (
     Decision,
     Incident,
     Process,
+    Policy,
     Prediction,
     PredictionBaserate,
     HippoError,
@@ -666,3 +667,88 @@ class Hippo:
         """GET /v1/processes/:id. Fetch a single process by id."""
         data = await self._request("GET", f"/v1/processes/{process_id}")
         return Process.model_validate(data["process"])
+
+    async def new_policy(
+        self,
+        policy_name: str,
+        policy_text: str,
+        *,
+        valid_from: str | None = None,
+        valid_to: str | None = None,
+    ) -> Policy:
+        """POST /v1/policies. Record a policy (bi-temporal first-class object).
+
+        ``valid_from`` defaults server-side to now when omitted; ``valid_to`` is
+        open-ended when omitted. Both are normalized to canonical ISO-8601; an
+        unparseable date or valid_to <= valid_from is rejected with 400.
+        """
+        body: dict[str, Any] = {"policyName": policy_name, "policyText": policy_text}
+        if valid_from is not None:
+            body["validFrom"] = valid_from
+        if valid_to is not None:
+            body["validTo"] = valid_to
+        data = await self._request("POST", "/v1/policies", json=body)
+        return Policy.model_validate(data["policy"])
+
+    async def supersede_policy(
+        self,
+        policy_id: int,
+        policy_text: str,
+        *,
+        valid_from: str | None = None,
+        valid_to: str | None = None,
+        change_summary: str | None = None,
+    ) -> Policy:
+        """POST /v1/policies/:id/supersede. Record a new version that supersedes
+        an active policy (active -> superseded). Reuses the predecessor's name;
+        ``change_summary`` is the delta note. Returns the new active version.
+        """
+        body: dict[str, Any] = {"policyText": policy_text}
+        if valid_from is not None:
+            body["validFrom"] = valid_from
+        if valid_to is not None:
+            body["validTo"] = valid_to
+        if change_summary is not None:
+            body["changeSummary"] = change_summary
+        data = await self._request("POST", f"/v1/policies/{policy_id}/supersede", json=body)
+        return Policy.model_validate(data["policy"])
+
+    async def close_policy(self, policy_id: int) -> Policy:
+        """POST /v1/policies/:id/close. Retire an active policy (active -> closed)."""
+        data = await self._request("POST", f"/v1/policies/{policy_id}/close", json={})
+        return Policy.model_validate(data["policy"])
+
+    async def list_policies(
+        self,
+        *,
+        status: Literal["active", "superseded", "closed", "all"] | None = None,
+        limit: int | None = None,
+    ) -> list[Policy]:
+        """GET /v1/policies. List policies, optionally filtered by status."""
+        params: dict[str, Any] = {}
+        if status is not None:
+            params["status"] = status
+        if limit is not None:
+            params["limit"] = limit
+        data = await self._request("GET", "/v1/policies", params=params)
+        return [Policy.model_validate(p) for p in data["policies"]]
+
+    async def get_policy(self, policy_id: int) -> Policy:
+        """GET /v1/policies/:id. Fetch a single policy by id."""
+        data = await self._request("GET", f"/v1/policies/{policy_id}")
+        return Policy.model_validate(data["policy"])
+
+    async def policies_asof(
+        self,
+        as_of_date: str,
+        *,
+        name: str | None = None,
+    ) -> list[Policy]:
+        """GET /v1/policies/asof. The bi-temporal as-of query: active policies in
+        force at ``as_of_date`` (a valid-time), optionally filtered by name.
+        """
+        params: dict[str, Any] = {"date": as_of_date}
+        if name is not None:
+            params["name"] = name
+        data = await self._request("GET", "/v1/policies/asof", params=params)
+        return [Policy.model_validate(p) for p in data["policies"]]

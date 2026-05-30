@@ -160,7 +160,10 @@ export type AuditOp =
   | 'incident_close' // E2 — emitted by closeIncident (open|resolved -> closed)
   | 'process_create' // E2 process first-class object — emitted by saveProcess
   | 'process_supersede' // E2 — emitted by saveProcess when supersedesProcessId resolves to an active process row
-  | 'process_close'; // E2 — emitted by closeProcess (active -> closed, retire without successor)
+  | 'process_close' // E2 — emitted by closeProcess (active -> closed, retire without successor)
+  | 'policy_create' // E2 policy first-class object — emitted by savePolicy
+  | 'policy_supersede' // E2 — emitted by savePolicy when supersedesPolicyId resolves to an active policy row
+  | 'policy_close'; // E2 — emitted by closePolicy (active -> closed, retire without successor)
 
 export interface AppendAuditOpts {
   tenantId: string;

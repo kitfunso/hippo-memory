@@ -47,6 +47,7 @@ __all__ = [
     "Decision",
     "Incident",
     "Process",
+    "Policy",
     "Prediction",
     "PredictionBaserate",
     "HippoError",
@@ -690,6 +691,40 @@ class Process(_Base):
     process_name: str
     description: str | None = None
     steps: list[str] = Field(default_factory=list)
+    version: int = 1
+    status: str = "active"
+    superseded_by: int | None = None
+    superseded_at: str | None = None
+    change_summary: str | None = None
+    closed_at: str | None = None
+    created_at: str
+
+
+class Policy(_Base):
+    """Policy first-class object (bi-temporal-first). Mirrors the TS Policy
+    interface in src/policies.ts.
+
+    A policy is a named rule/statement in force over an EFFECTIVE-TIME range:
+    ``valid_from`` (always set; defaults server-side to creation time) and
+    ``valid_to`` (None = open-ended). This valid-time axis is queryable via the
+    server's as-of endpoint (``policies_asof``). Transaction time is present via
+    ``created_at`` + the supersede chain's ``superseded_at`` (time-travel
+    deferred). The delta lifecycle reuses the decision/process supersede path:
+    active -> superseded (a newer version; ``superseded_by`` points to the
+    successor) or active -> closed. ``version`` is server-derived;
+    ``change_summary`` is set on a successor row only.
+
+    The policies table is canonical (survives memory decay). ``memory_id`` is
+    nullable (ON DELETE SET NULL gracefully orphans the row).
+    """
+
+    id: int
+    memory_id: str | None = None
+    tenant_id: str
+    policy_name: str
+    policy_text: str
+    valid_from: str
+    valid_to: str | None = None
     version: int = 1
     status: str = "active"
     superseded_by: int | None = None

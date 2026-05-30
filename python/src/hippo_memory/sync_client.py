@@ -50,6 +50,7 @@ from hippo_memory.models import (
     Decision,
     Incident,
     Process,
+    Policy,
     Prediction,
     PredictionBaserate,
     HippoError,
@@ -610,3 +611,78 @@ class HippoSync:
         """GET /v1/processes/:id. Sync mirror of Hippo.get_process."""
         data = self._request("GET", f"/v1/processes/{process_id}")
         return Process.model_validate(data["process"])
+
+    def new_policy(
+        self,
+        policy_name: str,
+        policy_text: str,
+        *,
+        valid_from: str | None = None,
+        valid_to: str | None = None,
+    ) -> Policy:
+        """POST /v1/policies. Sync mirror of Hippo.new_policy."""
+        body: dict[str, Any] = {"policyName": policy_name, "policyText": policy_text}
+        if valid_from is not None:
+            body["validFrom"] = valid_from
+        if valid_to is not None:
+            body["validTo"] = valid_to
+        data = self._request("POST", "/v1/policies", json=body)
+        return Policy.model_validate(data["policy"])
+
+    def supersede_policy(
+        self,
+        policy_id: int,
+        policy_text: str,
+        *,
+        valid_from: str | None = None,
+        valid_to: str | None = None,
+        change_summary: str | None = None,
+    ) -> Policy:
+        """POST /v1/policies/:id/supersede. Sync mirror of Hippo.supersede_policy."""
+        body: dict[str, Any] = {"policyText": policy_text}
+        if valid_from is not None:
+            body["validFrom"] = valid_from
+        if valid_to is not None:
+            body["validTo"] = valid_to
+        if change_summary is not None:
+            body["changeSummary"] = change_summary
+        data = self._request("POST", f"/v1/policies/{policy_id}/supersede", json=body)
+        return Policy.model_validate(data["policy"])
+
+    def close_policy(self, policy_id: int) -> Policy:
+        """POST /v1/policies/:id/close. Sync mirror of Hippo.close_policy."""
+        data = self._request("POST", f"/v1/policies/{policy_id}/close", json={})
+        return Policy.model_validate(data["policy"])
+
+    def list_policies(
+        self,
+        *,
+        status: Literal["active", "superseded", "closed", "all"] | None = None,
+        limit: int | None = None,
+    ) -> list[Policy]:
+        """GET /v1/policies. Sync mirror of Hippo.list_policies."""
+        params: dict[str, Any] = {}
+        if status is not None:
+            params["status"] = status
+        if limit is not None:
+            params["limit"] = limit
+        data = self._request("GET", "/v1/policies", params=params)
+        return [Policy.model_validate(p) for p in data["policies"]]
+
+    def get_policy(self, policy_id: int) -> Policy:
+        """GET /v1/policies/:id. Sync mirror of Hippo.get_policy."""
+        data = self._request("GET", f"/v1/policies/{policy_id}")
+        return Policy.model_validate(data["policy"])
+
+    def policies_asof(
+        self,
+        as_of_date: str,
+        *,
+        name: str | None = None,
+    ) -> list[Policy]:
+        """GET /v1/policies/asof. Sync mirror of Hippo.policies_asof."""
+        params: dict[str, Any] = {"date": as_of_date}
+        if name is not None:
+            params["name"] = name
+        data = self._request("GET", "/v1/policies/asof", params=params)
+        return [Policy.model_validate(p) for p in data["policies"]]

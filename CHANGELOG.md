@@ -38,6 +38,26 @@
   `process_supersede`, `process_close`) in the 3-site lockstep, and schema
   migration v32 (`processes` table, 2 indexes, 3 tenant-safety triggers
   including the supersede self-FK trigger).
+- E2 policy first-class object (bi-temporal-first). `hippo policy` records a named
+  rule/statement in force over an effective-time range as a canonical `policies`
+  table row (source of truth, survives memory decay) plus a memory mirror. Valid
+  time is first-class: `valid_from` (required, defaults to now) and `valid_to`
+  (open-ended when omitted), queryable via the as-of query
+  `hippo policy asof "<date>"` (the active policies in force at a valid-time,
+  half-open [valid_from, valid_to)). The delta lifecycle reuses the decision
+  supersede path: a new version supersedes the prior one, recording a
+  `change_summary` and a server-derived `version`; active -> superseded or
+  active -> closed. All date inputs are normalized to canonical ISO-8601 at the
+  store boundary so comparisons are exact; `valid_to` must be after `valid_from`.
+  New CLI subcommands `hippo policy new|list|get|asof|supersede|close`, HTTP routes
+  (`POST /v1/policies`, `GET /v1/policies`, `GET /v1/policies/asof`,
+  `GET /v1/policies/:id`, `POST /v1/policies/:id/supersede`,
+  `POST /v1/policies/:id/close`), Python SDK methods (`new_policy`,
+  `supersede_policy`, `close_policy`, `list_policies`, `get_policy`,
+  `policies_asof`, async and sync) plus the `Policy` model, three audit ops
+  (`policy_create`, `policy_supersede`, `policy_close`) in the 3-site lockstep,
+  and schema migration v33 (`policies` table, 3 indexes, 3 tenant-safety
+  triggers including the supersede self-FK trigger).
 
 ## 1.15.0 (2026-05-28): E2 decisions first-class object
 
