@@ -95,6 +95,15 @@ import {
   VALID_POLICY_STATES,
   type PolicyStatus,
 } from './policies.js';
+import {
+  saveSkill,
+  closeSkill,
+  loadSkillById,
+  loadSkills,
+  exportSkills,
+  VALID_SKILL_STATES,
+  type SkillStatus,
+} from './skills.js';
 import { handleMcpRequest, type McpRequest } from './mcp/server.js';
 import { verifySlackSignature } from './connectors/slack/signature.js';
 import { isSlackEventEnvelope, isSlackMessageEvent } from './connectors/slack/types.js';
@@ -171,6 +180,9 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'policy_create',         // E2 policy first-class object — emitted by savePolicy
   'policy_supersede',      // E2 — emitted by savePolicy on a supersession
   'policy_close',          // E2 — emitted by closePolicy
+  'skill_create',          // E2 skill first-class object — emitted by saveSkill
+  'skill_supersede',       // E2 — emitted by saveSkill on a supersession
+  'skill_close',           // E2 — emitted by closeSkill
 ]);
 
 // Cap on GET /v1/audit?limit=. Matches docs/api.md (when written) and is large
@@ -1960,6 +1972,181 @@ async function handleRequest(
       throw new HttpError(404, `policy ${id} not found`);
     }
     sendJson(res, 200, { policy });
+    return;
+  }
+
+  // ── skills (E2 first-class object, executable/exportable) ──
+  //
+  // 6 routes: POST /v1/skills (new; body skillName + instructions + trigger?),
+  // GET /v1/skills (list, status filter; shared parseListLimit), GET
+  // /v1/skills/export (renders ACTIVE skills as an AGENTS.md/CLAUDE.md markdown
+  // block -> {markdown}; literal 'export' is non-numeric so the /:id (\d+) route
+  // cannot capture it, but it is ordered first regardless), GET /v1/skills/:id,
+  // POST /v1/skills/:id/supersede, POST /v1/skills/:id/close. DoS caps:
+  // skillName 256, instructions 8192, trigger 1024, changeSummary 4096. The store
+  // validates + throws; the boundary maps validation -> 400, not-found -> 404,
+  // not-active -> 409. Mirrors /v1/processes; "executable" = exportable
+  // instruction (no code exec).
+  if (method === 'POST' && path === '/v1/skills') {
+    const body = await parseJsonBody(req);
+    const skillName = body['skillName'];
+    if (typeof skillName !== 'string' || skillName.trim().length === 0) {
+      throw new HttpError(400, 'skillName is required (non-empty string)');
+    }
+    if (skillName.length > 256) {
+      throw new HttpError(400, 'skillName exceeds 256-character cap');
+    }
+    const instructions = body['instructions'];
+    if (typeof instructions !== 'string' || instructions.trim().length === 0) {
+      throw new HttpError(400, 'instructions are required (non-empty string)');
+    }
+    if (instructions.length > 8192) {
+      throw new HttpError(400, 'instructions exceed 8192-character cap');
+    }
+    const triggerRaw = body['trigger'];
+    let trigger: string | undefined;
+    if (triggerRaw !== undefined && triggerRaw !== null) {
+      if (typeof triggerRaw !== 'string') {
+        throw new HttpError(400, 'trigger must be a string');
+      }
+      if (triggerRaw.length > 1024) {
+        throw new HttpError(400, 'trigger exceeds 1024-character cap');
+      }
+      trigger = triggerRaw;
+    }
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    try {
+      const skill = saveSkill(opts.hippoRoot, ctx.tenantId, {
+        skillName,
+        instructions,
+        trigger,
+      }, ctx.actor.subject);
+      sendJson(res, 201, { skill });
+    } catch (e) {
+      // saveSkill throws on validation (single-line name etc.) -> 400.
+      throw new HttpError(400, (e as Error).message);
+    }
+    return;
+  }
+
+  if (method === 'GET' && path === '/v1/skills') {
+    const status = query.get('status') ?? 'all';
+    const limit = parseListLimit(query.get('limit'));
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    let skills;
+    if (status === 'all') {
+      skills = loadSkills(opts.hippoRoot, ctx.tenantId, { limit });
+    } else {
+      if (!VALID_SKILL_STATES.has(status as SkillStatus)) {
+        throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
+      }
+      skills = loadSkills(opts.hippoRoot, ctx.tenantId, {
+        status: status as SkillStatus,
+        limit,
+      });
+    }
+    sendJson(res, 200, { skills });
+    return;
+  }
+
+  // The export renderer: must precede the /:id GET (literal 'export' is
+  // non-numeric so the /(\d+)/ route would not match it, but order it first).
+  if (method === 'GET' && path === '/v1/skills/export') {
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const markdown = exportSkills(opts.hippoRoot, ctx.tenantId);
+    sendJson(res, 200, { markdown });
+    return;
+  }
+
+  const skillSupersedeMatch = path.match(/^\/v1\/skills\/(\d+)\/supersede$/);
+  if (method === 'POST' && skillSupersedeMatch) {
+    const id = parseInt(skillSupersedeMatch[1], 10);
+    const body = await parseJsonBody(req);
+    const instructions = body['instructions'];
+    if (typeof instructions !== 'string' || instructions.trim().length === 0) {
+      throw new HttpError(400, 'instructions are required (non-empty string)');
+    }
+    if (instructions.length > 8192) {
+      throw new HttpError(400, 'instructions exceed 8192-character cap');
+    }
+    const triggerRaw = body['trigger'];
+    let trigger: string | undefined;
+    if (triggerRaw !== undefined && triggerRaw !== null) {
+      if (typeof triggerRaw !== 'string') {
+        throw new HttpError(400, 'trigger must be a string');
+      }
+      if (triggerRaw.length > 1024) {
+        throw new HttpError(400, 'trigger exceeds 1024-character cap');
+      }
+      trigger = triggerRaw;
+    }
+    const changeRaw = body['changeSummary'];
+    let changeSummary: string | undefined;
+    if (changeRaw !== undefined && changeRaw !== null) {
+      if (typeof changeRaw !== 'string') {
+        throw new HttpError(400, 'changeSummary must be a string');
+      }
+      if (changeRaw.length > 4096) {
+        throw new HttpError(400, 'changeSummary exceeds 4096-character cap');
+      }
+      changeSummary = changeRaw;
+    }
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const existing = loadSkillById(opts.hippoRoot, ctx.tenantId, id);
+    if (!existing) {
+      throw new HttpError(404, `skill ${id} not found`);
+    }
+    try {
+      const skill = saveSkill(opts.hippoRoot, ctx.tenantId, {
+        skillName: existing.skillName,
+        instructions,
+        trigger,
+        changeSummary,
+        supersedesSkillId: id,
+      }, ctx.actor.subject);
+      sendJson(res, 200, { skill });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) {
+        throw new HttpError(404, msg);
+      }
+      if (msg.includes('not active') || msg.includes('could not be superseded')) {
+        throw new HttpError(409, msg);
+      }
+      throw new HttpError(400, msg);
+    }
+    return;
+  }
+
+  const skillCloseMatch = path.match(/^\/v1\/skills\/(\d+)\/close$/);
+  if (method === 'POST' && skillCloseMatch) {
+    const id = parseInt(skillCloseMatch[1], 10);
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    try {
+      const skill = closeSkill(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
+      sendJson(res, 200, { skill });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) {
+        throw new HttpError(404, msg);
+      }
+      if (msg.includes('not active')) {
+        throw new HttpError(409, msg);
+      }
+      throw e;
+    }
+    return;
+  }
+
+  const skillByIdMatch = path.match(/^\/v1\/skills\/(\d+)$/);
+  if (method === 'GET' && skillByIdMatch) {
+    const id = parseInt(skillByIdMatch[1], 10);
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const skill = loadSkillById(opts.hippoRoot, ctx.tenantId, id);
+    if (!skill) {
+      throw new HttpError(404, `skill ${id} not found`);
+    }
+    sendJson(res, 200, { skill });
     return;
   }
 

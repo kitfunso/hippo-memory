@@ -163,7 +163,10 @@ export type AuditOp =
   | 'process_close' // E2 — emitted by closeProcess (active -> closed, retire without successor)
   | 'policy_create' // E2 policy first-class object — emitted by savePolicy
   | 'policy_supersede' // E2 — emitted by savePolicy when supersedesPolicyId resolves to an active policy row
-  | 'policy_close'; // E2 — emitted by closePolicy (active -> closed, retire without successor)
+  | 'policy_close' // E2 — emitted by closePolicy (active -> closed, retire without successor)
+  | 'skill_create' // E2 skill first-class object — emitted by saveSkill
+  | 'skill_supersede' // E2 — emitted by saveSkill when supersedesSkillId resolves to an active skill row
+  | 'skill_close'; // E2 — emitted by closeSkill (active -> closed, retire without successor)
 
 export interface AppendAuditOpts {
   tenantId: string;

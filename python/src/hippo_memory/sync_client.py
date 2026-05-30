@@ -51,6 +51,7 @@ from hippo_memory.models import (
     Incident,
     Process,
     Policy,
+    Skill,
     Prediction,
     PredictionBaserate,
     HippoError,
@@ -686,3 +687,64 @@ class HippoSync:
             params["name"] = name
         data = self._request("GET", "/v1/policies/asof", params=params)
         return [Policy.model_validate(p) for p in data["policies"]]
+
+    def new_skill(
+        self,
+        skill_name: str,
+        instructions: str,
+        *,
+        trigger: str | None = None,
+    ) -> Skill:
+        """POST /v1/skills. Sync mirror of Hippo.new_skill."""
+        body: dict[str, Any] = {"skillName": skill_name, "instructions": instructions}
+        if trigger is not None:
+            body["trigger"] = trigger
+        data = self._request("POST", "/v1/skills", json=body)
+        return Skill.model_validate(data["skill"])
+
+    def supersede_skill(
+        self,
+        skill_id: int,
+        instructions: str,
+        *,
+        trigger: str | None = None,
+        change_summary: str | None = None,
+    ) -> Skill:
+        """POST /v1/skills/:id/supersede. Sync mirror of Hippo.supersede_skill."""
+        body: dict[str, Any] = {"instructions": instructions}
+        if trigger is not None:
+            body["trigger"] = trigger
+        if change_summary is not None:
+            body["changeSummary"] = change_summary
+        data = self._request("POST", f"/v1/skills/{skill_id}/supersede", json=body)
+        return Skill.model_validate(data["skill"])
+
+    def close_skill(self, skill_id: int) -> Skill:
+        """POST /v1/skills/:id/close. Sync mirror of Hippo.close_skill."""
+        data = self._request("POST", f"/v1/skills/{skill_id}/close", json={})
+        return Skill.model_validate(data["skill"])
+
+    def list_skills(
+        self,
+        *,
+        status: Literal["active", "superseded", "closed", "all"] | None = None,
+        limit: int | None = None,
+    ) -> list[Skill]:
+        """GET /v1/skills. Sync mirror of Hippo.list_skills."""
+        params: dict[str, Any] = {}
+        if status is not None:
+            params["status"] = status
+        if limit is not None:
+            params["limit"] = limit
+        data = self._request("GET", "/v1/skills", params=params)
+        return [Skill.model_validate(s) for s in data["skills"]]
+
+    def get_skill(self, skill_id: int) -> Skill:
+        """GET /v1/skills/:id. Sync mirror of Hippo.get_skill."""
+        data = self._request("GET", f"/v1/skills/{skill_id}")
+        return Skill.model_validate(data["skill"])
+
+    def export_skills(self) -> str:
+        """GET /v1/skills/export. Sync mirror of Hippo.export_skills."""
+        data = self._request("GET", "/v1/skills/export")
+        return data["markdown"]

@@ -41,6 +41,7 @@ from hippo_memory.models import (
     Incident,
     Process,
     Policy,
+    Skill,
     Prediction,
     PredictionBaserate,
     HippoError,
@@ -752,3 +753,71 @@ class Hippo:
             params["name"] = name
         data = await self._request("GET", "/v1/policies/asof", params=params)
         return [Policy.model_validate(p) for p in data["policies"]]
+
+    async def new_skill(
+        self,
+        skill_name: str,
+        instructions: str,
+        *,
+        trigger: str | None = None,
+    ) -> Skill:
+        """POST /v1/skills. Record a reusable, agent-followable skill (instructions
+        + optional trigger). The skills table is the source of truth.
+        """
+        body: dict[str, Any] = {"skillName": skill_name, "instructions": instructions}
+        if trigger is not None:
+            body["trigger"] = trigger
+        data = await self._request("POST", "/v1/skills", json=body)
+        return Skill.model_validate(data["skill"])
+
+    async def supersede_skill(
+        self,
+        skill_id: int,
+        instructions: str,
+        *,
+        trigger: str | None = None,
+        change_summary: str | None = None,
+    ) -> Skill:
+        """POST /v1/skills/:id/supersede. Record a new version that supersedes an
+        active skill (active -> superseded). Reuses the predecessor's name.
+        """
+        body: dict[str, Any] = {"instructions": instructions}
+        if trigger is not None:
+            body["trigger"] = trigger
+        if change_summary is not None:
+            body["changeSummary"] = change_summary
+        data = await self._request("POST", f"/v1/skills/{skill_id}/supersede", json=body)
+        return Skill.model_validate(data["skill"])
+
+    async def close_skill(self, skill_id: int) -> Skill:
+        """POST /v1/skills/:id/close. Retire an active skill (active -> closed)."""
+        data = await self._request("POST", f"/v1/skills/{skill_id}/close", json={})
+        return Skill.model_validate(data["skill"])
+
+    async def list_skills(
+        self,
+        *,
+        status: Literal["active", "superseded", "closed", "all"] | None = None,
+        limit: int | None = None,
+    ) -> list[Skill]:
+        """GET /v1/skills. List skills, optionally filtered by status."""
+        params: dict[str, Any] = {}
+        if status is not None:
+            params["status"] = status
+        if limit is not None:
+            params["limit"] = limit
+        data = await self._request("GET", "/v1/skills", params=params)
+        return [Skill.model_validate(s) for s in data["skills"]]
+
+    async def get_skill(self, skill_id: int) -> Skill:
+        """GET /v1/skills/:id. Fetch a single skill by id."""
+        data = await self._request("GET", f"/v1/skills/{skill_id}")
+        return Skill.model_validate(data["skill"])
+
+    async def export_skills(self) -> str:
+        """GET /v1/skills/export. Render the tenant's ACTIVE skills as one
+        AGENTS.md / CLAUDE.md-style markdown block. Returns the markdown string
+        (empty string when there are no active skills).
+        """
+        data = await self._request("GET", "/v1/skills/export")
+        return data["markdown"]
