@@ -162,6 +162,7 @@ import { computePlanningFallacyOutput } from './predictions.js';
 import * as decisionsModule from './decisions.js';
 import * as incidentsModule from './incidents.js';
 import * as processesModule from './processes.js';
+import * as policiesModule from './policies.js';
 import { createHash } from 'node:crypto';
 import {
   detectAnchoring,
@@ -4217,6 +4218,200 @@ function cmdProcess(
   if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
 }
 
+// Strict positive-integer id parse for the mutating policy subcommands (mirrors
+// parsePositiveProcessId; codex P2 class - parseInt alone accepts '1abc' -> 1).
+function parsePositivePolicyId(idRaw: unknown): number {
+  const s = String(idRaw ?? '').trim();
+  const id = parseInt(s, 10);
+  if (!/^\d+$/.test(s) || id <= 0) {
+    console.error(`Invalid policy id: "${idRaw}" (expected a positive integer).`);
+    process.exit(1);
+  }
+  return id;
+}
+
+function printPolicyRow(p: policiesModule.Policy): void {
+  const range = p.validTo ? `${p.validFrom}..${p.validTo}` : `${p.validFrom}..(open)`;
+  console.log(`#${p.id} [${p.status}] v${p.version} ${range} memory=${p.memoryId ?? '-'}`);
+  console.log(`    ${p.policyName}: ${p.policyText}`);
+  if (p.changeSummary) console.log(`    change: ${p.changeSummary}`);
+}
+
+function cmdPolicy(
+  hippoRoot: string,
+  args: string[],
+  flags: Record<string, string | boolean | string[]>
+): void {
+  requireInit(hippoRoot);
+  const tenantId = resolveTenantId({});
+  const subcommand = args[0] ?? '';
+
+  if (subcommand === 'list') {
+    const statusRaw = flags['status'];
+    const status = typeof statusRaw === 'string' ? statusRaw.trim() : 'all';
+    const limitRaw = flags['limit'];
+    const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : 100;
+    if (!Number.isFinite(limit) || limit <= 0) {
+      console.error(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
+      process.exit(1);
+    }
+    let results;
+    if (status === 'all') {
+      results = policiesModule.loadPolicies(hippoRoot, tenantId, { limit });
+    } else {
+      if (!policiesModule.VALID_POLICY_STATES.has(status as policiesModule.PolicyStatus)) {
+        console.error(`Invalid --status: "${status}". Must be one of: active | superseded | closed | all.`);
+        process.exit(1);
+      }
+      results = policiesModule.loadPolicies(hippoRoot, tenantId, {
+        status: status as policiesModule.PolicyStatus,
+        limit,
+      });
+    }
+    if (results.length === 0) {
+      console.log('No policies.');
+      return;
+    }
+    console.log(`Found ${results.length} policies:\n`);
+    for (const p of results) printPolicyRow(p);
+    return;
+  }
+
+  if (subcommand === 'asof') {
+    const dateRaw = args[1];
+    if (!dateRaw) {
+      console.error('Usage: hippo policy asof <iso-date> [--name "<policy>"]');
+      process.exit(1);
+    }
+    const nameRaw = flags['name'];
+    const name = typeof nameRaw === 'string' && nameRaw ? nameRaw : undefined;
+    let results;
+    try {
+      results = policiesModule.loadPoliciesAsOf(hippoRoot, tenantId, dateRaw, { name });
+    } catch (e) {
+      console.error((e as Error).message);
+      process.exit(1);
+    }
+    if (results.length === 0) {
+      console.log(`No active policies in force at ${dateRaw}${name ? ` for "${name}"` : ''}.`);
+      return;
+    }
+    console.log(`Policies in force at ${dateRaw}:\n`);
+    for (const p of results) printPolicyRow(p);
+    return;
+  }
+
+  if (subcommand === 'get') {
+    const idRaw = args[1];
+    if (!idRaw) {
+      console.error('Usage: hippo policy get <id>');
+      process.exit(1);
+    }
+    const id = parsePositivePolicyId(idRaw);
+    const p = policiesModule.loadPolicyById(hippoRoot, tenantId, id);
+    if (!p) {
+      console.error(`Policy ${id} not found.`);
+      process.exit(1);
+    }
+    console.log(`Policy #${p.id}`);
+    console.log(`  name: ${p.policyName}`);
+    console.log(`  text: ${p.policyText}`);
+    console.log(`  status: ${p.status}`);
+    console.log(`  version: ${p.version}`);
+    console.log(`  valid_from: ${p.validFrom}`);
+    console.log(`  valid_to: ${p.validTo ?? '(open-ended)'}`);
+    if (p.changeSummary) console.log(`  change_summary: ${p.changeSummary}`);
+    if (p.supersededBy !== null) console.log(`  superseded_by: #${p.supersededBy}`);
+    if (p.supersededAt) console.log(`  superseded_at: ${p.supersededAt}`);
+    if (p.closedAt) console.log(`  closed_at: ${p.closedAt}`);
+    if (p.memoryId) console.log(`  memory: ${p.memoryId}`);
+    console.log(`  created: ${p.createdAt}`);
+    return;
+  }
+
+  if (subcommand === 'supersede') {
+    const idRaw = args[1];
+    if (!idRaw) {
+      console.error('Usage: hippo policy supersede <id> --text "<rule>" [--from <iso>] [--to <iso>] [--change "<summary>"]');
+      process.exit(1);
+    }
+    const id = parsePositivePolicyId(idRaw);
+    const textRaw = flags['text'];
+    if (typeof textRaw !== 'string' || !textRaw.trim()) {
+      console.error('hippo policy supersede requires --text "<rule>" for the new version.');
+      process.exit(1);
+    }
+    const existing = policiesModule.loadPolicyById(hippoRoot, tenantId, id);
+    if (!existing) {
+      console.error(`Policy ${id} not found.`);
+      process.exit(1);
+    }
+    const fromRaw = flags['from'];
+    const toRaw = flags['to'];
+    const changeRaw = flags['change'];
+    try {
+      const created = policiesModule.savePolicy(hippoRoot, tenantId, {
+        policyName: existing.policyName,
+        policyText: textRaw,
+        validFrom: typeof fromRaw === 'string' && fromRaw ? fromRaw : undefined,
+        validTo: typeof toRaw === 'string' && toRaw ? toRaw : undefined,
+        changeSummary: typeof changeRaw === 'string' && changeRaw ? changeRaw : undefined,
+        supersedesPolicyId: id,
+        extraTags: extractPathTags(process.cwd()),
+      });
+      console.log(`Policy #${created.id} recorded (v${created.version}), superseding #${id}.`);
+      if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
+    } catch (e) {
+      console.error((e as Error).message);
+      process.exit(1);
+    }
+    return;
+  }
+
+  if (subcommand === 'close') {
+    const idRaw = args[1];
+    if (!idRaw) {
+      console.error('Usage: hippo policy close <id>');
+      process.exit(1);
+    }
+    const id = parsePositivePolicyId(idRaw);
+    const closed = policiesModule.closePolicy(hippoRoot, tenantId, id);
+    console.log(`Policy #${closed.id} closed.`);
+    return;
+  }
+
+  // Default subcommand: new (create). Accept both `policy new "<name>"` and the
+  // bare `policy "<name>"` form: for the `new` keyword the name is args[1].
+  const policyName = subcommand === 'new' ? (args[1] ?? '') : subcommand;
+  const textRaw = flags['text'];
+  if (!policyName || typeof textRaw !== 'string' || !textRaw.trim()) {
+    console.error('Usage: hippo policy new "<name>" --text "<rule>" [--from <iso>] [--to <iso>]');
+    console.error('       hippo policy list [--status active|superseded|closed|all] [--limit N]');
+    console.error('       hippo policy get <id>');
+    console.error('       hippo policy asof <iso-date> [--name "<policy>"]');
+    console.error('       hippo policy supersede <id> --text "<rule>" [--from] [--to] [--change "<summary>"]');
+    console.error('       hippo policy close <id>');
+    process.exit(1);
+  }
+  const fromRaw = flags['from'];
+  const toRaw = flags['to'];
+  try {
+    const created = policiesModule.savePolicy(hippoRoot, tenantId, {
+      policyName,
+      policyText: textRaw,
+      validFrom: typeof fromRaw === 'string' && fromRaw ? fromRaw : undefined,
+      validTo: typeof toRaw === 'string' && toRaw ? toRaw : undefined,
+      extraTags: extractPathTags(process.cwd()),
+    });
+    const range = created.validTo ? `${created.validFrom}..${created.validTo}` : `${created.validFrom}..(open)`;
+    console.log(`Policy recorded: #${created.id} (v${created.version}, effective ${range})`);
+    if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
+  } catch (e) {
+    console.error((e as Error).message);
+    process.exit(1);
+  }
+}
+
 function cmdCurrent(
   hippoRoot: string,
   args: string[],
@@ -5793,6 +5988,9 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'process_create',        // E2 process first-class object — emitted by saveProcess
   'process_supersede',     // E2 — emitted by saveProcess on a supersession
   'process_close',         // E2 — emitted by closeProcess
+  'policy_create',         // E2 policy first-class object — emitted by savePolicy
+  'policy_supersede',      // E2 — emitted by savePolicy on a supersession
+  'policy_close',          // E2 — emitted by closePolicy
 ]);
 
 function formatAuditRow(ev: AuditEvent): string {
@@ -6667,6 +6865,21 @@ Commands:
     --change "<summary>"   What changed in this version (the delta note)
     --description "<text>" Optional summary of the new version
   process close <id>       Retire (close) an active process by its table id
+  policy new "<name>"      Record a policy (bi-temporal first-class object + mirror)
+    --text "<rule>"        The policy rule/statement (required)
+    --from "<iso>"         Effective-from date (default: now)
+    --to "<iso>"           Effective-to date (optional; open-ended if omitted)
+  policy list [--status active|superseded|closed|all] [--limit N]
+                           List policies (table is authoritative, survives decay)
+  policy get <id>          Show a policy by its table id
+  policy asof "<iso-date>" Show active policies in force at a valid-time
+    --name "<policy>"      Filter to one policy by name
+  policy supersede <id>    Record a new version that supersedes an active policy
+    --text "<rule>"        The new rule (required)
+    --from "<iso>"         New effective-from (default: now)
+    --to "<iso>"           New effective-to (optional)
+    --change "<summary>"   What changed in this version (the delta note)
+  policy close <id>        Retire (close) an active policy by its table id
   invalidate "<pattern>"   Actively weaken memories matching an old pattern
     --reason "<why>"       Optional: what replaced it
   wm <sub>                 Working memory — bounded buffer for current state
@@ -6750,6 +6963,8 @@ Examples:
   hippo decide "Use PostgreSQL for new services" --context "JSONB support"
   hippo incident "Prod outage: DB connection pool exhausted" --context "spike at 14:00"
   hippo process new "Release" --step "run tests" --step "bump version" --step "publish"
+  hippo policy new "Data retention" --text "Delete logs after 90 days" --from 2026-01-01
+  hippo policy asof 2026-03-01 --name "Data retention"
   hippo invalidate "REST API" --reason "migrated to GraphQL"
   hippo export memories.json
   hippo export --format markdown memories.md
@@ -7392,6 +7607,10 @@ async function main(): Promise<void> {
 
     case 'process':
       cmdProcess(hippoRoot, args, flags);
+      break;
+
+    case 'policy':
+      cmdPolicy(hippoRoot, args, flags);
       break;
 
     case 'help':

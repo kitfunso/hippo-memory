@@ -86,6 +86,15 @@ import {
   VALID_PROCESS_STATES,
   type ProcessStatus,
 } from './processes.js';
+import {
+  savePolicy,
+  closePolicy,
+  loadPolicyById,
+  loadPolicies,
+  loadPoliciesAsOf,
+  VALID_POLICY_STATES,
+  type PolicyStatus,
+} from './policies.js';
 import { handleMcpRequest, type McpRequest } from './mcp/server.js';
 import { verifySlackSignature } from './connectors/slack/signature.js';
 import { isSlackEventEnvelope, isSlackMessageEvent } from './connectors/slack/types.js';
@@ -159,6 +168,9 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'process_create',        // E2 process first-class object — emitted by saveProcess
   'process_supersede',     // E2 — emitted by saveProcess on a supersession
   'process_close',         // E2 — emitted by closeProcess
+  'policy_create',         // E2 policy first-class object — emitted by savePolicy
+  'policy_supersede',      // E2 — emitted by savePolicy on a supersession
+  'policy_close',          // E2 — emitted by closePolicy
 ]);
 
 // Cap on GET /v1/audit?limit=. Matches docs/api.md (when written) and is large
@@ -189,6 +201,37 @@ function validateProcessStepsBody(raw: unknown): string[] {
     }
   }
   return raw as string[];
+}
+
+// HTTP-boundary check for an optional policy date field (validFrom/validTo).
+// Type + length only; savePolicy/loadPoliciesAsOf normalize + format-validate the
+// value (an unparseable date throws there -> mapped to 400). 64-char cap bounds a
+// junk string before it reaches the Date parser.
+function optionalDateField(raw: unknown, label: string): string | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (typeof raw !== 'string') {
+    throw new HttpError(400, `${label} must be a string`);
+  }
+  if (raw.length > 64) {
+    throw new HttpError(400, `${label} exceeds 64-character cap`);
+  }
+  return raw;
+}
+
+// Parse a `?limit=` query param for the E2 list routes. Defaults to 100; requires
+// a positive INTEGER <= 1000. Number.isInteger rejects fractional values like
+// "1.5" that Number.isFinite would pass but SQLite `LIMIT ?` rejects with a
+// datatype mismatch (a 500). Shared across the decision/incident/process/policy
+// list routes so the guard cannot drift (codex review 2026-05-30 P2: fractional
+// limit reached SQLite on the policy route; the same latent hole existed in the
+// sibling routes this was copied from).
+function parseListLimit(limitRaw: string | null): number {
+  if (limitRaw === null) return 100;
+  const limit = Number(limitRaw);
+  if (!Number.isInteger(limit) || limit <= 0 || limit > 1000) {
+    throw new HttpError(400, 'limit must be a positive integer <= 1000');
+  }
+  return limit;
 }
 
 const VALID_KINDS: ReadonlySet<MemoryKind> = new Set([
@@ -1199,14 +1242,7 @@ async function handleRequest(
   if (method === 'GET' && path === '/v1/predictions') {
     const classTag = query.get('class') ?? undefined;
     const status = query.get('status') ?? 'all';
-    const limitRaw = query.get('limit');
-    let limit = 100;
-    if (limitRaw !== null) {
-      limit = Number(limitRaw);
-      if (!Number.isFinite(limit) || limit <= 0 || limit > 1000) {
-        throw new HttpError(400, 'limit must be a positive integer <= 1000');
-      }
-    }
+    const limit = parseListLimit(query.get('limit'));
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
     let predictions;
     if (status === 'all') {
@@ -1369,14 +1405,7 @@ async function handleRequest(
 
   if (method === 'GET' && path === '/v1/decisions') {
     const status = query.get('status') ?? 'all';
-    const limitRaw = query.get('limit');
-    let limit = 100;
-    if (limitRaw !== null) {
-      limit = Number(limitRaw);
-      if (!Number.isFinite(limit) || limit <= 0 || limit > 1000) {
-        throw new HttpError(400, 'limit must be a positive integer <= 1000');
-      }
-    }
+    const limit = parseListLimit(query.get('limit'));
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
     let decisions;
     if (status === 'all') {
@@ -1536,14 +1565,7 @@ async function handleRequest(
 
   if (method === 'GET' && path === '/v1/incidents') {
     const status = query.get('status') ?? 'all';
-    const limitRaw = query.get('limit');
-    let limit = 100;
-    if (limitRaw !== null) {
-      limit = Number(limitRaw);
-      if (!Number.isFinite(limit) || limit <= 0 || limit > 1000) {
-        throw new HttpError(400, 'limit must be a positive integer <= 1000');
-      }
-    }
+    const limit = parseListLimit(query.get('limit'));
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
     let incidents;
     if (status === 'all') {
@@ -1665,14 +1687,7 @@ async function handleRequest(
 
   if (method === 'GET' && path === '/v1/processes') {
     const status = query.get('status') ?? 'all';
-    const limitRaw = query.get('limit');
-    let limit = 100;
-    if (limitRaw !== null) {
-      limit = Number(limitRaw);
-      if (!Number.isFinite(limit) || limit <= 0 || limit > 1000) {
-        throw new HttpError(400, 'limit must be a positive integer <= 1000');
-      }
-    }
+    const limit = parseListLimit(query.get('limit'));
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
     let processes;
     if (status === 'all') {
@@ -1779,6 +1794,172 @@ async function handleRequest(
       throw new HttpError(404, `process ${id} not found`);
     }
     sendJson(res, 200, { process });
+    return;
+  }
+
+  // ── policies (E2 first-class object, bi-temporal-first) ──
+  //
+  // 6 routes: POST /v1/policies (new; processName-style body policyName +
+  // policyText + validFrom? + validTo?), GET /v1/policies (list, status filter),
+  // GET /v1/policies/asof (date + optional name; the bi-temporal as-of query;
+  // placed BEFORE the /:id GET so the literal 'asof' is matched first), GET
+  // /v1/policies/:id, POST /v1/policies/:id/supersede, POST /v1/policies/:id/close.
+  // Date inputs are normalized + range-validated in the store; an invalid/inverted
+  // date throws -> 400. DoS caps: policyName/policyText/changeSummary 4096.
+  if (method === 'POST' && path === '/v1/policies') {
+    const body = await parseJsonBody(req);
+    const policyName = body['policyName'];
+    if (typeof policyName !== 'string' || policyName.trim().length === 0) {
+      throw new HttpError(400, 'policyName is required (non-empty string)');
+    }
+    if (policyName.length > 4096) {
+      throw new HttpError(400, 'policyName exceeds 4096-character cap');
+    }
+    const policyText = body['policyText'];
+    if (typeof policyText !== 'string' || policyText.trim().length === 0) {
+      throw new HttpError(400, 'policyText is required (non-empty string)');
+    }
+    if (policyText.length > 4096) {
+      throw new HttpError(400, 'policyText exceeds 4096-character cap');
+    }
+    const validFrom = optionalDateField(body['validFrom'], 'validFrom');
+    const validTo = optionalDateField(body['validTo'], 'validTo');
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    try {
+      const policy = savePolicy(opts.hippoRoot, ctx.tenantId, {
+        policyName,
+        policyText,
+        validFrom,
+        validTo,
+      }, ctx.actor.subject);
+      sendJson(res, 201, { policy });
+    } catch (e) {
+      // savePolicy throws on invalid/inverted dates (validation) -> 400.
+      throw new HttpError(400, (e as Error).message);
+    }
+    return;
+  }
+
+  if (method === 'GET' && path === '/v1/policies') {
+    const status = query.get('status') ?? 'all';
+    const limit = parseListLimit(query.get('limit'));
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    let policies;
+    if (status === 'all') {
+      policies = loadPolicies(opts.hippoRoot, ctx.tenantId, { limit });
+    } else {
+      if (!VALID_POLICY_STATES.has(status as PolicyStatus)) {
+        throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
+      }
+      policies = loadPolicies(opts.hippoRoot, ctx.tenantId, {
+        status: status as PolicyStatus,
+        limit,
+      });
+    }
+    sendJson(res, 200, { policies });
+    return;
+  }
+
+  // The as-of query: must precede the /:id GET (literal 'asof' is non-numeric so
+  // the /(\d+)/ route would not match it, but order it first for clarity).
+  if (method === 'GET' && path === '/v1/policies/asof') {
+    const date = query.get('date');
+    if (date === null || date.length === 0) {
+      throw new HttpError(400, 'date is required (ISO-8601 valid-time)');
+    }
+    const name = query.get('name') ?? undefined;
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    try {
+      const policies = loadPoliciesAsOf(opts.hippoRoot, ctx.tenantId, date, { name });
+      sendJson(res, 200, { policies });
+    } catch (e) {
+      throw new HttpError(400, (e as Error).message);
+    }
+    return;
+  }
+
+  const policySupersedeMatch = path.match(/^\/v1\/policies\/(\d+)\/supersede$/);
+  if (method === 'POST' && policySupersedeMatch) {
+    const id = parseInt(policySupersedeMatch[1], 10);
+    const body = await parseJsonBody(req);
+    const policyText = body['policyText'];
+    if (typeof policyText !== 'string' || policyText.trim().length === 0) {
+      throw new HttpError(400, 'policyText is required (non-empty string)');
+    }
+    if (policyText.length > 4096) {
+      throw new HttpError(400, 'policyText exceeds 4096-character cap');
+    }
+    const validFrom = optionalDateField(body['validFrom'], 'validFrom');
+    const validTo = optionalDateField(body['validTo'], 'validTo');
+    const changeRaw = body['changeSummary'];
+    let changeSummary: string | undefined;
+    if (changeRaw !== undefined && changeRaw !== null) {
+      if (typeof changeRaw !== 'string') {
+        throw new HttpError(400, 'changeSummary must be a string');
+      }
+      if (changeRaw.length > 4096) {
+        throw new HttpError(400, 'changeSummary exceeds 4096-character cap');
+      }
+      changeSummary = changeRaw;
+    }
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const existing = loadPolicyById(opts.hippoRoot, ctx.tenantId, id);
+    if (!existing) {
+      throw new HttpError(404, `policy ${id} not found`);
+    }
+    try {
+      const policy = savePolicy(opts.hippoRoot, ctx.tenantId, {
+        policyName: existing.policyName,
+        policyText,
+        validFrom,
+        validTo,
+        changeSummary,
+        supersedesPolicyId: id,
+      }, ctx.actor.subject);
+      sendJson(res, 200, { policy });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) {
+        throw new HttpError(404, msg);
+      }
+      if (msg.includes('not active') || msg.includes('could not be superseded')) {
+        throw new HttpError(409, msg);
+      }
+      // invalid/inverted date or missing field -> validation.
+      throw new HttpError(400, msg);
+    }
+    return;
+  }
+
+  const policyCloseMatch = path.match(/^\/v1\/policies\/(\d+)\/close$/);
+  if (method === 'POST' && policyCloseMatch) {
+    const id = parseInt(policyCloseMatch[1], 10);
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    try {
+      const policy = closePolicy(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
+      sendJson(res, 200, { policy });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) {
+        throw new HttpError(404, msg);
+      }
+      if (msg.includes('not active')) {
+        throw new HttpError(409, msg);
+      }
+      throw e;
+    }
+    return;
+  }
+
+  const policyByIdMatch = path.match(/^\/v1\/policies\/(\d+)$/);
+  if (method === 'GET' && policyByIdMatch) {
+    const id = parseInt(policyByIdMatch[1], 10);
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const policy = loadPolicyById(opts.hippoRoot, ctx.tenantId, id);
+    if (!policy) {
+      throw new HttpError(404, `policy ${id} not found`);
+    }
+    sendJson(res, 200, { policy });
     return;
   }
 
