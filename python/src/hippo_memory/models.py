@@ -48,6 +48,7 @@ __all__ = [
     "Incident",
     "Process",
     "Policy",
+    "Skill",
     "Prediction",
     "PredictionBaserate",
     "HippoError",
@@ -725,6 +726,39 @@ class Policy(_Base):
     policy_text: str
     valid_from: str
     valid_to: str | None = None
+    version: int = 1
+    status: str = "active"
+    superseded_by: int | None = None
+    superseded_at: str | None = None
+    change_summary: str | None = None
+    closed_at: str | None = None
+    created_at: str
+
+
+class Skill(_Base):
+    """Skill first-class object (executable/exportable). Mirrors the TS Skill
+    interface in src/skills.ts.
+
+    A skill is a reusable, agent-followable capability: an ``instructions`` body
+    plus an optional ``trigger`` ("when to apply"). "Executable" is scoped to an
+    agent-followable instruction that, once exported into the agent's in-force
+    rules (AGENTS.md / CLAUDE.md) via the export endpoint, is executed by the
+    agent reading it; literal code execution is deferred. The delta lifecycle
+    reuses the decision/process supersede path: active -> superseded (a newer
+    version; ``superseded_by`` points to the successor) or active -> closed.
+    ``version`` is server-derived; ``change_summary`` is set on a successor row
+    only.
+
+    The skills table is canonical (survives memory decay). ``memory_id`` is
+    nullable (ON DELETE SET NULL gracefully orphans the row).
+    """
+
+    id: int
+    memory_id: str | None = None
+    tenant_id: str
+    skill_name: str
+    instructions: str
+    trigger: str | None = None
     version: int = 1
     status: str = "active"
     superseded_by: int | None = None

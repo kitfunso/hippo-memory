@@ -163,6 +163,7 @@ import * as decisionsModule from './decisions.js';
 import * as incidentsModule from './incidents.js';
 import * as processesModule from './processes.js';
 import * as policiesModule from './policies.js';
+import * as skillsModule from './skills.js';
 import { createHash } from 'node:crypto';
 import {
   detectAnchoring,
@@ -4412,6 +4413,180 @@ function cmdPolicy(
   }
 }
 
+// Strict positive-integer id parse for the mutating skill subcommands (mirrors
+// parsePositivePolicyId; codex P2 class - parseInt accepts '1abc' -> 1).
+function parsePositiveSkillId(idRaw: unknown): number {
+  const s = String(idRaw ?? '').trim();
+  const id = parseInt(s, 10);
+  if (!/^\d+$/.test(s) || id <= 0) {
+    console.error(`Invalid skill id: "${idRaw}" (expected a positive integer).`);
+    process.exit(1);
+  }
+  return id;
+}
+
+function printSkillRow(s: skillsModule.Skill): void {
+  const trig = s.trigger ? ` when="${s.trigger}"` : '';
+  console.log(`#${s.id} [${s.status}] v${s.version}${trig} memory=${s.memoryId ?? '-'}`);
+  console.log(`    ${s.skillName}`);
+  if (s.changeSummary) console.log(`    change: ${s.changeSummary}`);
+}
+
+function cmdSkill(
+  hippoRoot: string,
+  args: string[],
+  flags: Record<string, string | boolean | string[]>
+): void {
+  requireInit(hippoRoot);
+  const tenantId = resolveTenantId({});
+  const subcommand = args[0] ?? '';
+
+  if (subcommand === 'list') {
+    const statusRaw = flags['status'];
+    const status = typeof statusRaw === 'string' ? statusRaw.trim() : 'all';
+    const limitRaw = flags['limit'];
+    const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : 100;
+    if (!Number.isFinite(limit) || limit <= 0) {
+      console.error(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
+      process.exit(1);
+    }
+    let results;
+    if (status === 'all') {
+      results = skillsModule.loadSkills(hippoRoot, tenantId, { limit });
+    } else {
+      if (!skillsModule.VALID_SKILL_STATES.has(status as skillsModule.SkillStatus)) {
+        console.error(`Invalid --status: "${status}". Must be one of: active | superseded | closed | all.`);
+        process.exit(1);
+      }
+      results = skillsModule.loadSkills(hippoRoot, tenantId, {
+        status: status as skillsModule.SkillStatus,
+        limit,
+      });
+    }
+    if (results.length === 0) {
+      console.log('No skills.');
+      return;
+    }
+    console.log(`Found ${results.length} skills:\n`);
+    for (const s of results) printSkillRow(s);
+    return;
+  }
+
+  if (subcommand === 'export') {
+    const md = skillsModule.exportSkills(hippoRoot, tenantId);
+    if (!md) {
+      console.log('No active skills.');
+      return;
+    }
+    console.log(md);
+    return;
+  }
+
+  if (subcommand === 'get') {
+    const idRaw = args[1];
+    if (!idRaw) {
+      console.error('Usage: hippo skill get <id>');
+      process.exit(1);
+    }
+    const id = parsePositiveSkillId(idRaw);
+    const s = skillsModule.loadSkillById(hippoRoot, tenantId, id);
+    if (!s) {
+      console.error(`Skill ${id} not found.`);
+      process.exit(1);
+    }
+    console.log(`Skill #${s.id}`);
+    console.log(`  name: ${s.skillName}`);
+    console.log(`  status: ${s.status}`);
+    console.log(`  version: ${s.version}`);
+    if (s.trigger) console.log(`  when: ${s.trigger}`);
+    console.log(`  instructions: ${s.instructions}`);
+    if (s.changeSummary) console.log(`  change_summary: ${s.changeSummary}`);
+    if (s.supersededBy !== null) console.log(`  superseded_by: #${s.supersededBy}`);
+    if (s.supersededAt) console.log(`  superseded_at: ${s.supersededAt}`);
+    if (s.closedAt) console.log(`  closed_at: ${s.closedAt}`);
+    if (s.memoryId) console.log(`  memory: ${s.memoryId}`);
+    console.log(`  created: ${s.createdAt}`);
+    return;
+  }
+
+  if (subcommand === 'supersede') {
+    const idRaw = args[1];
+    if (!idRaw) {
+      console.error('Usage: hippo skill supersede <id> --instructions "<text>" [--trigger "<when>"] [--change "<summary>"]');
+      process.exit(1);
+    }
+    const id = parsePositiveSkillId(idRaw);
+    const instrRaw = flags['instructions'];
+    if (typeof instrRaw !== 'string' || !instrRaw.trim()) {
+      console.error('hippo skill supersede requires --instructions "<text>" for the new version.');
+      process.exit(1);
+    }
+    const existing = skillsModule.loadSkillById(hippoRoot, tenantId, id);
+    if (!existing) {
+      console.error(`Skill ${id} not found.`);
+      process.exit(1);
+    }
+    const trigRaw = flags['trigger'];
+    const changeRaw = flags['change'];
+    try {
+      const created = skillsModule.saveSkill(hippoRoot, tenantId, {
+        skillName: existing.skillName,
+        instructions: instrRaw,
+        trigger: typeof trigRaw === 'string' && trigRaw ? trigRaw : undefined,
+        changeSummary: typeof changeRaw === 'string' && changeRaw ? changeRaw : undefined,
+        supersedesSkillId: id,
+        extraTags: extractPathTags(process.cwd()),
+      });
+      console.log(`Skill #${created.id} recorded (v${created.version}), superseding #${id}.`);
+      if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
+    } catch (e) {
+      console.error((e as Error).message);
+      process.exit(1);
+    }
+    return;
+  }
+
+  if (subcommand === 'close') {
+    const idRaw = args[1];
+    if (!idRaw) {
+      console.error('Usage: hippo skill close <id>');
+      process.exit(1);
+    }
+    const id = parsePositiveSkillId(idRaw);
+    const closed = skillsModule.closeSkill(hippoRoot, tenantId, id);
+    console.log(`Skill #${closed.id} closed.`);
+    return;
+  }
+
+  // Default subcommand: new (create). Accept both `skill new "<name>"` and the
+  // bare `skill "<name>"` form: for the `new` keyword the name is args[1].
+  const skillName = subcommand === 'new' ? (args[1] ?? '') : subcommand;
+  const instrRaw = flags['instructions'];
+  if (!skillName || typeof instrRaw !== 'string' || !instrRaw.trim()) {
+    console.error('Usage: hippo skill new "<name>" --instructions "<text>" [--trigger "<when>"]');
+    console.error('       hippo skill list [--status active|superseded|closed|all] [--limit N]');
+    console.error('       hippo skill get <id>');
+    console.error('       hippo skill export   (render active skills as an AGENTS.md/CLAUDE.md block)');
+    console.error('       hippo skill supersede <id> --instructions "<text>" [--trigger] [--change "<summary>"]');
+    console.error('       hippo skill close <id>');
+    process.exit(1);
+  }
+  const trigRaw = flags['trigger'];
+  try {
+    const created = skillsModule.saveSkill(hippoRoot, tenantId, {
+      skillName,
+      instructions: instrRaw,
+      trigger: typeof trigRaw === 'string' && trigRaw ? trigRaw : undefined,
+      extraTags: extractPathTags(process.cwd()),
+    });
+    console.log(`Skill recorded: #${created.id} (v${created.version})`);
+    if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
+  } catch (e) {
+    console.error((e as Error).message);
+    process.exit(1);
+  }
+}
+
 function cmdCurrent(
   hippoRoot: string,
   args: string[],
@@ -5991,6 +6166,9 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'policy_create',         // E2 policy first-class object — emitted by savePolicy
   'policy_supersede',      // E2 — emitted by savePolicy on a supersession
   'policy_close',          // E2 — emitted by closePolicy
+  'skill_create',          // E2 skill first-class object — emitted by saveSkill
+  'skill_supersede',       // E2 — emitted by saveSkill on a supersession
+  'skill_close',           // E2 — emitted by closeSkill
 ]);
 
 function formatAuditRow(ev: AuditEvent): string {
@@ -6880,6 +7058,18 @@ Commands:
     --to "<iso>"           New effective-to (optional)
     --change "<summary>"   What changed in this version (the delta note)
   policy close <id>        Retire (close) an active policy by its table id
+  skill new "<name>"       Record a skill (reusable agent-followable capability)
+    --instructions "<txt>" The skill body (required)
+    --trigger "<when>"     Optional: when to apply this skill
+  skill list [--status active|superseded|closed|all] [--limit N]
+                           List skills (table is authoritative, survives decay)
+  skill get <id>           Show a skill by its table id
+  skill export             Render active skills as an AGENTS.md/CLAUDE.md markdown block
+  skill supersede <id>     Record a new version that supersedes an active skill
+    --instructions "<txt>" The new skill body (required)
+    --trigger "<when>"     Optional new trigger
+    --change "<summary>"   What changed in this version (the delta note)
+  skill close <id>         Retire (close) an active skill by its table id
   invalidate "<pattern>"   Actively weaken memories matching an old pattern
     --reason "<why>"       Optional: what replaced it
   wm <sub>                 Working memory — bounded buffer for current state
@@ -6965,6 +7155,8 @@ Examples:
   hippo process new "Release" --step "run tests" --step "bump version" --step "publish"
   hippo policy new "Data retention" --text "Delete logs after 90 days" --from 2026-01-01
   hippo policy asof 2026-03-01 --name "Data retention"
+  hippo skill new "Run tests" --instructions "npm test before every commit" --trigger "before commit"
+  hippo skill export
   hippo invalidate "REST API" --reason "migrated to GraphQL"
   hippo export memories.json
   hippo export --format markdown memories.md
@@ -7611,6 +7803,10 @@ async function main(): Promise<void> {
 
     case 'policy':
       cmdPolicy(hippoRoot, args, flags);
+      break;
+
+    case 'skill':
+      cmdSkill(hippoRoot, args, flags);
       break;
 
     case 'help':

@@ -58,6 +58,28 @@
   (`policy_create`, `policy_supersede`, `policy_close`) in the 3-site lockstep,
   and schema migration v33 (`policies` table, 3 indexes, 3 tenant-safety
   triggers including the supersede self-FK trigger).
+- E2 skill first-class object (executable / exportable). `hippo skill` records a
+  reusable, agent-followable capability (an `instructions` body + an optional
+  `trigger` for when to apply) as a canonical `skills` table row (source of truth,
+  survives memory decay) plus a memory mirror. The distinguishing feature is
+  `hippo skill export`, which renders the active skills into one AGENTS.md /
+  CLAUDE.md-style markdown block (one section per skill, ordered by name) and
+  returns the string. "Executable" is scoped to an agent-followable instruction
+  that is executed once exported into the agent's in-force rules; literal code
+  execution is deferred. The delta lifecycle reuses the decision supersede path: a
+  new version supersedes the prior one with a `change_summary` and a server-derived
+  `version`; active -> superseded or active -> closed. New CLI subcommands
+  `hippo skill new|list|get|export|supersede|close`, HTTP routes (`POST /v1/skills`,
+  `GET /v1/skills`, `GET /v1/skills/export`, `GET /v1/skills/:id`,
+  `POST /v1/skills/:id/supersede`, `POST /v1/skills/:id/close`), Python SDK methods
+  (`new_skill`, `supersede_skill`, `close_skill`, `list_skills`, `get_skill`,
+  `export_skills`, async and sync) plus the `Skill` model, three audit ops
+  (`skill_create`, `skill_supersede`, `skill_close`) in the 3-site lockstep, and
+  schema migration v34 (`skills` table, 2 indexes, 3 tenant-safety triggers
+  including the supersede self-FK trigger; the trigger column is named
+  `trigger_text` to avoid the SQLite reserved keyword). The skills list route uses
+  the shared integer-validated `?limit=` parsing established for the other
+  first-class-object list routes.
 
 ## 1.15.0 (2026-05-28): E2 decisions first-class object
 
