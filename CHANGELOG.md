@@ -126,6 +126,18 @@
   deferred (the entities table is unbuilt). With this, all eight E2 first-class objects
   (decision, prediction, incident, process, policy, skill, project_brief,
   customer_note) are shipped.
+- E3.3 graph-on-consolidated guard (first slice of the E3 graph layer). Adds the
+  `entities`, `relations`, and `graph_extraction_queue` tables (schema migration v37)
+  plus a `src/graph.ts` insert/load/enqueue API. The graph sits on top of consolidated
+  state and is guarded so it can only reference CONSOLIDATED memories
+  (`kind IN ('distilled','superseded')`), never `kind='raw'`: each table has a CHECK on
+  its `source_kind`/`kind` plus BEFORE INSERT and BEFORE UPDATE triggers that tie that
+  column to the referenced memory's actual kind and enforce tenant-match (relations also
+  reject cross-tenant edges), so a raw-layer reference is unrepresentable via any code
+  path (insert or update). `memory_id` is NOT NULL with ON DELETE CASCADE, keeping the
+  graph consistent with live consolidated state. This is internal infrastructure (no
+  CLI/HTTP/SDK yet); the `hippo sleep` enqueue hook, E3.1 entity extraction, E3.2
+  multi-hop recall, and the E3.3 CI lint are deferred follow-ups.
 
 ## 1.15.0 (2026-05-28): E2 decisions first-class object
 

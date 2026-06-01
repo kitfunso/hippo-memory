@@ -36,13 +36,13 @@ describe('schema v25 — DAG summary metadata', () => {
   afterEach(() => safeRmSync(root));
 
   it('current schema version is 25', () => {
-    expect(getCurrentSchemaVersion()).toBe(36);
+    expect(getCurrentSchemaVersion()).toBe(37);
   });
 
   it('fresh init brings DB to v25 with the three new columns', () => {
     const db = openHippoDb(root);
     try {
-      expect(getSchemaVersion(db)).toBe(36);
+      expect(getSchemaVersion(db)).toBe(37);
       const cols = db.prepare(`PRAGMA table_info(memories)`).all() as Array<{ name?: string }>;
       const names = cols.map((c) => c.name);
       expect(names).toContain('descendant_count');
