@@ -1,0 +1,25 @@
+{
+  "name": "hippo-website",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "deploy": "astro build && wrangler pages deploy dist"
+  },
+  "dependencies": {
+    "@astrojs/preact": "^5.1.4",
+    "@fontsource-variable/bricolage-grotesque": "^5.2.10",
+    "@fontsource-variable/hanken-grotesk": "^5.2.8",
+    "@fontsource-variable/jetbrains-mono": "^5.2.8",
+    "@tailwindcss/vite": "^4.3.0",
+    "astro": "^6.4.2",
+    "preact": "^10.29.2",
+    "tailwindcss": "^4.3.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.96.0"
+  }
+}

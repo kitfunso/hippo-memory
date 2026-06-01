@@ -1,0 +1,169 @@
+/* hippo-memory landing page - design system
+   Dark-premium. Single violet->cyan accent used surgically (headline words, the
+   decay curve, CTA edges, the hero glow) - never as a background fill, to stay off
+   the gradient-soup AI-slop path. Secondary emerald/rose chips echo hippo's
+   confidence tiers / error-memory mechanic. */
+
+@import '@fontsource-variable/bricolage-grotesque';
+@import '@fontsource-variable/hanken-grotesk';
+@import '@fontsource-variable/jetbrains-mono';
+@import 'tailwindcss';
+
+@theme {
+  --font-display: 'Bricolage Grotesque Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Hanken Grotesk Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, 'SFMono-Regular', monospace;
+
+  /* brand accent stops (distinct names so they don't clobber Tailwind's violet/cyan scales) */
+  --color-acc-violet: #a78bfa;
+  --color-acc-cyan: #22d3ee;
+
+  /* terminal palette */
+  --color-term-bg: #0c0c12;
+  --color-term-prompt: #22d3ee;
+  --color-term-ok: #4ade80;
+  --color-term-dim: #9a9aa6;
+  --color-term-fg: #e4e4ea;
+}
+
+/* ---- base ---- */
+@layer base {
+  :root {
+    color-scheme: dark;
+    --bg: #08080b;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: theme(--color-zinc-100);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+    font-weight: 600;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-acc-violet) 40%, transparent);
+    color: #fff;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-acc-cyan);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+}
+
+/* ---- gradient text (pinned @supports fallback so it never renders transparent) ---- */
+.text-gradient {
+  color: #c4b5fd; /* bright violet, passes AA on near-black for large display text */
+}
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .text-gradient {
+    background-image: linear-gradient(110deg, var(--color-acc-violet) 0%, var(--color-acc-cyan) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+}
+
+/* ---- glass surface ---- */
+.glass {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+}
+.glass-hover {
+  transition: border-color 0.25s ease, background 0.25s ease, transform 0.25s ease;
+}
+.glass-hover:hover {
+  border-color: rgba(167, 139, 250, 0.35);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* ---- decorative backgrounds ---- */
+.dot-grid {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 35%, transparent 75%);
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 35%, transparent 75%);
+}
+.hero-glow {
+  background:
+    radial-gradient(50% 45% at 70% 12%, rgba(34, 211, 238, 0.16), transparent 70%),
+    radial-gradient(55% 50% at 25% 20%, rgba(139, 92, 246, 0.20), transparent 70%);
+}
+
+/* hairline gradient divider */
+.rule-gradient {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(167, 139, 250, 0.5), rgba(34, 211, 238, 0.5), transparent);
+}
+
+/* gradient ring/border via padding box trick for CTA + cards */
+.ring-grad {
+  position: relative;
+}
+.ring-grad::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(120deg, var(--color-acc-violet), var(--color-acc-cyan));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ---- entrance animation (staggered reveal on load / scroll) ---- */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+.reveal {
+  animation: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes caret-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+.caret {
+  display: inline-block;
+  width: 0.6ch;
+  background: var(--color-term-prompt);
+  animation: caret-blink 1.05s step-end infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+/* recall-dot pulse via CSS (not SMIL) so the reduced-motion rule below stops it */
+.decay-dot {
+  animation: pulse-dot 2.2s ease-in-out infinite;
+}
+
+/* ---- reduced motion: kill all motion, show final state ---- */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .caret { animation: none; opacity: 1; }
+}

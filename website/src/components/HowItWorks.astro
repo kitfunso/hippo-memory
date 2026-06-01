@@ -1,0 +1,38 @@
+---
+import { mechanics } from '../content/site';
+import DecayCurve from './DecayCurve.tsx';
+---
+
+<section id="how" class="relative scroll-mt-20 border-t border-white/5">
+  <div class="mx-auto max-w-6xl px-5 py-24">
+    <div class="max-w-2xl">
+      <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">How it works</p>
+      <h2 class="mt-4 text-3xl leading-tight sm:text-4xl">
+        Memories decay. Retrieval makes them <span class="text-gradient">stronger.</span>
+      </h2>
+      <p class="mt-5 text-lg leading-relaxed text-zinc-400">
+        The thing brains have been getting right for 500 million years. Hard lessons stick because
+        you used them. Trivia fades because you didn't.
+      </p>
+    </div>
+
+    <!-- curve centerpiece -->
+    <div class="mt-12 rounded-2xl glass p-6 sm:p-8">
+      <DecayCurve client:visible />
+      <p class="mt-4 text-center font-mono text-xs text-zinc-400">
+        strength = decay over time, re-strengthened on every recall
+      </p>
+    </div>
+
+    <!-- the four mechanics, bound to the curve above by the shared accent -->
+    <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {mechanics.map((m) => (
+        <div class="glass glass-hover flex flex-col rounded-2xl p-6">
+          <span class="font-mono text-sm text-gradient">{m.metric}</span>
+          <h3 class="mt-3 text-lg font-semibold">{m.title}</h3>
+          <p class="mt-2 text-sm leading-relaxed text-zinc-400">{m.body}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

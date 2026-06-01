@@ -1,0 +1,21 @@
+---
+interface Props {
+  command: string;
+  size?: 'sm' | 'lg';
+}
+const { command, size = 'sm' } = Astro.props;
+const pad = size === 'lg' ? 'px-5 py-4 text-base' : 'px-4 py-3 text-sm';
+---
+
+<div class:list={['group flex items-center gap-3 rounded-xl glass font-mono', pad]}>
+  <span class="select-none text-acc-cyan">$</span>
+  <code class="flex-1 truncate text-zinc-200">{command}</code>
+  <button
+    type="button"
+    data-copy={command}
+    aria-label={`Copy command: ${command}`}
+    class="shrink-0 rounded-md border border-white/10 px-2.5 py-1 text-xs text-zinc-400 transition hover:border-acc-violet/50 hover:text-zinc-100 focus-visible:text-zinc-100"
+  >
+    <span data-copy-label>Copy</span>
+  </button>
+</div>

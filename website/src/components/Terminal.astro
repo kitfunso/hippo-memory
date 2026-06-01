@@ -1,0 +1,82 @@
+---
+import { terminal } from '../content/site';
+---
+
+<div
+  class="overflow-hidden rounded-2xl glass shadow-2xl shadow-black/60 ring-1 ring-white/5"
+  data-terminal
+>
+  <div class="flex items-center gap-2 border-b border-white/8 bg-white/3 px-4 py-3">
+    <span class="h-3 w-3 rounded-full bg-rose-400/80" aria-hidden="true"></span>
+    <span class="h-3 w-3 rounded-full bg-amber-300/80" aria-hidden="true"></span>
+    <span class="h-3 w-3 rounded-full bg-emerald-400/80" aria-hidden="true"></span>
+    <span class="ml-3 font-mono text-xs text-zinc-400">hippo · ~/projects</span>
+  </div>
+
+  <div class="space-y-1.5 p-4 font-mono text-[13px] leading-relaxed text-term-fg sm:p-5" data-term-body>
+    {terminal.map((line) => (
+      <div class="term-line flex items-start gap-2" data-kind={line.kind}>
+        {line.kind === 'cmd' && <span class="select-none text-acc-cyan">$</span>}
+        {line.kind === 'ok' && <span class="select-none text-term-ok">✓</span>}
+        {line.kind === 'out' && <span class="select-none text-term-dim">▸</span>}
+        <span class="term-text min-w-0 flex-1 break-words">{line.text}</span>
+        {line.chip && (
+          <span
+            class:list={[
+              'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium',
+              line.chip === 'verified' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-sky-500/15 text-sky-300',
+            ]}
+          >[{line.chip}]</span>
+        )}
+      </div>
+    ))}
+  </div>
+</div>
+
+<script is:inline>
+  (function () {
+    var body = document.querySelector('[data-term-body]');
+    if (!body) return;
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+    if (reduce.matches) return; // accessible final state already rendered
+
+    var lines = Array.prototype.slice.call(body.querySelectorAll('.term-line'));
+    var data = lines.map(function (l) {
+      var t = l.querySelector('.term-text');
+      return { line: l, el: t, full: t ? t.textContent : '', kind: l.getAttribute('data-kind') };
+    });
+    lines.forEach(function (l) { l.style.opacity = '0'; });
+
+    var started = false;
+    function run() {
+      if (started) return;
+      started = true;
+      var i = 0;
+      function next() {
+        if (i >= data.length) return;
+        var d = data[i];
+        d.line.style.opacity = '1';
+        if (d.kind === 'cmd' && d.el) {
+          d.el.textContent = '';
+          var c = 0;
+          (function type() {
+            d.el.textContent = d.full.slice(0, c);
+            if (c < d.full.length) { c++; setTimeout(type, 16); }
+            else { i++; setTimeout(next, 240); }
+          })();
+        } else {
+          i++;
+          setTimeout(next, 220);
+        }
+      }
+      next();
+    }
+
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) { run(); io.disconnect(); }
+      });
+    }, { threshold: 0.4 });
+    io.observe(body);
+  })();
+</script>

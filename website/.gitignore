@@ -1,0 +1,13 @@
+# build output
+dist/
+# generated types
+.astro/
+# dependencies
+node_modules/
+# wrangler / cloudflare
+.wrangler/
+# logs
+npm-debug.log*
+# environment
+.env
+.env.production

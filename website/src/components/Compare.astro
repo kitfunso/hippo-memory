@@ -1,0 +1,46 @@
+---
+import { compare } from '../content/site';
+---
+
+<section id="compare" class="relative scroll-mt-20 border-t border-white/5">
+  <div class="mx-auto max-w-5xl px-5 py-24">
+    <div class="max-w-2xl">
+      <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">Compare</p>
+      <h2 class="mt-4 text-3xl leading-tight sm:text-4xl">
+        <span class="text-gradient">{compare.heading}</span>
+      </h2>
+      <p class="mt-5 text-lg leading-relaxed text-zinc-400">{compare.body}</p>
+    </div>
+
+    <div class="mt-10 overflow-hidden rounded-2xl glass">
+      <div class="grid grid-cols-[1fr_auto_auto] items-center gap-x-4 border-b border-white/8 px-5 py-4 text-sm sm:gap-x-10 sm:px-7">
+        <span class="font-mono text-xs uppercase tracking-wider text-zinc-400">capability</span>
+        <span class="w-16 text-center font-display font-semibold text-gradient sm:w-24">hippo</span>
+        <span class="w-16 text-center text-xs leading-tight text-zinc-400 sm:w-32">save everything, search later</span>
+      </div>
+      {compare.rows.map((row, i) => (
+        <div
+          class:list={[
+            'grid grid-cols-[1fr_auto_auto] items-center gap-x-4 px-5 py-4 text-sm sm:gap-x-10 sm:px-7',
+            i % 2 === 1 ? 'bg-white/[0.015]' : '',
+          ]}
+        >
+          <span class="text-zinc-200">{row.feature}</span>
+          <span class="w-16 text-center sm:w-24">
+            {row.hippo ? <span class="text-emerald-400" aria-label="yes">✓</span> : <span class="text-zinc-400" aria-label="no">✗</span>}
+          </span>
+          <span class="w-16 text-center sm:w-32">
+            {row.others ? <span class="text-emerald-400" aria-label="yes">✓</span> : <span class="text-zinc-400" aria-label="no">✗</span>}
+          </span>
+        </div>
+      ))}
+    </div>
+
+    <p class="mt-5 text-sm text-zinc-400">
+      A category that matured fast in 2026.
+      <a href={compare.fullTableHref} target="_blank" rel="noopener noreferrer" class="text-acc-cyan underline underline-offset-4">
+        See the full feature table
+      </a> with graph-first, agent-managed, and version-control takes.
+    </p>
+  </div>
+</section>

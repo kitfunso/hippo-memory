@@ -1,0 +1,82 @@
+<!doctype html>
+<!-- Source for public/og.png. Rendered at 1200x630 and screenshotted (build-time only,
+     not deployed). Regenerate: open at 1200x630 and capture to ../public/og.png. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=JetBrains+Mono:wght@400;500&family=Hanken+Grotesk:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1200px; height: 630px; }
+      body {
+        position: relative;
+        overflow: hidden;
+        background: #08080b;
+        color: #fafafa;
+        font-family: 'Hanken Grotesk', system-ui, sans-serif;
+        padding: 80px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+      .glow {
+        position: absolute; inset: 0; z-index: 0;
+        background:
+          radial-gradient(40% 50% at 78% 18%, rgba(34,211,238,0.20), transparent 70%),
+          radial-gradient(45% 55% at 20% 25%, rgba(139,92,246,0.24), transparent 70%);
+      }
+      .grid {
+        position: absolute; inset: 0; z-index: 0;
+        background-image: radial-gradient(rgba(255,255,255,0.06) 1px, transparent 1px);
+        background-size: 26px 26px;
+        -webkit-mask-image: radial-gradient(ellipse 70% 70% at 50% 30%, #000 30%, transparent 75%);
+        mask-image: radial-gradient(ellipse 70% 70% at 50% 30%, #000 30%, transparent 75%);
+      }
+      .wrap { position: relative; z-index: 1; }
+      .brand { display: flex; align-items: center; gap: 14px; font-family: 'Bricolage Grotesque'; font-weight: 600; font-size: 34px; }
+      .brand .hippo { font-size: 40px; }
+      h1 {
+        font-family: 'Bricolage Grotesque';
+        font-weight: 600;
+        font-size: 116px;
+        line-height: 0.98;
+        letter-spacing: -0.03em;
+        margin-top: 44px;
+      }
+      .grad {
+        background: linear-gradient(110deg, #a78bfa 0%, #22d3ee 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .sub { margin-top: 30px; font-size: 30px; color: #a1a1aa; max-width: 760px; line-height: 1.4; }
+      .meta { margin-top: 46px; display: flex; align-items: center; gap: 18px; }
+      .pill {
+        font-family: 'JetBrains Mono', monospace; font-size: 24px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.10);
+        border-radius: 14px; padding: 14px 22px;
+      }
+      .pill .dollar { color: #22d3ee; margin-right: 12px; }
+      .tags { font-family: 'JetBrains Mono', monospace; font-size: 22px; color: #6b6b78; }
+    </style>
+  </head>
+  <body>
+    <div class="glow"></div>
+    <div class="grid"></div>
+    <div class="wrap">
+      <div class="brand"><span class="hippo">🦛</span><span>hippo</span></div>
+      <h1>Know what to<br /><span class="grad">forget.</span></h1>
+      <p class="sub">Memory for AI agents, modeled on the hippocampus. Decay by default, strength through use.</p>
+      <div class="meta">
+        <span class="pill"><span class="dollar">$</span>npm install -g hippo-memory</span>
+        <span class="tags">MIT · zero deps · 74% R@5</span>
+      </div>
+    </div>
+  </body>
+</html>

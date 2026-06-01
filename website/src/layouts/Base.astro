@@ -1,0 +1,75 @@
+---
+import '../styles/global.css';
+import { site } from '../content/site';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const {
+  title = `${site.name}: memory for AI agents that knows what to forget`,
+  description = site.description,
+} = Astro.props;
+
+// All URLs derive from astro.config `site` -> a later domain swap is one edit.
+const base = Astro.site ?? new URL('https://hippo-memory.pages.dev');
+const canonical = new URL(Astro.url.pathname, base).href;
+const ogImage = new URL('/og.png', base).href;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: site.pkg,
+  applicationCategory: 'DeveloperApplication',
+  operatingSystem: 'Node.js 22.5+',
+  description: site.description,
+  url: site.links.repo,
+  softwareVersion: site.version,
+  license: 'https://opensource.org/licenses/MIT',
+  author: { '@type': 'Organization', name: 'kitfunso' },
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+};
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <meta name="theme-color" content="#08080b" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:site_name" content={site.name} />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+  </head>
+  <body class="min-h-screen antialiased">
+    <a
+      href="#main"
+      class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-zinc-900 focus:px-4 focus:py-2 focus:text-sm focus:text-zinc-100"
+    >
+      Skip to content
+    </a>
+    <slot />
+  </body>
+</html>

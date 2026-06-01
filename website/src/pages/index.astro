@@ -1,0 +1,47 @@
+---
+import Base from '../layouts/Base.astro';
+import Nav from '../components/Nav.astro';
+import Hero from '../components/Hero.astro';
+import Problem from '../components/Problem.astro';
+import HowItWorks from '../components/HowItWorks.astro';
+import Receipts from '../components/Receipts.astro';
+import Compare from '../components/Compare.astro';
+import InstallCta from '../components/InstallCta.astro';
+import Footer from '../components/Footer.astro';
+---
+
+<Base>
+  <Nav />
+  <main id="main">
+    <Hero />
+    <Problem />
+    <HowItWorks />
+    <Receipts />
+    <Compare />
+    <InstallCta />
+  </main>
+  <Footer />
+
+  <div id="copy-live" class="sr-only" aria-live="polite"></div>
+
+  <script is:inline>
+    (function () {
+      var live = document.getElementById('copy-live');
+      document.querySelectorAll('[data-copy]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var text = btn.getAttribute('data-copy');
+          if (!text || !navigator.clipboard) return;
+          navigator.clipboard.writeText(text).then(function () {
+            var label = btn.querySelector('[data-copy-label]');
+            if (live) live.textContent = 'Copied to clipboard';
+            if (label) {
+              var prev = label.textContent;
+              label.textContent = 'Copied';
+              setTimeout(function () { label.textContent = prev; }, 1600);
+            }
+          }).catch(function () {});
+        });
+      });
+    })();
+  </script>
+</Base>
