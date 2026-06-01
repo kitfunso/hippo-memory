@@ -169,7 +169,10 @@ export type AuditOp =
   | 'skill_close' // E2 — emitted by closeSkill (active -> closed, retire without successor)
   | 'project_brief_create' // E2 project_brief first-class object — emitted by saveProjectBrief (incl. refreshBrief)
   | 'project_brief_supersede' // E2 — emitted by saveProjectBrief when supersedesBriefId resolves to an active brief row
-  | 'project_brief_close'; // E2 — emitted by closeProjectBrief (active -> closed, retire without successor)
+  | 'project_brief_close' // E2 — emitted by closeProjectBrief (active -> closed, retire without successor)
+  | 'customer_note_create' // E2 customer_note first-class object — emitted by saveCustomerNote
+  | 'customer_note_supersede' // E2 — emitted by saveCustomerNote when supersedesNoteId resolves to an active note row
+  | 'customer_note_close'; // E2 — emitted by closeCustomerNote (active -> closed, retire without successor)
 
 export interface AppendAuditOpts {
   tenantId: string;

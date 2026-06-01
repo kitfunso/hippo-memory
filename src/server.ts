@@ -114,6 +114,14 @@ import {
   VALID_BRIEF_STATES,
   type BriefStatus,
 } from './project-briefs.js';
+import {
+  saveCustomerNote,
+  closeCustomerNote,
+  loadCustomerNoteById,
+  loadCustomerNotes,
+  VALID_NOTE_STATES,
+  type NoteStatus,
+} from './customer-notes.js';
 import { handleMcpRequest, type McpRequest } from './mcp/server.js';
 import { verifySlackSignature } from './connectors/slack/signature.js';
 import { isSlackEventEnvelope, isSlackMessageEvent } from './connectors/slack/types.js';
@@ -196,6 +204,9 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'project_brief_create',  // E2 project_brief first-class object — emitted by saveProjectBrief
   'project_brief_supersede', // E2 — emitted by saveProjectBrief on a supersession (incl. refresh)
   'project_brief_close',   // E2 — emitted by closeProjectBrief
+  'customer_note_create',  // E2 customer_note first-class object — emitted by saveCustomerNote
+  'customer_note_supersede', // E2 — emitted by saveCustomerNote on a supersession
+  'customer_note_close',   // E2 — emitted by closeCustomerNote
 ]);
 
 // Cap on GET /v1/audit?limit=. Matches docs/api.md (when written) and is large
@@ -2338,6 +2349,144 @@ async function handleRequest(
       throw new HttpError(404, `project brief ${id} not found`);
     }
     sendJson(res, 200, { brief });
+    return;
+  }
+
+  // ── E2 customer_note routes ──
+  //
+  // 5 routes (no assembler/refresh): POST /v1/customer-notes (new; body customer +
+  // note), GET /v1/customer-notes (list; status + customer filter; shared
+  // parseListLimit), GET /v1/customer-notes/:id, POST /v1/customer-notes/:id/supersede,
+  // POST /v1/customer-notes/:id/close. DoS caps: customer 256, note 8192,
+  // changeSummary 4096. The store validates + throws; the boundary maps validation ->
+  // 400, not-found -> 404, not-active -> 409. Mirrors /v1/project-briefs.
+  if (method === 'POST' && path === '/v1/customer-notes') {
+    const body = await parseJsonBody(req);
+    const customer = body['customer'];
+    if (typeof customer !== 'string' || customer.trim().length === 0) {
+      throw new HttpError(400, 'customer is required (non-empty string)');
+    }
+    if (customer.length > 256) {
+      throw new HttpError(400, 'customer exceeds 256-character cap');
+    }
+    const note = body['note'];
+    if (typeof note !== 'string' || note.trim().length === 0) {
+      throw new HttpError(400, 'note is required (non-empty string)');
+    }
+    if (note.length > 8192) {
+      throw new HttpError(400, 'note exceeds 8192-character cap');
+    }
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    try {
+      const customerNote = saveCustomerNote(opts.hippoRoot, ctx.tenantId, {
+        customer,
+        note,
+      }, ctx.actor.subject);
+      sendJson(res, 201, { note: customerNote });
+    } catch (e) {
+      // saveCustomerNote throws on validation (single-line customer etc.) -> 400.
+      throw new HttpError(400, (e as Error).message);
+    }
+    return;
+  }
+
+  if (method === 'GET' && path === '/v1/customer-notes') {
+    const status = query.get('status') ?? 'all';
+    const customerFilter = query.get('customer');
+    const limit = parseListLimit(query.get('limit'));
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const listOpts: { status?: NoteStatus; customer?: string; limit: number } = { limit };
+    if (customerFilter !== null && customerFilter.trim().length > 0) {
+      listOpts.customer = customerFilter.trim();
+    }
+    if (status !== 'all') {
+      if (!VALID_NOTE_STATES.has(status as NoteStatus)) {
+        throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
+      }
+      listOpts.status = status as NoteStatus;
+    }
+    const notes = loadCustomerNotes(opts.hippoRoot, ctx.tenantId, listOpts);
+    sendJson(res, 200, { notes });
+    return;
+  }
+
+  const noteSupersedeMatch = path.match(/^\/v1\/customer-notes\/(\d+)\/supersede$/);
+  if (method === 'POST' && noteSupersedeMatch) {
+    const id = parseInt(noteSupersedeMatch[1], 10);
+    const body = await parseJsonBody(req);
+    const note = body['note'];
+    if (typeof note !== 'string' || note.trim().length === 0) {
+      throw new HttpError(400, 'note is required (non-empty string)');
+    }
+    if (note.length > 8192) {
+      throw new HttpError(400, 'note exceeds 8192-character cap');
+    }
+    const changeRaw = body['changeSummary'];
+    let changeSummary: string | undefined;
+    if (changeRaw !== undefined && changeRaw !== null) {
+      if (typeof changeRaw !== 'string') {
+        throw new HttpError(400, 'changeSummary must be a string');
+      }
+      if (changeRaw.length > 4096) {
+        throw new HttpError(400, 'changeSummary exceeds 4096-character cap');
+      }
+      changeSummary = changeRaw;
+    }
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const existing = loadCustomerNoteById(opts.hippoRoot, ctx.tenantId, id);
+    if (!existing) {
+      throw new HttpError(404, `customer note ${id} not found`);
+    }
+    try {
+      const customerNote = saveCustomerNote(opts.hippoRoot, ctx.tenantId, {
+        customer: existing.customer,
+        note,
+        changeSummary,
+        supersedesNoteId: id,
+      }, ctx.actor.subject);
+      sendJson(res, 200, { note: customerNote });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) {
+        throw new HttpError(404, msg);
+      }
+      if (msg.includes('not active') || msg.includes('could not be superseded')) {
+        throw new HttpError(409, msg);
+      }
+      throw new HttpError(400, msg);
+    }
+    return;
+  }
+
+  const noteCloseMatch = path.match(/^\/v1\/customer-notes\/(\d+)\/close$/);
+  if (method === 'POST' && noteCloseMatch) {
+    const id = parseInt(noteCloseMatch[1], 10);
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    try {
+      const customerNote = closeCustomerNote(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
+      sendJson(res, 200, { note: customerNote });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.includes('not found')) {
+        throw new HttpError(404, msg);
+      }
+      if (msg.includes('not active')) {
+        throw new HttpError(409, msg);
+      }
+      throw e;
+    }
+    return;
+  }
+
+  const noteByIdMatch = path.match(/^\/v1\/customer-notes\/(\d+)$/);
+  if (method === 'GET' && noteByIdMatch) {
+    const id = parseInt(noteByIdMatch[1], 10);
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const customerNote = loadCustomerNoteById(opts.hippoRoot, ctx.tenantId, id);
+    if (!customerNote) {
+      throw new HttpError(404, `customer note ${id} not found`);
+    }
+    sendJson(res, 200, { note: customerNote });
     return;
   }
 
