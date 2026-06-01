@@ -440,3 +440,22 @@ export function markExtractionProcessed(
     closeHippoDb(db);
   }
 }
+
+/**
+ * Delete ALL entities for a tenant (relations cascade via the from/to FKs). Returns
+ * the number of entities deleted. The rebuild primitive for graph extraction: the
+ * deterministic graph is a pure derived function of the consolidated objects, so an
+ * extract clears then re-derives. Lives in graph.ts (the sole sanctioned graph
+ * writer), so the E3.3 CI lint permits this `DELETE FROM entities`. Does NOT touch
+ * graph_extraction_queue (the enqueue-hook's domain).
+ */
+export function clearGraph(hippoRoot: string, tenantId: string): number {
+  assertTenantId('clearGraph', tenantId);
+  const db = openHippoDb(hippoRoot);
+  try {
+    const res = db.prepare(`DELETE FROM entities WHERE tenant_id = ?`).run(tenantId);
+    return Number(res.changes ?? 0);
+  } finally {
+    closeHippoDb(db);
+  }
+}

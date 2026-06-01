@@ -166,6 +166,7 @@ import * as policiesModule from './policies.js';
 import * as skillsModule from './skills.js';
 import * as briefsModule from './project-briefs.js';
 import * as customerNotesModule from './customer-notes.js';
+import { extractGraph } from './graph-extract.js';
 import { createHash } from 'node:crypto';
 import {
   detectAnchoring,
@@ -4794,6 +4795,31 @@ function noteUsage(): void {
   console.error('       hippo note close <id>');
 }
 
+function cmdGraph(
+  hippoRoot: string,
+  args: string[],
+  _flags: Record<string, string | boolean | string[]>
+): void {
+  requireInit(hippoRoot);
+  const tenantId = resolveTenantId({});
+  const subcommand = args[0] ?? '';
+
+  if (subcommand === 'extract') {
+    const result = extractGraph(hippoRoot, tenantId);
+    const byType = Object.entries(result.byType)
+      .map(([t, n]) => `${t} ${n}`)
+      .join(', ');
+    console.log(`Graph extracted: ${result.entities} entities (${byType}) + ${result.relations} supersedes relations.`);
+    if (result.truncated.length > 0) {
+      console.error(`WARNING: under-extracted (hit the per-type cap): ${result.truncated.join(', ')}. The graph is incomplete for those types.`);
+    }
+    return;
+  }
+
+  console.error('Usage: hippo graph extract   (rebuild the entity/relation graph from consolidated decisions/policies/customer-notes/project-briefs)');
+  process.exit(1);
+}
+
 function cmdCustomerNote(
   hippoRoot: string,
   args: string[],
@@ -7436,6 +7462,8 @@ Commands:
     --text "<note>"        The new note body (required)
     --change "<summary>"   What changed in this version (the delta note)
   note close <id>          Retire (close) an active customer note by its table id
+  graph extract            Rebuild the entity/relation graph from consolidated objects
+                           (decisions/policies/customer-notes/project-briefs); idempotent
   invalidate "<pattern>"   Actively weaken memories matching an old pattern
     --reason "<why>"       Optional: what replaced it
   wm <sub>                 Working memory — bounded buffer for current state
@@ -7527,6 +7555,7 @@ Examples:
   hippo brief refresh "hippo"
   hippo note new "Acme Corp" --text "Renewal call: wants SSO before Q3; champion is the VP Eng"
   hippo note list --customer "Acme Corp" --status active
+  hippo graph extract
   hippo invalidate "REST API" --reason "migrated to GraphQL"
   hippo export memories.json
   hippo export --format markdown memories.md
@@ -8187,6 +8216,10 @@ async function main(): Promise<void> {
     case 'note':
     case 'customer-note':
       cmdCustomerNote(hippoRoot, args, flags);
+      break;
+
+    case 'graph':
+      cmdGraph(hippoRoot, args, flags);
       break;
 
     case 'help':
