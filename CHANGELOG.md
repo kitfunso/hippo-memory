@@ -138,6 +138,14 @@
   graph consistent with live consolidated state. This is internal infrastructure (no
   CLI/HTTP/SDK yet); the `hippo sleep` enqueue hook, E3.1 entity extraction, E3.2
   multi-hop recall, and the E3.3 CI lint are deferred follow-ups.
+- E3.3 criterion 2 (CI-level enforcement): `scripts/check-graph-writes.mjs`, wired into
+  `prepublishOnly`, fails the build if any source file other than the sanctioned writer
+  `src/graph.ts` contains a DATA write (`INSERT INTO` / `UPDATE`) to a graph table
+  (`entities`, `relations`, `graph_extraction_queue`). This enforces the
+  single-audited-graph-writer architecture at PR/CI time as defense-in-depth on top of
+  the v37 DB triggers (which remain the airtight runtime backstop). With this, all three
+  E3.3 enforcement layers (DB CHECK + triggers, the consolidated-source queue table, and
+  the CI lint) are in place.
 
 ## 1.15.0 (2026-05-28): E2 decisions first-class object
 
