@@ -16,7 +16,10 @@ import { compare } from '../content/site';
       <div class="grid grid-cols-[1fr_auto_auto] items-center gap-x-4 border-b border-white/8 px-5 py-4 text-sm sm:gap-x-10 sm:px-7">
         <span class="font-mono text-xs uppercase tracking-wider text-zinc-400">capability</span>
         <span class="w-16 text-center font-display font-semibold text-gradient sm:w-24">hippo</span>
-        <span class="w-16 text-center text-xs leading-tight text-zinc-400 sm:w-32">save everything, search later</span>
+        <span class="w-16 text-center text-xs leading-tight text-zinc-400 sm:w-32">
+          <span class="sm:hidden">others</span>
+          <span class="hidden sm:inline">save everything, search later</span>
+        </span>
       </div>
       {compare.rows.map((row, i) => (
         <div
