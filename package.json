@@ -34,7 +34,7 @@
     "smoke:openclaw-install": "node scripts/smoke-openclaw-install.mjs",
     "build:ui": "cd ui && npm install && npm run build",
     "build:all": "npm run build && npm run build:ui",
-    "prepublishOnly": "node scripts/check-manifest-versions.mjs && node scripts/check-em-dashes-in-release-notes.mjs && npm run build:all"
+    "prepublishOnly": "node scripts/check-manifest-versions.mjs && node scripts/check-em-dashes-in-release-notes.mjs && node scripts/check-graph-writes.mjs && npm run build:all"
   },
   "keywords": [
     "memory",
