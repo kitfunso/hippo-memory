@@ -146,6 +146,17 @@
   the v37 DB triggers (which remain the airtight runtime backstop). With this, all three
   E3.3 enforcement layers (DB CHECK + triggers, the consolidated-source queue table, and
   the CI lint) are in place.
+- E3.1 deterministic entity extraction (first slice): `hippo graph extract` populates the
+  graph from the already-structured consolidated E2 objects, with NO LLM/NLP. It is an
+  idempotent rebuild (`extractGraph` in `src/graph-extract.ts`, backed by a new
+  `clearGraph` in `src/graph.ts`): it clears the tenant's graph and re-derives one entity
+  per active-or-superseded decision (`decision`), policy (`policy`), customer_note
+  (`customer`), and project_brief (`project`) - the four E2 types matching the
+  `entity_type` enum - plus a `supersedes` relation along each supersede chain. All writes
+  go through the consolidated-source guard. Closed objects and objects whose source memory
+  was forgotten (NULL `memory_id`) are excluded. The NLP prose-extraction path (the
+  gold-set/precision work), `skill`/`incident`/`process` entities, the `hippo sleep`
+  enqueue hook, and E3.2 multi-hop recall are deferred follow-ups.
 
 ## 1.15.0 (2026-05-28): E2 decisions first-class object
 
