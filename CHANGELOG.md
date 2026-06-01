@@ -105,6 +105,27 @@
   the operator-supplied repo, and capped; the list route reuses the shared
   integer-validated `?limit=` parsing. LLM summarization and async-on-write refresh
   are deferred.
+- E2 customer_note first-class object (entity-scoped) - the last of the eight E2
+  objects. `hippo note` records a discrete note scoped to an account/customer entity
+  (a `note` body keyed to a free-form `customer` id) as a canonical `customer_notes`
+  table row (source of truth, survives memory decay) plus a memory mirror tagged
+  `customer:<id>` for entity-aware recall. Unlike project_brief's one-summary-per-repo,
+  a customer accrues MANY notes over time, each with its own supersede chain. The delta
+  lifecycle reuses the project_brief supersede path: a new version supersedes the prior
+  one with a `change_summary` and a server-derived `version`; active -> superseded or
+  active -> closed. New CLI subcommands `hippo note new|list|get|supersede|close`, HTTP
+  routes (`POST /v1/customer-notes`, `GET /v1/customer-notes`,
+  `GET /v1/customer-notes/:id`, `POST /v1/customer-notes/:id/supersede`,
+  `POST /v1/customer-notes/:id/close`), Python SDK methods (`new_customer_note`,
+  `supersede_customer_note`, `close_customer_note`, `list_customer_notes`,
+  `get_customer_note`, async and sync) plus the `CustomerNote` model, three audit ops
+  (`customer_note_create`, `customer_note_supersede`, `customer_note_close`) in the
+  3-site lockstep, and schema migration v36 (`customer_notes` table, 3 indexes, 3
+  tenant-safety triggers including the supersede self-FK trigger). The list route
+  reuses the shared integer-validated `?limit=` parsing. An FK to an entities table is
+  deferred (the entities table is unbuilt). With this, all eight E2 first-class objects
+  (decision, prediction, incident, process, policy, skill, project_brief,
+  customer_note) are shipped.
 
 ## 1.15.0 (2026-05-28): E2 decisions first-class object
 

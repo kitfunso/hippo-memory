@@ -50,6 +50,7 @@ __all__ = [
     "Policy",
     "Skill",
     "ProjectBrief",
+    "CustomerNote",
     "Prediction",
     "PredictionBaserate",
     "HippoError",
@@ -789,6 +790,34 @@ class ProjectBrief(_Base):
     tenant_id: str
     repo: str
     summary: str
+    version: int = 1
+    status: str = "active"
+    superseded_by: int | None = None
+    superseded_at: str | None = None
+    change_summary: str | None = None
+    closed_at: str | None = None
+    created_at: str
+
+
+class CustomerNote(_Base):
+    """CustomerNote first-class object (entity-scoped). Mirrors the TS CustomerNote
+    interface in src/customer-notes.ts.
+
+    A customer_note is a discrete note recorded against an account/customer entity: a
+    ``note`` body scoped to a ``customer`` (free-form id), evolving via the supersede
+    delta lifecycle (active -> superseded or active -> closed). A customer accrues
+    MANY notes over time, each with its own supersede chain. ``version`` is
+    server-derived; ``change_summary`` is set on a successor row only.
+
+    The customer_notes table is canonical (survives memory decay). ``memory_id`` is
+    nullable (ON DELETE SET NULL gracefully orphans the row).
+    """
+
+    id: int
+    memory_id: str | None = None
+    tenant_id: str
+    customer: str
+    note: str
     version: int = 1
     status: str = "active"
     superseded_by: int | None = None

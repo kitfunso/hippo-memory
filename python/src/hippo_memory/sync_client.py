@@ -53,6 +53,7 @@ from hippo_memory.models import (
     Policy,
     Skill,
     ProjectBrief,
+    CustomerNote,
     Prediction,
     PredictionBaserate,
     HippoError,
@@ -804,3 +805,53 @@ class HippoSync:
         """POST /v1/project-briefs/refresh. Sync mirror of Hippo.refresh_project_brief."""
         data = self._request("POST", "/v1/project-briefs/refresh", json={"repo": repo})
         return ProjectBrief.model_validate(data["brief"])
+
+    def new_customer_note(self, customer: str, note: str) -> CustomerNote:
+        """POST /v1/customer-notes. Sync mirror of Hippo.new_customer_note."""
+        body: dict[str, Any] = {"customer": customer, "note": note}
+        data = self._request("POST", "/v1/customer-notes", json=body)
+        return CustomerNote.model_validate(data["note"])
+
+    def supersede_customer_note(
+        self,
+        note_id: int,
+        note: str,
+        *,
+        change_summary: str | None = None,
+    ) -> CustomerNote:
+        """POST /v1/customer-notes/:id/supersede. Sync mirror of
+        Hippo.supersede_customer_note.
+        """
+        body: dict[str, Any] = {"note": note}
+        if change_summary is not None:
+            body["changeSummary"] = change_summary
+        data = self._request("POST", f"/v1/customer-notes/{note_id}/supersede", json=body)
+        return CustomerNote.model_validate(data["note"])
+
+    def close_customer_note(self, note_id: int) -> CustomerNote:
+        """POST /v1/customer-notes/:id/close. Sync mirror of Hippo.close_customer_note."""
+        data = self._request("POST", f"/v1/customer-notes/{note_id}/close", json={})
+        return CustomerNote.model_validate(data["note"])
+
+    def list_customer_notes(
+        self,
+        *,
+        status: Literal["active", "superseded", "closed", "all"] | None = None,
+        customer: str | None = None,
+        limit: int | None = None,
+    ) -> list[CustomerNote]:
+        """GET /v1/customer-notes. Sync mirror of Hippo.list_customer_notes."""
+        params: dict[str, Any] = {}
+        if status is not None:
+            params["status"] = status
+        if customer is not None:
+            params["customer"] = customer
+        if limit is not None:
+            params["limit"] = limit
+        data = self._request("GET", "/v1/customer-notes", params=params)
+        return [CustomerNote.model_validate(n) for n in data["notes"]]
+
+    def get_customer_note(self, note_id: int) -> CustomerNote:
+        """GET /v1/customer-notes/:id. Sync mirror of Hippo.get_customer_note."""
+        data = self._request("GET", f"/v1/customer-notes/{note_id}")
+        return CustomerNote.model_validate(data["note"])

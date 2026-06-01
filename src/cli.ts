@@ -165,6 +165,7 @@ import * as processesModule from './processes.js';
 import * as policiesModule from './policies.js';
 import * as skillsModule from './skills.js';
 import * as briefsModule from './project-briefs.js';
+import * as customerNotesModule from './customer-notes.js';
 import { createHash } from 'node:crypto';
 import {
   detectAnchoring,
@@ -4770,6 +4771,162 @@ function cmdProjectBrief(
   }
 }
 
+function parsePositiveNoteId(idRaw: unknown): number {
+  const s = String(idRaw ?? '').trim();
+  const id = parseInt(s, 10);
+  if (!/^\d+$/.test(s) || id <= 0) {
+    console.error(`Invalid note id: "${idRaw}" (expected a positive integer).`);
+    process.exit(1);
+  }
+  return id;
+}
+
+function printNoteRow(n: customerNotesModule.CustomerNote): void {
+  console.log(`#${n.id} [${n.status}] v${n.version} customer="${n.customer}" memory=${n.memoryId ?? '-'}`);
+  if (n.changeSummary) console.log(`    change: ${n.changeSummary}`);
+}
+
+function noteUsage(): void {
+  console.error('Usage: hippo note new "<customer>" --text "<note>"');
+  console.error('       hippo note list [--status active|superseded|closed|all] [--customer "<id>"] [--limit N]');
+  console.error('       hippo note get <id>');
+  console.error('       hippo note supersede <id> --text "<note>" [--change "<summary>"]');
+  console.error('       hippo note close <id>');
+}
+
+function cmdCustomerNote(
+  hippoRoot: string,
+  args: string[],
+  flags: Record<string, string | boolean | string[]>
+): void {
+  requireInit(hippoRoot);
+  const tenantId = resolveTenantId({});
+  const subcommand = args[0] ?? '';
+
+  if (subcommand === 'list') {
+    const statusRaw = flags['status'];
+    const status = typeof statusRaw === 'string' ? statusRaw.trim() : 'all';
+    const customerRaw = flags['customer'];
+    const customer = typeof customerRaw === 'string' && customerRaw.trim() ? customerRaw.trim() : undefined;
+    const limitRaw = flags['limit'];
+    const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : 100;
+    if (!Number.isFinite(limit) || limit <= 0) {
+      console.error(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
+      process.exit(1);
+    }
+    const opts: customerNotesModule.ListCustomerNotesOpts = { limit, customer };
+    if (status !== 'all') {
+      if (!customerNotesModule.VALID_NOTE_STATES.has(status as customerNotesModule.NoteStatus)) {
+        console.error(`Invalid --status: "${status}". Must be one of: active | superseded | closed | all.`);
+        process.exit(1);
+      }
+      opts.status = status as customerNotesModule.NoteStatus;
+    }
+    const results = customerNotesModule.loadCustomerNotes(hippoRoot, tenantId, opts);
+    if (results.length === 0) {
+      console.log('No customer notes.');
+      return;
+    }
+    console.log(`Found ${results.length} customer notes:\n`);
+    for (const n of results) printNoteRow(n);
+    return;
+  }
+
+  if (subcommand === 'get') {
+    const idRaw = args[1];
+    if (!idRaw) {
+      console.error('Usage: hippo note get <id>');
+      process.exit(1);
+    }
+    const id = parsePositiveNoteId(idRaw);
+    const n = customerNotesModule.loadCustomerNoteById(hippoRoot, tenantId, id);
+    if (!n) {
+      console.error(`Customer note ${id} not found.`);
+      process.exit(1);
+    }
+    console.log(`Customer note #${n.id}`);
+    console.log(`  customer: ${n.customer}`);
+    console.log(`  status: ${n.status}`);
+    console.log(`  version: ${n.version}`);
+    console.log(`  note: ${n.note}`);
+    if (n.changeSummary) console.log(`  change_summary: ${n.changeSummary}`);
+    if (n.supersededBy !== null) console.log(`  superseded_by: #${n.supersededBy}`);
+    if (n.supersededAt) console.log(`  superseded_at: ${n.supersededAt}`);
+    if (n.closedAt) console.log(`  closed_at: ${n.closedAt}`);
+    if (n.memoryId) console.log(`  memory: ${n.memoryId}`);
+    console.log(`  created: ${n.createdAt}`);
+    return;
+  }
+
+  if (subcommand === 'supersede') {
+    const idRaw = args[1];
+    if (!idRaw) {
+      console.error('Usage: hippo note supersede <id> --text "<note>" [--change "<summary>"]');
+      process.exit(1);
+    }
+    const id = parsePositiveNoteId(idRaw);
+    const textRaw = flags['text'];
+    if (typeof textRaw !== 'string' || !textRaw.trim()) {
+      console.error('hippo note supersede requires --text "<note>" for the new version.');
+      process.exit(1);
+    }
+    const existing = customerNotesModule.loadCustomerNoteById(hippoRoot, tenantId, id);
+    if (!existing) {
+      console.error(`Customer note ${id} not found.`);
+      process.exit(1);
+    }
+    const changeRaw = flags['change'];
+    try {
+      const created = customerNotesModule.saveCustomerNote(hippoRoot, tenantId, {
+        customer: existing.customer,
+        note: textRaw,
+        changeSummary: typeof changeRaw === 'string' && changeRaw ? changeRaw : undefined,
+        supersedesNoteId: id,
+        extraTags: extractPathTags(process.cwd()),
+      });
+      console.log(`Customer note #${created.id} recorded (v${created.version}), superseding #${id}.`);
+      if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
+    } catch (e) {
+      console.error((e as Error).message);
+      process.exit(1);
+    }
+    return;
+  }
+
+  if (subcommand === 'close') {
+    const idRaw = args[1];
+    if (!idRaw) {
+      console.error('Usage: hippo note close <id>');
+      process.exit(1);
+    }
+    const id = parsePositiveNoteId(idRaw);
+    const closed = customerNotesModule.closeCustomerNote(hippoRoot, tenantId, id);
+    console.log(`Customer note #${closed.id} closed.`);
+    return;
+  }
+
+  // Default subcommand: new (create). Accept both `note new "<customer>"` and the
+  // bare `note "<customer>"` form: for the `new` keyword the customer is args[1].
+  const customer = subcommand === 'new' ? (args[1] ?? '') : subcommand;
+  const textRaw = flags['text'];
+  if (!customer || typeof textRaw !== 'string' || !textRaw.trim()) {
+    noteUsage();
+    process.exit(1);
+  }
+  try {
+    const created = customerNotesModule.saveCustomerNote(hippoRoot, tenantId, {
+      customer,
+      note: textRaw,
+      extraTags: extractPathTags(process.cwd()),
+    });
+    console.log(`Customer note recorded: #${created.id} (v${created.version}) for customer "${created.customer}"`);
+    if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
+  } catch (e) {
+    console.error((e as Error).message);
+    process.exit(1);
+  }
+}
+
 function cmdCurrent(
   hippoRoot: string,
   args: string[],
@@ -6355,6 +6512,9 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'project_brief_create',  // E2 project_brief first-class object — emitted by saveProjectBrief
   'project_brief_supersede', // E2 — emitted by saveProjectBrief on a supersession (incl. refresh)
   'project_brief_close',   // E2 — emitted by closeProjectBrief
+  'customer_note_create',  // E2 customer_note first-class object — emitted by saveCustomerNote
+  'customer_note_supersede', // E2 — emitted by saveCustomerNote on a supersession
+  'customer_note_close',   // E2 — emitted by closeCustomerNote
 ]);
 
 function formatAuditRow(ev: AuditEvent): string {
@@ -7267,6 +7427,15 @@ Commands:
   brief close <id>         Retire (close) an active project brief by its table id
   brief refresh "<repo>"   Auto-assemble the brief from the repo's receipts (path:<repo>)
     --dry-run              Print the assembled brief without writing it
+  note new "<customer>"    Record a customer/account-scoped note
+    --text "<note>"        The note body (required)
+  note list [--status active|superseded|closed|all] [--customer "<id>"] [--limit N]
+                           List customer notes (table is authoritative, survives decay)
+  note get <id>            Show a customer note by its table id
+  note supersede <id>      Record a new version that supersedes an active note
+    --text "<note>"        The new note body (required)
+    --change "<summary>"   What changed in this version (the delta note)
+  note close <id>          Retire (close) an active customer note by its table id
   invalidate "<pattern>"   Actively weaken memories matching an old pattern
     --reason "<why>"       Optional: what replaced it
   wm <sub>                 Working memory — bounded buffer for current state
@@ -7356,6 +7525,8 @@ Examples:
   hippo skill export
   hippo brief new "hippo" --summary "Agent-memory library; E2 first-class objects in progress"
   hippo brief refresh "hippo"
+  hippo note new "Acme Corp" --text "Renewal call: wants SSO before Q3; champion is the VP Eng"
+  hippo note list --customer "Acme Corp" --status active
   hippo invalidate "REST API" --reason "migrated to GraphQL"
   hippo export memories.json
   hippo export --format markdown memories.md
@@ -8011,6 +8182,11 @@ async function main(): Promise<void> {
     case 'brief':
     case 'project-brief':
       cmdProjectBrief(hippoRoot, args, flags);
+      break;
+
+    case 'note':
+    case 'customer-note':
+      cmdCustomerNote(hippoRoot, args, flags);
       break;
 
     case 'help':

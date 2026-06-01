@@ -43,6 +43,7 @@ from hippo_memory.models import (
     Policy,
     Skill,
     ProjectBrief,
+    CustomerNote,
     Prediction,
     PredictionBaserate,
     HippoError,
@@ -883,3 +884,55 @@ class Hippo:
         """
         data = await self._request("POST", "/v1/project-briefs/refresh", json={"repo": repo})
         return ProjectBrief.model_validate(data["brief"])
+
+    async def new_customer_note(self, customer: str, note: str) -> CustomerNote:
+        """POST /v1/customer-notes. Record a note scoped to an account/customer entity.
+        The customer_notes table is the source of truth.
+        """
+        body: dict[str, Any] = {"customer": customer, "note": note}
+        data = await self._request("POST", "/v1/customer-notes", json=body)
+        return CustomerNote.model_validate(data["note"])
+
+    async def supersede_customer_note(
+        self,
+        note_id: int,
+        note: str,
+        *,
+        change_summary: str | None = None,
+    ) -> CustomerNote:
+        """POST /v1/customer-notes/:id/supersede. Record a new version that supersedes
+        an active note (active -> superseded). Reuses the predecessor's customer.
+        """
+        body: dict[str, Any] = {"note": note}
+        if change_summary is not None:
+            body["changeSummary"] = change_summary
+        data = await self._request("POST", f"/v1/customer-notes/{note_id}/supersede", json=body)
+        return CustomerNote.model_validate(data["note"])
+
+    async def close_customer_note(self, note_id: int) -> CustomerNote:
+        """POST /v1/customer-notes/:id/close. Retire an active note (active -> closed)."""
+        data = await self._request("POST", f"/v1/customer-notes/{note_id}/close", json={})
+        return CustomerNote.model_validate(data["note"])
+
+    async def list_customer_notes(
+        self,
+        *,
+        status: Literal["active", "superseded", "closed", "all"] | None = None,
+        customer: str | None = None,
+        limit: int | None = None,
+    ) -> list[CustomerNote]:
+        """GET /v1/customer-notes. List notes, optionally filtered by status / customer."""
+        params: dict[str, Any] = {}
+        if status is not None:
+            params["status"] = status
+        if customer is not None:
+            params["customer"] = customer
+        if limit is not None:
+            params["limit"] = limit
+        data = await self._request("GET", "/v1/customer-notes", params=params)
+        return [CustomerNote.model_validate(n) for n in data["notes"]]
+
+    async def get_customer_note(self, note_id: int) -> CustomerNote:
+        """GET /v1/customer-notes/:id. Fetch a single note by id."""
+        data = await self._request("GET", f"/v1/customer-notes/{note_id}")
+        return CustomerNote.model_validate(data["note"])
