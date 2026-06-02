@@ -144,4 +144,27 @@ describe('A7 recall --why rerankTrace', () => {
       expect(item.rerankPipeline).toBeUndefined();
     }
   });
+
+  it('explicit --goal: recall --why --goal traces the `goal` stage (codex P2 fix)', () => {
+    // No HIPPO_SESSION_ID -> the session goal-boost path does not run; only the
+    // explicit `--goal <tag>` block fires. Before the fix this produced no
+    // ranking line at all for the --goal re-ranker.
+    const out = hippo(
+      home,
+      env,
+      'recall', 'auth',
+      '--why', '--json',
+      '--goal', 'fix-auth',
+      '--limit', '10',
+    );
+    const parsed = JSON.parse(out) as {
+      results: Array<{ id: string; rerankTrace?: Array<{ stage: string; multiplier?: number }> }>;
+    };
+    const hero = parsed.results.find((r) => r.id === heroId);
+    expect(hero, `hero not in results:\n${out}`).toBeDefined();
+    expect(hero!.rerankTrace).toBeDefined();
+    const goalStep = hero!.rerankTrace!.find((s) => s.stage === 'goal');
+    expect(goalStep, 'no `goal` stage in trace').toBeDefined();
+    expect(goalStep!.multiplier).toBe(1.5);
+  });
 });

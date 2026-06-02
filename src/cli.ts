@@ -1227,7 +1227,22 @@ async function cmdRecall(
   const goalTag = flags['goal'] !== undefined ? String(flags['goal']).trim() : '';
   if (goalTag) {
     results = results
-      .map((r) => (r.entry.tags?.includes(goalTag) ? { ...r, score: r.score * 1.5 } : r))
+      .map((r) => {
+        if (!r.entry.tags?.includes(goalTag)) return r;
+        const boosted = { ...r, score: r.score * 1.5 };
+        // A7 recall-trace: the explicit `--goal <tag>` boost is a public CLI
+        // re-ranker (score *= 1.5) and is mutually exclusive with the session
+        // goal-stack boost below, so it must record its OWN step or `--why
+        // --goal` produces no ranking line (codex review). Stage `goal`
+        // (explicit flag) is distinct from `goal-boost` (session stack).
+        if (showWhy) {
+          boosted.rerankTrace = [
+            ...(r.rerankTrace ?? []),
+            { stage: 'goal', multiplier: 1.5, scoreBefore: r.score, scoreAfter: r.score * 1.5, note: `--goal ${goalTag}` },
+          ];
+        }
+        return boosted;
+      })
       .sort((a, b) => b.score - a.score);
   }
 
