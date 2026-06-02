@@ -114,15 +114,52 @@ export const importsFrom = ['ChatGPT', 'CLAUDE.md', '.cursorrules', 'Slack', 'ma
 
 export const compare = {
   heading: 'Forget by default. Earn persistence through use.',
-  body: 'Most memory systems save everything and search later. Hippo takes the opposite stance: memories decay unless they prove useful. One take among several in a fast-moving category.',
-  rows: [
-    { feature: 'Decay by default', hippo: true, others: false },
-    { feature: 'Retrieval strengthening', hippo: true, others: false },
-    { feature: 'Outcome-weighted half-lives', hippo: true, others: false },
-    { feature: 'Confidence tiers + provenance', hippo: true, others: false },
-    { feature: 'Zero runtime dependencies', hippo: true, others: false },
+  body: "The AI-memory category matured fast in 2026. Hippo's take - bio-decay, strengthen-on-use, outcome-weighted half-lives - is one stance among several. The matrix below is a feature snapshot, not a verdict.",
+  sourceHref: `${REPO}#comparison`,
+} as const;
+
+/** Full comparison matrix, reproduced VERBATIM from README.md (#comparison),
+ *  including the asterisked "not directly comparable" benchmark caveats + footnotes.
+ *  cells[] align to systems[] order (Hippo first). Edit the README + here together. */
+export const comparison = {
+  systems: [
+    { name: 'Hippo', href: REPO, self: true },
+    { name: 'MemPalace', href: 'https://github.com/milla-jovovich/mempalace', self: false },
+    { name: 'Mem0', href: 'https://github.com/mem0ai/mem0', self: false },
+    { name: 'Basic Memory', href: 'https://github.com/basicmachines-co/basic-memory', self: false },
+    { name: 'gbrain', href: 'https://hermesatlas.com/projects/garrytan/gbrain', self: false },
+    { name: 'Zep', href: 'https://www.getzep.com/', self: false },
+    { name: 'Letta', href: 'https://github.com/letta-ai/letta', self: false },
+    { name: 'Cognee', href: 'https://www.cognee.ai/', self: false },
+    { name: 'Memoria', href: 'https://github.com/matrixorigin/Memoria', self: false },
+    { name: 'EverMind', href: 'https://evermind.ai/', self: false },
   ],
-  // Honest framing: "others" = the dominant "save everything, search later" pattern,
-  // NOT a named-competitor takedown. Full nuanced table lives in the README.
-  fullTableHref: `${REPO}#comparison`,
+  rows: [
+    { feature: 'Decay by default', cells: ['Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No'] },
+    { feature: 'Retrieval strengthening', cells: ['Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'Partial (recall tuning)', 'No', 'Partial (Skill Memory distills patterns)'] },
+    { feature: 'Reward-proportional decay', cells: ['Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No'] },
+    { feature: 'Hybrid search (BM25 + embeddings)', cells: ['Yes', 'Embeddings + spatial', 'Embeddings only', 'No', 'Yes (vec + rerank + graph)', 'Yes (graph + vec)', '?', 'Yes (GraphRAG)', 'Yes (vector + full-text)', 'Yes (mRAG, multi-modal)'] },
+    { feature: 'Schema acceleration / knowledge graph', cells: ['Yes (schema)', 'No', 'No', 'No', 'Yes (typed KG, self-wiring)', 'Yes (temporal KG)', 'No', 'Yes (auto-ontologies)', 'No (typed claims)', 'Yes (hierarchical: user/group/agent)'] },
+    { feature: 'Conflict detection + resolution', cells: ['Yes', 'No', 'No', 'No', 'Yes (eval-surfaced)', 'Yes (auto-invalidate stale facts)', 'No', 'No', 'Yes (auto-detect + quarantine)', 'Partial (temporal tracking)'] },
+    { feature: 'Multi-agent shared memory', cells: ['Yes', 'No', 'No', 'No', 'Yes (brain repo, team mounts)', 'Yes', 'No (single-agent state)', 'Yes', 'Yes (branch/merge across sessions)', 'Yes (multi-agent coordination)'] },
+    { feature: 'Transfer scoring', cells: ['Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No'] },
+    { feature: 'Outcome tracking', cells: ['Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'Partial (Cases: agent trajectories)'] },
+    { feature: 'Confidence tiers', cells: ['Yes', 'No', 'No', 'No', 'No (typed facts)', 'No', 'No', 'No', 'No', 'No'] },
+    { feature: 'Spatial organization', cells: ['No', 'Yes (wings/halls/rooms)', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No'] },
+    { feature: 'Lossless compression', cells: ['No', 'Yes (AAAK, 30x)', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No'] },
+    { feature: 'Cross-tool import (ChatGPT/Claude/Cursor)', cells: ['Yes', 'No', 'No', 'No', 'Partial (data sources)', '?', 'No', 'Partial (28 data sources)', 'No (Git ops)', 'Partial (mRAG: PDFs/images/URLs)'] },
+    { feature: 'Auto-hook install', cells: ['Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No'] },
+    { feature: 'MCP server', cells: ['Yes', 'Yes', 'No', 'No', 'Yes (stdio + HTTP/OAuth)', 'Partial (managed)', 'Yes (via Letta Code)', 'Yes (first-party Claude/LangGraph)', 'Yes', '?'] },
+    { feature: 'Zero runtime deps', cells: ['Yes', 'No (ChromaDB)', 'No', 'No', 'No (PGLite or PG+pgvector)', 'No (managed service)', 'No (Python deps)', 'No (Python deps)', 'Yes (single Rust binary)', 'No (managed + OSS)'] },
+    { feature: 'LongMemEval (best published)', cells: ['86.8% R@5 (F13+F9, oracle*)', '96.6% raw / 100% reranked R@5', '~49-85% R@5', 'N/A', '97.6-97.9% R@5 (s_cleaned*)', 'N/A (LoCoMo 80.3%)', 'N/A', 'N/A', '88.78% overall accuracy w/ reader**', '83.00% overall** (LoCoMo 93.05%, HaluMem 93.04%)'] },
+    { feature: 'Git-friendly', cells: ['Yes', 'No', 'No', 'Yes', 'Yes', 'No', 'No', 'No', 'Yes (Git is the model)', '?'] },
+    { feature: 'Framework agnostic', cells: ['Yes', 'Yes', 'Partial', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes'] },
+    { feature: 'License', cells: ['MIT', '(open)', 'Apache-2.0', '(open)', 'MIT', 'Apache-2.0 (community)', 'Apache-2.0', 'MIT (core)', 'Apache-2.0', 'Apache-2.0 (OSS) + cloud'] },
+  ],
+  footnotes: [
+    "* Split-mismatched: Hippo's 86.8% is on longmemeval_oracle (3 sessions per haystack); gbrain's 97.6% is on longmemeval_s_cleaned (~40 sessions per haystack). Different splits, different difficulty. Not directly comparable.",
+    "** Different metric: Memoria's 88.78% and EverMind's 83% are reported as overall accuracy with a reader LLM, not retrieval R@5. Higher denominator + LLM helps. Not directly comparable to retrieval-only R@5 numbers above.",
+  ],
+  closing:
+    'Different tools answer different questions. Mem0 and Basic Memory implement "save everything, search later." MemPalace organizes spatially. gbrain, Zep, and Cognee extract typed entities into a knowledge graph. Letta lets the agent edit its own memory blocks. Memoria is Git-style version control over memory. EverMind is self-evolving Skill Memory. Hippo implements "forget by default, earn persistence through use." Complementary takes, not a single-axis ranking.',
 } as const;
