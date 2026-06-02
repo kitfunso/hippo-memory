@@ -292,17 +292,48 @@ export function loadEntityById(hippoRoot: string, tenantId: string, id: number):
   }
 }
 
+/** Entities with an exact `name` (read), bounded by `limit` in SQL with a
+ *  deterministic order. Lets the graph-view focus query find the `--entity NAME`
+ *  entity DIRECTLY (not from a globally-capped list) WITHOUT materializing every
+ *  same-name row when a name maps to many entities. */
+export function loadEntitiesByName(
+  hippoRoot: string,
+  tenantId: string,
+  name: string,
+  opts: { limit?: number } = {},
+  txDb?: GraphTxDb,
+): Entity[] {
+  assertTenantId('loadEntitiesByName', tenantId);
+  const limit = opts.limit ?? 100;
+  if (!Number.isInteger(limit) || limit < 0) {
+    throw new Error(`loadEntitiesByName: limit must be a non-negative integer; got ${limit}`);
+  }
+  const ownDb = txDb ? null : openHippoDb(hippoRoot);
+  const db = txDb ?? ownDb!;
+  try {
+    const rows = db.prepare(`
+      SELECT ${ENTITY_COLS} FROM entities WHERE tenant_id = ? AND name = ?
+      ORDER BY id ASC LIMIT ?
+    `).all(tenantId, name, limit) as EntityRow[];
+    return rows.map(rowToEntity);
+  } finally {
+    if (ownDb) closeHippoDb(ownDb);
+  }
+}
+
 export function loadEntities(
   hippoRoot: string,
   tenantId: string,
   opts: { entityType?: EntityType; limit?: number } = {},
+  txDb?: GraphTxDb,
 ): Entity[] {
   assertTenantId('loadEntities', tenantId);
   const limit = opts.limit ?? 100;
   if (opts.entityType && !GRAPH_ENTITY_TYPES.has(opts.entityType)) {
     throw new Error(`loadEntities: entityType must be one of ${Array.from(GRAPH_ENTITY_TYPES).join('|')}; got ${opts.entityType}`);
   }
-  const db = openHippoDb(hippoRoot);
+  const ownDb = txDb ? null : openHippoDb(hippoRoot);
+  const db = txDb ?? ownDb!;
   try {
     const clauses = ['tenant_id = ?'];
     const params: unknown[] = [tenantId];
@@ -319,7 +350,7 @@ export function loadEntities(
     `).all(...params) as EntityRow[];
     return rows.map(rowToEntity);
   } finally {
-    closeHippoDb(db);
+    if (ownDb) closeHippoDb(ownDb);
   }
 }
 
@@ -327,10 +358,12 @@ export function loadRelations(
   hippoRoot: string,
   tenantId: string,
   opts: { fromEntityId?: number; limit?: number } = {},
+  txDb?: GraphTxDb,
 ): Relation[] {
   assertTenantId('loadRelations', tenantId);
   const limit = opts.limit ?? 100;
-  const db = openHippoDb(hippoRoot);
+  const ownDb = txDb ? null : openHippoDb(hippoRoot);
+  const db = txDb ?? ownDb!;
   try {
     const clauses = ['tenant_id = ?'];
     const params: unknown[] = [tenantId];
@@ -347,7 +380,7 @@ export function loadRelations(
     `).all(...params) as RelationRow[];
     return rows.map(rowToRelation);
   } finally {
-    closeHippoDb(db);
+    if (ownDb) closeHippoDb(ownDb);
   }
 }
 
@@ -398,10 +431,12 @@ export function loadEntitiesByIds(
   hippoRoot: string,
   tenantId: string,
   ids: number[],
+  txDb?: GraphTxDb,
 ): Entity[] {
   assertTenantId('loadEntitiesByIds', tenantId);
   if (ids.length === 0) return [];
-  const db = openHippoDb(hippoRoot);
+  const ownDb = txDb ? null : openHippoDb(hippoRoot);
+  const db = txDb ?? ownDb!;
   try {
     const out: Entity[] = [];
     for (let i = 0; i < ids.length; i += IN_LIST_CHUNK) {
@@ -415,7 +450,7 @@ export function loadEntitiesByIds(
     }
     return out;
   } finally {
-    closeHippoDb(db);
+    if (ownDb) closeHippoDb(ownDb);
   }
 }
 
@@ -431,6 +466,7 @@ export function loadNeighborRelations(
   tenantId: string,
   entityIds: number[],
   opts: { limit?: number } = {},
+  txDb?: GraphTxDb,
 ): Relation[] {
   assertTenantId('loadNeighborRelations', tenantId);
   if (entityIds.length === 0) return [];
@@ -438,7 +474,8 @@ export function loadNeighborRelations(
   if (!Number.isInteger(limit) || limit < 0) {
     throw new Error(`loadNeighborRelations: limit must be a non-negative integer; got ${limit}`);
   }
-  const db = openHippoDb(hippoRoot);
+  const ownDb = txDb ? null : openHippoDb(hippoRoot);
+  const db = txDb ?? ownDb!;
   try {
     // `limit` is applied PER CHUNK; a frontier spanning >IN_LIST_CHUNK ids could return
     // up to limit*chunks rows before the by-id dedup below. Harmless for E3.2 (the
@@ -458,6 +495,70 @@ export function loadNeighborRelations(
       for (const r of rows) byId.set(r.id, rowToRelation(r));
     }
     return Array.from(byId.values());
+  } finally {
+    if (ownDb) closeHippoDb(ownDb);
+  }
+}
+
+/**
+ * Relations with BOTH endpoints in `entityIds` (edges AMONG the set, not merely
+ * touching it). Read. Used by the graph-view focus subgraph so the displayed
+ * edges are exactly the intra-union edges: the `LIMIT` only caps genuinely-many
+ * intra-union edges — no out-of-union row can evict a valid in-set edge. The
+ * caller bounds `entityIds` (<= the view limit), so a single query is safe.
+ */
+export function loadRelationsAmong(
+  hippoRoot: string,
+  tenantId: string,
+  entityIds: number[],
+  opts: { limit?: number } = {},
+  txDb?: GraphTxDb,
+): Relation[] {
+  assertTenantId('loadRelationsAmong', tenantId);
+  if (entityIds.length === 0) return [];
+  const limit = opts.limit ?? 1000;
+  if (!Number.isInteger(limit) || limit < 0) {
+    throw new Error(`loadRelationsAmong: limit must be a non-negative integer; got ${limit}`);
+  }
+  const ownDb = txDb ? null : openHippoDb(hippoRoot);
+  const db = txDb ?? ownDb!;
+  try {
+    const ph = entityIds.map(() => '?').join(',');
+    const rows = db.prepare(`
+      SELECT ${RELATION_COLS} FROM relations
+      WHERE tenant_id = ? AND from_entity_id IN (${ph}) AND to_entity_id IN (${ph})
+      ORDER BY created_at DESC, id DESC
+      LIMIT ?
+    `).all(tenantId, ...entityIds, ...entityIds, limit) as RelationRow[];
+    return rows.map(rowToRelation);
+  } finally {
+    if (ownDb) closeHippoDb(ownDb);
+  }
+}
+
+/**
+ * Run `fn` inside ONE read transaction (a single WAL snapshot) so every graph read
+ * it performs — pass the supplied `txDb` to the `load*` functions — sees a consistent
+ * view, even if a `graph extract` / sleep-drain rebuild commits concurrently between
+ * reads (the rebuild clears + reinserts entities, so separate reads could otherwise
+ * mix old entity ids with new relation ids). Reads only; the connection is opened
+ * once and closed after.
+ */
+export function withGraphReadSnapshot<T>(
+  hippoRoot: string,
+  fn: (txDb: GraphTxDb) => T,
+): T {
+  const db = openHippoDb(hippoRoot);
+  try {
+    db.exec('BEGIN');
+    try {
+      const out = fn(db);
+      db.exec('COMMIT');
+      return out;
+    } catch (e) {
+      try { db.exec('ROLLBACK'); } catch { /* ignore */ }
+      throw e;
+    }
   } finally {
     closeHippoDb(db);
   }

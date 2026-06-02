@@ -51,6 +51,8 @@ import {
 } from './api.js';
 import type { MemoryKind } from './memory.js';
 import type { AuditOp } from './audit.js';
+import { buildGraphModel } from './graph-view.js';
+import { MAX_ENTITY_NAME_LEN } from './graph.js';
 import {
   savePrediction,
   closePrediction,
@@ -676,6 +678,24 @@ async function handleRequest(
       tags: getStringArray(body, 'tags'),
     });
     sendJson(res, 200, result);
+    return;
+  }
+
+  // GET /v1/graph?entity=NAME&limit=N — read-only entity/relation graph (tenant-scoped)
+  if (method === 'GET' && path === '/v1/graph') {
+    const entityRaw = query.get('entity');
+    // Cap at the graph entity-name cap (512), not the id-shaped 256, so a valid
+    // long decision/policy name remains focusable over HTTP (codex P2).
+    if (entityRaw !== null && entityRaw.length > MAX_ENTITY_NAME_LEN) {
+      throw new HttpError(400, `entity exceeds the ${MAX_ENTITY_NAME_LEN}-character cap`);
+    }
+    const limit = parseListLimit(query.get('limit'));
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    const model = buildGraphModel(ctx.hippoRoot, ctx.tenantId, {
+      entity: entityRaw ?? undefined,
+      limit,
+    });
+    sendJson(res, 200, model);
     return;
   }
 
