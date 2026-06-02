@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+## 1.19.0 (2026-06-02): E3 sleep enqueue-hook (graph auto-rebuilds during sleep)
+
+### Added
+- **Graph auto-rebuild on `hippo sleep`.** Every graph-source mutation (save/close
+  of decision/policy/customer_note, and save/close/refresh of project_brief) now
+  marks its tenant dirty via the `graph_extraction_queue`, and `hippo sleep` drains
+  the queue, rebuilding the entity/relation graph for each dirty tenant. So
+  `recall --hops` and cross-object `references` edges run on fresh data without a
+  manual `hippo graph extract`. `SleepResult` gains an optional `graph` summary
+  (`{tenants, entities, relations}`), redacted as a cross-tenant aggregate on
+  non-loopback egress.
+
+### Changed
+- **`extractGraph` is now atomic.** The clear plus all inserts run inside one
+  `BEGIN IMMEDIATE` transaction (`runGraphRebuildTransaction`), so two concurrent
+  rebuilds serialize on the SQLite write lock instead of duplicating rows, and a
+  throw mid-rebuild rolls back the clear (no bricked graph). Source reads are
+  preloaded before the transaction opens.
+- **`writeEntry` gains an `afterCommit` hook** (runs post-commit, pre-mirror) so a
+  committed save always marks the graph dirty even when a later markdown-mirror
+  write fails.
+
 ## 1.18.0 (2026-06-02): A7 recall-trace - explainable lifecycle re-ranking
 
 ### Added

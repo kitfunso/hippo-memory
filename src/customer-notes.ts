@@ -22,6 +22,7 @@
 
 import { openHippoDb, closeHippoDb } from './db.js';
 import { writeEntry, assertTenantId } from './store.js';
+import { markGraphDirty } from './graph.js';
 import { createMemory, Layer, CUSTOMER_NOTE_HALF_LIFE_DAYS } from './memory.js';
 import { appendAuditEvent } from './audit.js';
 
@@ -289,6 +290,7 @@ export function saveCustomerNote(
         },
       });
     },
+    afterCommit: () => markGraphDirty(hippoRoot, tenantId, mem.id),
   });
 
   if (!savedRow) {
@@ -344,7 +346,9 @@ export function closeCustomerNote(
       });
 
       db.exec('COMMIT');
-      return rowToCustomerNote(row);
+      const closed = rowToCustomerNote(row);
+      markGraphDirty(hippoRoot, tenantId, closed.memoryId);
+      return closed;
     } catch (e) {
       try {
         db.exec('ROLLBACK');

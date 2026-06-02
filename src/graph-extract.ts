@@ -21,7 +21,7 @@
  * `hippo sleep` enqueue-hook.
  */
 
-import { clearGraph, insertEntity, insertRelation, MAX_ENTITY_NAME_LEN, type EntityType } from './graph.js';
+import { clearGraph, insertEntity, insertRelation, runGraphRebuildTransaction, MAX_ENTITY_NAME_LEN, type EntityType, type GraphTxDb } from './graph.js';
 import { loadDecisions } from './decisions.js';
 import { loadPolicies } from './policies.js';
 import { loadCustomerNotes } from './customer-notes.js';
@@ -158,8 +158,38 @@ export function extractGraph(hippoRoot: string, tenantId: string): ExtractResult
     { entityType: 'project', loadFn: loadProjectBriefs, nameOf: (r) => r.repo, textOf: (r) => [r.repo, r.summary].filter(Boolean).join(' ') },
   ];
 
+  // READ PHASE: load every source's rows on their own connections BEFORE the
+  // write transaction. Holding the rebuild's BEGIN IMMEDIATE write lock while
+  // opening a second connection for these reads dead-locks ('database is
+  // locked'); preloading keeps the transaction single-connection.
+  const loaded = sources.map((src) => {
+    const { rows, hitCap } = loadType(hippoRoot, tenantId, src.entityType, src.loadFn, src.nameOf, src.textOf);
+    return { entityType: src.entityType, rows, hitCap };
+  });
+
+  // WRITE PHASE (codex P2): clear + every insert run in ONE transaction, so two
+  // concurrent rebuilds serialize on the SQLite write lock (no duplicate rows)
+  // and a throw mid-rebuild rolls back the clear (no bricked graph). No second
+  // connection is opened inside.
+  return runGraphRebuildTransaction(hippoRoot, tenantId, (txDb) =>
+    rebuildGraphRows(txDb, hippoRoot, tenantId, loaded),
+  );
+}
+
+/**
+ * The deterministic rebuild WRITES, run inside `runGraphRebuildTransaction`'s
+ * transaction (`txDb` is its connection). Clears the tenant's graph then
+ * re-derives entities + `supersedes` + `references` from the preloaded rows. All
+ * DB access here is on `txDb` (or in-memory) — no other connection is opened.
+ */
+function rebuildGraphRows(
+  txDb: GraphTxDb,
+  hippoRoot: string,
+  tenantId: string,
+  loaded: Array<{ entityType: EntityType; rows: ExtractRow[]; hitCap: boolean }>,
+): ExtractResult {
   // Rebuild from scratch: the graph is derived, so clear then re-derive.
-  clearGraph(hippoRoot, tenantId);
+  clearGraph(hippoRoot, tenantId, txDb);
 
   const byType: Record<string, number> = {};
   const truncated: string[] = [];
@@ -171,10 +201,9 @@ export function extractGraph(hippoRoot: string, tenantId: string): ExtractResult
 
   // Pass 1: entities. Skip rows whose source memory was forgotten (NULL memory_id) -
   // an entity must reference a consolidated memory (entities.memory_id is NOT NULL).
-  for (const src of sources) {
-    const { rows, hitCap } = loadType(hippoRoot, tenantId, src.entityType, src.loadFn, src.nameOf, src.textOf);
-    if (hitCap) truncated.push(src.entityType);
-    byType[src.entityType] = 0;
+  for (const { entityType, rows, hitCap } of loaded) {
+    if (hitCap) truncated.push(entityType);
+    byType[entityType] = 0;
     for (const row of rows) {
       allRows.push(row);
       if (row.memoryId === null) continue;
@@ -193,12 +222,12 @@ export function extractGraph(hippoRoot: string, tenantId: string): ExtractResult
         entityType: row.entityType,
         name,
         memoryId: row.memoryId,
-      });
+      }, txDb);
       const k = keyOf(row.entityType, row.e2Id);
       entityIdByKey.set(k, entity.id);
       memoryIdByKey.set(k, row.memoryId);
       created.push({ entityId: entity.id, entityType: row.entityType, memoryId: row.memoryId, name, searchText: row.searchText ?? '', superseded: row.supersededBy !== null });
-      byType[src.entityType] += 1;
+      byType[entityType] += 1;
     }
   }
 
@@ -224,7 +253,7 @@ export function extractGraph(hippoRoot: string, tenantId: string): ExtractResult
       toEntityId: toId,
       relType: 'supersedes',
       memoryId: yMemoryId,
-    });
+    }, txDb);
     supersededPairs.add(pairKey(fromId, toId));
     relations += 1;
   }
@@ -232,7 +261,7 @@ export function extractGraph(hippoRoot: string, tenantId: string): ExtractResult
   // Pass 3: cross-object `references` edges via conservative name matching. A source's
   // text containing a target entity's name -> "source references target". Sources +
   // targets are CREATED entities only, so insertRelation never sees a null source memory.
-  const references = extractReferences(hippoRoot, tenantId, created, supersededPairs, truncated);
+  const references = extractReferences(hippoRoot, tenantId, created, supersededPairs, truncated, txDb);
   relations += references;
 
   const entities = created.length;
@@ -251,6 +280,7 @@ function extractReferences(
   created: CreatedEntity[],
   supersededPairs: Set<string>,
   truncated: string[],
+  txDb: GraphTxDb,
 ): number {
   // Build the target index: normalised name -> single entity id. A name is a target only
   // if its length is in bounds; a name shared by >1 entity is AMBIGUOUS and dropped.
@@ -309,7 +339,7 @@ function extractReferences(
         toEntityId: targetId,
         relType: 'references',
         memoryId: src.memoryId, // the source object's consolidated memory
-      });
+      }, txDb);
       references += 1;
     }
   }

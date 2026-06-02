@@ -1156,12 +1156,19 @@ export function writeEntry(
   opts?: {
     actor?: string;
     afterWrite?: (db: DatabaseSyncLike, memoryId: string) => void;
+    /** Runs AFTER the DB row commits (RELEASE SAVEPOINT in writeEntryDbOnly) but
+     *  BEFORE the markdown mirrors are written. Lets a caller perform a post-commit
+     *  side effect (e.g. mark the graph dirty) that must still happen even if a
+     *  mirror write then throws. Keep it best-effort — it runs on a committed,
+     *  idle connection, so opening another handle inside it is safe. */
+    afterCommit?: () => void;
   },
 ): void {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
     writeEntryDbOnly(db, entry, opts);
+    opts?.afterCommit?.();
     writeEntryMirrors(hippoRoot, db, entry);
   } finally {
     closeHippoDb(db);

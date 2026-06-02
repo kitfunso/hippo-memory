@@ -2631,6 +2631,13 @@ export function renderSleepResult(result: api.SleepResult): void {
   if (result.ambient) {
     console.log(`\n${renderAmbientSummary(result.ambient)}`);
   }
+
+  if (result.graph && result.graph.tenants > 0) {
+    const { tenants, entities, relations } = result.graph;
+    console.log(
+      `\nGraph: rebuilt ${tenants} tenant${tenants === 1 ? '' : 's'} (${entities} entities, ${relations} relations).`,
+    );
+  }
 }
 
 async function cmdSleepCore(

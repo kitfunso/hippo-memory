@@ -24,6 +24,7 @@
 
 import { openHippoDb, closeHippoDb } from './db.js';
 import { writeEntry, assertTenantId } from './store.js';
+import { markGraphDirty } from './graph.js';
 import { createMemory, Layer, PROJECT_BRIEF_HALF_LIFE_DAYS } from './memory.js';
 import { appendAuditEvent } from './audit.js';
 
@@ -309,6 +310,8 @@ export function saveProjectBrief(
         },
       });
     },
+    // afterCommit covers refreshBrief (delegates here) + brief new/supersede.
+    afterCommit: () => markGraphDirty(hippoRoot, tenantId, mem.id),
   });
 
   if (!savedRow) {
@@ -364,7 +367,9 @@ export function closeProjectBrief(
       });
 
       db.exec('COMMIT');
-      return rowToProjectBrief(row);
+      const closed = rowToProjectBrief(row);
+      markGraphDirty(hippoRoot, tenantId, closed.memoryId);
+      return closed;
     } catch (e) {
       try {
         db.exec('ROLLBACK');

@@ -39,6 +39,7 @@
 
 import { openHippoDb, closeHippoDb } from './db.js';
 import { writeEntry, assertTenantId } from './store.js';
+import { markGraphDirty } from './graph.js';
 import { createMemory, Layer, POLICY_HALF_LIFE_DAYS } from './memory.js';
 import { appendAuditEvent } from './audit.js';
 
@@ -332,6 +333,7 @@ export function savePolicy(
         },
       });
     },
+    afterCommit: () => markGraphDirty(hippoRoot, tenantId, mem.id),
   });
 
   if (!savedRow) {
@@ -388,7 +390,9 @@ export function closePolicy(
       });
 
       db.exec('COMMIT');
-      return rowToPolicy(row);
+      const closed = rowToPolicy(row);
+      markGraphDirty(hippoRoot, tenantId, closed.memoryId);
+      return closed;
     } catch (e) {
       try {
         db.exec('ROLLBACK');
