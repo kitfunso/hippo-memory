@@ -575,6 +575,82 @@ J1-J8 emit *soft warnings* the calling agent decides whether to act on; hippo ne
 
 ---
 
+## Track K — Knowledge-graph interop (PKM bridges)
+
+Hippo already builds a typed knowledge graph (Track E3: `entities`/`relations` over consolidated state). External personal-knowledge-management tools (Obsidian, Logseq, org-roam, ...) build their *own* graphs over markdown + `[[wikilinks]]`. Track K bridges the two — but every direction routes through the existing raw→distil→graph pipeline so no Bet is violated.
+
+**Reframe (the unit of work is the open format, not the app).** Research scan (2026-06-02, sourced below) says: do NOT build 14 connectors. A single **Markdown + `[[wikilinks]]` vault adapter** covers the common markdown+wikilink subset of Obsidian (~1.5M MAU — fueler.io / BigGo), Foam, and Dendron with one adapter; the per-dialect specifics (Dendron dot-hierarchy filenames, Obsidian block refs / embeds / Canvas, Foam's near-plain markdown) are fixture-gated extensions on top, not separate connectors. **JSON Canvas** (`jsoncanvas.org`, MIT spec, `nodes[]`/`edges[]`) gives a free visual-graph export that opens natively in Obsidian. **org-roam** (`.org` + `[[id:...]]`, SQLite is a derived cache) covers the Emacs cohort. So the roadmap is "2 local-file adapters + 1 canvas exporter + optional cloud later," not 14 integrations. Cloud-only tools (Notion/Roam/Tana/Capacities/Reflect/Mem/Heptabase) require accounts + OAuth and several have crippled surfaces (Reflect is append-only and can't read note bodies; Tana is write-mostly; Capacities' API is immature) — deferred; Notion ingestion is already E1.6.
+
+**Two directions, two Bets.**
+- **IMPORT (vault → hippo):** ingest a vault's markdown as `kind='raw'` receipts (Bet #3 read-mostly; reuses the E1.x connector pattern — idempotency, cursor/backfill, source-deletion sync). `hippo sleep` then distils them and E3.1 proposes `entities`/`relations`. Wikilinks become relation *candidates* the sleep extractor proposes with provenance — never auto-asserted edges, never direct graph writes (E3.3 / Bet #5).
+- **EXPORT (hippo → vault):** project hippo's *consolidated* E3 graph as a wikilinked markdown vault + a `graph.canvas` (JSON Canvas) file — a read-only, regenerable **view** (Bet #3; non-goal #8 human-approved write-back). Delete it and re-run export to rebuild it. The vault is a projection, not a system hippo shadows.
+
+### K1. Markdown-vault + `[[wikilinks]]` importer [next]
+Extend `src/importers.ts` (already imports ChatGPT/Claude/Cursor/generic-md) with a **baseline** vault-folder adapter over the common markdown+wikilink subset: frontmatter→A3 envelope mapping, `[[wikilink]]`→relation-candidate parse, idempotency on `(path, content-hash)`, source-deletion sync (vault file deleted → memory invalidated, GDPR per E1.x). Provenance `source=vault:<name>`. Per-dialect features (Dendron dot-hierarchy filenames, Obsidian block refs `^id` / embeds `![[...]]` / Canvas, Foam's near-plain markdown) are explicit fixture-gated extensions, not assumed to "just work."
+**Effort:** 6-8d. **Success:** a per-dialect fixture vault (Obsidian, Foam, Dendron) each imports with ≥95% notes as raw + full provenance and no parser crash on dialect-specific syntax; re-import idempotent (0 dups); deleting a note invalidates its memory; wikilinks surface as E3.1 relation candidates at the next sleep.
+
+### K2. Consolidated-graph → markdown + JSON Canvas exporter [planned, blocked-on-E3.1]
+New read-only consumer of the E3 substrate (mirrors `src/graph-recall.ts`). Walks `entities`/`relations`, emits one `.md` per entity with `[[wikilinks]]` to neighbours + a `graph.canvas` for the visual graph. **Why blocked-on-E3.1, not [next]:** today the graph holds only `supersedes` edges (see `graph-recall.ts`), so a real knowledge-graph export needs E3.1's cross-object edges (owns/depends-on/blocked-by/references) first — the "knowledge-graph connection" is only as rich as E3.1's extraction. Split accordingly: **K2a thin supersession-export** (doable now, low value) vs **K2b full PKM graph export** (after E3.1, the actual deliverable).
+**Effort:** 5-7d (K2b). **Success:** the exported `graph.canvas` edge set exactly equals tenant X's consolidated `relations` rows (zero raw-source rows, E3.3 guard test); idempotent re-export; opens in Obsidian with the graph visible.
+
+### K3. Obsidian Local REST API live adapter [planned]
+Section-level live read/write via the community Local REST API plugin, for users wanting continuous hippo↔Obsidian sync rather than batch export. Gated behind human-approved write-back (non-goal #8); avoid the known POST-overwrite data-loss bug (issue #237) by using PATCH/section-targeting.
+**Effort:** 5d. **Success:** live-update a note section from a hippo supersession without clobbering unrelated content; opt-in, off by default.
+
+### K4. Logseq adapter [planned]
+Markdown-graph folder (reuses K1) + token-gated Local HTTP API; block-reference granularity maps onto fine-grained memories. The new Logseq DB (SQLite) version is a separate later target — do the markdown-graph format first.
+**Effort:** 6d. **Success:** import a Logseq markdown graph; block refs become relation candidates.
+
+### K5. org-roam adapter [research]
+`.org` files + `[[id:...]]` links; files are the source of truth, `org-roam.db` is a derived cache (do not write the cache).
+**Effort:** 5d. **Success:** import/export `.org` with id-links round-trips.
+
+### K6. Cloud PKM connectors [deferred]
+Notion (official hosted MCP; ingestion already E1.6), Roam (Graph API / EDN), Tana (Input API, write-mostly), Capacities (immature REST). Revisit per buyer pull — account/OAuth requirement violates the local-first weighting (Bet #2).
+
+**Discipline note (binding).** Import = raw receipts only, never direct graph writes (E3.3 + Bet #5); export = read-only projection of consolidated state, never autonomous write-back into a user-edited vault (non-goal #8). Imported wikilinks are relation *candidates* (provenance-tagged), never auto-asserted edges: a candidate promotes to an `entities`/`relations` edge only when *both* endpoints are already consolidated E3 objects, and a regression test asserts raw-imported links never write `entities`/`relations` directly — preserves graph-on-consolidated quality (E3.3 + Bet #5). Import fidelity tracked per RESEARCH §"Cross-tool import fidelity": measure what fraction of imported notes survive 30d decay+sleep, and consider a reduced starting half-life for bulk imports so a dumped vault doesn't crowd out earned memories (Bet #1).
+
+**Sources:** Obsidian MAU/format [fueler.io], [coddingtonbear/obsidian-local-rest-api]; JSON Canvas [jsoncanvas.org] (MIT); Logseq [github.com/logseq/logseq] (~43k★) + [db-version.md]; org-roam [orgroam.com/manual]; Notion hosted MCP [developers.notion.com/guides/mcp]; Reflect append-only [reflect.app/blog/reflect-update-api]; Tana Input API [tana.inc/docs/input-api].
+
+---
+
+## Track L — Latent memory: layer, not substrate
+
+A recurring question: should hippo adopt "latent memory" as a new layer, or as its **key feature**? This track settles it with a debate, then files the surviving pieces as scoped items. (Paper lineage cross-refs `RESEARCH.md`; all citations verified 2026-06-02.)
+
+**What "latent memory" means (verified).** A spectrum, not one thing: (1) **vector/embedding** memory — external store, lossy-encode but inspectable via the source text, rebuildable; (2) **KV-cache** memory — lives in GPU RAM, opaque, rebuildable by replay; (3) **parametric/test-time** memory written to weights/fast-weights — opaque, lossy, not cleanly rebuildable: **Titans** (Behrouz et al., Google, arXiv 2501.00663), **Memory Layers at Scale** (Meta FAIR, arXiv 2412.09764, ICLR'25); (4) **distilled-KV cartridges** — trained KV, opaque, rebuildable by re-distill: **Cartridges** (Stanford Hazy, arXiv 2508.17032); (5) **neural memory modules** — NTM lineage (arXiv 1410.5401), **Larimar** (IBM+Princeton, arXiv 2403.11901), **Memory³** (arXiv 2407.01178), **Memorizing Transformers** (arXiv 2203.08913), **RMT** (arXiv 2207.06881).
+
+**What hippo already has.** The *weak* form is shipped: recall is hybrid BM25 + BGE-base dense vectors fused with RRF (`src/rrf.ts`, F-track) — a **derived embedding index over the markdown of record**. So "add latent memory as a layer," in the vector sense, is done. The live question is the *strong* forms (KV/parametric/cartridge): substrate or layer?
+
+### The debate
+
+**FOR latent-as-key-feature (steelman).** The frontier moved. Titans (2501.00663) learns to memorize *and forget* at test time via gradient on its own memory weights — that is hippo's decay+strengthening thesis in parametric form, at >2M-token context. Cartridges (2508.17032) distil a corpus into a small trained KV cache for ~26x throughput. Memory Layers (2412.09764) beat 2x-compute dense models on factual recall. Latent delivers associative/fuzzy/multimodal/cross-lingual recall that grep + a small embedding index cannot. Competitors are vector/graph-core and growing — Mem0 (57.4k★, hybrid vector+graph), Zep/Graphiti (26.9k★, temporal graph), Letta (23.1k★, vector archival) — and a purely symbolic store risks looking dated on LongMemEval/LoCoMo, exactly where the F-track's local-embedder ceiling (F14–F16 R@5 plateau on `_s`) already bites. The biological metaphor arguably maps *more* cleanly onto a parametric fast-weight memory than onto markdown files.
+
+**AGAINST (and FOR latent-as-optional-layer).** It contradicts the founding bet. Bet #7 already states it: "MH-FLOCKE proves the sub-symbolic version works; hippo proves the symbolic + inspectable version is the right substrate." The competitive scan (verified) is decisive: Mem0, Zep, Letta, Cognee all store memory as embeddings/graph nodes in opaque DBs; **none** combine human-readable markdown-of-record + single-file local SQLite + biological lifecycle. That triple intersection is hippo's *entire* white space — latent-as-substrate walks into the red ocean. Three further failures: **(a) portability dies** — KV/weights are tied to a model's dim/tokenizer/architecture; you cannot migrate them across models or git-diff them (kills Bet #2 and the Track K multi-tool import thesis). **(b) the lifecycle moat is only legible over symbolic memory** — `supersede`-with-reason, A3 provenance envelopes, C5 WYSIATI "what was excluded and why," the A5 audit log, Track J soft-warnings all require inspectable, addressable units; you cannot supersede-with-reason or audit a region of opaque weights (kills Bet #1 and Bet #4 trust-over-recall). **(c) local-first feasibility** — the vector index is trivial (shipped), but KV/parametric/cartridge memory needs training loops + VRAM, dragging the zero-dep core toward a heavyweight GPU backend (non-goal #5) and toward becoming an inference provider (non-goal #6); the F-track already documents that even a *stronger embedder* is egress/compute-bound locally (F16–F17), and a training loop is a far bigger ask.
+
+### Recommendation
+
+**Two questions, kept separate (so the verdict isn't read as dodging the F-track).** (a) *Retrieval capability gap* — is recall good enough? Real and open: the F-track R@5 plateaus on the `_s` split and latent techniques could lift it. (b) *System-of-record substrate* — what holds the canonical memory? These are independent. The recommendation answers (b) "no" while keeping (a) wide open via L1/L2 — better recall is welcome, it just doesn't get to own the source of truth.
+
+**Latent memory is a LAYER, never the substrate.** Three rules + three scoped items:
+- **Rule 1 — the memory of record stays symbolic** (markdown + SQLite). Non-negotiable; it is the moat (Bets #1/#2/#4/#7).
+- **Rule 2 — every latent form is a derived, rebuildable index/accelerant** over the text-of-record, never the source of truth. Delete any latent artifact and `hippo sleep` regenerates it. (This is exactly how the embedding index already behaves.)
+- **Rule 3 — latent forms that cannot be made rebuildable-from-symbolic-state** (parametric memory written to weights) do not enter the product; they live in Track G research only.
+
+#### L1. Graph-retrieval stream into RRF [next, depends on E3.1]
+A **new** graph ranked-list *producer* that feeds `src/rrf.ts` as a third fusion input beside BM25 + dense — distinct from `src/graph-recall.ts`, which today does seed-adjacent injection with a per-hop score discount (not a ranked list, and not RRF-fused). Already filed (F-track "graph retrieval stream" + F4 HippoRAG). Pure win, no new substrate. Spec needed: the graph-score→rank function, the RRF weight/`k` for the graph stream, and tests. **Success:** a graph-stream-vs-no-graph-stream ablation under `rrf.ts` fusion lifts R@5 over the 2-stream (BM25+dense) baseline on the oracle split. Cross-ref F9.
+
+#### L2. Sleep-built KV "cartridge" over the consolidated semantic layer [research]
+The one strong-latent form that fits the Bets. At `hippo sleep`, optionally distil the *stable semantic store* into a reusable trained-KV cartridge (Cartridges, 2508.17032) for fast, cheap recall over a large stable corpus. Fits because it is (i) built offline during sleep (Bet #6), (ii) derived from consolidated symbolic state (Bet #5), (iii) rebuildable — delete it and the next sleep regenerates it (Rule 2), (iv) opt-in + GPU-gated (local core stays zero-dep). Candidate **5x-cost lever for the scale grant** (ROADMAP.md WP1: 1M+ items, sub-100ms, 5x cost reduction vs vector RAG).
+**Gated on a feasibility spike** that must answer the open unknowns before any roadmap promotion: tokenizer/model binding (which local model the cartridge is keyed to), artifact size per 100k items, rebuild time per sleep, GPU-VRAM floor, invalidation strategy on supersession/decay, and the tenant privacy boundary. **Success:** the spike *pre-registers* its thresholds (corpus size, hardware, latency, rebuild-time, and the hybrid-RRF R@5 baseline it must match or beat) before any build, satisfying the doc's cut-criteria; promotion out of `[research]` requires hitting them. **Discipline:** the cartridge never becomes the source of truth and never indexes the raw layer.
+
+#### L3. Parametric test-time memory (Titans-style) [research → Track G]
+Titans' learn-to-memorize/forget-at-test-time is hippo's D2 decay + D3 strengthening in parametric form — but it lives in weights (opaque, non-portable, non-rebuildable), failing Rule 3 for the product. File it where it belongs: the **Track G** bridge (hippocampal-circuits-in-LLMs), as the parametric realization of D2/D3. NOT a product layer. Cross-ref G1/G2/G3 and Deferred #2 (post-transformer integration).
+
+**Binding output:** the debate adds non-goal #10 below (latent/parametric memory as the system of record). Outside-voice review (`/plan-eng-review` or `/codex`) on Tracks K and L is the natural gate before either item leaves `[research]`/`[next]`.
+
+---
+
 ## Sequencing (next 90 days, single-engineer cadence)
 
 **Sequence revised after Codex + eng-review (consolidated patch).** Original sequence had Wks 1-4 over-budgeted ~3x and put A1 server before A3 provenance, despite A3 being a prerequisite for E1 ingestion. Cut to 4 items max for 90 days; everything else moves to days 91-180.
@@ -652,6 +728,7 @@ Things hippo will not do. Each one is a deliberate position derived from the pro
 | 7 | Retaining everything forever | The thesis is *better forgetting*. Decay, supersession, and consolidation are features. This does not mean underperforming on correct recall of what is retained | RESEARCH §"Phase 3", RESEARCH §"forgetting is a feature" |
 | 8 | Autonomous write-back / actuation into source systems in V1 | Every write-back to Slack/Jira/Gmail/etc. must be human-approved. RESEARCH §"Phase 1" says write-backs stay human-approved. Auto-actuation invites compliance disasters and trust failures | RESEARCH §"Phase 1: safest bridge" |
 | 9 | Employee-surveillance / compliance-archive product | Hippo helps agents do the work, not record people. Surveillance use cases are out of scope and will be refused | thesis-derived (eng-review) |
+| 10 | Opaque, non-rebuildable, or model-locked latent/parametric artifacts as the *system of record* | Such artifacts (weights, or KV/vectors that cannot be regenerated from the markdown) are non-portable + non-auditable and destroy the lifecycle + inspectability moat (Bets #1/#2/#4/#7). ALLOWED as derived caches: rebuildable latent artifacts over the markdown of record (Track L Rule 2), including the L2 sleep-built KV cartridge | Track L debate 2026-06-02 |
 
 ## Deferred / speculative
 
@@ -662,6 +739,7 @@ Things hippo might do later. Not active scope, not non-goals. Each item names th
 | 1 | Cross-modal memory (text + vision + action) | Core text product is at v1.0 + has paying customers; vision-language modeling is a separate problem |
 | 2 | Post-transformer architecture integration (Mamba / RWKV / future) | D1-D7 ML research lines mature; current architecture saturates a measurable bottleneck |
 | 3 | On-device hippo (mobile / edge) | Hosted product is shipping; embedded agents become a buyer-pulled use case |
+| 4 | A7.2: unify the cli/api/mcp recall re-ranking pipelines + MCP primary-band rerank-trace | A7 recall-trace (v1.18.0) surfaced that only `applyGoalStackBoost` is shared across the three pipelines (cli applies interference/value/OFC/reranker/downweight that api + mcp do not), so a recall ranks differently per surface. Unifying them is a hot-path refactor needing its own plan + outside-voice; until then the trace honestly reports each pipeline's own stages via `rerankPipeline`. See `docs/plans/2026-06-02-a7-recall-trace.md`. |
 
 ---
 
