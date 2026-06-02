@@ -4860,7 +4860,8 @@ function cmdGraph(
     const byType = Object.entries(result.byType)
       .map(([t, n]) => `${t} ${n}`)
       .join(', ');
-    console.log(`Graph extracted: ${result.entities} entities (${byType}) + ${result.relations} supersedes relations.`);
+    const supersedes = result.relations - result.references;
+    console.log(`Graph extracted: ${result.entities} entities (${byType}) + ${result.relations} relations (${supersedes} supersedes, ${result.references} references).`);
     if (result.truncated.length > 0) {
       console.error(`WARNING: under-extracted (hit the per-type cap): ${result.truncated.join(', ')}. The graph is incomplete for those types.`);
     }
