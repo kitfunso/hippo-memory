@@ -163,3 +163,41 @@ export const comparison = {
   closing:
     'Different tools answer different questions. Mem0 and Basic Memory implement "save everything, search later." MemPalace organizes spatially. gbrain, Zep, and Cognee extract typed entities into a knowledge graph. Letta lets the agent edit its own memory blocks. Memoria is Git-style version control over memory. EverMind is self-evolving Skill Memory. Hippo implements "forget by default, earn persistence through use." Complementary takes, not a single-axis ranking.',
 } as const;
+
+/** Get started = quickstart + the zero-config auto-install differentiator (README L97/L621). */
+export const getStarted = {
+  kicker: 'Get started',
+  heading: 'Zero config. It wires itself in.',
+  body: 'Install it, point it at your repos, and hippo auto-detects your agent framework and patches the right config file. Next session, your agent just uses it.',
+  steps: [site.installCmd, site.initCmd],
+  autoInstall: {
+    heading: 'Detected and patched automatically',
+    frameworks: ['Claude Code', 'Codex', 'Cursor', 'OpenClaw', 'OpenCode'],
+    note: 'The only memory layer that installs its own hooks. No manual wiring.',
+  },
+} as const;
+
+/** Local-first / privacy. Every receipt sourced verbatim to README (L46/L57/L58). */
+export const localFirst = {
+  kicker: 'Local-first',
+  heading: 'Your memory never leaves your machine.',
+  points: [
+    { stat: '0', label: 'outbound HTTP', body: 'Proven by a globalThis.fetch spy that throws on call, across the 1000-event ingestion smoke. Not a hardcoded zero.' },
+    { stat: 'SQLite', label: 'on disk', body: 'Memories live in a local .hippo/ store you can read, grep, and git-track. No cloud, no account, no telemetry.' },
+    { stat: '1 call', label: 'to forget', body: 'Right-to-be-forgotten is a single API call. Every row carries kind, scope, owner, and provenance.' },
+    { stat: 'tenant-safe', label: 'by default', body: 'Multi-tenant keys are scrypt-hashed with an audit log on every mutation. Tenant A cannot see tenant B, proven by a negative test.' },
+  ],
+  portability: {
+    heading: "And it's not locked to one tool.",
+    body: "Your ChatGPT memories don't travel to Claude; your .cursorrules don't travel to Codex. Hippo is one store behind all of them.",
+  },
+} as const;
+
+/** FAQ - objection handling. Answers sourced to README receipts. */
+export const faq = [
+  { q: 'Is this just RAG?', a: 'No. RAG retrieves from a static corpus; hippo is a memory lifecycle. Memories decay on a half-life, retrieval strengthens them, errors stick, and sleep consolidates repeats into patterns. It forgets by default and earns persistence through use.' },
+  { q: 'Does it need embeddings?', a: 'No. Recall runs on BM25 out of the box (74% R@5 on LongMemEval, BM25 only). Embeddings are an optional dependency for hybrid scoring; nothing is required at runtime.' },
+  { q: 'Where does my data go?', a: 'Nowhere. Everything is a local SQLite store with markdown mirrors: 0 outbound HTTP on the ingestion smoke, proven by a fetch spy. No cloud, no account, no telemetry.' },
+  { q: 'Which agents does it work with?', a: 'hippo init auto-installs hooks for Claude Code, Codex, Cursor, OpenClaw, and OpenCode, and exposes an MCP server for any MCP client (Cursor, Windsurf, Cline, Claude Desktop).' },
+  { q: 'Is it production-ready?', a: 'It is MIT-licensed at v1.15.0, with 926 tests against a real database and zero mocks. Multi-tenant isolation is proven by a negative test.' },
+] as const;

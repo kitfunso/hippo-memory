@@ -1,5 +1,6 @@
 ---
 import { site } from '../content/site';
+import Logo from './Logo.astro';
 
 const footerLinks = [
   { label: 'GitHub', href: site.links.repo },
@@ -16,9 +17,7 @@ const footerLinks = [
     <div class="rule-gradient mb-10"></div>
     <div class="flex flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
       <div class="max-w-sm">
-        <div class="flex items-center gap-2 font-display text-lg font-semibold">
-          <span aria-hidden="true" class="text-xl">🦛</span>{site.name}
-        </div>
+        <Logo gid="ft" />
         <p class="mt-3 text-sm leading-relaxed text-zinc-400">
           A memory layer for AI agents, modeled on the hippocampus. The secret to good memory isn't
           remembering more. It's knowing what to forget.

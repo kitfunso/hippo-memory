@@ -5,12 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
+    "check:readme": "node scripts/check-readme-sync.mjs",
+    "build": "node scripts/check-readme-sync.mjs && astro build",
     "preview": "astro preview",
-    "deploy": "astro build && wrangler pages deploy dist"
+    "deploy": "npm run build && wrangler pages deploy dist"
   },
   "dependencies": {
     "@astrojs/preact": "^5.1.4",
+    "@astrojs/sitemap": "^3.7.3",
     "@fontsource-variable/bricolage-grotesque": "^5.2.10",
     "@fontsource-variable/hanken-grotesk": "^5.2.8",
     "@fontsource-variable/jetbrains-mono": "^5.2.8",

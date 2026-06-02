@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://hippo-memory.pages.dev/sitemap-index.xml

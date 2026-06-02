@@ -1,6 +1,6 @@
 ---
 import '../styles/global.css';
-import { site } from '../content/site';
+import { site, faq } from '../content/site';
 
 interface Props {
   title?: string;
@@ -30,11 +30,30 @@ const jsonLd = {
   author: { '@type': 'Organization', name: 'kitfunso' },
   offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
 };
+
+const faqJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faq.map((f) => ({
+    '@type': 'Question',
+    name: f.q,
+    acceptedAnswer: { '@type': 'Answer', text: f.a },
+  })),
+};
+
+// Cloudflare Web Analytics: cookie-less, no perf hit. Renders ONLY when a beacon token
+// is provided at build time (PUBLIC_CF_BEACON_TOKEN); otherwise it is a no-op.
+// No SRI on the beacon by design: Cloudflare serves beacon.min.js as an auto-updated,
+// unversioned first-party asset and omits `integrity` in its official snippet (a pinned
+// hash would break on their rotations). Simpler alternative: the CF Pages dashboard
+// Web Analytics toggle injects the same beacon at the edge with zero code (see README).
+const beaconToken = import.meta.env.PUBLIC_CF_BEACON_TOKEN;
 ---
 
 <!doctype html>
 <html lang="en">
   <head>
+    <script is:inline>document.documentElement.classList.add('js');</script>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="generator" content={Astro.generator} />
@@ -44,6 +63,7 @@ const jsonLd = {
     <meta name="theme-color" content="#08080b" />
     <meta name="color-scheme" content="dark" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
@@ -62,6 +82,7 @@ const jsonLd = {
     <meta name="twitter:image" content={ogImage} />
 
     <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+    <script type="application/ld+json" set:html={JSON.stringify(faqJsonLd)} />
   </head>
   <body class="min-h-screen antialiased">
     <a
@@ -71,5 +92,12 @@ const jsonLd = {
       Skip to content
     </a>
     <slot />
+    {beaconToken && (
+      <script
+        defer
+        src="https://static.cloudflareinsights.com/beacon.min.js"
+        data-cf-beacon={JSON.stringify({ token: beaconToken })}
+      ></script>
+    )}
   </body>
 </html>

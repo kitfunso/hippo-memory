@@ -4,8 +4,11 @@ import Nav from '../components/Nav.astro';
 import Hero from '../components/Hero.astro';
 import Problem from '../components/Problem.astro';
 import HowItWorks from '../components/HowItWorks.astro';
+import GetStarted from '../components/GetStarted.astro';
+import LocalFirst from '../components/LocalFirst.astro';
 import Receipts from '../components/Receipts.astro';
 import Compare from '../components/Compare.astro';
+import Faq from '../components/Faq.astro';
 import InstallCta from '../components/InstallCta.astro';
 import Footer from '../components/Footer.astro';
 ---
@@ -16,8 +19,11 @@ import Footer from '../components/Footer.astro';
     <Hero />
     <Problem />
     <HowItWorks />
+    <GetStarted />
+    <LocalFirst />
     <Receipts />
     <Compare />
+    <Faq />
     <InstallCta />
   </main>
   <Footer />
@@ -26,6 +32,7 @@ import Footer from '../components/Footer.astro';
 
   <script is:inline>
     (function () {
+      // copy-to-clipboard
       var live = document.getElementById('copy-live');
       document.querySelectorAll('[data-copy]').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -42,6 +49,21 @@ import Footer from '../components/Footer.astro';
           }).catch(function () {});
         });
       });
+
+      // scroll-reveal: reveal [data-reveal] blocks as they enter view (.js gate hides
+      // them first; no-JS / no-IO shows everything).
+      var reveals = document.querySelectorAll('[data-reveal]');
+      if (!reveals.length) return;
+      if (!('IntersectionObserver' in window)) {
+        reveals.forEach(function (el) { el.classList.add('is-visible'); });
+        return;
+      }
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) { e.target.classList.add('is-visible'); io.unobserve(e.target); }
+        });
+      }, { rootMargin: '0px 0px -10% 0px', threshold: 0.05 });
+      reveals.forEach(function (el) { io.observe(el); });
     })();
   </script>
 </Base>

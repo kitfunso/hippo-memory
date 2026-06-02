@@ -9,7 +9,7 @@ const pad = size === 'lg' ? 'px-5 py-4 text-base' : 'px-4 py-3 text-sm';
 
 <div class:list={['group flex items-center gap-3 rounded-xl glass font-mono', pad]}>
   <span class="select-none text-acc-cyan">$</span>
-  <code class="flex-1 truncate text-zinc-200">{command}</code>
+  <code class="min-w-0 flex-1 break-words text-zinc-200">{command}</code>
   <button
     type="button"
     data-copy={command}

@@ -1,0 +1,37 @@
+---
+import { localFirst, importsFrom } from '../content/site';
+---
+
+<section id="local-first" class="relative scroll-mt-20 border-t border-white/5">
+  <div class="mx-auto max-w-6xl px-5 py-24">
+    <div class="max-w-2xl" data-reveal>
+      <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">{localFirst.kicker}</p>
+      <h2 class="mt-4 text-3xl leading-tight sm:text-4xl">
+        Your memory never leaves your <span class="text-gradient">machine.</span>
+      </h2>
+    </div>
+
+    <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-reveal>
+      {localFirst.points.map((p) => (
+        <div class="glass glass-hover flex flex-col rounded-2xl p-6">
+          <span class="font-mono text-2xl font-semibold text-gradient">{p.stat}</span>
+          <span class="mt-1 text-sm font-medium text-zinc-200">{p.label}</span>
+          <p class="mt-3 text-sm leading-relaxed text-zinc-400">{p.body}</p>
+        </div>
+      ))}
+    </div>
+
+    <div class="mt-8 rounded-2xl glass p-6 sm:flex sm:items-center sm:justify-between sm:gap-8" data-reveal>
+      <div class="max-w-xl">
+        <h3 class="text-lg font-semibold">{localFirst.portability.heading}</h3>
+        <p class="mt-2 text-sm leading-relaxed text-zinc-400">{localFirst.portability.body}</p>
+      </div>
+      <div class="mt-4 flex flex-wrap items-center gap-2 sm:mt-0 sm:shrink-0">
+        <span class="font-mono text-xs uppercase tracking-wider text-zinc-400">imports from</span>
+        {importsFrom.map((s) => (
+          <span class="rounded border border-white/10 bg-white/[0.02] px-2 py-0.5 font-mono text-xs text-zinc-300">{s}</span>
+        ))}
+      </div>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,24 @@
+---
+import { faq } from '../content/site';
+---
+
+<section id="faq" class="relative scroll-mt-20 border-t border-white/5 bg-[#0a0a0f]">
+  <div class="mx-auto max-w-3xl px-5 py-24">
+    <div data-reveal>
+      <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">FAQ</p>
+      <h2 class="mt-4 text-3xl leading-tight sm:text-4xl">Questions, answered.</h2>
+    </div>
+
+    <div class="mt-10 space-y-3" data-reveal>
+      {faq.map((item) => (
+        <details class="group rounded-2xl glass px-6 [&>summary]:list-none">
+          <summary class="flex cursor-pointer items-center justify-between gap-4 py-5 text-left text-base font-medium text-zinc-100">
+            <span>{item.q}</span>
+            <span class="shrink-0 text-xl leading-none text-acc-cyan transition-transform duration-200 group-open:rotate-45" aria-hidden="true">+</span>
+          </summary>
+          <p class="pb-5 text-sm leading-relaxed text-zinc-400">{item.a}</p>
+        </details>
+      ))}
+    </div>
+  </div>
+</section>

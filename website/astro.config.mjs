@@ -1,6 +1,7 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import preact from '@astrojs/preact';
+import sitemap from '@astrojs/sitemap';
 import tailwindcss from '@tailwindcss/vite';
 
 // Static landing page for hippo-memory, deployed to Cloudflare Pages.
@@ -8,7 +9,7 @@ import tailwindcss from '@tailwindcss/vite';
 // https://astro.build/config
 export default defineConfig({
   site: 'https://hippo-memory.pages.dev',
-  integrations: [preact()],
+  integrations: [preact(), sitemap()],
   vite: {
     plugins: [tailwindcss()],
   },

@@ -1,0 +1,41 @@
+---
+import { getStarted } from '../content/site';
+import CopyCommand from './CopyCommand.astro';
+---
+
+<section id="get-started" class="relative scroll-mt-20 border-t border-white/5 bg-[#0a0a0f]">
+  <div class="mx-auto max-w-6xl px-5 py-24">
+    <div class="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16">
+      <div data-reveal>
+        <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">{getStarted.kicker}</p>
+        <h2 class="mt-4 text-3xl leading-tight sm:text-4xl">{getStarted.heading}</h2>
+        <p class="mt-5 max-w-md text-lg leading-relaxed text-zinc-400">{getStarted.body}</p>
+
+        <div class="mt-8 rounded-2xl glass p-5">
+          <p class="text-sm font-medium text-zinc-200">{getStarted.autoInstall.heading}</p>
+          <ul class="mt-3 flex flex-wrap gap-2">
+            {getStarted.autoInstall.frameworks.map((f) => (
+              <li class="rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-1 font-mono text-xs text-zinc-300">{f}</li>
+            ))}
+          </ul>
+          <p class="mt-3 text-xs leading-relaxed text-zinc-400">{getStarted.autoInstall.note}</p>
+        </div>
+      </div>
+
+      <div data-reveal>
+        <ol class="space-y-4">
+          {getStarted.steps.map((cmd, i) => (
+            <li class="flex items-start gap-4">
+              <span class="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 font-mono text-xs text-acc-cyan">{i + 1}</span>
+              <div class="min-w-0 flex-1"><CopyCommand command={cmd} size="lg" /></div>
+            </li>
+          ))}
+        </ol>
+        <p class="mt-4 pl-11 text-sm leading-relaxed text-zinc-400">
+          Then <code class="font-mono text-zinc-300">hippo sleep</code> runs at session end via the
+          auto-installed hook and consolidates what you learned.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
