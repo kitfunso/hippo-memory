@@ -21,6 +21,11 @@
 import { openHippoDb, closeHippoDb } from './db.js';
 import { assertTenantId } from './store.js';
 
+/** The DB connection handle `openHippoDb` returns. Threaded (optionally) through
+ *  the graph writers so `extractGraph` can run clear + all inserts in ONE
+ *  transaction — see `runGraphRebuildTransaction`. */
+export type GraphTxDb = ReturnType<typeof openHippoDb>;
+
 // ---------------------------------------------------------------------------
 // Domain types
 // ---------------------------------------------------------------------------
@@ -207,6 +212,7 @@ export function insertEntity(
   hippoRoot: string,
   tenantId: string,
   opts: InsertEntityOpts,
+  txDb?: GraphTxDb,
 ): Entity {
   assertTenantId('insertEntity', tenantId);
   if (!GRAPH_ENTITY_TYPES.has(opts.entityType)) {
@@ -218,7 +224,8 @@ export function insertEntity(
     throw new Error(`insertEntity: name exceeds the ${MAX_ENTITY_NAME_LEN}-char cap`);
   }
   const now = new Date().toISOString();
-  const db = openHippoDb(hippoRoot);
+  const ownDb = txDb ? null : openHippoDb(hippoRoot);
+  const db = txDb ?? ownDb!;
   try {
     const sourceKind = resolveConsolidatedSource(db, tenantId, opts.memoryId, 'insertEntity');
     const result = db.prepare(`
@@ -230,7 +237,7 @@ export function insertEntity(
     if (!row) throw new Error('insertEntity: failed to reload inserted entity');
     return rowToEntity(row);
   } finally {
-    closeHippoDb(db);
+    if (ownDb) closeHippoDb(ownDb);
   }
 }
 
@@ -242,13 +249,15 @@ export function insertRelation(
   hippoRoot: string,
   tenantId: string,
   opts: InsertRelationOpts,
+  txDb?: GraphTxDb,
 ): Relation {
   assertTenantId('insertRelation', tenantId);
   if (!GRAPH_RELATION_TYPES.has(opts.relType)) {
     throw new Error(`insertRelation: relType must be one of ${Array.from(GRAPH_RELATION_TYPES).join('|')}; got ${opts.relType}`);
   }
   const now = new Date().toISOString();
-  const db = openHippoDb(hippoRoot);
+  const ownDb = txDb ? null : openHippoDb(hippoRoot);
+  const db = txDb ?? ownDb!;
   try {
     for (const [eid, role] of [[opts.fromEntityId, 'from'], [opts.toEntityId, 'to']] as const) {
       const ent = db.prepare(`SELECT tenant_id FROM entities WHERE id = ?`).get(eid) as { tenant_id: string } | undefined;
@@ -267,7 +276,7 @@ export function insertRelation(
     if (!row) throw new Error('insertRelation: failed to reload inserted relation');
     return rowToRelation(row);
   } finally {
-    closeHippoDb(db);
+    if (ownDb) closeHippoDb(ownDb);
   }
 }
 
@@ -561,11 +570,122 @@ export function markExtractionProcessed(
  * writer), so the E3.3 CI lint permits this `DELETE FROM entities`. Does NOT touch
  * graph_extraction_queue (the enqueue-hook's domain).
  */
-export function clearGraph(hippoRoot: string, tenantId: string): number {
+export function clearGraph(hippoRoot: string, tenantId: string, txDb?: GraphTxDb): number {
   assertTenantId('clearGraph', tenantId);
-  const db = openHippoDb(hippoRoot);
+  const ownDb = txDb ? null : openHippoDb(hippoRoot);
+  const db = txDb ?? ownDb!;
   try {
     const res = db.prepare(`DELETE FROM entities WHERE tenant_id = ?`).run(tenantId);
+    return Number(res.changes ?? 0);
+  } finally {
+    if (ownDb) closeHippoDb(ownDb);
+  }
+}
+
+/**
+ * Run a full graph rebuild for one tenant inside a single transaction. `clearGraph`
+ * + every `insertEntity`/`insertRelation` call made inside `fn` (passing the supplied
+ * `txDb`) share the one connection and its `BEGIN IMMEDIATE` write lock, so the
+ * rebuild is ATOMIC: two concurrent rebuilds serialize on the write lock (the second
+ * waits, then re-derives cleanly) instead of interleaving into duplicate rows, and a
+ * throw mid-rebuild ROLLS BACK the clear (no bricked/empty graph). The sole sanctioned
+ * place to wrap graph writes in a transaction.
+ */
+export function runGraphRebuildTransaction<T>(
+  hippoRoot: string,
+  tenantId: string,
+  fn: (txDb: GraphTxDb) => T,
+): T {
+  assertTenantId('runGraphRebuildTransaction', tenantId);
+  const db = openHippoDb(hippoRoot);
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    let committed = false;
+    try {
+      const out = fn(db);
+      db.exec('COMMIT');
+      committed = true;
+      return out;
+    } finally {
+      if (!committed) {
+        try { db.exec('ROLLBACK'); } catch { /* preserve the original throw */ }
+      }
+    }
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// E3 sleep enqueue-hook — producer helper + drain support
+// ---------------------------------------------------------------------------
+
+/**
+ * Fail-soft producer hook: mark a tenant dirty for graph re-extraction by
+ * enqueuing its consolidated mirror memory. NEVER throws into the caller — a
+ * graph-dirty signal failing must not abort a core E2 write. Graph staleness is
+ * recoverable (next sleep / manual `graph extract`); a broken `hippo decide` is
+ * not. Called POST-COMMIT from the E2 graph-source save/close mutations of
+ * decision, policy, customer_note and project_brief. A null memoryId (a
+ * forgotten mirror) is a no-op.
+ */
+export function markGraphDirty(hippoRoot: string, tenantId: string, memoryId: string | null): void {
+  if (!memoryId) return;
+  try {
+    enqueueExtraction(hippoRoot, tenantId, memoryId);
+  } catch (err) {
+    // Logged (warn) so a SYSTEMATIC enqueue failure surfaces to operators, but
+    // swallowed so the already-committed E2 write is never rolled back.
+    console.warn(
+      `markGraphDirty: enqueue failed for tenant=${tenantId} memory=${memoryId}: ${(err as Error).message}`,
+    );
+  }
+}
+
+/**
+ * The dirty tenants awaiting graph re-extraction, each with the MAX pending
+ * queue id at read time (a watermark). The sleep drain rebuilds each tenant's
+ * graph, then marks only items at or below the watermark processed, so items
+ * enqueued DURING the rebuild stay pending for the next sleep (no lost-update
+ * race). Host-wide read (the queue is per-tenant but sleep is cross-tenant).
+ */
+export function loadPendingExtractionTenants(
+  hippoRoot: string,
+): { tenantId: string; maxPendingId: number }[] {
+  const db = openHippoDb(hippoRoot);
+  try {
+    const rows = db.prepare(`
+      SELECT tenant_id AS tenant_id, MAX(id) AS max_id
+      FROM graph_extraction_queue
+      WHERE status = 'pending'
+      GROUP BY tenant_id
+    `).all() as { tenant_id: string; max_id: number }[];
+    return rows.map((r) => ({ tenantId: r.tenant_id, maxPendingId: Number(r.max_id) }));
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/**
+ * Mark every pending queue item for a tenant with `id <= maxId` processed, in
+ * one UPDATE. Status/processed_at only, so the consolidated-source guard trigger
+ * is not involved (same as markExtractionProcessed). Returns the count marked.
+ * The `<= maxId` watermark excludes items enqueued after the drain snapshot.
+ */
+export function markPendingProcessedUpTo(
+  hippoRoot: string,
+  tenantId: string,
+  maxId: number,
+): number {
+  assertTenantId('markPendingProcessedUpTo', tenantId);
+  const now = new Date().toISOString();
+  const db = openHippoDb(hippoRoot);
+  try {
+    const res = db.prepare(`
+      UPDATE graph_extraction_queue
+      SET status = 'processed', processed_at = ?
+      WHERE tenant_id = ? AND status = 'pending' AND id <= ?
+    `).run(now, tenantId, maxId);
     return Number(res.changes ?? 0);
   } finally {
     closeHippoDb(db);

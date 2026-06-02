@@ -26,6 +26,7 @@
 
 import { openHippoDb, closeHippoDb } from './db.js';
 import { writeEntry, assertTenantId } from './store.js';
+import { markGraphDirty } from './graph.js';
 import { createMemory, Layer, DECISION_HALF_LIFE_DAYS } from './memory.js';
 import { appendAuditEvent } from './audit.js';
 
@@ -237,6 +238,10 @@ export function saveDecision(
         },
       });
     },
+    // Post-commit hook: mark the tenant's graph dirty AFTER the DB row commits
+    // but BEFORE the markdown mirrors are written, so a mirror-write failure can
+    // never leave a committed save unflagged (codex). markGraphDirty is fail-soft.
+    afterCommit: () => markGraphDirty(hippoRoot, tenantId, mem.id),
   });
 
   if (!savedRow) {
@@ -295,7 +300,10 @@ export function closeDecision(
       });
 
       db.exec('COMMIT');
-      return rowToDecision(row);
+      const closed = rowToDecision(row);
+      // After COMMIT (write lock released), before the finally closes `db`.
+      markGraphDirty(hippoRoot, tenantId, closed.memoryId);
+      return closed;
     } catch (e) {
       try {
         db.exec('ROLLBACK');

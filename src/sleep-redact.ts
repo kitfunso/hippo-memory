@@ -43,6 +43,7 @@ export interface RedactSleepCtx {
  *   - deduped.semDups, .epiDups (aggregate dedup activity across tenants)
  *   - audit.errorsRemoved, .warningCount (aggregate audit-pipeline activity)
  *   - ambient.totalMemories, .avgStrength (aggregate corpus shape)
+ *   - graph.tenants, .entities, .relations (cross-tenant graph rebuild totals)
  *
  * NOT redacted (per-invocation activity counters, not cross-tenant accounting):
  *   - active, removed, mergedEpisodic, newSemantic (this invocation's totals)
@@ -80,6 +81,11 @@ export function redactSleepResultForCaller(
       totalMemories: 0,
       avgStrength: 0,
     };
+  }
+  if (result.graph !== undefined) {
+    // E3 sleep enqueue-hook: per-tenant graph rebuild totals are cross-tenant
+    // accounting, the same class as deduped/audit/ambient above.
+    redacted.graph = { tenants: 0, entities: 0, relations: 0 };
   }
   return redacted;
 }

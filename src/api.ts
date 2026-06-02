@@ -68,6 +68,8 @@ import { consolidate } from './consolidate.js';
 import { loadConfig } from './config.js';
 import { deduplicateStore } from './dedupe.js';
 import { computeAmbientState, type AmbientState } from './ambient.js';
+import { loadPendingExtractionTenants, markPendingProcessedUpTo } from './graph.js';
+import { extractGraph } from './graph-extract.js';
 import {
   computePlanningFallacyOutput,
   type PlanningFallacyHint,
@@ -2446,6 +2448,13 @@ export interface SleepResult {
   audit?: { errorsRemoved: number; warningCount: number };
   shared?: number;
   ambient?: AmbientState | null;
+  /**
+   * E3 sleep enqueue-hook: graph re-extraction totals across the tenants rebuilt
+   * this sleep. Absent when no tenant was dirty, and under dryRun (the graph
+   * phase runs only on a real sleep). Cross-tenant aggregate — zeroed on
+   * non-loopback non-self egress by sleep-redact.ts.
+   */
+  graph?: { tenants: number; entities: number; relations: number };
   details?: string[];
 }
 
@@ -2488,6 +2497,8 @@ export interface SleepPhases {
   deleteEntry: typeof deleteEntry;
   computeAmbientState: typeof computeAmbientState;
   loadConfig: typeof loadConfig;
+  loadPendingExtractionTenants: typeof loadPendingExtractionTenants;
+  extractGraph: typeof extractGraph;
 }
 
 const DEFAULT_SLEEP_PHASES: SleepPhases = {
@@ -2499,6 +2510,8 @@ const DEFAULT_SLEEP_PHASES: SleepPhases = {
   deleteEntry,
   computeAmbientState,
   loadConfig,
+  loadPendingExtractionTenants,
+  extractGraph,
 };
 
 export async function sleep(
@@ -2519,9 +2532,31 @@ export async function sleep(
   let auditDeletedCount = 0;
   let ambientTotal = 0;
   let phaseError: Error | null = null;
+  let graphSnapshotError: string | null = null;
 
   let result: SleepResult | null = null;
   try {
+    // Snapshot dirty tenants BEFORE any memory-deleting phase (consolidate /
+    // dedup / audit). The graph_extraction_queue rows are FK'd to mirror
+    // memories with ON DELETE CASCADE, so a phase that deletes a queued mirror
+    // (e.g. dedup removing a near-duplicate superseding decision) would drop the
+    // tenant from a drain-time load and leave its graph stale (codex P1). The
+    // MAX(id) watermark captured here stays valid: arrivals during sleep get a
+    // higher id and remain pending.
+    //
+    // Fail-soft (codex P2): a queue-read failure here must NOT abort core sleep
+    // (consolidation / dedup / audit run regardless). On failure, skip graph
+    // refresh this sleep (recovered next sleep) and surface a detail once
+    // `result` exists (Phase 6).
+    let dirtyTenants: { tenantId: string; maxPendingId: number }[] = [];
+    if (!dryRun) {
+      try {
+        dirtyTenants = phases.loadPendingExtractionTenants(ctx.hippoRoot);
+      } catch (snapErr) {
+        graphSnapshotError = (snapErr as Error).message;
+      }
+    }
+
     // Phase 1: Consolidation.
     const consolidateResult = await phases.consolidate(ctx.hippoRoot, { dryRun });
     consolidationCount = consolidateResult.semanticCreated + consolidateResult.merged;
@@ -2599,6 +2634,57 @@ export async function sleep(
         result.ambient = phases.computeAmbientState(postSleepEntries);
         ambientTotal = result.ambient.totalMemories;
       }
+    }
+
+    // Phase 6: Graph extraction drain (E3 sleep enqueue-hook). Rebuild the
+    // entity/relation graph for every tenant marked dirty (by markGraphDirty)
+    // since the last sleep, so `recall --hops` + cross-object `references` edges
+    // run on fresh data without a manual `hippo graph extract`. Fully
+    // fault-isolated: the consolidation work above has already committed, so a
+    // failure here must never abort sleep; a per-tenant extract failure leaves
+    // that tenant's queue items pending for the next sleep. (Skipped under
+    // dryRun via the early return above.)
+    try {
+      if (graphSnapshotError) {
+        // The dirty-tenant snapshot failed (codex P2 fail-soft). Core sleep
+        // already succeeded; surface the skipped graph refresh as a detail.
+        result.details = [
+          ...(result.details ?? []),
+          `graph: dirty-tenant snapshot failed (skipped graph refresh): ${graphSnapshotError}`,
+        ];
+      }
+      let gTenants = 0;
+      let gEntities = 0;
+      let gRelations = 0;
+      // dirtyTenants was snapshotted before the memory-deleting phases above.
+      for (const { tenantId, maxPendingId } of dirtyTenants) {
+        try {
+          const ext = phases.extractGraph(ctx.hippoRoot, tenantId);
+          // Count the rebuild as soon as it succeeds — it happened regardless of
+          // the drain-mark below.
+          gTenants += 1;
+          gEntities += ext.entities;
+          gRelations += ext.relations;
+          // Watermark drain: mark processed only items enqueued before this
+          // rebuild started (id <= maxPendingId). Arrivals during the rebuild
+          // keep pending status and are caught next sleep; rows whose mirror was
+          // cascade-deleted earlier this sleep are already gone (no-op).
+          markPendingProcessedUpTo(ctx.hippoRoot, tenantId, maxPendingId);
+        } catch (tenantErr) {
+          result.details = [
+            ...(result.details ?? []),
+            `graph: extract failed for a dirty tenant (left pending): ${(tenantErr as Error).message}`,
+          ];
+        }
+      }
+      if (gTenants > 0) {
+        result.graph = { tenants: gTenants, entities: gEntities, relations: gRelations };
+      }
+    } catch (graphErr) {
+      result.details = [
+        ...(result.details ?? []),
+        `graph: drain phase failed (skipped): ${(graphErr as Error).message}`,
+      ];
     }
 
     return result;
