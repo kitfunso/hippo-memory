@@ -343,6 +343,118 @@ export function loadRelations(
 }
 
 // ---------------------------------------------------------------------------
+// E3.2 multi-hop recall read helpers (SELECT-only; the check-graph-writes lint
+// permits these here and in the read-only consumer src/graph-recall.ts).
+// ---------------------------------------------------------------------------
+
+/** Chunk size for IN-list queries: well under SQLite's 999-bound-variable default
+ *  (leaves headroom for the tenant_id param + the doubled list in neighbour lookups). */
+const IN_LIST_CHUNK = 400;
+
+/**
+ * Map consolidated source memory ids -> their graph entities. The SEED step of E3.2
+ * multi-hop recall (recall result memory ids -> entities to traverse from). Tenant-
+ * scoped, read-only; chunks the IN-list under the SQLite variable cap.
+ */
+export function loadEntitiesByMemoryId(
+  hippoRoot: string,
+  tenantId: string,
+  memoryIds: string[],
+): Entity[] {
+  assertTenantId('loadEntitiesByMemoryId', tenantId);
+  if (memoryIds.length === 0) return [];
+  const db = openHippoDb(hippoRoot);
+  try {
+    const out: Entity[] = [];
+    for (let i = 0; i < memoryIds.length; i += IN_LIST_CHUNK) {
+      const slice = memoryIds.slice(i, i + IN_LIST_CHUNK);
+      const ph = slice.map(() => '?').join(',');
+      const rows = db.prepare(`
+        SELECT ${ENTITY_COLS} FROM entities
+        WHERE tenant_id = ? AND memory_id IN (${ph})
+      `).all(tenantId, ...slice) as EntityRow[];
+      out.push(...rows.map(rowToEntity));
+    }
+    return out;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/**
+ * Load entities by their primary ids. Resolves the entity rows reached during the BFS
+ * (whose `memory_id` maps back to a recall result). Tenant-scoped, read-only.
+ */
+export function loadEntitiesByIds(
+  hippoRoot: string,
+  tenantId: string,
+  ids: number[],
+): Entity[] {
+  assertTenantId('loadEntitiesByIds', tenantId);
+  if (ids.length === 0) return [];
+  const db = openHippoDb(hippoRoot);
+  try {
+    const out: Entity[] = [];
+    for (let i = 0; i < ids.length; i += IN_LIST_CHUNK) {
+      const slice = ids.slice(i, i + IN_LIST_CHUNK);
+      const ph = slice.map(() => '?').join(',');
+      const rows = db.prepare(`
+        SELECT ${ENTITY_COLS} FROM entities
+        WHERE tenant_id = ? AND id IN (${ph})
+      `).all(tenantId, ...slice) as EntityRow[];
+      out.push(...rows.map(rowToEntity));
+    }
+    return out;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/**
+ * All relations touching ANY of `entityIds` in EITHER direction (from OR to) — the
+ * per-hop neighbour query for E3.2 multi-hop traversal. ONE query for the whole frontier
+ * (not one per node): this is the bidirectional read `loadRelations` (from-only) lacks,
+ * and avoids an N+1 across BFS frontier nodes. `limit` caps rows for the frontier and
+ * must be a non-negative integer (the raw `LIMIT ?` rejects a fractional value).
+ */
+export function loadNeighborRelations(
+  hippoRoot: string,
+  tenantId: string,
+  entityIds: number[],
+  opts: { limit?: number } = {},
+): Relation[] {
+  assertTenantId('loadNeighborRelations', tenantId);
+  if (entityIds.length === 0) return [];
+  const limit = opts.limit ?? 1000;
+  if (!Number.isInteger(limit) || limit < 0) {
+    throw new Error(`loadNeighborRelations: limit must be a non-negative integer; got ${limit}`);
+  }
+  const db = openHippoDb(hippoRoot);
+  try {
+    // `limit` is applied PER CHUNK; a frontier spanning >IN_LIST_CHUNK ids could return
+    // up to limit*chunks rows before the by-id dedup below. Harmless for E3.2 (the
+    // frontier is bounded by maxNeighbors <= 200 << IN_LIST_CHUNK, so a single chunk,
+    // and the BFS re-enforces the per-hop fanout cap), but note the semantics if a
+    // tighter total cap is ever needed.
+    const byId = new Map<number, Relation>();
+    for (let i = 0; i < entityIds.length; i += IN_LIST_CHUNK) {
+      const slice = entityIds.slice(i, i + IN_LIST_CHUNK);
+      const ph = slice.map(() => '?').join(',');
+      const rows = db.prepare(`
+        SELECT ${RELATION_COLS} FROM relations
+        WHERE tenant_id = ? AND (from_entity_id IN (${ph}) OR to_entity_id IN (${ph}))
+        ORDER BY created_at DESC, id DESC
+        LIMIT ?
+      `).all(tenantId, ...slice, ...slice, limit) as RelationRow[];
+      for (const r of rows) byId.set(r.id, rowToRelation(r));
+    }
+    return Array.from(byId.values());
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Extraction queue (the interface the deferred sleep enqueue-hook + E3.1 will use)
 // ---------------------------------------------------------------------------
 

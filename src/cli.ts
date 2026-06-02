@@ -211,6 +211,7 @@ import { runFeatureEval, formatResult, resultToBaseline, detectRegressions, type
 import { refineStore } from './refine-llm.js';
 import { wmPush, wmRead, wmClear, wmFlush, WorkingMemoryItem } from './working-memory.js';
 import { multihopSearch } from './multihop.js';
+import { graphExpandRecall, MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from './graph-recall.js';
 import { getReranker } from './rerankers/index.js';
 import { computeSalience } from './salience.js';
 import { computeAmbientState, renderAmbientSummary } from './ambient.js';
@@ -990,6 +991,52 @@ async function cmdRecall(
     });
   }
 
+  // E3.2 multi-hop graph recall. After the base branch produces `results`, optionally
+  // augment with memories reached by walking the entities/relations graph `--hops N` out
+  // from the lexical seeds. Runs BEFORE the opt-in re-rankers below so graph-reached
+  // results are first-class candidates in any downstream re-ranking / --why. Default OFF
+  // (absent or 0 = no-op). Reached memories are loaded directly by id (NOT via the
+  // lexical candidate set, which would exclude the orthogonal neighbours graph recall
+  // exists to surface); the engine re-applies the same superseded/asOf hard filters.
+  if (flags['hops'] !== undefined) {
+    // Reject a value-less `--hops` (parseArgs stores boolean true): Number(true) === 1
+    // would otherwise silently run a 1-hop expansion when the user fat-fingered the value.
+    if (typeof flags['hops'] === 'boolean') {
+      console.error(`--hops requires an integer value 0..${MAX_HOPS} (e.g. --hops 1).`);
+      process.exit(1);
+    }
+    const hops = Number(flags['hops']);
+    if (!Number.isInteger(hops) || hops < 0 || hops > MAX_HOPS) {
+      console.error(`Invalid --hops: "${String(flags['hops'])}". Must be an integer 0..${MAX_HOPS}.`);
+      process.exit(1);
+    }
+    let maxNeighbors = DEFAULT_MAX_NEIGHBORS;
+    if (flags['max-neighbors'] !== undefined) {
+      if (typeof flags['max-neighbors'] === 'boolean') {
+        console.error(`--max-neighbors requires an integer value 1..200.`);
+        process.exit(1);
+      }
+      maxNeighbors = Number(flags['max-neighbors']);
+      if (!Number.isInteger(maxNeighbors) || maxNeighbors < 1 || maxNeighbors > 200) {
+        console.error(`Invalid --max-neighbors: "${String(flags['max-neighbors'])}". Must be an integer 1..200.`);
+        process.exit(1);
+      }
+    }
+    if (hops > 0) {
+      results = graphExpandRecall(results, {
+        hops,
+        maxNeighbors,
+        hippoRoot,
+        globalRoot: isInitialized(globalRoot) && globalRoot !== hippoRoot ? globalRoot : undefined,
+        tenantId,
+        includeSuperseded,
+        asOf,
+        budget,
+        minResults: minResults ?? 1,
+      });
+    }
+  }
+
   // ACC EVC-adaptive recall (RESEARCH.md §PFC.ACC). When the initial top-K is
   // dominated by lexically similar but distinct memories (high pairwise token
   // overlap = same topic, different facts = conflict), allocate extra retrieval
@@ -1537,6 +1584,9 @@ async function cmdRecall(
         base.superseded = true;
         base.superseded_by = r.entry.superseded_by;
       }
+      if (r.graphVia) {
+        base.graphVia = r.graphVia;
+      }
       if (showWhy) {
         const explanation = explainMatch(query, r);
         base.confidence = resolveConfidence(r.entry);
@@ -1651,8 +1701,9 @@ async function cmdRecall(
     const isGlobal = isInitialized(globalRoot) && !localIndex.entries[e.id];
     const globalMark = isGlobal ? ' [global]' : '';
     const supersededMark = e.superseded_by ? ' [superseded]' : '';
+    const graphMark = r.graphVia ? ` [graph: ${r.graphVia.hops}hop ${r.graphVia.relType}]` : '';
     const sourceMark = isGlobal ? ' [global]' : ' [local]';
-    console.log(`--- ${e.id} [${e.layer}] ${confLabel}${globalMark}${supersededMark} score=${fmt(r.score, 3)} strength=${fmt(e.strength)}`);
+    console.log(`--- ${e.id} [${e.layer}] ${confLabel}${globalMark}${supersededMark}${graphMark} score=${fmt(r.score, 3)} strength=${fmt(e.strength)}`);
     console.log(`    [${strengthBar}] tags: ${e.tags.join(', ') || 'none'} | retrieved: ${e.retrieval_count}x`);
     if (showWhy) {
       const explanation = explainMatch(query, r);
@@ -7161,6 +7212,13 @@ Commands:
     --min-results <n>      Minimum results regardless of budget (default: 1)
     --json                 Output as JSON
     --why                  Show match reasons and source annotations
+    --hops <n>             E3.2 multi-hop graph recall: also surface memories
+                           reached by walking the entities/relations graph <n>
+                           hops (0..3, default off) out from the lexical seeds.
+                           Graph hits are tagged [graph: Nhop <rel>]. Today the
+                           graph holds supersedes edges (E3.1); cross-object edges
+                           light up the same traversal once extracted.
+    --max-neighbors <n>    Per-hop fanout cap for --hops (1..200, default 25).
     --no-mmr               Disable MMR diversity re-ranking
     --mmr-lambda <f>       MMR balance 0..1 (default: 0.7, 1.0 = pure relevance)
     --evc-adaptive         ACC-style: when top-K shows high inter-item overlap

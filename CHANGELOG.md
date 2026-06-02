@@ -2,8 +2,28 @@
 
 ## Unreleased
 
+## 1.16.0 (2026-06-02): E3 graph layer (extract + guard + multi-hop recall) + E2 first-class objects
+
 ### Added
 
+- E3.2 multi-hop graph recall. `hippo recall "<query>" --hops N` augments lexical
+  recall with memories reached by walking the E3 entities/relations graph N hops
+  (0..3, default off) out from the seed results; `--max-neighbors M` caps per-hop
+  fanout (1..200, default 25). Graph hits are loaded directly by id (not via the
+  lexical candidate set, so lexically-orthogonal neighbours surface), inherit their
+  origin seed's relevance, and are placed adjacent to it; output tags them
+  `[graph: Nhop <rel>]` (text) / `graphVia` (JSON). Relation-type-agnostic, so the
+  cross-object edges E3.1 will add light up the same traversal with no rework. The
+  recall hard filters are re-applied to graph-reached rows: the full bi-temporal
+  `--as-of` rule, the default superseded-drop (a `supersedes` `to`-endpoint is the
+  older version, surfaced only under `--include-superseded`; the newer `from`-endpoint
+  shows by default), tenant scoping, and the `--min-results` floor (top rows protected
+  from budget eviction). Local AND global stores are expanded. New module
+  `src/graph-recall.ts` (SELECT-only, so the E3.3 graph-write lint permits it outside
+  `graph.ts`) + three read helpers in `src/graph.ts` (`loadEntitiesByMemoryId`,
+  `loadEntitiesByIds`, bidirectional `loadNeighborRelations`); `graphExpandRecall`
+  exported from the SDK. No migration (read-only). 19 real-DB tests +
+  `benchmarks/e3.2/multihop_benchmark.mjs` (predecessor recall 3/5 to 5/5).
 - E2 incident first-class object. `hippo incident` records an operational event
   as a canonical `incidents` table row (source of truth, survives memory decay)
   plus a memory mirror for recall; forget / consolidate / archive gracefully
