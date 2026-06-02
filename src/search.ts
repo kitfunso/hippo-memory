@@ -21,6 +21,7 @@ import { DEFAULT_PHYSICS_CONFIG } from './physics-config.js';
 import { loadPhysicsState } from './physics-state.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { rrfFuse } from './rrf.js';
+import { graphRankStream, selectGraphSeeds, DEFAULT_GRAPH_SEED_COUNT } from './graph-stream.js';
 
 // ---------------------------------------------------------------------------
 // Tokenizer
@@ -382,6 +383,22 @@ export async function hybridSearch(
     /** v0.30 / E4 — enable rebuilt-within-7-days micro-boost (1.05) on L2
      *  summaries with fresh last_rebuilt_at. Default true. */
     summaryFreshness?: boolean;
+    /** L1 — graph-retrieval stream (opt-in): adds a 3rd RRF input ranking in-pool
+     *  candidates by graph proximity to the strong lexical seeds. Active ONLY in
+     *  `scoring:'rrf'` mode with embeddings + a `hippoRoot`. Absent/`weight<=0`/empty
+     *  graph -> the byte-identical 2-list (BM25 + dense) fusion. See src/graph-stream.ts. */
+    graphStream?: {
+      /** RRF weight for the graph list. Required (opt-in is explicit; no implicit default). */
+      weight: number;
+      tenantId: string;
+      /** Global store root, when distinct (where global seeds' graph lives). */
+      globalRoot?: string;
+      hops?: number;
+      decay?: number;
+      maxNeighbors?: number;
+      /** # of top lexical seeds to expand from. Default DEFAULT_GRAPH_SEED_COUNT. */
+      seedCount?: number;
+    };
   } = {}
 ): Promise<SearchResult[]> {
   const now = options.now ?? new Date();
@@ -474,11 +491,39 @@ export async function hybridSearch(
       .filter((i) => bm25Scores[i] > 0 || cosineScores[i] > 0);
     const bm25Ranked = [...eligible].sort((a, b) => bm25Scores[b] - bm25Scores[a]);
     const cosineRanked = [...eligible].sort((a, b) => cosineScores[b] - cosineScores[a]);
-    rrfScores = rrfFuse(
-      [bm25Ranked, cosineRanked],
-      [bm25Weight, embeddingWeight],
-      { absentRank: entries.length + 1 },
-    );
+
+    // L1 graph-retrieval stream (opt-in): a 3rd RRF input ranking in-pool candidates by
+    // graph proximity to the strong lexical seeds. When absent / weight<=0 / the graph
+    // yields nothing in-pool, `graphRanked` is empty and the fusion below is the
+    // byte-identical 2-list (BM25 + dense) path. An all-absent 3rd list would NOT be a
+    // no-op: it adds a uniform constant to the RRF base, which the per-entry multipliers
+    // below turn non-uniform — so we SKIP it rather than fuse an empty list.
+    const gs = options.graphStream;
+    let graphRanked: number[] = [];
+    if (gs && gs.weight > 0 && options.hippoRoot) {
+      const seedCount = Math.min(gs.seedCount ?? DEFAULT_GRAPH_SEED_COUNT, eligible.length);
+      const seeds = selectGraphSeeds(bm25Ranked, cosineRanked, seedCount);
+      graphRanked = graphRankStream(entries, seeds, {
+        hippoRoot: options.hippoRoot,
+        tenantId: gs.tenantId,
+        globalRoot: gs.globalRoot,
+        hops: gs.hops,
+        decay: gs.decay,
+        maxNeighbors: gs.maxNeighbors,
+      });
+    }
+
+    rrfScores = graphRanked.length > 0
+      ? rrfFuse(
+          [bm25Ranked, cosineRanked, graphRanked],
+          [bm25Weight, embeddingWeight, gs!.weight],
+          { absentRank: entries.length + 1 },
+        )
+      : rrfFuse(
+          [bm25Ranked, cosineRanked],
+          [bm25Weight, embeddingWeight],
+          { absentRank: entries.length + 1 },
+        );
   }
 
   // Score each entry
