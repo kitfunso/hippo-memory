@@ -62,7 +62,7 @@ import {
   type ApiKeyListItem,
 } from './auth.js';
 import { applyGoalStackBoost } from './goals.js';
-import { markRetrieved, estimateTokens, hybridSearch, physicsSearch } from './search.js';
+import { markRetrieved, estimateTokens, hybridSearch, physicsSearch, type RerankStep } from './search.js';
 import { scopeMatch } from './scope.js';
 import { consolidate } from './consolidate.js';
 import { loadConfig } from './config.js';
@@ -367,6 +367,16 @@ export interface RecallOpts {
    * is supplied. HTTP / direct SDK callers leave this unset and receive the hint.
    */
   suppressAvailabilityHint?: boolean;
+  /**
+   * A7 recall-trace. When true, api.recall captures the lifecycle re-ranking
+   * trace (currently the goal-boost step on the primary band) and attaches it
+   * to each `RecallResultItem` as `rerankTrace`, plus `rerankPipeline:'api'`.
+   * When undefined/false (default), both fields are absent on EVERY band so
+   * the response shape is byte-identical to pre-A7. The api pipeline applies
+   * only goal-boost; the richer CLI stages (interference/value/utility/
+   * reranker/retrieval-count-downweight) are A7.2.
+   */
+  explain?: boolean;
 }
 
 export interface ContinuityBlock {
@@ -400,6 +410,23 @@ export interface RecallResultItem {
    * BM25 query match. Caller can render them in a separate "recent" band.
    */
   isFreshTail?: boolean;
+  /**
+   * A7 recall-trace. Ordered lifecycle re-ranking steps that mutated this
+   * row's `score` after candidate generation. On the api pipeline this carries
+   * the goal-boost step (the only re-ranking api.recall applies). Populated
+   * ONLY when `RecallOpts.explain` is set; absent on the default path
+   * (additive optional, back-compat per the `windowSize?` precedent;
+   * `client.ts` deserializes `as RecallResult` so the field rides through).
+   */
+  rerankTrace?: RerankStep[];
+  /**
+   * A7 recall-trace. Names which pipeline produced `rerankTrace`. `'api'` on
+   * every band returned by `api.recall` when `explain` is set; the CLI carries
+   * its trace on `SearchResult` instead and does not set this. Absent on the
+   * default path. Distinguishes the api pipeline (goal-boost only) from the
+   * richer CLI pipeline (A7.2 will unify them).
+   */
+  rerankPipeline?: 'cli' | 'api';
 }
 
 export interface RecallResult {
@@ -742,12 +769,18 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
       entry,
       score: Math.max(0, 1 - idx / Math.max(1, limit)),
     }));
+  // A7 recall-trace: separate side-channel accumulator, allocated ONLY under
+  // explain. applyGoalStackBoost writes goal-boost steps here keyed by entry
+  // id; the baseRanked map reads it. When !explain it stays undefined and is
+  // never passed → the helper's default-path math is byte-identical.
+  const explainTrace = opts.explain ? new Map<string, RerankStep>() : undefined;
   try {
     if (opts.sessionId && !opts.goalTag) {
       baseScored = applyGoalStackBoost(db, baseScored, {
         sessionId: opts.sessionId,
         tenantId: ctx.tenantId,
         limit,
+        ...(explainTrace ? { trace: explainTrace } : {}),
       });
       baseSlice = baseScored.map((r) => r.entry);
     }
@@ -804,13 +837,24 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   // the goal-stack boost did not run, scores are identical to the original
   // positional placeholder; when it did run, scores reflect the boost AND the
   // rows are in the boosted order (helper sort()).
-  const baseRanked: RecallResultItem[] = baseScored.map((r) => ({
-    id: r.entry.id,
-    content: r.entry.content,
-    score: r.score,
-    layer: r.entry.layer,
-    strength: r.entry.strength,
-  }));
+  const baseRanked: RecallResultItem[] = baseScored.map((r) => {
+    const item: RecallResultItem = {
+      id: r.entry.id,
+      content: r.entry.content,
+      score: r.score,
+      layer: r.entry.layer,
+      strength: r.entry.strength,
+    };
+    // A7 recall-trace: under explain, every api band carries rerankPipeline:'api';
+    // only baseRanked passes through the goal-boost helper, so only it can carry
+    // a step (and only for rows that actually matched an active goal).
+    if (opts.explain) {
+      item.rerankPipeline = 'api';
+      const step = explainTrace?.get(r.entry.id);
+      if (step) item.rerankTrace = [step];
+    }
+    return item;
+  });
   // Substituted summaries land at the end with score = 0.5 (mid-rank), so
   // they don't outrank top-N strong matches but stay above lowest-rank
   // leaves on the consumer side. Caller sorts/filters as it sees fit.
@@ -823,6 +867,9 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
     isSummary: true,
     substitutedFor: s.childIds,
     descendantCount: s.entry.descendant_count ?? s.childIds.length,
+    // A7 recall-trace: summary band runs no re-ranking, but under explain it
+    // still carries the pipeline marker (no steps). Absent when !explain.
+    ...(opts.explain ? { rerankPipeline: 'api' as const } : {}),
   }));
   // v1.5.2 fresh-tail. Surface the last N kind='raw' rows so an agent's
   // "what did I just see" recall path always covers the recent window even
@@ -867,6 +914,9 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
         layer: m.layer,
         strength: m.strength,
         isFreshTail: true,
+        // A7 recall-trace: fresh-tail band runs no re-ranking; under explain
+        // it carries the pipeline marker (no steps). Absent when !explain.
+        ...(opts.explain ? { rerankPipeline: 'api' as const } : {}),
       });
       seenIds.add(m.id);
     }

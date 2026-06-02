@@ -166,6 +166,34 @@ export function temporalBoost(entry: MemoryEntry, direction: 'recent' | 'oldest'
 // Public search API
 // ---------------------------------------------------------------------------
 
+/**
+ * A7 recall-trace: one lifecycle re-ranking step. Records a single score
+ * mutation applied AFTER candidate generation (interference, value, OFC
+ * utility, reranker, goal-boost, retrieval-count-downweight).
+ *
+ * Defined here (NOT in api.ts) so both `SearchResult` (the CLI carrier) and
+ * `RecallResultItem` (the api/HTTP carrier in api.ts) can reference it without
+ * a circular import: api.ts already imports from search.ts, and goals.ts imports
+ * the type from here too — search.ts imports neither, so the dependency stays
+ * acyclic.
+ *
+ * Pure side-channel: a `RerankStep[]` is only ever populated under an explicit
+ * opt-in (`recall --why` on the CLI, `RecallOpts.explain` on the api). The
+ * default path never allocates one (byte-identical guarantee).
+ */
+export interface RerankStep {
+  /** One of: interference, value, utility, reranker, goal-boost, retrieval-count-downweight. */
+  stage: string;
+  /** The score multiplier applied at this stage, when the transform is a scalar multiply. */
+  multiplier?: number;
+  /** Score before this stage ran. */
+  scoreBefore: number;
+  /** Score after this stage ran. */
+  scoreAfter: number;
+  /** Optional human-readable detail (e.g. the matched goal tags). */
+  note?: string;
+}
+
 export interface SearchResult {
   entry: MemoryEntry;
   score: number;          // composite score
@@ -174,6 +202,12 @@ export interface SearchResult {
   tokens: number;
   /** Populated when search is called with options.explain === true. */
   breakdown?: ScoreBreakdown;
+  /**
+   * A7 recall-trace: the ordered lifecycle re-ranking steps that mutated
+   * `score` after candidate generation. Populated by `cmdRecall` ONLY when
+   * `recall --why` is set; undefined on the default path (zero allocation).
+   */
+  rerankTrace?: RerankStep[];
   /** Populated when a reranker ran. Replaces `score` for ordering;
    *  original `score` preserved here. See src/rerankers/types.ts. */
   rerankScore?: number;
