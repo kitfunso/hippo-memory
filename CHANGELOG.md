@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+## 1.20.0 (2026-06-02): graph observability + visualization
+
+### Added
+- **Inspect the graph.** `hippo graph show [--entity NAME] [--json]` dumps the
+  entity/relation graph (entities grouped by type, then their edges) as text or
+  JSON. `GET /v1/graph [?entity=NAME&limit=N]` returns the tenant's graph as JSON
+  (auth-gated + tenant-scoped like sibling routes; reuses the shared list-limit
+  validator so a fractional `?limit` is a 400, not a 500).
+- **Visualize the graph.** `hippo graph view [--out FILE] [--open]
+  [--format html|canvas] [--entity NAME]` generates a self-contained,
+  dependency-free, offline, interactive HTML node-link diagram (server-computed
+  deterministic layout; pan / zoom / hover / click-to-highlight; user strings
+  escaped per sink so a name cannot inject script), or a JSON Canvas export that
+  opens in Obsidian. `--entity` renders a focus subgraph (the named entity, its
+  1-hop neighbours, and the edges among them).
+
+### Notes
+- Read-only over the graph (uses `loadEntities` / `loadRelations` and new read
+  helpers; no graph writes, so the graph-on-consolidated lint stays green). No
+  migration. All reads run inside a single read snapshot so a concurrent rebuild
+  cannot produce an inconsistent view.
+
 ## 1.19.0 (2026-06-02): E3 sleep enqueue-hook (graph auto-rebuilds during sleep)
 
 ### Added
