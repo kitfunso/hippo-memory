@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+## 1.21.0 (2026-06-02): graph-retrieval stream into RRF (Track L / L1)
+
+### Added
+- **Graph-retrieval RRF stream.** `hippo recall --graph-stream` fuses a third
+  retrieval stream into the RRF ranking (beside BM25 and dense), re-ranking the
+  in-pool candidates by graph proximity to the strong lexical seeds: a lexically-weak
+  memory that is graph-adjacent to a strong hit gets lifted. Opt-in and default-off;
+  the library exposes it as a `graphStream` option on `hybridSearch` (rrf scoring
+  mode). Tune with `--graph-hops` (1..3, default 2) and `--graph-seeds` (anchor count,
+  default 10). Read-only over the consolidated E3 graph; reuses the E3.2 traversal.
+  Distinct from `--hops` (E3.2), which injects out-of-pool neighbours; this re-ranks
+  within the candidate pool.
+
+### Notes
+- The stream lives in the rrf fusion path, so it needs embeddings (it stays inert
+  until `hippo embed` has run) and anchors on the top-`seeds` lexical hits, so on a
+  pool with fewer than `seeds` candidates it degrades to the 2-list fusion. Local
+  store only in the CLI for now.
+- Validated by a pre-registered hippo-native mechanism ablation: a graph-adjacent,
+  lexically-weak answer moves from rank 8/8 to 4/8 (into top-5) with no harm on
+  controls. This is a mechanism result, not a population R@5 claim; the
+  LongMemEval-oracle population ablation is deferred as L1-eval (it needs a hippo
+  entity graph built over the LME corpus). See `docs/evals/2026-06-02-l1-graph-stream-*`.
+
 ## 1.20.0 (2026-06-02): graph observability + visualization
 
 ### Added
