@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+## 1.17.0 (2026-06-02): E3.1 cross-object references (name-match)
+
+### Added
+
+- E3.1 cross-object `references` edges. `hippo graph extract` gains a Pass 3 that emits
+  the first CROSS-object relations beyond `supersedes`: a deterministic name-match
+  heuristic that adds a `references` edge when one consolidated object's text contains
+  another extracted entity's name (e.g. a decision that mentions a policy by name). This
+  gives E3.2 `recall --hops` real cross-entity edges to traverse. Conservative + measured:
+  word-boundary + length-bounded + ambiguity-dropped (a name shared by >1 entity) +
+  per-source capped; decisions are source-only (referenced via `supersedes`, not by
+  name); a version pair already related by `supersedes` is not also given a `references`
+  edge; references are extracted among ACTIVE entities only (superseded rows are not
+  current targets); longest-name-first matching avoids a prefix shadowing a longer name.
+  No migration (the `references` rel-type + the four entity types already exist).
+  `extractGraph` returns a `references` count and `graph extract` now prints
+  `N relations (M supersedes, K references)`. Measured precision 0.889 / recall 1.000 on a
+  realistic seeded set (the lone false positive is the disclosed generic-word case); the
+  feature ships always-on per that measurement. Eval:
+  `docs/evals/2026-06-02-e3-cross-object-precision.md`. New `src/graph-extract.ts` Pass 3
+  (SELECT/insertRelation only, E3.3 graph-write-lint-safe); 16 real-DB tests.
+
 ## 1.16.0 (2026-06-02): E3 graph layer (extract + guard + multi-hop recall) + E2 first-class objects
 
 ### Added

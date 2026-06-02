@@ -146,6 +146,6 @@ describe('graph extraction (E3.1 deterministic, from consolidated E2 objects)', 
 
   it('empty store extracts to an empty graph (no crash)', () => {
     const r = extractGraph(home, 'default');
-    expect(r).toEqual({ entities: 0, relations: 0, byType: { decision: 0, policy: 0, customer: 0, project: 0 }, truncated: [] });
+    expect(r).toEqual({ entities: 0, relations: 0, references: 0, byType: { decision: 0, policy: 0, customer: 0, project: 0 }, truncated: [] });
   });
 });
