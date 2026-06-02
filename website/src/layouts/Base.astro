@@ -41,13 +41,15 @@ const faqJsonLd = {
   })),
 };
 
-// Cloudflare Web Analytics: cookie-less, no perf hit. Renders ONLY when a beacon token
-// is provided at build time (PUBLIC_CF_BEACON_TOKEN); otherwise it is a no-op.
+// Cloudflare Web Analytics: cookie-less, no perf hit. The token below is a PUBLIC site
+// identifier - it ships in the page HTML by design and grants no account access, so it
+// is safe to commit, and committing it keeps analytics on across every `wrangler pages
+// deploy` (which ships a pre-built dist). Override or disable per-build with
+// PUBLIC_CF_BEACON_TOKEN (set it to '' to turn the beacon off).
 // No SRI on the beacon by design: Cloudflare serves beacon.min.js as an auto-updated,
 // unversioned first-party asset and omits `integrity` in its official snippet (a pinned
-// hash would break on their rotations). Simpler alternative: the CF Pages dashboard
-// Web Analytics toggle injects the same beacon at the edge with zero code (see README).
-const beaconToken = import.meta.env.PUBLIC_CF_BEACON_TOKEN;
+// hash would break on their rotations).
+const beaconToken = import.meta.env.PUBLIC_CF_BEACON_TOKEN ?? 'dca34bc57a3946d0846b1e969be40e5a';
 ---
 
 <!doctype html>
