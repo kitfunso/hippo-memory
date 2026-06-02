@@ -113,6 +113,33 @@ describe('L1 graph stream x RRF fusion (real SQLite)', () => {
     expect(order2[0]).toBe(0);         // strong control answer stays rank 1
   });
 
+  it('noise control: a POPULATED graph that boosts a non-answer distractor does NOT displace a strong lexical answer from the top', () => {
+    // The empty-graph no-harm case proves the skip path; this proves the harder thing —
+    // when the graph IS populated and lifts a graph-adjacent *distractor*, a true lexical
+    // answer with no graph path keeps its rank (the stream adds signal, not displacing noise).
+    const answer = mem(home, T, 'control answer matched strongly by every query term present');
+    const mids = [1, 2, 3].map((i) => mem(home, T, `mid pool distractor ${i} partial match`));
+    const adjacent = mem(home, T, 'orthogonal non-answer wording barely matched zzz'); // index 5
+    const entries = [answer, ...mids, mem(home, T, 'another mid distractor four'), adjacent];
+
+    // Graph edge: a strong seed (mids[0], index 1) -> adjacent (index 5). The ANSWER has no path.
+    const eSeed = ent(home, T, mids[0], 'SEED');
+    const eAdj = ent(home, T, adjacent, 'ADJ');
+    insertRelation(home, T, { fromEntityId: eSeed, toEntityId: eAdj, relType: 'supersedes', memoryId: mids[0].id });
+
+    const bm25Ranked = [0, 1, 2, 3, 4, 5];   // answer rank1, adjacent rank6 (tail)
+    const cosineRanked = [0, 1, 2, 3, 4, 5];
+    const seeds = selectGraphSeeds(bm25Ranked, cosineRanked, 3); // top-3: 0,1,2 ; adjacent(5) NOT a seed
+    const graphRanked = graphRankStream(entries, seeds, { hippoRoot: home, tenantId: T });
+    expect(graphRanked).toContain(5);        // the graph IS populated and boosts the distractor
+
+    const order2 = fusedOrder(entries.length, [bm25Ranked, cosineRanked], [BM25_W, DENSE_W]);
+    const order3 = fusedOrder(entries.length, [bm25Ranked, cosineRanked, graphRanked], [BM25_W, DENSE_W, 0.5]);
+    expect(order2[0]).toBe(0);               // answer is rank 1 under 2-stream
+    expect(order3[0]).toBe(0);               // ...and STILL rank 1 under 3-stream (no displacement)
+    expect(order3.indexOf(5)).toBeGreaterThan(0); // boosted distractor did not reach the top
+  });
+
   it('empty graphRanked -> the 3rd list is skipped -> fused order is byte-identical to the 2-list path', () => {
     const entries = [0, 1, 2, 3].map((i) => mem(home, T, `entry ${i} some lexical content`));
     const bm25Ranked = [0, 1, 2, 3];

@@ -21,10 +21,15 @@ lexical seeds.
 | Query class | n | Answer fused rank, 2-stream | Answer fused rank, 3-stream | Verdict |
 |---|---|---|---|---|
 | **G** (lexically-weak, graph-adjacent to a seed) | 1 | **8 / 8** (outside top-5) | **4 / 8** (inside top-5) | rescued |
-| **C** (lexically-strong, no graph path) | 1 | **1 / 5** | **1 / 5** (stream empty → 2-list path) | no harm |
+| **C-empty** (lexically-strong, empty graph) | 1 | **1 / 5** | **1 / 5** (stream empty → 2-list path) | no harm |
+| **C-noise** (lexically-strong, no path; graph POPULATED, boosts a non-answer distractor) | 1 | **1 / 6** | **1 / 6** (distractor lifted but never reaches top) | no harm |
 
 Per-query rank delta (G): **+4 positions** (rank 8 → 4). The graph stream is the only
-changed input; the BM25 and dense rankings are identical in both runs.
+changed input; the BM25 and dense rankings are identical in both runs. The **C-noise**
+control is the stronger no-harm test (added at review on the independent-review-critic's
+HIGH): with a *populated* graph that boosts a graph-adjacent distractor into the stream, a
+true lexical answer with no graph path keeps rank 1 — the stream adds signal without
+displacing a strong answer.
 
 ## Supporting evidence
 
@@ -32,8 +37,9 @@ changed input; the BM25 and dense rankings are identical in both runs.
   ordering, fanout cap, local+global expansion, deterministic ties, empty-graph no-op,
   not-in-pool ignored, seeds-never-scored (incl. seed-adjacent-to-another-seed),
   `selectGraphSeeds` correctness.
-- `tests/search-graph-stream-rrf.test.ts` — 3 fusion tests (the G dry-run, the C no-harm,
-  and the empty-graph skip-path = byte-identical to the 2-list fusion).
+- `tests/search-graph-stream-rrf.test.ts` — 4 fusion tests (the G dry-run, the C-empty
+  no-harm, the **C-noise populated-graph no-displacement** control, and the empty-graph
+  skip-path = byte-identical to the 2-list fusion).
 - `tests/cli-graph-stream.test.ts` — 3 CLI smoke/validation tests.
 - Full suite: 2483 passed (the single `server-concurrency.test.ts` failure is the known
   ECONNRESET env flake under full-suite parallelism — passes in isolation, no graph code).

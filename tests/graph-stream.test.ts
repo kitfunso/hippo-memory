@@ -138,6 +138,32 @@ describe('L1 graphRankStream (real SQLite)', () => {
     expect(out).toEqual([2]);          // only c; seeds 0 and 1 excluded
   });
 
+  it('a neighbour reachable from two seeds at the same hop takes the STRONGER seed (codex P2)', () => {
+    // nShared is 1-hop from a strong seed AND a weak seed; nWeakOnly is 1-hop from the weak
+    // seed only. With the strongest-same-hop-seed fix, nShared outscores nWeakOnly and ranks
+    // above it even though nShared has the HIGHER index (so it is strength order, not index
+    // order — which would have tied them if nShared were locked to the weak seed's strength).
+    const seedStrong = mem(home, T, 'strong seed aaa');
+    const seedWeak = mem(home, T, 'weak seed bbb');
+    const nWeakOnly = mem(home, T, 'weak-only neighbour ccc');  // index 2
+    const filler = mem(home, T, 'filler no edge ddd');          // index 3
+    const nShared = mem(home, T, 'shared neighbour eee');       // index 4
+    const eStrong = ent(home, T, seedStrong, 'STRONG');
+    const eWeak = ent(home, T, seedWeak, 'WEAK');
+    const eWeakOnly = ent(home, T, nWeakOnly, 'WONLY');
+    ent(home, T, filler, 'FILL');
+    const eShared = ent(home, T, nShared, 'SHARED');
+    // Insert strong->shared FIRST (lower id) then weak->shared (higher id, returned first by
+    // the loader's id-DESC order) — the exact ordering that would mis-score under the bug.
+    insertRelation(home, T, { fromEntityId: eStrong, toEntityId: eShared, relType: 'supersedes', memoryId: seedStrong.id });
+    insertRelation(home, T, { fromEntityId: eWeak, toEntityId: eShared, relType: 'supersedes', memoryId: seedWeak.id });
+    insertRelation(home, T, { fromEntityId: eWeak, toEntityId: eWeakOnly, relType: 'supersedes', memoryId: seedWeak.id });
+
+    const entries = [seedStrong, seedWeak, nWeakOnly, filler, nShared];
+    const out = graphRankStream(entries, [seed(0, 1.0), seed(1, 0.3)], { hippoRoot: home, tenantId: T });
+    expect(out).toEqual([4, 2]);       // nShared (strong, index 4) ranks ABOVE nWeakOnly (weak, index 2)
+  });
+
   it('expands across the global store (a global seed reaches a global neighbour)', () => {
     const glob = makeRoot();
     try {

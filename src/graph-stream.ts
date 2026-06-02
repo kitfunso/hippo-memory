@@ -136,9 +136,13 @@ function accumulateForRoot(
     const rels = loadNeighborRelations(root, tenantId, frontier, {
       limit: Math.max(maxNeighbors, maxNeighbors * frontier.length),
     });
-    const nextFrontier: number[] = [];
-    const nextStrength = new Map<number, number>();
     const hopFactor = Math.pow(decay, depth);
+    // Pass 1: accumulate the STRONGEST reaching-seed strength per new neighbour across ALL
+    // relations at this depth BEFORE committing any to `visited` (codex P2). Marking a node
+    // visited mid-loop would lock it to whichever relation SQLite returned first, so a later
+    // edge from a STRONGER lexical seed would be dropped and the neighbour mis-scored. A node
+    // already in `visited` was committed at an earlier (shorter) depth and keeps that score.
+    const bestStrengthThisDepth = new Map<number, number>();
     for (const rel of rels) {
       const fromIn = frontierSet.has(rel.fromEntityId);
       const toIn = frontierSet.has(rel.toEntityId);
@@ -148,17 +152,24 @@ function accumulateForRoot(
       else if (toIn && !fromIn) { neighborId = rel.fromEntityId; reacherId = rel.toEntityId; }
       else continue;
       if (visited.has(neighborId)) continue;
-      visited.add(neighborId);
       const seedStrength = frontierStrength.get(reacherId) ?? originStrength.get(reacherId) ?? 0;
-      const propagated = seedStrength * hopFactor;
-      // `visited` is set the moment a node is reached, so a node enters reachedScore at its
-      // FIRST (shortest) path only; the Math.max here is defensive for a same-frontier
-      // duplicate, not a true max over multiple distinct paths. Matches graph-recall.ts and
-      // is washed out by RRF anyway (only the induced order matters — see module docstring).
-      reachedScore.set(neighborId, Math.max(reachedScore.get(neighborId) ?? 0, propagated));
-      nextStrength.set(neighborId, Math.max(nextStrength.get(neighborId) ?? 0, seedStrength));
+      bestStrengthThisDepth.set(neighborId, Math.max(bestStrengthThisDepth.get(neighborId) ?? 0, seedStrength));
+    }
+    // Pass 2: commit strongest-first (then id asc — deterministic), so the per-hop fanout cap
+    // keeps the highest-scoring neighbours rather than whichever SQLite happened to return.
+    const nextFrontier: number[] = [];
+    const nextStrength = new Map<number, number>();
+    const ordered = [...bestStrengthThisDepth.keys()].sort((a, b) => {
+      const d = bestStrengthThisDepth.get(b)! - bestStrengthThisDepth.get(a)!;
+      return d !== 0 ? d : a - b;
+    });
+    for (const neighborId of ordered) {
+      if (nextFrontier.length >= maxNeighbors) break; // per-hop fanout cap (strongest kept)
+      const seedStrength = bestStrengthThisDepth.get(neighborId)!;
+      visited.add(neighborId);
+      reachedScore.set(neighborId, Math.max(reachedScore.get(neighborId) ?? 0, seedStrength * hopFactor));
+      nextStrength.set(neighborId, seedStrength);
       nextFrontier.push(neighborId);
-      if (nextFrontier.length >= maxNeighbors) break; // per-hop fanout cap
     }
     frontier = nextFrontier;
     frontierStrength = nextStrength;

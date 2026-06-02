@@ -498,9 +498,16 @@ export async function hybridSearch(
     // byte-identical 2-list (BM25 + dense) path. An all-absent 3rd list would NOT be a
     // no-op: it adds a uniform constant to the RRF base, which the per-entry multipliers
     // below turn non-uniform — so we SKIP it rather than fuse an empty list.
+    // Gate the graph stream on the candidate set actually having cached document vectors
+    // (codex P2): when the transformers package is installed but this store has not been
+    // embedded yet, `useEmbeddings` is true (only the QUERY vector was produced) while every
+    // `cosineScore` is 0, so `cosineRanked` collapses to entry order. Without this gate the
+    // stream would select seeds from that meaningless dense ranking; instead it stays inert
+    // (degrades to the 2-list path) until `hippo embed` has run.
+    const hasDocVectors = hadCachedVecs.some(Boolean);
     const gs = options.graphStream;
     let graphRanked: number[] = [];
-    if (gs && gs.weight > 0 && options.hippoRoot) {
+    if (gs && gs.weight > 0 && options.hippoRoot && hasDocVectors) {
       const seedCount = Math.min(gs.seedCount ?? DEFAULT_GRAPH_SEED_COUNT, eligible.length);
       const seeds = selectGraphSeeds(bm25Ranked, cosineRanked, seedCount);
       graphRanked = graphRankStream(entries, seeds, {
