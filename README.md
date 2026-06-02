@@ -546,6 +546,7 @@ hippo watch "npm run build"
 | `hippo recall "<query>" --budget <n>` | Recall within token limit (default: 4000) |
 | `hippo recall "<query>" --limit <n>` | Cap result count |
 | `hippo recall "<query>" --why` | Show match reasons and source buckets |
+| `hippo recall "<query>" --hops <n>` | Also surface memories N hops away in the entity/relation graph (0..3, default off) |
 | `hippo recall "<query>" --json` | Output as JSON |
 | `hippo context --auto` | Smart context injection (auto-detects task from git) |
 | `hippo context "<query>" --budget <n>` | Context injection with explicit query (default: 1500) |

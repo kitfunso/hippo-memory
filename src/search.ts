@@ -179,6 +179,9 @@ export interface SearchResult {
   rerankScore?: number;
   preRerankRank?: number;
   postRerankRank?: number;
+  /** Populated for results surfaced by E3.2 graph traversal (`recall --hops N`): how
+   *  the memory was reached from a lexical seed. Absent on normal lexical hits. */
+  graphVia?: { hops: number; relType: string; direction: 'from' | 'to' };
 }
 
 export interface ScoreBreakdown {
