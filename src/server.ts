@@ -740,6 +740,12 @@ async function handleRequest(
     const sessionId = sessionIdRaw && sessionIdRaw.trim().length > 0
       ? sessionIdRaw.trim()
       : undefined;
+    // A7 recall-trace: opt-in explain flag. When set, api.recall attaches the
+    // lifecycle re-ranking trace (goal-boost step on the api pipeline) +
+    // rerankPipeline:'api' to each result item; the field then rides on the
+    // serialized RecallResult. Mirrors the include_continuity convention.
+    const explainRaw = query.get('explain');
+    const explain = explainRaw === '1' || explainRaw === 'true';
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
 
     // v0.33 / J1 — HTTP per-pipeline anchoring detector. HTTP threads its
@@ -802,6 +808,7 @@ async function handleRequest(
       ...(scorerWindow !== undefined ? { scorerWindow } : {}),
       ...(sessionId !== undefined ? { sessionId } : {}),
       ...(httpRecallHistory !== undefined ? { recallHistory: httpRecallHistory } : {}),
+      ...(explain ? { explain } : {}),
     });
 
     // v0.33 / J1 — append AFTER recall completes (snapshot was taken before

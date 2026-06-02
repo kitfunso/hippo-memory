@@ -88,7 +88,7 @@ import {
   RECALL_DEFAULT_DENY_SCOPES,
 } from './store.js';
 import type { SessionHandoff } from './handoff.js';
-import { search, markRetrieved, estimateTokens, hybridSearch, physicsSearch, explainMatch, textOverlap } from './search.js';
+import { search, markRetrieved, estimateTokens, hybridSearch, physicsSearch, explainMatch, textOverlap, type RerankStep } from './search.js';
 import { renderTraceContent, parseSteps } from './trace.js';
 import { consolidate } from './consolidate.js';
 import { deduplicateStore } from './dedupe.js';
@@ -1095,7 +1095,16 @@ async function cmdRecall(
     results = results.map((r) => {
       const peers = r.entry.conflicts_with || [];
       const hasPeerInResults = peers.some((peerId) => presentIds.has(peerId));
-      return hasPeerInResults ? { ...r, score: r.score * 0.3 } : r;
+      if (!hasPeerInResults) return r;
+      const next = { ...r, score: r.score * 0.3 };
+      // A7 recall-trace: interference (vlPFC) down-rank. Only when --why.
+      if (showWhy) {
+        next.rerankTrace = [
+          ...(r.rerankTrace ?? []),
+          { stage: 'interference', multiplier: 0.3, scoreBefore: r.score, scoreAfter: next.score },
+        ];
+      }
+      return next;
     });
     results.sort((a, b) => b.score - a.score);
   }
@@ -1115,7 +1124,15 @@ async function cmdRecall(
       if (pos === 0 && neg === 0) return r;
       const raw = 1 + 0.3 * Math.tanh(pos - neg);
       const valueMult = Math.max(0.7, Math.min(1.3, raw));
-      return { ...r, score: r.score * valueMult };
+      const next = { ...r, score: r.score * valueMult };
+      // A7 recall-trace: vmPFC continuous value attribution. Only when --why.
+      if (showWhy) {
+        next.rerankTrace = [
+          ...(r.rerankTrace ?? []),
+          { stage: 'value', multiplier: valueMult, scoreBefore: r.score, scoreAfter: next.score },
+        ];
+      }
+      return next;
     });
     results.sort((a, b) => b.score - a.score);
   }
@@ -1140,8 +1157,17 @@ async function cmdRecall(
       .map((r) => {
         const strength = typeof r.entry.strength === 'number' ? r.entry.strength : 1.0;
         const costFactor = Math.min(0.3, (r.tokens || 0) / 10000);
-        const utility = r.score * (0.5 + 0.5 * strength) * (1 - costFactor);
-        return { ...r, score: utility };
+        const utilityMult = (0.5 + 0.5 * strength) * (1 - costFactor);
+        const utility = r.score * utilityMult;
+        const next = { ...r, score: utility };
+        // A7 recall-trace: OFC option-value re-rank. Only when --why.
+        if (showWhy) {
+          next.rerankTrace = [
+            ...(r.rerankTrace ?? []),
+            { stage: 'utility', multiplier: utilityMult, scoreBefore: r.score, scoreAfter: utility },
+          ];
+        }
+        return next;
       })
       .sort((a, b) => b.score - a.score);
   }
@@ -1171,11 +1197,22 @@ async function cmdRecall(
       // salience) that sort by `r.score` honor the reranker's order rather
       // than unwinding it. Original score is preserved on rerankScore's
       // input, but downstream sorters key on `score`.
-      const withPostRank = reranked.map((r, i) => ({
-        ...r,
-        score: r.rerankScore,
-        postRerankRank: i + 1,
-      }));
+      const withPostRank = reranked.map((r, i) => {
+        const next = {
+          ...r,
+          score: r.rerankScore,
+          postRerankRank: i + 1,
+        };
+        // A7 recall-trace: F6 reranker pass (reorder + rescale; not a scalar
+        // multiply, so no multiplier field). Only when --why.
+        if (showWhy) {
+          next.rerankTrace = [
+            ...(r.rerankTrace ?? []),
+            { stage: 'reranker', scoreBefore: r.score, scoreAfter: r.rerankScore },
+          ];
+        }
+        return next;
+      });
       results = [...withPostRank, ...tail];
     }
   }
@@ -1207,14 +1244,28 @@ async function cmdRecall(
   ).trim();
   if (sessionId && goalTag === '') {
     const dbForGoals = openHippoDb(hippoRoot);
+    // A7 recall-trace: goal-boost is the shared helper, not an inline map. It
+    // writes its steps into this SEPARATE accumulator (keyed by entry id), NOT
+    // onto the row (the helper strips internal markers on re-spread). Only
+    // allocated under --why.
+    const goalBoostTrace = showWhy ? new Map<string, RerankStep>() : undefined;
     try {
       results = applyGoalStackBoost(dbForGoals, results, {
         sessionId,
         tenantId,
         limit,
+        ...(goalBoostTrace ? { trace: goalBoostTrace } : {}),
       });
     } finally {
       closeHippoDb(dbForGoals);
+    }
+    // Merge the accumulated goal-boost steps onto the matching SearchResult.
+    if (goalBoostTrace && goalBoostTrace.size > 0) {
+      results = results.map((r) => {
+        const step = goalBoostTrace.get(r.entry.id);
+        if (!step) return r;
+        return { ...r, rerankTrace: [...(r.rerankTrace ?? []), step] };
+      });
     }
   }
 
@@ -1247,7 +1298,17 @@ async function cmdRecall(
         const count = r.entry.retrieval_count ?? 0;
         if (count >= T) return r;
         const mult = Math.max(0.5, count / T);
-        return { ...r, score: r.score * mult };
+        const next = { ...r, score: r.score * mult };
+        // A7 recall-trace: pineal salience (retrieval_count) down-weight. The
+        // stage names the ACTUAL transform (retrieval_count, not goal-stack).
+        // Only when --why.
+        if (showWhy) {
+          next.rerankTrace = [
+            ...(r.rerankTrace ?? []),
+            { stage: 'retrieval-count-downweight', multiplier: mult, scoreBefore: r.score, scoreAfter: next.score },
+          ];
+        }
+        return next;
       })
       .sort((a, b) => b.score - a.score);
   }
@@ -1597,6 +1658,10 @@ async function cmdRecall(
         if (explanation.envelope) {
           base.envelope = explanation.envelope;
         }
+        // A7 recall-trace: emit the ordered lifecycle re-ranking steps.
+        if (r.rerankTrace && r.rerankTrace.length > 0) {
+          base.rerankTrace = r.rerankTrace;
+        }
       }
       return base;
     });
@@ -1717,6 +1782,17 @@ async function cmdRecall(
         if (env.artifact_ref) console.log(`    artifact_ref: ${env.artifact_ref}`);
         if (env.session_id) console.log(`    session_id: ${env.session_id}`);
         console.log(`    confidence: ${env.confidence}`);
+      }
+      // A7 recall-trace: render the ordered lifecycle re-ranking chain, e.g.
+      // "ranking: base 0.420 -> interference x0.3 -> 0.126 -> goal-boost x1.5 -> 0.189".
+      if (r.rerankTrace && r.rerankTrace.length > 0) {
+        const parts = [`base ${fmt(r.rerankTrace[0].scoreBefore, 3)}`];
+        for (const step of r.rerankTrace) {
+          const mult = step.multiplier !== undefined ? ` x${fmt(step.multiplier, 2)}` : '';
+          parts.push(`${step.stage}${mult}`);
+          parts.push(fmt(step.scoreAfter, 3));
+        }
+        console.log(`    ranking: ${parts.join(' -> ')}`);
       }
     }
     console.log();

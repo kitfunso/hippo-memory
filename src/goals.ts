@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import type { MemoryEntry } from './memory.js';
+import type { RerankStep } from './search.js';
 
 export type GoalStatus = 'active' | 'suspended' | 'completed';
 export type PolicyType = 'schema-fit-biased' | 'error-prioritized' | 'recency-first' | 'hybrid';
@@ -256,9 +257,19 @@ export function applyGoalStackBoost<R extends { entry: MemoryEntry; score: numbe
     sessionId: string;
     tenantId: string;
     limit: number;
+    /**
+     * A7 recall-trace (optional side-channel). When supplied, the helper
+     * records one goal-boost `RerankStep` per ACTUALLY-boosted row, keyed by
+     * `entry.id`. This is a SEPARATE accumulator, NOT a field on the result
+     * row — the helper re-spreads rows and strips internal markers
+     * (`_goalMatches` below), so a row field would be dropped. The score-mul
+     * + re-sort math is untouched; the trace is only populated when this map
+     * is passed (default path never allocates → byte-identical).
+     */
+    trace?: Map<string, RerankStep>;
   },
 ): R[] {
-  const { sessionId, tenantId, limit } = opts;
+  const { sessionId, tenantId, limit, trace } = opts;
   const active = getActiveGoalsWithDb(db, { sessionId, tenantId });
   if (active.length === 0) return results;
 
@@ -328,6 +339,18 @@ export function applyGoalStackBoost<R extends { entry: MemoryEntry; score: numbe
       }
       // Hard cap AFTER all composition.
       multiplier = Math.min(multiplier, MAX_FINAL_MULTIPLIER);
+      // A7 recall-trace side-channel: record the goal-boost step BEFORE the
+      // score is mutated, keyed by entry id. Pure read of r.score here; the
+      // mutation below is byte-identical to pre-A7.
+      if (trace) {
+        trace.set(r.entry.id, {
+          stage: 'goal-boost',
+          multiplier,
+          scoreBefore: r.score,
+          scoreAfter: r.score * multiplier,
+          note: matches.join(', '),
+        });
+      }
       return {
         ...r,
         score: r.score * multiplier,
