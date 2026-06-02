@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+## 1.18.0 (2026-06-02): A7 recall-trace - explainable lifecycle re-ranking
+
+### Added
+
+- A7 recall-trace: an opt-in, per-result `rerankTrace` that explains hippo's lifecycle
+  re-ranking, i.e. the transforms that mutate a result's score AFTER candidate generation
+  (vlPFC interference, vmPFC value, OFC utility, the F6 reranker, the explicit `--goal`
+  boost, the session goal-stack boost, and the retrieval-count downweight). Surfaced on
+  `recall --why` (both the text `ranking:` line and `--json`) as an ordered, contiguous
+  chain (each step's `scoreBefore` equals the prior step's `scoreAfter`), and on the HTTP
+  `GET /v1/memories?explain=1` body via `RecallResultItem.rerankTrace` + `rerankPipeline`.
+  The shared `applyGoalStackBoost` records its step through a side-channel accumulator so
+  the goal-boost stage traces consistently wherever it runs. New `RerankStep` type on
+  `SearchResult` (CLI carrier) and `RecallResultItem` (api carrier).
+
+### Notes
+
+- Opt-in and byte-identical by default: when `--why`/`explain` is unset, no `rerankTrace` /
+  `rerankPipeline` field appears on any surface and recall scores/ordering are unchanged
+  (zero trace allocation on the hot path). No DB migration (schema v37).
+- The api and MCP pipelines apply only the goal-boost stage today; unifying the cli/api/mcp
+  re-ranking pipelines so all surfaces run the same stages is deferred to A7.2.
+- 5 new real-DB tests (CLI text + JSON, api explain on/off, HTTP wire-format, goals parity).
+
 ## 1.17.0 (2026-06-02): E3.1 cross-object references (name-match)
 
 ### Added
