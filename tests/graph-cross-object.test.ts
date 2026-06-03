@@ -115,13 +115,21 @@ describe('E3.1 cross-object references (Pass 3 name-match)', () => {
     expect(refs(home)).toHaveLength(1);
   });
 
-  it('a forgotten (null memory_id) source emits no edge and does not throw', () => {
+  it('a forgotten (null memory_id) source STILL emits its edge, anchored to the E2 object (v38 provenance)', () => {
     savePolicy(home, T, { policyName: 'AlphaPolicy', policyText: 'p' });
     const dec = saveDecision(home, T, { decisionText: 'uses AlphaPolicy heavily' });
-    // Delete the decision's memory -> ON DELETE SET NULL nulls the decision's memory_id.
+    // Delete the decision's mirror memory -> ON DELETE SET NULL nulls memory_id, but the
+    // decision row stays active and authoritative. v38 anchors the entity to the E2 object,
+    // so the forgotten-mirror decision is STILL a Pass-3 source (provenance = the object,
+    // not the decaying mirror). This is the whole point of the graph/E2 provenance fix.
     deleteEntry(home, dec.memoryId!, T);
     expect(() => extractGraph(home, T)).not.toThrow();
-    expect(refs(home)).toHaveLength(0); // the forgotten decision is never a Pass-3 source
+    const edges = refs(home);
+    expect(edges).toHaveLength(1); // forgotten-mirror decision still references AlphaPolicy
+    const decEnt = entByName(home, 'uses AlphaPolicy heavily')!;
+    const polEnt = entByName(home, 'AlphaPolicy')!;
+    expect(edges[0].fromEntityId).toBe(decEnt.id);
+    expect(edges[0].toEntityId).toBe(polEnt.id);
   });
 
   it('a supersedes pair is not ALSO given a references edge (name-containment artifact)', () => {

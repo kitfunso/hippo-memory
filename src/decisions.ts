@@ -26,7 +26,7 @@
 
 import { openHippoDb, closeHippoDb } from './db.js';
 import { writeEntry, assertTenantId } from './store.js';
-import { markGraphDirty } from './graph.js';
+import { markGraphDirty, removeGraphEntitiesForObject } from './graph.js';
 import { createMemory, Layer, DECISION_HALF_LIFE_DAYS } from './memory.js';
 import { appendAuditEvent } from './audit.js';
 
@@ -302,7 +302,15 @@ export function closeDecision(
       db.exec('COMMIT');
       const closed = rowToDecision(row);
       // After COMMIT (write lock released), before the finally closes `db`.
-      markGraphDirty(hippoRoot, tenantId, closed.memoryId);
+      // Closing removes the object from the graph. Remove its rows DIRECTLY (deterministic),
+      // not only via an enqueued rebuild whose queue item is lost if the mirror is later
+      // forgotten (the queue row cascade-deletes with the memory), which would leave the closed
+      // object stale and could block that forget (codex P1). Still enqueue when a mirror exists
+      // so a concurrent rebuild re-derives consistently (harmless if it also runs).
+      removeGraphEntitiesForObject(hippoRoot, tenantId, 'decision', closed.id);
+      if (closed.memoryId) {
+        markGraphDirty(hippoRoot, tenantId, closed.memoryId);
+      }
       return closed;
     } catch (e) {
       try {
