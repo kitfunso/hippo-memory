@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 1.22.0 (2026-06-03): graph provenance anchored to the authoritative E2 object
+
+### Fixed
+- **In-force E2 objects no longer drop out of the knowledge graph when their mirror memory is forgotten or consolidation-pruned.** Graph entity/relation provenance is now anchored to the authoritative E2 object (decision / policy / customer-note / project-brief) instead of the decaying memory mirror. Previously a decision or policy whose mirror memory decayed away (or was forgotten) silently vanished from `hippo graph extract` and graph recall, even while the object itself was still active. Now the object stays in the graph regardless of its mirror's lifecycle.
+
+### Changed
+- **Migration v38.** `entities`/`relations` `memory_id` is now nullable (`ON DELETE SET NULL`; a recall pointer that survives mirror loss) plus new `source_object_type`/`source_object_id` columns. The dual-path guard accepts EITHER a live distilled/superseded memory OR an active/superseded same-tenant E2 object, and still rejects raw and cross-tenant rows (validated at insert and on an explicit object/tenant change, never on the mirror-forget transition). Closing an object removes its graph rows directly. The graph is a derived cache, so v38 rebuilds it rather than migrating data; schema version 37 to 38.
+
+### Known follow-up
+- A tenant-level graph-rebuild signal is deferred (coordinated with the sleep enqueue subsystem). After upgrading, the graph re-derives on the next memory write or a manual `hippo graph extract`; closing a mirror-less object re-derives global reference edges on the next rebuild. No data is lost.
+
 ## 1.21.0 (2026-06-02): graph-retrieval stream into RRF (Track L / L1)
 
 ### Added
