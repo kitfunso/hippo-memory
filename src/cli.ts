@@ -213,6 +213,7 @@ import { refineStore } from './refine-llm.js';
 import { wmPush, wmRead, wmClear, wmFlush, WorkingMemoryItem } from './working-memory.js';
 import { multihopSearch } from './multihop.js';
 import { graphExpandRecall, MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from './graph-recall.js';
+import { DEFAULT_GRAPH_STREAM_WEIGHT } from './graph-stream.js';
 import { getReranker } from './rerankers/index.js';
 import { computeSalience } from './salience.js';
 import { computeAmbientState, renderAmbientSummary } from './ambient.js';
@@ -959,8 +960,59 @@ async function cmdRecall(
 
   const useMultihop = flags['multihop'] === true || config.multihop.enabled;
 
+  // L1 — graph-retrieval stream. `--graph-stream` forces rrf fusion + the graph stream
+  // (see src/graph-stream.ts). NOTE: it implies `scoring:'rrf'` (production default is
+  // 'blend'), so the flag bundles two behaviours by design. CLI surface is local-store
+  // only for now; the library API supports a globalRoot for callers who need it.
+  const useGraphStream = flags['graph-stream'] === true;
+  let graphStreamHops: number | undefined;
+  if (useGraphStream && flags['graph-hops'] !== undefined) {
+    if (typeof flags['graph-hops'] === 'boolean') {
+      console.error(`--graph-hops requires an integer value 1..${MAX_HOPS} (e.g. --graph-hops 2).`);
+      process.exit(1);
+    }
+    const h = Number(flags['graph-hops']);
+    if (!Number.isInteger(h) || h < 1 || h > MAX_HOPS) {
+      console.error(`Invalid --graph-hops: "${String(flags['graph-hops'])}". Must be an integer 1..${MAX_HOPS}.`);
+      process.exit(1);
+    }
+    graphStreamHops = h;
+  }
+  let graphStreamSeeds: number | undefined;
+  if (useGraphStream && flags['graph-seeds'] !== undefined) {
+    if (typeof flags['graph-seeds'] === 'boolean') {
+      console.error('--graph-seeds requires a positive integer value (e.g. --graph-seeds 10).');
+      process.exit(1);
+    }
+    const s = Number(flags['graph-seeds']);
+    if (!Number.isInteger(s) || s < 1) {
+      console.error(`Invalid --graph-seeds: "${String(flags['graph-seeds'])}". Must be a positive integer.`);
+      process.exit(1);
+    }
+    graphStreamSeeds = s;
+  }
+
   let results;
-  if (useMultihop) {
+  if (useGraphStream) {
+    if (!isEmbeddingAvailable()) {
+      // The graph stream fuses inside the rrf path, which only runs with embeddings; without
+      // them hybridSearch falls back to BM25-only and the stream is inert. Say so plainly
+      // rather than silently no-op.
+      console.error('[note] --graph-stream needs embeddings (rrf fusion); none available, so the graph stream is inert. Run `hippo embed` first.');
+    }
+    if (hasGlobal) {
+      console.error('[note] --graph-stream searches the local store only; global graph fusion is a follow-up.');
+    }
+    // The stream anchors on the top-`seedCount` lexical hits and re-ranks the rank>seedCount
+    // tail; on a pool with <= seedCount candidates EVERY candidate is a seed and the stream
+    // is inert (it degrades to the 2-list fusion). Tune the anchor count with --graph-seeds.
+    results = await hybridSearch(query, localEntries, {
+      budget, hippoRoot, mmr: mmrEnabled, mmrLambda, minResults, scope: recallActiveScope,
+      includeSuperseded, asOf,
+      scoring: 'rrf',
+      graphStream: { weight: DEFAULT_GRAPH_STREAM_WEIGHT, tenantId, hops: graphStreamHops, seedCount: graphStreamSeeds },
+    });
+  } else if (useMultihop) {
     const allEntries = [...localEntries, ...globalEntries];
     results = multihopSearch(query, allEntries, {
       budget,
@@ -7391,6 +7443,15 @@ Commands:
                            graph holds supersedes edges (E3.1); cross-object edges
                            light up the same traversal once extracted.
     --max-neighbors <n>    Per-hop fanout cap for --hops (1..200, default 25).
+    --graph-stream         L1: fuse a graph-retrieval stream into RRF, re-ranking
+                           in-pool results by graph proximity to the strong lexical
+                           seeds. Implies rrf scoring (default is blend). Local store
+                           only. Distinct from --hops (which injects out-of-pool
+                           neighbours); this re-ranks within the candidate pool.
+    --graph-hops <n>       Hops for --graph-stream (1..3, default 2).
+    --graph-seeds <n>      Lexical anchors for --graph-stream (default 10). The stream
+                           re-ranks the rank>seeds tail; on a pool with <= n candidates
+                           every candidate is a seed and the stream is inert.
     --no-mmr               Disable MMR diversity re-ranking
     --mmr-lambda <f>       MMR balance 0..1 (default: 0.7, 1.0 = pure relevance)
     --evc-adaptive         ACC-style: when top-K shows high inter-item overlap
