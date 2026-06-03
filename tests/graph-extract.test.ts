@@ -79,15 +79,23 @@ describe('graph extraction (E3.1 deterministic, from consolidated E2 objects)', 
     expect(loadRelations(home, 'default', { limit: 100 }).length).toBe(1);
   });
 
-  it('skips an E2 object whose source memory was forgotten (NULL memory_id)', () => {
+  it('KEEPS an active E2 object whose source memory was forgotten (v38 E2-provenance): memory_id NULL, source_object set', () => {
+    // v38: extraction anchors provenance to the authoritative E2 object, so an in-force
+    // decision STAYS in the graph after its mirror is forgotten (memory_id -> NULL), now
+    // anchored via source_object_type/id.
     const dn = saveDecision(home, 'default', { decisionText: 'Will lose its memory' });
     deleteEntry(home, dn.memoryId!); // distilled delete is allowed; decisions.memory_id -> NULL
     saveDecision(home, 'default', { decisionText: 'Keeps its memory' });
     const r = extractGraph(home, 'default');
-    expect(r.byType.decision).toBe(1); // only the one with a live memory
-    const names = loadEntities(home, 'default', { limit: 100 }).map((e) => e.name);
+    expect(r.byType.decision).toBe(2); // BOTH extracted (the forgotten-mirror one survives)
+    const ents = loadEntities(home, 'default', { limit: 100 });
+    const names = ents.map((e) => e.name);
     expect(names).toContain('Keeps its memory');
-    expect(names).not.toContain('Will lose its memory');
+    expect(names).toContain('Will lose its memory');
+    const lost = ents.find((e) => e.name === 'Will lose its memory')!;
+    expect(lost.memoryId).toBeNull();
+    expect(lost.sourceObjectType).toBe('decision');
+    expect(lost.sourceObjectId).toBe(dn.id);
   });
 
   it('skips a supersedes relation when the successor is not extracted (closed)', () => {

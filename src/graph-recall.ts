@@ -117,7 +117,10 @@ function produceHitsForRoot(
   // from (for adjacency placement + score inheritance).
   const visitedEntityIds = new Set<number>(seedEntities.map((e) => e.id));
   const reached = new Map<number, GraphVia>();
-  const originMemByEntityId = new Map<number, string>();
+  // A seed/reached entity whose mirror was forgotten/pruned has a null memoryId; the map
+  // tolerates null so traversal still propagates origin, and the null is dropped before
+  // any memory load below (a mirror-less node has no memory to surface).
+  const originMemByEntityId = new Map<number, string | null>();
   for (const se of seedEntities) originMemByEntityId.set(se.id, se.memoryId);
   let frontier: number[] = seedEntities.map((e) => e.id);
 
@@ -149,8 +152,15 @@ function produceHitsForRoot(
   if (reached.size === 0) return;
 
   // Reached entities -> source memory ids -> load DIRECTLY by id (chunked), not lexical.
+  // A mirror-less reached entity (memoryId === null) has no memory to load: drop its null
+  // id BEFORE it reaches loadByIdsChunked / the Set<string> (it cannot be recall-surfaced;
+  // it stays in entities/relations for graph extract / visualization).
   const reachedEntities = loadEntitiesByIds(root, tenantId, [...reached.keys()]);
-  const needLoad = [...new Set(reachedEntities.map((e) => e.memoryId).filter((id) => !seenMemoryIds.has(id)))];
+  const needLoad = [...new Set(
+    reachedEntities
+      .map((e) => e.memoryId)
+      .filter((id): id is string => id !== null && !seenMemoryIds.has(id)),
+  )];
   const loadedById = new Map(loadByIdsChunked(root, tenantId, needLoad).map((m) => [m.id, m]));
 
   // For the bi-temporal as-of rule on a superseded reached row we need its successor's
@@ -162,6 +172,7 @@ function produceHitsForRoot(
   }
 
   for (const ent of reachedEntities) {
+    if (ent.memoryId === null) continue;      // mirror-less node: not recall-surfaced
     const mem = loadedById.get(ent.memoryId);
     if (!mem) continue;                       // not found / wrong tenant / already in base
     if (seenMemoryIds.has(mem.id)) continue;  // another reached entity already added it

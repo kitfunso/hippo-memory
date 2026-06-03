@@ -193,7 +193,14 @@ describe('graph store (E3.3 graph-on-consolidated guard)', () => {
     expect(loadExtractionQueue(home, 'default', { status: 'processed' }).length).toBe(1);
   });
 
-  it('ON DELETE CASCADE: forgetting a consolidated memory removes its entities + relations + queue rows', () => {
+  it('ON DELETE SET NULL (v38): forgetting a memory nulls graph rows memory_id but keeps them; queue still cascades', () => {
+    // v38 (E2-provenance): entities/relations.memory_id is now NULLABLE with ON DELETE
+    // SET NULL (was NOT NULL / CASCADE), so a mirror forget no longer drops a graph row -
+    // it nulls the recall pointer and the row survives. graph_extraction_queue is untouched
+    // by v38 (still ON DELETE CASCADE), so its rows still disappear on a memory delete.
+    // (These rows are memory-only - no source_object - so the SET NULL leaves an all-null
+    // provenance row; that is tolerated because the SET NULL does NOT fire the BEFORE
+    // UPDATE guard: recursive_triggers is default-OFF.)
     const md = addMemory(home, 'default', 'distilled');
     const a = insertEntity(home, 'default', { entityType: 'system', name: 'a', memoryId: md });
     const b = insertEntity(home, 'default', { entityType: 'system', name: 'b', memoryId: md });
@@ -202,9 +209,13 @@ describe('graph store (E3.3 graph-on-consolidated guard)', () => {
     expect(countRows(home, 'entities')).toBe(2);
     expect(countRows(home, 'relations')).toBe(1);
     expect(countRows(home, 'graph_extraction_queue')).toBe(1);
-    deleteEntry(home, md); // distilled deletes are allowed (raw is append-only); cascades to graph rows
-    expect(countRows(home, 'entities')).toBe(0);
-    expect(countRows(home, 'relations')).toBe(0);
+    deleteEntry(home, md); // distilled deletes are allowed (raw is append-only)
+    // entities + relations SURVIVE, their memory_id nulled (SET NULL).
+    expect(countRows(home, 'entities')).toBe(2);
+    expect(countRows(home, 'relations')).toBe(1);
+    expect(loadEntityById(home, 'default', a.id)!.memoryId).toBeNull();
+    expect(loadEntityById(home, 'default', b.id)!.memoryId).toBeNull();
+    // the queue row still cascades away (graph_extraction_queue is untouched by v38).
     expect(countRows(home, 'graph_extraction_queue')).toBe(0);
   });
 

@@ -35,6 +35,26 @@ export type RelationType = 'owns' | 'supersedes' | 'depends-on' | 'blocked-by' |
 export type GraphQueueStatus = 'pending' | 'processed' | 'skipped';
 /** The consolidated source kinds the graph is permitted to index (never 'raw'). */
 export type SourceKind = 'distilled' | 'superseded';
+/** The authoritative E2 object types a graph row may be anchored to (the object
+ *  provenance path, alongside the memory path). Maps to source_object_type. */
+export type SourceObjectType = 'decision' | 'policy' | 'customer' | 'project';
+
+/** A soft (type,id) pointer to the authoritative E2 row a graph row descends from.
+ *  Survives a mirror memory forget/prune (memory_id may go NULL); the rebuild
+ *  re-validates it (it is not a hard FK). */
+export interface SourceObjectRef {
+  type: SourceObjectType;
+  id: number;
+}
+
+/** source_object_type -> its E2 table, for the object-path validation 4-way branch.
+ *  SQLite cannot parametrize a table name, so the SQL trigger mirrors this explicitly. */
+const SOURCE_OBJECT_TABLE: Record<SourceObjectType, string> = {
+  decision: 'decisions',
+  policy: 'policies',
+  customer: 'customer_notes',
+  project: 'project_briefs',
+};
 
 export const GRAPH_ENTITY_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
   'person', 'project', 'customer', 'system', 'policy', 'decision',
@@ -53,9 +73,15 @@ export interface Entity {
   tenantId: string;
   entityType: EntityType;
   name: string;
-  /** The consolidated source memory this entity was extracted from. */
-  memoryId: string;
+  /** The consolidated source memory this entity was extracted from. NULL once the
+   *  mirror is forgotten/pruned (ON DELETE SET NULL) - the entity then survives via
+   *  its source_object provenance. */
+  memoryId: string | null;
   sourceKind: SourceKind;
+  /** The authoritative E2 object this entity is anchored to (E2-provenance path).
+   *  Set for E2-sourced entities; absent for memory-only (prose/NLP) entities. */
+  sourceObjectType?: SourceObjectType;
+  sourceObjectId?: number;
   createdAt: string;
 }
 
@@ -65,8 +91,11 @@ export interface Relation {
   fromEntityId: number;
   toEntityId: number;
   relType: RelationType;
-  memoryId: string;
+  /** NULL once the mirror is forgotten/pruned; the relation survives via source_object. */
+  memoryId: string | null;
   sourceKind: SourceKind;
+  sourceObjectType?: SourceObjectType;
+  sourceObjectId?: number;
   createdAt: string;
 }
 
@@ -83,16 +112,23 @@ export interface GraphQueueItem {
 export interface InsertEntityOpts {
   entityType: EntityType;
   name: string;
-  /** A consolidated (distilled/superseded) memory; raw is rejected. */
-  memoryId: string;
+  /** A consolidated (distilled/superseded) memory; raw is rejected. NULL/omitted when
+   *  the entity is anchored only to its E2 source object (mirror forgotten/pruned). */
+  memoryId?: string | null;
+  /** The authoritative E2 object this entity descends from. Required when memoryId is
+   *  null; optional alongside a live memory (both paths may be set). */
+  sourceObject?: SourceObjectRef;
 }
 
 export interface InsertRelationOpts {
   fromEntityId: number;
   toEntityId: number;
   relType: RelationType;
-  /** A consolidated (distilled/superseded) memory; raw is rejected. */
-  memoryId: string;
+  /** A consolidated (distilled/superseded) memory; raw is rejected. NULL/omitted when
+   *  the relation is anchored only to its E2 source object. */
+  memoryId?: string | null;
+  /** The authoritative E2 object this relation descends from. */
+  sourceObject?: SourceObjectRef;
 }
 
 // ---------------------------------------------------------------------------
@@ -104,8 +140,10 @@ interface EntityRow {
   tenant_id: string;
   entity_type: string;
   name: string;
-  memory_id: string;
+  memory_id: string | null;
   source_kind: string;
+  source_object_type: string | null;
+  source_object_id: number | null;
   created_at: string;
 }
 interface RelationRow {
@@ -114,8 +152,10 @@ interface RelationRow {
   from_entity_id: number;
   to_entity_id: number;
   rel_type: string;
-  memory_id: string;
+  memory_id: string | null;
   source_kind: string;
+  source_object_type: string | null;
+  source_object_id: number | null;
   created_at: string;
 }
 interface QueueRow {
@@ -136,6 +176,8 @@ function rowToEntity(row: EntityRow): Entity {
     name: row.name,
     memoryId: row.memory_id,
     sourceKind: row.source_kind as SourceKind,
+    sourceObjectType: row.source_object_type === null ? undefined : (row.source_object_type as SourceObjectType),
+    sourceObjectId: row.source_object_id === null ? undefined : row.source_object_id,
     createdAt: row.created_at,
   };
 }
@@ -148,6 +190,8 @@ function rowToRelation(row: RelationRow): Relation {
     relType: row.rel_type as RelationType,
     memoryId: row.memory_id,
     sourceKind: row.source_kind as SourceKind,
+    sourceObjectType: row.source_object_type === null ? undefined : (row.source_object_type as SourceObjectType),
+    sourceObjectId: row.source_object_id === null ? undefined : row.source_object_id,
     createdAt: row.created_at,
   };
 }
@@ -163,8 +207,8 @@ function rowToQueueItem(row: QueueRow): GraphQueueItem {
   };
 }
 
-const ENTITY_COLS = `id, tenant_id, entity_type, name, memory_id, source_kind, created_at`;
-const RELATION_COLS = `id, tenant_id, from_entity_id, to_entity_id, rel_type, memory_id, source_kind, created_at`;
+const ENTITY_COLS = `id, tenant_id, entity_type, name, memory_id, source_kind, source_object_type, source_object_id, created_at`;
+const RELATION_COLS = `id, tenant_id, from_entity_id, to_entity_id, rel_type, memory_id, source_kind, source_object_type, source_object_id, created_at`;
 const QUEUE_COLS = `id, tenant_id, memory_id, kind, status, enqueued_at, processed_at`;
 
 // ---------------------------------------------------------------------------
@@ -176,28 +220,75 @@ interface DbLike {
 }
 
 /**
- * Look up a memory and assert it is a valid CONSOLIDATED source for the graph: it
- * exists, belongs to `tenantId`, and is not raw. Returns its kind (the source_kind to
- * store). Throws a clear error otherwise. This is the code-level mirror of the DB
- * trigger guard (which is the unbypassable backstop).
+ * Resolve the `source_kind` for a graph row from AT LEAST ONE valid provenance path,
+ * with the no-raw invariant intact. The code-level mirror of the DB trigger guard (the
+ * trigger is the unbypassable backstop). Two paths:
+ *  - MEMORY path (`memoryId` not null): the memory must exist, be same-tenant, and be
+ *    consolidated (distilled/superseded); raw is rejected. Returns its kind.
+ *  - OBJECT path (`memoryId` null, `sourceObject` set): the E2 row must exist, be
+ *    same-tenant, and have status active|superseded (4-way per E2 table). E2 objects are
+ *    consolidated BY CONSTRUCTION, so this returns 'distilled'.
+ * All-null (no memory AND no source object) is rejected.
  */
-function resolveConsolidatedSource(db: DbLike, tenantId: string, memoryId: string, label: string): SourceKind {
-  const row = db.prepare(`SELECT kind, tenant_id FROM memories WHERE id = ?`).get(memoryId) as
-    | { kind: string; tenant_id: string }
-    | undefined;
-  if (!row) {
-    throw new Error(`${label}: source memory ${memoryId} not found`);
+function resolveConsolidatedSource(
+  db: DbLike,
+  tenantId: string,
+  memoryId: string | null,
+  sourceObject: SourceObjectRef | null,
+  label: string,
+): { sourceKind: SourceKind; memoryId: string | null } {
+  let memKind: SourceKind | null = null;
+  let effectiveMemoryId: string | null = memoryId;
+  if (memoryId != null) {
+    const row = db.prepare(`SELECT kind, tenant_id FROM memories WHERE id = ?`).get(memoryId) as
+      | { kind: string; tenant_id: string }
+      | undefined;
+    if (!row) {
+      // Stale / forgotten mirror. Tolerate it IFF a valid source object provides provenance:
+      // graph-extract reads E2 rows then inserts, and a mirror forgotten/pruned in that window
+      // must NOT roll back the whole tenant rebuild - the active E2 object survives mirror loss
+      // (v38 contract; codex round-4 race). Anchor to the object; drop the dead memory pointer.
+      if (sourceObject == null) {
+        throw new Error(`${label}: source memory ${memoryId} not found`);
+      }
+      effectiveMemoryId = null;
+    } else if (row.tenant_id !== tenantId) {
+      throw new Error(`${label}: source memory ${memoryId} belongs to another tenant`);
+    } else if (row.kind === 'raw') {
+      throw new Error(`${label}: source memory ${memoryId} is raw; the graph indexes consolidated state only`);
+    } else if (row.kind !== 'distilled' && row.kind !== 'superseded') {
+      throw new Error(`${label}: source memory ${memoryId} has unsupported kind '${row.kind}'`);
+    } else {
+      memKind = row.kind;
+    }
   }
-  if (row.tenant_id !== tenantId) {
-    throw new Error(`${label}: source memory ${memoryId} belongs to another tenant`);
+
+  // Validate the object pointer WHENEVER it is provided - not only when memory is null
+  // (codex review): a dual-set row whose object is wrong/closed/cross-tenant would become
+  // the active provenance after ON DELETE SET NULL and could then block the memory delete.
+  if (sourceObject != null) {
+    const table = SOURCE_OBJECT_TABLE[sourceObject.type];
+    if (!table) {
+      throw new Error(`${label}: unsupported source_object_type '${sourceObject.type}'`);
+    }
+    // `table` is a fixed value from the SOURCE_OBJECT_TABLE map (never user-supplied), so
+    // this string interpolation is safe; `id`/`tenant_id` stay parametrized.
+    const row = db.prepare(
+      `SELECT status FROM ${table} WHERE id = ? AND tenant_id = ?`,
+    ).get(sourceObject.id, tenantId) as { status: string } | undefined;
+    if (!row) {
+      throw new Error(`${label}: source ${sourceObject.type} ${sourceObject.id} not found for tenant ${tenantId}`);
+    }
+    if (row.status !== 'active' && row.status !== 'superseded') {
+      throw new Error(`${label}: source ${sourceObject.type} ${sourceObject.id} has status '${row.status}' (must be active|superseded)`);
+    }
   }
-  if (row.kind === 'raw') {
-    throw new Error(`${label}: source memory ${memoryId} is raw; the graph indexes consolidated state only`);
-  }
-  if (row.kind !== 'distilled' && row.kind !== 'superseded') {
-    throw new Error(`${label}: source memory ${memoryId} has unsupported kind '${row.kind}'`);
-  }
-  return row.kind;
+
+  // source_kind is the memory's kind when a memory is present, else 'distilled' for an
+  // object-only row (E2 objects are consolidated by construction). All-null is rejected.
+  if (memKind != null) return { sourceKind: memKind, memoryId: effectiveMemoryId };
+  if (sourceObject != null) return { sourceKind: 'distilled', memoryId: null };
+  throw new Error(`${label}: graph row needs a memory or a source object`);
 }
 
 // ---------------------------------------------------------------------------
@@ -224,14 +315,16 @@ export function insertEntity(
     throw new Error(`insertEntity: name exceeds the ${MAX_ENTITY_NAME_LEN}-char cap`);
   }
   const now = new Date().toISOString();
+  const memoryId = opts.memoryId ?? null;
+  const sourceObject = opts.sourceObject ?? null;
   const ownDb = txDb ? null : openHippoDb(hippoRoot);
   const db = txDb ?? ownDb!;
   try {
-    const sourceKind = resolveConsolidatedSource(db, tenantId, opts.memoryId, 'insertEntity');
+    const { sourceKind, memoryId: effectiveMemoryId } = resolveConsolidatedSource(db, tenantId, memoryId, sourceObject, 'insertEntity');
     const result = db.prepare(`
-      INSERT INTO entities(tenant_id, entity_type, name, memory_id, source_kind, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(tenantId, opts.entityType, name, opts.memoryId, sourceKind, now);
+      INSERT INTO entities(tenant_id, entity_type, name, memory_id, source_kind, source_object_type, source_object_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(tenantId, opts.entityType, name, effectiveMemoryId, sourceKind, sourceObject?.type ?? null, sourceObject?.id ?? null, now);
     const id = Number(result.lastInsertRowid ?? 0);
     const row = db.prepare(`SELECT ${ENTITY_COLS} FROM entities WHERE id = ?`).get(id) as EntityRow | undefined;
     if (!row) throw new Error('insertEntity: failed to reload inserted entity');
@@ -256,6 +349,8 @@ export function insertRelation(
     throw new Error(`insertRelation: relType must be one of ${Array.from(GRAPH_RELATION_TYPES).join('|')}; got ${opts.relType}`);
   }
   const now = new Date().toISOString();
+  const memoryId = opts.memoryId ?? null;
+  const sourceObject = opts.sourceObject ?? null;
   const ownDb = txDb ? null : openHippoDb(hippoRoot);
   const db = txDb ?? ownDb!;
   try {
@@ -266,11 +361,11 @@ export function insertRelation(
         throw new Error(`insertRelation: ${role}_entity ${eid} belongs to another tenant (no cross-tenant edges)`);
       }
     }
-    const sourceKind = resolveConsolidatedSource(db, tenantId, opts.memoryId, 'insertRelation');
+    const { sourceKind, memoryId: effectiveMemoryId } = resolveConsolidatedSource(db, tenantId, memoryId, sourceObject, 'insertRelation');
     const result = db.prepare(`
-      INSERT INTO relations(tenant_id, from_entity_id, to_entity_id, rel_type, memory_id, source_kind, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(tenantId, opts.fromEntityId, opts.toEntityId, opts.relType, opts.memoryId, sourceKind, now);
+      INSERT INTO relations(tenant_id, from_entity_id, to_entity_id, rel_type, memory_id, source_kind, source_object_type, source_object_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(tenantId, opts.fromEntityId, opts.toEntityId, opts.relType, effectiveMemoryId, sourceKind, sourceObject?.type ?? null, sourceObject?.id ?? null, now);
     const id = Number(result.lastInsertRowid ?? 0);
     const row = db.prepare(`SELECT ${RELATION_COLS} FROM relations WHERE id = ?`).get(id) as RelationRow | undefined;
     if (!row) throw new Error('insertRelation: failed to reload inserted relation');
@@ -582,11 +677,13 @@ export function enqueueExtraction(
   const now = new Date().toISOString();
   const db = openHippoDb(hippoRoot);
   try {
-    const kind = resolveConsolidatedSource(db, tenantId, memoryId, 'enqueueExtraction');
+    // enqueue is memory-keyed (no source object), so a missing memory still throws (correct -
+    // you cannot enqueue a forgotten mirror); memoryId is non-null here by construction.
+    const { sourceKind } = resolveConsolidatedSource(db, tenantId, memoryId, null, 'enqueueExtraction');
     const result = db.prepare(`
       INSERT INTO graph_extraction_queue(tenant_id, memory_id, kind, status, enqueued_at, processed_at)
       VALUES (?, ?, ?, 'pending', ?, NULL)
-    `).run(tenantId, memoryId, kind, now);
+    `).run(tenantId, memoryId, sourceKind, now);
     const id = Number(result.lastInsertRowid ?? 0);
     const row = db.prepare(`SELECT ${QUEUE_COLS} FROM graph_extraction_queue WHERE id = ?`).get(id) as QueueRow | undefined;
     if (!row) throw new Error('enqueueExtraction: failed to reload queue item');
@@ -739,6 +836,47 @@ export function markGraphDirty(hippoRoot: string, tenantId: string, memoryId: st
     // swallowed so the already-committed E2 write is never rolled back.
     console.warn(
       `markGraphDirty: enqueue failed for tenant=${tenantId} memory=${memoryId}: ${(err as Error).message}`,
+    );
+  }
+}
+
+/**
+ * Remove the graph rows sourced from one E2 object, by its (type, id). Used when a
+ * MIRRORLESS object is closed: it has no mirror memory, so `markGraphDirty` cannot
+ * enqueue a rebuild (the queue is memory-keyed). Closing must still drop the object's
+ * now-stale entity + edges from the graph, so we remove them directly here. Fail-soft
+ * like `markGraphDirty` (never throws into the E2 close caller; graph staleness is
+ * recoverable). Deleting the entity cascade-deletes any relation where it is an endpoint
+ * (relations FK entities ON DELETE CASCADE); the explicit relations DELETE also covers a
+ * relation whose OWN provenance is this object (defensive — every such edge has the object
+ * as an endpoint today, so the cascade already covers it). DELETE fires no BEFORE
+ * INSERT/UPDATE guard trigger.
+ */
+export function removeGraphEntitiesForObject(
+  hippoRoot: string,
+  tenantId: string,
+  sourceObjectType: SourceObjectType,
+  sourceObjectId: number,
+): void {
+  try {
+    assertTenantId('removeGraphEntitiesForObject', tenantId);
+    const db = openHippoDb(hippoRoot);
+    try {
+      db.exec('BEGIN');
+      db.prepare(`DELETE FROM relations WHERE tenant_id = ? AND source_object_type = ? AND source_object_id = ?`)
+        .run(tenantId, sourceObjectType, sourceObjectId);
+      db.prepare(`DELETE FROM entities WHERE tenant_id = ? AND source_object_type = ? AND source_object_id = ?`)
+        .run(tenantId, sourceObjectType, sourceObjectId);
+      db.exec('COMMIT');
+    } catch (e) {
+      try { db.exec('ROLLBACK'); } catch { /* preserve original throw */ }
+      throw e;
+    } finally {
+      closeHippoDb(db);
+    }
+  } catch (err) {
+    console.warn(
+      `removeGraphEntitiesForObject: failed for tenant=${tenantId} ${sourceObjectType}#${sourceObjectId}: ${(err as Error).message}`,
     );
   }
 }

@@ -9,8 +9,8 @@ describe('A5 schema migration v16: tenant_id columns', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-a5-'));
     const db = openHippoDb(home);
     try {
-      expect(getSchemaVersion(db)).toBe(37);
-      expect(getCurrentSchemaVersion()).toBe(37);
+      expect(getSchemaVersion(db)).toBe(38);
+      expect(getCurrentSchemaVersion()).toBe(38);
     } finally {
       closeHippoDb(db);
       rmSync(home, { recursive: true, force: true });

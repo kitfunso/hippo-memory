@@ -21,7 +21,7 @@
  * `hippo sleep` enqueue-hook.
  */
 
-import { clearGraph, insertEntity, insertRelation, runGraphRebuildTransaction, MAX_ENTITY_NAME_LEN, type EntityType, type GraphTxDb } from './graph.js';
+import { clearGraph, insertEntity, insertRelation, runGraphRebuildTransaction, MAX_ENTITY_NAME_LEN, type EntityType, type GraphTxDb, type SourceObjectType, type SourceObjectRef } from './graph.js';
 import { loadDecisions } from './decisions.js';
 import { loadPolicies } from './policies.js';
 import { loadCustomerNotes } from './customer-notes.js';
@@ -76,6 +76,22 @@ function keyOf(entityType: EntityType, e2Id: number): string {
   return `${entityType}:${e2Id}`;
 }
 
+/** The four E2-derived extraction entity types map 1:1 to source_object_type. */
+const ENTITY_TYPE_TO_SOURCE_OBJECT: Partial<Record<EntityType, SourceObjectType>> = {
+  decision: 'decision',
+  policy: 'policy',
+  customer: 'customer',
+  project: 'project',
+};
+
+/** The E2 source-object ref for an extraction row (always set: every extracted row is an
+ *  E2 object). Throws on an unmappable entityType (a graph invariant violation). */
+function sourceObjectOf(entityType: EntityType, e2Id: number): SourceObjectRef {
+  const type = ENTITY_TYPE_TO_SOURCE_OBJECT[entityType];
+  if (!type) throw new Error(`graph-extract: entityType '${entityType}' has no source_object_type mapping`);
+  return { type, id: e2Id };
+}
+
 /** Escape a string for safe use as a literal inside a RegExp alternation. */
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -121,13 +137,18 @@ function loadType(
   return { rows, hitCap };
 }
 
-/** A Pass-1-created entity, the unit Pass 3 traverses (never `allRows` - a row with a
- *  null memory or empty name produced NO entity and must never be a references source,
- *  or insertRelation would throw on a null source memory after clearGraph). */
+/** A Pass-1-created entity, the unit Pass 3 traverses (never `allRows` - a row with an
+ *  empty name produced NO entity and must never be a references source). Carries its E2
+ *  source object so a references edge stays anchored to the object even when the mirror
+ *  memory is gone (memoryId null). */
 interface CreatedEntity {
   entityId: number;
   entityType: EntityType;
-  memoryId: string;
+  /** The source mirror memory, or null once forgotten/pruned (the edge then anchors to
+   *  the source object only). */
+  memoryId: string | null;
+  /** The E2 source object this entity descends from (always set). */
+  sourceObject: SourceObjectRef;
   name: string;
   searchText: string;
   /** True when this row was superseded by a successor. References are extracted among
@@ -195,18 +216,22 @@ function rebuildGraphRows(
   const truncated: string[] = [];
   const allRows: ExtractRow[] = [];
   const entityIdByKey = new Map<string, number>();
-  const memoryIdByKey = new Map<string, string>();
+  // The mirror memory per extracted key, null once forgotten/pruned (so a supersedes
+  // edge anchors to the successor's object when the mirror is gone but still passes the
+  // memory through when it lives).
+  const memoryIdByKey = new Map<string, string | null>();
   // Created entities ONLY (drives Pass 3 sources + targets), in stable insertion order.
   const created: CreatedEntity[] = [];
 
-  // Pass 1: entities. Skip rows whose source memory was forgotten (NULL memory_id) -
-  // an entity must reference a consolidated memory (entities.memory_id is NOT NULL).
+  // Pass 1: entities. Every ACTIVE/SUPERSEDED E2 row becomes an entity ANCHORED to its
+  // authoritative E2 object (source_object_type/id) - it survives a forgotten mirror
+  // (memory_id NULL). The mirror memory is passed through only when it still exists
+  // (it remains a recall pointer until forgotten/pruned).
   for (const { entityType, rows, hitCap } of loaded) {
     if (hitCap) truncated.push(entityType);
     byType[entityType] = 0;
     for (const row of rows) {
       allRows.push(row);
-      if (row.memoryId === null) continue;
       // Normalise the label so a long/odd-but-valid E2 name can never throw in
       // insertEntity and (because clearGraph already ran) brick the rebuild
       // unrebuildably. E2 name fields (decisionText / policyName) are UNCAPPED at
@@ -218,22 +243,26 @@ function rebuildGraphRows(
       // rather than throw. This closes the entire name-brick class.
       const name = (row.name ?? '').trim().slice(0, MAX_ENTITY_NAME_LEN);
       if (name.length === 0) continue;
+      const sourceObject = sourceObjectOf(row.entityType, row.e2Id);
       const entity = insertEntity(hippoRoot, tenantId, {
         entityType: row.entityType,
         name,
         memoryId: row.memoryId,
+        sourceObject,
       }, txDb);
       const k = keyOf(row.entityType, row.e2Id);
       entityIdByKey.set(k, entity.id);
       memoryIdByKey.set(k, row.memoryId);
-      created.push({ entityId: entity.id, entityType: row.entityType, memoryId: row.memoryId, name, searchText: row.searchText ?? '', superseded: row.supersededBy !== null });
+      created.push({ entityId: entity.id, entityType: row.entityType, memoryId: row.memoryId, sourceObject, name, searchText: row.searchText ?? '', superseded: row.supersededBy !== null });
       byType[entityType] += 1;
     }
   }
 
   // Pass 2: `supersedes` relations. For X superseded by Y (Y is the successor), emit
-  // "Y supersedes X" - but only when BOTH X and Y were extracted (e.g. Y may be closed
-  // and absent). The relation is sourced from Y's consolidated memory.
+  // "Y supersedes X" - but only when BOTH X and Y were EXTRACTED (e.g. Y may be closed
+  // and absent). The emit guard is ENTITY presence (entityIdByKey), not memory presence:
+  // a forgotten successor mirror must still emit the edge. The relation is anchored to Y's
+  // authoritative E2 object; Y's mirror memory is passed only when it still lives.
   let relations = 0;
   // Entity-id pairs already related by supersedes (unordered). Pass 3 skips a references
   // edge for such a pair: a version-extends-its-predecessor's-name containment (e.g.
@@ -246,13 +275,14 @@ function rebuildGraphRows(
     const yKey = keyOf(row.entityType, row.supersededBy);
     const fromId = entityIdByKey.get(yKey); // successor Y
     const toId = entityIdByKey.get(xKey); // superseded X
-    const yMemoryId = memoryIdByKey.get(yKey);
-    if (fromId === undefined || toId === undefined || yMemoryId === undefined) continue;
+    if (fromId === undefined || toId === undefined) continue;
+    const yMemoryId = memoryIdByKey.get(yKey) ?? null; // successor's mirror, null if gone
     insertRelation(hippoRoot, tenantId, {
       fromEntityId: fromId,
       toEntityId: toId,
       relType: 'supersedes',
       memoryId: yMemoryId,
+      sourceObject: sourceObjectOf(row.entityType, row.supersededBy), // successor Y's object
     }, txDb);
     supersededPairs.add(pairKey(fromId, toId));
     relations += 1;
@@ -260,7 +290,8 @@ function rebuildGraphRows(
 
   // Pass 3: cross-object `references` edges via conservative name matching. A source's
   // text containing a target entity's name -> "source references target". Sources +
-  // targets are CREATED entities only, so insertRelation never sees a null source memory.
+  // targets are CREATED entities only, each anchored to its E2 source object (so the
+  // edge survives a forgotten source mirror).
   const references = extractReferences(hippoRoot, tenantId, created, supersededPairs, truncated, txDb);
   relations += references;
 
@@ -272,7 +303,8 @@ function rebuildGraphRows(
  * Pass 3. Build a target-name index from the created entities (names within the length
  * bounds, ambiguous names dropped), scan each created entity's text once with one
  * combined word-boundary regex, and emit `references` edges (self-skipped, deduped,
- * per-source capped). Returns the number of references edges written.
+ * per-source capped). Each edge is anchored to the source entity's E2 object (memoryId
+ * passed through only when the mirror lives). Returns the number of references edges written.
  */
 function extractReferences(
   hippoRoot: string,
@@ -338,7 +370,9 @@ function extractReferences(
         fromEntityId: src.entityId,
         toEntityId: targetId,
         relType: 'references',
-        memoryId: src.memoryId, // the source object's consolidated memory
+        // Anchored to the source object; its mirror memory is passed only when it lives.
+        memoryId: src.memoryId,
+        sourceObject: src.sourceObject,
       }, txDb);
       references += 1;
     }

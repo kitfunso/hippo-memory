@@ -119,9 +119,12 @@ function accumulateForRoot(
   const seedEntities = loadEntitiesByMemoryId(root, tenantId, [...strengthByMemId.keys()]);
   if (seedEntities.length === 0) return;
 
-  // entityId -> origin seed strength (carried unchanged along the path).
+  // entityId -> origin seed strength (carried unchanged along the path). A seed entity is
+  // loaded by memory id, so its memoryId is non-null here; the guard keeps the widened
+  // (string | null) type honest (a null-memory entity is not a lexical seed).
   const originStrength = new Map<number, number>();
   for (const e of seedEntities) {
+    if (e.memoryId === null) continue;
     const st = strengthByMemId.get(e.memoryId) ?? 0;
     originStrength.set(e.id, Math.max(originStrength.get(e.id) ?? 0, st));
   }
@@ -179,6 +182,7 @@ function accumulateForRoot(
   // Reached entity ids -> source memory ids -> in-pool entry indices.
   const reachedEntities = loadEntitiesByIds(root, tenantId, [...reachedScore.keys()]);
   for (const ent of reachedEntities) {
+    if (ent.memoryId === null) continue;         // mirror-less node: no pool memory to re-rank
     const idx = memIdToIndex.get(ent.memoryId);
     if (idx === undefined) continue;             // reached memory is not in the candidate pool
     const score = reachedScore.get(ent.id) ?? 0;
