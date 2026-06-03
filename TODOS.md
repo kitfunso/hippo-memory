@@ -4,6 +4,22 @@
 
 Cross-referenced from `ROADMAP-RESEARCH.md` §"Next 90 days". The full execution roadmap (Tracks A-I, sequencing, bets, non-goals) lives there. This file owns the operational post-ship tail.
 
+### E2/E3 graph track — SHIPPED v1.16.0 → v1.22.0 (2026-06-03)
+
+The Company Brain object + graph layer shipped end-to-end:
+- **All eight E2 first-class objects done.** decision (v1.15.0), prediction (v1.13.0), incident / process / policy / skill / project_brief / customer_note (all v1.16.0). `handoff` is the one remaining (session-scoped today; full promotion ~3d).
+- **E3 graph layer.** extract + graph-on-consolidated guard + multi-hop `recall --hops` (v1.16.0); cross-object `references` edges (v1.17.0); **sleep enqueue-hook — graph auto-rebuilds during `hippo sleep`, no manual `graph extract`** (v1.19.0); observability + visualization (v1.20.0); graph-retrieval stream fused into RRF (v1.21.0, Track L1); entity/relation provenance anchored to the authoritative E2 object so an in-force object survives mirror decay/forget (v1.22.0, migration v38).
+
+**Next (post-v1.22.0 queue):**
+1. **Tenant-level graph-rebuild signal** (v1.22.0 follow-up). `graph_extraction_queue` is memory-keyed, so a whole-tenant re-derive (v38 cache drop on upgrade; mirrorless-object close) cannot be expressed — self-heals on the next memory-write, but a `graph_dirty_tenants` table / tenant-scoped queue entry makes it immediate. Coordinate with the v1.19.0 sleep-enqueue subsystem. See `docs/plans/2026-06-03-graph-e2-provenance.md`.
+2. **Recall-surfacing of source-object-anchored entities** (v1.22.0 follow-up). v1.22.0 keeps the object in the graph; recall does not yet preferentially surface it. Self-contained.
+3. **A7.2 — unify cli/api/mcp recall re-ranking pipelines** (v1.18.0 follow-up; ROADMAP-RESEARCH Deferred #4). Only `applyGoalStackBoost` is shared across the three surfaces today, so a recall ranks differently per surface. Hot-path refactor; needs its own plan + outside-voice.
+4. **A5 v2 sub-2 — L9 background-pipeline tenant-scoping** (8 files). Long-standing; unblocked since the v1.12.0 Actor shape landed.
+5. **Track L2 — sleep-built KV cartridge over the consolidated semantic layer** [research/spike]. Grant-relevant 5x-cost lever (ROADMAP.md WP1); gated on a pre-registered feasibility spike.
+6. **Track K1 — markdown-vault + `[[wikilinks]]` importer** [next]. Single open-format adapter (Obsidian / Foam / Dendron subset).
+
+Stale-branch note: `feat/e3-sleep-enqueue-hook` is now 8 commits behind master and its one feature commit already shipped as v1.19.0; the branch can be retired. Its plan doc still reads "Draft" (doc-hygiene only).
+
 ### v1.11.5 — SHIPPED 2026-05-23
 
 7 of 8 items closed in v1.11.5 (see `CHANGELOG.md` v1.11.5 entry). Items #1, #2, #3, #4, #6, #7, #8 done. Item #5 (per-tenant /v1/sleep scoping) deferred to v1.12.0 because plan-eng-critic surfaced it as MINOR-scope structural work.
@@ -61,7 +77,7 @@ Detail in §"v0.26 — UI Redesign (warm parchment + 3D)" below. STATUS (reconci
 
 ### B / C / E track depth items (deferred to days 91-180)
 
-Research-not-enterprise items; re-prioritise only after items 1-5 above. B1 ACC EVC calibration, B3 dlPFC goal-stack depth (MVP+depth shipped, but research workload-validity gates returned mixed signals — see `docs/RETRACTION.md`), C3 Pineal ambient state vector. E2 first-class `decision` SHIPPED v1.15.0; `prediction` SHIPPED v1.13.0; `handoff` already built (session-scoped). Remaining E2 objects: incident / process / policy / skill / project_brief / customer_note.
+Research-not-enterprise items; re-prioritise only after items 1-5 above. B1 ACC EVC calibration, B3 dlPFC goal-stack depth (MVP+depth shipped, but research workload-validity gates returned mixed signals — see `docs/RETRACTION.md`), C3 Pineal ambient state vector. **E2 first-class objects COMPLETE (2026-06-03):** decision (v1.15.0), prediction (v1.13.0), incident / process / policy / skill / project_brief / customer_note (all v1.16.0); `handoff` remains session-scoped (the one open E2 item). The E3 graph layer shipped v1.16.0 → v1.22.0 — see the top-of-file §"E2/E3 graph track" entry.
 
 ### Engineering hygiene (release pipeline)
 

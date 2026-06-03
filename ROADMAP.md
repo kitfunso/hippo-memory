@@ -2,7 +2,7 @@
 
 This roadmap tracks planned work for the hippo-memory codebase. Items are grouped by funding status: committed, conditional on grant award, and speculative.
 
-Current version: 1.11.4 (npm `hippo-memory`) + python-v0.1.0 (PyPI `hippo-memory-sdk`)
+Current version: 1.22.0 (npm `hippo-memory`) + python-v0.3.0 (PyPI `hippo-memory-sdk`)
 
 For non-grant execution status (Tracks A-I, sequencing, shipped items, bets, non-goals) see `ROADMAP-RESEARCH.md`. For operational follow-ups and per-version post-ship tails see `TODOS.md`. For the research lineage and seven-mechanisms backgrounder see `RESEARCH.md`.
 
@@ -127,6 +127,6 @@ Status: Submitted. Decision expected summer 2026. Project runs August 2026 - Jan
 |-------|--------|--------|----------|
 | Frontier AI Discovery (comp 2422) | Submitted 2026-04-20 | GBP 34,999 | TBC |
 | ARIA Rolling Seeding | Submitted 2026-04-20 | Up to GBP 500K | TBC |
-| AI Champions Frontier AI Phase 1 (comp 2419) | Submitted 2026-04-21 | Up to GBP 122,500 | TBC |
+| AI Champions Frontier AI Phase 1 (comp 2419) | Unsuccessful 60.0% (2026-06-03) | Up to GBP 122,500 | Not awarded |
 
 See `memory/reference_frontier_ai_hippo_answers.md` for the full application template and reusable assets.

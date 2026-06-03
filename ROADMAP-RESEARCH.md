@@ -4,7 +4,7 @@ This is the canonical execution roadmap. Every actionable item from `RESEARCH.md
 
 This file supersedes the prior research-only frame. `ROADMAP.md` continues to track grant-tied deliverables. `PLAN.md` documents architecture and CLS principles.
 
-Current version: 1.15.0 (npm `hippo-memory`) + python-v0.3.0 (PyPI `hippo-memory-sdk`) — both published 2026-05-29
+Current version: 1.22.0 (npm `hippo-memory`, published 2026-06-03) + python-v0.3.0 (PyPI `hippo-memory-sdk`, published 2026-05-28)
 Active branch: `master`
 
 ## Status as of 2026-05-24
@@ -305,13 +305,15 @@ RESEARCH §"Phase 2: operating objects". Each object gets its own table, recall 
 |--------|--------|----------------------|-------|
 | `decision` | **shipped v1.15.0** (`decisions` table + lifecycle) | done | first-class object; supersede/close ops |
 | `handoff` | partial (`hippo handoff`) | 3d to fully promote | session-scoped today |
-| `incident` | planned | 8d | postmortem capsules with linked receipts |
-| `process` | planned | 10d | living process maps with deltas |
-| `policy` | planned | 8d | bi-temporal-first object type |
-| `skill` | planned | 12d | executable; exports to AGENTS.md / CLAUDE.md |
-| `project_brief` | planned | 8d | repo-scoped; auto-refreshes from receipts |
-| `customer_note` | planned | 6d | scoped to account/customer entity |
+| `incident` | **shipped v1.16.0** | done | open/resolve/close lifecycle; `incidents` table, migration v31 |
+| `process` | **shipped v1.16.0** | done | living process maps with deltas |
+| `policy` | **shipped v1.16.0** | done | bi-temporal-first (`valid_from`/`valid_to`) |
+| `skill` | **shipped v1.16.0** | done | executable; exports to AGENTS.md / CLAUDE.md |
+| `project_brief` | **shipped v1.16.0** | done | repo-scoped; auto-refreshes from receipts (migration v35) |
+| `customer_note` | **shipped v1.16.0** | done | entity-scoped (`customer:<id>`); last of the eight E2 objects |
 | `prediction` | **shipped v1.13.0** | done | ex-ante claim closed against ex-post outcome; powers J3 reference-class forecasting |
+
+**Status (2026-06-03): all eight E2 objects are first-class and shipped.** Only `handoff` remains partial (session-scoped; full promotion ~3d) — the single open E2 item.
 
 ### Phase E3 — graph layer over consolidated state
 
@@ -319,15 +321,15 @@ RESEARCH §"Phase 2: operating objects". Each object gets its own table, recall 
 
 Position: a graph layer sits **on top of** consolidated facts, decisions, processes, and entities — never over raw transcript soup. It exists to support multi-hop reasoning across decisions, policies, owners, customers, systems, and exceptions.
 
-#### E3.1. Entity extraction at sleep [planned]
+#### E3.1. Entity extraction at sleep [shipped v1.16.0; cross-object `references` edges v1.17.0]
 During `hippo sleep`, extract canonical entities (person, project, customer, system, policy, decision) and relationships (owns, supersedes, depends-on, blocked-by, references) from consolidated objects only.
 **Effort:** 12d. **Success:** ≥80% precision on labeled gold set of 200 (entity, relation, entity) triples.
 
-#### E3.2. Multi-hop graph recall [planned]
+#### E3.2. Multi-hop graph recall [shipped v1.16.0]
 `hippo recall --hops 2 "incidents linked to decisions about retry-policy"` — traverses decision → policy → incident → owner.
 **Effort:** 10d (depends on E3.1). **Success:** answers a 5-question multi-hop benchmark suite faster + more accurately than flat retrieval baseline.
 
-#### E3.3. Graph-on-consolidated guard [next]
+#### E3.3. Graph-on-consolidated guard [shipped v1.16.0]
 Hard rule: graph never indexes raw layer. Three-layer enforcement, not just lint:
 1. **DB-level:** `entities` and `relations` tables have FK to consolidated rows only; CHECK constraint `source_kind IN ('distilled','superseded')`.
 2. **Pipeline-level:** `graph_extraction_queue` table is fed only by `consolidation_runs` writes that set `kind=distilled`. Graph indexer reads from the queue, never from `memories` directly.
@@ -336,6 +338,11 @@ Hard rule: graph never indexes raw layer. Three-layer enforcement, not just lint
 
 #### E3.4. Graph quality maintenance [research]
 How does the graph stay clean as supersession + invalidation happen? Soft-delete vs cascade vs tombstone vs versioned edges.
+
+#### E3 shipped status (2026-06-03) + open follow-ups
+The E3 graph track shipped end-to-end v1.16.0 → v1.22.0: extract + guard + multi-hop `recall --hops` (v1.16.0), cross-object `references` edges (v1.17.0), **sleep enqueue-hook so the graph auto-rebuilds during `hippo sleep`** with no manual `graph extract` (v1.19.0), graph observability + visualization (v1.20.0), graph-retrieval stream fused into RRF (v1.21.0; see Track L1), and entity/relation provenance anchored to the authoritative E2 object so an in-force object survives mirror decay/forget (v1.22.0, migration v38). Two follow-ups remain open (tracked in `TODOS.md`):
+- **Tenant-level graph-rebuild signal.** `graph_extraction_queue` is memory-keyed, so a whole-tenant re-derive (the v38 cache drop on upgrade; a mirrorless-object close) cannot be expressed; it self-heals on the next memory-write dirty event, but a `graph_dirty_tenants` signal / tenant-scoped queue entry would make it immediate. Coordinated with the v1.19.0 sleep-enqueue subsystem.
+- **Recall-surfacing of source-object-anchored entities.** v1.22.0 keeps the object in the graph; recall does not yet preferentially surface it.
 
 ### Phase E4 — trigger-based recall [planned]
 Cheap trigger routing happens before expensive global recall: file path, service, repo, ticket type, customer, workflow stage, on-call context.
@@ -637,7 +644,7 @@ A recurring question: should hippo adopt "latent memory" as a new layer, or as i
 - **Rule 2 — every latent form is a derived, rebuildable index/accelerant** over the text-of-record, never the source of truth. Delete any latent artifact and `hippo sleep` regenerates it. (This is exactly how the embedding index already behaves.)
 - **Rule 3 — latent forms that cannot be made rebuildable-from-symbolic-state** (parametric memory written to weights) do not enter the product; they live in Track G research only.
 
-#### L1. Graph-retrieval stream into RRF [next, depends on E3.1]
+#### L1. Graph-retrieval stream into RRF [shipped v1.21.0]
 A **new** graph ranked-list *producer* that feeds `src/rrf.ts` as a third fusion input beside BM25 + dense — distinct from `src/graph-recall.ts`, which today does seed-adjacent injection with a per-hop score discount (not a ranked list, and not RRF-fused). Already filed (F-track "graph retrieval stream" + F4 HippoRAG). Pure win, no new substrate. Spec needed: the graph-score→rank function, the RRF weight/`k` for the graph stream, and tests. **Success:** a graph-stream-vs-no-graph-stream ablation under `rrf.ts` fusion lifts R@5 over the 2-stream (BM25+dense) baseline on the oracle split. Cross-ref F9.
 
 #### L2. Sleep-built KV "cartridge" over the consolidated semantic layer [research]
@@ -740,7 +747,7 @@ Things hippo might do later. Not active scope, not non-goals. Each item names th
 | 2 | Post-transformer architecture integration (Mamba / RWKV / future) | D1-D7 ML research lines mature; current architecture saturates a measurable bottleneck |
 | 3 | On-device hippo (mobile / edge) | Hosted product is shipping; embedded agents become a buyer-pulled use case |
 | 4 | A7.2: unify the cli/api/mcp recall re-ranking pipelines + MCP primary-band rerank-trace | A7 recall-trace (v1.18.0) surfaced that only `applyGoalStackBoost` is shared across the three pipelines (cli applies interference/value/OFC/reranker/downweight that api + mcp do not), so a recall ranks differently per surface. Unifying them is a hot-path refactor needing its own plan + outside-voice; until then the trace honestly reports each pipeline's own stages via `rerankPipeline`. See `docs/plans/2026-06-02-a7-recall-trace.md`. |
-| 5 | Anchor graph entity/relation provenance to the authoritative E2 object (not the decaying mirror) | E3 graph keys entity provenance to the memory mirror (`entities.memory_id` NOT NULL + consolidated-source triggers), but the mirror has a half-life and is prunable, so an in-force E2 object (decision/policy/note/brief) silently drops from the graph once its mirror is forgotten or consolidation-pruned (`graph-extract.ts:180`). Re-introduces the decay-coupling E2 removed for recall (db.ts:1055-1059), one layer up. Fix anchors entities to the E2 row + extends the no-raw guard to accept E2-object provenance; NOT cascade/block forget (would destroy the source of truth). Build after the `feat/e3-*` branches land on master (concurrent-edit hazard on the guard + migration). See `docs/plans/2026-06-03-graph-e2-provenance.md`. |
+| 5 | ~~Anchor graph entity/relation provenance to the authoritative E2 object~~ **SHIPPED v1.22.0 (migration v38).** In-force E2 objects (decision/policy/customer_note/project_brief) now stay in the graph after their mirror memory is forgotten or consolidation-pruned; provenance anchored to the authoritative E2 row, the no-raw guard extended to accept E2-object provenance, no cascade/block on forget. Two follow-ups remain open (tenant-level rebuild signal; recall-surfacing) — see the E3 shipped-status block above + `TODOS.md`. See `docs/plans/2026-06-03-graph-e2-provenance.md`. |
 
 ---
 
