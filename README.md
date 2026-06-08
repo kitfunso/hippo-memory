@@ -22,7 +22,7 @@ One command. Every git repo on your machine gets memory.
 Works with:    Claude Code, Codex, Cursor, OpenClaw, OpenCode, Pi, any MCP client
 Imports from:  ChatGPT, Claude (CLAUDE.md), Cursor (.cursorrules), Slack, markdown
 Storage:       SQLite backbone with markdown mirrors. Git-trackable, human-readable.
-Dependencies:  Zero runtime deps. Node.js 22.5+. Optional embeddings via @xenova/transformers.
+Dependencies:  Zero runtime deps. Node.js 22.5+. Optional embeddings: local @xenova/transformers (default) or an opt-in API embedder (OpenAI/Voyage/Cohere).
 ```
 
 ---

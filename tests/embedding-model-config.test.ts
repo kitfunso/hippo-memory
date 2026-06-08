@@ -17,6 +17,7 @@ describe('embedding model configuration', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.unmock('../src/embeddings.js');
+    vi.unmock('../src/embedding-provider.js');
     vi.unmock('../src/search.js');
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-embed-model-'));
   });
@@ -36,18 +37,35 @@ describe('embedding model configuration', () => {
     expect(embeddings.resolveEmbeddingModel?.(tmpDir)).toBe('custom/model');
   });
 
-  it('hybridSearch passes the configured model to getEmbedding', async () => {
+  it('hybridSearch embeds the query via the provider built from the configured model', async () => {
     writeConfig(tmpDir, 'custom/model');
 
-    const getEmbeddingMock = vi.fn(async () => [1, 0, 0]);
     const entryId = 'mem_custom_model';
+    const embedMock = vi.fn(async (texts: string[]) => texts.map(() => [1, 0, 0]));
+    let resolvedId: string | undefined;
+
+    // The query-embedding seam moved from a direct getEmbedding(text, model, role)
+    // call to resolveEmbeddingProvider(...).embed(texts, role). Delegate to the
+    // REAL resolver so the configured model ('custom/model') is genuinely read
+    // into the provider id, then force availability and capture the embed call.
+    vi.doMock('../src/embedding-provider.js', async () => {
+      const actual = await vi.importActual<typeof import('../src/embedding-provider.js')>(
+        '../src/embedding-provider.js',
+      );
+      return {
+        ...actual,
+        resolveEmbeddingProvider: (hippoRoot: string) => {
+          const real = actual.resolveEmbeddingProvider(hippoRoot);
+          resolvedId = real.id;
+          return { kind: real.kind, model: real.model, id: real.id, isAvailable: () => true, embed: embedMock };
+        },
+      };
+    });
 
     vi.doMock('../src/embeddings.js', async () => {
       const actual = await vi.importActual<typeof import('../src/embeddings.js')>('../src/embeddings.js');
       return {
         ...actual,
-        isEmbeddingAvailable: () => true,
-        getEmbedding: getEmbeddingMock,
         embeddingModelRequiresReindex: () => false,
         loadEmbeddingIndex: () => ({ [entryId]: [1, 0, 0] }),
         cosineSimilarity: () => 1,
@@ -62,11 +80,11 @@ describe('embedding model configuration', () => {
 
     await hybridSearch('query text', [entry], { hippoRoot: tmpDir, budget: 1000 });
 
-    // hybridSearch passes a third `role` argument ('query'|'passage') so e5-family
-    // models receive the correct "query: " / "passage: " prefix; non-e5 models
-    // ignore it. The query path always passes 'query'. (Added with the F12
-    // multilingual-e5-large embedding work; see src/embeddings.ts + src/search.ts.)
-    expect(getEmbeddingMock).toHaveBeenCalledWith('query text', 'custom/model', 'query');
+    // The provider is built from the configured model...
+    expect(resolvedId).toBe('custom/model');
+    // ...and the query path embeds with role 'query' (so e5-family models get the
+    // correct "query: " prefix; non-e5 models ignore it).
+    expect(embedMock).toHaveBeenCalledWith(['query text'], 'query');
   });
 
   it('treats a legacy embedding index as stale when the configured model changes', async () => {
@@ -102,6 +120,44 @@ describe('embedding model configuration', () => {
     const results = await hybridSearch('query text', [entry], { hippoRoot: tmpDir, budget: 1000 });
 
     expect(getEmbeddingMock).not.toHaveBeenCalled();
+    expect(results.length).toBeGreaterThan(0);
+  });
+
+  it('stays BM25-only on an unembedded store (no query embedding spent)', async () => {
+    writeConfig(tmpDir, 'custom/model');
+    const embedMock = vi.fn(async (texts: string[]) => texts.map(() => [1, 0, 0]));
+
+    vi.doMock('../src/embedding-provider.js', async () => {
+      const actual = await vi.importActual<typeof import('../src/embedding-provider.js')>(
+        '../src/embedding-provider.js',
+      );
+      return {
+        ...actual,
+        resolveEmbeddingProvider: () => ({
+          kind: 'local',
+          model: 'custom/model',
+          id: 'custom/model',
+          isAvailable: () => true,
+          embed: embedMock,
+        }),
+      };
+    });
+
+    vi.doMock('../src/embeddings.js', async () => {
+      const actual = await vi.importActual<typeof import('../src/embeddings.js')>('../src/embeddings.js');
+      return { ...actual, embeddingModelRequiresReindex: () => false, loadEmbeddingIndex: () => ({}) };
+    });
+
+    const { hybridSearch } = await import('../src/search.js');
+    const { createMemory } = await import('../src/memory.js');
+
+    const results = await hybridSearch('query text', [createMemory('query text match')], {
+      hippoRoot: tmpDir,
+      budget: 1000,
+    });
+
+    // Empty index -> no cached doc vectors -> the query embedding is skipped.
+    expect(embedMock).not.toHaveBeenCalled();
     expect(results.length).toBeGreaterThan(0);
   });
 });

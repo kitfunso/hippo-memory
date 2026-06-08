@@ -20,9 +20,19 @@ export interface HippoConfig {
     threshold: number;  // trigger sleep after this many new memories
   };
   embeddings: {
-    enabled: boolean | 'auto';  // 'auto' = use if dependency installed
+    enabled: boolean | 'auto';  // 'auto' = use if dependency installed (local) / key present (api)
     model: string;
     hybridWeight: number;
+    /** Embedding backend. 'local' (default) = zero-dependency transformers.js.
+     *  'openai' | 'voyage' | 'cohere' = opt-in API embedder; needs the provider's
+     *  API key in env (OPENAI_API_KEY / VOYAGE_API_KEY / COHERE_API_KEY).
+     *  See src/embedding-provider.ts. */
+    provider?: 'local' | 'openai' | 'voyage' | 'cohere';
+    /** Optional API base-URL override (self-host / proxy). HTTPS only (localhost
+     *  may use http). Ignored by the local provider. */
+    apiBaseUrl?: string;
+    /** Batch size for API embedding requests. Default 64. */
+    batchSize?: number;
   };
   global: {
     enabled: boolean;
@@ -92,6 +102,7 @@ const DEFAULT_CONFIG: HippoConfig = {
     enabled: 'auto',
     model: 'Xenova/all-MiniLM-L6-v2',
     hybridWeight: 0.6,
+    provider: 'local',
   },
   global: {
     enabled: true,

@@ -98,7 +98,9 @@ import {
   embedMemory,
   loadEmbeddingIndex,
   resolveEmbeddingModel,
+  embeddingModelRequiresReindex,
 } from './embeddings.js';
+import { isEmbeddingConfigured, resolveEmbeddingProvider } from './embedding-provider.js';
 import { loadPhysicsState, resetAllPhysicsState } from './physics-state.js';
 import { computeSystemEnergy, vecNorm } from './physics.js';
 import { loadConfig } from './config.js';
@@ -796,8 +798,8 @@ async function cmdRemember(
   if (entry.tags.length > 0) console.log(`   Tags: ${entry.tags.join(', ')}`);
   if (entry.pinned) console.log('   Pinned (no decay)');
 
-  // Auto-embed if available
-  if (isEmbeddingAvailable()) {
+  // Auto-embed if available (provider-aware: local dep installed, or API key present)
+  if (isEmbeddingConfigured(targetRoot)) {
     embedMemory(targetRoot, entry).catch(() => {
       // Silently ignore embedding errors
     });
@@ -3082,18 +3084,45 @@ function cmdStatus(hippoRoot: string): void {
     console.log(`Last sleep:        never`);
   }
 
-  // Embedding status
-  const embAvail = isEmbeddingAvailable();
+  // Embedding status (provider-aware)
+  const embedProvider = (() => {
+    try {
+      return resolveEmbeddingProvider(hippoRoot);
+    } catch {
+      return null;
+    }
+  })();
   console.log('');
-  console.log(`Embeddings:        ${embAvail ? 'available' : 'not installed (BM25 only)'}`);
-  if (embAvail) {
+  if (!embedProvider) {
+    console.log(`Embeddings:        misconfigured (check embeddings.provider / apiBaseUrl), BM25 only`);
+  } else {
+    const embeddingsDisabled = loadConfig(hippoRoot).embeddings.enabled === false;
+    const embAvail = embedProvider.isAvailable();
+    if (embeddingsDisabled) {
+      console.log(`Embeddings:        disabled in config (embeddings.enabled = false), BM25 only`);
+    } else if (embedProvider.kind === 'local') {
+      console.log(`Embeddings:        ${embAvail ? `available [${embedProvider.id}]` : 'not installed (BM25 only)'}`);
+    } else if (embAvail) {
+      console.log(`Embeddings:        ${embedProvider.kind} api [${embedProvider.id}]`);
+    } else {
+      console.log(`Embeddings:        ${embedProvider.kind} configured but ${embedProvider.keyEnv} not set (BM25 only)`);
+    }
+    // Show cached counts whenever vectors exist on disk (even when disabled or
+    // the key was removed), so the user still sees what is already indexed.
     const embIndex = loadEmbeddingIndex(hippoRoot);
-    const activeIds = new Set(entries.map((e) => e.id));
-    const activeEmbedded = Object.keys(embIndex).filter((id) => activeIds.has(id)).length;
-    const orphaned = Object.keys(embIndex).length - activeEmbedded;
-    let line = `Embedded:          ${activeEmbedded}/${entries.length} memories`;
-    if (orphaned > 0) line += ` (${orphaned} orphaned — run \`hippo embed\` to prune)`;
-    console.log(line);
+    if (embAvail || Object.keys(embIndex).length > 0) {
+      const activeIds = new Set(entries.map((e) => e.id));
+      const activeEmbedded = Object.keys(embIndex).filter((id) => activeIds.has(id)).length;
+      const orphaned = Object.keys(embIndex).length - activeEmbedded;
+      const dims = Object.values(embIndex)[0]?.length;
+      let line = `Embedded:          ${activeEmbedded}/${entries.length} memories`;
+      if (dims) line += ` (${dims}-dim)`;
+      if (orphaned > 0) line += ` (${orphaned} orphaned, run \`hippo embed\` to prune)`;
+      console.log(line);
+      if (embeddingModelRequiresReindex(hippoRoot, embedProvider.id, embIndex)) {
+        console.log(`                   model changed, run \`hippo embed\` to reindex`);
+      }
+    }
   }
 
   // Physics status
@@ -5523,12 +5552,9 @@ async function cmdEmbed(
 ): Promise<void> {
   requireInit(hippoRoot);
 
-  if (!isEmbeddingAvailable()) {
-    console.log('Embeddings not available. Install @xenova/transformers to enable:');
-    console.log('  npm install @xenova/transformers');
-    return;
-  }
-
+  // --status and --reset-physics only read cached state, so they must work even
+  // when no provider key is present (e.g. embedded earlier with a key that was
+  // later removed). The provider-availability gate is deferred to the embed path.
   if (flags['reset-physics']) {
     const entries = loadAllEntries(hippoRoot);
     const embIndex = loadEmbeddingIndex(hippoRoot);
@@ -5559,8 +5585,50 @@ async function cmdEmbed(
     return;
   }
 
+  // Embedding (unlike status/reset) needs an available provider.
+  const embedProvider = (() => {
+    try {
+      return resolveEmbeddingProvider(hippoRoot);
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err));
+      return null;
+    }
+  })();
+  if (!embedProvider) {
+    process.exitCode = 1;
+    return;
+  }
+  if (!embedProvider.isAvailable()) {
+    if (loadConfig(hippoRoot).embeddings.enabled === false) {
+      console.log('Embeddings are disabled in config (embeddings.enabled = false). Set it to true or "auto" to enable.');
+      return;
+    }
+    if (embedProvider.kind === 'local') {
+      console.log('Embeddings not available. Install @xenova/transformers to enable:');
+      console.log('  npm install @xenova/transformers');
+    } else {
+      console.error(
+        `Embedding provider '${embedProvider.kind}' is configured but ${embedProvider.keyEnv} is not set.`,
+      );
+      console.error(`Export ${embedProvider.keyEnv}, or set config.embeddings.provider back to 'local'.`);
+      process.exitCode = 1;
+    }
+    return;
+  }
+
   console.log('Embedding all memories (this may take a moment on first run to download model)...');
-  const count = await embedAll(hippoRoot, resolveEmbeddingModel(hippoRoot));
+  let count: number;
+  try {
+    count = await embedAll(hippoRoot, resolveEmbeddingModel(hippoRoot));
+  } catch (err) {
+    console.error(`Embedding failed: ${err instanceof Error ? err.message : String(err)}`);
+    const partial = loadEmbeddingIndex(hippoRoot);
+    console.error(
+      `Partial progress saved: ${Object.keys(partial).length} embeddings on disk. Re-run \`hippo embed\` to resume.`,
+    );
+    process.exitCode = 1;
+    return;
+  }
   const entriesAfter = loadAllEntries(hippoRoot);
   const embIndexAfter = loadEmbeddingIndex(hippoRoot);
   console.log(`Done. ${count} new embeddings created. ${Object.keys(embIndexAfter).length}/${entriesAfter.length} total.`);
@@ -5599,7 +5667,7 @@ async function cmdWatch(command: string, hippoRoot: string): Promise<void> {
   writeEntry(hippoRoot, entry);
   updateStats(hippoRoot, { remembered: 1 });
 
-  if (isEmbeddingAvailable()) {
+  if (isEmbeddingConfigured(hippoRoot)) {
     embedMemory(hippoRoot, entry).catch(() => {});
   }
 
@@ -5682,7 +5750,7 @@ function learnFromRepo(
     writeEntry(hippoRoot, entry);
     updateStats(hippoRoot, { remembered: 1 });
 
-    if (isEmbeddingAvailable()) {
+    if (isEmbeddingConfigured(hippoRoot)) {
       embedMemory(hippoRoot, entry).catch(() => {});
     }
 
