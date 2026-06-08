@@ -71,13 +71,24 @@ const stats = await getStats(); // build-time social proof (cached + fallback)
 
       <div class="reveal mt-9" style="animation-delay: 340ms">
         <p class="mb-2 font-mono text-xs uppercase tracking-wider text-zinc-400">Works with</p>
-        <ul class="flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-zinc-400">
-          {worksWith.map((tool) => (
-            <li class="flex items-center gap-1.5">
-              <span class="h-1 w-1 rounded-full bg-zinc-600"></span>{tool}
-            </li>
-          ))}
-        </ul>
+        <div class="works-marquee relative overflow-hidden" aria-label={`Works with ${worksWith.join(', ')}`}>
+          <div class="works-track flex w-max">
+            <ul class="works-group flex shrink-0 list-none p-0 text-sm text-zinc-400">
+              {worksWith.map((tool) => (
+                <li class="flex items-center gap-1.5 whitespace-nowrap">
+                  <span class="h-1 w-1 rounded-full bg-zinc-600"></span>{tool}
+                </li>
+              ))}
+            </ul>
+            <ul class="works-group flex shrink-0 list-none p-0 text-sm text-zinc-400" aria-hidden="true">
+              {worksWith.map((tool) => (
+                <li class="flex items-center gap-1.5 whitespace-nowrap">
+                  <span class="h-1 w-1 rounded-full bg-zinc-600"></span>{tool}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -87,3 +98,41 @@ const stats = await getStats(); // build-time social proof (cached + fallback)
     </div>
   </div>
 </section>
+
+<style>
+  /* "Works with" infinite marquee. Two identical groups; translateX(-50%) loops seamlessly. */
+  .works-track {
+    animation: works-marquee 26s linear infinite;
+  }
+  .works-marquee:hover .works-track {
+    animation-play-state: paused;
+  }
+  .works-group {
+    gap: 1.25rem;
+    padding-right: 1.25rem;
+  }
+  @keyframes works-marquee {
+    to {
+      transform: translateX(-50%);
+    }
+  }
+  .works-marquee {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent);
+    mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .works-track {
+      animation: none;
+      width: auto;
+      flex-wrap: wrap;
+    }
+    .works-group {
+      flex-wrap: wrap;
+      gap: 1rem 0.375rem;
+      padding-right: 0;
+    }
+    .works-group[aria-hidden="true"] {
+      display: none;
+    }
+  }
+</style>
