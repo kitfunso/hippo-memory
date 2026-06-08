@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 1.23.0 (2026-06-08): pluggable embedding providers (bring a frontier embedder)
+
+### Added
+- **Pluggable embedding providers.** `config.embeddings.provider` now accepts `local` (default, zero-dependency `@xenova/transformers`) or an opt-in API provider: `openai`, `voyage`, or `cohere`. Bring a frontier embedder such as OpenAI `text-embedding-3-large` for frontier-class retrieval, while the default stays fully local with no API keys and no new runtime dependencies (API providers use the native `fetch` on Node 22.5+). The key is read from `OPENAI_API_KEY` / `VOYAGE_API_KEY` / `COHERE_API_KEY`. Optional `embeddings.apiBaseUrl` (https only; localhost may use http) and `embeddings.batchSize` (positive integer, default 64). API requests are bounded by a 30s timeout.
+
+### Changed
+- **Provider-aware reindex identity.** The local provider keeps the bare model string as its identity, so existing stores are NOT re-indexed on upgrade. Switching to or from an API embedder (or changing the model or vector dimension) triggers the existing reindex path.
+- **`embeddings.enabled: false` now hard-disables embedding** for both local and API providers, which prevents unwanted paid API calls.
+- **Status surface.** `hippo status` and `hippo embed --status` now show the active provider, model, whether the API key is present, the vector dimension, and a reindex-pending hint, and still report cached counts when embeddings are disabled or a key was removed.
+
+### Notes
+- Embedding stays best-effort on the add path: a provider failure never rejects a write. The explicit `hippo embed` backfill checkpoints progress per chunk and surfaces hard failures, so it never reports a false success. A malformed API response (wrong vector count or an empty vector) is treated as a hard failure so a reindex aborts atomically.
+- A real frontier-embedder LongMemEval benchmark (dual numbers: the zero-dependency local floor plus the frontier number) is a follow-up that must run on a host with API egress and a key. See `docs/FRONTIER_EMBEDDER_BENCHMARK.md`.
+
 ## 1.22.0 (2026-06-03): graph provenance anchored to the authoritative E2 object
 
 ### Fixed

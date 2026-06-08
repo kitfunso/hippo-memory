@@ -20,7 +20,8 @@ import {
   updateStats,
 } from './store.js';
 import { getGlobalRoot, initGlobal } from './shared.js';
-import { isEmbeddingAvailable, embedMemory } from './embeddings.js';
+import { embedMemory } from './embeddings.js';
+import { isEmbeddingConfigured } from './embedding-provider.js';
 
 // ---------------------------------------------------------------------------
 // Pattern definitions
@@ -594,7 +595,7 @@ function cmdCaptureCore(
       updateStats(targetRoot, { remembered: 1 });
       existing.push(entry); // within-batch dedup
 
-      if (isEmbeddingAvailable()) {
+      if (isEmbeddingConfigured(targetRoot)) {
         embedMemory(targetRoot, entry).catch(() => {});
       }
     }

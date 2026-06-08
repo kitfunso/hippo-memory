@@ -12,6 +12,7 @@ import { loadAllEntries } from './store.js';
 import { openHippoDb, closeHippoDb, getMeta, setMeta } from './db.js';
 import { initializeParticle, savePhysicsState, loadPhysicsState, resetAllPhysicsState } from './physics-state.js';
 import { loadConfig } from './config.js';
+import { resolveEmbeddingProvider, type EmbeddingProvider } from './embedding-provider.js';
 
 // Use createRequire for synchronous module resolution check in ESM
 const _require = createRequire(import.meta.url);
@@ -23,7 +24,7 @@ let _embeddingAvailable: boolean | null = null;
 const _pipelineInstances = new Map<string, unknown>();
 const _pipelineLoading = new Map<string, Promise<unknown>>();
 
-const DEFAULT_EMBEDDING_MODEL = 'Xenova/all-MiniLM-L6-v2';
+export const DEFAULT_EMBEDDING_MODEL = 'Xenova/all-MiniLM-L6-v2';
 const EMBEDDING_MODEL_META_KEY = 'embedding_model';
 
 /**
@@ -227,15 +228,20 @@ export function embeddingModelRequiresReindex(
 
 async function rebuildEmbeddingIndex(
   entries: MemoryEntry[],
-  model: string,
+  provider: EmbeddingProvider,
 ): Promise<Record<string, number[]>> {
   const rebuilt: Record<string, number[]> = {};
+  if (entries.length === 0) return rebuilt;
 
-  for (const entry of entries) {
-    const text = `${entry.content} ${entry.tags.join(' ')}`.trim();
-    const vector = await getEmbedding(text, model, 'passage');
-    if (vector.length > 0) {
-      rebuilt[entry.id] = vector;
+  const texts = entries.map((e) => `${e.content} ${e.tags.join(' ')}`.trim());
+  // provider.embed batches internally; on a hard transport/auth failure it
+  // throws, so the caller aborts WITHOUT saving a partial index (atomic
+  // reindex: the old index + stored identity are preserved).
+  const vectors = await provider.embed(texts, 'passage');
+  for (let i = 0; i < entries.length; i++) {
+    const vec = vectors[i];
+    if (vec && vec.length > 0) {
+      rebuilt[entries[i].id] = vec;
     }
   }
 
@@ -367,48 +373,57 @@ export async function embedMemory(
   entry: MemoryEntry,
   model?: string
 ): Promise<void> {
-  if (!isEmbeddingAvailable()) return;
+  const provider = resolveEmbeddingProvider(hippoRoot, { model });
+  if (!provider.isAvailable()) return;
 
   return withEmbedLock(async () => {
-    const effectiveModel = resolveEmbeddingModel(hippoRoot, model);
-    const existingIndex = loadEmbeddingIndex(hippoRoot);
-
-    if (embeddingModelRequiresReindex(hippoRoot, effectiveModel, existingIndex)) {
-      // L9: host-wide rebuild. The embedding index is keyed by entry.id
-      // (which is tenant-scoped) but the index itself is one per hippoRoot.
-      // Cross-tenant content equivalence is visible at the vector level.
-      // Per-tenant indices would be a larger architecture change.
-      const entries = loadAllEntries(hippoRoot);
-      const rebuiltIndex = await rebuildEmbeddingIndex(entries, effectiveModel);
-      saveEmbeddingIndex(hippoRoot, rebuiltIndex);
-      saveStoredEmbeddingModel(hippoRoot, effectiveModel);
-      resetPhysicsFromIndex(hippoRoot, entries, rebuiltIndex);
-      return;
-    }
-
-    const text = `${entry.content} ${entry.tags.join(' ')}`.trim();
-    const vector = await getEmbedding(text, effectiveModel, 'passage');
-    if (vector.length === 0) return;
-
-    const index = existingIndex;
-    index[entry.id] = vector;
-    saveEmbeddingIndex(hippoRoot, index);
-    saveStoredEmbeddingModel(hippoRoot, effectiveModel);
-
-    // Initialize physics state for this memory
+    // embedMemory is best-effort: an embedding failure (API down / bad key / 5xx)
+    // must not reject the caller's write — `getEmbedding` historically swallowed
+    // failures and returned []. The explicit `hippo embed` / `embedAll` path is
+    // where failures surface. On any failure we leave the existing index as-is.
     try {
-      const db = openHippoDb(hippoRoot);
+      const identity = provider.id;
+      const existingIndex = loadEmbeddingIndex(hippoRoot);
+
+      if (embeddingModelRequiresReindex(hippoRoot, identity, existingIndex)) {
+        // L9: host-wide rebuild. The embedding index is keyed by entry.id
+        // (which is tenant-scoped) but the index itself is one per hippoRoot.
+        // Cross-tenant content equivalence is visible at the vector level.
+        // Per-tenant indices would be a larger architecture change.
+        const entries = loadAllEntries(hippoRoot);
+        const rebuiltIndex = await rebuildEmbeddingIndex(entries, provider);
+        saveEmbeddingIndex(hippoRoot, rebuiltIndex);
+        saveStoredEmbeddingModel(hippoRoot, identity);
+        resetPhysicsFromIndex(hippoRoot, entries, rebuiltIndex);
+        return;
+      }
+
+      const text = `${entry.content} ${entry.tags.join(' ')}`.trim();
+      const [vector] = await provider.embed([text], 'passage');
+      if (!vector || vector.length === 0) return;
+
+      const index = existingIndex;
+      index[entry.id] = vector;
+      saveEmbeddingIndex(hippoRoot, index);
+      saveStoredEmbeddingModel(hippoRoot, identity);
+
+      // Initialize physics state for this memory
       try {
-        const existing = loadPhysicsState(db, [entry.id]);
-        if (!existing.has(entry.id)) {
-          const particle = initializeParticle(entry, vector);
-          savePhysicsState(db, [particle]);
+        const db = openHippoDb(hippoRoot);
+        try {
+          const existing = loadPhysicsState(db, [entry.id]);
+          if (!existing.has(entry.id)) {
+            const particle = initializeParticle(entry, vector);
+            savePhysicsState(db, [particle]);
+          }
+        } finally {
+          closeHippoDb(db);
         }
-      } finally {
-        closeHippoDb(db);
+      } catch {
+        // Physics init is best-effort — don't break embedding
       }
     } catch {
-      // Physics init is best-effort — don't break embedding
+      // Provider failure (API down / bad key). Best-effort: leave the index as-is.
     }
   });
 }
@@ -422,25 +437,42 @@ export async function embedAll(
   hippoRoot: string,
   model?: string
 ): Promise<number> {
-  if (!isEmbeddingAvailable()) return 0;
+  const provider = resolveEmbeddingProvider(hippoRoot, { model });
+  if (!provider.isAvailable()) {
+    // A configured (non-disabled) API provider with a missing key is a
+    // misconfiguration, not a no-op: surface it so programmatic callers of the
+    // exported embedAll() learn nothing was written. Local-not-installed and an
+    // explicit enabled=false stay silent no-ops (best-effort / intentional).
+    const cfg = loadConfig(hippoRoot).embeddings;
+    if (
+      provider.kind !== 'local' &&
+      cfg.enabled !== false &&
+      provider.keyEnv &&
+      !process.env[provider.keyEnv]?.trim()
+    ) {
+      throw new Error(
+        `Embedding provider '${provider.kind}' is configured but ${provider.keyEnv} is not set.`,
+      );
+    }
+    return 0;
+  }
 
   return withEmbedLock(async () => {
-    const effectiveModel = resolveEmbeddingModel(hippoRoot, model);
+    const identity = provider.id;
     // L9: host-wide by design. embedAll backfills vectors for all tenants'
     // entries into the per-host embedding index. Per-tenant filtering would
     // produce partial indices and break recall.
     const entries = loadAllEntries(hippoRoot);
     const index = loadEmbeddingIndex(hippoRoot);
 
-    if (embeddingModelRequiresReindex(hippoRoot, effectiveModel, index)) {
-      const rebuiltIndex = await rebuildEmbeddingIndex(entries, effectiveModel);
+    if (embeddingModelRequiresReindex(hippoRoot, identity, index)) {
+      const rebuiltIndex = await rebuildEmbeddingIndex(entries, provider);
       saveEmbeddingIndex(hippoRoot, rebuiltIndex);
-      saveStoredEmbeddingModel(hippoRoot, effectiveModel);
+      saveStoredEmbeddingModel(hippoRoot, identity);
       resetPhysicsFromIndex(hippoRoot, entries, rebuiltIndex);
       return Object.keys(rebuiltIndex).length;
     }
 
-    let count = 0;
     let dirty = false;
 
     // Prune orphaned embeddings for deleted memories
@@ -452,23 +484,51 @@ export async function embedAll(
       }
     }
 
-    for (const entry of entries) {
-      if (index[entry.id]) continue; // already embedded
-
-      const text = `${entry.content} ${entry.tags.join(' ')}`.trim();
-      const vector = await getEmbedding(text, effectiveModel, 'passage');
-      if (vector.length > 0) {
-        index[entry.id] = vector;
-        count++;
-        dirty = true;
+    // Embed entries without a cached vector in save-checkpointed chunks.
+    // provider.embed batches internally (one HTTP request per batchSize for API
+    // providers; sequential for local). A `[]` row means that single item could
+    // not be embedded and is left for a later run (resumable). On a hard provider
+    // failure mid-backfill we persist the chunks already embedded this run rather
+    // than discarding paid progress, then stop and resume on the next run.
+    const pending = entries.filter((e) => !index[e.id]);
+    let count = 0;
+    let backfillError: unknown = null;
+    const SAVE_CHUNK = 64;
+    for (let i = 0; i < pending.length; i += SAVE_CHUNK) {
+      const chunk = pending.slice(i, i + SAVE_CHUNK);
+      let vectors: number[][];
+      try {
+        vectors = await provider.embed(
+          chunk.map((e) => `${e.content} ${e.tags.join(' ')}`.trim()),
+          'passage',
+        );
+      } catch (err) {
+        // Preserve the chunks already saved this run, then surface the failure
+        // below so the explicit `hippo embed` path never reports a false success.
+        backfillError = err;
+        break;
       }
+      let chunkDirty = false;
+      for (let j = 0; j < chunk.length; j++) {
+        const vec = vectors[j];
+        if (vec && vec.length > 0) {
+          index[chunk[j].id] = vec;
+          count++;
+          dirty = true;
+          chunkDirty = true;
+        }
+      }
+      if (chunkDirty) saveEmbeddingIndex(hippoRoot, index);
     }
 
     if (dirty) {
       saveEmbeddingIndex(hippoRoot, index);
     }
-    saveStoredEmbeddingModel(hippoRoot, effectiveModel);
+    saveStoredEmbeddingModel(hippoRoot, identity);
 
+    // Partial progress is now persisted; surface a hard backfill failure so the
+    // explicit embed path reports it (best-effort callers go via embedMemory).
+    if (backfillError) throw backfillError;
     return count;
   });
 }

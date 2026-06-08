@@ -7,13 +7,11 @@ import { MemoryEntry, calculateStrength } from './memory.js';
 import { extractPathTags, pathOverlapScore } from './path-context.js';
 import { detectScope, scopeMatch } from './scope.js';
 import {
-  isEmbeddingAvailable,
-  getEmbedding,
   cosineSimilarity,
   embeddingModelRequiresReindex,
   loadEmbeddingIndex,
-  resolveEmbeddingModel,
 } from './embeddings.js';
+import { resolveEmbeddingProvider } from './embedding-provider.js';
 import { physicsScore as computePhysicsScores } from './physics.js';
 import type { PhysicsParticle } from './physics.js';
 import type { PhysicsConfig } from './physics-config.js';
@@ -452,14 +450,22 @@ export async function hybridSearch(
   let embeddingIndex: Record<string, number[]> = {};
   let queryVector: number[] = [];
 
-  if (isEmbeddingAvailable() && options.hippoRoot) {
+  if (options.hippoRoot) {
     try {
-      const model = resolveEmbeddingModel(options.hippoRoot);
-      if (!embeddingModelRequiresReindex(options.hippoRoot, model)) {
-        queryVector = await getEmbedding(query, model, 'query');
-        if (queryVector.length > 0) {
-          embeddingIndex = loadEmbeddingIndex(options.hippoRoot);
-          useEmbeddings = true;
+      const provider = resolveEmbeddingProvider(options.hippoRoot);
+      if (provider.isAvailable() && !embeddingModelRequiresReindex(options.hippoRoot, provider.id)) {
+        const idx = loadEmbeddingIndex(options.hippoRoot);
+        // Only spend a (possibly paid, off-box) query embedding when at least one
+        // of THIS search's entries has a cached vector to compare against. An
+        // index of only orphaned / out-of-scope vectors yields a meaningless
+        // dense ranking, so stay BM25-only in that case.
+        if (entries.some((e) => (idx[e.id]?.length ?? 0) > 0)) {
+          const [vec] = await provider.embed([query], 'query');
+          queryVector = vec ?? [];
+          if (queryVector.length > 0) {
+            embeddingIndex = idx;
+            useEmbeddings = true;
+          }
         }
       }
     } catch {
@@ -878,14 +884,22 @@ export async function physicsSearch(
   // Get query embedding (use pre-computed if provided)
   let queryVector = options.queryEmbedding ?? [];
   if (queryVector.length === 0) {
-    if (!isEmbeddingAvailable()) {
+    // Both resolveEmbeddingProvider (invalid config) and provider.embed (API
+    // network/auth/5xx) can throw; fall back to hybrid/BM25 rather than reject
+    // recall, matching the surrounding fallback contract. NOTE: physics search
+    // scores against its own cached particle-state vectors (loaded below), NOT
+    // embeddings.json, so we do not gate the query embedding on the index here
+    // (doing so would skip valid physics when the embedding index is pruned).
+    try {
+      const provider = resolveEmbeddingProvider(options.hippoRoot);
+      if (!provider.isAvailable() || embeddingModelRequiresReindex(options.hippoRoot, provider.id)) {
+        return hybridSearch(query, entries, options);
+      }
+      const [vec] = await provider.embed([query], 'query');
+      queryVector = vec ?? [];
+    } catch {
       return hybridSearch(query, entries, options);
     }
-    const model = resolveEmbeddingModel(options.hippoRoot);
-    if (embeddingModelRequiresReindex(options.hippoRoot, model)) {
-      return hybridSearch(query, entries, options);
-    }
-    queryVector = await getEmbedding(query, model, 'query');
     if (queryVector.length === 0) {
       return hybridSearch(query, entries, options);
     }
