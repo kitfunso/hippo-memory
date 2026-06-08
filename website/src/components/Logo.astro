@@ -1,5 +1,5 @@
 ---
-// Brand wordmark: the favicon glyph (gradient rounded-square + decay curve) + "hippo".
+// Brand wordmark: gradient rounded-square + minimal hippo-head glyph + "hippo".
 // `gid` makes the gradient id unique per instance (Nav + Footer render this on one page).
 interface Props {
   gid?: string;
@@ -10,22 +10,27 @@ const { gid = 'lg' } = Astro.props;
 <span class="inline-flex items-center gap-2 font-display text-lg font-semibold tracking-tight">
   <svg width="26" height="26" viewBox="0 0 64 64" aria-hidden="true" class="shrink-0">
     <defs>
-      <linearGradient id={`${gid}-grad`} x1="0" y1="0" x2="1" y2="1">
+      <linearGradient id={`${gid}-grad`} gradientUnits="userSpaceOnUse" x1="12" y1="16" x2="52" y2="50">
         <stop offset="0" stop-color="#a78bfa" />
         <stop offset="1" stop-color="#22d3ee" />
       </linearGradient>
     </defs>
     <rect width="64" height="64" rx="16" fill="#0c0c12" />
     <rect x="0.5" y="0.5" width="63" height="63" rx="15.5" fill="none" stroke="white" stroke-opacity="0.08" />
-    <path
-      d="M11 22 C23 33 27 45 33 45 C37 45 39 26 44 26 C50 26 52 41 54 45"
-      fill="none"
-      stroke={`url(#${gid}-grad)`}
-      stroke-width="4"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
-    <circle cx="44" cy="26" r="3" fill="#22d3ee" />
+    <!-- minimal hippo head: ears + brow + broad muzzle -->
+    <g fill={`url(#${gid}-grad)`}>
+      <circle cx="23" cy="19" r="4.5" />
+      <circle cx="41" cy="19" r="4.5" />
+      <rect x="14" y="21" width="36" height="27" rx="13" />
+      <rect x="11" y="33" width="42" height="17" rx="11" />
+    </g>
+    <!-- eyes + nostrils, punched in the container colour -->
+    <g fill="#0c0c12">
+      <circle cx="24" cy="29.5" r="2.4" />
+      <circle cx="40" cy="29.5" r="2.4" />
+      <circle cx="27" cy="44" r="2.3" />
+      <circle cx="37" cy="44" r="2.3" />
+    </g>
   </svg>
   <span>hippo</span>
 </span>
