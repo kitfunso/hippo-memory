@@ -27,8 +27,12 @@ const jsonLd = {
   url: site.links.repo,
   softwareVersion: site.version,
   license: 'https://opensource.org/licenses/MIT',
-  author: { '@type': 'Organization', name: 'kitfunso' },
+  author: { '@type': 'Organization', name: 'kitfunso', url: site.links.repo },
   offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  sameAs: [site.links.repo, site.links.npm],
+  downloadUrl: site.links.npm,
+  keywords:
+    'AI agent memory, LLM memory, agent memory layer, MCP memory server, memory lifecycle, decay, retrieval strengthening, consolidation, open source, local-first',
 };
 
 const faqJsonLd = {

@@ -10,7 +10,7 @@ export const REPO = 'https://github.com/kitfunso/hippo-memory';
 export const site = {
   name: 'hippo',
   pkg: 'hippo-memory',
-  version: '1.15.0', // package.json
+  version: '1.23.0', // package.json
   // README headline tagline, split for gradient emphasis on the verb.
   tagline: { lead: 'Know what to', accent: 'forget.' },
   // README line 12 (verbatim intent).
@@ -199,5 +199,6 @@ export const faq = [
   { q: 'Does it need embeddings?', a: 'No. Recall runs on BM25 out of the box (74% R@5 on LongMemEval, BM25 only). Embeddings are an optional dependency for hybrid scoring; nothing is required at runtime.' },
   { q: 'Where does my data go?', a: 'Nowhere. Everything is a local SQLite store with markdown mirrors: 0 outbound HTTP on the ingestion smoke, proven by a fetch spy. No cloud, no account, no telemetry.' },
   { q: 'Which agents does it work with?', a: 'hippo init auto-installs hooks for Claude Code, Codex, Cursor, OpenClaw, and OpenCode, and exposes an MCP server for any MCP client (Cursor, Windsurf, Cline, Claude Desktop).' },
-  { q: 'Is it production-ready?', a: 'It is MIT-licensed at v1.15.0, with 926 tests against a real database and zero mocks. Multi-tenant isolation is proven by a negative test.' },
+  { q: 'How is hippo different from mem0, Letta, or Zep?', a: 'hippo optimizes the memory lifecycle, not just storage or retrieval. mem0 and similar tools save and search; Zep and Cognee extract entities into a knowledge graph; Letta has the agent edit its own memory blocks. hippo forgets by default and earns persistence through use, with reward-weighted decay, conflict detection, and sleep consolidation, and it runs locally with zero runtime dependencies.' },
+  { q: 'Is it production-ready?', a: 'It is MIT-licensed at v1.23.0, with 926 tests against a real database and zero mocks. Multi-tenant isolation is proven by a negative test.' },
 ] as const;
