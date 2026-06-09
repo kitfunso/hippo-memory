@@ -8,7 +8,7 @@ import tailwindcss from '@tailwindcss/vite';
 // No SSR adapter: `astro build` -> dist/ -> `wrangler pages deploy dist`.
 // https://astro.build/config
 export default defineConfig({
-  site: 'https://hippo-memory.pages.dev',
+  site: 'https://hippo-memory.com',
   integrations: [preact(), sitemap()],
   vite: {
     plugins: [tailwindcss()],
