@@ -8,7 +8,7 @@
     "check:readme": "node scripts/check-readme-sync.mjs",
     "build": "node scripts/check-readme-sync.mjs && astro build",
     "preview": "astro preview",
-    "deploy": "npm run build && wrangler pages deploy dist"
+    "deploy": "npm run build && wrangler pages deploy dist --project-name hippo-memory --branch main"
   },
   "dependencies": {
     "@astrojs/preact": "^5.1.4",
