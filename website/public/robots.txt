@@ -1,4 +1,4 @@
-# https://hippo-memory.pages.dev
+# https://hippo-memory.com
 User-agent: *
 Allow: /
 
@@ -33,4 +33,4 @@ Allow: /
 User-agent: cohere-ai
 Allow: /
 
-Sitemap: https://hippo-memory.pages.dev/sitemap-index.xml
+Sitemap: https://hippo-memory.com/sitemap-index.xml

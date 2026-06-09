@@ -29,7 +29,7 @@ const jsonLd = {
   '@type': 'HowTo',
   name: 'Add persistent memory to an AI agent with hippo',
   description,
-  url: 'https://hippo-memory.pages.dev/quickstart/',
+  url: new URL('/quickstart/', Astro.site!).href,
   step: [
     { '@type': 'HowToStep', name: 'Install', text: 'npm install -g hippo-memory' },
     { '@type': 'HowToStep', name: 'Initialize', text: 'hippo init --scan ~ wires hooks into your agents and scans existing repos.' },

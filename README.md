@@ -4,7 +4,7 @@
 
 [![npm](https://img.shields.io/npm/v/hippo-memory)](https://npmjs.com/package/hippo-memory)
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
-[![website](https://img.shields.io/badge/website-hippo--memory.pages.dev-7c3aed)](https://hippo-memory.pages.dev)
+[![website](https://img.shields.io/badge/website-hippo--memory.com-7c3aed)](https://hippo-memory.com)
 
 <p align="center">
   <img src="./assets/hippo-init.svg" alt="hippo init --scan ~ — initializing memory across all repos" width="720">

@@ -27,8 +27,8 @@ const jsonLd = {
   description,
   about: 'LongMemEval retrieval benchmark for the hippo-memory AI agent memory system',
   author: { '@type': 'Organization', name: 'kitfunso', url: site.links.repo },
-  url: 'https://hippo-memory.pages.dev/benchmarks/',
-  isPartOf: { '@type': 'WebSite', name: site.name, url: 'https://hippo-memory.pages.dev/' },
+  url: new URL('/benchmarks/', Astro.site!).href,
+  isPartOf: { '@type': 'WebSite', name: site.name, url: Astro.site!.href },
 };
 ---
 

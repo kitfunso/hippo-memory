@@ -13,7 +13,7 @@ const {
 } = Astro.props;
 
 // All URLs derive from astro.config `site` -> a later domain swap is one edit.
-const base = Astro.site ?? new URL('https://hippo-memory.pages.dev');
+const base = Astro.site ?? new URL('https://hippo-memory.com');
 const canonical = new URL(Astro.url.pathname, base).href;
 const ogImage = new URL('/og.png', base).href;
 

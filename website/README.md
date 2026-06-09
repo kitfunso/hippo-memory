@@ -18,8 +18,9 @@ npm run preview  # serve the built dist/
 npm run deploy   # build + wrangler pages deploy dist
 ```
 
-Production: https://hippo-memory.pages.dev (custom domain TBD; set it in the CF Pages
-dashboard and update `site` in `astro.config.mjs`).
+Production: https://hippo-memory.com (apex custom domain on Cloudflare Pages). The
+hippo-memory.pages.dev subdomain still serves the same deployment; canonical tags point
+to the apex.
 
 ## Notes
 
