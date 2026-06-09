@@ -11,9 +11,15 @@ import Compare from '../components/Compare.astro';
 import Faq from '../components/Faq.astro';
 import InstallCta from '../components/InstallCta.astro';
 import Footer from '../components/Footer.astro';
+
+// Homepage-only meta + OG description, enriched with the high-search modifiers
+// "open-source" and "local-first". The canonical site.description (JSON-LD and
+// every other page) and the visible hero copy are intentionally left unchanged.
+const metaDescription =
+  'Open-source, local-first memory for AI agents, modeled on the hippocampus. Decay by default, strength through use, provenance on every memory.';
 ---
 
-<Base>
+<Base description={metaDescription}>
   <Nav />
   <main id="main">
     <Hero />
