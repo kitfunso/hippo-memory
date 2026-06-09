@@ -768,12 +768,12 @@ The AI-memory category matured fast in 2026. Hippo's specific take — bio-decay
 | Auto-hook install | Yes | No | No | No | No | No | No | No | No | No |
 | MCP server | Yes | Yes | No | No | Yes (stdio + HTTP/OAuth) | Partial (managed) | Yes (via Letta Code) | Yes (first-party Claude/LangGraph) | Yes | ? |
 | Zero runtime deps | Yes | No (ChromaDB) | No | No | No (PGLite or PG+pgvector) | No (managed service) | No (Python deps) | No (Python deps) | Yes (single Rust binary) | No (managed + OSS) |
-| LongMemEval (best published) | 86.8% R@5 (F13+F9, oracle\*) | 96.6% raw / 100% reranked R@5 | ~49-85% R@5 | N/A | 97.6-97.9% R@5 (s_cleaned\*) | N/A (LoCoMo 80.3%) | N/A | N/A | 88.78% overall accuracy w/ reader\*\* | 83.00% overall\*\* (LoCoMo 93.05%, HaluMem 93.04%) |
+| LongMemEval (best published) | 98.6% default / 99.8% voyage R@5 (s_cleaned, per-haystack)\* | 96.6% raw / 100% reranked R@5 | ~49-85% R@5 | N/A | 97.6-97.9% R@5 (s_cleaned\*) | N/A (LoCoMo 80.3%) | N/A | N/A | 88.78% overall accuracy w/ reader\*\* | 83.00% overall\*\* (LoCoMo 93.05%, HaluMem 93.04%) |
 | Git-friendly | Yes | No | No | Yes | Yes | No | No | No | Yes (Git is the model) | ? |
 | Framework agnostic | Yes | Yes | Partial | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | License | MIT | (open) | Apache-2.0 | (open) | MIT | Apache-2.0 (community) | Apache-2.0 | MIT (core) | Apache-2.0 | Apache-2.0 (OSS) + cloud |
 
-\* Split-mismatched: Hippo's 86.8% is on `longmemeval_oracle` (3 sessions per haystack); gbrain's 97.6% is on `longmemeval_s_cleaned` (~40 sessions per haystack). Different splits, different difficulty. Not directly comparable.
+\* Hippo's 98.6% (zero-dep default) and 99.8% (voyage-3-large) are on `longmemeval_s_cleaned`, per-question haystack, directly comparable to gbrain's 97.6% on the same split and metric (measured 2026-06-09, see [`docs/evals/2026-06-09-longmemeval-per-haystack-dual.md`](docs/evals/2026-06-09-longmemeval-per-haystack-dual.md)). gbrain's figure is their published claim. An older hippo number, 86.8% R@5 on `longmemeval_oracle` under pooled (non-per-haystack) retrieval, is not comparable to per-haystack figures.
 
 \*\* Different metric: Memoria's 88.78% and EverMind's 83% are reported as overall accuracy with a reader LLM, not retrieval R@5. Higher denominator + LLM helps. Not directly comparable to retrieval-only R@5 numbers above.
 
@@ -789,7 +789,18 @@ Two benchmarks testing two different things. Full details in [`benchmarks/`](ben
 
 [LongMemEval](https://arxiv.org/abs/2410.10813) (ICLR 2025) is the industry-standard benchmark: 500 questions across 5 memory abilities, embedded in 115k+ token chat histories.
 
-**Hippo v0.28.0 results (hybrid BM25 + cosine, full 500 questions):**
+**Standard per-haystack result (`_s` split, measured 2026-06-09).** Each question is scored against its own ~48-session haystack, the same way gbrain and other published systems report. The v1.23.0 pluggable embedding provider lets you choose the embedder:
+
+| Embedder | Dense-only R@5 | Best hybrid R@5 | R@1 |
+|----------|----------------|-----------------|-----|
+| MiniLM-L6 (zero-dependency default) | 96.6 | 98.6 | 89.6 |
+| voyage-3-large (opt-in) | 99.8 | 99.8 | 94.6 |
+
+gbrain reports 97.6 R@5 on this split with a paid frontier embedder. Hippo's free, local, zero-dependency default reaches 98.6. Retrieval recall on the standard task is effectively saturated, so the embedder is a swappable commodity, not the differentiator. Method and the global-pool comparison: [`docs/evals/2026-06-09-longmemeval-per-haystack-dual.md`](docs/evals/2026-06-09-longmemeval-per-haystack-dual.md).
+
+The differentiator is what happens as one store grows. Point retrieval at a single unified memory of tens of thousands of sessions, with no pre-scoped haystack, and recall stops being free (default 47, voyage 56 on the 19,195-session `_s` store). That is where memory lifecycle (decay, consolidation, supersession) earns its keep, and it is what hippo measures next (see ROADMAP Part III).
+
+**Hippo v0.28.0 oracle-split results (hybrid BM25 + cosine, full 500 questions, pooled retrieval):**
 
 | Metric | v0.28 | v0.11 (BM25 only) |
 |--------|-------|-------------------|
@@ -850,7 +861,7 @@ node run.mjs --adapter all
 Issues and PRs welcome. Before contributing, run `hippo status` in the repo root to see the project's own memory.
 
 The interesting problems:
-- **Improve LongMemEval score.** Current R@5 is 73.8% with hybrid BM25 + cosine (v0.28). Gap to MemPalace's 96.6% likely needs better chunking, reranking, or semantic compression — not just more of the same retrieval.
+- **LongMemEval retrieval (standard task: done).** Per-question-haystack R@5 is 98.6% with the zero-dependency default and 99.8% with voyage-3-large (measured 2026-06-09), at or above the published frontier. Retrieval is no longer the gap; the lifecycle stress eval (ROADMAP Part III) is the next measurement.
 - Better consolidation heuristics (LLM-powered merge vs current text overlap)
 - Web UI / dashboard for visualizing decay curves and memory health
 - Optimal decay parameter tuning from real usage data
