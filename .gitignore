@@ -63,3 +63,5 @@ nlnet-application/
 tmp-card4-20seed/
 # dev-framework-rl episode run metadata (local orchestrator artifacts, not the package)
 trajectories/
+benchmarks/lifecycle-stress/results-2*.json
+benchmarks/lifecycle-stress/labels/

@@ -1,0 +1,301 @@
+{
+  "meta": {
+    "budget": 1500,
+    "facts": 6,
+    "dupes": 3,
+    "seeds": 4,
+    "checkpoints": [
+      "1x",
+      "10x"
+    ],
+    "generatedAt": "2026-06-09T20:10:46.732Z",
+    "checkpointCounts": {
+      "1x": 100,
+      "10x": 1000,
+      "100x": 10000
+    },
+    "honestNull": true
+  },
+  "perCheckpoint": {
+    "1x": {
+      "seeds": 4,
+      "meanMerged": 19.5,
+      "meanSemanticCreated": 6.75,
+      "meanFitFraction": 0.8542283809037692,
+      "qa": {
+        "naive-append": 0.5,
+        "recency-window": 1,
+        "hippo-no-lifecycle": 1,
+        "hippo-full": 1,
+        "hippo-no-lifecycle-strength": 1,
+        "hippo-full-strength": 1
+      },
+      "tokens": {
+        "naive-append": 1491,
+        "recency-window": 1492,
+        "hippo-no-lifecycle": 1492,
+        "hippo-full": 1495,
+        "hippo-no-lifecycle-strength": 1495.75,
+        "hippo-full-strength": 1497
+      },
+      "deltas": {
+        "hippo-full_vs_hippo-no-lifecycle": {
+          "meanDiff": 0,
+          "low": 0,
+          "high": 0
+        },
+        "hippo-full_vs_naive-append": {
+          "meanDiff": 0.5,
+          "low": 0.5,
+          "high": 0.5
+        },
+        "hippo-full-strength_vs_hippo-no-lifecycle-strength": {
+          "meanDiff": 0,
+          "low": 0,
+          "high": 0
+        }
+      }
+    },
+    "10x": {
+      "seeds": 4,
+      "meanMerged": 89.25,
+      "meanSemanticCreated": 41.5,
+      "meanFitFraction": 0.09118005369973817,
+      "qa": {
+        "naive-append": 0,
+        "recency-window": 0,
+        "hippo-no-lifecycle": 1,
+        "hippo-full": 1,
+        "hippo-no-lifecycle-strength": 1,
+        "hippo-full-strength": 0.9166666666666667
+      },
+      "tokens": {
+        "naive-append": 1495.25,
+        "recency-window": 1493.75,
+        "hippo-no-lifecycle": 1496,
+        "hippo-full": 1494.5,
+        "hippo-no-lifecycle-strength": 1495.25,
+        "hippo-full-strength": 1497
+      },
+      "deltas": {
+        "hippo-full_vs_hippo-no-lifecycle": {
+          "meanDiff": 0,
+          "low": 0,
+          "high": 0
+        },
+        "hippo-full_vs_naive-append": {
+          "meanDiff": 1,
+          "low": 1,
+          "high": 1
+        },
+        "hippo-full-strength_vs_hippo-no-lifecycle-strength": {
+          "meanDiff": -0.08333333333333331,
+          "low": -0.16666666666666663,
+          "high": 0
+        }
+      }
+    }
+  },
+  "cells": [
+    {
+      "seed": 1000,
+      "checkpoint": "1x",
+      "scaleMemories": 100,
+      "facts": 6,
+      "merged": 18,
+      "semanticCreated": 6,
+      "fitFraction": 0.8586147681740126,
+      "qa": {
+        "naive-append": 0.5,
+        "recency-window": 1,
+        "hippo-no-lifecycle": 1,
+        "hippo-full": 1,
+        "hippo-no-lifecycle-strength": 1,
+        "hippo-full-strength": 1
+      },
+      "tokens": {
+        "naive-append": 1500,
+        "recency-window": 1495,
+        "hippo-no-lifecycle": 1495,
+        "hippo-full": 1498,
+        "hippo-no-lifecycle-strength": 1499,
+        "hippo-full-strength": 1496
+      }
+    },
+    {
+      "seed": 1001,
+      "checkpoint": "1x",
+      "scaleMemories": 100,
+      "facts": 6,
+      "merged": 20,
+      "semanticCreated": 7,
+      "fitFraction": 0.8493771234428086,
+      "qa": {
+        "naive-append": 0.5,
+        "recency-window": 1,
+        "hippo-no-lifecycle": 1,
+        "hippo-full": 1,
+        "hippo-no-lifecycle-strength": 1,
+        "hippo-full-strength": 1
+      },
+      "tokens": {
+        "naive-append": 1495,
+        "recency-window": 1488,
+        "hippo-no-lifecycle": 1488,
+        "hippo-full": 1497,
+        "hippo-no-lifecycle-strength": 1491,
+        "hippo-full-strength": 1499
+      }
+    },
+    {
+      "seed": 1002,
+      "checkpoint": "1x",
+      "scaleMemories": 100,
+      "facts": 6,
+      "merged": 18,
+      "semanticCreated": 6,
+      "fitFraction": 0.8527572484366117,
+      "qa": {
+        "naive-append": 0.5,
+        "recency-window": 1,
+        "hippo-no-lifecycle": 1,
+        "hippo-full": 1,
+        "hippo-no-lifecycle-strength": 1,
+        "hippo-full-strength": 1
+      },
+      "tokens": {
+        "naive-append": 1488,
+        "recency-window": 1488,
+        "hippo-no-lifecycle": 1488,
+        "hippo-full": 1497,
+        "hippo-no-lifecycle-strength": 1499,
+        "hippo-full-strength": 1496
+      }
+    },
+    {
+      "seed": 1003,
+      "checkpoint": "1x",
+      "scaleMemories": 100,
+      "facts": 6,
+      "merged": 22,
+      "semanticCreated": 8,
+      "fitFraction": 0.8561643835616438,
+      "qa": {
+        "naive-append": 0.5,
+        "recency-window": 1,
+        "hippo-no-lifecycle": 1,
+        "hippo-full": 1,
+        "hippo-no-lifecycle-strength": 1,
+        "hippo-full-strength": 1
+      },
+      "tokens": {
+        "naive-append": 1481,
+        "recency-window": 1497,
+        "hippo-no-lifecycle": 1497,
+        "hippo-full": 1488,
+        "hippo-no-lifecycle-strength": 1494,
+        "hippo-full-strength": 1497
+      }
+    },
+    {
+      "seed": 1000,
+      "checkpoint": "10x",
+      "scaleMemories": 1000,
+      "facts": 6,
+      "merged": 98,
+      "semanticCreated": 46,
+      "fitFraction": 0.09136313801924717,
+      "qa": {
+        "naive-append": 0,
+        "recency-window": 0,
+        "hippo-no-lifecycle": 1,
+        "hippo-full": 1,
+        "hippo-no-lifecycle-strength": 1,
+        "hippo-full-strength": 0.8333333333333334
+      },
+      "tokens": {
+        "naive-append": 1492,
+        "recency-window": 1499,
+        "hippo-no-lifecycle": 1490,
+        "hippo-full": 1500,
+        "hippo-no-lifecycle-strength": 1500,
+        "hippo-full-strength": 1496
+      }
+    },
+    {
+      "seed": 1001,
+      "checkpoint": "10x",
+      "scaleMemories": 1000,
+      "facts": 6,
+      "merged": 87,
+      "semanticCreated": 40,
+      "fitFraction": 0.09124087591240876,
+      "qa": {
+        "naive-append": 0,
+        "recency-window": 0,
+        "hippo-no-lifecycle": 1,
+        "hippo-full": 1,
+        "hippo-no-lifecycle-strength": 1,
+        "hippo-full-strength": 1
+      },
+      "tokens": {
+        "naive-append": 1498,
+        "recency-window": 1492,
+        "hippo-no-lifecycle": 1497,
+        "hippo-full": 1492,
+        "hippo-no-lifecycle-strength": 1494,
+        "hippo-full-strength": 1499
+      }
+    },
+    {
+      "seed": 1002,
+      "checkpoint": "10x",
+      "scaleMemories": 1000,
+      "facts": 6,
+      "merged": 78,
+      "semanticCreated": 36,
+      "fitFraction": 0.09108021130609023,
+      "qa": {
+        "naive-append": 0,
+        "recency-window": 0,
+        "hippo-no-lifecycle": 1,
+        "hippo-full": 1,
+        "hippo-no-lifecycle-strength": 1,
+        "hippo-full-strength": 1
+      },
+      "tokens": {
+        "naive-append": 1491,
+        "recency-window": 1486,
+        "hippo-no-lifecycle": 1500,
+        "hippo-full": 1493,
+        "hippo-no-lifecycle-strength": 1492,
+        "hippo-full-strength": 1493
+      }
+    },
+    {
+      "seed": 1003,
+      "checkpoint": "10x",
+      "scaleMemories": 1000,
+      "facts": 6,
+      "merged": 94,
+      "semanticCreated": 44,
+      "fitFraction": 0.09103598956120652,
+      "qa": {
+        "naive-append": 0,
+        "recency-window": 0,
+        "hippo-no-lifecycle": 1,
+        "hippo-full": 1,
+        "hippo-no-lifecycle-strength": 1,
+        "hippo-full-strength": 0.8333333333333334
+      },
+      "tokens": {
+        "naive-append": 1500,
+        "recency-window": 1498,
+        "hippo-no-lifecycle": 1497,
+        "hippo-full": 1493,
+        "hippo-no-lifecycle-strength": 1495,
+        "hippo-full-strength": 1500
+      }
+    }
+  ]
+}
