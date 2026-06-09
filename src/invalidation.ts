@@ -128,7 +128,10 @@ export function invalidateMatching(
 
     result.invalidated++;
     result.targets.push(entry.id);
-    result.preview.push({ id: entry.id, headline: entry.content.slice(0, 60) });
+    result.preview.push({
+      id: entry.id,
+      headline: entry.content.replace(/\s+/g, ' ').slice(0, 60),
+    });
     if (dryRun) continue;
 
     entry.half_life_days = Math.max(1, Math.floor(entry.half_life_days / 2));

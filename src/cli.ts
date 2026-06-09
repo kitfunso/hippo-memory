@@ -7833,6 +7833,9 @@ Commands:
                            full pattern - never token-level tag matching)
     --id <memory-id>       Invalidate exactly one memory (instead of a pattern)
     --dry-run              Preview what would be hit; writes nothing
+                           Note: a pattern equal to the system tag
+                           'invalidated' re-weakens previously invalidated
+                           memories - preview with --dry-run first
     --reason "<why>"       Optional: what replaced it
   wm <sub>                 Working memory — bounded buffer for current state
     wm push                Push a working memory entry

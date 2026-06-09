@@ -279,3 +279,40 @@ describe('invalidateMatching safety (2026-06-09 incident)', () => {
     expect(result.skippedPinned).toEqual([mem.id]);
   });
 });
+
+describe('invalidateMatching dryRun + onlyId composition', () => {
+  let tmpDir: string;
+  let hippoRoot: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-inv-compose-'));
+    hippoRoot = path.join(tmpDir, '.hippo');
+    initStore(hippoRoot);
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('previews a single id without writing (the headline safety workflow)', () => {
+    const mem = createMemory('Memory line one\nline two of the same memory', {
+      tags: ['x'],
+    });
+    writeEntry(hippoRoot, mem);
+
+    const result = invalidateMatching(
+      hippoRoot,
+      { from: `id:${mem.id}`, to: null, type: 'removal' },
+      undefined,
+      { dryRun: true, onlyId: mem.id },
+    );
+
+    expect(result.dryRun).toBe(true);
+    expect(result.invalidated).toBe(1);
+    expect(result.preview[0].id).toBe(mem.id);
+    expect(result.preview[0].headline).not.toContain('\n'); // flattened
+    const untouched = readEntry(hippoRoot, mem.id);
+    expect(untouched!.confidence).toBe(mem.confidence);
+    expect(untouched!.tags).not.toContain('invalidated');
+  });
+});
