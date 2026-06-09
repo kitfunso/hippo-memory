@@ -55,6 +55,7 @@
     "type": "git",
     "url": "git+https://github.com/kitfunso/hippo-memory.git"
   },
+  "homepage": "https://hippo-memory.pages.dev",
   "engines": {
     "node": ">=22.5.0"
   },
