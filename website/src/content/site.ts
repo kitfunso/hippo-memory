@@ -30,9 +30,10 @@ export const site = {
 } as const;
 
 export const nav = [
-  { label: 'How it works', href: '#how' },
-  { label: 'Receipts', href: '#receipts' },
-  { label: 'Compare', href: '#compare' },
+  { label: 'How it works', href: '/#how' },
+  { label: 'Benchmarks', href: '/benchmarks/' },
+  { label: 'Quickstart', href: '/quickstart/' },
+  { label: 'Compare', href: '/#compare' },
   { label: 'Docs', href: site.links.docs },
 ] as const;
 

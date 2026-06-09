@@ -2,12 +2,17 @@
 import { site } from '../content/site';
 import Logo from './Logo.astro';
 
+const siteLinks = [
+  { label: 'Benchmarks', href: '/benchmarks/' },
+  { label: 'Quickstart', href: '/quickstart/' },
+  { label: 'hippo vs mem0', href: '/vs/mem0/' },
+];
+
 const footerLinks = [
   { label: 'GitHub', href: site.links.repo },
   { label: 'npm', href: site.links.npm },
   { label: 'Docs', href: site.links.docs },
   { label: 'Changelog', href: site.links.changelog },
-  { label: 'Benchmarks', href: site.links.benchmarks },
   { label: 'License (MIT)', href: site.links.license },
 ];
 ---
@@ -23,13 +28,22 @@ const footerLinks = [
           remembering more. It's knowing what to forget.
         </p>
       </div>
-      <nav class="flex flex-wrap gap-x-8 gap-y-3 text-sm">
-        {footerLinks.map((l) => (
-          <a href={l.href} target="_blank" rel="noopener noreferrer" class="text-zinc-400 transition hover:text-zinc-100">
-            {l.label}
-          </a>
-        ))}
-      </nav>
+      <div class="flex flex-wrap gap-x-12 gap-y-6">
+        <nav class="flex flex-col gap-y-2 text-sm">
+          {siteLinks.map((l) => (
+            <a href={l.href} class="text-zinc-400 transition hover:text-zinc-100">
+              {l.label}
+            </a>
+          ))}
+        </nav>
+        <nav class="flex flex-col gap-y-2 text-sm">
+          {footerLinks.map((l) => (
+            <a href={l.href} target="_blank" rel="noopener noreferrer" class="text-zinc-400 transition hover:text-zinc-100">
+              {l.label}
+            </a>
+          ))}
+        </nav>
+      </div>
     </div>
     <p class="mt-10 font-mono text-xs text-zinc-400">
       hippo-memory v{site.version} · MIT · built by kitfunso
