@@ -945,6 +945,15 @@ Re-labelled, not retracted (global-pool is a legitimate harder eval). Dual numbe
 
 gbrain v0.28.8 reports 97.6 per-haystack with `text-embedding-3-large`. The zero-dep default (98.6) is at or above that. **F17 is NOT a blocker for standard LongMemEval-S.** Done: per-haystack harness committed (`chunk_per_turn_haystack_retrieve.mjs`), result doc written, README updated. The F-track aggregate above carries a correction banner.
 
+### Memory-system eval methodology and metric [next, research]
+
+The category lacks a good way to measure what a memory system is *for*. LongMemEval and LoCoMo measure retrieval recall on a fixed corpus, and per-haystack recall is saturated by any competent embedder (this update), so it does not discriminate memory systems on the thing that actually matters: deciding what to keep, forget, consolidate, supersede, and strengthen over time. Define that methodology and a composite metric, and release it as an open benchmark so the field (and hippo) is measured on the lifecycle, not just retrieval. This is the umbrella; the lifecycle stress eval below is its first concrete instance.
+
+- **Methodology:** a growth-over-time protocol (a single store grows 10x-100x with controlled redundancy, staleness, and conflict from a held-out injector), measured at checkpoints, comparing memory systems and naive baselines under a fixed context budget.
+- **Candidate metric axes (compose into one score, weights pre-registered):** answer correctness; active-context token cost (efficiency); stale-answer rate (supersession-correctness); retention quality (keeps the useful, drops the noise); and learning slope (does task N+k beat task N). Retrieval recall is one input, not the headline.
+- **Why hippo should own it:** hippo's lifecycle metadata (decay, outcomes, supersession, conflicts) is exactly what such a metric needs and what static-store competitors cannot report. Defining the metric is both a research contribution and positioning. F8 (Memory-Augmented Agent Eval, Part II) and the retracted sequential-learning trap-rate fold into this.
+- **Deliverable:** a methodology doc + reference harness + a public, reproducible result, pre-registered per the `docs/evals` discipline.
+
 ### Lifecycle stress eval (keystone) [next]
 
 The differentiator hippo claims is the memory lifecycle, and no existing benchmark (LongMemEval, LoCoMo) measures it: per-haystack retrieval recall is saturated by any competent embedder, and none of them ever force a forget/consolidate/supersede decision. Build the eval that does, in the large-store regime where retrieval stops being free (the correction above shows recall collapses to ~47-56 there).
