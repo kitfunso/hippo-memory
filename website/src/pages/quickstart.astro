@@ -1,0 +1,104 @@
+---
+import Base from '../layouts/Base.astro';
+import Nav from '../components/Nav.astro';
+import Footer from '../components/Footer.astro';
+import { site } from '../content/site';
+
+const title = 'hippo quickstart: persistent memory for Claude Code, Cursor, and MCP';
+const description =
+  'Install hippo and give your AI agents persistent, local memory in two commands. Auto-hooks for Claude Code, Codex, Cursor, OpenClaw, OpenCode, plus an MCP server for any MCP client.';
+
+const integrations = [
+  { name: 'Claude Code', note: 'Auto-installs a recall hook on session start and a sleep hook on exit.' },
+  { name: 'Cursor', note: 'Hook on task start plus the MCP server for in-editor recall.' },
+  { name: 'Codex', note: 'Auto-installed hook via hippo init.' },
+  { name: 'OpenClaw', note: 'Skill that injects recall on start and runs sleep on session end.' },
+  { name: 'OpenCode', note: 'Hook installed by hippo init.' },
+  { name: 'Any MCP client', note: 'MCP server for Cursor, Windsurf, Cline, and Claude Desktop.' },
+];
+
+const loop = [
+  { cmd: 'hippo remember "deploy failed: forgot migrations" --error', note: 'Store a memory. Errors get a longer half-life and stick.' },
+  { cmd: 'hippo recall "why did the deploy break" --budget 2000', note: 'Retrieve within a token budget, ranked by relevance and strength.' },
+  { cmd: 'hippo outcome --good', note: 'Tell hippo the recall helped. Useful memories decay slower.' },
+  { cmd: 'hippo sleep', note: 'Consolidate repeats into patterns, decay the unused, flag conflicts.' },
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'HowTo',
+  name: 'Add persistent memory to an AI agent with hippo',
+  description,
+  url: 'https://hippo-memory.pages.dev/quickstart/',
+  step: [
+    { '@type': 'HowToStep', name: 'Install', text: 'npm install -g hippo-memory' },
+    { '@type': 'HowToStep', name: 'Initialize', text: 'hippo init --scan ~ wires hooks into your agents and scans existing repos.' },
+    { '@type': 'HowToStep', name: 'Use', text: 'remember, recall, outcome, and sleep form the memory loop.' },
+  ],
+};
+---
+
+<Base title={title} description={description}>
+  <Nav />
+  <main id="main">
+    <section class="relative scroll-mt-20">
+      <div class="mx-auto max-w-5xl px-5 pb-12 pt-28 sm:pt-32">
+        <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">Quickstart</p>
+        <h1 class="mt-4 max-w-3xl font-display text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl">
+          Add memory in <span class="text-gradient">two commands</span>.
+        </h1>
+        <p class="mt-5 max-w-2xl leading-relaxed text-zinc-400">
+          hippo is an MIT-licensed npm package with zero runtime dependencies. Install it, point it at your home directory, and it wires itself into the agents you already use.
+        </p>
+      </div>
+    </section>
+
+    <section class="relative scroll-mt-20 border-t border-white/5 bg-[#0a0a0f]">
+      <div class="mx-auto max-w-5xl px-5 py-20">
+        <h2 class="text-2xl leading-tight sm:text-3xl">Install</h2>
+        <pre class="mt-6 overflow-x-auto rounded-2xl border border-white/8 bg-term-bg p-5 font-mono text-sm leading-relaxed text-term-fg"><code><span class="text-term-prompt">$</span> {site.installCmd}
+<span class="text-term-prompt">$</span> {site.initCmd}</code></pre>
+        <p class="mt-4 max-w-2xl text-sm leading-relaxed text-zinc-500">
+          <code class="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-zinc-300">init --scan ~</code> detects your agents, installs their hooks, and gives you memory across every git repo under your home directory. Everything lives in a local SQLite store with markdown mirrors. No cloud, no account, no telemetry.
+        </p>
+      </div>
+    </section>
+
+    <section class="relative scroll-mt-20 border-t border-white/5">
+      <div class="mx-auto max-w-5xl px-5 py-20">
+        <h2 class="text-2xl leading-tight sm:text-3xl">Works with your agents</h2>
+        <div class="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {integrations.map((i) => (
+            <div class="glass rounded-2xl p-5">
+              <span class="text-sm font-medium text-zinc-200">{i.name}</span>
+              <span class="mt-2 block text-xs leading-relaxed text-zinc-400">{i.note}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <section class="relative scroll-mt-20 border-t border-white/5 bg-[#0a0a0f]">
+      <div class="mx-auto max-w-5xl px-5 py-20">
+        <h2 class="text-2xl leading-tight sm:text-3xl">The memory loop</h2>
+        <p class="mt-4 max-w-2xl leading-relaxed text-zinc-400">
+          Four commands. Memories decay on a half-life unless something keeps them alive: a retrieval, a good outcome, an error tag, or consolidation during sleep.
+        </p>
+        <div class="mt-8 space-y-3">
+          {loop.map((step) => (
+            <div class="rounded-2xl border border-white/8 p-5">
+              <code class="block overflow-x-auto font-mono text-sm text-zinc-200"><span class="text-term-prompt">$</span> {step.cmd}</code>
+              <span class="mt-2 block text-xs leading-relaxed text-zinc-400">{step.note}</span>
+            </div>
+          ))}
+        </div>
+        <div class="mt-8 flex flex-wrap gap-3">
+          <a href={site.links.docs} target="_blank" rel="noopener noreferrer" class="rounded-lg bg-zinc-100 px-5 py-2.5 text-sm font-medium text-zinc-900 transition hover:bg-white">Full docs</a>
+          <a href="/benchmarks/" class="rounded-lg border border-white/12 px-5 py-2.5 text-sm font-medium text-zinc-200 transition hover:border-white/25">See the benchmarks</a>
+        </div>
+      </div>
+    </section>
+  </main>
+  <Footer />
+  <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+</Base>

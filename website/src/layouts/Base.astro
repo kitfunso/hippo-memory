@@ -35,6 +35,10 @@ const jsonLd = {
     'AI agent memory, LLM memory, agent memory layer, MCP memory server, memory lifecycle, decay, retrieval strengthening, consolidation, open source, local-first',
 };
 
+// The FAQPage schema describes the homepage FAQ, so only emit it on the homepage.
+// Sub-pages carry their own page-appropriate structured data.
+const isHome = Astro.url.pathname === '/';
+
 const faqJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'FAQPage',
@@ -88,7 +92,7 @@ const beaconToken = import.meta.env.PUBLIC_CF_BEACON_TOKEN ?? 'dca34bc57a3946d08
     <meta name="twitter:image" content={ogImage} />
 
     <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
-    <script type="application/ld+json" set:html={JSON.stringify(faqJsonLd)} />
+    {isHome && <script type="application/ld+json" set:html={JSON.stringify(faqJsonLd)} />}
   </head>
   <body class="min-h-screen antialiased">
     <a

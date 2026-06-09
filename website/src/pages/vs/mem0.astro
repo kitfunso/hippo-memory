@@ -1,0 +1,114 @@
+---
+import Base from '../../layouts/Base.astro';
+import Nav from '../../components/Nav.astro';
+import Footer from '../../components/Footer.astro';
+import { site } from '../../content/site';
+
+const title = 'hippo vs mem0: AI agent memory compared';
+const description =
+  'hippo and mem0 are both open-source memory for AI agents, with different philosophies. mem0 saves and searches; hippo runs a memory lifecycle that forgets by default and earns persistence through use. Feature comparison and when to pick which.';
+
+const rows = [
+  { feature: 'Core model', hippo: 'Memory lifecycle: forget by default', mem0: 'Save everything, search later' },
+  { feature: 'Decay by default', hippo: 'Yes', mem0: 'No' },
+  { feature: 'Retrieval strengthening', hippo: 'Yes', mem0: 'No' },
+  { feature: 'Reward-proportional decay', hippo: 'Yes', mem0: 'No' },
+  { feature: 'Conflict detection + resolution', hippo: 'Yes', mem0: 'No' },
+  { feature: 'Search', hippo: 'BM25 + optional embeddings', mem0: 'Embeddings only' },
+  { feature: 'Zero runtime dependencies', hippo: 'Yes', mem0: 'No' },
+  { feature: 'Storage', hippo: 'Local SQLite + markdown', mem0: 'Vector store' },
+  { feature: 'MCP server', hippo: 'Yes', mem0: 'No' },
+  { feature: 'License', hippo: 'MIT', mem0: 'Apache-2.0' },
+];
+
+const faqJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: [
+    {
+      '@type': 'Question',
+      name: 'Is hippo a mem0 alternative?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'Yes. Both are open-source memory layers for AI agents. mem0 extracts and stores facts and retrieves them by similarity. hippo adds a memory lifecycle on top: memories decay on a half-life, retrieval strengthens them, errors stick, conflicts are flagged, and a sleep cycle consolidates repeats. hippo runs locally with zero runtime dependencies.',
+      },
+    },
+    {
+      '@type': 'Question',
+      name: 'When should I choose hippo over mem0?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: 'Choose hippo when you want the store to stay small and current over time (decay, consolidation, supersession), local-first storage with no cloud or account, or zero runtime dependencies. mem0 is a fit when you mainly want to save and search facts. The two are not mutually exclusive philosophies, but hippo optimizes what to forget, not just what to retrieve.',
+      },
+    },
+  ],
+};
+---
+
+<Base title={title} description={description}>
+  <Nav />
+  <main id="main">
+    <section class="relative scroll-mt-20">
+      <div class="mx-auto max-w-5xl px-5 pb-12 pt-28 sm:pt-32">
+        <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">Comparison</p>
+        <h1 class="mt-4 font-display text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl">
+          hippo <span class="text-zinc-500">vs</span> <span class="text-gradient">mem0</span>
+        </h1>
+        <p class="mt-5 max-w-2xl leading-relaxed text-zinc-400">
+          Both are open-source memory for AI agents. The difference is philosophy. mem0 saves and searches: it extracts facts and retrieves them by similarity. hippo runs a memory lifecycle: it forgets by default and earns persistence through use, so the store stays small and current instead of growing without bound.
+        </p>
+      </div>
+    </section>
+
+    <section class="relative scroll-mt-20 border-t border-white/5 bg-[#0a0a0f]">
+      <div class="mx-auto max-w-5xl px-5 py-20">
+        <h2 class="text-2xl leading-tight sm:text-3xl">Feature comparison</h2>
+        <div class="mt-8 overflow-hidden rounded-2xl border border-white/8">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-white/[0.03] font-mono text-xs uppercase tracking-wider text-zinc-400">
+              <tr>
+                <th class="px-5 py-3 font-medium">Feature</th>
+                <th class="px-5 py-3 font-medium text-zinc-200">hippo</th>
+                <th class="px-5 py-3 font-medium">mem0</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-white/5">
+              {rows.map((r) => (
+                <tr class="text-zinc-300">
+                  <td class="px-5 py-3.5 text-zinc-400">{r.feature}</td>
+                  <td class="px-5 py-3.5 font-medium text-zinc-100">{r.hippo}</td>
+                  <td class="px-5 py-3.5">{r.mem0}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p class="mt-5 max-w-2xl text-sm leading-relaxed text-zinc-500">
+          Feature rows are from hippo's <a class="text-zinc-300 underline decoration-white/20 underline-offset-4 hover:decoration-acc-cyan" href={`${site.links.repo}#comparison`} target="_blank" rel="noopener noreferrer">comparison table</a>. mem0 reports its own LongMemEval figures under its own conditions; hippo's per-haystack results are on the <a class="text-zinc-300 underline decoration-white/20 underline-offset-4 hover:decoration-acc-cyan" href="/benchmarks/">benchmarks page</a>.
+        </p>
+      </div>
+    </section>
+
+    <section class="relative scroll-mt-20 border-t border-white/5">
+      <div class="mx-auto max-w-5xl px-5 py-20">
+        <h2 class="text-2xl leading-tight sm:text-3xl">When to choose which</h2>
+        <div class="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div class="glass rounded-2xl p-6">
+            <span class="text-sm font-medium text-zinc-100">Choose hippo</span>
+            <span class="mt-2 block text-sm leading-relaxed text-zinc-400">You want the store to stay small and current over time, local-first with no cloud or account, zero runtime dependencies, and a memory that forgets the noise and keeps what gets used.</span>
+          </div>
+          <div class="glass rounded-2xl p-6">
+            <span class="text-sm font-medium text-zinc-100">Choose mem0</span>
+            <span class="mt-2 block text-sm leading-relaxed text-zinc-400">You mainly want to extract, store, and search facts, and a hosted or vector-store-backed setup fits your stack.</span>
+          </div>
+        </div>
+        <div class="mt-8 flex flex-wrap gap-3">
+          <a href="/quickstart/" class="rounded-lg bg-zinc-100 px-5 py-2.5 text-sm font-medium text-zinc-900 transition hover:bg-white">Get started with hippo</a>
+          <a href="/benchmarks/" class="rounded-lg border border-white/12 px-5 py-2.5 text-sm font-medium text-zinc-200 transition hover:border-white/25">Benchmarks</a>
+        </div>
+      </div>
+    </section>
+  </main>
+  <Footer />
+  <script type="application/ld+json" set:html={JSON.stringify(faqJsonLd)} />
+</Base>
