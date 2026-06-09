@@ -1,0 +1,29 @@
+---
+import Base from '../layouts/Base.astro';
+import { site } from '../content/site';
+---
+
+<Base
+  title={`Page not found - ${site.name}`}
+  description="That page does not exist. Head back to the hippo homepage."
+>
+  <main
+    id="main"
+    class="mx-auto flex min-h-screen max-w-xl flex-col items-center justify-center gap-6 px-6 text-center"
+  >
+    <p class="font-mono text-sm tracking-widest text-zinc-500">404</p>
+    <h1 class="font-display text-4xl font-semibold tracking-tight sm:text-5xl">
+      This memory decayed.
+    </h1>
+    <p class="max-w-md leading-relaxed text-zinc-400">
+      The page you are looking for does not exist, or it was forgotten. hippo forgets by
+      default, after all.
+    </p>
+    <a
+      href="/"
+      class="rounded-lg bg-zinc-100 px-5 py-2.5 text-sm font-medium text-zinc-900 transition hover:bg-white"
+    >
+      Back to home
+    </a>
+  </main>
+</Base>
