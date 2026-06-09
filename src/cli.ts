@@ -8538,6 +8538,12 @@ async function main(): Promise<void> {
     case 'invalidate': {
       requireInit(hippoRoot);
       const target = args[0];
+      if (flags['id'] === true) {
+        // Value-less --id must never silently fall through to pattern mode
+        // (pattern mode writes broadly; an ignored --id reverses user intent).
+        console.error('--id requires a memory id');
+        process.exit(1);
+      }
       const onlyId = typeof flags['id'] === 'string' ? (flags['id'] as string) : undefined;
       if (typeof flags['dry-run'] === 'string') {
         // Unreachable via argv (dry-run is in BOOLEAN_FLAGS); guards
