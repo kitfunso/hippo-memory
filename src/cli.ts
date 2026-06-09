@@ -340,7 +340,12 @@ async function runViaServerIfAvailable(
   }
 }
 
-function parseArgs(argv: string[]): { command: string; args: string[]; flags: Record<string, string | boolean | string[]> } {
+// Flags that NEVER take a value. Without this, a positional following the
+// flag is silently swallowed as its value (`invalidate --dry-run "X"` would
+// eat the pattern). Every existing --dry-run consumer reads it as boolean.
+const BOOLEAN_FLAGS = new Set(['dry-run']);
+
+export function parseArgs(argv: string[]): { command: string; args: string[]; flags: Record<string, string | boolean | string[]> } {
   const [, , command = '', ...rest] = argv;
   const args: string[] = [];
   const flags: Record<string, string | boolean | string[]> = {};
@@ -356,7 +361,7 @@ function parseArgs(argv: string[]): { command: string; args: string[]; flags: Re
       const key = part.slice(2);
       const next = rest[i + 1];
 
-      if (!next || next.startsWith('--')) {
+      if (!next || next.startsWith('--') || BOOLEAN_FLAGS.has(key)) {
         // Boolean flag
         flags[key] = true;
         i++;
@@ -7824,6 +7829,10 @@ Commands:
   graph extract            Rebuild the entity/relation graph from consolidated objects
                            (decisions/policies/customer-notes/project-briefs); idempotent
   invalidate "<pattern>"   Actively weaken memories matching an old pattern
+                           (content overlap, or a tag EXACTLY equal to the
+                           full pattern - never token-level tag matching)
+    --id <memory-id>       Invalidate exactly one memory (instead of a pattern)
+    --dry-run              Preview what would be hit; writes nothing
     --reason "<why>"       Optional: what replaced it
   wm <sub>                 Working memory — bounded buffer for current state
     wm push                Push a working memory entry
@@ -7915,7 +7924,9 @@ Examples:
   hippo note new "Acme Corp" --text "Renewal call: wants SSO before Q3; champion is the VP Eng"
   hippo note list --customer "Acme Corp" --status active
   hippo graph extract
+  hippo invalidate "REST API" --dry-run
   hippo invalidate "REST API" --reason "migrated to GraphQL"
+  hippo invalidate --id mem_a1b2c3d4e5f6 --reason "superseded by new policy"
   hippo export memories.json
   hippo export --format markdown memories.md
   hippo sleep --dry-run
@@ -8527,22 +8538,43 @@ async function main(): Promise<void> {
     case 'invalidate': {
       requireInit(hippoRoot);
       const target = args[0];
-      if (!target) {
-        console.error('Usage: hippo invalidate "<old pattern>" [--reason "<why>"]');
+      const onlyId = typeof flags['id'] === 'string' ? (flags['id'] as string) : undefined;
+      if (typeof flags['dry-run'] === 'string') {
+        // Unreachable via argv (dry-run is in BOOLEAN_FLAGS); guards
+        // programmatically-built flags objects.
+        console.error('--dry-run takes no value');
+        process.exit(1);
+      }
+      const dryRun = flags['dry-run'] === true;
+      if ((target && onlyId) || (!target && !onlyId)) {
+        console.error('Usage: hippo invalidate "<old pattern>" [--dry-run] [--reason "<why>"]');
+        console.error('       hippo invalidate --id <memory-id> [--dry-run] [--reason "<why>"]');
+        console.error('Pass a pattern OR --id, not both. Tag matching is EXACT: the full pattern must equal a tag.');
         process.exit(1);
       }
       const reason = flags['reason'] as string || null;
       const invTarget: InvalidationTarget = {
-        from: target,
+        from: target ?? `id:${onlyId}`,
         to: reason,
         type: 'migration',
       };
-      const result = invalidateMatching(hippoRoot, invTarget, resolveTenantId({}));
-      if (result.invalidated === 0) {
-        console.log(`No memories matched "${target}".`);
+      const result = invalidateMatching(hippoRoot, invTarget, resolveTenantId({}), { dryRun, onlyId });
+      const label = target ? `"${target}"` : `--id ${onlyId}`;
+      if (result.dryRun) {
+        if (result.invalidated === 0) {
+          console.log(`DRY RUN - no memories would match ${label}.`);
+        } else {
+          console.log(`DRY RUN - ${result.invalidated} memories WOULD be invalidated:`);
+          result.preview.forEach(p => console.log(`   ${p.id}  ${p.headline}`));
+        }
+      } else if (result.invalidated === 0) {
+        console.log(`No memories matched ${label}.`);
       } else {
-        console.log(`Invalidated ${result.invalidated} memories referencing "${target}".`);
+        console.log(`Invalidated ${result.invalidated} memories referencing ${label}.`);
         result.targets.forEach(id => console.log(`   ${id}`));
+      }
+      if (result.skippedPinned.length > 0) {
+        console.log(`Skipped ${result.skippedPinned.length} pinned: ${result.skippedPinned.join(', ')}`);
       }
       break;
     }
