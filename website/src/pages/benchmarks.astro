@@ -20,6 +20,13 @@ const globalPool = [
 
 const benchUrl = `${site.links.longmemeval}`;
 
+// Hero chip group: reuses the page's own receipts (no new claims).
+const heroChips = [
+  { num: '98.6%', label: 'R@5, zero-dep default' },
+  { num: '926', label: 'tests, real database' },
+  { num: '0', label: 'outbound HTTP' },
+];
+
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'TechArticle',
@@ -37,21 +44,32 @@ const jsonLd = {
   <main id="main">
     <!-- Header -->
     <section class="relative scroll-mt-20">
-      <div class="mx-auto max-w-6xl px-5 pb-12 pt-28 sm:pt-32">
-        <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">Benchmarks</p>
-        <h1 class="mt-4 max-w-3xl font-display text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl">
-          Numbers, with the <span class="text-gradient">methodology</span>.
-        </h1>
-        <p class="mt-5 max-w-2xl leading-relaxed text-zinc-400">
-          hippo's retrieval, measured on <a class="text-zinc-200 underline decoration-white/20 underline-offset-4 hover:decoration-acc-cyan" href="https://arxiv.org/abs/2410.10813" target="_blank" rel="noopener noreferrer">LongMemEval</a> (ICLR 2025), the public 500-question memory benchmark. The harness, the data hash, and the per-question results are in the repo so you can rerun them.
-        </p>
+      <div class="mx-auto flex max-w-6xl items-end justify-between gap-10 px-5 pb-12 pt-28 sm:pt-32">
+        <div>
+          <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">Benchmarks</p>
+          <h1 class="mt-4 max-w-3xl font-display text-4xl font-semibold leading-[1.03] tracking-tight sm:text-5xl">
+            Numbers, with the <span class="text-gradient">methodology</span>.
+          </h1>
+          <p class="mt-5 max-w-2xl leading-relaxed text-zinc-400">
+            hippo's retrieval, measured on <a class="link" href="https://arxiv.org/abs/2410.10813" target="_blank" rel="noopener noreferrer">LongMemEval<span class="sr-only"> (opens in new tab)</span></a> (ICLR 2025), the public 500-question memory benchmark. The harness, the data hash, and the per-question results are in the repo so you can rerun them.
+          </p>
+        </div>
+        <!-- Metric chips fill the hero's right side on wide viewports; duplicates on-page data. -->
+        <div class="hidden w-60 shrink-0 flex-col gap-3 lg:flex" aria-hidden="true">
+          {heroChips.map((chip) => (
+            <div class="glass flex items-baseline justify-between gap-3 rounded-2xl px-4 py-3">
+              <span class="whitespace-nowrap font-mono text-xl font-semibold tracking-tight text-gradient">{chip.num}</span>
+              <span class="text-right text-xs leading-snug text-zinc-400">{chip.label}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
 
     <!-- Standard per-haystack -->
-    <section class="relative scroll-mt-20 border-t border-white/5 bg-[#0a0a0f]">
-      <div class="mx-auto max-w-6xl px-5 py-20">
-        <h2 class="text-2xl leading-tight sm:text-3xl">Standard task: per-question haystack</h2>
+    <section class="relative scroll-mt-20 border-t border-white/5 bg-white/[0.02]">
+      <div class="mx-auto max-w-6xl px-5 py-24">
+        <h2 class="text-balance text-3xl leading-tight sm:text-4xl">Standard task: per-question&nbsp;haystack</h2>
         <p class="mt-4 max-w-2xl leading-relaxed text-zinc-400">
           Each question ships its own haystack of about 48 conversation sessions, and the job is to retrieve the session that holds the answer. This is the standard LongMemEval-S setup, the same one published systems report. Recall at 5, on the <code class="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-sm text-zinc-300">_s</code> split:
         </p>
@@ -59,16 +77,16 @@ const jsonLd = {
           <table class="w-full text-left text-sm">
             <thead class="bg-white/[0.03] font-mono text-xs uppercase tracking-wider text-zinc-400">
               <tr>
-                <th class="px-5 py-3 font-medium">Embedder</th>
-                <th class="px-5 py-3 font-medium">R@1</th>
-                <th class="px-5 py-3 font-medium">R@5</th>
-                <th class="px-5 py-3 font-medium">R@10</th>
+                <th scope="col" class="px-5 py-3 font-medium">Embedder</th>
+                <th scope="col" class="px-5 py-3 font-medium">R@1</th>
+                <th scope="col" class="px-5 py-3 font-medium">R@5</th>
+                <th scope="col" class="px-5 py-3 font-medium">R@10</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-white/5">
               {perHaystack.map((row) => (
                 <tr class="text-zinc-300">
-                  <td class="px-5 py-3.5">{row.embedder}</td>
+                  <th scope="row" class="px-5 py-3.5 text-left font-normal">{row.embedder}</th>
                   <td class="px-5 py-3.5 font-mono">{row.r1}</td>
                   <td class="px-5 py-3.5 font-mono font-semibold text-gradient">{row.r5}</td>
                   <td class="px-5 py-3.5 font-mono">{row.r10}</td>
@@ -77,7 +95,7 @@ const jsonLd = {
             </tbody>
           </table>
         </div>
-        <p class="mt-5 max-w-2xl text-sm leading-relaxed text-zinc-500">
+        <p class="mt-5 max-w-2xl text-sm leading-relaxed text-zinc-400">
           For reference, gbrain reports 97.6% R@5 on this split with a paid frontier embedder. hippo's free, local, zero-dependency default reaches 98.6%. On the standard task, retrieval recall is effectively saturated, so the embedder is a swappable part, not the differentiator.
         </p>
       </div>
@@ -85,12 +103,12 @@ const jsonLd = {
 
     <!-- Large-store / global pool -->
     <section class="relative scroll-mt-20 border-t border-white/5">
-      <div class="mx-auto max-w-6xl px-5 py-20">
-        <h2 class="text-2xl leading-tight sm:text-3xl">Large store: one unified memory</h2>
+      <div class="mx-auto max-w-6xl px-5 py-24">
+        <h2 class="text-balance text-3xl leading-tight sm:text-4xl">Large store: one unified memory</h2>
         <p class="mt-4 max-w-2xl leading-relaxed text-zinc-400">
           Point retrieval at a single store of all 19,195 sessions, with no pre-scoped haystack, closer to how an agent's memory actually accumulates. Recall stops being free:
         </p>
-        <div class="mt-8 grid max-w-2xl grid-cols-2 gap-4">
+        <div class="mt-8 grid grid-cols-2 gap-4">
           {globalPool.map((row) => (
             <div class="glass rounded-2xl p-6">
               <span class="font-mono text-4xl font-semibold tracking-tight text-zinc-200">{row.r5}</span>
@@ -98,16 +116,16 @@ const jsonLd = {
             </div>
           ))}
         </div>
-        <p class="mt-5 max-w-2xl text-sm leading-relaxed text-zinc-500">
+        <p class="mt-5 max-w-2xl text-sm leading-relaxed text-zinc-400">
           A stronger embedder helps here (47 to 56) but neither is usable on its own: the answer drowns among thousands of distractors. This is where the memory lifecycle earns its keep, by decaying, consolidating, and superseding so the effective store stays small. Measuring that is the next benchmark on the roadmap.
         </p>
       </div>
     </section>
 
     <!-- Other receipts -->
-    <section class="relative scroll-mt-20 border-t border-white/5 bg-[#0a0a0f]">
-      <div class="mx-auto max-w-6xl px-5 py-20">
-        <h2 class="text-2xl leading-tight sm:text-3xl">Tested, and local by default</h2>
+    <section class="relative scroll-mt-20 border-t border-white/5 bg-white/[0.02]">
+      <div class="mx-auto max-w-6xl px-5 py-24">
+        <h2 class="text-balance text-3xl leading-tight sm:text-4xl">Tested, and local by default</h2>
         <div class="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div class="glass rounded-2xl p-6">
             <span class="font-mono text-4xl font-semibold tracking-tight text-gradient">74%</span>
@@ -130,14 +148,14 @@ const jsonLd = {
 
     <!-- Methodology + reproduce -->
     <section class="relative scroll-mt-20 border-t border-white/5">
-      <div class="mx-auto max-w-6xl px-5 py-20">
-        <h2 class="text-2xl leading-tight sm:text-3xl">Reproduce it</h2>
+      <div class="mx-auto max-w-6xl px-5 py-24">
+        <h2 class="text-balance text-3xl leading-tight sm:text-4xl">Reproduce it</h2>
         <p class="mt-4 max-w-2xl leading-relaxed text-zinc-400">
-          The data is <code class="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-sm text-zinc-300">longmemeval_s_cleaned.json</code> (SHA-256 <code class="font-mono text-xs text-zinc-500">d6f21ea9...</code>), 500 questions over 19,195 sessions. Retrieval is turn-level dense plus BM25, fused with reciprocal rank fusion and max-pooled to session. Embeddings are L2-normalized; the default is local MiniLM, with an opt-in pluggable provider for frontier embedders.
+          The data is <code class="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-sm text-zinc-300">longmemeval_s_cleaned.json</code> (SHA-256 <code class="font-mono text-xs text-zinc-400">d6f21ea9...</code>), 500 questions over 19,195 sessions. Retrieval is turn-level dense plus BM25, fused with reciprocal rank fusion and max-pooled to session. Embeddings are L2-normalized; the default is local MiniLM, with an opt-in pluggable provider for frontier embedders.
         </p>
         <div class="mt-7 flex flex-wrap gap-3">
-          <a href={benchUrl} target="_blank" rel="noopener noreferrer" class="rounded-lg bg-zinc-100 px-5 py-2.5 text-sm font-medium text-zinc-900 transition hover:bg-white">Benchmark harness &amp; data</a>
-          <a href={site.links.repo} target="_blank" rel="noopener noreferrer" class="rounded-lg border border-white/12 px-5 py-2.5 text-sm font-medium text-zinc-200 transition hover:border-white/25">Repository</a>
+          <a href={benchUrl} target="_blank" rel="noopener noreferrer" class="rounded-lg bg-zinc-100 px-5 py-2.5 text-sm font-medium text-zinc-900 transition hover:bg-white">Benchmark harness &amp; data<span class="sr-only"> (opens in new tab)</span></a>
+          <a href={site.links.repo} target="_blank" rel="noopener noreferrer" class="rounded-lg border border-white/12 px-5 py-2.5 text-sm font-medium text-zinc-200 transition hover:border-white/25">Repository<span class="sr-only"> (opens in new tab)</span></a>
         </div>
       </div>
     </section>

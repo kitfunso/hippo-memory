@@ -78,8 +78,8 @@ export default function DecayCurve() {
       {/* axes */}
       <line x1="24" y1="184" x2="464" y2="184" stroke="rgba(255,255,255,0.12)" stroke-width="1" />
       <line x1="24" y1="20" x2="24" y2="184" stroke="rgba(255,255,255,0.12)" stroke-width="1" />
-      <text x="8" y="30" fill="#52525b" font-size="9" font-family="monospace" transform="rotate(-90 8 30)" style="transform-box: fill-box;">strength</text>
-      <text x="430" y="200" fill="#52525b" font-size="9" font-family="monospace">time</text>
+      <text x="8" y="30" fill="#a1a1aa" font-size="9" font-family="monospace" transform="rotate(-90 8 30)" style="transform-box: fill-box;">strength</text>
+      <text x="430" y="200" fill="#a1a1aa" font-size="9" font-family="monospace">time</text>
 
       {/* area fill under curve */}
       <path

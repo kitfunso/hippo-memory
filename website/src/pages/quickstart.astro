@@ -17,6 +17,13 @@ const integrations = [
   { name: 'Any MCP client', note: 'MCP server for Cursor, Windsurf, Cline, and Claude Desktop.' },
 ];
 
+// Hero "at a glance" card: mirrors the page's real steps (and the HowTo JSON-LD below).
+const heroSteps = [
+  { n: '01', label: 'Install', cmd: site.installCmd, prompt: true },
+  { n: '02', label: 'Initialize', cmd: site.initCmd, prompt: true },
+  { n: '03', label: 'Use the loop', cmd: 'remember · recall · outcome · sleep', prompt: false },
+];
+
 const loop = [
   { cmd: 'hippo remember "deploy failed: forgot migrations" --error', note: 'Store a memory. Errors get a longer half-life and stick.' },
   { cmd: 'hippo recall "why did the deploy break" --budget 2000', note: 'Retrieve within a token budget, ranked by relevance and strength.' },
@@ -42,31 +49,46 @@ const jsonLd = {
   <Nav />
   <main id="main">
     <section class="relative scroll-mt-20">
-      <div class="mx-auto max-w-5xl px-5 pb-12 pt-28 sm:pt-32">
-        <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">Quickstart</p>
-        <h1 class="mt-4 max-w-3xl font-display text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl">
-          Add memory in <span class="text-gradient">two commands</span>.
-        </h1>
-        <p class="mt-5 max-w-2xl leading-relaxed text-zinc-400">
-          hippo is an MIT-licensed npm package with zero runtime dependencies. Install it, point it at your home directory, and it wires itself into the agents you already use.
-        </p>
+      <div class="mx-auto flex max-w-6xl items-start justify-between gap-10 px-5 pb-12 pt-28 sm:pt-32">
+        <div>
+          <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">Quickstart</p>
+          <h1 class="mt-4 max-w-3xl font-display text-4xl font-semibold leading-[1.03] tracking-tight sm:text-5xl">
+            Add memory in <span class="text-gradient">two commands</span>.
+          </h1>
+          <p class="mt-5 max-w-2xl leading-relaxed text-zinc-400">
+            hippo is an MIT-licensed npm package with zero runtime dependencies. Install it, point it at your home directory, and it wires itself into the agents you already use.
+          </p>
+        </div>
+        <!-- Setup-at-a-glance card fills the hero's right side on wide viewports. -->
+        <aside class="hidden w-[19rem] shrink-0 rounded-2xl border border-white/8 bg-term-bg p-5 lg:block" aria-label="Setup at a glance: 3 steps, about 2 minutes">
+          <p class="border-b border-white/5 pb-3 font-mono text-xs uppercase tracking-wider text-acc-cyan">3 steps &middot; ~2 minutes</p>
+          <ol class="mt-4 space-y-3.5">
+            {heroSteps.map((step) => (
+              <li class="grid grid-cols-[1.5rem_1fr] gap-x-2">
+                <span class="font-mono text-xs leading-6 text-acc-cyan" aria-hidden="true">{step.n}</span>
+                <span class="text-sm font-medium text-zinc-200">{step.label}</span>
+                <code class="col-start-2 mt-0.5 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs text-zinc-400">{step.prompt ? <><span class="text-term-prompt">$</span> {step.cmd}</> : step.cmd}</code>
+              </li>
+            ))}
+          </ol>
+        </aside>
       </div>
     </section>
 
-    <section class="relative scroll-mt-20 border-t border-white/5 bg-[#0a0a0f]">
-      <div class="mx-auto max-w-5xl px-5 py-20">
-        <h2 class="text-2xl leading-tight sm:text-3xl">Install</h2>
+    <section class="relative scroll-mt-20 border-t border-white/5 bg-white/[0.02]">
+      <div class="mx-auto max-w-6xl px-5 py-24">
+        <h2 class="text-3xl leading-tight sm:text-4xl">Install</h2>
         <pre class="mt-6 overflow-x-auto rounded-2xl border border-white/8 bg-term-bg p-5 font-mono text-sm leading-relaxed text-term-fg"><code><span class="text-term-prompt">$</span> {site.installCmd}
 <span class="text-term-prompt">$</span> {site.initCmd}</code></pre>
-        <p class="mt-4 max-w-2xl text-sm leading-relaxed text-zinc-500">
+        <p class="mt-4 max-w-2xl text-sm leading-relaxed text-zinc-400">
           <code class="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-zinc-300">init --scan ~</code> detects your agents, installs their hooks, and gives you memory across every git repo under your home directory. Everything lives in a local SQLite store with markdown mirrors. No cloud, no account, no telemetry.
         </p>
       </div>
     </section>
 
     <section class="relative scroll-mt-20 border-t border-white/5">
-      <div class="mx-auto max-w-5xl px-5 py-20">
-        <h2 class="text-2xl leading-tight sm:text-3xl">Works with your agents</h2>
+      <div class="mx-auto max-w-6xl px-5 py-24">
+        <h2 class="text-3xl leading-tight sm:text-4xl">Works with your agents</h2>
         <div class="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {integrations.map((i) => (
             <div class="glass rounded-2xl p-5">
@@ -78,9 +100,9 @@ const jsonLd = {
       </div>
     </section>
 
-    <section class="relative scroll-mt-20 border-t border-white/5 bg-[#0a0a0f]">
-      <div class="mx-auto max-w-5xl px-5 py-20">
-        <h2 class="text-2xl leading-tight sm:text-3xl">The memory loop</h2>
+    <section class="relative scroll-mt-20 border-t border-white/5 bg-white/[0.02]">
+      <div class="mx-auto max-w-6xl px-5 py-24">
+        <h2 class="text-3xl leading-tight sm:text-4xl">The memory loop</h2>
         <p class="mt-4 max-w-2xl leading-relaxed text-zinc-400">
           Four commands. Memories decay on a half-life unless something keeps them alive: a retrieval, a good outcome, an error tag, or consolidation during sleep.
         </p>
@@ -93,7 +115,7 @@ const jsonLd = {
           ))}
         </div>
         <div class="mt-8 flex flex-wrap gap-3">
-          <a href={site.links.docs} target="_blank" rel="noopener noreferrer" class="rounded-lg bg-zinc-100 px-5 py-2.5 text-sm font-medium text-zinc-900 transition hover:bg-white">Full docs</a>
+          <a href={site.links.docs} target="_blank" rel="noopener noreferrer" class="rounded-lg bg-zinc-100 px-5 py-2.5 text-sm font-medium text-zinc-900 transition hover:bg-white">Full docs<span class="sr-only"> (opens in new tab)</span></a>
           <a href="/benchmarks/" class="rounded-lg border border-white/12 px-5 py-2.5 text-sm font-medium text-zinc-200 transition hover:border-white/25">See the benchmarks</a>
         </div>
       </div>

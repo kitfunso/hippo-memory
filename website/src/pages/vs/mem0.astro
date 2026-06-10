@@ -21,6 +21,13 @@ const rows = [
   { feature: 'License', hippo: 'MIT', mem0: 'Apache-2.0' },
 ];
 
+// Receipts strip: figures reproduced from the comparison matrix in ../../content/site.ts
+// ("LongMemEval (best published)" row: Hippo 98.6% R@5, Mem0 ~49-85% R@5). Do not invent numbers.
+const receipts = {
+  hippo: { num: '98.6%', sub: 'per-question haystack, local MiniLM default' },
+  mem0: { num: '~49-85%', sub: 'self-reported, own conditions' },
+};
+
 const faqJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'FAQPage',
@@ -49,33 +56,55 @@ const faqJsonLd = {
   <Nav />
   <main id="main">
     <section class="relative scroll-mt-20">
-      <div class="mx-auto max-w-5xl px-5 pb-12 pt-28 sm:pt-32">
+      <div class="mx-auto max-w-6xl px-5 pb-12 pt-28 sm:pt-32">
         <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">Comparison</p>
-        <h1 class="mt-4 font-display text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl">
-          hippo <span class="text-zinc-500">vs</span> <span class="text-gradient">mem0</span>
+        <h1 class="mt-4 font-display text-4xl font-semibold leading-[1.03] tracking-tight sm:text-5xl">
+          <span class="text-gradient">hippo</span> <span class="text-zinc-500">vs</span> mem0
         </h1>
         <p class="mt-5 max-w-2xl leading-relaxed text-zinc-400">
           Both are open-source memory for AI agents. The difference is philosophy. mem0 saves and searches: it extracts facts and retrieves them by similarity. hippo runs a memory lifecycle: it forgets by default and earns persistence through use, so the store stays small and current instead of growing without bound.
         </p>
+        <!-- Receipts strip: the one number this page owes its reader. -->
+        <div class="mt-10">
+          <div class="glass rounded-2xl px-7 py-6">
+            <div class="flex flex-wrap items-center gap-x-10 gap-y-4">
+              <span class="font-mono text-xs uppercase leading-relaxed tracking-wider text-acc-cyan">LongMemEval<br />R@5</span>
+              <div class="flex flex-col gap-1">
+                <span class="font-mono text-xs uppercase tracking-wider text-zinc-200">hippo</span>
+                <span class="whitespace-nowrap font-mono text-3xl font-semibold tracking-tight text-gradient sm:text-4xl">{receipts.hippo.num}</span>
+                <span class="max-w-64 text-xs leading-relaxed text-zinc-400">{receipts.hippo.sub}</span>
+              </div>
+              <span class="hidden font-mono text-xs uppercase tracking-wider text-zinc-500 sm:inline" aria-hidden="true">vs</span>
+              <div class="flex flex-col gap-1">
+                <span class="font-mono text-xs uppercase tracking-wider text-zinc-400">mem0</span>
+                <span class="whitespace-nowrap font-mono text-3xl font-semibold tracking-tight text-zinc-300 sm:text-4xl">{receipts.mem0.num}</span>
+                <span class="max-w-64 text-xs leading-relaxed text-zinc-400">{receipts.mem0.sub}</span>
+              </div>
+            </div>
+          </div>
+          <p class="mt-3.5 max-w-2xl text-xs leading-relaxed text-zinc-400">
+            hippo measured 2026-06-09 on longmemeval_s_cleaned. mem0 reports its own LongMemEval figures under its own conditions, so this is not a controlled head-to-head. Full methodology and per-haystack results are on the <a class="link" href="/benchmarks/">benchmarks page</a>.
+          </p>
+        </div>
       </div>
     </section>
 
-    <section class="relative scroll-mt-20 border-t border-white/5 bg-[#0a0a0f]">
-      <div class="mx-auto max-w-5xl px-5 py-20">
-        <h2 class="text-2xl leading-tight sm:text-3xl">Feature comparison</h2>
+    <section class="relative scroll-mt-20 border-t border-white/5 bg-white/[0.02]">
+      <div class="mx-auto max-w-6xl px-5 py-24">
+        <h2 class="text-3xl leading-tight sm:text-4xl">Feature comparison</h2>
         <div class="mt-8 overflow-hidden rounded-2xl border border-white/8">
           <table class="w-full text-left text-sm">
             <thead class="bg-white/[0.03] font-mono text-xs uppercase tracking-wider text-zinc-400">
               <tr>
-                <th class="px-5 py-3 font-medium">Feature</th>
-                <th class="px-5 py-3 font-medium text-zinc-200">hippo</th>
-                <th class="px-5 py-3 font-medium">mem0</th>
+                <th scope="col" class="px-5 py-3 font-medium">Feature</th>
+                <th scope="col" class="px-5 py-3 font-medium text-zinc-200">hippo</th>
+                <th scope="col" class="px-5 py-3 font-medium">mem0</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-white/5">
               {rows.map((r) => (
                 <tr class="text-zinc-300">
-                  <td class="px-5 py-3.5 text-zinc-400">{r.feature}</td>
+                  <th scope="row" class="px-5 py-3.5 text-left font-normal text-zinc-400">{r.feature}</th>
                   <td class="px-5 py-3.5 font-medium text-zinc-100">{r.hippo}</td>
                   <td class="px-5 py-3.5">{r.mem0}</td>
                 </tr>
@@ -83,15 +112,15 @@ const faqJsonLd = {
             </tbody>
           </table>
         </div>
-        <p class="mt-5 max-w-2xl text-sm leading-relaxed text-zinc-500">
-          Feature rows are from hippo's <a class="text-zinc-300 underline decoration-white/20 underline-offset-4 hover:decoration-acc-cyan" href={`${site.links.repo}#comparison`} target="_blank" rel="noopener noreferrer">comparison table</a>. mem0 reports its own LongMemEval figures under its own conditions; hippo's per-haystack results are on the <a class="text-zinc-300 underline decoration-white/20 underline-offset-4 hover:decoration-acc-cyan" href="/benchmarks/">benchmarks page</a>.
+        <p class="mt-5 max-w-2xl text-sm leading-relaxed text-zinc-400">
+          Feature rows are from hippo's <a class="link" href={`${site.links.repo}#comparison`} target="_blank" rel="noopener noreferrer">comparison table<span class="sr-only"> (opens in new tab)</span></a>; the qualifier behind each Yes/No is in the full matrix. Benchmark figures and the comparability caveat are in the strip above.
         </p>
       </div>
     </section>
 
     <section class="relative scroll-mt-20 border-t border-white/5">
-      <div class="mx-auto max-w-5xl px-5 py-20">
-        <h2 class="text-2xl leading-tight sm:text-3xl">When to choose which</h2>
+      <div class="mx-auto max-w-6xl px-5 py-24">
+        <h2 class="text-3xl leading-tight sm:text-4xl">When to choose which</h2>
         <div class="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div class="glass rounded-2xl p-6">
             <span class="text-sm font-medium text-zinc-100">Choose hippo</span>

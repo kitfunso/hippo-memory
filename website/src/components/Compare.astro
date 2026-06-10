@@ -9,78 +9,108 @@ function cellTone(v: string): string {
   if (v === '?' || v.startsWith('N/A')) return 'text-zinc-400';
   return 'text-zinc-300';
 }
+
+// Home shows a trimmed view: 6 differentiator rows x (Feature + hippo + 3 strongest
+// competitors). The FULL 10-tool data stays in `comparison` (README-verbatim,
+// build-gate-checked); the GitHub link below carries readers to it. Cells render
+// the short `display` verdict where one exists, else the verbatim cell.
+const homeSystems = ['Hippo', 'Mem0', 'gbrain', 'Zep'];
+const homeFeatures = [
+  'Decay by default',
+  'Retrieval strengthening',
+  'Cross-tool import (ChatGPT/Claude/Cursor)',
+  'Auto-hook install',
+  'Zero runtime deps',
+  'LongMemEval (best published)',
+];
+const systems = homeSystems.map((n) => comparison.systems.find((s) => s.name === n)!);
+const sysIdx = homeSystems.map((n) => comparison.systems.findIndex((s) => s.name === n));
+const rows = homeFeatures.map((f) => {
+  const row = comparison.rows.find((r) => r.feature === f)!;
+  const all: readonly string[] = 'display' in row ? row.display : row.cells;
+  return { feature: row.feature, cells: sysIdx.map((i) => all[i]) };
+});
 ---
 
 <section id="compare" class="relative scroll-mt-20 border-t border-white/5">
   <div class="mx-auto max-w-6xl px-5 py-24">
-    <div class="max-w-2xl" data-reveal>
+    <div class="max-w-2xl">
       <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">Compare</p>
       <h2 class="mt-4 text-3xl leading-tight sm:text-4xl">
         <span class="text-gradient">{compare.heading}</span>
       </h2>
-      <p class="mt-5 text-lg leading-relaxed text-zinc-400">{compare.body}</p>
+      <p class="mt-5 text-lg leading-relaxed text-zinc-400" data-reveal>{compare.body}</p>
     </div>
 
-    <!-- full matrix; horizontal scroll is CONTAINED to this wrapper (never the page) -->
-    <div class="mt-10 overflow-x-auto rounded-2xl glass">
-      <table class="w-full min-w-[940px] border-collapse text-left text-sm">
-        <thead>
-          <tr class="border-b border-white/10">
-            <th
-              scope="col"
-              class="sticky left-0 z-20 w-40 border-r border-white/10 bg-[#0c0c11] px-4 py-3 font-mono text-xs uppercase tracking-wider text-zinc-400"
-            >
-              Feature
-            </th>
-            {comparison.systems.map((s) => (
-              <th scope="col" class="px-2 py-3 text-center align-bottom font-display text-[13px] font-semibold">
-                <a
-                  href={s.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class:list={[
-                    'underline-offset-4 transition hover:underline',
-                    s.self ? 'text-gradient' : 'text-zinc-300 hover:text-zinc-100',
-                  ]}
-                >{s.name}</a>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {comparison.rows.map((row, i) => (
-            <tr class:list={['border-b border-white/5', i % 2 === 1 ? 'bg-white/[0.015]' : '']}>
+    <!-- trimmed matrix; horizontal scroll is CONTAINED to this wrapper (never the page) -->
+    <div class="relative mt-10">
+      <div class="overflow-x-auto rounded-2xl glass">
+        <table class="w-full min-w-[560px] border-collapse text-left text-sm">
+          <thead>
+            <tr class="border-b border-white/10">
               <th
-                scope="row"
-                class="sticky left-0 z-10 w-40 border-r border-white/10 bg-[#0c0c11] px-4 py-3 text-left font-normal text-zinc-200"
+                scope="col"
+                class="sticky left-0 z-20 w-40 border-r border-white/10 bg-[#0c0c11] px-4 py-3 font-mono text-xs uppercase tracking-wider text-zinc-400"
               >
-                {row.feature}
+                Feature
               </th>
-              {row.cells.map((c, ci) => (
-                <td
-                  class:list={[
-                    'px-2 py-2.5 text-center align-top text-xs leading-snug',
-                    cellTone(c),
-                    ci === 0 ? 'bg-acc-violet/5 font-medium' : '',
-                  ]}
-                >{c}</td>
+              {systems.map((s) => (
+                <th scope="col" class="px-2 py-3 text-center align-bottom font-sans text-[13px] font-semibold">
+                  <a
+                    href={s.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class:list={[
+                      'underline-offset-4 transition hover:underline',
+                      s.self ? 'text-gradient' : 'text-zinc-300 hover:text-zinc-100',
+                    ]}
+                  >{s.name}</a>
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => (
+              <tr class:list={['border-b border-white/5', i % 2 === 1 ? 'bg-white/[0.015]' : '']}>
+                <th
+                  scope="row"
+                  class="sticky left-0 z-10 w-40 border-r border-white/10 bg-[#0c0c11] px-4 py-3 text-left font-normal text-zinc-200"
+                >
+                  {row.feature}
+                </th>
+                {row.cells.map((c, ci) => (
+                  <td
+                    class:list={[
+                      'whitespace-nowrap px-2 py-2.5 text-center align-top text-[13px] leading-snug',
+                      cellTone(c),
+                      ci === 0 ? 'bg-acc-violet/5 font-medium' : '',
+                    ]}
+                  >{c}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <!-- mobile scroll cue: right-edge fade over the scroll container -->
+      <div
+        class="pointer-events-none absolute inset-y-0 right-0 w-14 rounded-r-2xl bg-gradient-to-l from-[#08080b]/90 to-transparent sm:hidden"
+        aria-hidden="true"
+      ></div>
     </div>
+    <p class="mt-2.5 font-mono text-xs text-zinc-400 sm:hidden">{compare.scrollCue} →</p>
 
-    <div class="mt-4 space-y-1.5">
-      {comparison.footnotes.map((f) => <p class="max-w-3xl text-xs leading-relaxed text-zinc-400">{f}</p>)}
-    </div>
-
-    <p class="mt-6 max-w-3xl text-sm leading-relaxed text-zinc-400">{comparison.closing}</p>
-
-    <p class="mt-5 text-sm text-zinc-400">
-      <a href={compare.sourceHref} target="_blank" rel="noopener noreferrer" class="text-acc-cyan underline underline-offset-4">
-        Source: the full comparison in the README
+    <p class="mt-5 text-sm">
+      <a href={compare.sourceHref} target="_blank" rel="noopener noreferrer" class="link">
+        {compare.sourceLabel} →
       </a>
     </p>
+
+    <div class="mt-4 space-y-1.5" data-reveal>
+      {comparison.footnotes.map((f) => <p class="max-w-2xl text-sm leading-relaxed text-zinc-400">{f}</p>)}
+      <p class="max-w-2xl text-sm leading-relaxed text-zinc-400">{compare.qualifierNote}</p>
+    </div>
+
+    <p class="mt-6 max-w-2xl text-sm leading-relaxed text-zinc-400" data-reveal>{comparison.closing}</p>
   </div>
 </section>
