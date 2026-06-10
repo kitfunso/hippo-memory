@@ -610,20 +610,16 @@ function parseWikilinks(body: string): string[] {
 /** Recursively collect `*.md` files under `root`, returning paths relative to
  *  `root` with forward-slash separators (stable artifactRef keys across OSes).
  *  Symlinks are not followed. Skips dot-directories (the default `.hippo` store,
- *  `.git`, `.obsidian`, `.trash`) AND the resolved Hippo store path, so
- *  re-importing a vault that CONTAINS the store never ingests its own markdown
- *  mirror files (codex R5 P1: `hippo import --vault .` after `hippo init` in the
- *  vault would otherwise self-import its mirror rows and grow on every run). */
+ *  `.git`, `.obsidian`, `.trash`) AND the resolved Hippo store path during the
+ *  walk, so re-importing a vault that CONTAINS the store never ingests its own
+ *  markdown mirror files (codex R5 P1: `hippo import --vault .` after `hippo
+ *  init` in the vault would otherwise self-import its mirror rows and grow on
+ *  every run). The root-IS-the-store case is handled one level up in
+ *  importVault (a no-op early return), NOT here: returning [] for it would feed
+ *  the deletion-sync an empty scan that mass-archives every live row (codex R8). */
 function collectMarkdownFiles(root: string, hippoRoot: string): string[] {
   const out: string[] = [];
   const resolvedHippoRoot = path.resolve(hippoRoot);
-  const resolvedRoot = path.resolve(root);
-  // If the vault root IS the store (or lives inside it), there are no vault
-  // notes - only the store's own mirror files (codex R6 P2: `--vault .hippo` or
-  // an SDK caller passing the store dir). Return empty rather than self-import.
-  if (resolvedRoot === resolvedHippoRoot || resolvedRoot.startsWith(resolvedHippoRoot + path.sep)) {
-    return out;
-  }
   const walk = (dir: string): void => {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     for (const ent of entries) {
@@ -677,6 +673,20 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
     // in the wrong store. Reject for SDK callers too (the CLI also rejects
     // --global) rather than silently writing local (codex P2).
     throw new Error('importVault does not support global mode (raw rows are tenant-local).');
+  }
+
+  // Self-store no-op guard (codex R8 P1). MUST run BEFORE the existing-rows load
+  // and the deletion-sync pass below. If the vault folder IS the store (or lives
+  // inside it), there are no real vault notes - only the store's own markdown
+  // mirror files. Letting collectMarkdownFiles return [] for this case is NOT
+  // safe: an empty scan is indistinguishable from "every note was deleted", so
+  // deletion-sync would archive every live vault:<name>:* row, and raw-archive
+  // content redaction makes that loss IRREVERSIBLE. The only safe reading of
+  // "import the store into itself" is "do nothing".
+  const resolvedStore = path.resolve(hippoRoot);
+  const resolvedFolder = path.resolve(folderPath);
+  if (resolvedFolder === resolvedStore || resolvedFolder.startsWith(resolvedStore + path.sep)) {
+    return { total: 0, imported: 0, skipped: 0, archived: 0, entries: [] };
   }
 
   const ctx: Context = {

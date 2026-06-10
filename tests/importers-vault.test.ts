@@ -585,3 +585,50 @@ describe('importVault (t) — duplicate raw rows for one artifactRef archive ALL
     expect(archivedRows().length).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// (u) importing the store path is a no-op, NOT a mass-archive of live rows
+//     (codex R8 P1). The self-store guard returns an empty file scan; without
+//     a control-flow short-circuit, deletion-sync reads "empty scan" as "all
+//     notes deleted" and irreversibly archives every live vault:<name>:* row.
+// ---------------------------------------------------------------------------
+
+describe('importVault (u) — importing the store path preserves existing vault rows', () => {
+  it('does not archive live rows when folderPath resolves to the store (with rows present)', () => {
+    // A real import first, so live vault rows exist to be (wrongly) archived.
+    writeNote('keep.md', '# Keep\na genuine vault note worth keeping');
+    expect(importVault(vaultDir, opts({ name: 'v' })).imported).toBe(1);
+    const before = loadAllEntries(tmpDir, 'default').filter((e) =>
+      e.artifact_ref?.startsWith('vault:v:'),
+    );
+    expect(before.length).toBe(1);
+
+    // Now point the importer at the STORE itself. This must be a no-op, NOT a
+    // deletion-sync that archives every live row because the scan found nothing.
+    const selfImport = importVault(tmpDir, opts({ name: 'v' }));
+    expect(selfImport.total).toBe(0);
+    expect(selfImport.imported).toBe(0);
+    expect(selfImport.archived).toBe(0); // the regression guard
+
+    const after = loadAllEntries(tmpDir, 'default').filter((e) =>
+      e.artifact_ref?.startsWith('vault:v:'),
+    );
+    expect(after.length).toBe(1); // row survived
+    expect(after[0].id).toBe(before[0].id);
+    expect(archivedRows().length).toBe(0); // nothing archived at all
+  });
+
+  it('is a no-op for a child of the store too (nested store path)', () => {
+    writeNote('keep.md', '# Keep\nanother genuine vault note');
+    expect(importVault(vaultDir, opts({ name: 'v' })).imported).toBe(1);
+
+    // A subdirectory INSIDE the store resolves under hippoRoot → same guard.
+    const childOfStore = path.join(tmpDir, 'episodic');
+    fs.mkdirSync(childOfStore, { recursive: true });
+    const selfImport = importVault(childOfStore, opts({ name: 'v' }));
+    expect(selfImport.total).toBe(0);
+    expect(selfImport.archived).toBe(0);
+    expect(loadAllEntries(tmpDir, 'default').filter((e) => e.artifact_ref?.startsWith('vault:v:')).length).toBe(1);
+    expect(archivedRows().length).toBe(0);
+  });
+});
