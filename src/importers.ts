@@ -691,7 +691,11 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
   // Map serves both per-file idempotency AND the deletion diff (no second
   // query). LIKE-escape the vault name so a `%`/`_` in it can't over-match.
   initStore(hippoRoot);
-  const existing = new Map<string, VaultRow>();
+  // artifactRef -> ALL its live raw rows. >1 only after a concurrent double-insert
+  // (the importer is not re-entrant; see the JSDoc). The buckets matter: a later
+  // changed/deletion pass must archive EVERY matching row, not just the last one
+  // scanned, or older raw vault content lingers live + searchable (codex P2).
+  const existing = new Map<string, VaultRow[]>();
   {
     const db = openHippoDb(hippoRoot);
     try {
@@ -708,7 +712,9 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
       const exactPrefix = `vault:${vaultName}:`;
       for (const row of rows) {
         if (row.artifact_ref && row.artifact_ref.startsWith(exactPrefix)) {
-          existing.set(row.artifact_ref, row);
+          const bucket = existing.get(row.artifact_ref);
+          if (bucket) bucket.push(row);
+          else existing.set(row.artifact_ref, [row]);
         }
       }
     } finally {
@@ -746,9 +752,14 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
     const hash = createHash('sha256').update(rawFileContent).digest('hex');
     const hashTag = `content-hash:${hash}`;
 
-    const prior = existing.get(artifactRef);
-    const priorTags = prior ? parseJsonArrayLoose(prior.tags_json) : [];
-    if (prior && priorTags.includes(hashTag)) {
+    const priors = existing.get(artifactRef) ?? [];
+    // Unchanged iff EVERY live raw row already carries the current content-hash
+    // (the normal case is exactly one row; >1 only after a concurrent double-
+    // insert). If ANY row is stale / missing the hash, treat the file as changed
+    // so the archive pass below removes ALL of them, not just the matching one
+    // (codex P2). The `length > 0` guard is required: `[].every()` is vacuously
+    // true, but a never-seen file (no rows) must fall through to import, not skip.
+    if (priors.length > 0 && priors.every((p) => parseJsonArrayLoose(p.tags_json).includes(hashTag))) {
       // Unchanged file → skip (idempotent re-import).
       skipped++;
       continue;
@@ -765,13 +776,14 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
       continue;
     }
 
-    // Changed file → archive the OLD raw row, then append the new one. NEVER
+    // Changed file → archive EVERY old raw row for this ref (normally one; >1
+    // only after a concurrent double-insert), then append the new one. NEVER
     // supersede (would yield kind='distilled'). archiveRaw commits + closes its
     // handle before remember() runs, so there is no double-live row; a crash
     // between them self-heals (file re-imported as fresh raw next run).
-    if (prior) {
+    for (const p of priors) {
       archived++; // count the would-be archive even in dryRun (true preview)
-      if (!dryRun) archiveRaw(ctx, prior.id, `changed:${artifactRef}`);
+      if (!dryRun) archiveRaw(ctx, p.id, `changed:${artifactRef}`);
     }
     const frontmatterTags = [
       ...frontmatterList(fm['tags']),
@@ -824,10 +836,12 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
   // note that vanished from the source folder → archive its raw row. Per-file
   // archiveRaw (own handle); no outer SAVEPOINT (no cross-file idempotency row
   // to commit atomically, unlike github's multi-row case).
-  for (const [artifactRef, row] of existing) {
+  for (const [artifactRef, rows] of existing) {
     if (seen.has(artifactRef)) continue;
-    archived++; // count even in dryRun so the preview reflects destructive deletes
-    if (!dryRun) archiveRaw(ctx, row.id, `source_deleted:${artifactRef}`);
+    for (const row of rows) {
+      archived++; // count even in dryRun so the preview reflects destructive deletes
+      if (!dryRun) archiveRaw(ctx, row.id, `source_deleted:${artifactRef}`);
+    }
   }
 
   return { total, imported, skipped, archived, entries };

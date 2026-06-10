@@ -18,9 +18,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import { importVault, type ImportOptions } from '../src/importers.js';
 import { loadAllEntries, initStore } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { remember, type Context } from '../src/api.js';
 
 let tmpDir: string; // hippo root (the store)
 let vaultDir: string; // a scratch vault folder we mutate per-test
@@ -490,5 +492,96 @@ describe('importVault (s) — vault root IS the store imports nothing (codex R6 
     const result = importVault(tmpDir, opts({ name: 'v' })); // folderPath === hippoRoot
     expect(result.total).toBe(0);
     expect(result.imported).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// (t) duplicate live raw rows for one artifactRef → archive ALL on change/delete
+//     (codex R7 P2). The importer is not re-entrant: two concurrent runs can each
+//     see a note as absent and double-insert. A later changed/deletion pass must
+//     archive EVERY matching row, not just the last one scanned.
+// ---------------------------------------------------------------------------
+
+const vaultCtx = (): Context => ({
+  hippoRoot: tmpDir,
+  tenantId: 'default',
+  actor: { subject: 'connector:vault', role: 'admin' },
+});
+
+/** Inject a SECOND live raw row sharing dup.md's artifactRef + content-hash,
+ *  exactly as a concurrent importVault run would. Returns both live row ids. */
+function seedDuplicateRawRow(): string[] {
+  const raw = fs.readFileSync(path.join(vaultDir, 'dup.md'), 'utf8');
+  const hash = createHash('sha256').update(raw).digest('hex');
+  remember(vaultCtx(), {
+    content: raw, // no frontmatter in the fixture, so body === raw
+    kind: 'raw',
+    artifactRef: 'vault:v:dup.md',
+    owner: 'agent:vault-import',
+    tags: ['source:vault', 'vault:v', `content-hash:${hash}`],
+  });
+  const ids = loadAllEntries(tmpDir, 'default')
+    .filter((e) => e.artifact_ref === 'vault:v:dup.md')
+    .map((e) => e.id);
+  expect(ids.length).toBe(2); // precondition: two live rows for one ref
+  return ids;
+}
+
+describe('importVault (t) — duplicate raw rows for one artifactRef archive ALL', () => {
+  it('archives BOTH duplicates when the source file changes (not just the last)', () => {
+    writeNote('dup.md', '# Dup\noriginal content');
+    expect(importVault(vaultDir, opts({ name: 'v' })).imported).toBe(1);
+    const dupIds = seedDuplicateRawRow();
+
+    writeNote('dup.md', '# Dup\nCHANGED content');
+    const second = importVault(vaultDir, opts({ name: 'v' }));
+    expect(second.imported).toBe(1); // one new raw appended
+    expect(second.archived).toBe(2); // BOTH old rows archived, not one
+
+    const live = loadAllEntries(tmpDir, 'default');
+    expect(live.length).toBe(1); // exactly one live row remains
+    expect(live[0].content).toContain('CHANGED');
+    expect(dupIds).not.toContain(live[0].id);
+
+    const archived = archivedRows();
+    expect(archived.length).toBe(2);
+    expect(new Set(archived.map((a) => a.memory_id))).toEqual(new Set(dupIds));
+    for (const a of archived) expect(a.reason).toBe('changed:vault:v:dup.md');
+  });
+
+  it('archives BOTH duplicates when the source file is deleted (not just the last)', () => {
+    writeNote('dup.md', '# Dup\noriginal content');
+    expect(importVault(vaultDir, opts({ name: 'v' })).imported).toBe(1);
+    const dupIds = seedDuplicateRawRow();
+
+    fs.rmSync(path.join(vaultDir, 'dup.md'));
+    const second = importVault(vaultDir, opts({ name: 'v' }));
+    expect(second.total).toBe(0); // vault now empty
+    expect(second.archived).toBe(2); // BOTH rows archived on deletion-sync
+
+    const live = loadAllEntries(tmpDir, 'default').filter(
+      (e) => e.artifact_ref === 'vault:v:dup.md',
+    );
+    expect(live.length).toBe(0);
+
+    const archived = archivedRows();
+    expect(archived.length).toBe(2);
+    expect(new Set(archived.map((a) => a.memory_id))).toEqual(new Set(dupIds));
+    for (const a of archived) expect(a.reason).toBe('source_deleted:vault:v:dup.md');
+  });
+
+  it('skips cleanly when duplicates all carry the current hash (unchanged re-import)', () => {
+    writeNote('dup.md', '# Dup\noriginal content');
+    expect(importVault(vaultDir, opts({ name: 'v' })).imported).toBe(1);
+    seedDuplicateRawRow();
+
+    // Unchanged re-import: every live row already carries the current content-hash,
+    // so the file is skipped and NO archive fires (duplicates are identical content,
+    // not stale; codex P2 is about stale content after change/delete, not redundancy).
+    const second = importVault(vaultDir, opts({ name: 'v' }));
+    expect(second.skipped).toBe(1);
+    expect(second.imported).toBe(0);
+    expect(second.archived).toBe(0);
+    expect(archivedRows().length).toBe(0);
   });
 });
