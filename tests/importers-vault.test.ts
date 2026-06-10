@@ -631,4 +631,50 @@ describe('importVault (u) — importing the store path preserves existing vault 
     expect(loadAllEntries(tmpDir, 'default').filter((e) => e.artifact_ref?.startsWith('vault:v:')).length).toBe(1);
     expect(archivedRows().length).toBe(0);
   });
+
+  it('treats a junction/symlink to the store as self-store (codex R9 P2)', () => {
+    writeNote('keep.md', '# Keep\na real note that must survive an aliased self-import');
+    expect(importVault(vaultDir, opts({ name: 'v' })).imported).toBe(1);
+
+    // An aliased path (junction on Windows, symlink on POSIX) pointing AT the
+    // store. path.resolve(link) !== resolve(store) textually, so only a realpath
+    // canonicalization recognizes it as self-store.
+    const linkParent = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-vault-link-'));
+    const link = path.join(linkParent, 'store-alias');
+    let created = true;
+    try {
+      fs.symlinkSync(tmpDir, link, 'junction');
+    } catch {
+      created = false; // no privilege / unsupported on this host -> can't assert
+    }
+    try {
+      if (created) {
+        const aliased = importVault(link, opts({ name: 'v' }));
+        expect(aliased.total).toBe(0);
+        expect(aliased.archived).toBe(0); // the regression guard
+        const live = loadAllEntries(tmpDir, 'default').filter((e) =>
+          e.artifact_ref?.startsWith('vault:v:'),
+        );
+        expect(live.length).toBe(1);
+        expect(archivedRows().length).toBe(0);
+      }
+    } finally {
+      // Remove ONLY the link (never recurse into the target store): unlink for a
+      // POSIX symlink, rmdir for a Windows junction. Both are non-recursive.
+      try {
+        fs.unlinkSync(link);
+      } catch {
+        try {
+          fs.rmdirSync(link);
+        } catch {
+          /* link already gone */
+        }
+      }
+      try {
+        fs.rmdirSync(linkParent);
+      } catch {
+        /* leave the empty temp dir for the OS to reap */
+      }
+    }
+  });
 });

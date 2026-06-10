@@ -641,6 +641,22 @@ function collectMarkdownFiles(root: string, hippoRoot: string): string[] {
   return out;
 }
 
+/** Canonicalize a path for the self-store comparison: dereference symlinks /
+ *  junctions and normalize case (Windows) via the OS realpath, so a junction or
+ *  a case-variant path to the store is still recognized as self-store (codex R9
+ *  P2: path.resolve does neither, so an aliased store path slipped past the
+ *  guard and triggered the mass-archive). Falls back to path.resolve when the
+ *  path does not exist yet - an uninitialized store or a typo'd vault path
+ *  cannot be a live self-store, and a non-existent vault folder fails later in
+ *  the walk (readdirSync) before deletion-sync can archive anything. */
+function realpathOrResolve(p: string): string {
+  try {
+    return fs.realpathSync.native(p);
+  } catch {
+    return path.resolve(p);
+  }
+}
+
 interface VaultRow {
   id: string;
   artifact_ref: string;
@@ -682,9 +698,11 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
   // safe: an empty scan is indistinguishable from "every note was deleted", so
   // deletion-sync would archive every live vault:<name>:* row, and raw-archive
   // content redaction makes that loss IRREVERSIBLE. The only safe reading of
-  // "import the store into itself" is "do nothing".
-  const resolvedStore = path.resolve(hippoRoot);
-  const resolvedFolder = path.resolve(folderPath);
+  // "import the store into itself" is "do nothing". Canonicalize both paths
+  // (realpath: dereference junctions/symlinks + normalize Windows case) so an
+  // aliased path to the store is still caught (codex R9 P2).
+  const resolvedStore = realpathOrResolve(hippoRoot);
+  const resolvedFolder = realpathOrResolve(folderPath);
   if (resolvedFolder === resolvedStore || resolvedFolder.startsWith(resolvedStore + path.sep)) {
     return { total: 0, imported: 0, skipped: 0, archived: 0, entries: [] };
   }
