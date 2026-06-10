@@ -144,6 +144,7 @@ import {
   importCursor,
   importGenericFile,
   importMarkdown,
+  importVault,
   ImportOptions,
 } from './importers.js';
 import { cmdCapture, CaptureOptions } from './capture.js';
@@ -5828,6 +5829,39 @@ function cmdImport(
     hippoRoot,
   };
 
+  // K1 vault import: a FOLDER importer that mirrors the connector pattern
+  // (kind='raw' + tag provenance + archiveRaw deletions), so it dispatches
+  // separately from the single-file `importer` function-pointer slot below.
+  // It writes through api.remember/archiveRaw which are tenant-scoped, so we
+  // resolve the tenant and pass it through. --global is not supported for
+  // vault import (the connector raw-archive path is tenant-local).
+  if (flags['vault']) {
+    const folderPath = String(flags['vault']);
+    if (!fs.existsSync(folderPath) || !fs.statSync(folderPath).isDirectory()) {
+      console.error(`Vault folder not found (or not a directory): ${folderPath}`);
+      process.exit(1);
+    }
+    if (useGlobal) {
+      console.error('hippo import --vault does not support --global (raw rows are tenant-local).');
+      process.exit(1);
+    }
+    const tenantId = resolveTenantId({});
+    const vaultOptions: ImportOptions = {
+      ...importOptions,
+      tenantId,
+      name: flags['name'] ? String(flags['name']) : undefined,
+      scope: flags['scope'] ? String(flags['scope']) : undefined,
+    };
+    const vaultResult = importVault(folderPath, vaultOptions);
+    console.log(`\nImport Vault: ${folderPath}${dryRun ? ' (dry run - no writes)' : ''}`);
+    console.log(`  Notes found:           ${vaultResult.total}`);
+    console.log(`  ${dryRun ? 'Would import:         ' : 'Imported:             '}${vaultResult.imported}`);
+    console.log(`  Skipped (unchanged):   ${vaultResult.skipped}`);
+    console.log(`  ${dryRun ? 'Would archive:        ' : 'Archived (removed):   '}${vaultResult.archived ?? 0}`);
+    console.log(`  Store:                 ${hippoRoot}`);
+    return;
+  }
+
   // Determine which importer to use based on flag
   let filePath: string | undefined;
   let importer: ((fp: string, opts: ImportOptions) => ReturnType<typeof importChatGPT>) | undefined;
@@ -5861,7 +5895,7 @@ function cmdImport(
   }
 
   if (!filePath || !importer) {
-    console.error('Usage: hippo import <--chatgpt|--claude|--cursor|--file|--markdown> <path>');
+    console.error('Usage: hippo import <--chatgpt|--claude|--cursor|--file|--markdown|--vault> <path>');
     process.exit(1);
   }
 
@@ -7723,6 +7757,8 @@ Commands:
     --cursor <path>        Import from .cursorrules or .cursor/rules
     --file <path>          Import from any markdown or text file
     --markdown <path>      Import from structured MEMORY.md / AGENTS.md
+    --vault <path>         Import a markdown-vault FOLDER as kind='raw' notes
+                             (Obsidian/Foam/Dendron). [--name <vault>] [--scope <scope>]
     --dry-run              Preview without writing
     --global               Write to global store ($HIPPO_HOME or ~/.hippo/)
     --tag <tag>            Add extra tag (repeatable)

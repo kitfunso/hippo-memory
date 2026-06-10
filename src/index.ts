@@ -87,6 +87,7 @@ export {
   importCursor,
   importGenericFile,
   importMarkdown,
+  importVault,
   importEntries,
   ImportResult,
   ImportOptions,
