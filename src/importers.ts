@@ -609,15 +609,24 @@ function parseWikilinks(body: string): string[] {
 
 /** Recursively collect `*.md` files under `root`, returning paths relative to
  *  `root` with forward-slash separators (stable artifactRef keys across OSes).
- *  Symlinks are not followed (withFileTypes isSymbolicLink skipped). */
-function collectMarkdownFiles(root: string): string[] {
+ *  Symlinks are not followed. Skips dot-directories (the default `.hippo` store,
+ *  `.git`, `.obsidian`, `.trash`) AND the resolved Hippo store path, so
+ *  re-importing a vault that CONTAINS the store never ingests its own markdown
+ *  mirror files (codex R5 P1: `hippo import --vault .` after `hippo init` in the
+ *  vault would otherwise self-import its mirror rows and grow on every run). */
+function collectMarkdownFiles(root: string, hippoRoot: string): string[] {
   const out: string[] = [];
+  const resolvedHippoRoot = path.resolve(hippoRoot);
   const walk = (dir: string): void => {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     for (const ent of entries) {
       if (ent.isSymbolicLink()) continue;
       const abs = path.join(dir, ent.name);
       if (ent.isDirectory()) {
+        // Skip dot-dirs (config/system, incl. the default `.hippo` store) and
+        // the resolved store path (covers a HIPPO_HOME outside `.hippo`).
+        if (ent.name.startsWith('.')) continue;
+        if (path.resolve(abs) === resolvedHippoRoot) continue;
         walk(abs);
       } else if (ent.isFile() && ent.name.toLowerCase().endsWith('.md')) {
         out.push(path.relative(root, abs).split(path.sep).join('/'));
@@ -700,7 +709,7 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
     }
   }
 
-  const relpaths = collectMarkdownFiles(folderPath);
+  const relpaths = collectMarkdownFiles(folderPath, hippoRoot);
   const seen = new Set<string>();
 
   let total = 0;

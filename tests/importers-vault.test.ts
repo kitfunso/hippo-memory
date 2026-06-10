@@ -463,3 +463,21 @@ describe('importVault (q) — dryRun previews deletions without archiving', () =
     expect(loadAllEntries(tmpDir).filter((e) => e.tags.includes('vault:v')).length).toBe(2); // both still live
   });
 });
+
+describe('importVault (r) — does not import the Hippo store mirror files (codex R5 P1)', () => {
+  it('skips .hippo / dot-dirs when the vault contains the store', () => {
+    writeNote('real-note.md', 'a genuine vault note, long enough to store');
+    // markdown mirror file inside a .hippo store dir under the vault
+    fs.mkdirSync(path.join(vaultDir, '.hippo', 'episodic'), { recursive: true });
+    fs.writeFileSync(path.join(vaultDir, '.hippo', 'episodic', 'mirror.md'), 'self-import mirror content must not be ingested', 'utf8');
+    // and a .git internal markdown
+    fs.mkdirSync(path.join(vaultDir, '.git'), { recursive: true });
+    fs.writeFileSync(path.join(vaultDir, '.git', 'COMMIT_NOTE.md'), 'git internal not a note', 'utf8');
+    const result = importVault(vaultDir, opts({ name: 'v' }));
+    expect(result.total).toBe(1); // only real-note.md
+    expect(result.imported).toBe(1);
+    const rows = loadAllEntries(tmpDir).filter((e) => e.tags.includes('vault:v'));
+    expect(rows.length).toBe(1);
+    expect(rows[0].content).toContain('genuine vault note');
+  });
+});
