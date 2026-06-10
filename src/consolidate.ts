@@ -33,6 +33,12 @@ import { resolveTenantId } from './tenant.js';
 const DECAY_THRESHOLD = 0.05;
 const MERGE_OVERLAP_THRESHOLD = 0.35;  // Jaccard similarity for "related"
 const MERGE_MIN_CLUSTER = 2;            // minimum cluster size to merge
+// Half-life scale for merged source episodics. Demotion must go through
+// half_life_days: calculateStrength() recomputes live strength from
+// last_retrieved/half_life and never reads the stored strength field, so a
+// stored-strength write is inert for ranking and gets overwritten by the
+// next sleep's decay pass anyway.
+const MERGE_SOURCE_HALF_LIFE_FACTOR = 0.3;
 // Contradictions should be gated by content overlap, not shared tags. Tags like
 // `feedback` / `policy` are too coarse and can make unrelated rules look like
 // conflicts before the polarity heuristics run.
@@ -501,10 +507,21 @@ export async function consolidate(
       pendingWrites.push(semantic);
       result.semanticCreated++;
 
-      // Reduce strength of source episodics (they've been compressed into neocortex)
+      // Demote source episodics (they've been compressed into neocortex):
+      // scale half_life_days so they decay sooner while staying recoverable.
+      // Immediate ranking is deliberately unchanged: the 2026-06-10 DAG
+      // slice-1 eval measured that dropping children below a worse-retrieving
+      // summary regresses budget-bounded QA (docs/evals/). The stored
+      // strength is refreshed to the live value so inspect, replay sampling,
+      // and strength-sorted assembly see the truth instead of a fake 0.3.
+      // Mutate in place (not a copy): `cluster` holds the same object
+      // references as `survivors`, and the later detectConflicts(survivors)
+      // pass in this same run must see the post-demotion half-life, or it
+      // can persist conflicts for entries the just-written state excludes.
       for (const e of cluster) {
-        const weakened: MemoryEntry = { ...e, strength: e.strength * 0.3 };
-        pendingWrites.push(weakened);
+        e.half_life_days = Math.max(1, Math.floor(e.half_life_days * MERGE_SOURCE_HALF_LIFE_FACTOR));
+        e.strength = calculateStrength(e, now, decayOpts);
+        pendingWrites.push(e);
       }
     }
   }

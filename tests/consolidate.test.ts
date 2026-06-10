@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { consolidate } from '../src/consolidate.js';
 import { initStore, writeEntry, loadAllEntries, readEntry, listMemoryConflicts } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { createMemory, Layer, calculateStrength } from '../src/memory.js';
 
 let tmpDir: string;
 
@@ -193,6 +193,49 @@ describe('Merge pass', () => {
     const result = await consolidate(tmpDir, { now: new Date() });
     expect(result.merged).toBe(0);
     expect(result.semanticCreated).toBe(0);
+  });
+
+  it('demotes merged source episodics via half_life_days, not the inert stored-strength field', async () => {
+    initStore(tmpDir);
+
+    const e1 = createMemory('cache refresh failure data pipeline error', { layer: Layer.Episodic });
+    const e2 = createMemory('cache refresh failure data pipeline problem', { layer: Layer.Episodic });
+    writeEntry(tmpDir, e1);
+    writeEntry(tmpDir, e2);
+
+    const now = new Date();
+    const result = await consolidate(tmpDir, { now });
+    expect(result.merged).toBe(2);
+
+    const m1 = readEntry(tmpDir, e1.id);
+    const m2 = readEntry(tmpDir, e2.id);
+    expect(m1!.half_life_days).toBe(Math.max(1, Math.floor(e1.half_life_days * 0.3)));
+    expect(m2!.half_life_days).toBe(Math.max(1, Math.floor(e2.half_life_days * 0.3)));
+
+    // Stored strength is a cache of the LIVE value, not a fake 0.3: fresh
+    // entries keep ~full strength now (no immediate ranking cliff)...
+    expect(m1!.strength).toBeGreaterThan(0.9);
+
+    // ...but the demotion is real where ranking actually reads it: a few
+    // days out, the merged source decays below an unmerged peer written at
+    // the same time with the same default half-life.
+    const later = new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000);
+    const unmergedPeer = { ...createMemory('completely unrelated standalone topic'), half_life_days: e1.half_life_days };
+    expect(calculateStrength(m1!, later)).toBeLessThan(calculateStrength(unmergedPeer, later));
+  });
+
+  it('half-life demotion floors at 1 day', async () => {
+    initStore(tmpDir);
+
+    const e1 = { ...createMemory('cache refresh failure data pipeline error', { layer: Layer.Episodic }), half_life_days: 2 };
+    const e2 = { ...createMemory('cache refresh failure data pipeline problem', { layer: Layer.Episodic }), half_life_days: 2 };
+    writeEntry(tmpDir, e1);
+    writeEntry(tmpDir, e2);
+
+    await consolidate(tmpDir, { now: new Date() });
+
+    expect(readEntry(tmpDir, e1.id)!.half_life_days).toBe(1);
+    expect(readEntry(tmpDir, e2.id)!.half_life_days).toBe(1);
   });
 
   it('detects overlapping contradictory memories and records open conflicts', async () => {
