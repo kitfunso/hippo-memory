@@ -17,6 +17,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { fileURLToPath } from 'node:url';
 import { importVault, type ImportOptions } from '../src/importers.js';
 import { loadAllEntries, initStore } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
@@ -24,7 +25,7 @@ import { openHippoDb, closeHippoDb } from '../src/db.js';
 let tmpDir: string; // hippo root (the store)
 let vaultDir: string; // a scratch vault folder we mutate per-test
 
-const FIXTURES = path.join(__dirname, 'fixtures', 'vault-imports');
+const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'vault-imports');
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-vault-store-'));
@@ -479,5 +480,15 @@ describe('importVault (r) — does not import the Hippo store mirror files (code
     const rows = loadAllEntries(tmpDir).filter((e) => e.tags.includes('vault:v'));
     expect(rows.length).toBe(1);
     expect(rows[0].content).toContain('genuine vault note');
+  });
+});
+
+describe('importVault (s) — vault root IS the store imports nothing (codex R6 P2)', () => {
+  it('returns empty when folderPath resolves to hippoRoot', () => {
+    fs.mkdirSync(path.join(tmpDir, 'episodic'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, 'episodic', 'mirror.md'), 'store mirror content here', 'utf8');
+    const result = importVault(tmpDir, opts({ name: 'v' })); // folderPath === hippoRoot
+    expect(result.total).toBe(0);
+    expect(result.imported).toBe(0);
   });
 });

@@ -617,6 +617,13 @@ function parseWikilinks(body: string): string[] {
 function collectMarkdownFiles(root: string, hippoRoot: string): string[] {
   const out: string[] = [];
   const resolvedHippoRoot = path.resolve(hippoRoot);
+  const resolvedRoot = path.resolve(root);
+  // If the vault root IS the store (or lives inside it), there are no vault
+  // notes - only the store's own mirror files (codex R6 P2: `--vault .hippo` or
+  // an SDK caller passing the store dir). Return empty rather than self-import.
+  if (resolvedRoot === resolvedHippoRoot || resolvedRoot.startsWith(resolvedHippoRoot + path.sep)) {
+    return out;
+  }
   const walk = (dir: string): void => {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     for (const ent of entries) {
