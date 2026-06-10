@@ -12,13 +12,13 @@ const stats = await getStats(); // build-time social proof (cached + fallback)
   <div class="pointer-events-none absolute inset-0 -z-10 dot-grid opacity-70"></div>
 
   <div class="mx-auto grid max-w-6xl items-center gap-12 px-5 py-20 lg:grid-cols-2 lg:gap-10 lg:py-28">
-    <div>
+    <div class="min-w-0">
       <span
         class="reveal inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 font-mono text-xs text-zinc-400"
         style="animation-delay: 0ms"
       >
         <span class="h-1.5 w-1.5 rounded-full bg-acc-cyan"></span>
-        npm i -g hippo-memory · v{site.version} · MIT
+        v{site.version} · MIT
       </span>
 
       <h1
@@ -35,18 +35,20 @@ const stats = await getStats(); // build-time social proof (cached + fallback)
         {site.description}
       </p>
 
+      <p class="reveal mt-4 max-w-md text-sm leading-relaxed text-zinc-400" style="animation-delay: 170ms">
+        <span class="font-medium text-zinc-200 tabular-nums">{site.proof.stat}</span> {site.proof.text}
+      </p>
+
       <div class="reveal mt-8 max-w-md" style="animation-delay: 210ms">
         <CopyCommand command={site.installCmd} size="lg" />
       </div>
 
       <div class="reveal mt-5 flex flex-wrap items-center gap-3" style="animation-delay: 280ms">
         <a
-          href={site.links.repo}
-          target="_blank"
-          rel="noopener noreferrer"
+          href="/quickstart/"
           class="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-acc-violet to-acc-cyan px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:opacity-90"
         >
-          Star on GitHub
+          Get started
         </a>
         <a
           href={site.links.docs}
@@ -71,7 +73,7 @@ const stats = await getStats(); // build-time social proof (cached + fallback)
 
       <div class="reveal mt-9" style="animation-delay: 340ms">
         <p class="mb-2 font-mono text-xs uppercase tracking-wider text-zinc-400">Works with</p>
-        <div class="works-marquee relative overflow-hidden" aria-label={`Works with ${worksWith.join(', ')}`}>
+        <div class="works-marquee relative w-full overflow-hidden" aria-label={`Works with ${worksWith.join(', ')}`}>
           <div class="works-track flex w-max">
             <ul class="works-group flex shrink-0 list-none p-0 text-sm text-zinc-400">
               {worksWith.map((tool) => (
@@ -92,7 +94,7 @@ const stats = await getStats(); // build-time social proof (cached + fallback)
       </div>
     </div>
 
-    <div class="reveal lg:pl-4" style="animation-delay: 220ms">
+    <div class="reveal min-w-0 lg:pl-4" style="animation-delay: 220ms">
       <Terminal />
       <p class="mt-3 text-center font-mono text-xs text-zinc-400">an example session</p>
     </div>

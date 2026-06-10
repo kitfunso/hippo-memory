@@ -5,17 +5,21 @@
  * (README v1.7.9) and is deliberately ABSENT. Edit copy here, not in components.
  */
 
+import pkg from '../../../package.json';
+
 export const REPO = 'https://github.com/kitfunso/hippo-memory';
 
 export const site = {
   name: 'hippo',
   pkg: 'hippo-memory',
-  version: '1.23.0', // package.json
+  version: pkg.version, // npm-published hippo-memory version, imported at build time from the repo-root package.json
   // README headline tagline, split for gradient emphasis on the verb.
   tagline: { lead: 'Know what to', accent: 'forget.' },
   // README line 12 (verbatim intent).
   description:
     'A memory layer for AI agents, modeled on the hippocampus. Decay by default, strength through use, provenance on every memory.',
+  // One proof line under the hero subhead (audit: lead with capability proof, not adjectives).
+  proof: { stat: '98.6% R@5', text: 'on LongMemEval with the zero-dependency default.' },
   installCmd: 'npm install -g hippo-memory',
   initCmd: 'hippo init --scan ~',
   links: {
@@ -64,12 +68,12 @@ export const mechanics = [
   {
     title: 'Decay by default',
     metric: '7d half-life',
-    body: 'Every memory fades on a 7-day half-life. Persistence is earned, not assumed.',
+    body: 'Every memory fades on a 7-day half-life. Persistence is earned through use.',
   },
   {
     title: 'Retrieval strengthens',
     metric: '+2d / recall',
-    body: 'Use it or lose it. Each recall extends the half-life. Memories you reach for learn to survive.',
+    body: 'Use it or lose it. Each recall extends the half-life. Memories you reach for survive.',
   },
   {
     title: 'Errors stick',
@@ -115,13 +119,20 @@ export const importsFrom = ['ChatGPT', 'CLAUDE.md', '.cursorrules', 'Slack', 'ma
 
 export const compare = {
   heading: 'Forget by default. Earn persistence through use.',
-  body: "The AI-memory category matured fast in 2026. Hippo's take - bio-decay, strengthen-on-use, outcome-weighted half-lives - is one stance among several. The matrix below is a feature snapshot, not a verdict.",
+  body: 'How hippo compares to the strongest tools in the category, on the features that define a memory lifecycle.',
   sourceHref: `${REPO}#comparison`,
+  sourceLabel: 'Full 10-tool matrix on GitHub',
+  scrollCue: 'scroll for more tools',
+  qualifierNote:
+    'Verdicts are shortened for scanning; the qualifier behind each Yes/No/Partial is in the full matrix.',
 } as const;
 
-/** Full comparison matrix, reproduced VERBATIM from README.md (#comparison),
- *  including the asterisked "not directly comparable" benchmark caveats + footnotes.
- *  cells[] align to systems[] order (Hippo first). Edit the README + here together. */
+/** Full comparison matrix. cells[] are reproduced VERBATIM from README.md (#comparison),
+ *  including the asterisked "not directly comparable" benchmark caveats + footnotes,
+ *  and are asserted against the README by scripts/check-readme-sync.mjs - NEVER edit a
+ *  cells literal without editing the README. display[] (optional) is a render-only short
+ *  verdict per cell that the checker ignores; the home matrix renders display ?? cells.
+ *  cells[]/display[] align to systems[] order (Hippo first). */
 export const comparison = {
   systems: [
     { name: 'Hippo', href: REPO, self: true },
@@ -137,7 +148,7 @@ export const comparison = {
   ],
   rows: [
     { feature: 'Decay by default', cells: ['Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No'] },
-    { feature: 'Retrieval strengthening', cells: ['Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'Partial (recall tuning)', 'No', 'Partial (Skill Memory distills patterns)'] },
+    { feature: 'Retrieval strengthening', cells: ['Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'Partial (recall tuning)', 'No', 'Partial (Skill Memory distills patterns)'], display: ['Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'Partial', 'No', 'Partial'] },
     { feature: 'Reward-proportional decay', cells: ['Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No'] },
     { feature: 'Hybrid search (BM25 + embeddings)', cells: ['Yes', 'Embeddings + spatial', 'Embeddings only', 'No', 'Yes (vec + rerank + graph)', 'Yes (graph + vec)', '?', 'Yes (GraphRAG)', 'Yes (vector + full-text)', 'Yes (mRAG, multi-modal)'] },
     { feature: 'Schema acceleration / knowledge graph', cells: ['Yes (schema)', 'No', 'No', 'No', 'Yes (typed KG, self-wiring)', 'Yes (temporal KG)', 'No', 'Yes (auto-ontologies)', 'No (typed claims)', 'Yes (hierarchical: user/group/agent)'] },
@@ -148,11 +159,11 @@ export const comparison = {
     { feature: 'Confidence tiers', cells: ['Yes', 'No', 'No', 'No', 'No (typed facts)', 'No', 'No', 'No', 'No', 'No'] },
     { feature: 'Spatial organization', cells: ['No', 'Yes (wings/halls/rooms)', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No'] },
     { feature: 'Lossless compression', cells: ['No', 'Yes (AAAK, 30x)', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No'] },
-    { feature: 'Cross-tool import (ChatGPT/Claude/Cursor)', cells: ['Yes', 'No', 'No', 'No', 'Partial (data sources)', '?', 'No', 'Partial (28 data sources)', 'No (Git ops)', 'Partial (mRAG: PDFs/images/URLs)'] },
+    { feature: 'Cross-tool import (ChatGPT/Claude/Cursor)', cells: ['Yes', 'No', 'No', 'No', 'Partial (data sources)', '?', 'No', 'Partial (28 data sources)', 'No (Git ops)', 'Partial (mRAG: PDFs/images/URLs)'], display: ['Yes', 'No', 'No', 'No', 'Partial', '?', 'No', 'Partial', 'No', 'Partial'] },
     { feature: 'Auto-hook install', cells: ['Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No'] },
     { feature: 'MCP server', cells: ['Yes', 'Yes', 'No', 'No', 'Yes (stdio + HTTP/OAuth)', 'Partial (managed)', 'Yes (via Letta Code)', 'Yes (first-party Claude/LangGraph)', 'Yes', '?'] },
-    { feature: 'Zero runtime deps', cells: ['Yes', 'No (ChromaDB)', 'No', 'No', 'No (PGLite or PG+pgvector)', 'No (managed service)', 'No (Python deps)', 'No (Python deps)', 'Yes (single Rust binary)', 'No (managed + OSS)'] },
-    { feature: 'LongMemEval (best published)', cells: ['98.6% default / 99.8% voyage R@5 (s_cleaned, per-haystack)*', '96.6% raw / 100% reranked R@5', '~49-85% R@5', 'N/A', '97.6-97.9% R@5 (s_cleaned*)', 'N/A (LoCoMo 80.3%)', 'N/A', 'N/A', '88.78% overall accuracy w/ reader**', '83.00% overall** (LoCoMo 93.05%, HaluMem 93.04%)'] },
+    { feature: 'Zero runtime deps', cells: ['Yes', 'No (ChromaDB)', 'No', 'No', 'No (PGLite or PG+pgvector)', 'No (managed service)', 'No (Python deps)', 'No (Python deps)', 'Yes (single Rust binary)', 'No (managed + OSS)'], display: ['Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'Yes', 'No'] },
+    { feature: 'LongMemEval (best published)', cells: ['98.6% default / 99.8% voyage R@5 (s_cleaned, per-haystack)*', '96.6% raw / 100% reranked R@5', '~49-85% R@5', 'N/A', '97.6-97.9% R@5 (s_cleaned*)', 'N/A (LoCoMo 80.3%)', 'N/A', 'N/A', '88.78% overall accuracy w/ reader**', '83.00% overall** (LoCoMo 93.05%, HaluMem 93.04%)'], display: ['98.6% R@5*', '96.6% R@5', '~49-85% R@5', 'N/A', '97.6% R@5*', 'N/A', 'N/A', 'N/A', '88.78%**', '83.00%**'] },
     { feature: 'Git-friendly', cells: ['Yes', 'No', 'No', 'Yes', 'Yes', 'No', 'No', 'No', 'Yes (Git is the model)', '?'] },
     { feature: 'Framework agnostic', cells: ['Yes', 'Yes', 'Partial', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes'] },
     { feature: 'License', cells: ['MIT', '(open)', 'Apache-2.0', '(open)', 'MIT', 'Apache-2.0 (community)', 'Apache-2.0', 'MIT (core)', 'Apache-2.0', 'Apache-2.0 (OSS) + cloud'] },
@@ -162,7 +173,7 @@ export const comparison = {
     "** Different metric: Memoria's 88.78% and EverMind's 83% are reported as overall accuracy with a reader LLM, not retrieval R@5. Higher denominator + LLM helps. Not directly comparable to retrieval-only R@5 numbers above.",
   ],
   closing:
-    'Different tools answer different questions. Mem0 and Basic Memory implement "save everything, search later." MemPalace organizes spatially. gbrain, Zep, and Cognee extract typed entities into a knowledge graph. Letta lets the agent edit its own memory blocks. Memoria is Git-style version control over memory. EverMind is self-evolving Skill Memory. Hippo implements "forget by default, earn persistence through use." Complementary takes, not a single-axis ranking.',
+    'Different tools answer different questions. Mem0 and Basic Memory implement "save everything, search later." MemPalace organizes spatially. gbrain, Zep, and Cognee extract typed entities into a knowledge graph. Letta lets the agent edit its own memory blocks. Memoria is Git-style version control over memory. EverMind is self-evolving Skill Memory. Hippo implements "forget by default, earn persistence through use."',
 } as const;
 
 /** Get started = quickstart + the zero-config auto-install differentiator (README L97/L621). */
@@ -200,6 +211,6 @@ export const faq = [
   { q: 'Does it need embeddings?', a: 'No. Recall runs on BM25 out of the box (74% R@5 on LongMemEval, BM25 only). Embeddings are an optional dependency for hybrid scoring; nothing is required at runtime.' },
   { q: 'Where does my data go?', a: 'Nowhere. Everything is a local SQLite store with markdown mirrors: 0 outbound HTTP on the ingestion smoke, proven by a fetch spy. No cloud, no account, no telemetry.' },
   { q: 'Which agents does it work with?', a: 'hippo init auto-installs hooks for Claude Code, Codex, Cursor, OpenClaw, and OpenCode, and exposes an MCP server for any MCP client (Cursor, Windsurf, Cline, Claude Desktop).' },
-  { q: 'How is hippo different from mem0, Letta, or Zep?', a: 'hippo optimizes the memory lifecycle, not just storage or retrieval. mem0 and similar tools save and search; Zep and Cognee extract entities into a knowledge graph; Letta has the agent edit its own memory blocks. hippo forgets by default and earns persistence through use, with reward-weighted decay, conflict detection, and sleep consolidation, and it runs locally with zero runtime dependencies.' },
-  { q: 'Is it production-ready?', a: 'It is MIT-licensed at v1.23.0, with 926 tests against a real database and zero mocks. Multi-tenant isolation is proven by a negative test.' },
+  { q: 'How is hippo different from mem0, Letta, or Zep?', a: 'hippo optimizes the full memory lifecycle. mem0 and similar tools save and search; Zep and Cognee extract entities into a knowledge graph; Letta has the agent edit its own memory blocks. hippo forgets by default and earns persistence through use, with reward-weighted decay, conflict detection, and sleep consolidation, and it runs locally with zero runtime dependencies.' },
+  { q: 'Is it production-ready?', a: `It is MIT-licensed at v${pkg.version}, with 926 tests against a real database and zero mocks. Multi-tenant isolation is proven by a negative test.` },
 ] as const;

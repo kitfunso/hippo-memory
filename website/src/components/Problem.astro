@@ -2,9 +2,9 @@
 import { problem } from '../content/site';
 ---
 
-<section class="relative border-t border-white/5 bg-[#0a0a0f]">
+<section class="relative border-t border-white/5 bg-white/[0.02]">
   <div class="mx-auto max-w-6xl px-5 py-24">
-    <div class="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:gap-16" data-reveal>
+    <div class="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:gap-16">
       <div>
         <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">{problem.kicker}</p>
         <h2 class="mt-4 max-w-xl text-3xl leading-tight sm:text-4xl">
@@ -16,11 +16,11 @@ import { problem } from '../content/site';
       </div>
 
       <!-- the "saw it four times" motif: repeated faded failures, one finally remembered -->
-      <div class="flex min-w-0 items-center">
+      <div class="flex min-w-0 items-center" data-reveal>
         <div class="w-full min-w-0 space-y-2.5 font-mono text-sm" aria-hidden="true">
           {[1, 2, 3].map((n) => (
             <div class="flex items-center gap-3 rounded-lg border border-white/5 bg-white/[0.015] px-4 py-3 text-zinc-400">
-              <span class="text-rose-400/40">✗</span>
+              <span class="text-rose-400/60">✗</span>
               <span class="min-w-0 flex-1 truncate">deploy failed: forgot migrations</span>
               <span class="text-zinc-400">run #{n}</span>
             </div>
@@ -28,7 +28,7 @@ import { problem } from '../content/site';
           <div class="ring-grad flex items-center gap-3 rounded-lg bg-white/[0.03] px-4 py-3 text-zinc-200">
             <span class="text-emerald-400">✓</span>
             <span class="min-w-0 flex-1 truncate">remembered · surfaced before run #4</span>
-            <span class="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-300">[verified]</span>
+            <span class="rounded bg-emerald-500/15 px-1.5 py-0.5 text-xs text-emerald-300">[verified]</span>
           </div>
         </div>
       </div>

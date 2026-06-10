@@ -14,7 +14,7 @@ const pad = size === 'lg' ? 'px-5 py-4 text-base' : 'px-4 py-3 text-sm';
     type="button"
     data-copy={command}
     aria-label={`Copy command: ${command}`}
-    class="shrink-0 rounded-md border border-white/10 px-3 py-1.5 text-xs text-zinc-400 transition hover:border-acc-violet/50 hover:text-zinc-100 focus-visible:text-zinc-100"
+    class="relative shrink-0 rounded-md border border-white/10 px-3 py-1.5 text-xs text-zinc-400 transition after:absolute after:-inset-2 after:content-[''] hover:border-acc-violet/50 hover:text-zinc-100 focus-visible:text-zinc-100"
   >
     <span data-copy-label>Copy</span>
   </button>

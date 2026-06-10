@@ -3,22 +3,22 @@ import { site } from '../content/site';
 import CopyCommand from './CopyCommand.astro';
 ---
 
-<section class="relative overflow-hidden border-t border-white/5 bg-[#0a0a0f]">
+<section class="relative overflow-hidden border-t border-white/5 bg-white/[0.02]">
   <div class="pointer-events-none absolute inset-0 -z-10 hero-glow opacity-60"></div>
-  <div class="mx-auto max-w-3xl px-5 py-28 text-center" data-reveal>
-    <h2 class="text-4xl leading-tight sm:text-5xl">
+  <div class="mx-auto max-w-3xl px-5 py-28 text-center">
+    <h2 class="text-3xl leading-tight sm:text-4xl">
       One command. <span class="text-gradient">Every repo gets memory.</span>
     </h2>
     <p class="mx-auto mt-5 max-w-lg text-lg leading-relaxed text-zinc-400">
       Zero config. SQLite under the hood, zero runtime deps, works with every CLI agent you have.
     </p>
 
-    <div class="mx-auto mt-9 max-w-lg space-y-3 text-left">
+    <div class="mx-auto mt-9 max-w-lg space-y-3 text-left" data-reveal>
       <CopyCommand command={site.installCmd} size="lg" />
       <CopyCommand command={site.initCmd} size="lg" />
     </div>
 
-    <div class="mt-7 flex flex-wrap justify-center gap-3">
+    <div class="mt-7 flex flex-wrap justify-center gap-3" data-reveal>
       <a
         href={site.links.repo}
         target="_blank"

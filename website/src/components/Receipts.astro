@@ -2,9 +2,9 @@
 import { receipts, importsFrom } from '../content/site';
 ---
 
-<section id="receipts" class="relative scroll-mt-20 border-t border-white/5 bg-[#0a0a0f]">
+<section id="receipts" class="relative scroll-mt-20 border-t border-white/5 bg-white/[0.02]">
   <div class="mx-auto max-w-6xl px-5 py-24">
-    <div class="flex flex-wrap items-end justify-between gap-4" data-reveal>
+    <div class="flex flex-wrap items-end justify-between gap-4">
       <div class="max-w-xl">
         <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">Receipts</p>
         <h2 class="mt-4 text-3xl leading-tight sm:text-4xl">Numbers, not adjectives.</h2>
@@ -19,18 +19,19 @@ import { receipts, importsFrom } from '../content/site';
           target="_blank"
           rel="noopener noreferrer"
           class="glass glass-hover group flex flex-col rounded-2xl p-6"
+          data-reveal
         >
-          <span class="font-mono text-5xl font-semibold tracking-tight text-gradient">{r.stat}</span>
+          <span class="font-mono text-[clamp(1.75rem,8vw,3rem)] font-semibold tracking-tight text-gradient">{r.stat}</span>
           <span class="mt-3 text-sm font-medium text-zinc-200">{r.label}</span>
           <span class="mt-2 text-xs leading-relaxed text-zinc-400">{r.note}</span>
-          <span class="mt-4 inline-flex items-center gap-1 font-mono text-[11px] text-zinc-400 transition group-hover:text-acc-cyan">
+          <span class="mt-4 inline-flex items-center gap-1 font-mono text-xs text-zinc-400 transition group-hover:text-acc-cyan">
             source ↗
           </span>
         </a>
       ))}
     </div>
 
-    <div class="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-sm text-zinc-400">
+    <div class="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-sm text-zinc-400" data-reveal>
       <span class="text-zinc-400">imports from</span>
       {importsFrom.map((src) => (
         <span class="rounded border border-white/8 bg-white/[0.02] px-2 py-0.5 text-zinc-400">{src}</span>

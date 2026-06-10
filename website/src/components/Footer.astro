@@ -24,19 +24,19 @@ const footerLinks = [
       <div class="max-w-sm">
         <Logo gid="ft" />
         <p class="mt-3 text-sm leading-relaxed text-zinc-400">
-          A memory layer for AI agents, modeled on the hippocampus. The secret to good memory isn't
-          remembering more. It's knowing what to forget.
+          A memory layer for AI agents, modeled on the hippocampus. Good memory is knowing what
+          to forget.
         </p>
       </div>
       <div class="flex flex-wrap gap-x-12 gap-y-6">
-        <nav class="flex flex-col gap-y-2 text-sm">
+        <nav aria-label="Site pages" class="flex flex-col gap-y-2 text-sm">
           {siteLinks.map((l) => (
             <a href={l.href} class="text-zinc-400 transition hover:text-zinc-100">
               {l.label}
             </a>
           ))}
         </nav>
-        <nav class="flex flex-col gap-y-2 text-sm">
+        <nav aria-label="Resources" class="flex flex-col gap-y-2 text-sm">
           {footerLinks.map((l) => (
             <a href={l.href} target="_blank" rel="noopener noreferrer" class="text-zinc-400 transition hover:text-zinc-100">
               {l.label}

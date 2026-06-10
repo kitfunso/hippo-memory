@@ -1,6 +1,7 @@
 ---
 import '../styles/global.css';
 import { site, faq } from '../content/site';
+import BackgroundFx from '../components/BackgroundFx.astro';
 
 interface Props {
   title?: string;
@@ -101,6 +102,7 @@ const beaconToken = import.meta.env.PUBLIC_CF_BEACON_TOKEN ?? 'dca34bc57a3946d08
     >
       Skip to content
     </a>
+    <BackgroundFx />
     <slot />
     {beaconToken && (
       <script

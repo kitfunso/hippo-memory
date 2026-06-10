@@ -1,0 +1,215 @@
+---
+// Synapse-network background (DESIGN.md "Background layer"): a fixed canvas at
+// z-index -1 behind every page. Drifting neuron dots with depth parallax, faint
+// links between close pairs, pulses fired by scroll velocity. Link alpha stays
+// <= 9% so the AA contrast floor holds on top of it. Base styles live in
+// global.css (#bg-fx); prefers-reduced-motion gets a single static frame.
+---
+
+<canvas id="bg-fx" aria-hidden="true"></canvas>
+
+<script>
+  function initBackgroundFx() {
+    const canvas = document.getElementById('bg-fx');
+    if (!(canvas instanceof HTMLCanvasElement)) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const CYAN = '34,211,238';
+    const VIOLET = '167,139,250';
+    const LINK = 120; // px: pairs closer than this get a connecting line
+    const MAX_PULSES = 10;
+
+    interface SynapseNode {
+      x: number;
+      y: number;
+      z: number; // depth 0.35-1.0: drives parallax, size, and alpha
+      vx: number;
+      vy: number;
+      color: string;
+      twinkle: number;
+    }
+
+    let nodes: SynapseNode[] = [];
+    let pulses: Array<{ i: number; j: number; progress: number }> = [];
+    let width = 0;
+    let height = 0;
+    let scrollOffset = window.scrollY;
+    let lastScroll = scrollOffset;
+    let velocity = 0;
+    let rafId = 0;
+    let running = false;
+
+    const wrap = (value: number, max: number) => ((value % max) + max) % max;
+
+    // Density scales with viewport area, capped so the O(n^2) link pass stays cheap.
+    const seedNodes = () => {
+      const count = Math.min(110, Math.max(48, Math.floor((width * height) / 16000)));
+      nodes = [];
+      for (let i = 0; i < count; i++) {
+        nodes.push({
+          x: Math.random() * width,
+          y: Math.random() * (height + 80),
+          z: 0.35 + Math.random() * 0.65,
+          vx: (Math.random() - 0.5) * 0.12,
+          vy: (Math.random() - 0.5) * 0.12,
+          color: Math.random() < 0.72 ? CYAN : VIOLET,
+          twinkle: Math.random() * Math.PI * 2,
+        });
+      }
+      pulses = []; // pulse endpoint indexes are invalid after a re-seed
+    };
+
+    const drawFrame = () => {
+      ctx.clearRect(0, 0, width, height);
+      velocity = velocity * 0.9 + Math.abs(scrollOffset - lastScroll) * 0.1;
+      lastScroll = scrollOffset;
+
+      // project nodes: slow drift + depth parallax against scroll
+      const pts: Array<[number, number, SynapseNode]> = [];
+      for (const node of nodes) {
+        node.x += node.vx;
+        node.y += node.vy;
+        node.twinkle += 0.012;
+        const px = wrap(node.x, width);
+        const py = wrap(node.y - scrollOffset * 0.08 * node.z, height + 80) - 40;
+        pts.push([px, py, node]);
+      }
+
+      // links between close pairs; O(n^2) is fine at n <= 110
+      ctx.lineWidth = 1;
+      for (let i = 0; i < pts.length; i++) {
+        for (let j = i + 1; j < pts.length; j++) {
+          const dx = pts[i][0] - pts[j][0];
+          const dy = pts[i][1] - pts[j][1];
+          const d2 = dx * dx + dy * dy;
+          if (d2 < LINK * LINK) {
+            const alpha = (1 - Math.sqrt(d2) / LINK) * 0.09;
+            ctx.strokeStyle = `rgba(120,160,210,${alpha.toFixed(3)})`;
+            ctx.beginPath();
+            ctx.moveTo(pts[i][0], pts[i][1]);
+            ctx.lineTo(pts[j][0], pts[j][1]);
+            ctx.stroke();
+          }
+        }
+      }
+
+      for (const [px, py, node] of pts) {
+        const alpha = 0.16 + 0.22 * node.z + 0.1 * Math.sin(node.twinkle);
+        ctx.fillStyle = `rgba(${node.color},${Math.max(0.05, alpha).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(px, py, 0.8 + 1.2 * node.z, 0, 6.2832);
+        ctx.fill();
+      }
+
+      // scroll velocity fires pulses; a rare ambient fire keeps the field alive
+      // at rest. Guarded on `running` so the reduced-motion static frame is calm.
+      if (running) {
+        const want = velocity > 2 ? 2 : Math.random() < 0.012 ? 1 : 0;
+        for (let k = 0; k < want && pulses.length < MAX_PULSES; k++) {
+          const i = (Math.random() * pts.length) | 0;
+          let best = -1;
+          let bestD2 = LINK * LINK;
+          for (let j = 0; j < pts.length; j++) {
+            if (j === i) continue;
+            const dx = pts[i][0] - pts[j][0];
+            const dy = pts[i][1] - pts[j][1];
+            const d2 = dx * dx + dy * dy;
+            if (d2 < bestD2) {
+              bestD2 = d2;
+              best = j;
+            }
+          }
+          if (best >= 0) pulses.push({ i, j: best, progress: 0 });
+        }
+      }
+
+      for (let k = pulses.length - 1; k >= 0; k--) {
+        const pulse = pulses[k];
+        pulse.progress += 0.035;
+        if (pulse.progress >= 1 || pulse.i >= pts.length || pulse.j >= pts.length) {
+          pulses.splice(k, 1);
+          continue;
+        }
+        const [ax, ay] = pts[pulse.i];
+        const [bx, by] = pts[pulse.j];
+        // endpoints wrapped to opposite edges: kill the pulse instead of streaking
+        if (Math.abs(ax - bx) > LINK * 1.5 || Math.abs(ay - by) > LINK * 1.5) {
+          pulses.splice(k, 1);
+          continue;
+        }
+        const x = ax + (bx - ax) * pulse.progress;
+        const y = ay + (by - ay) * pulse.progress;
+        const fade = Math.sin(pulse.progress * Math.PI);
+        const glow = ctx.createRadialGradient(x, y, 0, x, y, 7);
+        glow.addColorStop(0, `rgba(103,232,249,${(0.5 * fade).toFixed(3)})`);
+        glow.addColorStop(1, 'rgba(103,232,249,0)');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(x, y, 7, 0, 6.2832);
+        ctx.fill();
+      }
+    };
+
+    const frame = () => {
+      drawFrame();
+      if (running) rafId = requestAnimationFrame(frame);
+    };
+
+    const start = () => {
+      if (running) return;
+      running = true;
+      lastScroll = scrollOffset; // no velocity spike from a stale delta
+      rafId = requestAnimationFrame(frame);
+    };
+
+    const stop = () => {
+      if (!running) return;
+      running = false;
+      cancelAnimationFrame(rafId);
+    };
+
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+    // Reduced motion: one static frame, no rAF loop. Re-applied when the
+    // preference changes at runtime, and on visibilitychange below.
+    const applyMotionPreference = () => {
+      if (motionQuery.matches) {
+        stop();
+        drawFrame();
+      } else if (!document.hidden) {
+        start();
+      }
+    };
+
+    const resize = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      seedNodes(); // density is area-dependent: redistribute, don't stretch
+      if (!running) drawFrame(); // keep the static frame fresh under reduced motion
+    };
+
+    window.addEventListener(
+      'scroll',
+      () => {
+        scrollOffset = window.scrollY;
+      },
+      { passive: true }
+    );
+    window.addEventListener('resize', resize, { passive: true });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) stop();
+      else applyMotionPreference();
+    });
+    motionQuery.addEventListener('change', applyMotionPreference);
+
+    resize(); // seeds + paints the first frame
+    applyMotionPreference();
+  }
+
+  initBackgroundFx();
+</script>

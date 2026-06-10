@@ -57,9 +57,14 @@ const metaDescription =
       });
 
       // scroll-reveal: reveal [data-reveal] blocks as they enter view (.js gate hides
-      // them first; no-JS / no-IO shows everything).
+      // them first; no-JS / no-IO shows everything). Reveals are applied to INNER
+      // blocks only (never section roots or h2 wrappers), and the fail-open below
+      // force-shows anything still hidden so print/screenshot/preview never blanks.
       var reveals = document.querySelectorAll('[data-reveal]');
       if (!reveals.length) return;
+      setTimeout(function () {
+        reveals.forEach(function (el) { el.classList.add('is-visible'); });
+      }, 1500);
       if (!('IntersectionObserver' in window)) {
         reveals.forEach(function (el) { el.classList.add('is-visible'); });
         return;
