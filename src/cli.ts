@@ -5954,7 +5954,11 @@ const HOOKS: Record<string, { file: string; content: string; description: string
     content: `
 ## Project Memory (Hippo)
 
-Before starting work, load relevant context:
+Pinned rules and recent writes auto-inject at every prompt via the installed
+UserPromptSubmit hook; never re-run that part manually. At the START of a
+task (not per prompt), additionally load task-specific context: git-aware
+recall over the full store that per-prompt injection does not cover. Also
+run it if the hook is not installed:
 \`\`\`bash
 hippo context --auto --budget 1500
 \`\`\`
