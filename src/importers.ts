@@ -610,8 +610,8 @@ function parseWikilinks(body: string): string[] {
 /** Recursively collect `*.md` files under `root`, returning paths relative to
  *  `root` with forward-slash separators (stable artifactRef keys across OSes).
  *  Symlinks are not followed. Skips dot-directories (the default `.hippo` store,
- *  `.git`, `.obsidian`, `.trash`) AND the resolved Hippo store path during the
- *  walk, so re-importing a vault that CONTAINS the store never ingests its own
+ *  `.git`, `.obsidian`, `.trash`) AND the canonicalized Hippo store path during
+ *  the walk, so re-importing a vault that CONTAINS the store never ingests its own
  *  markdown mirror files (codex R5 P1: `hippo import --vault .` after `hippo
  *  init` in the vault would otherwise self-import its mirror rows and grow on
  *  every run). The root-IS-the-store case is handled one level up in
@@ -619,7 +619,11 @@ function parseWikilinks(body: string): string[] {
  *  the deletion-sync an empty scan that mass-archives every live row (codex R8). */
 function collectMarkdownFiles(root: string, hippoRoot: string): string[] {
   const out: string[] = [];
-  const resolvedHippoRoot = path.resolve(hippoRoot);
+  // Canonicalize (realpath) so a non-dot HIPPO_HOME store nested in the vault is
+  // skipped even when hippoRoot is an aliased path (junction / Windows case
+  // variant); path.resolve would miss it and self-import the store's mirror
+  // files (codex R9 follow-up: same gap as the importVault guard, sibling site).
+  const resolvedHippoRoot = realpathOrResolve(hippoRoot);
   const walk = (dir: string): void => {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     for (const ent of entries) {
@@ -627,9 +631,9 @@ function collectMarkdownFiles(root: string, hippoRoot: string): string[] {
       const abs = path.join(dir, ent.name);
       if (ent.isDirectory()) {
         // Skip dot-dirs (config/system, incl. the default `.hippo` store) and
-        // the resolved store path (covers a HIPPO_HOME outside `.hippo`).
+        // the canonicalized store path (covers a HIPPO_HOME outside `.hippo`).
         if (ent.name.startsWith('.')) continue;
-        if (path.resolve(abs) === resolvedHippoRoot) continue;
+        if (realpathOrResolve(abs) === resolvedHippoRoot) continue;
         walk(abs);
       } else if (ent.isFile() && ent.name.toLowerCase().endsWith('.md')) {
         out.push(path.relative(root, abs).split(path.sep).join('/'));

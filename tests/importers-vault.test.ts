@@ -678,3 +678,79 @@ describe('importVault (u) — importing the store path preserves existing vault 
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// (w) a NON-dot store nested in the vault is skipped even when hippoRoot is an
+//     aliased path (junction / Windows case variant). The R9 fix canonicalized
+//     the importVault self-store guard but NOT this sibling walk-skip, so an
+//     aliased hippoRoot let the walk descend into the store and self-import its
+//     markdown mirror files (compensating-review P1, codex R9 follow-up).
+// ---------------------------------------------------------------------------
+
+describe('importVault (w) — nested non-dot store skipped under an aliased hippoRoot', () => {
+  it('does not self-import store mirror files when hippoRoot is a junction to a nested store', () => {
+    // A non-dot store dir INSIDE the vault (the HIPPO_HOME-inside-vault config
+    // the collectMarkdownFiles JSDoc claims to support).
+    const realStore = path.join(vaultDir, 'Store');
+    fs.mkdirSync(realStore, { recursive: true });
+
+    // Reach that store via a junction, so path.resolve(alias) !== the on-disk
+    // path (exactly like a case-variant HIPPO_HOME on Windows). Only realpath
+    // canonicalizes the alias back to realStore.
+    const aliasParent = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-vault-hr-'));
+    const hippoAlias = path.join(aliasParent, 'store-alias');
+    let created = true;
+    try {
+      fs.symlinkSync(realStore, hippoAlias, 'junction');
+    } catch {
+      created = false; // no privilege / unsupported -> can't assert
+    }
+    try {
+      if (created) {
+        initStore(hippoAlias);
+        // A mirror-like markdown file living inside the nested store.
+        fs.mkdirSync(path.join(realStore, 'episodic'), { recursive: true });
+        fs.writeFileSync(
+          path.join(realStore, 'episodic', 'mirror.md'),
+          'store mirror content that must NOT be self-imported as a vault note',
+          'utf8',
+        );
+        writeNote('realnote.md', '# Real\na genuine vault note worth importing');
+
+        const result = importVault(vaultDir, {
+          hippoRoot: hippoAlias,
+          tenantId: 'default',
+          name: 'v',
+        });
+        // Only the real note imports; the nested store's mirror file is skipped.
+        expect(result.total).toBe(1);
+        expect(result.imported).toBe(1);
+        const rows = loadAllEntries(hippoAlias, 'default').filter((e) =>
+          e.tags.includes('vault:v'),
+        );
+        expect(rows.length).toBe(1);
+        expect(rows[0].artifact_ref).toBe('vault:v:realnote.md');
+        expect(
+          rows.some((e) => (e.artifact_ref ?? '').includes('Store/')),
+        ).toBe(false);
+      }
+    } finally {
+      // Remove ONLY the junction link, never recurse into realStore (which lives
+      // under vaultDir and is cleaned by afterEach).
+      try {
+        fs.unlinkSync(hippoAlias);
+      } catch {
+        try {
+          fs.rmdirSync(hippoAlias);
+        } catch {
+          /* link already gone */
+        }
+      }
+      try {
+        fs.rmdirSync(aliasParent);
+      } catch {
+        /* leave the empty temp dir for the OS to reap */
+      }
+    }
+  });
+});
