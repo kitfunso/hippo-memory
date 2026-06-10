@@ -44,7 +44,7 @@ import { fileURLToPath } from 'node:url';
 import { createMemory } from '../../dist/memory.js';
 import { writeEntry, loadAllEntries, initStore } from '../../dist/store.js';
 import { embedMemory, isEmbeddingAvailable, loadEmbeddingIndex } from '../../dist/embeddings.js';
-import { physicsSearch } from '../../dist/search.js';
+import { physicsSearch, substituteDagSummaries } from '../../dist/search.js';
 import { consolidate } from '../../dist/consolidate.js';
 import { resetAllPhysicsState } from '../../dist/physics-state.js';
 import { openHippoDb, closeHippoDb } from '../../dist/db.js';
@@ -74,6 +74,10 @@ const NUM_SEEDS = parseInt(flag('--seeds', '20'), 10);
 const NUM_FACTS = parseInt(flag('--facts', '6'), 10);
 const DUPES = parseInt(flag('--dupes', '3'), 10);
 const BUDGET = parseInt(flag('--budget', '1500'), 10);
+// DAG slice 1 — A/B control: set LSE_NO_SUBSTITUTE=1 to disable summary->children
+// substitution at BOTH sites (physicsSearch pack + the global repack), isolating
+// the compression/dag-node effect from the substitution effect. Default ON.
+const SUBSTITUTE = !process.env.LSE_NO_SUBSTITUTE;
 
 for (const cp of CHECKPOINTS) {
   if (!(cp in CHECKPOINT_COUNTS)) {
@@ -277,6 +281,16 @@ async function unionPerFact(entries, B, labels, root) {
   for (const lab of labels) {
     const res = await physicsSearch(lab.topic, entries, {
       hippoRoot: root, physicsConfig: PC, budget: B, minResults: 1,
+      // DAG slice 1: neutralize the L2 ranking knobs on the eval path so the
+      // dense compressor output (the source-level fix) is what makes the
+      // summary compete on relevance — not a deboost/freshness thumb on the
+      // scale. summaryDeboost:1.0 disables the deboost; summaryFreshness:false
+      // disables the wall-clock-seeded boost (also keeps the run deterministic).
+      // Per-fact substitution is left ON (default) but the BINDING substitution
+      // is the global repack below (a child dropped here can re-enter via
+      // another fact's call; the global repack is the single measured context).
+      summaryDeboost: 1.0, summaryFreshness: false,
+      substituteSummaryChildren: SUBSTITUTE,
     });
     for (let i = 0; i < res.length; i++) {
       const id = res[i].entry.id;
@@ -290,7 +304,14 @@ async function unionPerFact(entries, B, labels, root) {
   // (one B-token context, NOT facts x B - the prior union returned ~facts*B). The
   // continue semantics (skip an over-budget item, keep filling with smaller ones)
   // match physicsSearch's own budget loop (search.ts:768).
-  const ranked = [...seen.values()].sort((a, b) => a.bestRank - b.bestRank);
+  const rankedAll = [...seen.values()].sort((a, b) => a.bestRank - b.bestRank);
+  // DAG slice 1 — THE BINDING substitution site: apply substituteDagSummaries to
+  // the global union BEFORE the pack loop. Without this, a child dropped on fact
+  // F's per-fact call is re-admitted via fact G (the round-2 crit). Applied
+  // equally to every condition: a no-op for naive/recency/no-lifecycle (no
+  // summaries), fires only for hippo-full. The summary occupies ONE slot where
+  // its >=2 redundant children would have occupied K — that IS the DAG's value.
+  const ranked = SUBSTITUTE ? substituteDagSummaries(rankedAll, { minChildren: 2 }) : rankedAll;
   const ctx = [];
   let used = 0;
   for (const v of ranked) {

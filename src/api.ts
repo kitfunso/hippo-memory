@@ -1477,7 +1477,14 @@ export function drillDown(
     const nextFrontier: string[] = [];
     for (const parentId of frontier) {
       const kids = loadChildrenOf(ctx.hippoRoot, parentId, ctx.tenantId);
-      const eligibleKids = kids.filter((c) => passesScopeFilterForRecall(c.scope ?? null, undefined));
+      // DAG slice 1 (codex P2): exclude superseded children at READ time so a
+      // stale answer never resurfaces via drillDown in the window after
+      // supersede() marks the parent dirty but before the rebuild detaches it
+      // (or if the rebuild fails). The rebuild-time detach (dag.ts) is the
+      // permanent cleanup; this is the read-path tombstone guard.
+      const eligibleKids = kids.filter(
+        (c) => !c.superseded_by && passesScopeFilterForRecall(c.scope ?? null, undefined),
+      );
       for (const k of eligibleKids) {
         if (visited.has(k.id)) continue;
         visited.add(k.id);

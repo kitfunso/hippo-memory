@@ -301,6 +301,55 @@ export function isDagSummary(entry: MemoryEntry): boolean {
 }
 
 /**
+ * DAG slice 1 — token-budget substitution primitive.
+ *
+ * Given a list of final-assembly candidate entries, DROP any child whose
+ * dag-summary parent (`dag_parent_id`) is ALSO present in the candidates AND
+ * has at least `minChildren` of its children present. The (smaller) summary
+ * then substitutes for the redundant children under a fixed token budget; the
+ * dropped children stay retrievable via drillDown (DB-backed).
+ *
+ * PURE + DETERMINISTIC: no side effects, no Date/random, stable input order
+ * preserved. Generic over any `{ entry: MemoryEntry }` shape so both
+ * physicsSearch's SearchResult[] and the eval's union rows can flow through it.
+ *
+ * Applied equally at EVERY final-assembly site (physicsSearch final pack and
+ * the eval's unionPerFact global repack); a no-op for candidate sets with no
+ * dag-summaries (naive / recency / no-lifecycle conditions).
+ */
+export function substituteDagSummaries<T extends { entry: MemoryEntry }>(
+  candidates: T[],
+  opts: { minChildren?: number } = {},
+): T[] {
+  const minChildren = opts.minChildren ?? 2;
+
+  // Index present dag-summaries by id.
+  const presentSummaryIds = new Set<string>();
+  for (const c of candidates) {
+    if (isDagSummary(c.entry)) presentSummaryIds.add(c.entry.id);
+  }
+  if (presentSummaryIds.size === 0) return candidates;
+
+  // Count present children per present summary parent.
+  const presentChildCount = new Map<string, number>();
+  for (const c of candidates) {
+    const parent = c.entry.dag_parent_id;
+    if (parent && presentSummaryIds.has(parent)) {
+      presentChildCount.set(parent, (presentChildCount.get(parent) ?? 0) + 1);
+    }
+  }
+
+  // Drop a child iff its present summary parent has >= minChildren present
+  // children. Summaries themselves are always kept.
+  return candidates.filter((c) => {
+    const parent = c.entry.dag_parent_id;
+    if (!parent || !presentSummaryIds.has(parent)) return true;
+    if (isDagSummary(c.entry)) return true; // never drop a summary
+    return (presentChildCount.get(parent) ?? 0) < minChildren;
+  });
+}
+
+/**
  * v0.30 / E4 — resolve summaryDeboost: per-call > env > 0.85 default.
  * Invalid values (≤0, >1, NaN) at any level fall back to 0.85.
  */
@@ -381,6 +430,12 @@ export async function hybridSearch(
     /** v0.30 / E4 — enable rebuilt-within-7-days micro-boost (1.05) on L2
      *  summaries with fresh last_rebuilt_at. Default true. */
     summaryFreshness?: boolean;
+    /** DAG slice 1 — when a dag-summary matches, also inject its children into
+     *  the candidate pool (the classic drill-down behavior). DEFAULT OFF: the
+     *  block previously injected children UNCONDITIONALLY whenever a summary
+     *  matched, which works against budget substitution. Off restores the
+     *  summary-as-substitute contract; opt in for explicit drill-on-match. */
+    drillChildren?: boolean;
     /** L1 — graph-retrieval stream (opt-in): adds a 3rd RRF input ranking in-pool
      *  candidates by graph proximity to the strong lexical seeds. Active ONLY in
      *  `scoring:'rrf'` mode with embeddings + a `hippoRoot`. Absent/`weight<=0`/empty
@@ -411,6 +466,8 @@ export async function hybridSearch(
   // v0.30 / E4 — DAG L2 summary scoring controls
   const summaryDeboost = resolveSummaryDeboost(options.summaryDeboost);
   const summaryFreshness = options.summaryFreshness ?? true;
+  // DAG slice 1 — classic drill-on-match child injection (default OFF).
+  const drillChildren = options.drillChildren ?? false;
 
   // Bi-temporal filtering
   if (options.asOf) {
@@ -698,10 +755,15 @@ export async function hybridSearch(
 
   const scoredDeduped = deduped;
 
-  // DAG drill-down: when a summary node matches, inject its children
-  const summaryIdsAsync = scoredDeduped
-    .filter((r) => r.entry.tags.includes('dag-summary'))
-    .map((r) => r.entry.id);
+  // DAG drill-down: when a summary node matches, inject its children.
+  // DAG slice 1 — gated behind drillChildren (default OFF). Unconditional
+  // injection re-admits the very children that budget substitution drops, so
+  // the default is now off; opt in for explicit drill-on-match.
+  const summaryIdsAsync = drillChildren
+    ? scoredDeduped
+        .filter((r) => r.entry.tags.includes('dag-summary'))
+        .map((r) => r.entry.id)
+    : [];
 
   if (summaryIdsAsync.length > 0) {
     const childEntriesAsync = entries.filter(
@@ -868,6 +930,13 @@ export async function physicsSearch(
     summaryDeboost?: number;
     /** v0.30 / E4 — same freshness boost as hybridSearch. */
     summaryFreshness?: boolean;
+    /** DAG slice 1 — when a dag-summary AND >=2 of its children are both in the
+     *  final candidate set, drop the children so the (smaller) summary
+     *  substitutes under the token budget. DEFAULT OFF: measured to REGRESS
+     *  budget-bounded QA by -6.3pp (a compressed summary retrieves worse than
+     *  the raw child it replaces, so under a binding budget it drops a fact) -
+     *  see docs/evals/2026-06-10-dag-consolidation-slice1-result.md. Opt-in only. */
+    substituteSummaryChildren?: boolean;
   } = {}
 ): Promise<SearchResult[]> {
   const now = options.now ?? new Date();
@@ -878,6 +947,10 @@ export async function physicsSearch(
   // v0.30 / E4 — DAG L2 summary scoring controls (same as hybridSearch)
   const summaryDeboost = resolveSummaryDeboost(options.summaryDeboost);
   const summaryFreshness = options.summaryFreshness ?? true;
+  // DAG slice 1 — budget substitution toggle. DEFAULT OFF: the eval measured it
+  // as a -6.3pp budget-QA regression (compressed summary retrieves worse than
+  // the raw child it replaces). Retained as opt-in for the next DAG iteration.
+  const substituteSummaryChildren = options.substituteSummaryChildren ?? false;
 
   if (entries.length === 0 || !options.hippoRoot) return [];
 
@@ -1018,13 +1091,21 @@ export async function physicsSearch(
   // Sort and apply budget
   merged.sort((a, b) => b.score - a.score);
 
+  // DAG slice 1 — token-budget substitution: before the pack loop, drop any
+  // child whose dag-summary parent is also present with >=2 present children,
+  // so the (smaller) summary occupies one slot instead of K. No-op when no
+  // summary has >=2 present children (summary-free stores unaffected).
+  const packCandidates = substituteSummaryChildren
+    ? substituteDagSummaries(merged, { minChildren: 2 })
+    : merged;
+
   const results: SearchResult[] = [];
   let usedTokens = 0;
-  for (let i = 0; i < merged.length; i++) {
-    const tokens = merged[i].tokens;
+  for (let i = 0; i < packCandidates.length; i++) {
+    const tokens = packCandidates[i].tokens;
     if (results.length >= minResults && usedTokens + tokens > budget) continue;
     usedTokens += tokens;
-    results.push(merged[i]);
+    results.push(packCandidates[i]);
   }
 
   return results;

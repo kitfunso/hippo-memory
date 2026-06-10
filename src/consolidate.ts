@@ -20,6 +20,7 @@ import {
   findPromotableSessions,
   traceExistsForSession,
   listSessionEvents,
+  loadAllDirtySummaries,
 } from './store.js';
 import { textOverlap, markRetrieved } from './search.js';
 import { openHippoDb, closeHippoDb } from './db.js';
@@ -329,11 +330,19 @@ export async function consolidate(
   // 1.8. DAG summary rebuild — drain dirty queue from E2's child-write hooks
   // -------------------------------------------------------------------------
   // Consumer of E2's summary_dirty flag. Walks dirty L2 summaries, regenerates
-  // each via generateDagSummary, atomically refreshes content + 6 metadata
-  // columns + clears summary_dirty (with FTS sync). Same apiKey/dryRun gate
-  // as buildDag above. Cap HIPPO_DAG_REBUILD_CAP (default 20, hard ceiling
-  // 1000) prevents runaway LLM cost.
-  if (apiKey && !dryRun) {
+  // each, atomically refreshes content + 6 metadata columns + clears
+  // summary_dirty (with FTS sync). Cap HIPPO_DAG_REBUILD_CAP (default 20, hard
+  // ceiling 1000) prevents runaway LLM cost.
+  //
+  // DAG slice 1 — NOT gated on apiKey anymore: rebuildDirtySummaries dispatches
+  // on provenance, so a merge-built summary (source='consolidation') rebuilds
+  // via the zero-dep compressor with NO LLM. Without this, a merge summary in a
+  // key-less store would stay dirty forever after a child supersession (the
+  // "graph that lies"). The LLM route still no-ops gracefully (fetch fails →
+  // failed++) when a buildDag summary is dirty in a key-less store. When there
+  // are no dirty summaries (the steady state, e.g. the hermetic eval), this is
+  // a cheap no-op (loadAllDirtySummaries returns []).
+  if (!dryRun) {
     try {
       const { rebuildDirtySummaries } = await import('./dag.js');
       const rawCap = parseInt(process.env.HIPPO_DAG_REBUILD_CAP ?? '20', 10);
@@ -342,11 +351,32 @@ export async function consolidate(
       const cap = Number.isFinite(rawCap) && rawCap > 0
         ? Math.min(rawCap, 1000)
         : 20;
+      // DAG slice 1 — snapshot the dirty-summary ids BEFORE the rebuild.
+      // rebuildDirtySummaries persists each rebuilt summary's row directly
+      // (content + metadata) via applyRebuildResult. But the decay pass (phase
+      // 1) may have captured a now-STALE copy of those same summary rows in
+      // pendingWrites; the phase-3 batch flush would re-upsert that stale copy
+      // and CLOBBER the rebuild (revert content, re-set summary_dirty). Drop the
+      // rebuilt rows from pendingWrites so the authoritative rebuilt row stands.
+      const dirtyBeforeRebuild = new Set(loadAllDirtySummaries(hippoRoot).map((s) => s.id));
       const rebuildResult = await rebuildDirtySummaries(hippoRoot, {
         apiKey,
         model: config.extraction.model,
         cap,
       });
+      // Drop from pendingWrites BOTH the rebuilt summary rows AND the children
+      // the rebuild detached (dag_parent_id -> null). The decay/replay pass may
+      // have queued stale copies of either; re-upserting them would clobber the
+      // rebuild (revert content / re-set summary_dirty) or UNDO the tombstone
+      // detach (re-link a superseded child), making cleanup non-durable and
+      // causing repeated rebuilds (codex P2).
+      const rebuildWrittenIds = new Set(dirtyBeforeRebuild);
+      for (const id of rebuildResult.detachedChildIds) rebuildWrittenIds.add(id);
+      if (rebuildWrittenIds.size > 0) {
+        for (let i = pendingWrites.length - 1; i >= 0; i--) {
+          if (rebuildWrittenIds.has(pendingWrites[i].id)) pendingWrites.splice(i, 1);
+        }
+      }
       result.summariesRebuilt = rebuildResult.rebuilt;
       result.summariesRebuildFailed = rebuildResult.failed;
       result.summariesZeroChildSkipped = rebuildResult.zeroChildSkipped;
@@ -456,8 +486,17 @@ export async function consolidate(
   // -------------------------------------------------------------------------
   // 3. Merge pass  - episodic entries only
   // -------------------------------------------------------------------------
+  // DAG slice 1 (codex P1): exclude episodics ALREADY linked to a summary
+  // (dag_parent_id set). Without this, a 2nd+ sleep re-clusters already-merged
+  // children into a NEW summary and re-links them, orphaning the prior summary
+  // (stale descendant_count, zero children) - repeated consolidation would
+  // corrupt the DAG instead of being idempotent.
   const mergeCandidates = survivors.filter(
-    (e) => e.layer === Layer.Episodic && !e.tags.includes('extracted'),
+    (e) =>
+      e.layer === Layer.Episodic &&
+      !e.tags.includes('extracted') &&
+      !e.dag_parent_id &&
+      !e.superseded_by, // superseded content must not form a new summary
   );
   const used = new Set<string>();
 
@@ -480,31 +519,45 @@ export async function consolidate(
     for (const e of cluster) used.add(e.id);
     result.merged += cluster.length;
 
-    // Create a semantic summary
-    const mergedContent = mergeContents(cluster);
-    const allTags = Array.from(new Set(cluster.flatMap((e) => e.tags)));
-    const maxValence = pickStrongestValence(cluster);
+    // DAG slice 1: compress the cluster to boilerplate-free dense text strictly
+    // smaller than the sum of the children (replaces the old non-compressing
+    // mergeContents concat).
+    const mergedContent = compressCluster(cluster);
 
     result.details.push(
       `  🔀 merged ${cluster.length} episodic entries into semantic: "${mergedContent.slice(0, 60)}..."`
     );
 
     if (!dryRun) {
-      const semantic = createMemory(mergedContent, {
-        layer: Layer.Semantic,
-        tags: allTags,
-        emotional_valence: maxValence,
-        schema_fit: 0.7,
+      // DAG slice 1: emit the summary via the shared createDagSummaryNode helper
+      // so it lands as a real L2 DAG node — dag_level=2, 'dag-summary' tag,
+      // descendant_count + earliest/latest_at, child dag_parent_id links,
+      // deterministic timestamps stamped from the children. The helper writes
+      // the summary AND the child links immediately (DB-backed), so children
+      // become retrievable via drillDown and substitutable under budget.
+      //
+      // source='consolidation' is the provenance rebuildDirtySummaries
+      // dispatches on: a merge-built summary rebuilds via the zero-dep
+      // compressor (no LLM), so the tombstone path works in a key-less store.
+      const { createDagSummaryNode } = await import('./dag.js');
+      const summary = createDagSummaryNode(hippoRoot, {
+        content: mergedContent,
+        children: cluster,
         source: 'consolidation',
-        confidence: 'inferred',
       });
-      pendingWrites.push(semantic);
       result.semanticCreated++;
 
-      // Reduce strength of source episodics (they've been compressed into neocortex)
+      // Keep the source episodics (do NOT delete, do NOT weaken). The inert
+      // strength*0.3 write was removed: calculateStrength (memory.ts) never
+      // reads the stored strength, so the weakening was a no-op that only
+      // confused the eval. Children stay dag_level=0 and now carry
+      // dag_parent_id = summary.id; mirror that link onto the in-memory
+      // survivor objects so the deferred batchWriteAndDelete flush (which may
+      // re-upsert these rows from the decay pass) preserves the link instead
+      // of clobbering it back to null.
       for (const e of cluster) {
-        const weakened: MemoryEntry = { ...e, strength: e.strength * 0.3 };
-        pendingWrites.push(weakened);
+        e.dag_parent_id = summary.id;
+        pendingWrites.push({ ...e, dag_parent_id: summary.id });
       }
     }
   }
@@ -541,18 +594,127 @@ export async function consolidate(
 // Helpers
 // ---------------------------------------------------------------------------
 
-function mergeContents(entries: MemoryEntry[]): string {
-  // Simple merge: take the longest entry as the base, prepend a summary note
-  const sorted = [...entries].sort((a, b) => b.content.length - a.content.length);
-  const base = sorted[0].content;
+// ---------------------------------------------------------------------------
+// Zero-dep extractive compressor (DAG slice 1)
+// ---------------------------------------------------------------------------
+//
+// Replaces the old non-compressing mergeContents concat. Collapses a cluster
+// to the set of DISTINCT normalized informational lines/sentences:
+//   - dedup unit = a normalized LINE/SENTENCE (NOT a token). Near-duplicate
+//     paraphrases (same fact, different connective) collapse to one
+//     representative; ALL distinct answer-bearing lines survive.
+//   - boilerplate-free dense text. NO "[Consolidated from N...]" prefix (it
+//     dilutes embedding similarity against the source content).
+//   - strictly fewer tokens than the sum of the children (real margin), so the
+//     summary can displace its children under a fixed budget.
+//
+// DETERMINISM: pure function of the input contents. No Date, no random, no
+// Map-iteration-order dependence. Stable sort with a content tiebreak. Same
+// inputs => byte-identical output.
 
-  if (entries.length === 2) {
-    return `[Consolidated from ${entries.length} related memories]\n\n${base}`;
+const COMPRESS_STOPWORDS = new Set([
+  'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'to', 'of', 'in', 'for',
+  'on', 'with', 'at', 'by', 'from', 'it', 'this', 'that', 'and', 'or', 'as',
+  'its', 'set', 'now', 'namely', 'equals', 'confirmed',
+]);
+
+// Two lines whose stopword-filtered token sets reach this Jaccard are treated
+// as paraphrases of one another and collapse to a single representative. High
+// enough that lines carrying DIFFERENT answer tokens (which differ in at least
+// the token itself) stay distinct. SET-EQUALITY (1.0): codex P2 showed a long
+// shared template differing only in a value token ("...is MONDAY..." vs
+// "...is TUESDAY...") can exceed a fuzzy 0.7 and be wrongly dropped as a
+// paraphrase, losing a distinct fact. Requiring IDENTICAL stopword-filtered
+// token SETS guarantees only pure connective/stopword variation collapses
+// ("X is ANS" == "X equals ANS"); any value-token difference is preserved.
+const PARAPHRASE_JACCARD = 1.0;
+
+/** Split content into candidate informational lines/sentences. */
+function splitIntoLines(content: string): string[] {
+  return content
+    // sentence boundary: period/!/? followed by whitespace
+    .split(/(?<=[.!?])\s+/)
+    // also split on hard newlines and list bullets
+    .flatMap((s) => s.split(/\n+/))
+    .map((s) => s.replace(/^[-*•]\s*/, '').trim())
+    .filter((s) => s.length > 0);
+}
+
+/** Stopword-filtered, lowercased token SET used as the paraphrase signature. */
+function lineTokenSet(line: string): Set<string> {
+  return new Set(
+    line
+      .toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter((t) => t.length > 1 && !COMPRESS_STOPWORDS.has(t)),
+  );
+}
+
+function jaccard(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 && b.size === 0) return 1;
+  if (a.size === 0 || b.size === 0) return 0;
+  let inter = 0;
+  for (const t of a) if (b.has(t)) inter++;
+  const union = a.size + b.size - inter;
+  return union === 0 ? 0 : inter / union;
+}
+
+/**
+ * Compress a set of related contents to boilerplate-free dense text strictly
+ * smaller (in estimated tokens) than the sum of the inputs. Exported so the
+ * merge pass (createDagSummaryNode caller) and the rebuild path (dag.ts
+ * provenance dispatch) share ONE implementation.
+ */
+export function compressContents(contents: string[]): string {
+  // Collect every candidate line tagged with its source content length (for a
+  // deterministic, info-favouring representative choice within a paraphrase
+  // group: longer line wins, content tiebreak).
+  const lines: string[] = [];
+  for (const c of contents) {
+    for (const l of splitIntoLines(c)) lines.push(l);
   }
 
-  // For 3+ entries, create a bulleted summary
-  const bullets = entries.map((e) => `- ${e.content.split('\n')[0].slice(0, 120)}`).join('\n');
-  return `[Consolidated pattern from ${entries.length} related memories]\n\n${bullets}`;
+  // Stable order: longest line first (most informational representative), then
+  // lexical by content so equal-length lines never depend on input order.
+  const sorted = [...lines].sort(
+    (a, b) => (b.length - a.length) || (a < b ? -1 : a > b ? 1 : 0),
+  );
+
+  // Greedy near-duplicate collapse against already-kept representatives.
+  const keptLines: string[] = [];
+  const keptSets: Set<string>[] = [];
+  for (const line of sorted) {
+    const sig = lineTokenSet(line);
+    let isParaphrase = false;
+    for (const kept of keptSets) {
+      if (jaccard(sig, kept) >= PARAPHRASE_JACCARD) {
+        isParaphrase = true;
+        break;
+      }
+    }
+    if (isParaphrase) continue;
+    keptLines.push(line);
+    keptSets.push(sig);
+  }
+
+  // Re-emit kept lines in a stable lexical order (independent of the
+  // longest-first processing order) so the output is canonical.
+  keptLines.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+
+  // Dedup is the ONLY compression: kept lines are a SUBSET of the children's
+  // lines, so output tokens <= sum(children) always, and strictly less when
+  // there was genuine redundancy to collapse. No lossy size-cap (codex P2):
+  // force-trimming distinct lines to hit a target would drop facts that differ
+  // only in a value token (which set-equality above deliberately preserves). A
+  // non-redundant cluster simply yields a same-size summary - lossless, not
+  // force-shrunk.
+  return keptLines.join('\n');
+}
+
+/** Convenience overload over MemoryEntry[] (merge-pass call site). */
+export function compressCluster(entries: MemoryEntry[]): string {
+  return compressContents(entries.map((e) => e.content));
 }
 
 function pickStrongestValence(entries: MemoryEntry[]): MemoryEntry['emotional_valence'] {

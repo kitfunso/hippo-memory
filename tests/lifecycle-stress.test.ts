@@ -19,9 +19,9 @@ import os from 'node:os';
 import fs from 'node:fs';
 
 import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory, type MemoryEntry } from '../src/memory.js';
 import { embedMemory, isEmbeddingAvailable } from '../src/embeddings.js';
-import { physicsSearch } from '../src/search.js';
+import { physicsSearch, substituteDagSummaries } from '../src/search.js';
 import { consolidate } from '../src/consolidate.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../src/physics-config.js';
 
@@ -29,6 +29,41 @@ import { injectStream } from '../scripts/lifecycle-stress/inject.mjs';
 
 const PC = { ...DEFAULT_PHYSICS_CONFIG, enabled: true };
 const tok = (s: string): number => Math.ceil((s || '').length / 4);
+
+// Mirrors run.mjs unionPerFact (per-fact physicsSearch union -> global repack)
+// WITH the DAG slice 1 substitution at the binding site. Re-implemented here so
+// the test pins the assembled-context contract independently of the harness.
+async function unionPerFactAssemble(
+  entries: MemoryEntry[],
+  B: number,
+  labels: { topic: string }[],
+  root: string,
+  substitute = true,
+): Promise<{ entry: MemoryEntry }[]> {
+  const seen = new Map<string, { entry: MemoryEntry; bestRank: number }>();
+  for (const lab of labels) {
+    const res = await physicsSearch(lab.topic, entries, {
+      hippoRoot: root, physicsConfig: PC, budget: B, minResults: 1,
+      summaryDeboost: 1.0, summaryFreshness: false,
+    });
+    for (let i = 0; i < res.length; i++) {
+      const id = res[i].entry.id;
+      const prev = seen.get(id);
+      if (!prev || i < prev.bestRank) seen.set(id, { entry: res[i].entry, bestRank: i });
+    }
+  }
+  const rankedAll = [...seen.values()].sort((a, b) => a.bestRank - b.bestRank);
+  const ranked = substitute ? substituteDagSummaries(rankedAll, { minChildren: 2 }) : rankedAll;
+  const ctx: { entry: MemoryEntry }[] = [];
+  let used = 0;
+  for (const v of ranked) {
+    const t = tok(v.entry.content);
+    if (ctx.length >= 1 && used + t > B) continue;
+    used += t;
+    ctx.push({ entry: v.entry });
+  }
+  return ctx;
+}
 
 // Re-implements run.mjs scoreAssembled by-value logic so the test pins the
 // scoring contract independently of the harness module's internals. Out-rank is
@@ -164,7 +199,10 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
 
     for (const e of loadAllEntries(root)) await embedMemory(root, e);
     const after = loadAllEntries(root);
-    const summaries = after.filter((e) => (e.content || '').startsWith('[Consolidated'));
+    // DAG slice 1: merge summaries are now real L2 DAG nodes (dag-summary tag,
+    // dag_level=2), and the dense compressor output has NO "[Consolidated...]"
+    // prefix. Identify summaries structurally.
+    const summaries = after.filter((e) => e.tags.includes('dag-summary'));
     expect(summaries.length).toBeGreaterThan(0);
 
     // every redundant-cluster fact's answer token survives into SOME summary
@@ -192,6 +230,68 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
       const present = res.some((r) => (r.entry.content || '').includes(lab.answerToken));
       expect(present, `fact ${lab.factKey} token ${lab.answerToken} must be retrievable`).toBe(true);
     }
+  }, 60_000);
+
+  it('unionPerFact assembly excludes substituted children and packs fewer tokens than the children sum', async () => {
+    if (!isEmbeddingAvailable()) {
+      console.warn('SKIP: embeddings unavailable in this environment');
+      return;
+    }
+    const B = 1500;
+    const { memories, labels } = injectStream({ seed: 23, scaleMemories: 60, numFacts: 4, dupesPerFact: 3 });
+    for (const m of memories) writeEntry(root, createMemory(m.content, { tags: m.tags, source: 'lse-test' }));
+    for (const e of loadAllEntries(root)) await embedMemory(root, e);
+
+    const cons = await consolidate(root, {});
+    expect(cons.semanticCreated).toBeGreaterThan(0);
+    for (const e of loadAllEntries(root)) await embedMemory(root, e);
+    const entries = loadAllEntries(root);
+
+    const summaries = entries.filter((e) => e.tags.includes('dag-summary'));
+    expect(summaries.length).toBeGreaterThan(0);
+    const summaryIds = new Set(summaries.map((s) => s.id));
+
+    // Build the per-fact union WITHOUT substitution (the raw candidate set the
+    // global repack sees), then the assembled context WITH substitution. The
+    // substitution contract keys on children PRESENT in the union (>=2), not on
+    // the store's total child count — so the invariant is asserted against the
+    // union, not against `entries`.
+    const rawUnion = await unionPerFactAssemble(entries, B, labels, root, /* substitute */ false);
+    const rawIds = new Set(rawUnion.map((r) => r.entry.id));
+    const assembled = await unionPerFactAssemble(entries, B, labels, root);
+    const assembledIds = new Set(assembled.map((r) => r.entry.id));
+
+    // INVARIANT: for every summary present in the assembled context, if >=2 of
+    // its children were in the raw union, none of THOSE children may remain in
+    // the assembled context — the summary substituted for them.
+    let firedForSome = false;
+    for (const s of summaries) {
+      if (!assembledIds.has(s.id)) continue;
+      const childrenInUnion = entries.filter((e) => e.dag_parent_id === s.id && rawIds.has(e.id));
+      if (childrenInUnion.length >= 2) {
+        firedForSome = true;
+        const stillThere = childrenInUnion.filter((c) => assembledIds.has(c.id));
+        expect(stillThere.length, `summary ${s.id} packed but kept substituted children`).toBe(0);
+      }
+    }
+    // mechanism actually fired for at least one summary (not vacuous).
+    expect(firedForSome, 'substitution should fire for at least one packed summary').toBe(true);
+
+    // Token footprint: for the packed summaries that substituted, the summaries'
+    // total tokens are strictly fewer than the tokens of the children they stood
+    // in for (the children that were in the raw union). This is the budget win.
+    let summaryTokens = 0;
+    let replacedChildTokens = 0;
+    for (const s of summaries) {
+      if (!assembledIds.has(s.id)) continue;
+      const childrenInUnion = entries.filter((e) => e.dag_parent_id === s.id && rawIds.has(e.id));
+      if (childrenInUnion.length >= 2) {
+        summaryTokens += tok(s.content);
+        replacedChildTokens += childrenInUnion.reduce((a, c) => a + tok(c.content), 0);
+      }
+    }
+    expect(replacedChildTokens).toBeGreaterThan(0);
+    expect(summaryTokens).toBeLessThan(replacedChildTokens);
   }, 60_000);
 
   it('G1 leak sanity: a noise-only store does not surface any fact answer token', async () => {

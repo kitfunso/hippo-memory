@@ -6,6 +6,7 @@ import {
   applyRebuildResult,
   clearSummaryDirtyAfterBuild,
 } from './store.js';
+import { compressContents } from './consolidate.js';
 
 export interface FactCluster {
   label: string;
@@ -116,6 +117,86 @@ export interface DagBuildResult {
   factsLinked: number;
 }
 
+/**
+ * Shared DAG summary node-creation helper (extracted from buildDag).
+ *
+ * NODE-CREATION ONLY — does NOT generate summary text; the caller supplies
+ * `content` (buildDag passes its LLM `generateDagSummary` output; the merge
+ * pass passes the zero-dep extractive compressor output). Responsibilities:
+ *   - write a Layer.Semantic summary at dag_level=2 with the 'dag-summary' tag
+ *   - link each child's dag_parent_id to the summary (children keep dag_level=0
+ *     when they come from the merge pass; buildDag's children are dag_level=1)
+ *   - cache descendant_count + earliest_at/latest_at from the children's sorted
+ *     `created` timestamps
+ *   - clear the born-dirty flag (E3 cancellation, same as buildDag)
+ *
+ * DETERMINISM: the summary's `created`/`last_retrieved`/`valid_from` are stamped
+ * from the MAX child `created` timestamp, never `Date.now()`, so a consolidation
+ * over a fixed input set is byte-identical across runs. createMemory() stamps
+ * wall-clock by default; we overwrite those three fields here.
+ */
+export function createDagSummaryNode(
+  hippoRoot: string,
+  opts: {
+    content: string;
+    children: MemoryEntry[];
+    tenantId?: string;
+    createdAt?: string;
+    /** Provenance for rebuildDirtySummaries dispatch. The merge pass passes
+     *  'consolidation' (rebuild via zero-dep compressor); buildDag omits it
+     *  (createMemory default → rebuild via LLM). */
+    source?: string;
+  },
+): MemoryEntry {
+  const { content, children } = opts;
+  // entity tags shared by ALL children (mirrors clusterFacts label derivation)
+  const childEntityTags = children.map((c) =>
+    c.tags.filter((t) => t.startsWith('speaker:') || t.startsWith('topic:')),
+  );
+  const sharedEntityTags = children.length > 0
+    ? childEntityTags[0].filter((t) => children.every((_, i) => childEntityTags[i].includes(t)))
+    : [];
+
+  // Sorted child `created` timestamps drive both the cached scope columns AND
+  // the deterministic stamp. Byte compare is chronological for canonical ISO.
+  const childCreatedAts = children.map((c) => c.created).sort();
+  const stamp = opts.createdAt
+    ?? (childCreatedAts.length > 0
+      ? childCreatedAts[childCreatedAts.length - 1]
+      : new Date().toISOString());
+
+  const tenantId = opts.tenantId ?? children[0]?.tenantId ?? 'default';
+
+  const summaryEntry = createMemory(content, {
+    layer: Layer.Semantic,
+    tags: [...sharedEntityTags, 'dag-summary'],
+    confidence: 'inferred',
+    dag_level: 2,
+    tenantId,
+    valid_from: stamp,
+    ...(opts.source !== undefined ? { source: opts.source } : {}),
+  });
+  // DETERMINISM: overwrite the wall-clock fields createMemory stamped.
+  summaryEntry.created = stamp;
+  summaryEntry.last_retrieved = stamp;
+  // Schema v25: cache descendant_count + earliest/latest_at on the summary row.
+  summaryEntry.descendant_count = children.length;
+  summaryEntry.earliest_at = childCreatedAts[0] ?? null;
+  summaryEntry.latest_at = childCreatedAts[childCreatedAts.length - 1] ?? null;
+  writeEntry(hippoRoot, summaryEntry);
+
+  for (const child of children) {
+    const updated: MemoryEntry = { ...child, dag_parent_id: summaryEntry.id };
+    writeEntry(hippoRoot, updated);
+  }
+
+  // E3 born-dirty cancellation: the child writeEntry calls fire the E2 dirty
+  // hook on the summary; the summary we just built IS fresh, so clear it now.
+  clearSummaryDirtyAfterBuild(hippoRoot, summaryEntry.id, summaryEntry.tenantId, 'createDagSummaryNode');
+
+  return summaryEntry;
+}
+
 export async function buildDag(
   hippoRoot: string,
   facts: MemoryEntry[],
@@ -139,33 +220,18 @@ export async function buildDag(
     );
     if (!summary) continue;
 
-    const memberCreatedAts = cluster.members.map((m) => m.created).sort();
-    const summaryEntry = createMemory(summary, {
-      layer: Layer.Semantic,
-      tags: [...cluster.entityTags, 'dag-summary'],
-      confidence: 'inferred',
-      dag_level: 2,
+    // v0.30 — node creation (write summary + link children + cache scope
+    // columns + born-dirty clear) is the shared createDagSummaryNode helper.
+    // buildDag still owns the LLM text gen (generateDagSummary above); the
+    // helper stamps deterministic timestamps from the children. buildDag's
+    // children are dag_level=1 facts (the helper preserves their level via the
+    // {...child} spread); only dag_parent_id changes.
+    createDagSummaryNode(hippoRoot, {
+      content: summary,
+      children: cluster.members,
     });
-    // Schema v25: cache descendant_count + earliest/latest_at on the summary
-    // row so DAG-aware recall (docs/plans/2026-05-05-dag-recall.md Task 2)
-    // can reason about scope without walking the children.
-    summaryEntry.descendant_count = cluster.members.length;
-    summaryEntry.earliest_at = memberCreatedAts[0];
-    summaryEntry.latest_at = memberCreatedAts[memberCreatedAts.length - 1];
-    writeEntry(hippoRoot, summaryEntry);
     result.summariesCreated++;
-
-    for (const member of cluster.members) {
-      const updated: MemoryEntry = { ...member, dag_parent_id: summaryEntry.id };
-      writeEntry(hippoRoot, updated);
-      result.factsLinked++;
-    }
-    // v0.30 / E3 — cancel the cascade of dirty-marks fired by member
-    // writeEntry calls (E2 hook on writeEntryDbOnly at store.ts:1214).
-    // The summary we just built IS fresh, no rebuild needed. Without this,
-    // E3 in the SAME sleep cycle would re-rebuild every new summary
-    // (2x LLM cost). plan-eng-r1 HIGH must-fix.
-    clearSummaryDirtyAfterBuild(hippoRoot, summaryEntry.id, summaryEntry.tenantId, 'buildDag');
+    result.factsLinked += cluster.members.length;
   }
 
   return result;
@@ -181,6 +247,7 @@ export interface DagRebuildResult {
   zeroChildSkipped: number;     // dirty-cleared without LLM (descendants all gone)
   failed: number;               // LLM null, fetch error, or applyRebuildResult throw
   capped: boolean;              // true if queue had more than cap entries
+  detachedChildIds: string[];   // superseded children detached (dag_parent_id->null); caller drops from pendingWrites (codex P2)
 }
 
 /**
@@ -210,14 +277,38 @@ export async function rebuildDirtySummaries(
     zeroChildSkipped: 0,
     failed: 0,
     capped,
+    detachedChildIds: [],
   };
+
+  // DAG slice 1 — provenance dispatch: a merge-built summary (source=
+  // 'consolidation') OR any rebuild with no LLM config (no apiKey) rebuilds via
+  // the zero-dep extractive compressor; a buildDag-built summary rebuilds via
+  // the LLM. Detect once outside the loop (apiKey is run-wide).
+  const noLlmConfig = !opts.apiKey;
 
   for (const summary of queue) {
     try {
-      const children = loadChildrenOfSummary(hippoRoot, summary.id, summary.tenantId);
+      const allChildren = loadChildrenOfSummary(hippoRoot, summary.id, summary.tenantId);
+      // TOMBSTONE: exclude superseded children from the rebuild input so a
+      // rebuilt summary DROPS the stale (superseded) child's content. The
+      // successor (the new memory) is itself a live child if it was linked to
+      // the same parent (supersede + writeEntryDbOnly hook), so the current
+      // answer is retained while the stale one is dropped.
+      const supersededChildren = allChildren.filter((c) => c.superseded_by);
+      const children = allChildren.filter((c) => !c.superseded_by);
+
+      // TOMBSTONE read-time guard: DETACH each superseded child from the parent
+      // (dag_parent_id -> null) so it is also excluded from loadChildrenOf /
+      // drillDown — a stale answer must never resurface as a live child. The
+      // new parent is null, so the E2 write hook fires no dirty mark (no loop).
+      // Kept in dag.ts (the rebuild owner) to avoid touching the read path.
+      for (const stale of supersededChildren) {
+        writeEntry(hippoRoot, { ...stale, dag_parent_id: null });
+        result.detachedChildIds.push(stale.id);
+      }
 
       if (children.length === 0) {
-        // Zero-child case: clear dirty + zero counts, no LLM call, no rebuild_count bump.
+        // Zero-child case: clear dirty + zero counts, no rebuild, no count bump.
         const changed = applyRebuildResult(hippoRoot, summary, {
           content: summary.content,
           descendant_count: 0,
@@ -232,22 +323,31 @@ export async function rebuildDirtySummaries(
         continue;
       }
 
-      // Derive label from summary's existing entity tags (mirrors clusterFacts)
-      const entityTags = summary.tags.filter(
-        (t) => t.startsWith('speaker:') || t.startsWith('topic:'),
-      );
-      const label = entityTags.length > 0
-        ? entityTags.map((t) => t.split(':')[1]).join(': ')
-        : summary.content.slice(0, 40);
+      const useCompressor = summary.source === 'consolidation' || noLlmConfig;
 
-      const newContent = await generateDagSummary(
-        label,
-        children.map((c) => c.content),
-        opts,
-      );
+      let newContent: string | null;
+      if (useCompressor) {
+        // Zero-dep, deterministic. Never null (pure function of child content).
+        newContent = compressContents(children.map((c) => c.content));
+      } else {
+        // Derive label from summary's existing entity tags (mirrors clusterFacts)
+        const entityTags = summary.tags.filter(
+          (t) => t.startsWith('speaker:') || t.startsWith('topic:'),
+        );
+        const label = entityTags.length > 0
+          ? entityTags.map((t) => t.split(':')[1]).join(': ')
+          : summary.content.slice(0, 40);
+
+        newContent = await generateDagSummary(
+          label,
+          children.map((c) => c.content),
+          opts,
+        );
+      }
 
       if (!newContent) {
-        // LLM null / fetch error → leave dirty for next cycle
+        // LLM null / fetch error → leave dirty for next cycle. (The compressor
+        // never returns null, so this only fires on the LLM route.)
         result.failed++;
         continue;
       }
