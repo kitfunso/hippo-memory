@@ -4,6 +4,7 @@
  */
 
 import { randomUUID } from 'crypto';
+import { isDecayAblated, isOutcomeSlowAblated, evalNow } from './ablation.js';
 
 export enum Layer {
   Buffer = 'buffer',
@@ -257,6 +258,8 @@ function applyLossAversionRatio(
  * decay slower; consistent negative outcomes decay faster.
  */
 export function calculateRewardFactor(entry: MemoryEntry): number {
+  // EVAL-ONLY ablation (see ablation.ts): the slow outcome channel.
+  if (isOutcomeSlowAblated()) return 1.0;
   const pos = entry.outcome_positive ?? 0;
   const neg = entry.outcome_negative ?? 0;
   if (pos === 0 && neg === 0) return 1.0;
@@ -291,7 +294,9 @@ export interface DecayOptions {
  */
 export function calculateStrength(
   entry: MemoryEntry,
-  now: Date = new Date(),
+  // evalNow(): the real clock unless HIPPO_FAKE_NOW is set (eval-only,
+  // simulated-time protocols; see ablation.ts). Explicit `now` always wins.
+  now: Date = evalNow(),
   options: DecayOptions = {},
 ): number {
   if (entry.pinned) return 1.0;
@@ -327,7 +332,10 @@ export function calculateStrength(
     decayExponent = daysSince / effectiveHalfLife;
   }
 
-  const decay = Math.pow(0.5, decayExponent);
+  // EVAL-ONLY ablation (see ablation.ts): decay term := 1. NOTE the [0,1]
+  // clamp below then caps retrievalBoost at baseline - see ablation.ts
+  // formula note.
+  const decay = isDecayAblated() ? 1.0 : Math.pow(0.5, decayExponent);
 
   // Retrieval boost: 1 + 0.1 * log2(retrieval_count + 1)
   const retrievalBoost = 1 + 0.1 * Math.log2(entry.retrieval_count + 1);

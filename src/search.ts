@@ -4,6 +4,7 @@
  */
 
 import { MemoryEntry, calculateStrength } from './memory.js';
+import { isOutcomeFastAblated, isRecallBoostAblated, evalNow } from './ablation.js';
 import { extractPathTags, pathOverlapScore } from './path-context.js';
 import { detectScope, scopeMatch } from './scope.js';
 import {
@@ -590,9 +591,10 @@ export async function hybridSearch(
 
     // Retrieval-time outcome personalization: nudge up/down from user feedback.
     // Distinct from reward-factor-via-strength (slow); this is immediate.
+    // EVAL-ONLY ablation (see ablation.ts): the fast outcome channel.
     const pos = entries[i].outcome_positive ?? 0;
     const neg = entries[i].outcome_negative ?? 0;
-    const outcomeBoost = pos === 0 && neg === 0
+    const outcomeBoost = isOutcomeFastAblated() || (pos === 0 && neg === 0)
       ? 1.0
       : Math.max(0.85, Math.min(1.15, 1 + 0.15 * Math.tanh((pos - neg) / 2)));
     compositeScore *= outcomeBoost;
@@ -1197,8 +1199,15 @@ export function search(
 /**
  * Update retrieval metadata on entries that were returned by a search.
  * Returns the mutated copies (caller must persist to disk).
+ *
+ * EVAL-ONLY ablation (see ablation.ts): with HIPPO_ABLATE_RECALL_BOOST set,
+ * this is a no-op returning the entries unchanged - neutralizing all three
+ * strengthening sub-effects (clock reset, retrieval_count, half-life
+ * increment) at the single shared write site. Callers persist identical rows.
+ * The default `now` honors HIPPO_FAKE_NOW (simulated-time protocols).
  */
-export function markRetrieved(entries: MemoryEntry[], now: Date = new Date()): MemoryEntry[] {
+export function markRetrieved(entries: MemoryEntry[], now: Date = evalNow()): MemoryEntry[] {
+  if (isRecallBoostAblated()) return entries;
   return entries.map((e) => {
     if (e.superseded_by) return e;
     const updated: MemoryEntry = {
