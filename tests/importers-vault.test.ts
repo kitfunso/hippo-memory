@@ -754,3 +754,78 @@ describe('importVault (w) — nested non-dot store skipped under an aliased hipp
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// (x) explicit vault name is required (no path-basename default), and a re-import
+//     that changes the ENVELOPE (--scope / extra tags) re-writes rather than
+//     skipping on content-hash alone (codex R10 P2 x2).
+// ---------------------------------------------------------------------------
+
+describe('importVault (x) — explicit name + envelope-aware idempotency', () => {
+  it('throws when no vault name is given (no basename default that could collide)', () => {
+    writeNote('a.md', '# A\nbody content long enough to store');
+    expect(() => importVault(vaultDir, { hippoRoot: tmpDir, tenantId: 'default' })).toThrow(
+      /explicit vault name/,
+    );
+    // A blank/whitespace name is rejected the same way.
+    expect(() => importVault(vaultDir, opts({ name: '   ' }))).toThrow(/explicit vault name/);
+  });
+
+  it('re-imports an unchanged file when --scope changes (archive old + new scoped row)', () => {
+    writeNote('note.md', '# Note\nstable content across the scope change');
+    expect(importVault(vaultDir, opts({ name: 'v' })).imported).toBe(1); // unscoped
+    const firstId = loadAllEntries(tmpDir, 'default')[0].id;
+    expect(loadAllEntries(tmpDir, 'default')[0].scope ?? null).toBe(null);
+
+    // Same bytes, now request a private scope -> must re-write, not skip.
+    const second = importVault(vaultDir, opts({ name: 'v', scope: 'private' }));
+    expect(second.skipped).toBe(0);
+    expect(second.imported).toBe(1);
+    expect(second.archived).toBe(1);
+
+    const live = loadAllEntries(tmpDir, 'default');
+    expect(live.length).toBe(1);
+    expect(live[0].id).not.toBe(firstId);
+    expect(live[0].scope).toBe('private'); // the requested envelope was applied
+
+    // A third identical run at the SAME scope is idempotent again.
+    const third = importVault(vaultDir, opts({ name: 'v', scope: 'private' }));
+    expect(third.skipped).toBe(1);
+    expect(third.imported).toBe(0);
+    expect(third.archived).toBe(0);
+  });
+
+  it('re-imports an unchanged file when an extra tag is added', () => {
+    writeNote('note.md', '# Note\nstable content across the tag change');
+    expect(importVault(vaultDir, opts({ name: 'v' })).imported).toBe(1);
+
+    const second = importVault(vaultDir, opts({ name: 'v', extraTags: ['campaign:q3'] }));
+    expect(second.imported).toBe(1);
+    expect(second.archived).toBe(1);
+    const live = loadAllEntries(tmpDir, 'default');
+    expect(live.length).toBe(1);
+    expect(live[0].tags).toContain('campaign:q3');
+  });
+
+  it('two same-basename vaults stay isolated under distinct explicit names', () => {
+    // Distinct names -> distinct vault:<name>:* prefixes -> deletion-sync of one
+    // never touches the other (the failure mode the basename default caused).
+    writeNote('shared.md', '# Work\nwork note body content');
+    expect(importVault(vaultDir, opts({ name: 'work' })).imported).toBe(1);
+
+    const other = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-vault-src2-'));
+    try {
+      fs.writeFileSync(path.join(other, 'shared.md'), '# Personal\npersonal note body', 'utf8');
+      const second = importVault(other, opts({ name: 'personal' }));
+      expect(second.imported).toBe(1);
+      expect(second.archived).toBe(0); // did NOT archive the work vault's row
+
+      const all = loadAllEntries(tmpDir, 'default');
+      expect(all.length).toBe(2);
+      expect(all.some((e) => e.artifact_ref === 'vault:work:shared.md')).toBe(true);
+      expect(all.some((e) => e.artifact_ref === 'vault:personal:shared.md')).toBe(true);
+    } finally {
+      fs.rmSync(other, { recursive: true, force: true });
+    }
+  });
+});

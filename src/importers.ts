@@ -665,6 +665,7 @@ interface VaultRow {
   id: string;
   artifact_ref: string;
   tags_json: string;
+  scope: string | null;
 }
 
 /**
@@ -678,7 +679,18 @@ interface VaultRow {
 export function importVault(folderPath: string, options: ImportOptions): ImportResult {
   const hippoRoot = options.hippoRoot;
   const tenantId = options.tenantId ?? 'default';
-  const vaultName = options.name ?? path.basename(path.resolve(folderPath));
+  // Vault NAME is the identity key for the destructive deletion-sync below, so it
+  // must be explicit. Defaulting to the folder basename meant two unrelated vaults
+  // sharing a basename (e.g. work/notes and personal/notes) collided on the same
+  // `vault:<name>:*` prefix - importing the second loaded the first's rows and the
+  // deletion-sync archived them (codex R10 P2). Require a deliberate name instead
+  // of inferring a path-unstable one.
+  const vaultName = options.name?.trim();
+  if (!vaultName) {
+    throw new Error(
+      'importVault requires an explicit vault name (options.name): it is the identity key for source-deletion sync and must not be inferred from the folder basename.',
+    );
+  }
   if (vaultName.includes(':')) {
     // ':' is the artifactRef delimiter (vault:<name>:<relpath>); a name
     // containing it lets a different vault's prefix scan over-match and archive
@@ -734,7 +746,7 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
       const likeParam = `vault:${escapeLike(vaultName)}:%`;
       const rows = db
         .prepare(
-          `SELECT id, artifact_ref, tags_json FROM memories
+          `SELECT id, artifact_ref, tags_json, scope FROM memories
              WHERE artifact_ref LIKE ? ESCAPE '\\' AND tenant_id = ? AND kind = 'raw'`,
         )
         .all(likeParam, tenantId) as VaultRow[];
@@ -785,14 +797,27 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
     const hashTag = `content-hash:${hash}`;
 
     const priors = existing.get(artifactRef) ?? [];
-    // Unchanged iff EVERY live raw row already carries the current content-hash
-    // (the normal case is exactly one row; >1 only after a concurrent double-
-    // insert). If ANY row is stale / missing the hash, treat the file as changed
-    // so the archive pass below removes ALL of them, not just the matching one
-    // (codex P2). The `length > 0` guard is required: `[].every()` is vacuously
-    // true, but a never-seen file (no rows) must fall through to import, not skip.
-    if (priors.length > 0 && priors.every((p) => parseJsonArrayLoose(p.tags_json).includes(hashTag))) {
-      // Unchanged file → skip (idempotent re-import).
+    // Unchanged iff EVERY live raw row matches the full import ENVELOPE, not just
+    // the file bytes: the content-hash tag AND the requested scope AND all the
+    // requested extra tags. Keying on the content-hash alone meant a re-import
+    // that changed --scope (or added a --tag) was skipped, so a vault first
+    // imported public stayed public after a rerun with a private scope (codex
+    // R10 P2). An envelope mismatch falls through to archive-all + remember with
+    // the new envelope. (The `length > 0` guard is required: `[].every()` is
+    // vacuously true, but a never-seen file must import, not skip. Archiving ALL
+    // priors on a mismatch also clears any concurrent-double-insert duplicates.)
+    const envelopeUnchanged =
+      priors.length > 0 &&
+      priors.every((p) => {
+        const priorTags = parseJsonArrayLoose(p.tags_json);
+        return (
+          priorTags.includes(hashTag) &&
+          (p.scope ?? null) === scope &&
+          extraTags.every((t) => priorTags.includes(t))
+        );
+      });
+    if (envelopeUnchanged) {
+      // Unchanged file + envelope → skip (idempotent re-import).
       skipped++;
       continue;
     }

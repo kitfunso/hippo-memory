@@ -5845,6 +5845,13 @@ function cmdImport(
       console.error('hippo import --vault does not support --global (raw rows are tenant-local).');
       process.exit(1);
     }
+    if (!flags['name'] || !String(flags['name']).trim()) {
+      // --name is the vault identity key for the destructive source-deletion sync;
+      // inferring it from the folder basename let same-basename vaults collide and
+      // clobber each other (codex R10 P2). Require it explicitly.
+      console.error('hippo import --vault requires --name <vault> (the identity key used for source-deletion sync).');
+      process.exit(1);
+    }
     const tenantId = resolveTenantId({});
     const vaultOptions: ImportOptions = {
       ...importOptions,
@@ -7758,7 +7765,8 @@ Commands:
     --file <path>          Import from any markdown or text file
     --markdown <path>      Import from structured MEMORY.md / AGENTS.md
     --vault <path>         Import a markdown-vault FOLDER as kind='raw' notes
-                             (Obsidian/Foam/Dendron). [--name <vault>] [--scope <scope>]
+                             (Obsidian/Foam/Dendron). Requires --name <vault>.
+                             [--scope <scope>]
     --dry-run              Preview without writing
     --global               Write to global store ($HIPPO_HOME or ~/.hippo/)
     --tag <tag>            Add extra tag (repeatable)
