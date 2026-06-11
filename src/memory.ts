@@ -4,6 +4,12 @@
  */
 
 import { randomUUID } from 'crypto';
+import {
+  isDecayAblated,
+  isOutcomeSlowAblated,
+  isRecallBoostAblated,
+  evalNow,
+} from './ablation.js';
 
 export enum Layer {
   Buffer = 'buffer',
@@ -257,6 +263,8 @@ function applyLossAversionRatio(
  * decay slower; consistent negative outcomes decay faster.
  */
 export function calculateRewardFactor(entry: MemoryEntry): number {
+  // EVAL-ONLY ablation (see ablation.ts): the slow outcome channel.
+  if (isOutcomeSlowAblated()) return 1.0;
   const pos = entry.outcome_positive ?? 0;
   const neg = entry.outcome_negative ?? 0;
   if (pos === 0 && neg === 0) return 1.0;
@@ -291,12 +299,23 @@ export interface DecayOptions {
  */
 export function calculateStrength(
   entry: MemoryEntry,
-  now: Date = new Date(),
+  // evalNow(): the real clock unless HIPPO_FAKE_NOW is set (eval-only,
+  // simulated-time protocols; see ablation.ts). Explicit `now` always wins.
+  now: Date = evalNow(),
   options: DecayOptions = {},
 ): number {
   if (entry.pinned) return 1.0;
 
-  const lastRetrieved = new Date(entry.last_retrieved);
+  // EVAL-ONLY ablation (see ablation.ts): with recall-strengthening ablated,
+  // anchor decay at CREATION, not last_retrieved. A never-strengthened memory
+  // decays from when it was made; using last_retrieved would let clock resets
+  // persisted by PRIOR unflagged runs leak strengthening into an ablated
+  // arm's rankings (codex P2). Identity on fresh stores (created ==
+  // last_retrieved at write). Prior-run half_life increments are NOT
+  // reconstructed - see the ablation.ts caveat (fresh stores per arm).
+  const lastRetrieved = new Date(
+    isRecallBoostAblated() ? entry.created : entry.last_retrieved,
+  );
   const daysSince = (now.getTime() - lastRetrieved.getTime()) / (1000 * 60 * 60 * 24);
 
   // Reward-proportional half-life modulation
@@ -327,10 +346,19 @@ export function calculateStrength(
     decayExponent = daysSince / effectiveHalfLife;
   }
 
-  const decay = Math.pow(0.5, decayExponent);
+  // EVAL-ONLY ablation (see ablation.ts): decay term := 1. NOTE the [0,1]
+  // clamp below then caps retrievalBoost at baseline - see ablation.ts
+  // formula note.
+  const decay = isDecayAblated() ? 1.0 : Math.pow(0.5, decayExponent);
 
   // Retrieval boost: 1 + 0.1 * log2(retrieval_count + 1)
-  const retrievalBoost = 1 + 0.1 * Math.log2(entry.retrieval_count + 1);
+  // EVAL-ONLY ablation (see ablation.ts): the recall-boost flag neutralizes
+  // the READ side too, so a store with PRIOR retrieval history (counts > 0
+  // written before the flag was set) does not leak strengthening into an
+  // ablated arm's rankings (codex P2).
+  const retrievalBoost = isRecallBoostAblated()
+    ? 1.0
+    : 1 + 0.1 * Math.log2(entry.retrieval_count + 1);
 
   // Emotional multiplier
   // v1.13.5 / J5: apply HIPPO_LOSS_AVERSION_RATIO to the negative multiplier
@@ -407,7 +435,7 @@ export function generateId(prefix: string = 'mem'): string {
  * If the entry has not been retrieved in 30+ days and is not 'verified',
  * returns 'stale'. Otherwise returns the stored confidence value.
  */
-export function resolveConfidence(entry: MemoryEntry, now: Date = new Date()): ConfidenceLevel {
+export function resolveConfidence(entry: MemoryEntry, now: Date = evalNow()): ConfidenceLevel {
   if (entry.pinned || entry.confidence === 'verified') return entry.confidence;
 
   const lastRetrieved = new Date(entry.last_retrieved);
@@ -454,7 +482,7 @@ export function createMemory(
     throw new Error(`Invalid trace_outcome: ${options.trace_outcome}. Must be 'success', 'failure', 'partial', or null.`);
   }
 
-  const now = new Date().toISOString();
+  const now = evalNow().toISOString(); // honors HIPPO_FAKE_NOW (eval-only)
   const layer = options.layer ?? Layer.Episodic;
   const tags = options.tags ?? [];
   const emotional_valence = options.emotional_valence ?? inferValence(tags);

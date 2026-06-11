@@ -26,6 +26,7 @@
  *   hippo wm <push|read|clear|flush>
  */
 
+import { evalNow, isRecallBoostAblated } from './ablation.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -1686,9 +1687,15 @@ async function cmdRecall(
   // Update retrieval metadata and persist
   const updated = markRetrieved(results.map((r) => r.entry));
   const localIndex = loadIndex(hippoRoot);
-  for (const u of updated) {
-    const targetRoot = localIndex.entries[u.id] ? hippoRoot : (isInitialized(globalRoot) ? globalRoot : hippoRoot);
-    writeEntry(targetRoot, u);
+  // EVAL-ONLY ablation (see ablation.ts): under the recall flag, markRetrieved
+  // returns unmutated entries (ids preserved for outcome attribution below)
+  // and persistence is skipped - writeEntry on identical rows still refreshes
+  // updated_at, rewrites mirrors, and marks DAG parents dirty.
+  if (!isRecallBoostAblated()) {
+    for (const u of updated) {
+      const targetRoot = localIndex.entries[u.id] ? hippoRoot : (isInitialized(globalRoot) ? globalRoot : hippoRoot);
+      writeEntry(targetRoot, u);
+    }
   }
 
   // Track last retrieval IDs for outcome command
@@ -2335,7 +2342,7 @@ function cmdTrace(
     process.exit(1);
   }
 
-  const now = new Date();
+  const now = evalNow();
   const strength = calculateStrength(entry, now);
   const halfLife = deriveHalfLife(7, entry);
   const rewardFactor = calculateRewardFactor(entry);
@@ -3021,7 +3028,7 @@ function cmdStatus(hippoRoot: string): void {
 
   const entries = loadAllEntries(hippoRoot);
   const stats = loadStats(hippoRoot);
-  const now = new Date();
+  const now = evalNow();
 
   const byLayer = {
     [Layer.Buffer]: 0,
@@ -3257,7 +3264,7 @@ function cmdInspect(hippoRoot: string, id: string): void {
     process.exit(1);
   }
 
-  const now = new Date();
+  const now = evalNow();
   const currentStrength = calculateStrength(entry, now);
   const lastRetrieved = new Date(entry.last_retrieved);
   const created = new Date(entry.created);
@@ -5479,7 +5486,7 @@ export function printContextMarkdown(
   totalTokens: number,
   framing: string = 'observe'
 ): void {
-  const now = new Date();
+  const now = evalNow();
   console.log(`## Project Memory (${items.length} entries, ${totalTokens} tokens)\n`);
   for (const item of items) {
     const e = item.entry;

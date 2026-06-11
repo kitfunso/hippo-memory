@@ -4,6 +4,7 @@
  */
 
 import { MemoryEntry, calculateStrength } from './memory.js';
+import { isOutcomeFastAblated, isRecallBoostAblated, evalNow } from './ablation.js';
 import { extractPathTags, pathOverlapScore } from './path-context.js';
 import { detectScope, scopeMatch } from './scope.js';
 import {
@@ -12,7 +13,7 @@ import {
   loadEmbeddingIndex,
 } from './embeddings.js';
 import { resolveEmbeddingProvider } from './embedding-provider.js';
-import { physicsScore as computePhysicsScores } from './physics.js';
+import { physicsScore as computePhysicsScores, computeMass } from './physics.js';
 import type { PhysicsParticle } from './physics.js';
 import type { PhysicsConfig } from './physics-config.js';
 import { DEFAULT_PHYSICS_CONFIG } from './physics-config.js';
@@ -399,7 +400,7 @@ export async function hybridSearch(
     };
   } = {}
 ): Promise<SearchResult[]> {
-  const now = options.now ?? new Date();
+  const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
   const budget = options.budget ?? 4000;
   const minResults = options.minResults ?? 1;
   const embeddingWeight = options.embeddingWeight ?? 0.6;
@@ -590,9 +591,10 @@ export async function hybridSearch(
 
     // Retrieval-time outcome personalization: nudge up/down from user feedback.
     // Distinct from reward-factor-via-strength (slow); this is immediate.
+    // EVAL-ONLY ablation (see ablation.ts): the fast outcome channel.
     const pos = entries[i].outcome_positive ?? 0;
     const neg = entries[i].outcome_negative ?? 0;
-    const outcomeBoost = pos === 0 && neg === 0
+    const outcomeBoost = isOutcomeFastAblated() || (pos === 0 && neg === 0)
       ? 1.0
       : Math.max(0.85, Math.min(1.15, 1 + 0.15 * Math.tanh((pos - neg) / 2)));
     compositeScore *= outcomeBoost;
@@ -870,7 +872,7 @@ export async function physicsSearch(
     summaryFreshness?: boolean;
   } = {}
 ): Promise<SearchResult[]> {
-  const now = options.now ?? new Date();
+  const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
   const budget = options.budget ?? 4000;
   const minResults = options.minResults ?? 1;
   const config = options.physicsConfig ?? DEFAULT_PHYSICS_CONFIG;
@@ -932,7 +934,20 @@ export async function physicsSearch(
       && particle.velocity.length === queryVector.length
     ) {
       physicsEntries.push(entry);
-      physicsParticles.push(particle);
+      // EVAL-ONLY ablation (see ablation.ts): persisted masses embed recall
+      // history TWICE - the outer retrieval-count multiplier AND the frozen
+      // strength inside it (computed at sleep time from clock-reset
+      // last_retrieved + the read-side boost). Stripping the outer multiplier
+      // alone is not enough (codex round-7 P2); under the flag, recompute the
+      // mass LIVE from the current entry under ablated strength rules
+      // (created-anchored decay, no boost - both applied inside
+      // calculateStrength/computeMass by the same flag). The frozen-at-sleep
+      // semantics is unrecoverable for the ablated arm by definition.
+      physicsParticles.push(
+        isRecallBoostAblated()
+          ? { ...particle, mass: computeMass(calculateStrength(entry, now), entry.retrieval_count) }
+          : particle,
+      );
     } else {
       classicEntries.push(entry);
     }
@@ -1059,7 +1074,7 @@ export function search(
   options: { budget?: number; now?: Date; hippoRoot?: string; minResults?: number; includeSuperseded?: boolean; asOf?: string } = {}
 ): SearchResult[] {
   // Synchronous path: BM25 only (no async hybrid)
-  const now = options.now ?? new Date();
+  const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
   const budget = options.budget ?? 4000;
   const minResults = options.minResults ?? 1;
 
@@ -1197,8 +1212,23 @@ export function search(
 /**
  * Update retrieval metadata on entries that were returned by a search.
  * Returns the mutated copies (caller must persist to disk).
+ *
+ * EVAL-ONLY ablation (see ablation.ts): with HIPPO_ABLATE_RECALL_BOOST set,
+ * this returns the entries UNMUTATED - neutralizing all three strengthening
+ * sub-effects (clock reset, retrieval_count, half-life increment) at the
+ * single shared write site. The entries (not an empty array) must be
+ * returned because callers derive `last_retrieval_ids` from the return
+ * value, and a later `hippo outcome --good/--bad` targets those ids - an
+ * empty return would silently co-ablate the outcome channel in the
+ * strengthen-off arm (codex round-7 P2). PERSISTENCE is gated separately at
+ * each persisting caller (CLI recall, api context, MCP recall/context,
+ * consolidation replay): writeEntry on identical rows still refreshes
+ * updated_at, rewrites mirrors, and marks DAG parents dirty (codex round-6
+ * P2), so those write loops skip under the flag.
+ * The default `now` honors HIPPO_FAKE_NOW (simulated-time protocols).
  */
-export function markRetrieved(entries: MemoryEntry[], now: Date = new Date()): MemoryEntry[] {
+export function markRetrieved(entries: MemoryEntry[], now: Date = evalNow()): MemoryEntry[] {
+  if (isRecallBoostAblated()) return entries;
   return entries.map((e) => {
     if (e.superseded_by) return e;
     const updated: MemoryEntry = {

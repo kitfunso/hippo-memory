@@ -18,6 +18,7 @@ import {
   calculateStrength,
 } from '../memory.js';
 import { search, hybridSearch, physicsSearch, markRetrieved, estimateTokens } from '../search.js';
+import { isRecallBoostAblated, evalNow } from '../ablation.js';
 import { loadAllEntries, writeEntry, readEntry, initStore, loadActiveTaskSnapshot, listMemoryConflicts, resolveConflict, RECALL_DEFAULT_DENY_SCOPES } from '../store.js';
 import { shareMemory, listPeers, getGlobalRoot } from '../shared.js';
 import { consolidate } from '../consolidate.js';
@@ -582,7 +583,11 @@ async function executeTool(
 
       // Mark retrieved and persist
       const retrieved = markRetrieved(results.map((r) => r.entry));
-      for (const entry of retrieved) writeEntry(hippoRoot, entry);
+      // EVAL-ONLY ablation (see ablation.ts): skip persistence under the recall
+      // flag; ids below stay populated for outcome attribution.
+      if (!isRecallBoostAblated()) {
+        for (const entry of retrieved) writeEntry(hippoRoot, entry);
+      }
       lastRecalledIds.set(resolveClientKey(ctx), retrieved.map((e) => e.id));
 
       // v0.33 / J1 — MCP per-pipeline anchoring detector. UNLIKE J3.2's
@@ -1003,7 +1008,11 @@ async function executeTool(
         ? await physicsSearch(query, entries, { budget, hippoRoot, physicsConfig: config.physics })
         : await hybridSearch(query, entries, { budget, hippoRoot });
       const retrieved = markRetrieved(results.map((r) => r.entry));
-      for (const entry of retrieved) writeEntry(hippoRoot, entry);
+      // EVAL-ONLY ablation (see ablation.ts): skip persistence under the recall
+      // flag; ids below stay populated for outcome attribution.
+      if (!isRecallBoostAblated()) {
+        for (const entry of retrieved) writeEntry(hippoRoot, entry);
+      }
       lastRecalledIds.set(resolveClientKey(ctx), retrieved.map((e) => e.id));
 
       const rawSnapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
@@ -1032,7 +1041,7 @@ async function executeTool(
 
     case 'hippo_status': {
       const entries = loadAllEntries(hippoRoot, tenantId);
-      const now = new Date();
+      const now = evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
       let atRisk = 0;
       let totalStrength = 0;
       for (const e of entries) {

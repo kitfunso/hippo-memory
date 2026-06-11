@@ -7,6 +7,7 @@
  * without retrieving specific memories.
  */
 
+import { evalNow } from './ablation.js';
 import type { MemoryEntry } from './memory.js';
 import { Layer } from './memory.js';
 import { calculateStrength } from './memory.js';
@@ -36,7 +37,7 @@ export function computeAmbientState(entries: MemoryEntry[], now?: Date): Ambient
     };
   }
 
-  const currentTime = now ?? new Date();
+  const currentTime = now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only)
 
   const tagCounts = new Map<string, number>();
   let strengthSum = 0;

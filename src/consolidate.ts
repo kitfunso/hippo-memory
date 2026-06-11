@@ -7,6 +7,7 @@
  * 3. Stats tracking
  */
 
+import { evalNow, isRecallBoostAblated } from './ablation.js';
 import { MemoryEntry, Layer, calculateStrength, createMemory, resolveConfidence, type DecayOptions } from './memory.js';
 import {
   loadAllEntries,
@@ -99,7 +100,7 @@ export async function consolidate(
   hippoRoot: string,
   options: { dryRun?: boolean; now?: Date } = {}
 ): Promise<ConsolidationResult> {
-  const now = options.now ?? new Date();
+  const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
   const dryRun = options.dryRun ?? false;
 
   const result: ConsolidationResult = {
@@ -252,7 +253,11 @@ export async function consolidate(
   // it doesn't fade" pass.
   {
     const replayCount = config.replay?.count ?? REPLAY_COUNT_DEFAULT;
-    if (replayCount > 0 && survivors.length > 0) {
+    // EVAL-ONLY ablation (see ablation.ts): replay rehearsal IS recall
+    // strengthening (same markRetrieved dynamics), so the strengthen-off arm
+    // silences the whole pass - markRetrieved would return unmutated entries
+    // and persisting them anyway would still refresh updated_at / mirrors.
+    if (replayCount > 0 && survivors.length > 0 && !isRecallBoostAblated()) {
       const seed = Math.floor(now.getTime() / 1000) & 0xffffffff;
       const picked = sampleForReplay(survivors, replayCount, now, seed);
       if (picked.length > 0) {
