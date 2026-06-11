@@ -192,8 +192,14 @@ export async function runArmSeed(arm, seed, genOpts = {}, inspect = undefined) {
       setSimulatedNow(session.date); // mutators stamp simulated time
 
       // 1. Ingest this session's memories (created/last_retrieved = fake now).
+      //    Entry ids are DERIVED from (seed, protocol id), not random UUIDs:
+      //    the protocol intentionally creates score TIES (identical-form
+      //    negatives), and same-timestamp rows order by id - random ids would
+      //    make identical (arm, seed) runs produce different top-5 metrics
+      //    (codex P1). sha256 prefix keeps the mem_<12 hex> format.
       for (const m of bySession.get(session.index) ?? []) {
         const entry = createMemory(m.content);
+        entry.id = `mem_${createHash('sha256').update(`e1:${seed}:${m.id}`).digest('hex').slice(0, 12)}`;
         writeEntry(hippoRoot, entry);
         idMap.set(m.id, entry.id);
       }

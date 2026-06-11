@@ -49,6 +49,10 @@ describe('E1 generator', () => {
     const updatedFacts = new Set(p.memories.filter((m: any) => m.kind === 'update').map((m: any) => m.factId));
     expect(updatedFacts.size).toBe(20);
     expect(p.memories.filter((m: any) => m.kind === 'contradiction').length).toBe(5);
+    // Updates and contradictions are DISJOINT (codex P2): a contradicted fact
+    // never has a version chain, so contradiction-intrusion is unconfounded.
+    const contraFacts = new Set(p.memories.filter((m: any) => m.kind === 'contradiction').map((m: any) => m.factId));
+    for (const cf of contraFacts) expect(updatedFacts.has(cf)).toBe(false);
     // Hard-negative pool >= 10x facts.
     expect(p.meta.counts.distractors).toBeGreaterThanOrEqual(500);
     // Version timelines strictly ordered; updates strictly after v1.
@@ -117,6 +121,17 @@ describe('E1 driver', () => {
   it('driver cleans its env: no ablation vars leak after a run', async () => {
     await runArmSeed('decay-off', 2, TINY);
     for (const v of ABLATION_ENV_VARS) expect(process.env[v]).toBeUndefined();
+  });
+
+  it('is REPRODUCIBLE: identical (arm, seed) runs produce identical metrics (codex P1)', async () => {
+    // The protocol intentionally creates score ties (identical-form
+    // negatives); with random entry UUIDs, tie order differed across runs of
+    // the same seed. Entry ids are now derived from (seed, protocol id) -
+    // two full runs must agree to the byte.
+    const a = await runArmSeed('full', 11, TINY);
+    const b = await runArmSeed('full', 11, TINY);
+    expect(JSON.stringify(a.epochs)).toBe(JSON.stringify(b.epochs));
+    expect(a.meta.protocolHash).toBe(b.meta.protocolHash);
   });
 
   it('baseline arms produce rankings (bm25-static + recency-window)', async () => {

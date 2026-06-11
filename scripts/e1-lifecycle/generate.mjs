@@ -128,11 +128,15 @@ export function generateProtocol(opts) {
   let memSeq = 0;
   const mid = () => `pm${memSeq++}`;
 
-  // Which facts get updates (40%) and contradictions (10%) - disjoint draws
-  // from a shuffled index list so fractions are exact, not stochastic.
+  // Which facts get updates (40%) and contradictions (10%). Fractions are
+  // exact (shuffled-slice draws, not stochastic) and the two sets are
+  // DISJOINT: contradictions sample from the NON-updated remainder, so
+  // contradiction-intrusion is never confounded with version chains
+  // (codex P2: the earlier draw re-sampled the full list and could overlap).
   const order = shuffle(rand, Array.from({ length: numFacts }, (_, i) => i));
   const updateSet = new Set(order.slice(0, Math.round(numFacts * 0.4)));
-  const contraSet = new Set(shuffle(rand, order).slice(0, Math.round(numFacts * 0.1)));
+  const nonUpdated = order.filter((i) => !updateSet.has(i));
+  const contraSet = new Set(shuffle(rand, nonUpdated).slice(0, Math.round(numFacts * 0.1)));
   // Traps: 15% of facts get one plausible-but-wrong memory that receives --bad.
   const trapSet = new Set(shuffle(rand, order).slice(0, Math.round(numFacts * 0.15)));
 

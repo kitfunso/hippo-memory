@@ -60,3 +60,18 @@ Directional preview persists (not registered results): outcome feedback buries t
 (0.111 vs 0.733); full-lifecycle current R@5 BELOW all-off (0.257 vs 0.727 - decay
 sacrifices old-but-current facts to fresh noise at this horizon); stale-suppression helps
 (0.475 vs 0.875). The per-mechanism arms will attribute these causally.
+
+## Pilot 4 - 2026-06-11, post codex-round-1 fixes (deterministic ids, disjoint contradictions)
+
+| final epoch | full | all-off | guard [0.10, 0.90] |
+|---|---|---|---|
+| current R@5 | 0.320 | 0.727 | PASS |
+| stale-intrusion | 0.475 | 0.825 | PASS |
+| trap-persistence | 0.067 | 0.778 | PASS |
+| hot R@5 | 0.480 | 0.693 | PASS |
+
+Wall-clock: all-off 87.2s, full 161.1s. Reproducibility now proven by invariant test
+(two identical (arm, seed) runs produce byte-identical metrics; entry ids derived from
+(seed, protocol id) instead of random UUIDs). Contradiction facts disjoint from updated
+facts (attribution unconfounded). Guard passes; protocol ready to freeze pending codex
+convergence.
