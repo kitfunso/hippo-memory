@@ -13,7 +13,7 @@ import {
   loadEmbeddingIndex,
 } from './embeddings.js';
 import { resolveEmbeddingProvider } from './embedding-provider.js';
-import { physicsScore as computePhysicsScores } from './physics.js';
+import { physicsScore as computePhysicsScores, stripRetrievalBoostFromMass } from './physics.js';
 import type { PhysicsParticle } from './physics.js';
 import type { PhysicsConfig } from './physics-config.js';
 import { DEFAULT_PHYSICS_CONFIG } from './physics-config.js';
@@ -934,7 +934,15 @@ export async function physicsSearch(
       && particle.velocity.length === queryVector.length
     ) {
       physicsEntries.push(entry);
-      physicsParticles.push(particle);
+      // EVAL-ONLY ablation (see ablation.ts): persisted masses carry the
+      // retrieval-count boost baked in at the last sleep; under the recall
+      // flag, strip it so query gravity cannot rank by retrieval history
+      // (codex P2). No-op for rc = 0.
+      physicsParticles.push(
+        isRecallBoostAblated()
+          ? { ...particle, mass: stripRetrievalBoostFromMass(particle.mass, entry.retrieval_count) }
+          : particle,
+      );
     } else {
       classicEntries.push(entry);
     }
@@ -1201,13 +1209,19 @@ export function search(
  * Returns the mutated copies (caller must persist to disk).
  *
  * EVAL-ONLY ablation (see ablation.ts): with HIPPO_ABLATE_RECALL_BOOST set,
- * this is a no-op returning the entries unchanged - neutralizing all three
- * strengthening sub-effects (clock reset, retrieval_count, half-life
- * increment) at the single shared write site. Callers persist identical rows.
+ * this returns an EMPTY array - neutralizing all three strengthening
+ * sub-effects (clock reset, retrieval_count, half-life increment) at the
+ * single shared write site AND signalling callers to persist nothing.
+ * Returning the entries themselves was not enough: every production caller
+ * writes the returned array back via writeEntry, which refreshes updated_at,
+ * rewrites mirrors, and marks DAG parents dirty even for identical rows
+ * (codex P2). All callers map-then-persist the return value; the one
+ * consumer that re-joins it into display results (api.assembleContext) uses
+ * a `?? original` fallback, so an empty return is safe everywhere.
  * The default `now` honors HIPPO_FAKE_NOW (simulated-time protocols).
  */
 export function markRetrieved(entries: MemoryEntry[], now: Date = evalNow()): MemoryEntry[] {
-  if (isRecallBoostAblated()) return entries;
+  if (isRecallBoostAblated()) return [];
   return entries.map((e) => {
     if (e.superseded_by) return e;
     const updated: MemoryEntry = {

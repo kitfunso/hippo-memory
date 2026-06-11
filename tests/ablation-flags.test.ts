@@ -144,15 +144,30 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     _resetAblationCacheForTests();
   });
 
-  it('neutralizes ALL THREE strengthening sub-effects (no-op markRetrieved)', () => {
+  it('neutralizes ALL THREE strengthening sub-effects AND persistence (markRetrieved returns [])', () => {
+    // Returns EMPTY so callers persist nothing: writeEntry on identical rows
+    // still refreshes updated_at, rewrites mirrors, and marks DAG parents
+    // dirty (codex round-6 P2). The source entry itself is untouched.
     const before = agedMemory(30);
     before.confidence = 'stale';
     const result = markRetrieved([before], NOW);
-    expect(result[0]).toBe(before); // identical object, untouched
-    expect(result[0].retrieval_count).toBe(0); // no count
-    expect(result[0].last_retrieved).not.toBe(NOW.toISOString()); // no clock reset
-    expect(result[0].half_life_days).toBe(7); // no +2
-    expect(result[0].confidence).toBe('stale'); // no stale->observed promotion
+    expect(result).toEqual([]); // nothing to persist
+    expect(before.retrieval_count).toBe(0); // no count
+    expect(before.last_retrieved).not.toBe(NOW.toISOString()); // no clock reset
+    expect(before.half_life_days).toBe(7); // no +2
+    expect(before.confidence).toBe('stale'); // no stale->observed promotion
+  });
+
+  it('strips retrieval boost from PERSISTED physics masses (codex round-6 P2)', async () => {
+    // memory_physics rows written before the flag carry the boost baked in;
+    // the loaded-mass path must strip it (exact when rc is unchanged since
+    // the mass was persisted; no-op for rc = 0).
+    const { computeMass, stripRetrievalBoostFromMass } = await import('../src/physics.js');
+    clearAblationEnv(); // compute a mass as an UNFLAGGED sleep would have persisted it
+    const baked = computeMass(0.8, 16);
+    expect(baked).toBeGreaterThan(0.8);
+    expect(stripRetrievalBoostFromMass(baked, 16)).toBeCloseTo(0.8, 10);
+    expect(stripRetrievalBoostFromMass(0.8, 0)).toBe(0.8); // rc=0 no-op
   });
 
   it('isolation: decay still runs', () => {
