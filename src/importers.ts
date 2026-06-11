@@ -796,31 +796,10 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
     const hash = createHash('sha256').update(rawFileContent).digest('hex');
     const hashTag = `content-hash:${hash}`;
 
+    // Load every live raw row for this ref (>1 only after a concurrent double-
+    // insert). The idempotency decision happens below, AFTER the full tag set is
+    // built, so it can compare the complete envelope rather than a subset.
     const priors = existing.get(artifactRef) ?? [];
-    // Unchanged iff EVERY live raw row matches the full import ENVELOPE, not just
-    // the file bytes: the content-hash tag AND the requested scope AND all the
-    // requested extra tags. Keying on the content-hash alone meant a re-import
-    // that changed --scope (or added a --tag) was skipped, so a vault first
-    // imported public stayed public after a rerun with a private scope (codex
-    // R10 P2). An envelope mismatch falls through to archive-all + remember with
-    // the new envelope. (The `length > 0` guard is required: `[].every()` is
-    // vacuously true, but a never-seen file must import, not skip. Archiving ALL
-    // priors on a mismatch also clears any concurrent-double-insert duplicates.)
-    const envelopeUnchanged =
-      priors.length > 0 &&
-      priors.every((p) => {
-        const priorTags = parseJsonArrayLoose(p.tags_json);
-        return (
-          priorTags.includes(hashTag) &&
-          (p.scope ?? null) === scope &&
-          extraTags.every((t) => priorTags.includes(t))
-        );
-      });
-    if (envelopeUnchanged) {
-      // Unchanged file + envelope → skip (idempotent re-import).
-      skipped++;
-      continue;
-    }
 
     const { fm, body } = parseFrontmatter(rawFileContent);
 
@@ -829,6 +808,48 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
     // first then throwing on the empty body would delete a live memory mid-run
     // (codex P2). The note stays in `seen`, so deletion-sync won't archive it.
     if (body.trim().length < 3) {
+      skipped++;
+      continue;
+    }
+
+    // Build the FULL tag envelope this import would write, BEFORE the idempotency
+    // decision. De-duplicate (createMemory stores tags verbatim, so a collision
+    // between, e.g., a frontmatter tag and an extraTag would otherwise produce a
+    // duplicate). Order-preserving.
+    const frontmatterTags = [
+      ...frontmatterList(fm['tags']),
+      ...frontmatterList(fm['aliases']).map((a) => `alias:${a}`),
+    ];
+    const wikilinkTags = parseWikilinks(body).map((t) => `wikilink-candidate:${t}`);
+    const tags = Array.from(
+      new Set([
+        'source:vault',
+        `vault:${vaultName}`,
+        hashTag,
+        ...frontmatterTags,
+        ...wikilinkTags,
+        ...extraTags,
+      ]),
+    );
+
+    // Unchanged iff EVERY live raw row carries the EXACT same tag set AND scope.
+    // Comparing the COMPLETE set (not the content-hash + a subset of extra tags)
+    // means every envelope change registers: content (via the content-hash tag),
+    // frontmatter, wikilinks, an ADDED extra tag, or a REMOVED one - the earlier
+    // piecemeal checks missed scope (R10 P2) then tag removal (R11 P2). Set
+    // equality is order-independent and both sides are deduped. (`length > 0`
+    // guard: a never-seen file must import, not skip; archiving ALL priors on a
+    // mismatch also clears any concurrent-double-insert duplicates.)
+    const wantTags = new Set(tags);
+    const envelopeUnchanged =
+      priors.length > 0 &&
+      priors.every((p) => {
+        if ((p.scope ?? null) !== scope) return false;
+        const priorTags = parseJsonArrayLoose(p.tags_json);
+        return priorTags.length === wantTags.size && priorTags.every((t) => wantTags.has(t));
+      });
+    if (envelopeUnchanged) {
+      // Unchanged file + envelope → skip (idempotent re-import).
       skipped++;
       continue;
     }
@@ -842,25 +863,6 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
       archived++; // count the would-be archive even in dryRun (true preview)
       if (!dryRun) archiveRaw(ctx, p.id, `changed:${artifactRef}`);
     }
-    const frontmatterTags = [
-      ...frontmatterList(fm['tags']),
-      ...frontmatterList(fm['aliases']).map((a) => `alias:${a}`),
-    ];
-    const wikilinkTags = parseWikilinks(body).map((t) => `wikilink-candidate:${t}`);
-
-    // De-duplicate the final tag array (createMemory stores tags verbatim, so a
-    // collision between, e.g., a frontmatter tag and an extraTag would otherwise
-    // produce a duplicate). Order-preserving.
-    const tags = Array.from(
-      new Set([
-        'source:vault',
-        `vault:${vaultName}`,
-        hashTag,
-        ...frontmatterTags,
-        ...wikilinkTags,
-        ...extraTags,
-      ]),
-    );
 
     // remember() owns the actual write. We build an `echo` of the SAME content +
     // tags via createMemory purely for the ImportResult, then reconcile its id to

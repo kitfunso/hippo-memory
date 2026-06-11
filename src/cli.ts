@@ -5845,11 +5845,18 @@ function cmdImport(
       console.error('hippo import --vault does not support --global (raw rows are tenant-local).');
       process.exit(1);
     }
-    if (!flags['name'] || !String(flags['name']).trim()) {
+    if (typeof flags['name'] !== 'string' || !flags['name'].trim()) {
       // --name is the vault identity key for the destructive source-deletion sync;
       // inferring it from the folder basename let same-basename vaults collide and
-      // clobber each other (codex R10 P2). Require it explicitly.
-      console.error('hippo import --vault requires --name <vault> (the identity key used for source-deletion sync).');
+      // clobber each other (codex R10 P2). A valueless `--name` parses as boolean
+      // true, and String(true) === "true" would silently import under vault:true:*
+      // - reject a non-string so it fails fast instead (codex R11 P2).
+      console.error('hippo import --vault requires --name <vault> (a non-empty identity key for source-deletion sync).');
+      process.exit(1);
+    }
+    if (flags['scope'] !== undefined && (typeof flags['scope'] !== 'string' || !flags['scope'].trim())) {
+      // Same valueless-flag trap: a bare `--scope` must not become scope "true".
+      console.error('hippo import --vault: --scope requires a value (e.g. --scope private).');
       process.exit(1);
     }
     const tenantId = resolveTenantId({});

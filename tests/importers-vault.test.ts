@@ -807,6 +807,25 @@ describe('importVault (x) — explicit name + envelope-aware idempotency', () =>
     expect(live[0].tags).toContain('campaign:q3');
   });
 
+  it('re-imports an unchanged file when an extra tag is REMOVED (codex R11 P2)', () => {
+    writeNote('note.md', '# Note\nstable content across the tag removal');
+    expect(
+      importVault(vaultDir, opts({ name: 'v', extraTags: ['campaign:q3'] })).imported,
+    ).toBe(1);
+    expect(loadAllEntries(tmpDir, 'default')[0].tags).toContain('campaign:q3');
+
+    // Re-import the SAME bytes WITHOUT the extra tag: a subset check would skip
+    // (vacuously true) and leave the stale tag live; the full-set check treats the
+    // removal as an envelope change and re-writes.
+    const second = importVault(vaultDir, opts({ name: 'v' }));
+    expect(second.skipped).toBe(0);
+    expect(second.imported).toBe(1);
+    expect(second.archived).toBe(1);
+    const live = loadAllEntries(tmpDir, 'default');
+    expect(live.length).toBe(1);
+    expect(live[0].tags).not.toContain('campaign:q3'); // stale tag gone
+  });
+
   it('two same-basename vaults stay isolated under distinct explicit names', () => {
     // Distinct names -> distinct vault:<name>:* prefixes -> deletion-sync of one
     // never touches the other (the failure mode the basename default caused).
