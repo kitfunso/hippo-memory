@@ -259,12 +259,16 @@ export function generateProtocol(opts) {
         // contradiction-lookalike (hedged phrasing, own token)
         content = `Unconfirmed: ${entity} ${attribute} might be ${ntok}, pending review.`;
       } else {
-        // BOTH-token mention (pilot rescale, 2026-06-11): same entity AND
-        // attribute in a process/meta sentence with its own token. These
-        // collide with the probe query on both tokens, so a static top-5
-        // cannot hold every same-fact document - de-saturates the all-off
-        // baseline (pilot showed currentR5 0.943 > 0.90 guard).
-        content = `Review of ${entity} ${attribute} noted in minutes ${ntok}; decision log pending.`;
+        // VALUE-CLAIM lookalike (pilot-2 rescale, 2026-06-11): the EXACT fact
+        // template with its own token. Pilot 2 showed longer meta-sentences
+        // never displace tight fact docs (BM25 length normalization), so the
+        // all-off ceiling held at 0.967. Identical-form claims are also the
+        // realistic adversary: a long-lived store accumulates multiple tight
+        // value claims per key (old notes, speculation, misheard values).
+        // With > top-k identical-form docs per fact, a static ranker must
+        // tie-break arbitrarily; lifecycle signals (update recency,
+        // strengthening, outcomes) are precisely the tiebreakers under test.
+        content = `${entity} ${attribute} ${pick(rand, CONNECTIVES)} ${ntok}.`;
       }
       memories.push({
         id: mid(), session: sn, kind: 'distractor', factId: null, version: null,
