@@ -137,6 +137,15 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     );
   });
 
+  it('neutralizes the READ side too: prior retrieval_count > 0 gives no boost (codex P2)', () => {
+    // A store written BEFORE the flag was set can carry counts; the ablated
+    // arm must not let that history leak strengthening into rankings.
+    const withHistory = agedMemory(10);
+    withHistory.retrieval_count = 16;
+    const without = agedMemory(10);
+    expect(calculateStrength(withHistory, NOW)).toBe(calculateStrength(without, NOW));
+  });
+
   it('isolation: both outcome channels still run', async () => {
     let m = createMemory('outcome-laden');
     m = applyOutcome(m, true);
@@ -227,6 +236,21 @@ describe('HIPPO_FAKE_NOW', () => {
     // markRetrieved default stamp = fake now.
     const [marked] = markRetrieved([createMemory('stamp me')]);
     expect(marked.last_retrieved).toBe('2030-01-01T00:00:00.000Z');
+  });
+
+  it('flows through search scoring, not just retrieval stamping (codex P2)', async () => {
+    // Without the search-default wiring, scoring would use the REAL clock while
+    // markRetrieved stamps the fake one - inconsistent simulated time.
+    process.env.HIPPO_FAKE_NOW = '2030-01-01T00:00:00.000Z';
+    _resetAblationCacheForTests();
+    const m = createMemory('search scoring uses the fake clock');
+    m.half_life_days = 7; // fresh in real time, ancient against the 2030 clock
+    const results = await hybridSearch('search scoring fake clock', [m], {
+      budget: 10000,
+      explain: true,
+    });
+    // strengthMultiplier = 0.5 + 0.5 * strength; strength ~ 0 under the 2030 clock.
+    expect(results[0].breakdown?.strengthMultiplier).toBeLessThan(0.51);
   });
 
   it('invalid value falls back to the real clock', () => {

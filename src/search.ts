@@ -400,7 +400,7 @@ export async function hybridSearch(
     };
   } = {}
 ): Promise<SearchResult[]> {
-  const now = options.now ?? new Date();
+  const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
   const budget = options.budget ?? 4000;
   const minResults = options.minResults ?? 1;
   const embeddingWeight = options.embeddingWeight ?? 0.6;
@@ -872,7 +872,7 @@ export async function physicsSearch(
     summaryFreshness?: boolean;
   } = {}
 ): Promise<SearchResult[]> {
-  const now = options.now ?? new Date();
+  const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
   const budget = options.budget ?? 4000;
   const minResults = options.minResults ?? 1;
   const config = options.physicsConfig ?? DEFAULT_PHYSICS_CONFIG;
@@ -1061,7 +1061,7 @@ export function search(
   options: { budget?: number; now?: Date; hippoRoot?: string; minResults?: number; includeSuperseded?: boolean; asOf?: string } = {}
 ): SearchResult[] {
   // Synchronous path: BM25 only (no async hybrid)
-  const now = options.now ?? new Date();
+  const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
   const budget = options.budget ?? 4000;
   const minResults = options.minResults ?? 1;
 

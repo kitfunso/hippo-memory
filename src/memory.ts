@@ -4,7 +4,12 @@
  */
 
 import { randomUUID } from 'crypto';
-import { isDecayAblated, isOutcomeSlowAblated, evalNow } from './ablation.js';
+import {
+  isDecayAblated,
+  isOutcomeSlowAblated,
+  isRecallBoostAblated,
+  evalNow,
+} from './ablation.js';
 
 export enum Layer {
   Buffer = 'buffer',
@@ -338,7 +343,13 @@ export function calculateStrength(
   const decay = isDecayAblated() ? 1.0 : Math.pow(0.5, decayExponent);
 
   // Retrieval boost: 1 + 0.1 * log2(retrieval_count + 1)
-  const retrievalBoost = 1 + 0.1 * Math.log2(entry.retrieval_count + 1);
+  // EVAL-ONLY ablation (see ablation.ts): the recall-boost flag neutralizes
+  // the READ side too, so a store with PRIOR retrieval history (counts > 0
+  // written before the flag was set) does not leak strengthening into an
+  // ablated arm's rankings (codex P2).
+  const retrievalBoost = isRecallBoostAblated()
+    ? 1.0
+    : 1 + 0.1 * Math.log2(entry.retrieval_count + 1);
 
   // Emotional multiplier
   // v1.13.5 / J5: apply HIPPO_LOSS_AVERSION_RATIO to the negative multiplier
