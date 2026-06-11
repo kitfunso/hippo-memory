@@ -144,30 +144,40 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     _resetAblationCacheForTests();
   });
 
-  it('neutralizes ALL THREE strengthening sub-effects AND persistence (markRetrieved returns [])', () => {
-    // Returns EMPTY so callers persist nothing: writeEntry on identical rows
-    // still refreshes updated_at, rewrites mirrors, and marks DAG parents
-    // dirty (codex round-6 P2). The source entry itself is untouched.
+  it('neutralizes ALL THREE strengthening sub-effects; entries returned unmutated', () => {
+    // Returns the UNMUTATED entries (not []): callers derive
+    // last_retrieval_ids from the return value, and `hippo outcome` targets
+    // those ids - an empty return would co-ablate the outcome channel in the
+    // strengthen-off arm (codex round-7 P2). Persistence is gated separately
+    // at each persisting caller (codex round-6 P2).
     const before = agedMemory(30);
     before.confidence = 'stale';
     const result = markRetrieved([before], NOW);
-    expect(result).toEqual([]); // nothing to persist
-    expect(before.retrieval_count).toBe(0); // no count
-    expect(before.last_retrieved).not.toBe(NOW.toISOString()); // no clock reset
-    expect(before.half_life_days).toBe(7); // no +2
-    expect(before.confidence).toBe('stale'); // no stale->observed promotion
+    expect(result.length).toBe(1); // ids preserved for outcome attribution
+    expect(result[0]).toBe(before); // identical object, untouched
+    expect(result[0].retrieval_count).toBe(0); // no count
+    expect(result[0].last_retrieved).not.toBe(NOW.toISOString()); // no clock reset
+    expect(result[0].half_life_days).toBe(7); // no +2
+    expect(result[0].confidence).toBe('stale'); // no stale->observed promotion
   });
 
-  it('strips retrieval boost from PERSISTED physics masses (codex round-6 P2)', async () => {
-    // memory_physics rows written before the flag carry the boost baked in;
-    // the loaded-mass path must strip it (exact when rc is unchanged since
-    // the mass was persisted; no-op for rc = 0).
-    const { computeMass, stripRetrievalBoostFromMass } = await import('../src/physics.js');
-    clearAblationEnv(); // compute a mass as an UNFLAGGED sleep would have persisted it
-    const baked = computeMass(0.8, 16);
-    expect(baked).toBeGreaterThan(0.8);
-    expect(stripRetrievalBoostFromMass(baked, 16)).toBeCloseTo(0.8, 10);
-    expect(stripRetrievalBoostFromMass(0.8, 0)).toBe(0.8); // rc=0 no-op
+  it('physics mass recomputed under ablated rules ignores ALL recall history (codex round-7 P2)', async () => {
+    // The physicsSearch join recomputes mass as
+    // computeMass(calculateStrength(entry, now), rc) under the flag; both
+    // functions apply ablated semantics internally, so a heavily-recalled
+    // entry and an untouched twin produce the SAME mass - no history leaks
+    // through either the count multiplier or the frozen-strength component.
+    const { computeMass } = await import('../src/physics.js');
+    const created = new Date(NOW.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString();
+    const hot = agedMemory(10);
+    hot.created = created;
+    hot.retrieval_count = 16;
+    hot.last_retrieved = new Date(NOW.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString();
+    const cold = agedMemory(10);
+    cold.created = created;
+    expect(computeMass(calculateStrength(hot, NOW), hot.retrieval_count)).toBe(
+      computeMass(calculateStrength(cold, NOW), cold.retrieval_count),
+    );
   });
 
   it('isolation: decay still runs', () => {

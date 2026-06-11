@@ -130,19 +130,6 @@ export function computeMass(strength: number, retrievalCount: number): number {
   return Math.max(0.01, strength * (1 + 0.1 * Math.log2(effectiveCount + 1)));
 }
 
-/**
- * EVAL-ONLY (see ablation.ts): strip the retrieval-count boost baked into a
- * PERSISTED particle mass. memory_physics rows written before the recall
- * ablation was enabled carry mass = strength * (1 + 0.1*log2(rc+1)); under
- * the flag, query gravity must not rank by that history (codex P2). Exact
- * whenever rc has not changed since the mass was persisted - which holds for
- * any store where the flag has been on since the last sleep (the flag stops
- * rc from ever incrementing). No-op when rc = 0 (protocol-fresh stores).
- */
-export function stripRetrievalBoostFromMass(mass: number, retrievalCount: number): number {
-  return Math.max(0.01, mass / (1 + 0.1 * Math.log2(retrievalCount + 1)));
-}
-
 export function computeCharge(valence: EmotionalValence): number {
   return CHARGE_MAP[valence] ?? 0;
 }

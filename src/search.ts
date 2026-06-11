@@ -13,7 +13,7 @@ import {
   loadEmbeddingIndex,
 } from './embeddings.js';
 import { resolveEmbeddingProvider } from './embedding-provider.js';
-import { physicsScore as computePhysicsScores, stripRetrievalBoostFromMass } from './physics.js';
+import { physicsScore as computePhysicsScores, computeMass } from './physics.js';
 import type { PhysicsParticle } from './physics.js';
 import type { PhysicsConfig } from './physics-config.js';
 import { DEFAULT_PHYSICS_CONFIG } from './physics-config.js';
@@ -934,13 +934,18 @@ export async function physicsSearch(
       && particle.velocity.length === queryVector.length
     ) {
       physicsEntries.push(entry);
-      // EVAL-ONLY ablation (see ablation.ts): persisted masses carry the
-      // retrieval-count boost baked in at the last sleep; under the recall
-      // flag, strip it so query gravity cannot rank by retrieval history
-      // (codex P2). No-op for rc = 0.
+      // EVAL-ONLY ablation (see ablation.ts): persisted masses embed recall
+      // history TWICE - the outer retrieval-count multiplier AND the frozen
+      // strength inside it (computed at sleep time from clock-reset
+      // last_retrieved + the read-side boost). Stripping the outer multiplier
+      // alone is not enough (codex round-7 P2); under the flag, recompute the
+      // mass LIVE from the current entry under ablated strength rules
+      // (created-anchored decay, no boost - both applied inside
+      // calculateStrength/computeMass by the same flag). The frozen-at-sleep
+      // semantics is unrecoverable for the ablated arm by definition.
       physicsParticles.push(
         isRecallBoostAblated()
-          ? { ...particle, mass: stripRetrievalBoostFromMass(particle.mass, entry.retrieval_count) }
+          ? { ...particle, mass: computeMass(calculateStrength(entry, now), entry.retrieval_count) }
           : particle,
       );
     } else {
@@ -1209,19 +1214,21 @@ export function search(
  * Returns the mutated copies (caller must persist to disk).
  *
  * EVAL-ONLY ablation (see ablation.ts): with HIPPO_ABLATE_RECALL_BOOST set,
- * this returns an EMPTY array - neutralizing all three strengthening
+ * this returns the entries UNMUTATED - neutralizing all three strengthening
  * sub-effects (clock reset, retrieval_count, half-life increment) at the
- * single shared write site AND signalling callers to persist nothing.
- * Returning the entries themselves was not enough: every production caller
- * writes the returned array back via writeEntry, which refreshes updated_at,
- * rewrites mirrors, and marks DAG parents dirty even for identical rows
- * (codex P2). All callers map-then-persist the return value; the one
- * consumer that re-joins it into display results (api.assembleContext) uses
- * a `?? original` fallback, so an empty return is safe everywhere.
+ * single shared write site. The entries (not an empty array) must be
+ * returned because callers derive `last_retrieval_ids` from the return
+ * value, and a later `hippo outcome --good/--bad` targets those ids - an
+ * empty return would silently co-ablate the outcome channel in the
+ * strengthen-off arm (codex round-7 P2). PERSISTENCE is gated separately at
+ * each persisting caller (CLI recall, api context, MCP recall/context,
+ * consolidation replay): writeEntry on identical rows still refreshes
+ * updated_at, rewrites mirrors, and marks DAG parents dirty (codex round-6
+ * P2), so those write loops skip under the flag.
  * The default `now` honors HIPPO_FAKE_NOW (simulated-time protocols).
  */
 export function markRetrieved(entries: MemoryEntry[], now: Date = evalNow()): MemoryEntry[] {
-  if (isRecallBoostAblated()) return [];
+  if (isRecallBoostAblated()) return entries;
   return entries.map((e) => {
     if (e.superseded_by) return e;
     const updated: MemoryEntry = {

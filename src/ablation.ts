@@ -14,21 +14,33 @@
  *
  * Flags (set to '1' or 'true'):
  *   HIPPO_ABLATE_DECAY         time-decay term := 1 in calculateStrength.
- *   HIPPO_ABLATE_RECALL_BOOST  markRetrieved becomes a no-op (all three
- *                              sub-effects: clock reset, retrieval_count,
- *                              half_life increment), the retrieval-count READ
- *                              boost := 1, and decay anchors at `created`
- *                              instead of `last_retrieved` (so clock resets
- *                              persisted by PRIOR unflagged runs cannot leak
- *                              in). CAVEAT: half_life increments persisted by
- *                              prior runs are NOT reconstructed (consolidation
- *                              legitimately writes half_life too, so they are
- *                              not separable) - ablation arms must run on
- *                              FRESH stores, as the experiment protocol
- *                              mandates. NOTE: also neutralizes replay
- *                              rehearsal inside consolidation (same helper);
- *                              use config replay.count=0 to separate replay
- *                              from query-time strengthening.
+ *   HIPPO_ABLATE_RECALL_BOOST  full recall-strengthening ablation:
+ *                              - markRetrieved returns entries UNMUTATED (no
+ *                                clock reset / count / half-life increment);
+ *                                ids stay available so `hippo outcome`
+ *                                attribution keeps working in this arm;
+ *                              - persisting callers (CLI recall, api context,
+ *                                MCP recall/context, consolidation replay)
+ *                                skip their writeEntry loops (identical-row
+ *                                writes still refresh updated_at / mirrors /
+ *                                DAG dirty flags);
+ *                              - the retrieval-count READ boost := 1;
+ *                              - decay anchors at `created` instead of
+ *                                `last_retrieved` (prior-run clock resets
+ *                                cannot leak in);
+ *                              - physics: computeMass ignores the count, and
+ *                                physicsSearch recomputes loaded masses LIVE
+ *                                under ablated strength rules (persisted
+ *                                masses embed recall history in their frozen
+ *                                strength component);
+ *                              - replay rehearsal is silenced entirely (it IS
+ *                                strengthening; use config replay.count=0 to
+ *                                separate replay in unflagged arms).
+ *                              CAVEAT: half_life increments persisted by
+ *                              prior unflagged runs are NOT reconstructed
+ *                              (consolidation legitimately writes half_life
+ *                              too) - ablation arms run on FRESH stores, as
+ *                              the experiment protocol mandates.
  *   HIPPO_ABLATE_OUTCOME       both outcome channels := neutral
  *                              (= _SLOW + _FAST together). The slow side also
  *                              silences replay's outcome reward bias

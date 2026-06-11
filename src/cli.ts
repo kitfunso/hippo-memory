@@ -26,7 +26,7 @@
  *   hippo wm <push|read|clear|flush>
  */
 
-import { evalNow } from './ablation.js';
+import { evalNow, isRecallBoostAblated } from './ablation.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -1687,9 +1687,15 @@ async function cmdRecall(
   // Update retrieval metadata and persist
   const updated = markRetrieved(results.map((r) => r.entry));
   const localIndex = loadIndex(hippoRoot);
-  for (const u of updated) {
-    const targetRoot = localIndex.entries[u.id] ? hippoRoot : (isInitialized(globalRoot) ? globalRoot : hippoRoot);
-    writeEntry(targetRoot, u);
+  // EVAL-ONLY ablation (see ablation.ts): under the recall flag, markRetrieved
+  // returns unmutated entries (ids preserved for outcome attribution below)
+  // and persistence is skipped - writeEntry on identical rows still refreshes
+  // updated_at, rewrites mirrors, and marks DAG parents dirty.
+  if (!isRecallBoostAblated()) {
+    for (const u of updated) {
+      const targetRoot = localIndex.entries[u.id] ? hippoRoot : (isInitialized(globalRoot) ? globalRoot : hippoRoot);
+      writeEntry(targetRoot, u);
+    }
   }
 
   // Track last retrieval IDs for outcome command

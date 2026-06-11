@@ -54,7 +54,7 @@ import {
   type AuditOp,
 } from './audit.js';
 import { promoteToGlobal, getGlobalRoot, autoShare, searchBothHybrid } from './shared.js';
-import { evalNow } from './ablation.js';
+import { evalNow, isRecallBoostAblated } from './ablation.js';
 import { archiveRawMemory } from './raw-archive.js';
 import {
   createApiKey,
@@ -2374,13 +2374,19 @@ export async function getContext(
     const updatedEntries = markRetrieved(toUpdate);
     const localIndex = loadIndex(ctx.hippoRoot);
 
-    for (const u of updatedEntries) {
-      const targetRoot = localIndex.entries[u.id]
-        ? ctx.hippoRoot
-        : hasGlobal
-          ? globalRoot
-          : ctx.hippoRoot;
-      writeEntry(targetRoot, u);
+    // EVAL-ONLY ablation (see ablation.ts): under the recall flag,
+    // markRetrieved returns unmutated entries (ids preserved for outcome
+    // attribution) and persistence is skipped (identical-row writes still
+    // refresh updated_at / mirrors / DAG dirty flags).
+    if (!isRecallBoostAblated()) {
+      for (const u of updatedEntries) {
+        const targetRoot = localIndex.entries[u.id]
+          ? ctx.hippoRoot
+          : hasGlobal
+            ? globalRoot
+            : ctx.hippoRoot;
+        writeEntry(targetRoot, u);
+      }
     }
 
     localIndex.last_retrieval_ids = updatedEntries.map((u) => u.id);
