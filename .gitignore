@@ -65,3 +65,4 @@ tmp-card4-20seed/
 trajectories/
 benchmarks/lifecycle-stress/results-2*.json
 benchmarks/lifecycle-stress/labels/
+benchmarks/e1-lifecycle/raw/
