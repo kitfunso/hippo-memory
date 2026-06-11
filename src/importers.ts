@@ -4,10 +4,14 @@
  */
 
 import * as fs from 'fs';
+import * as path from 'path';
+import { createHash } from 'node:crypto';
 import { createMemory, Layer, MemoryEntry } from './memory.js';
 import { initStore, loadAllEntries, writeEntry } from './store.js';
 import { textOverlap } from './search.js';
 import { getGlobalRoot, initGlobal } from './shared.js';
+import { remember, archiveRaw, isPrivateScope, type Context } from './api.js';
+import { openHippoDb, closeHippoDb } from './db.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -17,6 +21,9 @@ export interface ImportResult {
   total: number;     // entries found in source
   imported: number;  // actually imported (after dedup)
   skipped: number;   // skipped as duplicates or too short
+  /** K1 vault import: rows archived this run (changed + source-deleted). In a
+   *  dryRun this is the would-be count (a true deletion-sync preview). */
+  archived?: number;
   entries: MemoryEntry[];
 }
 
@@ -32,6 +39,22 @@ export interface ImportOptions {
    * Undefined preserves pre-1.12.1 host-wide dedup behaviour.
    */
   tenantId?: string;
+  /**
+   * K1 vault import only. Logical vault name used in the `vault:<name>` tag and
+   * the `artifactRef='vault:<name>:<relpath>'` key. REQUIRED by importVault: it
+   * is the identity key for the destructive source-deletion sync, so it must be
+   * set explicitly rather than inferred from the folder basename (two vaults
+   * sharing a basename would collide and clobber each other). importVault throws
+   * if it is missing or blank. Optional in this shared type only because the
+   * other importers ignore it. Operator-supplied, so the loader query LIKE-escapes
+   * it (see `escapeLike` below).
+   */
+  name?: string;
+  /**
+   * K1 vault import only. Memory scope stamped on every imported note. Defaults
+   * to null (unscoped) when unset.
+   */
+  scope?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -494,4 +517,430 @@ export function importMarkdown(filePath: string, options: ImportOptions): Import
   }
 
   return totalResult;
+}
+
+// ---------------------------------------------------------------------------
+// K1 vault importer (markdown-vault FOLDER → kind='raw' memories)
+//
+// MIRRORS THE CONNECTOR PATTERN (src/connectors/slack|github), NOT the
+// single-file importers above. Each note becomes a single kind='raw' row with
+// provenance in TAGS (`source:vault` + `vault:<name>`), an artifactRef cursor
+// key, and a content-hash tag. Changes APPEND a new raw row after archiveRaw of
+// the old one; deletions archiveRaw the orphaned rows. We NEVER `supersede` a
+// raw row (supersede yields kind='distilled', losing raw-append-only protection
+// and escaping the kind='raw' deletion rescan) — all raw deletions route through
+// `archiveRaw` (the only trigger-legit raw delete).
+// ---------------------------------------------------------------------------
+
+/** Escape LIKE wildcards in operator-supplied text (mirror of
+ *  src/project-briefs.ts:477 / src/store.ts:782, kept local since neither is
+ *  exported). Used so a `%`/`_`/`\` in the vault name cannot over-match the
+ *  loader prefix and archive another vault's rows. */
+function escapeLike(term: string): string {
+  return term.replace(/[%_\\]/g, '\\$&');
+}
+
+/** Minimal inline frontmatter split. Recognises a leading `---\n…\n---\n`
+ *  block (no YAML dep). Returns the parsed key→value map plus the body with the
+ *  block removed. When no well-formed block is present, `fm` is empty and
+ *  `body` is the original content. */
+function parseFrontmatter(raw: string): { fm: Record<string, string>; body: string } {
+  // Must start with `---` on its own line. Accept CRLF or LF.
+  const m = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+  if (!m) return { fm: {}, body: raw };
+  const block = m[1];
+  const body = raw.slice(m[0].length);
+  const fm: Record<string, string> = {};
+  const lines = block.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const kv = lines[i].match(/^([A-Za-z0-9_-]+)\s*:\s*(.*)$/);
+    if (!kv) continue;
+    let val = kv[2].trim();
+    if (val === '') {
+      // YAML block-style list: `key:` followed by indented `- item` lines
+      // (common in Obsidian/Dendron frontmatter). Collect them into a
+      // comma-joined value so frontmatterList parses them (codex P2).
+      const items: string[] = [];
+      let j = i + 1;
+      let item: RegExpMatchArray | null;
+      while (j < lines.length && (item = lines[j].match(/^\s+-\s+(.+?)\s*$/)) !== null) {
+        items.push(item[1].replace(/^['"]|['"]$/g, '').trim());
+        j++;
+      }
+      if (items.length) {
+        val = items.join(', ');
+        i = j - 1;
+      }
+    }
+    fm[kv[1]] = val;
+  }
+  return { fm, body };
+}
+
+/** Pull a frontmatter field that may be a YAML flow list (`[a, b]`), a
+ *  comma-separated scalar (`a, b`), or a single token, into a string[]. Quotes
+ *  and surrounding brackets are stripped; empty entries dropped. */
+function frontmatterList(value: string | undefined): string[] {
+  if (!value) return [];
+  let v = value.trim();
+  if (v.startsWith('[') && v.endsWith(']')) v = v.slice(1, -1);
+  return v
+    .split(',')
+    .map((s) => s.trim().replace(/^['"]|['"]$/g, '').trim())
+    .filter(Boolean);
+}
+
+/** Parse `[[wikilinks]]` from body text. `[[target]]` and `[[target|alias]]`
+ *  both yield `target` (alias dropped). Returns de-duplicated, order-preserving
+ *  target strings (trimmed). Embeds (`![[…]]`) are intentionally matched too —
+ *  the leading `!` is not part of the `[[…]]` capture, so an embed contributes
+ *  its target as a candidate, which is the desired no-crash baseline behaviour. */
+function parseWikilinks(body: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const re = /\[\[([^\]]+?)\]\]/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(body)) !== null) {
+    const inner = match[1];
+    const target = (inner.split('|')[0] ?? '').trim();
+    if (!target) continue;
+    if (seen.has(target)) continue;
+    seen.add(target);
+    out.push(target);
+  }
+  return out;
+}
+
+/** Recursively collect `*.md` files under `root`, returning paths relative to
+ *  `root` with forward-slash separators (stable artifactRef keys across OSes).
+ *  Symlinks are not followed. Skips dot-directories (the default `.hippo` store,
+ *  `.git`, `.obsidian`, `.trash`) AND the canonicalized Hippo store path during
+ *  the walk, so re-importing a vault that CONTAINS the store never ingests its own
+ *  markdown mirror files (codex R5 P1: `hippo import --vault .` after `hippo
+ *  init` in the vault would otherwise self-import its mirror rows and grow on
+ *  every run). The root-IS-the-store case is handled one level up in
+ *  importVault (a no-op early return), NOT here: returning [] for it would feed
+ *  the deletion-sync an empty scan that mass-archives every live row (codex R8). */
+function collectMarkdownFiles(root: string, hippoRoot: string): string[] {
+  const out: string[] = [];
+  // Canonicalize (realpath) so a non-dot HIPPO_HOME store nested in the vault is
+  // skipped even when hippoRoot is an aliased path (junction / Windows case
+  // variant); path.resolve would miss it and self-import the store's mirror
+  // files (codex R9 follow-up: same gap as the importVault guard, sibling site).
+  const resolvedHippoRoot = realpathOrResolve(hippoRoot);
+  const walk = (dir: string): void => {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const ent of entries) {
+      if (ent.isSymbolicLink()) continue;
+      const abs = path.join(dir, ent.name);
+      if (ent.isDirectory()) {
+        // Skip dot-dirs (config/system, incl. the default `.hippo` store) and
+        // the canonicalized store path (covers a HIPPO_HOME outside `.hippo`).
+        if (ent.name.startsWith('.')) continue;
+        if (realpathOrResolve(abs) === resolvedHippoRoot) continue;
+        walk(abs);
+      } else if (ent.isFile() && ent.name.toLowerCase().endsWith('.md')) {
+        out.push(path.relative(root, abs).split(path.sep).join('/'));
+      }
+    }
+  };
+  walk(root);
+  out.sort();
+  return out;
+}
+
+/** Canonicalize a path for the self-store comparison: dereference symlinks /
+ *  junctions and normalize case (Windows) via the OS realpath, so a junction or
+ *  a case-variant path to the store is still recognized as self-store (codex R9
+ *  P2: path.resolve does neither, so an aliased store path slipped past the
+ *  guard and triggered the mass-archive). Falls back to path.resolve when the
+ *  path does not exist yet - an uninitialized store or a typo'd vault path
+ *  cannot be a live self-store, and a non-existent vault folder fails later in
+ *  the walk (readdirSync) before deletion-sync can archive anything. */
+function realpathOrResolve(p: string): string {
+  try {
+    return fs.realpathSync.native(p);
+  } catch {
+    return path.resolve(p);
+  }
+}
+
+interface VaultRow {
+  id: string;
+  artifact_ref: string;
+  tags_json: string;
+  scope: string | null;
+}
+
+/**
+ * Import a markdown vault FOLDER as `kind='raw'` memories.
+ *
+ * NOT re-entrant: idempotency rests on the in-memory `existing` Map loaded once
+ * at the top. Two concurrent importVault runs over the same vault could both see
+ * a note as absent and double-insert (the connector pattern relies on a single
+ * sequential writer; same caveat applies here).
+ */
+export function importVault(folderPath: string, options: ImportOptions): ImportResult {
+  const hippoRoot = options.hippoRoot;
+  const tenantId = options.tenantId ?? 'default';
+  // Vault NAME is the identity key for the destructive deletion-sync below, so it
+  // must be explicit. Defaulting to the folder basename meant two unrelated vaults
+  // sharing a basename (e.g. work/notes and personal/notes) collided on the same
+  // `vault:<name>:*` prefix - importing the second loaded the first's rows and the
+  // deletion-sync archived them (codex R10 P2). Require a deliberate name instead
+  // of inferring a path-unstable one.
+  const vaultName = options.name?.trim();
+  if (!vaultName) {
+    throw new Error(
+      'importVault requires an explicit vault name (options.name): it is the identity key for source-deletion sync and must not be inferred from the folder basename.',
+    );
+  }
+  if (vaultName.includes(':')) {
+    // ':' is the artifactRef delimiter (vault:<name>:<relpath>); a name
+    // containing it lets a different vault's prefix scan over-match and archive
+    // its rows (codex P2). Reject rather than silently corrupt the keys.
+    throw new Error(`vault name must not contain ':' (artifactRef delimiter): ${vaultName}`);
+  }
+  const scope = options.scope ?? null;
+  // Privacy footgun guard (codex R13 P2): hippo's recall filter only default-denies
+  // scopes shaped `<source>:private:*` (see isPrivateScope / PRIVATE_SCOPE_RE in
+  // scope.ts). A bare `private` (or `private:<x>`) first segment is NOT recognized
+  // as private, so notes a user believes are private would still be returned to
+  // no-scope recall callers. Reject the alias and point at the source-prefixed form
+  // rather than silently storing public-visible "private" notes. Use recall's own
+  // isPrivateScope as the single source of truth: reject a scope that names a
+  // `private` segment yet is NOT a valid `<source>:private:*` (catches `private`,
+  // `private:x`, and `vault:private` with a missing trailing segment).
+  if (scope !== null && scope.split(':').includes('private') && !isPrivateScope(scope)) {
+    throw new Error(
+      `vault scope '${scope}' is not recognized as private by recall (only '<source>:private:*' scopes are default-denied). Use a source-prefixed scope such as 'vault:private:${vaultName}'.`,
+    );
+  }
+  const extraTags = options.extraTags ?? [];
+  const dryRun = options.dryRun ?? false;
+  if (options.global) {
+    // The raw-archive path is tenant-local; global mode would put raw vault rows
+    // in the wrong store. Reject for SDK callers too (the CLI also rejects
+    // --global) rather than silently writing local (codex P2).
+    throw new Error('importVault does not support global mode (raw rows are tenant-local).');
+  }
+
+  // Self-store no-op guard (codex R8 P1). MUST run BEFORE the existing-rows load
+  // and the deletion-sync pass below. If the vault folder IS the store (or lives
+  // inside it), there are no real vault notes - only the store's own markdown
+  // mirror files. Letting collectMarkdownFiles return [] for this case is NOT
+  // safe: an empty scan is indistinguishable from "every note was deleted", so
+  // deletion-sync would archive every live vault:<name>:* row, and raw-archive
+  // content redaction makes that loss IRREVERSIBLE. The only safe reading of
+  // "import the store into itself" is "do nothing". Canonicalize both paths
+  // (realpath: dereference junctions/symlinks + normalize Windows case) so an
+  // aliased path to the store is still caught (codex R9 P2).
+  const resolvedStore = realpathOrResolve(hippoRoot);
+  const resolvedFolder = realpathOrResolve(folderPath);
+  if (resolvedFolder === resolvedStore || resolvedFolder.startsWith(resolvedStore + path.sep)) {
+    return { total: 0, imported: 0, skipped: 0, archived: 0, entries: [] };
+  }
+
+  const ctx: Context = {
+    hippoRoot,
+    tenantId,
+    // Process-local actor; the vault importer is a CLI/SDK ingestion path, not
+    // a bearer-authed request. archiveRaw / remember thread this into audit.
+    actor: { subject: 'connector:vault', role: 'admin' },
+  };
+
+  // Load ONCE: every existing raw row for this vault, tenant-scoped. The same
+  // Map serves both per-file idempotency AND the deletion diff (no second
+  // query). LIKE-escape the vault name so a `%`/`_` in it can't over-match.
+  initStore(hippoRoot);
+  // artifactRef -> ALL its live raw rows. >1 only after a concurrent double-insert
+  // (the importer is not re-entrant; see the JSDoc). The buckets matter: a later
+  // changed/deletion pass must archive EVERY matching row, not just the last one
+  // scanned, or older raw vault content lingers live + searchable (codex P2).
+  const existing = new Map<string, VaultRow[]>();
+  {
+    const db = openHippoDb(hippoRoot);
+    try {
+      const likeParam = `vault:${escapeLike(vaultName)}:%`;
+      const rows = db
+        .prepare(
+          `SELECT id, artifact_ref, tags_json, scope FROM memories
+             WHERE artifact_ref LIKE ? ESCAPE '\\' AND tenant_id = ? AND kind = 'raw'`,
+        )
+        .all(likeParam, tenantId) as VaultRow[];
+      // SQLite LIKE is case-insensitive for ASCII, so the query over-fetches
+      // (vault 'A' also matches 'vault:a:%'). Filter to the EXACT-case prefix in
+      // JS so deletion-sync never archives a different-cased vault's rows (codex P2).
+      const exactPrefix = `vault:${vaultName}:`;
+      for (const row of rows) {
+        if (row.artifact_ref && row.artifact_ref.startsWith(exactPrefix)) {
+          const bucket = existing.get(row.artifact_ref);
+          if (bucket) bucket.push(row);
+          else existing.set(row.artifact_ref, [row]);
+        }
+      }
+    } finally {
+      closeHippoDb(db);
+    }
+  }
+
+  const relpaths = collectMarkdownFiles(folderPath, hippoRoot);
+  const seen = new Set<string>();
+
+  let total = 0;
+  let imported = 0;
+  let skipped = 0;
+  let archived = 0;
+  const entries: MemoryEntry[] = [];
+
+  for (const relpath of relpaths) {
+    total++;
+    const artifactRef = `vault:${vaultName}:${relpath}`;
+    seen.add(artifactRef);
+
+    // Content-hash is computed from the RAW file bytes (deterministic; no
+    // Date/random in the content path) so idempotency survives frontmatter
+    // edits identically to body edits.
+    let rawFileContent: string;
+    try {
+      rawFileContent = fs.readFileSync(path.join(folderPath, relpath), 'utf8');
+    } catch {
+      // File vanished between enumeration and read (TOCTOU), or a transient
+      // IO/permission error. Skip this one file rather than aborting the whole
+      // import (incl. the deletion-sync pass); an idempotent re-run picks it up.
+      skipped++;
+      continue;
+    }
+    const hash = createHash('sha256').update(rawFileContent).digest('hex');
+    const hashTag = `content-hash:${hash}`;
+
+    // Load every live raw row for this ref (>1 only after a concurrent double-
+    // insert). The idempotency decision happens below, AFTER the full tag set is
+    // built, so it can compare the complete envelope rather than a subset.
+    const priors = existing.get(artifactRef) ?? [];
+
+    const { fm, body } = parseFrontmatter(rawFileContent);
+
+    // Empty / frontmatter-only note: nothing storable (createMemory enforces a
+    // min content length). The note's CONTENT was deleted at source, so this is a
+    // content-deletion: archive any prior row(s) - the old body must not stay live
+    // and searchable after the source no longer holds it (codex R12 P2) - then
+    // skip the write. Archiving here is safe precisely because we then skip
+    // remember() entirely: there is no archive-then-throw-on-empty-body hazard
+    // (the original reason this branch did not archive). The note stays in `seen`
+    // so deletion-sync does not double-process it.
+    if (body.trim().length < 3) {
+      for (const p of priors) {
+        archived++; // count even in dryRun so the preview reflects the removal
+        if (!dryRun) archiveRaw(ctx, p.id, `emptied:${artifactRef}`);
+      }
+      skipped++;
+      continue;
+    }
+
+    // Build the FULL tag envelope this import would write, BEFORE the idempotency
+    // decision. De-duplicate (createMemory stores tags verbatim, so a collision
+    // between, e.g., a frontmatter tag and an extraTag would otherwise produce a
+    // duplicate). Order-preserving.
+    const frontmatterTags = [
+      ...frontmatterList(fm['tags']),
+      ...frontmatterList(fm['aliases']).map((a) => `alias:${a}`),
+    ];
+    const wikilinkTags = parseWikilinks(body).map((t) => `wikilink-candidate:${t}`);
+    const tags = Array.from(
+      new Set([
+        'source:vault',
+        `vault:${vaultName}`,
+        hashTag,
+        ...frontmatterTags,
+        ...wikilinkTags,
+        ...extraTags,
+      ]),
+    );
+
+    // Unchanged iff EVERY live raw row carries the EXACT same tag set AND scope.
+    // Comparing the COMPLETE set (not the content-hash + a subset of extra tags)
+    // means every envelope change registers: content (via the content-hash tag),
+    // frontmatter, wikilinks, an ADDED extra tag, or a REMOVED one - the earlier
+    // piecemeal checks missed scope (R10 P2) then tag removal (R11 P2). Set
+    // equality is order-independent and both sides are deduped. (`length > 0`
+    // guard: a never-seen file must import, not skip; archiving ALL priors on a
+    // mismatch also clears any concurrent-double-insert duplicates.)
+    const wantTags = new Set(tags);
+    const envelopeUnchanged =
+      priors.length > 0 &&
+      priors.every((p) => {
+        if ((p.scope ?? null) !== scope) return false;
+        const priorTags = parseJsonArrayLoose(p.tags_json);
+        return priorTags.length === wantTags.size && priorTags.every((t) => wantTags.has(t));
+      });
+    if (envelopeUnchanged) {
+      // Unchanged file + envelope → skip (idempotent re-import).
+      skipped++;
+      continue;
+    }
+
+    // Changed file → archive EVERY old raw row for this ref (normally one; >1
+    // only after a concurrent double-insert), then append the new one. NEVER
+    // supersede (would yield kind='distilled'). archiveRaw commits + closes its
+    // handle before remember() runs, so there is no double-live row; a crash
+    // between them self-heals (file re-imported as fresh raw next run).
+    for (const p of priors) {
+      archived++; // count the would-be archive even in dryRun (true preview)
+      if (!dryRun) archiveRaw(ctx, p.id, `changed:${artifactRef}`);
+    }
+
+    // remember() owns the actual write. We build an `echo` of the SAME content +
+    // tags via createMemory purely for the ImportResult, then reconcile its id to
+    // remember()'s real row id so entries[] reflects the row that landed.
+    const echo = createMemory(body, {
+      kind: 'raw',
+      tags,
+      scope,
+      owner: 'agent:vault-import',
+      artifact_ref: artifactRef,
+      tenantId,
+    });
+    // dryRun preview: count what WOULD import, but make no writes (codex P2).
+    if (!dryRun) {
+      const result = remember(ctx, {
+        content: body,
+        kind: 'raw',
+        artifactRef,
+        owner: 'agent:vault-import',
+        scope: scope ?? undefined,
+        tags,
+      });
+      echo.id = result.id;
+    }
+    entries.push(echo);
+    imported++;
+  }
+
+  // Deletion-sync: any artifactRef present in the Map but NOT seen this run is a
+  // note that vanished from the source folder → archive its raw row. Per-file
+  // archiveRaw (own handle); no outer SAVEPOINT (no cross-file idempotency row
+  // to commit atomically, unlike github's multi-row case).
+  for (const [artifactRef, rows] of existing) {
+    if (seen.has(artifactRef)) continue;
+    for (const row of rows) {
+      archived++; // count even in dryRun so the preview reflects destructive deletes
+      if (!dryRun) archiveRaw(ctx, row.id, `source_deleted:${artifactRef}`);
+    }
+  }
+
+  return { total, imported, skipped, archived, entries };
+}
+
+/** Local tolerant JSON-array parse for the loader's `tags_json` column. The
+ *  store's own `parseJsonArray` is not exported; this matches its contract
+ *  (returns [] on null/garbage). */
+function parseJsonArrayLoose(value: string | null | undefined): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
 }
