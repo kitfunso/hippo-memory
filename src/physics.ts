@@ -10,6 +10,7 @@
  * amplify each other via constructive interference.
  */
 
+import { isRecallBoostAblated } from './ablation.js';
 import type { EmotionalValence } from './memory.js';
 import type { PhysicsConfig } from './physics-config.js';
 
@@ -120,7 +121,13 @@ const CHARGE_MAP: Record<EmotionalValence, number> = {
 };
 
 export function computeMass(strength: number, retrievalCount: number): number {
-  return Math.max(0.01, strength * (1 + 0.1 * Math.log2(retrievalCount + 1)));
+  // EVAL-ONLY ablation (see ablation.ts): under the recall-boost flag, particle
+  // mass must not scale with retrieval history either - query gravity ranks by
+  // mass, so prior retrieval counts would leak strengthening into the ablated
+  // arm's physics-pool rankings (codex P2). Covers both the init and refresh
+  // callers in physics-state.ts.
+  const effectiveCount = isRecallBoostAblated() ? 0 : retrievalCount;
+  return Math.max(0.01, strength * (1 + 0.1 * Math.log2(effectiveCount + 1)));
 }
 
 export function computeCharge(valence: EmotionalValence): number {

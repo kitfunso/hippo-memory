@@ -170,6 +170,17 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     expect(calculateStrength(withHistory, NOW)).toBe(calculateStrength(without, NOW));
   });
 
+  it('neutralizes physics particle mass too: retrieval history cannot leak via gravity (codex round-5 P2)', async () => {
+    // Query gravity ranks the physics pool by particle mass, which scales with
+    // retrieval_count; under the flag, mass must ignore retrieval history in
+    // both the init and refresh paths (computeMass is the single shared site).
+    const { computeMass } = await import('../src/physics.js');
+    expect(computeMass(0.8, 16)).toBe(computeMass(0.8, 0));
+    // Sanity: WITHOUT the flag, history raises mass.
+    clearAblationEnv();
+    expect(computeMass(0.8, 16)).toBeGreaterThan(computeMass(0.8, 0));
+  });
+
   it('anchors decay at created: prior clock resets cannot leak in (codex round-3 P2)', () => {
     // Both memories created 30 days ago; one was "retrieved" 1 day ago by a
     // PRIOR unflagged run (persisted last_retrieved reset). Under the flag,
