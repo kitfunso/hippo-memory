@@ -230,6 +230,28 @@ describe('HIPPO_ABLATE_OUTCOME', () => {
     const [marked] = markRetrieved([agedMemory(30)], NOW);
     expect(marked.retrieval_count).toBe(1);
   });
+
+  it('silences replay reward bias too: outcome counts no longer skew replay priority (codex P2)', async () => {
+    // Replay (a consolidation sub-pass) preferentially rehearses
+    // outcome-positive memories and then strengthens them via markRetrieved -
+    // an outcome-dependent lifecycle path that must also go quiet in the
+    // outcome-off arm.
+    const { replayPriority } = await import('../src/replay.js');
+    let rewarded = agedMemory(5, 'replay candidate');
+    rewarded = applyOutcome(applyOutcome(rewarded, true), true);
+    const plain = agedMemory(5, 'replay candidate');
+    // Recompute BOTH strength caches at the same instant: replayPriority also
+    // reads entry.strength, and applyOutcome's recompute-at-real-now would
+    // otherwise differ from plain's initial cache purely by fixture timing.
+    rewarded.strength = calculateStrength(rewarded, NOW);
+    plain.strength = calculateStrength(plain, NOW);
+    expect(replayPriority(rewarded, NOW)).toBe(replayPriority(plain, NOW));
+    // Sanity: WITHOUT the flag the rewarded memory is prioritized.
+    clearAblationEnv();
+    rewarded.strength = calculateStrength(rewarded, NOW);
+    plain.strength = calculateStrength(plain, NOW);
+    expect(replayPriority(rewarded, NOW)).toBeGreaterThan(replayPriority(plain, NOW));
+  });
 });
 
 describe('HIPPO_ABLATE_OUTCOME_SLOW (decomposition arm)', () => {
@@ -272,10 +294,15 @@ describe('HIPPO_FAKE_NOW', () => {
     _resetAblationCacheForTests();
     expect(evalNow().toISOString()).toBe('2030-01-01T00:00:00.000Z');
     // Default-now path of calculateStrength uses the fake clock: a memory
-    // "fresh" relative to real time decays hard against the 2030 clock.
+    // dated 2026 decays hard against the 2030 clock. (createMemory itself now
+    // stamps fake time under the flag, so the 2026 dates are set explicitly.)
     const realFresh = createMemory('fresh in 2026');
+    realFresh.created = '2026-06-11T00:00:00.000Z';
+    realFresh.last_retrieved = '2026-06-11T00:00:00.000Z';
     realFresh.half_life_days = 7;
     expect(calculateStrength(realFresh)).toBeLessThan(0.01);
+    // createMemory write-stamps honor the fake clock too (simulated sessions).
+    expect(createMemory('stamped in 2030').created).toBe('2030-01-01T00:00:00.000Z');
     // markRetrieved default stamp = fake now.
     const [marked] = markRetrieved([createMemory('stamp me')]);
     expect(marked.last_retrieved).toBe('2030-01-01T00:00:00.000Z');
@@ -287,7 +314,9 @@ describe('HIPPO_FAKE_NOW', () => {
     process.env.HIPPO_FAKE_NOW = '2030-01-01T00:00:00.000Z';
     _resetAblationCacheForTests();
     const m = createMemory('search scoring uses the fake clock');
-    m.half_life_days = 7; // fresh in real time, ancient against the 2030 clock
+    m.created = '2026-06-11T00:00:00.000Z'; // dated 2026, ancient against the 2030 clock
+    m.last_retrieved = '2026-06-11T00:00:00.000Z';
+    m.half_life_days = 7;
     const results = await hybridSearch('search scoring fake clock', [m], {
       budget: 10000,
       explain: true,
@@ -332,7 +361,9 @@ describe('HIPPO_FAKE_NOW', () => {
     _resetAblationCacheForTests();
     const { searchBothHybrid } = await import('../src/shared.js');
     const m = createMemory('wrapper clock consistency check');
-    m.half_life_days = 7; // fresh in real time, ancient against the 2030 clock
+    m.created = '2026-06-11T00:00:00.000Z'; // dated 2026, ancient against the 2030 clock
+    m.last_retrieved = '2026-06-11T00:00:00.000Z';
+    m.half_life_days = 7;
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-abl-'));
     try {
       // Local-only store via the wrapper (global root nonexistent path).

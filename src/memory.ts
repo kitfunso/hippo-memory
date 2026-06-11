@@ -435,7 +435,7 @@ export function generateId(prefix: string = 'mem'): string {
  * If the entry has not been retrieved in 30+ days and is not 'verified',
  * returns 'stale'. Otherwise returns the stored confidence value.
  */
-export function resolveConfidence(entry: MemoryEntry, now: Date = new Date()): ConfidenceLevel {
+export function resolveConfidence(entry: MemoryEntry, now: Date = evalNow()): ConfidenceLevel {
   if (entry.pinned || entry.confidence === 'verified') return entry.confidence;
 
   const lastRetrieved = new Date(entry.last_retrieved);
@@ -482,7 +482,7 @@ export function createMemory(
     throw new Error(`Invalid trace_outcome: ${options.trace_outcome}. Must be 'success', 'failure', 'partial', or null.`);
   }
 
-  const now = new Date().toISOString();
+  const now = evalNow().toISOString(); // honors HIPPO_FAKE_NOW (eval-only)
   const layer = options.layer ?? Layer.Episodic;
   const tags = options.tags ?? [];
   const emotional_valence = options.emotional_valence ?? inferValence(tags);

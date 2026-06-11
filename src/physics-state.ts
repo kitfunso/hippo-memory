@@ -4,6 +4,7 @@
  * in SQLite using BLOB columns for 384-dim vectors.
  */
 
+import { evalNow } from './ablation.js';
 import type { DatabaseSyncLike } from './db.js';
 import type { MemoryEntry } from './memory.js';
 import type { PhysicsParticle } from './physics.js';
@@ -155,7 +156,7 @@ export function savePhysicsState(
 export function initializeParticle(
   entry: MemoryEntry,
   embedding: number[],
-  now: Date = new Date(),
+  now: Date = evalNow(),
 ): PhysicsParticle {
   const strength = calculateStrength(entry, now);
   const ageDays = (now.getTime() - new Date(entry.created).getTime()) / (1000 * 60 * 60 * 24);
@@ -186,7 +187,7 @@ export function resetAllPhysicsState(
   db: DatabaseSyncLike,
   entries: MemoryEntry[],
   embeddingIndex: Record<string, number[]>,
-  now: Date = new Date(),
+  now: Date = evalNow(),
 ): number {
   db.exec('DELETE FROM memory_physics');
 
@@ -211,7 +212,7 @@ export function resetAllPhysicsState(
 export function refreshParticleProperties(
   particles: PhysicsParticle[],
   entries: Map<string, MemoryEntry>,
-  now: Date = new Date(),
+  now: Date = evalNow(),
 ): void {
   for (const p of particles) {
     const entry = entries.get(p.memoryId);

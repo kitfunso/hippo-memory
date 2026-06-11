@@ -7,6 +7,7 @@
  * 3. Stats tracking
  */
 
+import { evalNow } from './ablation.js';
 import { MemoryEntry, Layer, calculateStrength, createMemory, resolveConfidence, type DecayOptions } from './memory.js';
 import {
   loadAllEntries,
@@ -99,7 +100,7 @@ export async function consolidate(
   hippoRoot: string,
   options: { dryRun?: boolean; now?: Date } = {}
 ): Promise<ConsolidationResult> {
-  const now = options.now ?? new Date();
+  const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
   const dryRun = options.dryRun ?? false;
 
   const result: ConsolidationResult = {

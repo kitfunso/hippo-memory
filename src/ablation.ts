@@ -30,7 +30,12 @@
  *                              use config replay.count=0 to separate replay
  *                              from query-time strengthening.
  *   HIPPO_ABLATE_OUTCOME       both outcome channels := neutral
- *                              (= _SLOW + _FAST together).
+ *                              (= _SLOW + _FAST together). The slow side also
+ *                              silences replay's outcome reward bias
+ *                              (replayPriority). NOT gated: the opt-in
+ *                              `recall --value-aware` rerank (an explicit CLI
+ *                              flag that also reads outcome counts) - ablated
+ *                              arms must not pass it.
  *   HIPPO_ABLATE_OUTCOME_SLOW  rewardFactor := 1 (no half-life modulation).
  *   HIPPO_ABLATE_OUTCOME_FAST  hybridSearch outcomeBoost := 1.
  *   HIPPO_FAKE_NOW             timestamp injected as the default `now` for

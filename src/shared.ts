@@ -91,7 +91,7 @@ export function searchBoth(
   globalRoot: string,
   options: SearchOptions = {}
 ): SearchResult[] {
-  const { budget = 4000, now = new Date(), minResults, tenantId } = options;
+  const { budget = 4000, now = evalNow(), minResults, tenantId } = options;
   const effectiveMin = minResults ?? 1;
 
   const localEntries = fs.existsSync(localRoot) ? loadSearchEntries(localRoot, query, undefined, tenantId) : [];

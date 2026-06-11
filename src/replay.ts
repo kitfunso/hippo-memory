@@ -23,6 +23,7 @@
  *   - REPLAY: picks winners and rehearses them (this file)
  */
 
+import { isOutcomeSlowAblated } from './ablation.js';
 import type { MemoryEntry, EmotionalValence } from './memory.js';
 
 const VALENCE_WEIGHT: Record<EmotionalValence, number> = {
@@ -43,7 +44,9 @@ export function replayPriority(entry: MemoryEntry, now: Date): number {
   // negative-dominated memories floor at 0.1 (so they're still eligible, just
   // much less likely to be sampled than neutral peers). Clamp is required
   // because sampleForReplay depends on all weights being positive.
-  const rewardSignal = Math.max(0.1, 1 + pos * 0.5 + (pos - neg) * 0.25);
+  const rewardSignal = isOutcomeSlowAblated()
+    ? 1.0 // EVAL-ONLY ablation (see ablation.ts): outcome-off also silences replay's reward bias
+    : Math.max(0.1, 1 + pos * 0.5 + (pos - neg) * 0.25);
 
   const valence = VALENCE_WEIGHT[entry.emotional_valence] ?? 1.0;
 
