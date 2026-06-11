@@ -10,7 +10,7 @@ import { createMemory, Layer, MemoryEntry } from './memory.js';
 import { initStore, loadAllEntries, writeEntry } from './store.js';
 import { textOverlap } from './search.js';
 import { getGlobalRoot, initGlobal } from './shared.js';
-import { remember, archiveRaw, type Context } from './api.js';
+import { remember, archiveRaw, isPrivateScope, type Context } from './api.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 
 // ---------------------------------------------------------------------------
@@ -702,6 +702,20 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
     throw new Error(`vault name must not contain ':' (artifactRef delimiter): ${vaultName}`);
   }
   const scope = options.scope ?? null;
+  // Privacy footgun guard (codex R13 P2): hippo's recall filter only default-denies
+  // scopes shaped `<source>:private:*` (see isPrivateScope / PRIVATE_SCOPE_RE in
+  // scope.ts). A bare `private` (or `private:<x>`) first segment is NOT recognized
+  // as private, so notes a user believes are private would still be returned to
+  // no-scope recall callers. Reject the alias and point at the source-prefixed form
+  // rather than silently storing public-visible "private" notes. Use recall's own
+  // isPrivateScope as the single source of truth: reject a scope that names a
+  // `private` segment yet is NOT a valid `<source>:private:*` (catches `private`,
+  // `private:x`, and `vault:private` with a missing trailing segment).
+  if (scope !== null && scope.split(':').includes('private') && !isPrivateScope(scope)) {
+    throw new Error(
+      `vault scope '${scope}' is not recognized as private by recall (only '<source>:private:*' scopes are default-denied). Use a source-prefixed scope such as 'vault:private:${vaultName}'.`,
+    );
+  }
   const extraTags = options.extraTags ?? [];
   const dryRun = options.dryRun ?? false;
   if (options.global) {

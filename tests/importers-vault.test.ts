@@ -780,8 +780,8 @@ describe('importVault (x) — explicit name + envelope-aware idempotency', () =>
     const firstId = loadAllEntries(tmpDir, 'default')[0].id;
     expect(loadAllEntries(tmpDir, 'default')[0].scope ?? null).toBe(null);
 
-    // Same bytes, now request a private scope -> must re-write, not skip.
-    const second = importVault(vaultDir, opts({ name: 'v', scope: 'private' }));
+    // Same bytes, now request a (properly source-prefixed) private scope -> re-write.
+    const second = importVault(vaultDir, opts({ name: 'v', scope: 'vault:private:v' }));
     expect(second.skipped).toBe(0);
     expect(second.imported).toBe(1);
     expect(second.archived).toBe(1);
@@ -789,13 +789,30 @@ describe('importVault (x) — explicit name + envelope-aware idempotency', () =>
     const live = loadAllEntries(tmpDir, 'default');
     expect(live.length).toBe(1);
     expect(live[0].id).not.toBe(firstId);
-    expect(live[0].scope).toBe('private'); // the requested envelope was applied
+    expect(live[0].scope).toBe('vault:private:v'); // the requested envelope was applied
 
     // A third identical run at the SAME scope is idempotent again.
-    const third = importVault(vaultDir, opts({ name: 'v', scope: 'private' }));
+    const third = importVault(vaultDir, opts({ name: 'v', scope: 'vault:private:v' }));
     expect(third.skipped).toBe(1);
     expect(third.imported).toBe(0);
     expect(third.archived).toBe(0);
+  });
+
+  it('rejects a bare-private scope recall would not treat as private (codex R13 P2)', () => {
+    writeNote('note.md', '# Note\nsensitive content the user wants private');
+    // Bare `private` / `private:<x>` are NOT default-denied by recall, so reject
+    // them rather than store public-visible "private" notes.
+    expect(() => importVault(vaultDir, opts({ name: 'v', scope: 'private' }))).toThrow(
+      /not recognized as private/,
+    );
+    expect(() => importVault(vaultDir, opts({ name: 'v', scope: 'private:secret' }))).toThrow(
+      /not recognized as private/,
+    );
+    // Nothing was written by the rejected runs; the source-prefixed form is accepted.
+    expect(loadAllEntries(tmpDir, 'default').length).toBe(0);
+    const ok = importVault(vaultDir, opts({ name: 'v', scope: 'vault:private:v' }));
+    expect(ok.imported).toBe(1);
+    expect(loadAllEntries(tmpDir, 'default')[0].scope).toBe('vault:private:v');
   });
 
   it('re-imports an unchanged file when an extra tag is added', () => {

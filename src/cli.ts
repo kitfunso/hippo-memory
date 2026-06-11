@@ -5856,7 +5856,9 @@ function cmdImport(
     }
     if (flags['scope'] !== undefined && (typeof flags['scope'] !== 'string' || !flags['scope'].trim())) {
       // Same valueless-flag trap: a bare `--scope` must not become scope "true".
-      console.error('hippo import --vault: --scope requires a value (e.g. --scope private).');
+      // Example uses the source-prefixed private form, since a bare `private` scope
+      // is NOT treated as private by recall and importVault rejects it (R13 P2).
+      console.error('hippo import --vault: --scope requires a value (e.g. --scope vault:private:notes).');
       process.exit(1);
     }
     const tenantId = resolveTenantId({});
