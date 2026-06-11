@@ -41,10 +41,15 @@ function clearAblationEnv(): void {
 beforeEach(clearAblationEnv);
 afterEach(clearAblationEnv);
 
-/** A memory last retrieved `daysAgo` days before `NOW`, with a short half-life. */
+/** A memory created AND last retrieved `daysAgo` days before `NOW` (i.e. aged
+ *  and never strengthened since), with a short half-life. Both timestamps are
+ *  backdated so the helper means the same thing under both decay anchors
+ *  (last_retrieved normally, created under HIPPO_ABLATE_RECALL_BOOST). */
 function agedMemory(daysAgo: number, content = 'aged memory content'): MemoryEntry {
   const m = createMemory(content);
-  m.last_retrieved = new Date(NOW.getTime() - daysAgo * 24 * 60 * 60 * 1000).toISOString();
+  const then = new Date(NOW.getTime() - daysAgo * 24 * 60 * 60 * 1000).toISOString();
+  m.created = then;
+  m.last_retrieved = then;
   m.half_life_days = 7;
   return m;
 }
@@ -165,6 +170,25 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     expect(calculateStrength(withHistory, NOW)).toBe(calculateStrength(without, NOW));
   });
 
+  it('anchors decay at created: prior clock resets cannot leak in (codex round-3 P2)', () => {
+    // Both memories created 30 days ago; one was "retrieved" 1 day ago by a
+    // PRIOR unflagged run (persisted last_retrieved reset). Under the flag,
+    // decay anchors at created, so both decay identically from creation.
+    const created = new Date(NOW.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const reset = createMemory('clock reset by a prior run');
+    reset.created = created;
+    reset.last_retrieved = new Date(NOW.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString();
+    reset.half_life_days = 7;
+    const untouched = createMemory('never retrieved');
+    untouched.created = created;
+    untouched.last_retrieved = created;
+    untouched.half_life_days = 7;
+    expect(calculateStrength(reset, NOW)).toBe(calculateStrength(untouched, NOW));
+    // Sanity: WITHOUT the flag these differ (the reset memory is stronger).
+    clearAblationEnv();
+    expect(calculateStrength(reset, NOW)).toBeGreaterThan(calculateStrength(untouched, NOW));
+  });
+
   it('isolation: both outcome channels still run', async () => {
     let m = createMemory('outcome-laden');
     m = applyOutcome(m, true);
@@ -280,8 +304,19 @@ describe('HIPPO_FAKE_NOW', () => {
   });
 
   it('rejects non-canonical formats Date.parse would accept (codex P2)', () => {
-    // '1', locale dates, and non-UTC ISO must NOT silently become a fake clock.
-    for (const junk of ['1', '06/11/2026', '2026-06-11', '2026-06-11T12:00:00', '2026-06-11T12:00:00+01:00']) {
+    // '1', locale dates, non-UTC ISO, millis-less forms, and ROLLED-OVER dates
+    // (2026-02-31 silently becomes March 3 under V8 Date.parse) must NOT
+    // become a fake clock - round-trip validation catches them all.
+    for (const junk of [
+      '1',
+      '06/11/2026',
+      '2026-06-11',
+      '2026-06-11T12:00:00',
+      '2026-06-11T12:00:00+01:00',
+      '2026-06-11T12:00:00Z', // millis required (exact toISOString form)
+      '2026-02-31T00:00:00.000Z', // rollover (codex round-3 P2)
+      '2026-13-01T00:00:00.000Z', // rollover month
+    ]) {
       process.env.HIPPO_FAKE_NOW = junk;
       _resetAblationCacheForTests();
       const drift = Math.abs(evalNow().getTime() - Date.now());

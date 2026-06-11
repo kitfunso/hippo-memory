@@ -306,7 +306,16 @@ export function calculateStrength(
 ): number {
   if (entry.pinned) return 1.0;
 
-  const lastRetrieved = new Date(entry.last_retrieved);
+  // EVAL-ONLY ablation (see ablation.ts): with recall-strengthening ablated,
+  // anchor decay at CREATION, not last_retrieved. A never-strengthened memory
+  // decays from when it was made; using last_retrieved would let clock resets
+  // persisted by PRIOR unflagged runs leak strengthening into an ablated
+  // arm's rankings (codex P2). Identity on fresh stores (created ==
+  // last_retrieved at write). Prior-run half_life increments are NOT
+  // reconstructed - see the ablation.ts caveat (fresh stores per arm).
+  const lastRetrieved = new Date(
+    isRecallBoostAblated() ? entry.created : entry.last_retrieved,
+  );
   const daysSince = (now.getTime() - lastRetrieved.getTime()) / (1000 * 60 * 60 * 24);
 
   // Reward-proportional half-life modulation

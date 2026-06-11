@@ -16,18 +16,31 @@
  *   HIPPO_ABLATE_DECAY         time-decay term := 1 in calculateStrength.
  *   HIPPO_ABLATE_RECALL_BOOST  markRetrieved becomes a no-op (all three
  *                              sub-effects: clock reset, retrieval_count,
- *                              half_life increment). NOTE: also neutralizes
- *                              replay rehearsal inside consolidation (same
- *                              helper); use config replay.count=0 to separate
- *                              replay from query-time strengthening.
+ *                              half_life increment), the retrieval-count READ
+ *                              boost := 1, and decay anchors at `created`
+ *                              instead of `last_retrieved` (so clock resets
+ *                              persisted by PRIOR unflagged runs cannot leak
+ *                              in). CAVEAT: half_life increments persisted by
+ *                              prior runs are NOT reconstructed (consolidation
+ *                              legitimately writes half_life too, so they are
+ *                              not separable) - ablation arms must run on
+ *                              FRESH stores, as the experiment protocol
+ *                              mandates. NOTE: also neutralizes replay
+ *                              rehearsal inside consolidation (same helper);
+ *                              use config replay.count=0 to separate replay
+ *                              from query-time strengthening.
  *   HIPPO_ABLATE_OUTCOME       both outcome channels := neutral
  *                              (= _SLOW + _FAST together).
  *   HIPPO_ABLATE_OUTCOME_SLOW  rewardFactor := 1 (no half-life modulation).
  *   HIPPO_ABLATE_OUTCOME_FAST  hybridSearch outcomeBoost := 1.
- *   HIPPO_FAKE_NOW             ISO timestamp injected as the default `now`
- *                              for strength computation and retrieval
- *                              stamping (simulated-time protocols). Invalid
- *                              values are ignored (real clock used).
+ *   HIPPO_FAKE_NOW             timestamp injected as the default `now` for
+ *                              strength computation and retrieval stamping
+ *                              (simulated-time protocols). MUST be the exact
+ *                              Date.toISOString() form
+ *                              (YYYY-MM-DDTHH:mm:ss.sssZ); validated by
+ *                              round-trip, so junk, locale dates, non-UTC
+ *                              offsets, and rolled-over dates (2026-02-31)
+ *                              all fall back to the real clock.
  *
  * Formula notes (load-bearing for the experiments) - ablating decay has TWO
  * intrinsic co-effects, because the unified formula routes other mechanisms
@@ -70,14 +83,16 @@ function readFlags(): AblationFlags {
   let fakeNowMs: number | null = null;
   const rawNow = process.env.HIPPO_FAKE_NOW;
   if (rawNow !== undefined && rawNow !== '') {
-    // STRICT canonical ISO-8601 UTC only (codex P2): Date.parse accepts junk
-    // like '1' or locale-dependent '06/11/2026', which would silently shift
-    // every simulated-time run. Anything non-canonical falls back to the real
+    // STRICT canonical form only: exactly what Date.prototype.toISOString
+    // emits (YYYY-MM-DDTHH:mm:ss.sssZ), verified by ROUND-TRIP equality.
+    // Two codex P2s drove this: (1) Date.parse accepts junk like '1' or
+    // locale-dependent '06/11/2026'; (2) a regex alone still admits
+    // rolled-over dates ('2026-02-31T...Z' silently becomes March 3). A
+    // value that does not round-trip byte-identical falls back to the real
     // clock, exactly as documented.
-    const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
-    if (ISO_UTC.test(rawNow)) {
-      const parsed = Date.parse(rawNow);
-      fakeNowMs = Number.isFinite(parsed) ? parsed : null;
+    const parsed = Date.parse(rawNow);
+    if (Number.isFinite(parsed) && new Date(parsed).toISOString() === rawNow) {
+      fakeNowMs = parsed;
     }
   }
   _cache = {
