@@ -27,6 +27,7 @@
     "baseline": "npm run build && npm test",
     "build": "tsc && tsc -p tsconfig.benchmarks.json",
     "dev": "tsc --watch",
+    "pretest": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "postinstall": "node scripts/postinstall.cjs",

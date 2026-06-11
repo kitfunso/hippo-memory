@@ -104,8 +104,12 @@ async function probeEpoch(protocol, entries, epoch, epochDate, arm) {
       top = entries.slice().sort((a, b) => Date.parse(b.created) - Date.parse(a.created)).slice(0, PROBE_TOP_K);
     } else {
       const results = await hybridSearch(probe.query, entries, { budget: PROBE_BUDGET, now: probeNow, minResults: PROBE_TOP_K });
+      // bm25-static tie-break MUST be independent of the composite order: a
+      // bare stable sort would let identical-BM25 candidates (this protocol
+      // creates many) keep hybridSearch's lifecycle/recency-tinged ordering
+      // (codex P2). Entry id is deterministic (seed-derived) and content-blind.
       const ranked = arm === 'bm25-static'
-        ? results.slice().sort((a, b) => b.bm25 - a.bm25)
+        ? results.slice().sort((a, b) => (b.bm25 - a.bm25) || a.entry.id.localeCompare(b.entry.id))
         : results;
       top = ranked.slice(0, PROBE_TOP_K).map((r) => r.entry);
     }
