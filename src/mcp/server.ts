@@ -18,7 +18,7 @@ import {
   calculateStrength,
 } from '../memory.js';
 import { search, hybridSearch, physicsSearch, markRetrieved, estimateTokens } from '../search.js';
-import { isRecallBoostAblated } from '../ablation.js';
+import { isRecallBoostAblated, evalNow } from '../ablation.js';
 import { loadAllEntries, writeEntry, readEntry, initStore, loadActiveTaskSnapshot, listMemoryConflicts, resolveConflict, RECALL_DEFAULT_DENY_SCOPES } from '../store.js';
 import { shareMemory, listPeers, getGlobalRoot } from '../shared.js';
 import { consolidate } from '../consolidate.js';
@@ -1041,7 +1041,7 @@ async function executeTool(
 
     case 'hippo_status': {
       const entries = loadAllEntries(hippoRoot, tenantId);
-      const now = new Date();
+      const now = evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
       let atRisk = 0;
       let totalStrength = 0;
       for (const e of entries) {
