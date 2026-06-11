@@ -41,9 +41,13 @@ export interface ImportOptions {
   tenantId?: string;
   /**
    * K1 vault import only. Logical vault name used in the `vault:<name>` tag and
-   * the `artifactRef='vault:<name>:<relpath>'` key. Defaults to
-   * `basename(folderPath)` when unset. Operator-supplied, so the loader query
-   * LIKE-escapes it (see `escapeLike` below).
+   * the `artifactRef='vault:<name>:<relpath>'` key. REQUIRED by importVault: it
+   * is the identity key for the destructive source-deletion sync, so it must be
+   * set explicitly rather than inferred from the folder basename (two vaults
+   * sharing a basename would collide and clobber each other). importVault throws
+   * if it is missing or blank. Optional in this shared type only because the
+   * other importers ignore it. Operator-supplied, so the loader query LIKE-escapes
+   * it (see `escapeLike` below).
    */
   name?: string;
   /**
@@ -804,10 +808,18 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
     const { fm, body } = parseFrontmatter(rawFileContent);
 
     // Empty / frontmatter-only note: nothing storable (createMemory enforces a
-    // min content length). Skip WITHOUT archiving any prior row — archiving
-    // first then throwing on the empty body would delete a live memory mid-run
-    // (codex P2). The note stays in `seen`, so deletion-sync won't archive it.
+    // min content length). The note's CONTENT was deleted at source, so this is a
+    // content-deletion: archive any prior row(s) - the old body must not stay live
+    // and searchable after the source no longer holds it (codex R12 P2) - then
+    // skip the write. Archiving here is safe precisely because we then skip
+    // remember() entirely: there is no archive-then-throw-on-empty-body hazard
+    // (the original reason this branch did not archive). The note stays in `seen`
+    // so deletion-sync does not double-process it.
     if (body.trim().length < 3) {
+      for (const p of priors) {
+        archived++; // count even in dryRun so the preview reflects the removal
+        if (!dryRun) archiveRaw(ctx, p.id, `emptied:${artifactRef}`);
+      }
       skipped++;
       continue;
     }

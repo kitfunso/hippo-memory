@@ -377,21 +377,24 @@ describe('importVault (j) — empty/frontmatter-only notes are skipped, not thro
   });
 });
 
-describe('importVault (k) — a note changed to empty keeps its prior memory (no mid-run archive)', () => {
-  it('does not archive the prior raw row when a note becomes empty', () => {
+describe('importVault (k) — a note emptied at source archives its prior memory', () => {
+  it('archives the prior raw row when a note becomes frontmatter-only (no stale body left live)', () => {
     writeNote('note.md', 'Original content that is long enough.');
     importVault(vaultDir, opts({ name: 'v' }));
     const before = loadAllEntries(tmpDir).filter((e) => e.tags.includes('vault:v'));
     expect(before.length).toBe(1);
     const originalId = before[0].id;
-    writeNote('note.md', '---\ntags: [y]\n---\n'); // body becomes empty
+    writeNote('note.md', '---\ntags: [y]\n---\n'); // body becomes empty (frontmatter-only)
     const result = importVault(vaultDir, opts({ name: 'v' }));
-    expect(result.skipped).toBe(1);
+    expect(result.skipped).toBe(1); // nothing storable -> no new write
     expect(result.imported).toBe(0);
+    expect(result.archived).toBe(1); // but the stale prior IS archived (codex R12 P2)
     const after = loadAllEntries(tmpDir).filter((e) => e.tags.includes('vault:v'));
-    expect(after.length).toBe(1);
-    expect(after[0].id).toBe(originalId); // prior kept, not archived
-    expect(archivedRows().length).toBe(0);
+    expect(after.length).toBe(0); // prior gone; the deleted body is not left searchable
+    const archived = archivedRows();
+    expect(archived.length).toBe(1);
+    expect(archived[0].memory_id).toBe(originalId);
+    expect(archived[0].reason).toBe('emptied:vault:v:note.md');
   });
 });
 
