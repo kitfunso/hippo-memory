@@ -54,6 +54,7 @@ import {
   type AuditOp,
 } from './audit.js';
 import { promoteToGlobal, getGlobalRoot, autoShare, searchBothHybrid } from './shared.js';
+import { evalNow } from './ablation.js';
 import { archiveRawMemory } from './raw-archive.js';
 import {
   createApiKey,
@@ -2180,7 +2181,7 @@ export async function getContext(
     }
     // Effective budget: explicit opts.budget wins over config.
     const effBudget = opts.budget !== undefined ? budget : pinnedCfg.pinnedInject.budget;
-    const nowP = new Date();
+    const nowP = evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
     const selectedIds = new Set<string>();
     let usedP = 0;
 
@@ -2245,7 +2246,7 @@ export async function getContext(
     totalTokens = usedP;
   } else if (query === '*') {
     // No query: return strongest memories by strength, up to budget.
-    const now = new Date();
+    const now = evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
     const localRanked = localEntries
       .map((e) => ({
         entry: e,

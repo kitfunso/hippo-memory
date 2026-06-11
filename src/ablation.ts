@@ -29,13 +29,19 @@
  *                              stamping (simulated-time protocols). Invalid
  *                              values are ignored (real clock used).
  *
- * Formula note (load-bearing for the experiments): with decay ablated,
- * calculateStrength's raw product is retrievalBoost * emotionalMultiplier,
- * which the [0,1] clamp caps at 1.0 - i.e. the recall-strengthening READ-side
- * boost can only offset decay, never exceed baseline. Ablating decay therefore
- * also flattens the read-side of strengthening (the write-side still runs).
- * This is a real property of the unified formula, not an implementation
- * accident; experiment analysis must account for it.
+ * Formula notes (load-bearing for the experiments) - ablating decay has TWO
+ * intrinsic co-effects, because the unified formula routes other mechanisms
+ * THROUGH the decay term. Both are real properties of the architecture, not
+ * implementation accidents; experiment analysis must attribute accordingly
+ * (the decay-off arm is "decay + its dependents off", see prereg amendment A1):
+ *   1. Read-side strengthening flattens: raw = retrievalBoost * emotionalMult
+ *      >= 1, and the [0,1] clamp caps it at 1.0 - the recall boost can only
+ *      offset decay, never exceed baseline. (Write-side still runs.)
+ *   2. Outcome-slow goes inert: rewardFactor only acts by scaling the
+ *      effective half-life INSIDE the decay exponent; with decay := 1 there
+ *      is no exponent for it to modulate. Outcome-slow is decay-rate
+ *      modulation BY DESIGN, so "no decay" necessarily means "no slow
+ *      channel" (the fast channel in hybridSearch is unaffected).
  *
  * Env caching follows the house pattern (see getLossAversionRatio in
  * memory.ts): read once per process, with a test-only reset helper. Tests
@@ -64,8 +70,15 @@ function readFlags(): AblationFlags {
   let fakeNowMs: number | null = null;
   const rawNow = process.env.HIPPO_FAKE_NOW;
   if (rawNow !== undefined && rawNow !== '') {
-    const parsed = Date.parse(rawNow);
-    fakeNowMs = Number.isFinite(parsed) ? parsed : null;
+    // STRICT canonical ISO-8601 UTC only (codex P2): Date.parse accepts junk
+    // like '1' or locale-dependent '06/11/2026', which would silently shift
+    // every simulated-time run. Anything non-canonical falls back to the real
+    // clock, exactly as documented.
+    const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
+    if (ISO_UTC.test(rawNow)) {
+      const parsed = Date.parse(rawNow);
+      fakeNowMs = Number.isFinite(parsed) ? parsed : null;
+    }
   }
   _cache = {
     decay: isTruthy(process.env.HIPPO_ABLATE_DECAY),

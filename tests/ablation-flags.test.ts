@@ -11,6 +11,9 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import {
   calculateStrength,
   calculateRewardFactor,
@@ -107,6 +110,22 @@ describe('HIPPO_ABLATE_DECAY', () => {
     m.retrieval_count = 16;
     expect(calculateStrength(m, NOW)).toBe(1.0);
     expect(calculateStrength(agedMemory(0), NOW)).toBe(1.0);
+  });
+
+  it('documents the co-ablation: outcome-slow is inert when decay is off (codex P2)', async () => {
+    // rewardFactor acts ONLY by scaling the effective half-life inside the
+    // decay exponent; with decay := 1 there is nothing to modulate. The
+    // decay-off arm is therefore "decay + outcome-slow off" BY CONSTRUCTION
+    // (prereg amendment A1). The fast channel is unaffected.
+    let bad = agedMemory(10, 'outcome laden memory');
+    bad = applyOutcome(applyOutcome(bad, false), false);
+    const plain = agedMemory(10, 'outcome laden memory');
+    expect(calculateStrength(bad, NOW)).toBe(calculateStrength(plain, NOW)); // slow inert
+    const results = await hybridSearch('outcome laden memory', [bad], {
+      budget: 10000,
+      explain: true,
+    });
+    expect(results[0].breakdown?.outcomeBoost).toBeLessThan(1); // fast still live
   });
 });
 
@@ -258,6 +277,42 @@ describe('HIPPO_FAKE_NOW', () => {
     _resetAblationCacheForTests();
     const drift = Math.abs(evalNow().getTime() - Date.now());
     expect(drift).toBeLessThan(5000);
+  });
+
+  it('rejects non-canonical formats Date.parse would accept (codex P2)', () => {
+    // '1', locale dates, and non-UTC ISO must NOT silently become a fake clock.
+    for (const junk of ['1', '06/11/2026', '2026-06-11', '2026-06-11T12:00:00', '2026-06-11T12:00:00+01:00']) {
+      process.env.HIPPO_FAKE_NOW = junk;
+      _resetAblationCacheForTests();
+      const drift = Math.abs(evalNow().getTime() - Date.now());
+      expect(drift, `format '${junk}' must fall back to real clock`).toBeLessThan(5000);
+    }
+  });
+
+  it('flows through the searchBothHybrid wrapper default too (codex P2)', async () => {
+    // The wrapper destructures its own `now` default and passes it explicitly
+    // into hybridSearch, so the inner fallback never runs - the wrapper default
+    // itself must honor the fake clock.
+    process.env.HIPPO_FAKE_NOW = '2030-01-01T00:00:00.000Z';
+    _resetAblationCacheForTests();
+    const { searchBothHybrid } = await import('../src/shared.js');
+    const m = createMemory('wrapper clock consistency check');
+    m.half_life_days = 7; // fresh in real time, ancient against the 2030 clock
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-abl-'));
+    try {
+      // Local-only store via the wrapper (global root nonexistent path).
+      const { initStore, writeEntry } = await import('../src/store.js');
+      initStore(tmp);
+      writeEntry(tmp, m);
+      const results = await searchBothHybrid('wrapper clock consistency check', tmp, path.join(tmp, 'no-global'), {
+        budget: 10000,
+        explain: true,
+      });
+      expect(results.length).toBeGreaterThan(0);
+      expect(results[0].breakdown?.strengthMultiplier).toBeLessThan(0.51);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
   });
 
   it('explicit now parameter always wins over the fake clock', () => {
