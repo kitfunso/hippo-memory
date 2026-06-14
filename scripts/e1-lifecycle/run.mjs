@@ -52,6 +52,11 @@ import { generateProtocol, GENERATOR_VERSION } from './generate.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
 const OUT_DIR = path.join(REPO, 'benchmarks', 'e1-lifecycle', 'raw');
+// Half-life robustness sweep (amendment A5, EXPLORATORY - not in the frozen prereg).
+// Module-level so the CLI can vary the decay half-life without changing runArmSeed's
+// signature: probe-replay.mjs imports runArmSeed and relies on the default 7d, which
+// reproduces the registered E1 byte-identically (invariant-tested).
+let SWEEP_HALF_LIFE = 7;
 
 const ARM_ENV = {
   'full': {},
@@ -202,7 +207,7 @@ export async function runArmSeed(arm, seed, genOpts = {}, inspect = undefined) {
       //    make identical (arm, seed) runs produce different top-5 metrics
       //    (codex P1). sha256 prefix keeps the mem_<12 hex> format.
       for (const m of bySession.get(session.index) ?? []) {
-        const entry = createMemory(m.content);
+        const entry = createMemory(m.content, { baseHalfLifeDays: SWEEP_HALF_LIFE });
         entry.id = `mem_${createHash('sha256').update(`e1:${seed}:${m.id}`).digest('hex').slice(0, 12)}`;
         writeEntry(hippoRoot, entry);
         idMap.set(m.id, entry.id);
@@ -272,19 +277,23 @@ if (isMain) {
     numSessions: Number(getArg('sessions', '20')),
     distractorMultiple: Number(getArg('distractors', '10')),
   };
+  // A5 sweep: --half-life sets the decay base (default 7 = registered E1); --out-dir
+  // isolates sweep output so it never clobbers the registered raw/.
+  SWEEP_HALF_LIFE = Number(getArg('half-life', '7'));
+  const outDir = path.resolve(getArg('out-dir', OUT_DIR));
   for (const arm of arms) {
     if (!ARM_ENV[arm]) {
       console.error(`unknown arm: ${arm}`);
       process.exit(1);
     }
   }
-  fs.mkdirSync(OUT_DIR, { recursive: true });
+  fs.mkdirSync(outDir, { recursive: true });
   (async () => {
     for (const arm of arms) {
       for (const seed of seeds) {
         const t0 = Date.now();
         const result = await runArmSeed(arm, seed, genOpts);
-        const outFile = path.join(OUT_DIR, `${arm}-seed${seed}.json`);
+        const outFile = path.join(outDir, `${arm}-seed${seed}.json`);
         fs.writeFileSync(outFile, JSON.stringify(result, null, 1), 'utf8');
         const last = result.epochs[result.epochs.length - 1];
         console.log(
