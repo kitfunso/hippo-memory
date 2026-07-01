@@ -68,6 +68,7 @@ import { markRetrieved, estimateTokens, hybridSearch, physicsSearch, type Rerank
 import { scopeMatch } from './scope.js';
 import { consolidate } from './consolidate.js';
 import { loadConfig } from './config.js';
+import { resolveProjectIdentity } from './project-identity.js';
 import { deduplicateStore } from './dedupe.js';
 import { computeAmbientState, type AmbientState } from './ambient.js';
 import { loadPendingExtractionTenants, markPendingProcessedUpTo } from './graph.js';
@@ -200,6 +201,24 @@ export function passesScopeFilterForRecall(
 
 export function isPrivateScope(scope: string | null | undefined): boolean {
   return typeof scope === 'string' && PRIVATE_SCOPE_RE.test(scope);
+}
+
+/**
+ * v39 memory scope isolation: classify a memory's origin_project against the
+ * active project. `currentName === ''` means the session is not in a project
+ * (home dir or markerless cwd) - everything is in scope there, matching
+ * pre-isolation behavior. NULL/undefined origin is a legacy pre-v39 row and
+ * is treated as cross-project (deny by default) - the safe direction for a
+ * security partition.
+ */
+export function classifyOriginProject(
+  origin: string | null | undefined,
+  currentName: string,
+): 'project' | 'user-global' | 'cross-project' {
+  if (currentName === '') return 'project';
+  if (origin === undefined || origin === null) return 'cross-project';
+  if (origin === '') return 'user-global';
+  return origin === currentName ? 'project' : 'cross-project';
 }
 
 export interface RememberOpts {
@@ -2081,6 +2100,15 @@ export interface ContextOpts {
   pinnedOnly?: boolean;
   scope?: string;
   includeRecent?: number;
+  /** v39 memory scope isolation: re-include other-project memories that the
+   *  origin partition excludes by default. They come back tagged
+   *  `category: 'cross-project'` so renderers can demarcate them. */
+  crossProject?: boolean;
+  /** The active project name for the origin partition ('' = not in a
+   *  project). Defaults to `resolveProjectIdentity(process.cwd()).name`;
+   *  surfaces whose process cwd is not the caller's project (HTTP server)
+   *  should pass it explicitly. */
+  currentProject?: string;
 }
 
 export interface ContextResultEntry {
@@ -2089,6 +2117,12 @@ export interface ContextResultEntry {
   tokens: number;
   isGlobal?: boolean;
   isFreshTail?: boolean;
+  /** v39: the entry's owning project ('' = user-global, null = legacy row). */
+  origin?: string | null;
+  /** v39: how the origin relates to the active project. 'cross-project'
+   *  entries only appear when ContextOpts.crossProject was set (or isolation
+   *  is disabled). */
+  category?: 'project' | 'user-global' | 'cross-project';
 }
 
 export interface ContextResult {
@@ -2147,6 +2181,25 @@ export async function getContext(
   // Filter superseded — context never includes superseded rows.
   localEntries = localEntries.filter((e) => !e.superseded_by);
   globalEntries = globalEntries.filter((e) => !e.superseded_by);
+
+  // v39 memory scope isolation (docs/plans/2026-07-01-memory-scope-isolation.md).
+  // S2: envelope-filter parity with api.recall for AMBIENT context - private
+  // scopes and quarantine buckets never inject. `requested` is deliberately
+  // undefined: opts.scope is the scope-TAG boost input here, not an
+  // envelope-scope request (api.recall's exact-match semantics don't apply).
+  // S3: origin partition - other-project memories are excluded unless the
+  // caller explicitly asks for them (crossProject) or isolation is disabled.
+  const isolationEnabled = loadConfig(ctx.hippoRoot).contextProjectIsolation !== false;
+  const currentProjectName =
+    opts.currentProject ?? resolveProjectIdentity(process.cwd()).name;
+  const includeCrossProject = opts.crossProject === true || !isolationEnabled;
+  const ambientAdmit = (e: MemoryEntry): boolean => {
+    if (!passesScopeFilterForRecall(e.scope ?? null, undefined)) return false;
+    if (includeCrossProject) return true;
+    return classifyOriginProject(e.origin_project, currentProjectName) !== 'cross-project';
+  };
+  localEntries = localEntries.filter(ambientAdmit);
+  globalEntries = globalEntries.filter(ambientAdmit);
 
   const activeSnapshot = hasLocal
     ? loadActiveTaskSnapshot(ctx.hippoRoot, ctx.tenantId)
@@ -2285,12 +2338,18 @@ export async function getContext(
         tenantId: ctx.tenantId,
       });
       const localIndex = loadIndex(ctx.hippoRoot);
-      results = merged.map((r) => ({
-        entry: r.entry,
-        score: r.score,
-        tokens: r.tokens,
-        isGlobal: !localIndex.entries[r.entry.id],
-      }));
+      // searchBothHybrid loads from the store roots itself, so the ambient
+      // filter above never saw its candidates - re-apply it here (post-filter
+      // only; the shared loaders stay untouched so hippo recall's public
+      // behavior cannot shift).
+      results = merged
+        .filter((r) => ambientAdmit(r.entry))
+        .map((r) => ({
+          entry: r.entry,
+          score: r.score,
+          tokens: r.tokens,
+          isGlobal: !localIndex.entries[r.entry.id],
+        }));
     } else {
       const ctxConfig = loadConfig(ctx.hippoRoot);
       const usePhysicsCtx = ctxConfig.physics?.enabled !== false;
@@ -2357,6 +2416,14 @@ export async function getContext(
     selectedItems = selectedItems.slice(0, limit);
     totalTokens = selectedItems.reduce((sum, r) => sum + r.tokens, 0);
   }
+
+  // v39: annotate every returned entry with its origin and how it relates to
+  // the active project, so renderers can demarcate cross-project inclusions.
+  selectedItems = selectedItems.map((r) => ({
+    ...r,
+    origin: r.entry.origin_project ?? null,
+    category: classifyOriginProject(r.entry.origin_project, currentProjectName),
+  }));
 
   if (
     selectedItems.length === 0 &&
