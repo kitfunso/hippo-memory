@@ -1007,8 +1007,13 @@ async function executeTool(
       // but synced-down or legacy rows can still carry another project's
       // origin, and secrets must never ambient-inject outside their owner.
       // Same policy as api.getContext; the scope filter above keeps this
-      // surface's own explicit-scope exact-match semantics.
-      const mcpProjectName = resolveProjectIdentity(path.dirname(path.resolve(hippoRoot))).name;
+      // surface's own explicit-scope exact-match semantics. Identity comes
+      // from the MCP server's launch cwd, NOT the store path: when store
+      // resolution falls back to the global store (git repo without a local
+      // .hippo), dirname(store) would be home ('' = admit everything) and
+      // the leak would return (codex round 4 P1). Stdio MCP servers launch
+      // in the project they serve, so cwd is the right identity.
+      const mcpProjectName = resolveProjectIdentity(process.cwd()).name;
       const isolationOff = config.contextProjectIsolation === false;
       const entries = allEntries.filter((e) => {
         if (!passesScopeFilter(e.scope ?? null)) return false;

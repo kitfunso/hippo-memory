@@ -150,6 +150,14 @@ describe('getContext origin partition (project A session)', () => {
     expect(got.join('\n')).not.toContain('filler text for bulk');
   });
 
+  it('an excluded duplicate cannot shadow its admitted copy in query mode (admission runs before dedupe)', async () => {
+    const DUP = 'deploykey duplicated fact shared to global';
+    writeEntry(projA, { ...createMemory(DUP, { scope: 'github:private:x' }) }); // excluded (private scope)
+    writeEntry(globalStore, { ...createMemory(DUP), origin_project: '' });      // admitted (user-global)
+    const result = await getContext(ctx, { currentProject: 'proj-a', q: 'deploykey duplicated' });
+    expect(contents(result.entries)).toContain(DUP);
+  });
+
   it('private-scope rows never ambient-inject even from the local store (S2 parity)', async () => {
     const secret = 'PRIVATE-SCOPED deploykey row that must not inject';
     writeEntry(projA, { ...createMemory(secret, { pinned: true, scope: 'github:private:repo-x' }) });

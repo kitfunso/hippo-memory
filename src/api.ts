@@ -2355,33 +2355,25 @@ export async function getContext(
     let results: ContextResultEntry[];
     if (hasGlobal) {
       // searchBothHybrid loads from the store roots itself, so the ambient
-      // filter above never saw its candidates - re-apply it after the search
-      // (post-filter only; the shared loaders stay untouched so hippo
-      // recall's public behavior cannot shift). Budgeting is deferred until
-      // AFTER admission: fetch the full ranked candidate set (unbounded
-      // token budget), filter, then greedy-fill to the caller's budget -
-      // otherwise excluded high-scoring rows could saturate any fixed
-      // over-fetch and starve admissible rows out entirely (codex gating
-      // rounds 1+3).
+      // filter above never saw its candidates. Admission runs INSIDE the
+      // search via the opt-in entryFilter, BEFORE ranking, cross-store
+      // content-dedupe, and budgeting - a post-filter instead would let an
+      // excluded row saturate the budget (codex rounds 1+3) or shadow its
+      // admitted duplicate in the dedupe pass (codex round 4). Recall paths
+      // never set entryFilter, so their behavior is unchanged.
       const merged = await searchBothHybrid(query, ctx.hippoRoot, globalRoot, {
-        budget: Number.MAX_SAFE_INTEGER,
+        budget,
         scope: activeScope,
         tenantId: ctx.tenantId,
+        entryFilter: ambientAdmit,
       });
       const localIndex = loadIndex(ctx.hippoRoot);
-      results = [];
-      let usedQueryTokens = 0;
-      for (const r of merged) {
-        if (!ambientAdmit(r.entry)) continue;
-        if (usedQueryTokens + r.tokens > budget) continue;
-        results.push({
-          entry: r.entry,
-          score: r.score,
-          tokens: r.tokens,
-          isGlobal: !localIndex.entries[r.entry.id],
-        });
-        usedQueryTokens += r.tokens;
-      }
+      results = merged.map((r) => ({
+        entry: r.entry,
+        score: r.score,
+        tokens: r.tokens,
+        isGlobal: !localIndex.entries[r.entry.id],
+      }));
     } else {
       const ctxConfig = loadConfig(ctx.hippoRoot);
       const usePhysicsCtx = ctxConfig.physics?.enabled !== false;

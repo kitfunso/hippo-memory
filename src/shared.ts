@@ -176,6 +176,12 @@ export interface HybridSearchOptions extends SearchOptions {
   summaryDeboost?: number;
   /** v0.30 / E4 — propagated. Default true (1.05 boost if rebuilt within 7d). */
   summaryFreshness?: boolean;
+  /** v39 memory scope isolation: optional admission predicate applied to the
+   *  loaded candidate entries of BOTH stores BEFORE ranking, cross-store
+   *  content-dedupe, and budgeting. Without it, an excluded row can shadow
+   *  its admitted duplicate in the dedupe pass, or saturate the budget.
+   *  Default undefined = unchanged behavior (recall paths never set it). */
+  entryFilter?: (entry: MemoryEntry) => boolean;
 }
 
 /**
@@ -188,10 +194,14 @@ export async function searchBothHybrid(
   globalRoot: string,
   options: HybridSearchOptions = {}
 ): Promise<SearchResult[]> {
-  const { budget = 4000, now = evalNow(), embeddingWeight, explain, mmr, mmrLambda, localBump = 1.2, minResults, scope, includeSuperseded, asOf, tenantId, summaryDeboost, summaryFreshness } = options;
+  const { budget = 4000, now = evalNow(), embeddingWeight, explain, mmr, mmrLambda, localBump = 1.2, minResults, scope, includeSuperseded, asOf, tenantId, summaryDeboost, summaryFreshness, entryFilter } = options;
 
-  const localEntries = fs.existsSync(localRoot) ? loadSearchEntries(localRoot, query, undefined, tenantId) : [];
-  const globalEntries = fs.existsSync(globalRoot) ? loadSearchEntries(globalRoot, query, undefined, tenantId) : [];
+  let localEntries = fs.existsSync(localRoot) ? loadSearchEntries(localRoot, query, undefined, tenantId) : [];
+  let globalEntries = fs.existsSync(globalRoot) ? loadSearchEntries(globalRoot, query, undefined, tenantId) : [];
+  if (entryFilter) {
+    localEntries = localEntries.filter(entryFilter);
+    globalEntries = globalEntries.filter(entryFilter);
+  }
 
   if (localEntries.length === 0 && globalEntries.length === 0) return [];
 
