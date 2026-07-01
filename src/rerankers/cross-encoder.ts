@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
 
 const MODEL_NAME = 'Xenova/ms-marco-MiniLM-L-6-v2';
@@ -8,32 +9,64 @@ const MODEL_NAME = 'Xenova/ms-marco-MiniLM-L-6-v2';
 const _dynImport = new Function('s', 'return import(s)') as (
   s: string,
 ) => Promise<unknown>;
+const _require = createRequire(import.meta.url);
+
+const TRANSFORMERS_PACKAGES = ['@huggingface/transformers', '@xenova/transformers'] as const;
+
+function resolveTransformersPackage(): (typeof TRANSFORMERS_PACKAGES)[number] | null {
+  for (const name of TRANSFORMERS_PACKAGES) {
+    try {
+      _require.resolve(name);
+      return name;
+    } catch {
+      // Try the legacy fallback only when the preferred package is not installed.
+    }
+  }
+  return null;
+}
+
+async function loadTransformersModule(): Promise<{
+  pipeline: (task: string, model: string) => Promise<unknown>;
+} | null> {
+  // Import one backend only. Loading both native ONNX runtimes in one process
+  // can abort during finalization; Hugging Face is the maintained default.
+  const name = resolveTransformersPackage();
+  if (!name) return null;
+  try {
+    const mod = (await _dynImport(name)) as {
+      pipeline?: (task: string, model: string) => Promise<unknown>;
+      default?: {
+        pipeline?: (task: string, model: string) => Promise<unknown>;
+      };
+    };
+    const pipeline = mod.pipeline ?? mod.default?.pipeline;
+    return typeof pipeline === 'function'
+      ? { pipeline }
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 type CrossEncoderFn = (query: string, candidate: string) => Promise<{ score: number }[]>;
 let cachedPipeline: CrossEncoderFn | null = null;
 let warnedOnFallback = false;
 
 /**
- * True if @xenova/transformers is importable. Note: this does NOT confirm
+ * True if a Transformers.js backend is importable. Note: this does NOT confirm
  * that the model is downloadable from Hugging Face CDN — in sandboxed
  * environments the package may import but the model fetch may be blocked.
  * The reranker silently falls back to identity ordering in that case.
  */
 export async function isCrossEncoderAvailable(): Promise<boolean> {
-  try {
-    const t = (await _dynImport('@xenova/transformers')) as { pipeline?: unknown };
-    return typeof t.pipeline === 'function';
-  } catch {
-    return false;
-  }
+  return (await loadTransformersModule()) !== null;
 }
 
 async function loadPipeline(): Promise<CrossEncoderFn | null> {
   if (cachedPipeline) return cachedPipeline;
   try {
-    const mod = (await _dynImport('@xenova/transformers')) as {
-      pipeline: (task: string, model: string) => Promise<unknown>;
-    };
+    const mod = await loadTransformersModule();
+    if (!mod) return null;
     const p = (await mod.pipeline('text-classification', MODEL_NAME)) as (
       input: string,
     ) => Promise<unknown>;
@@ -74,7 +107,7 @@ export const crossEncoderReranker: RerankerFn = async (
       warnedOnFallback = true;
       // eslint-disable-next-line no-console
       console.warn(
-        '[hippo] cross-encoder reranker unavailable (no @xenova/transformers, or model fetch blocked); falling back to identity ordering. Subsequent calls will not repeat this warning.',
+        '[hippo] cross-encoder reranker unavailable (no Transformers.js backend, or model fetch blocked); falling back to identity ordering. Subsequent calls will not repeat this warning.',
       );
     }
     return head.map((r, i) => ({

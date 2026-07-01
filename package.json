@@ -30,6 +30,7 @@
     "pretest": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
+    "audit:security": "npm audit --audit-level=high && npm --prefix ui audit --audit-level=high",
     "postinstall": "node scripts/postinstall.cjs",
     "smoke:pack": "node scripts/smoke-pack.mjs",
     "smoke:openclaw-install": "node scripts/smoke-openclaw-install.mjs",
@@ -63,15 +64,12 @@
   "devDependencies": {
     "@types/node": "^20.11.0",
     "typescript": "^5.4.0",
-    "vitest": "^1.4.0"
-  },
-  "peerDependenciesMeta": {
-    "@xenova/transformers": {
-      "optional": true
-    }
+    "vitest": "^3.2.6"
   },
   "optionalDependencies": {
-    "@huggingface/transformers": "^4.2.0",
-    "@xenova/transformers": "^2.17.2"
+    "@huggingface/transformers": "^4.2.0"
+  },
+  "overrides": {
+    "protobufjs": "7.6.4"
   }
 }

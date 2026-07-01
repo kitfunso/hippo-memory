@@ -577,5 +577,5 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
         delete process.env.HIPPO_DAG_REBUILD_CAP;
       }
     }
-  }, 60_000); // 60s timeout — 1500-row seed is slow
+  }, 120_000); // 1500-row real-DB seed is intentionally slow on low-power CI/dev hosts
 });

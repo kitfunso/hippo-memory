@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * Fetch a `@xenova/transformers`-compatible embedding model bundle from the
+ * Fetch a Transformers.js-compatible embedding model bundle from the
  * Qdrant fastembed Google Cloud Storage bucket and lay it out in the
  * library's local-cache directory structure.
  *
  * Why this script exists: in egress-restricted environments (e.g. Claude
  * Code Cloud sandboxes) `huggingface.co` is not allowlisted, so the default
- * @xenova/transformers download path fails. Qdrant publishes a curated set
+ * Transformers.js download path fails. Qdrant publishes a curated set
  * of ONNX-converted models on storage.googleapis.com, which is on common
  * allowlists.
  *
@@ -16,7 +16,7 @@
  *   Xenova/bge-base-en-v1.5          (768-dim,  CLS pooling,  FP16 model_optimized.onnx, ~195 MB tarball)
  *   Xenova/multilingual-e5-large     (1024-dim, mean pooling, FP32 model.onnx + model.onnx_data external-data, ~1.25 GB tarball)
  *
- * Layout produced (matches @xenova/transformers' local-model expectations):
+ * Layout produced (matches Transformers.js local-model expectations):
  *
  *   <dest>/<model-id>/
  *     config.json
