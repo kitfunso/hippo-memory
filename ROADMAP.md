@@ -15,7 +15,7 @@
 
 This roadmap tracks planned work for the hippo-memory codebase. Items are grouped by funding status: committed, conditional on grant award, and speculative.
 
-Current version: 1.22.0 (npm `hippo-memory`) + python-v0.3.0 (PyPI `hippo-memory-sdk`)
+Current version: 1.23.0 (npm `hippo-memory`) + python-v0.3.0 (PyPI `hippo-memory-sdk`)
 
 For non-grant execution status (Tracks A-I, sequencing, shipped items, bets, non-goals) see **Part II** below (formerly `ROADMAP-RESEARCH.md`). For operational follow-ups and per-version post-ship tails see `TODOS.md`. For the research lineage and seven-mechanisms backgrounder see `RESEARCH.md`.
 
@@ -108,6 +108,7 @@ Status: Submitted. Decision expected summer 2026. Project runs August 2026 - Jan
 - [Committed] Ongoing bug fixes and minor feature work on main branch
 - [Committed] npm publish cadence for point releases
 - [Committed] Documentation updates for existing API surface
+- [Committed] **Memory scope isolation (stop the agent tracing the wrong memories).** The UserPromptSubmit hook injects `path:skf_s` (home/global-scoped) memories into every session regardless of the active project, so a fact from project A surfaces while the agent works in project B. Two failure modes, both observed 2026-06-30: (1) **wrong-project recommendation** - in a corporate project (RamSky / MR3A) the agent recalled a *personal* hackathon's AWS usage and recommended AWS S3 for the corporate app; a fabrication the user caught and flagged ("please try not to mix what we have with what dmitrii has"). (2) **secret bleed** - a production API key (2chain, tagged `path:skf_s`) sits in the live context of unrelated project sessions. Fix direction: scope-aware retrieval keyed on the active project (cwd / git remote) that demarcates, down-weights, or excludes other-project memories unless explicitly requested; an explicit global-vs-project partition at recall time; and a hard rule that secret-tagged memories never auto-inject outside their owning project. Acceptance: an agent working in project A is not served project B's load-bearing facts or secrets without an explicit cross-project request. Pairs with the per-project + global store split noted under the quiz-me Speculative item.
 
 ### Company Brain execution order [Committed]
 
@@ -131,6 +132,7 @@ Status: Submitted. Decision expected summer 2026. Project runs August 2026 - Jan
 - [Speculative] Cross-modal memory (text + vision + action)
 - [Speculative] Post-transformer architecture integration
 - [Speculative] On-device Hippo (mobile / edge agents)
+- [Speculative] Learning-gate cards as first-class memories. Integrate the `/quiz-me` forcing-function skill (`~/.claude/skills/quiz-me/`, currently file-backed at `~/.claude/quiz-me/{deck,results}.jsonl`) with hippo as the storage layer. Each MC / explain-back card becomes a hippo memory tagged `card`; spaced-repetition schedule (1, 3, 7, 14, 30, 60, 120 days) drives the decay curve; failed cards spike retention via the existing outcome mechanism; recall surfaces due cards with the same MMR / value-aware ranking already used for normal recall. Unblocks: cross-project decks (hippo's per-project + global stores), card decay sensitive to actual use, and consolidation passes that merge near-duplicate cards. Blocked on: lossless-claw-style SQLite backbone landing first (per hippo plan correction 2026-03-18) — current `.jsonl` store is the bridge until that ships.
 
 ---
 
@@ -155,7 +157,7 @@ This is the canonical execution roadmap. Every actionable item from `RESEARCH.md
 
 This file supersedes the prior research-only frame. **Part I** above (formerly `ROADMAP.md`) tracks grant-tied deliverables. `PLAN.md` documents architecture and CLS principles.
 
-Current version: 1.22.0 (npm `hippo-memory`, published 2026-06-03) + python-v0.3.0 (PyPI `hippo-memory-sdk`, published 2026-05-28)
+Current version: 1.23.0 (npm `hippo-memory`, published 2026-06-08) + python-v0.3.0 (PyPI `hippo-memory-sdk`, published 2026-05-28)
 Active branch: `master`
 
 ## Status as of 2026-05-24
