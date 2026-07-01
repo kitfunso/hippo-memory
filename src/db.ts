@@ -5,7 +5,7 @@ import { createRequire } from 'module';
 import { createPhysicsTable } from './physics-state.js';
 import { cleanupArchivedMirrors } from './raw-archive-mirror-cleanup.js';
 import { PACKAGE_VERSION, compareSemver } from './version.js';
-import { deriveOriginProject } from './project-identity.js';
+import { deriveOriginProject, originFromSource } from './project-identity.js';
 
 const require = createRequire(import.meta.url);
 
@@ -2163,33 +2163,29 @@ const MIGRATIONS: Migration[] = [
       // Rows stay NULL only when no hippoRoot was provided.
       const hippoRoot = ctx?.hippoRoot;
       if (hippoRoot) {
+        // Provenance-source evidence first (shared:<project>: / promoted:<localRoot>,
+        // parsed by the same helper the markdown-import stamp uses), then the
+        // store's own location for everything else.
         const homeName = path.basename(os.homedir()).toLowerCase();
-        const sharedRows = db.prepare(
-          `SELECT id, source FROM memories WHERE origin_project IS NULL AND source LIKE 'shared:%'`,
+        const sourcedRows = db.prepare(
+          `SELECT id, source FROM memories WHERE origin_project IS NULL AND (source LIKE 'shared:%' OR source LIKE 'promoted:%')`,
         ).all() as Array<{ id: string; source: string }>;
         const setOrigin = db.prepare(`UPDATE memories SET origin_project = ? WHERE id = ?`);
-        for (const row of sharedRows) {
-          const match = /^shared:([^:]+):/.exec(row.source);
-          if (!match) continue;
-          const name = match[1].toLowerCase();
-          setOrigin.run(name === homeName ? '' : name, row.id);
-        }
-        // Rows promoted from a project store carry source 'promoted:<localRoot>'
-        // where <localRoot> is `<project>/.hippo` - the parent basename is the
-        // project (same parse listPeers uses). Pure string logic; the recorded
-        // path may no longer exist on disk (codex gating review P1).
-        const promotedRows = db.prepare(
-          `SELECT id, source FROM memories WHERE origin_project IS NULL AND source LIKE 'promoted:%'`,
-        ).all() as Array<{ id: string; source: string }>;
-        for (const row of promotedRows) {
-          const promotedPath = row.source.slice('promoted:'.length).trim();
-          if (!promotedPath) continue;
-          const name = path.basename(path.resolve(promotedPath, '..')).toLowerCase();
-          if (!name) continue;
-          setOrigin.run(name === homeName ? '' : name, row.id);
+        for (const row of sourcedRows) {
+          const origin = originFromSource(row.source, homeName);
+          if (origin === null) continue;
+          setOrigin.run(origin, row.id);
         }
         const storeOrigin = deriveOriginProject(path.dirname(hippoRoot));
         db.prepare(`UPDATE memories SET origin_project = ? WHERE origin_project IS NULL`).run(storeOrigin);
+      }
+      // Rollback-safety guard (v24 precedent): a pre-isolation binary opening
+      // this DB would ignore origin_project and the secret veto and resume
+      // injecting cross-project rows. 1.24.0 is the first version with the
+      // isolation behavior. Forward-only - never lower an existing minimum.
+      const existingMin = (db.prepare(`SELECT value FROM meta WHERE key = 'min_compatible_binary'`).get() as { value?: string } | undefined)?.value;
+      if (!existingMin || compareSemver('1.24.0', existingMin) > 0) {
+        db.prepare(`INSERT INTO meta(key, value) VALUES('min_compatible_binary', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run('1.24.0');
       }
     },
   },

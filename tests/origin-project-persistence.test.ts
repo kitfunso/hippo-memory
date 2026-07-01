@@ -162,6 +162,36 @@ describe('v39 migration backfill', () => {
     expect(entry.origin_project).toBe('proj-b');
   });
 
+  it('legacy markdown bootstrap honors source evidence over the destination store origin', () => {
+    // A pre-v39 markdown-only store: a shared:proj-b row imported into a
+    // proj-a store must keep proj-b, not become proj-a (codex round 3 P1).
+    const projectDir = path.join(tmpRoot, 'proj-a');
+    const storeRoot = path.join(projectDir, '.hippo');
+    fs.mkdirSync(path.join(storeRoot, 'episodic'), { recursive: true });
+    const sharedRow = { ...createMemory('markdown row shared from proj b', { source: 'shared:Proj-B:2026-01-01T00:00:00Z' }), origin_project: null };
+    const plainRow = { ...createMemory('markdown row written here long ago'), origin_project: null };
+    fs.writeFileSync(path.join(storeRoot, 'episodic', `${sharedRow.id}.md`), serializeEntry(sharedRow));
+    fs.writeFileSync(path.join(storeRoot, 'episodic', `${plainRow.id}.md`), serializeEntry(plainRow));
+
+    initStore(storeRoot); // bootstrapLegacyStore imports the markdown
+    const entries = loadAllEntries(storeRoot);
+    const shared = entries.find((e) => e.source.startsWith('shared:'));
+    const plain = entries.find((e) => !e.source.startsWith('shared:'));
+    expect(shared?.origin_project).toBe('proj-b');
+    expect(plain?.origin_project).toBe('proj-a');
+  });
+
+  it('stamps min_compatible_binary 1.24.0 so pre-isolation binaries refuse the DB', () => {
+    const storeRoot = makeProjectStore('proj-a');
+    const db = openHippoDb(storeRoot);
+    try {
+      const row = db.prepare(`SELECT value FROM meta WHERE key = 'min_compatible_binary'`).get() as { value?: string };
+      expect(row?.value).toBe('1.24.0');
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
   it('is idempotent: a second migration pass changes nothing', () => {
     const storeRoot = makeProjectStore('proj-a');
     writeEntry(storeRoot, createMemory('row for idempotency check'));

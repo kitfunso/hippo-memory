@@ -154,6 +154,34 @@ export function classifyOriginProject(
 }
 
 /**
+ * Parse a memory's origin from its provenance `source` string, mirroring the
+ * v39 migration's evidence rules: `shared:<project>:<ts>` and
+ * `promoted:<localRoot>` identify the owning project; the user home dir's
+ * basename maps to '' (user-global). Returns null when the source carries no
+ * origin evidence. Pure string logic - recorded paths may no longer exist.
+ */
+export function originFromSource(
+  source: string | null | undefined,
+  homeName?: string,
+): string | null {
+  if (!source) return null;
+  const home = (homeName ?? path.basename(os.homedir())).toLowerCase();
+  const shared = /^shared:([^:]+):/.exec(source);
+  if (shared) {
+    const name = shared[1].toLowerCase();
+    return name === home ? '' : name;
+  }
+  if (source.startsWith('promoted:')) {
+    const promotedPath = source.slice('promoted:'.length).trim();
+    if (!promotedPath) return null;
+    const name = path.basename(path.resolve(promotedPath, '..')).toLowerCase();
+    if (!name) return null;
+    return name === home ? '' : name;
+  }
+  return null;
+}
+
+/**
  * The origin project to stamp on a memory written from cwd.
  * Returns the project name, or '' for user-global (written at/under home or
  * in a markerless directory) - injectable everywhere. Write sites must always

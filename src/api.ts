@@ -2357,12 +2357,14 @@ export async function getContext(
       // searchBothHybrid loads from the store roots itself, so the ambient
       // filter above never saw its candidates - re-apply it after the search
       // (post-filter only; the shared loaders stay untouched so hippo
-      // recall's public behavior cannot shift). Over-fetch 3x then greedy
-      // re-fill to the caller's budget so an excluded high-scoring row
-      // cannot starve admitted lower-scoring rows out of the budget
-      // (codex gating review P2).
+      // recall's public behavior cannot shift). Budgeting is deferred until
+      // AFTER admission: fetch the full ranked candidate set (unbounded
+      // token budget), filter, then greedy-fill to the caller's budget -
+      // otherwise excluded high-scoring rows could saturate any fixed
+      // over-fetch and starve admissible rows out entirely (codex gating
+      // rounds 1+3).
       const merged = await searchBothHybrid(query, ctx.hippoRoot, globalRoot, {
-        budget: budget * 3,
+        budget: Number.MAX_SAFE_INTEGER,
         scope: activeScope,
         tenantId: ctx.tenantId,
       });

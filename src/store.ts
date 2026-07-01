@@ -23,7 +23,7 @@ import { SessionHandoff, SessionHandoffRow, rowToSessionHandoff } from './handof
 import { tokenize } from './search.js';
 import { appendAuditEvent, type AuditOp } from './audit.js';
 import { resolveTenantId } from './tenant.js';
-import { deriveOriginProject } from './project-identity.js';
+import { deriveOriginProject, originFromSource } from './project-identity.js';
 
 /**
  * Emit an audit event for a mutation against `db`. Wrapped so a broken audit
@@ -1184,14 +1184,21 @@ export function stampOriginProject(hippoRoot: string, entry: MemoryEntry): Memor
 }
 
 /**
- * Import-time variant that ALSO stamps null: used only where the store's
- * location genuinely is the evidence for rows that predate the origin
- * column - the legacy-markdown bootstrap and rebuildIndex import, which are
- * the markdown-store equivalent of the v39 SQL backfill.
+ * Import-time variant that ALSO stamps null: used only where evidence exists
+ * for rows that predate the origin column - the legacy-markdown bootstrap and
+ * rebuildIndex import, which are the markdown-store equivalent of the v39 SQL
+ * backfill. Same evidence order as the migration: the provenance source
+ * (`shared:<project>:` / `promoted:<localRoot>`) wins over the destination
+ * store's location, so a shared row imported into the global store keeps its
+ * owning project instead of becoming user-global (codex gating round 3 P1).
  */
 function stampOriginProjectForImport(hippoRoot: string, entry: MemoryEntry): MemoryEntry {
   if (entry.origin_project !== undefined && entry.origin_project !== null) return entry;
-  return { ...entry, origin_project: deriveOriginProject(path.dirname(hippoRoot)) };
+  const fromSource = originFromSource(entry.source);
+  return {
+    ...entry,
+    origin_project: fromSource ?? deriveOriginProject(path.dirname(hippoRoot)),
+  };
 }
 
 export function writeEntry(
