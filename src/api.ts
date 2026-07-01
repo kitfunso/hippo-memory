@@ -209,6 +209,43 @@ export function isPrivateScope(scope: string | null | undefined): boolean {
 // callers that already import the api surface.
 export { classifyOriginProject } from './project-identity.js';
 
+/**
+ * v39: the single ambient-injection admission policy, shared by getContext
+ * and the CLI-side ambient-state summary so the two cannot drift.
+ *
+ * - S4 secret veto is UNCONDITIONAL: neither crossProject nor
+ *   contextProjectIsolation:false re-includes secrets. A flagged row only
+ *   injects inside its owning project; flagged rows with no project origin
+ *   (''/null) never ambient-inject at all. Explicit recall is unaffected -
+ *   recalling a secret is a deliberate act.
+ * - S2 envelope parity: private scopes + quarantine buckets never inject.
+ * - S3 origin partition: other-project rows are excluded unless
+ *   `includeCrossProject`.
+ */
+export function ambientAdmitEntry(
+  e: MemoryEntry,
+  currentProjectName: string,
+  includeCrossProject: boolean,
+): boolean {
+  if (!ambientSecretAdmit(e, currentProjectName)) return false;
+  if (!passesScopeFilterForRecall(e.scope ?? null, undefined)) return false;
+  if (includeCrossProject) return true;
+  return classifyOriginProject(e.origin_project, currentProjectName) !== 'cross-project';
+}
+
+/**
+ * v39 S4: the secret half of the ambient policy on its own, for surfaces
+ * with their own scope semantics (MCP hippo_context's explicit-scope
+ * exact-match). A flagged row is only admitted inside its owning project;
+ * flagged rows with no project origin never ambient-inject.
+ */
+export function ambientSecretAdmit(e: MemoryEntry, currentProjectName: string): boolean {
+  if (!detectSecret(e).flagged) return true;
+  const origin = e.origin_project;
+  if (origin === undefined || origin === null || origin === '') return false;
+  return origin === currentProjectName;
+}
+
 export interface RememberOpts {
   content: string;
   kind?: MemoryKind;
@@ -2181,21 +2218,8 @@ export async function getContext(
   const currentProjectName =
     opts.currentProject ?? resolveProjectIdentity(process.cwd()).name;
   const includeCrossProject = opts.crossProject === true || !isolationEnabled;
-  const ambientAdmit = (e: MemoryEntry): boolean => {
-    // S4 secret veto - UNCONDITIONAL for ambient surfaces: neither
-    // crossProject nor contextProjectIsolation:false re-includes secrets.
-    // A flagged row only injects inside its owning project; flagged rows
-    // with no project origin (''/null) never ambient-inject at all.
-    // Explicit recall still returns them - recalling is a deliberate act.
-    if (detectSecret(e).flagged) {
-      const origin = e.origin_project;
-      if (origin === undefined || origin === null || origin === '') return false;
-      if (origin !== currentProjectName) return false;
-    }
-    if (!passesScopeFilterForRecall(e.scope ?? null, undefined)) return false;
-    if (includeCrossProject) return true;
-    return classifyOriginProject(e.origin_project, currentProjectName) !== 'cross-project';
-  };
+  const ambientAdmit = (e: MemoryEntry): boolean =>
+    ambientAdmitEntry(e, currentProjectName, includeCrossProject);
   localEntries = localEntries.filter(ambientAdmit);
   globalEntries = globalEntries.filter(ambientAdmit);
 

@@ -27,7 +27,8 @@ import { fetchGitLog, extractLessons, deduplicateLesson, isGitRepo } from '../au
 import { loadConfig } from '../config.js';
 import { resolveConfidence } from '../memory.js';
 import { resolveTenantId } from '../tenant.js';
-import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, drillDown as apiDrillDown, assemble as apiAssemble, isPrivateScope, adminActor, buildSuppressionSummary, type Context as ApiContext } from '../api.js';
+import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, drillDown as apiDrillDown, assemble as apiAssemble, isPrivateScope, adminActor, buildSuppressionSummary, ambientSecretAdmit, type Context as ApiContext } from '../api.js';
+import { resolveProjectIdentity, classifyOriginProject } from '../project-identity.js';
 import { computePredictionBaserate } from '../predictions.js';
 import { appendAuditEvent } from '../audit.js';
 import { createHash } from 'node:crypto';
@@ -1002,7 +1003,19 @@ async function executeTool(
         return true;
       };
       const allEntries = loadAllEntries(hippoRoot, tenantId);
-      const entries = allEntries.filter((e) => passesScopeFilter(e.scope ?? null));
+      // v39 memory scope isolation: this surface reads the LOCAL store only,
+      // but synced-down or legacy rows can still carry another project's
+      // origin, and secrets must never ambient-inject outside their owner.
+      // Same policy as api.getContext; the scope filter above keeps this
+      // surface's own explicit-scope exact-match semantics.
+      const mcpProjectName = resolveProjectIdentity(path.dirname(path.resolve(hippoRoot))).name;
+      const isolationOff = config.contextProjectIsolation === false;
+      const entries = allEntries.filter((e) => {
+        if (!passesScopeFilter(e.scope ?? null)) return false;
+        if (!ambientSecretAdmit(e, mcpProjectName)) return false;
+        if (isolationOff) return true;
+        return classifyOriginProject(e.origin_project, mcpProjectName) !== 'cross-project';
+      });
       const usePhysicsCtx = config.physics?.enabled !== false;
       const results = usePhysicsCtx
         ? await physicsSearch(query, entries, { budget, hippoRoot, physicsConfig: config.physics })

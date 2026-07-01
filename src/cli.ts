@@ -61,6 +61,7 @@ import {
   MemoryEntry,
   ConfidenceLevel,
 } from './memory.js';
+import { resolveProjectIdentity } from './project-identity.js';
 import {
   getHippoRoot,
   isInitialized,
@@ -5367,6 +5368,9 @@ async function cmdContext(
     tenantId: resolveTenantId({}),
     actor: api.adminActor('cli'),
   };
+  // v39 memory scope isolation: --cross-project re-includes other-project
+  // memories (rendered under a demarcated section below).
+  const crossProject = flags['cross-project'] === true;
   const opts: api.ContextOpts = {
     q: query,
     budget,
@@ -5374,6 +5378,7 @@ async function cmdContext(
     pinnedOnly,
     scope: ctxActiveScope ?? undefined,
     includeRecent: parseCountFlag(flags['include-recent']),
+    crossProject,
   };
 
   const result = await api.getContext(ctx, opts);
@@ -5390,8 +5395,13 @@ async function cmdContext(
   const format = String(flags['format'] ?? 'markdown');
   const framing = String(flags['framing'] ?? 'observe');
 
-  // Adapter: ContextResultEntry -> the print-helper input shape.
-  const renderItems = result.entries.map((r) => ({
+  // Adapter: ContextResultEntry -> the print-helper input shape. v39:
+  // cross-project inclusions (only present under --cross-project or with
+  // isolation disabled via crossProject) render in their own demarcated
+  // section so they can never masquerade as project memory.
+  const mainEntries = result.entries.filter((r) => r.category !== 'cross-project');
+  const crossEntries = result.entries.filter((r) => r.category === 'cross-project');
+  const renderItems = mainEntries.map((r) => ({
     entry: r.entry,
     score: r.score,
     tokens: r.tokens,
@@ -5407,6 +5417,8 @@ async function cmdContext(
       confidence: r.entry.confidence,
       content: r.entry.content,
       global: r.isGlobal ?? false,
+      origin: r.origin ?? null,
+      category: r.category ?? null,
     }));
     console.log(JSON.stringify({
       query: query || '*',
@@ -5431,6 +5443,7 @@ async function cmdContext(
       if (renderItems.length > 0) {
         printContextMarkdown(renderItems, result.tokens, framing);
       }
+      printCrossProjectSection(crossEntries);
     } finally {
       console.log = realLog;
     }
@@ -5457,6 +5470,7 @@ async function cmdContext(
     if (renderItems.length > 0) {
       printContextMarkdown(renderItems, result.tokens, framing);
     }
+    printCrossProjectSection(crossEntries);
 
     // Ambient state summary (CLI-side: api.getContext doesn't load all entries
     // post-selection, so we re-load here for the landscape summary).
@@ -5465,11 +5479,18 @@ async function cmdContext(
       const tenantId = ctx.tenantId;
       const globalRoot = getGlobalRoot();
       const hasGlobalForAmbient = isInitialized(globalRoot);
+      // v39: the landscape summary must reflect the same admission policy as
+      // the injected entries - otherwise excluded rows leak back in as
+      // aggregate signal (codex P2-13).
+      const isolationOff = ambientConfig.contextProjectIsolation === false;
+      const ambientCurrentName = resolveProjectIdentity(process.cwd()).name;
+      const ambientAdmit = (e: MemoryEntry) =>
+        api.ambientAdmitEntry(e, ambientCurrentName, crossProject || isolationOff);
       const localForAmbient = isInitialized(hippoRoot)
-        ? loadAllEntries(hippoRoot, tenantId).filter(e => !e.superseded_by)
+        ? loadAllEntries(hippoRoot, tenantId).filter(e => !e.superseded_by).filter(ambientAdmit)
         : [];
       const globalForAmbient = hasGlobalForAmbient
-        ? loadAllEntries(globalRoot, tenantId).filter(e => !e.superseded_by)
+        ? loadAllEntries(globalRoot, tenantId).filter(e => !e.superseded_by).filter(ambientAdmit)
         : [];
       const allForAmbient = [...localForAmbient, ...globalForAmbient];
       if (allForAmbient.length > 0) {
@@ -5477,6 +5498,21 @@ async function cmdContext(
         console.log(`\n${renderAmbientSummary(ambientState)}`);
       }
     }
+  }
+}
+
+/**
+ * v39: render cross-project inclusions under an explicit header so agents
+ * (and humans) can tell borrowed context from project memory. Only ever
+ * non-empty when the caller passed --cross-project or disabled isolation.
+ */
+function printCrossProjectSection(items: api.ContextResultEntry[]): void {
+  if (items.length === 0) return;
+  console.log(`\n## Other-project memory (explicitly requested, ${items.length} entries)\n`);
+  for (const item of items) {
+    const originLabel = item.origin === null || item.origin === '' ? 'unknown-origin' : item.origin;
+    const tagStr = item.entry.tags.length > 0 ? ` [${item.entry.tags.join(', ')}]` : '';
+    console.log(`- **[${originLabel}]** ${item.entry.content}${tagStr}`);
   }
 }
 
@@ -5982,7 +6018,7 @@ function cmdPromote(hippoRoot: string, id: string): void {
 // Sync command
 // ---------------------------------------------------------------------------
 
-function cmdSync(hippoRoot: string): void {
+function cmdSync(hippoRoot: string, flags: Record<string, string | boolean | string[]> = {}): void {
   requireInit(hippoRoot);
 
   const globalRoot = getGlobalRoot();
@@ -5991,8 +6027,10 @@ function cmdSync(hippoRoot: string): void {
     return;
   }
 
-  const count = syncGlobalToLocal(hippoRoot, globalRoot);
-  console.log(`Synced ${count} global memories into local project.`);
+  // v39: other-project rows are skipped by default; secrets always are.
+  const includeCrossProject = flags['cross-project'] === true;
+  const count = syncGlobalToLocal(hippoRoot, globalRoot, { includeCrossProject });
+  console.log(`Synced ${count} global memories into local project.${includeCrossProject ? '' : ' (other-project rows skipped; use --cross-project to include them)'}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -8407,7 +8445,7 @@ async function main(): Promise<void> {
     }
 
     case 'sync':
-      cmdSync(hippoRoot);
+      cmdSync(hippoRoot, flags);
       break;
 
     case 'share': {
