@@ -196,8 +196,15 @@ export async function searchBothHybrid(
 ): Promise<SearchResult[]> {
   const { budget = 4000, now = evalNow(), embeddingWeight, explain, mmr, mmrLambda, localBump = 1.2, minResults, scope, includeSuperseded, asOf, tenantId, summaryDeboost, summaryFreshness, entryFilter } = options;
 
-  let localEntries = fs.existsSync(localRoot) ? loadSearchEntries(localRoot, query, undefined, tenantId) : [];
-  let globalEntries = fs.existsSync(globalRoot) ? loadSearchEntries(globalRoot, query, undefined, tenantId) : [];
+  // When an admission filter is active, lift the per-store candidate cap
+  // (default 200): excluded rows matching the query could otherwise fill the
+  // window before any admitted row is even loaded (codex gating round 6).
+  // Only ambient-context query mode sets entryFilter, and that path is
+  // interactive - never the per-turn pinned-only hook - so ranking the full
+  // match set is acceptable.
+  const searchWindow = entryFilter ? Number.MAX_SAFE_INTEGER : undefined;
+  let localEntries = fs.existsSync(localRoot) ? loadSearchEntries(localRoot, query, searchWindow, tenantId) : [];
+  let globalEntries = fs.existsSync(globalRoot) ? loadSearchEntries(globalRoot, query, searchWindow, tenantId) : [];
   if (entryFilter) {
     localEntries = localEntries.filter(entryFilter);
     globalEntries = globalEntries.filter(entryFilter);
