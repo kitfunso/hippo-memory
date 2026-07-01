@@ -842,7 +842,9 @@ function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: str
   db.exec('BEGIN');
   try {
     for (const entry of legacyEntries) {
-      upsertEntryRow(db, entry);
+      // v39: legacy markdown carries no origin_project; stamp from the store
+      // location so bootstrapped rows stay visible to ambient context.
+      upsertEntryRow(db, stampOriginProject(hippoRoot, entry));
     }
 
     const legacyIndex = loadLegacyIndexFile(hippoRoot);
@@ -1576,7 +1578,12 @@ export function batchWriteAndDelete(
         }
       }
     }
-    for (const entry of toWrite) {
+    // v39: consolidate's new semantic rows (and any other batch writer)
+    // bypass writeEntry, so stamp store-derived origins here too - a NULL
+    // origin would make freshly consolidated memories vanish from ambient
+    // context (codex gating review P1).
+    const stampedWrites = toWrite.map((e) => stampOriginProject(hippoRoot, e));
+    for (const entry of stampedWrites) {
       upsertEntryRow(db, entry);
       // Hook for writes: child upserted under a level-2 summary marks parent dirty.
       if (entry.dag_parent_id) {
@@ -1596,7 +1603,7 @@ export function batchWriteAndDelete(
     db.exec('COMMIT');
 
     // Sync mirrors once after all DB writes
-    for (const entry of toWrite) {
+    for (const entry of stampedWrites) {
       writeMarkdownMirror(hippoRoot, entry);
     }
     for (const id of toDeleteIds) {
@@ -1708,7 +1715,8 @@ export function rebuildIndex(hippoRoot: string): HippoIndex {
       db.exec('BEGIN');
       try {
         for (const entry of legacyEntries) {
-          upsertEntryRow(db, entry);
+          // v39: same store-derived origin stamp as bootstrapLegacyStore.
+          upsertEntryRow(db, stampOriginProject(hippoRoot, entry));
         }
         db.exec('COMMIT');
       } catch (err) {

@@ -10,6 +10,7 @@ import {
   serializeEntry,
   deserializeEntry,
   stampOriginProject,
+  batchWriteAndDelete,
 } from '../src/store.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../src/db.js';
 import { clearProjectIdentityCache } from '../src/project-identity.js';
@@ -55,6 +56,13 @@ describe('writeEntry origin stamping (v39)', () => {
     writeEntry(storeRoot, entry);
     const [loaded] = loadAllEntries(storeRoot);
     expect(loaded.origin_project).toBe('');
+  });
+
+  it('stamps origins on the batch write path too (consolidate bypasses writeEntry)', () => {
+    const storeRoot = makeProjectStore('proj-a');
+    batchWriteAndDelete(storeRoot, [createMemory('a consolidated semantic summary row')], []);
+    const [entry] = loadAllEntries(storeRoot);
+    expect(entry.origin_project).toBe('proj-a');
   });
 
   it('stampOriginProject never mutates the input entry', () => {
@@ -123,6 +131,17 @@ describe('v39 migration backfill', () => {
     const fromHome = entries.find((e) => e.source.startsWith(`shared:${homeName}`));
     expect(fromB?.origin_project).toBe('proj-b');
     expect(fromHome?.origin_project).toBe('');
+  });
+
+  it('backfills promoted:<localRoot> rows with the promoting project', () => {
+    const storeRoot = makeProjectStore('proj-a');
+    const promotedFrom = path.join(tmpRoot, 'Proj-B', '.hippo');
+    writeEntry(storeRoot, createMemory('promoted from project b long ago', { source: `promoted:${promotedFrom}` }));
+    regressStoreToV38(storeRoot);
+
+    closeHippoDb(openHippoDb(storeRoot)); // migrate
+    const [entry] = loadAllEntries(storeRoot);
+    expect(entry.origin_project).toBe('proj-b');
   });
 
   it('is idempotent: a second migration pass changes nothing', () => {

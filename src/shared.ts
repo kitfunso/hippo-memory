@@ -60,14 +60,27 @@ export function promoteToGlobal(
   const entry = readEntry(localRoot, id, opts?.tenantId);
   if (!entry) throw new Error(`Memory not found: ${id}`);
 
+  // v39 S4 producer veto: promote is a producer path to the global store
+  // exactly like shareMemory - same hard rule (codex gating review P2).
+  const promoteSecret = detectSecret(entry);
+  if (promoteSecret.flagged) {
+    throw new Error(
+      `Refusing to promote ${id} to the global store: content matches secret material (${promoteSecret.reason}). ` +
+      `Secrets stay in their owning project's store.`,
+    );
+  }
+
   initGlobal();
   const globalRoot = getGlobalRoot();
 
-  // Mint a new ID for the global store
+  // Mint a new ID for the global store. origin_project rides along from the
+  // local entry's write-time stamp via the spread; back-stop it for pre-v39
+  // local rows so a promoted copy never lands NULL in the global store.
   const globalEntry: MemoryEntry = {
     ...entry,
     id: generateId('g'),
     source: `promoted:${localRoot}`,
+    origin_project: entry.origin_project ?? deriveOriginProject(path.dirname(path.resolve(localRoot))),
   };
 
   writeEntry(globalRoot, globalEntry, { actor: opts?.actor });

@@ -2174,6 +2174,20 @@ const MIGRATIONS: Migration[] = [
           const name = match[1].toLowerCase();
           setOrigin.run(name === homeName ? '' : name, row.id);
         }
+        // Rows promoted from a project store carry source 'promoted:<localRoot>'
+        // where <localRoot> is `<project>/.hippo` - the parent basename is the
+        // project (same parse listPeers uses). Pure string logic; the recorded
+        // path may no longer exist on disk (codex gating review P1).
+        const promotedRows = db.prepare(
+          `SELECT id, source FROM memories WHERE origin_project IS NULL AND source LIKE 'promoted:%'`,
+        ).all() as Array<{ id: string; source: string }>;
+        for (const row of promotedRows) {
+          const promotedPath = row.source.slice('promoted:'.length).trim();
+          if (!promotedPath) continue;
+          const name = path.basename(path.resolve(promotedPath, '..')).toLowerCase();
+          if (!name) continue;
+          setOrigin.run(name === homeName ? '' : name, row.id);
+        }
         const storeOrigin = deriveOriginProject(path.dirname(hippoRoot));
         db.prepare(`UPDATE memories SET origin_project = ? WHERE origin_project IS NULL`).run(storeOrigin);
       }

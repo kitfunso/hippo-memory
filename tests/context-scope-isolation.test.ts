@@ -137,6 +137,19 @@ describe('getContext origin partition (project A session)', () => {
     expect(got).toContain(LEGACY);
   });
 
+  it('query mode: an excluded high-token cross-project row cannot starve admitted rows out of the budget', async () => {
+    // A large cross-project row that matches the query strongly; the small
+    // in-scope rows must still fill the (tiny) budget after it is excluded.
+    writeEntry(globalStore, {
+      ...createMemory('deploykey deploykey deploykey ' + 'filler text for bulk '.repeat(40)),
+      origin_project: 'proj-b',
+    });
+    const result = await getContext(ctx, { currentProject: 'proj-a', q: 'deploykey', budget: 60 });
+    const got = contents(result.entries);
+    expect(got.length).toBeGreaterThan(0);
+    expect(got.join('\n')).not.toContain('filler text for bulk');
+  });
+
   it('private-scope rows never ambient-inject even from the local store (S2 parity)', async () => {
     const secret = 'PRIVATE-SCOPED deploykey row that must not inject';
     writeEntry(projA, { ...createMemory(secret, { pinned: true, scope: 'github:private:repo-x' }) });

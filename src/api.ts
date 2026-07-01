@@ -2354,24 +2354,32 @@ export async function getContext(
     // Real query: hybrid search (global + local) or physics+hybrid (local only).
     let results: ContextResultEntry[];
     if (hasGlobal) {
+      // searchBothHybrid loads from the store roots itself, so the ambient
+      // filter above never saw its candidates - re-apply it after the search
+      // (post-filter only; the shared loaders stay untouched so hippo
+      // recall's public behavior cannot shift). Over-fetch 3x then greedy
+      // re-fill to the caller's budget so an excluded high-scoring row
+      // cannot starve admitted lower-scoring rows out of the budget
+      // (codex gating review P2).
       const merged = await searchBothHybrid(query, ctx.hippoRoot, globalRoot, {
-        budget,
+        budget: budget * 3,
         scope: activeScope,
         tenantId: ctx.tenantId,
       });
       const localIndex = loadIndex(ctx.hippoRoot);
-      // searchBothHybrid loads from the store roots itself, so the ambient
-      // filter above never saw its candidates - re-apply it here (post-filter
-      // only; the shared loaders stay untouched so hippo recall's public
-      // behavior cannot shift).
-      results = merged
-        .filter((r) => ambientAdmit(r.entry))
-        .map((r) => ({
+      results = [];
+      let usedQueryTokens = 0;
+      for (const r of merged) {
+        if (!ambientAdmit(r.entry)) continue;
+        if (usedQueryTokens + r.tokens > budget) continue;
+        results.push({
           entry: r.entry,
           score: r.score,
           tokens: r.tokens,
           isGlobal: !localIndex.entries[r.entry.id],
-        }));
+        });
+        usedQueryTokens += r.tokens;
+      }
     } else {
       const ctxConfig = loadConfig(ctx.hippoRoot);
       const usePhysicsCtx = ctxConfig.physics?.enabled !== false;

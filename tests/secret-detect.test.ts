@@ -11,7 +11,7 @@ import * as path from 'path';
 import { detectSecret } from '../src/secret-detect.js';
 import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
 import { createMemory } from '../src/memory.js';
-import { shareMemory, autoShare, syncGlobalToLocal, getGlobalRoot } from '../src/shared.js';
+import { shareMemory, autoShare, syncGlobalToLocal, promoteToGlobal, getGlobalRoot } from '../src/shared.js';
 import { getContext, type Context } from '../src/api.js';
 import { clearProjectIdentityCache } from '../src/project-identity.js';
 
@@ -88,6 +88,18 @@ describe('producer + sync vetoes (real stores)', () => {
     writeEntry(projA, createMemory(CLEAN_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
     const shared = autoShare(projA, { minScore: 0.6 });
     expect(shared.map((e) => e.content)).toEqual([CLEAN_ROW]);
+  });
+
+  it('promoteToGlobal refuses a secret row and stamps origin on clean promotes', () => {
+    writeEntry(projA, createMemory(SECRET_ROW, { pinned: true }));
+    writeEntry(projA, createMemory(CLEAN_ROW, { pinned: true }));
+    const rows = loadAllEntries(projA);
+    const secretRow = rows.find((e) => e.content === SECRET_ROW)!;
+    const cleanRow = rows.find((e) => e.content === CLEAN_ROW)!;
+    expect(() => promoteToGlobal(projA, secretRow.id)).toThrow(/secret/i);
+    const promoted = promoteToGlobal(projA, cleanRow.id);
+    expect(promoted.origin_project).toBe('proj-a');
+    expect(loadAllEntries(getGlobalRoot()).map((e) => e.content)).toEqual([CLEAN_ROW]);
   });
 
   it('shareMemory stamps the canonical origin on the global copy', () => {
