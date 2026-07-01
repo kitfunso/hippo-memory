@@ -12,6 +12,7 @@ import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import {
   writeEntry,
   writeEntryDbOnly,
+  stampOriginProject,
   writeEntryMirrors,
   readEntry,
   deleteEntry,
@@ -1757,7 +1758,7 @@ export function supersede(
       // 2. Write new memory inside same tx via writeEntryDbOnly (DB-only
       //    path). This emits its OWN 'remember' audit row for the new
       //    memory inside the SAVEPOINT — atomic with the row INSERT.
-      writeEntryDbOnly(db, newEntry, { actor: ctx.actor.subject });
+      writeEntryDbOnly(db, stampOriginProject(ctx.hippoRoot, newEntry), { actor: ctx.actor.subject });
       // 3. User-facing 'supersede' audit row inside the same tx so the
       //    chain pointer + audit trail commit atomically.
       appendAuditEvent(db, {

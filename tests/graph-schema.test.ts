@@ -25,7 +25,7 @@ describe('graph schema v37 (E3.3)', () => {
   afterEach(() => { try { rmSync(home, { recursive: true, force: true }); } catch { /* ignore */ } });
 
   it('CURRENT_SCHEMA_VERSION is 38', () => {
-    expect(getCurrentSchemaVersion()).toBe(38);
+    expect(getCurrentSchemaVersion()).toBe(39);
   });
 
   it('creates entities + relations + graph_extraction_queue tables', () => {

@@ -23,6 +23,7 @@ import { SessionHandoff, SessionHandoffRow, rowToSessionHandoff } from './handof
 import { tokenize } from './search.js';
 import { appendAuditEvent, type AuditOp } from './audit.js';
 import { resolveTenantId } from './tenant.js';
+import { deriveOriginProject } from './project-identity.js';
 
 /**
  * Emit an audit event for a mutation against `db`. Wrapped so a broken audit
@@ -101,6 +102,8 @@ interface MemoryRow {
   owner: string | null;
   artifact_ref: string | null;
   tenant_id: string | null;
+  // Memory scope isolation (schema v39).
+  origin_project: string | null;
   descendant_count: number | null;
   earliest_at: string | null;
   latest_at: string | null;
@@ -196,13 +199,13 @@ export interface SessionEvent {
 }
 
 const INDEX_VERSION = 3;
-const MEMORY_SELECT_COLUMNS = `id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content, parents_json, starred, trace_outcome, source_session_id, valid_from, superseded_by, extracted_from, dag_level, dag_parent_id, kind, scope, owner, artifact_ref, tenant_id, descendant_count, earliest_at, latest_at, summary_dirty, last_rebuilt_at, rebuild_count, dag_level_3_built_at`;
+const MEMORY_SELECT_COLUMNS = `id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content, parents_json, starred, trace_outcome, source_session_id, valid_from, superseded_by, extracted_from, dag_level, dag_parent_id, kind, scope, owner, artifact_ref, tenant_id, origin_project, descendant_count, earliest_at, latest_at, summary_dirty, last_rebuilt_at, rebuild_count, dag_level_3_built_at`;
 // F1 (v1.7.0): qualified-and-aliased columns for the FTS join in
 // loadSearchRows. Every column is `m.<col> AS <col>` so rowToEntry's
 // unqualified field reads keep working unchanged. The trailing
 // bm25(memories_fts) AS bm25_score adds the FTS rank as a result column.
 // Only used inside the FTS path; non-FTS paths keep MEMORY_SELECT_COLUMNS.
-const MEMORY_SEARCH_COLUMNS = `m.id AS id, m.created AS created, m.last_retrieved AS last_retrieved, m.retrieval_count AS retrieval_count, m.strength AS strength, m.half_life_days AS half_life_days, m.layer AS layer, m.tags_json AS tags_json, m.emotional_valence AS emotional_valence, m.schema_fit AS schema_fit, m.source AS source, m.outcome_score AS outcome_score, m.outcome_positive AS outcome_positive, m.outcome_negative AS outcome_negative, m.conflicts_with_json AS conflicts_with_json, m.pinned AS pinned, m.confidence AS confidence, m.content AS content, m.parents_json AS parents_json, m.starred AS starred, m.trace_outcome AS trace_outcome, m.source_session_id AS source_session_id, m.valid_from AS valid_from, m.superseded_by AS superseded_by, m.extracted_from AS extracted_from, m.dag_level AS dag_level, m.dag_parent_id AS dag_parent_id, m.kind AS kind, m.scope AS scope, m.owner AS owner, m.artifact_ref AS artifact_ref, m.tenant_id AS tenant_id, m.descendant_count AS descendant_count, m.earliest_at AS earliest_at, m.latest_at AS latest_at, m.summary_dirty AS summary_dirty, m.last_rebuilt_at AS last_rebuilt_at, m.rebuild_count AS rebuild_count, m.dag_level_3_built_at AS dag_level_3_built_at, bm25(memories_fts) AS bm25_score`;
+const MEMORY_SEARCH_COLUMNS = `m.id AS id, m.created AS created, m.last_retrieved AS last_retrieved, m.retrieval_count AS retrieval_count, m.strength AS strength, m.half_life_days AS half_life_days, m.layer AS layer, m.tags_json AS tags_json, m.emotional_valence AS emotional_valence, m.schema_fit AS schema_fit, m.source AS source, m.outcome_score AS outcome_score, m.outcome_positive AS outcome_positive, m.outcome_negative AS outcome_negative, m.conflicts_with_json AS conflicts_with_json, m.pinned AS pinned, m.confidence AS confidence, m.content AS content, m.parents_json AS parents_json, m.starred AS starred, m.trace_outcome AS trace_outcome, m.source_session_id AS source_session_id, m.valid_from AS valid_from, m.superseded_by AS superseded_by, m.extracted_from AS extracted_from, m.dag_level AS dag_level, m.dag_parent_id AS dag_parent_id, m.kind AS kind, m.scope AS scope, m.owner AS owner, m.artifact_ref AS artifact_ref, m.tenant_id AS tenant_id, m.origin_project AS origin_project, m.descendant_count AS descendant_count, m.earliest_at AS earliest_at, m.latest_at AS latest_at, m.summary_dirty AS summary_dirty, m.last_rebuilt_at AS last_rebuilt_at, m.rebuild_count AS rebuild_count, m.dag_level_3_built_at AS dag_level_3_built_at, bm25(memories_fts) AS bm25_score`;
 /**
  * Default candidate-pool size for `loadSearchEntries` when called with
  * `limit === undefined`. Single source of truth; `api.recall` imports
@@ -328,6 +331,11 @@ export function serializeEntry(entry: MemoryEntry): string {
   if (tenantId !== 'default') {
     frontmatter['tenant_id'] = tenantId;
   }
+  // v39: origin_project '' (user-global) is meaningful and must round-trip;
+  // only undefined/null (legacy/unstamped) is omitted.
+  if (entry.origin_project !== undefined && entry.origin_project !== null) {
+    frontmatter['origin_project'] = entry.origin_project;
+  }
   const fm = dumpFrontmatter(frontmatter);
   return `${fm}\n\n${entry.content}\n`;
 }
@@ -377,6 +385,7 @@ export function deserializeEntry(raw: string): MemoryEntry | null {
     owner: data['owner'] === null || data['owner'] === undefined ? null : String(data['owner']),
     artifact_ref: data['artifact_ref'] === null || data['artifact_ref'] === undefined ? null : String(data['artifact_ref']),
     tenantId: data['tenant_id'] === null || data['tenant_id'] === undefined ? 'default' : String(data['tenant_id']),
+    origin_project: data['origin_project'] === null || data['origin_project'] === undefined ? null : String(data['origin_project']),
   };
 }
 
@@ -419,6 +428,7 @@ function rowToEntry(row: MemoryRow): MemoryEntry {
     owner: row.owner ?? null,
     artifact_ref: row.artifact_ref ?? null,
     tenantId: row.tenant_id ?? 'default',
+    origin_project: row.origin_project ?? null,
     descendant_count: Number(row.descendant_count ?? 0),
     earliest_at: row.earliest_at ?? null,
     latest_at: row.latest_at ?? null,
@@ -929,11 +939,11 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
       extracted_from,
       dag_level, dag_parent_id,
       kind, scope, owner, artifact_ref,
-      tenant_id,
+      tenant_id, origin_project,
       descendant_count, earliest_at, latest_at,
       dag_level_3_built_at,
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     ON CONFLICT(id) DO UPDATE SET
       created = excluded.created,
       last_retrieved = excluded.last_retrieved,
@@ -966,6 +976,7 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
       owner = excluded.owner,
       artifact_ref = excluded.artifact_ref,
       tenant_id = excluded.tenant_id,
+      origin_project = excluded.origin_project,
       descendant_count = excluded.descendant_count,
       earliest_at = excluded.earliest_at,
       latest_at = excluded.latest_at,
@@ -1004,6 +1015,7 @@ function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry):
     entry.owner ?? null,
     entry.artifact_ref ?? null,
     entry.tenantId ?? 'default',
+    entry.origin_project ?? null,
     entry.descendant_count ?? 0,
     entry.earliest_at ?? null,
     entry.latest_at ?? null,
@@ -1150,6 +1162,19 @@ export function saveIndex(hippoRoot: string, index: HippoIndex): void {
  * filesystem mirrors / audit emit never run. Used by E1.3+ connectors to
  * stamp idempotency rows atomically with the memory write.
  */
+/**
+ * Stamp origin_project from the store's own location when the entry does not
+ * already carry one (v39 memory scope isolation). The store dir is
+ * `<project>/.hippo`, so its parent resolves to the owning project; the
+ * home/global store resolves to '' (user-global). Callers that know a better
+ * origin (shareMemory, syncGlobalToLocal) set entry.origin_project before
+ * writing and this is a no-op. Returns a stamped copy; never mutates.
+ */
+export function stampOriginProject(hippoRoot: string, entry: MemoryEntry): MemoryEntry {
+  if (entry.origin_project !== undefined && entry.origin_project !== null) return entry;
+  return { ...entry, origin_project: deriveOriginProject(path.dirname(hippoRoot)) };
+}
+
 export function writeEntry(
   hippoRoot: string,
   entry: MemoryEntry,
@@ -1165,11 +1190,12 @@ export function writeEntry(
   },
 ): void {
   initStore(hippoRoot);
+  const stamped = stampOriginProject(hippoRoot, entry);
   const db = openHippoDb(hippoRoot);
   try {
-    writeEntryDbOnly(db, entry, opts);
+    writeEntryDbOnly(db, stamped, opts);
     opts?.afterCommit?.();
-    writeEntryMirrors(hippoRoot, db, entry);
+    writeEntryMirrors(hippoRoot, db, stamped);
   } finally {
     closeHippoDb(db);
   }
