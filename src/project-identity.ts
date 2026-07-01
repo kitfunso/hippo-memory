@@ -136,6 +136,24 @@ export function resolveProjectIdentity(
 }
 
 /**
+ * v39 memory scope isolation: classify a memory's origin_project against the
+ * active project. `currentName === ''` means the session is not in a project
+ * (home dir or markerless cwd) - everything is in scope there, matching
+ * pre-isolation behavior. NULL/undefined origin is a legacy pre-v39 row and
+ * is treated as cross-project (deny by default) - the safe direction for a
+ * security partition.
+ */
+export function classifyOriginProject(
+  origin: string | null | undefined,
+  currentName: string,
+): 'project' | 'user-global' | 'cross-project' {
+  if (currentName === '') return 'project';
+  if (origin === undefined || origin === null) return 'cross-project';
+  if (origin === '') return 'user-global';
+  return origin === currentName ? 'project' : 'cross-project';
+}
+
+/**
  * The origin project to stamp on a memory written from cwd.
  * Returns the project name, or '' for user-global (written at/under home or
  * in a markerless directory) - injectable everywhere. Write sites must always

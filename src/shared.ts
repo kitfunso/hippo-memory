@@ -19,6 +19,8 @@ import {
 } from './store.js';
 import { search, hybridSearch, SearchResult } from './search.js';
 import { evalNow } from './ablation.js';
+import { deriveOriginProject, classifyOriginProject } from './project-identity.js';
+import { detectSecret } from './secret-detect.js';
 
 /**
  * Returns the path to the global Hippo store.
@@ -288,17 +290,33 @@ export function shareMemory(
   const entry = readEntry(localRoot, id, options.tenantId);
   if (!entry) throw new Error(`Memory not found: ${id}`);
 
+  // v39 S4 producer veto: secrets never go to the global store, not even
+  // with --force. Explicit and loud - a silent null would read as "low
+  // transfer score" and invite retries.
+  const secret = detectSecret(entry);
+  if (secret.flagged) {
+    throw new Error(
+      `Refusing to share ${id} to the global store: content matches secret material (${secret.reason}). ` +
+      `Secrets stay in their owning project's store.`,
+    );
+  }
+
   const score = transferScore(entry);
   if (score < 0.3 && !options.force) return null;
 
   initGlobal();
   const globalRoot = getGlobalRoot();
 
-  const projectName = path.basename(path.resolve(localRoot, '..'));
+  // v39: canonical origin comes from the entry's own stamp (write-time,
+  // store-location-derived); the localRoot parent basename is only a
+  // fallback for pre-v39 rows and keeps the legacy source format intact.
+  const fallbackName = path.basename(path.resolve(localRoot, '..'));
+  const originName = entry.origin_project ?? deriveOriginProject(path.dirname(path.resolve(localRoot)));
   const globalEntry: MemoryEntry = {
     ...entry,
     id: generateId('g'),
-    source: `shared:${projectName}:${new Date().toISOString()}`,
+    source: `shared:${originName === '' ? fallbackName : originName}:${new Date().toISOString()}`,
+    origin_project: originName,
   };
 
   writeEntry(globalRoot, globalEntry);
@@ -389,6 +407,11 @@ export function autoShare(
   );
 
   const candidates = localEntries.filter((entry) => {
+    // v39 S4 producer veto: secret rows never auto-share, regardless of
+    // transfer score. (shareMemory would throw; filtering here keeps the
+    // sleep pipeline fail-safe.)
+    if (detectSecret(entry).flagged) return false;
+
     const score = transferScore(entry);
     if (score < minScore) return false;
 
@@ -415,7 +438,11 @@ export function autoShare(
  * Skips entries that already exist locally (by ID or by near-identical content).
  * Returns the count of newly copied entries.
  */
-export function syncGlobalToLocal(localRoot: string, globalRoot: string): number {
+export function syncGlobalToLocal(
+  localRoot: string,
+  globalRoot: string,
+  opts: { includeCrossProject?: boolean } = {},
+): number {
   if (!fs.existsSync(globalRoot)) return 0;
 
   // L9: host-wide read. syncGlobalToLocal copies the global union into a
@@ -423,11 +450,22 @@ export function syncGlobalToLocal(localRoot: string, globalRoot: string): number
   // the local-root context provides one.
   const globalEntries = loadAllEntries(globalRoot);
   const localIndex = loadIndex(localRoot);
+
+  // v39 (codex P1-4): syncing down must not re-import what ambient context
+  // excludes - other-project rows are skipped by default and secret rows
+  // are never copied. origin_project is preserved on the copy (writeEntry
+  // only stamps when the field is missing).
+  const currentName = deriveOriginProject(path.dirname(path.resolve(localRoot)));
   let count = 0;
 
   for (const entry of globalEntries) {
     // Skip if already present by ID
     if (localIndex.entries[entry.id]) continue;
+    if (detectSecret(entry).flagged) continue;
+    if (
+      !opts.includeCrossProject &&
+      classifyOriginProject(entry.origin_project, currentName) === 'cross-project'
+    ) continue;
 
     writeEntry(localRoot, entry);
     count++;

@@ -68,7 +68,8 @@ import { markRetrieved, estimateTokens, hybridSearch, physicsSearch, type Rerank
 import { scopeMatch } from './scope.js';
 import { consolidate } from './consolidate.js';
 import { loadConfig } from './config.js';
-import { resolveProjectIdentity } from './project-identity.js';
+import { resolveProjectIdentity, classifyOriginProject } from './project-identity.js';
+import { detectSecret } from './secret-detect.js';
 import { deduplicateStore } from './dedupe.js';
 import { computeAmbientState, type AmbientState } from './ambient.js';
 import { loadPendingExtractionTenants, markPendingProcessedUpTo } from './graph.js';
@@ -203,23 +204,10 @@ export function isPrivateScope(scope: string | null | undefined): boolean {
   return typeof scope === 'string' && PRIVATE_SCOPE_RE.test(scope);
 }
 
-/**
- * v39 memory scope isolation: classify a memory's origin_project against the
- * active project. `currentName === ''` means the session is not in a project
- * (home dir or markerless cwd) - everything is in scope there, matching
- * pre-isolation behavior. NULL/undefined origin is a legacy pre-v39 row and
- * is treated as cross-project (deny by default) - the safe direction for a
- * security partition.
- */
-export function classifyOriginProject(
-  origin: string | null | undefined,
-  currentName: string,
-): 'project' | 'user-global' | 'cross-project' {
-  if (currentName === '') return 'project';
-  if (origin === undefined || origin === null) return 'cross-project';
-  if (origin === '') return 'user-global';
-  return origin === currentName ? 'project' : 'cross-project';
-}
+// v39: classifyOriginProject lives in project-identity.ts (leaf) so
+// shared.ts can use it without an api.ts import cycle. Re-exported here for
+// callers that already import the api surface.
+export { classifyOriginProject } from './project-identity.js';
 
 export interface RememberOpts {
   content: string;
@@ -2194,6 +2182,16 @@ export async function getContext(
     opts.currentProject ?? resolveProjectIdentity(process.cwd()).name;
   const includeCrossProject = opts.crossProject === true || !isolationEnabled;
   const ambientAdmit = (e: MemoryEntry): boolean => {
+    // S4 secret veto - UNCONDITIONAL for ambient surfaces: neither
+    // crossProject nor contextProjectIsolation:false re-includes secrets.
+    // A flagged row only injects inside its owning project; flagged rows
+    // with no project origin (''/null) never ambient-inject at all.
+    // Explicit recall still returns them - recalling is a deliberate act.
+    if (detectSecret(e).flagged) {
+      const origin = e.origin_project;
+      if (origin === undefined || origin === null || origin === '') return false;
+      if (origin !== currentProjectName) return false;
+    }
     if (!passesScopeFilterForRecall(e.scope ?? null, undefined)) return false;
     if (includeCrossProject) return true;
     return classifyOriginProject(e.origin_project, currentProjectName) !== 'cross-project';
