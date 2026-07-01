@@ -844,7 +844,7 @@ function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: str
     for (const entry of legacyEntries) {
       // v39: legacy markdown carries no origin_project; stamp from the store
       // location so bootstrapped rows stay visible to ambient context.
-      upsertEntryRow(db, stampOriginProject(hippoRoot, entry));
+      upsertEntryRow(db, stampOriginProjectForImport(hippoRoot, entry));
     }
 
     const legacyIndex = loadLegacyIndexFile(hippoRoot);
@@ -1165,14 +1165,31 @@ export function saveIndex(hippoRoot: string, index: HippoIndex): void {
  * stamp idempotency rows atomically with the memory write.
  */
 /**
- * Stamp origin_project from the store's own location when the entry does not
- * already carry one (v39 memory scope isolation). The store dir is
+ * Stamp origin_project from the store's own location when the entry has
+ * never been stamped (v39 memory scope isolation). The store dir is
  * `<project>/.hippo`, so its parent resolves to the owning project; the
  * home/global store resolves to '' (user-global). Callers that know a better
  * origin (shareMemory, syncGlobalToLocal) set entry.origin_project before
  * writing and this is a no-op. Returns a stamped copy; never mutates.
+ *
+ * NULL is deliberately PRESERVED, not re-stamped: null means "legacy row the
+ * v39 migration found no evidence for" and is deny-by-default in ambient
+ * context. A writeback (e.g. markRetrieved on a crossProject-included row)
+ * must not launder it into an injectable origin - the migration is the only
+ * evidence-based NULL converter (codex gating round 2 P1).
  */
 export function stampOriginProject(hippoRoot: string, entry: MemoryEntry): MemoryEntry {
+  if (entry.origin_project !== undefined) return entry;
+  return { ...entry, origin_project: deriveOriginProject(path.dirname(hippoRoot)) };
+}
+
+/**
+ * Import-time variant that ALSO stamps null: used only where the store's
+ * location genuinely is the evidence for rows that predate the origin
+ * column - the legacy-markdown bootstrap and rebuildIndex import, which are
+ * the markdown-store equivalent of the v39 SQL backfill.
+ */
+function stampOriginProjectForImport(hippoRoot: string, entry: MemoryEntry): MemoryEntry {
   if (entry.origin_project !== undefined && entry.origin_project !== null) return entry;
   return { ...entry, origin_project: deriveOriginProject(path.dirname(hippoRoot)) };
 }
@@ -1716,7 +1733,7 @@ export function rebuildIndex(hippoRoot: string): HippoIndex {
       try {
         for (const entry of legacyEntries) {
           // v39: same store-derived origin stamp as bootstrapLegacyStore.
-          upsertEntryRow(db, stampOriginProject(hippoRoot, entry));
+          upsertEntryRow(db, stampOriginProjectForImport(hippoRoot, entry));
         }
         db.exec('COMMIT');
       } catch (err) {

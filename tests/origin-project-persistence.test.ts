@@ -65,6 +65,24 @@ describe('writeEntry origin stamping (v39)', () => {
     expect(entry.origin_project).toBe('proj-a');
   });
 
+  it('a legacy NULL origin is sticky across writebacks (never laundered to an injectable origin)', () => {
+    const storeRoot = makeProjectStore('proj-a');
+    writeEntry(storeRoot, createMemory('a legacy row that must stay denied'));
+    const db = openHippoDb(storeRoot);
+    try {
+      db.exec(`UPDATE memories SET origin_project = NULL`);
+    } finally {
+      closeHippoDb(db);
+    }
+    const [legacy] = loadAllEntries(storeRoot);
+    expect(legacy.origin_project).toBeNull();
+    // Simulate the markRetrieved writeback: writeEntry on the loaded row.
+    writeEntry(storeRoot, legacy);
+    expect(loadAllEntries(storeRoot)[0].origin_project).toBeNull();
+    // The pure helper preserves null too.
+    expect(stampOriginProject(storeRoot, { ...legacy, origin_project: null }).origin_project).toBeNull();
+  });
+
   it('stampOriginProject never mutates the input entry', () => {
     const storeRoot = makeProjectStore('proj-a');
     const entry = createMemory('immutability check');
