@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.24.0 (2026-07-02)
 
 ### Added
 - **Memory scope isolation (fixes cross-project context bleed).** Ambient context - the Claude Code UserPromptSubmit hook, `hippo context`, `GET /v1/context`, and MCP `hippo_context` - no longer injects memories owned by OTHER projects into the active session. Every memory now carries an `origin_project` (a project name = owned by that project, '' = user-global and injectable everywhere, NULL = legacy pre-v39 row, treated as other-project). Origin is stamped automatically from the store's location at write time; migration v39 backfills existing rows from store location and `shared:<project>:` sources. Escape hatches: `hippo context --cross-project` (rendered under a demarcated "Other-project memory" section), `cross_project=1` on `/v1/context`, and config `contextProjectIsolation: false`.
