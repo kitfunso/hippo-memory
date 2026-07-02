@@ -1,5 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
 import { createHash } from 'node:crypto';
+import { dirname, resolve } from 'node:path';
+import { resolveProjectIdentity } from './project-identity.js';
 import { detectServer, writePidfile, removePidfileIfOwned } from './server-detect.js';
 import { resolveTenantId } from './tenant.js';
 import { openHippoDb, closeHippoDb } from './db.js';
@@ -1073,6 +1075,13 @@ async function handleRequest(
         throw new HttpError(400, 'include_recent must be a non-negative number');
       }
     }
+    // v39 memory scope isolation: cross_project=1|true re-includes
+    // other-project rows (tagged category 'cross-project' in the response).
+    // The partition identity comes from the SERVED STORE's location, not the
+    // daemon's process cwd - a daemon started from anywhere still isolates
+    // the project it serves.
+    const crossProjectRaw = query.get('cross_project');
+    const crossProject = crossProjectRaw === '1' || crossProjectRaw === 'true';
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = await getContext(ctx, {
       q,
@@ -1081,6 +1090,8 @@ async function handleRequest(
       pinnedOnly,
       scope,
       includeRecent,
+      crossProject,
+      currentProject: resolveProjectIdentity(dirname(resolve(opts.hippoRoot))).name,
     });
     sendJson(res, 200, result);
     return;

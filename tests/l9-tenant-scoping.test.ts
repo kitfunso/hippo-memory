@@ -430,7 +430,7 @@ describe('L9: host-wide back-compat parity (current behaviour preserved)', () =>
     expect(peerNames).toContain('project-bar');
   });
 
-  it('case 13: syncGlobalToLocal copies all global entries to local (host-wide global read)', () => {
+  it('case 13: syncGlobalToLocal host-wide TENANT read survives the v39 origin gate', () => {
     // syncGlobalToLocal doesn't call initGlobal() (caller provides the
     // globalRoot directly), so HIPPO_HOME isolation isn't strictly required
     // here — but kept consistent for defence-in-depth.
@@ -439,12 +439,19 @@ describe('L9: host-wide back-compat parity (current behaviour preserved)', () =>
       // Set up two separate roots to simulate global → local sync
       const { tmpDir: globalTmp, hippoRoot: globalRoot } = newRoot('hippo-l9-global-');
       try {
-        // Seed global with two tenants' worth of entries
+        // Seed global with two tenants' worth of entries. Under v39 they
+        // are stamped with the seed store's own (different) project origin,
+        // so the default sync gates them as cross-project...
         seedFor(globalRoot, 'tenant-a', 'global memory from tenant-a', {});
         seedFor(globalRoot, 'tenant-b', 'global memory from tenant-b', {});
 
-        const copied = syncGlobalToLocal(hippoRoot, globalRoot);
-        expect(copied).toBe(2); // both tenants' global entries copied to local
+        expect(syncGlobalToLocal(hippoRoot, globalRoot)).toBe(0);
+
+        // ...but this case's original guarantee - the global read is
+        // host-wide across TENANTS - still holds once the origin gate is
+        // explicitly lifted: both tenants' rows copy.
+        const copied = syncGlobalToLocal(hippoRoot, globalRoot, { includeCrossProject: true });
+        expect(copied).toBe(2);
       } finally {
         rmSync(globalTmp, { recursive: true, force: true });
       }

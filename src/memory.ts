@@ -106,6 +106,15 @@ export interface MemoryEntry {
   // A5 stub auth (schema v16)
   tenantId: string;             // 'default' for single-tenant deployments
   /**
+   * Memory scope isolation (schema v39): owning project for ambient-context
+   * partitioning. A lowercased project name, '' for user-global (injectable
+   * everywhere), or null for legacy pre-v39 rows - ambient context treats
+   * null as other-project (deny). Stamped from the store's location at write
+   * time (store.ts stampOriginProject); undefined only on entries not yet
+   * written. See docs/plans/2026-07-01-memory-scope-isolation.md.
+   */
+  origin_project?: string | null;
+  /**
    * F1 (v1.7.0): raw SQLite FTS5 bm25() score from the FTS path of
    * `loadSearchEntries`.
    *

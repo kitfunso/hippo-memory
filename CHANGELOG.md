@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Added
+- **Memory scope isolation (fixes cross-project context bleed).** Ambient context - the Claude Code UserPromptSubmit hook, `hippo context`, `GET /v1/context`, and MCP `hippo_context` - no longer injects memories owned by OTHER projects into the active session. Every memory now carries an `origin_project` (a project name = owned by that project, '' = user-global and injectable everywhere, NULL = legacy pre-v39 row, treated as other-project). Origin is stamped automatically from the store's location at write time; migration v39 backfills existing rows from store location and `shared:<project>:` sources. Escape hatches: `hippo context --cross-project` (rendered under a demarcated "Other-project memory" section), `cross_project=1` on `/v1/context`, and config `contextProjectIsolation: false`.
+- **Secret hard veto.** New content/tag secret detection (provider-bounded patterns + `secret`/`api-key`/`token`/... tags). Secrets are never auto-shared or explicitly shared to the global store (`hippo share` refuses, `hippo sleep` skips), never synced down by `hippo sync`, and never ambient-injected outside their owning project - not even with `--cross-project` or isolation disabled. Origin-less secrets never ambient-inject at all. Explicit `hippo recall` still returns them: recalling a secret is a deliberate act.
+- **Context assembly now applies the same envelope default-deny as recall.** Private scopes (`*:private:*`) and quarantine buckets never inject into ambient context (previously only `hippo recall`/MCP recall enforced this).
+- `hippo sync --cross-project` re-includes other-project rows when syncing global memories down; the default now skips them (secrets always skipped). `syncGlobalToLocal` preserves `origin_project` on copies.
+
+### Changed
+- **Behavior change for existing installed hooks (intended):** the UserPromptSubmit hook command is unchanged and keeps working, but its injected content is now project-scoped. If you relied on seeing other projects' memories everywhere, set `contextProjectIsolation: false` in `config.json` or use `--cross-project` explicitly.
+- `ContextResult` entries gain `origin` and `category` (`project` | `user-global` | `cross-project`); the CLI JSON format exposes both.
+- `shareMemory` stamps the canonical `origin_project` on global copies (derived from the entry's own write-time stamp, not the local path basename).
+- Migration v39 (schema 38 -> 39): adds `memories.origin_project` + evidence-based backfill. Additive and idempotent; no data is removed.
+
 ## 1.23.0 (2026-06-08): pluggable embedding providers (bring a frontier embedder)
 
 ### Added

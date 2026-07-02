@@ -12,6 +12,7 @@ import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import {
   writeEntry,
   writeEntryDbOnly,
+  stampOriginProject,
   writeEntryMirrors,
   readEntry,
   deleteEntry,
@@ -67,6 +68,8 @@ import { markRetrieved, estimateTokens, hybridSearch, physicsSearch, type Rerank
 import { scopeMatch } from './scope.js';
 import { consolidate } from './consolidate.js';
 import { loadConfig } from './config.js';
+import { resolveProjectIdentity, classifyOriginProject } from './project-identity.js';
+import { detectSecret } from './secret-detect.js';
 import { deduplicateStore } from './dedupe.js';
 import { computeAmbientState, type AmbientState } from './ambient.js';
 import { loadPendingExtractionTenants, markPendingProcessedUpTo } from './graph.js';
@@ -199,6 +202,48 @@ export function passesScopeFilterForRecall(
 
 export function isPrivateScope(scope: string | null | undefined): boolean {
   return typeof scope === 'string' && PRIVATE_SCOPE_RE.test(scope);
+}
+
+// v39: classifyOriginProject lives in project-identity.ts (leaf) so
+// shared.ts can use it without an api.ts import cycle. Re-exported here for
+// callers that already import the api surface.
+export { classifyOriginProject } from './project-identity.js';
+
+/**
+ * v39: the single ambient-injection admission policy, shared by getContext
+ * and the CLI-side ambient-state summary so the two cannot drift.
+ *
+ * - S4 secret veto is UNCONDITIONAL: neither crossProject nor
+ *   contextProjectIsolation:false re-includes secrets. A flagged row only
+ *   injects inside its owning project; flagged rows with no project origin
+ *   (''/null) never ambient-inject at all. Explicit recall is unaffected -
+ *   recalling a secret is a deliberate act.
+ * - S2 envelope parity: private scopes + quarantine buckets never inject.
+ * - S3 origin partition: other-project rows are excluded unless
+ *   `includeCrossProject`.
+ */
+export function ambientAdmitEntry(
+  e: MemoryEntry,
+  currentProjectName: string,
+  includeCrossProject: boolean,
+): boolean {
+  if (!ambientSecretAdmit(e, currentProjectName)) return false;
+  if (!passesScopeFilterForRecall(e.scope ?? null, undefined)) return false;
+  if (includeCrossProject) return true;
+  return classifyOriginProject(e.origin_project, currentProjectName) !== 'cross-project';
+}
+
+/**
+ * v39 S4: the secret half of the ambient policy on its own, for surfaces
+ * with their own scope semantics (MCP hippo_context's explicit-scope
+ * exact-match). A flagged row is only admitted inside its owning project;
+ * flagged rows with no project origin never ambient-inject.
+ */
+export function ambientSecretAdmit(e: MemoryEntry, currentProjectName: string): boolean {
+  if (!detectSecret(e).flagged) return true;
+  const origin = e.origin_project;
+  if (origin === undefined || origin === null || origin === '') return false;
+  return origin === currentProjectName;
 }
 
 export interface RememberOpts {
@@ -1757,7 +1802,7 @@ export function supersede(
       // 2. Write new memory inside same tx via writeEntryDbOnly (DB-only
       //    path). This emits its OWN 'remember' audit row for the new
       //    memory inside the SAVEPOINT — atomic with the row INSERT.
-      writeEntryDbOnly(db, newEntry, { actor: ctx.actor.subject });
+      writeEntryDbOnly(db, stampOriginProject(ctx.hippoRoot, newEntry), { actor: ctx.actor.subject });
       // 3. User-facing 'supersede' audit row inside the same tx so the
       //    chain pointer + audit trail commit atomically.
       appendAuditEvent(db, {
@@ -2080,6 +2125,15 @@ export interface ContextOpts {
   pinnedOnly?: boolean;
   scope?: string;
   includeRecent?: number;
+  /** v39 memory scope isolation: re-include other-project memories that the
+   *  origin partition excludes by default. They come back tagged
+   *  `category: 'cross-project'` so renderers can demarcate them. */
+  crossProject?: boolean;
+  /** The active project name for the origin partition ('' = not in a
+   *  project). Defaults to `resolveProjectIdentity(process.cwd()).name`;
+   *  surfaces whose process cwd is not the caller's project (HTTP server)
+   *  should pass it explicitly. */
+  currentProject?: string;
 }
 
 export interface ContextResultEntry {
@@ -2088,6 +2142,12 @@ export interface ContextResultEntry {
   tokens: number;
   isGlobal?: boolean;
   isFreshTail?: boolean;
+  /** v39: the entry's owning project ('' = user-global, null = legacy row). */
+  origin?: string | null;
+  /** v39: how the origin relates to the active project. 'cross-project'
+   *  entries only appear when ContextOpts.crossProject was set (or isolation
+   *  is disabled). */
+  category?: 'project' | 'user-global' | 'cross-project';
 }
 
 export interface ContextResult {
@@ -2146,6 +2206,22 @@ export async function getContext(
   // Filter superseded — context never includes superseded rows.
   localEntries = localEntries.filter((e) => !e.superseded_by);
   globalEntries = globalEntries.filter((e) => !e.superseded_by);
+
+  // v39 memory scope isolation (docs/plans/2026-07-01-memory-scope-isolation.md).
+  // S2: envelope-filter parity with api.recall for AMBIENT context - private
+  // scopes and quarantine buckets never inject. `requested` is deliberately
+  // undefined: opts.scope is the scope-TAG boost input here, not an
+  // envelope-scope request (api.recall's exact-match semantics don't apply).
+  // S3: origin partition - other-project memories are excluded unless the
+  // caller explicitly asks for them (crossProject) or isolation is disabled.
+  const isolationEnabled = loadConfig(ctx.hippoRoot).contextProjectIsolation !== false;
+  const currentProjectName =
+    opts.currentProject ?? resolveProjectIdentity(process.cwd()).name;
+  const includeCrossProject = opts.crossProject === true || !isolationEnabled;
+  const ambientAdmit = (e: MemoryEntry): boolean =>
+    ambientAdmitEntry(e, currentProjectName, includeCrossProject);
+  localEntries = localEntries.filter(ambientAdmit);
+  globalEntries = globalEntries.filter(ambientAdmit);
 
   const activeSnapshot = hasLocal
     ? loadActiveTaskSnapshot(ctx.hippoRoot, ctx.tenantId)
@@ -2278,10 +2354,18 @@ export async function getContext(
     // Real query: hybrid search (global + local) or physics+hybrid (local only).
     let results: ContextResultEntry[];
     if (hasGlobal) {
+      // searchBothHybrid loads from the store roots itself, so the ambient
+      // filter above never saw its candidates. Admission runs INSIDE the
+      // search via the opt-in entryFilter, BEFORE ranking, cross-store
+      // content-dedupe, and budgeting - a post-filter instead would let an
+      // excluded row saturate the budget (codex rounds 1+3) or shadow its
+      // admitted duplicate in the dedupe pass (codex round 4). Recall paths
+      // never set entryFilter, so their behavior is unchanged.
       const merged = await searchBothHybrid(query, ctx.hippoRoot, globalRoot, {
         budget,
         scope: activeScope,
         tenantId: ctx.tenantId,
+        entryFilter: ambientAdmit,
       });
       const localIndex = loadIndex(ctx.hippoRoot);
       results = merged.map((r) => ({
@@ -2356,6 +2440,14 @@ export async function getContext(
     selectedItems = selectedItems.slice(0, limit);
     totalTokens = selectedItems.reduce((sum, r) => sum + r.tokens, 0);
   }
+
+  // v39: annotate every returned entry with its origin and how it relates to
+  // the active project, so renderers can demarcate cross-project inclusions.
+  selectedItems = selectedItems.map((r) => ({
+    ...r,
+    origin: r.entry.origin_project ?? null,
+    category: classifyOriginProject(r.entry.origin_project, currentProjectName),
+  }));
 
   if (
     selectedItems.length === 0 &&

@@ -109,11 +109,11 @@ describe('schema v24 — github connector tables', () => {
     } finally { closeHippoDb(db); }
   });
 
-  it('writes min_compatible_binary = 1.2.1 to meta', () => {
+  it('writes min_compatible_binary to meta (v24 stamped 1.2.1; v39 forward-bumps to 1.24.0)', () => {
     const db = openHippoDb(root);
     try {
       const v = getMeta(db, 'min_compatible_binary', '');
-      expect(v).toBe('1.2.1');
+      expect(v).toBe('1.24.0');
     } finally { closeHippoDb(db); }
   });
 

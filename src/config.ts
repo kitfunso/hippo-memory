@@ -68,6 +68,12 @@ export interface HippoConfig {
     enabled: boolean;
     budget: number;
   };
+  /** Memory scope isolation (v39): when true (default), ambient context
+   *  (`hippo context`, the UserPromptSubmit hook, /v1/context, MCP
+   *  hippo_context) excludes memories owned by OTHER projects; explicit
+   *  recall is unaffected. Set false to restore pre-v39 behavior. See
+   *  docs/plans/2026-07-01-memory-scope-isolation.md. */
+  contextProjectIsolation: boolean;
   extraction: {
     enabled: boolean | 'auto';
     model: string;
@@ -128,6 +134,7 @@ const DEFAULT_CONFIG: HippoConfig = {
     enabled: true,
     budget: 1500,
   },
+  contextProjectIsolation: true,
   extraction: {
     enabled: 'auto',
     model: 'claude-sonnet-4-6',
@@ -172,6 +179,7 @@ export function loadConfig(hippoRoot: string): HippoConfig {
       autoTraceCapture: raw.autoTraceCapture ?? DEFAULT_CONFIG.autoTraceCapture,
       autoTraceWindowDays: raw.autoTraceWindowDays ?? DEFAULT_CONFIG.autoTraceWindowDays,
       pinnedInject: { ...DEFAULT_CONFIG.pinnedInject, ...(raw.pinnedInject ?? {}) },
+      contextProjectIsolation: raw.contextProjectIsolation ?? DEFAULT_CONFIG.contextProjectIsolation,
       extraction: { ...DEFAULT_CONFIG.extraction, ...(raw.extraction ?? {}) },
       multihop: { ...DEFAULT_CONFIG.multihop, ...(raw.multihop ?? {}) },
       salience: { ...DEFAULT_CONFIG.salience, ...(raw.salience ?? {}) },
