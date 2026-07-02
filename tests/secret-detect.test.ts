@@ -25,8 +25,8 @@ describe('detectSecret patterns', () => {
     expect(flagged('stripe sk_live_abcdefghijklmnop1234')).toBe(true);
     expect(flagged('-----BEGIN RSA PRIVATE KEY-----')).toBe(true);
     expect(flagged('the prod API key is sk-abcdefghij0123456789xyz')).toBe(true);
-    // The exact leaked shape from the 2026-06-30 incident.
-    expect(flagged('2chain prod API key for keith-personal: sk_keith_kit_8c4f2e91')).toBe(true);
+    // The shape from the 2026-06-30 incident (synthetic value - never a real key).
+    expect(flagged('2chain prod API key for keith-personal: sk_vendor_1a2b3c4d')).toBe(true);
     expect(flagged('config sets api_key=9f8e7d6c5b4a3210ffff')).toBe(true);
   });
 
