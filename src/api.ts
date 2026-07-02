@@ -1491,8 +1491,8 @@ export function drillDown(
 ): DrillDownOutcome {
   const limit = opts.limit ?? 50;
   // v0.30 / E5: depth defaults 1 (backward compat); hard cap 10 levels
-  // prevents pathological deep trees. CLI/HTTP/MCP layers also clamp.
-  const depth = Math.max(1, Math.min(opts.depth ?? 1, 10));
+  // prevents pathological deep trees. CLI/HTTP/MCP reject invalid values.
+  const depth = Math.max(1, Math.min(Math.trunc(opts.depth ?? 1), 10));
   const summary = readEntry(ctx.hippoRoot, summaryId, ctx.tenantId);
   // No unscoped cross-tenant probe here — readEntry's null return covers
   // both "doesn't exist" and "exists in another tenant" by design.
