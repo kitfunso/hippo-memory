@@ -197,9 +197,9 @@ export async function searchBothHybrid(
   // When an admission filter is active, lift the per-store candidate cap
   // (default 200): excluded rows matching the query could otherwise fill the
   // window before any admitted row is even loaded (codex gating round 6).
-  // Only ambient-context query mode sets entryFilter, and that path is
-  // interactive - never the per-turn pinned-only hook - so ranking the full
-  // match set is acceptable.
+  // Ambient-context query mode and unscoped CLI recall set entryFilter. Both
+  // are interactive - never the per-turn pinned-only hook - so ranking the
+  // full match set is acceptable.
   // 5000 = 25x the default 200-row window: large enough that exclusion
   // crowding is a non-issue on real stores, bounded so a common query term
   // on a 100k-row store cannot stall an interactive call by ranking every
