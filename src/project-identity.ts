@@ -78,6 +78,17 @@ function isUnder(child: string, parent: string): boolean {
   return false;
 }
 
+/** A `.hippo` marker must be a DIRECTORY (a store) - a stray file named
+ *  `.hippo` must not turn its parent into a project. `.git` stays existsSync
+ *  because worktrees legitimately use a `.git` FILE. */
+function isDirectoryAt(p: string): boolean {
+  try {
+    return fs.statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Resolve the project identity for a working directory.
  * Defaults to process.cwd(). Results are cached per resolved input path.
@@ -108,7 +119,7 @@ export function resolveProjectIdentity(
       break;
     }
     if (stopDir !== null && samePath(dir, stopDir)) break;
-    if (hippoRoot === null && fs.existsSync(path.join(dir, '.hippo'))) {
+    if (hippoRoot === null && isDirectoryAt(path.join(dir, '.hippo'))) {
       hippoRoot = dir;
     }
     if (gitRoot === null && fs.existsSync(path.join(dir, '.git'))) {
@@ -151,6 +162,31 @@ export function classifyOriginProject(
   if (origin === undefined || origin === null) return 'cross-project';
   if (origin === '') return 'user-global';
   return origin === currentName ? 'project' : 'cross-project';
+}
+
+/**
+ * The global Hippo store directory, resolved the same way shared.ts does:
+ * $HIPPO_HOME > $XDG_DATA_HOME/hippo > ~/.hippo. Lives here (leaf module) so
+ * db.ts migrations can use it without importing shared.ts (store.ts cycle);
+ * shared.getGlobalRoot delegates to this.
+ */
+export function resolveGlobalRootDir(): string {
+  const hippoHome = process.env.HIPPO_HOME?.trim();
+  if (hippoHome) return hippoHome;
+  const xdgData = process.env.XDG_DATA_HOME?.trim();
+  if (xdgData) return path.join(xdgData, 'hippo');
+  return path.join(os.homedir(), '.hippo');
+}
+
+/**
+ * True when `p` IS the global store root. Used by the v39 migration so a
+ * global store whose parent chain happens to contain `.git`/`.hippo`
+ * (git-managed HIPPO_HOME, dotfiles setups) still backfills as user-global
+ * ('') instead of being stamped with the surrounding repo's name - which
+ * would hide the user's entire global corpus from every project.
+ */
+export function isGlobalStoreRoot(p: string): boolean {
+  return samePath(realpathOrResolve(path.resolve(p)), realpathOrResolve(resolveGlobalRootDir()));
 }
 
 /**

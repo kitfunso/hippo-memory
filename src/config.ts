@@ -71,8 +71,10 @@ export interface HippoConfig {
   /** Memory scope isolation (v39): when true (default), ambient context
    *  (`hippo context`, the UserPromptSubmit hook, /v1/context, MCP
    *  hippo_context) excludes memories owned by OTHER projects; explicit
-   *  recall is unaffected. Set false to restore pre-v39 behavior. See
-   *  docs/plans/2026-07-01-memory-scope-isolation.md. */
+   *  recall is unaffected. Set false to disable the ORIGIN PARTITION only -
+   *  the secret veto is unconditional for ambient surfaces and no config or
+   *  flag re-includes secret-flagged rows (explicit recall still returns
+   *  them). See docs/plans/2026-07-01-memory-scope-isolation.md. */
   contextProjectIsolation: boolean;
   extraction: {
     enabled: boolean | 'auto';

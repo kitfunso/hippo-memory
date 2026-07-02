@@ -43,6 +43,18 @@ describe('detectSecret patterns', () => {
     expect(flagged('password rotation policy: every 90 days, no reuse')).toBe(false);
     expect(flagged('sk-hyphenated-words-in-prose read fine in plain writing')).toBe(false);
   });
+
+  it('does not flag code snippets or prose in assignment position (post-merge review FPs)', () => {
+    // Both were verified false positives of the pre-fix generic pattern:
+    // ordinary code-lesson memories would silently vanish from ambient
+    // context everywhere. The value must now LOOK like a credential
+    // (token charset + at least one digit).
+    expect(flagged('lesson: token = estimateTokens(entry.content) counts words not chars')).toBe(false);
+    expect(flagged('the secret: incremental-rollout worked well for the beta')).toBe(false);
+    // Credential-shaped values still flag.
+    expect(flagged('password: MyDogsName2024x')).toBe(true);
+    expect(flagged('config sets api_key=9f8e7d6c5b4a3210ffff')).toBe(true);
+  });
 });
 
 describe('producer + sync vetoes (real stores)', () => {

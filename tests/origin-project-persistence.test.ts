@@ -192,6 +192,28 @@ describe('v39 migration backfill', () => {
     }
   });
 
+  it('a global store nested in a git repo (HIPPO_HOME in dotfiles) still backfills user-global', () => {
+    // Post-merge review P1: without the global-root special case, the walk
+    // finds the surrounding repo's .git and stamps the ENTIRE global corpus
+    // with that repo's name - hiding it from every project.
+    const dotfiles = path.join(tmpRoot, 'dotfiles');
+    fs.mkdirSync(path.join(dotfiles, '.git'), { recursive: true });
+    const globalRoot = path.join(dotfiles, 'hippo-global');
+    const origHippoHome = process.env.HIPPO_HOME;
+    process.env.HIPPO_HOME = globalRoot;
+    try {
+      initStore(globalRoot);
+      writeEntry(globalRoot, { ...createMemory('a user-global lesson in a dotfiles-managed store'), origin_project: '' });
+      regressStoreToV38(globalRoot);
+      closeHippoDb(openHippoDb(globalRoot)); // migrate
+      const [entry] = loadAllEntries(globalRoot);
+      expect(entry.origin_project).toBe('');
+    } finally {
+      if (origHippoHome !== undefined) process.env.HIPPO_HOME = origHippoHome;
+      else delete process.env.HIPPO_HOME;
+    }
+  });
+
   it('is idempotent: a second migration pass changes nothing', () => {
     const storeRoot = makeProjectStore('proj-a');
     writeEntry(storeRoot, createMemory('row for idempotency check'));

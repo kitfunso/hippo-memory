@@ -19,7 +19,7 @@ import {
 } from './store.js';
 import { search, hybridSearch, SearchResult } from './search.js';
 import { evalNow } from './ablation.js';
-import { deriveOriginProject, classifyOriginProject } from './project-identity.js';
+import { deriveOriginProject, classifyOriginProject, resolveGlobalRootDir } from './project-identity.js';
 import { detectSecret } from './secret-detect.js';
 
 /**
@@ -27,11 +27,9 @@ import { detectSecret } from './secret-detect.js';
  * Resolution order: $HIPPO_HOME > $XDG_DATA_HOME/hippo > ~/.hippo/
  */
 export function getGlobalRoot(): string {
-  const hippoHome = process.env.HIPPO_HOME?.trim();
-  if (hippoHome) return hippoHome;
-  const xdgData = process.env.XDG_DATA_HOME?.trim();
-  if (xdgData) return path.join(xdgData, 'hippo');
-  return path.join(os.homedir(), '.hippo');
+  // Single source of truth lives in project-identity.ts (leaf) so db.ts
+  // migrations can resolve the same path without a shared.ts import cycle.
+  return resolveGlobalRootDir();
 }
 
 /**
@@ -202,7 +200,11 @@ export async function searchBothHybrid(
   // Only ambient-context query mode sets entryFilter, and that path is
   // interactive - never the per-turn pinned-only hook - so ranking the full
   // match set is acceptable.
-  const searchWindow = entryFilter ? Number.MAX_SAFE_INTEGER : undefined;
+  // 5000 = 25x the default 200-row window: large enough that exclusion
+  // crowding is a non-issue on real stores, bounded so a common query term
+  // on a 100k-row store cannot stall an interactive call by ranking every
+  // match (post-merge adversarial review, 2026-07-02).
+  const searchWindow = entryFilter ? 5000 : undefined;
   let localEntries = fs.existsSync(localRoot) ? loadSearchEntries(localRoot, query, searchWindow, tenantId) : [];
   let globalEntries = fs.existsSync(globalRoot) ? loadSearchEntries(globalRoot, query, searchWindow, tenantId) : [];
   if (entryFilter) {

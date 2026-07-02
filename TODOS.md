@@ -4,6 +4,14 @@
 
 Cross-referenced from `ROADMAP-RESEARCH.md` §"Next 90 days". The full execution roadmap (Tracks A-I, sequencing, bets, non-goals) lives there. This file owns the operational post-ship tail.
 
+### Memory scope isolation (v39, merged dc7d3ba / PR #117) — post-ship tail
+
+1. **CLI `hippo recall` private-scope residue.** The direct CLI recall path (cli.ts `cmdRecall` via `searchBoth`/`loadSearchEntries`) predates `api.recall`'s private-scope SQL default-deny; recall is a deliberate act by the v39 policy matrix, but the private-scope envelope filter should still reach this surface. Promised as a follow-up in `docs/plans/2026-07-01-memory-scope-isolation.md`.
+2. **SleepResult secret-veto skip count.** `autoShare` silently skips secret-flagged rows; the plan promised a skip count in `SleepResult` + a sleep output line for observability. Small additive change to `api.sleep` + `renderSleepResult`.
+3. **Dedicated HTTP/MCP isolation tests.** `/v1/context?cross_project=1` and the MCP `hippo_context` origin/secret filter are covered only via the engine-level `getContext` tests; add surface-level cases to `tests/server-context-route.test.ts` and `tests/mcp-context-scope.test.ts`.
+4. **One-time global-store secret audit.** Run the v39 detector in report mode over `~/.hippo` and remove leaked rows by id via the store API (NOT `hippo invalidate`). The producer veto prevents recurrence; this cleans pre-v39 residue.
+5. **S5 path-overlap tuning** (deferred by design from the v39 plan). `pathOverlapScore`'s memory-side normalization lives in generic search code shared with recall; isolate behind a helper and measure under the tier-1 micro-eval before changing behavior.
+
 ### E2/E3 graph track — SHIPPED v1.16.0 → v1.22.0 (2026-06-03)
 
 The Company Brain object + graph layer shipped end-to-end:

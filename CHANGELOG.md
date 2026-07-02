@@ -13,6 +13,7 @@
 - `ContextResult` entries gain `origin` and `category` (`project` | `user-global` | `cross-project`); the CLI JSON format exposes both.
 - `shareMemory` stamps the canonical `origin_project` on global copies (derived from the entry's own write-time stamp, not the local path basename).
 - Migration v39 (schema 38 -> 39): adds `memories.origin_project` + evidence-based backfill. Additive and idempotent; no data is removed.
+- **Upgrade in lockstep on shared machines.** v39 stamps `min_compatible_binary: 1.24.0` on every store it migrates, including the shared `~/.hippo` global store. Any still-installed pre-1.24.0 hippo binary (pinned project dependency, old plugin bundle, stale hook install) will then refuse to open that store by design - the refusal is what prevents an old binary from silently leaking cross-project rows again. Upgrade all hippo installs on the machine together.
 
 ## 1.23.0 (2026-06-08): pluggable embedding providers (bring a frontier embedder)
 

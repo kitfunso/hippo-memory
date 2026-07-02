@@ -44,9 +44,15 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   // does.
   { name: 'sk-style-key', re: /\bsk-[A-Za-z0-9_-]{20,}\b/ },
   { name: 'sk-underscore-key', re: /\bsk_[A-Za-z0-9]+_[A-Za-z0-9_]{6,}\b/ },
-  // Generic assignment: api_key=..., password: ..., token = "..." with a
-  // 12+ char opaque value.
-  { name: 'secret-assignment', re: /\b(?:api[_-]?key|secret|token|password)\s*[:=]\s*['"]?[^\s'"]{12,}/i },
+  // Generic assignment: api_key=..., password: ..., token = "..." where the
+  // value actually LOOKS like a credential: 12+ chars drawn only from
+  // token-safe characters AND containing at least one digit. Without both
+  // constraints this pattern flags ordinary code snippets and prose -
+  // `token = estimateTokens(entry.content)` and "the secret: incremental-
+  // rollout worked well" were verified false positives that would silently
+  // hide real code-lesson memories from ambient context (post-merge
+  // adversarial review, 2026-07-02).
+  { name: 'secret-assignment', re: /\b(?:api[_-]?key|secret|token|password)\s*[:=]\s*['"]?(?=[A-Za-z0-9_\-+/=]*\d)[A-Za-z0-9_\-+/=]{12,}/i },
 ];
 
 const KEYISH_CONTEXT_RE = /key|token|secret|credential|bearer|auth|password/i;

@@ -5,7 +5,7 @@ import { createRequire } from 'module';
 import { createPhysicsTable } from './physics-state.js';
 import { cleanupArchivedMirrors } from './raw-archive-mirror-cleanup.js';
 import { PACKAGE_VERSION, compareSemver } from './version.js';
-import { deriveOriginProject, originFromSource } from './project-identity.js';
+import { deriveOriginProject, originFromSource, isGlobalStoreRoot } from './project-identity.js';
 
 const require = createRequire(import.meta.url);
 
@@ -2176,7 +2176,12 @@ const MIGRATIONS: Migration[] = [
           if (origin === null) continue;
           setOrigin.run(origin, row.id);
         }
-        const storeOrigin = deriveOriginProject(path.dirname(hippoRoot));
+        // The global root itself is ALWAYS user-global (''), regardless of
+        // what surrounds it on disk - a HIPPO_HOME inside a dotfiles git
+        // repo must not stamp the whole corpus with that repo's name.
+        const storeOrigin = isGlobalStoreRoot(hippoRoot)
+          ? ''
+          : deriveOriginProject(path.dirname(hippoRoot));
         db.prepare(`UPDATE memories SET origin_project = ? WHERE origin_project IS NULL`).run(storeOrigin);
       }
       // Rollback-safety guard (v24 precedent): a pre-isolation binary opening
