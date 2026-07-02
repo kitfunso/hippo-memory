@@ -36,13 +36,13 @@ export const PACKAGE_VERSION = '1.24.0';
  * pre-release semantics later, replace this with a real semver lib.
  */
 export function compareSemver(a: string, b: string): number {
-  const parse = (v: string): number[] =>
-    v.split('.').map((n) => {
-      if (!/^\d+$/.test(n)) {
-        throw new Error(`compareSemver: pre-release/build metadata not supported: ${v}`);
-      }
-      return Number(n);
-    });
+  const parse = (v: string): number[] => {
+    const parts = v.split('.');
+    if (parts.length !== 3 || parts.some((n) => !/^\d+$/.test(n))) {
+      throw new Error(`compareSemver: expected numeric x.y.z without pre-release/build metadata: ${v}`);
+    }
+    return parts.map(Number);
+  };
   const [a1, a2, a3] = parse(a);
   const [b1, b2, b3] = parse(b);
   if (a1 !== b1) return (a1 ?? 0) - (b1 ?? 0);
