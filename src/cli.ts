@@ -62,6 +62,7 @@ import {
   ConfidenceLevel,
 } from './memory.js';
 import { resolveProjectIdentity } from './project-identity.js';
+import { detectSecret } from './secret-detect.js';
 import {
   getHippoRoot,
   isInitialized,
@@ -2484,8 +2485,8 @@ async function cmdRefine(
  * Scan for Claude Code MEMORY.md files and import new entries into hippo.
  * Looks in ~/.claude/projects/<project>/memory/ for .md files with YAML frontmatter.
  */
-function learnFromMemoryMd(hippoRoot: string): number {
-  const home = os.homedir();
+export function learnFromMemoryMd(hippoRoot: string, homeDir: string = os.homedir()): number {
+  const home = homeDir;
   const memoryDirs: string[] = [];
 
   // Claude Code project memories
@@ -2503,6 +2504,7 @@ function learnFromMemoryMd(hippoRoot: string): number {
 
   const existing = loadAllEntries(hippoRoot);
   let imported = 0;
+  let skippedSecret = 0;
 
   for (const memDir of memoryDirs) {
     try {
@@ -2519,6 +2521,16 @@ function learnFromMemoryMd(hippoRoot: string): number {
 
         // Truncate to reasonable size
         const content = body.length > 1500 ? body.slice(0, 1500) + ' [truncated]' : body;
+
+        // Never ingest secret-bearing memory files. Some Claude Code memory
+        // files exist purely to hold a live credential (e.g. an API-key
+        // reference). The scope-isolation secret veto (v1.24.0) gated
+        // share/promote/sync/ambient but missed this import path, so a live
+        // key could land in the store here. Veto it at ingest. (v1.24.1)
+        if (detectSecret({ content, tags: ['claude-code-memory'] }).flagged) {
+          skippedSecret++;
+          continue;
+        }
 
         // Dedup: check if substantially similar content already exists
         const isDup = existing.some(e => {
@@ -2539,6 +2551,10 @@ function learnFromMemoryMd(hippoRoot: string): number {
         imported++;
       }
     } catch { /* skip broken dirs */ }
+  }
+
+  if (skippedSecret > 0) {
+    console.log(`Skipped ${skippedSecret} secret-bearing memory file${skippedSecret === 1 ? '' : 's'} (not ingested).`);
   }
 
   return imported;

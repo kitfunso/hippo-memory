@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.24.1 (2026-07-02)
+
+### Fixed
+- **Secret veto now covers the Claude Code memory importer.** `hippo sleep` auto-imports memories from `~/.claude/projects/*/memory/*.md` files. The v1.24.0 secret hard veto gated share/promote/sync/ambient but missed this ingest path, so a memory file that exists purely to hold a credential (e.g. an API-key reference) could be pulled into the store on sleep - and once ingested, mirrored to markdown and auto-shared to the global store. The importer now runs the same `detectSecret` veto per file and skips any secret-bearing one (logged as `Skipped N secret-bearing memory file(s)`). No schema change; fully compatible with 1.24.0 stores.
+
 ## 1.24.0 (2026-07-02)
 
 ### Added
