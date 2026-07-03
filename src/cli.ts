@@ -899,6 +899,12 @@ async function cmdRecall(
   // A5 stub auth: resolve the active tenant once and thread it through every
   // recall-time SELECT against `memories`. Cross-tenant rows must never surface.
   const tenantId = resolveTenantId({});
+  const recallExplicitScope =
+    typeof flags['scope'] === 'string' ? flags['scope'].trim() || null : null;
+  const recallEntryFilter = recallExplicitScope
+    ? undefined
+    : (entry: MemoryEntry): boolean =>
+        api.passesScopeFilterForRecall(entry.scope ?? null, undefined);
 
   let localEntries = loadSearchEntries(hippoRoot, query, undefined, tenantId);
   let globalEntries = isInitialized(globalRoot) ? loadSearchEntries(globalRoot, query, undefined, tenantId) : [];
@@ -910,6 +916,11 @@ async function cmdRecall(
   // are NOT counted in v1 — they are part of the rank step, not a filter.
   const totalCandidatesCountCmd = localEntries.length + globalEntries.length;
   let droppedPreRankCountCmd = 0;
+  if (recallEntryFilter) {
+    localEntries = localEntries.filter(recallEntryFilter);
+    globalEntries = globalEntries.filter(recallEntryFilter);
+    droppedPreRankCountCmd += totalCandidatesCountCmd - (localEntries.length + globalEntries.length);
+  }
 
   // Bi-temporal filtering for physics path (hybridSearch handles it internally)
   if (asOf) {
@@ -961,7 +972,6 @@ async function cmdRecall(
   const minResults = flags['min-results'] !== undefined
     ? parseInt(String(flags['min-results']), 10)
     : undefined;
-  const recallExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
   const recallActiveScope = recallExplicitScope || detectScope();
 
   const useMultihop = flags['multihop'] === true || config.multihop.enabled;
@@ -1041,7 +1051,7 @@ async function cmdRecall(
     // Use searchBothHybrid for merged results with embedding support
     results = await searchBothHybrid(query, hippoRoot, globalRoot, {
       budget, mmr: mmrEnabled, mmrLambda, localBump, minResults, scope: recallActiveScope, tenantId,
-      includeSuperseded, asOf,
+      includeSuperseded, asOf, entryFilter: recallEntryFilter,
     });
   } else {
     results = await hybridSearch(query, localEntries, {
