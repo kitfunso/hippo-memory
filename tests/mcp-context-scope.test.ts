@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore, saveActiveTaskSnapshot, writeEntry } from '../src/store.js';
+import { initStore, readEntry, saveActiveTaskSnapshot, writeEntry } from '../src/store.js';
 import { createMemory } from '../src/memory.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 
@@ -44,6 +44,27 @@ describe('mcp hippo_context scope filter', () => {
 
   afterEach(() => {
     rmSync(home, { recursive: true, force: true });
+  });
+
+  it('budget=0 returns no context without marking memories retrieved', async () => {
+    const memory = createMemory('zero budget canary memory');
+    writeEntry(home, memory);
+    saveActiveTaskSnapshot(home, 'default', {
+      task: 'Zero budget snapshot',
+      summary: 'Must not be returned',
+      next_step: 'Stay hidden',
+      session_id: 'sess-zero-budget',
+      source: 'test',
+    });
+
+    const res = await callTool(0, 'hippo_context', { budget: 0 }, {
+      hippoRoot: home,
+      tenantId: 'default',
+      actor: { subject: 'mcp', role: 'admin' },
+    });
+
+    expect(extractText(res)).toBe('Done.');
+    expect(readEntry(home, memory.id)?.retrieval_count).toBe(0);
   });
 
   it('default-deny: no-scope caller does not see private-scope memories or snapshot', async () => {
