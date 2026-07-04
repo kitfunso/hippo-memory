@@ -20,7 +20,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore, writeEntry } from '../src/store.js';
+import { initStore, writeEntry, loadRecallSearchEntries } from '../src/store.js';
 import { createMemory } from '../src/memory.js';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
@@ -80,19 +80,22 @@ describe('cli recall scope default-deny (v1.25.0)', () => {
     expect(out).not.toContain(LEGACY);
   });
 
-  it('JSON suppression summary counts the JS-half scope drops', () => {
+  it('JSON output excludes denied rows pre-candidate (SQL predicate before the window)', () => {
     const raw = hippo(home, env, 'recall', 'deploykey', '--json', '--limit', '10');
     const parsed = JSON.parse(raw) as {
       results: Array<{ content?: string; entry?: { content?: string } }>;
-      suppressionSummary: { droppedPreRank: number };
+      suppressionSummary: { totalCandidates: number; droppedPreRank: number };
     };
     const text = JSON.stringify(parsed.results);
     expect(text).not.toContain(PRIV_SLACK);
     expect(text).not.toContain(PRIV_GITHUB);
     expect(text).not.toContain(LEGACY);
-    // The two `<source>:private:*` rows are dropped by the JS regex half
-    // (the SQL predicate already excluded unknown:legacy before counting).
-    expect(parsed.suppressionSummary.droppedPreRank).toBeGreaterThanOrEqual(2);
+    // v1.12.13 accounting convention: SQL-excluded rows (quarantine + the
+    // v1.25.0 pre-window ':private:' exclusion) are pre-candidate — they
+    // never appear in totalCandidates and are not counted as drops. Of the
+    // four seeded rows matching 'deploykey', only CLEAN is a candidate.
+    expect(parsed.suppressionSummary.totalCandidates).toBe(1);
+    expect(parsed.suppressionSummary.droppedPreRank).toBe(0);
   });
 
   it('hasGlobal path (searchBothHybrid recallScope) filters global-store rows equally', () => {
@@ -105,6 +108,44 @@ describe('cli recall scope default-deny (v1.25.0)', () => {
     expect(out).toContain('global clean deploykey note');
     expect(out).not.toContain('global private deploykey note');
     expect(out).not.toContain(PRIV_SLACK);
+  });
+
+  it('hasGlobal path: explicit --scope additively unlocks the requested private scope on the GLOBAL store too', () => {
+    // independent-review-critic round 1 med: the additive unlock was only
+    // covered on the local-only path.
+    const globalDir = env.HIPPO_HOME;
+    initStore(globalDir);
+    writeEntry(globalDir, createMemory('global clean deploykey note'));
+    writeEntry(globalDir, createMemory('global private deploykey note', { scope: 'slack:private:CG' }));
+
+    const out = hippo(home, env, 'recall', 'deploykey', '--scope', 'slack:private:CG', '--limit', '10');
+    expect(out).toContain('global private deploykey note');
+    expect(out).toContain('global clean deploykey note');
+    // Non-requested private scopes stay denied on both stores.
+    expect(out).not.toContain(PRIV_SLACK);
+    expect(out).not.toContain(PRIV_GITHUB);
+  });
+
+  it('private rows cannot starve admitted rows out of the SQL candidate window (codex review P2)', () => {
+    // 220 matching private rows > the 200-row default window. Pre-fix, the
+    // window filled with private rows in SQL and the JS filter then emptied
+    // it, so the one admitted row never surfaced. The SQL pre-window
+    // NOT LIKE '%:private:%' exclusion keeps the window for admitted rows.
+    const hippoDir = join(home, '.hippo');
+    for (let i = 0; i < 220; i++) {
+      writeEntry(hippoDir, createMemory(`windowstarve private filler row number ${i}`, { scope: 'slack:private:Cbulk' }));
+    }
+    writeEntry(hippoDir, createMemory('windowstarve admitted public row'));
+
+    const entries = loadRecallSearchEntries(hippoDir, 'windowstarve', undefined, 'default');
+    const contents = entries.map((e) => e.content);
+    expect(contents).toContain('windowstarve admitted public row');
+    expect(contents.some((c) => c.includes('private filler'))).toBe(false);
+
+    // End-to-end through the CLI for belt and braces.
+    const out = hippo(home, env, 'recall', 'windowstarve', '--limit', '10');
+    expect(out).toContain('windowstarve admitted public row');
+    expect(out).not.toContain('private filler');
   });
 
   it('hippo explain applies the same rule and prints an honest note', () => {

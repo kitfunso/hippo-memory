@@ -925,7 +925,11 @@ async function cmdRecall(
   // (scored-to-zero rows that hybridSearch/physicsSearch returns fewer of)
   // are NOT counted in v1 — they are part of the rank step, not a filter.
   // totalCandidates = post-SQL-predicate count (api.recall parity: measured
-  // after loadRecallSearchEntries, before the JS scope filter).
+  // after loadRecallSearchEntries, before the JS scope filter). NOTE the
+  // v1.12.13 accounting convention: SQL-excluded rows (quarantine + the
+  // v1.25.0 pre-window ':private:' exclusion) are pre-candidate and are NOT
+  // counted as drops; the JS half below normally drops 0 and exists as
+  // defense-in-depth (LIKE/regex divergence, exact-mode mismatch).
   const totalCandidatesCountCmd = localEntries.length + globalEntries.length;
   let droppedPreRankCountCmd = 0;
 
@@ -1953,10 +1957,18 @@ async function cmdExplain(
   let explainGlobalEntries = isInitialized(globalRoot) ? loadRecallSearchEntries(globalRoot, query, undefined, tenantId, explainRequestedScope, 'additive') : [];
   const passesExplainScope = (e: MemoryEntry) =>
     api.passesCliRecallScopeFilter(e.scope ?? null, explainRequestedScope);
-  const beforeExplainScopeFilter = explainLocalEntries.length + explainGlobalEntries.length;
   explainLocalEntries = explainLocalEntries.filter(passesExplainScope);
   explainGlobalEntries = explainGlobalEntries.filter(passesExplainScope);
-  const explainScopeDropped = beforeExplainScopeFilter - (explainLocalEntries.length + explainGlobalEntries.length);
+  // Honesty note (grill finding #2): the SQL predicate excludes denied rows
+  // BEFORE the candidate window (codex P2 fix), so the pipeline never sees
+  // them. For the diagnostic note only, probe the unscoped window and count
+  // what the scope policy hides — window-capped, so the count is a floor on
+  // large stores, which is fine for a "why is my row missing" hint.
+  const explainUnscopedProbe = [
+    ...loadSearchEntries(hippoRoot, query, undefined, tenantId),
+    ...(isInitialized(globalRoot) ? loadSearchEntries(globalRoot, query, undefined, tenantId) : []),
+  ];
+  const explainScopeDropped = explainUnscopedProbe.filter((e) => !passesExplainScope(e)).length;
   if (explainScopeDropped > 0) {
     console.error(`[note] ${explainScopeDropped} candidate${explainScopeDropped === 1 ? '' : 's'} hidden by recall scope policy (pass an explicit --scope to inspect).`);
   }

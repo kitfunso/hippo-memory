@@ -741,10 +741,13 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
     // silently surface cross-scope rows.
     entries = all.filter((e) => e.scope === opts.scope);
   } else {
-    // SQL already excluded `unknown:legacy`. The remaining JS filter
-    // covers the regex-only `<source>:private:*` rule (v1.2.1 generalization
-    // from `slack:private:*` to any source: connector authors cannot silently
-    // surface private rows to no-scope callers).
+    // SQL already excluded `unknown:legacy` AND (v1.25.0) pre-filtered
+    // ':private:' scopes with a conservative LIKE before the candidate
+    // window, so private rows can no longer starve admitted rows out of the
+    // LIMIT (codex review-stage P2). This JS filter stays as the exact
+    // anchored `<source>:private:*` rule (v1.2.1 generalization) and
+    // defense-in-depth: connector authors cannot silently surface private
+    // rows to no-scope callers even if the SQL clause regresses.
     entries = all.filter((e) => !isPrivateScope(e.scope ?? null));
   }
   // v1.12.13 / C5 — WYSIATI dropped_pre_rank counter (JS scope filter drops

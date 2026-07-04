@@ -73,6 +73,12 @@ export function passesScopeFilterForRecall(
  * NOT narrow the result to X (that would return zero rows for every
  * tag-scoped workflow, whose envelope scope is NULL). api.recall keeps the
  * narrowing 'exact' semantics via `passesScopeFilterForRecall`.
+ *
+ * Note the unlock applies to whatever scope was explicitly named — including
+ * a private scope or a quarantine bucket (`--scope unknown:legacy`). That is
+ * deliberate owner access, identical in reach to api.recall's exact-match
+ * for the same input; only NON-requested private/quarantine scopes stay
+ * denied.
  */
 export function passesCliRecallScopeFilter(
   scope: string | null,

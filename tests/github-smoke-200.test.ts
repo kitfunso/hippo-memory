@@ -333,14 +333,26 @@ describe('GitHub connector — 200-event smoke test', () => {
     const privateMarker = privateDelivery!.markerText;
 
     const noScope = recall(ctx, { query: privateMarker });
-    // Default-deny: zero private rows surface to a no-scope caller.
-    expect(noScope.results).toHaveLength(0);
+    // Default-deny: no private-repo content surfaces to a no-scope caller.
+    // Since v1.25.0 the private exclusion runs in SQL BEFORE the candidate
+    // window (codex review P2: post-window filtering let private rows starve
+    // admitted candidates). Consequence: a query whose only lexical matches
+    // are denied now behaves exactly like a no-match query — loadSearchRows'
+    // full-store fallback may return unrelated PUBLIC rows instead of a
+    // distinguishable empty set. That closes a side channel (an empty result
+    // no longer reveals "something private matches this query"), so the
+    // assertion tests the actual intent: nothing private leaks.
+    const allPrivateMarkers = deliveries.filter((d) => d.isPrivate).map((d) => d.markerText);
+    for (const r of noScope.results) {
+      expect(r.content).not.toContain(privateMarker);
+      for (const m of allPrivateMarkers) {
+        expect(r.content).not.toContain(m);
+      }
+    }
 
     const withScope = recall(ctx, { query: privateMarker, scope: SCOPE_PRIVATE });
     expect(withScope.results.length).toBeGreaterThan(0);
     expect(withScope.results.some((r) => r.content.includes(privateMarker))).toBe(true);
-    const noScopeDeniedCount = withScope.results.length - noScope.results.length;
-    expect(noScopeDeniedCount).toBeGreaterThan(0);
 
     // ---- (7) Replay defense with a fresh deliveryId per delivery ---------
     const beforeReplayDef = rawCount(root);
@@ -385,7 +397,11 @@ describe('GitHub connector — 200-event smoke test', () => {
       tags: ['source:acme'],
     });
     const canaryNoScope = recall(ctx, { query: 'cross-scope-canary-payload-1234' });
-    expect(canaryNoScope.results).toHaveLength(0);
+    // v1.25.0: same rationale as section (6) — the SQL pre-window exclusion
+    // makes a denied-only match behave like a no-match query (fallback rows
+    // possible); assert the intent (the canary payload never surfaces), not
+    // the distinguishable-empty shape.
+    expect(canaryNoScope.results.some((r) => r.content.includes('cross-scope-canary-payload-1234'))).toBe(false);
     const canaryScoped = recall(ctx, {
       query: 'cross-scope-canary-payload-1234',
       scope: 'acme:private:demo',
