@@ -152,57 +152,17 @@ export class RecallContractError extends Error {
   }
 }
 
-/**
- * v1.2.1: source-agnostic private-scope detector. A scope string is treated
- * as private when it has the shape `<lowercase-source>:private:<rest>`.
- *
- * Examples that match:
- *   slack:private:Cabc, github:private:owner/repo, jira:private:PROJ-1
- * Examples that DO NOT match:
- *   slack:public:Cgeneral, acme:public:my-private-channel, null, '',
- *   'unknown:legacy', 'private' (alone), 'private:foo' (no source prefix).
- *
- * Used by api.recall, mcp/server.ts (hippo_recall + hippo_context),
- * cli.ts (cmdRecall continuity). Keep these in sync — the export is the
- * single source of truth so v1.3 GitHub work cannot drift.
- */
-const PRIVATE_SCOPE_RE = /^[a-z][a-z0-9_-]*:private:/;
-/**
- * Recall-side scope filter. Mirrors the inline rule in `recall` continuity
- * filtering and the row filter at api.ts:198-205. Lifted to a helper so
- * the v1.5.0 DAG substitution path can reuse it without duplicating logic.
- *
- * - When `requested` is set and non-empty: exact match required.
- * - When `requested` is undefined/empty: default-deny on any
- *   `<source>:private:*` scope and on the `unknown:legacy` quarantine bucket.
- *   `null` and public scopes pass.
- */
-/**
- * @internal v1.7.2 — exported for test parity with `RECALL_DEFAULT_DENY_SCOPES`
- * (single-source-of-truth verification). NOT part of the public API surface;
- * not re-exported from `src/index.ts`. Subject to change without semver bump.
- */
-export function passesScopeFilterForRecall(
-  scope: string | null,
-  requested: string | undefined,
-): boolean {
-  if (requested !== undefined && requested !== '') {
-    return scope === requested;
-  }
-  if (scope === null) return true;
-  if (isPrivateScope(scope)) return false;
-  // v1.7.2 — read from RECALL_DEFAULT_DENY_SCOPES (single source of truth
-  // shared with the SQL clause in loadSearchRows). Cast the array to
-  // readonly string[] so .includes() accepts arbitrary string scopes
-  // without a cast on the input (codex P0-2: casting `scope` would defeat
-  // the constant's safety).
-  if ((RECALL_DEFAULT_DENY_SCOPES as readonly string[]).includes(scope)) return false;
-  return true;
-}
-
-export function isPrivateScope(scope: string | null | undefined): boolean {
-  return typeof scope === 'string' && PRIVATE_SCOPE_RE.test(scope);
-}
+// v1.25.0: the recall-side scope predicates (PRIVATE_SCOPE_RE, isPrivateScope,
+// passesScopeFilterForRecall) live in recall-scope.ts (leaf) so shared.ts can
+// apply the same default-deny rule to searchBothHybrid's internal loads
+// without an api.ts import cycle — same pattern as classifyOriginProject
+// below. Imported here for this module's own call sites and re-exported for
+// back-compat (`api.isPrivateScope`, test imports). NOTE: the import statement
+// is required — a bare `export { x } from` re-export does not bind the local
+// names this module's ~9 call sites use.
+import { isPrivateScope, passesScopeFilterForRecall } from './recall-scope.js';
+export { isPrivateScope, passesScopeFilterForRecall };
+export { passesCliRecallScopeFilter } from './recall-scope.js';
 
 // v39: classifyOriginProject lives in project-identity.ts (leaf) so
 // shared.ts can use it without an api.ts import cycle. Re-exported here for
@@ -2546,6 +2506,15 @@ export interface SleepResult {
   };
   audit?: { errorsRemoved: number; warningCount: number };
   shared?: number;
+  /**
+   * v1.25.0: count of memories the auto-share secret veto withheld this sleep
+   * — rows that passed every other admission gate (transfer score,
+   * not-already-global) and were blocked solely by `detectSecret`. Absent
+   * when 0 or when auto-share did not run. Same redaction class as `shared`
+   * (per-invocation activity counter, NOT redacted on egress — see the
+   * "NOT redacted" list in src/sleep-redact.ts).
+   */
+  secretSkipped?: number;
   ambient?: AmbientState | null;
   /**
    * E3 sleep enqueue-hook: graph re-extraction totals across the tenants rebuilt
@@ -2716,9 +2685,15 @@ export async function sleep(
     if (!opts.noShare) {
       const sleepConfig = phases.loadConfig(ctx.hippoRoot);
       if (sleepConfig.autoShareOnSleep) {
-        const shared = phases.autoShare(ctx.hippoRoot, { minScore: 0.6 });
+        // v1.25.0: surface the secret-veto skip count (v39 follow-up #2) so
+        // the veto is observable instead of silent.
+        const autoShareStats = { secretSkipped: 0 };
+        const shared = phases.autoShare(ctx.hippoRoot, { minScore: 0.6, stats: autoShareStats });
         if (shared.length > 0) {
           result.shared = shared.length;
+        }
+        if (autoShareStats.secretSkipped > 0) {
+          result.secretSkipped = autoShareStats.secretSkipped;
         }
       }
     }

@@ -107,3 +107,17 @@ Results:
    Merged episodic:   0
    New semantic:      0"
 `;
+
+exports[`renderSleepResult snapshots > secret-veto withheld line when secretSkipped > 0 (v1.25.0) 1`] = `
+"Running consolidation...
+
+Results:
+   Active memories:  30
+   Removed (decayed): 1
+   Merged episodic:   0
+   New semantic:      0
+
+Auto-shared 2 high-value memories to global store.
+
+Auto-share: withheld 1 secret-flagged memory (secret veto)."
+`;

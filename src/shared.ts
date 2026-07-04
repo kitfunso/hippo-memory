@@ -14,9 +14,11 @@ import {
   loadAllEntries,
   loadIndex,
   loadSearchEntries,
+  loadRecallSearchEntries,
   writeEntry,
   readEntry,
 } from './store.js';
+import { passesScopeFilterForRecall, passesCliRecallScopeFilter } from './recall-scope.js';
 import { search, hybridSearch, SearchResult } from './search.js';
 import { evalNow } from './ablation.js';
 import { deriveOriginProject, classifyOriginProject, resolveGlobalRootDir } from './project-identity.js';
@@ -180,6 +182,24 @@ export interface HybridSearchOptions extends SearchOptions {
    *  its admitted duplicate in the dedupe pass, or saturate the budget.
    *  Default undefined = unchanged behavior (recall paths never set it). */
   entryFilter?: (entry: MemoryEntry) => boolean;
+  /** v1.25.0 — recall-mode scope filter, consumed by `searchBothHybrid` only.
+   *  ABSENT (undefined) is the only unfiltered mode: both stores load via
+   *  `loadSearchEntries` unchanged (background pipelines / eval callers).
+   *  PRESENT switches the internal loads to `loadRecallSearchEntries` (SQL
+   *  scope predicate) plus the recall-scope JS post-filter:
+   *    `{}`                                  = default-deny (`unknown:legacy`
+   *                                            + `<source>:private:*` excluded)
+   *    `{ requested: 'X' }`                  = exact match on scope X
+   *                                            (api.recall semantics)
+   *    `{ requested: 'X', additive: true }`  = default-admitted set PLUS
+   *                                            scope X (CLI --scope
+   *                                            semantics; see recall-scope.ts
+   *                                            passesCliRecallScopeFilter)
+   *  Object form on purpose — the sibling `scope` option above already gives
+   *  `null` a different meaning (boost-neutral), so a flat `string | null`
+   *  here would overload null with contradictory semantics. Do NOT pass an
+   *  empty object casually from non-recall paths. */
+  recallScope?: { requested?: string; additive?: boolean };
 }
 
 /**
@@ -192,7 +212,7 @@ export async function searchBothHybrid(
   globalRoot: string,
   options: HybridSearchOptions = {}
 ): Promise<SearchResult[]> {
-  const { budget = 4000, now = evalNow(), embeddingWeight, explain, mmr, mmrLambda, localBump = 1.2, minResults, scope, includeSuperseded, asOf, tenantId, summaryDeboost, summaryFreshness, entryFilter } = options;
+  const { budget = 4000, now = evalNow(), embeddingWeight, explain, mmr, mmrLambda, localBump = 1.2, minResults, scope, includeSuperseded, asOf, tenantId, summaryDeboost, summaryFreshness, entryFilter, recallScope } = options;
 
   // When an admission filter is active, lift the per-store candidate cap
   // (default 200): excluded rows matching the query could otherwise fill the
@@ -205,8 +225,31 @@ export async function searchBothHybrid(
   // on a 100k-row store cannot stall an interactive call by ranking every
   // match (post-merge adversarial review, 2026-07-02).
   const searchWindow = entryFilter ? 5000 : undefined;
-  let localEntries = fs.existsSync(localRoot) ? loadSearchEntries(localRoot, query, searchWindow, tenantId) : [];
-  let globalEntries = fs.existsSync(globalRoot) ? loadSearchEntries(globalRoot, query, searchWindow, tenantId) : [];
+  // v1.25.0 recall mode: push the scope predicate into SQL exactly like
+  // api.recall (loadRecallSearchEntries), so quarantine/private rows never
+  // enter the candidate set, never shadow admitted duplicates in the dedupe
+  // pass, and never consume budget. The JS post-filter below is the
+  // regex-only `<source>:private:*` half plus defense-in-depth on exact
+  // match, mirroring api.ts's recall load.
+  const loadEntries = (root: string): MemoryEntry[] => {
+    if (!fs.existsSync(root)) return [];
+    return recallScope
+      ? loadRecallSearchEntries(
+          root, query, searchWindow, tenantId, recallScope.requested,
+          recallScope.additive ? 'additive' : 'exact',
+        )
+      : loadSearchEntries(root, query, searchWindow, tenantId);
+  };
+  let localEntries = loadEntries(localRoot);
+  let globalEntries = loadEntries(globalRoot);
+  if (recallScope) {
+    const passes = (e: MemoryEntry) =>
+      recallScope.additive
+        ? passesCliRecallScopeFilter(e.scope ?? null, recallScope.requested)
+        : passesScopeFilterForRecall(e.scope ?? null, recallScope.requested);
+    localEntries = localEntries.filter(passes);
+    globalEntries = globalEntries.filter(passes);
+  }
   if (entryFilter) {
     localEntries = localEntries.filter(entryFilter);
     globalEntries = globalEntries.filter(entryFilter);
@@ -419,10 +462,16 @@ export function listPeers(
  * internal caller as of v1.12.1 is `api.sleep` (`src/api.ts:2041`), which
  * passes options without tenantId because `sleep` is host-wide by intent;
  * see `src/api.ts:2073-2077` for the cross-tenant dedup rationale.
+ *
+ * v1.25.0: `options.stats` is an opt-in out-param. When provided,
+ * `stats.secretSkipped` is incremented once per row that passed every OTHER
+ * admission gate (transfer score, not-already-global) and was withheld SOLELY
+ * by the secret veto — i.e. it counts shares actually prevented, not secret
+ * rows merely present. Filled identically under `dryRun`.
  */
 export function autoShare(
   localRoot: string,
-  options: { minScore?: number; dryRun?: boolean; tenantId?: string } = {},
+  options: { minScore?: number; dryRun?: boolean; tenantId?: string; stats?: { secretSkipped: number } } = {},
 ): MemoryEntry[] {
   const { minScore = 0.6, dryRun = false } = options;
 
@@ -439,17 +488,22 @@ export function autoShare(
   );
 
   const candidates = localEntries.filter((entry) => {
-    // v39 S4 producer veto: secret rows never auto-share, regardless of
-    // transfer score. (shareMemory would throw; filtering here keeps the
-    // sleep pipeline fail-safe.)
-    if (detectSecret(entry).flagged) return false;
-
     const score = transferScore(entry);
     if (score < minScore) return false;
 
     // Skip if already shared (approximate content match)
     const contentKey = entry.content.toLowerCase().trim().slice(0, 200);
     if (globalContentSet.has(contentKey)) return false;
+
+    // v39 S4 producer veto: secret rows never auto-share, regardless of
+    // transfer score. (shareMemory would throw; filtering here keeps the
+    // sleep pipeline fail-safe.) Checked LAST (v1.25.0) so the stats counter
+    // only counts rows the veto actually withheld — a row failing the score
+    // or dedupe gates was never going to share, secret or not.
+    if (detectSecret(entry).flagged) {
+      if (options.stats) options.stats.secretSkipped++;
+      return false;
+    }
 
     return true;
   });

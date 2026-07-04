@@ -17,6 +17,7 @@ function fullResult(): SleepResult {
     audit: { errorsRemoved: 2, warningCount: 7 },
     ambient: { totalMemories: 999, avgStrength: 0.73 },
     shared: 3,
+    secretSkipped: 2,
     details: ['Merged: 3 entries about caching'],
   };
 }
@@ -45,6 +46,9 @@ describe('redactSleepResultForCaller', () => {
     expect(out.newSemantic).toBe(3);
     expect(out.dryRun).toBe(false);
     expect(out.shared).toBe(3);
+    // v1.25.0: secretSkipped is `shared`'s sibling (same autoShare call) and
+    // deliberately follows the same NOT-redacted per-invocation policy.
+    expect(out.secretSkipped).toBe(2);
     expect(out.details).toEqual(['Merged: 3 entries about caching']);
 
     // Cross-tenant counters redacted to zero.

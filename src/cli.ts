@@ -72,6 +72,7 @@ import {
   deleteEntry,
   loadAllEntries,
   loadSearchEntries,
+  loadRecallSearchEntries,
   loadIndex,
   saveIndex,
   loadStats,
@@ -900,16 +901,43 @@ async function cmdRecall(
   // recall-time SELECT against `memories`. Cross-tenant rows must never surface.
   const tenantId = resolveTenantId({});
 
-  let localEntries = loadSearchEntries(hippoRoot, query, undefined, tenantId);
-  let globalEntries = isInitialized(globalRoot) ? loadSearchEntries(globalRoot, query, undefined, tenantId) : [];
+  // v1.25.0 (v39 follow-up #1): the direct CLI recall path applies the recall
+  // scope rule. SQL half via loadRecallSearchEntries in 'additive' mode —
+  // default-deny (`unknown:legacy` quarantine) always, and an explicit
+  // `--scope X` UNLOCKS envelope scope X on top of the default-admitted set
+  // (the CLI flag is historically a tag-boost hint over scope-NULL rows, so
+  // api.recall's narrowing exact-match would empty every tag-scoped recall —
+  // see passesCliRecallScopeFilter in recall-scope.ts). The regex-only
+  // `<source>:private:*` half is the JS post-filter below. Hoisted here
+  // (it previously lived with the boost flags): recallExplicitScope is the
+  // FILTER input; recallActiveScope (which falls back to detectScope()) stays
+  // boost-only — auto-detection must never become a filter input or
+  // detected-project recalls would change shape.
+  const recallExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
+  const requestedScopeForFilter = recallExplicitScope || undefined;
+
+  let localEntries = loadRecallSearchEntries(hippoRoot, query, undefined, tenantId, requestedScopeForFilter, 'additive');
+  let globalEntries = isInitialized(globalRoot) ? loadRecallSearchEntries(globalRoot, query, undefined, tenantId, requestedScopeForFilter, 'additive') : [];
 
   // v1.12.13 / C5 — WYSIATI counters. Track filter activity per the plan v3
   // Task 3 mapping table. dropped_pre_rank is the SUM of all non-budget
   // filter drops (pre-rank AND post-rank). Search-engine internal drops
   // (scored-to-zero rows that hybridSearch/physicsSearch returns fewer of)
   // are NOT counted in v1 — they are part of the rank step, not a filter.
+  // totalCandidates = post-SQL-predicate count (api.recall parity: measured
+  // after loadRecallSearchEntries, before the JS scope filter).
   const totalCandidatesCountCmd = localEntries.length + globalEntries.length;
   let droppedPreRankCountCmd = 0;
+
+  // v1.25.0: JS half of the recall scope rule (private-scope regex deny with
+  // explicit-request unlock), via the canonical helper — do not inline a
+  // fourth copy of this predicate.
+  const passesRecallScope = (e: MemoryEntry) =>
+    api.passesCliRecallScopeFilter(e.scope ?? null, requestedScopeForFilter);
+  const beforeScopeFilterCmd = localEntries.length + globalEntries.length;
+  localEntries = localEntries.filter(passesRecallScope);
+  globalEntries = globalEntries.filter(passesRecallScope);
+  droppedPreRankCountCmd += beforeScopeFilterCmd - (localEntries.length + globalEntries.length);
 
   // Bi-temporal filtering for physics path (hybridSearch handles it internally)
   if (asOf) {
@@ -961,7 +989,8 @@ async function cmdRecall(
   const minResults = flags['min-results'] !== undefined
     ? parseInt(String(flags['min-results']), 10)
     : undefined;
-  const recallExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
+  // recallExplicitScope hoisted above the candidate loads (v1.25.0) — see the
+  // scope-filter block near the top of cmdRecall.
   const recallActiveScope = recallExplicitScope || detectScope();
 
   const useMultihop = flags['multihop'] === true || config.multihop.enabled;
@@ -1038,10 +1067,16 @@ async function cmdRecall(
       asOf,
     });
   } else if (hasGlobal) {
-    // Use searchBothHybrid for merged results with embedding support
+    // Use searchBothHybrid for merged results with embedding support.
+    // recallScope (v1.25.0): searchBothHybrid re-loads candidates internally,
+    // so the scope rule must be plumbed in — the filtered localEntries /
+    // globalEntries above are NOT what this path ranks.
     results = await searchBothHybrid(query, hippoRoot, globalRoot, {
       budget, mmr: mmrEnabled, mmrLambda, localBump, minResults, scope: recallActiveScope, tenantId,
       includeSuperseded, asOf,
+      recallScope: recallExplicitScope
+        ? { requested: recallExplicitScope, additive: true }
+        : {},
     });
   } else {
     results = await hybridSearch(query, localEntries, {
@@ -1907,8 +1942,24 @@ async function cmdExplain(
 
   // A5: scope explain results to the active tenant.
   const tenantId = resolveTenantId({});
-  let explainLocalEntries = loadSearchEntries(hippoRoot, query, undefined, tenantId);
-  let explainGlobalEntries = isInitialized(globalRoot) ? loadSearchEntries(globalRoot, query, undefined, tenantId) : [];
+
+  // v1.25.0 (v39 follow-up #1): cmdExplain shares cmdRecall's leak class —
+  // same unscoped loads, same fix, same semantics (explain explains what
+  // recall would see). Flag hoisted above the loads; the note below keeps the
+  // command honest for an operator debugging a hidden row.
+  const explainExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
+  const explainRequestedScope = explainExplicitScope || undefined;
+  let explainLocalEntries = loadRecallSearchEntries(hippoRoot, query, undefined, tenantId, explainRequestedScope, 'additive');
+  let explainGlobalEntries = isInitialized(globalRoot) ? loadRecallSearchEntries(globalRoot, query, undefined, tenantId, explainRequestedScope, 'additive') : [];
+  const passesExplainScope = (e: MemoryEntry) =>
+    api.passesCliRecallScopeFilter(e.scope ?? null, explainRequestedScope);
+  const beforeExplainScopeFilter = explainLocalEntries.length + explainGlobalEntries.length;
+  explainLocalEntries = explainLocalEntries.filter(passesExplainScope);
+  explainGlobalEntries = explainGlobalEntries.filter(passesExplainScope);
+  const explainScopeDropped = beforeExplainScopeFilter - (explainLocalEntries.length + explainGlobalEntries.length);
+  if (explainScopeDropped > 0) {
+    console.error(`[note] ${explainScopeDropped} candidate${explainScopeDropped === 1 ? '' : 's'} hidden by recall scope policy (pass an explicit --scope to inspect).`);
+  }
 
   // Bi-temporal filtering
   if (explainAsOf) {
@@ -1950,7 +2001,7 @@ async function cmdExplain(
     : flags['local-bump'] !== undefined
       ? parseFloat(String(flags['local-bump']))
       : config.search.localBump;
-  const explainExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
+  // explainExplicitScope hoisted above the candidate loads (v1.25.0).
   const explainActiveScope = explainExplicitScope || detectScope();
 
   let results;
@@ -1968,6 +2019,9 @@ async function cmdExplain(
     results = await searchBothHybrid(query, hippoRoot, globalRoot, {
       budget, explain: true, mmr: mmrEnabled, mmrLambda, localBump, scope: explainActiveScope,
       includeSuperseded: explainIncludeSuperseded, asOf: explainAsOf, tenantId,
+      recallScope: explainExplicitScope
+        ? { requested: explainExplicitScope, additive: true }
+        : {},
     });
     modeUsed = 'searchBothHybrid';
   } else {
@@ -2706,6 +2760,11 @@ export function renderSleepResult(result: api.SleepResult): void {
 
   if (result.shared !== undefined && result.shared > 0) {
     console.log(`\nAuto-shared ${result.shared} high-value memories to global store.`);
+  }
+
+  if (result.secretSkipped !== undefined && result.secretSkipped > 0) {
+    // v1.25.0 (v39 follow-up #2): the secret veto is no longer silent.
+    console.log(`\nAuto-share: withheld ${result.secretSkipped} secret-flagged ${result.secretSkipped === 1 ? 'memory' : 'memories'} (secret veto).`);
   }
 
   if (result.ambient) {

@@ -658,9 +658,19 @@ function canonicalConflictPair(aId: string, bId: string): { memory_a_id: string;
  * (`loadRecallSearchEntries`) and tests can refer to it symbolically without
  * `Parameters<typeof loadSearchRows>[N]` indirection.
  *
- * Two modes:
+ * Three modes:
  *   - 'default-deny' — exclude scopes in `RECALL_DEFAULT_DENY_SCOPES` (T2).
- *   - 'exact' — exact match on `m.scope = value`.
+ *   - 'exact' — exact match on `m.scope = value` (api.recall's explicit-scope
+ *     request semantics).
+ *   - 'default-deny-or-exact' (v1.25.0) — the default-admitted set PLUS rows
+ *     whose scope equals `value`. This is the CLI `--scope` semantics: the
+ *     flag predates the envelope column as a TAG-boost ranking hint
+ *     (`scope:<v>` tags, HIPPO_SCOPE), so an explicit flag must UNLOCK the
+ *     named envelope scope in addition to the normal set rather than narrow
+ *     the result to it — narrowing would return zero rows for every
+ *     tag-scoped workflow (envelope scope NULL). Strictly safer than the
+ *     pre-v1.25.0 CLI behavior (no filter at all): other private scopes and
+ *     quarantine buckets stay denied.
  *
  * Background pipelines (`consolidate`, `embeddings`, `refine-llm`, ...) call
  * `loadSearchEntries` (no scopeFilter arg) and see all rows including
@@ -670,7 +680,8 @@ function canonicalConflictPair(aId: string, bId: string): { memory_a_id: string;
  *  surface (not re-exported from `src/index.ts`). Subject to change. */
 export type RecallScopeFilter =
   | { mode: 'default-deny' }
-  | { mode: 'exact'; value: string };
+  | { mode: 'exact'; value: string }
+  | { mode: 'default-deny-or-exact'; value: string };
 
 function loadSearchRows(
   db: ReturnType<typeof openHippoDb>,
@@ -739,6 +750,15 @@ function loadSearchRows(
       scopeClauseNoAlias = ` AND (scope IS NULL OR scope NOT IN (${placeholders}))`;
       scopeClauseTenantOnly = scopeClauseNoAlias;
       scopeParams.push(...RECALL_DEFAULT_DENY_SCOPES);
+    } else if (scopeFilter.mode === 'default-deny-or-exact') {
+      // v1.25.0 CLI semantics: default-admitted set PLUS the explicitly
+      // requested scope (see the RecallScopeFilter doc above). Same NULL
+      // three-valued-logic handling as 'default-deny'.
+      const placeholders = RECALL_DEFAULT_DENY_SCOPES.map(() => '?').join(', ');
+      scopeClauseAlias = ` AND (m.scope IS NULL OR m.scope NOT IN (${placeholders}) OR m.scope = ?)`;
+      scopeClauseNoAlias = ` AND (scope IS NULL OR scope NOT IN (${placeholders}) OR scope = ?)`;
+      scopeClauseTenantOnly = scopeClauseNoAlias;
+      scopeParams.push(...RECALL_DEFAULT_DENY_SCOPES, scopeFilter.value);
     } else {
       // mode === 'exact'
       scopeClauseAlias = ` AND m.scope = ?`;
@@ -1700,23 +1720,35 @@ export function loadSearchEntries(
  * step in `api.recall()` — the regex doesn't translate cleanly to SQL and the
  * existing `passesScopeFilterForRecall` helper covers it consistently.
  *
- * Consumers: `api.recall` (v1.7.1+). Background pipelines (`consolidate`,
- * `embeddings`, `refine-llm`, ...) keep using `loadSearchEntries` so they
- * can see quarantined rows when needed.
+ * Consumers: `api.recall` (v1.7.1+), `cmdRecall`/`cmdExplain` direct CLI paths
+ * and `searchBothHybrid` recall mode (v1.25.0). Background pipelines
+ * (`consolidate`, `embeddings`, `refine-llm`, ...) keep using
+ * `loadSearchEntries` so they can see quarantined rows when needed.
+ *
+ * `tenantId` widened to optional in v1.25.0 for the searchBothHybrid recall
+ * mode (its `tenantId` option is optional); `loadSearchRows` already treats
+ * undefined as "no tenant filter" for legacy callers.
  */
 export function loadRecallSearchEntries(
   hippoRoot: string,
   query: string,
   limit: number = DEFAULT_SEARCH_CANDIDATE_LIMIT,
-  tenantId: string,
+  tenantId?: string,
   requestedScope?: string,
+  explicitScopeMode: 'exact' | 'additive' = 'exact',
 ): MemoryEntry[] {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
+    // explicitScopeMode only matters when requestedScope is set:
+    //   'exact'    — api.recall semantics: narrow to m.scope = requested.
+    //   'additive' — CLI --scope semantics (v1.25.0): default-admitted set
+    //                PLUS the requested scope; see RecallScopeFilter docs.
     const scopeFilter: RecallScopeFilter =
       requestedScope && requestedScope !== ''
-        ? { mode: 'exact', value: requestedScope }
+        ? explicitScopeMode === 'additive'
+          ? { mode: 'default-deny-or-exact', value: requestedScope }
+          : { mode: 'exact', value: requestedScope }
         : { mode: 'default-deny' };
     return loadSearchRows(db, query, limit, tenantId, scopeFilter).map(rowToEntry);
   } finally {

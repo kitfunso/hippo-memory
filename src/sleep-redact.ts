@@ -49,6 +49,9 @@ export interface RedactSleepCtx {
  *   - active, removed, mergedEpisodic, newSemantic (this invocation's totals)
  *   - dryRun (echo of input)
  *   - shared (counted within api.sleep's per-call work)
+ *   - secretSkipped (v1.25.0 — sibling of `shared`, produced by the same
+ *     autoShare call; same per-invocation class, deliberately NOT given a
+ *     divergent rule)
  *   - details (text descriptions, no aggregate numerics)
  */
 export function redactSleepResultForCaller(

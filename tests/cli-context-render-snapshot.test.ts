@@ -213,6 +213,21 @@ describe('renderSleepResult snapshots', () => {
     expect(out).toMatchSnapshot();
   });
 
+  it('secret-veto withheld line when secretSkipped > 0 (v1.25.0)', () => {
+    const result: SleepResult = {
+      active: 30,
+      removed: 1,
+      mergedEpisodic: 0,
+      newSemantic: 0,
+      dryRun: false,
+      details: [],
+      shared: 2,
+      secretSkipped: 1,
+    };
+    const out = captureStdout(() => renderSleepResult(result));
+    expect(out).toMatchSnapshot();
+  });
+
   it('minimal full run (no optional fields)', () => {
     const result: SleepResult = {
       active: 5,
