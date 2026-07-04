@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.25.0 (2026-07-04)
+
+### Added
+- **`hippo recall` and `hippo explain` now enforce the recall scope rule on the direct CLI paths** (the promised v39 follow-up). Previously the direct CLI loaded candidates unscoped while `api.recall` (HTTP/MCP and server-routed CLI) denied `<source>:private:*` and `unknown:legacy` rows, so private-channel content could surface in a plain `hippo recall`. No `--scope`: same default-deny as every other surface. Explicit `--scope X`: ADDITIVE unlock - you get the default-admitted set PLUS rows whose envelope scope is exactly X (deliberate access to the named private scope keeps working, other private scopes and quarantine buckets stay denied, and the flag's long-standing tag-boost ranking over `scope:<v>`-tagged rows is preserved). `hippo explain` prints `[note] N candidate(s) hidden by recall scope policy` so a hidden row is diagnosable instead of invisible.
+- **The auto-share secret veto is now observable.** `SleepResult.secretSkipped` counts shares the veto actually withheld this sleep (rows that passed the transfer-score and dedupe gates and were blocked solely by secret detection), and `hippo sleep` prints `Auto-share: withheld N secret-flagged memories (secret veto).` Not redacted on egress: same per-invocation class as `shared`. `autoShare` gains an opt-in `stats` out-param; `searchBothHybrid` gains an opt-in `recallScope` option. Both additive.
+- Surface-level isolation tests: `GET /v1/context` (origin partition, `cross_project=1` re-include, secret veto) and MCP `hippo_context` (origin partition, secret veto), plus CLI scope-deny, window-starvation, and sleep secret-skip regression suites.
+
+### Fixed
+- **Private rows can no longer starve admitted rows out of the recall candidate window.** The private-scope exclusion previously ran only as a JS post-filter after the SQL LIMIT window, so a store where more than window-size matching rows are private (heavy private-channel ingestion) could return empty or incomplete recall results. Both recall deny modes now exclude `:private:` scopes in SQL before the window (conservative substring match, fail-closed superset of the exact anchored rule, which remains as the authoritative JS post-filter). Fixes the same latent shape in `api.recall`.
+
+### Changed
+- **Behavior change (intended):** a no-scope direct `hippo recall` no longer returns private-scope or quarantine rows. Escape hatch: name the scope explicitly (`--scope slack:private:C123`). Recalling a private scope by name remains a deliberate act per the v39 policy matrix.
+- **Behavior change (intended, side-channel closing):** a query whose only lexical matches are denied rows now behaves exactly like a no-match query, so it may return the standard no-match fallback rows instead of a distinguishable empty set. An empty result no longer reveals that something private matches the query.
+- The recall-side scope predicates moved to a new leaf module `src/recall-scope.ts` (re-exported from `api` unchanged); `loadRecallSearchEntries` gains an optional `explicitScopeMode` parameter and its `tenantId` parameter is now optional. All public-API changes are additive.
+
 ## 1.24.1 (2026-07-02)
 
 ### Fixed
