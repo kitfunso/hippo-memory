@@ -87,4 +87,46 @@ describe('mcp hippo_context scope filter', () => {
     const text = extractText(res);
     expect(text).toContain('Private task');
   });
+
+  it('v39 origin partition at the MCP surface: cross-project-origin rows do not inject', async () => {
+    // Synced-down / legacy rows in the served store can carry another
+    // project's origin; hippo_context must exclude them (same policy as
+    // api.getContext). 'proj-b' can never equal the resolved identity of a
+    // fresh tmpdir store, so this is deterministic.
+    writeEntry(home, createMemory('own public deploykey fact'));
+    writeEntry(home, {
+      ...createMemory('BRAVO deploykey fact from another project', { pinned: true }),
+      origin_project: 'proj-b',
+    });
+
+    const res = await callTool(3, 'hippo_context', {}, {
+      hippoRoot: home,
+      tenantId: 'default',
+      actor: { subject: 'mcp', role: 'admin' },
+    });
+    const text = extractText(res);
+    expect(text).not.toContain('BRAVO deploykey fact from another project');
+  });
+
+  it('v39 secret veto at the MCP surface: secret rows never inject outside their owner', async () => {
+    // Secret with a foreign origin AND secret with no origin: both denied
+    // (ambientSecretAdmit admits a flagged row only inside its owning project).
+    writeEntry(home, {
+      ...createMemory('mcp secret sk_vendor_deadbeef123456 foreign', { pinned: true }),
+      origin_project: 'proj-b',
+    });
+    writeEntry(home, {
+      ...createMemory('mcp secret sk_vendor_feedface654321 orphan', { pinned: true }),
+      origin_project: '',
+    });
+
+    const res = await callTool(4, 'hippo_context', {}, {
+      hippoRoot: home,
+      tenantId: 'default',
+      actor: { subject: 'mcp', role: 'admin' },
+    });
+    const text = extractText(res);
+    expect(text).not.toContain('sk_vendor_deadbeef123456');
+    expect(text).not.toContain('sk_vendor_feedface654321');
+  });
 });

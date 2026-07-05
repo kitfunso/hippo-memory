@@ -658,9 +658,19 @@ function canonicalConflictPair(aId: string, bId: string): { memory_a_id: string;
  * (`loadRecallSearchEntries`) and tests can refer to it symbolically without
  * `Parameters<typeof loadSearchRows>[N]` indirection.
  *
- * Two modes:
+ * Three modes:
  *   - 'default-deny' — exclude scopes in `RECALL_DEFAULT_DENY_SCOPES` (T2).
- *   - 'exact' — exact match on `m.scope = value`.
+ *   - 'exact' — exact match on `m.scope = value` (api.recall's explicit-scope
+ *     request semantics).
+ *   - 'default-deny-or-exact' (v1.25.0) — the default-admitted set PLUS rows
+ *     whose scope equals `value`. This is the CLI `--scope` semantics: the
+ *     flag predates the envelope column as a TAG-boost ranking hint
+ *     (`scope:<v>` tags, HIPPO_SCOPE), so an explicit flag must UNLOCK the
+ *     named envelope scope in addition to the normal set rather than narrow
+ *     the result to it — narrowing would return zero rows for every
+ *     tag-scoped workflow (envelope scope NULL). Strictly safer than the
+ *     pre-v1.25.0 CLI behavior (no filter at all): other private scopes and
+ *     quarantine buckets stay denied.
  *
  * Background pipelines (`consolidate`, `embeddings`, `refine-llm`, ...) call
  * `loadSearchEntries` (no scopeFilter arg) and see all rows including
@@ -670,7 +680,8 @@ function canonicalConflictPair(aId: string, bId: string): { memory_a_id: string;
  *  surface (not re-exported from `src/index.ts`). Subject to change. */
 export type RecallScopeFilter =
   | { mode: 'default-deny' }
-  | { mode: 'exact'; value: string };
+  | { mode: 'exact'; value: string }
+  | { mode: 'default-deny-or-exact'; value: string };
 
 function loadSearchRows(
   db: ReturnType<typeof openHippoDb>,
@@ -710,13 +721,15 @@ function loadSearchRows(
     tenantId !== undefined ? ` AND kind != 'archived'` : ` WHERE kind != 'archived'`;
 
   // v1.7.1 — recall-mode scope predicate (root-cause fix for the
-  // `unknown:legacy` leak codex flagged on the v1.6.5 review). Three forms:
-  //   undefined       → no scope filter (legacy callers; background pipelines)
-  //   { value: null } → recall-mode default-deny: exclude unknown:legacy
-  //   { value: 'X' }  → recall-mode exact match: m.scope = 'X'
-  // Private-scope (`<source>:private:*`) regex filtering remains a JS
-  // post-load step in `recall()` — the regex doesn't translate cleanly to
-  // SQL, and the JS helper covers all four recall consumers consistently.
+  // `unknown:legacy` leak codex flagged on the v1.6.5 review). Forms:
+  //   undefined                     → no scope filter (background pipelines)
+  //   { mode: 'default-deny' }      → exclude unknown:legacy + ':private:'
+  //   { mode: 'exact' }             → m.scope = 'X'
+  //   { mode: 'default-deny-or-exact' } → default set OR m.scope = 'X'
+  // v1.25.0: the private-scope exclusion now ALSO runs here pre-window as a
+  // conservative LIKE approximation (see the deny-mode comment below); the
+  // exact anchored regex stays the authoritative JS post-filter in the
+  // recall consumers.
   //
   // **Cross-reference:** `passesScopeFilterForRecall` in src/api.ts encodes
   // the same default-deny rule. If the deny list grows (e.g. add
@@ -734,11 +747,34 @@ function loadSearchRows(
       // NULL handling: m.scope NOT IN (?, ?) returns NULL on m.scope = NULL
       // (three-valued logic). The `m.scope IS NULL OR ...` disjunct admits
       // NULL rows.
+      // v1.25.0 (codex review-stage P2): the private-scope exclusion must run
+      // BEFORE the LIMIT, or a store where >window matching rows are
+      // `<source>:private:*` (heavy private-channel ingestion) starves every
+      // admitted row out of the candidate window and recall returns
+      // empty/incomplete. SQL uses a deliberately CONSERVATIVE approximation
+      // of the exact JS regex (`NOT LIKE '%:private:%'`, ASCII
+      // case-insensitive): it denies a strict superset (any scope containing
+      // ':private:' anywhere, any case) — fail-closed for a security filter.
+      // The exact anchored regex (`passesScopeFilterForRecall` /
+      // `isPrivateScope`) remains the authoritative JS post-filter.
       const placeholders = RECALL_DEFAULT_DENY_SCOPES.map(() => '?').join(', ');
-      scopeClauseAlias = ` AND (m.scope IS NULL OR m.scope NOT IN (${placeholders}))`;
-      scopeClauseNoAlias = ` AND (scope IS NULL OR scope NOT IN (${placeholders}))`;
+      scopeClauseAlias = ` AND (m.scope IS NULL OR (m.scope NOT IN (${placeholders}) AND m.scope NOT LIKE '%:private:%'))`;
+      scopeClauseNoAlias = ` AND (scope IS NULL OR (scope NOT IN (${placeholders}) AND scope NOT LIKE '%:private:%'))`;
       scopeClauseTenantOnly = scopeClauseNoAlias;
       scopeParams.push(...RECALL_DEFAULT_DENY_SCOPES);
+    } else if (scopeFilter.mode === 'default-deny-or-exact') {
+      // v1.25.0 CLI semantics: default-admitted set PLUS the explicitly
+      // requested scope (see the RecallScopeFilter doc above). Same NULL
+      // three-valued-logic handling and same pre-window private exclusion as
+      // 'default-deny' (codex P2, comment above); the trailing `OR scope = ?`
+      // arm keeps the explicitly requested scope loadable, INCLUDING a
+      // requested private or quarantine scope (deliberate owner access, same
+      // as api.recall's exact-match for the same input).
+      const placeholders = RECALL_DEFAULT_DENY_SCOPES.map(() => '?').join(', ');
+      scopeClauseAlias = ` AND (m.scope IS NULL OR (m.scope NOT IN (${placeholders}) AND m.scope NOT LIKE '%:private:%') OR m.scope = ?)`;
+      scopeClauseNoAlias = ` AND (scope IS NULL OR (scope NOT IN (${placeholders}) AND scope NOT LIKE '%:private:%') OR scope = ?)`;
+      scopeClauseTenantOnly = scopeClauseNoAlias;
+      scopeParams.push(...RECALL_DEFAULT_DENY_SCOPES, scopeFilter.value);
     } else {
       // mode === 'exact'
       scopeClauseAlias = ` AND m.scope = ?`;
@@ -1696,27 +1732,42 @@ export function loadSearchEntries(
  * - `requestedScope` undefined / '': default-deny on `unknown:legacy`.
  * - `requestedScope` non-empty string: exact match on `m.scope = requestedScope`.
  *
- * Private-scope (`<source>:private:*`) regex filter remains a JS post-load
- * step in `api.recall()` — the regex doesn't translate cleanly to SQL and the
- * existing `passesScopeFilterForRecall` helper covers it consistently.
+ * Private-scope (`<source>:private:*`) exclusion: SQL applies a conservative
+ * pre-window approximation (`NOT LIKE '%:private:%'`, v1.25.0 — codex P2:
+ * post-window-only filtering let private rows starve admitted candidates out
+ * of the LIMIT window); the exact anchored regex
+ * (`passesScopeFilterForRecall`) remains the authoritative JS post-filter in
+ * the recall consumers.
  *
- * Consumers: `api.recall` (v1.7.1+). Background pipelines (`consolidate`,
- * `embeddings`, `refine-llm`, ...) keep using `loadSearchEntries` so they
- * can see quarantined rows when needed.
+ * Consumers: `api.recall` (v1.7.1+), `cmdRecall`/`cmdExplain` direct CLI paths
+ * and `searchBothHybrid` recall mode (v1.25.0). Background pipelines
+ * (`consolidate`, `embeddings`, `refine-llm`, ...) keep using
+ * `loadSearchEntries` so they can see quarantined rows when needed.
+ *
+ * `tenantId` widened to optional in v1.25.0 for the searchBothHybrid recall
+ * mode (its `tenantId` option is optional); `loadSearchRows` already treats
+ * undefined as "no tenant filter" for legacy callers.
  */
 export function loadRecallSearchEntries(
   hippoRoot: string,
   query: string,
   limit: number = DEFAULT_SEARCH_CANDIDATE_LIMIT,
-  tenantId: string,
+  tenantId?: string,
   requestedScope?: string,
+  explicitScopeMode: 'exact' | 'additive' = 'exact',
 ): MemoryEntry[] {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
+    // explicitScopeMode only matters when requestedScope is set:
+    //   'exact'    — api.recall semantics: narrow to m.scope = requested.
+    //   'additive' — CLI --scope semantics (v1.25.0): default-admitted set
+    //                PLUS the requested scope; see RecallScopeFilter docs.
     const scopeFilter: RecallScopeFilter =
       requestedScope && requestedScope !== ''
-        ? { mode: 'exact', value: requestedScope }
+        ? explicitScopeMode === 'additive'
+          ? { mode: 'default-deny-or-exact', value: requestedScope }
+          : { mode: 'exact', value: requestedScope }
         : { mode: 'default-deny' };
     return loadSearchRows(db, query, limit, tenantId, scopeFilter).map(rowToEntry);
   } finally {

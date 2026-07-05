@@ -102,6 +102,27 @@ describe('producer + sync vetoes (real stores)', () => {
     expect(shared.map((e) => e.content)).toEqual([CLEAN_ROW]);
   });
 
+  it('autoShare stats counts only shares actually withheld by the secret veto (v1.25.0)', () => {
+    writeEntry(projA, createMemory(SECRET_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
+    writeEntry(projA, createMemory(CLEAN_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
+    // Below the transfer bar: secret-flagged but never a share candidate, so
+    // it must NOT increment the counter.
+    writeEntry(projA, createMemory('low transfer secret sk_vendor_cafebabe999888 note'));
+    const stats = { secretSkipped: 0 };
+    const shared = autoShare(projA, { minScore: 0.6, stats });
+    expect(shared.map((e) => e.content)).toEqual([CLEAN_ROW]);
+    expect(stats.secretSkipped).toBe(1);
+  });
+
+  it('autoShare fills stats identically under dryRun (v1.25.0)', () => {
+    writeEntry(projA, createMemory(SECRET_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
+    const stats = { secretSkipped: 0 };
+    const candidates = autoShare(projA, { minScore: 0.6, dryRun: true, stats });
+    expect(candidates).toHaveLength(0);
+    expect(stats.secretSkipped).toBe(1);
+    expect(loadAllEntries(getGlobalRoot())).toHaveLength(0);
+  });
+
   it('promoteToGlobal refuses a secret row and stamps origin on clean promotes', () => {
     writeEntry(projA, createMemory(SECRET_ROW, { pinned: true }));
     writeEntry(projA, createMemory(CLEAN_ROW, { pinned: true }));
