@@ -16,6 +16,79 @@ gold-evidence recall does not show a meaningful retrieval regression.
 Open for quality improvement: absolute LoCoMo evidence recall is still low.
 Do NOT carry any framing from the (now closed) LongMemEval thread.
 
+**Correction 2026-07-05 (same day): tag-loss root cause reattributed.**
+The "tag-loss finding" published earlier today (below, under "Update
+2026-07-05") attributed the loss to hippo's **write path**. That
+attribution is wrong. Root cause is the **harness**, not hippo:
+`benchmarks/locomo/run.py`'s `run_hippo` used
+`shell=(sys.platform == "win32")`. On Windows, `subprocess.run(shell=True)`
+builds a `cmd.exe /c <line>` command line, and cmd.exe truncates that line
+at the first embedded newline. Every LoCoMo turn whose source text ends
+with `"\n"` therefore lost its closing quote and every `--tag` argument
+after it -- exit code stayed 0, because the truncated line was still
+syntactically valid.
+
+Evidence:
+
+- All 10 conv-41 and both conv-43 tagless rows' SOURCE texts end with a
+  trailing newline; their stored content is newline-stripped; healthy rows
+  have no trailing newline.
+- Deterministic 2-row-store repro, identical content: `shell=True` produces
+  a row with only the auto `path:*` tag and a stripped trailing newline;
+  `shell=False` produces the full tag set and the newline intact.
+- Full-sequence replay: `shell=False` gives 0/663 tagless rows on conv-41;
+  `shell=True` (uncontended) reproduces the exact same 10/663 as the
+  original run.
+- **Hippo exoneration (write-path enumeration, complete).** Exactly one SQL
+  statement writes `memories.tags_json` -- `upsertEntryRow`,
+  `src/store.ts:992`. Its `ON CONFLICT` branch is unreachable across
+  distinct `remember` calls because ids are random 12-hex and collision is
+  not something a normal run hits. Both files-to-DB import paths are
+  hard-gated: `bootstrapLegacyStore` no-ops on a non-empty DB
+  (`store.ts:871-873`); `rebuildIndex` filters to ids not already in the DB
+  (`store.ts:1785-1788`). The markdown mirror of an affected row carries
+  the SAME stripped tags as the DB row, proving the loss predates
+  `writeEntry` entirely. `cli.ts`'s `parseArgs` is positional with no
+  content-conditional branching that could drop tags for some inputs and
+  not others.
+
+The **measured rates are kept as measurements of the harness bug**, not
+deleted: 13 distinct tagless rows / 33 of 9,930 top-5 slots at the
+retrieval-sample level, 12/1,343 (0.9%) at the store level (conv-41
+10/663, conv-43 2/680) -- see "Tag-loss finding" below, unedited. The
+canonical published number is **unaffected**: `score_evidence.py`'s
+content-recovery fallback (`content_to_dia`) absorbed tag-less rows in
+both the April and July runs, so evidence recall@5 = 0.363369 stands.
+The same `shell=True` truncation existed in every April locomo run too
+(same `run_hippo` code, same platform).
+
+Fix + regression test + this correction ship together in
+`docs/plans/2026-07-05-locomo-harness-newline-fix.md`: a new
+`benchmarks/locomo/hippo_subproc.py` helper that never sets `shell=True`
+(also refuses `.cmd`/`.bat` HIPPO_BIN shims outright, since batch files
+transit `cmd.exe` regardless of the `shell=` argument -- the BatBadBut /
+CVE-2024-24576 class -- rather than being individually escapable), wired
+into `locomo/run.py` and `locomo/audit_matched_stores.py`. The judge
+subprocess calls in `run.py` (`:406` claude judge, `:506` command judge)
+are untouched: they pass the prompt via stdin, not argv, so they were
+never exposed to this bug.
+
+**Exposure audit** (which scripts pass hippo-bound content via argv vs
+stdin vs direct SQLite -- the newline-truncation bug can only fire on the
+argv path):
+
+| Site | Content path | Exposed? | Action |
+|---|---|---|---|
+| `locomo/run.py` `run_hippo` (remember + recall) | content + tags via **argv** | YES (the proven bug) | fixed via `hippo_subproc.py` |
+| `locomo/audit_matched_stores.py` `run_hippo` / `remember_turn` | content via **argv**, multi-build `--hippo-cmd` | YES | fixed via `hippo_subproc.py` (explicit `command=` param) |
+| `locomo/run.py` judge calls (`:406` claude-cli, `:506` command) | prompt via **stdin** (`input=`), not a hippo call | no | out of scope, documented |
+| `longmemeval/ingest.py` (`remember -` content) | content via **stdin** | no | UNEXPOSED, documented only |
+| `longmemeval/ingest_direct.py`, `ingest_enriched.py` | direct SQLite `INSERT`, no subprocess for content | no | UNEXPOSED, documented only |
+| `longmemeval/retrieve.py` (`recall <query>` argv) | query via argv, but queries are single-line question strings, never turn text | not exposed in practice | documented only, no code change |
+
+No LongMemEval script passes turn content through argv to a shelled-out
+hippo call, so no LongMemEval taint follow-up is filed.
+
 Update 2026-07-05: v1.25.0 baseline refresh (F7). ROADMAP F7 said "Never run
 before" — that was stale. `benchmarks/locomo/` (`run.py`, `score_evidence.py`)
 was run extensively in April 2026; what was missing was a *publishable
@@ -142,8 +215,9 @@ rows (0.9%) stored with only the auto `path:*` tag, no
 the ground-truth rate; the 13 retrieved-unique rows are consistent with it
 (retrieved-unique is a lower bound on stored tagless rows for the
 conversations involved, since most tagless rows are never retrieved into any
-QA's top-5). Same underlying write-path bug measured at two sampling depths,
-not conflicting numbers.
+QA's top-5). Same underlying harness bug measured at two sampling depths
+(see "Correction 2026-07-05" above -- this is the harness's `shell=True`
+newline truncation, not a hippo write-path bug), not conflicting numbers.
 
 **Mem0 / Letta context (not a comparison — different metric, different
 harness, never used to gate a feature):**

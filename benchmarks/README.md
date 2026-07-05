@@ -101,6 +101,8 @@ python score_evidence.py \
 
 **v1.25.0 baseline (2026-07-05):** evidence recall@5 = **0.363** — 2.10x the April v0.32.0 baseline (0.173) under the identical protocol (top-k 5, `--budget 4000`, fresh store per conversation, same on-disk data file — unmodified since 2026-04-22 per mtime; no April sha exists for cryptographic confirmation). This is a single-run point estimate with measured run-to-run variance (repeat stdev 0.0175 on a 197-QA conversation slice), and it is deterministic evidence recall, not comparable to Mem0/Letta's published LLM-judge LoCoMo numbers — different metric, different harness. Informational only; never gates a feature (ROADMAP F7). Full table, protocol, and caveats: `LOCOMO_INVESTIGATION.md`.
 
+**Same-day correction (2026-07-05):** the "tag-loss" finding published earlier the same day alongside this baseline was misattributed to hippo's write path. Root cause is a harness bug — `locomo/run.py` shelled out on Windows (`shell=True`), and cmd.exe truncates the command line at the first embedded newline, dropping every `--tag` argument on turns whose text ends with `"\n"`. Hippo's write path is exonerated; fixed via `locomo/hippo_subproc.py` (never uses `shell=True`). The measured rates stand as harness-bug data and the canonical 0.363 recall number is unaffected (content-recovery fallback already absorbed the tag-less rows). Full writeup: `LOCOMO_INVESTIGATION.md`, "Correction 2026-07-05".
+
 ## What each benchmark proves
 
 | | Sequential Learning | LongMemEval | LoCoMo |

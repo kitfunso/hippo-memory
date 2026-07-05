@@ -12,7 +12,8 @@ Outputs a single JSON at results/hippo-v{version}.json with per-QA scores +
 overall + per-category aggregates.
 
 Honors the brief's non-negotiables:
-  - Uses globally installed `hippo` CLI.
+  - Uses the `hippo` CLI (HIPPO_BIN pointed at a build, recommended; or a
+    real `hippo` executable on PATH -- see README.md "Windows / HIPPO_BIN").
   - Fresh HIPPO_HOME per conversation (no cross-conversation leakage).
   - No hippo source changes.
   - Score mode, judge backend, and model id recorded in the output.
@@ -40,6 +41,8 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from tqdm import tqdm
+
+from hippo_subproc import run_hippo_argv
 
 logger = logging.getLogger(__name__)
 
@@ -165,22 +168,18 @@ def run_hippo(
     # Force isolation from global ~/.hippo as a belt-and-braces measure.
     env["HOME"] = hippo_home
     env["USERPROFILE"] = hippo_home
-    # Override the hippo binary via HIPPO_BIN. This may be either a single
-    # executable path or a command string such as `node C:/repo/bin/hippo.js`.
-    hippo_bin = os.environ.get("HIPPO_BIN")
-    cmd = shlex.split(hippo_bin) if hippo_bin else ["hippo"]
-    cmd += args
-    return subprocess.run(
-        cmd,
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
+    # Command resolution (HIPPO_BIN else PATH) and the actual subprocess
+    # call live in hippo_subproc.py: shell=True on win32 used to let cmd.exe
+    # truncate the command line at the first embedded newline in turn text,
+    # silently dropping every --tag argument after it (see
+    # ../LOCOMO_INVESTIGATION.md, "Correction 2026-07-05"). run_hippo_argv
+    # never uses shell=True.
+    return run_hippo_argv(
+        args,
         env=env,
-        shell=(sys.platform == "win32"),
-        input=stdin_text,
+        cwd=cwd,
         timeout=timeout,
+        stdin_text=stdin_text,
     )
 
 
