@@ -19,6 +19,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from hippo_subproc import run_hippo_argv
 from run import CATEGORY_NAMES, collect_turns, load_dataset
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -57,22 +58,18 @@ def run_hippo(
         "USERPROFILE": hippo_home,
         "HIPPO_SKIP_AUTO_INTEGRATIONS": "1",
     }
-    full_command = command + args
-    if sys.platform == "win32":
-        cmd: str | list[str] = subprocess.list2cmdline(full_command)
-        shell = True
-    else:
-        cmd = full_command
-        shell = False
-    return subprocess.run(
-        cmd,
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
+    # command is the explicit --hippo-cmd argv prefix for this profile; used
+    # verbatim so multi-build comparisons keep targeting the right binary.
+    # hippo_subproc.run_hippo_argv never uses shell=True -- the old
+    # `subprocess.list2cmdline` + shell=True win32 branch let cmd.exe
+    # truncate the command line at the first embedded newline in turn text,
+    # silently dropping every --tag argument after it (see
+    # ../LOCOMO_INVESTIGATION.md, "Correction 2026-07-05").
+    return run_hippo_argv(
+        args,
+        command=command,
         env=env,
-        shell=shell,
+        cwd=cwd,
         timeout=timeout,
     )
 

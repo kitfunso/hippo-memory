@@ -36,9 +36,14 @@ describe the April-era setup.
 
 ```bash
 pip install -r requirements.txt
-# Binary under test: globally installed `hippo` CLI by default, or point
-# HIPPO_BIN at any build (e.g. HIPPO_BIN="node <repo>/bin/hippo.js") —
-# the 2026-07-05 v1.25.0 baseline used HIPPO_BIN against a worktree build.
+# Binary under test: point HIPPO_BIN at a build (recommended), e.g.
+# HIPPO_BIN="node <repo>/bin/hippo.js" — the 2026-07-05 v1.25.0 baseline
+# used HIPPO_BIN against a worktree build this way. Without HIPPO_BIN, the
+# harness falls back to `hippo` on PATH, but ONLY if that resolves to a
+# real executable: a `.cmd`/`.bat` shim (e.g. a bare npm global install on
+# Windows) is refused with an actionable error rather than silently run
+# through cmd.exe, which can mangle argv content (see "Windows / HIPPO_BIN"
+# below).
 # Judge (judged mode only): uses `claude -p` CLI (no ANTHROPIC_API_KEY required)
 ```
 
@@ -85,8 +90,26 @@ Flags:
   `claude-cli`, gpt-4.1-mini for `openai`)
 - `--judge-command` — shell command for `--judge-backend command`
 - `--judge-timeout` — seconds per judge call (default: 60)
-- `HIPPO_BIN` — override the Hippo command for judged runs, for example
+- `HIPPO_BIN` — override the Hippo command used for every hippo
+  invocation (init/remember/recall, not just judged runs), for example
   `HIPPO_BIN='node C:/Users/skf_s/hippo-v032/bin/hippo.js'`
+
+### Windows / HIPPO_BIN
+
+`run.py` and `audit_matched_stores.py` invoke hippo via
+`benchmarks/locomo/hippo_subproc.py`, which never uses `shell=True`. If
+`HIPPO_BIN` resolves (or, when unset, `hippo` on PATH resolves) to a
+`.cmd`/`.bat` shim, the harness refuses to run it and raises an actionable
+error telling you to set `HIPPO_BIN` to a real executable or a direct
+interpreter invocation. This is deliberate: batch files always execute
+through `cmd.exe` regardless of the `shell=` argument passed to
+`subprocess.run` (the BatBadBut / CVE-2024-24576 class), so newlines, `%`
+expansion, `^`, and embedded quotes in turn content can be mangled no
+matter how carefully the argv is built — there is no safe way to shell out
+to a `.cmd`/`.bat` file with untrusted content. Point `HIPPO_BIN` at a
+`node <repo>/bin/hippo.js` invocation (recommended) or a real `hippo`
+executable; a bare `hippo` on PATH works only when PATH resolves to a real
+executable, not an npm `.cmd` shim.
 
 For version parity checks, run the audit with repeated `--hippo-cmd`
 arguments:
@@ -103,7 +126,9 @@ checks only.
 
 ## Non-negotiables honored
 
-1. Uses globally installed `hippo` CLI (v0.31.0 published artifact).
+1. Uses the `hippo` CLI — `HIPPO_BIN` pointed at a build (recommended) or,
+   if unset, a real `hippo` executable resolved from PATH (`.cmd`/`.bat`
+   shims refused, see "Windows / HIPPO_BIN" above).
 2. **Fresh HIPPO_HOME per conversation** (prevents cross-conversation leakage).
 3. No hippo source changes — measurement only.
 4. Judge model id logged in results.
