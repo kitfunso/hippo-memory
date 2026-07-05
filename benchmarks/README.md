@@ -89,8 +89,9 @@ python run.py --data data/longmemeval_oracle.json
 ```bash
 cd locomo
 HIPPO_BIN="node <path-to-hippo-build>/bin/hippo.js" python run.py \
-  --data data/locomo10.json --score-mode evidence \
-  --output-name hippo-<version>-evidence
+  --data data/locomo10.json --score-mode evidence
+# evidence mode auto-names the output results/hippo-v<version>-evidence.json;
+# an explicit --output-name must include .json (run.py uses the value verbatim)
 
 python score_evidence.py \
   --data data/locomo10.json \

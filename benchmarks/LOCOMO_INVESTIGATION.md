@@ -49,8 +49,10 @@ Regeneration commands (from `benchmarks/locomo/`):
 
 ```bash
 HIPPO_BIN="node <worktree>/bin/hippo.js" python run.py \
-  --data data/locomo10.json --score-mode evidence \
-  --output-name hippo-v1.25.0-evidence
+  --data data/locomo10.json --score-mode evidence
+# evidence mode auto-names the output results/hippo-v1.25.0-evidence.json
+# (the invocation the 2026-07-05 run used; an explicit --output-name must
+# include .json, run.py uses the value verbatim)
 
 python score_evidence.py \
   --data data/locomo10.json \
