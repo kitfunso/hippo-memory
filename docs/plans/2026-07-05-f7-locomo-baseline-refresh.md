@@ -55,8 +55,10 @@ starve harness-written rows. Timing: 0.37 s/remember, 0.48 s/recall →
 
 - **T1 — benchmark run (orchestrator-operated command, background).**
   From the worktree: `HIPPO_BIN="node <worktree>/bin/hippo.js" python run.py
-  --data data/locomo10.json --score-mode evidence --output-name
-  hippo-v1.25.0-evidence` (+ `--resume` on interruption). Acceptance:
+  --data data/locomo10.json --score-mode evidence` (+ `--resume` on
+  interruption; evidence mode auto-names the output
+  `results/hippo-v1.25.0-evidence.json` — an explicit `--output-name` must
+  include `.json`, run.py uses the value verbatim). Acceptance:
   ingested turns = 5,882/5,882 (per-conversation counts logged); scored
   QAs = 1,982; result JSON records score_mode/config.
 - **T2 — scorer cross-check (verify-stage input).** Rescore the new result
