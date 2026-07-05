@@ -913,6 +913,10 @@ async function cmdRecall(
   // FILTER input; recallActiveScope (which falls back to detectScope()) stays
   // boost-only — auto-detection must never become a filter input or
   // detected-project recalls would change shape.
+  if (flags['scope'] === true) {
+    console.error('--scope requires a value (e.g. --scope slack:private:C1).');
+    process.exit(1);
+  }
   const recallExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
   const requestedScopeForFilter = recallExplicitScope || undefined;
 
@@ -1951,6 +1955,10 @@ async function cmdExplain(
   // same unscoped loads, same fix, same semantics (explain explains what
   // recall would see). Flag hoisted above the loads; the note below keeps the
   // command honest for an operator debugging a hidden row.
+  if (flags['scope'] === true) {
+    console.error('--scope requires a value (e.g. --scope slack:private:C1).');
+    process.exit(1);
+  }
   const explainExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
   const explainRequestedScope = explainExplicitScope || undefined;
   let explainLocalEntries = loadRecallSearchEntries(hippoRoot, query, undefined, tenantId, explainRequestedScope, 'additive');
