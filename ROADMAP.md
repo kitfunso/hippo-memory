@@ -194,7 +194,7 @@ The per-track status tags below are updated to reflect shipped-vs-active state. 
 1. **Paired A/B fire-rate** on tier-1 micro-eval — own harness, fastest signal, Wilcoxon-tested. Commit `5ef6d78`.
 2. **Sequential-learning trap-rate** — own benchmark, directly tests the agent-learning thesis. ~~(78% -> 14% baseline over 50 tasks)~~ **(RETRACTED v1.7.9 — see `CHANGELOG.md` v1.7.9 entry; magnitude does not reproduce on the formal multi-seed harness across three pre-registered workload variants. Mechanism shipped.)**
 3. **LongMemEval** — public-comparability number for README and grants.
-4. **LoCoMo** — informational only until baseline established.
+4. **LoCoMo** — baseline ESTABLISHED 2026-07-05 (F7): evidence recall@5 = 0.363369 (v1.25.0), 2.10x the April v0.32.0 baseline (single-run point estimate, repeat-run stdev quantified; internal before/after on hippo's own retrieval stack, not comparable to vendor LLM-judge numbers). Still informational only; never gates a shipping decision. See `benchmarks/LOCOMO_INVESTIGATION.md`.
 5. **Memory-Augmented Agent Eval** — RESEARCH §"Near-term 1"; 50-task / 10-trap standardised sequence, planned to design.
 
 ---
@@ -576,9 +576,20 @@ Five abilities mapped to hippo features:
 
 Cross-track aggregate: **roadmap target R@5 ≥ 85% remains MET on the oracle split as of v1.9.2** (F13 + F9 stack = 86.8). The deployable cross-track best on `data/longmemeval_oracle.json` is still F13 + F9 stack at R@5 = 86.8. On the `_s` split, all four tracks attempted to date (F14 chunked-turn baseline 42.0, F14+F9-Sonnet stack 50.8, F15 Opus rerank 63.6, F16 e5-large baseline 43.6) have Gate-B FAILed against gbrain v0.28.8's 97.6. F15 produced the cleanest within-pool measurement: a maximally-equipped LLM-as-reranker closes 48.9% of the within-pool ranking gap vs F9's 19.9% (~2.5× ratio). F16 settled the embedder question: the locally-runnable embedder lever is **measured and flat** — swapping BGE-base for the only stronger GCS-reachable model (multilingual-e5-large) moved R@5 by +1.6 and R@100 by −1.4, both within noise, and the R@100 candidate-pool ceiling did NOT lift (84.8 vs 86.2). The F14 ceiling is therefore structural to locally-runnable bi-encoders, not a BGE-base artefact. The evidence-backed path forward is now two-pronged: (a) a qualitatively different embedder — F17 `text-embedding-3-large` (blocked on `api.openai.com` egress) or an HF-egress-gated model — and (b) local hybrid BM25+vector+graph RRF fusion, queued as Track F item F9 `[critical]`, which no F-track measurement has yet attempted and which runs entirely inside the sandbox. F9 hybrid fusion is the recommended next track; F17/F18 remain blocked on egress.
 
-### F7. LoCoMo first baseline [next]
-Informational only. Never run before. Do not gate any feature on it until baseline exists.
-**Effort:** 5d. **Success:** numbers published; comparison against Mem0 / Letta noted.
+### F7. LoCoMo first baseline [shipped 2026-07-05]
+Informational only; never gates a feature. `benchmarks/locomo/` was run
+extensively in April 2026 (v0.32-v0.34 era) — the stale claim here was
+"never run before"; what was actually missing was a *publishable current*
+baseline, since every April judged score was contaminated by judge failures
+and current master had moved on to v1.25.0. **Publishable deterministic
+baseline ESTABLISHED 2026-07-05:** evidence recall@5 = 0.363369 (v1.25.0),
+2.10x the April v0.32.0 baseline (0.172748) under an identical protocol
+(single-run point estimate, repeat-run stdev quantified; internal
+before/after on hippo's own retrieval stack, not comparable to vendor
+LLM-judge numbers).
+Full table, regeneration commands, determinism characterization, and
+Mem0/Letta context table: `benchmarks/LOCOMO_INVESTIGATION.md`.
+**Effort:** 5d. **Success:** numbers published; comparison against Mem0 / Letta noted. Met.
 
 ### F8. Memory-Augmented Agent Eval benchmark [planned]
 RESEARCH §"Near-term 1". 50-task / 10-trap standardised sequence. Compares no-memory baseline vs static memory (CLAUDE.md/AGENTS.md) vs full hippo.

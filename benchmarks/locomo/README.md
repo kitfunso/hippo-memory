@@ -2,6 +2,25 @@
 
 Benchmarks hippo memory retrieval against [LoCoMo](https://github.com/snap-research/locomo) (Snap Research), a long-conversation memory benchmark used by Mem0, Letta, Zep, Supermemory.
 
+## Current baseline (2026-07-05, v1.25.0)
+
+**Evidence recall@5 = 0.363369** (deterministic, `--score-mode evidence`,
+no LLM judge; 2.10x the April v0.32.0 baseline under the identical
+protocol). Canonical write-up, full per-category table, determinism
+characterization, and caveats: `../LOCOMO_INVESTIGATION.md` ("Update
+2026-07-05"). Reproduce with the current build (evidence mode auto-names
+the output `results/hippo-v<version>-evidence.json`):
+
+```bash
+HIPPO_BIN="node <path-to-hippo-build>/bin/hippo.js" python run.py \
+  --data data/locomo10.json --score-mode evidence
+```
+
+The judged path below is retained for history/ablations but its April
+aggregate scores were declared contaminated by judge failures — see the
+investigation doc. The sections below this banner predate 2026-07-05 and
+describe the April-era setup.
+
 ## Dataset
 
 - **Source**: https://github.com/snap-research/locomo (locomo10.json)
@@ -17,8 +36,10 @@ Benchmarks hippo memory retrieval against [LoCoMo](https://github.com/snap-resea
 
 ```bash
 pip install -r requirements.txt
-# Requires: hippo CLI installed globally (hippo --version => 0.31.0)
-# Judge: uses `claude -p` CLI (no ANTHROPIC_API_KEY required)
+# Binary under test: globally installed `hippo` CLI by default, or point
+# HIPPO_BIN at any build (e.g. HIPPO_BIN="node <repo>/bin/hippo.js") —
+# the 2026-07-05 v1.25.0 baseline used HIPPO_BIN against a worktree build.
+# Judge (judged mode only): uses `claude -p` CLI (no ANTHROPIC_API_KEY required)
 ```
 
 ## Usage

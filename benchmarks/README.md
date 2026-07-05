@@ -1,6 +1,6 @@
 # Hippo Benchmarks
 
-Two benchmarks, two different questions.
+Three benchmarks, three different questions.
 
 ## 1. Sequential Learning Benchmark
 
@@ -80,13 +80,34 @@ For full pipeline with LLM answer generation + evaluation (requires `ANTHROPIC_A
 python run.py --data data/longmemeval_oracle.json
 ```
 
+## 3. LoCoMo Integration
+
+**Question:** How accurately does hippo retrieve the gold evidence turn for a question over a long multi-session conversation?
+
+[LoCoMo](https://arxiv.org/abs/2402.17753) is 10 conversations (5,882 turns, 1,986 QAs across single-hop / multi-hop / temporal-reasoning / open-domain / adversarial categories). Hippo scores it with a deterministic gold-`dia_id` evidence-recall metric — no LLM judge in the scoring path.
+
+```bash
+cd locomo
+HIPPO_BIN="node <path-to-hippo-build>/bin/hippo.js" python run.py \
+  --data data/locomo10.json --score-mode evidence
+# evidence mode auto-names the output results/hippo-v<version>-evidence.json;
+# an explicit --output-name must include .json (run.py uses the value verbatim)
+
+python score_evidence.py \
+  --data data/locomo10.json \
+  --result results/hippo-<version>-evidence.json \
+  --output results/hippo-<version>-evidence-rescored.json
+```
+
+**v1.25.0 baseline (2026-07-05):** evidence recall@5 = **0.363** — 2.10x the April v0.32.0 baseline (0.173) under the identical protocol (top-k 5, `--budget 4000`, fresh store per conversation, same on-disk data file — unmodified since 2026-04-22 per mtime; no April sha exists for cryptographic confirmation). This is a single-run point estimate with measured run-to-run variance (repeat stdev 0.0175 on a 197-QA conversation slice), and it is deterministic evidence recall, not comparable to Mem0/Letta's published LLM-judge LoCoMo numbers — different metric, different harness. Informational only; never gates a feature (ROADMAP F7). Full table, protocol, and caveats: `LOCOMO_INVESTIGATION.md`.
+
 ## What each benchmark proves
 
-| | Sequential Learning | LongMemEval |
-|---|---|---|
-| Tests | Agent improvement over time | Retrieval accuracy on fixed corpus |
-| Unique to hippo? | Yes (no other benchmark tests this) | No (industry standard) |
-| Hippo result | RETRACTED v1.7.9 — mechanism shipped, no magnitude claimed (see CHANGELOG v1.7.9) | 74.0% R@5 (BM25 only) |
-| What it proves | Decay + strengthening + outcome feedback produce learning curves | BM25 keyword search competes with embedding systems at zero dependency cost |
-| Metric | Trap-hit-rate decline (early vs late) | Recall@K, answer-in-content |
-| Dependencies | Node.js 22.5+ | Python 3.9+ (retrieval eval needs no API key) |
+| | Sequential Learning | LongMemEval | LoCoMo |
+|---|---|---|---|
+| Tests | Agent improvement over time | Retrieval accuracy on fixed corpus | Gold-evidence retrieval on long multi-session conversations |
+| Unique to hippo? | Yes (no other benchmark tests this) | No (industry standard) | No (industry standard) |
+| Hippo result | RETRACTED v1.7.9 — mechanism shipped, no magnitude claimed (see CHANGELOG v1.7.9) | 74.0% R@5 (BM25 only) | 0.363 evidence recall@5 (v1.25.0; informational only, never gates a feature) |
+| What it proves | Decay + strengthening + outcome feedback produce learning curves | BM25 keyword search competes with embedding systems at zero dependency cost | Deterministic before/after tracking of hippo's own retrieval stack on conversational memory (no LLM judge) |
+| Metric | Trap-hit-rate decline (early vs late) | Recall@K, answer-in-content | Evidence recall@5 (gold dia_id, deterministic) |
+| Dependencies | Node.js 22.5+ | Python 3.9+ (retrieval eval needs no API key) | Python 3.9+ (evidence scoring needs no API key) |
