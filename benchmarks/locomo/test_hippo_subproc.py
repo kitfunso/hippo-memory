@@ -211,3 +211,21 @@ def test_no_hippo_bin_and_nothing_on_path_raises(tmp_path, monkeypatch):
             timeout=5,
         )
     assert "HIPPO_BIN" in str(exc_info.value)
+
+
+# --- (h): bare names that PATH-resolve to a batch shim are refused ---
+
+
+@pytest.mark.parametrize("via_command", [True, False])
+def test_bare_name_resolving_to_batch_shim_refused(tmp_path, monkeypatch, via_command):
+    shim = tmp_path / "hippo-v032.cmd"
+    shim.write_text("@echo off\n", encoding="utf-8")
+    monkeypatch.setattr(shutil, "which", lambda name: str(shim) if name == "hippo-v032" else None)
+
+    kwargs = dict(env=dict(os.environ), cwd=str(tmp_path), timeout=10)
+    with pytest.raises(HippoResolutionError, match="batch shim"):
+        if via_command:
+            run_hippo_argv(["--version"], command=["hippo-v032"], **kwargs)
+        else:
+            monkeypatch.setenv("HIPPO_BIN", "hippo-v032")
+            run_hippo_argv(["--version"], **kwargs)

@@ -58,6 +58,25 @@ def _is_batch_shim(executable: str) -> bool:
     return Path(executable).suffix.lower() in _BATCH_SUFFIXES
 
 
+def _check_prefix_head(head: str) -> None:
+    """Refuse batch shims, including bare names that PATH-resolve to one.
+
+    Empirically (verified 2026-07-05 on this runtime): a bare name whose
+    only PATH match is a `.cmd`/`.bat` does NOT execute under shell=False --
+    CreateProcess appends `.exe` only, so the call fails with
+    FileNotFoundError and nothing runs. This check exists to turn that raw
+    failure into the actionable HIPPO_BIN hint, and to keep the refusal
+    guarantee independent of platform resolution quirks.
+    """
+    if _is_batch_shim(head):
+        raise HippoResolutionError(_REFUSAL_HINT.format(exe=head))
+    p = Path(head)
+    if p.suffix == "" and p.parent == Path("."):
+        resolved = shutil.which(head)
+        if resolved is not None and _is_batch_shim(resolved):
+            raise HippoResolutionError(_REFUSAL_HINT.format(exe=resolved))
+
+
 def resolve_hippo_command() -> list[str]:
     """Resolve the default argv prefix used to invoke hippo.
 
@@ -72,8 +91,7 @@ def resolve_hippo_command() -> list[str]:
         command = shlex.split(hippo_bin)
         if not command:
             raise HippoResolutionError(_NOT_FOUND_HINT)
-        if _is_batch_shim(command[0]):
-            raise HippoResolutionError(_REFUSAL_HINT.format(exe=command[0]))
+        _check_prefix_head(command[0])
         return command
 
     resolved = shutil.which("hippo")
@@ -114,8 +132,7 @@ def run_hippo_argv(
     if command is not None:
         if not command:
             raise HippoResolutionError(_NOT_FOUND_HINT)
-        if _is_batch_shim(command[0]):
-            raise HippoResolutionError(_REFUSAL_HINT.format(exe=command[0]))
+        _check_prefix_head(command[0])
         prefix = command
     else:
         prefix = resolve_hippo_command()
