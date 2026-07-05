@@ -104,8 +104,21 @@ def run_hippo_argv(
 
     `shell` is never set to True. Turn text and tags are passed as separate
     argv elements exactly as given -- no normalization, no quoting games.
+
+    The batch-shim refusal applies to explicit `command` prefixes too: an
+    explicit `.cmd`/`.bat` path executes through cmd.exe under CreateProcess
+    regardless of shell=False (the BatBadBut vector), so
+    `--hippo-cmd current=hippo.cmd` would silently reopen the truncation
+    bug on the audit path without this check.
     """
-    prefix = command if command is not None else resolve_hippo_command()
+    if command is not None:
+        if not command:
+            raise HippoResolutionError(_NOT_FOUND_HINT)
+        if _is_batch_shim(command[0]):
+            raise HippoResolutionError(_REFUSAL_HINT.format(exe=command[0]))
+        prefix = command
+    else:
+        prefix = resolve_hippo_command()
     full_argv = [*prefix, *args]
     return subprocess.run(
         full_argv,

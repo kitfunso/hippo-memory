@@ -2,11 +2,12 @@
 
 Self-contained: no hippo binary required. HIPPO_BIN is stubbed with a
 throwaway python script (written to tmp_path per test) that records
-sys.argv + stdin to a JSON file. This exercises the exact code path that
-lost tags in production -- shell=True on win32 truncating the command line
-at the first embedded newline in turn text (see
-../LOCOMO_INVESTIGATION.md, "Correction 2026-07-05") -- without needing a
-real hippo build.
+sys.argv + stdin to a JSON file. These are regression guards for the FIXED
+contract (argv reaches the child byte-exact, batch shims refused); they do
+not re-run the removed shell=True path that originally lost tags in
+production (cmd.exe truncating the command line at the first embedded
+newline in turn text -- see ../LOCOMO_INVESTIGATION.md, "Correction
+2026-07-05").
 """
 
 from __future__ import annotations
@@ -164,6 +165,35 @@ def test_explicit_command_overrides_hippo_bin(tmp_path, monkeypatch):
     record = run_stub(tmp_path, args, command=[sys.executable, str(stub_path)])
     received = record["argv"][1:]
     assert received == args
+
+
+# --- (g): explicit command= prefixes get the same batch-shim refusal ---
+
+
+@pytest.mark.parametrize("suffix", [".cmd", ".bat"])
+def test_explicit_command_batch_shim_refused(tmp_path, suffix):
+    shim = tmp_path / f"other-build{suffix}"
+    shim.write_text("@echo off\n", encoding="utf-8")
+
+    with pytest.raises(HippoResolutionError, match="batch shim"):
+        run_hippo_argv(
+            ["--version"],
+            command=[str(shim)],
+            env=dict(os.environ),
+            cwd=str(tmp_path),
+            timeout=10,
+        )
+
+
+def test_explicit_command_empty_list_refused(tmp_path):
+    with pytest.raises(HippoResolutionError):
+        run_hippo_argv(
+            ["--version"],
+            command=[],
+            env=dict(os.environ),
+            cwd=str(tmp_path),
+            timeout=10,
+        )
 
 
 # --- (f): no HIPPO_BIN, nothing on PATH ---
