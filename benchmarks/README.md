@@ -80,6 +80,26 @@ For full pipeline with LLM answer generation + evaluation (requires `ANTHROPIC_A
 python run.py --data data/longmemeval_oracle.json
 ```
 
+## 3. LoCoMo Integration
+
+**Question:** How accurately does hippo retrieve the gold evidence turn for a question over a long multi-session conversation?
+
+[LoCoMo](https://arxiv.org/abs/2402.17753) is 10 conversations (5,882 turns, 1,986 QAs across single-hop / multi-hop / temporal-reasoning / open-domain / adversarial categories). Hippo scores it with a deterministic gold-`dia_id` evidence-recall metric — no LLM judge in the scoring path.
+
+```bash
+cd locomo
+HIPPO_BIN="node <path-to-hippo-build>/bin/hippo.js" python run.py \
+  --data data/locomo10.json --score-mode evidence \
+  --output-name hippo-<version>-evidence
+
+python score_evidence.py \
+  --data data/locomo10.json \
+  --result results/hippo-<version>-evidence.json \
+  --output results/hippo-<version>-evidence-rescored.json
+```
+
+**v1.25.0 baseline (2026-07-05):** evidence recall@5 = **0.363** — 2.10x the April v0.32.0 baseline (0.173) under the identical protocol (top-k 5, `--budget 4000`, fresh store per conversation, same data file). This is a single-run point estimate with measured run-to-run variance (repeat stdev 0.0175 on a 197-QA conversation slice), and it is deterministic evidence recall, not comparable to Mem0/Letta's published LLM-judge LoCoMo numbers — different metric, different harness. Informational only; never gates a feature (ROADMAP F7). Full table, protocol, and caveats: `LOCOMO_INVESTIGATION.md`.
+
 ## What each benchmark proves
 
 | | Sequential Learning | LongMemEval |
