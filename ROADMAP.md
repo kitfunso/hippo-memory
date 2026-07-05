@@ -194,7 +194,7 @@ The per-track status tags below are updated to reflect shipped-vs-active state. 
 1. **Paired A/B fire-rate** on tier-1 micro-eval — own harness, fastest signal, Wilcoxon-tested. Commit `5ef6d78`.
 2. **Sequential-learning trap-rate** — own benchmark, directly tests the agent-learning thesis. ~~(78% -> 14% baseline over 50 tasks)~~ **(RETRACTED v1.7.9 — see `CHANGELOG.md` v1.7.9 entry; magnitude does not reproduce on the formal multi-seed harness across three pre-registered workload variants. Mechanism shipped.)**
 3. **LongMemEval** — public-comparability number for README and grants.
-4. **LoCoMo** — baseline ESTABLISHED 2026-07-05 (F7): evidence recall@5 = 0.363369 (v1.25.0), 2.10x the April v0.32.0 baseline. Still informational only; never gates a shipping decision. See `benchmarks/LOCOMO_INVESTIGATION.md`.
+4. **LoCoMo** — baseline ESTABLISHED 2026-07-05 (F7): evidence recall@5 = 0.363369 (v1.25.0), 2.10x the April v0.32.0 baseline (single-run point estimate, repeat-run stdev quantified; internal before/after on hippo's own retrieval stack, not comparable to vendor LLM-judge numbers). Still informational only; never gates a shipping decision. See `benchmarks/LOCOMO_INVESTIGATION.md`.
 5. **Memory-Augmented Agent Eval** — RESEARCH §"Near-term 1"; 50-task / 10-trap standardised sequence, planned to design.
 
 ---
@@ -583,7 +583,10 @@ extensively in April 2026 (v0.32-v0.34 era) — the stale claim here was
 baseline, since every April judged score was contaminated by judge failures
 and current master had moved on to v1.25.0. **Publishable deterministic
 baseline ESTABLISHED 2026-07-05:** evidence recall@5 = 0.363369 (v1.25.0),
-2.10x the April v0.32.0 baseline (0.172748) under an identical protocol.
+2.10x the April v0.32.0 baseline (0.172748) under an identical protocol
+(single-run point estimate, repeat-run stdev quantified; internal
+before/after on hippo's own retrieval stack, not comparable to vendor
+LLM-judge numbers).
 Full table, regeneration commands, determinism characterization, and
 Mem0/Letta context table: `benchmarks/LOCOMO_INVESTIGATION.md`.
 **Effort:** 5d. **Success:** numbers published; comparison against Mem0 / Letta noted. Met.

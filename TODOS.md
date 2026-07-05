@@ -32,23 +32,27 @@ publication; both are recall/write-path correctness items.
   conversation-1 repeats gave mean_score 0.3630, stdev 0.0175 (range
   0.3401-0.3820, n=197 QAs per run). Candidate fix: a stable secondary sort
   key (e.g. content hash) at score ties.
-- **Rare silent loss of user-supplied `--tag` values on `remember`.** 3 of
-  ~9,910 retrieved top-5 memories in the LoCoMo v1.25.0 run were stored with
-  only the auto `path:*` tag — the `conv:`/`session:`/`speaker:`/`dia:` tags
-  passed at `remember` time are absent. Repro pointers:
-  `benchmarks/locomo/results/hippo-v1.25.0-evidence.json`, conv-41 qa_index
-  79 `top_k_memories[1]`; conv-43 qa_index 15 `top_k_memories[0]`; conv-43
-  qa_index 58 `top_k_memories[3]`. Needs root-cause in the remember/write
-  path. Impact: metadata-dependent consumers (scope filters, tag-based
-  recall boosts) silently undercount for the affected rows. Store-level
-  spot check (fresh re-ingest of conv-41 + conv-43) confirms this is a
-  write-path issue, not retrieval-path: all turns stored in both
-  conversations (conv-41 `turns=663 rows=663`; conv-43 `turns=680
-  remember_ok=680 rows=680` — no dedupe/merge loss), but conv-41 lost tags
-  on 10/663 rows (1.5%) and conv-43 on 2/680 rows (0.3%), combined 12/1,343
-  (0.9%) stored with only the auto `path:*` tag. Root-cause candidate: an
-  intermittent failure in whatever code path attaches
-  `conv:`/`session:`/`speaker:`/`dia:` tags during `hippo remember`.
+- **Rare silent loss of user-supplied `--tag` values on `remember`.** In the
+  LoCoMo v1.25.0 run, 13 distinct memory rows were stored with only the auto
+  `path:*` tag — the `conv:`/`session:`/`speaker:`/`dia:` tags passed at
+  `remember` time are absent — and those 13 rows surface in 33 of the 9,930
+  retrieved top-5 slots (1,986 QAs x 5; one row recurs in 11 QAs' top-5,
+  occurrence distribution 11,4,3,3,2,2,2,1,1,1,1,1,1). Repro pointers (the
+  divergence-causing subset — tagless AND gold evidence, so
+  content-recoverable): `benchmarks/locomo/results/hippo-v1.25.0-evidence.json`,
+  conv-41 qa_index 79 `top_k_memories[1]`; conv-43 qa_index 15
+  `top_k_memories[0]`; conv-43 qa_index 58 `top_k_memories[3]`. Needs
+  root-cause in the remember/write path. Impact: metadata-dependent
+  consumers (scope filters, tag-based recall boosts) silently undercount for
+  the affected rows. Store-level spot check (fresh re-ingest of conv-41 +
+  conv-43) confirms this is a write-path issue, not retrieval-path: all
+  turns stored in both conversations (conv-41 `turns=663 rows=663`; conv-43
+  `turns=680 remember_ok=680 rows=680` — no dedupe/merge loss), but conv-41
+  lost tags on 10/663 rows (1.5%) and conv-43 on 2/680 rows (0.3%), combined
+  12/1,343 (0.9%) stored with only the auto `path:*` tag — the ground-truth
+  rate; the 13 retrieved-unique rows are a lower bound consistent with it.
+  Root-cause candidate: an intermittent failure in whatever code path
+  attaches `conv:`/`session:`/`speaker:`/`dia:` tags during `hippo remember`.
 
 ### E2/E3 graph track — SHIPPED v1.16.0 → v1.22.0 (2026-06-03)
 

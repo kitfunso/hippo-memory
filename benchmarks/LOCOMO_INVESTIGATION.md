@@ -3,8 +3,10 @@
 ## Status
 
 **Publishable deterministic baseline: ESTABLISHED 2026-07-05 (v1.25.0,
-ROADMAP F7).** Evidence recall@5 = 0.363369 on the same protocol and same
-data file as the April v0.32/v0.33 runs below — 2.10x the April baseline.
+ROADMAP F7).** Evidence recall@5 = 0.363369 on the same protocol and the
+same on-disk data file as the April v0.32/v0.33 runs below (unmodified since
+2026-04-22 per mtime; no April sha exists for cryptographic confirmation) —
+2.10x the April baseline.
 See "Update 2026-07-05" immediately below for the full table, regeneration
 commands, determinism characterization, and caveats. Informational only;
 gates no feature.
@@ -31,9 +33,13 @@ test):** `data/locomo10.json` (10 conversations, 5,882 turns, 1,986 QAs);
 `conv:`/`session:`/`speaker:`/`dia:` tags; `hippo recall --json --budget
 4000`, top-k 5; `--score-mode evidence` (deterministic gold-`dia_id` recall,
 no LLM judge). Dataset sha256:
-`79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4` (recorded
-going forward for future comparisons; no April sha exists on disk to compare
-against, so this is a new floor, not a confirmed match to the April file).
+`79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4`
+(identical between the main-repo original and the worktree copy this run
+used; the main-repo file's mtime is 2026-04-22 13:45 — before the April
+24-28 runs — so the file has been unmodified since before those runs were
+made). No April-recorded sha exists, so byte-identity with what April
+actually read is supported by mtime evidence, not cryptographically
+confirmed; the sha is recorded going forward for future comparisons.
 
 **Run integrity:** `complete: true`, `failed_conversations: []`, elapsed
 93.6 min, 1,982 scored QAs (4 unscored — no gold evidence), 644
@@ -110,12 +116,19 @@ considerably — a rough guide (not a formal CI) is stdev/sqrt(10) ≈ 0.006 on
 the full-run aggregate. Candidate fix filed in `TODOS.md`: a stable
 secondary sort key (e.g. content hash) at score ties.
 
-**Tag-loss finding.** Spot-checking the same result file: 3 of ~9,910
-retrieved top-5 memories across the full run carry no user-supplied
-`conv:`/`session:`/`speaker:`/`dia:` tags at all — only the auto `path:*` tag
-survives. Confirmed instances (`hippo-v1.25.0-evidence.json`): conv-41
-qa_index 79 `top_k_memories[1]`; conv-43 qa_index 15 `top_k_memories[0]`;
-conv-43 qa_index 58 `top_k_memories[3]`. Store-level spot check (fresh re-ingest of conv-41 + conv-43, comparing row
+**Tag-loss finding.** Full recount over the result file
+(`hippo-v1.25.0-evidence.json`, all 1,986 QAs x top-5 = 9,930 slots): **13
+distinct memory rows** carry no user-supplied
+`conv:`/`session:`/`speaker:`/`dia:` tags at all — only the auto `path:*`
+tag survives — and those 13 rows surface in **33 of the 9,930 top-5 slots**
+(one row recurs in 11 different QAs' top-5; occurrence distribution
+11,4,3,3,2,2,2,1,1,1,1,1,1). The divergence-causing subset (tagless AND gold
+evidence, hence content-recoverable by `score_evidence.py`) is the 3
+instances already cited in the scorer-divergence footnote: conv-41 qa_index
+79 `top_k_memories[1]`; conv-43 qa_index 15 `top_k_memories[0]`; conv-43
+qa_index 58 `top_k_memories[3]` — those remain valid repro pointers, but
+they are the gold-overlapping subset, not the full tagless population.
+Store-level spot check (fresh re-ingest of conv-41 + conv-43, comparing row
 counts and tag counts against turns ingested): **all turns stored in both
 conversations** — conv-41 `turns=663 rows=663`; conv-43 `turns=680
 remember_ok=680 rows=680` (no write-time dedupe/merge loss). But a
@@ -123,11 +136,12 @@ non-trivial share of rows lost their user-supplied tags entirely: conv-41
 `rows_with_dia_tag=653, tagless=10` (10/663, 1.5%); conv-43
 `rows_with_dia_tag=678, tagless=2` (2/680, 0.3%) — combined 12/1,343 checked
 rows (0.9%) stored with only the auto `path:*` tag, no
-`conv:`/`session:`/`speaker:`/`dia:` tags at all. This store-level rate is
-higher than the top-5-retrieval-level finding above (3/~9,910) because most
-tagless rows are never retrieved into any QA's top-5 — the two are
-consistent measurements of the same underlying write-path bug at different
-sampling depths, not conflicting numbers.
+`conv:`/`session:`/`speaker:`/`dia:` tags at all. The store-level 0.9% is
+the ground-truth rate; the 13 retrieved-unique rows are consistent with it
+(retrieved-unique is a lower bound on stored tagless rows for the
+conversations involved, since most tagless rows are never retrieved into any
+QA's top-5). Same underlying write-path bug measured at two sampling depths,
+not conflicting numbers.
 
 **Mem0 / Letta context (not a comparison — different metric, different
 harness, never used to gate a feature):**
