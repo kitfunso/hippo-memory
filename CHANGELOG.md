@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.26.0 (2026-07-09)
+
+### Fixed
+- **Recall is now deterministic across fresh ingests of identical data.** Re-running an identical ingest into a fresh store used to produce different recall rankings run to run (LoCoMo conv-1 x4 fresh runs: evidence-recall@5 stdev 0.0175, range 0.3401-0.3820). Root cause was NOT a missing sort tiebreak alone: the dominant source was that embedding input text was `content + ALL tags`, and the auto `path:*` tags embed the store directory's path components - so a store created in a different directory (every fresh benchmark run, any renamed project folder) embedded DIFFERENT text for identical content, shifting similarities at the 1e-2 scale. Embedding input now excludes `path:*` tags (`embeddingInputText`, src/embeddings.ts). Retrieval semantics no longer depend on where the store lives. Verified: two fresh independent LoCoMo smoke runs now produce byte-identical per-question top-5 sets (10/10), with aggregate quality flat vs the previous build; the two-store probe's score deltas dropped from 6.6e-2 to 6.6e-8 (pure decay-at-read residual).
+- **Deterministic tie-breaking in recall ranking** (the residual half). New leaf module `src/compare.ts`: score ties at first-ranking sorts now break by content (UTF-16 code-unit order) then id, instead of falling to SQLite scan order / `crypto.randomUUID()` artifacts. SQL candidate loaders that decide LIMIT windows (`loadSearchRows` FTS + LIKE branches, `loadFreshRawMemories`, `loadEntriesByIds`) gained `content ASC, id ASC` tie keys so window membership is content-stable, not UUID-random. The physics scorer accepts a content tie key from `hybridSearch`/`physicsSearch` so the `cluster_top_k` amplification set is selected content-stably. Re-rank passes (goal boost, `--value-aware`, `--rerank-utility`, F6 boost, `--salience-threshold`, cross-encoder) deliberately stay PLAIN stable score sorts: their ties must preserve the prior meaningful ranking (a no-signal rerank pass must not reorder its input), and JS sort stability inherits the upstream determinism.
+
+### Changed
+- **One-time embedding reindex on upgrade (intended).** The stored embedding-index identity now carries an embed-text-format version (`<model>#t2`). Pre-1.26.0 indexes were computed over path-contaminated text, so the first embed-touching operation after upgrade rebuilds the index via the existing atomic reindex path. Until that happens, a RECALL-ONLY store gates dense/hybrid scoring off (BM25-only, deterministic) - run `hippo embed` once after upgrading to reindex immediately. Mixed hippo versions sharing a store will ping-pong reindexes (same class as an embedding-model swap); upgrade installs together.
+- `--evc-adaptive`'s on-topic test now accepts candidates by query coverage (fraction of query tokens present) as well as by score floor. The score floor alone proxied topicality through ranking score, and the disambiguating update the mechanic exists to surface (phrased differently by nature) measured 0.33x max under the corrected embeddings - below any sane floor. Query coverage is the mechanic's own "same topic, different fact" definition applied to the query, and is score-scale independent.
+
+### Known limitations
+- The lexical (BM25/FTS) corpus still tokenizes `path:*` tags: two stores whose directory paths differ in DEPTH have slightly different doc lengths, a residual determinism gap for BM25-only ranking flagged by cross-model review. Stripping path tags from the lexical index changes real matching behavior (project-name queries currently match `path:<project>` tags), so it is deferred as its own eval-gated change - tracked in TODOS.md.
+- Same-millisecond `created` collisions at SQL LIMIT boundaries and in the dedup survivor selection (`deduplicateStore`) remain per-instance-deterministic only - tracked in TODOS.md.
+
 ## 1.25.0 (2026-07-04)
 
 ### Added

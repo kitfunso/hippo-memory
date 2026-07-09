@@ -21,6 +21,7 @@ import { loadPhysicsState } from './physics-state.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { rrfFuse } from './rrf.js';
 import { graphRankStream, selectGraphSeeds, DEFAULT_GRAPH_SEED_COUNT } from './graph-stream.js';
+import { compareEntryIdentity, compareScoredResults } from './compare.js';
 
 // ---------------------------------------------------------------------------
 // Tokenizer
@@ -496,8 +497,17 @@ export async function hybridSearch(
     const eligible = entries
       .map((_, i) => i)
       .filter((i) => bm25Scores[i] > 0 || cosineScores[i] > 0);
-    const bm25Ranked = [...eligible].sort((a, b) => bm25Scores[b] - bm25Scores[a]);
-    const cosineRanked = [...eligible].sort((a, b) => cosineScores[b] - cosineScores[a]);
+    // score desc -> compareEntryIdentity tail (deterministic across fresh
+    // ingests): these two rankings feed selectGraphSeeds + RRF rank
+    // assignment, so an unbroken tie here would leak into seed selection.
+    const bm25Ranked = [...eligible].sort((a, b) => {
+      const d = bm25Scores[b] - bm25Scores[a];
+      return d !== 0 ? d : compareEntryIdentity(entries[a], entries[b]);
+    });
+    const cosineRanked = [...eligible].sort((a, b) => {
+      const d = cosineScores[b] - cosineScores[a];
+      return d !== 0 ? d : compareEntryIdentity(entries[a], entries[b]);
+    });
 
     // L1 graph-retrieval stream (opt-in): a 3rd RRF input ranking in-pool candidates by
     // graph proximity to the strong lexical seeds. When absent / weight<=0 / the graph
@@ -676,8 +686,8 @@ export async function hybridSearch(
     scored.push(result);
   }
 
-  // Sort by composite score descending
-  scored.sort((a, b) => b.score - a.score);
+  // Sort by composite score descending, deterministic tiebreak on ties.
+  scored.sort(compareScoredResults);
 
   // Deduplicate: when an extracted fact and its source both appear,
   // keep only the higher-scoring one (typically the fact).
@@ -722,7 +732,7 @@ export async function hybridSearch(
         });
       }
     }
-    scoredDeduped.sort((a, b) => b.score - a.score);
+    scoredDeduped.sort(compareScoredResults);
   }
 
   // MMR re-ranking: de-cluster near-duplicates by trading relevance for
@@ -784,6 +794,11 @@ export async function hybridSearch(
  * Inputs must already be sorted by relevance descending. When `explain` is
  * true, attaches `preMmrRank` / `postMmrRank` to each result's breakdown.
  * Exported for unit tests; production callers go through hybridSearch.
+ *
+ * Determinism note (T2): the picking loop below uses strict `mmr > bestMmr`
+ * (first-wins on ties), so it is already deterministic GIVEN a
+ * deterministic `scored` input order — no comparator change needed here;
+ * the tiebreak lives upstream, in how `scored` was sorted before this runs.
  */
 export function mmrRerank(
   scored: SearchResult[],
@@ -956,8 +971,15 @@ export async function physicsSearch(
   // Score physics-enabled memories
   const physicsResults: SearchResult[] = [];
   if (physicsParticles.length > 0) {
-    const scored = computePhysicsScores(physicsParticles, queryVector, config);
     const entryMap = new Map(physicsEntries.map(e => [e.id, e]));
+    // Content tie key: the physics baseScore tie order selects the
+    // cluster_top_k amplification set, so it must be cross-ingest-stable
+    // (codex review). memoryId fallback covers particles whose entry was
+    // filtered from physicsEntries.
+    const scored = computePhysicsScores(
+      physicsParticles, queryVector, config,
+      (id) => entryMap.get(id)?.content ?? id,
+    );
 
     for (const s of scored) {
       if (s.finalScore <= 0) continue;
@@ -1030,8 +1052,8 @@ export async function physicsSearch(
   // Normalize both pools to [0, 1] and merge
   const merged = mergeScorePools(physicsResults, classicResults);
 
-  // Sort and apply budget
-  merged.sort((a, b) => b.score - a.score);
+  // Sort and apply budget, deterministic tiebreak on ties.
+  merged.sort(compareScoredResults);
 
   const results: SearchResult[] = [];
   let usedTokens = 0;
@@ -1150,8 +1172,8 @@ export function search(
     scored.push({ entry: entries[i], score: composite, bm25, cosine: 0, tokens });
   }
 
-  // Sort by composite score descending
-  scored.sort((a, b) => b.score - a.score);
+  // Sort by composite score descending, deterministic tiebreak on ties.
+  scored.sort(compareScoredResults);
 
   const seenExtractedFromSync = new Set<string>();
   const dedupedSync: typeof scored = [];
@@ -1192,7 +1214,7 @@ export function search(
         });
       }
     }
-    dedupedSync.sort((a, b) => b.score - a.score);
+    dedupedSync.sort(compareScoredResults);
   }
 
   // Apply token budget

@@ -92,7 +92,8 @@ import {
   RECALL_DEFAULT_DENY_SCOPES,
 } from './store.js';
 import type { SessionHandoff } from './handoff.js';
-import { search, markRetrieved, estimateTokens, hybridSearch, physicsSearch, explainMatch, textOverlap, type RerankStep } from './search.js';
+import { search, markRetrieved, estimateTokens, hybridSearch, physicsSearch, explainMatch, textOverlap, tokenize as tokenizeQuery, type RerankStep } from './search.js';
+import { compareEntryIdentity } from './compare.js';
 import { renderTraceContent, parseSteps } from './trace.js';
 import { consolidate } from './consolidate.js';
 import { deduplicateStore } from './dedupe.js';
@@ -1159,15 +1160,37 @@ async function cmdRecall(
       const tail = results.slice(poolSize);
       const maxScore = pool.reduce((m, r) => Math.max(m, r.score), 0);
       const scoreFloor = maxScore * 0.5;
+      // On-topic test: score floor OR query coverage. The score floor alone
+      // proxied topicality via ranking score, but the disambiguating update
+      // this mechanic exists to surface is BY NATURE phrased differently
+      // (weaker lexical/embedding overlap), so under the #t2 embed-text
+      // format (docs/plans/2026-07-09-recall-determinism.md T1, which
+      // de-compressed similarity gaps) it fell below any sane floor
+      // (measured 0.33x max on the acc-evc micro fixture). Query coverage —
+      // the fraction of query tokens present in the candidate — is the
+      // mechanic's own definition of "same topic, different fact" applied
+      // to the query, and is score-scale-independent. Principled EVC
+      // calibration remains roadmapped as B1 depth.
+      const queryTokens = new Set(tokenizeQuery(query));
       const onTopic: typeof pool = [];
       const offTopic: typeof pool = [];
       for (const r of pool) {
-        (r.score >= scoreFloor ? onTopic : offTopic).push(r);
+        let hits = 0;
+        if (queryTokens.size > 0) {
+          const candTokens = new Set(tokenizeQuery(r.entry.content));
+          for (const t of queryTokens) if (candTokens.has(t)) hits++;
+        }
+        const queryCoverage = queryTokens.size > 0 ? hits / queryTokens.size : 0;
+        (r.score >= scoreFloor || queryCoverage >= 0.6 ? onTopic : offTopic).push(r);
       }
+      // Recency is the true primary key (unchanged) — that's the whole
+      // point of --evc-adaptive. compareEntryIdentity is only a TAIL for
+      // entries created at the exact same timestamp, which previously fell
+      // to array/scan order (T2, deterministic tie keys).
       onTopic.sort((a, b) => {
         const ta = new Date(a.entry.created).getTime();
         const tb = new Date(b.entry.created).getTime();
-        return tb - ta;
+        return tb !== ta ? tb - ta : compareEntryIdentity(a.entry, b.entry);
       });
       results = [...onTopic, ...offTopic, ...tail];
     }
@@ -1204,6 +1227,11 @@ async function cmdRecall(
       }
       return next;
     });
+    // T2 note: PLAIN stable score sort on purpose (here and in the rerank
+    // blocks below) -- these are RE-SORTS of an already deterministically-
+    // ordered ranking, so sort stability inherits the upstream content-tail
+    // determinism, and ties preserve the prior rank rather than reordering
+    // by content (a no-signal boost must not shuffle its input).
     results.sort((a, b) => b.score - a.score);
   }
 
@@ -1232,7 +1260,7 @@ async function cmdRecall(
       }
       return next;
     });
-    results.sort((a, b) => b.score - a.score);
+    results.sort((a, b) => b.score - a.score); // T2: plain stable re-sort, see --filter-conflicts note
   }
 
   // OFC option-value re-ranker MVP (RESEARCH.md §PFC.OFC). Combine relevance,
@@ -1267,7 +1295,7 @@ async function cmdRecall(
         }
         return next;
       })
-      .sort((a, b) => b.score - a.score);
+      .sort((a, b) => b.score - a.score); // T2: plain stable re-sort, see --filter-conflicts note
   }
 
   // F6 reranker pass (docs/plans/2026-05-10-f6-reranker-hardening.md). When
@@ -1341,7 +1369,7 @@ async function cmdRecall(
         }
         return boosted;
       })
-      .sort((a, b) => b.score - a.score);
+      .sort((a, b) => b.score - a.score); // T2: plain stable re-sort, see --filter-conflicts note
   }
 
   // dlPFC depth (B3, v0.38; lifted v1.7.4 into applyGoalStackBoost). When
@@ -1423,7 +1451,7 @@ async function cmdRecall(
         }
         return next;
       })
-      .sort((a, b) => b.score - a.score);
+      .sort((a, b) => b.score - a.score); // T2: plain stable re-sort, see --filter-conflicts note
   }
 
   // --outcome filter: drop trace entries whose trace_outcome !== target.

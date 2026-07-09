@@ -815,7 +815,7 @@ function loadSearchRows(
         FROM memories m
         JOIN memories_fts f ON f.id = m.id
         WHERE memories_fts MATCH ?${tenantPredicate}${archivedClauseAlias}${scopeClauseAlias}
-        ORDER BY bm25(memories_fts), m.updated_at DESC
+        ORDER BY bm25(memories_fts), m.updated_at DESC, m.content ASC, m.id ASC
         LIMIT ?
       `).all(ftsQuery, ...tenantParams, ...scopeParams, limit) as MemoryRow[];
 
@@ -836,7 +836,7 @@ function loadSearchRows(
     SELECT ${MEMORY_SELECT_COLUMNS}
     FROM memories
     WHERE (${where})${tenantPredicateNoAlias}${archivedClauseNoAlias}${scopeClauseNoAlias}
-    ORDER BY updated_at DESC, created DESC
+    ORDER BY updated_at DESC, created DESC, content ASC, id ASC
     LIMIT ?
   `).all(...params, ...tenantParams, ...scopeParams, limit) as MemoryRow[];
 
@@ -1380,12 +1380,15 @@ export function loadEntriesByIds(
   const db = openHippoDb(hippoRoot);
   try {
     const placeholders = capped.map(() => '?').join(',');
+    // T2: no ORDER BY meant row order followed SQLite's IN(...) scan order
+    // (undefined w.r.t. the caller's `ids` order). created ASC, id ASC
+    // makes it deterministic.
     const rows = tenantId !== undefined
       ? db.prepare(
-          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders}) AND tenant_id = ?`,
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders}) AND tenant_id = ? ORDER BY created ASC, content ASC, id ASC`,
         ).all(...capped, tenantId) as MemoryRow[]
       : db.prepare(
-          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders})`,
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders}) ORDER BY created ASC, content ASC, id ASC`,
         ).all(...capped) as MemoryRow[];
     return rows.map(rowToEntry);
   } finally {
@@ -1529,7 +1532,12 @@ export function loadFreshRawMemories(
       sql += ' AND source_session_id = ?';
       params.push(sessionId);
     }
-    sql += ' ORDER BY created DESC LIMIT ?';
+    // T2: tie tail keeps the LIMIT window keyed on `created` while making
+    // same-`created` rows deterministic. `content` before `id` (codex
+    // review): ids are random UUIDs, so an id-only tail would pick WHICH
+    // same-created rows make the window per-instance; content is
+    // cross-ingest-stable.
+    sql += ' ORDER BY created DESC, content ASC, id ASC LIMIT ?';
     params.push(capped);
     const rows = db.prepare(sql).all(...params) as MemoryRow[];
     return rows.map(rowToEntry);

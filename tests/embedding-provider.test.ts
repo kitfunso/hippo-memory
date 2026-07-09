@@ -7,7 +7,7 @@ import {
   resolveEmbeddingIdentity,
   isEmbeddingConfigured,
 } from '../src/embedding-provider.js';
-import { saveEmbeddingIndex, embeddingModelRequiresReindex } from '../src/embeddings.js';
+import { saveEmbeddingIndex, embeddingModelRequiresReindex, saveStoredEmbeddingModel } from '../src/embeddings.js';
 
 function mkRoot(embeddings: Record<string, unknown>): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-provider-'));
@@ -78,12 +78,20 @@ describe('EmbeddingProvider', () => {
     });
   });
 
-  describe('backwards compatibility (no forced reindex on upgrade)', () => {
-    it('an existing MiniLM index is NOT stale for the local provider', () => {
+  describe('upgrade reindex contract (embed-text format #t2)', () => {
+    // Contract change (docs/plans/2026-07-09-recall-determinism.md T1): a
+    // pre-#t2 store's vectors were computed over path-contaminated text, so
+    // the upgrade DOES force exactly one reindex — the historical
+    // "no forced reindex on upgrade" guarantee is deliberately retired.
+    it('a legacy MiniLM index is stale exactly once, then stable after reindex', () => {
       const root = mkRoot({ provider: 'local', model: 'Xenova/all-MiniLM-L6-v2' });
       // Legacy store: index present, model defaults to MiniLM (the historical default).
       saveEmbeddingIndex(root, { mem_legacy: [0.1, 0.2, 0.3] });
       const identity = resolveEmbeddingIdentity(root);
+      expect(embeddingModelRequiresReindex(root, identity)).toBe(true);
+      // The reindex path persists the versioned identity; after that the
+      // same provider id compares clean (no reindex loop).
+      saveStoredEmbeddingModel(root, identity);
       expect(embeddingModelRequiresReindex(root, identity)).toBe(false);
     });
 

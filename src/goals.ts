@@ -357,6 +357,10 @@ export function applyGoalStackBoost<R extends { entry: MemoryEntry; score: numbe
         _goalMatches: matches,
       } as R & { _goalMatches: string[] };
     })
+    // T2 note: deliberately a PLAIN stable score sort, no compareEntryIdentity
+    // tail -- a re-sort of an already deterministically-ordered ranking
+    // inherits its determinism via sort stability, and ties preserve the
+    // prior (meaningful) rank instead of reordering by content.
     .sort((a, b) => b.score - a.score) as R[];
 
   // Filter to local memories only -- global memory IDs aren't in this DB's

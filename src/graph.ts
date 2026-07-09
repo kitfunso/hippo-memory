@@ -506,9 +506,12 @@ export function loadEntitiesByMemoryId(
     for (let i = 0; i < memoryIds.length; i += IN_LIST_CHUNK) {
       const slice = memoryIds.slice(i, i + IN_LIST_CHUNK);
       const ph = slice.map(() => '?').join(',');
+      // T2: no ORDER BY meant chunk-local scan order decided ties; id ASC
+      // makes it deterministic (entities.id is an autoincrement integer PK).
       const rows = db.prepare(`
         SELECT ${ENTITY_COLS} FROM entities
         WHERE tenant_id = ? AND memory_id IN (${ph})
+        ORDER BY id ASC
       `).all(tenantId, ...slice) as EntityRow[];
       out.push(...rows.map(rowToEntity));
     }

@@ -286,7 +286,12 @@ for (let qi = 0; qi < questions.length; qi++) {
       }
     }
   }
-  const denseRanked = [...denseSessionMax.entries()].sort((a, b) => b[1].score - a[1].score);
+  // score desc -> session-id lexicographic tiebreak, so eval artifacts stop
+  // encoding Map iteration / scan order at ties (T2, deterministic tie keys).
+  const denseRanked = [...denseSessionMax.entries()].sort((a, b) => {
+    const d = b[1].score - a[1].score;
+    return d !== 0 ? d : (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
+  });
 
   // ---- BM25 ----
   const qTerms = tokenize(q.question);
@@ -311,15 +316,26 @@ for (let qi = 0; qi < questions.length; qi++) {
       bm25SessionMax.set(sid, { score: s, bestDocIdx: i });
     }
   }
-  const bm25Ranked = [...bm25SessionMax.entries()].sort((a, b) => b[1].score - a[1].score);
+  // score desc -> session-id lexicographic tiebreak (same rationale as
+  // denseRanked above).
+  const bm25Ranked = [...bm25SessionMax.entries()].sort((a, b) => {
+    const d = b[1].score - a[1].score;
+    return d !== 0 ? d : (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
+  });
 
   // ---- RRF fuse ----
   const bm25Sids = bm25Ranked.map(([sid]) => sid);
   const denseSids = denseRanked.map(([sid]) => sid);
   const fused = rrfFuse([bm25Sids, denseSids], [W_BM25, W_DENSE], { k: RRF_K_USED });
 
-  // Sort fused by score descending, take top-K
-  const topSids = [...fused.entries()].sort((a, b) => b[1] - a[1]).slice(0, TOP_K);
+  // Sort fused by score descending, take top-K. score desc -> session-id
+  // lexicographic tiebreak (same rationale as denseRanked/bm25Ranked above).
+  const topSids = [...fused.entries()]
+    .sort((a, b) => {
+      const d = b[1] - a[1];
+      return d !== 0 ? d : (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
+    })
+    .slice(0, TOP_K);
 
   // Build retrieved_memories. Each row tagged with the session_id so
   // evaluate_retrieval.py's matcher works against `answer_session_ids`.
