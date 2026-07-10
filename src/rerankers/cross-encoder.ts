@@ -106,6 +106,12 @@ export const crossEncoderReranker: RerankerFn = async (
     }),
   );
 
+  // T2 note: PLAIN stable score sort on purpose. The input `head` is already
+  // deterministically ordered (upstream content tail), so stability inherits
+  // that -- and when the cross-encoder produces tied scores (degenerate or
+  // no-signal cases), ties MUST fall back to the prior relevance order, not
+  // an arbitrary content order (the reranker-cross-encoder micro fixture
+  // fails otherwise: an all-tie rerank pass reordered its input).
   scored.sort((a, b) => b.rerankScore - a.rerankScore);
   scored.forEach((r, i) => (r.postRerankRank = i + 1));
   return scored;

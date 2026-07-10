@@ -13,6 +13,7 @@
 import { isRecallBoostAblated } from './ablation.js';
 import type { EmotionalValence } from './memory.js';
 import type { PhysicsConfig } from './physics-config.js';
+import { comparePhysicsResultsBy } from './compare.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -417,6 +418,11 @@ export function physicsScore(
   particles: PhysicsParticle[],
   queryEmbedding: number[],
   config: PhysicsConfig,
+  /** Cross-ingest-stable tie key per memoryId (typically the memory's
+   *  content, supplied by the caller which has entries in scope). Without
+   *  it ties fall to memoryId -- per-instance only, which lets the
+   *  cluster_top_k amplification set vary across fresh ingests. */
+  tieKeyOf?: (memoryId: string) => string,
 ): ScoredPhysicsResult[] {
   if (particles.length === 0 || queryEmbedding.length === 0) return [];
 
@@ -432,14 +438,18 @@ export function physicsScore(
     };
   });
 
-  // Sort by base score for top-K selection
-  results.sort((a, b) => b.baseScore - a.baseScore);
+  // Sort by base score for top-K selection: score desc -> tie key asc.
+  // The tie order here picks the cluster_top_k amplification SET (which
+  // mutates scores), so it must be cross-ingest-stable when the caller
+  // supplies a content tie key. See compare.ts comparePhysicsResultsBy.
+  const tie = tieKeyOf ? (r: ScoredPhysicsResult) => tieKeyOf(r.memoryId) : undefined;
+  results.sort(comparePhysicsResultsBy((r) => r.baseScore, tie));
 
   // Pass 2: cluster amplification on top K
   applyClusterAmplification(results, particles, config);
 
-  // Re-sort by final score
-  results.sort((a, b) => b.finalScore - a.finalScore);
+  // Re-sort by final score, same tiebreak rule.
+  results.sort(comparePhysicsResultsBy((r) => r.finalScore, tie));
 
   return results;
 }

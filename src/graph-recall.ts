@@ -39,6 +39,7 @@
 import { loadEntriesByIds } from './store.js';
 import type { MemoryEntry } from './memory.js';
 import { type SearchResult, estimateTokens } from './search.js';
+import { compareEntryIdentity } from './compare.js';
 import {
   loadEntitiesByMemoryId,
   loadEntitiesByIds,
@@ -244,8 +245,16 @@ export function graphExpandRecall(
 
   if (hitsByOrigin.size === 0) return baseResults;
   // Closer hops first within each origin group, then by inherited score.
+  // Hops asc and score desc are both true primary keys (unchanged);
+  // compareEntryIdentity is only the TAIL for a same-hop, same-score tie
+  // (T2, deterministic tie keys).
   for (const hits of hitsByOrigin.values()) {
-    hits.sort((a, b) => a.graphVia.hops - b.graphVia.hops || b.score - a.score);
+    hits.sort((a, b) => {
+      const byHops = a.graphVia.hops - b.graphVia.hops;
+      if (byHops !== 0) return byHops;
+      const byScore = b.score - a.score;
+      return byScore !== 0 ? byScore : compareEntryIdentity(a.entry, b.entry);
+    });
   }
   const allHits = [...hitsByOrigin.values()].flat();
 
@@ -263,6 +272,10 @@ export function graphExpandRecall(
   const protectedCount = Math.min(Math.max(minResults, 1), baseResults.length);
   const keep = new Set<SearchResult>(baseResults.slice(0, protectedCount));
   let usedTokens = [...keep].reduce((s, r) => s + r.tokens, 0);
+  // T2 note: PLAIN stable score sort on purpose -- both input lists are
+  // deterministically ordered by this point, stability inherits that, and a
+  // base-vs-graph-hit tie keeps the BASE result first (the concat order),
+  // preserving pre-T2 semantics.
   for (const r of [...baseResults.slice(protectedCount), ...allHits].sort((a, b) => b.score - a.score)) {
     if (usedTokens + r.tokens > budget) continue;
     usedTokens += r.tokens;

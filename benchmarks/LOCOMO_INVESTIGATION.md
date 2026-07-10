@@ -191,6 +191,27 @@ considerably — a rough guide (not a formal CI) is stdev/sqrt(10) ≈ 0.006 on
 the full-run aggregate. Candidate fix filed in `TODOS.md`: a stable
 secondary sort key (e.g. content hash) at score ties.
 
+**Correction 2026-07-09 (v1.26.0): the dominant mechanism was identified
+and fixed — it was NOT tie ordering.** The "wall-clock-derived state
+(timestamps/ids)" attribution above was refined by a controlled two-store
+probe (identical content, identical ingest order, differently-named store
+directories, one recall each): the dominant variance source was that
+**embedding input text included the auto `path:*` tags**, which carry every
+path component of the store directory — `run.py` uses
+`tempfile.mkdtemp(prefix="hippo_locomo_...")`, so every run embedded
+different text for identical content (measured: same-content embedding
+similarity 0.386 vs 0.374 across two stores differing only in dir name;
+final-score deltas up to 6.6e-2). Rebuilding a store at the SAME path was
+already order-identical with only ~1e-8 score jitter. v1.26.0 excludes
+`path:*` tags from embedding input (`embeddingInputText`) and adds the
+deterministic tie keys as the residual half. Post-fix: this smoke
+(`--conversations 1 --sample 10`) run twice on fresh stores produces
+byte-identical per-QA top-5 sets (10/10); aggregate flat vs pre-fix. The
+det-a..det-d spread above characterizes pre-1.26.0 builds only. See
+`docs/plans/2026-07-09-recall-determinism.md` and CHANGELOG 1.26.0
+(including the BM25 path-tag depth residual left as an eval-gated
+follow-up).
+
 **Tag-loss finding.** Full recount over the result file
 (`hippo-v1.25.0-evidence.json`, all 1,986 QAs x top-5 = 9,930 slots): **13
 distinct memory rows** carry no user-supplied

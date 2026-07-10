@@ -25,14 +25,34 @@ Surfaced while publishing the v1.25.0 LoCoMo baseline refresh
 publication. The first is a recall correctness item; the second was
 reattributed and resolved the same day (harness bug, not hippo).
 
-- **Deterministic tie-breaking in recall ranking.** Cross-store run-to-run
-  rank variance among near-duplicate score plateaus: no RNG exists in the
-  retrieval code path (zero `Math.random` in `src/`), but wall-clock-derived
-  state (timestamps/ids) flips ordering among near-tied candidates across
-  independent runs on identical data. Measured on LoCoMo: 4 fresh
-  conversation-1 repeats gave mean_score 0.3630, stdev 0.0175 (range
-  0.3401-0.3820, n=197 QAs per run). Candidate fix: a stable secondary sort
-  key (e.g. content hash) at score ties.
+- **RESOLVED 2026-07-09 (v1.26.0, episode 01KX434KMAQSX4HRHYC67WDTJQ) -
+  deterministic tie-breaking in recall ranking.** The filed candidate fix
+  (content-hash at score ties) turned out to be DOWNSTREAM of the real
+  dominant cause: embedding input text included auto `path:*` tags (store
+  directory path), so every fresh benchmark run embedded different text for
+  identical content. Fixed at the producer (`embeddingInputText` excludes
+  `path:*`; stored index identity versioned `#t2` for a one-time reindex)
+  PLUS the residual tie keys (leaf `src/compare.ts` comparators at
+  first-ranking sorts; `content ASC, id ASC` SQL keys at window-deciding
+  loaders; content tie key threaded into the physics cluster_top_k
+  selection). Evidence: LoCoMo smoke x2 fresh runs 10/10 byte-identical
+  top-5 (was stdev 0.0175); probe deltas 6.6e-2 -> 6.6e-8; micro 11/11.
+  See `docs/plans/2026-07-09-recall-determinism.md` + CHANGELOG 1.26.0.
+  Follow-ups filed below.
+- **Follow-up (eval-gated): strip `path:*` tags from the lexical BM25/FTS
+  corpus too.** codex review (v1.26.0 episode, round 2): stores whose
+  directory paths differ in DEPTH still get different doc lengths in BM25
+  normalization - a residual determinism gap for BM25-only ranking. Blocked
+  on an eval because path tokens currently do real lexical work
+  (project-name queries match `path:<project>` tags in the FTS index,
+  db.ts fts5(id, content, tags)).
+- **Follow-up: dedup survivor selection is per-instance nondeterministic.**
+  `deduplicateStore` (src/dedupe.ts:41) sorts strength desc ->
+  retrieval_count desc with no further key; freshly-ingested near-duplicates
+  tie on both, so WHICH duplicate survives `hippo sleep` falls to random-id
+  load order. Same class as the v1.26.0 fix but changes surviving CONTENT
+  during consolidation - needs its own tests (independent-review finding,
+  v1.26.0 episode).
 - **RESOLVED 2026-07-05 (same day) — silent loss of user-supplied `--tag`
   values was a harness bug, not a hippo write-path bug.** The rows this
   bullet originally described (13 tagless rows in the LoCoMo v1.25.0 run)

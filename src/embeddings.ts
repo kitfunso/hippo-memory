@@ -25,7 +25,62 @@ const _pipelineInstances = new Map<string, unknown>();
 const _pipelineLoading = new Map<string, Promise<unknown>>();
 
 export const DEFAULT_EMBEDDING_MODEL = 'Xenova/all-MiniLM-L6-v2';
-const EMBEDDING_MODEL_META_KEY = 'embedding_model';
+export const EMBEDDING_MODEL_META_KEY = 'embedding_model';
+
+/**
+ * Bump whenever `embeddingInputText`'s composition changes in a way that
+ * changes the resulting vectors for existing entries. Folded into the stored
+ * index identity (see `embeddingIndexIdentity`) so a text-format change is
+ * treated exactly like an embedding-model change: the next embed-touching
+ * operation detects the mismatch and reindexes automatically. Format 2 =
+ * `path:*` tags excluded (see `embeddingInputText`); format 1 (implicit, no
+ * suffix) = `${content} ${tags.join(' ')}` including path tags.
+ */
+export const EMBED_TEXT_FORMAT = 2;
+
+/**
+ * The stored-index identity for a given embedding provider id: folds
+ * `EMBED_TEXT_FORMAT` into the provider id so index-identity comparisons
+ * automatically invalidate on either a model change OR a text-format change.
+ * This is the ONE choke point both `embeddingModelRequiresReindex` (compare
+ * side) and `saveStoredEmbeddingModel` (save side) go through — they MUST
+ * version identically, or every call reindexes in a loop (or none ever do).
+ */
+export function embeddingIndexIdentity(providerId: string): string {
+  return `${providerId}#t${EMBED_TEXT_FORMAT}`;
+}
+
+/**
+ * Build the text embedded for a memory entry: content plus its tags, joined
+ * by a space and trimmed — the same shape as the legacy
+ * `` `${e.content} ${e.tags.join(' ')}`.trim() `` composition, minus `path:*`
+ * tags.
+ *
+ * `path:*` tags are excluded because they are auto-derived from
+ * `process.cwd()` (see `extractPathTags` in cli.ts) and carry every path
+ * component of the store's location, INCLUDING the store directory name
+ * itself. That means identical content embeds to a DIFFERENT vector
+ * depending on WHERE the store happens to live — e.g. a fresh benchmark run
+ * under `tempfile.mkdtemp()` gets a new directory name (hence new path
+ * tokens, hence a new vector) every single run, even with byte-identical
+ * content ingested in byte-identical order. This was diagnosed as the
+ * DOMINANT root cause of cross-fresh-ingest recall-rank variance measured on
+ * LoCoMo (mean evidence-recall@5 stdev 0.0175 across 4 fresh re-ingests of
+ * identical data; see `benchmarks/LOCOMO_INVESTIGATION.md`, "Determinism
+ * characterization"). It is a real product defect beyond benchmarks too:
+ * retrieval semantics should not depend on a project directory's name.
+ *
+ * Only `path:*` is excluded. Other tags (`conv:`, `session:`, `speaker:`,
+ * `dia:`, `error`, `scope:`, etc.) remain embedded — they carry semantic
+ * meaning. Path relevance at recall time is already handled explicitly by
+ * the v39 scope-isolation layer (`origin_project`, `pathOverlapScore`), so
+ * embedding-level path tokens are redundant with a dedicated mechanism
+ * rather than a feature.
+ */
+export function embeddingInputText(entry: { content: string; tags: string[] }): string {
+  const tags = entry.tags.filter((t) => !t.startsWith('path:'));
+  return `${entry.content} ${tags.join(' ')}`.trim();
+}
 
 /**
  * Per-model pooling dispatch for `@xenova/transformers`'s feature-extraction
@@ -199,10 +254,16 @@ function loadStoredEmbeddingModel(hippoRoot: string): string | null {
   }
 }
 
-function saveStoredEmbeddingModel(hippoRoot: string, model: string): void {
+/**
+ * Persist the stored-index identity for `model` (see `embeddingIndexIdentity`).
+ * Versioning happens INSIDE this function, not at call sites, so every caller
+ * — current and future — gets the identity format for free. Must stay
+ * consistent with the compare side in `embeddingModelRequiresReindex`.
+ */
+export function saveStoredEmbeddingModel(hippoRoot: string, model: string): void {
   const db = openHippoDb(hippoRoot);
   try {
-    setMeta(db, EMBEDDING_MODEL_META_KEY, model);
+    setMeta(db, EMBEDDING_MODEL_META_KEY, embeddingIndexIdentity(model));
   } finally {
     closeHippoDb(db);
   }
@@ -222,8 +283,8 @@ export function embeddingModelRequiresReindex(
   model: string,
   index: Record<string, number[]> = loadEmbeddingIndex(hippoRoot),
 ): boolean {
-  const indexedModel = resolveIndexedEmbeddingModel(hippoRoot, index);
-  return indexedModel !== null && indexedModel !== model;
+  const stored = resolveIndexedEmbeddingModel(hippoRoot, index);
+  return stored !== null && stored !== embeddingIndexIdentity(model);
 }
 
 async function rebuildEmbeddingIndex(
@@ -233,7 +294,7 @@ async function rebuildEmbeddingIndex(
   const rebuilt: Record<string, number[]> = {};
   if (entries.length === 0) return rebuilt;
 
-  const texts = entries.map((e) => `${e.content} ${e.tags.join(' ')}`.trim());
+  const texts = entries.map((e) => embeddingInputText(e));
   // provider.embed batches internally; on a hard transport/auth failure it
   // throws, so the caller aborts WITHOUT saving a partial index (atomic
   // reindex: the old index + stored identity are preserved).
@@ -398,7 +459,7 @@ export async function embedMemory(
         return;
       }
 
-      const text = `${entry.content} ${entry.tags.join(' ')}`.trim();
+      const text = embeddingInputText(entry);
       const [vector] = await provider.embed([text], 'passage');
       if (!vector || vector.length === 0) return;
 
@@ -499,7 +560,7 @@ export async function embedAll(
       let vectors: number[][];
       try {
         vectors = await provider.embed(
-          chunk.map((e) => `${e.content} ${e.tags.join(' ')}`.trim()),
+          chunk.map((e) => embeddingInputText(e)),
           'passage',
         );
       } catch (err) {

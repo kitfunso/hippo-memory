@@ -9,9 +9,13 @@
  * `config.embeddings.provider` (default `'local'`).
  *
  * Design contract (see docs/plans/2026-06-08-b-pluggable-embedding-provider.md):
- *   - Local provider `id` is the BARE model string, so existing stores whose DB
- *     meta `embedding_model` is `Xenova/all-MiniLM-L6-v2` see NO identity change
- *     and are NOT force-reindexed on upgrade.
+ *   - Local provider `id` is the BARE model string. (Historical note: this
+ *     originally guaranteed NO identity change on upgrade; since the
+ *     embed-text-format versioning in embeddings.ts (`embeddingIndexIdentity`,
+ *     `${id}#t2`, docs/plans/2026-07-09-recall-determinism.md T1), the STORED
+ *     identity carries a `#t<N>` suffix and pre-#t2 stores get exactly one
+ *     forced reindex on their next embed-touching operation — deliberate,
+ *     because their vectors were computed over path-contaminated text.)
  *   - API provider `id` is `${kind}:${model}`; switching to/from an API embedder
  *     (or a dimension change) flips the identity and triggers the existing
  *     reindex-on-change path.

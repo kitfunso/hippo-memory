@@ -141,7 +141,11 @@ export function searchBoth(
     return true;
   });
 
-  // Sort by adjusted score descending
+  // T2 note: PLAIN stable score sort on purpose -- local/global inputs are
+  // each deterministically ordered (content tail applied in the underlying
+  // search), stability inherits that, and an exact post-bump tie keeps the
+  // LOCAL result ahead of the global one (the concat order), preserving the
+  // pre-T2 semantics.
   deduped.sort((a, b) => b.score - a.score);
 
   // Apply combined token budget (guarantee at least minResults items)
@@ -286,7 +290,8 @@ export async function searchBothHybrid(
     return true;
   });
 
-  // Sort by adjusted score descending
+  // T2 note: PLAIN stable score sort on purpose -- see searchBoth above;
+  // same rationale (deterministic inputs + stability; local-first on ties).
   deduped.sort((a, b) => b.score - a.score);
 
   // Apply combined token budget (guarantee at least minResults items)

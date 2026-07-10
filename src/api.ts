@@ -65,6 +65,7 @@ import {
 } from './auth.js';
 import { applyGoalStackBoost } from './goals.js';
 import { markRetrieved, estimateTokens, hybridSearch, physicsSearch, type RerankStep } from './search.js';
+import { compareEntryIdentity, compareScoredResults } from './compare.js';
 import { scopeMatch } from './scope.js';
 import { consolidate } from './consolidate.js';
 import { loadConfig } from './config.js';
@@ -829,11 +830,15 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
       );
       const maxSub = Math.max(1, Math.ceil(limit * 0.3));
       // Order parents by overflow count descending so the most
-      // information-dense substitutions come first.
+      // information-dense substitutions come first. Overflow count is the
+      // true primary key (unchanged); compareEntryIdentity is only a TAIL
+      // for the case two parents overflow the same number of children —
+      // without it that tie fell to SQLite scan order / loadEntriesByIds
+      // batch order (T2, deterministic tie keys).
       eligibleParents.sort((a, b) => {
         const ac = overflowByParent.get(a.id)?.length ?? 0;
         const bc = overflowByParent.get(b.id)?.length ?? 0;
-        return bc - ac;
+        return bc !== ac ? bc - ac : compareEntryIdentity(a, b);
       });
       substituted = eligibleParents.slice(0, maxSub).map((p) => ({
         entry: p,
@@ -2229,6 +2234,16 @@ export async function getContext(
         ...localEntries.map((entry) => ({ entry, isGlobal: false })),
         ...globalEntries.map((entry) => ({ entry, isGlobal: true })),
       ]
+        // T2 (src/compare.ts) note: this already carries an explicit
+        // per-instance tiebreak (created desc -> id localeCompare) and is
+        // deliberately left as-is rather than routed through
+        // compareEntryIdentity. `created` reflects ingest order, so it is
+        // cross-ingest stable at ms granularity; the residual is honest,
+        // not silently ignored — rows created in the same millisecond fall
+        // to `id.localeCompare`, which is per-instance random (id is
+        // crypto.randomUUID()), so this listing is per-instance-
+        // deterministic but NOT cross-ingest-stable under same-ms
+        // collisions.
         .sort((a, b) => {
           const byCreated = Date.parse(b.entry.created) - Date.parse(a.entry.created);
           return byCreated !== 0 ? byCreated : b.entry.id.localeCompare(a.entry.id);
@@ -2273,7 +2288,7 @@ export async function getContext(
           isGlobal,
         };
       })
-      .sort((a, b) => b.score - a.score);
+      .sort(compareScoredResults);
 
     for (const r of rankedPinned) {
       if (selectedIds.has(r.entry.id)) continue;
@@ -2293,7 +2308,7 @@ export async function getContext(
         tokens: estimateTokens(e.content),
         isGlobal: false,
       }))
-      .sort((a, b) => b.score - a.score);
+      .sort(compareScoredResults);
 
     const globalRanked = globalEntries
       .map((e) => ({
@@ -2302,9 +2317,9 @@ export async function getContext(
         tokens: estimateTokens(e.content),
         isGlobal: true,
       }))
-      .sort((a, b) => b.score - a.score);
+      .sort(compareScoredResults);
 
-    const combined = [...localRanked, ...globalRanked].sort((a, b) => b.score - a.score);
+    const combined = [...localRanked, ...globalRanked].sort(compareScoredResults);
 
     let used = 0;
     for (const r of combined) {
