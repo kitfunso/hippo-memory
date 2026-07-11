@@ -39,6 +39,13 @@ function ent(home: string, tenant: string, m: MemoryEntry, name: string): number
   return insertEntity(home, tenant, { entityType: 'decision', name, memoryId: m.id }).id;
 }
 const seed = (index: number, strength = 1.0): GraphSeed => ({ index, strength });
+/** Like `mem`, but with an explicit envelope scope (v1.26.1 pool-only pinning case). */
+function scopedMem(home: string, tenant: string, text: string, scope: string): MemoryEntry {
+  const content = text.length < 3 ? text.repeat(3) : text;
+  const m = createMemory(content, { tags: [], layer: Layer.Semantic, confidence: 'verified', source: 'test', tenantId: tenant, scope });
+  writeEntry(home, m, { actor: 'test' });
+  return m;
+}
 
 describe('selectGraphSeeds (pure)', () => {
   it('picks top-N by best lexical rank across both lists; strength = 1/(bestRank+1)', () => {
@@ -127,6 +134,31 @@ describe('L1 graphRankStream (real SQLite)', () => {
     // pool excludes b
     const entries = [a, mem(home, T, 'other in pool but no path')];
     expect(graphRankStream(entries, [seed(0)], { hippoRoot: home, tenantId: T })).toEqual([]);
+  });
+
+  it('v1.26.1: a graph-reachable OUT-of-pool private-scoped memory never appears in the stream output (pool-only pin)', () => {
+    // graph-stream.ts is re-rank-only: it scores entries[] indices, never loads or
+    // surfaces memory content the caller did not already admit into the pool. Unlike
+    // graph-recall.ts (which loads reached rows by id and needed a scope predicate added,
+    // v1.26.1), this module has no such load path — the caller's own scope-filtered
+    // candidate pool is what keeps a private-scoped neighbour out, by construction. The
+    // pin asserts on a NON-EMPTY output (code-review-critic: empty-output would be
+    // vacuous): the public in-pool neighbour must rank while the equally-graph-reachable
+    // private row, absent from the pool, must not appear.
+    const a = mem(home, T, 'alpha cache invalidation decision');
+    const pub = mem(home, T, 'public in-pool neighbour of alpha');
+    const priv = scopedMem(home, T, 'private out-of-pool neighbour wording xyzzy', 'slack:private:dm1');
+    const ea = ent(home, T, a, 'A');
+    const ePub = ent(home, T, pub, 'PUB');
+    const ePriv = ent(home, T, priv, 'PRIV');
+    insertRelation(home, T, { fromEntityId: ea, toEntityId: ePub, relType: 'supersedes', memoryId: a.id });
+    insertRelation(home, T, { fromEntityId: ea, toEntityId: ePriv, relType: 'supersedes', memoryId: a.id });
+
+    // pool excludes priv (simulating the caller's own scope-filtered candidate pool).
+    const entries = [a, pub];
+    const out = graphRankStream(entries, [seed(0)], { hippoRoot: home, tenantId: T });
+    expect(out).toEqual([1]); // pub ranked — the pin is exercised, not vacuous...
+    expect(out.map((i) => entries[i].id)).not.toContain(priv.id); // ...and priv never appears
   });
 
   it('seeds are never scored — even when a seed is graph-adjacent to another seed', () => {

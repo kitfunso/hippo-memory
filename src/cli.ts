@@ -1132,6 +1132,9 @@ async function cmdRecall(
         asOf,
         budget,
         minResults: minResults ?? 1,
+        recallScope: recallExplicitScope
+          ? { requested: recallExplicitScope, additive: true }
+          : {},
       });
     }
   }
