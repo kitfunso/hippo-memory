@@ -172,6 +172,22 @@ specific memory id in the returned set — no score-tie assumptions anywhere.
 5. Zero behavior change for scope-NULL stores: existing graph-recall/graph-stream/
    tiebreak test files pass unmodified.
 
+## Review-stage deviations (2026-07-11)
+
+- codex round 1 returned 2 P2s, no P0/P1. P2-2 (manifests at 1.26.0 while CHANGELOG says
+  1.26.1) was a stage-sequencing artifact: the bump was planned for ship and is pulled
+  forward. P2-1 (emit-time filtering lets denied rows consume the relation window /
+  frontier slots) is REAL but shares its root and its trigger with both
+  independent-review lows (traversal-through-denied-nodes; entity-name observability):
+  all three need scope-aware traversal and all three are inert until graph rows can
+  reference scoped memories, which no shipped writer produces. Per
+  docs/release-policy.md's iteration threshold, shipped as a CHANGELOG Known
+  Limitation + one consolidated TODOS follow-up gated on E2 scope plumbing, rather
+  than restructuring the BFS hot path for an unreachable population. The
+  feedback_sql_filter_before_limit_window probation memory fired on exactly this
+  pattern: applied to the by-id load at plan time, missed on the relation window -
+  codex caught the residual.
+
 ## Out of scope (deliberate)
 
 - **Write-side scope guard on graph rows** — wrong layer (breaks deliberate unlock).

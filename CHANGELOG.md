@@ -9,6 +9,9 @@
 ### Added
 - Regression pin: the `--graph-stream` RRF stream is re-rank-only within the caller's (already scope-filtered) candidate pool - a graph-reachable out-of-pool private-scoped memory is structurally unindexable by the stream. Pinned with a non-empty-output test so the property is exercised, not assumed.
 
+### Known limitations
+- **The scope rule runs at emit time, not traversal time** (cross-model review, P2). Three consequences on a store whose graph references scoped memories: (1) denied neighbours still consume `loadNeighborRelations` window and `--max-neighbors` frontier slots, so a seed whose newest relations mostly point at denied rows can starve admitted neighbours out of the per-hop window (completeness, not confidentiality); (2) the BFS traverses THROUGH denied nodes, so at `--hops >= 2` a public row reachable only via a private stepping-stone still surfaces (deliberate: content never leaks, reachability does); (3) entity NAMES derived from a scoped object remain visible to graph observability surfaces. All three share one root (scope-aware graph traversal) and one trigger (graph rows referencing scoped memories, which NO shipped write path produces today - the graph derives from the four E2 tables, whose mirrors carry no scope). Filed as a single follow-up in TODOS.md, gated on E2 objects gaining scope plumbing.
+
 ## 1.26.0 (2026-07-09)
 
 ### Fixed
