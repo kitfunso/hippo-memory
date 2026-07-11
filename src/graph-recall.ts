@@ -45,6 +45,7 @@ import {
   loadEntitiesByIds,
   loadNeighborRelations,
 } from './graph.js';
+import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from './recall-scope.js';
 
 /** Hard cap on `--hops` (a higher value just walks more of a finite graph; this bounds
  *  worst-case work and keeps the flag honest). */
@@ -82,6 +83,14 @@ export interface GraphExpandOpts {
   /** The recall --min-results floor: this many top base rows are kept regardless of
    *  budget, so graph expansion never violates the floor. Defaults to 1. */
   minResults?: number;
+  /** Recall-side envelope scope rule applied to graph-REACHED memories (the injected
+   *  rows), mirroring shared.ts SearchBothOptions.recallScope. Omitted = default-deny
+   *  (private + quarantine scopes excluded, NULL passes) — the fail-closed default for
+   *  bare/SDK callers. { requested, additive: true } = CLI --scope unlock semantics
+   *  (passesCliRecallScopeFilter); additive false/absent with requested set = api
+   *  exact-narrowing semantics (passesScopeFilterForRecall). Base results are the
+   *  caller's responsibility (they passed through the caller's own scope filter). */
+  recallScope?: { requested?: string; additive?: boolean };
 }
 
 /** Load memories by id in <=500-id chunks (loadEntriesByIds caps each call at 500). */
@@ -105,9 +114,12 @@ function produceHitsForRoot(
   baseScoreByMemId: Map<string, number>,
   seenMemoryIds: Set<string>,
   hitsByOrigin: Map<string, GraphHit[]>,
-  opts: Required<Pick<GraphExpandOpts, 'hops' | 'maxNeighbors' | 'tenantId' | 'includeSuperseded'>> & { asOfDate: Date | null },
+  opts: Required<Pick<GraphExpandOpts, 'hops' | 'maxNeighbors' | 'tenantId' | 'includeSuperseded'>> & {
+    asOfDate: Date | null;
+    recallScope: { requested?: string; additive?: boolean };
+  },
 ): void {
-  const { hops, maxNeighbors, tenantId, includeSuperseded, asOfDate } = opts;
+  const { hops, maxNeighbors, tenantId, includeSuperseded, asOfDate, recallScope } = opts;
 
   // Seeds = graph entities (in THIS store) whose source memory is a base result.
   const seedEntities = loadEntitiesByMemoryId(root, tenantId, baseResults.map((r) => r.entry.id));
@@ -194,6 +206,10 @@ function produceHitsForRoot(
     } else if (!includeSuperseded && (mem.superseded_by || isSupersededEndpoint)) {
       continue;                                                 // default recall drops superseded
     }
+    const scopeOk = recallScope.additive
+      ? passesCliRecallScopeFilter(mem.scope ?? null, recallScope.requested)
+      : passesScopeFilterForRecall(mem.scope ?? null, recallScope.requested);
+    if (!scopeOk) continue;
     const origin = originMemByEntityId.get(ent.id) ?? baseResults[0].entry.id;
     const originScore = baseScoreByMemId.get(origin) ?? baseResults[baseResults.length - 1].score;
     seenMemoryIds.add(mem.id);
@@ -230,6 +246,7 @@ export function graphExpandRecall(
   const includeSuperseded = opts.includeSuperseded ?? false;
   const asOfDate = opts.asOf ? new Date(opts.asOf) : null;
   const minResults = opts.minResults ?? 1;
+  const recallScope = opts.recallScope ?? {};
 
   const baseScoreByMemId = new Map(baseResults.map((r) => [r.entry.id, r.score]));
   const seenMemoryIds = new Set<string>(baseResults.map((r) => r.entry.id));
@@ -239,7 +256,7 @@ export function graphExpandRecall(
   const roots = globalRoot && globalRoot !== hippoRoot ? [hippoRoot, globalRoot] : [hippoRoot];
   for (const root of roots) {
     produceHitsForRoot(root, baseResults, baseScoreByMemId, seenMemoryIds, hitsByOrigin, {
-      hops, maxNeighbors, tenantId, includeSuperseded, asOfDate,
+      hops, maxNeighbors, tenantId, includeSuperseded, asOfDate, recallScope,
     });
   }
 
