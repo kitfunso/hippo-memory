@@ -49,4 +49,13 @@ describe('HTTP /v1/memories windowSize serialization (v1.7.1 INFO #6)', () => {
     const body = (await res.json()) as { windowSize?: number };
     expect(body.windowSize).toBe(200);
   });
+
+  // v1.26.2 T2 — keep-alive hardening. serve() raises the default 5s
+  // keepAliveTimeout to shrink the idle-close/reuse race behind the
+  // server-concurrency ECONNRESET flake (T3b capture). headersTimeout must
+  // exceed keepAliveTimeout per Node's contract.
+  it('serve() sets keepAliveTimeout=65000 and headersTimeout=66000 on the underlying server', () => {
+    expect(handle.server?.keepAliveTimeout).toBe(65000);
+    expect(handle.server?.headersTimeout).toBe(66000);
+  });
 });
