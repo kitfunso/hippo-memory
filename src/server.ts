@@ -3269,11 +3269,12 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   // traced to a chunk-boundary reuse race — a kept-alive socket idled through
   // a prior response chunk gets closed by the server's default 5s
   // keepAliveTimeout just as a client reuses it for the next request. Raising
-  // both timeouts shrinks that idle-close/reuse window ~13x. headersTimeout
-  // must exceed keepAliveTimeout: the headers timer also runs while a
-  // kept-alive socket waits for its next request, so a smaller value would
-  // itself close idle reused sockets early (Node accepts the inversion
-  // silently — verified empirically, no listen-time error).
+  // both timeouts shrinks that idle-close/reuse window ~13x. Keep
+  // headersTimeout ABOVE keepAliveTimeout (as set here): the headers timer
+  // also runs while a kept-alive socket waits for its next request, so a
+  // future edit that set headersTimeout lower would itself close idle
+  // reused sockets early, and Node would not flag it (no error or warning
+  // at listen time — verified empirically).
   server.keepAliveTimeout = 65_000;
   server.headersTimeout = 66_000;
 

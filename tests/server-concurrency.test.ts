@@ -52,7 +52,11 @@ function tracedRequest(label: string, url: string, init?: TracedRequestInit): Pr
         port: target.port,
         path: `${target.pathname}${target.search}`,
         method: init?.method ?? 'GET',
-        headers: init?.headers,
+        // Content-Length keeps the wire format length-delimited, matching the
+        // prior fetch transport (node:http would otherwise send chunked).
+        headers: init?.body !== undefined
+          ? { ...init?.headers, 'content-length': String(Buffer.byteLength(init.body)) }
+          : init?.headers,
         agent: false,
       },
       (res) => {
@@ -68,12 +72,14 @@ function tracedRequest(label: string, url: string, init?: TracedRequestInit): Pr
         });
         res.on('error', (err) => {
           const code = (err as any)?.cause?.code ?? (err as any)?.code;
+          req.destroy(); // free the un-pooled socket on mid-response failure
           reject(new Error(`${label}: ${code}`, { cause: err }));
         });
       },
     );
     req.on('error', (err) => {
       const code = (err as any)?.cause?.code ?? (err as any)?.code;
+      req.destroy(); // free the un-pooled socket on request-phase failure
       reject(new Error(`${label}: ${code}`, { cause: err }));
     });
     if (init?.body !== undefined) req.write(init.body);
