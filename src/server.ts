@@ -3270,13 +3270,17 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   // a prior response chunk gets closed by the server's default 5s
   // keepAliveTimeout just as a client reuses it for the next request. Raising
   // both timeouts shrinks that idle-close/reuse window ~13x. Keep
-  // headersTimeout ABOVE keepAliveTimeout (as set here): the headers timer
-  // also runs while a kept-alive socket waits for its next request, so a
-  // future edit that set headersTimeout lower would itself close idle
-  // reused sockets early, and Node would not flag it (no error or warning
-  // at listen time — verified empirically).
+  // headersTimeout ABOVE the EFFECTIVE keep-alive expiry, which is
+  // keepAliveTimeout + keepAliveTimeoutBuffer (the buffer defaults to
+  // 1,000ms on Node 22.19+/24.6+ — verified 1,000 on node 24.13, so the
+  // effective expiry here is 66s; codex review caught that a 66s
+  // headersTimeout would sit exactly ON that boundary and recreate the
+  // race). The headers timer also runs while a kept-alive socket waits for
+  // its next request, so a value at or below the effective expiry would
+  // itself close idle reused sockets, and Node would not flag it (no error
+  // or warning at listen time — verified empirically).
   server.keepAliveTimeout = 65_000;
-  server.headersTimeout = 66_000;
+  server.headersTimeout = 70_000;
 
   await new Promise<void>((resolve, reject) => {
     const onError = (err: Error): void => {
