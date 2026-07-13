@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.26.2 (2026-07-13)
+
+### Fixed
+- **A value-less `--scope` is now a usage error on every command.** parseArgs stores a bare `--scope` as boolean `true`; the 14 consumer sites across 7 commands then split three ways - some coerced it into the literal scope string `'true'` (the recall filter/unlock input, wm session scope, and remember's `scope:true` tag dual-write), others silently dropped the user's scoping intent entirely (worst: `hippo remember <text> --scope` wrote the memory with NO envelope scope while still tagging it `scope:true`), and only `import` validated it. One global well-formedness guard now runs in the CLI dispatch before the command switch: `--scope` present but not a non-empty string exits 1 with a usage message, on every command (including ones that ignore the flag - well-formedness is global), on both the direct and thin-client paths. Explicit empty/whitespace values (`--scope ""`) error the same way. Valued `--scope` behavior is unchanged everywhere.
+- **`tests/server-concurrency.test.ts` ECONNRESET flake eliminated, with its mechanism captured first.** New permanent diagnostics named the failure live before any fix: `worker 6 req 11 read-chunk 10: ECONNRESET` - a second-chunk reader GET reusing a kept-alive socket that idled through the prior chunk while the full suite saturated the host, closed by the server's default 5s `keepAliveTimeout` exactly at reuse. Fixed at both layers (see Changed below); the test now uses fresh un-pooled `node:http` connections (`agent: false`) since connection reuse is orthogonal to its actual claim (SQLite single-writer correctness), and any future failure self-describes with worker/request/phase context. Evidence: 3 consecutive fully-green full-suite runs (2,726 tests each, zero ECONNRESET) against a 2-of-2-failing baseline, plus a 5x tight-loop stress probe (all green) bounding the fresh-connection transport's port-churn profile.
+
+### Changed
+- **`hippo serve` hardens its HTTP keep-alive timeouts:** `keepAliveTimeout` 5s -> 65s and `headersTimeout` -> 70s. The 5s default made the idle-close/reuse race easy to hit for any client under host load (the CLI thin-client silently falls back to direct mode when it loses, so this surfaced as noise rather than errors). 70s clears the EFFECTIVE keep-alive expiry - `keepAliveTimeout` plus the 1,000ms `keepAliveTimeoutBuffer` Node 22.19+/24.6+ adds (cross-model review caught that a 66s value sat exactly on the 65s+1s boundary); the ordering invariant itself is pinned by a regression test.
+- `ServerHandle` gains an optional `server` field exposing the underlying `node:http` Server (additive, introspection-only).
+
 ## 1.26.1 (2026-07-11)
 
 ### Fixed
