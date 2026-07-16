@@ -296,6 +296,11 @@ export interface ServerHandle {
   port: number;
   url: string;
   stop: () => Promise<void>;
+  /** Introspection-only (v1.26.2): the underlying node:http Server, exposed so
+   *  tests can assert keep-alive/headers timeout hardening without reaching
+   *  into serve()'s closure. Additive field — do not depend on it for control
+   *  flow outside tests. */
+  server?: import('node:http').Server;
 }
 
 export interface ServeOpts {
@@ -3260,6 +3265,23 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     });
   });
 
+  // T3b capture (v1.26.2): tests/server-concurrency.test.ts's ECONNRESET flake
+  // traced to a chunk-boundary reuse race — a kept-alive socket idled through
+  // a prior response chunk gets closed by the server's default 5s
+  // keepAliveTimeout just as a client reuses it for the next request. Raising
+  // both timeouts shrinks that idle-close/reuse window ~13x. Keep
+  // headersTimeout ABOVE the EFFECTIVE keep-alive expiry, which is
+  // keepAliveTimeout + keepAliveTimeoutBuffer (the buffer defaults to
+  // 1,000ms on Node 22.19+/24.6+ — verified 1,000 on node 24.13, so the
+  // effective expiry here is 66s; codex review caught that a 66s
+  // headersTimeout would sit exactly ON that boundary and recreate the
+  // race). The headers timer also runs while a kept-alive socket waits for
+  // its next request, so a value at or below the effective expiry would
+  // itself close idle reused sockets, and Node would not flag it (no error
+  // or warning at listen time — verified empirically).
+  server.keepAliveTimeout = 65_000;
+  server.headersTimeout = 70_000;
+
   await new Promise<void>((resolve, reject) => {
     const onError = (err: Error): void => {
       server.removeListener('listening', onListening);
@@ -3321,5 +3343,5 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     process.once('SIGINT', () => { void gracefulShutdown('SIGINT'); });
   }
 
-  return { port: actualPort, url, stop };
+  return { port: actualPort, url, stop, server };
 }

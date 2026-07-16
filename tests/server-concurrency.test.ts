@@ -2,10 +2,90 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { request as httpRequest } from 'node:http';
 import { initStore } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { remember as apiRemember } from '../src/api.js';
 import { serve, type ServerHandle } from '../src/server.js';
+
+// Minimal fetch-Response-shaped result so the assertions below (res.status,
+// await res.text(), await res.json()) did not need to change when the
+// transport switched off fetch/undici.
+interface TracedResponse {
+  status: number;
+  text: () => Promise<string>;
+  json: () => Promise<unknown>;
+}
+
+interface TracedRequestInit {
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string;
+}
+
+// T3c (hardening-1.26.2): fresh-TCP-connection transport, replacing fetch.
+// T3b captured the mechanism with T3a's diagnostics: "worker 6 req 11
+// read-chunk 10: ECONNRESET" / cause read ECONNRESET — a second-chunk reader
+// GET reused a kept-alive socket that had idled through the prior chunk
+// while the full suite saturated the host; Node's server-side default
+// keepAliveTimeout (5s) closed the socket exactly as undici tried to reuse
+// it. `node:http`'s `agent: false` opts out of connection pooling entirely
+// (an unmanaged, un-pooled socket per request, `Connection: close` sent
+// automatically), so this test's requests never depend on keep-alive
+// reuse timing again. undici is NOT a dependency here and none is added.
+//
+// Connection reuse is orthogonal to this test's actual claim (SQLite
+// single-writer correctness under concurrent requests, not HTTP keep-alive
+// behavior); the socket-lifecycle race itself belongs to T2's server
+// keep-alive/headers timeout hardening, not to this test avoiding it.
+//
+// Permanent failure diagnostics (T3a, ported from the fetch transport):
+// a rejection rethrows enriched with worker/request/phase context plus the
+// underlying cause code, so any future flake self-describes instead of a
+// bare ECONNRESET.
+function tracedRequest(label: string, url: string, init?: TracedRequestInit): Promise<TracedResponse> {
+  return new Promise((resolve, reject) => {
+    const target = new URL(url);
+    const req = httpRequest(
+      {
+        hostname: target.hostname,
+        port: target.port,
+        path: `${target.pathname}${target.search}`,
+        method: init?.method ?? 'GET',
+        // Content-Length keeps the wire format length-delimited, matching the
+        // prior fetch transport (node:http would otherwise send chunked).
+        headers: init?.body !== undefined
+          ? { ...init?.headers, 'content-length': String(Buffer.byteLength(init.body)) }
+          : init?.headers,
+        agent: false,
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => chunks.push(chunk));
+        res.on('end', () => {
+          const bodyText = Buffer.concat(chunks).toString('utf-8');
+          resolve({
+            status: res.statusCode ?? 0,
+            text: async () => bodyText,
+            json: async () => JSON.parse(bodyText) as unknown,
+          });
+        });
+        res.on('error', (err) => {
+          const code = (err as any)?.cause?.code ?? (err as any)?.code;
+          req.destroy(); // free the un-pooled socket on mid-response failure
+          reject(new Error(`${label}: ${code}`, { cause: err }));
+        });
+      },
+    );
+    req.on('error', (err) => {
+      const code = (err as any)?.cause?.code ?? (err as any)?.code;
+      req.destroy(); // free the un-pooled socket on request-phase failure
+      reject(new Error(`${label}: ${code}`, { cause: err }));
+    });
+    if (init?.body !== undefined) req.write(init.body);
+    req.end();
+  });
+}
 
 // Concurrent recall + write under SQLite single-writer (real DB).
 // Proves no SQLite locked errors when readers and a writer hammer the
@@ -49,13 +129,18 @@ describe('server concurrency — recall + write under single-writer', () => {
         const readsPerWorker = 50;
         const readChunk = 10;
         const readerWork = Array.from({ length: readerCount }, async (_, workerIdx) => {
-          const responses: Response[] = [];
+          const responses: TracedResponse[] = [];
           for (let chunkStart = 0; chunkStart < readsPerWorker; chunkStart += readChunk) {
             const chunkEnd = Math.min(chunkStart + readChunk, readsPerWorker);
-            const fetches: Promise<Response>[] = [];
+            const fetches: Promise<TracedResponse>[] = [];
             for (let reqIdx = chunkStart; reqIdx < chunkEnd; reqIdx++) {
               const term = seedTerms[(workerIdx + reqIdx) % seedTerms.length]!;
-              fetches.push(fetch(`${handle.url}/v1/memories?q=${term}&limit=5`));
+              fetches.push(
+                tracedRequest(
+                  `worker ${workerIdx} req ${reqIdx} read-chunk ${chunkStart}`,
+                  `${handle.url}/v1/memories?q=${term}&limit=5`,
+                ),
+              );
             }
             const chunkRes = await Promise.all(fetches);
             responses.push(...chunkRes);
@@ -66,9 +151,9 @@ describe('server concurrency — recall + write under single-writer', () => {
         // 1 writer worker, sequential POSTs with unique markers.
         const writeCount = 50;
         const writerWork = (async () => {
-          const responses: Response[] = [];
+          const responses: TracedResponse[] = [];
           for (let n = 0; n < writeCount; n++) {
-            const res = await fetch(`${handle.url}/v1/memories`, {
+            const res = await tracedRequest(`writer req ${n} write`, `${handle.url}/v1/memories`, {
               method: 'POST',
               headers: { 'content-type': 'application/json' },
               body: JSON.stringify({

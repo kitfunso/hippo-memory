@@ -8167,6 +8167,17 @@ async function main(): Promise<void> {
     process.exit(0);
   }
   maybeAutoInstallCodexWrapper(command, args);
+  /** Global --scope well-formedness guard (v1.26.2). parseArgs stores a value-less
+   *  flag as boolean true; downstream the 14 consumer sites either coerced that to
+   *  the literal scope string 'true' (recall filter/unlock input, wm session scope,
+   *  the remember scope-tag dual-write) or silently dropped the user's scoping
+   *  intent (the remember envelope WRITE). Reject it once here, mirroring the
+   *  --hops value-less guard, so every current and future command - including the
+   *  thin-client dispatch relays - sees --scope only as a non-empty string. */
+  if ('scope' in flags && (typeof flags['scope'] !== 'string' || !flags['scope'].trim())) {
+    console.error('--scope requires a non-empty value (e.g. --scope slack:private:C1).');
+    process.exit(1);
+  }
   switch (command) {
     case 'init':
       cmdInit(hippoRoot, flags);

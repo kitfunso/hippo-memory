@@ -49,4 +49,19 @@ describe('HTTP /v1/memories windowSize serialization (v1.7.1 INFO #6)', () => {
     const body = (await res.json()) as { windowSize?: number };
     expect(body.windowSize).toBe(200);
   });
+
+  // v1.26.2 T2 — keep-alive hardening. serve() raises the default 5s
+  // keepAliveTimeout to shrink the idle-close/reuse race behind the
+  // server-concurrency ECONNRESET flake (T3b capture). headersTimeout must
+  // exceed the EFFECTIVE keep-alive expiry (keepAliveTimeout + the 1,000ms
+  // keepAliveTimeoutBuffer on Node 22.19+/24.6+) — codex P2: 66s sat
+  // exactly on the 65s+1s boundary.
+  it('serve() sets keepAliveTimeout=65000 and headersTimeout=70000 on the underlying server', () => {
+    expect(handle.server?.keepAliveTimeout).toBe(65000);
+    expect(handle.server?.headersTimeout).toBe(70000);
+    const buffer = (handle.server as unknown as { keepAliveTimeoutBuffer?: number })?.keepAliveTimeoutBuffer ?? 0;
+    // Pin the ordering invariant itself, not just the two constants: the
+    // headers timer must clear the effective keep-alive expiry.
+    expect(handle.server!.headersTimeout).toBeGreaterThan(handle.server!.keepAliveTimeout + buffer);
+  });
 });
