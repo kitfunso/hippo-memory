@@ -73,7 +73,7 @@ function permutationsOf3(): number[][] {
   return out;
 }
 
-// Near-duplicate probe pair: 14 shared tokens, one word swapped
+// Near-duplicate probe pair: 14 tokens per entry, 13 shared, one word swapped
 // ("this" -> "last"). Jaccard = 13/15 = 0.8667 (> 0.7 dedupe threshold),
 // computed against src/search.ts textOverlap's tokenizer (lowercase,
 // punctuation-stripped, length>1 tokens, set-based Jaccard).
@@ -196,6 +196,34 @@ describe('dedupe survivor determinism', () => {
     } finally {
       s1.restore();
       s2.restore();
+    }
+  });
+
+  it('4b. quantization intent: within-epsilon strength difference is a TIE, so retrieval_count decides (kills the raw-strength-compare mutant)', () => {
+    // strengths 1.0 and 0.996 land in the SAME bucket (round(100.0) ==
+    // round(99.6) == 100), so under the shipped comparator retrieval_count
+    // decides -- the 0.996-strength / 5-retrieval entry must survive. A
+    // raw-strength compare ((b.strength ?? 0) - (a.strength ?? 0)) would
+    // keep the 1.0-strength entry instead and fail this test: this is the
+    // one case that pins the bucket quantization itself, not just the
+    // determinism properties (independent-review r1 MED).
+    const { home, restore } = tmpHome('hippo-dedupe-det-4b-');
+    try {
+      const strongRaw = remember(ctxFor(home), { content: CONTENT_A });
+      const retrieved = remember(ctxFor(home), { content: CONTENT_B });
+      setStrength(home, strongRaw.id, 1.0);
+      setStrength(home, retrieved.id, 0.996);
+      setRetrievalCount(home, strongRaw.id, 0);
+      setRetrievalCount(home, retrieved.id, 5);
+
+      const result = deduplicateStore(home);
+
+      expect(result.removed).toBe(1);
+      expect(result.pairs[0].kept).toBe(retrieved.id);
+      expect(result.pairs[0].keptContent).toBe(CONTENT_B);
+      expect(result.pairs[0].removed).toBe(strongRaw.id);
+    } finally {
+      restore();
     }
   });
 
