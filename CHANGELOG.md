@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.26.3 (2026-07-16)
+
+### Fixed
+- **Dedup survivor selection is now deterministic.** `deduplicateStore` decided which of two near-duplicate memories survives `hippo sleep` / `hippo dedup` with a comparator that (a) tied exactly on fresh ingests (strength 1 vs 1, retrieval_count 0 vs 0 - measured pre-fix) and had no terminal key, so the survivor fell to arrival order (two stores ingesting the same facts in different orders consolidated to DIFFERENT surviving content), and (b) used a 0.01 abs-diff strength epsilon that is non-transitive (1.0~0.994 ties, 0.994~0.988 ties, but 1.0 beats 0.988), handing `Array.prototype.sort` an inconsistent comparator. Survivor selection is now a strict total order: strength bucket desc (`strengthBucket` = `Math.round(strength / 0.01)`, `Number.isFinite`-guarded so no NaN can break the order - the historical epsilon made transitive), then retrieval_count desc (same non-finite hardening), then `compareEntryIdentity` (content asc -> id asc, the cross-ingest-stable terminal key from 1.26.0's `src/compare.ts`). Which content survives consolidation is now a deterministic function of the store's contents. Behavior nuance: two strengths straddling a 0.01 bucket edge (e.g. 0.0049 vs 0.0051) now compare as different where the old epsilon called them tied; the flip always favors the not-weaker entry, and the old behavior at such pairs was itself order/engine-dependent. Evidence: 9 new real-DB tests (`tests/dedupe-survivor-determinism.test.ts`) incl. opposite-order stores, all-6-permutation invariance over an epsilon-chain triple, and an empirically verified mutant-kill pin for the bucket quantization; captured pre-fix red runs; micro-eval 11/11; full suite green.
+- **Consolidation merge-base tie (same class).** `mergeContents` picked the 2-entry merge base by content length with equal-length ties falling to cluster-assembly order; ties now break on `compareEntryIdentity`. No change when lengths differ. The 3+ entry bullet ORDER still follows cluster order - filed as a follow-up in TODOS.md (a deliberate cluster-ordering decision, not a drive-by).
+
+### Changed
+- New additive export `strengthBucket` from `src/dedupe.ts` (the transitive strength-tie quantizer; JSDoc'd, unit-pinned). No other API surface changes.
+- The 1.26.0 known limitation "dedup survivor selection (`deduplicateStore`) remains per-instance-deterministic only" is resolved by this release. The same-millisecond `created` SQL LIMIT-boundary clause of that limitation is unchanged and stays tracked in TODOS.md.
+
 ## 1.26.2 (2026-07-13)
 
 ### Fixed

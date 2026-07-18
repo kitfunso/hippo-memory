@@ -48,13 +48,27 @@ reattributed and resolved the same day (harness bug, not hippo).
   on an eval because path tokens currently do real lexical work
   (project-name queries match `path:<project>` tags in the FTS index,
   db.ts fts5(id, content, tags)).
-- **Follow-up: dedup survivor selection is per-instance nondeterministic.**
-  `deduplicateStore` (src/dedupe.ts:41) sorts strength desc ->
-  retrieval_count desc with no further key; freshly-ingested near-duplicates
-  tie on both, so WHICH duplicate survives `hippo sleep` falls to random-id
-  load order. Same class as the v1.26.0 fix but changes surviving CONTENT
-  during consolidation - needs its own tests (independent-review finding,
-  v1.26.0 episode).
+- **RESOLVED 2026-07-16 (v1.26.3, episode 01KXPDKZJF2146W6R5VQA6M7FH) -
+  dedup survivor selection is per-instance nondeterministic.** Wider than
+  filed: besides the missing terminal tie key, the 0.01 abs-diff strength
+  epsilon was NON-TRANSITIVE (1.0~0.994, 0.994~0.988, 1.0>0.988), so a
+  minimal appended tie key would not have fixed the class. Shipped a strict
+  total order (`strengthBucket` bucket desc -> retrieval_count desc ->
+  compareEntryIdentity), plus the same-class equal-length merge-base tie in
+  consolidate.ts mergeContents. 9 real-DB tests incl. permutation invariance
+  + an empirically verified quantization mutant-kill; pre-fix red runs
+  captured. See CHANGELOG 1.26.3 +
+  docs/plans/2026-07-16-dedupe-survivor-determinism.md.
+- **Follow-up (from the dedupe-determinism episode): consolidate 3+ merge
+  bullet ORDER inherits cluster-assembly order.** `mergeContents`
+  (src/consolidate.ts) now breaks equal-LENGTH base ties deterministically,
+  but for 3+ entry clusters the bulleted summary lists members in cluster
+  order, which derives from upstream consolidation assembly (per-instance
+  stable via `created ASC, id ASC`, NOT cross-ingest stable). Content-noise
+  only (no survivor choice); land only with a deliberate cluster-ordering
+  decision in the consolidation pass, not as a drive-by
+  (docs/plans/2026-07-16-dedupe-survivor-determinism.md T2 out-of-scope
+  note).
 - **RESOLVED 2026-07-05 (same day) — silent loss of user-supplied `--tag`
   values was a harness bug, not a hippo write-path bug.** The rows this
   bullet originally described (13 tagless rows in the LoCoMo v1.25.0 run)
