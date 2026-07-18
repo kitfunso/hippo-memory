@@ -1,5 +1,55 @@
 # Changelog
 
+## 1.26.4 - 2026-07-18
+
+### Fixed
+- **Path-locality boost no longer rewards generic path tags** (S5, deferred
+  from the v39 scope-isolation plan). `pathOverlapScore` normalized by the
+  memory's own tag count, so a memory carrying a single generic path tag
+  (e.g. `path:<user>` written at the home directory) scored a perfect 1.0
+  overlap from every cwd underneath it and took the full 1.3x recall boost
+  cross-project via the global store, out-boosting location-specific
+  memories. It now normalizes by the more specific side:
+  `matches / max(|memoryPathTags|, |currentPathTags|)`. Evidence-gated under
+  a pre-registered decision rule: new tier-1 fixture red under the old
+  normalization / green under the new, measured (not predicted), with all
+  pre-existing fixtures and the full suite green.
+  See `docs/evals/2026-07-18-s5-path-overlap-result.md`.
+
+### Changed
+- **Recall-order behavior delta for upgraders**: the changed region is every
+  memory LESS path-specific than the recall cwd, not only generic-tagged
+  ones. A memory written at a project root and recalled from deeper
+  subdirectories of that same project now sheds boost one level earlier
+  (1.3/1.2/1.15/1.075 at depths 0-3, previously 1.3/1.3/1.3/1.15). This is
+  intended: an exactly-located memory now outranks a root-located one
+  instead of tying with it. The gradient is pinned in
+  `tests/path-context.test.ts`.
+- New exported helper `pathBoostMultiplier` (+ `PATH_BOOST_WEIGHT`) in
+  `src/path-context.ts`; both recall scoring paths (`hybridSearch` and the
+  sync `search`) now share it instead of duplicating the boost inline.
+
+### Micro-eval harness
+- Fixtures can now vary the working directory per remember/query/recall item
+  (`cwd_subdir`, sanitized, with automatic store init), promote a memory to
+  the per-fixture global store (`promote` action, reminted global id
+  tracked), and hard-delete a local copy (`forget` action). Older actions
+  (supersede, outcomes, trace verification, goal_push) now run from the
+  item's cwd too.
+- `run.py` falls back to `node bin/hippo.js` when the default `hippo` binary
+  is missing or is a Windows `.cmd` shim (unspawnable without a shell);
+  `HIPPO_BIN` still wins when set. Windows runs need no env override now.
+- New fixture `path_boost.json` (mechanic `path-boost`) keeps tier 1
+  sensitive to path-boost changes permanently.
+
+### Known limitations / follow-ups filed
+- Local store resolution has no ancestor walk-up: hippo commands run from a
+  subdirectory of an initialized project error instead of finding the
+  project root's store. Filed in TODOS.
+- Memories promoted to the global store carry no embedding and score
+  bm25-only in hybrid recall (a structural base-score deficit vs local
+  rows). Filed in TODOS.
+
 ## 1.26.3 (2026-07-16)
 
 ### Fixed
