@@ -23,6 +23,7 @@ import { search, hybridSearch, SearchResult } from './search.js';
 import { evalNow } from './ablation.js';
 import { deriveOriginProject, classifyOriginProject, resolveGlobalRootDir } from './project-identity.js';
 import { detectSecret } from './secret-detect.js';
+import { embedMemory, embedAll } from './embeddings.js';
 
 /**
  * Returns the path to the global Hippo store.
@@ -84,6 +85,13 @@ export function promoteToGlobal(
   };
 
   writeEntry(globalRoot, globalEntry, { actor: opts?.actor });
+
+  // Fire-and-forget: embedMemory's own availability gate (embeddings.ts:438)
+  // already no-ops when embeddings are unavailable/disabled, so a pre-guard
+  // here would be redundant (capture.ts:598 pre-guards instead; both
+  // contracts are correct, see docs/plans/2026-07-18-global-row-embeddings.md).
+  void embedMemory(globalRoot, globalEntry).catch(() => {});
+
   return globalEntry;
 }
 
@@ -360,7 +368,7 @@ export function transferScore(entry: MemoryEntry): number {
 export function shareMemory(
   localRoot: string,
   id: string,
-  options: { force?: boolean; tenantId?: string } = {}
+  options: { force?: boolean; tenantId?: string; skipEmbed?: boolean } = {}
 ): MemoryEntry | null {
   // tenantId is OPTIONAL for backward compat — autoShare's internal call at
   // :370 passes only `{ force: true }` in a single-tenant context. MCP/REST
@@ -400,6 +408,16 @@ export function shareMemory(
   };
 
   writeEntry(globalRoot, globalEntry);
+
+  // Single-row producer: embed here unless the caller opts out. autoShare
+  // sets skipEmbed so it can batch its whole run through one embedAll() at
+  // the end instead of N serialized full-index rewrites (embedMemory rewrites
+  // the whole index JSON per call). Same redundant-pre-guard reasoning as
+  // promoteToGlobal above.
+  if (!options.skipEmbed) {
+    void embedMemory(globalRoot, globalEntry).catch(() => {});
+  }
+
   return globalEntry;
 }
 
@@ -517,8 +535,14 @@ export function autoShare(
 
   const shared: MemoryEntry[] = [];
   for (const entry of candidates) {
-    const result = shareMemory(localRoot, entry.id, { force: true });
+    // skipEmbed: batching invariant, this is a batch producer, so it embeds
+    // once via embedAll() below rather than once per row inside shareMemory.
+    const result = shareMemory(localRoot, entry.id, { force: true, skipEmbed: true });
     if (result) shared.push(result);
+  }
+
+  if (shared.length > 0) {
+    void embedAll(globalRoot).catch(() => {});
   }
 
   return shared;
@@ -560,6 +584,12 @@ export function syncGlobalToLocal(
 
     writeEntry(localRoot, entry);
     count++;
+  }
+
+  // Batch producer: one embedAll() on the destination rather than an
+  // embedMemory() per copied row (same batching invariant as autoShare).
+  if (count > 0) {
+    void embedAll(localRoot).catch(() => {});
   }
 
   return count;
