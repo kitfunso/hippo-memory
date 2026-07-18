@@ -5,7 +5,7 @@
 
 import { MemoryEntry, calculateStrength } from './memory.js';
 import { isOutcomeFastAblated, isRecallBoostAblated, evalNow } from './ablation.js';
-import { extractPathTags, pathOverlapScore } from './path-context.js';
+import { extractPathTags, pathBoostMultiplier } from './path-context.js';
 import { detectScope, scopeMatch } from './scope.js';
 import {
   cosineSimilarity,
@@ -594,9 +594,7 @@ export async function hybridSearch(
     compositeScore *= decisionBoost;
 
     // Path-based boost: memories tagged with matching path segments get up to 1.3x
-    const memPathTags = entries[i].tags.filter(t => t.startsWith('path:'));
-    const pathScore = pathOverlapScore(memPathTags, currentPathTags);
-    const pathBoost = 1.0 + (pathScore * 0.3);
+    const pathBoost = pathBoostMultiplier(entries[i].tags, currentPathTags);
     compositeScore *= pathBoost;
 
     // Retrieval-time outcome personalization: nudge up/down from user feedback.
@@ -1152,10 +1150,7 @@ export function search(
     composite *= decisionBoost;
 
     // Path-based boost: memories tagged with matching path segments get up to 1.3x
-    const memPathTagsSync = entries[i].tags.filter(t => t.startsWith('path:'));
-    const pathScoreSync = pathOverlapScore(memPathTagsSync, currentPathTagsSync);
-    const pathBoostSync = 1.0 + (pathScoreSync * 0.3);
-    composite *= pathBoostSync;
+    composite *= pathBoostMultiplier(entries[i].tags, currentPathTagsSync);
 
     // Scope boost (sync path)
     const scopeSignalSync = scopeMatch(entries[i].tags, activeScopeSync);

@@ -1,0 +1,57 @@
+{
+  "name": "path-boost",
+  "mechanic": "path-boost",
+  "description": "Path-locality boost normalization (S5): three memories written from different cwds (LOCAL proj-nova/lib, GENERIC home root, FOREIGN proj-vega/lib), all promoted to the per-fixture global store, LOCAL's local copy forgotten so competitors are symmetric bm25-only global rows. q1 (from LOCAL's cwd) pins that a cwd-local memory outranks a generic home-root memory holding a slight lexical edge; q2 (from a third cwd) pins that the generic memory cannot outrank the topically better match. Red under the pre-1.26.4 memory-count normalization; green under the max-side normalization. See docs/plans/2026-07-18-s5-path-overlap-tuning.md.",
+  "remembers": [
+    {
+      "text": "what is the reindex cadence for the vector store, weekly zephyrline notes kept here indeed also",
+      "cwd_subdir": "proj-nova/lib"
+    },
+    {
+      "text": "what is the reindex cadence for the vector store, monthly gravemark manifests policy notes here"
+    },
+    {
+      "text": "basalt export manifests are rotated nightly basaltro; export manifests archived",
+      "cwd_subdir": "proj-vega/lib"
+    }
+  ],
+  "actions": [
+    {
+      "type": "promote",
+      "remember_index": 0
+    },
+    {
+      "type": "promote",
+      "remember_index": 1
+    },
+    {
+      "type": "promote",
+      "remember_index": 2
+    },
+    {
+      "type": "forget",
+      "remember_index": 0
+    }
+  ],
+  "queries": [
+    {
+      "q": "what is the reindex cadence for the vector store",
+      "cwd_subdir": "proj-nova/lib",
+      "top_k": 1,
+      "must_contain_any": [
+        "zephyrline"
+      ],
+      "must_not_contain_any": [
+        "gravemark"
+      ]
+    },
+    {
+      "q": "how are basalt export manifests rotated",
+      "cwd_subdir": "proj-rho",
+      "top_k": 1,
+      "must_contain_any": [
+        "basaltro"
+      ]
+    }
+  ]
+}
