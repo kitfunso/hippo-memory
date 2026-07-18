@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.27.0 - 2026-07-18
+
+### Fixed
+- **Rows promoted or shared to the global store now enter its embedding
+  index** (backlog A2#1). Every local write path embeds best-effort at write
+  time, but neither `promoteToGlobal` nor `shareMemory` did, and nothing ever
+  ran `embedAll` against the global root, so promoted/shared rows scored
+  bm25-only in hybrid recall: measured 3.15x hybrid-base deficit vs an
+  identical local twin on the minimal probe (0.2877 vs 0.9074; the richer
+  S5-era probe measured 5.4x). After the fix the promoted copy's hybrid base
+  is bit-identical to its local twin (same embedding input text since 1.26.0
+  excludes `path:*` tags). The producers now follow one invariant:
+  single-row producers (`promote`, `share`) fire the same best-effort
+  `embedMemory` contract `remember` uses; batch producers (`autoShare`
+  during sleep, `hippo sync`, `hippo import` including `--vault`) run one
+  best-effort `embedAll` on the destination store after their loop.
+  Evidence: red/green probes, micro-eval 12/12, full suite 345 files /
+  2752 tests. See `docs/evals/2026-07-18-global-row-embeddings-result.md`.
+
+### Added
+- **`hippo embed --global`**: runs the embedding backfill against the global
+  store (initializes it if needed; no local store required, mirroring
+  `auth --global` routing). This is the healing path for stores created
+  before 1.27.0.
+- `shareMemory` gained an optional `skipEmbed` flag (additive; used
+  internally by `autoShare` for batching).
+
+### Upgrade note
+- Run `hippo embed --global` once after upgrading to backfill vectors for
+  global rows promoted/shared under earlier versions. Until then those rows
+  keep their old bm25-only ranking. The first sleep after upgrading may also
+  take longer on a large legacy global store: `autoShare` now triggers the
+  backfill when it shares rows, and `embedMemory`/`embedAll` can trigger a
+  one-time full reindex if the store's embedding-model identity changed.
+
 ## 1.26.4 - 2026-07-18
 
 ### Fixed

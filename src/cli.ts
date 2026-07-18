@@ -5712,15 +5712,18 @@ async function cmdEmbed(
   hippoRoot: string,
   flags: Record<string, string | boolean | string[]>
 ): Promise<void> {
-  requireInit(hippoRoot);
+  // --global mirrors resolveAuthRoot (cli.ts:6900): initGlobal() + the global
+  // root, skipping the local requireInit entirely, so this is the healing
+  // path for pre-1.27.0 global stores from a directory with no local .hippo.
+  const root = resolveAuthRoot(hippoRoot, flags);
 
   // --status and --reset-physics only read cached state, so they must work even
   // when no provider key is present (e.g. embedded earlier with a key that was
   // later removed). The provider-availability gate is deferred to the embed path.
   if (flags['reset-physics']) {
-    const entries = loadAllEntries(hippoRoot);
-    const embIndex = loadEmbeddingIndex(hippoRoot);
-    const db = openHippoDb(hippoRoot);
+    const entries = loadAllEntries(root);
+    const embIndex = loadEmbeddingIndex(root);
+    const db = openHippoDb(root);
     try {
       const count = resetAllPhysicsState(db, entries, embIndex);
       console.log(`Reset physics state: ${count} particles re-initialized from embeddings.`);
@@ -5731,8 +5734,8 @@ async function cmdEmbed(
   }
 
   if (flags['status']) {
-    const entries = loadAllEntries(hippoRoot);
-    const embIndex = loadEmbeddingIndex(hippoRoot);
+    const entries = loadAllEntries(root);
+    const embIndex = loadEmbeddingIndex(root);
     const activeIds = new Set(entries.map((e) => e.id));
     const activeEmbedded = Object.keys(embIndex).filter((id) => activeIds.has(id)).length;
     const orphaned = Object.keys(embIndex).length - activeEmbedded;
@@ -5750,7 +5753,7 @@ async function cmdEmbed(
   // Embedding (unlike status/reset) needs an available provider.
   const embedProvider = (() => {
     try {
-      return resolveEmbeddingProvider(hippoRoot);
+      return resolveEmbeddingProvider(root);
     } catch (err) {
       console.error(err instanceof Error ? err.message : String(err));
       return null;
@@ -5761,7 +5764,7 @@ async function cmdEmbed(
     return;
   }
   if (!embedProvider.isAvailable()) {
-    if (loadConfig(hippoRoot).embeddings.enabled === false) {
+    if (loadConfig(root).embeddings.enabled === false) {
       console.log('Embeddings are disabled in config (embeddings.enabled = false). Set it to true or "auto" to enable.');
       return;
     }
@@ -5781,18 +5784,18 @@ async function cmdEmbed(
   console.log('Embedding all memories (this may take a moment on first run to download model)...');
   let count: number;
   try {
-    count = await embedAll(hippoRoot, resolveEmbeddingModel(hippoRoot));
+    count = await embedAll(root, resolveEmbeddingModel(root));
   } catch (err) {
     console.error(`Embedding failed: ${err instanceof Error ? err.message : String(err)}`);
-    const partial = loadEmbeddingIndex(hippoRoot);
+    const partial = loadEmbeddingIndex(root);
     console.error(
       `Partial progress saved: ${Object.keys(partial).length} embeddings on disk. Re-run \`hippo embed\` to resume.`,
     );
     process.exitCode = 1;
     return;
   }
-  const entriesAfter = loadAllEntries(hippoRoot);
-  const embIndexAfter = loadEmbeddingIndex(hippoRoot);
+  const entriesAfter = loadAllEntries(root);
+  const embIndexAfter = loadEmbeddingIndex(root);
   console.log(`Done. ${count} new embeddings created. ${Object.keys(embIndexAfter).length}/${entriesAfter.length} total.`);
 }
 
@@ -6036,6 +6039,12 @@ function cmdImport(
     console.log(`  Skipped (unchanged):   ${vaultResult.skipped}`);
     console.log(`  ${dryRun ? 'Would archive:        ' : 'Archived (removed):   '}${vaultResult.archived ?? 0}`);
     console.log(`  Store:                 ${hippoRoot}`);
+    // Batch producer, same contract as the single-file import below: vault rows
+    // write through api.remember (which never embeds), so backfill them here.
+    // Floating promise is deliberate; see the comment at the single-file site.
+    if (!dryRun && vaultResult.imported >= 1) {
+      void embedAll(hippoRoot).catch(() => {});
+    }
     return;
   }
 
@@ -6082,6 +6091,16 @@ function cmdImport(
   }
 
   const result = importer(filePath, importOptions);
+
+  // Batch producer: embed newly-imported rows on targetRoot in one pass
+  // rather than per-row (importers.ts writeEntry sites don't embed). The
+  // floating promise is deliberate: libuv keeps the process alive until it
+  // settles, so it is not dropped on process exit; `hippo embed --global` (or
+  // a local `hippo embed`) is the backstop if it does get interrupted. Do not
+  // "fix" this by awaiting it, that would block the CLI on model load/backfill.
+  if (!dryRun && result.imported >= 1) {
+    void embedAll(targetRoot).catch(() => {});
+  }
 
   const storeLabel = useGlobal ? `global (${getGlobalRoot()})` : targetRoot;
 
