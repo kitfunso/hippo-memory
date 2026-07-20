@@ -323,7 +323,7 @@ const TOOLS = [
     inputSchema: {
       type: 'object' as const,
       properties: {
-        budget: { type: 'number', description: 'Max tokens (default: 1500)' },
+        budget: { type: 'number', minimum: 0, description: 'Max tokens (default: 1500)' },
         scope: {
           type: 'string',
           description: 'Restrict memories and snapshot to this scope exactly. When omitted, default-deny applies to ANY <source>:private:* (slack, github, ...) and unknown-legacy rows.',
@@ -973,7 +973,11 @@ async function executeTool(
     }
 
     case 'hippo_context': {
-      const budget = Number(args.budget) || config.defaultContextBudget;
+      const budget = args.budget === undefined
+        ? config.defaultContextBudget
+        : Number(args.budget);
+      if (!Number.isFinite(budget) || budget < 0) return 'budget must be a non-negative number.';
+      if (budget === 0) return '';
       const explicitScope = typeof args.scope === 'string' && args.scope.length > 0
         ? String(args.scope)
         : undefined;
