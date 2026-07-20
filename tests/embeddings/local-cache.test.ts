@@ -2,12 +2,12 @@
  * TDD test for HIPPO_MODEL_CACHE env var support.
  *
  * When HIPPO_MODEL_CACHE is set, src/embeddings.ts must configure
- * @xenova/transformers to load the model from the local directory
+ * Transformers.js to load the model from the local directory
  * rather than downloading it from HuggingFace. This test runs offline.
  *
  * Expected: 384-dim vector produced by Xenova/all-MiniLM-L6-v2.
  *
- * Implementation note: @xenova/transformers is loaded via `new Function` in
+ * Implementation note: Transformers.js is loaded via `new Function` in
  * src/embeddings.ts to bypass TypeScript's static module resolution. That
  * technique fails inside vitest's VM sandbox (ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING).
  * We therefore run the actual embedding call in a child Node.js process that

@@ -166,6 +166,19 @@
 - Migration v39 (schema 38 -> 39): adds `memories.origin_project` + evidence-based backfill. Additive and idempotent; no data is removed.
 - **Upgrade in lockstep on shared machines.** v39 stamps `min_compatible_binary: 1.24.0` on every store it migrates, including the shared `~/.hippo` global store. Any still-installed pre-1.24.0 hippo binary (pinned project dependency, old plugin bundle, stale hook install) will then refuse to open that store by design - the refusal is what prevents an old binary from silently leaking cross-project rows again. Upgrade all hippo installs on the machine together.
 
+### Security
+- **Dependency audit is clean at high severity and above.** Upgrade the root
+  test runner from Vitest 1.6.1 to patched 3.2.6, force the optional transformer
+  stack onto patched `protobufjs` 7.6.4, and refresh the UI lockfile onto patched
+  Vite/Undici releases. `npm run audit:security` checks both lockfiles, and CI
+  now runs that gate on every push.
+- **One local embedding backend per install.** The maintained
+  `@huggingface/transformers` package is now the optional default; the legacy
+  `@xenova/transformers` package remains a runtime fallback when installed by
+  the user, but is no longer installed alongside it. Loading both packages
+  pulled incompatible native ONNX Runtime versions into one process and could
+  abort successful `remember`/`recall` commands during native finalization.
+
 ## 1.23.0 (2026-06-08): pluggable embedding providers (bring a frontier embedder)
 
 ### Added

@@ -5769,8 +5769,8 @@ async function cmdEmbed(
       return;
     }
     if (embedProvider.kind === 'local') {
-      console.log('Embeddings not available. Install @xenova/transformers to enable:');
-      console.log('  npm install @xenova/transformers');
+      console.log('Embeddings not available. Install @huggingface/transformers to enable:');
+      console.log('  npm install @huggingface/transformers');
     } else {
       console.error(
         `Embedding provider '${embedProvider.kind}' is configured but ${embedProvider.keyEnv} is not set.`,

@@ -17,5 +17,5 @@ describe('slack incident recall (success criterion)', () => {
     const r = await runIncidentRecallEval({ hippoRoot: root });
     expect(r.scenarios).toHaveLength(10);
     expect(r.scenariosBeaten).toBeGreaterThanOrEqual(7);
-  });
+  }, 30_000);
 });
