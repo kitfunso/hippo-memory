@@ -80,6 +80,16 @@ describe('cli recall scope default-deny (v1.25.0)', () => {
     expect(out).not.toContain(LEGACY);
   });
 
+  it.each(['recall', 'explain'])('%s rejects a value-less --scope', (command) => {
+    const res = spawnSync('node', [HIPPO_BIN, command, 'deploykey', '--scope'], {
+      cwd: home,
+      env: { ...process.env, ...env },
+      encoding: 'utf-8',
+    });
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('--scope requires a value');
+  });
+
   it('JSON output excludes denied rows pre-candidate (SQL predicate before the window)', () => {
     const raw = hippo(home, env, 'recall', 'deploykey', '--json', '--limit', '10');
     const parsed = JSON.parse(raw) as {
