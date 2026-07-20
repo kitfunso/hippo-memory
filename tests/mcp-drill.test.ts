@@ -145,4 +145,13 @@ describe('mcp hippo_drill', () => {
     const text = extractText(res);
     expect(text.toLowerCase()).toContain('no summary_id');
   });
+
+  it('rejects fractional depth', async () => {
+    const res = await callTool(6, 'hippo_drill', { summary_id: 'missing', depth: 1.5 }, {
+      hippoRoot: home,
+      tenantId: 'default',
+      actor: { subject: 'mcp', role: 'admin' },
+    });
+    expect(extractText(res)).toContain('depth must be an integer');
+  });
 });

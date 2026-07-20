@@ -923,7 +923,7 @@ async function handleRequest(
     if (depthRaw !== null) {
       const parsed = Number(depthRaw);
       // L4 fold: reject out-of-range explicitly (no silent clamp).
-      if (!Number.isFinite(parsed) || parsed < 1 || parsed > 10) {
+      if (!Number.isInteger(parsed) || parsed < 1 || parsed > 10) {
         throw new HttpError(400, 'depth must be a positive integer between 1 and 10');
       }
       depth = parsed;

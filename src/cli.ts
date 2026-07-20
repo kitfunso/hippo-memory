@@ -6873,7 +6873,7 @@ function cmdDrillDown(hippoRoot: string, summaryId: string, flags: Record<string
   const rawDepth = typeof flags['depth'] === 'string' ? Number(flags['depth']) : undefined;
   let depth: number | undefined;
   if (rawDepth !== undefined) {
-    if (!Number.isFinite(rawDepth) || rawDepth < 1 || rawDepth > 10) {
+    if (!Number.isInteger(rawDepth) || rawDepth < 1 || rawDepth > 10) {
       console.error(`--depth must be an integer between 1 and 10 (got ${flags['depth']})`);
       process.exit(2);
     }

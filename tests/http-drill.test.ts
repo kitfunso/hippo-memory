@@ -105,6 +105,11 @@ describe('GET /v1/recall/drill/:id', () => {
     expect(res.status).toBe(400);
   });
 
+  it('400 on fractional depth', async () => {
+    const res = await fetch(`${handle.url}/v1/recall/drill/m_does_not_exist?depth=1.5`);
+    expect(res.status).toBe(400);
+  });
+
   it('budget truncates and sets truncated=true', async () => {
     const summary: MemoryEntry = createMemory('topic budget', {
       layer: Layer.Semantic, dag_level: 2, confidence: 'inferred',

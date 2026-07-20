@@ -274,7 +274,7 @@ const TOOLS = [
           description: 'Max total token cost (~ chars/4) of returned children. Truncates chronologically.',
         },
         depth: {
-          type: 'number',
+          type: 'integer',
           minimum: 1,
           maximum: 10,
           description: 'v0.30 / E5: walk N levels down (default 1 = direct children only). Higher values include children of children. Token budget remains GLOBAL across levels. Hard cap 10.',
@@ -857,7 +857,7 @@ async function executeTool(
       let depth: number | undefined;
       if (args.depth !== undefined) {
         const depthRaw = Number(args.depth);
-        if (!Number.isFinite(depthRaw) || depthRaw < 1 || depthRaw > 10) {
+        if (!Number.isInteger(depthRaw) || depthRaw < 1 || depthRaw > 10) {
           return `depth must be an integer between 1 and 10 (got ${args.depth})`;
         }
         depth = depthRaw;

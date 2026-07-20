@@ -290,6 +290,17 @@ describe('v0.30 / E5 — level-3 entity profiles + drillDown depth', () => {
     expect(r.totalChildren).toBe(2);
   });
 
+  it('normalizes a fractional API depth before walking the DAG', () => {
+    const l3 = makeL3Profile('fractional depth profile', 'alice');
+    writeEntry(hippoRoot, l3);
+    const l2 = makeL2Summary('fractional depth topic', 'alice', l3.id);
+    writeEntry(hippoRoot, l2);
+    writeEntry(hippoRoot, makeL1Fact(l2.id, 'fractional depth leaf'));
+
+    const r = drillDown(defaultCtx(hippoRoot), l3.id, { depth: 1.5 }) as DrillDownResult;
+    expect(r.children.map((child) => child.id)).toEqual([l2.id]);
+  });
+
   it('test #8: drillDown depth=2 from L3 returns L2s + L1s with dedup + totalChildren=8', () => {
     const l3 = makeL3Profile('alice profile for depth test', 'alice');
     l3.descendant_count = 2; // stored direct-child count (2 L2 kids)
