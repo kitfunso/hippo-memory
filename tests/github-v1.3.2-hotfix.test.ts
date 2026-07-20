@@ -84,8 +84,10 @@ describe('v1.3.2 P1: compareSemver throws on pre-release tags', () => {
     expect(() => compareSemver('1.3.2+build.42', '1.3.2')).toThrow(/pre-release/);
   });
 
-  it('throws on non-numeric segments', () => {
+  it('throws on malformed versions', () => {
     expect(() => compareSemver('one.two.three', '1.0.0')).toThrow(/pre-release/);
+    expect(() => compareSemver('1.3', '1.3.0')).toThrow(/expected numeric x\.y\.z/);
+    expect(() => compareSemver('1.3.0.1', '1.3.0')).toThrow(/expected numeric x\.y\.z/);
   });
 });
 
