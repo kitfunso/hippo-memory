@@ -15,7 +15,7 @@
 
 This roadmap tracks planned work for the hippo-memory codebase. Items are grouped by funding status: committed, conditional on grant award, and speculative.
 
-Current version: 1.23.0 (npm `hippo-memory`) + python-v0.3.0 (PyPI `hippo-memory-sdk`)
+Current version: 1.24.0 (npm `hippo-memory`) + python-v0.3.0 (PyPI `hippo-memory-sdk`)
 
 For non-grant execution status (Tracks A-I, sequencing, shipped items, bets, non-goals) see **Part II** below (formerly `ROADMAP-RESEARCH.md`). For operational follow-ups and per-version post-ship tails see `TODOS.md`. For the research lineage and seven-mechanisms backgrounder see `RESEARCH.md`.
 
@@ -157,7 +157,7 @@ This is the canonical execution roadmap. Every actionable item from `RESEARCH.md
 
 This file supersedes the prior research-only frame. **Part I** above (formerly `ROADMAP.md`) tracks grant-tied deliverables. `PLAN.md` documents architecture and CLS principles.
 
-Current version: 1.23.0 (npm `hippo-memory`, published 2026-06-08) + python-v0.3.0 (PyPI `hippo-memory-sdk`, published 2026-05-28)
+Current version: 1.24.0 (npm `hippo-memory`, published 2026-07-02) + python-v0.3.0 (PyPI `hippo-memory-sdk`, published 2026-05-28)
 Active branch: `master`
 
 ## Status as of 2026-05-24
