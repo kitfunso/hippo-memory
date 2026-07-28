@@ -212,7 +212,16 @@ export async function rebuildDirtySummaries(
     capped,
   };
 
-  for (const summary of queue) {
+  for (const [index, summary] of queue.entries()) {
+    // Yield the macrotask queue every 25 summaries. The cap can reach 1000,
+    // and each iteration is synchronous SQLite (the LLM await resolves as a
+    // microtask when the response is cached/mocked), so a large batch would
+    // otherwise starve timers and IPC for the whole rebuild: server
+    // keep-alive pings in production, Vitest's birpc heartbeat in tests
+    // (hardcoded 60s upstream, vitest-dev/vitest#8164).
+    if (index > 0 && index % 25 === 0) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
     try {
       const children = loadChildrenOfSummary(hippoRoot, summary.id, summary.tenantId);
 
