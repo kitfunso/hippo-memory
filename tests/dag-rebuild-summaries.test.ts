@@ -547,6 +547,11 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
         writeEntry(hippoRoot, sum);
         writeEntry(hippoRoot, makeChild(sum.id, `fact-${i}`));
         forceMarkDirty(hippoRoot, sum.id);
+        // Yield every 50 rows so the fork can service Vitest's birpc
+        // heartbeat: a fully synchronous 4500-insert stretch can exceed
+        // birpc's hardcoded 60s RPC timeout on loaded hosts, failing a run
+        // whose tests all passed (vitest-dev/vitest#8164).
+        if (i % 50 === 49) await new Promise((res) => setImmediate(res));
       }
 
       // Mock global fetch so the consolidate path's apiKey gate is satisfied
