@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.28.0 - 2026-07-28
 
 ### Security
 - **The Codex session-capture wrapper is now strictly opt-in** (issue #133).
@@ -42,6 +42,12 @@
   preferred; `@xenova/transformers` remains a legacy fallback.
 
 ### Fixed
+- **Large DAG rebuild batches no longer starve the event loop.**
+  `rebuildDirtySummaries` now yields the macrotask queue every 25 summaries.
+  With the cap at 1000, a batch of synchronous SQLite rebuilds could block
+  timers and IPC for the whole sweep: server keep-alive pings in
+  production, and Vitest's hardcoded 60s birpc heartbeat in tests
+  (vitest-dev/vitest#8164), which failed runs whose tests all passed.
 - **`hippo invalidate` tag matching is now EXACT** (#109; incident
   2026-06-09: a pattern containing the word "hippo" weakened 10 bystander
   memories tagged `hippo` while the actual target escaped). A memory's tags
