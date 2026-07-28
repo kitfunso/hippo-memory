@@ -28,10 +28,15 @@
   embeddings would apply.
 
 ### Upgrade note
-- Existing installs keep working: an already-installed Codex wrapper is
-  preserved and self-repairs, and an already-installed transformers package
-  keeps powering embeddings. Fresh installs that want local embeddings run
-  one extra command: `npm i @xenova/transformers`.
+- An already-installed Codex wrapper is preserved and self-repairs.
+- Local embeddings need one manual install after upgrading:
+  `npm i @huggingface/transformers` (or legacy `@xenova/transformers` if
+  your model cache came from it). This applies to upgrades, not just fresh
+  installs: `npm update -g hippo-memory` rebuilds the package's
+  node_modules, so a backend that arrived via the old auto-install
+  disappears with it. Recall degrades gracefully to lexical search until a
+  backend is installed; the CLI prints the install command where
+  embeddings would apply.
 
 ## 1.27.0 - 2026-07-18
 

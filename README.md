@@ -22,7 +22,7 @@ One command. Every git repo on your machine gets memory.
 Works with:    Claude Code, Codex, Cursor, OpenClaw, OpenCode, Pi, any MCP client
 Imports from:  ChatGPT, Claude (CLAUDE.md), Cursor (.cursorrules), Slack, markdown
 Storage:       SQLite backbone with markdown mirrors. Git-trackable, human-readable.
-Dependencies:  Zero runtime deps. Node.js 22.5+. Optional embeddings: local @huggingface/transformers (default) or an opt-in API embedder (OpenAI/Voyage/Cohere).
+Dependencies:  Zero runtime deps. Node.js 22.5+. Optional embeddings: bring-your-own local Transformers.js (`npm i @huggingface/transformers`, or legacy `@xenova/transformers`) or an opt-in API embedder (OpenAI/Voyage/Cohere). Nothing is auto-installed.
 ```
 
 ---
@@ -106,7 +106,7 @@ hippo init
 #    Auto-installed claude-code hook in CLAUDE.md
 ```
 
-If you have a `CLAUDE.md`, it patches it. `AGENTS.md` for Codex/OpenClaw/OpenCode. `.cursorrules` for Cursor. For Codex, Hippo also wraps the detected launcher in place so `/exit` can consolidate memory without a manual PATH step. No manual `hook install` needed. Your agent starts using Hippo on its next session.
+If you have a `CLAUDE.md`, it patches it. `AGENTS.md` for Codex/OpenClaw/OpenCode. `.cursorrules` for Cursor. Your agent starts using Hippo on its next session. For Codex session capture, Hippo wraps the codex launcher only when you explicitly opt in with `hippo hook install codex` (init prints the command when it detects Codex; undo anytime with `hippo hook uninstall codex`).
 
 It also registers the current project in Hippo's workspace registry and installs one machine-level daily runner (6:15am). That runner sweeps every registered workspace, runs `hippo learn --git --days 1`, then `hippo sleep`. You get strict daily consolidation without creating one OS task per project.
 
