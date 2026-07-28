@@ -24,5 +24,11 @@ export default defineConfig({
     // module scope above covers the main process. Both are required.
     env: { HIPPO_HOME: isolatedHippoHome },
     globalSetup: ['tests/_real-store-guard.ts'],
+    // Real-DB suite: every test hits SQLite on disk, and Vitest 3's fork pool
+    // runs files in parallel, so under worker contention (Windows especially)
+    // individual tests that take ~2s in isolation exceed the 5s default and
+    // flake. 30s matches the slowest observed contention multiple; genuinely
+    // hung tests still fail, just later.
+    testTimeout: 30_000,
   },
 });

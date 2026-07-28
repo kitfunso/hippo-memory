@@ -577,5 +577,5 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
         delete process.env.HIPPO_DAG_REBUILD_CAP;
       }
     }
-  }, 120_000); // 1500-row real-DB seed is intentionally slow on low-power CI/dev hosts
+  }, 240_000); // 1500-row real-DB seed is intentionally slow on low-power CI/dev hosts; passes in ~90s solo but full-suite fork-pool contention can double it
 });

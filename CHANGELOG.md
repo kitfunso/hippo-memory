@@ -27,6 +27,49 @@
   when neither is present, and the CLI prints the install command where
   embeddings would apply.
 
+- **Dependency audit is clean at high severity and above** (#116). Upgrade
+  the root test runner from Vitest 1.6.1 to patched 3.2.6, force the
+  transformer stack onto patched `protobufjs` 7.6.4 via `overrides`, and
+  refresh the UI lockfile onto patched Vite/Undici releases.
+  `npm run audit:security` checks both lockfiles, and CI now runs that gate
+  on every push.
+- **One local embedding backend per process** (#116). Backend resolution
+  happens BEFORE import, so a process never loads two native ONNX Runtime
+  versions even when both Transformers.js packages are installed manually.
+  Loading both pulled incompatible native runtimes into one process and
+  could abort successful `remember`/`recall` commands during native
+  finalization (macOS arm64 SIGABRT). `@huggingface/transformers` is
+  preferred; `@xenova/transformers` remains a legacy fallback.
+
+### Fixed
+- **`hippo invalidate` tag matching is now EXACT** (#109; incident
+  2026-06-09: a pattern containing the word "hippo" weakened 10 bystander
+  memories tagged `hippo` while the actual target escaped). A memory's tags
+  now only match when the FULL pattern equals a tag; token-level matching
+  applies to content only. Both the CLI command and the auto-learn-from-git
+  invalidation path inherit the safer contract.
+- **Rollback guard rejects malformed versions** (#119). `compareSemver`
+  now requires exactly three numeric components, so `'1.24'` or
+  `'1.24.0.999'` fail loudly instead of comparing as `'1.24.0'`.
+- **Fractional drill depths are rejected** (#121). Depth validation uses
+  `Number.isInteger` across CLI, HTTP, MCP, and the direct API, so
+  `--depth 1.5` no longer walks 2 levels.
+- **MCP context honors a zero budget** (#122). `budget: 0` previously fell
+  through `Number(x) || default` to the default budget, returning context
+  and marking memories retrieved on a request that asked for none.
+
+### Added
+- **`hippo invalidate --dry-run`** (#109) previews exactly which memories
+  would be hit (id + headline) and writes nothing.
+- **`hippo invalidate --id <memory-id>`** (#109) invalidates exactly one
+  memory (tenant-scoped; pattern and `--id` are mutually exclusive). Pinned
+  memories are never touched and are now reported as skipped.
+
+### Changed
+- **Value-less boolean flags no longer swallow a following positional**
+  (#109). `--dry-run` is parsed as boolean everywhere, so
+  `hippo <cmd> --dry-run <arg>` works in any argument order.
+
 ### Upgrade note
 - An already-installed Codex wrapper is preserved and self-repairs.
 - Local embeddings need one manual install after upgrading:
@@ -203,29 +246,6 @@
 - `shareMemory` stamps the canonical `origin_project` on global copies (derived from the entry's own write-time stamp, not the local path basename).
 - Migration v39 (schema 38 -> 39): adds `memories.origin_project` + evidence-based backfill. Additive and idempotent; no data is removed.
 - **Upgrade in lockstep on shared machines.** v39 stamps `min_compatible_binary: 1.24.0` on every store it migrates, including the shared `~/.hippo` global store. Any still-installed pre-1.24.0 hippo binary (pinned project dependency, old plugin bundle, stale hook install) will then refuse to open that store by design - the refusal is what prevents an old binary from silently leaking cross-project rows again. Upgrade all hippo installs on the machine together.
-
-### Fixed
-- **`hippo invalidate` tag matching is now EXACT** (incident 2026-06-09: a pattern containing the word "hippo" weakened 10 bystander memories tagged `hippo` while the actual target escaped). A memory's tags now only match when the FULL pattern equals a tag; token-level matching applies to content only. Both the CLI command and the auto-learn-from-git invalidation path inherit the safer contract.
-
-### Added
-- **`hippo invalidate --dry-run`** previews exactly which memories would be hit (id + headline) and writes nothing.
-- **`hippo invalidate --id <memory-id>`** invalidates exactly one memory (tenant-scoped; pattern and `--id` are mutually exclusive). Pinned memories are never touched and are now reported as skipped.
-
-### Changed
-- **Value-less boolean flags no longer swallow a following positional.** `--dry-run` is parsed as boolean everywhere, so `hippo <cmd> --dry-run <arg>` now works in any argument order (previously the argument was silently consumed as the flag's value).
-
-### Security
-- **Dependency audit is clean at high severity and above.** Upgrade the root
-  test runner from Vitest 1.6.1 to patched 3.2.6, force the optional transformer
-  stack onto patched `protobufjs` 7.6.4, and refresh the UI lockfile onto patched
-  Vite/Undici releases. `npm run audit:security` checks both lockfiles, and CI
-  now runs that gate on every push.
-- **One local embedding backend per install.** The maintained
-  `@huggingface/transformers` package is now the optional default; the legacy
-  `@xenova/transformers` package remains a runtime fallback when installed by
-  the user, but is no longer installed alongside it. Loading both packages
-  pulled incompatible native ONNX Runtime versions into one process and could
-  abort successful `remember`/`recall` commands during native finalization.
 
 ## 1.23.0 (2026-06-08): pluggable embedding providers (bring a frontier embedder)
 
