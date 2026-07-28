@@ -22,7 +22,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    # First-run cold cache + @xenova/transformers optional install can be
+    # First-run cold cache + @huggingface/transformers optional install can be
     # slow. 25 minutes gives headroom; subsequent PRs hit the npm cache.
     timeout-minutes: 25
     steps:
@@ -35,6 +35,8 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
+      - name: Dependency security audit
+        run: npm run audit:security
       - run: npm run build
       # Some CLI-driven tests (cli-multihop, cli-dag, etc.) shell out to
       # `hippo` and expect it on PATH. Local devs have it via global install;

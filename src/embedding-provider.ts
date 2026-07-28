@@ -1,7 +1,7 @@
 /**
  * Pluggable embedding providers for Hippo.
  *
- * The local `@xenova/transformers` path stays the zero-DEPENDENCY DEFAULT. Opt-in
+ * The local `@huggingface/transformers` path stays the zero-DEPENDENCY DEFAULT. Opt-in
  * API providers (OpenAI / Voyage / Cohere) let a user bring a frontier embedder
  * (e.g. text-embedding-3-large) for frontier-class retrieval. They use the native
  * `fetch` global (Node >= 22.5, see package.json engines — NO new dependency) and

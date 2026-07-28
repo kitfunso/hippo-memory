@@ -1,6 +1,6 @@
 /**
  * Tests for hybrid search: BM25 + embedding vector blending.
- * Uses synthetic vectors (no @xenova/transformers needed).
+ * Uses synthetic vectors (no Transformers.js backend needed).
  */
 
 import { describe, it, expect } from 'vitest';
@@ -171,7 +171,7 @@ describe('hybridSearch explain breakdown', () => {
     const b = results[0].breakdown;
     expect(b).toBeDefined();
     if (!b) return;
-    // In a test env without @xenova/transformers the embedding path is off
+    // In a test env without a Transformers.js backend the embedding path is off
     // and the mode falls through to bm25-only. The hybrid-no-vec case needs
     // a mocked embedding pipeline and is verified via live dogfooding.
     expect(b.mode).toBe('bm25-only');

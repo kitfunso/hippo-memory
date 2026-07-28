@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { cosineSimilarity } from '../src/embeddings.js';
 
 // ---------------------------------------------------------------------------
-// Tests that run without @xenova/transformers installed
+// Tests that run without a Transformers.js backend installed
 // ---------------------------------------------------------------------------
 
 describe('cosineSimilarity', () => {

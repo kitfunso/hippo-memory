@@ -176,6 +176,19 @@
 ### Changed
 - **Value-less boolean flags no longer swallow a following positional.** `--dry-run` is parsed as boolean everywhere, so `hippo <cmd> --dry-run <arg>` now works in any argument order (previously the argument was silently consumed as the flag's value).
 
+### Security
+- **Dependency audit is clean at high severity and above.** Upgrade the root
+  test runner from Vitest 1.6.1 to patched 3.2.6, force the optional transformer
+  stack onto patched `protobufjs` 7.6.4, and refresh the UI lockfile onto patched
+  Vite/Undici releases. `npm run audit:security` checks both lockfiles, and CI
+  now runs that gate on every push.
+- **One local embedding backend per install.** The maintained
+  `@huggingface/transformers` package is now the optional default; the legacy
+  `@xenova/transformers` package remains a runtime fallback when installed by
+  the user, but is no longer installed alongside it. Loading both packages
+  pulled incompatible native ONNX Runtime versions into one process and could
+  abort successful `remember`/`recall` commands during native finalization.
+
 ## 1.23.0 (2026-06-08): pluggable embedding providers (bring a frontier embedder)
 
 ### Added

@@ -1,6 +1,6 @@
 /**
  * Optional embedding-based semantic search for Hippo.
- * Uses @xenova/transformers (local, zero API keys, ~22MB model).
+ * Uses @huggingface/transformers (local, zero API keys, ~22MB model).
  * Falls back silently if the library is not installed.
  */
 
@@ -83,7 +83,7 @@ export function embeddingInputText(entry: { content: string; tags: string[] }): 
 }
 
 /**
- * Per-model pooling dispatch for `@xenova/transformers`'s feature-extraction
+ * Per-model pooling dispatch for Transformers.js's feature-extraction
  * pipeline. BGE family models were trained with CLS pooling (per BAAI's
  * official inference code in `FlagEmbedding`); MiniLM and most sentence-
  * transformers models use mean pooling. Unknown model ids default to mean
@@ -152,22 +152,27 @@ export function isEmbeddingAvailable(): boolean {
 }
 
 /**
- * Some model families ship ONNX in external-data format (a tiny graph .onnx
- * plus a multi-GB `model.onnx_data` sidecar). `@xenova/transformers` v2.17 loads
- * the .onnx as an in-memory Buffer, which severs the external-data path
- * resolution and produces an "Initializer model_path must not be empty" error.
- * The maintained fork `@huggingface/transformers` v4 correctly passes the file
- * path through to onnxruntime, so external-data resolves cleanly.
+ * Pick exactly one Transformers.js implementation before importing either.
  *
- * We prefer the older `@xenova/transformers` by default (it's the historical
- * peer dep with zero observed regressions on BGE / MiniLM), and dispatch to
- * `@huggingface/transformers` only for families known to require it.
+ * Importing both packages in one process loads incompatible native
+ * onnxruntime-node versions (Xenova v2 uses ORT 1.14; Hugging Face v4 uses a
+ * current ORT). Their finalizers can double-free an InferenceSession on exit.
+ * Prefer the maintained package shipped by Hippo, with Xenova retained only as
+ * a compatibility fallback for users who installed it themselves.
  */
-function preferredBackend(model: string): 'xenova' | 'huggingface' {
-  // intfloat/e5 family ships external-data ONNX in the Qdrant fastembed
-  // mirror. Same dispatch shape as poolingFor / prefixFor.
-  if (/\be5\b/i.test(model)) return 'huggingface';
-  return 'xenova';
+function resolveTransformersPackage(): string | null {
+  try {
+    _require.resolve('@huggingface/transformers');
+    return '@huggingface/transformers';
+  } catch {
+    // fall through
+  }
+  try {
+    _require.resolve('@xenova/transformers');
+    return '@xenova/transformers';
+  } catch {
+    return null;
+  }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -177,29 +182,23 @@ async function loadPipeline(model: string): Promise<any> {
 
   const loading = (async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pkg = resolveTransformersPackage();
+    if (!pkg) return null;
+
     let pipelineFn: any = null;
-
-    const backend = preferredBackend(model);
-    const order = backend === 'huggingface'
-      ? ['@huggingface/transformers', '@xenova/transformers']
-      : ['@xenova/transformers', '@huggingface/transformers'];
-
-    for (const pkg of order) {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const mod = await _dynImport(pkg) as any;
-        if (process.env.HIPPO_MODEL_CACHE) {
-          if (mod.env) {
-            mod.env.cacheDir = process.env.HIPPO_MODEL_CACHE;
-            mod.env.localModelPath = process.env.HIPPO_MODEL_CACHE;
-            mod.env.allowRemoteModels = false;
-          }
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mod = await _dynImport(pkg) as any;
+      if (process.env.HIPPO_MODEL_CACHE) {
+        if (mod.env) {
+          mod.env.cacheDir = process.env.HIPPO_MODEL_CACHE;
+          mod.env.localModelPath = process.env.HIPPO_MODEL_CACHE;
+          mod.env.allowRemoteModels = false;
         }
-        pipelineFn = mod.pipeline ?? mod.default?.pipeline;
-        if (pipelineFn) break;
-      } catch {
-        // try next package
       }
+      pipelineFn = mod.pipeline ?? mod.default?.pipeline;
+    } catch {
+      return null;
     }
 
     if (!pipelineFn) return null;
