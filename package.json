@@ -66,8 +66,13 @@
     "typescript": "^5.4.0",
     "vitest": "^3.2.6"
   },
-  "optionalDependencies": {
-    "@huggingface/transformers": "^4.2.0"
+  "peerDependenciesMeta": {
+    "@xenova/transformers": {
+      "optional": true
+    },
+    "@huggingface/transformers": {
+      "optional": true
+    }
   },
   "overrides": {
     "protobufjs": "7.6.4"

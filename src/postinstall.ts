@@ -1,19 +1,35 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { ensureCodexWrapperInstalled } from './hooks.js';
+import {
+  detectRealCodexPath,
+  isCodexWrapperInstalled,
+  repairCodexWrapperIfInstalled,
+} from './hooks.js';
 
 function main(): void {
   if (process.env.HIPPO_SKIP_POSTINSTALL === '1') return;
 
   try {
-    ensureCodexWrapperInstalled();
+    // Repair-only: re-ensure the wrapper for users who previously opted in
+    // (e.g. a Codex update restored the real binary over our shim). A first
+    // install never happens here — swapping the codex binary from a package
+    // postinstall is a consent violation and reads as binary hijacking to
+    // supply-chain scanners (issue #133). First install is `hippo hook
+    // install codex` only.
+    repairCodexWrapperIfInstalled();
   } catch {
     // Never fail package install because auto-integration could not be applied.
   }
 
   try {
     printClaudeCodeNudge();
+  } catch {
+    // Never fail package install because the install hint could not be printed.
+  }
+
+  try {
+    printCodexNudge();
   } catch {
     // Never fail package install because the install hint could not be printed.
   }
@@ -62,6 +78,27 @@ function printClaudeCodeNudge(): void {
   line('    hippo init --global');
   line('');
   line('To skip this message on future installs: export HIPPO_SKIP_POSTINSTALL=1');
+  line('');
+}
+
+/**
+ * Read-only nudge: if the Codex CLI is on PATH and the Hippo session-capture
+ * wrapper is NOT installed, print the opt-in command. Mirrors the Claude Code
+ * nudge above — same least-authority reasoning: we tell the user what to run,
+ * we never swap their binary for them.
+ */
+function printCodexNudge(): void {
+  if (isCodexWrapperInstalled()) return;
+  if (!detectRealCodexPath()) return; // Codex not installed — silent
+
+  const line = (s: string) => process.stderr.write(s + '\n');
+  line('');
+  line('Codex CLI detected on this machine.');
+  line('');
+  line('To capture Codex sessions into Hippo (wraps the codex launcher;');
+  line('undo anytime with `hippo hook uninstall codex`), run:');
+  line('');
+  line('    hippo hook install codex');
   line('');
 }
 

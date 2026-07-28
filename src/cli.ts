@@ -40,6 +40,8 @@ import {
   defaultSleepLogPath,
   ensureCodexWrapperInstalled,
   installCodexWrapper,
+  isCodexWrapperInstalled,
+  repairCodexWrapperIfInstalled,
   uninstallCodexWrapper,
   resolveCodexSessionTranscript,
   resolveCodexWrapperPaths,
@@ -591,6 +593,13 @@ function autoInstallHooks(quiet: boolean): void {
       fs.writeFileSync(targetPath, existing + sep + block + '\n', 'utf8');
       installed.add(targetPath);
       console.log(`   Auto-installed ${hook} hook in ${hookDef.file}`);
+    }
+
+    // The Codex session-capture wrapper swaps the codex launcher binary, so
+    // init never installs it silently — it points at the explicit opt-in
+    // command instead (issue #133).
+    if (hook === 'codex' && !isCodexWrapperInstalled()) {
+      console.log('   Codex detected. To capture Codex sessions: hippo hook install codex');
     }
 
     // For Claude Code, also install SessionEnd+SessionStart entries in its
@@ -3129,7 +3138,7 @@ function cmdCodexSessionEndWorker(
   }
 }
 
-function shouldAutoInstallCodexWrapper(currentCommand: string, currentArgs: string[]): boolean {
+function shouldAutoRepairCodexWrapper(currentCommand: string, currentArgs: string[]): boolean {
   if (process.env.HIPPO_SKIP_AUTO_INTEGRATIONS === '1') return false;
   if (!['context', 'remember', 'recall', 'sleep', 'capture', 'outcome', 'status', 'init'].includes(currentCommand)) {
     return false;
@@ -3138,10 +3147,15 @@ function shouldAutoInstallCodexWrapper(currentCommand: string, currentArgs: stri
   return true;
 }
 
-function maybeAutoInstallCodexWrapper(currentCommand: string, currentArgs: string[]): void {
-  if (!shouldAutoInstallCodexWrapper(currentCommand, currentArgs)) return;
+// Repair-only: keeps the wrapper healthy for users who opted in via `hippo
+// hook install codex` (a Codex update can restore the real binary over our
+// shim). Never first-installs — silently swapping the codex binary on routine
+// commands is a consent violation and reads as binary hijacking to
+// supply-chain scanners (issue #133).
+function maybeRepairCodexWrapper(currentCommand: string, currentArgs: string[]): void {
+  if (!shouldAutoRepairCodexWrapper(currentCommand, currentArgs)) return;
   try {
-    ensureCodexWrapperInstalled();
+    repairCodexWrapperIfInstalled();
   } catch {
     // best-effort only
   }
@@ -8199,7 +8213,7 @@ async function main(): Promise<void> {
     console.log(version);
     process.exit(0);
   }
-  maybeAutoInstallCodexWrapper(command, args);
+  maybeRepairCodexWrapper(command, args);
   /** Global --scope well-formedness guard (v1.26.2). parseArgs stores a value-less
    *  flag as boolean true; downstream the 14 consumer sites either coerced that to
    *  the literal scope string 'true' (recall filter/unlock input, wm session scope,
