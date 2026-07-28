@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased
+
+### Security
+- **The Codex session-capture wrapper is now strictly opt-in** (issue #133).
+  Previously `npm install` (postinstall) and routine commands (`remember`,
+  `recall`, `status`, ...) silently renamed a detected `codex` launcher and
+  replaced it with Hippo's wrapper. Swapping another vendor's binary without
+  an explicit ask is a consent violation, and supply-chain scanners correctly
+  flag it as hijack-shaped behavior (Socket.dev gptAnomaly on 1.27.0). Now:
+  first install happens ONLY via `hippo hook install codex`; postinstall and
+  routine commands run a repair-only pass that re-ensures the wrapper solely
+  for users whose opt-in metadata already exists (e.g. after a Codex update
+  restores the real binary over the shim); `npm install` and `hippo init`
+  print a one-line nudge with the opt-in command when Codex is detected but
+  unwrapped. Users who got the wrapper under the old behavior keep it
+  (metadata counts as opt-in); `hippo hook uninstall codex` removes it.
+- **Local embedding backends are no longer auto-installed** (issue #133).
+  `@xenova/transformers` and `@huggingface/transformers` moved from
+  `optionalDependencies` (which npm installs by default) to optional peers.
+  A default install is now genuinely zero-dependency instead of pulling a
+  ~140-package native tree containing a critical-CVE protobufjs 6.11.6 (via
+  the frozen @xenova chain), an adm-zip CVE, and two sharp advisories.
+  Embeddings users opt in with `npm i @xenova/transformers` (or
+  `@huggingface/transformers`); every code path already degrades gracefully
+  when neither is present, and the CLI prints the install command where
+  embeddings would apply.
+
+### Upgrade note
+- Existing installs keep working: an already-installed Codex wrapper is
+  preserved and self-repairs, and an already-installed transformers package
+  keeps powering embeddings. Fresh installs that want local embeddings run
+  one extra command: `npm i @xenova/transformers`.
+
 ## 1.27.0 - 2026-07-18
 
 ### Fixed

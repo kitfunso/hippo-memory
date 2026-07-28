@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   ensureCodexWrapperInstalled,
   installCodexWrapper,
+  isCodexWrapperInstalled,
+  repairCodexWrapperIfInstalled,
   uninstallCodexWrapper,
   resolveCodexSessionTranscript,
   resolveCodexWrapperPaths,
@@ -111,6 +113,40 @@ describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
 
     expect(result.status).toBe('installed');
     expect(metadata.commandPath).toBe(realCodex);
+    expect(fs.readFileSync(realCodex, 'utf8')).toContain('codex-run');
+  });
+
+  it('repair-only ensure never first-installs, even with codex on PATH', () => {
+    const realBin = path.join(env.home, 'real-bin');
+    const realCodex = path.join(realBin, 'codex.cmd');
+    fs.mkdirSync(realBin, { recursive: true });
+    fs.writeFileSync(realCodex, '@echo off\r\necho real codex\r\n', 'utf8');
+    process.env.PATH = realBin;
+
+    const result = repairCodexWrapperIfInstalled();
+
+    expect(result.status).toBe('not-found');
+    expect(isCodexWrapperInstalled()).toBe(false);
+    // The user's real launcher is untouched: no wrapper content, no backup.
+    expect(fs.readFileSync(realCodex, 'utf8')).toContain('real codex');
+    expect(fs.existsSync(path.join(realBin, 'codex.hippo-real.cmd'))).toBe(false);
+  });
+
+  it('repair-only ensure restores a clobbered wrapper for an opted-in user', () => {
+    const realBin = path.join(env.home, 'real-bin');
+    const realCodex = path.join(realBin, 'codex.cmd');
+    fs.mkdirSync(realBin, { recursive: true });
+    fs.writeFileSync(realCodex, '@echo off\r\necho real codex\r\n', 'utf8');
+    process.env.PATH = realBin;
+
+    // Explicit opt-in first (what `hippo hook install codex` runs).
+    expect(ensureCodexWrapperInstalled().status).toBe('installed');
+    // Simulate a Codex update clobbering the shim with a fresh real launcher.
+    fs.writeFileSync(realCodex, '@echo off\r\necho updated real codex\r\n', 'utf8');
+
+    const result = repairCodexWrapperIfInstalled();
+
+    expect(result.status).toBe('installed');
     expect(fs.readFileSync(realCodex, 'utf8')).toContain('codex-run');
   });
 });

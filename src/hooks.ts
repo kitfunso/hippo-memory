@@ -499,6 +499,29 @@ export function ensureCodexWrapperInstalled(): EnsureCodexWrapperResult {
   };
 }
 
+/**
+ * True if Codex wrapper metadata exists on this machine, i.e. the user opted
+ * in to the wrapper at some point (via `hippo hook install codex`).
+ */
+export function isCodexWrapperInstalled(): boolean {
+  return readCodexWrapperMetadata() !== null;
+}
+
+/**
+ * Repair-only variant of `ensureCodexWrapperInstalled`: re-ensures the wrapper
+ * ONLY when wrapper metadata already exists — that metadata is the user's
+ * opt-in record. Never performs a first install. Replacing another vendor's
+ * binary must stay behind the explicit `hippo hook install codex` command;
+ * doing it from postinstall or routine commands is a consent violation and
+ * reads as binary hijacking to security scanners (issue #133).
+ */
+export function repairCodexWrapperIfInstalled(): EnsureCodexWrapperResult {
+  if (readCodexWrapperMetadata() === null) {
+    return { status: 'not-found' };
+  }
+  return ensureCodexWrapperInstalled();
+}
+
 function collectFiles(dir: string): string[] {
   if (!fs.existsSync(dir)) return [];
   const out: string[] = [];
