@@ -9,6 +9,16 @@ export interface InvalidationTarget {
 export interface InvalidationResult {
   invalidated: number;
   targets: string[];  // IDs of affected memories
+  skippedPinned: string[];  // matched but pinned — never touched
+  dryRun: boolean;
+  preview: { id: string; headline: string }[];  // what was (or would be) hit
+}
+
+export interface InvalidationOptions {
+  /** Evaluate matches but write nothing. */
+  dryRun?: boolean;
+  /** Consider ONLY this memory id (no content/tag matching). */
+  onlyId?: string;
 }
 
 /**
@@ -64,40 +74,72 @@ export function extractInvalidationTarget(message: string): InvalidationTarget |
  * - Halves half_life_days
  * - Sets confidence to 'stale'
  * - Adds 'invalidated' tag
- * - Skips pinned memories
+ * - Skips pinned memories (reported in skippedPinned)
+ *
+ * Tag matching is EXACT (2026-06-09 incident): the FULL pattern must equal a
+ * tag. Token-level matching applies to content only, so a pattern that merely
+ * CONTAINS a common tag word ("hippo") can no longer mass-weaken every memory
+ * carrying that tag. Both callers (the CLI `invalidate` command and the
+ * auto-learn-from-git path) inherit this contract.
  */
 export function invalidateMatching(
   hippoRoot: string,
   target: InvalidationTarget,
   tenantId?: string,
+  options?: InvalidationOptions,
 ): InvalidationResult {
   // L9: tenantId opt-in. When provided, only this tenant's memories are
   // considered for weakening. When undefined, behaves as it did pre-1.12.1
   // (host-wide invalidation across all tenants in the store).
+  // options.onlyId resolves by FILTERING this tenant-scoped list — never a
+  // direct id lookup — so an id from another tenant is invisible here.
   const entries = loadAllEntries(hippoRoot, tenantId);
   const fromTokens = invalidationTokenize(target.from);
-  const result: InvalidationResult = { invalidated: 0, targets: [] };
+  const exactTag = target.from.toLowerCase().trim();
+  const dryRun = options?.dryRun === true;
+  const result: InvalidationResult = {
+    invalidated: 0,
+    targets: [],
+    skippedPinned: [],
+    dryRun,
+    preview: [],
+  };
 
   for (const entry of entries) {
-    if (entry.pinned) continue;
+    if (options?.onlyId !== undefined) {
+      if (entry.id !== options.onlyId) continue;
+    } else {
+      const contentTokens = invalidationTokenize(entry.content);
+      const tagTokens = entry.tags.map(t => t.toLowerCase());
 
-    const contentTokens = invalidationTokenize(entry.content);
-    const tagTokens = entry.tags.map(t => t.toLowerCase());
+      // Check if the memory references the old pattern
+      const tokenMatch = matchScore(fromTokens, contentTokens);
+      const tagMatch = tagTokens.includes(exactTag);
 
-    // Check if the memory references the old pattern
-    const tokenMatch = matchScore(fromTokens, contentTokens);
-    const tagMatch = fromTokens.some(t => tagTokens.includes(t));
-
-    if (tokenMatch >= 0.5 || tagMatch) {
-      entry.half_life_days = Math.max(1, Math.floor(entry.half_life_days / 2));
-      entry.confidence = 'stale';
-      if (!entry.tags.includes('invalidated')) {
-        entry.tags.push('invalidated');
-      }
-      writeEntry(hippoRoot, entry);
-      result.invalidated++;
-      result.targets.push(entry.id);
+      if (!(tokenMatch >= 0.5 || tagMatch)) continue;
     }
+
+    // Pinned check runs AFTER matching so pinned would-be targets are
+    // observable in skippedPinned (pattern mode and onlyId mode alike).
+    if (entry.pinned) {
+      result.skippedPinned.push(entry.id);
+      continue;
+    }
+
+    result.invalidated++;
+    result.targets.push(entry.id);
+    result.preview.push({
+      id: entry.id,
+      headline: entry.content.replace(/\s+/g, ' ').slice(0, 60),
+    });
+    if (dryRun) continue;
+
+    entry.half_life_days = Math.max(1, Math.floor(entry.half_life_days / 2));
+    entry.confidence = 'stale';
+    if (!entry.tags.includes('invalidated')) {
+      entry.tags.push('invalidated');
+    }
+    writeEntry(hippoRoot, entry);
   }
 
   return result;

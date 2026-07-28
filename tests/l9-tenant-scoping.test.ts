@@ -460,3 +460,36 @@ describe('L9: host-wide back-compat parity (current behaviour preserved)', () =>
     }
   });
 });
+
+describe('L9 + invalidate onlyId (2026-06-09 safety fix)', () => {
+  let tmpDir: string;
+  let hippoRoot: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'hippo-l9-onlyid-'));
+    hippoRoot = join(tmpDir, '.hippo');
+    initStore(hippoRoot);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('onlyId naming a tenant-B memory under tenant-A scope invalidates nothing', () => {
+    const bId = seedFor(hippoRoot, 'tenant-b', 'tenant B private memory', { tags: ['private'] });
+
+    const result = invalidateMatching(
+      hippoRoot,
+      { from: `id:${bId}`, to: null, type: 'removal' },
+      'tenant-a',
+      { onlyId: bId },
+    );
+
+    expect(result.invalidated).toBe(0);
+    expect(result.targets).toEqual([]);
+    // tenant-b's entry is untouched
+    const bEntries = loadAllEntries(hippoRoot, 'tenant-b');
+    expect(bEntries[0].confidence).toBe('observed');
+    expect(bEntries[0].tags).not.toContain('invalidated');
+  });
+});

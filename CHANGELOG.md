@@ -166,6 +166,16 @@
 - Migration v39 (schema 38 -> 39): adds `memories.origin_project` + evidence-based backfill. Additive and idempotent; no data is removed.
 - **Upgrade in lockstep on shared machines.** v39 stamps `min_compatible_binary: 1.24.0` on every store it migrates, including the shared `~/.hippo` global store. Any still-installed pre-1.24.0 hippo binary (pinned project dependency, old plugin bundle, stale hook install) will then refuse to open that store by design - the refusal is what prevents an old binary from silently leaking cross-project rows again. Upgrade all hippo installs on the machine together.
 
+### Fixed
+- **`hippo invalidate` tag matching is now EXACT** (incident 2026-06-09: a pattern containing the word "hippo" weakened 10 bystander memories tagged `hippo` while the actual target escaped). A memory's tags now only match when the FULL pattern equals a tag; token-level matching applies to content only. Both the CLI command and the auto-learn-from-git invalidation path inherit the safer contract.
+
+### Added
+- **`hippo invalidate --dry-run`** previews exactly which memories would be hit (id + headline) and writes nothing.
+- **`hippo invalidate --id <memory-id>`** invalidates exactly one memory (tenant-scoped; pattern and `--id` are mutually exclusive). Pinned memories are never touched and are now reported as skipped.
+
+### Changed
+- **Value-less boolean flags no longer swallow a following positional.** `--dry-run` is parsed as boolean everywhere, so `hippo <cmd> --dry-run <arg>` now works in any argument order (previously the argument was silently consumed as the flag's value).
+
 ## 1.23.0 (2026-06-08): pluggable embedding providers (bring a frontier embedder)
 
 ### Added
