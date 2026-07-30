@@ -25,7 +25,7 @@
   ],
   "scripts": {
     "baseline": "npm run build && npm test",
-    "build": "tsc && tsc -p tsconfig.benchmarks.json",
+    "build": "tsc && tsc -p tsconfig.benchmarks.json && tsc -p tsconfig.extensions.json",
     "dev": "tsc --watch",
     "pretest": "npm run build",
     "test": "vitest run",
