@@ -55,6 +55,7 @@ import {
   type AuditOp,
 } from './audit.js';
 import { promoteToGlobal, getGlobalRoot, autoShare, searchBothHybrid } from './shared.js';
+import { writeRecallTrace, writeRecallTraceAtRoot, readLastTraceId, recordTraceOutcome } from './recall-trace.js';
 import { evalNow, isRecallBoostAblated } from './ablation.js';
 import { archiveRawMemory } from './raw-archive.js';
 import {
@@ -965,6 +966,25 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
       results: rankedOut.length,
     },
   });
+
+  // LC1 (docs/plans/2026-08-02-lc1-recall-trace-persistence.md): trace the
+  // returned ids+ranks+scores next to the audit emit, on the SAME open
+  // handle. v1.11.5 contract lock holds — api.recall does NOT write
+  // last_trace_id (tests/api-recall-no-side-effects.test.ts); a trace INSERT
+  // is the same observability class as the audit row it sits beside, not
+  // retrieval state. Fail-soft internally; never throws.
+  writeRecallTrace(db, {
+    tenantId: ctx.tenantId,
+    sessionId: opts.sessionId ?? null,
+    pipeline: 'api',
+    query: opts.query,
+    explainMode: opts.explain === true,
+    results: rankedOut.map((r) => ({
+      memoryId: r.id,
+      score: r.score,
+      rerankSteps: r.rerankTrace,
+    })),
+  });
   } finally {
     closeHippoDb(db);
   }
@@ -1573,11 +1593,21 @@ export function drillDown(
  * MUST return `appliedIds` instead of the raw input list — otherwise the
  * non-applied (cross-tenant) ids leak to the caller. Added in v1.11.4 to
  * close that disclosure path on POST /v1/outcome.
+ *
+ * `opts.traceId` (LC1, docs/plans/2026-08-02-lc1-recall-trace-persistence.md):
+ * OPTIONAL additive opt so a programmatic caller can link this outcome to
+ * the recall_traces row it judges. NOT applied unconditionally — an SDK
+ * caller passing explicit ids with no preceding CLI/context recall would
+ * otherwise get linked to a stale, unrelated trace. `outcomeForLastRecall`
+ * supplies this automatically from `last_trace_id`; every other caller
+ * (server.ts explicit-ids path, MCP hippo_outcome) omits it and gets no
+ * linkage, which is correct.
  */
 export function outcome(
   ctx: Context,
   ids: ReadonlyArray<string>,
   good: boolean,
+  opts?: { traceId?: number },
 ): { applied: number; appliedIds: string[] } {
   const appliedIds: string[] = [];
   const db = openHippoDb(ctx.hippoRoot);
@@ -1595,6 +1625,17 @@ export function outcome(
         metadata: { good },
       });
       appliedIds.push(id);
+    }
+    // LC1: link the outcome to its trace, recording only the ids actually
+    // credited (post tenant-filtering, matches appliedIds). Lives in its own
+    // append-only table so audit_log pruning can never erase training data.
+    if (opts?.traceId !== undefined && appliedIds.length > 0) {
+      recordTraceOutcome(db, {
+        traceId: opts.traceId,
+        tenantId: ctx.tenantId,
+        outcome: good ? 'positive' : 'negative',
+        memoryIds: appliedIds,
+      });
     }
   } finally {
     closeHippoDb(db);
@@ -2461,6 +2502,26 @@ export async function getContext(
 
     localIndex.last_retrieval_ids = updatedEntries.map((u) => u.id);
     saveIndex(ctx.hippoRoot, localIndex);
+
+    // LC1 (docs/plans/2026-08-02-lc1-recall-trace-persistence.md): trace the
+    // post-limit, post-annotation `selectedItems` actually returned. Fresh
+    // short-lived connection — the audit handles above (~2410) are already
+    // closed by this point, matching this block's own per-call-handle
+    // convention (writeEntry, saveIndex). Writes last_trace_id too (skipped
+    // entirely in pinnedOnly mode by virtue of this whole block being
+    // skipped). Fail-soft internally; never throws.
+    writeRecallTraceAtRoot(ctx.hippoRoot, {
+      tenantId: ctx.tenantId,
+      sessionId: activeSnapshot?.session_id ?? null,
+      pipeline: 'context',
+      query,
+      explainMode: false,
+      results: selectedItems.map((s) => ({
+        memoryId: s.entry.id,
+        score: s.score,
+      })),
+    });
+
     updateStats(ctx.hippoRoot, { recalled: selectedItems.length });
 
     // Replace selectedItems entries with markRetrieved-updated copies so
@@ -2880,6 +2941,11 @@ export function outcomeForLastRecall(
   const idx = loadIndex(ctx.hippoRoot);
   const ids = idx.last_retrieval_ids;
   if (ids.length === 0) return { applied: 0, ids: [] };
-  const { applied, appliedIds } = outcome(ctx, ids, good);
+  // LC1: this IS the last-retrieval mechanism the plan requires linkage for
+  // (docs/plans/2026-08-02-lc1-recall-trace-persistence.md). readLastTraceId
+  // returns null on a fresh store / pre-v40 flow / api.recall-only usage —
+  // outcome() skips linkage silently when traceId is undefined.
+  const traceId = readLastTraceId(ctx.hippoRoot);
+  const { applied, appliedIds } = outcome(ctx, ids, good, traceId !== null ? { traceId } : undefined);
   return { applied, ids: appliedIds };
 }

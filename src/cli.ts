@@ -97,6 +97,7 @@ import type { SessionHandoff } from './handoff.js';
 import { search, markRetrieved, estimateTokens, hybridSearch, physicsSearch, explainMatch, textOverlap, tokenize as tokenizeQuery, type RerankStep } from './search.js';
 import { compareEntryIdentity } from './compare.js';
 import { renderTraceContent, parseSteps } from './trace.js';
+import { writeRecallTraceAtRoot } from './recall-trace.js';
 import { consolidate } from './consolidate.js';
 import { deduplicateStore } from './dedupe.js';
 import {
@@ -1693,6 +1694,27 @@ async function cmdRecall(
     || recentSessionEvents.length > 0;
 
   if (results.length === 0) {
+    // LC1 (docs/plans/2026-08-02-lc1-recall-trace-persistence.md,
+    // independent-review-critic must-fix): trace the zero-result recall too
+    // (result_count 0, no result rows) so a query that reveals a coverage
+    // gap still lands in the training corpus. last_trace_id is deliberately
+    // NOT stamped here — this path never touches last_retrieval_ids (no
+    // memories to update), so stamping last_trace_id would let a later
+    // `hippo outcome` link the OLD last_retrieval_ids against this NEW,
+    // unrelated empty trace. Fail-soft internally; never throws.
+    writeRecallTraceAtRoot(
+      hippoRoot,
+      {
+        tenantId,
+        sessionId: sessionId || null,
+        pipeline: 'cli',
+        query,
+        explainMode: showWhy,
+        results: [],
+      },
+      { stampLastTraceId: false },
+    );
+
     if (asJson) {
       const out: Record<string, unknown> = {
         query,
@@ -1787,6 +1809,23 @@ async function cmdRecall(
   // Track last retrieval IDs for outcome command
   localIndex.last_retrieval_ids = updated.map((u) => u.id);
   saveIndex(hippoRoot, localIndex);
+
+  // LC1 (docs/plans/2026-08-02-lc1-recall-trace-persistence.md): ONE trace
+  // at hippoRoot (where last_retrieval_ids and outcome attribution live) +
+  // last_trace_id. The globalRoot audit emit (emitCliAudit above) is
+  // untouched — no second trace row. Fail-soft internally; never throws.
+  writeRecallTraceAtRoot(hippoRoot, {
+    tenantId,
+    sessionId: sessionId || null,
+    pipeline: 'cli',
+    query,
+    explainMode: showWhy,
+    results: results.map((r) => ({
+      memoryId: r.entry.id,
+      score: r.score,
+      rerankSteps: r.rerankTrace,
+    })),
+  });
 
   updateStats(hippoRoot, { recalled: results.length });
 

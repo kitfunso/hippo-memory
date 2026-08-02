@@ -67,6 +67,12 @@ export interface HippoIndex {
   version: number;
   entries: Record<string, IndexEntry>;
   last_retrieval_ids: string[];
+  /** LC1 (docs/plans/2026-08-02-lc1-recall-trace-persistence.md): id of the
+   *  most recent recall_traces row written by getContext/cmdRecall, mirrored
+   *  from the `last_trace_id` meta key exactly like last_retrieval_ids. null
+   *  when no trace has been written yet (fresh store, pre-v40 flow, or
+   *  api.recall-only usage — api.recall never sets this). */
+  last_trace_id: string | null;
 }
 
 interface MemoryRow {
@@ -885,6 +891,13 @@ function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: str
 
     const legacyIndex = loadLegacyIndexFile(hippoRoot);
     setMeta(db, 'last_retrieval_ids', JSON.stringify(legacyIndex.last_retrieval_ids ?? []));
+    // LC1: legacy index.json predates last_trace_id, so this is '' for every
+    // pre-v40 store — harmless, matches the ensureMetaDefaults default.
+    // Coerce like its neighbors below coerce theirs (independent-review-critic
+    // LOW finding): accept only a clean digit string, else fall back to ''
+    // rather than trusting whatever a hand-edited/corrupt index.json carries.
+    const legacyTraceId = String(legacyIndex.last_trace_id ?? '');
+    setMeta(db, 'last_trace_id', /^\d+$/.test(legacyTraceId) ? legacyTraceId : '');
 
     const legacyStats = loadLegacyStatsFile(hippoRoot);
     setMeta(db, 'total_remembered', String(Number(legacyStats.total_remembered ?? 0)));
@@ -931,13 +944,13 @@ function loadLegacyEntriesFromMarkdown(hippoRoot: string): MemoryEntry[] {
 function loadLegacyIndexFile(hippoRoot: string): HippoIndex {
   const indexPath = path.join(hippoRoot, 'index.json');
   if (!fs.existsSync(indexPath)) {
-    return { version: 1, entries: {}, last_retrieval_ids: [] };
+    return { version: 1, entries: {}, last_retrieval_ids: [], last_trace_id: null };
   }
 
   try {
     return JSON.parse(fs.readFileSync(indexPath, 'utf8')) as HippoIndex;
   } catch {
-    return { version: 1, entries: {}, last_retrieval_ids: [] };
+    return { version: 1, entries: {}, last_retrieval_ids: [], last_trace_id: null };
   }
 }
 
@@ -1116,6 +1129,7 @@ function buildIndexFromDb(db: ReturnType<typeof openHippoDb>): HippoIndex {
     version: INDEX_VERSION,
     entries,
     last_retrieval_ids: parseJsonArray(getMeta(db, 'last_retrieval_ids', '[]')),
+    last_trace_id: getMeta(db, 'last_trace_id', '') || null,
   };
 }
 
@@ -1180,6 +1194,7 @@ export function saveIndex(hippoRoot: string, index: HippoIndex): void {
   const db = openHippoDb(hippoRoot);
   try {
     setMeta(db, 'last_retrieval_ids', JSON.stringify(index.last_retrieval_ids ?? []));
+    setMeta(db, 'last_trace_id', index.last_trace_id ?? '');
     writeIndexMirror(hippoRoot, buildIndexFromDb(db));
   } finally {
     closeHippoDb(db);
