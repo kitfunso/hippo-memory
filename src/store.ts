@@ -1142,11 +1142,22 @@ function buildIndexFromDb(db: ReturnType<typeof openHippoDb>): HippoIndex {
     };
   }
 
+  // LC1 codex round-2 med: the two lockstep keys must be read in ONE
+  // statement. Two autocommit SELECTs leave a window where a concurrent
+  // saveIndex (which commits both keys in one transaction) lands between
+  // them, handing the reader mismatched last_retrieval_ids / last_trace_id
+  // and re-opening the mislinkage hole saveIndex's BEGIN/COMMIT closed on
+  // the write side. One SELECT = one SQLite read snapshot.
+  const lockstepRows = db.prepare(
+    `SELECT key, value FROM meta WHERE key IN ('last_retrieval_ids', 'last_trace_id')`,
+  ).all() as Array<{ key: string; value: string }>;
+  const lockstep = new Map(lockstepRows.map((r) => [r.key, r.value]));
+
   return {
     version: INDEX_VERSION,
     entries,
-    last_retrieval_ids: parseJsonArray(getMeta(db, 'last_retrieval_ids', '[]')),
-    last_trace_id: parseLastTraceId(getMeta(db, 'last_trace_id', '')),
+    last_retrieval_ids: parseJsonArray(lockstep.get('last_retrieval_ids') ?? '[]'),
+    last_trace_id: parseLastTraceId(lockstep.get('last_trace_id') ?? ''),
   };
 }
 

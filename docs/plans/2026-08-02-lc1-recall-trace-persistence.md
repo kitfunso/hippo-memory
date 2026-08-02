@@ -300,6 +300,20 @@ changed, no secrets in traces (hash-only queries).
 
 ## Limitations (added final review round)
 
+- **Mixed binary versions can contaminate linkage attribution (codex round-2
+  med, ACCEPTED with rationale).** A pre-v40 binary writing to a v40 store
+  updates `last_retrieval_ids` without touching `last_trace_id`. A new-binary
+  outcome then reads a stale trace id; membership validation filters the
+  credited ids against that stale trace, but ids that OVERLAP (similar
+  queries recall similar memories) still pass and get attributed to the
+  wrong recall event. Prevention would mean raising `min_compatible_binary`
+  at v40 — locking every pre-1.29 binary out of the store and breaking this
+  plan's v39-rollback promise. Deliberately NOT done: the contamination is
+  bounded to mixed-binary usage (a transitional state), affects training
+  attribution rather than user-facing behavior, and LC2's training loader
+  can additionally drop linkages whose outcome ts falls implausibly far
+  from the trace ts. Weighed and surfaced at the ship gate; revisit only if
+  mixed-binary usage becomes a standing configuration.
 - **Partial per-memory outcome failure can omit the linkage row.** `outcome()`
   loops over ids, calling `readEntry`/`writeEntry`/`appendAuditEvent` per id,
   and only calls `recordTraceOutcome` once at the end with whatever ended up
