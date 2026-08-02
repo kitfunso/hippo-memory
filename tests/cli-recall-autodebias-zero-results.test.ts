@@ -45,9 +45,13 @@ describe('cli.ts cmdRecall zero-result branch preserves planningFallacyHint (J3.
   it('isolate the zero-result block by line range', () => {
     // Find the `if (results.length === 0) {` block and slice ~50 lines.
     // Captures the JSON + text early-return paths the codex fix targets.
+    // Window bumped 3000 -> 3800 (LC1 F1 final-review fix, 2026-08-02): the
+    // zero-result branch now ALSO writes an empty recall trace before the
+    // JSON/text rendering, pushing the rendering code further into the
+    // block. Margin left for future additions to this branch.
     const startIdx = cliText.indexOf('if (results.length === 0)');
     expect(startIdx).toBeGreaterThan(0);
-    zeroResultBlock = cliText.slice(startIdx, startIdx + 3000);
+    zeroResultBlock = cliText.slice(startIdx, startIdx + 3800);
   });
 
   it('zero-result JSON output spreads planningFallacyHint when truthy', () => {

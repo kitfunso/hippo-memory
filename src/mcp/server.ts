@@ -508,6 +508,13 @@ async function executeTool(
         // physics/hybrid result set below; suppress api.recall's BM25-band copy
         // so one MCP recall does not emit recall_availability_detected twice.
         suppressAvailabilityHint: true,
+        // LC1 F2 fix — MCP's user-visible primary ordering comes from the
+        // physics/hybrid scorer below, NOT this api.recall call's BM25 band
+        // (see the comment above apiRecall). Tracing this call as pipeline
+        // 'api' would mislabel training data with ids/ranks/scores the user
+        // never actually saw. Real MCP tracing is the reserved 'mcp'
+        // pipeline value (schema v40) — a follow-up, not v1 scope.
+        suppressRecallTrace: true,
         ...(freshTailCount !== undefined ? { freshTailCount } : {}),
         ...(freshTailSessionId !== undefined ? { freshTailSessionId } : {}),
         ...(summarizeOverflow !== undefined ? { summarizeOverflow } : {}),

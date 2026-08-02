@@ -2202,6 +2202,22 @@ const MIGRATIONS: Migration[] = [
       // recall, a WITHOUT ROWID child table for the ranked results, and a
       // separate append-only outcomes table so audit_log pruning can never
       // erase training data.
+      //
+      // F6 (deliberate, not an oversight): unlike v39, this migration does
+      // NOT bump `min_compatible_binary`. A pre-v40 binary opening this DB
+      // ignores the three new tables and keeps writing `last_retrieval_ids`
+      // exactly as before — it never touches `last_trace_id` (that key
+      // simply stays whatever it was). recordTraceOutcome's F4 consumer-
+      // side validation (recall-trace.ts) makes any resulting staleness
+      // harmless to linkage: it re-validates the named trace's tenant AND
+      // intersects credited ids against the trace's OWN result set before
+      // inserting, so a stale/mismatched trace id from an old-binary write
+      // gets silently skipped rather than mislinked. That preserves the
+      // plan's "drop the three tables + last_trace_id restores v39 behavior
+      // exactly" rollback promise — a min_compatible_binary bump would
+      // additionally lock old binaries out of the WHOLE store for what is
+      // purely an observability/training feature, which the rollback
+      // promise does not require.
       db.exec(`
         CREATE TABLE IF NOT EXISTS recall_traces (
           id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -17,7 +17,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { openHippoDb, closeHippoDb, getMeta, setMeta, type DatabaseSyncLike } from './db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import type { RerankStep } from './search.js';
 
 /** One ranked result to persist alongside its trace row. */
@@ -42,6 +42,26 @@ export interface RecallTraceInput {
   explainMode?: boolean;
   /** Results in returned rank order (index 0 = rank 1). */
   results: RecallTraceResultInput[];
+}
+
+/**
+ * Strip a RerankStep down to {stage, multiplier, scoreBefore, scoreAfter}
+ * before persisting (F3 privacy fix, codex cross-model finding). `note` is
+ * free-form human text — the CLI's goal-boost step embeds matched goal tag
+ * text there, so persisting it verbatim would leak raw user content into
+ * training data via `rerank_json`. Only the four structured fields survive;
+ * any other/future free-form field is dropped by construction (allowlist,
+ * not a denylist).
+ */
+function sanitizeRerankSteps(
+  steps: RerankStep[],
+): Array<Pick<RerankStep, 'stage' | 'multiplier' | 'scoreBefore' | 'scoreAfter'>> {
+  return steps.map((s) => ({
+    stage: s.stage,
+    multiplier: s.multiplier,
+    scoreBefore: s.scoreBefore,
+    scoreAfter: s.scoreAfter,
+  }));
 }
 
 /**
@@ -87,7 +107,7 @@ export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput):
           r.memoryId,
           i + 1,
           r.score,
-          r.rerankSteps && r.rerankSteps.length > 0 ? JSON.stringify(r.rerankSteps) : null,
+          r.rerankSteps && r.rerankSteps.length > 0 ? JSON.stringify(sanitizeRerankSteps(r.rerankSteps)) : null,
         );
       });
 
@@ -106,34 +126,31 @@ export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput):
 
 /**
  * Convenience wrapper: opens a fresh short-lived connection at `root`,
- * writes the trace, and (by default) stamps the `last_trace_id` meta key,
- * then closes.
+ * writes the trace, and closes. Returns the new trace id, or null on any
+ * failure (fail-soft).
  *
  * Used at api.getContext and CLI cmdRecall — sites where the block's own
  * convention is per-call handles (writeEntry, saveIndex) and the earlier
  * audit handles are already closed. NOT used by api.recall, which must
- * reuse the caller's open handle and must NOT touch `last_trace_id`
- * (v1.11.5 no-side-effects contract, tests/api-recall-no-side-effects.test.ts).
+ * reuse the caller's open handle (v1.11.5 no-side-effects contract,
+ * tests/api-recall-no-side-effects.test.ts).
  *
- * `opts.stampLastTraceId` (default true, independent-review-critic
- * must-fix): pass `false` at any call site that traces a recall WITHOUT
- * also advancing `last_retrieval_ids` — e.g. CLI cmdRecall's zero-result
- * path, which still writes an (empty) trace for training-corpus coverage
- * but does not touch `last_retrieval_ids` (nothing to update). LOCKSTEP
- * INVARIANT: `last_trace_id` must only ever advance when
- * `last_retrieval_ids` also advances in the SAME call. Stamping it from a
- * trace that isn't paired with a `last_retrieval_ids` update would let a
- * later `hippo outcome` link the OLD (stale) last_retrieval_ids against
- * the NEW, unrelated trace — a silent mislinkage in the training data.
+ * F1 structural fix (replaces the earlier stamp-then-clear design): this
+ * function does NOT touch the `last_trace_id` meta key. Stamping lived here
+ * originally, on its own connection, separate from the `last_retrieval_ids`
+ * write in `saveIndex` — two connections meant two commits, so a crash or
+ * a failed second write could advance one without the other. LOCKSTEP
+ * INVARIANT: `last_trace_id` must only ever advance in the SAME write as
+ * `last_retrieval_ids`. The caller now does: call this function FIRST, set
+ * `localIndex.last_trace_id` from the returned id, THEN call `saveIndex`
+ * once — `saveIndex` persists both meta keys in one transaction
+ * (store.ts). Call sites that trace WITHOUT advancing `last_retrieval_ids`
+ * (CLI cmdRecall's zero-result path, getContext's empty-result path) simply
+ * never touch `localIndex` at all — they can't desync by construction.
  *
  * Fail-soft: never throws, including on connection failure.
  */
-export function writeRecallTraceAtRoot(
-  root: string,
-  input: RecallTraceInput,
-  opts?: { stampLastTraceId?: boolean },
-): number | null {
-  const stampLastTraceId = opts?.stampLastTraceId ?? true;
+export function writeRecallTraceAtRoot(root: string, input: RecallTraceInput): number | null {
   let db: DatabaseSyncLike;
   try {
     db = openHippoDb(root);
@@ -143,66 +160,7 @@ export function writeRecallTraceAtRoot(
     return null;
   }
   try {
-    const traceId = writeRecallTrace(db, input);
-    if (stampLastTraceId) {
-      try {
-        if (traceId !== null) {
-          setMeta(db, 'last_trace_id', String(traceId));
-        } else {
-          // Failed trace write: CLEAR the key so a later outcome cannot link
-          // this recall's ids against the previous, unrelated trace.
-          setMeta(db, 'last_trace_id', '');
-        }
-      } catch (error) {
-        // eslint-disable-next-line no-console
-        console.error(`[hippo] last_trace_id write failed: ${(error as Error).message}`);
-      }
-    }
-    return traceId;
-  } finally {
-    closeHippoDb(db);
-  }
-}
-
-/**
- * Read the `last_trace_id` meta key at `root`. Returns null when unset
- * (fresh store, pre-v40 flow, or a store whose last recall went through
- * api.recall only — api.recall never sets this key). Fail-soft like the
- * writers: a broken connection returns null rather than breaking the
- * surrounding outcome call.
- */
-export function readLastTraceId(root: string): number | null {
-  try {
-    const db = openHippoDb(root);
-    try {
-      // Strict parse (independent-review-critic MED finding): a bare
-      // Number(raw) turns '', whitespace, or garbage into 0/NaN handling
-      // that let a whitespace-only meta value parse as 0 — outcome() would
-      // then INSERT recall_trace_outcomes.trace_id=0, a masked FK
-      // violation (no row id 0 ever exists). Require a clean positive
-      // integer string; anything else is treated as unset.
-      const raw = getMeta(db, 'last_trace_id', '').trim();
-      if (!/^\d+$/.test(raw)) return null;
-      const n = Number(raw);
-      return n > 0 ? n : null;
-    } finally {
-      closeHippoDb(db);
-    }
-  } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error(`[hippo] last_trace_id read failed: ${(error as Error).message}`);
-    return null;
-  }
-}
-
-/**
- * Write the `last_trace_id` meta key at `root` on its own short-lived
- * connection.
- */
-export function writeLastTraceId(root: string, traceId: number): void {
-  const db = openHippoDb(root);
-  try {
-    setMeta(db, 'last_trace_id', String(traceId));
+    return writeRecallTrace(db, input);
   } finally {
     closeHippoDb(db);
   }
@@ -229,14 +187,48 @@ export interface RecordTraceOutcomeInput {
  * Lives in its own append-only table, not audit_log metadata: audit_log is
  * pruned by `pruneAuditLog`, and pruning must never erase training data.
  *
+ * F4 validation (codex cross-model finding): `traceId`/`memoryIds` reach
+ * this function from caller-side state (`last_trace_id` / applied outcome
+ * ids) that can go stale relative to the trace it names — a forgotten
+ * memory, a tenant switch mid-session, or a race between two callers. Two
+ * checks run before the insert, both skip silently (console.error one
+ * line) rather than throw:
+ *   1. The named trace must exist and belong to `input.tenantId` — a
+ *      tenant mismatch or a dangling id (deleted trace) skips.
+ *   2. `input.memoryIds` is intersected against the trace's OWN
+ *      `recall_trace_results.memory_id` set — only ids that trace actually
+ *      returned are recorded. An id that was never in this trace's result
+ *      set (stale caller state) is silently dropped rather than recorded
+ *      as a false credit. If the intersection is empty, no row is written.
+ *
  * Fail-soft: never throws.
  */
 export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutcomeInput): void {
   try {
+    const trace = db.prepare(`SELECT tenant_id FROM recall_traces WHERE id = ?`).get(input.traceId) as
+      | { tenant_id?: string }
+      | undefined;
+    if (!trace || trace.tenant_id !== input.tenantId) {
+      // eslint-disable-next-line no-console
+      console.error(`[hippo] recall trace outcome skipped: trace ${input.traceId} missing or tenant mismatch`);
+      return;
+    }
+
+    const memberRows = db
+      .prepare(`SELECT memory_id FROM recall_trace_results WHERE trace_id = ?`)
+      .all(input.traceId) as Array<{ memory_id: string }>;
+    const members = new Set(memberRows.map((r) => r.memory_id));
+    const credited = input.memoryIds.filter((id) => members.has(id));
+    if (credited.length === 0) {
+      // eslint-disable-next-line no-console
+      console.error(`[hippo] recall trace outcome skipped: no credited ids intersect trace ${input.traceId}'s results`);
+      return;
+    }
+
     db.prepare(`
       INSERT INTO recall_trace_outcomes (trace_id, ts, tenant_id, outcome, memory_ids_json)
       VALUES (?, ?, ?, ?, ?)
-    `).run(input.traceId, new Date().toISOString(), input.tenantId, input.outcome, JSON.stringify(input.memoryIds));
+    `).run(input.traceId, new Date().toISOString(), input.tenantId, input.outcome, JSON.stringify(credited));
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error(`[hippo] recall trace outcome write failed: ${(error as Error).message}`);

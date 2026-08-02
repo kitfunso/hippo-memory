@@ -462,6 +462,23 @@ function parseJsonArray(raw: string | null | undefined): string[] {
   }
 }
 
+/**
+ * Strict parse for the `last_trace_id` meta value (LC1 F1(d) structural
+ * fix). A bare Number(raw) would turn '', whitespace, or garbage into a
+ * usable-looking 0/NaN — a consumer INSERTing recall_trace_outcomes with
+ * trace_id=0 would hit a masked FK violation (row id 0 never exists).
+ * Require a clean positive integer string; anything else is treated as
+ * unset. This is the ONE place that decides "clean" — every consumer of
+ * `HippoIndex.last_trace_id` (outcomeForLastRecall, tests) reads the
+ * already-validated value out of `buildIndexFromDb`'s result and never
+ * re-parses the raw meta string itself.
+ */
+function parseLastTraceId(raw: string | null | undefined): string | null {
+  const trimmed = (raw ?? '').trim();
+  if (!/^\d+$/.test(trimmed) || Number(trimmed) <= 0) return null;
+  return trimmed;
+}
+
 function parseJsonObject(raw: string | null | undefined): Record<string, unknown> {
   if (!raw) return {};
   try {
@@ -1129,7 +1146,7 @@ function buildIndexFromDb(db: ReturnType<typeof openHippoDb>): HippoIndex {
     version: INDEX_VERSION,
     entries,
     last_retrieval_ids: parseJsonArray(getMeta(db, 'last_retrieval_ids', '[]')),
-    last_trace_id: getMeta(db, 'last_trace_id', '') || null,
+    last_trace_id: parseLastTraceId(getMeta(db, 'last_trace_id', '')),
   };
 }
 
@@ -1188,13 +1205,29 @@ export function loadIndex(hippoRoot: string): HippoIndex {
 
 /**
  * Persist mutable index metadata. Entry rows themselves are derived from SQLite.
+ *
+ * LC1 F1(c) structural fix: `last_retrieval_ids` and `last_trace_id` must
+ * land atomically — callers (getContext, cmdRecall) fold a freshly-written
+ * trace id into `index.last_trace_id` before calling this, relying on BOTH
+ * meta keys committing together. Wrapped in BEGIN/COMMIT so a crash or a
+ * mid-write failure can never advance one key without the other. The
+ * filesystem mirror write stays AFTER commit — the DB is the source of
+ * truth, the mirror is best-effort (matches every other per-call-handle
+ * site's convention).
  */
 export function saveIndex(hippoRoot: string, index: HippoIndex): void {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    setMeta(db, 'last_retrieval_ids', JSON.stringify(index.last_retrieval_ids ?? []));
-    setMeta(db, 'last_trace_id', index.last_trace_id ?? '');
+    db.exec('BEGIN');
+    try {
+      setMeta(db, 'last_retrieval_ids', JSON.stringify(index.last_retrieval_ids ?? []));
+      setMeta(db, 'last_trace_id', index.last_trace_id ?? '');
+      db.exec('COMMIT');
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
     writeIndexMirror(hippoRoot, buildIndexFromDb(db));
   } finally {
     closeHippoDb(db);

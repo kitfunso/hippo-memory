@@ -55,7 +55,7 @@ import {
   type AuditOp,
 } from './audit.js';
 import { promoteToGlobal, getGlobalRoot, autoShare, searchBothHybrid } from './shared.js';
-import { writeRecallTrace, writeRecallTraceAtRoot, readLastTraceId, recordTraceOutcome } from './recall-trace.js';
+import { writeRecallTrace, writeRecallTraceAtRoot, recordTraceOutcome } from './recall-trace.js';
 import { evalNow, isRecallBoostAblated } from './ablation.js';
 import { archiveRawMemory } from './raw-archive.js';
 import {
@@ -387,6 +387,19 @@ export interface RecallOpts {
    * reranker/retrieval-count-downweight) are A7.2.
    */
   explain?: boolean;
+  /**
+   * LC1 (docs/plans/2026-08-02-lc1-recall-trace-persistence.md) / F2 fix.
+   * When true, api.recall does NOT write a recall_traces row for this call.
+   * Mirrors `suppressAvailabilityHint`'s pattern: callers that run their OWN
+   * tracing over a DIFFERENT result set must suppress api.recall's copy so
+   * the training corpus doesn't get a trace mislabeled as 'api' pipeline
+   * when the caller's actual user-visible results came from elsewhere. The
+   * MCP handler sets this — its primary ranked band comes from a separate
+   * physics/hybrid scorer, not this api.recall call's BM25 band (real MCP
+   * tracing is the reserved 'mcp' pipeline, a follow-up). HTTP / direct SDK
+   * callers leave this unset and get the trace.
+   */
+  suppressRecallTrace?: boolean;
 }
 
 export interface ContinuityBlock {
@@ -972,19 +985,23 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   // handle. v1.11.5 contract lock holds — api.recall does NOT write
   // last_trace_id (tests/api-recall-no-side-effects.test.ts); a trace INSERT
   // is the same observability class as the audit row it sits beside, not
-  // retrieval state. Fail-soft internally; never throws.
-  writeRecallTrace(db, {
-    tenantId: ctx.tenantId,
-    sessionId: opts.sessionId ?? null,
-    pipeline: 'api',
-    query: opts.query,
-    explainMode: opts.explain === true,
-    results: rankedOut.map((r) => ({
-      memoryId: r.id,
-      score: r.score,
-      rerankSteps: r.rerankTrace,
-    })),
-  });
+  // retrieval state. F2 fix: suppressed when the caller (currently only the
+  // MCP handler) traces its own, different result set — see
+  // opts.suppressRecallTrace JSDoc. Fail-soft internally; never throws.
+  if (!opts.suppressRecallTrace) {
+    writeRecallTrace(db, {
+      tenantId: ctx.tenantId,
+      sessionId: opts.sessionId ?? null,
+      pipeline: 'api',
+      query: opts.query,
+      explainMode: opts.explain === true,
+      results: rankedOut.map((r) => ({
+        memoryId: r.id,
+        score: r.score,
+        rerankSteps: r.rerankTrace,
+      })),
+    });
+  }
   } finally {
     closeHippoDb(db);
   }
@@ -2474,6 +2491,27 @@ export async function getContext(
     !sessionHandoff &&
     recentSessionEvents.length === 0
   ) {
+    // LC1 F5 fix: this bare early-return used to skip tracing entirely — a
+    // query that found nothing is exactly the coverage-gap signal Track LC
+    // needs. Write an empty trace (result_count 0, no result rows) so it
+    // lands in the training corpus. Never touches localIndex/
+    // last_retrieval_ids/last_trace_id — by construction it can't desync
+    // (mirrors the CLI zero-result path). Skipped under pinnedOnly (hot
+    // path stays read-only, same reason it skips markRetrieved). Fail-soft
+    // internally; never throws.
+    if (!pinnedOnly) {
+      // No sessionId to pull here: !activeSnapshot holds in this branch by
+      // construction (one of the AND conditions above), so there is no
+      // active snapshot to derive a session id from.
+      writeRecallTraceAtRoot(ctx.hippoRoot, {
+        tenantId: ctx.tenantId,
+        sessionId: null,
+        pipeline: 'context',
+        query,
+        explainMode: false,
+        results: [],
+      });
+    }
     return { entries: [], tokens: 0 };
   }
 
@@ -2501,16 +2539,21 @@ export async function getContext(
     }
 
     localIndex.last_retrieval_ids = updatedEntries.map((u) => u.id);
-    saveIndex(ctx.hippoRoot, localIndex);
 
-    // LC1 (docs/plans/2026-08-02-lc1-recall-trace-persistence.md): trace the
-    // post-limit, post-annotation `selectedItems` actually returned. Fresh
-    // short-lived connection — the audit handles above (~2410) are already
-    // closed by this point, matching this block's own per-call-handle
-    // convention (writeEntry, saveIndex). Writes last_trace_id too (skipped
-    // entirely in pinnedOnly mode by virtue of this whole block being
-    // skipped). Fail-soft internally; never throws.
-    writeRecallTraceAtRoot(ctx.hippoRoot, {
+    // LC1 F1 structural fix (docs/plans/2026-08-02-lc1-recall-trace-persistence.md):
+    // write the trace FIRST — post-limit, post-annotation `selectedItems`
+    // actually returned, on a fresh short-lived connection (the audit
+    // handles above ~2410 are already closed by this point, matching this
+    // block's own per-call-handle convention: writeEntry, saveIndex) — then
+    // fold the resulting id into `localIndex` so the SAME `saveIndex` call
+    // below persists last_retrieval_ids + last_trace_id atomically.
+    // LOCKSTEP INVARIANT: last_trace_id must only ever advance together
+    // with last_retrieval_ids; a two-connection stamp-then-clear design
+    // could desync them on a crash between writes. A failed trace write
+    // (traceId null) sets last_trace_id to null rather than leaving the
+    // OLD id pointing at ids that are about to be overwritten. Fail-soft
+    // internally; never throws.
+    const traceId = writeRecallTraceAtRoot(ctx.hippoRoot, {
       tenantId: ctx.tenantId,
       sessionId: activeSnapshot?.session_id ?? null,
       pipeline: 'context',
@@ -2521,6 +2564,8 @@ export async function getContext(
         score: s.score,
       })),
     });
+    localIndex.last_trace_id = traceId !== null ? String(traceId) : null;
+    saveIndex(ctx.hippoRoot, localIndex);
 
     updateStats(ctx.hippoRoot, { recalled: selectedItems.length });
 
@@ -2941,11 +2986,16 @@ export function outcomeForLastRecall(
   const idx = loadIndex(ctx.hippoRoot);
   const ids = idx.last_retrieval_ids;
   if (ids.length === 0) return { applied: 0, ids: [] };
-  // LC1: this IS the last-retrieval mechanism the plan requires linkage for
-  // (docs/plans/2026-08-02-lc1-recall-trace-persistence.md). readLastTraceId
-  // returns null on a fresh store / pre-v40 flow / api.recall-only usage —
-  // outcome() skips linkage silently when traceId is undefined.
-  const traceId = readLastTraceId(ctx.hippoRoot);
+  // LC1 F1(d) structural fix (docs/plans/2026-08-02-lc1-recall-trace-persistence.md):
+  // read the trace id from the SAME `loadIndex` snapshot already in hand
+  // (idx.last_trace_id) — a single-snapshot read, not a second DB round
+  // trip via a now-deleted readLastTraceId helper. The value is already
+  // strict-parsed by buildIndexFromDb's parseLastTraceId (store.ts): every
+  // consumer gets a clean positive-integer string or null, never a garbage
+  // value that could reach outcome() and INSERT trace_id=0/NaN. null on a
+  // fresh store / pre-v40 flow / api.recall-only usage — outcome() skips
+  // linkage silently when traceId is undefined.
+  const traceId = idx.last_trace_id !== null ? Number(idx.last_trace_id) : null;
   const { applied, appliedIds } = outcome(ctx, ids, good, traceId !== null ? { traceId } : undefined);
   return { applied, ids: appliedIds };
 }
