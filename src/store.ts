@@ -67,6 +67,12 @@ export interface HippoIndex {
   version: number;
   entries: Record<string, IndexEntry>;
   last_retrieval_ids: string[];
+  /** LC1 (docs/plans/2026-08-02-lc1-recall-trace-persistence.md): id of the
+   *  most recent recall_traces row written by getContext/cmdRecall, mirrored
+   *  from the `last_trace_id` meta key exactly like last_retrieval_ids. null
+   *  when no trace has been written yet (fresh store, pre-v40 flow, or
+   *  api.recall-only usage — api.recall never sets this). */
+  last_trace_id: string | null;
 }
 
 interface MemoryRow {
@@ -454,6 +460,23 @@ function parseJsonArray(raw: string | null | undefined): string[] {
   } catch {
     return [];
   }
+}
+
+/**
+ * Strict parse for the `last_trace_id` meta value (LC1 F1(d) structural
+ * fix). A bare Number(raw) would turn '', whitespace, or garbage into a
+ * usable-looking 0/NaN — a consumer INSERTing recall_trace_outcomes with
+ * trace_id=0 would hit a masked FK violation (row id 0 never exists).
+ * Require a clean positive integer string; anything else is treated as
+ * unset. This is the ONE place that decides "clean" — every consumer of
+ * `HippoIndex.last_trace_id` (outcomeForLastRecall, tests) reads the
+ * already-validated value out of `buildIndexFromDb`'s result and never
+ * re-parses the raw meta string itself.
+ */
+function parseLastTraceId(raw: string | null | undefined): string | null {
+  const trimmed = (raw ?? '').trim();
+  if (!/^\d+$/.test(trimmed) || Number(trimmed) <= 0) return null;
+  return trimmed;
 }
 
 function parseJsonObject(raw: string | null | undefined): Record<string, unknown> {
@@ -885,6 +908,13 @@ function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: str
 
     const legacyIndex = loadLegacyIndexFile(hippoRoot);
     setMeta(db, 'last_retrieval_ids', JSON.stringify(legacyIndex.last_retrieval_ids ?? []));
+    // LC1: legacy index.json predates last_trace_id, so this is '' for every
+    // pre-v40 store — harmless, matches the ensureMetaDefaults default.
+    // Coerce like its neighbors below coerce theirs (independent-review-critic
+    // LOW finding): accept only a clean digit string, else fall back to ''
+    // rather than trusting whatever a hand-edited/corrupt index.json carries.
+    const legacyTraceId = String(legacyIndex.last_trace_id ?? '');
+    setMeta(db, 'last_trace_id', /^\d+$/.test(legacyTraceId) ? legacyTraceId : '');
 
     const legacyStats = loadLegacyStatsFile(hippoRoot);
     setMeta(db, 'total_remembered', String(Number(legacyStats.total_remembered ?? 0)));
@@ -931,13 +961,13 @@ function loadLegacyEntriesFromMarkdown(hippoRoot: string): MemoryEntry[] {
 function loadLegacyIndexFile(hippoRoot: string): HippoIndex {
   const indexPath = path.join(hippoRoot, 'index.json');
   if (!fs.existsSync(indexPath)) {
-    return { version: 1, entries: {}, last_retrieval_ids: [] };
+    return { version: 1, entries: {}, last_retrieval_ids: [], last_trace_id: null };
   }
 
   try {
     return JSON.parse(fs.readFileSync(indexPath, 'utf8')) as HippoIndex;
   } catch {
-    return { version: 1, entries: {}, last_retrieval_ids: [] };
+    return { version: 1, entries: {}, last_retrieval_ids: [], last_trace_id: null };
   }
 }
 
@@ -1112,10 +1142,22 @@ function buildIndexFromDb(db: ReturnType<typeof openHippoDb>): HippoIndex {
     };
   }
 
+  // LC1 codex round-2 med: the two lockstep keys must be read in ONE
+  // statement. Two autocommit SELECTs leave a window where a concurrent
+  // saveIndex (which commits both keys in one transaction) lands between
+  // them, handing the reader mismatched last_retrieval_ids / last_trace_id
+  // and re-opening the mislinkage hole saveIndex's BEGIN/COMMIT closed on
+  // the write side. One SELECT = one SQLite read snapshot.
+  const lockstepRows = db.prepare(
+    `SELECT key, value FROM meta WHERE key IN ('last_retrieval_ids', 'last_trace_id')`,
+  ).all() as Array<{ key: string; value: string }>;
+  const lockstep = new Map(lockstepRows.map((r) => [r.key, r.value]));
+
   return {
     version: INDEX_VERSION,
     entries,
-    last_retrieval_ids: parseJsonArray(getMeta(db, 'last_retrieval_ids', '[]')),
+    last_retrieval_ids: parseJsonArray(lockstep.get('last_retrieval_ids') ?? '[]'),
+    last_trace_id: parseLastTraceId(lockstep.get('last_trace_id') ?? ''),
   };
 }
 
@@ -1174,12 +1216,29 @@ export function loadIndex(hippoRoot: string): HippoIndex {
 
 /**
  * Persist mutable index metadata. Entry rows themselves are derived from SQLite.
+ *
+ * LC1 F1(c) structural fix: `last_retrieval_ids` and `last_trace_id` must
+ * land atomically — callers (getContext, cmdRecall) fold a freshly-written
+ * trace id into `index.last_trace_id` before calling this, relying on BOTH
+ * meta keys committing together. Wrapped in BEGIN/COMMIT so a crash or a
+ * mid-write failure can never advance one key without the other. The
+ * filesystem mirror write stays AFTER commit — the DB is the source of
+ * truth, the mirror is best-effort (matches every other per-call-handle
+ * site's convention).
  */
 export function saveIndex(hippoRoot: string, index: HippoIndex): void {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    setMeta(db, 'last_retrieval_ids', JSON.stringify(index.last_retrieval_ids ?? []));
+    db.exec('BEGIN');
+    try {
+      setMeta(db, 'last_retrieval_ids', JSON.stringify(index.last_retrieval_ids ?? []));
+      setMeta(db, 'last_trace_id', index.last_trace_id ?? '');
+      db.exec('COMMIT');
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
     writeIndexMirror(hippoRoot, buildIndexFromDb(db));
   } finally {
     closeHippoDb(db);

@@ -25,7 +25,7 @@ const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: new (path: string) => DatabaseSyncLike;
 };
 
-const CURRENT_SCHEMA_VERSION = 39;
+const CURRENT_SCHEMA_VERSION = 40;
 
 /**
  * Context passed to migrations that need to know WHERE the store lives.
@@ -2194,6 +2194,79 @@ const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    version: 40,
+    up: (db) => {
+      // LC1 retrieval-trace persistence (docs/plans/2026-08-02-lc1-recall-trace-persistence.md).
+      // Follows the v18 goal_recall_log style: one parent trace row per
+      // recall, a WITHOUT ROWID child table for the ranked results, and a
+      // separate append-only outcomes table so audit_log pruning can never
+      // erase training data.
+      //
+      // F6 (deliberate, not an oversight): unlike v39, this migration does
+      // NOT bump `min_compatible_binary`. A pre-v40 binary opening this DB
+      // ignores the three new tables and keeps writing `last_retrieval_ids`
+      // exactly as before — it never touches `last_trace_id` (that key
+      // simply stays whatever it was). recordTraceOutcome's F4 consumer-
+      // side validation (recall-trace.ts) makes any resulting staleness
+      // harmless to linkage: it re-validates the named trace's tenant AND
+      // intersects credited ids against the trace's OWN result set before
+      // inserting, so a stale/mismatched trace id from an old-binary write
+      // gets silently skipped rather than mislinked. That preserves the
+      // plan's "drop the three tables + last_trace_id restores v39 behavior
+      // exactly" rollback promise — a min_compatible_binary bump would
+      // additionally lock old binaries out of the WHOLE store for what is
+      // purely an observability/training feature, which the rollback
+      // promise does not require.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS recall_traces (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          ts TEXT NOT NULL,
+          tenant_id TEXT NOT NULL DEFAULT 'default',
+          session_id TEXT,
+          pipeline TEXT NOT NULL CHECK (pipeline IN ('api','cli','context','mcp')),
+            -- 'mcp' reserved for the deferred MCP wire-up. Deliberate: SQLite
+            -- cannot ALTER a CHECK constraint, so extending it later means a
+            -- full table-rebuild migration. One unused enum value now is
+            -- cheaper than that rebuild.
+          query_hash TEXT NOT NULL,          -- sha256/16, NEVER raw query (audit convention, cli.ts:1532)
+          query_length INTEGER NOT NULL,
+          result_count INTEGER NOT NULL,
+          explain_mode INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_recall_traces_tenant_ts ON recall_traces(tenant_id, ts DESC);
+
+        CREATE TABLE IF NOT EXISTS recall_trace_results (
+          trace_id INTEGER NOT NULL REFERENCES recall_traces(id) ON DELETE CASCADE,
+          tenant_id TEXT NOT NULL DEFAULT 'default',  -- denormalized like goal_recall_log (v18
+                                                      -- precedent): tenant-scoped training queries
+                                                      -- over the memory index must not need a join
+                                                      -- back through recall_traces
+          memory_id TEXT NOT NULL,           -- NO FK to memories: traces must OUTLIVE forgotten
+                                             -- memories (they are LC2's negative class). PRAGMA
+                                             -- foreign_keys=ON is real, so an FK would either
+                                             -- block inserts or cascade-delete exactly the rows
+                                             -- training needs. Deliberate.
+          result_rank INTEGER NOT NULL,      -- NOT "rank" (SQL keyword; audit rule 10)
+          score REAL NOT NULL,
+          rerank_json TEXT,                  -- compact RerankStep[] when explain/trace present; else NULL
+          PRIMARY KEY (trace_id, result_rank)
+        ) WITHOUT ROWID;
+        CREATE INDEX IF NOT EXISTS idx_recall_trace_results_tenant_memory
+          ON recall_trace_results(tenant_id, memory_id);
+
+        CREATE TABLE IF NOT EXISTS recall_trace_outcomes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          trace_id INTEGER NOT NULL REFERENCES recall_traces(id) ON DELETE CASCADE,
+          ts TEXT NOT NULL,
+          tenant_id TEXT NOT NULL DEFAULT 'default',
+          outcome TEXT NOT NULL CHECK (outcome IN ('positive','negative')),
+          memory_ids_json TEXT NOT NULL      -- ids actually credited by this outcome event
+        );
+        CREATE INDEX IF NOT EXISTS idx_recall_trace_outcomes_trace ON recall_trace_outcomes(trace_id);
+      `);
+    },
+  },
 ];
 
 function tableHasColumn(db: DatabaseSyncLike, tableName: string, columnName: string): boolean {
@@ -2318,6 +2391,7 @@ function ensureMetaDefaults(db: DatabaseSyncLike): void {
   const defaults: Array<[string, string]> = [
     ['schema_version', String(CURRENT_SCHEMA_VERSION)],
     ['last_retrieval_ids', '[]'],
+    ['last_trace_id', ''],
     ['total_remembered', '0'],
     ['total_recalled', '0'],
     ['total_forgotten', '0'],
