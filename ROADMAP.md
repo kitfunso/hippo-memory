@@ -914,6 +914,7 @@ Things hippo might do later. Not active scope, not non-goals. Each item names th
 | 3 | On-device hippo (mobile / edge) | Hosted product is shipping; embedded agents become a buyer-pulled use case |
 | 4 | A7.2: unify the cli/api/mcp recall re-ranking pipelines + MCP primary-band rerank-trace | A7 recall-trace (v1.18.0) surfaced that only `applyGoalStackBoost` is shared across the three pipelines (cli applies interference/value/OFC/reranker/downweight that api + mcp do not), so a recall ranks differently per surface. Unifying them is a hot-path refactor needing its own plan + outside-voice; until then the trace honestly reports each pipeline's own stages via `rerankPipeline`. See `docs/plans/2026-06-02-a7-recall-trace.md`. |
 | 5 | ~~Anchor graph entity/relation provenance to the authoritative E2 object~~ **SHIPPED v1.22.0 (migration v38).** In-force E2 objects (decision/policy/customer_note/project_brief) now stay in the graph after their mirror memory is forgotten or consolidation-pruned; provenance anchored to the authoritative E2 row, the no-raw guard extended to accept E2-object provenance, no cascade/block on forget. Two follow-ups remain open (tenant-level rebuild signal; recall-surfacing) — see the E3 shipped-status block above + `TODOS.md`. See `docs/plans/2026-06-03-graph-e2-provenance.md`. |
+| 6 | Agent-maintained codebase map: per-directory structural summaries agents update as they touch code, so future sessions navigate without re-exploring (the "MD version of my codebase" pattern circulating on X, 2026-07; naive loose-MD version rots — hippo's decay/invalidate machinery is the differentiator) | An agent workload shows measurable re-exploration cost (repeated Glob/Read of unchanged dirs across sessions); prototype as a consolidation output over path-tagged memories before adding any new store surface |
 
 ---
 
@@ -996,3 +997,59 @@ Lossless-claw-style hierarchical summarization on the SQLite backbone: raw recei
 ### Embedder track status
 
 The pluggable embedder (v1.23.0) is the right and final amount of embedder investment. With the correction above showing the zero-dep default already clears the published frontier on the standard task, the retrieval/embedder line of work is **DONE**; further retrieval gains are not the priority. The lifecycle (stress eval, then the DAG build) is.
+
+---
+
+## Part IV - 2026-08-01 update: learned memory components (deep-research findings + LC track)
+
+Added 2026-08-01 after a deep-research pass on learned components for agent memory (replacing hand-tuned saliency / decay / ranking heuristics with small models trained on the agent's own outcome logs), plus a grounding audit of the live store. Research provenance: 23 sources fetched, 112 claims extracted, 25 verified — 5 via 3-0 adversarial votes in the workflow, the remaining 20 via direct primary-source fetch the same day (all quotes matched; zero refuted). All claims below are **[verified]**.
+
+### Findings: the field
+
+- **[verified] Outcome-driven RL memory controllers work at tiny data volumes.** Memory-R1 (arXiv 2508.19828) fine-tunes a Memory Manager (ADD/UPDATE/DELETE/NOOP) plus an Answer Agent with PPO/GRPO, rewarded on downstream answer correctness. 152 training QA pairs outperform strong baselines and generalize across LoCoMo, MSC, LongMemEval and 3B-14B model scales. Mem-alpha (arXiv 2509.25911) trains a GRPO controller for a core/episodic/semantic memory with a 4-part reward (QA correctness, tool-call format, compression, content quality) on a Qwen3-4B backbone.
+- **[verified] No shipped competitor learns its memory heuristics.** Mem0 does ADD/UPDATE/DELETE/NOOP by LLM tool-call ("rather than using a separate classifier, we leverage the LLM's reasoning capabilities", arXiv 2504.19413). MemoryBank's decay is a hand-set Ebbinghaus rule and its strengthening a fixed +1 increment (arXiv 2305.10250). Generative Agents scores retrieval as recency+relevance+importance with all weights set to 1, and saliency by prompting for a 1-10 "poignancy" integer (UIST 2023). Four independent sources agree: the learned-lifecycle position is unoccupied.
+- **[verified] The closest published recipe to hippo's exact stack is a learned LINEAR memory-value function, and it is cheap.** arXiv 2606.12945 fits a linear multi-factor memory value with a gradient-free hill-climb (CMA-ES stand-in) against gold-evidence retention on LongMemEval-S under a 30% keep budget. Learned weights retain 0.770 of gold evidence in the blind (query-unaware) regime vs 0.657 uniform weights, 0.518 best single factor, 0.368 recency. Trained on ~240 cases (60 sufficed in their synthetic study), single CPU, no API calls, all-MiniLM-L6-v2 — hippo's zero-dep default embedder. Two methodology rules transfer directly: (1) score relevance ONLY from consolidation-time information — query-aware scoring is an oracle that saturates retention at ~0.98 and measures retrieval, not forgetting; (2) evaluate under a fixed keep budget.
+- **[verified] Experience retrieval gives most of the gain before any learned component; learned rerankers must beat strong lexical baselines to earn a slot.** ExpRAG (arXiv 2603.18272): trajectory retrieval alone lifts ALFWorld success 4.48% → 64.18% with zero training. The skeptic anchor (Yang et al., SIGIR 2019, arXiv 1904.09171): most neural-ranking "wins" evaporate against well-tuned lexical baselines. Hippo's BM25+RRF is exactly such a baseline — any learned reranker ships only if it beats it under a pre-registered paired eval.
+
+### Findings: hippo's own state (audited 2026-08-01, live store `~/.hippo/hippo.db`)
+
+- 1,550 memories; 439 (28%) carry outcome labels (`outcome_positive` / `outcome_negative` counters, `src/memory.ts`).
+- `audit_log` 8,868 rows: remember 5,702 / forget 2,688 / recall 288 / outcome 109 / consolidate 76.
+- **The blocking gap is instrumentation, not modeling.** Recall audit rows persist only `{query, results: <count>}` — the returned memory ids are never logged, and `outcome` rows are not linked to the recall that preceded them. The (query → candidates shown → outcome) triple that any learned reranker or saliency model would train on does not exist on disk. G8 names "outcome-labeled retrievals" as the corpus asset, but the producer never writes it. Root cause first: fix the producer, then train.
+
+### Track LC — Learned lifecycle components (dependency order)
+
+#### LC1. Retrieval-trace persistence (the training-data producer) [SHIPPED 2026-08-02, PR #135, schema v40]
+Persist per-recall: query text/hash, returned memory ids + ranks + per-stage scores (the A7 `rerankPipeline` trace already computes these in-memory), session id, tenant. Link `outcome` events to the recall ids that preceded them (cmdRecall's last-retrieval-ids mechanism already exists for credit assignment — persist the linkage durably instead of dropping it). Feeds G8; unblocks LC2, LC3, B1/B5 depth calibration, and F18.
+**Effort:** 2-3d. **Success:** every recall writes a trace row with returned ids; every outcome row references the recall trace(s) it scores; 30 days of dogfood accumulates a re-loadable (query, shown, outcome) dataset; storage overhead <5% of DB size.
+
+#### LC2. Learned memory-value v1: linear keep/forget/promotion scorer [next, after LC1]
+Replicate the 2606.12945 recipe on hippo's substrate: a linear (inspectable) value function over consolidation-time lifecycle features hippo already stores — age, decay state, strength, retrieval count, outcome ratio, error tag, schema_fit, tag class, scope. Fit gradient-free (CMA-ES / hill-climb) against (a) gold-evidence retention on LongMemEval with a held-out split and (b) the Part III lifecycle stress eval once it exists. Blind features only — no query-aware oracle. The learned weights replace the hand-set constants in the strength/salience formulas as an opt-in, derived, rebuildable, git-diffable config artifact (Track L Rule 2; a linear model is itself inspectable, so Bet #7 holds).
+**Guard (binding):** the C1 salience-gate regression (recall 81 → 15 when the gate was enabled; do-not-re-enable memory `feedback_hippo_salience_regression`) is the cautionary precedent. LC2 ships ONLY behind pre-registered paired A/B + LongMemEval non-regression gates per `docs/RETRACTION.md` discipline.
+**Effort:** 8-10d. **Success (pre-register exact bars before running):** learned weights beat uniform weights AND the best single factor on gold-retention at a fixed keep budget on the held-out split; tier-1 micro-eval fire-rate non-regression; LongMemEval per-haystack R@5 non-regression.
+
+#### LC3. Outcome-trained reranker head over RRF [planned, gated on ~90d of LC1 data]
+A small learning-to-rank head (logistic / GBDT over lifecycle + match features — NOT a neural cross-encoder) re-scoring the RRF candidate pool, trained on LC1's (query, shown, outcome) triples. SIGIR-2019 is the null hypothesis: BM25+RRF is a strong baseline and the head ships only if it beats it under a pre-registered paired eval. The differentiator is per-store personalization — each store learns from its own outcome history, which no static-store competitor can do.
+**Effort:** 6-8d once data exists. **Success:** pre-registered R@5 / fire-rate lift over the shipped RRF pipeline on own-store traces; identity fallback when a store has fewer labeled triples than a pre-set floor (cold-start).
+
+#### LC4. RL memory controller (Memory-R1 / Mem-alpha class) [research → Track G]
+Verified feasible at 152-QA-pair scale, but it requires fine-tuning a 3B-14B backbone and a training loop — as a product default this conflicts with the zero-dep local core (non-goals #5/#6). File as the Track G realization (G3 knowledge-RLHF, G5 sleep-as-training-pipeline); candidate for grant-funded research (a GRPO run on a ~4B model is locally feasible on the RTX 5080 for the research track). Any product surface is an optional trained artifact under Track L Rules 2/3.
+
+### Adjacent hooks item — compaction survival (added 2026-08-01, AutoCompact follow-up)
+
+#### CS1. PreCompact capture + compact-aware re-injection [next, parallel to LC1]
+Source: AutoCompact (Du et al., autocompact.github.io, 2026-07-30) fine-tunes Qwen3-30B-Coder to call `compact()` itself (judge-guided SFT + GRPO; post-RL it compacts proactively in 58.5% of tasks). Its supervision splits into when-to-compact 24%, **what-to-preserve 53%, how-to-continue 23%**. The when-decision needs a fine-tuned policy model — not hippo's lane (same verdict as LC4). The preserve/continue 76% is external-memory territory: make working state survive compaction independently of summary quality, with no model training.
+
+Mechanism (both hook events verified against code.claude.com/docs/en/hooks 2026-08-01):
+- **PreCompact hook** (fires on manual and auto compaction): run `hippo capture` over the tail of the session transcript before the summary is written — decisions, open items, ids, next step, tagged with session id. The transcript parser already exists (`src/capture.ts`); `hippo setup` currently installs only SessionEnd + SessionStart (`src/hooks.ts`), so mid-session compaction is a blind spot today.
+- **SessionStart `source: "compact"`**: re-inject the pre-compact snapshot plus task-relevant recalls, restoring what the summary dropped.
+- Non-goal v1: PreCompact can block compaction — leave that knob alone; blocking an auto-compact on a full context risks wedging the session.
+
+Feeds LC1/G8: pre-compact snapshots linked to post-compact outcomes are (state → outcome) training data for the learned lifecycle. Additive only — new hook entries + capture path, no public CLI renames.
+**Effort:** 2-3d. **Success:** `hippo setup` installs the PreCompact hook for claude-code; a compaction mid-session writes a working-state snapshot memory; the following SessionStart(compact) injects it; E2E test drives a synthetic transcript through simulated PreCompact + SessionStart(compact) hook input and asserts snapshot + re-injection; SessionEnd capture is unchanged.
+
+### Positioning note
+
+Hippo already owns the substrate a learned lifecycle needs (outcome counters, decay state, provenance envelope, audit log) and the eval harness to gate it (LongMemEval per-haystack + the Part III lifecycle stress eval). Competitors hand-tune or LLM-prompt these decisions. "The memory layer that learns what to keep from its own outcomes" is Bet #1 made trainable — the moat stays lifecycle, not retrieval quality, and the learned artifact stays derived + inspectable.
+
+**Research provenance:** deep-research workflow run `wf_00c80a74-033` (2026-08-01); 5 claims verified 3-0 in-workflow, remaining 20 verified same day by direct primary-source fetch (all quotes matched; zero refuted). Key sources: arXiv 2508.19828 (Memory-R1), 2509.25911 (Mem-alpha), 2506.15841 (MEM1), 2504.19413 (Mem0), 2305.10250 (MemoryBank), 2606.12945 (learned linear memory value on LongMemEval), 2603.18272 (ExpRAG), 2606.02204 (cross-environment reranker), 1904.09171 (neural-hype skeptic), Generative Agents (UIST 2023).
