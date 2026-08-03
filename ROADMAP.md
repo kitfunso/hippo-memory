@@ -1037,7 +1037,7 @@ Verified feasible at 152-QA-pair scale, but it requires fine-tuning a 3B-14B bac
 
 ### Adjacent hooks item — compaction survival (added 2026-08-01, AutoCompact follow-up)
 
-#### CS1. PreCompact capture + compact-aware re-injection [next, parallel to LC1]
+#### CS1. PreCompact capture + compact-aware re-injection [SHIPPED 2026-08-03, PR #136]
 Source: AutoCompact (Du et al., autocompact.github.io, 2026-07-30) fine-tunes Qwen3-30B-Coder to call `compact()` itself (judge-guided SFT + GRPO; post-RL it compacts proactively in 58.5% of tasks). Its supervision splits into when-to-compact 24%, **what-to-preserve 53%, how-to-continue 23%**. The when-decision needs a fine-tuned policy model — not hippo's lane (same verdict as LC4). The preserve/continue 76% is external-memory territory: make working state survive compaction independently of summary quality, with no model training.
 
 Mechanism (both hook events verified against code.claude.com/docs/en/hooks 2026-08-01):
