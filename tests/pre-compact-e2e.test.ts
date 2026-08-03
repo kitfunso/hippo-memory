@@ -97,6 +97,12 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
             ],
           },
         },
+        // Meta/sidechain lines are type:'user'/'assistant' but not the human
+        // or this session: a prior compaction's summary (isMeta) and a
+        // sub-agent turn (isSidechain) trail the real turns here and must
+        // NOT win task/next_step derivation.
+        { type: 'user', isMeta: true, message: { role: 'user', content: 'COMPACT SUMMARY META LINE - must not become the task' } },
+        { type: 'assistant', isSidechain: true, message: { role: 'assistant', content: [{ type: 'text', text: 'SIDECHAIN NEXT STEP - must not become next_step' }] } },
       ]),
     );
 

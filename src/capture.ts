@@ -750,6 +750,11 @@ function lastPlainUserMessage(jsonl: string): string {
     if (!entry || typeof entry !== 'object') continue;
     const e = entry as Record<string, unknown>;
     if (e.type !== 'user') continue;
+    // Meta/sidechain lines carry type:'user' but are not the human: after a
+    // FIRST compaction the transcript holds the compact summary as an isMeta
+    // user line, and sub-agent turns are isSidechain — deriving "task" from
+    // either yields junk on every later compaction.
+    if (e.isMeta === true || e.isSidechain === true) continue;
     const message = e.message as Record<string, unknown> | undefined;
     if (!message) continue;
     const content = message.content;
@@ -771,6 +776,9 @@ function lastAssistantTextBlock(jsonl: string): string {
     if (!entry || typeof entry !== 'object') continue;
     const e = entry as Record<string, unknown>;
     if (e.type !== 'assistant') continue;
+    // Same meta/sidechain guard as lastPlainUserMessage: sub-agent turns
+    // (isSidechain) are not this session's next step.
+    if (e.isMeta === true || e.isSidechain === true) continue;
     const message = e.message as Record<string, unknown> | undefined;
     if (!message) continue;
     const content = message.content;
