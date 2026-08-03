@@ -439,6 +439,120 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
   });
 });
 
+describe('codex round-2 regressions (CX5/CX6/CX7)', () => {
+  let dir: string;
+  let env: NodeJS.ProcessEnv;
+
+  beforeEach(() => {
+    ({ dir, env } = withScratchEnv());
+    initHippo(dir, env);
+  });
+
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('CX5: extracted memories are redacted, not just the snapshot fields', () => {
+    const transcriptPath = path.join(dir, 'cx5.jsonl');
+    fs.writeFileSync(
+      transcriptPath,
+      transcriptJsonl([
+        { type: 'user', message: { role: 'user', content: 'we decided to use the github token ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa for the deploy bot.' } },
+        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'Recorded that decision.' }] } },
+      ]),
+    );
+    const payload = JSON.stringify({
+      session_id: 'sess-cx5',
+      transcript_path: transcriptPath,
+      cwd: dir,
+      hook_event_name: 'PreCompact',
+    });
+
+    const result = runHippo(['pre-compact'], dir, env, payload);
+    expect(result.status).toBe(0);
+
+    const entries = loadAllEntries(getHippoRoot(dir), 'default');
+    for (const entry of entries) {
+      expect(entry.content).not.toContain('ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+    }
+    const decision = entries.find((e) => e.content.includes('deploy bot'));
+    if (decision) {
+      expect(decision.content).toContain('[REDACTED]');
+    }
+  });
+
+  it("CX6: per-field fallback never carries another session's content into this session's snapshot", () => {
+    const seed = runHippo(
+      ['snapshot', 'save', '--task', 'SESSION A TASK', '--summary', 'A summary', '--next-step', 'A next', '--session', 'sess-A'],
+      dir,
+      env,
+    );
+    expect(seed.status).toBe(0);
+
+    // Session B's tail has assistant text but NO plain user turn: derived
+    // task is empty. Pre-fix, the fallback borrowed A's task and saved it
+    // under sess-B, defeating compact-resume's session gate.
+    const transcriptPath = path.join(dir, 'cx6.jsonl');
+    fs.writeFileSync(
+      transcriptPath,
+      transcriptJsonl([
+        { type: 'user', message: { role: 'user', content: [{ type: 'tool_result', content: 'tool output only' }] } },
+        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'Session B assistant progress note. Next step: continue B work.' }] } },
+      ]),
+    );
+    const payload = JSON.stringify({
+      session_id: 'sess-B',
+      transcript_path: transcriptPath,
+      cwd: dir,
+      hook_event_name: 'PreCompact',
+    });
+
+    const result = runHippo(['pre-compact'], dir, env, payload);
+    expect(result.status).toBe(0);
+
+    const snapshot = loadActiveTaskSnapshot(getHippoRoot(dir), 'default');
+    expect(snapshot).not.toBeNull();
+    expect(snapshot!.session_id).toBe('sess-B');
+    expect(snapshot!.task).toBe('');
+    expect(snapshot!.task).not.toContain('SESSION A TASK');
+    expect(snapshot!.next_step).toContain('continue B work');
+  });
+
+  it('CX7: an oversized final JSONL record does not swallow the tail (window grows, earlier turns survive)', () => {
+    const transcriptPath = path.join(dir, 'cx7.jsonl');
+    // Final record ~600KB (> the 256KB window), shaped as a tool_result so
+    // it can never win task derivation itself.
+    const giant = {
+      type: 'user',
+      message: { role: 'user', content: [{ type: 'tool_result', content: 'x'.repeat(600 * 1024) }] },
+    };
+    fs.writeFileSync(
+      transcriptPath,
+      transcriptJsonl([
+        { type: 'user', message: { role: 'user', content: 'Ship the oversized-record survival fix.' } },
+        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'Next step: verify the grown-window path.' }] } },
+        giant,
+      ]),
+    );
+    const logFile = path.join(dir, 'pre-compact.log');
+    const payload = JSON.stringify({
+      session_id: 'sess-cx7',
+      transcript_path: transcriptPath,
+      cwd: dir,
+      hook_event_name: 'PreCompact',
+    });
+
+    const result = runHippo(['pre-compact', '--log-file', logFile], dir, env, payload);
+    expect(result.status).toBe(0);
+
+    const snapshot = loadActiveTaskSnapshot(getHippoRoot(dir), 'default');
+    expect(snapshot).not.toBeNull();
+    expect(snapshot!.session_id).toBe('sess-cx7');
+    expect(snapshot!.task).toContain('oversized-record survival');
+    expect(fs.readFileSync(logFile, 'utf8')).toContain('tail window grown');
+  });
+});
+
 describe('uninitialized store gate (X3): neither verb may create a store', () => {
   let dir: string;
   let homeDir: string;

@@ -913,14 +913,32 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, logFile
 
   let tail: string;
   try {
+    // CX7 (codex round 2): a final JSONL record larger than the window
+    // swallows the whole tail — the seek lands inside it and alignment
+    // drops everything up to its terminator, which is exactly the shape of
+    // a huge tool_result that itself triggered compaction. Grow the window
+    // a bounded number of times until at least one complete line survives.
     tail = readTranscriptTail(transcriptPath, PRE_COMPACT_TAIL_BYTES);
+    let prevCap = PRE_COMPACT_TAIL_BYTES;
+    for (const grownCap of [PRE_COMPACT_TAIL_BYTES * 4, PRE_COMPACT_TAIL_BYTES * 16]) {
+      if (tail.trim() !== '') break;
+      if (fs.statSync(transcriptPath).size <= prevCap) break; // already read the whole file
+      appendPreCompactLog(logFile, `tail window grown to ${grownCap} bytes (oversized final record)`);
+      tail = readTranscriptTail(transcriptPath, grownCap);
+      prevCap = grownCap;
+    }
   } catch (err) {
     appendPreCompactLog(logFile, `skip: could not read transcript tail: ${(err as Error).message}`);
     return [];
   }
 
   const summaryFull = summariseTranscript(tail);
-  const extracted = extractFromText(summaryFull);
+  // CX5 (codex round 2): extraction runs over REDACTED text — extracted
+  // items become durable memories and must never carry raw secrets any more
+  // than the snapshot fields may. (The pre-existing SessionEnd capture path
+  // is deliberately unchanged.)
+  const scrubbedSummary = redactSecrets(summaryFull);
+  const extracted = extractFromText(scrubbedSummary);
   const rawTask = lastPlainUserMessage(tail);
   const rawNextStep = lastAssistantTextBlock(tail);
 
@@ -946,15 +964,25 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, logFile
   }
 
   // X9: scrub secret-shaped substrings out of freshly-derived text before it
-  // is capped/stored. These three fields bypass the normal capture content
-  // gate (they're not extracted items), so this producer is the only place
-  // that ever sees them before they land in task_snapshots. Carried-over
+  // is capped/stored. These fields bypass the normal capture content gate
+  // (they're not extracted items), so this producer is the only place that
+  // ever sees them before they land in task_snapshots. Carried-over
   // existing field values are NOT re-scrubbed here — they already passed
   // through this same gate (or were set via `hippo snapshot save`, which is
   // deliberately untouched, same as the caps below).
   const scrubbedTask = redactSecrets(rawTask);
-  const scrubbedSummary = redactSecrets(summaryFull);
   const scrubbedNextStep = redactSecrets(rawNextStep);
+
+  // CX6 (codex round 2): field fallback must never move content across
+  // sessions — session A's task carried into a snapshot saved under session
+  // B's id would pass compact-resume's session gate wearing the wrong
+  // badge. Fall back only when the existing snapshot has no session, this
+  // payload has none, or they match.
+  const fallback =
+    existing !== null &&
+    (existing.session_id === null || sessionId === null || existing.session_id === sessionId)
+      ? existing
+      : null;
 
   // Field caps are enforced HERE ONLY — saveActiveTaskSnapshot and the
   // `hippo snapshot save` CLI path stay uncapped (AGENTS.md public-API
@@ -962,27 +990,33 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, logFile
   // safe (X2): never split a surrogate pair at the cut.
   const task = scrubbedTask.trim()
     ? truncateCodePointSafe(scrubbedTask, PRE_COMPACT_TASK_CAP)
-    : (existing?.task ?? '');
+    : (fallback?.task ?? '');
   const summary = scrubbedSummary.trim()
     ? truncateCodePointSafe(scrubbedSummary, PRE_COMPACT_SUMMARY_CAP)
-    : (existing?.summary ?? '');
+    : (fallback?.summary ?? '');
   const nextStep = scrubbedNextStep.trim()
     ? truncateCodePointSafe(scrubbedNextStep, PRE_COMPACT_NEXT_STEP_CAP)
-    : (existing?.next_step ?? '');
+    : (fallback?.next_step ?? '');
 
   // Snapshot writes FIRST: a capture-extraction failure below must never
-  // lose the headline artifact. The reverse order would risk it.
-  try {
-    saveActiveTaskSnapshot(hippoRoot, tenantId, {
-      task,
-      summary,
-      next_step: nextStep,
-      source: 'pre-compact',
-      session_id: sessionId,
-    });
-    appendPreCompactLog(logFile, 'snapshot saved');
-  } catch (err) {
-    appendPreCompactLog(logFile, `snapshot save failed: ${(err as Error).message}`);
+  // lose the headline artifact. The reverse order would risk it. All-empty
+  // fields (cross-session tail with nothing derivable) skip the write so a
+  // foreign session's junk never displaces the owning session's snapshot.
+  if (!task && !summary && !nextStep) {
+    appendPreCompactLog(logFile, 'skip: no snapshot content for this session (nothing derivable; fallback blocked or empty)');
+  } else {
+    try {
+      saveActiveTaskSnapshot(hippoRoot, tenantId, {
+        task,
+        summary,
+        next_step: nextStep,
+        source: 'pre-compact',
+        session_id: sessionId,
+      });
+      appendPreCompactLog(logFile, 'snapshot saved');
+    } catch (err) {
+      appendPreCompactLog(logFile, `snapshot save failed: ${(err as Error).message}`);
+    }
   }
 
   // Capture extraction SECOND, own try/catch: a failure here self-heals at
