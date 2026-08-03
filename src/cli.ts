@@ -2998,7 +2998,12 @@ function cmdCompactResume(hippoRoot: string, stdinText: string | undefined): voi
         // never runs).
         suppressOutput = true;
       } else {
-        if (typeof payload.source === 'string' && payload.source !== 'compact') {
+        // Fail closed on structurally incomplete payloads too ({}, [],
+        // source missing/non-string): any parsed non-empty payload must say
+        // source === 'compact' to print. Real SessionStart payloads always
+        // carry source; only the TTY/no-stdin manual path prints without
+        // one (codex round 3).
+        if (payload.source !== 'compact') {
           suppressOutput = true;
         }
         if (typeof payload.session_id === 'string') {

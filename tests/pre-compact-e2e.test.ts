@@ -319,8 +319,12 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     expect(snapshot).not.toBeNull();
     expect(snapshot!.task.length).toBeLessThanOrEqual(PRE_COMPACT_TASK_CAP);
     expect(snapshot!.task.length).toBe(PRE_COMPACT_TASK_CAP); // proves truncation, not coincidence
-    expect(snapshot!.summary.length).toBeLessThanOrEqual(PRE_COMPACT_SUMMARY_CAP);
-    expect(snapshot!.summary.length).toBe(PRE_COMPACT_SUMMARY_CAP);
+    // Summary caps from the RECENT end and carries a fixed trim marker
+    // (CX9), so its budget is cap + marker length, and truncation is proven
+    // by the marker rather than an exact length.
+    const TRIM_MARKER = '[...earlier turns trimmed]\n';
+    expect(snapshot!.summary.length).toBeLessThanOrEqual(PRE_COMPACT_SUMMARY_CAP + TRIM_MARKER.length);
+    expect(snapshot!.summary.startsWith(TRIM_MARKER)).toBe(true);
     expect(snapshot!.next_step.length).toBeLessThanOrEqual(PRE_COMPACT_NEXT_STEP_CAP);
     expect(snapshot!.next_step.length).toBe(PRE_COMPACT_NEXT_STEP_CAP);
 
@@ -516,6 +520,79 @@ describe('codex round-2 regressions (CX5/CX6/CX7)', () => {
     expect(snapshot!.task).toBe('');
     expect(snapshot!.task).not.toContain('SESSION A TASK');
     expect(snapshot!.next_step).toContain('continue B work');
+  });
+
+  it('CX8: a PEM private-key block is redacted through the END delimiter, not just the BEGIN line', () => {
+    const pem =
+      '-----BEGIN RSA PRIVATE KEY-----\nMIIfakefakefakebase64payloadfakefakefake\n-----END RSA PRIVATE KEY-----';
+    const transcriptPath = path.join(dir, 'cx8.jsonl');
+    fs.writeFileSync(
+      transcriptPath,
+      transcriptJsonl([
+        { type: 'user', message: { role: 'user', content: `here is the deploy key ${pem} keep it safe.` } },
+        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'Stored. Next step: rotate the key.' }] } },
+      ]),
+    );
+    const payload = JSON.stringify({
+      session_id: 'sess-cx8',
+      transcript_path: transcriptPath,
+      cwd: dir,
+      hook_event_name: 'PreCompact',
+    });
+
+    const result = runHippo(['pre-compact'], dir, env, payload);
+    expect(result.status).toBe(0);
+
+    const snapshot = loadActiveTaskSnapshot(getHippoRoot(dir), 'default');
+    expect(snapshot).not.toBeNull();
+    expect(snapshot!.task).not.toContain('MIIfake');
+    expect(snapshot!.summary).not.toContain('MIIfake');
+    expect(snapshot!.task).toContain('[REDACTED]');
+  });
+
+  it('CX9: the summary cap keeps the NEWEST turns, not the oldest', () => {
+    const turn = (marker: string) => `${marker} ${'lorem ipsum working state detail '.repeat(20)}`;
+    const transcriptPath = path.join(dir, 'cx9.jsonl');
+    fs.writeFileSync(
+      transcriptPath,
+      transcriptJsonl([
+        { type: 'user', message: { role: 'user', content: turn('OLDEST-TURN-MARKER') } },
+        { type: 'user', message: { role: 'user', content: turn('turn-two') } },
+        { type: 'user', message: { role: 'user', content: turn('turn-three') } },
+        { type: 'user', message: { role: 'user', content: turn('NEWEST-TURN-MARKER') } },
+        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'FINAL-ASSISTANT-MARKER: continue the rollout.' }] } },
+      ]),
+    );
+    const payload = JSON.stringify({
+      session_id: 'sess-cx9',
+      transcript_path: transcriptPath,
+      cwd: dir,
+      hook_event_name: 'PreCompact',
+    });
+
+    const result = runHippo(['pre-compact'], dir, env, payload);
+    expect(result.status).toBe(0);
+
+    const snapshot = loadActiveTaskSnapshot(getHippoRoot(dir), 'default');
+    expect(snapshot).not.toBeNull();
+    // The summary source text exceeds the 2000-char cap by construction, so
+    // head-first truncation would keep OLDEST and drop the assistant tail.
+    expect(snapshot!.summary).toContain('FINAL-ASSISTANT-MARKER');
+    expect(snapshot!.summary).not.toContain('OLDEST-TURN-MARKER');
+    expect(snapshot!.summary).toContain('[...earlier turns trimmed]');
+  });
+
+  it('CX10: a structurally incomplete payload ({}) fails closed in compact-resume', () => {
+    const seed = runHippo(
+      ['snapshot', 'save', '--task', 'stale task', '--summary', 's', '--next-step', 'n'],
+      dir,
+      env,
+    );
+    expect(seed.status).toBe(0);
+
+    const result = runHippo(['compact-resume'], dir, env, '{}');
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim()).toBe('');
   });
 
   it('CX7: an oversized final JSONL record does not swallow the tail (window grows, earlier turns survive)', () => {

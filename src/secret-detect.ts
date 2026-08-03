@@ -86,6 +86,15 @@ export function detectSecret(entry: { content: string; tags: string[] }): Secret
 export function redactSecrets(text: string): string {
   if (!text) return text;
   let result = text;
+  // PEM/OpenSSH blocks first: the pattern-table entry matches only the
+  // BEGIN delimiter, which is fine for detectSecret's flag-or-not decision
+  // but would leave the base64 payload behind here. Consume through the
+  // matching END delimiter; a truncated block with no END is redacted to
+  // the end of the text (codex round 3).
+  result = result.replace(
+    /-----BEGIN [A-Z ]*PRIVATE KEY-----(?:[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----|[\s\S]*$)/g,
+    '[REDACTED]',
+  );
   for (const { name, re } of SECRET_PATTERNS) {
     if (CO_OCCURRENCE_GUARDED.has(name) && !KEYISH_CONTEXT_RE.test(text)) continue;
     const flags = re.flags.includes('g') ? re.flags : `${re.flags}g`;

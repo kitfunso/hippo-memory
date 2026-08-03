@@ -694,6 +694,23 @@ export function truncateCodePointSafe(text: string, maxChars: number): string {
 }
 
 /**
+ * Cap from the RECENT end: summariseTranscript emits user turns oldest-to-
+ * newest with assistant responses after them, so a head-first cap keeps
+ * stale context and drops exactly the newest working state this feature
+ * exists to preserve. Keep the LAST maxChars instead, aligned forward to a
+ * nearby line start, with a trim marker (codex round 3).
+ */
+export function truncateKeepNewest(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  let start = text.length - maxChars;
+  const code = text.charCodeAt(start);
+  if (code >= 0xdc00 && code <= 0xdfff) start += 1; // never start on a low surrogate
+  const nl = text.indexOf('\n', start);
+  if (nl !== -1 && nl + 1 < text.length && nl - start < 200) start = nl + 1;
+  return '[...earlier turns trimmed]\n' + text.slice(start);
+}
+
+/**
  * Positional read of the last `capBytes` of `transcriptPath`, aligned
  * forward to the first complete JSONL line. Uses fs.openSync/readSync at a
  * byte offset rather than reading the whole file and slicing — PreCompact
@@ -992,7 +1009,7 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, logFile
     ? truncateCodePointSafe(scrubbedTask, PRE_COMPACT_TASK_CAP)
     : (fallback?.task ?? '');
   const summary = scrubbedSummary.trim()
-    ? truncateCodePointSafe(scrubbedSummary, PRE_COMPACT_SUMMARY_CAP)
+    ? truncateKeepNewest(scrubbedSummary, PRE_COMPACT_SUMMARY_CAP)
     : (fallback?.summary ?? '');
   const nextStep = scrubbedNextStep.trim()
     ? truncateCodePointSafe(scrubbedNextStep, PRE_COMPACT_NEXT_STEP_CAP)
