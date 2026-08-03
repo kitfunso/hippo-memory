@@ -653,6 +653,8 @@ For Claude Code, it also adds:
 - a `SessionEnd` hook so `hippo sleep` runs automatically when the session exits
 - a `SessionStart` hook that prints the previous session's consolidation output
 - a `UserPromptSubmit` hook that runs `hippo context --pinned-only --include-recent 5 --format additional-context` every turn. It re-injects pinned memories (`hippo remember <text> --pin`) plus the last 5 writes, so fresh same-session lessons appear on the next prompt before you pin them. Opt out with `{"pinnedInject":{"enabled":false}}` in `.hippo/config.json`.
+- a `PreCompact` hook that runs `hippo pre-compact` before the transcript gets summarized. It saves a working-state snapshot (task/summary/next step) and extracts durable memories from the tail, so mid-session compaction can't drop them.
+- a second `SessionStart` hook (matcher `compact`) that runs `hippo compact-resume`, printing that snapshot plus the recent session trail back into context right after compaction.
 
 To remove: `hippo hook uninstall claude-code`
 

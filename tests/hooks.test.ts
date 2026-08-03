@@ -8,6 +8,7 @@ import {
   resolveJsonHookPaths,
   detectInstalledTools,
   defaultSleepLogPath,
+  defaultPreCompactLogPath,
 } from '../src/hooks.js';
 import { withFakeHome as withFakeHomeShared } from './_helpers/with-fake-home.js';
 
@@ -43,7 +44,11 @@ describe('JSON hook installer', () => {
 
       const settings = JSON.parse(fs.readFileSync(result.settingsPath, 'utf8'));
       expect(settings.hooks.SessionEnd).toHaveLength(1);
-      expect(settings.hooks.SessionStart).toHaveLength(1);
+      // SessionStart now carries two entries: the un-matched last-sleep
+      // entry (index 0, asserted below) and the matcher:'compact'
+      // compact-resume entry — see the dedicated PreCompact/compact-resume
+      // test for that second entry's shape.
+      expect(settings.hooks.SessionStart).toHaveLength(2);
 
       const sessionEndCmd = settings.hooks.SessionEnd[0].hooks[0].command as string;
       const sessionStartCmd = settings.hooks.SessionStart[0].hooks[0].command as string;
@@ -60,16 +65,47 @@ describe('JSON hook installer', () => {
       expect(sessionEnd.timeout).toBeLessThanOrEqual(10);
     });
 
+    it('installs a PreCompact hook and a matcher:"compact" SessionStart entry alongside last-sleep', () => {
+      const result = installJsonHooks('claude-code');
+
+      expect(result.installedPreCompact).toBe(true);
+      expect(result.installedCompactResume).toBe(true);
+
+      const settings = JSON.parse(fs.readFileSync(result.settingsPath, 'utf8'));
+      expect(settings.hooks.PreCompact).toHaveLength(1);
+      expect(settings.hooks.PreCompact[0].matcher).toBeUndefined(); // fires on manual AND auto compaction
+      const preCompactCmd = settings.hooks.PreCompact[0].hooks[0].command as string;
+      expect(preCompactCmd).toContain('hippo pre-compact --log-file');
+      expect(preCompactCmd).toContain(defaultPreCompactLogPath());
+
+      // SessionStart now carries two entries: the pre-existing un-matched
+      // last-sleep entry and the new matcher:'compact' compact-resume entry.
+      expect(settings.hooks.SessionStart).toHaveLength(2);
+      const compactEntry = settings.hooks.SessionStart.find(
+        (e: { hooks: Array<{ command: string }> }) => e.hooks[0].command.includes('hippo compact-resume'),
+      );
+      expect(compactEntry).toBeDefined();
+      expect(compactEntry.matcher).toBe('compact');
+      const lastSleepEntry = settings.hooks.SessionStart.find(
+        (e: { hooks: Array<{ command: string }> }) => e.hooks[0].command.includes('hippo last-sleep'),
+      );
+      expect(lastSleepEntry).toBeDefined();
+      expect(lastSleepEntry.matcher).toBeUndefined();
+    });
+
     it('is idempotent — running twice does not duplicate entries', () => {
       installJsonHooks('claude-code');
       const second = installJsonHooks('claude-code');
 
       expect(second.installedSessionEnd).toBe(false);
       expect(second.installedSessionStart).toBe(false);
+      expect(second.installedPreCompact).toBe(false);
+      expect(second.installedCompactResume).toBe(false);
 
       const settings = JSON.parse(fs.readFileSync(second.settingsPath, 'utf8'));
       expect(settings.hooks.SessionEnd).toHaveLength(1);
-      expect(settings.hooks.SessionStart).toHaveLength(1);
+      expect(settings.hooks.SessionStart).toHaveLength(2);
+      expect(settings.hooks.PreCompact).toHaveLength(1);
     });
 
     it('migrates 0.22.x split sleep+capture SessionEnd entries into the single session-end entry', () => {
@@ -213,6 +249,8 @@ describe('JSON hook installer', () => {
 
       expect(result.installedSessionEnd).toBe(false);
       expect(result.installedSessionStart).toBe(false);
+      expect(result.installedPreCompact).toBe(false);
+      expect(result.installedCompactResume).toBe(false);
     });
   });
 
@@ -239,7 +277,35 @@ describe('JSON hook installer', () => {
       const after = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
       expect(after.hooks?.SessionEnd).toBeUndefined();
       expect(after.hooks?.SessionStart).toBeUndefined();
+      expect(after.hooks?.PreCompact).toBeUndefined();
       expect(after.hooks?.Stop).toBeUndefined();
+    });
+
+    it('removes PreCompact and the matcher-carrying compact-resume SessionStart entry, having left the un-matched last-sleep entry intact through install', () => {
+      installJsonHooks('claude-code');
+      const { settings: settingsPath } = resolveJsonHookPaths('claude-code');
+
+      // Sanity on the fixture: a fresh install left last-sleep (no matcher)
+      // and compact-resume (matcher: 'compact') coexisting, unmodified, in
+      // the same SessionStart array before uninstall runs.
+      const before = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      expect(before.hooks.SessionStart).toHaveLength(2);
+      const lastSleepBefore = before.hooks.SessionStart.find(
+        (e: { matcher?: string }) => e.matcher === undefined,
+      );
+      expect(lastSleepBefore.hooks[0].command).toContain('hippo last-sleep');
+      expect(lastSleepBefore.matcher).toBeUndefined();
+
+      const removed = uninstallJsonHooks('claude-code');
+      expect(removed).toBe(true);
+
+      // Full uninstall tears down every hippo-owned entry — including
+      // last-sleep — regardless of which entries carry a matcher field, so
+      // the matcher-carrying compact-resume entry doesn't corrupt removal
+      // of its un-matched sibling.
+      const after = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      expect(after.hooks?.PreCompact).toBeUndefined();
+      expect(after.hooks?.SessionStart).toBeUndefined();
     });
 
     it('also removes legacy 0.22.x split sleep+capture SessionEnd entries', () => {

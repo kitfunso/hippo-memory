@@ -96,6 +96,8 @@ export interface InstallResult {
   installedSessionEnd: boolean;
   installedSessionStart: boolean;
   installedUserPromptSubmit: boolean;
+  installedPreCompact: boolean;
+  installedCompactResume: boolean;
   migratedPinnedInjectRecent: boolean;
   migratedFromStop: boolean;
   migratedLegacySessionEnd: boolean;
@@ -117,6 +119,8 @@ const HIPPO_SESSION_END_MARKER = 'hippo session-end';
 const HIPPO_PINNED_INJECT_MARKER = 'hippo context --pinned-only';
 const HIPPO_PINNED_INJECT_COMMAND = 'hippo context --pinned-only --include-recent 5 --format additional-context';
 const HIPPO_CODEX_WRAPPER_MARKER = 'hippo codex wrapper';
+const HIPPO_PRE_COMPACT_MARKER = 'hippo pre-compact';
+const HIPPO_COMPACT_RESUME_MARKER = 'hippo compact-resume';
 
 const HIPPO_OPENCODE_PLUGIN_MARKER = 'HIPPO_OPENCODE_PLUGIN_V1';
 
@@ -195,6 +199,17 @@ function homeDir(): string {
  */
 export function defaultSleepLogPath(): string {
   return path.join(homeDir(), '.hippo', 'logs', 'last-sleep.log');
+}
+
+/**
+ * Diagnostic-only log path for `hippo pre-compact`. Deliberately separate
+ * from the SessionEnd sleep log: `hippo last-sleep` truncates that file on
+ * every SessionStart, which would wipe pre-compact lines before anyone
+ * could read them. Nothing consumes this file programmatically — it exists
+ * for manual troubleshooting only. Overridden by `--log-file`.
+ */
+export function defaultPreCompactLogPath(): string {
+  return path.join(homeDir(), '.hippo', 'logs', 'pre-compact.log');
 }
 
 export function resolveCodexWrapperPaths(): CodexWrapperPaths {
@@ -675,6 +690,8 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
         installedSessionEnd: false,
         installedSessionStart: false,
         installedUserPromptSubmit: false,
+        installedPreCompact: false,
+        installedCompactResume: false,
         migratedPinnedInjectRecent: false,
         migratedFromStop: false,
         migratedLegacySessionEnd: false,
@@ -764,10 +781,53 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
     installedUserPromptSubmit = true;
   }
 
+  // PreCompact: fires on manual AND auto compaction (no matcher). Writes a
+  // working-state snapshot before the transcript summary drops detail.
+  // Exit-0 contract lives in the verb itself (src/capture.ts cmdPreCompact),
+  // not here — this is install-time wiring only.
+  let installedPreCompact = false;
+  if (!hookArrayContains(hooks.PreCompact, HIPPO_PRE_COMPACT_MARKER)) {
+    if (!Array.isArray(hooks.PreCompact)) hooks.PreCompact = [];
+    hooks.PreCompact.push({
+      hooks: [
+        {
+          type: 'command',
+          command: `hippo pre-compact --log-file "${defaultPreCompactLogPath()}"`,
+          timeout: 30,
+        },
+      ],
+    });
+    installedPreCompact = true;
+  }
+
+  // SessionStart(compact): a SECOND SessionStart entry alongside the
+  // un-matched last-sleep entry above. The matcher is an optimization, not
+  // a dependency — compact-resume itself checks payload.source too, so an
+  // older Claude Code that ignores the matcher just runs a silent no-op on
+  // normal starts. Marker check keys on the command string, so this stays
+  // idempotent alongside the sibling last-sleep entry.
+  let installedCompactResume = false;
+  if (!hookArrayContains(hooks.SessionStart, HIPPO_COMPACT_RESUME_MARKER)) {
+    if (!Array.isArray(hooks.SessionStart)) hooks.SessionStart = [];
+    hooks.SessionStart.push({
+      matcher: 'compact',
+      hooks: [
+        {
+          type: 'command',
+          command: 'hippo compact-resume',
+          timeout: 10,
+        },
+      ],
+    });
+    installedCompactResume = true;
+  }
+
   if (
     installedSessionEnd ||
     installedSessionStart ||
     installedUserPromptSubmit ||
+    installedPreCompact ||
+    installedCompactResume ||
     migratedPinnedInjectRecent ||
     migratedFromStop ||
     migratedLegacySessionEnd ||
@@ -782,6 +842,8 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
     installedSessionEnd,
     installedSessionStart,
     installedUserPromptSubmit,
+    installedPreCompact,
+    installedCompactResume,
     migratedPinnedInjectRecent,
     migratedFromStop,
     migratedLegacySessionEnd,
@@ -806,8 +868,12 @@ export function uninstallJsonHooks(target: JsonHookTarget): boolean {
   let changed = false;
   const markersByKey: Record<string, string[]> = {
     SessionEnd: [HIPPO_SESSION_END_MARKER, HIPPO_SLEEP_MARKER, HIPPO_CAPTURE_MARKER],
-    SessionStart: [HIPPO_LAST_SLEEP_MARKER],
+    // Both the un-matched last-sleep entry and the matcher:'compact'
+    // compact-resume entry live under the SessionStart key; the matcher
+    // field doesn't affect this substring match, so removal covers both.
+    SessionStart: [HIPPO_LAST_SLEEP_MARKER, HIPPO_COMPACT_RESUME_MARKER],
     UserPromptSubmit: [HIPPO_PINNED_INJECT_MARKER],
+    PreCompact: [HIPPO_PRE_COMPACT_MARKER],
     Stop: [HIPPO_SLEEP_MARKER],
   };
   for (const [key, markers] of Object.entries(markersByKey)) {
