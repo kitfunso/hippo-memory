@@ -75,3 +75,21 @@ export function detectSecret(entry: { content: string; tags: string[] }): Secret
   }
   return { flagged: false, reason: null };
 }
+
+/**
+ * Replace secret-shaped substrings in free text with a redaction marker.
+ * Reuses the same `SECRET_PATTERNS` / co-occurrence guard as `detectSecret`
+ * (which only flags whole-entry content) so callers that must persist raw
+ * text that never passes through the normal capture content gate — e.g. the
+ * CS1 pre-compact snapshot fields — can scrub it in place instead.
+ */
+export function redactSecrets(text: string): string {
+  if (!text) return text;
+  let result = text;
+  for (const { name, re } of SECRET_PATTERNS) {
+    if (CO_OCCURRENCE_GUARDED.has(name) && !KEYISH_CONTEXT_RE.test(text)) continue;
+    const flags = re.flags.includes('g') ? re.flags : `${re.flags}g`;
+    result = result.replace(new RegExp(re.source, flags), '[REDACTED]');
+  }
+  return result;
+}

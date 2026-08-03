@@ -88,6 +88,27 @@ Compaction summarizes the session; working state (ids, decisions, the next step)
 - E2E drives a synthetic transcript through simulated PreCompact + SessionStart(compact) hook input, asserting snapshot + re-injection → T4.
 - SessionEnd capture unchanged → non-goal list; no edits to that path.
 
+## Review-round amendments (2026-08-03, fleet + codex round 1)
+
+Contract changes made after the review-stage critics (supersede the bullets above where they conflict):
+
+1. Skip rule is now a per-field merge: an empty derived task/summary/next_step never replaces a non-empty existing field; full skip only when everything derived is empty.
+2. Field caps are code-point-safe (no surrogate-pair splits).
+3. Both verbs gate on an initialized store and exit 0 WITHOUT creating one (the global hook fires in every Claude project; silent `.hippo` creation in uninitialized dirs was a codex crit).
+4. Fail-closed input: any non-empty stdin that is not an object with a string `transcript_path` logs and skips. Auto-discovery only on a true manual invocation (TTY/no stdin). Covers malformed JSON and `"transcript_path": null`.
+5. compact-resume gates on session identity: payload session_id and snapshot session_id both present and different → silent exit 0 (concurrent sessions must not cross-restore; single-active-snapshot is a known v1 limitation).
+6. Embeddings settle bounded (Promise.allSettled raced with 3s) before the exit-0.
+7. Producer corrupted-store exit-0 e2e added (the load-bearing invariant is tested on the producer, not just the injector).
+8. Per-event content capped at 400 chars at print time in compact-resume (shared printer untouched).
+9. Snapshot fields pass the repo's secret-redaction patterns before save (the capture path's content gate never applied to them).
+10. Log lines sanitize control chars from interpolated payload values.
+11. Payload transcript_path must end `.jsonl`; directory containment deliberately NOT enforced (CLAUDE_CONFIG_DIR relocates transcript roots) — trust model documented in code.
+12. Provenance framing line printed under the restored-header (re-injected state is background reference, not instructions).
+13. compact-resume malformed non-empty stdin is silent (fail closed, aligning code with this plan's T2 contract; the earlier manual-use-print behavior survives only for TTY/no-stdin).
+14. `readTranscriptTail` boundary behavior unit-tested via its capBytes parameter.
+
+Deferred to backlog (recorded, not shipped here): rewiring `cmdCaptureCore` through `writeExtractedItems` (touching the stable capture path in this PR adds regression risk for a maintainability win); array-content user-message extraction for better task derivation; per-session snapshot history.
+
 ## Effort / files
 
 ~1 executor day. `src/cli.ts`, `src/capture.ts`, `src/hooks.ts`, `tests/hooks.test.ts`, `tests/pre-compact-e2e.test.ts`, README/help text.

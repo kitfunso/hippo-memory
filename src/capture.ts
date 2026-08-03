@@ -19,12 +19,15 @@ import {
   loadAllEntries,
   updateStats,
   saveActiveTaskSnapshot,
+  loadActiveTaskSnapshot,
+  type TaskSnapshot,
 } from './store.js';
 import { getGlobalRoot, initGlobal } from './shared.js';
 import { embedMemory } from './embeddings.js';
 import { isEmbeddingConfigured } from './embedding-provider.js';
 import { resolveTenantId } from './tenant.js';
 import { defaultPreCompactLogPath } from './hooks.js';
+import { redactSecrets } from './secret-detect.js';
 
 // ---------------------------------------------------------------------------
 // Pattern definitions
@@ -225,15 +228,21 @@ function isDuplicate(content: string, existing: MemoryEntry[]): boolean {
  * summary, no raw-text re-extraction). Mirrors the non-dry-run write loop in
  * `cmdCaptureCore`: same layer/source/confidence, same embed-if-configured,
  * fire-and-forget behaviour.
+ *
+ * Returns the fire-and-forget `embedMemory` promises alongside the counts
+ * (review round X6) so a caller that must not exit before embeddings settle
+ * — `cmdPreCompact`, which runs process.exit(0) right after — can await them
+ * with a bounded timeout instead of racing a detached write.
  */
 function writeExtractedItems(
   hippoRoot: string,
   tenantId: string,
   extracted: ExtractedItem[],
-): { captured: number; skipped: number } {
-  if (extracted.length === 0) return { captured: 0, skipped: 0 };
+): { captured: number; skipped: number; embeds: Promise<unknown>[] } {
+  if (extracted.length === 0) return { captured: 0, skipped: 0, embeds: [] };
 
   const existing = loadAllEntries(hippoRoot, tenantId);
+  const embeds: Promise<unknown>[] = [];
   let captured = 0;
   let skipped = 0;
 
@@ -253,12 +262,12 @@ function writeExtractedItems(
     updateStats(hippoRoot, { remembered: 1 });
     existing.push(entry); // within-batch dedup
     if (isEmbeddingConfigured(hippoRoot)) {
-      embedMemory(hippoRoot, entry).catch(() => {});
+      embeds.push(embedMemory(hippoRoot, entry).catch(() => {}));
     }
     captured++;
   }
 
-  return { captured, skipped };
+  return { captured, skipped, embeds };
 }
 
 // ---------------------------------------------------------------------------
@@ -668,11 +677,35 @@ export const PRE_COMPACT_SUMMARY_CAP = 2000;
 export const PRE_COMPACT_NEXT_STEP_CAP = 500;
 
 /**
+ * Truncate `text` to at most `maxChars` UTF-16 code units without splitting
+ * a surrogate pair at the boundary. A plain `slice(0, n)` can land between a
+ * high and low surrogate, leaving an unpaired surrogate in a stored/
+ * re-injected snapshot field. If the code unit at the cut point is a high
+ * surrogate (0xD800-0xDBFF), back off one unit so the pair stays whole.
+ */
+export function truncateCodePointSafe(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  let end = maxChars;
+  if (end > 0) {
+    const code = text.charCodeAt(end - 1);
+    if (code >= 0xd800 && code <= 0xdbff) end -= 1;
+  }
+  return text.slice(0, end);
+}
+
+/**
  * Positional read of the last `capBytes` of `transcriptPath`, aligned
  * forward to the first complete JSONL line. Uses fs.openSync/readSync at a
  * byte offset rather than reading the whole file and slicing — PreCompact
  * fires exactly when transcripts are largest, so a whole-file read is the
  * one thing this path cannot do.
+ *
+ * Boundary handling (X14): a seek that lands mid-line must drop that
+ * partial first line so every remaining line parses as complete JSON. A
+ * seek that lands exactly after a '\n' already starts on a complete line
+ * and must NOT drop it — doing so would silently discard one whole line on
+ * every tail read whose start offset happens to align with a line break.
+ * Distinguished by peeking at the single byte immediately before `start`.
  */
 export function readTranscriptTail(transcriptPath: string, capBytes: number = PRE_COMPACT_TAIL_BYTES): string {
   const size = fs.statSync(transcriptPath).size;
@@ -682,10 +715,17 @@ export function readTranscriptTail(transcriptPath: string, capBytes: number = PR
 
   const fd = fs.openSync(transcriptPath, 'r');
   try {
+    let onLineBoundary = start === 0;
+    if (!onLineBoundary) {
+      const prevByte = Buffer.alloc(1);
+      fs.readSync(fd, prevByte, 0, 1, start - 1);
+      onLineBoundary = prevByte[0] === 0x0a; // '\n'
+    }
+
     const buf = Buffer.alloc(length);
     fs.readSync(fd, buf, 0, length, start);
     let text = buf.toString('utf8');
-    if (start > 0) {
+    if (!onLineBoundary) {
       // Landed mid-line — drop the partial first line so every remaining
       // line parses as complete JSON.
       const nl = text.indexOf('\n');
@@ -751,6 +791,16 @@ function lastAssistantTextBlock(jsonl: string): string {
 // Diagnostic-only log; a long-lived install must not grow it unbounded.
 const PRE_COMPACT_LOG_MAX_BYTES = 256 * 1024;
 
+/**
+ * Log-forgery guard: messages here interpolate payload-controlled values
+ * (transcript paths, session ids). Strip C0 control chars — newlines above
+ * all — so a crafted value can't inject fake `[hippo] ...` log lines.
+ */
+function sanitizeLogMessage(message: string): string {
+  // eslint-disable-next-line no-control-regex
+  return message.replace(/[\x00-\x1f]/g, '');
+}
+
 function appendPreCompactLog(logFile: string, message: string): void {
   try {
     fs.mkdirSync(path.dirname(logFile), { recursive: true });
@@ -758,7 +808,7 @@ function appendPreCompactLog(logFile: string, message: string): void {
     if (stat && stat.size > PRE_COMPACT_LOG_MAX_BYTES) {
       fs.writeFileSync(logFile, '', 'utf8'); // start fresh — dumb cap, no rotation
     }
-    fs.appendFileSync(logFile, `[hippo] ${new Date().toISOString()} ${message}\n`, 'utf8');
+    fs.appendFileSync(logFile, `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(message)}\n`, 'utf8');
   } catch {
     // Diagnostic-only; a log write failure must never affect the exit-0 contract.
   }
@@ -774,18 +824,60 @@ function isReadableFile(filePath: string): boolean {
   }
 }
 
-function runPreCompact(hippoRoot: string, stdinText: string | undefined, logFile: string): void {
+/**
+ * Runs the PreCompact producer. Returns any `embedMemory` promises kicked
+ * off along the way (empty on every skip path) so `cmdPreCompact` can await
+ * them, bounded, before it exits (X6).
+ */
+function runPreCompact(hippoRoot: string, stdinText: string | undefined, logFile: string): Promise<unknown>[] {
+  // X3: the PreCompact hook fires in every Claude Code project, including
+  // ones that never ran `hippo init`. Gate on the non-exiting isInitialized
+  // check BEFORE any store-opening call (saveActiveTaskSnapshot etc. all
+  // call initStore internally, which would silently create a store here).
+  if (!isInitialized(hippoRoot)) {
+    appendPreCompactLog(logFile, 'skip: store not initialized');
+    return [];
+  }
+
+  // A true manual invocation has no stdin at all (TTY, or a non-TTY pipe
+  // that yielded an empty read) — that's the ONLY case newest-transcript
+  // auto-discovery is allowed to run. Any other non-empty stdin must
+  // JSON-parse to an object carrying a string transcript_path, or it is
+  // treated as malformed input and skipped (X4) rather than silently
+  // falling back to discovery, which could snapshot an unrelated session's
+  // transcript under this payload's session_id.
+  const manualInvocation = !stdinText || stdinText.trim() === '';
   let sessionId: string | null = null;
   let payloadTranscriptPath: string | null = null;
-  if (stdinText && stdinText.trim().startsWith('{')) {
+
+  if (!manualInvocation) {
+    let payload: Record<string, unknown> | null = null;
     try {
-      const payload = JSON.parse(stdinText) as Record<string, unknown>;
-      if (typeof payload.session_id === 'string') sessionId = payload.session_id;
-      if (typeof payload.transcript_path === 'string') payloadTranscriptPath = payload.transcript_path;
+      payload = JSON.parse(stdinText!.trim()) as Record<string, unknown>;
     } catch {
-      // Malformed stdin JSON: both stay null — treated as a manual
-      // invocation below, so auto-discovery applies.
+      payload = null;
     }
+    if (!payload || typeof payload !== 'object' || typeof payload.transcript_path !== 'string') {
+      // Covers non-JSON stdin, a JSON value that isn't an object, and
+      // `"transcript_path": null` (or the key missing entirely) — all fail
+      // typeof-string. Log and skip; never fall through to auto-discovery.
+      appendPreCompactLog(logFile, 'skip: malformed or incomplete PreCompact payload (missing string transcript_path)');
+      return [];
+    }
+    if (typeof payload.session_id === 'string') sessionId = payload.session_id;
+    payloadTranscriptPath = payload.transcript_path;
+  }
+
+  // X11: payload transcript_path must end .jsonl. No directory-containment
+  // check is applied on top of this — CLAUDE_CONFIG_DIR can relocate the
+  // transcript root entirely, so a path-prefix allowlist would just reject
+  // legitimate relocated installs. The trust boundary here is process
+  // identity, not path shape: a local process able to feed this hook
+  // arbitrary stdin already runs as the same user who owns every transcript
+  // this check could gate on, so containment buys no real isolation.
+  if (payloadTranscriptPath !== null && !/\.jsonl$/i.test(payloadTranscriptPath)) {
+    appendPreCompactLog(logFile, `skip: payload transcript_path is not a .jsonl file: ${payloadTranscriptPath}`);
+    return [];
   }
 
   // A payload transcript_path is EXCLUSIVE: never fall back to
@@ -793,14 +885,14 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, logFile
   // fallback would snapshot a DIFFERENT session's transcript under THIS
   // payload's session_id — cross-session contamination with wrong linkage
   // (verify-stage E2E finding, 2026-08-03). Auto-discovery only applies
-  // when the payload carries no transcript_path at all (manual invocation).
+  // on a true manual invocation (no payload at all).
   let transcriptPath: string | null;
   if (payloadTranscriptPath !== null) {
     if (isReadableFile(payloadTranscriptPath)) {
       transcriptPath = payloadTranscriptPath;
     } else {
       appendPreCompactLog(logFile, `skip: payload transcript_path unreadable: ${payloadTranscriptPath}`);
-      return;
+      return [];
     }
   } else {
     transcriptPath = resolveLastSessionTranscript(undefined, stdinText);
@@ -808,7 +900,7 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, logFile
 
   if (!transcriptPath) {
     appendPreCompactLog(logFile, 'skip: no transcript resolved');
-    return;
+    return [];
   }
 
   let tail: string;
@@ -816,26 +908,59 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, logFile
     tail = readTranscriptTail(transcriptPath, PRE_COMPACT_TAIL_BYTES);
   } catch (err) {
     appendPreCompactLog(logFile, `skip: could not read transcript tail: ${(err as Error).message}`);
-    return;
+    return [];
   }
 
   const summaryFull = summariseTranscript(tail);
   const extracted = extractFromText(summaryFull);
+  const rawTask = lastPlainUserMessage(tail);
+  const rawNextStep = lastAssistantTextBlock(tail);
 
-  // Never clobber a user-authored active snapshot with junk: only write when
-  // the tail actually yielded something.
-  if (!summaryFull.trim() && extracted.length === 0) {
+  // Full skip only when EVERY derived field is empty and nothing was
+  // extracted — never clobber a user-authored active snapshot with junk.
+  if (!rawTask.trim() && !summaryFull.trim() && !rawNextStep.trim() && extracted.length === 0) {
     appendPreCompactLog(logFile, 'skip: empty summary and no extracted items');
-    return;
+    return [];
   }
+
+  const tenantId = resolveTenantId({});
+
+  // Per-field merge (X1): a tool-heavy tail whose only user turns are
+  // tool_result arrays derives an empty task even though the summary is
+  // non-empty. Loading the existing snapshot first lets each field fall
+  // back independently instead of the whole write clobbering a
+  // user-authored field with blank text.
+  let existing: TaskSnapshot | null = null;
+  try {
+    existing = loadActiveTaskSnapshot(hippoRoot, tenantId);
+  } catch {
+    // No existing snapshot to merge against — proceed with derived-only.
+  }
+
+  // X9: scrub secret-shaped substrings out of freshly-derived text before it
+  // is capped/stored. These three fields bypass the normal capture content
+  // gate (they're not extracted items), so this producer is the only place
+  // that ever sees them before they land in task_snapshots. Carried-over
+  // existing field values are NOT re-scrubbed here — they already passed
+  // through this same gate (or were set via `hippo snapshot save`, which is
+  // deliberately untouched, same as the caps below).
+  const scrubbedTask = redactSecrets(rawTask);
+  const scrubbedSummary = redactSecrets(summaryFull);
+  const scrubbedNextStep = redactSecrets(rawNextStep);
 
   // Field caps are enforced HERE ONLY — saveActiveTaskSnapshot and the
   // `hippo snapshot save` CLI path stay uncapped (AGENTS.md public-API
-  // preservation). Caps protect the re-injection token budget.
-  const task = lastPlainUserMessage(tail).slice(0, PRE_COMPACT_TASK_CAP);
-  const summary = summaryFull.slice(0, PRE_COMPACT_SUMMARY_CAP);
-  const nextStep = lastAssistantTextBlock(tail).slice(0, PRE_COMPACT_NEXT_STEP_CAP);
-  const tenantId = resolveTenantId({});
+  // preservation). Caps protect the re-injection token budget. Code-point
+  // safe (X2): never split a surrogate pair at the cut.
+  const task = scrubbedTask.trim()
+    ? truncateCodePointSafe(scrubbedTask, PRE_COMPACT_TASK_CAP)
+    : (existing?.task ?? '');
+  const summary = scrubbedSummary.trim()
+    ? truncateCodePointSafe(scrubbedSummary, PRE_COMPACT_SUMMARY_CAP)
+    : (existing?.summary ?? '');
+  const nextStep = scrubbedNextStep.trim()
+    ? truncateCodePointSafe(scrubbedNextStep, PRE_COMPACT_NEXT_STEP_CAP)
+    : (existing?.next_step ?? '');
 
   // Snapshot writes FIRST: a capture-extraction failure below must never
   // lose the headline artifact. The reverse order would risk it.
@@ -855,10 +980,12 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, logFile
   // Capture extraction SECOND, own try/catch: a failure here self-heals at
   // the next SessionEnd capture (existing dedup absorbs the overlap).
   try {
-    const { captured, skipped } = writeExtractedItems(hippoRoot, tenantId, extracted);
+    const { captured, skipped, embeds } = writeExtractedItems(hippoRoot, tenantId, extracted);
     appendPreCompactLog(logFile, `capture: ${captured} items captured, ${skipped} skipped`);
+    return embeds;
   } catch (err) {
     appendPreCompactLog(logFile, `capture failed: ${(err as Error).message}`);
+    return [];
   }
 }
 
@@ -867,6 +994,12 @@ export interface PreCompactOptions {
   logFile?: string;
 }
 
+// X6: bound how long cmdPreCompact will wait for fire-and-forget embeddings
+// to settle before it exits. PreCompact runs under a hook timeout (30s in
+// the installer) — 3s leaves ample headroom while still giving embeddings a
+// real chance to finish instead of racing process.exit(0) unconditionally.
+const EMBED_SETTLE_TIMEOUT_MS = 3000;
+
 /**
  * PreCompact hook entry point. Exit code 2 on PreCompact BLOCKS compaction,
  * so this verb must exit 0 on every path — malformed stdin, missing
@@ -874,12 +1007,26 @@ export interface PreCompactOptions {
  * thrown error. Callers (src/cli.ts) must not wrap this in anything that
  * could turn a caught-and-logged failure back into a non-zero exit.
  */
-export function cmdPreCompact(hippoRoot: string, options: PreCompactOptions): void {
+export async function cmdPreCompact(hippoRoot: string, options: PreCompactOptions): Promise<void> {
   const logFile = options.logFile ?? defaultPreCompactLogPath();
+  let embeds: Promise<unknown>[] = [];
   try {
-    runPreCompact(hippoRoot, options.stdinText, logFile);
+    embeds = runPreCompact(hippoRoot, options.stdinText, logFile);
   } catch (err) {
     appendPreCompactLog(logFile, `pre-compact failed: ${(err as Error).message}`);
   }
+
+  if (embeds.length > 0) {
+    let timer: ReturnType<typeof setTimeout>;
+    const timeout = new Promise<'timeout'>((resolve) => {
+      timer = setTimeout(() => resolve('timeout'), EMBED_SETTLE_TIMEOUT_MS);
+      timer.unref?.();
+    });
+    const settled = Promise.allSettled(embeds).then(() => 'settled' as const);
+    const outcome = await Promise.race([settled, timeout]);
+    clearTimeout(timer!);
+    appendPreCompactLog(logFile, outcome === 'settled' ? 'embeddings settled' : 'embeddings timeout');
+  }
+
   process.exit(0);
 }
