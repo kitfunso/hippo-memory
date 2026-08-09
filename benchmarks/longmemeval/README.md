@@ -24,6 +24,8 @@ Requires:
 
 Download the LongMemEval dataset and place the JSON file in this directory. Expected format: array of entries with `question_id`, `question`, `answer`, `question_type`, `haystack_sessions`, `haystack_session_ids`, `haystack_dates`.
 
+`longmemeval_s_cleaned.json` (used by `benchmarks/memory-value/`): https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/main/longmemeval_s_cleaned.json
+
 ## Usage
 
 ### Full pipeline

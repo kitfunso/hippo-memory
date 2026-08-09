@@ -18,6 +18,7 @@ benchmarks/sequential-learning/results/
 ui/tsconfig.tsbuildinfo
 benchmarks/micro/results/latest.json
 benchmarks/a1/results/
+benchmarks/memory-value/results/
 .claude/worktrees/
 .context/
 provenance-coverage.json
