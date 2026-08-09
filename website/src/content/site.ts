@@ -30,6 +30,7 @@ export const site = {
     benchmarks: `${REPO}/tree/master/benchmarks`,
     longmemeval: `${REPO}/tree/master/benchmarks/longmemeval`,
     license: `${REPO}/blob/master/LICENSE`,
+    atlas: 'https://neoneye.github.io/agent-memory-atlas/systems/hippo-memory/',
   },
 } as const;
 

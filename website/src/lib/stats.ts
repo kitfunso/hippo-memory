@@ -11,10 +11,14 @@
  */
 
 const REPO_API = 'https://api.github.com/repos/kitfunso/hippo-memory';
-const NPM_API = 'https://api.npmjs.org/downloads/point/last-month/hippo-memory';
+// hippo-memory's first npm publish date. Lifetime total, not last-month: a monotonic
+// headline number reads better than a monthly figure that dips between release spikes,
+// and matches how the milestone is talked about elsewhere (README, announcements).
+const NPM_PUBLISH_DATE = '2026-03-15';
+const NPM_API = `https://api.npmjs.org/downloads/point/${NPM_PUBLISH_DATE}:${new Date().toISOString().slice(0, 10)}/hippo-memory`;
 
-// Last-known values (2026-06-02), used only when a fetch fails.
-const FALLBACK = { stars: 679, downloads: 9858 } as const;
+// Last-known values (2026-08-09), used only when a fetch fails.
+const FALLBACK = { stars: 725, downloads: 25811 } as const;
 
 export interface Stats {
   stars: number;
