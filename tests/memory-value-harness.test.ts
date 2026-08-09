@@ -1,11 +1,20 @@
 /**
- * LC2-E1 memory-value eval harness — deterministic smoke test.
+ * LC2-E1 memory-value eval harness — deterministic mechanism tests.
  *
  * A tiny, fully hand-specified synthetic fixture (2 questions x 3 sessions x
  * ~10 turns, known gold flags — NOT the generic seeded generateSmokeFixture()
  * that run.mjs --smoke uses, because this test needs EXACT, hand-computable
  * retention numbers). Runs the real mechanism (ingest -> simulate -> extract
  * -> evaluate) against real SQLite scratch stores (house rule: no mocks).
+ * Fixture definitions live in memory-value-fixtures.ts, shared with
+ * memory-value-determinism.test.ts (codex confirmation-pass P1-B fix,
+ * 2026-08-09: the file was split so neither Vitest worker's per-file
+ * wallclock crosses the ~60s Windows worker-RPC "onTaskUpdate" timeout).
+ * This file's pipeline tests run simulate.mjs at TEST_SIM_ROUNDS (8), not
+ * the pinned CONFIG.SIM_ROUNDS (30) — they only need enough usage variance
+ * to exercise retrieval_count, outcome counters, half_life_days, not the full
+ * protocol depth. memory-value-determinism.test.ts keeps ONE full-30-round
+ * test, where the pinned protocol itself is under test.
  *
  * Hand-computable retention design note: memory ids come from
  * crypto.randomUUID() inside the real createMemory() path (by design — this
@@ -15,11 +24,12 @@
  * `recency` scorer sidesteps this: it scores purely by age_days, which is a
  * pure function of each turn's SESSION DATE (fully controlled by this
  * fixture) and is untouched by simulate.mjs (which only ever mutates
- * retrieval_count, outcome counters, half_life_days, last_retrieved). Both questions
- * below are constructed so the answer/gold session is the NEWEST session and
- * the primary-budget keep count exactly covers (Q_A) or is a subset of
- * entirely-gold (Q_B) that session's tied group — so `recency` retention is
- * exact and reproducible regardless of which random ids win a tie.
+ * retrieval_count, outcome counters, half_life_days, last_retrieved). Both
+ * questions below are constructed so the answer/gold session is the NEWEST
+ * session and the primary-budget keep count exactly covers (Q_A) or is a
+ * subset of entirely-gold (Q_B) that session's tied group — so `recency`
+ * retention is exact and reproducible regardless of which random ids win a
+ * tie.
  */
 import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
 import * as fs from 'node:fs';
@@ -39,113 +49,14 @@ import { extractQuestion } from '../benchmarks/memory-value/extract.mjs';
 // @ts-expect-error - .mjs harness modules have no type declarations
 import { evaluateAll, computeDatasetVariance, evaluateVarianceGate } from '../benchmarks/memory-value/evaluate.mjs';
 // @ts-expect-error - .mjs harness modules have no type declarations
-import { formatLmeDate, questionDir, metaPathFor, featuresPathFor, goldPathFor, readJsonl, readJson, computeGold, scratchRootDir, sanitizeQuestionId, safeRemoveScratchDir } from '../benchmarks/memory-value/common.mjs';
-// @ts-expect-error - .mjs harness modules have no type declarations
-import { _resetAblationCacheForTests } from '../dist/ablation.js';
+import { questionDir, metaPathFor, featuresPathFor, goldPathFor, readJsonl, readJson, computeGold, scratchRootDir, sanitizeQuestionId, safeRemoveScratchDir } from '../benchmarks/memory-value/common.mjs';
 // @ts-expect-error - .mjs harness modules have no type declarations
 import { computeSchemaFit } from '../dist/memory.js';
 
-// HIPPO_MV_SCRATCH_ROOT is included here (not just the ablation vars) so the
-// cross-ingest determinism test below can never leak its scratch-root
-// override into another test if it throws before its own finally runs.
-const RESET_ENV_VARS = ['HIPPO_FAKE_NOW', 'HIPPO_MV_SCRATCH_ROOT'] as const;
-function clearAblationEnv(): void {
-  for (const v of RESET_ENV_VARS) delete process.env[v];
-  _resetAblationCacheForTests();
-}
+import { clearAblationEnv, QUESTIONS, QUESTION_C, cleanupScratch, runPipeline, TEST_SIM_ROUNDS } from './memory-value-fixtures.js';
+
 beforeEach(clearAblationEnv);
 afterEach(clearAblationEnv);
-
-// ---------------------------------------------------------------------------
-// Fixture: 2 questions, 3 sessions each, ~10 turns each, known gold flags.
-// ---------------------------------------------------------------------------
-
-const BASE = Date.UTC(2024, 0, 1, 9, 0, 0); // 2024-01-01T09:00:00Z, a Monday
-const day = (n: number) => new Date(BASE + n * 86_400_000);
-
-function turn(role: 'user' | 'assistant', text: string, hasAnswer?: boolean) {
-  const t: Record<string, unknown> = { role, content: text };
-  if (hasAnswer !== undefined) t.has_answer = hasAnswer;
-  return t;
-}
-
-/** Q_A: evidence-turn mode. Sessions at day 0, 3, 6 (day 6 = newest = answer
- *  session). 4+3+3 = 10 turns. Exactly 1 gold turn (the last turn of the
- *  answer session). question_date = day 7 (one day after the newest session). */
-function buildQuestionA() {
-  const s0 = [turn('user', 'A-s0-t0 alpha topic note'), turn('assistant', 'A-s0-t1 alpha topic reply'), turn('user', 'A-s0-t2 alpha topic follow-up'), turn('assistant', 'A-s0-t3 alpha topic wrap-up')];
-  const s1 = [turn('user', 'A-s1-t0 beta topic note'), turn('assistant', 'A-s1-t1 beta topic reply'), turn('user', 'A-s1-t2 beta topic follow-up')];
-  const s2 = [turn('user', 'A-s2-t0 gamma topic note', false), turn('assistant', 'A-s2-t1 gamma topic reply', false), turn('user', 'A-s2-t2 gamma topic answer', true)];
-  return {
-    question_id: 'fixture_q_a',
-    question_type: 'single-session-user',
-    question: 'What was the gamma topic answer? (never read by simulate/extract)',
-    question_date: formatLmeDate(day(7)),
-    answer: 'the gamma topic answer (never read by simulate/extract)',
-    answer_session_ids: ['fixture_q_a_sess2'],
-    haystack_dates: [formatLmeDate(day(0)), formatLmeDate(day(3)), formatLmeDate(day(6))],
-    haystack_session_ids: ['fixture_q_a_sess0', 'fixture_q_a_sess1', 'fixture_q_a_sess2'],
-    haystack_sessions: [s0, s1, s2],
-  };
-}
-
-/** Q_B: answer-session-all fallback mode (no has_answer key anywhere).
- *  Sessions at day 0, 3, 6 (day 6 = newest = answer session, ALL 4 turns
- *  gold). 3+3+4 = 10 turns. question_date = day 7. */
-function buildQuestionB() {
-  const s0 = [turn('user', 'B-s0-t0 delta topic note'), turn('assistant', 'B-s0-t1 delta topic reply'), turn('user', 'B-s0-t2 delta topic follow-up')];
-  const s1 = [turn('user', 'B-s1-t0 epsilon topic note'), turn('assistant', 'B-s1-t1 epsilon topic reply'), turn('user', 'B-s1-t2 epsilon topic follow-up')];
-  const s2 = [turn('user', 'B-s2-t0 zeta topic note'), turn('assistant', 'B-s2-t1 zeta topic reply'), turn('user', 'B-s2-t2 zeta topic follow-up'), turn('assistant', 'B-s2-t3 zeta topic answer')];
-  return {
-    question_id: 'fixture_q_b',
-    question_type: 'multi-session',
-    question: 'What was decided in the zeta topic thread? (never read by simulate/extract)',
-    question_date: formatLmeDate(day(7)),
-    answer: 'the zeta topic decision (never read by simulate/extract)',
-    answer_session_ids: ['fixture_q_b_sess2'],
-    haystack_dates: [formatLmeDate(day(0)), formatLmeDate(day(3)), formatLmeDate(day(6))],
-    haystack_session_ids: ['fixture_q_b_sess0', 'fixture_q_b_sess1', 'fixture_q_b_sess2'],
-    haystack_sessions: [s0, s1, s2],
-  };
-}
-
-/** Q_C: causal clock clamp case. Sessions at day 0 and day 10 (day(10) is
- *  AFTER question_date = day 7 — mirrors the 76/500 real questions whose
- *  haystack postdates question_date). Answer session (day 10) has 1 gold
- *  turn. T_eval must clamp to day(10), not day(7), so every memory's
- *  age_days >= 0 (the day-10 session's own memories: age == 0 exactly). */
-function buildQuestionC() {
-  const s0 = [turn('user', 'C-s0-t0 eta topic note'), turn('assistant', 'C-s0-t1 eta topic reply'), turn('user', 'C-s0-t2 eta topic follow-up')];
-  const s1 = [turn('user', 'C-s1-t0 theta topic note', false), turn('assistant', 'C-s1-t1 theta topic reply', false), turn('user', 'C-s1-t2 theta topic answer', true)];
-  return {
-    question_id: 'fixture_q_c',
-    question_type: 'temporal-reasoning',
-    question: 'What was the theta topic answer? (never read by simulate/extract)',
-    question_date: formatLmeDate(day(7)), // BEFORE session s1 (day 10) — the causal-clamp case
-    answer: 'the theta topic answer (never read by simulate/extract)',
-    answer_session_ids: ['fixture_q_c_sess1'],
-    haystack_dates: [formatLmeDate(day(0)), formatLmeDate(day(10))],
-    haystack_session_ids: ['fixture_q_c_sess0', 'fixture_q_c_sess1'],
-    haystack_sessions: [s0, s1],
-  };
-}
-
-const QUESTIONS = [buildQuestionA(), buildQuestionB()];
-const QUESTION_C = buildQuestionC();
-
-function cleanupScratch(): void {
-  for (const q of [...QUESTIONS, QUESTION_C]) {
-    fs.rmSync(questionDir(q.question_id), { recursive: true, force: true });
-  }
-}
-
-async function runPipeline(q: ReturnType<typeof buildQuestionA>) {
-  const ingestResult = ingestQuestion(q);
-  const meta = readJson(metaPathFor(q.question_id)) as { tEval: string };
-  await simulateQuestion(q.question_id, meta.tEval);
-  const extractResult = extractQuestion(q.question_id, meta.tEval);
-  return { ingestResult, extractResult, tEval: meta.tEval };
-}
 
 afterAll(cleanupScratch);
 
@@ -330,7 +241,7 @@ describe('causal clock clamp (codex review fix round #3 P1 fix verification)', (
       expect(meta.tEval).not.toBe(meta.questionDate);
       expect(meta.tEval > meta.questionDate).toBe(true);
 
-      await simulateQuestion(QUESTION_C.question_id, meta.tEval, { seed: CONFIG.GLOBAL_SEED });
+      await simulateQuestion(QUESTION_C.question_id, meta.tEval, { seed: CONFIG.GLOBAL_SEED, rounds: TEST_SIM_ROUNDS });
       extractQuestion(QUESTION_C.question_id, meta.tEval);
 
       const rows = readJsonl(featuresPathFor(QUESTION_C.question_id)) as Array<{
@@ -475,71 +386,6 @@ describe('variance gate (pure logic, no I/O)', () => {
     // schema_fit is proven constant above; it must land in `dead`, not `varying`.
     expect(dead).toContain('schema_fit');
   });
-});
-
-describe('cross-ingest determinism (codex review P1 fix verification)', () => {
-  it('two separate scratch-root ingests of the same fixture produce identical retention (every scorer x budget) and identical per-row features joined on provenance key', async () => {
-    const rootA = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-xingest-a-'));
-    const rootB = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-xingest-b-'));
-    const budgets = [0.1, 0.2, 0.3, 0.5];
-
-    async function ingestSimExtractUnder(root: string) {
-      process.env.HIPPO_MV_SCRATCH_ROOT = root;
-      const rowsByQuestion: Record<string, Array<{ memory_id: string; sessionIndex: number; turnIdx: number; gold: number; features: Record<string, number> }>> = {};
-      for (const q of QUESTIONS) {
-        ingestQuestion(q);
-        const meta = readJson(metaPathFor(q.question_id)) as { tEval: string };
-        await simulateQuestion(q.question_id, meta.tEval, { seed: CONFIG.GLOBAL_SEED });
-        extractQuestion(q.question_id, meta.tEval);
-        rowsByQuestion[q.question_id] = readJsonl(featuresPathFor(q.question_id));
-      }
-      const evalResult = evaluateAll(
-        QUESTIONS.map((q) => ({ questionId: q.question_id, split: 'train' as const })),
-        { budgets, primaryBudget: 0.3 },
-      );
-      return { rowsByQuestion, evalResult };
-    }
-
-    try {
-      const runA = await ingestSimExtractUnder(rootA);
-      const runB = await ingestSimExtractUnder(rootB);
-
-      // (1) retention identical for EVERY scorer x budget (not just recency) —
-      // this is the property the previous memory_id-primary tie-break broke.
-      for (const scorerName of runA.evalResult.scorers as string[]) {
-        for (const budget of budgets) {
-          const a = runA.evalResult.summary.train[scorerName]?.[budget];
-          const b = runB.evalResult.summary.train[scorerName]?.[budget];
-          expect(b?.meanRetention, `${scorerName}@${budget}`).toBe(a?.meanRetention);
-        }
-      }
-
-      // (2) per-row features identical when joined on (sessionIndex, turnIdx)
-      //     — NOT on memory_id, which is crypto-random per ingest by design.
-      for (const q of QUESTIONS) {
-        const rowsA = runA.rowsByQuestion[q.question_id];
-        const rowsB = runB.rowsByQuestion[q.question_id];
-        expect(rowsB.length).toBe(rowsA.length);
-        const keyOf = (r: { sessionIndex: number; turnIdx: number }) => `${r.sessionIndex}:${r.turnIdx}`;
-        const byKeyB = new Map(rowsB.map((r) => [keyOf(r), r]));
-        for (const rowA of rowsA) {
-          const rowB = byKeyB.get(keyOf(rowA));
-          expect(rowB, `no provenance-matched row for ${keyOf(rowA)} in run B`).toBeDefined();
-          expect(rowB!.gold).toBe(rowA.gold);
-          expect(rowB!.features).toEqual(rowA.features);
-          // memory_id is deliberately NOT compared here (see file header).
-        }
-      }
-    } finally {
-      delete process.env.HIPPO_MV_SCRATCH_ROOT;
-      _resetAblationCacheForTests();
-      // Both temp roots are OUTSIDE the default scratch root (scratchRootDir()
-      // reads the env var, which is already cleared above), so a plain
-      // fs.rmSync is correct here — safeRemoveScratchDir would refuse them.
-      fs.rmSync(rootA, { recursive: true, force: true });
-      fs.rmSync(rootB, { recursive: true, force: true });
-    }
-  }, 90_000);
 });
 
 describe('scratch-cleanup containment guard (codex review P2 fix verification)', () => {

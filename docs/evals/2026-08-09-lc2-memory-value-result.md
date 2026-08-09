@@ -1,20 +1,21 @@
 # LC2-E1 baseline results: memory-value retention on LongMemEval-S (cleaned)
 
-Date: 2026-08-09 (v3, registered — regenerated under prereg amendments 1 and 2; supersedes the same-day v1/v2 runs, see the amendment records in the pre-reg).
+Date: 2026-08-09 (v4, registered — regenerated after the final determinism closure: stable (score, provenance) re-sort of search results in simulate.mjs, removing the last dependence on production id-based tie-order, proven on the codex repro question gpt4_6dc9b45b. Supersedes the same-day v1/v2/v3 runs; see the pre-reg amendment records).
 Pre-registration: `2026-08-09-lc2-memory-value-prereg.md` (protocol + both amendments locked before this run).
 Episode: 01KZHN3SM9A92V1WE23YQ76HZE. Reproduce: `node benchmarks/memory-value/run.mjs --data <path-to>/longmemeval_s_cleaned.json` (seed 42; cross-ingest determinism and the causal clock clamp are test-enforced in `tests/memory-value-harness.test.ts`, 17 tests).
 
-## Run facts (v3, registered)
+## Run facts (v4, registered)
 
 - Registered substrate executed in full: 500/500 questions, gold mode `evidence-turn` for all 500 (`has_answer` flags present everywhere).
-- Wallclock 79.8 min (ingest 44.1 min, simulate 35.6 min, extract 5.8 s, evaluate 1.7 s) — under the pre-registered 3 h cap.
+- Wallclock 81.2 min (ingest 44.9 min, simulate 36.1 min, extract 6.0 s, evaluate 1.9 s) — under the pre-registered 3 h cap.
+- v4-vs-v3 note: every reported summary cell is IDENTICAL to v3 at 4 decimal places — the tie-order fix changed per-question tie outcomes on duplicate-content questions without moving any aggregate, while making the whole pipeline provably cross-ingest deterministic (test-enforced, including a full-30-round proof on the codex repro question).
 - Causal clock: evaluation at T_eval(q) = max(question_date, latest haystack_date) — the 76 questions with post-question_date sessions are clamped; age_days >= 0 for every extracted row by construction (amendment 2).
 - Variance gate: **passed, 8/30** features vary within at least one store (the stricter within-store liveness definition from the review round): `age_days, half_life_days, strength, retrieval_count, outcome_positive, outcome_negative, outcome_ratio, content_length`. The 22 dead dims match the pre-reg's structurally-constant list exactly.
 - Zero-gold questions skipped from means: 11 train, 10 heldout (LongMemEval abstention-class questions).
 - Split: 289 train / 190 heldout questions included at budget 0.3 (seed-42 stratified 60/40 of 500, minus zero-gold).
 - Results: committed slim evidence `benchmarks/memory-value/results-latest.json` (summary, variance detail, gate, per-question bookkeeping, paired records for the four E2-bar scorers); the full per-scorer JSON is local-only (gitignored) and regenerates deterministically from the command above.
 
-## Headline numbers (mean gold-evidence retention @ keep budget 0.30, v3)
+## Headline numbers (mean gold-evidence retention @ keep budget 0.30, v4)
 
 | scorer | train | heldout |
 |---|---|---|

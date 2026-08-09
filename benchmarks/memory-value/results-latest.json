@@ -1,7 +1,7 @@
 {
- "note": "Slimmed committed evidence for LC2-E1 v3 (registered run under prereg amendments 1+2: stable-provenance sampling/tie-break + causal T_eval clock; full JSON local-only, gitignored). pairedRecords kept ONLY for the E2-bar scorers; everything regenerates deterministically with run.mjs seed 42.",
+ "note": "Slimmed committed evidence for LC2-E1 v4 (registered run; determinism class closed: stable (score, provenance) re-sort of search results, proven on the codex repro question). pairedRecords kept ONLY for the E2-bar scorers; everything regenerates deterministically with run.mjs seed 42.",
  "meta": {
-  "generatedAt": "2026-08-09T10:52:43.269Z",
+  "generatedAt": "2026-08-09T12:48:06.308Z",
   "mode": "real",
   "dataPath": "C:/Users/skf_s/hippo/benchmarks/longmemeval/data/longmemeval_s_cleaned.json",
   "seed": 42,
@@ -83,11 +83,11 @@
   "heldoutCount": 200
  },
  "timings": {
-  "ingestMs": 2644835,
-  "simulateMs": 2136450,
-  "extractMs": 5844,
-  "evaluateMs": 1735,
-  "totalMs": 4788869
+  "ingestMs": 2692899,
+  "simulateMs": 2168840,
+  "extractMs": 5984,
+  "evaluateMs": 1854,
+  "totalMs": 4869590
  },
  "evaluate": {
   "budgets": [
@@ -3836,15 +3836,15 @@
     "min": 7,
     "max": 31,
     "mean": 7.607977221843668,
-    "variance": 1.6785969304652895,
+    "variance": 1.6785644829491488,
     "pooledVaries": true,
     "varies": true
    },
    "strength": {
     "min": 3.937096891007969e-14,
     "max": 1,
-    "mean": 0.6374390823693779,
-    "variance": 0.12522007184948358,
+    "mean": 0.637443133576514,
+    "variance": 0.12521896297154878,
     "pooledVaries": true,
     "varies": true
    },
@@ -3852,7 +3852,7 @@
     "min": 0,
     "max": 12,
     "mean": 0.30398861092183393,
-    "variance": 0.4196492326163222,
+    "variance": 0.4196411207372865,
     "pooledVaries": true,
     "varies": true
    },
@@ -3876,7 +3876,7 @@
     "min": -0.8333333333333334,
     "max": 0.875,
     "mean": 0.04017354254079122,
-    "variance": 0.05437064211238228,
+    "variance": 0.054372670082141195,
     "pooledVaries": true,
     "varies": true
    },
@@ -25118,8 +25118,8 @@
     "N": 455,
     "keepN": 137,
     "cutoffBoundary": {
-     "lastKeptScore": 0.005993459354415861,
-     "firstDroppedScore": 0.005672576927734182
+     "lastKeptScore": 0.0060273104029861585,
+     "firstDroppedScore": 0.005993459354415861
     }
    },
    {

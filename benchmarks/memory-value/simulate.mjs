@@ -36,6 +36,25 @@
  * sequence of logical (sessionIndex, turnIdx) queries, every re-ingest.
  * The seed itself also now reaches this RNG (previously hardcoded 'simulate'
  * with no seed mixed in — a --seed override had zero effect on simulation).
+ *
+ * Equal-content tie-break override (codex confirmation-pass P1 fix,
+ * structural closure): the round-3 fix above (provenance-keyed query
+ * sampling + provenance-keyed store ordering) still left ONE id-dependent
+ * path — hybridSearch's OWN internal ranking falls back to `entry.id`
+ * whenever two candidates have IDENTICAL content (src/compare.ts
+ * compareEntryIdentity: content primary, id secondary). This is not a rare
+ * edge case: codex measured 267/500 real questions contain duplicate turn
+ * text, and reproduced a real membership divergence (re-ingesting
+ * gpt4_6dc9b45b twice at seed 42 changed top-K in rounds 4 and 28). Fixing
+ * hybridSearch itself is out of scope (src/, off-limits) and wrong anyway —
+ * production's id-based tie-break is intentional there. Fix, at the single
+ * point this file consumes hybridSearch's output (the `results` array,
+ * BEFORE the `.slice(0, topK)` that decides membership): stable re-sort the
+ * FULL result list by (score DESC, sessionIndex ASC, turnIdx ASC) via the
+ * provenance map. This overrides ANY upstream tie order — id-based or
+ * otherwise — with a provenance-based one before selection ever happens, so
+ * no production tie-break, now or in any future hybridSearch change, can
+ * reach this harness's top-K membership. See `stableReorderByProvenance`.
  */
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -57,6 +76,32 @@ function loadSortedByProvenance(hippoRoot, provenanceByMemoryId) {
     const pb = provenanceByMemoryId.get(b.id);
     if (!pa || !pb) {
       throw new Error(`loadSortedByProvenance: entry ${!pa ? a.id : b.id} missing from provenance map (drift)`);
+    }
+    return pa.sessionIndex - pb.sessionIndex || pa.turnIdx - pb.turnIdx;
+  });
+}
+
+/**
+ * THE single point every hybridSearch result list is consumed in this file
+ * MUST route through this before any `.slice(0, topK)` — see the file
+ * header's "Equal-content tie-break override" note. Stable re-sort by
+ * (score DESC, sessionIndex ASC, turnIdx ASC) via the provenance map, so
+ * top-K membership is decided by a provenance-based order, never by
+ * whatever tie-break hybridSearch's own internal sort applied (content
+ * primary, `entry.id` secondary — id is crypto-random per ingest).
+ * memory_id is intentionally NOT a fallback key here (unlike evaluate.mjs's
+ * keep-budget sort): every entry in a store has a UNIQUE (sessionIndex,
+ * turnIdx), so this comparator is already a total order — a residual tie
+ * would mean two DIFFERENT memory_ids map to the SAME provenance key, i.e.
+ * provenance corruption, which the missing-entry throw below already guards.
+ */
+function stableReorderByProvenance(results, provenanceByMemoryId) {
+  return results.slice().sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    const pa = provenanceByMemoryId.get(a.entry.id);
+    const pb = provenanceByMemoryId.get(b.entry.id);
+    if (!pa || !pb) {
+      throw new Error(`stableReorderByProvenance: result ${!pa ? a.entry.id : b.entry.id} missing from provenance map (drift)`);
     }
     return pa.sessionIndex - pb.sessionIndex || pa.turnIdx - pb.turnIdx;
   });
@@ -116,7 +161,11 @@ export async function simulateQuestion(questionId, questionDateIso, opts = {}) {
         minResults: topK,
         preparedCorpus: corpus,
       });
-      const topEntries = results.slice(0, topK).map((x) => x.entry);
+      // Structural tie-break override — see stableReorderByProvenance doc
+      // comment and the file header's "Equal-content tie-break override"
+      // note. MUST happen before top-K selection, not after.
+      const stableResults = stableReorderByProvenance(results, provenanceByMemoryId);
+      const topEntries = stableResults.slice(0, topK).map((x) => x.entry);
       const updated = markRetrieved(topEntries); // now = evalNow() (fake, question_date)
       for (const u of updated) writeEntry(hippoRoot, u);
 
@@ -134,6 +183,13 @@ export async function simulateQuestion(questionId, questionDateIso, opts = {}) {
           queryFromMemoryId: queryEntry.id,
           queryLength: query.length,
           topKIds: updated.map((u) => u.id),
+          // Provenance form of topKIds — memory_id is random per ingest, so
+          // cross-ingest membership comparisons must join on THIS, not
+          // topKIds directly.
+          topKProvenance: updated.map((u) => {
+            const p = provenanceByMemoryId.get(u.id);
+            return `${p.sessionIndex}:${p.turnIdx}`;
+          }),
           good,
         });
       }
