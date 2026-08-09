@@ -28,6 +28,20 @@
  * Scratch-cleanup safety: the clean-slate wipe below goes through
  * safeRemoveScratchDir (common.mjs), which sanitizes question_id for path
  * use and refuses to delete anything outside the resolved scratch root.
+ *
+ * Causal clock clamp (codex review fix round #2, 2026-08-09 P1 fix): 76/500
+ * real questions have at least one haystack session dated AFTER
+ * question_date. Naively running simulate.mjs/extract.mjs at
+ * HIPPO_FAKE_NOW = question_date would then compute NEGATIVE age_days for
+ * memories whose `created` is later than "now" (codex measured 15,162 such
+ * rows across the dataset, age down to -0.99 days) — a causality violation:
+ * a memory ostensibly created after the eval instant it's being scored at.
+ * Fix: `T_eval = max(question_date, latest haystack_date)`, computed ONCE
+ * here and written to meta.json as `tEval`; simulate.mjs and extract.mjs's
+ * callers both read `meta.tEval` (never `meta.questionDate`) as their
+ * HIPPO_FAKE_NOW, so age_days >= 0 by construction for all 500 questions.
+ * Canonical ISO strings byte-compare chronologically (see MemoryEntry
+ * timestamp invariant, src/memory.ts) so plain string `>` finds the max.
  */
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -63,6 +77,10 @@ export function ingestQuestion(question) {
   const questionDateIso = parseLmeDate(question.question_date);
 
   const sessionDateIso = question.haystack_dates.map(parseLmeDate);
+  // Causal clock clamp (see file header): T_eval = max(question_date, every
+  // haystack_date). Canonical ISO strings byte-compare chronologically, so
+  // this reduce (seeded with question_date) already IS the max.
+  const tEvalIso = sessionDateIso.reduce((a, b) => (b > a ? b : a), questionDateIso);
   const goldRecords = [];
   let skippedEmpty = 0;
 
@@ -126,6 +144,12 @@ export function ingestQuestion(question) {
     questionId: question.question_id,
     questionType: question.question_type,
     questionDate: questionDateIso,
+    // Causal clock clamp (see file header): simulate.mjs and extract.mjs's
+    // callers read THIS field (never questionDate directly) as their
+    // HIPPO_FAKE_NOW. Equals questionDate whenever every haystack session
+    // predates the question (the common case); clamps forward to the
+    // latest haystack_date for the 76/500 questions where it doesn't.
+    tEval: tEvalIso,
     goldMode: mode,
     goldCount,
     memoryCount: goldRecords.length,

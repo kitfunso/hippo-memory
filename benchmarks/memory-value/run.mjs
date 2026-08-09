@@ -15,13 +15,18 @@
  *                      generateSmokeFixture), no --data needed. <60s.
  * --questions N        Seeded stratified-by-type subset of N questions
  *                      instead of the full dataset.
- * --budget B           Report emphasis only — evaluate.mjs always scores
- *                      every CONFIG.KEEP_BUDGETS value; B just becomes the
- *                      headline number in the printed summary. Default
- *                      CONFIG.PRIMARY_BUDGET (0.3).
+ * --budget B           Report emphasis only — NEVER changes which budget
+ *                      drives pairedRecords/the E2 bootstrap input (always
+ *                      CONFIG.PRIMARY_BUDGET, 0.3, per the pre-reg). B is
+ *                      appended to the evaluated budgets list as a
+ *                      DESCRIPTIVE-only budget if it isn't already one of
+ *                      CONFIG.KEEP_BUDGETS, and becomes the headline number
+ *                      the printed summary reads. Default CONFIG.PRIMARY_BUDGET (0.3).
  * --skip-simulate      Ablation: extract features WITHOUT the usage
  *                      simulation (retrieval_count/outcome_* stay at their
- *                      ingest-time defaults).
+ *                      ingest-time defaults). Lowers the variance-gate
+ *                      threshold to CONFIG.MIN_VARYING_FEATURES_SKIP_SIMULATE
+ *                      (usage-derived dims are constant by design in this mode).
  * --keep-stores        Do not delete scratch stores after extraction
  *                      (default: cleaned up once features.jsonl exists).
  * --weights <file>     Forwarded to evaluate.mjs's --weights hook (E2).
@@ -107,13 +112,29 @@ async function main() {
   const splitById = new Map();
   for (const id of splitResult.train) splitById.set(id, 'train');
   for (const id of splitResult.heldout) splitById.set(id, 'heldout');
-  // Persist split.json so a later standalone `evaluate.mjs --weights <file>`
-  // (E2's re-scoring path, no re-ingest/simulate/extract needed) has a
-  // split to read by default, not just `split.mjs` run in isolation.
-  writeJson(path.join(RESULTS_DIR, 'split.json'), { ...splitResult, generatedAt: new Date().toISOString(), source: dataLabel });
 
   const targetIds = questionsN !== null ? selectSubset(questions, questionsN, seed) : questions.map((q) => q.question_id);
   const byId = new Map(questions.map((q) => [q.question_id, q]));
+
+  // Persist split.json so a later standalone `evaluate.mjs --weights <file>`
+  // (E2's re-scoring path, no re-ingest/simulate/extract needed) has a
+  // split to read by default, not just `split.mjs` run in isolation.
+  // Filtered to the PROCESSED ids only (codex review fix round, 2026-08-09
+  // P2 fix): a --questions N (or any other subsetting) run must never write
+  // a split.json listing ids that were never ingested/extracted this run —
+  // a standalone rescoring pass reading the full split would then crash or
+  // silently mix in stale features.jsonl from an unrelated earlier run.
+  // The FULL split's counts still land in results.split (below) for
+  // reference; only THIS file is subset-filtered.
+  const targetIdSet = new Set(targetIds);
+  writeJson(path.join(RESULTS_DIR, 'split.json'), {
+    ...splitResult,
+    train: splitResult.train.filter((id) => targetIdSet.has(id)),
+    heldout: splitResult.heldout.filter((id) => targetIdSet.has(id)),
+    subsetOf: { totalQuestions: splitResult.totalQuestions, fullTrainCount: splitResult.train.length, fullHeldoutCount: splitResult.heldout.length },
+    generatedAt: new Date().toISOString(),
+    source: dataLabel,
+  });
 
   console.log(
     `[run] ${smoke ? 'SMOKE' : 'REAL'} data=${dataLabel} questions=${targetIds.length}/${questions.length} ` +
@@ -138,14 +159,15 @@ async function main() {
     if (!skipSimulate) {
       t0 = Date.now();
       const meta = readJson(path.join(questionDir(questionId), 'meta.json'));
-      await simulateQuestion(questionId, meta.questionDate, { seed });
+      // Causal clock clamp: tEval (not questionDate) — see ingest.mjs header.
+      await simulateQuestion(questionId, meta.tEval, { seed });
       per.simulateMs = Date.now() - t0;
       timings.simulateMs += per.simulateMs;
     }
 
     t0 = Date.now();
     const meta = readJson(path.join(questionDir(questionId), 'meta.json'));
-    extractQuestion(questionId, meta.questionDate);
+    extractQuestion(questionId, meta.tEval);
     per.extractMs = Date.now() - t0;
     timings.extractMs += per.extractMs;
 
@@ -157,9 +179,26 @@ async function main() {
   // so cleanup MUST happen after evaluation, not right after extraction.
   const evalT0 = Date.now();
   const weights = weightsPath ? readJson(weightsPath) : undefined;
+  // --budget contract (codex review fix round #2, 2026-08-09 P2 fix):
+  // primaryBudget is ALWAYS CONFIG.PRIMARY_BUDGET (0.3, pre-registered) —
+  // pairedRecords (the E2 bootstrap input) must stay pinned there regardless
+  // of what --budget the user passes for report emphasis. A previous fix
+  // forwarded budgetHeadline as primaryBudget, which is wrong per the
+  // pre-reg. --budget only controls which cell the HEADLINE print reads; it
+  // is appended to the evaluated budgets list as a DESCRIPTIVE budget (no
+  // bars) if not already one of CONFIG.KEEP_BUDGETS, so that cell always
+  // exists (no `undefined` in the headline print).
+  const budgetsForEval = CONFIG.KEEP_BUDGETS.includes(budgetHeadline)
+    ? CONFIG.KEEP_BUDGETS
+    : [...CONFIG.KEEP_BUDGETS, budgetHeadline].sort((a, b) => a - b);
+  // --skip-simulate variance-gate exemption (P2 fix): usage-derived dims
+  // (retrieval_count, outcome_*, half_life_days) are constant BY DESIGN
+  // without simulation — see config.mjs's MIN_VARYING_FEATURES_SKIP_SIMULATE
+  // comment for exactly which 3 dims naturally survive.
+  const minVarying = skipSimulate ? CONFIG.MIN_VARYING_FEATURES_SKIP_SIMULATE : CONFIG.MIN_VARYING_FEATURES;
   const evaluation = evaluateAll(
     processed.map(({ questionId, split }) => ({ questionId, split })),
-    { weights, primaryBudget: budgetHeadline },
+    { weights, primaryBudget: CONFIG.PRIMARY_BUDGET, budgets: budgetsForEval, minVarying },
   );
   const evaluateMs = Date.now() - evalT0;
   const totalMs = Date.now() - overallT0;
@@ -215,15 +254,26 @@ async function main() {
   console.log(`[run] gold modes: ${JSON.stringify(goldModeCounts)}`);
 
   // Runtime variance gate (code-review-critic fix round, 2026-08-09): a real
-  // (non-smoke) run where fewer than 6 features vary dataset-wide means the
-  // substrate degenerated (e.g. an ingest regression froze every lifecycle
-  // field) — fail loudly instead of silently shipping a uniform/best-single
-  // comparison built on dead dims. Results are written FIRST so the failure
-  // is debuggable. Exempt for --smoke: a 12-question synthetic fixture can
-  // legitimately have thinner variance than the acceptance bar cares about.
+  // (non-smoke) run where fewer than MIN_VARYING_FEATURES features vary
+  // dataset-wide means the substrate degenerated (e.g. an ingest regression
+  // froze every lifecycle field) — fail loudly instead of silently shipping
+  // a uniform/best-single comparison built on dead dims. Results are written
+  // FIRST so the failure is debuggable. Exempt for --smoke: a 12-question
+  // synthetic fixture can legitimately have thinner variance than the
+  // acceptance bar cares about. Liveness is WITHIN-STORE (fix round #2, P2
+  // fix): a feature constant in every store individually but differing
+  // across stores pools as "varying" yet is provably inert for every
+  // per-store-normalized scorer — see computeDatasetVariance (evaluate.mjs).
   const gate = evaluation.varianceGate;
+  if (skipSimulate) {
+    console.log(
+      `[run] --skip-simulate: variance gate threshold lowered to ${CONFIG.MIN_VARYING_FEATURES_SKIP_SIMULATE} ` +
+        `(usage-derived dims are constant by design without simulation: retrieval_count, outcome_positive, ` +
+        `outcome_negative, outcome_ratio, half_life_days).`,
+    );
+  }
   console.log(
-    `[run] variance gate: ${gate.varyingCount}/${CONFIG.FEATURES.length} features vary dataset-wide (min required: ${gate.minVarying})`,
+    `[run] variance gate: ${gate.varyingCount}/${CONFIG.FEATURES.length} features vary within at least one store (min required: ${gate.minVarying})`,
   );
   console.log(`[run] varying: ${gate.varyingFeatures.join(', ') || '(none)'}`);
   console.log(`[run] dead: ${gate.deadFeatures.join(', ') || '(none)'}`);

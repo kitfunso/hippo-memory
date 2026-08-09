@@ -1,7 +1,7 @@
 {
- "note": "Slimmed committed evidence for LC2-E1 v2 (post codex fix round: stable-provenance sampling + tie-break; full JSON local-only, gitignored). pairedRecords kept ONLY for the E2-bar scorers (uniform, recency, age_days__neg, strength__pos); the full per-scorer set regenerates deterministically with run.mjs seed 42.",
+ "note": "Slimmed committed evidence for LC2-E1 v3 (registered run under prereg amendments 1+2: stable-provenance sampling/tie-break + causal T_eval clock; full JSON local-only, gitignored). pairedRecords kept ONLY for the E2-bar scorers; everything regenerates deterministically with run.mjs seed 42.",
  "meta": {
-  "generatedAt": "2026-08-09T05:30:24.920Z",
+  "generatedAt": "2026-08-09T10:52:43.269Z",
   "mode": "real",
   "dataPath": "C:/Users/skf_s/hippo/benchmarks/longmemeval/data/longmemeval_s_cleaned.json",
   "seed": 42,
@@ -35,6 +35,8 @@
     "uniform": 0.657,
     "bestSingle": 0.518
    },
+   "MIN_VARYING_FEATURES": 6,
+   "MIN_VARYING_FEATURES_SKIP_SIMULATE": 3,
    "FEATURES": [
     "age_days",
     "half_life_days",
@@ -81,11 +83,11 @@
   "heldoutCount": 200
  },
  "timings": {
-  "ingestMs": 2571691,
-  "simulateMs": 2061205,
-  "extractMs": 5718,
-  "evaluateMs": 1884,
-  "totalMs": 4640502
+  "ingestMs": 2644835,
+  "simulateMs": 2136450,
+  "extractMs": 5844,
+  "evaluateMs": 1735,
+  "totalMs": 4788869
  },
  "evaluate": {
   "budgets": [
@@ -169,13 +171,13 @@
       "degenerate": false
      },
      "0.2": {
-      "meanRetention": 0.13850877192982455,
+      "meanRetention": 0.14026315789473684,
       "questionsIncluded": 190,
       "questionsSkippedZeroGold": 10,
       "degenerate": false
      },
      "0.3": {
-      "meanRetention": 0.2398245614035088,
+      "meanRetention": 0.2468421052631579,
       "questionsIncluded": 190,
       "questionsSkippedZeroGold": 10,
       "degenerate": false
@@ -253,7 +255,7 @@
       "degenerate": false
      },
      "0.3": {
-      "meanRetention": 0.24868421052631579,
+      "meanRetention": 0.2513157894736842,
       "questionsIncluded": 190,
       "questionsSkippedZeroGold": 10,
       "degenerate": false
@@ -293,25 +295,25 @@
     },
     "strength__pos": {
      "0.1": {
-      "meanRetention": 0.07149122807017544,
+      "meanRetention": 0.0662280701754386,
       "questionsIncluded": 190,
       "questionsSkippedZeroGold": 10,
       "degenerate": false
      },
      "0.2": {
-      "meanRetention": 0.17491228070175438,
+      "meanRetention": 0.1731578947368421,
       "questionsIncluded": 190,
       "questionsSkippedZeroGold": 10,
       "degenerate": false
      },
      "0.3": {
-      "meanRetention": 0.31719298245614036,
+      "meanRetention": 0.3049122807017544,
       "questionsIncluded": 190,
       "questionsSkippedZeroGold": 10,
       "degenerate": false
      },
      "0.5": {
-      "meanRetention": 0.5669298245614034,
+      "meanRetention": 0.5642982456140351,
       "questionsIncluded": 190,
       "questionsSkippedZeroGold": 10,
       "degenerate": false
@@ -319,25 +321,25 @@
     },
     "strength__neg": {
      "0.1": {
-      "meanRetention": 0.06359649122807016,
+      "meanRetention": 0.0662280701754386,
       "questionsIncluded": 190,
       "questionsSkippedZeroGold": 10,
       "degenerate": false
      },
      "0.2": {
-      "meanRetention": 0.18350877192982454,
+      "meanRetention": 0.1940350877192982,
       "questionsIncluded": 190,
       "questionsSkippedZeroGold": 10,
       "degenerate": false
      },
      "0.3": {
-      "meanRetention": 0.26070175438596493,
+      "meanRetention": 0.27298245614035094,
       "questionsIncluded": 190,
       "questionsSkippedZeroGold": 10,
       "degenerate": false
      },
      "0.5": {
-      "meanRetention": 0.45105263157894737,
+      "meanRetention": 0.4501754385964913,
       "questionsIncluded": 190,
       "questionsSkippedZeroGold": 10,
       "degenerate": false
@@ -357,7 +359,7 @@
       "degenerate": false
      },
      "0.3": {
-      "meanRetention": 0.24868421052631579,
+      "meanRetention": 0.2513157894736842,
       "questionsIncluded": 190,
       "questionsSkippedZeroGold": 10,
       "degenerate": false
@@ -467,7 +469,7 @@
       "degenerate": false
      },
      "0.5": {
-      "meanRetention": 0.4839473684210526,
+      "meanRetention": 0.48657894736842106,
       "questionsIncluded": 190,
       "questionsSkippedZeroGold": 10,
       "degenerate": false
@@ -507,13 +509,13 @@
       "degenerate": false
      },
      "0.2": {
-      "meanRetention": 0.14517543859649124,
+      "meanRetention": 0.14780701754385966,
       "questionsIncluded": 190,
       "questionsSkippedZeroGold": 10,
       "degenerate": false
      },
      "0.3": {
-      "meanRetention": 0.2580701754385965,
+      "meanRetention": 0.2633333333333333,
       "questionsIncluded": 190,
       "questionsSkippedZeroGold": 10,
       "degenerate": false
@@ -1971,7 +1973,7 @@
       "degenerate": false
      },
      "0.5": {
-      "meanRetention": 0.4798154555940023,
+      "meanRetention": 0.4821222606689734,
       "questionsIncluded": 289,
       "questionsSkippedZeroGold": 11,
       "degenerate": false
@@ -2083,25 +2085,25 @@
     },
     "strength__pos": {
      "0.1": {
-      "meanRetention": 0.07566320645905421,
+      "meanRetention": 0.07854671280276816,
       "questionsIncluded": 289,
       "questionsSkippedZeroGold": 11,
       "degenerate": false
      },
      "0.2": {
-      "meanRetention": 0.21188004613610148,
+      "meanRetention": 0.21937716262975773,
       "questionsIncluded": 289,
       "questionsSkippedZeroGold": 11,
       "degenerate": false
      },
      "0.3": {
-      "meanRetention": 0.3415801614763553,
+      "meanRetention": 0.33465974625144174,
       "questionsIncluded": 289,
       "questionsSkippedZeroGold": 11,
       "degenerate": false
      },
      "0.5": {
-      "meanRetention": 0.5497693194925029,
+      "meanRetention": 0.5514994232987313,
       "questionsIncluded": 289,
       "questionsSkippedZeroGold": 11,
       "degenerate": false
@@ -2109,25 +2111,25 @@
     },
     "strength__neg": {
      "0.1": {
-      "meanRetention": 0.09088811995386391,
+      "meanRetention": 0.0914648212226067,
       "questionsIncluded": 289,
       "questionsSkippedZeroGold": 11,
       "degenerate": false
      },
      "0.2": {
-      "meanRetention": 0.20178777393310263,
+      "meanRetention": 0.20236447520184542,
       "questionsIncluded": 289,
       "questionsSkippedZeroGold": 11,
       "degenerate": false
      },
      "0.3": {
-      "meanRetention": 0.27871972318339094,
+      "meanRetention": 0.2833333333333333,
       "questionsIncluded": 289,
       "questionsSkippedZeroGold": 11,
       "degenerate": false
      },
      "0.5": {
-      "meanRetention": 0.46320645905420993,
+      "meanRetention": 0.4637831603229527,
       "questionsIncluded": 289,
       "questionsSkippedZeroGold": 11,
       "degenerate": false
@@ -3823,52 +3825,59 @@
   ],
   "featureVarianceDetail": {
    "age_days": {
-    "min": -0.9868055555555556,
+    "min": 0,
     "max": 311.7090277777778,
-    "mean": 16.511118614598658,
-    "variance": 1118.050968176871,
+    "mean": 16.58036874292413,
+    "variance": 1117.150426626135,
+    "pooledVaries": true,
     "varies": true
    },
    "half_life_days": {
     "min": 7,
     "max": 31,
     "mean": 7.607977221843668,
-    "variance": 1.6764229468837328,
+    "variance": 1.6785969304652895,
+    "pooledVaries": true,
     "varies": true
    },
    "strength": {
     "min": 3.937096891007969e-14,
     "max": 1,
-    "mean": 0.6404769453771871,
-    "variance": 0.12710984526838437,
+    "mean": 0.6374390823693779,
+    "variance": 0.12522007184948358,
+    "pooledVaries": true,
     "varies": true
    },
    "retrieval_count": {
     "min": 0,
     "max": 12,
     "mean": 0.30398861092183393,
-    "variance": 0.41910573672093304,
+    "variance": 0.4196492326163222,
+    "pooledVaries": true,
     "varies": true
    },
    "outcome_positive": {
     "min": 0,
     "max": 10,
     "mean": 0.20271991304065673,
-    "variance": 0.26002164259999894,
+    "variance": 0.26029744648721137,
+    "pooledVaries": true,
     "varies": true
    },
    "outcome_negative": {
     "min": 0,
     "max": 5,
     "mean": 0.10126869788117719,
-    "variance": 0.10775626704022992,
+    "variance": 0.10780493831444388,
+    "pooledVaries": true,
     "varies": true
    },
    "outcome_ratio": {
     "min": -0.8333333333333334,
     "max": 0.875,
-    "mean": 0.04020396208717492,
-    "variance": 0.05442390990102889,
+    "mean": 0.04017354254079122,
+    "variance": 0.05437064211238228,
+    "pooledVaries": true,
     "varies": true
    },
    "schema_fit": {
@@ -3876,6 +3885,7 @@
     "max": 0.5,
     "mean": 0.5,
     "variance": 0,
+    "pooledVaries": false,
     "varies": false
    },
    "pinned": {
@@ -3883,6 +3893,7 @@
     "max": 0,
     "mean": 0,
     "variance": 0,
+    "pooledVaries": false,
     "varies": false
    },
    "starred": {
@@ -3890,6 +3901,7 @@
     "max": 0,
     "mean": 0,
     "variance": 0,
+    "pooledVaries": false,
     "varies": false
    },
    "error_tag": {
@@ -3897,6 +3909,7 @@
     "max": 0,
     "mean": 0,
     "variance": 0,
+    "pooledVaries": false,
     "varies": false
    },
    "tag_count": {
@@ -3904,6 +3917,7 @@
     "max": 0,
     "mean": 0,
     "variance": 0,
+    "pooledVaries": false,
     "varies": false
    },
    "content_length": {
@@ -3911,6 +3925,7 @@
     "max": 76560,
     "mean": 992.2908514228236,
     "variance": 1119090.829419532,
+    "pooledVaries": true,
     "varies": true
    },
    "dag_level": {
@@ -3918,6 +3933,7 @@
     "max": 0,
     "mean": 0,
     "variance": 0,
+    "pooledVaries": false,
     "varies": false
    },
    "valence_neutral": {
@@ -3925,6 +3941,7 @@
     "max": 1,
     "mean": 1,
     "variance": 0,
+    "pooledVaries": false,
     "varies": false
    },
    "valence_positive": {
@@ -3932,6 +3949,7 @@
     "max": 0,
     "mean": 0,
     "variance": 0,
+    "pooledVaries": false,
     "varies": false
    },
    "valence_negative": {
@@ -3939,6 +3957,7 @@
     "max": 0,
     "mean": 0,
     "variance": 0,
+    "pooledVaries": false,
     "varies": false
    },
    "valence_critical": {
@@ -3946,6 +3965,7 @@
     "max": 0,
     "mean": 0,
     "variance": 0,
+    "pooledVaries": false,
     "varies": false
    },
    "layer_buffer": {
@@ -3953,6 +3973,7 @@
     "max": 0,
     "mean": 0,
     "variance": 0,
+    "pooledVaries": false,
     "varies": false
    },
    "layer_episodic": {
@@ -3960,6 +3981,7 @@
     "max": 1,
     "mean": 1,
     "variance": 0,
+    "pooledVaries": false,
     "varies": false
    },
    "layer_semantic": {
@@ -3967,6 +3989,7 @@
     "max": 0,
     "mean": 0,
     "variance": 0,
+    "pooledVaries": false,
     "varies": false
    },
    "layer_trace": {
@@ -3974,6 +3997,7 @@
     "max": 0,
     "mean": 0,
     "variance": 0,
+    "pooledVaries": false,
     "varies": false
    },
    "kind_raw": {
@@ -3981,6 +4005,7 @@
     "max": 1,
     "mean": 1,
     "variance": 0,
+    "pooledVaries": false,
     "varies": false
    },
    "kind_distilled": {
@@ -3988,6 +4013,7 @@
     "max": 0,
     "mean": 0,
     "variance": 0,
+    "pooledVaries": false,
     "varies": false
    },
    "kind_superseded": {
@@ -3995,6 +4021,7 @@
     "max": 0,
     "mean": 0,
     "variance": 0,
+    "pooledVaries": false,
     "varies": false
    },
    "kind_archived": {
@@ -4002,6 +4029,7 @@
     "max": 0,
     "mean": 0,
     "variance": 0,
+    "pooledVaries": false,
     "varies": false
    },
    "confidence_verified": {
@@ -4009,6 +4037,7 @@
     "max": 1,
     "mean": 1,
     "variance": 0,
+    "pooledVaries": false,
     "varies": false
    },
    "confidence_observed": {
@@ -4016,6 +4045,7 @@
     "max": 0,
     "mean": 0,
     "variance": 0,
+    "pooledVaries": false,
     "varies": false
    },
    "confidence_inferred": {
@@ -4023,6 +4053,7 @@
     "max": 0,
     "mean": 0,
     "variance": 0,
+    "pooledVaries": false,
     "varies": false
    },
    "confidence_stale": {
@@ -4030,6 +4061,7 @@
     "max": 0,
     "mean": 0,
     "variance": 0,
+    "pooledVaries": false,
     "varies": false
    }
   },
@@ -25446,8 +25478,8 @@
     "N": 465,
     "keepN": 140,
     "cutoffBoundary": {
-     "lastKeptScore": 0.04959192141966806,
-     "firstDroppedScore": 0.049238075554560695
+     "lastKeptScore": 0.044837741300678816,
+     "firstDroppedScore": 0.044636571272519895
     }
    },
    {
@@ -25461,8 +25493,8 @@
     "N": 465,
     "keepN": 140,
     "cutoffBoundary": {
-     "lastKeptScore": -0.28498542274052485,
-     "firstDroppedScore": -0.3148688046647231
+     "lastKeptScore": -0.2849854227405248,
+     "firstDroppedScore": -0.31486880466472306
     }
    },
    {
@@ -25470,14 +25502,14 @@
     "split": "train",
     "scorer": "strength__pos",
     "budget": 0.3,
-    "retention": 0.5,
+    "retention": 0,
     "goldCount": 2,
-    "keptGold": 1,
+    "keptGold": 0,
     "N": 465,
     "keepN": 140,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9702522595945091,
+     "firstDroppedScore": 0.9702522595945091
     }
    },
    {
@@ -25491,8 +25523,8 @@
     "N": 465,
     "keepN": 140,
     "cutoffBoundary": {
-     "lastKeptScore": -0.28498542274052485,
-     "firstDroppedScore": -0.3148688046647231
+     "lastKeptScore": -0.2849854227405248,
+     "firstDroppedScore": -0.31486880466472306
     }
    },
    {
@@ -25506,8 +25538,8 @@
     "N": 495,
     "keepN": 149,
     "cutoffBoundary": {
-     "lastKeptScore": 0.05385726487732474,
-     "firstDroppedScore": 0.05381254425818457
+     "lastKeptScore": 0.047808689588857485,
+     "firstDroppedScore": 0.047778496775972984
     }
    },
    {
@@ -25521,8 +25553,8 @@
     "N": 495,
     "keepN": 149,
     "cutoffBoundary": {
-     "lastKeptScore": -0.2349926793557833,
-     "firstDroppedScore": -0.2349926793557833
+     "lastKeptScore": -0.23499267935578333,
+     "firstDroppedScore": -0.23499267935578333
     }
    },
    {
@@ -25530,14 +25562,14 @@
     "split": "heldout",
     "scorer": "strength__pos",
     "budget": 0.3,
-    "retention": 0,
+    "retention": 0.5,
     "goldCount": 2,
-    "keptGold": 0,
+    "keptGold": 1,
     "N": 495,
     "keepN": 149,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9144276363945715,
+     "firstDroppedScore": 0.9144276363945715
     }
    },
    {
@@ -25551,8 +25583,8 @@
     "N": 495,
     "keepN": 149,
     "cutoffBoundary": {
-     "lastKeptScore": -0.2349926793557833,
-     "firstDroppedScore": -0.2349926793557833
+     "lastKeptScore": -0.23499267935578333,
+     "firstDroppedScore": -0.23499267935578333
     }
    },
    {
@@ -25566,8 +25598,8 @@
     "N": 478,
     "keepN": 144,
     "cutoffBoundary": {
-     "lastKeptScore": 0.04873678298187926,
-     "firstDroppedScore": 0.04873178211290778
+     "lastKeptScore": 0.03756147776129105,
+     "firstDroppedScore": 0.037417515191559184
     }
    },
    {
@@ -25590,14 +25622,14 @@
     "split": "train",
     "scorer": "strength__pos",
     "budget": 0.3,
-    "retention": 0.5,
+    "retention": 1,
     "goldCount": 2,
-    "keptGold": 1,
+    "keptGold": 2,
     "N": 478,
     "keepN": 144,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9992420330757276,
+     "firstDroppedScore": 0.9992420330757276
     }
    },
    {
@@ -25626,8 +25658,8 @@
     "N": 466,
     "keepN": 140,
     "cutoffBoundary": {
-     "lastKeptScore": 0.04766454812294023,
-     "firstDroppedScore": 0.04762769886183145
+     "lastKeptScore": 0.04252584453924369,
+     "firstDroppedScore": 0.04140399553403202
     }
    },
    {
@@ -25641,8 +25673,8 @@
     "N": 466,
     "keepN": 140,
     "cutoffBoundary": {
-     "lastKeptScore": -0.3533145275035261,
-     "firstDroppedScore": -0.3533145275035261
+     "lastKeptScore": -0.35331452750352604,
+     "firstDroppedScore": -0.35331452750352604
     }
    },
    {
@@ -25656,8 +25688,8 @@
     "N": 466,
     "keepN": 140,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9741255636580006,
+     "firstDroppedScore": 0.9741255636580006
     }
    },
    {
@@ -25671,8 +25703,8 @@
     "N": 466,
     "keepN": 140,
     "cutoffBoundary": {
-     "lastKeptScore": -0.3533145275035261,
-     "firstDroppedScore": -0.3533145275035261
+     "lastKeptScore": -0.35331452750352604,
+     "firstDroppedScore": -0.35331452750352604
     }
    },
    {
@@ -25686,8 +25718,8 @@
     "N": 463,
     "keepN": 139,
     "cutoffBoundary": {
-     "lastKeptScore": 0.050627243527409306,
-     "firstDroppedScore": 0.05057218470663184
+     "lastKeptScore": 0.039356515113549415,
+     "firstDroppedScore": 0.039256871270147146
     }
    },
    {
@@ -25701,8 +25733,8 @@
     "N": 463,
     "keepN": 139,
     "cutoffBoundary": {
-     "lastKeptScore": -0.41267501842299187,
-     "firstDroppedScore": -0.41267501842299187
+     "lastKeptScore": -0.4126750184229919,
+     "firstDroppedScore": -0.4126750184229919
     }
    },
    {
@@ -25716,8 +25748,8 @@
     "N": 463,
     "keepN": 139,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9108230932096432,
+     "firstDroppedScore": 0.9108230932096432
     }
    },
    {
@@ -25731,8 +25763,8 @@
     "N": 463,
     "keepN": 139,
     "cutoffBoundary": {
-     "lastKeptScore": -0.41267501842299187,
-     "firstDroppedScore": -0.41267501842299187
+     "lastKeptScore": -0.4126750184229919,
+     "firstDroppedScore": -0.4126750184229919
     }
    },
    {
@@ -25746,8 +25778,8 @@
     "N": 480,
     "keepN": 144,
     "cutoffBoundary": {
-     "lastKeptScore": 0.04555001072014269,
-     "firstDroppedScore": 0.0451114985108151
+     "lastKeptScore": 0.042954652290685784,
+     "firstDroppedScore": 0.04281897681508296
     }
    },
    {
@@ -25776,8 +25808,8 @@
     "N": 480,
     "keepN": 144,
     "cutoffBoundary": {
-     "lastKeptScore": 0.9642082438303681,
-     "firstDroppedScore": 0.9642082438303681
+     "lastKeptScore": 0.8863474909466609,
+     "firstDroppedScore": 0.8863474909466609
     }
    },
    {
@@ -25806,8 +25838,8 @@
     "N": 524,
     "keepN": 158,
     "cutoffBoundary": {
-     "lastKeptScore": 0.05122703548989364,
-     "firstDroppedScore": 0.051141082657916594
+     "lastKeptScore": 0.04629393050037891,
+     "firstDroppedScore": 0.04620009041924253
     }
    },
    {
@@ -25836,8 +25868,8 @@
     "N": 524,
     "keepN": 158,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.8947272415922652,
+     "firstDroppedScore": 0.8947272415922652
     }
    },
    {
@@ -25866,8 +25898,8 @@
     "N": 492,
     "keepN": 148,
     "cutoffBoundary": {
-     "lastKeptScore": 0.0469171439768491,
-     "firstDroppedScore": 0.04691073079951559
+     "lastKeptScore": 0.041221765589679556,
+     "firstDroppedScore": 0.04117590936675189
     }
    },
    {
@@ -25881,8 +25913,8 @@
     "N": 492,
     "keepN": 148,
     "cutoffBoundary": {
-     "lastKeptScore": -0.2733711048158641,
-     "firstDroppedScore": -0.2733711048158641
+     "lastKeptScore": -0.273371104815864,
+     "firstDroppedScore": -0.273371104815864
     }
    },
    {
@@ -25890,14 +25922,14 @@
     "split": "heldout",
     "scorer": "strength__pos",
     "budget": 0.3,
-    "retention": 0.5,
+    "retention": 0,
     "goldCount": 2,
-    "keptGold": 1,
+    "keptGold": 0,
     "N": 492,
     "keepN": 148,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9732795466213091,
+     "firstDroppedScore": 0.9732795466213091
     }
    },
    {
@@ -25911,8 +25943,8 @@
     "N": 492,
     "keepN": 148,
     "cutoffBoundary": {
-     "lastKeptScore": -0.2733711048158641,
-     "firstDroppedScore": -0.2733711048158641
+     "lastKeptScore": -0.273371104815864,
+     "firstDroppedScore": -0.273371104815864
     }
    },
    {
@@ -25926,8 +25958,8 @@
     "N": 479,
     "keepN": 144,
     "cutoffBoundary": {
-     "lastKeptScore": 0.05039213927145068,
-     "firstDroppedScore": 0.050362640625296246
+     "lastKeptScore": 0.04560820967651935,
+     "firstDroppedScore": 0.04516070623742243
     }
    },
    {
@@ -25941,8 +25973,8 @@
     "N": 479,
     "keepN": 144,
     "cutoffBoundary": {
-     "lastKeptScore": -0.3338078291814946,
-     "firstDroppedScore": -0.3338078291814946
+     "lastKeptScore": -0.33380782918149465,
+     "firstDroppedScore": -0.33380782918149465
     }
    },
    {
@@ -25950,14 +25982,14 @@
     "split": "train",
     "scorer": "strength__pos",
     "budget": 0.3,
-    "retention": 0.5,
+    "retention": 1,
     "goldCount": 2,
-    "keptGold": 1,
+    "keptGold": 2,
     "N": 479,
     "keepN": 144,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9322643060053486,
+     "firstDroppedScore": 0.9322643060053486
     }
    },
    {
@@ -25971,8 +26003,8 @@
     "N": 479,
     "keepN": 144,
     "cutoffBoundary": {
-     "lastKeptScore": -0.3338078291814946,
-     "firstDroppedScore": -0.3338078291814946
+     "lastKeptScore": -0.33380782918149465,
+     "firstDroppedScore": -0.33380782918149465
     }
    },
    {
@@ -25986,8 +26018,8 @@
     "N": 487,
     "keepN": 147,
     "cutoffBoundary": {
-     "lastKeptScore": 0.0536217618623258,
-     "firstDroppedScore": 0.053406430251645355
+     "lastKeptScore": 0.05187060260840089,
+     "firstDroppedScore": 0.05177259795150589
     }
    },
    {
@@ -26016,8 +26048,8 @@
     "N": 487,
     "keepN": 147,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9612588801724679,
+     "firstDroppedScore": 0.9612588801724679
     }
    },
    {
@@ -26046,8 +26078,8 @@
     "N": 546,
     "keepN": 164,
     "cutoffBoundary": {
-     "lastKeptScore": 0.042542051591103094,
-     "firstDroppedScore": 0.04248993969150694
+     "lastKeptScore": 0.03782283101701758,
+     "firstDroppedScore": 0.037814786288326054
     }
    },
    {
@@ -26076,8 +26108,8 @@
     "N": 546,
     "keepN": 164,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.8505487575660334,
+     "firstDroppedScore": 0.8505487575660334
     }
    },
    {
@@ -26106,8 +26138,8 @@
     "N": 497,
     "keepN": 150,
     "cutoffBoundary": {
-     "lastKeptScore": 0.05000360984766443,
-     "firstDroppedScore": 0.05000360984766443
+     "lastKeptScore": 0.04630058707939263,
+     "firstDroppedScore": 0.04612387553923459
     }
    },
    {
@@ -26121,8 +26153,8 @@
     "N": 497,
     "keepN": 150,
     "cutoffBoundary": {
-     "lastKeptScore": -0.23275862068965514,
-     "firstDroppedScore": -0.23275862068965514
+     "lastKeptScore": -0.23275862068965517,
+     "firstDroppedScore": -0.23275862068965517
     }
    },
    {
@@ -26136,8 +26168,8 @@
     "N": 497,
     "keepN": 150,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9774236487441547,
+     "firstDroppedScore": 0.9774236487441547
     }
    },
    {
@@ -26151,8 +26183,8 @@
     "N": 497,
     "keepN": 150,
     "cutoffBoundary": {
-     "lastKeptScore": -0.23275862068965514,
-     "firstDroppedScore": -0.23275862068965514
+     "lastKeptScore": -0.23275862068965517,
+     "firstDroppedScore": -0.23275862068965517
     }
    },
    {
@@ -26166,8 +26198,8 @@
     "N": 499,
     "keepN": 150,
     "cutoffBoundary": {
-     "lastKeptScore": 0.05093720013558896,
-     "firstDroppedScore": 0.05047725959166601
+     "lastKeptScore": 0.050015931217017216,
+     "firstDroppedScore": 0.04975617248542773
     }
    },
    {
@@ -26196,8 +26228,8 @@
     "N": 499,
     "keepN": 150,
     "cutoffBoundary": {
-     "lastKeptScore": 0.9791938747337859,
-     "firstDroppedScore": 0.9791938747337859
+     "lastKeptScore": 0.9149881021550712,
+     "firstDroppedScore": 0.9149881021550712
     }
    },
    {
@@ -26226,8 +26258,8 @@
     "N": 489,
     "keepN": 147,
     "cutoffBoundary": {
-     "lastKeptScore": 0.05625438788901175,
-     "firstDroppedScore": 0.05623708884622546
+     "lastKeptScore": 0.050055333867909634,
+     "firstDroppedScore": 0.05002226329603709
     }
    },
    {
@@ -26241,8 +26273,8 @@
     "N": 489,
     "keepN": 147,
     "cutoffBoundary": {
-     "lastKeptScore": -0.25797101449275367,
-     "firstDroppedScore": -0.25797101449275367
+     "lastKeptScore": -0.2579710144927536,
+     "firstDroppedScore": -0.2579710144927536
     }
    },
    {
@@ -26250,14 +26282,14 @@
     "split": "heldout",
     "scorer": "strength__pos",
     "budget": 0.3,
-    "retention": 0.5,
+    "retention": 0,
     "goldCount": 2,
-    "keptGold": 1,
+    "keptGold": 0,
     "N": 489,
     "keepN": 147,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9295859698623014,
+     "firstDroppedScore": 0.9295859698623014
     }
    },
    {
@@ -26271,8 +26303,8 @@
     "N": 489,
     "keepN": 147,
     "cutoffBoundary": {
-     "lastKeptScore": -0.25797101449275367,
-     "firstDroppedScore": -0.25797101449275367
+     "lastKeptScore": -0.2579710144927536,
+     "firstDroppedScore": -0.2579710144927536
     }
    },
    {
@@ -26286,8 +26318,8 @@
     "N": 467,
     "keepN": 141,
     "cutoffBoundary": {
-     "lastKeptScore": 0.046205937934373484,
-     "firstDroppedScore": 0.04617983707193284
+     "lastKeptScore": 0.040680018542407916,
+     "firstDroppedScore": 0.03995399119873881
     }
    },
    {
@@ -26316,8 +26348,8 @@
     "N": 467,
     "keepN": 141,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.932883398997091,
+     "firstDroppedScore": 0.932883398997091
     }
    },
    {
@@ -26346,8 +26378,8 @@
     "N": 484,
     "keepN": 146,
     "cutoffBoundary": {
-     "lastKeptScore": 0.04491688622451599,
-     "firstDroppedScore": 0.04472659603197237
+     "lastKeptScore": 0.03821963603346412,
+     "firstDroppedScore": 0.036487404938768155
     }
    },
    {
@@ -26361,8 +26393,8 @@
     "N": 484,
     "keepN": 146,
     "cutoffBoundary": {
-     "lastKeptScore": -0.35881104033970274,
-     "firstDroppedScore": -0.35881104033970274
+     "lastKeptScore": -0.3588110403397028,
+     "firstDroppedScore": -0.3588110403397028
     }
    },
    {
@@ -26370,14 +26402,14 @@
     "split": "train",
     "scorer": "strength__pos",
     "budget": 0.3,
-    "retention": 0.16666666666666666,
+    "retention": 0.5,
     "goldCount": 6,
-    "keptGold": 1,
+    "keptGold": 3,
     "N": 484,
     "keepN": 146,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.946661128530906,
+     "firstDroppedScore": 0.946661128530906
     }
    },
    {
@@ -26391,8 +26423,8 @@
     "N": 484,
     "keepN": 146,
     "cutoffBoundary": {
-     "lastKeptScore": -0.35881104033970274,
-     "firstDroppedScore": -0.35881104033970274
+     "lastKeptScore": -0.3588110403397028,
+     "firstDroppedScore": -0.3588110403397028
     }
    },
    {
@@ -26406,8 +26438,8 @@
     "N": 444,
     "keepN": 134,
     "cutoffBoundary": {
-     "lastKeptScore": 0.04721525621456181,
-     "firstDroppedScore": 0.047202799772109914
+     "lastKeptScore": 0.04347036583192024,
+     "firstDroppedScore": 0.043325647409981675
     }
    },
    {
@@ -26436,8 +26468,8 @@
     "N": 444,
     "keepN": 134,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9152625460625192,
+     "firstDroppedScore": 0.9152625460625192
     }
    },
    {
@@ -26466,8 +26498,8 @@
     "N": 482,
     "keepN": 145,
     "cutoffBoundary": {
-     "lastKeptScore": 0.027903266606221742,
-     "firstDroppedScore": 0.02785322966180277
+     "lastKeptScore": 0.02713922201812583,
+     "firstDroppedScore": 0.02642574669408945
     }
    },
    {
@@ -26481,8 +26513,8 @@
     "N": 482,
     "keepN": 145,
     "cutoffBoundary": {
-     "lastKeptScore": -0.4169014084507042,
-     "firstDroppedScore": -0.4169014084507042
+     "lastKeptScore": -0.41690140845070417,
+     "firstDroppedScore": -0.41690140845070417
     }
    },
    {
@@ -26496,8 +26528,8 @@
     "N": 482,
     "keepN": 145,
     "cutoffBoundary": {
-     "lastKeptScore": 0.9024932053264141,
-     "firstDroppedScore": 0.8706930814667481
+     "lastKeptScore": 0.8466188951861994,
+     "firstDroppedScore": 0.8167875506730662
     }
    },
    {
@@ -26511,8 +26543,8 @@
     "N": 482,
     "keepN": 145,
     "cutoffBoundary": {
-     "lastKeptScore": -0.4169014084507042,
-     "firstDroppedScore": -0.4169014084507042
+     "lastKeptScore": -0.41690140845070417,
+     "firstDroppedScore": -0.41690140845070417
     }
    },
    {
@@ -26526,8 +26558,8 @@
     "N": 452,
     "keepN": 136,
     "cutoffBoundary": {
-     "lastKeptScore": 0.05072589928741997,
-     "firstDroppedScore": 0.05062077232639781
+     "lastKeptScore": 0.04765258098370737,
+     "firstDroppedScore": 0.04762377859633802
     }
    },
    {
@@ -26541,8 +26573,8 @@
     "N": 452,
     "keepN": 136,
     "cutoffBoundary": {
-     "lastKeptScore": -0.302738712065137,
-     "firstDroppedScore": -0.3205033308660251
+     "lastKeptScore": -0.3027387120651369,
+     "firstDroppedScore": -0.32050333086602517
     }
    },
    {
@@ -26556,8 +26588,8 @@
     "N": 452,
     "keepN": 136,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9466442948095282,
+     "firstDroppedScore": 0.9466442948095282
     }
    },
    {
@@ -26571,8 +26603,8 @@
     "N": 452,
     "keepN": 136,
     "cutoffBoundary": {
-     "lastKeptScore": -0.302738712065137,
-     "firstDroppedScore": -0.3205033308660251
+     "lastKeptScore": -0.3027387120651369,
+     "firstDroppedScore": -0.32050333086602517
     }
    },
    {
@@ -26586,8 +26618,8 @@
     "N": 473,
     "keepN": 142,
     "cutoffBoundary": {
-     "lastKeptScore": 0.04968895179867018,
-     "firstDroppedScore": 0.049655874811983663
+     "lastKeptScore": 0.04305364006418309,
+     "firstDroppedScore": 0.04297827334342055
     }
    },
    {
@@ -26610,14 +26642,14 @@
     "split": "train",
     "scorer": "strength__pos",
     "budget": 0.3,
-    "retention": 0.5,
+    "retention": 0,
     "goldCount": 2,
-    "keptGold": 1,
+    "keptGold": 0,
     "N": 473,
     "keepN": 142,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9006454649464946,
+     "firstDroppedScore": 0.9006454649464946
     }
    },
    {
@@ -26646,8 +26678,8 @@
     "N": 492,
     "keepN": 148,
     "cutoffBoundary": {
-     "lastKeptScore": 0.05145162575461832,
-     "firstDroppedScore": 0.05138752425016151
+     "lastKeptScore": 0.04391061305845189,
+     "firstDroppedScore": 0.04389130494961446
     }
    },
    {
@@ -26661,8 +26693,8 @@
     "N": 492,
     "keepN": 148,
     "cutoffBoundary": {
-     "lastKeptScore": -0.3799860041987404,
-     "firstDroppedScore": -0.43596920923722887
+     "lastKeptScore": -0.37998600419874035,
+     "firstDroppedScore": -0.4359692092372288
     }
    },
    {
@@ -26670,14 +26702,14 @@
     "split": "heldout",
     "scorer": "strength__pos",
     "budget": 0.3,
-    "retention": 1,
+    "retention": 0,
     "goldCount": 2,
-    "keptGold": 2,
+    "keptGold": 0,
     "N": 492,
     "keepN": 148,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9355385217998001,
+     "firstDroppedScore": 0.9355385217998001
     }
    },
    {
@@ -26691,8 +26723,8 @@
     "N": 492,
     "keepN": 148,
     "cutoffBoundary": {
-     "lastKeptScore": -0.3799860041987404,
-     "firstDroppedScore": -0.43596920923722887
+     "lastKeptScore": -0.37998600419874035,
+     "firstDroppedScore": -0.4359692092372288
     }
    },
    {
@@ -26700,14 +26732,14 @@
     "split": "heldout",
     "scorer": "uniform",
     "budget": 0.3,
-    "retention": 0,
+    "retention": 0.5,
     "goldCount": 2,
-    "keptGold": 0,
+    "keptGold": 1,
     "N": 459,
     "keepN": 138,
     "cutoffBoundary": {
-     "lastKeptScore": 0.05231859795333316,
-     "firstDroppedScore": 0.05228488253410371
+     "lastKeptScore": 0.045221679012383005,
+     "firstDroppedScore": 0.04417229629633362
     }
    },
    {
@@ -26721,8 +26753,8 @@
     "N": 459,
     "keepN": 138,
     "cutoffBoundary": {
-     "lastKeptScore": -0.37526959022286116,
-     "firstDroppedScore": -0.37526959022286116
+     "lastKeptScore": -0.3752695902228612,
+     "firstDroppedScore": -0.3752695902228612
     }
    },
    {
@@ -26736,8 +26768,8 @@
     "N": 459,
     "keepN": 138,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9271210804429331,
+     "firstDroppedScore": 0.9271210804429331
     }
    },
    {
@@ -26751,8 +26783,8 @@
     "N": 459,
     "keepN": 138,
     "cutoffBoundary": {
-     "lastKeptScore": -0.37526959022286116,
-     "firstDroppedScore": -0.37526959022286116
+     "lastKeptScore": -0.3752695902228612,
+     "firstDroppedScore": -0.3752695902228612
     }
    },
    {
@@ -26766,8 +26798,8 @@
     "N": 459,
     "keepN": 138,
     "cutoffBoundary": {
-     "lastKeptScore": 0.04378092393979012,
-     "firstDroppedScore": 0.04371943149636413
+     "lastKeptScore": 0.0395147413411356,
+     "firstDroppedScore": 0.039497080628651995
     }
    },
    {
@@ -26781,8 +26813,8 @@
     "N": 459,
     "keepN": 138,
     "cutoffBoundary": {
-     "lastKeptScore": -0.16961130742049468,
-     "firstDroppedScore": -0.16961130742049468
+     "lastKeptScore": -0.1696113074204947,
+     "firstDroppedScore": -0.1696113074204947
     }
    },
    {
@@ -26796,8 +26828,8 @@
     "N": 459,
     "keepN": 138,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9216705418756249,
+     "firstDroppedScore": 0.9216705418756249
     }
    },
    {
@@ -26811,8 +26843,8 @@
     "N": 459,
     "keepN": 138,
     "cutoffBoundary": {
-     "lastKeptScore": -0.16961130742049468,
-     "firstDroppedScore": -0.16961130742049468
+     "lastKeptScore": -0.1696113074204947,
+     "firstDroppedScore": -0.1696113074204947
     }
    },
    {
@@ -26826,8 +26858,8 @@
     "N": 531,
     "keepN": 160,
     "cutoffBoundary": {
-     "lastKeptScore": 0.04469526938999692,
-     "firstDroppedScore": 0.04460953756868684
+     "lastKeptScore": 0.037756156514522916,
+     "firstDroppedScore": 0.03760079972320516
     }
    },
    {
@@ -26856,8 +26888,8 @@
     "N": 531,
     "keepN": 160,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9069852527088866,
+     "firstDroppedScore": 0.9062383529756779
     }
    },
    {
@@ -26886,8 +26918,8 @@
     "N": 460,
     "keepN": 138,
     "cutoffBoundary": {
-     "lastKeptScore": 0.047425693409945374,
-     "firstDroppedScore": 0.04730379513371639
+     "lastKeptScore": 0.046194766470062855,
+     "firstDroppedScore": 0.045903443253089586
     }
    },
    {
@@ -26901,8 +26933,8 @@
     "N": 460,
     "keepN": 138,
     "cutoffBoundary": {
-     "lastKeptScore": -0.41680000000000006,
-     "firstDroppedScore": -0.41680000000000006
+     "lastKeptScore": -0.4168,
+     "firstDroppedScore": -0.4168
     }
    },
    {
@@ -26910,14 +26942,14 @@
     "split": "train",
     "scorer": "strength__pos",
     "budget": 0.3,
-    "retention": 0.5,
+    "retention": 0,
     "goldCount": 2,
-    "keptGold": 1,
+    "keptGold": 0,
     "N": 460,
     "keepN": 138,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9941572827194814,
+     "firstDroppedScore": 0.9941572827194814
     }
    },
    {
@@ -26931,8 +26963,8 @@
     "N": 460,
     "keepN": 138,
     "cutoffBoundary": {
-     "lastKeptScore": -0.41680000000000006,
-     "firstDroppedScore": -0.41680000000000006
+     "lastKeptScore": -0.4168,
+     "firstDroppedScore": -0.4168
     }
    },
    {
@@ -26946,8 +26978,8 @@
     "N": 511,
     "keepN": 154,
     "cutoffBoundary": {
-     "lastKeptScore": 0.05057120323182159,
-     "firstDroppedScore": 0.05055129718834679
+     "lastKeptScore": 0.0462047716570154,
+     "firstDroppedScore": 0.04613753346572274
     }
    },
    {
@@ -26961,8 +26993,8 @@
     "N": 511,
     "keepN": 154,
     "cutoffBoundary": {
-     "lastKeptScore": -0.23257467994310096,
-     "firstDroppedScore": -0.23257467994310096
+     "lastKeptScore": -0.232574679943101,
+     "firstDroppedScore": -0.232574679943101
     }
    },
    {
@@ -26970,14 +27002,14 @@
     "split": "train",
     "scorer": "strength__pos",
     "budget": 0.3,
-    "retention": 0.5,
+    "retention": 0,
     "goldCount": 2,
-    "keptGold": 1,
+    "keptGold": 0,
     "N": 511,
     "keepN": 154,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9464082636995805,
+     "firstDroppedScore": 0.9315686987237825
     }
    },
    {
@@ -26991,8 +27023,8 @@
     "N": 511,
     "keepN": 154,
     "cutoffBoundary": {
-     "lastKeptScore": -0.23257467994310096,
-     "firstDroppedScore": -0.23257467994310096
+     "lastKeptScore": -0.232574679943101,
+     "firstDroppedScore": -0.232574679943101
     }
    },
    {
@@ -27006,8 +27038,8 @@
     "N": 591,
     "keepN": 178,
     "cutoffBoundary": {
-     "lastKeptScore": 0.041837910193835856,
-     "firstDroppedScore": 0.041821828886747216
+     "lastKeptScore": 0.03675119628150121,
+     "firstDroppedScore": 0.03567966445266388
     }
    },
    {
@@ -27036,8 +27068,8 @@
     "N": 591,
     "keepN": 178,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.847233259674927,
+     "firstDroppedScore": 0.847233259674927
     }
    },
    {
@@ -27066,8 +27098,8 @@
     "N": 470,
     "keepN": 141,
     "cutoffBoundary": {
-     "lastKeptScore": 0.048007326007326004,
-     "firstDroppedScore": 0.04800113252912808
+     "lastKeptScore": 0.04349654121563017,
+     "firstDroppedScore": 0.04274770650117807
     }
    },
    {
@@ -27096,8 +27128,8 @@
     "N": 470,
     "keepN": 141,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9771734944729747,
+     "firstDroppedScore": 0.9756534010847185
     }
    },
    {
@@ -27126,8 +27158,8 @@
     "N": 542,
     "keepN": 163,
     "cutoffBoundary": {
-     "lastKeptScore": 0.04645217294990827,
-     "firstDroppedScore": 0.046445142881107696
+     "lastKeptScore": 0.039787899670163926,
+     "firstDroppedScore": 0.039596698225859935
     }
    },
    {
@@ -27156,8 +27188,8 @@
     "N": 542,
     "keepN": 163,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.8820131424902633,
+     "firstDroppedScore": 0.8820131424902633
     }
    },
    {
@@ -27186,8 +27218,8 @@
     "N": 470,
     "keepN": 141,
     "cutoffBoundary": {
-     "lastKeptScore": 0.054907731238312836,
-     "firstDroppedScore": 0.05468270421497834
+     "lastKeptScore": 0.045537324477309245,
+     "firstDroppedScore": 0.04514548822049782
     }
    },
    {
@@ -27202,7 +27234,7 @@
     "keepN": 141,
     "cutoffBoundary": {
      "lastKeptScore": -0.40550070521861775,
-     "firstDroppedScore": -0.41960507757404797
+     "firstDroppedScore": -0.4196050775740479
     }
    },
    {
@@ -27210,14 +27242,14 @@
     "split": "train",
     "scorer": "strength__pos",
     "budget": 0.3,
-    "retention": 0.3333333333333333,
+    "retention": 0,
     "goldCount": 3,
-    "keptGold": 1,
+    "keptGold": 0,
     "N": 470,
     "keepN": 141,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.802190852690156,
+     "firstDroppedScore": 0.802190852690156
     }
    },
    {
@@ -27232,7 +27264,7 @@
     "keepN": 141,
     "cutoffBoundary": {
      "lastKeptScore": -0.40550070521861775,
-     "firstDroppedScore": -0.41960507757404797
+     "firstDroppedScore": -0.4196050775740479
     }
    },
    {
@@ -27246,8 +27278,8 @@
     "N": 457,
     "keepN": 138,
     "cutoffBoundary": {
-     "lastKeptScore": 0.04072148753672425,
-     "firstDroppedScore": 0.04066994054553628
+     "lastKeptScore": 0.03532168919728926,
+     "firstDroppedScore": 0.03489265708232781
     }
    },
    {
@@ -27270,14 +27302,14 @@
     "split": "heldout",
     "scorer": "strength__pos",
     "budget": 0.3,
-    "retention": 0.5,
+    "retention": 0,
     "goldCount": 2,
-    "keptGold": 1,
+    "keptGold": 0,
     "N": 457,
     "keepN": 138,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9531738025883832,
+     "firstDroppedScore": 0.9531738025883832
     }
    },
    {
@@ -27306,8 +27338,8 @@
     "N": 484,
     "keepN": 146,
     "cutoffBoundary": {
-     "lastKeptScore": 0.0499201944928915,
-     "firstDroppedScore": 0.04979605259294494
+     "lastKeptScore": 0.046573746982816674,
+     "firstDroppedScore": 0.04630465463613818
     }
    },
    {
@@ -27321,8 +27353,8 @@
     "N": 484,
     "keepN": 146,
     "cutoffBoundary": {
-     "lastKeptScore": -0.31586303284416495,
-     "firstDroppedScore": -0.31586303284416495
+     "lastKeptScore": -0.3158630328441649,
+     "firstDroppedScore": -0.3158630328441649
     }
    },
    {
@@ -27330,14 +27362,14 @@
     "split": "train",
     "scorer": "strength__pos",
     "budget": 0.3,
-    "retention": 1,
+    "retention": 0.5,
     "goldCount": 2,
-    "keptGold": 2,
+    "keptGold": 1,
     "N": 484,
     "keepN": 146,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9509512826279239,
+     "firstDroppedScore": 0.9509512826279239
     }
    },
    {
@@ -27351,8 +27383,8 @@
     "N": 484,
     "keepN": 146,
     "cutoffBoundary": {
-     "lastKeptScore": -0.31586303284416495,
-     "firstDroppedScore": -0.31586303284416495
+     "lastKeptScore": -0.3158630328441649,
+     "firstDroppedScore": -0.3158630328441649
     }
    },
    {
@@ -27366,8 +27398,8 @@
     "N": 534,
     "keepN": 161,
     "cutoffBoundary": {
-     "lastKeptScore": 0.04735446067886993,
-     "firstDroppedScore": 0.04732955098626212
+     "lastKeptScore": 0.04145582970050533,
+     "firstDroppedScore": 0.04123798116087784
     }
    },
    {
@@ -27396,8 +27428,8 @@
     "N": 534,
     "keepN": 161,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.8700672029125049,
+     "firstDroppedScore": 0.8700672029125049
     }
    },
    {
@@ -27426,8 +27458,8 @@
     "N": 533,
     "keepN": 160,
     "cutoffBoundary": {
-     "lastKeptScore": 0.04361158740715436,
-     "firstDroppedScore": 0.043586264410591206
+     "lastKeptScore": 0.03779563132831821,
+     "firstDroppedScore": 0.03779504589513764
     }
    },
    {
@@ -27456,8 +27488,8 @@
     "N": 533,
     "keepN": 160,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.8643900800768585,
+     "firstDroppedScore": 0.8643900800768585
     }
    },
    {
@@ -27486,8 +27518,8 @@
     "N": 429,
     "keepN": 129,
     "cutoffBoundary": {
-     "lastKeptScore": 0.05064153782814735,
-     "firstDroppedScore": 0.050624871922396196
+     "lastKeptScore": 0.04908981026188209,
+     "firstDroppedScore": 0.04829076150640668
     }
    },
    {
@@ -27510,14 +27542,14 @@
     "split": "heldout",
     "scorer": "strength__pos",
     "budget": 0.3,
-    "retention": 0,
+    "retention": 0.5,
     "goldCount": 2,
-    "keptGold": 0,
+    "keptGold": 1,
     "N": 429,
     "keepN": 129,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9932636933505753,
+     "firstDroppedScore": 0.9932636933505753
     }
    },
    {
@@ -27546,8 +27578,8 @@
     "N": 486,
     "keepN": 146,
     "cutoffBoundary": {
-     "lastKeptScore": 0.051481456999698326,
-     "firstDroppedScore": 0.05132293339450945
+     "lastKeptScore": 0.04962769007313,
+     "firstDroppedScore": 0.04941337767196771
     }
    },
    {
@@ -27570,14 +27602,14 @@
     "split": "train",
     "scorer": "strength__pos",
     "budget": 0.3,
-    "retention": 0,
+    "retention": 0.5,
     "goldCount": 2,
-    "keptGold": 0,
+    "keptGold": 1,
     "N": 486,
     "keepN": 146,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9334521631761594,
+     "firstDroppedScore": 0.9334521631761594
     }
    },
    {
@@ -27606,8 +27638,8 @@
     "N": 582,
     "keepN": 175,
     "cutoffBoundary": {
-     "lastKeptScore": 0.04710285204991087,
-     "firstDroppedScore": 0.047073334447415335
+     "lastKeptScore": 0.04036963792446046,
+     "firstDroppedScore": 0.040251752129074364
     }
    },
    {
@@ -27636,8 +27668,8 @@
     "N": 582,
     "keepN": 175,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.8313266881565917,
+     "firstDroppedScore": 0.8313266881565917
     }
    },
    {
@@ -27666,8 +27698,8 @@
     "N": 480,
     "keepN": 144,
     "cutoffBoundary": {
-     "lastKeptScore": 0.046218250965981963,
-     "firstDroppedScore": 0.0461388463903717
+     "lastKeptScore": 0.04176665101659903,
+     "firstDroppedScore": 0.04160450162535539
     }
    },
    {
@@ -27696,8 +27728,8 @@
     "N": 480,
     "keepN": 144,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.8988629472731935,
+     "firstDroppedScore": 0.8988629472731935
     }
    },
    {
@@ -27726,8 +27758,8 @@
     "N": 508,
     "keepN": 153,
     "cutoffBoundary": {
-     "lastKeptScore": 0.05191992690697877,
-     "firstDroppedScore": 0.05181678126855869
+     "lastKeptScore": 0.04849599802266427,
+     "firstDroppedScore": 0.04840759632535168
     }
    },
    {
@@ -27741,8 +27773,8 @@
     "N": 508,
     "keepN": 153,
     "cutoffBoundary": {
-     "lastKeptScore": -0.1562718990889979,
-     "firstDroppedScore": -0.1562718990889979
+     "lastKeptScore": -0.15627189908899788,
+     "firstDroppedScore": -0.15627189908899788
     }
    },
    {
@@ -27756,8 +27788,8 @@
     "N": 508,
     "keepN": 153,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9274115393577453,
+     "firstDroppedScore": 0.9274115393577453
     }
    },
    {
@@ -27771,8 +27803,8 @@
     "N": 508,
     "keepN": 153,
     "cutoffBoundary": {
-     "lastKeptScore": -0.1562718990889979,
-     "firstDroppedScore": -0.1562718990889979
+     "lastKeptScore": -0.15627189908899788,
+     "firstDroppedScore": -0.15627189908899788
     }
    },
    {
@@ -27786,8 +27818,8 @@
     "N": 493,
     "keepN": 148,
     "cutoffBoundary": {
-     "lastKeptScore": 0.042167359480829864,
-     "firstDroppedScore": 0.041554642873727704
+     "lastKeptScore": 0.03941287156720666,
+     "firstDroppedScore": 0.038806689176637654
     }
    },
    {
@@ -27816,8 +27848,8 @@
     "N": 493,
     "keepN": 148,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9669297898537786,
+     "firstDroppedScore": 0.9584856638346722
     }
    },
    {
@@ -27846,8 +27878,8 @@
     "N": 500,
     "keepN": 150,
     "cutoffBoundary": {
-     "lastKeptScore": 0.051649905354378044,
-     "firstDroppedScore": 0.0516435786924477
+     "lastKeptScore": 0.04436285612362923,
+     "firstDroppedScore": 0.044333162142884755
     }
    },
    {
@@ -27861,8 +27893,8 @@
     "N": 500,
     "keepN": 150,
     "cutoffBoundary": {
-     "lastKeptScore": -0.21303433777154873,
-     "firstDroppedScore": -0.21303433777154873
+     "lastKeptScore": -0.2130343377715487,
+     "firstDroppedScore": -0.2130343377715487
     }
    },
    {
@@ -27870,14 +27902,14 @@
     "split": "heldout",
     "scorer": "strength__pos",
     "budget": 0.3,
-    "retention": 0.5,
+    "retention": 0,
     "goldCount": 2,
-    "keptGold": 1,
+    "keptGold": 0,
     "N": 500,
     "keepN": 150,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9816229165819524,
+     "firstDroppedScore": 0.9816229165819524
     }
    },
    {
@@ -27891,8 +27923,8 @@
     "N": 500,
     "keepN": 150,
     "cutoffBoundary": {
-     "lastKeptScore": -0.21303433777154873,
-     "firstDroppedScore": -0.21303433777154873
+     "lastKeptScore": -0.2130343377715487,
+     "firstDroppedScore": -0.2130343377715487
     }
    },
    {
@@ -27906,8 +27938,8 @@
     "N": 445,
     "keepN": 134,
     "cutoffBoundary": {
-     "lastKeptScore": 0.05465048874988679,
-     "firstDroppedScore": 0.05432646592709984
+     "lastKeptScore": 0.04760521218524388,
+     "firstDroppedScore": 0.04730349575444301
     }
    },
    {
@@ -27921,8 +27953,8 @@
     "N": 445,
     "keepN": 134,
     "cutoffBoundary": {
-     "lastKeptScore": -0.3984647592463364,
-     "firstDroppedScore": -0.3984647592463364
+     "lastKeptScore": -0.39846475924633634,
+     "firstDroppedScore": -0.39846475924633634
     }
    },
    {
@@ -27930,14 +27962,14 @@
     "split": "heldout",
     "scorer": "strength__pos",
     "budget": 0.3,
-    "retention": 0,
+    "retention": 0.5,
     "goldCount": 2,
-    "keptGold": 0,
+    "keptGold": 1,
     "N": 445,
     "keepN": 134,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9904780700376556,
+     "firstDroppedScore": 0.9904780700376556
     }
    },
    {
@@ -27951,8 +27983,8 @@
     "N": 445,
     "keepN": 134,
     "cutoffBoundary": {
-     "lastKeptScore": -0.3984647592463364,
-     "firstDroppedScore": -0.3984647592463364
+     "lastKeptScore": -0.39846475924633634,
+     "firstDroppedScore": -0.39846475924633634
     }
    },
    {
@@ -27966,8 +27998,8 @@
     "N": 494,
     "keepN": 149,
     "cutoffBoundary": {
-     "lastKeptScore": 0.05117088858364875,
-     "firstDroppedScore": 0.050922811183499915
+     "lastKeptScore": 0.048942076924794756,
+     "firstDroppedScore": 0.04862901018057696
     }
    },
    {
@@ -27996,8 +28028,8 @@
     "N": 494,
     "keepN": 149,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9650101443757554,
+     "firstDroppedScore": 0.9650101443757554
     }
    },
    {
@@ -28020,14 +28052,14 @@
     "split": "heldout",
     "scorer": "uniform",
     "budget": 0.3,
-    "retention": 0,
+    "retention": 0.3333333333333333,
     "goldCount": 3,
-    "keptGold": 0,
+    "keptGold": 1,
     "N": 458,
     "keepN": 138,
     "cutoffBoundary": {
-     "lastKeptScore": 0.023713876723783608,
-     "firstDroppedScore": 0.02354706124126593
+     "lastKeptScore": 0.045737373636160004,
+     "firstDroppedScore": 0.04557541335678193
     }
    },
    {
@@ -28041,8 +28073,8 @@
     "N": 458,
     "keepN": 138,
     "cutoffBoundary": {
-     "lastKeptScore": -0.2672413793103449,
-     "firstDroppedScore": -0.2729885057471265
+     "lastKeptScore": -0.26724137931034486,
+     "firstDroppedScore": -0.27298850574712646
     }
    },
    {
@@ -28050,14 +28082,14 @@
     "split": "heldout",
     "scorer": "strength__pos",
     "budget": 0.3,
-    "retention": 0,
+    "retention": 0.6666666666666666,
     "goldCount": 3,
-    "keptGold": 0,
+    "keptGold": 2,
     "N": 458,
     "keepN": 138,
     "cutoffBoundary": {
-     "lastKeptScore": 0,
-     "firstDroppedScore": 0
+     "lastKeptScore": 0.9856962369868486,
+     "firstDroppedScore": 0.8875825419784714
     }
    },
    {
@@ -28071,8 +28103,8 @@
     "N": 458,
     "keepN": 138,
     "cutoffBoundary": {
-     "lastKeptScore": -0.2672413793103449,
-     "firstDroppedScore": -0.2729885057471265
+     "lastKeptScore": -0.26724137931034486,
+     "firstDroppedScore": -0.27298850574712646
     }
    },
    {
@@ -28086,8 +28118,8 @@
     "N": 452,
     "keepN": 136,
     "cutoffBoundary": {
-     "lastKeptScore": 0.05796350694678523,
-     "firstDroppedScore": 0.057854305912575475
+     "lastKeptScore": 0.05089075825656387,
+     "firstDroppedScore": 0.05087303573911835
     }
    },
    {
@@ -28110,14 +28142,14 @@
     "split": "heldout",
     "scorer": "strength__pos",
     "budget": 0.3,
-    "retention": 0.5,
+    "retention": 0,
     "goldCount": 2,
-    "keptGold": 1,
+    "keptGold": 0,
     "N": 452,
     "keepN": 136,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9723044660507674,
+     "firstDroppedScore": 0.9723044660507674
     }
    },
    {
@@ -28146,8 +28178,8 @@
     "N": 505,
     "keepN": 152,
     "cutoffBoundary": {
-     "lastKeptScore": 0.04973094924209935,
-     "firstDroppedScore": 0.04892517451815366
+     "lastKeptScore": 0.04652548814190735,
+     "firstDroppedScore": 0.04641613802766298
     }
    },
    {
@@ -28170,14 +28202,14 @@
     "split": "train",
     "scorer": "strength__pos",
     "budget": 0.3,
-    "retention": 0,
+    "retention": 0.5,
     "goldCount": 2,
-    "keptGold": 0,
+    "keptGold": 1,
     "N": 505,
     "keepN": 152,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9866897829680984,
+     "firstDroppedScore": 0.9866897829680984
     }
    },
    {
@@ -28206,8 +28238,8 @@
     "N": 504,
     "keepN": 152,
     "cutoffBoundary": {
-     "lastKeptScore": 0.04698846276894174,
-     "firstDroppedScore": 0.046889851405412464
+     "lastKeptScore": 0.04107539895089821,
+     "firstDroppedScore": 0.04093342268271381
     }
    },
    {
@@ -28230,14 +28262,14 @@
     "split": "train",
     "scorer": "strength__pos",
     "budget": 0.3,
-    "retention": 0.5,
+    "retention": 0,
     "goldCount": 2,
-    "keptGold": 1,
+    "keptGold": 0,
     "N": 504,
     "keepN": 152,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9385767552654158,
+     "firstDroppedScore": 0.9385767552654158
     }
    },
    {
@@ -28266,8 +28298,8 @@
     "N": 453,
     "keepN": 136,
     "cutoffBoundary": {
-     "lastKeptScore": 0.04759908827379266,
-     "firstDroppedScore": 0.04759788955642024
+     "lastKeptScore": 0.044438348423064745,
+     "firstDroppedScore": 0.044323084458755095
     }
    },
    {
@@ -28290,14 +28322,14 @@
     "split": "heldout",
     "scorer": "strength__pos",
     "budget": 0.3,
-    "retention": 0,
+    "retention": 0.5,
     "goldCount": 2,
-    "keptGold": 0,
+    "keptGold": 1,
     "N": 453,
     "keepN": 136,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9803472472603205,
+     "firstDroppedScore": 0.9803472472603205
     }
    },
    {
@@ -28326,8 +28358,8 @@
     "N": 472,
     "keepN": 142,
     "cutoffBoundary": {
-     "lastKeptScore": 0.0478333581073317,
-     "firstDroppedScore": 0.04776251741008308
+     "lastKeptScore": 0.04541999983366637,
+     "firstDroppedScore": 0.045275475276306314
     }
    },
    {
@@ -28341,8 +28373,8 @@
     "N": 472,
     "keepN": 142,
     "cutoffBoundary": {
-     "lastKeptScore": -0.20750708215297448,
-     "firstDroppedScore": -0.20750708215297448
+     "lastKeptScore": -0.2075070821529745,
+     "firstDroppedScore": -0.2075070821529745
     }
    },
    {
@@ -28356,8 +28388,8 @@
     "N": 472,
     "keepN": 142,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9038205260514274,
+     "firstDroppedScore": 0.9038205260514274
     }
    },
    {
@@ -28371,44 +28403,14 @@
     "N": 472,
     "keepN": 142,
     "cutoffBoundary": {
-     "lastKeptScore": -0.20750708215297448,
-     "firstDroppedScore": -0.20750708215297448
+     "lastKeptScore": -0.2075070821529745,
+     "firstDroppedScore": -0.2075070821529745
     }
    },
    {
     "questionId": "gpt4_213fd887",
     "split": "heldout",
     "scorer": "uniform",
-    "budget": 0.3,
-    "retention": 0.5,
-    "goldCount": 2,
-    "keptGold": 1,
-    "N": 446,
-    "keepN": 134,
-    "cutoffBoundary": {
-     "lastKeptScore": 0.05387099522653969,
-     "firstDroppedScore": 0.05383813250837625
-    }
-   },
-   {
-    "questionId": "gpt4_213fd887",
-    "split": "heldout",
-    "scorer": "age_days__neg",
-    "budget": 0.3,
-    "retention": 0.5,
-    "goldCount": 2,
-    "keptGold": 1,
-    "N": 446,
-    "keepN": 134,
-    "cutoffBoundary": {
-     "lastKeptScore": -0.26495726495726496,
-     "firstDroppedScore": -0.26495726495726496
-    }
-   },
-   {
-    "questionId": "gpt4_213fd887",
-    "split": "heldout",
-    "scorer": "strength__pos",
     "budget": 0.3,
     "retention": 1,
     "goldCount": 2,
@@ -28416,6 +28418,36 @@
     "N": 446,
     "keepN": 134,
     "cutoffBoundary": {
+     "lastKeptScore": 0.04774654341302107,
+     "firstDroppedScore": 0.047673238499292905
+    }
+   },
+   {
+    "questionId": "gpt4_213fd887",
+    "split": "heldout",
+    "scorer": "age_days__neg",
+    "budget": 0.3,
+    "retention": 0.5,
+    "goldCount": 2,
+    "keptGold": 1,
+    "N": 446,
+    "keepN": 134,
+    "cutoffBoundary": {
+     "lastKeptScore": -0.264957264957265,
+     "firstDroppedScore": -0.264957264957265
+    }
+   },
+   {
+    "questionId": "gpt4_213fd887",
+    "split": "heldout",
+    "scorer": "strength__pos",
+    "budget": 0.3,
+    "retention": 0.5,
+    "goldCount": 2,
+    "keptGold": 1,
+    "N": 446,
+    "keepN": 134,
+    "cutoffBoundary": {
      "lastKeptScore": 1,
      "firstDroppedScore": 1
     }
@@ -28431,8 +28463,8 @@
     "N": 446,
     "keepN": 134,
     "cutoffBoundary": {
-     "lastKeptScore": -0.26495726495726496,
-     "firstDroppedScore": -0.26495726495726496
+     "lastKeptScore": -0.264957264957265,
+     "firstDroppedScore": -0.264957264957265
     }
    },
    {
@@ -28446,8 +28478,8 @@
     "N": 512,
     "keepN": 154,
     "cutoffBoundary": {
-     "lastKeptScore": 0.04992465413838447,
-     "firstDroppedScore": 0.04984979652238254
+     "lastKeptScore": 0.04652782298999188,
+     "firstDroppedScore": 0.046441745980370944
     }
    },
    {
@@ -28476,8 +28508,8 @@
     "N": 512,
     "keepN": 154,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9322713204147958,
+     "firstDroppedScore": 0.9322713204147958
     }
    },
    {
@@ -28506,8 +28538,8 @@
     "N": 500,
     "keepN": 150,
     "cutoffBoundary": {
-     "lastKeptScore": 0.047138649912682386,
-     "firstDroppedScore": 0.047125324291856535
+     "lastKeptScore": 0.04548527999422895,
+     "firstDroppedScore": 0.045377279274996726
     }
    },
    {
@@ -28536,8 +28568,8 @@
     "N": 500,
     "keepN": 150,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9605815791617945,
+     "firstDroppedScore": 0.8843523970696763
     }
    },
    {
@@ -28566,8 +28598,8 @@
     "N": 471,
     "keepN": 142,
     "cutoffBoundary": {
-     "lastKeptScore": 0.04407962772360134,
-     "firstDroppedScore": 0.04405104098599596
+     "lastKeptScore": 0.03876360222893643,
+     "firstDroppedScore": 0.03874158106771903
     }
    },
    {
@@ -28581,8 +28613,8 @@
     "N": 471,
     "keepN": 142,
     "cutoffBoundary": {
-     "lastKeptScore": -0.28214285714285714,
-     "firstDroppedScore": -0.28214285714285714
+     "lastKeptScore": -0.2821428571428572,
+     "firstDroppedScore": -0.2821428571428572
     }
    },
    {
@@ -28596,8 +28628,8 @@
     "N": 471,
     "keepN": 142,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9082346146461807,
+     "firstDroppedScore": 0.9082346146461807
     }
    },
    {
@@ -28611,8 +28643,8 @@
     "N": 471,
     "keepN": 142,
     "cutoffBoundary": {
-     "lastKeptScore": -0.28214285714285714,
-     "firstDroppedScore": -0.28214285714285714
+     "lastKeptScore": -0.2821428571428572,
+     "firstDroppedScore": -0.2821428571428572
     }
    },
    {
@@ -28626,8 +28658,8 @@
     "N": 433,
     "keepN": 130,
     "cutoffBoundary": {
-     "lastKeptScore": 0.04427954120838937,
-     "firstDroppedScore": 0.044266545259736965
+     "lastKeptScore": 0.03660437170026982,
+     "firstDroppedScore": 0.03657054636201643
     }
    },
    {
@@ -28641,8 +28673,8 @@
     "N": 433,
     "keepN": 130,
     "cutoffBoundary": {
-     "lastKeptScore": -0.37807449051300074,
-     "firstDroppedScore": -0.387912860154603
+     "lastKeptScore": -0.3780744905130007,
+     "firstDroppedScore": -0.38791286015460297
     }
    },
    {
@@ -28656,8 +28688,8 @@
     "N": 433,
     "keepN": 130,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9111105965422345,
+     "firstDroppedScore": 0.9111105965422345
     }
    },
    {
@@ -28671,8 +28703,8 @@
     "N": 433,
     "keepN": 130,
     "cutoffBoundary": {
-     "lastKeptScore": -0.37807449051300074,
-     "firstDroppedScore": -0.387912860154603
+     "lastKeptScore": -0.3780744905130007,
+     "firstDroppedScore": -0.38791286015460297
     }
    },
    {
@@ -28686,8 +28718,8 @@
     "N": 520,
     "keepN": 156,
     "cutoffBoundary": {
-     "lastKeptScore": 0.047138496855164254,
-     "firstDroppedScore": 0.0471361274842879
+     "lastKeptScore": 0.04047604757141545,
+     "firstDroppedScore": 0.040223546599627416
     }
    },
    {
@@ -28716,8 +28748,8 @@
     "N": 520,
     "keepN": 156,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9374382327769936,
+     "firstDroppedScore": 0.9374382327769936
     }
    },
    {
@@ -28746,8 +28778,8 @@
     "N": 608,
     "keepN": 183,
     "cutoffBoundary": {
-     "lastKeptScore": 0.044615969956927216,
-     "firstDroppedScore": 0.04457853597160703
+     "lastKeptScore": 0.04095687033304244,
+     "firstDroppedScore": 0.04094523297680139
     }
    },
    {
@@ -28761,8 +28793,8 @@
     "N": 608,
     "keepN": 183,
     "cutoffBoundary": {
-     "lastKeptScore": -0.30444282592862343,
-     "firstDroppedScore": -0.30444282592862343
+     "lastKeptScore": -0.3044428259286235,
+     "firstDroppedScore": -0.3044428259286235
     }
    },
    {
@@ -28776,8 +28808,8 @@
     "N": 608,
     "keepN": 183,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.889877890596225,
+     "firstDroppedScore": 0.8883666287918665
     }
    },
    {
@@ -28791,8 +28823,8 @@
     "N": 608,
     "keepN": 183,
     "cutoffBoundary": {
-     "lastKeptScore": -0.30444282592862343,
-     "firstDroppedScore": -0.30444282592862343
+     "lastKeptScore": -0.3044428259286235,
+     "firstDroppedScore": -0.3044428259286235
     }
    },
    {
@@ -28806,8 +28838,8 @@
     "N": 505,
     "keepN": 152,
     "cutoffBoundary": {
-     "lastKeptScore": 0.05232153660012099,
-     "firstDroppedScore": 0.05198880822746522
+     "lastKeptScore": 0.04787727913145289,
+     "firstDroppedScore": 0.04760338396584207
     }
    },
    {
@@ -28836,8 +28868,8 @@
     "N": 505,
     "keepN": 152,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.8970080678230837,
+     "firstDroppedScore": 0.8970080678230837
     }
    },
    {
@@ -28866,8 +28898,8 @@
     "N": 506,
     "keepN": 152,
     "cutoffBoundary": {
-     "lastKeptScore": 0.04742969068234859,
-     "firstDroppedScore": 0.04738589716450294
+     "lastKeptScore": 0.04355123974814635,
+     "firstDroppedScore": 0.04353954723428329
     }
    },
    {
@@ -28881,8 +28913,8 @@
     "N": 506,
     "keepN": 152,
     "cutoffBoundary": {
-     "lastKeptScore": -0.2649753347427767,
-     "firstDroppedScore": -0.2649753347427767
+     "lastKeptScore": -0.2649753347427766,
+     "firstDroppedScore": -0.2649753347427766
     }
    },
    {
@@ -28896,8 +28928,8 @@
     "N": 506,
     "keepN": 152,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9549750547320895,
+     "firstDroppedScore": 0.9549750547320895
     }
    },
    {
@@ -28911,8 +28943,8 @@
     "N": 506,
     "keepN": 152,
     "cutoffBoundary": {
-     "lastKeptScore": -0.2649753347427767,
-     "firstDroppedScore": -0.2649753347427767
+     "lastKeptScore": -0.2649753347427766,
+     "firstDroppedScore": -0.2649753347427766
     }
    },
    {
@@ -28926,8 +28958,8 @@
     "N": 482,
     "keepN": 145,
     "cutoffBoundary": {
-     "lastKeptScore": 0.05169111164542759,
-     "firstDroppedScore": 0.05164302316261922
+     "lastKeptScore": 0.048528417580855104,
+     "firstDroppedScore": 0.048158403224841294
     }
    },
    {
@@ -28941,8 +28973,8 @@
     "N": 482,
     "keepN": 145,
     "cutoffBoundary": {
-     "lastKeptScore": -0.3749109052031361,
-     "firstDroppedScore": -0.3749109052031361
+     "lastKeptScore": -0.37491090520313614,
+     "firstDroppedScore": -0.37491090520313614
     }
    },
    {
@@ -28950,9 +28982,9 @@
     "split": "train",
     "scorer": "strength__pos",
     "budget": 0.3,
-    "retention": 1,
+    "retention": 0,
     "goldCount": 1,
-    "keptGold": 1,
+    "keptGold": 0,
     "N": 482,
     "keepN": 145,
     "cutoffBoundary": {
@@ -28971,8 +29003,8 @@
     "N": 482,
     "keepN": 145,
     "cutoffBoundary": {
-     "lastKeptScore": -0.3749109052031361,
-     "firstDroppedScore": -0.3749109052031361
+     "lastKeptScore": -0.37491090520313614,
+     "firstDroppedScore": -0.37491090520313614
     }
    },
    {
@@ -28986,8 +29018,8 @@
     "N": 491,
     "keepN": 148,
     "cutoffBoundary": {
-     "lastKeptScore": 0.04700508193557339,
-     "firstDroppedScore": 0.04687641420599939
+     "lastKeptScore": 0.04115080075020986,
+     "firstDroppedScore": 0.041104576739349655
     }
    },
    {
@@ -29001,8 +29033,8 @@
     "N": 491,
     "keepN": 148,
     "cutoffBoundary": {
-     "lastKeptScore": -0.2407407407407407,
-     "firstDroppedScore": -0.2407407407407407
+     "lastKeptScore": -0.24074074074074076,
+     "firstDroppedScore": -0.24074074074074076
     }
    },
    {
@@ -29010,14 +29042,14 @@
     "split": "heldout",
     "scorer": "strength__pos",
     "budget": 0.3,
-    "retention": 1,
+    "retention": 0,
     "goldCount": 1,
-    "keptGold": 1,
+    "keptGold": 0,
     "N": 491,
     "keepN": 148,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9805905156693662,
+     "firstDroppedScore": 0.9805905156693662
     }
    },
    {
@@ -29031,8 +29063,8 @@
     "N": 491,
     "keepN": 148,
     "cutoffBoundary": {
-     "lastKeptScore": -0.2407407407407407,
-     "firstDroppedScore": -0.2407407407407407
+     "lastKeptScore": -0.24074074074074076,
+     "firstDroppedScore": -0.24074074074074076
     }
    },
    {
@@ -29346,8 +29378,8 @@
     "N": 520,
     "keepN": 156,
     "cutoffBoundary": {
-     "lastKeptScore": 0.02089676123431495,
-     "firstDroppedScore": 0.02074215851280079
+     "lastKeptScore": 0.020562281084091864,
+     "firstDroppedScore": 0.02052751419414579
     }
    },
    {
@@ -29376,8 +29408,8 @@
     "N": 520,
     "keepN": 156,
     "cutoffBoundary": {
-     "lastKeptScore": 0.5380800910294511,
-     "firstDroppedScore": 0.5380800910294511
+     "lastKeptScore": 0.5136685566739807,
+     "firstDroppedScore": 0.5136685566739807
     }
    },
    {
@@ -29406,8 +29438,8 @@
     "N": 514,
     "keepN": 155,
     "cutoffBoundary": {
-     "lastKeptScore": 0.05384389421918887,
-     "firstDroppedScore": 0.05382052650649689
+     "lastKeptScore": 0.05341455188278472,
+     "firstDroppedScore": 0.05340993441410257
     }
    },
    {
@@ -29436,8 +29468,8 @@
     "N": 514,
     "keepN": 155,
     "cutoffBoundary": {
-     "lastKeptScore": 0.9812942718173961,
-     "firstDroppedScore": 0.9812942718173961
+     "lastKeptScore": 0.9647869957190919,
+     "firstDroppedScore": 0.9647869957190919
     }
    },
    {
@@ -29646,8 +29678,8 @@
     "N": 513,
     "keepN": 154,
     "cutoffBoundary": {
-     "lastKeptScore": 0.047075185563534044,
-     "firstDroppedScore": 0.047049301902099314
+     "lastKeptScore": 0.04707290574670907,
+     "firstDroppedScore": 0.04704702975412209
     }
    },
    {
@@ -29676,8 +29708,8 @@
     "N": 513,
     "keepN": 154,
     "cutoffBoundary": {
-     "lastKeptScore": 0.9795819207166856,
-     "firstDroppedScore": 0.9795819207166856
+     "lastKeptScore": 0.9795145623772106,
+     "firstDroppedScore": 0.9795145623772106
     }
    },
    {
@@ -30186,8 +30218,8 @@
     "N": 478,
     "keepN": 144,
     "cutoffBoundary": {
-     "lastKeptScore": 0.016444781583785463,
-     "firstDroppedScore": 0.011439833372662038
+     "lastKeptScore": 0.016667874845473423,
+     "firstDroppedScore": 0.01643499175278595
     }
    },
    {
@@ -30201,8 +30233,8 @@
     "N": 478,
     "keepN": 144,
     "cutoffBoundary": {
-     "lastKeptScore": -0.420695284075975,
-     "firstDroppedScore": -0.420695284075975
+     "lastKeptScore": -0.42069528407597495,
+     "firstDroppedScore": -0.42069528407597495
     }
    },
    {
@@ -30216,8 +30248,8 @@
     "N": 478,
     "keepN": 144,
     "cutoffBoundary": {
-     "lastKeptScore": 0.5414428423903429,
-     "firstDroppedScore": 0.5286762231912119
+     "lastKeptScore": 0.5114407036183141,
+     "firstDroppedScore": 0.5114407036183141
     }
    },
    {
@@ -30231,8 +30263,8 @@
     "N": 478,
     "keepN": 144,
     "cutoffBoundary": {
-     "lastKeptScore": -0.420695284075975,
-     "firstDroppedScore": -0.420695284075975
+     "lastKeptScore": -0.42069528407597495,
+     "firstDroppedScore": -0.42069528407597495
     }
    },
    {
@@ -30846,8 +30878,8 @@
     "N": 522,
     "keepN": 157,
     "cutoffBoundary": {
-     "lastKeptScore": 0.04993458249155855,
-     "firstDroppedScore": 0.049934108872593065
+     "lastKeptScore": 0.04997049911846089,
+     "firstDroppedScore": 0.04995946345942253
     }
    },
    {
@@ -30876,8 +30908,8 @@
     "N": 522,
     "keepN": 157,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9589871129694817,
+     "firstDroppedScore": 0.9589871129694817
     }
    },
    {
@@ -30966,8 +30998,8 @@
     "N": 475,
     "keepN": 143,
     "cutoffBoundary": {
-     "lastKeptScore": 0.03981099645341921,
-     "firstDroppedScore": 0.03941175965501021
+     "lastKeptScore": 0.039269113541936344,
+     "firstDroppedScore": 0.03910185458527877
     }
    },
    {
@@ -30981,8 +31013,8 @@
     "N": 475,
     "keepN": 143,
     "cutoffBoundary": {
-     "lastKeptScore": -0.07958368617398667,
-     "firstDroppedScore": -0.07958368617398667
+     "lastKeptScore": -0.07958368617398669,
+     "firstDroppedScore": -0.07958368617398669
     }
    },
    {
@@ -30996,8 +31028,8 @@
     "N": 475,
     "keepN": 143,
     "cutoffBoundary": {
-     "lastKeptScore": 0.891572186113931,
-     "firstDroppedScore": 0.8736081556226221
+     "lastKeptScore": 0.8677407430699212,
+     "firstDroppedScore": 0.850256885441968
     }
    },
    {
@@ -31011,8 +31043,8 @@
     "N": 475,
     "keepN": 143,
     "cutoffBoundary": {
-     "lastKeptScore": -0.07958368617398667,
-     "firstDroppedScore": -0.07958368617398667
+     "lastKeptScore": -0.07958368617398669,
+     "firstDroppedScore": -0.07958368617398669
     }
    },
    {
@@ -31026,8 +31058,8 @@
     "N": 506,
     "keepN": 152,
     "cutoffBoundary": {
-     "lastKeptScore": 0.047182470988701104,
-     "firstDroppedScore": 0.046725221151614704
+     "lastKeptScore": 0.04711714614884195,
+     "firstDroppedScore": 0.0466629705915919
     }
    },
    {
@@ -31056,8 +31088,8 @@
     "N": 506,
     "keepN": 152,
     "cutoffBoundary": {
-     "lastKeptScore": 0.9968417728787835,
-     "firstDroppedScore": 0.9968417728787835
+     "lastKeptScore": 0.9948558449890215,
+     "firstDroppedScore": 0.9948558449890215
     }
    },
    {
@@ -31086,8 +31118,8 @@
     "N": 493,
     "keepN": 148,
     "cutoffBoundary": {
-     "lastKeptScore": 0.05028315372814073,
-     "firstDroppedScore": 0.05023913177360695
+     "lastKeptScore": 0.049285097083168784,
+     "firstDroppedScore": 0.04927539620171395
     }
    },
    {
@@ -31116,8 +31148,8 @@
     "N": 493,
     "keepN": 148,
     "cutoffBoundary": {
-     "lastKeptScore": 0.9991064588713513,
-     "firstDroppedScore": 0.9991064588713513
+     "lastKeptScore": 0.9562214097746878,
+     "firstDroppedScore": 0.9562214097746878
     }
    },
    {
@@ -31236,8 +31268,8 @@
     "N": 543,
     "keepN": 163,
     "cutoffBoundary": {
-     "lastKeptScore": 0.6614097117242139,
-     "firstDroppedScore": 0.6614097117242139
+     "lastKeptScore": 0.6570563793735518,
+     "firstDroppedScore": 0.6570563793735518
     }
    },
    {
@@ -31746,8 +31778,8 @@
     "N": 422,
     "keepN": 127,
     "cutoffBoundary": {
-     "lastKeptScore": 0.03926124085975151,
-     "firstDroppedScore": 0.038823652210218676
+     "lastKeptScore": 0.038481455451577634,
+     "firstDroppedScore": 0.03841779099131496
     }
    },
    {
@@ -31776,8 +31808,8 @@
     "N": 422,
     "keepN": 127,
     "cutoffBoundary": {
-     "lastKeptScore": 0.7672806848243936,
-     "firstDroppedScore": 0.7672806848243936
+     "lastKeptScore": 0.722612166859103,
+     "firstDroppedScore": 0.722612166859103
     }
    },
    {
@@ -32046,8 +32078,8 @@
     "N": 482,
     "keepN": 145,
     "cutoffBoundary": {
-     "lastKeptScore": 0.03724194230246008,
-     "firstDroppedScore": 0.036976497280212045
+     "lastKeptScore": 0.036744012372365874,
+     "firstDroppedScore": 0.03650767304787445
     }
    },
    {
@@ -32061,8 +32093,8 @@
     "N": 482,
     "keepN": 145,
     "cutoffBoundary": {
-     "lastKeptScore": -0.04272692054262924,
-     "firstDroppedScore": -0.04317392412859134
+     "lastKeptScore": -0.042726920542629235,
+     "firstDroppedScore": -0.043173924128591334
     }
    },
    {
@@ -32076,8 +32108,8 @@
     "N": 482,
     "keepN": 145,
     "cutoffBoundary": {
-     "lastKeptScore": 0.7241323940332746,
-     "firstDroppedScore": 0.7241323940332746
+     "lastKeptScore": 0.6973046998227299,
+     "firstDroppedScore": 0.6650376555293604
     }
    },
    {
@@ -32091,8 +32123,8 @@
     "N": 482,
     "keepN": 145,
     "cutoffBoundary": {
-     "lastKeptScore": -0.04272692054262924,
-     "firstDroppedScore": -0.04317392412859134
+     "lastKeptScore": -0.042726920542629235,
+     "firstDroppedScore": -0.043173924128591334
     }
    },
    {
@@ -32346,8 +32378,8 @@
     "N": 446,
     "keepN": 134,
     "cutoffBoundary": {
-     "lastKeptScore": 0.024410646013216512,
-     "firstDroppedScore": 0.024352214013211186
+     "lastKeptScore": 0.023983830831393754,
+     "firstDroppedScore": 0.023894920388458092
     }
    },
    {
@@ -32376,8 +32408,8 @@
     "N": 446,
     "keepN": 134,
     "cutoffBoundary": {
-     "lastKeptScore": 0.34693453350190023,
-     "firstDroppedScore": 0.34693453350190023
+     "lastKeptScore": 0.3305183269130126,
+     "firstDroppedScore": 0.3305183269130126
     }
    },
    {
@@ -32586,8 +32618,8 @@
     "N": 479,
     "keepN": 144,
     "cutoffBoundary": {
-     "lastKeptScore": 0.022838720965621746,
-     "firstDroppedScore": 0.02281929343032839
+     "lastKeptScore": 0.02240743058357609,
+     "firstDroppedScore": 0.022388003048282732
     }
    },
    {
@@ -32601,8 +32633,8 @@
     "N": 479,
     "keepN": 144,
     "cutoffBoundary": {
-     "lastKeptScore": -0.19610185237851466,
-     "firstDroppedScore": -0.19610185237851466
+     "lastKeptScore": -0.19610185237851468,
+     "firstDroppedScore": -0.19610185237851468
     }
    },
    {
@@ -32616,8 +32648,8 @@
     "N": 479,
     "keepN": 144,
     "cutoffBoundary": {
-     "lastKeptScore": 0.325962709954609,
-     "firstDroppedScore": 0.2632715002710945
+     "lastKeptScore": 0.3130239984932394,
+     "firstDroppedScore": 0.3130239984932394
     }
    },
    {
@@ -32631,8 +32663,8 @@
     "N": 479,
     "keepN": 144,
     "cutoffBoundary": {
-     "lastKeptScore": -0.19610185237851466,
-     "firstDroppedScore": -0.19610185237851466
+     "lastKeptScore": -0.19610185237851468,
+     "firstDroppedScore": -0.19610185237851468
     }
    },
    {
@@ -32646,8 +32678,8 @@
     "N": 431,
     "keepN": 130,
     "cutoffBoundary": {
-     "lastKeptScore": 0.048723567297060864,
-     "firstDroppedScore": 0.04864503363276424
+     "lastKeptScore": 0.047087157995861724,
+     "firstDroppedScore": 0.04701149533556452
     }
    },
    {
@@ -32676,8 +32708,8 @@
     "N": 431,
     "keepN": 130,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.9627594202892111,
+     "firstDroppedScore": 0.9627594202892111
     }
    },
    {
@@ -32706,8 +32738,8 @@
     "N": 456,
     "keepN": 137,
     "cutoffBoundary": {
-     "lastKeptScore": 0.043676482409521517,
-     "firstDroppedScore": 0.04358731526134822
+     "lastKeptScore": 0.04339810192616163,
+     "firstDroppedScore": 0.04330494389476932
     }
    },
    {
@@ -32721,8 +32753,8 @@
     "N": 456,
     "keepN": 137,
     "cutoffBoundary": {
-     "lastKeptScore": -0.024002279950923095,
-     "firstDroppedScore": -0.028871327684980345
+     "lastKeptScore": -0.024002279950923088,
+     "firstDroppedScore": -0.02887132768498034
     }
    },
    {
@@ -32736,8 +32768,8 @@
     "N": 456,
     "keepN": 137,
     "cutoffBoundary": {
-     "lastKeptScore": 0.9920550303817424,
-     "firstDroppedScore": 0.9920550303817424
+     "lastKeptScore": 0.981672342253495,
+     "firstDroppedScore": 0.981672342253495
     }
    },
    {
@@ -32751,8 +32783,8 @@
     "N": 456,
     "keepN": 137,
     "cutoffBoundary": {
-     "lastKeptScore": -0.024002279950923095,
-     "firstDroppedScore": -0.028871327684980345
+     "lastKeptScore": -0.024002279950923088,
+     "firstDroppedScore": -0.02887132768498034
     }
    },
    {
@@ -33426,8 +33458,8 @@
     "N": 476,
     "keepN": 143,
     "cutoffBoundary": {
-     "lastKeptScore": 0.05173702770738,
-     "firstDroppedScore": 0.051678814719170914
+     "lastKeptScore": 0.05063906367658539,
+     "firstDroppedScore": 0.05060753908185989
     }
    },
    {
@@ -33456,8 +33488,8 @@
     "N": 476,
     "keepN": 143,
     "cutoffBoundary": {
-     "lastKeptScore": 1,
-     "firstDroppedScore": 1
+     "lastKeptScore": 0.974945079906825,
+     "firstDroppedScore": 0.974945079906825
     }
    },
    {

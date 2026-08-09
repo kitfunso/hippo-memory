@@ -39,7 +39,7 @@ import { extractQuestion } from '../benchmarks/memory-value/extract.mjs';
 // @ts-expect-error - .mjs harness modules have no type declarations
 import { evaluateAll, computeDatasetVariance, evaluateVarianceGate } from '../benchmarks/memory-value/evaluate.mjs';
 // @ts-expect-error - .mjs harness modules have no type declarations
-import { formatLmeDate, questionDir, featuresPathFor, goldPathFor, readJsonl, readJson, computeGold, scratchRootDir, sanitizeQuestionId, safeRemoveScratchDir } from '../benchmarks/memory-value/common.mjs';
+import { formatLmeDate, questionDir, metaPathFor, featuresPathFor, goldPathFor, readJsonl, readJson, computeGold, scratchRootDir, sanitizeQuestionId, safeRemoveScratchDir } from '../benchmarks/memory-value/common.mjs';
 // @ts-expect-error - .mjs harness modules have no type declarations
 import { _resetAblationCacheForTests } from '../dist/ablation.js';
 // @ts-expect-error - .mjs harness modules have no type declarations
@@ -109,21 +109,42 @@ function buildQuestionB() {
   };
 }
 
+/** Q_C: causal clock clamp case. Sessions at day 0 and day 10 (day(10) is
+ *  AFTER question_date = day 7 — mirrors the 76/500 real questions whose
+ *  haystack postdates question_date). Answer session (day 10) has 1 gold
+ *  turn. T_eval must clamp to day(10), not day(7), so every memory's
+ *  age_days >= 0 (the day-10 session's own memories: age == 0 exactly). */
+function buildQuestionC() {
+  const s0 = [turn('user', 'C-s0-t0 eta topic note'), turn('assistant', 'C-s0-t1 eta topic reply'), turn('user', 'C-s0-t2 eta topic follow-up')];
+  const s1 = [turn('user', 'C-s1-t0 theta topic note', false), turn('assistant', 'C-s1-t1 theta topic reply', false), turn('user', 'C-s1-t2 theta topic answer', true)];
+  return {
+    question_id: 'fixture_q_c',
+    question_type: 'temporal-reasoning',
+    question: 'What was the theta topic answer? (never read by simulate/extract)',
+    question_date: formatLmeDate(day(7)), // BEFORE session s1 (day 10) — the causal-clamp case
+    answer: 'the theta topic answer (never read by simulate/extract)',
+    answer_session_ids: ['fixture_q_c_sess1'],
+    haystack_dates: [formatLmeDate(day(0)), formatLmeDate(day(10))],
+    haystack_session_ids: ['fixture_q_c_sess0', 'fixture_q_c_sess1'],
+    haystack_sessions: [s0, s1],
+  };
+}
+
 const QUESTIONS = [buildQuestionA(), buildQuestionB()];
+const QUESTION_C = buildQuestionC();
 
 function cleanupScratch(): void {
-  for (const q of QUESTIONS) {
+  for (const q of [...QUESTIONS, QUESTION_C]) {
     fs.rmSync(questionDir(q.question_id), { recursive: true, force: true });
   }
 }
 
-const QUESTION_DATE_ISO = day(7).toISOString(); // both fixtures share question_date = day 7
-
 async function runPipeline(q: ReturnType<typeof buildQuestionA>) {
   const ingestResult = ingestQuestion(q);
-  await simulateQuestion(q.question_id, QUESTION_DATE_ISO);
-  const extractResult = extractQuestion(q.question_id, QUESTION_DATE_ISO);
-  return { ingestResult, extractResult };
+  const meta = readJson(metaPathFor(q.question_id)) as { tEval: string };
+  await simulateQuestion(q.question_id, meta.tEval);
+  const extractResult = extractQuestion(q.question_id, meta.tEval);
+  return { ingestResult, extractResult, tEval: meta.tEval };
 }
 
 afterAll(cleanupScratch);
@@ -295,6 +316,88 @@ describe('memory-value harness (real stores)', () => {
   });
 });
 
+describe('causal clock clamp (codex review fix round #3 P1 fix verification)', () => {
+  it('T_eval clamps forward past question_date to the latest haystack_date; age_days >= 0 for every row', async () => {
+    fs.rmSync(questionDir(QUESTION_C.question_id), { recursive: true, force: true });
+    try {
+      const ingestResult = ingestQuestion(QUESTION_C);
+      const meta = readJson(metaPathFor(QUESTION_C.question_id)) as { questionDate: string; tEval: string };
+
+      // question_date (day 7) predates session s1 (day 10) -> T_eval must
+      // clamp FORWARD to day 10, not stay at question_date.
+      const day10Iso = new Date(Date.UTC(2024, 0, 1, 9, 0, 0) + 10 * 86_400_000).toISOString();
+      expect(meta.tEval).toBe(day10Iso);
+      expect(meta.tEval).not.toBe(meta.questionDate);
+      expect(meta.tEval > meta.questionDate).toBe(true);
+
+      await simulateQuestion(QUESTION_C.question_id, meta.tEval, { seed: CONFIG.GLOBAL_SEED });
+      extractQuestion(QUESTION_C.question_id, meta.tEval);
+
+      const rows = readJsonl(featuresPathFor(QUESTION_C.question_id)) as Array<{
+        memory_id: string;
+        sessionIndex: number;
+        turnIdx: number;
+        features: { age_days: number };
+      }>;
+      expect(rows.length).toBe(ingestResult.memoryCount);
+      expect(rows.length).toBe(6); // 3 + 3 turns, none empty
+
+      // No negative age anywhere — the bug this fix eliminates (codex
+      // measured 15,162 such rows across the real 500-question dataset).
+      for (const row of rows) {
+        expect(row.features.age_days, `session ${row.sessionIndex} turn ${row.turnIdx}`).toBeGreaterThanOrEqual(0);
+      }
+      // s1 (day 10) IS T_eval -> its memories' age is exactly 0 (created ===
+      // T_eval, untouched by simulation, which never mutates `created`).
+      const s1Rows = rows.filter((r) => r.sessionIndex === 1);
+      expect(s1Rows.length).toBe(3);
+      for (const row of s1Rows) expect(row.features.age_days).toBe(0);
+      // s0 (day 0) is exactly 10 days before T_eval (day 10).
+      const s0Rows = rows.filter((r) => r.sessionIndex === 0);
+      expect(s0Rows.length).toBe(3);
+      for (const row of s0Rows) expect(row.features.age_days).toBe(10);
+    } finally {
+      fs.rmSync(questionDir(QUESTION_C.question_id), { recursive: true, force: true });
+    }
+  });
+});
+
+describe('--skip-simulate variance-gate exemption (codex review fix round #3 P2 fix verification)', () => {
+  it('a real (non-smoke) run without simulation passes at threshold 3 but would fail at the default threshold 6', async () => {
+    for (const q of QUESTIONS) {
+      fs.rmSync(questionDir(q.question_id), { recursive: true, force: true });
+      ingestQuestion(q); // no simulateQuestion call — mirrors --skip-simulate
+      const meta = readJson(metaPathFor(q.question_id)) as { tEval: string };
+      extractQuestion(q.question_id, meta.tEval);
+    }
+    try {
+      const storesRows = QUESTIONS.map(
+        (q) => readJsonl(featuresPathFor(q.question_id)) as Array<{ features: Record<string, number> }>,
+      );
+      const { varying, dead } = computeDatasetVariance(storesRows, CONFIG.FEATURES as string[]);
+
+      // Usage-derived dims are constant BY DESIGN without simulation.
+      for (const f of ['retrieval_count', 'outcome_positive', 'outcome_negative', 'outcome_ratio', 'half_life_days']) {
+        expect(dead, f).toContain(f);
+      }
+      // The naturally-surviving set (age varies by session date regardless
+      // of simulation; strength's decay term is a pure function of age;
+      // content_length is turn-text length, simulation-independent).
+      for (const f of ['age_days', 'strength', 'content_length']) {
+        expect(varying, f).toContain(f);
+      }
+
+      const defaultGate = evaluateVarianceGate(varying, dead); // minVarying defaults to 6
+      expect(defaultGate.passed).toBe(false);
+      const skipSimulateGate = evaluateVarianceGate(varying, dead, { minVarying: CONFIG.MIN_VARYING_FEATURES_SKIP_SIMULATE });
+      expect(CONFIG.MIN_VARYING_FEATURES_SKIP_SIMULATE).toBe(3);
+      expect(skipSimulateGate.passed).toBe(true);
+    } finally {
+      for (const q of QUESTIONS) fs.rmSync(questionDir(q.question_id), { recursive: true, force: true });
+    }
+  });
+});
+
 describe('variance gate (pure logic, no I/O)', () => {
   it('flags a hand-built ALL-CONSTANT feature set as failing', () => {
     const featureNames = CONFIG.FEATURES as string[];
@@ -303,7 +406,7 @@ describe('variance gate (pure logic, no I/O)', () => {
       for (const f of featureNames) features[f] = 0; // every dim frozen — the exact failure mode this gate exists for
       return { features };
     });
-    const { varying, dead } = computeDatasetVariance(rows, featureNames);
+    const { varying, dead } = computeDatasetVariance([rows], featureNames); // one store
     expect(varying.length).toBe(0);
     expect(dead.length).toBe(featureNames.length);
     const gate = evaluateVarianceGate(varying, dead);
@@ -312,16 +415,16 @@ describe('variance gate (pure logic, no I/O)', () => {
     expect(gate.deadFeatures.length).toBe(featureNames.length);
   });
 
-  it('passes when exactly the minimum (6) features vary', () => {
+  it('passes when exactly the minimum (6) features vary WITHIN a store', () => {
     const featureNames = CONFIG.FEATURES as string[];
     const rows = Array.from({ length: 5 }, (_, i) => {
       const features: Record<string, number> = {};
       featureNames.forEach((f, fi) => {
-        features[f] = fi < 6 ? i : 0; // first 6 dims vary row-to-row, the rest stay constant
+        features[f] = fi < 6 ? i : 0; // first 6 dims vary row-to-row WITHIN this one store, rest constant
       });
       return { features };
     });
-    const { varying, dead } = computeDatasetVariance(rows, featureNames);
+    const { varying, dead } = computeDatasetVariance([rows], featureNames); // one store
     expect(varying.length).toBe(6);
     expect(dead.length).toBe(featureNames.length - 6);
     const gate = evaluateVarianceGate(varying, dead);
@@ -329,15 +432,44 @@ describe('variance gate (pure logic, no I/O)', () => {
     expect(gate.varyingCount).toBe(6);
   });
 
+  it('a feature constant WITHIN every store but differing ACROSS stores is DEAD, not varying (cross-store-constant liveness)', () => {
+    // codex review fix round #3 P2 fix: pooled/cross-store variance would
+    // wrongly call this "varying" (pooled sees {0.3, 0.7, ...}); every
+    // scorer normalizes min-max PER STORE, so a feature constant within
+    // each individual store normalizes to 0 everywhere regardless of the
+    // cross-store spread — provably inert, must classify as dead.
+    const featureNames = CONFIG.FEATURES as string[];
+    const constantRowsAt = (value: number, n: number) =>
+      Array.from({ length: n }, () => {
+        const features: Record<string, number> = {};
+        for (const f of featureNames) features[f] = value;
+        return { features };
+      });
+    const storeA = constantRowsAt(0.3, 4); // constant 0.3 within store A
+    const storeB = constantRowsAt(0.7, 4); // constant 0.7 within store B — DIFFERENT constant
+    const storeC = constantRowsAt(1.5, 4); // a third distinct constant, for good measure
+
+    const { varying, dead, detail } = computeDatasetVariance([storeA, storeB, storeC], featureNames);
+    expect(varying.length).toBe(0);
+    expect(dead.length).toBe(featureNames.length);
+    for (const f of featureNames) {
+      expect(detail[f].pooledVaries, `${f} pooledVaries`).toBe(true); // diagnostic: pooled DOES see the spread
+      expect(detail[f].varies, `${f} varies`).toBe(false); // liveness: correctly dead
+      expect(detail[f].min).toBe(0.3);
+      expect(detail[f].max).toBe(1.5);
+    }
+    const gate = evaluateVarianceGate(varying, dead);
+    expect(gate.passed).toBe(false);
+  });
+
   it('a real fixture run produces a passing gate (>=6 varying features)', async () => {
     for (const q of QUESTIONS) {
       await runPipeline(q);
     }
-    const allRows: Array<{ features: Record<string, number> }> = [];
-    for (const q of QUESTIONS) {
-      allRows.push(...(readJsonl(featuresPathFor(q.question_id)) as Array<{ features: Record<string, number> }>));
-    }
-    const { varying, dead } = computeDatasetVariance(allRows, CONFIG.FEATURES as string[]);
+    const storesRows = QUESTIONS.map(
+      (q) => readJsonl(featuresPathFor(q.question_id)) as Array<{ features: Record<string, number> }>,
+    );
+    const { varying, dead } = computeDatasetVariance(storesRows, CONFIG.FEATURES as string[]);
     const gate = evaluateVarianceGate(varying, dead);
     expect(gate.passed).toBe(true);
     // schema_fit is proven constant above; it must land in `dead`, not `varying`.
@@ -356,8 +488,9 @@ describe('cross-ingest determinism (codex review P1 fix verification)', () => {
       const rowsByQuestion: Record<string, Array<{ memory_id: string; sessionIndex: number; turnIdx: number; gold: number; features: Record<string, number> }>> = {};
       for (const q of QUESTIONS) {
         ingestQuestion(q);
-        await simulateQuestion(q.question_id, QUESTION_DATE_ISO, { seed: CONFIG.GLOBAL_SEED });
-        extractQuestion(q.question_id, QUESTION_DATE_ISO);
+        const meta = readJson(metaPathFor(q.question_id)) as { tEval: string };
+        await simulateQuestion(q.question_id, meta.tEval, { seed: CONFIG.GLOBAL_SEED });
+        extractQuestion(q.question_id, meta.tEval);
         rowsByQuestion[q.question_id] = readJsonl(featuresPathFor(q.question_id));
       }
       const evalResult = evaluateAll(

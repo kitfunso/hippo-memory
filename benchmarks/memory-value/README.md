@@ -36,8 +36,16 @@ All scripts import from `dist/` (compiled hippo, same convention as
   turn of every answer session. `retention(q) = |gold ∩ kept| / |gold|`;
   questions with 0 gold turns are skipped from the mean but counted.
 - **Clock**: ingest stamps each session under `HIPPO_FAKE_NOW` = that
-  session's real `haystack_date`; all usage-simulation rounds and feature
-  extraction run under `HIPPO_FAKE_NOW` = `question_date`.
+  session's real `haystack_date`. Usage-simulation rounds and feature
+  extraction run under `HIPPO_FAKE_NOW` = `T_eval`, NOT the raw
+  `question_date` — **causal clock clamp**: `T_eval = max(question_date,
+  latest haystack_date)`, computed once at ingest and stored as
+  `meta.json`'s `tEval`. 76/500 real questions have at least one haystack
+  session dated AFTER `question_date`; evaluating at the raw `question_date`
+  would give those memories NEGATIVE `age_days` (a memory "created" after
+  the instant it's being scored at). `T_eval` guarantees `age_days >= 0` for
+  all 500 questions. Equal to `question_date` whenever every session
+  predates it (the common case).
 - **Usage simulation**: `SIM_ROUNDS` (30) seeded recall+outcome rounds per
   store. Query = a uniformly-sampled turn's content from THAT STORE's own
   sessions (never the eval question/answer text — the leakage rule), top-K
@@ -72,15 +80,27 @@ All scripts import from `dist/` (compiled hippo, same convention as
   [0.1, 0.2, 0.3, 0.5]; 0.3 is primary (the only budget with per-question
   paired records for bootstrap; the rest are descriptive-only, per the
   pre-reg).
-- **Dataset-wide variance gate**: `evaluate.mjs` computes RAW (pre-
-  normalization) variance per feature across every processed question and
-  reports `varyingFeatures` / `deadFeatures` explicitly. A dead feature
-  (constant everywhere) min-max normalizes to 0 in every store, so it is
-  provably inert for the uniform/weighted scorers; its single-factor summary
-  cells are marked `degenerate: true` / `degenerateReason: "tie-break-only"`
-  and excluded from `bestSingleFactor`. `run.mjs` hard-fails (nonzero exit)
-  on any real (non-`--smoke`) run with fewer than 6 dataset-wide-varying
-  features.
+- **Within-store variance gate**: `evaluate.mjs` computes RAW (pre-
+  normalization) variance per feature and reports `varyingFeatures` /
+  `deadFeatures` explicitly. Liveness is **WITHIN-STORE**: a feature must
+  vary inside at least one store to count as `varying` — a feature constant
+  in every store individually but at a DIFFERENT constant per store (e.g.
+  0.3 in store A, 0.7 in store B) pools as "varying" across the dataset yet
+  min-max normalizes to 0 in EVERY store, so it is just as inert as a
+  truly-constant feature; `featureVarianceDetail[f].pooledVaries` keeps the
+  pooled (cross-store) view as a diagnostic only, never as the
+  classification signal. A dead feature's single-factor summary cells are
+  marked `degenerate: true` / `degenerateReason: "tie-break-only"` and
+  excluded from `bestSingleFactor`. `run.mjs` hard-fails (nonzero exit) on
+  any real (non-`--smoke`) run with fewer than `CONFIG.MIN_VARYING_FEATURES`
+  (6) within-store-varying features — lowered to
+  `CONFIG.MIN_VARYING_FEATURES_SKIP_SIMULATE` (3) under `--skip-simulate`,
+  since `retrieval_count`/`outcome_positive`/`outcome_negative`/
+  `outcome_ratio`/`half_life_days` are constant BY DESIGN without
+  simulation (only `age_days`, `strength`, `content_length` naturally
+  survive — `strength`'s decay term is a pure function of age even with
+  zero retrievals). `run.mjs` prints a note when this lowered threshold is
+  in effect.
 
 All of the above numbers are pinned in `config.mjs` as one frozen object —
 that file is the single source of truth if this README and the config ever
@@ -174,6 +194,16 @@ block it was generated under, per-stage timings, gold-mode counts, the
 summary (mean retention per split/scorer/budget), and `pairedRecords`
 (primary-budget, every scorer, every question — the bootstrap input for
 E2's paired-CI bars).
+
+`results/split.json` is written filtered to the ids actually PROCESSED this
+run (e.g. exactly 3 ids after `--questions 3`), not the full computed split
+— a standalone `evaluate.mjs --weights <file>` reading it by default must
+never see an id whose `features.jsonl` doesn't exist. The full split's
+counts still land in `results.split` inside the main results JSON.
+`--budget B` NEVER changes which budget drives `pairedRecords` (always
+`CONFIG.PRIMARY_BUDGET`, 0.3, per the pre-reg) — it only adds `B` to the
+evaluated budgets list (if not already one of `CONFIG.KEEP_BUDGETS`) so the
+headline print has a defined cell to read.
 
 ## Tests
 

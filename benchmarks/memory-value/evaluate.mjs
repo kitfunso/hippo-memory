@@ -37,16 +37,19 @@
  * Retention(q) = |gold ∩ kept| / |gold|; questions with 0 gold are SKIPPED
  * from the mean but still counted (goldCount: 0 rows are not an error).
  *
- * Variance-aware reporting (code-review-critic fix round, 2026-08-09): a
- * feature that is structurally constant DATASET-WIDE (not just per-store) is
- * provably inert for the uniform/weighted scorers (min-max normalizes it to
- * 0 in every store) and its single-factor score is a pure tie-break, not a
- * real ranking signal. `evaluateAll` computes dataset-wide variance per
- * feature across every processed question BEFORE scoring, reports
- * `varyingFeatures`/`deadFeatures` explicitly, restricts `bestSingleFactor`
- * to varying-feature scorers only, and tags every single-factor summary cell
- * for a dead feature with `degenerate: true` so it is never silently mixed
- * into a "best single factor beats uniform" claim.
+ * Variance-aware reporting (code-review-critic fix rounds, 2026-08-09): a
+ * feature that never varies WITHIN ANY SINGLE STORE is provably inert for
+ * the uniform/weighted scorers (min-max normalizes it to 0 in every store)
+ * and its single-factor score is a pure tie-break, not a real ranking
+ * signal. `evaluateAll` computes this per-store liveness across every
+ * processed question BEFORE scoring (see computeDatasetVariance — fix
+ * round #2 corrected this from a pooled/cross-store definition, which wrongly
+ * called a feature "varying" when it was constant in every store individually
+ * but at a DIFFERENT constant per store), reports `varyingFeatures`/
+ * `deadFeatures` explicitly, restricts `bestSingleFactor` to varying-feature
+ * scorers only, and tags every single-factor summary cell for a dead feature
+ * with `degenerate: true` so it is never silently mixed into a "best single
+ * factor beats uniform" claim.
  */
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -97,44 +100,67 @@ export function buildScorers(featureNames, weights) {
 }
 
 // ---------------------------------------------------------------------------
-// Dataset-wide variance (across every processed question, RAW feature
-// values — pre-normalization, since per-store min-max would hide a feature
-// that varies store-to-store but happens to be point-constant within one
-// store). variance = 0 iff min === max for finite numeric features, so the
-// boolean gate uses the exact min/max comparison; the numeric variance is
-// reported alongside for diagnostics.
+// Dataset-wide variance, WITHIN-STORE liveness (codex review fix round #2,
+// 2026-08-09 P2 fix). A feature can pool as "varying" (its raw values differ
+// somewhere across the whole dataset) while being CONSTANT within every
+// single store — e.g. constant at 0.3 in store A, constant at 0.7 in store
+// B. Every scorer normalizes min-max PER STORE, so that feature normalizes
+// to 0 in EVERY store regardless of the cross-store spread: it is provably
+// inert for every scorer, exactly like a truly-constant feature, and must be
+// classified `dead`, not `varying`. Liveness is therefore "varies within AT
+// LEAST ONE store" — the pooled (cross-store) min/max/mean/variance are kept
+// in `detail` as diagnostics only, never as the classification signal.
 // ---------------------------------------------------------------------------
 
 /**
- * @param {Array<{features: Record<string, number>}>} rows  raw feature rows,
- *   pooled across every question/store processed this run.
+ * @param {Array<Array<{features: Record<string, number>}>>} storesRows  one
+ *   raw-feature-row array PER STORE (question) processed this run — the
+ *   store boundary is the unit variance is measured within.
  * @param {string[]} featureNames
- * @returns {{ varying: string[], dead: string[], detail: Record<string, {min:number|null,max:number|null,mean:number,variance:number,varies:boolean}> }}
+ * @returns {{ varying: string[], dead: string[], detail: Record<string, {min:number|null,max:number|null,mean:number,variance:number,pooledVaries:boolean,varies:boolean}> }}
  */
-export function computeDatasetVariance(rows, featureNames) {
-  const stats = {};
-  for (const f of featureNames) stats[f] = { min: Infinity, max: -Infinity, count: 0, sum: 0, sumSq: 0 };
-  for (const row of rows) {
+export function computeDatasetVariance(storesRows, featureNames) {
+  const pooled = {};
+  const livesWithinStore = {};
+  for (const f of featureNames) {
+    pooled[f] = { min: Infinity, max: -Infinity, count: 0, sum: 0, sumSq: 0 };
+    livesWithinStore[f] = false;
+  }
+
+  for (const rows of storesRows) {
+    const storeMinMax = {};
+    for (const f of featureNames) storeMinMax[f] = { min: Infinity, max: -Infinity };
+    for (const row of rows) {
+      for (const f of featureNames) {
+        const v = row.features[f];
+        const p = pooled[f];
+        if (v < p.min) p.min = v;
+        if (v > p.max) p.max = v;
+        p.count++;
+        p.sum += v;
+        p.sumSq += v * v;
+        const s = storeMinMax[f];
+        if (v < s.min) s.min = v;
+        if (v > s.max) s.max = v;
+      }
+    }
     for (const f of featureNames) {
-      const v = row.features[f];
-      const s = stats[f];
-      if (v < s.min) s.min = v;
-      if (v > s.max) s.max = v;
-      s.count++;
-      s.sum += v;
-      s.sumSq += v * v;
+      const s = storeMinMax[f];
+      if (s.max > s.min) livesWithinStore[f] = true;
     }
   }
+
   const varying = [];
   const dead = [];
   const detail = {};
   for (const f of featureNames) {
-    const s = stats[f];
-    const has = s.count > 0;
-    const mean = has ? s.sum / s.count : 0;
-    const variance = has ? Math.max(0, s.sumSq / s.count - mean * mean) : 0;
-    const varies = has && s.max > s.min;
-    detail[f] = { min: has ? s.min : null, max: has ? s.max : null, mean, variance, varies };
+    const p = pooled[f];
+    const has = p.count > 0;
+    const mean = has ? p.sum / p.count : 0;
+    const variance = has ? Math.max(0, p.sumSq / p.count - mean * mean) : 0;
+    const pooledVaries = has && p.max > p.min;
+    const varies = livesWithinStore[f]; // the classification signal — within-store, not pooled
+    detail[f] = { min: has ? p.min : null, max: has ? p.max : null, mean, variance, pooledVaries, varies };
     (varies ? varying : dead).push(f);
   }
   return { varying, dead, detail };
@@ -149,7 +175,7 @@ export function computeDatasetVariance(rows, featureNames) {
  * @param {{ minVarying?: number }} [opts]
  */
 export function evaluateVarianceGate(varying, dead, opts = {}) {
-  const minVarying = opts.minVarying ?? 6;
+  const minVarying = opts.minVarying ?? CONFIG.MIN_VARYING_FEATURES;
   return {
     passed: varying.length >= minVarying,
     minVarying,
@@ -246,7 +272,7 @@ export function evaluateStore(rows, budgets, weights) {
 
 /**
  * @param {Array<{questionId: string, split: 'train'|'heldout'}>} questionSplits
- * @param {{ budgets?: number[], primaryBudget?: number, weights?: Record<string,number> }} [opts]
+ * @param {{ budgets?: number[], primaryBudget?: number, weights?: Record<string,number>, minVarying?: number }} [opts]
  */
 export function evaluateAll(questionSplits, opts = {}) {
   const primaryBudget = opts.primaryBudget ?? CONFIG.PRIMARY_BUDGET;
@@ -265,14 +291,14 @@ export function evaluateAll(questionSplits, opts = {}) {
   // only framing for 0.1/0.2/0.5). Built from the SAME evaluateStore() call
   // as the aggregate below — one pass per question, not two.
   const pairedRecords = [];
-  // Pooled RAW rows across every processed question, for the dataset-wide
-  // variance gate (see computeDatasetVariance doc comment: must be computed
-  // on raw values, not per-store normalized ones).
-  const allRawRows = [];
+  // RAW rows grouped PER STORE (question) — computeDatasetVariance measures
+  // liveness WITHIN each store's array, not across the pooled flat list
+  // (see its doc comment).
+  const rawRowsByStore = [];
 
   for (const { questionId, split } of questionSplits) {
     const rows = readJsonl(featuresPathFor(questionId));
-    allRawRows.push(...rows);
+    rawRowsByStore.push(rows);
     const result = evaluateStore(rows, budgets, weights);
     if (scorerNames === null) scorerNames = Object.keys(result.perScorer);
 
@@ -313,12 +339,12 @@ export function evaluateAll(questionSplits, opts = {}) {
     }
   }
 
-  // Dataset-wide variance (raw, pre-normalization) — determines which
-  // single-factor scorers are "degenerate: tie-break-only" (dead feature,
-  // min-max normalizes to 0 everywhere) vs real ranking signal.
+  // Within-store variance liveness (raw, pre-normalization) — determines
+  // which single-factor scorers are "degenerate: tie-break-only" (dead
+  // feature, min-max normalizes to 0 in every store) vs real ranking signal.
   const { varying: varyingFeatures, dead: deadFeatures, detail: featureVarianceDetail } =
-    computeDatasetVariance(allRawRows, featureNames);
-  const varianceGate = evaluateVarianceGate(varyingFeatures, deadFeatures);
+    computeDatasetVariance(rawRowsByStore, featureNames);
+  const varianceGate = evaluateVarianceGate(varyingFeatures, deadFeatures, { minVarying: opts.minVarying });
   const deadFeatureSet = new Set(deadFeatures);
   // Single-factor scorer name -> its underlying feature, so degenerate
   // marking and bestSingleFactor filtering share one source of truth.

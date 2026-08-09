@@ -115,6 +115,20 @@ export const CONFIG = Object.freeze({
   E2_BOOTSTRAP_RESAMPLES: 1000,
   E2_PAPER_REFERENCE: Object.freeze({ learned: 0.77, uniform: 0.657, bestSingle: 0.518 }),
 
+  // Variance gate (evaluate.mjs computeDatasetVariance / evaluateVarianceGate;
+  // codex review fix round, 2026-08-09). MIN_VARYING_FEATURES is the normal
+  // (usage-simulated) threshold. MIN_VARYING_FEATURES_SKIP_SIMULATE is the
+  // --skip-simulate ablation-specific threshold: without simulation,
+  // retrieval_count/outcome_positive/outcome_negative/outcome_ratio/
+  // half_life_days are constant BY DESIGN (half_life_days only moves via
+  // markRetrieved's +2/retrieval — see ingest.mjs; it needs simulation to
+  // vary, same as the outcome/retrieval-count dims), leaving only
+  // {age_days, strength, content_length} as naturally-surviving dims —
+  // strength still varies because calculateStrength's decay term is a pure
+  // function of age even with zero retrievals.
+  MIN_VARYING_FEATURES: 6,
+  MIN_VARYING_FEATURES_SKIP_SIMULATE: 3,
+
   FEATURES,
   ORIENTATION,
 });

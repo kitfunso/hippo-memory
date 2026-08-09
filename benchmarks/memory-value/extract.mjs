@@ -85,6 +85,11 @@ export function computeFeatures(entry, now) {
 /**
  * Extract features.jsonl for one already-ingested (and usually simulated)
  * store, joining the gold.json sidecar for the `gold` label.
+ * @param {string} questionId
+ * @param {string} questionDateIso  the clock to extract at — callers MUST
+ *   pass meta.tEval (the causal clock clamp, ingest.mjs), never the raw
+ *   meta.questionDate, or memories from haystack sessions postdating the
+ *   question can get negative age_days.
  * @returns {{ rows: number, path: string }}
  */
 export function extractQuestion(questionId, questionDateIso) {
@@ -145,6 +150,7 @@ if (isMain) {
   }
   const meta = readJson(metaPathFor(questionId));
   const t0 = Date.now();
-  const r = extractQuestion(questionId, meta.questionDate);
+  // Causal clock clamp: tEval (not questionDate) — see ingest.mjs header.
+  const r = extractQuestion(questionId, meta.tEval);
   console.log(`[extract] ${questionId}: ${r.rows} rows in ${((Date.now() - t0) / 1000).toFixed(1)}s -> ${r.path}`);
 }

@@ -65,7 +65,10 @@ function loadSortedByProvenance(hippoRoot, provenanceByMemoryId) {
 /**
  * Run the usage simulation against an already-ingested store.
  * @param {string} questionId
- * @param {string} questionDateIso  canonical ISO date (parseLmeDate output)
+ * @param {string} questionDateIso  the clock to simulate at — callers MUST
+ *   pass meta.tEval (the causal clock clamp, ingest.mjs), never the raw
+ *   meta.questionDate, or memories from haystack sessions postdating the
+ *   question can get negative age_days.
  * @param {{ rounds?: number, topK?: number, seed?: number, recordRounds?: boolean }} [opts]
  * @returns {{ rounds: number, roundLog: Array<object> }}
  */
@@ -167,7 +170,8 @@ if (isMain) {
   }
   const meta = readJson(metaPathFor(questionId));
   const t0 = Date.now();
-  simulateQuestion(questionId, meta.questionDate, { seed, recordRounds: process.argv.includes('--record-rounds') }).then(
+  // Causal clock clamp: tEval (not questionDate) — see ingest.mjs header.
+  simulateQuestion(questionId, meta.tEval, { seed, recordRounds: process.argv.includes('--record-rounds') }).then(
     (r) => {
       console.log(`[simulate] ${questionId}: ${r.rounds} rounds in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
       if (r.roundLog.length > 0) {

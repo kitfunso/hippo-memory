@@ -538,6 +538,11 @@
     "gpt4_f420262d",
     "gpt4_fe651585_abs"
   ],
-  "generatedAt": "2026-08-09T04:12:41.891Z",
+  "subsetOf": {
+    "totalQuestions": 500,
+    "fullTrainCount": 300,
+    "fullHeldoutCount": 200
+  },
+  "generatedAt": "2026-08-09T09:32:28.810Z",
   "source": "C:/Users/skf_s/hippo/benchmarks/longmemeval/data/longmemeval_s_cleaned.json"
 }
