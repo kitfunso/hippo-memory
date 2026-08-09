@@ -38,6 +38,8 @@ import {
   seededShuffle,
   apportionLargestRemainder,
   questionDir,
+  hippoRootFor,
+  safeRemoveScratchDir,
   writeJson,
   readJson,
   RESULTS_DIR,
@@ -136,7 +138,7 @@ async function main() {
     if (!skipSimulate) {
       t0 = Date.now();
       const meta = readJson(path.join(questionDir(questionId), 'meta.json'));
-      await simulateQuestion(questionId, meta.questionDate);
+      await simulateQuestion(questionId, meta.questionDate, { seed });
       per.simulateMs = Date.now() - t0;
       timings.simulateMs += per.simulateMs;
     }
@@ -157,14 +159,20 @@ async function main() {
   const weights = weightsPath ? readJson(weightsPath) : undefined;
   const evaluation = evaluateAll(
     processed.map(({ questionId, split }) => ({ questionId, split })),
-    { weights },
+    { weights, primaryBudget: budgetHeadline },
   );
   const evaluateMs = Date.now() - evalT0;
   const totalMs = Date.now() - overallT0;
 
+  // Cleanup deletes ONLY the SQLite store dir (codex review fix round,
+  // 2026-08-09), not the whole question dir: gold.json/meta.json/
+  // features.jsonl survive, so a later standalone `evaluate.mjs --weights`
+  // (E2's re-scoring path) can run against this run's features without
+  // re-ingesting. safeRemoveScratchDir re-verifies containment before
+  // every delete (common.mjs).
   if (!keepStores) {
     for (const { questionId } of processed) {
-      fs.rmSync(questionDir(questionId), { recursive: true, force: true });
+      safeRemoveScratchDir(hippoRootFor(questionId));
     }
   }
 

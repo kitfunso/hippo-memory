@@ -133,14 +133,63 @@ export function clearFakeNow() {
 // Scratch-store paths. NEVER under the repo, NEVER touching ~/.hippo or any
 // .hippo ancestor (probation memory: feedback_hippo_probe_scratch_stores).
 // Built with path.join throughout so Windows/Git-Bash paths stay correct.
+//
+// Containment (codex review fix round, 2026-08-09 P1): `question_id` comes
+// from the LongMemEval dataset — untrusted-ish input. `sanitizeQuestionId`
+// is the single choke point every path-builder below routes through, so a
+// question_id containing path-traversal characters can never make
+// `questionDir` resolve outside the scratch root. `safeRemoveScratchDir` is
+// the single choke point for every recursive delete in this harness: it
+// re-verifies containment against the CURRENT `scratchRootDir()` (which
+// honors HIPPO_MV_SCRATCH_ROOT, read fresh on every call — see below) right
+// before deleting, so a caller can never be tricked into an out-of-root
+// `rmSync -r` even if a path was built some other way.
 // ---------------------------------------------------------------------------
 
+/** HIPPO_MV_SCRATCH_ROOT overrides the default os.tmpdir() root. Read FRESH
+ *  on every call (not cached) so a test can point two separate ingests at
+ *  two separate roots within the same process (cross-ingest determinism
+ *  check — memory ids are crypto-random per ingest and must never be relied
+ *  on for reproducibility; two full re-ingests into two roots is the only
+ *  way to prove that). Unset/blank falls back to the default tmp path. */
 export function scratchRootDir() {
+  const override = process.env.HIPPO_MV_SCRATCH_ROOT;
+  if (override && override.trim().length > 0) return override;
   return path.join(os.tmpdir(), 'hippo-mv-stores');
 }
 
+/** Directory-name-safe question id: anything outside [A-Za-z0-9_-] becomes
+ *  `_`. Every real/synthetic question_id used by this harness already only
+ *  contains those characters, so this is a no-op in practice — it exists to
+ *  make path-traversal via a hostile question_id structurally impossible,
+ *  not to handle an expected input shape. */
+export function sanitizeQuestionId(questionId) {
+  return String(questionId).replace(/[^A-Za-z0-9_-]/g, '_');
+}
+
 export function questionDir(questionId) {
-  return path.join(scratchRootDir(), questionId);
+  return path.join(scratchRootDir(), sanitizeQuestionId(questionId));
+}
+
+/**
+ * The ONLY recursive-delete entry point in benchmarks/memory-value/. Resolves
+ * `targetPath` and refuses (throws) unless it IS the current scratch root or
+ * lies strictly inside it. Every `fs.rmSync(..., {recursive:true})` call
+ * site in this harness (ingest.mjs's clean-slate wipe, run.mjs's post-
+ * extraction cleanup, the test file's cleanupScratch) MUST go through this
+ * instead of calling fs.rmSync directly.
+ */
+export function safeRemoveScratchDir(targetPath) {
+  const resolved = path.resolve(targetPath);
+  const root = path.resolve(scratchRootDir());
+  const contained = resolved === root || resolved.startsWith(root + path.sep);
+  if (!contained) {
+    throw new Error(
+      `safeRemoveScratchDir: refusing to recursively delete "${resolved}" — it is not the scratch root ` +
+        `"${root}" or a path inside it. Refusing rather than risking an out-of-root rmSync.`,
+    );
+  }
+  fs.rmSync(resolved, { recursive: true, force: true });
 }
 
 /** The hippoRoot passed to store.ts/memory.ts/search.ts functions directly

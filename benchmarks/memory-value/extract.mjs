@@ -13,6 +13,14 @@
  * while computing a feature value. The `gold` column on each output row
  * comes from the gold.json sidecar (ingest.mjs), joined AFTER all 30
  * feature values are computed — gold never feeds a feature.
+ *
+ * Provenance (codex review fix round, 2026-08-09 P1 fix): every row also
+ * carries `sessionIndex`/`turnIdx` (dataset-fixed, from gold.json's
+ * memories list — which already carries the same {id, sessionIndex,
+ * turnIdx} triples ingest.mjs writes to meta.json's `turns` for
+ * simulate.mjs). `memory_id` is crypto-random per ingest and must never be
+ * the ONLY join key between two runs of the same dataset; evaluate.mjs's
+ * tie-break and any cross-ingest comparison join on this provenance key.
  */
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -83,6 +91,9 @@ export function extractQuestion(questionId, questionDateIso) {
   const hippoRoot = hippoRootFor(questionId);
   const gold = readJson(goldPathFor(questionId));
   const goldById = new Map(gold.memories.map((m) => [m.id, m.isGold]));
+  const provenanceById = new Map(
+    gold.memories.map((m) => [m.id, { sessionIndex: m.sessionIndex, turnIdx: m.turnIdx }]),
+  );
 
   setFakeNow(questionDateIso);
   let rows;
@@ -91,12 +102,23 @@ export function extractQuestion(questionId, questionDateIso) {
     const now = new Date(questionDateIso);
     rows = entries
       .slice()
-      .sort((a, b) => a.id.localeCompare(b.id))
-      .map((entry) => ({
-        memory_id: entry.id,
-        gold: goldById.get(entry.id) === true ? 1 : 0,
-        features: computeFeatures(entry, now),
-      }));
+      .sort((a, b) => {
+        const pa = provenanceById.get(a.id);
+        const pb = provenanceById.get(b.id);
+        if (!pa || !pb) throw new Error(`extractQuestion: no provenance for memory ${!pa ? a.id : b.id}`);
+        return pa.sessionIndex - pb.sessionIndex || pa.turnIdx - pb.turnIdx;
+      })
+      .map((entry) => {
+        const prov = provenanceById.get(entry.id);
+        if (!prov) throw new Error(`extractQuestion: no provenance for memory ${entry.id}`);
+        return {
+          memory_id: entry.id,
+          sessionIndex: prov.sessionIndex,
+          turnIdx: prov.turnIdx,
+          gold: goldById.get(entry.id) === true ? 1 : 0,
+          features: computeFeatures(entry, now),
+        };
+      });
   } finally {
     clearFakeNow();
   }

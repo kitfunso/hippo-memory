@@ -19,8 +19,16 @@
  * answer-session-all mode per question and is recorded in gold.json
  * alongside the memory_id <-> turn map, so extract.mjs can join gold labels
  * onto features without ever touching query/answer text itself.
+ *
+ * Provenance: meta.json also carries a gold-free `turns` list
+ * ({sessionIndex, turnIdx, memoryId}, dataset-stable order) — see the
+ * writeJson call below — that simulate.mjs samples from, so query selection
+ * never depends on crypto-random memory ids.
+ *
+ * Scratch-cleanup safety: the clean-slate wipe below goes through
+ * safeRemoveScratchDir (common.mjs), which sanitizes question_id for path
+ * use and refuses to delete anything outside the resolved scratch root.
  */
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createMemory, computeSchemaFit } from '../../dist/memory.js';
@@ -30,10 +38,12 @@ import {
   setFakeNow,
   clearFakeNow,
   computeGold,
+  questionDir,
   hippoRootFor,
   goldPathFor,
   metaPathFor,
   writeJson,
+  safeRemoveScratchDir,
   loadDataset,
 } from './common.mjs';
 
@@ -46,7 +56,7 @@ const MIN_CONTENT_LEN = 3; // createMemory's own floor; skip anything shorter (b
  */
 export function ingestQuestion(question) {
   const hippoRoot = hippoRootFor(question.question_id);
-  fs.rmSync(path.dirname(hippoRoot), { recursive: true, force: true }); // clean slate per question
+  safeRemoveScratchDir(questionDir(question.question_id)); // clean slate per question (containment-checked)
   initStore(hippoRoot);
 
   const { mode, turns } = computeGold(question);
@@ -121,6 +131,15 @@ export function ingestQuestion(question) {
     memoryCount: goldRecords.length,
     skippedEmpty,
     sessionCount: question.haystack_sessions.length,
+    // Stable provenance (codex review fix round, 2026-08-09 P1): the
+    // (sessionIndex, turnIdx) pair is fixed by the DATASET, unlike
+    // memory_id (crypto.randomUUID(), fresh every ingest). simulate.mjs
+    // samples its query from THIS list — never from entries sorted by id —
+    // so the same seed picks the same logical turn across re-ingests.
+    // Deliberately gold-free (no isGold/isAnswerSession/role) so simulate.mjs's
+    // dependency surface stays a pure provenance map; gold.json carries the
+    // same (sessionIndex, turnIdx, id) triples PLUS gold labels for extract.mjs.
+    turns: goldRecords.map((r) => ({ sessionIndex: r.sessionIndex, turnIdx: r.turnIdx, memoryId: r.id })),
   });
 
   return { hippoRoot, goldMode: mode, goldCount, memoryCount: goldRecords.length, skippedEmpty };

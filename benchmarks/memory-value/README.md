@@ -44,7 +44,11 @@ All scripts import from `dist/` (compiled hippo, same convention as
   via hippo's real `hybridSearch`, strengthening via the real
   `markRetrieved` + `writeEntry`, outcome via the real `applyOutcome` +
   `writeEntry` applied to that same round's just-recalled ids. Round index
-  `r % 3 === 2` gets a negative outcome, else positive.
+  `r % 3 === 2` gets a negative outcome, else positive. Query sampling is
+  keyed by (`sessionIndex`, `turnIdx`) — a dataset-fixed provenance pair
+  ingest.mjs writes to `meta.json`'s `turns` list — NOT by sorting entries
+  on their crypto-random `memory_id`, so the same `GLOBAL_SEED`/`--seed`
+  picks the same logical turn on every re-ingest of the same dataset.
 - **Features**: 30-dim blind vector (`config.mjs` `FEATURES`) — lifecycle
   scalars (age, half-life, derived strength, retrieval/outcome counts) plus
   one-hot valence/layer/kind/confidence. Never query-derived; `bm25_score`
@@ -59,10 +63,15 @@ All scripts import from `dist/` (compiled hippo, same convention as
   "recency" as its own named baseline vs. the single-factor-both-signs
   sweep are two separate protocol asks) and is harmless — it just means the
   results JSON carries the same number under two scorer names.
-- **Keep set**: top `ceil(budget * N)` by `(score DESC, memory_id ASC)`,
-  stable, identical rule for every scorer. `KEEP_BUDGETS` = [0.1, 0.2, 0.3,
-  0.5]; 0.3 is primary (the only budget with per-question paired records for
-  bootstrap; the rest are descriptive-only, per the pre-reg).
+- **Keep set**: top `ceil(budget * N)` by `(score DESC, sessionIndex ASC,
+  turnIdx ASC, memory_id ASC)`, stable, identical rule for every scorer.
+  `sessionIndex`/`turnIdx` (dataset-fixed provenance) come BEFORE
+  `memory_id` (crypto-random, fresh per ingest) so the keep-budget cutoff is
+  reproducible ACROSS re-ingests of the same dataset+seed, not just within
+  one ingest — `memory_id` is only the final fallback. `KEEP_BUDGETS` =
+  [0.1, 0.2, 0.3, 0.5]; 0.3 is primary (the only budget with per-question
+  paired records for bootstrap; the rest are descriptive-only, per the
+  pre-reg).
 - **Dataset-wide variance gate**: `evaluate.mjs` computes RAW (pre-
   normalization) variance per feature across every processed question and
   reports `varyingFeatures` / `deadFeatures` explicitly. A dead feature
@@ -125,8 +134,18 @@ run.mjs        orchestrates all of the above; prints per-stage timings
 ```
 
 Scratch stores live under `os.tmpdir()/hippo-mv-stores/<question_id>/`
-(never under the repo, never touching `~/.hippo`), and are deleted after
-extraction by default (`--keep-stores` to retain).
+(never under the repo, never touching `~/.hippo`; `question_id` is
+sanitized to `[A-Za-z0-9_-]` before use in a path, and every recursive
+delete re-verifies it targets a path inside the scratch root — see
+`common.mjs`'s `safeRemoveScratchDir`). Override the root with
+`HIPPO_MV_SCRATCH_ROOT` (used by the cross-ingest determinism test to run
+two independent ingests side by side).
+
+By default, cleanup after extraction deletes ONLY the `store/` subdirectory
+(the SQLite files) — `gold.json`, `meta.json`, and `features.jsonl` survive,
+so a later standalone `node evaluate.mjs --weights <file>` (E2's re-scoring
+path) can run against an already-extracted run without re-ingesting.
+`--keep-stores` also retains `store/`.
 
 ## Commands
 

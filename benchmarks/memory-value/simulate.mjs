@@ -20,52 +20,94 @@
  *
  * Clock convention: ALL rounds run under HIPPO_FAKE_NOW = question_date
  * (set once for the whole store, not per round).
+ *
+ * Cross-ingest determinism (codex review fix round, 2026-08-09 P1 fix):
+ * memory ids are crypto.randomUUID() (real production path — see ingest.mjs)
+ * and therefore DIFFERENT on every ingest of the same dataset+seed. The
+ * previous version sorted entries by `.id` and indexed that order with the
+ * seeded PRNG, so the SAME rand() draw picked a DIFFERENT logical turn on
+ * every re-ingest — reproducible only WITHIN one ingest, not across
+ * re-ingests of identical data. Fix: the PRNG samples a position in
+ * meta.json's `turns` list ({sessionIndex, turnIdx, memoryId}, written by
+ * ingest.mjs in dataset-fixed order — see its header), a key that is
+ * IDENTICAL across re-ingests; THIS ingest's current memoryId for that
+ * logical turn is resolved via that same list, and the entry's content is
+ * read fresh from the store. Effect: same seed + same dataset -> same
+ * sequence of logical (sessionIndex, turnIdx) queries, every re-ingest.
+ * The seed itself also now reaches this RNG (previously hardcoded 'simulate'
+ * with no seed mixed in — a --seed override had zero effect on simulation).
  */
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { applyOutcome } from '../../dist/memory.js';
-import { writeEntry, loadAllEntries } from '../../dist/store.js';
+import { writeEntry, loadAllEntries, readEntry } from '../../dist/store.js';
 import { hybridSearch, markRetrieved, buildCorpus } from '../../dist/search.js';
 import { CONFIG } from './config.mjs';
 import { rngFor, pickUniform, setFakeNow, clearFakeNow, hippoRootFor, metaPathFor, questionDir, readJson, writeJsonl, loadDataset } from './common.mjs';
 
-/** Entries sorted by id: a stable positional order so a preparedCorpus built
- *  once stays valid across every round (content/tags never change post-ingest,
- *  only the fields markRetrieved/applyOutcome touch do). */
-function loadSorted(hippoRoot) {
-  return loadAllEntries(hippoRoot).sort((a, b) => a.id.localeCompare(b.id));
+/** Entries sorted by (sessionIndex, turnIdx) via the provenance map — a
+ *  stable, dataset-derived positional order (NOT `.id`, which is random per
+ *  ingest) so a preparedCorpus built once stays valid across every round
+ *  (content/tags never change post-ingest, only the fields
+ *  markRetrieved/applyOutcome touch do), and so this order is reproducible
+ *  across re-ingests of the same dataset+seed. */
+function loadSortedByProvenance(hippoRoot, provenanceByMemoryId) {
+  return loadAllEntries(hippoRoot).sort((a, b) => {
+    const pa = provenanceByMemoryId.get(a.id);
+    const pb = provenanceByMemoryId.get(b.id);
+    if (!pa || !pb) {
+      throw new Error(`loadSortedByProvenance: entry ${!pa ? a.id : b.id} missing from provenance map (drift)`);
+    }
+    return pa.sessionIndex - pb.sessionIndex || pa.turnIdx - pb.turnIdx;
+  });
 }
 
 /**
  * Run the usage simulation against an already-ingested store.
  * @param {string} questionId
  * @param {string} questionDateIso  canonical ISO date (parseLmeDate output)
- * @param {{ rounds?: number, topK?: number, recordRounds?: boolean }} [opts]
+ * @param {{ rounds?: number, topK?: number, seed?: number, recordRounds?: boolean }} [opts]
  * @returns {{ rounds: number, roundLog: Array<object> }}
  */
 export async function simulateQuestion(questionId, questionDateIso, opts = {}) {
   const rounds = opts.rounds ?? CONFIG.SIM_ROUNDS;
   const topK = opts.topK ?? CONFIG.SIM_TOP_K;
+  const seed = opts.seed ?? CONFIG.GLOBAL_SEED;
   const hippoRoot = hippoRootFor(questionId);
-  const rand = rngFor('simulate', questionId);
+  const meta = readJson(metaPathFor(questionId));
+  const turnsProvenance = meta.turns; // [{sessionIndex, turnIdx, memoryId}], dataset-fixed order (ingest.mjs)
+  const provenanceByMemoryId = new Map(turnsProvenance.map((t) => [t.memoryId, t]));
+  // Seed mixed in (previously hardcoded 'simulate', questionId — a --seed
+  // override had no effect on this RNG at all).
+  const rand = rngFor('simulate', String(seed), questionId);
   const roundLog = [];
 
   setFakeNow(questionDateIso);
   try {
-    const buildEntries = loadSorted(hippoRoot);
-    if (buildEntries.length === 0) {
+    if (turnsProvenance.length === 0) {
       return { rounds: 0, roundLog: [] };
     }
+    const buildEntries = loadSortedByProvenance(hippoRoot, provenanceByMemoryId);
     const corpus = buildCorpus(buildEntries.map((e) => `${e.content} ${e.tags.join(' ')}`));
 
     for (let r = 0; r < rounds; r++) {
-      // Query sampling: uniform over THIS STORE's own memory content only.
-      // Leakage rule: no access to the eval question/answer text anywhere
-      // in this function.
-      const entriesNow = loadSorted(hippoRoot);
-      const queryEntry = pickUniform(rand, entriesNow);
+      // Query sampling: uniform over a STABLE (sessionIndex, turnIdx)
+      // position in the dataset-derived turn list — never over entries
+      // sorted by crypto-random memory_id (see file header). Resolve THIS
+      // ingest's current memory_id for that same logical turn, then read
+      // its content fresh from the store. Leakage rule: no access to the
+      // eval question/answer text anywhere in this function.
+      const picked = pickUniform(rand, turnsProvenance);
+      const queryEntry = readEntry(hippoRoot, picked.memoryId);
+      if (!queryEntry) {
+        throw new Error(
+          `simulateQuestion: provenance drift — memory ${picked.memoryId} ` +
+            `(session ${picked.sessionIndex}, turn ${picked.turnIdx}) not found in store`,
+        );
+      }
       const query = queryEntry.content.slice(0, CONFIG.QUERY_MAX_CHARS);
 
+      const entriesNow = loadSortedByProvenance(hippoRoot, provenanceByMemoryId);
       const results = await hybridSearch(query, entriesNow, {
         budget: CONFIG.SIM_SEARCH_BUDGET,
         minResults: topK,
@@ -84,6 +126,8 @@ export async function simulateQuestion(questionId, questionDateIso, opts = {}) {
       if (opts.recordRounds) {
         roundLog.push({
           round: r,
+          querySessionIndex: picked.sessionIndex,
+          queryTurnIdx: picked.turnIdx,
           queryFromMemoryId: queryEntry.id,
           queryLength: query.length,
           topKIds: updated.map((u) => u.id),
@@ -110,8 +154,9 @@ const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPat
 if (isMain) {
   const dataPath = flag('data');
   const questionId = flag('question-id');
+  const seed = parseInt(flag('seed', String(CONFIG.GLOBAL_SEED)), 10);
   if (!dataPath || !questionId) {
-    console.error('Usage: simulate.mjs --data <path> --question-id <id> [--record-rounds]');
+    console.error('Usage: simulate.mjs --data <path> --question-id <id> [--seed 42] [--record-rounds]');
     process.exit(2);
   }
   const questions = loadDataset(dataPath);
@@ -122,7 +167,7 @@ if (isMain) {
   }
   const meta = readJson(metaPathFor(questionId));
   const t0 = Date.now();
-  simulateQuestion(questionId, meta.questionDate, { recordRounds: process.argv.includes('--record-rounds') }).then(
+  simulateQuestion(questionId, meta.questionDate, { seed, recordRounds: process.argv.includes('--record-rounds') }).then(
     (r) => {
       console.log(`[simulate] ${questionId}: ${r.rounds} rounds in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
       if (r.roundLog.length > 0) {

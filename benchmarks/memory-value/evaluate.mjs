@@ -16,11 +16,23 @@
  *     sum(weight[f] * norm(f)) using literal weights (the weights already
  *     encode sign/orientation; no additional orientation multiply).
  *
- * Keep set: top ceil(budget * N) under (score DESC, memory_id ASC), a
- * stable total order applied identically to every scorer. Cutoff-boundary
- * score pairs (last-kept vs first-dropped, full float precision) are
- * recorded so a tie-heavy scorer is visible in the results JSON rather than
- * silently resolved by the tie-break (measure-ties discipline).
+ * Keep set: top ceil(budget * N) under (score DESC, sessionIndex ASC,
+ * turnIdx ASC, memory_id ASC as final fallback), a stable total order
+ * applied identically to every scorer. sessionIndex/turnIdx come BEFORE
+ * memory_id (codex review fix round, 2026-08-09 P1 fix): memory_id is
+ * crypto.randomUUID(), fresh on every ingest, so a memory_id-primary
+ * tie-break made the keep-budget cutoff (and therefore retention, for any
+ * tie-heavy scorer — most single-factor scorers over a dead/near-constant
+ * feature) non-reproducible ACROSS re-ingests of the identical dataset+seed,
+ * even though it was internally consistent within one ingest.
+ * (sessionIndex, turnIdx) is dataset-fixed and never changes across
+ * re-ingests; memory_id remains only as the final fallback for the
+ * vanishingly-rare case of two DIFFERENT logical turns tying on score AND
+ * provenance (impossible for real per-turn provenance, kept for totality).
+ * Cutoff-boundary score pairs (last-kept vs first-dropped, full float
+ * precision) are recorded so a tie-heavy scorer is visible in the results
+ * JSON rather than silently resolved by the tie-break (measure-ties
+ * discipline).
  *
  * Retention(q) = |gold ∩ kept| / |gold|; questions with 0 gold are SKIPPED
  * from the mean but still counted (goldCount: 0 rows are not an error).
@@ -152,7 +164,7 @@ export function evaluateVarianceGate(varying, dead, opts = {}) {
 // ---------------------------------------------------------------------------
 
 /**
- * @param {Array<{memory_id: string, gold: 0|1, features: Record<string, number>}>} rows
+ * @param {Array<{memory_id: string, sessionIndex: number, turnIdx: number, gold: 0|1, features: Record<string, number>}>} rows
  * @param {number[]} budgets
  * @param {Record<string, number>} [weights]
  * @returns {{ N: number, goldCount: number, perScorer: Record<string, Record<number, object>> }}
@@ -190,10 +202,19 @@ export function evaluateStore(rows, budgets, weights) {
   for (const scorer of scorers) {
     const scored = rows.map((r, i) => ({
       memory_id: r.memory_id,
+      sessionIndex: r.sessionIndex,
+      turnIdx: r.turnIdx,
       gold: r.gold === 1,
       score: scorer.score(normed[i]),
     }));
-    scored.sort((a, b) => (b.score - a.score) || a.memory_id.localeCompare(b.memory_id));
+    // (score DESC, sessionIndex ASC, turnIdx ASC, memory_id ASC) — see header
+    // comment for why memory_id is the LAST fallback, not the primary tie-break.
+    scored.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      if (a.sessionIndex !== b.sessionIndex) return a.sessionIndex - b.sessionIndex;
+      if (a.turnIdx !== b.turnIdx) return a.turnIdx - b.turnIdx;
+      return a.memory_id.localeCompare(b.memory_id);
+    });
 
     const perBudget = {};
     for (const budget of budgets) {

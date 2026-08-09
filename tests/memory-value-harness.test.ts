@@ -23,6 +23,8 @@
  */
 import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
 // @ts-expect-error - .mjs harness modules have no type declarations
 import { CONFIG } from '../benchmarks/memory-value/config.mjs';
@@ -37,15 +39,18 @@ import { extractQuestion } from '../benchmarks/memory-value/extract.mjs';
 // @ts-expect-error - .mjs harness modules have no type declarations
 import { evaluateAll, computeDatasetVariance, evaluateVarianceGate } from '../benchmarks/memory-value/evaluate.mjs';
 // @ts-expect-error - .mjs harness modules have no type declarations
-import { formatLmeDate, questionDir, featuresPathFor, goldPathFor, readJsonl, readJson, computeGold, scratchRootDir } from '../benchmarks/memory-value/common.mjs';
+import { formatLmeDate, questionDir, featuresPathFor, goldPathFor, readJsonl, readJson, computeGold, scratchRootDir, sanitizeQuestionId, safeRemoveScratchDir } from '../benchmarks/memory-value/common.mjs';
 // @ts-expect-error - .mjs harness modules have no type declarations
 import { _resetAblationCacheForTests } from '../dist/ablation.js';
 // @ts-expect-error - .mjs harness modules have no type declarations
 import { computeSchemaFit } from '../dist/memory.js';
 
-const ABLATION_ENV_VARS = ['HIPPO_FAKE_NOW'] as const;
+// HIPPO_MV_SCRATCH_ROOT is included here (not just the ablation vars) so the
+// cross-ingest determinism test below can never leak its scratch-root
+// override into another test if it throws before its own finally runs.
+const RESET_ENV_VARS = ['HIPPO_FAKE_NOW', 'HIPPO_MV_SCRATCH_ROOT'] as const;
 function clearAblationEnv(): void {
-  for (const v of ABLATION_ENV_VARS) delete process.env[v];
+  for (const v of RESET_ENV_VARS) delete process.env[v];
   _resetAblationCacheForTests();
 }
 beforeEach(clearAblationEnv);
@@ -173,13 +178,15 @@ describe('memory-value harness (real stores)', () => {
 
   it('schema_fit is wired to the REAL computeSchemaFit(text, [], entriesSoFar) path — verified by independent replay', async () => {
     // Coordinator's fix-round ask was "assert schema_fit varies". Measured
-    // reality (src/memory.ts:568): computeSchemaFit's tag-overlap guard
-    // (`tags.length === 0 && tagFreq.size === 0`) returns the neutral 0.5
-    // BEFORE ever reaching the content-overlap branch, and since ingest.mjs
-    // always passes `tags: []` (no invented tags, per the leakage-rule
-    // design), tagFreq is empty for every store, every question — the guard
-    // fires unconditionally and schema_fit is provably dataset-wide constant
-    // on THIS substrate, correct wiring notwithstanding. This test proves
+    // reality: computeSchemaFit returns the neutral 0.5 before ever reaching
+    // the content-overlap branch — via the empty-store guard (src/memory.ts:558)
+    // for each store's FIRST entry, and via the tag-overlap guard
+    // (src/memory.ts:568, `tags.length === 0 && tagFreq.size === 0`) for every
+    // entry after it, since ingest.mjs always passes `tags: []` (no invented
+    // tags, per the leakage-rule design) so tagFreq stays empty for every
+    // store. One of the two guards fires unconditionally and schema_fit is
+    // provably dataset-wide constant on THIS substrate, correct wiring
+    // notwithstanding. This test proves
     // CORRECTNESS of the wiring (the stored value matches an independent
     // replay of the real function against the real accumulated-so-far
     // store), which is the property that actually matters — a false
@@ -335,6 +342,96 @@ describe('variance gate (pure logic, no I/O)', () => {
     expect(gate.passed).toBe(true);
     // schema_fit is proven constant above; it must land in `dead`, not `varying`.
     expect(dead).toContain('schema_fit');
+  });
+});
+
+describe('cross-ingest determinism (codex review P1 fix verification)', () => {
+  it('two separate scratch-root ingests of the same fixture produce identical retention (every scorer x budget) and identical per-row features joined on provenance key', async () => {
+    const rootA = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-xingest-a-'));
+    const rootB = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-xingest-b-'));
+    const budgets = [0.1, 0.2, 0.3, 0.5];
+
+    async function ingestSimExtractUnder(root: string) {
+      process.env.HIPPO_MV_SCRATCH_ROOT = root;
+      const rowsByQuestion: Record<string, Array<{ memory_id: string; sessionIndex: number; turnIdx: number; gold: number; features: Record<string, number> }>> = {};
+      for (const q of QUESTIONS) {
+        ingestQuestion(q);
+        await simulateQuestion(q.question_id, QUESTION_DATE_ISO, { seed: CONFIG.GLOBAL_SEED });
+        extractQuestion(q.question_id, QUESTION_DATE_ISO);
+        rowsByQuestion[q.question_id] = readJsonl(featuresPathFor(q.question_id));
+      }
+      const evalResult = evaluateAll(
+        QUESTIONS.map((q) => ({ questionId: q.question_id, split: 'train' as const })),
+        { budgets, primaryBudget: 0.3 },
+      );
+      return { rowsByQuestion, evalResult };
+    }
+
+    try {
+      const runA = await ingestSimExtractUnder(rootA);
+      const runB = await ingestSimExtractUnder(rootB);
+
+      // (1) retention identical for EVERY scorer x budget (not just recency) —
+      // this is the property the previous memory_id-primary tie-break broke.
+      for (const scorerName of runA.evalResult.scorers as string[]) {
+        for (const budget of budgets) {
+          const a = runA.evalResult.summary.train[scorerName]?.[budget];
+          const b = runB.evalResult.summary.train[scorerName]?.[budget];
+          expect(b?.meanRetention, `${scorerName}@${budget}`).toBe(a?.meanRetention);
+        }
+      }
+
+      // (2) per-row features identical when joined on (sessionIndex, turnIdx)
+      //     — NOT on memory_id, which is crypto-random per ingest by design.
+      for (const q of QUESTIONS) {
+        const rowsA = runA.rowsByQuestion[q.question_id];
+        const rowsB = runB.rowsByQuestion[q.question_id];
+        expect(rowsB.length).toBe(rowsA.length);
+        const keyOf = (r: { sessionIndex: number; turnIdx: number }) => `${r.sessionIndex}:${r.turnIdx}`;
+        const byKeyB = new Map(rowsB.map((r) => [keyOf(r), r]));
+        for (const rowA of rowsA) {
+          const rowB = byKeyB.get(keyOf(rowA));
+          expect(rowB, `no provenance-matched row for ${keyOf(rowA)} in run B`).toBeDefined();
+          expect(rowB!.gold).toBe(rowA.gold);
+          expect(rowB!.features).toEqual(rowA.features);
+          // memory_id is deliberately NOT compared here (see file header).
+        }
+      }
+    } finally {
+      delete process.env.HIPPO_MV_SCRATCH_ROOT;
+      _resetAblationCacheForTests();
+      // Both temp roots are OUTSIDE the default scratch root (scratchRootDir()
+      // reads the env var, which is already cleared above), so a plain
+      // fs.rmSync is correct here — safeRemoveScratchDir would refuse them.
+      fs.rmSync(rootA, { recursive: true, force: true });
+      fs.rmSync(rootB, { recursive: true, force: true });
+    }
+  }, 90_000);
+});
+
+describe('scratch-cleanup containment guard (codex review P2 fix verification)', () => {
+  it('sanitizeQuestionId strips path-traversal characters', () => {
+    expect(sanitizeQuestionId('../../etc/passwd')).not.toContain('/');
+    expect(sanitizeQuestionId('../../etc/passwd')).not.toContain('..');
+    expect(sanitizeQuestionId('a/b\\c')).toBe('a_b_c');
+    expect(sanitizeQuestionId('fixture_q_a')).toBe('fixture_q_a'); // already-safe ids pass through unchanged
+  });
+
+  it('safeRemoveScratchDir refuses a target outside the scratch root', () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-outside-root-'));
+    try {
+      expect(() => safeRemoveScratchDir(outside)).toThrow(/refusing/i);
+      expect(fs.existsSync(outside)).toBe(true); // must survive the refused delete
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('safeRemoveScratchDir allows a target inside the scratch root', () => {
+    const inside = questionDir('containment-guard-probe');
+    fs.mkdirSync(inside, { recursive: true });
+    expect(() => safeRemoveScratchDir(inside)).not.toThrow();
+    expect(fs.existsSync(inside)).toBe(false);
   });
 });
 

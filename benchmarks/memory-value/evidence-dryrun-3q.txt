@@ -1,12 +1,12 @@
 [run] REAL data=C:\Users\skf_s\hippo\benchmarks\longmemeval\data\longmemeval_s_cleaned.json questions=3/500 skipSimulate=false budget=0.3 seed=42
-[run] stages: ingest=15294ms simulate=12034ms extract=31ms evaluate=18ms total=27379ms
+[run] stages: ingest=14968ms simulate=12279ms extract=33ms evaluate=17ms total=27297ms
 [run] gold modes: {"evidence-turn":3,"answer-session-all":0}
 [run] variance gate: 8/30 features vary dataset-wide (min required: 6)
 [run] varying: age_days, half_life_days, strength, retrieval_count, outcome_positive, outcome_negative, outcome_ratio, content_length
 [run] dead: schema_fit, pinned, starred, error_tag, tag_count, dag_level, valence_neutral, valence_positive, valence_negative, valence_critical, layer_buffer, layer_episodic, layer_semantic, layer_trace, kind_raw, kind_distilled, kind_superseded, kind_archived, confidence_verified, confidence_observed, confidence_inferred, confidence_stale
-[run] heldout: uniform@0.3=0.5000 recency@0.3=0.5000 (n=2, skipped0gold=0)
+[run] heldout: uniform@0.3=0.2500 recency@0.3=0.5000 (n=2, skipped0gold=0)
 [run] train: uniform@0.3=0.0000 recency@0.3=0.0000 (n=1, skipped0gold=0)
-[run] wrote C:\Users\skf_s\hippo-wt-lc2e1\benchmarks\memory-value\results\2026-08-09T01-49-24-540Z.json
+[run] wrote C:\Users\skf_s\hippo-wt-lc2e1\benchmarks\memory-value\results\2026-08-09T04-11-06-256Z.json
 [run] wrote C:\Users\skf_s\hippo-wt-lc2e1\benchmarks\memory-value\results\latest.json
-(node:38084) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(node:38144) ExperimentalWarning: SQLite is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)

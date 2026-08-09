@@ -69,7 +69,9 @@ export const EXCLUDED_FEATURES = Object.freeze(['bm25_score']);
  *
  * Single-factor baselines in evaluate.mjs evaluate BOTH signs regardless of
  * this map, so an orientation choice here can never hide a better-inverted
- * factor — this map only affects the UNIFORM and WEIGHTED-hook combiners.
+ * factor — this map only affects the UNIFORM combiner. The weighted hook
+ * ignores it by contract: a --weights file encodes its own signs, and
+ * evaluate.mjs applies those weights with no additional orientation multiply.
  */
 export const ORIENTATION = Object.freeze({
   age_days: -1, // recency-positive: younger memories score higher
@@ -82,7 +84,11 @@ export function orientationOf(feature) {
 }
 
 export const CONFIG = Object.freeze({
-  // Determinism
+  // Determinism. Threaded through every seeded RNG in this harness (split's
+  // stratified shuffle, run.mjs's --questions subset selection, AND
+  // simulate.mjs's query-sampling RNG — codex review fix round, 2026-08-09:
+  // simulate.mjs previously hardcoded its RNG seed string with no run seed
+  // mixed in, so --seed had zero effect on the usage simulation).
   GLOBAL_SEED: 42,
 
   // split.mjs
