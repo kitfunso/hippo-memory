@@ -205,9 +205,77 @@ counts still land in `results.split` inside the main results JSON.
 evaluated budgets list (if not already one of `CONFIG.KEEP_BUDGETS`) so the
 headline print has a defined cell to read.
 
+## E2: fitting
+
+`fit.mjs` learns signed weights over the 8 live lifecycle dims (`age_days`,
+`half_life_days`, `strength`, `retrieval_count`, `outcome_positive`,
+`outcome_negative`, `outcome_ratio`, `content_length`) that maximize TRAIN
+mean gold retention at `CONFIG.PRIMARY_BUDGET` (0.3), using the SHIPPED
+scoring path (`evaluateStore`/`evaluateAll`, imported unmodified from
+`evaluate.mjs`) as the objective — no reimplementation, no drift between
+fitting and judging. See
+`docs/plans/2026-08-10-lc2-e2-memory-value-fit.md` for the full protocol.
+
+```bash
+# Integrity gate -> seeded (1+lambda)-ES, 5 restarts -> freeze weights.
+# REFUSES immediately (before running the gate or the fit) if
+# weights-learned.json already exists — weights are frozen exactly once.
+node benchmarks/memory-value/fit.mjs
+
+# Re-fit and overwrite BOTH frozen artifacts (weights-learned.json AND
+# weights-learned.meta.json together — never one without the other).
+node benchmarks/memory-value/fit.mjs --force
+
+# Gate only, then time ~20 candidate evaluations and project the total
+# runtime for the real fit. Exits without fitting.
+node benchmarks/memory-value/fit.mjs --dry-run-timing
+
+# Post-freeze: evaluate weights-learned.json on HELD-OUT (once), paired
+# per-question bootstrap 95% CIs vs recency and vs uniform.
+node benchmarks/memory-value/fit.mjs --report
+```
+
+The integrity gate runs before any fitting and checks the surviving scratch
+data against the committed `split-registered.json` and `results-latest.json`
+(split counts, post-zero-gold `questionsIncluded`, 4-decimal-place baseline
+reproduction, and the varying-features set) — any mismatch exits nonzero
+with the failed assertion named, and no fit runs.
+
+A successful fit freezes two files:
+
+- `weights-learned.json` — flat `{feature: weight}`, ONLY the 8 fit dims
+  (the other 22 `CONFIG.FEATURES` are pinned to zero by omission). This
+  file is directly consumable by `run.mjs --weights` and
+  `evaluate.mjs --weights` — no format conversion needed.
+- `weights-learned.meta.json` — sidecar with the seed, per-restart
+  trajectories, the winning restart, the pinned-zero dim list, and a
+  `configHash` (SHA-256 of `config.mjs`'s `CONFIG` object) so a later audit
+  can tell which protocol version produced the weights. It also carries
+  `weightsFileSha256` — a SHA-256 digest of `weights-learned.json`'s raw
+  bytes, written at freeze time. `--report` recomputes this digest and
+  refuses to run if it does not match the sidecar's recorded value: the two
+  files are bound together, and an edited or swapped `weights-learned.json`
+  (even one that still only uses FIT_DIMS keys) is refused rather than
+  silently reported on.
+
+`--report` is non-destructive with respect to the frozen weights and the
+scratch data (it never re-fits, never writes `weights-learned.json`), but it
+DOES write two files on every run: `results/fit-report-latest.json` (mutable
+run output) and the committed `fit-report-registered.json` (git-tracked).
+Running `--report` as a debugging/spot-check step will dirty
+`fit-report-registered.json` in `git status` if the numbers differ at all
+from what is currently committed — review that diff before committing it,
+the same as any other registered artifact.
+
 ## Tests
 
 `tests/memory-value-harness.test.ts` — deterministic smoke against real
 SQLite scratch stores (a hand-specified 2-question fixture, not the seeded
 `--smoke` generator, so retention numbers are hand-verifiable). Run via the
 normal `npm test`.
+
+`tests/memory-value-fit.test.ts` — `fit.mjs` mechanism tests: `runES`
+against synthetic objectives (tie discipline, sigma-halving schedule,
+termination), `selectWinner`'s tie-break, `bootstrapCI` against a
+hand-computable toy input, and `computeFit`/`runIntegrityGate` against the
+same real 2-question fixture.

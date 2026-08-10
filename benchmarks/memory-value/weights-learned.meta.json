@@ -1,0 +1,1389 @@
+{
+  "globalSeed": 42,
+  "restarts": 5,
+  "esSeedNamespaces": [
+    "fit|0",
+    "fit|1",
+    "fit|2",
+    "fit|3",
+    "fit|4"
+  ],
+  "reportSeedNamespace": "report",
+  "seedNote": "GLOBAL_SEED parameterizes the E1 split/simulation substrate; the ES and bootstrap streams are namespaced by rngFor and do not consume GLOBAL_SEED.",
+  "perRestart": [
+    {
+      "restart": 0,
+      "init": [
+        -1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "generations": 37,
+      "finalSigma": 0.009375,
+      "trainObjective": 0.497116493656286,
+      "trajectory": [
+        {
+          "gen": 0,
+          "bestObjective": 0.38615916955017304,
+          "sigma": 0.3
+        },
+        {
+          "gen": 1,
+          "bestObjective": 0.41782006920415227,
+          "sigma": 0.3
+        },
+        {
+          "gen": 2,
+          "bestObjective": 0.46476355247981543,
+          "sigma": 0.3
+        },
+        {
+          "gen": 3,
+          "bestObjective": 0.4689158016147636,
+          "sigma": 0.3
+        },
+        {
+          "gen": 4,
+          "bestObjective": 0.4715109573241061,
+          "sigma": 0.3
+        },
+        {
+          "gen": 5,
+          "bestObjective": 0.4715109573241061,
+          "sigma": 0.3
+        },
+        {
+          "gen": 6,
+          "bestObjective": 0.49065743944636675,
+          "sigma": 0.3
+        },
+        {
+          "gen": 7,
+          "bestObjective": 0.49065743944636675,
+          "sigma": 0.3
+        },
+        {
+          "gen": 8,
+          "bestObjective": 0.49065743944636675,
+          "sigma": 0.3
+        },
+        {
+          "gen": 9,
+          "bestObjective": 0.49065743944636675,
+          "sigma": 0.3
+        },
+        {
+          "gen": 10,
+          "bestObjective": 0.49065743944636675,
+          "sigma": 0.3
+        },
+        {
+          "gen": 11,
+          "bestObjective": 0.49065743944636675,
+          "sigma": 0.15
+        },
+        {
+          "gen": 12,
+          "bestObjective": 0.49065743944636675,
+          "sigma": 0.15
+        },
+        {
+          "gen": 13,
+          "bestObjective": 0.49065743944636675,
+          "sigma": 0.15
+        },
+        {
+          "gen": 14,
+          "bestObjective": 0.49065743944636675,
+          "sigma": 0.15
+        },
+        {
+          "gen": 15,
+          "bestObjective": 0.49065743944636675,
+          "sigma": 0.15
+        },
+        {
+          "gen": 16,
+          "bestObjective": 0.49065743944636675,
+          "sigma": 0.075
+        },
+        {
+          "gen": 17,
+          "bestObjective": 0.4953863898500576,
+          "sigma": 0.075
+        },
+        {
+          "gen": 18,
+          "bestObjective": 0.4953863898500576,
+          "sigma": 0.075
+        },
+        {
+          "gen": 19,
+          "bestObjective": 0.4953863898500576,
+          "sigma": 0.075
+        },
+        {
+          "gen": 20,
+          "bestObjective": 0.4953863898500576,
+          "sigma": 0.075
+        },
+        {
+          "gen": 21,
+          "bestObjective": 0.4953863898500576,
+          "sigma": 0.075
+        },
+        {
+          "gen": 22,
+          "bestObjective": 0.4953863898500576,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 23,
+          "bestObjective": 0.4953863898500576,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 24,
+          "bestObjective": 0.4953863898500576,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 25,
+          "bestObjective": 0.4953863898500576,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 26,
+          "bestObjective": 0.4953863898500576,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 27,
+          "bestObjective": 0.4953863898500576,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 28,
+          "bestObjective": 0.4953863898500576,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 29,
+          "bestObjective": 0.4953863898500576,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 30,
+          "bestObjective": 0.4953863898500576,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 31,
+          "bestObjective": 0.4953863898500576,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 32,
+          "bestObjective": 0.497116493656286,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 33,
+          "bestObjective": 0.497116493656286,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 34,
+          "bestObjective": 0.497116493656286,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 35,
+          "bestObjective": 0.497116493656286,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 36,
+          "bestObjective": 0.497116493656286,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 37,
+          "bestObjective": 0.497116493656286,
+          "sigma": 0.009375
+        }
+      ]
+    },
+    {
+      "restart": 1,
+      "init": [
+        0.4721453399397433,
+        -0.8446518443524837,
+        0.23435122286900878,
+        0.33579239062964916,
+        0.7791134114377201,
+        0.5164313651621342,
+        0.299745773896575,
+        -0.11900019459426403
+      ],
+      "generations": 46,
+      "finalSigma": 0.009375,
+      "trainObjective": 0.4964244521337946,
+      "trajectory": [
+        {
+          "gen": 0,
+          "bestObjective": 0.33523644752018456,
+          "sigma": 0.3
+        },
+        {
+          "gen": 1,
+          "bestObjective": 0.4419838523644751,
+          "sigma": 0.3
+        },
+        {
+          "gen": 2,
+          "bestObjective": 0.4643021914648213,
+          "sigma": 0.3
+        },
+        {
+          "gen": 3,
+          "bestObjective": 0.4643021914648213,
+          "sigma": 0.3
+        },
+        {
+          "gen": 4,
+          "bestObjective": 0.4643021914648213,
+          "sigma": 0.3
+        },
+        {
+          "gen": 5,
+          "bestObjective": 0.4643021914648213,
+          "sigma": 0.3
+        },
+        {
+          "gen": 6,
+          "bestObjective": 0.4643021914648213,
+          "sigma": 0.3
+        },
+        {
+          "gen": 7,
+          "bestObjective": 0.47883506343713944,
+          "sigma": 0.3
+        },
+        {
+          "gen": 8,
+          "bestObjective": 0.4802768166089964,
+          "sigma": 0.3
+        },
+        {
+          "gen": 9,
+          "bestObjective": 0.48892733564013835,
+          "sigma": 0.3
+        },
+        {
+          "gen": 10,
+          "bestObjective": 0.48892733564013835,
+          "sigma": 0.3
+        },
+        {
+          "gen": 11,
+          "bestObjective": 0.48892733564013835,
+          "sigma": 0.3
+        },
+        {
+          "gen": 12,
+          "bestObjective": 0.48892733564013835,
+          "sigma": 0.3
+        },
+        {
+          "gen": 13,
+          "bestObjective": 0.48892733564013835,
+          "sigma": 0.3
+        },
+        {
+          "gen": 14,
+          "bestObjective": 0.48892733564013835,
+          "sigma": 0.15
+        },
+        {
+          "gen": 15,
+          "bestObjective": 0.48892733564013835,
+          "sigma": 0.15
+        },
+        {
+          "gen": 16,
+          "bestObjective": 0.4903114186851212,
+          "sigma": 0.15
+        },
+        {
+          "gen": 17,
+          "bestObjective": 0.4903114186851212,
+          "sigma": 0.15
+        },
+        {
+          "gen": 18,
+          "bestObjective": 0.4944059976931949,
+          "sigma": 0.15
+        },
+        {
+          "gen": 19,
+          "bestObjective": 0.4944059976931949,
+          "sigma": 0.15
+        },
+        {
+          "gen": 20,
+          "bestObjective": 0.4944059976931949,
+          "sigma": 0.15
+        },
+        {
+          "gen": 21,
+          "bestObjective": 0.4944059976931949,
+          "sigma": 0.15
+        },
+        {
+          "gen": 22,
+          "bestObjective": 0.4952710495963091,
+          "sigma": 0.15
+        },
+        {
+          "gen": 23,
+          "bestObjective": 0.4952710495963091,
+          "sigma": 0.15
+        },
+        {
+          "gen": 24,
+          "bestObjective": 0.4952710495963091,
+          "sigma": 0.15
+        },
+        {
+          "gen": 25,
+          "bestObjective": 0.4952710495963091,
+          "sigma": 0.15
+        },
+        {
+          "gen": 26,
+          "bestObjective": 0.4952710495963091,
+          "sigma": 0.15
+        },
+        {
+          "gen": 27,
+          "bestObjective": 0.4952710495963091,
+          "sigma": 0.075
+        },
+        {
+          "gen": 28,
+          "bestObjective": 0.4952710495963091,
+          "sigma": 0.075
+        },
+        {
+          "gen": 29,
+          "bestObjective": 0.4952710495963091,
+          "sigma": 0.075
+        },
+        {
+          "gen": 30,
+          "bestObjective": 0.4952710495963091,
+          "sigma": 0.075
+        },
+        {
+          "gen": 31,
+          "bestObjective": 0.4952710495963091,
+          "sigma": 0.075
+        },
+        {
+          "gen": 32,
+          "bestObjective": 0.4952710495963091,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 33,
+          "bestObjective": 0.4952710495963091,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 34,
+          "bestObjective": 0.4952710495963091,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 35,
+          "bestObjective": 0.4952710495963091,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 36,
+          "bestObjective": 0.4952710495963091,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 37,
+          "bestObjective": 0.4952710495963091,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 38,
+          "bestObjective": 0.4952710495963091,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 39,
+          "bestObjective": 0.4952710495963091,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 40,
+          "bestObjective": 0.4952710495963091,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 41,
+          "bestObjective": 0.4964244521337946,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 42,
+          "bestObjective": 0.4964244521337946,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 43,
+          "bestObjective": 0.4964244521337946,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 44,
+          "bestObjective": 0.4964244521337946,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 45,
+          "bestObjective": 0.4964244521337946,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 46,
+          "bestObjective": 0.4964244521337946,
+          "sigma": 0.009375
+        }
+      ]
+    },
+    {
+      "restart": 2,
+      "init": [
+        -0.8973469482734799,
+        0.35486463364213705,
+        0.782530618365854,
+        -0.6390756545588374,
+        0.23269005585461855,
+        -0.82241075579077,
+        0.02625422552227974,
+        -0.6899891709908843
+      ],
+      "generations": 53,
+      "finalSigma": 0.009375,
+      "trainObjective": 0.508650519031142,
+      "trajectory": [
+        {
+          "gen": 0,
+          "bestObjective": 0.39925028835063436,
+          "sigma": 0.3
+        },
+        {
+          "gen": 1,
+          "bestObjective": 0.44417531718569786,
+          "sigma": 0.3
+        },
+        {
+          "gen": 2,
+          "bestObjective": 0.44417531718569786,
+          "sigma": 0.3
+        },
+        {
+          "gen": 3,
+          "bestObjective": 0.44417531718569786,
+          "sigma": 0.3
+        },
+        {
+          "gen": 4,
+          "bestObjective": 0.4526528258362168,
+          "sigma": 0.3
+        },
+        {
+          "gen": 5,
+          "bestObjective": 0.4555363321799307,
+          "sigma": 0.3
+        },
+        {
+          "gen": 6,
+          "bestObjective": 0.4555363321799307,
+          "sigma": 0.3
+        },
+        {
+          "gen": 7,
+          "bestObjective": 0.4867358708189158,
+          "sigma": 0.3
+        },
+        {
+          "gen": 8,
+          "bestObjective": 0.4867358708189158,
+          "sigma": 0.3
+        },
+        {
+          "gen": 9,
+          "bestObjective": 0.4867358708189158,
+          "sigma": 0.3
+        },
+        {
+          "gen": 10,
+          "bestObjective": 0.4867358708189158,
+          "sigma": 0.3
+        },
+        {
+          "gen": 11,
+          "bestObjective": 0.4867358708189158,
+          "sigma": 0.3
+        },
+        {
+          "gen": 12,
+          "bestObjective": 0.4867358708189158,
+          "sigma": 0.15
+        },
+        {
+          "gen": 13,
+          "bestObjective": 0.4867358708189158,
+          "sigma": 0.15
+        },
+        {
+          "gen": 14,
+          "bestObjective": 0.4867358708189158,
+          "sigma": 0.15
+        },
+        {
+          "gen": 15,
+          "bestObjective": 0.49567474048442905,
+          "sigma": 0.15
+        },
+        {
+          "gen": 16,
+          "bestObjective": 0.49567474048442905,
+          "sigma": 0.15
+        },
+        {
+          "gen": 17,
+          "bestObjective": 0.49567474048442905,
+          "sigma": 0.15
+        },
+        {
+          "gen": 18,
+          "bestObjective": 0.49567474048442905,
+          "sigma": 0.15
+        },
+        {
+          "gen": 19,
+          "bestObjective": 0.49567474048442905,
+          "sigma": 0.15
+        },
+        {
+          "gen": 20,
+          "bestObjective": 0.49567474048442905,
+          "sigma": 0.075
+        },
+        {
+          "gen": 21,
+          "bestObjective": 0.49567474048442905,
+          "sigma": 0.075
+        },
+        {
+          "gen": 22,
+          "bestObjective": 0.49567474048442905,
+          "sigma": 0.075
+        },
+        {
+          "gen": 23,
+          "bestObjective": 0.49567474048442905,
+          "sigma": 0.075
+        },
+        {
+          "gen": 24,
+          "bestObjective": 0.4962514417531718,
+          "sigma": 0.075
+        },
+        {
+          "gen": 25,
+          "bestObjective": 0.4962514417531718,
+          "sigma": 0.075
+        },
+        {
+          "gen": 26,
+          "bestObjective": 0.4962514417531718,
+          "sigma": 0.075
+        },
+        {
+          "gen": 27,
+          "bestObjective": 0.4962514417531718,
+          "sigma": 0.075
+        },
+        {
+          "gen": 28,
+          "bestObjective": 0.4962514417531718,
+          "sigma": 0.075
+        },
+        {
+          "gen": 29,
+          "bestObjective": 0.5027681660899654,
+          "sigma": 0.075
+        },
+        {
+          "gen": 30,
+          "bestObjective": 0.5027681660899654,
+          "sigma": 0.075
+        },
+        {
+          "gen": 31,
+          "bestObjective": 0.5027681660899654,
+          "sigma": 0.075
+        },
+        {
+          "gen": 32,
+          "bestObjective": 0.5027681660899654,
+          "sigma": 0.075
+        },
+        {
+          "gen": 33,
+          "bestObjective": 0.5027681660899654,
+          "sigma": 0.075
+        },
+        {
+          "gen": 34,
+          "bestObjective": 0.5060553633217993,
+          "sigma": 0.075
+        },
+        {
+          "gen": 35,
+          "bestObjective": 0.5060553633217993,
+          "sigma": 0.075
+        },
+        {
+          "gen": 36,
+          "bestObjective": 0.5060553633217993,
+          "sigma": 0.075
+        },
+        {
+          "gen": 37,
+          "bestObjective": 0.5060553633217993,
+          "sigma": 0.075
+        },
+        {
+          "gen": 38,
+          "bestObjective": 0.508650519031142,
+          "sigma": 0.075
+        },
+        {
+          "gen": 39,
+          "bestObjective": 0.508650519031142,
+          "sigma": 0.075
+        },
+        {
+          "gen": 40,
+          "bestObjective": 0.508650519031142,
+          "sigma": 0.075
+        },
+        {
+          "gen": 41,
+          "bestObjective": 0.508650519031142,
+          "sigma": 0.075
+        },
+        {
+          "gen": 42,
+          "bestObjective": 0.508650519031142,
+          "sigma": 0.075
+        },
+        {
+          "gen": 43,
+          "bestObjective": 0.508650519031142,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 44,
+          "bestObjective": 0.508650519031142,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 45,
+          "bestObjective": 0.508650519031142,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 46,
+          "bestObjective": 0.508650519031142,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 47,
+          "bestObjective": 0.508650519031142,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 48,
+          "bestObjective": 0.508650519031142,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 49,
+          "bestObjective": 0.508650519031142,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 50,
+          "bestObjective": 0.508650519031142,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 51,
+          "bestObjective": 0.508650519031142,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 52,
+          "bestObjective": 0.508650519031142,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 53,
+          "bestObjective": 0.508650519031142,
+          "sigma": 0.009375
+        }
+      ]
+    },
+    {
+      "restart": 3,
+      "init": [
+        0.3687982875853777,
+        0.9879545057192445,
+        -0.36460744589567184,
+        0.2094507967121899,
+        0.9747884473763406,
+        -0.282195424195379,
+        -0.5547047699801624,
+        -0.2819293257780373
+      ],
+      "generations": 56,
+      "finalSigma": 0.009375,
+      "trainObjective": 0.4987889273356402,
+      "trajectory": [
+        {
+          "gen": 0,
+          "bestObjective": 0.3324106113033449,
+          "sigma": 0.3
+        },
+        {
+          "gen": 1,
+          "bestObjective": 0.39359861591695505,
+          "sigma": 0.3
+        },
+        {
+          "gen": 2,
+          "bestObjective": 0.4320645905420991,
+          "sigma": 0.3
+        },
+        {
+          "gen": 3,
+          "bestObjective": 0.4401960784313725,
+          "sigma": 0.3
+        },
+        {
+          "gen": 4,
+          "bestObjective": 0.45761245674740486,
+          "sigma": 0.3
+        },
+        {
+          "gen": 5,
+          "bestObjective": 0.45761245674740486,
+          "sigma": 0.3
+        },
+        {
+          "gen": 6,
+          "bestObjective": 0.46211072664359854,
+          "sigma": 0.3
+        },
+        {
+          "gen": 7,
+          "bestObjective": 0.46211072664359854,
+          "sigma": 0.3
+        },
+        {
+          "gen": 8,
+          "bestObjective": 0.46332179930795847,
+          "sigma": 0.3
+        },
+        {
+          "gen": 9,
+          "bestObjective": 0.47277970011534015,
+          "sigma": 0.3
+        },
+        {
+          "gen": 10,
+          "bestObjective": 0.47970011534025364,
+          "sigma": 0.3
+        },
+        {
+          "gen": 11,
+          "bestObjective": 0.47970011534025364,
+          "sigma": 0.3
+        },
+        {
+          "gen": 12,
+          "bestObjective": 0.47970011534025364,
+          "sigma": 0.3
+        },
+        {
+          "gen": 13,
+          "bestObjective": 0.47970011534025364,
+          "sigma": 0.3
+        },
+        {
+          "gen": 14,
+          "bestObjective": 0.47970011534025364,
+          "sigma": 0.3
+        },
+        {
+          "gen": 15,
+          "bestObjective": 0.47970011534025364,
+          "sigma": 0.15
+        },
+        {
+          "gen": 16,
+          "bestObjective": 0.47970011534025364,
+          "sigma": 0.15
+        },
+        {
+          "gen": 17,
+          "bestObjective": 0.47970011534025364,
+          "sigma": 0.15
+        },
+        {
+          "gen": 18,
+          "bestObjective": 0.47970011534025364,
+          "sigma": 0.15
+        },
+        {
+          "gen": 19,
+          "bestObjective": 0.47970011534025364,
+          "sigma": 0.15
+        },
+        {
+          "gen": 20,
+          "bestObjective": 0.47970011534025364,
+          "sigma": 0.075
+        },
+        {
+          "gen": 21,
+          "bestObjective": 0.4810265282583621,
+          "sigma": 0.075
+        },
+        {
+          "gen": 22,
+          "bestObjective": 0.4810265282583621,
+          "sigma": 0.075
+        },
+        {
+          "gen": 23,
+          "bestObjective": 0.4830449826989619,
+          "sigma": 0.075
+        },
+        {
+          "gen": 24,
+          "bestObjective": 0.4863898500576701,
+          "sigma": 0.075
+        },
+        {
+          "gen": 25,
+          "bestObjective": 0.4863898500576701,
+          "sigma": 0.075
+        },
+        {
+          "gen": 26,
+          "bestObjective": 0.4863898500576701,
+          "sigma": 0.075
+        },
+        {
+          "gen": 27,
+          "bestObjective": 0.4863898500576701,
+          "sigma": 0.075
+        },
+        {
+          "gen": 28,
+          "bestObjective": 0.4863898500576701,
+          "sigma": 0.075
+        },
+        {
+          "gen": 29,
+          "bestObjective": 0.48806228373702426,
+          "sigma": 0.075
+        },
+        {
+          "gen": 30,
+          "bestObjective": 0.48806228373702426,
+          "sigma": 0.075
+        },
+        {
+          "gen": 31,
+          "bestObjective": 0.48806228373702426,
+          "sigma": 0.075
+        },
+        {
+          "gen": 32,
+          "bestObjective": 0.48806228373702426,
+          "sigma": 0.075
+        },
+        {
+          "gen": 33,
+          "bestObjective": 0.4923875432525952,
+          "sigma": 0.075
+        },
+        {
+          "gen": 34,
+          "bestObjective": 0.4923875432525952,
+          "sigma": 0.075
+        },
+        {
+          "gen": 35,
+          "bestObjective": 0.4923875432525952,
+          "sigma": 0.075
+        },
+        {
+          "gen": 36,
+          "bestObjective": 0.4948673587081891,
+          "sigma": 0.075
+        },
+        {
+          "gen": 37,
+          "bestObjective": 0.4948673587081891,
+          "sigma": 0.075
+        },
+        {
+          "gen": 38,
+          "bestObjective": 0.4948673587081891,
+          "sigma": 0.075
+        },
+        {
+          "gen": 39,
+          "bestObjective": 0.4948673587081891,
+          "sigma": 0.075
+        },
+        {
+          "gen": 40,
+          "bestObjective": 0.4948673587081891,
+          "sigma": 0.075
+        },
+        {
+          "gen": 41,
+          "bestObjective": 0.4948673587081891,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 42,
+          "bestObjective": 0.4948673587081891,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 43,
+          "bestObjective": 0.49705882352941166,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 44,
+          "bestObjective": 0.49705882352941166,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 45,
+          "bestObjective": 0.49705882352941166,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 46,
+          "bestObjective": 0.4987889273356402,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 47,
+          "bestObjective": 0.4987889273356402,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 48,
+          "bestObjective": 0.4987889273356402,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 49,
+          "bestObjective": 0.4987889273356402,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 50,
+          "bestObjective": 0.4987889273356402,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 51,
+          "bestObjective": 0.4987889273356402,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 52,
+          "bestObjective": 0.4987889273356402,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 53,
+          "bestObjective": 0.4987889273356402,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 54,
+          "bestObjective": 0.4987889273356402,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 55,
+          "bestObjective": 0.4987889273356402,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 56,
+          "bestObjective": 0.4987889273356402,
+          "sigma": 0.009375
+        }
+      ]
+    },
+    {
+      "restart": 4,
+      "init": [
+        0.8065776391886175,
+        -0.9872329509817064,
+        0.21703101554885507,
+        0.11625150637701154,
+        0.2981310016475618,
+        -0.6068954821676016,
+        0.9321454209275544,
+        0.9859942058101296
+      ],
+      "generations": 52,
+      "finalSigma": 0.009375,
+      "trainObjective": 0.49953863898500567,
+      "trajectory": [
+        {
+          "gen": 0,
+          "bestObjective": 0.13517877739331025,
+          "sigma": 0.3
+        },
+        {
+          "gen": 1,
+          "bestObjective": 0.17877739331026532,
+          "sigma": 0.3
+        },
+        {
+          "gen": 2,
+          "bestObjective": 0.22912341407151096,
+          "sigma": 0.3
+        },
+        {
+          "gen": 3,
+          "bestObjective": 0.29728950403690896,
+          "sigma": 0.3
+        },
+        {
+          "gen": 4,
+          "bestObjective": 0.3386966551326414,
+          "sigma": 0.3
+        },
+        {
+          "gen": 5,
+          "bestObjective": 0.3964244521337949,
+          "sigma": 0.3
+        },
+        {
+          "gen": 6,
+          "bestObjective": 0.41891580161476355,
+          "sigma": 0.3
+        },
+        {
+          "gen": 7,
+          "bestObjective": 0.4497116493656285,
+          "sigma": 0.3
+        },
+        {
+          "gen": 8,
+          "bestObjective": 0.4497116493656285,
+          "sigma": 0.3
+        },
+        {
+          "gen": 9,
+          "bestObjective": 0.451441753171857,
+          "sigma": 0.3
+        },
+        {
+          "gen": 10,
+          "bestObjective": 0.451441753171857,
+          "sigma": 0.3
+        },
+        {
+          "gen": 11,
+          "bestObjective": 0.45940023068050756,
+          "sigma": 0.3
+        },
+        {
+          "gen": 12,
+          "bestObjective": 0.45940023068050756,
+          "sigma": 0.3
+        },
+        {
+          "gen": 13,
+          "bestObjective": 0.46211072664359865,
+          "sigma": 0.3
+        },
+        {
+          "gen": 14,
+          "bestObjective": 0.4719146482122261,
+          "sigma": 0.3
+        },
+        {
+          "gen": 15,
+          "bestObjective": 0.4719146482122261,
+          "sigma": 0.3
+        },
+        {
+          "gen": 16,
+          "bestObjective": 0.4719146482122261,
+          "sigma": 0.3
+        },
+        {
+          "gen": 17,
+          "bestObjective": 0.4719146482122261,
+          "sigma": 0.3
+        },
+        {
+          "gen": 18,
+          "bestObjective": 0.4719146482122261,
+          "sigma": 0.3
+        },
+        {
+          "gen": 19,
+          "bestObjective": 0.4719146482122261,
+          "sigma": 0.15
+        },
+        {
+          "gen": 20,
+          "bestObjective": 0.4719146482122261,
+          "sigma": 0.15
+        },
+        {
+          "gen": 21,
+          "bestObjective": 0.4756055363321799,
+          "sigma": 0.15
+        },
+        {
+          "gen": 22,
+          "bestObjective": 0.4756055363321799,
+          "sigma": 0.15
+        },
+        {
+          "gen": 23,
+          "bestObjective": 0.48310265282583625,
+          "sigma": 0.15
+        },
+        {
+          "gen": 24,
+          "bestObjective": 0.4831603229527105,
+          "sigma": 0.15
+        },
+        {
+          "gen": 25,
+          "bestObjective": 0.4907727797001153,
+          "sigma": 0.15
+        },
+        {
+          "gen": 26,
+          "bestObjective": 0.4907727797001153,
+          "sigma": 0.15
+        },
+        {
+          "gen": 27,
+          "bestObjective": 0.4964244521337947,
+          "sigma": 0.15
+        },
+        {
+          "gen": 28,
+          "bestObjective": 0.4964244521337947,
+          "sigma": 0.15
+        },
+        {
+          "gen": 29,
+          "bestObjective": 0.4964244521337947,
+          "sigma": 0.15
+        },
+        {
+          "gen": 30,
+          "bestObjective": 0.4964244521337947,
+          "sigma": 0.15
+        },
+        {
+          "gen": 31,
+          "bestObjective": 0.4964244521337947,
+          "sigma": 0.15
+        },
+        {
+          "gen": 32,
+          "bestObjective": 0.4964244521337947,
+          "sigma": 0.075
+        },
+        {
+          "gen": 33,
+          "bestObjective": 0.4964244521337947,
+          "sigma": 0.075
+        },
+        {
+          "gen": 34,
+          "bestObjective": 0.4964244521337947,
+          "sigma": 0.075
+        },
+        {
+          "gen": 35,
+          "bestObjective": 0.4964244521337947,
+          "sigma": 0.075
+        },
+        {
+          "gen": 36,
+          "bestObjective": 0.497116493656286,
+          "sigma": 0.075
+        },
+        {
+          "gen": 37,
+          "bestObjective": 0.49953863898500567,
+          "sigma": 0.075
+        },
+        {
+          "gen": 38,
+          "bestObjective": 0.49953863898500567,
+          "sigma": 0.075
+        },
+        {
+          "gen": 39,
+          "bestObjective": 0.49953863898500567,
+          "sigma": 0.075
+        },
+        {
+          "gen": 40,
+          "bestObjective": 0.49953863898500567,
+          "sigma": 0.075
+        },
+        {
+          "gen": 41,
+          "bestObjective": 0.49953863898500567,
+          "sigma": 0.075
+        },
+        {
+          "gen": 42,
+          "bestObjective": 0.49953863898500567,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 43,
+          "bestObjective": 0.49953863898500567,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 44,
+          "bestObjective": 0.49953863898500567,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 45,
+          "bestObjective": 0.49953863898500567,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 46,
+          "bestObjective": 0.49953863898500567,
+          "sigma": 0.0375
+        },
+        {
+          "gen": 47,
+          "bestObjective": 0.49953863898500567,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 48,
+          "bestObjective": 0.49953863898500567,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 49,
+          "bestObjective": 0.49953863898500567,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 50,
+          "bestObjective": 0.49953863898500567,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 51,
+          "bestObjective": 0.49953863898500567,
+          "sigma": 0.01875
+        },
+        {
+          "gen": 52,
+          "bestObjective": 0.49953863898500567,
+          "sigma": 0.009375
+        }
+      ]
+    }
+  ],
+  "winnerRestart": 2,
+  "trainObjective": 0.508650519031142,
+  "featureList": [
+    "age_days",
+    "half_life_days",
+    "strength",
+    "retrieval_count",
+    "outcome_positive",
+    "outcome_negative",
+    "outcome_ratio",
+    "content_length"
+  ],
+  "pinnedZero": [
+    "schema_fit",
+    "pinned",
+    "starred",
+    "error_tag",
+    "tag_count",
+    "dag_level",
+    "valence_neutral",
+    "valence_positive",
+    "valence_negative",
+    "valence_critical",
+    "layer_buffer",
+    "layer_episodic",
+    "layer_semantic",
+    "layer_trace",
+    "kind_raw",
+    "kind_distilled",
+    "kind_superseded",
+    "kind_archived",
+    "confidence_verified",
+    "confidence_observed",
+    "confidence_inferred",
+    "confidence_stale"
+  ],
+  "configHash": "f4344541d44409f96d139b398f4699bf320e1a303913f236244b7d1fd963e5e5",
+  "frozenAt": "2026-08-10T13:14:44.724Z",
+  "weightsFileSha256": "1e747abed0df771fc9c354da8562771b336c4042faf0266f565bba1b5a8c5a40"
+}
