@@ -47,8 +47,9 @@ Flag on, the learned score acts as a **rescue veto on the existing forget set**:
   non-pinned candidate set (per-tenant grouping — see D2).
 - **Rescue** iff the entry ranks in the top 30% of its tenant by learned score — the E2
   keep-budget operating point, the only point with measured evidence. Rescued entries are
-  kept exactly as-is (no writes, no half-life edits); non-rescued condemned entries follow
-  the existing delete path.
+  kept with the standard survivor bookkeeping refresh (stored strength + effective
+  confidence); no half-life edits, no rank-derived writes. Non-rescued condemned entries
+  follow the existing delete path.
 - Every rescue emits a `result.details` line AND an audit row (attributability).
 
 Properties this buys, by construction:

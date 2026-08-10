@@ -61,7 +61,7 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { CONFIG } from './config.mjs';
 import { evaluateStore, evaluateAll } from './evaluate.mjs';
 import {
@@ -72,11 +72,17 @@ import {
   metaPathFor,
   goldPathFor,
 } from './common.mjs';
-import { loadAllEntries } from '../../dist/store.js';
-import { scoreEntries } from '../../dist/memory-value.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.join(HERE, '..', '..');
 const SPLIT_REGISTERED_PATH = path.join(HERE, 'split-registered.json');
+
+// dist/store.js and dist/memory-value.js are loaded lazily via
+// loadDistScorer() below, AFTER the freshness guard passes — never a bare
+// static import (which would run before any guard could fire). Populated
+// once by main() before srcWeightedRetentionForQuestion is ever called.
+let loadAllEntries;
+let scoreEntries;
 
 const BUDGET = 0.3; // G1's keep budget (== CONFIG.PRIMARY_BUDGET, asserted in main())
 const EPS = 5e-5; // matches fit.mjs's own reproduction epsilon (half-ULP-at-4dp)
@@ -91,6 +97,51 @@ class GateGuardError extends Error {}
 
 function guard(cond, message) {
   if (!cond) throw new GateGuardError(message);
+}
+
+// ---------------------------------------------------------------------------
+// dist/ freshness guard (round-2 code-review P2-3). This gate validates the
+// COMPILED src scorer (dist/memory-value.js), not the TypeScript source
+// directly — importing a stale dist file after an un-built src edit would
+// silently validate the PREVIOUS scoring logic and report a pass that says
+// nothing about the code actually on disk. Checked, and the dist modules
+// dynamically imported, only after this guard passes.
+// ---------------------------------------------------------------------------
+const DIST_MEMORY_VALUE_PATH = path.join(REPO_ROOT, 'dist', 'memory-value.js');
+const DIST_STORE_PATH = path.join(REPO_ROOT, 'dist', 'store.js');
+const SRC_WATCH_PATHS = [
+  path.join(REPO_ROOT, 'src', 'memory-value.ts'),
+  path.join(REPO_ROOT, 'src', 'memory-value-weights.ts'),
+];
+
+function assertDistFresh() {
+  guard(
+    fs.existsSync(DIST_MEMORY_VALUE_PATH),
+    `dist/memory-value.js not found (${DIST_MEMORY_VALUE_PATH}) — rebuild first: npm run build`,
+  );
+  const distMtimeMs = fs.statSync(DIST_MEMORY_VALUE_PATH).mtimeMs;
+  for (const srcPath of SRC_WATCH_PATHS) {
+    guard(fs.existsSync(srcPath), `expected src file missing: ${srcPath}`);
+    const srcMtimeMs = fs.statSync(srcPath).mtimeMs;
+    guard(
+      srcMtimeMs <= distMtimeMs,
+      `${path.relative(REPO_ROOT, srcPath)} is newer than dist/memory-value.js — rebuild first: npm run build`,
+    );
+  }
+}
+
+/** Freshness-checks then dynamically imports the dist scorer modules,
+ *  populating the module-level loadAllEntries/scoreEntries bindings. Must
+ *  run (via main()) before srcWeightedRetentionForQuestion is called. */
+export async function loadDistScorer() {
+  assertDistFresh();
+  const [storeMod, mvMod] = await Promise.all([
+    import(pathToFileURL(DIST_STORE_PATH).href),
+    import(pathToFileURL(DIST_MEMORY_VALUE_PATH).href),
+  ]);
+  loadAllEntries = storeMod.loadAllEntries;
+  scoreEntries = mvMod.scoreEntries;
+  return { loadAllEntries, scoreEntries };
 }
 
 /** Registered heldout ids, in registered order — the same source fit.mjs
@@ -189,11 +240,13 @@ function parseArgs(argv) {
   return { sliceN };
 }
 
-function main() {
+async function main() {
   guard(
     CONFIG.PRIMARY_BUDGET === BUDGET,
     `CONFIG.PRIMARY_BUDGET (${CONFIG.PRIMARY_BUDGET}) no longer matches this gate's hardcoded budget (${BUDGET}) — protocol drift`,
   );
+
+  await loadDistScorer(); // freshness guard + dynamic import (P2-3) — must precede any srcWeightedRetentionForQuestion call
 
   const { sliceN } = parseArgs(process.argv.slice(2));
   const heldoutIds = loadHeldoutIds();
@@ -232,7 +285,7 @@ function main() {
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
   try {
-    main();
+    await main();
   } catch (err) {
     if (err instanceof GateGuardError) {
       console.error(`[G1] FAILED (guard): ${err.message}`);

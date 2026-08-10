@@ -80,11 +80,16 @@ function enableMemoryValue(hippoRoot: string, extra: Record<string, unknown> = {
  *  describe('(e) rescue semantics'). */
 function condemnedEntry(
   content: string,
-  opts: { layer?: Layer; tenantId?: string; tags?: string[] } = {},
+  opts: { layer?: Layer; tenantId?: string; tags?: string[]; confidence?: MemoryEntry['confidence'] } = {},
 ): MemoryEntry {
   const created = ancientDate(3650);
   return {
-    ...createMemory(content, { layer: opts.layer ?? Layer.Semantic, tenantId: opts.tenantId, tags: opts.tags }),
+    ...createMemory(content, {
+      layer: opts.layer ?? Layer.Semantic,
+      tenantId: opts.tenantId,
+      tags: opts.tags,
+      confidence: opts.confidence,
+    }),
     created,
     last_retrieved: created,
     half_life_days: 1,
@@ -314,6 +319,45 @@ describe('(e) rescue semantics', () => {
       expect(meta.rank).toBeGreaterThanOrEqual(1);
       expect(meta.rank!).toBeLessThanOrEqual(3);
       expect(typeof meta.score).toBe('number');
+    }
+  });
+
+  it('rescued entries get the standard survivor bookkeeping refresh (stored strength + confidence), not left stale', async () => {
+    initStore(dir);
+    enableMemoryValue(dir);
+
+    // 4 condemned entries, confidence 'observed' (createMemory's 'verified'
+    // default never changes via resolveConfidence regardless of age, so it
+    // can't demonstrate the confidence half of the refresh). content_length
+    // spread (10, 20, 90, 100) -> keepN = ceil(0.3*4) = 2 rescues the 2
+    // shortest.
+    const lens = [10, 20, 90, 100];
+    const built = lens.map((len) =>
+      condemnedEntry('w'.repeat(len), { tenantId: 'te', confidence: 'observed' }),
+    );
+    for (const e of built) writeEntry(dir, e);
+
+    const sortedByLen = [...built].sort((a, b) => a.content.length - b.content.length);
+    const rescuedSrc = sortedByLen.slice(0, 2);
+    expect(rescuedSrc.every((e) => e.strength === 1.0 && e.confidence === 'observed')).toBe(true);
+
+    await consolidate(dir, { now: NOW });
+
+    const after = loadAllEntries(dir);
+    for (const orig of rescuedSrc) {
+      const refreshed = after.find((e) => e.id === orig.id);
+      expect(refreshed, `expected rescued entry ${orig.id} to survive`).toBeDefined();
+      // P2-1 fix: rescued entries get the SAME bookkeeping refresh as every
+      // other survivor -- stored strength reflects the actual computed
+      // (condemnation-basis) strength, not the stale original (1.0 default
+      // from createMemory).
+      expect(refreshed!.strength).toBeLessThan(0.05); // DECAY_THRESHOLD
+      expect(refreshed!.strength).not.toBe(orig.strength);
+      // Effective confidence is refreshed too (observed -> stale after 3650
+      // ancient days via resolveConfidence), not left at the original value.
+      expect(refreshed!.confidence).toBe('stale');
+      // D1 still holds: no half-life edits, no rank-derived writes.
+      expect(refreshed!.half_life_days).toBe(orig.half_life_days);
     }
   });
 

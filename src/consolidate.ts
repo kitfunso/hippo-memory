@@ -31,7 +31,8 @@ import { loadConfig } from './config.js';
 import { sampleForReplay } from './replay.js';
 import { renderTraceContent } from './trace.js';
 import { resolveTenantId } from './tenant.js';
-import { rescueSet, rankNonPinnedByTenant, type MvRankInfo } from './memory-value.js';
+import { rescueSet, rankNonPinnedByTenant, validateWeights, type MvRankInfo } from './memory-value.js';
+import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from './memory-value-weights.js';
 import { appendAuditEvent } from './audit.js';
 
 const DECAY_THRESHOLD = 0.05;
@@ -154,10 +155,12 @@ export async function consolidate(
   // behavior (pre-registered gate G2). Flag ON restructures into two phases:
   // phase 1 classifies every entry (condemned vs survivor) with ZERO
   // commits; phase 2 runs rescueSet over the per-tenant candidate groups,
-  // then commits — rescued entries are kept exactly as-is (D1: no writes,
-  // no half-life edits) and pushed to survivors so they fully participate in
-  // this cycle's merge/physics/conflict passes; non-rescued condemned
-  // entries follow the existing pendingDeletes/result.removed/details path.
+  // then commits — rescued entries get the standard survivor bookkeeping
+  // refresh (stored strength + effective confidence; no half-life edits, no
+  // rank-derived writes) and are pushed to survivors so they fully
+  // participate in this cycle's merge/physics/conflict passes; non-rescued
+  // condemned entries follow the existing pendingDeletes/result.removed/
+  // details path.
   const survivors: MemoryEntry[] = [];
   let rescuedIds: Set<string> = new Set();
   // Carried forward to the post-flush "4. Log run" section below, where the
@@ -184,13 +187,22 @@ export async function consolidate(
     // --- Phase 2: rescue, then commit ---
     // Pure compute — runs under --dry-run too (only pendingDeletes/the audit
     // write in "4. Log run" below stay !dryRun-gated), so the preview
-    // matches what a real run would decide. rankById carries the same
-    // per-tenant rank context rescueSet used internally, reused below for
-    // the detail/audit lines so the decision and its reported rank never
-    // diverge.
+    // matches what a real run would decide.
     const condemnedIds = new Set(condemned.map((e) => e.id));
-    rankById = rankNonPinnedByTenant(all, now);
-    rescuedIds = rescueSet(all, condemnedIds, now);
+    // Fail-loud must not depend on condemnation traffic (round-2 code-review
+    // P2-2): validate the frozen weights constant unconditionally, even on a
+    // sleep with nothing condemned.
+    validateWeights();
+    if (condemnedIds.size > 0) {
+      // Compute the per-tenant ranking ONCE (round-2 code-review P2-2):
+      // rankById feeds both rescueSet's decision (via precomputedRanks,
+      // skipping its own internal rankNonPinnedByTenant call) and the
+      // detail/audit rank context below, so the whole-store ranking pass
+      // runs a single time per sleep instead of twice, and only when there
+      // is actually something condemned to rank against.
+      rankById = rankNonPinnedByTenant(all, now);
+      rescuedIds = rescueSet(all, condemnedIds, now, MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256, rankById);
+    }
 
     for (const entry of preliminarySurvivors) {
       const strength = strengthById.get(entry.id)!;
@@ -206,10 +218,21 @@ export async function consolidate(
     for (const entry of condemned) {
       const strength = strengthById.get(entry.id)!;
       if (rescuedIds.has(entry.id)) {
-        // Rescued (D1): kept exactly as-is — no writes, no half-life edits.
-        survivors.push(entry);
+        // Rescued (D1): standard survivor bookkeeping refresh — same
+        // stored-strength + effective-confidence update every other
+        // survivor gets (round-2 code-review P2-1). D1's "kept as-is"
+        // protects against half-life edits and rank-derived writes, not
+        // against the ordinary decay-pass refresh every survivor receives;
+        // leaving a rescued entry's stale strength (e.g. 1.0) on disk would
+        // mislead downstream replay/admission reads.
+        const effectiveConfidence = resolveConfidence(entry, now);
+        const updated = { ...entry, strength, confidence: effectiveConfidence };
+        survivors.push(updated);
+        if (!dryRun && (strength !== entry.strength || effectiveConfidence !== entry.confidence)) {
+          pendingWrites.push(updated);
+        }
         result.decayed++;
-        rescuedEntries.push(entry);
+        rescuedEntries.push(updated);
         const rank = rankById.get(entry.id);
         const rankNote = rank
           ? ` — rescued (rank ${rank.rank}/${rank.totalNonPinned} in tenant ${rank.tenantId}, top ${rank.keepN})`

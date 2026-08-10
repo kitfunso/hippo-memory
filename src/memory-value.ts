@@ -228,6 +228,13 @@ export function rankNonPinnedByTenant(
  * callers (consolidate.ts) never pass overrides — the params exist purely so
  * "flag on + a broken constant throws" is directly testable end-to-end
  * through this function without mutating the frozen module singleton.
+ *
+ * `precomputedRanks` (round-2 code-review P2-2): when the caller has already
+ * computed the per-tenant ranking (e.g. consolidate.ts needs it separately
+ * for detail/audit rank context), pass it here to skip the internal
+ * rankNonPinnedByTenant call — the whole-store ranking pass then runs
+ * exactly once per sleep instead of twice. Omitted (the default), rescueSet
+ * computes it internally as before — existing callers/tests are unaffected.
  */
 export function rescueSet(
   entries: MemoryEntry[],
@@ -235,9 +242,10 @@ export function rescueSet(
   now: Date,
   weights: Readonly<Record<string, number>> = MEMORY_VALUE_WEIGHTS,
   digest: string = SOURCE_ARTIFACT_SHA256,
+  precomputedRanks?: Map<string, MvRankInfo>,
 ): Set<string> {
   validateWeights(weights, digest); // fail loud before any rescue computation (constraint 5)
-  const ranked = rankNonPinnedByTenant(entries, now, weights, digest);
+  const ranked = precomputedRanks ?? rankNonPinnedByTenant(entries, now, weights, digest);
   const rescued = new Set<string>();
   for (const id of condemnedIds) {
     const info = ranked.get(id);
