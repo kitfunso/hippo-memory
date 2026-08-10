@@ -26,7 +26,7 @@ The frozen E2 learned memory-value scorer is wired into the sleep decay pass as 
 | Gate | Bar | Result |
 |---|---|---|
 | G1 code parity | src scorer reproduces registered held-out weighted 0.48973684210526314 at keep 0.30, ε 5e-5, through the harness's own selection | **PASS, delta 0 (exact)** — strong arm: full-500 scratch rebuild (`--full --keep-stores`, isolated root) reproduced registered baselines exactly (heldout recency 0.4203, uniform 0.2468, n=190; train recency 0.3862), then `report-src-parity.mjs` over the rebuilt held-out stores: src 0.48973684210526314 vs registered 0.48973684210526314; recency cross-check delta 0 |
-| G2 default-path non-regression | full suite green + flag-off bit-identity | **PASS** — 359 test files passed / 3 skipped, exit 0, on the final tree; bit-identity test green. LongMemEval not re-run for the off path per the pre-registered justification |
+| G2 default-path non-regression | full suite green + flag-off bit-identity | **PASS** — 360 test files passed / 3 skipped, exit 0, on the final tree (run twice; the count includes the review-round `audit-ops-mv-rescue-lockstep` test added after an earlier 359-file run); bit-identity test green. LongMemEval not re-run for the off path per the pre-registered justification |
 | G3 behavioral properties | rescue semantics incl. merge + conflict-detection participation; subset; pinned; fail-loud; dry-run parity | **PASS** — all green on the final tree |
 | G4 scale characterization | determinism, subset, per-tenant isolation at ~2k entries / 3 tenants | **PASS** — properties green; rescue rate **17.7%** of condemned (58/327; per-tenant 19.8/17.1/16.3) — REPORTED, not gated |
 
