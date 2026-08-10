@@ -952,7 +952,13 @@ async function executeTool(
           return age < 24; // created in last 24 hours
         }).length;
         if (recentCount >= config.autoSleep.threshold) {
-          consolidate(hippoRoot);
+          // Fire-and-forget by design (never block the remember response), but
+          // an unhandled rejection here can kill the MCP server process — any
+          // consolidate error (DB contention, or the memoryValue fail-loud
+          // throw) must land as a logged line, not a crash.
+          consolidate(hippoRoot).catch((err) => {
+            console.error(`auto-sleep consolidate failed: ${err instanceof Error ? err.message : err}`);
+          });
         }
       }
 
