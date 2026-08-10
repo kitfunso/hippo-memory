@@ -91,6 +91,36 @@ recorded here as a dated amendment BEFORE the real fit.
    + `docs/RETRACTION.md` discipline; the `weighted` scorer key is
    presented as "learned" in prose with the key name noted.
 
+## Amendment 1 (2026-08-10, post-result hardening - dated per the E1 precedent)
+
+Recorded AFTER the bars-met result existed, from the review round (codex
+P1/P2s + /code-review 15 findings). Nothing here touches the optimizer, the
+objective, the bars, or any PRNG stream; the ES search is bit-identical and
+the refit must reproduce `weights-learned.json` byte-for-byte (verified in
+the result doc's addendum). Changes:
+
+1. Integrity gate extended: split duplicate/disjointness assertions;
+   reproduced (live-scratch) varying-features tied to the registered set;
+   TRAIN uniform meanRetention + questionsIncluded added to the baseline
+   assertions (the all-features-sensitive statistic - closes the gate's
+   blindness to non-age train-feature corruption; a committed per-question
+   feature hash remains the airtight future fix); malformed input fails as
+   named assertions, never TypeErrors.
+2. The judgment path is now gated: `--report` runs the integrity gate and
+   verifies the frozen meta's configHash before any held-out evaluation,
+   and evaluates held-out ids only (provably number-preserving).
+3. Freeze is mechanically enforced: refit refuses without `--force`; the
+   report is additionally written to the COMMITTED
+   `fit-report-registered.json` (E1 registration convention).
+4. Meta sidecar completeness: per-restart trajectories retained (as this
+   prereg promised); accurate seed-provenance fields added. CORRECTION to
+   this prereg's own wording: the ES restarts and bootstrap draw from
+   rngFor namespaces ('fit|<r>', 'report') which do NOT consume
+   CONFIG.GLOBAL_SEED; GLOBAL_SEED parameterizes the E1 split/simulation
+   substrate. The streams themselves are unchanged by this amendment.
+5. Result-doc headline count corrected: held-out is 200 raw questions /
+   190 non-zero-gold (the earlier "190/189" was a mis-derived count).
+
 ## Dry-run evidence (filled before lock; empty = NOT LOCKED)
 
 - Integrity gate: **PASSED** on the real scratch (500/500 dirs), three

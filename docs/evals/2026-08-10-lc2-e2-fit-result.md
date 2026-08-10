@@ -9,7 +9,7 @@ Reproduce: `node benchmarks/memory-value/fit.mjs` then
 `node benchmarks/memory-value/fit.mjs --report` (deterministic; seed 42;
 requires the E1 scratch features or a fresh E1 run to regenerate them).
 
-## Headline (held-out, keep budget 0.30, 190 questions / 189 non-zero-gold)
+## Headline (held-out, keep budget 0.30, 200 questions / 190 non-zero-gold)
 
 | scorer | held-out retention |
 |---|---|
@@ -101,3 +101,34 @@ question); no re-assertion of any retracted magnitude.
   is byte-identical to green-CI master and passes alone (12/12).
 - Held-out was evaluated exactly once, after freeze; `--report` consumed
   `evaluateAll`'s in-process pairedRecords.
+
+## Addendum (2026-08-10, review-round hardening - prereg Amendment 1)
+
+The review round (codex: 1 P1 + 2 P2; /code-review: 15 verified findings,
+which also reproduced this doc's held-out report byte-identically before
+any fix) drove a gate/reporting hardening pass. Everything is recorded in
+the prereg's Amendment 1; the empirical closure:
+
+- **The ES search was bit-unchanged**: the deterministic refit under the
+  hardened gate reproduced all five restart objectives exactly
+  (0.4971/0.4964/0.5087/0.4988/0.4995, winner restart 2) and
+  `weights-learned.json` is **byte-identical** (empty git diff). The meta
+  sidecar now carries the promised per-restart trajectories and accurate
+  seed-provenance fields.
+- **The re-run gated `--report` reproduced every headline digit**
+  (0.48973684..., CIs [0.016570..., 0.126519...] / [0.174811...,
+  0.312206...]) and additionally wrote the committed
+  `fit-report-registered.json` (registration convention).
+- Gate now also asserts: split duplicate/disjointness; live reproduced
+  variance == registered set; TRAIN uniform baseline (the
+  all-features-sensitive statistic closing the non-age-corruption
+  blindness codex flagged); named failures on malformed input. `--report`
+  gates + verifies the frozen configHash and evaluates held-out only.
+  Refit refuses without `--force`. barsMet throws on degenerate null CIs.
+- This doc's headline count was corrected (200 raw held-out / 190
+  non-zero-gold; an earlier draft said 190/189 - a mis-derived count
+  caught by /code-review).
+- Recorded follow-ups (not this episode): helper consolidation into
+  common.mjs (boolFlag/mean/gaussian/questionSplits duplicates - touches
+  frozen E1 files); committed per-question feature hashes as the airtight
+  gate; dag-rebuild test #12 worker-RPC flake.

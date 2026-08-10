@@ -20,6 +20,7 @@
  *   node fit.mjs --report        post-freeze: heldout paired bootstrap CIs
  *   node fit.mjs --help          print usage and exit
  */
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -62,6 +63,10 @@ const META_PATH = path.join(HERE, 'weights-learned.meta.json');
 const SPLIT_REGISTERED_PATH = path.join(HERE, 'split-registered.json');
 const RESULTS_LATEST_PATH = path.join(HERE, 'results-latest.json');
 const REPORT_PATH = path.join(RESULTS_DIR, 'fit-report-latest.json');
+// Committed registration copy (fix-round: mirrors E1's results-latest.json
+// convention — the mutable results/ path is the run output, this one is the
+// git-diffable record of the last registered report).
+const REPORT_REGISTERED_PATH = path.join(HERE, 'fit-report-registered.json');
 
 // ---------------------------------------------------------------------------
 // Small pure helpers
@@ -239,88 +244,171 @@ function assertGate(cond, message) {
   if (!cond) throw new Error(`[integrity-gate] FAILED ${message}`);
 }
 
-/**
- * Three assertions plus the varying-features check plus the recency
- * cross-check (plan test 8). Any failure throws with the assertion named —
- * the CLI turns that into a nonzero exit. No fit runs on a failed gate.
- *
- * Accepts pre-parsed `splitRegistered`/`registeredResults` (tests only) so
- * a tampered scratch root can be gated without writing throwaway files —
- * default reads the committed files.
- */
-export function runIntegrityGate({ splitRegistered, registeredResults } = {}) {
-  const split = splitRegistered ?? readJson(SPLIT_REGISTERED_PATH);
-  const registered = registeredResults ?? readJson(RESULTS_LATEST_PATH);
-  const budget = CONFIG.PRIMARY_BUDGET;
+/** Asserts `value` is present (not null/undefined) before any caller does a
+ *  `.property`/`.toFixed()` access on it — every place this wraps a deep
+ *  `registered`/`reproduced` dereference turns a would-be raw TypeError
+ *  (malformed/tampered JSON) into a named assertGate failure instead
+ *  (gate-hardening fix round). Returns `value` so call sites can inline it. */
+function requireCell(value, message) {
+  assertGate(value !== undefined && value !== null, message);
+  return value;
+}
 
-  // (a) split integrity: split-registered's counts must equal results-
-  // latest's split block. Targets come from `registered` itself (the
-  // committed file), not a duplicate hardcoded literal — a second copy of
-  // the same fact is a second place it can drift out of sync.
+/** Like `requireCell`, additionally requiring the summary-cell shape
+ *  (`{meanRetention, questionsIncluded}`) that every `.toFixed(4)` /
+ *  inclusion-integrity comparison below depends on — a cell object present
+ *  but missing/non-numeric `meanRetention` would otherwise throw a raw
+ *  TypeError at the `.toFixed()` call site rather than a named failure. */
+function requireMeanCell(value, message) {
   assertGate(
-    split.train.length === registered.split.trainCount && split.heldout.length === registered.split.heldoutCount,
-    `(a) split-registered train/heldout lengths (${split.train.length}/${split.heldout.length}) must equal ` +
-      `results-latest split block (${registered.split.trainCount}/${registered.split.heldoutCount})`,
+    value !== undefined &&
+      value !== null &&
+      typeof value.meanRetention === 'number' &&
+      typeof value.questionsIncluded === 'number',
+    message,
+  );
+  return value;
+}
+
+/** (a) split integrity: split-registered's train/heldout id arrays must be
+ *  duplicate-free, disjoint, and their lengths must equal results-latest's
+ *  split block. Targets come from `registered` itself (the committed file),
+ *  not a duplicate hardcoded literal — a second copy of the same fact is a
+ *  second place it can drift out of sync. */
+function assertSplitIntegrity(split, registered) {
+  const trainIds = requireCell(split?.train, '(a) split-registered is missing a train id array');
+  const heldoutIds = requireCell(split?.heldout, '(a) split-registered is missing a heldout id array');
+  const trainCount = requireCell(registered?.split?.trainCount, '(a) results-latest split block is missing trainCount');
+  const heldoutCount = requireCell(registered?.split?.heldoutCount, '(a) results-latest split block is missing heldoutCount');
+
+  assertGate(
+    trainIds.length === trainCount && heldoutIds.length === heldoutCount,
+    `(a) split-registered train/heldout lengths (${trainIds.length}/${heldoutIds.length}) must equal ` +
+      `results-latest split block (${trainCount}/${heldoutCount})`,
   );
 
-  const registeredTrainRecency = registered.evaluate.summary.train.recency[budget];
-  const registeredHeldoutRecency = registered.evaluate.summary.heldout.recency[budget];
-  const registeredHeldoutUniform = registered.evaluate.summary.heldout.uniform[budget];
+  const trainSet = new Set(trainIds);
+  const heldoutSet = new Set(heldoutIds);
+  assertGate(
+    trainSet.size === trainIds.length,
+    `(a) split-registered train contains duplicate ids (${trainIds.length} entries, ${trainSet.size} unique)`,
+  );
+  assertGate(
+    heldoutSet.size === heldoutIds.length,
+    `(a) split-registered heldout contains duplicate ids (${heldoutIds.length} entries, ${heldoutSet.size} unique)`,
+  );
+  let overlap = 0;
+  for (const id of trainSet) if (heldoutSet.has(id)) overlap++;
+  assertGate(overlap === 0, `(a) split-registered train and heldout overlap on ${overlap} id(s) — splits must be disjoint`);
+}
 
-  // Reproduced summary over the COMMITTED split, no weights (baseline
-  // scorers only) — the input to assertions (b) and (c).
+/** `summary?.[splitName]?.[scorerName]?.[budget]`, guarded via requireMeanCell. */
+function getMeanCell(summary, splitName, scorerName, budget, label) {
+  return requireMeanCell(summary?.[splitName]?.[scorerName]?.[budget], label);
+}
+
+/** (b) inclusion integrity — `reproducedCell.questionsIncluded` must match
+ *  the registered file's own recorded post-zero-gold count. `assertionTag`
+ *  is 'b' for the original two checks, 'c' for the NEW train-uniform check
+ *  (the fix that added it framed both its halves as part of extending (c)). */
+function assertInclusionMatches(reproducedCell, registeredCell, label, assertionTag) {
+  assertGate(
+    reproducedCell.questionsIncluded === registeredCell.questionsIncluded,
+    `(${assertionTag}) ${label} questionsIncluded must be ${registeredCell.questionsIncluded}, got ${reproducedCell.questionsIncluded}`,
+  );
+}
+
+/** (c) baseline reproduction at 4dp against the committed results-latest.json. */
+function assertReproducesBaseline(reproducedCell, registeredCell, label) {
+  assertGate(
+    reproducedCell.meanRetention.toFixed(4) === registeredCell.meanRetention.toFixed(4),
+    `(c) ${label} must reproduce ${registeredCell.meanRetention.toFixed(4)}, got ${reproducedCell.meanRetention.toFixed(4)}`,
+  );
+}
+
+/**
+ * Reproduces the no-weights (baseline scorers only) summary over the
+ * COMMITTED split and checks it against `registered` (results-latest.json):
+ * (b) inclusion integrity and (c) baseline reproduction at 4dp. The
+ * train-uniform check is the all-features-sensitive baseline (fix round
+ * addition): recency alone only exercises age_days, so a corruption in any
+ * OTHER train feature is invisible to it — uniform sums all 30 features and
+ * so surfaces non-age corruption that recency-only reproduction would miss.
+ * (A committed per-question feature hash would be the airtight fix; this is
+ * the practical stand-in until that lands.) Returns the reproduced
+ * evaluateAll() result for the variance check.
+ */
+function reproduceAndAssertBaselines(split, registered, budget) {
+  const registeredSummary = registered?.evaluate?.summary;
+  const registeredTrainRecency = getMeanCell(registeredSummary, 'train', 'recency', budget, '(b) registered summary missing train.recency cell');
+  const registeredHeldoutRecency = getMeanCell(registeredSummary, 'heldout', 'recency', budget, '(b) registered summary missing heldout.recency cell');
+  const registeredHeldoutUniform = getMeanCell(registeredSummary, 'heldout', 'uniform', budget, '(b) registered summary missing heldout.uniform cell');
+  const registeredTrainUniform = getMeanCell(registeredSummary, 'train', 'uniform', budget, '(b) registered summary missing train.uniform cell');
+
   const questionSplits = [
     ...split.train.map((questionId) => ({ questionId, split: 'train' })),
     ...split.heldout.map((questionId) => ({ questionId, split: 'heldout' })),
   ];
   const reproduced = evaluateAll(questionSplits, { budgets: [budget], primaryBudget: budget });
 
-  const trainRecency = reproduced.summary.train?.recency?.[budget];
-  const heldoutRecency = reproduced.summary.heldout?.recency?.[budget];
-  const heldoutUniform = reproduced.summary.heldout?.uniform?.[budget];
+  const trainRecency = getMeanCell(reproduced.summary, 'train', 'recency', budget, '(b) reproduced summary is missing the train.recency cell');
+  const heldoutRecency = getMeanCell(reproduced.summary, 'heldout', 'recency', budget, '(b) reproduced summary is missing the heldout.recency cell');
+  const heldoutUniform = getMeanCell(reproduced.summary, 'heldout', 'uniform', budget, '(b) reproduced summary is missing the heldout.uniform cell');
+  const trainUniform = getMeanCell(reproduced.summary, 'train', 'uniform', budget, '(b) reproduced summary is missing the train.uniform cell');
+
+  assertInclusionMatches(trainRecency, registeredTrainRecency, 'train recency', 'b');
+  assertInclusionMatches(heldoutRecency, registeredHeldoutRecency, 'heldout recency', 'b');
+
+  assertReproducesBaseline(heldoutRecency, registeredHeldoutRecency, 'heldout recency');
+  assertReproducesBaseline(heldoutUniform, registeredHeldoutUniform, 'heldout uniform');
+  assertReproducesBaseline(trainRecency, registeredTrainRecency, 'train recency');
+  // All-features-sensitive baseline (see function doc comment above).
+  assertReproducesBaseline(trainUniform, registeredTrainUniform, 'train uniform');
+  assertInclusionMatches(trainUniform, registeredTrainUniform, 'train uniform', 'c');
+
+  return reproduced;
+}
+
+/**
+ * Varying-features set (registered, committed) must equal `expectedFitDims`
+ * exactly (production default: FIT_DIMS). NEW (gate-hardening fix round):
+ * the live-scratch reproduced varying set must ALSO equal the registered
+ * set — a scratch that has drifted (a feature gone dead, or a new one now
+ * varying, since results-latest.json was registered) is caught here even if
+ * assertions (b)/(c) above happen not to move at 4dp.
+ */
+function assertVarianceLiveness(reproduced, registered, expectedFitDims) {
+  const registeredVarying = requireCell(
+    registered?.evaluate?.varyingFeatures,
+    '(b) registered evaluate block is missing varyingFeatures',
+  );
+  const registeredVaryingSorted = [...registeredVarying].sort();
+  const fitDimsSorted = [...expectedFitDims].sort();
   assertGate(
-    Boolean(trainRecency && heldoutRecency && heldoutUniform),
-    '(b) reproduced summary is missing a train/heldout recency or uniform cell',
+    JSON.stringify(registeredVaryingSorted) === JSON.stringify(fitDimsSorted),
+    `varying-features set must equal FIT_DIMS, got ${JSON.stringify(registeredVaryingSorted)}`,
   );
 
-  // (b) inclusion integrity — reproduced questionsIncluded must match the
-  // registered file's own recorded post-zero-gold counts.
+  const reproducedVaryingSorted = [...reproduced.varyingFeatures].sort();
   assertGate(
-    trainRecency.questionsIncluded === registeredTrainRecency.questionsIncluded,
-    `(b) train recency questionsIncluded must be ${registeredTrainRecency.questionsIncluded}, got ${trainRecency.questionsIncluded}`,
+    JSON.stringify(reproducedVaryingSorted) === JSON.stringify(registeredVaryingSorted),
+    `live-scratch varying-features must equal the registered set ${JSON.stringify(registeredVaryingSorted)}, got ${JSON.stringify(reproducedVaryingSorted)}`,
   );
-  assertGate(
-    heldoutRecency.questionsIncluded === registeredHeldoutRecency.questionsIncluded,
-    `(b) heldout recency questionsIncluded must be ${registeredHeldoutRecency.questionsIncluded}, got ${heldoutRecency.questionsIncluded}`,
-  );
+}
 
-  // (c) baseline reproduction, 4dp, against the committed results-latest.json.
-  assertGate(
-    heldoutRecency.meanRetention.toFixed(4) === registeredHeldoutRecency.meanRetention.toFixed(4),
-    `(c) heldout recency must reproduce ${registeredHeldoutRecency.meanRetention.toFixed(4)}, got ${heldoutRecency.meanRetention.toFixed(4)}`,
+/**
+ * Row cache (caching contract, plan decision 1) + recency cross-check (plan
+ * test 8): the fitter's OWN mean/skip-rule arithmetic, run on the pure
+ * recency vector, must reproduce the registered train recency. Any drift
+ * here means the objective's mean or skip rule disagrees with evaluateAll's.
+ * Returns the row cache (for the caller to reuse across ES candidates) and
+ * the cross-check value itself (runFit's non-tautological restart-0 bar).
+ */
+function crossCheckRecency(split, registered, budget) {
+  const registeredTrainRecency = requireMeanCell(
+    registered?.evaluate?.summary?.train?.recency?.[budget],
+    '(b) registered summary missing train.recency cell',
   );
-  assertGate(
-    heldoutUniform.meanRetention.toFixed(4) === registeredHeldoutUniform.meanRetention.toFixed(4),
-    `(c) heldout uniform must reproduce ${registeredHeldoutUniform.meanRetention.toFixed(4)}, got ${heldoutUniform.meanRetention.toFixed(4)}`,
-  );
-  assertGate(
-    trainRecency.meanRetention.toFixed(4) === registeredTrainRecency.meanRetention.toFixed(4),
-    `(c) train recency must reproduce ${registeredTrainRecency.meanRetention.toFixed(4)}, got ${trainRecency.meanRetention.toFixed(4)}`,
-  );
-
-  // Varying-features set (registered, committed) must equal FIT_DIMS exactly.
-  const registeredVarying = [...registered.evaluate.varyingFeatures].sort();
-  const fitDimsSorted = [...FIT_DIMS].sort();
-  assertGate(
-    JSON.stringify(registeredVarying) === JSON.stringify(fitDimsSorted),
-    `varying-features set must equal FIT_DIMS, got ${JSON.stringify(registeredVarying)}`,
-  );
-
-  // Row cache (caching contract, plan decision 1) + recency cross-check
-  // (plan test 8): the fitter's OWN mean/skip-rule arithmetic, run on the
-  // pure recency vector, must reproduce the registered train recency. Any
-  // drift here means the objective's mean or skip rule disagrees with
-  // evaluateAll's.
   const cachedRowsById = cacheTrainRows(split.train);
   const recencyWeights = toWeights(FIT_DIMS.map((f) => (f === 'age_days' ? -1 : 0)));
   const recencyCrossCheck = computeTrainObjective(recencyWeights, cachedRowsById, split.train, budget);
@@ -329,8 +417,33 @@ export function runIntegrityGate({ splitRegistered, registeredResults } = {}) {
     recencyCrossCheck !== null && recencyCrossCheck.toFixed(4) === registeredTrainRecency4dp,
     `recency cross-check: fitter's own objective must reproduce train recency ${registeredTrainRecency4dp}, got ${recencyCrossCheck?.toFixed(4)}`,
   );
+  return { cachedRowsById, recencyCrossCheck };
+}
 
-  return { splitRegistered: split, trainIds: split.train, cachedRowsById, reproduced };
+/**
+ * Split integrity + baseline reproduction + variance liveness + recency
+ * cross-check (plan test 8). Any failure throws with the assertion named —
+ * the CLI turns that into a nonzero exit. No fit runs on a failed gate.
+ *
+ * Accepts pre-parsed `splitRegistered`/`registeredResults` (tests only) so
+ * a tampered scratch root can be gated without writing throwaway files —
+ * default reads the committed files. `expectedFitDims` (tests only) lets a
+ * toy fixture whose reproduced varying set differs from production's
+ * FIT_DIMS still exercise the mechanism (registered==expected AND
+ * reproduced==registered) without weakening the check on the real path,
+ * which always uses the FIT_DIMS default.
+ */
+export function runIntegrityGate({ splitRegistered, registeredResults, expectedFitDims = FIT_DIMS } = {}) {
+  const split = splitRegistered ?? readJson(SPLIT_REGISTERED_PATH);
+  const registered = registeredResults ?? readJson(RESULTS_LATEST_PATH);
+  const budget = CONFIG.PRIMARY_BUDGET;
+
+  assertSplitIntegrity(split, registered);
+  const reproduced = reproduceAndAssertBaselines(split, registered, budget);
+  assertVarianceLiveness(reproduced, registered, expectedFitDims);
+  const { cachedRowsById, recencyCrossCheck } = crossCheckRecency(split, registered, budget);
+
+  return { splitRegistered: split, trainIds: split.train, cachedRowsById, reproduced, recencyCrossCheck };
 }
 
 // ---------------------------------------------------------------------------
@@ -363,6 +476,16 @@ export function computeFit(trainIds, cachedRowsById, opts = {}) {
     const rng = rngFor('fit', r);
     const init = initVectorForRestart(r, FIT_DIMS, rng, esOpts.box);
     const es = runES({ objective, dims: FIT_DIMS, rng, init, ...esOpts });
+    // Non-finite guard (gate-hardening fix round): a restart whose winning
+    // objective is NaN/Infinity means the objective function degenerated
+    // (e.g. every candidate hit the zero-gold skip) — fail loudly rather
+    // than silently propagate a non-finite value into selectWinner/meta.
+    if (!Number.isFinite(es.bestObjective)) {
+      throw new Error(
+        `[fit] restart ${r} produced a non-finite train objective (${es.bestObjective}) — the objective ` +
+          'function returned a degenerate value for every candidate (likely a zero-gold or malformed cache).',
+      );
+    }
     perRestart.push({
       restart: r,
       init,
@@ -370,23 +493,43 @@ export function computeFit(trainIds, cachedRowsById, opts = {}) {
       generations: es.generations,
       finalSigma: es.finalSigma,
       trainObjective: es.bestObjective,
+      trajectory: es.trajectory,
     });
   }
 
   const winner = selectWinner(perRestart);
   const norm = l2norm(winner.best);
+  // Zero-norm guard (gate-hardening fix round): normalizing a (near-)zero
+  // vector divides by (near-)zero and hands weights-learned.json NaNs —
+  // fail loudly instead of freezing a broken scorer.
+  if (norm < 1e-9) {
+    throw new Error(
+      `[fit] winning vector has near-zero L2 norm (${norm}) — restart ${winner.restart} converged to (near-)zero ` +
+        'and cannot be normalized.',
+    );
+  }
   const normalized = winner.best.map((x) => x / norm);
   const weights = toWeights(normalized);
 
   const meta = {
     globalSeed: CONFIG.GLOBAL_SEED,
     restarts,
-    perRestart: perRestart.map(({ restart, init, generations, finalSigma, trainObjective }) => ({
+    // Seed provenance (gate-hardening fix round): documents which rngFor
+    // namespaces produced this freeze. GLOBAL_SEED itself is NOT consumed
+    // by the ES/bootstrap streams (see seedNote) — recorded here only so a
+    // reader doesn't have to infer that from the source.
+    esSeedNamespaces: Array.from({ length: restarts }, (_, r) => `fit|${r}`),
+    reportSeedNamespace: 'report',
+    seedNote:
+      'GLOBAL_SEED parameterizes the E1 split/simulation substrate; the ES and bootstrap streams are ' +
+      'namespaced by rngFor and do not consume GLOBAL_SEED.',
+    perRestart: perRestart.map(({ restart, init, generations, finalSigma, trainObjective, trajectory }) => ({
       restart,
       init,
       generations,
       finalSigma,
       trainObjective,
+      trajectory,
     })),
     winnerRestart: winner.restart,
     trainObjective: winner.trainObjective,
@@ -451,13 +594,51 @@ function pairedDeltas(mapA, mapB) {
   return deltas;
 }
 
+/**
+ * Bars-met logic (gate-hardening fix round), pulled out to a pure function
+ * so it is unit-testable without file I/O. A null CI bound only ever comes
+ * from an empty paired-delta set (bootstrapCI's own contract: `n === 0` =>
+ * `ci95: [null, null]`) — degenerate pairing must never silently produce a
+ * barsMet=false report, it must throw and refuse to write one at all.
+ */
+export function computeBarsMet(heldout, ciVsRecency, ciVsUniform) {
+  const ciBoundsAreNull =
+    ciVsRecency.ci95[0] === null ||
+    ciVsRecency.ci95[1] === null ||
+    ciVsUniform.ci95[0] === null ||
+    ciVsUniform.ci95[1] === null;
+  if (ciBoundsAreNull) {
+    throw new Error(
+      '[fit-report] FAILED data integrity: a bootstrap CI bound is null (empty paired-delta set) — refusing ' +
+        'to write a barsMet report from degenerate pairing.',
+    );
+  }
+  return (
+    heldout.weighted > heldout.recency &&
+    heldout.weighted > heldout.uniform &&
+    ciVsRecency.ci95[0] > 0 &&
+    ciVsUniform.ci95[0] > 0
+  );
+}
+
 // ---------------------------------------------------------------------------
 // CLI orchestration
 // ---------------------------------------------------------------------------
 
 function runFit() {
+  // Freeze enforcement (gate-hardening fix round): checked BEFORE the
+  // (potentially ~60 min) gate + fit run, not after — an operator re-running
+  // `fit.mjs` by mistake gets refused immediately, not after paying the full
+  // cost. --force is the explicit, named override.
+  if (fs.existsSync(WEIGHTS_PATH) && !boolFlag('force')) {
+    throw new Error(
+      `[fit] refusing to overwrite existing ${WEIGHTS_PATH} — weights are already frozen. Pass --force to ` +
+        're-fit and overwrite (this also overwrites weights-learned.meta.json).',
+    );
+  }
+
   console.log('[fit] running integrity gate...');
-  const { trainIds, cachedRowsById } = runIntegrityGate();
+  const { trainIds, cachedRowsById, recencyCrossCheck } = runIntegrityGate();
   console.log(`[fit] integrity gate passed; ${trainIds.length} train rows cached`);
 
   const { weights, meta, perRestart, winner } = computeFit(trainIds, cachedRowsById);
@@ -467,13 +648,17 @@ function runFit() {
     );
   }
 
-  // Restart-0 invariant: impossible by construction (restart 0 starts at
-  // recency and only moves on strict improvement). A violation is a fitter
-  // bug, not a data outcome — fail loudly rather than freeze a bad result.
-  const restart0Objective = perRestart[0].trainObjective;
-  if (winner.trainObjective < restart0Objective) {
+  // Restart-0 invariant, checked against the gate's OWN recency cross-check
+  // rather than restart 0's own objective (the old check was tautological:
+  // selectWinner can never pick a winner worse than restart 0, since restart
+  // 0 IS one of the candidates it selects from). recencyCrossCheck is an
+  // independent computation of the recency-vector objective on the SAME
+  // cached rows, so "winner >= recencyCrossCheck" is a real invariant.
+  // Non-finite objectives already throw inside computeFit (see its
+  // per-restart guard).
+  if (winner.trainObjective < recencyCrossCheck) {
     throw new Error(
-      `restart-0 invariant violated: winner trainObjective ${winner.trainObjective} < restart-0 (recency-init) ${restart0Objective}`,
+      `restart-0 invariant violated: winner trainObjective ${winner.trainObjective} < recency cross-check ${recencyCrossCheck}`,
     );
   }
 
@@ -514,13 +699,34 @@ function dryRunTiming() {
 }
 
 function runReport() {
+  // Gate FIRST (gate-hardening fix round): --report previously ran ungated,
+  // so a stale/tampered scratch or split could produce a "bars met" report
+  // that never touched verified data. Just gate — its cachedRowsById/train
+  // return isn't needed here, --report never reads train.
+  runIntegrityGate();
+
+  // Freeze provenance: refuse to report against weights frozen under a
+  // DIFFERENT config.mjs than the one currently checked out — configHash is
+  // written at freeze time (computeFit) precisely so this can be checked.
   const weights = readJson(WEIGHTS_PATH);
+  const meta = readJson(META_PATH);
+  const currentConfigHash = sha256Hex(JSON.stringify(CONFIG));
+  if (meta.configHash !== currentConfigHash) {
+    throw new Error(
+      `[fit-report] FAILED freeze provenance: weights-learned.meta.json configHash (${meta.configHash}) does ` +
+        `not match the current CONFIG hash (${currentConfigHash}) — the weights were frozen against a ` +
+        'different config.mjs; refusing to report against a stale freeze.',
+    );
+  }
+
   const split = readJson(SPLIT_REGISTERED_PATH);
   const budget = CONFIG.PRIMARY_BUDGET;
-  const questionSplits = [
-    ...split.train.map((questionId) => ({ questionId, split: 'train' })),
-    ...split.heldout.map((questionId) => ({ questionId, split: 'heldout' })),
-  ];
+  // Held-out ONLY (gate-hardening fix round): train ids are never read here.
+  // Retention is computed per-store (evaluateStore normalizes/scores each
+  // question independently), so restricting questionSplits to heldout
+  // leaves every heldout summary cell and every heldout pairedRecord
+  // unchanged versus evaluating train+heldout together and filtering after.
+  const questionSplits = split.heldout.map((questionId) => ({ questionId, split: 'heldout' }));
   const evalResult = evaluateAll(questionSplits, { weights, budgets: [budget], primaryBudget: budget });
 
   const heldoutPaired = evalResult.pairedRecords.filter((r) => r.split === 'heldout');
@@ -540,11 +746,9 @@ function runReport() {
     recency: s.recency[budget].meanRetention,
     uniform: s.uniform[budget].meanRetention,
   };
-  const barsMet =
-    heldout.weighted > heldout.recency &&
-    heldout.weighted > heldout.uniform &&
-    ciVsRecency.ci95[0] > 0 &&
-    ciVsUniform.ci95[0] > 0;
+  // Throws (never returns false) on a degenerate/empty paired-delta set —
+  // see computeBarsMet's doc comment.
+  const barsMet = computeBarsMet(heldout, ciVsRecency, ciVsUniform);
 
   const report = {
     heldout,
@@ -558,13 +762,19 @@ function runReport() {
   console.log(JSON.stringify(report, null, 2));
   writeJson(REPORT_PATH, report);
   console.log(`[fit] wrote ${REPORT_PATH}`);
+  // Committed registration copy (registration convention mirroring E1's
+  // results-latest.json — see REPORT_REGISTERED_PATH's doc comment).
+  writeJson(REPORT_REGISTERED_PATH, report);
+  console.log(`[fit] wrote ${REPORT_REGISTERED_PATH}`);
 }
 
 function printUsage() {
   console.log(
     [
-      'Usage: fit.mjs [--dry-run-timing | --report | --help]',
+      'Usage: fit.mjs [--force] [--dry-run-timing | --report | --help]',
       '  (default)          integrity gate -> 5-restart ES fit -> weights-learned.json + .meta.json',
+      '                     refuses to overwrite an existing weights-learned.json unless --force is passed',
+      '  --force            allow the default fit to overwrite an existing weights-learned.json',
       '  --dry-run-timing   gate, then measure ~20 candidates, project total, exit without fitting',
       '  --report           post-freeze: evaluate weights-learned.json on heldout, paired bootstrap CIs',
       '  --help             print this message and exit',

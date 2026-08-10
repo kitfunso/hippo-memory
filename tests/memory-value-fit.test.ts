@@ -33,6 +33,7 @@ import {
   toWeights,
   runIntegrityGate,
   bootstrapCI,
+  computeBarsMet,
   // @ts-expect-error - .mjs harness module has no type declarations
 } from '../benchmarks/memory-value/fit.mjs';
 
@@ -284,14 +285,24 @@ describe('runIntegrityGate (real fixture)', () => {
       { questionId: 'fixture_q_b', split: 'heldout' as const },
     ];
     const good = evaluateAll(questionSplits, { budgets: [0.3], primaryBudget: 0.3 });
+    // varyingFeatures comes from the REPRODUCED value (`good.varyingFeatures`),
+    // not a hardcoded [...FIT_DIMS] — the tiny 2-question, reduced-simulation
+    // fixture does not vary across every one of the 8 production FIT_DIMS
+    // (e.g. `strength` is constant within both toy stores), so hardcoding
+    // FIT_DIMS here would fail the NEW reproduced==registered variance check
+    // (gate-hardening fix round) even though the gate is behaving correctly.
+    // `expectedFitDims` lets this fixture test the MECHANISM (registered==
+    // expected AND reproduced==registered) without asserting production's
+    // FIT_DIMS onto a toy dataset that was never meant to vary across all 8.
     const registeredResults = {
       split: { trainCount: 1, heldoutCount: 1 },
-      evaluate: { summary: good.summary, varyingFeatures: [...FIT_DIMS] },
+      evaluate: { summary: good.summary, varyingFeatures: good.varyingFeatures },
     };
 
-    const gateResult = runIntegrityGate({ splitRegistered, registeredResults });
+    const gateResult = runIntegrityGate({ splitRegistered, registeredResults, expectedFitDims: good.varyingFeatures });
     expect(gateResult.trainIds).toEqual(['fixture_q_a']);
     expect(gateResult.cachedRowsById.size).toBe(1);
+    expect(typeof gateResult.recencyCrossCheck).toBe('number');
   });
 
   it('(6) fails loudly, naming assertion (c), on a tampered features.jsonl value', async () => {
@@ -302,23 +313,124 @@ describe('runIntegrityGate (real fixture)', () => {
       { questionId: 'fixture_q_b', split: 'heldout' as const },
     ];
     const good = evaluateAll(questionSplits, { budgets: [0.3], primaryBudget: 0.3 });
+    // See the previous test for why varyingFeatures/expectedFitDims come
+    // from the fixture's own reproduced value rather than FIT_DIMS.
     const registeredResults = {
       split: { trainCount: 1, heldoutCount: 1 },
-      evaluate: { summary: good.summary, varyingFeatures: [...FIT_DIMS] },
+      evaluate: { summary: good.summary, varyingFeatures: good.varyingFeatures },
     };
+    const gateOpts = { splitRegistered, registeredResults, expectedFitDims: good.varyingFeatures };
 
     // Sanity: the untampered gate passes against this synthetic reference.
-    expect(() => runIntegrityGate({ splitRegistered, registeredResults })).not.toThrow();
+    expect(() => runIntegrityGate(gateOpts)).not.toThrow();
 
     // Corrupt one non-gold row in the HELDOUT question so its recency
     // ranking (and therefore heldout recency retention) shifts.
-    const path = featuresPathFor('fixture_q_b');
-    const rows = readJsonl(path) as Array<{ gold: number; features: { age_days: number } }>;
+    const featuresPath = featuresPathFor('fixture_q_b');
+    const rows = readJsonl(featuresPath) as Array<{ gold: number; features: { age_days: number } }>;
     const target = rows.find((r) => r.gold === 0);
     expect(target, 'fixture must contain at least one non-gold row').toBeDefined();
     target!.features.age_days = 0; // make an old, non-gold row look newest
-    writeJsonl(path, rows);
+    writeJsonl(featuresPath, rows);
 
-    expect(() => runIntegrityGate({ splitRegistered, registeredResults })).toThrow(/\(c\)/);
+    expect(() => runIntegrityGate(gateOpts)).toThrow(/\(c\)/);
+  });
+
+  it('throws a named disjointness failure (not a raw comparison) when an id appears in both train and heldout', async () => {
+    for (const q of QUESTIONS) await runPipeline(q);
+    // train/heldout overlap on fixture_q_b — assertSplitIntegrity must catch
+    // this before any evaluateAll/baseline work runs.
+    const splitRegistered = { train: ['fixture_q_a', 'fixture_q_b'], heldout: ['fixture_q_b'] };
+    const registeredResults = { split: { trainCount: 2, heldoutCount: 1 } };
+
+    expect(() => runIntegrityGate({ splitRegistered, registeredResults })).toThrow(/\(a\).*overlap/);
+  });
+
+  it('throws a named failure (not a raw TypeError) when the registered summary is missing a cell', async () => {
+    for (const q of QUESTIONS) await runPipeline(q);
+    const splitRegistered = { train: ['fixture_q_a'], heldout: ['fixture_q_b'] };
+    const questionSplits = [
+      { questionId: 'fixture_q_a', split: 'train' as const },
+      { questionId: 'fixture_q_b', split: 'heldout' as const },
+    ];
+    const good = evaluateAll(questionSplits, { budgets: [0.3], primaryBudget: 0.3 });
+    // `train` summary is present but missing its recency/uniform cells — a
+    // realistic "malformed committed JSON" shape, not just an absent key.
+    const registeredResults = {
+      split: { trainCount: 1, heldoutCount: 1 },
+      evaluate: { summary: { heldout: good.summary.heldout, train: {} }, varyingFeatures: good.varyingFeatures },
+    };
+
+    let caught: unknown;
+    try {
+      runIntegrityGate({ splitRegistered, registeredResults, expectedFitDims: good.varyingFeatures });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught).not.toBeInstanceOf(TypeError);
+    expect((caught as Error).message).toMatch(/\(b\).*missing train\.recency cell/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeBarsMet — pure bars-met/degenerate-pairing guard (test 7.iii)
+// ---------------------------------------------------------------------------
+
+describe('computeBarsMet', () => {
+  it('throws a named data-integrity error when a bootstrap CI bound is null (empty paired-delta set)', () => {
+    const heldout = { weighted: 0.5, recency: 0.3, uniform: 0.2 };
+    const ciVsRecency = { point: null, ci95: [null, null] };
+    const ciVsUniform = { point: 0.1, ci95: [0.05, 0.15] };
+    expect(() => computeBarsMet(heldout, ciVsRecency, ciVsUniform)).toThrow(/data integrity/);
+  });
+
+  it('returns true when both deltas are positive and both CIs exclude 0', () => {
+    const heldout = { weighted: 0.5, recency: 0.3, uniform: 0.2 };
+    const ciVsRecency = { point: 0.2, ci95: [0.1, 0.3] };
+    const ciVsUniform = { point: 0.3, ci95: [0.2, 0.4] };
+    expect(computeBarsMet(heldout, ciVsRecency, ciVsUniform)).toBe(true);
+  });
+
+  it('returns false when a CI crosses 0 even though the point estimate is higher', () => {
+    const heldout = { weighted: 0.5, recency: 0.3, uniform: 0.2 };
+    const ciVsRecency = { point: 0.2, ci95: [-0.05, 0.3] };
+    const ciVsUniform = { point: 0.3, ci95: [0.2, 0.4] };
+    expect(computeBarsMet(heldout, ciVsRecency, ciVsUniform)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeFit — non-finite objective / zero-norm winner guards (tests 7.iv, 7.v)
+// ---------------------------------------------------------------------------
+
+describe('computeFit (degenerate-input guards)', () => {
+  beforeEach(cleanupScratch);
+
+  it('(iv) throws a named error when every candidate objective is non-finite (all-zero-gold cache)', () => {
+    // No real pipeline run needed: a stubbed cachedRowsById whose only row
+    // is non-gold forces computeTrainObjective to skip every id (zero-gold
+    // skip rule), so computeTrainObjective returns null and the objective
+    // wrapper maps that to -Infinity for every candidate ES ever evaluates.
+    const zeroFeatures = Object.fromEntries(CONFIG.FEATURES.map((f: string) => [f, 0]));
+    const cachedRowsById = new Map([
+      ['synthetic_q', [{ memory_id: 'm0', sessionIndex: 0, turnIdx: 0, gold: 0, features: zeroFeatures }]],
+    ]);
+    expect(() => computeFit(['synthetic_q'], cachedRowsById, { restarts: 1, maxGens: 2 })).toThrow(
+      /non-finite train objective/,
+    );
+  });
+
+  it('(v) throws a named error when the winning vector has near-zero L2 norm (box=[0,0])', async () => {
+    // box=[0,0] clips every init AND every mutation to exactly 0, so every
+    // offspring's L2 norm is < 1e-9 and gets rejected (runES's own
+    // zero-norm mutation guard) for the entire run — the parent, and
+    // therefore the winner, never moves off the all-zero vector.
+    for (const q of QUESTIONS) await runPipeline(q);
+    const trainIds = QUESTIONS.map((q) => q.question_id);
+    const cachedRowsById = cacheTrainRows(trainIds);
+    expect(() => computeFit(trainIds, cachedRowsById, { restarts: 1, maxGens: 2, box: [0, 0] })).toThrow(
+      /near-zero L2 norm/,
+    );
   });
 });
