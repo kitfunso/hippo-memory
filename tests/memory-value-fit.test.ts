@@ -34,6 +34,9 @@ import {
   runIntegrityGate,
   bootstrapCI,
   computeBarsMet,
+  verifyFrozenWeights,
+  recencyVector,
+  initVectorForRestart,
   // @ts-expect-error - .mjs harness module has no type declarations
 } from '../benchmarks/memory-value/fit.mjs';
 
@@ -62,9 +65,9 @@ afterAll(() => {
 // pinned protocol depth (that lives in fit.mjs's own defaults).
 const FAST_FIT_OPTS = { restarts: 2, maxGens: 10 };
 
-function recencyVector(): number[] {
-  return FIT_DIMS.map((f: string) => (f === 'age_days' ? -1 : 0));
-}
+// recencyVector is imported from fit.mjs (fix round: single shared source
+// for restart-0's init AND crossCheckRecency's cross-check vector, instead
+// of this file keeping its own duplicate literal that could drift from it).
 
 // ---------------------------------------------------------------------------
 // runES — pure mechanism tests (tests 4, 7)
@@ -225,6 +228,10 @@ describe('bootstrapCI', () => {
     expect(result.point).toBeNull();
     expect(result.ci95).toEqual([null, null]);
   });
+
+  it('throws a named error when resamples < 1', () => {
+    expect(() => bootstrapCI([1, 2, 3], 0, () => 0.5)).toThrow(/resamples must be >= 1/);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -303,6 +310,30 @@ describe('runIntegrityGate (real fixture)', () => {
     expect(gateResult.trainIds).toEqual(['fixture_q_a']);
     expect(gateResult.cachedRowsById.size).toBe(1);
     expect(typeof gateResult.recencyCrossCheck).toBe('number');
+  });
+
+  it('assertVarianceLiveness: registered varyingFeatures must equal expectedFitDims exactly (non-tautological)', async () => {
+    // Every other gate test in this file sets expectedFitDims to
+    // good.varyingFeatures itself, so the FIRST assertGate in
+    // assertVarianceLiveness (registered vs expected) is tautologically true
+    // everywhere else — this test deliberately diverges expectedFitDims from
+    // the registered set so that branch actually gets exercised and can fail.
+    for (const q of QUESTIONS) await runPipeline(q);
+    const splitRegistered = { train: ['fixture_q_a'], heldout: ['fixture_q_b'] };
+    const questionSplits = [
+      { questionId: 'fixture_q_a', split: 'train' as const },
+      { questionId: 'fixture_q_b', split: 'heldout' as const },
+    ];
+    const good = evaluateAll(questionSplits, { budgets: [0.3], primaryBudget: 0.3 });
+    const registeredResults = {
+      split: { trainCount: 1, heldoutCount: 1 },
+      evaluate: { summary: good.summary, varyingFeatures: good.varyingFeatures },
+    };
+    const bogusExpectedFitDims = [...good.varyingFeatures, 'not_a_real_dim'];
+
+    expect(() =>
+      runIntegrityGate({ splitRegistered, registeredResults, expectedFitDims: bogusExpectedFitDims }),
+    ).toThrow(/varying-features set must equal FIT_DIMS/);
   });
 
   it('(6) fails loudly, naming assertion (c), on a tampered features.jsonl value', async () => {
@@ -432,5 +463,59 @@ describe('computeFit (degenerate-input guards)', () => {
     expect(() => computeFit(trainIds, cachedRowsById, { restarts: 1, maxGens: 2, box: [0, 0] })).toThrow(
       /near-zero L2 norm/,
     );
+  });
+
+  it('(vi) throws a named error when opts.restarts < 1', () => {
+    // No pipeline run needed: the restarts guard fires before any row is
+    // ever read, so an empty trainIds/cachedRowsById is sufficient.
+    expect(() => computeFit([], new Map(), { restarts: 0 })).toThrow(/restarts must be >= 1/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// initVectorForRestart / recencyVector — missing-dim guard (fix round)
+// ---------------------------------------------------------------------------
+
+describe('initVectorForRestart / recencyVector', () => {
+  it('initVectorForRestart throws a named error when dims is missing "age_days" (restart 0)', () => {
+    expect(() => initVectorForRestart(0, ['strength', 'content_length'], () => 0.5)).toThrow(
+      /missing "age_days"/,
+    );
+  });
+
+  it('recencyVector throws a named error directly when dims is missing "age_days"', () => {
+    expect(() => recencyVector(['strength'])).toThrow(/missing "age_days"/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// verifyFrozenWeights — freeze binding (codex round-2 P2; pure unit tests)
+// ---------------------------------------------------------------------------
+
+describe('verifyFrozenWeights', () => {
+  const goodWeights = { age_days: -0.5, content_length: -0.6 };
+  const digest = 'abc123';
+  const goodMeta = { weightsFileSha256: digest };
+
+  it('accepts a well-formed weights object whose file digest matches the frozen sidecar', () => {
+    expect(() => verifyFrozenWeights(goodWeights, digest, goodMeta)).not.toThrow();
+  });
+
+  it('throws a named error on an unknown dim (a weights file with a non-FIT_DIMS key)', () => {
+    expect(() => verifyFrozenWeights({ ...goodWeights, schema_fit: 0.4 }, digest, goodMeta)).toThrow(
+      /unknown dim "schema_fit"/,
+    );
+  });
+
+  it('throws a named error on a non-finite weight value', () => {
+    expect(() => verifyFrozenWeights({ age_days: Number.NaN }, digest, goodMeta)).toThrow(/not a finite number/);
+  });
+
+  it('throws a named error when the meta sidecar has no frozen digest (pre-binding freeze)', () => {
+    expect(() => verifyFrozenWeights(goodWeights, digest, {})).toThrow(/no weightsFileSha256/);
+  });
+
+  it('throws a named error when the weights file digest does not match the frozen digest', () => {
+    expect(() => verifyFrozenWeights(goodWeights, 'tampered', goodMeta)).toThrow(/changed after freeze/);
   });
 });

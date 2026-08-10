@@ -1384,5 +1384,6 @@
     "confidence_stale"
   ],
   "configHash": "f4344541d44409f96d139b398f4699bf320e1a303913f236244b7d1fd963e5e5",
-  "frozenAt": "2026-08-10T12:31:04.838Z"
+  "frozenAt": "2026-08-10T13:14:44.724Z",
+  "weightsFileSha256": "1e747abed0df771fc9c354da8562771b336c4042faf0266f565bba1b5a8c5a40"
 }

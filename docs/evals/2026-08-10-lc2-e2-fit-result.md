@@ -1,13 +1,20 @@
 # LC2-E2 result: learned linear memory-value weights BEAT recency on held-out
 
-**Status: BARS MET** (both pre-registered bars, first and only held-out run).
+**Status: BARS MET** (both pre-registered bars). The canonical judgment is
+the FIRST post-freeze held-out run; the Amendment-1/2 hardening rounds each
+re-ran the gated report as a VERIFICATION pass against byte-identical
+weights and reproduced every digit - no refitting occurred between any two
+looks, which is the property the held-out-once safeguard protects.
 Date: 2026-08-10. Episode: 01KZNFYSCS1EFZY5HYFZGR8GB0.
 Pre-registration: `2026-08-10-lc2-e2-fit-prereg.md` (LOCKED before the fit;
 no amendments were needed).
 Substrate: E1 v4 registered (`2026-08-09-lc2-memory-value-result.md`).
-Reproduce: `node benchmarks/memory-value/fit.mjs` then
-`node benchmarks/memory-value/fit.mjs --report` (deterministic; seed 42;
-requires the E1 scratch features or a fresh E1 run to regenerate them).
+Verify (non-destructive): `node benchmarks/memory-value/fit.mjs --report` -
+gates, checks the frozen configHash + weights-file digest, and reproduces
+the registered numbers from the committed weights. Full regeneration:
+`node benchmarks/memory-value/fit.mjs --force` (deterministically
+overwrites the frozen artifacts; byte-identical weights) then `--report`.
+Both require the E1 scratch features or a fresh E1 run to regenerate them.
 
 ## Headline (held-out, keep budget 0.30, 200 questions / 190 non-zero-gold)
 
@@ -17,7 +24,10 @@ requires the E1 scratch features or a fresh E1 run to regenerate them).
 | recency (best single factor, the operative bar) | 0.4203 |
 | uniform (1/K oriented) | 0.2468 |
 
-Paired per-question bootstrap 95% CIs (1000 resamples, seed 42):
+Paired per-question bootstrap 95% CIs (1000 resamples, seeded via the
+`rngFor('report')` namespace - a mulberry32 seed derived from the namespace
+string; `GLOBAL_SEED` is not consumed by this stream, per the meta
+sidecar's `seedNote`):
 
 - learned − recency: **+0.0695**, CI [0.0166, 0.1265] — excludes 0. BAR MET.
 - learned − uniform: **+0.2429**, CI [0.1748, 0.3122] — excludes 0. BAR MET.
@@ -46,7 +56,14 @@ conjunction: both point estimates higher AND both CI lower bounds > 0).
   questions, but the majority of the lift generalizes.
 - Frozen artifacts: `weights-learned.json` (flat, 8 keys, L2-normalized) +
   `weights-learned.meta.json` (winner restart, per-restart trajectories,
-  pinned-zero list, configHash f4344541d..., frozenAt 2026-08-10T11:05:21Z).
+  pinned-zero list). Stable provenance anchors: configHash
+  `f4344541d44409f96d139b398f4699bf320e1a303913f236244b7d1fd963e5e5`,
+  weightsFileSha256
+  `1e747abed0df771fc9c354da8562771b336c4042faf0266f565bba1b5a8c5a40`.
+  (`frozenAt` is a volatile wall-clock stamp that changes on every
+  deterministic refreeze - the digests, not the timestamp, are the
+  provenance; the weights bytes have been identical across all three
+  freezes this episode.)
 
 ## The learned vector (signs tell the story)
 

@@ -121,6 +121,28 @@ the result doc's addendum). Changes:
 5. Result-doc headline count corrected: held-out is 200 raw questions /
    190 non-zero-gold (the earlier "190/189" was a mis-derived count).
 
+## Amendment 2 (2026-08-10, codex round-2 P2 closure - dated)
+
+Applied after Amendment 1's verification re-run, before ship. No stream,
+objective, or bar changes; weights remain byte-identical (re-proven by the
+Amendment-2 refit).
+
+1. **Freeze binding:** the meta sidecar now records `weightsFileSha256`
+   (digest of the frozen weights file bytes); `--report` refuses a weights
+   file whose digest, key set (FIT_DIMS only), or value finiteness does
+   not match the freeze (`verifyFrozenWeights`). configHash alone bound
+   the protocol, not the model.
+2. **Held-out-once wording precisified:** the canonical judgment is the
+   first post-freeze report; hardening-round reports are verification
+   passes against byte-identical weights. The safeguard's substance - no
+   refitting between looks - is unchanged and machine-evidenced.
+3. **Reproduction path corrected:** `--report` is the non-destructive
+   verification command (the bare fit now correctly refuses without
+   `--force` on a checkout that already carries the frozen artifacts).
+4. **Bootstrap seed description corrected:** the CI stream is
+   `rngFor('report')` (namespace-derived mulberry32 seed); GLOBAL_SEED is
+   not consumed by it.
+
 ## Dry-run evidence (filled before lock; empty = NOT LOCKED)
 
 - Integrity gate: **PASSED** on the real scratch (500/500 dirs), three

@@ -26,7 +26,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { CONFIG } from './config.mjs';
 import { evaluateStore, evaluateAll } from './evaluate.mjs';
-import { readJson, writeJson, readJsonl, featuresPathFor, rngFor, RESULTS_DIR } from './common.mjs';
+import { readJson, writeJson, readJsonl, featuresPathFor, rngFor, RESULTS_DIR, scratchRootDir } from './common.mjs';
 
 // ---------------------------------------------------------------------------
 // Pinned constants (plan decisions 2, 3, 6). None of these live in
@@ -188,15 +188,31 @@ export function selectWinner(perRestart) {
   return winner;
 }
 
+/** Shared recency vector (age_days = -1, rest 0), in `dims` order. Restart
+ *  0's init and crossCheckRecency's independent objective computation both
+ *  need the IDENTICAL vector — a single exported source prevents the two
+ *  call sites from silently drifting apart (fix round: previously each had
+ *  its own inline literal). Throws a named error if `dims` lacks 'age_days'
+ *  — the recency init/cross-check contract cannot hold without that dim. */
+export function recencyVector(dims = FIT_DIMS) {
+  const ageIdx = dims.indexOf('age_days');
+  if (ageIdx === -1) {
+    throw new Error(
+      '[fit] FAILED recencyVector: dims is missing "age_days" — the recency init/cross-check contract requires it',
+    );
+  }
+  const v = new Array(dims.length).fill(0);
+  v[ageIdx] = -1;
+  return v;
+}
+
 /** Restart 0 starts at the recency vector (age_days = -1, rest 0) — the
  *  search begins at the incumbent best single factor, so winner >= recency
  *  on TRAIN by construction. Restarts 1-4 start at a seeded random point in
  *  the box. */
 export function initVectorForRestart(restartIndex, dims, rng, box = BOX) {
   if (restartIndex === 0) {
-    const v = new Array(dims.length).fill(0);
-    v[dims.indexOf('age_days')] = -1;
-    return v;
+    return recencyVector(dims);
   }
   const [lo, hi] = box;
   return dims.map(() => lo + rng() * (hi - lo));
@@ -270,6 +286,29 @@ function requireMeanCell(value, message) {
   return value;
 }
 
+/** (0) scratch existence pre-check (fix round): a wiped or never-populated
+ *  scratch root turns every subsequent read (evaluateAll, cacheTrainRows)
+ *  into a raw, unnamed ENOENT thrown from deep inside those calls. Checking
+ *  every split id up front (fs.existsSync loop; milliseconds) turns that
+ *  into one named, actionable failure before any real work starts. */
+function assertScratchExists(split) {
+  const root = scratchRootDir();
+  if (!fs.existsSync(root)) {
+    throw new Error(
+      `[integrity-gate] FAILED (scratch) scratch root does not exist: ${root} — re-run the E1 pipeline: ` +
+        'node benchmarks/memory-value/run.mjs --data <path>',
+    );
+  }
+  const allIds = [...split.train, ...split.heldout];
+  const missing = allIds.filter((id) => !fs.existsSync(featuresPathFor(id)));
+  if (missing.length > 0) {
+    throw new Error(
+      `[integrity-gate] FAILED (scratch) ${missing.length} split id(s) have no features.jsonl (first: ` +
+        `${missing[0]}) — re-run the E1 pipeline: node benchmarks/memory-value/run.mjs --data <path>`,
+    );
+  }
+}
+
 /** (a) split integrity: split-registered's train/heldout id arrays must be
  *  duplicate-free, disjoint, and their lengths must equal results-latest's
  *  split block. Targets come from `registered` itself (the committed file),
@@ -318,10 +357,17 @@ function assertInclusionMatches(reproducedCell, registeredCell, label, assertion
   );
 }
 
-/** (c) baseline reproduction at 4dp against the committed results-latest.json. */
+/** (c) baseline reproduction at 4dp against the committed results-latest.json.
+ *  Compared as a numeric epsilon, not a toFixed(4) string, because float
+ *  summation order differs between E1's run and the gate's reproduction
+ *  (same math, different accumulation order) — string-rounding equality is
+ *  boundary-fragile (0.12345 vs 0.123449999... can round to different 4dp
+ *  strings). 5e-5 is the exact half-ULP-at-4dp tolerance, so the prereg
+ *  intent (4-decimal-place reproduction) is unchanged; only the comparison
+ *  mechanism is. Failure MESSAGES still print the 4dp-formatted numbers. */
 function assertReproducesBaseline(reproducedCell, registeredCell, label) {
   assertGate(
-    reproducedCell.meanRetention.toFixed(4) === registeredCell.meanRetention.toFixed(4),
+    Math.abs(reproducedCell.meanRetention - registeredCell.meanRetention) < 5e-5,
     `(c) ${label} must reproduce ${registeredCell.meanRetention.toFixed(4)}, got ${reproducedCell.meanRetention.toFixed(4)}`,
   );
 }
@@ -410,11 +456,12 @@ function crossCheckRecency(split, registered, budget) {
     '(b) registered summary missing train.recency cell',
   );
   const cachedRowsById = cacheTrainRows(split.train);
-  const recencyWeights = toWeights(FIT_DIMS.map((f) => (f === 'age_days' ? -1 : 0)));
+  const recencyWeights = toWeights(recencyVector());
   const recencyCrossCheck = computeTrainObjective(recencyWeights, cachedRowsById, split.train, budget);
   const registeredTrainRecency4dp = registeredTrainRecency.meanRetention.toFixed(4);
+  // Epsilon compare, not toFixed(4) string equality — see assertReproducesBaseline's doc comment for why.
   assertGate(
-    recencyCrossCheck !== null && recencyCrossCheck.toFixed(4) === registeredTrainRecency4dp,
+    recencyCrossCheck !== null && Math.abs(recencyCrossCheck - registeredTrainRecency.meanRetention) < 5e-5,
     `recency cross-check: fitter's own objective must reproduce train recency ${registeredTrainRecency4dp}, got ${recencyCrossCheck?.toFixed(4)}`,
   );
   return { cachedRowsById, recencyCrossCheck };
@@ -433,17 +480,35 @@ function crossCheckRecency(split, registered, budget) {
  * reproduced==registered) without weakening the check on the real path,
  * which always uses the FIT_DIMS default.
  */
-export function runIntegrityGate({ splitRegistered, registeredResults, expectedFitDims = FIT_DIMS } = {}) {
+export function runIntegrityGate({
+  splitRegistered,
+  registeredResults,
+  expectedFitDims = FIT_DIMS,
+  needTrainRows = true,
+} = {}) {
   const split = splitRegistered ?? readJson(SPLIT_REGISTERED_PATH);
   const registered = registeredResults ?? readJson(RESULTS_LATEST_PATH);
   const budget = CONFIG.PRIMARY_BUDGET;
 
   assertSplitIntegrity(split, registered);
+  assertScratchExists(split);
   const reproduced = reproduceAndAssertBaselines(split, registered, budget);
   assertVarianceLiveness(reproduced, registered, expectedFitDims);
+  // crossCheckRecency's own cacheTrainRows read is unavoidable here (the
+  // cross-check IS a gate assertion, run unconditionally) — needTrainRows
+  // only controls whether the caller gets the resulting cache back to reuse
+  // (runFit needs it for thousands of ES candidate evaluations; runReport
+  // never touches train rows again and would otherwise hold the cache in
+  // memory for no reason). This drops the reference, it does not skip a read.
   const { cachedRowsById, recencyCrossCheck } = crossCheckRecency(split, registered, budget);
 
-  return { splitRegistered: split, trainIds: split.train, cachedRowsById, reproduced, recencyCrossCheck };
+  return {
+    splitRegistered: split,
+    trainIds: split.train,
+    cachedRowsById: needTrainRows ? cachedRowsById : null,
+    reproduced,
+    recencyCrossCheck,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -457,6 +522,9 @@ export function runIntegrityGate({ splitRegistered, registeredResults, expectedF
  */
 export function computeFit(trainIds, cachedRowsById, opts = {}) {
   const restarts = opts.restarts ?? RESTARTS;
+  if (restarts < 1) {
+    throw new Error(`[fit] FAILED computeFit: restarts must be >= 1, got ${restarts}`);
+  }
   const esOpts = {
     lambda: opts.lambda ?? LAMBDA,
     sigma0: opts.sigma0 ?? SIGMA0,
@@ -565,6 +633,9 @@ function percentile(sortedArr, p) {
  * the resample-mean distribution (linear interpolation between order stats).
  */
 export function bootstrapCI(deltas, resamples, rng) {
+  if (resamples < 1) {
+    throw new Error(`[fit-report] FAILED bootstrapCI: resamples must be >= 1, got ${resamples}`);
+  }
   const n = deltas.length;
   if (n === 0) return { point: null, ci95: [null, null] };
   const point = mean(deltas);
@@ -598,19 +669,22 @@ function pairedDeltas(mapA, mapB) {
  * Bars-met logic (gate-hardening fix round), pulled out to a pure function
  * so it is unit-testable without file I/O. A null CI bound only ever comes
  * from an empty paired-delta set (bootstrapCI's own contract: `n === 0` =>
- * `ci95: [null, null]`) — degenerate pairing must never silently produce a
- * barsMet=false report, it must throw and refuse to write one at all.
+ * `ci95: [null, null]`); a non-finite (NaN/Infinity) bound is the same class
+ * of degenerate result under a different symptom (e.g. NaN contamination
+ * upstream) — both must never silently produce a barsMet=false report, they
+ * must throw and refuse to write one at all.
  */
 export function computeBarsMet(heldout, ciVsRecency, ciVsUniform) {
-  const ciBoundsAreNull =
-    ciVsRecency.ci95[0] === null ||
-    ciVsRecency.ci95[1] === null ||
-    ciVsUniform.ci95[0] === null ||
-    ciVsUniform.ci95[1] === null;
-  if (ciBoundsAreNull) {
+  const isBadBound = (b) => b === null || !Number.isFinite(b);
+  const ciBoundsAreBad =
+    isBadBound(ciVsRecency.ci95[0]) ||
+    isBadBound(ciVsRecency.ci95[1]) ||
+    isBadBound(ciVsUniform.ci95[0]) ||
+    isBadBound(ciVsUniform.ci95[1]);
+  if (ciBoundsAreBad) {
     throw new Error(
-      '[fit-report] FAILED data integrity: a bootstrap CI bound is null (empty paired-delta set) — refusing ' +
-        'to write a barsMet report from degenerate pairing.',
+      '[fit-report] FAILED data integrity: a bootstrap CI bound is null or non-finite (empty paired-delta set, ' +
+        'or NaN/Infinity contamination) — refusing to write a barsMet report from degenerate pairing.',
     );
   }
   return (
@@ -663,6 +737,10 @@ function runFit() {
   }
 
   writeJson(WEIGHTS_PATH, weights);
+  // Freeze binding (codex round-2 P2): digest the weights FILE BYTES so
+  // --report can refuse a weights file edited or swapped after freeze —
+  // configHash alone binds only the protocol, not the model.
+  meta.weightsFileSha256 = sha256Hex(fs.readFileSync(WEIGHTS_PATH));
   writeJson(META_PATH, meta);
   console.log(`[fit] winner: restart ${meta.winnerRestart}, trainObjective=${meta.trainObjective.toFixed(4)}`);
   console.log(`[fit] wrote ${WEIGHTS_PATH}`);
@@ -698,12 +776,60 @@ function dryRunTiming() {
   }
 }
 
+/**
+ * Freeze binding (codex round-2 P2): the report must be bound to the EXACT
+ * frozen weights file, not just the config it was frozen under — an edited
+ * or cherry-picked weights-learned.json (including one with dims the meta
+ * claims are pinned to zero) must be refused. Pure; throws named errors.
+ */
+export function verifyFrozenWeights(weights, weightsFileSha256, meta, fitDims = FIT_DIMS) {
+  for (const [key, value] of Object.entries(weights)) {
+    if (!fitDims.includes(key)) {
+      throw new Error(`[fit-report] FAILED freeze binding: weights file carries unknown dim "${key}"`);
+    }
+    if (!Number.isFinite(value)) {
+      throw new Error(`[fit-report] FAILED freeze binding: weights dim "${key}" is not a finite number (${value})`);
+    }
+  }
+  if (!meta.weightsFileSha256) {
+    throw new Error(
+      '[fit-report] FAILED freeze binding: weights-learned.meta.json has no weightsFileSha256 — ' +
+        'refreeze with the current fitter (node fit.mjs --force)',
+    );
+  }
+  if (meta.weightsFileSha256 !== weightsFileSha256) {
+    throw new Error(
+      `[fit-report] FAILED freeze binding: weights-learned.json digest (${weightsFileSha256}) does not match ` +
+        `the frozen digest in the meta sidecar (${meta.weightsFileSha256}) — the weights file changed after freeze`,
+    );
+  }
+}
+
 function runReport() {
   // Gate FIRST (gate-hardening fix round): --report previously ran ungated,
   // so a stale/tampered scratch or split could produce a "bars met" report
-  // that never touched verified data. Just gate — its cachedRowsById/train
-  // return isn't needed here, --report never reads train.
-  runIntegrityGate();
+  // that never touched verified data. The gate DOES read every train
+  // features.jsonl too (baseline reproduction (b)/(c) + the recency
+  // cross-check) even though --report itself only evaluates heldout below —
+  // that read is a gate-integrity assertion, not something --report opted
+  // into. needTrainRows:false just drops the resulting row-cache reference
+  // once the gate returns (memory, not I/O — --report never uses the cache
+  // again, so there is no reason to keep 300 stores' worth of rows alive).
+  const { splitRegistered } = runIntegrityGate({ needTrainRows: false });
+
+  // Freeze provenance (fix round): a half-frozen state — one of the two
+  // frozen artifacts present, the other missing (e.g. an interrupted freeze,
+  // or one file deleted by hand) — must be named explicitly rather than
+  // surfacing as a raw ENOENT from whichever readJson() happens to run first.
+  const weightsExists = fs.existsSync(WEIGHTS_PATH);
+  const metaExists = fs.existsSync(META_PATH);
+  if (weightsExists !== metaExists) {
+    throw new Error(
+      `[fit-report] FAILED freeze provenance: half-frozen state — ${weightsExists ? WEIGHTS_PATH : META_PATH} ` +
+        `exists but ${weightsExists ? META_PATH : WEIGHTS_PATH} does not. --force refreezes both files together ` +
+        '(node fit.mjs --force).',
+    );
+  }
 
   // Freeze provenance: refuse to report against weights frozen under a
   // DIFFERENT config.mjs than the one currently checked out — configHash is
@@ -718,15 +844,18 @@ function runReport() {
         'different config.mjs; refusing to report against a stale freeze.',
     );
   }
+  verifyFrozenWeights(weights, sha256Hex(fs.readFileSync(WEIGHTS_PATH)), meta);
 
-  const split = readJson(SPLIT_REGISTERED_PATH);
+  // Reuse the gate's own parsed split (splitRegistered above) instead of a
+  // second readJson(SPLIT_REGISTERED_PATH) — same file, same call graph,
+  // no reason to parse it twice (fix round).
   const budget = CONFIG.PRIMARY_BUDGET;
-  // Held-out ONLY (gate-hardening fix round): train ids are never read here.
-  // Retention is computed per-store (evaluateStore normalizes/scores each
-  // question independently), so restricting questionSplits to heldout
-  // leaves every heldout summary cell and every heldout pairedRecord
-  // unchanged versus evaluating train+heldout together and filtering after.
-  const questionSplits = split.heldout.map((questionId) => ({ questionId, split: 'heldout' }));
+  // Held-out ONLY for the evaluation BELOW (gate-hardening fix round): this
+  // function's own evaluateAll call never touches train ids. The gate above
+  // already read every train features.jsonl (baseline reproduction + recency
+  // cross-check) — "never reads train" described this function, not the
+  // gate it calls first.
+  const questionSplits = splitRegistered.heldout.map((questionId) => ({ questionId, split: 'heldout' }));
   const evalResult = evaluateAll(questionSplits, { weights, budgets: [budget], primaryBudget: budget });
 
   const heldoutPaired = evalResult.pairedRecords.filter((r) => r.split === 'heldout');
@@ -786,8 +915,26 @@ function boolFlag(name) {
   return process.argv.includes(`--${name}`);
 }
 
+const KNOWN_FLAGS = ['help', 'dry-run-timing', 'report', 'force'];
+
+/** Argv whitelist (fix round): a `--flag` outside KNOWN_FLAGS is (almost
+ *  always) a typo — e.g. `--reprot` — and without this check it silently
+ *  falls through every `boolFlag()` check below to the default (destructive,
+ *  freeze-writing) fit path. Checked BEFORE any dispatch, so a typo can
+ *  never run the wrong command. */
+function checkKnownFlags(argv) {
+  for (const arg of argv) {
+    if (arg.startsWith('--') && !KNOWN_FLAGS.includes(arg.slice(2))) {
+      console.error(`[fit] FAILED: unknown flag ${arg}`);
+      printUsage();
+      process.exit(1);
+    }
+  }
+}
+
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
+  checkKnownFlags(process.argv.slice(2));
   try {
     if (boolFlag('help')) printUsage();
     else if (boolFlag('dry-run-timing')) dryRunTiming();

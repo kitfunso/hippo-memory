@@ -218,7 +218,13 @@ fitting and judging. See
 
 ```bash
 # Integrity gate -> seeded (1+lambda)-ES, 5 restarts -> freeze weights.
+# REFUSES immediately (before running the gate or the fit) if
+# weights-learned.json already exists — weights are frozen exactly once.
 node benchmarks/memory-value/fit.mjs
+
+# Re-fit and overwrite BOTH frozen artifacts (weights-learned.json AND
+# weights-learned.meta.json together — never one without the other).
+node benchmarks/memory-value/fit.mjs --force
 
 # Gate only, then time ~20 candidate evaluations and project the total
 # runtime for the real fit. Exits without fitting.
@@ -244,9 +250,22 @@ A successful fit freezes two files:
 - `weights-learned.meta.json` — sidecar with the seed, per-restart
   trajectories, the winning restart, the pinned-zero dim list, and a
   `configHash` (SHA-256 of `config.mjs`'s `CONFIG` object) so a later audit
-  can tell which protocol version produced the weights.
+  can tell which protocol version produced the weights. It also carries
+  `weightsFileSha256` — a SHA-256 digest of `weights-learned.json`'s raw
+  bytes, written at freeze time. `--report` recomputes this digest and
+  refuses to run if it does not match the sidecar's recorded value: the two
+  files are bound together, and an edited or swapped `weights-learned.json`
+  (even one that still only uses FIT_DIMS keys) is refused rather than
+  silently reported on.
 
-`--report` writes `results/fit-report-latest.json`.
+`--report` is non-destructive with respect to the frozen weights and the
+scratch data (it never re-fits, never writes `weights-learned.json`), but it
+DOES write two files on every run: `results/fit-report-latest.json` (mutable
+run output) and the committed `fit-report-registered.json` (git-tracked).
+Running `--report` as a debugging/spot-check step will dirty
+`fit-report-registered.json` in `git status` if the numbers differ at all
+from what is currently committed — review that diff before committing it,
+the same as any other registered artifact.
 
 ## Tests
 
