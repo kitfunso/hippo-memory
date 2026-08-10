@@ -211,6 +211,7 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'customer_note_create',  // E2 customer_note first-class object — emitted by saveCustomerNote
   'customer_note_supersede', // E2 — emitted by saveCustomerNote on a supersession
   'customer_note_close',   // E2 — emitted by closeCustomerNote
+  'mv_rescue',             // LC2-E3 — emitted by consolidate() per rescue; lockstep with AuditOp union + cli.ts VALID_AUDIT_OPS
 ]);
 
 // Cap on GET /v1/audit?limit=. Matches docs/api.md (when written) and is large

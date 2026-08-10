@@ -172,7 +172,8 @@ export type AuditOp =
   | 'project_brief_close' // E2 — emitted by closeProjectBrief (active -> closed, retire without successor)
   | 'customer_note_create' // E2 customer_note first-class object — emitted by saveCustomerNote
   | 'customer_note_supersede' // E2 — emitted by saveCustomerNote when supersedesNoteId resolves to an active note row
-  | 'customer_note_close'; // E2 — emitted by closeCustomerNote (active -> closed, retire without successor)
+  | 'customer_note_close' // E2 — emitted by closeCustomerNote (active -> closed, retire without successor)
+  | 'mv_rescue'; // LC2-E3 — emitted by consolidate() per rescued entry when config.memoryValue.enabled (docs/plans/2026-08-10-lc2-e3-mv-wiring.md)
 
 export interface AppendAuditOpts {
   tenantId: string;

@@ -93,6 +93,14 @@ export interface HippoConfig {
   ambient: {
     enabled: boolean;
   };
+  /** LC2-E3: opt-in learned memory-value rescue veto on the sleep decay pass
+   *  (docs/plans/2026-08-10-lc2-e3-mv-wiring.md). Default OFF — the frozen
+   *  E2 weights (src/memory-value-weights.ts) only run when explicitly
+   *  enabled; no other knobs in v1 (the rescue budget is a code constant
+   *  tied to E2 evidence, not user-tunable). */
+  memoryValue: {
+    enabled: boolean;
+  };
 }
 
 const DEFAULT_CONFIG: HippoConfig = {
@@ -154,6 +162,9 @@ const DEFAULT_CONFIG: HippoConfig = {
   ambient: {
     enabled: true,
   },
+  memoryValue: {
+    enabled: false,
+  },
 };
 
 export function loadConfig(hippoRoot: string): HippoConfig {
@@ -186,6 +197,7 @@ export function loadConfig(hippoRoot: string): HippoConfig {
       multihop: { ...DEFAULT_CONFIG.multihop, ...(raw.multihop ?? {}) },
       salience: { ...DEFAULT_CONFIG.salience, ...(raw.salience ?? {}) },
       ambient: { ...DEFAULT_CONFIG.ambient, ...(raw.ambient ?? {}) },
+      memoryValue: { ...DEFAULT_CONFIG.memoryValue, ...(raw.memoryValue ?? {}) },
     };
   } catch (err) {
     if (fs.existsSync(configPath)) {
