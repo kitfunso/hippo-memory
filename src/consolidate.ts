@@ -31,6 +31,9 @@ import { loadConfig } from './config.js';
 import { sampleForReplay } from './replay.js';
 import { renderTraceContent } from './trace.js';
 import { resolveTenantId } from './tenant.js';
+import { rescueSet, rankNonPinnedByTenant, validateWeights, type MvRankInfo } from './memory-value.js';
+import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from './memory-value-weights.js';
+import { appendAuditEvent } from './audit.js';
 
 const DECAY_THRESHOLD = 0.05;
 const MERGE_OVERLAP_THRESHOLD = 0.35;  // Jaccard similarity for "related"
@@ -147,29 +150,142 @@ export async function consolidate(
   // -------------------------------------------------------------------------
   // 1. Decay pass
   // -------------------------------------------------------------------------
+  // LC2-E3 (opt-in, default off; docs/plans/2026-08-10-lc2-e3-mv-wiring.md):
+  // flag OFF keeps the single-phase loop below byte-identical to pre-E3
+  // behavior (pre-registered gate G2). Flag ON restructures into two phases:
+  // phase 1 classifies every entry (condemned vs survivor) with ZERO
+  // commits; phase 2 runs rescueSet over the per-tenant candidate groups,
+  // then commits — rescued entries get the standard survivor bookkeeping
+  // refresh (stored strength + effective confidence; no half-life edits, no
+  // rank-derived writes) and are pushed to survivors so they fully
+  // participate in this cycle's merge/physics/conflict passes; non-rescued
+  // condemned entries follow the existing pendingDeletes/result.removed/
+  // details path.
   const survivors: MemoryEntry[] = [];
-  for (const entry of all) {
-    const strength = calculateStrength(entry, now, decayOpts);
+  let rescuedIds: Set<string> = new Set();
+  // Carried forward to the post-flush "4. Log run" section below, where the
+  // mv_rescue audit rows are actually written (code-review fix: writing them
+  // here, before batchWriteAndDelete, would assert rescues for a cycle whose
+  // effects might never land if a later phase throws).
+  let rescuedEntries: MemoryEntry[] = [];
+  let rankById: Map<string, MvRankInfo> = new Map();
+  if (config.memoryValue.enabled) {
+    // --- Phase 1: classify (zero commits) ---
+    const condemned: MemoryEntry[] = [];
+    const strengthById = new Map<string, number>();
+    for (const entry of all) {
+      const strength = calculateStrength(entry, now, decayOpts);
+      strengthById.set(entry.id, strength);
+      if (!entry.pinned && strength < DECAY_THRESHOLD) {
+        condemned.push(entry);
+      }
+    }
 
-    if (!entry.pinned && strength < DECAY_THRESHOLD) {
-      result.removed++;
-      result.details.push(`  🗑  removed ${entry.id} (strength ${strength.toFixed(4)} < ${DECAY_THRESHOLD})`);
-      if (!dryRun) {
-        pendingDeletes.push(entry.id);
+    // --- Phase 2a: rescue decision (pure compute) ---
+    // Runs under --dry-run too (only pendingDeletes/the audit write in
+    // "4. Log run" below stay !dryRun-gated), so the preview matches what a
+    // real run would decide.
+    const condemnedIds = new Set(condemned.map((e) => e.id));
+    // Fail-loud must not depend on condemnation traffic (round-2 code-review
+    // P2-2): validate the frozen weights constant unconditionally, even on a
+    // sleep with nothing condemned.
+    validateWeights();
+    if (condemnedIds.size > 0) {
+      // Compute the per-tenant ranking ONCE (round-2 code-review P2-2):
+      // rankById feeds both rescueSet's decision (via precomputedRanks,
+      // skipping its own internal rankNonPinnedByTenant call) and the
+      // detail/audit rank context below, so the whole-store ranking pass
+      // runs a single time per sleep instead of twice, and only when there
+      // is actually something condemned to rank against.
+      rankById = rankNonPinnedByTenant(all, now);
+      rescuedIds = rescueSet(all, condemnedIds, now, MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256, rankById);
+
+      // Review-round F2: entries with a non-finite computed feature (e.g. a
+      // malformed `created` string -> Date.parse NaN) score -Infinity in
+      // rankById and rescueSet's explicit finite-score guard means they can
+      // never be rescued. Surfaced here as one details warning line naming
+      // them, rather than leaving it a silent NaN-driven scoring detail.
+      const nonFiniteIds = [...rankById.entries()]
+        .filter(([, info]) => !Number.isFinite(info.score))
+        .map(([id]) => id);
+      if (nonFiniteIds.length > 0) {
+        result.details.push(
+          `  ⚠️ memory-value: skipped ${nonFiniteIds.length} entr${nonFiniteIds.length === 1 ? 'y' : 'ies'} ` +
+          `with non-finite computed features (never rescued): ${nonFiniteIds.join(', ')}`,
+        );
       }
-    } else {
-      // Update the stored strength value and persist stale confidence when applicable.
-      const effectiveConfidence = resolveConfidence(entry, now);
-      const updated = {
-        ...entry,
-        strength,
-        confidence: effectiveConfidence,
-      };
-      survivors.push(updated);
-      if (!dryRun && (strength !== entry.strength || effectiveConfidence !== entry.confidence)) {
-        pendingWrites.push(updated);
+    }
+
+    // --- Phase 2b: commit, one pass over `all` in ITS ORIGINAL ORDER ---
+    // (review-round F4: rescued entries used to be appended at the tail of
+    // survivors, systematically starving them in downstream order-sensitive
+    // passes like extraction's slice(0,20) — a single pass over `all`
+    // preserves flag-off's ordering semantics exactly.)
+    for (const entry of all) {
+      const strength = strengthById.get(entry.id)!;
+      if (!entry.pinned && strength < DECAY_THRESHOLD) {
+        if (rescuedIds.has(entry.id)) {
+          // Rescued (D1): standard survivor bookkeeping refresh — same
+          // stored-strength + effective-confidence update every other
+          // survivor gets (round-2 code-review P2-1). D1's "kept as-is"
+          // protects against half-life edits and rank-derived writes, not
+          // against the ordinary decay-pass refresh every survivor
+          // receives; leaving a rescued entry's stale strength (e.g. 1.0)
+          // on disk would mislead downstream replay/admission reads.
+          const effectiveConfidence = resolveConfidence(entry, now);
+          const updated = { ...entry, strength, confidence: effectiveConfidence };
+          survivors.push(updated);
+          if (!dryRun && (strength !== entry.strength || effectiveConfidence !== entry.confidence)) {
+            pendingWrites.push(updated);
+          }
+          result.decayed++;
+          rescuedEntries.push(updated);
+          const rank = rankById.get(entry.id);
+          const rankNote = rank
+            ? ` - rescued (rank ${rank.rank}/${rank.totalNonPinned} in tenant ${rank.tenantId}, top ${rank.keepN})`
+            : ' - rescued';
+          result.details.push(`  🛟 ${entry.id} (strength ${strength.toFixed(4)} < ${DECAY_THRESHOLD})${rankNote}`);
+        } else {
+          result.removed++;
+          result.details.push(`  🗑  removed ${entry.id} (strength ${strength.toFixed(4)} < ${DECAY_THRESHOLD})`);
+          if (!dryRun) {
+            pendingDeletes.push(entry.id);
+          }
+        }
+      } else {
+        const effectiveConfidence = resolveConfidence(entry, now);
+        const updated = { ...entry, strength, confidence: effectiveConfidence };
+        survivors.push(updated);
+        if (!dryRun && (strength !== entry.strength || effectiveConfidence !== entry.confidence)) {
+          pendingWrites.push(updated);
+        }
+        result.decayed++;
       }
-      result.decayed++;
+    }
+  } else {
+    for (const entry of all) {
+      const strength = calculateStrength(entry, now, decayOpts);
+
+      if (!entry.pinned && strength < DECAY_THRESHOLD) {
+        result.removed++;
+        result.details.push(`  🗑  removed ${entry.id} (strength ${strength.toFixed(4)} < ${DECAY_THRESHOLD})`);
+        if (!dryRun) {
+          pendingDeletes.push(entry.id);
+        }
+      } else {
+        // Update the stored strength value and persist stale confidence when applicable.
+        const effectiveConfidence = resolveConfidence(entry, now);
+        const updated = {
+          ...entry,
+          strength,
+          confidence: effectiveConfidence,
+        };
+        survivors.push(updated);
+        if (!dryRun && (strength !== entry.strength || effectiveConfidence !== entry.confidence)) {
+          pendingWrites.push(updated);
+        }
+        result.decayed++;
+      }
     }
   }
 
@@ -541,7 +657,7 @@ export async function consolidate(
   // 4. Log run
   // -------------------------------------------------------------------------
   if (!dryRun) {
-    const detectedConflicts = detectConflicts(survivors, now, decayOpts);
+    const detectedConflicts = detectConflicts(survivors, now, decayOpts, rescuedIds);
     replaceDetectedConflicts(hippoRoot, detectedConflicts, now.toISOString());
 
     if (detectedConflicts.length > 0) {
@@ -555,6 +671,59 @@ export async function consolidate(
       removed: result.removed,
     });
     incrementSleepCount(hippoRoot);
+
+    // One audit row per rescue (attributability, D1). Written here, AFTER
+    // batchWriteAndDelete above has committed this cycle's writes/deletes
+    // (and after conflict detection + run logging), not inline in the decay
+    // pass — same durability posture as api.ts's top-level 'consolidate'
+    // summary audit row (written only once the whole sleep has completed).
+    // Writing it earlier would assert rescues for a cycle whose effects
+    // never landed if a later phase threw. Real writes only — dry-run
+    // previews the decision (details line above) but persists nothing.
+    if (rescuedEntries.length > 0) {
+      try {
+        const auditDb = openHippoDb(hippoRoot);
+        try {
+          // Review-round F5: per-row try/catch, not one try/catch around the
+          // whole loop — a single failed appendAuditEvent must not silently
+          // drop every remaining row. Mirrors the physics pass's
+          // skipped-warning precedent (line ~564 above): count losses, keep
+          // the overall fail-soft posture, tell the operator via details.
+          let auditFailures = 0;
+          for (const entry of rescuedEntries) {
+            try {
+              const rank = rankById.get(entry.id);
+              appendAuditEvent(auditDb, {
+                tenantId: entry.tenantId,
+                actor: 'sleep',
+                op: 'mv_rescue',
+                targetId: entry.id,
+                metadata: rank
+                  ? { rank: rank.rank, totalNonPinned: rank.totalNonPinned, keepN: rank.keepN, score: rank.score }
+                  : {},
+              });
+            } catch {
+              auditFailures++;
+            }
+          }
+          if (auditFailures > 0) {
+            result.details.push(
+              `  ⚠️ memory-value: ${auditFailures} mv_rescue audit row${auditFailures === 1 ? '' : 's'} ` +
+              `failed to write (the rescue itself still landed)`,
+            );
+          }
+        } finally {
+          closeHippoDb(auditDb);
+        }
+      } catch {
+        // openHippoDb/closeHippoDb-level failure: audit must never crash a
+        // mutation (mirrors store.ts's audit() posture).
+        result.details.push(
+          `  ⚠️ memory-value: mv_rescue audit unavailable this cycle ` +
+          `(${rescuedEntries.length} rescue${rescuedEntries.length === 1 ? '' : 's'} not audited)`,
+        );
+      }
+    }
   }
 
   return result;
@@ -593,8 +762,19 @@ function detectConflicts(
   entries: MemoryEntry[],
   now: Date,
   decayOpts: DecayOptions = {},
+  // LC2-E3 (opt-in, default off): ids rescued by this cycle's decay pass.
+  // detectConflicts recomputes its own strength>=DECAY_THRESHOLD survivor
+  // filter independently of the decay pass above; without this bypass,
+  // rescued entries would be silently re-excluded from conflict detection
+  // every cycle even though the decay pass just decided to keep them.
+  // Default empty set: flag-off behavior is unchanged.
+  rescuedIds: Set<string> = new Set(),
 ): Array<{ memory_a_id: string; memory_b_id: string; reason: string; score: number }> {
-  const survivors = entries.filter((entry) => entry.layer !== Layer.Semantic && calculateStrength(entry, now, decayOpts) >= DECAY_THRESHOLD);
+  const survivors = entries.filter(
+    (entry) =>
+      entry.layer !== Layer.Semantic
+      && (rescuedIds.has(entry.id) || calculateStrength(entry, now, decayOpts) >= DECAY_THRESHOLD),
+  );
   const detected: Array<{ memory_a_id: string; memory_b_id: string; reason: string; score: number }> = [];
 
   for (let i = 0; i < survivors.length; i++) {

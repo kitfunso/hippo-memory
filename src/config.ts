@@ -93,6 +93,14 @@ export interface HippoConfig {
   ambient: {
     enabled: boolean;
   };
+  /** LC2-E3: opt-in learned memory-value rescue veto on the sleep decay pass
+   *  (docs/plans/2026-08-10-lc2-e3-mv-wiring.md). Default OFF — the frozen
+   *  E2 weights (src/memory-value-weights.ts) only run when explicitly
+   *  enabled; no other knobs in v1 (the rescue budget is a code constant
+   *  tied to E2 evidence, not user-tunable). */
+  memoryValue: {
+    enabled: boolean;
+  };
 }
 
 const DEFAULT_CONFIG: HippoConfig = {
@@ -154,6 +162,9 @@ const DEFAULT_CONFIG: HippoConfig = {
   ambient: {
     enabled: true,
   },
+  memoryValue: {
+    enabled: false,
+  },
 };
 
 export function loadConfig(hippoRoot: string): HippoConfig {
@@ -163,6 +174,23 @@ export function loadConfig(hippoRoot: string): HippoConfig {
     const raw = JSON.parse(fs.readFileSync(configPath, 'utf8')) as Partial<HippoConfig>;
     const basis = raw.decayBasis;
     const validBasis = basis === 'clock' || basis === 'session' || basis === 'adaptive';
+    // Review-round F6: {...DEFAULT_CONFIG.memoryValue, ...raw.memoryValue}
+    // silently no-ops when raw.memoryValue is a non-object (e.g. the user
+    // wrote {"memoryValue": true}) — spreading a boolean/primitive/array
+    // contributes no enumerable own properties, so `enabled` stays at the
+    // default `false` with zero indication anything was wrong. This
+    // feature's whole point is "never silently off": warn loudly and fall
+    // back to defaults instead of merging garbage.
+    const memoryValueRaw = raw.memoryValue as unknown;
+    const validMemoryValueShape =
+      memoryValueRaw === undefined
+      || (typeof memoryValueRaw === 'object' && memoryValueRaw !== null && !Array.isArray(memoryValueRaw));
+    if (!validMemoryValueShape) {
+      console.error(
+        `Warning: config.json's "memoryValue" must be an object like {"enabled": true} ` +
+        `(got ${JSON.stringify(memoryValueRaw)}) - using defaults.`,
+      );
+    }
     return {
       defaultHalfLifeDays: raw.defaultHalfLifeDays ?? DEFAULT_CONFIG.defaultHalfLifeDays,
       defaultBudget: raw.defaultBudget ?? DEFAULT_CONFIG.defaultBudget,
@@ -186,6 +214,10 @@ export function loadConfig(hippoRoot: string): HippoConfig {
       multihop: { ...DEFAULT_CONFIG.multihop, ...(raw.multihop ?? {}) },
       salience: { ...DEFAULT_CONFIG.salience, ...(raw.salience ?? {}) },
       ambient: { ...DEFAULT_CONFIG.ambient, ...(raw.ambient ?? {}) },
+      memoryValue: {
+        ...DEFAULT_CONFIG.memoryValue,
+        ...(validMemoryValueShape ? (memoryValueRaw as Partial<HippoConfig['memoryValue']> ?? {}) : {}),
+      },
     };
   } catch (err) {
     if (fs.existsSync(configPath)) {

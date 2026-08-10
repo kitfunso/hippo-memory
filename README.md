@@ -448,6 +448,19 @@ hippo sleep
 
 Three or more related episodes get merged into a single semantic memory. The originals decay. The pattern survives.
 
+**Experimental: learned memory-value rescue (opt-in, default off).** With
+`{"memoryValue":{"enabled":true}}` in `.hippo/config.json`, sleep consults a learned
+linear memory-value scorer before deleting a decayed memory: a memory that scores in the
+top 30% of its tenant by learned value is kept ("rescued") even though its strength fell
+below the decay threshold. The scorer can only rescue, never delete — with the flag on,
+sleep deletes a strict subset of what it would delete with the flag off. Every rescue is
+recorded in the audit log (`hippo audit list --op mv_rescue`). The weights were learned
+on the LongMemEval retention benchmark (held-out retention 0.4897 vs 0.4203 for the best
+hand-set baseline); caveat: their usage-feature signs reflect that benchmark's simulated
+usage, NOT real usage value — treat the flag as an experiment, not a recommendation.
+Tenants with fewer than 10 non-pinned memories never rescue (rank statistics are noise at
+tiny scale).
+
 ---
 
 ### Outcome feedback
