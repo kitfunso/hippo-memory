@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.30.0 - 2026-08-10
+
+### Added
+- **Learned memory-value rescue in sleep consolidation (experimental, opt-in,
+  default off)** (#141). With `{"memoryValue":{"enabled":true}}` in
+  `.hippo/config.json`, the sleep decay pass consults the learned linear
+  memory-value scorer (LC2-E2 frozen weights) before deleting a decayed
+  memory: a memory ranking in the top 30% of its tenant by learned value is
+  kept ("rescued") even though its strength fell below the decay threshold.
+  Safety properties, all test-enforced: the scorer can only rescue, never
+  delete (flag-on deletes are a strict subset of flag-off deletes); flag off
+  (the default) is bit-identical to prior behavior; tenants with fewer than
+  10 non-pinned memories never rescue (rank statistics are noise at tiny
+  scale, and the floor prevents a condemned-only tenant from converging to an
+  undeletable memory); a malformed weights constant makes flag-on sleep fail
+  loudly rather than silently behave as off; memories with malformed feature
+  data are never rescued and are named in a warning line. Every rescue is
+  recorded in the audit log (`hippo audit list --op mv_rescue`) with rank
+  context. Code parity with the evaluated artifact is machine-checked: the
+  compiled production scorer reproduces the registered held-out retention
+  0.48973684210526314 exactly (delta 0) through the benchmark harness, and a
+  CI sync test pins the embedded weights to the committed artifact by value
+  and digest. Caveat (from the LC2-E2 result doc): the weights' usage-feature
+  signs reflect the benchmark's simulated usage, not real usage value - treat
+  the flag as an experiment surface, not a recommendation.
+
+### Fixed
+- **MCP auto-sleep no longer risks the server process on a consolidation
+  error** (#141). The `hippo_remember` auto-sleep fired `consolidate()`
+  without await or catch, so any consolidation failure became an unhandled
+  rejection after the tool had already returned success. Errors now land as
+  a logged line; the call stays fire-and-forget by design.
+
 ## 1.29.0 - 2026-08-10
 
 ### Added
