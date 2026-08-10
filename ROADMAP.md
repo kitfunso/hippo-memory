@@ -15,7 +15,7 @@
 
 This roadmap tracks planned work for the hippo-memory codebase. Items are grouped by funding status: committed, conditional on grant award, and speculative.
 
-Current version: 1.23.0 (npm `hippo-memory`) + python-v0.3.0 (PyPI `hippo-memory-sdk`)
+Current version: 1.28.0 (npm `hippo-memory`) + python-v0.3.0 (PyPI `hippo-memory-sdk`)
 
 For non-grant execution status (Tracks A-I, sequencing, shipped items, bets, non-goals) see **Part II** below (formerly `ROADMAP-RESEARCH.md`). For operational follow-ups and per-version post-ship tails see `TODOS.md`. For the research lineage and seven-mechanisms backgrounder see `RESEARCH.md`.
 
@@ -29,11 +29,13 @@ Each work item has a status tag:
 - **[Phase 2]** - planned follow-on work
 - **[Speculative]** - exploratory, no firm date
 
+> **Funding update (2026-08-10):** none of the three 2026 bids was awarded - FAD ineligible (not assessed, seen 2026-07-19), ARIA unsuccessful (confirmed 2026-07-19), AIC-P1 unsuccessful at 60.0% (2026-06-03). All **[Grant: FAD]** and **[Grant: AIC-P1]** items below are unfunded; treat them as [Speculative] unless re-submitted under a future competition.
+
 ---
 
 ## Grant: Frontier AI Discovery (submitted 2026-04-20)
 
-Status: Submitted. Decision expected summer 2026. Project runs October - December 2026 if awarded.
+Status: **Ineligible - not assessed** (status seen 2026-07-19, app #10200923). Not awarded; O1-O3 below are unfunded unless re-scoped for a future competition.
 
 ### O1. Convergence proofs [Grant: FAD]
 
@@ -63,7 +65,7 @@ Status: Submitted. Decision expected summer 2026. Project runs October - Decembe
 
 ## Grant: AI Champions Frontier AI Phase 1 (submitted 2026-04-21)
 
-Status: Submitted. Decision expected summer 2026. Project runs August 2026 - January 2027 (6 months) if awarded.
+Status: **Unsuccessful at 60.0%** (2026-06-03). Not awarded; WP1-WP4 below are unfunded. Post-mortem + reusable answers: `memory/reference_ai_champions_hippo_answers.md`.
 
 ### WP1. Architecture scaling to 1M+ items [Grant: AIC-P1]
 
@@ -140,8 +142,8 @@ Status: Submitted. Decision expected summer 2026. Project runs August 2026 - Jan
 
 | Grant | Status | Amount | Decision |
 |-------|--------|--------|----------|
-| Frontier AI Discovery (comp 2422) | Submitted 2026-04-20 | GBP 34,999 | TBC |
-| ARIA Rolling Seeding | Submitted 2026-04-20 | Up to GBP 500K | TBC |
+| Frontier AI Discovery (comp 2422) | Ineligible - not assessed (seen 2026-07-19) | GBP 34,999 | Not awarded |
+| ARIA Rolling Seeding | Unsuccessful (confirmed 2026-07-19) | Up to GBP 500K | Not awarded |
 | AI Champions Frontier AI Phase 1 (comp 2419) | Unsuccessful 60.0% (2026-06-03) | Up to GBP 122,500 | Not awarded |
 
 See `memory/reference_frontier_ai_hippo_answers.md` for the full application template and reusable assets.
@@ -157,7 +159,7 @@ This is the canonical execution roadmap. Every actionable item from `RESEARCH.md
 
 This file supersedes the prior research-only frame. **Part I** above (formerly `ROADMAP.md`) tracks grant-tied deliverables. `PLAN.md` documents architecture and CLS principles.
 
-Current version: 1.23.0 (npm `hippo-memory`, published 2026-06-08) + python-v0.3.0 (PyPI `hippo-memory-sdk`, published 2026-05-28)
+Current version: 1.28.0 (npm `hippo-memory`, published 2026-07-28) + python-v0.3.0 (PyPI `hippo-memory-sdk`, published 2026-05-28)
 Active branch: `master`
 
 ## Status as of 2026-05-24
@@ -355,7 +357,7 @@ Do ACC + vmPFC + dlPFC + vlPFC + OFC compound or interfere when all on?
 RESEARCH §"AI Pineal Gland". Three components.
 
 ### C1. Salience gate v1 [shipped]
-Basic novelty + tag-class scoring. Commit `50528a5`. v2 in flight on this branch.
+Basic novelty + tag-class scoring (`src/salience.ts`). Commit ref `50528a5` no longer resolves in current history (pre-squash SHA; the CHANGELOG v0.2x entry cites the same dead pointer). v2 shipped as the `--salience-threshold` recall flag.
 
 ### C2. Salience gate v3 [next]
 Physics-energy ambient state injected as scalar; salience tied to ambient delta. **Salience decides promotion (raw → distilled), not receipt capture.** Raw layer remains append-only per RESEARCH §"Phase 1" — every receipt is captured; salience controls whether the receipt promotes to consolidated state during `hippo sleep`.
@@ -791,13 +793,13 @@ Notion (official hosted MCP; ingestion already E1.6), Roam (Graph API / EDN), Ta
 
 A recurring question: should hippo adopt "latent memory" as a new layer, or as its **key feature**? This track settles it with a debate, then files the surviving pieces as scoped items. (Paper lineage cross-refs `RESEARCH.md`; all citations verified 2026-06-02.)
 
-**What "latent memory" means (verified).** A spectrum, not one thing: (1) **vector/embedding** memory — external store, lossy-encode but inspectable via the source text, rebuildable; (2) **KV-cache** memory — lives in GPU RAM, opaque, rebuildable by replay; (3) **parametric/test-time** memory written to weights/fast-weights — opaque, lossy, not cleanly rebuildable: **Titans** (Behrouz et al., Google, arXiv 2501.00663), **Memory Layers at Scale** (Meta FAIR, arXiv 2412.09764, ICLR'25); (4) **distilled-KV cartridges** — trained KV, opaque, rebuildable by re-distill: **Cartridges** (Stanford Hazy, arXiv 2508.17032); (5) **neural memory modules** — NTM lineage (arXiv 1410.5401), **Larimar** (IBM+Princeton, arXiv 2403.11901), **Memory³** (arXiv 2407.01178), **Memorizing Transformers** (arXiv 2203.08913), **RMT** (arXiv 2207.06881).
+**What "latent memory" means (verified).** A spectrum, not one thing: (1) **vector/embedding** memory — external store, lossy-encode but inspectable via the source text, rebuildable; (2) **KV-cache** memory — lives in GPU RAM, opaque, rebuildable by replay; (3) **parametric/test-time** memory written to weights/fast-weights — opaque, lossy, not cleanly rebuildable: **Titans** (Behrouz et al., Google, arXiv 2501.00663), **Memory Layers at Scale** (Meta FAIR, arXiv 2412.09764, ICLR'25); (4) **distilled-KV cartridges** — trained KV, opaque, rebuildable by re-distill: **Cartridges** (Stanford Hazy, arXiv 2506.06266); (5) **neural memory modules** — NTM lineage (arXiv 1410.5401), **Larimar** (IBM+Princeton, arXiv 2403.11901), **Memory³** (arXiv 2407.01178), **Memorizing Transformers** (arXiv 2203.08913), **RMT** (arXiv 2207.06881).
 
 **What hippo already has.** The *weak* form is shipped: recall is hybrid BM25 + BGE-base dense vectors fused with RRF (`src/rrf.ts`, F-track) — a **derived embedding index over the markdown of record**. So "add latent memory as a layer," in the vector sense, is done. The live question is the *strong* forms (KV/parametric/cartridge): substrate or layer?
 
 ### The debate
 
-**FOR latent-as-key-feature (steelman).** The frontier moved. Titans (2501.00663) learns to memorize *and forget* at test time via gradient on its own memory weights — that is hippo's decay+strengthening thesis in parametric form, at >2M-token context. Cartridges (2508.17032) distil a corpus into a small trained KV cache for ~26x throughput. Memory Layers (2412.09764) beat 2x-compute dense models on factual recall. Latent delivers associative/fuzzy/multimodal/cross-lingual recall that grep + a small embedding index cannot. Competitors are vector/graph-core and growing — Mem0 (57.4k★, hybrid vector+graph), Zep/Graphiti (26.9k★, temporal graph), Letta (23.1k★, vector archival) — and a purely symbolic store risks looking dated on LongMemEval/LoCoMo, exactly where the F-track's local-embedder ceiling (F14–F16 R@5 plateau on `_s`) already bites. The biological metaphor arguably maps *more* cleanly onto a parametric fast-weight memory than onto markdown files.
+**FOR latent-as-key-feature (steelman).** The frontier moved. Titans (2501.00663) learns to memorize *and forget* at test time via gradient on its own memory weights — that is hippo's decay+strengthening thesis in parametric form, at >2M-token context. Cartridges (2506.06266) distil a corpus into a small trained KV cache for ~26x throughput. Memory Layers (2412.09764) beat 2x-compute dense models on factual recall. Latent delivers associative/fuzzy/multimodal/cross-lingual recall that grep + a small embedding index cannot. Competitors are vector/graph-core and growing — Mem0 (57.4k★, hybrid vector+graph), Zep/Graphiti (26.9k★, temporal graph), Letta (23.1k★, vector archival) — and a purely symbolic store risks looking dated on LongMemEval/LoCoMo, exactly where the F-track's local-embedder ceiling (F14–F16 R@5 plateau on `_s`) already bites. The biological metaphor arguably maps *more* cleanly onto a parametric fast-weight memory than onto markdown files.
 
 **AGAINST (and FOR latent-as-optional-layer).** It contradicts the founding bet. Bet #7 already states it: "MH-FLOCKE proves the sub-symbolic version works; hippo proves the symbolic + inspectable version is the right substrate." The competitive scan (verified) is decisive: Mem0, Zep, Letta, Cognee all store memory as embeddings/graph nodes in opaque DBs; **none** combine human-readable markdown-of-record + single-file local SQLite + biological lifecycle. That triple intersection is hippo's *entire* white space — latent-as-substrate walks into the red ocean. Three further failures: **(a) portability dies** — KV/weights are tied to a model's dim/tokenizer/architecture; you cannot migrate them across models or git-diff them (kills Bet #2 and the Track K multi-tool import thesis). **(b) the lifecycle moat is only legible over symbolic memory** — `supersede`-with-reason, A3 provenance envelopes, C5 WYSIATI "what was excluded and why," the A5 audit log, Track J soft-warnings all require inspectable, addressable units; you cannot supersede-with-reason or audit a region of opaque weights (kills Bet #1 and Bet #4 trust-over-recall). **(c) local-first feasibility** — the vector index is trivial (shipped), but KV/parametric/cartridge memory needs training loops + VRAM, dragging the zero-dep core toward a heavyweight GPU backend (non-goal #5) and toward becoming an inference provider (non-goal #6); the F-track already documents that even a *stronger embedder* is egress/compute-bound locally (F16–F17), and a training loop is a far bigger ask.
 
@@ -814,7 +816,7 @@ A recurring question: should hippo adopt "latent memory" as a new layer, or as i
 A **new** graph ranked-list *producer* that feeds `src/rrf.ts` as a third fusion input beside BM25 + dense — distinct from `src/graph-recall.ts`, which today does seed-adjacent injection with a per-hop score discount (not a ranked list, and not RRF-fused). Already filed (F-track "graph retrieval stream" + F4 HippoRAG). Pure win, no new substrate. Spec needed: the graph-score→rank function, the RRF weight/`k` for the graph stream, and tests. **Success:** a graph-stream-vs-no-graph-stream ablation under `rrf.ts` fusion lifts R@5 over the 2-stream (BM25+dense) baseline on the oracle split. Cross-ref F9.
 
 #### L2. Sleep-built KV "cartridge" over the consolidated semantic layer [research]
-The one strong-latent form that fits the Bets. At `hippo sleep`, optionally distil the *stable semantic store* into a reusable trained-KV cartridge (Cartridges, 2508.17032) for fast, cheap recall over a large stable corpus. Fits because it is (i) built offline during sleep (Bet #6), (ii) derived from consolidated symbolic state (Bet #5), (iii) rebuildable — delete it and the next sleep regenerates it (Rule 2), (iv) opt-in + GPU-gated (local core stays zero-dep). Candidate **5x-cost lever for the scale grant** (ROADMAP.md WP1: 1M+ items, sub-100ms, 5x cost reduction vs vector RAG).
+The one strong-latent form that fits the Bets. At `hippo sleep`, optionally distil the *stable semantic store* into a reusable trained-KV cartridge (Cartridges, 2506.06266) for fast, cheap recall over a large stable corpus. Fits because it is (i) built offline during sleep (Bet #6), (ii) derived from consolidated symbolic state (Bet #5), (iii) rebuildable — delete it and the next sleep regenerates it (Rule 2), (iv) opt-in + GPU-gated (local core stays zero-dep). Candidate **5x-cost lever for the scale grant** (ROADMAP.md WP1: 1M+ items, sub-100ms, 5x cost reduction vs vector RAG).
 **Gated on a feasibility spike** that must answer the open unknowns before any roadmap promotion: tokenizer/model binding (which local model the cartridge is keyed to), artifact size per 100k items, rebuild time per sleep, GPU-VRAM floor, invalidation strategy on supersession/decay, and the tenant privacy boundary. **Success:** the spike *pre-registers* its thresholds (corpus size, hardware, latency, rebuild-time, and the hybrid-RRF R@5 baseline it must match or beat) before any build, satisfying the doc's cut-criteria; promotion out of `[research]` requires hitting them. **Discipline:** the cartridge never becomes the source of truth and never indexes the raw layer.
 
 #### L3. Parametric test-time memory (Titans-style) [research → Track G]
@@ -968,7 +970,9 @@ The category lacks a good way to measure what a memory system is *for*. LongMemE
 - **Why hippo should own it:** hippo's lifecycle metadata (decay, outcomes, supersession, conflicts) is exactly what such a metric needs and what static-store competitors cannot report. Defining the metric is both a research contribution and positioning. F8 (Memory-Augmented Agent Eval, Part II) and the retracted sequential-learning trap-rate fold into this.
 - **Deliverable:** a methodology doc + reference harness + a public, reproducible result, pre-registered per the `docs/evals` discipline.
 
-### Lifecycle stress eval (keystone) [next]
+### Lifecycle stress eval (keystone) [shipped first slice 2026-06-09; headline NULL]
+
+> **Status 2026-06-09 (first measurement, `docs/evals/2026-06-09-lifecycle-stress-eval-result.md`):** the ruler is built and works - it cleanly separates retrieval (hippo) from recency (naive) and can detect a lifecycle effect when one exists. The pre-registered headline hypothesis - sleep consolidation frees active-context budget - measured **NULL-to-slightly-negative** on current hippo. Mechanistic root cause (verified in source): the merge "summary" is a concatenation comparable-or-larger than its sources, and the `strength * 0.3` write on merged episodics is inert because `calculateStrength()` never reads the stored `strength` field. This is what motivated the DAG item below.
 
 The differentiator hippo claims is the memory lifecycle, and no existing benchmark (LongMemEval, LoCoMo) measures it: per-haystack retrieval recall is saturated by any competent embedder, and none of them ever force a forget/consolidate/supersede decision. Build the eval that does, in the large-store regime where retrieval stops being free (the correction above shows recall collapses to ~47-56 there).
 
@@ -978,7 +982,9 @@ The differentiator hippo claims is the memory lifecycle, and no existing benchma
 - **Success (pre-register exact bar):** hippo-full holds QA accuracy within a set floor (e.g. <=2pp drop) and stale-answer rate low while active-context tokens stay a set fraction of naive at 100x; naive degrades or blows the context window. Pre-registered per `docs/evals` discipline.
 - Subsumes/sharpens F8 (Memory-Augmented Agent Eval) and the retracted sequential-learning trap-rate. **Gates the DAG build below** (build the ruler before the thing it measures).
 
-### DAG consolidation hierarchy (the "next major feature") [planned]
+### DAG consolidation hierarchy (the "next major feature") [planned; slice 1 MEASURED-FALSE 2026-06-10]
+
+> **Status 2026-06-10: slice 1 MEASURED-FALSE** (`docs/evals/2026-06-10-dag-consolidation-slice1-result.md`). The pre-registered hypothesis - compressed summaries substituting for redundant children free active-context budget and lift budget-bounded QA - was falsified: substitution **regressed** QA by **-6.3pp** under a binding budget; compression alone was neutral on the relevance path. The mechanism was built and fully tested (14/14 real-DB); the *idea* failed its eval, which is exactly what the lifecycle stress eval exists to catch. Any further DAG work starts from a new hypothesis, not a re-run of this slice.
 
 Lossless-claw-style hierarchical summarization on the SQLite backbone: raw receipts (lossless) -> episodic -> consolidated DAG summary nodes, so active context is a small top-of-DAG slice while detail stays retrievable on demand; decay/outcomes drive which branches consolidate vs prune. Fixes hippo's flat-store weakness and lossless-claw's keep-everything weakness. Distinct from E3 (entity graph for multi-hop): this DAG is for context compression.
 
@@ -1023,7 +1029,9 @@ Added 2026-08-01 after a deep-research pass on learned components for agent memo
 Persist per-recall: query text/hash, returned memory ids + ranks + per-stage scores (the A7 `rerankPipeline` trace already computes these in-memory), session id, tenant. Link `outcome` events to the recall ids that preceded them (cmdRecall's last-retrieval-ids mechanism already exists for credit assignment — persist the linkage durably instead of dropping it). Feeds G8; unblocks LC2, LC3, B1/B5 depth calibration, and F18.
 **Effort:** 2-3d. **Success:** every recall writes a trace row with returned ids; every outcome row references the recall trace(s) it scores; 30 days of dogfood accumulates a re-loadable (query, shown, outcome) dataset; storage overhead <5% of DB size.
 
-#### LC2. Learned memory-value v1: linear keep/forget/promotion scorer [next, after LC1]
+#### LC2. Learned memory-value v1: linear keep/forget/promotion scorer [in progress - E1 eval substrate shipped 2026-08-09, PR #138; E2 fitter next]
+
+> **Status 2026-08-09 (LC2-E1, `docs/evals/2026-08-09-lc2-memory-value-result.md`):** retention harness + v4 registered baselines shipped on LongMemEval-S cleaned (500/500 questions, deterministic, test-enforced). Held-out bars for the E2 fitter: best single factor = recency at **0.4203**; uniform equal-weighting lands *below* chance (0.2468) on hippo's substrate - inverting the paper's ordering (paper: uniform 0.657 > recency 0.368), so E2's bars are relative to hippo's own baselines, not the paper's.
 Replicate the 2606.12945 recipe on hippo's substrate: a linear (inspectable) value function over consolidation-time lifecycle features hippo already stores — age, decay state, strength, retrieval count, outcome ratio, error tag, schema_fit, tag class, scope. Fit gradient-free (CMA-ES / hill-climb) against (a) gold-evidence retention on LongMemEval with a held-out split and (b) the Part III lifecycle stress eval once it exists. Blind features only — no query-aware oracle. The learned weights replace the hand-set constants in the strength/salience formulas as an opt-in, derived, rebuildable, git-diffable config artifact (Track L Rule 2; a linear model is itself inspectable, so Bet #7 holds).
 **Guard (binding):** the C1 salience-gate regression (recall 81 → 15 when the gate was enabled; do-not-re-enable memory `feedback_hippo_salience_regression`) is the cautionary precedent. LC2 ships ONLY behind pre-registered paired A/B + LongMemEval non-regression gates per `docs/RETRACTION.md` discipline.
 **Effort:** 8-10d. **Success (pre-register exact bars before running):** learned weights beat uniform weights AND the best single factor on gold-retention at a fixed keep budget on the held-out split; tier-1 micro-eval fire-rate non-regression; LongMemEval per-haystack R@5 non-regression.
@@ -1053,3 +1061,39 @@ Feeds LC1/G8: pre-compact snapshots linked to post-compact outcomes are (state �
 Hippo already owns the substrate a learned lifecycle needs (outcome counters, decay state, provenance envelope, audit log) and the eval harness to gate it (LongMemEval per-haystack + the Part III lifecycle stress eval). Competitors hand-tune or LLM-prompt these decisions. "The memory layer that learns what to keep from its own outcomes" is Bet #1 made trainable — the moat stays lifecycle, not retrieval quality, and the learned artifact stays derived + inspectable.
 
 **Research provenance:** deep-research workflow run `wf_00c80a74-033` (2026-08-01); 5 claims verified 3-0 in-workflow, remaining 20 verified same day by direct primary-source fetch (all quotes matched; zero refuted). Key sources: arXiv 2508.19828 (Memory-R1), 2509.25911 (Mem-alpha), 2506.15841 (MEM1), 2504.19413 (Mem0), 2305.10250 (MemoryBank), 2606.12945 (learned linear memory value on LongMemEval), 2603.18272 (ExpRAG), 2606.02204 (cross-environment reranker), 1904.09171 (neural-hype skeptic), Generative Agents (UIST 2023).
+
+---
+
+## Part V - 2026-08-09 update: agent-memory-atlas comparative gap analysis (source-verified)
+
+Triggered by GitHub issue #137 (neoneye, author of the agent-memory-atlas, 2026-08-04): a Claude Opus 5 authored audit of hippo against 238 other agent-memory systems, at `neoneye.github.io/agent-memory-atlas/systems/hippo-memory/` and `/compare/`. Two verification passes went into this section: (1) the atlas's comparison-matrix membership claims were checked against the atlas page itself (curled and grepped); (2) every claim about hippo's own code behavior was checked against hippo source on 2026-08-09 - and that second pass found the atlas report **wrong or overstated on three of its findings** (noted per item below). An earlier draft of this section propagated those errors; this rewrite corrects them.
+
+**Atlas score: hippo carries 4 of 7 rubric marks** - trust state, bi-temporal validity, scope-enforced retrieval, append-only mutation audit. Marks withheld: rejected-value tombstone (12/238 systems carry it), human review surface (59/238), negative-retrieval eval (50/238). Four systems carry all 7: `memsem`, `perseus-vault`, `provem`, `verel`. Source-verification verdict per withheld mark: the tombstone gap is **real** (AT1); the other two are **partial** - hippo has `hippo conflicts` / `hippo resolve` (cli.ts) and committed cross-tenant negative tests (`tests/l9-tenant-scoping.test.ts`), so the genuine gaps are narrower than the atlas scored (AT4, AT5).
+
+### AT1. Rejected-value tombstone [critical, next]
+**Verified real.** `deleteEntry` is a hard `DELETE FROM memories` (src/store.ts:1654); no tombstone / rejected-value / suppression-by-value vocabulary exists anywhere in src (grep 2026-08-09). Supersession hides rows on read but keys nothing on the *value* - re-extraction can silently re-assert a fact a human already rejected. `perseus-vault` refuses on every remember-path write via a digest-keyed tombstone table (with an audited trusted-override escape hatch); `memsem` writes a durable value-keyed suppression on human rejection and refuses `memory_add` when the normalized value matches. This is also the same mechanism the Part III DAG consolidation item is blocked on ("do not ship summarization before the tombstone/invalidation story exists") and that E3.4 lists as `[research]`.
+**Effort:** 5-6d (new table, write-path check in `capture`/`remember`/auto-learn, migration, tests). **Success:** reject value X; re-run an extraction pass that would re-assert X; assert the write is refused and `audit_log` records the refusal; existing supersession behavior unchanged for non-rejected corrections.
+
+### AT2. Stale tier masks the stored epistemic tier for non-verified memories [planned, small]
+**Atlas overstated; corrected against source.** `resolveConfidence` (src/memory.ts:447-455) exempts `verified` and `pinned` entries from staleness - a verified fact never degrades to `stale`, so the atlas's "verified facts marked outdated regardless of truthfulness" is wrong. The residual issue is real but smaller: for `observed`/`inferred` entries, 30+ days of disuse returns `stale` in place of the stored tier, so recall surfaces cannot distinguish a stale-observed from a stale-inferred memory. Disuse (a recency signal) overwrites the epistemic tier (an evidence signal) in one field.
+**Effort:** 1-2d. **Success:** `recall --why` shows both the stored tier and the staleness flag as separate facets (e.g. `observed+stale`); no fire-rate regression on tier-1 micro-eval.
+
+### AT3. Quarantine tier before sleep-audit hard-delete [planned]
+**Verified real (wording corrected).** The sleep pipeline's audit phase flags junk (too short / empty / version-bump / non-substantive - `isContentWorthStoring`, src/audit.ts:116-124) and removes it via the hard-delete path (`errorsRemoved`, cli.ts:2859); `auditMemories` + `deleteEntry` run host-wide in sleep, not tenant-scoped (the known A5 v2 sub-2 residue). No recoverable step exists between "flagged" and "gone". `memory-project`'s archive -> cold-storage -> `revive_from_cold()` two-speed pattern and `perseus-vault`'s staged supersede/demote/archive/forget/purge both keep one.
+**Effort:** 3-4d. **Success:** a junk-flagged entry moves to a quarantined state for N days before permanent deletion; a `revive` command restores it and it recalls normally; `audit_log` distinguishes quarantine events from hard-delete events.
+
+### AT4. Approval gate on unattended destructive passes [planned]
+**Scoped narrower than the atlas's "no human review" verdict.** Humans CAN adjudicate conflicts today (`hippo conflicts` / `hippo resolve`, cli.ts:8704/8708). What has no approval surface is the *unattended* destructive work: sleep's junk deletion (AT3) and consolidation merges act without a person in the loop. `provem` models admission with discrete statuses (`hypothesis`/`accepted`/`proposed`/`pending review`/`quarantined`).
+**Effort:** 4-6d (review-queue table + CLI + dashboard surface, opt-in flag so single-user local mode is unaffected by default; overlaps AT3's quarantine table - build together). **Success:** with review mode on, a junk-flagged entry or auto-merge sits in `pending_review` until approve/reject, logged to `audit_log`; review mode off (default) behavior unchanged. Outside-voice pass before leaving `[planned]`, same gate Tracks K/L use.
+
+### AT5. Negative-retrieval assertions in the eval suites [next, small]
+**Atlas overstated; corrected against source.** Committed negative tests DO exist - `tests/l9-tenant-scoping.test.ts` et al. assert cross-tenant isolation (the README/site "proven by a negative test" claim is accurate). What the eval suites (tier-1 micro-eval fixtures, LongMemEval harness) lack is must-NOT-appear assertions: superseded values, suppressed memories, and (once AT1 ships) rejected values. The atlas's own reading of the split matters here: of the 50 systems with the mark, only five assert a *boundary*; the rest assert *content* exclusions - hippo has the boundary tests and lacks the content ones.
+**Effort:** 1-2d. **Success:** micro-eval fixtures gain must-not-appear cases for superseded + suppressed content; once AT1 ships, a paired case asserts a rejected value never resurfaces via recall.
+
+### AT6. Document successor-derived expiry on `memories` [resolved 2026-08-10, doc-only]
+**Atlas wrong; corrected against source - and the first draft of this item was wrong too.** The atlas claimed memories' bi-temporal columns "carry no read-path filter" - false: `--as-of` recall filters on `valid_from` and derives expiry from the superseding row's `valid_from` (src/search.ts:417-435, both pipelines). The earlier draft here then asserted a dead `memories.valid_to` column; a second source pass (2026-08-10) found `memories` has **no `valid_to` column at all** - the bi-temporal migration adds only `valid_from` (src/db.ts:238-240). The only `valid_to` in src belongs to the `policies` table, where it IS read by the as-of query (src/policies.ts:533). Nothing to retire or wire up.
+**Effort:** 0 (code). Optional: one doc line in `MEMORY_ENVELOPE.md` stating memory expiry is successor-chain-derived with no explicit `valid_to` column.
+
+**Not adopted from the atlas scan:** `perseus-vault`'s AES-256-GCM at-rest encryption and hash-chained journal (out of scope - hippo's local-first zero-dep core is the explicit bet, non-goal #5); `provem`'s pluggable-backend governance layer (hippo's SQLite-first architecture is Bet #7, not a plugin host).
+
+**Discipline note:** the three atlas errors (AT2, AT5, AT6) were only caught by reading hippo's source; the atlas is an LLM-authored report and inherits LLM-report failure modes. Any future item sourced from an external audit of hippo's code gets a source-verification pass before it lands in this file. The pass must also cover this file's own drafts: the first draft of AT6 asserted a dead `memories.valid_to` column that does not exist (memories carries only `valid_from`, src/db.ts:238-240) - caught 2026-08-10 by a second read of the migrations.
