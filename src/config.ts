@@ -174,6 +174,23 @@ export function loadConfig(hippoRoot: string): HippoConfig {
     const raw = JSON.parse(fs.readFileSync(configPath, 'utf8')) as Partial<HippoConfig>;
     const basis = raw.decayBasis;
     const validBasis = basis === 'clock' || basis === 'session' || basis === 'adaptive';
+    // Review-round F6: {...DEFAULT_CONFIG.memoryValue, ...raw.memoryValue}
+    // silently no-ops when raw.memoryValue is a non-object (e.g. the user
+    // wrote {"memoryValue": true}) — spreading a boolean/primitive/array
+    // contributes no enumerable own properties, so `enabled` stays at the
+    // default `false` with zero indication anything was wrong. This
+    // feature's whole point is "never silently off": warn loudly and fall
+    // back to defaults instead of merging garbage.
+    const memoryValueRaw = raw.memoryValue as unknown;
+    const validMemoryValueShape =
+      memoryValueRaw === undefined
+      || (typeof memoryValueRaw === 'object' && memoryValueRaw !== null && !Array.isArray(memoryValueRaw));
+    if (!validMemoryValueShape) {
+      console.error(
+        `Warning: config.json's "memoryValue" must be an object like {"enabled": true} ` +
+        `(got ${JSON.stringify(memoryValueRaw)}) - using defaults.`,
+      );
+    }
     return {
       defaultHalfLifeDays: raw.defaultHalfLifeDays ?? DEFAULT_CONFIG.defaultHalfLifeDays,
       defaultBudget: raw.defaultBudget ?? DEFAULT_CONFIG.defaultBudget,
@@ -197,7 +214,10 @@ export function loadConfig(hippoRoot: string): HippoConfig {
       multihop: { ...DEFAULT_CONFIG.multihop, ...(raw.multihop ?? {}) },
       salience: { ...DEFAULT_CONFIG.salience, ...(raw.salience ?? {}) },
       ambient: { ...DEFAULT_CONFIG.ambient, ...(raw.ambient ?? {}) },
-      memoryValue: { ...DEFAULT_CONFIG.memoryValue, ...(raw.memoryValue ?? {}) },
+      memoryValue: {
+        ...DEFAULT_CONFIG.memoryValue,
+        ...(validMemoryValueShape ? (memoryValueRaw as Partial<HippoConfig['memoryValue']> ?? {}) : {}),
+      },
     };
   } catch (err) {
     if (fs.existsSync(configPath)) {

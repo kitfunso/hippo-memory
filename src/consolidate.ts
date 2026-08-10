@@ -172,22 +172,19 @@ export async function consolidate(
   if (config.memoryValue.enabled) {
     // --- Phase 1: classify (zero commits) ---
     const condemned: MemoryEntry[] = [];
-    const preliminarySurvivors: MemoryEntry[] = [];
     const strengthById = new Map<string, number>();
     for (const entry of all) {
       const strength = calculateStrength(entry, now, decayOpts);
       strengthById.set(entry.id, strength);
       if (!entry.pinned && strength < DECAY_THRESHOLD) {
         condemned.push(entry);
-      } else {
-        preliminarySurvivors.push(entry);
       }
     }
 
-    // --- Phase 2: rescue, then commit ---
-    // Pure compute — runs under --dry-run too (only pendingDeletes/the audit
-    // write in "4. Log run" below stay !dryRun-gated), so the preview
-    // matches what a real run would decide.
+    // --- Phase 2a: rescue decision (pure compute) ---
+    // Runs under --dry-run too (only pendingDeletes/the audit write in
+    // "4. Log run" below stay !dryRun-gated), so the preview matches what a
+    // real run would decide.
     const condemnedIds = new Set(condemned.map((e) => e.id));
     // Fail-loud must not depend on condemnation traffic (round-2 code-review
     // P2-2): validate the frozen weights constant unconditionally, even on a
@@ -202,29 +199,60 @@ export async function consolidate(
       // is actually something condemned to rank against.
       rankById = rankNonPinnedByTenant(all, now);
       rescuedIds = rescueSet(all, condemnedIds, now, MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256, rankById);
-    }
 
-    for (const entry of preliminarySurvivors) {
-      const strength = strengthById.get(entry.id)!;
-      const effectiveConfidence = resolveConfidence(entry, now);
-      const updated = { ...entry, strength, confidence: effectiveConfidence };
-      survivors.push(updated);
-      if (!dryRun && (strength !== entry.strength || effectiveConfidence !== entry.confidence)) {
-        pendingWrites.push(updated);
+      // Review-round F2: entries with a non-finite computed feature (e.g. a
+      // malformed `created` string -> Date.parse NaN) score -Infinity in
+      // rankById and rescueSet's explicit finite-score guard means they can
+      // never be rescued. Surfaced here as one details warning line naming
+      // them, rather than leaving it a silent NaN-driven scoring detail.
+      const nonFiniteIds = [...rankById.entries()]
+        .filter(([, info]) => !Number.isFinite(info.score))
+        .map(([id]) => id);
+      if (nonFiniteIds.length > 0) {
+        result.details.push(
+          `  ⚠️ memory-value: skipped ${nonFiniteIds.length} entr${nonFiniteIds.length === 1 ? 'y' : 'ies'} ` +
+          `with non-finite computed features (never rescued): ${nonFiniteIds.join(', ')}`,
+        );
       }
-      result.decayed++;
     }
 
-    for (const entry of condemned) {
+    // --- Phase 2b: commit, one pass over `all` in ITS ORIGINAL ORDER ---
+    // (review-round F4: rescued entries used to be appended at the tail of
+    // survivors, systematically starving them in downstream order-sensitive
+    // passes like extraction's slice(0,20) — a single pass over `all`
+    // preserves flag-off's ordering semantics exactly.)
+    for (const entry of all) {
       const strength = strengthById.get(entry.id)!;
-      if (rescuedIds.has(entry.id)) {
-        // Rescued (D1): standard survivor bookkeeping refresh — same
-        // stored-strength + effective-confidence update every other
-        // survivor gets (round-2 code-review P2-1). D1's "kept as-is"
-        // protects against half-life edits and rank-derived writes, not
-        // against the ordinary decay-pass refresh every survivor receives;
-        // leaving a rescued entry's stale strength (e.g. 1.0) on disk would
-        // mislead downstream replay/admission reads.
+      if (!entry.pinned && strength < DECAY_THRESHOLD) {
+        if (rescuedIds.has(entry.id)) {
+          // Rescued (D1): standard survivor bookkeeping refresh — same
+          // stored-strength + effective-confidence update every other
+          // survivor gets (round-2 code-review P2-1). D1's "kept as-is"
+          // protects against half-life edits and rank-derived writes, not
+          // against the ordinary decay-pass refresh every survivor
+          // receives; leaving a rescued entry's stale strength (e.g. 1.0)
+          // on disk would mislead downstream replay/admission reads.
+          const effectiveConfidence = resolveConfidence(entry, now);
+          const updated = { ...entry, strength, confidence: effectiveConfidence };
+          survivors.push(updated);
+          if (!dryRun && (strength !== entry.strength || effectiveConfidence !== entry.confidence)) {
+            pendingWrites.push(updated);
+          }
+          result.decayed++;
+          rescuedEntries.push(updated);
+          const rank = rankById.get(entry.id);
+          const rankNote = rank
+            ? ` - rescued (rank ${rank.rank}/${rank.totalNonPinned} in tenant ${rank.tenantId}, top ${rank.keepN})`
+            : ' - rescued';
+          result.details.push(`  🛟 ${entry.id} (strength ${strength.toFixed(4)} < ${DECAY_THRESHOLD})${rankNote}`);
+        } else {
+          result.removed++;
+          result.details.push(`  🗑  removed ${entry.id} (strength ${strength.toFixed(4)} < ${DECAY_THRESHOLD})`);
+          if (!dryRun) {
+            pendingDeletes.push(entry.id);
+          }
+        }
+      } else {
         const effectiveConfidence = resolveConfidence(entry, now);
         const updated = { ...entry, strength, confidence: effectiveConfidence };
         survivors.push(updated);
@@ -232,18 +260,6 @@ export async function consolidate(
           pendingWrites.push(updated);
         }
         result.decayed++;
-        rescuedEntries.push(updated);
-        const rank = rankById.get(entry.id);
-        const rankNote = rank
-          ? ` — rescued (rank ${rank.rank}/${rank.totalNonPinned} in tenant ${rank.tenantId}, top ${rank.keepN})`
-          : ' — rescued';
-        result.details.push(`  🛟 ${entry.id} (strength ${strength.toFixed(4)} < ${DECAY_THRESHOLD})${rankNote}`);
-      } else {
-        result.removed++;
-        result.details.push(`  🗑  removed ${entry.id} (strength ${strength.toFixed(4)} < ${DECAY_THRESHOLD})`);
-        if (!dryRun) {
-          pendingDeletes.push(entry.id);
-        }
       }
     }
   } else {
@@ -668,23 +684,44 @@ export async function consolidate(
       try {
         const auditDb = openHippoDb(hippoRoot);
         try {
+          // Review-round F5: per-row try/catch, not one try/catch around the
+          // whole loop — a single failed appendAuditEvent must not silently
+          // drop every remaining row. Mirrors the physics pass's
+          // skipped-warning precedent (line ~564 above): count losses, keep
+          // the overall fail-soft posture, tell the operator via details.
+          let auditFailures = 0;
           for (const entry of rescuedEntries) {
-            const rank = rankById.get(entry.id);
-            appendAuditEvent(auditDb, {
-              tenantId: entry.tenantId,
-              actor: 'sleep',
-              op: 'mv_rescue',
-              targetId: entry.id,
-              metadata: rank
-                ? { rank: rank.rank, totalNonPinned: rank.totalNonPinned, keepN: rank.keepN, score: rank.score }
-                : {},
-            });
+            try {
+              const rank = rankById.get(entry.id);
+              appendAuditEvent(auditDb, {
+                tenantId: entry.tenantId,
+                actor: 'sleep',
+                op: 'mv_rescue',
+                targetId: entry.id,
+                metadata: rank
+                  ? { rank: rank.rank, totalNonPinned: rank.totalNonPinned, keepN: rank.keepN, score: rank.score }
+                  : {},
+              });
+            } catch {
+              auditFailures++;
+            }
+          }
+          if (auditFailures > 0) {
+            result.details.push(
+              `  ⚠️ memory-value: ${auditFailures} mv_rescue audit row${auditFailures === 1 ? '' : 's'} ` +
+              `failed to write (the rescue itself still landed)`,
+            );
           }
         } finally {
           closeHippoDb(auditDb);
         }
       } catch {
-        // Audit must never crash a mutation (mirrors store.ts's audit() posture).
+        // openHippoDb/closeHippoDb-level failure: audit must never crash a
+        // mutation (mirrors store.ts's audit() posture).
+        result.details.push(
+          `  ⚠️ memory-value: mv_rescue audit unavailable this cycle ` +
+          `(${rescuedEntries.length} rescue${rescuedEntries.length === 1 ? '' : 's'} not audited)`,
+        );
       }
     }
   }

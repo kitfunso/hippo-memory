@@ -458,6 +458,8 @@ recorded in the audit log (`hippo audit list --op mv_rescue`). The weights were 
 on the LongMemEval retention benchmark (held-out retention 0.4897 vs 0.4203 for the best
 hand-set baseline); caveat: their usage-feature signs reflect that benchmark's simulated
 usage, NOT real usage value — treat the flag as an experiment, not a recommendation.
+Tenants with fewer than 10 non-pinned memories never rescue (rank statistics are noise at
+tiny scale).
 
 ---
 

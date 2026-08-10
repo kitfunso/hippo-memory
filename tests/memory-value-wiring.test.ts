@@ -280,6 +280,89 @@ describe('(d) flag-off byte-identical', () => {
 
     expect(auditRescueRows(dir, 'default').length).toBe(0);
   });
+
+  it('bigger mixed store (~40 entries, pinned/condemned/healthy, 3 tenants): survivor set, counts, and full details match a predicate-computed expectation', async () => {
+    initStore(dir);
+    // Disable the other decay-adjacent passes so result.details is
+    // decay-pass-only and directly comparable to the predicate below
+    // (review-round F8 wants the FULL details array checked, not just
+    // counts). memoryValue stays unset -> DEFAULT_CONFIG's false.
+    const configPath = path.join(dir, 'config.json');
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({ replay: { count: 0 }, physics: { enabled: false }, autoTraceCapture: false }, null, 2),
+    );
+
+    const tenants = ['d-t1', 'd-t2', 'd-t3'];
+    const built: MemoryEntry[] = [];
+    for (const tenantId of tenants) {
+      for (let i = 0; i < 10; i++) {
+        built.push(createMemory(`${tenantId} healthy entry ${i} with distinct padding text`, {
+          layer: Layer.Semantic,
+          tenantId,
+        }));
+      }
+      for (let i = 0; i < 3; i++) {
+        built.push(condemnedEntry(`${tenantId} condemned entry ${i}`, { tenantId }));
+      }
+      built.push({
+        ...createMemory(`${tenantId} pinned rule`, { pinned: true, layer: Layer.Semantic, tenantId }),
+        created: ancientDate(3650),
+        last_retrieved: ancientDate(3650),
+        half_life_days: 1,
+      });
+    }
+    expect(built.length).toBeGreaterThanOrEqual(40); // 3 tenants * (10 + 3 + 1) = 42
+
+    for (const e of built) writeEntry(dir, e);
+
+    // Predicate expectation, computed from the SAME order consolidate()
+    // will load (loadAllEntries's `ORDER BY created ASC, id ASC`) -- NOT
+    // `built`'s construction order, since entries sharing an identical
+    // `created` value (all healthy entries created within the same test
+    // tick; all condemned/pinned entries sharing the identical
+    // ancientDate(3650) string) tie-break on id, not insertion order.
+    const loadedBeforeSleep = loadAllEntries(dir);
+    const config = loadConfig(dir);
+    const sessionCtx = loadSessionDecayContext(dir);
+    const decayOpts: DecayOptions = {
+      decayBasis: config.decayBasis,
+      avgSessionIntervalDays: sessionCtx.avgSessionIntervalDays,
+      sleepCount: sessionCtx.sleepCount,
+    };
+    const expectedRemovedIds = new Set<string>();
+    const expectedSurvivorIds = new Set<string>();
+    const expectedRemovedDetails: string[] = [];
+    for (const entry of loadedBeforeSleep) {
+      const strength = calculateStrength(entry, NOW, decayOpts);
+      if (!entry.pinned && strength < 0.05) {
+        expectedRemovedIds.add(entry.id);
+        expectedRemovedDetails.push(`  🗑  removed ${entry.id} (strength ${strength.toFixed(4)} < 0.05)`);
+      } else {
+        expectedSurvivorIds.add(entry.id);
+      }
+    }
+    expect(expectedRemovedIds.size).toBe(9); // 3 tenants * 3 condemned each
+    expect(expectedSurvivorIds.size).toBe(built.length - 9);
+
+    const result = await consolidate(dir, { now: NOW });
+
+    expect(result.removed).toBe(expectedRemovedIds.size);
+    expect(result.decayed).toBe(expectedSurvivorIds.size);
+    expect(result.details.some((l) => l.includes('🛟'))).toBe(false);
+    // Full details array: with replay/physics/autoTraceCapture off and no
+    // Episodic/conflicting content, decay's removed lines are the entirety
+    // of result.details, in loadAllEntries order.
+    expect(result.details).toEqual(expectedRemovedDetails);
+
+    const remainingIds = new Set(loadAllEntries(dir).map((e) => e.id));
+    expect(remainingIds).toEqual(expectedSurvivorIds);
+    for (const id of expectedRemovedIds) expect(remainingIds.has(id)).toBe(false);
+
+    for (const tenantId of tenants) {
+      expect(auditRescueRows(dir, tenantId).length).toBe(0);
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -326,12 +409,14 @@ describe('(e) rescue semantics', () => {
     initStore(dir);
     enableMemoryValue(dir);
 
-    // 4 condemned entries, confidence 'observed' (createMemory's 'verified'
+    // 10 condemned entries (>= MIN_RESCUE_GROUP -- review-round F1's
+    // small-tenant floor), confidence 'observed' (createMemory's 'verified'
     // default never changes via resolveConfidence regardless of age, so it
     // can't demonstrate the confidence half of the refresh). content_length
-    // spread (10, 20, 90, 100) -> keepN = ceil(0.3*4) = 2 rescues the 2
-    // shortest.
-    const lens = [10, 20, 90, 100];
+    // spread (10..100) -> keepN = ceil(0.3*10) = 3 rescues the 3 shortest;
+    // we only assert on the top 2 (a safe subset of the top 3 regardless of
+    // exactly which entry takes rank 3).
+    const lens = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
     const built = lens.map((len) =>
       condemnedEntry('w'.repeat(len), { tenantId: 'te', confidence: 'observed' }),
     );
@@ -397,12 +482,15 @@ describe('(e) rescue semantics', () => {
     initStore(dir);
     enableMemoryValue(dir);
 
-    // 2 short conflicting-polarity Buffer entries + 3 longer, unrelated
-    // Semantic filler entries. All condemned; keepN = ceil(0.3*5) = 2
-    // rescues exactly the 2 conflicting entries (both shorter than every
-    // filler). Buffer layer: excluded from the merge pass (Episodic-only),
-    // included in detectConflicts (only Semantic is excluded there) — keeps
-    // this sub-test isolated from the merge-pass sub-test above.
+    // 2 short conflicting-polarity Buffer entries + 8 longer, unrelated
+    // Semantic filler entries (>= MIN_RESCUE_GROUP total -- review-round
+    // F1's small-tenant floor). All condemned; keepN = ceil(0.3*10) = 3, and
+    // the 2 conflicting entries are both far shorter than every filler, so
+    // both land inside the top 3 regardless of which filler takes rank 3 --
+    // assert both are rescued (a superset check), not an exact rescued set.
+    // Buffer layer: excluded from the merge pass (Episodic-only), included
+    // in detectConflicts (only Semantic is excluded there) — keeps this
+    // sub-test isolated from the merge-pass sub-test above.
     const a = condemnedEntry(
       'widget caching is enabled by default for every request',
       { layer: Layer.Buffer, tenantId: 'tc' },
@@ -411,8 +499,8 @@ describe('(e) rescue semantics', () => {
       'widget caching is disabled by default for every request',
       { layer: Layer.Buffer, tenantId: 'tc' },
     );
-    const fillers = Array.from({ length: 3 }, (_, i) =>
-      condemnedEntry(`completely unrelated filler content block number ${i} ${'z'.repeat(100)}`, {
+    const fillers = Array.from({ length: 8 }, (_, i) =>
+      condemnedEntry(`completely unrelated filler content block number ${i} ${'z'.repeat(100 + i * 10)}`, {
         layer: Layer.Semantic,
         tenantId: 'tc',
       }),
@@ -424,8 +512,9 @@ describe('(e) rescue semantics', () => {
 
     await consolidate(dir, { now: NOW });
 
-    const rescuedEvents = auditRescueRows(dir, 'tc');
-    expect(new Set(rescuedEvents.map((e) => e.targetId))).toEqual(new Set([a.id, b.id]));
+    const rescuedTargets = new Set(auditRescueRows(dir, 'tc').map((e) => e.targetId));
+    expect(rescuedTargets.has(a.id)).toBe(true);
+    expect(rescuedTargets.has(b.id)).toBe(true);
 
     const conflicts = listMemoryConflicts(dir, 'open', 'tc');
     const found = conflicts.find(
@@ -435,6 +524,27 @@ describe('(e) rescue semantics', () => {
     );
     expect(found, 'expected a conflict row between the two rescued entries').toBeDefined();
     expect(found!.reason).toMatch(/enabled\/disabled/);
+  });
+
+  it('tenants smaller than MIN_RESCUE_GROUP never rescue (small-tenant degeneracy floor, review-round F1)', async () => {
+    initStore(dir);
+    enableMemoryValue(dir);
+
+    // A condemned-only 1-entry tenant: without the floor, ceil(0.3*1) = 1
+    // guarantees an immortal rescue every single sleep. With
+    // MIN_RESCUE_GROUP = 10, this tenant's non-pinned candidate set (1) is
+    // below the floor -> keepN 0 -> no rescue, flag-on behaves exactly like
+    // flag-off for this tenant.
+    const lonely = condemnedEntry('a lonely condemned memory with no tenant-mates', { tenantId: 'tf' });
+    writeEntry(dir, lonely);
+
+    const result = await consolidate(dir, { now: NOW });
+    expect(result.removed).toBe(1);
+    expect(result.details.some((l) => l.includes('🛟'))).toBe(false);
+
+    const remaining = loadAllEntries(dir);
+    expect(remaining.find((e) => e.id === lonely.id)).toBeUndefined();
+    expect(auditRescueRows(dir, 'tf').length).toBe(0);
   });
 });
 
@@ -484,8 +594,12 @@ describe('(g) fail-loud on a malformed weights constant', () => {
 
   it('rescueSet propagates the throw at its own top — flag-on + a broken constant never behaves as flag-off', () => {
     initStore(dir);
+    // >= MIN_RESCUE_GROUP non-pinned entries in the tenant (review-round F1)
+    // so this exercises the eligible-for-rescue path, even though the
+    // assertions below only care about the throw, not the rescue outcome.
     const condemned = condemnedEntry('an entry that would otherwise be condemned and evaluated');
     writeEntry(dir, condemned);
+    for (let i = 0; i < 9; i++) writeEntry(dir, condemnedEntry(`filler tenant-mate ${i}`));
     const all = loadAllEntries(dir);
     const badWeights = { ...MEMORY_VALUE_WEIGHTS, strength: Number.POSITIVE_INFINITY };
 
@@ -538,9 +652,19 @@ describe('(h) scale characterization', () => {
           // 95% non-Episodic so the merge pass's O(N^2) episodic-candidate
           // scan and detectConflicts's O(N^2) non-Semantic scan both stay
           // small regardless of total N (plan's Risks section / T4(h) note).
+          // Tenant A (TENANTS[0]) is EXCLUDED from Episodic entirely
+          // (review-round F11): the merge pass demotes a merged episodic's
+          // half_life_days WITHIN the same cycle, which would perturb
+          // tenant A's own per-tenant min-max normalization context between
+          // cycle 1 and cycle 2 -- a real, orthogonal same-tenant effect
+          // that would confound the cross-tenant isolation property F11
+          // checks (tenant B's mutation must not move tenant A's rescue
+          // outcomes; a tenant-A-internal merge moving them is a different
+          // question this test isn't asking).
           const layerRoll = rand();
-          const layer =
-            layerRoll < 0.9 ? Layer.Semantic
+          const layer = tenantId === TENANTS[0]
+            ? (layerRoll < 0.6 ? Layer.Semantic : layerRoll < 0.85 ? Layer.Trace : Layer.Buffer)
+            : layerRoll < 0.9 ? Layer.Semantic
             : layerRoll < 0.95 ? Layer.Trace
             : layerRoll < 0.98 ? Layer.Buffer
             : Layer.Episodic;
@@ -644,8 +768,93 @@ describe('(h) scale characterization', () => {
     for (const id of condemnedIds) {
       expect(finalIds.has(id)).toBe(rescued1.has(id));
     }
+
+    // --- Review-round F11: G4 isolation proven through the FULL wiring,
+    // not just the pure rescueSet function. A SECOND, SEPARATE store,
+    // seeded with the IDENTICAL initial composition but with tenant B's
+    // rows mutated in the REAL STORE before its own (single) consolidate()
+    // run, must produce IDENTICAL tenant-A mv_rescue audit rows to the
+    // first store's cycle above (same ids, same rank/totalNonPinned/keepN/
+    // score). Two SEPARATE one-cycle stores, not two sequential cycles on
+    // the same store: a second cycle on the SAME store starts from a
+    // tenant-A composition already shrunk by the first cycle's own
+    // deletions (a real, expected, but orthogonal effect — not an
+    // isolation break) that would confound a same-store before/after
+    // comparison. Holding tenant A's starting composition fixed across two
+    // stores isolates exactly the property under test: tenant B's
+    // composition, and nothing else, is what may differ.
+    type MvAuditMeta = { rank?: number; totalNonPinned?: number; keepN?: number; score?: number };
+    const cycle1Events = auditRescueRows(dir, tenantAId);
+    const cycle1ByIdMeta = new Map(
+      cycle1Events
+        .filter((e) => e.targetId !== null)
+        .map((e) => [e.targetId as string, e.metadata as MvAuditMeta]),
+    );
+    expect(cycle1ByIdMeta.size).toBeGreaterThan(0);
+
+    const dirMutated = fs.mkdtempSync(path.join(SCRATCH_ROOT, 'case-'));
+    try {
+      initStore(dirMutated);
+      enableMemoryValue(dirMutated, { replay: { count: 0 }, autoTraceCapture: false });
+
+      const tenantBIds = new Set(loaded.filter((e) => e.tenantId === tenantBId).map((e) => e.id));
+      const dropCount = Math.floor(tenantBIds.size * 0.4);
+      expect(dropCount).toBeGreaterThan(0);
+      let droppedForMutated = 0;
+      const seedForMutated = loaded.filter((e) => {
+        if (e.tenantId === tenantBId && droppedForMutated < dropCount) {
+          droppedForMutated++;
+          return false;
+        }
+        return true;
+      });
+      batchWriteAndDelete(dirMutated, seedForMutated, []);
+
+      await consolidate(dirMutated, { now: NOW });
+
+      const mutatedEvents = auditRescueRows(dirMutated, tenantAId);
+      const mutatedByIdMeta = new Map(
+        mutatedEvents
+          .filter((e) => e.targetId !== null)
+          .map((e) => [e.targetId as string, e.metadata as MvAuditMeta]),
+      );
+
+      expect([...mutatedByIdMeta.keys()].sort()).toEqual([...cycle1ByIdMeta.keys()].sort());
+      for (const [id, meta1] of cycle1ByIdMeta) {
+        const meta2 = mutatedByIdMeta.get(id);
+        expect(meta2, `tenant A rescue metadata missing in the tenant-B-mutated store for ${id}`).toBeDefined();
+        expect(meta2!.rank).toBe(meta1.rank);
+        expect(meta2!.totalNonPinned).toBe(meta1.totalNonPinned);
+        expect(meta2!.keepN).toBe(meta1.keepN);
+        expect(meta2!.score).toBe(meta1.score);
+      }
+    } finally {
+      fs.rmSync(dirMutated, { recursive: true, force: true });
+    }
   }, 60_000);
 });
+
+/** Parses entry ids out of decay-pass detail lines (review-round F7: parity
+ *  by IDS, not just counts). Line shapes (src/consolidate.ts):
+ *    "  🛟 <id> (strength ...) - rescued (...)"
+ *    "  🗑  removed <id> (strength ...)"
+ */
+function parseRescuedIds(details: string[]): Set<string> {
+  const ids = new Set<string>();
+  for (const line of details) {
+    const m = line.match(/🛟\s+(\S+)/);
+    if (m) ids.add(m[1]);
+  }
+  return ids;
+}
+function parseRemovedIds(details: string[]): Set<string> {
+  const ids = new Set<string>();
+  for (const line of details) {
+    const m = line.match(/🗑\s+removed\s+(\S+)/);
+    if (m) ids.add(m[1]);
+  }
+  return ids;
+}
 
 // ---------------------------------------------------------------------------
 // (i) dry-run parity
@@ -678,6 +887,18 @@ describe('(i) dry-run parity', () => {
       expect(dryResult.removed).toBe(realResult.removed);
       expect(dryResult.decayed).toBe(realResult.decayed);
       expect(dryResult.removed).toBe(expectedDeleted.size);
+
+      // F7: parity by IDS, not just counts — parse the rescued/removed
+      // entry ids out of both runs' details and assert set equality.
+      const dryRescuedIds = parseRescuedIds(dryResult.details);
+      const realRescuedIds = parseRescuedIds(realResult.details);
+      expect(dryRescuedIds).toEqual(realRescuedIds);
+      expect(dryRescuedIds).toEqual(expectedRescued);
+
+      const dryRemovedIds = parseRemovedIds(dryResult.details);
+      const realRemovedIds = parseRemovedIds(realResult.details);
+      expect(dryRemovedIds).toEqual(realRemovedIds);
+      expect(dryRemovedIds).toEqual(expectedDeleted);
 
       // Dry-run: store untouched, zero audit rows.
       expect(loadAllEntries(dirDry).length).toBe(built.length);

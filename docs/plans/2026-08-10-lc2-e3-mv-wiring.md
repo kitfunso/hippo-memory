@@ -63,6 +63,24 @@ Properties this buys, by construction:
 score per sleep). E1's keep budget was a one-shot eval construct; applied per-sleep it
 compounds — repeated sleeps delete X% every pass regardless of store health (runaway).
 
+**Review-round addendum: small-tenant floor.** `keepN = ceil(0.3 * N)` guarantees at least
+one rescue whenever `N >= 1` — a condemned-only 1-entry tenant would be rescued every
+single sleep forever (an immortal stale memory), and small tenants get 100%/50%/33% rescue
+rates the E2 evidence never supported at that scale. `MIN_RESCUE_GROUP = 10`
+(`src/memory-value.ts`): tenants whose non-pinned candidate set is smaller than 10 produce
+zero rescues (`keepN` 0) — flag-on behaves exactly like flag-off for that tenant. A
+condemned-only tenant below the floor drains normally as entries are deleted; the
+surviving rescued subset only shrinks, never regrows past 10 to regain eligibility.
+
+**Review-round addendum: non-finite feature posture.** `Date.parse` on a malformed
+`created` string yields `NaN`, and an unguarded `NaN` would silently corrupt every OTHER
+entry's min-max in the same tenant group (and make the sort comparator
+insertion-order-dependent). An entry with any non-finite computed feature is excluded from
+the normalization context entirely and always scores `-Infinity` — the conservative
+direction, since `rescueSet` also carries an explicit `Number.isFinite(score)` guard, so
+such an entry can never be rescued regardless of its sort position. `consolidate.ts` emits
+one `result.details` warning line naming the skipped entry ids.
+
 ### D2. Rank-based scoring, normalized and ranked PER TENANT (resolves threshold-vs-budget + the context-mismatch finding)
 
 The E2 weights were fit on min-max normalized features per store (evaluate.mjs; a constant

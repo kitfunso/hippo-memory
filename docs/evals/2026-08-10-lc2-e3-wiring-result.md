@@ -12,8 +12,11 @@ The frozen E2 learned memory-value scorer is wired into the sleep decay pass as 
 - Flag off (default): behavior is bit-identical to pre-E3 master (test-proven, G2).
 - Flag on: a non-pinned memory condemned by the strength threshold is kept ("rescued")
   iff it ranks in the top 30% of its own tenant's non-pinned candidate set by learned
-  score. The scorer can only rescue, never condemn: deletes(flag-on) ⊆ deletes(flag-off)
-  by construction. Every rescue writes an `mv_rescue` audit row (rank, tenant, score
+  score, AND that tenant's non-pinned candidate set has at least 10 members — below that
+  floor a rank statistic is noise and the tenant never rescues (review-round fix; without
+  it a condemned-only 1-entry tenant would be rescued every single sleep forever). The
+  scorer can only rescue, never condemn: deletes(flag-on) ⊆ deletes(flag-off) by
+  construction. Every rescue writes an `mv_rescue` audit row (rank, tenant, score
   context), after the cycle's store effects are durable.
 - Weights ship as a digest-pinned src constant synced by CI test to the committed E2
   artifact (sha256 `1e747abed0df771fc9c354da8562771b336c4042faf0266f565bba1b5a8c5a40`).

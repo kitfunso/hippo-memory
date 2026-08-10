@@ -39,6 +39,20 @@ export const MV_FEATURE_NAMES: ReadonlyArray<keyof MvFeatureVector> = [
  *  evidence) — a code constant tied to that evidence, not user-tunable. */
 const RESCUE_BUDGET = 0.3;
 
+/**
+ * Review-round F1 (small-tenant degeneracy): below this per-tenant
+ * non-pinned candidate-set size, a rank statistic is noise — E2's evidence
+ * says nothing about tiny scale — and the floor prevents immortal-entry
+ * convergence: keepN=ceil(0.3*N) guarantees >=1 rescue at N=1, so without a
+ * floor a condemned-only 1-entry tenant would be rescued every single sleep
+ * forever. A condemned-only tenant below the floor instead drains normally
+ * as entries are deleted: the surviving rescued subset only ever shrinks
+ * toward 0, never regrows past 10 to regain eligibility on its own. Code
+ * constant tied to that reasoning, not user-tunable (same posture as
+ * RESCUE_BUDGET).
+ */
+const MIN_RESCUE_GROUP = 10;
+
 export interface MvFeatureVector {
   age_days: number;
   half_life_days: number;
@@ -118,6 +132,15 @@ export function validateWeights(
  * `weights` defaults to the real frozen singleton; parameterized (like
  * validateWeights) so callers/tests can score against an explicit vector
  * without touching the module singleton.
+ *
+ * Review-round F2 (non-finite features): Date.parse on a malformed `created`
+ * string yields NaN, and NaN would silently corrupt every OTHER entry's
+ * min-max in the same group. An entry with ANY non-finite computed feature
+ * is excluded from the normalization context entirely (its raw values never
+ * touch min/max) and always scores -Infinity — the lowest possible score, so
+ * it sorts to the bottom of its tenant deterministically and (via rescueSet's
+ * explicit finite-score guard below) can never be rescued. Conservative
+ * direction: deletes(flag-on) subset deletes(flag-off) still holds.
  */
 export function scoreEntries(
   entries: MemoryEntry[],
@@ -127,11 +150,18 @@ export function scoreEntries(
   const raw = new Map<string, MvFeatureVector>();
   for (const e of entries) raw.set(e.id, computeMvFeatures(e, now));
 
+  const nonFiniteIds = new Set<string>();
+  for (const e of entries) {
+    const nf = raw.get(e.id)!;
+    if (MV_FEATURE_NAMES.some((f) => !Number.isFinite(nf[f]))) nonFiniteIds.add(e.id);
+  }
+  const normContextEntries = entries.filter((e) => !nonFiniteIds.has(e.id));
+
   const minMax = new Map<keyof MvFeatureVector, { min: number; max: number }>();
   for (const f of MV_FEATURE_NAMES) {
     let min = Infinity;
     let max = -Infinity;
-    for (const e of entries) {
+    for (const e of normContextEntries) {
       const v = raw.get(e.id)![f];
       if (v < min) min = v;
       if (v > max) max = v;
@@ -145,6 +175,10 @@ export function scoreEntries(
 
   const scores = new Map<string, number>();
   for (const e of entries) {
+    if (nonFiniteIds.has(e.id)) {
+      scores.set(e.id, -Infinity);
+      continue;
+    }
     const nf = raw.get(e.id)!;
     let sum = 0;
     for (const f of MV_FEATURE_NAMES) sum += weights[f] * norm(f, nf[f]);
@@ -189,9 +223,14 @@ export function rankNonPinnedByTenant(
   const byTenant = new Map<string, MemoryEntry[]>();
   for (const e of entries) {
     if (e.pinned) continue; // D2: pinned entries never compete for rescue (never condemned)
-    const list = byTenant.get(e.tenantId);
+    // F9: guard undefined tenantId the same way dag.ts:341 does — the
+    // MemoryEntry type says `string`, but a raw/legacy row can still carry
+    // undefined at runtime, and grouping it under the literal key
+    // "undefined" would silently split it into its own singleton tenant.
+    const tenantId = e.tenantId ?? 'default';
+    const list = byTenant.get(tenantId);
     if (list) list.push(e);
-    else byTenant.set(e.tenantId, [e]);
+    else byTenant.set(tenantId, [e]);
   }
 
   const result = new Map<string, MvRankInfo>();
@@ -199,12 +238,20 @@ export function rankNonPinnedByTenant(
     const scores = scoreEntries(group, now, weights);
     // score DESC -> compareEntryIdentity (content asc -> id asc), the shared
     // deterministic tie-break used by every score-primary sort site in this
-    // codebase (src/compare.ts).
+    // codebase (src/compare.ts). F2: `-Infinity - -Infinity` is NaN, not 0 —
+    // two non-finite-feature entries tied at -Infinity would otherwise fall
+    // through to `diff` (NaN), which Array.sort treats as "no preference"
+    // and leaves insertion-order-dependent. Route NaN through the same
+    // deterministic tie-break as an exact-zero diff.
     const sorted = [...group].sort((a, b) => {
       const diff = scores.get(b.id)! - scores.get(a.id)!;
-      return diff !== 0 ? diff : compareEntryIdentity(a, b);
+      return diff === 0 || Number.isNaN(diff) ? compareEntryIdentity(a, b) : diff;
     });
-    const keepN = Math.min(sorted.length, Math.ceil(RESCUE_BUDGET * sorted.length));
+    // F1: tenants smaller than MIN_RESCUE_GROUP never rescue (keepN 0) — see
+    // that constant's doc comment.
+    const keepN = sorted.length < MIN_RESCUE_GROUP
+      ? 0
+      : Math.min(sorted.length, Math.ceil(RESCUE_BUDGET * sorted.length));
     sorted.forEach((e, i) => {
       result.set(e.id, {
         tenantId,
@@ -249,7 +296,12 @@ export function rescueSet(
   const rescued = new Set<string>();
   for (const id of condemnedIds) {
     const info = ranked.get(id);
-    if (info && info.rank <= info.keepN) rescued.add(id);
+    // F2: Number.isFinite(info.score) is an explicit, absolute guard — not
+    // just reliance on -Infinity naturally sorting last. In the degenerate
+    // case where every entry in a tenant is non-finite-scored (a tie at
+    // -Infinity), rank position alone could otherwise place one inside
+    // keepN; this makes "never rescued" hold regardless.
+    if (info && info.rank <= info.keepN && Number.isFinite(info.score)) rescued.add(id);
   }
   return rescued;
 }
