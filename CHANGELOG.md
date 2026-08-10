@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.29.0 - 2026-08-10
+
+### Added
+- **Retrieval-trace persistence (LC1, schema v40)** (#135). Recalls now
+  persist which memories were shown (`recall_traces`, `recall_trace_results`)
+  and link them to later outcomes (`recall_trace_outcomes`). This creates the
+  (query, shown, outcome) training data on disk that learned retrieval needs.
+  The producer is fail-soft: a trace failure never breaks the recall itself.
+- **Compaction survival (CS1)** (#136). New `hippo pre-compact` captures
+  working state from the transcript before a context compaction (snapshot
+  write, per-field session-scoped merge, secret redaction), and
+  `hippo compact-resume` re-injects it when the compacted session restarts.
+  Installer adds both hooks behind marker guards.
+- **Memory-value evaluation substrate (LC2-E1)** (#138). New
+  `benchmarks/memory-value/` harness measures gold-retention under a keep
+  budget on LongMemEval with blind consolidation-time features, registered
+  baselines, and determinism-enforcing tests. Eval-only; no runtime changes.
+- **Learned memory-value weights (LC2-E2)** (#140). A seeded evolution-strategy
+  fitter (`benchmarks/memory-value/fit.mjs`) learned a linear keep/forget
+  scorer that beats the best single-factor baseline on held-out data:
+  retention 0.4897 vs recency 0.4203 and uniform 0.2468, paired bootstrap
+  95% CIs excluding zero. Weights ship frozen and digest-bound
+  (`weights-learned.json`); production wiring is a later, opt-in step.
+
+### Security
+- **Dependency audit fixes** (#139). Bump `nanoid` and `undici` past their
+  advisories; `npm run audit:security` is clean again at the gated levels.
+
 ## 1.28.0 - 2026-07-28
 
 ### Security
