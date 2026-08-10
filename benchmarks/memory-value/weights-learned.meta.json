@@ -1,0 +1,124 @@
+{
+  "globalSeed": 42,
+  "restarts": 5,
+  "perRestart": [
+    {
+      "restart": 0,
+      "init": [
+        -1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "generations": 37,
+      "finalSigma": 0.009375,
+      "trainObjective": 0.497116493656286
+    },
+    {
+      "restart": 1,
+      "init": [
+        0.4721453399397433,
+        -0.8446518443524837,
+        0.23435122286900878,
+        0.33579239062964916,
+        0.7791134114377201,
+        0.5164313651621342,
+        0.299745773896575,
+        -0.11900019459426403
+      ],
+      "generations": 46,
+      "finalSigma": 0.009375,
+      "trainObjective": 0.4964244521337946
+    },
+    {
+      "restart": 2,
+      "init": [
+        -0.8973469482734799,
+        0.35486463364213705,
+        0.782530618365854,
+        -0.6390756545588374,
+        0.23269005585461855,
+        -0.82241075579077,
+        0.02625422552227974,
+        -0.6899891709908843
+      ],
+      "generations": 53,
+      "finalSigma": 0.009375,
+      "trainObjective": 0.508650519031142
+    },
+    {
+      "restart": 3,
+      "init": [
+        0.3687982875853777,
+        0.9879545057192445,
+        -0.36460744589567184,
+        0.2094507967121899,
+        0.9747884473763406,
+        -0.282195424195379,
+        -0.5547047699801624,
+        -0.2819293257780373
+      ],
+      "generations": 56,
+      "finalSigma": 0.009375,
+      "trainObjective": 0.4987889273356402
+    },
+    {
+      "restart": 4,
+      "init": [
+        0.8065776391886175,
+        -0.9872329509817064,
+        0.21703101554885507,
+        0.11625150637701154,
+        0.2981310016475618,
+        -0.6068954821676016,
+        0.9321454209275544,
+        0.9859942058101296
+      ],
+      "generations": 52,
+      "finalSigma": 0.009375,
+      "trainObjective": 0.49953863898500567
+    }
+  ],
+  "winnerRestart": 2,
+  "trainObjective": 0.508650519031142,
+  "featureList": [
+    "age_days",
+    "half_life_days",
+    "strength",
+    "retrieval_count",
+    "outcome_positive",
+    "outcome_negative",
+    "outcome_ratio",
+    "content_length"
+  ],
+  "pinnedZero": [
+    "schema_fit",
+    "pinned",
+    "starred",
+    "error_tag",
+    "tag_count",
+    "dag_level",
+    "valence_neutral",
+    "valence_positive",
+    "valence_negative",
+    "valence_critical",
+    "layer_buffer",
+    "layer_episodic",
+    "layer_semantic",
+    "layer_trace",
+    "kind_raw",
+    "kind_distilled",
+    "kind_superseded",
+    "kind_archived",
+    "confidence_verified",
+    "confidence_observed",
+    "confidence_inferred",
+    "confidence_stale"
+  ],
+  "configHash": "f4344541d44409f96d139b398f4699bf320e1a303913f236244b7d1fd963e5e5",
+  "frozenAt": "2026-08-10T11:05:21.405Z"
+}
