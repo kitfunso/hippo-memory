@@ -25,6 +25,7 @@ import {
 import { textOverlap, markRetrieved } from './search.js';
 import { compareEntryIdentity } from './compare.js';
 import { openHippoDb, closeHippoDb } from './db.js';
+import { rejectionDigest, findRejectedValue } from './rejection.js';
 import { loadPhysicsState, savePhysicsState, refreshParticleProperties } from './physics-state.js';
 import { simulate, type ForceContext } from './physics.js';
 import { loadConfig } from './config.js';
@@ -289,6 +290,39 @@ export async function consolidate(
     }
   }
 
+  // AT1 rejection-guard db handle (docs/plans/2026-08-15-at1-rejected-value-tombstone.md):
+  // opened ONCE for the whole non-dry-run consolidate, covering BOTH the
+  // auto-promote pass (1.4, immediately below) and the merge pass (3,
+  // further down) — both build deterministic content that batchWriteAndDelete
+  // writes through the guard's bypass, so both need a producer-side
+  // tombstone check before pushing to pendingWrites. A single handle here
+  // replaces what used to be a per-pass open. Dry-run never reaches the
+  // bypass (no batchWriteAndDelete call), so there is nothing for a handle
+  // to protect against — stays null and every `if (consolidateDb)` below is
+  // a no-op.
+  //
+  // AT1 P2 fix (codex, handle-leak restructure): the open must be followed
+  // IMMEDIATELY by the try whose finally closes it, covering every phase
+  // that can touch consolidateDb — not just the merge pass. Previously the
+  // try/finally wrapped only section 3 (merge pass); an exception thrown by
+  // auto-promote (1.4), replay (1.5), batch extraction (1.6), the DAG
+  // passes (1.7-1.9), or physics (2) would propagate past the open handle
+  // with nothing to close it. No behavior change on the happy path — each
+  // of those phases already best-effort catches its own exceptions today
+  // (physics has its own try/catch below; each DAG pass wraps its own
+  // dynamic import + call in try/catch) — this only closes the handle on
+  // the rare path where one of them throws past its own catch. Deliberately
+  // NOT re-indented (mechanical wrap only, kept surgical): every statement
+  // between this try and its finally (below, at the end of the merge pass)
+  // stays at its original indentation.
+  const consolidateDb = dryRun ? null : openHippoDb(hippoRoot);
+  // Declared here (not at the merge pass, its point of use) so it survives
+  // this try/finally — a `let` declared INSIDE the try would go out of
+  // scope before the `if (mergesSkippedRejected > 0)` check that reads it
+  // after the finally closes the handle.
+  let mergesSkippedRejected = 0;
+  try {
+
   // -------------------------------------------------------------------------
   // 1.4. Auto-promote complete sessions to traces
   // -------------------------------------------------------------------------
@@ -298,6 +332,7 @@ export async function consolidate(
   // render the action sequence as markdown and persist a Layer.Trace memory.
   // Traces inherit decay, search, replay, and physics from the base MemoryEntry.
   if (!dryRun && config.autoTraceCapture !== false) {
+    let tracesSkippedRejected = 0;
     const windowDays = config.autoTraceWindowDays ?? 7;
     const sinceMs = now.getTime() - windowDays * 24 * 60 * 60 * 1000;
     // Auto-trace currently runs in a single-tenant context (the env-resolved
@@ -343,6 +378,38 @@ export async function consolidate(
           source: 'auto-promote',
         },
       );
+
+      // AT1 (same producer-side pattern as the merge pass below): traceExistsForSession
+      // only sees rows CURRENTLY in the store — once a rejected trace is
+      // removed, that idempotency check no longer blocks regeneration, and
+      // this write would otherwise reach batchWriteAndDelete's guard bypass
+      // unchecked, resurrecting it every sleep. Check under THE ENTRY'S OWN
+      // stamped tenantId (read off `trace` after createMemory — never guess
+      // the tenant) + the built content's digest. A hit skips the push
+      // entirely: not counted as promoted, not added to survivors.
+      if (consolidateDb) {
+        const traceDigest = rejectionDigest(trace.content);
+        const tombstone = findRejectedValue(consolidateDb, trace.tenantId, traceDigest);
+        if (tombstone) {
+          tracesSkippedRejected++;
+          try {
+            appendAuditEvent(consolidateDb, {
+              tenantId: trace.tenantId,
+              actor: 'sleep',
+              op: 'reject_refusal',
+              metadata: {
+                digest: traceDigest,
+                reason: tombstone.reason,
+                sourceSessionId: session.session_id,
+              },
+            });
+          } catch {
+            // Best-effort — mirrors store.ts's audit() semantics.
+          }
+          continue;
+        }
+      }
+
       pendingWrites.push(trace);
       survivors.push(trace);
       result.promotedTraces++;
@@ -354,6 +421,11 @@ export async function consolidate(
     if (result.promotedTraces > 0) {
       result.details.push(
         `  🧬 promoted ${result.promotedTraces} trace${result.promotedTraces === 1 ? '' : 's'} from completed session${result.promotedTraces === 1 ? '' : 's'}`
+      );
+    }
+    if (tracesSkippedRejected > 0) {
+      console.error(
+        `consolidate: skipped ${tracesSkippedRejected} auto-promoted trace(s) whose content matches a rejected value`,
       );
     }
   }
@@ -589,63 +661,134 @@ export async function consolidate(
   );
   const used = new Set<string>();
 
-  for (let i = 0; i < mergeCandidates.length; i++) {
-    if (used.has(mergeCandidates[i].id)) continue;
+  // AT1 consolidation-loop fix (docs/plans/2026-08-15-at1-rejected-value-tombstone.md):
+  // reuses the single consolidateDb handle opened once above (before the
+  // auto-promote pass, 1.4) for the whole non-dry-run consolidate — see that
+  // declaration's comment. Only needed for real writes — a dry-run preview
+  // never reaches batchWriteAndDelete's guard bypass, so there is nothing
+  // here for it to protect against. (mergesSkippedRejected itself is
+  // declared up at the try's opening above 1.4, not here — it has to
+  // survive the try/finally that now wraps this whole section; see the
+  // handle-leak restructure comment there.)
+    for (let i = 0; i < mergeCandidates.length; i++) {
+      if (used.has(mergeCandidates[i].id)) continue;
 
-    const cluster: MemoryEntry[] = [mergeCandidates[i]];
+      const cluster: MemoryEntry[] = [mergeCandidates[i]];
 
-    for (let j = i + 1; j < mergeCandidates.length; j++) {
-      if (used.has(mergeCandidates[j].id)) continue;
-      const overlap = textOverlap(mergeCandidates[i].content, mergeCandidates[j].content);
-      if (overlap >= MERGE_OVERLAP_THRESHOLD) {
-        cluster.push(mergeCandidates[j]);
+      for (let j = i + 1; j < mergeCandidates.length; j++) {
+        if (used.has(mergeCandidates[j].id)) continue;
+        const overlap = textOverlap(mergeCandidates[i].content, mergeCandidates[j].content);
+        if (overlap >= MERGE_OVERLAP_THRESHOLD) {
+          cluster.push(mergeCandidates[j]);
+        }
+      }
+
+      if (cluster.length < MERGE_MIN_CLUSTER) continue;
+
+      // Create a semantic summary
+      const mergedContent = mergeContents(cluster);
+      const allTags = Array.from(new Set(cluster.flatMap((e) => e.tags)));
+      const maxValence = pickStrongestValence(cluster);
+
+      // AT1 P2 fix: build the semantic entry FIRST — createMemory is cheap
+      // and pure — so the tombstone check below runs under the tenant the
+      // row will ACTUALLY land in. The prior version checked
+      // cluster[0].tenantId, but createMemory (below) is never passed a
+      // tenantId option, so it always stamps its own default ('default',
+      // see memory.ts) regardless of the cluster's source tenant — the
+      // check was consulting a tenant's tombstones that the write was never
+      // going to land in (a false negative on the real destination, and a
+      // possible false-block on the source tenant's unrelated tombstones).
+      // This fix only makes the CHECK match wherever the row actually
+      // lands; it deliberately does NOT change that destination — merge
+      // rows always landing in 'default' regardless of source tenant is a
+      // real, pre-existing cross-tenant question, tracked separately as an
+      // AT1 follow-up (not this fix's scope) rather than folded in here.
+      let semantic: MemoryEntry | null = null;
+      if (!dryRun) {
+        semantic = createMemory(mergedContent, {
+          layer: Layer.Semantic,
+          tags: allTags,
+          emotional_valence: maxValence,
+          schema_fit: 0.7,
+          source: 'consolidation',
+          confidence: 'inferred',
+        });
+      }
+
+      // mergeContents is DETERMINISTIC CONCATENATION (not an LLM paraphrase)
+      // — if a human rejected exactly this byte-identical rollup before, an
+      // unguarded sleep would regenerate it every cycle and
+      // batchWriteAndDelete's guard bypass (store.ts) would silently
+      // re-assert it forever. This producer-side check is what makes that
+      // bypass safe. A hit skips the WHOLE cluster: sources stay unmerged —
+      // not demoted, not deleted — so a later sleep gets another chance if
+      // the tombstone is lifted.
+      if (consolidateDb && semantic) {
+        const mergeDigest = rejectionDigest(semantic.content);
+        const tombstone = findRejectedValue(consolidateDb, semantic.tenantId, mergeDigest);
+        if (tombstone) {
+          // Still mark used — these members are not re-tried against a
+          // DIFFERENT cluster within this same pass; next sleep re-clusters
+          // them fresh.
+          for (const e of cluster) used.add(e.id);
+          mergesSkippedRejected++;
+          try {
+            appendAuditEvent(consolidateDb, {
+              tenantId: semantic.tenantId,
+              actor: 'sleep',
+              op: 'reject_refusal',
+              metadata: {
+                digest: mergeDigest,
+                reason: tombstone.reason,
+                sourceIds: cluster.map((e) => e.id),
+              },
+            });
+          } catch {
+            // Best-effort — mirrors store.ts's audit() semantics.
+          }
+          continue;
+        }
+      }
+
+      // Mark cluster members as used
+      for (const e of cluster) used.add(e.id);
+      result.merged += cluster.length;
+
+      result.details.push(
+        `  🔀 merged ${cluster.length} episodic entries into semantic: "${mergedContent.slice(0, 60)}..."`
+      );
+
+      if (!dryRun && semantic) {
+        pendingWrites.push(semantic);
+        result.semanticCreated++;
+
+        // Demote source episodics (they've been compressed into neocortex):
+        // scale half_life_days so they decay sooner while staying recoverable.
+        // Immediate ranking is deliberately unchanged: the 2026-06-10 DAG
+        // slice-1 eval measured that dropping children below a worse-retrieving
+        // summary regresses budget-bounded QA (docs/evals/). The stored
+        // strength is refreshed to the live value so inspect, replay sampling,
+        // and strength-sorted assembly see the truth instead of a fake 0.3.
+        // Mutate in place (not a copy): `cluster` holds the same object
+        // references as `survivors`, and the later detectConflicts(survivors)
+        // pass in this same run must see the post-demotion half-life, or it
+        // can persist conflicts for entries the just-written state excludes.
+        for (const e of cluster) {
+          e.half_life_days = Math.max(1, Math.floor(e.half_life_days * MERGE_SOURCE_HALF_LIFE_FACTOR));
+          e.strength = calculateStrength(e, now, decayOpts);
+          pendingWrites.push(e);
+        }
       }
     }
+  } finally {
+    if (consolidateDb) closeHippoDb(consolidateDb);
+  }
 
-    if (cluster.length < MERGE_MIN_CLUSTER) continue;
-
-    // Mark cluster members as used
-    for (const e of cluster) used.add(e.id);
-    result.merged += cluster.length;
-
-    // Create a semantic summary
-    const mergedContent = mergeContents(cluster);
-    const allTags = Array.from(new Set(cluster.flatMap((e) => e.tags)));
-    const maxValence = pickStrongestValence(cluster);
-
-    result.details.push(
-      `  🔀 merged ${cluster.length} episodic entries into semantic: "${mergedContent.slice(0, 60)}..."`
+  if (mergesSkippedRejected > 0) {
+    console.error(
+      `consolidate: skipped ${mergesSkippedRejected} merge(s) whose content matches a rejected value`,
     );
-
-    if (!dryRun) {
-      const semantic = createMemory(mergedContent, {
-        layer: Layer.Semantic,
-        tags: allTags,
-        emotional_valence: maxValence,
-        schema_fit: 0.7,
-        source: 'consolidation',
-        confidence: 'inferred',
-      });
-      pendingWrites.push(semantic);
-      result.semanticCreated++;
-
-      // Demote source episodics (they've been compressed into neocortex):
-      // scale half_life_days so they decay sooner while staying recoverable.
-      // Immediate ranking is deliberately unchanged: the 2026-06-10 DAG
-      // slice-1 eval measured that dropping children below a worse-retrieving
-      // summary regresses budget-bounded QA (docs/evals/). The stored
-      // strength is refreshed to the live value so inspect, replay sampling,
-      // and strength-sorted assembly see the truth instead of a fake 0.3.
-      // Mutate in place (not a copy): `cluster` holds the same object
-      // references as `survivors`, and the later detectConflicts(survivors)
-      // pass in this same run must see the post-demotion half-life, or it
-      // can persist conflicts for entries the just-written state excludes.
-      for (const e of cluster) {
-        e.half_life_days = Math.max(1, Math.floor(e.half_life_days * MERGE_SOURCE_HALF_LIFE_FACTOR));
-        e.strength = calculateStrength(e, now, decayOpts);
-        pendingWrites.push(e);
-      }
-    }
   }
 
   // Flush all writes/deletes in a single transaction

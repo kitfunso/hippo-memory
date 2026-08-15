@@ -1,5 +1,6 @@
 import { remember, type Context } from '../../api.js';
 import { openHippoDb, closeHippoDb } from '../../db.js';
+import { RejectedValueError } from '../../rejection.js';
 import {
   hasSeenEvent,
   markEventSeen,
@@ -113,6 +114,19 @@ export function ingestMessage(ctx: Context, input: IngestInput): IngestResult {
       } finally {
         closeHippoDb(db3);
       }
+    }
+    if (e instanceof RejectedValueError) {
+      // AT1 (plan §3 containment): a tombstone hit is a PERMANENT skip, not
+      // a transient failure — never DLQ-retry it (retrying would just hit
+      // the same refusal forever). Mark the event seen exactly like the
+      // empty-body branch above so a Slack retry acks as done, not error.
+      const db4 = openHippoDb(ctx.hippoRoot);
+      try {
+        markEventSeen(db4, input.eventId, null);
+      } finally {
+        closeHippoDb(db4);
+      }
+      return { status: 'skipped', memoryId: null };
     }
     throw e;
   }

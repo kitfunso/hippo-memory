@@ -15,6 +15,9 @@
  *   hippo handoff <create|latest|show>
  *   hippo current <show>
  *   hippo forget <id> [--archive --reason "<why>"]
+ *   hippo reject <id>|--value "<text>" --reason "<why>"
+ *   hippo rejections
+ *   hippo unreject <digest-prefix>
  *   hippo inspect <id>
  *   hippo embed [--status]
  *   hippo watch "<command>"
@@ -93,6 +96,8 @@ import {
   SessionEvent,
   RECALL_DEFAULT_DENY_SCOPES,
 } from './store.js';
+import { rejectValue, unrejectValue, listRejectionsForTenant } from './reject-flow.js';
+import { RejectedValueError } from './rejection.js';
 import type { SessionHandoff } from './handoff.js';
 import { search, markRetrieved, estimateTokens, hybridSearch, physicsSearch, explainMatch, textOverlap, tokenize as tokenizeQuery, type RerankStep } from './search.js';
 import { compareEntryIdentity } from './compare.js';
@@ -890,9 +895,26 @@ function cmdSupersede(
     confidence: 'verified',
   });
 
+  // AT1: write the SUCCESSOR first. The rejection guard fires on the new
+  // content — if it refuses, nothing has been mutated yet (the old ordering
+  // committed old.superseded_by before the guarded new write, leaving a
+  // dangling pointer to an id that was never created). If the old-row write
+  // below fails instead, the new row exists unpointered — an orphan
+  // successor, strictly less harmful than a dangling pointer. NOTE: unlike
+  // api.supersede (whose CAS + insert commit in ONE transaction), this CLI
+  // path is two independent writes and stays non-atomic; write order is its
+  // only ordering guarantee.
+  try {
+    writeEntry(hippoRoot, newEntry);
+  } catch (err) {
+    if (err instanceof RejectedValueError) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+    throw err;
+  }
   old.superseded_by = newEntry.id;
   writeEntry(hippoRoot, old);
-  writeEntry(hippoRoot, newEntry);
   emitCliAudit(hippoRoot, 'supersede', oldId, { newId: newEntry.id });
 
   console.log(`Superseded ${oldId} → ${newEntry.id}`);
@@ -2664,6 +2686,11 @@ export function learnFromMemoryMd(hippoRoot: string, homeDir: string = os.homedi
   const existing = loadAllEntries(hippoRoot);
   let imported = 0;
   let skippedSecret = 0;
+  // AT1 (plan §3 containment): a rejection guard refusal is per-VALUE — one
+  // tombstoned memory file must not abort the whole directory scan. No
+  // signature change (bare number return, cli.ts:540 + cli.ts:2903 callers
+  // unchanged) — counted internally and printed as one summary line.
+  let rejected = 0;
 
   for (const memDir of memoryDirs) {
     try {
@@ -2705,7 +2732,15 @@ export function learnFromMemoryMd(hippoRoot: string, homeDir: string = os.homedi
           confidence: 'observed',
         });
 
-        writeEntry(hippoRoot, entry);
+        try {
+          writeEntry(hippoRoot, entry);
+        } catch (err) {
+          if (err instanceof RejectedValueError) {
+            rejected++;
+            continue;
+          }
+          throw err;
+        }
         existing.push(entry); // prevent self-dedup within batch
         imported++;
       }
@@ -2714,6 +2749,9 @@ export function learnFromMemoryMd(hippoRoot: string, homeDir: string = os.homedi
 
   if (skippedSecret > 0) {
     console.log(`Skipped ${skippedSecret} secret-bearing memory file${skippedSecret === 1 ? '' : 's'} (not ingested).`);
+  }
+  if (rejected > 0) {
+    console.log(`Skipped ${rejected} rejected value${rejected === 1 ? '' : 's'} (run \`hippo unreject\` to allow).`);
   }
 
   return imported;
@@ -3697,20 +3735,155 @@ function cmdResolve(
       console.log(`      ${entryB.content.slice(0, 120)}${entryB.content.length > 120 ? '...' : ''}`);
     }
     console.log('');
-    console.log(`Resolve with: hippo resolve ${conflictId} --keep <memory_id> [--forget]`);
+    console.log(`Resolve with: hippo resolve ${conflictId} --keep <memory_id> [--forget] [--reject-loser [--reason "<why>"]]`);
     return;
   }
 
   const forgetLoser = Boolean(flags['forget']);
-  const result = resolveConflict(hippoRoot, conflictId, keepId, forgetLoser, tenantId);
+  // AT1: --reject-loser tombstones the loser's normalized digest so it
+  // cannot be re-asserted later, in addition to removing it (kind-aware).
+  // --reason defaults to a conflict-context string when omitted (resolve
+  // already has the conflict id + keepId; unlike `hippo reject`, a reason
+  // is not strictly required here).
+  const rejectLoser = Boolean(flags['reject-loser']);
+  const reasonFlag = typeof flags['reason'] === 'string' ? (flags['reason'] as string) : undefined;
+  const result = resolveConflict(hippoRoot, conflictId, keepId, forgetLoser, tenantId, {
+    rejectLoserValue: rejectLoser,
+    reason: reasonFlag,
+  });
 
   if (!result) {
     console.error(`Could not resolve conflict ${conflictId}. Check the ID and --keep value.`);
     process.exit(1);
   }
 
-  const action = forgetLoser ? 'deleted' : 'weakened (half-life halved)';
+  const action = rejectLoser
+    ? 'rejected (tombstoned) and removed'
+    : forgetLoser
+      ? 'deleted'
+      : 'weakened (half-life halved)';
   console.log(`Resolved conflict ${conflictId}: kept ${keepId}, ${action} ${result.loserId}`);
+}
+
+// ---------------------------------------------------------------------------
+// AT1: reject / rejections / unreject
+// docs/plans/2026-08-15-at1-rejected-value-tombstone.md §4
+// ---------------------------------------------------------------------------
+
+function cmdReject(
+  hippoRoot: string,
+  args: string[],
+  flags: Record<string, string | boolean | string[]>,
+): void {
+  // Store resolution mirrors `hippo remember`: --global writes to the
+  // global store, otherwise the local store (requireInit'd via resolveAuthRoot).
+  const root = resolveAuthRoot(hippoRoot, flags);
+  const tenantId = resolveTenantId({});
+
+  // --reason is REQUIRED (plan §4, grill issue 4): the tombstone stores no
+  // content, so reason is its only human-readable identity.
+  const reason = typeof flags['reason'] === 'string' ? (flags['reason'] as string).trim() : '';
+  if (!reason) {
+    console.error('hippo reject requires --reason "<why>" (the tombstone stores no content; reason is its only identity).');
+    process.exit(1);
+  }
+
+  const valueFlag = typeof flags['value'] === 'string' ? (flags['value'] as string) : undefined;
+  const memoryId = args[0];
+
+  if (!memoryId && valueFlag === undefined) {
+    console.error('Usage: hippo reject <memory-id> --reason "<why>"');
+    console.error('   or: hippo reject --value "<text>" --reason "<why>"');
+    process.exit(1);
+  }
+  if (memoryId && valueFlag !== undefined) {
+    // Ambiguous ask: silently preferring one form would ignore the other
+    // without feedback (code-review round-1 low).
+    console.error('hippo reject takes EITHER a memory id OR --value, not both.');
+    process.exit(1);
+  }
+
+  try {
+    const result = rejectValue({
+      hippoRoot: root,
+      tenantId,
+      actor: 'cli',
+      reason,
+      memoryId: valueFlag === undefined ? memoryId : undefined,
+      value: valueFlag,
+    });
+    const digestPrefix = result.digest.slice(0, 12);
+    const preview = result.content.length > 80 ? `${result.content.slice(0, 80)}...` : result.content;
+    console.log(`Rejected [${digestPrefix}...]: "${preview}"`);
+    console.log(`  Reason: ${reason}`);
+    if (result.removedIds.length > 0) {
+      console.log(`  Removed ${result.removedIds.length} matching row(s): ${result.removedIds.join(', ')}`);
+    } else {
+      console.log('  No live rows matched (pre-emptive tombstone).');
+    }
+  } catch (err) {
+    console.error(`Could not reject: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+}
+
+function cmdRejections(
+  hippoRoot: string,
+  flags: Record<string, string | boolean | string[]>,
+): void {
+  const root = resolveAuthRoot(hippoRoot, flags);
+  const tenantId = resolveTenantId({});
+  const rows = listRejectionsForTenant(root, tenantId);
+
+  if (flags['json']) {
+    console.log(JSON.stringify({ rejections: rows }, null, 2));
+    return;
+  }
+
+  if (rows.length === 0) {
+    console.log('No rejected values.');
+    return;
+  }
+
+  console.log(`${rows.length} rejected value(s):\n`);
+  for (const row of rows) {
+    console.log(`--- ${row.digest.slice(0, 12)}...`);
+    console.log(`    Reason:       ${row.reason ?? 'none given'}`);
+    console.log(`    Rejected by:  ${row.rejectedBy ?? 'unknown'}`);
+    console.log(`    Rejected at:  ${row.rejectedAt}`);
+    if (row.sourceMemoryId) console.log(`    Source id:    ${row.sourceMemoryId}`);
+    if (row.normalizedChars !== null) console.log(`    Chars:        ${row.normalizedChars}`);
+    console.log('');
+  }
+}
+
+function cmdUnreject(
+  hippoRoot: string,
+  args: string[],
+  flags: Record<string, string | boolean | string[]>,
+): void {
+  const root = resolveAuthRoot(hippoRoot, flags);
+  const tenantId = resolveTenantId({});
+  const digestOrPrefix = (args[0] ?? '').trim();
+  if (!digestOrPrefix) {
+    console.error('Usage: hippo unreject <digest-or-prefix>');
+    process.exit(1);
+  }
+
+  const outcome = unrejectValue(root, tenantId, digestOrPrefix, 'cli');
+  if (outcome.status === 'not_found') {
+    console.error(`No rejected value matches "${digestOrPrefix}". Run \`hippo rejections\` to list tombstones.`);
+    process.exit(1);
+  }
+  if (outcome.status === 'ambiguous') {
+    console.error(`"${digestOrPrefix}" matches ${outcome.candidates.length} tombstones. Use a longer prefix:`);
+    for (const c of outcome.candidates) {
+      console.error(`  ${c.digest.slice(0, 16)}...  ${c.reason ?? 'none given'}`);
+    }
+    process.exit(1);
+  }
+
+  console.log(`Unrejected [${outcome.digest.slice(0, 12)}...] (was: ${outcome.reason ?? 'none given'})`);
 }
 
 function cmdSnapshot(
@@ -6000,15 +6173,27 @@ async function cmdWatch(command: string, hippoRoot: string): Promise<void> {
   entry.schema_fit = watchFit;
   entry.half_life_days = deriveHalfLife(7, entry);
   entry.strength = calculateStrength(entry);
-  writeEntry(hippoRoot, entry);
-  updateStats(hippoRoot, { remembered: 1 });
+  // AT1 (plan §3 containment): mechanical content from a failed command — a
+  // rejection-guard refusal here must not crash the watcher. Skip silently
+  // (loud enough via the message below) and still exit with the wrapped
+  // command's real exit code.
+  try {
+    writeEntry(hippoRoot, entry);
+    updateStats(hippoRoot, { remembered: 1 });
 
-  if (isEmbeddingConfigured(hippoRoot)) {
-    embedMemory(hippoRoot, entry).catch(() => {});
+    if (isEmbeddingConfigured(hippoRoot)) {
+      embedMemory(hippoRoot, entry).catch(() => {});
+    }
+
+    const preview = stderr.trim().slice(0, 80);
+    console.error(`\nHippo learned from failure: "${preview}"`);
+  } catch (err) {
+    if (err instanceof RejectedValueError) {
+      console.error(`\nHippo: this failure matches a rejected value (${err.reason ?? 'no reason given'}); not stored.`);
+    } else {
+      throw err;
+    }
   }
-
-  const preview = stderr.trim().slice(0, 80);
-  console.error(`\nHippo learned from failure: "${preview}"`);
 
   process.exit(exitCode);
 }
@@ -6044,6 +6229,11 @@ function learnFromRepo(
 
   let added = 0;
   let skipped = 0;
+  // AT1 (plan §3 containment): per-lesson refusal must not abort the rest
+  // of the git-log scan. No signature change (added/skipped return shape
+  // used by cmdLearn + cmdSleepCore callers) — counted locally, folded into
+  // the existing summary line.
+  let rejected = 0;
   const gitLearnTags = ['error', 'git-learned'];
   const existingForSchema = loadAllEntries(hippoRoot);
 
@@ -6083,7 +6273,15 @@ function learnFromRepo(
       if (!entry.tags.includes(pt)) entry.tags.push(pt);
     }
 
-    writeEntry(hippoRoot, entry);
+    try {
+      writeEntry(hippoRoot, entry);
+    } catch (err) {
+      if (err instanceof RejectedValueError) {
+        rejected++;
+        continue;
+      }
+      throw err;
+    }
     updateStats(hippoRoot, { remembered: 1 });
 
     if (isEmbeddingConfigured(hippoRoot)) {
@@ -6093,7 +6291,11 @@ function learnFromRepo(
     added++;
   }
 
-  console.log(`${prefix}${added} new lessons added, ${skipped} duplicates skipped.`);
+  console.log(
+    `${prefix}${added} new lessons added, ${skipped} duplicates skipped` +
+      (rejected > 0 ? `, ${rejected} rejected value(s) skipped` : '') +
+      '.',
+  );
   return { added, skipped };
 }
 
@@ -6208,6 +6410,9 @@ function cmdImport(
     console.log(`  Notes found:           ${vaultResult.total}`);
     console.log(`  ${dryRun ? 'Would import:         ' : 'Imported:             '}${vaultResult.imported}`);
     console.log(`  Skipped (unchanged):   ${vaultResult.skipped}`);
+    if ((vaultResult.rejected ?? 0) > 0) {
+      console.log(`  Rejected (tombstoned): ${vaultResult.rejected}`);
+    }
     console.log(`  ${dryRun ? 'Would archive:        ' : 'Archived (removed):   '}${vaultResult.archived ?? 0}`);
     console.log(`  Store:                 ${hippoRoot}`);
     // Batch producer, same contract as the single-file import below: vault rows
@@ -6279,6 +6484,9 @@ function cmdImport(
   console.log(`  Source entries found:  ${result.total}`);
   console.log(`  Imported:              ${result.imported}`);
   console.log(`  Skipped (dedup/noise): ${result.skipped}`);
+  if ((result.rejected ?? 0) > 0) {
+    console.log(`  Rejected (tombstoned): ${result.rejected}`);
+  }
   if (dryRun) {
     console.log('\n  (dry run - nothing written)');
     if (result.entries.length > 0) {
@@ -7302,6 +7510,10 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'customer_note_supersede', // E2 — emitted by saveCustomerNote on a supersession
   'customer_note_close',   // E2 — emitted by closeCustomerNote
   'mv_rescue',             // LC2-E3 — emitted by consolidate() per rescue; lockstep with AuditOp union + server.ts VALID_AUDIT_OPS
+  'reject_value',          // AT1 — emitted by `hippo reject`; lockstep with AuditOp union + server.ts VALID_AUDIT_OPS
+  'reject_refusal',        // AT1 — emitted when the rejection guard refuses a write; lockstep
+  'unreject_value',        // AT1 — emitted by `hippo unreject`; lockstep
+  'conflict_resolve',      // AT1 — emitted by resolveConflict on every resolution path; lockstep
 ]);
 
 function formatAuditRow(ev: AuditEvent): string {
@@ -8070,6 +8282,18 @@ Commands:
   resolve <conflict_id>    Resolve a memory conflict
     --keep <memory_id>     Memory to keep (required)
     --forget               Delete the losing memory (default: halve half-life)
+    --reject-loser         Tombstone the loser's value too (implies removal)
+    --reason "<why>"       Reason for --reject-loser (default: conflict context)
+  reject <memory-id>       Tombstone a value so it refuses re-ingestion
+    reject --value "<t>"   Pre-emptive form: tombstone a value not (currently) stored
+    --reason "<why>"       Required. The tombstone stores no content — this
+                           is its only human-readable identity.
+    --global               Reject in the global store
+  rejections               List rejected-value tombstones for the active tenant
+    --json                 Output as JSON
+    --global               Operate on the global store
+  unreject <digest-prefix> Delete a tombstone (the only escape hatch)
+    --global               Operate on the global store
   snapshot <sub>           Persist or inspect the current active task
     snapshot save          Save active task state
       --task <task>
@@ -8324,6 +8548,10 @@ Examples:
   hippo recall "data pipeline issues" --budget 2000
   hippo context --auto --budget 1500
   hippo conflicts
+  hippo reject mem_abc123 --reason "leaked credential"
+  hippo reject --value "never store my key again" --reason "secret"
+  hippo rejections
+  hippo unreject a1b2c3d4e5f6
   hippo session log --id sess_123 --task "Ship feature" --type progress --content "Build is green, next step is docs"
   hippo session latest --json
   hippo session resume
@@ -8704,6 +8932,18 @@ async function main(): Promise<void> {
 
     case 'resolve':
       cmdResolve(hippoRoot, args, flags);
+      break;
+
+    case 'reject':
+      cmdReject(hippoRoot, args, flags);
+      break;
+
+    case 'rejections':
+      cmdRejections(hippoRoot, flags);
+      break;
+
+    case 'unreject':
+      cmdUnreject(hippoRoot, args, flags);
       break;
 
     case 'snapshot':

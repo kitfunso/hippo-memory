@@ -52,6 +52,8 @@ export interface RedactSleepCtx {
  *   - secretSkipped (v1.25.0 — sibling of `shared`, produced by the same
  *     autoShare call; same per-invocation class, deliberately NOT given a
  *     divergent rule)
+ *   - rejectedSkipped (AT1 — secretSkipped's own sibling, same autoShare
+ *     call, same per-invocation class)
  *   - details (text descriptions, no aggregate numerics)
  */
 export function redactSleepResultForCaller(

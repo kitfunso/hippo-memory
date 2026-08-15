@@ -23,6 +23,7 @@ import { search, hybridSearch, SearchResult } from './search.js';
 import { evalNow } from './ablation.js';
 import { deriveOriginProject, classifyOriginProject, resolveGlobalRootDir } from './project-identity.js';
 import { detectSecret } from './secret-detect.js';
+import { RejectedValueError } from './rejection.js';
 import { embedMemory, embedAll } from './embeddings.js';
 
 /**
@@ -491,10 +492,23 @@ export function listPeers(
  * admission gate (transfer score, not-already-global) and was withheld SOLELY
  * by the secret veto — i.e. it counts shares actually prevented, not secret
  * rows merely present. Filled identically under `dryRun`.
+ *
+ * AT1: `stats.rejectedSkipped` (optional) is incremented once per candidate
+ * refused by the GLOBAL store's rejection tombstone (RejectedValueError from
+ * shareMemory -> writeEntry). Unlike secretSkipped, this can only be
+ * detected by attempting the write — `dryRun` returns candidates before the
+ * write loop runs, so `rejectedSkipped` stays at its initial value under
+ * `dryRun` (candidates that WOULD be refused are not distinguished in the
+ * dry-run preview).
  */
 export function autoShare(
   localRoot: string,
-  options: { minScore?: number; dryRun?: boolean; tenantId?: string; stats?: { secretSkipped: number } } = {},
+  options: {
+    minScore?: number;
+    dryRun?: boolean;
+    tenantId?: string;
+    stats?: { secretSkipped: number; rejectedSkipped?: number };
+  } = {},
 ): MemoryEntry[] {
   const { minScore = 0.6, dryRun = false } = options;
 
@@ -534,11 +548,36 @@ export function autoShare(
   if (dryRun) return candidates;
 
   const shared: MemoryEntry[] = [];
+  // AT1 containment (docs/plans/2026-08-15-at1-rejected-value-tombstone.md
+  // plan §3 — sync/promote/share copy paths must not let ONE rejected
+  // candidate kill the batch): shareMemory -> writeEntry hits the LIVE guard
+  // against the GLOBAL store's tombstones. A matching candidate throws
+  // RejectedValueError, which (uncaught) would abort this whole loop and,
+  // via api.ts's sleep pipeline, the entire autoShare sleep phase. Mirrors
+  // syncGlobalToLocal's per-item catch just above in this file. writeEntry's
+  // own catch already writes the reject_refusal audit before rethrowing
+  // (plan §3) — do not double-audit here, just count and continue.
+  let rejectedSkipped = 0;
   for (const entry of candidates) {
-    // skipEmbed: batching invariant, this is a batch producer, so it embeds
-    // once via embedAll() below rather than once per row inside shareMemory.
-    const result = shareMemory(localRoot, entry.id, { force: true, skipEmbed: true });
-    if (result) shared.push(result);
+    try {
+      // skipEmbed: batching invariant, this is a batch producer, so it embeds
+      // once via embedAll() below rather than once per row inside shareMemory.
+      const result = shareMemory(localRoot, entry.id, { force: true, skipEmbed: true });
+      if (result) shared.push(result);
+    } catch (err) {
+      if (err instanceof RejectedValueError) {
+        rejectedSkipped++;
+        if (options.stats) options.stats.rejectedSkipped = (options.stats.rejectedSkipped ?? 0) + 1;
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  if (rejectedSkipped > 0) {
+    console.error(
+      `autoShare: skipped ${rejectedSkipped} candidate(s) refused by the global store's rejection tombstone`,
+    );
   }
 
   if (shared.length > 0) {
@@ -572,6 +611,12 @@ export function syncGlobalToLocal(
   // only stamps when the field is missing).
   const currentName = deriveOriginProject(path.dirname(path.resolve(localRoot)));
   let count = 0;
+  // AT1 (plan §3 containment, the roadmap threat this whole feature targets
+  // — a locally-rejected value must not silently resurrect via sync down
+  // from global): per-item catch, no signature change (bare number return;
+  // see the syncGlobalToLocal callers in cli.ts + tests). Counted locally
+  // and printed as one summary line, same pattern as learnFromMemoryMd.
+  let rejected = 0;
 
   for (const entry of globalEntries) {
     // Skip if already present by ID
@@ -582,8 +627,20 @@ export function syncGlobalToLocal(
       classifyOriginProject(entry.origin_project, currentName) === 'cross-project'
     ) continue;
 
-    writeEntry(localRoot, entry);
+    try {
+      writeEntry(localRoot, entry);
+    } catch (err) {
+      if (err instanceof RejectedValueError) {
+        rejected++;
+        continue;
+      }
+      throw err;
+    }
     count++;
+  }
+
+  if (rejected > 0) {
+    console.error(`syncGlobalToLocal: skipped ${rejected} rejected value(s) (run \`hippo unreject\` on the local store to allow).`);
   }
 
   // Batch producer: one embedAll() on the destination rather than an

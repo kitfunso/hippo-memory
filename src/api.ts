@@ -35,9 +35,12 @@ import {
   updateStats,
   isInitialized,
   markSummaryDirtyInTx,
+  auditRejectionRefusal,
   type TaskSnapshot,
   type SessionEvent,
 } from './store.js';
+import { RejectedValueError, type RejectedValueRow } from './rejection.js';
+import { rejectValue, unrejectValue, listRejectionsForTenant } from './reject-flow.js';
 import type { SessionHandoff } from './handoff.js';
 import {
   createMemory,
@@ -1694,6 +1697,98 @@ export function forget(ctx: Context, id: string): { ok: true; id: string } {
 }
 
 // ---------------------------------------------------------------------------
+// AT1: reject / unreject / listRejections
+// docs/plans/2026-08-15-at1-rejected-value-tombstone.md §4
+//
+// Context-based, tenant-checked, so HTTP/MCP reject-administration endpoints
+// can be added later without touching store internals (the write-path guard
+// itself already protects every write surface today — only this admin
+// surface is CLI/api-first, plan §4 non-goals). Shares the exact same
+// transaction flow as `hippo reject`/`rejections`/`unreject` via
+// src/reject-flow.ts — neither surface duplicates it.
+// ---------------------------------------------------------------------------
+
+export interface RejectOpts {
+  /** By-id form: reject the CURRENT content of an existing memory. */
+  memoryId?: string;
+  /** Pre-emptive form: reject a value not currently stored (or already gone). */
+  value?: string;
+  /** Required — the tombstone stores no content; reason is its only identity. */
+  reason: string;
+}
+
+export interface RejectResult {
+  digest: string;
+  removedIds: string[];
+}
+
+/**
+ * Reject a value: tombstone its normalized digest so a matching write is
+ * refused everywhere (remember/capture/import/sync) until `unreject`. Two
+ * forms — pass exactly one:
+ *  - `memoryId`: reject the CURRENT content of an existing memory. Removes
+ *    that row and every other live row in the tenant whose normalized
+ *    digest matches (not just the id passed).
+ *  - `value`: pre-emptive form — tombstone content that may not currently
+ *    be stored (or is already gone). Zero removals.
+ *
+ * `reason` is required (the tombstone stores no content; reason is its
+ * only human-readable identity). Throws if the memory id is not found in
+ * `ctx.tenantId`, or if both/neither of `memoryId`/`value` are given.
+ */
+export function reject(ctx: Context, opts: RejectOpts): RejectResult {
+  if (opts.memoryId !== undefined) {
+    // Tenant scope, same not-found-shaped denial as forget/promote above:
+    // rejectValue itself also tenant-checks the id, but pre-checking here
+    // keeps the error message consistent with the rest of this module.
+    const db = openHippoDb(ctx.hippoRoot);
+    try {
+      const row = db
+        .prepare(`SELECT tenant_id FROM memories WHERE id = ?`)
+        .get(opts.memoryId) as { tenant_id?: string } | undefined;
+      if (!row || row.tenant_id !== ctx.tenantId) {
+        throw new Error(`memory not found: ${opts.memoryId}`);
+      }
+    } finally {
+      closeHippoDb(db);
+    }
+  }
+  const result = rejectValue({
+    hippoRoot: ctx.hippoRoot,
+    tenantId: ctx.tenantId,
+    actor: ctx.actor.subject,
+    reason: opts.reason,
+    memoryId: opts.memoryId,
+    value: opts.value,
+  });
+  return { digest: result.digest, removedIds: result.removedIds };
+}
+
+/**
+ * Delete a tombstone by exact digest or unambiguous prefix, restoring the
+ * value's writability — the only v1 escape hatch (no per-write force flag).
+ * Throws if `digestOrPrefix` matches no tombstone, is blank, or matches
+ * more than one (use a longer prefix).
+ */
+export function unreject(ctx: Context, digestOrPrefix: string): { ok: true; digest: string } {
+  const outcome = unrejectValue(ctx.hippoRoot, ctx.tenantId, digestOrPrefix, ctx.actor.subject);
+  if (outcome.status === 'not_found') {
+    throw new Error(`no rejected value matches: ${digestOrPrefix}`);
+  }
+  if (outcome.status === 'ambiguous') {
+    throw new Error(
+      `"${digestOrPrefix}" matches ${outcome.candidates.length} tombstones; use a longer prefix`,
+    );
+  }
+  return { ok: true, digest: outcome.digest };
+}
+
+/** List every rejected-value tombstone for `ctx.tenantId`, newest first. */
+export function listRejections(ctx: Context): RejectedValueRow[] {
+  return listRejectionsForTenant(ctx.hippoRoot, ctx.tenantId);
+}
+
+// ---------------------------------------------------------------------------
 // promote
 // ---------------------------------------------------------------------------
 
@@ -1841,6 +1936,12 @@ export function supersede(
       db.exec('COMMIT');
     } catch (err) {
       try { db.exec('ROLLBACK'); } catch { /* already rolled back */ }
+      // AT1 (plan §3): refusal audit lands post-ROLLBACK, in a fresh
+      // implicit transaction the aborted outer one cannot claw back — then
+      // rethrow so the caller sees the refusal.
+      if (err instanceof RejectedValueError) {
+        auditRejectionRefusal(db, err, ctx.actor.subject);
+      }
       throw err;
     }
     // Mirrors after COMMIT, while the db handle is still open. Same
@@ -2639,6 +2740,15 @@ export interface SleepResult {
    * "NOT redacted" list in src/sleep-redact.ts).
    */
   secretSkipped?: number;
+  /**
+   * AT1: count of auto-share candidates the GLOBAL store's rejection
+   * tombstone refused this sleep (docs/plans/2026-08-15-at1-rejected-value-tombstone.md
+   * plan §3 — copy paths must not let one rejected candidate abort the
+   * batch). Absent when 0 or when auto-share did not run. Same
+   * per-invocation-activity class as `secretSkipped` (sibling counter,
+   * same autoShare call) — NOT redacted on egress, see sleep-redact.ts.
+   */
+  rejectedSkipped?: number;
   ambient?: AmbientState | null;
   /**
    * E3 sleep enqueue-hook: graph re-extraction totals across the tenants rebuilt
@@ -2811,13 +2921,19 @@ export async function sleep(
       if (sleepConfig.autoShareOnSleep) {
         // v1.25.0: surface the secret-veto skip count (v39 follow-up #2) so
         // the veto is observable instead of silent.
-        const autoShareStats = { secretSkipped: 0 };
+        // AT1: rejectedSkipped is autoShare's sibling counter for candidates
+        // the global store's rejection tombstone refused (threaded the same
+        // way as secretSkipped just below).
+        const autoShareStats = { secretSkipped: 0, rejectedSkipped: 0 };
         const shared = phases.autoShare(ctx.hippoRoot, { minScore: 0.6, stats: autoShareStats });
         if (shared.length > 0) {
           result.shared = shared.length;
         }
         if (autoShareStats.secretSkipped > 0) {
           result.secretSkipped = autoShareStats.secretSkipped;
+        }
+        if (autoShareStats.rejectedSkipped > 0) {
+          result.rejectedSkipped = autoShareStats.rejectedSkipped;
         }
       }
     }

@@ -12,6 +12,7 @@ import { textOverlap } from './search.js';
 import { getGlobalRoot, initGlobal } from './shared.js';
 import { remember, archiveRaw, isPrivateScope, type Context } from './api.js';
 import { openHippoDb, closeHippoDb } from './db.js';
+import { RejectedValueError, checkRejectionGuard } from './rejection.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -21,6 +22,16 @@ export interface ImportResult {
   total: number;     // entries found in source
   imported: number;  // actually imported (after dedup)
   skipped: number;   // skipped as duplicates or too short
+  /** AT1: refused by the rejection-value guard — kept distinct from
+   *  `skipped` (dedup) so a tombstoned value is distinguishable from a
+   *  plain duplicate in import summaries (plan §3 containment, round-2 low).
+   *  AT1 P2 fix (codex, published-surface compat): optional, not required —
+   *  `ImportResult` is re-exported from the package root (index.ts), and a
+   *  required field breaks any existing consumer constructing the pre-AT1
+   *  shape. Every producer in this file still always sets a real number;
+   *  `?? 0` at read sites (this file's own accumulation, cli.ts's summary
+   *  prints) tolerates a caller-supplied object that omits it. */
+  rejected?: number;
   /** K1 vault import: rows archived this run (changed + source-deleted). In a
    *  dryRun this is the would-be count (a true deletion-sync preview). */
   archived?: number;
@@ -87,68 +98,100 @@ export function importEntries(
   let total = 0;
   let imported = 0;
   let skipped = 0;
+  let rejected = 0;
   const entries: MemoryEntry[] = [];
 
-  for (const raw of chunks) {
-    const trimmed = raw.trim();
-    if (trimmed.length > 1000) {
-      console.error(`Warning: imported memory truncated from ${trimmed.length} to 1000 chars`);
-    }
-    const chunk = trimmed.slice(0, 1000);
-
-    // Skip empty or too-short chunks
-    if (!chunk || chunk.length < 10) {
-      skipped++;
-      continue;
-    }
-
-    total++;
-
-    // Dedup check: textOverlap > 0.7 with any existing memory = skip
-    let isDuplicate = false;
-    for (const existing_entry of existing) {
-      if (textOverlap(chunk, existing_entry.content) > 0.7) {
-        isDuplicate = true;
-        break;
+  // AT1 P2 fix: a dry-run preview never called writeEntry, so it never
+  // checked tombstones either — every non-duplicate chunk counted as
+  // `imported` even when a real run would refuse it, making the preview's
+  // `rejected` count silently 0. Probe (read-only) via the same guard
+  // writeEntry uses internally, without ever writing.
+  const dryRunDb = options.dryRun ? openHippoDb(targetRoot) : null;
+  try {
+    for (const raw of chunks) {
+      const trimmed = raw.trim();
+      if (trimmed.length > 1000) {
+        console.error(`Warning: imported memory truncated from ${trimmed.length} to 1000 chars`);
       }
+      const chunk = trimmed.slice(0, 1000);
+
+      // Skip empty or too-short chunks
+      if (!chunk || chunk.length < 10) {
+        skipped++;
+        continue;
+      }
+
+      total++;
+
+      // Dedup check: textOverlap > 0.7 with any existing memory = skip
+      let isDuplicate = false;
+      for (const existing_entry of existing) {
+        if (textOverlap(chunk, existing_entry.content) > 0.7) {
+          isDuplicate = true;
+          break;
+        }
+      }
+
+      if (isDuplicate) {
+        skipped++;
+        continue;
+      }
+
+      // A3: kind defaults to 'distilled'. ChatGPT/Claude/Cursor exports are curated
+      // user pastes, not raw transcripts from a system of record, so distilled is
+      // correct here. E1.3 (Slack ingestion) shipped 2026-04-29 in src/connectors/slack/
+      // and sets kind: 'raw' + routes deletions through archiveRawMemory() — these
+      // importers stay 'distilled' per the original reasoning. See MEMORY_ENVELOPE.md.
+      // L9: the dedup read above is scoped by options.tenantId — the WRITE
+      // must match, or scoped-dedup-passes-then-default-tenant-write breaks
+      // the per-tenant contract. Mirror the dedup-read guard: global=true
+      // → host-wide write to global store (tenantId irrelevant, createMemory
+      // defaults to 'default'). global=false → write to the same tenant as
+      // the dedup read.
+      const entry = createMemory(chunk, {
+        layer: Layer.Episodic,
+        tags: allTags,
+        source,
+        confidence: 'observed',
+        tenantId: options.global ? undefined : options.tenantId,
+      });
+
+      if (options.dryRun) {
+        if (dryRunDb) {
+          try {
+            checkRejectionGuard(dryRunDb, entry.tenantId ?? 'default', entry.id, entry.content);
+          } catch (err) {
+            if (err instanceof RejectedValueError) {
+              rejected++;
+              continue;
+            }
+            throw err;
+          }
+        }
+      } else {
+        // AT1 (plan §3 containment): a rejection refuses one CHUNK, not the
+        // whole import batch. Caught per-item so siblings still land.
+        try {
+          writeEntry(targetRoot, entry);
+        } catch (err) {
+          if (err instanceof RejectedValueError) {
+            rejected++;
+            continue;
+          }
+          throw err;
+        }
+        // Add to existing so subsequent chunks dedup against freshly imported ones
+        existing.push(entry);
+      }
+
+      entries.push(entry);
+      imported++;
     }
 
-    if (isDuplicate) {
-      skipped++;
-      continue;
-    }
-
-    // A3: kind defaults to 'distilled'. ChatGPT/Claude/Cursor exports are curated
-    // user pastes, not raw transcripts from a system of record, so distilled is
-    // correct here. E1.3 (Slack ingestion) shipped 2026-04-29 in src/connectors/slack/
-    // and sets kind: 'raw' + routes deletions through archiveRawMemory() — these
-    // importers stay 'distilled' per the original reasoning. See MEMORY_ENVELOPE.md.
-    // L9: the dedup read above is scoped by options.tenantId — the WRITE
-    // must match, or scoped-dedup-passes-then-default-tenant-write breaks
-    // the per-tenant contract. Mirror the dedup-read guard: global=true
-    // → host-wide write to global store (tenantId irrelevant, createMemory
-    // defaults to 'default'). global=false → write to the same tenant as
-    // the dedup read.
-    const entry = createMemory(chunk, {
-      layer: Layer.Episodic,
-      tags: allTags,
-      source,
-      confidence: 'observed',
-      tenantId: options.global ? undefined : options.tenantId,
-    });
-
-    entries.push(entry);
-
-    if (!options.dryRun) {
-      writeEntry(targetRoot, entry);
-      // Add to existing so subsequent chunks dedup against freshly imported ones
-      existing.push(entry);
-    }
-
-    imported++;
+    return { total, imported, skipped, rejected, entries };
+  } finally {
+    if (dryRunDb) closeHippoDb(dryRunDb);
   }
-
-  return { total, imported, skipped, entries };
 }
 
 // ---------------------------------------------------------------------------
@@ -503,7 +546,7 @@ export function importMarkdown(filePath: string, options: ImportOptions): Import
     bySlug.set(sectionSlug, list);
   }
 
-  let totalResult: ImportResult = { total: 0, imported: 0, skipped: 0, entries: [] };
+  let totalResult: ImportResult = { total: 0, imported: 0, skipped: 0, rejected: 0, entries: [] };
 
   for (const [slug, chunks] of bySlug.entries()) {
     const sectionTags = slug ? ['imported', slug] : ['imported'];
@@ -512,6 +555,9 @@ export function importMarkdown(filePath: string, options: ImportOptions): Import
       total: totalResult.total + result.total,
       imported: totalResult.imported + result.imported,
       skipped: totalResult.skipped + result.skipped,
+      // AT1 P2 fix: `rejected` is now optional on ImportResult (compat) — tolerate
+      // undefined on either side of the accumulation.
+      rejected: (totalResult.rejected ?? 0) + (result.rejected ?? 0),
       entries: [...totalResult.entries, ...result.entries],
     };
   }
@@ -738,7 +784,7 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
   const resolvedStore = realpathOrResolve(hippoRoot);
   const resolvedFolder = realpathOrResolve(folderPath);
   if (resolvedFolder === resolvedStore || resolvedFolder.startsWith(resolvedStore + path.sep)) {
-    return { total: 0, imported: 0, skipped: 0, archived: 0, entries: [] };
+    return { total: 0, imported: 0, skipped: 0, rejected: 0, archived: 0, entries: [] };
   }
 
   const ctx: Context = {
@@ -790,131 +836,167 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
   let total = 0;
   let imported = 0;
   let skipped = 0;
+  let rejected = 0;
   let archived = 0;
   const entries: MemoryEntry[] = [];
 
-  for (const relpath of relpaths) {
-    total++;
-    const artifactRef = `vault:${vaultName}:${relpath}`;
-    seen.add(artifactRef);
+  // AT1 P2 fix: dry-run never called remember(), so it never probed
+  // tombstones — every note that reached the write step counted as
+  // `imported` even when a real run would refuse it. Probe (read-only) via
+  // the same guard remember()/writeEntry uses, without ever writing.
+  const dryRunDb = dryRun ? openHippoDb(hippoRoot) : null;
+  try {
+    for (const relpath of relpaths) {
+      total++;
+      const artifactRef = `vault:${vaultName}:${relpath}`;
+      seen.add(artifactRef);
 
-    // Content-hash is computed from the RAW file bytes (deterministic; no
-    // Date/random in the content path) so idempotency survives frontmatter
-    // edits identically to body edits.
-    let rawFileContent: string;
-    try {
-      rawFileContent = fs.readFileSync(path.join(folderPath, relpath), 'utf8');
-    } catch {
-      // File vanished between enumeration and read (TOCTOU), or a transient
-      // IO/permission error. Skip this one file rather than aborting the whole
-      // import (incl. the deletion-sync pass); an idempotent re-run picks it up.
-      skipped++;
-      continue;
-    }
-    const hash = createHash('sha256').update(rawFileContent).digest('hex');
-    const hashTag = `content-hash:${hash}`;
-
-    // Load every live raw row for this ref (>1 only after a concurrent double-
-    // insert). The idempotency decision happens below, AFTER the full tag set is
-    // built, so it can compare the complete envelope rather than a subset.
-    const priors = existing.get(artifactRef) ?? [];
-
-    const { fm, body } = parseFrontmatter(rawFileContent);
-
-    // Empty / frontmatter-only note: nothing storable (createMemory enforces a
-    // min content length). The note's CONTENT was deleted at source, so this is a
-    // content-deletion: archive any prior row(s) - the old body must not stay live
-    // and searchable after the source no longer holds it (codex R12 P2) - then
-    // skip the write. Archiving here is safe precisely because we then skip
-    // remember() entirely: there is no archive-then-throw-on-empty-body hazard
-    // (the original reason this branch did not archive). The note stays in `seen`
-    // so deletion-sync does not double-process it.
-    if (body.trim().length < 3) {
-      for (const p of priors) {
-        archived++; // count even in dryRun so the preview reflects the removal
-        if (!dryRun) archiveRaw(ctx, p.id, `emptied:${artifactRef}`);
+      // Content-hash is computed from the RAW file bytes (deterministic; no
+      // Date/random in the content path) so idempotency survives frontmatter
+      // edits identically to body edits.
+      let rawFileContent: string;
+      try {
+        rawFileContent = fs.readFileSync(path.join(folderPath, relpath), 'utf8');
+      } catch {
+        // File vanished between enumeration and read (TOCTOU), or a transient
+        // IO/permission error. Skip this one file rather than aborting the whole
+        // import (incl. the deletion-sync pass); an idempotent re-run picks it up.
+        skipped++;
+        continue;
       }
-      skipped++;
-      continue;
-    }
+      const hash = createHash('sha256').update(rawFileContent).digest('hex');
+      const hashTag = `content-hash:${hash}`;
 
-    // Build the FULL tag envelope this import would write, BEFORE the idempotency
-    // decision. De-duplicate (createMemory stores tags verbatim, so a collision
-    // between, e.g., a frontmatter tag and an extraTag would otherwise produce a
-    // duplicate). Order-preserving.
-    const frontmatterTags = [
-      ...frontmatterList(fm['tags']),
-      ...frontmatterList(fm['aliases']).map((a) => `alias:${a}`),
-    ];
-    const wikilinkTags = parseWikilinks(body).map((t) => `wikilink-candidate:${t}`);
-    const tags = Array.from(
-      new Set([
-        'source:vault',
-        `vault:${vaultName}`,
-        hashTag,
-        ...frontmatterTags,
-        ...wikilinkTags,
-        ...extraTags,
-      ]),
-    );
+      // Load every live raw row for this ref (>1 only after a concurrent double-
+      // insert). The idempotency decision happens below, AFTER the full tag set is
+      // built, so it can compare the complete envelope rather than a subset.
+      const priors = existing.get(artifactRef) ?? [];
 
-    // Unchanged iff EVERY live raw row carries the EXACT same tag set AND scope.
-    // Comparing the COMPLETE set (not the content-hash + a subset of extra tags)
-    // means every envelope change registers: content (via the content-hash tag),
-    // frontmatter, wikilinks, an ADDED extra tag, or a REMOVED one - the earlier
-    // piecemeal checks missed scope (R10 P2) then tag removal (R11 P2). Set
-    // equality is order-independent and both sides are deduped. (`length > 0`
-    // guard: a never-seen file must import, not skip; archiving ALL priors on a
-    // mismatch also clears any concurrent-double-insert duplicates.)
-    const wantTags = new Set(tags);
-    const envelopeUnchanged =
-      priors.length > 0 &&
-      priors.every((p) => {
-        if ((p.scope ?? null) !== scope) return false;
-        const priorTags = parseJsonArrayLoose(p.tags_json);
-        return priorTags.length === wantTags.size && priorTags.every((t) => wantTags.has(t));
-      });
-    if (envelopeUnchanged) {
-      // Unchanged file + envelope → skip (idempotent re-import).
-      skipped++;
-      continue;
-    }
+      const { fm, body } = parseFrontmatter(rawFileContent);
 
-    // Changed file → archive EVERY old raw row for this ref (normally one; >1
-    // only after a concurrent double-insert), then append the new one. NEVER
-    // supersede (would yield kind='distilled'). archiveRaw commits + closes its
-    // handle before remember() runs, so there is no double-live row; a crash
-    // between them self-heals (file re-imported as fresh raw next run).
-    for (const p of priors) {
-      archived++; // count the would-be archive even in dryRun (true preview)
-      if (!dryRun) archiveRaw(ctx, p.id, `changed:${artifactRef}`);
-    }
+      // Empty / frontmatter-only note: nothing storable (createMemory enforces a
+      // min content length). The note's CONTENT was deleted at source, so this is a
+      // content-deletion: archive any prior row(s) - the old body must not stay live
+      // and searchable after the source no longer holds it (codex R12 P2) - then
+      // skip the write. Archiving here is safe precisely because we then skip
+      // remember() entirely: there is no archive-then-throw-on-empty-body hazard
+      // (the original reason this branch did not archive). The note stays in `seen`
+      // so deletion-sync does not double-process it.
+      if (body.trim().length < 3) {
+        for (const p of priors) {
+          archived++; // count even in dryRun so the preview reflects the removal
+          if (!dryRun) archiveRaw(ctx, p.id, `emptied:${artifactRef}`);
+        }
+        skipped++;
+        continue;
+      }
 
-    // remember() owns the actual write. We build an `echo` of the SAME content +
-    // tags via createMemory purely for the ImportResult, then reconcile its id to
-    // remember()'s real row id so entries[] reflects the row that landed.
-    const echo = createMemory(body, {
-      kind: 'raw',
-      tags,
-      scope,
-      owner: 'agent:vault-import',
-      artifact_ref: artifactRef,
-      tenantId,
-    });
-    // dryRun preview: count what WOULD import, but make no writes (codex P2).
-    if (!dryRun) {
-      const result = remember(ctx, {
-        content: body,
+      // Build the FULL tag envelope this import would write, BEFORE the idempotency
+      // decision. De-duplicate (createMemory stores tags verbatim, so a collision
+      // between, e.g., a frontmatter tag and an extraTag would otherwise produce a
+      // duplicate). Order-preserving.
+      const frontmatterTags = [
+        ...frontmatterList(fm['tags']),
+        ...frontmatterList(fm['aliases']).map((a) => `alias:${a}`),
+      ];
+      const wikilinkTags = parseWikilinks(body).map((t) => `wikilink-candidate:${t}`);
+      const tags = Array.from(
+        new Set([
+          'source:vault',
+          `vault:${vaultName}`,
+          hashTag,
+          ...frontmatterTags,
+          ...wikilinkTags,
+          ...extraTags,
+        ]),
+      );
+
+      // Unchanged iff EVERY live raw row carries the EXACT same tag set AND scope.
+      // Comparing the COMPLETE set (not the content-hash + a subset of extra tags)
+      // means every envelope change registers: content (via the content-hash tag),
+      // frontmatter, wikilinks, an ADDED extra tag, or a REMOVED one - the earlier
+      // piecemeal checks missed scope (R10 P2) then tag removal (R11 P2). Set
+      // equality is order-independent and both sides are deduped. (`length > 0`
+      // guard: a never-seen file must import, not skip; archiving ALL priors on a
+      // mismatch also clears any concurrent-double-insert duplicates.)
+      const wantTags = new Set(tags);
+      const envelopeUnchanged =
+        priors.length > 0 &&
+        priors.every((p) => {
+          if ((p.scope ?? null) !== scope) return false;
+          const priorTags = parseJsonArrayLoose(p.tags_json);
+          return priorTags.length === wantTags.size && priorTags.every((t) => wantTags.has(t));
+        });
+      if (envelopeUnchanged) {
+        // Unchanged file + envelope → skip (idempotent re-import).
+        skipped++;
+        continue;
+      }
+
+      // Changed file → archive EVERY old raw row for this ref (normally one; >1
+      // only after a concurrent double-insert), then append the new one. NEVER
+      // supersede (would yield kind='distilled'). archiveRaw commits + closes its
+      // handle before remember() runs, so there is no double-live row; a crash
+      // between them self-heals (file re-imported as fresh raw next run).
+      for (const p of priors) {
+        archived++; // count the would-be archive even in dryRun (true preview)
+        if (!dryRun) archiveRaw(ctx, p.id, `changed:${artifactRef}`);
+      }
+
+      // remember() owns the actual write. We build an `echo` of the SAME content +
+      // tags via createMemory purely for the ImportResult, then reconcile its id to
+      // remember()'s real row id so entries[] reflects the row that landed.
+      const echo = createMemory(body, {
         kind: 'raw',
-        artifactRef,
-        owner: 'agent:vault-import',
-        scope: scope ?? undefined,
         tags,
+        scope,
+        owner: 'agent:vault-import',
+        artifact_ref: artifactRef,
+        tenantId,
       });
-      echo.id = result.id;
+      // dryRun preview: count what WOULD import, but make no writes (codex P2).
+      if (!dryRun) {
+        // AT1 (plan §3 containment): a rejected note must not abort the rest
+        // of the vault scan (deletion-sync pass included). The priors above
+        // are already archived by this point — same self-heal story as any
+        // other crash between archiveRaw and remember() (comment above): a
+        // re-run with the file still rejected hits the same refusal again,
+        // loud each time via the rejected count.
+        try {
+          const result = remember(ctx, {
+            content: body,
+            kind: 'raw',
+            artifactRef,
+            owner: 'agent:vault-import',
+            scope: scope ?? undefined,
+            tags,
+          });
+          echo.id = result.id;
+        } catch (err) {
+          if (err instanceof RejectedValueError) {
+            rejected++;
+            continue;
+          }
+          throw err;
+        }
+      } else if (dryRunDb) {
+        // AT1 P2 fix: probe the tombstone without writing so the preview's
+        // `rejected` count matches what a real run would refuse.
+        try {
+          checkRejectionGuard(dryRunDb, tenantId, echo.id, echo.content);
+        } catch (err) {
+          if (err instanceof RejectedValueError) {
+            rejected++;
+            continue;
+          }
+          throw err;
+        }
+      }
+      entries.push(echo);
+      imported++;
     }
-    entries.push(echo);
-    imported++;
+  } finally {
+    if (dryRunDb) closeHippoDb(dryRunDb);
   }
 
   // Deletion-sync: any artifactRef present in the Map but NOT seen this run is a
@@ -929,7 +1011,7 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
     }
   }
 
-  return { total, imported, skipped, archived, entries };
+  return { total, imported, skipped, rejected, archived, entries };
 }
 
 /** Local tolerant JSON-array parse for the loader's `tags_json` column. The
