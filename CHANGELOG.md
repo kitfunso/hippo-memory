@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.32.0 - 2026-08-15
+
+### Fixed
+- **Cross-tenant consolidation landing**: the merge pass now partitions
+  episodic candidates by tenant before clustering (a cluster can no longer
+  mix content from different tenants into one merged row), and merge, trace,
+  extract, and DAG L2 summary producers all stamp their rows with the source
+  tenant instead of always 'default'. Also fixes trace idempotency for
+  non-default tenants (previously the auto-promoted trace regenerated every
+  sleep because the idempotency check looked in a tenant the trace never
+  landed in). Single-tenant stores are byte-identical.
+- **MCP audit attribution**: all MCP tool paths now record the auth-resolved
+  caller identity (HTTP-MCP) or 'mcp' (stdio) on every audit row, including
+  recall side effects (retrieval persists, anchoring/availability audits,
+  prediction baserates). One caller, one principal.
+- **memory-value-wiring test flake**: root-caused (createMemory read the
+  clock twice, so stored strength could land at 0.999... instead of 1.0
+  about 0.1 percent of the time) and fixed by single-sourcing the clock
+  basis in the test fixtures. No tolerance widening.
+
+### Added
+- `ConsolidationResult.summariesRebuildRefused` and
+  `DagRebuildResult.refused`: tombstone-refused DAG rebuilds are now counted
+  separately from successful rebuilds (previously a refusal silently counted
+  as rebuilt). Surfaced in the sleep details line as "N refused".
+
+### Changed
+- The consolidation rejection-guard db handle opens lazily on first use
+  instead of unconditionally every non-dry-run sleep (perf hygiene).
+
+### Known issue (pre-existing, filed)
+- The dedupe pass is tenant-blind: byte-identical content in two tenants can
+  be deduplicated across the tenant boundary (data loss for multi-tenant
+  stores). Pre-existing behavior exposed by the landing fix; tracked as the
+  top backlog candidate.
+
 ## 1.31.0 - 2026-08-15
 
 ### Added
