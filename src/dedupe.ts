@@ -14,7 +14,9 @@
  * asc). Previously the strength/retrieval-count comparator could tie
  * exactly with no terminal key, so the survivor fell to load order
  * (arrival-order-dependent); see `strengthBucket` below for the bucket
- * encoding.
+ * encoding. As of the tenant-partition fix
+ * (docs/plans/2026-08-15-dedupe-tenant-partition.md) the order is scoped
+ * WITHIN each tenant group; cross-tenant pairs are never compared.
  */
 
 import { textOverlap } from './search.js';
