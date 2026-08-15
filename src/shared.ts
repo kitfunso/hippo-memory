@@ -23,6 +23,7 @@ import { search, hybridSearch, SearchResult } from './search.js';
 import { evalNow } from './ablation.js';
 import { deriveOriginProject, classifyOriginProject, resolveGlobalRootDir } from './project-identity.js';
 import { detectSecret } from './secret-detect.js';
+import { RejectedValueError } from './rejection.js';
 import { embedMemory, embedAll } from './embeddings.js';
 
 /**
@@ -572,6 +573,12 @@ export function syncGlobalToLocal(
   // only stamps when the field is missing).
   const currentName = deriveOriginProject(path.dirname(path.resolve(localRoot)));
   let count = 0;
+  // AT1 (plan §3 containment, the roadmap threat this whole feature targets
+  // — a locally-rejected value must not silently resurrect via sync down
+  // from global): per-item catch, no signature change (bare number return;
+  // see the syncGlobalToLocal callers in cli.ts + tests). Counted locally
+  // and printed as one summary line, same pattern as learnFromMemoryMd.
+  let rejected = 0;
 
   for (const entry of globalEntries) {
     // Skip if already present by ID
@@ -582,8 +589,20 @@ export function syncGlobalToLocal(
       classifyOriginProject(entry.origin_project, currentName) === 'cross-project'
     ) continue;
 
-    writeEntry(localRoot, entry);
+    try {
+      writeEntry(localRoot, entry);
+    } catch (err) {
+      if (err instanceof RejectedValueError) {
+        rejected++;
+        continue;
+      }
+      throw err;
+    }
     count++;
+  }
+
+  if (rejected > 0) {
+    console.error(`syncGlobalToLocal: skipped ${rejected} rejected value(s) (run \`hippo unreject\` on the local store to allow).`);
   }
 
   // Batch producer: one embedAll() on the destination rather than an

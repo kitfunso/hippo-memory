@@ -12,6 +12,7 @@ import { textOverlap } from './search.js';
 import { getGlobalRoot, initGlobal } from './shared.js';
 import { remember, archiveRaw, isPrivateScope, type Context } from './api.js';
 import { openHippoDb, closeHippoDb } from './db.js';
+import { RejectedValueError } from './rejection.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -21,6 +22,10 @@ export interface ImportResult {
   total: number;     // entries found in source
   imported: number;  // actually imported (after dedup)
   skipped: number;   // skipped as duplicates or too short
+  /** AT1: refused by the rejection-value guard — kept distinct from
+   *  `skipped` (dedup) so a tombstoned value is distinguishable from a
+   *  plain duplicate in import summaries (plan §3 containment, round-2 low). */
+  rejected: number;
   /** K1 vault import: rows archived this run (changed + source-deleted). In a
    *  dryRun this is the would-be count (a true deletion-sync preview). */
   archived?: number;
@@ -87,6 +92,7 @@ export function importEntries(
   let total = 0;
   let imported = 0;
   let skipped = 0;
+  let rejected = 0;
   const entries: MemoryEntry[] = [];
 
   for (const raw of chunks) {
@@ -137,18 +143,27 @@ export function importEntries(
       tenantId: options.global ? undefined : options.tenantId,
     });
 
-    entries.push(entry);
-
     if (!options.dryRun) {
-      writeEntry(targetRoot, entry);
+      // AT1 (plan §3 containment): a rejection refuses one CHUNK, not the
+      // whole import batch. Caught per-item so siblings still land.
+      try {
+        writeEntry(targetRoot, entry);
+      } catch (err) {
+        if (err instanceof RejectedValueError) {
+          rejected++;
+          continue;
+        }
+        throw err;
+      }
       // Add to existing so subsequent chunks dedup against freshly imported ones
       existing.push(entry);
     }
 
+    entries.push(entry);
     imported++;
   }
 
-  return { total, imported, skipped, entries };
+  return { total, imported, skipped, rejected, entries };
 }
 
 // ---------------------------------------------------------------------------
@@ -503,7 +518,7 @@ export function importMarkdown(filePath: string, options: ImportOptions): Import
     bySlug.set(sectionSlug, list);
   }
 
-  let totalResult: ImportResult = { total: 0, imported: 0, skipped: 0, entries: [] };
+  let totalResult: ImportResult = { total: 0, imported: 0, skipped: 0, rejected: 0, entries: [] };
 
   for (const [slug, chunks] of bySlug.entries()) {
     const sectionTags = slug ? ['imported', slug] : ['imported'];
@@ -512,6 +527,7 @@ export function importMarkdown(filePath: string, options: ImportOptions): Import
       total: totalResult.total + result.total,
       imported: totalResult.imported + result.imported,
       skipped: totalResult.skipped + result.skipped,
+      rejected: totalResult.rejected + result.rejected,
       entries: [...totalResult.entries, ...result.entries],
     };
   }
@@ -738,7 +754,7 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
   const resolvedStore = realpathOrResolve(hippoRoot);
   const resolvedFolder = realpathOrResolve(folderPath);
   if (resolvedFolder === resolvedStore || resolvedFolder.startsWith(resolvedStore + path.sep)) {
-    return { total: 0, imported: 0, skipped: 0, archived: 0, entries: [] };
+    return { total: 0, imported: 0, skipped: 0, rejected: 0, archived: 0, entries: [] };
   }
 
   const ctx: Context = {
@@ -790,6 +806,7 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
   let total = 0;
   let imported = 0;
   let skipped = 0;
+  let rejected = 0;
   let archived = 0;
   const entries: MemoryEntry[] = [];
 
@@ -903,15 +920,29 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
     });
     // dryRun preview: count what WOULD import, but make no writes (codex P2).
     if (!dryRun) {
-      const result = remember(ctx, {
-        content: body,
-        kind: 'raw',
-        artifactRef,
-        owner: 'agent:vault-import',
-        scope: scope ?? undefined,
-        tags,
-      });
-      echo.id = result.id;
+      // AT1 (plan §3 containment): a rejected note must not abort the rest
+      // of the vault scan (deletion-sync pass included). The priors above
+      // are already archived by this point — same self-heal story as any
+      // other crash between archiveRaw and remember() (comment above): a
+      // re-run with the file still rejected hits the same refusal again,
+      // loud each time via the rejected count.
+      try {
+        const result = remember(ctx, {
+          content: body,
+          kind: 'raw',
+          artifactRef,
+          owner: 'agent:vault-import',
+          scope: scope ?? undefined,
+          tags,
+        });
+        echo.id = result.id;
+      } catch (err) {
+        if (err instanceof RejectedValueError) {
+          rejected++;
+          continue;
+        }
+        throw err;
+      }
     }
     entries.push(echo);
     imported++;
@@ -929,7 +960,7 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
     }
   }
 
-  return { total, imported, skipped, archived, entries };
+  return { total, imported, skipped, rejected, archived, entries };
 }
 
 /** Local tolerant JSON-array parse for the loader's `tags_json` column. The

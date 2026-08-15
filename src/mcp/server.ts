@@ -31,6 +31,7 @@ import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, dr
 import { resolveProjectIdentity, classifyOriginProject } from '../project-identity.js';
 import { computePredictionBaserate } from '../predictions.js';
 import { appendAuditEvent } from '../audit.js';
+import { RejectedValueError } from '../rejection.js';
 import { createHash } from 'node:crypto';
 import {
   detectAnchoring,
@@ -370,6 +371,8 @@ const TOOLS = [
         conflict_id: { type: 'number', description: 'The conflict ID to resolve' },
         keep: { type: 'string', description: 'ID of the memory to keep' },
         forget: { type: 'boolean', description: 'Delete the loser instead of weakening (default: false)' },
+        rejectLoser: { type: 'boolean', description: 'Tombstone the loser\'s value too, so it refuses re-ingestion (implies removal; default: false)' },
+        reason: { type: 'string', description: 'Reason recorded on the tombstone when rejectLoser is set (default: a conflict-context string)' },
       },
       required: ['conflict_id', 'keep'],
     },
@@ -1112,6 +1115,7 @@ async function executeTool(
       const lessons = extractLessons(gitLog, config.gitLearnPatterns);
       let added = 0;
       let skipped = 0;
+      let rejected = 0;
       for (const lesson of lessons) {
         if (deduplicateLesson(hippoRoot, lesson, 0.7, tenantId)) { skipped++; continue; }
         const entry = createMemory(lesson, {
@@ -1122,10 +1126,18 @@ async function executeTool(
           baseHalfLifeDays: config.defaultHalfLifeDays,
           tenantId,
         });
-        writeEntry(hippoRoot, entry);
+        // AT1 (plan §3 containment): a refused lesson must not crash the
+        // MCP learn call or lose the rest of the git log scan.
+        try {
+          writeEntry(hippoRoot, entry);
+        } catch (err) {
+          if (err instanceof RejectedValueError) { rejected++; continue; }
+          throw err;
+        }
         added++;
       }
-      return `Git learn: ${added} new, ${skipped} duplicates skipped (scanned ${days} days)`;
+      const rejectedSuffix = rejected > 0 ? `, ${rejected} rejected values skipped` : '';
+      return `Git learn: ${added} new, ${skipped} duplicates skipped${rejectedSuffix} (scanned ${days} days)`;
     }
 
     case 'hippo_conflicts': {
@@ -1140,10 +1152,17 @@ async function executeTool(
       const conflictId = Number(args.conflict_id);
       const keepId = String(args.keep || '');
       const forget = Boolean(args.forget);
+      // AT1: optional rejectLoser + reason, threaded straight through to
+      // resolveConflict's opts (plan §5 — mirrors the CLI's --reject-loser).
+      const rejectLoser = Boolean(args.rejectLoser);
+      const reason = typeof args.reason === 'string' ? args.reason : undefined;
       if (isNaN(conflictId) || !keepId) return 'Required: conflict_id and keep.';
-      const result = resolveConflict(hippoRoot, conflictId, keepId, forget, tenantId);
+      const result = resolveConflict(hippoRoot, conflictId, keepId, forget, tenantId, {
+        rejectLoserValue: rejectLoser,
+        reason,
+      });
       if (!result) return 'Could not resolve. Check the conflict ID and --keep value.';
-      const action = forget ? 'deleted' : 'weakened';
+      const action = rejectLoser ? 'rejected (tombstoned) and removed' : forget ? 'deleted' : 'weakened';
       return `Resolved conflict ${conflictId}: kept ${keepId}, ${action} ${result.loserId}`;
     }
 

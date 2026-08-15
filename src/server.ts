@@ -212,6 +212,10 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'customer_note_supersede', // E2 — emitted by saveCustomerNote on a supersession
   'customer_note_close',   // E2 — emitted by closeCustomerNote
   'mv_rescue',             // LC2-E3 — emitted by consolidate() per rescue; lockstep with AuditOp union + cli.ts VALID_AUDIT_OPS
+  'reject_value',          // AT1 — emitted by `hippo reject`; lockstep with AuditOp union + cli.ts VALID_AUDIT_OPS
+  'reject_refusal',        // AT1 — emitted when the rejection guard refuses a write; lockstep
+  'unreject_value',        // AT1 — emitted by `hippo unreject`; lockstep
+  'conflict_resolve',      // AT1 — emitted by resolveConflict on every resolution path; lockstep
 ]);
 
 // Cap on GET /v1/audit?limit=. Matches docs/api.md (when written) and is large

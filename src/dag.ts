@@ -6,6 +6,7 @@ import {
   applyRebuildResult,
   clearSummaryDirtyAfterBuild,
 } from './store.js';
+import { RejectedValueError } from './rejection.js';
 
 export interface FactCluster {
   label: string;
@@ -114,6 +115,12 @@ export interface DagBuildResult {
   candidateClusters: number;
   summariesCreated: number;
   factsLinked: number;
+  /** AT1: clusters skipped because the LLM-synthesized summary landed on a
+   *  rejected value (plan §3 containment — per-cluster catch, not a whole-
+   *  phase abort). Member re-parenting writes are unaffected by construction
+   *  (same id + same content = guard-exempt), so this only ever counts
+   *  summary-creation refusals. */
+  rejected: number;
 }
 
 export async function buildDag(
@@ -121,7 +128,7 @@ export async function buildDag(
   facts: MemoryEntry[],
   opts: DagSummaryOptions,
 ): Promise<DagBuildResult> {
-  const result: DagBuildResult = { candidateClusters: 0, summariesCreated: 0, factsLinked: 0 };
+  const result: DagBuildResult = { candidateClusters: 0, summariesCreated: 0, factsLinked: 0, rejected: 0 };
 
   const unparented = facts.filter(
     (f) => f.dag_level === 1 && !f.dag_parent_id && f.tags.includes('extracted'),
@@ -152,7 +159,20 @@ export async function buildDag(
     summaryEntry.descendant_count = cluster.members.length;
     summaryEntry.earliest_at = memberCreatedAts[0];
     summaryEntry.latest_at = memberCreatedAts[memberCreatedAts.length - 1];
-    writeEntry(hippoRoot, summaryEntry);
+    // AT1 (plan §3 containment): a refused LLM-synthesized summary skips
+    // ONLY this cluster — the sleep cycle continues to the next one. The
+    // member re-parenting writes below never run for a skipped cluster
+    // (there is no summary id to parent them under).
+    try {
+      writeEntry(hippoRoot, summaryEntry);
+    } catch (err) {
+      if (err instanceof RejectedValueError) {
+        result.rejected++;
+        console.error(`[buildDag] cluster "${cluster.label}" skipped: summary matches a rejected value`);
+        continue;
+      }
+      throw err;
+    }
     result.summariesCreated++;
 
     for (const member of cluster.members) {
@@ -302,6 +322,10 @@ export interface EntityProfilesBuildResult {
   // independent-review MED #3 fold: surface failure counter so operators
   // see LLM null / rate-limit / 401 signal (parity with DagRebuildResult.failed).
   failed: number;
+  /** AT1: clusters skipped because the profile summary landed on a rejected
+   *  value (plan §3 containment). Kept distinct from `failed` (LLM null /
+   *  rate-limit) — a tombstone hit is a deliberate refusal, not an error. */
+  rejected: number;
 }
 
 /**
@@ -325,6 +349,7 @@ export async function buildEntityProfiles(
     profilesCreated: 0,
     l2sLinked: 0,
     failed: 0,
+    rejected: 0,
   };
 
   // Only L2 with no L3 parent yet (avoid re-clustering already-profiled L2s).
@@ -375,7 +400,19 @@ export async function buildEntityProfiles(
       profileEntry.earliest_at = memberCreatedAts[0];
       profileEntry.latest_at = memberCreatedAts[memberCreatedAts.length - 1];
       profileEntry.dag_level_3_built_at = nowIso;
-      writeEntry(hippoRoot, profileEntry);
+      // AT1 (plan §3 containment): per-cluster catch — skip this cluster,
+      // count, log once. The member re-linking writes below never run for a
+      // skipped cluster (mirrors buildDag above).
+      try {
+        writeEntry(hippoRoot, profileEntry);
+      } catch (err) {
+        if (err instanceof RejectedValueError) {
+          result.rejected++;
+          console.error(`[buildEntityProfiles] cluster "${cluster.label}" skipped: profile matches a rejected value`);
+          continue;
+        }
+        throw err;
+      }
       result.profilesCreated++;
 
       for (const member of cluster.members) {

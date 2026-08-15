@@ -28,6 +28,7 @@ import { isEmbeddingConfigured } from './embedding-provider.js';
 import { resolveTenantId } from './tenant.js';
 import { defaultPreCompactLogPath } from './hooks.js';
 import { redactSecrets } from './secret-detect.js';
+import { RejectedValueError } from './rejection.js';
 
 // ---------------------------------------------------------------------------
 // Pattern definitions
@@ -238,13 +239,14 @@ function writeExtractedItems(
   hippoRoot: string,
   tenantId: string,
   extracted: ExtractedItem[],
-): { captured: number; skipped: number; embeds: Promise<unknown>[] } {
-  if (extracted.length === 0) return { captured: 0, skipped: 0, embeds: [] };
+): { captured: number; skipped: number; rejected: number; embeds: Promise<unknown>[] } {
+  if (extracted.length === 0) return { captured: 0, skipped: 0, rejected: 0, embeds: [] };
 
   const existing = loadAllEntries(hippoRoot, tenantId);
   const embeds: Promise<unknown>[] = [];
   let captured = 0;
   let skipped = 0;
+  let rejected = 0;
 
   for (const item of extracted) {
     if (isDuplicate(item.content, existing)) {
@@ -258,7 +260,17 @@ function writeExtractedItems(
       confidence: 'observed',
       tenantId,
     });
-    writeEntry(hippoRoot, entry);
+    // AT1 (plan §3 containment): a refusal is per-VALUE — one rejected
+    // extraction must not abort the rest of this transcript's captures.
+    try {
+      writeEntry(hippoRoot, entry);
+    } catch (err) {
+      if (err instanceof RejectedValueError) {
+        rejected++;
+        continue;
+      }
+      throw err;
+    }
     updateStats(hippoRoot, { remembered: 1 });
     existing.push(entry); // within-batch dedup
     if (isEmbeddingConfigured(hippoRoot)) {
@@ -267,7 +279,7 @@ function writeExtractedItems(
     captured++;
   }
 
-  return { captured, skipped, embeds };
+  return { captured, skipped, rejected, embeds };
 }
 
 // ---------------------------------------------------------------------------
@@ -615,6 +627,7 @@ function cmdCaptureCore(
 
   let captured = 0;
   let skipped = 0;
+  let rejected = 0;
 
   for (const item of extracted) {
     if (isDuplicate(item.content, existing)) {
@@ -646,7 +659,17 @@ function cmdCaptureCore(
         tenantId: useGlobal ? undefined : options.tenantId,
       });
 
-      writeEntry(targetRoot, entry);
+      // AT1 (plan §3 containment): one rejected item must not abort the
+      // rest of this capture's items.
+      try {
+        writeEntry(targetRoot, entry);
+      } catch (err) {
+        if (err instanceof RejectedValueError) {
+          rejected++;
+          continue;
+        }
+        throw err;
+      }
       updateStats(targetRoot, { remembered: 1 });
       existing.push(entry); // within-batch dedup
 
@@ -661,7 +684,9 @@ function cmdCaptureCore(
   const prefix = options.dryRun ? '[dry-run] ' : '';
   const globalPrefix = useGlobal ? '[global] ' : '';
   console.log(
-    `\n${prefix}${globalPrefix}Captured ${captured} items (${skipped} skipped as duplicates)`
+    `\n${prefix}${globalPrefix}Captured ${captured} items (${skipped} skipped as duplicates` +
+      (rejected > 0 ? `, ${rejected} rejected` : '') +
+      ')'
   );
 }
 
@@ -1039,8 +1064,12 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, logFile
   // Capture extraction SECOND, own try/catch: a failure here self-heals at
   // the next SessionEnd capture (existing dedup absorbs the overlap).
   try {
-    const { captured, skipped, embeds } = writeExtractedItems(hippoRoot, tenantId, extracted);
-    appendPreCompactLog(logFile, `capture: ${captured} items captured, ${skipped} skipped`);
+    const { captured, skipped, rejected, embeds } = writeExtractedItems(hippoRoot, tenantId, extracted);
+    appendPreCompactLog(
+      logFile,
+      `capture: ${captured} items captured, ${skipped} skipped` +
+        (rejected > 0 ? `, ${rejected} rejected` : ''),
+    );
     return embeds;
   } catch (err) {
     appendPreCompactLog(logFile, `capture failed: ${(err as Error).message}`);

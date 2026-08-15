@@ -35,9 +35,12 @@ import {
   updateStats,
   isInitialized,
   markSummaryDirtyInTx,
+  auditRejectionRefusal,
   type TaskSnapshot,
   type SessionEvent,
 } from './store.js';
+import { RejectedValueError, type RejectedValueRow } from './rejection.js';
+import { rejectValue, unrejectValue, listRejectionsForTenant } from './reject-flow.js';
 import type { SessionHandoff } from './handoff.js';
 import {
   createMemory,
@@ -1694,6 +1697,77 @@ export function forget(ctx: Context, id: string): { ok: true; id: string } {
 }
 
 // ---------------------------------------------------------------------------
+// AT1: reject / unreject / listRejections
+// docs/plans/2026-08-15-at1-rejected-value-tombstone.md §4
+//
+// Context-based, tenant-checked, so HTTP/MCP reject-administration endpoints
+// can be added later without touching store internals (the write-path guard
+// itself already protects every write surface today — only this admin
+// surface is CLI/api-first, plan §4 non-goals). Shares the exact same
+// transaction flow as `hippo reject`/`rejections`/`unreject` via
+// src/reject-flow.ts — neither surface duplicates it.
+// ---------------------------------------------------------------------------
+
+export interface RejectOpts {
+  /** By-id form: reject the CURRENT content of an existing memory. */
+  memoryId?: string;
+  /** Pre-emptive form: reject a value not currently stored (or already gone). */
+  value?: string;
+  /** Required — the tombstone stores no content; reason is its only identity. */
+  reason: string;
+}
+
+export interface RejectResult {
+  digest: string;
+  removedIds: string[];
+}
+
+export function reject(ctx: Context, opts: RejectOpts): RejectResult {
+  if (opts.memoryId !== undefined) {
+    // Tenant scope, same not-found-shaped denial as forget/promote above:
+    // rejectValue itself also tenant-checks the id, but pre-checking here
+    // keeps the error message consistent with the rest of this module.
+    const db = openHippoDb(ctx.hippoRoot);
+    try {
+      const row = db
+        .prepare(`SELECT tenant_id FROM memories WHERE id = ?`)
+        .get(opts.memoryId) as { tenant_id?: string } | undefined;
+      if (!row || row.tenant_id !== ctx.tenantId) {
+        throw new Error(`memory not found: ${opts.memoryId}`);
+      }
+    } finally {
+      closeHippoDb(db);
+    }
+  }
+  const result = rejectValue({
+    hippoRoot: ctx.hippoRoot,
+    tenantId: ctx.tenantId,
+    actor: ctx.actor.subject,
+    reason: opts.reason,
+    memoryId: opts.memoryId,
+    value: opts.value,
+  });
+  return { digest: result.digest, removedIds: result.removedIds };
+}
+
+export function unreject(ctx: Context, digestOrPrefix: string): { ok: true; digest: string } {
+  const outcome = unrejectValue(ctx.hippoRoot, ctx.tenantId, digestOrPrefix, ctx.actor.subject);
+  if (outcome.status === 'not_found') {
+    throw new Error(`no rejected value matches: ${digestOrPrefix}`);
+  }
+  if (outcome.status === 'ambiguous') {
+    throw new Error(
+      `"${digestOrPrefix}" matches ${outcome.candidates.length} tombstones; use a longer prefix`,
+    );
+  }
+  return { ok: true, digest: outcome.digest };
+}
+
+export function listRejections(ctx: Context): RejectedValueRow[] {
+  return listRejectionsForTenant(ctx.hippoRoot, ctx.tenantId);
+}
+
+// ---------------------------------------------------------------------------
 // promote
 // ---------------------------------------------------------------------------
 
@@ -1841,6 +1915,12 @@ export function supersede(
       db.exec('COMMIT');
     } catch (err) {
       try { db.exec('ROLLBACK'); } catch { /* already rolled back */ }
+      // AT1 (plan §3): refusal audit lands post-ROLLBACK, in a fresh
+      // implicit transaction the aborted outer one cannot claw back — then
+      // rethrow so the caller sees the refusal.
+      if (err instanceof RejectedValueError) {
+        auditRejectionRefusal(db, err, ctx.actor.subject);
+      }
       throw err;
     }
     // Mirrors after COMMIT, while the db handle is still open. Same

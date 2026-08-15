@@ -45,6 +45,99 @@ Every row in `memories` carries the canonical envelope as of schema v14 (A3) + v
 - **E1 ingestion connectors.** Every Slack/Jira/GitHub message lands as `kind='raw'` with full provenance; `hippo sleep` promotes selected receipts to `kind='distilled'`.
 - **E3 graph layer.** Graph indexer reads only `kind IN ('distilled','superseded')` rows; `kind='raw'` is structurally inaccessible.
 
+## Rejected values (AT1, schema v41)
+
+A human who rejects a fact gets a durable say: `hippo reject` tombstones the
+value so it refuses to come back, across every write surface, not just the
+one row the human saw.
+
+### Semantics
+
+- **Exact-normalized-value match, not semantic.** `normalizeValueForRejection`
+  (`src/rejection.ts`) does Unicode NFC → lowercase → collapse whitespace runs
+  → trim. No punctuation stripping — over-normalization creates false
+  refusals, which are worse than misses. `rejectionDigest` is the full
+  sha256 hex (64 chars) of the normalized string.
+- **Digest-keyed.** The `rejected_values` table stores `(tenant_id, digest)`
+  as its primary key — never the raw text. A lookup is one indexed point
+  query.
+- **Per-store.** Each SQLite store carries its own `rejected_values` table.
+  Rejecting a value in the local store refuses local re-writes — including a
+  `syncGlobalToLocal` pull that would otherwise re-import it from global —
+  but does not reach into other stores. Rejecting in the store where the
+  value lives is the v1 contract.
+- **Per-tenant.** The primary key includes `tenant_id`; tenant B can write a
+  value tenant A rejected.
+
+### What is (and isn't) stored
+
+- **No raw content and no preview.** Only `reason`, `rejected_by`,
+  `rejected_at`, `source_memory_id` (provenance only, no FK — the tombstone
+  outlives the row), and `normalized_chars` (a weak sanity aid for humans
+  listing tombstones). `reason` is the tombstone's only human-readable
+  identity, which is why `hippo reject` requires it.
+- **GDPR rationale.** A rejected value may itself be a secret or PII ("never
+  store my key again"); persisting it in the tombstone would defeat the
+  point. This follows the `raw_archive` redaction precedent (payload is
+  `{redacted:true, ...}`). The human sees the content once, at reject time
+  (the CLI echoes it); afterwards `reason` is all that remains.
+
+### Write-refusal contract
+
+The guard lives at the single INSERT choke point, `upsertEntryRow`
+(`src/store.ts`). It fires when an incoming write's content digest matches a
+tombstone AND the write introduces that content (a new row, or a same-id
+UPDATE changing content onto a rejected value). A miss costs one indexed
+point query; a hit adds one more to classify new-row vs content-introduction.
+On a hit it throws `RejectedValueError` — fail-loud, no silent downgrade.
+
+Two shapes of caller, both pinned by tests:
+
+- **Single-item surfaces fail loud.** `hippo remember` (CLI/api/MCP/HTTP),
+  domain-object writers, and `api.supersede`'s successor write propagate the
+  refusal to the caller with the tombstone's reason.
+- **Multi-item surfaces contain the refusal per item and keep going.**
+  `capture`/pre-compact extraction, importers, `learnFromMemoryMd`,
+  `syncGlobalToLocal`/`promoteToGlobal`/`shareMemory`'s sync-down path,
+  connector ingest, and the DAG summary builders (`buildDag`,
+  `buildEntityProfiles`) catch `RejectedValueError` per item, skip it, count
+  it, and finish the batch. A refusal is per-VALUE — sibling items must
+  survive. `bootstrapLegacyStore` and `rebuildIndex` run the same guard
+  per row over legacy markdown mirrors, which closes the resurrection path a
+  stale/never-purged mirror would otherwise open — structurally, regardless
+  of mirror state.
+- **One bypass exists, on purpose.** `batchWriteAndDelete` (consolidation
+  merges + auto-promote rollups) skips the guard: those writes are LLM
+  paraphrase rollups of already-guarded leaf facts, and refusing mid-batch
+  would abort the whole consolidation transaction for a coincidental digest
+  match. The guard belongs on leaf inserts, not rollups.
+- **Refusal audits survive rollback.** The `reject_refusal` audit row is
+  written by the transaction owner (`writeEntry`, `api.supersede`) *after*
+  its own rollback completes, via `auditRejectionRefusal` — never inside a
+  scope the caller's own rollback would claw back.
+
+### `unreject` is the only escape hatch
+
+`hippo unreject <digest-prefix>` deletes the tombstone; there is no per-write
+force-override flag. A second path through the guard is a second thing to
+get wrong — start minimal, add on demand.
+
+### Multi-binary gap
+
+Schema v41 does **not** bump `min_compatible_binary`. Rejection is enforced
+by binaries >= 1.31.0; an older binary sharing a synced store can still
+write the rejected value back in, silently — no refusal, no warning. Upgrade
+every binary that shares a store. This is a deliberate v1 tradeoff (bumping
+would hard-lock every old binary out of the store entirely, disproportionate
+for the dominant single-user single-binary deployment), not an oversight.
+
+### Known limitation
+
+Matching is exact-normalized-value only. A paraphrase of a rejected fact —
+different words, same meaning — is not caught. This is out of scope for v1;
+semantic/paraphrase-tolerant matching is research, not a documented gap in
+the guard's correctness.
+
 ## Out of scope here (deferred)
 
 - `tenant_id` column (A5)

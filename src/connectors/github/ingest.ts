@@ -23,6 +23,7 @@
 
 import { remember, type Context, type RememberOpts } from '../../api.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../db.js';
+import { RejectedValueError } from '../../rejection.js';
 import { hasSeenKey, lookupMemoryByKey, DuplicateIdempotencyError } from './idempotency.js';
 import { computeIdempotencyKey } from './signature.js';
 import {
@@ -200,6 +201,23 @@ export function ingestEvent(ctx: Context, input: IngestInput): IngestResult {
       } finally {
         closeHippoDb(db3);
       }
+    }
+    if (e instanceof RejectedValueError) {
+      // AT1 (plan §3 containment): a tombstone hit is a PERMANENT skip, not
+      // a transient failure — never DLQ-retry it. Mark the idempotency key
+      // seen exactly like the empty-body branch above so a GitHub retry of
+      // the same delivery acks as done, not error.
+      const db4 = openHippoDb(ctx.hippoRoot);
+      try {
+        db4
+          .prepare(
+            `INSERT OR IGNORE INTO github_event_log (idempotency_key, delivery_id, event_name, ingested_at, memory_id) VALUES (?, ?, ?, ?, ?)`,
+          )
+          .run(idempotencyKey, input.deliveryId, input.event.eventName, new Date().toISOString(), null);
+      } finally {
+        closeHippoDb(db4);
+      }
+      return { status: 'skipped', memoryId: null };
     }
     throw e;
   }

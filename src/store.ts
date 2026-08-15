@@ -24,6 +24,19 @@ import { tokenize } from './search.js';
 import { appendAuditEvent, type AuditOp } from './audit.js';
 import { resolveTenantId } from './tenant.js';
 import { deriveOriginProject, originFromSource } from './project-identity.js';
+import {
+  checkRejectionGuard,
+  RejectedValueError,
+  rejectionDigest,
+  normalizeValueForRejection,
+  insertRejectedValue,
+} from './rejection.js';
+// AT1 (plan §5): resolveConflict's kind-aware loser removal needs
+// archiveRawMemory for kind='raw' losers. raw-archive.ts imports
+// markSummaryDirtyInTx from this module — both imports are used only
+// inside function bodies (never at module-evaluation time), so the cycle
+// is the standard safe mutual-function-reference shape under NodeNext ESM.
+import { archiveRawMemory } from './raw-archive.js';
 
 /**
  * Emit an audit event for a mutation against `db`. Wrapped so a broken audit
@@ -50,6 +63,28 @@ function audit(
     // Audit must never crash a mutation. Failures here mean the audit_log
     // table is broken; the mutation has already succeeded.
   }
+}
+
+/**
+ * Refusal audit for the AT1 rejection guard (plan §3). Written by the
+ * transaction OWNER post-rollback — writeEntry's catch (no outer tx exists
+ * there, so this lands in a fresh implicit transaction) and api.supersede's
+ * catch (after its own ROLLBACK) — never inside a scope the caller's own
+ * rollback could claw back. Best-effort `audit()` semantics: never throws.
+ */
+export function auditRejectionRefusal(
+  db: ReturnType<typeof openHippoDb>,
+  err: RejectedValueError,
+  actor: string,
+): void {
+  audit(
+    db,
+    'reject_refusal',
+    err.entryId,
+    { digest: err.digest, reason: err.reason },
+    actor,
+    err.tenantId,
+  );
 }
 
 export interface IndexEntry {
@@ -900,10 +935,32 @@ function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: str
 
   db.exec('BEGIN');
   try {
+    // AT1 (plan §3, round-3 redesign): run the guard LIVE per row rather
+    // than bypassing it. bootstrapLegacyStore is exactly the channel through
+    // which a stale/never-purged markdown mirror could resurrect a rejected
+    // value; a skip-and-count here closes that structurally, independent of
+    // mirror state. The refusal audit is written INLINE inside this
+    // still-open loop transaction (plain audit() — nothing is rolled back
+    // on a per-row skip, so the post-rollback auditRejectionRefusal helper
+    // is the wrong tool here).
+    let rejectedCount = 0;
     for (const entry of legacyEntries) {
       // v39: legacy markdown carries no origin_project; stamp from the store
       // location so bootstrapped rows stay visible to ambient context.
-      upsertEntryRow(db, stampOriginProjectForImport(hippoRoot, entry));
+      const stamped = stampOriginProjectForImport(hippoRoot, entry);
+      try {
+        upsertEntryRow(db, stamped);
+      } catch (err) {
+        if (err instanceof RejectedValueError) {
+          rejectedCount++;
+          audit(db, 'reject_refusal', err.entryId, { digest: err.digest, reason: err.reason }, 'cli', err.tenantId);
+          continue;
+        }
+        throw err;
+      }
+    }
+    if (rejectedCount > 0) {
+      console.error(`bootstrapLegacyStore: skipped ${rejectedCount} rejected value(s) found in legacy mirrors`);
     }
 
     const legacyIndex = loadLegacyIndexFile(hippoRoot);
@@ -994,7 +1051,21 @@ function loadLegacyStatsFile(hippoRoot: string): Record<string, unknown> {
   }
 }
 
-function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry): void {
+/**
+ * `bypassRejectionGuard` (AT1, plan §3): ONLY `batchWriteAndDelete`'s call
+ * site passes `true` — consolidation merge/auto-promote writes are LLM
+ * paraphrase rollups of already-guarded leaf facts; the guard belongs on
+ * leaf inserts. Every other caller (writeEntryDbOnly, bootstrapLegacyStore,
+ * rebuildIndex) leaves this false and the guard runs live.
+ */
+function upsertEntryRow(
+  db: ReturnType<typeof openHippoDb>,
+  entry: MemoryEntry,
+  bypassRejectionGuard = false,
+): void {
+  if (!bypassRejectionGuard) {
+    checkRejectionGuard(db, entry.tenantId ?? 'default', entry.id, entry.content);
+  }
   db.prepare(`
     INSERT INTO memories(
       id, created, last_retrieved, retrieval_count, strength, half_life_days, layer,
@@ -1116,7 +1187,8 @@ function deleteFtsRow(db: ReturnType<typeof openHippoDb>, id: string): void {
   }
 }
 
-function buildIndexFromDb(db: ReturnType<typeof openHippoDb>): HippoIndex {
+// AT1: exported for the same reason as writeIndexMirror above.
+export function buildIndexFromDb(db: ReturnType<typeof openHippoDb>): HippoIndex {
   const rows = db.prepare(`SELECT id, created, last_retrieved, strength, layer, tags_json, pinned FROM memories ORDER BY created ASC, id ASC`).all() as Array<{
     id: string;
     created: string;
@@ -1172,7 +1244,11 @@ function buildStatsFromDb(db: ReturnType<typeof openHippoDb>): Record<string, un
   };
 }
 
-function writeIndexMirror(hippoRoot: string, index: HippoIndex): void {
+// AT1: exported so src/reject-flow.ts can replicate deleteEntry's exact
+// post-commit "removeEntryMirrors then rewrite the index once" sequence for
+// the reject verb's (possibly multi-row) removal, without duplicating
+// buildIndexFromDb's query.
+export function writeIndexMirror(hippoRoot: string, index: HippoIndex): void {
   fs.writeFileSync(path.join(hippoRoot, 'index.json'), JSON.stringify(index, null, 2), 'utf8');
 }
 
@@ -1317,6 +1393,15 @@ export function writeEntry(
     writeEntryDbOnly(db, stamped, opts);
     opts?.afterCommit?.();
     writeEntryMirrors(hippoRoot, db, stamped);
+  } catch (error) {
+    // AT1 (plan §3): writeEntryDbOnly's own SAVEPOINT has already unwound by
+    // the time this catch runs, so the refusal audit lands post-rollback in
+    // a fresh implicit transaction — then rethrow so the caller sees the
+    // refusal.
+    if (error instanceof RejectedValueError) {
+      auditRejectionRefusal(db, error, opts?.actor ?? 'cli');
+    }
+    throw error;
   } finally {
     closeHippoDb(db);
   }
@@ -1632,11 +1717,58 @@ export function loadChildrenOf(
 }
 
 /**
+ * AT1 (plan §4, round-2 fix, designed from source): db-scoped delete core.
+ * `deleteEntry` used to open+close its OWN connection, which meant it could
+ * never compose inside a caller's transaction (unlike writeEntry/
+ * writeEntryDbOnly, which already split this way). Split identically: row-
+ * meta SELECT, `DELETE FROM memories`, FTS delete, `forget` audit, DAG
+ * dirty-mark. NO filesystem I/O — the caller's own transaction may still be
+ * rolled back, and mirror writes must only happen post-commit.
+ *
+ * `opts.suppressForgetAudit` (default false, off): T2's reject path sets
+ * this so removed non-raw rows do NOT each emit a `forget` row — a single
+ * aggregate `reject_value` audit row is the trail for that path instead.
+ * Default keeps `deleteEntry` byte-identical to its pre-split behavior.
+ *
+ * Returns `{tenantId, dagParentId}` for the removed row, or `null` if no row
+ * with `id` existed.
+ */
+export function deleteEntryCore(
+  db: ReturnType<typeof openHippoDb>,
+  id: string,
+  opts?: { actor?: string; suppressForgetAudit?: boolean },
+): { tenantId: string; dagParentId: string | null } | null {
+  const row = db
+    .prepare(`SELECT id, tenant_id, dag_parent_id FROM memories WHERE id = ?`)
+    .get(id) as { id?: string; tenant_id?: string; dag_parent_id?: string | null } | undefined;
+  if (!row?.id) return null;
+
+  db.prepare(`DELETE FROM memories WHERE id = ?`).run(id);
+  deleteFtsRow(db, id);
+  if (!opts?.suppressForgetAudit) {
+    audit(db, 'forget', id, undefined, opts?.actor ?? 'cli', row.tenant_id);
+  }
+  // v0.30 / E2 — DAG live-coupling: forget of a child under a level-2
+  // summary marks parent dirty. Non-atomic with the DELETE (no SAVEPOINT
+  // wrapper here, same as pre-split deleteEntry); markSummaryDirtyInTx is
+  // idempotent so any future child mutation re-marks parent if this fails.
+  // Acceptable degradation, mirrors the pre-split audit best-effort posture.
+  if (row.dag_parent_id) {
+    markSummaryDirtyInTx(db, row.dag_parent_id, row.tenant_id ?? 'default', opts?.actor ?? 'cli');
+  }
+  return { tenantId: row.tenant_id ?? 'default', dagParentId: row.dag_parent_id ?? null };
+}
+
+/**
  * Delete an entry from SQLite and mirrors.
  *
  * `opts.actor` defaults to 'cli'. The api.* layer threads `ctx.actor` so HTTP
  * callers land with `api_key:<key_id>` in the audit log without a duplicate
  * emit from the api wrapper.
+ *
+ * Thin wrapper over `deleteEntryCore` (open → core → mirrors → close);
+ * behavior is byte-identical to the pre-split implementation for every
+ * existing caller.
  */
 export function deleteEntry(
   hippoRoot: string,
@@ -1646,24 +1778,11 @@ export function deleteEntry(
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    const row = db
-      .prepare(`SELECT id, tenant_id, dag_parent_id FROM memories WHERE id = ?`)
-      .get(id) as { id?: string; tenant_id?: string; dag_parent_id?: string | null } | undefined;
-    if (!row?.id) return false;
+    const result = deleteEntryCore(db, id, opts);
+    if (!result) return false;
 
-    db.prepare(`DELETE FROM memories WHERE id = ?`).run(id);
-    deleteFtsRow(db, id);
     removeEntryMirrors(hippoRoot, id);
     writeIndexMirror(hippoRoot, buildIndexFromDb(db));
-    audit(db, 'forget', id, undefined, opts?.actor ?? 'cli', row.tenant_id);
-    // v0.30 / E2 — DAG live-coupling: forget of a child under a level-2
-    // summary marks parent dirty. Non-atomic with the DELETE (deleteEntry
-    // has no SAVEPOINT wrapper); markSummaryDirtyInTx is idempotent so any
-    // future child mutation re-marks parent if this fails. Acceptable
-    // degradation, mirrors deleteEntry's existing audit best-effort posture.
-    if (row.dag_parent_id) {
-      markSummaryDirtyInTx(db, row.dag_parent_id, row.tenant_id ?? 'default', opts?.actor ?? 'cli');
-    }
     return true;
   } finally {
     closeHippoDb(db);
@@ -1711,7 +1830,14 @@ export function batchWriteAndDelete(
     // context (codex gating review P1).
     const stampedWrites = toWrite.map((e) => stampOriginProject(hippoRoot, e));
     for (const entry of stampedWrites) {
-      upsertEntryRow(db, entry);
+      // AT1 (plan §3): bypass the rejection guard here. Consolidation
+      // merge/auto-promote writes are LLM paraphrase rollups of
+      // already-guarded leaf facts — refusing a paraphrase mid-batch would
+      // abort the whole consolidation transaction, and the digest would
+      // almost never match anyway (false confidence, not protection). The
+      // guard belongs on leaf inserts, which write through writeEntry /
+      // writeEntryDbOnly and stay guarded (bypassRejectionGuard defaults false).
+      upsertEntryRow(db, entry, true);
       // Hook for writes: child upserted under a level-2 summary marks parent dirty.
       if (entry.dag_parent_id) {
         dirtyParents.add(entry.dag_parent_id);
@@ -1856,9 +1982,27 @@ export function rebuildIndex(hippoRoot: string): HippoIndex {
     if (legacyEntries.length > 0) {
       db.exec('BEGIN');
       try {
+        // AT1 (plan §3, round-3 redesign): same guard-with-per-row-skip as
+        // bootstrapLegacyStore — rebuildIndex is the other channel through
+        // which a stale markdown mirror could resurrect a rejected value.
+        // Refusal audit written INLINE (nothing rolls back on a skip).
+        let rejectedCount = 0;
         for (const entry of legacyEntries) {
           // v39: same store-derived origin stamp as bootstrapLegacyStore.
-          upsertEntryRow(db, stampOriginProjectForImport(hippoRoot, entry));
+          const stamped = stampOriginProjectForImport(hippoRoot, entry);
+          try {
+            upsertEntryRow(db, stamped);
+          } catch (err) {
+            if (err instanceof RejectedValueError) {
+              rejectedCount++;
+              audit(db, 'reject_refusal', err.entryId, { digest: err.digest, reason: err.reason }, 'cli', err.tenantId);
+              continue;
+            }
+            throw err;
+          }
+        }
+        if (rejectedCount > 0) {
+          console.error(`rebuildIndex: skipped ${rejectedCount} rejected value(s) found in legacy mirrors`);
         }
         db.exec('COMMIT');
       } catch (err) {
@@ -2440,9 +2584,32 @@ export function replaceDetectedConflicts(
 }
 
 /**
+ * AT1 (plan §5): additive-optional opts for resolveConflict.
+ * `rejectLoserValue` implies removal of the loser regardless of
+ * `forgetLoser` — you cannot tombstone a value and leave it live.
+ */
+export interface ResolveConflictOpts {
+  /** Tombstone the loser's normalized digest + kind-aware remove it. */
+  rejectLoserValue?: boolean;
+  /** Actor for the tombstone + the new conflict_resolve audit row. Defaults to 'cli'. */
+  rejectedBy?: string;
+  /** Reason recorded on the tombstone (and passed to archiveRawMemory if the
+   *  loser is kind='raw'). Defaults to a conflict-context string. */
+  reason?: string;
+}
+
+/**
  * Resolve a conflict by keeping one memory and weakening the other.
  * Sets conflict status to 'resolved' and halves the loser's half-life.
- * If --forget is used, the loser is deleted entirely.
+ * If --forget is used, the loser is removed entirely (kind-aware: raw rows
+ * are archived via archiveRawMemory, others deleted via deleteEntryCore —
+ * AT1 fix for the pre-existing crash where a raw loser aborted the whole
+ * resolve transaction against the append-only trigger). `opts.rejectLoserValue`
+ * additionally tombstones the loser's normalized digest so it cannot be
+ * re-asserted later.
+ *
+ * Every resolution path (weaken / forget / reject) emits a `conflict_resolve`
+ * audit row (AT1 — previously resolveConflict wrote zero audit rows on any path).
  *
  * Returns the resolved conflict, or null if not found.
  */
@@ -2452,6 +2619,7 @@ export function resolveConflict(
   keepId: string,
   forgetLoser: boolean = false,
   tenantId?: string,
+  opts?: ResolveConflictOpts,
 ): { conflict: MemoryConflict; loserId: string } | null {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
@@ -2497,9 +2665,50 @@ export function resolveConflict(
     db.prepare(`UPDATE memory_conflicts SET status = 'resolved', updated_at = datetime('now') WHERE id = ?`)
       .run(conflictId);
 
-    if (forgetLoser) {
-      // Delete the losing memory
-      db.prepare(`DELETE FROM memories WHERE id = ?${memScope}`).run(loserId, ...memArgs);
+    // AT1 (plan §5): removal (forgetLoser OR rejectLoserValue — a tombstoned
+    // value cannot be left live) is now kind-aware. The old bare
+    // `DELETE FROM memories WHERE id = ?` aborted the whole transaction when
+    // the loser was kind='raw' (append-only trigger fires); route through
+    // the same helpers the reject verb uses (both db-scoped, both compose
+    // inside this BEGIN/COMMIT). loserRemoved / loserWasRaw drive both the
+    // conflicts_with_json skip below and the post-commit mirror purge.
+    let loserRemoved = false;
+    let loserWasRaw = false;
+    let rejectedDigest: string | undefined;
+    const removeLoser = forgetLoser || opts?.rejectLoserValue === true;
+
+    if (removeLoser) {
+      const loserRow = db
+        .prepare(`SELECT kind, content, tenant_id FROM memories WHERE id = ?${memScope}`)
+        .get(loserId, ...memArgs) as { kind: string; content: string; tenant_id: string } | undefined;
+
+      if (loserRow) {
+        const actor = opts?.rejectedBy ?? 'cli';
+        const reason = opts?.reason ?? `resolveConflict ${conflictId}: kept ${keepId}`;
+
+        if (opts?.rejectLoserValue) {
+          rejectedDigest = rejectionDigest(loserRow.content);
+          insertRejectedValue(db, {
+            tenantId: loserRow.tenant_id ?? 'default',
+            digest: rejectedDigest,
+            reason,
+            rejectedBy: actor,
+            rejectedAt: new Date().toISOString(),
+            sourceMemoryId: loserId,
+            normalizedChars: normalizeValueForRejection(loserRow.content).length,
+          });
+        }
+
+        if (loserRow.kind === 'raw') {
+          archiveRawMemory(db, loserId, { reason, who: actor });
+          loserWasRaw = true;
+        } else {
+          deleteEntryCore(db, loserId, { actor, suppressForgetAudit: true });
+        }
+        loserRemoved = true;
+      }
+      // loserRow undefined = tenant-scope mismatch (or already gone); matches
+      // the old tenant-scoped DELETE's silent 0-rows-affected behavior.
     } else {
       // Halve the loser's half-life (weakens it over time)
       db.prepare(`UPDATE memories SET half_life_days = MAX(1, half_life_days / 2), updated_at = datetime('now') WHERE id = ?${memScope}`)
@@ -2515,7 +2724,7 @@ export function resolveConflict(
         .run(JSON.stringify(cleaned), keepId, ...memArgs);
     }
 
-    if (!forgetLoser) {
+    if (!loserRemoved) {
       const loserRow = db.prepare(`SELECT conflicts_with_json FROM memories WHERE id = ?${memScope}`).get(loserId, ...memArgs) as { conflicts_with_json: string } | undefined;
       if (loserRow) {
         const refs: string[] = JSON.parse(loserRow.conflicts_with_json || '[]');
@@ -2525,8 +2734,52 @@ export function resolveConflict(
       }
     }
 
+    // AT1: the missing audit (plan §5 — resolveConflict wrote ZERO audit_log
+    // rows on any path before this). Every path — weaken, forget, reject —
+    // lands exactly one conflict_resolve row.
+    audit(
+      db,
+      'conflict_resolve',
+      keepId,
+      {
+        conflictId,
+        keepId,
+        loserId,
+        disposition: loserRemoved ? (loserWasRaw ? 'archived_raw' : 'deleted') : 'weakened',
+        rejected: Boolean(opts?.rejectLoserValue),
+        rejectedDigest,
+      },
+      opts?.rejectedBy ?? 'cli',
+      tenantId,
+    );
+
     db.exec('COMMIT');
     syncMirrorFiles(hippoRoot, db);
+
+    // AT1 (plan §5): mirror purge + reaper stamp for the rejectLoserValue
+    // path only — same post-commit pattern as the reject verb
+    // (src/reject-flow.ts), reusing removeEntryMirrors + the raw_archive
+    // reaper bookkeeping. The plain forgetLoser path is left byte-identical
+    // to its pre-AT1 behavior (syncMirrorFiles above is all it ever did).
+    if (opts?.rejectLoserValue && loserRemoved) {
+      let mirrorOk = false;
+      try {
+        removeEntryMirrors(hippoRoot, loserId);
+        mirrorOk = true;
+      } catch (mirrorErr) {
+        console.error(
+          `resolveConflict: mirror cleanup failed for ${loserId} (will retry via reaper on next open): ${
+            mirrorErr instanceof Error ? mirrorErr.message : String(mirrorErr)
+          }`,
+        );
+      }
+      if (mirrorOk && loserWasRaw) {
+        db.prepare(`UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(
+          new Date().toISOString(),
+          loserId,
+        );
+      }
+    }
 
     return { conflict: { ...conflict, status: 'resolved' }, loserId };
   } catch (error) {

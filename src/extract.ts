@@ -1,5 +1,6 @@
 import { MemoryEntry, Layer, EmotionalValence, createMemory } from './memory.js';
 import { writeEntry } from './store.js';
+import { RejectedValueError } from './rejection.js';
 
 export interface ExtractedFact {
   content: string;
@@ -97,6 +98,7 @@ export function storeExtractedFacts(
   );
 
   const entries: MemoryEntry[] = [];
+  let rejected = 0;
 
   for (const fact of facts) {
     const tags = ['extracted', ...inheritedTags, ...fact.tags];
@@ -109,8 +111,23 @@ export function storeExtractedFacts(
       extracted_from: source.id,
     });
 
-    writeEntry(hippoRoot, entry);
+    // AT1 containment: a refusal is per-VALUE — one rejected fact must not
+    // drop the rest of this batch. writeEntry has already audited the
+    // refusal (reject_refusal) before rethrowing, so skip-and-count here.
+    try {
+      writeEntry(hippoRoot, entry);
+    } catch (err) {
+      if (err instanceof RejectedValueError) {
+        rejected++;
+        continue;
+      }
+      throw err;
+    }
     entries.push(entry);
+  }
+
+  if (rejected > 0) {
+    console.error(`storeExtractedFacts: skipped ${rejected} rejected value(s)`);
   }
 
   return entries;
