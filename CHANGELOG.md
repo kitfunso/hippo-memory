@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.31.0 - 2026-08-15
+
+### Added
+- **Rejected-value tombstone (`hippo reject` / `rejections` / `unreject`)**
+  (#142, ROADMAP Part V AT1). A human who rejects a value now gets a durable
+  say: a digest-keyed `rejected_values` table (schema v41; per store, per
+  tenant; no content stored - the required `--reason` is the tombstone's only
+  human-readable identity, so a rejected secret never persists) refuses
+  byte-stable re-assertion of that value across every write surface -
+  remember, capture, import, sync, connectors, supersede, consolidation
+  merges, auto-promoted traces, and DAG summary rebuilds. Refusals are
+  audited (`reject_refusal`); `hippo unreject <digest-prefix>` is the only
+  escape hatch. Multi-item writers (capture, importers, sleep passes,
+  connector ingest, auto-share) skip a refused item and continue - one
+  rejected value never aborts a batch - while single-item surfaces fail loud
+  with the tombstone's reason. `hippo resolve` gains `--reject-loser`, which
+  tombstones the losing value and removes every same-tenant duplicate
+  (kind-aware: raw rows are archived, never bare-deleted).
+- api additions: `api.reject` / `api.unreject` / `api.listRejections`;
+  `ImportResult` gains an optional `rejected` count; sleep results report
+  `rejectedSkipped` alongside the secret-veto counter.
+
+### Fixed
+- `resolveConflict` now writes a `conflict_resolve` audit row on every
+  resolution path (it previously wrote none) and no longer crashes when the
+  forgotten loser is a `kind='raw'` row (routed through the archive path).
+- Trace-layer markdown mirrors are now included in mirror cleanup (rejected
+  or forgotten trace content no longer survives on disk).
+- `batchWriteAndDelete` opens with `BEGIN IMMEDIATE` and re-checks
+  tombstones inside its own transaction, closing a race where a reject
+  landing mid-consolidation could be silently undone.
+- Legacy-mirror bootstrap is gated by a completion flag (an all-rejected
+  mirror set no longer re-runs bootstrap on every store open).
+- Capture and import `--dry-run` previews now probe tombstones so preview
+  counts match the real run.
+
 ## 1.30.0 - 2026-08-10
 
 ### Added
