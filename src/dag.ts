@@ -198,6 +198,7 @@ export async function buildDag(
 export interface DagRebuildResult {
   attempted: number;            // summaries we tried (<= cap)
   rebuilt: number;              // successful regenerations
+  refused: number;              // tombstone-hit refusals — dirty cleared, content NOT written (T4 split from `rebuilt`)
   zeroChildSkipped: number;     // dirty-cleared without LLM (descendants all gone)
   failed: number;               // LLM null, fetch error, or applyRebuildResult throw
   capped: boolean;              // true if queue had more than cap entries
@@ -213,7 +214,12 @@ export interface DagRebuildResult {
  *
  * Race-loser handling: applyRebuildResult's UPDATE WHERE includes
  * AND summary_dirty=1, so concurrent sleep's second writer returns
- * changed=false. Silent skip (neither rebuilt++ nor failed++).
+ * changed=false. Silent skip (neither rebuilt++ nor refused++ nor failed++).
+ *
+ * T4: applyRebuildResult returns { changed, refused } — a tombstone hit
+ * (rebuild content matches a previously-rejected value) increments
+ * `refused`, not `rebuilt`. Dirty still clears either way; only the stat
+ * split changed (docs/plans/2026-08-15-hardening-at1-followups.md T4).
  */
 export async function rebuildDirtySummaries(
   hippoRoot: string,
@@ -227,6 +233,7 @@ export async function rebuildDirtySummaries(
   const result: DagRebuildResult = {
     attempted: queue.length,
     rebuilt: 0,
+    refused: 0,
     zeroChildSkipped: 0,
     failed: 0,
     capped,
@@ -247,7 +254,7 @@ export async function rebuildDirtySummaries(
 
       if (children.length === 0) {
         // Zero-child case: clear dirty + zero counts, no LLM call, no rebuild_count bump.
-        const changed = applyRebuildResult(hippoRoot, summary, {
+        const { changed } = applyRebuildResult(hippoRoot, summary, {
           content: summary.content,
           descendant_count: 0,
           earliest_at: null,
@@ -257,7 +264,9 @@ export async function rebuildDirtySummaries(
           actor: 'sleep',
         });
         if (changed) result.zeroChildSkipped++;
-        // changed=false → race lost / row vanished; silently skip
+        // changed=false → race lost / row vanished; silently skip. `refused`
+        // is always false here — applyRebuildResult only checks the
+        // tombstone when bumpRebuildCount is true (store.ts:3398).
         continue;
       }
 
@@ -282,7 +291,7 @@ export async function rebuildDirtySummaries(
       }
 
       const childCreatedAts = children.map((c) => c.created).sort();
-      const changed = applyRebuildResult(hippoRoot, summary, {
+      const { changed, refused } = applyRebuildResult(hippoRoot, summary, {
         content: newContent,
         descendant_count: children.length,
         earliest_at: childCreatedAts[0],
@@ -291,8 +300,13 @@ export async function rebuildDirtySummaries(
         zeroChildren: false,
         actor: 'sleep',
       });
-      if (changed) result.rebuilt++;
-      // changed=false → race lost; not failure, not success, silently skip
+      if (refused) {
+        result.refused++;
+      } else if (changed) {
+        result.rebuilt++;
+      }
+      // changed=false (refused also false) → race lost; not failure, not
+      // success, silently skip
     } catch (err) {
       // Per-summary failure isolation — one throw doesn't abort the queue.
       // independent-review MED #2 fold: log enough to triage in production
