@@ -67,7 +67,11 @@ export function strengthBucket(strength: number | null | undefined): number {
 
 /**
  * Scan the store for near-duplicate memories and remove the weaker copy.
- * Two memories are duplicates if their content has > threshold Jaccard overlap.
+ * Two memories are duplicates if their content has > threshold Jaccard
+ * overlap AND they belong to the same tenant: the scan is partitioned by
+ * tenantId, so byte-identical content in two tenants is never a duplicate
+ * pair (the tenant boundary is an isolation boundary; cross-tenant removal
+ * was the v1.32.0 known-issue data-loss bug).
  * Keeps the one with higher strength (or more retrievals if tied).
  */
 export function deduplicateStore(
