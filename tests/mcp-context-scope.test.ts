@@ -60,7 +60,7 @@ describe('mcp hippo_context scope filter', () => {
     const res = await callTool(0, 'hippo_context', { budget: 0 }, {
       hippoRoot: home,
       tenantId: 'default',
-      actor: { subject: 'mcp', role: 'admin' },
+      actor: 'mcp',
     });
 
     expect(extractText(res)).toBe('Done.');
@@ -82,7 +82,7 @@ describe('mcp hippo_context scope filter', () => {
     const res = await callTool(1, 'hippo_context', {}, {
       hippoRoot: home,
       tenantId: 'default',
-      actor: { subject: 'mcp', role: 'admin' },
+      actor: 'mcp',
     });
     const text = extractText(res);
     expect(text).not.toContain('private memory secret');
@@ -103,7 +103,7 @@ describe('mcp hippo_context scope filter', () => {
     const res = await callTool(2, 'hippo_context', { scope: 'slack:private:Csecret' }, {
       hippoRoot: home,
       tenantId: 'default',
-      actor: { subject: 'mcp', role: 'admin' },
+      actor: 'mcp',
     });
     const text = extractText(res);
     expect(text).toContain('Private task');
@@ -123,7 +123,7 @@ describe('mcp hippo_context scope filter', () => {
     const res = await callTool(3, 'hippo_context', {}, {
       hippoRoot: home,
       tenantId: 'default',
-      actor: { subject: 'mcp', role: 'admin' },
+      actor: 'mcp',
     });
     const text = extractText(res);
     expect(text).not.toContain('BRAVO deploykey fact from another project');
@@ -144,7 +144,7 @@ describe('mcp hippo_context scope filter', () => {
     const res = await callTool(4, 'hippo_context', {}, {
       hippoRoot: home,
       tenantId: 'default',
-      actor: { subject: 'mcp', role: 'admin' },
+      actor: 'mcp',
     });
     const text = extractText(res);
     expect(text).not.toContain('sk_vendor_deadbeef123456');

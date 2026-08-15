@@ -83,21 +83,39 @@ function condemnedEntry(
   opts: { layer?: Layer; tenantId?: string; tags?: string[]; confidence?: MemoryEntry['confidence'] } = {},
 ): MemoryEntry {
   const created = ancientDate(3650);
-  return {
-    ...createMemory(content, {
-      layer: opts.layer ?? Layer.Semantic,
-      tenantId: opts.tenantId,
-      tags: opts.tags,
-      confidence: opts.confidence,
-    }),
+  const base = createMemory(content, {
+    layer: opts.layer ?? Layer.Semantic,
+    tenantId: opts.tenantId,
+    tags: opts.tags,
+    confidence: opts.confidence,
+  });
+  const overridden: MemoryEntry = {
+    ...base,
     created,
     last_retrieved: created,
+    valid_from: created,
     half_life_days: 1,
     retrieval_count: 0,
     outcome_positive: 0,
     outcome_negative: 0,
     pinned: false,
   };
+  // T5 fix (AT1 in-suite flake): single-source the stored `strength` to the
+  // same frozen clock basis as every other field above, instead of trusting
+  // createMemory's own computed value. createMemory (memory.ts:539) derives
+  // its initial strength via calculateStrength(entry) with NO explicit
+  // `now`, which defaults to a SECOND, separate evalNow() call -- distinct
+  // from the one that stamped created/last_retrieved a few lines earlier
+  // (memory.ts:494). Any real clock tick between those two reads makes
+  // daysSince a tiny positive epsilon instead of exactly 0, so `base.strength`
+  // can land at 0.999999999... instead of 1.0 (confirmed empirically: ~0.1%
+  // of calls landed non-unity in a 200k-iteration stress repro -- rare in
+  // isolation, likelier under full-suite worker contention, matching the
+  // observed isolation-pass/suite-fail split). Re-deriving here against
+  // `created` itself as `now` makes daysSince exactly 0 by definition
+  // (last_retrieved === created above): strength is exactly 1.0 with zero
+  // dependency on the real clock.
+  return { ...overridden, strength: calculateStrength(overridden, new Date(created)) };
 }
 
 function auditRescueRows(hippoRoot: string, tenantId: string) {

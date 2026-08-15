@@ -74,7 +74,7 @@ describe('MCP hippo_recall scorer_window (v1.7.2 T4)', () => {
     const result = await callTool(
       'hippo_recall',
       { query: 'alpha', budget: 5000, scorer_window: 2 },
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'mcp', role: 'admin' } },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
     );
     const text =
       (result as { result?: { content: Array<{ text: string }> } }).result
@@ -88,7 +88,7 @@ describe('MCP hippo_recall scorer_window (v1.7.2 T4)', () => {
       await callTool(
         'hippo_recall',
         { query: 'alpha', scorer_window: 0 },
-        { hippoRoot: home, tenantId: 'default', actor: { subject: 'mcp', role: 'admin' } },
+        { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
       );
     } catch (err) {
       thrown = err;
@@ -117,7 +117,7 @@ describe('MCP hippo_recall scorer_window (v1.7.2 T4)', () => {
     const result = await callTool(
       'hippo_recall',
       { query: 'alpha', budget: 5000, scorer_window: 2, fresh_tail_count: 5 },
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'mcp', role: 'admin' } },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
     );
     const text =
       (result as { result?: { content: Array<{ text: string }> } }).result
@@ -137,7 +137,7 @@ describe('MCP hippo_recall scorer_window (v1.7.2 T4)', () => {
       await callTool(
         'hippo_recall',
         { query: 'alpha', scorer_window: 'abc' },
-        { hippoRoot: home, tenantId: 'default', actor: { subject: 'mcp', role: 'admin' } },
+        { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
       );
     } catch (err) {
       thrown = err;

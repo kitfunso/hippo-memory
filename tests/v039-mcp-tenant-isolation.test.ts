@@ -78,8 +78,8 @@ describe('v039 mcp tenant + client-key isolation', () => {
       { content: 'shared-canary lastRecalled keyed-by-clientKey alpha-tenant' },
     );
 
-    const ctxA = { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'mcp', role: 'admin' }, clientKey: 'http:tokenA:1.2.3.4' };
-    const ctxB = { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'mcp', role: 'admin' }, clientKey: 'http:tokenB:5.6.7.8' };
+    const ctxA = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', clientKey: 'http:tokenA:1.2.3.4' };
+    const ctxB = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', clientKey: 'http:tokenB:5.6.7.8' };
 
     // Both clients recall the same memory.
     await callTool(1, 'hippo_recall', { query: 'lastRecalled', budget: 1500 }, ctxA);
@@ -106,7 +106,7 @@ describe('v039 mcp tenant + client-key isolation', () => {
     //
     // Probe that branch directly: clear B's set by giving a different
     // clientKey that has never recalled.
-    const ctxC = { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'mcp', role: 'admin' }, clientKey: 'http:tokenC:never-recalled' };
+    const ctxC = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', clientKey: 'http:tokenC:never-recalled' };
     const cOutcome = await callTool(3, 'hippo_outcome', { good: true }, ctxC);
     expect(extractText(cOutcome)).toMatch(/No recent recalls/i);
 
@@ -123,7 +123,7 @@ describe('v039 mcp tenant + client-key isolation', () => {
       { content: 'audit-canary recall actor-mcp shape lock' },
     );
 
-    const ctx = { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'mcp', role: 'admin' }, clientKey: 'http:t:addr' };
+    const ctx = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', clientKey: 'http:t:addr' };
     await callTool(1, 'hippo_recall', { query: 'audit-canary', budget: 1500 }, ctx);
 
     const db = openHippoDb(home);
@@ -148,7 +148,7 @@ describe('v039 mcp tenant + client-key isolation', () => {
 
   // ---- Test 3: MCP remember produces audit_log with actor='mcp' -------------
   it('hippo_remember via MCP routes through api.ts and writes audit_log with actor=mcp', async () => {
-    const ctx = { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'mcp', role: 'admin' }, clientKey: 'http:t:addr' };
+    const ctx = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', clientKey: 'http:t:addr' };
     const res = await callTool(
       1,
       'hippo_remember',
@@ -170,7 +170,7 @@ describe('v039 mcp tenant + client-key isolation', () => {
 
   // ---- Test 3.5: hippo_outcome routes through api.ts (audit_log actor=mcp) -
   it('hippo_outcome via MCP routes through api.ts and writes audit_log with op=outcome actor=mcp', async () => {
-    const ctx = { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'mcp', role: 'admin' }, clientKey: 'http:t:addr-outcome' };
+    const ctx = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', clientKey: 'http:t:addr-outcome' };
     // Seed a memory + recall it so lastRecalledIds is populated for clientKey.
     apiRemember({ hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } }, { content: 'outcome-canary memory for audit shape lock' });
     await callTool(1, 'hippo_recall', { query: 'outcome-canary' }, ctx);
@@ -196,7 +196,7 @@ describe('v039 mcp tenant + client-key isolation', () => {
       { content: 'stdio-fallback canary backward-compat clientKey-undefined' },
     );
 
-    const ctxNoKey = { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'mcp', role: 'admin' } };
+    const ctxNoKey = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp' };
 
     // Recall sets the keyed Map under the stdio-${pid}:alpha fallback.
     const recallRes = await callTool(1, 'hippo_recall', { query: 'stdio-fallback', budget: 1500 }, ctxNoKey);
@@ -227,8 +227,8 @@ describe('v039 mcp tenant + client-key isolation', () => {
     const keyB = `http:${createHash('sha256').update(bearerB).digest('hex').slice(0, 16)}:${remoteAddr}`;
     expect(keyA).not.toBe(keyB);
 
-    const ctxA = { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'mcp', role: 'admin' }, clientKey: keyA };
-    const ctxB = { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'mcp', role: 'admin' }, clientKey: keyB };
+    const ctxA = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', clientKey: keyA };
+    const ctxB = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', clientKey: keyB };
 
     // Only A recalls.
     await callTool(1, 'hippo_recall', { query: 'cross-client', budget: 1500 }, ctxA);
@@ -255,7 +255,7 @@ describe('v039 mcp tenant + client-key isolation', () => {
     // through to the test — handleMcpRequest catches the executeTool throw
     // only in the HTTP handler, but here we're calling handleMcpRequest
     // directly, so the throw propagates. Wrap accordingly.
-    const ctxB = { hippoRoot: home, tenantId: 'bravo', actor: { subject: 'mcp', role: 'admin' }, clientKey: 'http:bravo-token:1.2.3.4' };
+    const ctxB = { hippoRoot: home, tenantId: 'bravo', actor: 'mcp', clientKey: 'http:bravo-token:1.2.3.4' };
 
     let threwNotFound = false;
     try {
@@ -277,9 +277,89 @@ describe('v039 mcp tenant + client-key isolation', () => {
     }
 
     // Sanity: tenant A can still share its own memory.
-    const ctxA = { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'mcp', role: 'admin' }, clientKey: 'http:alpha-token:1.2.3.4' };
+    const ctxA = { hippoRoot: home, tenantId: 'alpha', actor: 'mcp', clientKey: 'http:alpha-token:1.2.3.4' };
     const okRes = await callTool(2, 'hippo_share', { id: a.id, force: true }, ctxA);
     expect(extractText(okRes)).toMatch(/Shared \[mem_|Shared \[g_/);
+  });
+
+  // ---- Test 7: T2 — ctx.actor threads into audit_log subject ---------------
+  // server.ts's 5 ApiContext build sites used to hardcode adminActor('mcp'),
+  // ignoring McpContext.actor entirely. Fix: adminActor(ctx?.actor ?? 'mcp').
+  // Under HTTP-MCP ctx.actor carries the auth-resolved subject; this must
+  // show up as the audit_log actor for remember and outcome (recall already
+  // covered by Test 2's actor=mcp pin above, same code path).
+  it('hippo_remember and hippo_outcome via MCP thread ctx.actor into audit_log subject (T2)', async () => {
+    const ctx = { hippoRoot: home, tenantId: 'alpha', actor: 'user:alice', clientKey: 'http:alice:addr' };
+
+    const rememberRes = await callTool(
+      1,
+      'hippo_remember',
+      { text: 'T2-canary remember actor-threading user-alice' },
+      ctx,
+    );
+    expect(extractText(rememberRes)).toMatch(/Remembered \[mem_/);
+
+    await callTool(2, 'hippo_recall', { query: 'T2-canary' }, ctx);
+    const outcomeRes = await callTool(3, 'hippo_outcome', { good: true }, ctx);
+    expect(extractText(outcomeRes)).toMatch(/Applied positive outcome to \d+ memories/);
+
+    const db = openHippoDb(home);
+    try {
+      const rememberEvents = queryAuditEvents(db, { tenantId: 'alpha', op: 'remember' });
+      const aliceRemember = rememberEvents.find((e) => e.actor === 'user:alice');
+      expect(aliceRemember).toBeDefined();
+      expect(aliceRemember!.targetId).toMatch(/^mem_/);
+
+      const outcomeEvents = queryAuditEvents(db, { tenantId: 'alpha', op: 'outcome' });
+      const aliceOutcome = outcomeEvents.find((e) => e.actor === 'user:alice');
+      expect(aliceOutcome).toBeDefined();
+
+      // Codex review-stage P2 pin: the recall branch's SIDE EFFECTS (retrieval
+      // persist via writeEntry, anchoring/availability audits) must carry the
+      // same resolved actor as the primary call - a single authenticated
+      // recall must never fan audit rows out across multiple principals
+      // ('user:alice' primary + 'cli' writeEntry default + hardcoded 'mcp').
+      const allAlphaEvents = queryAuditEvents(db, { tenantId: 'alpha' });
+      const principals = new Set(allAlphaEvents.map((e) => e.actor));
+      expect(principals.has('cli')).toBe(false);
+      expect(principals.has('mcp')).toBe(false);
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
+  // ---- Test 8: T2 — actor not supplied still falls back to 'mcp' -----------
+  // Pins ctx?.actor ?? 'mcp' directly (existing-behavior pin: stdio callers
+  // pass no ctx, and the fallback must stay 'mcp'). This deliberately does
+  // NOT call handleMcpRequest with the whole ctx argument omitted — on this
+  // dev machine findHippoRoot()'s cwd walk reaches the real global store at
+  // C:/Users/skf_s/.hippo before HIPPO_HOME's sandbox override applies
+  // (verified: C:/Users/skf_s/.hippo exists), so exercising the literal
+  // no-ctx branch here would write test rows into a real, non-test store.
+  // hippoRoot/tenantId are supplied instead (as in every other test in this
+  // file, skipping findHippoRoot entirely) with actor the only field left
+  // unset, which reaches the fix's `??` operator identically at runtime.
+  it('MCP context with actor omitted falls back to "mcp" in audit_log (ctx?.actor ?? "mcp" pin)', async () => {
+    const res = await handleMcpRequest(
+      {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'hippo_remember', arguments: { text: 'T2-canary fallback no-actor-supplied' } },
+      },
+      { hippoRoot: home, tenantId: 'alpha', clientKey: 'http:no-actor:addr' } as any,
+    );
+    expect(extractText(res)).toMatch(/Remembered \[mem_/);
+
+    const db = openHippoDb(home);
+    try {
+      const rememberEvents = queryAuditEvents(db, { tenantId: 'alpha', op: 'remember' });
+      const fallbackRemember = rememberEvents.find((e) => e.actor === 'mcp');
+      expect(fallbackRemember).toBeDefined();
+      expect(fallbackRemember!.targetId).toMatch(/^mem_/);
+    } finally {
+      closeHippoDb(db);
+    }
   });
 });
 

@@ -212,7 +212,7 @@ describe('AT1 rejection guard', () => {
       }
 
       const loaded = readEntry(home, summary.id)!;
-      const changed = applyRebuildResult(home, loaded, {
+      const result1 = applyRebuildResult(home, loaded, {
         content: rejectedContent,
         descendant_count: 3,
         earliest_at: '2026-08-01T00:00:00Z',
@@ -222,9 +222,11 @@ describe('AT1 rejection guard', () => {
         actor: 'sleep',
       });
 
-      // Documented return-value semantics: metadata still applied → true,
-      // even though content was refused.
-      expect(changed).toBe(true);
+      // Documented return-value semantics (T4 split): metadata still
+      // applied → changed=true, even though content was refused; refused=true
+      // is the T4 signal the caller uses to NOT count this as a rebuild.
+      expect(result1.changed).toBe(true);
+      expect(result1.refused).toBe(true);
 
       const after = readEntry(home, summary.id)!;
       expect(after.content).toBe('old summary content');
@@ -244,7 +246,7 @@ describe('AT1 rejection guard', () => {
       // No loop: dirty is cleared, so a second attempt against the
       // now-current row (summary_dirty=1 no longer matches) is a race-loser
       // no-op — no second refusal audit.
-      const secondPass = applyRebuildResult(home, after, {
+      const result2 = applyRebuildResult(home, after, {
         content: rejectedContent,
         descendant_count: 3,
         earliest_at: '2026-08-01T00:00:00Z',
@@ -253,7 +255,11 @@ describe('AT1 rejection guard', () => {
         zeroChildren: false,
         actor: 'sleep',
       });
-      expect(secondPass).toBe(false);
+      expect(result2.changed).toBe(false);
+      // Race-loser, not a refusal: the row's summary_dirty no longer matches
+      // the WHERE clause, so nothing from this call landed — refused stays
+      // false even though the tombstone still exists.
+      expect(result2.refused).toBe(false);
 
       const db2 = openHippoDb(home);
       try {

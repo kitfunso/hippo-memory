@@ -24,6 +24,7 @@ import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
 import { rebuildDirtySummaries, buildDag, generateDagSummary } from '../src/dag.js';
 import { consolidate } from '../src/consolidate.js';
 import { archiveRawMemory } from '../src/raw-archive.js';
+import { insertRejectedValue, rejectionDigest, normalizeValueForRejection } from '../src/rejection.js';
 
 /**
  * Build a fetcher that returns the same synthetic content for every call.
@@ -58,6 +59,26 @@ function forceMarkDirty(hippoRoot: string, summaryId: string): void {
   const db = openHippoDb(hippoRoot);
   try {
     db.prepare(`UPDATE memories SET summary_dirty = 1 WHERE id = ?`).run(summaryId);
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Insert a tombstone matching `content`'s rejection digest, so a later
+ * rebuild that regenerates the identical content gets refused (T4 tests).
+ */
+function rejectValue(hippoRoot: string, tenantId: string, content: string): void {
+  const db = openHippoDb(hippoRoot);
+  try {
+    insertRejectedValue(db, {
+      tenantId,
+      digest: rejectionDigest(content),
+      reason: 'T4 refused-stat test fixture',
+      rejectedBy: 'test',
+      rejectedAt: new Date().toISOString(),
+      normalizedChars: normalizeValueForRejection(content).length,
+    });
   } finally {
     db.close();
   }
@@ -405,7 +426,7 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
     expect(sql).toContain('AND summary_dirty = 1'); // race-loser guard
 
     // Smoke test the function actually applies the patch in one round-trip
-    const ok = applyRebuildResult(hippoRoot, summary, {
+    const result = applyRebuildResult(hippoRoot, summary, {
       content: 'one-shot-content-xyzabc',
       descendant_count: 0,
       earliest_at: null,
@@ -414,7 +435,8 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
       zeroChildren: false,
       actor: 'test',
     });
-    expect(ok).toBe(true);
+    expect(result.changed).toBe(true);
+    expect(result.refused).toBe(false); // no tombstone in play — clean rebuild
 
     const db = openHippoDb(hippoRoot);
     try {
@@ -496,12 +518,80 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
     expect(rebuildResult.rebuilt).toBe(0);
   });
 
+  it('T-followup (hardening pass, docs/plans/2026-08-15-hardening-at1-followups.md): buildDag partitions unparented facts by tenant — two tenants sharing a speaker: tag produce two per-tenant summaries, never one cross-tenant summary in default', async () => {
+    // Deliberately the SAME entity tag ('speaker:alice') across both
+    // tenants so that without the tenant partition, clusterFacts's jaccard
+    // match on entityTags would merge all 6 facts into one 6-member cluster
+    // whose LLM-synthesized summary then landed in 'default' regardless of
+    // source (memory.ts:535's implicit default when createMemory isn't
+    // passed a tenantId). Mirrors T1(a)'s cross-tenant shape
+    // (tests/consolidate-tenant-landing.test.ts) but for the DAG producer
+    // (dag.ts buildDag) instead of consolidate.ts's merge pass.
+    const aFacts = ['alice did X', 'alice said Y', 'alice noted Z'].map((c) =>
+      createMemory(c, {
+        layer: Layer.Episodic,
+        dag_level: 1,
+        tags: ['extracted', 'speaker:alice'],
+        tenantId: 'tenant-a',
+      }),
+    );
+    const bFacts = ['alice ran P', 'alice flagged Q', 'alice closed R'].map((c) =>
+      createMemory(c, {
+        layer: Layer.Episodic,
+        dag_level: 1,
+        tags: ['extracted', 'speaker:alice'],
+        tenantId: 'tenant-b',
+      }),
+    );
+    for (const f of [...aFacts, ...bFacts]) writeEntry(hippoRoot, f);
+
+    const fetcher = makeOkFetcher('synthetic-tenant-partitioned-summary');
+    // Host-wide input, exactly like consolidate.ts:543's `extractedFacts`
+    // (survivors filtered host-wide, no tenant slicing by the caller) —
+    // buildDag itself must do the tenant separation, not its caller.
+    const result = await buildDag(hippoRoot, [...aFacts, ...bFacts], {
+      apiKey: 'test-key',
+      fetcher,
+    });
+
+    // Two separate per-tenant clusters, not one 6-member cross-tenant cluster.
+    expect(result.candidateClusters).toBe(2);
+    expect(result.summariesCreated).toBe(2);
+    expect(result.factsLinked).toBe(6);
+
+    const db = openHippoDb(hippoRoot);
+    try {
+      const summaries = db.prepare(
+        `SELECT id, tenant_id FROM memories WHERE dag_level = 2 AND tags_json LIKE '%dag-summary%'`,
+      ).all() as Array<{ id: string; tenant_id: string }>;
+      expect(summaries).toHaveLength(2);
+      const tenants = summaries.map((s) => s.tenant_id).sort();
+      expect(tenants).toEqual(['tenant-a', 'tenant-b']);
+      expect(tenants).not.toContain('default');
+
+      // Each tenant's 3 members must be re-parented under THAT tenant's own
+      // summary — no member crossed into the other tenant's cluster.
+      const summaryByTenant = new Map(summaries.map((s) => [s.tenant_id, s.id]));
+      for (const [tenantId, facts] of [['tenant-a', aFacts], ['tenant-b', bFacts]] as const) {
+        const rows = db.prepare(
+          `SELECT dag_parent_id FROM memories WHERE tenant_id = ? AND dag_level = 1`,
+        ).all(tenantId) as Array<{ dag_parent_id: string }>;
+        expect(rows).toHaveLength(facts.length);
+        for (const row of rows) {
+          expect(row.dag_parent_id).toBe(summaryByTenant.get(tenantId));
+        }
+      }
+    } finally {
+      db.close();
+    }
+  });
+
   it('test #11: race-loser no-op — pre-cleared dirty flag → applyRebuildResult returns false, no audit, no rebuild_count bump', () => {
     const summary = makeSummary('s11-summary-content');
     writeEntry(hippoRoot, summary);
     // Note: we do NOT force-mark dirty — simulate the race-loser by leaving clean
 
-    const ok = applyRebuildResult(hippoRoot, summary, {
+    const result = applyRebuildResult(hippoRoot, summary, {
       content: 'should-not-land',
       descendant_count: 5,
       earliest_at: '2026-05-25T10:00:00Z',
@@ -510,7 +600,8 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
       zeroChildren: false,
       actor: 'test',
     });
-    expect(ok).toBe(false);
+    expect(result.changed).toBe(false);
+    expect(result.refused).toBe(false); // race-loser, not a refusal — no tombstone hit
 
     const db = openHippoDb(hippoRoot);
     try {
@@ -583,4 +674,73 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
       }
     }
   }, 240_000); // 1500-row real-DB seed is intentionally slow on low-power CI/dev hosts; passes in ~90s solo but full-suite fork-pool contention can double it
+
+  it('test #13: T4 — tombstone-hit rebuild increments refused, not rebuilt (dirty still clears, content unchanged)', async () => {
+    const summary = makeSummary('original summary content');
+    writeEntry(hippoRoot, summary);
+    const child = makeChild(summary.id, 'fact for refused rebuild');
+    writeEntry(hippoRoot, child);
+    forceMarkDirty(hippoRoot, summary.id);
+
+    const rejectedContent = 'this-exact-content-was-already-rejected-XYZ';
+    rejectValue(hippoRoot, summary.tenantId, rejectedContent);
+
+    // Fetcher regenerates content byte-identical to the tombstoned value —
+    // the deterministic-summarization scenario the AT1 P1a fix guards.
+    const fetcher = makeOkFetcher(rejectedContent);
+    const result = await rebuildDirtySummaries(hippoRoot, {
+      apiKey: 'test-key',
+      fetcher,
+      cap: 20,
+    });
+
+    expect(result.attempted).toBe(1);
+    expect(result.refused).toBe(1);
+    expect(result.rebuilt).toBe(0);
+    expect(result.failed).toBe(0);
+    expect(result.zeroChildSkipped).toBe(0);
+
+    const db = openHippoDb(hippoRoot);
+    try {
+      const row = db.prepare(`
+        SELECT content, summary_dirty, rebuild_count, descendant_count FROM memories WHERE id = ?
+      `).get(summary.id) as any;
+      // Content NOT overwritten — the tombstone refused it.
+      expect(row.content).toBe('original summary content');
+      // Dirty still clears — no infinite retry loop (the pre-existing
+      // no-infinite-retry choice T4 keeps).
+      expect(row.summary_dirty).toBe(0);
+      expect(row.rebuild_count ?? 0).toBe(0);
+      // Metadata still applies alongside the refusal.
+      expect(row.descendant_count).toBe(1);
+
+      const refusalAudit = db.prepare(`
+        SELECT COUNT(*) AS n FROM audit_log WHERE op = 'reject_refusal' AND target_id = ?
+      `).get(summary.id) as { n: number };
+      expect(refusalAudit.n).toBe(1);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('test #14: T4 — clean rebuild (no tombstone hit) increments rebuilt, refused stays zero', async () => {
+    const summary = makeSummary('stale summary content');
+    writeEntry(hippoRoot, summary);
+    const child = makeChild(summary.id, 'fact for clean rebuild');
+    writeEntry(hippoRoot, child);
+    forceMarkDirty(hippoRoot, summary.id);
+
+    const fetcher = makeOkFetcher('fresh-regenerated-summary-content-T4');
+    const result = await rebuildDirtySummaries(hippoRoot, {
+      apiKey: 'test-key',
+      fetcher,
+      cap: 20,
+    });
+
+    expect(result.attempted).toBe(1);
+    expect(result.rebuilt).toBe(1);
+    expect(result.refused).toBe(0);
+    expect(result.failed).toBe(0);
+    expect(result.zeroChildSkipped).toBe(0);
+  });
 });

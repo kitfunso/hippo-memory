@@ -3365,14 +3365,17 @@ export interface RebuildPatch {
  * WHERE includes `AND summary_dirty = 1` so concurrent sleep's race-loser
  * becomes a no-op (no rebuild_count bump, no audit row).
  *
- * Returns true on actual rebuild (changes > 0), false on race-loss /
- * unknown id / archived / wrong dag_level.
+ * Returns `{ changed, refused }`. `changed` is true when this call's UPDATE
+ * (content or metadata-only) affected a row; false on race-loss / unknown id
+ * / archived / wrong dag_level. `refused` is true only when a tombstone hit
+ * suppressed the content write AND the metadata UPDATE still landed — see
+ * the return-semantics comment below for the full contract.
  */
 export function applyRebuildResult(
   hippoRoot: string,
   summary: MemoryEntry,
   patch: RebuildPatch,
-): boolean {
+): { changed: boolean; refused: boolean } {
   assertTenantId('applyRebuildResult', summary.tenantId);
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
@@ -3449,24 +3452,31 @@ export function applyRebuildResult(
             summary.tenantId,
           );
 
-      // Return-value semantics (documented per plan follow-up): `changed`
-      // reflects whether THIS call's UPDATE (content or metadata-only)
-      // affected a row — NOT whether patch.content specifically landed. On
-      // a refusal, metadata still applies, so changed=true here even though
-      // content did not change. This is a deliberate choice: the caller
+      // Return-value semantics (v0.30/T4 split): `changed` reflects whether
+      // THIS call's UPDATE (content or metadata-only) affected a row — NOT
+      // whether patch.content specifically landed. On a refusal, metadata
+      // still applies, so changed=true even though content did not change.
+      // This preserves the pre-T4 no-infinite-retry choice: the caller
       // (dag.ts rebuildDirtySummaries) treats changed=false as "race lost,
       // silently retry next cycle" — returning false on a refusal would
-      // retry the same doomed LLM rebuild forever. Returning true settles
-      // this cycle (dirty cleared) at the cost of the refused rebuild also
-      // counting toward the caller's `rebuilt` stat, which is the lesser
-      // evil and mirrors the pre-existing zero-child branch's own semantics
-      // (it already returns changed=true for a metadata-only update).
+      // retry the same doomed LLM rebuild forever, so changed=true settles
+      // this cycle (dirty cleared) regardless of refusal.
+      // `refused` is the T4 addition: true only when a tombstone hit AND
+      // the metadata UPDATE landed (changed=true) — a refusal that loses
+      // the race to a concurrent writer reports refused=false too, since
+      // nothing from this call took effect. Before T4, a refusal also
+      // counted toward the caller's `rebuilt` stat because `changed` alone
+      // could not distinguish it; the caller now increments `refused`
+      // instead of `rebuilt` when this is true, so the stat reflects what
+      // happened without changing dirty-clearing or retry behavior.
       const changed = (result.changes ?? 0) > 0;
+      const refused = Boolean(tombstone) && changed;
 
       if (tombstone && changed) {
-        // Best-effort refusal audit, written INLINE inside this still-open
-        // SAVEPOINT — nothing here rolls back on a refusal (the metadata
-        // UPDATE above already committed to this savepoint), so the
+        // refused === true here (same condition, narrowed for the tombstone.*
+        // access below). Best-effort refusal audit, written INLINE inside
+        // this still-open SAVEPOINT — nothing here rolls back on a refusal
+        // (the metadata UPDATE above already committed to this savepoint), so the
         // post-rollback auditRejectionRefusal helper (writeEntry/supersede's
         // tool) is the wrong one here; a direct audit() call is correct and
         // commits with the rest of this savepoint.
@@ -3524,7 +3534,7 @@ export function applyRebuildResult(
       }
 
       db.exec('RELEASE SAVEPOINT rebuild_summary');
-      return changed;
+      return { changed, refused };
     } catch (e) {
       try {
         db.exec('ROLLBACK TO SAVEPOINT rebuild_summary');

@@ -495,7 +495,7 @@ async function executeTool(
       const apiCtx: ApiContext = {
         hippoRoot,
         tenantId,
-        actor: adminActor('mcp'),
+        actor: adminActor(ctx?.actor ?? 'mcp'),
       };
       // Route through api.recall for audit + (when requested) continuity block.
       // api.recall already applies the same default-deny / exact-match rules
@@ -597,7 +597,7 @@ async function executeTool(
       // EVAL-ONLY ablation (see ablation.ts): skip persistence under the recall
       // flag; ids below stay populated for outcome attribution.
       if (!isRecallBoostAblated()) {
-        for (const entry of retrieved) writeEntry(hippoRoot, entry);
+        for (const entry of retrieved) writeEntry(hippoRoot, entry, { actor: ctx?.actor ?? 'mcp' });
       }
       lastRecalledIds.set(resolveClientKey(ctx), retrieved.map((e) => e.id));
 
@@ -623,7 +623,7 @@ async function executeTool(
             try {
               appendAuditEvent(dbForAudit, {
                 tenantId,
-                actor: 'mcp',
+                actor: ctx?.actor ?? 'mcp',
                 op: 'recall_anchor_detected_memory_dominance',
                 targetId: mcpAnchoringHint.memoryId,
                 metadata: {
@@ -639,7 +639,7 @@ async function executeTool(
             try {
               appendAuditEvent(dbForAudit, {
                 tenantId,
-                actor: 'mcp',
+                actor: ctx?.actor ?? 'mcp',
                 op: 'recall_anchor_detected_query_repeat',
                 targetId: mcpAnchoringHint.memoryId,
                 metadata: { memory_id: mcpAnchoringHint.memoryId },
@@ -658,7 +658,7 @@ async function executeTool(
           try {
             appendAuditEvent(dbForAudit, {
               tenantId,
-              actor: 'mcp',
+              actor: ctx?.actor ?? 'mcp',
               op: 'recall_anchor_skipped_no_session',
               targetId: undefined,
               metadata: {
@@ -675,7 +675,8 @@ async function executeTool(
       // v0.32 / J3.2 — auto-injection of reference-class baserate hint
       // when the query carries a forward-prediction phrase. Read from
       // apiResult.planningFallacyHint (already computed inside api.recall
-      // with actor='mcp' threaded through ctx.actor.subject). The hint is
+      // with the caller identity threaded through ctx.actor.subject -
+      // auth-resolved actor under HTTP-MCP, 'mcp' for stdio). The hint is
       // pipeline-INVARIANT — same (hippoRoot, tenantId, query) inputs
       // produce the same hint regardless of which downstream search
       // pipeline (api.recall band vs physics/hybrid) renders the memory
@@ -714,7 +715,8 @@ async function executeTool(
       // planningFallacyHint), this depends on MCP's OWN returned top-K and the
       // scope-filtered candidate pool (entries) it was drawn from, so MCP
       // computes its own hint here. Soft warning only. Gated by
-      // HIPPO_AVAILABILITY=off; audit emission is pipeline-local (actor='mcp').
+      // HIPPO_AVAILABILITY=off; audit emission is pipeline-local (actor =
+      // auth-resolved ctx.actor under HTTP-MCP, 'mcp' for stdio).
       let mcpAvailabilityHint: AvailabilityHint | null = null;
       if (process.env.HIPPO_AVAILABILITY !== 'off') {
         mcpAvailabilityHint = detectAvailabilityBias({
@@ -726,7 +728,7 @@ async function executeTool(
           try {
             appendAuditEvent(dbForAudit, {
               tenantId,
-              actor: 'mcp',
+              actor: ctx?.actor ?? 'mcp',
               op: 'recall_availability_detected',
               metadata: {
                 recent_fraction: mcpAvailabilityHint.recentFraction,
@@ -836,7 +838,7 @@ async function executeTool(
       const apiCtx: ApiContext = {
         hippoRoot,
         tenantId,
-        actor: adminActor('mcp'),
+        actor: adminActor(ctx?.actor ?? 'mcp'),
       };
       const explicitScope = typeof args.scope === 'string' && args.scope.length > 0
         ? String(args.scope)
@@ -875,7 +877,7 @@ async function executeTool(
       const apiCtx: ApiContext = {
         hippoRoot,
         tenantId,
-        actor: adminActor('mcp'),
+        actor: adminActor(ctx?.actor ?? 'mcp'),
       };
       const r = apiDrillDown(apiCtx, summaryId, {
         ...(Number.isFinite(limit) && limit > 0 ? { limit } : {}),
@@ -911,7 +913,7 @@ async function executeTool(
       // (single source of truth, no caller-site drift).
       const classTag = String(args.class_tag || '').trim();
       if (!classTag) return 'No class_tag provided. Usage: pass class_tag matching a class used in past predictions (e.g. "migration-effort").';
-      const baserate = computePredictionBaserate(hippoRoot, tenantId, classTag, 'mcp');
+      const baserate = computePredictionBaserate(hippoRoot, tenantId, classTag, ctx?.actor ?? 'mcp');
       if (baserate.nClosed === 0) {
         return `No closed predictions in class "${classTag}" yet. Create one via hippo_predict (or 'hippo predict ...' CLI) and close it with hippo_predict_close once the actual outcome is known. Base rates need closed predictions with numeric actual_value to compute.`;
       }
@@ -932,14 +934,15 @@ async function executeTool(
       const tags: string[] = [];
       if (args.error) tags.push('error');
       if (args.tag) tags.push(String(args.tag));
-      // Route through api.ts so audit_log captures actor='mcp' uniformly with
-      // CLI/REST. api.ts.remember writes the memory + audit row in one
-      // transaction-friendly path; we re-read the entry to surface the
-      // half-life used in the MCP human-readable response.
+      // Route through api.ts so audit_log captures the caller identity
+      // uniformly with CLI/REST: the auth-resolved ctx.actor under HTTP-MCP,
+      // 'mcp' for stdio (no ctx). api.ts.remember writes the memory + audit
+      // row in one transaction-friendly path; we re-read the entry to surface
+      // the half-life used in the MCP human-readable response.
       const apiCtx: ApiContext = {
         hippoRoot,
         tenantId,
-        actor: adminActor('mcp'),
+        actor: adminActor(ctx?.actor ?? 'mcp'),
       };
       const result = apiRemember(apiCtx, {
         content: text,
@@ -976,13 +979,14 @@ async function executeTool(
       const ids = lastRecalledIds.get(clientKey) ?? [];
       if (ids.length === 0) return 'No recent recalls to apply outcome to.';
 
-      // Route through src/api.ts so audit_log captures actor='mcp' and
-      // tenant scoping is enforced uniformly (same surface as recall/remember).
+      // Route through src/api.ts so audit_log captures the caller identity
+      // (auth-resolved ctx.actor under HTTP-MCP, 'mcp' for stdio) and tenant
+      // scoping is enforced uniformly (same surface as recall/remember).
       // outcome() also handles cross-tenant id skip silently.
       const apiCtx: ApiContext = {
         hippoRoot,
         tenantId,
-        actor: adminActor('mcp'),
+        actor: adminActor(ctx?.actor ?? 'mcp'),
       };
       const { applied } = apiOutcome(apiCtx, ids, good);
       return `Applied ${good ? 'positive' : 'negative'} outcome to ${applied} memories`;
@@ -1056,7 +1060,7 @@ async function executeTool(
       // EVAL-ONLY ablation (see ablation.ts): skip persistence under the recall
       // flag; ids below stay populated for outcome attribution.
       if (!isRecallBoostAblated()) {
-        for (const entry of retrieved) writeEntry(hippoRoot, entry);
+        for (const entry of retrieved) writeEntry(hippoRoot, entry, { actor: ctx?.actor ?? 'mcp' });
       }
       lastRecalledIds.set(resolveClientKey(ctx), retrieved.map((e) => e.id));
 
@@ -1129,7 +1133,7 @@ async function executeTool(
         // AT1 (plan §3 containment): a refused lesson must not crash the
         // MCP learn call or lose the rest of the git log scan.
         try {
-          writeEntry(hippoRoot, entry);
+          writeEntry(hippoRoot, entry, { actor: ctx?.actor ?? 'mcp' });
         } catch (err) {
           if (err instanceof RejectedValueError) { rejected++; continue; }
           throw err;

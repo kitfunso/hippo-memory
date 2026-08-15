@@ -42,7 +42,7 @@ function callTool(
   reqId: number,
   name: string,
   args: Record<string, unknown>,
-  ctx: { hippoRoot: string; tenantId: string; actor: { subject: string; role: 'admin' | 'member' }; clientKey?: string },
+  ctx: { hippoRoot: string; tenantId: string; actor: string; clientKey?: string },
 ) {
   return handleMcpRequest(
     {
@@ -51,7 +51,7 @@ function callTool(
       method: 'tools/call',
       params: { name, arguments: args },
     },
-    ctx as unknown as { hippoRoot: string; tenantId: string; actor: string; clientKey?: string },
+    ctx,
   );
 }
 
@@ -90,7 +90,7 @@ describe('mcp hippo_recall Cutoff suppressionSummary (C5, v1.12.13 + v1.13.3)', 
     const res = await callTool(1, 'hippo_recall', { query: 'omega', budget: 200 }, {
       hippoRoot: home,
       tenantId: 'default',
-      actor: { subject: 'mcp:test', role: 'admin' },
+      actor: 'mcp:test',
     });
     const text = extractText(res);
     // v1.13.3: format is "## Cutoff\nShowing N of M candidates; ..." (was
@@ -115,7 +115,7 @@ describe('mcp hippo_recall Cutoff suppressionSummary (C5, v1.12.13 + v1.13.3)', 
     const res = await callTool(2, 'hippo_recall', { query: 'omega', budget: 200 }, {
       hippoRoot: home,
       tenantId: 'default',
-      actor: { subject: 'mcp:test', role: 'admin' },
+      actor: 'mcp:test',
     });
     const text = extractText(res);
     // Extract Cutoff totalCandidates value via regex.
@@ -138,7 +138,7 @@ describe('mcp hippo_recall Cutoff suppressionSummary (C5, v1.12.13 + v1.13.3)', 
     const res = await callTool(3, 'hippo_recall', { query: 'nothing' }, {
       hippoRoot: home,
       tenantId: 'default',
-      actor: { subject: 'mcp:test', role: 'admin' },
+      actor: 'mcp:test',
     });
     const text = extractText(res);
     expect(text).not.toMatch(/## Cutoff/);
@@ -162,7 +162,7 @@ describe('mcp hippo_recall Cutoff suppressionSummary (C5, v1.12.13 + v1.13.3)', 
     const res = await callTool(4, 'hippo_recall', { query: 'omega', budget: 200 }, {
       hippoRoot: home,
       tenantId: 'default',
-      actor: { subject: 'mcp:test', role: 'admin' },
+      actor: 'mcp:test',
     });
     const text = extractText(res);
     const cutoffIdx = text.indexOf('## Cutoff');

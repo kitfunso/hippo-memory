@@ -27,7 +27,7 @@ function callTool(
   reqId: number,
   name: string,
   args: Record<string, unknown>,
-  ctx: { hippoRoot: string; tenantId: string; actor: { subject: string; role: 'admin' | 'member' }; clientKey?: string },
+  ctx: { hippoRoot: string; tenantId: string; actor: string; clientKey?: string },
 ) {
   return handleMcpRequest(
     {
@@ -75,7 +75,7 @@ describe('mcp hippo_predict_baserate (J3, v0.31)', () => {
     const res = await callTool(1, 'hippo_predict_baserate', { class_tag: 'mcp-test' }, {
       hippoRoot: home,
       tenantId: 'default',
-      actor: { subject: 'mcp:test', role: 'admin' },
+      actor: 'mcp:test',
     });
     const text = extractText(res);
 
@@ -93,7 +93,7 @@ describe('mcp hippo_predict_baserate (J3, v0.31)', () => {
     const res = await callTool(2, 'hippo_predict_baserate', { class_tag: 'never-seen' }, {
       hippoRoot: home,
       tenantId: 'default',
-      actor: { subject: 'mcp:test', role: 'admin' },
+      actor: 'mcp:test',
     });
     const text = extractText(res);
     expect(text).toContain('No closed predictions');
@@ -105,7 +105,7 @@ describe('mcp hippo_predict_baserate (J3, v0.31)', () => {
     const res = await callTool(3, 'hippo_predict_baserate', {}, {
       hippoRoot: home,
       tenantId: 'default',
-      actor: { subject: 'mcp:test', role: 'admin' },
+      actor: 'mcp:test',
     });
     const text = extractText(res);
     expect(text).toContain('No class_tag');

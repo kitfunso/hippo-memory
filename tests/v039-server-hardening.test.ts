@@ -366,7 +366,7 @@ describe('v039 server hardening', () => {
     );
 
     // Call MCP recall with no scope.
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: { subject: 'mcp', role: 'admin' }, clientKey: 'http:t:test' };
+    const ctx = { hippoRoot: root, tenantId: 'default', actor: 'mcp', clientKey: 'http:t:test' };
     const res = await handleMcpRequest(
       {
         jsonrpc: '2.0',
