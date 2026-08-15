@@ -495,7 +495,7 @@ async function executeTool(
       const apiCtx: ApiContext = {
         hippoRoot,
         tenantId,
-        actor: adminActor('mcp'),
+        actor: adminActor(ctx?.actor ?? 'mcp'),
       };
       // Route through api.recall for audit + (when requested) continuity block.
       // api.recall already applies the same default-deny / exact-match rules
@@ -836,7 +836,7 @@ async function executeTool(
       const apiCtx: ApiContext = {
         hippoRoot,
         tenantId,
-        actor: adminActor('mcp'),
+        actor: adminActor(ctx?.actor ?? 'mcp'),
       };
       const explicitScope = typeof args.scope === 'string' && args.scope.length > 0
         ? String(args.scope)
@@ -875,7 +875,7 @@ async function executeTool(
       const apiCtx: ApiContext = {
         hippoRoot,
         tenantId,
-        actor: adminActor('mcp'),
+        actor: adminActor(ctx?.actor ?? 'mcp'),
       };
       const r = apiDrillDown(apiCtx, summaryId, {
         ...(Number.isFinite(limit) && limit > 0 ? { limit } : {}),
@@ -939,7 +939,7 @@ async function executeTool(
       const apiCtx: ApiContext = {
         hippoRoot,
         tenantId,
-        actor: adminActor('mcp'),
+        actor: adminActor(ctx?.actor ?? 'mcp'),
       };
       const result = apiRemember(apiCtx, {
         content: text,
@@ -982,7 +982,7 @@ async function executeTool(
       const apiCtx: ApiContext = {
         hippoRoot,
         tenantId,
-        actor: adminActor('mcp'),
+        actor: adminActor(ctx?.actor ?? 'mcp'),
       };
       const { applied } = apiOutcome(apiCtx, ids, good);
       return `Applied ${good ? 'positive' : 'negative'} outcome to ${applied} memories`;

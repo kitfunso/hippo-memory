@@ -50,7 +50,7 @@ function callMcpTool(
       method: 'tools/call',
       params: { name, arguments: args },
     },
-    { hippoRoot: home, tenantId: 'default', actor: { subject: 'mcp', role: 'admin' } },
+    { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
   );
 }
 
