@@ -20,6 +20,7 @@
 import { textOverlap } from './search.js';
 import { loadAllEntries, deleteEntry } from './store.js';
 import { compareEntryIdentity } from './compare.js';
+import type { MemoryEntry } from './memory.js';
 
 export interface DedupPair {
   kept: string;
@@ -77,14 +78,19 @@ export function deduplicateStore(
   const dryRun = options.dryRun ?? false;
   const entries = loadAllEntries(hippoRoot);
 
-  // Total order so the survivor is a deterministic function of the entry
-  // multiset, not of load/ingest order: strength bucket desc
-  // (materially-stronger survives) -> retrieval_count desc (more-retrieved
-  // survives on a strength tie) -> compareEntryIdentity (content asc -> id
-  // asc), the cross-ingest-stable terminal key. Without a terminal key,
-  // freshly-ingested near-duplicates tie exactly (strength=1,
-  // retrieval_count=0) and the stable sort falls through to
-  // loadAllEntries's `created ASC, id ASC` order -- arrival order.
+  // Tenant partition (mirrors consolidate.ts mergeCandidatesByTenant and
+  // dag.ts unparentedByTenant): group by tenantId BEFORE the sort so a
+  // duplicate pair can never form across tenants. Map preserves insertion
+  // order, so a single-tenant store (every row 'default') gets exactly one
+  // group and the sort plus pair loop below run byte-identical to the
+  // pre-fix global pass.
+  const entriesByTenant = new Map<string, MemoryEntry[]>();
+  for (const entry of entries) {
+    const bucket = entriesByTenant.get(entry.tenantId);
+    if (bucket) bucket.push(entry);
+    else entriesByTenant.set(entry.tenantId, [entry]);
+  }
+
   // finiteCount mirrors strengthBucket's non-finite hardening on the
   // retrieval leg: a NaN retrieval_count would make the comparator return
   // NaN and break the total order the same way a NaN bucket would.
@@ -92,37 +98,50 @@ export function deduplicateStore(
   // symmetry, not a live bug.
   const finiteCount = (n: number | null | undefined): number =>
     Number.isFinite(n ?? 0) ? (n ?? 0) : 0;
-  entries.sort((a, b) => {
-    const bucketDiff = strengthBucket(b.strength) - strengthBucket(a.strength);
-    if (bucketDiff !== 0) return bucketDiff;
-    const retrievalDiff = finiteCount(b.retrieval_count) - finiteCount(a.retrieval_count);
-    if (retrievalDiff !== 0) return retrievalDiff;
-    return compareEntryIdentity(a, b);
-  });
 
   const removed = new Set<string>();
   const pairs: DedupPair[] = [];
 
-  for (let i = 0; i < entries.length; i++) {
-    if (removed.has(entries[i].id)) continue;
-    for (let j = i + 1; j < entries.length; j++) {
-      if (removed.has(entries[j].id)) continue;
+  for (const tenantEntries of entriesByTenant.values()) {
+    // Total order so the survivor is a deterministic function of the entry
+    // multiset, not of load/ingest order: strength bucket desc
+    // (materially-stronger survives) -> retrieval_count desc (more-retrieved
+    // survives on a strength tie) -> compareEntryIdentity (content asc -> id
+    // asc), the cross-ingest-stable terminal key. Without a terminal key,
+    // freshly-ingested near-duplicates tie exactly (strength=1,
+    // retrieval_count=0) and the stable sort falls through to
+    // loadAllEntries's `created ASC, id ASC` order -- arrival order.
+    // Scoped per tenant group: the total order is within a tenant only,
+    // matching the partition above.
+    tenantEntries.sort((a, b) => {
+      const bucketDiff = strengthBucket(b.strength) - strengthBucket(a.strength);
+      if (bucketDiff !== 0) return bucketDiff;
+      const retrievalDiff = finiteCount(b.retrieval_count) - finiteCount(a.retrieval_count);
+      if (retrievalDiff !== 0) return retrievalDiff;
+      return compareEntryIdentity(a, b);
+    });
 
-      const similarity = textOverlap(entries[i].content, entries[j].content);
-      if (similarity <= threshold) continue;
+    for (let i = 0; i < tenantEntries.length; i++) {
+      if (removed.has(tenantEntries[i].id)) continue;
+      for (let j = i + 1; j < tenantEntries.length; j++) {
+        if (removed.has(tenantEntries[j].id)) continue;
 
-      removed.add(entries[j].id);
-      pairs.push({
-        kept: entries[i].id,
-        keptContent: entries[i].content,
-        keptLayer: entries[i].layer,
-        keptStrength: entries[i].strength ?? 0,
-        removed: entries[j].id,
-        removedContent: entries[j].content,
-        removedLayer: entries[j].layer,
-        removedStrength: entries[j].strength ?? 0,
-        similarity,
-      });
+        const similarity = textOverlap(tenantEntries[i].content, tenantEntries[j].content);
+        if (similarity <= threshold) continue;
+
+        removed.add(tenantEntries[j].id);
+        pairs.push({
+          kept: tenantEntries[i].id,
+          keptContent: tenantEntries[i].content,
+          keptLayer: tenantEntries[i].layer,
+          keptStrength: tenantEntries[i].strength ?? 0,
+          removed: tenantEntries[j].id,
+          removedContent: tenantEntries[j].content,
+          removedLayer: tenantEntries[j].layer,
+          removedStrength: tenantEntries[j].strength ?? 0,
+          similarity,
+        });
+      }
     }
   }
 
