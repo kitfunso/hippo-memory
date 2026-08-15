@@ -313,6 +313,16 @@ describe('v039 mcp tenant + client-key isolation', () => {
       const outcomeEvents = queryAuditEvents(db, { tenantId: 'alpha', op: 'outcome' });
       const aliceOutcome = outcomeEvents.find((e) => e.actor === 'user:alice');
       expect(aliceOutcome).toBeDefined();
+
+      // Codex review-stage P2 pin: the recall branch's SIDE EFFECTS (retrieval
+      // persist via writeEntry, anchoring/availability audits) must carry the
+      // same resolved actor as the primary call - a single authenticated
+      // recall must never fan audit rows out across multiple principals
+      // ('user:alice' primary + 'cli' writeEntry default + hardcoded 'mcp').
+      const allAlphaEvents = queryAuditEvents(db, { tenantId: 'alpha' });
+      const principals = new Set(allAlphaEvents.map((e) => e.actor));
+      expect(principals.has('cli')).toBe(false);
+      expect(principals.has('mcp')).toBe(false);
     } finally {
       closeHippoDb(db);
     }
