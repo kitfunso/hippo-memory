@@ -63,6 +63,20 @@ describe('api.reject / api.unreject / api.listRejections', () => {
     }
   });
 
+  it('reject purges the trace-layer markdown mirror (P1 fix: removeEntryMirrors previously skipped Layer.Trace)', () => {
+    const trace = createMemory('trace: read config.ts -> rotated the deploy key -> success', {
+      layer: Layer.Trace,
+      trace_outcome: 'success',
+    });
+    writeEntry(tmpDir, trace);
+    const mirrorPath = path.join(tmpDir, Layer.Trace, `${trace.id}.md`);
+    expect(fs.existsSync(mirrorPath)).toBe(true);
+
+    api.reject(ctx(), { memoryId: trace.id, reason: 'trace content was wrong' });
+    expect(readEntry(tmpDir, trace.id)).toBeNull();
+    expect(fs.existsSync(mirrorPath)).toBe(false);
+  });
+
   it('rejections lists the tombstone', () => {
     const a = createMemory('to be rejected', { tags: [] });
     writeEntry(tmpDir, a);
@@ -198,6 +212,42 @@ describe('resolveConflict AT1 wiring', () => {
     } finally {
       closeHippoDb(db);
     }
+  });
+
+  it('rejectLoserValue removes a same-tenant same-digest duplicate but leaves an identical-content row in ANOTHER tenant untouched (P1 fix)', () => {
+    const { aId, bId, conflictId } = seedConflict();
+    const loserContent = 'Use && to chain commands in PowerShell';
+
+    // Same-tenant duplicate of the loser's content — must be swept up too.
+    const dup = createMemory(loserContent, { tags: ['dup'] });
+    writeEntry(tmpDir, dup);
+
+    // Identical content in a DIFFERENT tenant — tombstones are tenant-scoped
+    // by design; this row must survive untouched.
+    const otherTenantDup = createMemory(loserContent, { tags: ['dup'], tenantId: 'other-tenant' });
+    writeEntry(tmpDir, otherTenantDup);
+
+    const result = resolveConflict(tmpDir, conflictId, aId, false, 'default', {
+      rejectLoserValue: true,
+      reason: 'loser + same-tenant duplicates rejected',
+    });
+    expect(result).not.toBeNull();
+
+    expect(readEntry(tmpDir, bId)).toBeNull();
+    expect(readEntry(tmpDir, dup.id)).toBeNull();
+    expect(readEntry(tmpDir, otherTenantDup.id, 'other-tenant')).not.toBeNull();
+
+    const db = openHippoDb(tmpDir);
+    try {
+      const events = queryAuditEvents(db, { tenantId: 'default', op: 'conflict_resolve' });
+      expect(events.length).toBe(1);
+      const removedIds = events[0]!.metadata.removedIds as string[];
+      expect(removedIds.slice().sort()).toEqual([bId, dup.id].sort());
+    } finally {
+      closeHippoDb(db);
+    }
+
+    expect(() => api.remember(ctx(), { content: loserContent })).toThrow(RejectedValueError);
   });
 
   it('raw loser via resolve --forget no longer throws (kind-aware removal)', () => {

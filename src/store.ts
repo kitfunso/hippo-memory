@@ -917,8 +917,17 @@ function writeMarkdownMirror(hippoRoot: string, entry: MemoryEntry): void {
   fs.writeFileSync(path.join(dir, `${entry.id}.md`), serializeEntry(entry), 'utf8');
 }
 
+// AT1 P1 fix (codex): `writeMarkdownMirror` writes ANY layer's mirror,
+// including `trace/<id>.md` for Layer.Trace rows (auto-promoted traces,
+// consolidate.ts) — but this enumeration only walked
+// Buffer/Episodic/Semantic. A rejected/forgotten trace row's markdown
+// content survived on disk while the purge (and `hippo reject`/plain
+// `forget`) reported success, and a stale trace mirror is exactly the
+// resurrection channel bootstrapLegacyStore/rebuildIndex guard against.
+// Fixes BOTH the AT1 reject-flow purge and the pre-existing plain-`forget`
+// gap for trace rows (deleteEntry has always called this same function).
 export function removeEntryMirrors(hippoRoot: string, id: string): void {
-  for (const layer of [Layer.Buffer, Layer.Episodic, Layer.Semantic]) {
+  for (const layer of [Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace]) {
     const file = path.join(layerDir(hippoRoot, layer), `${id}.md`);
     if (fs.existsSync(file)) {
       fs.unlinkSync(file);
@@ -936,7 +945,11 @@ export function removeEntryMirrors(hippoRoot: string, id: string): void {
  * which file is stuck.
  */
 export function getExistingEntryMirrorPaths(hippoRoot: string, id: string): string[] {
-  return [Layer.Buffer, Layer.Episodic, Layer.Semantic]
+  // AT1 P1 fix (codex): same missing Layer.Trace as removeEntryMirrors above
+  // — kept in lockstep with it since this function's whole purpose is
+  // walking the mirror paths "the same way removeEntryMirrors walks them"
+  // (see its own doc comment).
+  return [Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace]
     .map((layer) => path.join(layerDir(hippoRoot, layer), `${id}.md`))
     .filter((file) => fs.existsSync(file));
 }
@@ -1137,6 +1150,18 @@ function loadLegacyStatsFile(hippoRoot: string): Record<string, unknown> {
  * ever assembling a batch to write, and skips the merge entirely on a hit.
  * Every other caller (writeEntryDbOnly, bootstrapLegacyStore, rebuildIndex)
  * leaves this false and the guard runs live.
+ *
+ * AT1 P1 fix (codex, batch-transaction rejection race): the producer check
+ * above runs on a DIFFERENT connection BEFORE this transaction opens — a
+ * `hippo reject X` that commits in that window is invisible to it. This
+ * parameter's contract is UNCHANGED (still the sole bypass, still trusted
+ * by the producer-side check for the common case); what changed is that
+ * `batchWriteAndDelete` no longer trusts it BLINDLY. It now runs its own
+ * in-transaction point-probe (same connection, same digest lookup this
+ * function's guard would have done) immediately before each upsert and
+ * skips — rather than writes — any entry whose content matches a tombstone
+ * that landed after the producer's check. See batchWriteAndDelete for the
+ * skip logic.
  */
 function upsertEntryRow(
   db: ReturnType<typeof openHippoDb>,
@@ -1920,7 +1945,42 @@ export function batchWriteAndDelete(
     // origin would make freshly consolidated memories vanish from ambient
     // context (codex gating review P1).
     const stampedWrites = toWrite.map((e) => stampOriginProject(hippoRoot, e));
+    // AT1 P1 fix (codex, batch-transaction rejection race): the producer-side
+    // check (e.g. consolidate.ts's merge pass) runs BEFORE this transaction,
+    // on a different connection. A `hippo reject X` that commits in that
+    // window is invisible to it — a queued same-id write of X already
+    // sitting in `toWrite` (decay/replay re-persist, or a merge built before
+    // the reject) would silently re-INSERT the just-rejected row via the
+    // blind bypass. Fix: one indexed point probe per batch entry, on THIS
+    // connection, INSIDE this transaction — closes the race regardless of
+    // which write class hits it. N is small per sleep, so the extra query
+    // per entry is cheap.
+    //
+    // Skip, don't throw: the batch must still complete for every OTHER
+    // entry. Skipping is correct for every write class here — a merge
+    // summary skip just means that rollup is absent this cycle (its source
+    // facts stay merely demoted, recoverable next sleep); a skipped
+    // demotion/replay re-persist of a rejected-removed row means it stays
+    // gone, which is the entire point of the tombstone.
+    let batchRejectedSkips = 0;
+    const skippedWriteIds = new Set<string>();
     for (const entry of stampedWrites) {
+      const entryTenantId = entry.tenantId ?? 'default';
+      const incomingDigest = rejectionDigest(entry.content);
+      const tombstone = findRejectedValue(db, entryTenantId, incomingDigest);
+      if (tombstone) {
+        batchRejectedSkips++;
+        skippedWriteIds.add(entry.id);
+        audit(
+          db,
+          'reject_refusal',
+          entry.id,
+          { digest: incomingDigest, reason: tombstone.reason },
+          'sleep-batch',
+          entryTenantId,
+        );
+        continue;
+      }
       // AT1 (plan §3, corrected): bypass the rejection guard here.
       // Consolidation merges are DETERMINISTIC CONCATENATION (mergeContents,
       // consolidate.ts:736-751) of already-guarded leaf facts, not an LLM
@@ -1928,10 +1988,11 @@ export function batchWriteAndDelete(
       // transaction. The bypass is safe because consolidate.ts's merge pass
       // now checks the merged content's rejection digest against the
       // tenant's tombstones BEFORE ever pushing a merge into pendingWrites,
-      // skipping that merge entirely on a hit — the producer-side check is
-      // the fix, this bypass just stays out of its way. The guard belongs
-      // on leaf inserts, which write through writeEntry / writeEntryDbOnly
-      // and stay guarded (bypassRejectionGuard defaults false).
+      // skipping that merge entirely on a hit, AND because the point-probe
+      // immediately above closes the race window between that producer
+      // check and this COMMIT. The guard itself still belongs on leaf
+      // inserts, which write through writeEntry / writeEntryDbOnly and stay
+      // guarded (bypassRejectionGuard defaults false).
       upsertEntryRow(db, entry, true);
       // Hook for writes: child upserted under a level-2 summary marks parent dirty.
       if (entry.dag_parent_id) {
@@ -1950,8 +2011,17 @@ export function batchWriteAndDelete(
     }
     db.exec('COMMIT');
 
-    // Sync mirrors once after all DB writes
+    if (batchRejectedSkips > 0) {
+      console.error(
+        `batchWriteAndDelete: skipped ${batchRejectedSkips} write(s) whose content matches a rejected value (tombstone hit during the batch transaction)`,
+      );
+    }
+
+    // Sync mirrors once after all DB writes. Entries skipped above were
+    // never inserted — writing their markdown mirror would resurrect the
+    // exact content the skip just kept out of the DB.
     for (const entry of stampedWrites) {
+      if (skippedWriteIds.has(entry.id)) continue;
       writeMarkdownMirror(hippoRoot, entry);
     }
     for (const id of toDeleteIds) {
@@ -2770,6 +2840,12 @@ export function resolveConflict(
     let loserRemoved = false;
     let loserWasRaw = false;
     let rejectedDigest: string | undefined;
+    // AT1 P1 fix (codex): same-tenant duplicates of the loser's content that
+    // rejectLoserValue also removes (see below) — separate from loserId so
+    // the audit + post-commit mirror purge can cover ALL of them, not just
+    // loserId.
+    const extraRemovedIds: string[] = [];
+    const extraRemovedRawIds: string[] = [];
     const removeLoser = forgetLoser || opts?.rejectLoserValue === true;
 
     if (removeLoser) {
@@ -2792,6 +2868,33 @@ export function resolveConflict(
             sourceMemoryId: loserId,
             normalizedChars: normalizeValueForRejection(loserRow.content).length,
           });
+
+          // AT1 P1 fix (codex): reject-flow.ts's `rejectValue` removes ALL
+          // live same-tenant rows whose normalized digest matches, not just
+          // the one id passed — but this branch only ever removed loserId,
+          // leaving same-TENANT duplicates live while their shared content
+          // was tombstoned. Same O(N) scan pattern as reject-flow.ts (human-
+          // triggered command, tenant's row count is human-scale). CRITICAL
+          // BOUNDARY: tenant-scoped ONLY — tombstones are tenant-scoped by
+          // design, so a same-content row in ANOTHER tenant is legitimately
+          // live and must NOT be touched here. `keepId` is excluded even if
+          // its content coincidentally matches: the human explicitly chose
+          // to keep it in this same resolution, and this branch must not
+          // undo that choice in the same transaction.
+          const loserTenantId = loserRow.tenant_id ?? 'default';
+          const dupRows = db
+            .prepare(`SELECT id, kind, content FROM memories WHERE tenant_id = ? AND id != ? AND id != ?`)
+            .all(loserTenantId, loserId, keepId) as Array<{ id: string; kind: string; content: string }>;
+          for (const dup of dupRows) {
+            if (rejectionDigest(dup.content) !== rejectedDigest) continue;
+            if (dup.kind === 'raw') {
+              archiveRawMemory(db, dup.id, { reason, who: actor });
+              extraRemovedRawIds.push(dup.id);
+            } else {
+              deleteEntryCore(db, dup.id, { actor, suppressForgetAudit: true });
+            }
+            extraRemovedIds.push(dup.id);
+          }
         }
 
         if (loserRow.kind === 'raw') {
@@ -2843,6 +2946,10 @@ export function resolveConflict(
         disposition: loserRemoved ? (loserWasRaw ? 'archived_raw' : 'deleted') : 'weakened',
         rejected: Boolean(opts?.rejectLoserValue),
         rejectedDigest,
+        // AT1 P1 fix: every row this call removed, not just loserId — the
+        // same-tenant duplicate sweep above (extraRemovedIds) needs an
+        // audit trail too.
+        removedIds: loserRemoved ? [loserId, ...extraRemovedIds] : [],
       },
       opts?.rejectedBy ?? 'cli',
       tenantId,
@@ -2866,17 +2973,24 @@ export function resolveConflict(
     // purge+reaper pattern as the reject verb (src/reject-flow.ts) and
     // api.archiveRaw — reusing removeEntryMirrors + raw_archive bookkeeping.
     if (loserRemoved) {
-      // AT1 fix: purgeMirrorBestEffort retries once, then — for non-raw ids,
-      // which cleanupArchivedMirrors' reaper never scans — reports the
-      // EXPLICIT leftover path(s) instead of the false "will retry via
-      // reaper" claim. See its own doc comment (store.ts, near
-      // removeEntryMirrors) for the full rationale.
-      const mirrorOk = purgeMirrorBestEffort(hippoRoot, loserId, loserWasRaw, 'resolveConflict');
-      if (mirrorOk && loserWasRaw) {
-        db.prepare(`UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(
-          new Date().toISOString(),
-          loserId,
-        );
+      // AT1 P1 fix: loop over loserId AND every same-tenant duplicate the
+      // rejectLoserValue sweep above removed (extraRemovedIds) — previously
+      // only loserId's mirror was purged, leaving duplicate mirrors orphaned
+      // despite their rows being gone.
+      for (const removedId of [loserId, ...extraRemovedIds]) {
+        const isRaw = removedId === loserId ? loserWasRaw : extraRemovedRawIds.includes(removedId);
+        // AT1 fix: purgeMirrorBestEffort retries once, then — for non-raw ids,
+        // which cleanupArchivedMirrors' reaper never scans — reports the
+        // EXPLICIT leftover path(s) instead of the false "will retry via
+        // reaper" claim. See its own doc comment (store.ts, near
+        // removeEntryMirrors) for the full rationale.
+        const mirrorOk = purgeMirrorBestEffort(hippoRoot, removedId, isRaw, 'resolveConflict');
+        if (mirrorOk && isRaw) {
+          db.prepare(`UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(
+            new Date().toISOString(),
+            removedId,
+          );
+        }
       }
     }
 

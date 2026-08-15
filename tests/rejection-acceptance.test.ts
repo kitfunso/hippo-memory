@@ -480,6 +480,46 @@ describe('AT1 P2 fix: import dry-run tombstone accuracy', () => {
   });
 });
 
+describe('AT1 P2 fix: capture dry-run tombstone accuracy', () => {
+  it('capture dry-run reports a tombstoned extraction as rejected and writes nothing, agreeing with a real run', () => {
+    const home = tmpHome('hippo-rejection-acceptance-capture-dryrun-');
+    try {
+      initStore(home);
+      // Digit signal so audit.ts's isContentWorthStoring specificity gate
+      // (hasNoSpecificity) doesn't filter these before they ever reach the
+      // rejection guard — same fixture-construction rule as case 1 above.
+      const rejectedContent = 'use bearer tokens for outbound api calls to port 8443';
+      api.reject(ctx(home), { value: rejectedContent, reason: 'pre-emptive dry-run capture tombstone' });
+
+      const fixturePath = join(home, 'capture-dryrun-fixture.txt');
+      writeFileSync(
+        fixturePath,
+        [
+          `decision: ${rejectedContent}`,
+          'decision: rotate deploy keys every 90 days',
+        ].join('\n'),
+        'utf8',
+      );
+
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      cmdCapture(home, { source: 'file', filePath: fixturePath, dryRun: true, global: false });
+      const dryLogs = logSpy.mock.calls.map((c) => String(c[0])).join('\n');
+      logSpy.mockRestore();
+
+      expect(dryLogs).toContain(', 1 rejected)');
+      expect(loadAllEntries(home).length).toBe(0); // dry-run writes nothing
+
+      // Real run agrees: the tombstoned item is refused, the sibling lands.
+      cmdCapture(home, { source: 'file', filePath: fixturePath, dryRun: false, global: false });
+      const contents = loadAllEntries(home).map((e) => e.content);
+      expect(contents).not.toContain(rejectedContent);
+      expect(contents.some((c) => c.includes('rotate deploy keys'))).toBe(true);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('AT1 codex-P1 fix 1: auto-promoted trace tombstone check', () => {
   it('reject an auto-promoted trace -> next consolidate does not recreate it: skip counted, one reject_refusal audit, no trace row', async () => {
     const home = tmpHome('hippo-rejection-acceptance-trace-');

@@ -28,7 +28,8 @@ import { isEmbeddingConfigured } from './embedding-provider.js';
 import { resolveTenantId } from './tenant.js';
 import { defaultPreCompactLogPath } from './hooks.js';
 import { redactSecrets } from './secret-detect.js';
-import { RejectedValueError } from './rejection.js';
+import { RejectedValueError, checkRejectionGuard } from './rejection.js';
+import { openHippoDb, closeHippoDb } from './db.js';
 
 // ---------------------------------------------------------------------------
 // Pattern definitions
@@ -629,18 +630,24 @@ function cmdCaptureCore(
   let skipped = 0;
   let rejected = 0;
 
-  for (const item of extracted) {
-    if (isDuplicate(item.content, existing)) {
-      skipped++;
-      if (options.dryRun) {
-        console.log(`  [skip] (${item.category}) ${item.content.slice(0, 80)}`);
+  // AT1 P2 fix (dry-run parity, docs/plans/2026-08-15-at1-rejected-value-tombstone.md):
+  // dry-run used to skip the guarded write branch ENTIRELY, so a tombstoned
+  // extraction printed as `[capture]` and counted toward `captured` — the
+  // preview lied about what a real run would do. Mirrors importers.ts's
+  // importEntries dry-run probe (commit 6146e82): open a read-only handle
+  // once, run the same checkRejectionGuard the real write path uses via
+  // writeEntry, never write anything.
+  const dryRunDb = options.dryRun ? openHippoDb(targetRoot) : null;
+  try {
+    for (const item of extracted) {
+      if (isDuplicate(item.content, existing)) {
+        skipped++;
+        if (options.dryRun) {
+          console.log(`  [skip] (${item.category}) ${item.content.slice(0, 80)}`);
+        }
+        continue;
       }
-      continue;
-    }
 
-    if (options.dryRun) {
-      console.log(`  [capture] (${item.category}) ${item.content}`);
-    } else {
       // A3: kind defaults to 'distilled'. capture.ts extracts curated items from
       // session output (not raw transcript chunks), so distilled is correct. If a
       // future variant captures full raw session text, it MUST set kind: 'raw'
@@ -659,26 +666,44 @@ function cmdCaptureCore(
         tenantId: useGlobal ? undefined : options.tenantId,
       });
 
-      // AT1 (plan §3 containment): one rejected item must not abort the
-      // rest of this capture's items.
-      try {
-        writeEntry(targetRoot, entry);
-      } catch (err) {
-        if (err instanceof RejectedValueError) {
-          rejected++;
-          continue;
+      if (options.dryRun) {
+        if (dryRunDb) {
+          try {
+            checkRejectionGuard(dryRunDb, entry.tenantId ?? 'default', entry.id, entry.content);
+          } catch (err) {
+            if (err instanceof RejectedValueError) {
+              rejected++;
+              console.log(`  [reject] (${item.category}) ${item.content.slice(0, 80)} - matches a rejected value`);
+              continue;
+            }
+            throw err;
+          }
         }
-        throw err;
-      }
-      updateStats(targetRoot, { remembered: 1 });
-      existing.push(entry); // within-batch dedup
+        console.log(`  [capture] (${item.category}) ${item.content}`);
+      } else {
+        // AT1 (plan §3 containment): one rejected item must not abort the
+        // rest of this capture's items.
+        try {
+          writeEntry(targetRoot, entry);
+        } catch (err) {
+          if (err instanceof RejectedValueError) {
+            rejected++;
+            continue;
+          }
+          throw err;
+        }
+        updateStats(targetRoot, { remembered: 1 });
+        existing.push(entry); // within-batch dedup
 
-      if (isEmbeddingConfigured(targetRoot)) {
-        embedMemory(targetRoot, entry).catch(() => {});
+        if (isEmbeddingConfigured(targetRoot)) {
+          embedMemory(targetRoot, entry).catch(() => {});
+        }
       }
+
+      captured++;
     }
-
-    captured++;
+  } finally {
+    if (dryRunDb) closeHippoDb(dryRunDb);
   }
 
   const prefix = options.dryRun ? '[dry-run] ' : '';

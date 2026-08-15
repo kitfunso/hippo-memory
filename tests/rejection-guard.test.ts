@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../src/db.js';
-import { initStore, writeEntry, readEntry, batchWriteAndDelete, applyRebuildResult } from '../src/store.js';
+import { initStore, writeEntry, readEntry, deleteEntry, batchWriteAndDelete, applyRebuildResult } from '../src/store.js';
 import { createMemory, Layer } from '../src/memory.js';
 import { queryAuditEvents } from '../src/audit.js';
 import {
@@ -105,16 +105,43 @@ describe('AT1 rejection guard', () => {
     }
   });
 
-  it('batchWriteAndDelete bypasses the rejection guard (consolidation rollups)', () => {
+  it('batchWriteAndDelete probes for a rejected value in-transaction and skips a re-persist that races a reject, instead of resurrecting it (P1 batch-transaction race fix)', () => {
     const home = tmpHome();
     try {
       initStore(home);
-      const rollupText = 'rollup text that happens to match a tombstone';
-      reject(home, rollupText, 'coincidental digest match');
+      const raceText = 'batch race content rejected between the producer check and the batch commit';
+      const entry = createMemory(raceText, { layer: Layer.Semantic });
+      writeEntry(home, entry);
 
-      const entry = createMemory(rollupText, { layer: Layer.Semantic });
-      expect(() => batchWriteAndDelete(home, [entry], [])).not.toThrow();
-      expect(readEntry(home, entry.id)!.content).toBe(rollupText);
+      // The queued write standing in for a stale toWrite/pendingWrites entry
+      // (e.g. consolidate's decay-pass strength refresh) captured BEFORE the
+      // reject below commits — same id, same content, about to reach
+      // batchWriteAndDelete's guard-bypassed upsert AFTER the row is gone.
+      // This is the exact race the producer-side check alone cannot close:
+      // the producer runs on a different connection before this transaction
+      // opens.
+      const queuedRePersist = { ...entry, retrieval_count: entry.retrieval_count + 1 };
+
+      // The race: remove the row and tombstone its digest — exactly what
+      // `hippo reject` does (reject-flow.ts), done here directly at the
+      // store/rejection.ts layer to match this file's existing convention.
+      deleteEntry(home, entry.id);
+      const digest = reject(home, raceText, 'rejected mid-race, between producer check and batch commit');
+      expect(readEntry(home, entry.id)).toBeNull();
+
+      expect(() => batchWriteAndDelete(home, [queuedRePersist], [])).not.toThrow();
+      expect(readEntry(home, entry.id)).toBeNull(); // stays gone — not resurrected
+
+      const db = openHippoDb(home);
+      try {
+        const refusals = queryAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' });
+        expect(refusals.length).toBe(1);
+        expect(refusals[0]!.targetId).toBe(entry.id);
+        expect(refusals[0]!.metadata.digest).toBe(digest);
+        expect(refusals[0]!.actor).toBe('sleep-batch');
+      } finally {
+        closeHippoDb(db);
+      }
     } finally {
       rmSync(home, { recursive: true, force: true });
     }

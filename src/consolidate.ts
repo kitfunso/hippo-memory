@@ -300,7 +300,28 @@ export async function consolidate(
   // bypass (no batchWriteAndDelete call), so there is nothing for a handle
   // to protect against — stays null and every `if (consolidateDb)` below is
   // a no-op.
+  //
+  // AT1 P2 fix (codex, handle-leak restructure): the open must be followed
+  // IMMEDIATELY by the try whose finally closes it, covering every phase
+  // that can touch consolidateDb — not just the merge pass. Previously the
+  // try/finally wrapped only section 3 (merge pass); an exception thrown by
+  // auto-promote (1.4), replay (1.5), batch extraction (1.6), the DAG
+  // passes (1.7-1.9), or physics (2) would propagate past the open handle
+  // with nothing to close it. No behavior change on the happy path — each
+  // of those phases already best-effort catches its own exceptions today
+  // (physics has its own try/catch below; each DAG pass wraps its own
+  // dynamic import + call in try/catch) — this only closes the handle on
+  // the rare path where one of them throws past its own catch. Deliberately
+  // NOT re-indented (mechanical wrap only, kept surgical): every statement
+  // between this try and its finally (below, at the end of the merge pass)
+  // stays at its original indentation.
   const consolidateDb = dryRun ? null : openHippoDb(hippoRoot);
+  // Declared here (not at the merge pass, its point of use) so it survives
+  // this try/finally — a `let` declared INSIDE the try would go out of
+  // scope before the `if (mergesSkippedRejected > 0)` check that reads it
+  // after the finally closes the handle.
+  let mergesSkippedRejected = 0;
+  try {
 
   // -------------------------------------------------------------------------
   // 1.4. Auto-promote complete sessions to traces
@@ -645,9 +666,10 @@ export async function consolidate(
   // auto-promote pass, 1.4) for the whole non-dry-run consolidate — see that
   // declaration's comment. Only needed for real writes — a dry-run preview
   // never reaches batchWriteAndDelete's guard bypass, so there is nothing
-  // here for it to protect against.
-  let mergesSkippedRejected = 0;
-  try {
+  // here for it to protect against. (mergesSkippedRejected itself is
+  // declared up at the try's opening above 1.4, not here — it has to
+  // survive the try/finally that now wraps this whole section; see the
+  // handle-leak restructure comment there.)
     for (let i = 0; i < mergeCandidates.length; i++) {
       if (used.has(mergeCandidates[i].id)) continue;
 

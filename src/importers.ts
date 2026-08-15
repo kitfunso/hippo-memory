@@ -24,8 +24,14 @@ export interface ImportResult {
   skipped: number;   // skipped as duplicates or too short
   /** AT1: refused by the rejection-value guard — kept distinct from
    *  `skipped` (dedup) so a tombstoned value is distinguishable from a
-   *  plain duplicate in import summaries (plan §3 containment, round-2 low). */
-  rejected: number;
+   *  plain duplicate in import summaries (plan §3 containment, round-2 low).
+   *  AT1 P2 fix (codex, published-surface compat): optional, not required —
+   *  `ImportResult` is re-exported from the package root (index.ts), and a
+   *  required field breaks any existing consumer constructing the pre-AT1
+   *  shape. Every producer in this file still always sets a real number;
+   *  `?? 0` at read sites (this file's own accumulation, cli.ts's summary
+   *  prints) tolerates a caller-supplied object that omits it. */
+  rejected?: number;
   /** K1 vault import: rows archived this run (changed + source-deleted). In a
    *  dryRun this is the would-be count (a true deletion-sync preview). */
   archived?: number;
@@ -549,7 +555,9 @@ export function importMarkdown(filePath: string, options: ImportOptions): Import
       total: totalResult.total + result.total,
       imported: totalResult.imported + result.imported,
       skipped: totalResult.skipped + result.skipped,
-      rejected: totalResult.rejected + result.rejected,
+      // AT1 P2 fix: `rejected` is now optional on ImportResult (compat) — tolerate
+      // undefined on either side of the accumulation.
+      rejected: (totalResult.rejected ?? 0) + (result.rejected ?? 0),
       entries: [...totalResult.entries, ...result.entries],
     };
   }

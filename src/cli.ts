@@ -6410,7 +6410,7 @@ function cmdImport(
     console.log(`  Notes found:           ${vaultResult.total}`);
     console.log(`  ${dryRun ? 'Would import:         ' : 'Imported:             '}${vaultResult.imported}`);
     console.log(`  Skipped (unchanged):   ${vaultResult.skipped}`);
-    if (vaultResult.rejected > 0) {
+    if ((vaultResult.rejected ?? 0) > 0) {
       console.log(`  Rejected (tombstoned): ${vaultResult.rejected}`);
     }
     console.log(`  ${dryRun ? 'Would archive:        ' : 'Archived (removed):   '}${vaultResult.archived ?? 0}`);
@@ -6484,7 +6484,7 @@ function cmdImport(
   console.log(`  Source entries found:  ${result.total}`);
   console.log(`  Imported:              ${result.imported}`);
   console.log(`  Skipped (dedup/noise): ${result.skipped}`);
-  if (result.rejected > 0) {
+  if ((result.rejected ?? 0) > 0) {
     console.log(`  Rejected (tombstoned): ${result.rejected}`);
   }
   if (dryRun) {
