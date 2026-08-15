@@ -1919,7 +1919,14 @@ export function batchWriteAndDelete(
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    db.exec('BEGIN');
+    // BEGIN IMMEDIATE (codex delta-review P2): the AT1 tombstone probes below
+    // READ before the first write. Under a deferred BEGIN, that read pins a
+    // WAL snapshot; a concurrent writer (e.g. `hippo reject`) committing
+    // between probe and first upsert would make the later write-lock upgrade
+    // fail with SQLITE_BUSY and roll back the ENTIRE batch — the exact race
+    // the probe exists to contain. Taking the write lock up front serializes
+    // the probe and the writes on one consistent snapshot.
+    db.exec('BEGIN IMMEDIATE');
     // v0.30 / E2 — DAG live-coupling: BEFORE deletes, snapshot dag_parent_id
     // for every doomed row so we can mark parents dirty post-COMMIT. Done
     // inside the same BEGIN so the SELECT sees pre-delete state.
@@ -1966,20 +1973,32 @@ export function batchWriteAndDelete(
     const skippedWriteIds = new Set<string>();
     for (const entry of stampedWrites) {
       const entryTenantId = entry.tenantId ?? 'default';
-      const incomingDigest = rejectionDigest(entry.content);
-      const tombstone = findRejectedValue(db, entryTenantId, incomingDigest);
-      if (tombstone) {
-        batchRejectedSkips++;
-        skippedWriteIds.add(entry.id);
-        audit(
-          db,
-          'reject_refusal',
-          entry.id,
-          { digest: incomingDigest, reason: tombstone.reason },
-          'sleep-batch',
-          entryTenantId,
-        );
-        continue;
+      // Codex delta-review P2 fix: reuse checkRejectionGuard rather than a
+      // bare tombstone probe — the guard's content-INTRODUCTION
+      // classification must apply here too. A tombstone can legitimately
+      // coexist with a live same-content row (resolveConflict deliberately
+      // excludes keepId from its sweep; unreject-then-re-reject windows), and
+      // an unconditional skip would starve that row of decay/replay metadata
+      // updates forever. The guard throws only when the write is new-row or
+      // changes content TO the rejected value; unchanged same-id re-persists
+      // pass through, exactly as on the writeEntry path.
+      try {
+        checkRejectionGuard(db, entryTenantId, entry.id, entry.content);
+      } catch (err) {
+        if (err instanceof RejectedValueError) {
+          batchRejectedSkips++;
+          skippedWriteIds.add(entry.id);
+          audit(
+            db,
+            'reject_refusal',
+            entry.id,
+            { digest: err.digest, reason: err.reason },
+            'sleep-batch',
+            entryTenantId,
+          );
+          continue;
+        }
+        throw err;
       }
       // AT1 (plan §3, corrected): bypass the rejection guard here.
       // Consolidation merges are DETERMINISTIC CONCATENATION (mergeContents,
