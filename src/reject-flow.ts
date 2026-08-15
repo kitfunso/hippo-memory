@@ -72,6 +72,13 @@ export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
   if (opts.memoryId === undefined && opts.value === undefined) {
     throw new Error('reject requires either a memory id or --value.');
   }
+  if (opts.memoryId !== undefined && opts.value !== undefined) {
+    // P2 fix: the CLI's flag parser already refuses both forms together;
+    // the shared flow itself didn't enforce it, so a direct api caller
+    // passing both silently got the memoryId path with `value` ignored —
+    // surprising for a caller who thought they were rejecting `value`.
+    throw new Error('reject accepts either a memory id or --value, not both.');
+  }
   if (opts.value !== undefined && normalizeValueForRejection(opts.value).length === 0) {
     // Direct api callers can pass strings the CLI flag parser would have
     // refused; an empty-normalized tombstone would refuse nothing meaningful
@@ -209,6 +216,15 @@ export function unrejectValue(
   digestOrPrefix: string,
   actor: string,
 ): UnrejectOutcome {
+  // P2 fix: an empty/blank prefix startsWith-matches EVERY digest (every
+  // string starts with ''), which would previously fall through to the
+  // ambiguous-candidates branch and list the whole tombstone set instead of
+  // failing loud on the actually-invalid input. Reject before the DB round
+  // trip.
+  if (digestOrPrefix.trim().length === 0) {
+    return { status: 'not_found' };
+  }
+
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {

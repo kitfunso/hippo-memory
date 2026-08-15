@@ -25,6 +25,7 @@ import {
 import { textOverlap, markRetrieved } from './search.js';
 import { compareEntryIdentity } from './compare.js';
 import { openHippoDb, closeHippoDb } from './db.js';
+import { rejectionDigest, findRejectedValue } from './rejection.js';
 import { loadPhysicsState, savePhysicsState, refreshParticleProperties } from './physics-state.js';
 import { simulate, type ForceContext } from './physics.js';
 import { loadConfig } from './config.js';
@@ -589,63 +590,119 @@ export async function consolidate(
   );
   const used = new Set<string>();
 
-  for (let i = 0; i < mergeCandidates.length; i++) {
-    if (used.has(mergeCandidates[i].id)) continue;
+  // AT1 consolidation-loop fix (docs/plans/2026-08-15-at1-rejected-value-tombstone.md):
+  // one handle for the whole merge pass' tombstone point-queries + best-effort
+  // reject_refusal audits, opened once rather than per-cluster. Only needed
+  // for real writes — a dry-run preview never reaches batchWriteAndDelete's
+  // guard bypass, so there is nothing here for it to protect against.
+  const mergeDb = dryRun ? null : openHippoDb(hippoRoot);
+  let mergesSkippedRejected = 0;
+  try {
+    for (let i = 0; i < mergeCandidates.length; i++) {
+      if (used.has(mergeCandidates[i].id)) continue;
 
-    const cluster: MemoryEntry[] = [mergeCandidates[i]];
+      const cluster: MemoryEntry[] = [mergeCandidates[i]];
 
-    for (let j = i + 1; j < mergeCandidates.length; j++) {
-      if (used.has(mergeCandidates[j].id)) continue;
-      const overlap = textOverlap(mergeCandidates[i].content, mergeCandidates[j].content);
-      if (overlap >= MERGE_OVERLAP_THRESHOLD) {
-        cluster.push(mergeCandidates[j]);
+      for (let j = i + 1; j < mergeCandidates.length; j++) {
+        if (used.has(mergeCandidates[j].id)) continue;
+        const overlap = textOverlap(mergeCandidates[i].content, mergeCandidates[j].content);
+        if (overlap >= MERGE_OVERLAP_THRESHOLD) {
+          cluster.push(mergeCandidates[j]);
+        }
+      }
+
+      if (cluster.length < MERGE_MIN_CLUSTER) continue;
+
+      // Create a semantic summary
+      const mergedContent = mergeContents(cluster);
+
+      // AT1: check the merge's content digest against the CLUSTER's tenant
+      // tombstones BEFORE committing to this merge (used.add / result.merged
+      // / the write). mergeContents is DETERMINISTIC CONCATENATION (not an
+      // LLM paraphrase) — if a human rejected exactly this byte-identical
+      // rollup before, an unguarded sleep would regenerate it every cycle
+      // and batchWriteAndDelete's guard bypass (store.ts) would silently
+      // re-assert it forever. This producer-side check is what makes that
+      // bypass safe. A hit skips the WHOLE cluster: sources stay unmerged —
+      // not demoted, not deleted — so a later sleep gets another chance if
+      // the tombstone is lifted.
+      if (mergeDb) {
+        const clusterTenantId = cluster[0]?.tenantId ?? 'default';
+        const mergeDigest = rejectionDigest(mergedContent);
+        const tombstone = findRejectedValue(mergeDb, clusterTenantId, mergeDigest);
+        if (tombstone) {
+          // Still mark used — these members are not re-tried against a
+          // DIFFERENT cluster within this same pass; next sleep re-clusters
+          // them fresh.
+          for (const e of cluster) used.add(e.id);
+          mergesSkippedRejected++;
+          try {
+            appendAuditEvent(mergeDb, {
+              tenantId: clusterTenantId,
+              actor: 'sleep',
+              op: 'reject_refusal',
+              metadata: {
+                digest: mergeDigest,
+                reason: tombstone.reason,
+                sourceIds: cluster.map((e) => e.id),
+              },
+            });
+          } catch {
+            // Best-effort — mirrors store.ts's audit() semantics.
+          }
+          continue;
+        }
+      }
+
+      // Mark cluster members as used
+      for (const e of cluster) used.add(e.id);
+      result.merged += cluster.length;
+
+      const allTags = Array.from(new Set(cluster.flatMap((e) => e.tags)));
+      const maxValence = pickStrongestValence(cluster);
+
+      result.details.push(
+        `  🔀 merged ${cluster.length} episodic entries into semantic: "${mergedContent.slice(0, 60)}..."`
+      );
+
+      if (!dryRun) {
+        const semantic = createMemory(mergedContent, {
+          layer: Layer.Semantic,
+          tags: allTags,
+          emotional_valence: maxValence,
+          schema_fit: 0.7,
+          source: 'consolidation',
+          confidence: 'inferred',
+        });
+        pendingWrites.push(semantic);
+        result.semanticCreated++;
+
+        // Demote source episodics (they've been compressed into neocortex):
+        // scale half_life_days so they decay sooner while staying recoverable.
+        // Immediate ranking is deliberately unchanged: the 2026-06-10 DAG
+        // slice-1 eval measured that dropping children below a worse-retrieving
+        // summary regresses budget-bounded QA (docs/evals/). The stored
+        // strength is refreshed to the live value so inspect, replay sampling,
+        // and strength-sorted assembly see the truth instead of a fake 0.3.
+        // Mutate in place (not a copy): `cluster` holds the same object
+        // references as `survivors`, and the later detectConflicts(survivors)
+        // pass in this same run must see the post-demotion half-life, or it
+        // can persist conflicts for entries the just-written state excludes.
+        for (const e of cluster) {
+          e.half_life_days = Math.max(1, Math.floor(e.half_life_days * MERGE_SOURCE_HALF_LIFE_FACTOR));
+          e.strength = calculateStrength(e, now, decayOpts);
+          pendingWrites.push(e);
+        }
       }
     }
+  } finally {
+    if (mergeDb) closeHippoDb(mergeDb);
+  }
 
-    if (cluster.length < MERGE_MIN_CLUSTER) continue;
-
-    // Mark cluster members as used
-    for (const e of cluster) used.add(e.id);
-    result.merged += cluster.length;
-
-    // Create a semantic summary
-    const mergedContent = mergeContents(cluster);
-    const allTags = Array.from(new Set(cluster.flatMap((e) => e.tags)));
-    const maxValence = pickStrongestValence(cluster);
-
-    result.details.push(
-      `  🔀 merged ${cluster.length} episodic entries into semantic: "${mergedContent.slice(0, 60)}..."`
+  if (mergesSkippedRejected > 0) {
+    console.error(
+      `consolidate: skipped ${mergesSkippedRejected} merge(s) whose content matches a rejected value`,
     );
-
-    if (!dryRun) {
-      const semantic = createMemory(mergedContent, {
-        layer: Layer.Semantic,
-        tags: allTags,
-        emotional_valence: maxValence,
-        schema_fit: 0.7,
-        source: 'consolidation',
-        confidence: 'inferred',
-      });
-      pendingWrites.push(semantic);
-      result.semanticCreated++;
-
-      // Demote source episodics (they've been compressed into neocortex):
-      // scale half_life_days so they decay sooner while staying recoverable.
-      // Immediate ranking is deliberately unchanged: the 2026-06-10 DAG
-      // slice-1 eval measured that dropping children below a worse-retrieving
-      // summary regresses budget-bounded QA (docs/evals/). The stored
-      // strength is refreshed to the live value so inspect, replay sampling,
-      // and strength-sorted assembly see the truth instead of a fake 0.3.
-      // Mutate in place (not a copy): `cluster` holds the same object
-      // references as `survivors`, and the later detectConflicts(survivors)
-      // pass in this same run must see the post-demotion half-life, or it
-      // can persist conflicts for entries the just-written state excludes.
-      for (const e of cluster) {
-        e.half_life_days = Math.max(1, Math.floor(e.half_life_days * MERGE_SOURCE_HALF_LIFE_FACTOR));
-        e.strength = calculateStrength(e, now, decayOpts);
-        pendingWrites.push(e);
-      }
-    }
   }
 
   // Flush all writes/deletes in a single transaction

@@ -116,10 +116,22 @@ the **only** `INSERT INTO memories` in src (spot-checked). Guard runs there:
   callers goes through it; they call `upsertEntryRow` directly). Exactly ONE call
   site passes the bypass (round-3 correction), with an in-code comment obligation:
   - `batchWriteAndDelete` (calls `upsertEntryRow` at store.ts:1714) —
-    consolidation merge + auto-promote writes are LLM paraphrase rollups of
-    already-guarded leaf facts; refusing a paraphrase mid-batch would abort the
-    whole consolidation transaction and the digest would almost never match anyway
-    (false confidence, not protection). The guard belongs on leaf inserts.
+    **premise corrected post-ship (review-stage fix):** consolidation merges
+    are DETERMINISTIC CONCATENATION (`mergeContents`, consolidate.ts:736-751),
+    not an LLM paraphrase — refusing mid-batch would still abort the whole
+    consolidation transaction, but the digest matching a tombstone is NOT
+    rare: deterministic concatenation of the same source facts reproduces
+    the exact same rejected string every sleep cycle. The bypass is safe
+    because the PRODUCER now checks first — consolidate.ts's merge pass
+    looks up the merged content's rejection digest against the tenant's
+    tombstones before ever pushing that merge into `pendingWrites`, and
+    skips the whole cluster on a hit (sources stay unmerged, not demoted,
+    not deleted; skip counted, best-effort `reject_refusal` audit, one
+    `console.error` per sleep). Without that producer-side check, an
+    unguarded bypass would resurrect a rejected rollup every cycle: reject
+    a consolidated summary, sleep regenerates the byte-identical content,
+    the bypassed batch writer re-asserts it. The guard itself stays on leaf
+    inserts; the producer-side check is what makes this bypass safe to keep.
   - `writeEntryDbOnly`'s own call (store.ts:1352) passes NO bypass — the guard is
     live for every producer routed through `writeEntry` / `api.supersede`.
 - **Recovery paths run the guard WITH per-row containment — they do NOT bypass

@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { createMemory } from '../src/memory.js';
+import { createMemory, Layer } from '../src/memory.js';
 import {
   initStore,
   writeEntry,
@@ -105,6 +105,27 @@ describe('api.reject / api.unreject / api.listRejections', () => {
     const a = createMemory('needs a reason', { tags: [] });
     writeEntry(tmpDir, a);
     expect(() => api.reject(ctx(), { memoryId: a.id, reason: '' })).toThrow();
+  });
+
+  it('reject throws when both memoryId and value are given (P2 fix)', () => {
+    const a = createMemory('both forms supplied at once', { tags: [] });
+    writeEntry(tmpDir, a);
+    expect(() =>
+      api.reject(ctx(), { memoryId: a.id, value: 'a different value entirely', reason: 'ambiguous' }),
+    ).toThrow();
+  });
+
+  it('unreject throws on a blank digest/prefix instead of matching every tombstone (P2 fix)', () => {
+    const a = createMemory('to be rejected for the blank-unreject test', { tags: [] });
+    writeEntry(tmpDir, a);
+    api.reject(ctx(), { memoryId: a.id, reason: 'setup for blank-unreject test' });
+    expect(api.listRejections(ctx()).length).toBe(1);
+
+    expect(() => api.unreject(ctx(), '')).toThrow();
+    expect(() => api.unreject(ctx(), '   ')).toThrow();
+    // The tombstone must survive an accidental blank call, not get wiped by
+    // an empty-string startsWith-matches-everything prefix scan.
+    expect(api.listRejections(ctx()).length).toBe(1);
   });
 });
 
@@ -203,6 +224,93 @@ describe('resolveConflict AT1 wiring', () => {
       expect(events[0]!.metadata.disposition).toBe('archived_raw');
     } finally {
       closeHippoDb(db);
+    }
+  });
+
+  it('raw loser via PLAIN resolve --forget (no --reject-loser) purges its mirror + stamps mirror_cleaned_at (P1b fix)', () => {
+    const a = createMemory('keeper content for raw mirror-purge conflict', { tags: ['x'] });
+    const rawLoser = createMemory('raw loser content for the mirror-purge test', { tags: ['x'], kind: 'raw' });
+    writeEntry(tmpDir, a);
+    writeEntry(tmpDir, rawLoser);
+    const mirrorPath = path.join(tmpDir, Layer.Episodic, `${rawLoser.id}.md`);
+    expect(fs.existsSync(mirrorPath)).toBe(true);
+
+    replaceDetectedConflicts(tmpDir, [{
+      memory_a_id: a.id,
+      memory_b_id: rawLoser.id,
+      reason: 'raw conflict for mirror-purge test',
+      score: 0.85,
+    }]);
+    const conflicts = listMemoryConflicts(tmpDir, 'open');
+    const conflictId = conflicts[0]!.id;
+
+    // Plain --forget, deliberately WITHOUT rejectLoserValue — before P1b the
+    // post-commit purge gate required rejectLoserValue too, so this path
+    // left the raw mirror orphaned (only the reaper would eventually catch
+    // it; a non-raw loser would never be caught at all).
+    resolveConflict(tmpDir, conflictId, a.id, true, 'default');
+    expect(readEntry(tmpDir, rawLoser.id)).toBeNull();
+    expect(fs.existsSync(mirrorPath)).toBe(false);
+
+    const db = openHippoDb(tmpDir);
+    try {
+      const row = db
+        .prepare(`SELECT mirror_cleaned_at FROM raw_archive WHERE memory_id = ?`)
+        .get(rawLoser.id) as { mirror_cleaned_at: string | null } | undefined;
+      expect(row?.mirror_cleaned_at).toBeTruthy();
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
+  it('rejectLoserValue on a RAW loser: tombstone written, raw archived (not deleted), no crash — previously untested combination (GDPR pairing)', () => {
+    const a = createMemory('keeper content for raw+reject conflict', { tags: ['x'] });
+    const rawLoser = createMemory('raw loser content later rejected via the reject-loser path', {
+      tags: ['x'],
+      kind: 'raw',
+    });
+    writeEntry(tmpDir, a);
+    writeEntry(tmpDir, rawLoser);
+    replaceDetectedConflicts(tmpDir, [{
+      memory_a_id: a.id,
+      memory_b_id: rawLoser.id,
+      reason: 'raw+reject conflict',
+      score: 0.85,
+    }]);
+    const conflicts = listMemoryConflicts(tmpDir, 'open');
+    const conflictId = conflicts[0]!.id;
+
+    expect(() =>
+      resolveConflict(tmpDir, conflictId, a.id, false, 'default', {
+        rejectLoserValue: true,
+        reason: 'raw loser rejected via GDPR-adjacent path',
+      }),
+    ).not.toThrow();
+
+    // Archived, not hard-deleted: the row is gone from `memories` but a
+    // raw_archive row exists (append-only trigger respected).
+    expect(readEntry(tmpDir, rawLoser.id)).toBeNull();
+    const db = openHippoDb(tmpDir);
+    try {
+      const archiveRow = db.prepare(`SELECT memory_id FROM raw_archive WHERE memory_id = ?`).get(rawLoser.id);
+      expect(archiveRow).not.toBeUndefined();
+    } finally {
+      closeHippoDb(db);
+    }
+
+    // Tombstone written: re-remembering the raw loser's content is refused.
+    expect(() =>
+      api.remember(ctx(), { content: 'raw loser content later rejected via the reject-loser path' }),
+    ).toThrow(RejectedValueError);
+
+    const db2 = openHippoDb(tmpDir);
+    try {
+      const events = queryAuditEvents(db2, { tenantId: 'default', op: 'conflict_resolve' });
+      expect(events.length).toBe(1);
+      expect(events[0]!.metadata.disposition).toBe('archived_raw');
+      expect(events[0]!.metadata.rejected).toBe(true);
+    } finally {
+      closeHippoDb(db2);
     }
   });
 });

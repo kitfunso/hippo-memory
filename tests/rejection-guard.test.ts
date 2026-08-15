@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../src/db.js';
-import { initStore, writeEntry, readEntry, batchWriteAndDelete } from '../src/store.js';
+import { initStore, writeEntry, readEntry, batchWriteAndDelete, applyRebuildResult } from '../src/store.js';
 import { createMemory, Layer } from '../src/memory.js';
 import { queryAuditEvents } from '../src/audit.js';
 import {
@@ -156,6 +156,122 @@ describe('AT1 rejection guard', () => {
       } finally {
         closeHippoDb(db);
       }
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('applyRebuildResult refuses a rebuild patch matching a rejected value: old content survives, dirty cleared, one reject_refusal audit, no loop on second run (P1a fix)', () => {
+    const home = tmpHome();
+    try {
+      initStore(home);
+      const summary = createMemory('old summary content', {
+        layer: Layer.Semantic,
+        dag_level: 2,
+        confidence: 'inferred',
+      });
+      writeEntry(home, summary);
+
+      const rejectedContent = 'rebuilt content that was already rejected';
+      reject(home, rejectedContent, 'known-bad rebuild output');
+
+      // Force the summary dirty — rebuildDirtySummaries' normal trigger is a
+      // child write under it; this test drives applyRebuildResult directly.
+      const dbSetup = openHippoDb(home);
+      try {
+        dbSetup.prepare(`UPDATE memories SET summary_dirty = 1 WHERE id = ?`).run(summary.id);
+      } finally {
+        closeHippoDb(dbSetup);
+      }
+
+      const loaded = readEntry(home, summary.id)!;
+      const changed = applyRebuildResult(home, loaded, {
+        content: rejectedContent,
+        descendant_count: 3,
+        earliest_at: '2026-08-01T00:00:00Z',
+        latest_at: '2026-08-02T00:00:00Z',
+        bumpRebuildCount: true,
+        zeroChildren: false,
+        actor: 'sleep',
+      });
+
+      // Documented return-value semantics: metadata still applied → true,
+      // even though content was refused.
+      expect(changed).toBe(true);
+
+      const after = readEntry(home, summary.id)!;
+      expect(after.content).toBe('old summary content');
+      expect(after.summary_dirty).toBe(0);
+      expect(after.rebuild_count).toBe(0);
+      expect(after.descendant_count).toBe(3); // metadata DID apply
+
+      const db = openHippoDb(home);
+      try {
+        const refusals = queryAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' });
+        expect(refusals.length).toBe(1);
+        expect(refusals[0]!.targetId).toBe(summary.id);
+      } finally {
+        closeHippoDb(db);
+      }
+
+      // No loop: dirty is cleared, so a second attempt against the
+      // now-current row (summary_dirty=1 no longer matches) is a race-loser
+      // no-op — no second refusal audit.
+      const secondPass = applyRebuildResult(home, after, {
+        content: rejectedContent,
+        descendant_count: 3,
+        earliest_at: '2026-08-01T00:00:00Z',
+        latest_at: '2026-08-02T00:00:00Z',
+        bumpRebuildCount: true,
+        zeroChildren: false,
+        actor: 'sleep',
+      });
+      expect(secondPass).toBe(false);
+
+      const db2 = openHippoDb(home);
+      try {
+        const refusals2 = queryAuditEvents(db2, { tenantId: 'default', op: 'reject_refusal' });
+        expect(refusals2.length).toBe(1); // still just one — no loop
+      } finally {
+        closeHippoDb(db2);
+      }
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('a same-id upsert that only changes tenantId is refused when the destination tenant rejected the unchanged content (P2 fix)', () => {
+    const home = tmpHome();
+    try {
+      initStore(home);
+      // Content lives quietly in tenant A — never rejected there.
+      const entry = createMemory('shared content across a tenant move', { layer: Layer.Episodic });
+      entry.tenantId = 'tenant-a';
+      writeEntry(home, entry);
+      expect(readEntry(home, entry.id, 'tenant-a')).not.toBeNull();
+
+      // Tenant B rejects the SAME (byte-identical) content.
+      const db = openHippoDb(home);
+      try {
+        insertRejectedValue(db, {
+          tenantId: 'tenant-b',
+          digest: rejectionDigest('shared content across a tenant move'),
+          reason: 'rejected in tenant B',
+          rejectedBy: 'cli',
+          rejectedAt: new Date().toISOString(),
+          normalizedChars: normalizeValueForRejection('shared content across a tenant move').length,
+        });
+      } finally {
+        closeHippoDb(db);
+      }
+
+      // Same id, SAME content — only tenantId changes A -> B.
+      const moved = { ...entry, tenantId: 'tenant-b' };
+      expect(() => writeEntry(home, moved)).toThrow(RejectedValueError);
+
+      // The row stays in tenant A, untouched.
+      expect(readEntry(home, entry.id, 'tenant-a')!.content).toBe('shared content across a tenant move');
+      expect(readEntry(home, entry.id, 'tenant-b')).toBeNull();
     } finally {
       rmSync(home, { recursive: true, force: true });
     }

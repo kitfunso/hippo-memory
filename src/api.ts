@@ -1722,6 +1722,20 @@ export interface RejectResult {
   removedIds: string[];
 }
 
+/**
+ * Reject a value: tombstone its normalized digest so a matching write is
+ * refused everywhere (remember/capture/import/sync) until `unreject`. Two
+ * forms — pass exactly one:
+ *  - `memoryId`: reject the CURRENT content of an existing memory. Removes
+ *    that row and every other live row in the tenant whose normalized
+ *    digest matches (not just the id passed).
+ *  - `value`: pre-emptive form — tombstone content that may not currently
+ *    be stored (or is already gone). Zero removals.
+ *
+ * `reason` is required (the tombstone stores no content; reason is its
+ * only human-readable identity). Throws if the memory id is not found in
+ * `ctx.tenantId`, or if both/neither of `memoryId`/`value` are given.
+ */
 export function reject(ctx: Context, opts: RejectOpts): RejectResult {
   if (opts.memoryId !== undefined) {
     // Tenant scope, same not-found-shaped denial as forget/promote above:
@@ -1750,6 +1764,12 @@ export function reject(ctx: Context, opts: RejectOpts): RejectResult {
   return { digest: result.digest, removedIds: result.removedIds };
 }
 
+/**
+ * Delete a tombstone by exact digest or unambiguous prefix, restoring the
+ * value's writability — the only v1 escape hatch (no per-write force flag).
+ * Throws if `digestOrPrefix` matches no tombstone, is blank, or matches
+ * more than one (use a longer prefix).
+ */
 export function unreject(ctx: Context, digestOrPrefix: string): { ok: true; digest: string } {
   const outcome = unrejectValue(ctx.hippoRoot, ctx.tenantId, digestOrPrefix, ctx.actor.subject);
   if (outcome.status === 'not_found') {
@@ -1763,6 +1783,7 @@ export function unreject(ctx: Context, digestOrPrefix: string): { ok: true; dige
   return { ok: true, digest: outcome.digest };
 }
 
+/** List every rejected-value tombstone for `ctx.tenantId`, newest first. */
 export function listRejections(ctx: Context): RejectedValueRow[] {
   return listRejectionsForTenant(ctx.hippoRoot, ctx.tenantId);
 }

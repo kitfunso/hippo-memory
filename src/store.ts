@@ -30,6 +30,7 @@ import {
   rejectionDigest,
   normalizeValueForRejection,
   insertRejectedValue,
+  findRejectedValue,
 } from './rejection.js';
 // AT1 (plan §5): resolveConflict's kind-aware loser removal needs
 // archiveRawMemory for kind='raw' losers. raw-archive.ts imports
@@ -929,6 +930,16 @@ function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: str
   const countRow = db.prepare(`SELECT COUNT(*) AS count FROM memories`).get() as { count?: number } | undefined;
   const memoryCount = Number(countRow?.count ?? 0);
   if (memoryCount > 0) return false;
+  // AT1 P2 fix: memoryCount alone is not a reliable "already bootstrapped"
+  // signal once the rejection guard exists. If EVERY legacy mirror row is
+  // rejected, memories stays at 0 rows even after a successful bootstrap
+  // pass, so the memoryCount>0 gate above never trips — every subsequent
+  // initStore() call would re-run this whole function: re-scan the legacy
+  // mirrors, re-attempt (and re-refuse, re-auditing) every row, and
+  // re-INSERT the legacy consolidation_runs rows with no dedup, duplicating
+  // them on each open. A dedicated meta flag marks bootstrap as
+  // attempted-and-settled regardless of how many rows actually landed.
+  if (getMeta(db, 'legacy_bootstrap_completed', '0') === '1') return false;
 
   const legacyEntries = loadLegacyEntriesFromMarkdown(hippoRoot);
   if (legacyEntries.length === 0) return false;
@@ -991,6 +1002,9 @@ function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: str
       );
     }
 
+    // AT1 P2 fix: stamp completion regardless of how many rows actually
+    // landed (all-rejected included) — see the gate comment above.
+    setMeta(db, 'legacy_bootstrap_completed', '1');
     db.exec('COMMIT');
   } catch (error) {
     db.exec('ROLLBACK');
@@ -1053,10 +1067,13 @@ function loadLegacyStatsFile(hippoRoot: string): Record<string, unknown> {
 
 /**
  * `bypassRejectionGuard` (AT1, plan §3): ONLY `batchWriteAndDelete`'s call
- * site passes `true` — consolidation merge/auto-promote writes are LLM
- * paraphrase rollups of already-guarded leaf facts; the guard belongs on
- * leaf inserts. Every other caller (writeEntryDbOnly, bootstrapLegacyStore,
- * rebuildIndex) leaves this false and the guard runs live.
+ * site passes `true`. Consolidation merges are DETERMINISTIC CONCATENATION
+ * (mergeContents, consolidate.ts:736-751), not LLM paraphrase — the bypass
+ * is safe because the producer (consolidate.ts's merge pass) now checks the
+ * merged content's rejection digest against the tenant's tombstones BEFORE
+ * ever assembling a batch to write, and skips the merge entirely on a hit.
+ * Every other caller (writeEntryDbOnly, bootstrapLegacyStore, rebuildIndex)
+ * leaves this false and the guard runs live.
  */
 function upsertEntryRow(
   db: ReturnType<typeof openHippoDb>,
@@ -1187,7 +1204,13 @@ function deleteFtsRow(db: ReturnType<typeof openHippoDb>, id: string): void {
   }
 }
 
-// AT1: exported for the same reason as writeIndexMirror above.
+/**
+ * Derive the current `HippoIndex` (entries + last-retrieval/trace lockstep
+ * meta) from SQLite, the source of truth. Exported (AT1) for the same
+ * reason as `writeIndexMirror` below: `src/reject-flow.ts` needs to rebuild
+ * the index mirror post-commit after a (possibly multi-row) reject removal,
+ * without duplicating this query.
+ */
 export function buildIndexFromDb(db: ReturnType<typeof openHippoDb>): HippoIndex {
   const rows = db.prepare(`SELECT id, created, last_retrieved, strength, layer, tags_json, pinned FROM memories ORDER BY created ASC, id ASC`).all() as Array<{
     id: string;
@@ -1244,10 +1267,13 @@ function buildStatsFromDb(db: ReturnType<typeof openHippoDb>): Record<string, un
   };
 }
 
-// AT1: exported so src/reject-flow.ts can replicate deleteEntry's exact
-// post-commit "removeEntryMirrors then rewrite the index once" sequence for
-// the reject verb's (possibly multi-row) removal, without duplicating
-// buildIndexFromDb's query.
+/**
+ * Write the `index.json` mirror file for a given (already-derived) index.
+ * Exported (AT1) so `src/reject-flow.ts` can replicate `deleteEntry`'s exact
+ * post-commit "removeEntryMirrors then rewrite the index once" sequence for
+ * the reject verb's (possibly multi-row) removal, without duplicating
+ * `buildIndexFromDb`'s query.
+ */
 export function writeIndexMirror(hippoRoot: string, index: HippoIndex): void {
   fs.writeFileSync(path.join(hippoRoot, 'index.json'), JSON.stringify(index, null, 2), 'utf8');
 }
@@ -1725,9 +1751,11 @@ export function loadChildrenOf(
  * dirty-mark. NO filesystem I/O — the caller's own transaction may still be
  * rolled back, and mirror writes must only happen post-commit.
  *
- * `opts.suppressForgetAudit` (default false, off): T2's reject path sets
- * this so removed non-raw rows do NOT each emit a `forget` row — a single
- * aggregate `reject_value` audit row is the trail for that path instead.
+ * `opts.suppressForgetAudit` (default false, off): two AT1 callers set this
+ * so a removed non-raw row does NOT ALSO emit a `forget` row, because each
+ * already writes its own aggregate audit trail — `src/reject-flow.ts`'s
+ * `rejectValue` (single `reject_value` row covering every same-digest row
+ * removed) and `resolveConflict` (`conflict_resolve` row per resolution).
  * Default keeps `deleteEntry` byte-identical to its pre-split behavior.
  *
  * Returns `{tenantId, dagParentId}` for the removed row, or `null` if no row
@@ -1830,13 +1858,17 @@ export function batchWriteAndDelete(
     // context (codex gating review P1).
     const stampedWrites = toWrite.map((e) => stampOriginProject(hippoRoot, e));
     for (const entry of stampedWrites) {
-      // AT1 (plan §3): bypass the rejection guard here. Consolidation
-      // merge/auto-promote writes are LLM paraphrase rollups of
-      // already-guarded leaf facts — refusing a paraphrase mid-batch would
-      // abort the whole consolidation transaction, and the digest would
-      // almost never match anyway (false confidence, not protection). The
-      // guard belongs on leaf inserts, which write through writeEntry /
-      // writeEntryDbOnly and stay guarded (bypassRejectionGuard defaults false).
+      // AT1 (plan §3, corrected): bypass the rejection guard here.
+      // Consolidation merges are DETERMINISTIC CONCATENATION (mergeContents,
+      // consolidate.ts:736-751) of already-guarded leaf facts, not an LLM
+      // paraphrase — refusing mid-batch would abort the whole consolidation
+      // transaction. The bypass is safe because consolidate.ts's merge pass
+      // now checks the merged content's rejection digest against the
+      // tenant's tombstones BEFORE ever pushing a merge into pendingWrites,
+      // skipping that merge entirely on a hit — the producer-side check is
+      // the fix, this bypass just stays out of its way. The guard belongs
+      // on leaf inserts, which write through writeEntry / writeEntryDbOnly
+      // and stay guarded (bypassRejectionGuard defaults false).
       upsertEntryRow(db, entry, true);
       // Hook for writes: child upserted under a level-2 summary marks parent dirty.
       if (entry.dag_parent_id) {
@@ -2756,12 +2788,21 @@ export function resolveConflict(
     db.exec('COMMIT');
     syncMirrorFiles(hippoRoot, db);
 
-    // AT1 (plan §5): mirror purge + reaper stamp for the rejectLoserValue
-    // path only — same post-commit pattern as the reject verb
-    // (src/reject-flow.ts), reusing removeEntryMirrors + the raw_archive
-    // reaper bookkeeping. The plain forgetLoser path is left byte-identical
-    // to its pre-AT1 behavior (syncMirrorFiles above is all it ever did).
-    if (opts?.rejectLoserValue && loserRemoved) {
+    // AT1 P1b fix: mirror purge + reaper stamp for EVERY removed loser, not
+    // just the rejectLoserValue path. Pre-AT1, the plain forgetLoser path on
+    // a raw loser crashed outright (bare DELETE FROM memories hit the
+    // append-only trigger) — there is no legacy "successful forget, no
+    // purge" behavior to preserve for that case. Post-AT1's kind-aware
+    // removal (archiveRawMemory / deleteEntryCore above) makes plain
+    // --forget succeed on every kind, but until this fix the mirror was
+    // only purged when rejectLoserValue was ALSO set: a plain raw --forget
+    // left its markdown mirror orphaned (the reaper still catches it
+    // eventually, since archiveRawMemory's own raw_archive insert leaves
+    // mirror_cleaned_at NULL) and a plain non-raw --forget left its mirror
+    // orphaned FOREVER (no reaper exists for non-raw rows). Same post-commit
+    // purge+reaper pattern as the reject verb (src/reject-flow.ts) and
+    // api.archiveRaw — reusing removeEntryMirrors + raw_archive bookkeeping.
+    if (loserRemoved) {
       let mirrorOk = false;
       try {
         removeEntryMirrors(hippoRoot, loserId);
@@ -3148,9 +3189,33 @@ export function applyRebuildResult(
     db.exec('SAVEPOINT rebuild_summary');
     try {
       const nowIso = new Date().toISOString();
+
+      // AT1 P1a fix (docs/plans/2026-08-15-at1-rejected-value-tombstone.md):
+      // applyRebuildResult's bumpRebuildCount branch wrote patch.content via
+      // a direct UPDATE, bypassing the rejection guard entirely (the guard
+      // lives in upsertEntryRow's INSERT path, which this function never
+      // calls). A rebuild that regenerates byte-identical content to an
+      // already-rejected value (e.g. deterministic summarization of an
+      // unchanged child set) would silently re-assert it every sleep cycle.
+      // Check BEFORE choosing which UPDATE to run — only the
+      // bumpRebuildCount branch ever writes content, so a miss or a
+      // zero-child call is a no-op here (one indexed point query, guarded
+      // path only).
+      const tombstone = patch.bumpRebuildCount
+        ? findRejectedValue(db, summary.tenantId, rejectionDigest(patch.content))
+        : null;
+      // On a hit: do NOT write the new content. Fall through to the SAME
+      // metadata-only behavior the zero-child branch already has —
+      // descendant_count/earliest_at/latest_at update + summary_dirty
+      // cleared, no content write, no rebuild_count bump. Clearing dirty
+      // (rather than leaving it set) is deliberate: leaving it dirty would
+      // make every following sleep cycle re-attempt and re-refuse the
+      // identical rebuild forever (the DAG-loop this fix closes).
+      const applyContentWrite = patch.bumpRebuildCount && !tombstone;
+
       // ONE prepared UPDATE per branch. Test #8 inspects the SQL string.
       // v0.30 / E5: widened dag_level=2 -> IN (2, 3) on both branches.
-      const sql = patch.bumpRebuildCount
+      const sql = applyContentWrite
         ? `UPDATE memories
               SET content = ?,
                   descendant_count = ?,
@@ -3175,7 +3240,7 @@ export function applyRebuildResult(
               AND summary_dirty = 1
               AND kind != 'archived'`;
 
-      const result = patch.bumpRebuildCount
+      const result = applyContentWrite
         ? db.prepare(sql).run(
             patch.content,
             patch.descendant_count,
@@ -3193,22 +3258,58 @@ export function applyRebuildResult(
             summary.tenantId,
           );
 
+      // Return-value semantics (documented per plan follow-up): `changed`
+      // reflects whether THIS call's UPDATE (content or metadata-only)
+      // affected a row — NOT whether patch.content specifically landed. On
+      // a refusal, metadata still applies, so changed=true here even though
+      // content did not change. This is a deliberate choice: the caller
+      // (dag.ts rebuildDirtySummaries) treats changed=false as "race lost,
+      // silently retry next cycle" — returning false on a refusal would
+      // retry the same doomed LLM rebuild forever. Returning true settles
+      // this cycle (dirty cleared) at the cost of the refused rebuild also
+      // counting toward the caller's `rebuilt` stat, which is the lesser
+      // evil and mirrors the pre-existing zero-child branch's own semantics
+      // (it already returns changed=true for a metadata-only update).
       const changed = (result.changes ?? 0) > 0;
+
+      if (tombstone && changed) {
+        // Best-effort refusal audit, written INLINE inside this still-open
+        // SAVEPOINT — nothing here rolls back on a refusal (the metadata
+        // UPDATE above already committed to this savepoint), so the
+        // post-rollback auditRejectionRefusal helper (writeEntry/supersede's
+        // tool) is the wrong one here; a direct audit() call is correct and
+        // commits with the rest of this savepoint.
+        audit(
+          db,
+          'reject_refusal',
+          summary.id,
+          { digest: tombstone.digest, reason: tombstone.reason },
+          patch.actor,
+          summary.tenantId,
+        );
+        console.error(
+          `applyRebuildResult: refused rebuild content for ${summary.id} — matches a rejected value ` +
+            `(digest ${tombstone.digest.slice(0, 12)}...); metadata updated, content unchanged`,
+        );
+      }
 
       if (changed) {
         // FTS sync — bare UPDATE on memories does NOT update memories_fts.
         // R1 HIGH must-fix from plan-eng-r1. Construct the patched entry in
         // memory and reuse the existing syncFtsRow helper (delete-then-insert).
         // earliest_at/latest_at preserve null semantics (R2 must-fix).
+        // AT1: content stays summary.content (unchanged) when the write was
+        // refused — applyContentWrite is false, so patch.content was never
+        // written to the row FTS must mirror.
         const patchedEntry: MemoryEntry = {
           ...summary,
-          content: patch.content,
+          content: applyContentWrite ? patch.content : summary.content,
           descendant_count: patch.descendant_count,
           earliest_at: patch.earliest_at,
           latest_at: patch.latest_at,
           summary_dirty: 0,
-          last_rebuilt_at: patch.bumpRebuildCount ? nowIso : summary.last_rebuilt_at,
-          rebuild_count: patch.bumpRebuildCount
+          last_rebuilt_at: applyContentWrite ? nowIso : summary.last_rebuilt_at,
+          rebuild_count: applyContentWrite
             ? (summary.rebuild_count ?? 0) + 1
             : summary.rebuild_count,
         };

@@ -1160,6 +1160,13 @@ async function executeTool(
       const result = resolveConflict(hippoRoot, conflictId, keepId, forget, tenantId, {
         rejectLoserValue: rejectLoser,
         reason,
+        // P2 fix: resolveConflict's opts.rejectedBy defaults to 'cli' when
+        // omitted — this call site never passed it, so the tombstone's
+        // rejected_by AND the conflict_resolve audit's actor both landed as
+        // 'cli' even though the caller was MCP. ctx.actor carries the
+        // auth-resolved actor for HTTP-MCP (see McpContext above); stdio
+        // callers pass no ctx, so 'mcp' is the honest fallback there.
+        rejectedBy: ctx?.actor ?? 'mcp',
       });
       if (!result) return 'Could not resolve. Check the conflict ID and --keep value.';
       const action = rejectLoser ? 'rejected (tombstoned) and removed' : forget ? 'deleted' : 'weakened';

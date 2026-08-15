@@ -204,11 +204,23 @@ export function checkRejectionGuard(
   // ULIDs, this lookup only classifies new-row vs same-id re-persist for the
   // id the caller is already writing, and the tombstone lookup above is the
   // tenant-scoped decision. Matches deleteEntry's own by-id SELECT.
-  const storedRow = db.prepare(`SELECT content FROM memories WHERE id = ?`).get(entryId) as
-    | { content: string }
+  //
+  // P2 fix: also read tenant_id. Content-digest-only comparison let a
+  // same-id upsert that ONLY changes tenantId slip through as an "unchanged
+  // re-persist" — content C sitting quietly (never rejected) in tenant A
+  // could be re-tagged into tenant B, and since C's digest already matched
+  // this row's stored digest, the guard exempted it even though B is the
+  // tenant that rejected C (that is WHY `tombstone` above is non-null: the
+  // lookup already ran under the INCOMING/destination tenantId). A tenant
+  // change on the SAME id is therefore always a content introduction into
+  // the destination tenant, exactly as if the row were new there.
+  const storedRow = db.prepare(`SELECT content, tenant_id FROM memories WHERE id = ?`).get(entryId) as
+    | { content: string; tenant_id: string }
     | undefined;
   const isNewRow = storedRow === undefined;
-  const isContentIntroduction = isNewRow || rejectionDigest(storedRow.content) !== incomingDigest;
+  const tenantChanged = !isNewRow && storedRow.tenant_id !== tenantId;
+  const isContentIntroduction =
+    isNewRow || tenantChanged || rejectionDigest(storedRow.content) !== incomingDigest;
   if (!isContentIntroduction) return; // unchanged same-id re-persist — exempt by construction
 
   throw new RejectedValueError({

@@ -33,6 +33,8 @@ import {
 import { cmdCapture } from '../src/capture.js';
 import { syncGlobalToLocal } from '../src/shared.js';
 import * as api from '../src/api.js';
+import { consolidate } from '../src/consolidate.js';
+import { importEntries } from '../src/importers.js';
 
 function tmpHome(prefix: string = 'hippo-rejection-acceptance-'): string {
   return mkdtempSync(join(tmpdir(), prefix));
@@ -368,6 +370,110 @@ describe('AT1 case 6: AT5 paired case — reject removes a value from recall, pe
 
       const afterReattempt = api.recall(ctx(home), { query: 'zynthkey', limit: 5 });
       expect(afterReattempt.results.some((r) => r.content === wContent)).toBe(false);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('AT1 consolidation-loop fix: merge tombstone check', () => {
+  it('a rejected would-be-merged content digest makes consolidate skip that merge: no semantic row with that digest, sources not demoted/deleted, skip counted', async () => {
+    const home = tmpHome('hippo-rejection-acceptance-consolidate-');
+    try {
+      initStore(home);
+      // Disable replay: it independently rehearses (and half-life-boosts)
+      // survivors regardless of the merge pass, which would confound the
+      // "sources not demoted" half_life_days assertion below.
+      writeFileSync(join(home, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
+
+      // longText is the longer of the two, so mergeContents' length-sort
+      // deterministically picks it as the 2-entry merge base.
+      const shortText = 'migrate the billing database before the next release window';
+      const longText = 'migrate the billing database before the next release window with full backups enabled';
+      const e1 = createMemory(shortText, { layer: Layer.Episodic });
+      const e2 = createMemory(longText, { layer: Layer.Episodic });
+      writeEntry(home, e1);
+      writeEntry(home, e2);
+
+      const mergedContent = `[Consolidated from 2 related memories]\n\n${longText}`;
+      const mergedDigest = rejectionDigest(mergedContent);
+      const db = openHippoDb(home);
+      try {
+        insertRejectedValue(db, {
+          tenantId: 'default',
+          digest: mergedDigest,
+          reason: 'pre-rejected merge rollup',
+          rejectedBy: 'test',
+          rejectedAt: new Date().toISOString(),
+          normalizedChars: normalizeValueForRejection(mergedContent).length,
+        });
+      } finally {
+        closeHippoDb(db);
+      }
+
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const result = await consolidate(home, { dryRun: false });
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('skipped 1 merge(s) whose content matches a rejected value'),
+      );
+      errorSpy.mockRestore();
+
+      expect(result.semanticCreated).toBe(0);
+
+      const allAfter = loadAllEntries(home);
+      // No row anywhere carries the rejected merge digest.
+      expect(allAfter.some((e) => rejectionDigest(e.content) === mergedDigest)).toBe(false);
+
+      // Sources survive, UNMERGED: still present, still episodic, half-life
+      // untouched (the demotion loop never ran for this cluster).
+      const e1After = allAfter.find((e) => e.id === e1.id);
+      const e2After = allAfter.find((e) => e.id === e2.id);
+      expect(e1After).toBeDefined();
+      expect(e2After).toBeDefined();
+      expect(e1After!.layer).toBe(Layer.Episodic);
+      expect(e2After!.layer).toBe(Layer.Episodic);
+      expect(e1After!.half_life_days).toBe(e1.half_life_days);
+      expect(e2After!.half_life_days).toBe(e2.half_life_days);
+
+      const dbAfter = openHippoDb(home);
+      try {
+        const refusals = queryAuditEvents(dbAfter, { tenantId: 'default', op: 'reject_refusal' });
+        expect(refusals.length).toBe(1);
+      } finally {
+        closeHippoDb(dbAfter);
+      }
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('AT1 P2 fix: import dry-run tombstone accuracy', () => {
+  it('importEntries dry-run counts a tombstoned chunk as rejected (not imported), writes nothing, and agrees with a real run', () => {
+    const home = tmpHome('hippo-rejection-acceptance-import-dryrun-');
+    try {
+      initStore(home);
+      const rejectedChunk = 'never re-import this specific chunk of text again please';
+      const otherChunk = 'a completely different unrelated chunk of text here';
+      api.reject(ctx(home), { value: rejectedChunk, reason: 'pre-emptive dry-run test tombstone' });
+
+      const dryResult = importEntries([rejectedChunk, otherChunk], 'import:test', [], {
+        hippoRoot: home,
+        dryRun: true,
+      });
+      expect(dryResult.rejected).toBe(1);
+      expect(dryResult.imported).toBe(1);
+      expect(loadAllEntries(home).length).toBe(0); // dry-run writes nothing
+
+      const realResult = importEntries([rejectedChunk, otherChunk], 'import:test', [], {
+        hippoRoot: home,
+        dryRun: false,
+      });
+      expect(realResult.rejected).toBe(1);
+      expect(realResult.imported).toBe(1);
+      const contents = loadAllEntries(home).map((e) => e.content);
+      expect(contents).not.toContain(rejectedChunk);
+      expect(contents).toContain(otherChunk);
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
