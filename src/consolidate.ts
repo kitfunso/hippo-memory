@@ -24,7 +24,7 @@ import {
 } from './store.js';
 import { textOverlap, markRetrieved } from './search.js';
 import { compareEntryIdentity } from './compare.js';
-import { openHippoDb, closeHippoDb } from './db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import { rejectionDigest, findRejectedValue } from './rejection.js';
 import { loadPhysicsState, savePhysicsState, refreshParticleProperties } from './physics-state.js';
 import { simulate, type ForceContext } from './physics.js';
@@ -88,6 +88,10 @@ export interface ConsolidationResult {
   summariesRebuilt: number;
   summariesRebuildFailed: number;
   summariesZeroChildSkipped: number;
+  // Hardening pass: tombstone-refused rebuilds split out of `rebuilt` so the
+  // stat no longer silently absorbs refusals (metadata still applied, dirty
+  // still cleared - counters only; see applyRebuildResult's return contract).
+  summariesRebuildRefused: number;
   summariesRebuildCapped: boolean;
   // v0.30 / E5 — L3 entity-profile build count
   entityProfilesCreated: number;
@@ -122,6 +126,7 @@ export async function consolidate(
     summariesRebuilt: 0,
     summariesRebuildFailed: 0,
     summariesZeroChildSkipped: 0,
+    summariesRebuildRefused: 0,
     summariesRebuildCapped: false,
     entityProfilesCreated: 0,
     dryRun,
@@ -291,22 +296,29 @@ export async function consolidate(
   }
 
   // AT1 rejection-guard db handle (docs/plans/2026-08-15-at1-rejected-value-tombstone.md):
-  // opened ONCE for the whole non-dry-run consolidate, covering BOTH the
-  // auto-promote pass (1.4, immediately below) and the merge pass (3,
-  // further down) — both build deterministic content that batchWriteAndDelete
-  // writes through the guard's bypass, so both need a producer-side
-  // tombstone check before pushing to pendingWrites. A single handle here
-  // replaces what used to be a per-pass open. Dry-run never reaches the
-  // bypass (no batchWriteAndDelete call), so there is nothing for a handle
-  // to protect against — stays null and every `if (consolidateDb)` below is
-  // a no-op.
+  // covers BOTH the auto-promote pass (1.4, immediately below) and the merge
+  // pass (3, further down) — both build deterministic content that
+  // batchWriteAndDelete writes through the guard's bypass, so both need a
+  // producer-side tombstone check before pushing to pendingWrites.
   //
-  // AT1 P2 fix (codex, handle-leak restructure): the open must be followed
-  // IMMEDIATELY by the try whose finally closes it, covering every phase
-  // that can touch consolidateDb — not just the merge pass. Previously the
+  // T3 fix (2026-08-15 hardening pass, perf hygiene): memoized lazy getter,
+  // not an eager open. The handle only serves these two tombstone checks —
+  // a sleep with zero promotable sessions and zero merge clusters never
+  // reaches either use site, so opening it unconditionally on every
+  // non-dry-run sleep paid a db-open cost for nothing. dryRun still never
+  // opens (getConsolidateDb short-circuits before touching the handle).
+  // Every `if (consolidateDb)` guard below becomes `const consolidateDb =
+  // getConsolidateDb();` at its use site — same semantics, opened on first
+  // real use. consolidateDbOpened (not just a truthy handle check) is the
+  // single source of truth for "was this ever opened", so the finally below
+  // closes it exactly once and never double-opens.
+  //
+  // AT1 P2 fix (codex, handle-leak restructure): the getter's lifetime must
+  // start IMMEDIATELY before the try whose finally closes it, covering every
+  // phase that can touch it — not just the merge pass. Previously the
   // try/finally wrapped only section 3 (merge pass); an exception thrown by
   // auto-promote (1.4), replay (1.5), batch extraction (1.6), the DAG
-  // passes (1.7-1.9), or physics (2) would propagate past the open handle
+  // passes (1.7-1.9), or physics (2) would propagate past an open handle
   // with nothing to close it. No behavior change on the happy path — each
   // of those phases already best-effort catches its own exceptions today
   // (physics has its own try/catch below; each DAG pass wraps its own
@@ -315,7 +327,16 @@ export async function consolidate(
   // NOT re-indented (mechanical wrap only, kept surgical): every statement
   // between this try and its finally (below, at the end of the merge pass)
   // stays at its original indentation.
-  const consolidateDb = dryRun ? null : openHippoDb(hippoRoot);
+  let consolidateDbHandle: DatabaseSyncLike | null = null;
+  let consolidateDbOpened = false;
+  const getConsolidateDb = (): DatabaseSyncLike | null => {
+    if (dryRun) return null;
+    if (!consolidateDbOpened) {
+      consolidateDbHandle = openHippoDb(hippoRoot);
+      consolidateDbOpened = true;
+    }
+    return consolidateDbHandle;
+  };
   // Declared here (not at the merge pass, its point of use) so it survives
   // this try/finally — a `let` declared INSIDE the try would go out of
   // scope before the `if (mergesSkippedRejected > 0)` check that reads it
@@ -376,6 +397,13 @@ export async function consolidate(
           source_session_id: session.session_id,
           tags: ['auto-promoted'],
           source: 'auto-promote',
+          // T1 fix (2026-08-15 hardening pass): stamp the trace into the SAME
+          // tenant traceExistsForSession (:347, above) checks under. Before
+          // this, createMemory omitted tenantId and the trace always landed
+          // 'default' (memory.ts:535) while the idempotency check ran under
+          // consolidationTenant — for any non-default tenant that check never
+          // hit, and the trace regenerated every sleep.
+          tenantId: consolidationTenant,
         },
       );
 
@@ -387,6 +415,7 @@ export async function consolidate(
       // stamped tenantId (read off `trace` after createMemory — never guess
       // the tenant) + the built content's digest. A hit skips the push
       // entirely: not counted as promoted, not added to survivors.
+      const consolidateDb = getConsolidateDb();
       if (consolidateDb) {
         const traceDigest = rejectionDigest(trace.content);
         const tombstone = findRejectedValue(consolidateDb, trace.tenantId, traceDigest);
@@ -550,10 +579,12 @@ export async function consolidate(
       result.summariesRebuilt = rebuildResult.rebuilt;
       result.summariesRebuildFailed = rebuildResult.failed;
       result.summariesZeroChildSkipped = rebuildResult.zeroChildSkipped;
+      result.summariesRebuildRefused = rebuildResult.refused;
       result.summariesRebuildCapped = rebuildResult.capped;
-      if (rebuildResult.rebuilt > 0 || rebuildResult.zeroChildSkipped > 0 || rebuildResult.failed > 0) {
+      if (rebuildResult.rebuilt > 0 || rebuildResult.zeroChildSkipped > 0 || rebuildResult.failed > 0 || rebuildResult.refused > 0) {
         const parts: string[] = [];
         if (rebuildResult.rebuilt > 0) parts.push(`${rebuildResult.rebuilt} rebuilt`);
+        if (rebuildResult.refused > 0) parts.push(`${rebuildResult.refused} refused`);
         if (rebuildResult.zeroChildSkipped > 0) parts.push(`${rebuildResult.zeroChildSkipped} zero-child-skipped`);
         if (rebuildResult.failed > 0) parts.push(`${rebuildResult.failed} failed`);
         if (rebuildResult.capped) parts.push(`CAPPED@${cap}`);
@@ -661,6 +692,20 @@ export async function consolidate(
   );
   const used = new Set<string>();
 
+  // T1 fix (2026-08-15 hardening pass): partition by tenantId BEFORE the
+  // overlap loop so a cluster can never span tenants. Previously textOverlap
+  // clustered across the whole host-wide `survivors` list with no tenant
+  // boundary, and mergeContents concatenated cross-tenant content into one
+  // row. Map preserves insertion order, so single-tenant stores (every row
+  // 'default') get exactly one partition and iterate in the same order as
+  // before this fix — byte-identical behavior there.
+  const mergeCandidatesByTenant = new Map<string, MemoryEntry[]>();
+  for (const entry of mergeCandidates) {
+    const bucket = mergeCandidatesByTenant.get(entry.tenantId);
+    if (bucket) bucket.push(entry);
+    else mergeCandidatesByTenant.set(entry.tenantId, [entry]);
+  }
+
   // AT1 consolidation-loop fix (docs/plans/2026-08-15-at1-rejected-value-tombstone.md):
   // reuses the single consolidateDb handle opened once above (before the
   // auto-promote pass, 1.4) for the whole non-dry-run consolidate — see that
@@ -670,16 +715,17 @@ export async function consolidate(
   // declared up at the try's opening above 1.4, not here — it has to
   // survive the try/finally that now wraps this whole section; see the
   // handle-leak restructure comment there.)
-    for (let i = 0; i < mergeCandidates.length; i++) {
-      if (used.has(mergeCandidates[i].id)) continue;
+  for (const [mergeTenant, tenantCandidates] of mergeCandidatesByTenant) {
+    for (let i = 0; i < tenantCandidates.length; i++) {
+      if (used.has(tenantCandidates[i].id)) continue;
 
-      const cluster: MemoryEntry[] = [mergeCandidates[i]];
+      const cluster: MemoryEntry[] = [tenantCandidates[i]];
 
-      for (let j = i + 1; j < mergeCandidates.length; j++) {
-        if (used.has(mergeCandidates[j].id)) continue;
-        const overlap = textOverlap(mergeCandidates[i].content, mergeCandidates[j].content);
+      for (let j = i + 1; j < tenantCandidates.length; j++) {
+        if (used.has(tenantCandidates[j].id)) continue;
+        const overlap = textOverlap(tenantCandidates[i].content, tenantCandidates[j].content);
         if (overlap >= MERGE_OVERLAP_THRESHOLD) {
-          cluster.push(mergeCandidates[j]);
+          cluster.push(tenantCandidates[j]);
         }
       }
 
@@ -692,18 +738,11 @@ export async function consolidate(
 
       // AT1 P2 fix: build the semantic entry FIRST — createMemory is cheap
       // and pure — so the tombstone check below runs under the tenant the
-      // row will ACTUALLY land in. The prior version checked
-      // cluster[0].tenantId, but createMemory (below) is never passed a
-      // tenantId option, so it always stamps its own default ('default',
-      // see memory.ts) regardless of the cluster's source tenant — the
-      // check was consulting a tenant's tombstones that the write was never
-      // going to land in (a false negative on the real destination, and a
-      // possible false-block on the source tenant's unrelated tombstones).
-      // This fix only makes the CHECK match wherever the row actually
-      // lands; it deliberately does NOT change that destination — merge
-      // rows always landing in 'default' regardless of source tenant is a
-      // real, pre-existing cross-tenant question, tracked separately as an
-      // AT1 follow-up (not this fix's scope) rather than folded in here.
+      // row will ACTUALLY land in.
+      // T1 fix: createMemory now receives tenantId: mergeTenant (the
+      // partition's tenant — every member of `cluster` shares it by
+      // construction), so the row lands in its source tenant instead of
+      // always 'default'.
       let semantic: MemoryEntry | null = null;
       if (!dryRun) {
         semantic = createMemory(mergedContent, {
@@ -713,6 +752,7 @@ export async function consolidate(
           schema_fit: 0.7,
           source: 'consolidation',
           confidence: 'inferred',
+          tenantId: mergeTenant,
         });
       }
 
@@ -724,6 +764,7 @@ export async function consolidate(
       // bypass safe. A hit skips the WHOLE cluster: sources stay unmerged —
       // not demoted, not deleted — so a later sleep gets another chance if
       // the tombstone is lifted.
+      const consolidateDb = getConsolidateDb();
       if (consolidateDb && semantic) {
         const mergeDigest = rejectionDigest(semantic.content);
         const tombstone = findRejectedValue(consolidateDb, semantic.tenantId, mergeDigest);
@@ -781,8 +822,9 @@ export async function consolidate(
         }
       }
     }
+  }
   } finally {
-    if (consolidateDb) closeHippoDb(consolidateDb);
+    if (consolidateDbHandle) closeHippoDb(consolidateDbHandle);
   }
 
   if (mergesSkippedRejected > 0) {

@@ -109,6 +109,12 @@ export function storeExtractedFacts(
       confidence: 'inferred',
       source: source.source,
       extracted_from: source.id,
+      // T1 executor check (2026-08-15 hardening pass): same defect as the
+      // consolidate.ts merge/trace passes — createMemory with no tenantId
+      // option stamps 'default' (memory.ts:535) regardless of the source
+      // entry's own tenant. Thread it through so extracted facts land in
+      // the same tenant as the episodic memory they were extracted from.
+      tenantId: source.tenantId,
     });
 
     // AT1 containment: a refusal is per-VALUE — one rejected fact must not

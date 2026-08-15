@@ -573,7 +573,11 @@ describe('AT1 codex-P1 fix 1: auto-promoted trace tombstone check', () => {
 });
 
 describe('AT1 codex-P1 fix 2: merge tombstone check uses the destination tenant', () => {
-  it('a tombstone in the tenant createMemory actually stamps (default) blocks the merge, even though the cluster is a different tenant', async () => {
+  // T1 landing fix (2026-08-15 hardening pass, consolidate.ts): merge rows
+  // now stamp the CLUSTER'S OWN tenant, not always 'default' — both cases
+  // below were written against the pre-fix 'default' landing and are
+  // updated here to the new landing tenant (plan test point e).
+  it('a tombstone in the cluster tenant blocks the merge, now that merge rows land in their source tenant', async () => {
     const home = tmpHome('hippo-rejection-acceptance-merge-tenant-');
     try {
       initStore(home);
@@ -590,13 +594,12 @@ describe('AT1 codex-P1 fix 2: merge tombstone check uses the destination tenant'
       const mergedContent = `[Consolidated from 2 related memories]\n\n${longText}`;
       const mergedDigest = rejectionDigest(mergedContent);
 
-      // Tombstone lives in 'default' — the tenant createMemory's semantic
-      // entry actually stamps (it is never passed a tenantId option) — NOT
-      // the cluster's own 'tenant-a'.
+      // Tombstone lives in 'tenant-a' — the cluster's own tenant, and (post
+      // T1 fix) the tenant createMemory's semantic entry actually stamps.
       const db = openHippoDb(home);
       try {
         insertRejectedValue(db, {
-          tenantId: 'default',
+          tenantId: 'tenant-a',
           digest: mergedDigest,
           reason: 'pre-rejected in the actual destination tenant',
           rejectedBy: 'test',
@@ -620,7 +623,7 @@ describe('AT1 codex-P1 fix 2: merge tombstone check uses the destination tenant'
 
       const dbAfter = openHippoDb(home);
       try {
-        const refusals = queryAuditEvents(dbAfter, { tenantId: 'default', op: 'reject_refusal' });
+        const refusals = queryAuditEvents(dbAfter, { tenantId: 'tenant-a', op: 'reject_refusal' });
         expect(refusals.length).toBe(1);
       } finally {
         closeHippoDb(dbAfter);
@@ -630,7 +633,7 @@ describe('AT1 codex-P1 fix 2: merge tombstone check uses the destination tenant'
     }
   });
 
-  it('a tombstone ONLY in the source tenant (not the destination) does not falsely block the merge', async () => {
+  it('a tombstone in an unrelated tenant does not falsely block the merge', async () => {
     const home = tmpHome('hippo-rejection-acceptance-merge-tenant-');
     try {
       initStore(home);
@@ -646,14 +649,15 @@ describe('AT1 codex-P1 fix 2: merge tombstone check uses the destination tenant'
       const mergedContent = `[Consolidated from 2 related memories]\n\n${longText}`;
       const mergedDigest = rejectionDigest(mergedContent);
 
-      // Tombstone lives ONLY in 'tenant-a' (the cluster's source tenant) —
-      // the write actually lands in 'default', so this must NOT block.
+      // Tombstone lives in an unrelated tenant ('default') — the write now
+      // lands in 'tenant-a' (the cluster's own tenant), so this must NOT
+      // block.
       const db = openHippoDb(home);
       try {
         insertRejectedValue(db, {
-          tenantId: 'tenant-a',
+          tenantId: 'default',
           digest: mergedDigest,
-          reason: 'rejected in the source tenant only',
+          reason: 'rejected in an unrelated tenant only',
           rejectedBy: 'test',
           rejectedAt: new Date().toISOString(),
           normalizedChars: normalizeValueForRejection(mergedContent).length,
@@ -668,7 +672,7 @@ describe('AT1 codex-P1 fix 2: merge tombstone check uses the destination tenant'
       const allAfter = loadAllEntries(home);
       const semantic = allAfter.find((e) => e.layer === Layer.Semantic && e.content === mergedContent);
       expect(semantic).toBeDefined();
-      expect(semantic!.tenantId).toBe('default');
+      expect(semantic!.tenantId).toBe('tenant-a');
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
