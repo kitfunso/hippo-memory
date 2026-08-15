@@ -20,7 +20,7 @@ import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../src/db.js';
-import { initStore, writeEntry, readEntry, loadAllEntries, rebuildIndex } from '../src/store.js';
+import { initStore, writeEntry, readEntry, loadAllEntries, rebuildIndex, appendSessionEvent } from '../src/store.js';
 import { createMemory, Layer } from '../src/memory.js';
 import { queryAuditEvents } from '../src/audit.js';
 import {
@@ -31,7 +31,7 @@ import {
   findRejectedValue,
 } from '../src/rejection.js';
 import { cmdCapture } from '../src/capture.js';
-import { syncGlobalToLocal } from '../src/shared.js';
+import { syncGlobalToLocal, autoShare } from '../src/shared.js';
 import * as api from '../src/api.js';
 import { consolidate } from '../src/consolidate.js';
 import { importEntries } from '../src/importers.js';
@@ -476,6 +476,210 @@ describe('AT1 P2 fix: import dry-run tombstone accuracy', () => {
       expect(contents).toContain(otherChunk);
     } finally {
       rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('AT1 codex-P1 fix 1: auto-promoted trace tombstone check', () => {
+  it('reject an auto-promoted trace -> next consolidate does not recreate it: skip counted, one reject_refusal audit, no trace row', async () => {
+    const home = tmpHome('hippo-rejection-acceptance-trace-');
+    try {
+      initStore(home);
+      const sid = 'test-session-rejected-trace';
+      appendSessionEvent(home, 'default', {
+        session_id: sid, event_type: 'action', content: 'read config.ts', source: 'agent',
+      });
+      appendSessionEvent(home, 'default', {
+        session_id: sid,
+        event_type: 'session_complete',
+        content: 'success',
+        source: 'agent',
+        metadata: { summary: 'rotated the deploy key' },
+      });
+
+      const firstResult = await consolidate(home, { now: new Date() });
+      expect(firstResult.promotedTraces).toBe(1);
+
+      const traceBefore = loadAllEntries(home).find((e) => e.layer === Layer.Trace);
+      expect(traceBefore).toBeDefined();
+
+      api.reject(ctx(home), { memoryId: traceBefore!.id, reason: 'trace content was wrong' });
+      expect(readEntry(home, traceBefore!.id)).toBeNull();
+
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const secondResult = await consolidate(home, { now: new Date() });
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('skipped 1 auto-promoted trace'),
+      );
+      errorSpy.mockRestore();
+
+      // Not recreated, and not counted as promoted.
+      expect(secondResult.promotedTraces).toBe(0);
+      const tracesAfter = loadAllEntries(home).filter((e) => e.layer === Layer.Trace);
+      expect(tracesAfter).toHaveLength(0);
+
+      const db = openHippoDb(home);
+      try {
+        const refusals = queryAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' });
+        expect(refusals.length).toBe(1);
+        expect(refusals[0]!.metadata.sourceSessionId).toBe(sid);
+      } finally {
+        closeHippoDb(db);
+      }
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('AT1 codex-P1 fix 2: merge tombstone check uses the destination tenant', () => {
+  it('a tombstone in the tenant createMemory actually stamps (default) blocks the merge, even though the cluster is a different tenant', async () => {
+    const home = tmpHome('hippo-rejection-acceptance-merge-tenant-');
+    try {
+      initStore(home);
+      // Disable replay: see the sibling "consolidation-loop fix" test above.
+      writeFileSync(join(home, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
+
+      const shortText = 'rotate the staging tls certificates before expiry';
+      const longText = 'rotate the staging tls certificates before expiry and notify the on-call channel';
+      const e1 = createMemory(shortText, { layer: Layer.Episodic, tenantId: 'tenant-a' });
+      const e2 = createMemory(longText, { layer: Layer.Episodic, tenantId: 'tenant-a' });
+      writeEntry(home, e1);
+      writeEntry(home, e2);
+
+      const mergedContent = `[Consolidated from 2 related memories]\n\n${longText}`;
+      const mergedDigest = rejectionDigest(mergedContent);
+
+      // Tombstone lives in 'default' — the tenant createMemory's semantic
+      // entry actually stamps (it is never passed a tenantId option) — NOT
+      // the cluster's own 'tenant-a'.
+      const db = openHippoDb(home);
+      try {
+        insertRejectedValue(db, {
+          tenantId: 'default',
+          digest: mergedDigest,
+          reason: 'pre-rejected in the actual destination tenant',
+          rejectedBy: 'test',
+          rejectedAt: new Date().toISOString(),
+          normalizedChars: normalizeValueForRejection(mergedContent).length,
+        });
+      } finally {
+        closeHippoDb(db);
+      }
+
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const result = await consolidate(home, { dryRun: false });
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('skipped 1 merge(s) whose content matches a rejected value'),
+      );
+      errorSpy.mockRestore();
+
+      expect(result.semanticCreated).toBe(0);
+      const allAfter = loadAllEntries(home);
+      expect(allAfter.some((e) => rejectionDigest(e.content) === mergedDigest)).toBe(false);
+
+      const dbAfter = openHippoDb(home);
+      try {
+        const refusals = queryAuditEvents(dbAfter, { tenantId: 'default', op: 'reject_refusal' });
+        expect(refusals.length).toBe(1);
+      } finally {
+        closeHippoDb(dbAfter);
+      }
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('a tombstone ONLY in the source tenant (not the destination) does not falsely block the merge', async () => {
+    const home = tmpHome('hippo-rejection-acceptance-merge-tenant-');
+    try {
+      initStore(home);
+      writeFileSync(join(home, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
+
+      const shortText = 'archive the quarterly billing export before cleanup';
+      const longText = 'archive the quarterly billing export before cleanup and confirm checksum';
+      const e1 = createMemory(shortText, { layer: Layer.Episodic, tenantId: 'tenant-a' });
+      const e2 = createMemory(longText, { layer: Layer.Episodic, tenantId: 'tenant-a' });
+      writeEntry(home, e1);
+      writeEntry(home, e2);
+
+      const mergedContent = `[Consolidated from 2 related memories]\n\n${longText}`;
+      const mergedDigest = rejectionDigest(mergedContent);
+
+      // Tombstone lives ONLY in 'tenant-a' (the cluster's source tenant) —
+      // the write actually lands in 'default', so this must NOT block.
+      const db = openHippoDb(home);
+      try {
+        insertRejectedValue(db, {
+          tenantId: 'tenant-a',
+          digest: mergedDigest,
+          reason: 'rejected in the source tenant only',
+          rejectedBy: 'test',
+          rejectedAt: new Date().toISOString(),
+          normalizedChars: normalizeValueForRejection(mergedContent).length,
+        });
+      } finally {
+        closeHippoDb(db);
+      }
+
+      const result = await consolidate(home, { dryRun: false });
+
+      expect(result.semanticCreated).toBe(1);
+      const allAfter = loadAllEntries(home);
+      const semantic = allAfter.find((e) => e.layer === Layer.Semantic && e.content === mergedContent);
+      expect(semantic).toBeDefined();
+      expect(semantic!.tenantId).toBe('default');
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('AT1 codex-P1 fix 3: autoShare per-candidate rejection containment', () => {
+  it('one rejected + one clean candidate: the sleep-facing autoShare call completes, the clean one shares, the rejected one is counted', () => {
+    const localRoot = tmpHome('hippo-rejection-acceptance-autoshare-local-');
+    const globalRoot = tmpHome('hippo-rejection-acceptance-autoshare-global-');
+    const prevHippoHome = process.env.HIPPO_HOME;
+    try {
+      initStore(localRoot);
+      initStore(globalRoot);
+      // autoShare -> shareMemory resolves its destination via
+      // getGlobalRoot()/HIPPO_HOME (same pattern as shared.test.ts's
+      // promoteToGlobal describe block).
+      process.env.HIPPO_HOME = globalRoot;
+
+      const rejectedContent = 'never re-share this specific finding to the global store again';
+      const cleanContent = 'a completely different clean finding worth sharing globally';
+      const rejectedEntry = createMemory(rejectedContent, { layer: Layer.Episodic });
+      const cleanEntry = createMemory(cleanContent, { layer: Layer.Episodic });
+      writeEntry(localRoot, rejectedEntry);
+      writeEntry(localRoot, cleanEntry);
+
+      // Reject in the GLOBAL store — the store shareMemory -> writeEntry
+      // actually writes into.
+      api.reject(ctx(globalRoot), { value: rejectedContent, reason: 'must not be shared globally' });
+
+      const stats = { secretSkipped: 0, rejectedSkipped: 0 };
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const shared = autoShare(localRoot, { minScore: 0, stats });
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('skipped 1 candidate(s) refused'),
+      );
+      errorSpy.mockRestore();
+
+      // The clean candidate shared; the rejected one did not abort the batch.
+      expect(shared.length).toBe(1);
+      expect(shared[0]!.content).toBe(cleanContent);
+      expect(stats.rejectedSkipped).toBe(1);
+
+      const globalContents = loadAllEntries(globalRoot).map((e) => e.content);
+      expect(globalContents).toContain(cleanContent);
+      expect(globalContents).not.toContain(rejectedContent);
+    } finally {
+      if (prevHippoHome === undefined) delete process.env.HIPPO_HOME;
+      else process.env.HIPPO_HOME = prevHippoHome;
+      rmSync(localRoot, { recursive: true, force: true });
+      rmSync(globalRoot, { recursive: true, force: true });
     }
   });
 });

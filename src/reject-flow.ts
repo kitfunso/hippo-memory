@@ -18,7 +18,7 @@ import { archiveRawMemory } from './raw-archive.js';
 import {
   initStore,
   deleteEntryCore,
-  removeEntryMirrors,
+  purgeMirrorBestEffort,
   writeIndexMirror,
   buildIndexFromDb,
 } from './store.js';
@@ -172,17 +172,12 @@ export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
     // best-effort mirror purge per removed id, reaper-backstop stamp for
     // raw ids, one index mirror rewrite.
     for (const id of removedIds) {
-      let mirrorOk = false;
-      try {
-        removeEntryMirrors(opts.hippoRoot, id);
-        mirrorOk = true;
-      } catch (mirrorErr) {
-        console.error(
-          `hippo reject: mirror cleanup failed for ${id} (will retry via reaper on next open): ${
-            mirrorErr instanceof Error ? mirrorErr.message : String(mirrorErr)
-          }`,
-        );
-      }
+      // AT1 fix: purgeMirrorBestEffort retries once, then — for non-raw ids,
+      // which cleanupArchivedMirrors' reaper never scans — reports the
+      // EXPLICIT leftover path(s) instead of the false "will retry via
+      // reaper" claim. See its own doc comment (store.ts, near
+      // removeEntryMirrors) for the full rationale.
+      const mirrorOk = purgeMirrorBestEffort(opts.hippoRoot, id, removedRawIds.includes(id), 'hippo reject');
       if (mirrorOk && removedRawIds.includes(id)) {
         db.prepare(`UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(
           new Date().toISOString(),

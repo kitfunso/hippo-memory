@@ -926,6 +926,69 @@ export function removeEntryMirrors(hippoRoot: string, id: string): void {
   }
 }
 
+/**
+ * AT1 mirror-purge honesty fix (docs/plans/2026-08-15-at1-rejected-value-tombstone.md):
+ * the candidate markdown mirror paths still on disk for `id`, computed the
+ * same way `removeEntryMirrors` walks them (one per layer: buffer/episodic/
+ * semantic), filtered to the ones that still `fs.existsSync`. Used to report
+ * an EXPLICIT path when a best-effort purge fails and no reaper exists to
+ * retry it — plain `removeEntryMirrors` returns void, giving no way to name
+ * which file is stuck.
+ */
+export function getExistingEntryMirrorPaths(hippoRoot: string, id: string): string[] {
+  return [Layer.Buffer, Layer.Episodic, Layer.Semantic]
+    .map((layer) => path.join(layerDir(hippoRoot, layer), `${id}.md`))
+    .filter((file) => fs.existsSync(file));
+}
+
+/**
+ * AT1 fix: best-effort markdown-mirror purge shared by `reject-flow.ts`'s
+ * `rejectValue` and `resolveConflict`'s post-commit purge. Both used to log
+ * "will retry via reaper on next open" for EVERY failure, but the reaper
+ * (`cleanupArchivedMirrors`, raw-archive-mirror-cleanup.ts) only scans
+ * `raw_archive` — that message was false for a non-raw id, which has no
+ * reaper at all.
+ *
+ * Retries the unlink once synchronously (the common real-world failure is a
+ * transient lock/AV-scanner false positive, not a permanent one). On a
+ * second failure: raw ids still get the honest reaper message (true); non-raw
+ * ids get the EXPLICIT leftover file path(s) and a manual-delete instruction,
+ * since nothing will ever retry them automatically.
+ *
+ * Returns true if the mirror ended up purged (first or second attempt).
+ */
+export function purgeMirrorBestEffort(
+  hippoRoot: string,
+  id: string,
+  isRaw: boolean,
+  logPrefix: string,
+): boolean {
+  try {
+    removeEntryMirrors(hippoRoot, id);
+    return true;
+  } catch {
+    try {
+      removeEntryMirrors(hippoRoot, id);
+      return true;
+    } catch (secondErr) {
+      const msg = secondErr instanceof Error ? secondErr.message : String(secondErr);
+      if (isRaw) {
+        console.error(
+          `${logPrefix}: mirror cleanup failed for ${id} (will retry via reaper on next open): ${msg}`,
+        );
+      } else {
+        const leftover = getExistingEntryMirrorPaths(hippoRoot, id);
+        const pathsNote = leftover.length > 0 ? leftover.join(', ') : `${id}.md (path unresolved)`;
+        console.error(
+          `${logPrefix}: mirror cleanup failed for ${id} - no automatic retry exists for this file, ` +
+          `delete it manually: ${pathsNote} (${msg})`,
+        );
+      }
+      return false;
+    }
+  }
+}
+
 function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: string): boolean {
   const countRow = db.prepare(`SELECT COUNT(*) AS count FROM memories`).get() as { count?: number } | undefined;
   const memoryCount = Number(countRow?.count ?? 0);
@@ -2803,17 +2866,12 @@ export function resolveConflict(
     // purge+reaper pattern as the reject verb (src/reject-flow.ts) and
     // api.archiveRaw — reusing removeEntryMirrors + raw_archive bookkeeping.
     if (loserRemoved) {
-      let mirrorOk = false;
-      try {
-        removeEntryMirrors(hippoRoot, loserId);
-        mirrorOk = true;
-      } catch (mirrorErr) {
-        console.error(
-          `resolveConflict: mirror cleanup failed for ${loserId} (will retry via reaper on next open): ${
-            mirrorErr instanceof Error ? mirrorErr.message : String(mirrorErr)
-          }`,
-        );
-      }
+      // AT1 fix: purgeMirrorBestEffort retries once, then — for non-raw ids,
+      // which cleanupArchivedMirrors' reaper never scans — reports the
+      // EXPLICIT leftover path(s) instead of the false "will retry via
+      // reaper" claim. See its own doc comment (store.ts, near
+      // removeEntryMirrors) for the full rationale.
+      const mirrorOk = purgeMirrorBestEffort(hippoRoot, loserId, loserWasRaw, 'resolveConflict');
       if (mirrorOk && loserWasRaw) {
         db.prepare(`UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(
           new Date().toISOString(),

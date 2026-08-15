@@ -131,6 +131,24 @@ every binary that shares a store. This is a deliberate v1 tradeoff (bumping
 would hard-lock every old binary out of the store entirely, disproportionate
 for the dominant single-user single-binary deployment), not an oversight.
 
+### Mirror cleanup
+
+Purging a removed row's markdown mirror (`.md` file) is best-effort, not
+guaranteed. `cleanupArchivedMirrors` (the reaper, run on every `openHippoDb`)
+only scans `raw_archive` — it retries a failed purge for `kind='raw'` ids
+only. Non-raw ids have no reaper: if the post-commit unlink (retried once)
+still fails, the file stays on disk with no automatic retry, ever. The
+failure message names the exact leftover path(s) for a human to delete.
+
+This is not silent data loss, because the tombstone does the actual work: a
+stale mirror sitting on disk cannot resurrect the value it names.
+`bootstrapLegacyStore` and `rebuildIndex` run the write-refusal guard per row
+over exactly this class of file, so re-inserting from a stale mirror is
+refused the same as any other write. But the FILE itself persists until a
+human deletes it. If the value is later `unreject`ed, that stale mirror CAN
+be re-imported by a subsequent `rebuildIndex` — reject then unreject does
+not guarantee the old mirror is gone.
+
 ### Known limitation
 
 Matching is exact-normalized-value only. A paraphrase of a rejected fact —

@@ -2740,6 +2740,15 @@ export interface SleepResult {
    * "NOT redacted" list in src/sleep-redact.ts).
    */
   secretSkipped?: number;
+  /**
+   * AT1: count of auto-share candidates the GLOBAL store's rejection
+   * tombstone refused this sleep (docs/plans/2026-08-15-at1-rejected-value-tombstone.md
+   * plan §3 — copy paths must not let one rejected candidate abort the
+   * batch). Absent when 0 or when auto-share did not run. Same
+   * per-invocation-activity class as `secretSkipped` (sibling counter,
+   * same autoShare call) — NOT redacted on egress, see sleep-redact.ts.
+   */
+  rejectedSkipped?: number;
   ambient?: AmbientState | null;
   /**
    * E3 sleep enqueue-hook: graph re-extraction totals across the tenants rebuilt
@@ -2912,13 +2921,19 @@ export async function sleep(
       if (sleepConfig.autoShareOnSleep) {
         // v1.25.0: surface the secret-veto skip count (v39 follow-up #2) so
         // the veto is observable instead of silent.
-        const autoShareStats = { secretSkipped: 0 };
+        // AT1: rejectedSkipped is autoShare's sibling counter for candidates
+        // the global store's rejection tombstone refused (threaded the same
+        // way as secretSkipped just below).
+        const autoShareStats = { secretSkipped: 0, rejectedSkipped: 0 };
         const shared = phases.autoShare(ctx.hippoRoot, { minScore: 0.6, stats: autoShareStats });
         if (shared.length > 0) {
           result.shared = shared.length;
         }
         if (autoShareStats.secretSkipped > 0) {
           result.secretSkipped = autoShareStats.secretSkipped;
+        }
+        if (autoShareStats.rejectedSkipped > 0) {
+          result.rejectedSkipped = autoShareStats.rejectedSkipped;
         }
       }
     }
