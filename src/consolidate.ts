@@ -398,7 +398,8 @@ export async function consolidate(
           tags: ['auto-promoted'],
           source: 'auto-promote',
           // T1 fix (2026-08-15 hardening pass): stamp the trace into the SAME
-          // tenant traceExistsForSession (:347, above) checks under. Before
+          // tenant the traceExistsForSession idempotency check (above) runs
+          // under. Before
           // this, createMemory omitted tenantId and the trace always landed
           // 'default' (memory.ts:535) while the idempotency check ran under
           // consolidationTenant — for any non-default tenant that check never

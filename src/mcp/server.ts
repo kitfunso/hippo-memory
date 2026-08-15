@@ -675,7 +675,8 @@ async function executeTool(
       // v0.32 / J3.2 — auto-injection of reference-class baserate hint
       // when the query carries a forward-prediction phrase. Read from
       // apiResult.planningFallacyHint (already computed inside api.recall
-      // with actor='mcp' threaded through ctx.actor.subject). The hint is
+      // with the caller identity threaded through ctx.actor.subject -
+      // auth-resolved actor under HTTP-MCP, 'mcp' for stdio). The hint is
       // pipeline-INVARIANT — same (hippoRoot, tenantId, query) inputs
       // produce the same hint regardless of which downstream search
       // pipeline (api.recall band vs physics/hybrid) renders the memory
@@ -932,10 +933,11 @@ async function executeTool(
       const tags: string[] = [];
       if (args.error) tags.push('error');
       if (args.tag) tags.push(String(args.tag));
-      // Route through api.ts so audit_log captures actor='mcp' uniformly with
-      // CLI/REST. api.ts.remember writes the memory + audit row in one
-      // transaction-friendly path; we re-read the entry to surface the
-      // half-life used in the MCP human-readable response.
+      // Route through api.ts so audit_log captures the caller identity
+      // uniformly with CLI/REST: the auth-resolved ctx.actor under HTTP-MCP,
+      // 'mcp' for stdio (no ctx). api.ts.remember writes the memory + audit
+      // row in one transaction-friendly path; we re-read the entry to surface
+      // the half-life used in the MCP human-readable response.
       const apiCtx: ApiContext = {
         hippoRoot,
         tenantId,
@@ -976,8 +978,9 @@ async function executeTool(
       const ids = lastRecalledIds.get(clientKey) ?? [];
       if (ids.length === 0) return 'No recent recalls to apply outcome to.';
 
-      // Route through src/api.ts so audit_log captures actor='mcp' and
-      // tenant scoping is enforced uniformly (same surface as recall/remember).
+      // Route through src/api.ts so audit_log captures the caller identity
+      // (auth-resolved ctx.actor under HTTP-MCP, 'mcp' for stdio) and tenant
+      // scoping is enforced uniformly (same surface as recall/remember).
       // outcome() also handles cross-tenant id skip silently.
       const apiCtx: ApiContext = {
         hippoRoot,
