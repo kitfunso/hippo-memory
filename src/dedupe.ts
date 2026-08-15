@@ -99,19 +99,17 @@ export function deduplicateStore(
   const finiteCount = (n: number | null | undefined): number =>
     Number.isFinite(n ?? 0) ? (n ?? 0) : 0;
 
+  // Shared across tenant groups: safe because memory ids are globally
+  // unique (crypto.randomUUID at creation), so an id in `removed` can never
+  // collide with another tenant's row, and deleteEntry below deletes by
+  // primary-key id alone.
   const removed = new Set<string>();
   const pairs: DedupPair[] = [];
 
   for (const tenantEntries of entriesByTenant.values()) {
-    // Total order so the survivor is a deterministic function of the entry
-    // multiset, not of load/ingest order: strength bucket desc
-    // (materially-stronger survives) -> retrieval_count desc (more-retrieved
-    // survives on a strength tie) -> compareEntryIdentity (content asc -> id
-    // asc), the cross-ingest-stable terminal key. Without a terminal key,
-    // freshly-ingested near-duplicates tie exactly (strength=1,
-    // retrieval_count=0) and the stable sort falls through to
-    // loadAllEntries's `created ASC, id ASC` order -- arrival order.
-    // Scoped per tenant group: the total order is within a tenant only,
+    // The v1.26.3 survivor total order (see the file-level docstring:
+    // strength bucket desc -> retrieval_count desc -> compareEntryIdentity),
+    // scoped per tenant group: the total order holds within a tenant only,
     // matching the partition above.
     tenantEntries.sort((a, b) => {
       const bucketDiff = strengthBucket(b.strength) - strengthBucket(a.strength);
