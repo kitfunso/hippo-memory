@@ -518,6 +518,74 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
     expect(rebuildResult.rebuilt).toBe(0);
   });
 
+  it('T-followup (hardening pass, docs/plans/2026-08-15-hardening-at1-followups.md): buildDag partitions unparented facts by tenant — two tenants sharing a speaker: tag produce two per-tenant summaries, never one cross-tenant summary in default', async () => {
+    // Deliberately the SAME entity tag ('speaker:alice') across both
+    // tenants so that without the tenant partition, clusterFacts's jaccard
+    // match on entityTags would merge all 6 facts into one 6-member cluster
+    // whose LLM-synthesized summary then landed in 'default' regardless of
+    // source (memory.ts:535's implicit default when createMemory isn't
+    // passed a tenantId). Mirrors T1(a)'s cross-tenant shape
+    // (tests/consolidate-tenant-landing.test.ts) but for the DAG producer
+    // (dag.ts buildDag) instead of consolidate.ts's merge pass.
+    const aFacts = ['alice did X', 'alice said Y', 'alice noted Z'].map((c) =>
+      createMemory(c, {
+        layer: Layer.Episodic,
+        dag_level: 1,
+        tags: ['extracted', 'speaker:alice'],
+        tenantId: 'tenant-a',
+      }),
+    );
+    const bFacts = ['alice ran P', 'alice flagged Q', 'alice closed R'].map((c) =>
+      createMemory(c, {
+        layer: Layer.Episodic,
+        dag_level: 1,
+        tags: ['extracted', 'speaker:alice'],
+        tenantId: 'tenant-b',
+      }),
+    );
+    for (const f of [...aFacts, ...bFacts]) writeEntry(hippoRoot, f);
+
+    const fetcher = makeOkFetcher('synthetic-tenant-partitioned-summary');
+    // Host-wide input, exactly like consolidate.ts:543's `extractedFacts`
+    // (survivors filtered host-wide, no tenant slicing by the caller) —
+    // buildDag itself must do the tenant separation, not its caller.
+    const result = await buildDag(hippoRoot, [...aFacts, ...bFacts], {
+      apiKey: 'test-key',
+      fetcher,
+    });
+
+    // Two separate per-tenant clusters, not one 6-member cross-tenant cluster.
+    expect(result.candidateClusters).toBe(2);
+    expect(result.summariesCreated).toBe(2);
+    expect(result.factsLinked).toBe(6);
+
+    const db = openHippoDb(hippoRoot);
+    try {
+      const summaries = db.prepare(
+        `SELECT id, tenant_id FROM memories WHERE dag_level = 2 AND tags_json LIKE '%dag-summary%'`,
+      ).all() as Array<{ id: string; tenant_id: string }>;
+      expect(summaries).toHaveLength(2);
+      const tenants = summaries.map((s) => s.tenant_id).sort();
+      expect(tenants).toEqual(['tenant-a', 'tenant-b']);
+      expect(tenants).not.toContain('default');
+
+      // Each tenant's 3 members must be re-parented under THAT tenant's own
+      // summary — no member crossed into the other tenant's cluster.
+      const summaryByTenant = new Map(summaries.map((s) => [s.tenant_id, s.id]));
+      for (const [tenantId, facts] of [['tenant-a', aFacts], ['tenant-b', bFacts]] as const) {
+        const rows = db.prepare(
+          `SELECT dag_parent_id FROM memories WHERE tenant_id = ? AND dag_level = 1`,
+        ).all(tenantId) as Array<{ dag_parent_id: string }>;
+        expect(rows).toHaveLength(facts.length);
+        for (const row of rows) {
+          expect(row.dag_parent_id).toBe(summaryByTenant.get(tenantId));
+        }
+      }
+    } finally {
+      db.close();
+    }
+  });
+
   it('test #11: race-loser no-op — pre-cleared dirty flag → applyRebuildResult returns false, no audit, no rebuild_count bump', () => {
     const summary = makeSummary('s11-summary-content');
     writeEntry(hippoRoot, summary);

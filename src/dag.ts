@@ -134,58 +134,90 @@ export async function buildDag(
     (f) => f.dag_level === 1 && !f.dag_parent_id && f.tags.includes('extracted'),
   );
 
-  const clusters = clusterFacts(unparented);
-  const eligibleClusters = clusters.filter((c) => c.members.length >= 3);
-  result.candidateClusters = eligibleClusters.length;
+  // Hardening follow-up (mirrors consolidate.ts's mergeCandidatesByTenant,
+  // T1): partition unparented facts by tenantId BEFORE clustering so a
+  // cluster can never mix facts from different tenants into one
+  // LLM-synthesized summary. Map preserves insertion order, so
+  // single-tenant stores (every row 'default') get exactly one partition
+  // and iterate in the same order as before this fix — byte-identical
+  // behavior there.
+  const unparentedByTenant = new Map<string, MemoryEntry[]>();
+  for (const fact of unparented) {
+    const bucket = unparentedByTenant.get(fact.tenantId);
+    if (bucket) bucket.push(fact);
+    else unparentedByTenant.set(fact.tenantId, [fact]);
+  }
 
-  for (const cluster of eligibleClusters) {
-    const summary = await generateDagSummary(
-      cluster.label,
-      cluster.members.map((m) => m.content),
-      opts,
-    );
-    if (!summary) continue;
+  for (const [factTenant, tenantFacts] of unparentedByTenant) {
+    const clusters = clusterFacts(tenantFacts);
+    const eligibleClusters = clusters.filter((c) => c.members.length >= 3);
+    result.candidateClusters += eligibleClusters.length;
 
-    const memberCreatedAts = cluster.members.map((m) => m.created).sort();
-    const summaryEntry = createMemory(summary, {
-      layer: Layer.Semantic,
-      tags: [...cluster.entityTags, 'dag-summary'],
-      confidence: 'inferred',
-      dag_level: 2,
-    });
-    // Schema v25: cache descendant_count + earliest/latest_at on the summary
-    // row so DAG-aware recall (docs/plans/2026-05-05-dag-recall.md Task 2)
-    // can reason about scope without walking the children.
-    summaryEntry.descendant_count = cluster.members.length;
-    summaryEntry.earliest_at = memberCreatedAts[0];
-    summaryEntry.latest_at = memberCreatedAts[memberCreatedAts.length - 1];
-    // AT1 (plan §3 containment): a refused LLM-synthesized summary skips
-    // ONLY this cluster — the sleep cycle continues to the next one. The
-    // member re-parenting writes below never run for a skipped cluster
-    // (there is no summary id to parent them under).
-    try {
-      writeEntry(hippoRoot, summaryEntry);
-    } catch (err) {
-      if (err instanceof RejectedValueError) {
-        result.rejected++;
-        console.error(`[buildDag] cluster "${cluster.label}" skipped: summary matches a rejected value`);
-        continue;
+    for (const cluster of eligibleClusters) {
+      const summary = await generateDagSummary(
+        cluster.label,
+        cluster.members.map((m) => m.content),
+        opts,
+      );
+      if (!summary) continue;
+
+      const memberCreatedAts = cluster.members.map((m) => m.created).sort();
+      // Every member of `cluster` shares factTenant by construction (the
+      // tenant partition above), so the summary lands in the same tenant
+      // as the facts it summarizes instead of always 'default'
+      // (memory.ts:535 defaults tenantId when the option is omitted).
+      const summaryEntry = createMemory(summary, {
+        layer: Layer.Semantic,
+        tags: [...cluster.entityTags, 'dag-summary'],
+        confidence: 'inferred',
+        dag_level: 2,
+        tenantId: factTenant,
+      });
+      // Schema v25: cache descendant_count + earliest/latest_at on the summary
+      // row so DAG-aware recall (docs/plans/2026-05-05-dag-recall.md Task 2)
+      // can reason about scope without walking the children.
+      summaryEntry.descendant_count = cluster.members.length;
+      summaryEntry.earliest_at = memberCreatedAts[0];
+      summaryEntry.latest_at = memberCreatedAts[memberCreatedAts.length - 1];
+      // AT1 (plan §3 containment): a refused LLM-synthesized summary skips
+      // ONLY this cluster — the sleep cycle continues to the next one. The
+      // member re-parenting writes below never run for a skipped cluster
+      // (there is no summary id to parent them under).
+      //
+      // The tombstone check itself is tenant-scoped for free: writeEntry ->
+      // writeEntryDbOnly -> upsertEntryRow calls
+      // checkRejectionGuard(db, entry.tenantId ?? 'default', ...)
+      // (store.ts:1172), reading tenantId off the entry being written. Now
+      // that summaryEntry carries factTenant instead of the implicit
+      // 'default', the guard consults that tenant's tombstones — no
+      // separate check needed here (unlike consolidate.ts's merge pass,
+      // which pre-checks via findRejectedValue because it writes through
+      // batchWriteAndDelete's bypassRejectionGuard path instead of
+      // writeEntry).
+      try {
+        writeEntry(hippoRoot, summaryEntry);
+      } catch (err) {
+        if (err instanceof RejectedValueError) {
+          result.rejected++;
+          console.error(`[buildDag] cluster "${cluster.label}" skipped: summary matches a rejected value`);
+          continue;
+        }
+        throw err;
       }
-      throw err;
-    }
-    result.summariesCreated++;
+      result.summariesCreated++;
 
-    for (const member of cluster.members) {
-      const updated: MemoryEntry = { ...member, dag_parent_id: summaryEntry.id };
-      writeEntry(hippoRoot, updated);
-      result.factsLinked++;
+      for (const member of cluster.members) {
+        const updated: MemoryEntry = { ...member, dag_parent_id: summaryEntry.id };
+        writeEntry(hippoRoot, updated);
+        result.factsLinked++;
+      }
+      // v0.30 / E3 — cancel the cascade of dirty-marks fired by member
+      // writeEntry calls (E2 hook on writeEntryDbOnly at store.ts:1214).
+      // The summary we just built IS fresh, no rebuild needed. Without this,
+      // E3 in the SAME sleep cycle would re-rebuild every new summary
+      // (2x LLM cost). plan-eng-r1 HIGH must-fix.
+      clearSummaryDirtyAfterBuild(hippoRoot, summaryEntry.id, summaryEntry.tenantId, 'buildDag');
     }
-    // v0.30 / E3 — cancel the cascade of dirty-marks fired by member
-    // writeEntry calls (E2 hook on writeEntryDbOnly at store.ts:1214).
-    // The summary we just built IS fresh, no rebuild needed. Without this,
-    // E3 in the SAME sleep cycle would re-rebuild every new summary
-    // (2x LLM cost). plan-eng-r1 HIGH must-fix.
-    clearSummaryDirtyAfterBuild(hippoRoot, summaryEntry.id, summaryEntry.tenantId, 'buildDag');
   }
 
   return result;
