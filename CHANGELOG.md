@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.33.0 - 2026-08-16
+
+### Added
+- **Anti-slop lint gate.** New Oxlint plugin (`tools/oxlint/anti-slop`, 15 rules at error) plus `npm run lint`. Bans unexplained type assertions, `as unknown as` chains, unparsed `unknown` boundaries, unsafe dictionary types, and module mocking. `no-runtime-typeof` runs with `allowInTypeGuards: true`, so `typeof` stays legal inside named `x is T` predicates.
+- **Test dependency-injection seams.** `__setSchedulerFsDeps` (scheduler fs access) and `__setHippoPluginDeps` (OpenClaw plugin child_process/fs access) replace module mocks in tests. Additive only; default behavior unchanged.
+
+### Changed
+- **JsonValue boundary domain.** GitHub and Slack webhook guards, MCP `params`, and server JSON-body parsing now take a named `JsonValue` type with typeof-based type predicates instead of `unknown` plus casts. `McpRequest.params` is now `Record<string, JsonValue>`; `connectors/slack/types` exports `JsonValue`.
+- **SAFETY-commented assertions.** Every remaining type assertion states the checked invariant that makes it sound (SELECT column lists, wire-shape contracts, fixture provenance).
+- **Codebase migration.** 2,434 lint findings fixed across src, tests, ui, extensions, and benchmarks; 277 documented remainders live in `src/cli.ts` (deferred follow-up) plus two coupled singles in `store.ts`/`client.ts`. MCP test fixtures now use the real `McpContext` shape (`actor: string`).
+
 ## 1.32.1 - 2026-08-16
 
 ### Fixed
