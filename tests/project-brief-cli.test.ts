@@ -23,6 +23,12 @@ function makeEnv(): TestEnv {
   initStore(hippoRoot);
   return { cwd, hippoRoot, globalRoot };
 }
+/** Extracts the `#<id>` printed by a `brief` CLI command, or throws. */
+function extractId(text: string): string {
+  const match = text.match(/#(\d+)/);
+  if (!match) throw new Error(`no "#<id>" found in output: ${text}`);
+  return match[1];
+}
 function run(env: TestEnv, args: string[]): string {
   return execFileSync('node', [CLI, ...args], {
     cwd: env.cwd,
@@ -42,8 +48,8 @@ describe('hippo brief CLI', () => {
     const list = run(env, ['brief', 'list']);
     expect(list).toContain('repo="hippo"');
     expect(list).not.toContain('repo="new"');
-    const id = created.match(/#(\d+)/)?.[1];
-    const get = run(env, ['brief', 'get', id as string]);
+    const id = extractId(created);
+    const get = run(env, ['brief', 'get', id]);
     expect(get).toContain('agent memory lib');
     expect(get).toContain('repo: hippo');
   });
@@ -55,8 +61,8 @@ describe('hippo brief CLI', () => {
 
   it('new -> supersede version chain', () => {
     const open = run(env, ['brief', 'new', 'r', '--summary', 'v1 body']);
-    const id = open.match(/#(\d+)/)?.[1];
-    const sup = run(env, ['brief', 'supersede', id as string, '--summary', 'v2 body', '--change', 'updated']);
+    const id = extractId(open);
+    const sup = run(env, ['brief', 'supersede', id, '--summary', 'v2 body', '--change', 'updated']);
     expect(sup).toMatch(/v2/);
     const active = run(env, ['brief', 'list', '--status', 'active', '--repo', 'r']);
     expect(active).toContain('v2');

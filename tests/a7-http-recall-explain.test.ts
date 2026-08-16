@@ -39,6 +39,9 @@ describe('HTTP /v1/memories A7 rerank-trace wire-format', () => {
   it('explain=1 -> every result item carries rerankPipeline:api on the wire', async () => {
     const res = await fetch(`${handle.url}/v1/memories?q=auth&explain=1`);
     expect(res.status).toBe(200);
+    // SAFETY: /v1/memories's JSON response body is the serialized
+    // RecallResult produced by src/api.ts's recall(), checked immediately by
+    // the assertions that follow.
     const body = (await res.json()) as RecallResult;
     expect(body.results.length).toBeGreaterThan(0);
     for (const item of body.results) {
@@ -49,12 +52,14 @@ describe('HTTP /v1/memories A7 rerank-trace wire-format', () => {
   it('no explain -> rerankPipeline + rerankTrace absent on the wire (byte-identical default)', async () => {
     const res = await fetch(`${handle.url}/v1/memories?q=auth`);
     expect(res.status).toBe(200);
+    // SAFETY: /v1/memories's JSON response body is the serialized
+    // RecallResult produced by src/api.ts's recall(), checked immediately by
+    // the assertions that follow.
     const body = (await res.json()) as RecallResult;
     expect(body.results.length).toBeGreaterThan(0);
     for (const item of body.results) {
-      const raw = item as Record<string, unknown>;
-      expect(raw.rerankPipeline).toBeUndefined();
-      expect(raw.rerankTrace).toBeUndefined();
+      expect(item.rerankPipeline).toBeUndefined();
+      expect(item.rerankTrace).toBeUndefined();
     }
   });
 });

@@ -28,8 +28,8 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, MemoryKind } from '../src/memory.js';
-import { handleMcpRequest } from '../src/mcp/server.js';
+import { createMemory, Layer } from '../src/memory.js';
+import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
 
 function makeRoot(prefix: string): string {
   const home = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
@@ -41,8 +41,8 @@ function makeRoot(prefix: string): string {
 function callTool(
   reqId: number,
   name: string,
-  args: Record<string, unknown>,
-  ctx: { hippoRoot: string; tenantId: string; actor: string; clientKey?: string },
+  args: Record<string, string | number | boolean>,
+  ctx: McpContext,
 ) {
   return handleMcpRequest(
     {
@@ -55,9 +55,11 @@ function callTool(
   );
 }
 
-function extractText(res: unknown): string {
-  const r = res as { result?: { content?: Array<{ text?: string }> } } | null;
-  return r?.result?.content?.[0]?.text ?? '';
+function extractText(res: McpResponse | null): string {
+  // SAFETY: every hippo_recall tool response in this suite carries a
+  // single MCP text content block; the server's own formatter built it.
+  const result = res?.result as { content?: Array<{ text?: string }> } | undefined;
+  return result?.content?.[0]?.text ?? '';
 }
 
 describe('mcp hippo_recall Cutoff suppressionSummary (C5, v1.12.13 + v1.13.3)', () => {
@@ -83,7 +85,7 @@ describe('mcp hippo_recall Cutoff suppressionSummary (C5, v1.12.13 + v1.13.3)', 
     for (let i = 0; i < 30; i++) {
       writeEntry(home, createMemory(`omega ${i} ${'padding text '.repeat(20)}`, {
         layer: Layer.Buffer,
-        kind: 'raw' as MemoryKind,
+        kind: 'raw',
         tenantId: 'default',
       }));
     }
@@ -108,7 +110,7 @@ describe('mcp hippo_recall Cutoff suppressionSummary (C5, v1.12.13 + v1.13.3)', 
     for (let i = 0; i < 30; i++) {
       writeEntry(home, createMemory(`omega ${i} ${'padding text '.repeat(20)}`, {
         layer: Layer.Buffer,
-        kind: 'raw' as MemoryKind,
+        kind: 'raw',
         tenantId: 'default',
       }));
     }
@@ -155,7 +157,7 @@ describe('mcp hippo_recall Cutoff suppressionSummary (C5, v1.12.13 + v1.13.3)', 
     for (let i = 0; i < 30; i++) {
       writeEntry(home, createMemory(`omega ${i} ${'padding text '.repeat(20)}`, {
         layer: Layer.Buffer,
-        kind: 'raw' as MemoryKind,
+        kind: 'raw',
         tenantId: 'default',
       }));
     }

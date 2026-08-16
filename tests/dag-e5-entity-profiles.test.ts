@@ -20,16 +20,16 @@ import {
   buildEntityProfiles,
   rebuildDirtySummaries,
 } from '../src/dag.js';
-import { drillDown, type Context, type DrillDownResult } from '../src/api.js';
+import { drillDown, type Context, type DrillDownOutcome, type DrillDownResult } from '../src/api.js';
 import { hybridSearch, isDagSummary } from '../src/search.js';
 
 function makeOkFetcher(content: string = 'synthetic-entity-profile-content-xyz') {
-  return vi.fn(async () => {
+  return vi.fn<typeof fetch>(async () => {
     return new Response(
       JSON.stringify({ content: [{ text: content }] }),
       { status: 200, headers: { 'content-type': 'application/json' } },
     );
-  }) as unknown as typeof fetch;
+  });
 }
 
 function makeL2Summary(
@@ -76,6 +76,11 @@ function forceMarkDirty(hippoRoot: string, summaryId: string): void {
   }
 }
 
+/** Narrows a drillDown outcome to its success shape, failing the test clearly if not. */
+function assertDrillDownSucceeded(outcome: DrillDownOutcome): asserts outcome is DrillDownResult {
+  expect('failure' in outcome).toBe(false);
+}
+
 function defaultCtx(hippoRoot: string, tenantId: string = 'default'): Context {
   return {
     hippoRoot,
@@ -114,10 +119,21 @@ describe('v0.30 / E5 — level-3 entity profiles + drillDown depth', () => {
 
     const db = openHippoDb(hippoRoot);
     try {
+      // SAFETY: the db driver's .get() returns `unknown`; the row shape is guaranteed
+      // by the `SELECT id, content, dag_level, ...` projection above, and buildEntityProfiles
+      // was awaited just before this block so exactly one L3 profile row exists.
       const profile = db.prepare(`
         SELECT id, content, dag_level, dag_level_3_built_at, descendant_count, earliest_at, latest_at
           FROM memories WHERE dag_level = 3
-      `).get() as any;
+      `).get() as {
+        id: string;
+        content: string;
+        dag_level: number;
+        dag_level_3_built_at: string | null;
+        descendant_count: number;
+        earliest_at: string | null;
+        latest_at: string | null;
+      };
       expect(profile).toBeTruthy();
       expect(profile.dag_level).toBe(3);
       expect(profile.dag_level_3_built_at).toBeTruthy();
@@ -126,7 +142,9 @@ describe('v0.30 / E5 — level-3 entity profiles + drillDown depth', () => {
       expect(profile.latest_at).toBeTruthy();
 
       // All 3 L2s now have dag_parent_id pointing to profile
-      const linkedRows = db.prepare(`SELECT id FROM memories WHERE dag_parent_id = ?`).all(profile.id) as any[];
+      // SAFETY: the db driver's .all() returns `unknown[]`; the row shape is guaranteed
+      // by the `SELECT id` projection above.
+      const linkedRows = db.prepare(`SELECT id FROM memories WHERE dag_parent_id = ?`).all(profile.id) as Array<{ id: string }>;
       expect(linkedRows.length).toBe(3);
     } finally {
       db.close();
@@ -161,7 +179,10 @@ describe('v0.30 / E5 — level-3 entity profiles + drillDown depth', () => {
     // M2 fold: confirm the parented L2 STILL points at `existing`, not the new L3.
     const db = openHippoDb(hippoRoot);
     try {
-      const row = db.prepare(`SELECT dag_parent_id FROM memories WHERE id = ?`).get(parented.id) as any;
+      // SAFETY: the db driver's .get() returns `unknown`; the row shape is guaranteed
+      // by the `SELECT dag_parent_id` projection above, and `parented` was written
+      // to this store just above so a matching row exists.
+      const row = db.prepare(`SELECT dag_parent_id FROM memories WHERE id = ?`).get(parented.id) as { dag_parent_id: string | null };
       expect(row.dag_parent_id).toBe(existing.id);
     } finally {
       db.close();
@@ -181,9 +202,14 @@ describe('v0.30 / E5 — level-3 entity profiles + drillDown depth', () => {
 
     const db = openHippoDb(hippoRoot);
     try {
-      const profile = db.prepare(`SELECT id, summary_dirty FROM memories WHERE dag_level = 3`).get() as any;
+      // SAFETY: the db driver's .get() returns `unknown`; the row shape is guaranteed
+      // by the `SELECT id, summary_dirty` projection above, and buildEntityProfiles
+      // was awaited just above so exactly one L3 profile row exists.
+      const profile = db.prepare(`SELECT id, summary_dirty FROM memories WHERE dag_level = 3`).get() as { id: string; summary_dirty: number };
       expect(profile.summary_dirty).toBe(0);
 
+      // SAFETY: the db driver's .all() returns `unknown[]`; the row shape is guaranteed
+      // by the `SELECT metadata_json` projection above.
       const cleanRows = db.prepare(`
         SELECT metadata_json FROM audit_log WHERE op = 'summary_marked_clean' AND target_id = ?
       `).all(profile.id) as Array<{ metadata_json: string }>;
@@ -209,9 +235,14 @@ describe('v0.30 / E5 — level-3 entity profiles + drillDown depth', () => {
 
     const db = openHippoDb(hippoRoot);
     try {
-      const row = db.prepare(`SELECT summary_dirty FROM memories WHERE id = ?`).get(l3.id) as any;
+      // SAFETY: the db driver's .get() returns `unknown`; the row shape is guaranteed
+      // by the `SELECT summary_dirty` projection above, and `l3` was written to this
+      // store just above so a matching row exists.
+      const row = db.prepare(`SELECT summary_dirty FROM memories WHERE id = ?`).get(l3.id) as { summary_dirty: number };
       expect(row.summary_dirty).toBe(1);
 
+      // SAFETY: the db driver's .all() returns `unknown[]`; the row shape is guaranteed
+      // by the `SELECT metadata_json` projection above.
       const auditRows = db.prepare(`
         SELECT metadata_json FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?
       `).all(l3.id) as Array<{ metadata_json: string }>;
@@ -234,14 +265,16 @@ describe('v0.30 / E5 — level-3 entity profiles + drillDown depth', () => {
     forceMarkDirty(hippoRoot, l3.id);
 
     let capturedPrompt: string | undefined;
-    const fetcher = vi.fn(async (_url: any, init?: any) => {
+    const fetcher = vi.fn<typeof fetch>(async (_url, init) => {
+      // SAFETY: this fetcher is invoked only by rebuildDirtySummaries's Anthropic call
+      // below, which always sends `body: JSON.stringify({...})` (src/dag.ts).
       const body = init?.body ? JSON.parse(init.body as string) : {};
       capturedPrompt = body?.messages?.[0]?.content ?? '';
       return new Response(
         JSON.stringify({ content: [{ text: 'rebuilt-alice-profile-content-yyy' }] }),
         { status: 200 },
       );
-    }) as unknown as typeof fetch;
+    });
 
     const result = await rebuildDirtySummaries(hippoRoot, {
       apiKey: 'k',
@@ -252,10 +285,19 @@ describe('v0.30 / E5 — level-3 entity profiles + drillDown depth', () => {
 
     const db = openHippoDb(hippoRoot);
     try {
+      // SAFETY: the db driver's .get() returns `unknown`; the row shape is guaranteed
+      // by the `SELECT content, rebuild_count, ...` projection above, and `l3` was
+      // written to this store and rebuilt just above so a matching row exists.
       const row = db.prepare(`
         SELECT content, rebuild_count, last_rebuilt_at, summary_dirty, dag_level_3_built_at
           FROM memories WHERE id = ?
-      `).get(l3.id) as any;
+      `).get(l3.id) as {
+        content: string;
+        rebuild_count: number;
+        last_rebuilt_at: string | null;
+        summary_dirty: number;
+        dag_level_3_built_at: string | null;
+      };
       expect(row.content).toBe('rebuilt-alice-profile-content-yyy');
       expect(row.rebuild_count).toBe(1);
       expect(row.last_rebuilt_at).toBeTruthy();
@@ -264,11 +306,13 @@ describe('v0.30 / E5 — level-3 entity profiles + drillDown depth', () => {
       expect(row.dag_level_3_built_at).toBe(builtAtIso);
 
       // Audit row has dag_level: 3 in metadata (NOT hardcoded 2)
+      // SAFETY: the db driver's .get() returns `unknown`; the row shape is guaranteed
+      // by the `SELECT metadata_json` projection above (undefined if no audit row).
       const auditRow = db.prepare(`
         SELECT metadata_json FROM audit_log WHERE op = 'summary_rebuilt' AND target_id = ?
-      `).get(l3.id) as any;
+      `).get(l3.id) as { metadata_json: string } | undefined;
       expect(auditRow).toBeTruthy();
-      const meta = JSON.parse(auditRow.metadata_json);
+      const meta = JSON.parse(auditRow!.metadata_json);
       expect(meta.dag_level).toBe(3);
       expect(meta.source).toBe('E3-rebuild');
     } finally {
@@ -284,8 +328,8 @@ describe('v0.30 / E5 — level-3 entity profiles + drillDown depth', () => {
     writeEntry(hippoRoot, makeL1Fact(summary.id, 'fact one for compat test'));
     writeEntry(hippoRoot, makeL1Fact(summary.id, 'fact two for compat test'));
 
-    const r = drillDown(defaultCtx(hippoRoot), summary.id) as DrillDownResult;
-    expect('failure' in r).toBe(false);
+    const r = drillDown(defaultCtx(hippoRoot), summary.id);
+    assertDrillDownSucceeded(r);
     expect(r.children.length).toBe(2);
     expect(r.totalChildren).toBe(2);
   });
@@ -297,7 +341,8 @@ describe('v0.30 / E5 — level-3 entity profiles + drillDown depth', () => {
     writeEntry(hippoRoot, l2);
     writeEntry(hippoRoot, makeL1Fact(l2.id, 'fractional depth leaf'));
 
-    const r = drillDown(defaultCtx(hippoRoot), l3.id, { depth: 1.5 }) as DrillDownResult;
+    const r = drillDown(defaultCtx(hippoRoot), l3.id, { depth: 1.5 });
+    assertDrillDownSucceeded(r);
     expect(r.children.map((child) => child.id)).toEqual([l2.id]);
   });
 
@@ -314,8 +359,8 @@ describe('v0.30 / E5 — level-3 entity profiles + drillDown depth', () => {
       writeEntry(hippoRoot, makeL1Fact(l2b.id, `B-fact-${i} content here`));
     }
 
-    const r = drillDown(defaultCtx(hippoRoot), l3.id, { depth: 2 }) as DrillDownResult;
-    expect('failure' in r).toBe(false);
+    const r = drillDown(defaultCtx(hippoRoot), l3.id, { depth: 2 });
+    assertDrillDownSucceeded(r);
     // 2 L2s + 6 L1s = 8 entries
     expect(r.children.length).toBe(8);
     expect(r.totalChildren).toBe(8);
@@ -334,8 +379,8 @@ describe('v0.30 / E5 — level-3 entity profiles + drillDown depth', () => {
     writeEntry(hippoRoot, makeL1Fact(l2.id, 'fact one for depth3 test'));
     writeEntry(hippoRoot, makeL1Fact(l2.id, 'fact two for depth3 test'));
 
-    const r = drillDown(defaultCtx(hippoRoot), l3.id, { depth: 3 }) as DrillDownResult;
-    expect('failure' in r).toBe(false);
+    const r = drillDown(defaultCtx(hippoRoot), l3.id, { depth: 3 });
+    assertDrillDownSucceeded(r);
     // 1 L2 + 2 L1s = 3 entries; depth=3 doesn't over-walk into nothing
     expect(r.children.length).toBe(3);
     expect(r.totalChildren).toBe(3);
@@ -351,8 +396,8 @@ describe('v0.30 / E5 — level-3 entity profiles + drillDown depth', () => {
     }
 
     // Very tight budget — should truncate
-    const r = drillDown(defaultCtx(hippoRoot), l3.id, { depth: 2, budget: 30 }) as DrillDownResult;
-    expect('failure' in r).toBe(false);
+    const r = drillDown(defaultCtx(hippoRoot), l3.id, { depth: 2, budget: 30 });
+    assertDrillDownSucceeded(r);
     expect(r.truncated).toBe(true);
     expect(r.children.length).toBeLessThan(6);
   });
@@ -378,8 +423,8 @@ describe('v0.30 / E5 — level-3 entity profiles + drillDown depth', () => {
       db.close();
     }
 
-    const r = drillDown(defaultCtx(hippoRoot, 'default'), l3.id, { depth: 2 }) as DrillDownResult;
-    expect('failure' in r).toBe(false);
+    const r = drillDown(defaultCtx(hippoRoot, 'default'), l3.id, { depth: 2 });
+    assertDrillDownSucceeded(r);
     // Should return only L2-A (tenant-a), NOT the L1s in tenant-b
     expect(r.children.length).toBe(1);
     expect(r.children[0]!.id).toBe(l2a.id);
@@ -427,7 +472,9 @@ describe('v0.30 / E5 — level-3 entity profiles + drillDown depth', () => {
 
     const db = openHippoDb(hippoRoot);
     try {
-      const profiles = db.prepare(`SELECT id, tenant_id FROM memories WHERE dag_level = 3`).all() as any[];
+      // SAFETY: the db driver's .all() returns `unknown[]`; the row shape is guaranteed
+      // by the `SELECT id, tenant_id` projection above.
+      const profiles = db.prepare(`SELECT id, tenant_id FROM memories WHERE dag_level = 3`).all() as Array<{ id: string; tenant_id: string }>;
       expect(profiles.length).toBe(2);
       const tenants = new Set(profiles.map((p) => p.tenant_id));
       expect(tenants.has('tenant-a')).toBe(true);

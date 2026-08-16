@@ -31,6 +31,8 @@ describe('goal stack depth cap', () => {
 
     const db = openHippoDb(root);
     try {
+      // SAFETY: literal SELECT of the status column for the goal_stack row
+      // this test's pushGoal calls above just wrote.
       const row = db.prepare(`SELECT status FROM goal_stack WHERE id = ?`).get(g1.id) as { status: string };
       expect(row.status).toBe('suspended');
     } finally {
@@ -59,6 +61,8 @@ describe('goal stack depth cap', () => {
     expect(getActiveGoals(root, ctx)).toHaveLength(3);
     const db = openHippoDb(root);
     try {
+      // SAFETY: literal COUNT(*) query against the known goal_stack schema
+      // always returns a single { c } row.
       const total = (db.prepare(`SELECT COUNT(*) AS c FROM goal_stack`).get() as { c: number }).c;
       expect(total).toBe(10);
     } finally {

@@ -88,77 +88,99 @@ export interface GitHubPullRequestReviewCommentEvent extends GitHubWebhookEnvelo
   };
 }
 
-function isObject(x: unknown): x is Record<string, unknown> {
-  return !!x && typeof x === 'object';
+/**
+ * The full value space `JSON.parse` can produce. Boundary-guard functions in
+ * this file accept `JsonValue` (never `unknown`) so a value's origin as
+ * unparsed external JSON stays visible in its type, then narrow it via the
+ * `isJson*` predicates below.
+ */
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+function isJsonObject(x: JsonValue): x is Record<string, JsonValue> {
+  return x !== null && typeof x === 'object';
 }
 
-function hasSenderShape(x: unknown): x is GitHubSender {
-  if (!isObject(x)) return false;
-  return typeof x.login === 'string' && typeof x.id === 'number';
+function isJsonString(x: JsonValue): x is string {
+  return typeof x === 'string';
 }
 
-export function isGitHubWebhookEnvelope(x: unknown): x is GitHubWebhookEnvelope {
-  if (!isObject(x)) return false;
+function isJsonNumber(x: JsonValue): x is number {
+  return typeof x === 'number';
+}
+
+function isGitHubSender(x: JsonValue): x is JsonValue & GitHubSender {
+  if (!isJsonObject(x)) return false;
+  return isJsonString(x.login) && isJsonNumber(x.id);
+}
+
+export function isGitHubWebhookEnvelope(x: JsonValue): x is JsonValue & GitHubWebhookEnvelope {
+  if (!isJsonObject(x)) return false;
   // Duck-type: an envelope must at least carry an action OR a repository field.
-  return typeof x.action === 'string' || isObject(x.repository);
+  return isJsonString(x.action) || isJsonObject(x.repository);
 }
 
 export function isGitHubIssueEvent(
-  x: unknown,
+  x: JsonValue,
   evtHeader: string,
-): x is GitHubIssueEvent {
+): x is JsonValue & GitHubIssueEvent {
   if (evtHeader !== 'issues') return false;
-  if (!isObject(x)) return false;
-  if (typeof x.action !== 'string') return false;
+  if (!isJsonObject(x)) return false;
+  if (!isJsonString(x.action)) return false;
   const issue = x.issue;
-  if (!isObject(issue)) return false;
-  if (typeof issue.number !== 'number') return false;
-  if (!hasSenderShape(issue.user)) return false;
+  if (!isJsonObject(issue)) return false;
+  if (!isJsonNumber(issue.number)) return false;
+  if (!isGitHubSender(issue.user)) return false;
   return true;
 }
 
 export function isGitHubIssueCommentEvent(
-  x: unknown,
+  x: JsonValue,
   evtHeader: string,
-): x is GitHubIssueCommentEvent {
+): x is JsonValue & GitHubIssueCommentEvent {
   if (evtHeader !== 'issue_comment') return false;
-  if (!isObject(x)) return false;
-  if (typeof x.action !== 'string') return false;
+  if (!isJsonObject(x)) return false;
+  if (!isJsonString(x.action)) return false;
   const issue = x.issue;
-  if (!isObject(issue) || typeof issue.number !== 'number') return false;
+  if (!isJsonObject(issue) || !isJsonNumber(issue.number)) return false;
   const comment = x.comment;
-  if (!isObject(comment)) return false;
-  if (typeof comment.id !== 'number') return false;
-  if (!hasSenderShape(comment.user)) return false;
+  if (!isJsonObject(comment)) return false;
+  if (!isJsonNumber(comment.id)) return false;
+  if (!isGitHubSender(comment.user)) return false;
   return true;
 }
 
 export function isGitHubPullRequestEvent(
-  x: unknown,
+  x: JsonValue,
   evtHeader: string,
-): x is GitHubPullRequestEvent {
+): x is JsonValue & GitHubPullRequestEvent {
   if (evtHeader !== 'pull_request') return false;
-  if (!isObject(x)) return false;
-  if (typeof x.action !== 'string') return false;
+  if (!isJsonObject(x)) return false;
+  if (!isJsonString(x.action)) return false;
   const pr = x.pull_request;
-  if (!isObject(pr)) return false;
-  if (typeof pr.number !== 'number') return false;
-  if (!hasSenderShape(pr.user)) return false;
+  if (!isJsonObject(pr)) return false;
+  if (!isJsonNumber(pr.number)) return false;
+  if (!isGitHubSender(pr.user)) return false;
   return true;
 }
 
 export function isGitHubPullRequestReviewCommentEvent(
-  x: unknown,
+  x: JsonValue,
   evtHeader: string,
-): x is GitHubPullRequestReviewCommentEvent {
+): x is JsonValue & GitHubPullRequestReviewCommentEvent {
   if (evtHeader !== 'pull_request_review_comment') return false;
-  if (!isObject(x)) return false;
-  if (typeof x.action !== 'string') return false;
+  if (!isJsonObject(x)) return false;
+  if (!isJsonString(x.action)) return false;
   const pr = x.pull_request;
-  if (!isObject(pr) || typeof pr.number !== 'number') return false;
+  if (!isJsonObject(pr) || !isJsonNumber(pr.number)) return false;
   const comment = x.comment;
-  if (!isObject(comment)) return false;
-  if (typeof comment.id !== 'number') return false;
-  if (!hasSenderShape(comment.user)) return false;
+  if (!isJsonObject(comment)) return false;
+  if (!isJsonNumber(comment.id)) return false;
+  if (!isGitHubSender(comment.user)) return false;
   return true;
 }

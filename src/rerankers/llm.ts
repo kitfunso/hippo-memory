@@ -2,6 +2,11 @@ import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+interface FetchHeaders {
+  'content-type': string;
+  authorization?: string;
+}
+
 /**
  * Track 3 reranker: listwise LLM rerank. Uses a customer-supplied
  * OpenAI-compatible endpoint. Gated on HIPPO_LLM_RERANKER_URL to prevent
@@ -42,14 +47,18 @@ export const llmReranker: RerankerFn = async (
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
+  const headers: FetchHeaders = {
+    'content-type': 'application/json',
+  };
+  if (key) {
+    headers.authorization = `Bearer ${key}`;
+  }
+
   let permutation: number[] | null = null;
   try {
     const resp = await fetch(`${url.replace(/\/$/, '')}/chat/completions`, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        ...(key ? { authorization: `Bearer ${key}` } : {}),
-      },
+      headers: { ...headers },
       body: JSON.stringify({
         model: process.env.HIPPO_LLM_RERANKER_MODEL ?? 'gpt-4o-mini',
         messages: [{ role: 'user', content: prompt }],
@@ -58,7 +67,7 @@ export const llmReranker: RerankerFn = async (
       signal: controller.signal,
     });
     if (resp.ok) {
-      const j = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> };
+      const j: { choices?: Array<{ message?: { content?: string } }> } = await resp.json();
       const txt = j.choices?.[0]?.message?.content ?? '';
       const m = txt.match(/\[\s*(\d+(?:\s*,\s*\d+)*)\s*\]/);
       if (m) {

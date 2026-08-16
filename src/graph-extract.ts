@@ -76,13 +76,16 @@ function keyOf(entityType: EntityType, e2Id: number): string {
   return `${entityType}:${e2Id}`;
 }
 
-/** The four E2-derived extraction entity types map 1:1 to source_object_type. */
-const ENTITY_TYPE_TO_SOURCE_OBJECT: Partial<Record<EntityType, SourceObjectType>> = {
+/** The four E2-derived extraction entity types map 1:1 to source_object_type; the other
+ *  two EntityType members ('person', 'system') have no E2 table and stay unmapped. */
+const ENTITY_TYPE_TO_SOURCE_OBJECT = {
   decision: 'decision',
   policy: 'policy',
   customer: 'customer',
   project: 'project',
-};
+  person: undefined,
+  system: undefined,
+} satisfies Record<EntityType, SourceObjectType | undefined>;
 
 /** The E2 source-object ref for an extraction row (always set: every extracted row is an
  *  E2 object). Throws on an unmappable entityType (a graph invariant violation). */
@@ -117,13 +120,18 @@ function loadType(
   nameOf: (row: any) => string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   textOf: (row: any) => string,
-): { rows: ExtractRow[]; hitCap: boolean } {
+) {
   const rows: ExtractRow[] = [];
   let hitCap = false;
   for (const status of ['active', 'superseded'] as const) {
     const loaded = loadFn(hippoRoot, tenantId, { status, limit: MAX_EXTRACT_PER_TYPE });
     if (loaded.length === MAX_EXTRACT_PER_TYPE) hitCap = true;
     for (const r of loaded) {
+      // SAFETY: loadFn is always one of loadDecisions/loadPolicies/loadCustomerNotes/
+      // loadProjectBriefs (wired at each extractGraph call site); every one of their row
+      // types declares id: number, memoryId: string | null, supersededBy: number | null.
+      // `any` here is the deliberate type-erasure boundary (see eslint-disable above)
+      // that lets one loop handle all four E2 row shapes.
       rows.push({
         entityType,
         e2Id: r.id as number,

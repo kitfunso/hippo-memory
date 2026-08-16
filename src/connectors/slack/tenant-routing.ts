@@ -19,11 +19,15 @@ import type { DatabaseSyncLike } from '../../db.js';
  * CLI replay, future MCP) gets the same protection.
  */
 export function resolveTenantForTeam(db: DatabaseSyncLike, teamId: string): string | null {
+  // SAFETY: query selects only `tenant_id`, so a returned row has that shape;
+  // .get() returns undefined when no row matches.
   const row = db
     .prepare(`SELECT tenant_id FROM slack_workspaces WHERE team_id = ?`)
     .get(teamId) as { tenant_id?: string } | undefined;
   if (row?.tenant_id) return row.tenant_id;
 
+  // SAFETY: `COUNT(*) AS c` always returns exactly one row shaped { c }; sqlite
+  // may return the count as number or bigint depending on driver.
   const total = (db
     .prepare(`SELECT COUNT(*) AS c FROM slack_workspaces`)
     .get() as { c: number | bigint }).c;

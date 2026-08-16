@@ -72,6 +72,8 @@ describe('store initialization', () => {
     expect(index.entries['mem_legacy_alpha']).toBeDefined();
     expect(index.entries['mem_legacy_beta']).toBeDefined();
 
+    // SAFETY: loadStats' Record<string, unknown> return is buildStatsFromDb's fixed
+    // stats-mirror shape (src/store.ts), which always includes these counter fields.
     const stats = loadStats(tmpDir) as {
       total_remembered: number;
       total_recalled: number;
@@ -217,6 +219,8 @@ describe('stats tracking', () => {
 
     updateStats(tmpDir, { remembered: 2, recalled: 1, forgotten: 1 });
 
+    // SAFETY: loadStats' Record<string, unknown> return is buildStatsFromDb's fixed
+    // stats-mirror shape (src/store.ts), which always includes these counter fields.
     const stats = loadStats(tmpDir) as {
       total_remembered: number;
       total_recalled: number;
@@ -269,6 +273,8 @@ describe('SQLite-backed search candidates', () => {
     const reopened = openHippoDb(tmpDir);
     try {
       if (hadFts) {
+        // SAFETY: the query selects a single COUNT(*) AS count aggregate, so the row
+        // (if any) is shaped { count: number }.
         const row = reopened.prepare('SELECT COUNT(*) AS count FROM memories_fts WHERE id = ?').get(entry.id) as { count?: number } | undefined;
         expect(Number(row?.count ?? 0)).toBe(1);
       }
@@ -366,6 +372,8 @@ describe('active task snapshots', () => {
 
     const db = openHippoDb(tmpDir);
     try {
+      // SAFETY: the query selects only the status column from task_snapshots, a TEXT
+      // column, for a single row by primary key.
       const row = db.prepare('SELECT status FROM task_snapshots WHERE id = ?').get(first.id) as { status?: string } | undefined;
       expect(row?.status).toBe('superseded');
     } finally {

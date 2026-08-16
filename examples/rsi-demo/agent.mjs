@@ -92,6 +92,19 @@ function mulberry32(seed) {
  * On non-zero exit we return stdout if any (hippo recall can exit non-zero
  * when there are no results). True failures surface via `strict: true`.
  */
+/**
+ * Read a string property off a caught execFileSync error without assuming
+ * its shape. Node attaches `.stdout`/`.stderr` as strings when `encoding`
+ * is set, but the thrown value's exact shape is otherwise unknown.
+ * @param {unknown} err
+ * @param {'stdout' | 'stderr'} key
+ * @returns {string | null}
+ */
+function errorStringField(err, key) {
+  const value = err && err[key];
+  return Object.prototype.toString.call(value) === '[object String]' ? value : null;
+}
+
 function hippo(sandbox, args, { strict = false } = {}) {
   const baseArgs = HIPPO_JS ? [HIPPO_JS, ...args] : args;
   const cmd = HIPPO_JS ? process.execPath : 'hippo';
@@ -105,10 +118,11 @@ function hippo(sandbox, args, { strict = false } = {}) {
     });
   } catch (err) {
     if (strict) {
-      const stderr = err && typeof err.stderr === 'string' ? err.stderr : '';
+      const stderr = errorStringField(err, 'stderr') ?? '';
       throw new Error(`hippo ${args.join(' ')} failed:\n${stderr}`);
     }
-    if (err && typeof err.stdout === 'string') return err.stdout;
+    const stdout = errorStringField(err, 'stdout');
+    if (stdout !== null) return stdout;
     throw err;
   }
 }

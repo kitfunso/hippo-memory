@@ -103,6 +103,8 @@ describe('POST /v1/sleep admin-role gate (v1.12.0)', () => {
       body: JSON.stringify({ dry_run: true }),
     });
     expect(res.status).toBe(403);
+    // SAFETY: this route's 403 handler always returns a JSON body shaped
+    // { error: string } (src/server.ts admin-role gate on POST /v1/sleep).
     const body = await res.json() as { error: string };
     expect(body.error).toContain('admin role');
   });

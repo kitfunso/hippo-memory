@@ -116,6 +116,7 @@ describe('v1.3.1 P0: deletion atomicity (claude review #2)', () => {
     // Sanity: 3 rows in DB with kind='raw'.
     const dbCheck = openHippoDb(home);
     try {
+      // SAFETY: `SELECT id` names exactly this one text column.
       const rows = dbCheck.prepare(`SELECT id FROM memories WHERE artifact_ref=? AND kind='raw'`).all(ref) as Array<{id: string}>;
       expect(rows).toHaveLength(3);
     } finally {
@@ -181,10 +182,14 @@ describe('v1.3.1 P0: deletion atomicity (claude review #2)', () => {
     // All 3 rows gone from memories.
     const dbAfter = openHippoDb(home);
     try {
+      // SAFETY: `SELECT id` names exactly this one text column.
       const surviving = dbAfter.prepare(`SELECT id FROM memories WHERE artifact_ref=? AND kind='raw'`).all(ref) as Array<{id: string}>;
       expect(surviving).toHaveLength(0);
 
       // Idempotency mark committed.
+      // SAFETY: the SELECT list above names exactly these two columns; the
+      // row may be absent (undefined) if no matching idempotency key was
+      // written.
       const log = dbAfter.prepare(`SELECT idempotency_key, memory_id FROM github_event_log WHERE idempotency_key=?`).get('test-key-multi-archive') as { idempotency_key: string; memory_id: string } | undefined;
       expect(log).toBeDefined();
     } finally {
@@ -254,6 +259,8 @@ describe('v1.3.1 P1: backfill HWM stays put on capped streams', () => {
 
     const db = openHippoDb(home);
     try {
+      // SAFETY: `SELECT issues_hwm` names exactly this one nullable text
+      // column; the row may be absent if this repo has no cursor row yet.
       const row = db.prepare(`SELECT issues_hwm FROM github_cursors WHERE tenant_id=? AND repo_full_name=?`)
         .get('default', 'acme/demo') as { issues_hwm: string | null } | undefined;
       // HWM did NOT advance (capped run, drained=false).
@@ -298,6 +305,8 @@ describe('v1.3.1 P1: backfill issues_hwm advances past skipped PRs', () => {
 
     const db = openHippoDb(home);
     try {
+      // SAFETY: `SELECT issues_hwm` names exactly this one nullable text
+      // column; the row may be absent if this repo has no cursor row yet.
       const row = db.prepare(`SELECT issues_hwm FROM github_cursors WHERE tenant_id=? AND repo_full_name=?`)
         .get('default', 'acme/demo') as { issues_hwm: string | null } | undefined;
       expect(row?.issues_hwm).toBe('2026-05-04T12:00:00Z');

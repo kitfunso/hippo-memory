@@ -33,6 +33,18 @@ const LOCKSTEP_MANIFESTS = [
   'extensions/openclaw-plugin/openclaw.plugin.json',
 ];
 
+/**
+ * Read the "version" field off a parsed manifest as a validated string, or
+ * null when it's absent or not a string. Boundary parse for a value that
+ * came straight out of JSON.parse() (untyped by definition).
+ * @param {unknown} parsed
+ * @returns {string | null}
+ */
+function manifestVersion(parsed) {
+  const value = parsed?.version;
+  return Object.prototype.toString.call(value) === '[object String]' ? value : null;
+}
+
 const drifts = [];
 for (const path of LOCKSTEP_MANIFESTS) {
   if (!existsSync(path)) {
@@ -46,12 +58,13 @@ for (const path of LOCKSTEP_MANIFESTS) {
     drifts.push({ path, found: '(parse error: ' + e.message + ')', expected: expectedVersion });
     continue;
   }
-  if (typeof parsed.version !== 'string') {
+  const version = manifestVersion(parsed);
+  if (version === null) {
     drifts.push({ path, found: '(no version field)', expected: expectedVersion });
     continue;
   }
-  if (parsed.version !== expectedVersion) {
-    drifts.push({ path, found: parsed.version, expected: expectedVersion });
+  if (version !== expectedVersion) {
+    drifts.push({ path, found: version, expected: expectedVersion });
   }
 }
 

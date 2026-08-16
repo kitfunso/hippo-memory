@@ -62,6 +62,12 @@ function isNoiseError(error: string): boolean {
   return NOISE_ERROR_PATTERNS.some((p) => p.test(error));
 }
 
+/** True for a string value, without assuming the input's shape — used on
+ * fields read off the untyped Pi extension event/plugin surface. */
+function isString<T>(value: T): value is T & string {
+  return typeof value === 'string';
+}
+
 function hashError(toolName: string, error: string): string {
   return `${toolName}::${error.replace(/\s+/g, ' ').trim().slice(0, 80).toLowerCase()}`;
 }
@@ -86,7 +92,9 @@ function runHippo(args: readonly string[], cwd?: string): string {
       timeout: 30_000,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
-    return typeof result === 'string' ? result.trim() : '';
+    // `encoding: 'utf8'` above selects the ExecFileSyncOptionsWithStringEncoding
+    // overload, so `result` is always a `string` here — no runtime check needed.
+    return result.trim();
   } catch (err: any) {
     return err.stdout?.trim() || err.message || 'hippo command failed';
   }
@@ -156,7 +164,7 @@ export default function (pi: any) {
     pi.on('tool_result', async (event: any, ctx: any) => {
       if (!event.isError) return;
 
-      const error = typeof event.content === 'string'
+      const error = isString(event.content)
         ? event.content
         : Array.isArray(event.content)
           ? event.content.map((c: any) => c.text || '').join(' ')

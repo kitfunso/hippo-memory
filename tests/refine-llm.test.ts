@@ -15,12 +15,11 @@ function cleanup(dir: string): void { fs.rmSync(dir, { recursive: true, force: t
 
 /** A fetch stub that returns a canned Claude-shaped JSON response. */
 function mockFetcher(body: string, ok = true): typeof fetch {
-  return (async () => ({
-    ok,
-    status: ok ? 200 : 500,
-    async json() { return { content: [{ text: body }] }; },
-    async text() { return JSON.stringify({ content: [{ text: body }] }); },
-  })) as unknown as typeof fetch;
+  const status = ok ? 200 : 500;
+  // A real Response satisfies `typeof fetch`'s return type directly, so no
+  // assertion is needed: .ok is derived from `status`, .json()/.text() work
+  // as usual.
+  return async () => new Response(JSON.stringify({ content: [{ text: body }] }), { status });
 }
 
 describe('refineSemanticMemory', () => {

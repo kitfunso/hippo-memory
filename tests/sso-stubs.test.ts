@@ -13,7 +13,10 @@ describe('SSO/SCIM hook stubs', () => {
       ssoLogin({ provider: 'saml', token: 'tok' });
     } catch (err) {
       expect(err).toBeInstanceOf(NotImplementedError);
+      // SAFETY: the toBeInstanceOf(NotImplementedError) assertion above just
+      // confirmed err's runtime type; NotImplementedError extends Error.
       expect((err as Error).message).toContain('v2');
+      // SAFETY: see above — err was just confirmed to be a NotImplementedError.
       expect((err as Error).message).toContain('SSO login');
     }
   });
@@ -26,7 +29,10 @@ describe('SSO/SCIM hook stubs', () => {
       scimProvisionUser({ externalId: 'ext-1', email: 'a@example.com' });
     } catch (err) {
       expect(err).toBeInstanceOf(NotImplementedError);
+      // SAFETY: the toBeInstanceOf(NotImplementedError) assertion above just
+      // confirmed err's runtime type; NotImplementedError extends Error.
       expect((err as Error).message).toContain('v2');
+      // SAFETY: see above — err was just confirmed to be a NotImplementedError.
       expect((err as Error).message).toContain('SCIM user provisioning');
     }
   });
@@ -37,7 +43,10 @@ describe('SSO/SCIM hook stubs', () => {
       scimDeprovisionUser('ext-1');
     } catch (err) {
       expect(err).toBeInstanceOf(NotImplementedError);
+      // SAFETY: the toBeInstanceOf(NotImplementedError) assertion above just
+      // confirmed err's runtime type; NotImplementedError extends Error.
       expect((err as Error).message).toContain('v2');
+      // SAFETY: see above — err was just confirmed to be a NotImplementedError.
       expect((err as Error).message).toContain('SCIM user deprovisioning');
     }
   });

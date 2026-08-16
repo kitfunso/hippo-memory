@@ -37,7 +37,7 @@ const tok = (s: string): number => Math.ceil((s || '').length / 4);
 function scoreAssembled(
   assembled: { entry: { content: string } }[],
   labels: { factKey: string; topic: string; answerToken: string; staleTokens?: string[] }[],
-): { answered: number; tokens: number } {
+) {
   const tokens = assembled.reduce((s, r) => s + tok(r.entry.content), 0);
   let answered = 0;
   for (const lab of labels) {

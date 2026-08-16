@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateStrength, calculateRewardFactor, createMemory, applyOutcome, Layer } from '../src/memory.js';
+import { calculateStrength, calculateRewardFactor, createMemory, applyOutcome, Layer, type TraceOutcome } from '../src/memory.js';
 
 describe('Strength formula', () => {
   it('returns 1.0 for a pinned memory regardless of age', () => {
@@ -285,10 +285,17 @@ describe('MemoryEntry trace fields', () => {
   });
 
   it('rejects invalid trace_outcome values', () => {
+    // A plain `string`-typed literal, not narrowed to the TraceOutcome union,
+    // so the assertion below is a genuine down-cast rather than a no-op.
+    const invalidOutcome: string = 'not-a-real-outcome';
     expect(() => createMemory('invalid', {
       layer: Layer.Trace,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      trace_outcome: 'not-a-real-outcome' as any,
+      // SAFETY: intentionally NOT a member of the TraceOutcome union —
+      // this test exercises createMemory's runtime validation (memory.ts
+      // throws "Invalid trace_outcome" for any value outside 'success' |
+      // 'failure' | 'partial' | null), so the invalid literal must reach
+      // the function despite the type system disallowing it structurally.
+      trace_outcome: invalidOutcome as TraceOutcome,
     })).toThrow(/trace_outcome/);
   });
 });

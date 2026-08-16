@@ -212,10 +212,10 @@ describe('generateTasks(seed) (v1.7.5)', () => {
       if (pos <= 34) return 'mid';
       return 'late';
     };
-    const canonicalShape: Record<string, string> = {};
+    const canonicalPhasesByCategory: Record<string, string> = {};
     for (const tp of TRAP_PLACEMENTS) {
       const phases = tp.positions.map(phaseOf).sort().join(',');
-      canonicalShape[tp.category] = phases;
+      canonicalPhasesByCategory[tp.category] = phases;
     }
     for (const seed of [42, 1000, 9999]) {
       const tasks = generateTasks(seed);
@@ -226,7 +226,7 @@ describe('generateTasks(seed) (v1.7.5)', () => {
         }
       });
       for (const [cat, phases] of Object.entries(seededPhases)) {
-        expect(phases.sort().join(',')).toBe(canonicalShape[cat]);
+        expect(phases.sort().join(',')).toBe(canonicalPhasesByCategory[cat]);
       }
     }
   });

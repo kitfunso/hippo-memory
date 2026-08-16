@@ -29,6 +29,18 @@ import { remember } from '../src/api.js';
 import { createMemory } from '../src/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
+/**
+ * Parses a fetch Response body as the shape `T` the caller asserts on.
+ * SAFETY: every call site here reads a JSON body produced by the
+ * `/v1/context` route under test in this file, immediately followed by
+ * assertions on the exact fields named in `T`.
+ */
+async function jsonAs<T>(res: Response): Promise<T> {
+  // SAFETY: see doc comment above — caller supplies T for a body this file
+  // asserts on immediately after calling jsonAs.
+  return (await res.json()) as T;
+}
+
 function makeRoot(): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-srv-ctx-'));
   mkdirSync(join(home, '.hippo'), { recursive: true });
@@ -69,7 +81,7 @@ describe('GET /v1/context', () => {
 
     const res = await fetch(`${handle.url}/v1/context?budget=1500`);
     expect(res.status).toBe(200);
-    const body = await res.json() as { entries: unknown[]; tokens: number };
+    const body = await jsonAs<{ entries: unknown[]; tokens: number }>(res);
     expect(body.entries.length).toBeGreaterThan(0);
     expect(body.tokens).toBeGreaterThan(0);
   });
@@ -82,7 +94,7 @@ describe('GET /v1/context', () => {
 
     const res = await fetch(`${handle.url}/v1/context?budget=50`);
     expect(res.status).toBe(200);
-    const body = await res.json() as { entries: unknown[]; tokens: number };
+    const body = await jsonAs<{ entries: unknown[]; tokens: number }>(res);
     expect(body.tokens).toBeLessThanOrEqual(50);
   });
 
@@ -109,7 +121,7 @@ describe('GET /v1/context', () => {
       const contents = async (qs: string): Promise<string> => {
         const res = await fetch(`${projHandle.url}/v1/context?${qs}`);
         expect(res.status).toBe(200);
-        const body = await res.json() as { entries: Array<{ entry: { content: string } }> };
+        const body = await jsonAs<{ entries: Array<{ entry: { content: string } }> }>(res);
         return body.entries.map((e) => e.entry.content).join('\n');
       };
 
@@ -142,7 +154,7 @@ describe('GET /v1/context', () => {
     for (const qs of ['q=deploykey', 'q=deploykey&cross_project=1']) {
       const res = await fetch(`${handle.url}/v1/context?${qs}`);
       expect(res.status).toBe(200);
-      const body = await res.json() as { entries: Array<{ entry: { content: string } }> };
+      const body = await jsonAs<{ entries: Array<{ entry: { content: string } }> }>(res);
       const text = body.entries.map((e) => e.entry.content).join('\n');
       expect(text).not.toContain('sk_vendor_deadbeef123456');
       expect(text).not.toContain('sk_vendor_feedface654321');
@@ -155,7 +167,7 @@ describe('GET /v1/context', () => {
 
     const res = await fetch(`${handle.url}/v1/context?budget=0`);
     expect(res.status).toBe(200);
-    const body = await res.json() as { entries: unknown[]; tokens: number };
+    const body = await jsonAs<{ entries: unknown[]; tokens: number }>(res);
     expect(body.entries).toEqual([]);
     expect(body.tokens).toBe(0);
   });
@@ -187,9 +199,9 @@ describe('GET /v1/context', () => {
 
     const res = await fetch(`${handle.url}/v1/context?pinned_only=1&budget=1500`);
     expect(res.status).toBe(200);
-    const body = await res.json() as {
+    const body = await jsonAs<{
       entries: Array<{ entry: { id: string; content: string; pinned?: boolean } }>;
-    };
+    }>(res);
     // All returned entries should be pinned.
     expect(body.entries.length).toBeGreaterThan(0);
     for (const e of body.entries) {
@@ -211,9 +223,9 @@ describe('GET /v1/context', () => {
 
     const res = await fetch(`${handle.url}/v1/context?budget=1500`);
     expect(res.status).toBe(200);
-    const body = await res.json() as {
+    const body = await jsonAs<{
       activeSnapshot?: { session_id: string; task: string };
-    };
+    }>(res);
     expect(body.activeSnapshot).toBeTruthy();
     expect(body.activeSnapshot?.session_id).toBe('sess-ctx-route');
     expect(body.activeSnapshot?.task).toBe('ctx-route-snapshot-test');
@@ -228,9 +240,9 @@ describe('GET /v1/context', () => {
     // No Bearer in the request -> ctx.tenantId resolves to 'default'.
     const res = await fetch(`${handle.url}/v1/context?budget=1500`);
     expect(res.status).toBe(200);
-    const body = await res.json() as {
+    const body = await jsonAs<{
       entries: Array<{ entry: { content: string } }>;
-    };
+    }>(res);
     const contents = body.entries.map((e) => e.entry.content);
     expect(contents).toContain('belongs-to-default');
     expect(contents).not.toContain('belongs-to-tenant-B');
@@ -241,7 +253,7 @@ describe('GET /v1/context', () => {
     const q = 'a'.repeat(1025);
     const res = await fetch(`${handle.url}/v1/context?q=${q}`);
     expect(res.status).toBe(400);
-    const body = await res.json() as { error: string };
+    const body = await jsonAs<{ error: string }>(res);
     expect(body.error).toContain('1024-character cap');
   });
 

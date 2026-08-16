@@ -53,6 +53,10 @@ export async function runIncidentRecallEval(opts: {
   hippoRoot: string;
 }): Promise<IncidentRecallEvalResult> {
   const here = dirname(fileURLToPath(import.meta.url));
+  // SAFETY: scenarios.json is a static, version-controlled fixture checked
+  // into this benchmark directory and hand-authored to the Scenario[] shape
+  // consumed below (sc.id, sc.transcript) — it is not external/untrusted
+  // input.
   const scenarios = JSON.parse(
     readFileSync(join(here, 'scenarios.json'), 'utf-8'),
   ) as Scenario[];

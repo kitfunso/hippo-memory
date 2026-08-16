@@ -42,7 +42,8 @@ describe('hippo note CLI', () => {
     expect(list).toContain('customer="Acme Corp"');
     expect(list).not.toContain('customer="new"');
     const id = created.match(/#(\d+)/)?.[1];
-    const get = run(env, ['note', 'get', id as string]);
+    if (!id) throw new Error('customer note id not found in "note new" output');
+    const get = run(env, ['note', 'get', id]);
     expect(get).toContain('renewal call notes');
     expect(get).toContain('customer: Acme Corp');
   });
@@ -56,11 +57,12 @@ describe('hippo note CLI', () => {
     run(env, ['note', 'new', 'Acme', '--text', 'note one']);
     const open = run(env, ['note', 'new', 'Acme', '--text', 'note two']);
     const id = open.match(/#(\d+)/)?.[1];
+    if (!id) throw new Error('customer note id not found in "note new" output');
     // both active for the same customer (printNoteRow shows customer=, not the body)
     const active = run(env, ['note', 'list', '--customer', 'Acme', '--status', 'active']);
     expect((active.match(/customer="Acme"/g) ?? []).length).toBe(2);
     // supersede one
-    const sup = run(env, ['note', 'supersede', id as string, '--text', 'note two v2', '--change', 'corrected']);
+    const sup = run(env, ['note', 'supersede', id, '--text', 'note two v2', '--change', 'corrected']);
     expect(sup).toMatch(/v2/);
   });
 

@@ -9,23 +9,34 @@ import {
 } from '../src/embedding-provider.js';
 import { saveEmbeddingIndex, embeddingModelRequiresReindex, saveStoredEmbeddingModel } from '../src/embeddings.js';
 
-function mkRoot(embeddings: Record<string, unknown>): string {
+interface EmbeddingsConfig {
+  provider?: string;
+  model?: string;
+  enabled?: boolean;
+  batchSize?: number;
+  apiBaseUrl?: string;
+}
+
+function mkRoot(embeddings: EmbeddingsConfig): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-provider-'));
   fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ embeddings }), 'utf8');
   return dir;
 }
 
-function jsonResponse(data: unknown, status = 200): unknown {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => data,
-    text: async () => JSON.stringify(data),
-  };
+// A real Response satisfies fetch's return type directly, so no assertion is
+// needed to hand it back through a mocked `fetch`.
+function jsonResponse<T>(data: T, status = 200): Response {
+  return new Response(JSON.stringify(data), { status });
 }
 
-function errorResponse(status: number, body: string): unknown {
-  return { ok: false, status, json: async () => ({}), text: async () => body };
+function errorResponse(status: number, body: string): Response {
+  return new Response(body, { status });
+}
+
+/** Shape of the JSON request body posted to an embeddings API, as far as
+ * these tests inspect it. */
+interface EmbedRequestBody {
+  input_type?: string;
 }
 
 function l2norm(v: number[]): number {
@@ -140,7 +151,7 @@ describe('EmbeddingProvider', () => {
     it('posts to /embeddings with bearer auth and a batched body, and L2-normalizes the result', async () => {
       process.env.OPENAI_API_KEY = 'sk-secret-123';
       const root = mkRoot({ provider: 'openai', model: 'text-embedding-3-large' });
-      const fetchMock = vi.fn(async () =>
+      const fetchMock = vi.fn(async (_url: string, _init: { headers: Record<string, string>; body: string }) =>
         jsonResponse({ data: [{ embedding: [3, 0, 4] }, { embedding: [0, 6, 8] }] }),
       );
       vi.stubGlobal('fetch', fetchMock);
@@ -148,10 +159,15 @@ describe('EmbeddingProvider', () => {
       const vecs = await resolveEmbeddingProvider(root).embed(['a', 'b'], 'passage');
 
       expect(fetchMock).toHaveBeenCalledTimes(1);
-      const call = fetchMock.mock.calls[0] as unknown as [string, { headers: Record<string, string>; body: string }];
-      expect(String(call[0])).toMatch(/\/embeddings$/);
-      expect(call[1].headers.authorization).toBe('Bearer sk-secret-123');
-      const body = JSON.parse(call[1].body) as { model: string; input: string[] };
+      // Typing fetchMock's own params above gives `.mock.calls[0]` this exact
+      // tuple shape already, so no assertion is needed to read it.
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(String(url)).toMatch(/\/embeddings$/);
+      expect(init.headers.authorization).toBe('Bearer sk-secret-123');
+      // SAFETY: body is the JSON.stringify'd request this test's own
+      // fetchMock captured; shape is the OpenAI embeddings request contract
+      // exercised by resolveEmbeddingProvider(root).embed() above.
+      const body = JSON.parse(init.body) as { model: string; input: string[] };
       expect(body.model).toBe('text-embedding-3-large');
       expect(body.input).toEqual(['a', 'b']);
       // [3,0,4] -> /5 ; [0,6,8] -> /10
@@ -188,7 +204,7 @@ describe('EmbeddingProvider', () => {
     it('voyage maps query/passage to query/document', async () => {
       process.env.VOYAGE_API_KEY = 'k';
       const root = mkRoot({ provider: 'voyage', model: 'voyage-3' });
-      const bodies: Array<Record<string, unknown>> = [];
+      const bodies: EmbedRequestBody[] = [];
       vi.stubGlobal(
         'fetch',
         vi.fn(async (_url: string, init: { body: string }) => {
@@ -206,7 +222,7 @@ describe('EmbeddingProvider', () => {
     it('cohere maps query/passage to search_query/search_document and posts to /embed', async () => {
       process.env.COHERE_API_KEY = 'k';
       const root = mkRoot({ provider: 'cohere', model: 'embed-v4.0' });
-      const bodies: Array<Record<string, unknown>> = [];
+      const bodies: EmbedRequestBody[] = [];
       const urls: string[] = [];
       vi.stubGlobal(
         'fetch',
@@ -228,7 +244,7 @@ describe('EmbeddingProvider', () => {
     it('openai sends no input_type', async () => {
       process.env.OPENAI_API_KEY = 'k';
       const root = mkRoot({ provider: 'openai', model: 'm' });
-      let body: Record<string, unknown> = {};
+      let body: EmbedRequestBody = {};
       vi.stubGlobal(
         'fetch',
         vi.fn(async (_url: string, init: { body: string }) => {
@@ -248,10 +264,11 @@ describe('EmbeddingProvider', () => {
       const root = mkRoot({ provider: 'openai', model: 'm' });
       vi.stubGlobal('fetch', vi.fn(async () => errorResponse(401, `Invalid key ${key} for org`)));
 
-      const err = (await resolveEmbeddingProvider(root)
+      const err: unknown = await resolveEmbeddingProvider(root)
         .embed(['x'])
-        .catch((e) => e)) as Error;
+        .catch((e) => e);
       expect(err).toBeInstanceOf(Error);
+      if (!(err instanceof Error)) throw new Error('expected embed() to reject with an Error');
       expect(err.message).not.toContain(key);
     });
 

@@ -21,6 +21,7 @@ describe('B3 schema migration v18', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-b3-mig-'));
     const db = openHippoDb(home);
     try {
+      // SAFETY: PRAGMA table_info always returns rows with a `name` column (SQLite pragma contract).
       const cols = db.prepare(`PRAGMA table_info(goal_stack)`).all() as Array<{ name: string }>;
       const names = new Set(cols.map((c) => c.name));
       for (const required of [
@@ -85,16 +86,19 @@ describe('B3 schema migration v18', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-b3-mig-'));
     const db = openHippoDb(home);
     try {
+      // SAFETY: PRAGMA table_info always returns rows with a `name` column (SQLite pragma contract).
       const policyCols = db.prepare(`PRAGMA table_info(retrieval_policy)`).all() as Array<{ name: string }>;
       const policyNames = new Set(policyCols.map((c) => c.name));
       for (const c of ['id', 'goal_id', 'policy_type', 'weight_schema_fit', 'weight_recency', 'weight_outcome', 'error_priority']) {
         expect(policyNames.has(c), `retrieval_policy.${c} missing`).toBe(true);
       }
+      // SAFETY: PRAGMA table_info always returns rows with a `name` column (SQLite pragma contract).
       const logCols = db.prepare(`PRAGMA table_info(goal_recall_log)`).all() as Array<{ name: string }>;
       const logNames = new Set(logCols.map((c) => c.name));
       for (const c of ['id', 'goal_id', 'memory_id', 'tenant_id', 'session_id', 'recalled_at', 'score']) {
         expect(logNames.has(c), `goal_recall_log.${c} missing`).toBe(true);
       }
+      // SAFETY: the SELECT explicitly lists `name`, so the row shape matches.
       const idx = db.prepare(`SELECT name FROM sqlite_master WHERE type='index'`).all() as Array<{ name: string }>;
       const idxNames = new Set(idx.map((i) => i.name));
       expect(idxNames.has('idx_goal_stack_tenant_session_status')).toBe(true);
@@ -121,7 +125,9 @@ describe('B3 schema migration v18', () => {
 
       db.prepare(`DELETE FROM goal_stack WHERE id = 'g1'`).run();
 
+      // SAFETY: `SELECT COUNT(*) AS c` explicitly aliases the count to `c`, so the row shape matches.
       expect((db.prepare(`SELECT COUNT(*) AS c FROM retrieval_policy`).get() as { c: number }).c).toBe(0);
+      // SAFETY: `SELECT COUNT(*) AS c` explicitly aliases the count to `c`, so the row shape matches.
       expect((db.prepare(`SELECT COUNT(*) AS c FROM goal_recall_log`).get() as { c: number }).c).toBe(0);
     } finally {
       closeHippoDb(db);

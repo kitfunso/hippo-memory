@@ -2,7 +2,7 @@ import type { DatabaseSyncLike } from '../../db.js';
 import type { Context } from '../../api.js';
 import { openHippoDb, closeHippoDb } from '../../db.js';
 import { verifyGitHubSignature } from './signature.js';
-import { isGitHubWebhookEnvelope } from './types.js';
+import { isGitHubWebhookEnvelope, type JsonValue } from './types.js';
 
 /**
  * GitHub webhook DLQ. Mirrors the Slack DLQ shape (src/connectors/slack/dlq.ts)
@@ -80,10 +80,31 @@ const SELECT_COLUMNS = `id, tenant_id, raw_payload, error, event_name, delivery_
             signature, installation_id, repo_full_name, retry_count,
             received_at, retried_at, bucket`;
 
+// The sqlite driver returns each column as one of these JS types depending on
+// its stored affinity; rowToItem below coerces every field with String()/Number()
+// regardless, so a named union (not `unknown`) is enough of a contract here.
+type DlqRawRow = {
+  id: string | number | bigint;
+  tenant_id: string | number | bigint | null;
+  raw_payload: string | number | bigint | null;
+  error: string | number | bigint | null;
+  event_name: string | number | bigint | null;
+  delivery_id: string | number | bigint | null;
+  signature: string | number | bigint | null;
+  installation_id: string | number | bigint | null;
+  repo_full_name: string | number | bigint | null;
+  retry_count: string | number | bigint | null;
+  received_at: string | number | bigint | null;
+  retried_at: string | number | bigint | null;
+  bucket: string | number | bigint | null;
+};
+
 export function listDlq(
   db: DatabaseSyncLike,
   opts: { tenantId: string; limit?: number },
 ): DlqItem[] {
+  // SAFETY: rows come from the SELECT above (SELECT_COLUMNS), which projects
+  // exactly DlqRawRow's fields, in the same order github_dlq defines them.
   const rows = db
     .prepare(
       `SELECT ${SELECT_COLUMNS}
@@ -92,23 +113,25 @@ export function listDlq(
         ORDER BY received_at ASC
         LIMIT ?`,
     )
-    .all(opts.tenantId, opts.limit ?? 100) as Array<Record<string, unknown>>;
+    .all(opts.tenantId, opts.limit ?? 100) as DlqRawRow[];
   return rows.map(rowToItem);
 }
 
 export function getDlqEntry(db: DatabaseSyncLike, id: number): DlqItem | null {
+  // SAFETY: the row comes from the SELECT above (SELECT_COLUMNS), which
+  // projects exactly DlqRawRow's fields, in the same order github_dlq defines them.
   const row = db
     .prepare(
       `SELECT ${SELECT_COLUMNS}
          FROM github_dlq
         WHERE id = ?`,
     )
-    .get(id) as Record<string, unknown> | undefined;
+    .get(id) as DlqRawRow | undefined;
   if (!row) return null;
   return rowToItem(row);
 }
 
-function rowToItem(r: Record<string, unknown>): DlqItem {
+function rowToItem(r: DlqRawRow): DlqItem {
   return {
     id: Number(r.id),
     tenantId: String(r.tenant_id),
@@ -258,17 +281,21 @@ export async function replayDlqEntry(
   }
 
   // Parse + envelope guard.
-  let parsed: unknown;
+  let parsed: JsonValue;
   try {
     parsed = JSON.parse(row.rawPayload);
   } catch (e) {
     bumpRetryCount(ctx.hippoRoot, id);
+    // SAFETY: this is a best-effort error message only; property access on
+    // any JS value is safe (undefined if absent), preserving the existing
+    // lenient formatting even when something non-Error was thrown.
+    const message = (e as Error).message;
     return {
       ok: false,
       status: 'parse_error',
       memoryId: null,
       retryCount: row.retryCount + 1,
-      reason: `still unparseable: ${(e as Error).message}`,
+      reason: `still unparseable: ${message}`,
     };
   }
   if (!isGitHubWebhookEnvelope(parsed)) {

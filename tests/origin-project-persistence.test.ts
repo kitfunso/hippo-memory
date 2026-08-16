@@ -185,6 +185,9 @@ describe('v39 migration backfill', () => {
     const storeRoot = makeProjectStore('proj-a');
     const db = openHippoDb(storeRoot);
     try {
+      // SAFETY: query selects only the "value" text column from meta, so the
+      // row (if present) has that shape; absence is handled via optional
+      // chaining below.
       const row = db.prepare(`SELECT value FROM meta WHERE key = 'min_compatible_binary'`).get() as { value?: string };
       expect(row?.value).toBe('1.24.0');
     } finally {

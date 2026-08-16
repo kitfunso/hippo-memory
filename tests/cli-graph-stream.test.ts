@@ -15,13 +15,18 @@ import { join } from 'node:path';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 
-function hippo(cwd: string, env: Record<string, string>, ...args: string[]): string {
+interface CliEnv {
+  HIPPO_HOME: string;
+  HIPPO_SKIP_AUTO_INTEGRATIONS: string;
+}
+
+function hippo(cwd: string, env: CliEnv, ...args: string[]): string {
   return execFileSync('node', [HIPPO_BIN, ...args], { cwd, env: { ...process.env, ...env }, encoding: 'utf-8' });
 }
 
 describe('recall --graph-stream (L1 CLI)', () => {
   let home: string;
-  let env: Record<string, string>;
+  let env: CliEnv;
 
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), 'hippo-l1cli-'));
@@ -34,20 +39,30 @@ describe('recall --graph-stream (L1 CLI)', () => {
     hippo(home, env, 'remember', 'cache invalidation decision for the deploy pipeline');
     // Exits 0 (execFileSync throws on non-zero). Output is the normal recall result.
     const out = hippo(home, env, 'recall', 'cache', '--graph-stream', '--limit', '5');
-    expect(typeof out).toBe('string');
+    expect(out).toEqual(expect.any(String));
   });
 
   it('--graph-hops out of range is rejected', () => {
     let err = '';
     try { hippo(home, env, 'recall', 'anything', '--graph-stream', '--graph-hops', '99'); }
-    catch (e) { err = String((e as { stderr?: Buffer }).stderr ?? ''); }
+    catch (e) {
+      // SAFETY: execFileSync throws a Node child_process error with .stderr
+      // populated as a string (the helper always passes encoding: 'utf-8')
+      // when the child exits non-zero, which is the only throw path here.
+      err = String((e as { stderr?: string }).stderr ?? '');
+    }
     expect(err).toMatch(/Invalid --graph-hops/);
   });
 
   it('--graph-seeds non-positive is rejected', () => {
     let err = '';
     try { hippo(home, env, 'recall', 'anything', '--graph-stream', '--graph-seeds', '0'); }
-    catch (e) { err = String((e as { stderr?: Buffer }).stderr ?? ''); }
+    catch (e) {
+      // SAFETY: execFileSync throws a Node child_process error with .stderr
+      // populated as a string (the helper always passes encoding: 'utf-8')
+      // when the child exits non-zero, which is the only throw path here.
+      err = String((e as { stderr?: string }).stderr ?? '');
+    }
     expect(err).toMatch(/Invalid --graph-seeds/);
   });
 });

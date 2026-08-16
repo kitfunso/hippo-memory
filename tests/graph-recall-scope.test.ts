@@ -158,9 +158,11 @@ describe('graph-recall scope parity (v1.26.1)', () => {
   });
 });
 
+type GraphRecallCliEnv = { HIPPO_HOME: string; HIPPO_SKIP_AUTO_INTEGRATIONS: string };
+
 describe('graph-recall scope parity — CLI e2e (v1.26.1)', () => {
   let cliHome: string;
-  let env: Record<string, string>;
+  let env: GraphRecallCliEnv;
 
   beforeEach(() => {
     cliHome = mkdtempSync(join(tmpdir(), 'hippo-graphrecall-scope-cli-'));

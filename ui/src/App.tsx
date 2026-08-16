@@ -13,6 +13,10 @@ type FrozenOrigin = "os" | "user" | null;
 
 type LoadState = "loading" | "ready" | "error";
 
+function errorMessage<T>(err: T): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 const loadingStyles = `
   @keyframes hippo-float {
     0%, 100% { transform: translateY(0px); opacity: 0.4; }
@@ -47,7 +51,7 @@ export function App() {
   // HIGH #2: NOT subscribing to media query changes — the user's override
   // would otherwise be silently undone on every focus/blur event.
   useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    if (!("window" in globalThis) || !(window.matchMedia instanceof Function)) return;
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
     if (mq.matches) {
       setFilterState((prev) => ({ ...prev, frozen: true }));
@@ -138,8 +142,8 @@ export function App() {
         setEmbeddings(e);
         setState("ready");
       })
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : String(err));
+      .catch((err) => {
+        setError(errorMessage(err));
         setState("error");
       });
   }, []);

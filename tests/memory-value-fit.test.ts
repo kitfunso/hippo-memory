@@ -258,7 +258,7 @@ describe('computeFit (real fixture)', () => {
 
     const recencyObjective = computeTrainObjective(toWeights(recencyVector()), cachedRowsById, trainIds);
     const { winner } = computeFit(trainIds, cachedRowsById, FAST_FIT_OPTS);
-    expect(winner.trainObjective).toBeGreaterThanOrEqual(recencyObjective as number);
+    expect(winner.trainObjective).toBeGreaterThanOrEqual(recencyObjective);
   });
 
   it('(3) weights file contract: only FIT_DIMS keys; loads through buildScorers/evaluateStore without throw; dead dims absent', async () => {
@@ -268,7 +268,7 @@ describe('computeFit (real fixture)', () => {
     const { weights } = computeFit(trainIds, cachedRowsById, { restarts: 1, maxGens: 5 });
 
     expect(Object.keys(weights).sort()).toEqual([...FIT_DIMS].sort());
-    const deadDims = (CONFIG.FEATURES as string[]).filter((f) => !FIT_DIMS.includes(f));
+    const deadDims = CONFIG.FEATURES.filter((f: string) => !FIT_DIMS.includes(f));
     for (const d of deadDims) expect(Object.prototype.hasOwnProperty.call(weights, d)).toBe(false);
 
     expect(() => buildScorers(CONFIG.FEATURES, weights)).not.toThrow();
@@ -309,7 +309,7 @@ describe('runIntegrityGate (real fixture)', () => {
     const gateResult = runIntegrityGate({ splitRegistered, registeredResults, expectedFitDims: good.varyingFeatures });
     expect(gateResult.trainIds).toEqual(['fixture_q_a']);
     expect(gateResult.cachedRowsById.size).toBe(1);
-    expect(typeof gateResult.recencyCrossCheck).toBe('number');
+    expect(gateResult.recencyCrossCheck).toEqual(expect.any(Number));
   });
 
   it('assertVarianceLiveness: registered varyingFeatures must equal expectedFitDims exactly (non-tautological)', async () => {
@@ -358,6 +358,9 @@ describe('runIntegrityGate (real fixture)', () => {
     // Corrupt one non-gold row in the HELDOUT question so its recency
     // ranking (and therefore heldout recency retention) shifts.
     const featuresPath = featuresPathFor('fixture_q_b');
+    // SAFETY: readJsonl is untyped (.mjs harness module); featuresPath is a
+    // features.jsonl written by extract.mjs earlier in this test's own
+    // pipeline run, whose rows always carry `gold` and `features.age_days`.
     const rows = readJsonl(featuresPath) as Array<{ gold: number; features: { age_days: number } }>;
     const target = rows.find((r) => r.gold === 0);
     expect(target, 'fixture must contain at least one non-gold row').toBeDefined();
@@ -400,6 +403,7 @@ describe('runIntegrityGate (real fixture)', () => {
     }
     expect(caught).toBeInstanceOf(Error);
     expect(caught).not.toBeInstanceOf(TypeError);
+    // SAFETY: narrowed by the toBeInstanceOf(Error) assertion just above.
     expect((caught as Error).message).toMatch(/\(b\).*missing train\.recency cell/);
   });
 });

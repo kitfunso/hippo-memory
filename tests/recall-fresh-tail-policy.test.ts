@@ -17,7 +17,7 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry, MemoryKind } from '../src/memory.js';
+import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
 import { recall, RecallContractError, type Context } from '../src/api.js';
 
 function makeRoot(prefix: string): string {
@@ -36,7 +36,7 @@ function makeRaw(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
   return createMemory(text, {
     layer: Layer.Buffer,
     confidence: 'observed',
-    kind: 'raw' as MemoryKind,
+    kind: 'raw',
     scope: opts.scope ?? null,
     tenantId: opts.tenantId ?? 'default',
     tags: opts.tags ?? [],
@@ -76,16 +76,19 @@ describe('fresh-tail policy F5 (v1.6.5)', () => {
   it('env=1, freshTailCount > 0, no sessionId → throws RecallContractError with code', () => {
     process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL = '1';
     for (let i = 0; i < 3; i++) writeEntry(root, makeRaw(`event ${i}`));
-    let thrown: unknown = null;
+    let thrown = null;
     try {
       recall(ctxFor(root), { query: 'event', freshTailCount: 3 });
     } catch (err) {
       thrown = err;
     }
     expect(thrown).toBeInstanceOf(RecallContractError);
+    // SAFETY: the instanceof check above confirms `thrown` is a
+    // RecallContractError before either cast reads its fields.
     expect((thrown as RecallContractError).code).toBe(
       'fresh_tail_requires_session_id',
     );
+    // SAFETY: same guaranteed RecallContractError instance as above.
     expect((thrown as RecallContractError).message).toContain(
       'HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL',
     );

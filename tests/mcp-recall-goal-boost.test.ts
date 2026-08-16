@@ -16,8 +16,8 @@ import { join } from 'node:path';
 import { initStore } from '../src/store.js';
 import { remember } from '../src/api.js';
 import { pushGoal } from '../src/goals.js';
-import { handleMcpRequest } from '../src/mcp/server.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 
 function makeRoot(): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-mcp-goal-boost-'));
@@ -26,10 +26,16 @@ function makeRoot(): string {
   return home;
 }
 
+interface HippoRecallToolArgs {
+  query: string;
+  budget?: number;
+  session_id?: string;
+}
+
 function callTool(
   name: string,
-  args: Record<string, unknown>,
-  ctx: { hippoRoot: string; tenantId: string; actor: string },
+  args: HippoRecallToolArgs,
+  ctx: McpContext,
 ) {
   return handleMcpRequest(
     {
@@ -42,9 +48,20 @@ function callTool(
   );
 }
 
-function extractText(res: unknown): string {
-  return (res as { result?: { content: Array<{ text: string }> } }).result
+function extractText(res: McpResponse | null): string {
+  // SAFETY: hippo_recall's MCP tool result envelope always carries
+  // result.content per src/mcp/server.ts; McpResponse.result is typed
+  // unknown at the transport layer since it varies per tool.
+  return (res as { result?: { content: Array<{ text: string }> } } | null)?.result
     ?.content?.[0]?.text ?? '';
+}
+
+/** Query a single row from the hippo SQLite handle. */
+function queryOne<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T | undefined {
+  // SAFETY: sql is a literal SELECT against known hippo schema columns; the
+  // row shape is declared by the generic type argument at each call site and
+  // checked immediately by the assertions that follow.
+  return db.prepare(sql).get(...params) as T | undefined;
 }
 
 describe('MCP hippo_recall session_id goal-stack boost (v1.7.4)', () => {
@@ -59,7 +76,7 @@ describe('MCP hippo_recall session_id goal-stack boost (v1.7.4)', () => {
   afterEach(() => rmSync(home, { recursive: true, force: true }));
 
   it('session_id schema field is accepted (no validation error) and reaches the boost', async () => {
-    const ctx = { hippoRoot: home, tenantId, actor: 'mcp' };
+    const ctx: McpContext = { hippoRoot: home, tenantId, actor: 'mcp' };
     remember({ hippoRoot: home, tenantId, actor: { subject: 'test', role: 'admin' } }, {
       content: 'auth bug fix details',
       tags: ['fix-auth'],
@@ -77,9 +94,11 @@ describe('MCP hippo_recall session_id goal-stack boost (v1.7.4)', () => {
     // tagged memory landed in goal_recall_log.
     const db = openHippoDb(home);
     try {
-      const count = (db.prepare(
+      const count = queryOne<{ c: number }>(
+        db,
         `SELECT COUNT(*) AS c FROM goal_recall_log WHERE session_id = ?`,
-      ).get(sessionId) as { c: number }).c;
+        sessionId,
+      )!.c;
       expect(count).toBeGreaterThan(0);
     } finally {
       closeHippoDb(db);
@@ -87,7 +106,7 @@ describe('MCP hippo_recall session_id goal-stack boost (v1.7.4)', () => {
   });
 
   it('without session_id, no boost runs and goal_recall_log stays empty (v1.7.3 baseline)', async () => {
-    const ctx = { hippoRoot: home, tenantId, actor: 'mcp' };
+    const ctx: McpContext = { hippoRoot: home, tenantId, actor: 'mcp' };
     remember({ hippoRoot: home, tenantId, actor: { subject: 'test', role: 'admin' } }, {
       content: 'auth bug fix details',
       tags: ['fix-auth'],
@@ -98,9 +117,11 @@ describe('MCP hippo_recall session_id goal-stack boost (v1.7.4)', () => {
 
     const db = openHippoDb(home);
     try {
-      const count = (db.prepare(
+      const count = queryOne<{ c: number }>(
+        db,
         `SELECT COUNT(*) AS c FROM goal_recall_log WHERE session_id = ?`,
-      ).get(sessionId) as { c: number }).c;
+        sessionId,
+      )!.c;
       expect(count).toBe(0);
     } finally {
       closeHippoDb(db);

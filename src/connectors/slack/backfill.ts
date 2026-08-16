@@ -35,6 +35,8 @@ export interface BackfillOpts {
 function readCursor(root: string, tenantId: string, channelId: string): string | null {
   const db = openHippoDb(root);
   try {
+    // SAFETY: row shape matches the single `latest_ts` column named in the
+    // SELECT above; sqlite returns undefined when no row matches.
     const row = db
       .prepare(`SELECT latest_ts FROM slack_cursors WHERE tenant_id=? AND channel_id=?`)
       .get(tenantId, channelId) as { latest_ts?: string } | undefined;

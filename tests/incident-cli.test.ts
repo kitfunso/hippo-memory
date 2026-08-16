@@ -71,10 +71,11 @@ describe('hippo incident CLI', () => {
     const open = run(env, ['incident', 'open', 'disk full on host-3']);
     const id = open.match(/#(\d+)/)?.[1];
     expect(id).toBeTruthy();
-    run(env, ['incident', 'resolve', id as string, '--resolution', 'freed 20GB, rotated logs']);
+    if (!id) throw new Error('unreachable: expect(id).toBeTruthy() above guarantees this');
+    run(env, ['incident', 'resolve', id, '--resolution', 'freed 20GB, rotated logs']);
     const resolved = run(env, ['incident', 'list', '--status', 'resolved']);
     expect(resolved).toContain('disk full on host-3');
-    run(env, ['incident', 'close', id as string]);
+    run(env, ['incident', 'close', id]);
     const closed = run(env, ['incident', 'list', '--status', 'closed']);
     expect(closed).toContain('disk full on host-3');
   });

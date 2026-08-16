@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, MemoryKind, type MemoryEntry } from '../src/memory.js';
+import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
 import { assemble, type Context } from '../src/api.js';
 
 /**
@@ -93,7 +93,7 @@ describe('assemble ISO sort (F4) — integration', () => {
       const e: MemoryEntry = createMemory(`row ${i}`, {
         layer: Layer.Buffer,
         confidence: 'observed',
-        kind: 'raw' as MemoryKind,
+        kind: 'raw',
         tenantId: 'default',
         source_session_id: sess,
       });

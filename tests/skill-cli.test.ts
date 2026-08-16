@@ -41,7 +41,7 @@ describe('hippo skill CLI', () => {
     const list = run(env, ['skill', 'list']);
     expect(list).toContain('Run tests');
     const id = created.match(/#(\d+)/)?.[1];
-    const get = run(env, ['skill', 'get', id as string]);
+    const get = run(env, ['skill', 'get', id!]);
     expect(get).toContain('npm test');
     expect(get).toContain('when: before commit');
   });
@@ -54,7 +54,7 @@ describe('hippo skill CLI', () => {
   it('new -> supersede version chain + export via CLI', () => {
     const open = run(env, ['skill', 'new', 'Lint', '--instructions', 'eslint v1']);
     const id = open.match(/#(\d+)/)?.[1];
-    const sup = run(env, ['skill', 'supersede', id as string, '--instructions', 'eslint v2', '--change', 'updated']);
+    const sup = run(env, ['skill', 'supersede', id!, '--instructions', 'eslint v2', '--change', 'updated']);
     expect(sup).toMatch(/v2/);
     // export renders the active v2 only
     const md = run(env, ['skill', 'export']);

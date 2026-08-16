@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { detectServer, writePidfile, removePidfile, removePidfileIfOwned } from '../src/server-detect.js';
 import { serve } from '../src/server.js';
 
@@ -99,7 +100,11 @@ describe('server-detect', () => {
       const port = await new Promise<number>((resolve) => {
         stub.listen(0, '127.0.0.1', () => {
           const addr = stub.address();
-          resolve(typeof addr === 'object' && addr ? addr.port : 0);
+          // SAFETY: stub.address() is AddressInfo | string | null. Casting straight to
+          // AddressInfo | null and reading .port is safe without a typeof check: when addr
+          // is actually a string, property access on it yields undefined (strings have no
+          // "port"), so `?? 0` below still falls back correctly.
+          resolve((addr as AddressInfo | null)?.port ?? 0);
         });
       });
       writeFileSync(pidfile, JSON.stringify({

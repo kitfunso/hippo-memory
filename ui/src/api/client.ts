@@ -14,7 +14,7 @@ async function get<T>(path: string): Promise<T> {
   if (!response.ok) {
     throw new Error(`${response.status} ${response.statusText}: ${path}`);
   }
-  return response.json() as Promise<T>;
+  return response.json();
 }
 
 export function fetchMemories(): Promise<Memory[]> {

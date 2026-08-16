@@ -196,6 +196,8 @@ describe('graph-view: layout + renderers (pure)', () => {
   });
 
   it('11. JSON Canvas export is valid and 1:1 with the model', () => {
+    // SAFETY: renderGraphCanvas (src/graph-view.ts) is the function under
+    // test; its output is always this JSON Canvas node/edge shape.
     const canvas = JSON.parse(renderGraphCanvas(model)) as {
       nodes: { id: string; type: string; x: number; y: number; width: number; height: number; text: string }[];
       edges: { id: string; fromNode: string; toNode: string; label: string }[];
@@ -204,8 +206,9 @@ describe('graph-view: layout + renderers (pure)', () => {
     expect(canvas.edges).toHaveLength(model.edges.length);
     for (const n of canvas.nodes) {
       expect(n.type).toBe('text');
-      expect(typeof n.x === 'number' && typeof n.y === 'number').toBe(true);
-      expect(typeof n.text).toBe('string');
+      expect(n.x).toEqual(expect.any(Number));
+      expect(n.y).toEqual(expect.any(Number));
+      expect(n.text).toEqual(expect.any(String));
     }
     expect(canvas.edges[0].fromNode).toBe('n1');
     expect(canvas.edges[0].toNode).toBe('n2');
@@ -241,6 +244,8 @@ describe('graph-view: GET /v1/graph (live server)', () => {
 
     const res = await fetch(`${handle.url}/v1/graph`);
     expect(res.status).toBe(200);
+    // SAFETY: GET /v1/graph is served by this app's own route handler
+    // (src/server.ts), which always sends a GraphModel-shaped JSON body.
     const body = (await res.json()) as GraphModel;
     expect(body.nodes.some((n) => n.name === 'RetryPolicy')).toBe(true);
     expect(body.nodes.some((n) => n.name === 'TenantBOnlyPolicy')).toBe(false);
@@ -254,6 +259,8 @@ describe('graph-view: GET /v1/graph (live server)', () => {
   it('14. empty graph returns 200 with empty nodes/edges', async () => {
     const res = await fetch(`${handle.url}/v1/graph`);
     expect(res.status).toBe(200);
+    // SAFETY: GET /v1/graph is served by this app's own route handler
+    // (src/server.ts), which always sends a GraphModel-shaped JSON body.
     const body = (await res.json()) as GraphModel;
     expect(body.nodes).toEqual([]);
     expect(body.edges).toEqual([]);
@@ -265,6 +272,8 @@ describe('graph-view: GET /v1/graph (live server)', () => {
     extractGraph(home, T);
     const res = await fetch(`${handle.url}/v1/graph?entity=${encodeURIComponent(longName)}`);
     expect(res.status).toBe(200); // not a 400 length rejection
+    // SAFETY: GET /v1/graph is served by this app's own route handler
+    // (src/server.ts), which always sends a GraphModel-shaped JSON body.
     const body = (await res.json()) as GraphModel;
     expect(body.nodes.some((n) => n.name === longName)).toBe(true);
   });

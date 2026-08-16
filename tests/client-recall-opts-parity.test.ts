@@ -31,7 +31,7 @@ describe('client RecallOpts parity sweep over the wire (v1.7.2 T4)', () => {
         }),
       ),
     );
-    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+    globalThis.fetch = fetchSpy;
 
     await recall('http://localhost:9999', undefined, {
       query: 'alpha',
@@ -59,7 +59,7 @@ describe('client RecallOpts parity sweep over the wire (v1.7.2 T4)', () => {
         }),
       ),
     );
-    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+    globalThis.fetch = fetchSpy;
 
     await recall('http://localhost:9999', undefined, {
       query: 'alpha',
@@ -82,7 +82,7 @@ describe('client RecallOpts parity sweep over the wire (v1.7.2 T4)', () => {
         }),
       ),
     );
-    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+    globalThis.fetch = fetchSpy;
 
     await recall('http://localhost:9999', undefined, {
       query: 'alpha',

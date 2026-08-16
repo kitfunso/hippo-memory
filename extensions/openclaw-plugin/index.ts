@@ -28,6 +28,38 @@ type HippoRuntimeContext = {
   sessionKey?: string;
 };
 
+/**
+ * Dependency-injection seam for tests. Production code always uses the real
+ * child_process/fs functions imported above; tests override this via
+ * __setHippoPluginDeps to substitute fakes instead of `vi.mock`ing the
+ * built-in modules. Never called outside tests -- register(api)'s public
+ * behavior is unaffected when it's never invoked.
+ *
+ * The function shapes below are narrower than Node's full overloaded
+ * child_process/fs types -- they capture only the call shape this plugin
+ * actually uses, so test doubles don't need to satisfy every overload.
+ */
+export interface HippoPluginDeps {
+  execFileSync: (
+    file: string,
+    args: readonly string[],
+    options: { cwd: string; encoding: 'utf8'; timeout: number; stdio: string[] },
+  ) => string;
+  spawn: (
+    command: string,
+    args: string[],
+    options: { cwd: string; detached: boolean; stdio: string; windowsHide: boolean },
+  ) => { unref: () => void };
+  existsSync: (path: string) => boolean;
+}
+
+let deps: HippoPluginDeps = { execFileSync, spawn, existsSync };
+
+/** Test-only override. Not part of the plugin's public API surface. */
+export function __setHippoPluginDeps(overrides: Partial<HippoPluginDeps>): void {
+  deps = { ...deps, ...overrides };
+}
+
 const AUTO_SLEEP_SESSION_THRESHOLD = 10;
 const MAX_ERRORS_PER_SESSION = 5;
 const sessionMemoryCounts = new Map<string, number>();
@@ -59,6 +91,12 @@ function isNoiseError(error: string): boolean {
   return NOISE_ERROR_PATTERNS.some((p) => p.test(error));
 }
 
+/** True for a non-empty string, without assuming the input's shape — used
+ * on values read off the untyped OpenClaw plugin `api` surface. */
+function isNonEmptyString<T>(value: T): value is T & string {
+  return typeof value === 'string' && value.length > 0;
+}
+
 function hashError(toolName: string, error: string): string {
   // Normalize the error to a stable key: tool + first 80 chars of error
   const normalized = error.replace(/\s+/g, ' ').trim().slice(0, 80).toLowerCase();
@@ -75,7 +113,7 @@ function getConfig(api: any): HippoConfig {
 }
 
 function findHippoRoot(workspace?: string, configRoot?: string): string | null {
-  if (configRoot && existsSync(configRoot)) return configRoot;
+  if (configRoot && deps.existsSync(configRoot)) return configRoot;
 
   const home = process.env.USERPROFILE || process.env.HOME || '';
   const candidates = [
@@ -84,10 +122,10 @@ function findHippoRoot(workspace?: string, configRoot?: string): string | null {
     process.env.HIPPO_ROOT,
     process.env.XDG_DATA_HOME ? join(process.env.XDG_DATA_HOME, 'hippo') : null,
     home ? join(home, '.hippo') : null,
-  ].filter(Boolean) as string[];
+  ].filter((candidate): candidate is string => Boolean(candidate));
 
   for (const candidate of candidates) {
-    if (existsSync(candidate)) return candidate;
+    if (deps.existsSync(candidate)) return candidate;
   }
   return null;
 }
@@ -99,16 +137,16 @@ function getAgentWorkspace(api: any, agentId?: string): string | undefined {
 
     if (agentId) {
       const match = list.find((agent: any) => agent?.id === agentId);
-      if (typeof match?.workspace === 'string' && match.workspace) return match.workspace;
+      if (isNonEmptyString(match?.workspace)) return match.workspace;
     }
 
     const defaultAgent = list.find((agent: any) => agent?.default);
-    if (typeof defaultAgent?.workspace === 'string' && defaultAgent.workspace) {
+    if (isNonEmptyString(defaultAgent?.workspace)) {
       return defaultAgent.workspace;
     }
 
     const fallback = agents?.defaults?.workspace;
-    return typeof fallback === 'string' && fallback ? fallback : undefined;
+    return isNonEmptyString(fallback) ? fallback : undefined;
   } catch {
     return undefined;
   }
@@ -173,7 +211,7 @@ function cleanupBackupPlugins(logger?: { info?: (...args: unknown[]) => void }):
       process.env.USERPROFILE || process.env.HOME || '',
       '.openclaw', 'extensions'
     );
-    if (!existsSync(extensionsDir)) return;
+    if (!deps.existsSync(extensionsDir)) return;
 
     for (const entry of readdirSync(extensionsDir)) {
       if (entry.startsWith('hippo-memory.bak')) {
@@ -193,13 +231,15 @@ function hippoRememberSucceeded(result: string): boolean {
 
 function runHippo(args: readonly string[], cwd?: string): string {
   try {
-    const result = execFileSync('hippo', args, {
+    const result = deps.execFileSync('hippo', args, {
       cwd: cwd || process.cwd(),
       encoding: 'utf8',
       timeout: 30_000,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
-    return typeof result === 'string' ? result.trim() : '';
+    // `encoding: 'utf8'` above selects the ExecFileSyncOptionsWithStringEncoding
+    // overload, so `result` is always a `string` here — no runtime check needed.
+    return result.trim();
   } catch (err: any) {
     return err.stdout?.trim() || err.message || 'hippo command failed';
   }
@@ -207,7 +247,7 @@ function runHippo(args: readonly string[], cwd?: string): string {
 
 function spawnHippoDetached(args: readonly string[], cwd?: string): boolean {
   try {
-    const child = spawn('hippo', [...args], {
+    const child = deps.spawn('hippo', [...args], {
       cwd: cwd || process.cwd(),
       detached: true,
       stdio: 'ignore',

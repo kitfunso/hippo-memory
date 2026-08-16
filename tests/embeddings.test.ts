@@ -48,7 +48,7 @@ describe('isEmbeddingAvailable', () => {
   it('returns a boolean', async () => {
     const { isEmbeddingAvailable } = await import('../src/embeddings.js');
     const available = await isEmbeddingAvailable();
-    expect(typeof available).toBe('boolean');
+    expect(available).toEqual(expect.any(Boolean));
     // We don't assert true/false since the test env may or may not have the lib
   });
 });
@@ -66,10 +66,10 @@ describe('embedding index persistence', () => {
 
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-embed-'));
     // We need the .hippo structure; here we just use tmpDir directly as root
-    const index: Record<string, number[]> = {
+    const index = {
       mem_abc: [0.1, 0.2, 0.3],
       mem_def: [0.4, 0.5, 0.6],
-    };
+    } satisfies Record<string, number[]>;
 
     saveEmbeddingIndex(tmpDir, index);
     const loaded = loadEmbeddingIndex(tmpDir);

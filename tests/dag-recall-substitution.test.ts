@@ -12,7 +12,7 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry, MemoryKind } from '../src/memory.js';
+import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
 import { recall, type Context } from '../src/api.js';
 
 function makeRoot(prefix: string): string {
@@ -39,7 +39,7 @@ function makeLeaf(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
     dag_parent_id: opts.dag_parent_id,
     scope: opts.scope ?? null,
     tenantId: opts.tenantId ?? 'default',
-    kind: (opts.kind ?? 'distilled') as MemoryKind,
+    kind: opts.kind ?? 'distilled',
   });
   return e;
 }

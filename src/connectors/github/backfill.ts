@@ -28,6 +28,7 @@ import type { Context } from '../../api.js';
 import { openHippoDb, closeHippoDb } from '../../db.js';
 import { ingestEvent, type IngestEvent } from './ingest.js';
 import type { GitHubFetcher, GitHubBackfillPage } from './octokit-client.js';
+import type { JsonValue } from './types.js';
 import type {
   GitHubIssueEvent,
   GitHubIssueCommentEvent,
@@ -71,6 +72,8 @@ interface StoredCursors {
 function readCursor(root: string, tenantId: string, repo: string): StoredCursors {
   const db = openHippoDb(root);
   try {
+    // SAFETY: row's shape matches the three HWM columns named in the SELECT
+    // above; `better-sqlite3`'s `.get()` return type is untyped by the driver.
     const row = db
       .prepare(
         `SELECT issues_hwm, issue_comments_hwm, pr_review_comments_hwm
@@ -167,23 +170,25 @@ interface PrReviewCommentItem {
   pull_request_url?: string;
 }
 
-function isIssuesItem(x: unknown): x is IssuesItem {
-  if (!x || typeof x !== 'object') return false;
-  const o = x as Record<string, unknown>;
-  if (typeof o.number !== 'number') return false;
-  if (typeof o.title !== 'string') return false;
-  const u = o.user as { login?: unknown; id?: unknown } | undefined;
-  if (!u || typeof u.login !== 'string' || typeof u.id !== 'number') return false;
-  return true;
+function isPlainObject(x: JsonValue | undefined): x is Record<string, JsonValue> {
+  return x !== undefined && x !== null && typeof x === 'object' && !Array.isArray(x);
 }
 
-function isCommentItem(x: unknown): x is IssueCommentItem | PrReviewCommentItem {
-  if (!x || typeof x !== 'object') return false;
-  const o = x as Record<string, unknown>;
-  if (typeof o.id !== 'number') return false;
-  const u = o.user as { login?: unknown; id?: unknown } | undefined;
-  if (!u || typeof u.login !== 'string' || typeof u.id !== 'number') return false;
-  return true;
+function isGitHubUser(x: JsonValue | undefined): x is Record<string, JsonValue> & GitHubSender {
+  return isPlainObject(x) && typeof x.login === 'string' && typeof x.id === 'number';
+}
+
+function isIssuesItem(x: JsonValue): x is JsonValue & IssuesItem {
+  if (!isPlainObject(x)) return false;
+  if (typeof x.number !== 'number') return false;
+  if (typeof x.title !== 'string') return false;
+  return isGitHubUser(x.user);
+}
+
+function isCommentItem(x: JsonValue): x is JsonValue & (IssueCommentItem | PrReviewCommentItem) {
+  if (!isPlainObject(x)) return false;
+  if (typeof x.id !== 'number') return false;
+  return isGitHubUser(x.user);
 }
 
 /**
@@ -204,7 +209,7 @@ function isCommentItem(x: unknown): x is IssueCommentItem | PrReviewCommentItem 
 async function drainStream(
   ctx: Context,
   url0: string,
-  toIngestEvent: (item: unknown) => IngestEvent | null,
+  toIngestEvent: (item: JsonValue) => IngestEvent | null,
   fetcher: GitHubFetcher,
   token: string,
   sleep: (ms: number) => Promise<void>,
@@ -232,10 +237,12 @@ async function drainStream(
       // v1.3.1: track updated_at on EVERY item, before the toIngestEvent
       // filter. Skipped PRs from /issues still contribute to the HWM so
       // PR-only pages don't loop forever.
-      const updatedAt =
-        item && typeof item === 'object'
-          ? ((item as { updated_at?: string }).updated_at ?? null)
-          : null;
+      // SAFETY: updated_at is GitHub's ISO-timestamp field on every item
+      // shape this stream returns; a non-string value would only fail the
+      // string comparisons below, matching pre-migration passthrough.
+      const updatedAt = isPlainObject(item)
+        ? ((item.updated_at as string | undefined) ?? null)
+        : null;
       if (updatedAt && (!maxUpdatedAt || updatedAt > maxUpdatedAt)) {
         maxUpdatedAt = updatedAt;
       }
@@ -330,6 +337,9 @@ export async function backfillRepo(
     commentsUrl,
     (item) => {
       if (!isCommentItem(item)) return null;
+      // SAFETY: this closure only runs against the /issues/comments stream,
+      // so every item isCommentItem validates here is genuinely an
+      // IssueCommentItem; a missing issue_url is handled defensively below.
       const c = item as IssueCommentItem;
       const issueNumber = parseTrailingNumber(c.issue_url);
       if (issueNumber === null) return null;
@@ -374,6 +384,9 @@ export async function backfillRepo(
     prCommentsUrl,
     (item) => {
       if (!isCommentItem(item)) return null;
+      // SAFETY: this closure only runs against the /pulls/comments stream,
+      // so every item isCommentItem validates here is genuinely a
+      // PrReviewCommentItem; a missing pull_request_url is handled below.
       const c = item as PrReviewCommentItem;
       const prNumber = parseTrailingNumber(c.pull_request_url);
       if (prNumber === null) return null;

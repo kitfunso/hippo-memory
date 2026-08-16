@@ -111,6 +111,8 @@ function rowToPrediction(row: PredictionRow): Prediction {
     estimateUnit: row.estimate_unit,
     targetDate: row.target_date,
     actualValue: row.actual_value,
+    // SAFETY: closure_state is DB-constrained to VALID_CLOSURE_STATES; this
+    // module is the only writer and always inserts one of those literals.
     closureState: row.closure_state as ClosureState,
     closedAt: row.closed_at,
     closureNote: row.closure_note,
@@ -149,6 +151,7 @@ export function savePrediction(
     layer: Layer.Semantic,
     confidence: 'observed',
     source: 'prediction',
+    // SAFETY: 'distilled' is a valid MemoryKind literal (see memory.ts).
     kind: 'distilled' as MemoryKind,
     tenantId,
   });
@@ -179,6 +182,7 @@ export function savePrediction(
       );
 
       const predictionId = Number(result.lastInsertRowid ?? 0);
+      // SAFETY: row's shape matches the columns named in the SELECT above.
       const row = db.prepare(`
         SELECT id, memory_id, tenant_id, class_tag, claim_text,
                estimate_value, estimate_unit, target_date,
@@ -263,6 +267,8 @@ export function closePrediction(
       if (updateResult.changes === 0) {
         // Distinguish "not found" from "already closed" so callers (CLI, HTTP)
         // can surface the right error to the user.
+        // SAFETY: row shape matches the single `closure_state` column named
+        // in the SELECT above.
         const existing = db.prepare(`
           SELECT closure_state FROM predictions WHERE id = ? AND tenant_id = ?
         `).get(id, tenantId) as { closure_state: string } | undefined;
@@ -275,6 +281,7 @@ export function closePrediction(
         );
       }
 
+      // SAFETY: row's shape matches the columns named in the SELECT above.
       const row = db.prepare(`
         SELECT id, memory_id, tenant_id, class_tag, claim_text,
                estimate_value, estimate_unit, target_date,
@@ -321,6 +328,7 @@ export function loadPredictionById(
   assertTenantId('loadPredictionById', tenantId);
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: row's shape matches the columns named in the SELECT above.
     const row = db.prepare(`
       SELECT id, memory_id, tenant_id, class_tag, claim_text,
              estimate_value, estimate_unit, target_date,
@@ -350,6 +358,7 @@ export function loadPredictionsByClass(
           `loadPredictionsByClass: closureState must be one of ${Array.from(VALID_CLOSURE_STATES).join('|')}; got ${opts.closureState}`,
         );
       }
+      // SAFETY: rows' shape matches the columns named in the SELECT above.
       rows = db.prepare(`
         SELECT id, memory_id, tenant_id, class_tag, claim_text,
                estimate_value, estimate_unit, target_date,
@@ -360,6 +369,7 @@ export function loadPredictionsByClass(
         LIMIT ?
       `).all(tenantId, classTag, opts.closureState, limit) as PredictionRow[];
     } else {
+      // SAFETY: rows' shape matches the columns named in the SELECT above.
       rows = db.prepare(`
         SELECT id, memory_id, tenant_id, class_tag, claim_text,
                estimate_value, estimate_unit, target_date,
@@ -441,6 +451,7 @@ export function computePredictionBaserate(
 
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: rows' shape matches the two columns named in the SELECT above.
     const rows = db.prepare(`
       SELECT estimate_value, actual_value
       FROM predictions
@@ -539,6 +550,7 @@ export function loadOpenPredictions(
   try {
     let rows: PredictionRow[];
     if (opts.classTag) {
+      // SAFETY: rows' shape matches the columns named in the SELECT above.
       rows = db.prepare(`
         SELECT id, memory_id, tenant_id, class_tag, claim_text,
                estimate_value, estimate_unit, target_date,
@@ -549,6 +561,7 @@ export function loadOpenPredictions(
         LIMIT ?
       `).all(tenantId, opts.classTag, limit) as PredictionRow[];
     } else {
+      // SAFETY: rows' shape matches the columns named in the SELECT above.
       rows = db.prepare(`
         SELECT id, memory_id, tenant_id, class_tag, claim_text,
                estimate_value, estimate_unit, target_date,
@@ -692,6 +705,7 @@ function resolveClassFromTokens(
   if (queryTokens.length === 0) return { classTag: null, tiebreak: false };
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: rows' shape matches the single `class_tag` column named in the SELECT above.
     const rows = db.prepare(
       `SELECT DISTINCT class_tag FROM predictions WHERE tenant_id = ?`,
     ).all(tenantId) as Array<{ class_tag: string }>;

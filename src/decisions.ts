@@ -99,6 +99,8 @@ function rowToDecision(row: DecisionRow): Decision {
     tenantId: row.tenant_id,
     decisionText: row.decision_text,
     context: row.context,
+    // SAFETY: status is DB-constrained to VALID_DECISION_STATES; this module
+    // is the only writer and always inserts one of those literal strings.
     status: row.status as DecisionStatus,
     supersededBy: row.superseded_by,
     supersededAt: row.superseded_at,
@@ -165,6 +167,7 @@ export function saveDecision(
       // Validating first means the new row is never a candidate for its own
       // supersede UPDATE. codex review 2026-05-28 (P1).
       if (opts.supersedesDecisionId !== undefined) {
+        // SAFETY: row shape matches the single `status` column named in the SELECT below.
         const pred = db.prepare(
           `SELECT status FROM decisions WHERE id = ? AND tenant_id = ?`,
         ).get(opts.supersedesDecisionId, tenantId) as { status: string } | undefined;
@@ -221,6 +224,7 @@ export function saveDecision(
         });
       }
 
+      // SAFETY: row's shape matches the columns named in DECISION_COLS above.
       const row = db.prepare(`SELECT ${DECISION_COLS} FROM decisions WHERE id = ?`)
         .get(decisionId) as DecisionRow | undefined;
       if (!row) throw new Error('saveDecision: failed to reload saved decision row');
@@ -276,6 +280,7 @@ export function closeDecision(
       `).run(now, id, tenantId);
 
       if (updateResult.changes === 0) {
+        // SAFETY: row shape matches the single `status` column named in the SELECT above.
         const existing = db.prepare(
           `SELECT status FROM decisions WHERE id = ? AND tenant_id = ?`,
         ).get(id, tenantId) as { status: string } | undefined;
@@ -287,6 +292,7 @@ export function closeDecision(
         );
       }
 
+      // SAFETY: row's shape matches the columns named in DECISION_COLS above.
       const row = db.prepare(`SELECT ${DECISION_COLS} FROM decisions WHERE id = ? AND tenant_id = ?`)
         .get(id, tenantId) as DecisionRow | undefined;
       if (!row) throw new Error(`closeDecision: decision ${id} not found after UPDATE`);
@@ -333,6 +339,7 @@ export function loadDecisionById(
   assertTenantId('loadDecisionById', tenantId);
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: row's shape matches the columns named in DECISION_COLS above.
     const row = db.prepare(`SELECT ${DECISION_COLS} FROM decisions WHERE id = ? AND tenant_id = ?`)
       .get(id, tenantId) as DecisionRow | undefined;
     return row ? rowToDecision(row) : null;
@@ -357,6 +364,7 @@ export function loadDecisions(
           `loadDecisions: status must be one of ${Array.from(VALID_DECISION_STATES).join('|')}; got ${opts.status}`,
         );
       }
+      // SAFETY: rows' shape matches the columns named in DECISION_COLS above.
       rows = db.prepare(`
         SELECT ${DECISION_COLS} FROM decisions
         WHERE tenant_id = ? AND status = ?
@@ -364,6 +372,7 @@ export function loadDecisions(
         LIMIT ?
       `).all(tenantId, opts.status, limit) as DecisionRow[];
     } else {
+      // SAFETY: rows' shape matches the columns named in DECISION_COLS above.
       rows = db.prepare(`
         SELECT ${DECISION_COLS} FROM decisions
         WHERE tenant_id = ?
@@ -400,6 +409,7 @@ export function resolveActiveDecisionIdByMemory(
   assertTenantId('resolveActiveDecisionIdByMemory', tenantId);
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: row shape matches the single `id` column named in the SELECT above.
     const row = db.prepare(
       `SELECT id FROM decisions WHERE memory_id = ? AND tenant_id = ? AND status = 'active' ORDER BY id DESC LIMIT 1`,
     ).get(memoryId, tenantId) as { id: number } | undefined;

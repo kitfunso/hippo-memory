@@ -30,7 +30,12 @@ const PRIV_SLACK = 'private slack deploykey fact';
 const PRIV_GITHUB = 'private github deploykey fact';
 const LEGACY = 'legacy quarantined deploykey fact';
 
-function hippo(cwd: string, env: Record<string, string>, ...args: string[]): string {
+interface RecallScopeEnv {
+  HIPPO_HOME: string;
+  HIPPO_SKIP_AUTO_INTEGRATIONS: string;
+}
+
+function hippo(cwd: string, env: RecallScopeEnv, ...args: string[]): string {
   return execFileSync('node', [HIPPO_BIN, ...args], {
     cwd,
     env: { ...process.env, ...env },
@@ -40,7 +45,7 @@ function hippo(cwd: string, env: Record<string, string>, ...args: string[]): str
 
 describe('cli recall scope default-deny (v1.25.0)', () => {
   let home: string;
-  let env: Record<string, string>;
+  let env: RecallScopeEnv;
 
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), 'hippo-recall-scope-'));
@@ -82,6 +87,8 @@ describe('cli recall scope default-deny (v1.25.0)', () => {
 
   it('JSON output excludes denied rows pre-candidate (SQL predicate before the window)', () => {
     const raw = hippo(home, env, 'recall', 'deploykey', '--json', '--limit', '10');
+    // SAFETY: `hippo recall --json` on this CLI always prints the recall-result
+    // envelope with `results` and `suppressionSummary` fields, per src/cli.ts.
     const parsed = JSON.parse(raw) as {
       results: Array<{ content?: string; entry?: { content?: string } }>;
       suppressionSummary: { totalCandidates: number; droppedPreRank: number };

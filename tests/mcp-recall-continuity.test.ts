@@ -10,7 +10,7 @@ import {
   writeEntry,
 } from '../src/store.js';
 import { createMemory } from '../src/memory.js';
-import { handleMcpRequest } from '../src/mcp/server.js';
+import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 
 function makeRoot(prefix: string): string {
   const home = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
@@ -19,10 +19,16 @@ function makeRoot(prefix: string): string {
   return home;
 }
 
+interface HippoRecallArgs {
+  query: string;
+  include_continuity?: boolean;
+  scope?: string;
+}
+
 function callTool(
   reqId: number,
   name: string,
-  args: Record<string, unknown>,
+  args: HippoRecallArgs,
   ctx: { hippoRoot: string; tenantId: string; actor: string; clientKey?: string },
 ) {
   return handleMcpRequest(
@@ -36,9 +42,17 @@ function callTool(
   );
 }
 
-function extractText(res: unknown): string {
-  const r = res as { result?: { content?: Array<{ text?: string }> } } | null;
-  return r?.result?.content?.[0]?.text ?? '';
+interface McpToolCallResult {
+  content?: Array<{ text?: string }>;
+}
+
+function extractText(res: McpResponse | null): string {
+  if (res === null || res.result === undefined) return '';
+  // SAFETY: every call in this file dispatches method 'tools/call', whose
+  // result shape is always `{ content: [{ type: 'text', text }] }` per the
+  // 'tools/call' branch of handleMcpRequest (src/mcp/server.ts).
+  const result = res.result as McpToolCallResult;
+  return result.content?.[0]?.text ?? '';
 }
 
 describe('mcp hippo_recall include_continuity', () => {

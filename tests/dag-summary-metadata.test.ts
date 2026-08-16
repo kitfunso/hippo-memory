@@ -43,6 +43,9 @@ describe('schema v25 — DAG summary metadata', () => {
     const db = openHippoDb(root);
     try {
       expect(getSchemaVersion(db)).toBe(41);
+      // SAFETY: PRAGMA table_info always returns rows shaped
+      // `{ name: string, ... }`; `name` is optional here only to tolerate a
+      // driver that omits an unexpected column.
       const cols = db.prepare(`PRAGMA table_info(memories)`).all() as Array<{ name?: string }>;
       const names = cols.map((c) => c.name);
       expect(names).toContain('descendant_count');

@@ -44,10 +44,10 @@ export async function runSlackSmoke(opts: SmokeOpts): Promise<SmokeResult> {
   // fails LOUD if anything in the ingest path ever calls fetch().
   const origFetch = globalThis.fetch;
   let outboundHttp = 0;
-  globalThis.fetch = ((..._args: unknown[]): Promise<Response> => {
+  globalThis.fetch = (..._args: unknown[]): Promise<Response> => {
     outboundHttp++;
     throw new Error('outbound HTTP forbidden during slack smoke');
-  }) as typeof fetch;
+  };
 
   try {
     for (let pass = 0; pass < opts.replay; pass++) {

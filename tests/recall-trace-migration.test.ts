@@ -10,6 +10,8 @@ import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db.js';
 
 function tableNames(db: DatabaseSyncLike): string[] {
+  // SAFETY: the query selects only the `name` column from sqlite_master, so every
+  // row is shaped { name: string }.
   return (db
     .prepare(`SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`)
     .all() as Array<{ name: string }>)
@@ -17,6 +19,8 @@ function tableNames(db: DatabaseSyncLike): string[] {
 }
 
 function getMeta(db: DatabaseSyncLike, key: string): string | undefined {
+  // SAFETY: the meta table's value column is TEXT (nullable by absence of a row);
+  // this query selects only that column for a single row by primary key.
   const row = db.prepare(`SELECT value FROM meta WHERE key = ?`).get(key) as { value?: string } | undefined;
   return row?.value;
 }
@@ -46,6 +50,8 @@ describe('LC1 schema migration v40', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-lc1-mig-'));
     const db = openHippoDb(home);
     try {
+      // SAFETY: PRAGMA table_info always returns rows with a `name` text column
+      // per SQLite's fixed pragma schema.
       const cols = (db.prepare(`PRAGMA table_info(recall_traces)`).all() as Array<{ name: string }>).map((c) => c.name);
       for (const c of ['id', 'ts', 'tenant_id', 'session_id', 'pipeline', 'query_hash', 'query_length', 'result_count', 'explain_mode']) {
         expect(cols, `recall_traces.${c} missing`).toContain(c);
@@ -122,7 +128,11 @@ describe('LC1 schema migration v40', () => {
 
       db.prepare(`DELETE FROM recall_traces WHERE id = ?`).run(traceId);
 
+      // SAFETY: this query selects a single `SELECT COUNT(*) AS c` aggregate, so the
+      // driver always returns one row shaped { c: number }.
       expect((db.prepare(`SELECT COUNT(*) AS c FROM recall_trace_results`).get() as { c: number }).c).toBe(0);
+      // SAFETY: this query selects a single `SELECT COUNT(*) AS c` aggregate, so the
+      // driver always returns one row shaped { c: number }.
       expect((db.prepare(`SELECT COUNT(*) AS c FROM recall_trace_outcomes`).get() as { c: number }).c).toBe(0);
     } finally {
       closeHippoDb(db);

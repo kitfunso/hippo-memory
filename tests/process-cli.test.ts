@@ -31,6 +31,13 @@ function makeEnv(): TestEnv {
   return { cwd, hippoRoot, globalRoot };
 }
 
+/** Pull the `#<id>` out of a CLI output line, or fail loudly if it is missing. */
+function extractId(output: string): string {
+  const id = output.match(/#(\d+)/)?.[1];
+  if (id === undefined) throw new Error(`no "#<id>" found in output:\n${output}`);
+  return id;
+}
+
 function run(env: TestEnv, args: string[]): string {
   return execFileSync('node', [CLI, ...args], {
     cwd: env.cwd,
@@ -61,8 +68,8 @@ describe('hippo process CLI', () => {
     expect(list).toContain('Release flow');
     // The keyword "new" must NOT have been stored as the process name.
     expect(list).not.toMatch(/^\s+new$/m);
-    const id = created.match(/#(\d+)/)?.[1];
-    const get = run(env, ['process', 'get', id as string]);
+    const id = extractId(created);
+    const get = run(env, ['process', 'get', id]);
     expect(get).toContain('1. run tests');
     expect(get).toContain('2. publish');
   });
@@ -75,9 +82,8 @@ describe('hippo process CLI', () => {
 
   it('new -> supersede -> list version chain via CLI', () => {
     const open = run(env, ['process', 'new', 'Deploy', '--step', 'a']);
-    const id = open.match(/#(\d+)/)?.[1];
-    expect(id).toBeTruthy();
-    const sup = run(env, ['process', 'supersede', id as string, '--step', 'a', '--step', 'b', '--change', 'added b']);
+    const id = extractId(open);
+    const sup = run(env, ['process', 'supersede', id, '--step', 'a', '--step', 'b', '--change', 'added b']);
     expect(sup).toMatch(/v2/);
     // The active list now shows v2; the superseded original is excluded.
     const active = run(env, ['process', 'list', '--status', 'active']);

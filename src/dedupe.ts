@@ -36,6 +36,12 @@ export interface DedupPair {
   similarity: number;
 }
 
+/** Result of `deduplicateStore`: how many entries were removed, and the kept/removed pairs. */
+export interface DedupResult {
+  removed: number;
+  pairs: DedupPair[];
+}
+
 /** Quantization step for strength-tie comparisons. The historical 0.01
  *  epsilon (see `strengthBucket` below) applied via rounding instead of a
  *  raw abs-diff threshold, so the tiebreak is transitive. */
@@ -79,7 +85,7 @@ export function strengthBucket(strength: number | null | undefined): number {
 export function deduplicateStore(
   hippoRoot: string,
   options: { threshold?: number; dryRun?: boolean } = {}
-): { removed: number; pairs: DedupPair[] } {
+): DedupResult {
   const threshold = options.threshold ?? 0.7;
   const dryRun = options.dryRun ?? false;
   const entries = loadAllEntries(hippoRoot);

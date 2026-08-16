@@ -52,7 +52,11 @@ function safeRmSync(p: string): void {
 }
 function countRows(home: string, table: string): number {
   const db = openHippoDb(home);
-  try { return (db.prepare(`SELECT COUNT(*) as c FROM ${table}`).get() as { c: number }).c; }
+  try {
+    // SAFETY: the query always selects a single COUNT(*) aggregate as c, so the
+    // driver always returns one row shaped { c: number }.
+    return (db.prepare(`SELECT COUNT(*) as c FROM ${table}`).get() as { c: number }).c;
+  }
   finally { closeHippoDb(db); }
 }
 /** Write a non-brief memory tagged path:<repo> so it counts as a receipt. */
@@ -90,15 +94,22 @@ describe('project_briefs store (E2 repo-scoped / auto-refreshes first-class obje
     expect(b.changeSummary).toBeNull();
     const db = openHippoDb(home);
     try {
+      // SAFETY: the query selects content/source/tags_json from memories, whose
+      // schema types those columns TEXT/TEXT/TEXT (tags_json JSON-encoded).
       const memRow = db.prepare(`SELECT content, source, tags_json FROM memories WHERE id = ?`)
         .get(b.memoryId!) as { content: string; source: string; tags_json: string };
       expect(memRow.content).toContain('hippo');
       expect(memRow.content).toContain('agent-memory lib');
       expect(memRow.source).toBe('project_brief');
+      // SAFETY: memories.tags_json is always a JSON-encoded string array, written by
+      // writeEntry/saveProjectBrief in this codebase.
       expect((JSON.parse(memRow.tags_json) as string[])).toContain('project_brief');
+      // SAFETY: the query selects only metadata_json (TEXT) from audit_log.
       const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op='project_brief_create' AND target_id=?`)
         .all(String(b.id)) as Array<{ metadata_json: string }>;
       expect(rows.length).toBe(1);
+      // SAFETY: project_brief_create audit metadata is always the flat object built
+      // at that op's appendAuditEvent call site with these two fields.
       const meta = JSON.parse(rows[0].metadata_json) as { repo: string; refreshed: boolean };
       expect(meta.repo).toBe('hippo');
       expect(meta.refreshed).toBe(false);
@@ -287,8 +298,12 @@ describe('project_briefs store (E2 repo-scoped / auto-refreshes first-class obje
     // recall treats it as repo-local (codex-review 2026-05-30, P2)
     const dbTag = openHippoDb(home);
     try {
+      // SAFETY: the query selects only tags_json (TEXT, JSON-encoded array) from
+      // memories for a single row by primary key.
       const tagsJson = (dbTag.prepare(`SELECT tags_json FROM memories WHERE id = ?`)
         .get(v1.memoryId!) as { tags_json: string }).tags_json;
+      // SAFETY: memories.tags_json is always a JSON-encoded string array, written by
+      // writeEntry/refreshBrief in this codebase.
       expect(JSON.parse(tagsJson) as string[]).toContain('path:hippo');
     } finally { closeHippoDb(dbTag); }
     // a subsequent refresh must STILL exclude the brief's own mirror (source guard),
@@ -297,6 +312,8 @@ describe('project_briefs store (E2 repo-scoped / auto-refreshes first-class obje
     expect(reAssemble.receiptCount).toBe(1); // only the real receipt, not the brief
     const db = openHippoDb(home);
     try {
+      // SAFETY: the query selects only metadata_json (TEXT) from audit_log for a
+      // single row; project_brief_create metadata is always this flat object.
       const meta = JSON.parse((db.prepare(`SELECT metadata_json FROM audit_log WHERE op='project_brief_create' AND target_id=?`)
         .get(String(v1.id)) as { metadata_json: string }).metadata_json) as { refreshed: boolean; receipt_count: number };
       expect(meta.refreshed).toBe(true);
@@ -312,6 +329,8 @@ describe('project_briefs store (E2 repo-scoped / auto-refreshes first-class obje
     expect(loadActiveBriefForRepo(home, 'default', 'hippo')!.id).toBe(v2.id);
     const db2 = openHippoDb(home);
     try {
+      // SAFETY: the query selects only metadata_json (TEXT) from audit_log for a
+      // single row; project_brief_supersede metadata is always this flat object.
       const meta = JSON.parse((db2.prepare(`SELECT metadata_json FROM audit_log WHERE op='project_brief_supersede' AND target_id=?`)
         .get(String(v1.id)) as { metadata_json: string }).metadata_json) as { refreshed: boolean; receipt_count: number };
       expect(meta.refreshed).toBe(true);
@@ -341,11 +360,15 @@ describe('project_briefs store (E2 repo-scoped / auto-refreshes first-class obje
     const db = openHippoDb(home);
     try {
       expect(db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='project_briefs'`).get()).toBeDefined();
+      // SAFETY: the query selects only the `name` column from sqlite_master, so every
+      // row is shaped { name: string }.
       const triggers = (db.prepare(`SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_project_briefs_%'`)
         .all() as Array<{ name: string }>).map((t) => t.name);
       expect(triggers).toContain('trg_project_briefs_tenant_match_insert');
       expect(triggers).toContain('trg_project_briefs_tenant_match_update');
       expect(triggers).toContain('trg_project_briefs_supersede_tenant_match_update');
+      // SAFETY: the query selects only the `name` column from sqlite_master, so every
+      // row is shaped { name: string }.
       const indexes = (db.prepare(`SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_project_briefs_%'`)
         .all() as Array<{ name: string }>).map((i) => i.name);
       expect(indexes).toContain('idx_project_briefs_tenant_status');

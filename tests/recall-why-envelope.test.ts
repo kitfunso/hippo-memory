@@ -47,6 +47,8 @@ describe('hippo recall --why exposes envelope', () => {
         execSync(`node "${cli}" remember "should fail" --kind raw --global`, { env, cwd: home, stdio: 'pipe' });
       } catch (e: unknown) {
         threw = true;
+        // SAFETY: execSync with stdio:'pipe' throws Node's child_process
+        // error, which always carries stdout/stderr Buffers on failure.
         const err = e as { stderr?: Buffer };
         stderr = err.stderr ? err.stderr.toString() : '';
       }

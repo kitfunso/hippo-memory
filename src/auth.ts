@@ -84,6 +84,9 @@ export function validateApiKey(db: DatabaseSyncLike, plaintext: string): Validat
     return { valid: false };
   }
   const keyId = plaintext.slice(0, dot);
+  // SAFETY: row comes from the SELECT above, which projects exactly
+  // key_hash, tenant_id, revoked_at, role; `.get` returns undefined when no
+  // row matches key_id.
   const row = db
     .prepare(`SELECT key_hash, tenant_id, revoked_at, role FROM api_keys WHERE key_id = ?`)
     .get(keyId) as { key_hash: string; tenant_id: string; revoked_at: string | null; role: string } | undefined;
@@ -126,6 +129,9 @@ export function listApiKeys(db: DatabaseSyncLike, opts: { active: boolean }): Ap
   const sql = opts.active
     ? `SELECT key_id, tenant_id, label, created_at, revoked_at, role FROM api_keys WHERE revoked_at IS NULL ORDER BY id DESC`
     : `SELECT key_id, tenant_id, label, created_at, revoked_at, role FROM api_keys ORDER BY id DESC`;
+  // SAFETY: rows come from one of the two SELECTs above, both of which
+  // project the same 6 columns (key_id, tenant_id, label, created_at,
+  // revoked_at, role) in the same order.
   const rows = db.prepare(sql).all() as Array<{
     key_id: string; tenant_id: string; label: string | null; created_at: string; revoked_at: string | null; role: string;
   }>;

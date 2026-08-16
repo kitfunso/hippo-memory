@@ -3,12 +3,28 @@ import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
 
 const MODEL_NAME = 'Xenova/ms-marco-MiniLM-L-6-v2';
 
+type CrossEncoderScore = { score: number };
+// The raw Transformers.js text-classification pipeline: called with the
+// combined query/candidate text, resolves to either a single score object or
+// an array of them depending on library version.
+type CrossEncoderPipeline = (input: string) => Promise<CrossEncoderScore | CrossEncoderScore[]>;
+type TransformersPipelineFactory = (task: string, model: string) => Promise<CrossEncoderPipeline>;
+
+interface TransformersModuleNamespace {
+  pipeline?: TransformersPipelineFactory;
+  default?: { pipeline?: TransformersPipelineFactory };
+}
+
 // Use Function constructor to bypass TypeScript static module resolution
 // for optional peer dependencies that may not be installed (mirrors the
 // pattern in src/embeddings.ts).
+// SAFETY: this declares the contract we require from the dynamically
+// imported package (a `pipeline` factory, top-level or under `default`);
+// loadTransformersModule validates the resolved value is callable via
+// isPipelineFactory before it is ever invoked.
 const _dynImport = new Function('s', 'return import(s)') as (
   s: string,
-) => Promise<unknown>;
+) => Promise<TransformersModuleNamespace>;
 const _require = createRequire(import.meta.url);
 
 const TRANSFORMERS_PACKAGES = ['@huggingface/transformers', '@xenova/transformers'] as const;
@@ -25,22 +41,23 @@ function resolveTransformersPackage(): (typeof TRANSFORMERS_PACKAGES)[number] | 
   return null;
 }
 
+function isPipelineFactory(
+  value: TransformersPipelineFactory | undefined,
+): value is TransformersPipelineFactory {
+  return typeof value === 'function';
+}
+
 async function loadTransformersModule(): Promise<{
-  pipeline: (task: string, model: string) => Promise<unknown>;
+  pipeline: TransformersPipelineFactory;
 } | null> {
   // Import one backend only. Loading both native ONNX runtimes in one process
   // can abort during finalization; Hugging Face is the maintained default.
   const name = resolveTransformersPackage();
   if (!name) return null;
   try {
-    const mod = (await _dynImport(name)) as {
-      pipeline?: (task: string, model: string) => Promise<unknown>;
-      default?: {
-        pipeline?: (task: string, model: string) => Promise<unknown>;
-      };
-    };
+    const mod = await _dynImport(name);
     const pipeline = mod.pipeline ?? mod.default?.pipeline;
-    return typeof pipeline === 'function'
+    return isPipelineFactory(pipeline)
       ? { pipeline }
       : null;
   } catch {
@@ -67,13 +84,9 @@ async function loadPipeline(): Promise<CrossEncoderFn | null> {
   try {
     const mod = await loadTransformersModule();
     if (!mod) return null;
-    const p = (await mod.pipeline('text-classification', MODEL_NAME)) as (
-      input: string,
-    ) => Promise<unknown>;
+    const p = await mod.pipeline('text-classification', MODEL_NAME);
     cachedPipeline = async (query: string, candidate: string) => {
-      const out = (await p(`${query} [SEP] ${candidate}`)) as
-        | { score: number }[]
-        | { score: number };
+      const out = await p(`${query} [SEP] ${candidate}`);
       return Array.isArray(out) ? out : [out];
     };
     return cachedPipeline;

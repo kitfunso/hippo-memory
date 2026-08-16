@@ -7,8 +7,14 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, MemoryKind } from '../src/memory.js';
+import { createMemory, Layer } from '../src/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
+
+async function jsonAs<T>(res: Response): Promise<T> {
+  // SAFETY: every call site awaits a `fetch()` response from the local test server started
+  // in this file's `beforeEach`, whose route handlers are exercised directly below.
+  return (await res.json()) as T;
+}
 
 function makeRoot(): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-http-assemble-'));
@@ -37,7 +43,7 @@ describe('GET /v1/sessions/:id/assemble', () => {
       const e = createMemory(`http session message ${i}`, {
         layer: Layer.Buffer,
         confidence: 'observed',
-        kind: 'raw' as MemoryKind,
+        kind: 'raw',
         source_session_id: 'sess-http',
         tenantId: 'default',
       });
@@ -46,11 +52,11 @@ describe('GET /v1/sessions/:id/assemble', () => {
     }
     const res = await fetch(`${handle.url}/v1/sessions/sess-http/assemble`);
     expect(res.status).toBe(200);
-    const body = await res.json() as {
+    const body = await jsonAs<{
       sessionId: string;
       items: Array<{ id: string; content: string; isFreshTail?: boolean }>;
       totalRaw: number;
-    };
+    }>(res);
     expect(body.sessionId).toBe('sess-http');
     expect(body.totalRaw).toBe(4);
     expect(body.items.length).toBe(4);
@@ -59,7 +65,7 @@ describe('GET /v1/sessions/:id/assemble', () => {
   it('200 with empty items for unknown session', async () => {
     const res = await fetch(`${handle.url}/v1/sessions/sess-nope/assemble`);
     expect(res.status).toBe(200);
-    const body = await res.json() as { items: unknown[]; totalRaw: number };
+    const body = await jsonAs<{ items: unknown[]; totalRaw: number }>(res);
     expect(body.items).toEqual([]);
     expect(body.totalRaw).toBe(0);
   });
@@ -84,7 +90,7 @@ describe('GET /v1/sessions/:id/assemble', () => {
       const e = createMemory(`older detail ${i}`, {
         layer: Layer.Episodic,
         confidence: 'observed',
-        kind: 'raw' as MemoryKind,
+        kind: 'raw',
         source_session_id: 'sess-noop',
         dag_level: 1,
         dag_parent_id: summary.id,
@@ -94,10 +100,10 @@ describe('GET /v1/sessions/:id/assemble', () => {
       writeEntry(home, e);
     }
     const res = await fetch(`${handle.url}/v1/sessions/sess-noop/assemble?summarizeOlder=0&freshTail=1`);
-    const body = await res.json() as {
+    const body = await jsonAs<{
       summarized: number;
       items: Array<{ isSummary?: boolean }>;
-    };
+    }>(res);
     expect(body.summarized).toBe(0);
     expect(body.items.every((it) => !it.isSummary)).toBe(true);
   });

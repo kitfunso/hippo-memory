@@ -104,6 +104,9 @@ ${sourceBlock}`;
   if (!res.ok) return null;
 
   try {
+    // SAFETY: data is the Anthropic Messages API response body; the
+    // documented response shape is `{ content: [{ type, text, ... }] }`
+    // for a text-generating request like this one.
     const data = await res.json() as { content?: Array<{ text?: string }> };
     const text = data.content?.[0]?.text?.trim() ?? '';
     if (text.length < 10) return null;

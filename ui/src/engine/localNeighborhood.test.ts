@@ -239,7 +239,7 @@ describe("computeLocalNeighborhood", () => {
             vSet = new Set();
             adj.set(v, vSet);
           }
-          (vSet as Set<string>).add(u);
+          vSet.add(u);
         }
       }
 

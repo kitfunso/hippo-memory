@@ -28,6 +28,8 @@ export function markEventSeen(db: DatabaseSyncLike, eventId: string, memoryId: s
 }
 
 export function lookupMemoryByEvent(db: DatabaseSyncLike, eventId: string): string | null {
+  // SAFETY: query selects only `memory_id`, a nullable column, so a returned
+  // row has this shape; .get() returns undefined when no row matches.
   const row = db.prepare(`SELECT memory_id FROM slack_event_log WHERE event_id = ?`).get(eventId) as
     | { memory_id: string | null }
     | undefined;

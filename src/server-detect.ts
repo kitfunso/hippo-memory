@@ -133,7 +133,7 @@ export async function detectServer(hippoRoot: string): Promise<ServerInfo | null
       raw += decoder.decode(value, { stream: true });
     }
     raw += decoder.decode();
-    const body = JSON.parse(raw) as { started_at?: unknown };
+    const body: { started_at?: unknown } = JSON.parse(raw);
     if (body.started_at !== info.started_at) {
       try { unlinkSync(path); } catch {}
       return null;
@@ -142,6 +142,8 @@ export async function detectServer(hippoRoot: string): Promise<ServerInfo | null
     // A timeout is ambiguous (the server may be alive but busy), so keep the
     // pidfile. Any other failure (connection refused, malformed body) is
     // definitive: unlink it as stale.
+    // SAFETY: err's shape is unknown (catch clause); reading an optional
+    // .name property structurally is safe regardless of the object's actual type.
     if ((err as { name?: unknown })?.name !== 'TimeoutError') {
       try { unlinkSync(path); } catch {}
     }

@@ -297,7 +297,7 @@ function trapHitRate(results: SimResult[]): number {
 }
 
 /** Split results into thirds and compute hit rate for each */
-function hitRateByPhase(results: SimResult[]): { early: number; mid: number; late: number } {
+function hitRateByPhase(results: SimResult[]) {
   const trapTasks = results.filter((r) => r.trapCategory !== null);
   const n = trapTasks.length;
   const third = Math.ceil(n / 3);

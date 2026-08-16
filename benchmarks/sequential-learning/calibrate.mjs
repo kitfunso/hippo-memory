@@ -31,6 +31,15 @@ import { mean, ciHalfWidth95 } from './aggregate.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+/**
+ * Human-readable type name for an error message, without `typeof`.
+ * @param {unknown} value
+ * @returns {string}
+ */
+function describeType(value) {
+  return Object.prototype.toString.call(value).slice(8, -1).toLowerCase();
+}
+
 // ---------------------------------------------------------------------------
 // B* selection rule.
 //
@@ -163,9 +172,9 @@ function runOneBudget(budget, seeds, outputBase) {
     const condName = Object.keys(j.conditions)[0];
     // Single-seed path -- read directly from `phases.late`.
     const lateRate = j.conditions[condName].phases.late;
-    if (typeof lateRate !== 'number') {
+    if (Object.prototype.toString.call(lateRate) !== '[object Number]') {
       throw new Error(
-        `runOneBudget: phases.late not numeric for ${seedDir} (got ${typeof lateRate}). ` +
+        `runOneBudget: phases.late not numeric for ${seedDir} (got ${describeType(lateRate)}). ` +
         `Schema may have changed; verify run.mjs::buildOutput output shape.`,
       );
     }

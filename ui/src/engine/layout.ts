@@ -16,11 +16,11 @@ export interface LayoutNode extends SimulationNodeDatum {
   strength: number;
 }
 
-const LAYER_Y: Record<LayoutNode["layer"], number> = {
+const LAYER_Y = {
   buffer: 0.18,
   episodic: 0.50,
   semantic: 0.82,
-};
+} satisfies Record<LayoutNode["layer"], number>;
 
 interface NodeWithTarget extends LayoutNode {
   targetY: number;
@@ -35,6 +35,12 @@ export function createForceLayout(
   if (nodes.length === 0) return nodes;
 
   const pad = 80;
+  // SAFETY: `extended` aliases the same node objects as `nodes` (no copy) so
+  // in-place mutation below is visible on the array this function returns.
+  // `targetY` doesn't exist yet at this line, but the loop immediately
+  // below assigns it to every element before any reader (forceY's `d =>
+  // d.targetY` accessor, or code after this function returns) can observe
+  // an element missing it.
   const extended = nodes as NodeWithTarget[];
 
   for (const node of extended) {

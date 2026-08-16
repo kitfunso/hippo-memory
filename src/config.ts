@@ -171,7 +171,7 @@ export function loadConfig(hippoRoot: string): HippoConfig {
   const configPath = path.join(hippoRoot, 'config.json');
   if (!fs.existsSync(configPath)) return { ...DEFAULT_CONFIG };
   try {
-    const raw = JSON.parse(fs.readFileSync(configPath, 'utf8')) as Partial<HippoConfig>;
+    const raw: Partial<HippoConfig> = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     const basis = raw.decayBasis;
     const validBasis = basis === 'clock' || basis === 'session' || basis === 'adaptive';
     // Review-round F6: {...DEFAULT_CONFIG.memoryValue, ...raw.memoryValue}
@@ -202,7 +202,7 @@ export function loadConfig(hippoRoot: string): HippoConfig {
       embeddings: { ...DEFAULT_CONFIG.embeddings, ...(raw.embeddings ?? {}) },
       global: { ...DEFAULT_CONFIG.global, ...(raw.global ?? {}) },
       gitLearnPatterns: raw.gitLearnPatterns ?? DEFAULT_CONFIG.gitLearnPatterns,
-      physics: mergePhysicsConfig(raw.physics as Partial<PhysicsConfig> | undefined),
+      physics: mergePhysicsConfig(raw.physics),
       mmr: { ...DEFAULT_CONFIG.mmr, ...(raw.mmr ?? {}) },
       search: { ...DEFAULT_CONFIG.search, ...(raw.search ?? {}) },
       replay: { ...DEFAULT_CONFIG.replay, ...(raw.replay ?? {}) },

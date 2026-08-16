@@ -12,7 +12,7 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry, countSessionRawMemories } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry, MemoryKind } from '../src/memory.js';
+import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
 import { assemble, type Context } from '../src/api.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { serve, type ServerHandle } from '../src/server.js';
@@ -31,7 +31,7 @@ function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {
   const e = createMemory(text, {
     layer: Layer.Buffer,
     confidence: 'observed',
-    kind: 'raw' as MemoryKind,
+    kind: 'raw',
     scope: opts.scope ?? null,
     tenantId: opts.tenantId ?? 'default',
     source_session_id: sessionId,
@@ -165,9 +165,25 @@ describe('v1.6.3 P1-1 — MCP hippo_recall exposes fresh_tail_session_id', () =>
   it('hippo_recall tool schema lists fresh_tail_session_id', async () => {
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/list' },
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'mcp', role: 'admin' } },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
     );
-    const tools = (res as { result?: { tools?: Array<{ name?: string; inputSchema?: { properties?: Record<string, unknown> } }> } }).result?.tools ?? [];
+    // SAFETY: tools/list's MCP result envelope always carries result.tools
+    // with each tool's JSON-schema inputSchema.properties; McpResponse.result
+    // is typed unknown at the transport layer since it varies per method.
+    const tools = (res as {
+      result?: {
+        tools?: Array<{
+          name?: string;
+          inputSchema?: {
+            properties?: {
+              fresh_tail_session_id?: unknown;
+              fresh_tail_count?: unknown;
+              summarize_overflow?: unknown;
+            };
+          };
+        }>;
+      };
+    }).result?.tools ?? [];
     const recall = tools.find((t) => t.name === 'hippo_recall');
     expect(recall).toBeDefined();
     const props = recall?.inputSchema?.properties ?? {};

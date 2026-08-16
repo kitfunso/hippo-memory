@@ -110,6 +110,7 @@ describe('v1.6.4 Task 1 — HTTP /v1/recall/drill status mapping', () => {
     expect(res.status).toBe(422);
     // Regression guard: body must contain "leaf" so a future "fix" that
     // collapses the message back to a generic "not found" is caught.
+    // SAFETY: HTTP error responses are always { error: message } (src/server.ts sendJson error handler).
     const body = await res.json() as { error?: string };
     expect((body.error ?? '').toLowerCase()).toContain('leaf');
   });

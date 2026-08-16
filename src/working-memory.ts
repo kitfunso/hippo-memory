@@ -11,6 +11,9 @@ import { initStore } from './store.js';
 
 export const WM_MAX_ENTRIES = 20;
 
+export type JsonValue = string | number | boolean | null | JsonValue[] | JsonObject;
+export type JsonObject = { [key: string]: JsonValue };
+
 export interface WorkingMemoryItem {
   id: number;
   scope: string;
@@ -18,7 +21,7 @@ export interface WorkingMemoryItem {
   taskId: string | null;
   importance: number;
   content: string;
-  metadata: Record<string, unknown>;
+  metadata: JsonObject;
   createdAt: string;
   updatedAt: string;
 }
@@ -36,9 +39,12 @@ interface WorkingMemoryRow {
 }
 
 function rowToItem(row: WorkingMemoryRow): WorkingMemoryItem {
-  let metadata: Record<string, unknown> = {};
+  let metadata: JsonObject = {};
   try {
-    metadata = JSON.parse(row.metadata_json) as Record<string, unknown>;
+    // SAFETY: metadata_json is always written by wmPush via
+    // JSON.stringify(opts.metadata ?? {}), so a successful parse yields a
+    // plain JSON object; malformed content falls through to the catch below.
+    metadata = JSON.parse(row.metadata_json) as JsonObject;
   } catch {
     // malformed JSON — default to empty
   }
@@ -67,7 +73,7 @@ export function wmPush(hippoRoot: string, opts: {
   importance?: number;
   sessionId?: string;
   taskId?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: JsonObject;
 }): number {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
@@ -94,6 +100,9 @@ export function wmPush(hippoRoot: string, opts: {
       const id = Number(result.lastInsertRowid ?? 0);
 
       // Evict if over capacity for this scope
+      // SAFETY: `COUNT(*) AS cnt` on a scoped query always returns exactly
+      // one row shaped { cnt }; .get() returns undefined only if the driver
+      // yields no row, which COUNT(*) never does.
       const countRow = db.prepare(`
         SELECT COUNT(*) AS cnt FROM working_memory WHERE scope = ?
       `).get(opts.scope) as { cnt: number } | undefined;
@@ -150,6 +159,8 @@ export function wmRead(hippoRoot: string, opts?: {
     params.push(limit);
 
     const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+    // SAFETY: query selects exactly the columns of WorkingMemoryRow, in the
+    // same names, from the working_memory table this module owns.
     const rows = db.prepare(`
       SELECT id, scope, session_id, task_id, importance, content, metadata_json, created_at, updated_at
       FROM working_memory

@@ -15,8 +15,16 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, MemoryKind } from '../src/memory.js';
+import { createMemory, Layer } from '../src/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
+
+/** Parse a fetch Response body against a caller-declared shape. */
+async function jsonAs<T>(res: Response): Promise<T> {
+  // SAFETY: only used against this file's own /v1/memories route responses,
+  // whose JSON shape is fixed by the handler in src/server.ts and checked by
+  // the assertions immediately following each call site.
+  return (await res.json()) as T;
+}
 
 function makeRoot(): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-http-sw-'));
@@ -33,7 +41,7 @@ beforeEach(async () => {
   for (let i = 0; i < 10; i++) {
     writeEntry(home, createMemory(`alpha ${i}`, {
       layer: Layer.Buffer,
-      kind: 'raw' as MemoryKind,
+      kind: 'raw',
       tenantId: 'default',
     }));
   }
@@ -48,7 +56,7 @@ describe('HTTP /v1/memories scorer_window (v1.7.2 T4)', () => {
   it('scorer_window=5 narrows the candidate pool: response.windowSize=5', async () => {
     const res = await fetch(`${handle.url}/v1/memories?q=alpha&scorer_window=5`);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { windowSize?: number; total?: number };
+    const body = await jsonAs<{ windowSize?: number; total?: number }>(res);
     expect(body.windowSize).toBe(5);
     expect(body.total).toBe(5);
   });
@@ -56,21 +64,21 @@ describe('HTTP /v1/memories scorer_window (v1.7.2 T4)', () => {
   it('scorer_window omitted: response.windowSize=200 (default unchanged)', async () => {
     const res = await fetch(`${handle.url}/v1/memories?q=alpha`);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { windowSize?: number };
+    const body = await jsonAs<{ windowSize?: number }>(res);
     expect(body.windowSize).toBe(200);
   });
 
   it('scorer_window=0 returns 400 with code=invalid_scorer_window', async () => {
     const res = await fetch(`${handle.url}/v1/memories?q=alpha&scorer_window=0`);
     expect(res.status).toBe(400);
-    const body = (await res.json()) as { error?: string; code?: string };
+    const body = await jsonAs<{ error?: string; code?: string }>(res);
     expect(body.code).toBe('invalid_scorer_window');
   });
 
   it('scorer_window=abc returns 400 (NaN forwarded; recall() rejects)', async () => {
     const res = await fetch(`${handle.url}/v1/memories?q=alpha&scorer_window=abc`);
     expect(res.status).toBe(400);
-    const body = (await res.json()) as { error?: string; code?: string };
+    const body = await jsonAs<{ error?: string; code?: string }>(res);
     expect(body.code).toBe('invalid_scorer_window');
   });
 });

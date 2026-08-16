@@ -41,7 +41,10 @@ export interface EdgeCounts {
 }
 
 const SPREAD = 20;
-const LAYER_Y_OFFSET: Record<string, number> = { buffer: 6, episodic: 0, semantic: -6 };
+const LAYER_Y_OFFSET = { buffer: 6, episodic: 0, semantic: -6 } satisfies Record<
+  Memory["layer"],
+  number
+>;
 
 function hexToColor(hex: string): THREE.Color {
   return new THREE.Color(hex);
@@ -50,9 +53,9 @@ function hexToColor(hex: string): THREE.Color {
 interface MemoryNode {
   id: string;
   memory: Memory;
-  mesh: THREE.Mesh;
+  mesh: THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial>;
   basePosition: THREE.Vector3;
-  halo: THREE.Mesh;
+  halo: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>;
   phase: number;
   driftSpeed: number;
   /**
@@ -61,7 +64,7 @@ interface MemoryNode {
    * search dimming state. Billboarded each frame via lookAt(camera).
    * Shape disambiguates from selection sphere-halo (plan-design-critic R1 HIGH #1).
    */
-  fadingRing?: THREE.Mesh;
+  fadingRing?: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
 }
 
 export class BrainScene {
@@ -71,8 +74,8 @@ export class BrainScene {
   private controls!: OrbitControls;
   private composer!: EffectComposer;
   private nodes: MemoryNode[] = [];
-  private tendrils: THREE.Line[] = [];
-  private conflictLines: THREE.Line[] = [];
+  private tendrils: THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>[] = [];
+  private conflictLines: THREE.Line<THREE.BufferGeometry, THREE.LineDashedMaterial>[] = [];
   private raycaster = new THREE.Raycaster();
   private mouse = new THREE.Vector2();
   private hoveredNode: MemoryNode | null = null;
@@ -109,7 +112,7 @@ export class BrainScene {
    * hairlines. Computed by computeSharedTagPairs() (pure helper) and
    * filtered to the n<=500 case via sharedTagBailed flag.
    */
-  private sharedTagEdges: THREE.Line[] = [];
+  private sharedTagEdges: THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>[] = [];
   private sharedTagBailed = false;
   /**
    * v0.28+ E4 — force-layout state. Built fresh per populate(). lastSettledPositions
@@ -276,7 +279,7 @@ export class BrainScene {
       if (node.fadingRing) {
         this.scene.remove(node.fadingRing);
         node.fadingRing.geometry.dispose();
-        (node.fadingRing.material as THREE.Material).dispose();
+        node.fadingRing.material.dispose();
       }
     }
     for (const line of this.tendrils) {
@@ -293,7 +296,7 @@ export class BrainScene {
     for (const line of this.sharedTagEdges) {
       this.scene.remove(line);
       line.geometry.dispose();
-      (line.material as THREE.Material).dispose();
+      line.material.dispose();
     }
     this.nodes = [];
     this.tendrils = [];
@@ -353,7 +356,7 @@ export class BrainScene {
       // v0.26.1 — fading ring (TorusGeometry) for at-risk memories. Constant
       // 0.5 opacity rust ring; shape (ring) disambiguates from sphere-halo
       // selection emphasis. Plan-design-critic R1 HIGH #1.
-      let fadingRing: THREE.Mesh | undefined;
+      let fadingRing: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial> | undefined;
       if (isFading(mem)) {
         const ringGeo = new THREE.RingGeometry(radius * 1.4, radius * 1.7, 32);
         const ringMat = new THREE.MeshBasicMaterial({
@@ -524,6 +527,10 @@ export class BrainScene {
     let open = 0;
     let resolved = 0;
     for (const line of this.conflictLines) {
+      // SAFETY: every entry in this.conflictLines was constructed and pushed
+      // by buildConflictLines(), which always sets
+      // userData = { status: c.status, aId, bId } before the push — no other
+      // code path mutates conflictLines' userData.
       const status = (line.userData as { status?: string }).status;
       if (status === "open") open++;
       else if (status === "resolved") resolved++;
@@ -565,10 +572,10 @@ export class BrainScene {
     for (const node of this.nodes) {
       const hex = resolveColor(node.memory, mode, this.tagPalette, this.pathPalette);
       const color = hexToColor(hex);
-      (node.mesh.material as THREE.MeshStandardMaterial).color.copy(color);
+      node.mesh.material.color.copy(color);
       // Halo material is independent — keep it tracking the node color too
       // so selection/hover halo reads correctly under the new mode.
-      (node.halo.material as THREE.MeshBasicMaterial).color.copy(color);
+      node.halo.material.color.copy(color);
       // Tendrils intentionally NOT updated. See class-level comment.
     }
   }
@@ -672,8 +679,8 @@ export class BrainScene {
 
   private applyDimming(): void {
     for (const node of this.nodes) {
-      const mat = node.mesh.material as THREE.MeshStandardMaterial;
-      const haloMat = node.halo.material as THREE.MeshBasicMaterial;
+      const mat = node.mesh.material;
+      const haloMat = node.halo.material;
 
       if (this.searchDimmed && !this.highlightedIds.has(node.id)) {
         mat.opacity = 0.05;
@@ -700,6 +707,9 @@ export class BrainScene {
 
     if (intersects.length > 0) {
       const hit = intersects[0].object;
+      // SAFETY: raycastable meshes come only from `meshes = this.nodes.map(n
+      // => n.mesh)` above, and populate() sets userData = { memoryId: mem.id }
+      // (a string) on every sphere before it's pushed into this.nodes.
       const memId = hit.userData.memoryId as string;
       this.hoveredNode = this.nodes.find((n) => n.id === memId) ?? null;
       this.renderer.domElement.style.cursor = "pointer";
@@ -716,18 +726,17 @@ export class BrainScene {
     }
 
     if (prevHovered && prevHovered !== this.hoveredNode) {
-      const mat = prevHovered.mesh.material as THREE.MeshStandardMaterial;
+      const mat = prevHovered.mesh.material;
       mat.emissiveIntensity = 0.6 + prevHovered.memory.strength * 0.8;
       prevHovered.mesh.scale.setScalar(1);
-      (prevHovered.halo.material as THREE.MeshBasicMaterial).opacity =
-        0.06 + prevHovered.memory.strength * 0.08;
+      prevHovered.halo.material.opacity = 0.06 + prevHovered.memory.strength * 0.08;
     }
 
     if (this.hoveredNode) {
-      const mat = this.hoveredNode.mesh.material as THREE.MeshStandardMaterial;
+      const mat = this.hoveredNode.mesh.material;
       mat.emissiveIntensity = 2.0;
       this.hoveredNode.mesh.scale.setScalar(1.4);
-      (this.hoveredNode.halo.material as THREE.MeshBasicMaterial).opacity = 0.2;
+      this.hoveredNode.halo.material.opacity = 0.2;
     }
   }
 
@@ -937,6 +946,10 @@ export class BrainScene {
         line.visible = true;
         continue;
       }
+      // SAFETY: buildConflictLines() and buildSharedTagEdges() always set
+      // userData = { aId, bId } (both strings) on the lines they construct;
+      // tendrils never set userData, so ud.aId/ud.bId read undefined there
+      // and are handled by the guard immediately below.
       const ud = line.userData as { aId?: string; bId?: string };
       if (!ud.aId || !ud.bId) {
         // Lines without endpoint IDs (legacy tendrils today) — keep
@@ -998,13 +1011,13 @@ export class BrainScene {
 
     for (const node of this.nodes) {
       node.mesh.geometry.dispose();
-      (node.mesh.material as THREE.Material).dispose();
+      node.mesh.material.dispose();
       node.halo.geometry.dispose();
-      (node.halo.material as THREE.Material).dispose();
+      node.halo.material.dispose();
       // v0.26.1 — clean up fading ring resources on full teardown.
       if (node.fadingRing) {
         node.fadingRing.geometry.dispose();
-        (node.fadingRing.material as THREE.Material).dispose();
+        node.fadingRing.material.dispose();
       }
     }
     // v0.28 (E2 real-edges) — include sharedTagEdges in full-teardown
@@ -1014,7 +1027,7 @@ export class BrainScene {
     // BufferGeometry per dashboard unmount cycle).
     for (const line of [...this.tendrils, ...this.conflictLines, ...this.sharedTagEdges]) {
       line.geometry.dispose();
-      (line.material as THREE.Material).dispose();
+      line.material.dispose();
     }
 
     this.renderer.dispose();

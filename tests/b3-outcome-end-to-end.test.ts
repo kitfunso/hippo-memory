@@ -60,6 +60,8 @@ function runRecall(env: TestEnv, query: string, sessionId: string) {
 function readStrength(root: string, memId: string): number {
   const db = openHippoDb(root);
   try {
+    // SAFETY: memId is always a row this test wrote earlier, so the SELECT
+    // by primary key always returns exactly one row with a strength column.
     return (db.prepare(`SELECT strength FROM memories WHERE id = ?`).get(memId) as {
       strength: number;
     }).strength;

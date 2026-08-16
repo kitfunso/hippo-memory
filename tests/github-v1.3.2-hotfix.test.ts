@@ -109,6 +109,6 @@ describe('v1.3.2 P1: IngestHook type no longer advertises phantom idempotencyKey
       const _: { rawPayload: string; eventName: string; deliveryId: string } = args;
       return { memoryId: null };
     };
-    expect(typeof hook).toBe('function');
+    expect(hook).toEqual(expect.any(Function));
   });
 });

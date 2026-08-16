@@ -25,9 +25,19 @@ export interface ArchiveOpts {
  *
  * Throws if the row does not exist or is not `kind='raw'`.
  */
+/** The subset of `memories` columns this function reads off a `SELECT *` row. */
+interface ArchivedMemoryRow {
+  kind: string;
+  tenant_id: string | null;
+  dag_parent_id: string | null;
+}
+
 export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: ArchiveOpts): void {
+  // SAFETY: SELECT * FROM memories returns every column of the memories table; only
+  // kind, tenant_id, and dag_parent_id are read below, all guaranteed present (possibly
+  // null) by the memories schema.
   const row = db.prepare(`SELECT * FROM memories WHERE id = ?`).get(id) as
-    | Record<string, unknown>
+    | ArchivedMemoryRow
     | undefined;
   if (!row) throw new Error(`memory not found: ${id}`);
   if (row.kind !== 'raw') {

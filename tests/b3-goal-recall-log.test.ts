@@ -79,6 +79,8 @@ describe('goal_recall_log captured from real CLI recall', () => {
 
     const db = openHippoDb(env.hippoRoot);
     try {
+      // SAFETY: the db driver's .all() returns `unknown[]`; the row shape is guaranteed
+      // by the `SELECT goal_id, memory_id` projection above.
       const rows = db
         .prepare(`SELECT goal_id, memory_id FROM goal_recall_log WHERE goal_id = ?`)
         .all(g.id) as Array<{ goal_id: string; memory_id: string }>;
@@ -100,6 +102,8 @@ describe('goal_recall_log captured from real CLI recall', () => {
 
     const db = openHippoDb(env.hippoRoot);
     try {
+      // SAFETY: the db driver's .get() returns `unknown`; `SELECT COUNT(*) AS c` always
+      // yields exactly one row with a numeric `c` column.
       const rows = db
         .prepare(`SELECT COUNT(*) AS c FROM goal_recall_log`)
         .get() as { c: number };

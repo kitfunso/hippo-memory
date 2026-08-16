@@ -58,6 +58,10 @@ export function computeCutoff(days: number, now: Date = new Date()): string {
   return cutoff.toISOString();
 }
 
+function isTenantIdString(value: string): value is string {
+  return typeof value === 'string';
+}
+
 /**
  * Delete audit_log rows older than `olderThanDays` days for `tenantId`.
  * Emits an `audit_prune` event with metadata `{cutoff, count, dryRun}`.
@@ -71,7 +75,7 @@ export function pruneAuditLog(
   if (!Number.isFinite(opts.olderThanDays) || opts.olderThanDays <= 0) {
     throw new Error(`pruneAuditLog: olderThanDays must be a positive number, got ${opts.olderThanDays}`);
   }
-  if (!opts.tenantId || typeof opts.tenantId !== 'string') {
+  if (!opts.tenantId || !isTenantIdString(opts.tenantId)) {
     throw new Error('pruneAuditLog: tenantId is required');
   }
   const dryRun = opts.dryRun === true;
@@ -81,6 +85,9 @@ export function pruneAuditLog(
   let count = 0;
   if (dryRun) {
     // Dry-run: just count, no DELETE.
+    // SAFETY: row comes from `SELECT COUNT(*) AS c` above; COUNT(*) always
+    // yields exactly one row with a numeric `c` column (number or bigint
+    // depending on the node:sqlite driver's integer handling).
     const row = db
       .prepare(`SELECT COUNT(*) AS c FROM audit_log WHERE tenant_id = ? AND ts < ?`)
       .get(opts.tenantId, cutoff) as { c: number | bigint };

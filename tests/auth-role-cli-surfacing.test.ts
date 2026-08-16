@@ -22,7 +22,7 @@ import { authCreate, adminActor, type Context } from '../src/api.js';
 import { listApiKeys } from '../src/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
-function newCtx(tenantId = 'default'): { ctx: Context; tmpDir: string; cleanup: () => void } {
+function newCtx(tenantId = 'default') {
   const tmpDir = mkdtempSync(join(tmpdir(), 'hippo-auth-role-cli-'));
   const ctx: Context = {
     hippoRoot: tmpDir,

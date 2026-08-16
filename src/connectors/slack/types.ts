@@ -28,32 +28,52 @@ export interface SlackMessageEvent {
   deleted_ts?: string;
 }
 
+/** JSON value shape for the parts of an inbound Slack payload not yet
+ *  narrowed to a known envelope/event shape. */
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
 export interface SlackEventEnvelope {
   type: 'event_callback';
   team_id: string;
   event_id: string;
   event_time: number;
-  event: SlackMessageEvent | { type: string; [k: string]: unknown };
+  event: SlackMessageEvent | { type: string; [k: string]: JsonValue };
 }
 
 export type SlackInbound = SlackEventEnvelope | SlackUrlVerification;
 
-export function isSlackEventEnvelope(x: unknown): x is SlackEventEnvelope {
-  if (!x || typeof x !== 'object') return false;
-  const o = x as Record<string, unknown>;
+function isJsonString(value: JsonValue | undefined): value is string {
+  return typeof value === 'string';
+}
+
+function isJsonNumber(value: JsonValue | undefined): value is number {
+  return typeof value === 'number';
+}
+
+function isJsonRecord(value: JsonValue | undefined): value is { [key: string]: JsonValue } {
   return (
-    o.type === 'event_callback' &&
-    typeof o.team_id === 'string' &&
-    typeof o.event_id === 'string' &&
-    typeof o.event_time === 'number' &&
-    !!o.event &&
-    typeof o.event === 'object' &&
-    typeof (o.event as Record<string, unknown>).type === 'string'
+    value !== null &&
+    value !== undefined &&
+    !Array.isArray(value) &&
+    typeof value === 'object'
   );
 }
 
-export function isSlackMessageEvent(x: unknown): x is SlackMessageEvent {
-  if (!x || typeof x !== 'object') return false;
-  const o = x as Record<string, unknown>;
-  return o.type === 'message' && typeof o.channel === 'string' && typeof o.ts === 'string';
+export function isSlackEventEnvelope(x: JsonValue): x is JsonValue & SlackEventEnvelope {
+  if (!isJsonRecord(x)) return false;
+  const o = x;
+  if (o.type !== 'event_callback') return false;
+  if (!isJsonString(o.team_id) || !isJsonString(o.event_id) || !isJsonNumber(o.event_time)) {
+    return false;
+  }
+  const event = o.event;
+  return isJsonRecord(event) && isJsonString(event.type);
+}
+
+export function isSlackMessageEvent(
+  x: JsonValue | SlackEventEnvelope['event'],
+): x is SlackMessageEvent {
+  if (x === null || typeof x !== 'object' || Array.isArray(x)) return false;
+  const o = x;
+  return o.type === 'message' && isJsonString(o.channel) && isJsonString(o.ts);
 }

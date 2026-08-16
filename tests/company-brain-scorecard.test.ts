@@ -363,10 +363,10 @@ describe('Company Brain correction-latency scorecard', () => {
 
   it('flags direct supersedes as manual with zero measurable latency', () => {
     const oldEntry = createMemory('belief: tier is 100', {});
-    (oldEntry as { created: string }).created = '2026-04-01T00:00:00.000Z';
+    oldEntry.created = '2026-04-01T00:00:00.000Z';
     const newEntry = createMemory('belief: tier is 120', {});
-    (newEntry as { created: string }).created = '2026-04-02T00:00:00.000Z';
-    (oldEntry as { superseded_by: string | null }).superseded_by = newEntry.id;
+    newEntry.created = '2026-04-02T00:00:00.000Z';
+    oldEntry.superseded_by = newEntry.id;
 
     const report = buildCorrectionLatency([oldEntry, newEntry]);
 
@@ -384,16 +384,16 @@ describe('Company Brain correction-latency scorecard', () => {
       owner: 'user:keith',
       artifact_ref: 'slack://team/eng/1714600100.001',
     });
-    (rawReceipt as { created: string }).created = '2026-04-01T10:00:00.000Z';
+    rawReceipt.created = '2026-04-01T10:00:00.000Z';
 
     const oldFact = createMemory('belief: tier is 100', {});
-    (oldFact as { created: string }).created = '2026-03-15T00:00:00.000Z';
+    oldFact.created = '2026-03-15T00:00:00.000Z';
 
     const newFact = createMemory('belief: tier is 120', {
       extracted_from: rawReceipt.id,
     });
-    (newFact as { created: string }).created = '2026-04-01T10:30:00.000Z';
-    (oldFact as { superseded_by: string | null }).superseded_by = newFact.id;
+    newFact.created = '2026-04-01T10:30:00.000Z';
+    oldFact.superseded_by = newFact.id;
 
     const report = buildCorrectionLatency([rawReceipt, oldFact, newFact]);
 
@@ -408,10 +408,10 @@ describe('Company Brain correction-latency scorecard', () => {
 
   it('skips pairs with malformed timestamps so NaN never reaches percentiles', () => {
     const oldEntry = createMemory('belief: tier is 100', {});
-    (oldEntry as { created: string }).created = '2026-04-01T00:00:00.000Z';
+    oldEntry.created = '2026-04-01T00:00:00.000Z';
     const newEntry = createMemory('belief: tier is 120', {});
-    (newEntry as { created: string }).created = 'not-a-date';
-    (oldEntry as { superseded_by: string | null }).superseded_by = newEntry.id;
+    newEntry.created = 'not-a-date';
+    oldEntry.superseded_by = newEntry.id;
 
     const report = buildCorrectionLatency([oldEntry, newEntry]);
     expect(report.count).toBe(0);
@@ -420,7 +420,7 @@ describe('Company Brain correction-latency scorecard', () => {
 
   it('handles dangling superseded_by pointers without throwing', () => {
     const oldEntry = createMemory('belief points at a missing successor', {});
-    (oldEntry as { superseded_by: string | null }).superseded_by = 'mem-does-not-exist';
+    oldEntry.superseded_by = 'mem-does-not-exist';
 
     const report = buildCorrectionLatency([oldEntry]);
     expect(report.count).toBe(0);
@@ -438,16 +438,16 @@ describe('Company Brain correction-latency scorecard', () => {
         owner: 'user:keith',
         artifact_ref: `slack://team/eng/${i}`,
       });
-      (raw as { created: string }).created = baseRaw;
+      raw.created = baseRaw;
 
       const oldFact = createMemory(`belief ${i} v1`, {});
-      (oldFact as { created: string }).created = '2026-03-01T00:00:00.000Z';
+      oldFact.created = '2026-03-01T00:00:00.000Z';
 
       const newFact = createMemory(`belief ${i} v2`, { extracted_from: raw.id });
-      (newFact as { created: string }).created = new Date(
+      newFact.created = new Date(
         new Date(baseRaw).getTime() + lagMin * 60 * 1000,
       ).toISOString();
-      (oldFact as { superseded_by: string | null }).superseded_by = newFact.id;
+      oldFact.superseded_by = newFact.id;
 
       entries.push(raw, oldFact, newFact);
     });

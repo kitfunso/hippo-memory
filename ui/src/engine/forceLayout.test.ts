@@ -55,14 +55,14 @@ function mulberry32(seed: number): () => number {
 describe("buildForceLayout basic contract", () => {
   it("returns the full handle (tick/runToCompletion/done/position/ticksRun/settledPositions/onSettleStateChange/isSettling)", () => {
     const handle = buildForceLayout([mem({ id: "A" })], new Map(), null);
-    expect(typeof handle.tick).toBe("function");
-    expect(typeof handle.runToCompletion).toBe("function");
-    expect(typeof handle.done).toBe("function");
-    expect(typeof handle.position).toBe("function");
-    expect(typeof handle.ticksRun).toBe("function");
-    expect(typeof handle.settledPositions).toBe("function");
-    expect(typeof handle.onSettleStateChange).toBe("function");
-    expect(typeof handle.isSettling).toBe("function");
+    expect(handle.tick).toBeInstanceOf(Function);
+    expect(handle.runToCompletion).toBeInstanceOf(Function);
+    expect(handle.done).toBeInstanceOf(Function);
+    expect(handle.position).toBeInstanceOf(Function);
+    expect(handle.ticksRun).toBeInstanceOf(Function);
+    expect(handle.settledPositions).toBeInstanceOf(Function);
+    expect(handle.onSettleStateChange).toBeInstanceOf(Function);
+    expect(handle.isSettling).toBeInstanceOf(Function);
   });
 
   it("does NOT auto-tick at init (simulation.stop called)", () => {
@@ -298,7 +298,7 @@ describe("perf budget (AC18 + AC19)", () => {
           s = new Set();
           adj.set(v, s);
         }
-        (s as Set<string>).add(u);
+        s.add(u);
       }
     }
 

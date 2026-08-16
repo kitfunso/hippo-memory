@@ -21,6 +21,14 @@ function sign(secret: string, ts: string, body: string): string {
   return `v0=${createHmac('sha256', secret).update(`v0:${ts}:${body}`).digest('hex')}`;
 }
 
+interface SlackDlqUnroutableRow {
+  tenant_id: string;
+  team_id: string;
+  bucket: string;
+  signature: string;
+  slack_timestamp: string;
+}
+
 function withEnv(name: string, value: string | undefined): () => void {
   const prev = process.env[name];
   if (value === undefined) delete process.env[name];
@@ -47,6 +55,7 @@ describe('v0.39 commit 3 — Slack hardening + migration v19', () => {
     const db = openHippoDb(root);
     try {
       expect(getSchemaVersion(db)).toBe(41);
+      // SAFETY: PRAGMA table_info() always returns rows with a name column.
       const cols = db.prepare(`PRAGMA table_info(slack_dlq)`).all() as Array<{ name: string }>;
       const names = cols.map((c) => c.name);
       expect(names).toContain('team_id');
@@ -151,11 +160,12 @@ describe('v0.39 commit 3 — Slack hardening + migration v19', () => {
       expect(loadAllEntries(root).filter((e) => e.tags.includes('source:slack'))).toHaveLength(0);
       const db = openHippoDb(root);
       try {
+        // SAFETY: SELECT explicitly projects these five NOT NULL slack_dlq columns.
         const rows = db
           .prepare(
             `SELECT tenant_id, team_id, bucket, signature, slack_timestamp FROM slack_dlq ORDER BY id`,
           )
-          .all() as Array<Record<string, unknown>>;
+          .all() as SlackDlqUnroutableRow[];
         expect(rows).toHaveLength(1);
         expect(rows[0].bucket).toBe('unroutable');
         expect(rows[0].team_id).toBe('TFOREIGN');
@@ -267,6 +277,7 @@ describe('v0.39 commit 3 — Slack hardening + migration v19', () => {
     {
       const db = openHippoDb(root);
       try {
+        // SAFETY: SELECT memory_id projects only the memory_id column.
         const rows = db
           .prepare(`SELECT memory_id FROM slack_event_log WHERE event_id = ?`)
           .all(racedEventId) as Array<{ memory_id: string }>;
@@ -302,6 +313,7 @@ describe('v0.39 commit 3 — Slack hardening + migration v19', () => {
       ).toThrow(/hook says no/);
 
       // Memory is still present — SAVEPOINT rolled back.
+      // SAFETY: SELECT id, kind projects only these two columns.
       const stillThere = db
         .prepare(`SELECT id, kind FROM memories WHERE id = ?`)
         .get(mem.id) as { id?: string; kind?: string } | undefined;
@@ -309,6 +321,7 @@ describe('v0.39 commit 3 — Slack hardening + migration v19', () => {
       expect(stillThere?.kind).toBe('raw');
 
       // raw_archive has no row for this id.
+      // SAFETY: SELECT COUNT(*) AS c always returns exactly one row with a numeric c column.
       const archCount = db
         .prepare(`SELECT COUNT(*) AS c FROM raw_archive WHERE memory_id = ?`)
         .get(mem.id) as { c: number | bigint };
@@ -391,6 +404,7 @@ describe('v0.39 commit 3 — Slack hardening + migration v19', () => {
     // DLQ row has retried_at + retry_count = 1.
     const db = openHippoDb(root);
     try {
+      // SAFETY: SELECT retried_at, retry_count projects only these two columns.
       const after = db
         .prepare(`SELECT retried_at, retry_count FROM slack_dlq WHERE id = ?`)
         .get(dlqId) as { retried_at?: string; retry_count?: number | bigint };
@@ -404,15 +418,16 @@ describe('v0.39 commit 3 — Slack hardening + migration v19', () => {
   // 9. Web-client emits oldest only on first-page resume.
   it('slackHistoryFetcher: oldest is emitted only when caller passes one', async () => {
     const calls: string[] = [];
-    const fakeFetch = vi.fn(async (url: string) => {
-      calls.push(url);
-      return {
+    // A real Response satisfies typeof fetch's return type directly (no cast
+    // needed), and vi.fn<typeof fetch>(...) types the mock's call signature
+    // to match fetch exactly (same pattern as tests/dag-rebuild-summaries.test.ts).
+    const fakeFetch = vi.fn<typeof fetch>(async (url) => {
+      calls.push(String(url));
+      return new Response(JSON.stringify({ ok: true, messages: [], response_metadata: {} }), {
         status: 200,
-        headers: { get: () => null },
-        json: async () => ({ ok: true, messages: [], response_metadata: {} }),
-      } as unknown as Response;
+      });
     });
-    const fetcher = slackHistoryFetcher('xoxb-fake', fakeFetch as unknown as typeof fetch);
+    const fetcher = slackHistoryFetcher('xoxb-fake', fakeFetch);
 
     // First page (resume): caller passes oldest.
     await fetcher({ channelId: 'C1', cursor: null, oldest: '1700000000.000001' });
@@ -489,6 +504,7 @@ describe('v0.39 commit 3 — Slack hardening + migration v19', () => {
       expect(res.status).toBe(200);
       const db = openHippoDb(root);
       try {
+        // SAFETY: SELECT team_id, bucket projects only these two columns.
         const rows = db
           .prepare(`SELECT team_id, bucket FROM slack_dlq ORDER BY id DESC LIMIT 1`)
           .all() as Array<{ team_id?: string; bucket?: string }>;

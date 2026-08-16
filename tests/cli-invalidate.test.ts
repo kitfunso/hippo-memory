@@ -18,7 +18,7 @@ function runCli(
   cwd: string,
   args: string[],
   opts: { ok?: boolean } = {},
-): { stdout: string; stderr: string } {
+) {
   if (!existsSync(CLI)) {
     throw new Error(`bin/hippo.js not found at ${CLI} - run \`npm run build\` first`);
   }
@@ -30,6 +30,8 @@ function runCli(
     });
     return { stdout, stderr: '' };
   } catch (err) {
+    // SAFETY: execFileSync attaches stdout/stderr/status to the thrown Error
+    // on a non-zero child exit (Node child_process sync error contract).
     const e = err as { stdout?: string; stderr?: string; status?: number };
     if (opts.ok === false) return { stdout: e.stdout ?? '', stderr: e.stderr ?? '' };
     throw new Error(`CLI exit ${e.status}: ${e.stderr ?? ''}\nstdout: ${e.stdout ?? ''}`);

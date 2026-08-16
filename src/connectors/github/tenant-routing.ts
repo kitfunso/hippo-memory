@@ -38,14 +38,20 @@ export function resolveTenantForGitHub(
   const envFallback = (): string => process.env.HIPPO_TENANT?.trim() || 'default';
   const escapeHatch = process.env.GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK === '1';
 
+  // SAFETY: the row comes from the SELECT above, which projects exactly one
+  // column, `c`, as a COUNT(*).
   const instCount = (db
     .prepare(`SELECT COUNT(*) AS c FROM github_installations`)
     .get() as { c: number | bigint }).c;
+  // SAFETY: the row comes from the SELECT above, which projects exactly one
+  // column, `c`, as a COUNT(*).
   const repoCount = (db
     .prepare(`SELECT COUNT(*) AS c FROM github_repositories`)
     .get() as { c: number | bigint }).c;
 
   if (args.installationId) {
+    // SAFETY: the row comes from the SELECT above, which projects exactly
+    // the tenant_id column of github_installations.
     const row = db
       .prepare(`SELECT tenant_id FROM github_installations WHERE installation_id = ?`)
       .get(args.installationId) as { tenant_id?: string } | undefined;
@@ -64,6 +70,8 @@ export function resolveTenantForGitHub(
     return envFallback();
   }
   if (args.repoFullName) {
+    // SAFETY: the row comes from the SELECT above, which projects exactly
+    // the tenant_id column of github_repositories.
     const row = db
       .prepare(
         `SELECT tenant_id FROM github_repositories WHERE repo_full_name = ? ORDER BY added_at, tenant_id LIMIT 1`,

@@ -29,6 +29,8 @@ export function markKeySeen(
 }
 
 export function lookupMemoryByKey(db: DatabaseSyncLike, idempotencyKey: string): string | null {
+  // SAFETY: the row comes from the SELECT above, which projects exactly the
+  // memory_id column of github_event_log.
   const row = db.prepare(`SELECT memory_id FROM github_event_log WHERE idempotency_key = ?`).get(idempotencyKey) as
     | { memory_id: string | null }
     | undefined;

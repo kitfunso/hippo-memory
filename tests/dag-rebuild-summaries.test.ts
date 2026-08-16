@@ -19,7 +19,7 @@ import {
   applyRebuildResult,
   clearSummaryDirtyAfterBuild,
 } from '../src/store.js';
-import { openHippoDb } from '../src/db.js';
+import { openHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
 import { rebuildDirtySummaries, buildDag, generateDagSummary } from '../src/dag.js';
 import { consolidate } from '../src/consolidate.js';
@@ -29,26 +29,38 @@ import { insertRejectedValue, rejectionDigest, normalizeValueForRejection } from
 /**
  * Build a fetcher that returns the same synthetic content for every call.
  * Returns ≥20 chars so it passes generateDagSummary's length guard (dag.ts:101).
+ * A real Response satisfies typeof fetch's return type directly (no cast
+ * needed), and vi.fn<typeof fetch>(...) types the mock's call signature
+ * to match fetch exactly.
  */
-function makeOkFetcher(content: string = 'synthetic-summary-from-fetcher-X') {
-  return vi.fn(async () => {
-    return new Response(
-      JSON.stringify({ content: [{ text: content }] }),
-      { status: 200, headers: { 'content-type': 'application/json' } },
-    );
-  }) as unknown as typeof fetch;
+function makeOkFetcher(content: string = 'synthetic-summary-from-fetcher-X'): typeof fetch {
+  return vi.fn<typeof fetch>(async () => new Response(
+    JSON.stringify({ content: [{ text: content }] }),
+    { status: 200, headers: { 'content-type': 'application/json' } },
+  ));
 }
 
-function makeThrowingFetcher() {
-  return vi.fn(async () => {
+function makeThrowingFetcher(): typeof fetch {
+  return vi.fn<typeof fetch>(async () => {
     throw new Error('network down');
-  }) as unknown as typeof fetch;
+  });
 }
 
-function makeNonOkFetcher(status: number = 500) {
-  return vi.fn(async () => {
-    return new Response('error', { status });
-  }) as unknown as typeof fetch;
+function makeNonOkFetcher(status: number = 500): typeof fetch {
+  return vi.fn<typeof fetch>(async () => new Response('error', { status }));
+}
+
+/**
+ * Typed wrapper around a single-row SELECT used throughout this file. Every
+ * call site queries a row this test itself already wrote (memories /
+ * audit_log / memories_fts, synchronously updated by rebuildDirtySummaries /
+ * applyRebuildResult before the call), so the row always matches the
+ * caller-supplied T. better-sqlite3 types .get() as `unknown` because the
+ * driver has no static knowledge of a query's column shape.
+ */
+function getRow<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T {
+  // SAFETY: see function doc comment above.
+  return db.prepare(sql).get(...params) as T;
 }
 
 /**
@@ -155,10 +167,18 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
     // Verify the row state
     const db = openHippoDb(hippoRoot);
     try {
-      const row = db.prepare(`
+      const row = getRow<{
+        content: string;
+        summary_dirty: number;
+        rebuild_count: number | null;
+        last_rebuilt_at: string | null;
+        descendant_count: number | null;
+        earliest_at: string | null;
+        latest_at: string | null;
+      }>(db, `
         SELECT content, summary_dirty, rebuild_count, last_rebuilt_at, descendant_count, earliest_at, latest_at
           FROM memories WHERE id = ?
-      `).get(summary.id) as any;
+      `, summary.id);
       expect(row.content).toBe('newly-generated-summary-content-X');
       expect(row.summary_dirty).toBe(0);
       expect(row.rebuild_count).toBe(1);
@@ -168,9 +188,9 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
       expect(row.latest_at).toBe(child3.created);
 
       // Audit row emitted
-      const auditRow = db.prepare(`
+      const auditRow = getRow<{ op: string; metadata_json: string }>(db, `
         SELECT op, metadata_json FROM audit_log WHERE op = 'summary_rebuilt' AND target_id = ?
-      `).get(summary.id) as any;
+      `, summary.id);
       expect(auditRow).toBeTruthy();
       const meta = JSON.parse(auditRow.metadata_json);
       expect(meta.source).toBe('E3-rebuild');
@@ -178,12 +198,12 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
       expect(meta.descendant_count).toBe(3);
 
       // FTS row synced — query content column for the rebuilt token
-      const ftsRow = db.prepare(`
+      const ftsRow = getRow<{ id: string; content: string }>(db, `
         SELECT id, content FROM memories_fts WHERE memories_fts MATCH ?
-      `).get('newgensummarycontent') as any;
+      `, 'newgensummarycontent');
       // We don't expect the dashed string to tokenize cleanly; just verify
       // FTS row was rewritten by reading its content directly.
-      const ftsAll = db.prepare(`SELECT content FROM memories_fts WHERE id = ?`).get(summary.id) as any;
+      const ftsAll = getRow<{ content: string }>(db, `SELECT content FROM memories_fts WHERE id = ?`, summary.id);
       expect(ftsAll?.content).toBe('newly-generated-summary-content-X');
     } finally {
       db.close();
@@ -211,7 +231,9 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
     // Row state UNCHANGED from first call
     const db = openHippoDb(hippoRoot);
     try {
-      const row = db.prepare(`SELECT summary_dirty, rebuild_count FROM memories WHERE id = ?`).get(summary.id) as any;
+      const row = getRow<{ summary_dirty: number; rebuild_count: number | null }>(
+        db, `SELECT summary_dirty, rebuild_count FROM memories WHERE id = ?`, summary.id,
+      );
       expect(row.summary_dirty).toBe(0);
       expect(row.rebuild_count).toBe(1);
     } finally {
@@ -232,7 +254,9 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
     forceMarkDirty(hippoRoot, sumB.id);
 
     const seenPayloads: string[] = [];
-    const fetcher = vi.fn(async (_url: any, init?: any) => {
+    const fetcher = vi.fn<typeof fetch>(async (_url, init) => {
+      // SAFETY: rebuildDirtySummaries (dag.ts) always JSON.stringifies the
+      // request body before calling fetch, so init.body is a string here.
       const body = init?.body ? JSON.parse(init.body as string) : {};
       const prompt = body?.messages?.[0]?.content ?? '';
       seenPayloads.push(prompt);
@@ -240,7 +264,7 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
         JSON.stringify({ content: [{ text: 'rebuilt-tenant-content-XX' }] }),
         { status: 200 },
       );
-    }) as unknown as typeof fetch;
+    });
 
     const result = await rebuildDirtySummaries(hippoRoot, {
       apiKey: 'k',
@@ -312,10 +336,16 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
 
     const db = openHippoDb(hippoRoot);
     try {
-      const row = db.prepare(`
+      const row = getRow<{
+        summary_dirty: number;
+        descendant_count: number | null;
+        earliest_at: string | null;
+        latest_at: string | null;
+        rebuild_count: number | null;
+      }>(db, `
         SELECT summary_dirty, descendant_count, earliest_at, latest_at, rebuild_count
           FROM memories WHERE id = ?
-      `).get(summary.id) as any;
+      `, summary.id);
       expect(row.summary_dirty).toBe(0);
       expect(row.descendant_count).toBe(0);
       expect(row.earliest_at).toBeNull();
@@ -324,9 +354,9 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
       expect(row.rebuild_count ?? 0).toBe(0);
 
       // Audit row with zero_children=true
-      const auditRow = db.prepare(`
+      const auditRow = getRow<{ metadata_json: string }>(db, `
         SELECT metadata_json FROM audit_log WHERE op = 'summary_rebuilt' AND target_id = ?
-      `).get(summary.id) as any;
+      `, summary.id);
       expect(auditRow).toBeTruthy();
       const meta = JSON.parse(auditRow.metadata_json);
       expect(meta.zero_children).toBe(true);
@@ -350,11 +380,11 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
     forceMarkDirty(hippoRoot, sum2.id);
 
     let call = 0;
-    const fetcher = vi.fn(async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => {
       call++;
       if (call === 1) throw new Error('network down');
       return new Response(JSON.stringify({ content: [{ text: 'second-summary-ok-content-XX' }] }), { status: 200 });
-    }) as unknown as typeof fetch;
+    });
 
     const result = await rebuildDirtySummaries(hippoRoot, { apiKey: 'k', fetcher, cap: 20 });
 
@@ -378,11 +408,11 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
     forceMarkDirty(hippoRoot, sum2.id);
 
     let call = 0;
-    const fetcher = vi.fn(async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => {
       call++;
       if (call === 1) return new Response('upstream error', { status: 503 });
       return new Response(JSON.stringify({ content: [{ text: 'second-ok-content-zz' }] }), { status: 200 });
-    }) as unknown as typeof fetch;
+    });
 
     const result = await rebuildDirtySummaries(hippoRoot, { apiKey: 'k', fetcher, cap: 20 });
     expect(result.failed).toBe(1);
@@ -440,7 +470,9 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
 
     const db = openHippoDb(hippoRoot);
     try {
-      const row = db.prepare(`SELECT content, rebuild_count, summary_dirty FROM memories WHERE id = ?`).get(summary.id) as any;
+      const row = getRow<{ content: string; rebuild_count: number | null; summary_dirty: number }>(
+        db, `SELECT content, rebuild_count, summary_dirty FROM memories WHERE id = ?`, summary.id,
+      );
       expect(row.content).toBe('one-shot-content-xyzabc');
       expect(row.rebuild_count).toBe(1);
       expect(row.summary_dirty).toBe(0);
@@ -498,6 +530,8 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
     // Audit row for summary_marked_clean source='buildDag-clean' should exist
     const db = openHippoDb(hippoRoot);
     try {
+      // SAFETY: metadata_json is a NOT NULL TEXT column on audit_log; .all()
+      // rows always match the queried SELECT's single column.
       const auditRows = db.prepare(`
         SELECT metadata_json FROM audit_log WHERE op = 'summary_marked_clean'
       `).all() as Array<{ metadata_json: string }>;
@@ -605,13 +639,16 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
 
     const db = openHippoDb(hippoRoot);
     try {
-      const row = db.prepare(`SELECT content, rebuild_count, summary_dirty FROM memories WHERE id = ?`).get(summary.id) as any;
+      const row = getRow<{ content: string; rebuild_count: number | null; summary_dirty: number }>(
+        db, `SELECT content, rebuild_count, summary_dirty FROM memories WHERE id = ?`, summary.id,
+      );
       // Content unchanged
       expect(row.content).toBe('s11-summary-content');
       // rebuild_count UNCHANGED (null or 0)
       expect(row.rebuild_count ?? 0).toBe(0);
 
       // No summary_rebuilt audit row for this summary
+      // SAFETY: COUNT(*) always returns exactly one row shaped { n: number }.
       const auditRow = db.prepare(`
         SELECT COUNT(*) AS n FROM audit_log WHERE op = 'summary_rebuilt' AND target_id = ?
       `).get(summary.id) as { n: number };

@@ -63,7 +63,7 @@ async function postEvent(
     },
     body,
   });
-  let parsed: unknown = null;
+  let parsed = null;
   try {
     parsed = await res.json();
   } catch {

@@ -57,6 +57,8 @@ export function addWorkspace(
  * List all registered workspaces, sorted by team_id for stable output.
  */
 export function listWorkspaces(db: DatabaseSyncLike): SlackWorkspace[] {
+  // SAFETY: query selects exactly team_id, tenant_id, added_at, all NOT NULL
+  // text columns in the slack_workspaces schema, so each row has this shape.
   const rows = db
     .prepare(
       `SELECT team_id, tenant_id, added_at FROM slack_workspaces ORDER BY team_id`,

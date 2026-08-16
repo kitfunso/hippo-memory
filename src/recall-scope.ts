@@ -26,9 +26,14 @@ import { RECALL_DEFAULT_DENY_SCOPES } from './store.js';
  */
 export const PRIVATE_SCOPE_RE = /^[a-z][a-z0-9_-]*:private:/;
 
+function isScopeString(value: string | null | undefined): value is string {
+  return typeof value === 'string';
+}
+
 /** True when `scope` matches the `<source>:private:*` shape. */
 export function isPrivateScope(scope: string | null | undefined): boolean {
-  return typeof scope === 'string' && PRIVATE_SCOPE_RE.test(scope);
+  if (!isScopeString(scope)) return false;
+  return PRIVATE_SCOPE_RE.test(scope);
 }
 
 /**
@@ -54,11 +59,11 @@ export function passesScopeFilterForRecall(
   }
   if (scope === null) return true;
   if (isPrivateScope(scope)) return false;
-  // v1.7.2 — read from RECALL_DEFAULT_DENY_SCOPES (single source of truth
-  // shared with the SQL clause in loadSearchRows). Cast the array to
-  // readonly string[] so .includes() accepts arbitrary string scopes
-  // without a cast on the input (codex P0-2: casting `scope` would defeat
-  // the constant's safety).
+  // SAFETY: RECALL_DEFAULT_DENY_SCOPES (v1.7.2, single source of truth
+  // shared with the SQL clause in loadSearchRows) is a readonly tuple of
+  // string literals. Cast the array to readonly string[] so .includes()
+  // accepts arbitrary string scopes without a cast on the input (codex
+  // P0-2: casting `scope` would defeat the constant's safety).
   if ((RECALL_DEFAULT_DENY_SCOPES as readonly string[]).includes(scope)) return false;
   return true;
 }

@@ -23,7 +23,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, deleteEntry, writeEntry } from '../src/store.js';
 import { createMemory, Layer } from '../src/memory.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import {
   saveSkill,
   closeSkill,
@@ -46,8 +46,27 @@ function safeRmSync(p: string): void {
 }
 function countRows(home: string, table: string): number {
   const db = openHippoDb(home);
-  try { return (db.prepare(`SELECT COUNT(*) as c FROM ${table}`).get() as { c: number }).c; }
+  try { return getRow<{ c: number }>(db, `SELECT COUNT(*) as c FROM ${table}`).c; }
   finally { closeHippoDb(db); }
+}
+
+function getRow<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T {
+  // SAFETY: every call site below passes a SELECT whose column list is
+  // exactly the fields named in the requested type parameter, so the DB
+  // driver's `unknown` return is a faithful match for T.
+  return db.prepare(sql).get(...params) as T;
+}
+function getRows<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T[] {
+  // SAFETY: every call site below passes a SELECT whose column list is
+  // exactly the fields named in the requested type parameter, so the DB
+  // driver's `unknown[]` return is a faithful match for T[].
+  return db.prepare(sql).all(...params) as T[];
+}
+function parseJson<T>(text: string): T {
+  // SAFETY: callers only parse JSON this test itself wrote (via saveSkill's
+  // own JSON.stringify of tags_json/metadata_json), so the parsed shape
+  // matches the requested type parameter.
+  return JSON.parse(text) as T;
 }
 
 describe('skills store (E2 executable/exportable first-class object)', () => {
@@ -66,16 +85,22 @@ describe('skills store (E2 executable/exportable first-class object)', () => {
     expect(s.status).toBe('active');
     const db = openHippoDb(home);
     try {
-      const memRow = db.prepare(`SELECT content, source, tags_json FROM memories WHERE id = ?`)
-        .get(s.memoryId!) as { content: string; source: string; tags_json: string };
+      const memRow = getRow<{ content: string; source: string; tags_json: string }>(
+        db,
+        `SELECT content, source, tags_json FROM memories WHERE id = ?`,
+        s.memoryId!,
+      );
       expect(memRow.content).toContain('Run tests');
       expect(memRow.content).toContain('npm test before commit');
       expect(memRow.source).toBe('skill');
-      expect((JSON.parse(memRow.tags_json) as string[])).toContain('skill');
-      const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op='skill_create' AND target_id=?`)
-        .all(String(s.id)) as Array<{ metadata_json: string }>;
+      expect(parseJson<string[]>(memRow.tags_json)).toContain('skill');
+      const rows = getRows<{ metadata_json: string }>(
+        db,
+        `SELECT metadata_json FROM audit_log WHERE op='skill_create' AND target_id=?`,
+        String(s.id),
+      );
       expect(rows.length).toBe(1);
-      expect((JSON.parse(rows[0].metadata_json) as { has_trigger: boolean }).has_trigger).toBe(false);
+      expect(parseJson<{ has_trigger: boolean }>(rows[0]!.metadata_json).has_trigger).toBe(false);
     } finally { closeHippoDb(db); }
   });
 
@@ -84,7 +109,7 @@ describe('skills store (E2 executable/exportable first-class object)', () => {
     expect(s.trigger).toBe('before push');
     const db = openHippoDb(home);
     try {
-      const memRow = db.prepare(`SELECT content FROM memories WHERE id = ?`).get(s.memoryId!) as { content: string };
+      const memRow = getRow<{ content: string }>(db, `SELECT content FROM memories WHERE id = ?`, s.memoryId!);
       expect(memRow.content).toContain('When: before push');
     } finally { closeHippoDb(db); }
   });
@@ -228,13 +253,17 @@ describe('skills store (E2 executable/exportable first-class object)', () => {
     const db = openHippoDb(home);
     try {
       expect(db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='skills'`).get()).toBeDefined();
-      const triggers = (db.prepare(`SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_skills_%'`)
-        .all() as Array<{ name: string }>).map((t) => t.name);
+      const triggers = getRows<{ name: string }>(
+        db,
+        `SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_skills_%'`,
+      ).map((t) => t.name);
       expect(triggers).toContain('trg_skills_tenant_match_insert');
       expect(triggers).toContain('trg_skills_tenant_match_update');
       expect(triggers).toContain('trg_skills_supersede_tenant_match_update');
-      const indexes = (db.prepare(`SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_skills_%'`)
-        .all() as Array<{ name: string }>).map((i) => i.name);
+      const indexes = getRows<{ name: string }>(
+        db,
+        `SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_skills_%'`,
+      ).map((i) => i.name);
       expect(indexes).toContain('idx_skills_tenant_status');
       expect(indexes).toContain('idx_skills_memory');
     } finally { closeHippoDb(db); }

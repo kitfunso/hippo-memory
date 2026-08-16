@@ -10,6 +10,10 @@ function asResult(content: string, score: number): SearchResult {
   return { entry: createMemory(content), score, bm25: score, cosine: 0, tokens: 10 };
 }
 
+function isNumber<T>(value: T): value is T & number {
+  return typeof value === 'number';
+}
+
 describe('crossEncoderReranker', () => {
   let available = false;
 
@@ -47,7 +51,7 @@ describe('crossEncoderReranker', () => {
   it.runIf(() => available)('returns rerankScore on every result', async () => {
     const out = await crossEncoderReranker('test', [asResult('test content', 1.0)]);
     expect(out[0].rerankScore).toBeDefined();
-    expect(typeof out[0].rerankScore).toBe('number');
+    expect(isNumber(out[0].rerankScore)).toBe(true);
   });
 
   it('falls back to identity ordering when cross-encoder is unavailable', async () => {

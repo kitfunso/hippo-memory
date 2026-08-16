@@ -8,6 +8,32 @@ interface WorkspaceRegistry {
   workspaces: string[];
 }
 
+/**
+ * Dependency-injection seam for tests. Production code always uses the real
+ * `fs` functions imported above; tests override this via
+ * __setSchedulerFsDeps to substitute fakes instead of `vi.mock`ing the
+ * built-in `fs` module. Never called outside tests -- this module's public
+ * behavior is unaffected when it's never invoked.
+ */
+export interface SchedulerFsDeps {
+  existsSync: typeof fs.existsSync;
+  readFileSync: typeof fs.readFileSync;
+  mkdirSync: typeof fs.mkdirSync;
+  writeFileSync: typeof fs.writeFileSync;
+}
+
+let fsDeps: SchedulerFsDeps = {
+  existsSync: fs.existsSync,
+  readFileSync: fs.readFileSync,
+  mkdirSync: fs.mkdirSync,
+  writeFileSync: fs.writeFileSync,
+};
+
+/** Test-only override. Not part of this module's public API surface. */
+export function __setSchedulerFsDeps(overrides: Partial<SchedulerFsDeps>): void {
+  fsDeps = { ...fsDeps, ...overrides };
+}
+
 function defaultRegistry(): WorkspaceRegistry {
   return {
     version: 1,
@@ -25,10 +51,10 @@ function normalizeWorkspace(projectDir: string): string {
 
 export function loadWorkspaceRegistry(globalRoot: string): WorkspaceRegistry {
   const registryPath = workspaceRegistryPath(globalRoot);
-  if (!fs.existsSync(registryPath)) return defaultRegistry();
+  if (!fsDeps.existsSync(registryPath)) return defaultRegistry();
 
   try {
-    const parsed = JSON.parse(fs.readFileSync(registryPath, 'utf8')) as Partial<WorkspaceRegistry>;
+    const parsed: Partial<WorkspaceRegistry> = JSON.parse(fsDeps.readFileSync(registryPath, 'utf8'));
     const workspaces = Array.isArray(parsed.workspaces)
       ? [...new Set(parsed.workspaces.map((entry) => normalizeWorkspace(String(entry))).filter(Boolean))].sort()
       : [];
@@ -42,8 +68,8 @@ export function loadWorkspaceRegistry(globalRoot: string): WorkspaceRegistry {
 }
 
 export function saveWorkspaceRegistry(globalRoot: string, registry: WorkspaceRegistry): void {
-  fs.mkdirSync(globalRoot, { recursive: true });
-  fs.writeFileSync(
+  fsDeps.mkdirSync(globalRoot, { recursive: true });
+  fsDeps.writeFileSync(
     workspaceRegistryPath(globalRoot),
     JSON.stringify(
       {
@@ -86,7 +112,7 @@ export function runDailyMaintenance(
 ): void {
   for (const workspace of workspaces) {
     const resolved = normalizeWorkspace(workspace);
-    if (!fs.existsSync(path.join(resolved, '.hippo'))) continue;
+    if (!fsDeps.existsSync(path.join(resolved, '.hippo'))) continue;
     runCommand(resolved, ['learn', '--git', '--days', '1']);
     runCommand(resolved, ['sleep']);
   }

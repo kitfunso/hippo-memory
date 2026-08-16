@@ -25,7 +25,7 @@ import { join } from 'node:path';
 import { initStore, writeEntry, saveActiveTaskSnapshot } from '../src/store.js';
 import { createMemory } from '../src/memory.js';
 import { recall } from '../src/api.js';
-import { handleMcpRequest } from '../src/mcp/server.js';
+import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 
 function makeRoot(prefix: string): string {
   const home = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
@@ -38,10 +38,14 @@ function ctx(home: string) {
   return { hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' } };
 }
 
+interface ScopeToolArgs {
+  query?: string;
+}
+
 function callMcpTool(
   home: string,
   name: string,
-  args: Record<string, unknown>,
+  args: ScopeToolArgs,
 ) {
   return handleMcpRequest(
     {
@@ -54,9 +58,13 @@ function callMcpTool(
   );
 }
 
-function extractText(res: unknown): string {
-  const r = res as { result?: { content?: Array<{ text?: string }> } } | null;
-  return r?.result?.content?.[0]?.text ?? '';
+function extractText(res: McpResponse | null): string {
+  // SAFETY: handleMcpRequest's 'tools/call' case always wraps tool output in
+  // MCP's { content: [{ type: 'text', text }] } shape (src/mcp/server.ts);
+  // McpResponse.result is `unknown` only because different tools return
+  // different payloads.
+  const r = res?.result as { content?: Array<{ text?: string }> } | undefined;
+  return r?.content?.[0]?.text ?? '';
 }
 
 describe('scope filter — generic *:private:* default-deny', () => {

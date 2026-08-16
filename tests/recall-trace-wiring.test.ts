@@ -32,7 +32,7 @@ import { remember, recall, getContext, type Context } from '../src/api.js';
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const hippoBin = join(repoRoot, 'bin', 'hippo.js');
 
-function tmpHome(): { home: string; restore: () => void } {
+function tmpHome() {
   const home = mkdtempSync(join(tmpdir(), 'hippo-recall-trace-wiring-'));
   initStore(home);
   const origHippoHome = process.env.HIPPO_HOME;
@@ -50,19 +50,28 @@ function tmpHome(): { home: string; restore: () => void } {
   };
 }
 
-function traceRows(home: string, pipeline: string): Array<Record<string, unknown>> {
+/** Concrete SQLite column value: what node:sqlite can actually return. */
+type SqliteValue = string | number | bigint | null | Uint8Array;
+type SqliteRow = Record<string, SqliteValue>;
+
+function traceRows(home: string, pipeline: string): SqliteRow[] {
   const db: DatabaseSyncLike = openHippoDb(home);
   try {
-    return db.prepare(`SELECT * FROM recall_traces WHERE pipeline = ?`).all(pipeline) as Array<Record<string, unknown>>;
+    // SAFETY: sql is a literal SELECT against the known recall_traces schema;
+    // the SqliteRow value type already reflects what node:sqlite can return.
+    return db.prepare(`SELECT * FROM recall_traces WHERE pipeline = ?`).all(pipeline) as SqliteRow[];
   } finally {
     closeHippoDb(db);
   }
 }
 
-function resultRowsFor(home: string, traceId: number): Array<Record<string, unknown>> {
+function resultRowsFor(home: string, traceId: number): SqliteRow[] {
   const db: DatabaseSyncLike = openHippoDb(home);
   try {
-    return db.prepare(`SELECT * FROM recall_trace_results WHERE trace_id = ? ORDER BY result_rank ASC`).all(traceId) as Array<Record<string, unknown>>;
+    // SAFETY: sql is a literal SELECT against the known recall_trace_results
+    // schema; the SqliteRow value type already reflects what node:sqlite can
+    // return.
+    return db.prepare(`SELECT * FROM recall_trace_results WHERE trace_id = ? ORDER BY result_rank ASC`).all(traceId) as SqliteRow[];
   } finally {
     closeHippoDb(db);
   }
@@ -93,6 +102,8 @@ describe('api.recall — trace wiring', () => {
       expect(traces[0].tenant_id).toBe('default');
       expect(traces[0].result_count).toBe(result.results.length);
 
+      // SAFETY: recall_traces.id is an INTEGER PRIMARY KEY; node:sqlite
+      // returns it as a JS number for values within safe-integer range.
       const rows = resultRowsFor(home, traces[0].id as number);
       expect(rows).toHaveLength(result.results.length);
       rows.forEach((row, i) => {
@@ -218,6 +229,8 @@ describe('api.getContext — trace wiring', () => {
       const traces = traceRows(home, 'context');
       expect(traces).toHaveLength(1);
       expect(traces[0].result_count).toBe(0);
+      // SAFETY: recall_traces.id is an INTEGER PRIMARY KEY; node:sqlite
+      // returns it as a JS number for values within safe-integer range.
       expect(resultRowsFor(home, traces[0].id as number)).toHaveLength(0);
 
       // Deliberately untouched — this path never advances last_retrieval_ids,
@@ -296,6 +309,8 @@ describe('CLI cmdRecall — trace wiring', () => {
       expect(zeroTrace).toBeDefined();
       expect(zeroTrace!.result_count).toBe(0);
 
+      // SAFETY: recall_traces.id is an INTEGER PRIMARY KEY; node:sqlite
+      // returns it as a JS number for values within safe-integer range.
       const results = resultRowsFor(localStore, zeroTrace!.id as number);
       expect(results).toHaveLength(0);
 

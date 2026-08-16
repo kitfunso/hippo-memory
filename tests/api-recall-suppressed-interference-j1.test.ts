@@ -18,7 +18,7 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, MemoryKind } from '../src/memory.js';
+import { createMemory, Layer } from '../src/memory.js';
 import { recall, type Context } from '../src/api.js';
 import { hashQueryText, type RecallHistorySnapshot, type RecallHistoryEntry } from '../src/recall-history.js';
 
@@ -33,7 +33,7 @@ function seed(root: string, content: string): string {
   const m = createMemory(content, {
     layer: Layer.Buffer,
     confidence: 'observed',
-    kind: 'raw' as MemoryKind,
+    kind: 'raw',
     tenantId: 'default',
   });
   writeEntry(root, m);

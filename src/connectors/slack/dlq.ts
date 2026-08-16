@@ -4,7 +4,7 @@ import { openHippoDb, closeHippoDb } from '../../db.js';
 import { ingestMessage } from './ingest.js';
 import { resolveTenantForTeam } from './tenant-routing.js';
 import { verifySlackSignature } from './signature.js';
-import { isSlackEventEnvelope, isSlackMessageEvent } from './types.js';
+import { isSlackEventEnvelope, isSlackMessageEvent, type JsonValue } from './types.js';
 import { handleMessageDeleted } from './deletion.js';
 
 export type DlqBucket = 'parse_error' | 'unroutable' | 'signature_fail';
@@ -62,7 +62,23 @@ export function writeToDlq(db: DatabaseSyncLike, opts: WriteDlqOpts): number {
   return Number(result.lastInsertRowid);
 }
 
+/** Raw `slack_dlq` row shape, matching the columns named in the SELECTs below. */
+interface DlqRow {
+  id?: unknown;
+  tenant_id?: unknown;
+  team_id?: unknown;
+  raw_payload?: unknown;
+  error?: unknown;
+  received_at?: unknown;
+  retried_at?: unknown;
+  bucket?: unknown;
+  retry_count?: unknown;
+  signature?: unknown;
+  slack_timestamp?: unknown;
+}
+
 export function listDlq(db: DatabaseSyncLike, opts: { tenantId: string; limit?: number }): DlqItem[] {
+  // SAFETY: row shape matches the columns named in the SELECT below.
   const rows = db
     .prepare(
       `SELECT id, tenant_id, team_id, raw_payload, error, received_at, retried_at,
@@ -72,11 +88,12 @@ export function listDlq(db: DatabaseSyncLike, opts: { tenantId: string; limit?: 
         ORDER BY received_at ASC
         LIMIT ?`,
     )
-    .all(opts.tenantId, opts.limit ?? 100) as Array<Record<string, unknown>>;
+    .all(opts.tenantId, opts.limit ?? 100) as DlqRow[];
   return rows.map(rowToItem);
 }
 
 export function getDlqEntry(db: DatabaseSyncLike, id: number): DlqItem | null {
+  // SAFETY: row shape matches the columns named in the SELECT below.
   const row = db
     .prepare(
       `SELECT id, tenant_id, team_id, raw_payload, error, received_at, retried_at,
@@ -84,12 +101,12 @@ export function getDlqEntry(db: DatabaseSyncLike, id: number): DlqItem | null {
          FROM slack_dlq
         WHERE id = ?`,
     )
-    .get(id) as Record<string, unknown> | undefined;
+    .get(id) as DlqRow | undefined;
   if (!row) return null;
   return rowToItem(row);
 }
 
-function rowToItem(r: Record<string, unknown>): DlqItem {
+function rowToItem(r: DlqRow): DlqItem {
   return {
     id: Number(r.id),
     tenantId: String(r.tenant_id),
@@ -198,7 +215,7 @@ export function replayDlqEntry(
   }
 
   // Parse + dispatch.
-  let parsed: unknown;
+  let parsed: JsonValue;
   try {
     parsed = JSON.parse(row.rawPayload);
   } catch (e) {
@@ -208,7 +225,7 @@ export function replayDlqEntry(
       status: 'parse_error',
       memoryId: null,
       retryCount: row.retryCount + 1,
-      reason: `still unparseable: ${(e as Error).message}`,
+      reason: `still unparseable: ${e instanceof Error ? e.message : String(e)}`,
     };
   }
   if (!isSlackEventEnvelope(parsed)) {

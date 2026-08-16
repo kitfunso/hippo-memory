@@ -3,7 +3,22 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store.js';
-import { openHippoDb, closeHippoDb, getMeta } from '../src/db.js';
+import { openHippoDb, closeHippoDb, getMeta, type DatabaseSyncLike } from '../src/db.js';
+
+interface TableColumnInfo {
+  cid: number;
+  name: string;
+  type: string;
+  notnull: number;
+  dflt_value: string | number | null;
+  pk: number;
+}
+
+function tableColumns(db: DatabaseSyncLike, table: string): TableColumnInfo[] {
+  // SAFETY: PRAGMA table_info() always returns rows in this fixed SQLite
+  // pragma shape (cid, name, type, notnull, dflt_value, pk).
+  return db.prepare(`PRAGMA table_info(${table})`).all() as TableColumnInfo[];
+}
 
 function makeRoot(prefix: string): string {
   const home = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
@@ -28,7 +43,7 @@ describe('schema v24 — github connector tables', () => {
   it('github_event_log has PK on idempotency_key and required columns', () => {
     const db = openHippoDb(root);
     try {
-      const cols = db.prepare(`PRAGMA table_info(github_event_log)`).all() as Array<Record<string, unknown>>;
+      const cols = tableColumns(db, 'github_event_log');
       const names = new Set(cols.map((c) => c.name));
       expect(names.has('idempotency_key')).toBe(true);
       expect(names.has('delivery_id')).toBe(true);
@@ -50,7 +65,7 @@ describe('schema v24 — github connector tables', () => {
   it('github_cursors has composite PK and per-stream HWM columns', () => {
     const db = openHippoDb(root);
     try {
-      const cols = db.prepare(`PRAGMA table_info(github_cursors)`).all() as Array<Record<string, unknown>>;
+      const cols = tableColumns(db, 'github_cursors');
       const names = new Set(cols.map((c) => c.name));
       expect(names.has('issues_hwm')).toBe(true);
       expect(names.has('issue_comments_hwm')).toBe(true);
@@ -68,13 +83,14 @@ describe('schema v24 — github connector tables', () => {
   it('github_dlq has all replay-required columns', () => {
     const db = openHippoDb(root);
     try {
-      const cols = db.prepare(`PRAGMA table_info(github_dlq)`).all() as Array<Record<string, unknown>>;
+      const cols = tableColumns(db, 'github_dlq');
       const names = new Set(cols.map((c) => c.name));
       for (const col of ['id', 'tenant_id', 'raw_payload', 'error', 'event_name', 'delivery_id', 'signature', 'installation_id', 'repo_full_name', 'retry_count', 'received_at', 'retried_at', 'bucket']) {
         expect(names.has(col), `missing column: ${col}`).toBe(true);
       }
       db.prepare(`INSERT INTO github_dlq (tenant_id, raw_payload, error, received_at, bucket) VALUES (?,?,?,?,?)`)
         .run('default', '{}', 'parse error', '2026-05-04T00:00:00Z', 'parse_error');
+      // SAFETY: SELECT id, retry_count projects exactly these two NOT NULL columns.
       const row = db.prepare(`SELECT id, retry_count FROM github_dlq LIMIT 1`).get() as { id: number; retry_count: number };
       expect(row.id).toBe(1);
       expect(row.retry_count).toBe(0);

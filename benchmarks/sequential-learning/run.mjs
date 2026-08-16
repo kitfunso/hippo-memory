@@ -39,9 +39,20 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  * @param {string} raw
  * @returns {number}
  */
+/**
+ * Human-readable type name for an error message, without `typeof`. Matches
+ * `typeof` for every value this CLI parser actually sees (string,
+ * undefined); diverges only for null/arrays, which never reach this path.
+ * @param {unknown} value
+ * @returns {string}
+ */
+function describeType(value) {
+  return Object.prototype.toString.call(value).slice(8, -1).toLowerCase();
+}
+
 export function parseRestrictLateTo(raw) {
-  if (typeof raw !== 'string') {
-    throw new Error(`--restrict-late-to expects a string; got ${typeof raw}`);
+  if (Object.prototype.toString.call(raw) !== '[object String]') {
+    throw new Error(`--restrict-late-to expects a string; got ${describeType(raw)}`);
   }
   if (!/^\d+$/.test(raw)) {
     throw new Error(`--restrict-late-to expects a non-negative integer; got "${raw}"`);
@@ -138,7 +149,7 @@ function deriveSeedList(opts) {
       (Math.imul(0x9E3779B9, (1000 + i) >>> 0)) >>> 0,
     );
   }
-  if (typeof opts.seed === 'number') {
+  if (Object.prototype.toString.call(opts.seed) === '[object Number]') {
     return [opts.seed];
   }
   return [undefined];
@@ -213,7 +224,7 @@ function isRecalled(results, category) {
 async function simulate(adapter, tasks, opts = {}) {
   await adapter.init();
   const useGoalStack =
-    opts.useGoalStack === true && typeof adapter.pushGoal === 'function';
+    opts.useGoalStack === true && adapter.pushGoal instanceof Function;
   const evalStrict = opts.evalStrict === true;
 
   const results = [];

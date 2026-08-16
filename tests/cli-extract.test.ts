@@ -21,7 +21,6 @@ function hippo(cwd: string, env: Record<string, string>, ...args: string[]): str
 
 describe('hippo remember --extract', () => {
   let home: string;
-  let env: Record<string, string>;
 
   afterEach(() => {
     if (home) rmSync(home, { recursive: true, force: true });
@@ -29,7 +28,7 @@ describe('hippo remember --extract', () => {
 
   it('saves memory even when extraction skips (no API key)', () => {
     home = mkdtempSync(join(tmpdir(), 'hippo-extract-'));
-    env = { HIPPO_HOME: join(home, '.hippo'), ANTHROPIC_API_KEY: '' };
+    const env = { HIPPO_HOME: join(home, '.hippo'), ANTHROPIC_API_KEY: '' };
     hippo(home, env, 'init', '--no-hooks', '--no-schedule', '--no-learn');
 
     let stderr = '';
@@ -41,7 +40,7 @@ describe('hippo remember --extract', () => {
         shell: process.platform === 'win32',
       });
     } catch (e) {
-      stderr = String((e as { stderr?: Buffer }).stderr ?? '');
+      stderr = e instanceof Error && 'stderr' in e ? String(e.stderr ?? '') : '';
     }
 
     const out = hippo(home, env, 'recall', 'basketball', '--json');
@@ -50,7 +49,7 @@ describe('hippo remember --extract', () => {
 
   it('remember works without --extract flag', () => {
     home = mkdtempSync(join(tmpdir(), 'hippo-extract-'));
-    env = { HIPPO_HOME: join(home, '.hippo'), ANTHROPIC_API_KEY: '' };
+    const env = { HIPPO_HOME: join(home, '.hippo'), ANTHROPIC_API_KEY: '' };
     hippo(home, env, 'init', '--no-hooks', '--no-schedule', '--no-learn');
 
     hippo(home, env, 'remember', 'Alice enjoys reading');

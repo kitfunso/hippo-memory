@@ -14,6 +14,14 @@ function makeRoot(): string {
   return home;
 }
 
+async function jsonAs<T>(res: Response): Promise<T> {
+  // SAFETY: every call site below targets one of this file's routes under
+  // test (POST/GET/DELETE /v1/memories, /v1/auth/keys, /v1/audit); each
+  // response shape is checked field-by-field by the assertions immediately
+  // following each call.
+  return res.json() as Promise<T>;
+}
+
 describe('server HTTP routes — memories', () => {
   let home: string;
   let globalHome: string;
@@ -47,7 +55,7 @@ describe('server HTTP routes — memories', () => {
     });
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toContain('application/json');
-    const body = await res.json() as { id: string; kind: string; tenantId: string };
+    const body = await jsonAs<{ id: string; kind: string; tenantId: string }>(res);
     expect(body.id).toMatch(/^mem_/);
     expect(body.kind).toBe('distilled');
     expect(body.tenantId).toBe('default');
@@ -65,11 +73,11 @@ describe('server HTTP routes — memories', () => {
 
     const res = await fetch(`${handle.url}/v1/memories?q=alpha-token-http&limit=5`);
     expect(res.status).toBe(200);
-    const body = await res.json() as {
+    const body = await jsonAs<{
       results: Array<{ id: string; content: string; score: number }>;
       total: number;
       tokens: number;
-    };
+    }>(res);
     expect(body.results.length).toBeGreaterThan(0);
     expect(body.results[0]!.content).toContain('alpha-token-http');
     expect(body.total).toBeGreaterThan(0);
@@ -83,7 +91,7 @@ describe('server HTTP routes — memories', () => {
     );
     const res = await fetch(`${handle.url}/v1/memories/${id}`, { method: 'DELETE' });
     expect(res.status).toBe(200);
-    const body = await res.json() as { ok: boolean; id: string };
+    const body = await jsonAs<{ ok: boolean; id: string }>(res);
     expect(body.ok).toBe(true);
     expect(body.id).toBe(id);
 
@@ -102,7 +110,7 @@ describe('server HTTP routes — memories', () => {
       method: 'DELETE',
     });
     expect(res.status).toBe(404);
-    const body = await res.json() as { error: string };
+    const body = await jsonAs<{ error: string }>(res);
     expect(body.error).toMatch(/not found/i);
   });
 
@@ -113,7 +121,7 @@ describe('server HTTP routes — memories', () => {
     );
     const res = await fetch(`${handle.url}/v1/memories/${id}/promote`, { method: 'POST' });
     expect(res.status).toBe(200);
-    const body = await res.json() as { ok: boolean; sourceId: string; globalId: string };
+    const body = await jsonAs<{ ok: boolean; sourceId: string; globalId: string }>(res);
     expect(body.ok).toBe(true);
     expect(body.sourceId).toBe(id);
     // promoteToGlobal mints a fresh id on the global store; prefix is 'g_'.
@@ -131,7 +139,7 @@ describe('server HTTP routes — memories', () => {
       body: JSON.stringify({ content: 'supersede-new-content' }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as { ok: boolean; oldId: string; newId: string };
+    const body = await jsonAs<{ ok: boolean; oldId: string; newId: string }>(res);
     expect(body.ok).toBe(true);
     expect(body.oldId).toBe(id);
     expect(body.newId).toMatch(/^mem_/);
@@ -171,7 +179,7 @@ describe('server HTTP routes — memories', () => {
       body: JSON.stringify({ reason: 'gdpr-http' }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as { ok: boolean; archivedAt: string };
+    const body = await jsonAs<{ ok: boolean; archivedAt: string }>(res);
     expect(body.ok).toBe(true);
     expect(body.archivedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 
@@ -179,6 +187,10 @@ describe('server HTTP routes — memories', () => {
     try {
       const row = db2.prepare(`SELECT id FROM memories WHERE id = ?`).get(rawId);
       expect(row).toBeUndefined();
+      // SAFETY: SELECT memory_id, reason FROM raw_archive WHERE memory_id = ?
+      // names exactly those two columns against the row the /archive route
+      // just wrote for rawId; may be undefined only if archiving silently
+      // failed (checked by the assertions below).
       const archived = db2
         .prepare(`SELECT memory_id, reason FROM raw_archive WHERE memory_id = ?`)
         .get(rawId) as { memory_id: string; reason: string } | undefined;
@@ -196,7 +208,7 @@ describe('server HTTP routes — memories', () => {
       body: '{not valid json',
     });
     expect(res.status).toBe(400);
-    const body = await res.json() as { error: string };
+    const body = await jsonAs<{ error: string }>(res);
     expect(body.error).toMatch(/invalid json/i);
   });
 
@@ -207,14 +219,14 @@ describe('server HTTP routes — memories', () => {
       body: JSON.stringify({ kind: 'distilled' }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json() as { error: string };
+    const body = await jsonAs<{ error: string }>(res);
     expect(body.error).toMatch(/content/i);
   });
 
   it('GET /v1/memories without q returns 400', async () => {
     const res = await fetch(`${handle.url}/v1/memories`);
     expect(res.status).toBe(400);
-    const body = await res.json() as { error: string };
+    const body = await jsonAs<{ error: string }>(res);
     expect(body.error).toMatch(/q is required/i);
   });
 });
@@ -248,7 +260,7 @@ describe('server HTTP routes — auth + audit', () => {
       body: JSON.stringify({ label: 'http-test-key' }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as { keyId: string; plaintext: string; tenantId: string };
+    const body = await jsonAs<{ keyId: string; plaintext: string; tenantId: string }>(res);
     expect(body.keyId).toMatch(/^hk_/);
     // Plaintext is the only place a caller will ever see the raw secret —
     // ensure it actually lands in the JSON response (not just the keyId).
@@ -264,19 +276,19 @@ describe('server HTTP routes — auth + audit', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ label: 'k1' }),
     });
-    const k1 = await r1.json() as { keyId: string };
+    const k1 = await jsonAs<{ keyId: string }>(r1);
     const r2 = await fetch(`${handle.url}/v1/auth/keys`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ label: 'k2' }),
     });
-    const k2 = await r2.json() as { keyId: string };
+    const k2 = await jsonAs<{ keyId: string }>(r2);
     await fetch(`${handle.url}/v1/auth/keys/${k2.keyId}`, { method: 'DELETE' });
 
     // Default (active=true): only k1.
     const activeRes = await fetch(`${handle.url}/v1/auth/keys`);
     expect(activeRes.status).toBe(200);
-    const activeBody = await activeRes.json() as Array<{ keyId: string; revokedAt: string | null }>;
+    const activeBody = await jsonAs<Array<{ keyId: string; revokedAt: string | null }>>(activeRes);
     const activeIds = activeBody.map((k) => k.keyId);
     expect(activeIds).toContain(k1.keyId);
     expect(activeIds).not.toContain(k2.keyId);
@@ -284,7 +296,7 @@ describe('server HTTP routes — auth + audit', () => {
     // active=false: includes the revoked k2.
     const allRes = await fetch(`${handle.url}/v1/auth/keys?active=false`);
     expect(allRes.status).toBe(200);
-    const allBody = await allRes.json() as Array<{ keyId: string }>;
+    const allBody = await jsonAs<Array<{ keyId: string }>>(allRes);
     const allIds = allBody.map((k) => k.keyId);
     expect(allIds).toContain(k1.keyId);
     expect(allIds).toContain(k2.keyId);
@@ -296,11 +308,11 @@ describe('server HTTP routes — auth + audit', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ label: 'revoke-target' }),
     });
-    const minted = await mintRes.json() as { keyId: string };
+    const minted = await jsonAs<{ keyId: string }>(mintRes);
 
     const first = await fetch(`${handle.url}/v1/auth/keys/${minted.keyId}`, { method: 'DELETE' });
     expect(first.status).toBe(200);
-    const firstBody = await first.json() as { ok: boolean; revokedAt: string };
+    const firstBody = await jsonAs<{ ok: boolean; revokedAt: string }>(first);
     expect(firstBody.ok).toBe(true);
     expect(firstBody.revokedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 
@@ -308,13 +320,13 @@ describe('server HTTP routes — auth + audit', () => {
     // existing revokedAt (idempotent), per src/api.ts authRevoke.
     const second = await fetch(`${handle.url}/v1/auth/keys/${minted.keyId}`, { method: 'DELETE' });
     expect(second.status).toBe(200);
-    const secondBody = await second.json() as { ok: boolean; revokedAt: string };
+    const secondBody = await jsonAs<{ ok: boolean; revokedAt: string }>(second);
     expect(secondBody.revokedAt).toBe(firstBody.revokedAt);
 
     // Unknown key_id → 404 (mapApiError sees "Unknown key_id: ..." and routes 404).
     const missing = await fetch(`${handle.url}/v1/auth/keys/hk_does_not_exist`, { method: 'DELETE' });
     expect(missing.status).toBe(404);
-    const missingBody = await missing.json() as { error: string };
+    const missingBody = await jsonAs<{ error: string }>(missing);
     expect(missingBody.error).toMatch(/unknown key_id/i);
   });
 
@@ -327,13 +339,13 @@ describe('server HTTP routes — auth + audit', () => {
 
     const allRes = await fetch(`${handle.url}/v1/audit`);
     expect(allRes.status).toBe(200);
-    const allBody = await allRes.json() as Array<{ op: string; actor: string }>;
+    const allBody = await jsonAs<Array<{ op: string; actor: string }>>(allRes);
     expect(allBody.length).toBeGreaterThan(0);
     expect(allBody.some((e) => e.op === 'remember')).toBe(true);
 
     const filteredRes = await fetch(`${handle.url}/v1/audit?op=remember&limit=5`);
     expect(filteredRes.status).toBe(200);
-    const filteredBody = await filteredRes.json() as Array<{ op: string }>;
+    const filteredBody = await jsonAs<Array<{ op: string }>>(filteredRes);
     expect(filteredBody.length).toBeGreaterThan(0);
     expect(filteredBody.every((e) => e.op === 'remember')).toBe(true);
   });
@@ -341,21 +353,21 @@ describe('server HTTP routes — auth + audit', () => {
   it('GET /v1/audit with invalid op returns 400', async () => {
     const res = await fetch(`${handle.url}/v1/audit?op=not_a_real_op`);
     expect(res.status).toBe(400);
-    const body = await res.json() as { error: string };
+    const body = await jsonAs<{ error: string }>(res);
     expect(body.error).toMatch(/invalid op/i);
   });
 
   it('GET /v1/audit with invalid since returns 400', async () => {
     const res = await fetch(`${handle.url}/v1/audit?since=not-a-date`);
     expect(res.status).toBe(400);
-    const body = await res.json() as { error: string };
+    const body = await jsonAs<{ error: string }>(res);
     expect(body.error).toMatch(/invalid since/i);
   });
 
   it('GET /v1/audit with out-of-range limit returns 400', async () => {
     const res = await fetch(`${handle.url}/v1/audit?limit=99999999`);
     expect(res.status).toBe(400);
-    const body = await res.json() as { error: string };
+    const body = await jsonAs<{ error: string }>(res);
     expect(body.error).toMatch(/limit must be/i);
   });
 });

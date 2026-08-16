@@ -34,7 +34,7 @@ function runCli(
   cwd: string,
   args: string[],
   extraEnv: Record<string, string> = {},
-): { stdout: string; stderr: string; status: number } {
+) {
   if (!existsSync(CLI)) {
     throw new Error(
       `bin/hippo.js not found at ${CLI} - run \`npm run build\` first`,
@@ -49,6 +49,9 @@ function runCli(
     });
     return { stdout, stderr: '', status: 0 };
   } catch (e) {
+    // SAFETY: execFileSync throws a Node child_process error augmented with
+    // status/stdout/stderr (per Node's ExecFileSyncError docs); ExecError
+    // models that exact shape.
     const err = e as ExecError;
     return {
       stdout: err.stdout?.toString() ?? '',
@@ -99,6 +102,9 @@ describe('hippo github CLI', () => {
         env,
       });
     } catch (e) {
+      // SAFETY: execFileSync throws a Node child_process error augmented
+      // with status/stdout/stderr (per Node's ExecFileSyncError docs);
+      // ExecError models that exact shape.
       const err = e as ExecError;
       status = err.status ?? 1;
       stderr = err.stderr?.toString() ?? '';
@@ -149,6 +155,9 @@ describe('hippo github CLI', () => {
       if (prevToken === undefined) delete process.env.GITHUB_TOKEN;
       else process.env.GITHUB_TOKEN = prevToken;
     }
+    // SAFETY: cmdGithubBackfill's only console.log call in this path prints
+    // its own JSON summary object with `ingested`/`pages` counters (verified
+    // by the assertions below); logs is captured exclusively around that call.
     const json = JSON.parse(logs.join('\n')) as {
       ingested: { issues: number };
       pages: { issues: number };

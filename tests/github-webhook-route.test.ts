@@ -5,9 +5,25 @@ import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
 import { initStore, loadAllEntries } from '../src/store.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 
 const SECRET = 'github-webhook-secret';
+
+/** Parse a fetch Response body against a caller-declared shape. */
+async function jsonAs<T>(res: Response): Promise<T> {
+  // SAFETY: only used against this file's own webhook route responses, whose
+  // JSON shape is fixed by the handler in src/server.ts and checked by the
+  // assertions immediately following each call site.
+  return (await res.json()) as T;
+}
+
+/** Query a single row from the hippo SQLite handle. */
+function queryOne<T>(db: DatabaseSyncLike, sql: string): T {
+  // SAFETY: sql is a literal SELECT against known hippo schema columns; the
+  // row shape is declared by the generic type argument at each call site and
+  // checked immediately by the assertions that follow.
+  return db.prepare(sql).get() as T;
+}
 
 function sign(body: string, secret: string = SECRET): string {
   return `sha256=${createHmac('sha256', secret).update(body).digest('hex')}`;
@@ -25,7 +41,7 @@ function postWebhook(
   });
 }
 
-function defaultHeaders(body: string, eventName: string, deliveryId: string): Record<string, string> {
+function defaultHeaders(body: string, eventName: string, deliveryId: string) {
   return {
     'x-hub-signature-256': sign(body),
     'x-github-event': eventName,
@@ -40,8 +56,16 @@ interface IssueBodyOpts {
   repoFullName?: string;
 }
 
+interface GithubIssueEventPayload {
+  action: string;
+  issue: { number: number; title: string; body: string; user: { login: string; id: number } };
+  repository: { full_name: string; private: boolean; owner: { login: string }; name: string };
+  sender: { login: string; id: number };
+  installation?: { id: number };
+}
+
 function issueBody(opts: IssueBodyOpts = {}): string {
-  const obj: Record<string, unknown> = {
+  const obj: GithubIssueEventPayload = {
     action: opts.action ?? 'opened',
     issue: {
       number: opts.number ?? 42,
@@ -145,7 +169,7 @@ describe('POST /v1/connectors/github/events', () => {
     const body = issueBody();
     const res = await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-1'));
     expect(res.status).toBe(200);
-    const json = (await res.json()) as { ok: boolean; status: string; memoryId: string };
+    const json = await jsonAs<{ ok: boolean; status: string; memoryId: string }>(res);
     expect(json.ok).toBe(true);
     expect(json.status).toBe('ingested');
 
@@ -232,7 +256,7 @@ describe('POST /v1/connectors/github/events', () => {
     const body = JSON.stringify({ zen: 'Speak like a human.', hook_id: 1 });
     const res = await postWebhook(handle.port, body, defaultHeaders(body, 'ping', 'd-8'));
     expect(res.status).toBe(200);
-    const json = (await res.json()) as { pong: boolean };
+    const json = await jsonAs<{ pong: boolean }>(res);
     expect(json.pong).toBe(true);
     const entries = loadAllEntries(root);
     expect(entries.filter((e) => e.tags.includes('source:github')).length).toBe(0);
@@ -260,7 +284,7 @@ describe('POST /v1/connectors/github/events', () => {
       defaultHeaders(delBody, 'issue_comment', 'd-9b'),
     );
     expect(delRes.status).toBe(200);
-    const json = (await delRes.json()) as { ok: boolean; status: string; archivedCount: number };
+    const json = await jsonAs<{ ok: boolean; status: string; archivedCount: number }>(delRes);
     expect(json.status).toBe('archived');
     expect(json.archivedCount).toBe(1);
 
@@ -284,14 +308,15 @@ describe('POST /v1/connectors/github/events', () => {
     const body = issueBody({ installationId: 12345 }); // unknown
     const res = await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-10'));
     expect(res.status).toBe(200);
-    const json = (await res.json()) as { status: string };
+    const json = await jsonAs<{ status: string }>(res);
     expect(json.status).toBe('dlq');
 
     const db2 = openHippoDb(root);
     try {
-      const row = db2
-        .prepare(`SELECT bucket FROM github_dlq ORDER BY id DESC LIMIT 1`)
-        .get() as { bucket: string };
+      const row = queryOne<{ bucket: string }>(
+        db2,
+        `SELECT bucket FROM github_dlq ORDER BY id DESC LIMIT 1`,
+      );
       expect(row.bucket).toBe('unroutable');
     } finally {
       closeHippoDb(db2);
@@ -312,14 +337,15 @@ describe('POST /v1/connectors/github/events', () => {
     const body = issueBody({ installationId: null, repoFullName: 'unknown/repo' });
     const res = await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-11'));
     expect(res.status).toBe(200);
-    const json = (await res.json()) as { status: string };
+    const json = await jsonAs<{ status: string }>(res);
     expect(json.status).toBe('dlq');
 
     const db2 = openHippoDb(root);
     try {
-      const row = db2
-        .prepare(`SELECT bucket FROM github_dlq ORDER BY id DESC LIMIT 1`)
-        .get() as { bucket: string };
+      const row = queryOne<{ bucket: string }>(
+        db2,
+        `SELECT bucket FROM github_dlq ORDER BY id DESC LIMIT 1`,
+      );
       expect(row.bucket).toBe('unroutable');
     } finally {
       closeHippoDb(db2);
@@ -344,16 +370,15 @@ describe('POST /v1/connectors/github/events', () => {
     const body = issueBody({ installationId: null });
     const res = await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-12'));
     expect(res.status).toBe(200);
-    const json = (await res.json()) as { status: string };
+    const json = await jsonAs<{ status: string }>(res);
     expect(json.status).toBe('ingested');
 
     const db2 = openHippoDb(root);
     try {
-      const row = db2
-        .prepare(
-          `SELECT tenant_id FROM memories WHERE artifact_ref = 'github://acme/repo/issue/42' AND kind = 'raw'`,
-        )
-        .get() as { tenant_id: string };
+      const row = queryOne<{ tenant_id: string }>(
+        db2,
+        `SELECT tenant_id FROM memories WHERE artifact_ref = 'github://acme/repo/issue/42' AND kind = 'raw'`,
+      );
       expect(row.tenant_id).toBe('tenant-a');
     } finally {
       closeHippoDb(db2);
@@ -364,14 +389,15 @@ describe('POST /v1/connectors/github/events', () => {
     const body = 'not-json';
     const res = await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-13'));
     expect(res.status).toBe(200);
-    const json = (await res.json()) as { status: string };
+    const json = await jsonAs<{ status: string }>(res);
     expect(json.status).toBe('dlq');
 
     const db = openHippoDb(root);
     try {
-      const row = db
-        .prepare(`SELECT bucket FROM github_dlq ORDER BY id DESC LIMIT 1`)
-        .get() as { bucket: string };
+      const row = queryOne<{ bucket: string }>(
+        db,
+        `SELECT bucket FROM github_dlq ORDER BY id DESC LIMIT 1`,
+      );
       expect(row.bucket).toBe('parse_error');
     } finally {
       closeHippoDb(db);
@@ -382,12 +408,12 @@ describe('POST /v1/connectors/github/events', () => {
     const body = issueBody();
     const res1 = await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-14a'));
     expect(res1.status).toBe(200);
-    const j1 = (await res1.json()) as { status: string };
+    const j1 = await jsonAs<{ status: string }>(res1);
     expect(j1.status).toBe('ingested');
 
     const res2 = await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-14b-DIFFERENT-UUID'));
     expect(res2.status).toBe(200);
-    const j2 = (await res2.json()) as { status: string };
+    const j2 = await jsonAs<{ status: string }>(res2);
     expect(['duplicate', 'skipped_duplicate']).toContain(j2.status);
 
     const rows = loadAllEntries(root).filter(
@@ -404,14 +430,15 @@ describe('POST /v1/connectors/github/events', () => {
     });
     const res = await postWebhook(handle.port, body, defaultHeaders(body, 'discussion', 'd-15'));
     expect(res.status).toBe(200);
-    const json = (await res.json()) as { status: string };
+    const json = await jsonAs<{ status: string }>(res);
     expect(json.status).toBe('dlq');
 
     const db = openHippoDb(root);
     try {
-      const row = db
-        .prepare(`SELECT bucket FROM github_dlq ORDER BY id DESC LIMIT 1`)
-        .get() as { bucket: string };
+      const row = queryOne<{ bucket: string }>(
+        db,
+        `SELECT bucket FROM github_dlq ORDER BY id DESC LIMIT 1`,
+      );
       expect(row.bucket).toBe('unhandled');
     } finally {
       closeHippoDb(db);

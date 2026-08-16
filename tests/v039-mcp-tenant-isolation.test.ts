@@ -7,7 +7,7 @@ import { initStore } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';
 import { remember as apiRemember } from '../src/api.js';
-import { handleMcpRequest } from '../src/mcp/server.js';
+import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 
 // v0.39 commit 2 regressions:
 //  - lastRecalledIds keyed per-client so two HTTP-MCP clients on the same
@@ -29,7 +29,7 @@ function makeRoot(prefix: string): string {
 function callTool(
   reqId: number,
   name: string,
-  args: Record<string, unknown>,
+  args: Record<string, string | number | boolean>,
   ctx: { hippoRoot: string; tenantId: string; actor: string; clientKey?: string },
 ) {
   return handleMcpRequest(
@@ -43,9 +43,11 @@ function callTool(
   );
 }
 
-function extractText(res: unknown): string {
-  const r = res as { result?: { content?: Array<{ text?: string }> } } | null;
-  return r?.result?.content?.[0]?.text ?? '';
+function extractText(res: McpResponse | null): string {
+  // SAFETY: every hippo_* tool handler under test returns the standard MCP
+  // tool-call result shape { content: [{ type: 'text', text: string }] }.
+  const r = res?.result as { content?: Array<{ text?: string }> } | undefined;
+  return r?.content?.[0]?.text ?? '';
 }
 
 describe('v039 mcp tenant + client-key isolation', () => {
@@ -89,6 +91,8 @@ describe('v039 mcp tenant + client-key isolation', () => {
     const before = (() => {
       const db = openHippoDb(home);
       try {
+        // SAFETY: `seeded` was just written via apiRemember above, so its row
+        // exists and always has retrieval_count and strength columns.
         return db
           .prepare(`SELECT retrieval_count, strength FROM memories WHERE id = ?`)
           .get(seeded.id) as { retrieval_count: number; strength: number };
@@ -133,6 +137,8 @@ describe('v039 mcp tenant + client-key isolation', () => {
       expect(mcpRecall).toBeDefined();
       // GDPR Path A: recall audit stores query_hash (sha256/16) instead of
       // truncated query text. Assert hash shape + length, not the original text.
+      // SAFETY: the 'recall' op's audit metadata is always written by
+      // src/api.ts (see query_length comment there) with exactly these fields.
       const meta = mcpRecall!.metadata as {
         query?: string;
         query_hash?: string;
@@ -140,7 +146,7 @@ describe('v039 mcp tenant + client-key isolation', () => {
       };
       expect(meta.query).toBeUndefined();
       expect(meta.query_hash).toMatch(/^[0-9a-f]{16}$/);
-      expect(typeof meta.query_length).toBe('number');
+      expect(Number.isInteger(meta.query_length)).toBe(true);
     } finally {
       closeHippoDb(db);
     }
@@ -268,6 +274,7 @@ describe('v039 mcp tenant + client-key isolation', () => {
     // The global store must NOT have received a copy of alpha's memory.
     const gdb = openHippoDb(globalHome);
     try {
+      // SAFETY: `SELECT COUNT(*) AS c` always returns exactly one row shaped { c: number }.
       const rows = gdb
         .prepare(`SELECT COUNT(*) AS c FROM memories WHERE content LIKE '%alpha-private%'`)
         .get() as { c: number };

@@ -1,7 +1,7 @@
 declare module 'node:sqlite' {
   export class StatementSync {
     run(...params: unknown[]): { lastInsertRowid?: number | bigint; changes?: number };
-    get(...params: unknown[]): unknown;
+    get<T = unknown>(...params: unknown[]): T | undefined;
     all(...params: unknown[]): unknown[];
   }
 

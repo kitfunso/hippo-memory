@@ -4,13 +4,32 @@ import * as path from 'node:path';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
 
-function readJson(file: string): Record<string, any> {
-  return JSON.parse(fs.readFileSync(path.join(repoRoot, file), 'utf8'));
+interface PackageJsonManifest {
+  optionalDependencies?: Record<string, string>;
+  dependencies?: Record<string, string>;
+  peerDependenciesMeta?: Record<string, { optional?: boolean }>;
+}
+
+interface PackageLockEntry {
+  version?: string;
+  resolved?: string;
+  dev?: boolean;
+  optional?: boolean;
+}
+
+interface PackageLockManifest {
+  packages: Record<string, PackageLockEntry>;
+}
+
+function readJson<T>(file: string): T {
+  // SAFETY: both callers below read this repo's own committed package.json /
+  // package-lock.json, whose shape matches the requested manifest type.
+  return JSON.parse(fs.readFileSync(path.join(repoRoot, file), 'utf8')) as T;
 }
 
 describe('Transformers.js backend safety', () => {
   it('auto-installs no backend: both Transformers.js packages are optional peers', () => {
-    const manifest = readJson('package.json');
+    const manifest = readJson<PackageJsonManifest>('package.json');
     // No optionalDependencies at all — npm installs those by default, which
     // is exactly what issue #133 was about. Backends are bring-your-own.
     expect(manifest.optionalDependencies).toBeUndefined();
@@ -20,8 +39,8 @@ describe('Transformers.js backend safety', () => {
   });
 
   it('locks zero Transformers.js backends and zero native ONNX Runtimes', () => {
-    const lock = readJson('package-lock.json');
-    const installedPaths = Object.keys(lock.packages as Record<string, unknown>);
+    const lock = readJson<PackageLockManifest>('package-lock.json');
+    const installedPaths = Object.keys(lock.packages);
 
     expect(installedPaths).not.toContain('node_modules/@huggingface/transformers');
     expect(installedPaths).not.toContain('node_modules/@xenova/transformers');

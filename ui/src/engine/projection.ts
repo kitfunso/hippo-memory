@@ -1,6 +1,4 @@
-export function projectTo2D(
-  vectors: Record<string, number[]>,
-): Record<string, [number, number]> {
+export function projectTo2D(vectors: Record<string, number[]>) {
   const result3d = projectTo3D(vectors);
   const out: Record<string, [number, number]> = {};
   for (const [id, [x, y]] of Object.entries(result3d)) {
@@ -14,7 +12,7 @@ export function projectTo3D(
 ): Record<string, [number, number, number]> {
   const ids = Object.keys(vectors);
   if (ids.length === 0) return {};
-  if (ids.length === 1) return { [ids[0]]: [0, 0, 0] };
+  if (ids.length === 1) return Object.fromEntries<[number, number, number]>([[ids[0], [0, 0, 0]]]);
 
   const dim = vectors[ids[0]].length;
   const n = ids.length;
@@ -105,17 +103,13 @@ export function projectTo3D(
     }
   }
 
-  const result: Record<string, [number, number, number]> = {};
-  if (maxAbs < 1e-12) {
-    for (const id of ids) result[id] = [0, 0, 0];
-  } else {
-    for (let i = 0; i < n; i++) {
-      result[ids[i]] = [
-        coords[i][0] / maxAbs,
-        coords[i][1] / maxAbs,
-        coords[i][2] / maxAbs,
-      ];
-    }
-  }
+  const result: Record<string, [number, number, number]> = Object.fromEntries(
+    ids.map(
+      (id, i): [string, [number, number, number]] =>
+        maxAbs < 1e-12
+          ? [id, [0, 0, 0]]
+          : [id, [coords[i][0] / maxAbs, coords[i][1] / maxAbs, coords[i][2] / maxAbs]],
+    ),
+  );
   return result;
 }

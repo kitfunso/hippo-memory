@@ -3,8 +3,17 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import { remember, forget, archiveRaw } from '../src/api.js';
+
+function selectRow<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T | undefined {
+  // SAFETY: T is pinned by each call site to the exact column list of the
+  // SQL SELECT text passed in; the driver's .get() (src/db.ts
+  // DatabaseSyncLike, backed by node:sqlite) returns `unknown` and
+  // `undefined` when no row matches, so this is the single place that
+  // establishes the row contract for every caller in this file.
+  return db.prepare(sql).get(...params) as T | undefined;
+}
 
 // Regression: archiveRaw and forget previously looked up the target row by
 // id alone, with no tenant filter. A valid Bearer for tenant A could
@@ -43,9 +52,9 @@ describe('api tenant deny — archiveRaw and forget', () => {
     // Original row must still exist with its kind intact.
     const db = openHippoDb(home);
     try {
-      const row = db
-        .prepare(`SELECT tenant_id, kind FROM memories WHERE id = ?`)
-        .get(created.id) as { tenant_id: string; kind: string } | undefined;
+      const row = selectRow<{ tenant_id: string; kind: string }>(
+        db, `SELECT tenant_id, kind FROM memories WHERE id = ?`, created.id,
+      );
       expect(row).toBeDefined();
       expect(row!.tenant_id).toBe('alpha');
       expect(row!.kind).toBe('raw');
@@ -72,9 +81,9 @@ describe('api tenant deny — archiveRaw and forget', () => {
     // Original row must still exist.
     const db = openHippoDb(home);
     try {
-      const row = db
-        .prepare(`SELECT tenant_id FROM memories WHERE id = ?`)
-        .get(created.id) as { tenant_id: string } | undefined;
+      const row = selectRow<{ tenant_id: string }>(
+        db, `SELECT tenant_id FROM memories WHERE id = ?`, created.id,
+      );
       expect(row).toBeDefined();
       expect(row!.tenant_id).toBe('alpha');
     } finally {
@@ -95,9 +104,9 @@ describe('api tenant deny — archiveRaw and forget', () => {
 
     const db = openHippoDb(home);
     try {
-      const row = db
-        .prepare(`SELECT id FROM memories WHERE id = ?`)
-        .get(created.id) as { id?: string } | undefined;
+      const row = selectRow<{ id?: string }>(
+        db, `SELECT id FROM memories WHERE id = ?`, created.id,
+      );
       expect(row).toBeUndefined();
     } finally {
       closeHippoDb(db);

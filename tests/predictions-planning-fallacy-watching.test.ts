@@ -24,7 +24,7 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, type MemoryKind } from '../src/memory.js';
+import { createMemory, Layer } from '../src/memory.js';
 import {
   computePlanningFallacyOutput,
   computePlanningFallacyHint,
@@ -163,7 +163,7 @@ describe('PlanningFallacyWatching (v1.13.4 / J3.2 follow-up)', () => {
     // but exercises the populated-results path).
     writeEntry(root, createMemory('some unrelated memory content', {
       layer: Layer.Buffer,
-      kind: 'raw' as MemoryKind,
+      kind: 'raw',
       tenantId: 'default',
     }));
     const result = recall(ctxFor(root), { query: 'this will take 2 days to finish the project' });
@@ -176,7 +176,7 @@ describe('PlanningFallacyWatching (v1.13.4 / J3.2 follow-up)', () => {
     seedClosedPredictions(root, 'estimate-task', 3);
     writeEntry(root, createMemory('some unrelated memory content', {
       layer: Layer.Buffer,
-      kind: 'raw' as MemoryKind,
+      kind: 'raw',
       tenantId: 'default',
     }));
     const result = recall(ctxFor(root), { query: 'the next task will take 2 days' });

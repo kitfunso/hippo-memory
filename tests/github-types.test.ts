@@ -84,7 +84,7 @@ describe('isGitHubIssueCommentEvent', () => {
   });
 
   it('rejects a malformed shape (comment.id not a number)', () => {
-    const bad = { ...fixture, comment: { ...fixture.comment, id: 'nope' as unknown as number } };
+    const bad = { ...fixture, comment: { ...fixture.comment, id: 'nope' } };
     expect(isGitHubIssueCommentEvent(bad, 'issue_comment')).toBe(false);
   });
 

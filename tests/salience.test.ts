@@ -1,10 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { createMemory, type MemoryEntry } from '../src/memory.js';
+import { createMemory, type MemoryEntry, type EmotionalValence } from '../src/memory.js';
 import { computeSalience } from '../src/salience.js';
 
-function mem(content: string, opts: { tags?: string[]; emotional_valence?: string } = {}): MemoryEntry {
+function mem(
+  content: string,
+  opts: { tags?: string[]; emotional_valence?: EmotionalValence } = {},
+): MemoryEntry {
   const entry = createMemory(content, { tags: opts.tags ?? [] });
-  if (opts.emotional_valence) (entry as any).emotional_valence = opts.emotional_valence;
+  if (opts.emotional_valence) entry.emotional_valence = opts.emotional_valence;
   return entry;
 }
 

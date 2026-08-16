@@ -14,11 +14,23 @@ function escapeString(s: string): string {
   return s;
 }
 
+function isYamlBoolean(val: YamlValue): val is boolean {
+  return typeof val === 'boolean';
+}
+
+function isYamlNumber(val: YamlValue): val is number {
+  return typeof val === 'number';
+}
+
+function isYamlString(val: YamlValue): val is string {
+  return typeof val === 'string';
+}
+
 function serializeValue(val: YamlValue): string {
   if (val === null) return 'null';
-  if (typeof val === 'boolean') return val ? 'true' : 'false';
-  if (typeof val === 'number') return String(val);
-  if (typeof val === 'string') return escapeString(val);
+  if (isYamlBoolean(val)) return val ? 'true' : 'false';
+  if (isYamlNumber(val)) return String(val);
+  if (isYamlString(val)) return escapeString(val);
   if (Array.isArray(val)) {
     if (val.length === 0) return '[]';
     const items = val.map((v) => escapeString(String(v))).join(', ');

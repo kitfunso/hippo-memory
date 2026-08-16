@@ -94,7 +94,17 @@ Memory tags: ${memory.tags.join(', ') || '(none)'}`;
   if (!match) throw new Error(`Could not parse JSON array from response: ${text.slice(0, 200)}`);
   const queries = JSON.parse(match[0]);
   if (!Array.isArray(queries) || queries.length === 0) throw new Error('Empty query list');
-  return queries.filter((q) => typeof q === 'string' && q.length > 10);
+  return queries.filter(isUsableQuery);
+}
+
+/**
+ * A generated recall query is only usable when the model actually returned
+ * a string long enough to be a real query (parsed LLM JSON is untyped).
+ * @param {unknown} q
+ * @returns {boolean}
+ */
+function isUsableQuery(q) {
+  return Object.prototype.toString.call(q) === '[object String]' && q.length > 10;
 }
 
 async function main() {

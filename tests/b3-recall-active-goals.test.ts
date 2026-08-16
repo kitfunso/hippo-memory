@@ -35,12 +35,17 @@ function makeEnv(): TestEnv {
   return { cwd, hippoRoot, globalRoot };
 }
 
+interface RecallCliResult {
+  results: Array<{ content: string; score: number }>;
+  raw: string;
+}
+
 function recallCli(
   env: TestEnv,
   query: string,
   extraEnv: Record<string, string> = {},
   extraArgs: string[] = [],
-): { results: Array<{ content: string; score: number }>; raw: string } {
+): RecallCliResult {
   const raw = execFileSync(
     'node',
     [CLI, 'recall', query, '--json', '--budget', '2000', ...extraArgs],

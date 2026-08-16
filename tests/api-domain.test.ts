@@ -223,6 +223,8 @@ describe('api domain — archive_raw / auth / audit', () => {
       const stillThere = db2.prepare(`SELECT id FROM memories WHERE id = ?`).get(rawId);
       expect(stillThere).toBeUndefined();
 
+      // SAFETY: the db driver's .get() returns `unknown`; the row shape is guaranteed
+      // by the `SELECT memory_id, reason, archived_by` projection above (undefined if absent).
       const archived = db2
         .prepare(`SELECT memory_id, reason, archived_by FROM raw_archive WHERE memory_id = ?`)
         .get(rawId) as { memory_id: string; reason: string; archived_by: string } | undefined;

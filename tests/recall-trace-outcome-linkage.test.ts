@@ -24,7 +24,10 @@ import { remember, recall, outcome, outcomeForLastRecall, type Context } from '.
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const hippoBin = join(repoRoot, 'bin', 'hippo.js');
 
-function tmpHome(): { home: string; restore: () => void } {
+type RecallTraceRow = { id: number };
+type RecallTraceOutcomeRow = { outcome: string; memory_ids_json: string };
+
+function tmpHome() {
   const home = mkdtempSync(join(tmpdir(), 'hippo-recall-trace-outcome-'));
   initStore(home);
   return { home, restore: () => rmSync(home, { recursive: true, force: true }) };
@@ -44,12 +47,16 @@ describe('outcome linkage E2E (CLI recall -> outcome)', () => {
       const localStore = join(hippoRoot, '.hippo');
       const db = openHippoDb(localStore);
       try {
-        const traces = db.prepare(`SELECT * FROM recall_traces WHERE pipeline = 'cli'`).all() as Array<Record<string, unknown>>;
+        // SAFETY: recall_traces.id is INTEGER PRIMARY KEY AUTOINCREMENT
+        // (src/db.ts schema), so every row carries a numeric id.
+        const traces = db.prepare(`SELECT * FROM recall_traces WHERE pipeline = 'cli'`).all() as RecallTraceRow[];
         expect(traces).toHaveLength(1);
-        const outcomes = db.prepare(`SELECT * FROM recall_trace_outcomes WHERE trace_id = ?`).all(traces[0].id) as Array<Record<string, unknown>>;
+        // SAFETY: recall_trace_outcomes.outcome and .memory_ids_json are
+        // NOT NULL text columns (src/db.ts schema), guaranteed on every row.
+        const outcomes = db.prepare(`SELECT * FROM recall_trace_outcomes WHERE trace_id = ?`).all(traces[0]!.id) as RecallTraceOutcomeRow[];
         expect(outcomes).toHaveLength(1);
-        expect(outcomes[0].outcome).toBe('positive');
-        const memoryIds = JSON.parse(outcomes[0].memory_ids_json as string);
+        expect(outcomes[0]!.outcome).toBe('positive');
+        const memoryIds = JSON.parse(outcomes[0]!.memory_ids_json);
         expect(memoryIds).toHaveLength(1);
       } finally {
         closeHippoDb(db);
@@ -80,6 +87,8 @@ describe('outcomeForLastRecall — no prior trace', () => {
 
       const db = openHippoDb(home);
       try {
+        // SAFETY: `COUNT(*) AS c` always yields exactly one row with a
+        // numeric `c` column.
         const outcomes = db.prepare(`SELECT COUNT(*) AS c FROM recall_trace_outcomes`).get() as { c: number };
         expect(outcomes.c).toBe(0);
       } finally {
@@ -103,6 +112,8 @@ describe('api.outcome explicit traceId opt (SDK linkage)', () => {
       const db = openHippoDb(home);
       let traceId: number;
       try {
+        // SAFETY: `SELECT id` names exactly one numeric column, and this
+        // trace was just created by the recall() call above.
         const trace = db.prepare(`SELECT id FROM recall_traces WHERE pipeline = 'api'`).get() as { id: number };
         traceId = trace.id;
       } finally {
@@ -114,9 +125,11 @@ describe('api.outcome explicit traceId opt (SDK linkage)', () => {
 
       const db2 = openHippoDb(home);
       try {
-        const rows = db2.prepare(`SELECT * FROM recall_trace_outcomes WHERE trace_id = ?`).all(traceId) as Array<Record<string, unknown>>;
+        // SAFETY: recall_trace_outcomes.outcome is a NOT NULL text column
+        // (src/db.ts schema), guaranteed on every row.
+        const rows = db2.prepare(`SELECT * FROM recall_trace_outcomes WHERE trace_id = ?`).all(traceId) as Array<{ outcome: string }>;
         expect(rows).toHaveLength(1);
-        expect(rows[0].outcome).toBe('positive');
+        expect(rows[0]!.outcome).toBe('positive');
       } finally {
         closeHippoDb(db2);
       }
@@ -134,6 +147,8 @@ describe('api.outcome explicit traceId opt (SDK linkage)', () => {
 
       const db = openHippoDb(home);
       try {
+        // SAFETY: `COUNT(*) AS c` always yields exactly one row with a
+        // numeric `c` column.
         const count = db.prepare(`SELECT COUNT(*) AS c FROM recall_trace_outcomes`).get() as { c: number };
         expect(count.c).toBe(0);
       } finally {

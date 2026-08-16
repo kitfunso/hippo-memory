@@ -26,7 +26,12 @@ import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';
 import { remember, sleep, type Context } from '../src/api.js';
 
-function tmpHome(): { home: string; restore: () => void } {
+// The 'consolidate' audit op's metadata is always the flat scalar phase-counter
+// object built at the appendAuditEvent call site for that op in src/api.ts --
+// never nested objects or arrays.
+type AuditMetadataValue = string | number | boolean | null;
+
+function tmpHome() {
   const home = mkdtempSync(join(tmpdir(), 'hippo-api-sleep-'));
   initStore(home);
   // api.sleep's auto-share phase promotes memories to the GLOBAL store
@@ -113,10 +118,10 @@ describe('api.sleep', () => {
       const result = await sleep(ctx, { dryRun: false });
 
       expect(result.dryRun).toBe(false);
-      expect(typeof result.active).toBe('number');
-      expect(typeof result.removed).toBe('number');
-      expect(typeof result.mergedEpisodic).toBe('number');
-      expect(typeof result.newSemantic).toBe('number');
+      expect(Number.isInteger(result.active)).toBe(true);
+      expect(Number.isInteger(result.removed)).toBe(true);
+      expect(Number.isInteger(result.mergedEpisodic)).toBe(true);
+      expect(Number.isInteger(result.newSemantic)).toBe(true);
       expect(Array.isArray(result.details)).toBe(true);
     } finally {
       restore();
@@ -162,7 +167,9 @@ describe('api.sleep', () => {
       expect(rows[0]?.actor).toBe('cli');
       expect(rows[0]?.op).toBe('consolidate');
       // Metadata should carry phase counters with the keys we expect.
-      const meta = rows[0]?.metadata as Record<string, unknown>;
+      // SAFETY: see the AuditMetadataValue comment above -- consolidate metadata is
+      // always a flat scalar object.
+      const meta = rows[0]?.metadata as Record<string, AuditMetadataValue>;
       expect(meta).toBeDefined();
       expect(meta).toHaveProperty('consolidationCount');
       expect(meta).toHaveProperty('dedupCount');
@@ -189,7 +196,9 @@ describe('api.sleep', () => {
       closeHippoDb(db);
 
       expect(rows.length).toBe(1);
-      const meta = rows[0]?.metadata as Record<string, unknown>;
+      // SAFETY: see the AuditMetadataValue comment above -- consolidate metadata is
+      // always a flat scalar object.
+      const meta = rows[0]?.metadata as Record<string, AuditMetadataValue>;
       expect(meta.dryRun).toBe(true);
       expect(meta.partial).toBe(false);
     } finally {

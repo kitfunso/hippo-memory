@@ -164,7 +164,7 @@ function buildDashboardData(hippoRoot: string): DashboardData {
 }
 
 
-const MIME_TYPES: Record<string, string> = {
+const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -173,9 +173,15 @@ const MIME_TYPES: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
   '.woff2': 'font/woff2',
-};
+} as const;
 
-function jsonResponse(res: http.ServerResponse, data: unknown, status: number = 200): void {
+type StaticFileExtension = keyof typeof MIME_TYPES;
+
+function isStaticFileExtension(ext: string): ext is StaticFileExtension {
+  return Object.hasOwn(MIME_TYPES, ext);
+}
+
+function jsonResponse<T>(res: http.ServerResponse, data: T, status: number = 200): void {
   const body = JSON.stringify(data);
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
@@ -186,8 +192,8 @@ function jsonResponse(res: http.ServerResponse, data: unknown, status: number = 
 
 function serveStaticFile(res: http.ServerResponse, filePath: string): boolean {
   const ext = path.extname(filePath).toLowerCase();
+  if (!isStaticFileExtension(ext)) return false;
   const mime = MIME_TYPES[ext];
-  if (!mime) return false;
 
   try {
     const content = fs.readFileSync(filePath);

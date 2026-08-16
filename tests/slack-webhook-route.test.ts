@@ -44,6 +44,8 @@ describe('POST /v1/connectors/slack/events', () => {
       body,
     });
     expect(res.status).toBe(200);
+    // SAFETY: this route's url_verification response is fixed by the handler
+    // in src/server.ts and checked by the assertion immediately below.
     const json = (await res.json()) as { challenge?: string };
     expect(json.challenge).toBe('abc123');
   });
@@ -117,6 +119,8 @@ describe('POST /v1/connectors/slack/events', () => {
     expect(res.status).toBe(200);
     const db = openHippoDb(root);
     try {
+      // SAFETY: literal COUNT(*) query against the known slack_dlq schema
+      // always returns a single { c } row.
       const row = db.prepare(`SELECT COUNT(*) as c FROM slack_dlq`).get() as { c: number };
       expect(Number(row.c)).toBe(1);
     } finally {

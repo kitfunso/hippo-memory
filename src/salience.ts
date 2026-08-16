@@ -94,7 +94,7 @@ export function computeSalience(
 function findBestOverlap(
   content: string,
   memories: MemoryEntry[],
-): { overlap: number; matchId: string | null } {
+) {
   let best = 0;
   let matchId: string | null = null;
   for (const m of memories) {

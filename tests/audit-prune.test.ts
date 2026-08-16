@@ -25,6 +25,9 @@ function seedAuditRow(
 }
 
 function countAudit(db: DatabaseSyncLike, tenantId: string): number {
+  // SAFETY: literal COUNT(*) query against the known audit_log schema always
+  // returns a single { c } row; SQLite COUNT can surface as bigint for large
+  // tables.
   const r = db
     .prepare(`SELECT COUNT(*) AS c FROM audit_log WHERE tenant_id = ?`)
     .get(tenantId) as { c: number | bigint };
@@ -125,6 +128,8 @@ describe('pruneAuditLog', () => {
 
     pruneAuditLog(db, { olderThanDays: 30, tenantId: 'acme', actor: 'cli:test' });
 
+    // SAFETY: literal SELECT of these three known columns for the
+    // audit_prune row pruneAuditLog just emitted.
     const row = db
       .prepare(`SELECT actor, op, metadata_json FROM audit_log WHERE tenant_id = ? AND op = 'audit_prune'`)
       .get('acme') as { actor: string; op: string; metadata_json: string } | undefined;
@@ -163,6 +168,8 @@ describe('pruneAuditLog', () => {
     pruneAuditLog(db, { olderThanDays: 1, tenantId: 'acme' });
     // 1 old row deleted, 1 audit_prune row remaining (its ts is now, way newer than cutoff).
     expect(countAudit(db, 'acme')).toBe(1);
+    // SAFETY: literal SELECT of the op column against the known audit_log
+    // schema; op is NOT NULL.
     const surviving = db
       .prepare(`SELECT op FROM audit_log WHERE tenant_id = ?`)
       .all('acme') as Array<{ op: string }>;

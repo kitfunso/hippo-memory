@@ -174,8 +174,8 @@ export function deriveVisibleIds(
 
   for (const m of memories) {
     if (!matchesQuery(m, state.query)) continue;
-    if (filterLayers && !state.layers.has(m.layer as Layer)) continue;
-    if (filterConfidences && !state.confidences.has(m.confidence as Confidence)) continue;
+    if (filterLayers && !state.layers.has(m.layer)) continue;
+    if (filterConfidences && !state.confidences.has(m.confidence)) continue;
     if (filterStrength && (m.strength < strMin || m.strength > strMax)) continue;
     if (filterAge && state.ageMaxDays !== null && m.age_days > state.ageMaxDays) continue;
     if (state.fadingOnly && !isFading(m)) continue;

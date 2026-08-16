@@ -22,6 +22,7 @@ describe('A5 schema migration v16: tenant_id columns', () => {
     const db = openHippoDb(home);
     try {
       for (const tbl of ['memories', 'working_memory', 'consolidation_runs', 'task_snapshots', 'memory_conflicts']) {
+        // SAFETY: PRAGMA table_info always returns rows with a "name" column per SQLite's fixed schema.
         const cols = db.prepare(`PRAGMA table_info(${tbl})`).all() as Array<{ name: string }>;
         expect(cols.some((c) => c.name === 'tenant_id'), `${tbl}.tenant_id missing`).toBe(true);
       }
@@ -35,6 +36,7 @@ describe('A5 schema migration v16: tenant_id columns', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-a5-'));
     const db = openHippoDb(home);
     try {
+      // SAFETY: query selects only the "name" column from sqlite_master, so each row has a "name" string.
       const indexes = db.prepare(`SELECT name FROM sqlite_master WHERE type='index'`).all() as Array<{ name: string }>;
       const names = new Set(indexes.map((i) => i.name));
       expect(names.has('idx_memories_tenant_created')).toBe(true);
@@ -53,6 +55,7 @@ describe('A5 schema migration v16: api_keys and audit_log tables', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-a5-'));
     const db = openHippoDb(home);
     try {
+      // SAFETY: PRAGMA table_info always returns rows with a "name" column per SQLite's fixed schema.
       const cols = db.prepare(`PRAGMA table_info(api_keys)`).all() as Array<{ name: string }>;
       const names = new Set(cols.map((c) => c.name));
       for (const required of ['id', 'key_id', 'key_hash', 'tenant_id', 'created_at', 'revoked_at', 'label']) {
@@ -84,6 +87,7 @@ describe('A5 schema migration v16: api_keys and audit_log tables', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-a5-'));
     const db = openHippoDb(home);
     try {
+      // SAFETY: PRAGMA table_info always returns rows with a "name" column per SQLite's fixed schema.
       const cols = db.prepare(`PRAGMA table_info(audit_log)`).all() as Array<{ name: string }>;
       const names = new Set(cols.map((c) => c.name));
       for (const required of ['id', 'ts', 'tenant_id', 'actor', 'op', 'target_id', 'metadata_json']) {
@@ -108,6 +112,7 @@ describe('A5 v16 backfill', () => {
       db.prepare(
         `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, kind) VALUES ('m1','2026-04-01','2026-04-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','c','distilled')`,
       ).run();
+      // SAFETY: query selects only "tenant_id" for the row just inserted above, so the result has that column.
       const row = db.prepare(`SELECT tenant_id FROM memories WHERE id='m1'`).get() as { tenant_id: string };
       expect(row.tenant_id).toBe('default');
     } finally {

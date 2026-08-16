@@ -19,12 +19,12 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry, MemoryKind } from '../src/memory.js';
+import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
 import { recall, type Context } from '../src/api.js';
 import { estimateTokens, type SearchResult } from '../src/search.js';
 import { insertEntity, insertRelation } from '../src/graph.js';
 import { graphExpandRecall } from '../src/graph-recall.js';
-import { compareEntryIdentity } from '../src/compare.js';
+import { compareEntryIdentity, type EntryIdentity } from '../src/compare.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -52,7 +52,7 @@ describe('api.ts:833 DAG substitution ordering', () => {
       dag_level: opts.dag_level ?? 0,
       dag_parent_id: opts.dag_parent_id,
       tenantId: opts.tenantId ?? 'default',
-      kind: (opts.kind ?? 'distilled') as MemoryKind,
+      kind: opts.kind ?? 'distilled',
     });
   }
   function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
@@ -114,8 +114,8 @@ describe('api.ts:833 DAG substitution ordering', () => {
     // plan's explicit allowance, test the api.ts:833 comparator expression
     // directly at the sorted-array level (same expression, just inlined —
     // api.ts does not export it).
-    const parentA = { id: 'parent-zzz', content: 'zzz summary of topic zzz', tags: [] } as unknown as MemoryEntry;
-    const parentB = { id: 'parent-aaa', content: 'aaa summary of topic aaa', tags: [] } as unknown as MemoryEntry;
+    const parentA: EntryIdentity = { id: 'parent-zzz', content: 'zzz summary of topic zzz' };
+    const parentB: EntryIdentity = { id: 'parent-aaa', content: 'aaa summary of topic aaa' };
     const overflowByParent = new Map<string, number>([
       [parentA.id, 2],
       [parentB.id, 2], // tied overflow count with parentA

@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { createMemory, Layer, type MemoryEntry, type EmotionalValence } from '../src/memory.js';
 import { computeAmbientState, renderAmbientSummary, formatAmbientVector } from '../src/ambient.js';
 
 function mem(content: string, opts: {
   tags?: string[];
   layer?: Layer;
-  emotional_valence?: string;
+  emotional_valence?: EmotionalValence;
   created?: string;
   schema_fit?: number;
   extracted_from?: string;
@@ -15,11 +15,11 @@ function mem(content: string, opts: {
     layer: opts.layer ?? Layer.Episodic,
     tags: opts.tags ?? [],
   });
-  if (opts.emotional_valence) (entry as any).emotional_valence = opts.emotional_valence;
-  if (opts.created) (entry as any).created = opts.created;
-  if (opts.schema_fit !== undefined) (entry as any).schema_fit = opts.schema_fit;
-  if (opts.extracted_from) (entry as any).extracted_from = opts.extracted_from;
-  if (opts.dag_level !== undefined) (entry as any).dag_level = opts.dag_level;
+  if (opts.emotional_valence) entry.emotional_valence = opts.emotional_valence;
+  if (opts.created) entry.created = opts.created;
+  if (opts.schema_fit !== undefined) entry.schema_fit = opts.schema_fit;
+  if (opts.extracted_from) entry.extracted_from = opts.extracted_from;
+  if (opts.dag_level !== undefined) entry.dag_level = opts.dag_level;
   return entry;
 }
 
@@ -109,7 +109,7 @@ describe('computeAmbientState', () => {
   it('skips superseded entries', () => {
     const entries = [
       mem('Active', { tags: ['a'] }),
-      (() => { const e = mem('Old', { tags: ['b'] }); (e as any).superseded_by = 'xxx'; return e; })(),
+      (() => { const e = mem('Old', { tags: ['b'] }); e.superseded_by = 'xxx'; return e; })(),
     ];
     const state = computeAmbientState(entries);
     expect(state.totalMemories).toBe(2);

@@ -76,6 +76,9 @@ describe('MCP-over-HTTP tenant context', () => {
       }),
     });
     expect(res.status).toBe(200);
+    // SAFETY: this is the MCP server's own JSON-RPC response to a
+    // `tools/call`; the handler always replies with `{ result: { content } }`
+    // on success, matching this narrow read-only shape.
     const body = await res.json() as { result?: { content: Array<{ text: string }> } };
     const replyText = body.result?.content?.[0]?.text ?? '';
     expect(replyText).toMatch(/Remembered/i);
@@ -84,6 +87,8 @@ describe('MCP-over-HTTP tenant context', () => {
     // guarding against would have written 'default' here.
     const verify = openHippoDb(home);
     try {
+      // SAFETY: the SELECT list above names exactly these two columns, so
+      // every returned row has this shape.
       const rows = verify
         .prepare(`SELECT tenant_id, content FROM memories WHERE content = ?`)
         .all(sentinel) as Array<{ tenant_id: string; content: string }>;

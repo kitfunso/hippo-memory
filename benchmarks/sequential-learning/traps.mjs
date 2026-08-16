@@ -236,20 +236,20 @@ function buildSeededTrapMap(seed) {
   }
 
   // Group non-adversarial categories by their canonical phase shape (e.g. "early,mid,late").
-  const shapeGroups = new Map(); // shape -> [{category, positions}]
+  const phasePatternGroups = new Map(); // phase pattern -> [{category, positions}]
   for (const tp of nonAdversarialPlacements) {
-    const shape = tp.positions.map(phaseOf).sort().join(',');
-    if (!shapeGroups.has(shape)) shapeGroups.set(shape, []);
-    shapeGroups.get(shape).push(tp);
+    const phasePattern = tp.positions.map(phaseOf).sort().join(',');
+    if (!phasePatternGroups.has(phasePattern)) phasePatternGroups.set(phasePattern, []);
+    phasePatternGroups.get(phasePattern).push(tp);
   }
 
   // Salt per shape group keeps streams independent across groups. Sort by
   // shape key for determinism (Map insertion order is non-deterministic
   // across spec versions; explicit sort future-proofs the seeded output).
-  const sortedShapes = [...shapeGroups.keys()].sort();
+  const sortedPhasePatterns = [...phasePatternGroups.keys()].sort();
 
-  sortedShapes.forEach((shape, idx) => {
-    const group = shapeGroups.get(shape);
+  sortedPhasePatterns.forEach((phasePattern, idx) => {
+    const group = phasePatternGroups.get(phasePattern);
     // Shuffle the array of category IDs within this group. The list of
     // slot-tuples stays in canonical order; we only rotate which category
     // attaches to which tuple.
@@ -293,7 +293,7 @@ function buildSeededTrapMap(seed) {
  */
 export function generateTasks(seed) {
   let trapMap;
-  if (typeof seed === 'number') {
+  if (Object.prototype.toString.call(seed) === '[object Number]') {
     trapMap = buildSeededTrapMap(seed);
   } else {
     trapMap = new Map();

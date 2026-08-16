@@ -9,7 +9,7 @@ import { summariseTranscript, resolveLastSessionTranscript } from '../src/captur
 /**
  * Per-test tmpdir so the fake transcript fixtures don't leak between cases.
  */
-function withTmpDir(): { dir: string; cleanup: () => void } {
+function withTmpDir() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-capture-test-'));
   return {
     dir,

@@ -102,6 +102,14 @@ interface ReceiptRow {
   content: string;
 }
 
+/** Audit-metadata fields set only when a write came from refreshBrief's
+ *  auto-refresh path, so the supersede/create audit events carry receipt_count
+ *  exactly when isRefresh is true (named owner contract instead of a
+ *  conditional `{}` spread). */
+interface RefreshAuditMetadata {
+  receipt_count?: number;
+}
+
 // ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
@@ -116,7 +124,7 @@ function validateBriefFields(
   repo: string,
   summary: string,
   changeSummary: string | undefined,
-): { repo: string } {
+) {
   const normalizedRepo = (repo ?? '').trim();
   if (normalizedRepo.length === 0) throw new Error('saveProjectBrief: repo is required');
   if (/[\r\n]/.test(normalizedRepo)) {
@@ -164,6 +172,8 @@ function rowToProjectBrief(row: ProjectBriefRow): ProjectBrief {
     repo: row.repo,
     summary: row.summary,
     version: row.version,
+    // SAFETY: row.status is DB-constrained to BriefStatus values; every INSERT/
+    // UPDATE in this file writes only the literal 'active' | 'superseded' | 'closed'.
     status: row.status as BriefStatus,
     supersededBy: row.superseded_by,
     supersededAt: row.superseded_at,
@@ -206,6 +216,8 @@ export function saveProjectBrief(
   const isSupersede = opts.supersedesBriefId !== undefined;
   const changeSummary = isSupersede ? (opts.changeSummary ?? null) : null;
   const isRefresh = opts.refreshReceiptCount !== undefined;
+  const refreshAuditExtra: RefreshAuditMetadata = {};
+  if (isRefresh) refreshAuditExtra.receipt_count = opts.refreshReceiptCount;
 
   const now = new Date().toISOString();
   const content = buildBriefContent(repo, opts.summary);
@@ -230,6 +242,8 @@ export function saveProjectBrief(
       // Mirrors saveSkill / saveProcess (codex P1 2026-05-28).
       let version = 1;
       if (opts.supersedesBriefId !== undefined) {
+        // SAFETY: SELECT projects exactly status, version; .get() returns that
+        // shape for the matching row, or undefined when no brief/tenant pair matches.
         const pred = db.prepare(
           `SELECT status, version FROM project_briefs WHERE id = ? AND tenant_id = ?`,
         ).get(opts.supersedesBriefId, tenantId) as
@@ -285,11 +299,14 @@ export function saveProjectBrief(
             superseded_by: briefId,
             new_version: version,
             refreshed: isRefresh,
-            ...(isRefresh ? { receipt_count: opts.refreshReceiptCount } : {}),
+            ...refreshAuditExtra,
           },
         });
       }
 
+      // SAFETY: SELECT ${BRIEF_COLS} projects exactly the ProjectBriefRow
+      // columns; .get() returns that row, or undefined only if the
+      // just-inserted id can't be found.
       const row = db.prepare(`SELECT ${BRIEF_COLS} FROM project_briefs WHERE id = ?`)
         .get(briefId) as ProjectBriefRow | undefined;
       if (!row) throw new Error('saveProjectBrief: failed to reload saved brief row');
@@ -306,7 +323,7 @@ export function saveProjectBrief(
           repo,
           version,
           refreshed: isRefresh,
-          ...(isRefresh ? { receipt_count: opts.refreshReceiptCount } : {}),
+          ...refreshAuditExtra,
         },
       });
     },
@@ -343,6 +360,8 @@ export function closeProjectBrief(
       `).run(now, id, tenantId);
 
       if (updateResult.changes === 0) {
+        // SAFETY: SELECT projects exactly the status column; .get() returns that
+        // shape, or undefined when the id/tenant pair doesn't exist.
         const existing = db.prepare(
           `SELECT status FROM project_briefs WHERE id = ? AND tenant_id = ?`,
         ).get(id, tenantId) as { status: string } | undefined;
@@ -354,6 +373,9 @@ export function closeProjectBrief(
         );
       }
 
+      // SAFETY: SELECT ${BRIEF_COLS} projects exactly the ProjectBriefRow
+      // columns; .get() returns that row for the just-updated id, or undefined
+      // only in an impossible race since the UPDATE above already matched it.
       const row = db.prepare(`SELECT ${BRIEF_COLS} FROM project_briefs WHERE id = ? AND tenant_id = ?`)
         .get(id, tenantId) as ProjectBriefRow | undefined;
       if (!row) throw new Error(`closeProjectBrief: brief ${id} not found after UPDATE`);
@@ -399,6 +421,9 @@ export function loadProjectBriefById(
   assertTenantId('loadProjectBriefById', tenantId);
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: SELECT ${BRIEF_COLS} projects exactly the ProjectBriefRow
+    // columns; .get() returns that row, or undefined when the id/tenant pair
+    // doesn't exist.
     const row = db.prepare(`SELECT ${BRIEF_COLS} FROM project_briefs WHERE id = ? AND tenant_id = ?`)
       .get(id, tenantId) as ProjectBriefRow | undefined;
     return row ? rowToProjectBrief(row) : null;
@@ -432,6 +457,9 @@ export function loadProjectBriefs(
       params.push(opts.repo);
     }
     params.push(limit);
+    // SAFETY: SELECT ${BRIEF_COLS} projects exactly the ProjectBriefRow columns
+    // regardless of the dynamic WHERE clause built above; .all() returns rows
+    // in that shape.
     const rows = db.prepare(`
       SELECT ${BRIEF_COLS} FROM project_briefs
       WHERE ${clauses.join(' AND ')}
@@ -457,6 +485,9 @@ export function loadActiveBriefForRepo(
   assertTenantId('loadActiveBriefForRepo', tenantId);
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: SELECT ${BRIEF_COLS} projects exactly the ProjectBriefRow
+    // columns; .get() returns that row, or undefined when no active brief
+    // exists for this tenant/repo.
     const row = db.prepare(`
       SELECT ${BRIEF_COLS} FROM project_briefs
       WHERE tenant_id = ? AND repo = ? AND status = 'active'
@@ -505,7 +536,7 @@ export function assembleBriefFromReceipts(
   hippoRoot: string,
   tenantId: string,
   repo: string,
-): { markdown: string; receiptCount: number } {
+) {
   assertTenantId('assembleBriefFromReceipts', tenantId);
   const normalizedRepo = (repo ?? '').trim();
   if (normalizedRepo.length === 0) {
@@ -517,6 +548,8 @@ export function assembleBriefFromReceipts(
   const db = openHippoDb(hippoRoot);
   let receipts: ReceiptRow[];
   try {
+    // SAFETY: SELECT projects exactly id, created, source, content (the
+    // ReceiptRow columns); .all() returns rows in that shape.
     receipts = db.prepare(`
       SELECT id, created, source, content FROM memories
       WHERE tenant_id = ?

@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createMemory, Layer, MemoryKind } from '../src/memory.js';
+import { createMemory, Layer } from '../src/memory.js';
 import { recall, type Context } from '../src/api.js';
 import {
   hashQueryText,
@@ -44,7 +44,7 @@ function seedQueryMatchingMemory(root: string, content: string): string {
   const mem = createMemory(content, {
     layer: Layer.Buffer,
     confidence: 'observed',
-    kind: 'raw' as MemoryKind,
+    kind: 'raw',
     tenantId: 'default',
   });
   writeEntry(root, mem);
@@ -60,6 +60,8 @@ function entry(queryHash: number, topMemoryId: string | null, anchoredOn?: strin
 function countAuditOps(root: string, op: string): number {
   const db = openHippoDb(root);
   try {
+    // SAFETY: literal COUNT(*) query against the known audit_log schema
+    // always returns a single { n } row.
     const row = db.prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE op = ?`).get(op) as { n: number };
     return row.n;
   } finally {

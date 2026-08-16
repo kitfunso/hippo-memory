@@ -102,6 +102,15 @@ export interface ConsolidationResult {
 
 const REPLAY_COUNT_DEFAULT = 5;
 
+/** JSON value shape for a session event's free-form metadata field, cast to
+ *  once at its `Record<string, unknown>` origin so it can be narrowed via
+ *  isJsonString below rather than left as unparsed `unknown`. */
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+function isJsonString(value: JsonValue): value is string {
+  return typeof value === 'string';
+}
+
 /**
  * Run a full consolidation pass.
  */
@@ -385,9 +394,11 @@ export async function consolidate(
         .filter((e) => e.event_type !== 'session_complete')
         .map((e) => ({ action: e.content, observation: '' }));
 
-      const summary = typeof completeEvent.metadata.summary === 'string'
-        ? completeEvent.metadata.summary
-        : '(untitled)';
+      // SAFETY: session event metadata is a free-form Record<string, unknown>
+      // bag; summary is optional and is only trusted once isJsonString below
+      // confirms it is actually a string.
+      const summaryValue = completeEvent.metadata.summary as JsonValue;
+      const summary = isJsonString(summaryValue) ? summaryValue : '(untitled)';
 
       const trace = createMemory(
         renderTraceContent({ task: summary, steps, outcome }),

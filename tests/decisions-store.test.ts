@@ -31,7 +31,7 @@ import {
   writeEntry,
 } from '../src/store.js';
 import { createMemory, Layer } from '../src/memory.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import {
   saveDecision,
   closeDecision,
@@ -53,10 +53,33 @@ function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
 
+/**
+ * Typed wrappers around DatabaseSyncLike's untyped get/all and JSON.parse.
+ * Every call site below supplies T for a SELECT column list (or JSON
+ * payload written by saveDecision/audit logging under test) directly at
+ * the call, so the shape is established there, not assumed blind.
+ */
+function getRow<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T {
+  // SAFETY: see doc comment above.
+  return db.prepare(sql).get(...params) as T;
+}
+function getRowMaybe<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T | undefined {
+  // SAFETY: see doc comment above; undefined only when get() finds no row.
+  return db.prepare(sql).get(...params) as T | undefined;
+}
+function allRows<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T[] {
+  // SAFETY: see doc comment above.
+  return db.prepare(sql).all(...params) as T[];
+}
+function parseJson<T>(text: string): T {
+  // SAFETY: see doc comment above.
+  return JSON.parse(text) as T;
+}
+
 function countRows(home: string, table: string): number {
   const db = openHippoDb(home);
   try {
-    return (db.prepare(`SELECT COUNT(*) as c FROM ${table}`).get() as { c: number }).c;
+    return getRow<{ c: number }>(db, `SELECT COUNT(*) as c FROM ${table}`).c;
   } finally { closeHippoDb(db); }
 }
 
@@ -82,18 +105,24 @@ describe('decisions store (E2 first-class object)', () => {
 
     const db = openHippoDb(home);
     try {
-      const memRow = db.prepare(`SELECT content, tags_json, source FROM memories WHERE id = ?`)
-        .get(d.memoryId!) as { content: string; tags_json: string; source: string } | undefined;
+      const memRow = getRowMaybe<{ content: string; tags_json: string; source: string }>(
+        db,
+        `SELECT content, tags_json, source FROM memories WHERE id = ?`,
+        d.memoryId!,
+      );
       expect(memRow).toBeDefined();
       expect(memRow!.content).toContain('use Postgres');
       expect(memRow!.content).toContain('Context: scale and JSONB');
       expect(memRow!.source).toBe('decision');
-      expect((JSON.parse(memRow!.tags_json) as string[])).toContain('decision');
+      expect(parseJson<string[]>(memRow!.tags_json)).toContain('decision');
 
-      const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'decision_create' AND target_id = ?`)
-        .all(String(d.id)) as Array<{ metadata_json: string }>;
+      const rows = allRows<{ metadata_json: string }>(
+        db,
+        `SELECT metadata_json FROM audit_log WHERE op = 'decision_create' AND target_id = ?`,
+        String(d.id),
+      );
       expect(rows.length).toBe(1);
-      const meta = JSON.parse(rows[0].metadata_json) as { decision_id: number; has_context: boolean };
+      const meta = parseJson<{ decision_id: number; has_context: boolean }>(rows[0].metadata_json);
       expect(meta.has_context).toBe(true);
     } finally {
       closeHippoDb(db);
@@ -105,11 +134,14 @@ describe('decisions store (E2 first-class object)', () => {
     expect(d.context).toBeNull();
     const db = openHippoDb(home);
     try {
-      const memRow = db.prepare(`SELECT content FROM memories WHERE id = ?`).get(d.memoryId!) as { content: string };
+      const memRow = getRow<{ content: string }>(db, `SELECT content FROM memories WHERE id = ?`, d.memoryId!);
       expect(memRow.content).toBe('adopt trunk-based dev');
-      const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'decision_create' AND target_id = ?`)
-        .all(String(d.id)) as Array<{ metadata_json: string }>;
-      expect((JSON.parse(rows[0].metadata_json) as { has_context: boolean }).has_context).toBe(false);
+      const rows = allRows<{ metadata_json: string }>(
+        db,
+        `SELECT metadata_json FROM audit_log WHERE op = 'decision_create' AND target_id = ?`,
+        String(d.id),
+      );
+      expect(parseJson<{ has_context: boolean }>(rows[0].metadata_json).has_context).toBe(false);
     } finally {
       closeHippoDb(db);
     }
@@ -151,10 +183,13 @@ describe('decisions store (E2 first-class object)', () => {
 
     const db = openHippoDb(home);
     try {
-      const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'decision_supersede' AND target_id = ?`)
-        .all(String(first.id)) as Array<{ metadata_json: string }>;
+      const rows = allRows<{ metadata_json: string }>(
+        db,
+        `SELECT metadata_json FROM audit_log WHERE op = 'decision_supersede' AND target_id = ?`,
+        String(first.id),
+      );
       expect(rows.length).toBe(1);
-      const meta = JSON.parse(rows[0].metadata_json) as { decision_id: number; superseded_by: number };
+      const meta = parseJson<{ decision_id: number; superseded_by: number }>(rows[0].metadata_json);
       expect(meta.superseded_by).toBe(second.id);
     } finally {
       closeHippoDb(db);
@@ -212,8 +247,11 @@ describe('decisions store (E2 first-class object)', () => {
 
     const db = openHippoDb(home);
     try {
-      const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'decision_close' AND target_id = ?`)
-        .all(String(d.id)) as Array<{ metadata_json: string }>;
+      const rows = allRows<{ metadata_json: string }>(
+        db,
+        `SELECT metadata_json FROM audit_log WHERE op = 'decision_close' AND target_id = ?`,
+        String(d.id),
+      );
       expect(rows.length).toBe(1);
     } finally { closeHippoDb(db); }
   });
@@ -345,13 +383,17 @@ describe('decisions store (E2 first-class object)', () => {
     const db = openHippoDb(home);
     try {
       expect(db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='decisions'`).get()).toBeDefined();
-      const triggers = (db.prepare(`SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_decisions_%'`)
-        .all() as Array<{ name: string }>).map((t) => t.name);
+      const triggers = allRows<{ name: string }>(
+        db,
+        `SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_decisions_%'`,
+      ).map((t) => t.name);
       expect(triggers).toContain('trg_decisions_tenant_match_insert');
       expect(triggers).toContain('trg_decisions_tenant_match_update');
       expect(triggers).toContain('trg_decisions_supersede_tenant_match_update');
-      const indexes = (db.prepare(`SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_decisions_%'`)
-        .all() as Array<{ name: string }>).map((i) => i.name);
+      const indexes = allRows<{ name: string }>(
+        db,
+        `SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_decisions_%'`,
+      ).map((i) => i.name);
       expect(indexes).toContain('idx_decisions_tenant_status');
       expect(indexes).toContain('idx_decisions_memory');
     } finally { closeHippoDb(db); }

@@ -809,7 +809,9 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
         sessionId: opts.sessionId,
         tenantId: ctx.tenantId,
         limit,
-        ...(explainTrace ? { trace: explainTrace } : {}),
+        // trace is optional on applyGoalStackBoost; explicitly passing
+        // undefined when !explain is identical to omitting the key.
+        trace: explainTrace,
       });
       baseSlice = baseScored.map((r) => r.entry);
     }
@@ -891,19 +893,22 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   // Substituted summaries land at the end with score = 0.5 (mid-rank), so
   // they don't outrank top-N strong matches but stay above lowest-rank
   // leaves on the consumer side. Caller sorts/filters as it sees fit.
-  const summaryRanked: RecallResultItem[] = substituted.map((s) => ({
-    id: s.entry.id,
-    content: s.entry.content,
-    score: 0.5,
-    layer: s.entry.layer,
-    strength: s.entry.strength,
-    isSummary: true,
-    substitutedFor: s.childIds,
-    descendantCount: s.entry.descendant_count ?? s.childIds.length,
+  const summaryRanked: RecallResultItem[] = substituted.map((s) => {
+    const item: RecallResultItem = {
+      id: s.entry.id,
+      content: s.entry.content,
+      score: 0.5,
+      layer: s.entry.layer,
+      strength: s.entry.strength,
+      isSummary: true,
+      substitutedFor: s.childIds,
+      descendantCount: s.entry.descendant_count ?? s.childIds.length,
+    };
     // A7 recall-trace: summary band runs no re-ranking, but under explain it
     // still carries the pipeline marker (no steps). Absent when !explain.
-    ...(opts.explain ? { rerankPipeline: 'api' as const } : {}),
-  }));
+    if (opts.explain) item.rerankPipeline = 'api';
+    return item;
+  });
   // v1.5.2 fresh-tail. Surface the last N kind='raw' rows so an agent's
   // "what did I just see" recall path always covers the recent window even
   // when the query terms don't match. Tenant + scope filtered.
@@ -940,17 +945,18 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
     ]);
     for (const m of recentScoped) {
       if (seenIds.has(m.id)) continue;
-      freshRanked.push({
+      const item: RecallResultItem = {
         id: m.id,
         content: m.content,
         score: 1.0,
         layer: m.layer,
         strength: m.strength,
         isFreshTail: true,
-        // A7 recall-trace: fresh-tail band runs no re-ranking; under explain
-        // it carries the pipeline marker (no steps). Absent when !explain.
-        ...(opts.explain ? { rerankPipeline: 'api' as const } : {}),
-      });
+      };
+      // A7 recall-trace: fresh-tail band runs no re-ranking; under explain
+      // it carries the pipeline marker (no steps). Absent when !explain.
+      if (opts.explain) item.rerankPipeline = 'api';
+      freshRanked.push(item);
       seenIds.add(m.id);
     }
   }
@@ -1044,6 +1050,9 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
       if (isPrivateScope(s)) return false;
       // v1.7.2: read from RECALL_DEFAULT_DENY_SCOPES (single source of truth
       // shared with SQL + passesScopeFilterForRecall).
+      // SAFETY: RECALL_DEFAULT_DENY_SCOPES is declared as a readonly tuple of
+      // string literals; widening to readonly string[] only relaxes the
+      // element type for Array.includes(s: string), it does not change values.
       if ((RECALL_DEFAULT_DENY_SCOPES as readonly string[]).includes(s)) return false;
       return true;
     };
@@ -1175,7 +1184,7 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
     }
   }
 
-  return {
+  const result: RecallResult = {
     results: rankedOut,
     total: totalOut,
     tokens: tokensOut,
@@ -1190,11 +1199,12 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
       freshTailAdded: freshTailAddedCount,
       suppressedByInterference: suppressedByInterferenceCount,
     }),
-    ...(planningFallacyHint ? { planningFallacyHint } : {}),
-    ...(planningFallacyWatching ? { planningFallacyWatching } : {}),
-    ...(anchoringHint ? { anchoringHint } : {}),
-    ...(availabilityHint ? { availabilityHint } : {}),
   };
+  if (planningFallacyHint) result.planningFallacyHint = planningFallacyHint;
+  if (planningFallacyWatching) result.planningFallacyWatching = planningFallacyWatching;
+  if (anchoringHint) result.anchoringHint = anchoringHint;
+  if (availabilityHint) result.availabilityHint = availabilityHint;
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -1623,12 +1633,16 @@ export function drillDown(
  * (server.ts explicit-ids path, MCP hippo_outcome) omits it and gets no
  * linkage, which is correct.
  */
+export interface OutcomeResult {
+  applied: number;
+  appliedIds: string[];
+}
 export function outcome(
   ctx: Context,
   ids: ReadonlyArray<string>,
   good: boolean,
   opts?: { traceId?: number },
-): { applied: number; appliedIds: string[] } {
+): OutcomeResult {
   const appliedIds: string[] = [];
   const db = openHippoDb(ctx.hippoRoot);
   try {
@@ -1677,9 +1691,15 @@ export function outcome(
  * cross-tenant access with a not-found error (no info leak about whether
  * the id exists in another tenant).
  */
-export function forget(ctx: Context, id: string): { ok: true; id: string } {
+export interface ForgetResult {
+  ok: true;
+  id: string;
+}
+export function forget(ctx: Context, id: string): ForgetResult {
   const db = openHippoDb(ctx.hippoRoot);
   try {
+    // SAFETY: row's shape matches the single `tenant_id` column named in
+    // the SELECT above.
     const row = db
       .prepare(`SELECT tenant_id FROM memories WHERE id = ?`)
       .get(id) as { tenant_id?: string } | undefined;
@@ -1803,10 +1823,15 @@ export function listRejections(ctx: Context): RejectedValueRow[] {
  * preserves the entry's existing tenantId on the global side. Task 4 may
  * tighten this once writeEntry/readEntry thread tenant context.
  */
+export interface PromoteResult {
+  ok: true;
+  sourceId: string;
+  globalId: string;
+}
 export function promote(
   ctx: Context,
   id: string,
-): { ok: true; sourceId: string; globalId: string } {
+): PromoteResult {
   // Tenant scope: promoteToGlobal reads the entry from the local root via
   // readEntry without a tenant filter, so a Bearer for tenant A could
   // promote tenant B's row by guessing or leaking the id. Pre-check the
@@ -1815,6 +1840,8 @@ export function promote(
   // another tenant).
   const ownerDb = openHippoDb(ctx.hippoRoot);
   try {
+    // SAFETY: row's shape matches the single `tenant_id` column named in
+    // the SELECT above.
     const row = ownerDb
       .prepare(`SELECT tenant_id FROM memories WHERE id = ?`)
       .get(id) as { tenant_id?: string } | undefined;
@@ -1857,11 +1884,16 @@ export function promote(
  * — A1 keeps the API minimal; the CLI handler will continue to handle those
  * flags and pass the resolved values once Task 4 lands).
  */
+export interface SupersedeResult {
+  ok: true;
+  oldId: string;
+  newId: string;
+}
 export function supersede(
   ctx: Context,
   oldId: string,
   newContent: string,
-): { ok: true; oldId: string; newId: string } {
+): SupersedeResult {
   // Read old (tenant-scoped). readEntry filters by tenantId, so a Bearer for
   // tenant A on tenant B's id throws "Memory not found" here without any
   // info leak.
@@ -1986,12 +2018,16 @@ export interface ArchiveRawOpts {
   afterArchive?: (db: DatabaseSyncLike, archivedMemoryId: string) => void;
 }
 
+export interface ArchiveRawResult {
+  ok: true;
+  archivedAt: string;
+}
 export function archiveRaw(
   ctx: Context,
   id: string,
   reason: string,
   opts: ArchiveRawOpts = {},
-): { ok: true; archivedAt: string } {
+): ArchiveRawResult {
   const db = openHippoDb(ctx.hippoRoot);
   let mirrorOk = false;
   try {
@@ -2000,6 +2036,8 @@ export function archiveRaw(
     // pre-check. Deny cross-tenant access with the same not-found message
     // archiveRawMemory itself would throw on a missing row, so we don't
     // leak whether the id exists in another tenant.
+    // SAFETY: row's shape matches the single `tenant_id` column named in
+    // the SELECT above.
     const row = db
       .prepare(`SELECT tenant_id FROM memories WHERE id = ?`)
       .get(id) as { tenant_id?: string } | undefined;
@@ -2143,12 +2181,18 @@ export function authList(
  * (M1 fix from A5 review, mirrors src/cli.ts:cmdAuthRevoke). Skipped on no-op
  * revoke (already revoked) so re-running doesn't pad the audit log.
  */
+export interface AuthRevokeResult {
+  ok: true;
+  revokedAt: string;
+}
 export function authRevoke(
   ctx: Context,
   keyId: string,
-): { ok: true; revokedAt: string } {
+): AuthRevokeResult {
   const db = openHippoDb(ctx.hippoRoot);
   try {
+    // SAFETY: row's shape matches the three columns named in the SELECT
+    // above.
     const row = db
       .prepare(`SELECT key_id, tenant_id, revoked_at FROM api_keys WHERE key_id = ?`)
       .get(keyId) as
@@ -2169,6 +2213,8 @@ export function authRevoke(
       revokedAt = row.revoked_at;
     } else {
       revokeApiKey(db, keyId);
+      // SAFETY: updated's shape matches the single `revoked_at` column named
+      // in the SELECT above.
       const updated = db
         .prepare(`SELECT revoked_at FROM api_keys WHERE key_id = ?`)
         .get(keyId) as { revoked_at: string | null } | undefined;
@@ -2855,6 +2901,9 @@ export async function sleep(
       try {
         dirtyTenants = phases.loadPendingExtractionTenants(ctx.hippoRoot);
       } catch (snapErr) {
+        // SAFETY: this is a best-effort log message only; property access on
+        // any JS value is safe (undefined if absent), preserving the existing
+        // lenient formatting even when something non-Error was thrown.
         graphSnapshotError = (snapErr as Error).message;
       }
     }
@@ -2985,6 +3034,9 @@ export async function sleep(
           // cascade-deleted earlier this sleep are already gone (no-op).
           markPendingProcessedUpTo(ctx.hippoRoot, tenantId, maxPendingId);
         } catch (tenantErr) {
+          // SAFETY: this is a best-effort log message only; property access
+          // on any JS value is safe (undefined if absent), preserving the
+          // existing lenient formatting even when something non-Error was thrown.
           result.details = [
             ...(result.details ?? []),
             `graph: extract failed for a dirty tenant (left pending): ${(tenantErr as Error).message}`,
@@ -2995,6 +3047,9 @@ export async function sleep(
         result.graph = { tenants: gTenants, entities: gEntities, relations: gRelations };
       }
     } catch (graphErr) {
+      // SAFETY: this is a best-effort log message only; property access on
+      // any JS value is safe (undefined if absent), preserving the existing
+      // lenient formatting even when something non-Error was thrown.
       result.details = [
         ...(result.details ?? []),
         `graph: drain phase failed (skipped): ${(graphErr as Error).message}`,
@@ -3003,6 +3058,9 @@ export async function sleep(
 
     return result;
   } catch (err) {
+    // SAFETY: phaseError is read via phaseError.message / (phaseError !==
+    // null) below, both safe even if a non-Error was thrown; this mirrors
+    // the existing lenient (err as Error) pattern used throughout this catch chain.
     phaseError = err as Error;
     throw err;
   } finally {
@@ -3036,21 +3094,33 @@ export async function sleep(
         // `hippo audit list --tenant __host__`. The actor field still
         // carries ctx.actor.subject so the operator who triggered the
         // consolidation is traceable.
+        interface SleepAuditMetadata {
+          consolidationCount: number;
+          dedupCount: number;
+          auditDeletedCount: number;
+          ambientTotal: number;
+          dryRun: boolean;
+          noShare: boolean;
+          partial: boolean;
+          triggeredByTenant: string;
+          errorMessage?: string;
+        }
+        const sleepAuditMetadata: SleepAuditMetadata = {
+          consolidationCount,
+          dedupCount,
+          auditDeletedCount,
+          ambientTotal,
+          dryRun,
+          noShare: opts.noShare ?? false,
+          partial: phaseError !== null,
+          triggeredByTenant: ctx.tenantId, // preserve for audit forensics
+        };
+        if (phaseError) sleepAuditMetadata.errorMessage = phaseError.message;
         appendAuditEvent(db, {
           tenantId: '__host__',
           actor: ctx.actor.subject,
           op: 'consolidate',
-          metadata: {
-            consolidationCount,
-            dedupCount,
-            auditDeletedCount,
-            ambientTotal,
-            dryRun,
-            noShare: opts.noShare ?? false,
-            partial: phaseError !== null,
-            triggeredByTenant: ctx.tenantId, // preserve for audit forensics
-            ...(phaseError ? { errorMessage: phaseError.message } : {}),
-          },
+          metadata: { ...sleepAuditMetadata },
         });
       } finally {
         closeHippoDb(db);
@@ -3061,6 +3131,9 @@ export async function sleep(
       // This guards the case where consolidation AND audit-emit fail in the
       // same invocation against the same DB (correlated: same disk, same
       // schema state) — losing the original error makes diagnosis much harder.
+      // SAFETY: this is a best-effort log message only; property access on
+      // any JS value is safe (undefined if absent), preserving the existing
+      // lenient formatting even when something non-Error was thrown.
       // eslint-disable-next-line no-console
       console.error(
         `[hippo] api.sleep audit emit failed: ${(auditErr as Error).message}`,
@@ -3095,10 +3168,14 @@ export async function sleep(
  * would break the (correct) cross-tenant-silent-skip behavior covered by
  * the test in `tests/api-outcome-for-last-recall.test.ts`.
  */
+export interface OutcomeForLastRecallResult {
+  applied: number;
+  ids: string[];
+}
 export function outcomeForLastRecall(
   ctx: Context,
   good: boolean,
-): { applied: number; ids: string[] } {
+): OutcomeForLastRecallResult {
   const idx = loadIndex(ctx.hippoRoot);
   const ids = idx.last_retrieval_ids;
   if (ids.length === 0) return { applied: 0, ids: [] };

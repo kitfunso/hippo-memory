@@ -18,11 +18,21 @@ export type RerankerFn = (
   options?: RerankerOptions,
 ) => Promise<RerankResult[]>;
 
+/** JSON-serializable value. Per-track reranker config is opaque to the seam
+ *  but must still be a concrete, serializable shape rather than `unknown`. */
+export type RerankerConfigValue =
+  | string
+  | number
+  | boolean
+  | null
+  | RerankerConfigValue[]
+  | { [key: string]: RerankerConfigValue };
+
 export interface RerankerOptions {
   /** Cap candidates passed to the reranker. Default 50. */
   topK?: number;
   /** Per-track config blob; opaque to the seam. */
-  config?: Record<string, unknown>;
+  config?: Record<string, RerankerConfigValue>;
 }
 
 export interface RerankResult extends SearchResult {

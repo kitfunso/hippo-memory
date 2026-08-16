@@ -38,6 +38,8 @@ export function handleMessageDeleted(ctx: Context, input: DeletionInput): Deleti
     // from tenant A could archive tenant B's raw row sharing the same
     // artifact_ref. The `kind = 'raw'` filter prevents accidentally targeting
     // distilled rows.
+    // SAFETY: row comes from the SELECT above, which projects only the
+    // `id` column; `.get` returns undefined when no row matches.
     const row = db
       .prepare(`SELECT id FROM memories WHERE artifact_ref = ? AND tenant_id = ? AND kind = 'raw'`)
       .get(ref, ctx.tenantId) as { id?: string } | undefined;

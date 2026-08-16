@@ -35,15 +35,17 @@ function runHippo(args: string[]): RunResult {
     });
     return { stdout, status: 0 };
   } catch (err) {
+    // SAFETY: execFileSync throws a Node ChildProcess error on non-zero exit, which
+    // always carries optional stdout/status fields from the spawned hippo.js process.
     const e = err as { stdout?: string; status?: number };
     return { stdout: e.stdout ?? '', status: e.status ?? 1 };
   }
 }
 
 function withCreated<T extends MemoryEntry>(entry: T, iso: string): T {
-  (entry as { created: string }).created = iso;
-  (entry as { valid_from: string }).valid_from = iso;
-  (entry as { last_retrieved: string }).last_retrieved = iso;
+  entry.created = iso;
+  entry.valid_from = iso;
+  entry.last_retrieved = iso;
   return entry;
 }
 
@@ -78,7 +80,7 @@ describe('hippo correction-latency CLI', () => {
       createMemory('belief: tier is 120', { extracted_from: raw.id }),
       '2026-04-01T10:30:00.000Z',
     );
-    (oldFact as { superseded_by: string | null }).superseded_by = newFact.id;
+    oldFact.superseded_by = newFact.id;
 
     writeEntry(hippoDir, oldFact);
     writeEntry(hippoDir, newFact);
@@ -106,7 +108,7 @@ describe('hippo correction-latency CLI', () => {
       createMemory('belief: tier is 120', {}),
       '2026-04-01T10:30:00.000Z',
     );
-    (oldFact as { superseded_by: string | null }).superseded_by = newFact.id;
+    oldFact.superseded_by = newFact.id;
 
     writeEntry(hippoDir, oldFact);
     writeEntry(hippoDir, newFact);

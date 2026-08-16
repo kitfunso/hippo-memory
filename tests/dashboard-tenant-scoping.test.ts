@@ -95,6 +95,9 @@ describe('dashboard tenant-scoping (v1.11.0 residue)', () => {
     // The tenant_a memory's starred field is unchanged in the DB.
     const db = openHippoDb(hippoRoot);
     try {
+      // SAFETY: SELECT starred FROM memories WHERE id = ? names exactly one
+      // column against the row seeded above (a.id), which is guaranteed to
+      // exist.
       const row = db
         .prepare(`SELECT starred FROM memories WHERE id = ?`)
         .get(a.id) as { starred: number };

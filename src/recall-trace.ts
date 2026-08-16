@@ -119,7 +119,7 @@ export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput):
     }
   } catch (error) {
     // eslint-disable-next-line no-console
-    console.error(`[hippo] recall trace write failed: ${(error as Error).message}`);
+    console.error(`[hippo] recall trace write failed: ${error instanceof Error ? error.message : String(error)}`);
     return null;
   }
 }
@@ -156,7 +156,7 @@ export function writeRecallTraceAtRoot(root: string, input: RecallTraceInput): n
     db = openHippoDb(root);
   } catch (error) {
     // eslint-disable-next-line no-console
-    console.error(`[hippo] recall trace connection failed: ${(error as Error).message}`);
+    console.error(`[hippo] recall trace connection failed: ${error instanceof Error ? error.message : String(error)}`);
     return null;
   }
   try {
@@ -205,6 +205,8 @@ export interface RecordTraceOutcomeInput {
  */
 export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutcomeInput): void {
   try {
+    // SAFETY: row shape matches the single `tenant_id` column named in the
+    // SELECT above; sqlite returns undefined when no row matches.
     const trace = db.prepare(`SELECT tenant_id FROM recall_traces WHERE id = ?`).get(input.traceId) as
       | { tenant_id?: string }
       | undefined;
@@ -214,6 +216,8 @@ export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutco
       return;
     }
 
+    // SAFETY: row shape matches the single `memory_id` column named in the
+    // SELECT above.
     const memberRows = db
       .prepare(`SELECT memory_id FROM recall_trace_results WHERE trace_id = ?`)
       .all(input.traceId) as Array<{ memory_id: string }>;
@@ -231,6 +235,6 @@ export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutco
     `).run(input.traceId, new Date().toISOString(), input.tenantId, input.outcome, JSON.stringify(credited));
   } catch (error) {
     // eslint-disable-next-line no-console
-    console.error(`[hippo] recall trace outcome write failed: ${(error as Error).message}`);
+    console.error(`[hippo] recall trace outcome write failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
