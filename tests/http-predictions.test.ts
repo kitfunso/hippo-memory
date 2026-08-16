@@ -19,6 +19,15 @@ import { initStore } from '../src/store.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { createApiKey, type CreatedApiKey } from '../src/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
+import type { Prediction } from '../src/predictions.js';
+
+/** Parse a fetch Response body against a caller-declared shape. */
+async function jsonAs<T>(res: Response): Promise<T> {
+  // SAFETY: only used against this file's own /v1/predictions route
+  // responses, whose JSON shape is fixed by the handler in src/server.ts and
+  // checked by the assertions immediately following each call site.
+  return (await res.json()) as T;
+}
 
 function makeRoot(): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-http-pred-'));
@@ -66,7 +75,7 @@ describe('HTTP /v1/predictions (E2 prediction, v0.31)', () => {
       }),
     });
     expect(res.status).toBe(201);
-    const body = await res.json() as { prediction: Record<string, unknown> };
+    const body = await jsonAs<{ prediction: Prediction }>(res);
     expect(body.prediction).toBeDefined();
     expect(body.prediction.classTag).toBe('migration-effort');
     expect(body.prediction.claimText).toBe('migration takes 2 days');
@@ -90,7 +99,7 @@ describe('HTTP /v1/predictions (E2 prediction, v0.31)', () => {
       headers: authHeaders(),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as { predictions: Array<Record<string, unknown>> };
+    const body = await jsonAs<{ predictions: Prediction[] }>(res);
     expect(body.predictions.length).toBe(2);
     expect(body.predictions.every((p) => p.classTag === 'list-test')).toBe(true);
     expect(body.predictions.every((p) => p.closureState === 'open')).toBe(true);
@@ -102,11 +111,11 @@ describe('HTTP /v1/predictions (E2 prediction, v0.31)', () => {
       headers: authHeaders(),
       body: JSON.stringify({ claim: 'show test claim', classTag: 'show-test' }),
     });
-    const created = (await create.json() as { prediction: { id: number } }).prediction;
+    const created = (await jsonAs<{ prediction: Prediction }>(create)).prediction;
 
     const getRes = await fetch(`${handle.url}/v1/predictions/${created.id}`, { headers: authHeaders() });
     expect(getRes.status).toBe(200);
-    const fetched = (await getRes.json() as { prediction: Record<string, unknown> }).prediction;
+    const fetched = (await jsonAs<{ prediction: Prediction }>(getRes)).prediction;
     expect(fetched.id).toBe(created.id);
 
     const missingRes = await fetch(`${handle.url}/v1/predictions/99999`, { headers: authHeaders() });
@@ -119,7 +128,7 @@ describe('HTTP /v1/predictions (E2 prediction, v0.31)', () => {
       headers: authHeaders(),
       body: JSON.stringify({ claim: 'close test claim', classTag: 'close-test', estimate: 1 }),
     });
-    const created = (await create.json() as { prediction: { id: number } }).prediction;
+    const created = (await jsonAs<{ prediction: Prediction }>(create)).prediction;
 
     const closeRes = await fetch(`${handle.url}/v1/predictions/${created.id}/close`, {
       method: 'POST',
@@ -127,7 +136,7 @@ describe('HTTP /v1/predictions (E2 prediction, v0.31)', () => {
       body: JSON.stringify({ state: 'closed', actual: 3, note: 'took longer' }),
     });
     expect(closeRes.status).toBe(200);
-    const closed = (await closeRes.json() as { prediction: Record<string, unknown> }).prediction;
+    const closed = (await jsonAs<{ prediction: Prediction }>(closeRes)).prediction;
     expect(closed.closureState).toBe('closed');
     expect(closed.actualValue).toBe(3);
     expect(closed.closureNote).toBe('took longer');
@@ -139,7 +148,7 @@ describe('HTTP /v1/predictions (E2 prediction, v0.31)', () => {
       headers: authHeaders(),
     });
     expect(res.status).toBe(400);
-    const body = await res.json() as { error: string };
+    const body = await jsonAs<{ error: string }>(res);
     expect(body.error).toMatch(/status must be one of/);
   });
 

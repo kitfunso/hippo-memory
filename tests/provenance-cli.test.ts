@@ -36,6 +36,9 @@ function runHippo(args: string[]): RunResult {
     });
     return { stdout, stderr: '', status: 0 };
   } catch (err) {
+    // SAFETY: execFileSync throws a Node child_process error augmented with
+    // stdout/stderr/status on non-zero exit; that shape is guaranteed by the
+    // Node API contract for a failed synchronous subprocess call.
     const e = err as { stdout?: string; stderr?: string; status?: number };
     return { stdout: e.stdout ?? '', stderr: e.stderr ?? '', status: e.status ?? 1 };
   }

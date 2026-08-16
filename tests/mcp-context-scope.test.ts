@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, readEntry, saveActiveTaskSnapshot, writeEntry } from '../src/store.js';
 import { createMemory } from '../src/memory.js';
-import { handleMcpRequest } from '../src/mcp/server.js';
+import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 
 function makeRoot(prefix: string): string {
   const home = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
@@ -16,7 +16,7 @@ function makeRoot(prefix: string): string {
 function callTool(
   reqId: number,
   name: string,
-  args: Record<string, unknown>,
+  args: Record<string, string | number | boolean>,
   ctx: { hippoRoot: string; tenantId: string; actor: string; clientKey?: string },
 ) {
   return handleMcpRequest(
@@ -30,9 +30,11 @@ function callTool(
   );
 }
 
-function extractText(res: unknown): string {
-  const r = res as { result?: { content?: Array<{ text?: string }> } } | null;
-  return r?.result?.content?.[0]?.text ?? '';
+function extractText(res: McpResponse | null): string {
+  // SAFETY: every hippo_context tool response in this suite carries a
+  // single MCP text content block; the server's own formatter built it.
+  const result = res?.result as { content?: Array<{ text?: string }> } | undefined;
+  return result?.content?.[0]?.text ?? '';
 }
 
 describe('mcp hippo_context scope filter', () => {

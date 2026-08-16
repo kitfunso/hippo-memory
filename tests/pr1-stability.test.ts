@@ -21,6 +21,7 @@ describe('SQLite busy_timeout', () => {
     initStore(tmpDir);
     const db = openHippoDb(tmpDir);
     try {
+      // SAFETY: PRAGMA busy_timeout always returns a single { timeout } row.
       const row = db.prepare('PRAGMA busy_timeout').get() as { timeout?: number };
       expect(row?.timeout).toBe(5000);
     } finally {
@@ -32,6 +33,7 @@ describe('SQLite busy_timeout', () => {
     initStore(tmpDir);
     const db = openHippoDb(tmpDir);
     try {
+      // SAFETY: PRAGMA synchronous always returns a single { synchronous } row.
       const row = db.prepare('PRAGMA synchronous').get() as { synchronous?: number };
       // NORMAL = 1
       expect(row?.synchronous).toBe(1);

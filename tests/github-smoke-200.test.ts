@@ -68,7 +68,7 @@ function repoFor(index: number): typeof PUBLIC_REPO | typeof PRIVATE_REPO {
   return index % 2 === 0 ? PUBLIC_REPO : PRIVATE_REPO;
 }
 
-function userFor(index: number): { login: string; id: number } {
+function userFor(index: number) {
   const login = USERS[index % USERS.length];
   return { login, id: index + 1 };
 }
@@ -225,6 +225,8 @@ const ctxFor = (root: string, tenantId = 'default'): Context => ({
 function rawCount(root: string): number {
   const db = openHippoDb(root);
   try {
+    // SAFETY: the db driver's .get() returns `unknown`; `SELECT COUNT(*) AS c` always
+    // yields exactly one row with a numeric (or bigint) `c` column.
     const row = db
       .prepare(`SELECT COUNT(*) AS c FROM memories WHERE kind = ?`)
       .get('raw') as { c: number | bigint };
@@ -267,6 +269,7 @@ describe('GitHub connector — 200-event smoke test', () => {
     );
     expect(deletable.length).toBeGreaterThanOrEqual(5);
     const toDelete = deletable.slice(0, 5);
+    const toDeleteIds = new Set(toDelete.map((d) => d.deliveryId));
 
     let archivedTotal = 0;
     for (const d of toDelete) {
@@ -327,7 +330,7 @@ describe('GitHub connector — 200-event smoke test', () => {
     // ---- (6) No-scope recall denial of a private repo memory -------------
     // Pick the first delivery whose repo was private, then recall its marker.
     const privateDelivery = deliveries.find(
-      (d) => d.isPrivate && !toDelete.includes(d as GeneratedDelivery & { artifactRef: string }),
+      (d) => d.isPrivate && !toDeleteIds.has(d.deliveryId),
     );
     expect(privateDelivery).toBeDefined();
     const privateMarker = privateDelivery!.markerText;

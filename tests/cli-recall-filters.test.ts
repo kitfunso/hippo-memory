@@ -6,7 +6,12 @@ import { join } from 'node:path';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 
-function hippo(cwd: string, env: Record<string, string>, ...args: string[]): string {
+interface HippoEnv {
+  HIPPO_HOME: string;
+  HIPPO_SKIP_AUTO_INTEGRATIONS?: string;
+}
+
+function hippo(cwd: string, env: HippoEnv, ...args: string[]): string {
   return execFileSync('node', [HIPPO_BIN, ...args], {
     cwd,
     env: { ...process.env, ...env },
@@ -16,7 +21,7 @@ function hippo(cwd: string, env: Record<string, string>, ...args: string[]): str
 
 describe('recall --layer filter (v0.30.1)', () => {
   let home: string;
-  let env: Record<string, string>;
+  let env: HippoEnv;
 
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), 'hippo-layer-'));
@@ -46,6 +51,8 @@ describe('recall --layer filter (v0.30.1)', () => {
     try {
       hippo(home, env, 'recall', 'anything', '--layer', 'bogus');
     } catch (e) {
+      // SAFETY: execFileSync on failure throws an Error augmented with a
+      // stderr Buffer per Node's child_process API contract.
       err = String((e as { stderr?: Buffer }).stderr ?? '');
     }
     expect(err).toMatch(/Invalid --layer/);

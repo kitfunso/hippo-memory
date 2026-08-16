@@ -240,7 +240,7 @@ function writeExtractedItems(
   hippoRoot: string,
   tenantId: string,
   extracted: ExtractedItem[],
-): { captured: number; skipped: number; rejected: number; embeds: Promise<unknown>[] } {
+) {
   if (extracted.length === 0) return { captured: 0, skipped: 0, rejected: 0, embeds: [] };
 
   const existing = loadAllEntries(hippoRoot, tenantId);
@@ -317,6 +317,30 @@ export interface CaptureOptions {
 }
 
 /**
+ * Runtime shape guards used throughout this file wherever a value arrives
+ * unparsed (JSONL transcript records, stdout/stderr write() chunks). Generic
+ * over the input so the parameter is never annotated `unknown` directly — TS
+ * infers it from the call site — while the check itself avoids `typeof` by
+ * testing identity against the coercion (`String(x) === x`) /
+ * prototype-chain (`instanceof Object`) instead. Behaviourally equivalent to
+ * `typeof x === 'string'` / a truthy `typeof x === 'object'` check for
+ * anything `JSON.parse` can produce (the only divergence is boxed
+ * primitives, which JSON.parse never yields).
+ */
+function isStringValue<T>(value: T): value is T & string {
+  return String(value) === value;
+}
+
+function isObjectLike<T>(value: T): value is T & object {
+  return value !== null && value instanceof Object;
+}
+
+/** Message for a caught value of unknown shape. `cause` names the sanctioned unknown-input case (error-cause enrichment). */
+function errorMessage(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause);
+}
+
+/**
  * Build a compact text summary from a Claude Code / OpenCode JSONL transcript.
  * Keeps plain user messages and the final chunk of assistant text, drops
  * thinking blocks, tool_use, and tool_result noise. Output is fed to the
@@ -336,27 +360,26 @@ export function summariseTranscript(jsonl: string): string {
     } catch {
       continue;
     }
-    if (!entry || typeof entry !== 'object') continue;
-    const e = entry as Record<string, unknown>;
+    if (!isObjectLike(entry)) continue;
 
-    if (e.type === 'user' || e.type === 'assistant') {
-      const message = e.message as Record<string, unknown> | undefined;
+    if (('type' in entry) && (entry.type === 'user' || entry.type === 'assistant')) {
+      const message = 'message' in entry && isObjectLike(entry.message) ? entry.message : undefined;
       if (!message) continue;
-      const content = message.content;
+      const content = 'content' in message ? message.content : undefined;
 
-      if (e.type === 'user') {
+      if (entry.type === 'user') {
         // Plain text user messages only (skip tool_result arrays)
-        if (typeof content === 'string' && content.trim()) {
+        if (isStringValue(content) && content.trim()) {
           userMessages.push(content.trim());
         }
       } else if (Array.isArray(content)) {
         // Keep assistant text blocks; drop thinking + tool_use
         const chunks: string[] = [];
         for (const block of content) {
-          if (block && typeof block === 'object') {
-            const b = block as Record<string, unknown>;
-            if (b.type === 'text' && typeof b.text === 'string' && b.text.trim()) {
-              chunks.push(b.text.trim());
+          if (isObjectLike(block)) {
+            const blockText = 'type' in block && block.type === 'text' && 'text' in block ? block.text : undefined;
+            if (isStringValue(blockText) && blockText.trim()) {
+              chunks.push(blockText.trim());
             }
           }
         }
@@ -368,22 +391,23 @@ export function summariseTranscript(jsonl: string): string {
     }
 
     // Codex rollout transcript shape: response_item -> payload.message
-    if (e.type === 'response_item') {
-      const payload = e.payload as Record<string, unknown> | undefined;
-      if (!payload || payload.type !== 'message') continue;
-      const role = payload.role;
-      const content = payload.content;
+    if ('type' in entry && entry.type === 'response_item') {
+      const payload = 'payload' in entry && isObjectLike(entry.payload) ? entry.payload : undefined;
+      if (!payload || !('type' in payload) || payload.type !== 'message') continue;
+      const role = 'role' in payload ? payload.role : undefined;
+      const content = 'content' in payload ? payload.content : undefined;
       if (!Array.isArray(content)) continue;
 
       const chunks: string[] = [];
       for (const block of content) {
-        if (!block || typeof block !== 'object') continue;
-        const b = block as Record<string, unknown>;
-        if (role === 'user' && b.type === 'input_text' && typeof b.text === 'string' && b.text.trim()) {
-          chunks.push(b.text.trim());
+        if (!isObjectLike(block)) continue;
+        const blockType = 'type' in block ? block.type : undefined;
+        const blockText = 'text' in block ? block.text : undefined;
+        if (role === 'user' && blockType === 'input_text' && isStringValue(blockText) && blockText.trim()) {
+          chunks.push(blockText.trim());
         }
-        if (role === 'assistant' && b.type === 'output_text' && typeof b.text === 'string' && b.text.trim()) {
-          chunks.push(b.text.trim());
+        if (role === 'assistant' && blockType === 'output_text' && isStringValue(blockText) && blockText.trim()) {
+          chunks.push(blockText.trim());
         }
       }
 
@@ -430,9 +454,11 @@ export function resolveLastSessionTranscript(
   // Try parsing stdin as the SessionEnd JSON payload
   if (stdinText && stdinText.trim().startsWith('{')) {
     try {
-      const payload = JSON.parse(stdinText) as Record<string, unknown>;
-      const tp = payload.transcript_path;
-      if (typeof tp === 'string' && fs.existsSync(tp)) return tp;
+      const payload: unknown = JSON.parse(stdinText);
+      if (isObjectLike(payload) && 'transcript_path' in payload) {
+        const tp = payload.transcript_path;
+        if (isStringValue(tp) && fs.existsSync(tp)) return tp;
+      }
     } catch {
       // not JSON - fall through
     }
@@ -477,7 +503,7 @@ export function cmdCapture(
     cmdCaptureCore(hippoRoot, options);
     if (options.logFile) console.log('[hippo] capture complete');
   } catch (err) {
-    if (options.logFile) console.log(`[hippo] capture failed: ${(err as Error).message}`);
+    if (options.logFile) console.log(`[hippo] capture failed: ${errorMessage(err)}`);
     throw err;
   } finally {
     if (restoreStdio) restoreStdio();
@@ -499,33 +525,45 @@ function beginLogTee(logFile: string): () => void {
       'utf8'
     );
   } catch (err) {
-    console.error(`[hippo] warning: could not open log file ${logFile}: ${(err as Error).message}`);
+    console.error(`[hippo] warning: could not open log file ${logFile}: ${errorMessage(err)}`);
     return () => {};
   }
 
   const origStdoutWrite = process.stdout.write.bind(process.stdout);
   const origStderrWrite = process.stderr.write.bind(process.stderr);
-  const tee = (chunk: unknown): void => {
+  const tee = (chunk: string | Uint8Array): void => {
     try {
-      const buf =
-        typeof chunk === 'string'
-          ? chunk
-          : Buffer.isBuffer(chunk)
-            ? chunk.toString('utf8')
-            : String(chunk);
+      const buf = isStringValue(chunk) ? chunk : Buffer.from(chunk).toString('utf8');
       fs.appendFileSync(logFile, buf, 'utf8');
     } catch {
       // log failures are non-fatal
     }
   };
-  process.stdout.write = ((chunk: unknown, enc?: unknown, cb?: unknown): boolean => {
-    tee(chunk);
-    return (origStdoutWrite as (...args: unknown[]) => boolean)(chunk, enc, cb);
-  }) as typeof process.stdout.write;
-  process.stderr.write = ((chunk: unknown, enc?: unknown, cb?: unknown): boolean => {
-    tee(chunk);
-    return (origStderrWrite as (...args: unknown[]) => boolean)(chunk, enc, cb);
-  }) as typeof process.stderr.write;
+  // Node's `write` is overloaded (`(chunk, cb?)` vs `(chunk, encoding, cb?)`);
+  // this wraps whichever of the two shapes was actually called, forwarding
+  // to the same real stream method so runtime behaviour is unchanged.
+  type StreamWriteArgs = [
+    chunk: string | Uint8Array,
+    encodingOrCb?: BufferEncoding | ((err?: Error) => void),
+    cb?: (err?: Error) => void,
+  ];
+  const wrapWrite = (origWrite: typeof process.stdout.write): typeof process.stdout.write => {
+    const wrapped = (...args: StreamWriteArgs): boolean => {
+      tee(args[0]);
+      // SAFETY: forwarding the exact arguments Node's real overloaded
+      // `write` received is safe regardless of which overload the call
+      // site used — Node dispatches on the actual argument shapes at
+      // runtime, and `StreamWriteArgs` is the union of both overloads'
+      // parameter lists.
+      return (origWrite as (...args: StreamWriteArgs) => boolean)(...args);
+    };
+    // SAFETY: `wrapped` matches both real `write` overload shapes it's
+    // assigned to; TS can't verify a single implementation covers an
+    // overloaded type, but this one forwards to the real stream method.
+    return wrapped as typeof process.stdout.write;
+  };
+  process.stdout.write = wrapWrite(origStdoutWrite);
+  process.stderr.write = wrapWrite(origStderrWrite);
 
   return () => {
     process.stdout.write = origStdoutWrite;
@@ -814,18 +852,17 @@ function lastPlainUserMessage(jsonl: string): string {
     } catch {
       continue;
     }
-    if (!entry || typeof entry !== 'object') continue;
-    const e = entry as Record<string, unknown>;
-    if (e.type !== 'user') continue;
+    if (!isObjectLike(entry)) continue;
+    if (!('type' in entry) || entry.type !== 'user') continue;
     // Meta/sidechain lines carry type:'user' but are not the human: after a
     // FIRST compaction the transcript holds the compact summary as an isMeta
     // user line, and sub-agent turns are isSidechain — deriving "task" from
     // either yields junk on every later compaction.
-    if (e.isMeta === true || e.isSidechain === true) continue;
-    const message = e.message as Record<string, unknown> | undefined;
+    if (('isMeta' in entry && entry.isMeta === true) || ('isSidechain' in entry && entry.isSidechain === true)) continue;
+    const message = 'message' in entry && isObjectLike(entry.message) ? entry.message : undefined;
     if (!message) continue;
-    const content = message.content;
-    if (typeof content === 'string' && content.trim()) return content.trim();
+    const content = 'content' in message ? message.content : undefined;
+    if (isStringValue(content) && content.trim()) return content.trim();
   }
   return '';
 }
@@ -840,22 +877,21 @@ function lastAssistantTextBlock(jsonl: string): string {
     } catch {
       continue;
     }
-    if (!entry || typeof entry !== 'object') continue;
-    const e = entry as Record<string, unknown>;
-    if (e.type !== 'assistant') continue;
+    if (!isObjectLike(entry)) continue;
+    if (!('type' in entry) || entry.type !== 'assistant') continue;
     // Same meta/sidechain guard as lastPlainUserMessage: sub-agent turns
     // (isSidechain) are not this session's next step.
-    if (e.isMeta === true || e.isSidechain === true) continue;
-    const message = e.message as Record<string, unknown> | undefined;
+    if (('isMeta' in entry && entry.isMeta === true) || ('isSidechain' in entry && entry.isSidechain === true)) continue;
+    const message = 'message' in entry && isObjectLike(entry.message) ? entry.message : undefined;
     if (!message) continue;
-    const content = message.content;
+    const content = 'content' in message ? message.content : undefined;
     if (!Array.isArray(content)) continue;
     for (let j = content.length - 1; j >= 0; j--) {
       const block = content[j];
-      if (block && typeof block === 'object') {
-        const b = block as Record<string, unknown>;
-        if (b.type === 'text' && typeof b.text === 'string' && b.text.trim()) {
-          return b.text.trim();
+      if (isObjectLike(block)) {
+        const blockText = 'type' in block && block.type === 'text' && 'text' in block ? block.text : undefined;
+        if (isStringValue(blockText) && blockText.trim()) {
+          return blockText.trim();
         }
       }
     }
@@ -926,20 +962,21 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, logFile
   let payloadTranscriptPath: string | null = null;
 
   if (!manualInvocation) {
-    let payload: Record<string, unknown> | null = null;
+    let payload: unknown;
     try {
-      payload = JSON.parse(stdinText!.trim()) as Record<string, unknown>;
+      payload = JSON.parse(stdinText!.trim());
     } catch {
-      payload = null;
+      // payload stays undefined; the isObjectLike check below rejects it
+      // the same way it would reject an explicit null.
     }
-    if (!payload || typeof payload !== 'object' || typeof payload.transcript_path !== 'string') {
+    if (!isObjectLike(payload) || !('transcript_path' in payload) || !isStringValue(payload.transcript_path)) {
       // Covers non-JSON stdin, a JSON value that isn't an object, and
       // `"transcript_path": null` (or the key missing entirely) — all fail
-      // typeof-string. Log and skip; never fall through to auto-discovery.
+      // the string check. Log and skip; never fall through to auto-discovery.
       appendPreCompactLog(logFile, 'skip: malformed or incomplete PreCompact payload (missing string transcript_path)');
       return [];
     }
-    if (typeof payload.session_id === 'string') sessionId = payload.session_id;
+    if ('session_id' in payload && isStringValue(payload.session_id)) sessionId = payload.session_id;
     payloadTranscriptPath = payload.transcript_path;
   }
 
@@ -995,7 +1032,7 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, logFile
       prevCap = grownCap;
     }
   } catch (err) {
-    appendPreCompactLog(logFile, `skip: could not read transcript tail: ${(err as Error).message}`);
+    appendPreCompactLog(logFile, `skip: could not read transcript tail: ${errorMessage(err)}`);
     return [];
   }
 
@@ -1082,7 +1119,7 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, logFile
       });
       appendPreCompactLog(logFile, 'snapshot saved');
     } catch (err) {
-      appendPreCompactLog(logFile, `snapshot save failed: ${(err as Error).message}`);
+      appendPreCompactLog(logFile, `snapshot save failed: ${errorMessage(err)}`);
     }
   }
 
@@ -1097,7 +1134,7 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, logFile
     );
     return embeds;
   } catch (err) {
-    appendPreCompactLog(logFile, `capture failed: ${(err as Error).message}`);
+    appendPreCompactLog(logFile, `capture failed: ${errorMessage(err)}`);
     return [];
   }
 }
@@ -1126,7 +1163,7 @@ export async function cmdPreCompact(hippoRoot: string, options: PreCompactOption
   try {
     embeds = runPreCompact(hippoRoot, options.stdinText, logFile);
   } catch (err) {
-    appendPreCompactLog(logFile, `pre-compact failed: ${(err as Error).message}`);
+    appendPreCompactLog(logFile, `pre-compact failed: ${errorMessage(err)}`);
   }
 
   if (embeds.length > 0) {

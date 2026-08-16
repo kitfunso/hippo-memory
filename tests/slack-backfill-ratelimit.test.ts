@@ -30,17 +30,23 @@ describe('backfill survives 429 + Retry-After through the full loop', () => {
 
   it('429 then 200 → backfill ingests + cursor advances', async () => {
     let phase = 0;
-    const fakeFetch = vi.fn(async (_url: string) => {
+    const fakeFetch = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> => {
       phase++;
       if (phase === 1) {
         // 429 with Retry-After: 0.01 seconds → fetchWithRetry sleeps 10ms.
+        // SAFETY: fetchWithRetry only reads status/headers.get/json off this Response, and the
+        // real Response type is a superset of that shape, so the real type is assignable back
+        // onto this literal.
         return {
           status: 429,
           headers: { get: (h: string) => (h.toLowerCase() === 'retry-after' ? '0.01' : null) },
           json: async () => ({}),
-        } as unknown as Response;
+        } as Response;
       }
       // Second attempt succeeds with one message.
+      // SAFETY: fetchWithRetry only reads status/headers.get/json off this Response, and the
+      // real Response type is a superset of that shape, so the real type is assignable back
+      // onto this literal.
       return {
         status: 200,
         headers: { get: () => null },
@@ -51,10 +57,10 @@ describe('backfill survives 429 + Retry-After through the full loop', () => {
           ],
           response_metadata: { next_cursor: null },
         }),
-      } as unknown as Response;
+      } as Response;
     });
 
-    const fetcher = slackHistoryFetcher('xoxb-fake', fakeFetch as unknown as typeof fetch);
+    const fetcher = slackHistoryFetcher('xoxb-fake', fakeFetch);
     const r = await backfillChannel(ctx(root), {
       teamId: 'T1',
       channel: { id: 'C1', is_private: false },

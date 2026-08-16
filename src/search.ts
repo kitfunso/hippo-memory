@@ -136,7 +136,12 @@ export function detectTemporalDirection(query: string): 'recent' | 'oldest' | nu
   return null;
 }
 
-export function computeTemporalRange(entries: MemoryEntry[]): { minTime: number; maxTime: number } {
+export interface TemporalRange {
+  minTime: number;
+  maxTime: number;
+}
+
+export function computeTemporalRange(entries: MemoryEntry[]): TemporalRange {
   let minTime = Infinity;
   let maxTime = -Infinity;
   for (const e of entries) {
@@ -147,7 +152,7 @@ export function computeTemporalRange(entries: MemoryEntry[]): { minTime: number;
   return { minTime, maxTime };
 }
 
-export function temporalBoost(entry: MemoryEntry, direction: 'recent' | 'oldest' | null, range: { minTime: number; maxTime: number }): number {
+export function temporalBoost(entry: MemoryEntry, direction: 'recent' | 'oldest' | null, range: TemporalRange): number {
   if (!direction) return 1.0;
 
   const span = range.maxTime - range.minTime;

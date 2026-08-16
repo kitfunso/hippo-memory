@@ -65,7 +65,7 @@ describe('hippo context --pinned-only', () => {
     const parsed = JSON.parse(out);
     expect(parsed.hookSpecificOutput).toBeDefined();
     expect(parsed.hookSpecificOutput.hookEventName).toBe('UserPromptSubmit');
-    expect(typeof parsed.hookSpecificOutput.additionalContext).toBe('string');
+    expect(parsed.hookSpecificOutput.additionalContext).toBeTypeOf('string');
     expect(parsed.hookSpecificOutput.additionalContext).toContain('NEVER use --no-verify');
   });
 
@@ -145,7 +145,7 @@ describe('hippo context --pinned-only', () => {
     const raw = runHippo(['context', '--pinned-only', '--format', 'additional-context', '--budget', '500']);
     const parsed = JSON.parse(raw);
     expect(parsed.hookSpecificOutput.hookEventName).toBe('UserPromptSubmit');
-    expect(typeof parsed.hookSpecificOutput.additionalContext).toBe('string');
+    expect(parsed.hookSpecificOutput.additionalContext).toBeTypeOf('string');
     expect(parsed.hookSpecificOutput.additionalContext).toContain('never commit secrets');
     expect(parsed.hookSpecificOutput.additionalContext).toContain('use safe_sync.py');
     expect(parsed.hookSpecificOutput.additionalContext).not.toContain('unpinned note that absolutely must not appear');

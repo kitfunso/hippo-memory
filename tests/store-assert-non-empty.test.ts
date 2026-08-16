@@ -23,6 +23,6 @@ describe('assertNonEmpty (v1.7.3 review-tail)', () => {
 
   it('handles readonly arrays without widening at the call site', () => {
     const arr = ['unknown:legacy'] as const;
-    expect(() => assertNonEmpty(arr as readonly string[], 'TEST')).not.toThrow();
+    expect(() => assertNonEmpty(arr, 'TEST')).not.toThrow();
   });
 });

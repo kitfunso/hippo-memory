@@ -202,6 +202,8 @@ describe('ingestEvent', () => {
     const db = openHippoDb(root);
     try {
       const idempotencyKey = computeIdempotencyKey('github://acme/demo/issue/42', null);
+      // SAFETY: the SELECT explicitly lists idempotency_key, delivery_id,
+      // event_name, memory_id, so the row shape matches.
       const row = db
         .prepare(`SELECT idempotency_key, delivery_id, event_name, memory_id FROM github_event_log WHERE idempotency_key = ?`)
         .get(idempotencyKey) as
@@ -264,6 +266,7 @@ describe('ingestEvent', () => {
     const db = openHippoDb(root);
     try {
       const key = computeIdempotencyKey('github://acme/demo/issue/42', null);
+      // SAFETY: the SELECT explicitly lists memory_id, so the row shape matches.
       const row = db
         .prepare(`SELECT memory_id FROM github_event_log WHERE idempotency_key = ?`)
         .get(key) as { memory_id: string | null } | undefined;
@@ -374,6 +377,7 @@ describe('ingestEvent', () => {
     const db = openHippoDb(root);
     try {
       const key = computeIdempotencyKey('github://acme/demo/issue/42', null);
+      // SAFETY: the SELECT explicitly lists delivery_id, memory_id, so the row shape matches.
       const row = db
         .prepare(`SELECT delivery_id, memory_id FROM github_event_log WHERE idempotency_key = ?`)
         .get(key) as { delivery_id: string; memory_id: string | null } | undefined;
@@ -463,6 +467,7 @@ describe('ingestEvent', () => {
     // row survives.
     const db = openHippoDb(root);
     try {
+      // SAFETY: the SELECT explicitly lists id, so the row shape matches.
       const rows = db
         .prepare(`SELECT id FROM memories WHERE artifact_ref = ?`)
         .all('github://acme/demo/issue/42') as Array<{ id: string }>;

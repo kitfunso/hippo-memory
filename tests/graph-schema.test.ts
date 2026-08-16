@@ -40,6 +40,8 @@ describe('graph schema v37 (E3.3)', () => {
   it('creates the 7 graph indexes', () => {
     const db = openHippoDb(home);
     try {
+      // SAFETY: the query selects only the `name` column from sqlite_master, so
+      // every row is shaped { name: string }.
       const names = (db.prepare(`SELECT name FROM sqlite_master WHERE type='index' AND (name LIKE 'idx_entities_%' OR name LIKE 'idx_relations_%' OR name LIKE 'idx_graph_%')`)
         .all() as Array<{ name: string }>).map((r) => r.name);
       for (const idx of [
@@ -55,6 +57,8 @@ describe('graph schema v37 (E3.3)', () => {
   it('creates the 6 graph-table guard triggers (INSERT + UPDATE per table)', () => {
     const db = openHippoDb(home);
     try {
+      // SAFETY: the query selects only the `name` column from sqlite_master, so
+      // every row is shaped { name: string }.
       const names = (db.prepare(`SELECT name FROM sqlite_master WHERE type='trigger' AND (name LIKE 'trg_entities_%' OR name LIKE 'trg_relations_%' OR name LIKE 'trg_graph_queue_%')`)
         .all() as Array<{ name: string }>).map((r) => r.name);
       for (const trg of [

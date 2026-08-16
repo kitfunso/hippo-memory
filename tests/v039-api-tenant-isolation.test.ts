@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, readEntry } from '../src/store.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import { createApiKey } from '../src/auth.js';
 import { queryAuditEvents } from '../src/audit.js';
 import {
@@ -14,6 +14,15 @@ import {
   archiveRaw,
 } from '../src/api.js';
 import { serve, type ServerHandle } from '../src/server.js';
+
+/**
+ * Typed wrapper around a single-row SQL lookup. Every call site below
+ * passes a SELECT whose column list matches T exactly, so the cast is sound.
+ */
+function queryRow<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T | undefined {
+  // SAFETY: each call site's SELECT explicitly lists the columns matching T.
+  return db.prepare(sql).get(...params) as T | undefined;
+}
 
 // v0.39 commit 1 regressions:
 //  - promote: tenant pre-check matches archiveRaw (CRITICAL #1)
@@ -70,9 +79,7 @@ describe('v039 api tenant isolation', () => {
     // The original row must still exist on the local root, untouched.
     const db = openHippoDb(home);
     try {
-      const row = db
-        .prepare(`SELECT tenant_id FROM memories WHERE id = ?`)
-        .get(created.id) as { tenant_id: string } | undefined;
+      const row = queryRow<{ tenant_id: string }>(db, `SELECT tenant_id FROM memories WHERE id = ?`, created.id);
       expect(row).toBeDefined();
       expect(row!.tenant_id).toBe('alpha');
     } finally {
@@ -83,7 +90,7 @@ describe('v039 api tenant isolation', () => {
     // run because the tenant pre-check throws before it does.
     const gdb = openHippoDb(globalHome);
     try {
-      const grows = gdb.prepare(`SELECT COUNT(*) AS c FROM memories`).get() as { c: number };
+      const grows = queryRow<{ c: number }>(gdb, `SELECT COUNT(*) AS c FROM memories`)!;
       expect(Number(grows.c)).toBe(0);
     } finally {
       closeHippoDb(gdb);
@@ -106,9 +113,7 @@ describe('v039 api tenant isolation', () => {
 
     const db = openHippoDb(home);
     try {
-      const row = db
-        .prepare(`SELECT tenant_id FROM memories WHERE id = ?`)
-        .get(created.id) as { tenant_id: string } | undefined;
+      const row = queryRow<{ tenant_id: string }>(db, `SELECT tenant_id FROM memories WHERE id = ?`, created.id);
       expect(row).toBeDefined();
       expect(row!.tenant_id).toBe('alpha');
     } finally {
@@ -133,9 +138,11 @@ describe('v039 api tenant isolation', () => {
 
     const db = openHippoDb(home);
     try {
-      const row = db
-        .prepare(`SELECT tenant_id, kind FROM memories WHERE id = ?`)
-        .get(created.id) as { tenant_id: string; kind: string } | undefined;
+      const row = queryRow<{ tenant_id: string; kind: string }>(
+        db,
+        `SELECT tenant_id, kind FROM memories WHERE id = ?`,
+        created.id,
+      );
       expect(row).toBeDefined();
       expect(row!.tenant_id).toBe('alpha');
       expect(row!.kind).toBe('raw');
@@ -199,9 +206,11 @@ describe('v039 api tenant isolation', () => {
       expect(Number(result.changes ?? 0)).toBe(0);
 
       // And the pre-existing supersede pointer is untouched.
-      const row = db2
-        .prepare(`SELECT superseded_by FROM memories WHERE id = ?`)
-        .get(created.id) as { superseded_by: string | null } | undefined;
+      const row = queryRow<{ superseded_by: string | null }>(
+        db2,
+        `SELECT superseded_by FROM memories WHERE id = ?`,
+        created.id,
+      );
       expect(row?.superseded_by).toBe('mem_preexisting_racer');
     } finally {
       closeHippoDb(db2);
@@ -242,6 +251,8 @@ describe('v039 api tenant isolation', () => {
       const supersedeEvents = queryAuditEvents(db, { tenantId: 'alpha', op: 'supersede' });
       const supersedeRow = supersedeEvents.find((e) => e.targetId === created.id);
       expect(supersedeRow).toBeDefined();
+      // SAFETY: supersede() writes its audit_log row with metadata={ newId }
+      // (see api.ts supersede()), so newId is present on this row.
       expect((supersedeRow!.metadata as { newId?: string }).newId).toBe(result.newId);
 
       const rememberEvents = queryAuditEvents(db, { tenantId: 'alpha', op: 'remember' });
@@ -270,14 +281,16 @@ describe('v039 api tenant isolation', () => {
     // The original row is untouched: no superseded_by, no new memory created.
     const db = openHippoDb(home);
     try {
-      const row = db
-        .prepare(`SELECT tenant_id, superseded_by FROM memories WHERE id = ?`)
-        .get(created.id) as { tenant_id: string; superseded_by: string | null } | undefined;
+      const row = queryRow<{ tenant_id: string; superseded_by: string | null }>(
+        db,
+        `SELECT tenant_id, superseded_by FROM memories WHERE id = ?`,
+        created.id,
+      );
       expect(row).toBeDefined();
       expect(row!.tenant_id).toBe('alpha');
       expect(row!.superseded_by).toBeNull();
 
-      const totalRows = db.prepare(`SELECT COUNT(*) AS c FROM memories`).get() as { c: number };
+      const totalRows = queryRow<{ c: number }>(db, `SELECT COUNT(*) AS c FROM memories`)!;
       expect(Number(totalRows.c)).toBe(1);
     } finally {
       closeHippoDb(db);
@@ -342,6 +355,9 @@ describe('v039 authCreate HTTP body.tenantId ignored', () => {
       body: JSON.stringify({ tenantId: 'bravo', label: 'should-be-alpha' }),
     });
     expect(res.status).toBe(200);
+    // SAFETY: POST /v1/auth/keys returns AuthCreateResult {keyId, plaintext,
+    // tenantId, role} verbatim via sendJson (src/api.ts authCreate + the
+    // /v1/auth/keys route in src/server.ts).
     const body = await res.json() as { keyId: string; plaintext: string; tenantId: string };
     expect(body.tenantId).toBe('alpha');
     expect(body.keyId).toMatch(/^hk_/);
@@ -349,9 +365,7 @@ describe('v039 authCreate HTTP body.tenantId ignored', () => {
     // Confirm in the DB: the api_keys row carries tenant_id='alpha'.
     const db2 = openHippoDb(home);
     try {
-      const row = db2
-        .prepare(`SELECT tenant_id FROM api_keys WHERE key_id = ?`)
-        .get(body.keyId) as { tenant_id: string } | undefined;
+      const row = queryRow<{ tenant_id: string }>(db2, `SELECT tenant_id FROM api_keys WHERE key_id = ?`, body.keyId);
       expect(row).toBeDefined();
       expect(row!.tenant_id).toBe('alpha');
     } finally {

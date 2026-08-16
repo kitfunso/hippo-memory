@@ -29,7 +29,7 @@ import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { remember, type Context } from '../src/api.js';
 import { deduplicateStore } from '../src/dedupe.js';
 
-function tmpHome(prefix: string): { home: string; restore: () => void } {
+function tmpHome(prefix: string) {
   const home = mkdtempSync(join(tmpdir(), prefix));
   initStore(home);
   return {

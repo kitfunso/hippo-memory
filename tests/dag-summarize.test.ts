@@ -18,7 +18,7 @@ describe('generateDagSummary', () => {
         'John wants to improve shooting percentage',
         'John dreams of winning a championship',
       ],
-      { apiKey: 'test', fetcher: mockFetcher as typeof fetch },
+      { apiKey: 'test', fetcher: mockFetcher },
     );
 
     expect(summary).not.toBeNull();
@@ -29,7 +29,7 @@ describe('generateDagSummary', () => {
     const mockFetcher = async () => new Response('', { status: 500 });
     const summary = await generateDagSummary('label', ['fact'], {
       apiKey: 'test',
-      fetcher: mockFetcher as typeof fetch,
+      fetcher: mockFetcher,
     });
     expect(summary).toBeNull();
   });
@@ -42,7 +42,7 @@ describe('generateDagSummary', () => {
       );
     const summary = await generateDagSummary('label', ['fact'], {
       apiKey: 'test',
-      fetcher: mockFetcher as typeof fetch,
+      fetcher: mockFetcher,
     });
     expect(summary).toBeNull();
   });

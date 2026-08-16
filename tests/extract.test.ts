@@ -2,12 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { extractFacts } from '../src/extract.js';
 
 function mockFetcher(body: string, ok = true): typeof fetch {
-  return (async () => ({
-    ok,
-    status: ok ? 200 : 500,
-    async json() { return { content: [{ text: body }] }; },
-    async text() { return JSON.stringify({ content: [{ text: body }] }); },
-  })) as unknown as typeof fetch;
+  // A real Response satisfies typeof fetch's return type directly, so no
+  // cast is needed: extractFacts only reads res.ok and res.json().
+  return async () =>
+    new Response(JSON.stringify({ content: [{ text: body }] }), { status: ok ? 200 : 500 });
 }
 
 describe('extractFacts', () => {
@@ -53,7 +51,7 @@ describe('extractFacts', () => {
   });
 
   it('returns [] when fetch throws', async () => {
-    const fetcher = (() => { throw new Error('network down'); }) as unknown as typeof fetch;
+    const fetcher: typeof fetch = () => { throw new Error('network down'); };
     const facts = await extractFacts('text', { apiKey: 'test', fetcher });
     expect(facts).toEqual([]);
   });

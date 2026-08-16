@@ -154,6 +154,9 @@ describe('v039 server hardening', () => {
         if (r.value) buf += decoder.decode(r.value);
         const m = buf.match(/event:\s*closed\s*\ndata:\s*(\{[^\n]*\})/);
         if (m) {
+          // SAFETY: the regex above only matches an SSE "event: closed" frame
+          // whose data payload is the JSON object src/server.ts's stream-close
+          // handler writes, which always includes a `reason` field.
           const parsed = JSON.parse(m[1]!) as { reason?: string };
           closedReason = parsed.reason ?? null;
           break;
@@ -223,6 +226,9 @@ describe('v039 server hardening', () => {
         if (r.value) buf += decoder.decode(r.value);
         const m = buf.match(/event:\s*closed\s*\ndata:\s*(\{[^\n]*\})/);
         if (m) {
+          // SAFETY: the regex above only matches an SSE "event: closed" frame
+          // whose data payload is the JSON object src/server.ts's stream-close
+          // handler writes, which always includes a `reason` field.
           const parsed = JSON.parse(m[1]!) as { reason?: string };
           closedReason = parsed.reason ?? null;
           break;
@@ -269,8 +275,9 @@ describe('v039 server hardening', () => {
     // Re-running stop is safe (idempotent).
     await handle.stop();
     ac.abort();
-    // Mark handle stopped so afterEach doesn't double-stop.
-    (handle as { stop: () => Promise<void> }).stop = async () => {};
+    // Mark handle stopped so afterEach doesn't double-stop. ServerHandle.stop
+    // is a plain (non-readonly) field, so this is a direct reassignment.
+    handle.stop = async () => {};
   }, 10_000);
 
   // ---- Fix 5.5: PUBLIC_ROUTES bypass attempts --------------------------
@@ -376,8 +383,12 @@ describe('v039 server hardening', () => {
       },
       ctx,
     );
-    const text = ((res as { result?: { content?: Array<{ text?: string }> } } | null)
-      ?.result?.content?.[0]?.text) ?? '';
+    // SAFETY: handleMcpRequest's 'tools/call' case always wraps tool output in
+    // MCP's { content: [{ type: 'text', text }] } shape (src/mcp/server.ts);
+    // McpResponse.result is `unknown` only because different tools return
+    // different payloads.
+    const text = (res?.result as { content?: Array<{ text?: string }> } | undefined)
+      ?.content?.[0]?.text ?? '';
     expect(text).toContain('public-canary');
     expect(text).not.toContain('private-slack-canary');
   });

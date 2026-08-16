@@ -29,7 +29,7 @@ const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
  * ~/.claude/projects/ and `defaultSleepLogPath()` can never see the real
  * developer machine.
  */
-function withScratchEnv(): { dir: string; env: NodeJS.ProcessEnv } {
+function withScratchEnv() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-precompact-e2e-'));
   const env: NodeJS.ProcessEnv = {
     ...process.env,

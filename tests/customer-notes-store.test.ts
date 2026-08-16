@@ -44,13 +44,20 @@ function safeRmSync(p: string): void {
 }
 function countRows(home: string, table: string): number {
   const db = openHippoDb(home);
-  try { return (db.prepare(`SELECT COUNT(*) as c FROM ${table}`).get() as { c: number }).c; }
+  try {
+    // SAFETY: `SELECT COUNT(*) as c` always returns exactly one row shaped { c: number }.
+    return (db.prepare(`SELECT COUNT(*) as c FROM ${table}`).get() as { c: number }).c;
+  }
   finally { closeHippoDb(db); }
 }
 function memTags(home: string, memoryId: string): string[] {
   const db = openHippoDb(home);
   try {
+    // SAFETY: caller passes the id of a memory row that was just written, so
+    // it exists and its tags_json column is always a JSON array string.
     const r = db.prepare(`SELECT tags_json FROM memories WHERE id = ?`).get(memoryId) as { tags_json: string };
+    // SAFETY: tags_json is always written as a JSON array of strings (see
+    // src/store.ts writeEntry serialization); never any other JSON shape.
     return JSON.parse(r.tags_json) as string[];
   } finally { closeHippoDb(db); }
 }
@@ -71,14 +78,20 @@ describe('customer_notes store (E2 entity-scoped first-class object)', () => {
     expect(n.changeSummary).toBeNull();
     const db = openHippoDb(home);
     try {
+      // SAFETY: n.memoryId is the id just returned by saveCustomerNote's memory
+      // mirror write, so the row exists with these columns.
       const memRow = db.prepare(`SELECT content, source FROM memories WHERE id = ?`)
         .get(n.memoryId!) as { content: string; source: string };
       expect(memRow.content).toContain('Acme Corp');
       expect(memRow.content).toContain('renewal call notes');
       expect(memRow.source).toBe('customer_note');
+      // SAFETY: metadata_json is always a JSON object with a customer_note_create
+      // audit's fields (see src/customer-notes.ts saveCustomerNote audit write).
       const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op='customer_note_create' AND target_id=?`)
         .all(String(n.id)) as Array<{ metadata_json: string }>;
       expect(rows.length).toBe(1);
+      // SAFETY: metadata_json for a customer_note_create audit row always
+      // includes the `customer` field written by saveCustomerNote.
       expect((JSON.parse(rows[0].metadata_json) as { customer: string }).customer).toBe('Acme Corp');
     } finally { closeHippoDb(db); }
   });
@@ -200,11 +213,15 @@ describe('customer_notes store (E2 entity-scoped first-class object)', () => {
     const db = openHippoDb(home);
     try {
       expect(db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='customer_notes'`).get()).toBeDefined();
+      // SAFETY: `SELECT name FROM sqlite_master` always projects a single text
+      // column named `name` for any matching row.
       const triggers = (db.prepare(`SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_customer_notes_%'`)
         .all() as Array<{ name: string }>).map((t) => t.name);
       expect(triggers).toContain('trg_customer_notes_tenant_match_insert');
       expect(triggers).toContain('trg_customer_notes_tenant_match_update');
       expect(triggers).toContain('trg_customer_notes_supersede_tenant_match_update');
+      // SAFETY: `SELECT name FROM sqlite_master` always projects a single text
+      // column named `name` for any matching row.
       const indexes = (db.prepare(`SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_customer_notes_%'`)
         .all() as Array<{ name: string }>).map((i) => i.name);
       expect(indexes).toContain('idx_customer_notes_tenant_status');

@@ -54,6 +54,8 @@ function opts(overrides: Partial<ImportOptions> = {}): ImportOptions {
 function archivedRows(): Array<{ memory_id: string; reason: string }> {
   const db = openHippoDb(tmpDir);
   try {
+    // SAFETY: query selects only the memory_id and reason text columns from
+    // raw_archive, so every row in the result has exactly this shape.
     return db
       .prepare(`SELECT memory_id, reason FROM raw_archive ORDER BY archived_at ASC`)
       .all() as Array<{ memory_id: string; reason: string }>;

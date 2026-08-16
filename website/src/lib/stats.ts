@@ -29,13 +29,33 @@ export interface Stats {
 
 let cache: Promise<Stats> | null = null;
 
-async function fetchJson(url: string, ms = 3000): Promise<Record<string, unknown>> {
+/** GitHub repo API response — only the field this module reads. Its value
+ * is left `unknown` because the actual response is external, untyped
+ * input; callers runtime-check it (see getStats() below) before use. */
+interface GitHubRepoResponse {
+  stargazers_count?: unknown;
+}
+
+/** npm downloads-point API response — same "unknown until checked" shape
+ * as GitHubRepoResponse, for the same reason. */
+interface NpmDownloadsResponse {
+  downloads?: unknown;
+}
+
+function isNumber<T>(value: T): value is T & number {
+  return typeof value === 'number';
+}
+
+async function fetchJson<T>(url: string, ms = 3000): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms);
   try {
     const res = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return (await res.json()) as Record<string, unknown>;
+    // SAFETY: this only names the property T expects to read off an
+    // external JSON response — every caller runtime-checks each field's
+    // actual type (isNumber() in getStats() below) before trusting it.
+    return (await res.json()) as T;
   } finally {
     clearTimeout(timer);
   }
@@ -55,16 +75,16 @@ export function getStats(): Promise<Stats> {
     let downloads = FALLBACK.downloads;
 
     try {
-      const gh = await fetchJson(REPO_API);
-      if (typeof gh.stargazers_count === 'number') stars = gh.stargazers_count;
+      const gh = await fetchJson<GitHubRepoResponse>(REPO_API);
+      if (isNumber(gh.stargazers_count)) stars = gh.stargazers_count;
       else throw new Error('no stargazers_count');
     } catch (err) {
       console.warn(`[stats] GitHub stars fetch failed, using fallback ${FALLBACK.stars}:`, String(err));
     }
 
     try {
-      const npm = await fetchJson(NPM_API);
-      if (typeof npm.downloads === 'number') downloads = npm.downloads;
+      const npm = await fetchJson<NpmDownloadsResponse>(NPM_API);
+      if (isNumber(npm.downloads)) downloads = npm.downloads;
       else throw new Error('no downloads');
     } catch (err) {
       console.warn(`[stats] npm downloads fetch failed, using fallback ${FALLBACK.downloads}:`, String(err));

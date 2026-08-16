@@ -71,6 +71,9 @@ async function embeddingIsFunctional(): Promise<boolean> {
     // Only the documented VM limitation (see the comment above) is a known
     // "unavailable in this harness" condition. Anything else is a genuine
     // embed-pipeline regression and must fail loud, not masquerade as a skip.
+    // SAFETY: `err` is unknown per catch-clause typing; every field read
+    // below is optional-chained, so the narrowing is safe no matter what
+    // shape the actual thrown value turns out to have.
     const code = (err as NodeJS.ErrnoException | undefined)?.code;
     const message = err instanceof Error ? err.message : String(err);
     const isKnownVmLimitation =
@@ -286,6 +289,9 @@ describe('global-row-embeddings: hippo embed --global CLI', () => {
       try {
         execFileSync('node', [HIPPO_BIN, 'embed', '--global'], { cwd, env, encoding: 'utf-8' });
       } catch (err) {
+        // SAFETY: `err` is unknown per catch-clause typing; execFileSync
+        // throws a Node child_process error whose `status`/`stderr` fields
+        // are read optionally, so this is safe for any thrown shape.
         const e = err as { status?: number | null; stderr?: string };
         exitCode = e.status ?? 1;
         stderr = e.stderr ?? '';

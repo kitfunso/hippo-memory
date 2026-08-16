@@ -20,10 +20,10 @@ import { sleep, adminActor, type Context, type SleepPhases } from '../src/api.js
 import { initStore, writeEntry } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { createMemory, Layer } from '../src/memory.js';
-import { queryAuditEvents } from '../src/audit.js';
+import { queryAuditEvents, type AuditEvent } from '../src/audit.js';
 import { loadConfig as realLoadConfig } from '../src/config.js';
 
-function newCtx(): { ctx: Context; tmpDir: string; restore: () => void } {
+function newCtx() {
   const tmpDir = mkdtempSync(join(tmpdir(), 'hippo-sleep-fault-'));
   const hippoRoot = join(tmpDir, '.hippo');
   initStore(hippoRoot);
@@ -65,13 +65,13 @@ function newCtx(): { ctx: Context; tmpDir: string; restore: () => void } {
 }
 
 function getLastConsolidateAuditRow(hippoRoot: string, tenantId = 'default'): {
-  metadata: Record<string, unknown>;
+  metadata: AuditEvent['metadata'];
 } | null {
   const db = openHippoDb(hippoRoot);
   try {
     const rows = queryAuditEvents(db, { tenantId: '__host__', op: 'consolidate', limit: 1 });
     if (rows.length === 0) return null;
-    return { metadata: rows[0].metadata as Record<string, unknown> };
+    return { metadata: rows[0].metadata };
   } finally {
     closeHippoDb(db);
   }
@@ -156,10 +156,10 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
 
     // Phase 4 only runs if config.autoShareOnSleep is true; bypass the gate
     // by also stubbing loadConfig to force the flag on.
-    stubPhases.loadConfig = ((root: string) => {
+    stubPhases.loadConfig = (root: string) => {
       const cfg = realLoadConfig(root);
       return { ...cfg, autoShareOnSleep: true };
-    }) as SleepPhases['loadConfig'];
+    };
 
     await expect(
       sleep(testCtx.ctx, { __phases: stubPhases }),

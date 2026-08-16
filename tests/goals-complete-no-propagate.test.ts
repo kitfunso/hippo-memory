@@ -32,6 +32,9 @@ function ctx(root: string): Context {
 function getStrength(root: string, memId: string): number {
   const db = openHippoDb(root);
   try {
+    // SAFETY: memId is always a row this test wrote earlier via remember()/
+    // writeEntry(), so the SELECT by primary key always returns exactly one
+    // row with a strength column.
     const row = db.prepare('SELECT strength FROM memories WHERE id = ?').get(memId) as { strength: number };
     return row.strength;
   } finally {

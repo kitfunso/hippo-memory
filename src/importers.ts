@@ -198,6 +198,30 @@ export function importEntries(
 // ChatGPT importer
 // ---------------------------------------------------------------------------
 
+/** The full value space `JSON.parse` can produce. Boundary-guard functions in
+ *  this file accept `JsonValue` (never `unknown`) so a value's origin as
+ *  unparsed external JSON stays visible in its type, then narrow it via the
+ *  `isJson*` predicates below. */
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+function isJsonString(x: JsonValue): x is string {
+  return typeof x === 'string';
+}
+
+function isJsonPlainObject(x: JsonValue): x is { [key: string]: JsonValue } {
+  return x !== null && !Array.isArray(x) && typeof x === 'object';
+}
+
+/** Coerce one imported record (string, `{content|text: ...}` object, or
+ *  anything else) into the plain-text memory chunk it represents. */
+function extractMemoryText(candidate: JsonValue): string {
+  if (isJsonString(candidate)) return candidate;
+  if (isJsonPlainObject(candidate)) {
+    return String(candidate['content'] ?? candidate['text'] ?? '');
+  }
+  return '';
+}
+
 /**
  * Parse ChatGPT memory export file.
  * Supports:
@@ -212,34 +236,16 @@ function parseChatGPTFile(filePath: string): string[] {
   // Try JSON first
   if (raw.startsWith('[') || raw.startsWith('{')) {
     try {
-      const parsed = JSON.parse(raw);
+      const parsed: JsonValue = JSON.parse(raw);
 
       // {"memories": [...]} - ChatGPT export format
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Array.isArray(parsed.memories)) {
-        return parsed.memories
-          .map((m: unknown) => {
-            if (typeof m === 'string') return m;
-            if (m && typeof m === 'object') {
-              const obj = m as Record<string, unknown>;
-              return String(obj['content'] ?? obj['text'] ?? '');
-            }
-            return '';
-          })
-          .filter(Boolean);
+      if (isJsonPlainObject(parsed) && Array.isArray(parsed.memories)) {
+        return parsed.memories.map(extractMemoryText).filter(Boolean);
       }
 
       // Array format
       if (Array.isArray(parsed)) {
-        return parsed
-          .map((m: unknown) => {
-            if (typeof m === 'string') return m;
-            if (m && typeof m === 'object') {
-              const obj = m as Record<string, unknown>;
-              return String(obj['content'] ?? obj['text'] ?? '');
-            }
-            return '';
-          })
-          .filter(Boolean);
+        return parsed.map(extractMemoryText).filter(Boolean);
       }
     } catch {
       // Fall through to plain text
@@ -340,18 +346,9 @@ function parseClaudeFile(filePath: string): string[] {
   // JSON memory file
   if (filePath.endsWith('.json')) {
     try {
-      const parsed = JSON.parse(raw.trim());
+      const parsed: JsonValue = JSON.parse(raw.trim());
       if (Array.isArray(parsed)) {
-        return parsed
-          .map((m: unknown) => {
-            if (typeof m === 'string') return m;
-            if (m && typeof m === 'object') {
-              const obj = m as Record<string, unknown>;
-              return String(obj['content'] ?? obj['text'] ?? '');
-            }
-            return '';
-          })
-          .filter(Boolean);
+        return parsed.map(extractMemoryText).filter(Boolean);
       }
     } catch {
       // Fall through to markdown
@@ -590,7 +587,12 @@ function escapeLike(term: string): string {
  *  block (no YAML dep). Returns the parsed key→value map plus the body with the
  *  block removed. When no well-formed block is present, `fm` is empty and
  *  `body` is the original content. */
-function parseFrontmatter(raw: string): { fm: Record<string, string>; body: string } {
+interface FrontmatterParseResult {
+  fm: Record<string, string>;
+  body: string;
+}
+
+function parseFrontmatter(raw: string): FrontmatterParseResult {
   // Must start with `---` on its own line. Accept CRLF or LF.
   const m = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
   if (!m) return { fm: {}, body: raw };
@@ -808,6 +810,8 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
     const db = openHippoDb(hippoRoot);
     try {
       const likeParam = `vault:${escapeLike(vaultName)}:%`;
+      // SAFETY: query selects exactly the columns of VaultRow, in the same
+      // names, from the memories table this module owns.
       const rows = db
         .prepare(
           `SELECT id, artifact_ref, tags_json, scope FROM memories
@@ -1020,8 +1024,8 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
 function parseJsonArrayLoose(value: string | null | undefined): string[] {
   if (!value) return [];
   try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+    const parsed: JsonValue = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter(isJsonString) : [];
   } catch {
     return [];
   }

@@ -2,14 +2,31 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+
+function rowsAs<T>(db: DatabaseSyncLike, sql: string): T[] {
+  // SAFETY: T is pinned by each call site to the exact column list of the
+  // SQL SELECT/PRAGMA text passed in; the driver's .all() (src/db.ts
+  // DatabaseSyncLike, backed by node:sqlite) returns `unknown[]`, so this is
+  // the single place that establishes the row contract for every caller.
+  return db.prepare(sql).all() as T[];
+}
+
+function rowAs<T>(db: DatabaseSyncLike, sql: string): T {
+  // SAFETY: same invariant as rowsAs above — T is pinned to the column list
+  // of the SQL SELECT text passed in, and every call site's query is known
+  // to match exactly one seeded row.
+  return db.prepare(sql).get() as T;
+}
 
 describe('schema migration v22: tenant_id + scope on continuity tables', () => {
   it('adds tenant_id NOT NULL DEFAULT default and scope (nullable) to session_events', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-v22-'));
     const db = openHippoDb(home);
     try {
-      const cols = db.prepare(`PRAGMA table_info(session_events)`).all() as Array<{ name: string; notnull: number; dflt_value: string | null }>;
+      const cols = rowsAs<{ name: string; notnull: number; dflt_value: string | null }>(
+        db, `PRAGMA table_info(session_events)`,
+      );
       const tenant = cols.find((c) => c.name === 'tenant_id');
       const scope = cols.find((c) => c.name === 'scope');
       expect(tenant).toBeDefined();
@@ -27,7 +44,9 @@ describe('schema migration v22: tenant_id + scope on continuity tables', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-v22-'));
     const db = openHippoDb(home);
     try {
-      const cols = db.prepare(`PRAGMA table_info(session_handoffs)`).all() as Array<{ name: string; notnull: number; dflt_value: string | null }>;
+      const cols = rowsAs<{ name: string; notnull: number; dflt_value: string | null }>(
+        db, `PRAGMA table_info(session_handoffs)`,
+      );
       expect(cols.some((c) => c.name === 'tenant_id' && c.notnull === 1)).toBe(true);
       expect(cols.some((c) => c.name === 'scope')).toBe(true);
     } finally {
@@ -40,7 +59,9 @@ describe('schema migration v22: tenant_id + scope on continuity tables', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-v22-'));
     const db = openHippoDb(home);
     try {
-      const idx = db.prepare(`SELECT name FROM sqlite_master WHERE type='index'`).all() as Array<{ name: string }>;
+      const idx = rowsAs<{ name: string }>(
+        db, `SELECT name FROM sqlite_master WHERE type='index'`,
+      );
       const names = new Set(idx.map((i) => i.name));
       expect(names.has('idx_session_events_tenant_session')).toBe(true);
       expect(names.has('idx_session_handoffs_tenant_session')).toBe(true);
@@ -92,8 +113,12 @@ describe('schema migration v22: tenant_id + scope on continuity tables', () => {
                  WHERE t.session_id = session_handoffs.session_id) = 1
       `);
 
-      const evt = db.prepare(`SELECT tenant_id FROM session_events WHERE session_id='sess-mapped'`).get() as { tenant_id: string };
-      const hf = db.prepare(`SELECT tenant_id FROM session_handoffs WHERE session_id='sess-mapped'`).get() as { tenant_id: string };
+      const evt = rowAs<{ tenant_id: string }>(
+        db, `SELECT tenant_id FROM session_events WHERE session_id='sess-mapped'`,
+      );
+      const hf = rowAs<{ tenant_id: string }>(
+        db, `SELECT tenant_id FROM session_handoffs WHERE session_id='sess-mapped'`,
+      );
       expect(evt.tenant_id).toBe('tenantA');
       expect(hf.tenant_id).toBe('tenantA');
     } finally {
@@ -132,7 +157,9 @@ describe('schema migration v22: tenant_id + scope on continuity tables', () => {
                  WHERE t.session_id = session_events.session_id) = 1
       `);
 
-      const evt = db.prepare(`SELECT tenant_id FROM session_events WHERE session_id='sess-shared'`).get() as { tenant_id: string };
+      const evt = rowAs<{ tenant_id: string }>(
+        db, `SELECT tenant_id FROM session_events WHERE session_id='sess-shared'`,
+      );
       expect(evt.tenant_id).toBe('default');
     } finally {
       closeHippoDb(db);

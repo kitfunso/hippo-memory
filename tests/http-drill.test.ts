@@ -58,6 +58,8 @@ describe('GET /v1/recall/drill/:id', () => {
 
     const res = await fetch(`${handle.url}/v1/recall/drill/${summary.id}`);
     expect(res.status).toBe(200);
+    // SAFETY: GET /v1/recall/drill's response body is fixed by the handler
+    // in src/server.ts and checked by the assertions immediately below.
     const body = await res.json() as {
       summary: { id: string; descendantCount: number };
       children: Array<{ id: string; content: string }>;
@@ -122,6 +124,8 @@ describe('GET /v1/recall/drill/:id', () => {
     }
     const res = await fetch(`${handle.url}/v1/recall/drill/${summary.id}?budget=80`);
     expect(res.status).toBe(200);
+    // SAFETY: GET /v1/recall/drill's response body is fixed by the handler
+    // in src/server.ts and checked by the assertions immediately below.
     const body = await res.json() as { children: unknown[]; truncated: boolean };
     expect(body.truncated).toBe(true);
     expect(body.children.length).toBeLessThan(8);

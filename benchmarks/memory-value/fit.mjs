@@ -260,6 +260,10 @@ function assertGate(cond, message) {
   if (!cond) throw new Error(`[integrity-gate] FAILED ${message}`);
 }
 
+function isNumber(value) {
+  return Object.prototype.toString.call(value) === '[object Number]';
+}
+
 /** Asserts `value` is present (not null/undefined) before any caller does a
  *  `.property`/`.toFixed()` access on it — every place this wraps a deep
  *  `registered`/`reproduced` dereference turns a would-be raw TypeError
@@ -279,8 +283,8 @@ function requireMeanCell(value, message) {
   assertGate(
     value !== undefined &&
       value !== null &&
-      typeof value.meanRetention === 'number' &&
-      typeof value.questionsIncluded === 'number',
+      isNumber(value.meanRetention) &&
+      isNumber(value.questionsIncluded),
     message,
   );
   return value;

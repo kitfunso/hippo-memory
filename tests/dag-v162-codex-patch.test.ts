@@ -18,7 +18,7 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry, loadSessionRawMemories, loadFreshRawMemories } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry, MemoryKind } from '../src/memory.js';
+import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
 import { recall, assemble, type Context } from '../src/api.js';
 
 function makeRoot(prefix: string): string {
@@ -35,7 +35,7 @@ function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {
   const e = createMemory(text, {
     layer: Layer.Buffer,
     confidence: 'observed',
-    kind: 'raw' as MemoryKind,
+    kind: 'raw',
     scope: opts.scope ?? null,
     tenantId: opts.tenantId ?? 'default',
     source_session_id: sessionId,
@@ -176,6 +176,8 @@ describe('v1.6.2 codex P2 #3 — HTTP /v1/memories accepts new RecallOpts', () =
   it('fresh_tail_session_id query param scopes fresh-tail correctly', async () => {
     const res = await fetch(`${serverHandle.url}/v1/memories?q=unmatched&fresh_tail_count=5&fresh_tail_session_id=sess-Ah`);
     expect(res.status).toBe(200);
+    // SAFETY: /v1/memories route under test always responds with a RecallResult JSON body
+    // whose results carry content and isFreshTail per the recall contract.
     const body = await res.json() as { results: Array<{ content: string; isFreshTail?: boolean }> };
     const tail = body.results.filter((it) => it.isFreshTail);
     expect(tail.some((it) => it.content === 'row in session A http')).toBe(true);

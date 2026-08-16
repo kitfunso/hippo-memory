@@ -16,7 +16,7 @@ import { initStore } from '../src/store.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { createApiKey, type CreatedApiKey } from '../src/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { savePrediction, closePrediction } from '../src/predictions.js';
+import { savePrediction, closePrediction, type PredictionBaserate } from '../src/predictions.js';
 
 function makeRoot(): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-http-j3-'));
@@ -49,10 +49,17 @@ function authHeaders() {
   return { 'authorization': `Bearer ${apiKey.plaintext}`, 'content-type': 'application/json' };
 }
 
+async function jsonAs<T>(res: Response): Promise<T> {
+  // SAFETY: T is pinned by each call site to the exact JSON envelope the
+  // /v1/predictions/stats route handler (src/server.ts) returns; every call
+  // site asserts the specific fields it reads immediately after this call.
+  return res.json() as Promise<T>;
+}
+
 describe('HTTP /v1/predictions/stats (J3, v0.31)', () => {
   it('returns baserate JSON for a class with closed predictions', async () => {
     // Seed: 2 closed predictions in class "http-test"
-    for (const [est, act] of [[3, 5], [4, 6]] as Array<[number, number]>) {
+    for (const [est, act] of [[3, 5], [4, 6]]) {
       const p = savePrediction(home, 'default', {
         classTag: 'http-test',
         claimText: `est=${est} act=${act}`,
@@ -65,19 +72,19 @@ describe('HTTP /v1/predictions/stats (J3, v0.31)', () => {
       headers: authHeaders(),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as { baserate: Record<string, unknown> };
+    const body = await jsonAs<{ baserate: PredictionBaserate }>(res);
     expect(body.baserate).toBeDefined();
     expect(body.baserate.classTag).toBe('http-test');
     expect(body.baserate.nClosed).toBe(2);
     expect(body.baserate.nRatioEligible).toBe(2);
-    expect(typeof body.baserate.meanRatio).toBe('number');
-    expect(typeof body.baserate.summary).toBe('string');
+    expect(body.baserate.meanRatio).toEqual(expect.any(Number));
+    expect(body.baserate.summary).toEqual(expect.any(String));
   });
 
   it('missing class param returns 400', async () => {
     const res = await fetch(`${handle.url}/v1/predictions/stats`, { headers: authHeaders() });
     expect(res.status).toBe(400);
-    const body = await res.json() as { error: string };
+    const body = await jsonAs<{ error: string }>(res);
     expect(body.error).toMatch(/class param is required/);
   });
 
@@ -89,6 +96,8 @@ describe('HTTP /v1/predictions/stats (J3, v0.31)', () => {
 
     const db = openHippoDb(home);
     try {
+      // SAFETY: the SELECT list above is exactly `op, target_id`, so each
+      // row from .all() has exactly these two string columns.
       const rows = db.prepare(
         `SELECT op, target_id FROM audit_log WHERE op = 'predict_baserate'`
       ).all() as Array<{ op: string; target_id: string }>;
@@ -102,7 +111,7 @@ describe('HTTP /v1/predictions/stats (J3, v0.31)', () => {
   it('empty class returns baserate with nClosed=0', async () => {
     const res = await fetch(`${handle.url}/v1/predictions/stats?class=never-existed`, { headers: authHeaders() });
     expect(res.status).toBe(200);
-    const body = await res.json() as { baserate: { nClosed: number; summary: string } };
+    const body = await jsonAs<{ baserate: PredictionBaserate }>(res);
     expect(body.baserate.nClosed).toBe(0);
     expect(body.baserate.summary).toBe('');
   });

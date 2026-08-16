@@ -161,12 +161,12 @@ export const CUSTOMER_NOTE_HALF_LIFE_DAYS = 90;
 //
 // `negative` is further scaled per-process by HIPPO_LOSS_AVERSION_RATIO
 // (env var, default 1.0; see getLossAversionRatio + applyLossAversionRatio).
-const EMOTIONAL_MULTIPLIERS: Record<EmotionalValence, number> = {
+const EMOTIONAL_MULTIPLIERS = {
   neutral: 1.0,
   positive: 1.0,
   negative: 2.0,  // error-tagged
   critical: 2.0,
-};
+} satisfies Record<EmotionalValence, number>;
 
 /**
  * v1.13.5 / J5 — module-level lazy-cached read of HIPPO_LOSS_AVERSION_RATIO.

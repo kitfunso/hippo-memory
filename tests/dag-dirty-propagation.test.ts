@@ -29,7 +29,7 @@ function defaultCtx(hippoRoot: string): Context {
     hippoRoot,
     tenantId: 'default',
     actor: { subject: 'test-actor', role: 'admin' },
-  } as Context;
+  };
 }
 
 describe('v0.30 / E2 — child-write dirty-flag propagation', () => {
@@ -81,6 +81,7 @@ describe('v0.30 / E2 — child-write dirty-flag propagation', () => {
     const db = openHippoDb(hippoRoot);
     db.prepare(`UPDATE memories SET summary_dirty = 0 WHERE id = ?`).run(summary.id);
     // Count audit rows BEFORE supersede so we can assert delta (1) not total.
+    // SAFETY: `SELECT COUNT(*) AS n` always returns exactly one row shaped { n: number }.
     const beforeCount = (db.prepare(
       `SELECT COUNT(*) AS n FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`,
     ).get(summary.id) as { n: number }).n;
@@ -92,6 +93,7 @@ describe('v0.30 / E2 — child-write dirty-flag propagation', () => {
     supersede(defaultCtx(hippoRoot), oldFact.id, 'new corrected fact');
     expect(loadDirtySummaries(hippoRoot, 'default').map((m) => m.id)).toContain(summary.id);
     const db2 = openHippoDb(hippoRoot);
+    // SAFETY: `SELECT COUNT(*) AS n` always returns exactly one row shaped { n: number }.
     const afterCount = (db2.prepare(
       `SELECT COUNT(*) AS n FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`,
     ).get(summary.id) as { n: number }).n;
@@ -189,6 +191,8 @@ describe('v0.30 / E2 — child-write dirty-flag propagation', () => {
     const auditRows = db.prepare(
       `SELECT * FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`,
     ).all(summary.id);
+    // SAFETY: `summary` was just written via writeEntry above, so the row for
+    // its id exists and always has a summary_dirty column value.
     const row = db.prepare(`SELECT summary_dirty FROM memories WHERE id = ?`).get(summary.id) as {
       summary_dirty: number;
     };

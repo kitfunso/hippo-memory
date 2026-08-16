@@ -17,8 +17,14 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, MemoryKind } from '../src/memory.js';
+import { createMemory, Layer } from '../src/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
+
+async function jsonAs<T>(res: Response): Promise<T> {
+  // SAFETY: every call site awaits a `fetch()` response from the local test server started
+  // in this file's `beforeEach`, whose route handlers are exercised directly below.
+  return (await res.json()) as T;
+}
 
 function makeRoot(): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-http-f5-'));
@@ -53,7 +59,7 @@ describe('GET /v1/memories fresh-tail policy F5 (v1.6.5)', () => {
     for (let i = 0; i < 3; i++) {
       writeEntry(home, createMemory(`event ${i}`, {
         layer: Layer.Buffer,
-        kind: 'raw' as MemoryKind,
+        kind: 'raw',
       }));
     }
     const res = await fetch(`${handle.url}/v1/memories?q=event&fresh_tail_count=3`);
@@ -65,7 +71,7 @@ describe('GET /v1/memories fresh-tail policy F5 (v1.6.5)', () => {
     for (let i = 0; i < 3; i++) {
       writeEntry(home, createMemory(`event ${i}`, {
         layer: Layer.Buffer,
-        kind: 'raw' as MemoryKind,
+        kind: 'raw',
       }));
     }
     const res = await fetch(`${handle.url}/v1/memories?q=event&fresh_tail_count=3`);
@@ -73,9 +79,9 @@ describe('GET /v1/memories fresh-tail policy F5 (v1.6.5)', () => {
     // Body shape (v1.7.0 api-contract review): `error` is the human message
     // (matches sendError shape across v1/*), `code` is the typed
     // discriminator. Clients branch on `body.code`, render `body.error`.
-    const body = (await res.json()) as { error: string; code: string };
+    const body = await jsonAs<{ error: string; code: string }>(res);
     expect(body.code).toBe('fresh_tail_requires_session_id');
-    expect(typeof body.error).toBe('string');
+    expect(body.error).toBeTypeOf('string');
     expect(body.error).toContain('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL');
   });
 
@@ -84,7 +90,7 @@ describe('GET /v1/memories fresh-tail policy F5 (v1.6.5)', () => {
     for (let i = 0; i < 3; i++) {
       writeEntry(home, createMemory(`event ${i}`, {
         layer: Layer.Buffer,
-        kind: 'raw' as MemoryKind,
+        kind: 'raw',
         source_session_id: 'sess-A',
       }));
     }
@@ -98,7 +104,7 @@ describe('GET /v1/memories fresh-tail policy F5 (v1.6.5)', () => {
     process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL = '1';
     writeEntry(home, createMemory('event', {
       layer: Layer.Buffer,
-      kind: 'raw' as MemoryKind,
+      kind: 'raw',
     }));
     const res = await fetch(`${handle.url}/v1/memories?q=event`);
     expect(res.status).toBe(200);

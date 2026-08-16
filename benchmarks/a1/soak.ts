@@ -190,6 +190,9 @@ async function doRequest(
       let idCreated: string | undefined;
       if (res.ok) {
         try {
+          // SAFETY: `body` is the response from this soak test's own
+          // `POST /v1/memories` call a few lines above — a local server we
+          // control, not external/untrusted input.
           const parsed = JSON.parse(body) as { id?: string };
           if (parsed.id) idCreated = parsed.id;
         } catch { /* ignore */ }
@@ -244,6 +247,10 @@ async function workerLoop(
   }
 }
 
+function isCallableGc(value: (() => void) | undefined): value is () => void {
+  return typeof value === 'function';
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const totalSeconds = Math.round(args.hours * 3600);
@@ -273,8 +280,11 @@ async function main(): Promise<void> {
   // RSS baseline taken AFTER seed + server start. Growth is measured against
   // this steady-state baseline; seed allocations are excluded from the leak
   // signal. Forces a GC pass first if --expose-gc was set.
+  // SAFETY: globalThis.gc only exists when Node is launched with
+  // --expose-gc; this just gives TS a name for that optional runtime
+  // extension — the isCallableGc check below is the real guard.
   const maybeGc = (globalThis as { gc?: () => void }).gc;
-  if (typeof maybeGc === 'function') maybeGc();
+  if (isCallableGc(maybeGc)) maybeGc();
   await new Promise((r) => setTimeout(r, 100));
   const initialRss = process.memoryUsage().rss;
   let maxRss = initialRss;

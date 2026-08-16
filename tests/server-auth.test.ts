@@ -7,6 +7,14 @@ import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { createApiKey, revokeApiKey } from '../src/auth.js';
 import { queryAuditEvents } from '../src/audit.js';
 import { serve, type ServerHandle, isLoopback } from '../src/server.js';
+import type { RememberResult } from '../src/api.js';
+
+async function jsonAs<T>(res: Response): Promise<T> {
+  // SAFETY: T is pinned by each call site to the exact JSON envelope the
+  // route handler (src/server.ts) returns for that request; every call
+  // site asserts the specific fields it reads immediately after this call.
+  return res.json() as Promise<T>;
+}
 
 function makeRoot(): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-srv-auth-'));
@@ -85,7 +93,7 @@ describe('server auth middleware', () => {
       body: JSON.stringify({ content: 'auth-canary-loopback-noauth' }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as { id: string };
+    const body = await jsonAs<RememberResult>(res);
     expect(body.id).toMatch(/^mem_/);
 
     const db = openHippoDb(home);
@@ -121,7 +129,7 @@ describe('server auth middleware', () => {
       body: JSON.stringify({ content: 'auth-canary-bearer-valid' }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as { id: string; tenantId: string };
+    const body = await jsonAs<RememberResult>(res);
     expect(body.id).toMatch(/^mem_/);
     expect(body.tenantId).toBe('default');
 
@@ -146,7 +154,7 @@ describe('server auth middleware', () => {
       body: JSON.stringify({ content: 'auth-canary-bearer-invalid' }),
     });
     expect(res.status).toBe(401);
-    const body = await res.json() as { error: string };
+    const body = await jsonAs<{ error: string }>(res);
     expect(body.error).toBe('invalid api key');
 
     const db = openHippoDb(home);
@@ -191,7 +199,7 @@ describe('server auth middleware', () => {
       body: JSON.stringify({ content: 'auth-canary-malformed' }),
     });
     expect(res.status).toBe(401);
-    const body = await res.json() as { error: string };
+    const body = await jsonAs<{ error: string }>(res);
     expect(body.error).toBe('invalid api key');
   });
 
@@ -210,7 +218,7 @@ describe('server auth middleware', () => {
   it('GET /health is reachable without auth', async () => {
     const res = await fetch(`${handle.url}/health`);
     expect(res.status).toBe(200);
-    const body = await res.json() as { ok: boolean };
+    const body = await jsonAs<{ ok: boolean }>(res);
     expect(body.ok).toBe(true);
   });
 

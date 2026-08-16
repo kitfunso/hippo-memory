@@ -32,6 +32,8 @@ describe('enforceDepthCapWithinTx helper (v1.7.4)', () => {
         enforceDepthCapWithinTx(db, tenantId, sessionId);
         db.exec('COMMIT');
       } catch (err) { db.exec('ROLLBACK'); throw err; }
+      // SAFETY: query is a fixed `COUNT(*) AS c` aggregate, which always
+      // returns exactly one row shaped { c: number }.
       const active = db.prepare(
         `SELECT COUNT(*) AS c FROM goal_stack WHERE status = 'active' AND tenant_id = ? AND session_id = ?`,
       ).get(tenantId, sessionId) as { c: number };
@@ -52,6 +54,8 @@ describe('enforceDepthCapWithinTx helper (v1.7.4)', () => {
         enforceDepthCapWithinTx(db, tenantId, sessionId);
         db.exec('COMMIT');
       } catch (err) { db.exec('ROLLBACK'); throw err; }
+      // SAFETY: query is a fixed `COUNT(*) AS c` aggregate, which always
+      // returns exactly one row shaped { c: number }.
       const active = db.prepare(
         `SELECT COUNT(*) AS c FROM goal_stack WHERE status = 'active' AND tenant_id = ? AND session_id = ?`,
       ).get(tenantId, sessionId) as { c: number };

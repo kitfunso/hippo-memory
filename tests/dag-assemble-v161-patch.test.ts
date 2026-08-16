@@ -11,7 +11,7 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry, loadSessionRawMemories } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry, MemoryKind } from '../src/memory.js';
+import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
 import { assemble, type Context } from '../src/api.js';
 
 function makeRoot(prefix: string): string {
@@ -28,7 +28,7 @@ function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {
   const e = createMemory(text, {
     layer: Layer.Buffer,
     confidence: 'observed',
-    kind: 'raw' as MemoryKind,
+    kind: 'raw',
     scope: opts.scope ?? null,
     tenantId: opts.tenantId ?? 'default',
     source_session_id: sessionId,

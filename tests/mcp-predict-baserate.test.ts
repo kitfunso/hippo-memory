@@ -13,7 +13,7 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store.js';
-import { handleMcpRequest } from '../src/mcp/server.js';
+import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { savePrediction, closePrediction } from '../src/predictions.js';
 
 function makeRoot(prefix: string): string {
@@ -23,11 +23,15 @@ function makeRoot(prefix: string): string {
   return home;
 }
 
+interface ToolArgs {
+  class_tag?: string;
+}
+
 function callTool(
   reqId: number,
   name: string,
-  args: Record<string, unknown>,
-  ctx: { hippoRoot: string; tenantId: string; actor: string; clientKey?: string },
+  args: ToolArgs,
+  ctx: McpContext,
 ) {
   return handleMcpRequest(
     {
@@ -36,13 +40,16 @@ function callTool(
       method: 'tools/call',
       params: { name, arguments: args },
     },
-    ctx as unknown as { hippoRoot: string; tenantId: string; actor: string; clientKey?: string },
+    ctx,
   );
 }
 
-function extractText(res: unknown): string {
-  const r = res as { result?: { content?: Array<{ text?: string }> } } | null;
-  return r?.result?.content?.[0]?.text ?? '';
+function extractText(res: McpResponse | null): string {
+  // SAFETY: a successful tools/call response always carries
+  // result.content[0].text (src/mcp/server.ts handleMcpRequest 'tools/call'
+  // case constructs this exact shape).
+  const result = res?.result as { content?: Array<{ text?: string }> } | undefined;
+  return result?.content?.[0]?.text ?? '';
 }
 
 describe('mcp hippo_predict_baserate (J3, v0.31)', () => {
@@ -63,7 +70,8 @@ describe('mcp hippo_predict_baserate (J3, v0.31)', () => {
 
   it('returns formatted text response for a class with closed predictions', async () => {
     // Seed 3 closed predictions
-    for (const [est, act] of [[2, 4], [3, 6], [1, 1]] as Array<[number, number]>) {
+    const estimateActualPairs: Array<[number, number]> = [[2, 4], [3, 6], [1, 1]];
+    for (const [est, act] of estimateActualPairs) {
       const p = savePrediction(home, 'default', {
         classTag: 'mcp-test',
         claimText: `est ${est} act ${act}`,

@@ -43,6 +43,10 @@ export type EmbeddingProviderKind = 'local' | 'openai' | 'voyage' | 'cohere';
 
 export const API_PROVIDER_KINDS: readonly EmbeddingProviderKind[] = ['openai', 'voyage', 'cohere'];
 
+function isApiProviderKind(x: string): x is 'openai' | 'voyage' | 'cohere' {
+  return x === 'openai' || x === 'voyage' || x === 'cohere';
+}
+
 const DEFAULT_API_BATCH_SIZE = 64;
 /** Per-request timeout for API embedding calls. A provider/proxy that accepts
  *  the connection but never responds must not hang embed/recall indefinitely. */
@@ -98,7 +102,32 @@ class LocalEmbeddingProvider implements EmbeddingProvider {
 // API providers — OpenAI / Voyage / Cohere over native fetch.
 // ---------------------------------------------------------------------------
 
-interface ApiProviderShape {
+/** The full value space `JSON.parse` (via `resp.json()`) can produce. Keeps a
+ *  vendor response's origin as unparsed external JSON visible in its type
+ *  instead of collapsing it to `unknown`. */
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+/** POST body for an embeddings request. Each provider's `buildBody` populates
+ *  only the fields its API expects; the rest stay unset. */
+interface EmbeddingRequestBody {
+  model: string;
+  input?: string[];
+  input_type?: string;
+  texts?: string[];
+  embedding_types?: string[];
+}
+
+/** OpenAI and Voyage both respond `{ data: [{ embedding: number[] }] }`. */
+interface VectorArrayResponse {
+  data?: Array<{ embedding?: number[] }>;
+}
+
+/** Cohere v2: `{ embeddings: { float: number[][] } }`. */
+interface CohereEmbeddingsResponse {
+  embeddings?: { float?: number[][] };
+}
+
+interface ApiProviderSpec {
   keyEnv: string;
   defaultBaseUrl: string;
   /** Endpoint path appended to baseUrl ('embeddings' for OpenAI/Voyage, 'embed' for Cohere). */
@@ -106,12 +135,12 @@ interface ApiProviderShape {
   /** Provider flagship model, used when config selects the provider but no API model. */
   defaultModel: string;
   /** Build the POST body for a batch of texts. */
-  buildBody(model: string, texts: string[], role?: EmbeddingRole): Record<string, unknown>;
+  buildBody(model: string, texts: string[], role?: EmbeddingRole): EmbeddingRequestBody;
   /** Extract the ordered vectors from the parsed JSON response. */
-  extractVectors(json: unknown): number[][];
+  extractVectors(json: JsonValue): number[][];
 }
 
-const API_SHAPES: Record<'openai' | 'voyage' | 'cohere', ApiProviderShape> = {
+const API_PROVIDER_SPECS = {
   openai: {
     keyEnv: 'OPENAI_API_KEY',
     defaultBaseUrl: 'https://api.openai.com/v1',
@@ -120,7 +149,10 @@ const API_SHAPES: Record<'openai' | 'voyage' | 'cohere', ApiProviderShape> = {
     // OpenAI has no asymmetric query/passage input type for embeddings.
     buildBody: (model, texts) => ({ model, input: texts }),
     extractVectors: (json) => {
-      const data = (json as { data?: Array<{ embedding?: number[] }> }).data ?? [];
+      // SAFETY: OpenAI's documented embeddings response envelope; embedChunk
+      // validates vector count/non-emptiness against the request afterward,
+      // so a malformed response degrades to [] here and throws there.
+      const data = (json as VectorArrayResponse).data ?? [];
       return data.map((d) => d.embedding ?? []);
     },
   },
@@ -130,12 +162,15 @@ const API_SHAPES: Record<'openai' | 'voyage' | 'cohere', ApiProviderShape> = {
     path: 'embeddings',
     defaultModel: 'voyage-3',
     buildBody: (model, texts, role) => {
-      const body: Record<string, unknown> = { model, input: texts };
+      const body: EmbeddingRequestBody = { model, input: texts };
       if (role) body.input_type = role === 'query' ? 'query' : 'document';
       return body;
     },
     extractVectors: (json) => {
-      const data = (json as { data?: Array<{ embedding?: number[] }> }).data ?? [];
+      // SAFETY: Voyage's documented embeddings response envelope; embedChunk
+      // validates vector count/non-emptiness against the request afterward,
+      // so a malformed response degrades to [] here and throws there.
+      const data = (json as VectorArrayResponse).data ?? [];
       return data.map((d) => d.embedding ?? []);
     },
   },
@@ -152,11 +187,14 @@ const API_SHAPES: Record<'openai' | 'voyage' | 'cohere', ApiProviderShape> = {
     }),
     extractVectors: (json) => {
       // Cohere v2: { embeddings: { float: number[][] } }
-      const emb = (json as { embeddings?: { float?: number[][] } }).embeddings;
+      // SAFETY: matches Cohere's documented v2 response envelope; embedChunk
+      // validates vector count/non-emptiness against the request afterward,
+      // so a malformed response degrades to [] here and throws there.
+      const emb = (json as CohereEmbeddingsResponse).embeddings;
       return emb?.float ?? [];
     },
   },
-};
+} satisfies Record<'openai' | 'voyage' | 'cohere', ApiProviderSpec>;
 
 /** Remove a secret substring from any string before it surfaces in an error. */
 function redact(text: string, secret: string | undefined): string {
@@ -186,7 +224,7 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
   }
 
   get keyEnv(): string {
-    return API_SHAPES[this.kind].keyEnv;
+    return API_PROVIDER_SPECS[this.kind].keyEnv;
   }
 
   isAvailable(): boolean {
@@ -214,8 +252,8 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
   }
 
   private async embedChunk(chunk: string[], key: string, role?: EmbeddingRole): Promise<number[][]> {
-    const shape = API_SHAPES[this.kind];
-    const url = `${this.baseUrl.replace(/\/$/, '')}/${shape.path}`;
+    const spec = API_PROVIDER_SPECS[this.kind];
+    const url = `${this.baseUrl.replace(/\/$/, '')}/${spec.path}`;
     let resp: Response;
     try {
       resp = await fetch(url, {
@@ -224,7 +262,7 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
           'content-type': 'application/json',
           authorization: `Bearer ${key}`,
         },
-        body: JSON.stringify(shape.buildBody(this.model, chunk, role)),
+        body: JSON.stringify(spec.buildBody(this.model, chunk, role)),
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
     } catch (err) {
@@ -244,7 +282,7 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
       );
     }
 
-    let json: unknown;
+    let json: JsonValue;
     try {
       json = await resp.json();
     } catch (err) {
@@ -252,7 +290,7 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
       throw new Error(redact(`${this.kind} embeddings returned invalid JSON: ${msg}`, key));
     }
 
-    const vectors = shape.extractVectors(json);
+    const vectors = spec.extractVectors(json);
     // A 200 response with the wrong number of vectors (or any empty/malformed
     // vector) is a provider/proxy contract violation, NOT a per-item miss. Throw
     // so a reindex aborts atomically (preserving the prior usable index) and the
@@ -275,13 +313,15 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
 // Resolution
 // ---------------------------------------------------------------------------
 
-function readEmbeddingsConfig(hippoRoot: string): {
+interface EmbeddingsConfigValues {
   enabled?: boolean | 'auto';
   provider?: string;
   model?: string;
   apiBaseUrl?: string;
   batchSize?: number;
-} {
+}
+
+function readEmbeddingsConfig(hippoRoot: string): EmbeddingsConfigValues {
   try {
     return loadConfig(hippoRoot).embeddings;
   } catch {
@@ -328,7 +368,7 @@ export function resolveEmbeddingProvider(
   opts: ResolveProviderOptions = {},
 ): EmbeddingProvider {
   const cfg = readEmbeddingsConfig(hippoRoot);
-  const requested = (opts.provider ?? cfg.provider ?? 'local') as string;
+  const requested = opts.provider ?? cfg.provider ?? 'local';
   // An explicit embeddings.enabled=false hard-disables embedding for BOTH local
   // and API providers — for API this prevents unwanted paid off-box calls.
   const enabled = cfg.enabled !== false;
@@ -336,7 +376,7 @@ export function resolveEmbeddingProvider(
   if (requested === 'local') {
     return new LocalEmbeddingProvider(resolveEmbeddingModel(hippoRoot, opts.model), enabled);
   }
-  if (!API_PROVIDER_KINDS.includes(requested as EmbeddingProviderKind)) {
+  if (!isApiProviderKind(requested)) {
     // Fail loud on a typo'd provider rather than silently using local (which
     // would reindex with the local model and clobber the intended identity).
     throw new Error(
@@ -344,16 +384,16 @@ export function resolveEmbeddingProvider(
     );
   }
 
-  const kind = requested as 'openai' | 'voyage' | 'cohere';
-  const shape = API_SHAPES[kind];
+  const kind = requested;
+  const spec = API_PROVIDER_SPECS[kind];
   // If no API model was chosen (config left the local default in place), fall
   // back to the provider's flagship model rather than POSTing a local model id.
   const requestedModel = (opts.model ?? cfg.model)?.trim();
   const model =
-    requestedModel && requestedModel !== DEFAULT_EMBEDDING_MODEL ? requestedModel : shape.defaultModel;
-  const baseUrl = validateBaseUrl(cfg.apiBaseUrl, shape.defaultBaseUrl);
+    requestedModel && requestedModel !== DEFAULT_EMBEDDING_MODEL ? requestedModel : spec.defaultModel;
+  const baseUrl = validateBaseUrl(cfg.apiBaseUrl, spec.defaultBaseUrl);
   const batchSize =
-    typeof cfg.batchSize === 'number' && Number.isInteger(cfg.batchSize) && cfg.batchSize > 0
+    cfg.batchSize !== undefined && Number.isInteger(cfg.batchSize) && cfg.batchSize > 0
       ? cfg.batchSize
       : DEFAULT_API_BATCH_SIZE;
   return new ApiEmbeddingProvider(kind, model, baseUrl, batchSize, enabled);

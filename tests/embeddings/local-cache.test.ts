@@ -56,13 +56,15 @@ process.stdout.write(JSON.stringify({ length: vector.length, first3: vector.slic
       cwd: REPO_ROOT,
     });
 
+    // SAFETY: result is this test's own script's stdout, written by the
+    // process.stdout.write(JSON.stringify(...)) call in the script above.
     const parsed = JSON.parse(result.toString()) as { length: number; first3: number[] };
 
     expect(parsed.length).toBe(384);
 
     // Spot-check: values should be floats in [-1, 1] (model normalises output).
     for (const v of parsed.first3) {
-      expect(typeof v).toBe('number');
+      expect(Number.isFinite(v)).toBe(true);
       expect(v).toBeGreaterThanOrEqual(-1);
       expect(v).toBeLessThanOrEqual(1);
     }

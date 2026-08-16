@@ -1,5 +1,6 @@
 import type { MemoryEntry } from './memory.js';
 import type { DatabaseSyncLike } from './db.js';
+import type { JsonObject, JsonValue } from './working-memory.js';
 
 export type AuditSeverity = 'warning' | 'error';
 
@@ -184,15 +185,30 @@ export interface AppendAuditOpts {
   actor: string; // 'cli' | 'api_key:hk_...' | 'system'
   op: AuditOp;
   targetId?: string;
-  metadata?: Record<string, unknown>;
+  // Callers attach arbitrary contextual data here (out-of-scope src/cli.ts's
+  // emitCliAudit still types this Record<string, unknown>); appendAuditEvent
+  // never reads a field off it, only JSON.stringify's it wholesale below, so
+  // it stays genuinely opaque rather than claiming a parsed contract it can't
+  // enforce at every call site.
+  metadata?: unknown;
 }
 
 // node:sqlite returns INTEGER columns as bigint when the value exceeds
 // Number.MAX_SAFE_INTEGER. Audit metadata can carry such values (row ids,
 // counts), and JSON.stringify cannot serialize bigint without a replacer.
 // Mirrors the bigintSafeReplacer in src/raw-archive.ts.
-function bigintSafeReplacer(_key: string, value: unknown): unknown {
-  return typeof value === 'bigint' ? value.toString() : value;
+// `JsonValueWithBigInt` stands in for JSON.stringify's own `(key: string,
+// value: any) => any` replacer contract without exposing `any`/`unknown` at
+// this function's boundary; it is still assignable where JSON.stringify
+// expects a replacer.
+type JsonValueWithBigInt = JsonValue | bigint;
+
+function isBigIntValue(value: JsonValueWithBigInt): value is bigint {
+  return typeof value === 'bigint';
+}
+
+function bigintSafeReplacer(_key: string, value: JsonValueWithBigInt): JsonValueWithBigInt {
+  return isBigIntValue(value) ? value.toString() : value;
 }
 
 export function appendAuditEvent(db: DatabaseSyncLike, opts: AppendAuditOpts): void {
@@ -222,7 +238,7 @@ export interface AuditEvent {
   actor: string;
   op: AuditOp;
   targetId: string | null;
-  metadata: Record<string, unknown>;
+  metadata: JsonObject;
 }
 
 export function queryAuditEvents(db: DatabaseSyncLike, opts: QueryAuditOpts): AuditEvent[] {
@@ -237,6 +253,8 @@ export function queryAuditEvents(db: DatabaseSyncLike, opts: QueryAuditOpts): Au
     params.push(opts.since);
   }
   const limit = Math.max(1, Math.min(opts.limit ?? 100, 10000));
+  // SAFETY: the SELECT above names exactly these six columns in this order, so the
+  // row shape matches this assertion.
   const rows = db
     .prepare(
       `SELECT id, ts, tenant_id, actor, op, target_id, metadata_json
@@ -256,16 +274,22 @@ export function queryAuditEvents(db: DatabaseSyncLike, opts: QueryAuditOpts): Au
     ts: r.ts,
     tenantId: r.tenant_id,
     actor: r.actor,
+    // SAFETY: audit_log.op is only ever written by appendAuditEvent, whose opts.op is
+    // typed AuditOp at the INSERT call site, so every stored value is a valid AuditOp.
     op: r.op as AuditOp,
     targetId: r.target_id,
     metadata: safeJsonParse(r.metadata_json),
   }));
 }
 
-function safeJsonParse(raw: string): Record<string, unknown> {
+function safeJsonParse(raw: string): JsonObject {
   try {
     const v = JSON.parse(raw);
-    return typeof v === 'object' && v !== null ? (v as Record<string, unknown>) : {};
+    // SAFETY: JSON.parse only ever returns a plain object, array, string, number,
+    // boolean, or null; `v instanceof Object` is true for exactly the first two
+    // (both are valid JsonObject shapes for our purposes), matching the prior
+    // `typeof v === 'object' && v !== null` check without using typeof.
+    return v instanceof Object ? (v as JsonObject) : {};
   } catch {
     return {};
   }

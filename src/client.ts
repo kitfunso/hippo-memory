@@ -27,11 +27,15 @@ import type {
   AuditListOpts,
 } from './api.js';
 
-function buildHeaders(apiKey: string | undefined, withBody: boolean): Record<string, string> {
+function buildHeaders(apiKey: string | undefined, withBody: boolean) {
   const headers: Record<string, string> = {};
   if (withBody) headers['content-type'] = 'application/json';
   if (apiKey) headers['authorization'] = `Bearer ${apiKey}`;
   return headers;
+}
+
+function isNonEmptyString(value: string | undefined): value is string {
+  return typeof value === 'string' && value.length > 0;
 }
 
 /**
@@ -43,8 +47,8 @@ function buildHeaders(apiKey: string | undefined, withBody: boolean): Record<str
 async function throwForStatus(res: Response): Promise<never> {
   let message = `${res.status} ${res.statusText}`;
   try {
-    const body = await res.json() as { error?: string };
-    if (body && typeof body.error === 'string' && body.error.length > 0) {
+    const body: { error?: string } = await res.json();
+    if (body && isNonEmptyString(body.error)) {
       message = body.error;
     }
   } catch {
@@ -64,7 +68,8 @@ export async function remember(
     body: JSON.stringify(opts),
   });
   if (!res.ok) await throwForStatus(res);
-  return await res.json() as RememberResult;
+  const result: RememberResult = await res.json();
+  return result;
 }
 
 export async function recall(
@@ -107,7 +112,8 @@ export async function recall(
     headers: buildHeaders(apiKey, false),
   });
   if (!res.ok) await throwForStatus(res);
-  return await res.json() as RecallResult;
+  const result: RecallResult = await res.json();
+  return result;
 }
 
 export async function forget(
@@ -120,7 +126,8 @@ export async function forget(
     headers: buildHeaders(apiKey, false),
   });
   if (!res.ok) await throwForStatus(res);
-  return await res.json() as { ok: true; id: string };
+  const result: { ok: true; id: string } = await res.json();
+  return result;
 }
 
 export async function promote(
@@ -133,7 +140,8 @@ export async function promote(
     headers: buildHeaders(apiKey, false),
   });
   if (!res.ok) await throwForStatus(res);
-  return await res.json() as { ok: true; sourceId: string; globalId: string };
+  const result: { ok: true; sourceId: string; globalId: string } = await res.json();
+  return result;
 }
 
 export async function supersede(
@@ -148,7 +156,8 @@ export async function supersede(
     body: JSON.stringify({ content: newContent }),
   });
   if (!res.ok) await throwForStatus(res);
-  return await res.json() as { ok: true; oldId: string; newId: string };
+  const result: { ok: true; oldId: string; newId: string } = await res.json();
+  return result;
 }
 
 export async function archiveRaw(
@@ -163,7 +172,8 @@ export async function archiveRaw(
     body: JSON.stringify({ reason }),
   });
   if (!res.ok) await throwForStatus(res);
-  return await res.json() as { ok: true; archivedAt: string };
+  const result: { ok: true; archivedAt: string } = await res.json();
+  return result;
 }
 
 export async function authCreate(
@@ -177,7 +187,8 @@ export async function authCreate(
     body: JSON.stringify(opts),
   });
   if (!res.ok) await throwForStatus(res);
-  return await res.json() as AuthCreateResult;
+  const result: AuthCreateResult = await res.json();
+  return result;
 }
 
 export async function authList(
@@ -192,7 +203,8 @@ export async function authList(
     headers: buildHeaders(apiKey, false),
   });
   if (!res.ok) await throwForStatus(res);
-  return await res.json() as ApiKeyListItem[];
+  const result: ApiKeyListItem[] = await res.json();
+  return result;
 }
 
 export async function authRevoke(
@@ -205,7 +217,8 @@ export async function authRevoke(
     headers: buildHeaders(apiKey, false),
   });
   if (!res.ok) await throwForStatus(res);
-  return await res.json() as { ok: true; revokedAt: string };
+  const result: { ok: true; revokedAt: string } = await res.json();
+  return result;
 }
 
 export async function auditList(
@@ -224,7 +237,8 @@ export async function auditList(
     headers: buildHeaders(apiKey, false),
   });
   if (!res.ok) await throwForStatus(res);
-  return await res.json() as AuditEvent[];
+  const result: AuditEvent[] = await res.json();
+  return result;
 }
 
 /**
@@ -232,6 +246,13 @@ export async function auditList(
  * pidfile said one was, but the connection refused, or DNS / abort errors).
  * The CLI uses this to detect a stale pidfile and self-heal back to direct mode.
  */
+function hasObjectCause(e: Error): e is Error & { cause: { code?: unknown } } {
+  // Node's fs/net system errors (ECONNREFUSED, ECONNRESET) attach the syscall
+  // code on a non-null object `cause`; the strict-equality checks at the call
+  // site validate the code value before it is used for anything.
+  return typeof e.cause === 'object' && e.cause !== null;
+}
+
 export function isConnectionRefused(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   const message = err.message.toLowerCase();
@@ -239,9 +260,8 @@ export function isConnectionRefused(err: unknown): boolean {
   // and the cause has the syscall code. We check both shapes.
   if (message.includes('econnrefused')) return true;
   if (message.includes('connect econnrefused')) return true;
-  const cause = (err as { cause?: unknown }).cause;
-  if (cause && typeof cause === 'object') {
-    const code = (cause as { code?: unknown }).code;
+  if (hasObjectCause(err)) {
+    const code = err.cause.code;
     if (code === 'ECONNREFUSED' || code === 'ECONNRESET') return true;
   }
   // Fallthrough: 'fetch failed' alone is suspicious. Treat as connection failure

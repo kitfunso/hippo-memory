@@ -13,7 +13,7 @@ import {
   resolveCodexWrapperPaths,
 } from '../src/hooks.js';
 
-function withFakeHome(): { cleanup: () => void; home: string } {
+function withFakeHome() {
   const prevHome = process.env.HOME;
   const prevUserProfile = process.env.USERPROFILE;
   const prevPath = process.env.PATH;

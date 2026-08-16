@@ -109,6 +109,8 @@ export function enforceDepthCapWithinTx(
   tenantId: string,
   sessionId: string,
 ): void {
+  // SAFETY: the row comes from the SELECT above, which projects exactly one
+  // column, `c`, as a COUNT(*).
   const activeCount = (db.prepare(`
     SELECT COUNT(*) AS c
     FROM goal_stack
@@ -141,6 +143,8 @@ export function pushGoalWithDb(db: DatabaseSyncLike, opts: PushGoalOpts): Goal {
     enforceDepthCapWithinTx(db, opts.tenantId, opts.sessionId);
 
     if (opts.parentGoalId) {
+      // SAFETY: the row comes from the SELECT above, which projects exactly
+      // the tenant_id and session_id columns of goal_stack.
       const parent = db.prepare(
         `SELECT tenant_id, session_id FROM goal_stack WHERE id = ?`,
       ).get(opts.parentGoalId) as { tenant_id: string; session_id: string } | undefined;
@@ -218,6 +222,8 @@ export function getActiveGoals(hippoRoot: string, opts: GetActiveGoalsOpts): Goa
 }
 
 export function getActiveGoalsWithDb(db: DatabaseSyncLike, opts: GetActiveGoalsOpts): Goal[] {
+  // SAFETY: rows come from the SELECT above, which projects exactly
+  // GoalRow's columns (in the same order goal_stack defines them).
   const rows = db.prepare(`
     SELECT id, session_id, tenant_id, goal_name, level, parent_goal_id, status,
            success_condition, retrieval_policy_id, created_at, completed_at, outcome_score
@@ -282,6 +288,8 @@ export function applyGoalStackBoost<R extends { entry: MemoryEntry; score: numbe
   const policiesByGoalId = new Map<string, RetrievalPolicy>();
   for (const g of active) {
     if (!g.retrievalPolicyId) continue;
+    // SAFETY: the row comes from the SELECT above, which projects exactly
+    // these seven retrieval_policy columns.
     const row = db.prepare(`
       SELECT id, goal_id, policy_type, weight_schema_fit, weight_recency, weight_outcome, error_priority
       FROM retrieval_policy WHERE id = ?
@@ -307,7 +315,12 @@ export function applyGoalStackBoost<R extends { entry: MemoryEntry; score: numbe
     }
   }
 
-  let boosted = results
+  // Goal-tag matches per boosted row, keyed by entry id. Kept as a side table
+  // (rather than a spread-on `_goalMatches` marker property) so `boosted`
+  // stays exactly R[] end to end, with no cast-tag-then-strip round trip.
+  const matchesByEntryId = new Map<string, string[]>();
+
+  const boosted = results
     .map((r) => {
       const tags = r.entry.tags ?? [];
       const matches = tags.filter((t) => goalsByTag.has(t));
@@ -351,17 +364,17 @@ export function applyGoalStackBoost<R extends { entry: MemoryEntry; score: numbe
           note: matches.join(', '),
         });
       }
-      return {
-        ...r,
-        score: r.score * multiplier,
-        _goalMatches: matches,
-      } as R & { _goalMatches: string[] };
+      matchesByEntryId.set(r.entry.id, matches);
+      // SAFETY: spreading a generic-constrained `r: R` widens the result to
+      // the spread's plain object type; only `score` changes, so the value
+      // still satisfies R's shape exactly.
+      return { ...r, score: r.score * multiplier } as R;
     })
     // T2 note: deliberately a PLAIN stable score sort, no compareEntryIdentity
     // tail -- a re-sort of an already deterministically-ordered ranking
     // inherits its determinism via sort stability, and ties preserve the
     // prior (meaningful) rank instead of reordering by content.
-    .sort((a, b) => b.score - a.score) as R[];
+    .sort((a, b) => b.score - a.score);
 
   // Filter to local memories only -- global memory IDs aren't in this DB's
   // memories table, so the FK on goal_recall_log.memory_id would fail.
@@ -372,6 +385,8 @@ export function applyGoalStackBoost<R extends { entry: MemoryEntry; score: numbe
   const localIds = new Set<string>();
   if (topKIds.length > 0) {
     const placeholders = topKIds.map(() => '?').join(',');
+    // SAFETY: rows come from the SELECT above, which projects exactly one
+    // column, `id`, from memories.
     const localRows = db.prepare(
       `SELECT id FROM memories WHERE id IN (${placeholders})`,
     ).all(...topKIds) as Array<{ id: string }>;
@@ -389,7 +404,7 @@ export function applyGoalStackBoost<R extends { entry: MemoryEntry; score: numbe
   `);
   for (const r of boosted.slice(0, limit)) {
     if (!localIds.has(r.entry.id)) continue; // global -> skip log insert
-    const matches = (r as R & { _goalMatches?: string[] })._goalMatches;
+    const matches = matchesByEntryId.get(r.entry.id);
     if (!matches || matches.length === 0) continue;
     for (const tag of matches) {
       const goal = goalsByTag.get(tag);
@@ -405,11 +420,7 @@ export function applyGoalStackBoost<R extends { entry: MemoryEntry; score: numbe
     }
   }
 
-  // Strip the internal _goalMatches marker so callers don't see it.
-  return boosted.map((r) => {
-    const { _goalMatches: _omit, ...rest } = r as R & { _goalMatches?: string[] };
-    return rest as R;
-  });
+  return boosted;
 }
 
 const POSITIVE_OUTCOME_THRESHOLD = 0.7;
@@ -441,6 +452,8 @@ export function completeGoal(hippoRoot: string, goalId: string, opts: CompleteGo
 
     db.exec('BEGIN IMMEDIATE');
     try {
+      // SAFETY: the row comes from the SELECT above, which projects exactly
+      // the created_at and status columns of goal_stack.
       const goalRow = db.prepare(
         `SELECT created_at, status FROM goal_stack WHERE id = ?`,
       ).get(goalId) as { created_at: string; status: string } | undefined;
@@ -506,6 +519,8 @@ export function resumeGoal(hippoRoot: string, goalId: string): void {
   try {
     db.exec('BEGIN IMMEDIATE');
     try {
+      // SAFETY: the row comes from the SELECT above, which projects exactly
+      // the session_id, tenant_id, and status columns of goal_stack.
       const row = db.prepare(
         `SELECT session_id, tenant_id, status FROM goal_stack WHERE id = ?`,
       ).get(goalId) as { session_id: string; tenant_id: string; status: string } | undefined;

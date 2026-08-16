@@ -30,6 +30,7 @@
     "pretest": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
+    "lint": "oxlint",
     "audit:security": "npm audit --audit-level=high && npm --prefix ui audit --audit-level=high",
     "postinstall": "node scripts/postinstall.cjs",
     "smoke:pack": "node scripts/smoke-pack.mjs",
@@ -62,7 +63,9 @@
     "node": ">=22.5.0"
   },
   "devDependencies": {
+    "@oxlint/plugins": "^1.78.0",
     "@types/node": "^20.11.0",
+    "oxlint": "^1.78.0",
     "typescript": "^5.4.0",
     "vitest": "^3.2.6"
   },

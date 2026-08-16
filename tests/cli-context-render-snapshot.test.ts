@@ -61,10 +61,14 @@ function makeMemory(overrides: Partial<MemoryEntry> & { id: string; content: str
   };
 }
 
+function isString<T>(value: T): value is T & string {
+  return typeof value === 'string';
+}
+
 function captureStdout(fn: () => void): string {
   const logs: string[] = [];
   const spy = vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
-    logs.push(args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' '));
+    logs.push(args.map((a) => (isString(a) ? a : JSON.stringify(a))).join(' '));
   });
   try {
     fn();

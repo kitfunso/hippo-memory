@@ -41,6 +41,8 @@ function runHippo(args: string[]): RunResult {
     });
     return { stdout, status: 0 };
   } catch (err) {
+    // SAFETY: execFileSync throws a Node ExecException-shaped error on non-zero exit,
+    // which always carries these optional stdout/status fields.
     const e = err as { stdout?: string; status?: number };
     return { stdout: e.stdout ?? '', status: e.status ?? 1 };
   }

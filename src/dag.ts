@@ -103,7 +103,7 @@ export async function generateDagSummary(
   if (!res.ok) return null;
 
   try {
-    const data = (await res.json()) as { content?: Array<{ text?: string }> };
+    const data: { content?: Array<{ text?: string }> } = await res.json();
     const text = data.content?.[0]?.text?.trim() ?? '';
     return text.length >= 20 ? text : null;
   } catch {

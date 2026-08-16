@@ -49,6 +49,8 @@ function rawRowExists(root: string, id: string): boolean {
 function archiveRowCount(root: string, memoryId: string): number {
   const db = openHippoDb(root);
   try {
+    // SAFETY: the query always selects a single `SELECT COUNT(*) as c` aggregate,
+    // so the driver always returns one row shaped { c: number }.
     const row = db
       .prepare(`SELECT COUNT(*) as c FROM raw_archive WHERE memory_id = ?`)
       .get(memoryId) as { c: number };

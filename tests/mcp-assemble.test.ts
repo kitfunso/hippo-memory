@@ -7,8 +7,8 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, MemoryKind } from '../src/memory.js';
-import { handleMcpRequest } from '../src/mcp/server.js';
+import { createMemory, Layer } from '../src/memory.js';
+import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 
 function makeRoot(prefix: string): string {
   const home = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
@@ -21,7 +21,7 @@ function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force:
 async function callTool(
   reqId: number,
   name: string,
-  args: Record<string, unknown>,
+  args: Record<string, string | number | boolean>,
   ctx: { hippoRoot: string; tenantId: string; actor: string; clientKey?: string },
 ) {
   return handleMcpRequest(
@@ -29,9 +29,11 @@ async function callTool(
     ctx,
   );
 }
-function extractText(res: unknown): string {
-  const r = res as { result?: { content?: Array<{ text?: string }> } } | null;
-  return r?.result?.content?.[0]?.text ?? '';
+function extractText(res: McpResponse | null): string {
+  // SAFETY: every hippo_assemble tool response in this suite carries a
+  // single MCP text content block; the server's own formatter built it.
+  const result = res?.result as { content?: Array<{ text?: string }> } | undefined;
+  return result?.content?.[0]?.text ?? '';
 }
 
 describe('mcp hippo_assemble', () => {
@@ -53,7 +55,9 @@ describe('mcp hippo_assemble', () => {
       { jsonrpc: '2.0', id: 1, method: 'tools/list' },
       { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
     );
-    const tools = (res as { result?: { tools?: Array<{ name?: string }> } }).result?.tools ?? [];
+    // SAFETY: tools/list always returns { tools: [...] } per the MCP protocol handler above.
+    const listResult = res?.result as { tools?: Array<{ name?: string }> } | undefined;
+    const tools = listResult?.tools ?? [];
     expect(tools.map((t) => t.name)).toContain('hippo_assemble');
   });
 
@@ -62,7 +66,7 @@ describe('mcp hippo_assemble', () => {
       const e = createMemory(`session message ${i} content`, {
         layer: Layer.Buffer,
         confidence: 'observed',
-        kind: 'raw' as MemoryKind,
+        kind: 'raw',
         source_session_id: 'sess-mcp',
         tenantId: 'default',
       });

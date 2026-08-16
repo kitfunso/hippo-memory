@@ -31,7 +31,7 @@ import {
   writeEntry,
 } from '../src/store.js';
 import { createMemory, Layer } from '../src/memory.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import {
   saveIncident,
   resolveIncident,
@@ -54,10 +54,28 @@ function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
 
+/** Query a single row from the hippo SQLite handle. */
+function queryOne<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T | undefined {
+  // SAFETY: sql is a literal SELECT against known hippo schema columns; the
+  // row shape is declared by the generic type argument at each call site and
+  // checked immediately by the assertions that follow.
+  return db.prepare(sql).get(...params) as T | undefined;
+}
+
+/** Query all rows from the hippo SQLite handle. */
+function queryAll<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T[] {
+  // SAFETY: sql is a literal SELECT against known hippo schema columns; the
+  // row shape is declared by the generic type argument at each call site and
+  // checked immediately by the assertions that follow.
+  return db.prepare(sql).all(...params) as T[];
+}
+
 function countRows(home: string, table: string): number {
   const db = openHippoDb(home);
   try {
-    return (db.prepare(`SELECT COUNT(*) as c FROM ${table}`).get() as { c: number }).c;
+    // SAFETY: table is always one of this test file's own literal SQL
+    // identifiers ('memories' | 'incidents'), never external input.
+    return (queryOne<{ c: number }>(db, `SELECT COUNT(*) as c FROM ${table}`))!.c;
   } finally { closeHippoDb(db); }
 }
 
@@ -97,17 +115,27 @@ describe('incidents store (E2 first-class object)', () => {
 
     const db = openHippoDb(home);
     try {
-      const memRow = db.prepare(`SELECT content, tags_json, source FROM memories WHERE id = ?`)
-        .get(inc.memoryId!) as { content: string; tags_json: string; source: string } | undefined;
+      const memRow = queryOne<{ content: string; tags_json: string; source: string }>(
+        db,
+        `SELECT content, tags_json, source FROM memories WHERE id = ?`,
+        inc.memoryId!,
+      );
       expect(memRow).toBeDefined();
       expect(memRow!.content).toContain('DB pool exhausted');
       expect(memRow!.content).toContain('Context: spike at 14:00');
       expect(memRow!.source).toBe('incident');
-      expect((JSON.parse(memRow!.tags_json) as string[])).toContain('incident');
+      // SAFETY: tags_json is this test's own row, written by saveIncident as a
+      // JSON.stringify'd string[] (memory tags column).
+      expect(JSON.parse(memRow!.tags_json) as string[]).toContain('incident');
 
-      const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'incident_open' AND target_id = ?`)
-        .all(String(inc.id)) as Array<{ metadata_json: string }>;
+      const rows = queryAll<{ metadata_json: string }>(
+        db,
+        `SELECT metadata_json FROM audit_log WHERE op = 'incident_open' AND target_id = ?`,
+        String(inc.id),
+      );
       expect(rows.length).toBe(1);
+      // SAFETY: metadata_json is this test's own audit row, written by
+      // saveIncident's incident_open audit call with this exact shape.
       const meta = JSON.parse(rows[0].metadata_json) as { incident_id: number; has_context: boolean };
       expect(meta.has_context).toBe(true);
     } finally {
@@ -120,10 +148,19 @@ describe('incidents store (E2 first-class object)', () => {
     expect(inc.context).toBeNull();
     const db = openHippoDb(home);
     try {
-      const memRow = db.prepare(`SELECT content FROM memories WHERE id = ?`).get(inc.memoryId!) as { content: string };
-      expect(memRow.content).toBe('cron job silently failed');
-      const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'incident_open' AND target_id = ?`)
-        .all(String(inc.id)) as Array<{ metadata_json: string }>;
+      const memRow = queryOne<{ content: string }>(
+        db,
+        `SELECT content FROM memories WHERE id = ?`,
+        inc.memoryId!,
+      );
+      expect(memRow!.content).toBe('cron job silently failed');
+      const rows = queryAll<{ metadata_json: string }>(
+        db,
+        `SELECT metadata_json FROM audit_log WHERE op = 'incident_open' AND target_id = ?`,
+        String(inc.id),
+      );
+      // SAFETY: metadata_json is this test's own audit row, written by
+      // saveIncident's incident_open audit call with this exact shape.
       expect((JSON.parse(rows[0].metadata_json) as { has_context: boolean }).has_context).toBe(false);
     } finally {
       closeHippoDb(db);
@@ -160,8 +197,11 @@ describe('incidents store (E2 first-class object)', () => {
 
     const db = openHippoDb(home);
     try {
-      const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'incident_resolve' AND target_id = ?`)
-        .all(String(inc.id)) as Array<{ metadata_json: string }>;
+      const rows = queryAll<{ metadata_json: string }>(
+        db,
+        `SELECT metadata_json FROM audit_log WHERE op = 'incident_resolve' AND target_id = ?`,
+        String(inc.id),
+      );
       expect(rows.length).toBe(1);
     } finally { closeHippoDb(db); }
   });
@@ -189,8 +229,11 @@ describe('incidents store (E2 first-class object)', () => {
 
     const db = openHippoDb(home);
     try {
-      const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'incident_close' AND target_id = ?`)
-        .all(String(inc.id)) as Array<{ metadata_json: string }>;
+      const rows = queryAll<{ metadata_json: string }>(
+        db,
+        `SELECT metadata_json FROM audit_log WHERE op = 'incident_close' AND target_id = ?`,
+        String(inc.id),
+      );
       expect(rows.length).toBe(1);
     } finally { closeHippoDb(db); }
   });
@@ -337,12 +380,16 @@ describe('incidents store (E2 first-class object)', () => {
     const db = openHippoDb(home);
     try {
       expect(db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='incidents'`).get()).toBeDefined();
-      const triggers = (db.prepare(`SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_incidents_%'`)
-        .all() as Array<{ name: string }>).map((t) => t.name);
+      const triggers = queryAll<{ name: string }>(
+        db,
+        `SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_incidents_%'`,
+      ).map((t) => t.name);
       expect(triggers).toContain('trg_incidents_tenant_match_insert');
       expect(triggers).toContain('trg_incidents_tenant_match_update');
-      const indexes = (db.prepare(`SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_incidents_%'`)
-        .all() as Array<{ name: string }>).map((i) => i.name);
+      const indexes = queryAll<{ name: string }>(
+        db,
+        `SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_incidents_%'`,
+      ).map((i) => i.name);
       expect(indexes).toContain('idx_incidents_tenant_status');
       expect(indexes).toContain('idx_incidents_memory');
     } finally { closeHippoDb(db); }

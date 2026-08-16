@@ -44,6 +44,9 @@ describe('backfillChannel', () => {
 
     const db = openHippoDb(root);
     try {
+      // SAFETY: backfillChannel() above persisted the cursor for tenant
+      // 'default'/channel 'C1' in this same test, so the row is guaranteed
+      // present with a latest_ts column.
       const row = db
         .prepare(`SELECT latest_ts FROM slack_cursors WHERE tenant_id=? AND channel_id=?`)
         .get('default', 'C1') as { latest_ts: string };

@@ -13,6 +13,10 @@ import { LAYER_COLORS } from "../engine/types.js";
 import { isFading, type ColorMode } from "../state/filterState.js";
 import { pickColorTag } from "../engine/tagPalette.js";
 
+function isTagOrPathColorMode(mode: ColorMode): mode is "tag" | "path" {
+  return mode === "tag" || mode === "path";
+}
+
 interface DrawerProps {
   memories: Memory[];
   visibleIds: Set<string>;
@@ -284,11 +288,11 @@ export function Drawer({
                         />
                       )}
                     </td>
-                    {showTagColumn && (() => {
+                    {showTagColumn && isTagOrPathColorMode(colorMode) && (() => {
                       // code-review-critic R1 MED: compute pickColorTag once
                       // per row instead of twice (cell text + title). Cheap
                       // per call but adds up across 1373 rows.
-                      const tag = pickColorTag(m, colorMode as "tag" | "path") ?? "";
+                      const tag = pickColorTag(m, colorMode) ?? "";
                       return (
                         <td style={{ ...tdStyle, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                             title={tag}>

@@ -63,7 +63,7 @@ export function Header({ memoryCount, matchCount, stats, filterState, frozenOrig
   // P5 fix: `/` to focus search, Esc to clear (matches BottomBar shortcut hint).
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
-      const target = e.target as HTMLElement | null;
+      const target = e.target;
       const inInput = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
       if (e.key === "/" && !inInput) {
         e.preventDefault();

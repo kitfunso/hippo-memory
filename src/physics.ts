@@ -114,12 +114,12 @@ function cosine(a: number[], b: number[]): number {
 // Property derivation from memory attributes
 // ---------------------------------------------------------------------------
 
-const CHARGE_MAP: Record<EmotionalValence, number> = {
+const CHARGE_MAP = {
   neutral: 0,
   positive: 0.3,
   negative: -0.5,
   critical: -1.0,
-};
+} satisfies Record<EmotionalValence, number>;
 
 export function computeMass(strength: number, retrievalCount: number): number {
   // EVAL-ONLY ablation (see ablation.ts): under the recall-boost flag, particle

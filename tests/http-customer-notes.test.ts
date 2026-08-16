@@ -15,6 +15,14 @@ import { initStore } from '../src/store.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { createApiKey, type CreatedApiKey } from '../src/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
+import type { CustomerNote } from '../src/customer-notes.js';
+
+async function jsonAs<T>(res: Response): Promise<T> {
+  // SAFETY: every /v1/customer-notes response body is written by this
+  // server's own route handlers (src/server.ts) under test; each call
+  // site's <T> matches exactly the JSON shape that handler sends.
+  return (await res.json()) as T;
+}
 
 function makeRoot(): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-http-note-'));
@@ -45,7 +53,7 @@ afterEach(async () => {
 function authHeaders(key: CreatedApiKey = apiKey) {
   return { authorization: `Bearer ${key.plaintext}`, 'content-type': 'application/json' };
 }
-async function createNote(body: Record<string, unknown>, key: CreatedApiKey = apiKey) {
+async function createNote(body: { customer: string; note: string }, key: CreatedApiKey = apiKey) {
   return fetch(`${handle.url}/v1/customer-notes`, { method: 'POST', headers: authHeaders(key), body: JSON.stringify(body) });
 }
 
@@ -53,7 +61,7 @@ describe('HTTP /v1/customer-notes (E2 entity-scoped first-class object)', () => 
   it('POST /v1/customer-notes creates a note (201 + note, version 1)', async () => {
     const res = await createNote({ customer: 'Acme', note: 'renewal call' });
     expect(res.status).toBe(201);
-    const body = await res.json() as { note: Record<string, unknown> };
+    const body = await jsonAs<{ note: CustomerNote }>(res);
     expect(body.note.customer).toBe('Acme');
     expect(body.note.note).toBe('renewal call');
     expect(body.note.version).toBe(1);
@@ -64,27 +72,27 @@ describe('HTTP /v1/customer-notes (E2 entity-scoped first-class object)', () => 
     await createNote({ customer: 'Acme', note: 'n1' });
     await createNote({ customer: 'Acme', note: 'n2' });
     await createNote({ customer: 'Beta', note: 'b1' });
-    const all = await (await fetch(`${handle.url}/v1/customer-notes`, { headers: authHeaders() })).json() as { notes: unknown[] };
+    const all = await jsonAs<{ notes: CustomerNote[] }>(await fetch(`${handle.url}/v1/customer-notes`, { headers: authHeaders() }));
     expect(all.notes.length).toBe(3);
-    const acme = await (await fetch(`${handle.url}/v1/customer-notes?customer=Acme`, { headers: authHeaders() })).json() as { notes: unknown[] };
+    const acme = await jsonAs<{ notes: CustomerNote[] }>(await fetch(`${handle.url}/v1/customer-notes?customer=Acme`, { headers: authHeaders() }));
     expect(acme.notes.length).toBe(2); // many per customer
-    const acmeActive = await (await fetch(`${handle.url}/v1/customer-notes?customer=Acme&status=active`, { headers: authHeaders() })).json() as { notes: unknown[] };
+    const acmeActive = await jsonAs<{ notes: CustomerNote[] }>(await fetch(`${handle.url}/v1/customer-notes?customer=Acme&status=active`, { headers: authHeaders() }));
     expect(acmeActive.notes.length).toBe(2);
   });
 
   it('GET /v1/customer-notes/:id + 404 on missing', async () => {
-    const created = (await (await createNote({ customer: 'x', note: 'a' })).json() as { note: { id: number } }).note;
+    const created = (await jsonAs<{ note: CustomerNote }>(await createNote({ customer: 'x', note: 'a' }))).note;
     expect((await fetch(`${handle.url}/v1/customer-notes/${created.id}`, { headers: authHeaders() })).status).toBe(200);
     expect((await fetch(`${handle.url}/v1/customer-notes/99999`, { headers: authHeaders() })).status).toBe(404);
   });
 
   it('POST /v1/customer-notes/:id/supersede creates v2 (+409 on re-supersede)', async () => {
-    const v1 = (await (await createNote({ customer: 'b', note: 'a' })).json() as { note: { id: number } }).note;
+    const v1 = (await jsonAs<{ note: CustomerNote }>(await createNote({ customer: 'b', note: 'a' }))).note;
     const sup = await fetch(`${handle.url}/v1/customer-notes/${v1.id}/supersede`, {
       method: 'POST', headers: authHeaders(), body: JSON.stringify({ note: 'b', changeSummary: 'x' }),
     });
     expect(sup.status).toBe(200);
-    expect((await sup.json() as { note: { version: number } }).note.version).toBe(2);
+    expect((await jsonAs<{ note: CustomerNote }>(sup)).note.version).toBe(2);
     const conflict = await fetch(`${handle.url}/v1/customer-notes/${v1.id}/supersede`, {
       method: 'POST', headers: authHeaders(), body: JSON.stringify({ note: 'c' }),
     });
@@ -92,7 +100,7 @@ describe('HTTP /v1/customer-notes (E2 entity-scoped first-class object)', () => 
   });
 
   it('POST /v1/customer-notes/:id/close retires (+409 on re-close)', async () => {
-    const n = (await (await createNote({ customer: 'c', note: 'a' })).json() as { note: { id: number } }).note;
+    const n = (await jsonAs<{ note: CustomerNote }>(await createNote({ customer: 'c', note: 'a' }))).note;
     expect((await fetch(`${handle.url}/v1/customer-notes/${n.id}/close`, { method: 'POST', headers: authHeaders() })).status).toBe(200);
     expect((await fetch(`${handle.url}/v1/customer-notes/${n.id}/close`, { method: 'POST', headers: authHeaders() })).status).toBe(409);
   });
@@ -118,8 +126,8 @@ describe('HTTP /v1/customer-notes (E2 entity-scoped first-class object)', () => 
   });
 
   it('cross-tenant isolation: tenant-b cannot see default notes', async () => {
-    const created = (await (await createNote({ customer: 'secret', note: 'a' })).json() as { note: { id: number } }).note;
-    const bList = await (await fetch(`${handle.url}/v1/customer-notes`, { headers: authHeaders(apiKeyB) })).json() as { notes: unknown[] };
+    const created = (await jsonAs<{ note: CustomerNote }>(await createNote({ customer: 'secret', note: 'a' }))).note;
+    const bList = await jsonAs<{ notes: CustomerNote[] }>(await fetch(`${handle.url}/v1/customer-notes`, { headers: authHeaders(apiKeyB) }));
     expect(bList.notes.length).toBe(0);
     expect((await fetch(`${handle.url}/v1/customer-notes/${created.id}`, { headers: authHeaders(apiKeyB) })).status).toBe(404);
   });

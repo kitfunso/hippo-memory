@@ -14,7 +14,15 @@ import { initStore } from '../src/store.js';
 import { remember } from '../src/api.js';
 import { pushGoal } from '../src/goals.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+
+function countGoalRecallLogRows(db: DatabaseSyncLike, sessionId: string): number {
+  // SAFETY: `SELECT COUNT(*) AS c ...` always returns exactly one row with a
+  // numeric `c` column; this covers both call sites below.
+  return (db.prepare(
+    `SELECT COUNT(*) AS c FROM goal_recall_log WHERE session_id = ?`,
+  ).get(sessionId) as { c: number }).c;
+}
 
 function makeRoot(): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-http-goal-boost-'));
@@ -49,9 +57,7 @@ describe('HTTP /v1/memories session_id (v1.7.4)', () => {
     expect(res.status).toBe(200);
     const db = openHippoDb(home);
     try {
-      const count = (db.prepare(
-        `SELECT COUNT(*) AS c FROM goal_recall_log WHERE session_id = ?`,
-      ).get(sessionId) as { c: number }).c;
+      const count = countGoalRecallLogRows(db, sessionId);
       expect(count).toBeGreaterThan(0);
     } finally {
       closeHippoDb(db);
@@ -63,9 +69,7 @@ describe('HTTP /v1/memories session_id (v1.7.4)', () => {
     expect(res.status).toBe(200);
     const db = openHippoDb(home);
     try {
-      const count = (db.prepare(
-        `SELECT COUNT(*) AS c FROM goal_recall_log WHERE session_id = ?`,
-      ).get(sessionId) as { c: number }).c;
+      const count = countGoalRecallLogRows(db, sessionId);
       expect(count).toBe(0);
     } finally {
       closeHippoDb(db);
@@ -78,6 +82,8 @@ describe('HTTP /v1/memories session_id (v1.7.4)', () => {
       `${handle.url}/v1/memories?q=auth&session_id=${encodeURIComponent(overCap)}`,
     );
     expect(res.status).toBe(400);
+    // SAFETY: route under test returns a JSON error object with a string
+    // `error` field on 400 responses (validated by the assertion below).
     const body = (await res.json()) as { error?: string };
     expect(body.error).toMatch(/session_id.*256/i);
   });

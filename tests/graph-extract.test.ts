@@ -27,7 +27,11 @@ function makeRoot(): string {
 }
 function entityCount(home: string): number {
   const db = openHippoDb(home);
-  try { return (db.prepare(`SELECT COUNT(*) c FROM entities`).get() as { c: number }).c; }
+  try {
+    // SAFETY: COUNT(*) always returns exactly one row shaped { c: number };
+    // better-sqlite3's .get() types as `unknown` with no query-shape knowledge.
+    return (db.prepare(`SELECT COUNT(*) c FROM entities`).get() as { c: number }).c;
+  }
   finally { closeHippoDb(db); }
 }
 

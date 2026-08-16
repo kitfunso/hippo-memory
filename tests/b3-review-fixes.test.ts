@@ -92,6 +92,8 @@ describe('B3 /review fixes', () => {
     // goal_recall_log must NOT contain the global memory id.
     const db = openHippoDb(env.hippoRoot);
     try {
+      // SAFETY: goal_recall_log's memory_id column is a NOT NULL TEXT FK;
+      // .all() rows always match the queried SELECT's single column.
       const rows = db.prepare(
         `SELECT memory_id FROM goal_recall_log WHERE goal_id = ?`,
       ).all(goal.id) as Array<{ memory_id: string }>;
@@ -128,6 +130,8 @@ describe('B3 /review fixes', () => {
     const dbA = openHippoDb(env.hippoRoot);
     let s1: number;
     try {
+      // SAFETY: memory `m` was just written above; strength is a NOT NULL
+      // REAL column, so the row and column always exist.
       s1 = (dbA.prepare(`SELECT strength FROM memories WHERE id = ?`).get(m.id) as { strength: number }).strength;
     } finally {
       closeHippoDb(dbA);
@@ -138,6 +142,8 @@ describe('B3 /review fixes', () => {
     const dbB = openHippoDb(env.hippoRoot);
     let s2: number;
     try {
+      // SAFETY: same invariant as s1 above — memory `m` and its strength
+      // column always exist by this point.
       s2 = (dbB.prepare(`SELECT strength FROM memories WHERE id = ?`).get(m.id) as { strength: number }).strength;
     } finally {
       closeHippoDb(dbB);
@@ -197,6 +203,9 @@ describe('B3 /review fixes', () => {
         },
       );
     } catch (err) {
+      // SAFETY: execFileSync throws a Node child_process error with numeric
+      // .status and string .stderr (encoding: 'utf8' set above) when the
+      // child exits non-zero, which is the only throw path here.
       const e = err as { status: number; stderr: string };
       exitCode = e.status;
       stderr = e.stderr;
@@ -224,6 +233,9 @@ describe('B3 /review fixes', () => {
         },
       );
     } catch (err) {
+      // SAFETY: execFileSync throws a Node child_process error with numeric
+      // .status and string .stderr (encoding: 'utf8' set above) when the
+      // child exits non-zero, which is the only throw path here.
       const e = err as { status: number; stderr: string };
       exitCode = e.status;
       stderr = e.stderr;

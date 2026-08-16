@@ -27,7 +27,7 @@ import { join } from 'node:path';
 import { initStore, saveActiveTaskSnapshot } from '../src/store.js';
 import { remember, getContext, type Context } from '../src/api.js';
 
-function tmpHome(): { home: string; restore: () => void } {
+function tmpHome() {
   const home = mkdtempSync(join(tmpdir(), 'hippo-api-ctx-'));
   initStore(home);
   // Per-test HIPPO_HOME override pointing to a separate UNINITIALIZED dir

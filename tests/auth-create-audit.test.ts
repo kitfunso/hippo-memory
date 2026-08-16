@@ -12,7 +12,7 @@ import { authCreate, authRevoke, adminActor, type Context } from '../src/api.js'
 import { queryAuditEvents } from '../src/audit.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
-function newCtx(tenantId = 'default'): { ctx: Context; tmpDir: string; cleanup: () => void } {
+function newCtx(tenantId = 'default') {
   const tmpDir = mkdtempSync(join(tmpdir(), 'hippo-auth-create-audit-'));
   const ctx: Context = {
     hippoRoot: tmpDir,
@@ -26,17 +26,24 @@ function newCtx(tenantId = 'default'): { ctx: Context; tmpDir: string; cleanup: 
   };
 }
 
+// auth_create / auth_revoke audit metadata is always the flat {label, role} /
+// {} scalar object built at the appendAuditEvent call sites in src/api.ts for
+// these two ops -- never nested objects or arrays.
+type AuditMetadataValue = string | number | boolean | null;
+
 function getAuditRows(hippoRoot: string, tenantId: string, op: 'auth_create' | 'auth_revoke'): Array<{
   actor: string;
   targetId: string | null;
-  metadata: Record<string, unknown>;
+  metadata: Record<string, AuditMetadataValue>;
 }> {
   const db = openHippoDb(hippoRoot);
   try {
     return queryAuditEvents(db, { tenantId, op, limit: 50 }).map((r) => ({
       actor: r.actor,
       targetId: r.targetId,
-      metadata: r.metadata as Record<string, unknown>,
+      // SAFETY: see the AuditMetadataValue comment above -- auth_create/auth_revoke
+      // metadata is always a flat scalar object for these two ops.
+      metadata: r.metadata as Record<string, AuditMetadataValue>,
     }));
   } finally {
     closeHippoDb(db);

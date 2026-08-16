@@ -27,7 +27,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, deleteEntry, writeEntry } from '../src/store.js';
 import { createMemory, Layer } from '../src/memory.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import {
   savePolicy,
   closePolicy,
@@ -48,9 +48,29 @@ function makeRoot(prefix: string): string {
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
+/** Query a single row from the hippo SQLite handle. */
+function queryOne<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T | undefined {
+  // SAFETY: sql is a literal SELECT against known hippo schema columns; the
+  // row shape is declared by the generic type argument at each call site and
+  // checked immediately by the assertions that follow.
+  return db.prepare(sql).get(...params) as T | undefined;
+}
+
+/** Query all rows from the hippo SQLite handle. */
+function queryAll<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T[] {
+  // SAFETY: sql is a literal SELECT against known hippo schema columns; the
+  // row shape is declared by the generic type argument at each call site and
+  // checked immediately by the assertions that follow.
+  return db.prepare(sql).all(...params) as T[];
+}
+
 function countRows(home: string, table: string): number {
   const db = openHippoDb(home);
-  try { return (db.prepare(`SELECT COUNT(*) as c FROM ${table}`).get() as { c: number }).c; }
+  try {
+    // SAFETY: table is always one of this test file's own literal SQL
+    // identifiers, never external input.
+    return queryOne<{ c: number }>(db, `SELECT COUNT(*) as c FROM ${table}`)!.c;
+  }
   finally { closeHippoDb(db); }
 }
 
@@ -77,16 +97,26 @@ describe('policies store (E2 bi-temporal first-class object)', () => {
 
     const db = openHippoDb(home);
     try {
-      const memRow = db.prepare(`SELECT content, source, tags_json FROM memories WHERE id = ?`)
-        .get(p.memoryId!) as { content: string; source: string; tags_json: string };
+      const memRow = queryOne<{ content: string; source: string; tags_json: string }>(
+        db,
+        `SELECT content, source, tags_json FROM memories WHERE id = ?`,
+        p.memoryId!,
+      )!;
       expect(memRow.content).toContain('Retention');
       expect(memRow.content).toContain('Delete logs after 90d');
       expect(memRow.content).toContain('Effective:');
       expect(memRow.source).toBe('policy');
-      expect((JSON.parse(memRow.tags_json) as string[])).toContain('policy');
-      const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op='policy_create' AND target_id=?`)
-        .all(String(p.id)) as Array<{ metadata_json: string }>;
+      // SAFETY: tags_json is this test's own row, written by savePolicy as a
+      // JSON.stringify'd string[] (memory tags column).
+      expect(JSON.parse(memRow.tags_json) as string[]).toContain('policy');
+      const rows = queryAll<{ metadata_json: string }>(
+        db,
+        `SELECT metadata_json FROM audit_log WHERE op='policy_create' AND target_id=?`,
+        String(p.id),
+      );
       expect(rows.length).toBe(1);
+      // SAFETY: metadata_json is this test's own audit row, written by
+      // savePolicy's policy_create audit call with this exact shape.
       expect((JSON.parse(rows[0].metadata_json) as { open_ended: boolean }).open_ended).toBe(true);
     } finally { closeHippoDb(db); }
   });
@@ -308,13 +338,17 @@ describe('policies store (E2 bi-temporal first-class object)', () => {
     const db = openHippoDb(home);
     try {
       expect(db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='policies'`).get()).toBeDefined();
-      const triggers = (db.prepare(`SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_policies_%'`)
-        .all() as Array<{ name: string }>).map((t) => t.name);
+      const triggers = queryAll<{ name: string }>(
+        db,
+        `SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_policies_%'`,
+      ).map((t) => t.name);
       expect(triggers).toContain('trg_policies_tenant_match_insert');
       expect(triggers).toContain('trg_policies_tenant_match_update');
       expect(triggers).toContain('trg_policies_supersede_tenant_match_update');
-      const indexes = (db.prepare(`SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_policies_%'`)
-        .all() as Array<{ name: string }>).map((i) => i.name);
+      const indexes = queryAll<{ name: string }>(
+        db,
+        `SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_policies_%'`,
+      ).map((i) => i.name);
       expect(indexes).toContain('idx_policies_tenant_status');
       expect(indexes).toContain('idx_policies_memory');
       expect(indexes).toContain('idx_policies_asof');

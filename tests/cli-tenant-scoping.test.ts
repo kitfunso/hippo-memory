@@ -21,11 +21,16 @@ import { createMemory } from '../src/memory.js';
 const REPO_ROOT = join(__dirname, '..');
 const CLI_PATH = join(REPO_ROOT, 'dist', 'cli.js');
 
+interface CliRunResult {
+  out: string;
+  status: number;
+}
+
 function runCli(
   cwd: string,
   env: NodeJS.ProcessEnv,
   ...args: string[]
-): { out: string; status: number } {
+): CliRunResult {
   try {
     const stdout = execFileSync(process.execPath, [CLI_PATH, ...args], {
       cwd,
@@ -35,19 +40,15 @@ function runCli(
     });
     return { out: stdout, status: 0 };
   } catch (e) {
+    // SAFETY: execFileSync on failure throws an Error augmented with
+    // stdout/stderr/status per Node's child_process API contract.
     const err = e as {
       stdout?: string | Buffer;
       stderr?: string | Buffer;
       status?: number;
     };
-    const stdout =
-      typeof err.stdout === 'string'
-        ? err.stdout
-        : (err.stdout?.toString('utf8') ?? '');
-    const stderr =
-      typeof err.stderr === 'string'
-        ? err.stderr
-        : (err.stderr?.toString('utf8') ?? '');
+    const stdout = Buffer.isBuffer(err.stdout) ? err.stdout.toString('utf8') : (err.stdout ?? '');
+    const stderr = Buffer.isBuffer(err.stderr) ? err.stderr.toString('utf8') : (err.stderr ?? '');
     return { out: stdout + stderr, status: err.status ?? 1 };
   }
 }

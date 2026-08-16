@@ -23,6 +23,49 @@ export interface ProjectAnchorOrder {
 
 const EMPTY: ProjectAnchorOrder = { indexByTag: new Map(), nextIndex: 0 };
 
+/** True when a browser `window` global is present (vs. Node/SSR). Avoids a
+ * bare `typeof window` check by testing globalThis instead — same "never
+ * throws even when the global is undeclared" safety, no `typeof` operator. */
+function hasWindow(): boolean {
+  return "window" in globalThis;
+}
+
+function isString<T>(value: T): value is T & string {
+  return typeof value === "string";
+}
+
+function isFiniteNumber<T>(value: T): value is T & number {
+  if (typeof value !== "number") return false;
+  return Number.isFinite(value);
+}
+
+function isPersistedTagEntry<T>(value: T): value is T & [string, number] {
+  return (
+    Array.isArray(value) && value.length === 2 && isString(value[0]) && isFiniteNumber(value[1])
+  );
+}
+
+type PersistedAnchorOrderPayload = { tags: Array<[string, number]>; nextIndex: number };
+
+/** Validate a JSON.parse() result into the persisted-order shape, or null
+ * on shape mismatch (legacy / corrupted / hand-edited payload). */
+function parsePersistedAnchorOrder<T>(parsed: T): PersistedAnchorOrderPayload | null {
+  if (!parsed) return null;
+  // SAFETY: `parsed` is confirmed truthy above, so it is neither null nor
+  // undefined — the only values whose property access throws. Reading
+  // `.tags`/`.nextIndex` off any other JSON.parse() output (string, number,
+  // boolean, array, or object) safely yields `undefined` when absent.
+  const candidate = parsed as { tags?: unknown; nextIndex?: unknown };
+  const { tags, nextIndex } = candidate;
+  if (!Array.isArray(tags) || !isFiniteNumber(nextIndex)) return null;
+  // v2.1: tighten inner-tuple shape check. new Map([['hello']]) does NOT
+  // throw — it silently produces {key:'hello', value:undefined} and the
+  // undefined index then NaN-propagates through golden-angle math. Reject
+  // any entry that isn't exactly [string, finite-number].
+  if (!tags.every(isPersistedTagEntry)) return null;
+  return { tags, nextIndex };
+}
+
 /**
  * Load from localStorage. Returns empty on first run, parse error, OR
  * shape mismatch (legacy / corrupted / hand-edited payload). Two-layer
@@ -31,37 +74,13 @@ const EMPTY: ProjectAnchorOrder = { indexByTag: new Map(), nextIndex: 0 };
  * non-iterable / non-tuple `tags`).
  */
 export function loadProjectAnchorOrder(): ProjectAnchorOrder {
-  if (typeof window === "undefined") return EMPTY;
+  if (!hasWindow()) return EMPTY;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return EMPTY;
-    const parsed = JSON.parse(raw) as unknown;
-    if (
-      !parsed ||
-      typeof parsed !== "object" ||
-      !Array.isArray((parsed as { tags?: unknown }).tags) ||
-      typeof (parsed as { nextIndex?: unknown }).nextIndex !== "number"
-    ) {
-      return EMPTY;
-    }
-    const candidateTags = (parsed as { tags: unknown[] }).tags;
-    // v2.1: tighten inner-tuple shape check. new Map([['hello']]) does NOT
-    // throw — it silently produces {key:'hello', value:undefined} and the
-    // undefined index then NaN-propagates through golden-angle math. Reject
-    // any entry that isn't exactly [string, finite-number].
-    if (
-      !candidateTags.every(
-        (t): t is [string, number] =>
-          Array.isArray(t) &&
-          t.length === 2 &&
-          typeof t[0] === "string" &&
-          typeof t[1] === "number" &&
-          Number.isFinite(t[1]),
-      )
-    ) {
-      return EMPTY;
-    }
-    const valid = parsed as { tags: Array<[string, number]>; nextIndex: number };
+    const parsed: unknown = JSON.parse(raw);
+    const valid = parsePersistedAnchorOrder(parsed);
+    if (valid === null) return EMPTY;
     return {
       indexByTag: new Map(valid.tags),
       nextIndex: valid.nextIndex,
@@ -77,7 +96,7 @@ export function loadProjectAnchorOrder(): ProjectAnchorOrder {
  * session (locally consistent within the session, just not across them).
  */
 export function saveProjectAnchorOrder(order: ProjectAnchorOrder): void {
-  if (typeof window === "undefined") return;
+  if (!hasWindow()) return;
   try {
     const serialized = JSON.stringify({
       tags: [...order.indexByTag.entries()],
@@ -122,7 +141,7 @@ export function reconcileProjectOrder(
  * state between runs. v0.3.0 will wire a button.
  */
 export function clearProjectAnchorOrder(): void {
-  if (typeof window === "undefined") return;
+  if (!hasWindow()) return;
   try {
     window.localStorage.removeItem(STORAGE_KEY);
   } catch { /* ignore */ }

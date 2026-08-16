@@ -26,8 +26,8 @@ import {
   deleteEntry,
   writeEntry,
 } from '../src/store.js';
-import { createMemory, Layer, MemoryKind } from '../src/memory.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { createMemory, Layer } from '../src/memory.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import {
   savePrediction,
   closePrediction,
@@ -46,6 +46,13 @@ function makeRoot(prefix: string): string {
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+}
+
+function countRows(db: DatabaseSyncLike, table: 'memories' | 'predictions'): number {
+  const row = db.prepare(`SELECT COUNT(*) as c FROM ${table}`).get();
+  // SAFETY: the query always selects a single COUNT(*) aggregate as c, so the
+  // driver always returns one row shaped { c: number }.
+  return (row as { c: number }).c;
 }
 
 describe('predictions store (E2 first-class object, v0.31)', () => {
@@ -78,9 +85,13 @@ describe('predictions store (E2 first-class object, v0.31)', () => {
     // Memory mirror exists with the prediction tag
     const db = openHippoDb(home);
     try {
+      // SAFETY: the query selects the id/content/tags_json columns from memories,
+      // whose schema types those as TEXT/TEXT/TEXT (JSON-encoded array) respectively.
       const memRow = db.prepare(`SELECT id, content, tags_json FROM memories WHERE id = ?`).get(pred.memoryId!) as { id: string; content: string; tags_json: string } | undefined;
       expect(memRow).toBeDefined();
       expect(memRow!.content).toBe('migration takes 2 days');
+      // SAFETY: memories.tags_json is always a JSON-encoded string array, written by
+      // writeEntry/savePrediction in this codebase.
       const tags = JSON.parse(memRow!.tags_json) as string[];
       expect(tags).toContain('prediction');
       expect(tags).toContain('migration-effort');
@@ -96,13 +107,13 @@ describe('predictions store (E2 first-class object, v0.31)', () => {
     const memBefore = (() => {
       const db = openHippoDb(home);
       try {
-        return (db.prepare(`SELECT COUNT(*) as c FROM memories`).get() as { c: number }).c;
+        return countRows(db, 'memories');
       } finally { closeHippoDb(db); }
     })();
     const predBefore = (() => {
       const db = openHippoDb(home);
       try {
-        return (db.prepare(`SELECT COUNT(*) as c FROM predictions`).get() as { c: number }).c;
+        return countRows(db, 'predictions');
       } finally { closeHippoDb(db); }
     })();
 
@@ -111,7 +122,7 @@ describe('predictions store (E2 first-class object, v0.31)', () => {
       layer: Layer.Semantic,
       confidence: 'observed',
       source: 'prediction',
-      kind: 'distilled' as MemoryKind,
+      kind: 'distilled',
       tenantId: 'default',
     });
 
@@ -127,7 +138,7 @@ describe('predictions store (E2 first-class object, v0.31)', () => {
     const memAfter = (() => {
       const db = openHippoDb(home);
       try {
-        return (db.prepare(`SELECT COUNT(*) as c FROM memories`).get() as { c: number }).c;
+        return countRows(db, 'memories');
       } finally { closeHippoDb(db); }
     })();
     expect(memAfter).toBe(memBefore);
@@ -136,7 +147,7 @@ describe('predictions store (E2 first-class object, v0.31)', () => {
     const predAfter = (() => {
       const db = openHippoDb(home);
       try {
-        return (db.prepare(`SELECT COUNT(*) as c FROM predictions`).get() as { c: number }).c;
+        return countRows(db, 'predictions');
       } finally { closeHippoDb(db); }
     })();
     expect(predAfter).toBe(predBefore);
@@ -165,10 +176,14 @@ describe('predictions store (E2 first-class object, v0.31)', () => {
     // Audit row landed
     const db = openHippoDb(home);
     try {
+      // SAFETY: the query selects op/target_id/metadata_json from audit_log, whose
+      // schema types those columns TEXT/TEXT/TEXT.
       const auditRows = db.prepare(
         `SELECT op, target_id, metadata_json FROM audit_log WHERE op = 'predict_close' AND target_id = ?`
       ).all(String(pred.id)) as Array<{ op: string; target_id: string; metadata_json: string }>;
       expect(auditRows.length).toBe(1);
+      // SAFETY: predict_close audit metadata is always the flat object built at the
+      // predict_close appendAuditEvent call site with these three fields.
       const meta = JSON.parse(auditRows[0].metadata_json) as { prediction_id: number; closure_state: string; has_actual: boolean };
       expect(meta.closure_state).toBe('closed');
       expect(meta.has_actual).toBe(true);
@@ -184,7 +199,7 @@ describe('predictions store (E2 first-class object, v0.31)', () => {
       layer: Layer.Semantic,
       confidence: 'observed',
       source: 'test',
-      kind: 'distilled' as MemoryKind,
+      kind: 'distilled',
       tenantId: 'tenant-a',
     });
     writeEntry(home, mem);
@@ -287,7 +302,7 @@ describe('predictions store (E2 first-class object, v0.31)', () => {
       layer: Layer.Semantic,
       confidence: 'observed',
       source: 'prediction',
-      kind: 'distilled' as MemoryKind,
+      kind: 'distilled',
       tenantId: 'tenant-a',
     });
     writeEntry(home, memA);
@@ -341,6 +356,8 @@ describe('predictions store (E2 first-class object, v0.31)', () => {
     // Confirm only ONE predict_close audit landed (not two)
     const db = openHippoDb(home);
     try {
+      // SAFETY: the query selects only the id column from audit_log, an INTEGER
+      // primary key.
       const auditRows = db.prepare(
         `SELECT id FROM audit_log WHERE op = 'predict_close' AND target_id = ?`
       ).all(String(pred.id)) as Array<{ id: number }>;
@@ -363,12 +380,16 @@ describe('predictions store (E2 first-class object, v0.31)', () => {
     const db = openHippoDb(home);
     try {
       // Table exists
+      // SAFETY: the query selects only the `name` column from sqlite_master, so the
+      // row (if any) is shaped { name: string }.
       const tableRow = db.prepare(
         `SELECT name FROM sqlite_master WHERE type='table' AND name='predictions'`
       ).get() as { name?: string } | undefined;
       expect(tableRow?.name).toBe('predictions');
 
       // Triggers exist
+      // SAFETY: the query selects only the `name` column from sqlite_master, so every
+      // row is shaped { name: string }.
       const triggers = db.prepare(
         `SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_predictions_%'`
       ).all() as Array<{ name: string }>;
@@ -377,6 +398,8 @@ describe('predictions store (E2 first-class object, v0.31)', () => {
       expect(triggerNames).toContain('trg_predictions_tenant_match_update');
 
       // Indexes exist
+      // SAFETY: the query selects only the `name` column from sqlite_master, so every
+      // row is shaped { name: string }.
       const indexes = db.prepare(
         `SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_predictions_%'`
       ).all() as Array<{ name: string }>;

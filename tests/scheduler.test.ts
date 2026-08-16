@@ -2,20 +2,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   DAILY_TASK_NAME,
+  __setSchedulerFsDeps,
   buildDailyRunnerCommand,
   registerWorkspace,
   runDailyMaintenance,
   workspaceRegistryPath,
 } from '../src/scheduler.js';
 
-const fsMock = vi.hoisted(() => ({
+// Fakes injected via __setSchedulerFsDeps (a DI seam on the scheduler module)
+// instead of `vi.mock('fs')`, so the module under test always calls through
+// real function references and only the fs.* implementations are swapped.
+const fsMock = {
   existsSync: vi.fn(),
   mkdirSync: vi.fn(),
   readFileSync: vi.fn(),
   writeFileSync: vi.fn(),
-}));
+};
 
-vi.mock('fs', () => fsMock);
+__setSchedulerFsDeps(fsMock);
 
 // scheduler tests use hardcoded Windows-style paths (`C:/Users/skf_s/.hippo`)
 // and assert workspaceRegistryPath produces matching output. The production

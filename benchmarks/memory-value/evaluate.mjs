@@ -368,8 +368,10 @@ export function evaluateAll(questionSplits, opts = {}) {
           questionsIncluded: b.count,
           questionsSkippedZeroGold: b.skippedZeroGold,
           degenerate,
-          ...(degenerate ? { degenerateReason: 'tie-break-only' } : {}),
         };
+        if (degenerate) {
+          summary[split][scorerName][budget].degenerateReason = 'tie-break-only';
+        }
       }
     }
   }

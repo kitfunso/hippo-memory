@@ -13,6 +13,7 @@ import { describe, it, expect } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
+import type { DatabaseSyncLike } from '../src/db.js';
 // @ts-expect-error - .mjs adapter module without .d.ts
 import { createAdapter } from '../benchmarks/sequential-learning/adapters/interface.mjs';
 // @ts-expect-error - .mjs adapter module without .d.ts
@@ -90,6 +91,8 @@ describe('hippo adapter goal-stack boost fires end-to-end', () => {
       expect(recalled.length).toBeGreaterThan(0);
 
       // Query the temp store directly. The adapter exposes _storeDir.
+      // SAFETY: adapters/hippo.mjs sets `this._storeDir` to the mkdtemp path
+      // in init() (see hippo.mjs:87) before any test can reach this line.
       const storeDir = (hippoAdapter as { _storeDir: string })._storeDir;
       expect(storeDir && existsSync(storeDir)).toBeTruthy();
 
@@ -105,14 +108,16 @@ describe('hippo adapter goal-stack boost fires end-to-end', () => {
       // Vitest can't resolve `node:sqlite` via ESM import (vite intercepts it),
       // so use createRequire — the same trick src/db.ts uses.
       const nodeRequire = createRequire(import.meta.url);
+      // SAFETY: node:sqlite's DatabaseSync shape is fixed by the runtime
+      // module; DatabaseSyncLike is db.ts's own typed contract for it (the
+      // same trick src/db.ts uses to require this module).
       const { DatabaseSync } = nodeRequire('node:sqlite') as {
-        DatabaseSync: new (path: string) => {
-          prepare(sql: string): { get(...args: unknown[]): unknown };
-          close(): void;
-        };
+        DatabaseSync: new (path: string) => DatabaseSyncLike;
       };
       const db = new DatabaseSync(dbToOpen);
       try {
+        // SAFETY: query is a fixed `COUNT(*) AS n` aggregate, which always
+        // returns exactly one row shaped { n: number }.
         const row = db
           .prepare('SELECT COUNT(*) AS n FROM goal_recall_log')
           .get() as { n: number };

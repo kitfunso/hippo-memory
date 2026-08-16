@@ -520,7 +520,7 @@ describe('Scoring', () => {
         expect(r).toHaveProperty('baseScore');
         expect(r).toHaveProperty('clusterAmplification');
         expect(r).toHaveProperty('finalScore');
-        expect(typeof r.baseScore).toBe('number');
+        expect(r.baseScore).toEqual(expect.any(Number));
         expect(r.clusterAmplification).toBeGreaterThanOrEqual(1.0);
       }
     });

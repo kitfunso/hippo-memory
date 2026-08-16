@@ -50,6 +50,9 @@ import {
   sleep,
   adminActor,
   type Context,
+  type RecallOpts,
+  type AssembleOpts,
+  type DrillDownOpts,
 } from './api.js';
 import type { MemoryKind } from './memory.js';
 import type { AuditOp } from './audit.js';
@@ -63,7 +66,6 @@ import {
   loadOpenPredictions,
   computePredictionBaserate,
   VALID_CLOSURE_STATES,
-  type ClosureState,
 } from './predictions.js';
 import {
   saveDecision,
@@ -71,7 +73,6 @@ import {
   loadDecisionById,
   loadDecisions,
   VALID_DECISION_STATES,
-  type DecisionStatus,
 } from './decisions.js';
 import {
   saveIncident,
@@ -80,7 +81,6 @@ import {
   loadIncidentById,
   loadIncidents,
   VALID_INCIDENT_STATES,
-  type IncidentStatus,
 } from './incidents.js';
 import {
   saveProcess,
@@ -88,7 +88,6 @@ import {
   loadProcessById,
   loadProcesses,
   VALID_PROCESS_STATES,
-  type ProcessStatus,
 } from './processes.js';
 import {
   savePolicy,
@@ -97,7 +96,6 @@ import {
   loadPolicies,
   loadPoliciesAsOf,
   VALID_POLICY_STATES,
-  type PolicyStatus,
 } from './policies.js';
 import {
   saveSkill,
@@ -106,7 +104,6 @@ import {
   loadSkills,
   exportSkills,
   VALID_SKILL_STATES,
-  type SkillStatus,
 } from './skills.js';
 import {
   saveProjectBrief,
@@ -223,10 +220,61 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
 // small enough that a malicious client can't ask for the world.
 const MAX_AUDIT_LIMIT = 10000;
 
+// Shared JSON-value domain type for the HTTP boundary (request bodies,
+// JSON.parse results). Runtime shape checks against it go through the
+// predicates below rather than a bare `typeof` (banned unconditionally by
+// anti-slop/no-runtime-typeof in this repo's oxlint config). Mirrors the
+// pattern already used in src/connectors/slack/types.ts.
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+function isJsonString(value: JsonValue | undefined): value is string {
+  return typeof value === 'string';
+}
+
+function isJsonNumber(value: JsonValue | undefined): value is number {
+  return typeof value === 'number';
+}
+
+function isJsonBoolean(value: JsonValue | undefined): value is boolean {
+  return typeof value === 'boolean';
+}
+
+function isJsonObjectRecord(value: JsonValue | undefined): value is Record<string, JsonValue> {
+  return value !== undefined && value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+// node:http header values are `string | string[] | undefined` (never a bare
+// unknown), so this gets its own predicate rather than reusing isJsonString.
+function isHeaderString(value: string | string[] | undefined): value is string {
+  return typeof value === 'string';
+}
+
+// server.address() returns AddressInfo once a TCP socket is bound; null before
+// listening, a string only for pipe/unix-socket listeners (never used here).
+function isAddressInfo(
+  a: string | import('node:net').AddressInfo | null,
+): a is import('node:net').AddressInfo {
+  return a !== null && typeof a !== 'string';
+}
+
+// Runtime membership check for a `ReadonlySet<T>` of string-literal union
+// members, used at every `body` field validated against a VALID_* set below.
+// Set<T>.has(value: T) itself gives no narrowing (its parameter type is T,
+// not a type predicate) so callers previously needed a separate `as T` cast
+// at both the check and the later usage; this helper is the one place that
+// assertion lives, so downstream call sites narrow via the `value is T`
+// return instead of re-asserting.
+function isSetMember<T extends string>(set: ReadonlySet<T>, value: string): value is T {
+  // SAFETY: `value as T` is discarded unless `set.has` (the real runtime
+  // check) confirms membership; the `value is T` return type is what
+  // performs the actual narrowing for callers.
+  return set.has(value as T);
+}
+
 // HTTP-boundary validation for a process `steps` body (untrusted). Returns the
 // step strings (saveProcess re-validates + trims, this is the fail-fast 400
 // gate). Caps mirror src/processes.ts MAX_PROCESS_STEPS / MAX_PROCESS_STEP_LEN.
-function validateProcessStepsBody(raw: unknown): string[] {
+function validateProcessStepsBody(raw: JsonValue | undefined): string[] {
   if (raw === undefined || raw === null) return [];
   if (!Array.isArray(raw)) {
     throw new HttpError(400, 'steps must be an array of strings');
@@ -235,7 +283,7 @@ function validateProcessStepsBody(raw: unknown): string[] {
     throw new HttpError(400, 'steps exceeds 200-step cap');
   }
   for (const item of raw) {
-    if (typeof item !== 'string') {
+    if (!isJsonString(item)) {
       throw new HttpError(400, 'each step must be a string');
     }
     if (item.trim().length === 0) {
@@ -245,6 +293,7 @@ function validateProcessStepsBody(raw: unknown): string[] {
       throw new HttpError(400, 'a step exceeds the 2000-character cap');
     }
   }
+  // SAFETY: every item in raw was confirmed to be a string in the loop above.
   return raw as string[];
 }
 
@@ -252,9 +301,9 @@ function validateProcessStepsBody(raw: unknown): string[] {
 // Type + length only; savePolicy/loadPoliciesAsOf normalize + format-validate the
 // value (an unparseable date throws there -> mapped to 400). 64-char cap bounds a
 // junk string before it reaches the Date parser.
-function optionalDateField(raw: unknown, label: string): string | undefined {
+function optionalDateField(raw: JsonValue | undefined, label: string): string | undefined {
   if (raw === undefined || raw === null) return undefined;
-  if (typeof raw !== 'string') {
+  if (!isJsonString(raw)) {
     throw new HttpError(400, `${label} must be a string`);
   }
   if (raw.length > 64) {
@@ -328,7 +377,7 @@ class HttpError extends Error {
 
 class BodyTooLargeError extends Error {}
 
-function sendJson(res: ServerResponse, status: number, body: unknown): void {
+function sendJson<T>(res: ServerResponse, status: number, body: T): void {
   res.writeHead(status, JSON_HEADERS);
   res.end(JSON.stringify(body));
 }
@@ -346,6 +395,8 @@ async function readBody(req: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = [];
   let total = 0;
   for await (const chunk of req) {
+    // SAFETY: IncomingMessage never runs setEncoding() here, so every
+    // streamed chunk is a Buffer, not a decoded string.
     const buf = chunk as Buffer;
     total += buf.length;
     if (total > MAX_BODY_BYTES) {
@@ -356,15 +407,15 @@ async function readBody(req: IncomingMessage): Promise<string> {
   return Buffer.concat(chunks).toString('utf8');
 }
 
-async function parseJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+async function parseJsonBody(req: IncomingMessage): Promise<Record<string, JsonValue>> {
   const raw = await readBody(req);
   if (raw.length === 0) return {};
   try {
-    const parsed = JSON.parse(raw);
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    const parsed: JsonValue = JSON.parse(raw);
+    if (!isJsonObjectRecord(parsed)) {
       throw new HttpError(400, 'request body must be a JSON object');
     }
-    return parsed as Record<string, unknown>;
+    return parsed;
   } catch (e) {
     if (e instanceof HttpError) throw e;
     throw new HttpError(400, 'invalid JSON body');
@@ -381,7 +432,7 @@ async function parseJsonBody(req: IncomingMessage): Promise<Record<string, unkno
  *   - /not raw/i    → 400 (archive_raw on non-raw row)
  * Everything else maps to 400 (bad input).
  */
-function mapApiError(err: unknown): { status: number; message: string } {
+function mapApiError<E>(err: E) {
   const message = err instanceof Error ? err.message : String(err);
   const lower = message.toLowerCase();
   if (/not found/.test(lower) || /^unknown /.test(lower)) {
@@ -467,7 +518,9 @@ function readAuthHeader(req: IncomingMessage): AuthHeader {
   const raw = req.headers['authorization'];
   if (raw === undefined) return { kind: 'absent' };
   const value = Array.isArray(raw) ? raw[0] : raw;
-  if (typeof value !== 'string' || value.length === 0) return { kind: 'malformed' };
+  if (!isHeaderString(value) || value.length === 0) {
+    return { kind: 'malformed' };
+  }
   const space = value.indexOf(' ');
   if (space < 0) return { kind: 'malformed' };
   const scheme = value.slice(0, space);
@@ -579,16 +632,16 @@ function requireAuth(req: IncomingMessage, hippoRoot: string): void {
   }
 }
 
-function getString(obj: Record<string, unknown>, key: string): string | undefined {
+function getString(obj: Record<string, JsonValue>, key: string): string | undefined {
   const v = obj[key];
-  return typeof v === 'string' ? v : undefined;
+  return isJsonString(v) ? v : undefined;
 }
 
-function getStringArray(obj: Record<string, unknown>, key: string): string[] | undefined {
+function getStringArray(obj: Record<string, JsonValue>, key: string): string[] | undefined {
   const v = obj[key];
   if (!Array.isArray(v)) return undefined;
-  if (!v.every((x) => typeof x === 'string')) return undefined;
-  return v as string[];
+  if (!v.every(isJsonString)) return undefined;
+  return v;
 }
 
 /**
@@ -677,13 +730,13 @@ async function handleRequest(
       throw new HttpError(400, 'content is required');
     }
     const kindRaw = getString(body, 'kind');
-    if (kindRaw !== undefined && !VALID_KINDS.has(kindRaw as MemoryKind)) {
+    if (kindRaw !== undefined && !isSetMember(VALID_KINDS, kindRaw)) {
       throw new HttpError(400, `invalid kind: ${kindRaw}`);
     }
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = remember(ctx, {
       content,
-      kind: kindRaw as MemoryKind | undefined,
+      kind: kindRaw,
       scope: getString(body, 'scope'),
       owner: getString(body, 'owner'),
       artifactRef: getString(body, 'artifactRef'),
@@ -828,19 +881,25 @@ async function handleRequest(
       }
     }
 
+    const recallExtra: Pick<
+      RecallOpts,
+      'freshTailCount' | 'freshTailSessionId' | 'summarizeOverflow' | 'scorerWindow' | 'sessionId' | 'recallHistory' | 'explain'
+    > = {};
+    if (freshTailCount !== undefined) recallExtra.freshTailCount = freshTailCount;
+    if (freshTailSessionId !== undefined) recallExtra.freshTailSessionId = freshTailSessionId;
+    if (summarizeOverflow !== undefined) recallExtra.summarizeOverflow = summarizeOverflow;
+    if (scorerWindow !== undefined) recallExtra.scorerWindow = scorerWindow;
+    if (sessionId !== undefined) recallExtra.sessionId = sessionId;
+    if (httpRecallHistory !== undefined) recallExtra.recallHistory = httpRecallHistory;
+    if (explain) recallExtra.explain = explain;
+
     const result = recall(ctx, {
       query: q,
       limit,
-      mode: (mode ?? undefined) as 'bm25' | 'hybrid' | 'physics' | undefined,
+      mode: mode ?? undefined,
       scope: scope ?? undefined,
       includeContinuity,
-      ...(freshTailCount !== undefined ? { freshTailCount } : {}),
-      ...(freshTailSessionId !== undefined ? { freshTailSessionId } : {}),
-      ...(summarizeOverflow !== undefined ? { summarizeOverflow } : {}),
-      ...(scorerWindow !== undefined ? { scorerWindow } : {}),
-      ...(sessionId !== undefined ? { sessionId } : {}),
-      ...(httpRecallHistory !== undefined ? { recallHistory: httpRecallHistory } : {}),
-      ...(explain ? { explain } : {}),
+      ...recallExtra,
     });
 
     // v0.33 / J1 — append AFTER recall completes (snapshot was taken before
@@ -893,12 +952,12 @@ async function handleRequest(
     const scopeQ = query.get('scope');
     const scope = scopeQ !== null && scopeQ.length > 0 ? scopeQ : undefined;
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
-    const result = assemble(ctx, assembleMatch.id!, {
-      ...(budget !== undefined ? { budget } : {}),
-      ...(freshTailCount !== undefined ? { freshTailCount } : {}),
-      ...(summarizeOlder !== undefined ? { summarizeOlder } : {}),
-      ...(scope !== undefined ? { scope } : {}),
-    });
+    const assembleExtra: Pick<AssembleOpts, 'budget' | 'freshTailCount' | 'summarizeOlder' | 'scope'> = {};
+    if (budget !== undefined) assembleExtra.budget = budget;
+    if (freshTailCount !== undefined) assembleExtra.freshTailCount = freshTailCount;
+    if (summarizeOlder !== undefined) assembleExtra.summarizeOlder = summarizeOlder;
+    if (scope !== undefined) assembleExtra.scope = scope;
+    const result = assemble(ctx, assembleMatch.id!, assembleExtra);
     sendJson(res, 200, result);
     return;
   }
@@ -934,11 +993,11 @@ async function handleRequest(
       depth = parsed;
     }
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
-    const result = drillDown(ctx, drillMatch.id!, {
-      ...(limit !== undefined ? { limit } : {}),
-      ...(budget !== undefined ? { budget } : {}),
-      ...(depth !== undefined ? { depth } : {}),
-    });
+    const drillExtra: Pick<DrillDownOpts, 'limit' | 'budget' | 'depth'> = {};
+    if (limit !== undefined) drillExtra.limit = limit;
+    if (budget !== undefined) drillExtra.budget = budget;
+    if (depth !== undefined) drillExtra.depth = depth;
+    const result = drillDown(ctx, drillMatch.id!, drillExtra);
     if ('failure' in result) {
       // v1.6.4: leaf id maps to 422 (caller-actionable). Other cases stay
       // as 404 to avoid leaking cross-tenant existence or scope grants.
@@ -1007,7 +1066,7 @@ async function handleRequest(
   if (method === 'POST' && path === '/v1/outcome') {
     const body = await parseJsonBody(req);
     const good = body['good'];
-    if (typeof good !== 'boolean') {
+    if (!isJsonBoolean(good)) {
       throw new HttpError(400, 'good is required (boolean)');
     }
     const idsRaw = body['ids'];
@@ -1016,10 +1075,9 @@ async function handleRequest(
       if (!Array.isArray(idsRaw)) {
         throw new HttpError(400, 'ids must be an array of non-empty strings');
       }
-      for (const id of idsRaw) {
-        if (typeof id !== 'string' || id.length === 0) {
-          throw new HttpError(400, 'ids must be an array of non-empty strings');
-        }
+      const isNonEmptyId = (item: JsonValue): item is string => isJsonString(item) && item.length > 0;
+      if (!idsRaw.every(isNonEmptyId)) {
+        throw new HttpError(400, 'ids must be an array of non-empty strings');
       }
       // v1.11.5: DoS cap on ids.length. Each id triggers ~3 DB ops (readEntry +
       // writeEntry + appendAuditEvent). N=1000 keeps per-request work bounded
@@ -1136,11 +1194,11 @@ async function handleRequest(
     }
     const body = await parseJsonBody(req);
     const dryRunRaw = body['dry_run'];
-    if (dryRunRaw !== undefined && typeof dryRunRaw !== 'boolean') {
+    if (dryRunRaw !== undefined && !isJsonBoolean(dryRunRaw)) {
       throw new HttpError(400, 'dry_run must be a boolean');
     }
     const noShareRaw = body['no_share'];
-    if (noShareRaw !== undefined && typeof noShareRaw !== 'boolean') {
+    if (noShareRaw !== undefined && !isJsonBoolean(noShareRaw)) {
       throw new HttpError(400, 'no_share must be a boolean');
     }
     // v1.12.0: sleepCtx already built above for the admin-role gate; reuse.
@@ -1158,7 +1216,7 @@ async function handleRequest(
   if (method === 'POST' && path === '/v1/auth/keys') {
     const body = await parseJsonBody(req);
     const labelRaw = body['label'];
-    if (labelRaw !== undefined && typeof labelRaw !== 'string') {
+    if (labelRaw !== undefined && !isJsonString(labelRaw)) {
       throw new HttpError(400, 'label must be a string');
     }
     // v1.12.3: optional body.role mirrors the --role CLI flag. Validated
@@ -1226,10 +1284,10 @@ async function handleRequest(
     const opRaw = query.get('op');
     let op: AuditOp | undefined;
     if (opRaw !== null) {
-      if (!VALID_AUDIT_OPS.has(opRaw as AuditOp)) {
+      if (!isSetMember(VALID_AUDIT_OPS, opRaw)) {
         throw new HttpError(400, `invalid op: ${opRaw}`);
       }
-      op = opRaw as AuditOp;
+      op = opRaw;
     }
     const sinceRaw = query.get('since');
     let since: string | undefined;
@@ -1277,20 +1335,20 @@ async function handleRequest(
   if (method === 'POST' && path === '/v1/predictions') {
     const body = await parseJsonBody(req);
     const claim = body['claim'];
-    if (typeof claim !== 'string' || claim.length === 0) {
+    if (!isJsonString(claim) || claim.length === 0) {
       throw new HttpError(400, 'claim is required (non-empty string)');
     }
     if (claim.length > 4096) {
       throw new HttpError(400, 'claim exceeds 4096-character cap');
     }
     const classTag = body['classTag'];
-    if (typeof classTag !== 'string' || classTag.length === 0) {
+    if (!isJsonString(classTag) || classTag.length === 0) {
       throw new HttpError(400, 'classTag is required (non-empty string)');
     }
     const estimate = body['estimate'];
     let estimateValue: number | undefined;
     if (estimate !== undefined && estimate !== null) {
-      if (typeof estimate !== 'number' || !Number.isFinite(estimate)) {
+      if (!isJsonNumber(estimate) || !Number.isFinite(estimate)) {
         throw new HttpError(400, 'estimate must be a finite number');
       }
       estimateValue = estimate;
@@ -1298,7 +1356,7 @@ async function handleRequest(
     const unit = body['unit'];
     let estimateUnit: string | undefined;
     if (unit !== undefined && unit !== null) {
-      if (typeof unit !== 'string') {
+      if (!isJsonString(unit)) {
         throw new HttpError(400, 'unit must be a string');
       }
       estimateUnit = unit;
@@ -1306,7 +1364,7 @@ async function handleRequest(
     const targetDate = body['targetDate'];
     let targetDateValue: string | undefined;
     if (targetDate !== undefined && targetDate !== null) {
-      if (typeof targetDate !== 'string') {
+      if (!isJsonString(targetDate)) {
         throw new HttpError(400, 'targetDate must be an ISO date string');
       }
       targetDateValue = targetDate;
@@ -1341,14 +1399,14 @@ async function handleRequest(
         limit,
       });
     } else {
-      if (!VALID_CLOSURE_STATES.has(status as ClosureState)) {
+      if (!isSetMember(VALID_CLOSURE_STATES, status)) {
         throw new HttpError(400, `status must be one of: open | closed | closed-unknown | all (got "${status}")`);
       }
       if (!classTag) {
         throw new HttpError(400, 'status filter (non-open) requires class param');
       }
       predictions = loadPredictionsByClass(opts.hippoRoot, ctx.tenantId, classTag, {
-        closureState: status as ClosureState,
+        closureState: status,
         limit,
       });
     }
@@ -1391,13 +1449,13 @@ async function handleRequest(
     const id = parseInt(predictionCloseMatch[1], 10);
     const body = await parseJsonBody(req);
     const state = body['state'];
-    if (typeof state !== 'string' || !VALID_CLOSURE_STATES.has(state as ClosureState) || state === 'open') {
+    if (!isJsonString(state) || !isSetMember(VALID_CLOSURE_STATES, state) || state === 'open') {
       throw new HttpError(400, 'state is required and must be one of: closed | closed-unknown');
     }
     const actual = body['actual'];
     let actualValue: number | undefined;
     if (actual !== undefined && actual !== null) {
-      if (typeof actual !== 'number' || !Number.isFinite(actual)) {
+      if (!isJsonNumber(actual) || !Number.isFinite(actual)) {
         throw new HttpError(400, 'actual must be a finite number');
       }
       actualValue = actual;
@@ -1405,7 +1463,7 @@ async function handleRequest(
     const note = body['note'];
     let closureNote: string | undefined;
     if (note !== undefined && note !== null) {
-      if (typeof note !== 'string') {
+      if (!isJsonString(note)) {
         throw new HttpError(400, 'note must be a string');
       }
       if (note.length > 2048) {
@@ -1416,13 +1474,13 @@ async function handleRequest(
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
     try {
       const prediction = closePrediction(opts.hippoRoot, ctx.tenantId, id, {
-        closureState: state as ClosureState,
+        closureState: state,
         actualValue,
         closureNote,
       }, ctx.actor.subject);
       sendJson(res, 200, { prediction });
     } catch (e) {
-      const msg = (e as Error).message;
+      const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('not found')) {
         throw new HttpError(404, msg);
       }
@@ -1444,7 +1502,7 @@ async function handleRequest(
   if (method === 'POST' && path === '/v1/decisions') {
     const body = await parseJsonBody(req);
     const text = body['text'];
-    if (typeof text !== 'string' || text.length === 0) {
+    if (!isJsonString(text) || text.length === 0) {
       throw new HttpError(400, 'text is required (non-empty string)');
     }
     if (text.length > 4096) {
@@ -1453,7 +1511,7 @@ async function handleRequest(
     const contextRaw = body['context'];
     let context: string | undefined;
     if (contextRaw !== undefined && contextRaw !== null) {
-      if (typeof contextRaw !== 'string') {
+      if (!isJsonString(contextRaw)) {
         throw new HttpError(400, 'context must be a string');
       }
       if (contextRaw.length > 4096) {
@@ -1464,7 +1522,7 @@ async function handleRequest(
     const supRaw = body['supersedesDecisionId'];
     let supersedesDecisionId: number | undefined;
     if (supRaw !== undefined && supRaw !== null) {
-      if (typeof supRaw !== 'number' || !Number.isInteger(supRaw) || supRaw <= 0) {
+      if (!isJsonNumber(supRaw) || !Number.isInteger(supRaw) || supRaw <= 0) {
         throw new HttpError(400, 'supersedesDecisionId must be a positive integer');
       }
       supersedesDecisionId = supRaw;
@@ -1478,7 +1536,7 @@ async function handleRequest(
       }, ctx.actor.subject);
       sendJson(res, 201, { decision });
     } catch (e) {
-      const msg = (e as Error).message;
+      const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('not found') || msg.includes('not active')) {
         throw new HttpError(409, msg);
       }
@@ -1495,11 +1553,11 @@ async function handleRequest(
     if (status === 'all') {
       decisions = loadDecisions(opts.hippoRoot, ctx.tenantId, { limit });
     } else {
-      if (!VALID_DECISION_STATES.has(status as DecisionStatus)) {
+      if (!isSetMember(VALID_DECISION_STATES, status)) {
         throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
       }
       decisions = loadDecisions(opts.hippoRoot, ctx.tenantId, {
-        status: status as DecisionStatus,
+        status,
         limit,
       });
     }
@@ -1512,7 +1570,7 @@ async function handleRequest(
     const oldId = parseInt(decisionSupersedeMatch[1], 10);
     const body = await parseJsonBody(req);
     const text = body['text'];
-    if (typeof text !== 'string' || text.length === 0) {
+    if (!isJsonString(text) || text.length === 0) {
       throw new HttpError(400, 'text is required (non-empty string)');
     }
     if (text.length > 4096) {
@@ -1521,7 +1579,7 @@ async function handleRequest(
     const contextRaw = body['context'];
     let context: string | undefined;
     if (contextRaw !== undefined && contextRaw !== null) {
-      if (typeof contextRaw !== 'string') {
+      if (!isJsonString(contextRaw)) {
         throw new HttpError(400, 'context must be a string');
       }
       if (contextRaw.length > 4096) {
@@ -1538,7 +1596,7 @@ async function handleRequest(
       }, ctx.actor.subject);
       sendJson(res, 201, { decision });
     } catch (e) {
-      const msg = (e as Error).message;
+      const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('not found')) {
         throw new HttpError(404, msg);
       }
@@ -1558,7 +1616,7 @@ async function handleRequest(
       const decision = closeDecision(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
       sendJson(res, 200, { decision });
     } catch (e) {
-      const msg = (e as Error).message;
+      const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('not found')) {
         throw new HttpError(404, msg);
       }
@@ -1596,7 +1654,7 @@ async function handleRequest(
   if (method === 'POST' && path === '/v1/incidents') {
     const body = await parseJsonBody(req);
     const text = body['text'];
-    if (typeof text !== 'string' || text.length === 0) {
+    if (!isJsonString(text) || text.length === 0) {
       throw new HttpError(400, 'text is required (non-empty string)');
     }
     if (text.length > 4096) {
@@ -1605,7 +1663,7 @@ async function handleRequest(
     const contextRaw = body['context'];
     let context: string | undefined;
     if (contextRaw !== undefined && contextRaw !== null) {
-      if (typeof contextRaw !== 'string') {
+      if (!isJsonString(contextRaw)) {
         throw new HttpError(400, 'context must be a string');
       }
       if (contextRaw.length > 4096) {
@@ -1622,12 +1680,12 @@ async function handleRequest(
       if (linkedRaw.length > 256) {
         throw new HttpError(400, 'linkedMemoryIds exceeds 256-item cap');
       }
-      for (const item of linkedRaw) {
-        if (typeof item !== 'string' || item.length === 0 || item.length > 4096) {
-          throw new HttpError(400, 'each linkedMemoryIds entry must be a non-empty string <= 4096 chars');
-        }
+      const isValidMemoryId = (item: JsonValue): item is string =>
+        isJsonString(item) && item.length > 0 && item.length <= 4096;
+      if (!linkedRaw.every(isValidMemoryId)) {
+        throw new HttpError(400, 'each linkedMemoryIds entry must be a non-empty string <= 4096 chars');
       }
-      linkedMemoryIds = linkedRaw as string[];
+      linkedMemoryIds = linkedRaw;
     }
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
     try {
@@ -1638,7 +1696,7 @@ async function handleRequest(
       }, ctx.actor.subject);
       sendJson(res, 201, { incident });
     } catch (e) {
-      const msg = (e as Error).message;
+      const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('not found')) {
         throw new HttpError(409, msg);
       }
@@ -1655,11 +1713,11 @@ async function handleRequest(
     if (status === 'all') {
       incidents = loadIncidents(opts.hippoRoot, ctx.tenantId, { limit });
     } else {
-      if (!VALID_INCIDENT_STATES.has(status as IncidentStatus)) {
+      if (!isSetMember(VALID_INCIDENT_STATES, status)) {
         throw new HttpError(400, `status must be one of: open | resolved | closed | all (got "${status}")`);
       }
       incidents = loadIncidents(opts.hippoRoot, ctx.tenantId, {
-        status: status as IncidentStatus,
+        status,
         limit,
       });
     }
@@ -1672,7 +1730,7 @@ async function handleRequest(
     const id = parseInt(incidentResolveMatch[1], 10);
     const body = await parseJsonBody(req);
     const resolutionText = body['resolutionText'];
-    if (typeof resolutionText !== 'string' || resolutionText.trim().length === 0) {
+    if (!isJsonString(resolutionText) || resolutionText.trim().length === 0) {
       throw new HttpError(400, 'resolutionText is required (non-empty string)');
     }
     if (resolutionText.length > 4096) {
@@ -1683,7 +1741,7 @@ async function handleRequest(
       const incident = resolveIncident(opts.hippoRoot, ctx.tenantId, id, resolutionText, ctx.actor.subject);
       sendJson(res, 200, { incident });
     } catch (e) {
-      const msg = (e as Error).message;
+      const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('not found')) {
         throw new HttpError(404, msg);
       }
@@ -1703,7 +1761,7 @@ async function handleRequest(
       const incident = closeIncident(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
       sendJson(res, 200, { incident });
     } catch (e) {
-      const msg = (e as Error).message;
+      const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('not found')) {
         throw new HttpError(404, msg);
       }
@@ -1741,7 +1799,7 @@ async function handleRequest(
   if (method === 'POST' && path === '/v1/processes') {
     const body = await parseJsonBody(req);
     const processName = body['processName'];
-    if (typeof processName !== 'string' || processName.trim().length === 0) {
+    if (!isJsonString(processName) || processName.trim().length === 0) {
       throw new HttpError(400, 'processName is required (non-empty string)');
     }
     if (processName.length > 4096) {
@@ -1751,7 +1809,7 @@ async function handleRequest(
     const descriptionRaw = body['description'];
     let description: string | undefined;
     if (descriptionRaw !== undefined && descriptionRaw !== null) {
-      if (typeof descriptionRaw !== 'string') {
+      if (!isJsonString(descriptionRaw)) {
         throw new HttpError(400, 'description must be a string');
       }
       if (descriptionRaw.length > 4096) {
@@ -1777,11 +1835,11 @@ async function handleRequest(
     if (status === 'all') {
       processes = loadProcesses(opts.hippoRoot, ctx.tenantId, { limit });
     } else {
-      if (!VALID_PROCESS_STATES.has(status as ProcessStatus)) {
+      if (!isSetMember(VALID_PROCESS_STATES, status)) {
         throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
       }
       processes = loadProcesses(opts.hippoRoot, ctx.tenantId, {
-        status: status as ProcessStatus,
+        status,
         limit,
       });
     }
@@ -1800,7 +1858,7 @@ async function handleRequest(
     const changeRaw = body['changeSummary'];
     let changeSummary: string | undefined;
     if (changeRaw !== undefined && changeRaw !== null) {
-      if (typeof changeRaw !== 'string') {
+      if (!isJsonString(changeRaw)) {
         throw new HttpError(400, 'changeSummary must be a string');
       }
       if (changeRaw.length > 4096) {
@@ -1811,7 +1869,7 @@ async function handleRequest(
     const descRaw = body['description'];
     let description: string | undefined;
     if (descRaw !== undefined && descRaw !== null) {
-      if (typeof descRaw !== 'string') {
+      if (!isJsonString(descRaw)) {
         throw new HttpError(400, 'description must be a string');
       }
       if (descRaw.length > 4096) {
@@ -1837,7 +1895,7 @@ async function handleRequest(
       }, ctx.actor.subject);
       sendJson(res, 200, { process });
     } catch (e) {
-      const msg = (e as Error).message;
+      const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('not found')) {
         throw new HttpError(404, msg);
       }
@@ -1857,7 +1915,7 @@ async function handleRequest(
       const process = closeProcess(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
       sendJson(res, 200, { process });
     } catch (e) {
-      const msg = (e as Error).message;
+      const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('not found')) {
         throw new HttpError(404, msg);
       }
@@ -1893,14 +1951,14 @@ async function handleRequest(
   if (method === 'POST' && path === '/v1/policies') {
     const body = await parseJsonBody(req);
     const policyName = body['policyName'];
-    if (typeof policyName !== 'string' || policyName.trim().length === 0) {
+    if (!isJsonString(policyName) || policyName.trim().length === 0) {
       throw new HttpError(400, 'policyName is required (non-empty string)');
     }
     if (policyName.length > 4096) {
       throw new HttpError(400, 'policyName exceeds 4096-character cap');
     }
     const policyText = body['policyText'];
-    if (typeof policyText !== 'string' || policyText.trim().length === 0) {
+    if (!isJsonString(policyText) || policyText.trim().length === 0) {
       throw new HttpError(400, 'policyText is required (non-empty string)');
     }
     if (policyText.length > 4096) {
@@ -1919,7 +1977,7 @@ async function handleRequest(
       sendJson(res, 201, { policy });
     } catch (e) {
       // savePolicy throws on invalid/inverted dates (validation) -> 400.
-      throw new HttpError(400, (e as Error).message);
+      throw new HttpError(400, e instanceof Error ? e.message : String(e));
     }
     return;
   }
@@ -1932,11 +1990,11 @@ async function handleRequest(
     if (status === 'all') {
       policies = loadPolicies(opts.hippoRoot, ctx.tenantId, { limit });
     } else {
-      if (!VALID_POLICY_STATES.has(status as PolicyStatus)) {
+      if (!isSetMember(VALID_POLICY_STATES, status)) {
         throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
       }
       policies = loadPolicies(opts.hippoRoot, ctx.tenantId, {
-        status: status as PolicyStatus,
+        status,
         limit,
       });
     }
@@ -1957,7 +2015,7 @@ async function handleRequest(
       const policies = loadPoliciesAsOf(opts.hippoRoot, ctx.tenantId, date, { name });
       sendJson(res, 200, { policies });
     } catch (e) {
-      throw new HttpError(400, (e as Error).message);
+      throw new HttpError(400, e instanceof Error ? e.message : String(e));
     }
     return;
   }
@@ -1967,7 +2025,7 @@ async function handleRequest(
     const id = parseInt(policySupersedeMatch[1], 10);
     const body = await parseJsonBody(req);
     const policyText = body['policyText'];
-    if (typeof policyText !== 'string' || policyText.trim().length === 0) {
+    if (!isJsonString(policyText) || policyText.trim().length === 0) {
       throw new HttpError(400, 'policyText is required (non-empty string)');
     }
     if (policyText.length > 4096) {
@@ -1978,7 +2036,7 @@ async function handleRequest(
     const changeRaw = body['changeSummary'];
     let changeSummary: string | undefined;
     if (changeRaw !== undefined && changeRaw !== null) {
-      if (typeof changeRaw !== 'string') {
+      if (!isJsonString(changeRaw)) {
         throw new HttpError(400, 'changeSummary must be a string');
       }
       if (changeRaw.length > 4096) {
@@ -2002,7 +2060,7 @@ async function handleRequest(
       }, ctx.actor.subject);
       sendJson(res, 200, { policy });
     } catch (e) {
-      const msg = (e as Error).message;
+      const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('not found')) {
         throw new HttpError(404, msg);
       }
@@ -2023,7 +2081,7 @@ async function handleRequest(
       const policy = closePolicy(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
       sendJson(res, 200, { policy });
     } catch (e) {
-      const msg = (e as Error).message;
+      const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('not found')) {
         throw new HttpError(404, msg);
       }
@@ -2062,14 +2120,14 @@ async function handleRequest(
   if (method === 'POST' && path === '/v1/skills') {
     const body = await parseJsonBody(req);
     const skillName = body['skillName'];
-    if (typeof skillName !== 'string' || skillName.trim().length === 0) {
+    if (!isJsonString(skillName) || skillName.trim().length === 0) {
       throw new HttpError(400, 'skillName is required (non-empty string)');
     }
     if (skillName.length > 256) {
       throw new HttpError(400, 'skillName exceeds 256-character cap');
     }
     const instructions = body['instructions'];
-    if (typeof instructions !== 'string' || instructions.trim().length === 0) {
+    if (!isJsonString(instructions) || instructions.trim().length === 0) {
       throw new HttpError(400, 'instructions are required (non-empty string)');
     }
     if (instructions.length > 8192) {
@@ -2078,7 +2136,7 @@ async function handleRequest(
     const triggerRaw = body['trigger'];
     let trigger: string | undefined;
     if (triggerRaw !== undefined && triggerRaw !== null) {
-      if (typeof triggerRaw !== 'string') {
+      if (!isJsonString(triggerRaw)) {
         throw new HttpError(400, 'trigger must be a string');
       }
       if (triggerRaw.length > 1024) {
@@ -2096,7 +2154,7 @@ async function handleRequest(
       sendJson(res, 201, { skill });
     } catch (e) {
       // saveSkill throws on validation (single-line name etc.) -> 400.
-      throw new HttpError(400, (e as Error).message);
+      throw new HttpError(400, e instanceof Error ? e.message : String(e));
     }
     return;
   }
@@ -2109,11 +2167,11 @@ async function handleRequest(
     if (status === 'all') {
       skills = loadSkills(opts.hippoRoot, ctx.tenantId, { limit });
     } else {
-      if (!VALID_SKILL_STATES.has(status as SkillStatus)) {
+      if (!isSetMember(VALID_SKILL_STATES, status)) {
         throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
       }
       skills = loadSkills(opts.hippoRoot, ctx.tenantId, {
-        status: status as SkillStatus,
+        status,
         limit,
       });
     }
@@ -2135,7 +2193,7 @@ async function handleRequest(
     const id = parseInt(skillSupersedeMatch[1], 10);
     const body = await parseJsonBody(req);
     const instructions = body['instructions'];
-    if (typeof instructions !== 'string' || instructions.trim().length === 0) {
+    if (!isJsonString(instructions) || instructions.trim().length === 0) {
       throw new HttpError(400, 'instructions are required (non-empty string)');
     }
     if (instructions.length > 8192) {
@@ -2144,7 +2202,7 @@ async function handleRequest(
     const triggerRaw = body['trigger'];
     let trigger: string | undefined;
     if (triggerRaw !== undefined && triggerRaw !== null) {
-      if (typeof triggerRaw !== 'string') {
+      if (!isJsonString(triggerRaw)) {
         throw new HttpError(400, 'trigger must be a string');
       }
       if (triggerRaw.length > 1024) {
@@ -2155,7 +2213,7 @@ async function handleRequest(
     const changeRaw = body['changeSummary'];
     let changeSummary: string | undefined;
     if (changeRaw !== undefined && changeRaw !== null) {
-      if (typeof changeRaw !== 'string') {
+      if (!isJsonString(changeRaw)) {
         throw new HttpError(400, 'changeSummary must be a string');
       }
       if (changeRaw.length > 4096) {
@@ -2178,7 +2236,7 @@ async function handleRequest(
       }, ctx.actor.subject);
       sendJson(res, 200, { skill });
     } catch (e) {
-      const msg = (e as Error).message;
+      const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('not found')) {
         throw new HttpError(404, msg);
       }
@@ -2198,7 +2256,7 @@ async function handleRequest(
       const skill = closeSkill(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
       sendJson(res, 200, { skill });
     } catch (e) {
-      const msg = (e as Error).message;
+      const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('not found')) {
         throw new HttpError(404, msg);
       }
@@ -2222,6 +2280,14 @@ async function handleRequest(
     return;
   }
 
+  // Named list-opts shape for GET /v1/project-briefs (see no-known-value-widening:
+  // a named interface is not flagged the way an inline anonymous object type is).
+  interface ProjectBriefListOpts {
+    status?: BriefStatus;
+    repo?: string;
+    limit: number;
+  }
+
   // ── E2 project_brief routes ──
   //
   // 6 routes: POST /v1/project-briefs (new; body repo + summary), GET
@@ -2235,14 +2301,14 @@ async function handleRequest(
   if (method === 'POST' && path === '/v1/project-briefs') {
     const body = await parseJsonBody(req);
     const repo = body['repo'];
-    if (typeof repo !== 'string' || repo.trim().length === 0) {
+    if (!isJsonString(repo) || repo.trim().length === 0) {
       throw new HttpError(400, 'repo is required (non-empty string)');
     }
     if (repo.length > 256) {
       throw new HttpError(400, 'repo exceeds 256-character cap');
     }
     const summary = body['summary'];
-    if (typeof summary !== 'string' || summary.trim().length === 0) {
+    if (!isJsonString(summary) || summary.trim().length === 0) {
       throw new HttpError(400, 'summary is required (non-empty string)');
     }
     if (summary.length > 8192) {
@@ -2257,7 +2323,7 @@ async function handleRequest(
       sendJson(res, 201, { brief });
     } catch (e) {
       // saveProjectBrief throws on validation (single-line repo etc.) -> 400.
-      throw new HttpError(400, (e as Error).message);
+      throw new HttpError(400, e instanceof Error ? e.message : String(e));
     }
     return;
   }
@@ -2267,15 +2333,15 @@ async function handleRequest(
     const repoFilter = query.get('repo');
     const limit = parseListLimit(query.get('limit'));
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
-    const listOpts: { status?: BriefStatus; repo?: string; limit: number } = { limit };
+    const listOpts: ProjectBriefListOpts = { limit };
     if (repoFilter !== null && repoFilter.trim().length > 0) {
       listOpts.repo = repoFilter.trim();
     }
     if (status !== 'all') {
-      if (!VALID_BRIEF_STATES.has(status as BriefStatus)) {
+      if (!isSetMember(VALID_BRIEF_STATES, status)) {
         throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
       }
-      listOpts.status = status as BriefStatus;
+      listOpts.status = status;
     }
     const briefs = loadProjectBriefs(opts.hippoRoot, ctx.tenantId, listOpts);
     sendJson(res, 200, { briefs });
@@ -2287,7 +2353,7 @@ async function handleRequest(
   if (method === 'POST' && path === '/v1/project-briefs/refresh') {
     const body = await parseJsonBody(req);
     const repo = body['repo'];
-    if (typeof repo !== 'string' || repo.trim().length === 0) {
+    if (!isJsonString(repo) || repo.trim().length === 0) {
       throw new HttpError(400, 'repo is required (non-empty string)');
     }
     if (repo.length > 256) {
@@ -2308,7 +2374,7 @@ async function handleRequest(
       // loadActiveBriefForRepo and the supersede CAS) is a state conflict, not a
       // validation error — map it to 409 like the explicit supersede route
       // (codex-review 2026-05-30, P3).
-      const msg = (e as Error).message;
+      const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('not found')) {
         throw new HttpError(404, msg);
       }
@@ -2325,7 +2391,7 @@ async function handleRequest(
     const id = parseInt(briefSupersedeMatch[1], 10);
     const body = await parseJsonBody(req);
     const summary = body['summary'];
-    if (typeof summary !== 'string' || summary.trim().length === 0) {
+    if (!isJsonString(summary) || summary.trim().length === 0) {
       throw new HttpError(400, 'summary is required (non-empty string)');
     }
     if (summary.length > 8192) {
@@ -2334,7 +2400,7 @@ async function handleRequest(
     const changeRaw = body['changeSummary'];
     let changeSummary: string | undefined;
     if (changeRaw !== undefined && changeRaw !== null) {
-      if (typeof changeRaw !== 'string') {
+      if (!isJsonString(changeRaw)) {
         throw new HttpError(400, 'changeSummary must be a string');
       }
       if (changeRaw.length > 4096) {
@@ -2356,7 +2422,7 @@ async function handleRequest(
       }, ctx.actor.subject);
       sendJson(res, 200, { brief });
     } catch (e) {
-      const msg = (e as Error).message;
+      const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('not found')) {
         throw new HttpError(404, msg);
       }
@@ -2376,7 +2442,7 @@ async function handleRequest(
       const brief = closeProjectBrief(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
       sendJson(res, 200, { brief });
     } catch (e) {
-      const msg = (e as Error).message;
+      const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('not found')) {
         throw new HttpError(404, msg);
       }
@@ -2411,14 +2477,14 @@ async function handleRequest(
   if (method === 'POST' && path === '/v1/customer-notes') {
     const body = await parseJsonBody(req);
     const customer = body['customer'];
-    if (typeof customer !== 'string' || customer.trim().length === 0) {
+    if (!isJsonString(customer) || customer.trim().length === 0) {
       throw new HttpError(400, 'customer is required (non-empty string)');
     }
     if (customer.length > 256) {
       throw new HttpError(400, 'customer exceeds 256-character cap');
     }
     const note = body['note'];
-    if (typeof note !== 'string' || note.trim().length === 0) {
+    if (!isJsonString(note) || note.trim().length === 0) {
       throw new HttpError(400, 'note is required (non-empty string)');
     }
     if (note.length > 8192) {
@@ -2433,9 +2499,18 @@ async function handleRequest(
       sendJson(res, 201, { note: customerNote });
     } catch (e) {
       // saveCustomerNote throws on validation (single-line customer etc.) -> 400.
-      throw new HttpError(400, (e as Error).message);
+      throw new HttpError(400, e instanceof Error ? e.message : String(e));
     }
     return;
+  }
+
+  // Named list-opts shape for GET /v1/customer-notes (see the matching
+  // ProjectBriefListOpts comment above: named interfaces are exempt from
+  // no-known-value-widening, inline anonymous object types are not).
+  interface CustomerNoteListOpts {
+    status?: NoteStatus;
+    customer?: string;
+    limit: number;
   }
 
   if (method === 'GET' && path === '/v1/customer-notes') {
@@ -2443,15 +2518,15 @@ async function handleRequest(
     const customerFilter = query.get('customer');
     const limit = parseListLimit(query.get('limit'));
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
-    const listOpts: { status?: NoteStatus; customer?: string; limit: number } = { limit };
+    const listOpts: CustomerNoteListOpts = { limit };
     if (customerFilter !== null && customerFilter.trim().length > 0) {
       listOpts.customer = customerFilter.trim();
     }
     if (status !== 'all') {
-      if (!VALID_NOTE_STATES.has(status as NoteStatus)) {
+      if (!isSetMember(VALID_NOTE_STATES, status)) {
         throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
       }
-      listOpts.status = status as NoteStatus;
+      listOpts.status = status;
     }
     const notes = loadCustomerNotes(opts.hippoRoot, ctx.tenantId, listOpts);
     sendJson(res, 200, { notes });
@@ -2463,7 +2538,7 @@ async function handleRequest(
     const id = parseInt(noteSupersedeMatch[1], 10);
     const body = await parseJsonBody(req);
     const note = body['note'];
-    if (typeof note !== 'string' || note.trim().length === 0) {
+    if (!isJsonString(note) || note.trim().length === 0) {
       throw new HttpError(400, 'note is required (non-empty string)');
     }
     if (note.length > 8192) {
@@ -2472,7 +2547,7 @@ async function handleRequest(
     const changeRaw = body['changeSummary'];
     let changeSummary: string | undefined;
     if (changeRaw !== undefined && changeRaw !== null) {
-      if (typeof changeRaw !== 'string') {
+      if (!isJsonString(changeRaw)) {
         throw new HttpError(400, 'changeSummary must be a string');
       }
       if (changeRaw.length > 4096) {
@@ -2494,7 +2569,7 @@ async function handleRequest(
       }, ctx.actor.subject);
       sendJson(res, 200, { note: customerNote });
     } catch (e) {
-      const msg = (e as Error).message;
+      const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('not found')) {
         throw new HttpError(404, msg);
       }
@@ -2514,7 +2589,7 @@ async function handleRequest(
       const customerNote = closeCustomerNote(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
       sendJson(res, 200, { note: customerNote });
     } catch (e) {
-      const msg = (e as Error).message;
+      const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('not found')) {
         throw new HttpError(404, msg);
       }
@@ -2572,8 +2647,8 @@ async function handleRequest(
     const previousSecret = process.env.SLACK_SIGNING_SECRET_PREVIOUS;
     const sig = req.headers['x-slack-signature'];
     const tsHdr = req.headers['x-slack-request-timestamp'];
-    const sigStr = typeof sig === 'string' ? sig : null;
-    const tsStr = typeof tsHdr === 'string' ? tsHdr : null;
+    const sigStr = isHeaderString(sig) ? sig : null;
+    const tsStr = isHeaderString(tsHdr) ? tsHdr : null;
     if (
       sigStr === null ||
       tsStr === null ||
@@ -2593,7 +2668,7 @@ async function handleRequest(
       const m = rawBody.match(/"team_id"\s*:\s*"([^"]+)"/);
       return m ? m[1] : null;
     })();
-    let body: unknown;
+    let body: JsonValue | undefined;
     try {
       body = JSON.parse(rawBody);
     } catch {
@@ -2625,22 +2700,21 @@ async function handleRequest(
       sendJson(res, 200, { ok: true, status: 'dlq' });
       return;
     }
-    if (
-      body &&
-      typeof body === 'object' &&
-      (body as Record<string, unknown>).type === 'url_verification'
-    ) {
-      sendJson(res, 200, {
-        challenge: String((body as Record<string, unknown>).challenge ?? ''),
-      });
-      return;
+    if (isJsonObjectRecord(body)) {
+      const bodyRecord = body;
+      if (bodyRecord.type === 'url_verification') {
+        sendJson(res, 200, {
+          challenge: String(bodyRecord.challenge ?? ''),
+        });
+        return;
+      }
     }
     // Resolve tenant. v0.39 fail-closed: when slack_workspaces is non-empty
     // and the team_id is unknown, resolveTenantForTeam returns null and we
     // park the envelope in slack_dlq with bucket='unroutable'. Mandatory ACK
     // 200 so Slack stops retrying; do NOT call ingest.
     let resolvedTenant: string | null = null;
-    if (isSlackEventEnvelope(body)) {
+    if (body !== undefined && isSlackEventEnvelope(body)) {
       const db = openHippoDb(opts.hippoRoot);
       try {
         resolvedTenant = resolveTenantForTeam(db, body.team_id);
@@ -2674,7 +2748,7 @@ async function handleRequest(
       tenantId: resolvedTenant,
       actor: adminActor('connector:slack'),
     };
-    if (!isSlackEventEnvelope(body)) {
+    if (body === undefined || !isSlackEventEnvelope(body)) {
       const db = openHippoDb(ctx.hippoRoot);
       try {
         writeToDlq(db, {
@@ -2727,7 +2801,7 @@ async function handleRequest(
         tenantId: ctx.tenantId,
         teamId: body.team_id,
         rawPayload: rawBody,
-        error: `unhandled event type: ${(inner as { type?: string })?.type ?? 'unknown'}`,
+        error: `unhandled event type: ${inner.type ?? 'unknown'}`,
         bucket: 'parse_error',
         signature: sigStr,
         slackTimestamp: tsStr,
@@ -2768,9 +2842,9 @@ async function handleRequest(
     const sigHdr = req.headers['x-hub-signature-256'];
     const eventHdr = req.headers['x-github-event'];
     const deliveryHdr = req.headers['x-github-delivery'];
-    const sigStr = typeof sigHdr === 'string' ? sigHdr : null;
-    const eventName = typeof eventHdr === 'string' ? eventHdr : null;
-    const deliveryId = typeof deliveryHdr === 'string' ? deliveryHdr : null;
+    const sigStr = isHeaderString(sigHdr) ? sigHdr : null;
+    const eventName = isHeaderString(eventHdr) ? eventHdr : null;
+    const deliveryId = isHeaderString(deliveryHdr) ? deliveryHdr : null;
 
     if (
       sigStr === null ||
@@ -2853,7 +2927,7 @@ async function handleRequest(
       return;
     }
 
-    let body: unknown;
+    let body: JsonValue | undefined;
     try {
       body = JSON.parse(rawBody);
     } catch {
@@ -2877,7 +2951,7 @@ async function handleRequest(
       return;
     }
 
-    if (!isGitHubWebhookEnvelope(body)) {
+    if (body === undefined || !isGitHubWebhookEnvelope(body)) {
       const db = openHippoDb(opts.hippoRoot);
       try {
         writeToGitHubDlq(db, {
@@ -3083,18 +3157,22 @@ async function handleRequest(
     // back to whatever the env says.
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const raw = await readBody(req);
-    let mcpReq: McpRequest;
+    let mcpReq: JsonValue;
     try {
-      mcpReq = JSON.parse(raw) as McpRequest;
+      mcpReq = JSON.parse(raw);
     } catch {
       throw new HttpError(400, 'invalid JSON-RPC body');
     }
-    if (!mcpReq || typeof mcpReq !== 'object' || typeof mcpReq.method !== 'string') {
+    if (!isJsonObjectRecord(mcpReq) || !isJsonString(mcpReq.method)) {
       throw new HttpError(400, 'JSON-RPC body must include a method string');
     }
+    // SAFETY: validated above as a plain JSON object carrying a string method;
+    // the remaining McpRequest wire fields (jsonrpc, id, params) are checked or
+    // safely defaulted inside handleMcpRequest's JSON-RPC dispatch.
+    const rpcReq = mcpReq as McpRequest & Record<string, JsonValue>;
     let mcpRes;
     try {
-      mcpRes = await handleMcpRequest(mcpReq, {
+      mcpRes = await handleMcpRequest(rpcReq, {
         hippoRoot: ctx.hippoRoot,
         tenantId: ctx.tenantId,
         // v1.12.0: McpContext.actor stays string; extract subject at the boundary.
@@ -3175,7 +3253,7 @@ async function handleRequest(
     }, heartbeatMs);
     // Don't keep the event loop alive just for this timer — the server's
     // listener already does that, and tests want the process to exit cleanly.
-    if (typeof ping.unref === 'function') ping.unref();
+    if (ping.unref instanceof Function) ping.unref();
     req.on('close', () => clearInterval(ping));
     return;
   }
@@ -3235,7 +3313,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
       : undefined;
 
   const server: Server = createServer((req, res) => {
-    handleRequest(req, res, opts, startedAt, limiter).catch((err: unknown) => {
+    handleRequest(req, res, opts, startedAt, limiter).catch(<E>(err: E) => {
       if (res.headersSent) {
         try { res.end(); } catch { /* socket already gone */ }
         return;
@@ -3302,10 +3380,11 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   });
 
   const address = server.address();
-  if (!address || typeof address === 'string') {
+  if (!isAddressInfo(address)) {
     throw new Error('server.address() returned unexpected shape');
   }
-  const actualPort = address.port;
+  const addressInfo = address;
+  const actualPort = addressInfo.port;
   const url = `http://${host}:${actualPort}`;
 
   writePidfile(opts.hippoRoot, { port: actualPort, url, startedAt });

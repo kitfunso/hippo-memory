@@ -153,17 +153,17 @@ describe('--why JSON output fields', () => {
 
     const r = results[0];
     // Verify all fields exist on SearchResult that --why needs
-    expect(typeof r.score).toBe('number');
-    expect(typeof r.bm25).toBe('number');
-    expect(typeof r.cosine).toBe('number');
-    expect(typeof r.entry.layer).toBe('string');
-    expect(typeof r.entry.confidence).toBe('string');
-    expect(typeof r.entry.id).toBe('string');
-    expect(typeof r.entry.strength).toBe('number');
+    expect(r.score).toBeTypeOf('number');
+    expect(r.bm25).toBeTypeOf('number');
+    expect(r.cosine).toBeTypeOf('number');
+    expect(r.entry.layer).toBeTypeOf('string');
+    expect(r.entry.confidence).toBeTypeOf('string');
+    expect(r.entry.id).toBeTypeOf('string');
+    expect(r.entry.strength).toBeTypeOf('number');
 
     // explainMatch produces the reason field
     const explanation = explainMatch('FRED cache', r);
-    expect(typeof explanation.reason).toBe('string');
+    expect(explanation.reason).toBeTypeOf('string');
     expect(explanation.reason.length).toBeGreaterThan(0);
   });
 
@@ -211,8 +211,8 @@ describe('hybridSearch results carry explainMatch data', () => {
     expect(results.length).toBeGreaterThan(0);
 
     for (const r of results) {
-      expect(typeof r.bm25).toBe('number');
-      expect(typeof r.cosine).toBe('number');
+      expect(r.bm25).toBeTypeOf('number');
+      expect(r.cosine).toBeTypeOf('number');
 
       const explanation = explainMatch('FRED cache failure', r);
       expect(explanation.reason.length).toBeGreaterThan(0);

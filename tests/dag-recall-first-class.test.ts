@@ -262,7 +262,7 @@ describe('v0.30 / E4 — first-class DAG recall (scoring layer)', () => {
     });
     expect(recordingReranker).toHaveBeenCalled();
     expect(recordedInputs).not.toBeNull();
-    const rerankerSawSummary = (recordedInputs as unknown as SearchResult[]).find((r) => r.entry.id === summary.id);
+    const rerankerSawSummary = recordedInputs!.find((r) => r.entry.id === summary.id);
     expect(rerankerSawSummary).toBeTruthy();
     // The summary the reranker SAW had its score multiplied by 0.85
     expect(rerankerSawSummary!.score).toBeCloseTo(summaryBaseScore * 0.85, 5);

@@ -178,7 +178,10 @@ function assertQuestionStoreReady(id) {
 export function srcWeightedRetentionForQuestion(id) {
   assertQuestionStoreReady(id);
   const meta = readJson(metaPathFor(id));
-  guard(typeof meta.tEval === 'string' && meta.tEval.length > 0, `question ${id} meta.json has no tEval`);
+  // Non-empty-string check without `typeof`: primitive strings box to
+  // String on property access, so this holds for real string values and
+  // short-circuits safely (undefined) for null/undefined/other types.
+  guard(meta.tEval?.constructor === String && meta.tEval.length > 0, `question ${id} meta.json has no tEval`);
   const evalNow = new Date(meta.tEval); // per-question causal clock clamp — see ingest.mjs header; NEVER wall-clock now
 
   const gold = readJson(goldPathFor(id));

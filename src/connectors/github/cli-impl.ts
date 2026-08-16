@@ -24,16 +24,33 @@ import {
   isGitHubIssueCommentEvent,
   isGitHubPullRequestEvent,
   isGitHubPullRequestReviewCommentEvent,
+  type JsonValue,
 } from './types.js';
 
-type Flags = Record<string, string | boolean | string[]>;
+type FlagValue = string | boolean | string[];
+type Flags = Record<string, FlagValue>;
+
+function isFlagString(value: FlagValue): value is string {
+  return typeof value === 'string';
+}
+
+// FlagValue never includes `number` (see its declaration above), so a
+// `value is number` predicate directly on FlagValue would not type-check —
+// the generic wrapper narrows a value of any type T instead.
+function isNumberLike<T>(value: T): value is T & number {
+  return typeof value === 'number';
+}
+
+function isFlagValueNumberLike(value: FlagValue): boolean {
+  return isNumberLike(value);
+}
 
 /**
  * Map a parsed envelope + eventName header to an IngestEvent discriminated
  * union. Returns null for unknown event types or shapes that don't pass the
  * type guards.
  */
-function parsedToIngestEvent(parsed: unknown, eventName: string): IngestEvent | null {
+function parsedToIngestEvent(parsed: JsonValue, eventName: string): IngestEvent | null {
   if (eventName === 'issues' && isGitHubIssueEvent(parsed, eventName)) {
     return { eventName: 'issues', payload: parsed };
   }
@@ -74,7 +91,7 @@ export async function cmdGithubBackfill(
     return;
   }
   const repo = flags['repo'];
-  if (typeof repo !== 'string' || !repo.includes('/')) {
+  if (!isFlagString(repo) || !repo.includes('/')) {
     printGithubBackfillUsage();
     process.exit(2);
   }
@@ -87,13 +104,14 @@ export async function cmdGithubBackfill(
   }
   const maxRaw = flags['max'];
   let maxPerStream: number | undefined;
-  if (typeof maxRaw === 'string' || typeof maxRaw === 'number') {
+  if (isFlagString(maxRaw) || isFlagValueNumberLike(maxRaw)) {
     const parsed = Number(maxRaw);
     if (Number.isFinite(parsed) && parsed > 0) {
       maxPerStream = Math.floor(parsed);
     }
   }
-  const sinceIso = typeof flags['since'] === 'string' ? (flags['since'] as string) : undefined;
+  const sinceFlag = flags['since'];
+  const sinceIso = isFlagString(sinceFlag) ? sinceFlag : undefined;
   const tenantId = resolveTenantId({});
 
   // Seed the github_cursors row so all 3 streams use --since on a fresh run.
@@ -126,11 +144,14 @@ export async function cmdGithubBackfill(
     const result = await backfillRepo(ctx, {
       repoFullName: repo,
       fetcher,
-      token: token as string,
+      token,
       maxPerStream,
     });
     console.log(JSON.stringify(result, null, 2));
   } catch (e) {
+    // SAFETY: this is a best-effort error message only; property access on
+    // any JS value is safe (undefined if absent), preserving the existing
+    // lenient formatting even when something non-Error was thrown.
     console.error('backfill failed:', (e as Error).message);
     process.exit(3);
   }

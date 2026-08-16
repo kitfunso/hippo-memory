@@ -26,7 +26,7 @@ import { join } from 'node:path';
 import { initStore, loadIndex } from '../src/store.js';
 import { remember, recall, getContext, type Context } from '../src/api.js';
 
-function tmpHome(): { home: string; restore: () => void } {
+function tmpHome() {
   const home = mkdtempSync(join(tmpdir(), 'hippo-api-recall-noside-'));
   initStore(home);
   const origHippoHome = process.env.HIPPO_HOME;

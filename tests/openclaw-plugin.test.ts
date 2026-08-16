@@ -1,28 +1,39 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const execFileSyncMock = vi.fn();
+type ExecFileSyncOpts = { cwd?: string; encoding?: string; timeout?: number; stdio?: string[] };
+type ExecFileSyncArgs = string[];
+
+const execFileSyncMock = vi.fn<(cmd: string, args: ExecFileSyncArgs, opts?: ExecFileSyncOpts) => string>();
 const spawnUnrefMock = vi.fn();
 const spawnMock = vi.fn(() => ({
   unref: spawnUnrefMock,
 }));
 const existsSyncMock = vi.fn((target: string) => target.includes('.hippo'));
 
-vi.mock('child_process', () => ({
-  execFileSync: execFileSyncMock,
-  spawn: spawnMock,
-}));
-
-vi.mock('fs', async () => {
-  const actual = await vi.importActual<typeof import('fs')>('fs');
-  return {
-    ...actual,
+// Fakes injected via __setHippoPluginDeps (a DI seam on the plugin module)
+// instead of `vi.mock('child_process')`/`vi.mock('fs')`, so the module under
+// test always calls through real function references and only the
+// execFileSync/spawn/existsSync implementations are swapped.
+async function loadPlugin() {
+  const mod = await import('../extensions/openclaw-plugin/index.ts');
+  mod.__setHippoPluginDeps({
+    execFileSync: execFileSyncMock,
+    spawn: spawnMock,
     existsSync: existsSyncMock,
-  };
-});
+  });
+  return mod.default;
+}
+
+type ToolExecuteParams =
+  | { query: string; budget?: number }
+  | { text: string; error?: boolean; pin?: boolean; tag?: string }
+  | { good: boolean };
+
+type ToolExecuteResult = { content: Array<{ type: string; text: string }> };
 
 type ToolDef = {
   name: string;
-  execute: (toolCallId: string, params: Record<string, unknown>) => Promise<unknown>;
+  execute: (toolCallId: string, params: ToolExecuteParams) => Promise<ToolExecuteResult>;
 };
 
 type HookHandler = (
@@ -32,7 +43,36 @@ type HookHandler = (
 
 type VoidHookHandler<Event = unknown, Ctx = unknown> = (event: Event, ctx: Ctx) => void | Promise<void>;
 
-function makeApi(config: Record<string, unknown>) {
+type HippoMemoryPluginConfig = {
+  budget?: number;
+  autoContext?: boolean;
+  framing?: string;
+  root?: string;
+  autoLearn?: boolean;
+  autoSleep?: boolean;
+};
+
+type HippoPluginConfig = {
+  agents: {
+    defaults: { workspace: string };
+    list: Array<{ id: string; default: boolean; workspace: string }>;
+  };
+  plugins: {
+    entries: {
+      'hippo-memory': { config: HippoMemoryPluginConfig };
+    };
+  };
+};
+
+/** Distinguishes a registered ToolDef factory from an already-built ToolDef: only the
+ *  factory form is callable, and only the built form carries `execute` directly. */
+function isToolFactory(
+  registration: ToolDef | ((ctx: { workspaceDir?: string }) => ToolDef),
+): registration is (ctx: { workspaceDir?: string }) => ToolDef {
+  return !('execute' in registration);
+}
+
+function makeApi(config: HippoPluginConfig) {
   const toolRegistrations: Array<ToolDef | ((ctx: { workspaceDir?: string }) => ToolDef)> = [];
   const hooks = new Map<string, HookHandler | VoidHookHandler>();
 
@@ -52,7 +92,7 @@ function makeApi(config: Record<string, unknown>) {
     },
     getTool(name: string, ctx: { workspaceDir?: string } = {}) {
       for (const registration of toolRegistrations) {
-        const tool = typeof registration === 'function' ? registration(ctx) : registration;
+        const tool = isToolFactory(registration) ? registration(ctx) : registration;
         if (tool.name === name) {
           return tool;
         }
@@ -64,6 +104,9 @@ function makeApi(config: Record<string, unknown>) {
       if (!hook) {
         throw new Error(`Hook not found: ${name}`);
       }
+      // SAFETY: callers only request event names registered via api.on() with a
+      // HookHandler signature (e.g. 'before_prompt_build'); void-returning hooks are
+      // fetched through getVoidHook instead.
       return hook as HookHandler;
     },
     getVoidHook<Event = unknown, Ctx = unknown>(name: string) {
@@ -71,12 +114,15 @@ function makeApi(config: Record<string, unknown>) {
       if (!hook) {
         throw new Error(`Hook not found: ${name}`);
       }
+      // SAFETY: callers supply Event/Ctx type params matching the specific hook name
+      // they registered (e.g. 'after_tool_call', 'session_end'), and every such hook was
+      // stored as a VoidHookHandler by api.on() above.
       return hook as VoidHookHandler<Event, Ctx>;
     },
   };
 }
 
-function hippoConfig(overrides: Record<string, unknown> = {}) {
+function hippoConfig(overrides: Partial<HippoMemoryPluginConfig> = {}): HippoPluginConfig {
   return {
     agents: {
       defaults: {
@@ -118,7 +164,7 @@ describe('openclaw hippo plugin', () => {
   });
 
   it('uses workspaceDir for tool execution by default', async () => {
-    const { default: register } = await import('../extensions/openclaw-plugin/index.ts');
+    const register = await loadPlugin();
     const harness = makeApi(hippoConfig());
 
     register(harness.api);
@@ -132,7 +178,7 @@ describe('openclaw hippo plugin', () => {
   });
 
   it('uses workspaceDir for prompt hook auto-context', async () => {
-    const { default: register } = await import('../extensions/openclaw-plugin/index.ts');
+    const register = await loadPlugin();
     const harness = makeApi(hippoConfig());
 
     register(harness.api);
@@ -152,7 +198,7 @@ describe('openclaw hippo plugin', () => {
   });
 
   it('lets config.root override workspaceDir when root points at a .hippo directory', async () => {
-    const { default: register } = await import('../extensions/openclaw-plugin/index.ts');
+    const register = await loadPlugin();
     const harness = makeApi(
       hippoConfig({
         root: 'D:\\shared\\workspace\\.hippo',
@@ -169,13 +215,13 @@ describe('openclaw hippo plugin', () => {
   });
 
   it('autoLearn stores a Hippo error memory when a tool call fails', async () => {
-    const { default: register } = await import('../extensions/openclaw-plugin/index.ts');
+    const register = await loadPlugin();
     const harness = makeApi(hippoConfig({ autoLearn: true }));
 
     register(harness.api);
 
     const hook = harness.getVoidHook<
-      { toolName: string; params: Record<string, unknown>; error?: string },
+      { toolName: string; params: Record<string, string | number | boolean | null>; error?: string },
       { agentId?: string; sessionId?: string; toolName: string }
     >('after_tool_call');
 
@@ -194,7 +240,7 @@ describe('openclaw hippo plugin', () => {
     );
 
     expect(execFileSyncMock).toHaveBeenCalledTimes(1);
-    const args = execFileSyncMock.mock.calls[0]?.[1] as string[];
+    const args = execFileSyncMock.mock.calls[0]?.[1];
     expect(args).toContain('remember');
     expect(args).toContain('--error');
     // tool name sanitized to tag: browser_open -> browser-open
@@ -203,7 +249,7 @@ describe('openclaw hippo plugin', () => {
   });
 
   it('autoSleep detaches consolidation only after sessions with at least 10 new memories', async () => {
-    const { default: register } = await import('../extensions/openclaw-plugin/index.ts');
+    const register = await loadPlugin();
     const harness = makeApi(hippoConfig({ autoSleep: true }));
 
     execFileSyncMock.mockImplementation((_cmd: string, args: string[]) => {

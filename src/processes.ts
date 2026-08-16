@@ -48,6 +48,14 @@ export const VALID_PROCESS_STATES: ReadonlySet<ProcessStatus> = new Set<ProcessS
   'closed',
 ]);
 
+/** Arbitrary JSON-shaped value; the domain type for untrusted input at the
+ *  steps I/O boundary (validateProcessSteps parses this into string[]). */
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+function isString(v: JsonValue): v is string {
+  return typeof v === 'string';
+}
+
 /** DoS / abuse caps on the steps body (untrusted at the HTTP/SDK boundary). */
 export const MAX_PROCESS_STEPS = 200;
 export const MAX_PROCESS_STEP_LEN = 2000;
@@ -101,7 +109,7 @@ export interface ListProcessesOpts {
  * non-string / empty element, or a cap breach. Mirrors the incident DoS-cap
  * discipline.
  */
-export function validateProcessSteps(steps: unknown): string[] {
+export function validateProcessSteps(steps: JsonValue): string[] {
   if (!Array.isArray(steps)) {
     throw new Error('saveProcess: steps must be an array of strings');
   }
@@ -113,7 +121,7 @@ export function validateProcessSteps(steps: unknown): string[] {
   const out: string[] = [];
   for (let i = 0; i < steps.length; i++) {
     const raw = steps[i];
-    if (typeof raw !== 'string') {
+    if (!isString(raw)) {
       throw new Error(`saveProcess: step ${i + 1} is not a string`);
     }
     const trimmed = raw.trim();
@@ -154,8 +162,8 @@ interface ProcessRow {
 function parseSteps(raw: string): string[] {
   try {
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.every((s) => typeof s === 'string')) {
-      return parsed as string[];
+    if (Array.isArray(parsed) && parsed.every(isString)) {
+      return parsed;
     }
     return [];
   } catch {
@@ -172,6 +180,8 @@ function rowToProcess(row: ProcessRow): Process {
     description: row.description,
     steps: parseSteps(row.steps),
     version: row.version,
+    // SAFETY: processes.status has a DB CHECK constraint restricting it to
+    // 'active' | 'superseded' | 'closed' (CREATE TABLE processes, db.ts).
     status: row.status as ProcessStatus,
     supersededBy: row.superseded_by,
     supersededAt: row.superseded_at,
@@ -251,6 +261,8 @@ export function saveProcess(
       // successor's version is server-derived, never client-supplied.
       let version = 1;
       if (opts.supersedesProcessId !== undefined) {
+        // SAFETY: SELECT status, version FROM processes; row shape matches
+        // the two selected columns 1:1.
         const pred = db.prepare(
           `SELECT status, version FROM processes WHERE id = ? AND tenant_id = ?`,
         ).get(opts.supersedesProcessId, tenantId) as
@@ -310,6 +322,8 @@ export function saveProcess(
         });
       }
 
+      // SAFETY: SELECT ${PROCESS_COLS} enumerates every ProcessRow field
+      // 1:1 (see PROCESS_COLS above).
       const row = db.prepare(`SELECT ${PROCESS_COLS} FROM processes WHERE id = ?`)
         .get(processId) as ProcessRow | undefined;
       if (!row) throw new Error('saveProcess: failed to reload saved process row');
@@ -362,6 +376,8 @@ export function closeProcess(
       `).run(now, id, tenantId);
 
       if (updateResult.changes === 0) {
+        // SAFETY: SELECT status FROM processes; row shape matches the
+        // single selected column.
         const existing = db.prepare(
           `SELECT status FROM processes WHERE id = ? AND tenant_id = ?`,
         ).get(id, tenantId) as { status: string } | undefined;
@@ -373,6 +389,8 @@ export function closeProcess(
         );
       }
 
+      // SAFETY: SELECT ${PROCESS_COLS} enumerates every ProcessRow field
+      // 1:1 (see PROCESS_COLS above).
       const row = db.prepare(`SELECT ${PROCESS_COLS} FROM processes WHERE id = ? AND tenant_id = ?`)
         .get(id, tenantId) as ProcessRow | undefined;
       if (!row) throw new Error(`closeProcess: process ${id} not found after UPDATE`);
@@ -408,6 +426,8 @@ export function loadProcessById(
   assertTenantId('loadProcessById', tenantId);
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: SELECT ${PROCESS_COLS} enumerates every ProcessRow field 1:1
+    // (see PROCESS_COLS above).
     const row = db.prepare(`SELECT ${PROCESS_COLS} FROM processes WHERE id = ? AND tenant_id = ?`)
       .get(id, tenantId) as ProcessRow | undefined;
     return row ? rowToProcess(row) : null;
@@ -432,6 +452,8 @@ export function loadProcesses(
           `loadProcesses: status must be one of ${Array.from(VALID_PROCESS_STATES).join('|')}; got ${opts.status}`,
         );
       }
+      // SAFETY: SELECT ${PROCESS_COLS} enumerates every ProcessRow field
+      // 1:1 (see PROCESS_COLS above).
       rows = db.prepare(`
         SELECT ${PROCESS_COLS} FROM processes
         WHERE tenant_id = ? AND status = ?
@@ -439,6 +461,8 @@ export function loadProcesses(
         LIMIT ?
       `).all(tenantId, opts.status, limit) as ProcessRow[];
     } else {
+      // SAFETY: SELECT ${PROCESS_COLS} enumerates every ProcessRow field
+      // 1:1 (see PROCESS_COLS above).
       rows = db.prepare(`
         SELECT ${PROCESS_COLS} FROM processes
         WHERE tenant_id = ?

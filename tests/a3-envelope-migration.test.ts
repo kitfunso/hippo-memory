@@ -22,6 +22,7 @@ describe('A3 envelope migration v14+v15', () => {
   it('memories table has kind column with default distilled', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
     const db = openHippoDb(home);
+    // SAFETY: PRAGMA table_info always returns rows with these column names.
     const cols = db.prepare(`PRAGMA table_info(memories)`).all() as Array<{ name: string; dflt_value: string | null }>;
     const kind = cols.find((c) => c.name === 'kind');
     expect(kind).toBeDefined();
@@ -82,6 +83,7 @@ describe('A3 envelope migration v14+v15', () => {
   it.each(['scope', 'owner', 'artifact_ref'])('memories table has nullable %s column', (col) => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
     const db = openHippoDb(home);
+    // SAFETY: PRAGMA table_info always returns rows with these column names.
     const cols = db.prepare(`PRAGMA table_info(memories)`).all() as Array<{ name: string; notnull: number }>;
     const c = cols.find((x) => x.name === col);
     expect(c).toBeDefined();
@@ -107,7 +109,10 @@ describe('A3 envelope migration v14+v15', () => {
     // Re-run the v14 backfill SQL (idempotent by design)
     db.exec(`UPDATE memories SET kind = 'superseded' WHERE kind IS NULL AND superseded_by IS NOT NULL`);
     db.exec(`UPDATE memories SET kind = 'distilled' WHERE kind IS NULL`);
+    // SAFETY: literal SELECT of the kind column for rows this test just
+    // inserted; the backfill UPDATEs above guarantee kind is set.
     const s1 = db.prepare(`SELECT kind FROM memories WHERE id='s1'`).get() as { kind: string };
+    // SAFETY: see above.
     const s2 = db.prepare(`SELECT kind FROM memories WHERE id='s2'`).get() as { kind: string };
     expect(s1.kind).toBe('superseded');
     expect(s2.kind).toBe('distilled');
@@ -118,6 +123,7 @@ describe('A3 envelope migration v14+v15', () => {
   it('raw_archive table exists with required columns', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-a3-'));
     const db = openHippoDb(home);
+    // SAFETY: PRAGMA table_info always returns rows with a name column.
     const cols = db.prepare(`PRAGMA table_info(raw_archive)`).all() as Array<{ name: string }>;
     const names = cols.map((c) => c.name);
     expect(names).toEqual(expect.arrayContaining(['id', 'memory_id', 'archived_at', 'reason', 'archived_by', 'payload_json']));

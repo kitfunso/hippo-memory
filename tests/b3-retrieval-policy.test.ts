@@ -41,18 +41,20 @@ function recallCli(
   query: string,
   sessionId: string,
 ): Array<{ content: string; score: number }> {
+  const cliEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    HIPPO_HOME: env.globalRoot,
+    HIPPO_TENANT: 'default',
+    HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
+  };
+  if (sessionId) cliEnv.HIPPO_SESSION_ID = sessionId;
+
   const raw = execFileSync(
     'node',
     [CLI, 'recall', query, '--json', '--budget', '4000'],
     {
       cwd: env.cwd,
-      env: {
-        ...process.env,
-        HIPPO_HOME: env.globalRoot,
-        HIPPO_TENANT: 'default',
-        HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
-        ...(sessionId ? { HIPPO_SESSION_ID: sessionId } : {}),
-      },
+      env: cliEnv,
       encoding: 'utf8',
     },
   );

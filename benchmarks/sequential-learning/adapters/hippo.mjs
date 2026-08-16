@@ -46,19 +46,20 @@ import { createAdapter } from './interface.mjs';
  */
 function hippoExec(storeDir, args, sessionId = null) {
   try {
+    const env = {
+      ...process.env,
+      // v1.7.5 codex P0 isolation -- HIPPO_HOME wins over HOME in
+      // getGlobalRoot, and we blank XDG_DATA_HOME so neither it nor the
+      // user's real ~/.hippo can leak in.
+      HIPPO_HOME: storeDir,
+      HOME: storeDir,
+      USERPROFILE: storeDir,
+      XDG_DATA_HOME: '',
+    };
+    if (sessionId) env.HIPPO_SESSION_ID = sessionId;
     const result = execSync(`hippo ${args}`, {
       cwd: storeDir,
-      env: {
-        ...process.env,
-        // v1.7.5 codex P0 isolation -- HIPPO_HOME wins over HOME in
-        // getGlobalRoot, and we blank XDG_DATA_HOME so neither it nor the
-        // user's real ~/.hippo can leak in.
-        HIPPO_HOME: storeDir,
-        HOME: storeDir,
-        USERPROFILE: storeDir,
-        XDG_DATA_HOME: '',
-        ...(sessionId ? { HIPPO_SESSION_ID: sessionId } : {}),
-      },
+      env,
       encoding: 'utf-8',
       timeout: 15_000,
       stdio: ['pipe', 'pipe', 'pipe'],

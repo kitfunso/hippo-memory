@@ -97,9 +97,9 @@ export function deduplicateLesson(
   threshold = 0.7,
   tenantId?: string,
 ): boolean {
-  const entries = typeof hippoRootOrEntries === 'string'
-    ? loadAllEntries(hippoRootOrEntries, tenantId)
-    : hippoRootOrEntries;
+  const entries = Array.isArray(hippoRootOrEntries)
+    ? hippoRootOrEntries
+    : loadAllEntries(hippoRootOrEntries, tenantId);
 
   for (const entry of entries) {
     const overlap = textOverlap(lesson, entry.content);
@@ -165,7 +165,7 @@ export function fetchGitLog(cwd: string, days: number): string {
     const raw = execFileSync('git', [
       'log', `--since=${days} days ago`, '--pretty=format:%s',
     ], { encoding: 'utf8', cwd, timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'] });
-    return typeof raw === 'string' ? raw : '';
+    return raw;
   } catch {
     return '';
   }

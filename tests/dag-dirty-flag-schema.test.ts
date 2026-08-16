@@ -51,6 +51,8 @@ describe('v28 schema migration + dirty-flag plumbing (E1)', () => {
     const summary = createMemory('test summary', { layer: Layer.Semantic, dag_level: 2 });
     writeEntry(hippoRoot, summary);
     const db = openHippoDb(hippoRoot);
+    // SAFETY: the SELECT list above names exactly these four columns, so
+    // every returned row has this shape.
     const row = db.prepare(
       `SELECT summary_dirty, last_rebuilt_at, rebuild_count, dag_level_3_built_at FROM memories WHERE id = ?`,
     ).get(summary.id) as {
@@ -91,6 +93,7 @@ describe('v28 schema migration + dirty-flag plumbing (E1)', () => {
     const auditRows = db.prepare(
       `SELECT * FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`,
     ).all(summary.id);
+    // SAFETY: `SELECT summary_dirty` names exactly this one numeric column.
     const row = db.prepare(`SELECT summary_dirty FROM memories WHERE id = ?`).get(summary.id) as {
       summary_dirty: number;
     };

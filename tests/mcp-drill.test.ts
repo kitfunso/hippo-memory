@@ -11,7 +11,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
 import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
-import { handleMcpRequest } from '../src/mcp/server.js';
+import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
+
+type DrillArgs = { summary_id: string; depth?: number };
 
 function makeRoot(prefix: string): string {
   const home = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
@@ -27,7 +29,7 @@ function safeRmSync(p: string): void {
 async function callTool(
   reqId: number,
   name: string,
-  args: Record<string, unknown>,
+  args: DrillArgs,
   ctx: { hippoRoot: string; tenantId: string; actor: string; clientKey?: string },
 ) {
   return handleMcpRequest(
@@ -41,7 +43,10 @@ async function callTool(
   );
 }
 
-function extractText(res: unknown): string {
+function extractText(res: McpResponse | null): string {
+  // SAFETY: every hippo_drill response follows the MCP `tools/call`
+  // content-block convention: `result.content` is an array of `{ text }`
+  // blocks, and this helper only reads the first block's text.
   const r = res as { result?: { content?: Array<{ text?: string }> } } | null;
   return r?.result?.content?.[0]?.text ?? '';
 }
@@ -67,6 +72,8 @@ describe('mcp hippo_drill', () => {
       { jsonrpc: '2.0', id: 1, method: 'tools/list' },
       { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
     );
+    // SAFETY: `tools/list` responses always carry `result.tools` as the
+    // catalogue array; each entry at minimum has its registered `name`.
     const tools = (res as { result?: { tools?: Array<{ name?: string }> } }).result?.tools ?? [];
     const names = tools.map((t) => t.name);
     expect(names).toContain('hippo_drill');

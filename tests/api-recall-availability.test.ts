@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createMemory, Layer, type MemoryKind } from '../src/memory.js';
+import { createMemory, Layer } from '../src/memory.js';
 import { recall, type Context } from '../src/api.js';
 
 function makeRoot(prefix: string): string {
@@ -37,6 +37,7 @@ function ctxFor(root: string): Context {
 function countAuditOps(root: string, op: string): number {
   const db = openHippoDb(root);
   try {
+    // SAFETY: SELECT COUNT(*) AS n always returns exactly one row with a numeric n column.
     const row = db.prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE op = ?`).get(op) as { n: number };
     return row.n;
   } finally {
@@ -48,13 +49,14 @@ function countAuditOps(root: string, op: string): number {
  *  createMemory fixes created=now; we override it before writeEntry to age the row.
  *  last_retrieved stays recent so the row is not decayed out of recall. */
 function seedAged(root: string, content: string, ageDays: number, scope?: string): string {
-  const mem = createMemory(content, {
+  const options: Parameters<typeof createMemory>[1] = {
     layer: Layer.Buffer,
     confidence: 'observed',
-    kind: 'raw' as MemoryKind,
+    kind: 'raw',
     tenantId: 'default',
-    ...(scope !== undefined ? { scope } : {}),
-  });
+  };
+  if (scope !== undefined) options.scope = scope;
+  const mem = createMemory(content, options);
   mem.created = new Date(Date.now() - ageDays * 86_400_000).toISOString();
   writeEntry(root, mem);
   return mem.id;

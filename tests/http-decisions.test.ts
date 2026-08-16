@@ -22,6 +22,16 @@ import { initStore } from '../src/store.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { createApiKey, type CreatedApiKey } from '../src/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
+import type { Decision } from '../src/decisions.js';
+
+async function jsonAs<T>(res: Response): Promise<T> {
+  // SAFETY: every response in this suite comes from the /v1/decisions route
+  // handlers under test (src/server.ts sendJson calls), which always return
+  // the `{ decision: Decision }` / `{ decisions: Decision[] }` envelopes the
+  // caller requests as T; the status-code assertions before each call
+  // confirm the success path ran.
+  return (await res.json()) as T;
+}
 
 function makeRoot(): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-http-dec-'));
@@ -56,7 +66,11 @@ function authHeaders(key: CreatedApiKey = apiKey) {
   return { authorization: `Bearer ${key.plaintext}`, 'content-type': 'application/json' };
 }
 
-async function createDecision(text: string, extra: Record<string, unknown> = {}, key: CreatedApiKey = apiKey) {
+async function createDecision(
+  text: string,
+  extra: { context?: string; supersedesDecisionId?: number } = {},
+  key: CreatedApiKey = apiKey,
+) {
   return fetch(`${handle.url}/v1/decisions`, {
     method: 'POST',
     headers: authHeaders(key),
@@ -68,51 +82,52 @@ describe('HTTP /v1/decisions (E2 decision first-class object)', () => {
   it('POST /v1/decisions creates a decision (201 + Decision body)', async () => {
     const res = await createDecision('use Postgres', { context: 'scale' });
     expect(res.status).toBe(201);
-    const body = await res.json() as { decision: Record<string, unknown> };
+    const body = await jsonAs<{ decision: Decision }>(res);
     expect(body.decision.decisionText).toBe('use Postgres');
     expect(body.decision.context).toBe('scale');
     expect(body.decision.status).toBe('active');
-    expect(body.decision.id as number).toBeGreaterThan(0);
+    expect(body.decision.id).toBeGreaterThan(0);
   });
 
   it('GET /v1/decisions lists and filters by status', async () => {
     await createDecision('active one');
-    const toClose = (await (await createDecision('to close')).json() as { decision: { id: number } }).decision;
+    const toClose = (await jsonAs<{ decision: Decision }>(await createDecision('to close'))).decision;
     await fetch(`${handle.url}/v1/decisions/${toClose.id}/close`, { method: 'POST', headers: authHeaders() });
 
     const allRes = await fetch(`${handle.url}/v1/decisions`, { headers: authHeaders() });
     expect(allRes.status).toBe(200);
-    const all = await allRes.json() as { decisions: Array<Record<string, unknown>> };
+    const all = await jsonAs<{ decisions: Decision[] }>(allRes);
     expect(all.decisions.length).toBe(2);
 
     const activeRes = await fetch(`${handle.url}/v1/decisions?status=active`, { headers: authHeaders() });
-    const active = await activeRes.json() as { decisions: Array<Record<string, unknown>> };
+    const active = await jsonAs<{ decisions: Decision[] }>(activeRes);
     expect(active.decisions.length).toBe(1);
     expect(active.decisions[0].status).toBe('active');
   });
 
   it('GET /v1/decisions/:id returns single + 404 on missing', async () => {
-    const created = (await (await createDecision('show me')).json() as { decision: { id: number } }).decision;
+    const created = (await jsonAs<{ decision: Decision }>(await createDecision('show me'))).decision;
     const getRes = await fetch(`${handle.url}/v1/decisions/${created.id}`, { headers: authHeaders() });
     expect(getRes.status).toBe(200);
-    expect((await getRes.json() as { decision: { id: number } }).decision.id).toBe(created.id);
+    expect((await jsonAs<{ decision: Decision }>(getRes)).decision.id).toBe(created.id);
 
     const missing = await fetch(`${handle.url}/v1/decisions/99999`, { headers: authHeaders() });
     expect(missing.status).toBe(404);
   });
 
   it('POST /v1/decisions/:id/supersede creates a successor and supersedes the old', async () => {
-    const old = (await (await createDecision('use REST')).json() as { decision: { id: number } }).decision;
+    const old = (await jsonAs<{ decision: Decision }>(await createDecision('use REST'))).decision;
     const supRes = await fetch(`${handle.url}/v1/decisions/${old.id}/supersede`, {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({ text: 'use GraphQL' }),
     });
     expect(supRes.status).toBe(201);
-    const successor = (await supRes.json() as { decision: { id: number; status: string } }).decision;
+    const successor = (await jsonAs<{ decision: Decision }>(supRes)).decision;
     expect(successor.status).toBe('active');
 
-    const oldReload = await (await fetch(`${handle.url}/v1/decisions/${old.id}`, { headers: authHeaders() })).json() as { decision: { status: string; supersededBy: number } };
+    const oldReloadRes = await fetch(`${handle.url}/v1/decisions/${old.id}`, { headers: authHeaders() });
+    const oldReload = await jsonAs<{ decision: Decision }>(oldReloadRes);
     expect(oldReload.decision.status).toBe('superseded');
     expect(oldReload.decision.supersededBy).toBe(successor.id);
 
@@ -126,10 +141,10 @@ describe('HTTP /v1/decisions (E2 decision first-class object)', () => {
   });
 
   it('POST /v1/decisions/:id/close retires an active decision (+409 on re-close)', async () => {
-    const d = (await (await createDecision('use webpack')).json() as { decision: { id: number } }).decision;
+    const d = (await jsonAs<{ decision: Decision }>(await createDecision('use webpack'))).decision;
     const closeRes = await fetch(`${handle.url}/v1/decisions/${d.id}/close`, { method: 'POST', headers: authHeaders() });
     expect(closeRes.status).toBe(200);
-    expect((await closeRes.json() as { decision: { status: string } }).decision.status).toBe('closed');
+    expect((await jsonAs<{ decision: Decision }>(closeRes)).decision.status).toBe('closed');
 
     const recl = await fetch(`${handle.url}/v1/decisions/${d.id}/close`, { method: 'POST', headers: authHeaders() });
     expect(recl.status).toBe(409);
@@ -160,8 +175,9 @@ describe('HTTP /v1/decisions (E2 decision first-class object)', () => {
   });
 
   it('cross-tenant isolation: tenant-b cannot see default-tenant decisions', async () => {
-    const created = (await (await createDecision('default secret')).json() as { decision: { id: number } }).decision;
-    const bList = await (await fetch(`${handle.url}/v1/decisions`, { headers: authHeaders(apiKeyB) })).json() as { decisions: unknown[] };
+    const created = (await jsonAs<{ decision: Decision }>(await createDecision('default secret'))).decision;
+    const bListRes = await fetch(`${handle.url}/v1/decisions`, { headers: authHeaders(apiKeyB) });
+    const bList = await jsonAs<{ decisions: Decision[] }>(bListRes);
     expect(bList.decisions.length).toBe(0);
     const bGet = await fetch(`${handle.url}/v1/decisions/${created.id}`, { headers: authHeaders(apiKeyB) });
     expect(bGet.status).toBe(404);

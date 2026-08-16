@@ -63,7 +63,7 @@ describe('E1 generator', () => {
     // Every outcome target exists and is scheduled at/after its ingestion session.
     const memById = new Map(p.memories.map((m: any) => [m.id, m]));
     for (const o of p.outcomeSchedule) {
-      const m = memById.get(o.memoryRef) as any;
+      const m = memById.get(o.memoryRef);
       expect(m).toBeDefined();
       expect(o.session).toBeGreaterThanOrEqual(m.session);
     }

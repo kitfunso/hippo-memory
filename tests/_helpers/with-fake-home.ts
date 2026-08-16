@@ -11,7 +11,12 @@ import * as path from 'node:path';
  * Extracted from tests/hooks.test.ts 2026-05-23 so the new opencode plugin
  * install tests use the same isolation pattern.
  */
-export function withFakeHome(prefix = 'hippo-test-'): { cleanup: () => void; home: string } {
+export interface FakeHomeHandle {
+  cleanup: () => void;
+  home: string;
+}
+
+export function withFakeHome(prefix = 'hippo-test-'): FakeHomeHandle {
   const prevHome = process.env.HOME;
   const prevUserProfile = process.env.USERPROFILE;
   const fake = fs.mkdtempSync(path.join(os.tmpdir(), prefix));

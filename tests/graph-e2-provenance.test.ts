@@ -45,28 +45,38 @@ function addMemory(home: string, kind: 'distilled' | 'superseded' | 'raw'): stri
   return mem.id;
 }
 
-/** Raw rows straight out of the entities table (the success criterion is a TABLE query). */
-function entityRows(home: string): Array<{
+type EntityRow = {
   id: number; name: string; memory_id: string | null;
   source_object_type: string | null; source_object_id: number | null;
-}> {
+};
+
+type RelationRow = {
+  id: number; from_entity_id: number; to_entity_id: number; rel_type: string;
+  memory_id: string | null; source_object_type: string | null; source_object_id: number | null;
+};
+
+/** Raw rows straight out of the entities table (the success criterion is a TABLE query). */
+function entityRows(home: string): EntityRow[] {
   const db = openHippoDb(home);
   try {
+    // SAFETY: db.prepare().all() is typed `unknown[]` (node:sqlite has no
+    // generic overload); the SELECT column list above matches EntityRow
+    // field-for-field.
     return db.prepare(
       `SELECT id, name, memory_id, source_object_type, source_object_id FROM entities ORDER BY id`,
-    ).all() as never;
+    ).all() as EntityRow[];
   } finally { closeHippoDb(db); }
 }
 
-function relationRows(home: string): Array<{
-  id: number; from_entity_id: number; to_entity_id: number; rel_type: string;
-  memory_id: string | null; source_object_type: string | null; source_object_id: number | null;
-}> {
+function relationRows(home: string): RelationRow[] {
   const db = openHippoDb(home);
   try {
+    // SAFETY: db.prepare().all() is typed `unknown[]` (node:sqlite has no
+    // generic overload); the SELECT column list above matches RelationRow
+    // field-for-field.
     return db.prepare(
       `SELECT id, from_entity_id, to_entity_id, rel_type, memory_id, source_object_type, source_object_id FROM relations ORDER BY id`,
-    ).all() as never;
+    ).all() as RelationRow[];
   } finally { closeHippoDb(db); }
 }
 

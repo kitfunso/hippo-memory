@@ -235,8 +235,10 @@ describe('api.recall continuity flag', () => {
     let capturedUrl: string | undefined;
     const realFetch = globalThis.fetch;
     // Stub fetch to capture the URL.
+    // SAFETY: globalThis always has a `fetch` property in this Node test runtime
+    // (undici's global fetch); this narrows it to a writable, callable shape.
     (globalThis as { fetch: typeof globalThis.fetch }).fetch = async (input: RequestInfo | URL) => {
-      capturedUrl = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url;
+      capturedUrl = input instanceof URL ? input.toString() : input instanceof Request ? input.url : input;
       return new Response(JSON.stringify({ results: [], total: 0, tokens: 0 }), {
         status: 200,
         headers: { 'content-type': 'application/json' },

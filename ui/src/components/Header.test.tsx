@@ -50,7 +50,7 @@ describe("Header (E2)", () => {
     const setQuery = vi.fn();
     renderHeader({ setQuery });
 
-    const input = screen.getByLabelText("Search memories") as HTMLInputElement;
+    const input = screen.getByLabelText<HTMLInputElement>("Search memories");
 
     // Type 10 chars rapidly (one per "ms" in fake-timer land).
     const chars = "abcdefghij".split("");

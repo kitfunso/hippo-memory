@@ -18,7 +18,12 @@ interface RunOpts {
   ok?: boolean; // when false, expect non-zero exit and return captured stderr
 }
 
-function runCli(cwd: string, args: string[], opts: RunOpts = {}): { stdout: string; stderr: string } {
+interface CliRunResult {
+  stdout: string;
+  stderr: string;
+}
+
+function runCli(cwd: string, args: string[], opts: RunOpts = {}): CliRunResult {
   if (!existsSync(CLI)) {
     throw new Error(`bin/hippo.js not found at ${CLI} - run \`npm run build\` first`);
   }
@@ -30,6 +35,8 @@ function runCli(cwd: string, args: string[], opts: RunOpts = {}): { stdout: stri
     });
     return { stdout, stderr: '' };
   } catch (err) {
+    // SAFETY: execFileSync on failure throws an Error augmented with
+    // stdout/stderr/status per Node's child_process API contract.
     const e = err as { stdout?: string; stderr?: string; status?: number };
     if (opts.ok === false) {
       return { stdout: e.stdout ?? '', stderr: e.stderr ?? '' };

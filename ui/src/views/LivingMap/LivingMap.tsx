@@ -176,12 +176,12 @@ function DetailPanel({ memory, onClose, open, localView, setLocalView }: {
               <StrengthBar value={memory.strength} />
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 20px", fontSize: 11, marginBottom: 20 }}>
-              {([
+              {[
                 ["Half-life", `${memory.half_life_days}d`], ["Retrievals", String(memory.retrieval_count)],
                 ["Age", `${memory.age_days}d`], ["Schema fit", memory.schema_fit.toFixed(2)],
                 ["Valence", memory.emotional_valence], ["Confidence", memory.confidence],
                 ["+7d", memory.projected_strength_7d.toFixed(3)], ["+30d", memory.projected_strength_30d.toFixed(3)],
-              ] as [string, string][]).map(([label, val]) => (
+              ].map(([label, val]) => (
                 <div key={label}>
                   <div style={{ color: "var(--dim)", fontSize: 9, fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 2 }}>{label}</div>
                   <div style={{ color: "var(--text)", fontFamily: "var(--font-mono)" }}>{val}</div>

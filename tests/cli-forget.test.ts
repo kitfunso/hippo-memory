@@ -21,16 +21,23 @@ const RAW_COLS =
   'layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, ' +
   'pinned, confidence, content, kind';
 
-function runCli(cwd: string, ...args: string[]): { out: string; status: number } {
+function toUtf8(value: string | Buffer | undefined): string {
+  if (value === undefined) return '';
+  return Buffer.isBuffer(value) ? value.toString('utf8') : value;
+}
+
+function runCli(cwd: string, ...args: string[]) {
   try {
     const stdout = execFileSync(process.execPath, [CLI_PATH, ...args], {
       cwd, env: { ...process.env }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
     });
     return { out: stdout, status: 0 };
   } catch (e) {
+    // SAFETY: execFileSync attaches stdout/stderr/status to the thrown Error
+    // on a non-zero child exit (Node child_process sync error contract).
     const err = e as { stdout?: string | Buffer; stderr?: string | Buffer; status?: number };
-    const stdout = typeof err.stdout === 'string' ? err.stdout : (err.stdout?.toString('utf8') ?? '');
-    const stderr = typeof err.stderr === 'string' ? err.stderr : (err.stderr?.toString('utf8') ?? '');
+    const stdout = toUtf8(err.stdout);
+    const stderr = toUtf8(err.stderr);
     return { out: stdout + stderr, status: err.status ?? 1 };
   }
 }

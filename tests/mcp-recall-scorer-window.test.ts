@@ -15,8 +15,8 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, MemoryKind } from '../src/memory.js';
-import { handleMcpRequest } from '../src/mcp/server.js';
+import { createMemory, Layer } from '../src/memory.js';
+import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { RecallContractError } from '../src/api.js';
 
 function makeRoot(): string {
@@ -28,7 +28,7 @@ function makeRoot(): string {
 
 function callTool(
   name: string,
-  args: Record<string, unknown>,
+  args: Record<string, string | number>,
   ctx: { hippoRoot: string; tenantId: string; actor: string },
 ) {
   return handleMcpRequest(
@@ -42,6 +42,15 @@ function callTool(
   );
 }
 
+/** Extract the rendered text from a `hippo_recall` MCP tool result. */
+function extractResultText(response: McpResponse | null): string {
+  // SAFETY: hippo_recall's success response is written by this MCP server
+  // under test (src/mcp/server.ts) and always shapes `result` as
+  // { content: [{ text: string }, ...] } for a text-content tool result.
+  const result = response?.result as { content?: Array<{ text: string }> } | undefined;
+  return result?.content?.[0]?.text ?? '';
+}
+
 describe('MCP hippo_recall scorer_window (v1.7.2 T4)', () => {
   let home: string;
 
@@ -50,7 +59,7 @@ describe('MCP hippo_recall scorer_window (v1.7.2 T4)', () => {
     for (let i = 0; i < 30; i++) {
       writeEntry(home, createMemory(`alpha ${i}`, {
         layer: Layer.Buffer,
-        kind: 'raw' as MemoryKind,
+        kind: 'raw',
         tenantId: 'default',
       }));
     }
@@ -76,25 +85,18 @@ describe('MCP hippo_recall scorer_window (v1.7.2 T4)', () => {
       { query: 'alpha', budget: 5000, scorer_window: 2 },
       { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
     );
-    const text =
-      (result as { result?: { content: Array<{ text: string }> } }).result
-        ?.content?.[0]?.text ?? '';
+    const text = extractResultText(result);
     expect(text.length).toBeGreaterThan(0);
   });
 
   it('scorer_window=0 throws RecallContractError with code=invalid_scorer_window', async () => {
-    let thrown: unknown = null;
-    try {
-      await callTool(
-        'hippo_recall',
-        { query: 'alpha', scorer_window: 0 },
-        { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
-      );
-    } catch (err) {
-      thrown = err;
-    }
-    expect(thrown).toBeInstanceOf(RecallContractError);
-    expect((thrown as RecallContractError).code).toBe('invalid_scorer_window');
+    const call = callTool(
+      'hippo_recall',
+      { query: 'alpha', scorer_window: 0 },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
+    );
+    await expect(call).rejects.toBeInstanceOf(RecallContractError);
+    await expect(call).rejects.toMatchObject({ code: 'invalid_scorer_window' });
   });
 
   it('scorer_window+fresh_tail_count exercises the api.recall appendix path — review TESTING P1', async () => {
@@ -111,7 +113,7 @@ describe('MCP hippo_recall scorer_window (v1.7.2 T4)', () => {
     // fresh-tail dedup-survive into the appendix.
     for (let i = 0; i < 5; i++) {
       writeEntry(home, createMemory(`beta ${i}`, {
-        layer: Layer.Buffer, kind: 'raw' as MemoryKind, tenantId: 'default',
+        layer: Layer.Buffer, kind: 'raw', tenantId: 'default',
       }));
     }
     const result = await callTool(
@@ -119,9 +121,7 @@ describe('MCP hippo_recall scorer_window (v1.7.2 T4)', () => {
       { query: 'alpha', budget: 5000, scorer_window: 2, fresh_tail_count: 5 },
       { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
     );
-    const text =
-      (result as { result?: { content: Array<{ text: string }> } }).result
-        ?.content?.[0]?.text ?? '';
+    const text = extractResultText(result);
     expect(text.length).toBeGreaterThan(0);
     // Appendix renders "## Fresh tail / substituted summaries" header
     // (src/mcp/server.ts:470). Confirm the appendix path fired with the
@@ -132,17 +132,12 @@ describe('MCP hippo_recall scorer_window (v1.7.2 T4)', () => {
   it('scorer_window="abc" (string, transport-coerced) rejects with invalid_scorer_window', async () => {
     // Codex CRITICAL[2]: MCP Number-coerces non-numeric input so the
     // rejection reaches recall() and produces the same typed code as HTTP.
-    let thrown: unknown = null;
-    try {
-      await callTool(
-        'hippo_recall',
-        { query: 'alpha', scorer_window: 'abc' },
-        { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
-      );
-    } catch (err) {
-      thrown = err;
-    }
-    expect(thrown).toBeInstanceOf(RecallContractError);
-    expect((thrown as RecallContractError).code).toBe('invalid_scorer_window');
+    const call = callTool(
+      'hippo_recall',
+      { query: 'alpha', scorer_window: 'abc' },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
+    );
+    await expect(call).rejects.toBeInstanceOf(RecallContractError);
+    await expect(call).rejects.toMatchObject({ code: 'invalid_scorer_window' });
   });
 });

@@ -3,7 +3,6 @@ import {
   isSlackEventEnvelope,
   isSlackMessageEvent,
   type SlackEventEnvelope,
-  type SlackMessageEvent,
 } from '../src/connectors/slack/types.js';
 
 describe('slack types', () => {
@@ -27,7 +26,8 @@ describe('slack types', () => {
       ts: '1700000001.000200',
     };
     expect(isSlackMessageEvent(evt)).toBe(true);
-    expect((evt as SlackMessageEvent).subtype).toBe('message_deleted');
+    if (!isSlackMessageEvent(evt)) throw new Error('expected a message event');
+    expect(evt.subtype).toBe('message_deleted');
   });
 
   it('rejects malformed envelopes', () => {

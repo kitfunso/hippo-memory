@@ -60,6 +60,35 @@ afterEach(clearAblationEnv);
 
 afterAll(cleanupScratch);
 
+// Typed seams over the untyped .mjs harness surface (CONFIG / readJsonl /
+// readJson / scratchRootDir all import as `any`, per the @ts-expect-error
+// imports above). Each helper below owns the ONE cast for its shape so every
+// call site downstream is fully typed without repeating the justification.
+
+// SAFETY: config.mjs's FEATURES is a fixed array of feature-name strings,
+// read once at module load and reused by every test below.
+const FEATURE_NAMES = CONFIG.FEATURES as string[];
+
+function jsonlRows<T>(filePath: string): T[] {
+  // SAFETY: every call site below passes a features.jsonl path written by
+  // extract.mjs, with the row shape the caller requests as T.
+  return readJsonl(filePath) as T[];
+}
+
+function jsonFile<T>(filePath: string): T {
+  // SAFETY: every call site below passes a meta.json/gold.json path written
+  // by ingest.mjs/common.mjs, with the shape the caller requests as T.
+  return readJson(filePath) as T;
+}
+
+type PairedRecord = { scorer: string; questionId: string; retention: number };
+
+function pairedRecordsOf(result: { pairedRecords: unknown }): PairedRecord[] {
+  // SAFETY: evaluate.mjs's evaluateAll always returns one pairedRecords row
+  // per (scorer, question) pair with exactly these three fields.
+  return result.pairedRecords as PairedRecord[];
+}
+
 // ---------------------------------------------------------------------------
 // (a) split determinism
 // ---------------------------------------------------------------------------
@@ -98,9 +127,8 @@ describe('memory-value harness (real stores)', () => {
       expect(extractResult.rows).toBe(ingestResult.memoryCount);
       expect(ingestResult.memoryCount).toBe(10); // fixture is exactly 10 turns/question, none empty
 
-      const rows = readJsonl(featuresPathFor(q.question_id)) as Array<{ features: Record<string, number> }>;
-      const featureNames = CONFIG.FEATURES as string[];
-      const nonConstant = featureNames.filter((f) => {
+      const rows = jsonlRows<{ features: Record<string, number> }>(featuresPathFor(q.question_id));
+      const nonConstant = FEATURE_NAMES.filter((f) => {
         const vals = new Set(rows.map((r) => r.features[f]));
         return vals.size > 1;
       });
@@ -125,9 +153,9 @@ describe('memory-value harness (real stores)', () => {
     // "it varies" assertion would not have been true and is not asserted.
     for (const q of QUESTIONS) {
       await runPipeline(q);
-      const rows = readJsonl(featuresPathFor(q.question_id)) as Array<{ memory_id: string; features: { schema_fit: number } }>;
+      const rows = jsonlRows<{ memory_id: string; features: { schema_fit: number } }>(featuresPathFor(q.question_id));
       const rowById = new Map(rows.map((r) => [r.memory_id, r]));
-      const gold = readJson(goldPathFor(q.question_id)) as { memories: Array<{ id: string }> };
+      const gold = jsonFile<{ memories: Array<{ id: string }> }>(goldPathFor(q.question_id));
       const { turns } = computeGold(q);
 
       const entriesSoFar: Array<{ tags: string[]; content: string }> = [];
@@ -162,9 +190,9 @@ describe('memory-value harness (real stores)', () => {
       { budgets: [0.3], primaryBudget: 0.3 },
     );
     const recencyByQuestion = new Map(
-      result.pairedRecords
-        .filter((r: { scorer: string }) => r.scorer === 'recency')
-        .map((r: { questionId: string; retention: number }) => [r.questionId, r.retention]),
+      pairedRecordsOf(result)
+        .filter((r) => r.scorer === 'recency')
+        .map((r) => [r.questionId, r.retention]),
     );
     // Q_A: N=10, keepN=ceil(0.3*10)=3, newest session (day 6) has exactly 3
     // turns and exactly 1 is gold -> the whole newest session is kept
@@ -179,7 +207,7 @@ describe('memory-value harness (real stores)', () => {
   it('(d) no NaN anywhere in extracted features', async () => {
     for (const q of QUESTIONS) {
       await runPipeline(q);
-      const rows = readJsonl(featuresPathFor(q.question_id)) as Array<{ features: Record<string, number> }>;
+      const rows = jsonlRows<{ features: Record<string, number> }>(featuresPathFor(q.question_id));
       for (const row of rows) {
         for (const [name, value] of Object.entries(row.features)) {
           expect(Number.isFinite(value), `${q.question_id} ${name} = ${value}`).toBe(true);
@@ -196,7 +224,7 @@ describe('memory-value harness (real stores)', () => {
       const rowCounts: Record<string, number> = {};
       const goldCounts: Record<string, number> = {};
       for (const q of QUESTIONS) {
-        const rows = readJsonl(featuresPathFor(q.question_id)) as Array<{ gold: number }>;
+        const rows = jsonlRows<{ gold: number }>(featuresPathFor(q.question_id));
         rowCounts[q.question_id] = rows.length;
         goldCounts[q.question_id] = rows.filter((r) => r.gold === 1).length;
       }
@@ -205,7 +233,7 @@ describe('memory-value harness (real stores)', () => {
         { budgets: [0.3], primaryBudget: 0.3 },
       );
       const recency: Record<string, number> = {};
-      for (const r of result.pairedRecords as Array<{ scorer: string; questionId: string; retention: number }>) {
+      for (const r of pairedRecordsOf(result)) {
         if (r.scorer === 'recency') recency[r.questionId] = r.retention;
       }
       return { rowCounts, goldCounts, recency };
@@ -232,7 +260,7 @@ describe('causal clock clamp (codex review fix round #3 P1 fix verification)', (
     fs.rmSync(questionDir(QUESTION_C.question_id), { recursive: true, force: true });
     try {
       const ingestResult = ingestQuestion(QUESTION_C);
-      const meta = readJson(metaPathFor(QUESTION_C.question_id)) as { questionDate: string; tEval: string };
+      const meta = jsonFile<{ questionDate: string; tEval: string }>(metaPathFor(QUESTION_C.question_id));
 
       // question_date (day 7) predates session s1 (day 10) -> T_eval must
       // clamp FORWARD to day 10, not stay at question_date.
@@ -244,12 +272,12 @@ describe('causal clock clamp (codex review fix round #3 P1 fix verification)', (
       await simulateQuestion(QUESTION_C.question_id, meta.tEval, { seed: CONFIG.GLOBAL_SEED, rounds: TEST_SIM_ROUNDS });
       extractQuestion(QUESTION_C.question_id, meta.tEval);
 
-      const rows = readJsonl(featuresPathFor(QUESTION_C.question_id)) as Array<{
+      const rows = jsonlRows<{
         memory_id: string;
         sessionIndex: number;
         turnIdx: number;
         features: { age_days: number };
-      }>;
+      }>(featuresPathFor(QUESTION_C.question_id));
       expect(rows.length).toBe(ingestResult.memoryCount);
       expect(rows.length).toBe(6); // 3 + 3 turns, none empty
 
@@ -278,14 +306,14 @@ describe('--skip-simulate variance-gate exemption (codex review fix round #3 P2 
     for (const q of QUESTIONS) {
       fs.rmSync(questionDir(q.question_id), { recursive: true, force: true });
       ingestQuestion(q); // no simulateQuestion call — mirrors --skip-simulate
-      const meta = readJson(metaPathFor(q.question_id)) as { tEval: string };
+      const meta = jsonFile<{ tEval: string }>(metaPathFor(q.question_id));
       extractQuestion(q.question_id, meta.tEval);
     }
     try {
       const storesRows = QUESTIONS.map(
-        (q) => readJsonl(featuresPathFor(q.question_id)) as Array<{ features: Record<string, number> }>,
+        (q) => jsonlRows<{ features: Record<string, number> }>(featuresPathFor(q.question_id)),
       );
-      const { varying, dead } = computeDatasetVariance(storesRows, CONFIG.FEATURES as string[]);
+      const { varying, dead } = computeDatasetVariance(storesRows, FEATURE_NAMES);
 
       // Usage-derived dims are constant BY DESIGN without simulation.
       for (const f of ['retrieval_count', 'outcome_positive', 'outcome_negative', 'outcome_ratio', 'half_life_days']) {
@@ -311,7 +339,7 @@ describe('--skip-simulate variance-gate exemption (codex review fix round #3 P2 
 
 describe('variance gate (pure logic, no I/O)', () => {
   it('flags a hand-built ALL-CONSTANT feature set as failing', () => {
-    const featureNames = CONFIG.FEATURES as string[];
+    const featureNames = FEATURE_NAMES;
     const rows = Array.from({ length: 5 }, () => {
       const features: Record<string, number> = {};
       for (const f of featureNames) features[f] = 0; // every dim frozen — the exact failure mode this gate exists for
@@ -327,7 +355,7 @@ describe('variance gate (pure logic, no I/O)', () => {
   });
 
   it('passes when exactly the minimum (6) features vary WITHIN a store', () => {
-    const featureNames = CONFIG.FEATURES as string[];
+    const featureNames = FEATURE_NAMES;
     const rows = Array.from({ length: 5 }, (_, i) => {
       const features: Record<string, number> = {};
       featureNames.forEach((f, fi) => {
@@ -349,7 +377,7 @@ describe('variance gate (pure logic, no I/O)', () => {
     // scorer normalizes min-max PER STORE, so a feature constant within
     // each individual store normalizes to 0 everywhere regardless of the
     // cross-store spread — provably inert, must classify as dead.
-    const featureNames = CONFIG.FEATURES as string[];
+    const featureNames = FEATURE_NAMES;
     const constantRowsAt = (value: number, n: number) =>
       Array.from({ length: n }, () => {
         const features: Record<string, number> = {};
@@ -378,9 +406,9 @@ describe('variance gate (pure logic, no I/O)', () => {
       await runPipeline(q);
     }
     const storesRows = QUESTIONS.map(
-      (q) => readJsonl(featuresPathFor(q.question_id)) as Array<{ features: Record<string, number> }>,
+      (q) => jsonlRows<{ features: Record<string, number> }>(featuresPathFor(q.question_id)),
     );
-    const { varying, dead } = computeDatasetVariance(storesRows, CONFIG.FEATURES as string[]);
+    const { varying, dead } = computeDatasetVariance(storesRows, FEATURE_NAMES);
     const gate = evaluateVarianceGate(varying, dead);
     expect(gate.passed).toBe(true);
     // schema_fit is proven constant above; it must land in `dead`, not `varying`.
@@ -416,6 +444,8 @@ describe('scratch-cleanup containment guard (codex review P2 fix verification)',
 
 describe('scratch-store hygiene', () => {
   it('scratch stores live under the OS temp dir, never under the repo', () => {
+    // SAFETY: scratchRootDir() (common.mjs) always returns the scratch-root
+    // path as a string; it never returns a filesystem handle or undefined.
     const root = scratchRootDir() as string;
     expect(root.toLowerCase()).not.toContain('hippo-wt-lc2e1');
     expect(fs.existsSync(root) || true).toBe(true); // root need not exist yet; just checking the path shape

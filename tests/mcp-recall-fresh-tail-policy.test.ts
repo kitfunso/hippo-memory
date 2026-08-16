@@ -19,7 +19,7 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, MemoryKind } from '../src/memory.js';
+import { createMemory, Layer } from '../src/memory.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { RecallContractError } from '../src/api.js';
 
@@ -30,9 +30,15 @@ function makeRoot(prefix: string): string {
   return home;
 }
 
+interface HippoRecallToolArgs {
+  query?: string;
+  fresh_tail_count?: number;
+  fresh_tail_session_id?: string;
+}
+
 function callTool(
   name: string,
-  args: Record<string, unknown>,
+  args: HippoRecallToolArgs,
   ctx: { hippoRoot: string; tenantId: string; actor: string },
 ) {
   return handleMcpRequest(
@@ -70,10 +76,10 @@ describe('mcp hippo_recall fresh-tail policy F5 (v1.6.5)', () => {
     for (let i = 0; i < 3; i++) {
       writeEntry(home, createMemory(`event ${i}`, {
         layer: Layer.Buffer,
-        kind: 'raw' as MemoryKind,
+        kind: 'raw',
       }));
     }
-    let thrown: unknown = null;
+    let thrown = null;
     try {
       await callTool(
         'hippo_recall',
@@ -84,9 +90,13 @@ describe('mcp hippo_recall fresh-tail policy F5 (v1.6.5)', () => {
       thrown = err;
     }
     expect(thrown).toBeInstanceOf(RecallContractError);
+    // SAFETY: the toBeInstanceOf(RecallContractError) assertion above just
+    // confirmed thrown's runtime type.
     expect((thrown as RecallContractError).code).toBe(
       'fresh_tail_requires_session_id',
     );
+    // SAFETY: the toBeInstanceOf(RecallContractError) assertion above just
+    // confirmed thrown's runtime type.
     expect((thrown as RecallContractError).message).toContain(
       'HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL',
     );
@@ -97,7 +107,7 @@ describe('mcp hippo_recall fresh-tail policy F5 (v1.6.5)', () => {
     for (let i = 0; i < 3; i++) {
       writeEntry(home, createMemory(`event ${i}`, {
         layer: Layer.Buffer,
-        kind: 'raw' as MemoryKind,
+        kind: 'raw',
         source_session_id: 'sess-A',
       }));
     }
@@ -106,6 +116,9 @@ describe('mcp hippo_recall fresh-tail policy F5 (v1.6.5)', () => {
       { query: 'event', fresh_tail_count: 3, fresh_tail_session_id: 'sess-A' },
       { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
     );
+    // SAFETY: hippo_recall's MCP tool result envelope always carries
+    // result.content per src/mcp/server.ts; McpResponse.result is typed
+    // unknown at the transport layer since it varies per tool.
     const r = res as {
       error?: { code: number; message: string };
       result?: { content: Array<{ text: string }> };
@@ -118,7 +131,7 @@ describe('mcp hippo_recall fresh-tail policy F5 (v1.6.5)', () => {
     for (let i = 0; i < 3; i++) {
       writeEntry(home, createMemory(`event ${i}`, {
         layer: Layer.Buffer,
-        kind: 'raw' as MemoryKind,
+        kind: 'raw',
       }));
     }
     const res = await callTool(
@@ -126,10 +139,7 @@ describe('mcp hippo_recall fresh-tail policy F5 (v1.6.5)', () => {
       { query: 'event', fresh_tail_count: 3 },
       { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
     );
-    const r = res as {
-      error?: { code: number; message: string };
-      result?: unknown;
-    };
+    const r = res!;
     expect(r.error).toBeUndefined();
   });
 });

@@ -58,6 +58,9 @@ describe('cross-ingest determinism (codex review P1 fix verification)', () => {
       const rowsByQuestion: Record<string, Array<{ memory_id: string; sessionIndex: number; turnIdx: number; gold: number; features: Record<string, number> }>> = {};
       for (const q of QUESTIONS) {
         ingestQuestion(q);
+        // SAFETY: ingestQuestion (ingest.mjs) always writes a meta.json with
+        // a tEval field before this file is read back; readJson has no
+        // static type because it comes from an untyped .mjs harness module.
         const meta = readJson(metaPathFor(q.question_id)) as { tEval: string };
         // No `rounds` override -> defaults to CONFIG.SIM_ROUNDS (30), the
         // pinned protocol — this is the one test that must run it in full.
@@ -78,6 +81,9 @@ describe('cross-ingest determinism (codex review P1 fix verification)', () => {
 
       // (1) retention identical for EVERY scorer x budget (not just recency) —
       // this is the property the previous memory_id-primary tie-break broke.
+      // SAFETY: evaluateAll (evaluate.mjs) returns { scorers: string[], ... }
+      // per its documented contract; the harness module has no .d.ts so
+      // evalResult is untyped at the import boundary.
       for (const scorerName of runA.evalResult.scorers as string[]) {
         for (const budget of budgets) {
           const a = runA.evalResult.summary.train[scorerName]?.[budget];

@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { detectScope, scopeMatch } from '../src/scope.js';
 
+function isString<T>(value: T): value is T & string {
+  return typeof value === 'string';
+}
+
 describe('detectScope', () => {
   const savedEnv: Record<string, string | undefined> = {};
 
@@ -27,7 +31,7 @@ describe('detectScope', () => {
     const result = detectScope();
     // If we're on master/main/develop/dev, result is null.
     // If on a feature branch, result is the branch name. Both are valid.
-    expect(result === null || typeof result === 'string').toBe(true);
+    expect(result === null || isString(result)).toBe(true);
   });
 
   it('returns HIPPO_SCOPE when set', () => {

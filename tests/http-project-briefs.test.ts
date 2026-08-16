@@ -23,6 +23,18 @@ import { initStore } from '../src/store.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { createApiKey, type CreatedApiKey } from '../src/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
+import type { ProjectBrief } from '../src/project-briefs.js';
+
+type BriefResponse = { brief: ProjectBrief };
+type BriefListResponse = { briefs: ProjectBrief[] };
+type RefreshDryRunResponse = { markdown: string; receiptCount: number };
+
+async function jsonAs<T>(res: Response): Promise<T> {
+  // SAFETY: only called against the /v1/project-briefs routes under test in this file;
+  // each call site's explicit type argument and the assertions that follow it pin the
+  // actual response shape.
+  return (await res.json()) as T;
+}
 
 function makeRoot(): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-http-brief-'));
@@ -53,7 +65,7 @@ afterEach(async () => {
 function authHeaders(key: CreatedApiKey = apiKey) {
   return { authorization: `Bearer ${key.plaintext}`, 'content-type': 'application/json' };
 }
-async function createBrief(body: Record<string, unknown>, key: CreatedApiKey = apiKey) {
+async function createBrief(body: { repo: string; summary: string }, key: CreatedApiKey = apiKey) {
   return fetch(`${handle.url}/v1/project-briefs`, { method: 'POST', headers: authHeaders(key), body: JSON.stringify(body) });
 }
 
@@ -61,7 +73,7 @@ describe('HTTP /v1/project-briefs (E2 repo-scoped first-class object)', () => {
   it('POST /v1/project-briefs creates a brief (201 + brief, version 1)', async () => {
     const res = await createBrief({ repo: 'hippo', summary: 'agent-memory lib' });
     expect(res.status).toBe(201);
-    const body = await res.json() as { brief: Record<string, unknown> };
+    const body = await jsonAs<BriefResponse>(res);
     expect(body.brief.repo).toBe('hippo');
     expect(body.brief.summary).toBe('agent-memory lib');
     expect(body.brief.version).toBe(1);
@@ -69,16 +81,16 @@ describe('HTTP /v1/project-briefs (E2 repo-scoped first-class object)', () => {
   });
 
   it('GET /v1/project-briefs lists + filters by status + repo', async () => {
-    const v1 = (await (await createBrief({ repo: 'r', summary: 'a' })).json() as { brief: { id: number } }).brief;
+    const v1 = (await jsonAs<BriefResponse>(await createBrief({ repo: 'r', summary: 'a' }))).brief;
     await createBrief({ repo: 'other', summary: 'x' });
     await fetch(`${handle.url}/v1/project-briefs/${v1.id}/supersede`, {
       method: 'POST', headers: authHeaders(), body: JSON.stringify({ summary: 'b', changeSummary: 'c' }),
     });
-    const all = await (await fetch(`${handle.url}/v1/project-briefs`, { headers: authHeaders() })).json() as { briefs: unknown[] };
+    const all = await jsonAs<BriefListResponse>(await fetch(`${handle.url}/v1/project-briefs`, { headers: authHeaders() }));
     expect(all.briefs.length).toBe(3);
-    const repoR = await (await fetch(`${handle.url}/v1/project-briefs?repo=r`, { headers: authHeaders() })).json() as { briefs: unknown[] };
+    const repoR = await jsonAs<BriefListResponse>(await fetch(`${handle.url}/v1/project-briefs?repo=r`, { headers: authHeaders() }));
     expect(repoR.briefs.length).toBe(2);
-    const active = await (await fetch(`${handle.url}/v1/project-briefs?repo=r&status=active`, { headers: authHeaders() })).json() as { briefs: Array<{ version: number }> };
+    const active = await jsonAs<BriefListResponse>(await fetch(`${handle.url}/v1/project-briefs?repo=r&status=active`, { headers: authHeaders() }));
     expect(active.briefs.length).toBe(1);
     expect(active.briefs[0].version).toBe(2);
   });
@@ -89,10 +101,10 @@ describe('HTTP /v1/project-briefs (E2 repo-scoped first-class object)', () => {
       method: 'POST', headers: authHeaders(), body: JSON.stringify({ repo: 'hippo', dryRun: true }),
     });
     expect(dry.status).toBe(200);
-    const dryBody = await dry.json() as { markdown: string; receiptCount: number };
+    const dryBody = await jsonAs<RefreshDryRunResponse>(dry);
     expect(dryBody.receiptCount).toBe(0);
     expect(dryBody.markdown).toContain('# Project Brief: hippo');
-    const afterDry = await (await fetch(`${handle.url}/v1/project-briefs?repo=hippo`, { headers: authHeaders() })).json() as { briefs: unknown[] };
+    const afterDry = await jsonAs<BriefListResponse>(await fetch(`${handle.url}/v1/project-briefs?repo=hippo`, { headers: authHeaders() }));
     expect(afterDry.briefs.length).toBe(0);
 
     // real refresh writes v1
@@ -100,26 +112,26 @@ describe('HTTP /v1/project-briefs (E2 repo-scoped first-class object)', () => {
       method: 'POST', headers: authHeaders(), body: JSON.stringify({ repo: 'hippo' }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as { brief: { version: number; repo: string } };
+    const body = await jsonAs<BriefResponse>(res);
     expect(body.brief.version).toBe(1);
     expect(body.brief.repo).toBe('hippo');
-    const after = await (await fetch(`${handle.url}/v1/project-briefs?repo=hippo`, { headers: authHeaders() })).json() as { briefs: unknown[] };
+    const after = await jsonAs<BriefListResponse>(await fetch(`${handle.url}/v1/project-briefs?repo=hippo`, { headers: authHeaders() }));
     expect(after.briefs.length).toBe(1);
   });
 
   it('GET /v1/project-briefs/:id + 404 on missing', async () => {
-    const created = (await (await createBrief({ repo: 'x', summary: 'a' })).json() as { brief: { id: number } }).brief;
+    const created = (await jsonAs<BriefResponse>(await createBrief({ repo: 'x', summary: 'a' }))).brief;
     expect((await fetch(`${handle.url}/v1/project-briefs/${created.id}`, { headers: authHeaders() })).status).toBe(200);
     expect((await fetch(`${handle.url}/v1/project-briefs/99999`, { headers: authHeaders() })).status).toBe(404);
   });
 
   it('POST /v1/project-briefs/:id/supersede creates v2 (+409 on re-supersede)', async () => {
-    const v1 = (await (await createBrief({ repo: 'b', summary: 'a' })).json() as { brief: { id: number } }).brief;
+    const v1 = (await jsonAs<BriefResponse>(await createBrief({ repo: 'b', summary: 'a' }))).brief;
     const sup = await fetch(`${handle.url}/v1/project-briefs/${v1.id}/supersede`, {
       method: 'POST', headers: authHeaders(), body: JSON.stringify({ summary: 'b', changeSummary: 'x' }),
     });
     expect(sup.status).toBe(200);
-    expect((await sup.json() as { brief: { version: number } }).brief.version).toBe(2);
+    expect((await jsonAs<BriefResponse>(sup)).brief.version).toBe(2);
     const conflict = await fetch(`${handle.url}/v1/project-briefs/${v1.id}/supersede`, {
       method: 'POST', headers: authHeaders(), body: JSON.stringify({ summary: 'c' }),
     });
@@ -127,7 +139,7 @@ describe('HTTP /v1/project-briefs (E2 repo-scoped first-class object)', () => {
   });
 
   it('POST /v1/project-briefs/:id/close retires (+409 on re-close)', async () => {
-    const b = (await (await createBrief({ repo: 'c', summary: 'a' })).json() as { brief: { id: number } }).brief;
+    const b = (await jsonAs<BriefResponse>(await createBrief({ repo: 'c', summary: 'a' }))).brief;
     expect((await fetch(`${handle.url}/v1/project-briefs/${b.id}/close`, { method: 'POST', headers: authHeaders() })).status).toBe(200);
     expect((await fetch(`${handle.url}/v1/project-briefs/${b.id}/close`, { method: 'POST', headers: authHeaders() })).status).toBe(409);
   });
@@ -153,8 +165,8 @@ describe('HTTP /v1/project-briefs (E2 repo-scoped first-class object)', () => {
   });
 
   it('cross-tenant isolation: tenant-b cannot see default briefs', async () => {
-    const created = (await (await createBrief({ repo: 'secret', summary: 'a' })).json() as { brief: { id: number } }).brief;
-    const bList = await (await fetch(`${handle.url}/v1/project-briefs`, { headers: authHeaders(apiKeyB) })).json() as { briefs: unknown[] };
+    const created = (await jsonAs<BriefResponse>(await createBrief({ repo: 'secret', summary: 'a' }))).brief;
+    const bList = await jsonAs<BriefListResponse>(await fetch(`${handle.url}/v1/project-briefs`, { headers: authHeaders(apiKeyB) }));
     expect(bList.briefs.length).toBe(0);
     expect((await fetch(`${handle.url}/v1/project-briefs/${created.id}`, { headers: authHeaders(apiKeyB) })).status).toBe(404);
   });

@@ -11,6 +11,14 @@ import type { SlackMessageEvent } from './types.js';
  * the request channel id onto each parsed message — downstream ingest needs
  * it on every event.
  */
+/** JSON value shape for the parts of the Slack history response not yet
+ *  narrowed to a known message shape. */
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+function isJsonString(value: JsonValue | undefined): value is string {
+  return typeof value === 'string';
+}
+
 export function slackHistoryFetcher(
   token: string,
   fetchImpl?: typeof fetch,
@@ -26,6 +34,8 @@ export function slackHistoryFetcher(
       init: { method: 'GET', headers: { authorization: `Bearer ${token}` } },
       fetchImpl,
     });
+    // SAFETY: body is the Slack `conversations.history` response; per the
+    // documented shape it's `{ ok, error?, messages?, response_metadata? }`.
     const body = (await r.json()) as {
       ok: boolean;
       error?: string;
@@ -35,9 +45,14 @@ export function slackHistoryFetcher(
     if (!body.ok) throw new Error(`slack: ${body.error ?? 'unknown error'}`);
     const messages: SlackMessageEvent[] = (body.messages ?? [])
       .filter((m): m is SlackMessageEvent => {
-        if (!m || typeof m !== 'object') return false;
-        const o = m as Record<string, unknown>;
-        return o.type === 'message' && typeof o.ts === 'string';
+        if (m === null || Array.isArray(m) || typeof m !== 'object') {
+          return false;
+        }
+        // SAFETY: the check above just confirmed m is a non-null, non-array
+        // plain object, so it's safe to treat as a JSON-shaped record; the
+        // `m is SlackMessageEvent` predicate is what validates the fields.
+        const o = m as { [key: string]: JsonValue };
+        return o.type === 'message' && isJsonString(o.ts);
       })
       // Slack returns messages without `channel`; stamp it from the request.
       .map((m) => ({ ...m, channel: channelId }));

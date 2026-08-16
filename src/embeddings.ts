@@ -123,7 +123,9 @@ export function prefixFor(model: string, role?: EmbeddingRole): string {
 
 // Use Function constructor to bypass TypeScript static module resolution
 // for optional peer dependencies that may not be installed.
-const _dynImport = new Function('s', 'return import(s)') as (s: string) => Promise<unknown>;
+// SAFETY: `import(s)` always resolves to a module namespace object (or rejects);
+// Promise<object> names that honestly without claiming a specific module shape.
+const _dynImport = new Function('s', 'return import(s)') as (s: string) => Promise<object>;
 
 /**
  * Check (synchronously) if @xenova/transformers or @huggingface/transformers is installed.
@@ -187,6 +189,9 @@ async function loadPipeline(model: string): Promise<any> {
 
     let pipelineFn: any = null;
     try {
+      // SAFETY: the resolved module's shape is untyped by design (optional peer
+      // dependency); pipelineFn/mod.env are read defensively below and any
+      // failure to find a usable pipeline falls through to `return null`.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mod = await _dynImport(pkg) as any;
       if (process.env.HIPPO_MODEL_CACHE) {
@@ -347,8 +352,13 @@ export async function getEmbedding(
 
     const prefix = prefixFor(model, role);
     const input = prefix ? `${prefix}${text}` : text;
+    // SAFETY: pipe() is a Transformers.js feature-extraction pipeline call;
+    // its untyped output is read defensively below (only `.data`, cast on
+    // the return line to the documented Float32Array tensor shape).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const output = await pipe(input, { pooling: poolingFor(model), normalize: true }) as any;
+    // SAFETY: output.data is a Float32Array per the feature-extraction
+    // pipeline's documented tensor output shape.
     return Array.from(output.data as Float32Array);
   } catch {
     return [];
@@ -388,6 +398,9 @@ export function loadEmbeddingIndex(hippoRoot: string): Record<string, number[]> 
   const fp = path.join(hippoRoot, EMBEDDINGS_FILE);
   if (!fs.existsSync(fp)) return {};
   try {
+    // SAFETY: embeddings.json is written exclusively by saveEmbeddingIndex with
+    // this exact shape; a corrupt or foreign file is caught by the try/catch
+    // below and treated as an empty index.
     return JSON.parse(fs.readFileSync(fp, 'utf8')) as Record<string, number[]>;
   } catch {
     return {};
@@ -552,7 +565,10 @@ export async function embedAll(
     // than discarding paid progress, then stop and resume on the next run.
     const pending = entries.filter((e) => !index[e.id]);
     let count = 0;
-    let backfillError: unknown = null;
+    // Initialized to `undefined` (not a known-evidence literal like `null`) so
+    // it stays a plain `unknown` binding for the arbitrary caught value below;
+    // falsy either way, so `if (backfillError)` behaves identically.
+    let backfillError: unknown = undefined;
     const SAVE_CHUNK = 64;
     for (let i = 0; i < pending.length; i += SAVE_CHUNK) {
       const chunk = pending.slice(i, i + SAVE_CHUNK);

@@ -16,10 +16,56 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import { writeRecallTrace, writeRecallTraceAtRoot, recordTraceOutcome } from '../src/recall-trace.js';
 
-function tmpHome(): { home: string; restore: () => void } {
+// Row shapes mirror the recall_traces / recall_trace_results /
+// recall_trace_outcomes tables created in src/db.ts (openHippoDb migration).
+interface RecallTraceRow {
+  id: number;
+  ts: string;
+  tenant_id: string;
+  session_id: string | null;
+  pipeline: 'api' | 'cli' | 'context' | 'mcp';
+  query_hash: string;
+  query_length: number;
+  result_count: number;
+  explain_mode: number;
+}
+
+interface RecallTraceResultRow {
+  trace_id: number;
+  tenant_id: string;
+  memory_id: string;
+  result_rank: number;
+  score: number;
+  rerank_json: string | null;
+}
+
+interface RecallTraceOutcomeRow {
+  id: number;
+  trace_id: number;
+  ts: string;
+  tenant_id: string;
+  outcome: 'positive' | 'negative';
+  memory_ids_json: string;
+}
+
+function queryRow<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T {
+  // SAFETY: every call site's SQL SELECT list matches T exactly — either the
+  // full recall_traces / recall_trace_results / recall_trace_outcomes column
+  // set (see the CREATE TABLE statements in src/db.ts) or an explicit
+  // narrower column subset named in the query text — and each query targets
+  // a row this test just wrote, so the row is present.
+  return db.prepare(sql).get(...params) as T;
+}
+
+function queryAll<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T[] {
+  // SAFETY: same column-list guarantee as queryRow, applied to every matching row.
+  return db.prepare(sql).all(...params) as T[];
+}
+
+function tmpHome() {
   const home = mkdtempSync(join(tmpdir(), 'hippo-recall-trace-helper-'));
   return {
     home,
@@ -46,7 +92,7 @@ describe('writeRecallTrace', () => {
         });
         expect(traceId).not.toBeNull();
 
-        const trace = db.prepare(`SELECT * FROM recall_traces WHERE id = ?`).get(traceId) as Record<string, unknown>;
+        const trace = queryRow<RecallTraceRow>(db, `SELECT * FROM recall_traces WHERE id = ?`, traceId);
         expect(trace.tenant_id).toBe('default');
         expect(trace.session_id).toBe('sess-1');
         expect(trace.pipeline).toBe('api');
@@ -57,9 +103,11 @@ describe('writeRecallTrace', () => {
         // Raw query text must never land in any persisted column.
         expect(JSON.stringify(trace)).not.toContain('super secret raw query text');
 
-        const results = db.prepare(
+        const results = queryAll<RecallTraceResultRow>(
+          db,
           `SELECT * FROM recall_trace_results WHERE trace_id = ? ORDER BY result_rank ASC`,
-        ).all(traceId) as Array<Record<string, unknown>>;
+          traceId,
+        );
         expect(results).toHaveLength(2);
         expect(results[0].memory_id).toBe('mem-a');
         expect(results[0].result_rank).toBe(1);
@@ -93,7 +141,7 @@ describe('writeRecallTrace', () => {
             },
           ],
         });
-        const row = db.prepare(`SELECT rerank_json FROM recall_trace_results WHERE trace_id = ?`).get(traceId) as { rerank_json: string };
+        const row = queryRow<{ rerank_json: string }>(db, `SELECT rerank_json FROM recall_trace_results WHERE trace_id = ?`, traceId);
         const steps = JSON.parse(row.rerank_json);
         expect(steps).toEqual([{ stage: 'goal-boost', scoreBefore: 0.8, scoreAfter: 0.9 }]);
       } finally {
@@ -125,12 +173,12 @@ describe('writeRecallTrace', () => {
                   scoreBefore: 0.6,
                   scoreAfter: 0.9,
                   note: 'matched goal tag: super-secret-project-codename',
-                } as never,
+                },
               ],
             },
           ],
         });
-        const row = db.prepare(`SELECT rerank_json FROM recall_trace_results WHERE trace_id = ?`).get(traceId) as { rerank_json: string };
+        const row = queryRow<{ rerank_json: string }>(db, `SELECT rerank_json FROM recall_trace_results WHERE trace_id = ?`, traceId);
         expect(row.rerank_json).not.toContain('note');
         expect(row.rerank_json).not.toContain('super-secret-project-codename');
         const steps = JSON.parse(row.rerank_json);
@@ -184,7 +232,11 @@ describe('writeRecallTrace', () => {
             { memoryId: 'mem-a', score: 0.5 }, // same memory id twice, different ranks
           ],
         });
-        const rows = db.prepare(`SELECT result_rank FROM recall_trace_results WHERE trace_id = ? ORDER BY result_rank`).all(traceId) as Array<{ result_rank: number }>;
+        const rows = queryAll<{ result_rank: number }>(
+          db,
+          `SELECT result_rank FROM recall_trace_results WHERE trace_id = ? ORDER BY result_rank`,
+          traceId,
+        );
         expect(rows.map((r) => r.result_rank)).toEqual([1, 2]);
       } finally {
         closeHippoDb(db);
@@ -214,7 +266,7 @@ describe('writeRecallTraceAtRoot', () => {
 
       const db = openHippoDb(home);
       try {
-        const trace = db.prepare(`SELECT * FROM recall_traces WHERE id = ?`).get(traceId) as Record<string, unknown>;
+        const trace = queryRow<RecallTraceRow>(db, `SELECT * FROM recall_traces WHERE id = ?`, traceId);
         expect(trace).toBeDefined();
         expect(trace.pipeline).toBe('context');
       } finally {
@@ -243,14 +295,14 @@ describe('recordTraceOutcome', () => {
           results: [{ memoryId: 'mem-a', score: 1 }],
         });
         recordTraceOutcome(db, {
-          traceId: traceId as number,
+          traceId: traceId!,
           tenantId: 'default',
           outcome: 'positive',
           memoryIds: ['mem-a'],
         });
-        const row = db.prepare(`SELECT * FROM recall_trace_outcomes WHERE trace_id = ?`).get(traceId) as Record<string, unknown>;
+        const row = queryRow<RecallTraceOutcomeRow>(db, `SELECT * FROM recall_trace_outcomes WHERE trace_id = ?`, traceId);
         expect(row.outcome).toBe('positive');
-        expect(JSON.parse(row.memory_ids_json as string)).toEqual(['mem-a']);
+        expect(JSON.parse(row.memory_ids_json)).toEqual(['mem-a']);
       } finally {
         closeHippoDb(db);
       }
@@ -272,13 +324,13 @@ describe('recordTraceOutcome', () => {
         });
         const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
         recordTraceOutcome(db, {
-          traceId: traceId as number,
+          traceId: traceId!,
           tenantId: 'tenant_b', // mismatched — trace belongs to 'default'
           outcome: 'positive',
           memoryIds: ['mem-a'],
         });
         expect(errSpy).toHaveBeenCalled();
-        const count = db.prepare(`SELECT COUNT(*) AS c FROM recall_trace_outcomes`).get() as { c: number };
+        const count = queryRow<{ c: number }>(db, `SELECT COUNT(*) AS c FROM recall_trace_outcomes`);
         expect(count.c).toBe(0);
       } finally {
         closeHippoDb(db);
@@ -301,7 +353,7 @@ describe('recordTraceOutcome', () => {
           memoryIds: ['mem-a'],
         });
         expect(errSpy).toHaveBeenCalled();
-        const count = db.prepare(`SELECT COUNT(*) AS c FROM recall_trace_outcomes`).get() as { c: number };
+        const count = queryRow<{ c: number }>(db, `SELECT COUNT(*) AS c FROM recall_trace_outcomes`);
         expect(count.c).toBe(0);
       } finally {
         closeHippoDb(db);
@@ -327,13 +379,13 @@ describe('recordTraceOutcome', () => {
         });
         // mem-c was never in this trace's results (stale caller state).
         recordTraceOutcome(db, {
-          traceId: traceId as number,
+          traceId: traceId!,
           tenantId: 'default',
           outcome: 'positive',
           memoryIds: ['mem-a', 'mem-c'],
         });
-        const row = db.prepare(`SELECT * FROM recall_trace_outcomes WHERE trace_id = ?`).get(traceId) as Record<string, unknown>;
-        expect(JSON.parse(row.memory_ids_json as string)).toEqual(['mem-a']);
+        const row = queryRow<RecallTraceOutcomeRow>(db, `SELECT * FROM recall_trace_outcomes WHERE trace_id = ?`, traceId);
+        expect(JSON.parse(row.memory_ids_json)).toEqual(['mem-a']);
       } finally {
         closeHippoDb(db);
       }
@@ -355,13 +407,13 @@ describe('recordTraceOutcome', () => {
         });
         const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
         recordTraceOutcome(db, {
-          traceId: traceId as number,
+          traceId: traceId!,
           tenantId: 'default',
           outcome: 'positive',
           memoryIds: ['mem-z'],
         });
         expect(errSpy).toHaveBeenCalled();
-        const count = db.prepare(`SELECT COUNT(*) AS c FROM recall_trace_outcomes`).get() as { c: number };
+        const count = queryRow<{ c: number }>(db, `SELECT COUNT(*) AS c FROM recall_trace_outcomes`);
         expect(count.c).toBe(0);
       } finally {
         closeHippoDb(db);

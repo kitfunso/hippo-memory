@@ -16,7 +16,7 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, MemoryKind } from '../src/memory.js';
+import { createMemory, Layer } from '../src/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import type { RecallResult, RecallSuppressionSummary } from '../src/api.js';
 
@@ -25,6 +25,14 @@ function makeRoot(): string {
   mkdirSync(join(home, '.hippo'), { recursive: true });
   initStore(home);
   return home;
+}
+
+async function jsonAs<T>(res: Response): Promise<T> {
+  // SAFETY: every call site below targets GET /v1/memories under test in
+  // this file; the response is the api.recall RecallResult contract
+  // (imported above), checked field-by-field by the assertions immediately
+  // following each call.
+  return res.json() as Promise<T>;
 }
 
 let home: string;
@@ -36,7 +44,7 @@ beforeEach(async () => {
   for (let i = 0; i < 20; i++) {
     writeEntry(home, createMemory(`omega ${i}`, {
       layer: Layer.Buffer,
-      kind: 'raw' as MemoryKind,
+      kind: 'raw',
       tenantId: 'default',
     }));
   }
@@ -52,7 +60,7 @@ describe('HTTP /v1/memories suppressionSummary (C5 WYSIATI, v1.12.13)', () => {
   it('response body includes suppressionSummary with all 6 camelCase counters', async () => {
     const res = await fetch(`${handle.url}/v1/memories?q=omega&limit=5`);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as Partial<RecallResult>;
+    const body = await jsonAs<Partial<RecallResult>>(res);
     expect(body.suppressionSummary).toBeDefined();
     const s = body.suppressionSummary!;
     // All 6 camelCase fields present on the wire.
@@ -66,7 +74,7 @@ describe('HTTP /v1/memories suppressionSummary (C5 WYSIATI, v1.12.13)', () => {
 
   it('droppedByBudget reflects the limit cut over the wire', async () => {
     const res = await fetch(`${handle.url}/v1/memories?q=omega&limit=5`);
-    const body = (await res.json()) as Partial<RecallResult>;
+    const body = await jsonAs<Partial<RecallResult>>(res);
     expect(body.results!.length).toBeLessThanOrEqual(5);
     // 20 candidates, limit 5 -> 15 dropped by budget.
     expect(body.suppressionSummary!.droppedByBudget).toBeGreaterThanOrEqual(15);
@@ -74,7 +82,7 @@ describe('HTTP /v1/memories suppressionSummary (C5 WYSIATI, v1.12.13)', () => {
 
   it('suppressedByInterference is 0 in v1.12.13 (placeholder)', async () => {
     const res = await fetch(`${handle.url}/v1/memories?q=omega&limit=5`);
-    const body = (await res.json()) as Partial<RecallResult>;
+    const body = await jsonAs<Partial<RecallResult>>(res);
     expect(body.suppressionSummary!.suppressedByInterference).toBe(0);
   });
 

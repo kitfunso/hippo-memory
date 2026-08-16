@@ -24,6 +24,7 @@ describe('v1.12.0 migration v26: api_keys.role', () => {
     const db = openHippoDb(home);
     try {
       expect(getSchemaVersion(db)).toBe(41);
+      // SAFETY: PRAGMA table_info always returns rows with these four columns.
       const cols = db.prepare(`PRAGMA table_info(api_keys)`).all() as Array<{ name: string; type: string; dflt_value: string | null; notnull: number }>;
       const role = cols.find((c) => c.name === 'role');
       expect(role).toBeDefined();
@@ -81,6 +82,8 @@ describe('v1.12.0 migration v26: api_keys.role', () => {
       db.prepare(
         `INSERT INTO api_keys (key_id, key_hash, tenant_id, label, created_at) VALUES (?, ?, ?, ?, ?)`,
       ).run('hk_legacy_test', 'fake_hash_for_test', 'default', 'legacy', new Date().toISOString());
+      // SAFETY: literal SELECT of the role column for the legacy row this
+      // test just inserted; role is NOT NULL (DEFAULT 'admin').
       const row = db.prepare(`SELECT role FROM api_keys WHERE key_id = ?`).get('hk_legacy_test') as { role: string };
       expect(row.role).toBe('admin');
     } finally {

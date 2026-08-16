@@ -18,7 +18,7 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry, loadSearchEntries } from '../src/store.js';
-import { createMemory, Layer, MemoryKind, type MemoryEntry } from '../src/memory.js';
+import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
 
 function makeRoot(prefix: string): string {
   const root = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
@@ -33,7 +33,7 @@ function makeRaw(text: string): MemoryEntry {
   return createMemory(text, {
     layer: Layer.Buffer,
     confidence: 'observed',
-    kind: 'raw' as MemoryKind,
+    kind: 'raw',
     tenantId: 'default',
   });
 }
@@ -53,7 +53,7 @@ describe('loadSearchEntries bm25_score (F1, v1.7.0)', () => {
     const matched = results.filter((e) => e.bm25_score !== undefined);
     expect(matched.length).toBeGreaterThanOrEqual(1);
     for (const e of matched) {
-      expect(typeof e.bm25_score).toBe('number');
+      expect(e.bm25_score).toEqual(expect.any(Number));
       expect(Number.isFinite(e.bm25_score!)).toBe(true);
     }
     // Ascending bm25_score (FTS5: lower = better).

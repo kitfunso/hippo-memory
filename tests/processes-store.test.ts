@@ -59,6 +59,7 @@ function safeRmSync(p: string): void {
 function countRows(home: string, table: string): number {
   const db = openHippoDb(home);
   try {
+    // SAFETY: `SELECT COUNT(*) as c` always returns exactly one row shaped { c: number }.
     return (db.prepare(`SELECT COUNT(*) as c FROM ${table}`).get() as { c: number }).c;
   } finally { closeHippoDb(db); }
 }
@@ -87,6 +88,9 @@ describe('processes store (E2 first-class object)', () => {
 
     const db = openHippoDb(home);
     try {
+      // SAFETY: proc.memoryId is the id just returned by saveProcess's memory
+      // mirror write; the row may not exist only if that write failed, which
+      // the toBeDefined() assertion below checks before any further access.
       const memRow = db.prepare(`SELECT content, tags_json, source FROM memories WHERE id = ?`)
         .get(proc.memoryId!) as { content: string; tags_json: string; source: string } | undefined;
       expect(memRow).toBeDefined();
@@ -94,11 +98,17 @@ describe('processes store (E2 first-class object)', () => {
       expect(memRow!.content).toContain('1. run tests');
       expect(memRow!.content).toContain('Description: the npm release ritual');
       expect(memRow!.source).toBe('process');
+      // SAFETY: tags_json is always written as a JSON array of strings (see
+      // src/store.ts writeEntry serialization); never any other JSON shape.
       expect((JSON.parse(memRow!.tags_json) as string[])).toContain('process');
 
+      // SAFETY: metadata_json for a process_create audit row is always a JSON
+      // object with these fields (see src/processes.ts saveProcess audit write).
       const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'process_create' AND target_id = ?`)
         .all(String(proc.id)) as Array<{ metadata_json: string }>;
       expect(rows.length).toBe(1);
+      // SAFETY: metadata_json for a process_create audit row always includes
+      // these fields, written by saveProcess (see src/processes.ts).
       const meta = JSON.parse(rows[0].metadata_json) as { version: number; step_count: number; has_description: boolean };
       expect(meta.version).toBe(1);
       expect(meta.step_count).toBe(3);
@@ -114,6 +124,8 @@ describe('processes store (E2 first-class object)', () => {
     expect(proc.description).toBeNull();
     const db = openHippoDb(home);
     try {
+      // SAFETY: proc.memoryId is the id just returned by saveProcess's memory
+      // mirror write, so the row exists with a content column.
       const memRow = db.prepare(`SELECT content FROM memories WHERE id = ?`).get(proc.memoryId!) as { content: string };
       expect(memRow.content).toBe('Empty');
     } finally { closeHippoDb(db); }
@@ -158,9 +170,12 @@ describe('processes store (E2 first-class object)', () => {
 
     const db = openHippoDb(home);
     try {
+      // SAFETY: metadata_json for a process_supersede audit row always
+      // includes these fields (see src/processes.ts saveProcess audit write).
       const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'process_supersede' AND target_id = ?`)
         .all(String(v1.id)) as Array<{ metadata_json: string }>;
       expect(rows.length).toBe(1);
+      // SAFETY: same process_supersede audit contract as above.
       const meta = JSON.parse(rows[0].metadata_json) as { superseded_by: number; new_version: number };
       expect(meta.superseded_by).toBe(v2.id);
       expect(meta.new_version).toBe(2);
@@ -208,6 +223,8 @@ describe('processes store (E2 first-class object)', () => {
     expect(closed.closedAt).not.toBeNull();
     const db = openHippoDb(home);
     try {
+      // SAFETY: metadata_json for a process_close audit row is always a JSON
+      // object (see src/processes.ts closeProcess audit write).
       const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'process_close' AND target_id = ?`)
         .all(String(proc.id)) as Array<{ metadata_json: string }>;
       expect(rows.length).toBe(1);
@@ -339,11 +356,15 @@ describe('processes store (E2 first-class object)', () => {
     const db = openHippoDb(home);
     try {
       expect(db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='processes'`).get()).toBeDefined();
+      // SAFETY: `SELECT name FROM sqlite_master` always projects a single text
+      // column named `name` for any matching row.
       const triggers = (db.prepare(`SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_processes_%'`)
         .all() as Array<{ name: string }>).map((t) => t.name);
       expect(triggers).toContain('trg_processes_tenant_match_insert');
       expect(triggers).toContain('trg_processes_tenant_match_update');
       expect(triggers).toContain('trg_processes_supersede_tenant_match_update');
+      // SAFETY: `SELECT name FROM sqlite_master` always projects a single text
+      // column named `name` for any matching row.
       const indexes = (db.prepare(`SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_processes_%'`)
         .all() as Array<{ name: string }>).map((i) => i.name);
       expect(indexes).toContain('idx_processes_tenant_status');

@@ -119,6 +119,10 @@ function buildContent(rng: () => number, cluster: { tag: string; words: Readonly
   return parts.join(' ').slice(0, targetLen).trim();
 }
 
+function isNonEmptyString<T>(value: T): value is T & string {
+  return typeof value === 'string' && String(value).length > 0;
+}
+
 function loadTier1Queries(): string[] {
   const here = dirname(fileURLToPath(import.meta.url));
   const fixturesDir = resolve(here, '../micro/fixtures');
@@ -126,12 +130,15 @@ function loadTier1Queries(): string[] {
   try {
     for (const f of readdirSync(fixturesDir)) {
       if (!f.endsWith('.json')) continue;
+      // SAFETY: micro/fixtures/*.json are static, version-controlled fixture
+      // files hand-authored to this { queries: [{ q }] } shape; each q.q is
+      // still runtime-checked via isNonEmptyString() below before use.
       const data = JSON.parse(readFileSync(join(fixturesDir, f), 'utf8')) as {
         queries?: Array<{ q?: string }>;
       };
       if (Array.isArray(data.queries)) {
         for (const q of data.queries) {
-          if (typeof q.q === 'string' && q.q.length > 0) queries.push(q.q);
+          if (isNonEmptyString(q.q)) queries.push(q.q);
         }
       }
     }

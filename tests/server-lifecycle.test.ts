@@ -10,6 +10,24 @@ function makeRoot(): string {
   return home;
 }
 
+interface HealthBody {
+  ok: boolean;
+  version: string;
+  started_at: string;
+  pid: number;
+}
+
+/**
+ * Parses a /health response body as HealthBody.
+ * SAFETY: every call site reads the body from this file's own /health
+ * fetches, immediately followed by runtime assertions on each field.
+ */
+async function healthBody(res: Response): Promise<HealthBody> {
+  // SAFETY: see doc comment above — every call site asserts on HealthBody's
+  // fields immediately after calling healthBody.
+  return (await res.json()) as HealthBody;
+}
+
 describe('server lifecycle', () => {
   it('serve returns a handle with a positive port and matching url', async () => {
     const home = makeRoot();
@@ -30,13 +48,13 @@ describe('server lifecycle', () => {
       const res = await fetch(`${handle.url}/health`);
       expect(res.status).toBe(200);
       expect(res.headers.get('content-type')).toContain('application/json');
-      const body = await res.json() as Record<string, unknown>;
+      const body = await healthBody(res);
       expect(body.ok).toBe(true);
-      expect(typeof body.version).toBe('string');
+      expect(body.version).toEqual(expect.any(String));
       expect(body.version).toMatch(/^\d+\.\d+\.\d+$/);
-      expect(typeof body.started_at).toBe('string');
+      expect(body.started_at).toEqual(expect.any(String));
       // ISO 8601 sanity check
-      expect(Number.isFinite(Date.parse(body.started_at as string))).toBe(true);
+      expect(Number.isFinite(Date.parse(body.started_at))).toBe(true);
       expect(body.pid).toBe(process.pid);
     } finally {
       await handle.stop();
@@ -100,7 +118,7 @@ describe('server lifecycle', () => {
     try {
       const secondHealth = await fetch(`${second.url}/health`);
       expect(secondHealth.status).toBe(200);
-      const body = await secondHealth.json() as Record<string, unknown>;
+      const body = await healthBody(secondHealth);
       expect(body.ok).toBe(true);
     } finally {
       await second.stop();

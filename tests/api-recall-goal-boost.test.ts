@@ -13,7 +13,15 @@ import fs from 'node:fs';
 import { initStore } from '../src/store.js';
 import { remember, recall, type Context } from '../src/api.js';
 import { pushGoal } from '../src/goals.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+
+function countRows(db: DatabaseSyncLike, sql: string, ...params: unknown[]): number {
+  const row = db.prepare(sql).get(...params);
+  // SAFETY: every call site below passes a literal `SELECT COUNT(*) AS c FROM ...`
+  // query defined in this file, so the driver always returns a single row shaped
+  // { c: number }.
+  return (row as { c: number }).c;
+}
 
 describe('api.recall + RecallOpts.sessionId goal-stack boost (v1.7.4)', () => {
   let hippoRoot: string;
@@ -49,9 +57,12 @@ describe('api.recall + RecallOpts.sessionId goal-stack boost (v1.7.4)', () => {
     recall(ctx, { query: 'auth', limit: 10, sessionId });
     const db = openHippoDb(hippoRoot);
     try {
-      const count = (db.prepare(
+      const count = countRows(
+        db,
         `SELECT COUNT(*) AS c FROM goal_recall_log WHERE goal_id = ? AND memory_id = ?`,
-      ).get(goal.id, m.id) as { c: number }).c;
+        goal.id,
+        m.id,
+      );
       expect(count).toBe(1);
     } finally {
       closeHippoDb(db);
@@ -76,9 +87,11 @@ describe('api.recall + RecallOpts.sessionId goal-stack boost (v1.7.4)', () => {
     // No goal_recall_log row written (boost suppressed).
     const db = openHippoDb(hippoRoot);
     try {
-      const count = (db.prepare(
+      const count = countRows(
+        db,
         `SELECT COUNT(*) AS c FROM goal_recall_log WHERE goal_id = ?`,
-      ).get(goal.id) as { c: number }).c;
+        goal.id,
+      );
       expect(count).toBe(0);
     } finally {
       closeHippoDb(db);
@@ -91,9 +104,12 @@ describe('api.recall + RecallOpts.sessionId goal-stack boost (v1.7.4)', () => {
     recall(ctx, { query: 'auth', limit: 10 }); // no sessionId
     const db = openHippoDb(hippoRoot);
     try {
-      const count = (db.prepare(
+      const count = countRows(
+        db,
         `SELECT COUNT(*) AS c FROM goal_recall_log WHERE goal_id = ? AND memory_id = ?`,
-      ).get(goal.id, m.id) as { c: number }).c;
+        goal.id,
+        m.id,
+      );
       expect(count).toBe(0); // no boost, no log row
     } finally {
       closeHippoDb(db);

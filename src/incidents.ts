@@ -97,6 +97,8 @@ interface IncidentRow {
 
 function parseLinkedMemoryIds(raw: string): string[] {
   try {
+    // SAFETY: JSON.parse output is arbitrary; narrowed by Array.isArray plus
+    // the per-element string check below before use as string[].
     const parsed = JSON.parse(raw) as unknown;
     if (Array.isArray(parsed)) {
       return parsed.filter((x): x is string => typeof x === 'string');
@@ -114,6 +116,8 @@ function rowToIncident(row: IncidentRow): Incident {
     tenantId: row.tenant_id,
     incidentText: row.incident_text,
     context: row.context,
+    // SAFETY: status is DB-constrained to VALID_INCIDENT_STATES; this module
+    // is the only writer and always inserts one of those literal strings.
     status: row.status as IncidentStatus,
     resolutionText: row.resolution_text,
     resolvedAt: row.resolved_at,
@@ -181,6 +185,7 @@ export function saveIncident(
       // whole write rather than recording an unverifiable receipt.
       const validated: string[] = [];
       for (const linkId of linkInput) {
+        // SAFETY: row shape matches the single `id` column named in the SELECT above.
         const exists = db.prepare(
           `SELECT id FROM memories WHERE id = ? AND tenant_id = ?`,
         ).get(linkId, tenantId) as { id: string } | undefined;
@@ -207,6 +212,7 @@ export function saveIncident(
       );
       const incidentId = Number(result.lastInsertRowid ?? 0);
 
+      // SAFETY: row's shape matches the columns named in INCIDENT_COLS above.
       const row = db.prepare(`SELECT ${INCIDENT_COLS} FROM incidents WHERE id = ?`)
         .get(incidentId) as IncidentRow | undefined;
       if (!row) throw new Error('saveIncident: failed to reload saved incident row');
@@ -263,6 +269,7 @@ export function resolveIncident(
       `).run(resolutionText, now, id, tenantId);
 
       if (updateResult.changes === 0) {
+        // SAFETY: row shape matches the single `status` column named in the SELECT above.
         const existing = db.prepare(
           `SELECT status FROM incidents WHERE id = ? AND tenant_id = ?`,
         ).get(id, tenantId) as { status: string } | undefined;
@@ -274,6 +281,7 @@ export function resolveIncident(
         );
       }
 
+      // SAFETY: row's shape matches the columns named in INCIDENT_COLS above.
       const row = db.prepare(`SELECT ${INCIDENT_COLS} FROM incidents WHERE id = ? AND tenant_id = ?`)
         .get(id, tenantId) as IncidentRow | undefined;
       if (!row) throw new Error(`resolveIncident: incident ${id} not found after UPDATE`);
@@ -326,6 +334,7 @@ export function closeIncident(
       `).run(now, id, tenantId);
 
       if (updateResult.changes === 0) {
+        // SAFETY: row shape matches the single `status` column named in the SELECT above.
         const existing = db.prepare(
           `SELECT status FROM incidents WHERE id = ? AND tenant_id = ?`,
         ).get(id, tenantId) as { status: string } | undefined;
@@ -337,6 +346,7 @@ export function closeIncident(
         );
       }
 
+      // SAFETY: row's shape matches the columns named in INCIDENT_COLS above.
       const row = db.prepare(`SELECT ${INCIDENT_COLS} FROM incidents WHERE id = ? AND tenant_id = ?`)
         .get(id, tenantId) as IncidentRow | undefined;
       if (!row) throw new Error(`closeIncident: incident ${id} not found after UPDATE`);
@@ -372,6 +382,7 @@ export function loadIncidentById(
   assertTenantId('loadIncidentById', tenantId);
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: row's shape matches the columns named in INCIDENT_COLS above.
     const row = db.prepare(`SELECT ${INCIDENT_COLS} FROM incidents WHERE id = ? AND tenant_id = ?`)
       .get(id, tenantId) as IncidentRow | undefined;
     return row ? rowToIncident(row) : null;
@@ -396,6 +407,7 @@ export function loadIncidents(
           `loadIncidents: status must be one of ${Array.from(VALID_INCIDENT_STATES).join('|')}; got ${opts.status}`,
         );
       }
+      // SAFETY: rows' shape matches the columns named in INCIDENT_COLS above.
       rows = db.prepare(`
         SELECT ${INCIDENT_COLS} FROM incidents
         WHERE tenant_id = ? AND status = ?
@@ -403,6 +415,7 @@ export function loadIncidents(
         LIMIT ?
       `).all(tenantId, opts.status, limit) as IncidentRow[];
     } else {
+      // SAFETY: rows' shape matches the columns named in INCIDENT_COLS above.
       rows = db.prepare(`
         SELECT ${INCIDENT_COLS} FROM incidents
         WHERE tenant_id = ?
@@ -438,6 +451,7 @@ export function resolveActiveIncidentIdByMemory(
   assertTenantId('resolveActiveIncidentIdByMemory', tenantId);
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: row shape matches the single `id` column named in the SELECT above.
     const row = db.prepare(
       `SELECT id FROM incidents WHERE memory_id = ? AND tenant_id = ? AND status = 'open' ORDER BY id DESC LIMIT 1`,
     ).get(memoryId, tenantId) as { id: number } | undefined;

@@ -36,7 +36,8 @@ function ctxFor(root: string, subject: string = 'cli'): Context {
 
 // Seed 3 closed predictions in class "migration-effort" with mean_ratio = 2.0
 function seedMigrationEffortBaserate(root: string): void {
-  for (const [est, act] of [[2, 4], [3, 6], [4, 8]] as Array<[number, number]>) {
+  const pairs: Array<[number, number]> = [[2, 4], [3, 6], [4, 8]];
+  for (const [est, act] of pairs) {
     const p = savePrediction(root, 'default', {
       classTag: 'migration-effort',
       claimText: `migration effort estimate ${est} days`,
@@ -49,6 +50,8 @@ function seedMigrationEffortBaserate(root: string): void {
 function countAuditOps(root: string, op: string): number {
   const db = openHippoDb(root);
   try {
+    // SAFETY: query is a fixed `COUNT(*) AS n` aggregate, which always
+    // returns exactly one row shaped { n: number }.
     const row = db.prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE op = ?`).get(op) as { n: number };
     return row.n;
   } finally {
@@ -59,6 +62,8 @@ function countAuditOps(root: string, op: string): number {
 function lastAuditActor(root: string, op: string): string | null {
   const db = openHippoDb(root);
   try {
+    // SAFETY: query selects only the `actor` text column, so the row (if
+    // any — LIMIT 1 with no matching op yields undefined) is { actor: string }.
     const row = db.prepare(`SELECT actor FROM audit_log WHERE op = ? ORDER BY id DESC LIMIT 1`).get(op) as { actor: string } | undefined;
     return row?.actor ?? null;
   } finally {
@@ -131,7 +136,8 @@ describe('api.recall planningFallacyHint (J3.2, v0.32)', () => {
 
   it('silent on tie: 2 classes with equal overlap returns no hint + emits tiebreak audit', () => {
     // Seed two classes that BOTH overlap with "migration" token.
-    for (const [est, act] of [[2, 4]] as Array<[number, number]>) {
+    const pairs: Array<[number, number]> = [[2, 4]];
+    for (const [est, act] of pairs) {
       const a = savePrediction(root, 'default', { classTag: 'migration-effort', claimText: 'first prediction', estimateValue: est });
       closePrediction(root, 'default', a.id, { closureState: 'closed', actualValue: act });
       const b = savePrediction(root, 'default', { classTag: 'migration-risk', claimText: 'second prediction', estimateValue: est });
@@ -194,7 +200,8 @@ describe('api.recall planningFallacyHint (J3.2, v0.32)', () => {
   it('cross-tenant scoping: tenant-b query gets no hint from tenant-a predictions', () => {
     // Seed tenant-a only.
     const ctxA: Context = { hippoRoot: root, tenantId: 'tenant-a', actor: { subject: 'cli', role: 'admin' } };
-    for (const [est, act] of [[2, 4], [3, 6]] as Array<[number, number]>) {
+    const pairs: Array<[number, number]> = [[2, 4], [3, 6]];
+    for (const [est, act] of pairs) {
       const p = savePrediction(root, 'tenant-a', { classTag: 'migration-effort', claimText: 'tenant a prediction', estimateValue: est });
       closePrediction(root, 'tenant-a', p.id, { closureState: 'closed', actualValue: act });
     }

@@ -13,6 +13,8 @@ const ctx = (root: string) => ({ hippoRoot: root, tenantId: 'default', actor: { 
 function readStrength(root: string, memId: string): number {
   const db = openHippoDb(root);
   try {
+    // SAFETY: `.get()` is typed `unknown` (node:sqlite); the query selects only
+    // `strength` from a row for a memId this test just created, so it exists.
     return (db.prepare(`SELECT strength FROM memories WHERE id = ?`).get(memId) as { strength: number }).strength;
   } finally {
     closeHippoDb(db);

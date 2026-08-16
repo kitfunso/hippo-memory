@@ -14,6 +14,14 @@ export interface ExtractOptions {
   fetcher?: typeof fetch;
 }
 
+/** JSON value shape for fields pulled off the untyped, parsed LLM response
+ *  array before they are individually validated. */
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+function isJsonString(value: JsonValue): value is string {
+  return typeof value === 'string';
+}
+
 const EXTRACTION_PROMPT = `You are extracting factual statements from a conversation or memory entry. Extract 1-8 standalone factual statements that would be useful to remember later.
 
 Rules:
@@ -56,7 +64,7 @@ export async function extractFacts(
   if (!res.ok) return [];
 
   try {
-    const data = await res.json() as { content?: Array<{ text?: string }> };
+    const data: { content?: Array<{ text?: string }> } = await res.json();
     const raw = data.content?.[0]?.text?.trim() ?? '';
     if (!raw) return [];
 
@@ -68,11 +76,18 @@ export async function extractFacts(
 
     for (const item of parsed) {
       if (facts.length >= 8) break;
-      if (!item || typeof item.content !== 'string' || item.content.length < 3) continue;
+      if (
+        !item ||
+        !isJsonString(item.content) ||
+        item.content.length < 3
+      )
+        continue;
 
-      const tags = Array.isArray(item.tags)
-        ? item.tags.filter((t: unknown) => typeof t === 'string')
+      const itemTags = item.tags;
+      const tags = Array.isArray(itemTags)
+        ? itemTags.filter((t) => isJsonString(t))
         : [];
+      // SAFETY: validValences.has(item.valence) above confirms item.valence is one of the four literal strings of EmotionalValence.
       const valence: EmotionalValence = validValences.has(item.valence)
         ? (item.valence as EmotionalValence)
         : 'neutral';

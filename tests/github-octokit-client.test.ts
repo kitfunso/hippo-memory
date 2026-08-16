@@ -35,19 +35,30 @@ describe('parseNextLink', () => {
   });
 });
 
+// A minimal structural stand-in for the fetch Response shape that
+// realGitHubFetcher actually reads (status, headers, text(), json()) — this
+// lets the object literal satisfy the type directly, with no assertion.
+interface FakeFetchResponse {
+  readonly status: number;
+  readonly headers: Headers;
+  text: () => Promise<string>;
+  // realGitHubFetcher only reads json() on 200s, always a GitHub list payload.
+  json: () => Promise<unknown[]>;
+}
+
 function makeResponse(
   status: number,
   body: string,
   linkHeader = '',
-): Response {
+): FakeFetchResponse {
   const headers = new Headers();
   if (linkHeader) headers.set('link', linkHeader);
   return {
     status,
     headers,
     text: async () => body,
-    json: async () => JSON.parse(body),
-  } as unknown as Response;
+    json: async (): Promise<unknown[]> => JSON.parse(body),
+  };
 }
 
 describe('realGitHubFetcher (Codex P1 #4: non-200 must throw)', () => {

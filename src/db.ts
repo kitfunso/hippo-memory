@@ -11,7 +11,7 @@ const require = createRequire(import.meta.url);
 
 interface StatementSyncLike {
   run(...params: unknown[]): { lastInsertRowid?: number | bigint; changes?: number };
-  get(...params: unknown[]): unknown;
+  get<T>(...params: unknown[]): T;
   all(...params: unknown[]): unknown[];
 }
 
@@ -21,6 +21,9 @@ export interface DatabaseSyncLike {
   close(): void;
 }
 
+// SAFETY: node:sqlite's DatabaseSync constructor genuinely has this shape at
+// runtime (Node's built-in synchronous SQLite module); there are no bundled
+// types for it here, so this require + cast is the module's documented boundary.
 const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: new (path: string) => DatabaseSyncLike;
 };
@@ -571,6 +574,7 @@ const MIGRATIONS: Migration[] = [
       // UPDATE with the redacted shape. Rows with unparseable legacy JSON get
       // redacted with tenant_id='unknown', kind='unknown'. The audit_log
       // remains the compliance record.
+      // SAFETY: rows' shape matches the four columns named in the SELECT above.
       const rows = db
         .prepare(`SELECT id, archived_at, reason, payload_json FROM raw_archive`)
         .all() as Array<{
@@ -584,6 +588,9 @@ const MIGRATIONS: Migration[] = [
         let tenant = 'unknown';
         let kind = 'unknown';
         try {
+          // SAFETY: parsed is a best-effort JSON.parse of legacy payload_json;
+          // an unexpected shape only yields undefined fields (falling back to
+          // 'unknown' below), and a parse failure is caught, so this never crashes.
           const parsed = JSON.parse(row.payload_json) as {
             tenant_id?: string;
             kind?: string;
@@ -2167,6 +2174,8 @@ const MIGRATIONS: Migration[] = [
         // parsed by the same helper the markdown-import stamp uses), then the
         // store's own location for everything else.
         const homeName = path.basename(os.homedir()).toLowerCase();
+        // SAFETY: sourcedRows' shape matches the two columns (id, source)
+        // named in the SELECT above.
         const sourcedRows = db.prepare(
           `SELECT id, source FROM memories WHERE origin_project IS NULL AND (source LIKE 'shared:%' OR source LIKE 'promoted:%')`,
         ).all() as Array<{ id: string; source: string }>;
@@ -2188,6 +2197,8 @@ const MIGRATIONS: Migration[] = [
       // this DB would ignore origin_project and the secret veto and resume
       // injecting cross-project rows. 1.24.0 is the first version with the
       // isolation behavior. Forward-only - never lower an existing minimum.
+      // SAFETY: this get() result's shape matches the single `value` column
+      // named in the SELECT above.
       const existingMin = (db.prepare(`SELECT value FROM meta WHERE key = 'min_compatible_binary'`).get() as { value?: string } | undefined)?.value;
       if (!existingMin || compareSemver('1.24.0', existingMin) > 0) {
         db.prepare(`INSERT INTO meta(key, value) VALUES('min_compatible_binary', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run('1.24.0');
@@ -2313,12 +2324,15 @@ const MIGRATIONS: Migration[] = [
 
 function tableHasColumn(db: DatabaseSyncLike, tableName: string, columnName: string): boolean {
   if (!/^[a-z_]+$/i.test(tableName)) throw new Error(`Invalid table name: ${tableName}`);
+  // SAFETY: rows' shape matches PRAGMA table_info's documented `name` column.
   const rows = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name?: string }>;
   return rows.some((row) => row.name === columnName);
 }
 
 function tableExists(db: DatabaseSyncLike, tableName: string): boolean {
   if (!/^[a-z_]+$/i.test(tableName)) throw new Error(`Invalid table name: ${tableName}`);
+  // SAFETY: row's shape matches the single `name` column named in the
+  // SELECT above.
   const row = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name = ?`).get(tableName) as { name?: string } | undefined;
   return !!row?.name;
 }
@@ -2334,6 +2348,8 @@ export function getCurrentSchemaVersion(): number {
 function readMinCompatibleBinary(db: DatabaseSyncLike): string | null {
   // Tolerate the meta table not yet existing on a fresh DB.
   try {
+    // SAFETY: row's shape matches the single `value` column named in the
+    // SELECT above.
     const row = db.prepare(`SELECT value FROM meta WHERE key = 'min_compatible_binary'`).get() as
       | { value?: string }
       | undefined;
@@ -2419,6 +2435,8 @@ function ensureMetaTable(db: DatabaseSyncLike): void {
 }
 
 export function getSchemaVersion(db: DatabaseSyncLike): number {
+  // SAFETY: row's shape matches the single `value` column named in the
+  // SELECT above.
   const row = db.prepare(`SELECT value FROM meta WHERE key = 'schema_version'`).get() as { value?: string } | undefined;
   const version = Number(row?.value ?? 0);
   return Number.isFinite(version) ? version : 0;
@@ -2460,7 +2478,11 @@ function ensureOptionalFts(db: DatabaseSyncLike): void {
 }
 
 function backfillFtsIndex(db: DatabaseSyncLike): void {
+  // SAFETY: this get() result's shape matches the single aliased `c` column
+  // named in the SELECT above.
   const memCount = (db.prepare(`SELECT COUNT(*) AS c FROM memories`).get() as { c?: number } | undefined)?.c ?? 0;
+  // SAFETY: this get() result's shape matches the single aliased `c` column
+  // named in the SELECT above.
   const ftsCount = (db.prepare(`SELECT COUNT(*) AS c FROM memories_fts`).get() as { c?: number } | undefined)?.c ?? 0;
   if (memCount === ftsCount) return;
 
@@ -2484,6 +2506,8 @@ export function closeHippoDb(db: DatabaseSyncLike): void {
 }
 
 export function getMeta(db: DatabaseSyncLike, key: string, fallback = ''): string {
+  // SAFETY: row's shape matches the single `value` column named in the
+  // SELECT above.
   const row = db.prepare(`SELECT value FROM meta WHERE key = ?`).get(key) as { value?: string } | undefined;
   return row?.value ?? fallback;
 }

@@ -91,6 +91,11 @@ describe('v1.8 adversarial position assignment (uniform across early/mid/late)',
   it('all new placements carry adversarial: true flag', () => {
     for (const tp of TRAP_PLACEMENTS) {
       if (NEW_IDS.includes(tp.category)) {
+        // SAFETY: traps.mjs's TRAP_PLACEMENTS literal sets `adversarial: true`
+        // only on the 3 v1.8.0 adversarial-category entries (see file header);
+        // TS infers a union over the array's mixed object shapes, so the flag
+        // isn't part of every element's inferred type even though the NEW_IDS
+        // entries always carry it.
         expect((tp as { adversarial?: boolean }).adversarial).toBe(true);
       }
     }
@@ -153,7 +158,7 @@ describe('v1.8 existing-10 categories PRNG-stability vs v1.7.x positions (per ou
   });
 
   it('v1.7.x existing-10 placements are unchanged (per-category positions match v1.7.x record)', () => {
-    const expected: Record<string, number[]> = {
+    const expected = {
       overwrite_production: [2, 22, 42],
       bare_except: [4, 28, 46],
       emoji_windows: [6, 24, 38],

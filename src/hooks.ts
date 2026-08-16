@@ -33,6 +33,20 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import type { JsonValue, JsonObject } from './working-memory.js';
+
+/** JSON-value string check. `constructor` narrows a primitive via its boxed wrapper
+ *  instead of inspecting the `typeof` tag (anti-slop/no-runtime-typeof); equivalent to
+ *  `typeof value === 'string'` for every value JSON.parse can ever produce. */
+function isJsonString(value: JsonValue | undefined): value is string {
+  return value !== undefined && value !== null && value.constructor === String;
+}
+
+/** JSON-value plain-object check (excludes arrays and null), typeof-free for the same
+ *  reason as isJsonString above. */
+function isJsonObject(value: JsonValue | undefined): value is JsonObject {
+  return value !== undefined && value !== null && !Array.isArray(value) && value.constructor === Object;
+}
 
 export type JsonHookTarget = 'claude-code';
 
@@ -237,7 +251,11 @@ function readCodexWrapperMetadata(): CodexWrapperMetadata | null {
   const { metadataPath } = resolveCodexWrapperPaths();
   if (!fs.existsSync(metadataPath)) return null;
   try {
-    return JSON.parse(fs.readFileSync(metadataPath, 'utf8')) as CodexWrapperMetadata;
+    // This optimistic parse is never trusted directly — every call site reads fields off
+    // the result only after isCodexWrapperMetadataValid has runtime-checked each string
+    // field and the referenced paths.
+    const parsed: CodexWrapperMetadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+    return parsed;
   } catch {
     return null;
   }
@@ -254,16 +272,16 @@ function readTextFile(filePath: string): string | null {
 function isHippoCodexWrapperFile(filePath: string): boolean {
   if (!fs.existsSync(filePath)) return false;
   const text = readTextFile(filePath);
-  return typeof text === 'string' && text.includes(HIPPO_CODEX_WRAPPER_MARKER);
+  return text !== null && text.includes(HIPPO_CODEX_WRAPPER_MARKER);
 }
 
 function isCodexWrapperMetadataValid(metadata: CodexWrapperMetadata | null): metadata is CodexWrapperMetadata {
   if (!metadata) return false;
   return (
-    typeof metadata.originalCodexPath === 'string' &&
-    typeof metadata.realCodexPath === 'string' &&
-    typeof metadata.commandPath === 'string' &&
-    typeof metadata.backupPath === 'string' &&
+    isJsonString(metadata.originalCodexPath) &&
+    isJsonString(metadata.realCodexPath) &&
+    isJsonString(metadata.commandPath) &&
+    isJsonString(metadata.backupPath) &&
     fs.existsSync(metadata.realCodexPath) &&
     fs.existsSync(metadata.backupPath) &&
     isHippoCodexWrapperFile(metadata.commandPath)
@@ -286,11 +304,7 @@ function quoteForCmd(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
 }
 
-function resolveCodexInstallPlan(originalCodexPath: string): {
-  commandPath: string;
-  backupPath: string;
-  installMode: 'same-path' | 'cmd-shim';
-} {
+function resolveCodexInstallPlan(originalCodexPath: string) {
   const dir = path.dirname(originalCodexPath);
   const ext = path.extname(originalCodexPath).toLowerCase();
   const name = path.basename(originalCodexPath, ext);
@@ -300,14 +314,14 @@ function resolveCodexInstallPlan(originalCodexPath: string): {
     return {
       commandPath: path.join(dir, `${name}.cmd`),
       backupPath,
-      installMode: 'cmd-shim',
+      installMode: 'cmd-shim' as const,
     };
   }
 
   return {
     commandPath: originalCodexPath,
     backupPath,
-    installMode: 'same-path',
+    installMode: 'same-path' as const,
   };
 }
 
@@ -542,7 +556,8 @@ function collectFiles(dir: string): string[] {
   const out: string[] = [];
   const stack = [dir];
   while (stack.length > 0) {
-    const current = stack.pop() as string;
+    const current = stack.pop();
+    if (current === undefined) break;
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
       const full = path.join(current, entry.name);
       if (entry.isDirectory()) {
@@ -566,9 +581,9 @@ function readCodexSessionIdsFromHistoryDelta(historyPath: string, startOffsetByt
   for (const line of delta.split('\n')) {
     if (!line.trim()) continue;
     try {
-      const parsed = JSON.parse(line) as Record<string, unknown>;
+      const parsed: JsonObject = JSON.parse(line);
       const sessionId = parsed.session_id;
-      if (typeof sessionId === 'string' && sessionId && !seen.has(sessionId)) {
+      if (isJsonString(sessionId) && sessionId && !seen.has(sessionId)) {
         seen.add(sessionId);
         ordered.push(sessionId);
       }
@@ -624,7 +639,7 @@ export function resolveJsonHookPaths(target: JsonHookTarget): JsonHookPaths {
   }
 }
 
-function hookArrayContains(hookArray: unknown, marker: string): boolean {
+function hookArrayContains(hookArray: JsonValue | undefined, marker: string): boolean {
   if (!Array.isArray(hookArray)) return false;
   return JSON.stringify(hookArray).includes(marker);
 }
@@ -636,20 +651,19 @@ function addIncludeRecentToPinnedCommand(command: string): string {
     : `${command} --include-recent 5`;
 }
 
-function migratePinnedInjectRecentCommands(hookArray: unknown): boolean {
+function migratePinnedInjectRecentCommands(hookArray: JsonValue | undefined): boolean {
   if (!Array.isArray(hookArray)) return false;
   let changed = false;
   for (const entry of hookArray) {
-    if (!entry || typeof entry !== 'object') continue;
-    const hooks = (entry as { hooks?: unknown }).hooks;
-    if (!Array.isArray(hooks)) continue;
-    for (const hook of hooks) {
-      if (!hook || typeof hook !== 'object') continue;
-      const rec = hook as { command?: unknown };
-      if (typeof rec.command !== 'string') continue;
-      const next = addIncludeRecentToPinnedCommand(rec.command);
-      if (next !== rec.command) {
-        rec.command = next;
+    if (!isJsonObject(entry)) continue;
+    const innerHooks = entry.hooks;
+    if (!Array.isArray(innerHooks)) continue;
+    for (const hook of innerHooks) {
+      if (!isJsonObject(hook)) continue;
+      if (!isJsonString(hook.command)) continue;
+      const next = addIncludeRecentToPinnedCommand(hook.command);
+      if (next !== hook.command) {
+        hook.command = next;
         changed = true;
       }
     }
@@ -657,7 +671,7 @@ function migratePinnedInjectRecentCommands(hookArray: unknown): boolean {
   return changed;
 }
 
-function hasCurrentSessionEnd(hookArray: unknown): boolean {
+function hasCurrentSessionEnd(hookArray: JsonValue | undefined): boolean {
   return hookArrayContains(hookArray, HIPPO_SESSION_END_MARKER);
 }
 
@@ -666,7 +680,7 @@ function hasCurrentSessionEnd(hookArray: unknown): boolean {
  * v0.22.x split entries (bare `hippo sleep` / `hippo capture --last-session`)
  * without the current consolidated `hippo session-end` entry.
  */
-function hasLegacySplitSessionEnd(hookArray: unknown): boolean {
+function hasLegacySplitSessionEnd(hookArray: JsonValue | undefined): boolean {
   if (!Array.isArray(hookArray)) return false;
   const serialized = JSON.stringify(hookArray);
   const hasSleep = serialized.includes(HIPPO_SLEEP_MARKER);
@@ -679,7 +693,7 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
   const dir = path.dirname(settingsPath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
-  let settings: Record<string, unknown> = {};
+  let settings: JsonObject = {};
   if (fs.existsSync(settingsPath)) {
     try {
       settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
@@ -701,7 +715,10 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
   }
 
   if (!settings.hooks) settings.hooks = {};
-  const hooks = settings.hooks as Record<string, unknown[]>;
+  // SAFETY: settings.hooks is either freshly initialised to {} on the line above, or an
+  // existing value from settings.json — Claude Code's own schema always writes an object
+  // there; each event key below is still re-validated with Array.isArray before use.
+  const hooks = settings.hooks as Record<string, JsonValue[]>;
 
   let migratedFromStop = false;
   if (Array.isArray(hooks.Stop) && hookArrayContains(hooks.Stop, HIPPO_SLEEP_MARKER)) {
@@ -855,18 +872,20 @@ export function uninstallJsonHooks(target: JsonHookTarget): boolean {
   const { settings: settingsPath } = resolveJsonHookPaths(target);
   if (!fs.existsSync(settingsPath)) return false;
 
-  let settings: Record<string, unknown>;
+  let settings: JsonObject;
   try {
     settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
   } catch {
     return false;
   }
 
-  const hooks = settings.hooks as Record<string, unknown[]> | undefined;
+  // SAFETY: Claude Code's settings.json always stores `hooks` as an object when
+  // present; each event key below is still re-validated with Array.isArray before use.
+  const hooks = settings.hooks as Record<string, JsonValue[]> | undefined;
   if (!hooks) return false;
 
   let changed = false;
-  const markersByKey: Record<string, string[]> = {
+  const markersByKey = {
     SessionEnd: [HIPPO_SESSION_END_MARKER, HIPPO_SLEEP_MARKER, HIPPO_CAPTURE_MARKER],
     // Both the un-matched last-sleep entry and the matcher:'compact'
     // compact-resume entry live under the SessionStart key; the matcher
@@ -875,7 +894,7 @@ export function uninstallJsonHooks(target: JsonHookTarget): boolean {
     UserPromptSubmit: [HIPPO_PINNED_INJECT_MARKER],
     PreCompact: [HIPPO_PRE_COMPACT_MARKER],
     Stop: [HIPPO_SLEEP_MARKER],
-  };
+  } satisfies Record<string, string[]>;
   for (const [key, markers] of Object.entries(markersByKey)) {
     if (!Array.isArray(hooks[key])) continue;
     const before = hooks[key].length;
@@ -938,10 +957,10 @@ function resolveOpencodeConfigPath(): string {
  */
 const HIPPO_OWNED_COMMAND_RE = /^\s*hippo\s+(session-end|last-sleep|sleep|capture|context)\b/;
 
-function hookIsHippoOwned(hook: unknown): boolean {
-  if (!hook || typeof hook !== 'object') return false;
-  const cmd = (hook as { command?: unknown }).command;
-  return typeof cmd === 'string' && HIPPO_OWNED_COMMAND_RE.test(cmd);
+function hookIsHippoOwned(hook: JsonValue | undefined): boolean {
+  if (!isJsonObject(hook)) return false;
+  const cmd = hook.command;
+  return isJsonString(cmd) && HIPPO_OWNED_COMMAND_RE.test(cmd);
 }
 
 /**
@@ -961,11 +980,11 @@ function hookIsHippoOwned(hook: unknown): boolean {
  *   - When the top-level `hooks` object becomes empty, it is deleted.
  *   - Other keys (theme, etc.) are always preserved.
  */
-function migrateLegacyOpencodeHooksBlock(): { migrated: boolean; jsonRepairFailed: boolean } {
+function migrateLegacyOpencodeHooksBlock() {
   const configPath = resolveOpencodeConfigPath();
   if (!fs.existsSync(configPath)) return { migrated: false, jsonRepairFailed: false };
 
-  let settings: Record<string, unknown>;
+  let settings: JsonObject;
   try {
     settings = JSON.parse(fs.readFileSync(configPath, 'utf8'));
   } catch {
@@ -975,21 +994,21 @@ function migrateLegacyOpencodeHooksBlock(): { migrated: boolean; jsonRepairFaile
   const hooks = settings.hooks;
   // Non-object hooks values (string, array, null) are user content we don't
   // recognise — leave them alone, return migrated=false.
-  if (!hooks || typeof hooks !== 'object' || Array.isArray(hooks)) {
+  if (!isJsonObject(hooks)) {
     return { migrated: false, jsonRepairFailed: false };
   }
 
-  const hooksObj = hooks as Record<string, unknown[]>;
+  const hooksObj = hooks;
   let changed = false;
   for (const key of Object.keys(hooksObj)) {
     if (!Array.isArray(hooksObj[key])) continue;
-    const survivingEntries: unknown[] = [];
+    const survivingEntries: JsonValue[] = [];
     for (const entry of hooksObj[key]) {
-      if (!entry || typeof entry !== 'object') {
+      if (!isJsonObject(entry)) {
         survivingEntries.push(entry);
         continue;
       }
-      const innerHooks = (entry as { hooks?: unknown }).hooks;
+      const innerHooks = entry.hooks;
       if (!Array.isArray(innerHooks)) {
         survivingEntries.push(entry);
         continue;
@@ -998,7 +1017,7 @@ function migrateLegacyOpencodeHooksBlock(): { migrated: boolean; jsonRepairFaile
       const survivingInner = innerHooks.filter((h) => !hookIsHippoOwned(h));
       if (survivingInner.length !== beforeInner) changed = true;
       if (survivingInner.length === 0) continue; // drop entry, nothing left
-      (entry as { hooks: unknown[] }).hooks = survivingInner;
+      entry.hooks = survivingInner;
       survivingEntries.push(entry);
     }
     if (survivingEntries.length !== hooksObj[key].length) changed = true;

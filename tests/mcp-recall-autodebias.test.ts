@@ -15,7 +15,7 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store.js';
-import { handleMcpRequest } from '../src/mcp/server.js';
+import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { savePrediction, closePrediction } from '../src/predictions.js';
 
 function makeRoot(prefix: string): string {
@@ -25,11 +25,15 @@ function makeRoot(prefix: string): string {
   return home;
 }
 
+interface HippoRecallToolArgs {
+  query: string;
+}
+
 function callTool(
   reqId: number,
   name: string,
-  args: Record<string, unknown>,
-  ctx: { hippoRoot: string; tenantId: string; actor: string; clientKey?: string },
+  args: HippoRecallToolArgs,
+  ctx: McpContext,
 ) {
   return handleMcpRequest(
     {
@@ -42,13 +46,17 @@ function callTool(
   );
 }
 
-function extractText(res: unknown): string {
+function extractText(res: McpResponse | null): string {
+  // SAFETY: hippo_recall's MCP tool result envelope always carries
+  // result.content per src/mcp/server.ts; McpResponse.result is typed
+  // unknown at the transport layer since it varies per tool.
   const r = res as { result?: { content?: Array<{ text?: string }> } } | null;
   return r?.result?.content?.[0]?.text ?? '';
 }
 
 function seedBaserate(home: string): void {
-  for (const [est, act] of [[2, 4], [3, 6], [4, 8]] as Array<[number, number]>) {
+  const estimateVsActual: Array<[number, number]> = [[2, 4], [3, 6], [4, 8]];
+  for (const [est, act] of estimateVsActual) {
     const p = savePrediction(home, 'default', {
       classTag: 'migration-effort',
       claimText: `migration effort ${est} days`,
@@ -78,7 +86,7 @@ describe('mcp hippo_recall planningFallacyHint text block (J3.2 v0.32)', () => {
 
   it('prepends "## Planning fallacy hint" block when query matches forward-claim AND class resolves', async () => {
     seedBaserate(home);
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: 'mcp' };
+    const ctx: McpContext = { hippoRoot: home, tenantId: 'default', actor: 'mcp' };
     const res = await callTool(1, 'hippo_recall', { query: 'migration effort will take 3 days' }, ctx);
     const text = extractText(res);
     expect(text).toContain('## Planning fallacy hint');
@@ -90,7 +98,7 @@ describe('mcp hippo_recall planningFallacyHint text block (J3.2 v0.32)', () => {
 
   it('does NOT prepend the hint block when query has no forward-claim phrase', async () => {
     seedBaserate(home);
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: 'mcp' };
+    const ctx: McpContext = { hippoRoot: home, tenantId: 'default', actor: 'mcp' };
     const res = await callTool(1, 'hippo_recall', { query: 'show me the auth flow' }, ctx);
     const text = extractText(res);
     expect(text).not.toContain('## Planning fallacy hint');
@@ -99,7 +107,7 @@ describe('mcp hippo_recall planningFallacyHint text block (J3.2 v0.32)', () => {
   it('does NOT prepend the hint block when HIPPO_AUTODEBIAS=off', async () => {
     seedBaserate(home);
     process.env.HIPPO_AUTODEBIAS = 'off';
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: 'mcp' };
+    const ctx: McpContext = { hippoRoot: home, tenantId: 'default', actor: 'mcp' };
     const res = await callTool(1, 'hippo_recall', { query: 'migration effort will take 3 days' }, ctx);
     const text = extractText(res);
     expect(text).not.toContain('## Planning fallacy hint');

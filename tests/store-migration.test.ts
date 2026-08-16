@@ -7,6 +7,9 @@ import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
 import { createMemory, Layer } from '../src/memory.js';
 
 const require = createRequire(import.meta.url);
+// SAFETY: node:sqlite's DatabaseSync constructor genuinely has this shape at
+// runtime (Node's built-in synchronous SQLite module); there are no bundled
+// types for it here, so this require + cast is the module's documented boundary.
 const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: new (path: string) => {
     exec(sql: string): void;

@@ -39,6 +39,13 @@ function makeRoot(): string {
   return home;
 }
 
+async function jsonAs<T>(res: Response): Promise<T> {
+  // SAFETY: every call site below targets POST /v1/outcome under test in
+  // this file; the response shape is checked field-by-field by the
+  // assertions immediately following each call.
+  return res.json() as Promise<T>;
+}
+
 describe('POST /v1/outcome', () => {
   let home: string;
   let globalHome: string;
@@ -75,7 +82,7 @@ describe('POST /v1/outcome', () => {
       body: JSON.stringify({ ids: [m1.id, m2.id], good: true }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as { applied: number };
+    const body = await jsonAs<{ applied: number }>(res);
     expect(body.applied).toBe(2);
   });
 
@@ -93,7 +100,7 @@ describe('POST /v1/outcome', () => {
       body: JSON.stringify({ good: true }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as { applied: number; ids: string[] };
+    const body = await jsonAs<{ applied: number; ids: string[] }>(res);
     expect(body.applied).toBe(2);
     expect(body.ids).toEqual([m1.id, m2.id]);
   });
@@ -105,7 +112,7 @@ describe('POST /v1/outcome', () => {
       body: JSON.stringify({ good: false }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as { applied: number; ids: string[] };
+    const body = await jsonAs<{ applied: number; ids: string[] }>(res);
     expect(body).toEqual({ applied: 0, ids: [] });
   });
 
@@ -173,7 +180,7 @@ describe('POST /v1/outcome', () => {
       body: JSON.stringify({ ids: [tenantBMem.id], good: true }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as { applied: number };
+    const body = await jsonAs<{ applied: number }>(res);
     expect(body.applied).toBe(0);
 
     const db = openHippoDb(home);
@@ -210,7 +217,7 @@ describe('POST /v1/outcome', () => {
       body: JSON.stringify({ good: true }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as { applied: number; ids: string[] };
+    const body = await jsonAs<{ applied: number; ids: string[] }>(res);
     expect(body.applied).toBe(0);
     // The critical assertion: response ids must NOT contain the
     // cross-tenant id. Pre-v1.11.4 this was [tenantBMem.id], leaking
@@ -228,7 +235,7 @@ describe('POST /v1/outcome', () => {
       body: JSON.stringify({ ids, good: true }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json() as { error: string };
+    const body = await jsonAs<{ error: string }>(res);
     expect(body.error).toContain('1000-id cap');
   });
 
@@ -249,7 +256,7 @@ describe('POST /v1/outcome', () => {
       body: JSON.stringify({ ids, good: true }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as { applied: number };
+    const body = await jsonAs<{ applied: number }>(res);
     expect(body.applied).toBe(3); // only the 3 real ids applied
   }, 30_000);
 

@@ -7,8 +7,58 @@ import {
   closeHippoDb,
   getCurrentSchemaVersion,
   getSchemaVersion,
+  type DatabaseSyncLike,
 } from '../src/db.js';
 import { remember, archiveRaw, recall } from '../src/api.js';
+
+interface RedactedArchivePayload {
+  redacted: boolean;
+  tenant_id: string;
+  kind: string;
+  reason: string;
+  archived_at: string;
+  migration?: string;
+  id?: string;
+  content?: string;
+}
+
+interface ArchiveAuditRow {
+  tenant_id: string;
+  actor: string;
+  op: string;
+  target_id: string;
+  metadata_json: string;
+}
+
+interface ArchiveAuditMetadata {
+  reason: string;
+}
+
+function parseJson<T>(text: string): T {
+  // SAFETY: raw_archive.payload_json / audit_log.metadata_json in this
+  // suite are always written by this codebase's own JSON.stringify calls
+  // (archiveRaw, the v20 redaction migration, or api.archiveRaw's audit
+  // write), never externally supplied.
+  return JSON.parse(text) as T;
+}
+
+function fetchPayloadJson(db: DatabaseSyncLike, memoryId: string): string | undefined {
+  // SAFETY: raw_archive rows written by this codebase always have a
+  // payload_json TEXT column; SELECT payload_json projects only that column.
+  const row = db
+    .prepare(`SELECT payload_json FROM raw_archive WHERE memory_id = ?`)
+    .get(memoryId) as { payload_json: string } | undefined;
+  return row?.payload_json;
+}
+
+function fetchArchiveAuditRows(db: DatabaseSyncLike, targetId: string): ArchiveAuditRow[] {
+  // SAFETY: SELECT explicitly projects these five NOT NULL audit_log columns.
+  return db
+    .prepare(
+      `SELECT tenant_id, actor, op, target_id, metadata_json FROM audit_log WHERE op = 'archive_raw' AND target_id = ?`,
+    )
+    .all(targetId) as ArchiveAuditRow[];
+}
 
 /**
  * v0.39 GDPR Path A regression suite.
@@ -53,16 +103,14 @@ describe('v0.39 GDPR Path A redaction + migration v20', () => {
 
     const db = openHippoDb(root);
     try {
-      const archived = db
-        .prepare(`SELECT payload_json FROM raw_archive WHERE memory_id = ?`)
-        .get(id) as { payload_json: string } | undefined;
-      expect(archived).toBeDefined();
-      const payload = JSON.parse(archived!.payload_json) as Record<string, unknown>;
+      const payloadJson = fetchPayloadJson(db, id);
+      expect(payloadJson).toBeDefined();
+      const payload = parseJson<RedactedArchivePayload>(payloadJson!);
       expect(payload.redacted).toBe(true);
       expect(payload.tenant_id).toBe('tenant-A');
       expect(payload.kind).toBe('raw');
       expect(payload.reason).toBe('GDPR right-to-be-forgotten');
-      expect(typeof payload.archived_at).toBe('string');
+      expect(payload.archived_at).toEqual(expect.any(String));
       // Critical: original content fields are NOT present.
       expect(payload.id).toBeUndefined();
       expect(payload.content).toBeUndefined();
@@ -108,10 +156,8 @@ describe('v0.39 GDPR Path A redaction + migration v20', () => {
     const db2 = openHippoDb(root);
     try {
       expect(getSchemaVersion(db2)).toBe(41);
-      const row = db2
-        .prepare(`SELECT payload_json FROM raw_archive WHERE memory_id = ?`)
-        .get('m-legacy-1') as { payload_json: string };
-      const payload = JSON.parse(row.payload_json) as Record<string, unknown>;
+      const payloadJson = fetchPayloadJson(db2, 'm-legacy-1');
+      const payload = parseJson<RedactedArchivePayload>(payloadJson!);
       expect(payload.redacted).toBe(true);
       expect(payload.tenant_id).toBe('t1');
       expect(payload.kind).toBe('raw');
@@ -151,10 +197,8 @@ describe('v0.39 GDPR Path A redaction + migration v20', () => {
     const db2 = openHippoDb(root);
     try {
       expect(getSchemaVersion(db2)).toBe(41);
-      const row = db2
-        .prepare(`SELECT payload_json FROM raw_archive WHERE memory_id = ?`)
-        .get('m-malformed-1') as { payload_json: string };
-      const payload = JSON.parse(row.payload_json) as Record<string, unknown>;
+      const payloadJson = fetchPayloadJson(db2, 'm-malformed-1');
+      const payload = parseJson<RedactedArchivePayload>(payloadJson!);
       expect(payload.redacted).toBe(true);
       expect(payload.tenant_id).toBe('unknown');
       expect(payload.kind).toBe('unknown');
@@ -173,24 +217,14 @@ describe('v0.39 GDPR Path A redaction + migration v20', () => {
 
     const db = openHippoDb(root);
     try {
-      const auditRows = db
-        .prepare(
-          `SELECT tenant_id, actor, op, target_id, metadata_json FROM audit_log WHERE op = 'archive_raw' AND target_id = ?`,
-        )
-        .all(id) as Array<{
-        tenant_id: string;
-        actor: string;
-        op: string;
-        target_id: string;
-        metadata_json: string;
-      }>;
+      const auditRows = fetchArchiveAuditRows(db, id);
       expect(auditRows.length).toBe(1);
       const audit = auditRows[0];
       expect(audit.op).toBe('archive_raw');
       expect(audit.tenant_id).toBe('tenant-B');
       expect(audit.actor).toBe('user:42');
       expect(audit.target_id).toBe(id);
-      const meta = JSON.parse(audit.metadata_json) as Record<string, unknown>;
+      const meta = parseJson<ArchiveAuditMetadata>(audit.metadata_json);
       expect(meta.reason).toBe('compliance test');
     } finally {
       closeHippoDb(db);

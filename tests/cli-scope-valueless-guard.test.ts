@@ -24,12 +24,18 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { writeEntry } from '../src/store.js';
-import { createMemory, type MemoryKind } from '../src/memory.js';
+import { createMemory } from '../src/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 const USAGE_MSG = '--scope requires a non-empty value (e.g. --scope slack:private:C1).';
+
+/** Env-var map for the child `hippo` process — a fixed, known key set (not an open dictionary). */
+type ScopeGuardEnv = {
+  HIPPO_HOME: string;
+  HIPPO_SKIP_AUTO_INTEGRATIONS: string;
+};
 
 function hippo(cwd: string, env: Record<string, string>, ...args: string[]): string {
   return execFileSync('node', [HIPPO_BIN, ...args], {
@@ -43,7 +49,7 @@ function hippoRun(
   cwd: string,
   env: Record<string, string>,
   ...args: string[]
-): { status: number | null; stdout: string; stderr: string } {
+) {
   const res = spawnSync('node', [HIPPO_BIN, ...args], {
     cwd,
     env: { ...process.env, ...env },
@@ -79,7 +85,7 @@ function hippoAsync(
 
 describe('global --scope value-less guard (v1.26.2 T1) — exit-1 cases', () => {
   let home: string;
-  let env: Record<string, string>;
+  let env: ScopeGuardEnv;
 
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), 'hippo-scope-guard-'));
@@ -148,7 +154,7 @@ describe('global --scope value-less guard (v1.26.2 T1) — exit-1 cases', () => 
 
 describe('valued --scope regression coverage (v1.26.2 acceptance criterion 2)', () => {
   let home: string;
-  let env: Record<string, string>;
+  let env: ScopeGuardEnv;
 
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), 'hippo-scope-valued-'));
@@ -185,7 +191,7 @@ describe('valued --scope regression coverage (v1.26.2 acceptance criterion 2)', 
     const hippoDir = join(home, '.hippo');
     const sessionId = 'sess-scope-pin';
     const mkRaw = (text: string, scope: string | null) => createMemory(text, {
-      kind: 'raw' as MemoryKind,
+      kind: 'raw',
       tenantId: 'default',
       source_session_id: sessionId,
       scope,
@@ -195,6 +201,8 @@ describe('valued --scope regression coverage (v1.26.2 acceptance criterion 2)', 
     writeEntry(hippoDir, mkRaw('projy scope row content here', 'projY'));
 
     const raw = hippo(home, env, 'assemble', '--session', sessionId, '--scope', 'projX', '--json');
+    // SAFETY: `hippo assemble --json` prints api.assemble()'s AssembleResult
+    // directly (src/cli.ts cmdAssemble); only .items[].content is read below.
     const parsed = JSON.parse(raw) as { items: Array<{ content: string }> };
     const contents = parsed.items.map((it) => it.content);
     expect(contents.some((c) => c.includes('projx scope row'))).toBe(true);
@@ -217,6 +225,9 @@ describe('valued --scope regression coverage (v1.26.2 acceptance criterion 2)', 
 
       const db = openHippoDb(hippoDir);
       try {
+        // SAFETY: SELECT scope FROM memories WHERE content = ? names exactly
+        // one column against the canary row remembered above; may be
+        // undefined only if the row somehow did not land (checked below).
         const row = db
           .prepare(`SELECT scope FROM memories WHERE content = ?`)
           .get('thin client scope canary content') as { scope: string | null } | undefined;

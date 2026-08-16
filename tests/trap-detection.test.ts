@@ -45,6 +45,8 @@ interface TrapDefinition {
   recall_query: string;
 }
 
+// SAFETY: trap-definitions.json is this repo's own fixture file, hand-
+// authored to match the TrapDefinition shape declared above.
 const trapDefs: TrapDefinition[] = JSON.parse(
   fs.readFileSync(TRAP_DEFS_PATH, 'utf8')
 ).traps as TrapDefinition[];

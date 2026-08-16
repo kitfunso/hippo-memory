@@ -43,6 +43,17 @@ export function renderTraceContent(rec: TraceRecord): string {
   return lines.join('\n');
 }
 
+/** JSON value shape for the parsed-but-unvalidated trace step payload. */
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+function isJsonRecord(value: JsonValue): value is { [key: string]: JsonValue } {
+  return value !== null && !Array.isArray(value) && typeof value === 'object';
+}
+
+function isJsonString(value: JsonValue | undefined): value is string {
+  return typeof value === 'string';
+}
+
 /**
  * Parse a JSON string into an array of TraceStep. Throws on invalid shape.
  */
@@ -58,20 +69,22 @@ export function parseSteps(json: string): TraceStep[] {
   if (!Array.isArray(parsed)) {
     throw new Error('trace steps must be an array');
   }
-  return parsed.map((s, i) => {
-    if (typeof s !== 'object' || s === null) {
+  return parsed.map((s: JsonValue, i) => {
+    if (!isJsonRecord(s)) {
       throw new Error(`trace step ${i}: not an object`);
     }
-    const rec = s as Record<string, unknown>;
-    if (typeof rec['action'] !== 'string') {
+    const action = s.action;
+    if (!isJsonString(action)) {
       throw new Error(`trace step ${i}: missing action`);
     }
+    const observationValue = s.observation;
     const step: TraceStep = {
-      action: rec['action'] as string,
-      observation: typeof rec['observation'] === 'string' ? (rec['observation'] as string) : '',
+      action,
+      observation: isJsonString(observationValue) ? observationValue : '',
     };
-    if (typeof rec['timestamp'] === 'string') {
-      step.timestamp = rec['timestamp'] as string;
+    const timestampValue = s.timestamp;
+    if (isJsonString(timestampValue)) {
+      step.timestamp = timestampValue;
     }
     return step;
   });

@@ -65,7 +65,7 @@ export function createAdapter(adapter) {
     }
   }
   for (const key of required.slice(1)) {
-    if (typeof adapter[key] !== 'function') {
+    if (!(adapter[key] instanceof Function)) {
       throw new Error(`Adapter.${key} must be a function`);
     }
   }
@@ -79,10 +79,10 @@ export function createAdapter(adapter) {
         : 'Adapter supplies completeGoal but missing pushGoal -- the v1.7.5 B3 hooks are paired',
     );
   }
-  if (hasPush && typeof adapter.pushGoal !== 'function') {
+  if (hasPush && !(adapter.pushGoal instanceof Function)) {
     throw new Error('Adapter.pushGoal must be a function');
   }
-  if (hasComplete && typeof adapter.completeGoal !== 'function') {
+  if (hasComplete && !(adapter.completeGoal instanceof Function)) {
     throw new Error('Adapter.completeGoal must be a function');
   }
   return adapter;

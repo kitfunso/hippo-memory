@@ -47,8 +47,14 @@ export function clearAblationEnv(): void {
 export const BASE = Date.UTC(2024, 0, 1, 9, 0, 0); // 2024-01-01T09:00:00Z, a Monday
 export const day = (n: number) => new Date(BASE + n * 86_400_000);
 
-export function turn(role: 'user' | 'assistant', text: string, hasAnswer?: boolean) {
-  const t: Record<string, unknown> = { role, content: text };
+export interface Turn {
+  role: 'user' | 'assistant';
+  content: string;
+  has_answer?: boolean;
+}
+
+export function turn(role: 'user' | 'assistant', text: string, hasAnswer?: boolean): Turn {
+  const t: Turn = { role, content: text };
   if (hasAnswer !== undefined) t.has_answer = hasAnswer;
   return t;
 }
@@ -137,6 +143,8 @@ export const TEST_SIM_ROUNDS = 8;
 
 export async function runPipeline(q: ReturnType<typeof buildQuestionA>) {
   const ingestResult = ingestQuestion(q);
+  // SAFETY: readJson is untyped (.mjs harness module); metaPathFor's file is
+  // always written by ingestQuestion just above with a `tEval` field.
   const meta = readJson(metaPathFor(q.question_id)) as { tEval: string };
   await simulateQuestion(q.question_id, meta.tEval, { rounds: TEST_SIM_ROUNDS });
   const extractResult = extractQuestion(q.question_id, meta.tEval);

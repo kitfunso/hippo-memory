@@ -93,7 +93,7 @@ describe('installJsonHooks — UserPromptSubmit pinned-inject (claude-code)', ()
 
     const settingsPath = path.join(tmpHome, '.claude', 'settings.json');
     const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-    const remaining = (settings.hooks?.UserPromptSubmit ?? []) as unknown[];
+    const remaining = settings.hooks?.UserPromptSubmit ?? [];
     expect(remaining).toHaveLength(0);
   });
 });

@@ -37,9 +37,13 @@ describe('handleMessageDeleted', () => {
     // raw_archive table now has the row.
     const db = openHippoDb(root);
     try {
-      const arch = db.prepare(`SELECT memory_id, reason FROM raw_archive WHERE memory_id = ?`).get(ingested.memoryId!) as Record<string, unknown>;
+      // SAFETY: literal SELECT of these two known columns from the
+      // raw_archive row archiveRawMemory just wrote for this memory.
+      const arch = db.prepare(`SELECT memory_id, reason FROM raw_archive WHERE memory_id = ?`).get(ingested.memoryId!) as
+        | { memory_id: string; reason: string }
+        | undefined;
       expect(arch).toBeDefined();
-      expect(String(arch.reason)).toContain('source_deleted');
+      expect(arch!.reason).toContain('source_deleted');
     } finally { closeHippoDb(db); }
   });
 
@@ -73,6 +77,8 @@ describe('handleMessageDeleted', () => {
     expect(remaining).toHaveLength(1);
     const db = openHippoDb(root);
     try {
+      // SAFETY: literal COUNT(*) query against the known raw_archive schema
+      // always returns a single { c } row.
       const archCount = db.prepare(`SELECT COUNT(*) as c FROM raw_archive WHERE memory_id = ?`).get(ingested.memoryId!) as { c: number };
       expect(Number(archCount.c)).toBe(0);
     } finally { closeHippoDb(db); }

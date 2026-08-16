@@ -30,10 +30,19 @@ function hippo(cwd: string, env: Record<string, string>, ...args: string[]): str
   });
 }
 
+/** The env passed to the child `hippo` process: a fixed key set, plus an
+ *  index signature so it still satisfies `Record<string, string>` at the
+ *  spawn boundary. */
+interface CliEnv {
+  [key: string]: string;
+  HIPPO_HOME: string;
+  HIPPO_SKIP_AUTO_INTEGRATIONS: string;
+}
+
 describe('A7 recall --why rerankTrace', () => {
   let home: string;
   let localRoot: string;
-  let env: Record<string, string>;
+  let env: CliEnv;
   const tenantId = 'default';
   const sessionId = 'sess-a7-cli';
   let heroId: string;
@@ -116,6 +125,9 @@ describe('A7 recall --why rerankTrace', () => {
       '--salience-threshold', '5',
       '--limit', '10',
     );
+    // SAFETY: `recall --json` output is written by this CLI's own JSON
+    // formatter, which always emits `results[].id` and, under `--why`, a
+    // `rerankTrace` array of `{stage, scoreBefore, scoreAfter}` steps.
     const parsed = JSON.parse(out) as {
       results: Array<{ id: string; rerankTrace?: Array<{ stage: string; scoreBefore: number; scoreAfter: number }> }>;
     };
@@ -138,7 +150,12 @@ describe('A7 recall --why rerankTrace', () => {
     expect(out).not.toContain('rerankTrace');
 
     const jsonOut = hippo(home, env, 'recall', 'auth', '--json', '--limit', '10');
-    const parsed = JSON.parse(jsonOut) as { results: Array<Record<string, unknown>> };
+    // SAFETY: `recall --json` output is written by this CLI's own JSON
+    // formatter; each result item only needs checking for the ABSENCE of
+    // these two trace fields, so their value type is irrelevant.
+    const parsed = JSON.parse(jsonOut) as {
+      results: Array<{ rerankTrace?: unknown; rerankPipeline?: unknown }>;
+    };
     for (const item of parsed.results) {
       expect(item.rerankTrace).toBeUndefined();
       expect(item.rerankPipeline).toBeUndefined();
@@ -157,6 +174,9 @@ describe('A7 recall --why rerankTrace', () => {
       '--goal', 'fix-auth',
       '--limit', '10',
     );
+    // SAFETY: `recall --why --json` output is written by this CLI's own JSON
+    // formatter, which always emits `results[].id` and a `rerankTrace` array
+    // of `{stage, multiplier}` steps for the `--goal` re-ranker under test.
     const parsed = JSON.parse(out) as {
       results: Array<{ id: string; rerankTrace?: Array<{ stage: string; multiplier?: number }> }>;
     };

@@ -26,7 +26,7 @@ import { embedAll } from '../src/embeddings.js';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function newRoot(prefix: string): { tmpDir: string; hippoRoot: string } {
+function newRoot(prefix: string) {
   const tmpDir = mkdtempSync(join(tmpdir(), prefix));
   const hippoRoot = join(tmpDir, '.hippo');
   initStore(hippoRoot);
@@ -39,7 +39,7 @@ function newRoot(prefix: string): { tmpDir: string; hippoRoot: string } {
  * this the test mutates the run-wide isolated HIPPO_HOME baseline and
  * tests/_real-store-guard.ts trips on teardown.
  */
-function tmpHippoHome(prefix: string): { home: string; restore: () => void } {
+function tmpHippoHome(prefix: string) {
   const home = mkdtempSync(join(tmpdir(), prefix));
   const orig = process.env.HIPPO_HOME;
   process.env.HIPPO_HOME = home;
@@ -154,7 +154,7 @@ describe('L9: per-tenant scoping (cross-tenant leak prevention)', () => {
     let refineCallSources: number | undefined;
     const fetcher = async (_url: string, init?: { body?: string }): Promise<Response> => {
       // Capture how many sources were sent to the LLM
-      const body = init?.body ? JSON.parse(init.body as string) : {};
+      const body = init?.body ? JSON.parse(init.body) : {};
       const userMsg = body.messages?.find((m: { role: string }) => m.role === 'user')?.content ?? '';
       refineCallSources = (userMsg.match(/Source \d/g) ?? []).length;
       return new Response(
@@ -199,6 +199,8 @@ describe('L9: per-tenant scoping (cross-tenant leak prevention)', () => {
     // Seed tenant-b with the SAME extracted content as a dedup-hit target
     seedFor(hippoRoot, 'tenant-b', extractedContent, { tags: ['decision'] });
 
+    // SAFETY: require() of a built-in Node module always resolves to its
+    // real module object; this mirrors the module's own .d.ts shape.
     const fs = require('node:fs') as typeof import('node:fs');
     const fixturePath = join(tmpDir, 'capture-fixture.txt');
     fs.writeFileSync(fixturePath, fixtureText, 'utf8');

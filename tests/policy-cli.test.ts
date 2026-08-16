@@ -23,6 +23,11 @@ function makeEnv(): TestEnv {
   initStore(hippoRoot);
   return { cwd, hippoRoot, globalRoot };
 }
+function extractId(output: string): string {
+  const id = output.match(/#(\d+)/)?.[1];
+  if (id === undefined) throw new Error(`no "#<id>" found in CLI output: ${output}`);
+  return id;
+}
 function run(env: TestEnv, args: string[]): string {
   return execFileSync('node', [CLI, ...args], {
     cwd: env.cwd,
@@ -41,8 +46,8 @@ describe('hippo policy CLI', () => {
     expect(created).toMatch(/Policy recorded: #\d+/);
     const list = run(env, ['policy', 'list']);
     expect(list).toContain('Retention policy');
-    const id = created.match(/#(\d+)/)?.[1];
-    const get = run(env, ['policy', 'get', id as string]);
+    const id = extractId(created);
+    const get = run(env, ['policy', 'get', id]);
     expect(get).toContain('delete after 90d');
     expect(get).toContain('valid_from: 2026-01-01T00:00:00.000Z');
   });
@@ -54,8 +59,8 @@ describe('hippo policy CLI', () => {
 
   it('new -> supersede version chain + asof query via CLI', () => {
     const open = run(env, ['policy', 'new', 'Window', '--text', 'v1', '--from', '2026-01-01', '--to', '2026-06-01']);
-    const id = open.match(/#(\d+)/)?.[1];
-    const sup = run(env, ['policy', 'supersede', id as string, '--text', 'v2', '--from', '2026-01-01', '--to', '2026-06-01', '--change', 'reworded']);
+    const id = extractId(open);
+    const sup = run(env, ['policy', 'supersede', id, '--text', 'v2', '--from', '2026-01-01', '--to', '2026-06-01', '--change', 'reworded']);
     expect(sup).toMatch(/v2/);
     // as-of mid-window returns the active v2
     const asof = run(env, ['policy', 'asof', '2026-03-01', '--name', 'Window']);

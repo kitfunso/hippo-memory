@@ -32,6 +32,13 @@ function makeRoot(): string {
   return home;
 }
 
+async function jsonAs<T>(res: Response): Promise<T> {
+  // SAFETY: every call site below targets POST /v1/sleep under test in this
+  // file; the response is the SleepResult JSON contract, checked field-by-
+  // field by the assertions immediately following each call.
+  return res.json() as Promise<T>;
+}
+
 describe('POST /v1/sleep', () => {
   let home: string;
   let globalHome: string;
@@ -64,14 +71,14 @@ describe('POST /v1/sleep', () => {
       body: JSON.stringify({}),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as {
+    const body = await jsonAs<{
       dryRun: boolean;
       active: number;
       removed: number;
-    };
-    expect(typeof body.dryRun).toBe('boolean');
-    expect(typeof body.active).toBe('number');
-    expect(typeof body.removed).toBe('number');
+    }>(res);
+    expect(body.dryRun).toEqual(expect.any(Boolean));
+    expect(body.active).toEqual(expect.any(Number));
+    expect(body.removed).toEqual(expect.any(Number));
   });
 
   it('dry_run=true returns dryRun:true and skips later phases', async () => {
@@ -84,13 +91,13 @@ describe('POST /v1/sleep', () => {
       body: JSON.stringify({ dry_run: true }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as {
+    const body = await jsonAs<{
       dryRun: boolean;
       deduped?: unknown;
       audit?: unknown;
       shared?: unknown;
       ambient?: unknown;
-    };
+    }>(res);
     expect(body.dryRun).toBe(true);
     expect(body.deduped).toBeUndefined();
     expect(body.audit).toBeUndefined();
@@ -110,9 +117,9 @@ describe('POST /v1/sleep', () => {
       body: JSON.stringify({}),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as { dryRun: boolean; active: number };
+    const body = await jsonAs<{ dryRun: boolean; active: number }>(res);
     expect(body.dryRun).toBe(false);
-    expect(typeof body.active).toBe('number');
+    expect(body.active).toEqual(expect.any(Number));
   });
 
   it('no_share=true keeps shared undefined', async () => {
@@ -125,7 +132,7 @@ describe('POST /v1/sleep', () => {
       body: JSON.stringify({ no_share: true }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as { shared?: number };
+    const body = await jsonAs<{ shared?: number }>(res);
     expect(body.shared).toBeUndefined();
   });
 
@@ -156,7 +163,7 @@ describe('POST /v1/sleep', () => {
       body: JSON.stringify({}),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as { dryRun: boolean };
+    const body = await jsonAs<{ dryRun: boolean }>(res);
     expect(body.dryRun).toBe(false);
     // Test passes when the sleep call completes without error against the
     // cross-tenant store. The dedupe MAY or MAY NOT fire depending on the

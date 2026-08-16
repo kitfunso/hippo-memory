@@ -49,7 +49,10 @@ function addMemory(home: string, tenant: string, kind: 'distilled' | 'superseded
 }
 function countRows(home: string, table: string): number {
   const db = openHippoDb(home);
-  try { return (db.prepare(`SELECT COUNT(*) as c FROM ${table}`).get() as { c: number }).c; }
+  try {
+    // SAFETY: query selects a single aliased "c" column, so the result row always has that field.
+    return (db.prepare(`SELECT COUNT(*) as c FROM ${table}`).get() as { c: number }).c;
+  }
   finally { closeHippoDb(db); }
 }
 
@@ -100,6 +103,7 @@ describe('graph store (E3.3 graph-on-consolidated guard)', () => {
       expect(() => db.prepare(`UPDATE entities SET source_kind = 'superseded' WHERE id = ?`).run(e.id))
         .toThrow(/source_kind must equal the referenced memory kind/);
       // the row is unchanged
+      // SAFETY: query selects only memory_id and source_kind for the entity row inserted above.
       const row = db.prepare(`SELECT memory_id, source_kind FROM entities WHERE id = ?`).get(e.id) as { memory_id: string; source_kind: string };
       expect(row.memory_id).toBe(md);
       expect(row.source_kind).toBe('distilled');
@@ -233,6 +237,7 @@ describe('graph store (E3.3 graph-on-consolidated guard)', () => {
       // move the referenced memory cross-tenant -> ABORT
       expect(() => db.prepare(`UPDATE memories SET tenant_id = 'tenant-x' WHERE id = ?`).run(md))
         .toThrow(/while the graph references it/);
+      // SAFETY: query selects only kind and tenant_id for the memory row created above.
       const row = db.prepare(`SELECT kind, tenant_id FROM memories WHERE id = ?`).get(md) as { kind: string; tenant_id: string };
       expect(row.kind).toBe('distilled');
       expect(row.tenant_id).toBe('default');

@@ -36,6 +36,8 @@ describe('api.sleep audit row tenant tag (D2 v1.12.10)', () => {
 
     const db = openHippoDb(root);
     try {
+      // SAFETY: query selects exactly these four audit_log text columns, so
+      // each returned row is shaped { tenant_id, actor, op, metadata_json }.
       const rows = db
         .prepare(`SELECT tenant_id, actor, op, metadata_json FROM audit_log WHERE op = 'consolidate'`)
         .all() as Array<{ tenant_id: string; actor: string; op: string; metadata_json: string }>;
@@ -62,6 +64,8 @@ describe('api.sleep audit row tenant tag (D2 v1.12.10)', () => {
 
     const db = openHippoDb(root);
     try {
+      // SAFETY: query selects exactly these three audit_log text columns, so
+      // each returned row is shaped { tenant_id, actor, metadata_json }.
       const rows = db
         .prepare(`SELECT tenant_id, actor, metadata_json FROM audit_log WHERE op = 'consolidate' ORDER BY id`)
         .all() as Array<{ tenant_id: string; actor: string; metadata_json: string }>;
@@ -90,11 +94,14 @@ describe('api.sleep audit row tenant tag (D2 v1.12.10)', () => {
     // surfaces it.
     const db = openHippoDb(root);
     try {
+      // SAFETY: query is a fixed `COUNT(*) AS c` aggregate, which always
+      // returns exactly one row shaped { c: number | bigint }.
       const acmeRows = db
         .prepare(`SELECT COUNT(*) AS c FROM audit_log WHERE op = 'consolidate' AND tenant_id = ?`)
         .get('acme') as { c: number | bigint };
       expect(Number(acmeRows.c)).toBe(0); // tenant view doesn't show host ops
 
+      // SAFETY: same fixed COUNT(*) aggregate as above.
       const hostRows = db
         .prepare(`SELECT COUNT(*) AS c FROM audit_log WHERE op = 'consolidate' AND tenant_id = ?`)
         .get('__host__') as { c: number | bigint };

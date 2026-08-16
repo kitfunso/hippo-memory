@@ -13,7 +13,7 @@ import { initStore } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { applyGoalStackBoost, pushGoal } from '../src/goals.js';
 import { remember } from '../src/api.js';
-import type { MemoryEntry } from '../src/memory.js';
+import { Layer, type MemoryEntry } from '../src/memory.js';
 
 interface ScoredRow { entry: MemoryEntry; score: number; }
 
@@ -27,17 +27,50 @@ describe('applyGoalStackBoost (v1.7.4)', () => {
     initStore(hippoRoot);
   });
 
-  function makeRow(id: string, tags: string[], score: number): ScoredRow {
+  // Fully-populated MemoryEntry fixture: applyGoalStackBoost only reads
+  // entry.id and entry.tags, but the ScoredRow contract requires the whole
+  // shape, so every required field gets a neutral default here rather than
+  // asserting past the type checker.
+  function makeMemoryEntry(id: string, tags: string[], strength: number): MemoryEntry {
+    const now = new Date().toISOString();
     return {
-      entry: {
-        id,
-        content: `c-${id}`,
-        tags,
-        layer: 'episodic',
-        strength: 0.5,
-      } as unknown as MemoryEntry,
-      score,
+      id,
+      created: now,
+      last_retrieved: now,
+      retrieval_count: 0,
+      strength,
+      half_life_days: 90,
+      layer: Layer.Episodic,
+      tags,
+      emotional_valence: 'neutral',
+      schema_fit: 0.5,
+      source: 'test',
+      outcome_score: null,
+      outcome_positive: 0,
+      outcome_negative: 0,
+      conflicts_with: [],
+      pinned: false,
+      confidence: 'observed',
+      content: `c-${id}`,
+      parents: [],
+      starred: false,
+      trace_outcome: null,
+      source_session_id: null,
+      valid_from: now,
+      superseded_by: null,
+      extracted_from: null,
+      dag_level: 0,
+      dag_parent_id: null,
+      kind: 'raw',
+      scope: null,
+      owner: null,
+      artifact_ref: null,
+      tenantId: 'default',
     };
+  }
+
+  function makeRow(id: string, tags: string[], score: number): ScoredRow {
+    return { entry: makeMemoryEntry(id, tags, 0.5), score };
   }
 
   it('boosts rows whose tags match an active goal name', () => {
@@ -65,6 +98,7 @@ describe('applyGoalStackBoost (v1.7.4)', () => {
     try {
       applyGoalStackBoost(db, rows, { sessionId, tenantId, limit: 10 });
       applyGoalStackBoost(db, rows, { sessionId, tenantId, limit: 10 });
+      // SAFETY: `SELECT COUNT(*) AS c` always returns exactly one row shaped { c: number }.
       const count = (db.prepare(
         `SELECT COUNT(*) AS c FROM goal_recall_log WHERE goal_id = ? AND memory_id = ?`,
       ).get(goal.id, m.id) as { c: number }).c;
@@ -81,6 +115,7 @@ describe('applyGoalStackBoost (v1.7.4)', () => {
     const db = openHippoDb(hippoRoot);
     try {
       applyGoalStackBoost(db, rows, { sessionId, tenantId, limit: 10 });
+      // SAFETY: `SELECT COUNT(*) AS c` always returns exactly one row shaped { c: number }.
       const count = (db.prepare(
         `SELECT COUNT(*) AS c FROM goal_recall_log WHERE memory_id = 'm-global'`,
       ).get() as { c: number }).c;

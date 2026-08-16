@@ -23,6 +23,7 @@ import { initStore } from '../src/store.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { createApiKey, type CreatedApiKey } from '../src/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
+import type { Process } from '../src/processes.js';
 
 function makeRoot(): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-http-proc-'));
@@ -57,7 +58,23 @@ function authHeaders(key: CreatedApiKey = apiKey) {
   return { authorization: `Bearer ${key.plaintext}`, 'content-type': 'application/json' };
 }
 
-async function createProcess(processName: string, extra: Record<string, unknown> = {}, key: CreatedApiKey = apiKey) {
+async function jsonAs<T>(res: Response): Promise<T> {
+  // SAFETY: T is pinned by each call site to the exact JSON envelope the
+  // /v1/processes route handlers (src/server.ts) return; every call site
+  // asserts the specific fields it reads immediately after this call.
+  return res.json() as Promise<T>;
+}
+
+interface ProcessCreateExtra {
+  steps?: string[];
+  description?: string;
+}
+
+async function createProcess(
+  processName: string,
+  extra: ProcessCreateExtra = {},
+  key: CreatedApiKey = apiKey,
+) {
   return fetch(`${handle.url}/v1/processes`, {
     method: 'POST',
     headers: authHeaders(key),
@@ -69,16 +86,16 @@ describe('HTTP /v1/processes (E2 process first-class object)', () => {
   it('POST /v1/processes creates a process (201 + Process body, version 1)', async () => {
     const res = await createProcess('Release', { steps: ['test', 'bump', 'publish'], description: 'the ritual' });
     expect(res.status).toBe(201);
-    const body = await res.json() as { process: Record<string, unknown> };
+    const body = await jsonAs<{ process: Process }>(res);
     expect(body.process.processName).toBe('Release');
     expect(body.process.steps).toEqual(['test', 'bump', 'publish']);
     expect(body.process.version).toBe(1);
     expect(body.process.status).toBe('active');
-    expect(body.process.id as number).toBeGreaterThan(0);
+    expect(body.process.id).toBeGreaterThan(0);
   });
 
   it('GET /v1/processes lists and filters by status', async () => {
-    const v1 = (await (await createProcess('Deploy', { steps: ['a'] })).json() as { process: { id: number } }).process;
+    const v1 = (await jsonAs<{ process: Process }>(await createProcess('Deploy', { steps: ['a'] }))).process;
     await fetch(`${handle.url}/v1/processes/${v1.id}/supersede`, {
       method: 'POST',
       headers: authHeaders(),
@@ -87,34 +104,34 @@ describe('HTTP /v1/processes (E2 process first-class object)', () => {
 
     const allRes = await fetch(`${handle.url}/v1/processes`, { headers: authHeaders() });
     expect(allRes.status).toBe(200);
-    const all = await allRes.json() as { processes: Array<Record<string, unknown>> };
+    const all = await jsonAs<{ processes: Process[] }>(allRes);
     expect(all.processes.length).toBe(2);
 
     const activeRes = await fetch(`${handle.url}/v1/processes?status=active`, { headers: authHeaders() });
-    const active = await activeRes.json() as { processes: Array<Record<string, unknown>> };
+    const active = await jsonAs<{ processes: Process[] }>(activeRes);
     expect(active.processes.length).toBe(1);
     expect(active.processes[0].version).toBe(2);
   });
 
   it('GET /v1/processes/:id returns single + 404 on missing', async () => {
-    const created = (await (await createProcess('show me', { steps: ['a'] })).json() as { process: { id: number } }).process;
+    const created = (await jsonAs<{ process: Process }>(await createProcess('show me', { steps: ['a'] }))).process;
     const getRes = await fetch(`${handle.url}/v1/processes/${created.id}`, { headers: authHeaders() });
     expect(getRes.status).toBe(200);
-    expect((await getRes.json() as { process: { id: number } }).process.id).toBe(created.id);
+    expect((await jsonAs<{ process: Process }>(getRes)).process.id).toBe(created.id);
 
     const missing = await fetch(`${handle.url}/v1/processes/99999`, { headers: authHeaders() });
     expect(missing.status).toBe(404);
   });
 
   it('POST /v1/processes/:id/supersede creates v2 (+409 on re-supersede of a superseded row)', async () => {
-    const v1 = (await (await createProcess('Build', { steps: ['x'] })).json() as { process: { id: number } }).process;
+    const v1 = (await jsonAs<{ process: Process }>(await createProcess('Build', { steps: ['x'] }))).process;
     const supRes = await fetch(`${handle.url}/v1/processes/${v1.id}/supersede`, {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({ steps: ['x', 'y'], changeSummary: 'added y' }),
     });
     expect(supRes.status).toBe(200);
-    const v2 = (await supRes.json() as { process: { version: number; changeSummary: string } }).process;
+    const v2 = (await jsonAs<{ process: Process }>(supRes)).process;
     expect(v2.version).toBe(2);
     expect(v2.changeSummary).toBe('added y');
 
@@ -128,7 +145,7 @@ describe('HTTP /v1/processes (E2 process first-class object)', () => {
   });
 
   it('supersede requires steps (missing -> 400)', async () => {
-    const v1 = (await (await createProcess('NeedsSteps', { steps: ['a'] })).json() as { process: { id: number } }).process;
+    const v1 = (await jsonAs<{ process: Process }>(await createProcess('NeedsSteps', { steps: ['a'] }))).process;
     const res = await fetch(`${handle.url}/v1/processes/${v1.id}/supersede`, {
       method: 'POST',
       headers: authHeaders(),
@@ -138,10 +155,10 @@ describe('HTTP /v1/processes (E2 process first-class object)', () => {
   });
 
   it('POST /v1/processes/:id/close retires a process (+409 on re-close)', async () => {
-    const proc = (await (await createProcess('close me', { steps: ['a'] })).json() as { process: { id: number } }).process;
+    const proc = (await jsonAs<{ process: Process }>(await createProcess('close me', { steps: ['a'] }))).process;
     const closeRes = await fetch(`${handle.url}/v1/processes/${proc.id}/close`, { method: 'POST', headers: authHeaders() });
     expect(closeRes.status).toBe(200);
-    expect((await closeRes.json() as { process: { status: string } }).process.status).toBe('closed');
+    expect((await jsonAs<{ process: Process }>(closeRes)).process.status).toBe('closed');
 
     const recl = await fetch(`${handle.url}/v1/processes/${proc.id}/close`, { method: 'POST', headers: authHeaders() });
     expect(recl.status).toBe(409);
@@ -169,8 +186,10 @@ describe('HTTP /v1/processes (E2 process first-class object)', () => {
   });
 
   it('cross-tenant isolation: tenant-b cannot see default-tenant processes', async () => {
-    const created = (await (await createProcess('default secret', { steps: ['a'] })).json() as { process: { id: number } }).process;
-    const bList = await (await fetch(`${handle.url}/v1/processes`, { headers: authHeaders(apiKeyB) })).json() as { processes: unknown[] };
+    const created = (await jsonAs<{ process: Process }>(await createProcess('default secret', { steps: ['a'] }))).process;
+    const bList = await jsonAs<{ processes: Process[] }>(
+      await fetch(`${handle.url}/v1/processes`, { headers: authHeaders(apiKeyB) }),
+    );
     expect(bList.processes.length).toBe(0);
     const bGet = await fetch(`${handle.url}/v1/processes/${created.id}`, { headers: authHeaders(apiKeyB) });
     expect(bGet.status).toBe(404);
