@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.32.1 - 2026-08-16
+
+### Fixed
+- **Cross-tenant dedupe data loss** (the v1.32.0 known issue): the dedup
+  scan is now partitioned by tenant, so byte-identical content in two
+  tenants is never a duplicate pair and one tenant's rows can no longer be
+  deleted because another tenant holds the same content. The v1.26.3
+  survivor total order is preserved unchanged within each tenant;
+  single-tenant stores are byte-identical. Both the sleep dedupe phase and
+  `hippo dedup` inherit the fix.
+
 ## 1.32.0 - 2026-08-15
 
 ### Fixed
