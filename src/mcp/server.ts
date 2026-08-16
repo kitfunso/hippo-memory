@@ -1208,7 +1208,7 @@ async function executeTool(
       // AT1: optional rejectLoser + reason, threaded straight through to
       // resolveConflict's opts (plan §5 — mirrors the CLI's --reject-loser).
       const rejectLoser = Boolean(args.rejectLoser);
-      const reason = typeof args.reason === 'string' ? args.reason : undefined;
+      const reason = isJsonString(args.reason) ? args.reason : undefined;
       if (isNaN(conflictId) || !keepId) return 'Required: conflict_id and keep.';
       const result = resolveConflict(hippoRoot, conflictId, keepId, forget, tenantId, {
         rejectLoserValue: rejectLoser,

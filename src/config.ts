@@ -167,6 +167,12 @@ const DEFAULT_CONFIG: HippoConfig = {
   },
 };
 
+function isMemoryValueConfig(
+  value: HippoConfig['memoryValue'] | undefined,
+): value is HippoConfig['memoryValue'] {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 export function loadConfig(hippoRoot: string): HippoConfig {
   const configPath = path.join(hippoRoot, 'config.json');
   if (!fs.existsSync(configPath)) return { ...DEFAULT_CONFIG };
@@ -181,16 +187,16 @@ export function loadConfig(hippoRoot: string): HippoConfig {
     // default `false` with zero indication anything was wrong. This
     // feature's whole point is "never silently off": warn loudly and fall
     // back to defaults instead of merging garbage.
-    const memoryValueRaw = raw.memoryValue as unknown;
-    const validMemoryValueShape =
-      memoryValueRaw === undefined
-      || (typeof memoryValueRaw === 'object' && memoryValueRaw !== null && !Array.isArray(memoryValueRaw));
-    if (!validMemoryValueShape) {
+    const memoryValueRaw = raw.memoryValue;
+    const validMemoryValueConfig = memoryValueRaw === undefined || isMemoryValueConfig(memoryValueRaw);
+    if (!validMemoryValueConfig) {
       console.error(
         `Warning: config.json's "memoryValue" must be an object like {"enabled": true} ` +
         `(got ${JSON.stringify(memoryValueRaw)}) - using defaults.`,
       );
     }
+    const memoryValueOverride: Partial<HippoConfig['memoryValue']> =
+      memoryValueRaw !== undefined && isMemoryValueConfig(memoryValueRaw) ? memoryValueRaw : {};
     return {
       defaultHalfLifeDays: raw.defaultHalfLifeDays ?? DEFAULT_CONFIG.defaultHalfLifeDays,
       defaultBudget: raw.defaultBudget ?? DEFAULT_CONFIG.defaultBudget,
@@ -216,7 +222,7 @@ export function loadConfig(hippoRoot: string): HippoConfig {
       ambient: { ...DEFAULT_CONFIG.ambient, ...(raw.ambient ?? {}) },
       memoryValue: {
         ...DEFAULT_CONFIG.memoryValue,
-        ...(validMemoryValueShape ? (memoryValueRaw as Partial<HippoConfig['memoryValue']> ?? {}) : {}),
+        ...memoryValueOverride,
       },
     };
   } catch (err) {

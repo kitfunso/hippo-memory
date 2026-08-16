@@ -144,7 +144,7 @@ describe('api.reject / api.unreject / api.listRejections', () => {
 });
 
 describe('resolveConflict AT1 wiring', () => {
-  function seedConflict(): { aId: string; bId: string; conflictId: number } {
+  function seedConflict() {
     const a = createMemory('Always use semicolons in PowerShell', { tags: ['x'] });
     const b = createMemory('Use && to chain commands in PowerShell', { tags: ['x'] });
     writeEntry(tmpDir, a);
@@ -241,6 +241,8 @@ describe('resolveConflict AT1 wiring', () => {
     try {
       const events = queryAuditEvents(db, { tenantId: 'default', op: 'conflict_resolve' });
       expect(events.length).toBe(1);
+      // SAFETY: resolveConflict's conflict_resolve audit always writes
+      // metadata.removedIds as string[] (src/store.ts's conflictResolveMeta).
       const removedIds = events[0]!.metadata.removedIds as string[];
       expect(removedIds.slice().sort()).toEqual([bId, dup.id].sort());
     } finally {
@@ -304,6 +306,8 @@ describe('resolveConflict AT1 wiring', () => {
 
     const db = openHippoDb(tmpDir);
     try {
+      // SAFETY: row's shape matches the single `mirror_cleaned_at` column
+      // named in the SELECT above.
       const row = db
         .prepare(`SELECT mirror_cleaned_at FROM raw_archive WHERE memory_id = ?`)
         .get(rawLoser.id) as { mirror_cleaned_at: string | null } | undefined;

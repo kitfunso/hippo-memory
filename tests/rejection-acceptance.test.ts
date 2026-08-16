@@ -300,6 +300,8 @@ describe('AT1 case 5: migration v41 idempotence', () => {
       const db1 = openHippoDb(home);
       try {
         expect(getSchemaVersion(db1)).toBe(41);
+        // SAFETY: row's shape matches the single `value` column named in
+        // the SELECT above.
         minCompatBefore = (
           db1.prepare(`SELECT value FROM meta WHERE key = 'min_compatible_binary'`).get() as
             | { value?: string }
@@ -329,6 +331,8 @@ describe('AT1 case 5: migration v41 idempotence', () => {
           }),
         ).not.toThrow();
 
+        // SAFETY: row's shape matches the single `value` column named in
+        // the SELECT above.
         const minCompatAfter = (
           db2.prepare(`SELECT value FROM meta WHERE key = 'min_compatible_binary'`).get() as
             | { value?: string }
@@ -360,7 +364,7 @@ describe('AT1 case 6: AT5 paired case — reject removes a value from recall, pe
       const afterReject = api.recall(ctx(home), { query: 'zynthkey', limit: 5 });
       expect(afterReject.results.some((r) => r.content === wContent)).toBe(false);
 
-      let caught: unknown = null;
+      let caught: unknown;
       try {
         api.remember(ctx(home), { content: wContent });
       } catch (err) {

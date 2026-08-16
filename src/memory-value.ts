@@ -103,20 +103,28 @@ export function computeMvFeatures(entry: MemoryEntry, now: Date): MvFeatureVecto
  * MEMORY_VALUE_WEIGHTS export — mirrors fit.mjs's verifyFrozenWeights
  * (see tests/memory-value-fit.test.ts's `describe('verifyFrozenWeights')`).
  */
+function isFiniteWeightValue(value: number): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function isNonEmptyDigestString(value: string): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
 export function validateWeights(
   weights: Readonly<Record<string, number>> = MEMORY_VALUE_WEIGHTS,
   digest: string = SOURCE_ARTIFACT_SHA256,
 ): void {
   for (const key of MV_FEATURE_NAMES) {
     const v = weights[key];
-    if (typeof v !== 'number' || !Number.isFinite(v)) {
+    if (!isFiniteWeightValue(v)) {
       throw new Error(
         `memory-value: weights constant is malformed — "${key}" is not a finite number ` +
         `(src/memory-value-weights.ts)`,
       );
     }
   }
-  if (typeof digest !== 'string' || digest.length === 0) {
+  if (!isNonEmptyDigestString(digest)) {
     throw new Error(
       'memory-value: weights constant is malformed — SOURCE_ARTIFACT_SHA256 digest missing (src/memory-value-weights.ts)',
     );

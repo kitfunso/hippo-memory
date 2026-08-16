@@ -239,7 +239,7 @@ export interface SessionEvent {
   content: string;
   source: string;
   scope: string | null;
-  metadata: Record<string, unknown>;
+  metadata: Record<string, JsonValue>;
   created_at: string;
 }
 
@@ -1958,6 +1958,7 @@ export function deleteEntryCore(
   id: string,
   opts?: { actor?: string; suppressForgetAudit?: boolean },
 ): { tenantId: string; dagParentId: string | null } | null {
+  // SAFETY: row's shape matches the three columns named in the SELECT above.
   const row = db
     .prepare(`SELECT id, tenant_id, dag_parent_id FROM memories WHERE id = ?`)
     .get(id) as { id?: string; tenant_id?: string; dag_parent_id?: string | null } | undefined;
@@ -2913,6 +2914,19 @@ export interface ResolveConflictOpts {
   reason?: string;
 }
 
+/** AT1 (plan §5): the `conflict_resolve` audit row's metadata shape —
+ *  every resolveConflict path writes exactly these fields (rejectedDigest
+ *  only when the loser's value was also tombstoned). */
+interface ConflictResolveMeta {
+  conflictId: number;
+  keepId: string;
+  loserId: string;
+  disposition: string;
+  rejected: boolean;
+  removedIds: string[];
+  rejectedDigest?: string;
+}
+
 /**
  * Resolve a conflict by keeping one memory and weakening the other.
  * Sets conflict status to 'resolved' and halves the loser's half-life.
@@ -3001,6 +3015,8 @@ export function resolveConflict(
     const removeLoser = forgetLoser || opts?.rejectLoserValue === true;
 
     if (removeLoser) {
+      // SAFETY: loserRow's shape matches the three columns named in the
+      // SELECT above.
       const loserRow = db
         .prepare(`SELECT kind, content, tenant_id FROM memories WHERE id = ?${memScope}`)
         .get(loserId, ...memArgs) as { kind: string; content: string; tenant_id: string } | undefined;
@@ -3034,6 +3050,8 @@ export function resolveConflict(
           // to keep it in this same resolution, and this branch must not
           // undo that choice in the same transaction.
           const loserTenantId = loserRow.tenant_id ?? 'default';
+          // SAFETY: dupRows' shape matches the three columns named in the
+          // SELECT above.
           const dupRows = db
             .prepare(`SELECT id, kind, content FROM memories WHERE tenant_id = ? AND id != ? AND id != ?`)
             .all(loserTenantId, loserId, keepId) as Array<{ id: string; kind: string; content: string }>;
@@ -3091,25 +3109,25 @@ export function resolveConflict(
     // AT1: the missing audit (plan §5 — resolveConflict wrote ZERO audit_log
     // rows on any path before this). Every path — weaken, forget, reject —
     // lands exactly one conflict_resolve row.
-    audit(
-      db,
-      'conflict_resolve',
+    const conflictResolveMeta: ConflictResolveMeta = {
+      conflictId,
       keepId,
-      {
-        conflictId,
-        keepId,
-        loserId,
-        disposition: loserRemoved ? (loserWasRaw ? 'archived_raw' : 'deleted') : 'weakened',
-        rejected: Boolean(opts?.rejectLoserValue),
-        rejectedDigest,
-        // AT1 P1 fix: every row this call removed, not just loserId — the
-        // same-tenant duplicate sweep above (extraRemovedIds) needs an
-        // audit trail too.
-        removedIds: loserRemoved ? [loserId, ...extraRemovedIds] : [],
-      },
-      opts?.rejectedBy ?? 'cli',
-      tenantId,
-    );
+      loserId,
+      disposition: loserRemoved ? (loserWasRaw ? 'archived_raw' : 'deleted') : 'weakened',
+      rejected: Boolean(opts?.rejectLoserValue),
+      // AT1 P1 fix: every row this call removed, not just loserId — the
+      // same-tenant duplicate sweep above (extraRemovedIds) needs an
+      // audit trail too.
+      removedIds: loserRemoved ? [loserId, ...extraRemovedIds] : [],
+    };
+    // Assigned only when present so the serialized audit payload keeps
+    // omitting the key, exactly as the pre-migration object literal did.
+    if (rejectedDigest !== undefined) conflictResolveMeta.rejectedDigest = rejectedDigest;
+    // Fresh spread literal: ConflictResolveMeta is a closed interface (no
+    // index signature) and isn't directly assignable to audit()'s
+    // Record<string, JsonValue> metadata param; a spread into a fresh
+    // object literal satisfies it without widening the declared type above.
+    audit(db, 'conflict_resolve', keepId, { ...conflictResolveMeta }, opts?.rejectedBy ?? 'cli', tenantId);
 
     db.exec('COMMIT');
     syncMirrorFiles(hippoRoot, db);
@@ -3532,7 +3550,7 @@ export function applyRebuildResult(
   hippoRoot: string,
   summary: MemoryEntry,
   patch: RebuildPatch,
-): { changed: boolean; refused: boolean } {
+) {
   assertTenantId('applyRebuildResult', summary.tenantId);
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);

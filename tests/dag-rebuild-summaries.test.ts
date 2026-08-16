@@ -595,6 +595,8 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
 
     const db = openHippoDb(hippoRoot);
     try {
+      // SAFETY: summaries' shape matches the two columns named in the
+      // SELECT above.
       const summaries = db.prepare(
         `SELECT id, tenant_id FROM memories WHERE dag_level = 2 AND tags_json LIKE '%dag-summary%'`,
       ).all() as Array<{ id: string; tenant_id: string }>;
@@ -607,6 +609,8 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
       // summary — no member crossed into the other tenant's cluster.
       const summaryByTenant = new Map(summaries.map((s) => [s.tenant_id, s.id]));
       for (const [tenantId, facts] of [['tenant-a', aFacts], ['tenant-b', bFacts]] as const) {
+        // SAFETY: rows' shape matches the single `dag_parent_id` column
+        // named in the SELECT above.
         const rows = db.prepare(
           `SELECT dag_parent_id FROM memories WHERE tenant_id = ? AND dag_level = 1`,
         ).all(tenantId) as Array<{ dag_parent_id: string }>;
@@ -739,9 +743,16 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
 
     const db = openHippoDb(hippoRoot);
     try {
+      // SAFETY: row's shape matches the four columns named in the SELECT
+      // above (store.ts's SummaryRow types these the same way).
       const row = db.prepare(`
         SELECT content, summary_dirty, rebuild_count, descendant_count FROM memories WHERE id = ?
-      `).get(summary.id) as any;
+      `).get(summary.id) as {
+        content: string;
+        summary_dirty: number | null;
+        rebuild_count: number | null;
+        descendant_count: number | null;
+      };
       // Content NOT overwritten — the tombstone refused it.
       expect(row.content).toBe('original summary content');
       // Dirty still clears — no infinite retry loop (the pre-existing
@@ -751,6 +762,8 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
       // Metadata still applies alongside the refusal.
       expect(row.descendant_count).toBe(1);
 
+      // SAFETY: this get() result's shape matches the single aliased `n`
+      // column named in the SELECT above.
       const refusalAudit = db.prepare(`
         SELECT COUNT(*) AS n FROM audit_log WHERE op = 'reject_refusal' AND target_id = ?
       `).get(summary.id) as { n: number };

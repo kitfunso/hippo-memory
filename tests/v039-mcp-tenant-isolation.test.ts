@@ -7,7 +7,7 @@ import { initStore } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';
 import { remember as apiRemember } from '../src/api.js';
-import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
+import { handleMcpRequest, type McpResponse, type McpContext } from '../src/mcp/server.js';
 
 // v0.39 commit 2 regressions:
 //  - lastRecalledIds keyed per-client so two HTTP-MCP clients on the same
@@ -354,7 +354,11 @@ describe('v039 mcp tenant + client-key isolation', () => {
         method: 'tools/call',
         params: { name: 'hippo_remember', arguments: { text: 'T2-canary fallback no-actor-supplied' } },
       },
-      { hippoRoot: home, tenantId: 'alpha', clientKey: 'http:no-actor:addr' } as any,
+      // SAFETY: actor is deliberately omitted to exercise the `ctx?.actor ??
+      // 'mcp'` fallback under test; handleMcpRequest only ever reads
+      // ctx?.actor optionally, so the missing required field is safe at
+      // runtime and is exactly the shape this test needs.
+      { hippoRoot: home, tenantId: 'alpha', clientKey: 'http:no-actor:addr' } as McpContext,
     );
     expect(extractText(res)).toMatch(/Remembered \[mem_/);
 

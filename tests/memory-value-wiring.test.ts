@@ -24,9 +24,9 @@ import {
   batchWriteAndDelete,
 } from '../src/store.js';
 import { createMemory, Layer, calculateStrength, type MemoryEntry, type DecayOptions } from '../src/memory.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig, type HippoConfig } from '../src/config.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { queryAuditEvents } from '../src/audit.js';
+import { queryAuditEvents, type AuditEvent } from '../src/audit.js';
 import {
   computeMvFeatures,
   MV_FEATURE_NAMES,
@@ -34,6 +34,7 @@ import {
   rescueSet,
   rankNonPinnedByTenant,
   validateWeights,
+  type MvFeatureVector,
 } from '../src/memory-value.js';
 import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../src/memory-value-weights.js';
 
@@ -64,7 +65,7 @@ function ancientDate(daysAgo: number): string {
   return new Date(NOW.getTime() - daysAgo * 24 * 60 * 60 * 1000).toISOString();
 }
 
-function enableMemoryValue(hippoRoot: string, extra: Record<string, unknown> = {}): void {
+function enableMemoryValue(hippoRoot: string, extra: Partial<HippoConfig> = {}): void {
   const configPath = path.join(hippoRoot, 'config.json');
   fs.writeFileSync(
     configPath,
@@ -118,6 +119,10 @@ function condemnedEntry(
   return { ...overridden, strength: calculateStrength(overridden, new Date(created)) };
 }
 
+function hasStringTargetId(e: AuditEvent): e is AuditEvent & { targetId: string } {
+  return e.targetId !== null;
+}
+
 function auditRescueRows(hippoRoot: string, tenantId: string) {
   const db = openHippoDb(hippoRoot);
   try {
@@ -168,8 +173,10 @@ describe('(a) feature parity vs extract.mjs computeFeatures', () => {
 
     for (const entry of loaded) {
       const mv = computeMvFeatures(entry, NOW);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const bench = computeFeatures(entry, NOW) as any;
+      // SAFETY: computeFeatures (extract.mjs) computes the same 8-dim
+      // feature vector as computeMvFeatures — proving that parity is this
+      // test's whole point (the loop below checks every MV_FEATURE_NAMES dim).
+      const bench = computeFeatures(entry, NOW) as MvFeatureVector;
       for (const f of MV_FEATURE_NAMES) {
         expect(mv[f]).toBeCloseTo(bench[f], 10);
       }
@@ -263,7 +270,11 @@ describe('(c) weights-sync vs the committed JSON artifact', () => {
   it('MEMORY_VALUE_WEIGHTS matches weights-learned.json values exactly; digest matches the meta sidecar', () => {
     const weightsJsonPath = path.join(repoRoot, 'benchmarks', 'memory-value', 'weights-learned.json');
     const metaJsonPath = path.join(repoRoot, 'benchmarks', 'memory-value', 'weights-learned.meta.json');
+    // SAFETY: this repo's own committed benchmark artifact
+    // (weights-learned.json), whose shape matches this type.
     const artifactWeights = JSON.parse(fs.readFileSync(weightsJsonPath, 'utf8')) as Record<string, number>;
+    // SAFETY: this repo's own committed benchmark artifact
+    // (weights-learned.meta.json), whose shape matches this type.
     const meta = JSON.parse(fs.readFileSync(metaJsonPath, 'utf8')) as { weightsFileSha256: string };
 
     expect(Object.keys(MEMORY_VALUE_WEIGHTS).sort()).toEqual(Object.keys(artifactWeights).sort());
@@ -414,12 +425,15 @@ describe('(e) rescue semantics', () => {
     expect(events.length).toBe(3);
     expect(new Set(events.map((e) => e.targetId))).toEqual(expectedRescued);
     for (const ev of events) {
+      // SAFETY: consolidate.ts's mv_rescue audit always writes metadata as
+      // exactly { rank, totalNonPinned, keepN, score } (consolidate.ts's
+      // rescue-audit write site).
       const meta = ev.metadata as { rank?: number; totalNonPinned?: number; keepN?: number; score?: number };
       expect(meta.totalNonPinned).toBe(10);
       expect(meta.keepN).toBe(3);
       expect(meta.rank).toBeGreaterThanOrEqual(1);
       expect(meta.rank!).toBeLessThanOrEqual(3);
-      expect(typeof meta.score).toBe('number');
+      expect(meta.score).toBeTypeOf('number');
     }
   });
 
@@ -602,7 +616,7 @@ describe('(g) fail-loud on a malformed weights constant', () => {
 
   it('validateWeights throws on a missing dim', () => {
     const missingDim = { ...MEMORY_VALUE_WEIGHTS };
-    delete (missingDim as Record<string, number>).content_length;
+    delete missingDim.content_length;
     expect(() => validateWeights(missingDim, SOURCE_ARTIFACT_SHA256)).toThrow(/not a finite number/);
   });
 
@@ -803,10 +817,13 @@ describe('(h) scale characterization', () => {
     // composition, and nothing else, is what may differ.
     type MvAuditMeta = { rank?: number; totalNonPinned?: number; keepN?: number; score?: number };
     const cycle1Events = auditRescueRows(dir, tenantAId);
+    // SAFETY: consolidate.ts's mv_rescue audit always writes metadata as
+    // exactly { rank, totalNonPinned, keepN, score } (consolidate.ts's
+    // rescue-audit write site).
     const cycle1ByIdMeta = new Map(
       cycle1Events
-        .filter((e) => e.targetId !== null)
-        .map((e) => [e.targetId as string, e.metadata as MvAuditMeta]),
+        .filter(hasStringTargetId)
+        .map((e) => [e.targetId, e.metadata as MvAuditMeta]),
     );
     expect(cycle1ByIdMeta.size).toBeGreaterThan(0);
 
@@ -831,10 +848,13 @@ describe('(h) scale characterization', () => {
       await consolidate(dirMutated, { now: NOW });
 
       const mutatedEvents = auditRescueRows(dirMutated, tenantAId);
+      // SAFETY: consolidate.ts's mv_rescue audit always writes metadata as
+      // exactly { rank, totalNonPinned, keepN, score } (consolidate.ts's
+      // rescue-audit write site).
       const mutatedByIdMeta = new Map(
         mutatedEvents
-          .filter((e) => e.targetId !== null)
-          .map((e) => [e.targetId as string, e.metadata as MvAuditMeta]),
+          .filter(hasStringTargetId)
+          .map((e) => [e.targetId, e.metadata as MvAuditMeta]),
       );
 
       expect([...mutatedByIdMeta.keys()].sort()).toEqual([...cycle1ByIdMeta.keys()].sort());

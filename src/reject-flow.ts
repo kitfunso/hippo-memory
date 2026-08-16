@@ -91,6 +91,7 @@ export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
   try {
     let content: string;
     if (opts.memoryId !== undefined) {
+      // SAFETY: row's shape matches the two columns named in the SELECT above.
       const row = db
         .prepare(`SELECT content, tenant_id FROM memories WHERE id = ?`)
         .get(opts.memoryId) as { content: string; tenant_id: string } | undefined;
@@ -122,6 +123,7 @@ export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
       // O(N) scan over the tenant's rows (plan §4): human-triggered command
       // on ~1-5k-row stores — acceptable, documented. A digest column on
       // memories is the escape if stores grow 100x; not needed now.
+      // SAFETY: rows' shape matches the three columns named in the SELECT above.
       const rows = db
         .prepare(`SELECT id, kind, content FROM memories WHERE tenant_id = ?`)
         .all(opts.tenantId) as Array<{ id: string; kind: string; content: string }>;

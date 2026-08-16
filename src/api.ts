@@ -1763,6 +1763,8 @@ export function reject(ctx: Context, opts: RejectOpts): RejectResult {
     // keeps the error message consistent with the rest of this module.
     const db = openHippoDb(ctx.hippoRoot);
     try {
+      // SAFETY: row's shape matches the single `tenant_id` column named in
+      // the SELECT above.
       const row = db
         .prepare(`SELECT tenant_id FROM memories WHERE id = ?`)
         .get(opts.memoryId) as { tenant_id?: string } | undefined;
@@ -1790,7 +1792,7 @@ export function reject(ctx: Context, opts: RejectOpts): RejectResult {
  * Throws if `digestOrPrefix` matches no tombstone, is blank, or matches
  * more than one (use a longer prefix).
  */
-export function unreject(ctx: Context, digestOrPrefix: string): { ok: true; digest: string } {
+export function unreject(ctx: Context, digestOrPrefix: string) {
   const outcome = unrejectValue(ctx.hippoRoot, ctx.tenantId, digestOrPrefix, ctx.actor.subject);
   if (outcome.status === 'not_found') {
     throw new Error(`no rejected value matches: ${digestOrPrefix}`);

@@ -110,6 +110,7 @@ export function findRejectedValue(
   tenantId: string,
   digest: string,
 ): RejectedValueRow | null {
+  // SAFETY: row's shape matches the columns named in the SELECT above.
   const row = db
     .prepare(
       `SELECT tenant_id, digest, reason, rejected_by, rejected_at, source_memory_id, normalized_chars
@@ -166,6 +167,7 @@ export function deleteRejectedValue(db: DatabaseSyncLike, tenantId: string, dige
 
 /** List tombstones for a tenant, newest first — the T2 `rejections` verb. */
 export function listRejectedValues(db: DatabaseSyncLike, tenantId: string): RejectedValueRow[] {
+  // SAFETY: rows' shape matches the columns named in the SELECT above.
   const rows = db
     .prepare(
       `SELECT tenant_id, digest, reason, rejected_by, rejected_at, source_memory_id, normalized_chars
@@ -214,6 +216,7 @@ export function checkRejectionGuard(
   // lookup already ran under the INCOMING/destination tenantId). A tenant
   // change on the SAME id is therefore always a content introduction into
   // the destination tenant, exactly as if the row were new there.
+  // SAFETY: storedRow's shape matches the two columns named in the SELECT above.
   const storedRow = db.prepare(`SELECT content, tenant_id FROM memories WHERE id = ?`).get(entryId) as
     | { content: string; tenant_id: string }
     | undefined;
