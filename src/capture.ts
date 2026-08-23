@@ -266,7 +266,16 @@ function extractFromPatterns(
         const rawPrefix = match[1] ?? '';
         const isLabelPrefix = /:\s*$/.test(rawPrefix) || /^\s*the\s+\w+\s+(?:is|was)\s*$/i.test(rawPrefix);
         const keywordPrefix = isLabelPrefix ? '' : rawPrefix;
-        const afterKeyword = match[2] ?? match[0];
+        // Scan the UNTRUNCATED remainder, not match[2]. The patterns cap
+        // their content group at 500 chars, so a quoted literal whose closer
+        // sits past that point had no visible partner and the pairing check
+        // read the opener as prose - cutting inside the literal. That was a
+        // blindness built into the scanner's INPUT, not a bad predicate, so
+        // no further predicate could have fixed it. boundToClause already
+        // caps its OUTPUT at maxLen, so widening the input costs nothing and
+        // makes pairing decidable on the whole sentence. Codex P2, round 5.
+        const contentStart = match.index !== undefined ? match.index + rawPrefix.length : -1;
+        const afterKeyword = contentStart >= 0 ? sentence.slice(contentStart) : (match[2] ?? match[0]);
         bounded = boundToClause(keywordPrefix + afterKeyword, keywordPrefix.length);
       }
       const content = cleanExtract(bounded);

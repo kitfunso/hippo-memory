@@ -216,6 +216,13 @@ describe('DF2 capture coherence', () => {
         mustContain: "'em enabled", mustNotContain: 'restart the service' },
       { text: "Never wait 'til the deploy finishes, check the logs first.",
         mustContain: "'til the deploy finishes", mustNotContain: 'check the logs' },
+      // a quoted literal whose closer sits past the patterns' 500-char
+      // content cap. The scanner used to see only the truncated match, so the
+      // closer was invisible and the opener read as prose - it cut inside the
+      // literal at the first comma. Fixed by widening the scanner's INPUT to
+      // the untruncated sentence; no predicate could have seen this.
+      { text: "Always pass '" + 'a, ' + 'x'.repeat(600) + "' to the parser.",
+        mustContain: "Always pass 'a, xxx", mustNotContain: "pass 'a'" },
       // plain prose, no traps
       { text: 'Always run the suite twice, then deploy.',
         mustContain: 'run the suite twice', mustNotContain: 'then deploy' },

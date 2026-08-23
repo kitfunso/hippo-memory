@@ -163,46 +163,41 @@ stripped would reintroduce the inversion this change removes. AT1 shipped
 2026-08-15, eight days before this, so the affected population is small.
 Recorded so a re-capture after upgrade reads as known, not mysterious.
 
-## KNOWN REMAINING LIMITATION, and why I stopped here
+## Review-round history, and the correction I had to make about it
 
-**Defect:** a single-quoted literal longer than the pattern's 500-char
-capture window has its closing quote outside `full`, so the pairing check
-sees no closer, treats the opener as prose, and cuts at the first comma
-inside the literal. Measured on a 632-char input:
-`"Always pass '<600-char literal with a comma>' to the parser."` stores
-`"Always pass 'a"`. Normal-length literals are unaffected
-(`"Always pass 'a, b' to the parser"` is correct).
+Six codex rounds landed on `boundToClause`. After round 5 I told the operator
+the pattern itself was the finding - five patches to a hand-rolled scanner,
+each trading one text edge case for another - and stopped, recommending a
+tokenizer rewrite as a separate episode.
 
-**Why it is not fixed in this branch.** This is the sixth consecutive
-review round on one function, and the shape has not changed: every fix
-trades one text edge case for another.
+**That read was wrong, and the last round proves it.**
 
-| Round | Defect | Severity |
-|---|---|---|
-| 1 | cut inside code delimiters | P1 |
-| 2 | every apostrophe opened quote mode forever | P1 |
-| 3 | ignoring apostrophes cut inside `'a, b'` | P1 |
-| 4 | word-boundary heuristic opened on elided forms | P2 |
-| 5 | pairing check fails when the closer is past the window | P2 |
+| Round | Defect | Severity | Kind of fix |
+|---|---|---|---|
+| 1 | cut inside `build(x, y)` | P1 | predicate |
+| 2 | every apostrophe opened quote mode forever | P1 | predicate |
+| 3 | ignoring apostrophes cut inside `'a, b'` | P1 | predicate |
+| 4 | word-boundary heuristic opened on `'em` | P2 | predicate -> verified pairing |
+| 5 | closer past the 500-char content cap | P2 | **input plumbing, not a predicate** |
 
-Severity is converging (P1 → P2) and the cases are narrowing, which is
-some evidence the approach can be finished. But five patches to a
-hand-rolled character scanner, each one surfacing a case the previous did
-not consider, is the three-strike pattern at scale. The honest read is
-that **prose-vs-code segmentation wants a real tokenizer, not another
-predicate**, and that is a separate episode with its own plan — not a
-sixth patch appended to a long one.
+Round 5 was not a sixth heuristic. The patterns cap their content group at 500
+characters and handed *that truncated string* to the scanner, so a literal
+whose closing quote sat past the cap had no visible partner - the pairing check
+read the opener as prose and cut inside the literal. **No predicate could have
+fixed that**, because the closer was never in the scanner's input. Widening the
+input to the untruncated sentence makes pairing decidable; `boundToClause`
+already caps its OUTPUT at `maxLen`, so a wider input costs nothing.
 
-**Why the branch is still worth shipping with this open.** The severe
-defect — prohibitions stored as their opposite — was fixed in the first
-commit and has been stable through every round since. The remaining
-limitation costs at most one malformed memory for an unusually long
-quoted literal, against a defect that inverted the meaning of every
-negation rule a user wrote. Shipping the first while tracking the second
-is the better trade; holding the inversion fix hostage to a tokenizer
-rewrite is not.
+The lesson is about the stopping rule, not the scanner. Counting rounds is a
+bad convergence test: it treats a plumbing defect and a heuristic patch as the
+same evidence. **The signal to watch is what each fix IS.** Rounds 1-3 were
+predicates guessing at text shape, which is the treadmill. Round 4 replaced a
+guess with a verified property. Round 5 removed a blindness from the input.
+Those last two were the approach converging, and I read them as it failing.
 
-Backlogged as its own item.
+All six text classes are now verified together, each proven load-bearing by
+stashing the fix and watching the corpus go red: elided forms, paired literals,
+long literals past the cap, contractions, code delimiters, negations.
 
 ## Non-goals
 
