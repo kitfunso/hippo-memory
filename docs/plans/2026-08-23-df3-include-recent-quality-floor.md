@@ -129,10 +129,17 @@ Measured: `isContentWorthStoring('データベース接続がタイムアウト�
 returned `false`. Applying the floor at the read surface would therefore have
 hidden Japanese/Chinese memories from injection.
 
-Fixed in `substantiveWordCount`: CJK characters are counted as substantive
-units (~2 chars per word) separately from the latin word split, with CJK runs
-stripped before that split so nothing double-counts. The change is **strictly
-more permissive** — it can only admit content previously rejected, never
+Fixed in `substantiveWordCount`: CJK **letters** (matched by Unicode script,
+not by block range) are counted as substantive units at ~2 chars per word, and
+that count is **added to** the unmodified latin word count. Two properties,
+both learned the hard way from a second codex round that found each as a
+regression in the first draft: (a) block ranges include the Katakana middle
+dot and prolonged sound mark, so punctuation-only junk scored as substantive
+and the gate admitted content it used to reject; (b) stripping CJK before the
+latin split REDUCES the count for short mixed tokens like `UI/DB/QA` +
+ideograph, newly rejecting content that was previously accepted and making
+capture silently drop it. Adding to the unmodified count is what makes the
+change **strictly more permissive** — it can only admit content previously rejected, never
 reject something previously admitted — which is why it is safe to make in a
 predicate shared with capture's write gate. It also fixes a pre-existing
 silent data-loss bug: `capture.ts:174` has been dropping CJK content at write

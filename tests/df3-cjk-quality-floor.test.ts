@@ -97,4 +97,21 @@ describe('DF3 follow-up — CJK-aware substantiveWordCount (src/audit.ts)', () =
       expect(isContentWorthStoring(content)).toBe(expected);
     }
   });
+
+  // codex review round 2 found BOTH of these as regressions in the first
+  // locale-aware draft. They pin the two properties the counter must hold.
+  it('kana punctuation is not substantive: a punctuation-only string stays rejected', () => {
+    // The Katakana BLOCK contains the middle dot and the prolonged sound mark.
+    // A block-range match counted them as words, so punctuation-only junk
+    // passed the shared gate and capture would have admitted it.
+    expect(isContentWorthStoring('・'.repeat(10))).toBe(false);
+    expect(isContentWorthStoring('ー'.repeat(10))).toBe(false);
+  });
+
+  it('mixed latin+CJK tokens keep their prior count: previously-accepted content is not newly rejected', () => {
+    // Stripping CJK before the latin split left three 2-char fragments that
+    // fail the `> 2` filter, dropping this from 3 substantive tokens to 1 and
+    // making capture silently discard it. The count must be ADDITIVE.
+    expect(isContentWorthStoring('UI層 DB層 QA層')).toBe(true);
+  });
 });

@@ -30,22 +30,32 @@ const STOP_WORDS = new Set([
 const VAGUE_ONLY = /^[\w\s,.'"-]+$/;
 
 // CJK scripts carry no whitespace word boundaries, so a plain \s+ split scores
-// an entire sentence as one "word" (or zero, if it also has no ASCII
-// whitespace at all) and the gate rejects real sentences as junk. CJK words
-// average ~2 characters, so approximate substantive units as one per 2 CJK
-// characters, counted separately from (not double-counted with) the
-// whitespace-delimited latin word count.
-const CJK_CHARS = /[぀-ヿ㐀-䶿一-鿿豈-﫿]/g;
+// an entire sentence as one "word" and the gate rejects real sentences as junk.
+// CJK words average ~2 characters, so approximate substantive units as one per
+// 2 CJK LETTERS.
+//
+// Two properties this must hold, both learned from codex review findings:
+//  1. Script-based matching, not block ranges. The Katakana BLOCK contains
+//     punctuation - the middle dot and the prolonged sound mark - so a block
+//     range counts punctuation-only junk as substantive. `\p{Script=...}`
+//     matches letters only, and the middle dot is Script=Common, so it
+//     correctly scores 0.
+//  2. ADD to the latin count, never strip before it. Stripping CJK first can
+//     REDUCE the count for short mixed tokens (`UI<han> DB<han> QA<han>` leaves
+//     three 2-char latin fragments that fail the `> 2` filter), which would
+//     reject content this gate previously accepted and make capture silently
+//     drop it. Adding keeps the change strictly more permissive - the property
+//     that makes it safe in a predicate shared with capture's write gate.
+const CJK_LETTERS = /\p{Script=Han}|\p{Script=Hiragana}|\p{Script=Katakana}/gu;
 
 function substantiveWordCount(text: string): number {
-  const cjkCharCount = (text.match(CJK_CHARS) ?? []).length;
+  const cjkLetterCount = (text.match(CJK_LETTERS) ?? []).length;
   const latinWordCount = text
-    .replace(CJK_CHARS, ' ')
     .toLowerCase()
     .split(/\s+/)
     .filter(w => w.length > 2 && !STOP_WORDS.has(w))
     .length;
-  return latinWordCount + Math.floor(cjkCharCount / 2);
+  return latinWordCount + Math.floor(cjkLetterCount / 2);
 }
 
 function isVersionBump(text: string): boolean {
