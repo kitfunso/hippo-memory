@@ -299,11 +299,21 @@ describe('DF4: a gated lesson still invalidates', () => {
     fs.rmSync(globalRoot, { recursive: true, force: true });
   });
 
-  it('weakens stale memories even when the subject is too thin to store', () => {
-    // The admission gate is about STORAGE. An earlier revision filtered the
-    // loop input instead of the write, which removed dropped lessons from
-    // the invalidation pass too - so this migration silently stopped
-    // superseding anything. Codex P1 on this branch; this pins the fix.
+  it('does NOT invalidate when the subject is too thin to store (documented limit)', () => {
+    // PINS A DELIBERATE LIMITATION, not a fix. A subject too thin to store
+    // also does not invalidate, because the gate filters the loop input.
+    //
+    // The alternative was tried and reverted: letting dropped lessons
+    // invalidate removes the stored record that makes invalidation
+    // idempotent, so every rescan re-weakens the same memories and
+    // half_life_days compounds down (measured 7 -> 3 -> 1 over two runs).
+    // Across 413 real auto-learn rows, ZERO gated lessons carry a migration
+    // target, so both failure modes are empty on real data and the tie
+    // breaks on which is benign. Backlog: make invalidateMatching idempotent,
+    // which would allow both behaviours at once.
+    //
+    // If this assertion ever flips, someone changed that decision - make it
+    // deliberate rather than incidental.
     const repoRoot = path.join(repoDir, '.hippo');
     const stale = createMemory('webpack config uses HtmlWebpackPlugin for output', {
       tags: ['webpack', 'build'],
@@ -318,7 +328,14 @@ describe('DF4: a gated lesson still invalidates', () => {
 
     const updated = readEntry(repoRoot, stale.id);
     expect(updated, 'the stale memory should still exist').not.toBeNull();
-    expect(updated!.tags, 'invalidation must run for a gated lesson').toContain('invalidated');
+    expect(
+      updated!.tags,
+      'a gated lesson does not invalidate - documented limitation, see the comment above'
+    ).not.toContain('invalidated');
+    expect(
+      updated!.half_life_days,
+      'and its decay must be untouched, so rescans cannot compound'
+    ).toBe(stale.half_life_days);
 
     // ...and the thin subject itself is still not stored.
     const contents = loadAllEntries(repoRoot).map((e) => e.content);

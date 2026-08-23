@@ -6313,17 +6313,34 @@ function learnFromRepo(
   // DF4: admission gate lives at the write path, not in extractLessons
   // (a published API surface that only parses). Bare subjects like "fixed
   // signals" are dropped here, before they ever become a memory.
-  // ADMISSION only. The loop below does two separate jobs per lesson:
-  // it INVALIDATES stale memories a migration subject supersedes, and it
-  // STORES the lesson. The quality gate is about the second one. Filtering
-  // the loop input suppressed both, so "refactor: replace webpack with vite"
-  // parsed to "replace webpack with vite", failed the heuristic, and stopped
-  // weakening stale webpack memories - an advertised behaviour silently lost.
-  // So the loop still walks every parsed lesson; the gate decides only
-  // whether the lesson is WRITTEN. Codex P1 on this branch.
-  const { dropped } = partitionLessons(parsedLessons);
+  // The gate filters the loop INPUT, so a dropped lesson neither stores nor
+  // invalidates. That is deliberate, and it was argued both ways.
+  //
+  // Round 1 of review called the lost invalidation a P1: a migration subject
+  // too thin to store ("replace webpack with vite") would stop weakening
+  // stale webpack memories. True. So the loop was widened to walk every
+  // parsed lesson with the gate on the write alone.
+  //
+  // Round 2 then found the cure was worse. STORAGE is what makes invalidation
+  // idempotent here: a stored lesson is recognised by deduplicateLesson on
+  // the next scan and short-circuits before invalidating again. A lesson that
+  // invalidates but is never stored has no such record, so every rescan
+  // re-invalidates, and invalidateMatching halves half_life_days each time.
+  // Measured: 7 -> 3 -> 1 over two runs. That is compounding data damage.
+  //
+  // Measured frequency decided it. Across 413 real auto-learn rows in 4
+  // stores, 24 are gated and ZERO of those carry an invalidation target; the
+  // 45 lessons that do carry targets all pass the gate and are unaffected
+  // either way. Both failure modes are empty on real data, so the tie breaks
+  // on which one is benign if it ever fires: not invalidating is a missed
+  // improvement, re-invalidating forever is damage.
+  //
+  // Documented limitation, pinned by test: a migration subject too thin to
+  // store also does not invalidate. Making invalidateMatching idempotent
+  // would allow both, and is backlogged - it is a latent issue for the manual
+  // `hippo invalidate` path too, not just this one.
+  const { kept: lessons, dropped } = partitionLessons(parsedLessons);
   const lowInfo = dropped.length;
-  const lowInfoSet = new Set(dropped);
 
   let added = 0;
   let skipped = 0;
@@ -6335,7 +6352,7 @@ function learnFromRepo(
   const gitLearnTags = ['error', 'git-learned'];
   const existingForSchema = loadAllEntries(hippoRoot);
 
-  for (const lesson of parsedLessons) {
+  for (const lesson of lessons) {
     // L9: learnFromRepo's existingForSchema load just above (the
     // `loadAllEntries(hippoRoot)` call a few lines up) is host-wide and
     // intentionally out-of-L9-scope per plan §11 (cli.ts is
@@ -6353,13 +6370,6 @@ function learnFromRepo(
       if (invResult.invalidated > 0) {
         console.log(`${prefix}   Invalidated ${invResult.invalidated} memories referencing "${target.from}"`);
       }
-    }
-
-    // Invalidation above ran for this lesson whatever its quality; only the
-    // WRITE is gated. A low-information subject can still supersede a stale
-    // memory - that is a different question from whether it is worth storing.
-    if (lowInfoSet.has(lesson)) {
-      continue;
     }
 
     const schemaFitVal = computeSchemaFit(lesson, gitLearnTags, existingForSchema);
