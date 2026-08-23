@@ -276,6 +276,56 @@ describe('DF4 write-path gate: CLI `hippo learn --git`', () => {
   });
 });
 
+describe('DF4: a gated lesson still invalidates', () => {
+  let repoDir: string;
+  let globalRoot: string;
+  let env: NodeJS.ProcessEnv;
+
+  beforeEach(() => {
+    // "replace webpack with vite" is a MIGRATION subject that FAILS the
+    // quality heuristic. Both facts matter: it must still supersede stale
+    // webpack memories even though it is not itself worth storing.
+    repoDir = initGitRepoWithCommits(['refactor: replace webpack with vite']);
+    globalRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-df4-inv-'));
+    env = { ...process.env, HIPPO_HOME: globalRoot, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
+    execFileSync('node', [CLI, 'init', '--no-hooks', '--no-schedule', '--no-learn'], {
+      cwd: repoDir,
+      env,
+    });
+  });
+
+  afterEach(() => {
+    fs.rmSync(repoDir, { recursive: true, force: true });
+    fs.rmSync(globalRoot, { recursive: true, force: true });
+  });
+
+  it('weakens stale memories even when the subject is too thin to store', () => {
+    // The admission gate is about STORAGE. An earlier revision filtered the
+    // loop input instead of the write, which removed dropped lessons from
+    // the invalidation pass too - so this migration silently stopped
+    // superseding anything. Codex P1 on this branch; this pins the fix.
+    const repoRoot = path.join(repoDir, '.hippo');
+    const stale = createMemory('webpack config uses HtmlWebpackPlugin for output', {
+      tags: ['webpack', 'build'],
+    });
+    writeEntry(repoRoot, stale);
+
+    execFileSync('node', [CLI, 'learn', '--git', '--days', '3650'], {
+      cwd: repoDir,
+      env,
+      encoding: 'utf8',
+    });
+
+    const updated = readEntry(repoRoot, stale.id);
+    expect(updated, 'the stale memory should still exist').not.toBeNull();
+    expect(updated!.tags, 'invalidation must run for a gated lesson').toContain('invalidated');
+
+    // ...and the thin subject itself is still not stored.
+    const contents = loadAllEntries(repoRoot).map((e) => e.content);
+    expect(contents.some((c) => c.includes('replace webpack with vite'))).toBe(false);
+  });
+});
+
 describe('DF4 write-path gate: MCP hippo_learn tool', () => {
   let repoDir: string;
   let hippoRoot: string;

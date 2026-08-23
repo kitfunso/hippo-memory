@@ -1173,6 +1173,11 @@ async function executeTool(
       // DF4: admission gate lives at the write path, not in extractLessons
       // (a published API surface that only parses). Bare subjects like
       // "fixed signals" are dropped here, before they ever become a memory.
+      // Gating the loop INPUT is correct here, unlike the CLI path: this
+      // loop only writes. The CLI's loop also runs invalidation, so there
+      // the gate has to sit on the write alone or a migration subject stops
+      // superseding stale memories. Same predicate, different placement,
+      // because the loops do different work.
       const { kept: lessons, dropped } = partitionLessons(parsedLessons);
       const lowInfo = dropped.length;
       let added = 0;

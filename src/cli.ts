@@ -454,6 +454,11 @@ function cmdInitScan(scanDir: string, flags: Record<string, string | boolean | s
   }
 
   let totalLessons = 0;
+  // Rolled up so the cross-repo summary reports the gate too. Each repo
+  // already prints its own count inside learnFromRepo, but the aggregate
+  // line showed only what was ADDED - and the point of this change is
+  // that a dropped subject is never invisible.
+  let totalLowInfo = 0;
   const seedDays = parseInt(String(flags['days'] ?? '365'), 10);
 
   for (const repo of repos) {
@@ -473,6 +478,7 @@ function cmdInitScan(scanDir: string, flags: Record<string, string | boolean | s
       const result = learnFromRepo(repoHippo, repo, seedDays, name);
       added = result.added;
       totalLessons += added;
+      totalLowInfo += result.lowInfo;
     }
 
     const status = alreadyExists ? 'existing' : 'new';
@@ -480,7 +486,9 @@ function cmdInitScan(scanDir: string, flags: Record<string, string | boolean | s
     console.log(`  ${name.padEnd(25)} ${status.padEnd(10)} ${entries.length} memories${added > 0 ? ` (+${added} from git)` : ''}`);
   }
 
-  console.log(`\n${repos.length} repositories, ${totalLessons} new lessons learned.`);
+  console.log(`\n${repos.length} repositories, ${totalLessons} new lessons learned` +
+    (totalLowInfo > 0 ? `, ${totalLowInfo} low-information subject(s) dropped` : '') +
+    '.');
   console.log(`Global store: ${globalRoot}`);
   if (!flags['no-schedule']) {
     setupDailySchedule(globalRoot);
@@ -6305,8 +6313,17 @@ function learnFromRepo(
   // DF4: admission gate lives at the write path, not in extractLessons
   // (a published API surface that only parses). Bare subjects like "fixed
   // signals" are dropped here, before they ever become a memory.
-  const { kept: lessons, dropped } = partitionLessons(parsedLessons);
+  // ADMISSION only. The loop below does two separate jobs per lesson:
+  // it INVALIDATES stale memories a migration subject supersedes, and it
+  // STORES the lesson. The quality gate is about the second one. Filtering
+  // the loop input suppressed both, so "refactor: replace webpack with vite"
+  // parsed to "replace webpack with vite", failed the heuristic, and stopped
+  // weakening stale webpack memories - an advertised behaviour silently lost.
+  // So the loop still walks every parsed lesson; the gate decides only
+  // whether the lesson is WRITTEN. Codex P1 on this branch.
+  const { dropped } = partitionLessons(parsedLessons);
   const lowInfo = dropped.length;
+  const lowInfoSet = new Set(dropped);
 
   let added = 0;
   let skipped = 0;
@@ -6318,7 +6335,7 @@ function learnFromRepo(
   const gitLearnTags = ['error', 'git-learned'];
   const existingForSchema = loadAllEntries(hippoRoot);
 
-  for (const lesson of lessons) {
+  for (const lesson of parsedLessons) {
     // L9: learnFromRepo's existingForSchema load just above (the
     // `loadAllEntries(hippoRoot)` call a few lines up) is host-wide and
     // intentionally out-of-L9-scope per plan §11 (cli.ts is
@@ -6336,6 +6353,13 @@ function learnFromRepo(
       if (invResult.invalidated > 0) {
         console.log(`${prefix}   Invalidated ${invResult.invalidated} memories referencing "${target.from}"`);
       }
+    }
+
+    // Invalidation above ran for this lesson whatever its quality; only the
+    // WRITE is gated. A low-information subject can still supersede a stale
+    // memory - that is a different question from whether it is worth storing.
+    if (lowInfoSet.has(lesson)) {
+      continue;
     }
 
     const schemaFitVal = computeSchemaFit(lesson, gitLearnTags, existingForSchema);
