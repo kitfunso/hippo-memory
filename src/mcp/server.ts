@@ -19,7 +19,7 @@ import {
 } from '../memory.js';
 import { search, hybridSearch, physicsSearch, markRetrieved, estimateTokens } from '../search.js';
 import { isRecallBoostAblated, evalNow } from '../ablation.js';
-import { loadAllEntries, writeEntry, readEntry, initStore, loadActiveTaskSnapshot, listMemoryConflicts, resolveConflict, RECALL_DEFAULT_DENY_SCOPES } from '../store.js';
+import { loadAllEntries, writeEntry, readEntry, initStore, loadFreshActiveTaskSnapshot, listMemoryConflicts, resolveConflict, RECALL_DEFAULT_DENY_SCOPES } from '../store.js';
 import { shareMemory, listPeers, getGlobalRoot } from '../shared.js';
 import { consolidate } from '../consolidate.js';
 import { execSync } from 'child_process';
@@ -1113,7 +1113,11 @@ async function executeTool(
       }
       lastRecalledIds.set(resolveClientKey(ctx), retrieved.map((e) => e.id));
 
-      const rawSnapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
+      // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md, T2): bounded
+      // read, no session id available on this surface (freshness bound
+      // only) — an orphaned snapshot must age out here too, not just on the
+      // UserPromptSubmit path.
+      const rawSnapshot = loadFreshActiveTaskSnapshot(hippoRoot, tenantId);
       const snapshot = rawSnapshot && passesScopeFilter(rawSnapshot.scope)
         ? rawSnapshot
         : null;

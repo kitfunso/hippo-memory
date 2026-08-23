@@ -906,8 +906,11 @@ const PRE_COMPACT_LOG_MAX_BYTES = 256 * 1024;
  * Log-forgery guard: messages here interpolate payload-controlled values
  * (transcript paths, session ids). Strip C0 control chars — newlines above
  * all — so a crafted value can't inject fake `[hippo] ...` log lines.
+ * Exported for every `[hippo]`-prefixed log writer that interpolates
+ * payload-controlled values (cli.ts appendSessionEndCloseLog) — one shared
+ * guard, not per-file copies.
  */
-function sanitizeLogMessage(message: string): string {
+export function sanitizeLogMessage(message: string): string {
   // eslint-disable-next-line no-control-regex
   return message.replace(/[\x00-\x1f]/g, '');
 }

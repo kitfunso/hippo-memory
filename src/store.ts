@@ -2545,6 +2545,65 @@ export function loadActiveTaskSnapshot(hippoRoot: string, tenantId: string): Tas
   }
 }
 
+/**
+ * Default freshness bound for AMBIENT active-task-snapshot reads (DF1,
+ * docs/plans/2026-08-23-df1-snapshot-lifecycle.md): 72h, chosen over 48h so
+ * a Friday-evening orphan still offers continuity on Monday morning.
+ * Exported so callers can override via `loadFreshActiveTaskSnapshot`'s
+ * `opts.maxAgeMs`; deliberately no env knob (Simplicity First).
+ */
+export const SNAPSHOT_AMBIENT_MAX_AGE_MS = 72 * 60 * 60 * 1000;
+
+/** A usable session id: non-null, non-empty string. Named predicate (not an
+ * inline `typeof` check) so the owner-match rule in
+ * `loadFreshActiveTaskSnapshot` states its contract once. */
+function isNonEmptySessionId(value: string | null | undefined): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
+/**
+ * Bounded read for AMBIENT active-task-snapshot surfaces (UserPromptSubmit
+ * hook context, MCP recall block) — the never-expires fix for DF1. A
+ * snapshot written by `hippo pre-compact` has no death path tied to the
+ * session that owns it, so an orphaned row would otherwise inject into
+ * every prompt of every later session forever. Wraps `loadActiveTaskSnapshot`
+ * (unchanged, still the source of truth for explicit continuity surfaces),
+ * then applies, in order:
+ *
+ * 1. Owner match — ONLY when both `opts.sessionId` and the snapshot's
+ *    `session_id` are non-null, non-empty strings and strictly equal
+ *    (`===`). Owner reads are unbounded: the session that owns the snapshot
+ *    can always see its own working state, regardless of age.
+ * 2. Age check — everything else, including absent-vs-absent ids. A
+ *    null/undefined/empty id on EITHER side never counts as an owner match;
+ *    it falls through here instead. (`runPreCompact` can legitimately save a
+ *    snapshot with `session_id = null`; a null-equals-null "match" would
+ *    reopen indefinite ambient injection for exactly those rows.) Returns
+ *    the snapshot only when `age(updated_at) <= maxAgeMs` (default
+ *    `SNAPSHOT_AMBIENT_MAX_AGE_MS`); otherwise null.
+ *
+ * No SQL change — age derives from the existing `updated_at` column.
+ */
+export function loadFreshActiveTaskSnapshot(
+  hippoRoot: string,
+  tenantId: string,
+  opts: { maxAgeMs?: number; sessionId?: string | null } = {},
+): TaskSnapshot | null {
+  const snapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
+  if (!snapshot) return null;
+
+  const callerSessionId = opts.sessionId;
+  const isOwnerMatch =
+    isNonEmptySessionId(callerSessionId) &&
+    isNonEmptySessionId(snapshot.session_id) &&
+    callerSessionId === snapshot.session_id;
+  if (isOwnerMatch) return snapshot;
+
+  const maxAgeMs = opts.maxAgeMs ?? SNAPSHOT_AMBIENT_MAX_AGE_MS;
+  const ageMs = Date.now() - Date.parse(snapshot.updated_at);
+  return ageMs <= maxAgeMs ? snapshot : null;
+}
+
 export function clearActiveTaskSnapshot(hippoRoot: string, tenantId: string, clearedStatus: string = 'cleared'): boolean {
   assertTenantId('clearActiveTaskSnapshot', tenantId);
   initStore(hippoRoot);
@@ -2562,6 +2621,36 @@ export function clearActiveTaskSnapshot(hippoRoot: string, tenantId: string, cle
     db.prepare(`UPDATE task_snapshots SET status = ?, updated_at = ? WHERE id = ? AND tenant_id = ?`).run(clearedStatus, now, active.id, tenantId);
     removeActiveTaskMirror(hippoRoot, tenantId);
     return true;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/**
+ * Close the `active` task snapshot(s) owned by `sessionId`, for the T3
+ * session-end death path (DF1, docs/plans/2026-08-23-df1-snapshot-lifecycle.md).
+ * Only one `active` row exists per tenant in practice (supersession happens
+ * at save), but the WHERE clause scopes on `session_id` too — not just
+ * `status='active' AND tenant_id=?` — so an ending session can never close a
+ * different, newer session's active snapshot. Returns the number of rows
+ * closed (0 when no active row is owned by `sessionId`).
+ */
+export function closeTaskSnapshotsForSession(
+  hippoRoot: string,
+  tenantId: string,
+  sessionId: string,
+  status: string = 'session-ended',
+): number {
+  assertTenantId('closeTaskSnapshotsForSession', tenantId);
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  const now = new Date().toISOString();
+
+  try {
+    const result = db.prepare(
+      `UPDATE task_snapshots SET status = ?, updated_at = ? WHERE status = 'active' AND tenant_id = ? AND session_id = ?`,
+    ).run(status, now, tenantId, sessionId);
+    return Number(result.changes ?? 0);
   } finally {
     closeHippoDb(db);
   }
