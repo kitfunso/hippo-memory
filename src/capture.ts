@@ -178,7 +178,13 @@ function boundToClause(full: string, searchFrom: number, maxLen = 200): string {
       const atBoundary =
         (prev === undefined || /[\s([{]/.test(prev)) &&
         next !== undefined && !/\s/.test(next);
-      if (atBoundary) { quote = ch; }
+      // Pairing is VERIFIED, not assumed. A word-boundary test alone still
+      // opens quote mode on elided forms ("keep 'em", "wait 'til"), which
+      // have no closer, so the scanner never leaves quote mode and bounding
+      // is disabled for the rest of the capture. Requiring an actual closing
+      // quote later in the string replaces a guess with a checkable fact -
+      // an elided form simply has no partner. Codex P2, this round.
+      if (atBoundary && full.indexOf("'", i + 1) !== -1) { quote = ch; }
       continue;
     }
     if (ch === '(' || ch === '[' || ch === '{') { depth++; continue; }

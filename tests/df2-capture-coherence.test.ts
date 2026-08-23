@@ -208,6 +208,14 @@ describe('DF2 capture coherence', () => {
       // vacuous on the first attempt.
       { text: "Never run 'rm -rf, x' in the deploy script, check first.",
         mustContain: "'rm -rf, x'", mustNotContain: 'check first' },
+      // elided forms - a leading apostrophe with NO closer. A word-boundary
+      // heuristic alone opened quote mode here and never left it, disabling
+      // bounding for the rest of the capture. Fixed by verifying the pairing
+      // (a closer must exist) rather than guessing from position.
+      { text: "Always keep 'em enabled, then restart the service.",
+        mustContain: "'em enabled", mustNotContain: 'restart the service' },
+      { text: "Never wait 'til the deploy finishes, check the logs first.",
+        mustContain: "'til the deploy finishes", mustNotContain: 'check the logs' },
       // plain prose, no traps
       { text: 'Always run the suite twice, then deploy.',
         mustContain: 'run the suite twice', mustNotContain: 'then deploy' },
