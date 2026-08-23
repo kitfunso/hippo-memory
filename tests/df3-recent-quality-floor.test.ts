@@ -383,3 +383,81 @@ describe('DF3 — includeRecent quality floor (CLI end-to-end)', () => {
     expect(context).not.toContain('fixed signals');
   });
 });
+
+
+/**
+ * Reserve dedupe (codex finding on the budget-reserve commit).
+ *
+ * `syncGlobalToLocal` copies global rows into the local store PRESERVING
+ * `entry.id`, so a synced pin exists in both stores. The pinned admission
+ * loop dedupes via `selectedIds`, so it returns that pin once — but the
+ * budget reserve walked `rankedPinned` without deduping and charged the pin
+ * twice, starving recents of budget a single returned pin never needed.
+ */
+describe('DF3 — pinned budget reserve dedupes mirrored entries', () => {
+  let home: string;
+  let globalTmp: string;
+  let origHippoHome: string | undefined;
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'hippo-df3-dedupe-'));
+    initStore(home);
+    // An INITIALIZED global store, so api.getContext takes the hasGlobal path
+    // and pinnedGlobal is populated.
+    globalTmp = mkdtempSync(join(tmpdir(), 'hippo-df3-dedupe-global-'));
+    initStore(globalTmp);
+    origHippoHome = process.env.HIPPO_HOME;
+    process.env.HIPPO_HOME = globalTmp;
+  });
+
+  afterEach(() => {
+    rmSync(home, { recursive: true, force: true });
+    rmSync(globalTmp, { recursive: true, force: true });
+    if (origHippoHome !== undefined) process.env.HIPPO_HOME = origHippoHome;
+    else delete process.env.HIPPO_HOME;
+  });
+
+  it('a pin mirrored in local+global reserves its cost ONCE, so a recent entry still fits', async () => {
+    // The SAME entry object written to both stores — exactly what
+    // syncGlobalToLocal produces (it skips by id, preserving it).
+    const pin = createMemory('pinned rule that is mirrored across both stores', {
+      pinned: true,
+      layer: Layer.Episodic,
+      tenantId: 'default',
+    });
+    pin.created = new Date(Date.now() - 60_000).toISOString();
+    writeEntry(home, pin);
+    writeEntry(globalTmp, pin);
+
+    const recent = createMemory(
+      'a clean recent memory that should still fit alongside the single pin',
+      { pinned: false, layer: Layer.Episodic, tenantId: 'default' },
+    );
+    writeEntry(home, recent);
+
+    const ctx: Context = {
+      hippoRoot: home,
+      tenantId: 'default',
+      actor: { kind: 'admin', id: 'test' } as Context['actor'],
+    };
+    // Budget sized from the MEASURED token costs (pin 12, recent 17) so the
+    // two cases are actually distinguishable:
+    //   deduped reserve   -> 35 - 12 = 23 remaining, recent (17) FITS
+    //   double-reserve    -> 35 - 24 = 11 remaining, recent (17) DROPPED
+    // A larger budget passes either way and proves nothing (verified: at 46
+    // both branches leave room, which is why the first draft of this test was
+    // green against the unfixed code).
+    const res = await getContext(ctx, {
+      pinnedOnly: true,
+      includeRecent: 3,
+      budget: 35,
+    });
+    const contents = res.entries.map((e) => e.entry.content);
+
+    expect(contents).toContain(pin.content);
+    // Returned once despite living in both stores.
+    expect(contents.filter((c) => c === pin.content)).toHaveLength(1);
+    // The point of the fix: the recent entry survives.
+    expect(contents).toContain(recent.content);
+  });
+});

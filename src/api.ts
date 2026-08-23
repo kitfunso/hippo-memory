@@ -2497,10 +2497,19 @@ export async function getContext(
     // semantics (further down) so the reserve equals what that loop will
     // actually admit -- a big pin near the front should not block smaller
     // pins behind it from reserving their share too.
+    // Dedupe by id: `syncGlobalToLocal` copies global rows into the local
+    // store preserving `entry.id`, so a synced pin appears in BOTH
+    // `pinnedLocal` and `pinnedGlobal` and would otherwise reserve its cost
+    // twice. The admission loop already dedupes via `selectedIds`; the
+    // reserve has to mirror that or it silently starves recents of budget a
+    // single returned pin never needed.
     let pinnedReserve = 0;
+    const reservedIds = new Set<string>();
     for (const r of rankedPinned) {
+      if (reservedIds.has(r.entry.id)) continue;
       if (pinnedReserve + r.tokens <= effBudget) {
         pinnedReserve += r.tokens;
+        reservedIds.add(r.entry.id);
       }
     }
     // Known, accepted tradeoff: a pin that also lands in the recent-N slice
