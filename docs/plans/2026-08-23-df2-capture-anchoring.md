@@ -163,41 +163,50 @@ stripped would reintroduce the inversion this change removes. AT1 shipped
 2026-08-15, eight days before this, so the affected population is small.
 Recorded so a re-capture after upgrade reads as known, not mysterious.
 
-## Review-round history, and the correction I had to make about it
+## Where the review rounds ended, and why
 
-Six codex rounds landed on `boundToClause`. After round 5 I told the operator
-the pattern itself was the finding - five patches to a hand-rolled scanner,
-each trading one text edge case for another - and stopped, recommending a
-tokenizer rewrite as a separate episode.
+Twelve codex rounds landed on the clause scanner. They stopped being about
+bugs and became a measurement of the problem, so the result is recorded as a
+boundary rather than a backlog item.
 
-**That read was wrong, and the last round proves it.**
+**The measured finding.** Quote role is not decidable from local context.
+Two inputs, byte-identical neighbours, opposite correct answers:
 
-| Round | Defect | Severity | Kind of fix |
-|---|---|---|---|
-| 1 | cut inside `build(x, y)` | P1 | predicate |
-| 2 | every apostrophe opened quote mode forever | P1 | predicate |
-| 3 | ignoring apostrophes cut inside `'a, b'` | P1 | predicate |
-| 4 | word-boundary heuristic opened on `'em` | P2 | predicate -> verified pairing |
-| 5 | closer past the 500-char content cap | P2 | **input plumbing, not a predicate** |
+    "Always run 'echo a, b ';then verify."          prev=" " next=";" after="t"
+    "Always keep 'em enabled, then set ';foo, ..."  prev=" " next=";" after="f"
 
-Round 5 was not a sixth heuristic. The patterns cap their content group at 500
-characters and handed *that truncated string* to the scanner, so a literal
-whose closing quote sat past the cap had no visible partner - the pairing check
-read the opener as prose and cut inside the literal. **No predicate could have
-fixed that**, because the closer was never in the scanner's input. Widening the
-input to the untruncated sentence makes pairing decidable; `boundToClause`
-already caps its OUTPUT at `maxLen`, so a wider input costs nothing.
+The first quote must close (it ends a quoted shell command); the second must
+not (it opens an unmatched token, and closing there swallows the clause
+boundary). The same holds for `prev="(" next="." after=letter`, a closer in
+`'a, ('.trim()` and an opener in `parse('.env`.
 
-The lesson is about the stopping rule, not the scanner. Counting rounds is a
-bad convergence test: it treats a plumbing defect and a heuristic patch as the
-same evidence. **The signal to watch is what each fix IS.** Rounds 1-3 were
-predicates guessing at text shape, which is the treadmill. Round 4 replaced a
-guess with a verified property. Round 5 removed a blindness from the input.
-Those last two were the approach converging, and I read them as it failing.
+Deciding these requires knowing whether an EARLIER quote was an elision or a
+real opener - global pairing rather than neighbour inspection - and pairing
+in turn needs a notion of what a literal "looks like", which is another
+heuristic. That is the wall, and it is a property of the input, not of any
+particular predicate.
 
-All six text classes are now verified together, each proven load-bearing by
-stashing the fix and watching the corpus go red: elided forms, paired literals,
-long literals past the cap, contractions, code delimiters, negations.
+**What the rounds actually bought.** Each one named a distinction that was
+missing rather than a condition:
+
+| Round | Distinction it named |
+|---|---|
+| 1 | separators inside code delimiters are not clause boundaries |
+| 2-4 | an apostrophe is not a quote; an elision has no partner |
+| 5 | the scanner was reading a TRUNCATED match, not the sentence |
+| 6 | group offsets must come from the engine, not from arithmetic |
+| 7-11 | punctuation splits: `, ; : ! ?` never join tokens, `. - _ /` do |
+| 12 | the residue is locally undecidable |
+
+**The engineering call.** The scanner favours the shapes that occur in real
+memory text - quoted shell commands, flags, filenames, contractions,
+possessives - and accepts the mirrored shapes as a bounded cost: a capture
+slightly too long or slightly too short. Never a semantic inversion, which
+is the defect this branch exists to remove and which master still has.
+
+Both accepted shapes are pinned by test 16 in
+`tests/df2-capture-coherence.test.ts`, asserting current behaviour so any
+future change to the predicate surfaces as a failure instead of drifting.
 
 ## Non-goals
 

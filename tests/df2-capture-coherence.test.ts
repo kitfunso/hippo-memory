@@ -143,6 +143,45 @@ describe('DF2 capture coherence', () => {
     expect(true).toBe(true);
   });
 
+  /**
+   * DOCUMENTED BOUNDARY: locally undecidable quote roles.
+   *
+   * These assert what the scanner CURRENTLY does on inputs where no local
+   * rule can be correct, so a future change to the predicate shows up as a
+   * failure here instead of passing silently.
+   *
+   * The proof is a measured pair. These two quotes have byte-identical
+   * neighbours and opposite correct answers:
+   *
+   *   "run 'echo a, b ';then"   prev=" " next=";" after="t"  -> must CLOSE
+   *   "set ';foo, after"        prev=" " next=";" after="f"  -> must NOT
+   *
+   * Same for prev="(" next="." after=letter, which is a closer in
+   * "'a, ('.trim()" and an opener in "parse('.env". Deciding these needs to
+   * know whether an earlier quote was an elision or a real opener - global
+   * pairing, not neighbour inspection - and pairing itself needs a notion of
+   * what a literal "looks like". Twelve review rounds converged here.
+   *
+   * The scanner favours the shapes that occur in real memory text (quoted
+   * shell commands, flags, filenames) and accepts the mirrored ones as a
+   * bounded cost: a slightly overlong or slightly short capture, never a
+   * semantic inversion, which is the defect this branch exists to fix.
+   */
+  it('16. known boundary: locally undecidable quote roles are pinned, not fixed', () => {
+    // favoured: a quoted shell command closes at the semicolon
+    expect(extractFromText("Always run 'echo a, b ';then verify.")[0]?.content)
+      .toContain("'echo a, b '");
+    // mirrored shape, accepted cost: the clause boundary is swallowed
+    expect(extractFromText("Always keep 'em enabled, then set ';foo, after restart.")[0]?.content)
+      .toContain("';foo");
+    // mirrored shape, accepted cost: a literal ending in an open delimiter
+    expect(extractFromText("Always pass 'a, ('.trim() to the parser, then verify.")[0]?.content)
+      .toBe("Always pass 'a");
+    // and the thing that must NEVER regress, whatever the quote rules do
+    expect(extractFromText('Never use --no-verify on git commits in this project.')[0]?.content)
+      .toContain('Never');
+  });
+
   // Codex P1 on this branch: the clause scanner cut inside code delimiters,
   // reintroducing the exact fragment defect this change exists to remove -
   // and the fragments PASSED the write gate because code punctuation reads as
