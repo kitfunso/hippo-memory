@@ -97,9 +97,17 @@ function hasNoSpecificity(text: string): boolean {
   const words = text.toLowerCase().split(/\s+/);
   const hasNumber = /\d/.test(text);
   const hasProperNoun = /[A-Z][a-z]{2,}/.test(text);
+  // An ACRONYM is specificity too, and this test could not see one: the
+  // proper-noun pattern needs lowercase after the capital, so "PR", "CI",
+  // "DB", "API", "S3" - the densest domain tokens in a technical memory -
+  // all read as vague. Surfaced by DF2: clause-bounding correctly shortened
+  // "The rule is every PR needs two approvals, no exceptions." to "every PR
+  // needs two approvals", which then fell under the 40-char vagueness gate
+  // and was silently DROPPED - a rule that stored before this branch.
+  const hasAcronym = /\b[A-Z]{2,6}\b/.test(text);
   const hasPath = /[/\\.]/.test(text);
   const hasCode = /[`_{}()\[\]]/.test(text);
-  if (hasNumber || hasProperNoun || hasPath || hasCode) return false;
+  if (hasNumber || hasProperNoun || hasPath || hasCode || hasAcronym) return false;
   return words.length < 8 && VAGUE_ONLY.test(text);
 }
 

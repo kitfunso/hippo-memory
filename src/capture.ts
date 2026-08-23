@@ -138,15 +138,24 @@ function splitSentences(text: string): string[] {
  * end-of-string - never by a letter, which is what makes "user's" an
  * apostrophe rather than a partner.
  */
-function hasCloserAfter(full: string, from: number): boolean {
-  for (let j = full.indexOf("'", from); j !== -1; j = full.indexOf("'", j + 1)) {
-    const prev = full[j - 1];
+function lastCloserIndex(full: string): number {
+  // ONE pass, not one per apostrophe. The previous shape rescanned the whole
+  // remaining suffix at every boundary apostrophe, so a transcript full of
+  // elisions ("keep 'em", "wait 'til", ...) made extraction quadratic and
+  // could stall a moderately sized capture. Codex P2, r7.
+  //
+  // A closer is an apostrophe NOT followed by a letter or digit. The earlier
+  // rule also demanded non-whitespace BEFORE it, which rejected the genuine
+  // closer in "Always preserve 'a, b ' exactly" and re-cut inside the
+  // literal (codex P2, r7). What actually distinguishes a closer from an
+  // in-word apostrophe is only what FOLLOWS it: "user's" has a letter, a
+  // closer has space, punctuation, or end-of-string.
+  for (let j = full.length - 1; j >= 0; j--) {
+    if (full[j] !== "'") continue;
     const next = full[j + 1];
-    if (prev !== undefined && !/\s/.test(prev) && (next === undefined || !/[\p{L}\p{N}]/u.test(next))) {
-      return true;
-    }
+    if (next === undefined || !/[\p{L}\p{N}]/u.test(next)) return j;
   }
-  return false;
+  return -1;
 }
 
 function boundToClause(full: string, searchFrom: number, maxLen = 200): string {
@@ -164,6 +173,7 @@ function boundToClause(full: string, searchFrom: number, maxLen = 200): string {
   // So: a separator only ends the clause at bracket depth zero and outside
   // quotes. Unbalanced closers are tolerated (depth floors at 0) because
   // captured text often starts mid-expression.
+  const lastCloser = lastCloserIndex(full);
   let depth = 0;
   let quote: string | null = null;
   let cutEnd = full.length;
@@ -213,7 +223,7 @@ function boundToClause(full: string, searchFrom: number, maxLen = 200): string {
       // So apply the SAME shape rule already used to open a literal, mirrored:
       // a closer has non-whitespace before it and whitespace/punctuation (not
       // a letter) after. "user's" fails it on both counts. Codex P2, r6.
-      if (atBoundary && hasCloserAfter(full, i + 1)) { quote = ch; }
+      if (atBoundary && lastCloser > i) { quote = ch; }
       continue;
     }
     if (ch === '(' || ch === '[' || ch === '{') { depth++; continue; }
