@@ -150,6 +150,41 @@ describe('DF3 — includeRecent quality floor (api.getContext)', () => {
     }
   });
 
+  it('test 3b — pinned displacement under budget pressure (codex finding): a pinned entry occupying a recent slot must still inject once budget is tight', async () => {
+    const { home, restore } = tmpHome();
+    try {
+      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+
+      // The pinned entry fails isContentWorthStoring and is the NEWEST entry,
+      // so it occupies a slot in the recent-N window (includeRecent: 3).
+      // Without the `entry.pinned ||` bypass in the recent filter, this
+      // entry is dropped from the candidate list BEFORE the slice, so the
+      // three clean unpinned entries below backfill into the window and
+      // consume the entire budget in the recent loop. By the time the
+      // dedicated pinned block runs, there is no budget left and the pinned
+      // entry is skipped via `continue` — displacing explicit user intent.
+      // Token costs (estimateTokens, chars/4 rounded up): "fixed signals" = 4,
+      // each clean entry below = 18. budget: 55.
+      //   OLD (bug): recent slice = [alpha, bravo, charlie] (pinned dropped
+      //     pre-slice) -> 18+18+18 = 54 <= 55, all three fit, usedP = 54.
+      //     Pinned block then needs 54+4=58 > 55 -> SKIPPED.
+      //   NEW (fix): recent slice = [pinned, alpha, bravo] (pinned survives
+      //     the filter and is newest) -> 4+18+18 = 40 <= 55, all three fit
+      //     including the pinned entry directly in the recent loop.
+      seed(home, 'fixed signals', { pinned: true, created: '2026-08-20T10:00:03.000Z' });
+      seed(home, 'clean recent entry alpha with plenty of specific detail worth keeping', { created: '2026-08-20T10:00:02.000Z' });
+      seed(home, 'clean recent entry bravo with plenty of specific detail worth keeping', { created: '2026-08-20T10:00:01.000Z' });
+      seed(home, 'clean recent entry charlie with plenty of specific detail worth keeping', { created: '2026-08-20T10:00:00.000Z' });
+
+      const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 3, budget: 55 });
+      const contents = result.entries.map((e) => e.entry.content);
+
+      expect(contents).toContain('fixed signals');
+    } finally {
+      restore();
+    }
+  });
+
   it('test 4 — measured-limitation pin: a real mid-sentence fragment is NOT filtered', async () => {
     const { home, restore } = tmpHome();
     try {

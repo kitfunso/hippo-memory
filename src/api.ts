@@ -2301,6 +2301,12 @@ export interface ContextOpts {
   limit?: number;
   pinnedOnly?: boolean;
   scope?: string;
+  /** With `pinnedOnly`, also inject the N most recent writes that pass the
+   *  quality floor (`isContentWorthStoring`, DF3). Filtering happens BEFORE
+   *  the take-N, so a caller asking for 5 gets 5 qualifying entries rather
+   *  than 5-minus-junk; pinned entries bypass the floor. Entries are only
+   *  skipped for this read, never mutated or deleted. Ignored when
+   *  `pinnedOnly` is false — no other path reads it. */
   includeRecent?: number;
   /** v39 memory scope isolation: re-include other-project memories that the
    *  origin partition excludes by default. They come back tagged
@@ -2478,10 +2484,18 @@ export async function getContext(
         // filter before slice, not after — the caller asked for N recent
         // *useful* entries, so a junk row must be skipped and backfilled
         // past, not counted against the N. Skip-only: no mutation, no audit
-        // row, nothing becomes unrecoverable. A pinned entry that fails this
-        // heuristic still injects via the separate pinned block below, so no
-        // `entry.pinned ||` bypass is needed here.
-        .filter(({ entry }) => isContentWorthStoring(entry.content))
+        // row, nothing becomes unrecoverable.
+        //
+        // `entry.pinned ||` bypass IS needed here (codex review finding,
+        // corrects the earlier claim in this comment that it wasn't): under
+        // budget pressure, a pinned entry that fails the heuristic gets
+        // dropped from this recent slice, and an unpinned entry backfills
+        // into its slot and consumes `usedP` in the loop below. By the time
+        // the pinned block runs (further down), the budget it needed is
+        // already spent, so it hits `continue` and the pinned entry is
+        // omitted entirely — the pinned block is NOT a safety net once the
+        // recent loop has already spent the shared budget.
+        .filter(({ entry }) => entry.pinned || isContentWorthStoring(entry.content))
         .slice(0, includeRecent)
         .map(({ entry, isGlobal }) => ({
           entry,

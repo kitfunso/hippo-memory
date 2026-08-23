@@ -29,12 +29,23 @@ const STOP_WORDS = new Set([
 
 const VAGUE_ONLY = /^[\w\s,.'"-]+$/;
 
+// CJK scripts carry no whitespace word boundaries, so a plain \s+ split scores
+// an entire sentence as one "word" (or zero, if it also has no ASCII
+// whitespace at all) and the gate rejects real sentences as junk. CJK words
+// average ~2 characters, so approximate substantive units as one per 2 CJK
+// characters, counted separately from (not double-counted with) the
+// whitespace-delimited latin word count.
+const CJK_CHARS = /[぀-ヿ㐀-䶿一-鿿豈-﫿]/g;
+
 function substantiveWordCount(text: string): number {
-  return text
+  const cjkCharCount = (text.match(CJK_CHARS) ?? []).length;
+  const latinWordCount = text
+    .replace(CJK_CHARS, ' ')
     .toLowerCase()
     .split(/\s+/)
     .filter(w => w.length > 2 && !STOP_WORDS.has(w))
     .length;
+  return latinWordCount + Math.floor(cjkCharCount / 2);
 }
 
 function isVersionBump(text: string): boolean {

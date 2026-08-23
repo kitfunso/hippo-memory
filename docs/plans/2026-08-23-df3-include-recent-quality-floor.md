@@ -84,22 +84,61 @@ Three properties, each deliberate:
 2. **Skip, never delete.** This is a read-path admission decision only. No
    store mutation, no audit row, nothing becomes unrecoverable.
 3. **Reuse the shared definition.** `isContentWorthStoring` (audit.ts:117) is
-   already the repo's single definition of junk (capture write gate, sleep
-   audit). Adding a second definition here would be the actual anti-pattern.
+   already the repo's junk predicate for write admission — its only other
+   caller is capture's write gate (capture.ts:174). It shares its underlying
+   predicates (`isFragment`, `isVersionBump`, `hasNoSpecificity`,
+   `substantiveWordCount`) with `auditMemory`, which is the separate function
+   the `hippo audit` CLI and the sleep quality phase call. (An earlier draft
+   of this plan and of the commit message described `isContentWorthStoring`
+   itself as "the sleep audit's" gate — inaccurate, corrected here: the sleep
+   phase calls `auditMemories`, api.ts:2969.) Adding a third, DF3-only
+   definition of junk would be the actual anti-pattern.
 
 `api.ts` already imports from `./audit.js` (line 60), so this adds no new
 module dependency and crosses no boundary.
 
-**Pinned injection needs no bypass clause in this filter.** The pinned block
-(api.ts:2493-2524) is a separate loop that admits every pinned entry
-unconditionally, deduping against `selectedIds`. A pinned entry dropped from
-the *recent* listing is therefore still injected by the pinned loop. The only
-difference is which path admits it (and so which score and budget order it
-gets) — not whether it appears. An earlier draft of this plan carried an
-`entry.pinned ||` clause justified as necessary for pinned survival; that
-justification was false, and the clause is dropped as unnecessary surface
-(Simplicity First). The acceptance criterion "pinned injection unchanged" is
-satisfied by the untouched pinned block, and test 3 pins it.
+**Pinned entries DO need the `entry.pinned ||` bypass — corrected after a
+cross-model (codex) review finding.** This plan went back and forth on the
+clause, so the reasoning is recorded in full:
+
+- Draft 1 carried `entry.pinned ||`, justified as "necessary or pinned entries
+  vanish". Round-1 plan critic correctly showed that justification was wrong:
+  the pinned block (api.ts:2493-2524) is a separate loop that admits pinned
+  entries unconditionally, deduping on `selectedIds`, so a pinned entry
+  dropped from the recent listing is re-added there.
+- Draft 2 therefore dropped the clause.
+- **Codex then found the case both of those missed:** the two loops share one
+  budget (`usedP` / `effBudget`). Without the bypass, a heuristic-failing
+  pinned entry is dropped from the recent slice, an unpinned entry backfills
+  into its slot and spends that budget, and when the pinned block finally runs
+  it hits `usedP + r.tokens > effBudget` and `continue`s — the pin is omitted
+  entirely. The pinned block is only a safety net when budget is not already
+  spent. Under pressure it is not.
+- The clause is restored. Test 3b constructs the budget pressure explicitly
+  (pinned junk entry newest, three clean 18-token entries, `includeRecent: 3`,
+  `budget: 55`) and is red without the bypass, green with it.
+
+Lesson recorded for the roadmap: "a later loop re-adds it" is not sufficient
+reasoning whenever the two loops draw on a shared budget.
+
+## Locale correctness (added after the codex review)
+
+`substantiveWordCount` split on `/\s+/` only, so a CJK sentence — which has no
+whitespace word boundaries — scored as one "word" and failed the `< 2` check.
+Measured: `isContentWorthStoring('データベース接続がタイムアウトしたときは再試行の間隔を二倍にする')`
+returned `false`. Applying the floor at the read surface would therefore have
+hidden Japanese/Chinese memories from injection.
+
+Fixed in `substantiveWordCount`: CJK characters are counted as substantive
+units (~2 chars per word) separately from the latin word split, with CJK runs
+stripped before that split so nothing double-counts. The change is **strictly
+more permissive** — it can only admit content previously rejected, never
+reject something previously admitted — which is why it is safe to make in a
+predicate shared with capture's write gate. It also fixes a pre-existing
+silent data-loss bug: `capture.ts:174` has been dropping CJK content at write
+time. Verified unchanged on every latin fixture (junk still junk, clean still
+clean, version-bumps still rejected, the documented fragment case still
+passes).
 
 ## Non-goals (explicit)
 
