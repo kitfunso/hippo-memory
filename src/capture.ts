@@ -157,16 +157,30 @@ function boundToClause(full: string, searchFrom: number, maxLen = 200): string {
       if (ch === quote) quote = null;
       continue;
     }
-    // Only " and ` open a quote. An apostrophe is NOT treated as one: in
-    // prose it is overwhelmingly a contraction or possessive ("it's", "the
-    // user's config"), and treating it as an opening quote leaves the
-    // scanner in quote mode forever, disabling clause-bounding entirely for
-    // ordinary English. Measured before this: "Always ensure it's enabled,
-    // then restart the service." captured the whole trailing clause.
-    // Codex P1, second round. The cost of ignoring ' is that a comma inside
-    // a single-quoted code string bounds early — a SHORTER capture, which is
-    // the safe direction here.
+    // Quote handling has to tell an APOSTROPHE from a single-quoted
+    // LITERAL, because getting either wrong reintroduces the fragment
+    // defect this change exists to remove, and both fragments PASS the
+    // write gate (code punctuation reads as "specific"):
+    //   treat every ' as a quote  -> "Always ensure it's enabled, then
+    //     restart..." never leaves quote mode, bounding disabled entirely
+    //   treat no ' as a quote     -> "Always pass 'a, b' to the parser."
+    //     cuts at the comma and stores "Always pass 'a"
+    // Both were codex P1s on this branch, in consecutive rounds.
+    //
+    // Discriminator: a ' OPENS a literal only at a word boundary - preceded
+    // by start/whitespace/open-bracket AND followed by non-whitespace. An
+    // in-word apostrophe ("it's", "user's") has letters on both sides and is
+    // just a character.
     if (ch === '"' || ch === '`') { quote = ch; continue; }
+    if (ch === "'") {
+      const prev = i > 0 ? full[i - 1] : undefined;
+      const next = full[i + 1];
+      const atBoundary =
+        (prev === undefined || /[\s([{]/.test(prev)) &&
+        next !== undefined && !/\s/.test(next);
+      if (atBoundary) { quote = ch; }
+      continue;
+    }
     if (ch === '(' || ch === '[' || ch === '{') { depth++; continue; }
     if (ch === ')' || ch === ']' || ch === '}') { if (depth > 0) depth--; continue; }
     if (depth > 0) continue;

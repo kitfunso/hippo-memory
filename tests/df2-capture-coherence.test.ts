@@ -196,6 +196,18 @@ describe('DF2 capture coherence', () => {
       // double-quoted string containing a separator
       { text: 'Always set the flag to "a, b" before running, then verify.',
         mustContain: '"a, b"', mustNotContain: 'then verify' },
+      // single-quoted literals containing a separator. An earlier revision
+      // ignored the apostrophe entirely and CUT here, storing "Always pass
+      // 'a" - which passes the write gate because code punctuation reads as
+      // "specific". I had asserted in a code comment that cutting early was
+      // "the safe direction" without testing it; codex proved otherwise.
+      { text: "Always pass 'a, b' to the parser, then validate.",
+        mustContain: "'a, b'", mustNotContain: 'then validate' },
+      // NB: the trailing clause must be a token that is not a substring of
+      // the kept text - "ever" is inside "Never" and made this assertion
+      // vacuous on the first attempt.
+      { text: "Never run 'rm -rf, x' in the deploy script, check first.",
+        mustContain: "'rm -rf, x'", mustNotContain: 'check first' },
       // plain prose, no traps
       { text: 'Always run the suite twice, then deploy.',
         mustContain: 'run the suite twice', mustNotContain: 'then deploy' },
