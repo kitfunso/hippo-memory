@@ -132,19 +132,48 @@ function splitSentences(text: string): string[] {
  * it is truncated and stored.
  */
 function boundToClause(full: string, searchFrom: number, maxLen = 200): string {
+  // Scan for the first PROSE clause boundary after `searchFrom`.
+  //
+  // Depth-awareness is not a nicety here: hippo memories are full of code, and
+  // a naive scan reintroduces the exact fragment defect this whole change
+  // exists to remove. Measured before this guard existed:
+  //   "Always call build(x, y) before deploy."  ->  "Always call build(x"
+  //   "Never pass {a: 1, b: 2} to the writer."  ->  "Never pass {a"
+  // Both then PASS the write gate, because they contain code punctuation and
+  // so read as "specific" — a malformed fragment stored with high confidence.
+  // Codex review finding (P1) on this branch.
+  //
+  // So: a separator only ends the clause at bracket depth zero and outside
+  // quotes. Unbalanced closers are tolerated (depth floors at 0) because
+  // captured text often starts mid-expression.
+  let depth = 0;
+  let quote: string | null = null;
   let cutEnd = full.length;
-  const tail = full.slice(searchFrom);
 
-  const clause = tail.match(/[,;:]\s/);
-  if (clause && clause.index !== undefined) {
-    const idx = searchFrom + clause.index;
-    if (idx < cutEnd) cutEnd = idx;
-  }
+  for (let i = searchFrom; i < full.length; i++) {
+    const ch = full[i];
 
-  const terminator = tail.match(/[.!?](?=\s|$)/);
-  if (terminator && terminator.index !== undefined) {
-    const idx = searchFrom + terminator.index + 1;
-    if (idx < cutEnd) cutEnd = idx;
+    if (quote) {
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') { quote = ch; continue; }
+    if (ch === '(' || ch === '[' || ch === '{') { depth++; continue; }
+    if (ch === ')' || ch === ']' || ch === '}') { if (depth > 0) depth--; continue; }
+    if (depth > 0) continue;
+
+    const next = full[i + 1];
+    // Prose clause separator: , ; : followed by whitespace.
+    if ((ch === ',' || ch === ';' || ch === ':') && next !== undefined && /\s/.test(next)) {
+      cutEnd = i;
+      break;
+    }
+    // Sentence terminator, but only when followed by whitespace or end — a
+    // bare [.!?] splits inside .env, capture.ts, v1.35.0.
+    if ((ch === '.' || ch === '!' || ch === '?') && (next === undefined || /\s/.test(next))) {
+      cutEnd = i + 1;
+      break;
+    }
   }
 
   let bounded = full.slice(0, cutEnd);
@@ -206,7 +235,7 @@ function extractFromPatterns(
         // Discriminator: a label ends in its own colon, or is a "the X is"
         // phrase.
         const rawPrefix = match[1] ?? '';
-        const isLabelPrefix = /:\s*$/.test(rawPrefix) || /^\s*the\s+\w+\s+is\s*$/i.test(rawPrefix);
+        const isLabelPrefix = /:\s*$/.test(rawPrefix) || /^\s*the\s+\w+\s+(?:is|was)\s*$/i.test(rawPrefix);
         const keywordPrefix = isLabelPrefix ? '' : rawPrefix;
         const afterKeyword = match[2] ?? match[0];
         bounded = boundToClause(keywordPrefix + afterKeyword, keywordPrefix.length);

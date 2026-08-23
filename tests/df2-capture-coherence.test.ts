@@ -55,16 +55,23 @@ describe('DF2 capture coherence', () => {
     expect(shouldAlways[0].content.toLowerCase()).toContain('always run the suite twice');
   });
 
-  it('6. DECISION and ERROR sets keep their keyword too, not just RULE', () => {
+  it('6. DECISION and ERROR sets follow the same semantic-vs-label split as RULE', () => {
+    // SEMANTIC keyword ("decided to") carries the meaning -> preserved.
     const decision = extractFromText('We decided to pin the version to avoid a repeat of the outage.');
     expect(decision).toHaveLength(1);
     expect(decision[0].category).toBe('decision');
     expect(decision[0].content.toLowerCase()).toContain('decided');
 
+    // LABEL keyword ("the issue was") only names the category, which is
+    // already on the item -> dropped. An earlier revision of this test
+    // asserted the opposite, because the discriminator recognised "the X is"
+    // but not "the X was" and the label leaked through. Two reviewers found
+    // that gap independently; this now pins the corrected behaviour.
     const error = extractFromText('The issue was that the reserve loop did not dedupe entries.');
     expect(error).toHaveLength(1);
     expect(error[0].category).toBe('error');
-    expect(error[0].content.toLowerCase()).toContain('issue was');
+    expect(error[0].content.toLowerCase()).not.toContain('the issue was');
+    expect(error[0].content.toLowerCase()).toContain('reserve loop');
   });
 
   it('7. documented behaviour change: a short imperative is now captured', () => {
@@ -134,5 +141,34 @@ describe('DF2 capture coherence', () => {
     // This suite deliberately does not duplicate capture-last-session.test.ts;
     // the verification step runs that suite alongside this one instead.
     expect(true).toBe(true);
+  });
+
+  // Codex P1 on this branch: the clause scanner cut inside code delimiters,
+  // reintroducing the exact fragment defect this change exists to remove -
+  // and the fragments PASSED the write gate because code punctuation reads as
+  // "specific". Depth-aware scanning is the fix; these pin it.
+  it('11. clause scan ignores separators inside code delimiters', () => {
+    const cases: Array<[string, string]> = [
+      ['Always call build(x, y) before deploy.', 'build(x, y)'],
+      ['Never pass {a: 1, b: 2} directly to the writer.', '{a: 1, b: 2}'],
+      ['Never use arr[0, 1] indexing here.', 'arr[0, 1]'],
+    ];
+    for (const [text, mustContain] of cases) {
+      const items = extractFromText(text);
+      expect(items, `expected a capture from "${text}"`).toHaveLength(1);
+      expect(items[0].content, `code span must survive clause scanning`).toContain(mustContain);
+    }
+  });
+
+  it('12. label discriminator treats "the X was" like "the X is"', () => {
+    // ERROR_PATTERNS matches (?:the (?:issue|problem|fix) (?:is|was)); the
+    // discriminator originally only knew the "is" form, so the "was" branch
+    // kept its label prefix. Found independently by two reviewers.
+    const wasItems = extractFromText('The issue was the config file was missing from the deploy bundle.');
+    const isItems = extractFromText('The issue is the config file goes missing from the deploy bundle.');
+    expect(wasItems).toHaveLength(1);
+    expect(isItems).toHaveLength(1);
+    expect(wasItems[0].content.toLowerCase()).not.toContain('the issue was');
+    expect(isItems[0].content.toLowerCase()).not.toContain('the issue is');
   });
 });
