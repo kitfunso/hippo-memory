@@ -161,7 +161,7 @@ import {
   importVault,
   ImportOptions,
 } from './importers.js';
-import { cmdCapture, CaptureOptions, cmdPreCompact, truncateCodePointSafe } from './capture.js';
+import { cmdCapture, CaptureOptions, cmdPreCompact, truncateCodePointSafe, sanitizeLogMessage } from './capture.js';
 import {
   auditMemories,
   appendAuditEvent,
@@ -3223,7 +3223,9 @@ function appendSessionEndCloseLog(logFile: string | null, message: string): void
   if (!logFile) return;
   try {
     fs.mkdirSync(path.dirname(logFile), { recursive: true });
-    fs.appendFileSync(logFile, `[hippo] ${new Date().toISOString()} ${message}\n`, 'utf8');
+    // sanitizeLogMessage: `message` interpolates the payload-controlled
+    // session_id — same log-forgery guard appendPreCompactLog applies.
+    fs.appendFileSync(logFile, `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(message)}\n`, 'utf8');
   } catch {
     // Best-effort only — never let a log-write failure surface as an error.
   }

@@ -206,4 +206,28 @@ describe('6. session-end wiring: --session-id argv + worker close (DF1 T3)', () 
       'skip: no session_id in SessionEnd payload, active snapshot left untouched',
     );
   });
+
+  it('log-forgery guard: a session_id with embedded newlines cannot inject fake [hippo] log lines', async () => {
+    // PR #146 review finding: appendSessionEndCloseLog interpolates the
+    // payload-controlled session_id, so it must run the same
+    // sanitizeLogMessage guard appendPreCompactLog documents (capture.ts
+    // "Log-forgery guard" comment). Red-under-old: without the guard the
+    // crafted id below writes a standalone "FORGED [hippo] fake line".
+    const logFile = path.join(dir, 'session-end-forgery.log');
+    const evilId = 'sess-evil\nFORGED [hippo] fake line\nsess-tail';
+    const payload = JSON.stringify({ session_id: evilId, hook_event_name: 'SessionEnd' });
+    const result = runHippo(['session-end', '--log-file', logFile], dir, env, payload);
+    expect(result.status).toBe(0);
+
+    await waitUntil(
+      () => fs.existsSync(logFile) && fs.readFileSync(logFile, 'utf8').includes('active snapshot'),
+    );
+
+    const logText = fs.readFileSync(logFile, 'utf8');
+    // No line may START with the injected content — every log line stays
+    // [hippo]-prefixed with the control chars stripped from the id.
+    const forgedLine = logText.split('\n').find((l) => l.startsWith('FORGED'));
+    expect(forgedLine).toBeUndefined();
+    expect(logText).toContain('sess-evilFORGED [hippo] fake linesess-tail');
+  });
 });
