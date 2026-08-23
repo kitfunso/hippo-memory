@@ -62,16 +62,27 @@ describe('DF2 capture coherence', () => {
     expect(decision[0].category).toBe('decision');
     expect(decision[0].content.toLowerCase()).toContain('decided');
 
-    // LABEL keyword ("the issue was") only names the category, which is
-    // already on the item -> dropped. An earlier revision of this test
-    // asserted the opposite, because the discriminator recognised "the X is"
-    // but not "the X was" and the label leaked through. Two reviewers found
-    // that gap independently; this now pins the corrected behaviour.
+    // COLON labels ("decision:", "error:") are dropped - they name the
+    // category, which is already on the item. "the X is/was" is KEPT.
+    //
+    // This reverses an earlier revision of this test, and the reversal is the
+    // point: dropping "the X is/was" too left the residue starting with
+    // "to ", which isFragment rejects outright, so "The plan is to ship on
+    // Friday" and "The fix was to bump the pool timeout" stored NOTHING where
+    // every prior version stored them. Silent loss on two high-traffic
+    // patterns, found only at the ship gate. The AT1 rejected-value evidence
+    // that motivated label-dropping involved colon labels exclusively
+    // (tests/rejection-acceptance.test.ts still passes), so the narrow rule
+    // keeps that guarantee without the collateral loss.
     const error = extractFromText('The issue was that the reserve loop did not dedupe entries.');
     expect(error).toHaveLength(1);
     expect(error[0].category).toBe('error');
-    expect(error[0].content.toLowerCase()).not.toContain('the issue was');
     expect(error[0].content.toLowerCase()).toContain('reserve loop');
+
+    // the regression this narrowing exists to prevent
+    const plan = extractFromText('The plan is to ship the DF2 branch on Friday afternoon, pending QA signoff.');
+    expect(plan, 'a "the plan is to ..." memory must not vanish').toHaveLength(1);
+    expect(plan[0].content.toLowerCase()).toContain('ship the df2 branch');
   });
 
   it('7. documented behaviour change: a short imperative is now captured', () => {
@@ -144,6 +155,38 @@ describe('DF2 capture coherence', () => {
   });
 
   /**
+   * Ship-gate findings. Every case here is a regression this branch
+   * introduced against master, each verified by running BOTH versions - not
+   * inferred. All three survived twelve codex rounds and five reviewers,
+   * because they live at the interaction between the new scanner and gates
+   * nobody re-swept.
+   */
+  it('17. ship gate: shorter-but-correct content must not fall under a downstream gate', () => {
+    // isFragment rejects content starting with "to " under 50 chars. Dropping
+    // the "the X is/was" label left exactly that residue, so these stored
+    // NOTHING while master stored them. Absence of a memory is invisible -
+    // no error, no log, nothing to notice in the field.
+    const plan = extractFromText('The plan is to ship the DF2 branch on Friday afternoon, pending QA signoff.');
+    expect(plan, 'a "the plan is to ..." memory must not vanish').toHaveLength(1);
+
+    const fix = extractFromText('The fix was to bump the pool timeout to 30s, because the recycler defaults were too aggressive.');
+    expect(fix, 'a "the fix was to ..." memory must not vanish').toHaveLength(1);
+    expect(fix[0].content).toContain('pool timeout');
+  });
+
+  it('18. ship gate: closing a literal uses the same shape test as opening', () => {
+    // The open decision took twelve rounds of care; the close accepted any
+    // bare quote. So a possessive INSIDE a literal closed it early and the
+    // comma after read as a clause boundary - a mid-literal fragment that
+    // then passes the write gate, the exact defect this branch removes, on
+    // ordinary prose master handles correctly.
+    const items = extractFromText("Always pass 'user's a, b list' to the parser.");
+    expect(items).toHaveLength(1);
+    expect(items[0].content, 'possessive inside a literal must not close it')
+      .toContain("'user's a, b list'");
+  });
+
+  /**
    * DOCUMENTED BOUNDARY: locally undecidable quote roles.
    *
    * These assert what the scanner CURRENTLY does on inputs where no local
@@ -158,9 +201,19 @@ describe('DF2 capture coherence', () => {
    *
    * Same for prev="(" next="." after=letter, which is a closer in
    * "'a, ('.trim()" and an opener in "parse('.env". Deciding these needs to
-   * know whether an earlier quote was an elision or a real opener - global
-   * pairing, not neighbour inspection - and pairing itself needs a notion of
-   * what a literal "looks like". Twelve review rounds converged here.
+   * know whether an earlier quote was an elision or a real opener.
+   *
+   * CORRECTION, from the ship-gate review: "undecidable" overstates it. These
+   * particular pairs ARE separable by a small elision lexicon ('em, 'til,
+   * 'tis, 'cause, 'n) - treat a known elision as never-an-opener and the
+   * mirrored quote stops pairing with it. What is genuinely undecidable is
+   * narrower: an UNKNOWN elision ahead of a quote-shaped token. That is rarer
+   * than the earlier wording implied, and the honest statement is that these
+   * shapes are UNRESOLVED rather than unresolvable.
+   *
+   * They stay pinned rather than fixed because a lexicon is a different kind
+   * of change - data, not logic - and belongs with the tokenizer question,
+   * not appended to a twelve-round predicate. Backlogged.
    *
    * The scanner favours the shapes that occur in real memory text (quoted
    * shell commands, flags, filenames) and accepts the mirrored ones as a
@@ -199,16 +252,26 @@ describe('DF2 capture coherence', () => {
     }
   });
 
-  it('12. label discriminator treats "the X was" like "the X is"', () => {
-    // ERROR_PATTERNS matches (?:the (?:issue|problem|fix) (?:is|was)); the
-    // discriminator originally only knew the "is" form, so the "was" branch
-    // kept its label prefix. Found independently by two reviewers.
+  it('12. "the X is" and "the X was" behave identically', () => {
+    // The original defect two reviewers found was an INCONSISTENCY: the
+    // discriminator knew "the X is" but not "the X was", so one kept its
+    // label and the other dropped it. Consistency was the requirement; which
+    // way to resolve it was the open choice.
+    //
+    // It was first resolved by dropping BOTH, which turned out to cause
+    // silent data loss (see test 6) because the residue starts with "to ".
+    // It is now resolved by KEEPING both. The invariant the reviewers
+    // actually asked for - identical handling - still holds, and is what
+    // this test pins.
     const wasItems = extractFromText('The issue was the config file was missing from the deploy bundle.');
     const isItems = extractFromText('The issue is the config file goes missing from the deploy bundle.');
     expect(wasItems).toHaveLength(1);
     expect(isItems).toHaveLength(1);
-    expect(wasItems[0].content.toLowerCase()).not.toContain('the issue was');
-    expect(isItems[0].content.toLowerCase()).not.toContain('the issue is');
+    expect(wasItems[0].content.toLowerCase()).toContain('the issue was');
+    expect(isItems[0].content.toLowerCase()).toContain('the issue is');
+    // both keep their content, neither is truncated to the label
+    expect(wasItems[0].content.toLowerCase()).toContain('config file');
+    expect(isItems[0].content.toLowerCase()).toContain('config file');
   });
 
   // STRUCTURAL GUARD — three rounds of defects in this scanner earned it.

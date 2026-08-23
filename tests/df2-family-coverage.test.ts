@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { extractFromText } from '../src/capture.js';
+import { isContentWorthStoring } from '../src/audit.js';
 
 /**
  * Family coverage sweep (DF2).
@@ -34,6 +35,12 @@ describe('DF2: every pattern family still extracts', () => {
     ['decision/lets', "Let's go with SQLite for the store."],
     ['decision/decided', 'We decided to use Postgres for the primary store.'],
     ['pref/prefer', 'Prefer using SQLite instead of Postgres for local runs.'],
+    // moved out of EXPECT_NULL when label-dropping was narrowed to colon
+    // labels: keeping "the issue was" makes the content long enough to clear
+    // the write gate, so this shape now stores where it previously vanished.
+    // The EXPECT_NULL guard is what surfaced the change - it failed loudly
+    // rather than letting a behaviour shift pass unnoticed.
+    ['error/issuewas', 'The issue was the reserve loop did not dedupe entries.'],
   ];
 
   // Shapes that extract NOTHING on this branch and extracted nothing on
@@ -45,7 +52,6 @@ describe('DF2: every pattern family still extracts', () => {
     ['decision/goingwith', "We're going with the batched writer approach."],
     ['pref/rather', 'I would rather batch the writes than lock the table.'],
     ['error/failed', 'The build failed because the token had expired.'],
-    ['error/issuewas', 'The issue was the reserve loop did not dedupe entries.'],
     ['error/bugwas', 'The bug was the offset assumed group one started the match.'],
     ['error/causewas', 'The cause was a stale base branch in the worktree.'],
     ['rule/importantshort', 'Important: rotate the token first.'],
@@ -72,6 +78,21 @@ describe('DF2: every pattern family still extracts', () => {
       expect(got!, `${name} duplicated a word`).not.toMatch(DUPLICATED_WORD);
     });
   }
+
+  it('ship gate: chat acronyms do not buy a specificity bypass', () => {
+    // The acronym signal exists so "every PR needs two approvals" survives
+    // clause-bounding. It must not also admit chat noise: this gate is shared
+    // with the recent-context floor and `hippo audit`, so widening it acts
+    // RETROACTIVELY over rows a user already holds.
+    for (const junk of ['TODO fix this thing', 'LGTM ship it', 'FYI all done here', 'IIRC that was fine']) {
+      expect(isContentWorthStoring(junk), `${junk} must stay rejected`).toBe(false);
+    }
+    for (const real of ['every PR needs two approvals', 'the CI runs on every push here', 'restart the DB pool after deploy']) {
+      expect(isContentWorthStoring(real), `${real} must be stored`).toBe(true);
+    }
+    // capitalisation alone still buys nothing
+    expect(isContentWorthStoring('FIXED SIGNALS')).toBe(false);
+  });
 
   it('the duplication assertion is not vacuous', () => {
     // Guards the guard. A regex mangled into control bytes still "passes"

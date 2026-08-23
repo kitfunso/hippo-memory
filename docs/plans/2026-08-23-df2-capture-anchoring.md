@@ -181,10 +181,18 @@ boundary). The same holds for `prev="(" next="." after=letter`, a closer in
 `'a, ('.trim()` and an opener in `parse('.env`.
 
 Deciding these requires knowing whether an EARLIER quote was an elision or a
-real opener - global pairing rather than neighbour inspection - and pairing
-in turn needs a notion of what a literal "looks like", which is another
-heuristic. That is the wall, and it is a property of the input, not of any
-particular predicate.
+real opener - global pairing rather than neighbour inspection.
+
+**Corrected by the ship-gate review.** Calling this "undecidable" was too
+strong. A small elision lexicon ('em, 'til, 'tis, 'cause, 'n) separates both
+pinned pairs: treat a known elision as never-an-opener, and the mirrored
+quote stops pairing with it. The genuinely undecidable residue is narrower -
+an UNKNOWN elision ahead of a quote-shaped token - and rarer than the first
+wording implied. The accurate word is UNRESOLVED, not unresolvable.
+
+They stay pinned rather than fixed because a lexicon is a different kind of
+change - data rather than logic - and belongs with the tokenizer question
+instead of being appended to a twelve-round predicate.
 
 **What the rounds actually bought.** Each one named a distinction that was
 missing rather than a condition:

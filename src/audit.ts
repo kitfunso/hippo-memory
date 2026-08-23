@@ -110,7 +110,15 @@ function hasNoSpecificity(text: string): boolean {
   // "fixed signals" was correctly rejected, so capitalization alone bought a
   // bypass - into auditMemory and includeRecent as well, where junk would
   // then occupy recent-context slots. Codex P2, r8.
-  const hasAcronym = /\b[A-Z]{2,6}\b/.test(text) && /[a-z]/.test(text);
+  // CHAT acronyms are not domain signal. Admitting any all-caps token let
+  // "LGTM ship it", "TODO fix this thing", "FYI all done here" through a gate
+  // that correctly rejected them before - and this gate is shared, so the
+  // effect is retroactive: junk rows already in a user's store were filtered
+  // out of recent-context slots and would have started occupying them, and
+  // `hippo audit` would have stopped flagging them. Found at the ship gate.
+  const CHAT_ACRONYMS = /^(?:TODO|FYI|LGTM|IIRC|IMO|IMHO|FWIW|TBD|BTW|ASAP|AFAIK|WIP|NB|PS)$/;
+  const domainAcronyms = (text.match(/\b[A-Z]{2,6}\b/g) ?? []).filter(a => !CHAT_ACRONYMS.test(a));
+  const hasAcronym = domainAcronyms.length > 0 && /[a-z]/.test(text);
   const hasPath = /[/\\.]/.test(text);
   const hasCode = /[`_{}()\[\]]/.test(text);
   if (hasNumber || hasProperNoun || hasPath || hasCode || hasAcronym) return false;

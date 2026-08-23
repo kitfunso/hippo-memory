@@ -138,6 +138,10 @@ function splitSentences(text: string): string[] {
  * end-of-string - never by a letter, which is what makes "user's" an
  * apostrophe rather than a partner.
  */
+function isLetterOrDigit(ch: string | undefined): boolean {
+  return ch !== undefined && /[\p{L}\p{N}]/u.test(ch);
+}
+
 function lastCloserIndex(full: string): number {
   // ONE pass, not one per apostrophe. The previous shape rescanned the whole
   // remaining suffix at every boundary apostrophe, so a transcript full of
@@ -166,7 +170,7 @@ function lastCloserIndex(full: string): number {
     if (full[j] !== "'") continue;
     const prev = full[j - 1];
     const next = full[j + 1];
-    if (next !== undefined && /[\p{L}\p{N}]/u.test(next)) continue;
+    if (isLetterOrDigit(next)) continue;
     // "tight against content" excludes an OPENING delimiter: in
     // "call parse('--force" the paren is non-whitespace but the quote after
     // it is an opener, and treating it as a closer let an earlier elision
@@ -214,7 +218,18 @@ function boundToClause(full: string, searchFrom: number, maxLen = 200): string {
     const ch = full[i];
 
     if (quote) {
-      if (ch === quote) quote = null;
+      // Closing uses the SAME shape test as opening. This was asymmetric:
+      // twelve rounds went into deciding when a quote OPENS a literal, while
+      // the close accepted any bare "'" - so the apostrophe in a possessive
+      // INSIDE a literal closed it early:
+      //   "Always pass 'user's a, b list' to the parser."
+      //     -> "Always pass 'user's a"   (master kept the whole literal)
+      // a mid-literal fragment that then PASSES the write gate, which is
+      // precisely the defect this branch exists to remove. Found by the
+      // ship-gate review after every earlier gate missed it.
+      if (ch === quote && (quote !== "'" || !isLetterOrDigit(full[i + 1]))) {
+        quote = null;
+      }
       continue;
     }
     // Quote handling has to tell an APOSTROPHE from a single-quoted
@@ -337,7 +352,15 @@ function extractFromPatterns(
         // Discriminator: a label ends in its own colon, or is a "the X is"
         // phrase.
         const rawPrefix = match[1] ?? '';
-        const isLabelPrefix = /:\s*$/.test(rawPrefix) || /^\s*the\s+\w+\s+(?:is|was)\s*$/i.test(rawPrefix);
+        // ONLY colon-terminated labels are dropped. Dropping "the X is/was"
+        // too left the residue starting with "to ", which isFragment then
+        // rejected outright - so "The plan is to ship on Friday" and "The fix
+        // was to bump the pool timeout" stored NOTHING, where every prior
+        // version stored them. Silent loss on two of the highest-traffic
+        // patterns, and invisible: an absent memory leaves no trace. The AT1
+        // rejected-value evidence only ever involved colon labels
+        // ("decision: "), so the narrower rule keeps that guarantee.
+        const isLabelPrefix = /:\s*$/.test(rawPrefix);
         const keywordPrefix = isLabelPrefix ? '' : rawPrefix;
         // Scan the UNTRUNCATED remainder, not match[2]. The patterns cap
         // their content group at 500 chars, so a quoted literal whose closer
