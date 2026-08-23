@@ -179,7 +179,11 @@ describe('DF2 capture coherence', () => {
   // messy realities of English-plus-code in one place, so the NEXT unimagined
   // shape fails here rather than in review.
   it('13. adversarial prose corpus: clause bounding holds across real-world text shapes', () => {
-    const corpus: Array<{ text: string; mustContain: string; mustNotContain: string }> = [
+    // `mustNotContain` is optional: a few shapes are purely positive, where
+    // the whole literal must survive and no substring of the CORRECT output
+    // is a valid negative. Inventing one there would assert nothing, which
+    // is the vacuity trap this file already carries a guard against.
+    const corpus: Array<{ text: string; mustContain: string; mustNotContain?: string }> = [
       // contractions and possessives (codex P1, round 2)
       { text: "Always ensure it's enabled, then restart the service.",
         mustContain: "it's enabled", mustNotContain: 'restart the service' },
@@ -256,6 +260,14 @@ describe('DF2 capture coherence', () => {
         mustContain: "'a, b'-style", mustNotContain: 'then verify' },
       { text: "Always keep 'em enabled, then edit '.env, after restart.",
         mustContain: "'em enabled", mustNotContain: '.env' },
+      // an opener sitting tight against an OPENING delimiter. Non-whitespace
+      // before it, but "parse('" is an opener position, not a closer.
+      { text: "Always keep 'em enabled, then call parse('--force, after restart.",
+        mustContain: "'em enabled", mustNotContain: 'parse' },
+      // a closer before punctuation that does NOT join tokens. A semicolon
+      // ends the literal whatever follows it, unlike the dot in '.env.
+      { text: "Always run 'echo a, b ';then verify.",
+        mustContain: "'echo a, b '" },
       // plain prose, no traps
       { text: 'Always run the suite twice, then deploy.',
         mustContain: 'run the suite twice', mustNotContain: 'then deploy' },
@@ -265,7 +277,9 @@ describe('DF2 capture coherence', () => {
       expect(items, `expected a capture from "${c.text}"`).toHaveLength(1);
       const content = items[0].content;
       expect(content, `must keep: ${c.mustContain}`).toContain(c.mustContain);
-      expect(content, `must bound before: ${c.mustNotContain}`).not.toContain(c.mustNotContain);
+      if (c.mustNotContain !== undefined) {
+        expect(content, `must bound before: ${c.mustNotContain}`).not.toContain(c.mustNotContain);
+      }
     }
   });
 });

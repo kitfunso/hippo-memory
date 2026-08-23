@@ -167,13 +167,25 @@ function lastCloserIndex(full: string): number {
     const prev = full[j - 1];
     const next = full[j + 1];
     if (next !== undefined && /[\p{L}\p{N}]/u.test(next)) continue;
-    const tightBefore = prev !== undefined && !/\s/.test(prev);
+    // "tight against content" excludes an OPENING delimiter: in
+    // "call parse('--force" the paren is non-whitespace but the quote after
+    // it is an opener, and treating it as a closer let an earlier elision
+    // pair across the clause boundary. Codex P2, r11.
+    const tightBefore = prev !== undefined && !/[\s([{]/.test(prev);
     const endsAfter = next === undefined || /\s/.test(next);
+    // Punctuation splits in two, and this is the fact the last three
+    // revisions kept rediscovering piecemeal:
+    //   , ; : ! ? ) ] }  never join tokens - they end the literal whatever
+    //                    follows, so "'echo a, b ';then" closes at the ;
+    //   . - _ / @ #      DO join tokens - "'.env" and "'--force" continue a
+    //                    filename or flag, so these only close when trailed
+    //                    by whitespace
     const afterNext = full[j + 2];
-    const clauseAfter =
-      next !== undefined && /[,;:.!?)\]}]/.test(next) &&
+    const closesRegardless = next !== undefined && /[,;:!?)\]}]/.test(next);
+    const joinerThenSpace =
+      next !== undefined && /[.\-_/@#]/.test(next) &&
       (afterNext === undefined || /\s/.test(afterNext));
-    if (tightBefore || endsAfter || clauseAfter) return j;
+    if (tightBefore || endsAfter || closesRegardless || joinerThenSpace) return j;
   }
   return -1;
 }
