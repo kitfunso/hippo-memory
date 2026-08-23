@@ -1153,6 +1153,10 @@ Fixed at the cause rather than the instance: a `(?=\p{L})` lookahead makes "lett
 
 **Rule earned (applies well beyond hippo):** when a fix depends on a claimed property of a character class, encoding, locale or collation, execute that property against an adversarial category sweep BEFORE writing it down as justification. Reasoning about Unicode is not evidence about Unicode.
 
+**The deepest finding came from the ship-gate pass, and it was architectural, not textual.** `getContext`'s pinnedOnly branch runs two admission loops against ONE budget: recents spend first, pins take the remainder and skip whatever no longer fits. DF3's filter replaced short junk rows with full-size qualifying entries, so recents systematically spend MORE and a pin that fit before silently stops being injected. Codex had caught one manifestation (pins *inside* the recent window) and the `entry.pinned ||` bypass patched it; the ship-gate review found the second (pins *outside* the window) and identified that both were the same mechanism. Fixed at the mechanism: pins are ranked and their budget reserved BEFORE the recent loop runs, so explicit user intent gets first claim and automatic backfill is capped to the remainder.
+
+**Rule earned:** when a change alters how much of a shared budget an earlier consumer spends, the later consumers on that budget are all in the blast radius — enumerate them explicitly. Patching the first displaced consumer you find is patching a symptom; two consumers displaced by one mechanism means the mechanism is the bug.
+
 ### DF4. Git auto-learn seeds no-information commit subjects as memories [planned, small]
 **Incident (live store):** `hippo audit` flags 44 entries, dominated by bare commit subjects ("fixed signals", "globe view on by default", "corrected entry prices") seeded by auto-learn (src/autolearn.ts) - the audit heuristic calls them "no specific details (names, paths, numbers, code)".
 **Root cause:** the quality verifier exists only downstream (audit) while the producer ingests unconditionally - the same shape as DF2/DF3. A subject line without a path, number, or code token carries no recall value on its own.
