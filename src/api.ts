@@ -2461,6 +2461,56 @@ export async function getContext(
     const selectedIds = new Set<string>();
     let usedP = 0;
 
+    // Pinned entries are explicit user intent; the recent-N list is an
+    // automatic backfill. Both loops below share ONE budget (`usedP`
+    // against `effBudget`), and the recent loop runs first (see it further
+    // down) then the pinned loop takes what is left, `continue`-skipping
+    // any pin that no longer fits. DF3's quality filter on the recent list
+    // means junk rows (short, cheap) get skipped and full-size qualifying
+    // entries backfill in their place, so the recent loop now systematically
+    // spends more before the pinned loop ever runs -- a pin outside the
+    // recent-N window can get silently displaced. The `entry.pinned ||`
+    // bypass in the recent filter below only protects a pin that is itself
+    // inside the recent window; it does nothing for pins outside it. Fix:
+    // rank pins here (before the recent loop spends anything) and reserve
+    // their share of `effBudget` up front, so the recent loop is capped to
+    // what pins do NOT need.
+    const pinnedLocal = localEntries.filter((e) => e.pinned);
+    const pinnedGlobal = globalEntries.filter((e) => e.pinned);
+    const rankedPinned = [
+      ...pinnedLocal.map((e) => ({ entry: e, isGlobal: false })),
+      ...pinnedGlobal.map((e) => ({ entry: e, isGlobal: true })),
+    ]
+      .map(({ entry, isGlobal }) => {
+        const scopeSig = scopeMatch(entry.tags, activeScope);
+        const sBst = scopeSig === 1 ? 1.5 : scopeSig === -1 ? 0.5 : 1.0;
+        return {
+          entry,
+          score: calculateStrength(entry, nowP) * (isGlobal ? 1 / 1.2 : 1) * sBst,
+          tokens: estimateTokens(entry.content),
+          isGlobal,
+        };
+      })
+      .sort(compareScoredResults);
+
+    // Mirror the pinned admission loop's own `continue`-not-`break`
+    // semantics (further down) so the reserve equals what that loop will
+    // actually admit -- a big pin near the front should not block smaller
+    // pins behind it from reserving their share too.
+    let pinnedReserve = 0;
+    for (const r of rankedPinned) {
+      if (pinnedReserve + r.tokens <= effBudget) {
+        pinnedReserve += r.tokens;
+      }
+    }
+    // Known, accepted tradeoff: a pin that also lands in the recent-N slice
+    // is counted once in `pinnedReserve` (here) AND admitted again by the
+    // recent loop below, so a little budget goes unused (`recentBudget` is
+    // more conservative than it needs to be in that case). That only
+    // under-fills recents slightly -- it never displaces a pin -- so it is
+    // the safe direction and is not worth extra bookkeeping to recover.
+    const recentBudget = Math.max(0, effBudget - pinnedReserve);
+
     if (includeRecent > 0) {
       const recent = [
         ...localEntries.map((entry) => ({ entry, isGlobal: false })),
@@ -2506,15 +2556,13 @@ export async function getContext(
 
       for (const r of recent) {
         if (selectedIds.has(r.entry.id)) continue;
-        if (usedP + r.tokens > effBudget) continue;
+        if (usedP + r.tokens > recentBudget) continue;
         selectedItems.push(r);
         selectedIds.add(r.entry.id);
         usedP += r.tokens;
       }
     }
 
-    const pinnedLocal = localEntries.filter((e) => e.pinned);
-    const pinnedGlobal = globalEntries.filter((e) => e.pinned);
     if (
       pinnedLocal.length === 0 &&
       pinnedGlobal.length === 0 &&
@@ -2522,21 +2570,6 @@ export async function getContext(
     ) {
       return { entries: [], tokens: 0 };
     }
-    const rankedPinned = [
-      ...pinnedLocal.map((e) => ({ entry: e, isGlobal: false })),
-      ...pinnedGlobal.map((e) => ({ entry: e, isGlobal: true })),
-    ]
-      .map(({ entry, isGlobal }) => {
-        const scopeSig = scopeMatch(entry.tags, activeScope);
-        const sBst = scopeSig === 1 ? 1.5 : scopeSig === -1 ? 0.5 : 1.0;
-        return {
-          entry,
-          score: calculateStrength(entry, nowP) * (isGlobal ? 1 / 1.2 : 1) * sBst,
-          tokens: estimateTokens(entry.content),
-          isGlobal,
-        };
-      })
-      .sort(compareScoredResults);
 
     for (const r of rankedPinned) {
       if (selectedIds.has(r.entry.id)) continue;

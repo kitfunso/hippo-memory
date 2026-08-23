@@ -234,6 +234,94 @@ describe('DF3 — includeRecent quality floor (api.getContext)', () => {
     }
   });
 
+  it('test 3c — repro: shared-budget reserve keeps a pin outside the recent-N window from being displaced by DF3 backfill', async () => {
+    const { home, restore } = tmpHome();
+    try {
+      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+
+      // Executed repro from the ship-gate review. Junk "tmp" (1 token) is
+      // the NEWEST entry, three clean 69-70 char entries (18 tokens each)
+      // sit in the middle, and the pin "fixed signals" (4 tokens) is the
+      // OLDEST entry -- outside the includeRecent:3 window either way.
+      //   Junk is filtered pre-slice, so the recent candidate list is the
+      //   three clean entries (54 tokens total).
+      //   Before the reserve fix: the recent loop admits all three clean
+      //     entries against the full 55-token budget (54 <= 55), leaving
+      //     only 1 token. The pinned loop then needs 4, 54+4=58 > 55, so
+      //     the pin is skipped -- MISSING.
+      //   After the reserve fix: pinnedReserve = 4 (the pin alone), so the
+      //     recent loop is capped at 55-4=51. Two clean entries fit
+      //     (18+18=36 <= 51); the third does not (36+18=54 > 51) and is
+      //     dropped. The pinned loop then admits the pin against the full
+      //     55-token budget (36+4=40 <= 55) -- the pin now injects.
+      seed(home, 'tmp', { created: '2026-08-20T10:00:04.000Z' });
+      seed(home, 'clean recent entry alpha with plenty of specific detail worth keeping', { created: '2026-08-20T10:00:03.000Z' });
+      seed(home, 'clean recent entry bravo with plenty of specific detail worth keeping', { created: '2026-08-20T10:00:02.000Z' });
+      seed(home, 'clean recent entry charlx with plenty of specific detail worth keeping', { created: '2026-08-20T10:00:01.000Z' });
+      seed(home, 'fixed signals', { pinned: true, created: '2026-08-20T10:00:00.000Z' });
+
+      const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 3, budget: 55 });
+      const contents = result.entries.map((e) => e.entry.content);
+
+      expect(contents).toContain('fixed signals');
+    } finally {
+      restore();
+    }
+  });
+
+  it('test 3d — pins win under heavy budget pressure: budget only fits the pin, all recents are dropped', async () => {
+    const { home, restore } = tmpHome();
+    try {
+      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+
+      // Budget (5) is smaller than any single clean recent entry (18
+      // tokens) but fits the pin (4 tokens) alone. pinnedReserve consumes
+      // the entire budget, so recentBudget floors at 0 -- no recents can
+      // ever be admitted -- and the pinned loop still admits the pin
+      // against the full effBudget.
+      seed(home, 'fixed signals', { pinned: true, created: '2026-08-20T10:00:01.000Z' });
+      seed(home, 'clean recent entry alpha with plenty of specific detail worth keeping', { created: '2026-08-20T10:00:00.000Z' });
+
+      const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 3, budget: 5 });
+      const contents = result.entries.map((e) => e.entry.content);
+
+      expect(contents).toEqual(['fixed signals']);
+    } finally {
+      restore();
+    }
+  });
+
+  it('test 3e — no under-fill regression: generous budget returns the same entries as before the reserve', async () => {
+    const { home, restore } = tmpHome();
+    try {
+      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+
+      // Pin is the OLDEST entry (outside the includeRecent:3 window, same
+      // shape as test 3c) so the three clean entries fill the recent slice
+      // on their own. Budget (2000) comfortably covers the pin plus all
+      // three recent entries. pinnedReserve is computed and subtracted
+      // from the recent cap, but 2000 - 4 = 1996 is still far more than
+      // the 54 tokens the three clean entries need, so nothing is dropped
+      // -- the reserve must not shrink results in the common,
+      // unconstrained case.
+      seed(home, 'clean recent entry alpha with plenty of specific detail worth keeping', { created: '2026-08-20T10:00:02.000Z' });
+      seed(home, 'clean recent entry bravo with plenty of specific detail worth keeping', { created: '2026-08-20T10:00:01.000Z' });
+      seed(home, 'clean recent entry charlx with plenty of specific detail worth keeping', { created: '2026-08-20T10:00:00.000Z' });
+      seed(home, 'fixed signals', { pinned: true, created: '2026-08-19T10:00:00.000Z' });
+
+      const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 3, budget: 2000 });
+      const contents = result.entries.map((e) => e.entry.content);
+
+      expect(contents).toContain('fixed signals');
+      expect(contents).toContain('clean recent entry alpha with plenty of specific detail worth keeping');
+      expect(contents).toContain('clean recent entry bravo with plenty of specific detail worth keeping');
+      expect(contents).toContain('clean recent entry charlx with plenty of specific detail worth keeping');
+      expect(contents.length).toBe(4);
+    } finally {
+      restore();
+    }
+  });
+
   it('test 6 — all-recent-junk: recent contributes nothing, no crash, pinned entries still returned', async () => {
     const { home, restore } = tmpHome();
     try {
