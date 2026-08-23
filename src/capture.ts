@@ -144,24 +144,36 @@ function lastCloserIndex(full: string): number {
   // elisions ("keep 'em", "wait 'til", ...) made extraction quadratic and
   // could stall a moderately sized capture. Codex P2, r7.
   //
-  // Decided by what FOLLOWS the quote, and nothing else. Three revisions of
-  // this predicate each added a clause about the preceding character, and
-  // each one broke a shape the last had fixed:
-  //   r7  next is not a letter          -> accepted "'--force" as a closer
-  //   r8  ...and tight-before OR loose-after -> rejected "'a, b ',"
-  // Looking only forward separates all four shapes with one positive class,
-  // because the distinction is really opener-versus-closer, not spacing:
-  //   "user's"            next 's'  - a letter continues a word
-  //   "run '--force,"     next '-'  - punctuation that STARTS a token
-  //   "pass 'a, b' to"    next ' '  - whitespace ENDS the literal
-  //   "preserve 'a, b '," next ','  - clause punctuation ENDS it too
-  // A closer is followed by end-of-string, whitespace, or clause/closing
-  // punctuation. Anything that begins a token is an opener. The earlier
-  // letter-exclusion is subsumed: a letter is not in this class either.
+  // A quote CLOSES THE SIDE IT IS TIGHT AGAINST. The test needs both
+  // neighbours, and one round proved that empirically: these two have the
+  // same following character and opposite roles -
+  //   "preserve 'a, b'-style"   next '-'  -> CLOSER, content on the left
+  //   "then run '--force,"      next '-'  -> OPENER, content on the right
+  // so no forward-only rule can separate them. An earlier revision tried
+  // exactly that and broke in both directions at once (codex P1+P2, r10):
+  // it missed closers before token-joining punctuation and accepted
+  // "'.env" as a closer because a dot happened to be in its class.
+  //
+  //   never a closer   next is a letter/digit      "user's", "keep 'em"
+  //   closer           prev is non-whitespace      "'a, b' to", "'a, b'-style"
+  //   closer           next is whitespace or end   "preserve 'a, b ' exactly"
+  //   closer           next is clause punctuation  "preserve 'a, b ', then"
+  //                    that itself ends the token
+  //
+  // The last clause is what separates ", " from ".env": a dot followed by a
+  // letter joins a filename, a dot followed by space ends a sentence.
   for (let j = full.length - 1; j >= 0; j--) {
     if (full[j] !== "'") continue;
+    const prev = full[j - 1];
     const next = full[j + 1];
-    if (next === undefined || /[\s,;:.!?)\]}]/.test(next)) return j;
+    if (next !== undefined && /[\p{L}\p{N}]/u.test(next)) continue;
+    const tightBefore = prev !== undefined && !/\s/.test(prev);
+    const endsAfter = next === undefined || /\s/.test(next);
+    const afterNext = full[j + 2];
+    const clauseAfter =
+      next !== undefined && /[,;:.!?)\]}]/.test(next) &&
+      (afterNext === undefined || /\s/.test(afterNext));
+    if (tightBefore || endsAfter || clauseAfter) return j;
   }
   return -1;
 }

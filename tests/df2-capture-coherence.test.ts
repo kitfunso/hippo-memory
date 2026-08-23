@@ -249,6 +249,13 @@ describe('DF2 capture coherence', () => {
       // phrased around the preceding character rejects a genuine closer.
       { text: "Always preserve 'a, b ', then verify.",
         mustContain: "'a, b '", mustNotContain: 'then verify' },
+      // THE PAIR THAT PROVES THE RULE NEEDS BOTH NEIGHBOURS. Identical
+      // following character, opposite roles - only the preceding side
+      // differs, so no forward-only test can separate them.
+      { text: "Always preserve 'a, b'-style text, then verify.",
+        mustContain: "'a, b'-style", mustNotContain: 'then verify' },
+      { text: "Always keep 'em enabled, then edit '.env, after restart.",
+        mustContain: "'em enabled", mustNotContain: '.env' },
       // plain prose, no traps
       { text: 'Always run the suite twice, then deploy.',
         mustContain: 'run the suite twice', mustNotContain: 'then deploy' },
