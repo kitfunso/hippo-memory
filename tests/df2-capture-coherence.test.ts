@@ -171,4 +171,41 @@ describe('DF2 capture coherence', () => {
     expect(wasItems[0].content.toLowerCase()).not.toContain('the issue was');
     expect(isItems[0].content.toLowerCase()).not.toContain('the issue is');
   });
+
+  // STRUCTURAL GUARD — three rounds of defects in this scanner earned it.
+  // Each round, adversarial review supplied a prose shape I had not imagined
+  // (code delimiters, then apostrophes). Pinning individual cases as they are
+  // found is a losing game; this sweep exercises the scanner against the
+  // messy realities of English-plus-code in one place, so the NEXT unimagined
+  // shape fails here rather than in review.
+  it('13. adversarial prose corpus: clause bounding holds across real-world text shapes', () => {
+    const corpus: Array<{ text: string; mustContain: string; mustNotContain: string }> = [
+      // contractions and possessives (codex P1, round 2)
+      { text: "Always ensure it's enabled, then restart the service.",
+        mustContain: "it's enabled", mustNotContain: 'restart the service' },
+      { text: "Never touch the user's config, it is generated.",
+        mustContain: "user's config", mustNotContain: 'it is generated' },
+      // code delimiters (codex P1, round 1)
+      { text: 'Always call build(x, y) before deploy, then tag it.',
+        mustContain: 'build(x, y)', mustNotContain: 'then tag it' },
+      { text: 'Never pass {a: 1, b: 2} to the writer, it corrupts rows.',
+        mustContain: '{a: 1, b: 2}', mustNotContain: 'it corrupts rows' },
+      // periods inside tokens
+      { text: 'Never edit capture.ts in the same commit as audit.ts, it confuses review.',
+        mustContain: 'capture.ts', mustNotContain: 'confuses review' },
+      // double-quoted string containing a separator
+      { text: 'Always set the flag to "a, b" before running, then verify.',
+        mustContain: '"a, b"', mustNotContain: 'then verify' },
+      // plain prose, no traps
+      { text: 'Always run the suite twice, then deploy.',
+        mustContain: 'run the suite twice', mustNotContain: 'then deploy' },
+    ];
+    for (const c of corpus) {
+      const items = extractFromText(c.text);
+      expect(items, `expected a capture from "${c.text}"`).toHaveLength(1);
+      const content = items[0].content;
+      expect(content, `must keep: ${c.mustContain}`).toContain(c.mustContain);
+      expect(content, `must bound before: ${c.mustNotContain}`).not.toContain(c.mustNotContain);
+    }
+  });
 });

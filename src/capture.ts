@@ -157,7 +157,16 @@ function boundToClause(full: string, searchFrom: number, maxLen = 200): string {
       if (ch === quote) quote = null;
       continue;
     }
-    if (ch === '"' || ch === "'" || ch === '`') { quote = ch; continue; }
+    // Only " and ` open a quote. An apostrophe is NOT treated as one: in
+    // prose it is overwhelmingly a contraction or possessive ("it's", "the
+    // user's config"), and treating it as an opening quote leaves the
+    // scanner in quote mode forever, disabling clause-bounding entirely for
+    // ordinary English. Measured before this: "Always ensure it's enabled,
+    // then restart the service." captured the whole trailing clause.
+    // Codex P1, second round. The cost of ignoring ' is that a comma inside
+    // a single-quoted code string bounds early — a SHORTER capture, which is
+    // the safe direction here.
+    if (ch === '"' || ch === '`') { quote = ch; continue; }
     if (ch === '(' || ch === '[' || ch === '{') { depth++; continue; }
     if (ch === ')' || ch === ']' || ch === '}') { if (depth > 0) depth--; continue; }
     if (depth > 0) continue;
