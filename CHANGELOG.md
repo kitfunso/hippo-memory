@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.36.0 - 2026-08-23
 
 ### Fixed
 - **The capture extractor stored prohibitions as their OPPOSITE (DF2).** Measured on 1.35.0: `"Never use --no-verify on git commits in this project."` was stored as `"use --no-verify on git commits in this project"`, and `"You must not commit the .env file"` as `"commit the .env file to this repository"` - then injected into later prompts as pinned rules meaning the reverse of what was written. Cause: every pattern was an unanchored keyword alternation with a fixed-width capture beginning AFTER the keyword, so the negation was discarded and the content ran past clause boundaries. Patterns now carry the keyword in its own group, preserved whenever it carries semantic sign (`never`, `always`, `must not`, `don't ever`) and dropped only for colon labels (`error:`, `decision:`) whose category is already recorded on the item. Content is bounded to its clause by a depth- and quote-aware scanner instead of counted to 200 characters.
