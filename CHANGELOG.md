@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.35.0 - 2026-08-23
+
+### Fixed
+- **Quality floor on `--include-recent` injection (DF3).** The UserPromptSubmit hook runs `hippo context --pinned-only --include-recent 5`, and that path admitted the last N writes with no quality predicate at all - a low-information memory went from "stored" to "read on every prompt" with nothing in between. `isContentWorthStoring` now gates the recent listing, applied BEFORE the take-N so a caller asking for 5 gets 5 qualifying entries rather than 5-minus-junk. Skip-only: no mutation, no audit row, nothing becomes unrecoverable. Measured scope, pinned by test: this catches the vague / no-specificity / version-bump / too-short class. It does NOT catch mid-sentence fragments - those pass the predicate because `capture` already applies the same gate at write time, so they can only be fixed at the producer.
+- **Non-Latin content is no longer classified as junk (silent data loss at capture).** `substantiveWordCount` split on whitespace only, so a Japanese or Chinese sentence scored one "word" and failed the substantive floor. Because that predicate is also capture's write gate, CJK memories were being silently DROPPED at write time - not just hidden on read. Han, Hiragana and Katakana letters now count as substantive units, matched by Unicode script intersected with the Letter category (so punctuation and radicals do not count) and ADDED to the unmodified Latin count (so no previously-accepted content is newly rejected). Scope is Han/Hiragana/Katakana; Hangul, Thai, Khmer, Burmese and Lao are unchanged and tracked separately.
+- **Pinned memories can no longer be displaced from the injected context.** The recent listing and the pinned block share one token budget and the recent loop spends first. Filtering cheap junk rows out meant full-size entries backfilled and spent more, so a pinned memory that previously fit could silently stop appearing. Pins are now ranked and their budget reserved before the recent loop runs - explicit user intent gets first claim - and mirrored local/global copies of a pin reserve their cost once rather than twice.
+
+### Notes
+- Upgrading changes what `--include-recent` surfaces: low-information entries stop appearing, and previously-dropped non-Latin content starts being stored and surfaced. Run `hippo audit` to see what the floor considers junk in your store.
+
 ## 1.34.0 - 2026-08-23
 
 ### Fixed
