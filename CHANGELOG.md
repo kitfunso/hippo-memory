@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.34.0 - 2026-08-23
+
+### Fixed
+- **Active task snapshot lifecycle (DF1).** A `hippo pre-compact` snapshot stayed `status='active'` forever unless a later pre-compact superseded it; ambient surfaces then injected it into every prompt of every later session (observed live: a 7-day-old snapshot at ~800 tokens per prompt). Two layers, no migration, no public signature changes: ambient reads (UserPromptSubmit hook context, MCP context block) now go through `loadFreshActiveTaskSnapshot` - unbounded only when the reading session owns the snapshot (both session ids non-empty and strictly equal; null/empty ids never match), otherwise a 72h freshness bound derived from the existing `updated_at` (`SNAPSHOT_AMBIENT_MAX_AGE_MS`, exported). `hippo session-end` now closes the ending session's own active snapshot after sleep+capture (`closeTaskSnapshotsForSession`, scoped so a concurrent session's snapshot is untouched); the freshness bound is the backstop when session-end never fires. All explicit continuity surfaces (`snapshot show`, `session latest`, `recall --continuity`, compact-resume) are unchanged.
+- **Log-forgery guard on the session-end close log.** The new close-step log line interpolates the payload-controlled `session_id`; it now runs the same `sanitizeLogMessage` guard as the pre-compact log (guard exported from `capture.ts`, one shared implementation).
+
+### Notes
+- Pre-existing stale `active` snapshots become inert on ambient surfaces immediately after upgrade; `hippo snapshot clear` removes one on demand.
+
 ## 1.33.0 - 2026-08-16
 
 ### Added
