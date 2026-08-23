@@ -42,32 +42,54 @@ export interface ExtractedItem {
 }
 
 // Sentence-level patterns
+//
+// T1 (DF2): each pattern now carries TWO capture groups — group 1 is the
+// discriminating keyword (plus its trailing separator, verbatim), group 2 is
+// the content that follows it. Previously only the after-keyword content was
+// captured, so a negation like "never" / "must not" was discarded and a
+// prohibition inverted into an instruction ("Never use X" stored as "use X").
+// `extractFromPatterns` reassembles group1 + a clause-bounded group2 (T2, via
+// `boundToClause` below) rather than reading a single fixed-width group —
+// group 2's own reach is widened to {1,500} because the true stopping point
+// is now found by content, not counted characters. Keeping the keyword in
+// its own group (rather than folding it into one bigger capture) matters:
+// `boundToClause` must scan for a clause boundary only in group 2, never in
+// group 1 — several keywords end in their own colon ("error:", "rule:",
+// "decision:") which is not a clause boundary in the prose sense and would
+// wrongly truncate the capture down to just the keyword if scanned.
+// `PREFERENCE_PATTERNS[0]` is the one exception — its two-capture-group
+// shape means something different (two content spans either side of
+// "instead of"/"over"/"not") and is a separate, backlogged defect (see
+// docs/plans/2026-08-23-df2-capture-anchoring.md); left as-is.
 const DECISION_PATTERNS = [
-  /(?:we(?:'ve| have)?|i(?:'ve| have)?|let's)\s+decid(?:ed|e)\s+(?:to\s+)?(.{10,200})/i,
-  /(?:let's|we(?:'ll| will| should)?)\s+(?:go with|do|use|try|build|implement|switch to)\s+(.{5,200})/i,
-  /(?:going|went)\s+with\s+(.{5,200})/i,
-  /(?:the plan is|plan:)\s+(.{10,200})/i,
-  /decision:\s*(.{10,200})/i,
+  /(?:we(?:'ve| have)?|i(?:'ve| have)?|let's)\s+(decid(?:ed|e)\s+(?:to\s+)?)(.{1,500})/i,
+  /(?:let's|we(?:'ll| will| should)?)\s+((?:go with|do|use|try|build|implement|switch to)\s+)(.{1,500})/i,
+  /((?:going|went)\s+with\s+)(.{1,500})/i,
+  /((?:the plan is|plan:)\s+)(.{1,500})/i,
+  /(decision:\s*)(.{1,500})/i,
 ];
 
 const RULE_PATTERNS = [
-  /(?:never|always|must(?:\s+not)?|do(?:n't| not)\s+ever)\s+(.{5,200})/i,
-  /(?:the rule is|rule:)\s*(.{5,200})/i,
-  /(?:important|critical|remember):\s*(.{10,200})/i,
-  /(?:make sure|ensure)\s+(?:to\s+)?(.{10,200})/i,
+  /((?:never|always|must(?:\s+not)?|do(?:n't| not)\s+ever)\s+)(.{1,500})/i,
+  /((?:the rule is|rule:)\s*)(.{1,500})/i,
+  /((?:important|critical|remember):\s*)(.{1,500})/i,
+  /((?:make sure|ensure)\s+(?:to\s+)?)(.{1,500})/i,
 ];
 
 const ERROR_PATTERNS = [
-  /(?:error|bug|gotcha|watch out|careful|warning|caveat|trap):\s*(.{10,200})/i,
-  /(?:this broke|this breaks|this will break|broke because)\s+(.{5,200})/i,
-  /(?:the (?:issue|problem|fix) (?:is|was))\s+(.{10,200})/i,
-  /(?:don't forget|easy to miss):\s*(.{5,200})/i,
+  /((?:error|bug|gotcha|watch out|careful|warning|caveat|trap):\s*)(.{1,500})/i,
+  /((?:this broke|this breaks|this will break|broke because)\s+)(.{1,500})/i,
+  /((?:the (?:issue|problem|fix) (?:is|was))\s+)(.{1,500})/i,
+  /((?:don't forget|easy to miss):\s*)(.{1,500})/i,
 ];
 
+// PREFERENCE_PATTERNS[0] keeps its pre-DF2 two-capture-group shape
+// (match[1]-only, unbounded) — out of scope here, backlogged. See
+// extractFromPatterns' reference check against this exact array element.
 const PREFERENCE_PATTERNS = [
   /(?:prefer|use)\s+(.{5,100})\s+(?:instead of|over|not)\s+(.{3,100})/i,
-  /(?:don't use|avoid|skip)\s+(.{5,200})/i,
-  /(?:we(?:'re| are)\s+using|the stack is|we use)\s+(.{5,200})/i,
+  /((?:don't use|avoid|skip)\s+)(.{1,500})/i,
+  /((?:we(?:'re| are)\s+using|the stack is|we use)\s+)(.{1,500})/i,
 ];
 
 // Heading patterns that signal a following list of specs/requirements
@@ -88,11 +110,70 @@ function splitSentences(text: string): string[] {
     .filter((s) => s.length > 5);
 }
 
+/**
+ * T2 (DF2): bound a keyword+content capture to its clause instead of a fixed
+ * character count. `full` is `keywordPrefix + content` (already concatenated
+ * so the 200-char ceiling below applies to the whole stored string, not just
+ * the part after the keyword); `searchFrom` is `keywordPrefix.length`, so the
+ * clause/terminator scan only ever looks INSIDE `content` — several keywords
+ * end in their own colon ("error:", "rule:", "decision:") which must never
+ * be mistaken for a clause boundary in the prose that follows.
+ *
+ * Stops at the first `,`/`;`/`:` followed by whitespace, or at a sentence
+ * terminator `[.!?]` followed by whitespace or end-of-string — whichever
+ * comes first — and never past `maxLen` chars total.
+ *
+ * The whitespace requirement on the terminator is load-bearing: a bare
+ * `[.!?]` would split inside a token like `.env` / `capture.ts` / `v1.35.0`,
+ * turning a full clause into a fragment that then fails the write gate and
+ * is silently dropped (measured in the plan). The `maxLen` ceiling is also
+ * load-bearing: without it, a clause-free span can run past the 500-char
+ * gate in `extractFromPatterns` and the whole match is dropped, where today
+ * it is truncated and stored.
+ */
+function boundToClause(full: string, searchFrom: number, maxLen = 200): string {
+  let cutEnd = full.length;
+  const tail = full.slice(searchFrom);
+
+  const clause = tail.match(/[,;:]\s/);
+  if (clause && clause.index !== undefined) {
+    const idx = searchFrom + clause.index;
+    if (idx < cutEnd) cutEnd = idx;
+  }
+
+  const terminator = tail.match(/[.!?](?=\s|$)/);
+  if (terminator && terminator.index !== undefined) {
+    const idx = searchFrom + terminator.index + 1;
+    if (idx < cutEnd) cutEnd = idx;
+  }
+
+  let bounded = full.slice(0, cutEnd);
+  if (bounded.length > maxLen) bounded = bounded.slice(0, maxLen);
+  return bounded;
+}
+
 function cleanExtract(raw: string): string {
-  return raw
+  let content = raw
     .replace(/^[:\s-]+/, '')
     .replace(/[.!?,;:\s]+$/, '')
     .trim();
+
+  // T2 trailing cleanup: clause-bounding can cut inside a parenthetical and
+  // leave an unmatched trailing ')' (e.g. "...(two had never got entries),"
+  // bounds to "never got entries)"). Strip a trailing ')' ONLY while closes
+  // outnumber opens in the string so far — a balanced parenthetical like
+  // "always run the suite (twice)" must be left intact.
+  while (content.endsWith(')')) {
+    const opens = (content.match(/\(/g) ?? []).length;
+    const closes = (content.match(/\)/g) ?? []).length;
+    if (closes <= opens) break;
+    content = content
+      .slice(0, -1)
+      .replace(/[.!?,;:\s]+$/, '')
+      .trim();
+  }
+
+  return content;
 }
 
 function extractFromPatterns(
@@ -104,9 +185,33 @@ function extractFromPatterns(
   for (const pat of patterns) {
     const match = sentence.match(pat);
     if (match) {
-      // Use the captured group if available, otherwise the full match
-      const raw = match[1] ?? match[0];
-      const content = cleanExtract(raw);
+      let bounded: string;
+      if (pat === PREFERENCE_PATTERNS[0]) {
+        // PREFERENCE_PATTERNS[0] is the one pattern left out of T1/T2 (see
+        // comment at its definition) — its match[1] keeps its pre-DF2,
+        // unbounded shape rather than going through clause-bounding.
+        bounded = match[1] ?? match[0];
+      } else {
+        // group1 = keyword + separator (verbatim, never clause-bounded);
+        // group2 = the content that follows it (clause-bounded below).
+        //
+        // T1 preserves the keyword only when it carries SEMANTIC SIGN — a
+        // negation or modality ("never", "must not", "do not ever",
+        // "always"). Dropping those inverts the meaning, which is the whole
+        // point of T1. A LABEL keyword ("decision:", "rule:", "error:",
+        // "important:") carries no sign: it only names the category, which
+        // is already recorded in `category`/`tags`, so prefixing it onto the
+        // content is duplication that also breaks value-keyed matching
+        // (AT1's rejected-value digest hashes the bare content).
+        // Discriminator: a label ends in its own colon, or is a "the X is"
+        // phrase.
+        const rawPrefix = match[1] ?? '';
+        const isLabelPrefix = /:\s*$/.test(rawPrefix) || /^\s*the\s+\w+\s+is\s*$/i.test(rawPrefix);
+        const keywordPrefix = isLabelPrefix ? '' : rawPrefix;
+        const afterKeyword = match[2] ?? match[0];
+        bounded = boundToClause(keywordPrefix + afterKeyword, keywordPrefix.length);
+      }
+      const content = cleanExtract(bounded);
       if (content.length >= 8 && content.length <= 500) {
         return { content, category, tags: [tag, 'captured'] };
       }
