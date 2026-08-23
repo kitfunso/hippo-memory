@@ -55,6 +55,7 @@ import {
   appendAuditEvent,
   queryAuditEvents,
   auditMemories,
+  isContentWorthStoring,
   type AuditEvent,
   type AuditOp,
 } from './audit.js';
@@ -2473,6 +2474,14 @@ export async function getContext(
           const byCreated = Date.parse(b.entry.created) - Date.parse(a.entry.created);
           return byCreated !== 0 ? byCreated : b.entry.id.localeCompare(a.entry.id);
         })
+        // DF3 (docs/plans/2026-08-23-df3-include-recent-quality-floor.md):
+        // filter before slice, not after — the caller asked for N recent
+        // *useful* entries, so a junk row must be skipped and backfilled
+        // past, not counted against the N. Skip-only: no mutation, no audit
+        // row, nothing becomes unrecoverable. A pinned entry that fails this
+        // heuristic still injects via the separate pinned block below, so no
+        // `entry.pinned ||` bypass is needed here.
+        .filter(({ entry }) => isContentWorthStoring(entry.content))
         .slice(0, includeRecent)
         .map(({ entry, isGlobal }) => ({
           entry,
