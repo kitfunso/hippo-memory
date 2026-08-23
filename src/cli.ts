@@ -125,6 +125,7 @@ import { rowToGoal } from './goals.js';
 import {
   captureError,
   extractLessons,
+  partitionLessons,
   deduplicateLesson,
   runWatched,
   fetchGitLog,
@@ -6281,25 +6282,31 @@ function learnFromRepo(
   repoPath: string,
   days: number,
   label?: string
-): { added: number; skipped: number } {
+): { added: number; skipped: number; lowInfo: number } {
   const prefix = label ? `[${label}] ` : '';
 
   if (!isGitRepo(repoPath)) {
     console.log(`${prefix}No git history found (or not a git repository).`);
-    return { added: 0, skipped: 0 };
+    return { added: 0, skipped: 0, lowInfo: 0 };
   }
 
   const gitLog = fetchGitLog(repoPath, days);
   if (!gitLog.trim()) {
     console.log(`${prefix}No fix/revert/bug commits found in the specified period.`);
-    return { added: 0, skipped: 0 };
+    return { added: 0, skipped: 0, lowInfo: 0 };
   }
 
-  const lessons = extractLessons(gitLog);
-  if (lessons.length === 0) {
+  const parsedLessons = extractLessons(gitLog);
+  if (parsedLessons.length === 0) {
     console.log(`${prefix}No fix/revert/bug commits found in the specified period.`);
-    return { added: 0, skipped: 0 };
+    return { added: 0, skipped: 0, lowInfo: 0 };
   }
+
+  // DF4: admission gate lives at the write path, not in extractLessons
+  // (a published API surface that only parses). Bare subjects like "fixed
+  // signals" are dropped here, before they ever become a memory.
+  const { kept: lessons, dropped } = partitionLessons(parsedLessons);
+  const lowInfo = dropped.length;
 
   let added = 0;
   let skipped = 0;
@@ -6368,9 +6375,10 @@ function learnFromRepo(
   console.log(
     `${prefix}${added} new lessons added, ${skipped} duplicates skipped` +
       (rejected > 0 ? `, ${rejected} rejected value(s) skipped` : '') +
+      (lowInfo > 0 ? `, ${lowInfo} low-information subject(s) dropped` : '') +
       '.',
   );
-  return { added, skipped };
+  return { added, skipped, lowInfo };
 }
 
 function cmdLearn(

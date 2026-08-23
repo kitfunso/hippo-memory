@@ -7,6 +7,7 @@ import { execSync, execFileSync, spawn } from 'child_process';
 import { MemoryEntry, createMemory, Layer } from './memory.js';
 import { loadAllEntries } from './store.js';
 import { textOverlap } from './search.js';
+import { isContentWorthStoring } from './audit.js';
 
 /**
  * Create a MemoryEntry capturing a command failure.
@@ -80,6 +81,31 @@ export function extractLessons(gitLog: string, customPatterns?: string[]): strin
 
   // Deduplicate exact matches at extraction time
   return [...new Set(lessons)];
+}
+
+/**
+ * Split parsed lessons into ones worth storing and low-information ones.
+ *
+ * `extractLessons` is a published API surface (exported from src/index.ts)
+ * and does one job: parse a git log into candidate lesson strings. Adding a
+ * quality check inside it would break that contract and silently change
+ * what external callers get back. So parsing and admission are separate
+ * steps: this function is the write-path gate, called by each caller that
+ * actually stores a lesson, not by the parser itself.
+ *
+ * Order is preserved in both output arrays.
+ */
+export function partitionLessons(lessons: string[]): { kept: string[]; dropped: string[] } {
+  const kept: string[] = [];
+  const dropped: string[] = [];
+  for (const lesson of lessons) {
+    if (isContentWorthStoring(lesson)) {
+      kept.push(lesson);
+    } else {
+      dropped.push(lesson);
+    }
+  }
+  return { kept, dropped };
 }
 
 /**

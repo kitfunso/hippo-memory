@@ -53,6 +53,7 @@ export {
 export {
   captureError,
   extractLessons,
+  partitionLessons,
   deduplicateLesson,
   runWatched,
   fetchGitLog,
