@@ -55,6 +55,7 @@ import {
   appendAuditEvent,
   queryAuditEvents,
   auditMemories,
+  isContentWorthStoring,
   type AuditEvent,
   type AuditOp,
 } from './audit.js';
@@ -2300,6 +2301,12 @@ export interface ContextOpts {
   limit?: number;
   pinnedOnly?: boolean;
   scope?: string;
+  /** With `pinnedOnly`, also inject the N most recent writes that pass the
+   *  quality floor (`isContentWorthStoring`, DF3). Filtering happens BEFORE
+   *  the take-N, so a caller asking for 5 gets 5 qualifying entries rather
+   *  than 5-minus-junk; pinned entries bypass the floor. Entries are only
+   *  skipped for this read, never mutated or deleted. Ignored when
+   *  `pinnedOnly` is false — no other path reads it. */
   includeRecent?: number;
   /** v39 memory scope isolation: re-include other-project memories that the
    *  origin partition excludes by default. They come back tagged
@@ -2454,6 +2461,65 @@ export async function getContext(
     const selectedIds = new Set<string>();
     let usedP = 0;
 
+    // Pinned entries are explicit user intent; the recent-N list is an
+    // automatic backfill. Both loops below share ONE budget (`usedP`
+    // against `effBudget`), and the recent loop runs first (see it further
+    // down) then the pinned loop takes what is left, `continue`-skipping
+    // any pin that no longer fits. DF3's quality filter on the recent list
+    // means junk rows (short, cheap) get skipped and full-size qualifying
+    // entries backfill in their place, so the recent loop now systematically
+    // spends more before the pinned loop ever runs -- a pin outside the
+    // recent-N window can get silently displaced. The `entry.pinned ||`
+    // bypass in the recent filter below only protects a pin that is itself
+    // inside the recent window; it does nothing for pins outside it. Fix:
+    // rank pins here (before the recent loop spends anything) and reserve
+    // their share of `effBudget` up front, so the recent loop is capped to
+    // what pins do NOT need.
+    const pinnedLocal = localEntries.filter((e) => e.pinned);
+    const pinnedGlobal = globalEntries.filter((e) => e.pinned);
+    const rankedPinned = [
+      ...pinnedLocal.map((e) => ({ entry: e, isGlobal: false })),
+      ...pinnedGlobal.map((e) => ({ entry: e, isGlobal: true })),
+    ]
+      .map(({ entry, isGlobal }) => {
+        const scopeSig = scopeMatch(entry.tags, activeScope);
+        const sBst = scopeSig === 1 ? 1.5 : scopeSig === -1 ? 0.5 : 1.0;
+        return {
+          entry,
+          score: calculateStrength(entry, nowP) * (isGlobal ? 1 / 1.2 : 1) * sBst,
+          tokens: estimateTokens(entry.content),
+          isGlobal,
+        };
+      })
+      .sort(compareScoredResults);
+
+    // Mirror the pinned admission loop's own `continue`-not-`break`
+    // semantics (further down) so the reserve equals what that loop will
+    // actually admit -- a big pin near the front should not block smaller
+    // pins behind it from reserving their share too.
+    // Dedupe by id: `syncGlobalToLocal` copies global rows into the local
+    // store preserving `entry.id`, so a synced pin appears in BOTH
+    // `pinnedLocal` and `pinnedGlobal` and would otherwise reserve its cost
+    // twice. The admission loop already dedupes via `selectedIds`; the
+    // reserve has to mirror that or it silently starves recents of budget a
+    // single returned pin never needed.
+    let pinnedReserve = 0;
+    const reservedIds = new Set<string>();
+    for (const r of rankedPinned) {
+      if (reservedIds.has(r.entry.id)) continue;
+      if (pinnedReserve + r.tokens <= effBudget) {
+        pinnedReserve += r.tokens;
+        reservedIds.add(r.entry.id);
+      }
+    }
+    // Known, accepted tradeoff: a pin that also lands in the recent-N slice
+    // is counted once in `pinnedReserve` (here) AND admitted again by the
+    // recent loop below, so a little budget goes unused (`recentBudget` is
+    // more conservative than it needs to be in that case). That only
+    // under-fills recents slightly -- it never displaces a pin -- so it is
+    // the safe direction and is not worth extra bookkeeping to recover.
+    const recentBudget = Math.max(0, effBudget - pinnedReserve);
+
     if (includeRecent > 0) {
       const recent = [
         ...localEntries.map((entry) => ({ entry, isGlobal: false })),
@@ -2473,6 +2539,22 @@ export async function getContext(
           const byCreated = Date.parse(b.entry.created) - Date.parse(a.entry.created);
           return byCreated !== 0 ? byCreated : b.entry.id.localeCompare(a.entry.id);
         })
+        // DF3 (docs/plans/2026-08-23-df3-include-recent-quality-floor.md):
+        // filter before slice, not after — the caller asked for N recent
+        // *useful* entries, so a junk row must be skipped and backfilled
+        // past, not counted against the N. Skip-only: no mutation, no audit
+        // row, nothing becomes unrecoverable.
+        //
+        // `entry.pinned ||` bypass IS needed here (codex review finding,
+        // corrects the earlier claim in this comment that it wasn't): under
+        // budget pressure, a pinned entry that fails the heuristic gets
+        // dropped from this recent slice, and an unpinned entry backfills
+        // into its slot and consumes `usedP` in the loop below. By the time
+        // the pinned block runs (further down), the budget it needed is
+        // already spent, so it hits `continue` and the pinned entry is
+        // omitted entirely — the pinned block is NOT a safety net once the
+        // recent loop has already spent the shared budget.
+        .filter(({ entry }) => entry.pinned || isContentWorthStoring(entry.content))
         .slice(0, includeRecent)
         .map(({ entry, isGlobal }) => ({
           entry,
@@ -2483,15 +2565,13 @@ export async function getContext(
 
       for (const r of recent) {
         if (selectedIds.has(r.entry.id)) continue;
-        if (usedP + r.tokens > effBudget) continue;
+        if (usedP + r.tokens > recentBudget) continue;
         selectedItems.push(r);
         selectedIds.add(r.entry.id);
         usedP += r.tokens;
       }
     }
 
-    const pinnedLocal = localEntries.filter((e) => e.pinned);
-    const pinnedGlobal = globalEntries.filter((e) => e.pinned);
     if (
       pinnedLocal.length === 0 &&
       pinnedGlobal.length === 0 &&
@@ -2499,21 +2579,6 @@ export async function getContext(
     ) {
       return { entries: [], tokens: 0 };
     }
-    const rankedPinned = [
-      ...pinnedLocal.map((e) => ({ entry: e, isGlobal: false })),
-      ...pinnedGlobal.map((e) => ({ entry: e, isGlobal: true })),
-    ]
-      .map(({ entry, isGlobal }) => {
-        const scopeSig = scopeMatch(entry.tags, activeScope);
-        const sBst = scopeSig === 1 ? 1.5 : scopeSig === -1 ? 0.5 : 1.0;
-        return {
-          entry,
-          score: calculateStrength(entry, nowP) * (isGlobal ? 1 / 1.2 : 1) * sBst,
-          tokens: estimateTokens(entry.content),
-          isGlobal,
-        };
-      })
-      .sort(compareScoredResults);
 
     for (const r of rankedPinned) {
       if (selectedIds.has(r.entry.id)) continue;
