@@ -2,11 +2,12 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { execSync } from 'child_process';
-import { captureError, extractLessons, deduplicateLesson, fetchGitLog, isGitRepo } from '../src/autolearn.js';
-import { initStore, writeEntry, readEntry } from '../src/store.js';
+import { execSync, execFileSync } from 'child_process';
+import { captureError, extractLessons, partitionLessons, deduplicateLesson, fetchGitLog, isGitRepo } from '../src/autolearn.js';
+import { initStore, writeEntry, readEntry, loadAllEntries } from '../src/store.js';
 import { createMemory } from '../src/memory.js';
 import { extractInvalidationTarget, invalidateMatching } from '../src/invalidation.js';
+import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 
 // ---------------------------------------------------------------------------
 // captureError
@@ -123,6 +124,266 @@ describe('extractLessons', () => {
     // Combined set has no overlap
     const all = [...lessonsA, ...lessonsB];
     expect(new Set(all).size).toBe(all.length);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// partitionLessons (DF4)
+// ---------------------------------------------------------------------------
+
+describe('partitionLessons', () => {
+  // These are the six roadmap-named junk subjects: no path, number, flag or
+  // other specific detail, so isContentWorthStoring rejects them.
+  const junkSubjects = [
+    'fixed signals',
+    'globe view on by default',
+    'corrected entry prices',
+    'update readme',
+    'wip',
+    'refactor stuff',
+  ];
+
+  // These carry a path, number, or flag - specific enough to be worth
+  // storing as a memory.
+  const detailedSubjects = [
+    'fix CI flake in session-end-snapshot-close.test.ts',
+    'bump pool timeout to 30s in src/db.ts',
+    'add --include-recent flag to hippo context',
+  ];
+
+  it('drops all six roadmap-named junk subjects', () => {
+    const { kept, dropped } = partitionLessons(junkSubjects);
+    expect(dropped).toEqual(junkSubjects);
+    expect(kept).toEqual([]);
+  });
+
+  it('keeps all three detail-carrying subjects', () => {
+    const { kept, dropped } = partitionLessons(detailedSubjects);
+    expect(kept).toEqual(detailedSubjects);
+    expect(dropped).toEqual([]);
+  });
+
+  it('preserves input order across a mixed batch', () => {
+    const mixed = [junkSubjects[0], detailedSubjects[0], junkSubjects[1], detailedSubjects[1]];
+    const { kept, dropped } = partitionLessons(mixed);
+    expect(kept).toEqual([detailedSubjects[0], detailedSubjects[1]]);
+    expect(dropped).toEqual([junkSubjects[0], junkSubjects[1]]);
+  });
+
+  it('returns empty arrays for an empty input', () => {
+    expect(partitionLessons([])).toEqual({ kept: [], dropped: [] });
+  });
+
+  // Anti-coupling pin (the grill's objection from the DF4 plan): autolearn is
+  // now the FOURTH consumer of isContentWorthStoring, after the capture
+  // write gate, the DF3 include-recent floor, and auditMemory. A prior
+  // release widened that shared predicate and silently changed behaviour
+  // for a consumer nobody re-swept (v1.36.0 ship-gate incident). This test
+  // pins autolearn's OWN admission boundary against fixed inputs, so if a
+  // future change to isContentWorthStoring moves that boundary, it fails
+  // HERE - loud and attributable to autolearn - instead of quietly
+  // changing what git auto-learn ingests with no test noticing.
+  it('pins the admission boundary against the shared predicate (anti-coupling)', () => {
+    const { kept, dropped } = partitionLessons([...junkSubjects, ...detailedSubjects]);
+    expect(dropped.sort()).toEqual([...junkSubjects].sort());
+    expect(kept.sort()).toEqual([...detailedSubjects].sort());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractLessons stays a pure parser (DF4: filtering moved to the write
+// path, not into the parser - a junk subject the parser recognizes as a
+// "fix"-shaped commit is still RETURNED here; partitionLessons is what
+// drops it before storage).
+// ---------------------------------------------------------------------------
+
+describe('extractLessons unchanged by DF4', () => {
+  it('still returns a low-information subject the parser recognizes', () => {
+    // "fixed signals" matches the loose \b(fixed|...)\b pattern - the parser
+    // has no quality predicate and never should; admission happens later.
+    const lessons = extractLessons('abc1234 fixed signals');
+    expect(lessons).toContain('fixed signals');
+  });
+
+  it('still returns "corrected entry prices" from a matching commit line', () => {
+    const lessons = extractLessons('def5678 corrected entry prices');
+    expect(lessons).toContain('corrected entry prices');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Write-path wiring (DF4): both `hippo learn --git` (CLI) and the MCP
+// `hippo_learn` tool must run parsed lessons through partitionLessons
+// before they reach the store. A junk subject must not survive; a
+// detail-carrying one must.
+// ---------------------------------------------------------------------------
+
+const CLI = path.join(process.cwd(), 'dist', 'src', 'cli.js');
+
+function initGitRepoWithCommits(subjects: string[]): string {
+  const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-df4-repo-'));
+  execSync('git init', { cwd: repoDir, stdio: 'ignore' });
+  execSync('git config user.name "Test User"', { cwd: repoDir, stdio: 'ignore' });
+  execSync('git config user.email "test@example.com"', { cwd: repoDir, stdio: 'ignore' });
+  subjects.forEach((subject, i) => {
+    fs.writeFileSync(path.join(repoDir, `f${i}.txt`), String(i));
+    execFileSync('git', ['add', '.'], { cwd: repoDir, stdio: 'ignore' });
+    execFileSync('git', ['commit', '-m', subject], { cwd: repoDir, stdio: 'ignore' });
+  });
+  return repoDir;
+}
+
+describe('DF4 write-path gate: CLI `hippo learn --git`', () => {
+  let repoDir: string;
+  let globalRoot: string;
+  let env: NodeJS.ProcessEnv;
+
+  beforeEach(() => {
+    repoDir = initGitRepoWithCommits([
+      'fixed signals',
+      'corrected entry prices',
+      'fix CI flake in session-end-snapshot-close.test.ts',
+      'hotfix: pool timeout bumped to 30s in src/db.ts',
+    ]);
+    globalRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-df4-global-'));
+    env = { ...process.env, HIPPO_HOME: globalRoot, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
+    execFileSync('node', [CLI, 'init', '--no-hooks', '--no-schedule', '--no-learn'], {
+      cwd: repoDir,
+      env,
+    });
+  });
+
+  afterEach(() => {
+    fs.rmSync(repoDir, { recursive: true, force: true });
+    fs.rmSync(globalRoot, { recursive: true, force: true });
+  });
+
+  it('drops junk subjects and stores detail-carrying ones, reporting the count', () => {
+    const output = execFileSync('node', [CLI, 'learn', '--git', '--days', '3650'], {
+      cwd: repoDir,
+      env,
+      encoding: 'utf8',
+    });
+
+    expect(output).toMatch(/low-information subject\(s\) dropped/);
+
+    const entries = loadAllEntries(path.join(repoDir, '.hippo'));
+    const contents = entries.map((e) => e.content);
+    expect(contents.some((c) => c.includes('fixed signals'))).toBe(false);
+    expect(contents.some((c) => c.includes('corrected entry prices'))).toBe(false);
+    expect(contents.some((c) => c.includes('session-end-snapshot-close.test.ts'))).toBe(true);
+    expect(contents.some((c) => c.includes('src/db.ts'))).toBe(true);
+  });
+});
+
+describe('DF4: a gated lesson still invalidates', () => {
+  let repoDir: string;
+  let globalRoot: string;
+  let env: NodeJS.ProcessEnv;
+
+  beforeEach(() => {
+    // "replace webpack with vite" is a MIGRATION subject that FAILS the
+    // quality heuristic. Both facts matter: it must still supersede stale
+    // webpack memories even though it is not itself worth storing.
+    repoDir = initGitRepoWithCommits(['refactor: replace webpack with vite']);
+    globalRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-df4-inv-'));
+    env = { ...process.env, HIPPO_HOME: globalRoot, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
+    execFileSync('node', [CLI, 'init', '--no-hooks', '--no-schedule', '--no-learn'], {
+      cwd: repoDir,
+      env,
+    });
+  });
+
+  afterEach(() => {
+    fs.rmSync(repoDir, { recursive: true, force: true });
+    fs.rmSync(globalRoot, { recursive: true, force: true });
+  });
+
+  it('does NOT invalidate when the subject is too thin to store (documented limit)', () => {
+    // PINS A DELIBERATE LIMITATION, not a fix. A subject too thin to store
+    // also does not invalidate, because the gate filters the loop input.
+    //
+    // The alternative was tried and reverted: letting dropped lessons
+    // invalidate removes the stored record that makes invalidation
+    // idempotent, so every rescan re-weakens the same memories and
+    // half_life_days compounds down (measured 7 -> 3 -> 1 over two runs).
+    // Across 413 real auto-learn rows, ZERO gated lessons carry a migration
+    // target, so both failure modes are empty on real data and the tie
+    // breaks on which is benign. Backlog: make invalidateMatching idempotent,
+    // which would allow both behaviours at once.
+    //
+    // If this assertion ever flips, someone changed that decision - make it
+    // deliberate rather than incidental.
+    const repoRoot = path.join(repoDir, '.hippo');
+    const stale = createMemory('webpack config uses HtmlWebpackPlugin for output', {
+      tags: ['webpack', 'build'],
+    });
+    writeEntry(repoRoot, stale);
+
+    execFileSync('node', [CLI, 'learn', '--git', '--days', '3650'], {
+      cwd: repoDir,
+      env,
+      encoding: 'utf8',
+    });
+
+    const updated = readEntry(repoRoot, stale.id);
+    expect(updated, 'the stale memory should still exist').not.toBeNull();
+    expect(
+      updated!.tags,
+      'a gated lesson does not invalidate - documented limitation, see the comment above'
+    ).not.toContain('invalidated');
+    expect(
+      updated!.half_life_days,
+      'and its decay must be untouched, so rescans cannot compound'
+    ).toBe(stale.half_life_days);
+
+    // ...and the thin subject itself is still not stored.
+    const contents = loadAllEntries(repoRoot).map((e) => e.content);
+    expect(contents.some((c) => c.includes('replace webpack with vite'))).toBe(false);
+  });
+});
+
+describe('DF4 write-path gate: MCP hippo_learn tool', () => {
+  let repoDir: string;
+  let hippoRoot: string;
+  let originalCwd: string;
+
+  beforeEach(() => {
+    repoDir = initGitRepoWithCommits([
+      'fixed signals',
+      'fix --include-recent flag handling in hippo context',
+    ]);
+    hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-df4-mcp-'));
+    initStore(hippoRoot);
+    originalCwd = process.cwd();
+    process.chdir(repoDir);
+  });
+
+  afterEach(() => {
+    process.chdir(originalCwd);
+    fs.rmSync(repoDir, { recursive: true, force: true });
+    fs.rmSync(hippoRoot, { recursive: true, force: true });
+  });
+
+  it('drops junk subjects and stores detail-carrying ones via the MCP tool', async () => {
+    const res = (await handleMcpRequest(
+      {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'hippo_learn', arguments: { days: 3650 } },
+      },
+      { hippoRoot, tenantId: 'default', actor: 'mcp' },
+    )) as McpResponse | null;
+
+    const text = (res as { result?: { content?: Array<{ text?: string }> } } | null)
+      ?.result?.content?.[0]?.text ?? '';
+    expect(text).toMatch(/low-information subjects dropped/);
+
+    const entries = loadAllEntries(hippoRoot);
+    const contents = entries.map((e) => e.content);
+    expect(contents.some((c) => c.includes('fixed signals'))).toBe(false);
+    expect(contents.some((c) => c.includes('--include-recent'))).toBe(true);
   });
 });
 

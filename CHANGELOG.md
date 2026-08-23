@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.37.0 - 2026-08-23
+
+### Fixed
+- **Git auto-learn stored commit subjects that carry no information (DF4).** `hippo learn` parsed git subjects and stored every match with no quality predicate, so bare subjects landed in the store and `hippo audit` flagged them afterwards - measured on a live store, 36 of 37 issues were this class ("fixed signals", "mobile responsive polish", "corrected entry prices"). The quality check existed only downstream in audit. It now runs at the producer: a new `partitionLessons` applies `isContentWorthStoring` and BOTH write paths use it, the CLI `learn` command and the MCP `learn` tool. Measured against real data: of 413 rows written by auto-learn across four project stores, 24 (6%) would have been gated, and the gated set is exactly the junk class. The parser `extractLessons` is unchanged - it is a published export and stays a pure parser; admission is a separate step.
+- The drop count is reported, not silent: per repo and rolled up across repos in `hippo init --scan`. An absent memory raises no error, so the count is the only way the gate is visible.
+
+### Notes
+- **Existing flagged rows are NOT cleaned up.** The 36 already in a live store stay until the quarantine tier ships; hard-deleting stored user content is barred by the never-delete-when-weakening-suffices rule, and `hippo audit --fix` only removes error severity. Run `hippo audit` to see them.
+- **Known limitation, pinned by test:** a migration subject too thin to store also does not invalidate stale memories. Letting gated lessons invalidate was tried and reverted - storage is what makes invalidation idempotent, so a lesson that invalidates without storing re-invalidates on every rescan and compounds decay (measured 7 to 3 to 1 over two runs). Zero of the 24 gated rows carry a migration target, so neither behaviour fires on real data; the benign failure mode was chosen. Tracked: make `invalidateMatching` idempotent, which would allow both.
+
 ## 1.36.0 - 2026-08-23
 
 ### Fixed

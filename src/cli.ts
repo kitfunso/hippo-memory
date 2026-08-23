@@ -125,6 +125,7 @@ import { rowToGoal } from './goals.js';
 import {
   captureError,
   extractLessons,
+  partitionLessons,
   deduplicateLesson,
   runWatched,
   fetchGitLog,
@@ -453,6 +454,11 @@ function cmdInitScan(scanDir: string, flags: Record<string, string | boolean | s
   }
 
   let totalLessons = 0;
+  // Rolled up so the cross-repo summary reports the gate too. Each repo
+  // already prints its own count inside learnFromRepo, but the aggregate
+  // line showed only what was ADDED - and the point of this change is
+  // that a dropped subject is never invisible.
+  let totalLowInfo = 0;
   const seedDays = parseInt(String(flags['days'] ?? '365'), 10);
 
   for (const repo of repos) {
@@ -472,6 +478,7 @@ function cmdInitScan(scanDir: string, flags: Record<string, string | boolean | s
       const result = learnFromRepo(repoHippo, repo, seedDays, name);
       added = result.added;
       totalLessons += added;
+      totalLowInfo += result.lowInfo;
     }
 
     const status = alreadyExists ? 'existing' : 'new';
@@ -479,7 +486,9 @@ function cmdInitScan(scanDir: string, flags: Record<string, string | boolean | s
     console.log(`  ${name.padEnd(25)} ${status.padEnd(10)} ${entries.length} memories${added > 0 ? ` (+${added} from git)` : ''}`);
   }
 
-  console.log(`\n${repos.length} repositories, ${totalLessons} new lessons learned.`);
+  console.log(`\n${repos.length} repositories, ${totalLessons} new lessons learned` +
+    (totalLowInfo > 0 ? `, ${totalLowInfo} low-information subject(s) dropped` : '') +
+    '.');
   console.log(`Global store: ${globalRoot}`);
   if (!flags['no-schedule']) {
     setupDailySchedule(globalRoot);
@@ -6281,25 +6290,57 @@ function learnFromRepo(
   repoPath: string,
   days: number,
   label?: string
-): { added: number; skipped: number } {
+): { added: number; skipped: number; lowInfo: number } {
   const prefix = label ? `[${label}] ` : '';
 
   if (!isGitRepo(repoPath)) {
     console.log(`${prefix}No git history found (or not a git repository).`);
-    return { added: 0, skipped: 0 };
+    return { added: 0, skipped: 0, lowInfo: 0 };
   }
 
   const gitLog = fetchGitLog(repoPath, days);
   if (!gitLog.trim()) {
     console.log(`${prefix}No fix/revert/bug commits found in the specified period.`);
-    return { added: 0, skipped: 0 };
+    return { added: 0, skipped: 0, lowInfo: 0 };
   }
 
-  const lessons = extractLessons(gitLog);
-  if (lessons.length === 0) {
+  const parsedLessons = extractLessons(gitLog);
+  if (parsedLessons.length === 0) {
     console.log(`${prefix}No fix/revert/bug commits found in the specified period.`);
-    return { added: 0, skipped: 0 };
+    return { added: 0, skipped: 0, lowInfo: 0 };
   }
+
+  // DF4: admission gate lives at the write path, not in extractLessons
+  // (a published API surface that only parses). Bare subjects like "fixed
+  // signals" are dropped here, before they ever become a memory.
+  // The gate filters the loop INPUT, so a dropped lesson neither stores nor
+  // invalidates. That is deliberate, and it was argued both ways.
+  //
+  // Round 1 of review called the lost invalidation a P1: a migration subject
+  // too thin to store ("replace webpack with vite") would stop weakening
+  // stale webpack memories. True. So the loop was widened to walk every
+  // parsed lesson with the gate on the write alone.
+  //
+  // Round 2 then found the cure was worse. STORAGE is what makes invalidation
+  // idempotent here: a stored lesson is recognised by deduplicateLesson on
+  // the next scan and short-circuits before invalidating again. A lesson that
+  // invalidates but is never stored has no such record, so every rescan
+  // re-invalidates, and invalidateMatching halves half_life_days each time.
+  // Measured: 7 -> 3 -> 1 over two runs. That is compounding data damage.
+  //
+  // Measured frequency decided it. Across 413 real auto-learn rows in 4
+  // stores, 24 are gated and ZERO of those carry an invalidation target; the
+  // 45 lessons that do carry targets all pass the gate and are unaffected
+  // either way. Both failure modes are empty on real data, so the tie breaks
+  // on which one is benign if it ever fires: not invalidating is a missed
+  // improvement, re-invalidating forever is damage.
+  //
+  // Documented limitation, pinned by test: a migration subject too thin to
+  // store also does not invalidate. Making invalidateMatching idempotent
+  // would allow both, and is backlogged - it is a latent issue for the manual
+  // `hippo invalidate` path too, not just this one.
+  const { kept: lessons, dropped } = partitionLessons(parsedLessons);
+  const lowInfo = dropped.length;
 
   let added = 0;
   let skipped = 0;
@@ -6368,9 +6409,10 @@ function learnFromRepo(
   console.log(
     `${prefix}${added} new lessons added, ${skipped} duplicates skipped` +
       (rejected > 0 ? `, ${rejected} rejected value(s) skipped` : '') +
+      (lowInfo > 0 ? `, ${lowInfo} low-information subject(s) dropped` : '') +
       '.',
   );
-  return { added, skipped };
+  return { added, skipped, lowInfo };
 }
 
 function cmdLearn(

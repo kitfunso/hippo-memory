@@ -23,7 +23,7 @@ import { loadAllEntries, writeEntry, readEntry, initStore, loadFreshActiveTaskSn
 import { shareMemory, listPeers, getGlobalRoot } from '../shared.js';
 import { consolidate } from '../consolidate.js';
 import { execSync } from 'child_process';
-import { fetchGitLog, extractLessons, deduplicateLesson, isGitRepo } from '../autolearn.js';
+import { fetchGitLog, extractLessons, partitionLessons, deduplicateLesson, isGitRepo } from '../autolearn.js';
 import { loadConfig } from '../config.js';
 import { resolveConfidence } from '../memory.js';
 import { resolveTenantId } from '../tenant.js';
@@ -1169,7 +1169,17 @@ async function executeTool(
       if (!isGitRepo(process.cwd())) return 'No git history found.';
       const gitLog = fetchGitLog(process.cwd(), days);
       if (!gitLog.trim()) return 'No fix/revert/bug commits found in the specified period.';
-      const lessons = extractLessons(gitLog, config.gitLearnPatterns);
+      const parsedLessons = extractLessons(gitLog, config.gitLearnPatterns);
+      // DF4: admission gate lives at the write path, not in extractLessons
+      // (a published API surface that only parses). Bare subjects like
+      // "fixed signals" are dropped here, before they ever become a memory.
+      // Gating the loop INPUT is correct here, unlike the CLI path: this
+      // loop only writes. The CLI's loop also runs invalidation, so there
+      // the gate has to sit on the write alone or a migration subject stops
+      // superseding stale memories. Same predicate, different placement,
+      // because the loops do different work.
+      const { kept: lessons, dropped } = partitionLessons(parsedLessons);
+      const lowInfo = dropped.length;
       let added = 0;
       let skipped = 0;
       let rejected = 0;
@@ -1194,7 +1204,8 @@ async function executeTool(
         added++;
       }
       const rejectedSuffix = rejected > 0 ? `, ${rejected} rejected values skipped` : '';
-      return `Git learn: ${added} new, ${skipped} duplicates skipped${rejectedSuffix} (scanned ${days} days)`;
+      const lowInfoSuffix = lowInfo > 0 ? `, ${lowInfo} low-information subjects dropped` : '';
+      return `Git learn: ${added} new, ${skipped} duplicates skipped${rejectedSuffix}${lowInfoSuffix} (scanned ${days} days)`;
     }
 
     case 'hippo_conflicts': {
