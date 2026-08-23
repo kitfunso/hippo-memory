@@ -244,6 +244,11 @@ describe('DF2 capture coherence', () => {
       // a genuine closer, so a tight-before-only rule rejects it.
       { text: "Always preserve 'a, b ' exactly, then verify.",
         mustContain: "'a, b '", mustNotContain: 'then verify' },
+      // a literal ending in whitespace and followed by CLAUSE punctuation -
+      // whitespace before the closer and a comma after it, so any rule
+      // phrased around the preceding character rejects a genuine closer.
+      { text: "Always preserve 'a, b ', then verify.",
+        mustContain: "'a, b '", mustNotContain: 'then verify' },
       // plain prose, no traps
       { text: 'Always run the suite twice, then deploy.',
         mustContain: 'run the suite twice', mustNotContain: 'then deploy' },

@@ -144,25 +144,24 @@ function lastCloserIndex(full: string): number {
   // elisions ("keep 'em", "wait 'til", ...) made extraction quadratic and
   // could stall a moderately sized capture. Codex P2, r7.
   //
-  // Three shapes have to be separated, and no single test does it:
-  //   "user's"                  -> next is a LETTER, never a closer
-  //   "preserve 'a, b ' exactly" -> prev is SPACE, still a real closer
-  //   "run '--force, after"      -> next is punctuation, but this is an
-  //                                 OPENER of an unmatched token; treating
-  //                                 it as a closer let the elision earlier in
-  //                                 the sentence pair with it and swallowed
-  //                                 the clause boundary (codex P2, r8)
-  // So: never followed by a letter or digit, AND either tight against the
-  // text it closes (non-whitespace before) or trailed by whitespace/end.
-  // "'--force" fails both halves - space before, punctuation after.
+  // Decided by what FOLLOWS the quote, and nothing else. Three revisions of
+  // this predicate each added a clause about the preceding character, and
+  // each one broke a shape the last had fixed:
+  //   r7  next is not a letter          -> accepted "'--force" as a closer
+  //   r8  ...and tight-before OR loose-after -> rejected "'a, b ',"
+  // Looking only forward separates all four shapes with one positive class,
+  // because the distinction is really opener-versus-closer, not spacing:
+  //   "user's"            next 's'  - a letter continues a word
+  //   "run '--force,"     next '-'  - punctuation that STARTS a token
+  //   "pass 'a, b' to"    next ' '  - whitespace ENDS the literal
+  //   "preserve 'a, b '," next ','  - clause punctuation ENDS it too
+  // A closer is followed by end-of-string, whitespace, or clause/closing
+  // punctuation. Anything that begins a token is an opener. The earlier
+  // letter-exclusion is subsumed: a letter is not in this class either.
   for (let j = full.length - 1; j >= 0; j--) {
     if (full[j] !== "'") continue;
-    const prev = full[j - 1];
     const next = full[j + 1];
-    if (next !== undefined && /[\p{L}\p{N}]/u.test(next)) continue;
-    const tightBefore = prev !== undefined && !/\s/.test(prev);
-    const looseAfter = next === undefined || /\s/.test(next);
-    if (tightBefore || looseAfter) return j;
+    if (next === undefined || /[\s,;:.!?)\]}]/.test(next)) return j;
   }
   return -1;
 }
