@@ -223,6 +223,18 @@ describe('DF2 capture coherence', () => {
       // the untruncated sentence; no predicate could have seen this.
       { text: "Always pass '" + 'a, ' + 'x'.repeat(600) + "' to the parser.",
         mustContain: "Always pass 'a, xxx", mustNotContain: "pass 'a'" },
+      // DECISION_PATTERNS carry an UNCAPTURED subject before group 1, so an
+      // offset derived as match.index + prefix.length lands inside the
+      // keyword and duplicates text. Read group 2's real offset instead.
+      { text: 'We decided to pin the version to 1.35.0.',
+        mustContain: 'decided to pin the version', mustNotContain: 'to to' },
+      { text: "Let's go with SQLite for the store.",
+        mustContain: 'go with SQLite', mustNotContain: 'with  with' },
+      // an elision plus an unrelated IN-WORD apostrophe far downstream. Any
+      // apostrophe would satisfy a bare pairing check, re-opening quote mode
+      // on the elision; a closer-SHAPED partner does not exist here.
+      { text: "Always keep 'em enabled, then " + 'y'.repeat(520) + " check user's config.",
+        mustContain: "'em enabled", mustNotContain: 'yyyy' },
       // plain prose, no traps
       { text: 'Always run the suite twice, then deploy.',
         mustContain: 'run the suite twice', mustNotContain: 'then deploy' },

@@ -131,6 +131,24 @@ function splitSentences(text: string): string[] {
  * gate in `extractFromPatterns` and the whole match is dropped, where today
  * it is truncated and stored.
  */
+/**
+ * Does a plausible CLOSING single quote appear after `from`? Mirror of the
+ * opener rule in `boundToClause`: a closer sits tight against the literal it
+ * ends (non-whitespace before) and is followed by whitespace, punctuation, or
+ * end-of-string - never by a letter, which is what makes "user's" an
+ * apostrophe rather than a partner.
+ */
+function hasCloserAfter(full: string, from: number): boolean {
+  for (let j = full.indexOf("'", from); j !== -1; j = full.indexOf("'", j + 1)) {
+    const prev = full[j - 1];
+    const next = full[j + 1];
+    if (prev !== undefined && !/\s/.test(prev) && (next === undefined || !/[\p{L}\p{N}]/u.test(next))) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function boundToClause(full: string, searchFrom: number, maxLen = 200): string {
   // Scan for the first PROSE clause boundary after `searchFrom`.
   //
@@ -184,7 +202,18 @@ function boundToClause(full: string, searchFrom: number, maxLen = 200): string {
       // is disabled for the rest of the capture. Requiring an actual closing
       // quote later in the string replaces a guess with a checkable fact -
       // an elided form simply has no partner. Codex P2, this round.
-      if (atBoundary && full.indexOf("'", i + 1) !== -1) { quote = ch; }
+      // ...and the partner must LOOK like a closer, not merely be another
+      // apostrophe. Distance cannot separate the two cases - both put a `'`
+      // far downstream:
+      //   "Always pass '<600-char literal>' to the parser"  -> the far ' IS
+      //     the closer, and pairing must succeed
+      //   "keep 'em enabled, then <520 chars> check user's config" -> the far
+      //     ' is in-word, and pairing against it re-opens quote mode on the
+      //     elision, disabling bounding for the rest of the capture
+      // So apply the SAME shape rule already used to open a literal, mirrored:
+      // a closer has non-whitespace before it and whitespace/punctuation (not
+      // a letter) after. "user's" fails it on both counts. Codex P2, r6.
+      if (atBoundary && hasCloserAfter(full, i + 1)) { quote = ch; }
       continue;
     }
     if (ch === '(' || ch === '[' || ch === '{') { depth++; continue; }
@@ -241,7 +270,9 @@ function extractFromPatterns(
   tag: string
 ): ExtractedItem | null {
   for (const pat of patterns) {
-    const match = sentence.match(pat);
+    // `d` gives per-group offsets; see the contentStart comment below.
+    const dpat = pat.flags.includes('d') ? pat : new RegExp(pat.source, pat.flags + 'd');
+    const match = dpat.exec(sentence);
     if (match) {
       let bounded: string;
       if (pat === PREFERENCE_PATTERNS[0]) {
@@ -274,7 +305,14 @@ function extractFromPatterns(
         // no further predicate could have fixed it. boundToClause already
         // caps its OUTPUT at maxLen, so widening the input costs nothing and
         // makes pairing decidable on the whole sentence. Codex P2, round 5.
-        const contentStart = match.index !== undefined ? match.index + rawPrefix.length : -1;
+        // Group 2's REAL offset, read from the regex engine. Deriving it as
+        // `match.index + rawPrefix.length` assumes group 1 starts the match,
+        // but DECISION_PATTERNS carry an uncaptured subject ("we ", "let's ")
+        // ahead of it - so the offset landed inside the keyword and the
+        // widened slice duplicated text: "We decided to pin..." stored as
+        // "decided to to pin...". Real corruption of the commonest decision
+        // capture, shipped in the previous commit. Codex P1, r6.
+        const contentStart = match.indices?.[2]?.[0] ?? -1;
         const afterKeyword = contentStart >= 0 ? sentence.slice(contentStart) : (match[2] ?? match[0]);
         bounded = boundToClause(keywordPrefix + afterKeyword, keywordPrefix.length);
       }
