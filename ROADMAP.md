@@ -1157,6 +1157,12 @@ Fixed at the cause rather than the instance: a `(?=\p{L})` lookahead makes "lett
 
 **Rule earned:** when a change alters how much of a shared budget an earlier consumer spends, the later consumers on that budget are all in the blast radius — enumerate them explicitly. Patching the first displaced consumer you find is patching a symptom; two consumers displaced by one mechanism means the mechanism is the bug.
 
+**A sixth round found the reserve itself over-charged mirrored pins** (`syncGlobalToLocal` copies global rows preserving `entry.id`, so a synced pin sits in both `pinnedLocal` and `pinnedGlobal`; the admission loop deduped via `selectedIds` but the reserve did not, starving recents of budget a single returned pin never needed). Deduped, and the fix is one `Set`.
+
+**The most useful lesson of the episode came from writing that regression test.** Its first draft PASSED against the unfixed code: at budget 46 the reserve left 34 tokens deduped versus 22 double-charged, and the recent entry needed only 17 — it fit either way, so the test asserted nothing. It was caught only by running the revert-and-check step rather than assuming a fresh test must be red. Sizing the budget from the MEASURED costs (pin 12, recent 17) gave the real distinguishing window of 29-40.
+
+**Rule earned:** a regression test is not evidence until you have watched it fail against the unfixed code. When the test turns on a numeric threshold, derive the threshold from measured values — a round number that *looks* tight is how a test ends up green in both worlds. This is the same failure as the prose-assertion rule above, wearing a test's clothing: the whole episode's defect class was *claims never executed*, and an unverified test is just another claim.
+
 ### DF4. Git auto-learn seeds no-information commit subjects as memories [planned, small]
 **Incident (live store):** `hippo audit` flags 44 entries, dominated by bare commit subjects ("fixed signals", "globe view on by default", "corrected entry prices") seeded by auto-learn (src/autolearn.ts) - the audit heuristic calls them "no specific details (names, paths, numbers, code)".
 **Root cause:** the quality verifier exists only downstream (audit) while the producer ingests unconditionally - the same shape as DF2/DF3. A subject line without a path, number, or code token carries no recall value on its own.
