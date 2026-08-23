@@ -29,7 +29,8 @@ const STOP_WORDS = new Set([
 
 const VAGUE_ONLY = /^[\w\s,.'"-]+$/;
 
-// CJK scripts carry no whitespace word boundaries, so a plain \s+ split scores
+// Han, Hiragana and Katakana carry no whitespace word boundaries, so a plain
+// \s+ split scores
 // an entire sentence as one "word" and the gate rejects real sentences as junk.
 // CJK words average ~2 characters, so approximate substantive units as one per
 // 2 CJK LETTERS.
@@ -43,6 +44,14 @@ const VAGUE_ONLY = /^[\w\s,.'"-]+$/;
 //     makes "letters only" true by definition rather than by assertion, and
 //     the category sweep in tests/df3-cjk-quality-floor.test.ts pins it so the
 //     next wrong guess fails locally instead of in review.
+//
+// SCOPE, stated precisely because the constant name says "CJK": this covers
+// Han, Hiragana and Katakana only. Hangul is absent (Korean largely survives
+// the whitespace split already) and other spaceless scripts - Thai, Khmer,
+// Burmese, Lao - still hit the original one-word failure. Their behavior is
+// byte-identical to before this change, so nothing regressed; widening the
+// script set is a separate, deliberately-scoped follow-up rather than another
+// mid-episode guess at this predicate.
 //  2. ADD to the latin count, never strip before it. Stripping CJK first can
 //     REDUCE the count for short mixed tokens (`UI<han> DB<han> QA<han>` leaves
 //     three 2-char latin fragments that fail the `> 2` filter), which would
