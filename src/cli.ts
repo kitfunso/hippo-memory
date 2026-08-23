@@ -84,6 +84,7 @@ import {
   updateStats,
   saveActiveTaskSnapshot,
   loadActiveTaskSnapshot,
+  closeTaskSnapshotsForSession,
   clearActiveTaskSnapshot,
   appendSessionEvent,
   listSessionEvents,
@@ -3111,7 +3112,11 @@ function cmdSessionEnd(
   // Read stdin synchronously. The SessionEnd hook payload carries
   // `transcript_path` as JSON; we extract it here and pass it to the worker
   // via argv so the detached child doesn't need to inherit stdin.
+  // DF1 T3 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md): `session_id`
+  // is extracted the same way, so the worker can close the ending session's
+  // own active task snapshot after sleep+capture finish.
   let transcriptPath: string | null = null;
+  let sessionId: string | null = null;
   try {
     const stdinText = fs.readFileSync(0, 'utf8');
     if (stdinText && stdinText.trim().startsWith('{')) {
@@ -3119,15 +3124,19 @@ function cmdSessionEnd(
       if (typeof payload.transcript_path === 'string') {
         transcriptPath = payload.transcript_path;
       }
+      if (typeof payload.session_id === 'string') {
+        sessionId = payload.session_id;
+      }
     }
   } catch {
     // No stdin, not JSON, or read failure — capture will fall back to
-    // transcript auto-discovery.
+    // transcript auto-discovery; the snapshot close below will no-op.
   }
 
   const workerArgs: string[] = [process.argv[1], '__session-end-worker'];
   if (logFile) workerArgs.push('--log-file', logFile);
   if (transcriptPath) workerArgs.push('--transcript', transcriptPath);
+  if (sessionId) workerArgs.push('--session-id', sessionId);
 
   try {
     const child = spawn(process.execPath, workerArgs, {
@@ -3138,7 +3147,10 @@ function cmdSessionEnd(
     child.unref();
   } catch (err) {
     // If spawn fails, run inline as a last resort — better late output than
-    // no consolidation at all.
+    // no consolidation at all. NOTE: `flags` carries neither --transcript nor
+    // --session-id (both are stdin-derived, argv-only for the child), so in
+    // this fallback capture auto-discovers the transcript and the DF1
+    // snapshot close no-ops — the ambient freshness bound is the backstop.
     cmdSessionEndWorker(hippoRoot, flags);
     return;
   }
@@ -3175,6 +3187,45 @@ function cmdSessionEndWorker(
     cmdCapture(hippoRoot, captureOpts);
   } catch {
     // Same treatment — the failure line is already in the log.
+  }
+
+  // DF1 T3: close the ending session's own active task snapshot AFTER
+  // sleep+capture complete — neither producer (runPreCompact,
+  // `hippo snapshot save`) runs inside session-end, so this can never
+  // destroy same-run work. Scoped to `--session-id`: a concurrent session's
+  // active snapshot is untouched (closeTaskSnapshotsForSession's own WHERE
+  // clause). Absent session id -> no-op plus one log line; session-end is
+  // not guaranteed to fire at all (crash, kill -9), so the freshness bound
+  // in loadFreshActiveTaskSnapshot is the backstop layer, not this close.
+  const closeLogFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : null;
+  const closeSessionId = typeof flags['session-id'] === 'string' ? (flags['session-id'] as string) : null;
+  try {
+    if (closeSessionId) {
+      const closed = closeTaskSnapshotsForSession(hippoRoot, resolveTenantId({}), closeSessionId);
+      appendSessionEndCloseLog(closeLogFile, `closed ${closed} active snapshot(s) for session ${closeSessionId}`);
+    } else {
+      appendSessionEndCloseLog(closeLogFile, 'skip: no session_id in SessionEnd payload, active snapshot left untouched');
+    }
+  } catch (err) {
+    appendSessionEndCloseLog(closeLogFile, `snapshot close failed: ${(err as Error).message}`);
+  }
+}
+
+/**
+ * Best-effort log line for the DF1 T3 snapshot-close step in
+ * `cmdSessionEndWorker`. `cmdSleep`/`cmdCapture` each tee console output to
+ * `logFile` only for their own duration (the tee is restored before this
+ * runs), so a plain `console.log` here would be silently discarded under
+ * the detached worker's `stdio: 'ignore'` — write straight to the file
+ * instead, matching capture.ts's `appendPreCompactLog` convention.
+ */
+function appendSessionEndCloseLog(logFile: string | null, message: string): void {
+  if (!logFile) return;
+  try {
+    fs.mkdirSync(path.dirname(logFile), { recursive: true });
+    fs.appendFileSync(logFile, `[hippo] ${new Date().toISOString()} ${message}\n`, 'utf8');
+  } catch {
+    // Best-effort only — never let a log-write failure surface as an error.
   }
 }
 
@@ -5798,7 +5849,8 @@ function cmdCurrent(
 async function cmdContext(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: Record<string, string | boolean | string[]>,
+  stdinText?: string
 ): Promise<void> {
   // --pinned-only fires on every UserPromptSubmit — including in directories
   // that don't have a local .hippo. Skip requireInit for that path and fall
@@ -5833,6 +5885,25 @@ async function cmdContext(
   // v39 memory scope isolation: --cross-project re-includes other-project
   // memories (rendered under a demarcated section below).
   const crossProject = flags['cross-project'] === true;
+
+  // DF1 T2: resolve the calling session's id for the bounded active-task-
+  // snapshot read (api.getContext -> loadFreshActiveTaskSnapshot). Stdin
+  // payload (the UserPromptSubmit hook JSON) wins; falls back to
+  // HIPPO_SESSION_ID; absent both, undefined -- api.getContext then applies
+  // the pure freshness bound with no owner-match short-circuit.
+  let payloadSessionId: string | undefined;
+  if (stdinText && stdinText.trim() !== '') {
+    try {
+      const payload = JSON.parse(stdinText.trim()) as Record<string, unknown>;
+      if (payload && typeof payload === 'object' && typeof payload.session_id === 'string') {
+        payloadSessionId = payload.session_id;
+      }
+    } catch {
+      // Malformed/non-JSON stdin: fall through to the env fallback below.
+    }
+  }
+  const currentSessionId = payloadSessionId ?? (process.env.HIPPO_SESSION_ID || undefined);
+
   const opts: api.ContextOpts = {
     q: query,
     budget,
@@ -5841,6 +5912,7 @@ async function cmdContext(
     scope: ctxActiveScope ?? undefined,
     includeRecent: parseCountFlag(flags['include-recent']),
     crossProject,
+    currentSessionId,
   };
 
   const result = await api.getContext(ctx, opts);
@@ -9001,9 +9073,22 @@ async function main(): Promise<void> {
       break;
     }
 
-    case 'context':
-      await cmdContext(hippoRoot, args, flags);
+    case 'context': {
+      // DF1 T2 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md): same TTY
+      // guard as `pre-compact` / `compact-resume` above — skip reading stdin
+      // when it's an interactive terminal so a manual invocation never
+      // hangs. `hippo context` is both the hot UserPromptSubmit path
+      // (non-TTY, stdin carries the hook JSON with `session_id`) and a
+      // manually-invocable command (TTY, no payload) — the guardless read in
+      // cmdSessionEnd is the wrong sibling to copy here; it only runs under
+      // a hook that always supplies stdin.
+      let stdinText: string | undefined;
+      if (!process.stdin.isTTY) {
+        try { stdinText = fs.readFileSync(0, 'utf8'); } catch { stdinText = undefined; }
+      }
+      await cmdContext(hippoRoot, args, flags, stdinText);
       break;
+    }
 
     case 'hook':
       cmdHook(args, flags);

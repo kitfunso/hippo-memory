@@ -27,6 +27,7 @@ import {
   RECALL_DEFAULT_DENY_SCOPES,
   removeEntryMirrors,
   loadActiveTaskSnapshot,
+  loadFreshActiveTaskSnapshot,
   loadLatestHandoff,
   listSessionEvents,
   loadIndex,
@@ -2309,6 +2310,15 @@ export interface ContextOpts {
    *  surfaces whose process cwd is not the caller's project (HTTP server)
    *  should pass it explicitly. */
   currentProject?: string;
+  /** DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md, T2): the calling
+   *  session's id, used ONLY as the owner-match input to
+   *  `loadFreshActiveTaskSnapshot` — when it strictly equals the active
+   *  snapshot's `session_id`, the read is unbounded (same-session
+   *  continuity); otherwise the snapshot must pass the freshness bound to
+   *  surface. Absent (undefined/null/'') never short-circuits as a match;
+   *  it just means every snapshot goes through the age check. Host-resolved
+   *  (stdin payload / HIPPO_SESSION_ID) so this stays host-agnostic. */
+  currentSessionId?: string | null;
 }
 
 export interface ContextResultEntry {
@@ -2398,8 +2408,16 @@ export async function getContext(
   localEntries = localEntries.filter(ambientAdmit);
   globalEntries = globalEntries.filter(ambientAdmit);
 
+  // DF1 T2: bounded read — an orphaned snapshot (no later pre-compact
+  // superseded it, no session-end closed it) must age out of this ambient
+  // surface instead of injecting into every future prompt forever. Owner
+  // reads (opts.currentSessionId matches the snapshot's session_id) stay
+  // unbounded; see loadFreshActiveTaskSnapshot's own doc comment for the
+  // exact null/empty-id matching rules.
   const activeSnapshot = hasLocal
-    ? loadActiveTaskSnapshot(ctx.hippoRoot, ctx.tenantId)
+    ? loadFreshActiveTaskSnapshot(ctx.hippoRoot, ctx.tenantId, {
+        sessionId: opts.currentSessionId,
+      })
     : null;
   const sessionHandoff = hasLocal && activeSnapshot?.session_id
     ? loadLatestHandoff(ctx.hippoRoot, ctx.tenantId, activeSnapshot.session_id)
