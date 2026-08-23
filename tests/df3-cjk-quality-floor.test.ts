@@ -114,4 +114,35 @@ describe('DF3 follow-up — CJK-aware substantiveWordCount (src/audit.ts)', () =
     // making capture silently discard it. The count must be ADDITIVE.
     expect(isContentWorthStoring('UI層 DB層 QA層')).toBe(true);
   });
+
+  // STRUCTURAL GUARD (three codex rounds earned this). Every defect here was
+  // the same shape: a property of the character class asserted in a comment
+  // but never tested, with review supplying the adversarial input. This sweep
+  // asserts the invariant itself - only Unicode LETTERS count toward the
+  // substantive floor - so a future wrong guess about which ranges or
+  // properties to match fails here rather than in review.
+  it('invariant sweep: only Unicode letters count toward the floor', () => {
+    const nonLetters: ReadonlyArray<readonly [string, string]> = [
+      ['katakana middle dot', '\u30fb'],
+      ['prolonged sound mark', '\u30fc'],
+      ['Kangxi radical', '\u2f00'],
+      ['old Chinese hook mark', '\u{16fe2}'],
+      ['ideographic full stop', '\u3002'],
+      ['fullwidth comma', '\uff0c'],
+    ];
+    for (const [label, ch] of nonLetters) {
+      // 20 repetitions is far past the >= 2 substantive-unit floor, so any of
+      // these counting as a letter would flip the verdict to true.
+      expect(isContentWorthStoring(ch.repeat(20)), label).toBe(false);
+    }
+
+    const letters: ReadonlyArray<readonly [string, string]> = [
+      ['han', '\u6e2c\u8a66\u74b0\u5883\u306e\u63a5\u7d9a\u8a2d\u5b9a\u3092\u5909\u66f4'],
+      ['hiragana', '\u3055\u3044\u3057\u3087\u306e\u3066\u3063\u305a\u304c\u304a\u3061\u308b'],
+      ['katakana', '\u30c7\u30fc\u30bf\u30d9\u30fc\u30b9\u30b3\u30cd\u30af\u30b7\u30e7\u30f3'],
+    ];
+    for (const [label, text] of letters) {
+      expect(isContentWorthStoring(text), label).toBe(true);
+    }
+  });
 });

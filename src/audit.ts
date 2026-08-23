@@ -35,18 +35,21 @@ const VAGUE_ONLY = /^[\w\s,.'"-]+$/;
 // 2 CJK LETTERS.
 //
 // Two properties this must hold, both learned from codex review findings:
-//  1. Script-based matching, not block ranges. The Katakana BLOCK contains
-//     punctuation - the middle dot and the prolonged sound mark - so a block
-//     range counts punctuation-only junk as substantive. `\p{Script=...}`
-//     matches letters only, and the middle dot is Script=Common, so it
-//     correctly scores 0.
+//  1. Letters only, enforced by construction. Two separate wrong guesses were
+//     caught here: a Katakana BLOCK range counts the middle dot and prolonged
+//     sound mark, and `\p{Script=Han}` alone still counts Han-script
+//     NON-letters (Kangxi radicals, the old Chinese hook mark) because Script
+//     properties are not restricted to letters. The `(?=\p{L})` lookahead
+//     makes "letters only" true by definition rather than by assertion, and
+//     the category sweep in tests/df3-cjk-quality-floor.test.ts pins it so the
+//     next wrong guess fails locally instead of in review.
 //  2. ADD to the latin count, never strip before it. Stripping CJK first can
 //     REDUCE the count for short mixed tokens (`UI<han> DB<han> QA<han>` leaves
 //     three 2-char latin fragments that fail the `> 2` filter), which would
 //     reject content this gate previously accepted and make capture silently
 //     drop it. Adding keeps the change strictly more permissive - the property
 //     that makes it safe in a predicate shared with capture's write gate.
-const CJK_LETTERS = /\p{Script=Han}|\p{Script=Hiragana}|\p{Script=Katakana}/gu;
+const CJK_LETTERS = /(?=\p{L})(?:\p{Script=Han}|\p{Script=Hiragana}|\p{Script=Katakana})/gu;
 
 function substantiveWordCount(text: string): number {
   const cjkLetterCount = (text.match(CJK_LETTERS) ?? []).length;
