@@ -144,16 +144,25 @@ function lastCloserIndex(full: string): number {
   // elisions ("keep 'em", "wait 'til", ...) made extraction quadratic and
   // could stall a moderately sized capture. Codex P2, r7.
   //
-  // A closer is an apostrophe NOT followed by a letter or digit. The earlier
-  // rule also demanded non-whitespace BEFORE it, which rejected the genuine
-  // closer in "Always preserve 'a, b ' exactly" and re-cut inside the
-  // literal (codex P2, r7). What actually distinguishes a closer from an
-  // in-word apostrophe is only what FOLLOWS it: "user's" has a letter, a
-  // closer has space, punctuation, or end-of-string.
+  // Three shapes have to be separated, and no single test does it:
+  //   "user's"                  -> next is a LETTER, never a closer
+  //   "preserve 'a, b ' exactly" -> prev is SPACE, still a real closer
+  //   "run '--force, after"      -> next is punctuation, but this is an
+  //                                 OPENER of an unmatched token; treating
+  //                                 it as a closer let the elision earlier in
+  //                                 the sentence pair with it and swallowed
+  //                                 the clause boundary (codex P2, r8)
+  // So: never followed by a letter or digit, AND either tight against the
+  // text it closes (non-whitespace before) or trailed by whitespace/end.
+  // "'--force" fails both halves - space before, punctuation after.
   for (let j = full.length - 1; j >= 0; j--) {
     if (full[j] !== "'") continue;
+    const prev = full[j - 1];
     const next = full[j + 1];
-    if (next === undefined || !/[\p{L}\p{N}]/u.test(next)) return j;
+    if (next !== undefined && /[\p{L}\p{N}]/u.test(next)) continue;
+    const tightBefore = prev !== undefined && !/\s/.test(prev);
+    const looseAfter = next === undefined || /\s/.test(next);
+    if (tightBefore || looseAfter) return j;
   }
   return -1;
 }

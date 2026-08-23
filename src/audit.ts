@@ -104,7 +104,13 @@ function hasNoSpecificity(text: string): boolean {
   // "The rule is every PR needs two approvals, no exceptions." to "every PR
   // needs two approvals", which then fell under the 40-char vagueness gate
   // and was silently DROPPED - a rule that stored before this branch.
-  const hasAcronym = /\b[A-Z]{2,6}\b/.test(text);
+  // ...but an acronym only signals specificity when it stands out AGAINST
+  // ordinary prose. Without the lowercase requirement, any shouted phrase
+  // qualifies: "FIXED SIGNALS" passed the gate while the identical
+  // "fixed signals" was correctly rejected, so capitalization alone bought a
+  // bypass - into auditMemory and includeRecent as well, where junk would
+  // then occupy recent-context slots. Codex P2, r8.
+  const hasAcronym = /\b[A-Z]{2,6}\b/.test(text) && /[a-z]/.test(text);
   const hasPath = /[/\\.]/.test(text);
   const hasCode = /[`_{}()\[\]]/.test(text);
   if (hasNumber || hasProperNoun || hasPath || hasCode || hasAcronym) return false;

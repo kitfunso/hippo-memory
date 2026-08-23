@@ -235,6 +235,15 @@ describe('DF2 capture coherence', () => {
       // on the elision; a closer-SHAPED partner does not exist here.
       { text: "Always keep 'em enabled, then " + 'y'.repeat(520) + " check user's config.",
         mustContain: "'em enabled", mustNotContain: 'yyyy' },
+      // an elision plus an unmatched quoted token starting with punctuation.
+      // "not followed by a letter" alone accepts the quote before --force as
+      // a closer, pairing it with 'em and swallowing the clause boundary.
+      { text: "Always keep 'em enabled, then run '--force, after restart.",
+        mustContain: "'em enabled", mustNotContain: '--force' },
+      // a literal whose closer trails whitespace - prev is a SPACE, yet it is
+      // a genuine closer, so a tight-before-only rule rejects it.
+      { text: "Always preserve 'a, b ' exactly, then verify.",
+        mustContain: "'a, b '", mustNotContain: 'then verify' },
       // plain prose, no traps
       { text: 'Always run the suite twice, then deploy.',
         mustContain: 'run the suite twice', mustNotContain: 'then deploy' },

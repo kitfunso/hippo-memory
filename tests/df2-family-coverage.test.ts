@@ -36,18 +36,27 @@ describe('DF2: every pattern family still extracts', () => {
     ['pref/prefer', 'Prefer using SQLite instead of Postgres for local runs.'],
   ];
 
-  // Shapes that do not match on this branch AND did not match on master.
-  // Recorded rather than omitted so a future change that starts or stops
-  // matching them shows up as a diff instead of passing silently.
-  const KNOWN_NULL = new Set([
-    'decision/goingwith',
-    'pref/rather',
-    'error/failed',
-    'error/issuewas',
-    'error/bugwas',
-    'error/causewas',
-    'rule/importantshort',
-  ]);
+  // Shapes that extract NOTHING on this branch and extracted nothing on
+  // master either. They are asserted, not skipped: an early `return` would
+  // make them pass without checking anything, so a known-null shape quietly
+  // starting to match - or a live one going dark - would be invisible. That
+  // is the same vacuity trap as the mangled regex below. Codex P2, r8.
+  const EXPECT_NULL: Array<[string, string]> = [
+    ['decision/goingwith', "We're going with the batched writer approach."],
+    ['pref/rather', 'I would rather batch the writes than lock the table.'],
+    ['error/failed', 'The build failed because the token had expired.'],
+    ['error/issuewas', 'The issue was the reserve loop did not dedupe entries.'],
+    ['error/bugwas', 'The bug was the offset assumed group one started the match.'],
+    ['error/causewas', 'The cause was a stale base branch in the worktree.'],
+    ['rule/importantshort', 'Important: rotate the token first.'],
+  ];
+
+  for (const [name, text] of EXPECT_NULL) {
+    it(`${name} is still a known non-match`, () => {
+      const got = extractFromText(text)[0]?.content ?? null;
+      expect(got, `${name} started matching - intended, or a silent change?`).toBeNull();
+    });
+  }
 
   // A word repeated back-to-back, e.g. "decided to to pin" - the signature of
   // the group-offset defect. Written as a literal so no escaping layer can
@@ -59,7 +68,6 @@ describe('DF2: every pattern family still extracts', () => {
   for (const [name, text] of cases) {
     it(`${name} extracts without duplication`, () => {
       const got = extractFromText(text)[0]?.content ?? null;
-      if (KNOWN_NULL.has(name)) return;
       expect(got, `${name} stopped extracting`).toBeTruthy();
       expect(got!, `${name} duplicated a word`).not.toMatch(DUPLICATED_WORD);
     });
