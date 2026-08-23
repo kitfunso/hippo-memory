@@ -146,6 +146,23 @@ a colon-terminated keyword's OWN colon read as a clause boundary, truncating
 the capture down to just the keyword. Hence two groups per pattern, with
 clause-scanning applied only to the content group.
 
+## Accepted limitation: AT1 tombstones predating this change
+
+Raised at review (confidence 75, below the blocking bar) and accepted rather
+than fixed. `checkRejectionGuard` digests the exact normalized content
+(`rejectionDigest`, sha256 over NFC-lowercased text). This change alters the
+captured content shape for RULE items — `"use --no-verify…"` becomes
+`"Never use --no-verify…"` — so a tombstone a user created against the
+OLD shape will not match the NEW capture, and that value becomes
+re-capturable once.
+
+Not fixed here because the alternatives are worse: rewriting stored
+tombstones is a data migration over user memory (the exact thing DF4/AT3's
+quarantine work exists to do carefully), and digesting content with keywords
+stripped would reintroduce the inversion this change removes. AT1 shipped
+2026-08-15, eight days before this, so the affected population is small.
+Recorded so a re-capture after upgrade reads as known, not mysterious.
+
 ## Non-goals
 
 - Not touching `isContentWorthStoring` / `isFragment` (shared with capture's
