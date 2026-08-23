@@ -1120,10 +1120,22 @@ Triggered by a working-as-intended audit of the live store on Keith's machine (2
 **Fix shape:** boundary-aware source truncation (cut at the last sentence boundary inside the cap, the same discipline `truncateCodePointSafe` applies to surrogate pairs); require extracts to start at a clause boundary (reject leading lowercase-continuation and unbalanced closing brackets); run the extract through the existing junk heuristic (`isContentWorthStoring`, src/audit.ts) before `remember` - the verifier already exists, it just runs post-hoc today.
 **Effort:** 3-4d. **Success:** a fixture built from the real g_782a9ac59e12 source text goes red-under-old / green-under-new; capture yield on a clean transcript corpus does not drop more than ~10% (guard against over-filtering); no stored capture begins mid-clause across the micro-eval fixture set.
 
-### DF3. `--include-recent` injects the last N writes with no quality floor [next, small]
-**Root cause (source-verified):** the UserPromptSubmit hook runs `hippo context --pinned-only --include-recent 5`; the includeRecent branch (src/api.ts:2439-2458) takes the newest N rows as-is. It is the amplifier that turned DF2's fragments into per-prompt noise: junk goes from "stored" to "read on every prompt" with no gate between.
-**Fix shape:** apply the same `isContentWorthStoring` floor to includeRecent candidates (skip, do not delete); optionally backfill-skip anything the audit already flagged. Producer fix is DF2; this is defense at the one surface every user reads.
-**Effort:** 1d. **Success:** a store seeded with one junk and four clean recent writes injects only the clean four; pinned injection unchanged.
+### DF3. `--include-recent` injects the last N writes with no quality floor [SHIPPED 2026-08-23, episode 01M0Q4BMEZZE2EX0YRHJ102RV6]
+**Root cause (source-verified):** the UserPromptSubmit hook runs `hippo context --pinned-only --include-recent 5`; the includeRecent branch (src/api.ts:2439-2458) takes the newest N rows as-is, with no quality predicate. Junk goes from "stored" to "read on every prompt" with no gate between.
+
+**PREMISE CORRECTION (measured at plan time, 2026-08-23).** This item originally claimed the floor "is the amplifier that turned DF2's fragments into per-prompt noise". **That was wrong.** Running `isContentWorthStoring` against the actual live entries:
+
+| Case (real store content) | `isContentWorthStoring` | Filtered by DF3? |
+|---|---|---|
+| Fragment "got entries), plus one documented exception…" | `true` | **No** |
+| Fragment "fetches a quote → blank price" | `true` | **No** |
+| Auto-learn "fixed signals" | `false` | Yes |
+| Auto-learn "globe view on by default" | `false` | Yes |
+
+The fragments pass because `capture.ts:174` already applies that exact gate at write time. So DF3's real coverage is the **vague / no-specificity / version-bump / too-short class — i.e. DF4's auto-learn class**, not DF2's fragments. Mid-sentence fragments are indistinguishable from good content at the read surface and can only be fixed at the producer (DF2's boundary-aware truncation). This *strengthens* the Part VI pattern note rather than weakening it.
+
+**Shipped:** `isContentWorthStoring` filter placed BEFORE the slice in the includeRecent block, so a caller asking for N gets N *qualifying* entries (backfilled past junk) rather than N-minus-junk. Skip-only. Pinned entries unaffected — they inject via the separate pinned block, so no bypass clause is needed. Deliberately NOT strengthening `isFragment`: it also gates capture writes, so widening it would silently under-store good memories (note: an earlier draft justified this by claiming `isFragment` feeds the sleep hard-delete path — false, verified at api.ts:2971, only `severity === 'error'` is deleted and `isFragment` is `warning`).
+**Effort:** 1d (actual: 1 episode). **Success (met):** a store seeded with one junk and four clean recent writes injects only the clean four; pinned injection unchanged. Plus a measured-limitation test pinning that fragments are NOT caught, so no future reader assumes DF3 covers DF2's class.
 
 ### DF4. Git auto-learn seeds no-information commit subjects as memories [planned, small]
 **Incident (live store):** `hippo audit` flags 44 entries, dominated by bare commit subjects ("fixed signals", "globe view on by default", "corrected entry prices") seeded by auto-learn (src/autolearn.ts) - the audit heuristic calls them "no specific details (names, paths, numbers, code)".
