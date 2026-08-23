@@ -97,9 +97,31 @@ function hasNoSpecificity(text: string): boolean {
   const words = text.toLowerCase().split(/\s+/);
   const hasNumber = /\d/.test(text);
   const hasProperNoun = /[A-Z][a-z]{2,}/.test(text);
+  // An ACRONYM is specificity too, and this test could not see one: the
+  // proper-noun pattern needs lowercase after the capital, so "PR", "CI",
+  // "DB", "API", "S3" - the densest domain tokens in a technical memory -
+  // all read as vague. Surfaced by DF2: clause-bounding correctly shortened
+  // "The rule is every PR needs two approvals, no exceptions." to "every PR
+  // needs two approvals", which then fell under the 40-char vagueness gate
+  // and was silently DROPPED - a rule that stored before this branch.
+  // ...but an acronym only signals specificity when it stands out AGAINST
+  // ordinary prose. Without the lowercase requirement, any shouted phrase
+  // qualifies: "FIXED SIGNALS" passed the gate while the identical
+  // "fixed signals" was correctly rejected, so capitalization alone bought a
+  // bypass - into auditMemory and includeRecent as well, where junk would
+  // then occupy recent-context slots. Codex P2, r8.
+  // CHAT acronyms are not domain signal. Admitting any all-caps token let
+  // "LGTM ship it", "TODO fix this thing", "FYI all done here" through a gate
+  // that correctly rejected them before - and this gate is shared, so the
+  // effect is retroactive: junk rows already in a user's store were filtered
+  // out of recent-context slots and would have started occupying them, and
+  // `hippo audit` would have stopped flagging them. Found at the ship gate.
+  const CHAT_ACRONYMS = /^(?:TODO|FYI|LGTM|IIRC|IMO|IMHO|FWIW|TBD|BTW|ASAP|AFAIK|WIP|NB|PS)$/;
+  const domainAcronyms = (text.match(/\b[A-Z]{2,6}\b/g) ?? []).filter(a => !CHAT_ACRONYMS.test(a));
+  const hasAcronym = domainAcronyms.length > 0 && /[a-z]/.test(text);
   const hasPath = /[/\\.]/.test(text);
   const hasCode = /[`_{}()\[\]]/.test(text);
-  if (hasNumber || hasProperNoun || hasPath || hasCode) return false;
+  if (hasNumber || hasProperNoun || hasPath || hasCode || hasAcronym) return false;
   return words.length < 8 && VAGUE_ONLY.test(text);
 }
 

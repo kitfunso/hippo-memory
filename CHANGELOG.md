@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.36.0 - 2026-08-23
+
+### Fixed
+- **The capture extractor stored prohibitions as their OPPOSITE (DF2).** Measured on 1.35.0: `"Never use --no-verify on git commits in this project."` was stored as `"use --no-verify on git commits in this project"`, and `"You must not commit the .env file"` as `"commit the .env file to this repository"` - then injected into later prompts as pinned rules meaning the reverse of what was written. Cause: every pattern was an unanchored keyword alternation with a fixed-width capture beginning AFTER the keyword, so the negation was discarded and the content ran past clause boundaries. Patterns now carry the keyword in its own group, preserved whenever it carries semantic sign (`never`, `always`, `must not`, `don't ever`) and dropped only for colon labels (`error:`, `decision:`) whose category is already recorded on the item. Content is bounded to its clause by a depth- and quote-aware scanner instead of counted to 200 characters.
+- **Acronyms count as specificity.** The vagueness gate tested `[A-Z][a-z]{2,}`, which cannot see `PR`, `CI`, `DB`, `API`, `S3` - the densest domain tokens in a technical memory. Once clause-bounding shortened captures, short technical rules fell under the 40-char gate and were silently dropped. Chat acronyms (`TODO`, `FYI`, `LGTM`, `IIRC`, ...) are excluded, so this does not widen what counts as worth storing.
+
+### Notes
+- **Rules captured before this version may be sign-inverted, and are not migrated.** If your store predates this release, `rule`-tagged rows written by session capture may say the opposite of the rule you stated - the inversion above was silent, so there is no marker to find them by. `hippo audit` cannot detect an inverted rule, and automatic repair is deliberately not attempted: rewriting stored user content on upgrade is riskier than leaving it. Review pinned rules with `hippo list --tag rule` and re-state any that read backwards. Re-capturing the same transcript writes a NEW correctly-signed row rather than matching the old one, so an inverted memory and its correction can coexist until you remove the old one.
+- Captures now keep their keyword, so a rule stored before and after this version will differ textually (`"run the suite twice"` vs `"always run the suite twice"`) and will not dedupe against each other.
+
 ## 1.35.0 - 2026-08-23
 
 ### Fixed
