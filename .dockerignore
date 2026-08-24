@@ -1,0 +1,12 @@
+# Keep the image build context free of local state and secrets. The build
+# stage compiles from source (npm run build:all), so host artifacts are
+# never needed.
+.git
+node_modules
+dist
+coverage
+.hippo
+.env
+.env.*
+*.log
+.devrl-backlog.md
