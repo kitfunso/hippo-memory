@@ -123,3 +123,54 @@ describe('serve() non-loopback host guard', () => {
     });
   });
 });
+
+// clientIpForRateLimit: proxy-aware rate-limit keying. Behind a
+// TLS-terminating proxy every socket carries the proxy's address, so
+// HIPPO_CLIENT_IP_HEADER names the header the proxy stamps with the real
+// client address. Unset (the default), the socket address keys the bucket.
+import { clientIpForRateLimit } from '../src/server.js';
+import type { IncomingMessage } from 'node:http';
+
+function fakeReq(headers: Record<string, string | string[]>, remoteAddress = '10.0.0.9'): IncomingMessage {
+  return { headers, socket: { remoteAddress } } as unknown as IncomingMessage;
+}
+
+describe('clientIpForRateLimit', () => {
+  const saved = process.env.HIPPO_CLIENT_IP_HEADER;
+
+  afterEach(() => {
+    if (saved === undefined) delete process.env.HIPPO_CLIENT_IP_HEADER;
+    else process.env.HIPPO_CLIENT_IP_HEADER = saved;
+  });
+
+  it('defaults to the socket remote address when the env var is unset', () => {
+    delete process.env.HIPPO_CLIENT_IP_HEADER;
+    expect(clientIpForRateLimit(fakeReq({ 'fly-client-ip': '203.0.113.7' }))).toBe('10.0.0.9');
+  });
+
+  it('uses the configured header when present', () => {
+    process.env.HIPPO_CLIENT_IP_HEADER = 'fly-client-ip';
+    expect(clientIpForRateLimit(fakeReq({ 'fly-client-ip': '203.0.113.7' }))).toBe('203.0.113.7');
+  });
+
+  it('matches the header case-insensitively (env var may be given uppercased)', () => {
+    process.env.HIPPO_CLIENT_IP_HEADER = 'Fly-Client-IP';
+    expect(clientIpForRateLimit(fakeReq({ 'fly-client-ip': '203.0.113.7' }))).toBe('203.0.113.7');
+  });
+
+  it('takes the first entry of a comma-joined proxy chain', () => {
+    process.env.HIPPO_CLIENT_IP_HEADER = 'x-forwarded-for';
+    expect(clientIpForRateLimit(fakeReq({ 'x-forwarded-for': '203.0.113.7, 198.51.100.2' }))).toBe('203.0.113.7');
+  });
+
+  it('takes the first value of a repeated header', () => {
+    process.env.HIPPO_CLIENT_IP_HEADER = 'x-forwarded-for';
+    expect(clientIpForRateLimit(fakeReq({ 'x-forwarded-for': ['203.0.113.7', '198.51.100.2'] }))).toBe('203.0.113.7');
+  });
+
+  it('falls back to the socket address when the header is absent or empty', () => {
+    process.env.HIPPO_CLIENT_IP_HEADER = 'fly-client-ip';
+    expect(clientIpForRateLimit(fakeReq({}))).toBe('10.0.0.9');
+    expect(clientIpForRateLimit(fakeReq({ 'fly-client-ip': '  ' }))).toBe('10.0.0.9');
+  });
+});

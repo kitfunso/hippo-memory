@@ -5,10 +5,24 @@
 # fresh volume, initialize it; on restarts the existing store persists.
 #
 # API keys are minted OUT OF BAND by the operator:
-#   fly ssh console -a hippo-aml -C "node /app/dist/src/cli.js auth create --label aml-eval --role writer --json"
+#   fly ssh console -a hippo-aml -C "node /app/dist/src/cli.js auth create --label aml-eval --role member --json"
 # The plaintext is shown exactly once; hippo stores only a scrypt hash.
 # Nothing here prints or stores a key.
 set -eu
+
+# Privilege drop: the Fly volume mounts root-owned, so first boot must chown
+# it. Do that as root, then re-exec this script as the unprivileged node user
+# via setpriv (execs in place, keeping PID 1 signal handling). Everything the
+# server creates under /data is node-owned from then on, so the non-recursive
+# chown of the mount point is sufficient.
+if [ "$(id -u)" = "0" ]; then
+  chown node:node /data
+  exec setpriv --reuid node --regid node --init-groups "$0" "$@"
+fi
+
+# setpriv changes uid but not the environment: HOME still says /root, and
+# hippo resolves its global store from $HOME. Point it at node's real home.
+export HOME=/home/node
 
 cd /data
 

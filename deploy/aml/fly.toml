@@ -16,6 +16,10 @@ primary_region = "lhr"
 [env]
   HIPPO_REQUIRE_AUTH = "1"
   HIPPO_PORT = "8080"
+  # Fly's edge always overwrites this header with the real client address,
+  # so the /v1 rate limiter keys per client instead of collapsing every
+  # request into the proxy's single source-IP bucket.
+  HIPPO_CLIENT_IP_HEADER = "fly-client-ip"
 
 [[mounts]]
   source = "hippo_aml_data"

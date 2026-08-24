@@ -551,6 +551,32 @@ function buildMcpClientKey(req: IncomingMessage): string {
 }
 
 /**
+ * Rate-limit key for a request. Defaults to the socket's remote address.
+ *
+ * Behind a TLS-terminating proxy (Fly, most PaaS ingress) every socket
+ * carries the proxy's address, so per-IP buckets collapse into one global
+ * bucket that unauthenticated traffic can drain before auth runs. Set
+ * HIPPO_CLIENT_IP_HEADER to the header the proxy stamps with the real
+ * client address (fly-client-ip on Fly, which the edge always overwrites)
+ * to key buckets per client instead.
+ *
+ * Only set this when a trusted proxy fronts EVERY request: a directly
+ * reachable server honoring the header would let clients mint a fresh
+ * bucket per request and bypass the limiter entirely.
+ */
+export function clientIpForRateLimit(req: IncomingMessage): string {
+  const header = process.env.HIPPO_CLIENT_IP_HEADER?.toLowerCase();
+  if (header) {
+    const raw = req.headers[header];
+    const first = Array.isArray(raw) ? raw[0] : raw;
+    // Take the first entry of a comma-joined list (proxy chains append).
+    const ip = first?.split(',')[0]?.trim();
+    if (ip) return ip;
+  }
+  return req.socket.remoteAddress ?? 'unknown';
+}
+
+/**
  * Build a per-request Context from the Authorization header and remote
  * address. Throws HttpError(401) for invalid / missing credentials. Opens
  * the DB only when a Bearer token is present so loopback no-auth requests
@@ -697,12 +723,20 @@ async function handleRequest(
   const { method, path, query } = parseRequest(req);
 
   if (method === 'GET' && path === '/health') {
-    sendJson(res, 200, {
-      ok: true,
-      version: VERSION,
-      started_at: startedAt,
-      pid: process.pid,
-    });
+    // Loopback callers (detectServer's stale-pidfile probe reads version and
+    // pid) get the full body. Non-loopback callers get liveness only: the
+    // version string would fingerprint the build for the public internet and
+    // the pid is noise. Platform health checks only need the 200.
+    if (isLoopback(req.socket.remoteAddress)) {
+      sendJson(res, 200, {
+        ok: true,
+        version: VERSION,
+        started_at: startedAt,
+        pid: process.pid,
+      });
+    } else {
+      sendJson(res, 200, { ok: true });
+    }
     return;
   }
 
@@ -710,13 +744,13 @@ async function handleRequest(
   // (a liveness probe) and non-/v1 paths are never throttled. A 429 thrown
   // here lands in the createServer catch like any other HttpError.
   //
-  // Keyed on the socket's remote address. serve() binds loopback-only today,
-  // so in the default deployment this is effectively one global /v1 bucket,
-  // which still bounds enumeration. True per-client keying (and trusting an
-  // X-Forwarded-For only from a known proxy) belongs with the non-loopback
-  // serving that A5 v2 unlocks.
+  // Keyed on the socket's remote address by default. Behind a TLS-terminating
+  // proxy every socket carries the proxy's address, collapsing the per-IP
+  // buckets into one global bucket that pre-auth traffic can drain; set
+  // HIPPO_CLIENT_IP_HEADER there so each real client gets its own bucket
+  // (see clientIpForRateLimit).
   if (limiter && path.startsWith('/v1/')) {
-    const ip = req.socket.remoteAddress ?? 'unknown';
+    const ip = clientIpForRateLimit(req);
     if (!limiter.check(ip)) {
       throw new HttpError(429, 'rate limit exceeded');
     }
@@ -3267,8 +3301,10 @@ async function handleRequest(
  *
  * Refuses non-loopback hosts at boot (Footgun #3 from the A1 plan) unless
  * HIPPO_REQUIRE_AUTH=1 is set. The A5 v2 auth middleware (buildContextWithAuth /
- * requireAuth) has shipped and every route checks it except GET /health,
- * which is public by design for platform health checks. But the loopback
+ * requireAuth) has shipped and every route checks it except GET /health
+ * (public by design for platform health checks) and the two connector
+ * webhooks in PUBLIC_ROUTES, which are HMAC-gated by their own signing
+ * secrets and 404 when those secrets are unset. But the loopback
  * no-auth fallback inside buildContextWithAuth still admits unauthenticated
  * requests from a loopback remote address, so binding to a non-loopback host
  * is only safe once that fallback is disabled with HIPPO_REQUIRE_AUTH=1,
