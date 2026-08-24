@@ -3265,10 +3265,16 @@ async function handleRequest(
 /**
  * Boot the HTTP daemon on host:port and write the pidfile under hippoRoot.
  *
- * Refuses non-loopback hosts at boot (Footgun #3 from the A1 plan): without
- * the A5 v2 auth middleware we have no way to gate remote requests, so we
- * fail fast rather than expose the DB to the network. Task 9 will lift this
- * restriction once Bearer-token validation lands.
+ * Refuses non-loopback hosts at boot (Footgun #3 from the A1 plan) unless
+ * HIPPO_REQUIRE_AUTH=1 is set. The A5 v2 auth middleware (buildContextWithAuth /
+ * requireAuth) has shipped and every route checks it except GET /health,
+ * which is public by design for platform health checks. But the loopback
+ * no-auth fallback inside buildContextWithAuth still admits unauthenticated
+ * requests from a loopback remote address, so binding to a non-loopback host
+ * is only safe once that fallback is disabled with HIPPO_REQUIRE_AUTH=1,
+ * which forces every request (loopback or not) through Bearer-token
+ * validation. Without that env var set, a non-loopback bind would expose the
+ * DB to the network with no auth, so we fail fast instead.
  *
  * Use port: 0 in tests to bind to an ephemeral port and read the actual
  * port back via server.address() after listen.
@@ -3277,11 +3283,11 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const host = opts.host ?? '127.0.0.1';
   const requestedPort = opts.port ?? Number(process.env.HIPPO_PORT ?? 6789);
 
-  if (!LOOPBACK_HOSTS.has(host)) {
+  if (!LOOPBACK_HOSTS.has(host) && process.env.HIPPO_REQUIRE_AUTH !== '1') {
     throw new Error(
       `Refusing to bind hippo serve to non-loopback host '${host}' without auth. ` +
-      `Remote-host serving requires the A5 v2 auth middleware (Task 9 of the A1 plan). ` +
-      `Bind to 127.0.0.1 / ::1 / localhost, or wait for auth support.`,
+      `Set HIPPO_REQUIRE_AUTH=1 to bind non-loopback; every request then requires ` +
+      `a valid API key. Bind to 127.0.0.1 / ::1 / localhost otherwise.`,
     );
   }
 
