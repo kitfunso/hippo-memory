@@ -29,7 +29,9 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { initStore } from '../src/store.js';
+import { initStore, writeEntry } from '../src/store.js';
+import { createMemory, Layer } from '../src/memory.js';
+import { insertEntity, insertRelation } from '../src/graph.js';
 import { remember, type Context } from '../src/api.js';
 
 const CLI = join(process.cwd(), 'dist', 'src', 'cli.js');
@@ -172,6 +174,71 @@ describe('C5: cmdRecall candidate accounting closes (2026-08-24)', () => {
   });
 });
 
+
+
+describe('C5: graph-expanded recall keeps the published accounting honest', () => {
+  let home: string;
+  afterEach(() => {
+    if (home) rmSync(home, { recursive: true, force: true });
+  });
+
+  // The graph fix has to be proven by EXECUTION, with a real edge. Two
+  // earlier attempts to verify it used fixtures with no entity relations, so
+  // the hops path added nothing and the checks were vacuous. This seeds the
+  // same shape as tests/graph-recall.test.ts: B is lexically orthogonal to
+  // the query and reachable only through a supersedes edge.
+  it('a row surfaced by edge is included in the published total and the invariant closes', () => {
+    // Same root convention as makeEnv: the store ROOT is the .hippo directory
+    // itself. initStore(home) with a bare dir leaves cwd/.hippo uninitialized
+    // and the CLI exits "No .hippo directory found".
+    home = mkdtempSync(join(tmpdir(), 'c5-graph-'));
+    const root = join(home, '.hippo');
+    const globalRoot = join(home, 'global-hippo');
+    mkdirSync(globalRoot, { recursive: true });
+    initStore(root);
+    const T = 'default';
+    const mk = (text: string) => {
+      const m = createMemory(text, {
+        tags: [], layer: Layer.Semantic, confidence: 'verified', source: 'test', tenantId: T,
+      });
+      writeEntry(root, m, { actor: 'test' });
+      return m;
+    };
+    const a = mk('decision quokka about cache invalidation strategy');
+    const b = mk('wholly unrelated wording xyzzy plugh frobnicate');
+    const ea = insertEntity(root, T, { entityType: 'decision', name: 'A', memoryId: a.id }).id;
+    const eb = insertEntity(root, T, { entityType: 'decision', name: 'B', memoryId: b.id }).id;
+    insertRelation(root, T, { fromEntityId: eb, toEntityId: ea, relType: 'supersedes', memoryId: b.id });
+
+    // cwd is `home` so no stray local store joins the recall: this test pins
+    // the SINGLE-store graph case. (A worktree cwd would silently merge its
+    // local .hippo - remember() writes to cwd/.hippo, HIPPO_HOME only moves
+    // the global store. That exact confusion made two earlier probes invalid.)
+    const raw = execFileSync(
+      'node',
+      [CLI, 'recall', 'quokka', '--hops', '1', '--json'],
+      {
+        cwd: home,
+        env: { ...process.env, HIPPO_HOME: globalRoot, HIPPO_TENANT: T, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' },
+        encoding: 'utf8',
+      },
+    );
+    const d = JSON.parse(raw.slice(raw.indexOf('{')));
+    const s = d.suppressionSummary as SuppressionSummary;
+    const rows = (d.memories ?? d.results ?? []) as Array<{ entry?: { id: string }; id?: string }>;
+    const ids = rows.map((r) => (r.entry ?? r).id);
+
+    // the edge must actually fire, or this test proves nothing
+    expect(ids, 'graph neighbour must be surfaced by edge').toContain(b.id);
+    // the graph-added row must be inside the PUBLISHED total, not only the
+    // internal arithmetic - this is what broke: total said 1, returned said 2
+    expect(
+      s.totalCandidates,
+      'published invariant must close when the graph adds an out-of-pool row',
+    ).toBe(s.droppedPreRank + s.droppedByBudget + rows.length);
+    expect(s.totalCandidates, 'total must count the edge-surfaced row').toBeGreaterThanOrEqual(rows.length);
+  });
+});
 
 describe('C5: BUDGET-driven truncation is counted (the measured failure)', () => {
   let env: TestEnv;
