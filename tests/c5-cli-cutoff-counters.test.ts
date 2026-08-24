@@ -67,6 +67,29 @@ interface SuppressionSummary {
   droppedByBudget: number;
 }
 
+function recallJsonBudget(
+  env: TestEnv,
+  query: string,
+  budget: number,
+): { results: unknown[]; suppressionSummary: SuppressionSummary } {
+  const raw = execFileSync(
+    'node',
+    [CLI, 'recall', query, '--json', '--budget', String(budget)],
+    {
+      cwd: env.cwd,
+      env: {
+        ...process.env,
+        HIPPO_HOME: env.globalRoot,
+        HIPPO_TENANT: 'default',
+        HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
+      },
+      encoding: 'utf8',
+    },
+  );
+  const start = raw.indexOf('{');
+  return JSON.parse(raw.slice(start));
+}
+
 function recallJson(
   env: TestEnv,
   query: string,
@@ -146,6 +169,40 @@ describe('C5: cmdRecall candidate accounting closes (2026-08-24)', () => {
 
     expect(s.totalCandidates).toBe(s.droppedPreRank + s.droppedByBudget + returned);
     expect(s.droppedByBudget).toBe(0);
+  });
+});
+
+
+describe('C5: BUDGET-driven truncation is counted (the measured failure)', () => {
+  let env: TestEnv;
+  afterEach(() => {
+    if (env?.cwd) rmSync(env.cwd, { recursive: true, force: true });
+  });
+
+  // THE GAP THIS FILE ORIGINALLY MISSED. Every other test here passes
+  // --limit, and the OLD code counted the --limit slice correctly, so those
+  // tests pass on master and prove only that the wording changed.
+  //
+  // The measured production failure was budget/rank driven with NO --limit:
+  // totalCandidates 400, returned 3, droppedByBudget 0, Cutoff line silent.
+  // This is the case that must go red without the derivation fix.
+  it('reports drops when a small --budget truncates and --limit is never passed', () => {
+    env = makeEnv('budget-gap');
+    seedMatchingMemories(env, 'widgetbudget', 40);
+
+    const out = recallJsonBudget(env, 'widgetbudget', 40);
+    const s = out.suppressionSummary;
+    const returned = out.results.length;
+
+    expect(returned, 'a small budget must truncate').toBeLessThan(s.totalCandidates);
+    expect(
+      s.droppedByBudget,
+      'budget/rank drops must be counted - this read 0 in production',
+    ).toBeGreaterThan(0);
+    expect(
+      s.totalCandidates,
+      'published invariant must close on the budget path too',
+    ).toBe(s.droppedPreRank + s.droppedByBudget + returned);
   });
 });
 

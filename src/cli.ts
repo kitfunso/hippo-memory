@@ -1197,7 +1197,12 @@ async function cmdRecall(
       // to 0, and the accounting silently breaks: 1 candidate, 2 returned,
       // 0 drops. Found independently by two reviewers. Count the additions
       // so the invariant holds on graph-expanded recalls too.
-      const beforeGraphExpand = results.length;
+      // GROSS, not net. graphExpandRecall both adds neighbours AND evicts weak
+      // base rows in one call (graph-recall.ts:285), so a net delta of 0 hides
+      // 3 added + 3 evicted: the additions escape the candidate total and the
+      // evictions escape the drop count, and the Cutoff line goes silent again.
+      // Compare ID sets so both directions are counted.
+      const beforeGraphIds = new Set(results.map((r) => r.entry.id));
       results = graphExpandRecall(results, {
         hops,
         maxNeighbors,
@@ -1213,7 +1218,9 @@ async function cmdRecall(
           : {},
       });
       // Rows the graph surfaced that the lexical pool never held.
-      graphAddedCountCmd += Math.max(0, results.length - beforeGraphExpand);
+      for (const r of results) {
+        if (!beforeGraphIds.has(r.entry.id)) graphAddedCountCmd++;
+      }
     }
   }
 
@@ -1633,7 +1640,13 @@ async function cmdRecall(
   // interference; query_repeat is a re-ask, not memory competition).
   const cmdSuppressedByInterference = cmdAnchoringHint?.reason === 'memory_dominance' ? 1 : 0;
   const cmdSuppressionSummary = api.buildSuppressionSummary({
-    totalCandidates: totalCandidatesCountCmd,
+    // PUBLISHED total includes graph-surfaced rows. Folding graphAdded into
+    // the derivation but not into the reported total made the invariant hold
+    // internally and break externally by exactly that count: JSON consumers
+    // saw total != preRank + byBudget + returned, and the text line could
+    // read "showing 8 of 10" having actually considered 12. The number a
+    // caller sees must be the number the arithmetic used.
+    totalCandidates: totalCandidatesCountCmd + graphAddedCountCmd,
     droppedPreRank: droppedPreRankCountCmd,
     droppedByBudget: droppedByBudgetCountCmd,
     summarySubstitutionsAdded: 0,
