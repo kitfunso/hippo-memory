@@ -1,6 +1,17 @@
 # Changelog
 
-## 1.37.0 - 2026-08-23
+## 1.38.0 - 2026-08-24
+
+### Fixed
+- **`hippo recall` silently discarded most candidates (C5).** The transparency line that exists to stop an agent treating a truncated result set as the whole picture could not fire on the CLI path. Measured on 1.37.0: six recalls across three queries and two budgets, `totalCandidates` 192 to 400, 1 to 6 returned, and `droppedByBudget` 0 every time, so the `clauses.length > 0` guard suppressed the `Cutoff:` line entirely. The count was derived from the post-search `--limit` slice, but results arrive from the search already ranked and truncated, so the counter ran after the cut it was measuring. It is now derived as `totalCandidates + graphAdded - droppedPreRank - returned`, so the accounting closes by construction: `totalCandidates == droppedPreRank + droppedByBudget + returned`.
+- **Graph-expanded recalls (`--hops`) are counted correctly.** `graphExpandRecall` both surfaces neighbours and evicts weak base rows in one call, so a net-length comparison scored 3 added plus 3 evicted as no change. Counted by identity now, and the graph-surfaced rows are included in the reported `totalCandidates` so the published numbers satisfy the same invariant the internal arithmetic does.
+- **The cutoff message named a control the caller may not have used.** It read "N dropped to fit limit" even for a `--budget` recall with no `--limit` flag. It now reads "N not shown (rank, budget or limit)".
+
+### Notes
+- **Accounting convention change.** Search-engine rank-step drops were previously excluded from `droppedByBudget` by a documented v1 convention. That convention is why the line was unfireable in the common case, so it now counts them. `dropped_pre_rank` keeps its exact filters-not-ranking meaning. Counts remain per-path honest reports rather than normalised cross-surface numbers, so the CLI and `api.recall` figures answer the same question differently and should not be compared directly.
+- `hippo recall --why` will now print a `Cutoff:` line on most non-trivial stores. That is the intended behaviour: the line only appears when candidates were actually excluded, and `--why` is the flag that asks for it.
+
+## 1.37.0 - 2026-08-24
 
 ### Fixed
 - **Git auto-learn stored commit subjects that carry no information (DF4).** `hippo learn` parsed git subjects and stored every match with no quality predicate, so bare subjects landed in the store and `hippo audit` flagged them afterwards - measured on a live store, 36 of 37 issues were this class ("fixed signals", "mobile responsive polish", "corrected entry prices"). The quality check existed only downstream in audit. It now runs at the producer: a new `partitionLessons` applies `isContentWorthStoring` and BOTH write paths use it, the CLI `learn` command and the MCP `learn` tool. Measured against real data: of 413 rows written by auto-learn across four project stores, 24 (6%) would have been gated, and the gated set is exactly the junk class. The parser `extractLessons` is unchanged - it is a published export and stays a pure parser; admission is a separate step.

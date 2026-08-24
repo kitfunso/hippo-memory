@@ -371,8 +371,10 @@ Continuous background representation: physics-engine energy + velocity-distribut
 Sub-millisecond pre-LLM classifier. Cosine of query embedding against particle-cluster centroids. Predicts: relevant knowledge present? familiar vs novel? about to repeat known mistake?
 **Effort:** 8d. **Success:** ≥70% accuracy on labeled trace; <1ms p99 latency.
 
-### C5. WYSIATI cutoff transparency [next]
+### C5. WYSIATI cutoff transparency [SHIPPED 2026-08-24, PR #154, v1.38.0]
 When `hippo recall --budget N` truncates the candidate set, surface the suppressed-set summary in the response: "showing 5/47 by strength; 38 below decay threshold; 4 suppressed by interference filter." Today the cut is silent and the calling agent treats the cutoff as the full picture (Kahneman, "What You See Is All There Is", TFAS ch. 7). Hippo's lifecycle metadata is uniquely positioned to surface *what was excluded and why* -- a signal no static-store competitor has.
+**PREMISE CORRECTION (measured 2026-08-24).** This item was not unbuilt: it shipped in v1.12.13 and was refined in v1.13.3 with passing tests. Driving the live binary showed it could not FIRE on the CLI path - cmdRecall derived droppedByBudget from the post-search --limit slice, after the search had already truncated, so the counter read 0 while hundreds of candidates vanished and the guard suppressed the line. The tests passed because they exercise api.recall, the path that was already correct. v1.38.0 derives the count arithmetically so the published invariant (totalCandidates == droppedPreRank + droppedByBudget + returned) holds by construction, including on --hops recalls where graph expansion adds out-of-pool rows. **Success (met):** the Cutoff line prints on truncated --why recalls, pinned by tests verified red against the pre-fix code on the budget, limit and graph paths. **Not done, deliberate:** the paired tier-1 micro-eval (decision-quality non-regression) was not run this episode; the accounting-convention change is documented in the CHANGELOG including cross-surface non-comparability.
+
 **Effort:** 1-2d. **Success:** `recall --why` output includes a suppressed-tier breakdown on every truncated recall; integration test asserts the breakdown appears whenever total_candidates > budget; paired tier-1 micro-eval shows agent decision quality non-regression with the breakdown injected.
 
 ---

@@ -975,9 +975,21 @@ async function cmdRecall(
 
   // v1.12.13 / C5 — WYSIATI counters. Track filter activity per the plan v3
   // Task 3 mapping table. dropped_pre_rank is the SUM of all non-budget
-  // filter drops (pre-rank AND post-rank). Search-engine internal drops
-  // (scored-to-zero rows that hybridSearch/physicsSearch returns fewer of)
-  // are NOT counted in v1 — they are part of the rank step, not a filter.
+  // filter drops (pre-rank AND post-rank); its meaning is unchanged by C5.
+  //
+  // C5 (2026-08-24): search-engine internal drops (scored-to-zero rows that
+  // hybridSearch/physicsSearch returns fewer of than they were given) now
+  // count toward droppedByBudget, not "not counted at all" as the old v1
+  // convention had it. That old convention is exactly why the `Cutoff:` line
+  // never printed: cmdRecall measured droppedByBudget from `results.length -
+  // limit` (cli.ts ~1547) AFTER the search call, but `results` had already
+  // been ranked and truncated by the search engine to a handful of rows, so
+  // `limit < results.length` was almost always false and the counter stayed
+  // 0 while hundreds of candidates silently vanished (see the plan's measured
+  // table: 397 of 400 candidates gone, every counter reading 0). droppedByBudget
+  // is now derived as "everything not attributed to a named pre-rank filter",
+  // computed after the final `--limit` slice — see the definition near
+  // line ~1545 for the exact formula and the double-count argument.
   // totalCandidates = post-SQL-predicate count (api.recall parity: measured
   // after loadRecallSearchEntries, before the JS scope filter). NOTE the
   // v1.12.13 accounting convention: SQL-excluded rows (quarantine + the
@@ -986,6 +998,9 @@ async function cmdRecall(
   // defense-in-depth (LIKE/regex divergence, exact-mode mismatch).
   const totalCandidatesCountCmd = localEntries.length + globalEntries.length;
   let droppedPreRankCountCmd = 0;
+  // Graph expansion adds candidates AFTER totalCandidatesCountCmd is taken,
+  // so they are folded back in before the budget residual is derived.
+  let graphAddedCountCmd = 0;
 
   // v1.25.0: JS half of the recall scope rule (private-scope regex deny with
   // explicit-request unlock), via the canonical helper — do not inline a
@@ -1175,6 +1190,19 @@ async function cmdRecall(
       }
     }
     if (hops > 0) {
+      // graphExpandRecall can SURFACE rows that were never in the lexical
+      // candidate pool (a graph neighbour reached by entity edge, not by
+      // query match), and totalCandidatesCountCmd was snapshotted before the
+      // search. Without this the derived budget count goes negative, clamps
+      // to 0, and the accounting silently breaks: 1 candidate, 2 returned,
+      // 0 drops. Found independently by two reviewers. Count the additions
+      // so the invariant holds on graph-expanded recalls too.
+      // GROSS, not net. graphExpandRecall both adds neighbours AND evicts weak
+      // base rows in one call (graph-recall.ts:285), so a net delta of 0 hides
+      // 3 added + 3 evicted: the additions escape the candidate total and the
+      // evictions escape the drop count, and the Cutoff line goes silent again.
+      // Compare ID sets so both directions are counted.
+      const beforeGraphIds = new Set(results.map((r) => r.entry.id));
       results = graphExpandRecall(results, {
         hops,
         maxNeighbors,
@@ -1189,6 +1217,10 @@ async function cmdRecall(
           ? { requested: recallExplicitScope, additive: true }
           : {},
       });
+      // Rows the graph surfaced that the lexical pool never held.
+      for (const r of results) {
+        if (!beforeGraphIds.has(r.entry.id)) graphAddedCountCmd++;
+      }
     }
   }
 
@@ -1541,12 +1573,32 @@ async function cmdRecall(
     droppedPreRankCountCmd += beforeLayerFilter - results.length;
   }
 
-  // v1.12.13 / C5 — WYSIATI dropped_by_budget counter (final limit cut).
-  let droppedByBudgetCountCmd = 0;
+  // v1.12.13 / C5 — WYSIATI dropped_by_budget counter. Apply the final
+  // `--limit` slice first, then derive the count ARITHMETICALLY as
+  // "everything lost that droppedPreRank did not already claim":
+  //
+  //   droppedByBudget = totalCandidates - droppedPreRank - returned
+  //
+  // This is the invariant the plan requires (totalCandidates == droppedPreRank
+  // + droppedByBudget + returned) restated as an assignment, so it holds by
+  // construction rather than by two counters happening to agree. It also
+  // cannot double-count the post-search droppedPreRank sites (--filter-
+  // conflicts, --outcome, --layer, ~1270/1528/1541): those are subtracted
+  // once here, not re-counted, because this line does not re-walk any filter
+  // — it only compares the two totals already tracked above. Everything left
+  // over — search-engine internal rank-step drops AND the `--limit` slice
+  // itself — lands in droppedByBudget, per the C5 accounting change in the
+  // comment near line ~976. Clamped at 0 as a defensive floor: if a future
+  // pipeline change ever returns MORE rows than totalCandidates minus
+  // droppedPreRank (should not happen), report "nothing dropped" rather than
+  // a negative count.
   if (limit < results.length) {
-    droppedByBudgetCountCmd = results.length - limit;
     results = results.slice(0, limit);
   }
+  const droppedByBudgetCountCmd = Math.max(
+    0,
+    totalCandidatesCountCmd + graphAddedCountCmd - droppedPreRankCountCmd - results.length,
+  );
 
   // v0.33 / J1 — CLI per-pipeline anchoring detector. Each pipeline (api.recall,
   // cmdRecall, MCP) computes its own AnchoringHint via the shared detectAnchoring
@@ -1588,7 +1640,13 @@ async function cmdRecall(
   // interference; query_repeat is a re-ask, not memory competition).
   const cmdSuppressedByInterference = cmdAnchoringHint?.reason === 'memory_dominance' ? 1 : 0;
   const cmdSuppressionSummary = api.buildSuppressionSummary({
-    totalCandidates: totalCandidatesCountCmd,
+    // PUBLISHED total includes graph-surfaced rows. Folding graphAdded into
+    // the derivation but not into the reported total made the invariant hold
+    // internally and break externally by exactly that count: JSON consumers
+    // saw total != preRank + byBudget + returned, and the text line could
+    // read "showing 8 of 10" having actually considered 12. The number a
+    // caller sees must be the number the arithmetic used.
+    totalCandidates: totalCandidatesCountCmd + graphAddedCountCmd,
     droppedPreRank: droppedPreRankCountCmd,
     droppedByBudget: droppedByBudgetCountCmd,
     summarySubstitutionsAdded: 0,
@@ -1990,7 +2048,11 @@ async function cmdRecall(
   if (showWhy) {
     const s = cmdSuppressionSummary;
     const clauses: string[] = [];
-    if (s.droppedByBudget > 0) clauses.push(`${s.droppedByBudget} dropped to fit limit`);
+    // "dropped to fit limit" pointed at the wrong control: the residual covers
+    // search-ranking and token-budget drops too, and fires even when --limit
+    // was never passed. Measured: `recall --budget 20 --why` printed "39
+    // dropped to fit limit" with no --limit flag in the command at all.
+    if (s.droppedByBudget > 0) clauses.push(`${s.droppedByBudget} not shown (rank, budget or limit)`);
     if (s.droppedPreRank > 0) clauses.push(`${s.droppedPreRank} filtered pre-rank`);
     if (s.summarySubstitutionsAdded > 0) clauses.push(`${s.summarySubstitutionsAdded} summary substitutions added`);
     if (s.freshTailAdded > 0) clauses.push(`${s.freshTailAdded} fresh-tail added`);
