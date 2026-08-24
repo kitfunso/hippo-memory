@@ -975,9 +975,21 @@ async function cmdRecall(
 
   // v1.12.13 / C5 — WYSIATI counters. Track filter activity per the plan v3
   // Task 3 mapping table. dropped_pre_rank is the SUM of all non-budget
-  // filter drops (pre-rank AND post-rank). Search-engine internal drops
-  // (scored-to-zero rows that hybridSearch/physicsSearch returns fewer of)
-  // are NOT counted in v1 — they are part of the rank step, not a filter.
+  // filter drops (pre-rank AND post-rank); its meaning is unchanged by C5.
+  //
+  // C5 (2026-08-24): search-engine internal drops (scored-to-zero rows that
+  // hybridSearch/physicsSearch returns fewer of than they were given) now
+  // count toward droppedByBudget, not "not counted at all" as the old v1
+  // convention had it. That old convention is exactly why the `Cutoff:` line
+  // never printed: cmdRecall measured droppedByBudget from `results.length -
+  // limit` (cli.ts ~1547) AFTER the search call, but `results` had already
+  // been ranked and truncated by the search engine to a handful of rows, so
+  // `limit < results.length` was almost always false and the counter stayed
+  // 0 while hundreds of candidates silently vanished (see the plan's measured
+  // table: 397 of 400 candidates gone, every counter reading 0). droppedByBudget
+  // is now derived as "everything not attributed to a named pre-rank filter",
+  // computed after the final `--limit` slice — see the definition near
+  // line ~1545 for the exact formula and the double-count argument.
   // totalCandidates = post-SQL-predicate count (api.recall parity: measured
   // after loadRecallSearchEntries, before the JS scope filter). NOTE the
   // v1.12.13 accounting convention: SQL-excluded rows (quarantine + the
@@ -1541,12 +1553,32 @@ async function cmdRecall(
     droppedPreRankCountCmd += beforeLayerFilter - results.length;
   }
 
-  // v1.12.13 / C5 — WYSIATI dropped_by_budget counter (final limit cut).
-  let droppedByBudgetCountCmd = 0;
+  // v1.12.13 / C5 — WYSIATI dropped_by_budget counter. Apply the final
+  // `--limit` slice first, then derive the count ARITHMETICALLY as
+  // "everything lost that droppedPreRank did not already claim":
+  //
+  //   droppedByBudget = totalCandidates - droppedPreRank - returned
+  //
+  // This is the invariant the plan requires (totalCandidates == droppedPreRank
+  // + droppedByBudget + returned) restated as an assignment, so it holds by
+  // construction rather than by two counters happening to agree. It also
+  // cannot double-count the post-search droppedPreRank sites (--filter-
+  // conflicts, --outcome, --layer, ~1270/1528/1541): those are subtracted
+  // once here, not re-counted, because this line does not re-walk any filter
+  // — it only compares the two totals already tracked above. Everything left
+  // over — search-engine internal rank-step drops AND the `--limit` slice
+  // itself — lands in droppedByBudget, per the C5 accounting change in the
+  // comment near line ~976. Clamped at 0 as a defensive floor: if a future
+  // pipeline change ever returns MORE rows than totalCandidates minus
+  // droppedPreRank (should not happen), report "nothing dropped" rather than
+  // a negative count.
   if (limit < results.length) {
-    droppedByBudgetCountCmd = results.length - limit;
     results = results.slice(0, limit);
   }
+  const droppedByBudgetCountCmd = Math.max(
+    0,
+    totalCandidatesCountCmd - droppedPreRankCountCmd - results.length,
+  );
 
   // v0.33 / J1 — CLI per-pipeline anchoring detector. Each pipeline (api.recall,
   // cmdRecall, MCP) computes its own AnchoringHint via the shared detectAnchoring
