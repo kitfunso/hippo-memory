@@ -998,6 +998,9 @@ async function cmdRecall(
   // defense-in-depth (LIKE/regex divergence, exact-mode mismatch).
   const totalCandidatesCountCmd = localEntries.length + globalEntries.length;
   let droppedPreRankCountCmd = 0;
+  // Graph expansion adds candidates AFTER totalCandidatesCountCmd is taken,
+  // so they are folded back in before the budget residual is derived.
+  let graphAddedCountCmd = 0;
 
   // v1.25.0: JS half of the recall scope rule (private-scope regex deny with
   // explicit-request unlock), via the canonical helper — do not inline a
@@ -1187,6 +1190,14 @@ async function cmdRecall(
       }
     }
     if (hops > 0) {
+      // graphExpandRecall can SURFACE rows that were never in the lexical
+      // candidate pool (a graph neighbour reached by entity edge, not by
+      // query match), and totalCandidatesCountCmd was snapshotted before the
+      // search. Without this the derived budget count goes negative, clamps
+      // to 0, and the accounting silently breaks: 1 candidate, 2 returned,
+      // 0 drops. Found independently by two reviewers. Count the additions
+      // so the invariant holds on graph-expanded recalls too.
+      const beforeGraphExpand = results.length;
       results = graphExpandRecall(results, {
         hops,
         maxNeighbors,
@@ -1201,6 +1212,8 @@ async function cmdRecall(
           ? { requested: recallExplicitScope, additive: true }
           : {},
       });
+      // Rows the graph surfaced that the lexical pool never held.
+      graphAddedCountCmd += Math.max(0, results.length - beforeGraphExpand);
     }
   }
 
@@ -1577,7 +1590,7 @@ async function cmdRecall(
   }
   const droppedByBudgetCountCmd = Math.max(
     0,
-    totalCandidatesCountCmd - droppedPreRankCountCmd - results.length,
+    totalCandidatesCountCmd + graphAddedCountCmd - droppedPreRankCountCmd - results.length,
   );
 
   // v0.33 / J1 — CLI per-pipeline anchoring detector. Each pipeline (api.recall,
@@ -2022,7 +2035,11 @@ async function cmdRecall(
   if (showWhy) {
     const s = cmdSuppressionSummary;
     const clauses: string[] = [];
-    if (s.droppedByBudget > 0) clauses.push(`${s.droppedByBudget} dropped to fit limit`);
+    // "dropped to fit limit" pointed at the wrong control: the residual covers
+    // search-ranking and token-budget drops too, and fires even when --limit
+    // was never passed. Measured: `recall --budget 20 --why` printed "39
+    // dropped to fit limit" with no --limit flag in the command at all.
+    if (s.droppedByBudget > 0) clauses.push(`${s.droppedByBudget} not shown (rank, budget or limit)`);
     if (s.droppedPreRank > 0) clauses.push(`${s.droppedPreRank} filtered pre-rank`);
     if (s.summarySubstitutionsAdded > 0) clauses.push(`${s.summarySubstitutionsAdded} summary substitutions added`);
     if (s.freshTailAdded > 0) clauses.push(`${s.freshTailAdded} fresh-tail added`);

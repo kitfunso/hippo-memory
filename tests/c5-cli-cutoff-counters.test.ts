@@ -164,10 +164,17 @@ describe('C5: the `Cutoff:` line prints on a truncated CLI recall (2026-08-24)',
 
     // This is the specific gap the plan names: no prior test drove the CLI
     // summary output, so the line's guard (`clauses.length > 0`) being
-    // permanently false went uncaught. Assert the exact shape the line
-    // takes (cli.ts ~1998: "Cutoff: showing N of M candidates; ... dropped
-    // to fit limit ...").
-    expect(output).toMatch(/^Cutoff: showing \d+ of \d+ candidates;.*dropped to fit limit/m);
+    // permanently false went uncaught.
+    //
+    // The wording is asserted deliberately. It used to read "dropped to fit
+    // limit", which named a control the caller often never passed - review
+    // caught it printing that for a `--budget 20` command with no --limit
+    // flag at all. The residual covers rank, budget AND limit, so the text
+    // must not single one out.
+    expect(output).toMatch(/^Cutoff: showing \d+ of \d+ candidates;/m);
+    expect(output).toMatch(/not shown \(rank, budget or limit\)/);
+    expect(output, 'must not name a control the caller may never have passed')
+      .not.toMatch(/dropped to fit limit/);
   });
 
   it('does NOT print "Cutoff:" when the recall is not truncated (no always-on noise)', () => {
