@@ -84,6 +84,10 @@ curl -X POST https://aml.hippo-memory.com/search -H "Authorization: Bearer <key>
 ```
 
 Operational notes:
+- **The API key is the only secret.** `user_id` is client-asserted; scope
+  partitioning isolates users inside one trusted tenant, it is not an auth
+  boundary. A leaked key reads any user's rows. Mint per evaluation, revoke
+  after.
 - The host must stay awake for the evaluation window (disable sleep during it).
 - The container auto-starts with Docker; the tunnel auto-starts at user logon
   (Startup entry) or as a Windows service if installed elevated.

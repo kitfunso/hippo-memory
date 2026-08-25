@@ -323,6 +323,11 @@ const server = createServer((req, res) => {
     });
 });
 
+// Bound the slow-client window: Cloudflare fronts this, but a stalled body
+// should not hold a connection for Node's default 300s.
+server.headersTimeout = 15_000;
+server.requestTimeout = 30_000;
+
 server.listen(ADAPTER_PORT, () => {
   // server.address().port is the actual bound port. Matters when
   // ADAPTER_PORT=0 asks the OS for an ephemeral port (tests do this).
