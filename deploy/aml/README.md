@@ -10,21 +10,23 @@ container's port is bound to 127.0.0.1 only.
 
 ## What AML calls
 
-AML's protocol requires exactly two operations. hippo serves them natively:
+The public endpoints are served by `adapter/adapter.mjs`, a zero-dependency
+Node proxy that translates AML's contract (agentmemories.ai/api-guide, read
+2026-08-25) onto hippo's native API:
 
-| AML operation | hippo route |
-|---|---|
-| Add | `POST /v1/memories` |
-| Search | `GET /v1/memories?q=<query>&limit=<n>` |
+| AML operation | public route | behind it |
+|---|---|---|
+| Add | `POST /add` | one hippo memory per chunk: messages joined as a role-prefixed transcript, `scope: aml/<user_id>`, tagged `aml-session:<session_id>` |
+| Search | `POST /search` | `GET /v1/memories?q&limit=top_k&scope=aml/<user_id>`, results mapped to `{data:[{id, content, score}]}` |
+| Health | `GET /health` | mirrors hippo's health, unauthenticated |
 
-Auth is a bearer token validated against a store-resident API key
-(scrypt-hashed at rest, tenant-scoped). Health: `GET /health` (public,
-liveness-only body for non-loopback callers).
-
-An adapter translating AML's exact request/response schema onto these routes
-lands in this directory once written against the published API guide
-(https://agentmemories.ai/api-guide). If the schemas already align, no adapter
-is needed and this note gets replaced by that finding.
+Per-user isolation rides on hippo's shipped scope machinery: scoped recall is
+an exact-match filter, so no user's rows (and no unscoped row) can appear in
+another user's results. The adapter accepts `Bearer`, `Token`, or `X-Api-Key`
+credentials and forwards them verbatim to hippo, which validates against a
+store-resident API key (scrypt-hashed at rest). The adapter holds no secrets.
+It also forwards Cloudflare's `cf-connecting-ip` so hippo's rate limiter keys
+per real client.
 
 ## Configuration facts that matter for reproduction
 
@@ -44,31 +46,24 @@ is needed and this note gets replaced by that finding.
 ## Standing it up
 
 ```sh
-# 1. Build the image (from the repo root)
-docker build -f deploy/aml/Dockerfile -t hippo-aml:prod .
+# 1. Build and start both containers (from the repo root). Only the adapter
+#    is published, loopback-only, on 127.0.0.1:18081.
+docker compose -f deploy/aml/docker-compose.yml up -d --build
 
-# 2. Run the container: loopback-only publish, survives restarts
-docker volume create hippo-aml-data
-docker run -d --name hippo-aml --restart unless-stopped \
-  -v hippo-aml-data:/data \
-  -p 127.0.0.1:18080:8080 \
-  -e HIPPO_CLIENT_IP_HEADER=cf-connecting-ip \
-  hippo-aml:prod
-
-# 3. Cloudflare Tunnel (one-time): authorize the zone, create, route
+# 2. Cloudflare Tunnel (one-time): authorize the zone, create, route
 cloudflared tunnel login
 cloudflared tunnel create hippo-aml
 cloudflared tunnel route dns hippo-aml aml.hippo-memory.com
 
-# 4. ~/.cloudflared/config.yml
+# 3. ~/.cloudflared/config.yml
 #    tunnel: <tunnel id>
 #    credentials-file: <path printed by tunnel create>
 #    ingress:
 #      - hostname: aml.hippo-memory.com
-#        service: http://localhost:18080
+#        service: http://localhost:18081
 #      - service: http_status:404
 
-# 5. Run it (or install persistence: `cloudflared service install` from an
+# 4. Run it (or install persistence: `cloudflared service install` from an
 #    admin shell, or a user Startup entry running `cloudflared tunnel run hippo-aml`)
 cloudflared tunnel run hippo-aml
 ```
@@ -82,9 +77,10 @@ docker exec -w /data hippo-aml node /app/dist/src/cli.js auth create --label aml
 # revoke a key
 docker exec -w /data hippo-aml node /app/dist/src/cli.js auth revoke <keyId>
 
-# smoke-check from outside
+# smoke-check from outside (AML contract)
 curl https://aml.hippo-memory.com/health
-curl -H "Authorization: Bearer <key>" "https://aml.hippo-memory.com/v1/memories?q=test"
+curl -X POST https://aml.hippo-memory.com/add -H "Authorization: Bearer <key>"   -H "Content-Type: application/json"   -d '{"request_id":"r1","messages":[{"role":"user","content":"hi"}],"user_id":"u1","session_id":"s1"}'
+curl -X POST https://aml.hippo-memory.com/search -H "Authorization: Bearer <key>"   -H "Content-Type: application/json"   -d '{"query":"hi","user_id":"u1","top_k":5}'
 ```
 
 Operational notes:
