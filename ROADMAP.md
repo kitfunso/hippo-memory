@@ -236,8 +236,13 @@ For shared deployments only. SQLite stays the local default.
 
 ### A7. Observability [partial: audit + rate-limit shipped; dashboard pending]
 Per-query cost, retrieval traces, decay/strengthening rates, conflict counts, sleep-cycle metrics.
-**Shipped:** `audit_log` table (every remember/recall/promote/supersede/outcome/forget with actor + tenant). Per-IP rate-limit visibility via 429 responses (`HIPPO_V1_RPS`). Brain Observatory UI (v0.25) surfaces memory state, conflicts, embeddings via JSON API at `/api/{memories,stats,conflicts,embeddings,peers,config}`.
-**Pending:** retrieval-trace API ("why did my agent recall X"), per-tenant cost/usage rollups, Prometheus exporter, decay-curve telemetry (D8 below).
+**Shipped:** `audit_log` table (every remember/recall/promote/supersede/outcome/forget with actor + tenant). Per-IP rate-limit visibility via 429 responses (`HIPPO_V1_RPS`). Brain Observatory UI (v0.25) surfaces memory state, conflicts, embeddings via JSON API at `/api/{memories,stats,conflicts,embeddings,peers,config}`. LC1 shipped durable per-recall candidate/rank/score traces in schema v40.
+**Pending:** per-tenant cost/usage rollups, Prometheus exporter, decay-curve telemetry (D8 below), and A7.3 below.
+
+#### A7.3 Write-decision trace + deterministic replay [next; blocks LC3 write-policy learning]
+Persist one inspectable trace for every memory-policy decision: `ADD`, `UPDATE`, `SUPERSEDE`, `NOOP` (and `DELETE` where an existing path can emit it). Each trace records the input observation, candidate memories considered, evidence and provenance, per-stage scores, confidence, chosen action, policy/rule version, resulting memory ids, correction chain, tenant/session identity, and optional `agent_run_id`. Expose the same trace through CLI, HTTP API and MCP so an operator can answer *"why did Hippo write or reject this?"* without reading SQLite directly. Add deterministic replay against the recorded policy version; replay is diagnostic only and never re-applies mutations.
+
+**Effort:** 4-6d. **Success:** 100% trace coverage across every public mutation path; identical inputs + policy version replay to the same decision and candidate ordering; supersession/correction chains remain traversable; tenant isolation is test-proven; redaction prevents raw secrets and full tool payloads entering traces; default behavior is bit-identical when trace inspection is unused. A7.3 feeds LC3 and links to Track M's M2 run envelope, but does not make Track M an execution dependency for ordinary memory writes.
 
 ### A8. Framework adapter breadth [grant: AIC-P1]
 LangChain, LlamaIndex, Letta, CrewAI, AutoGen. Consistent semantics across all five. Already in `ROADMAP.md` WP3.
@@ -246,6 +251,11 @@ LangChain, LlamaIndex, Letta, CrewAI, AutoGen. Consistent semantics across all f
 ### A9. Scale to 1M+ [grant: AIC-P1]
 HNSW with custom metric, parallel sleep-cycle consolidation, sub-linear memory compaction. Already in `ROADMAP.md` WP1.
 **Effort:** ongoing under grant. **Success:** 1M+ items, sub-100ms retrieval, 5x compute cost reduction vs vector RAG.
+
+#### A9.1 Unified-store scale gate [next; acceptance gate, not a retrieval research track]
+Run the shipped flat and graph recall paths against deterministic 1K, 10K and 100K-memory stores before promoting A9 or an LC3 policy. Measure cold and warm p50/p95/p99 latency, evidence recall@5, multi-hop evidence recall, stale-answer rate after corrections, active-context tokens, index/build cost, peak memory, and tenant-isolation failures. Include current shipped Hippo, flat-only recall, graph-enabled recall and no-memory/context-stuffing controls; preserve the same query set and correction history across modes.
+
+**Effort:** 3-5d for harness + registered baseline. **Success:** thresholds and corpus hashes are pre-registered under `docs/evals` before execution; every release candidate produces a reproducible result artifact at all three sizes; no candidate promotes if it materially regresses evidence recall, multi-hop recall or stale-answer rate, or breaches its registered p95 latency/memory budget. The 1M+ grant target remains A9; A9.1 is the cheaper gate that prevents scale work from hiding lifecycle regressions.
 
 ### A10. Managed cloud [planned]
 Multi-tenant SaaS deployment, billing, free tier, paid org tier. After A1-A6.
@@ -613,6 +623,16 @@ Triggered by a 2026-05-16 review of `rohitg00/agentmemory` (GitHub), an open age
 **Differentiate (the moat — do NOT converge here):** agentmemory, gbrain, mem0 and Letta all do *static* hybrid retrieval over an effectively append-only store; none rank by memory *state*. Hippo's differentiated retrieval is *dynamic* — ranking modulated by decay half-life, strengthening history, supersession status, and goal-stack context. The B-track PFC modules (B1 ACC EVC-adaptive recall, B3 dlPFC goal-conditioned recall, B5 OFC option-value re-ranker) ARE that differentiated retrieval system. Frontier position: **table-stakes hybrid+RRF retrieval as the candidate generator, lifecycle-aware PFC-modulated re-ranking as the differentiator.** This is consistent with Bet #1 ("memory lifecycle is the moat, not retrieval quality") — hybrid retrieval is the parity floor, not the moat; the moat is what hippo does to the ranking *after* candidate generation, and what it forgets.
 
 **Do NOT borrow:** agentmemory's "iii engine" substrate (HTTP-trigger / KV / stream primitives) — hippo has its own server-mode path (A1). Scope this item to retrieval architecture and capture ergonomics only.
+
+### F19. LoCoMo per-category breakdown + level-3 proactive-service eval [planned]
+Source: bojieli's "AI Agents in Depth" ch. 3 review (2026-08-29). The book's three-level memory eval framework — L1 basic recall, L2 multi-session reasoning, L3 proactive service (synthesize old + new memories to offer predictive help) — maps L1/L2 onto harnesses hippo already runs (LongMemEval per-haystack, F7 LoCoMo baseline, tier-1 micro-eval). Nothing measures L3. Separately, LoCoMo defines 8 capability categories (preference tracking, memory update, temporal awareness, conflict resolution, ...) but the F7 baseline reports a single evidence-recall@5 aggregate; a per-category breakdown is cheap and shows where the retrieval stack is weak.
+**Effort:** ~2-3d for the per-category re-report of the existing F7 run; L3 needs its own task-set design with a no-memory control (pairs naturally with F8's trap-sequence design work).
+**Success:** F7 baseline re-reported per LoCoMo category from the existing artifacts; a pre-registered L3 proactive-service task set exists with a no-memory control. Informational like F7 — never gates a shipping decision.
+
+### F20. Mem0 v3 conflict-resolution diff [planned]
+Book claim (secondary source, UNVERIFIED against Mem0 primary sources): Mem0 v3 moved from write-time memory updates to append-only writes + retrieval-time conflict resolution (temporal ranking + multi-signal fusion), avoiding irreversible deletions. Hippo does the opposite: write-time invalidation / supersession + conflict detection, over the A3 append-only raw layer. The Part IV source verification covered arXiv 2504.19413, which describes the older LLM-tool-call ADD/UPDATE/DELETE/NOOP design — it does not settle the v3 claim.
+Task, in order: (1) verify the v3 claim against Mem0's own docs/changelog; (2) if real, diff the two approaches on hippo's own evals — stale-answer rate after corrections is the discriminating metric and A9.1 already defines it; (3) write up either outcome as positioning material (README / paper related-work).
+**Effort:** ~1d verification; +3-4d if a measured diff is warranted. **Success:** primary-sourced writeup; any measured comparison is pre-registered per `docs/RETRACTION.md` discipline; README/paper positioning updated either way.
 
 ---
 
@@ -1029,18 +1049,23 @@ Added 2026-08-01 after a deep-research pass on learned components for agent memo
 Persist per-recall: query text/hash, returned memory ids + ranks + per-stage scores (the A7 `rerankPipeline` trace already computes these in-memory), session id, tenant. Link `outcome` events to the recall ids that preceded them (cmdRecall's last-retrieval-ids mechanism already exists for credit assignment — persist the linkage durably instead of dropping it). Feeds G8; unblocks LC2, LC3, B1/B5 depth calibration, and F18.
 **Effort:** 2-3d. **Success:** every recall writes a trace row with returned ids; every outcome row references the recall trace(s) it scores; 30 days of dogfood accumulates a re-loadable (query, shown, outcome) dataset; storage overhead <5% of DB size.
 
-#### LC2. Learned memory-value v1: linear keep/forget/promotion scorer [E2 BARS MET 2026-08-10; E3 production wiring next]
+#### LC2. Learned memory-value v1: linear keep/forget/promotion scorer [E3 SHIPPED 2026-08-10 — wired, opt-in, default off; LC2 COMPLETE]
 
 > **Status 2026-08-09 (LC2-E1, `docs/evals/2026-08-09-lc2-memory-value-result.md`):** retention harness + v4 registered baselines shipped on LongMemEval-S cleaned (500/500 questions, deterministic, test-enforced). Held-out bars for the E2 fitter: best single factor = recency at **0.4203**; uniform equal-weighting lands *below* chance (0.2468) on hippo's substrate - inverting the paper's ordering (paper: uniform 0.657 > recency 0.368), so E2's bars are relative to hippo's own baselines, not the paper's.
 >
 > **Status 2026-08-10 (LC2-E2, `docs/evals/2026-08-10-lc2-e2-fit-result.md`): BARS MET.** Seeded (1+lambda)-ES fit (5 restarts, train-only, prereg locked pre-fit) produced learned weights at held-out retention **0.4897** vs recency 0.4203 (+0.0695, paired bootstrap 95% CI [0.017, 0.127] excluding 0) and vs uniform 0.2468 (+0.243, CI [0.175, 0.312]). Artifact: `benchmarks/memory-value/weights-learned.json` (+ meta sidecar) - derived, rebuildable, git-diffable (Track L Rule 2), consumed by nothing in src/ yet. Caveat that rides the artifact: usage-feature signs reflect E1's anti-oracle simulation, not real usage value (LC3 tests that). Next: E3 wires the scorer into a real decision site behind an opt-in flag, default off.
+>
+> **Status 2026-08-10 (LC2-E3, `docs/evals/2026-08-10-lc2-e3-wiring-result.md`): SHIPPED — ALL GATES GREEN.** The scorer is wired into the sleep decay pass as a rescue-only veto behind `memoryValue.enabled` (default off): flag-on can only RESCUE a strength-condemned memory (top-30% learned rank within its own tenant), never condemn — deletes(on) ⊆ deletes(off) by construction, neutralizing the usage-sign hazard at a hard-delete site. G1 code parity passed at **delta 0** (src scorer over rebuilt fit-time stores = registered 0.48973684210526314 exactly); default-off bit-identity test-proven; per-tenant isolation + subset + fail-loud property-gated; rescue rate 17.7% characterized at 2k/3-tenant scale. Flag-flip preconditions pre-registered (dogfood via `mv_rescue` audit rows + full LongMemEval + micro-eval battery). LC2 (E1 substrate → E2 fit → E3 wiring) is complete; LC3 (outcome-trained reranker, ~90d LC1 data clock) is the track's open item.
 Replicate the 2606.12945 recipe on hippo's substrate: a linear (inspectable) value function over consolidation-time lifecycle features hippo already stores — age, decay state, strength, retrieval count, outcome ratio, error tag, schema_fit, tag class, scope. Fit gradient-free (CMA-ES / hill-climb) against (a) gold-evidence retention on LongMemEval with a held-out split and (b) the Part III lifecycle stress eval once it exists. Blind features only — no query-aware oracle. The learned weights replace the hand-set constants in the strength/salience formulas as an opt-in, derived, rebuildable, git-diffable config artifact (Track L Rule 2; a linear model is itself inspectable, so Bet #7 holds).
 **Guard (binding):** the C1 salience-gate regression (recall 81 → 15 when the gate was enabled; do-not-re-enable memory `feedback_hippo_salience_regression`) is the cautionary precedent. LC2 ships ONLY behind pre-registered paired A/B + LongMemEval non-regression gates per `docs/RETRACTION.md` discipline.
 **Effort:** 8-10d. **Success (pre-register exact bars before running):** learned weights beat uniform weights AND the best single factor on gold-retention at a fixed keep budget on the held-out split; tier-1 micro-eval fire-rate non-regression; LongMemEval per-haystack R@5 non-regression.
 
-#### LC3. Outcome-trained reranker head over RRF [planned, gated on ~90d of LC1 data]
-A small learning-to-rank head (logistic / GBDT over lifecycle + match features — NOT a neural cross-encoder) re-scoring the RRF candidate pool, trained on LC1's (query, shown, outcome) triples. SIGIR-2019 is the null hypothesis: BM25+RRF is a strong baseline and the head ships only if it beats it under a pre-registered paired eval. The differentiator is per-store personalization — each store learns from its own outcome history, which no static-store competitor can do.
-**Effort:** 6-8d once data exists. **Success:** pre-registered R@5 / fire-rate lift over the shipped RRF pipeline on own-store traces; identity fallback when a store has fewer labeled triples than a pre-set floor (cold-start).
+#### LC3. Real-outcome memory policy [planned; gated on A7.3 + Track M M2 + ~90d of LC1 data]
+Learn from downstream verified outcomes rather than proxy retrieval labels alone. LC3 starts with the existing small learning-to-rank head (logistic / GBDT over lifecycle + match features — NOT a neural cross-encoder) re-scoring the RRF candidate pool from LC1's (query, shown, outcome) triples. It then evaluates write-policy choices from A7.3 (`ADD` / `UPDATE` / `SUPERSEDE` / `NOOP`) against Track M's linked `agent_runs`: task class, runtime/model, tokens, cost, latency, verified pass/fail/abandoned verdict, artifacts and correction history. Training data stays tenant/store-local unless explicitly exported.
+
+Shadow mode is mandatory: score and recommend decisions without changing retrieval or writes. Compare against four registered controls: shipped BM25+RRF, LC2's fixed memory-value scorer, a recency policy, and no-memory/context-stuffing. A fifth, conditional control: a neural cross-encoder rerank over the same RRF candidate pool — the industry-standard dense+BM25 → RRF → cross-encoder pipeline ("AI Agents in Depth" ch. 3; the reference shape LC3's learned head should be judged against). Conditional because the F15-era egress audit found all HF endpoints blocked from the sandbox; this control ships only if HF egress opens or a user-supplied model tarball is available. Headline metrics are cost per verified pass, verified pass rate, stale-answer rate, active-context tokens and added p95 latency; R@5/fire-rate remain diagnostic inputs, not the product claim. SIGIR-2019 remains the null hypothesis: a learned head earns a slot only if it beats the strong shipped lexical baseline. The differentiator is per-store personalization from real run outcomes, not a globally trained opaque model.
+
+**Effort:** 8-12d once both trace producers have enough data. **Success:** a pre-registered paired shadow eval beats the strongest registered control on cost per verified pass with no statistically credible pass-rate or stale-answer regression; every recommendation cites the recall/write trace ids and `agent_run_id` behind it; stores below a pre-set sample floor get identity fallback; no learned policy is allowed to mutate memory until shadow results pass A9.1 at 1K/10K/100K and a separate explicit promotion decision is recorded.
 
 #### LC4. RL memory controller (Memory-R1 / Mem-alpha class) [research → Track G]
 Verified feasible at 152-QA-pair scale, but it requires fine-tuning a 3B-14B backbone and a training loop — as a product default this conflicts with the zero-dep local core (non-goals #5/#6). File as the Track G realization (G3 knowledge-RLHF, G5 sleep-as-training-pipeline); candidate for grant-funded research (a GRPO run on a ~4B model is locally feasible on the RTX 5080 for the research track). Any product surface is an optional trained artifact under Track L Rules 2/3.
@@ -1072,7 +1097,7 @@ Triggered by GitHub issue #137 (neoneye, author of the agent-memory-atlas, 2026-
 
 **Atlas score: hippo carries 4 of 7 rubric marks** - trust state, bi-temporal validity, scope-enforced retrieval, append-only mutation audit. Marks withheld: rejected-value tombstone (12/238 systems carry it), human review surface (59/238), negative-retrieval eval (50/238). Four systems carry all 7: `memsem`, `perseus-vault`, `provem`, `verel`. Source-verification verdict per withheld mark: the tombstone gap is **real** (AT1); the other two are **partial** - hippo has `hippo conflicts` / `hippo resolve` (cli.ts) and committed cross-tenant negative tests (`tests/l9-tenant-scoping.test.ts`), so the genuine gaps are narrower than the atlas scored (AT4, AT5).
 
-### AT1. Rejected-value tombstone [critical, next]
+### AT1. Rejected-value tombstone [SHIPPED 2026-08-15, PR #142, v1.31.0]
 **Verified real.** `deleteEntry` is a hard `DELETE FROM memories` (src/store.ts:1654); no tombstone / rejected-value / suppression-by-value vocabulary exists anywhere in src (grep 2026-08-09). Supersession hides rows on read but keys nothing on the *value* - re-extraction can silently re-assert a fact a human already rejected. `perseus-vault` refuses on every remember-path write via a digest-keyed tombstone table (with an audited trusted-override escape hatch); `memsem` writes a durable value-keyed suppression on human rejection and refuses `memory_add` when the normalized value matches. This is also the same mechanism the Part III DAG consolidation item is blocked on ("do not ship summarization before the tombstone/invalidation story exists") and that E3.4 lists as `[research]`.
 **Effort:** 5-6d (new table, write-path check in `capture`/`remember`/auto-learn, migration, tests). **Success:** reject value X; re-run an extraction pass that would re-assert X; assert the write is refused and `audit_log` records the refusal; existing supersession behavior unchanged for non-rejected corrections.
 
@@ -1099,3 +1124,102 @@ Triggered by GitHub issue #137 (neoneye, author of the agent-memory-atlas, 2026-
 **Not adopted from the atlas scan:** `perseus-vault`'s AES-256-GCM at-rest encryption and hash-chained journal (out of scope - hippo's local-first zero-dep core is the explicit bet, non-goal #5); `provem`'s pluggable-backend governance layer (hippo's SQLite-first architecture is Bet #7, not a plugin host).
 
 **Discipline note:** the three atlas errors (AT2, AT5, AT6) were only caught by reading hippo's source; the atlas is an LLM-authored report and inherits LLM-report failure modes. Any future item sourced from an external audit of hippo's code gets a source-verification pass before it lands in this file. The pass must also cover this file's own drafts: the first draft of AT6 asserted a dead `memories.valid_to` column that does not exist (memories carries only `valid_from`, src/db.ts:238-240) - caught 2026-08-10 by a second read of the migrations.
+
+---
+
+## Part VI - 2026-08-19 update: agent control plane / cross-agent routing — scoped verdict
+
+Triggered by the question of whether hippo should become a coding-agent platform ("an OpenRouter for coding agents", or a Claude Code competitor). Two independent Codex reviews converged on the same counter-proposal: do not clone Claude Code, build an **agent control plane** instead — route Claude / Codex / Gemini / local models, add persistent project memory, task state, handoffs, outcome tracking, permissions and evals, let existing agents connect via SDK/MCP/API, and ship a thin hippo CLI as the reference client.
+
+**Verdict: the platform framing is rejected. One narrow track (M) is adopted.** The Codex diagnosis is right (cloning Claude Code is indefensible) and the prescription is wrong (the layer it escapes to is more contested, not less). Reasoning and sources below; every claim about hippo's own code was source-verified against `origin/master` (v1.32.1) on 2026-08-19, per the Part V discipline note.
+
+### VI.1 Market check (all figures retrieved 2026-08-19)
+
+| Layer | State | Implication for hippo |
+|---|---|---|
+| Model routing | Commoditized, and now owned by payments infrastructure. OpenRouter reached ~$140M annualized revenue and 8M users by July 2026 and is being acquired by Stripe for >$7B. The acquisition analysis is explicit that the asset is the **metering and billing relationship**, not the routing algorithm. Free open-source equivalents already route Claude Code / Codex / Gemini per request type: Claude Code Router, TeamoRouter, LiteLLM, and Gemini CLI's native smart routing. | Closed. Routing is a giveaway feature attached to a billing rail hippo does not own and cannot build. |
+| "Agent control plane" | The most contested phrase in enterprise AI in 2026, not an opening. OpenHands published this exact layer stack (harness / orchestrator / control plane, covering cost attribution, policy, secrets access, LLM routing, budgets, audit) on 2026-04-03 and claims first-to-unify; Google Cloud Next 2026 ran the same race across the enterprise vendors. | Closed at single-engineer cadence. Also duplicates non-goal #5. |
+| Cross-agent memory | Filling fast. `agentmemory` hit #1 GitHub trending in May 2026 (1,048 stars in 24h, 5,000+ since) at roughly $10/yr; `threadctx` and ByteRover target the same seam; the funded tier is mem0 ($24.5M raised, ~41-48k stars, exclusive memory provider in the AWS Agent SDK), Zep/Graphiti, Letta, Cognee, Supermemory. | Contested but not closed. hippo's differentiator is lifecycle + audit, not storage or recall (Bets #1, #4). |
+| Outcome-conditioned routing | Real, researched, and with a **measured ceiling**. SkillRouter (arXiv 2603.22455) routes coding agents inside the Claude Code harness by task success and reports +1.78pp top-1 / +2.33pp top-10 over baseline routers. FlyRoute (arXiv 2605.22057) does live-traffic agent profiling. Braintrust ships performance-based routing commercially. | The honest read: a ~2pp task-success gain is **feature-sized, not company-sized**. This is the right shape for a hippo track and the wrong shape for a pivot. |
+
+Context on hippo's own scale while reading the above: v1.33.0 on npm, 2,829 downloads in the 30 days to 2026-08-18. `agentmemory` gained more GitHub stars in one day than hippo has in total. Any plan whose first move is a land-grab against that curve is not a plan.
+
+### VI.2 Source-verification of the "we already built most of this" claim
+
+Codex asserted hippo already has, accidentally: devrl, cross-runtime handoffs, shared lessons, model-run memory, retrieval replay, and evidence-gated routing. Checked against `origin/master` 2026-08-19. **Two of the six do not exist and one is agent-blind.**
+
+| Claimed piece | Verdict | Evidence (reproduce with the command shown) |
+|---|---|---|
+| Cross-runtime handoffs | **Real, but agent-blind** | `src/handoff.ts`; `session_handoffs` at `src/db.ts:155-164`. Columns: `session_id, repo_root, task_id, summary, next_action, artifacts_json, created_at` (+ `tenant_id`/`scope` from the v16-era migration). **No agent, model, or runtime column** — a handoff cannot state which agent produced it, so it cannot support routing. `git show origin/master:src/db.ts \| grep -A 11 "CREATE TABLE IF NOT EXISTS session_handoffs"` |
+| Outcome tracking | **Real, but memory-scoped not run-scoped** | `outcome_score` / `outcome_positive` / `outcome_negative` / `trace_outcome` on `memories` (`src/store.ts:93-95`, `:211`). These score a *memory*; nothing records an *agent run's* cost, tokens, duration, or verdict. |
+| Retrieval replay | **Real** | `src/recall-history.ts` (LC1). |
+| Shared lessons | **Real** | capture / consolidation / auto-learn. |
+| Model-run memory | **Does not exist** | `git show origin/master:src/db.ts \| grep "agent_id\|agent_name\|model_name\|runtime"` returns nothing. The only actor attribution in the schema is `actor TEXT NOT NULL` on two tables (`src/db.ts:428`, `:938`). |
+| Evidence-gated routing | **Does not exist in hippo** | `grep -c agent_runs` on `origin/master:src/db.ts` = 0. devrl is a separate `~/.claude` skill with its own SQLite trajectory store; it is not a hippo surface and shares no schema. |
+
+The build is therefore materially larger than "already built accidentally" implies. Recording this because the Part V discipline note applies: an LLM-authored audit of hippo's code inherits LLM-report failure modes, and this one overstated on two of six items in the optimistic direction.
+
+### VI.3 Why the platform framing is rejected — it breaks hippo's own written positions
+
+Not a matter of taste; the proposal contradicts three commitments already in this file:
+
+1. **Routing execution puts hippo in the model data path** — holding API keys, owning uptime, reconciling spend. That is adjacent to non-goal #6 (hippo is memory infra, not inference infra) and directly against Bet #2 (the local-first zero-dep core never gets worse).
+2. **A control plane is a heavyweight enterprise backend**, which is non-goal #5 stated verbatim.
+3. **Neither is affordable** against OpenHands, Google, LiteLLM, and a Stripe-owned OpenRouter at the cadence this roadmap is actually built at.
+
+The Codex framing swapped "compete with Anthropic on harnesses" for "compete with Stripe on billing and OpenHands on governance". That is a worse trade, not a better one, and it is the classic escape-upward-into-abstraction move: the abstract layer feels safer because its competitors are less vivid, not because they are weaker.
+
+### VI.4 What IS adopted: Track M — agent-run outcome memory (advice, never execution)
+
+The defensible half of the Codex proposal is the memory-shaped half. hippo records what each agent run cost and whether it worked, then answers *"which agent should take this task, in this repo"* with evidence a human can inspect and challenge. **hippo advises; the caller's existing harness executes.** No proxy, no API keys, no billing, no sandbox, no data path.
+
+This sits inside the existing moat rather than beside it: it is lifecycle and provenance applied to agent runs instead of facts (Bets #1 and #4), and every primitive lands in SQLite (Bet #7). It also gives Track E and the LC track a genuinely new supervision signal — run outcomes are ground truth in a way memory outcomes are not.
+
+**Protocol finding: the OpenRouter analogy stops at the policy layer.** OpenRouter normalizes model inference and provider selection. Coding-agent runtimes expose richer, incompatible state: sessions/threads, streamed tool events, approvals, terminal processes, file changes and resumable execution. MCP is the wrong abstraction for that job (model-to-tool/context); ACP standardizes client-to-coding-agent sessions; A2A standardizes agent-to-agent tasks and artifacts; Claude Agent SDK and Codex app-server expose vendor-native lifecycle streams. Track M therefore stores a provider-neutral **run envelope** and keeps thin adapters at the edge. It does not pretend one universal execution API already exists.
+
+**M0. Runtime event envelope + adapter canaries [next, blocks M1-M2].** Specify one append-only envelope for `run_started`, `context_injected`, `tool_event_ref`, `approval`, `artifact`, `verification`, `handoff`, `run_finished` and `run_abandoned`. Required identity: runtime, agent, model, native session/thread id, repo/worktree, task id and schema version. Build read-only canaries against Claude Code hooks/SDK events, Codex app-server/rollout events and the existing OpenClaw plugin. Prefer native lifecycle APIs; wrappers remain compatibility fallbacks, not the architecture.
+**Effort:** 2-3d. **Success:** the same fixture task in all three runtimes produces schema-valid envelopes; unknown event fields survive round-trip; interrupted runs close as `abandoned` rather than false success; no prompt, provider key or full tool payload is persisted by default.
+
+**M1. Agent attribution on handoffs and runs [next, small].** Add agent/model/runtime identity to `session_handoffs` and to the capture path. This single missing column is what currently makes cross-agent continuity unusable for routing: a handoff knows *what* happened but not *who* did it.
+**Effort:** 1-2d (migration, writer plumbing, MCP/CLI surface, tests). **Success:** a handoff written by Codex and resumed in Claude Code reports both agents by name in `hippo handoff show`; existing agent-less handoffs read back unchanged (null-safe, no backfill invention).
+
+**M2. `agent_runs` table [next].** One row per agent run: task ref, repo root, agent, model, tokens, cost, wall-clock, verdict (pass/fail/abandoned), artifacts, linked handoff and recall-trace ids. Written by hooks and by explicit CLI calls. Read-mostly; no orchestration.
+**Effort:** 3-4d. **Success:** 30 days of dogfood accumulates a queryable (task-class, agent, model, cost, verdict) dataset across at least three runtimes; tenant-scoped from the first migration (do not repeat the `session_handoffs` v16 leak, Part V / db.ts:633-638); storage overhead <2% of DB size.
+
+**M3. `hippo advise "<task>"` [next].** Ranked agent/model suggestion for a task in a repo, with the evidence inline and no network call: *"codex: 7/9 refactors in this repo, median $0.42, median 4m; claude-code: 2/9 refactors but 4/4 debugging."* Refuses to rank below a minimum-sample threshold rather than inventing confidence.
+**Effort:** 3-4d. **Success:** `advise` cites the exact run ids behind every number; below N runs for a task class it returns "insufficient evidence" and says how many rows it needs; a pre-registered A/B on Keith's own repos shows the advice beats always-picking-one-agent on cost-per-passed-task, or the track is cut per the cut criteria.
+
+**M4. `hippo run` thin wrapper [speculative — gated on M3].** Shells out to the already-installed `claude` / `codex` / `gemini` binaries (invoke, never proxy), injects repo memory, records the run, writes the handoff. Explicitly **not** a router, gateway, editor, sandbox, or agent framework.
+**Gate:** only starts if M3's A/B clears its bar AND someone other than Keith has used `advise` for a month. Absent both, M1-M3 stand alone as memory features and M4 is dropped.
+
+### VI.5 Interop boundary (source-verified)
+
+| Surface | What it standardizes | Track M use |
+|---|---|---|
+| MCP | Agent/model access to tools, resources and prompts | Keep Hippo's memory tools available inside each runtime; **not** run orchestration |
+| ACP | Editor/client interaction with coding agents over JSON-RPC, including sessions, terminals and permission requests | Candidate adapter seam where a runtime supports it; do not wait for universal adoption |
+| A2A | Agent discovery, tasks, status and artifacts between independent agents | Later handoff transport only; unnecessary for local M0-M3 |
+| Claude Agent SDK | Claude-native sessions, hooks, permissions and resumability | Native Claude adapter and event capture |
+| Codex app-server | Codex-native threads, turns, streamed events and approval requests | Native Codex adapter and event capture |
+
+Primary references retrieved 2026-08-19: [OpenRouter overview](https://openrouter.ai/docs/overview), [OpenRouter provider routing](https://openrouter.ai/docs/features/provider-routing), [Claude Agent SDK](https://platform.claude.com/docs/en/agent-sdk/overview), [Codex SDK](https://developers.openai.com/codex/sdk), [Codex app-server](https://learn.chatgpt.com/docs/app-server.md), [ACP](https://agentclientprotocol.com/overview/introduction), [MCP](https://modelcontextprotocol.io/docs/getting-started/intro), [A2A](https://a2a-protocol.org/latest/).
+
+### VI.6 Execution order and gates
+
+1. **M0 + M1:** prove portable identity and handoff continuity across Claude Code, Codex and OpenClaw. No ranking yet.
+2. **M2:** dogfood run capture until each runtime has at least 30 completed, verification-backed runs and the abandonment/error rate is measured.
+3. **M3 shadow mode:** issue advice but never auto-select. Compare it with the agent Keith actually chose and the verified outcome.
+4. **M3 decision gate:** ship recommendations only if the pre-registered test beats best-single-agent and cheapest-agent baselines on cost per verified pass, with no statistically credible pass-rate regression.
+5. **M4 external canary:** only after the existing dual gate. One repo, one user outside Keith, reversible local wrapper. No hosted control plane.
+
+### VI.7 New non-goal (append to the non-goals table)
+
+| # | Non-goal | Why | Source |
+|---|----------|-----|--------|
+| 11 | Sitting in the inference data path: routing/proxying model traffic, holding customer provider keys, or reselling tokens | Adjacent to non-goal #6 and fatal to Bet #2 (local-first, zero-dep). The 2026 market settled this layer — OpenRouter's value was the metering and billing relationship (Stripe acquisition, >$7B), which hippo cannot and should not contest. hippo may *advise* which agent/model to use and *record* what a run cost; it never carries the call | Part VI market check 2026-08-19 |
+
+### VI.8 Cut criteria specific to Track M
+
+In addition to the standing criteria: M is cut if M3 cannot beat a fixed single-agent policy on cost-per-passed-task within two pre-registered A/B cycles. SkillRouter's +1.78pp is the public reference point for how small this effect can be — if hippo cannot clear a comparable bar on real repo data, the track is a research curiosity and should not consume a sprint.
+
+**Sources (retrieved 2026-08-19):** Sacra OpenRouter profile; FourWeekMBA Stripe/OpenRouter acquisition analysis; OpenHands "The Software Agent Control Plane" (2026-04-03); SiliconANGLE Google Cloud Next 2026 control-plane coverage; arXiv 2603.22455 (SkillRouter); arXiv 2605.22057 (FlyRoute); GitHub `rohitg00/agentmemory`; Braintrust LLM-router survey 2026; npm `hippo-memory` downloads API.

@@ -1,8 +1,15 @@
-# Hippo Brain Observatory — Roadmap
+# Hippo TODOS — operational post-ship tail
 
 ## Next 90 days (2026-05-23 →) — priority queue
 
-Cross-referenced from `ROADMAP-RESEARCH.md` §"Next 90 days". The full execution roadmap (Tracks A-I, sequencing, bets, non-goals) lives there. This file owns the operational post-ship tail.
+Cross-referenced from `ROADMAP.md` Part II §"Next 90 days". The full execution roadmap (Tracks A-I, sequencing, bets, non-goals) lives there. This file owns the operational post-ship tail. (Title corrected 2026-08-29; this file grew out of the old Brain Observatory roadmap, which is why older sections below still carry UI-redesign items.)
+
+### From the ai-agent-book review (2026-08-29) — backlog
+
+Filed from reading bojieli's "AI Agents in Depth" (book-en/ ch. 2-3). Roadmap placement: ROADMAP.md Part II items F19, F20, plus a fifth registered control added to LC3.
+
+- [ ] **LoCoMo per-category breakdown + level-3 proactive-service eval (F19).** F7's baseline is one evidence-recall@5 aggregate; LoCoMo defines 8 capability categories, and the book's three-level eval framework names "proactive service" as a capability hippo does not measure. Cheap first step: re-report the existing F7 run per category. Then design a pre-registered L3 task set with a no-memory control (pairs with F8). Informational, never gates.
+- [ ] **Mem0 v3 conflict-resolution diff (F20).** Verify (primary source — Mem0 docs/changelog) the book's claim that Mem0 v3 is append-only writes + retrieval-time conflict resolution; the Part IV verification only covered the older arXiv 2504.19413 design. If real, diff against hippo's write-time supersession/invalidation on stale-answer-rate-after-corrections (A9.1 metric). Positioning material either way.
 
 ### Memory scope isolation (v39, merged dc7d3ba / PR #117) — post-ship tail
 
@@ -98,7 +105,7 @@ The Company Brain object + graph layer shipped end-to-end:
 **Next (post-v1.22.0 queue):**
 1. **Tenant-level graph-rebuild signal** (v1.22.0 follow-up). `graph_extraction_queue` is memory-keyed, so a whole-tenant re-derive (v38 cache drop on upgrade; mirrorless-object close) cannot be expressed — self-heals on the next memory-write, but a `graph_dirty_tenants` table / tenant-scoped queue entry makes it immediate. Coordinate with the v1.19.0 sleep-enqueue subsystem. See `docs/plans/2026-06-03-graph-e2-provenance.md`.
 2. **Recall-surfacing of source-object-anchored entities** (v1.22.0 follow-up). v1.22.0 keeps the object in the graph; recall does not yet preferentially surface it. Self-contained.
-3. **A7.2 — unify cli/api/mcp recall re-ranking pipelines** (v1.18.0 follow-up; ROADMAP-RESEARCH Deferred #4). Only `applyGoalStackBoost` is shared across the three surfaces today, so a recall ranks differently per surface. Hot-path refactor; needs its own plan + outside-voice.
+3. **A7.2 — unify cli/api/mcp recall re-ranking pipelines** (v1.18.0 follow-up; ROADMAP.md Part II Deferred #4). Only `applyGoalStackBoost` is shared across the three surfaces today, so a recall ranks differently per surface. Hot-path refactor; needs its own plan + outside-voice.
 4. **A5 v2 sub-2 — L9 background-pipeline tenant-scoping** (8 files). Long-standing; unblocked since the v1.12.0 Actor shape landed.
 5. **Track L2 — sleep-built KV cartridge over the consolidated semantic layer** [research/spike]. Grant-relevant 5x-cost lever (ROADMAP.md WP1); gated on a pre-registered feasibility spike.
 6. **Track K1 — markdown-vault + `[[wikilinks]]` importer** [next]. Single open-format adapter (Obsidian / Foam / Dendron subset).
