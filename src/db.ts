@@ -2421,6 +2421,7 @@ function runMigrations(db: DatabaseSyncLike, hippoRoot?: string): void {
     }
   }
 
+  ensureContinuityTables(db);
   ensureMetaDefaults(db);
   ensureOptionalFts(db);
 }
@@ -2445,6 +2446,63 @@ export function getSchemaVersion(db: DatabaseSyncLike): number {
 function setSchemaVersion(db: DatabaseSyncLike, version: number): void {
   db.prepare(`INSERT INTO meta(key, value) VALUES('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(String(version));
   db.exec(`PRAGMA user_version = ${Math.max(0, Math.trunc(version))}`);
+}
+
+// Versionless and run every open: a table lost after its migration stamped (2026-08-15
+// home-store incident) is never re-migrated. Parity tests catch drift from future migrations.
+function ensureContinuityTables(db: DatabaseSyncLike): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS task_snapshots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      next_step TEXT NOT NULL,
+      status TEXT NOT NULL,
+      source TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      session_id TEXT,
+      tenant_id TEXT NOT NULL DEFAULT 'default',
+      scope TEXT
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS session_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL,
+      task TEXT,
+      event_type TEXT NOT NULL,
+      content TEXT NOT NULL,
+      source TEXT NOT NULL,
+      metadata_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      tenant_id TEXT NOT NULL DEFAULT 'default',
+      scope TEXT
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS session_handoffs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL,
+      repo_root TEXT,
+      task_id TEXT,
+      summary TEXT NOT NULL,
+      next_action TEXT,
+      artifacts_json TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      tenant_id TEXT NOT NULL DEFAULT 'default',
+      scope TEXT
+    )
+  `);
+
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_task_snapshots_status_updated ON task_snapshots(status, updated_at DESC, id DESC)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_task_snapshots_tenant_status ON task_snapshots(tenant_id, status, updated_at DESC)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_task_snapshots_tenant_scope ON task_snapshots(tenant_id, scope, status)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_session_events_session_created ON session_events(session_id, created_at DESC, id DESC)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_session_events_task_created ON session_events(task, created_at DESC, id DESC)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_session_events_tenant_session ON session_events(tenant_id, session_id, created_at DESC, id DESC)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_session_handoffs_session ON session_handoffs(session_id, created_at DESC)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_session_handoffs_tenant_session ON session_handoffs(tenant_id, session_id, created_at DESC)`);
 }
 
 function ensureMetaDefaults(db: DatabaseSyncLike): void {
