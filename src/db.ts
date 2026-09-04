@@ -2405,9 +2405,8 @@ function runMigrations(db: DatabaseSyncLike, hippoRoot?: string): void {
     );
   }
 
-  ensureContinuityTables(db);
-
   let currentVersion = getSchemaVersion(db);
+  if (currentVersion > 0) ensureContinuityTables(db);
   for (const migration of MIGRATIONS) {
     if (migration.version <= currentVersion) continue;
 
@@ -2423,6 +2422,7 @@ function runMigrations(db: DatabaseSyncLike, hippoRoot?: string): void {
     }
   }
 
+  ensureContinuityIndexes(db);
   ensureMetaDefaults(db);
   ensureOptionalFts(db);
 }
@@ -2449,8 +2449,8 @@ function setSchemaVersion(db: DatabaseSyncLike, version: number): void {
   db.exec(`PRAGMA user_version = ${Math.max(0, Math.trunc(version))}`);
 }
 
-// Versionless, before the loop, every open: a table lost after its migration stamped (2026-08-15
-// incident) is never re-migrated, and v4/v16/v22 ALTER or read it. Parity tests catch drift.
+// Before the loop on stamped stores: a table lost after its migration stamped (2026-08-15
+// incident) is never re-migrated, and v4/v16/v22 ALTER or read it. Fresh stores use the chain.
 function ensureContinuityTables(db: DatabaseSyncLike): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS task_snapshots (
@@ -2495,7 +2495,10 @@ function ensureContinuityTables(db: DatabaseSyncLike): void {
       scope TEXT
     )
   `);
+}
 
+// After the loop: tenant_id (v16) and scope (v23) do not exist yet on a genuine old store.
+function ensureContinuityIndexes(db: DatabaseSyncLike): void {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_task_snapshots_status_updated ON task_snapshots(status, updated_at DESC, id DESC)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_task_snapshots_tenant_status ON task_snapshots(tenant_id, status, updated_at DESC)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_task_snapshots_tenant_scope ON task_snapshots(tenant_id, scope, status)`);

@@ -239,6 +239,47 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
     }
   });
 
+  it('migrates a genuine pre-v16 task_snapshots shape and still ends at full parity', () => {
+    // codex round 2: an index on tenant_id or scope created before v16/v23 add them throws.
+    const db = openHippoDb(root);
+    try {
+      db.exec('DROP TABLE task_snapshots');
+      db.exec(`
+        CREATE TABLE task_snapshots (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          task TEXT NOT NULL,
+          summary TEXT NOT NULL,
+          next_step TEXT NOT NULL,
+          status TEXT NOT NULL,
+          source TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          session_id TEXT
+        )
+      `);
+      db.prepare(`UPDATE meta SET value = ? WHERE key = 'schema_version'`).run('15');
+    } finally {
+      closeHippoDb(db);
+    }
+
+    const migrated = openHippoDb(root);
+    const fresh = mkdtempSync(join(tmpdir(), 'hippo-continuity-fresh-'));
+    try {
+      initStore(fresh);
+      const a = openHippoDb(fresh);
+      try {
+        expect(getMeta(migrated, 'schema_version')).toBe('41');
+        expect(columns(migrated, 'task_snapshots')).toEqual(columns(a, 'task_snapshots'));
+        expect(indexNames(migrated, 'task_snapshots')).toEqual(indexNames(a, 'task_snapshots'));
+      } finally {
+        closeHippoDb(a);
+      }
+    } finally {
+      closeHippoDb(migrated);
+      rmSync(fresh, { recursive: true, force: true });
+    }
+  });
+
   it('hippo context runs on the incident shape (compiled CLI, real store)', () => {
     // CLI resolves hippoRoot as <cwd>/.hippo, unlike the direct-hippoRoot
     // calls above, so this case needs its own project/.hippo pair.
