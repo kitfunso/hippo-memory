@@ -1,3 +1,4 @@
+import { execFileSync } from 'child_process';
 import { existsSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -57,12 +58,11 @@ describe('openclaw package metadata', () => {
   // Pins the v1.38.0 packaging failure: build never compiled extensions/, so
   // no dist/ twin existed and every npm install of the plugin failed.
   it('ships a compiled dist twin for every TypeScript openclaw extension entry', () => {
-    const pkg = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'));
-    const entries: string[] = pkg.openclaw?.extensions ?? [];
-
-    for (const entry of entries.filter((e) => e.endsWith('.ts'))) {
-      const distPath = join(repoRoot, 'dist', entry.replace(/^\.\//, '').replace(/\.ts$/, '.js'));
-      expect(existsSync(distPath), `expected compiled twin at ${distPath}`).toBe(true);
-    }
+    // Runs the real publish gate in a plain Node process: vitest's own import() interops
+    // CommonJS, so an in-test import stays green on the exact emit that breaks Node.
+    execFileSync(process.execPath, [join(repoRoot, 'scripts', 'check-openclaw-dist.mjs')], {
+      cwd: repoRoot,
+      stdio: 'pipe',
+    });
   });
 });
