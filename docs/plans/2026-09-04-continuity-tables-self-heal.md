@@ -24,7 +24,7 @@ Precedent: migration v27 (`src/db.ts:899-935`) re-asserts `api_keys` and `audit_
 
 ### 1. `src/db.ts`: `ensureContinuityTables(db)`
 
-A module-private function next to `ensureMetaDefaults`, called from `runMigrations` right after the migration loop and before `ensureMetaDefaults`. Body: `CREATE TABLE IF NOT EXISTS` for `task_snapshots`, `session_events`, `session_handoffs` at their current full shape, then `CREATE INDEX IF NOT EXISTS` for every index the migrations create on them.
+A module-private function next to `ensureMetaDefaults`, called from `runMigrations` right before the migration loop (codex review round 1: after the loop, a store below v22 missing `task_snapshots` still died inside v4, v16 or v22, which ALTER or read it). Body: `CREATE TABLE IF NOT EXISTS` for `task_snapshots`, `session_events`, `session_handoffs` at their current full shape, then `CREATE INDEX IF NOT EXISTS` for every index the migrations create on them.
 
 Column order must match what a fresh store gets from the migration chain, because the parity test compares `PRAGMA table_info` rows exactly:
 
@@ -38,7 +38,7 @@ Indexes: `idx_task_snapshots_status_updated` (v2), `idx_task_snapshots_tenant_st
 
 Comment budget: one two-line header on the function saying why it runs every open (a lost table after the stamp is never re-migrated; the 2026-08-15 home-store incident) and pointing at the parity test as the drift guard.
 
-Order matters: the ensure runs after the loop, so on a store below 23 the migrations add the columns first and the ensure is a no-op; on a store at 41 missing a table the ensure creates it at full shape.
+Order matters: the ensure runs before the loop. Every ALTER in the chain is guarded by `tableHasColumn` and every CREATE is `IF NOT EXISTS`, so a table the ensure created at full shape makes the later migrations no-ops; a table that already exists is untouched and migrates as before.
 
 ### 2. `tests/db-continuity-tables-self-heal.test.ts` (new, real DB, mirrors `tests/db-migration-v27-self-heal.test.ts`)
 
@@ -53,7 +53,7 @@ Cases:
 5. **No-op on a healthy store.** Row counts and `schema_version` unchanged across an extra open/close on a store with one snapshot, one event and one handoff written through the store API.
 6. **`hippo context` runs on the incident shape (compiled CLI, real store).** `initStore`, `saveActiveTaskSnapshot` with `session_id 'sess-heal'` (read the signature at `src/store.ts:2456` first), then drop `session_handoffs` and `session_events`. Run `node dist/cli.js context --pinned-only --budget 1500` and `node dist/cli.js context --auto --budget 1500` via `execFileSync` with `cwd = <project dir>` and `HIPPO_SESSION_ID=sess-heal` in env. Both exit 0. Mirror the process setup of `tests/context-continuity.test.ts` (it drives the `context` command through `bin/hippo.js`, which imports `dist/cli.js`; `tests/cli-tenant-scoping.test.ts` calls `dist/cli.js` directly, either is fine). `autoDetectContext` (`src/cli.ts:6162`) wraps its git call in try/catch, so a non-git tmp dir is safe for `--auto`.
 
-Red-before check (execute stage, recorded in the manifest): with the `ensureContinuityTables(db)` call commented out, cases 1, 2, 3, 4 and 6 fail and case 5 still passes. Restore and all six pass.
+Red-before check (execute stage, recorded in the manifest): with the `ensureContinuityTables(db)` call commented out, cases 1, 2, 3, 4 and 6 fail and case 5 still passes. Restore and all six pass. Case 7 (store rolled back to 19, `task_snapshots` dropped) fails with the call after the loop and passes with it before.
 
 ### 3. `CHANGELOG.md`
 

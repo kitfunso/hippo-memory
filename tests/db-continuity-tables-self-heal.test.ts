@@ -220,6 +220,25 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
     }
   });
 
+  it('heals task_snapshots on a store below v22, before the migrations that reference it', () => {
+    // v4, v16 and v22 ALTER or read task_snapshots; a store that lost it below v22 died there.
+    const db = openHippoDb(root);
+    try {
+      db.exec('DROP TABLE task_snapshots');
+      db.prepare(`UPDATE meta SET value = ? WHERE key = 'schema_version'`).run('19');
+    } finally {
+      closeHippoDb(db);
+    }
+
+    const healed = openHippoDb(root);
+    try {
+      expect(tableNames(healed)).toContain('task_snapshots');
+      expect(getMeta(healed, 'schema_version')).toBe('41');
+    } finally {
+      closeHippoDb(healed);
+    }
+  });
+
   it('hippo context runs on the incident shape (compiled CLI, real store)', () => {
     // CLI resolves hippoRoot as <cwd>/.hippo, unlike the direct-hippoRoot
     // calls above, so this case needs its own project/.hippo pair.

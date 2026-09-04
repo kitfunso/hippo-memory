@@ -2405,6 +2405,8 @@ function runMigrations(db: DatabaseSyncLike, hippoRoot?: string): void {
     );
   }
 
+  ensureContinuityTables(db);
+
   let currentVersion = getSchemaVersion(db);
   for (const migration of MIGRATIONS) {
     if (migration.version <= currentVersion) continue;
@@ -2421,7 +2423,6 @@ function runMigrations(db: DatabaseSyncLike, hippoRoot?: string): void {
     }
   }
 
-  ensureContinuityTables(db);
   ensureMetaDefaults(db);
   ensureOptionalFts(db);
 }
@@ -2448,8 +2449,8 @@ function setSchemaVersion(db: DatabaseSyncLike, version: number): void {
   db.exec(`PRAGMA user_version = ${Math.max(0, Math.trunc(version))}`);
 }
 
-// Versionless and run every open: a table lost after its migration stamped (2026-08-15
-// home-store incident) is never re-migrated. Parity tests catch drift from future migrations.
+// Versionless, before the loop, every open: a table lost after its migration stamped (2026-08-15
+// incident) is never re-migrated, and v4/v16/v22 ALTER or read it. Parity tests catch drift.
 function ensureContinuityTables(db: DatabaseSyncLike): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS task_snapshots (
