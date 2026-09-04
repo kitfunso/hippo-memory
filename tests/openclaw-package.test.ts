@@ -53,4 +53,16 @@ describe('openclaw package metadata', () => {
     expect(match, 'PACKAGE_VERSION constant should be present in src/version.ts').not.toBeNull();
     expect(match?.[1]).toBe(pkg.version);
   });
+
+  // Pins the v1.38.0 packaging failure: build never compiled extensions/, so
+  // no dist/ twin existed and every npm install of the plugin failed.
+  it('ships a compiled dist twin for every TypeScript openclaw extension entry', () => {
+    const pkg = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'));
+    const entries: string[] = pkg.openclaw?.extensions ?? [];
+
+    for (const entry of entries.filter((e) => e.endsWith('.ts'))) {
+      const distPath = join(repoRoot, 'dist', entry.replace(/^\.\//, '').replace(/\.ts$/, '.js'));
+      expect(existsSync(distPath), `expected compiled twin at ${distPath}`).toBe(true);
+    }
+  });
 });

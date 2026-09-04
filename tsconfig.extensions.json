@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "./extensions",
+    "outDir": "./dist/extensions",
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": ["extensions/openclaw-plugin/index.ts"],
+  "exclude": ["node_modules", "dist", "tests", "ui"]
+}

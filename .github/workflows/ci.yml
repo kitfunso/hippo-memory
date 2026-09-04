@@ -38,6 +38,7 @@ jobs:
       - name: Dependency security audit
         run: npm run audit:security
       - run: npm run build
+      - run: node scripts/check-openclaw-dist.mjs
       # Some CLI-driven tests (cli-multihop, cli-dag, etc.) shell out to
       # `hippo` and expect it on PATH. Local devs have it via global install;
       # CI gets it via npm link.

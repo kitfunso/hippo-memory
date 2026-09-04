@@ -1,6 +1,6 @@
 {
   "name": "hippo-memory",
-  "version": "1.38.0",
+  "version": "1.38.1",
   "description": "Biologically-inspired memory system for AI agents. Decay by default, strength through use.",
   "type": "module",
   "main": "./dist/index.js",
@@ -25,7 +25,7 @@
   ],
   "scripts": {
     "baseline": "npm run build && npm test",
-    "build": "tsc && tsc -p tsconfig.benchmarks.json",
+    "build": "tsc && tsc -p tsconfig.benchmarks.json && tsc -p tsconfig.extensions.json",
     "dev": "tsc --watch",
     "pretest": "npm run build",
     "test": "vitest run",
@@ -37,7 +37,7 @@
     "smoke:openclaw-install": "node scripts/smoke-openclaw-install.mjs",
     "build:ui": "cd ui && npm install && npm run build",
     "build:all": "npm run build && npm run build:ui",
-    "prepublishOnly": "node scripts/check-manifest-versions.mjs && node scripts/check-em-dashes-in-release-notes.mjs && node scripts/check-graph-writes.mjs && npm run build:all"
+    "prepublishOnly": "node scripts/check-manifest-versions.mjs && node scripts/check-em-dashes-in-release-notes.mjs && node scripts/check-graph-writes.mjs && npm run build:all && node scripts/check-openclaw-dist.mjs && npm run smoke:openclaw-install"
   },
   "keywords": [
     "memory",
