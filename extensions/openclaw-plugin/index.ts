@@ -8,6 +8,7 @@
  */
 
 import { execFileSync, spawn } from 'child_process';
+import type { ChildProcess, ExecFileSyncOptionsWithStringEncoding, SpawnOptions } from 'child_process';
 import { existsSync, readdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { basename as posixBasename, dirname as posixDirname } from 'path/posix';
@@ -35,21 +36,20 @@ type HippoRuntimeContext = {
  * built-in modules. Never called outside tests -- register(api)'s public
  * behavior is unaffected when it's never invoked.
  *
- * The function shapes below are narrower than Node's full overloaded
- * child_process/fs types -- they capture only the call shape this plugin
- * actually uses, so test doubles don't need to satisfy every overload.
+ * Option params use Node's own overload-selecting types so `deps = {
+ * execFileSync, spawn, existsSync }` type-checks under strict without a cast.
  */
 export interface HippoPluginDeps {
   execFileSync: (
     file: string,
     args: readonly string[],
-    options: { cwd: string; encoding: 'utf8'; timeout: number; stdio: string[] },
+    options: ExecFileSyncOptionsWithStringEncoding,
   ) => string;
   spawn: (
     command: string,
-    args: string[],
-    options: { cwd: string; detached: boolean; stdio: string; windowsHide: boolean },
-  ) => { unref: () => void };
+    args: readonly string[],
+    options: SpawnOptions,
+  ) => Pick<ChildProcess, 'unref'>;
   existsSync: (path: string) => boolean;
 }
 

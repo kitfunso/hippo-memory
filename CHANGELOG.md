@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.38.1 - 2026-09-04
+
+### Fixed
+- **`openclaw plugins install hippo-memory` failed on every published release since the plugin shipped.** Reproduced on the 1.38.0 tarball with `npm run smoke:openclaw-install`: `package install requires compiled runtime output for TypeScript entry ./extensions/openclaw-plugin/index.ts: expected ./dist/extensions/openclaw-plugin/index.js, ...`. OpenClaw resolves a `.ts` extension entry to its compiled twin under `dist/`, but the `build` script only compiled `src/` and `benchmarks/`, so no published release ever shipped that file (the plugin dates from 0.4.0; the failure was confirmed on 1.38.0 and had been filed unmerged since 2026-07-30). `build` now also runs a new `tsconfig.extensions.json` pass that compiles `extensions/openclaw-plugin/index.ts` to `dist/extensions/openclaw-plugin/index.js`.
+- **Added a publish gate so this class cannot regress.** A new `scripts/check-openclaw-dist.mjs` reads `package.json#openclaw.extensions` and asserts every `.ts` entry has a compiled `dist/` twin; it now runs in `prepublishOnly` ahead of `smoke:openclaw-install`, and in CI right after `npm run build`. The existing detector, `scripts/smoke-openclaw-install.mjs`, has existed since 0.6.2 with nothing wired to run it.
+- **The compiled plugin is now emitted as ESM.** `extensions/openclaw-plugin/package.json` had no `type` field, so tsc under `module: NodeNext` emitted CommonJS into the root package's `"type": "module"` scope, and a native `import()` of `dist/extensions/openclaw-plugin/index.js` threw `exports is not defined in ES module scope` (the install smoke passed only because OpenClaw falls back to jiti). The nested manifest now declares `"type": "module"`, and the publish gate and `tests/openclaw-package.test.ts` import each dist twin natively instead of only checking it exists.
+- **Fixed a strict-mode type error surfaced by first-time type-checking the extension.** `HippoPluginDeps` hand narrowed Node's overloaded `execFileSync`/`spawn` option types, so no overload matched and `tsc --noEmit` failed with TS2322 at `index.ts:56`. The interface now uses Node's own `ExecFileSyncOptionsWithStringEncoding` and `SpawnOptions` types, and the spawn return is typed `Pick<ChildProcess, 'unref'>`. No behavior change; call sites and test fakes are unchanged.
+
 ## 1.38.0 - 2026-08-24
 
 ### Fixed
