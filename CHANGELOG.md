@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.38.1 - 2026-09-04
+## 1.38.1 - 2026-09-05
 
 ### Fixed
 - **`openclaw plugins install hippo-memory` failed on every published release since the plugin shipped.** Reproduced on the 1.38.0 tarball with `npm run smoke:openclaw-install`: `package install requires compiled runtime output for TypeScript entry ./extensions/openclaw-plugin/index.ts: expected ./dist/extensions/openclaw-plugin/index.js, ...`. OpenClaw resolves a `.ts` extension entry to its compiled twin under `dist/`, but the `build` script only compiled `src/` and `benchmarks/`, so no published release ever shipped that file (the plugin dates from 0.4.0; the failure was confirmed on 1.38.0 and had been filed unmerged since 2026-07-30). `build` now also runs a new `tsconfig.extensions.json` pass that compiles `extensions/openclaw-plugin/index.ts` to `dist/extensions/openclaw-plugin/index.js`.
@@ -9,6 +9,11 @@
 - **Fixed a strict-mode type error surfaced by first-time type-checking the extension.** `HippoPluginDeps` hand narrowed Node's overloaded `execFileSync`/`spawn` option types, so no overload matched and `tsc --noEmit` failed with TS2322 at `index.ts:56`. The interface now uses Node's own `ExecFileSyncOptionsWithStringEncoding` and `SpawnOptions` types, and the spawn return is typed `Pick<ChildProcess, 'unref'>`. No behavior change; call sites and test fakes are unchanged.
 - **`hippo context` no longer crashes on a store missing a continuity table.** A store stamped at schema version 41 but missing `session_handoffs`, `session_events` or `task_snapshots` threw "no such table" on every read (2026-08-15 home-store incident). The hook runs `hippo context` on every prompt, so the whole session lost memory injection, and a migration never reruns below its own version. Every open of an existing store now re-asserts the three tables before the migration loop (so a store below v22 that lost `task_snapshots` no longer dies inside the v4, v16 or v22 migrations either) and their indexes after it. Healthy stores are untouched.
 - **Dedupe survivor metadata was insertion-order random.** `compareEntryIdentity` compared content and then the random UUID, so two byte-identical memories that differed only in tags or source kept whichever copy happened to sort first, and a semantic/episodic pair always kept the episodic copy because `mem_` ids sort before `sem_` ids. The shared tie key now orders content, then layer (semantic, episodic, trace, buffer), then distinct tag count, sorted tags, source, and id last. Every sort site that routes through it (dedupe, consolidate merge base, search and recall ties) inherits the same order. Dedupe now only considers current distilled rows: raw (append-only) rows used to abort `sleep` mid-loop when they lost a tie, and superseded rows could delete the current copy. Cross-layer twins now keep the higher-ranked layer's copy, so a semantic/episodic pair keeps the semantic one, since that is the consolidated copy. `sleep-redact.ts` comments no longer call `crossDups` a cross-tenant counter; it counts cross-layer pairs.
+
+### Changed
+- `prepublishOnly` now runs the test suite last (`scripts/check-tests-pass.mjs`) and refuses to
+  publish on a red run. `HIPPO_PUBLISH_SKIP_TESTS="<reason>"` is the documented escape hatch for
+  the vitest worker-IPC exit-1 artifact; `--ignore-scripts` is not.
 
 ## 1.38.0 - 2026-08-24
 

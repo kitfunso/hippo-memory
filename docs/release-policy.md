@@ -77,6 +77,20 @@ gets scanned.
 Why scoped: backporting em-dash purity to v0.x-v1.13.x CHANGELOG
 entries is a separate doc-clean-up task, not a release blocker.
 
+## Test suite (pre-publish guard)
+
+`prepublishOnly` ends with `node scripts/check-tests-pass.mjs`, which runs `vitest run` through
+node and vitest's own bin (no npm shim, no `pretest` rebuild) and exits with the suite's status.
+It runs after `build:all` so the CLI-spawning tests see the fresh `dist/`. Extra arguments pass
+through to vitest, so `node scripts/check-tests-pass.mjs tests/foo.test.ts` gates on one file.
+
+Known artifact: under load vitest can exit 1 with zero failed tests and
+`[vitest-worker]: Timeout calling "onTaskUpdate"`. Rerun the failed files alone first. If the
+suite is green that way and you still need to publish, set
+`HIPPO_PUBLISH_SKIP_TESTS="<reason>"`; the gate prints a WARNING with the reason and exits 0. An
+empty value does not skip. `npm publish --ignore-scripts` is not the escape hatch: it skips the
+manifest, em-dash and graph-write guards too.
+
 ## Test isolation patterns
 
 Tests that mutate `process.env.HIPPO_LOSS_AVERSION_RATIO` (or any other
