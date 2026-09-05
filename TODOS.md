@@ -63,16 +63,13 @@ reattributed and resolved the same day (harness bug, not hippo).
   + an empirically verified quantization mutant-kill; pre-fix red runs
   captured. See CHANGELOG 1.26.3 +
   docs/plans/2026-07-16-dedupe-survivor-determinism.md.
-- **Follow-up (from the dedupe-determinism episode): consolidate 3+ merge
-  bullet ORDER inherits cluster-assembly order.** `mergeContents`
-  (src/consolidate.ts) now breaks equal-LENGTH base ties deterministically,
-  but for 3+ entry clusters the bulleted summary lists members in cluster
-  order, which derives from upstream consolidation assembly (per-instance
-  stable via `created ASC, id ASC`, NOT cross-ingest stable). Content-noise
-  only (no survivor choice); land only with a deliberate cluster-ordering
-  decision in the consolidation pass, not as a drive-by
-  (docs/plans/2026-07-16-dedupe-survivor-determinism.md T2 out-of-scope
-  note).
+- **RESOLVED 2026-09-05 (episode 01M1S1MH5XZ4STGM08PBD5X3ZP): consolidate 3+
+  merge bullet order now follows the merge-base order.** Decision: render
+  order = base order (`sorted.map` in `mergeContents`), merged tags sorted;
+  upstream cluster assembly deliberately untouched because sorting candidates
+  there can change cluster membership. Permutation test 14 in
+  tests/dedupe-survivor-determinism.test.ts. See CHANGELOG 1.38.2 +
+  docs/plans/2026-09-05-consolidate-bullet-order.md.
 - **RESOLVED 2026-07-05 (same day) — silent loss of user-supplied `--tag`
   values was a harness bug, not a hippo write-path bug.** The rows this
   bullet originally described (13 tagless rows in the LoCoMo v1.25.0 run)

@@ -745,7 +745,7 @@ export async function consolidate(
 
       // Create a semantic summary
       const mergedContent = mergeContents(cluster);
-      const allTags = Array.from(new Set(cluster.flatMap((e) => e.tags)));
+      const allTags = Array.from(new Set(cluster.flatMap((e) => e.tags))).sort();
       const maxValence = pickStrongestValence(cluster);
 
       // AT1 P2 fix: build the semantic entry FIRST — createMemory is cheap
@@ -942,8 +942,9 @@ function mergeContents(entries: MemoryEntry[]): string {
     return `[Consolidated from ${entries.length} related memories]\n\n${base}`;
   }
 
-  // For 3+ entries, create a bulleted summary
-  const bullets = entries.map((e) => `- ${e.content.split('\n')[0].slice(0, 120)}`).join('\n');
+  // Bullets follow the base order (not raw cluster order) so the merged row
+  // and its rejection digest are byte-identical across ingest orders.
+  const bullets = sorted.map((e) => `- ${e.content.split('\n')[0].slice(0, 120)}`).join('\n');
   return `[Consolidated pattern from ${entries.length} related memories]\n\n${bullets}`;
 }
 

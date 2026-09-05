@@ -422,4 +422,42 @@ describe('dedupe survivor determinism', () => {
       restore();
     }
   });
+
+  it('14. mergeContents 3+ bullets: bullet order and merged tags identical across all 6 ingest orders (base order: length desc -> content asc)', async () => {
+    // Guards: a future VARIANT_* edit that breaks the length tie/non-tie shape fails here loudly.
+    expect(VARIANT_A.length).toBe(VARIANT_C.length);
+    expect(VARIANT_B.length).toBeLessThan(VARIANT_A.length);
+
+    const now = new Date();
+    const variants = [
+      { content: VARIANT_A, tags: ['t-a'] },
+      { content: VARIANT_B, tags: ['t-b'] },
+      { content: VARIANT_C, tags: ['t-c'] },
+    ];
+    const expectedOrder = [...variants].sort(
+      (a, b) => b.content.length - a.content.length || (a.content < b.content ? -1 : a.content > b.content ? 1 : 0),
+    );
+    const expectedBlock = expectedOrder.map((v) => `- ${v.content.slice(0, 120)}`).join('\n');
+
+    for (const perm of permutationsOf3()) {
+      const { home, restore } = tmpHome('hippo-dedupe-det-14-');
+      try {
+        for (const idx of perm) {
+          writeEntry(home, createMemory(variants[idx].content, { layer: Layer.Episodic, tags: variants[idx].tags }));
+        }
+
+        const result = await consolidate(home, { now });
+        expect(result.merged).toBeGreaterThan(0);
+
+        const semantics = loadAllEntries(home).filter(
+          (e) => e.layer === Layer.Semantic && e.content.startsWith('[Consolidated pattern from 3 related memories]'),
+        );
+        expect(semantics.length).toBe(1);
+        expect(semantics[0].content.split('\n\n')[1]).toBe(expectedBlock);
+        expect([...semantics[0].tags]).toEqual(['t-a', 't-b', 't-c']);
+      } finally {
+        restore();
+      }
+    }
+  });
 });
