@@ -143,3 +143,16 @@ returns null, naming `npm run build`. `HIPPO_BENCH_CLI` overrides the CLI file (
 build; also how the test points at a missing file). README requirement line updated. Red first:
 `tests/sl-adapter-cli-missing.test.ts` resolved instead of rejecting before the fix; 17 tests across
 the adapter, budget, gate and new file pass after it with the global npm dir stripped from PATH.
+
+## Review round 5 (codex on the 47a27f6 delta: one P1, two P2)
+
+P1: `hippoExec` returns partial stdout from its catch block, so a CLI that prints during `init` and then
+exits non-zero passed the null check. P2: a relative `HIPPO_BENCH_CLI` was kept verbatim while
+`hippoExec` runs with the temp store as cwd, so Node looked for it in the wrong place. P2: `init`
+threw after creating `_storeDir`, and the runner only reaches `cleanup()` after a successful init, so
+every failed run left a `hippo-bench-*` directory behind. Fix: `hippoExec` gains a `strict` flag that
+rethrows (init is the only strict caller; recall keeps the partial-stdout path on purpose);
+`HIPPO_BIN` is `resolve()`d at load; init removes the temp store and nulls `_storeDir` before
+rethrowing with the child's message. Red first: three cases in `tests/sl-adapter-cli-missing.test.ts`
+(missing file, fixture that prints then exits 1, relative override) failed for exactly the three
+reasons above; 20 tests across five files pass after the fix with the global npm dir stripped from PATH.

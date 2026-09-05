@@ -19,14 +19,16 @@
 
 import { execSync } from 'node:child_process';
 import { mkdtempSync, rmSync, existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { createAdapter } from './interface.mjs';
 
 // This repo's CLI, not a PATH-resolved global install (which may be an older release).
-const HIPPO_BIN =
-  process.env.HIPPO_BENCH_CLI || join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'bin', 'hippo.js');
+// resolve() pins a relative override to the startup cwd; hippoExec later runs with the temp store as cwd.
+const HIPPO_BIN = resolve(
+  process.env.HIPPO_BENCH_CLI || join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'bin', 'hippo.js'),
+);
 
 // POST-AUDIT P1-4 (v1.7.8): session id and counters were module-level `let`
 // in v1.7.5..v1.7.7 — two parallel adapter consumers (e.g. future --workers N)
@@ -47,9 +49,10 @@ const HIPPO_BIN =
  * @param {string} storeDir
  * @param {string} args
  * @param {string|null} [sessionId=null] - Optional HIPPO_SESSION_ID for this exec.
+ * @param {boolean} [strict=false] - Rethrow on any failure instead of returning partial stdout or null.
  * @returns {string|null} stdout, or null on failure.
  */
-function hippoExec(storeDir, args, sessionId = null) {
+function hippoExec(storeDir, args, sessionId = null, strict = false) {
   try {
     const env = {
       ...process.env,
@@ -71,6 +74,7 @@ function hippoExec(storeDir, args, sessionId = null) {
     });
     return result.trim();
   } catch (err) {
+    if (strict) throw err;
     // Some commands (recall with no results) exit non-zero
     if (err.stdout) return err.stdout.trim();
     return null;
@@ -96,10 +100,15 @@ export default createAdapter({
     this._sessionId = null;
     this._pushedCount = 0;
     this._completedCount = 0;
-    // hippoExec swallows failures on purpose (recall with no results exits non-zero); this first
-    // call is the one place a missing CLI can be told apart from a quiet success (codex round 3).
-    if (hippoExec(this._storeDir, 'init --no-schedule') === null) {
-      throw new Error(`hippo CLI failed to start at ${HIPPO_BIN}; run \`npm run build\` first or set HIPPO_BENCH_CLI`);
+    // Strict: a missing or half-failing CLI must abort the run, not report a fake trap-hit rate (codex rounds 3-4).
+    try {
+      hippoExec(this._storeDir, 'init --no-schedule', null, true);
+    } catch (err) {
+      rmSync(this._storeDir, { recursive: true, force: true });
+      this._storeDir = null;
+      throw new Error(
+        `hippo CLI failed to start at ${HIPPO_BIN} (run \`npm run build\` first or set HIPPO_BENCH_CLI): ${err.message}`,
+      );
     }
   },
 
