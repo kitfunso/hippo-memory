@@ -65,6 +65,13 @@ describe('compareEntryIdentity', () => {
     const ab = { content: 'same', id: 'b', tags: ['a', 'b'] };
     const ba = { content: 'same', id: 'a', tags: ['b', 'a'] };
     expect(compareEntryIdentity(ab, ba)).toBeGreaterThan(0);
+
+    // tags are compared element-wise, so a NUL inside a tag cannot make two
+    // different tag sets collide and fall through to the random id
+    const nulInSecond = { content: 'same', id: 'z', tags: ['a', 'b\0c'] };
+    const nulInFirst = { content: 'same', id: 'a', tags: ['a\0b', 'c'] };
+    expect(compareEntryIdentity(nulInSecond, nulInFirst)).toBeLessThan(0);
+    expect(compareEntryIdentity(nulInFirst, nulInSecond)).toBeGreaterThan(0);
   });
 
   it('orders by source ascending after layer and tags tie', () => {

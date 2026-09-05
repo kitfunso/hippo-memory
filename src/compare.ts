@@ -81,7 +81,13 @@ function compareStrings(a: string, b: string): number {
 function compareTags(a: readonly string[] | undefined, b: readonly string[] | undefined): number {
   const ua = [...new Set(a ?? [])].sort();
   const ub = [...new Set(b ?? [])].sort();
-  return ub.length - ua.length || compareStrings(ua.join('\0'), ub.join('\0'));
+  if (ua.length !== ub.length) return ub.length - ua.length;
+  // element-wise, not a joined string: a separator inside a tag would collide
+  for (let i = 0; i < ua.length; i++) {
+    const c = compareStrings(ua[i], ub[i]);
+    if (c !== 0) return c;
+  }
+  return 0;
 }
 
 /** Minimal shape for score-primary sort sites (SearchResult and friends

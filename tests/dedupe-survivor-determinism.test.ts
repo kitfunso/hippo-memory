@@ -5,7 +5,7 @@
  * Pins that `deduplicateStore` picks the SAME surviving content regardless
  * of ingest order: strength bucket desc -> retrieval_count desc ->
  * compareEntryIdentity (content asc -> layer -> tags -> source -> id asc;
- * cases 9-11 pin the metadata keys). Real-DB per project
+ * cases 9-11 pin the metadata keys; 12-13 pin the candidate filter). Real-DB per project
  * convention (measure-ties-before-fixing / real-store-guard): each test
  * isolates a fresh hippoRoot via mkdtempSync + initStore, following the
  * tmpHome idiom in tests/api-sleep.test.ts.
@@ -379,6 +379,47 @@ describe('dedupe survivor determinism', () => {
       expect(pairs).toHaveLength(1);
       expect(pairs[0].keptLayer).toBe(Layer.Semantic);
       expect(pairs[0].removedLayer).toBe(Layer.Episodic);
+    }
+  });
+
+  // Cases 12-13 (codex round 1): the layer rank made these two lifecycle
+  // states deterministic LOSERS, so dedupe must not consider them at all.
+  it('12. a raw (append-only) episodic twin is not a dedupe candidate, so sleep no longer aborts on the delete trigger', () => {
+    const raw = createMemory(TWIN_TEXT, { layer: Layer.Episodic, kind: 'raw' });
+    const semantic = createMemory(TWIN_TEXT, { layer: Layer.Semantic });
+    for (const order of [[raw, semantic], [semantic, raw]]) {
+      const { home, restore } = tmpHome('hippo-dedupe-det-raw-');
+      try {
+        for (const entry of order) writeEntry(home, entry);
+        const result = deduplicateStore(home);
+        expect(result.removed).toBe(0);
+        expect(result.pairs).toHaveLength(0);
+        const ids = loadAllEntries(home).map((e) => e.id).sort();
+        expect(ids).toEqual([raw.id, semantic.id].sort());
+      } finally {
+        restore();
+      }
+    }
+  });
+
+  it('13. a superseded semantic twin never outranks the current episodic re-ingest', () => {
+    const { home, restore } = tmpHome('hippo-dedupe-det-superseded-');
+    try {
+      const successor = createMemory('unrelated successor text that replaced the old semantic row', { layer: Layer.Semantic });
+      const stale = {
+        ...createMemory(TWIN_TEXT, { layer: Layer.Semantic }),
+        superseded_by: successor.id,
+        kind: 'superseded' as const,
+      };
+      const current = createMemory(TWIN_TEXT, { layer: Layer.Episodic });
+      for (const entry of [successor, stale, current]) writeEntry(home, entry);
+      const result = deduplicateStore(home);
+      expect(result.removed).toBe(0);
+      expect(result.pairs).toHaveLength(0);
+      const ids = loadAllEntries(home).map((e) => e.id).sort();
+      expect(ids).toEqual([successor.id, stale.id, current.id].sort());
+    } finally {
+      restore();
     }
   });
 });

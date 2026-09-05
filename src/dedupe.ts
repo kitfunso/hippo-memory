@@ -17,7 +17,8 @@
  * key, so the survivor fell to load order (arrival-order-dependent); see
  * `strengthBucket` below for the bucket encoding. As of the tenant-partition
  * fix (docs/plans/2026-08-15-dedupe-tenant-partition.md) the order is scoped
- * WITHIN each tenant group; cross-tenant pairs are never compared.
+ * WITHIN each tenant group; cross-tenant pairs are never compared. Raw and
+ * superseded rows are not candidates at all (v1.38.1).
  */
 
 import { textOverlap } from './search.js';
@@ -89,7 +90,9 @@ export function deduplicateStore(
 ): DedupResult {
   const threshold = options.threshold ?? 0.7;
   const dryRun = options.dryRun ?? false;
-  const entries = loadAllEntries(hippoRoot);
+  // Only current distilled rows compete: raw rows are append-only (the delete
+  // trigger would abort sleep mid-loop) and superseded rows are history, as in consolidate.ts.
+  const entries = loadAllEntries(hippoRoot).filter((e) => e.kind === 'distilled' && !e.superseded_by);
 
   // Tenant partition (mirrors consolidate.ts mergeCandidatesByTenant and
   // dag.ts unparentedByTenant): group by tenantId BEFORE the sort so a
