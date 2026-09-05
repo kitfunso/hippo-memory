@@ -434,8 +434,8 @@ describe('rate-limit key forwarding and status pass-through', () => {
     rlHippoRoot = join(mkdtempSync(join(tmpdir(), 'hippo-aml-adapter-ratelimit-')), '.hippo');
     initStore(rlHippoRoot);
 
-    // HIPPO_V1_RPS is read at serve() boot, so all three must be set before
-    // this call; clientIpForRateLimit reads its header per request either way.
+    // Only HIPPO_V1_RPS is read at serve() boot; the other two are read per
+    // request, so they are set here for one place to save and restore them.
     process.env.HIPPO_REQUIRE_AUTH = '1';
     process.env.HIPPO_CLIENT_IP_HEADER = 'cf-connecting-ip';
     process.env.HIPPO_V1_RPS = '0.5';
