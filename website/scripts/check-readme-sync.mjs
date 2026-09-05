@@ -54,11 +54,25 @@ if (warns.length) {
   console.warn('[readme-sync] WARN: receipt claim(s) not found verbatim in README (verify wording):', warns.join(' | '));
 }
 
+// LoCoMo rows on the benchmarks page must match the README's "### LoCoMo" subsection (same
+// best-effort extraction: category + r5 literals from `const locomo = [...]` in benchmarks.astro).
+const bench = await readFile(join(root, 'src', 'pages', 'benchmarks.astro'), 'utf8');
+const locoStart = readme.indexOf('### LoCoMo');
+const locoEnd = locoStart >= 0 ? readme.indexOf('\n### ', locoStart + 3) : -1;
+const locoNorm = normalize(locoStart >= 0 ? readme.slice(locoStart, locoEnd > 0 ? locoEnd : undefined) : '');
+const locoBlock = (bench.match(/const locomo = \[([\s\S]*?)\];/) || [])[1] || '';
+const locoRows = [...locoBlock.matchAll(/category:\s*'([^']*)'.*?r5:\s*'([^']*)'/g)];
+if (!locoRows.length) missing.push('locomo: no rows found in benchmarks.astro');
+for (const [, category, r5] of locoRows) {
+  if (!locoNorm.includes(`| ${category} |`) && !locoNorm.includes(`| **${category}** |`)) missing.push(`locomo category: "${category}"`);
+  if (!locoNorm.includes(r5)) missing.push(`locomo r5: "${category}" ${r5}`);
+}
+
 if (missing.length) {
-  console.error('[readme-sync] DRIFT: site.ts comparison entries missing from README.md #comparison:');
+  console.error('[readme-sync] DRIFT: website entries missing from README.md (comparison cells vs #comparison, locomo rows vs ### LoCoMo):');
   for (const m of missing) console.error('  - ' + m);
   console.error('Fix: the README is the source of truth - update README.md and site.ts together.');
   process.exit(1);
 }
 
-console.log(`[readme-sync] OK: ${distinctive.length} distinctive cells + ${systems.length} systems match README #comparison.`);
+console.log(`[readme-sync] OK: ${distinctive.length} distinctive cells + ${systems.length} systems match README #comparison; ${locoRows.length} LoCoMo rows match README ### LoCoMo.`);

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.38.3 - unreleased
+
+### Added
+- **LoCoMo per-category disclosure table.** The v1.25.0 evidence recall@5 numbers per question category (single-hop 0.239, multi-hop 0.491, temporal-reasoning 0.169, open-domain 0.450, adversarial 0.226, overall 0.363) used to live only in `benchmarks/LOCOMO_INVESTIGATION.md`. README's Benchmarks section and the website benchmarks page now carry the table with the conditions that must travel with it: MiniLM-L6 default embedder, single run, v1.25.0 build, pre-#126 harness, no LLM judge. `website/scripts/check-readme-sync.mjs` fails the site build if the page's LoCoMo rows drift from the README (F19).
+
 ## 1.38.2 - 2026-09-05
 
 ### Fixed
