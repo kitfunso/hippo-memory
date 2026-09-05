@@ -21,12 +21,16 @@ describe('package entry re-exports strengthBucket', () => {
       "const m = await import('hippo-memory');",
       'console.log(JSON.stringify({ url, type: typeof m.strengthBucket, one: m.strengthBucket?.(1) }));',
     ].join('\n');
+    // cwd is the checkout, not a temp dir, because self-reference resolves from the nearest package.json; the child only imports and calls a pure function.
     const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
       cwd: REPO_ROOT,
       encoding: 'utf-8',
+      timeout: 30_000,
     });
     if (child.status !== 0) {
-      throw new Error(`self-reference import failed (run \`npm run build\` first):\n${child.stderr}`);
+      throw new Error(
+        `self-reference import failed (run \`npm run build\` first):\n${child.error?.message ?? ''}${child.stderr}`,
+      );
     }
     const lines = child.stdout.trim().split('\n');
     // SAFETY: the child script above is the only writer of the last stdout line and always emits these three keys.
