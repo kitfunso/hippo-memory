@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.38.3 - unreleased
+
+### Fixed
+- **Micro-eval: five fixtures were red on every fresh checkout and nothing noticed.** `benchmarks/micro/run.py` now probes a remember, a hybrid recall and the cross-encoder in a throwaway store and refuses to run when no embedding is computed or the reranker falls back to identity order, because dlpfc-goals, pineal-salience, reranker-cross-encoder and vmpfc-value were calibrated with it present and the 1.33.0 zero-dep install (PR #134) silently turned every fresh run BM25-only, with the cross-encoder falling back to identity order. The runner also sets `HOME`/`USERPROFILE` to its sandbox so the 1.38.2 ancestor walk-up stops there: before, `hippo init` in a fixture subdirectory reused the sandbox root store and path-boost lost its per-project stores. `ofc_utility.json` recalibrated (measured ratio 1.18 inside the flip window; the old 1.331 sat just past it). No `src/` change. Details: `docs/plans/2026-09-05-micro-eval-red-fixtures.md`.
+
+### CI
+- New `micro-eval` job runs the tier-1 micro-eval on every PR with the embedding backend installed (`--no-save`) and the model weights cached. The `test` job is unchanged.
+
 ## 1.38.2 - 2026-09-05
 
 ### Fixed
