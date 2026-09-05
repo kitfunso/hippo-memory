@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.38.2 - unreleased
+
+### Changed
+- **The CLI now finds the nearest ancestor `.hippo` store, like git finds `.git`.** `getHippoRoot` used to be `<cwd>/.hippo` strictly, so every command run from a subdirectory of an initialised project exited with "No .hippo directory found". It now reuses the bounded ancestor walk that memory scope isolation already had (`resolveProjectIdentity`): the walk ends at the home directory, the temp root and the filesystem root (home and the temp root are never projects, and on Windows the temp root sits inside home), and a `.hippo` marker must be a directory. When nothing is found the old `<cwd>/.hippo` is returned, so `hippo init` in a fresh directory behaves exactly as before, while `hippo init` from inside an initialised project now reports the existing store instead of creating a nested one. The "not initialised" error names the store path it settled on and the directory it searched from. Path tags are unchanged: they still derive from the working directory, not the store root.
+- **The MCP server shares the same bounded walk.** Its own copy walked to the filesystem root with `existsSync`, so with cwd under home and `HIPPO_HOME` set elsewhere it returned `~/.hippo` instead of the configured global store, and a stray file named `.hippo` on an ancestor was returned as a store. `findHippoRoot` is now exported with `(cwd, opts)` test seams.
+
 ## 1.38.1 - 2026-09-05
 
 ### Fixed

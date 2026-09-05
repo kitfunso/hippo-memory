@@ -108,27 +108,7 @@ export function resolveProjectIdentity(
   const stopDir = opts?.stopDir ? realpathOrResolve(opts.stopDir) : null;
   const start = realpathOrResolve(startInput);
 
-  let hippoRoot: string | null = null;
-  let gitRoot: string | null = null;
-  let reachedHome = false;
-
-  let dir = start;
-  for (let depth = 0; depth < MAX_WALK_DEPTH; depth++) {
-    if (samePath(dir, home)) {
-      reachedHome = true;
-      break;
-    }
-    if (stopDir !== null && samePath(dir, stopDir)) break;
-    if (hippoRoot === null && isDirectoryAt(path.join(dir, '.hippo'))) {
-      hippoRoot = dir;
-    }
-    if (gitRoot === null && fs.existsSync(path.join(dir, '.git'))) {
-      gitRoot = dir;
-    }
-    const parent = path.dirname(dir);
-    if (samePath(parent, dir)) break; // filesystem root
-    dir = parent;
-  }
+  const { hippoRoot, gitRoot, reachedHome } = walkProjectMarkers(start, home, stopDir === null ? [] : [stopDir]);
 
   let identity: ProjectIdentity;
   const root = hippoRoot ?? gitRoot;
@@ -144,6 +124,54 @@ export function resolveProjectIdentity(
 
   if (cacheable) identityCache.set(startInput, identity);
   return identity;
+}
+
+interface MarkerWalk {
+  hippoRoot: string | null;
+  gitRoot: string | null;
+  reachedHome: boolean;
+}
+
+/** Climb from start toward the root; home (never a project) and every stop dir end the walk unchecked. */
+function walkProjectMarkers(start: string, home: string, stopDirs: readonly string[]): MarkerWalk {
+  let hippoRoot: string | null = null;
+  let gitRoot: string | null = null;
+  let reachedHome = false;
+
+  let dir = start;
+  for (let depth = 0; depth < MAX_WALK_DEPTH; depth++) {
+    if (samePath(dir, home)) {
+      reachedHome = true;
+      break;
+    }
+    if (stopDirs.some((stop) => samePath(dir, stop))) break;
+    if (hippoRoot === null && isDirectoryAt(path.join(dir, '.hippo'))) {
+      hippoRoot = dir;
+    }
+    if (gitRoot === null && fs.existsSync(path.join(dir, '.git'))) {
+      gitRoot = dir;
+    }
+    const parent = path.dirname(dir);
+    if (samePath(parent, dir)) break; // filesystem root
+    dir = parent;
+  }
+  return { hippoRoot, gitRoot, reachedHome };
+}
+
+/**
+ * Nearest ancestor store (`<dir>/.hippo`) from cwd upward, or null when none exists below the bounds.
+ * Home and the temp root end the walk unchecked: neither is ever a project, and on Windows the temp root
+ * sits inside home, so a sandbox whose HOME points elsewhere must still stop before the real ~/.hippo.
+ * Start and bounds are all realpath'd so they compare in one form (macOS spells the temp root through
+ * the /var symlink while cwd is physical); a symlink-free cwd therefore keeps the caller's spelling.
+ */
+export function findHippoStoreDir(cwd?: string, opts?: ResolveProjectIdentityOpts): string | null {
+  const home = realpathOrResolve(opts?.homeDir ?? os.homedir());
+  const stops = [realpathOrResolve(os.tmpdir())];
+  if (opts?.stopDir) stops.push(realpathOrResolve(opts.stopDir));
+  const start = realpathOrResolve(cwd ?? process.cwd());
+  const { hippoRoot } = walkProjectMarkers(start, home, stops);
+  return hippoRoot === null ? null : path.join(hippoRoot, '.hippo');
 }
 
 /**
