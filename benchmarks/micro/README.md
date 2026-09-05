@@ -76,7 +76,9 @@ metadata, e.g. dlPFC goal conditioning (`--goal <tag>` boost).
   content digest is refused on later writes; `reason` is required). With
   `"reattempt": true` the runner re-runs `hippo remember` with the same text
   and requires the CLI to refuse it, so the fixture's must-not assertion is
-  testing the tombstone rather than a row that was never re-stored. Used by
+  testing the tombstone rather than a row that was never re-stored. Same
+  local-store scope as `forget`: a prior `promote` of the remember survives
+  and a later `promote` of it fails, so declare any `promote` first. Used by
   `fixtures/negative_retrieval.json` (AT5). Example:
   `{"type": "reject", "remember_index": 3, "reason": "wrong retry policy", "reattempt": true}`.
 **Per-query `pre_actions`** run before the query's recall subprocess (per query, in declared order):

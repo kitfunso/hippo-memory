@@ -90,12 +90,15 @@ Action types:
                rejected value; a successful re-remember is a RuntimeError,
                because the fixture's later must-not assertion would otherwise
                be testing a row that was simply never re-stored.
+               Same store scope as `forget`: the row and the tombstone live
+               in that cwd's LOCAL store, so a prior `promote` of the same
+               remember (a copy in the global store) is unaffected.
                Example: {"type": "reject", "remember_index": 3,
                          "reason": "wrong retry policy", "reattempt": true}
 
-  Ordering constraint (actions run in declared order): a `forget` of a
-  remember hard-deletes its local id, so any `promote` of that same
-  remember MUST be declared BEFORE the `forget` in the fixture's `actions`
+  Ordering constraint (actions run in declared order): a `forget` or
+  `reject` of a remember hard-deletes its local id, so any `promote` of
+  that same remember MUST be declared BEFORE it in the fixture's `actions`
   list — a `promote` declared after would try to promote an id the local
   store no longer has.
 
