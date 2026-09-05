@@ -63,3 +63,7 @@ No entry exists for this item. Nothing to update.
 - A handler that tightens validation later breaks its lockdown row with a 400. The failure message carries the body, and the fix is a one-line table edit.
 - `POST /v1/sleep` checks `isLoopback` before `buildContextWithAuth`, so a non-loopback caller sees 403 first. The test binds 127.0.0.1, so the loopback check passes and the 401 is reached. If the server ever moves that check after auth, the row still passes.
 - No behavior change in the server, so no runtime risk.
+
+## Review follow-up
+
+Codex (round 1) showed the three-shape raw count shared the parser's blind spots: a double-quoted path literal or a `.test(path)` regex route left both at 64. The guard now counts `if (method === '` dispatch lines in `handleRequest`, an axis independent of the path shape, and both parsers read the same `handleRequest` slice.

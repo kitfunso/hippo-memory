@@ -70,9 +70,8 @@ function publicRoutesFromServerSource(text: string): Set<string> {
 const serverSource = readFileSync(join(repoRoot, 'src/server.ts'), 'utf8');
 const handleRequestSource = serverSource.slice(serverSource.indexOf('async function handleRequest'));
 
-// Every authed (non-public, non-health) route with a request shape that
-// clears pre-auth validation, so a 401 (not 400) proves the Bearer check ran.
-// :param segments become '1' (ID_SEGMENT_RE and \d+ regex routes both accept it).
+// Every authed route with a request shape that clears pre-auth validation, so a
+// 401 (not 400) proves the Bearer check ran. :param segments become '1'.
 const AUTHED_ROUTES: ReadonlyArray<{
   method: string;
   pattern: string;
@@ -168,14 +167,14 @@ describe('server Bearer lockdown', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('the three raw route shapes account for every parsed entry (guards a 4th shape)', () => {
-    const literalCount = (handleRequestSource.match(/path === '\//g) ?? []).length;
-    const matchPathCount = (handleRequestSource.match(/= matchPath\(/g) ?? []).length;
-    const regexCount = (handleRequestSource.match(/path\.match\(\/\^/g) ?? []).length;
-    const derived = routesFromServerSource(serverSource);
+  it('every method-check dispatch line parses into a route (guards an unknown path shape)', () => {
+    // Counts the method axis, not the path axis, so a path shape the parser
+    // does not know still shows up here and the two counts disagree loudly.
+    const dispatchCount = (handleRequestSource.match(/^\s*if \(method === '/gm) ?? []).length;
+    const derived = routesFromServerSource(handleRequestSource);
     expect(
-      literalCount + matchPathCount + regexCount,
-      `raw shape count (${literalCount} + ${matchPathCount} + ${regexCount}) must equal parsed routes (${derived.size})`,
+      dispatchCount,
+      `${dispatchCount} method-check dispatch lines must equal parsed routes (${derived.size})`,
     ).toBe(derived.size);
   });
 
@@ -188,7 +187,7 @@ describe('server Bearer lockdown', () => {
   });
 
   it('AUTHED_ROUTES covers exactly the derived routes minus public routes minus GET /health', () => {
-    const derived = routesFromServerSource(serverSource);
+    const derived = routesFromServerSource(handleRequestSource);
     const publicRoutes = publicRoutesFromServerSource(serverSource);
     const expected = new Set(derived);
     expected.delete('GET /health');
