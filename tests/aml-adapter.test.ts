@@ -50,13 +50,59 @@ async function waitForAdapterReady(baseUrl: string, timeoutMs = 10_000): Promise
   throw new Error(`adapter never became reachable at ${baseUrl}: ${String(lastErr)}`);
 }
 
+interface AdapterHandle {
+  child: ChildProcess;
+  baseUrl: string;
+  stderrChunks: Buffer[];
+}
+
+// Shared by both describe blocks below so a second real server pair costs
+// one call, not a second copy of the spawn wiring.
+function spawnAdapter(hippoPort: number): Promise<AdapterHandle> {
+  const stderrChunks: Buffer[] = [];
+  return new Promise((resolve, reject) => {
+    let stdoutBuf = '';
+    // stdout keeps growing with access-log lines, so the regex matches again on every chunk.
+    let readyStarted = false;
+    const child = spawn(process.execPath, [ADAPTER_PATH], {
+      env: {
+        ...process.env,
+        ADAPTER_PORT: '0',
+        HIPPO_URL: `http://127.0.0.1:${hippoPort}`,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    child.stdout?.on('data', (chunk: Buffer) => {
+      stdoutBuf += chunk.toString('utf8');
+      const match = /listening on :(\d+)/.exec(stdoutBuf);
+      if (match && !readyStarted) {
+        readyStarted = true;
+        const baseUrl = `http://127.0.0.1:${Number(match[1])}`;
+        waitForAdapterReady(baseUrl)
+          .then(() => resolve({ child, baseUrl, stderrChunks }))
+          .catch(reject);
+      }
+    });
+    child.stderr?.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
+    child.once('error', reject);
+    child.once('exit', (code) => {
+      if (code !== null && code !== 0) {
+        reject(new Error(`adapter process exited with code ${code}: ${Buffer.concat(stderrChunks).toString('utf8')}`));
+      }
+    });
+  });
+}
+
+function stopAdapter(handle: AdapterHandle | undefined): void {
+  handle?.child.kill();
+}
+
 describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
   let hippoRoot: string;
   let hippoHandle: ServerHandle;
-  let adapterProcess: ChildProcess;
+  let adapterHandle: AdapterHandle;
   let baseUrl: string;
   let validKey: string;
-  const stderrChunks: Buffer[] = [];
   const savedRequireAuth = process.env.HIPPO_REQUIRE_AUTH;
 
   beforeAll(async () => {
@@ -76,37 +122,12 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
       closeHippoDb(db);
     }
 
-    const adapterReady = new Promise<number>((resolve, reject) => {
-      let stdoutBuf = '';
-      adapterProcess = spawn(process.execPath, [ADAPTER_PATH], {
-        env: {
-          ...process.env,
-          ADAPTER_PORT: '0',
-          HIPPO_URL: `http://127.0.0.1:${hippoHandle.port}`,
-        },
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-      adapterProcess.stdout?.on('data', (chunk: Buffer) => {
-        stdoutBuf += chunk.toString('utf8');
-        const match = /listening on :(\d+)/.exec(stdoutBuf);
-        if (match) resolve(Number(match[1]));
-      });
-      adapterProcess.stderr?.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
-      adapterProcess.once('error', reject);
-      adapterProcess.once('exit', (code) => {
-        if (code !== null && code !== 0) {
-          reject(new Error(`adapter process exited with code ${code}: ${Buffer.concat(stderrChunks).toString('utf8')}`));
-        }
-      });
-    });
-
-    const adapterPort = await adapterReady;
-    baseUrl = `http://127.0.0.1:${adapterPort}`;
-    await waitForAdapterReady(baseUrl);
+    adapterHandle = await spawnAdapter(hippoHandle.port);
+    baseUrl = adapterHandle.baseUrl;
   }, 30_000);
 
   afterAll(async () => {
-    adapterProcess?.kill();
+    stopAdapter(adapterHandle);
     await hippoHandle?.stop();
     if (savedRequireAuth === undefined) {
       delete process.env.HIPPO_REQUIRE_AUTH;
@@ -383,5 +404,106 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
     expect(row).toBeDefined();
     expect(row!.content).toContain('user: zqx7');
     expect(row!.content).toContain('assistant: wvk3');
+  });
+});
+
+// Second real server pair with the production limiter env, pinning the two
+// release-safety behaviours the first describe never exercises (see
+// docs/plans/2026-09-05-aml-adapter-status-and-ip-header.md).
+describe('rate-limit key forwarding and status pass-through', () => {
+  let rlHippoRoot: string;
+  let rlHippoHandle: ServerHandle;
+  let rlAdapterHandle: AdapterHandle;
+  let rlBaseUrl: string;
+  let rlValidKey: string;
+  const savedRequireAuth = process.env.HIPPO_REQUIRE_AUTH;
+  const savedClientIpHeader = process.env.HIPPO_CLIENT_IP_HEADER;
+  const savedV1Rps = process.env.HIPPO_V1_RPS;
+
+  beforeAll(async () => {
+    rlHippoRoot = join(mkdtempSync(join(tmpdir(), 'hippo-aml-adapter-ratelimit-')), '.hippo');
+    initStore(rlHippoRoot);
+
+    // HIPPO_V1_RPS is read at serve() boot, so all three must be set before
+    // this call; clientIpForRateLimit reads its header per request either way.
+    process.env.HIPPO_REQUIRE_AUTH = '1';
+    process.env.HIPPO_CLIENT_IP_HEADER = 'cf-connecting-ip';
+    process.env.HIPPO_V1_RPS = '0.5';
+    rlHippoHandle = await serve({ hippoRoot: rlHippoRoot, host: '127.0.0.1', port: 0 });
+
+    const db = openHippoDb(rlHippoRoot);
+    try {
+      ({ plaintext: rlValidKey } = createApiKey(db, { tenantId: 'default', label: 'aml-adapter-ratelimit-test' }));
+    } finally {
+      closeHippoDb(db);
+    }
+
+    rlAdapterHandle = await spawnAdapter(rlHippoHandle.port);
+    rlBaseUrl = rlAdapterHandle.baseUrl;
+  }, 30_000);
+
+  afterAll(async () => {
+    stopAdapter(rlAdapterHandle);
+    await rlHippoHandle?.stop();
+    if (savedRequireAuth === undefined) {
+      delete process.env.HIPPO_REQUIRE_AUTH;
+    } else {
+      process.env.HIPPO_REQUIRE_AUTH = savedRequireAuth;
+    }
+    if (savedClientIpHeader === undefined) {
+      delete process.env.HIPPO_CLIENT_IP_HEADER;
+    } else {
+      process.env.HIPPO_CLIENT_IP_HEADER = savedClientIpHeader;
+    }
+    if (savedV1Rps === undefined) {
+      delete process.env.HIPPO_V1_RPS;
+    } else {
+      process.env.HIPPO_V1_RPS = savedV1Rps;
+    }
+    rmSync(rlHippoRoot, { recursive: true, force: true });
+  });
+
+  // Clears adapter validation on every call so the request always reaches
+  // hippo; only the extra headers vary between calls.
+  function rlSearch(extraHeaders: Record<string, string>) {
+    return fetch(`${rlBaseUrl}/search`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${rlValidKey}`,
+        ...extraHeaders,
+      },
+      body: JSON.stringify({ query: 'x', user_id: 'user-ratelimit', top_k: 1 }),
+    });
+  }
+
+  it("a hippo non-200 (exercised with a real 429) passes through with hippo's status and body", async () => {
+    const [first, second] = await Promise.all([
+      rlSearch({ 'cf-connecting-ip': '203.0.113.10' }),
+      rlSearch({ 'cf-connecting-ip': '203.0.113.10' }),
+    ]);
+    const statuses = [first.status, second.status].sort((a, b) => a - b);
+    expect(statuses).toEqual([200, 429]);
+
+    const limited = first.status === 429 ? first : second;
+    const limitedBody = await limited.json();
+    expect(limitedBody).toEqual({ error: 'rate limit exceeded' });
+  });
+
+  it("only cf-connecting-ip reaches hippo's rate-limit key; x-forwarded-for and x-real-ip do not", async () => {
+    const forwarded = await Promise.all([
+      rlSearch({ 'cf-connecting-ip': '198.51.100.1' }),
+      rlSearch({ 'cf-connecting-ip': '198.51.100.2' }),
+      rlSearch({ 'cf-connecting-ip': '198.51.100.3' }),
+    ]);
+    expect(forwarded.map((r) => r.status).sort((a, b) => a - b)).toEqual([200, 200, 200]);
+
+    // No cf-connecting-ip: both fall back to the socket-address bucket, which
+    // no earlier request in this describe has touched.
+    const notForwarded = await Promise.all([
+      rlSearch({ 'x-forwarded-for': '198.51.100.4', 'x-real-ip': '198.51.100.5' }),
+      rlSearch({ 'x-forwarded-for': '198.51.100.6', 'x-real-ip': '198.51.100.7' }),
+    ]);
+    expect(notForwarded.map((r) => r.status).sort((a, b) => a - b)).toEqual([200, 429]);
   });
 });

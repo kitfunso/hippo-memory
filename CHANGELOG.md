@@ -7,6 +7,7 @@
 
 ### Tests
 - `tests/server-bearer-lockdown.test.ts` now derives its route table from `src/server.ts` source instead of a hand-copied list, so a new `/v1/*` route missing `buildContextWithAuth`/`requireAuth` fails CI instead of shipping unauthed.
+- **Pinned two release-safety behaviours of the AML adapter (`deploy/aml/adapter/adapter.mjs`) the existing suite could not catch.** A hippo non-200 (exercised with a real 429) now passes through with hippo's status and error body unchanged, and only the `cf-connecting-ip` header reaches hippo's per-client rate-limit key (`x-forwarded-for` and `x-real-ip` do not). `tests/aml-adapter.test.ts` gained a second real hippo plus adapter pair (`HIPPO_REQUIRE_AUTH=1`, `HIPPO_CLIENT_IP_HEADER=cf-connecting-ip`, `HIPPO_V1_RPS=0.5`) and two concurrency-based tests; the adapter spawn is now a shared `spawnAdapter` helper used by both describe blocks. No adapter behaviour change.
 
 ## 1.38.1 - 2026-09-05
 
