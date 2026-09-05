@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.38.2 - unreleased
+
+### Fixed
+- **Consolidating 3+ related memories produced a different merged row for each ingest order.** `mergeContents` picked the merge base from a sorted view (content length desc, then the shared tie order) but listed the bullets from the raw cluster, which follows `created ASC, id ASC` in that store. The same three memories ingested in a different order gave a different `[Consolidated pattern from N related memories]` row and a different rejection digest, so a rollup a human had rejected could come back under a new digest. Bullets now follow the base order and the merged row's tags are sorted, so the row is byte-identical in any ingest order. One-time effect: a 3+ rollup rejected before this release regenerates once on the next `sleep` and can be rejected again.
+
 ## 1.38.1 - 2026-09-05
 
 ### Fixed
