@@ -36,8 +36,8 @@ describe('prepublish test gate (scripts/check-tests-pass.mjs)', () => {
     expect(r.stderr).toContain('flaky worker IPC, reran files alone');
   });
 
-  test('an empty HIPPO_PUBLISH_SKIP_TESTS does not skip', () => {
-    const r = runGate('failing', { HIPPO_PUBLISH_SKIP_TESTS: '' });
+  test.each(['', '   '])('HIPPO_PUBLISH_SKIP_TESTS=%j is not a reason and does not skip', (value) => {
+    const r = runGate('failing', { HIPPO_PUBLISH_SKIP_TESTS: value });
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('refusing to publish');
   });

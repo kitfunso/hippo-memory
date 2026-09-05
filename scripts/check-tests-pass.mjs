@@ -13,10 +13,15 @@ const run = spawnSync(process.execPath, [vitestBin, 'run', ...process.argv.slice
   stdio: 'inherit',
 });
 
+if (run.error) {
+  console.error(`check-tests-pass: could not start vitest (${run.error.message}); refusing to publish.`);
+  process.exit(1);
+}
+
 const code = run.status ?? 1;
 if (code === 0) process.exit(0);
 
-const reason = process.env.HIPPO_PUBLISH_SKIP_TESTS;
+const reason = (process.env.HIPPO_PUBLISH_SKIP_TESTS ?? '').trim();
 if (reason) {
   console.error(`WARNING: publishing with a failed test run. Reason: ${reason}`);
   process.exit(0);
