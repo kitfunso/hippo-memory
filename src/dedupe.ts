@@ -10,12 +10,13 @@
  *
  * Survivor selection is a total order as of v1.26.3
  * (docs/plans/2026-07-16-dedupe-survivor-determinism.md): strength bucket
- * desc -> retrieval_count desc -> compareEntryIdentity (content asc -> id
- * asc). Previously the strength/retrieval-count comparator could tie
- * exactly with no terminal key, so the survivor fell to load order
- * (arrival-order-dependent); see `strengthBucket` below for the bucket
- * encoding. As of the tenant-partition fix
- * (docs/plans/2026-08-15-dedupe-tenant-partition.md) the order is scoped
+ * desc -> retrieval_count desc -> compareEntryIdentity (content asc ->
+ * layer rank -> tags -> source -> id asc; the metadata keys arrived in
+ * v1.38.1, docs/plans/2026-09-04-dedupe-survivor-metadata.md). Previously
+ * the strength/retrieval-count comparator could tie exactly with no terminal
+ * key, so the survivor fell to load order (arrival-order-dependent); see
+ * `strengthBucket` below for the bucket encoding. As of the tenant-partition
+ * fix (docs/plans/2026-08-15-dedupe-tenant-partition.md) the order is scoped
  * WITHIN each tenant group; cross-tenant pairs are never compared.
  */
 
