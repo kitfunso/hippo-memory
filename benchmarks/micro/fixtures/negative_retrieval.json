@@ -1,0 +1,63 @@
+{
+  "name": "negative_retrieval",
+  "mechanic": "negative-retrieval",
+  "description": "AT5: superseded, forgotten and rejected rows must not come back from recall. Each negative query has a live sibling row sharing its vocabulary, so a leak would rank against a real competitor rather than an empty result. The second cache query is the positive control: the superseded row is still stored, and only the default filter hides it. The reject action re-remembers the same text and requires the rejection guard to refuse it before the queries run.",
+  "remembers": [
+    "render-tier cache eviction is zorblat LRU with a two hour ttl",
+    "team retro notes live under the drumlin wiki page",
+    "scheduler leader lease held by the vexmoor node for ninety seconds",
+    "payment retries use quillfang linear backoff with fifty attempts",
+    "payment retries use marlowe exponential backoff capped at five attempts",
+    "scheduler leader lease heartbeat is fifteen seconds on the ostrel node"
+  ],
+  "actions": [
+    {
+      "type": "supersede",
+      "remember_index": 0,
+      "new_content": "render-tier cache eviction is kestrelarc LFU with a six hour ttl"
+    },
+    {
+      "type": "forget",
+      "remember_index": 2
+    },
+    {
+      "type": "reject",
+      "remember_index": 3,
+      "reason": "wrong retry policy, fifty linear attempts was never the contract",
+      "reattempt": true
+    }
+  ],
+  "queries": [
+    {
+      "q": "cache eviction policy for the render tier",
+      "top_k": 3,
+      "must_contain_any": ["kestrelarc"],
+      "must_not_contain_any": ["zorblat"]
+    },
+    {
+      "q": "cache eviction policy for the render tier",
+      "top_k": 3,
+      "cli_args": ["--include-superseded"],
+      "must_contain_any": ["zorblat"]
+    },
+    {
+      "q": "scheduler leader lease",
+      "top_k": 3,
+      "must_contain_any": ["ostrel"],
+      "must_not_contain_any": ["vexmoor"]
+    },
+    {
+      "q": "payment retries backoff",
+      "top_k": 3,
+      "must_contain_any": ["marlowe"],
+      "must_not_contain_any": ["quillfang"]
+    },
+    {
+      "q": "payment retries backoff",
+      "top_k": 3,
+      "cli_args": ["--include-superseded"],
+      "must_contain_any": ["marlowe"],
+      "must_not_contain_any": ["quillfang"]
+    }
+  ]
+}
