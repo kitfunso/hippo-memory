@@ -71,6 +71,14 @@ metadata, e.g. dlPFC goal conditioning (`--goal <tag>` boost).
   `hippo outcome --bad --id <id>` `bad` times. Used to set up
   value-attribution scenarios (vmPFC mechanic). Example:
   `{"type": "outcomes", "remember_index": 0, "good": 3, "bad": 0}`.
+- `reject` — runs `hippo reject <id> --reason <reason>` for
+  `remembers[remember_index]` (AT1 tombstone: the row is removed and its
+  content digest is refused on later writes; `reason` is required). With
+  `"reattempt": true` the runner re-runs `hippo remember` with the same text
+  and requires the CLI to refuse it, so the fixture's must-not assertion is
+  testing the tombstone rather than a row that was never re-stored. Used by
+  `fixtures/negative_retrieval.json` (AT5). Example:
+  `{"type": "reject", "remember_index": 3, "reason": "wrong retry policy", "reattempt": true}`.
 **Per-query `pre_actions`** run before the query's recall subprocess (per query, in declared order):
 
 - `goal_push` — shells out `hippo goal push <name> --session-id <session_id>` against the same temp `HIPPO_HOME`. Used by the dlPFC depth fixture (`fixtures/dlpfc_depth.json`) to push a named goal so `hippo recall` auto-applies the goal-tag boost. The harness threads `HIPPO_SESSION_ID` into the recall subprocess from either an explicit `--session-id` in `cli_args` or from the pre_action's `session_id`. Example:
