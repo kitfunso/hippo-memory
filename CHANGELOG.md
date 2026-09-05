@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.38.3 - unreleased
+
+### Tests
+- **`tests/session-end-snapshot-close.test.ts` no longer flakes on CI.** Test 1 polled `loadActiveTaskSnapshot` at 20 Hz while waiting for the detached `session-end` worker. Every poll is two `openHippoDb` cycles whose per-open migrations write, so the poll itself made the worker's close fail with `database is locked`, silently because the test passed no `--log-file`, and then waited 25 s for a row that would never change. Tests 1 and 2 now wait on the worker's own close-step log line, as tests 3 and 4 already did, and read the database once. Follow-ups in TODOS.md: the instant `database is locked` despite `busy_timeout`, and the unawaited `cmdSleep` in the worker.
+
 ## 1.38.2 - 2026-09-05
 
 ### Fixed

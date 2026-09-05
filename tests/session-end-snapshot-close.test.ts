@@ -87,11 +87,13 @@ async function loadSnapshotRetrying(
  * worker is expected to eventually produce, bounded so a real wiring bug
  * fails the test instead of hanging it.
  *
- * `check()` opens its own SQLite connection while a SEPARATE OS process
- * (the detached worker) may be mid-write on the same file — an occasional
- * transient "database is locked" from that race is expected polling noise,
- * not a real failure, so a throw counts as "not yet" and the loop keeps
- * going. Only run out of the clock still fails the test.
+ * `check()` must read the worker's `--log-file`, never the database: a 20 Hz
+ * `loadActiveTaskSnapshot` poll is two `openHippoDb` cycles per tick and every
+ * open runs migrations that write, so the poll itself made the worker's close
+ * fail with "database is locked" and then waited 25s for a row that would
+ * never change (CI run 33985138707; docs/plans/2026-09-05-session-end-test-
+ * observable-signal.md). A throw from `check()` counts as "not yet"; only
+ * running out of the clock fails the test.
  *
  * Default bound is generous (25s, under this project's 30s global
  * `testTimeout` in vitest.config.ts) because the detached worker is a real
@@ -99,6 +101,14 @@ async function loadSnapshotRetrying(
  * test` run — under full-suite parallel load this project's own heavier
  * tests (e.g. dag-rebuild-summaries.test.ts) observably take well over a
  * minute, so 8s was too tight for this worker's sleep+capture+close chain. */
+const CLOSE_STEP = /closed \d+ active snapshot\(s\) for session |snapshot close failed: /;
+
+/** The worker's close-step line, success OR failure, so a failed close fails the
+ * test fast with the worker's own error instead of waiting out the clock. */
+function closeStepLogged(logFile: string): boolean {
+  return fs.existsSync(logFile) && CLOSE_STEP.test(fs.readFileSync(logFile, 'utf8'));
+}
+
 async function waitUntil(check: () => boolean, timeoutMs = 25_000, intervalMs = 50): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   let lastError: unknown;
@@ -144,16 +154,18 @@ describe('6. session-end wiring: --session-id argv + worker close (DF1 T3)', () 
       source: 'pre-compact',
     });
 
+    const logFile = path.join(dir, 'session-end.log');
     const payload = JSON.stringify({ session_id: 'sess-end-close-me', hook_event_name: 'SessionEnd' });
-    const result = runHippo(['session-end'], dir, env, payload);
+    const result = runHippo(['session-end', '--log-file', logFile], dir, env, payload);
     expect(result.status).toBe(0);
 
-    // The parent returns immediately; the detached worker does the close.
-    // waitUntil's own successful return IS the assertion — no closed once,
-    // still-closed re-check after it (the worker's last DB write already
-    // happened by the time the condition holds; a second read only adds
-    // needless exposure to the cross-process WAL race waitUntil tolerates).
-    await waitUntil(() => loadActiveTaskSnapshot(hippoRoot, 'default') === null);
+    // The parent returns immediately; wait on the detached worker's own close
+    // line (see waitUntil), then read the row once.
+    await waitUntil(() => closeStepLogged(logFile));
+    expect(fs.readFileSync(logFile, 'utf8')).toContain(
+      'closed 1 active snapshot(s) for session sess-end-close-me',
+    );
+    expect(await loadSnapshotRetrying(hippoRoot, 'default')).toBeNull();
   });
 
   it('a DIFFERENT session\'s snapshot survives: session-end for session B never closes session A\'s active row', async () => {
@@ -167,13 +179,17 @@ describe('6. session-end wiring: --session-id argv + worker close (DF1 T3)', () 
     });
 
     // session-end fires for a DIFFERENT session (B) — A's row must survive.
+    const logFile = path.join(dir, 'session-end.log');
     const payload = JSON.stringify({ session_id: 'sess-b-ending', hook_event_name: 'SessionEnd' });
-    const result = runHippo(['session-end'], dir, env, payload);
+    const result = runHippo(['session-end', '--log-file', logFile], dir, env, payload);
     expect(result.status).toBe(0);
 
-    // Give the detached worker a fair window to run (and prove it does NOT
-    // touch A's row, not just that we didn't wait long enough).
-    await sleepMs(1500);
+    // Wait until the worker reports its close step, so the survival check
+    // proves it ran and closed nothing rather than that we did not wait long enough.
+    await waitUntil(() => closeStepLogged(logFile));
+    expect(fs.readFileSync(logFile, 'utf8')).toContain(
+      'closed 0 active snapshot(s) for session sess-b-ending',
+    );
     const snapshot = await loadSnapshotRetrying(hippoRoot, 'default');
     expect(snapshot).not.toBeNull();
     expect(snapshot!.status).toBe('active');
@@ -219,9 +235,7 @@ describe('6. session-end wiring: --session-id argv + worker close (DF1 T3)', () 
     const result = runHippo(['session-end', '--log-file', logFile], dir, env, payload);
     expect(result.status).toBe(0);
 
-    await waitUntil(
-      () => fs.existsSync(logFile) && fs.readFileSync(logFile, 'utf8').includes('active snapshot'),
-    );
+    await waitUntil(() => closeStepLogged(logFile));
 
     const logText = fs.readFileSync(logFile, 'utf8');
     // No line may START with the injected content — every log line stays
