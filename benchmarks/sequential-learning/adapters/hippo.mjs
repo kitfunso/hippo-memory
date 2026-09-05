@@ -19,9 +19,13 @@
 
 import { execSync } from 'node:child_process';
 import { mkdtempSync, rmSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { createAdapter } from './interface.mjs';
+
+// This repo's CLI, not a PATH-resolved global install (which may be an older release).
+const HIPPO_BIN = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'bin', 'hippo.js');
 
 // POST-AUDIT P1-4 (v1.7.8): session id and counters were module-level `let`
 // in v1.7.5..v1.7.7 — two parallel adapter consumers (e.g. future --workers N)
@@ -57,7 +61,7 @@ function hippoExec(storeDir, args, sessionId = null) {
       XDG_DATA_HOME: '',
     };
     if (sessionId) env.HIPPO_SESSION_ID = sessionId;
-    const result = execSync(`hippo ${args}`, {
+    const result = execSync(`node ${JSON.stringify(HIPPO_BIN)} ${args}`, {
       cwd: storeDir,
       env,
       encoding: 'utf-8',

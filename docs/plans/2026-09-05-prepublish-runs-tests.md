@@ -107,4 +107,27 @@ worker-IPC question (result goes in the verify manifest, not in code).
   publish log and the human's stated reason are the trail; a file write inside prepublishOnly
   would itself need a home in the tarball or the repo.
 - Version bump (rides 1.38.1).
-- Changing CI.
+
+## Review round 2 (codex P1, fe3398a)
+
+Codex (wrapper and GitHub bot) found that `tests/cli-dag.test.ts` and `tests/cli-multihop.test.ts`
+execSync a bare `hippo`, which only CI's `npm link` put on PATH; in a clean checkout the gate
+fails with command-not-found, and on a dev box it tests the global install (1.38.0 here), not the
+checkout. Root fix: both files run `node bin/hippo.js` like `tests/cli-version.test.ts`; a guard
+case in `tests/prepublish-test-gate.test.ts` fails on any future bare `hippo` spawn (it matched
+7 sites in the old files); the CI `npm link` step is removed as dead. Red first: cli-dag failed
+with the global npm dir stripped from PATH; the four CLI and gate files pass with the same PATH
+after the change.
+
+## Review round 3 (codex P1 on the delta, plus CI red on fe3398a)
+
+Codex's delta review and CI (2 failed files) found a third bare `hippo` spawn: the benchmark
+adapter `benchmarks/sequential-learning/adapters/hippo.mjs` (`hippoExec`), which
+`tests/sequential-learning-adapter-contract.test.ts` and `tests/sl-adapter-budget.test.ts` drive
+end to end. The round-2 guard scanned only `tests/*.test.*`, so it missed a helper. Fix: the
+adapter resolves `bin/hippo.js` from its own `import.meta.url` (the .mjs is not compiled or
+copied, per `tsconfig.benchmarks.json`), and the guard now scans `tests/` and `benchmarks/`
+recursively for any `.ts/.mjs/.js`. Red first: the contract test failed with the global npm dir
+stripped from PATH; the adapter, budget, gate and cli-dag files pass (17 tests) after the change.
+`extensions/*` spawn `hippo` by name on purpose (they call the user's installed CLI) and are out
+of scope.

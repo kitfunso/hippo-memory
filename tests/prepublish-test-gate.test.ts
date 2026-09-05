@@ -58,10 +58,12 @@ describe('prepublish test gate (scripts/check-tests-pass.mjs)', () => {
 });
 
 describe('tests run the worktree CLI, never a PATH-resolved hippo', () => {
-  test('no test spawns a bare `hippo` command', () => {
-    const offenders = readdirSync(path.join(REPO, 'tests'))
-      .filter((f) => /\.test\.(ts|mjs)$/.test(f))
-      .filter((f) => /(exec|spawn)\w*\(\s*[`'"]hippo\b/.test(readFileSync(path.join(REPO, 'tests', f), 'utf-8')));
+  test('no test or benchmark helper spawns a bare `hippo` command', () => {
+    // benchmarks/ holds adapters the tests import, so it is scanned too (codex round 2).
+    const offenders = ['tests', 'benchmarks']
+      .flatMap((dir) => readdirSync(path.join(REPO, dir), { recursive: true, encoding: 'utf-8' }).map((f) => path.join(dir, f)))
+      .filter((f) => /\.(ts|mjs|js)$/.test(f))
+      .filter((f) => /(exec|spawn)\w*\(\s*[`'"]hippo\b/.test(readFileSync(path.join(REPO, f), 'utf-8')));
     expect(offenders).toEqual([]);
   });
 });
