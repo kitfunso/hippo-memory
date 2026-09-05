@@ -4,7 +4,8 @@
  *
  * Pins that `deduplicateStore` picks the SAME surviving content regardless
  * of ingest order: strength bucket desc -> retrieval_count desc ->
- * compareEntryIdentity (content asc -> id asc). Real-DB per project
+ * compareEntryIdentity (content asc -> layer -> tags -> source -> id asc;
+ * cases 9-11 pin the metadata keys; 12-13 pin the candidate filter). Real-DB per project
  * convention (measure-ties-before-fixing / real-store-guard): each test
  * isolates a fresh hippoRoot via mkdtempSync + initStore, following the
  * tmpHome idiom in tests/api-sleep.test.ts.
@@ -334,5 +335,91 @@ describe('dedupe survivor determinism', () => {
     const cmp = bucketDiff !== 0 ? bucketDiff : retrievalDiff !== 0 ? retrievalDiff : identity;
     expect(Number.isNaN(cmp)).toBe(false);
     expect(Number.isFinite(cmp)).toBe(true);
+  });
+
+  // Cases 9-11: byte-identical twins tie on strength, retrieval_count and
+  // content, so only the metadata keys can decide the survivor. Four twins
+  // (not two) so a pass under the old id-random comparator needs 1/4 luck.
+  const TWIN_TEXT = 'byte identical twin content for the survivor metadata cases';
+
+  function survivorAfterDedupe(order: ReturnType<typeof createMemory>[]) {
+    const { home, restore } = tmpHome('hippo-dedupe-det-meta-');
+    try {
+      for (const entry of order) writeEntry(home, entry);
+      const result = deduplicateStore(home);
+      expect(result.removed).toBe(order.length - 1);
+      const remaining = loadAllEntries(home);
+      expect(remaining.length).toBe(1);
+      return { survivor: remaining[0], pairs: result.pairs };
+    } finally {
+      restore();
+    }
+  }
+
+  it('9. twins differing only in tags keep the copy with the most tags in both ingest orders', () => {
+    const twins = [['a'], ['b'], ['c'], ['d', 'e']].map((tags) => createMemory(TWIN_TEXT, { tags }));
+    const forward = survivorAfterDedupe(twins).survivor;
+    const reversed = survivorAfterDedupe([...twins].reverse()).survivor;
+    expect([...forward.tags].sort()).toEqual(['d', 'e']);
+    expect([...reversed.tags].sort()).toEqual(['d', 'e']);
+  });
+
+  it('10. twins differing only in source keep the lowest source in both ingest orders', () => {
+    const twins = ['src-c', 'src-a', 'src-d', 'src-b'].map((source) => createMemory(TWIN_TEXT, { source }));
+    expect(survivorAfterDedupe(twins).survivor.source).toBe('src-a');
+    expect(survivorAfterDedupe([...twins].reverse()).survivor.source).toBe('src-a');
+  });
+
+  it('11. episodic/semantic twins keep the semantic copy in both ingest orders (was the episodic one via the mem_/sem_ id prefix)', () => {
+    const episodic = createMemory(TWIN_TEXT, { layer: Layer.Episodic });
+    const semantic = createMemory(TWIN_TEXT, { layer: Layer.Semantic });
+    for (const order of [[episodic, semantic], [semantic, episodic]]) {
+      const { survivor, pairs } = survivorAfterDedupe(order);
+      expect(survivor.layer).toBe(Layer.Semantic);
+      expect(pairs).toHaveLength(1);
+      expect(pairs[0].keptLayer).toBe(Layer.Semantic);
+      expect(pairs[0].removedLayer).toBe(Layer.Episodic);
+    }
+  });
+
+  // Cases 12-13 (codex round 1): the layer rank made these two lifecycle
+  // states deterministic LOSERS, so dedupe must not consider them at all.
+  it('12. a raw (append-only) episodic twin is not a dedupe candidate, so sleep no longer aborts on the delete trigger', () => {
+    const raw = createMemory(TWIN_TEXT, { layer: Layer.Episodic, kind: 'raw' });
+    const semantic = createMemory(TWIN_TEXT, { layer: Layer.Semantic });
+    for (const order of [[raw, semantic], [semantic, raw]]) {
+      const { home, restore } = tmpHome('hippo-dedupe-det-raw-');
+      try {
+        for (const entry of order) writeEntry(home, entry);
+        const result = deduplicateStore(home);
+        expect(result.removed).toBe(0);
+        expect(result.pairs).toHaveLength(0);
+        const ids = loadAllEntries(home).map((e) => e.id).sort();
+        expect(ids).toEqual([raw.id, semantic.id].sort());
+      } finally {
+        restore();
+      }
+    }
+  });
+
+  it('13. a superseded semantic twin never outranks the current episodic re-ingest', () => {
+    const { home, restore } = tmpHome('hippo-dedupe-det-superseded-');
+    try {
+      const successor = createMemory('unrelated successor text that replaced the old semantic row', { layer: Layer.Semantic });
+      const stale = {
+        ...createMemory(TWIN_TEXT, { layer: Layer.Semantic }),
+        superseded_by: successor.id,
+        kind: 'superseded' as const,
+      };
+      const current = createMemory(TWIN_TEXT, { layer: Layer.Episodic });
+      for (const entry of [successor, stale, current]) writeEntry(home, entry);
+      const result = deduplicateStore(home);
+      expect(result.removed).toBe(0);
+      expect(result.pairs).toHaveLength(0);
+      const ids = loadAllEntries(home).map((e) => e.id).sort();
+      expect(ids).toEqual([successor.id, stale.id, current.id].sort());
+    } finally {
+      restore();
+    }
   });
 });

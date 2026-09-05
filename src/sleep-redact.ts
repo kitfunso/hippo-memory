@@ -1,10 +1,11 @@
 /**
  * D1 v1.12.10 — Redact-on-egress for SleepResult cross-tenant counters.
  *
- * `api.sleep` returns host-wide counters (deduped.crossDups, audit counters,
- * ambient totals) — they describe the host's full memory state, not any one
- * tenant. Today the route is loopback-only + admin-gated since v1.12.0
- * sub-1, so all callers see the full picture honestly.
+ * `api.sleep` returns host-wide counters (deduped.crossDups, which counts
+ * cross-LAYER pairs, audit counters, ambient totals); they describe the
+ * host's full memory state, not any one tenant. Today the route is
+ * loopback-only + admin-gated since v1.12.0 sub-1, so all callers see the
+ * full picture honestly.
  *
  * Once `HIPPO_BIND_ALL` ships (per D3 lock-step sequencing), non-loopback
  * admin Bearer callers would see another tenant's accounting data in the
@@ -38,8 +39,8 @@ export interface RedactSleepCtx {
  * Returns a SleepResult that's safe to serialize to a non-loopback non-self
  * caller. Loopback OR `__host__` caller = pass-through unchanged.
  *
- * Redaction surface (the cross-tenant counters specifically):
- *   - deduped.crossDups
+ * Redaction surface (the host-wide aggregate counters specifically):
+ *   - deduped.crossDups (pairs whose kept and removed layers differ, summed across tenants)
  *   - deduped.semDups, .epiDups (aggregate dedup activity across tenants)
  *   - audit.errorsRemoved, .warningCount (aggregate audit-pipeline activity)
  *   - ambient.totalMemories, .avgStrength (aggregate corpus shape)

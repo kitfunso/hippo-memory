@@ -15,35 +15,78 @@
  */
 
 /** Minimal shape needed to break a tie deterministically across fresh
- *  ingests of the same content into different stores. */
+ *  ingests of the same content into different stores. The metadata keys are
+ *  optional so existing `{ content, id }` callers (tests, benchmarks) still fit;
+ *  a full MemoryEntry satisfies it structurally and gets the metadata order. */
 export interface EntryIdentity {
   content: string;
   id: string;
+  layer?: string;
+  tags?: readonly string[];
+  source?: string;
 }
 
 /**
- * content ascending (UTF-16 code-unit compare) -> id ascending.
+ * content asc -> layer rank asc -> distinct tag count desc -> sorted tags asc
+ * -> source asc -> id asc (all string compares are UTF-16 code-unit order).
  *
  * `content` is the cross-ingest-stable key: identical text ingested into two
  * independently-created stores (different directory name, different insert
- * order of everything else on disk) sorts identically. `id`
- * (`crypto.randomUUID()`) is per-instance only — two stores ingesting the
- * same content never produce the same id, so it is a last-resort tiebreak
- * for genuine duplicate-content rows within one comparison, not a
- * cross-ingest-stable key on its own.
+ * order of everything else on disk) sorts identically. The metadata keys make
+ * byte-identical twins order by what they carry instead of by `id`
+ * (`crypto.randomUUID()`), which is per-instance random: before v1.38.1 the
+ * dedupe survivor of two twins that differed only in tags or source was
+ * whichever id sorted first, and a semantic/episodic pair always kept the
+ * episodic copy because `mem_` sorts before `sem_`. `id` stays the terminal
+ * key so the order is total within one store.
  *
- * Plain `<`/`>` (UTF-16 code-unit order), NOT `localeCompare`:
- * `localeCompare` is locale- and ICU-version-dependent (a determinism leak
- * in its own right) and is needlessly slow for a tiebreak that only needs a
- * total order, not a linguistically "correct" one. Full-content compare is O(len) worst case;
- * fine because ties are rare post-T1 (path-tag embedding fix) — no hashing
- * needed.
+ * Layer rank puts semantic first: semantic rows are consolidation output, so
+ * keeping that copy preserves the promotion instead of demoting the memory.
+ * Unknown or missing layers rank last and then compare as raw strings.
+ * Tags prefer the copy with more distinct labels (fewer labels are lost on
+ * dedupe); source is an arbitrary but stable key.
+ *
+ * Plain `<`/`>`, NOT `localeCompare`: `localeCompare` is locale- and
+ * ICU-version-dependent (a determinism leak in its own right) and needlessly
+ * slow for a tiebreak that only needs a total order. The metadata keys are
+ * only computed on a content tie, which is rare post-T1 (path-tag embedding
+ * fix), so the per-compare Set/sort cost never lands on the hot path.
  */
 export function compareEntryIdentity(a: EntryIdentity, b: EntryIdentity): number {
-  if (a.content < b.content) return -1;
-  if (a.content > b.content) return 1;
-  if (a.id < b.id) return -1;
-  if (a.id > b.id) return 1;
+  return (
+    compareStrings(a.content, b.content) ||
+    layerRank(a.layer) - layerRank(b.layer) ||
+    compareStrings(a.layer ?? '', b.layer ?? '') ||
+    compareTags(a.tags, b.tags) ||
+    compareStrings(a.source ?? '', b.source ?? '') ||
+    compareStrings(a.id, b.id)
+  );
+}
+
+const LAYER_RANK: ReadonlyMap<string, number> = new Map([
+  ['semantic', 0],
+  ['episodic', 1],
+  ['trace', 2],
+  ['buffer', 3],
+]);
+
+function layerRank(layer: string | undefined): number {
+  return LAYER_RANK.get(layer ?? '') ?? LAYER_RANK.size;
+}
+
+function compareStrings(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function compareTags(a: readonly string[] | undefined, b: readonly string[] | undefined): number {
+  const ua = [...new Set(a ?? [])].sort();
+  const ub = [...new Set(b ?? [])].sort();
+  if (ua.length !== ub.length) return ub.length - ua.length;
+  // element-wise, not a joined string: a separator inside a tag would collide
+  for (let i = 0; i < ua.length; i++) {
+    const c = compareStrings(ua[i], ub[i]);
+    if (c !== 0) return c;
+  }
   return 0;
 }
 

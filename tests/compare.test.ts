@@ -43,6 +43,59 @@ describe('compareEntryIdentity', () => {
     expect(compareEntryIdentity(a, b)).toBeLessThan(0); // a (Bravo) sorts first
     expect('Bravo'.localeCompare('alpha')).toBeGreaterThan(0); // localeCompare disagrees
   });
+
+  it('ranks layer semantic -> episodic -> trace -> buffer on a content tie, unknown layers last', () => {
+    const mk = (layer: string | undefined, id: string) => ({ content: 'same', id, layer });
+    const shuffled = [mk('buffer', '1'), mk('weird', '2'), mk('episodic', '3'), mk(undefined, '4'), mk('semantic', '5'), mk('trace', '6')];
+    const sorted = [...shuffled].sort(compareEntryIdentity);
+    expect(sorted.map((e) => e.layer)).toEqual(['semantic', 'episodic', 'trace', 'buffer', undefined, 'weird']);
+  });
+
+  it('prefers more distinct tags, then the sorted tag list, before falling to id', () => {
+    const richer = { content: 'same', id: 'z', tags: ['x', 'y'] };
+    const poorer = { content: 'same', id: 'a', tags: ['x'] };
+    expect(compareEntryIdentity(richer, poorer)).toBeLessThan(0);
+
+    // duplicate tags do not count twice: ['a', 'a'] ties ['b'] on count, then 'a' < 'b'
+    const dupA = { content: 'same', id: 'z', tags: ['a', 'a'] };
+    const oneB = { content: 'same', id: 'a', tags: ['b'] };
+    expect(compareEntryIdentity(dupA, oneB)).toBeLessThan(0);
+
+    // tag order inside the array is irrelevant: equal sets fall through to id
+    const ab = { content: 'same', id: 'b', tags: ['a', 'b'] };
+    const ba = { content: 'same', id: 'a', tags: ['b', 'a'] };
+    expect(compareEntryIdentity(ab, ba)).toBeGreaterThan(0);
+
+    // tags are compared element-wise, so a NUL inside a tag cannot make two
+    // different tag sets collide and fall through to the random id
+    const nulInSecond = { content: 'same', id: 'z', tags: ['a', 'b\0c'] };
+    const nulInFirst = { content: 'same', id: 'a', tags: ['a\0b', 'c'] };
+    expect(compareEntryIdentity(nulInSecond, nulInFirst)).toBeLessThan(0);
+    expect(compareEntryIdentity(nulInFirst, nulInSecond)).toBeGreaterThan(0);
+  });
+
+  it('orders by source ascending after layer and tags tie', () => {
+    const a = { content: 'same', id: 'z', layer: 'episodic', tags: ['t'], source: 'src-a' };
+    const b = { content: 'same', id: 'a', layer: 'episodic', tags: ['t'], source: 'src-b' };
+    expect(compareEntryIdentity(a, b)).toBeLessThan(0);
+    expect(compareEntryIdentity(b, a)).toBeGreaterThan(0);
+  });
+
+  it('is a total order: three different starting orders sort to one sequence', () => {
+    const entries = [
+      { content: 'same', id: 'i1', layer: 'episodic', tags: ['a'], source: 's' },
+      { content: 'same', id: 'i2', layer: 'semantic', tags: [], source: 's' },
+      { content: 'same', id: 'i3', layer: 'episodic', tags: ['a', 'b'], source: 's' },
+      { content: 'same', id: 'i4', layer: 'episodic', tags: ['a'], source: 'r' },
+      { content: 'other', id: 'i5' },
+      { content: 'same', id: 'i0', layer: 'episodic', tags: ['a'], source: 's' },
+    ];
+    const orders = [entries, [...entries].reverse(), [entries[3], entries[0], entries[5], entries[1], entries[4], entries[2]]];
+    const results = orders.map((o) => [...o].sort(compareEntryIdentity).map((e) => e.id));
+    expect(results[1]).toEqual(results[0]);
+    expect(results[2]).toEqual(results[0]);
+    expect(results[0]).toEqual(['i5', 'i2', 'i3', 'i4', 'i0', 'i1']);
+  });
 });
 
 describe('compareScoredResults', () => {
