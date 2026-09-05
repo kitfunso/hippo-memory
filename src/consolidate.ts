@@ -933,7 +933,7 @@ export async function consolidate(
 function mergeContents(entries: MemoryEntry[]): string {
   // Simple merge: take the longest entry as the base, prepend a summary note.
   // Equal-length merge bases previously fell to cluster-assembly order;
-  // compareEntryIdentity is a deterministic tie key (content asc -> id asc),
+  // compareEntryIdentity is a deterministic tie key (content asc -> metadata -> id asc),
   // a no-op when lengths differ (docs/plans/2026-07-16-dedupe-survivor-determinism.md T2).
   const sorted = [...entries].sort((a, b) => (b.content.length - a.content.length) || compareEntryIdentity(a, b));
   const base = sorted[0].content;

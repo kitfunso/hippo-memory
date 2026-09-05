@@ -244,7 +244,7 @@ export function rankNonPinnedByTenant(
   const result = new Map<string, MvRankInfo>();
   for (const [tenantId, group] of byTenant) {
     const scores = scoreEntries(group, now, weights);
-    // score DESC -> compareEntryIdentity (content asc -> id asc), the shared
+    // score DESC -> compareEntryIdentity (content asc -> metadata -> id asc), the shared
     // deterministic tie-break used by every score-primary sort site in this
     // codebase (src/compare.ts). F2: `-Infinity - -Infinity` is NaN, not 0 —
     // two non-finite-feature entries tied at -Infinity would otherwise fall

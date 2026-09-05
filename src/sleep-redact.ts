@@ -3,8 +3,9 @@
  *
  * `api.sleep` returns host-wide counters (deduped.crossDups, which counts
  * cross-LAYER pairs, audit counters, ambient totals); they describe the
- * host's full memory state, not any one tenant. Today the route is loopback-only + admin-gated since v1.12.0
- * sub-1, so all callers see the full picture honestly.
+ * host's full memory state, not any one tenant. Today the route is
+ * loopback-only + admin-gated since v1.12.0 sub-1, so all callers see the
+ * full picture honestly.
  *
  * Once `HIPPO_BIND_ALL` ships (per D3 lock-step sequencing), non-loopback
  * admin Bearer callers would see another tenant's accounting data in the
