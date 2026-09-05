@@ -53,7 +53,7 @@ export function clearProjectIdentityCache(): void {
  * Canonicalize a path via realpath, falling back to path.resolve when the
  * path does not exist or realpath fails (mirrors importers.ts).
  */
-function realpathOrResolve(p: string): string {
+export function realpathOrResolve(p: string): string {
   try {
     return fs.realpathSync.native(p);
   } catch {
@@ -158,13 +158,8 @@ function walkProjectMarkers(start: string, home: string, stopDirs: readonly stri
   return { hippoRoot, gitRoot, reachedHome };
 }
 
-/**
- * Nearest ancestor store (`<dir>/.hippo`) from cwd upward, or null when none exists below the bounds.
- * Home and the temp root end the walk unchecked: neither is ever a project, and on Windows the temp root
- * sits inside home, so a sandbox whose HOME points elsewhere must still stop before the real ~/.hippo.
- * Start and bounds are all realpath'd so they compare in one form (macOS spells the temp root through
- * the /var symlink while cwd is physical); a symlink-free cwd therefore keeps the caller's spelling.
- */
+/** Nearest ancestor `.hippo` below home and the temp root (never projects; on Windows the temp root sits inside home).
+ *  Everything is realpath'd so a symlinked temp root or cwd still matches its bound. Design notes: docs/plans/2026-09-05-*.md */
 export function findHippoStoreDir(cwd?: string, opts?: ResolveProjectIdentityOpts): string | null {
   const home = realpathOrResolve(opts?.homeDir ?? os.homedir());
   const stops = [realpathOrResolve(os.tmpdir())];

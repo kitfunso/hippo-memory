@@ -72,6 +72,12 @@ Episode 01M1S8SZH6KZA9FPC9KY92XX5Y. TODOS.md:23. Batch 01M1S1M74R8RW419AK3W17FB7
 - `npx tsc --noEmit`, `npm run lint`.
 - Mutation: revert `getHippoRoot` to the strict join; the end-to-end CLI test and the nested-subdir unit test must fail. Revert `findHippoRoot` to the old unbounded loop; the HIPPO_HOME-wins test must fail. Drop the temp-root stop; the temp-root unit test must fail (and on a Windows dev box the full suite's pre-compact-e2e X3 case fails again).
 
+## Found during review
+
+- Reviewer (history): the found branch of `getHippoRoot` returned a realpath'd store while the no-store fallback kept the raw cwd, so a project reached through a symlink or junction registered twice in the workspace registry (first `hippo init` raw, re-run realpath'd). The fallback now realpath's cwd too; a junction test pins one spelling before and after init.
+- Codex: the test sandbox root is realpath'd (macOS spells `os.tmpdir()` through `/var`) and the "no `.hippo` above the temp root" preflight is gone, since the walk itself stops at the temp root.
+- Reviewer (standards): the `findHippoStoreDir` JSDoc was trimmed to two lines; the rationale lives here.
+
 ## Found during verify
 
 The first full-suite run failed `tests/pre-compact-e2e.test.ts` X3 (`compact-resume` printed a snapshot where none should exist). Cause: that test re-points HOME/USERPROFILE at a sandbox, so the child's home bound moved, and the walk from `%TEMP%/hippo-precompact-uninit-project-*` climbed through the real `C:/Users/<user>` and found the developer's real `~/.hippo`; `pre-compact` wrote two `sess-uninit` snapshot rows into that live store (deleted afterwards). Fix at root: the store walk also ends at `os.tmpdir()`, unchecked, and compares start and bounds in the same realpath'd form (code review round 2: macOS spells `os.tmpdir()` through the `/var` symlink while `process.cwd()` is physical, so a plain-resolved comparison would leave the stop dead there). The home bound alone is env-derived and cannot protect a sandbox on Windows, where the temp root sits inside home. CI (Linux, `/tmp`) never saw this because `/tmp` has no `.hippo` ancestor.

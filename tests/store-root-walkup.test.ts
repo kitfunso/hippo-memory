@@ -1,6 +1,6 @@
-// Ancestor walk-up store discovery (episode 01M1S8SZH6KZA9FPC9KY92XX5Y). Real filesystem
-// in a mkdtemp sandbox; the CLI cases use the real home bound, hence the beforeAll guard.
-import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
+// Ancestor walk-up store discovery (episode 01M1S8SZH6KZA9FPC9KY92XX5Y). Real filesystem in a
+// mkdtemp sandbox; the walk stops at the temp root, so stores above it cannot leak into these cases.
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -26,20 +26,8 @@ function samePath(a: string, b: string): boolean {
   return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
 }
 
-beforeAll(() => {
-  const hits: string[] = [];
-  let dir = os.tmpdir();
-  while (!samePath(dir, os.homedir())) {
-    if (fs.existsSync(path.join(dir, '.hippo'))) hits.push(dir);
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  expect(hits, 'an ancestor of os.tmpdir() holds .hippo; sandbox stores would resolve upward').toEqual([]);
-});
-
 beforeEach(() => {
-  tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-walkup-'));
+  tmpRoot = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-walkup-')));
   home = mkdirs('home');
   fs.mkdirSync(path.join(home, '.hippo'));
 });
@@ -80,6 +68,16 @@ describe('getHippoRoot ancestor walk', () => {
   it('returns <cwd>/.hippo when no marker exists anywhere up to the bound', () => {
     const lone = mkdirs('elsewhere', 'a', 'b');
     expect(getHippoRoot(lone, { homeDir: home, stopDir: tmpRoot })).toBe(path.join(lone, '.hippo'));
+  });
+
+  it('spells a symlinked project the same way before and after init, so the workspace registry sees one entry', () => {
+    const real = mkdirs('real-proj');
+    const link = path.join(tmpRoot, 'link-proj');
+    fs.symlinkSync(real, link, process.platform === 'win32' ? 'junction' : 'dir');
+    const before = getHippoRoot(link, { homeDir: home, stopDir: tmpRoot });
+    fs.mkdirSync(path.join(real, '.hippo'));
+    expect(getHippoRoot(link, { homeDir: home, stopDir: tmpRoot })).toBe(before);
+    expect(before).toBe(path.join(real, '.hippo'));
   });
 
   it('ends the walk at the temp root unchecked, so a sandbox under it never resolves upward', () => {

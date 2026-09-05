@@ -23,7 +23,7 @@ import { SessionHandoff, SessionHandoffRow, rowToSessionHandoff } from './handof
 import { tokenize } from './search.js';
 import { appendAuditEvent, type AuditOp } from './audit.js';
 import { resolveTenantId } from './tenant.js';
-import { deriveOriginProject, originFromSource, findHippoStoreDir, type ResolveProjectIdentityOpts } from './project-identity.js';
+import { deriveOriginProject, originFromSource, findHippoStoreDir, realpathOrResolve, type ResolveProjectIdentityOpts } from './project-identity.js';
 import {
   checkRejectionGuard,
   RejectedValueError,
@@ -296,7 +296,7 @@ function layerDir(root: string, layer: Layer): string {
 
 /** Nearest ancestor store like git; the strict join is the fallback so `hippo init` still creates `<cwd>/.hippo`. */
 export function getHippoRoot(cwd: string = process.cwd(), opts?: ResolveProjectIdentityOpts): string {
-  return findHippoStoreDir(cwd, opts) ?? path.join(cwd, '.hippo');
+  return findHippoStoreDir(cwd, opts) ?? path.join(realpathOrResolve(cwd), '.hippo');
 }
 
 export function isInitialized(hippoRoot: string): boolean {
