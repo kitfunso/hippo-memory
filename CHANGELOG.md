@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.38.2 - unreleased
+
+### Added
+- **Micro-eval negative-retrieval fixture (ROADMAP AT5).** `benchmarks/micro/fixtures/negative_retrieval.json` asserts that superseded, forgotten and rejected rows do not come back from `hippo recall`, each against a live sibling row that shares the query's vocabulary, with an `--include-superseded` positive control proving the superseded row is still stored and only the default filter hides it. The runner gains a `reject` action (`hippo reject <id> --reason`) whose `reattempt` flag re-remembers the same text and requires the AT1 rejection guard to refuse it. No `src/` change.
+
 ## 1.38.1 - 2026-09-05
 
 ### Fixed

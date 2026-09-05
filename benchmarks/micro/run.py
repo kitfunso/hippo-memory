@@ -81,6 +81,17 @@ Action types:
                LOCAL store only — a prior `promote` of the same remember
                (if any) is unaffected, since it lives in the global store.
                Same uncaptured-id RuntimeError as `promote`.
+  - reject:    runs `hippo reject <id> --reason <reason>` for
+               remembers[remember_index] from its tracked cwd (AT1 tombstone:
+               the row is removed and its content digest is refused on later
+               writes). `reason` is required. With `"reattempt": true` the
+               runner then re-runs `hippo remember <original text>` from the
+               same cwd and REQUIRES a non-zero exit whose stderr mentions the
+               rejected value; a successful re-remember is a RuntimeError,
+               because the fixture's later must-not assertion would otherwise
+               be testing a row that was simply never re-stored.
+               Example: {"type": "reject", "remember_index": 3,
+                         "reason": "wrong retry policy", "reattempt": true}
 
   Ordering constraint (actions run in declared order): a `forget` of a
   remember hard-deletes its local id, so any `promote` of that same
@@ -285,6 +296,7 @@ def score_fixture(fixture: dict) -> FixtureResult:
         run_hippo(["init", "--no-learn", "--no-hooks", "--no-schedule"], home).check_returncode()
         remember_ids: list[str | None] = []
         remember_cwds: list[Path] = []
+        remember_texts: list[str] = []
         for item in fixture["remembers"]:
             # Item may be a plain string OR an object {"text": "...", "tags": ["foo", "bar"]}
             # for fixtures that need per-memory metadata (e.g. dlPFC goal conditioning).
@@ -309,6 +321,7 @@ def score_fixture(fixture: dict) -> FixtureResult:
             cp.check_returncode()
             remember_ids.append(_extract_remembered_id(cp.stdout))
             remember_cwds.append(item_cwd)
+            remember_texts.append(text)
 
         # Global IDs reminted by a `promote` action, parallel to remember_ids.
         # A recall from a cwd other than the remember's hits the PROMOTED
@@ -452,6 +465,28 @@ def score_fixture(fixture: dict) -> FixtureResult:
                 run_hippo(
                     ["forget", target_id], home, cwd=remember_cwds[idx]
                 ).check_returncode()
+            elif atype == "reject":
+                idx = int(action["remember_index"])
+                target_id = remember_ids[idx]
+                if target_id is None:
+                    raise RuntimeError(
+                        f"fixture {name!r}: cannot reject remember[{idx}]: id not captured"
+                    )
+                reason = action.get("reason")
+                if not reason:
+                    raise ValueError(f"fixture {name!r}: reject action needs a non-empty 'reason'")
+                run_hippo(
+                    ["reject", target_id, "--reason", reason], home, cwd=remember_cwds[idx]
+                ).check_returncode()
+                if action.get("reattempt", False):
+                    # The tombstone must refuse the same text, or the later must-not
+                    # assertion is testing an absence the fixture never re-created.
+                    cp = run_hippo(["remember", remember_texts[idx]], home, cwd=remember_cwds[idx])
+                    if cp.returncode == 0 or "rejected value" not in cp.stderr:
+                        raise RuntimeError(
+                            f"fixture {name!r}: re-remember of rejected remember[{idx}] was not "
+                            f"refused (rc={cp.returncode}); stdout={cp.stdout!r} stderr={cp.stderr!r}"
+                        )
             else:
                 raise ValueError(f"fixture {name!r}: unknown action type {atype!r}")
 
