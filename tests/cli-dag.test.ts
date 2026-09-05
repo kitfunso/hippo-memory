@@ -4,12 +4,15 @@ import * as os from 'os';
 import * as path from 'path';
 import { execSync } from 'child_process';
 
+// The worktree's own CLI, not a PATH-resolved global install (which may be an older release).
+const HIPPO = `node ${JSON.stringify(path.join(process.cwd(), 'bin', 'hippo.js'))}`;
+
 describe('hippo dag', () => {
   let hippoRoot: string;
 
   beforeEach(() => {
     hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-cli-dag-'));
-    execSync(`hippo init --no-hooks --no-schedule --no-learn`, {
+    execSync(`${HIPPO} init --no-hooks --no-schedule --no-learn`, {
       cwd: hippoRoot,
       env: { ...process.env, HIPPO_HOME: hippoRoot },
     });
@@ -20,7 +23,7 @@ describe('hippo dag', () => {
   });
 
   it('runs without error and shows dag stats', () => {
-    const result = execSync(`hippo dag --stats`, {
+    const result = execSync(`${HIPPO} dag --stats`, {
       cwd: hippoRoot,
       env: { ...process.env, HIPPO_HOME: hippoRoot },
       encoding: 'utf-8',

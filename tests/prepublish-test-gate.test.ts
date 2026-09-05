@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const REPO = process.cwd();
@@ -54,5 +54,14 @@ describe('prepublish test gate (scripts/check-tests-pass.mjs)', () => {
       expect(chain).toContain(step);
     }
     expect(chain.endsWith('&& node scripts/check-tests-pass.mjs')).toBe(true);
+  });
+});
+
+describe('tests run the worktree CLI, never a PATH-resolved hippo', () => {
+  test('no test spawns a bare `hippo` command', () => {
+    const offenders = readdirSync(path.join(REPO, 'tests'))
+      .filter((f) => /\.test\.(ts|mjs)$/.test(f))
+      .filter((f) => /(exec|spawn)\w*\(\s*[`'"]hippo\b/.test(readFileSync(path.join(REPO, 'tests', f), 'utf-8')));
+    expect(offenders).toEqual([]);
   });
 });
