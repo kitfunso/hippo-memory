@@ -131,3 +131,15 @@ recursively for any `.ts/.mjs/.js`. Red first: the contract test failed with the
 stripped from PATH; the adapter, budget, gate and cli-dag files pass (17 tests) after the change.
 `extensions/*` spawn `hippo` by name on purpose (they call the user's installed CLI) and are out
 of scope.
+
+## Review round 4 (codex P1 on the ba35764 delta)
+
+Codex: in a fresh checkout `dist/` is gitignored, so `bin/hippo.js` cannot load; `hippoExec` swallows
+that (by design, recall with no results exits non-zero) and `init` ignored the null, so
+`run.mjs --adapter hippo` exited 0 with a 100% trap-hit rate. Pre-existing swallow, but the change
+moved the trigger from "hippo not on PATH" to "repo not built" and left the README stale. Fix at the
+one place a missing CLI is distinguishable from a quiet success: `init()` throws when the first exec
+returns null, naming `npm run build`. `HIPPO_BENCH_CLI` overrides the CLI file (benchmark another
+build; also how the test points at a missing file). README requirement line updated. Red first:
+`tests/sl-adapter-cli-missing.test.ts` resolved instead of rejecting before the fix; 17 tests across
+the adapter, budget, gate and new file pass after it with the global npm dir stripped from PATH.

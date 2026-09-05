@@ -14,7 +14,7 @@
  * the session so cross-task state cannot leak. Both methods hard-fail (no swallow)
  * so the simulator's eval-strict mode can detect a broken mechanism.
  *
- * Requires: hippo CLI on PATH (npm link or global install).
+ * Requires: a built checkout (`npm run build`), or HIPPO_BENCH_CLI pointing at another CLI file.
  */
 
 import { execSync } from 'node:child_process';
@@ -25,7 +25,8 @@ import { tmpdir } from 'node:os';
 import { createAdapter } from './interface.mjs';
 
 // This repo's CLI, not a PATH-resolved global install (which may be an older release).
-const HIPPO_BIN = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'bin', 'hippo.js');
+const HIPPO_BIN =
+  process.env.HIPPO_BENCH_CLI || join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'bin', 'hippo.js');
 
 // POST-AUDIT P1-4 (v1.7.8): session id and counters were module-level `let`
 // in v1.7.5..v1.7.7 — two parallel adapter consumers (e.g. future --workers N)
@@ -95,7 +96,11 @@ export default createAdapter({
     this._sessionId = null;
     this._pushedCount = 0;
     this._completedCount = 0;
-    hippoExec(this._storeDir, 'init --no-schedule');
+    // hippoExec swallows failures on purpose (recall with no results exits non-zero); this first
+    // call is the one place a missing CLI can be told apart from a quiet success (codex round 3).
+    if (hippoExec(this._storeDir, 'init --no-schedule') === null) {
+      throw new Error(`hippo CLI failed to start at ${HIPPO_BIN}; run \`npm run build\` first or set HIPPO_BENCH_CLI`);
+    }
   },
 
   async store(content, tags) {

@@ -52,7 +52,7 @@ node benchmarks/sequential-learning/run.mjs --output my-results/
 
 Requirements:
 - Node.js 22.5+
-- For the hippo adapter: `hippo` CLI on PATH
+- For the hippo adapter: a built checkout (`npm run build`), so `bin/hippo.js` can load `dist/cli.js`; set `HIPPO_BENCH_CLI=<path>` to benchmark another CLI file
 
 No npm dependencies. Uses only Node.js built-in modules.
 
