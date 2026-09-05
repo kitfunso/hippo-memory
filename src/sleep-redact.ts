@@ -40,7 +40,7 @@ export interface RedactSleepCtx {
  * caller. Loopback OR `__host__` caller = pass-through unchanged.
  *
  * Redaction surface (the host-wide aggregate counters specifically):
- *   - deduped.crossDups (cross-layer pairs, semantic vs episodic, summed across tenants)
+ *   - deduped.crossDups (pairs whose kept and removed layers differ, summed across tenants)
  *   - deduped.semDups, .epiDups (aggregate dedup activity across tenants)
  *   - audit.errorsRemoved, .warningCount (aggregate audit-pipeline activity)
  *   - ambient.totalMemories, .avgStrength (aggregate corpus shape)

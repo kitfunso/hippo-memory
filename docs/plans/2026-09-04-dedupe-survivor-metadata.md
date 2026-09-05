@@ -65,7 +65,7 @@ order as "content ascending -> id ascending". It is the load-bearing doc for thi
 name the new keys and the semantic-first rationale, matching the dedupe.ts comments and the
 CHANGELOG bullet.
 
-Callers that pass `{content, id}` (physics tie keys, tests, benchmark) are unaffected: missing
+Callers that pass `{content, id}` (tests, benchmark) are unaffected: missing
 keys compare equal and fall through to id. Callers that pass a `MemoryEntry` get the new keys
 automatically because the type is structural. No signature change, no new export from index.ts.
 

@@ -16,7 +16,7 @@
 
 /** Minimal shape needed to break a tie deterministically across fresh
  *  ingests of the same content into different stores. The metadata keys are
- *  optional so `{ content, id }` callers (physics tie keys, tests) still fit;
+ *  optional so existing `{ content, id }` callers (tests, benchmarks) still fit;
  *  a full MemoryEntry satisfies it structurally and gets the metadata order. */
 export interface EntryIdentity {
   content: string;
