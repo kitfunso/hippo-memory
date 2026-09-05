@@ -28,7 +28,7 @@ import { loadConfig } from '../config.js';
 import { resolveConfidence } from '../memory.js';
 import { resolveTenantId } from '../tenant.js';
 import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, drillDown as apiDrillDown, assemble as apiAssemble, isPrivateScope, adminActor, buildSuppressionSummary, ambientSecretAdmit, type Context as ApiContext } from '../api.js';
-import { resolveProjectIdentity, classifyOriginProject } from '../project-identity.js';
+import { resolveProjectIdentity, classifyOriginProject, findHippoStoreDir, type ResolveProjectIdentityOpts } from '../project-identity.js';
 import { computePredictionBaserate } from '../predictions.js';
 import { appendAuditEvent } from '../audit.js';
 import { RejectedValueError } from '../rejection.js';
@@ -60,20 +60,13 @@ import { PACKAGE_VERSION } from '../version.js';
 
 // ── Find hippo root ──
 
-function findHippoRoot(): string | null {
-  // Walk up from cwd
-  let dir = process.cwd();
-  while (true) {
-    const candidate = path.join(dir, '.hippo');
-    if (fs.existsSync(candidate)) return candidate;
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
+/** Same bounded walk as the CLI (ends at home, so HIPPO_HOME wins over ~/.hippo); cwd/opts are the test seam. */
+export function findHippoRoot(cwd: string = process.cwd(), opts?: ResolveProjectIdentityOpts): string | null {
+  const local = findHippoStoreDir(cwd, opts);
+  if (local !== null) return local;
   // Global fallback (respects $HIPPO_HOME / $XDG_DATA_HOME)
   const global = getGlobalRoot();
-  if (fs.existsSync(global)) return global;
-  return null;
+  return fs.existsSync(global) ? global : null;
 }
 
 // ── MCP protocol types ──

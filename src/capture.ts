@@ -857,7 +857,7 @@ function cmdCaptureCore(
     initGlobal();
   } else {
     if (!isInitialized(hippoRoot)) {
-      console.error('No .hippo directory found. Run `hippo init` first.');
+      console.error(`No hippo store at ${hippoRoot} (searched ${process.cwd()} and its parents up to your home directory). Run \`hippo init\` first.`);
       process.exit(1);
     }
   }
