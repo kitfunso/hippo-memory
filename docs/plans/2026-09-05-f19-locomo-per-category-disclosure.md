@@ -66,8 +66,9 @@ Conditions that must travel with the table:
      `title`, `description`, `heroChips` and `jsonLd` stay LongMemEval-led: the headline numbers
      do not change.
 3. `website/scripts/check-readme-sync.mjs`: extend the drift guard so the `locomo` rows in
-   `benchmarks.astro` (category names and r5 strings) must appear in the README's `### LoCoMo`
-   subsection. A new parallel check block in the same best-effort text-extraction style as the
+   `benchmarks.astro` must each match one README `### LoCoMo` table line as a whole
+   (`| category | n | r5 |`), so a swapped or copied score fails, not only a missing one (codex
+   review round 1 P2). A new parallel check block in the same best-effort text-extraction style as the
    existing `cells:` check (second source file, second README section scope); fails the website
    build on drift. This is the repo's established pattern for site-vs-README numbers.
 4. `CHANGELOG.md`: new `## 1.38.3 - unreleased` heading with an `### Added` bullet (version bump

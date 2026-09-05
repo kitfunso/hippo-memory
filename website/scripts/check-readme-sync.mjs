@@ -54,18 +54,17 @@ if (warns.length) {
   console.warn('[readme-sync] WARN: receipt claim(s) not found verbatim in README (verify wording):', warns.join(' | '));
 }
 
-// LoCoMo rows on the benchmarks page must match the README's "### LoCoMo" subsection (same
-// best-effort extraction: category + r5 literals from `const locomo = [...]` in benchmarks.astro).
+// LoCoMo rows on the benchmarks page must match the README's "### LoCoMo" subsection row for
+// row (category, n and r5 on one table line), so a swapped or copied score cannot pass.
 const bench = await readFile(join(root, 'src', 'pages', 'benchmarks.astro'), 'utf8');
 const locoStart = readme.indexOf('### LoCoMo');
 const locoEnd = locoStart >= 0 ? readme.indexOf('\n### ', locoStart + 3) : -1;
-const locoNorm = normalize(locoStart >= 0 ? readme.slice(locoStart, locoEnd > 0 ? locoEnd : undefined) : '');
+const locoNorm = normalize(locoStart >= 0 ? readme.slice(locoStart, locoEnd > 0 ? locoEnd : undefined) : '').replace(/\*/g, '');
 const locoBlock = (bench.match(/const locomo = \[([\s\S]*?)\];/) || [])[1] || '';
-const locoRows = [...locoBlock.matchAll(/category:\s*'([^']*)'.*?r5:\s*'([^']*)'/g)];
+const locoRows = [...locoBlock.matchAll(/\{\s*category:\s*'([^']*)',\s*n:\s*'([^']*)',\s*r5:\s*'([^']*)'\s*\}/g)];
 if (!locoRows.length) missing.push('locomo: no rows found in benchmarks.astro');
-for (const [, category, r5] of locoRows) {
-  if (!locoNorm.includes(`| ${category} |`) && !locoNorm.includes(`| **${category}** |`)) missing.push(`locomo category: "${category}"`);
-  if (!locoNorm.includes(r5)) missing.push(`locomo r5: "${category}" ${r5}`);
+for (const [, category, n, r5] of locoRows) {
+  if (!locoNorm.includes(`| ${category} | ${n} | ${r5} |`)) missing.push(`locomo row: | ${category} | ${n} | ${r5} |`);
 }
 
 if (missing.length) {
