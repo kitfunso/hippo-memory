@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.38.2 - unreleased
+
+### Tests
+- `tests/server-bearer-lockdown.test.ts` now derives its route table from `src/server.ts` source instead of a hand-copied list, so a new `/v1/*` route missing `buildContextWithAuth`/`requireAuth` fails CI instead of shipping unauthed.
+
 ## 1.38.1 - 2026-09-05
 
 ### Fixed
