@@ -72,6 +72,13 @@ function spawnAdapter(hippoPort: number): Promise<AdapterHandle> {
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+    // No handle reaches the caller on a failed start, so the helper must reap its own child.
+    const fail = (err: unknown): void => {
+      clearTimeout(startupTimer);
+      child.kill();
+      reject(err);
+    };
+    const startupTimer = setTimeout(() => fail(new Error('adapter never printed its listening line')), 20_000);
     child.stdout?.on('data', (chunk: Buffer) => {
       stdoutBuf += chunk.toString('utf8');
       const match = /listening on :(\d+)/.exec(stdoutBuf);
@@ -79,15 +86,18 @@ function spawnAdapter(hippoPort: number): Promise<AdapterHandle> {
         readyStarted = true;
         const baseUrl = `http://127.0.0.1:${Number(match[1])}`;
         waitForAdapterReady(baseUrl)
-          .then(() => resolve({ child, baseUrl, stderrChunks }))
-          .catch(reject);
+          .then(() => {
+            clearTimeout(startupTimer);
+            resolve({ child, baseUrl, stderrChunks });
+          })
+          .catch(fail);
       }
     });
     child.stderr?.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
-    child.once('error', reject);
+    child.once('error', fail);
     child.once('exit', (code) => {
       if (code !== null && code !== 0) {
-        reject(new Error(`adapter process exited with code ${code}: ${Buffer.concat(stderrChunks).toString('utf8')}`));
+        fail(new Error(`adapter process exited with code ${code}: ${Buffer.concat(stderrChunks).toString('utf8')}`));
       }
     });
   });
