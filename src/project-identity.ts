@@ -53,7 +53,7 @@ export function clearProjectIdentityCache(): void {
  * Canonicalize a path via realpath, falling back to path.resolve when the
  * path does not exist or realpath fails (mirrors importers.ts).
  */
-function realpathOrResolve(p: string): string {
+export function realpathOrResolve(p: string): string {
   try {
     return fs.realpathSync.native(p);
   } catch {
@@ -108,27 +108,7 @@ export function resolveProjectIdentity(
   const stopDir = opts?.stopDir ? realpathOrResolve(opts.stopDir) : null;
   const start = realpathOrResolve(startInput);
 
-  let hippoRoot: string | null = null;
-  let gitRoot: string | null = null;
-  let reachedHome = false;
-
-  let dir = start;
-  for (let depth = 0; depth < MAX_WALK_DEPTH; depth++) {
-    if (samePath(dir, home)) {
-      reachedHome = true;
-      break;
-    }
-    if (stopDir !== null && samePath(dir, stopDir)) break;
-    if (hippoRoot === null && isDirectoryAt(path.join(dir, '.hippo'))) {
-      hippoRoot = dir;
-    }
-    if (gitRoot === null && fs.existsSync(path.join(dir, '.git'))) {
-      gitRoot = dir;
-    }
-    const parent = path.dirname(dir);
-    if (samePath(parent, dir)) break; // filesystem root
-    dir = parent;
-  }
+  const { hippoRoot, gitRoot, reachedHome } = walkProjectMarkers(start, home, stopDir === null ? [] : [stopDir]);
 
   let identity: ProjectIdentity;
   const root = hippoRoot ?? gitRoot;
@@ -144,6 +124,49 @@ export function resolveProjectIdentity(
 
   if (cacheable) identityCache.set(startInput, identity);
   return identity;
+}
+
+interface MarkerWalk {
+  hippoRoot: string | null;
+  gitRoot: string | null;
+  reachedHome: boolean;
+}
+
+/** Climb from start toward the root; home (never a project) and every stop dir end the walk unchecked. */
+function walkProjectMarkers(start: string, home: string, stopDirs: readonly string[]): MarkerWalk {
+  let hippoRoot: string | null = null;
+  let gitRoot: string | null = null;
+  let reachedHome = false;
+
+  let dir = start;
+  for (let depth = 0; depth < MAX_WALK_DEPTH; depth++) {
+    if (samePath(dir, home)) {
+      reachedHome = true;
+      break;
+    }
+    if (stopDirs.some((stop) => samePath(dir, stop))) break;
+    if (hippoRoot === null && isDirectoryAt(path.join(dir, '.hippo'))) {
+      hippoRoot = dir;
+    }
+    if (gitRoot === null && fs.existsSync(path.join(dir, '.git'))) {
+      gitRoot = dir;
+    }
+    const parent = path.dirname(dir);
+    if (samePath(parent, dir)) break; // filesystem root
+    dir = parent;
+  }
+  return { hippoRoot, gitRoot, reachedHome };
+}
+
+/** Nearest ancestor `.hippo` below home and the temp root (never projects; on Windows the temp root sits inside home).
+ *  Everything is realpath'd so a symlinked temp root or cwd still matches its bound. Design notes: docs/plans/2026-09-05-*.md */
+export function findHippoStoreDir(cwd?: string, opts?: ResolveProjectIdentityOpts): string | null {
+  const home = realpathOrResolve(opts?.homeDir ?? os.homedir());
+  const stops = [realpathOrResolve(os.tmpdir())];
+  if (opts?.stopDir) stops.push(realpathOrResolve(opts.stopDir));
+  const start = realpathOrResolve(cwd ?? process.cwd());
+  const { hippoRoot } = walkProjectMarkers(start, home, stops);
+  return hippoRoot === null ? null : path.join(hippoRoot, '.hippo');
 }
 
 /**
