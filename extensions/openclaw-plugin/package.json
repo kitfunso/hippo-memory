@@ -1,6 +1,6 @@
 {
   "name": "hippo-memory",
-  "version": "1.38.3",
+  "version": "1.38.4",
   "type": "module",
   "description": "Hippo Memory plugin for OpenClaw - biologically-inspired agent memory",
   "main": "index.ts",

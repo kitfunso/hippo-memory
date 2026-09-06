@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.38.4 - 2026-09-06
+
+### Fixed
+- **`database is locked` on ordinary opens had two independent causes, and the one named in the 1.38.3 follow-up was not either of the ones we had guessed.** `openHippoDb` ran `PRAGMA journal_mode = WAL` before `PRAGMA busy_timeout = 5000` (`src/db.ts:2366-2367`). `journal_mode` is the first lock-taking statement of every open, so it ran at SQLite's default busy timeout of 0, got no busy handler, and threw instantly instead of waiting. That is the instant `database is locked` "despite `busy_timeout`" from the 1.38.3 Tests note. Separately, `runMigrations` ended with 7 no-op `INSERT OR IGNORE` statements in `ensureMetaDefaults` and a same-value meta upsert in `ensureOptionalFts`, so every open took a RESERVED write lock even on an already-current store and any concurrent writer could make an unrelated read command fail to open. Both are now read-first: one multi-key `SELECT` that returns before any write, and a single-key compare before the fts5 flag write. The `CREATE ... IF NOT EXISTS` self-heal and `backfillFtsIndex` are untouched, so a dropped `memories_fts` still rebuilds and backfills.
+
+  The two fixes close different paths and neither closes the other's. Measured with a 20 Hz open/close poller against sequential writers, 4 reps per arm: with the churn poller and the per-open write, 4 of 4 reps crashed; with the write removed, 3 of 4 still crashed; with no churn, 0 of 4; with `busy_timeout` moved first and the write kept, 0 of 4. So removing the per-open write does not fix the churn path, and the reorder does not fix the held-lock path. The reorder trades no stall for the crash: max open 30.7 ms over 2696 opens, zero opens above 50 ms, writer p95 8 ms. The write-free open is justified on its own path, where a concurrent `BEGIN IMMEDIATE` made the old open burn the full 5000 ms and throw (3 of 3 at 5500.6, 5512.4 and 5493.0 ms).
+- **`hippo session-end` could exit before its sleep write landed.** `cmdSleep` is async, but `cmdSessionEndWorker` and its codex twin `cmdCodexSessionEndWorker` were typed `void` and called it without `await`, so a rejection escaped the `try/catch` and the process could exit mid-write. Both workers and `cmdSessionEnd` are now async, `cmdCodexRun`'s exit handler awaits its inline fallback before the `process.kill`/`process.exit` calls that used to cut it off, and the three dispatch sites await. Closes both TODOS.md follow-ups named in the 1.38.3 Tests note.
+
+### Tests
+- Three new real-DB files, each confirmed red before its fix and green after. `tests/db-open-pragma-order.test.ts` runs two real writer processes against the store while calling `openHippoDb` in a loop and asserts it never throws (red 3/3, green 3/3). `tests/db-open-write-free.test.ts` holds `BEGIN IMMEDIATE` on a second connection and bounds the open at 1000 ms (was a throw at 5558 ms, now returns in 152 ms), and pins that dropping `memories_fts` still rebuilds and backfills on reopen. `tests/session-end-worker-await-sleep.test.ts` forces a sleep failure and asserts the worker still finishes in order (was status 1, now 0).
+
 ## 1.38.3 - 2026-09-06
 
 ### Added
