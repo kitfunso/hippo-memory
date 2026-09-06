@@ -2420,13 +2420,9 @@ export async function getContext(
   localEntries = localEntries.filter(ambientAdmit);
   globalEntries = globalEntries.filter(ambientAdmit);
 
-  // Reuse `config` (zero extra I/O) for the landscape summary getContext
-  // already has the admitted entries for, so cli.ts stops re-deriving them.
-  const ambientEnabled = config.ambient.enabled && !pinnedOnly;
-  const ambientState =
-    ambientEnabled && localEntries.length + globalEntries.length > 0
-      ? computeAmbientState([...localEntries, ...globalEntries])
-      : undefined;
+  // Computed below, after markRetrieved runs, so avgStrength reflects the
+  // post-retrieval strengths rather than a stale pre-mutation snapshot.
+  let ambientState: AmbientState | undefined;
 
   // DF1 T2: bounded read — an orphaned snapshot (no later pre-compact
   // superseded it, no session-end closed it) must age out of this ambient
@@ -2820,6 +2816,17 @@ export async function getContext(
       ...s,
       entry: updatedEntries.find((u) => u.id === s.entry.id) ?? s.entry,
     }));
+
+    // Overlay by id (no re-read) so avgStrength reflects post-retrieval strength.
+    if (config.ambient.enabled) {
+      const updatedById = new Map(updatedEntries.map((u) => [u.id, u]));
+      const overlaid = [...localEntries, ...globalEntries].map(
+        (e) => updatedById.get(e.id) ?? e,
+      );
+      if (overlaid.length > 0) {
+        ambientState = computeAmbientState(overlaid);
+      }
+    }
   }
 
   return {
