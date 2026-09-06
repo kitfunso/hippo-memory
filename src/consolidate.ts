@@ -8,7 +8,7 @@
  */
 
 import { evalNow, isRecallBoostAblated } from './ablation.js';
-import { MemoryEntry, Layer, calculateStrength, createMemory, resolveConfidence, type DecayOptions } from './memory.js';
+import { MemoryEntry, Layer, calculateStrength, createMemory, type DecayOptions } from './memory.js';
 import {
   loadAllEntries,
   writeEntry,
@@ -240,17 +240,12 @@ export async function consolidate(
       const strength = strengthById.get(entry.id)!;
       if (!entry.pinned && strength < DECAY_THRESHOLD) {
         if (rescuedIds.has(entry.id)) {
-          // Rescued (D1): standard survivor bookkeeping refresh — same
-          // stored-strength + effective-confidence update every other
-          // survivor gets (round-2 code-review P2-1). D1's "kept as-is"
-          // protects against half-life edits and rank-derived writes, not
-          // against the ordinary decay-pass refresh every survivor
-          // receives; leaving a rescued entry's stale strength (e.g. 1.0)
-          // on disk would mislead downstream replay/admission reads.
-          const effectiveConfidence = resolveConfidence(entry, now);
-          const updated = { ...entry, strength, confidence: effectiveConfidence };
+          // Rescued (D1): standard survivor stored-strength refresh (P2-1).
+          // Confidence is left alone here: it is an epistemic tier, not a
+          // cached computation, so resolveConfidence derives it on read.
+          const updated = { ...entry, strength };
           survivors.push(updated);
-          if (!dryRun && (strength !== entry.strength || effectiveConfidence !== entry.confidence)) {
+          if (!dryRun && strength !== entry.strength) {
             pendingWrites.push(updated);
           }
           result.decayed++;
@@ -268,10 +263,9 @@ export async function consolidate(
           }
         }
       } else {
-        const effectiveConfidence = resolveConfidence(entry, now);
-        const updated = { ...entry, strength, confidence: effectiveConfidence };
+        const updated = { ...entry, strength };
         survivors.push(updated);
-        if (!dryRun && (strength !== entry.strength || effectiveConfidence !== entry.confidence)) {
+        if (!dryRun && strength !== entry.strength) {
           pendingWrites.push(updated);
         }
         result.decayed++;
@@ -288,15 +282,10 @@ export async function consolidate(
           pendingDeletes.push(entry.id);
         }
       } else {
-        // Update the stored strength value and persist stale confidence when applicable.
-        const effectiveConfidence = resolveConfidence(entry, now);
-        const updated = {
-          ...entry,
-          strength,
-          confidence: effectiveConfidence,
-        };
+        // Only strength is a cached computation; confidence stays as stored.
+        const updated = { ...entry, strength };
         survivors.push(updated);
-        if (!dryRun && (strength !== entry.strength || effectiveConfidence !== entry.confidence)) {
+        if (!dryRun && strength !== entry.strength) {
           pendingWrites.push(updated);
         }
         result.decayed++;

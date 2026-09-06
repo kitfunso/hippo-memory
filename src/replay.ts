@@ -24,7 +24,7 @@
  */
 
 import { isOutcomeSlowAblated } from './ablation.js';
-import type { MemoryEntry, EmotionalValence } from './memory.js';
+import { resolveConfidence, type MemoryEntry, type EmotionalValence } from './memory.js';
 
 const VALENCE_WEIGHT = {
   neutral: 1.0,
@@ -99,9 +99,10 @@ export function sampleForReplay(
   if (count <= 0 || survivors.length === 0) return [];
   const rng = mulberry32(seed);
 
-  // Stale memories have been deliberately marked as untrusted; rehearsing
-  // them would defeat the purpose of staleness. Skip them entirely.
-  const eligible = survivors.filter((e) => e.confidence !== 'stale');
+  // Deliberately-marked and aged-out memories are both untrusted; rehearsing
+  // them would defeat the purpose of staleness, so derive rather than trust
+  // the stored value (it no longer carries the age-out case, see memory.ts).
+  const eligible = survivors.filter((e) => resolveConfidence(e, now) !== 'stale');
   if (eligible.length === 0) return [];
 
   const pool = eligible.map((entry, idx) => ({

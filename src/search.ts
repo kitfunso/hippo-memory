@@ -1259,7 +1259,9 @@ export function markRetrieved(entries: MemoryEntry[], now: Date = evalNow()): Me
       last_retrieved: now.toISOString(),
       // Extend half-life by +2 days per retrieval (PLAN.md)
       half_life_days: e.half_life_days + 2,
-      // A stale memory that gets used again becomes live context.
+      // Only fires for rows deliberately marked 'stale' (invalidation.ts,
+      // cli.ts) or already flattened by a pre-fix sleep; age-out staleness
+      // is derived by resolveConfidence and never stored, so it never reaches this branch.
       confidence: e.confidence === 'stale' ? 'observed' : e.confidence,
     };
     updated.strength = calculateStrength(updated, now);

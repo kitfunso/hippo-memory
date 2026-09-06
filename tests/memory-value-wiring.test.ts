@@ -23,7 +23,7 @@ import {
   loadSessionDecayContext,
   batchWriteAndDelete,
 } from '../src/store.js';
-import { createMemory, Layer, calculateStrength, type MemoryEntry, type DecayOptions } from '../src/memory.js';
+import { createMemory, Layer, calculateStrength, resolveConfidence, type MemoryEntry, type DecayOptions } from '../src/memory.js';
 import { loadConfig, type HippoConfig } from '../src/config.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { queryAuditEvents, type AuditEvent } from '../src/audit.js';
@@ -437,7 +437,7 @@ describe('(e) rescue semantics', () => {
     }
   });
 
-  it('rescued entries get the standard survivor bookkeeping refresh (stored strength + confidence), not left stale', async () => {
+  it('rescued entries get the standard survivor bookkeeping refresh (stored strength), confidence tier preserved', async () => {
     initStore(dir);
     enableMemoryValue(dir);
 
@@ -470,9 +470,10 @@ describe('(e) rescue semantics', () => {
       // from createMemory).
       expect(refreshed!.strength).toBeLessThan(0.05); // DECAY_THRESHOLD
       expect(refreshed!.strength).not.toBe(orig.strength);
-      // Effective confidence is refreshed too (observed -> stale after 3650
-      // ancient days via resolveConfidence), not left at the original value.
-      expect(refreshed!.confidence).toBe('stale');
+      // Confidence is an epistemic tier, not a cached computation: the store
+      // keeps 'observed', while resolveConfidence still reports 'stale'.
+      expect(refreshed!.confidence).toBe('observed');
+      expect(resolveConfidence(refreshed!, NOW)).toBe('stale');
       // D1 still holds: no half-life edits, no rank-derived writes.
       expect(refreshed!.half_life_days).toBe(orig.half_life_days);
     }

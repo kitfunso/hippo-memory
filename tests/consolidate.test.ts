@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { consolidate } from '../src/consolidate.js';
 import { initStore, writeEntry, loadAllEntries, readEntry, listMemoryConflicts } from '../src/store.js';
-import { createMemory, Layer, calculateStrength } from '../src/memory.js';
+import { createMemory, Layer, calculateStrength, resolveConfidence } from '../src/memory.js';
 
 let tmpDir: string;
 
@@ -65,19 +65,23 @@ describe('Decay pass', () => {
     expect(remaining.find((e) => e.id === ancient.id)).toBeDefined();
   });
 
-  it('persists stale confidence for old non-verified memories during sleep', async () => {
+  it('keeps the stored confidence tier for old non-verified memories through sleep, while resolveConfidence reports stale', async () => {
     initStore(tmpDir);
 
     const entry = createMemory('stale memory candidate', { confidence: 'observed', tags: ['error'] });
-    const oldDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString();
+    const now = new Date();
+    const oldDate = new Date(now.getTime() - 31 * 24 * 60 * 60 * 1000).toISOString();
     const staleCandidate = { ...entry, last_retrieved: oldDate, confidence: 'observed' as const };
     writeEntry(tmpDir, staleCandidate);
 
-    await consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now });
 
     const loaded = readEntry(tmpDir, staleCandidate.id);
     expect(loaded).not.toBeNull();
-    expect(loaded!.confidence).toBe('stale');
+    // Confidence is an epistemic tier, not a cached computation (reverses
+    // the confidence half of P2-1; strength refresh is untouched).
+    expect(loaded!.confidence).toBe('observed');
+    expect(resolveConfidence(loaded!, now)).toBe('stale');
   });
 });
 
