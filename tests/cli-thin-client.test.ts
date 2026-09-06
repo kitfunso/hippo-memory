@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn, execFileSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { initStore } from '../src/store.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb, getMeta } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';
 
 /**
@@ -316,6 +316,9 @@ describe('cli thin-client mode', () => {
         const events = queryAuditEvents(db2, { tenantId: 'default', op: 'archive_raw', limit: 10 });
         expect(events.length).toBeGreaterThan(0);
         expect(events[0].actor).toBe('localhost:cli');
+        // The counter lives in api.archiveRaw so the routed path reaches it;
+        // when it lived in the CLI, routing an archive silently lost the count.
+        expect(getMeta(db2, 'total_forgotten', '0')).toBe('1');
       } finally {
         closeHippoDb(db2);
       }
@@ -432,6 +435,71 @@ describe('cli thin-client mode', () => {
       // removePidfileIfOwned cleared it and the command completed direct.
       expect(existsSync(pidfilePath)).toBe(false);
       expect(getActorForContent(workspace, 'conn-refused-canary-55')).toBe('cli');
+    } finally {
+      if (stub.listening) {
+        stub.closeAllConnections?.();
+        await new Promise<void>((resolve) => stub.close(() => resolve()));
+      }
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  it('forget --archive reaches the same connection-refused fallback as remember', async () => {
+    const workspace = makeWorkspace();
+    const hippoRoot = join(workspace, '.hippo');
+    const { createServer } = await import('node:http');
+    const startedAt = new Date().toISOString();
+    const port = await pickFreePort();
+    const pidfilePath = join(hippoRoot, 'server.pid');
+
+    // Same stub as the remember case above. The forget dispatch used to catch
+    // every routed error itself, so this branch was unreachable for both
+    // forget and --archive however the server died.
+    const stub = createServer((req, res) => {
+      if (req.url === '/health') {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({
+          ok: true, version: '0.0.0', started_at: startedAt, pid: process.pid,
+        }));
+        res.on('finish', () => stub.close());
+        return;
+      }
+      res.writeHead(404);
+      res.end();
+    });
+    await new Promise<void>((resolve) => stub.listen(port, '127.0.0.1', () => resolve()));
+
+    try {
+      const db = openHippoDb(hippoRoot);
+      try {
+        db.prepare(
+          `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, ` +
+          `half_life_days, layer, tags_json, emotional_valence, schema_fit, source, ` +
+          `conflicts_with_json, pinned, confidence, content, kind) VALUES ` +
+          `('mem_racearchive', '2026-01-01', '2026-01-01', 0, 1.0, 7, 'episodic', '[]', ` +
+          `'neutral', 0.5, 'connector', '[]', 0, 'observed', 'connector raw content', 'raw')`,
+        ).run();
+      } finally {
+        closeHippoDb(db);
+      }
+
+      writeFileSync(pidfilePath, JSON.stringify({
+        schema: 1, pid: process.pid, port,
+        url: `http://127.0.0.1:${port}`, started_at: startedAt,
+      }));
+
+      const run = await runCliAsync(workspace, 'forget', 'mem_racearchive', '--archive', '--reason', 'race fallback test');
+      expect(run.stdout, `stderr: ${run.stderr}`).toMatch(/Archived mem_racearchive/);
+      expect(existsSync(pidfilePath)).toBe(false);
+
+      const db2 = openHippoDb(hippoRoot);
+      try {
+        expect(db2.prepare(`SELECT id FROM memories WHERE id = 'mem_racearchive'`).get()).toBeUndefined();
+        const events = queryAuditEvents(db2, { tenantId: 'default', op: 'archive_raw', limit: 10 });
+        expect(events[0]?.actor).toBe('cli');
+      } finally {
+        closeHippoDb(db2);
+      }
     } finally {
       if (stub.listening) {
         stub.closeAllConnections?.();

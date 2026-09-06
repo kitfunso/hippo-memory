@@ -2083,6 +2083,9 @@ export function archiveRaw(
   } finally {
     closeHippoDb(db);
   }
+  // Counted here rather than in the CLI: the HTTP archive route calls this too,
+  // so a routed archive would otherwise never reach the forgotten counter.
+  updateStats(ctx.hippoRoot, { forgotten: 1 });
   // archiveRawMemory does not return the archive_at timestamp it wrote. We
   // emit a fresh ISO timestamp here for the API response. Within a millisecond
   // of the actual write, fine for a server response shape.

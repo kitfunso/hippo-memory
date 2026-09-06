@@ -3686,7 +3686,6 @@ function cmdForget(
     }
     try {
       api.archiveRaw(ctx, id, reason);
-      updateStats(hippoRoot, { forgotten: 1 });
       console.log(`Archived ${id}`);
     } catch (err) {
       console.error(`Could not archive ${id}: ${err instanceof Error ? err.message : String(err)}`);
@@ -9153,6 +9152,9 @@ async function main(): Promise<void> {
             console.log(`Forgot ${id}`);
           }
         } catch (err) {
+          // A server that died after the health probe is the caller's stale
+          // pidfile fallback to handle, not an error to report to the user.
+          if (client.isConnectionRefused(err)) throw err;
           const msg = err instanceof Error ? err.message : String(err);
           console.error(archive ? `Could not archive ${id}: ${msg}` : msg);
           process.exit(1);
