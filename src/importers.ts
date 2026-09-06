@@ -1,7 +1,4 @@
-/**
- * Memory importers for Hippo.
- * Imports memories from ChatGPT, Claude, Cursor, generic files, and structured markdown.
- */
+// Importers for ChatGPT, Claude, Cursor, generic files and structured markdown.
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -13,16 +10,11 @@ import { getGlobalRoot, initGlobal } from './shared.js';
 import { remember, archiveRaw, isPrivateScope, type Context } from './api.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 export interface ImportResult {
   total: number;     // entries found in source
   imported: number;  // actually imported (after dedup)
   skipped: number;   // skipped as duplicates or too short
-  /** K1 vault import: rows archived this run (changed + source-deleted). In a
-   *  dryRun this is the would-be count (a true deletion-sync preview). */
+  /** Rows archived this run (changed + source-deleted); in dryRun, the would-be count. */
   archived?: number;
   entries: MemoryEntry[];
 }
@@ -32,39 +24,15 @@ export interface ImportOptions {
   global?: boolean;
   extraTags?: string[];
   hippoRoot: string;
-  /**
-   * L9: tenant scope for the dedup read. When provided AND `global` is
-   * false, the dedup check only considers this tenant's existing entries.
-   * Ignored when `global: true` (global writes are host-wide by definition).
-   * Undefined preserves pre-1.12.1 host-wide dedup behaviour.
-   */
+  /** Tenant scope for the dedup read (ignored when global=true); undefined preserves pre-1.12.1 host-wide dedup. */
   tenantId?: string;
-  /**
-   * K1 vault import only. Logical vault name used in the `vault:<name>` tag and
-   * the `artifactRef='vault:<name>:<relpath>'` key. REQUIRED by importVault: it
-   * is the identity key for the destructive source-deletion sync, so it must be
-   * set explicitly rather than inferred from the folder basename (two vaults
-   * sharing a basename would collide and clobber each other). importVault throws
-   * if it is missing or blank. Optional in this shared type only because the
-   * other importers ignore it. Operator-supplied, so the loader query LIKE-escapes
-   * it (see `escapeLike` below).
-   */
+  /** Vault import only: identity key for the vault:<name>:<relpath> artifactRef and the destructive deletion-sync; required (importVault throws if unset) since a basename default risks two vaults colliding (see ARCHITECTURE.md). */
   name?: string;
-  /**
-   * K1 vault import only. Memory scope stamped on every imported note. Defaults
-   * to null (unscoped) when unset.
-   */
+  /** Vault import only: scope stamped on every imported note; defaults to null (unscoped). */
   scope?: string;
 }
 
-// ---------------------------------------------------------------------------
-// Shared core: dedup + write
-// ---------------------------------------------------------------------------
-
-/**
- * Given an array of raw text chunks, deduplicate against existing memories,
- * create MemoryEntry objects, write them (unless dry-run), and return a result.
- */
+/** Dedup threshold: textOverlap > 0.7 against any existing memory skips a chunk as duplicate. */
 export function importEntries(
   chunks: string[],
   source: string,
@@ -73,7 +41,6 @@ export function importEntries(
 ): ImportResult {
   const targetRoot = options.global ? getGlobalRoot() : options.hippoRoot;
 
-  // Ensure store is ready
   if (options.global) {
     initGlobal();
   }
@@ -96,7 +63,6 @@ export function importEntries(
     }
     const chunk = trimmed.slice(0, 1000);
 
-    // Skip empty or too-short chunks
     if (!chunk || chunk.length < 10) {
       skipped++;
       continue;
@@ -104,7 +70,6 @@ export function importEntries(
 
     total++;
 
-    // Dedup check: textOverlap > 0.7 with any existing memory = skip
     let isDuplicate = false;
     for (const existing_entry of existing) {
       if (textOverlap(chunk, existing_entry.content) > 0.7) {
@@ -118,17 +83,8 @@ export function importEntries(
       continue;
     }
 
-    // A3: kind defaults to 'distilled'. ChatGPT/Claude/Cursor exports are curated
-    // user pastes, not raw transcripts from a system of record, so distilled is
-    // correct here. E1.3 (Slack ingestion) shipped 2026-04-29 in src/connectors/slack/
-    // and sets kind: 'raw' + routes deletions through archiveRawMemory() — these
-    // importers stay 'distilled' per the original reasoning. See MEMORY_ENVELOPE.md.
-    // L9: the dedup read above is scoped by options.tenantId — the WRITE
-    // must match, or scoped-dedup-passes-then-default-tenant-write breaks
-    // the per-tenant contract. Mirror the dedup-read guard: global=true
-    // → host-wide write to global store (tenantId irrelevant, createMemory
-    // defaults to 'default'). global=false → write to the same tenant as
-    // the dedup read.
+    // Chunk imports default to kind='distilled' (curated pastes, unlike Slack's raw ingestion; see MEMORY_ENVELOPE.md).
+    // tenantId must mirror the dedup-read scope: global writes go host-wide; scoped reads write to the same tenant.
     const entry = createMemory(chunk, {
       layer: Layer.Episodic,
       tags: allTags,
@@ -155,23 +111,14 @@ export function importEntries(
 // ChatGPT importer
 // ---------------------------------------------------------------------------
 
-/**
- * Parse ChatGPT memory export file.
- * Supports:
- *   - JSON array of strings: ["memory 1", "memory 2"]
- *   - JSON array of objects: [{"content": "...", "created": "..."}]
- *   - ChatGPT export format: {"memories": [{"content": "...", "created_at": "..."}]}
- *   - Plain text: one memory per line
- */
+/** Parses ChatGPT export format: JSON array of strings/objects ({content|text}), {memories:[...]}, or plain text one-per-line. */
 function parseChatGPTFile(filePath: string): string[] {
   const raw = fs.readFileSync(filePath, 'utf8').trim();
 
-  // Try JSON first
   if (raw.startsWith('[') || raw.startsWith('{')) {
     try {
       const parsed = JSON.parse(raw);
 
-      // {"memories": [...]} - ChatGPT export format
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Array.isArray(parsed.memories)) {
         return parsed.memories
           .map((m: unknown) => {
@@ -185,7 +132,6 @@ function parseChatGPTFile(filePath: string): string[] {
           .filter(Boolean);
       }
 
-      // Array format
       if (Array.isArray(parsed)) {
         return parsed
           .map((m: unknown) => {
@@ -203,7 +149,6 @@ function parseChatGPTFile(filePath: string): string[] {
     }
   }
 
-  // Plain text: one memory per line
   return raw.split('\n').map((l) => l.trim()).filter(Boolean);
 }
 
@@ -212,16 +157,9 @@ export function importChatGPT(filePath: string, options: ImportOptions): ImportR
   return importEntries(chunks, 'import:chatgpt', ['imported', 'chatgpt'], options);
 }
 
-// ---------------------------------------------------------------------------
-// Claude importer
-// ---------------------------------------------------------------------------
-
 const HIPPO_START = '<!-- hippo:start -->';
 const HIPPO_END = '<!-- hippo:end -->';
 
-/**
- * Strip the hippo hook block from markdown content.
- */
 function stripHippoBlock(content: string): string {
   const startIdx = content.indexOf(HIPPO_START);
   const endIdx = content.indexOf(HIPPO_END);
@@ -229,9 +167,6 @@ function stripHippoBlock(content: string): string {
   return content.slice(0, startIdx) + content.slice(endIdx + HIPPO_END.length);
 }
 
-/**
- * Split markdown into meaningful chunks (headings + bullet points).
- */
 function splitMarkdown(content: string): string[] {
   const chunks: string[] = [];
   const lines = content.split('\n');
@@ -240,14 +175,13 @@ function splitMarkdown(content: string): string[] {
   for (const line of lines) {
     const trimmed = line.trim();
 
-    // Heading: start a new chunk
     if (/^#{1,6}\s+/.test(trimmed)) {
       if (current.trim()) chunks.push(current.trim());
       current = trimmed;
       continue;
     }
 
-    // Bullet point: each bullet is its own chunk (flush previous if not a bullet context)
+    // Bullet: each bullet is its own chunk; flush any pending text first.
     if (/^[-*+]\s+/.test(trimmed)) {
       if (current.trim() && !/^[-*+]\s+/.test(current.split('\n')[0])) {
         chunks.push(current.trim());
@@ -261,7 +195,6 @@ function splitMarkdown(content: string): string[] {
       continue;
     }
 
-    // Numbered list item
     if (/^\d+\.\s+/.test(trimmed)) {
       if (current.trim()) {
         chunks.push(current.trim());
@@ -271,7 +204,6 @@ function splitMarkdown(content: string): string[] {
       continue;
     }
 
-    // Empty line
     if (!trimmed) {
       if (current.trim()) {
         chunks.push(current.trim());
@@ -280,7 +212,6 @@ function splitMarkdown(content: string): string[] {
       continue;
     }
 
-    // Regular line: append to current
     current = current ? current + ' ' + trimmed : trimmed;
   }
 
@@ -288,13 +219,9 @@ function splitMarkdown(content: string): string[] {
   return chunks.filter(Boolean);
 }
 
-/**
- * Parse CLAUDE.md or Claude memory.json.
- */
 function parseClaudeFile(filePath: string): string[] {
   const raw = fs.readFileSync(filePath, 'utf8');
 
-  // JSON memory file
   if (filePath.endsWith('.json')) {
     try {
       const parsed = JSON.parse(raw.trim());
@@ -315,7 +242,6 @@ function parseClaudeFile(filePath: string): string[] {
     }
   }
 
-  // Markdown file: strip hippo block and split
   const cleaned = stripHippoBlock(raw);
   return splitMarkdown(cleaned);
 }
@@ -325,14 +251,7 @@ export function importClaude(filePath: string, options: ImportOptions): ImportRe
   return importEntries(chunks, 'import:claude', ['imported', 'claude'], options);
 }
 
-// ---------------------------------------------------------------------------
-// Cursor importer
-// ---------------------------------------------------------------------------
-
-/**
- * Split cursor rules file into chunks.
- * Priority: numbered items, then bullet points, then double newlines.
- */
+/** Cursor rules chunking priority: numbered items > bullets > double newlines. */
 function parseCursorFile(content: string): string[] {
   const chunks: string[] = [];
   const lines = content.split('\n');
@@ -350,7 +269,6 @@ function parseCursorFile(content: string): string[] {
       continue;
     }
 
-    // Numbered item: 1. 2. 3.
     if (/^\d+\.\s+/.test(trimmed)) {
       if (current.trim()) {
         chunks.push(current.trim());
@@ -360,7 +278,6 @@ function parseCursorFile(content: string): string[] {
       continue;
     }
 
-    // Bullet: - or *
     if (/^[-*]\s+/.test(trimmed)) {
       if (current.trim()) {
         chunks.push(current.trim());
@@ -370,7 +287,6 @@ function parseCursorFile(content: string): string[] {
       continue;
     }
 
-    // Regular line
     current = current ? current + ' ' + trimmed : trimmed;
   }
 
@@ -389,15 +305,7 @@ export function importCursor(filePath: string, options: ImportOptions): ImportRe
   return importEntries(chunks, 'import:cursor', ['imported', 'cursor'], options);
 }
 
-// ---------------------------------------------------------------------------
-// Generic file importer
-// ---------------------------------------------------------------------------
-
-/**
- * Split a generic file into chunks.
- * Markdown: split on headings and bullet points.
- * Plain text: split on double newlines or one-per-line.
- */
+/** Markdown files split on headings/bullets; plain text splits on double newlines, falling back to one-per-line. */
 function parseGenericFile(filePath: string): string[] {
   const raw = fs.readFileSync(filePath, 'utf8');
   const isMarkdown = filePath.endsWith('.md') || filePath.endsWith('.mdx');
@@ -406,11 +314,9 @@ function parseGenericFile(filePath: string): string[] {
     return splitMarkdown(raw);
   }
 
-  // Plain text: try double newlines first
   const byParagraph = raw.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
   if (byParagraph.length > 1) return byParagraph;
 
-  // Fall back to one-per-line
   return raw.split('\n').map((l) => l.trim()).filter(Boolean);
 }
 
@@ -419,14 +325,7 @@ export function importGenericFile(filePath: string, options: ImportOptions): Imp
   return importEntries(chunks, 'import:file', ['imported'], options);
 }
 
-// ---------------------------------------------------------------------------
-// Structured markdown importer (MEMORY.md / AGENTS.md format)
-// ---------------------------------------------------------------------------
-
-/**
- * Slugify a heading for use as a tag.
- * "Data Pipeline & Cache" -> "data-pipeline-cache"
- */
+/** Slugify a heading for use as a tag, e.g. "Data Pipeline & Cache" -> "data-pipeline-cache". */
 function slugify(heading: string): string {
   return heading
     .toLowerCase()
@@ -437,11 +336,7 @@ function slugify(heading: string): string {
     .slice(0, 50);
 }
 
-/**
- * Parse structured markdown into {content, sectionSlug} pairs.
- * Each heading starts a new section. Bullet points / numbered items under
- * the heading become individual memories tagged with the section slug.
- */
+/** Each heading starts a section; bullets/numbered items under it become individual memories tagged with the section slug. */
 function parseStructuredMarkdown(raw: string): Array<{ content: string; sectionSlug: string }> {
   const results: Array<{ content: string; sectionSlug: string }> = [];
   const lines = raw.split('\n');
@@ -459,7 +354,6 @@ function parseStructuredMarkdown(raw: string): Array<{ content: string; sectionS
   for (const line of lines) {
     const trimmed = line.trim();
 
-    // Heading
     const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)/);
     if (headingMatch) {
       flush();
@@ -468,7 +362,6 @@ function parseStructuredMarkdown(raw: string): Array<{ content: string; sectionS
       continue;
     }
 
-    // Bullet or numbered item: flush previous, start new
     if (/^[-*+]\s+/.test(trimmed) || /^\d+\.\s+/.test(trimmed)) {
       flush();
       const itemText = trimmed.replace(/^[-*+]\s+/, '').replace(/^\d+\.\s+/, '').trim();
@@ -476,13 +369,11 @@ function parseStructuredMarkdown(raw: string): Array<{ content: string; sectionS
       continue;
     }
 
-    // Empty line: flush current pending
     if (!trimmed) {
       flush();
       continue;
     }
 
-    // Continuation of current item
     pendingText = pendingText ? pendingText + ' ' + trimmed : trimmed;
   }
 
@@ -494,8 +385,7 @@ export function importMarkdown(filePath: string, options: ImportOptions): Import
   const raw = fs.readFileSync(filePath, 'utf8');
   const parsed = parseStructuredMarkdown(raw);
 
-  // Group by section slug so we can pass per-chunk tags
-  // We call importEntries per unique slug to get the right tags per section
+  // Group by section slug so importEntries can be called once per slug with that slug's tags.
   const bySlug = new Map<string, string[]>();
   for (const { content, sectionSlug } of parsed) {
     const list = bySlug.get(sectionSlug) ?? [];
@@ -519,31 +409,14 @@ export function importMarkdown(filePath: string, options: ImportOptions): Import
   return totalResult;
 }
 
-// ---------------------------------------------------------------------------
-// K1 vault importer (markdown-vault FOLDER → kind='raw' memories)
-//
-// MIRRORS THE CONNECTOR PATTERN (src/connectors/slack|github), NOT the
-// single-file importers above. Each note becomes a single kind='raw' row with
-// provenance in TAGS (`source:vault` + `vault:<name>`), an artifactRef cursor
-// key, and a content-hash tag. Changes APPEND a new raw row after archiveRaw of
-// the old one; deletions archiveRaw the orphaned rows. We NEVER `supersede` a
-// raw row (supersede yields kind='distilled', losing raw-append-only protection
-// and escaping the kind='raw' deletion rescan) — all raw deletions route through
-// `archiveRaw` (the only trigger-legit raw delete).
-// ---------------------------------------------------------------------------
+// K1 vault importer: mirrors the connector pattern (kind='raw', append-only; never supersede — see ARCHITECTURE.md).
 
-/** Escape LIKE wildcards in operator-supplied text (mirror of
- *  src/project-briefs.ts:477 / src/store.ts:782, kept local since neither is
- *  exported). Used so a `%`/`_`/`\` in the vault name cannot over-match the
- *  loader prefix and archive another vault's rows. */
+/** Escapes LIKE wildcards (mirrors project-briefs.ts/store.ts's local copies) so a %/_/\ in the vault name can't over-match the loader prefix. */
 function escapeLike(term: string): string {
   return term.replace(/[%_\\]/g, '\\$&');
 }
 
-/** Minimal inline frontmatter split. Recognises a leading `---\n…\n---\n`
- *  block (no YAML dep). Returns the parsed key→value map plus the body with the
- *  block removed. When no well-formed block is present, `fm` is empty and
- *  `body` is the original content. */
+/** Minimal frontmatter split (no YAML dep): returns {fm, body}; fm is empty when no well-formed --- block is present. */
 function parseFrontmatter(raw: string): { fm: Record<string, string>; body: string } {
   // Must start with `---` on its own line. Accept CRLF or LF.
   const m = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
@@ -557,9 +430,7 @@ function parseFrontmatter(raw: string): { fm: Record<string, string>; body: stri
     if (!kv) continue;
     let val = kv[2].trim();
     if (val === '') {
-      // YAML block-style list: `key:` followed by indented `- item` lines
-      // (common in Obsidian/Dendron frontmatter). Collect them into a
-      // comma-joined value so frontmatterList parses them (codex P2).
+      // YAML block-list (`key:` + indented `- item` lines, common in Obsidian/Dendron): collect into a comma-joined value for frontmatterList.
       const items: string[] = [];
       let j = i + 1;
       let item: RegExpMatchArray | null;
@@ -577,9 +448,7 @@ function parseFrontmatter(raw: string): { fm: Record<string, string>; body: stri
   return { fm, body };
 }
 
-/** Pull a frontmatter field that may be a YAML flow list (`[a, b]`), a
- *  comma-separated scalar (`a, b`), or a single token, into a string[]. Quotes
- *  and surrounding brackets are stripped; empty entries dropped. */
+/** Normalizes a frontmatter field (YAML flow list, comma-separated scalar, or single token) into a string[]; quotes/brackets stripped. */
 function frontmatterList(value: string | undefined): string[] {
   if (!value) return [];
   let v = value.trim();
@@ -590,11 +459,7 @@ function frontmatterList(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
-/** Parse `[[wikilinks]]` from body text. `[[target]]` and `[[target|alias]]`
- *  both yield `target` (alias dropped). Returns de-duplicated, order-preserving
- *  target strings (trimmed). Embeds (`![[…]]`) are intentionally matched too —
- *  the leading `!` is not part of the `[[…]]` capture, so an embed contributes
- *  its target as a candidate, which is the desired no-crash baseline behaviour. */
+/** Parses [[target]] / [[target|alias]] wikilinks (alias dropped, deduped); embeds (![[…]]) are intentionally matched too since ! isn't part of the [[…]] capture. */
 function parseWikilinks(body: string): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
@@ -611,22 +476,10 @@ function parseWikilinks(body: string): string[] {
   return out;
 }
 
-/** Recursively collect `*.md` files under `root`, returning paths relative to
- *  `root` with forward-slash separators (stable artifactRef keys across OSes).
- *  Symlinks are not followed. Skips dot-directories (the default `.hippo` store,
- *  `.git`, `.obsidian`, `.trash`) AND the canonicalized Hippo store path during
- *  the walk, so re-importing a vault that CONTAINS the store never ingests its own
- *  markdown mirror files (codex R5 P1: `hippo import --vault .` after `hippo
- *  init` in the vault would otherwise self-import its mirror rows and grow on
- *  every run). The root-IS-the-store case is handled one level up in
- *  importVault (a no-op early return), NOT here: returning [] for it would feed
- *  the deletion-sync an empty scan that mass-archives every live row (codex R8). */
+/** Recursively collects *.md paths (root-relative, forward-slash); skips dot-dirs and the store path to avoid self-import (see ARCHITECTURE.md — root-IS-store is handled one level up in importVault, not here). */
 function collectMarkdownFiles(root: string, hippoRoot: string): string[] {
   const out: string[] = [];
-  // Canonicalize (realpath) so a non-dot HIPPO_HOME store nested in the vault is
-  // skipped even when hippoRoot is an aliased path (junction / Windows case
-  // variant); path.resolve would miss it and self-import the store's mirror
-  // files (codex R9 follow-up: same gap as the importVault guard, sibling site).
+  // Canonicalize via realpath (not path.resolve) so an aliased HIPPO_HOME (junction/case-variant) is still recognized and skipped (see ARCHITECTURE.md).
   const resolvedHippoRoot = realpathOrResolve(hippoRoot);
   const walk = (dir: string): void => {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -634,8 +487,7 @@ function collectMarkdownFiles(root: string, hippoRoot: string): string[] {
       if (ent.isSymbolicLink()) continue;
       const abs = path.join(dir, ent.name);
       if (ent.isDirectory()) {
-        // Skip dot-dirs (config/system, incl. the default `.hippo` store) and
-        // the canonicalized store path (covers a HIPPO_HOME outside `.hippo`).
+        // Skip dot-dirs (incl. the default .hippo store) and the canonicalized store path (covers a HIPPO_HOME outside .hippo).
         if (ent.name.startsWith('.')) continue;
         if (realpathOrResolve(abs) === resolvedHippoRoot) continue;
         walk(abs);
@@ -649,14 +501,7 @@ function collectMarkdownFiles(root: string, hippoRoot: string): string[] {
   return out;
 }
 
-/** Canonicalize a path for the self-store comparison: dereference symlinks /
- *  junctions and normalize case (Windows) via the OS realpath, so a junction or
- *  a case-variant path to the store is still recognized as self-store (codex R9
- *  P2: path.resolve does neither, so an aliased store path slipped past the
- *  guard and triggered the mass-archive). Falls back to path.resolve when the
- *  path does not exist yet - an uninitialized store or a typo'd vault path
- *  cannot be a live self-store, and a non-existent vault folder fails later in
- *  the walk (readdirSync) before deletion-sync can archive anything. */
+/** Canonicalizes via OS realpath (dereferences symlinks/junctions, normalizes Windows case) so an aliased store path is still recognized as self-store; falls back to path.resolve for a not-yet-existing path (see ARCHITECTURE.md). */
 function realpathOrResolve(p: string): string {
   try {
     return fs.realpathSync.native(p);
@@ -672,23 +517,11 @@ interface VaultRow {
   scope: string | null;
 }
 
-/**
- * Import a markdown vault FOLDER as `kind='raw'` memories.
- *
- * NOT re-entrant: idempotency rests on the in-memory `existing` Map loaded once
- * at the top. Two concurrent importVault runs over the same vault could both see
- * a note as absent and double-insert (the connector pattern relies on a single
- * sequential writer; same caveat applies here).
- */
+/** Imports a markdown vault folder as kind='raw' memories. NOT re-entrant: idempotency rests on the in-memory Map loaded once, so concurrent runs over the same vault can double-insert. */
 export function importVault(folderPath: string, options: ImportOptions): ImportResult {
   const hippoRoot = options.hippoRoot;
   const tenantId = options.tenantId ?? 'default';
-  // Vault NAME is the identity key for the destructive deletion-sync below, so it
-  // must be explicit. Defaulting to the folder basename meant two unrelated vaults
-  // sharing a basename (e.g. work/notes and personal/notes) collided on the same
-  // `vault:<name>:*` prefix - importing the second loaded the first's rows and the
-  // deletion-sync archived them (codex R10 P2). Require a deliberate name instead
-  // of inferring a path-unstable one.
+  // Explicit name required: a basename default let two same-basename vaults collide and archive each other's rows (see ARCHITECTURE.md).
   const vaultName = options.name?.trim();
   if (!vaultName) {
     throw new Error(
@@ -696,21 +529,11 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
     );
   }
   if (vaultName.includes(':')) {
-    // ':' is the artifactRef delimiter (vault:<name>:<relpath>); a name
-    // containing it lets a different vault's prefix scan over-match and archive
-    // its rows (codex P2). Reject rather than silently corrupt the keys.
+    // ':' is the artifactRef delimiter; a name containing it could let a prefix scan over-match and archive another vault's rows.
     throw new Error(`vault name must not contain ':' (artifactRef delimiter): ${vaultName}`);
   }
   const scope = options.scope ?? null;
-  // Privacy footgun guard (codex R13 P2): hippo's recall filter only default-denies
-  // scopes shaped `<source>:private:*` (see isPrivateScope / PRIVATE_SCOPE_RE in
-  // scope.ts). A bare `private` (or `private:<x>`) first segment is NOT recognized
-  // as private, so notes a user believes are private would still be returned to
-  // no-scope recall callers. Reject the alias and point at the source-prefixed form
-  // rather than silently storing public-visible "private" notes. Use recall's own
-  // isPrivateScope as the single source of truth: reject a scope that names a
-  // `private` segment yet is NOT a valid `<source>:private:*` (catches `private`,
-  // `private:x`, and `vault:private` with a missing trailing segment).
+  // Privacy footgun: a bare 'private' segment isn't recognized by isPrivateScope's <source>:private:* rule and would leak; reject rather than silently expose (see ARCHITECTURE.md).
   if (scope !== null && scope.split(':').includes('private') && !isPrivateScope(scope)) {
     throw new Error(
       `vault scope '${scope}' is not recognized as private by recall (only '<source>:private:*' scopes are default-denied). Use a source-prefixed scope such as 'vault:private:${vaultName}'.`,
@@ -719,22 +542,11 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
   const extraTags = options.extraTags ?? [];
   const dryRun = options.dryRun ?? false;
   if (options.global) {
-    // The raw-archive path is tenant-local; global mode would put raw vault rows
-    // in the wrong store. Reject for SDK callers too (the CLI also rejects
-    // --global) rather than silently writing local (codex P2).
+    // Raw-archive is tenant-local; global mode would misfile rows, so reject here too (CLI already rejects --global).
     throw new Error('importVault does not support global mode (raw rows are tenant-local).');
   }
 
-  // Self-store no-op guard (codex R8 P1). MUST run BEFORE the existing-rows load
-  // and the deletion-sync pass below. If the vault folder IS the store (or lives
-  // inside it), there are no real vault notes - only the store's own markdown
-  // mirror files. Letting collectMarkdownFiles return [] for this case is NOT
-  // safe: an empty scan is indistinguishable from "every note was deleted", so
-  // deletion-sync would archive every live vault:<name>:* row, and raw-archive
-  // content redaction makes that loss IRREVERSIBLE. The only safe reading of
-  // "import the store into itself" is "do nothing". Canonicalize both paths
-  // (realpath: dereference junctions/symlinks + normalize Windows case) so an
-  // aliased path to the store is still caught (codex R9 P2).
+  // Self-store guard MUST run before the existing-rows load / deletion-sync below: an empty scan here is indistinguishable from "everything deleted", and archiveRaw's redaction makes that IRREVERSIBLE (see ARCHITECTURE.md).
   const resolvedStore = realpathOrResolve(hippoRoot);
   const resolvedFolder = realpathOrResolve(folderPath);
   if (resolvedFolder === resolvedStore || resolvedFolder.startsWith(resolvedStore + path.sep)) {
@@ -744,19 +556,13 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
   const ctx: Context = {
     hippoRoot,
     tenantId,
-    // Process-local actor; the vault importer is a CLI/SDK ingestion path, not
-    // a bearer-authed request. archiveRaw / remember thread this into audit.
+    // Process-local actor (CLI/SDK path, not bearer-authed); threaded into audit by archiveRaw/remember.
     actor: { subject: 'connector:vault', role: 'admin' },
   };
 
-  // Load ONCE: every existing raw row for this vault, tenant-scoped. The same
-  // Map serves both per-file idempotency AND the deletion diff (no second
-  // query). LIKE-escape the vault name so a `%`/`_` in it can't over-match.
+  // Load once: the same Map serves per-file idempotency AND the deletion diff (LIKE-escaped so %/_ in the name can't over-match).
   initStore(hippoRoot);
-  // artifactRef -> ALL its live raw rows. >1 only after a concurrent double-insert
-  // (the importer is not re-entrant; see the JSDoc). The buckets matter: a later
-  // changed/deletion pass must archive EVERY matching row, not just the last one
-  // scanned, or older raw vault content lingers live + searchable (codex P2).
+  // artifactRef -> ALL live raw rows (>1 only after a concurrent double-insert); every bucket must be archived on change/deletion, not just the last-scanned row.
   const existing = new Map<string, VaultRow[]>();
   {
     const db = openHippoDb(hippoRoot);
@@ -768,9 +574,7 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
              WHERE artifact_ref LIKE ? ESCAPE '\\' AND tenant_id = ? AND kind = 'raw'`,
         )
         .all(likeParam, tenantId) as VaultRow[];
-      // SQLite LIKE is case-insensitive for ASCII, so the query over-fetches
-      // (vault 'A' also matches 'vault:a:%'). Filter to the EXACT-case prefix in
-      // JS so deletion-sync never archives a different-cased vault's rows (codex P2).
+      // SQLite LIKE is ASCII case-insensitive (vault 'A' also matches 'vault:a:%'); re-filter to the exact-case prefix so deletion-sync can't cross vaults.
       const exactPrefix = `vault:${vaultName}:`;
       for (const row of rows) {
         if (row.artifact_ref && row.artifact_ref.startsWith(exactPrefix)) {
@@ -798,37 +602,24 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
     const artifactRef = `vault:${vaultName}:${relpath}`;
     seen.add(artifactRef);
 
-    // Content-hash is computed from the RAW file bytes (deterministic; no
-    // Date/random in the content path) so idempotency survives frontmatter
-    // edits identically to body edits.
+    // Hash is over raw file bytes (deterministic, no Date/random) so idempotency covers frontmatter edits the same as body edits.
     let rawFileContent: string;
     try {
       rawFileContent = fs.readFileSync(path.join(folderPath, relpath), 'utf8');
     } catch {
-      // File vanished between enumeration and read (TOCTOU), or a transient
-      // IO/permission error. Skip this one file rather than aborting the whole
-      // import (incl. the deletion-sync pass); an idempotent re-run picks it up.
+      // TOCTOU or transient IO error: skip this file rather than abort the whole import; an idempotent re-run picks it up.
       skipped++;
       continue;
     }
     const hash = createHash('sha256').update(rawFileContent).digest('hex');
     const hashTag = `content-hash:${hash}`;
 
-    // Load every live raw row for this ref (>1 only after a concurrent double-
-    // insert). The idempotency decision happens below, AFTER the full tag set is
-    // built, so it can compare the complete envelope rather than a subset.
+    // Idempotency check happens after the full tag envelope is built below, so it compares the complete set, not a subset.
     const priors = existing.get(artifactRef) ?? [];
 
     const { fm, body } = parseFrontmatter(rawFileContent);
 
-    // Empty / frontmatter-only note: nothing storable (createMemory enforces a
-    // min content length). The note's CONTENT was deleted at source, so this is a
-    // content-deletion: archive any prior row(s) - the old body must not stay live
-    // and searchable after the source no longer holds it (codex R12 P2) - then
-    // skip the write. Archiving here is safe precisely because we then skip
-    // remember() entirely: there is no archive-then-throw-on-empty-body hazard
-    // (the original reason this branch did not archive). The note stays in `seen`
-    // so deletion-sync does not double-process it.
+    // Empty/frontmatter-only body = content deleted at source: archive prior rows (must not stay live+searchable) then skip the write; stays in `seen` so deletion-sync doesn't double-process it.
     if (body.trim().length < 3) {
       for (const p of priors) {
         archived++; // count even in dryRun so the preview reflects the removal
@@ -838,10 +629,7 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
       continue;
     }
 
-    // Build the FULL tag envelope this import would write, BEFORE the idempotency
-    // decision. De-duplicate (createMemory stores tags verbatim, so a collision
-    // between, e.g., a frontmatter tag and an extraTag would otherwise produce a
-    // duplicate). Order-preserving.
+    // Build the full tag envelope before the idempotency check; de-duped since createMemory stores tags verbatim.
     const frontmatterTags = [
       ...frontmatterList(fm['tags']),
       ...frontmatterList(fm['aliases']).map((a) => `alias:${a}`),
@@ -858,14 +646,7 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
       ]),
     );
 
-    // Unchanged iff EVERY live raw row carries the EXACT same tag set AND scope.
-    // Comparing the COMPLETE set (not the content-hash + a subset of extra tags)
-    // means every envelope change registers: content (via the content-hash tag),
-    // frontmatter, wikilinks, an ADDED extra tag, or a REMOVED one - the earlier
-    // piecemeal checks missed scope (R10 P2) then tag removal (R11 P2). Set
-    // equality is order-independent and both sides are deduped. (`length > 0`
-    // guard: a never-seen file must import, not skip; archiving ALL priors on a
-    // mismatch also clears any concurrent-double-insert duplicates.)
+    // Unchanged iff every live row's tag set AND scope exactly match (full-set comparison catches content/frontmatter/wikilink/tag changes that piecemeal checks used to miss).
     const wantTags = new Set(tags);
     const envelopeUnchanged =
       priors.length > 0 &&
@@ -875,24 +656,17 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
         return priorTags.length === wantTags.size && priorTags.every((t) => wantTags.has(t));
       });
     if (envelopeUnchanged) {
-      // Unchanged file + envelope → skip (idempotent re-import).
       skipped++;
       continue;
     }
 
-    // Changed file → archive EVERY old raw row for this ref (normally one; >1
-    // only after a concurrent double-insert), then append the new one. NEVER
-    // supersede (would yield kind='distilled'). archiveRaw commits + closes its
-    // handle before remember() runs, so there is no double-live row; a crash
-    // between them self-heals (file re-imported as fresh raw next run).
+    // Changed: archive every old row (never supersede — that would yield kind='distilled'); archiveRaw commits before remember() runs, so a crash between them self-heals on next import.
     for (const p of priors) {
       archived++; // count the would-be archive even in dryRun (true preview)
       if (!dryRun) archiveRaw(ctx, p.id, `changed:${artifactRef}`);
     }
 
-    // remember() owns the actual write. We build an `echo` of the SAME content +
-    // tags via createMemory purely for the ImportResult, then reconcile its id to
-    // remember()'s real row id so entries[] reflects the row that landed.
+    // echo mirrors what remember() will write, purely for ImportResult; its id is reconciled to the real row id below.
     const echo = createMemory(body, {
       kind: 'raw',
       tags,
@@ -901,7 +675,7 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
       artifact_ref: artifactRef,
       tenantId,
     });
-    // dryRun preview: count what WOULD import, but make no writes (codex P2).
+    // dryRun preview: count what WOULD import, but make no writes.
     if (!dryRun) {
       const result = remember(ctx, {
         content: body,
@@ -917,10 +691,7 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
     imported++;
   }
 
-  // Deletion-sync: any artifactRef present in the Map but NOT seen this run is a
-  // note that vanished from the source folder → archive its raw row. Per-file
-  // archiveRaw (own handle); no outer SAVEPOINT (no cross-file idempotency row
-  // to commit atomically, unlike github's multi-row case).
+  // Deletion-sync: any artifactRef not seen this run vanished from source — archive it (per-file archiveRaw, no outer SAVEPOINT needed here).
   for (const [artifactRef, rows] of existing) {
     if (seen.has(artifactRef)) continue;
     for (const row of rows) {
@@ -932,9 +703,7 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
   return { total, imported, skipped, archived, entries };
 }
 
-/** Local tolerant JSON-array parse for the loader's `tags_json` column. The
- *  store's own `parseJsonArray` is not exported; this matches its contract
- *  (returns [] on null/garbage). */
+/** Local tolerant JSON-array parse for tags_json; mirrors store.ts's unexported parseJsonArray contract (returns [] on null/garbage). */
 function parseJsonArrayLoose(value: string | null | undefined): string[] {
   if (!value) return [];
   try {

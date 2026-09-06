@@ -116,7 +116,12 @@ async function startServer(workspace: string, port: number): Promise<SpawnedServ
   return { child, port, url: `http://127.0.0.1:${port}`, stop };
 }
 
-function runCli(workspace: string, ...cliArgs: string[]): { stdout: string; stderr: string } {
+interface CliResult {
+  stdout: string;
+  stderr: string;
+}
+
+function runCli(workspace: string, ...cliArgs: string[]): CliResult {
   try {
     const stdout = execFileSync(process.execPath, [CLI_PATH, ...cliArgs], {
       cwd: workspace,
@@ -126,10 +131,12 @@ function runCli(workspace: string, ...cliArgs: string[]): { stdout: string; stde
     });
     return { stdout, stderr: '' };
   } catch (e) {
+    // SAFETY: execFileSync on failure throws an Error augmented with
+    // stdout/stderr/status per Node's child_process API contract.
     const err = e as { stdout?: Buffer | string; stderr?: Buffer | string; status?: number };
     return {
-      stdout: typeof err.stdout === 'string' ? err.stdout : (err.stdout?.toString('utf8') ?? ''),
-      stderr: typeof err.stderr === 'string' ? err.stderr : (err.stderr?.toString('utf8') ?? ''),
+      stdout: Buffer.isBuffer(err.stdout) ? err.stdout.toString('utf8') : (err.stdout ?? ''),
+      stderr: Buffer.isBuffer(err.stderr) ? err.stderr.toString('utf8') : (err.stderr ?? ''),
     };
   }
 }
@@ -140,7 +147,7 @@ function runCli(workspace: string, ...cliArgs: string[]): { stdout: string; stde
  * requests. execFileSync (used by runCli) freezes this process's event loop
  * for the whole child run, which starves any in-process server.
  */
-function runCliAsync(workspace: string, ...cliArgs: string[]): Promise<{ stdout: string; stderr: string }> {
+function runCliAsync(workspace: string, ...cliArgs: string[]): Promise<CliResult> {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [CLI_PATH, ...cliArgs], {
       cwd: workspace,
@@ -167,6 +174,8 @@ function getActorForContent(workspace: string, contentNeedle: string): string | 
       // Check whether this audit row corresponds to a memory whose content
       // contains our needle. We look it up via the memories table directly
       // since api/store don't expose a content lookup helper here.
+      // SAFETY: literal SELECT of a single known column against the memories
+      // schema; a matching id row always has a content string.
       const row = db.prepare(`SELECT content FROM memories WHERE id = ?`).get(target) as
         | { content: string }
         | undefined;

@@ -36,7 +36,6 @@ import {
   Layer,
   type EmotionalValence,
   type MemoryEntry,
-  type MemoryKind,
   _resetLossAversionRatioCacheForTests,
 } from '../src/memory.js';
 import { initStore, writeEntry } from '../src/store.js';
@@ -64,7 +63,7 @@ function makeEntry(valence: EmotionalValence, opts: Partial<MemoryEntry> = {}): 
   const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
   const e = createMemory(`test memory with valence ${valence}`, {
     layer: Layer.Buffer,
-    kind: 'raw' as MemoryKind,
+    kind: 'raw',
     tenantId: 'default',
     emotional_valence: valence,
   });
@@ -274,13 +273,14 @@ describe('J5 behavioral: env=0 ranking effect (v1.13.5)', () => {
     process.env[ENV_KEY] = '0.5';
     _resetLossAversionRatioCacheForTests();
     const marker = (v: string) => `shared ranking keyword variant ${v} test`;
-    for (const valence of ['positive', 'negative', 'critical', 'neutral'] as EmotionalValence[]) {
+    const valences: EmotionalValence[] = ['positive', 'negative', 'critical', 'neutral'];
+    for (const valence of valences) {
       // v1.13.5 + codex round 2 P2-B fold: age all seeded entries (5 days
       // old, half-life 3) so the unclamped strength values are visible and
       // the env-driven multiplier delta is observable in recall output.
       const e = createMemory(marker(valence), {
         layer: Layer.Buffer,
-        kind: 'raw' as MemoryKind,
+        kind: 'raw',
         tenantId: 'default',
         emotional_valence: valence,
       });
@@ -321,7 +321,7 @@ describe('J5 behavioral: env=0 ranking effect (v1.13.5)', () => {
     _resetLossAversionRatioCacheForTests();
     const baselineEntry = createMemory('shared ranking keyword variant negative test', {
       layer: Layer.Buffer,
-      kind: 'raw' as MemoryKind,
+      kind: 'raw',
       tenantId: 'default',
       emotional_valence: 'negative',
     });

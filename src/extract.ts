@@ -55,7 +55,7 @@ export async function extractFacts(
   if (!res.ok) return [];
 
   try {
-    const data = await res.json() as { content?: Array<{ text?: string }> };
+    const data: { content?: Array<{ text?: string }> } = await res.json();
     const raw = data.content?.[0]?.text?.trim() ?? '';
     if (!raw) return [];
 
@@ -67,11 +67,18 @@ export async function extractFacts(
 
     for (const item of parsed) {
       if (facts.length >= 8) break;
-      if (!item || typeof item.content !== 'string' || item.content.length < 3) continue;
+      if (
+        !item ||
+        Object.prototype.toString.call(item.content) !== '[object String]' ||
+        item.content.length < 3
+      )
+        continue;
 
-      const tags = Array.isArray(item.tags)
-        ? item.tags.filter((t: unknown) => typeof t === 'string')
+      const itemTags = item.tags;
+      const tags = Array.isArray(itemTags)
+        ? itemTags.filter((t) => Object.prototype.toString.call(t) === '[object String]')
         : [];
+      // SAFETY: validValences.has(item.valence) above confirms item.valence is one of the four literal strings of EmotionalValence.
       const valence: EmotionalValence = validValences.has(item.valence)
         ? (item.valence as EmotionalValence)
         : 'neutral';

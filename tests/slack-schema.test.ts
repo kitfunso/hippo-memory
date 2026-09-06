@@ -5,6 +5,16 @@ import { join } from 'path';
 import { initStore } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
+/** Row shape of a SQLite `PRAGMA table_info(...)` result. */
+interface TableInfoRow {
+  cid: number;
+  name: string;
+  type: string;
+  notnull: number;
+  dflt_value: string | null;
+  pk: number;
+}
+
 describe('schema v17 — slack ingestion tables', () => {
   let root: string;
   beforeEach(() => {
@@ -16,7 +26,8 @@ describe('schema v17 — slack ingestion tables', () => {
   it('creates slack_event_log with PRIMARY KEY on event_id', () => {
     const db = openHippoDb(root);
     try {
-      const cols = db.prepare(`PRAGMA table_info(slack_event_log)`).all() as Array<Record<string, unknown>>;
+      // SAFETY: PRAGMA table_info always returns rows with these six columns.
+      const cols = db.prepare(`PRAGMA table_info(slack_event_log)`).all() as TableInfoRow[];
       const eventIdCol = cols.find((c) => c.name === 'event_id');
       expect(eventIdCol).toBeDefined();
       expect(eventIdCol!.pk).toBe(1);
@@ -47,6 +58,8 @@ describe('schema v17 — slack ingestion tables', () => {
     const db = openHippoDb(root);
     try {
       db.prepare(`INSERT INTO slack_dlq (tenant_id, raw_payload, error, received_at) VALUES (?, ?, ?, ?)`).run('default', '{}', 'parse error', '2026-04-29T00:00:00Z');
+      // SAFETY: literal SELECT of the id column for the row this test just
+      // inserted; slack_dlq.id is an INTEGER PRIMARY KEY.
       const row = db.prepare(`SELECT id FROM slack_dlq LIMIT 1`).get() as { id: number };
       expect(row.id).toBe(1);
     } finally {

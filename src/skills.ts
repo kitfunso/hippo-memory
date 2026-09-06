@@ -91,6 +91,13 @@ export interface ListSkillsOpts {
 // Validation
 // ---------------------------------------------------------------------------
 
+/** Normalised return shape for validateSkillFields: named (not an inline object
+ *  type) so the return keeps its literal-evidence narrowing at the call site. */
+interface ValidatedSkillFields {
+  name: string;
+  trigger: string | null;
+}
+
 /**
  * Validate + normalise skill fields. skill_name is trimmed and MUST be a single
  * line (no newlines) so it cannot break the H2 header in the export render
@@ -101,7 +108,7 @@ function validateSkillFields(
   skillName: string,
   instructions: string,
   trigger: string | undefined,
-): { name: string; trigger: string | null } {
+): ValidatedSkillFields {
   const name = (skillName ?? '').trim();
   if (name.length === 0) throw new Error('saveSkill: skillName is required');
   if (/[\r\n]/.test(name)) throw new Error('saveSkill: skillName must be a single line (no newlines)');
@@ -159,6 +166,8 @@ function rowToSkill(row: SkillRow): Skill {
     instructions: row.instructions,
     trigger: row.trigger_text,
     version: row.version,
+    // SAFETY: status is DB-constrained to VALID_SKILL_STATES; this module
+    // is the only writer and always inserts one of those literal strings.
     status: row.status as SkillStatus,
     supersededBy: row.superseded_by,
     supersededAt: row.superseded_at,
@@ -228,6 +237,7 @@ export function saveSkill(
       // Mirrors saveProcess / savePolicy (codex P1 2026-05-28).
       let version = 1;
       if (opts.supersedesSkillId !== undefined) {
+        // SAFETY: row shape matches the `status, version` columns named in the SELECT below.
         const pred = db.prepare(
           `SELECT status, version FROM skills WHERE id = ? AND tenant_id = ?`,
         ).get(opts.supersedesSkillId, tenantId) as
@@ -287,6 +297,7 @@ export function saveSkill(
         });
       }
 
+      // SAFETY: row's shape matches the columns named in SKILL_COLS above.
       const row = db.prepare(`SELECT ${SKILL_COLS} FROM skills WHERE id = ?`)
         .get(skillId) as SkillRow | undefined;
       if (!row) throw new Error('saveSkill: failed to reload saved skill row');
@@ -336,6 +347,7 @@ export function closeSkill(
       `).run(now, id, tenantId);
 
       if (updateResult.changes === 0) {
+        // SAFETY: row shape matches the single `status` column named in the SELECT above.
         const existing = db.prepare(
           `SELECT status FROM skills WHERE id = ? AND tenant_id = ?`,
         ).get(id, tenantId) as { status: string } | undefined;
@@ -347,6 +359,7 @@ export function closeSkill(
         );
       }
 
+      // SAFETY: row's shape matches the columns named in SKILL_COLS above.
       const row = db.prepare(`SELECT ${SKILL_COLS} FROM skills WHERE id = ? AND tenant_id = ?`)
         .get(id, tenantId) as SkillRow | undefined;
       if (!row) throw new Error(`closeSkill: skill ${id} not found after UPDATE`);
@@ -382,6 +395,7 @@ export function loadSkillById(
   assertTenantId('loadSkillById', tenantId);
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: row's shape matches the columns named in SKILL_COLS above.
     const row = db.prepare(`SELECT ${SKILL_COLS} FROM skills WHERE id = ? AND tenant_id = ?`)
       .get(id, tenantId) as SkillRow | undefined;
     return row ? rowToSkill(row) : null;
@@ -406,6 +420,7 @@ export function loadSkills(
           `loadSkills: status must be one of ${Array.from(VALID_SKILL_STATES).join('|')}; got ${opts.status}`,
         );
       }
+      // SAFETY: rows' shape matches the columns named in SKILL_COLS above.
       rows = db.prepare(`
         SELECT ${SKILL_COLS} FROM skills
         WHERE tenant_id = ? AND status = ?
@@ -413,6 +428,7 @@ export function loadSkills(
         LIMIT ?
       `).all(tenantId, opts.status, limit) as SkillRow[];
     } else {
+      // SAFETY: rows' shape matches the columns named in SKILL_COLS above.
       rows = db.prepare(`
         SELECT ${SKILL_COLS} FROM skills
         WHERE tenant_id = ?
@@ -447,6 +463,7 @@ export function exportSkills(hippoRoot: string, tenantId: string): string {
   assertTenantId('exportSkills', tenantId);
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: rows' shape matches the columns named in SKILL_COLS above.
     const rows = db.prepare(`
       SELECT ${SKILL_COLS} FROM skills
       WHERE tenant_id = ? AND status = 'active'

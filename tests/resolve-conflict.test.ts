@@ -28,7 +28,7 @@ afterAll(() => {
   // Clean up any leftover temp dirs
 });
 
-function seedConflict(): { aId: string; bId: string; conflictId: number } {
+function seedConflict() {
   const a = createMemory('Always use semicolons in PowerShell', { tags: ['powershell', 'windows'] });
   const b = createMemory('Use && to chain commands in PowerShell', { tags: ['powershell', 'windows'] });
   writeEntry(tmpDir, a);
@@ -139,7 +139,7 @@ describe('resolveConflict', () => {
 });
 
 describe('conflict tenant isolation (E2)', () => {
-  function seedTenantConflict(tenant: string): { aId: string; bId: string; conflictId: number } {
+  function seedTenantConflict(tenant: string) {
     const a = createMemory(`semicolons rule for ${tenant}`, { tenantId: tenant, tags: ['x'] });
     const b = createMemory(`chaining rule for ${tenant}`, { tenantId: tenant, tags: ['x'] });
     writeEntry(tmpDir, a);

@@ -18,7 +18,7 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, MemoryKind, type MemoryEntry } from '../src/memory.js';
+import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
 import { recall, type Context } from '../src/api.js';
 
 function makeRoot(prefix: string): string {
@@ -37,7 +37,7 @@ function makeRaw(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
   return createMemory(text, {
     layer: Layer.Buffer,
     confidence: 'observed',
-    kind: 'raw' as MemoryKind,
+    kind: 'raw',
     tenantId: opts.tenantId ?? 'default',
   });
 }
@@ -81,7 +81,7 @@ describe('RecallOpts.scorerWindow (F3, v1.7.0)', () => {
 
   it('scorerWindow validation: 0 throws RecallContractError with invalid_scorer_window', () => {
     writeEntry(root, makeRaw('alpha'));
-    let thrown: unknown = null;
+    let thrown = null;
     try {
       recall(ctxFor(root), { query: 'alpha', scorerWindow: 0 });
     } catch (err) {
@@ -89,9 +89,13 @@ describe('RecallOpts.scorerWindow (F3, v1.7.0)', () => {
     }
     expect(thrown).toBeTruthy();
     // Same RecallContractError class, distinguishable by code.
+    // SAFETY: the toBeTruthy() assertion above confirms recall() threw;
+    // RecallContractError is the only error type this call path can throw.
     expect((thrown as { name: string; code?: string }).name).toBe(
       'RecallContractError',
     );
+    // SAFETY: the toBeTruthy() assertion above confirms recall() threw;
+    // RecallContractError is the only error type this call path can throw.
     expect((thrown as { code?: string }).code).toBe('invalid_scorer_window');
   });
 
@@ -99,7 +103,7 @@ describe('RecallOpts.scorerWindow (F3, v1.7.0)', () => {
     'scorerWindow=%s throws RecallContractError with code invalid_scorer_window (testing specialist #1)',
     (bad) => {
       writeEntry(root, makeRaw('alpha'));
-      let thrown: unknown = null;
+      let thrown = null;
       try {
         recall(ctxFor(root), { query: 'alpha', scorerWindow: bad });
       } catch (err) {
@@ -108,8 +112,15 @@ describe('RecallOpts.scorerWindow (F3, v1.7.0)', () => {
       // Per-iteration code assertion catches a regression where one of the
       // bad values (e.g. NaN) sneaks through and the throw comes from a
       // downstream FTS LIMIT instead of our typed validator.
+      // SAFETY: recall() with an invalid scorerWindow always throws
+      // RecallContractError; this it.each case exists to prove that per bad
+      // value below.
       expect((thrown as { name?: string })?.name).toBe('RecallContractError');
+      // SAFETY: see above — RecallContractError is the only error type this
+      // call path can throw.
       expect((thrown as { code?: string })?.code).toBe('invalid_scorer_window');
+      // SAFETY: see above — RecallContractError is the only error type this
+      // call path can throw.
       expect(String((thrown as { message?: string })?.message)).toMatch(
         /scorerWindow must be a positive integer/,
       );

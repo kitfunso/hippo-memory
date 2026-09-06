@@ -81,6 +81,12 @@ interface McpRequest {
   jsonrpc: '2.0';
   id: number | string;
   method: string;
+  // NOTE: kept as Record<string, unknown> (not narrowed to a JsonValue
+  // domain type) because McpRequest is a public exported type consumed by
+  // src/server.ts and ~10 test files that construct `params.arguments` as
+  // Record<string, unknown>; narrowing here would break those out-of-scope
+  // callers. Every actual read of `params` (the tools/call case below)
+  // narrows inline via Object.prototype.toString.call before use.
   params?: Record<string, unknown>;
 }
 
@@ -120,6 +126,43 @@ export interface McpContext {
 // https://modelcontextprotocol.io/specification/.../basic/transports#stdio
 function send(msg: McpResponse): void {
   process.stdout.write(JSON.stringify(msg) + '\n');
+}
+
+// ── JSON-ish domain type for untrusted MCP tool-call arguments ──
+
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+function isJsonString(v: JsonValue): v is string {
+  return Object.prototype.toString.call(v) === '[object String]';
+}
+
+function isJsonBoolean(v: JsonValue): v is boolean {
+  return Object.prototype.toString.call(v) === '[object Boolean]';
+}
+
+// Named shapes for the optional fields each api.* call only wants to pass
+// when the caller actually supplied them. Built via `const extra: T = {};
+// if (cond) extra.field = value;` then spread once, unconditionally — keeps
+// the same per-field omission semantics as a conditional spread without the
+// `...(cond ? { field } : {})` pattern.
+interface RecallExtraOpts {
+  freshTailCount?: number;
+  freshTailSessionId?: string;
+  summarizeOverflow?: boolean;
+  scorerWindow?: number;
+  sessionId?: string;
+}
+
+interface AssembleExtraOpts {
+  budget?: number;
+  freshTailCount?: number;
+  scope?: string;
+}
+
+interface DrillDownExtraOpts {
+  limit?: number;
+  budget?: number;
+  depth?: number;
 }
 
 // ── Format helpers ──
@@ -434,7 +477,7 @@ function resolveClientKey(ctx: { clientKey?: string; tenantId: string } | undefi
 
 async function executeTool(
   name: string,
-  args: Record<string, unknown>,
+  args: Record<string, JsonValue>,
   ctx?: McpContext,
 ): Promise<string> {
   // When a transport hands us a context (HTTP path), trust it: the HTTP
@@ -456,17 +499,17 @@ async function executeTool(
       const query = String(args.query || '');
       const budget = Number(args.budget) || config.defaultBudget;
       const includeContinuity = Boolean(args.include_continuity);
-      const explicitScope = typeof args.scope === 'string' && args.scope.length > 0
-        ? String(args.scope)
+      const explicitScope = isJsonString(args.scope) && args.scope.length > 0
+        ? args.scope
         : undefined;
       const freshTailCountArg = Number(args.fresh_tail_count);
       const freshTailCount = Number.isFinite(freshTailCountArg) && freshTailCountArg > 0
         ? freshTailCountArg
         : undefined;
-      const freshTailSessionId = typeof args.fresh_tail_session_id === 'string' && args.fresh_tail_session_id.length > 0
-        ? String(args.fresh_tail_session_id)
+      const freshTailSessionId = isJsonString(args.fresh_tail_session_id) && args.fresh_tail_session_id.length > 0
+        ? args.fresh_tail_session_id
         : undefined;
-      const summarizeOverflow = typeof args.summarize_overflow === 'boolean'
+      const summarizeOverflow = isJsonBoolean(args.summarize_overflow)
         ? args.summarize_overflow
         : undefined;
       // v1.7.2 T4 — scorer_window: Number-coerce so non-numeric input
@@ -485,7 +528,7 @@ async function executeTool(
       // summary appendix paths see consistent ranking), and (b) below on the
       // physics/hybrid result list before formatMemories (since MCP's
       // user-visible primary ordering does NOT come from api.recall).
-      const sessionIdRaw = typeof args.session_id === 'string' ? args.session_id.trim() : '';
+      const sessionIdRaw = isJsonString(args.session_id) ? args.session_id.trim() : '';
       const sessionId = sessionIdRaw.length > 0 && sessionIdRaw.length <= 256
         ? sessionIdRaw
         : undefined;
@@ -499,6 +542,12 @@ async function executeTool(
       // we want here, so its continuity output is the source of truth.
       // RecallContractError throws propagate raw to the MCP caller (per the
       // v1.6.5 F5 contract documented in mcp-recall-fresh-tail-policy.test.ts).
+      const recallExtra: RecallExtraOpts = {};
+      if (freshTailCount !== undefined) recallExtra.freshTailCount = freshTailCount;
+      if (freshTailSessionId !== undefined) recallExtra.freshTailSessionId = freshTailSessionId;
+      if (summarizeOverflow !== undefined) recallExtra.summarizeOverflow = summarizeOverflow;
+      if (scorerWindow !== undefined) recallExtra.scorerWindow = scorerWindow;
+      if (sessionId !== undefined) recallExtra.sessionId = sessionId;
       const apiResult = apiRecall(apiCtx, {
         query,
         limit: 50,
@@ -515,11 +564,7 @@ async function executeTool(
         // never actually saw. Real MCP tracing is the reserved 'mcp'
         // pipeline value (schema v40) — a follow-up, not v1 scope.
         suppressRecallTrace: true,
-        ...(freshTailCount !== undefined ? { freshTailCount } : {}),
-        ...(freshTailSessionId !== undefined ? { freshTailSessionId } : {}),
-        ...(summarizeOverflow !== undefined ? { summarizeOverflow } : {}),
-        ...(scorerWindow !== undefined ? { scorerWindow } : {}),
-        ...(sessionId !== undefined ? { sessionId } : {}),
+        ...recallExtra,
       });
 
       // Existing physics/hybrid scorer continues to drive user-visible
@@ -544,7 +589,7 @@ async function executeTool(
             if (isPrivateScope(s)) return false;
             // v1.7.2: read from RECALL_DEFAULT_DENY_SCOPES (single source of truth
             // shared with SQL clause + passesScopeFilterForRecall).
-            if ((RECALL_DEFAULT_DENY_SCOPES as readonly string[]).includes(s)) return false;
+            if (RECALL_DEFAULT_DENY_SCOPES.some((deny) => deny === s)) return false;
             return true;
           });
       const droppedPreRankCountMcp = allEntries.length - entries.length;
@@ -835,14 +880,16 @@ async function executeTool(
         tenantId,
         actor: adminActor('mcp'),
       };
-      const explicitScope = typeof args.scope === 'string' && args.scope.length > 0
-        ? String(args.scope)
+      const explicitScope = isJsonString(args.scope) && args.scope.length > 0
+        ? args.scope
         : undefined;
+      const assembleExtra: AssembleExtraOpts = {};
+      if (Number.isFinite(budget) && budget > 0) assembleExtra.budget = budget;
+      if (Number.isFinite(freshTailCount) && freshTailCount >= 0) assembleExtra.freshTailCount = freshTailCount;
+      if (explicitScope !== undefined) assembleExtra.scope = explicitScope;
       const r = apiAssemble(apiCtx, sessionId, {
-        ...(Number.isFinite(budget) && budget > 0 ? { budget } : {}),
-        ...(Number.isFinite(freshTailCount) && freshTailCount >= 0 ? { freshTailCount } : {}),
         summarizeOlder,
-        ...(explicitScope !== undefined ? { scope: explicitScope } : {}),
+        ...assembleExtra,
       });
       const lines: string[] = [];
       lines.push(`Session ${r.sessionId} — ${r.items.length} items, ${r.tokens} tokens (raw=${r.totalRaw}, summarized=${r.summarized}, evicted=${r.evicted})`);
@@ -874,11 +921,11 @@ async function executeTool(
         tenantId,
         actor: adminActor('mcp'),
       };
-      const r = apiDrillDown(apiCtx, summaryId, {
-        ...(Number.isFinite(limit) && limit > 0 ? { limit } : {}),
-        ...(Number.isFinite(budget) && budget > 0 ? { budget } : {}),
-        ...(depth !== undefined ? { depth } : {}),
-      });
+      const drillExtra: DrillDownExtraOpts = {};
+      if (Number.isFinite(limit) && limit > 0) drillExtra.limit = limit;
+      if (Number.isFinite(budget) && budget > 0) drillExtra.budget = budget;
+      if (depth !== undefined) drillExtra.depth = depth;
+      const r = apiDrillDown(apiCtx, summaryId, { ...drillExtra });
       if ('failure' in r) {
         // v1.6.4: only not_drillable is caller-actionable. not_found
         // intentionally collapses cross-tenant + scope-blocked + missing
@@ -985,8 +1032,8 @@ async function executeTool(
         : Number(args.budget);
       if (!Number.isFinite(budget) || budget < 0) return 'budget must be a non-negative number.';
       if (budget === 0) return '';
-      const explicitScope = typeof args.scope === 'string' && args.scope.length > 0
-        ? String(args.scope)
+      const explicitScope = isJsonString(args.scope) && args.scope.length > 0
+        ? args.scope
         : undefined;
       // Auto-detect query from git
       let query = '';
@@ -1010,7 +1057,7 @@ async function executeTool(
         if (isPrivateScope(s)) return false;
         // v1.7.2: read from RECALL_DEFAULT_DENY_SCOPES (single source of truth
         // shared with SQL + api.passesScopeFilterForRecall).
-        if ((RECALL_DEFAULT_DENY_SCOPES as readonly string[]).includes(s)) return false;
+        if (RECALL_DEFAULT_DENY_SCOPES.some((deny) => deny === s)) return false;
         return true;
       };
       const allEntries = loadAllEntries(hippoRoot, tenantId);
@@ -1202,8 +1249,21 @@ export async function handleMcpRequest(
       return { jsonrpc: '2.0', id, result: { tools: TOOLS } };
 
     case 'tools/call': {
-      const toolName = (params as any)?.name;
-      const toolArgs = (params as any)?.arguments ?? {};
+      const nameValue = params?.name;
+      const toolName =
+        // SAFETY: just confirmed via Object.prototype.toString.call that
+        // nameValue is a string; the JSON-RPC tools/call params.name field
+        // is always a string per the MCP wire spec.
+        Object.prototype.toString.call(nameValue) === '[object String]' ? (nameValue as string) : '';
+      const argumentsValue = params?.arguments;
+      const toolArgs =
+        // SAFETY: just confirmed via Object.prototype.toString.call that
+        // argumentsValue is a plain object; executeTool narrows every field
+        // itself before use (see the isJsonString/isJsonBoolean checks
+        // above), so an arbitrary-shaped object is safe to pass through.
+        Object.prototype.toString.call(argumentsValue) === '[object Object]'
+          ? (argumentsValue as Record<string, JsonValue>)
+          : {};
       const output = await executeTool(toolName, toolArgs, ctx);
       return {
         jsonrpc: '2.0',
@@ -1234,6 +1294,10 @@ let buffer: Buffer = Buffer.alloc(0);
 function dispatch(body: string): void {
   let req: McpRequest;
   try {
+    // SAFETY: malformed JSON is caught below and the frame is skipped; the
+    // JSON-RPC shape itself is validated field-by-field next (req.method
+    // truthiness check), matching the src/server.ts HTTP transport's own
+    // `JSON.parse(raw) as McpRequest` boundary cast.
     req = JSON.parse(body) as McpRequest;
   } catch {
     return; // skip malformed

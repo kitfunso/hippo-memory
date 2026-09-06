@@ -126,7 +126,7 @@ export function validatePolicyDates(
   validFromRaw: string | undefined,
   validToRaw: string | undefined,
   nowIso: string,
-): { validFrom: string; validTo: string | null } {
+) {
   const validFrom = validFromRaw !== undefined ? normalizePolicyDate(validFromRaw, 'valid_from') : nowIso;
   const validTo = validToRaw !== undefined && validToRaw !== null
     ? normalizePolicyDate(validToRaw, 'valid_to')
@@ -170,6 +170,8 @@ function rowToPolicy(row: PolicyRow): Policy {
     validFrom: row.valid_from,
     validTo: row.valid_to,
     version: row.version,
+    // SAFETY: row.status is DB-constrained to PolicyStatus values; every INSERT/
+    // UPDATE in this file writes only the literal 'active' | 'superseded' | 'closed'.
     status: row.status as PolicyStatus,
     supersededBy: row.superseded_by,
     supersededAt: row.superseded_at,
@@ -255,6 +257,8 @@ export function savePolicy(
       // Mirrors saveProcess / saveDecision (codex P1 2026-05-28).
       let version = 1;
       if (opts.supersedesPolicyId !== undefined) {
+        // SAFETY: SELECT projects exactly status, version; .get() returns that
+        // shape for the matching row, or undefined when no policy/tenant pair matches.
         const pred = db.prepare(
           `SELECT status, version FROM policies WHERE id = ? AND tenant_id = ?`,
         ).get(opts.supersedesPolicyId, tenantId) as
@@ -315,6 +319,9 @@ export function savePolicy(
         });
       }
 
+      // SAFETY: SELECT ${POLICY_COLS} projects exactly the PolicyRow columns;
+      // .get() returns that row, or undefined only if the just-inserted id can't
+      // be found.
       const row = db.prepare(`SELECT ${POLICY_COLS} FROM policies WHERE id = ?`)
         .get(policyId) as PolicyRow | undefined;
       if (!row) throw new Error('savePolicy: failed to reload saved policy row');
@@ -366,6 +373,8 @@ export function closePolicy(
       `).run(now, id, tenantId);
 
       if (updateResult.changes === 0) {
+        // SAFETY: SELECT projects exactly the status column; .get() returns that
+        // shape, or undefined when the id/tenant pair doesn't exist.
         const existing = db.prepare(
           `SELECT status FROM policies WHERE id = ? AND tenant_id = ?`,
         ).get(id, tenantId) as { status: string } | undefined;
@@ -377,6 +386,9 @@ export function closePolicy(
         );
       }
 
+      // SAFETY: SELECT ${POLICY_COLS} projects exactly the PolicyRow columns;
+      // .get() returns that row for the just-updated id, or undefined only in an
+      // impossible race since the UPDATE above already matched it.
       const row = db.prepare(`SELECT ${POLICY_COLS} FROM policies WHERE id = ? AND tenant_id = ?`)
         .get(id, tenantId) as PolicyRow | undefined;
       if (!row) throw new Error(`closePolicy: policy ${id} not found after UPDATE`);
@@ -422,6 +434,8 @@ export function loadPolicyById(
   assertTenantId('loadPolicyById', tenantId);
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: SELECT ${POLICY_COLS} projects exactly the PolicyRow columns;
+    // .get() returns that row, or undefined when the id/tenant pair doesn't exist.
     const row = db.prepare(`SELECT ${POLICY_COLS} FROM policies WHERE id = ? AND tenant_id = ?`)
       .get(id, tenantId) as PolicyRow | undefined;
     return row ? rowToPolicy(row) : null;
@@ -446,6 +460,8 @@ export function loadPolicies(
           `loadPolicies: status must be one of ${Array.from(VALID_POLICY_STATES).join('|')}; got ${opts.status}`,
         );
       }
+      // SAFETY: SELECT ${POLICY_COLS} projects exactly the PolicyRow columns;
+      // .all() returns rows in that shape regardless of the status filter applied.
       rows = db.prepare(`
         SELECT ${POLICY_COLS} FROM policies
         WHERE tenant_id = ? AND status = ?
@@ -453,6 +469,8 @@ export function loadPolicies(
         LIMIT ?
       `).all(tenantId, opts.status, limit) as PolicyRow[];
     } else {
+      // SAFETY: SELECT ${POLICY_COLS} projects exactly the PolicyRow columns;
+      // .all() returns rows in that shape for every tenant-scoped row.
       rows = db.prepare(`
         SELECT ${POLICY_COLS} FROM policies
         WHERE tenant_id = ?
@@ -523,6 +541,10 @@ export function loadPoliciesAsOf(
     const params: Array<string | number> = [tenantId, asOf, asOf, asOf];
     if (opts.name !== undefined) params.push(opts.name);
     params.push(limit);
+    // SAFETY: the SELECT list explicitly aliases p.* to exactly the PolicyRow
+    // columns (id, memory_id, tenant_id, policy_name, policy_text, valid_from,
+    // valid_to, version, status, superseded_by, superseded_at, change_summary,
+    // closed_at, created_at); .all() returns rows in that shape.
     const rows = db.prepare(`
       SELECT p.id, p.memory_id, p.tenant_id, p.policy_name, p.policy_text,
              p.valid_from, p.valid_to, p.version, p.status, p.superseded_by,

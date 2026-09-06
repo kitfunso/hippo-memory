@@ -103,12 +103,12 @@ function mem(id: string, content: string, opts: {
     dag_level: opts.dag_level,
     dag_parent_id: opts.dag_parent_id,
   });
-  (entry as any).id = id;
-  if (opts.created) (entry as any).created = opts.created;
+  entry.id = id;
+  if (opts.created) entry.created = opts.created;
   return entry;
 }
 
-export function buildSyntheticCorpus(): { entries: MemoryEntry[]; cases: FeatureTestCase[] } {
+export function buildSyntheticCorpus() {
   const entries: MemoryEntry[] = [];
   const cases: FeatureTestCase[] = [];
 
@@ -196,7 +196,7 @@ export function buildSyntheticCorpus(): { entries: MemoryEntry[]; cases: Feature
   );
   // Link children to parent
   for (const child of [entries.find(e => e.id === 'dag-child-1')!, entries.find(e => e.id === 'dag-child-2')!, entries.find(e => e.id === 'dag-child-3')!]) {
-    (child as any).dag_parent_id = 'dag-summary-1';
+    child.dag_parent_id = 'dag-summary-1';
   }
 
   cases.push(
@@ -319,7 +319,7 @@ export async function runFeatureEval(version: string): Promise<EvalSuiteResult> 
     });
   }
 
-  const categories = [...new Set(cases.map(c => c.category))] as FeatureCategory[];
+  const categories = [...new Set(cases.map(c => c.category))];
   const features: FeatureResult[] = categories.map(cat => {
     const catCases = caseResults.filter(r => r.case.category === cat);
     const n = catCases.length;
@@ -386,7 +386,12 @@ export function detectRegressions(baseline: EvalBaseline, current: EvalSuiteResu
 }
 
 export function resultToBaseline(result: EvalSuiteResult): EvalBaseline {
-  const features: EvalBaseline['features'] = {} as any;
+  // SAFETY: every FeatureCategory key is populated by the loop immediately
+  // below (one iteration per entry in result.features), before this object
+  // is read anywhere; result.features is built from every category in
+  // buildSyntheticCorpus's cases (runFeatureEval derives `categories` the
+  // same way), so no FeatureCategory key is left unset.
+  const features: EvalBaseline['features'] = {} as EvalBaseline['features'];
   for (const f of result.features) {
     features[f.category] = { mrr: f.mrr, recallAt5: f.recallAt5, ndcgAt5: f.ndcgAt5 };
   }

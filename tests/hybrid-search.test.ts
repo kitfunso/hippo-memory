@@ -41,10 +41,10 @@ describe('hybridSearch with embeddings', () => {
 
     // Synthetic vectors: query is close to entry[0], far from entry[1]
     const queryVector = [1.0, 0.0, 0.0, 0.0];
-    const embeddingIndex: Record<string, number[]> = {
+    const embeddingIndex = {
       [entries[0].id]: [0.95, 0.05, 0.0, 0.0],  // high similarity to query
       [entries[1].id]: [0.0, 0.0, 1.0, 0.0],     // orthogonal to query
-    };
+    } satisfies Record<string, number[]>;
 
     const tmpDir = setupEmbeddingFixture(embeddingIndex);
 
@@ -74,10 +74,10 @@ describe('hybridSearch with embeddings', () => {
     // entry[0]: strong keyword match AND strong embedding match
     // entry[1]: strong keyword match but weak embedding match
     const queryVector = [1.0, 0.0, 0.0];
-    const embeddingIndex: Record<string, number[]> = {
+    const embeddingIndex = {
       [entries[0].id]: [0.9, 0.1, 0.0],   // high cosine
       [entries[1].id]: [0.1, 0.9, 0.0],   // low cosine
-    };
+    } satisfies Record<string, number[]>;
 
     // BM25 alone: both match "cache" similarly
     const bm25Results = search('cache failure', entries, { budget: 10000 });
@@ -261,7 +261,7 @@ describe('SearchResult cosine field', () => {
 describe('searchBothHybrid', () => {
   it('is exported and callable', async () => {
     const { searchBothHybrid } = await import('../src/shared.js');
-    expect(typeof searchBothHybrid).toBe('function');
+    expect(searchBothHybrid).toBeInstanceOf(Function);
   });
 });
 
@@ -334,14 +334,14 @@ describe('mmrRerank', () => {
       cosine: 0,
       tokens: 0,
       // force id to match what we index in embeddings map
-    } as unknown as SearchResult & { entry: { id: string } };
+    };
   }
 
   it('lambda=1 returns pure-relevance ordering unchanged', () => {
     const a = makeResult('a', 0.9);
     const b = makeResult('b', 0.6);
-    (a as unknown as { entry: { id: string } }).entry.id = 'a';
-    (b as unknown as { entry: { id: string } }).entry.id = 'b';
+    a.entry.id = 'a';
+    b.entry.id = 'b';
     const idx = { a: [1, 0], b: [0, 1] };
     const ranked = mmrRerank([a, b], idx, 1.0, false);
     expect(ranked.map((r) => r.entry.id)).toEqual(['a', 'b']);
@@ -353,9 +353,9 @@ describe('mmrRerank', () => {
     const a = makeResult('a', 1.00);
     const b = makeResult('b', 0.95);
     const c = makeResult('c', 0.70);
-    (a as unknown as { entry: { id: string } }).entry.id = 'a';
-    (b as unknown as { entry: { id: string } }).entry.id = 'b';
-    (c as unknown as { entry: { id: string } }).entry.id = 'c';
+    a.entry.id = 'a';
+    b.entry.id = 'b';
+    c.entry.id = 'c';
     const idx = {
       a: [1, 0, 0],
       b: [0.99, 0.14, 0],     // cos(a, b) ≈ 0.99 — duplicates
@@ -371,11 +371,17 @@ describe('mmrRerank', () => {
     const a = makeResult('a', 1.00);
     const b = makeResult('b', 0.95);
     const c = makeResult('c', 0.70);
-    (a as unknown as { entry: { id: string } }).entry.id = 'a';
-    (b as unknown as { entry: { id: string } }).entry.id = 'b';
-    (c as unknown as { entry: { id: string } }).entry.id = 'c';
+    a.entry.id = 'a';
+    b.entry.id = 'b';
+    c.entry.id = 'c';
+    // SAFETY: fixture only reads breakdown.mode/preMmrRank/postMmrRank below;
+    // mmrRerank sets the MMR rank fields, the rest of ScoreBreakdown is unused here.
     a.breakdown = { mode: 'hybrid' } as SearchResult['breakdown'];
+    // SAFETY: fixture only reads breakdown.mode/preMmrRank/postMmrRank below;
+    // mmrRerank sets the MMR rank fields, the rest of ScoreBreakdown is unused here.
     b.breakdown = { mode: 'hybrid' } as SearchResult['breakdown'];
+    // SAFETY: fixture only reads breakdown.mode/preMmrRank/postMmrRank below;
+    // mmrRerank sets the MMR rank fields, the rest of ScoreBreakdown is unused here.
     c.breakdown = { mode: 'hybrid' } as SearchResult['breakdown'];
     const idx = { a: [1, 0, 0], b: [0.99, 0.14, 0], c: [0, 0, 1] };
     const ranked = mmrRerank([a, b, c], idx, 0.5, true);
@@ -388,8 +394,8 @@ describe('mmrRerank', () => {
   it('leaves order unchanged when no embeddings are available for any doc', () => {
     const a = makeResult('a', 0.9);
     const b = makeResult('b', 0.8);
-    (a as unknown as { entry: { id: string } }).entry.id = 'a';
-    (b as unknown as { entry: { id: string } }).entry.id = 'b';
+    a.entry.id = 'a';
+    b.entry.id = 'b';
     const ranked = mmrRerank([a, b], {}, 0.5, false);
     expect(ranked.map((r) => r.entry.id)).toEqual(['a', 'b']);
   });

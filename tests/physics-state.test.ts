@@ -161,6 +161,8 @@ describe('physics table creation', () => {
     const db = openHippoDb(tmpDir);
     try {
       // Should not throw
+      // SAFETY: literal COUNT(*) query against the known memory_physics
+      // schema always returns a single { cnt } row.
       const row = db.prepare(
         `SELECT COUNT(*) AS cnt FROM memory_physics`
       ).get() as { cnt: number };
@@ -173,6 +175,8 @@ describe('physics table creation', () => {
   it('creates the index idx_memory_physics_mass', () => {
     const db = openHippoDb(tmpDir);
     try {
+      // SAFETY: literal SELECT against the known sqlite_master schema; name
+      // is NOT NULL for every index row.
       const rows = db.prepare(
         `SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='memory_physics'`
       ).all() as Array<{ name: string }>;
@@ -525,10 +529,10 @@ describe('resetAllPhysicsState', () => {
         makeMemoryEntry('mem_r1'),
         makeMemoryEntry('mem_r2'),
       ];
-      const embeddingIndex: Record<string, number[]> = {
+      const embeddingIndex = {
         mem_r1: [0.5, 0.5, 0.5],
         mem_r2: [0.1, 0.2, 0.3],
-      };
+      } satisfies Record<string, number[]>;
 
       const count = resetAllPhysicsState(db, entries, embeddingIndex, NOW);
       expect(count).toBe(2);
@@ -555,10 +559,10 @@ describe('resetAllPhysicsState', () => {
         makeMemoryEntry('mem_has_emb'),
         makeMemoryEntry('mem_no_emb'),
       ];
-      const embeddingIndex: Record<string, number[]> = {
+      const embeddingIndex = {
         mem_has_emb: [0.1, 0.2, 0.3],
         // mem_no_emb intentionally missing
-      };
+      } satisfies Record<string, number[]>;
 
       const count = resetAllPhysicsState(db, entries, embeddingIndex, NOW);
       expect(count).toBe(1);
@@ -577,9 +581,9 @@ describe('resetAllPhysicsState', () => {
       insertMemoryRow(db, 'mem_empty_emb');
 
       const entries = [makeMemoryEntry('mem_empty_emb')];
-      const embeddingIndex: Record<string, number[]> = {
+      const embeddingIndex = {
         mem_empty_emb: [],
-      };
+      } satisfies Record<string, number[]>;
 
       const count = resetAllPhysicsState(db, entries, embeddingIndex, NOW);
       expect(count).toBe(0);

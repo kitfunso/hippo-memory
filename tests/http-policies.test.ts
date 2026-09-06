@@ -23,6 +23,15 @@ import { initStore } from '../src/store.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { createApiKey, type CreatedApiKey } from '../src/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
+import type { Policy } from '../src/policies.js';
+
+/** Parse a fetch Response body against a caller-declared shape. */
+async function jsonAs<T>(res: Response): Promise<T> {
+  // SAFETY: only used against this file's own /v1/policies route responses,
+  // whose JSON shape is fixed by the handler in src/server.ts and checked by
+  // the assertions immediately following each call site.
+  return (await res.json()) as T;
+}
 
 function makeRoot(): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-http-pol-'));
@@ -53,7 +62,14 @@ afterEach(async () => {
 function authHeaders(key: CreatedApiKey = apiKey) {
   return { authorization: `Bearer ${key.plaintext}`, 'content-type': 'application/json' };
 }
-async function createPolicy(body: Record<string, unknown>, key: CreatedApiKey = apiKey) {
+interface CreatePolicyBody {
+  policyName: string;
+  policyText: string;
+  validFrom?: string;
+  validTo?: string;
+}
+
+async function createPolicy(body: CreatePolicyBody, key: CreatedApiKey = apiKey) {
   return fetch(`${handle.url}/v1/policies`, { method: 'POST', headers: authHeaders(key), body: JSON.stringify(body) });
 }
 
@@ -61,7 +77,7 @@ describe('HTTP /v1/policies (E2 bi-temporal first-class object)', () => {
   it('POST /v1/policies creates a policy (201 + Policy, version 1)', async () => {
     const res = await createPolicy({ policyName: 'Retention', policyText: 'delete after 90d', validFrom: '2026-01-01' });
     expect(res.status).toBe(201);
-    const body = await res.json() as { policy: Record<string, unknown> };
+    const body = await jsonAs<{ policy: Policy }>(res);
     expect(body.policy.policyName).toBe('Retention');
     expect(body.policy.validFrom).toBe('2026-01-01T00:00:00.000Z');
     expect(body.policy.version).toBe(1);
@@ -69,23 +85,23 @@ describe('HTTP /v1/policies (E2 bi-temporal first-class object)', () => {
   });
 
   it('GET /v1/policies lists + filters by status', async () => {
-    const v1 = (await (await createPolicy({ policyName: 'P', policyText: 'a' })).json() as { policy: { id: number } }).policy;
+    const v1 = (await jsonAs<{ policy: Policy }>(await createPolicy({ policyName: 'P', policyText: 'a' }))).policy;
     await fetch(`${handle.url}/v1/policies/${v1.id}/supersede`, {
       method: 'POST', headers: authHeaders(), body: JSON.stringify({ policyText: 'b', changeSummary: 'c' }),
     });
-    const all = await (await fetch(`${handle.url}/v1/policies`, { headers: authHeaders() })).json() as { policies: unknown[] };
+    const all = await jsonAs<{ policies: Policy[] }>(await fetch(`${handle.url}/v1/policies`, { headers: authHeaders() }));
     expect(all.policies.length).toBe(2);
-    const active = await (await fetch(`${handle.url}/v1/policies?status=active`, { headers: authHeaders() })).json() as { policies: Array<{ version: number }> };
+    const active = await jsonAs<{ policies: Policy[] }>(await fetch(`${handle.url}/v1/policies?status=active`, { headers: authHeaders() }));
     expect(active.policies.length).toBe(1);
     expect(active.policies[0].version).toBe(2);
   });
 
   it('GET /v1/policies/asof returns active policies in force at a valid-time', async () => {
     await createPolicy({ policyName: 'W', policyText: 'win', validFrom: '2026-01-01', validTo: '2026-06-01' });
-    const inForce = await (await fetch(`${handle.url}/v1/policies/asof?date=2026-03-01`, { headers: authHeaders() })).json() as { policies: unknown[] };
+    const inForce = await jsonAs<{ policies: Policy[] }>(await fetch(`${handle.url}/v1/policies/asof?date=2026-03-01`, { headers: authHeaders() }));
     expect(inForce.policies.length).toBe(1);
     // half-open: == valid_to not in force
-    const atEnd = await (await fetch(`${handle.url}/v1/policies/asof?date=2026-06-01`, { headers: authHeaders() })).json() as { policies: unknown[] };
+    const atEnd = await jsonAs<{ policies: Policy[] }>(await fetch(`${handle.url}/v1/policies/asof?date=2026-06-01`, { headers: authHeaders() }));
     expect(atEnd.policies.length).toBe(0);
     // missing date -> 400
     const noDate = await fetch(`${handle.url}/v1/policies/asof`, { headers: authHeaders() });
@@ -93,18 +109,18 @@ describe('HTTP /v1/policies (E2 bi-temporal first-class object)', () => {
   });
 
   it('GET /v1/policies/:id returns single + 404 on missing', async () => {
-    const created = (await (await createPolicy({ policyName: 'X', policyText: 'a' })).json() as { policy: { id: number } }).policy;
+    const created = (await jsonAs<{ policy: Policy }>(await createPolicy({ policyName: 'X', policyText: 'a' }))).policy;
     expect((await fetch(`${handle.url}/v1/policies/${created.id}`, { headers: authHeaders() })).status).toBe(200);
     expect((await fetch(`${handle.url}/v1/policies/99999`, { headers: authHeaders() })).status).toBe(404);
   });
 
   it('POST /v1/policies/:id/supersede creates v2 (+409 on re-supersede)', async () => {
-    const v1 = (await (await createPolicy({ policyName: 'B', policyText: 'a' })).json() as { policy: { id: number } }).policy;
+    const v1 = (await jsonAs<{ policy: Policy }>(await createPolicy({ policyName: 'B', policyText: 'a' }))).policy;
     const sup = await fetch(`${handle.url}/v1/policies/${v1.id}/supersede`, {
       method: 'POST', headers: authHeaders(), body: JSON.stringify({ policyText: 'b', changeSummary: 'x' }),
     });
     expect(sup.status).toBe(200);
-    expect((await sup.json() as { policy: { version: number } }).policy.version).toBe(2);
+    expect((await jsonAs<{ policy: Policy }>(sup)).policy.version).toBe(2);
     const conflict = await fetch(`${handle.url}/v1/policies/${v1.id}/supersede`, {
       method: 'POST', headers: authHeaders(), body: JSON.stringify({ policyText: 'c' }),
     });
@@ -112,7 +128,7 @@ describe('HTTP /v1/policies (E2 bi-temporal first-class object)', () => {
   });
 
   it('POST /v1/policies/:id/close retires (+409 on re-close)', async () => {
-    const p = (await (await createPolicy({ policyName: 'C', policyText: 'a' })).json() as { policy: { id: number } }).policy;
+    const p = (await jsonAs<{ policy: Policy }>(await createPolicy({ policyName: 'C', policyText: 'a' }))).policy;
     expect((await fetch(`${handle.url}/v1/policies/${p.id}/close`, { method: 'POST', headers: authHeaders() })).status).toBe(200);
     expect((await fetch(`${handle.url}/v1/policies/${p.id}/close`, { method: 'POST', headers: authHeaders() })).status).toBe(409);
   });
@@ -144,8 +160,8 @@ describe('HTTP /v1/policies (E2 bi-temporal first-class object)', () => {
   });
 
   it('cross-tenant isolation: tenant-b cannot see default policies', async () => {
-    const created = (await (await createPolicy({ policyName: 'secret', policyText: 'a' })).json() as { policy: { id: number } }).policy;
-    const bList = await (await fetch(`${handle.url}/v1/policies`, { headers: authHeaders(apiKeyB) })).json() as { policies: unknown[] };
+    const created = (await jsonAs<{ policy: Policy }>(await createPolicy({ policyName: 'secret', policyText: 'a' }))).policy;
+    const bList = await jsonAs<{ policies: Policy[] }>(await fetch(`${handle.url}/v1/policies`, { headers: authHeaders(apiKeyB) }));
     expect(bList.policies.length).toBe(0);
     expect((await fetch(`${handle.url}/v1/policies/${created.id}`, { headers: authHeaders(apiKeyB) })).status).toBe(404);
   });

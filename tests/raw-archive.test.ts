@@ -5,6 +5,16 @@ import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { archiveRawMemory } from '../src/raw-archive.js';
 
+interface ArchivedRawPayload {
+  redacted?: boolean;
+  tenant_id?: string;
+  kind?: string;
+  reason?: string;
+  archived_at?: string;
+  id?: string;
+  content?: string;
+}
+
 describe('archiveRawMemory', () => {
   it('snapshots row into raw_archive then removes it from memories', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-arch-'));
@@ -15,6 +25,8 @@ describe('archiveRawMemory', () => {
     archiveRawMemory(db, 'r1', { reason: 'GDPR right-to-be-forgotten', who: 'user:42' });
     const remaining = db.prepare(`SELECT id FROM memories WHERE id='r1'`).get();
     expect(remaining).toBeUndefined();
+    // SAFETY: literal SELECT of the raw_archive row this test just wrote via
+    // archiveRawMemory above; all four columns are NOT NULL in the schema.
     const archived = db
       .prepare(`SELECT memory_id, reason, archived_by, payload_json FROM raw_archive WHERE memory_id='r1'`)
       .get() as { memory_id: string; reason: string; archived_by: string; payload_json: string };
@@ -24,12 +36,14 @@ describe('archiveRawMemory', () => {
     // v0.39 Path A: payload_json is metadata-only — original content is NOT
     // stored. The audit_log row carries the compliance trail; raw_archive
     // tracks only that an archive happened, for what tenant/kind, and why.
-    const payload = JSON.parse(archived.payload_json) as Record<string, unknown>;
+    // SAFETY: payload_json is written by archiveRawMemory (src/raw-archive.ts)
+    // with exactly this metadata-only shape.
+    const payload = JSON.parse(archived.payload_json) as ArchivedRawPayload;
     expect(payload.redacted).toBe(true);
     expect(payload.tenant_id).toBe('default');
     expect(payload.kind).toBe('raw');
     expect(payload.reason).toBe('GDPR right-to-be-forgotten');
-    expect(typeof payload.archived_at).toBe('string');
+    expect(payload.archived_at).toEqual(expect.any(String));
     expect(payload.id).toBeUndefined();
     expect(payload.content).toBeUndefined();
     closeHippoDb(db);
@@ -59,6 +73,8 @@ describe('archiveRawMemory', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-arch-'));
     const db = openHippoDb(home);
     // Skip if FTS5 not available in this build
+    // SAFETY: literal SELECT of a single known meta key; the value column is
+    // NOT NULL in the schema when the row exists.
     const ftsRow = db.prepare(`SELECT value FROM meta WHERE key='fts5_available'`).get() as
       | { value: string }
       | undefined;

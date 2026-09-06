@@ -28,7 +28,7 @@ export function loadWorkspaceRegistry(globalRoot: string): WorkspaceRegistry {
   if (!fs.existsSync(registryPath)) return defaultRegistry();
 
   try {
-    const parsed = JSON.parse(fs.readFileSync(registryPath, 'utf8')) as Partial<WorkspaceRegistry>;
+    const parsed: Partial<WorkspaceRegistry> = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
     const workspaces = Array.isArray(parsed.workspaces)
       ? [...new Set(parsed.workspaces.map((entry) => normalizeWorkspace(String(entry))).filter(Boolean))].sort()
       : [];

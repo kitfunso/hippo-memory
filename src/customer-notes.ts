@@ -96,7 +96,7 @@ function validateNoteFields(
   customer: string,
   note: string,
   changeSummary: string | undefined,
-): { customer: string } {
+) {
   const normalizedCustomer = (customer ?? '').trim();
   if (normalizedCustomer.length === 0) throw new Error('saveCustomerNote: customer is required');
   if (/[\r\n]/.test(normalizedCustomer)) {
@@ -144,6 +144,8 @@ function rowToCustomerNote(row: CustomerNoteRow): CustomerNote {
     customer: row.customer,
     note: row.note,
     version: row.version,
+    // SAFETY: row.status is DB-constrained to NoteStatus values; every INSERT/
+    // UPDATE in this file writes only the literal 'active' | 'superseded' | 'closed'.
     status: row.status as NoteStatus,
     supersededBy: row.superseded_by,
     supersededAt: row.superseded_at,
@@ -214,6 +216,8 @@ export function saveCustomerNote(
       // Mirrors saveProjectBrief / saveSkill (codex P1 2026-05-28).
       let version = 1;
       if (opts.supersedesNoteId !== undefined) {
+        // SAFETY: SELECT projects exactly status, version; .get() returns that
+        // shape for the matching row, or undefined when no note/tenant pair matches.
         const pred = db.prepare(
           `SELECT status, version FROM customer_notes WHERE id = ? AND tenant_id = ?`,
         ).get(opts.supersedesNoteId, tenantId) as
@@ -272,6 +276,9 @@ export function saveCustomerNote(
         });
       }
 
+      // SAFETY: SELECT ${NOTE_COLS} projects exactly the CustomerNoteRow columns;
+      // .get() returns that row, or undefined only if the just-inserted id can't
+      // be found.
       const row = db.prepare(`SELECT ${NOTE_COLS} FROM customer_notes WHERE id = ?`)
         .get(noteId) as CustomerNoteRow | undefined;
       if (!row) throw new Error('saveCustomerNote: failed to reload saved note row');
@@ -322,6 +329,8 @@ export function closeCustomerNote(
       `).run(now, id, tenantId);
 
       if (updateResult.changes === 0) {
+        // SAFETY: SELECT projects exactly the status column; .get() returns that
+        // shape, or undefined when the id/tenant pair doesn't exist.
         const existing = db.prepare(
           `SELECT status FROM customer_notes WHERE id = ? AND tenant_id = ?`,
         ).get(id, tenantId) as { status: string } | undefined;
@@ -333,6 +342,9 @@ export function closeCustomerNote(
         );
       }
 
+      // SAFETY: SELECT ${NOTE_COLS} projects exactly the CustomerNoteRow columns;
+      // .get() returns that row for the just-updated id, or undefined only in an
+      // impossible race since the UPDATE above already matched it.
       const row = db.prepare(`SELECT ${NOTE_COLS} FROM customer_notes WHERE id = ? AND tenant_id = ?`)
         .get(id, tenantId) as CustomerNoteRow | undefined;
       if (!row) throw new Error(`closeCustomerNote: note ${id} not found after UPDATE`);
@@ -378,6 +390,8 @@ export function loadCustomerNoteById(
   assertTenantId('loadCustomerNoteById', tenantId);
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: SELECT ${NOTE_COLS} projects exactly the CustomerNoteRow columns;
+    // .get() returns that row, or undefined when the id/tenant pair doesn't exist.
     const row = db.prepare(`SELECT ${NOTE_COLS} FROM customer_notes WHERE id = ? AND tenant_id = ?`)
       .get(id, tenantId) as CustomerNoteRow | undefined;
     return row ? rowToCustomerNote(row) : null;
@@ -411,6 +425,9 @@ export function loadCustomerNotes(
       params.push(opts.customer);
     }
     params.push(limit);
+    // SAFETY: SELECT ${NOTE_COLS} projects exactly the CustomerNoteRow columns
+    // regardless of the dynamic WHERE clause built above; .all() returns rows
+    // in that shape.
     const rows = db.prepare(`
       SELECT ${NOTE_COLS} FROM customer_notes
       WHERE ${clauses.join(' AND ')}

@@ -71,6 +71,8 @@ interface StoredCursors {
 function readCursor(root: string, tenantId: string, repo: string): StoredCursors {
   const db = openHippoDb(root);
   try {
+    // SAFETY: row's shape matches the three HWM columns named in the SELECT
+    // above; `better-sqlite3`'s `.get()` return type is untyped by the driver.
     const row = db
       .prepare(
         `SELECT issues_hwm, issue_comments_hwm, pr_review_comments_hwm
@@ -168,21 +170,40 @@ interface PrReviewCommentItem {
 }
 
 function isIssuesItem(x: unknown): x is IssuesItem {
-  if (!x || typeof x !== 'object') return false;
-  const o = x as Record<string, unknown>;
-  if (typeof o.number !== 'number') return false;
-  if (typeof o.title !== 'string') return false;
+  if (!x || Object.prototype.toString.call(x) !== '[object Object]') return false;
+  // SAFETY: the toString.call check above confirmed x is a plain object;
+  // each field read here is toString.call-validated before returning true.
+  const o = x as { number?: unknown; title?: unknown; user?: unknown };
+  if (Object.prototype.toString.call(o.number) !== '[object Number]') return false;
+  if (Object.prototype.toString.call(o.title) !== '[object String]') return false;
+  // SAFETY: o.user is read as unknown and both fields are validated below.
   const u = o.user as { login?: unknown; id?: unknown } | undefined;
-  if (!u || typeof u.login !== 'string' || typeof u.id !== 'number') return false;
+  if (
+    !u ||
+    Object.prototype.toString.call(u.login) !== '[object String]' ||
+    Object.prototype.toString.call(u.id) !== '[object Number]'
+  ) {
+    return false;
+  }
   return true;
 }
 
 function isCommentItem(x: unknown): x is IssueCommentItem | PrReviewCommentItem {
-  if (!x || typeof x !== 'object') return false;
-  const o = x as Record<string, unknown>;
-  if (typeof o.id !== 'number') return false;
+  if (!x || Object.prototype.toString.call(x) !== '[object Object]') return false;
+  // SAFETY: the toString.call check above confirmed x is a plain object; id
+  // and user are the only fields shared by IssueCommentItem and
+  // PrReviewCommentItem, and both are validated before returning true.
+  const o = x as { id?: unknown; user?: unknown };
+  if (Object.prototype.toString.call(o.id) !== '[object Number]') return false;
+  // SAFETY: o.user is read as unknown and both fields are validated below.
   const u = o.user as { login?: unknown; id?: unknown } | undefined;
-  if (!u || typeof u.login !== 'string' || typeof u.id !== 'number') return false;
+  if (
+    !u ||
+    Object.prototype.toString.call(u.login) !== '[object String]' ||
+    Object.prototype.toString.call(u.id) !== '[object Number]'
+  ) {
+    return false;
+  }
   return true;
 }
 
@@ -232,8 +253,10 @@ async function drainStream(
       // v1.3.1: track updated_at on EVERY item, before the toIngestEvent
       // filter. Skipped PRs from /issues still contribute to the HWM so
       // PR-only pages don't loop forever.
+      // SAFETY: toString.call confirms item is a plain object before the
+      // cast; `updated_at` is read as an optional field and defaulted to null.
       const updatedAt =
-        item && typeof item === 'object'
+        item && Object.prototype.toString.call(item) === '[object Object]'
           ? ((item as { updated_at?: string }).updated_at ?? null)
           : null;
       if (updatedAt && (!maxUpdatedAt || updatedAt > maxUpdatedAt)) {
@@ -330,6 +353,9 @@ export async function backfillRepo(
     commentsUrl,
     (item) => {
       if (!isCommentItem(item)) return null;
+      // SAFETY: this closure only runs against the /issues/comments stream,
+      // so every item isCommentItem validates here is genuinely an
+      // IssueCommentItem; a missing issue_url is handled defensively below.
       const c = item as IssueCommentItem;
       const issueNumber = parseTrailingNumber(c.issue_url);
       if (issueNumber === null) return null;
@@ -374,6 +400,9 @@ export async function backfillRepo(
     prCommentsUrl,
     (item) => {
       if (!isCommentItem(item)) return null;
+      // SAFETY: this closure only runs against the /pulls/comments stream,
+      // so every item isCommentItem validates here is genuinely a
+      // PrReviewCommentItem; a missing pull_request_url is handled below.
       const c = item as PrReviewCommentItem;
       const prNumber = parseTrailingNumber(c.pull_request_url);
       if (prNumber === null) return null;

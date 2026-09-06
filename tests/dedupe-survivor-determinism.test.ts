@@ -27,7 +27,7 @@ import { compareEntryIdentity } from '../src/compare.js';
 import { consolidate } from '../src/consolidate.js';
 import { createMemory, Layer } from '../src/memory.js';
 
-function tmpHome(prefix: string): { home: string; restore: () => void } {
+function tmpHome(prefix: string) {
   const home = mkdtempSync(join(tmpdir(), prefix));
   initStore(home);
   return {
@@ -333,6 +333,6 @@ describe('dedupe survivor determinism', () => {
 
     const cmp = bucketDiff !== 0 ? bucketDiff : retrievalDiff !== 0 ? retrievalDiff : identity;
     expect(Number.isNaN(cmp)).toBe(false);
-    expect(typeof cmp).toBe('number');
+    expect(Number.isFinite(cmp)).toBe(true);
   });
 });

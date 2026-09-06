@@ -41,6 +41,8 @@ function safeRmSync(p: string): void {
 function countPredictBaserateAudits(root: string): number {
   const db = openHippoDb(root);
   try {
+    // SAFETY: literal COUNT(*) query against the known audit_log schema
+    // always returns a single { n } row.
     const row = db.prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE op = 'predict_baserate'`).get() as { n: number };
     return row.n;
   } finally {
@@ -89,6 +91,8 @@ describe('computePredictionBaserate emitAudit flag (J3.2 v0.32)', () => {
     computePredictionBaserate(root, 'default', 'with-actor', 'mcp');
     const db = openHippoDb(root);
     try {
+      // SAFETY: literal SELECT of the actor column for the predict_baserate
+      // row this test's computePredictionBaserate call just wrote.
       const row = db.prepare(`SELECT actor FROM audit_log WHERE op = 'predict_baserate' ORDER BY id DESC LIMIT 1`).get() as { actor: string };
       expect(row.actor).toBe('mcp');
     } finally {

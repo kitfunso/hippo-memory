@@ -6,9 +6,29 @@ import { createHash } from 'node:crypto';
 import {
   openHippoDb,
   closeHippoDb,
+  type DatabaseSyncLike,
 } from '../src/db.js';
 import { remember, archiveRaw, recall } from '../src/api.js';
 import { queryAuditEvents } from '../src/audit.js';
+
+/** Query a single row from the hippo SQLite handle. */
+function queryOne<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T | undefined {
+  // SAFETY: sql is a literal SELECT against known hippo schema columns; the
+  // row shape is declared by the generic type argument at each call site and
+  // checked immediately by the assertions that follow.
+  return db.prepare(sql).get(...params) as T | undefined;
+}
+
+/** Concrete SQLite column value: what node:sqlite can actually return. */
+type SqliteValue = string | number | bigint | null | Uint8Array;
+
+/** Query all rows from the hippo SQLite handle. */
+function queryAll<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T[] {
+  // SAFETY: sql is a literal SELECT against known hippo schema columns; the
+  // row shape is declared by the generic type argument at each call site and
+  // checked immediately by the assertions that follow.
+  return db.prepare(sql).all(...params) as T[];
+}
 
 /**
  * v0.39 GDPR Path A completeness regression suite.
@@ -78,10 +98,10 @@ describe('v0.39 GDPR Path A completeness fixes', () => {
     const db2 = openHippoDb(root);
     try {
       expect(existsSync(orphanPath)).toBe(false);
-      const cleanedAt = (
-        db2
-          .prepare(`SELECT mirror_cleaned_at FROM raw_archive WHERE memory_id = ?`)
-          .get('mem_legacy_canary_1') as { mirror_cleaned_at?: string | null }
+      const cleanedAt = queryOne<{ mirror_cleaned_at?: string | null }>(
+        db2,
+        `SELECT mirror_cleaned_at FROM raw_archive WHERE memory_id = ?`,
+        'mem_legacy_canary_1',
       )?.mirror_cleaned_at;
       expect(cleanedAt).toBeTruthy();
     } finally {
@@ -91,17 +111,16 @@ describe('v0.39 GDPR Path A completeness fixes', () => {
     // Re-open again: idempotent — reaper SELECT returns empty, no errors.
     const db3 = openHippoDb(root);
     try {
-      const stillCleaned = (
-        db3
-          .prepare(`SELECT mirror_cleaned_at FROM raw_archive WHERE memory_id = ?`)
-          .get('mem_legacy_canary_1') as { mirror_cleaned_at?: string | null }
+      const stillCleaned = queryOne<{ mirror_cleaned_at?: string | null }>(
+        db3,
+        `SELECT mirror_cleaned_at FROM raw_archive WHERE memory_id = ?`,
+        'mem_legacy_canary_1',
       )?.mirror_cleaned_at;
       expect(stillCleaned).toBeTruthy();
       // Confirm zero pending rows.
-      const pending = (
-        db3
-          .prepare(`SELECT COUNT(*) AS c FROM raw_archive WHERE mirror_cleaned_at IS NULL`)
-          .get() as { c?: number }
+      const pending = queryOne<{ c?: number }>(
+        db3,
+        `SELECT COUNT(*) AS c FROM raw_archive WHERE mirror_cleaned_at IS NULL`,
       )?.c;
       expect(pending).toBe(0);
     } finally {
@@ -113,8 +132,9 @@ describe('v0.39 GDPR Path A completeness fixes', () => {
     // Fresh open — no raw_archive rows. Reaper should exit cleanly.
     const db = openHippoDb(root);
     try {
-      const count = (
-        db.prepare(`SELECT COUNT(*) AS c FROM raw_archive`).get() as { c?: number }
+      const count = queryOne<{ c?: number }>(
+        db,
+        `SELECT COUNT(*) AS c FROM raw_archive`,
       )?.c;
       expect(count).toBe(0);
     } finally {
@@ -148,10 +168,10 @@ describe('v0.39 GDPR Path A completeness fixes', () => {
     // Re-open: reaper runs. Live memory's mirror must survive.
     const db2 = openHippoDb(root);
     try {
-      const cleanedAt = (
-        db2
-          .prepare(`SELECT mirror_cleaned_at FROM raw_archive WHERE memory_id = ?`)
-          .get('mem_other_archived_id') as { mirror_cleaned_at?: string | null }
+      const cleanedAt = queryOne<{ mirror_cleaned_at?: string | null }>(
+        db2,
+        `SELECT mirror_cleaned_at FROM raw_archive WHERE memory_id = ?`,
+        'mem_other_archived_id',
       )?.mirror_cleaned_at;
       expect(cleanedAt).toBeTruthy();
     } finally {
@@ -197,10 +217,9 @@ describe('v0.39 GDPR Path A completeness fixes', () => {
           JSON.stringify({ redacted: true, tenant_id: 'default', kind: 'raw' }),
         );
       // Pre-condition: row is in the reaper's SELECT set.
-      const pendingBefore = (
-        db1
-          .prepare(`SELECT COUNT(*) AS c FROM raw_archive WHERE mirror_cleaned_at IS NULL`)
-          .get() as { c?: number }
+      const pendingBefore = queryOne<{ c?: number }>(
+        db1,
+        `SELECT COUNT(*) AS c FROM raw_archive WHERE mirror_cleaned_at IS NULL`,
       )?.c;
       expect(pendingBefore).toBe(1);
     } finally {
@@ -217,10 +236,9 @@ describe('v0.39 GDPR Path A completeness fixes', () => {
     const db2 = openHippoDb(root);
     try {
       expect(existsSync(mirrorPath)).toBe(false);
-      const pendingAfter = (
-        db2
-          .prepare(`SELECT COUNT(*) AS c FROM raw_archive WHERE mirror_cleaned_at IS NULL`)
-          .get() as { c?: number }
+      const pendingAfter = queryOne<{ c?: number }>(
+        db2,
+        `SELECT COUNT(*) AS c FROM raw_archive WHERE mirror_cleaned_at IS NULL`,
       )?.c;
       expect(pendingAfter).toBe(0);
     } finally {
@@ -233,18 +251,17 @@ describe('v0.39 GDPR Path A completeness fixes', () => {
     // never revisited stale work.
     const db3 = openHippoDb(root);
     try {
-      const stillNoPending = (
-        db3
-          .prepare(`SELECT COUNT(*) AS c FROM raw_archive WHERE mirror_cleaned_at IS NULL`)
-          .get() as { c?: number }
+      const stillNoPending = queryOne<{ c?: number }>(
+        db3,
+        `SELECT COUNT(*) AS c FROM raw_archive WHERE mirror_cleaned_at IS NULL`,
       )?.c;
       expect(stillNoPending).toBe(0);
       // Idempotency belt-and-braces: timestamp is unchanged across opens
       // (we don't re-stamp already-cleaned rows).
-      const cleanedAt = (
-        db3
-          .prepare(`SELECT mirror_cleaned_at FROM raw_archive WHERE memory_id = ?`)
-          .get(memId) as { mirror_cleaned_at?: string }
+      const cleanedAt = queryOne<{ mirror_cleaned_at?: string }>(
+        db3,
+        `SELECT mirror_cleaned_at FROM raw_archive WHERE memory_id = ?`,
+        memId,
       )?.mirror_cleaned_at;
       expect(cleanedAt).toBeTruthy();
     } finally {
@@ -267,7 +284,7 @@ describe('v0.39 GDPR Path A completeness fixes', () => {
     try {
       const events = queryAuditEvents(db, { tenantId: 'default', op: 'recall' });
       expect(events.length).toBeGreaterThan(0);
-      const meta = events[0].metadata as Record<string, unknown>;
+      const meta = events[0].metadata;
       const expectedHash = createHash('sha256').update(distinctive).digest('hex').slice(0, 16);
       expect(meta.query_hash).toBe(expectedHash);
       expect(meta.query_length).toBe(distinctive.length);
@@ -308,17 +325,14 @@ describe('v0.39 GDPR Path A completeness fixes', () => {
     // assert the canary appears nowhere.
     const db = openHippoDb(root);
     try {
-      const tables = (
-        db
-          .prepare(
-            `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '%_fts%' AND name NOT LIKE '%_config' AND name NOT LIKE '%_data' AND name NOT LIKE '%_idx' AND name NOT LIKE '%_docsize' AND name NOT LIKE '%_content'`,
-          )
-          .all() as Array<{ name: string }>
+      const tables = queryAll<{ name: string }>(
+        db,
+        `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '%_fts%' AND name NOT LIKE '%_config' AND name NOT LIKE '%_data' AND name NOT LIKE '%_idx' AND name NOT LIKE '%_docsize' AND name NOT LIKE '%_content'`,
       ).map((r) => r.name);
 
       const hits: Array<{ table: string; row: unknown }> = [];
       for (const table of tables) {
-        const rows = db.prepare(`SELECT * FROM "${table}"`).all() as Array<Record<string, unknown>>;
+        const rows = queryAll<Record<string, SqliteValue>>(db, `SELECT * FROM "${table}"`);
         for (const row of rows) {
           const blob = JSON.stringify(row);
           if (blob.includes(canary)) {
@@ -359,16 +373,14 @@ describe('v0.39 GDPR Path A completeness fixes', () => {
       expect(events.length).toBe(2);
       const expectedHash = createHash('sha256').update(queryText).digest('hex').slice(0, 16);
       for (const ev of events) {
-        const meta = ev.metadata as Record<string, unknown>;
+        const meta = ev.metadata;
         expect(meta.query).toBeUndefined();
         expect(meta.query_hash).toBe(expectedHash);
         expect(meta.query_length).toBe(queryText.length);
       }
 
       // Belt-and-braces: query text appears nowhere in audit_log raw json.
-      const rawAudit = db
-        .prepare(`SELECT metadata_json FROM audit_log`)
-        .all() as Array<{ metadata_json: string }>;
+      const rawAudit = queryAll<{ metadata_json: string }>(db, `SELECT metadata_json FROM audit_log`);
       for (const r of rawAudit) {
         expect(r.metadata_json).not.toContain(queryText);
       }

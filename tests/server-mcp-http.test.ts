@@ -5,6 +5,14 @@ import { join } from 'node:path';
 import { initStore } from '../src/store.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
+/** Parse a fetch Response body against a caller-declared shape. */
+async function jsonAs<T>(res: Response): Promise<T> {
+  // SAFETY: only used against this file's own /mcp JSON-RPC responses, whose
+  // shape is fixed by handleMcpRequest and checked by the assertions
+  // immediately following each call site.
+  return (await res.json()) as T;
+}
+
 // MCP-over-HTTP/SSE transport (Task 11 of A1 plan).
 //
 // Both routes — POST /mcp and GET /mcp/stream — dispatch through the same
@@ -46,7 +54,7 @@ describe('MCP-over-HTTP transport', () => {
     });
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toContain('application/json');
-    const body = await res.json() as { jsonrpc: string; id: number; result?: { tools: Array<{ name: string }> } };
+    const body = await jsonAs<{ jsonrpc: string; id: number; result?: { tools: Array<{ name: string }> } }>(res);
     expect(body.jsonrpc).toBe('2.0');
     expect(body.id).toBe(1);
     expect(Array.isArray(body.result?.tools)).toBe(true);
@@ -73,7 +81,7 @@ describe('MCP-over-HTTP transport', () => {
       }),
     });
     expect(rememberRes.status).toBe(200);
-    const rememberBody = await rememberRes.json() as { id: number; result?: { content: Array<{ text: string }> } };
+    const rememberBody = await jsonAs<{ id: number; result?: { content: Array<{ text: string }> } }>(rememberRes);
     expect(rememberBody.id).toBe(2);
     const rememberText = rememberBody.result?.content?.[0]?.text ?? '';
     expect(rememberText).toMatch(/Remembered/i);
@@ -95,7 +103,7 @@ describe('MCP-over-HTTP transport', () => {
       }),
     });
     expect(recallRes.status).toBe(200);
-    const recallBody = await recallRes.json() as { id: number; result?: { content: Array<{ text: string }> } };
+    const recallBody = await jsonAs<{ id: number; result?: { content: Array<{ text: string }> } }>(recallRes);
     const recallText = recallBody.result?.content?.[0]?.text ?? '';
     expect(recallText).toContain(sentinel);
   });

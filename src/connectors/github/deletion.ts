@@ -53,6 +53,8 @@ export function handleCommentDeleted(ctx: Context, input: DeletionInput): Deleti
       return { status: 'duplicate', archivedCount: 0 };
     }
 
+    // SAFETY: rows come from the SELECT above, which projects only the
+    // `id` column, so each row is exactly `{ id: string }`.
     const rows = db
       .prepare(
         `SELECT id FROM memories WHERE artifact_ref = ? AND tenant_id = ? AND kind = 'raw'`,

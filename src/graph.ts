@@ -49,7 +49,13 @@ export interface SourceObjectRef {
 
 /** source_object_type -> its E2 table, for the object-path validation 4-way branch.
  *  SQLite cannot parametrize a table name, so the SQL trigger mirrors this explicitly. */
-const SOURCE_OBJECT_TABLE: Record<SourceObjectType, string> = {
+interface SourceObjectTableMap {
+  decision: string;
+  policy: string;
+  customer: string;
+  project: string;
+}
+const SOURCE_OBJECT_TABLE: SourceObjectTableMap = {
   decision: 'decisions',
   policy: 'policies',
   customer: 'customer_notes',
@@ -169,6 +175,9 @@ interface QueueRow {
 }
 
 function rowToEntity(row: EntityRow): Entity {
+  // SAFETY: entity_type/source_kind/source_object_type are DB CHECK-constrained
+  // (see db.ts CREATE TABLE entities) to exactly the EntityType/SourceKind/
+  // SourceObjectType enum values, so the row's column values match those types.
   return {
     id: row.id,
     tenantId: row.tenant_id,
@@ -182,6 +191,9 @@ function rowToEntity(row: EntityRow): Entity {
   };
 }
 function rowToRelation(row: RelationRow): Relation {
+  // SAFETY: rel_type/source_kind/source_object_type are DB CHECK-constrained
+  // (see db.ts CREATE TABLE relations) to exactly the RelationType/SourceKind/
+  // SourceObjectType enum values, so the row's column values match those types.
   return {
     id: row.id,
     tenantId: row.tenant_id,
@@ -196,6 +208,9 @@ function rowToRelation(row: RelationRow): Relation {
   };
 }
 function rowToQueueItem(row: QueueRow): GraphQueueItem {
+  // SAFETY: kind/status are DB CHECK-constrained (see db.ts CREATE TABLE
+  // graph_extraction_queue) to exactly the SourceKind/GraphQueueStatus enum
+  // values, so the row's column values match those types.
   return {
     id: row.id,
     tenantId: row.tenant_id,
@@ -216,7 +231,7 @@ const QUEUE_COLS = `id, tenant_id, memory_id, kind, status, enqueued_at, process
 // ---------------------------------------------------------------------------
 
 interface DbLike {
-  prepare(sql: string): { get(...params: unknown[]): unknown };
+  prepare(sql: string): { get<T>(...params: unknown[]): T };
 }
 
 /**
@@ -230,16 +245,22 @@ interface DbLike {
  *    consolidated BY CONSTRUCTION, so this returns 'distilled'.
  * All-null (no memory AND no source object) is rejected.
  */
+interface ResolvedGraphSource {
+  sourceKind: SourceKind;
+  memoryId: string | null;
+}
 function resolveConsolidatedSource(
   db: DbLike,
   tenantId: string,
   memoryId: string | null,
   sourceObject: SourceObjectRef | null,
   label: string,
-): { sourceKind: SourceKind; memoryId: string | null } {
+): ResolvedGraphSource {
   let memKind: SourceKind | null = null;
   let effectiveMemoryId: string | null = memoryId;
   if (memoryId != null) {
+    // SAFETY: row's shape matches the two columns (kind, tenant_id) named in
+    // the SELECT above.
     const row = db.prepare(`SELECT kind, tenant_id FROM memories WHERE id = ?`).get(memoryId) as
       | { kind: string; tenant_id: string }
       | undefined;
@@ -273,6 +294,8 @@ function resolveConsolidatedSource(
     }
     // `table` is a fixed value from the SOURCE_OBJECT_TABLE map (never user-supplied), so
     // this string interpolation is safe; `id`/`tenant_id` stay parametrized.
+    // SAFETY: row's shape matches the single `status` column named in the
+    // SELECT above.
     const row = db.prepare(
       `SELECT status FROM ${table} WHERE id = ? AND tenant_id = ?`,
     ).get(sourceObject.id, tenantId) as { status: string } | undefined;
@@ -326,6 +349,7 @@ export function insertEntity(
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(tenantId, opts.entityType, name, effectiveMemoryId, sourceKind, sourceObject?.type ?? null, sourceObject?.id ?? null, now);
     const id = Number(result.lastInsertRowid ?? 0);
+    // SAFETY: row's shape matches the columns named in ENTITY_COLS above.
     const row = db.prepare(`SELECT ${ENTITY_COLS} FROM entities WHERE id = ?`).get(id) as EntityRow | undefined;
     if (!row) throw new Error('insertEntity: failed to reload inserted entity');
     return rowToEntity(row);
@@ -355,6 +379,8 @@ export function insertRelation(
   const db = txDb ?? ownDb!;
   try {
     for (const [eid, role] of [[opts.fromEntityId, 'from'], [opts.toEntityId, 'to']] as const) {
+      // SAFETY: ent's shape matches the single `tenant_id` column named in
+      // the SELECT above.
       const ent = db.prepare(`SELECT tenant_id FROM entities WHERE id = ?`).get(eid) as { tenant_id: string } | undefined;
       if (!ent) throw new Error(`insertRelation: ${role}_entity ${eid} not found`);
       if (ent.tenant_id !== tenantId) {
@@ -367,6 +393,7 @@ export function insertRelation(
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(tenantId, opts.fromEntityId, opts.toEntityId, opts.relType, effectiveMemoryId, sourceKind, sourceObject?.type ?? null, sourceObject?.id ?? null, now);
     const id = Number(result.lastInsertRowid ?? 0);
+    // SAFETY: row's shape matches the columns named in RELATION_COLS above.
     const row = db.prepare(`SELECT ${RELATION_COLS} FROM relations WHERE id = ?`).get(id) as RelationRow | undefined;
     if (!row) throw new Error('insertRelation: failed to reload inserted relation');
     return rowToRelation(row);
@@ -379,6 +406,7 @@ export function loadEntityById(hippoRoot: string, tenantId: string, id: number):
   assertTenantId('loadEntityById', tenantId);
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: row's shape matches the columns named in ENTITY_COLS above.
     const row = db.prepare(`SELECT ${ENTITY_COLS} FROM entities WHERE id = ? AND tenant_id = ?`)
       .get(id, tenantId) as EntityRow | undefined;
     return row ? rowToEntity(row) : null;
@@ -406,6 +434,7 @@ export function loadEntitiesByName(
   const ownDb = txDb ? null : openHippoDb(hippoRoot);
   const db = txDb ?? ownDb!;
   try {
+    // SAFETY: rows' shape matches the columns named in ENTITY_COLS above.
     const rows = db.prepare(`
       SELECT ${ENTITY_COLS} FROM entities WHERE tenant_id = ? AND name = ?
       ORDER BY id ASC LIMIT ?
@@ -437,6 +466,7 @@ export function loadEntities(
       params.push(opts.entityType);
     }
     params.push(limit);
+    // SAFETY: rows' shape matches the columns named in ENTITY_COLS above.
     const rows = db.prepare(`
       SELECT ${ENTITY_COLS} FROM entities
       WHERE ${clauses.join(' AND ')}
@@ -467,6 +497,7 @@ export function loadRelations(
       params.push(opts.fromEntityId);
     }
     params.push(limit);
+    // SAFETY: rows' shape matches the columns named in RELATION_COLS above.
     const rows = db.prepare(`
       SELECT ${RELATION_COLS} FROM relations
       WHERE ${clauses.join(' AND ')}
@@ -508,6 +539,7 @@ export function loadEntitiesByMemoryId(
       const ph = slice.map(() => '?').join(',');
       // T2: no ORDER BY meant chunk-local scan order decided ties; id ASC
       // makes it deterministic (entities.id is an autoincrement integer PK).
+      // SAFETY: rows' shape matches the columns named in ENTITY_COLS above.
       const rows = db.prepare(`
         SELECT ${ENTITY_COLS} FROM entities
         WHERE tenant_id = ? AND memory_id IN (${ph})
@@ -540,6 +572,7 @@ export function loadEntitiesByIds(
     for (let i = 0; i < ids.length; i += IN_LIST_CHUNK) {
       const slice = ids.slice(i, i + IN_LIST_CHUNK);
       const ph = slice.map(() => '?').join(',');
+      // SAFETY: rows' shape matches the columns named in ENTITY_COLS above.
       const rows = db.prepare(`
         SELECT ${ENTITY_COLS} FROM entities
         WHERE tenant_id = ? AND id IN (${ph})
@@ -584,6 +617,7 @@ export function loadNeighborRelations(
     for (let i = 0; i < entityIds.length; i += IN_LIST_CHUNK) {
       const slice = entityIds.slice(i, i + IN_LIST_CHUNK);
       const ph = slice.map(() => '?').join(',');
+      // SAFETY: rows' shape matches the columns named in RELATION_COLS above.
       const rows = db.prepare(`
         SELECT ${RELATION_COLS} FROM relations
         WHERE tenant_id = ? AND (from_entity_id IN (${ph}) OR to_entity_id IN (${ph}))
@@ -622,6 +656,7 @@ export function loadRelationsAmong(
   const db = txDb ?? ownDb!;
   try {
     const ph = entityIds.map(() => '?').join(',');
+    // SAFETY: rows' shape matches the columns named in RELATION_COLS above.
     const rows = db.prepare(`
       SELECT ${RELATION_COLS} FROM relations
       WHERE tenant_id = ? AND from_entity_id IN (${ph}) AND to_entity_id IN (${ph})
@@ -688,6 +723,7 @@ export function enqueueExtraction(
       VALUES (?, ?, ?, 'pending', ?, NULL)
     `).run(tenantId, memoryId, sourceKind, now);
     const id = Number(result.lastInsertRowid ?? 0);
+    // SAFETY: row's shape matches the columns named in QUEUE_COLS above.
     const row = db.prepare(`SELECT ${QUEUE_COLS} FROM graph_extraction_queue WHERE id = ?`).get(id) as QueueRow | undefined;
     if (!row) throw new Error('enqueueExtraction: failed to reload queue item');
     return rowToQueueItem(row);
@@ -715,6 +751,7 @@ export function loadExtractionQueue(
       params.push(opts.status);
     }
     params.push(limit);
+    // SAFETY: rows' shape matches the columns named in QUEUE_COLS above.
     const rows = db.prepare(`
       SELECT ${QUEUE_COLS} FROM graph_extraction_queue
       WHERE ${clauses.join(' AND ')}
@@ -749,11 +786,14 @@ export function markExtractionProcessed(
       WHERE id = ? AND tenant_id = ? AND status = 'pending'
     `).run(status, now, id, tenantId);
     if (updated.changes === 0) {
+      // SAFETY: existing's shape matches the single `status` column named in
+      // the SELECT above.
       const existing = db.prepare(`SELECT status FROM graph_extraction_queue WHERE id = ? AND tenant_id = ?`)
         .get(id, tenantId) as { status: string } | undefined;
       if (!existing) throw new Error(`markExtractionProcessed: queue item ${id} not found for tenant ${tenantId}`);
       throw new Error(`markExtractionProcessed: queue item ${id} is not pending (status='${existing.status}')`);
     }
+    // SAFETY: row's shape matches the columns named in QUEUE_COLS above.
     const row = db.prepare(`SELECT ${QUEUE_COLS} FROM graph_extraction_queue WHERE id = ? AND tenant_id = ?`)
       .get(id, tenantId) as QueueRow | undefined;
     if (!row) throw new Error(`markExtractionProcessed: queue item ${id} not found after UPDATE`);
@@ -837,6 +877,9 @@ export function markGraphDirty(hippoRoot: string, tenantId: string, memoryId: st
   } catch (err) {
     // Logged (warn) so a SYSTEMATIC enqueue failure surfaces to operators, but
     // swallowed so the already-committed E2 write is never rolled back.
+    // SAFETY: this is a best-effort log message only; property access on any
+    // JS value is safe (undefined if absent), preserving the existing lenient
+    // formatting even when something non-Error was thrown.
     console.warn(
       `markGraphDirty: enqueue failed for tenant=${tenantId} memory=${memoryId}: ${(err as Error).message}`,
     );
@@ -878,6 +921,9 @@ export function removeGraphEntitiesForObject(
       closeHippoDb(db);
     }
   } catch (err) {
+    // SAFETY: this is a best-effort log message only; property access on any
+    // JS value is safe (undefined if absent), preserving the existing lenient
+    // formatting even when something non-Error was thrown.
     console.warn(
       `removeGraphEntitiesForObject: failed for tenant=${tenantId} ${sourceObjectType}#${sourceObjectId}: ${(err as Error).message}`,
     );
@@ -896,6 +942,8 @@ export function loadPendingExtractionTenants(
 ): { tenantId: string; maxPendingId: number }[] {
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: rows' shape matches the two aliased columns (tenant_id, max_id)
+    // named in the SELECT above.
     const rows = db.prepare(`
       SELECT tenant_id AS tenant_id, MAX(id) AS max_id
       FROM graph_extraction_queue

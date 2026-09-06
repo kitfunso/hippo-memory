@@ -50,8 +50,8 @@ describe('JSON hook installer', () => {
       // test for that second entry's shape.
       expect(settings.hooks.SessionStart).toHaveLength(2);
 
-      const sessionEndCmd = settings.hooks.SessionEnd[0].hooks[0].command as string;
-      const sessionStartCmd = settings.hooks.SessionStart[0].hooks[0].command as string;
+      const sessionEndCmd = settings.hooks.SessionEnd[0].hooks[0].command;
+      const sessionStartCmd = settings.hooks.SessionStart[0].hooks[0].command;
       expect(sessionEndCmd).toContain('hippo session-end --log-file');
       expect(sessionEndCmd).not.toContain('hippo sleep --log-file');
       expect(sessionEndCmd).not.toContain('hippo capture --last-session --log-file');
@@ -74,7 +74,7 @@ describe('JSON hook installer', () => {
       const settings = JSON.parse(fs.readFileSync(result.settingsPath, 'utf8'));
       expect(settings.hooks.PreCompact).toHaveLength(1);
       expect(settings.hooks.PreCompact[0].matcher).toBeUndefined(); // fires on manual AND auto compaction
-      const preCompactCmd = settings.hooks.PreCompact[0].hooks[0].command as string;
+      const preCompactCmd = settings.hooks.PreCompact[0].hooks[0].command;
       expect(preCompactCmd).toContain('hippo pre-compact --log-file');
       expect(preCompactCmd).toContain(defaultPreCompactLogPath());
 
@@ -143,7 +143,7 @@ describe('JSON hook installer', () => {
 
       const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
       expect(settings.hooks.SessionEnd).toHaveLength(1);
-      const cmd = settings.hooks.SessionEnd[0].hooks[0].command as string;
+      const cmd = settings.hooks.SessionEnd[0].hooks[0].command;
       expect(cmd).toContain('hippo session-end --log-file');
       expect(cmd).not.toContain('hippo sleep --log-file');
       expect(cmd).not.toContain('hippo capture --last-session --log-file');
@@ -209,7 +209,7 @@ describe('JSON hook installer', () => {
 
       const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
       expect(settings.hooks.SessionEnd).toHaveLength(1);
-      const cmd = settings.hooks.SessionEnd[0].hooks[0].command as string;
+      const cmd = settings.hooks.SessionEnd[0].hooks[0].command;
       expect(cmd).toContain('hippo session-end --log-file');
       expect(cmd).not.toContain('echo');
     });

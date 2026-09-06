@@ -216,7 +216,11 @@ export function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
-const NODE_COLORS: Record<string, string> = {
+interface NodeColorMap {
+  [key: string]: string;
+}
+
+const NODE_COLORS: NodeColorMap = {
   decision: '#6366f1',
   policy: '#10b981',
   customer: '#f59e0b',

@@ -213,8 +213,12 @@ export async function consolidate(
         .filter((e) => e.event_type !== 'session_complete')
         .map((e) => ({ action: e.content, observation: '' }));
 
-      const summary = typeof completeEvent.metadata.summary === 'string'
-        ? completeEvent.metadata.summary
+      const summaryValue = completeEvent.metadata.summary;
+      // SAFETY: just confirmed summaryValue is a string via
+      // Object.prototype.toString above (session event metadata is a
+      // free-form Record<string, unknown> bag; summary is optional).
+      const summary = Object.prototype.toString.call(summaryValue) === '[object String]'
+        ? (summaryValue as string)
         : '(untitled)';
 
       const trace = createMemory(

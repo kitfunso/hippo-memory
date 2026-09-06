@@ -15,13 +15,13 @@ describe('llmReranker', () => {
   });
 
   it('parses model output as a permutation and reorders accordingly', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch' as never).mockResolvedValue(
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(
         JSON.stringify({
           choices: [{ message: { content: '[2, 0, 1]' } }],
         }),
         { status: 200, headers: { 'content-type': 'application/json' } },
-      ) as never,
+      ),
     );
 
     const inputs = [
@@ -38,11 +38,11 @@ describe('llmReranker', () => {
   });
 
   it('falls back to input ordering when the model returns malformed output', async () => {
-    vi.spyOn(globalThis, 'fetch' as never).mockResolvedValue(
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(
         JSON.stringify({ choices: [{ message: { content: 'not a permutation' } }] }),
         { status: 200, headers: { 'content-type': 'application/json' } },
-      ) as never,
+      ),
     );
     const inputs = [asResult('alpha', 1.0), asResult('beta', 0.5)];
     const out = await llmReranker('q', inputs);
@@ -61,10 +61,7 @@ describe('llmReranker', () => {
     // does NOT throw.
     process.env.HIPPO_LLM_RERANKER_TIMEOUT_MS = '5';
     let abortedFromSignal = false;
-    vi.spyOn(globalThis, 'fetch' as never).mockImplementation((async (
-      _url: unknown,
-      init?: { signal?: AbortSignal },
-    ) => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
       return new Promise((_resolve, reject) => {
         init?.signal?.addEventListener('abort', () => {
           abortedFromSignal = true;
@@ -72,7 +69,7 @@ describe('llmReranker', () => {
         });
         // never resolves on its own; only the abort can complete it
       });
-    }) as never);
+    });
 
     const inputs = [asResult('alpha', 1.0), asResult('beta', 0.5)];
     const out = await llmReranker('q', inputs);

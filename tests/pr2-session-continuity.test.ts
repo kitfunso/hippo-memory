@@ -47,6 +47,8 @@ describe('schema v5+v6 migration', () => {
     initStore(tmpDir);
     const db = openHippoDb(tmpDir);
     try {
+      // SAFETY: literal SELECT against the known sqlite_master schema; name
+      // is NOT NULL for every table row.
       const tables = db.prepare(
         `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'session_handoffs'`
       ).all() as Array<{ name: string }>;
@@ -61,6 +63,8 @@ describe('schema v5+v6 migration', () => {
     initStore(tmpDir);
     const db = openHippoDb(tmpDir);
     try {
+      // SAFETY: literal SELECT against the known sqlite_master schema; name
+      // is NOT NULL for every index row.
       const indexes = db.prepare(
         `SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_session_handoffs_session'`
       ).all() as Array<{ name: string }>;
@@ -189,6 +193,8 @@ describe('loadHandoffById', () => {
     // Find the row ID by loading from DB directly
     const db = openHippoDb(tmpDir);
     try {
+      // SAFETY: literal SELECT of the id column for the handoff row this
+      // test just wrote via saveSessionHandoff above.
       const row = db.prepare(
         `SELECT id FROM session_handoffs WHERE session_id = 'sess-byid' ORDER BY id DESC LIMIT 1`
       ).get() as { id: number } | undefined;

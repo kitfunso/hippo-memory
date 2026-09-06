@@ -26,12 +26,12 @@
 import { isOutcomeSlowAblated } from './ablation.js';
 import type { MemoryEntry, EmotionalValence } from './memory.js';
 
-const VALENCE_WEIGHT: Record<EmotionalValence, number> = {
+const VALENCE_WEIGHT = {
   neutral: 1.0,
   positive: 1.3,
   negative: 1.5,
   critical: 2.0,
-};
+} satisfies Record<EmotionalValence, number>;
 
 /**
  * Priority score used to rank survivors for replay. Higher = more likely

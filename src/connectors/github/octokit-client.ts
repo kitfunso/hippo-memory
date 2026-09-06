@@ -48,11 +48,11 @@ export function parseNextLink(linkHeader: string): string | null {
 }
 
 function headersToRecord(h: Headers): Record<string, string | undefined> {
-  const out: Record<string, string> = {};
+  const entries: Array<[string, string]> = [];
   h.forEach((v, k) => {
-    out[k.toLowerCase()] = v;
+    entries.push([k.toLowerCase(), v]);
   });
-  return out;
+  return Object.fromEntries(entries);
 }
 
 export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
@@ -72,6 +72,11 @@ export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
     throw new GitHubFetchError(res.status, body.slice(0, 256), url);
   }
 
+  // SAFETY: GitHub's list/paginated endpoints (issues, comments, etc. — the
+  // only endpoints this backfill fetcher targets) return a JSON array body
+  // on 200; per-item shape is intentionally left as `unknown` here since
+  // GitHubBackfillPage.items is opaque to this seam (callers parse the
+  // shape they expect downstream).
   const items =
     res.status === 200 ? ((await res.json()) as Array<unknown>) : [];
   const link = res.headers.get('link') ?? '';

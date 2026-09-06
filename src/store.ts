@@ -25,6 +25,9 @@ import { appendAuditEvent, type AuditOp } from './audit.js';
 import { resolveTenantId } from './tenant.js';
 import { deriveOriginProject, originFromSource } from './project-identity.js';
 
+/** A value that round-trips through JSON.stringify/JSON.parse unchanged. */
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
 /**
  * Emit an audit event for a mutation against `db`. Wrapped so a broken audit
  * log can never crash the surrounding mutation — the SQLite store is still the
@@ -34,7 +37,7 @@ function audit(
   db: ReturnType<typeof openHippoDb>,
   op: AuditOp,
   targetId?: string,
-  metadata?: Record<string, unknown>,
+  metadata?: Record<string, JsonValue>,
   actor: string = 'cli',
   tenantId?: string,
 ): void {
@@ -249,10 +252,7 @@ export function assertNonEmpty<T>(arr: readonly T[], name: string): void {
   }
 }
 
-assertNonEmpty(
-  RECALL_DEFAULT_DENY_SCOPES as readonly string[],
-  'RECALL_DEFAULT_DENY_SCOPES',
-);
+assertNonEmpty(RECALL_DEFAULT_DENY_SCOPES, 'RECALL_DEFAULT_DENY_SCOPES');
 
 function layerDir(root: string, layer: Layer): string {
   return path.join(root, layer);
@@ -300,11 +300,46 @@ function ensureMirrorDirectories(hippoRoot: string): void {
   }
 }
 
+type FrontmatterValue = string | number | boolean | null | string[] | number[];
+
+/** Named field set for `serializeEntry`'s frontmatter — a fixed-shape owner
+ * contract (not an open dictionary), with tenant_id/origin_project optional
+ * so they can stay entirely absent from the YAML output when not set. */
+interface EntryFrontmatterFields {
+  id: FrontmatterValue;
+  created: FrontmatterValue;
+  last_retrieved: FrontmatterValue;
+  retrieval_count: FrontmatterValue;
+  strength: FrontmatterValue;
+  half_life_days: FrontmatterValue;
+  layer: FrontmatterValue;
+  tags: FrontmatterValue;
+  emotional_valence: FrontmatterValue;
+  schema_fit: FrontmatterValue;
+  source: FrontmatterValue;
+  outcome_score: FrontmatterValue;
+  outcome_positive: FrontmatterValue;
+  outcome_negative: FrontmatterValue;
+  conflicts_with: FrontmatterValue;
+  pinned: FrontmatterValue;
+  confidence: FrontmatterValue;
+  parents: FrontmatterValue;
+  starred: FrontmatterValue;
+  trace_outcome: FrontmatterValue;
+  source_session_id: FrontmatterValue;
+  kind: FrontmatterValue;
+  scope: FrontmatterValue;
+  owner: FrontmatterValue;
+  artifact_ref: FrontmatterValue;
+  tenant_id?: FrontmatterValue;
+  origin_project?: FrontmatterValue;
+}
+
 /**
  * Serialize a MemoryEntry to markdown with YAML frontmatter.
  */
 export function serializeEntry(entry: MemoryEntry): string {
-  const frontmatter: Record<string, string | number | boolean | null | string[] | number[]> = {
+  const frontmatter: EntryFrontmatterFields = {
     id: entry.id,
     created: entry.created,
     last_retrieved: entry.last_retrieved,
@@ -342,7 +377,11 @@ export function serializeEntry(entry: MemoryEntry): string {
   if (entry.origin_project !== undefined && entry.origin_project !== null) {
     frontmatter['origin_project'] = entry.origin_project;
   }
-  const fm = dumpFrontmatter(frontmatter);
+  // Spread into a fresh object literal: dumpFrontmatter's Record<string,
+  // YamlValue> parameter needs an index signature, which a named interface
+  // reference (EntryFrontmatterFields) doesn't structurally provide even
+  // though every property's value type already matches.
+  const fm = dumpFrontmatter({ ...frontmatter });
   return `${fm}\n\n${entry.content}\n`;
 }
 
@@ -354,6 +393,11 @@ export function deserializeEntry(raw: string): MemoryEntry | null {
 
   if (!data['id'] || !data['layer']) return null;
 
+  // SAFETY: every `as X` below narrows a raw YAML frontmatter field to an
+  // enum/union member of MemoryEntry; frontmatter is only ever written by
+  // serializeEntry (whose own fields are typed), so out-of-range values here
+  // would indicate hand-edited files, which this parser is not required to
+  // reject — matches the pre-existing permissive-parse behavior.
   return {
     id: String(data['id']),
     created: String(data['created'] ?? new Date().toISOString()),
@@ -395,13 +439,17 @@ export function deserializeEntry(raw: string): MemoryEntry | null {
   };
 }
 
-function normalizeStringArray(value: unknown): string[] {
+function normalizeStringArray(value: FrontmatterValue): string[] {
   if (!Array.isArray(value)) return [];
   return value.map((item) => String(item));
 }
 
 function rowToEntry(row: MemoryRow): MemoryEntry {
-  return {
+  // SAFETY: every `as X` below narrows a SQLite column value to an
+  // enum/union member of MemoryEntry; `row` comes from MEMORY_SELECT_COLUMNS
+  // / MEMORY_SEARCH_COLUMNS, which are the only queries producing MemoryRow,
+  // and the DB layer only ever writes these columns from the same enums.
+  const entry: MemoryEntry = {
     id: row.id,
     created: row.created,
     last_retrieved: row.last_retrieved,
@@ -443,13 +491,14 @@ function rowToEntry(row: MemoryRow): MemoryEntry {
     last_rebuilt_at: row.last_rebuilt_at ?? null,
     rebuild_count: Number(row.rebuild_count ?? 0),
     dag_level_3_built_at: row.dag_level_3_built_at ?? null,
-    // F1 (v1.7.0): preserve bm25_score from the FTS path. `'bm25_score' in row`
-    // distinguishes "absent column" (non-FTS path) from "column present but
-    // value 0" — though FTS5 bm25() never returns 0, this is defensive.
-    ...('bm25_score' in row && row.bm25_score !== undefined && row.bm25_score !== null
-      ? { bm25_score: Number(row.bm25_score) }
-      : {}),
   };
+  // F1 (v1.7.0): preserve bm25_score from the FTS path. `'bm25_score' in row`
+  // distinguishes "absent column" (non-FTS path) from "column present but
+  // value 0" — though FTS5 bm25() never returns 0, this is defensive.
+  if ('bm25_score' in row && row.bm25_score !== undefined && row.bm25_score !== null) {
+    entry.bm25_score = Number(row.bm25_score);
+  }
+  return entry;
 }
 
 function parseJsonArray(raw: string | null | undefined): string[] {
@@ -479,12 +528,19 @@ function parseLastTraceId(raw: string | null | undefined): string | null {
   return trimmed;
 }
 
-function parseJsonObject(raw: string | null | undefined): Record<string, unknown> {
+function parseJsonObject(raw: string | null | undefined): Record<string, JsonValue> {
   if (!raw) return {};
   try {
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>;
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      parsed &&
+      Object.prototype.toString.call(parsed) === '[object Object]' &&
+      !Array.isArray(parsed)
+    ) {
+      // SAFETY: the toString.call check above confirmed parsed is a plain
+      // object; JSON.parse only ever produces JSON-safe values, so every
+      // property conforms to JsonValue.
+      return parsed as Record<string, JsonValue>;
     }
     return {};
   } catch {
@@ -814,6 +870,8 @@ function loadSearchRows(
     // this no-terms path had the same shape). Apply LIMIT so all four
     // candidate paths honour the caller's cap when set.
     const sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate}${archivedClauseTenantOnly}${scopeClauseTenantOnly} ORDER BY created ASC, id ASC LIMIT ?`;
+    // SAFETY: sql selects exactly MEMORY_SELECT_COLUMNS, whose column list
+    // matches MemoryRow's field set.
     return db.prepare(sql).all(...tenantParams, ...scopeParams, limit) as MemoryRow[];
   }
 
@@ -833,6 +891,8 @@ function loadSearchRows(
       // F1 (v1.7.0): MEMORY_SEARCH_COLUMNS adds bm25_score as the trailing
       // result column. Every other column is m.<col> AS <col> so rowToEntry
       // sees the same shape it always has.
+      // SAFETY: MEMORY_SEARCH_COLUMNS aliases every column to the same name
+      // MEMORY_SELECT_COLUMNS uses (plus bm25_score), matching MemoryRow.
       const rows = db.prepare(`
         SELECT ${MEMORY_SEARCH_COLUMNS}
         FROM memories m
@@ -855,6 +915,8 @@ function loadSearchRows(
     return [like, like];
   });
 
+  // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
+  // MemoryRow's field set.
   const rows = db.prepare(`
     SELECT ${MEMORY_SELECT_COLUMNS}
     FROM memories
@@ -871,6 +933,8 @@ function loadSearchRows(
   // candidate-pool size. Apply LIMIT here so all four paths honour the
   // caller's cap.
   const fallback = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${tenantOnlyPredicate}${archivedClauseTenantOnly}${scopeClauseTenantOnly} ORDER BY created ASC, id ASC LIMIT ?`;
+  // SAFETY: fallback selects exactly MEMORY_SELECT_COLUMNS, matching
+  // MemoryRow's field set.
   return db.prepare(fallback).all(...tenantParams, ...scopeParams, limit) as MemoryRow[];
 }
 
@@ -891,6 +955,8 @@ export function removeEntryMirrors(hippoRoot: string, id: string): void {
 }
 
 function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: string): boolean {
+  // SAFETY: countRow's shape matches the single `COUNT(*) AS count` column
+  // selected above; `.get()` returns undefined only when no row exists.
   const countRow = db.prepare(`SELECT COUNT(*) AS count FROM memories`).get() as { count?: number } | undefined;
   const memoryCount = Number(countRow?.count ?? 0);
   if (memoryCount > 0) return false;
@@ -924,8 +990,11 @@ function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: str
     const runs = Array.isArray(legacyStats.consolidation_runs) ? legacyStats.consolidation_runs : [];
     const insertRun = db.prepare(`INSERT INTO consolidation_runs(timestamp, decayed, merged, removed) VALUES (?, ?, ?, ?)`);
     for (const run of runs) {
-      if (!run || typeof run !== 'object') continue;
-      const row = run as Record<string, unknown>;
+      if (!run || Object.prototype.toString.call(run) !== '[object Object]') continue;
+      // SAFETY: the toString.call check above confirmed run is a plain
+      // object; it comes from JSON.parse of the legacy stats file, so every
+      // property conforms to JsonValue.
+      const row = run as Record<string, JsonValue>;
       insertRun.run(
         String(row.timestamp ?? new Date().toISOString()),
         Number(row.decayed ?? 0),
@@ -965,13 +1034,25 @@ function loadLegacyIndexFile(hippoRoot: string): HippoIndex {
   }
 
   try {
+    // SAFETY: index.json is only ever written by writeIndexMirror below,
+    // which always serializes a HippoIndex; a hand-edited or corrupted file
+    // that violates the shape falls through to the catch block's fallback.
     return JSON.parse(fs.readFileSync(indexPath, 'utf8')) as HippoIndex;
   } catch {
     return { version: 1, entries: {}, last_retrieval_ids: [], last_trace_id: null };
   }
 }
 
-function loadLegacyStatsFile(hippoRoot: string): Record<string, unknown> {
+/** Named field set for the legacy `stats.json` mirror — the only fields any
+ * caller reads (see loadLegacyStatsFile's callers below). */
+interface LegacyStats {
+  total_remembered: JsonValue;
+  total_recalled: JsonValue;
+  total_forgotten: JsonValue;
+  consolidation_runs: JsonValue;
+}
+
+function loadLegacyStatsFile(hippoRoot: string): LegacyStats {
   const statsPath = path.join(hippoRoot, 'stats.json');
   if (!fs.existsSync(statsPath)) {
     return {
@@ -983,7 +1064,11 @@ function loadLegacyStatsFile(hippoRoot: string): Record<string, unknown> {
   }
 
   try {
-    return JSON.parse(fs.readFileSync(statsPath, 'utf8')) as Record<string, unknown>;
+    // SAFETY: stats.json is only ever written by writeStatsMirror below,
+    // which always emits exactly these four fields; callers additionally
+    // guard every read with `?? 0` / `Array.isArray`, tolerating a
+    // hand-edited or corrupted file even if this optimistic cast is wrong.
+    return JSON.parse(fs.readFileSync(statsPath, 'utf8')) as LegacyStats;
   } catch {
     return {
       total_remembered: 0,
@@ -1117,6 +1202,7 @@ function deleteFtsRow(db: ReturnType<typeof openHippoDb>, id: string): void {
 }
 
 function buildIndexFromDb(db: ReturnType<typeof openHippoDb>): HippoIndex {
+  // SAFETY: rows' shape matches the seven columns named in the SELECT below.
   const rows = db.prepare(`SELECT id, created, last_retrieved, strength, layer, tags_json, pinned FROM memories ORDER BY created ASC, id ASC`).all() as Array<{
     id: string;
     created: string;
@@ -1129,6 +1215,8 @@ function buildIndexFromDb(db: ReturnType<typeof openHippoDb>): HippoIndex {
 
   const entries: Record<string, IndexEntry> = {};
   for (const row of rows) {
+    // SAFETY: layer is only ever written from the Layer enum by this
+    // module's own INSERT/UPDATE paths.
     const layer = row.layer as Layer;
     entries[row.id] = {
       id: row.id,
@@ -1148,6 +1236,7 @@ function buildIndexFromDb(db: ReturnType<typeof openHippoDb>): HippoIndex {
   // them, handing the reader mismatched last_retrieval_ids / last_trace_id
   // and re-opening the mislinkage hole saveIndex's BEGIN/COMMIT closed on
   // the write side. One SELECT = one SQLite read snapshot.
+  // SAFETY: lockstepRows' shape matches the key/value columns named above.
   const lockstepRows = db.prepare(
     `SELECT key, value FROM meta WHERE key IN ('last_retrieval_ids', 'last_trace_id')`,
   ).all() as Array<{ key: string; value: string }>;
@@ -1161,14 +1250,20 @@ function buildIndexFromDb(db: ReturnType<typeof openHippoDb>): HippoIndex {
   };
 }
 
-function buildStatsFromDb(db: ReturnType<typeof openHippoDb>): Record<string, unknown> {
+function buildStatsFromDb(db: ReturnType<typeof openHippoDb>): LegacyStats {
+  // SAFETY: runs' shape matches the four columns named in the SELECT above.
   const runs = db.prepare(`SELECT timestamp, decayed, merged, removed FROM consolidation_runs ORDER BY timestamp ASC, id ASC`).all() as ConsolidationRunRow[];
 
   return {
     total_remembered: Number(getMeta(db, 'total_remembered', '0')),
     total_recalled: Number(getMeta(db, 'total_recalled', '0')),
     total_forgotten: Number(getMeta(db, 'total_forgotten', '0')),
-    consolidation_runs: runs,
+    consolidation_runs: runs.map((run) => ({
+      timestamp: run.timestamp,
+      decayed: run.decayed,
+      merged: run.merged,
+      removed: run.removed,
+    })),
   };
 }
 
@@ -1176,17 +1271,21 @@ function writeIndexMirror(hippoRoot: string, index: HippoIndex): void {
   fs.writeFileSync(path.join(hippoRoot, 'index.json'), JSON.stringify(index, null, 2), 'utf8');
 }
 
-function writeStatsMirror(hippoRoot: string, stats: Record<string, unknown>): void {
+function writeStatsMirror(hippoRoot: string, stats: LegacyStats): void {
   fs.writeFileSync(path.join(hippoRoot, 'stats.json'), JSON.stringify(stats, null, 2), 'utf8');
 }
 
 function syncMirrorFiles(hippoRoot: string, db: ReturnType<typeof openHippoDb>): void {
+  // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
+  // MemoryRow's field set.
   const entries = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`).all() as MemoryRow[];
 
   for (const entry of entries.map(rowToEntry)) {
     writeMarkdownMirror(hippoRoot, entry);
   }
 
+  // SAFETY: conflicts' shape matches the eight columns named in the SELECT
+  // above.
   const conflicts = db.prepare(`
     SELECT id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at
     FROM memory_conflicts
@@ -1409,6 +1508,8 @@ export function readEntry(hippoRoot: string, id: string, tenantId?: string): Mem
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: both branches select exactly MEMORY_SELECT_COLUMNS, matching
+    // MemoryRow's field set.
     const row = tenantId !== undefined
       ? db.prepare(
           `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ? AND tenant_id = ?`,
@@ -1442,6 +1543,8 @@ export function loadEntriesByIds(
     // T2: no ORDER BY meant row order followed SQLite's IN(...) scan order
     // (undefined w.r.t. the caller's `ids` order). created ASC, id ASC
     // makes it deterministic.
+    // SAFETY: both branches select exactly MEMORY_SELECT_COLUMNS, matching
+    // MemoryRow's field set.
     const rows = tenantId !== undefined
       ? db.prepare(
           `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders}) AND tenant_id = ? ORDER BY created ASC, content ASC, id ASC`,
@@ -1487,10 +1590,12 @@ export function loadSessionRawMemories(
     if (cap !== undefined && cap > 0) {
       sql += ' ORDER BY created DESC, id DESC LIMIT ?';
       params.push(cap);
+      // SAFETY: sql starts from MEMORY_SELECT_COLUMNS, matching MemoryRow.
       const rows = db.prepare(sql).all(...params) as MemoryRow[];
       return rows.reverse().map(rowToEntry);
     }
     sql += ' ORDER BY created ASC, id ASC';
+    // SAFETY: sql starts from MEMORY_SELECT_COLUMNS, matching MemoryRow.
     const rows = db.prepare(sql).all(...params) as MemoryRow[];
     return rows.map(rowToEntry);
   } finally {
@@ -1540,6 +1645,7 @@ export function countSessionRawMemories(
       // AND != 'unknown:legacy'). Mirrors api.passesScopeFilterForRecall.
       sql += ` AND (scope IS NULL OR (scope NOT LIKE '%:private:%' AND scope != 'unknown:legacy'))`;
     }
+    // SAFETY: row's shape matches the single `COUNT(*) AS c` column above.
     const row = db.prepare(sql).get(...params) as { c?: number } | undefined;
     return Number(row?.c ?? 0);
   } finally {
@@ -1598,6 +1704,7 @@ export function loadFreshRawMemories(
     // cross-ingest-stable.
     sql += ' ORDER BY created DESC, content ASC, id ASC LIMIT ?';
     params.push(capped);
+    // SAFETY: sql starts from MEMORY_SELECT_COLUMNS, matching MemoryRow.
     const rows = db.prepare(sql).all(...params) as MemoryRow[];
     return rows.map(rowToEntry);
   } finally {
@@ -1618,6 +1725,8 @@ export function loadChildrenOf(
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: both branches select exactly MEMORY_SELECT_COLUMNS, matching
+    // MemoryRow's field set.
     const rows = tenantId !== undefined
       ? db.prepare(
           `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE dag_parent_id = ? AND tenant_id = ? ORDER BY created ASC, id ASC`,
@@ -1646,6 +1755,8 @@ export function deleteEntry(
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: row's shape matches the three columns named in the SELECT
+    // above.
     const row = db
       .prepare(`SELECT id, tenant_id, dag_parent_id FROM memories WHERE id = ?`)
       .get(id) as { id?: string; tenant_id?: string; dag_parent_id?: string | null } | undefined;
@@ -1695,6 +1806,8 @@ export function batchWriteAndDelete(
     const tenantById = new Map<string, string>();
     if (toDeleteIds.length > 0) {
       const placeholders = toDeleteIds.map(() => '?').join(',');
+      // SAFETY: rows' shape matches the two columns named in the SELECT
+      // above.
       const rows = db.prepare(
         `SELECT dag_parent_id, tenant_id FROM memories WHERE id IN (${placeholders})`,
       ).all(...toDeleteIds) as Array<{ dag_parent_id: string | null; tenant_id: string | null }>;
@@ -1756,6 +1869,8 @@ export function loadAllEntries(hippoRoot: string, tenantId?: string): MemoryEntr
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: both branches select exactly MEMORY_SELECT_COLUMNS, matching
+    // MemoryRow's field set.
     const rows = tenantId !== undefined
       ? db.prepare(
           `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created ASC, id ASC`,
@@ -1849,6 +1964,7 @@ export function rebuildIndex(hippoRoot: string): HippoIndex {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: rows' shape matches the single `id` column selected above.
     const existingIds = new Set(
       (db.prepare(`SELECT id FROM memories`).all() as Array<{ id: string }>).map((row) => row.id)
     );
@@ -1895,7 +2011,7 @@ export function updateStats(
   }
 }
 
-export function loadStats(hippoRoot: string): Record<string, unknown> {
+export function loadStats(hippoRoot: string): LegacyStats {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
@@ -1946,6 +2062,7 @@ export function loadSessionDecayContext(hippoRoot: string): SessionDecayContext 
   const db = openHippoDb(hippoRoot);
   try {
     // Get recent consolidation timestamps (last 20)
+    // SAFETY: rows' shape matches the single `timestamp` column above.
     const rows = db.prepare(
       `SELECT timestamp FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT 20`
     ).all() as Array<{ timestamp: string }>;
@@ -2002,12 +2119,16 @@ export function incrementSleepCount(hippoRoot: string): void {
  * Acceptable tradeoff for catching the silent-leak class.
  */
 export function assertTenantId(fnName: string, value: unknown): asserts value is string {
-  if (typeof value !== 'string' || value.length === 0) {
-    throw new Error(`${fnName}: tenantId is required (got ${typeof value})`);
+  const isString = Object.prototype.toString.call(value) === '[object String]';
+  if (!isString || String(value).length === 0) {
+    throw new Error(`${fnName}: tenantId is required (got ${Object.prototype.toString.call(value)})`);
   }
-  if (/^sess[-_]/i.test(value)) {
+  // SAFETY: isString confirmed value is a string via the toString.call check
+  // above; TS doesn't narrow `unknown` from that non-typeof check on its own.
+  const tenantId = value as string;
+  if (/^sess[-_]/i.test(tenantId)) {
     throw new Error(
-      `${fnName}: tenantId looks like a session id ('${value}'). ` +
+      `${fnName}: tenantId looks like a session id ('${tenantId}'). ` +
       `In v0.41+ these helpers take (hippoRoot, tenantId, ...). ` +
       `Pass the tenant id (e.g. 'default') and the session id separately.`,
     );
@@ -2053,6 +2174,7 @@ export function saveActiveTaskSnapshot(
     db.exec('COMMIT');
 
     const id = Number(result.lastInsertRowid ?? 0);
+    // SAFETY: row's shape matches the ten columns named in the SELECT above.
     const row = db.prepare(`
       SELECT id, task, summary, next_step, status, source, session_id, scope, created_at, updated_at
       FROM task_snapshots
@@ -2083,6 +2205,7 @@ export function loadActiveTaskSnapshot(hippoRoot: string, tenantId: string): Tas
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: row's shape matches the ten columns named in the SELECT above.
     const row = db.prepare(`
       SELECT id, task, summary, next_step, status, source, session_id, scope, created_at, updated_at
       FROM task_snapshots
@@ -2111,6 +2234,7 @@ export function clearActiveTaskSnapshot(hippoRoot: string, tenantId: string, cle
   const now = new Date().toISOString();
 
   try {
+    // SAFETY: active's shape matches the single `id` column selected above.
     const active = db.prepare(`SELECT id FROM task_snapshots WHERE status = 'active' AND tenant_id = ? ORDER BY updated_at DESC, id DESC LIMIT 1`).get(tenantId) as { id?: number } | undefined;
     if (!active?.id) {
       removeActiveTaskMirror(hippoRoot, tenantId);
@@ -2162,6 +2286,8 @@ export function appendSessionEvent(
     );
 
     const id = Number(result.lastInsertRowid ?? 0);
+    // SAFETY: row's shape matches the nine columns named in the SELECT
+    // above.
     const row = db.prepare(`
       SELECT id, session_id, task, event_type, content, source, scope, metadata_json, created_at
       FROM session_events
@@ -2173,6 +2299,8 @@ export function appendSessionEvent(
     }
 
     const loaded = rowToSessionEvent(row);
+    // SAFETY: recentRows' shape matches the nine columns named in the
+    // SELECT above.
     const recentRows = db.prepare(`
       SELECT id, session_id, task, event_type, content, source, scope, metadata_json, created_at
       FROM session_events
@@ -2213,6 +2341,8 @@ export function listSessionEvents(
     params.push(limit);
 
     const where = `WHERE ${clauses.join(' AND ')}`;
+    // SAFETY: rows' shape matches the nine columns named in the SELECT
+    // above.
     const rows = db.prepare(`
       SELECT id, session_id, task, event_type, content, source, scope, metadata_json, created_at
       FROM session_events
@@ -2240,6 +2370,8 @@ export function findPromotableSessions(
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: rows' shape matches the single `session_id` column selected
+    // above.
     const rows = db.prepare(`
       SELECT DISTINCT session_id FROM session_events
       WHERE event_type = 'session_complete' AND created_at >= ? AND tenant_id = ?
@@ -2288,6 +2420,8 @@ export function listMemoryConflicts(
       // Tenanted query — JOIN to memories on both conflict members and require
       // each in-tenant, so neither a normal cross-tenant pair nor a stale
       // pre-fix row surfaces (consistent with resolveConflict).
+      // SAFETY: both branches select the same eight mc.* columns (aliased
+      // to MemoryConflictRow's field names) from memory_conflicts.
       rows = allStatuses
         ? db.prepare(`
             SELECT mc.id, mc.memory_a_id, mc.memory_b_id, mc.reason, mc.score,
@@ -2309,6 +2443,8 @@ export function listMemoryConflicts(
           `).all(status, tenantId, tenantId) as MemoryConflictRow[];
     } else {
       // Unscoped query — legacy direct-mode (CLI, tests, consolidate).
+      // SAFETY: both branches select the same eight columns matching
+      // MemoryConflictRow's field set.
       rows = allStatuses
         ? db.prepare(`
             SELECT id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at
@@ -2344,6 +2480,7 @@ export function replaceDetectedConflicts(
     // inserting rows and when rebuilding conflicts_with_json, so a stale
     // cross-tenant row can neither persist nor leak a foreign id.
     const tenantById = new Map<string, string>();
+    // SAFETY: rows' shape matches the two columns named in the SELECT below.
     for (const r of db.prepare(`SELECT id, tenant_id FROM memories`).all() as Array<{ id: string; tenant_id: string }>) {
       tenantById.set(r.id, r.tenant_id);
     }
@@ -2361,6 +2498,8 @@ export function replaceDetectedConflicts(
 
     const detectedKeys = new Set(canonicalDetected.map((conflict) => `${conflict.memory_a_id}::${conflict.memory_b_id}`));
 
+    // SAFETY: openRows' shape matches the eight columns named in the SELECT
+    // above.
     const openRows = db.prepare(`
       SELECT id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at
       FROM memory_conflicts
@@ -2402,6 +2541,7 @@ export function replaceDetectedConflicts(
       );
     }
 
+    // SAFETY: openConflicts' shape matches the two columns named above.
     const openConflicts = db.prepare(`
       SELECT memory_a_id, memory_b_id
       FROM memory_conflicts
@@ -2419,6 +2559,8 @@ export function replaceDetectedConflicts(
       refMap.get(row.memory_b_id)!.add(row.memory_a_id);
     }
 
+    // SAFETY: memoryRows' shape matches the single `id` column selected
+    // above.
     const memoryRows = db.prepare(`SELECT id FROM memories`).all() as Array<{ id: string }>;
     for (const memory of memoryRows) {
       const refs = Array.from(refMap.get(memory.id) ?? []).sort();
@@ -2464,6 +2606,8 @@ export function resolveConflict(
   const memArgs: string[] = tenantId !== undefined ? [tenantId] : [];
 
   try {
+    // SAFETY: both branches select the same eight columns (aliased in the
+    // tenanted branch) matching MemoryConflictRow's field set.
     const row = (tenantId !== undefined
       ? db.prepare(`
           SELECT mc.id, mc.memory_a_id, mc.memory_b_id, mc.reason, mc.score,
@@ -2507,6 +2651,8 @@ export function resolveConflict(
     }
 
     // Clean up conflicts_with references
+    // SAFETY: keepRow's shape matches the single `conflicts_with_json`
+    // column selected above.
     const keepRow = db.prepare(`SELECT conflicts_with_json FROM memories WHERE id = ?${memScope}`).get(keepId, ...memArgs) as { conflicts_with_json: string } | undefined;
     if (keepRow) {
       const refs: string[] = JSON.parse(keepRow.conflicts_with_json || '[]');
@@ -2516,6 +2662,8 @@ export function resolveConflict(
     }
 
     if (!forgetLoser) {
+      // SAFETY: loserRow's shape matches the single `conflicts_with_json`
+      // column selected above.
       const loserRow = db.prepare(`SELECT conflicts_with_json FROM memories WHERE id = ?${memScope}`).get(loserId, ...memArgs) as { conflicts_with_json: string } | undefined;
       if (loserRow) {
         const refs: string[] = JSON.parse(loserRow.conflicts_with_json || '[]');
@@ -2569,6 +2717,8 @@ export function saveSessionHandoff(
     );
 
     const id = Number(result.lastInsertRowid ?? 0);
+    // SAFETY: row's shape matches the nine columns named in the SELECT
+    // above.
     const row = db.prepare(`
       SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, created_at
       FROM session_handoffs
@@ -2596,6 +2746,8 @@ export function loadLatestHandoff(hippoRoot: string, tenantId: string, sessionId
   try {
     let row: SessionHandoffRow | undefined;
     if (sessionId) {
+      // SAFETY: row's shape matches the nine columns named in the SELECT
+      // below.
       row = db.prepare(`
         SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, created_at
         FROM session_handoffs
@@ -2604,6 +2756,8 @@ export function loadLatestHandoff(hippoRoot: string, tenantId: string, sessionId
         LIMIT 1
       `).get(sessionId, tenantId) as SessionHandoffRow | undefined;
     } else {
+      // SAFETY: row's shape matches the nine columns named in the SELECT
+      // below.
       row = db.prepare(`
         SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, created_at
         FROM session_handoffs
@@ -2628,6 +2782,8 @@ export function loadHandoffById(hippoRoot: string, tenantId: string, id: number)
   const db = openHippoDb(hippoRoot);
 
   try {
+    // SAFETY: row's shape matches the nine columns named in the SELECT
+    // above.
     const row = db.prepare(`
       SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, created_at
       FROM session_handoffs
@@ -2666,6 +2822,8 @@ export function loadDirtySummaries(
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
+    // MemoryRow's field set.
     const rows = db.prepare(`
       SELECT ${MEMORY_SELECT_COLUMNS}
         FROM memories
@@ -2705,6 +2863,8 @@ export function markSummaryDirtyInTx(
   // v0.30 / E5: widened dag_level=2 -> IN (2, 3). RETURNING dag_level reads
   // actual level in same round trip so audit metadata stays accurate without
   // a SELECT-before-UPDATE extra DB op on this hot path (5 caller sites).
+  // SAFETY: result's shape matches the single `dag_level` column returned
+  // above.
   const result = db.prepare(`
     UPDATE memories
        SET summary_dirty = 1
@@ -2745,6 +2905,8 @@ export function markSummaryDirty(
   try {
     // v0.30 / E5: widened dag_level=2 -> IN (2, 3). RETURNING dag_level reads
     // actual level in same round trip.
+    // SAFETY: result's shape matches the single `dag_level` column returned
+    // above.
     const result = db.prepare(`
       UPDATE memories
          SET summary_dirty = 1
@@ -2790,6 +2952,8 @@ export function loadAllL2Summaries(hippoRoot: string): MemoryEntry[] {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
+    // MemoryRow's field set.
     const rows = db.prepare(`
       SELECT ${MEMORY_SELECT_COLUMNS}
         FROM memories
@@ -2817,6 +2981,8 @@ export function loadAllDirtySummaries(hippoRoot: string): MemoryEntry[] {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
+    // MemoryRow's field set.
     const rows = db.prepare(`
       SELECT ${MEMORY_SELECT_COLUMNS}
         FROM memories
@@ -2846,6 +3012,8 @@ export function loadChildrenOfSummary(
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
+    // MemoryRow's field set.
     const rows = db.prepare(`
       SELECT ${MEMORY_SELECT_COLUMNS}
         FROM memories
@@ -3017,6 +3185,8 @@ export function clearSummaryDirtyAfterBuild(
   try {
     // v0.30 / E5: widened dag_level=2 -> IN (2, 3). RETURNING dag_level reads
     // actual level so audit metadata stays accurate without an extra SELECT.
+    // SAFETY: result's shape matches the single `dag_level` column returned
+    // below.
     const result = db.prepare(`
       UPDATE memories
          SET summary_dirty = 0

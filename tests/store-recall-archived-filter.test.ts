@@ -22,9 +22,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry, loadSearchEntries } from '../src/store.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { Layer } from '../src/memory.js';
+import { Layer, type MemoryEntry } from '../src/memory.js';
 
-function makeRawMemory(id: string, content: string, tenantId = 'default') {
+function makeRawMemory(id: string, content: string, tenantId = 'default'): MemoryEntry {
   return {
     id,
     content,
@@ -34,17 +34,17 @@ function makeRawMemory(id: string, content: string, tenantId = 'default') {
     strength: 1.0,
     half_life_days: 30,
     layer: Layer.Episodic,
-    tags: [] as string[],
+    tags: [],
     emotional_valence: 'neutral' as const,
     schema_fit: 0.7,
     source: 'test',
     outcome_score: null,
     outcome_positive: 0,
     outcome_negative: 0,
-    conflicts_with: [] as string[],
+    conflicts_with: [],
     pinned: false,
     confidence: 'verified' as const,
-    parents: [] as string[],
+    parents: [],
     starred: false,
     trace_outcome: null,
     source_session_id: null,

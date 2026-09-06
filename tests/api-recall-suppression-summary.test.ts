@@ -14,7 +14,7 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, MemoryKind, type MemoryEntry } from '../src/memory.js';
+import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
 import { recall, buildSuppressionSummary, type Context } from '../src/api.js';
 
 function makeRoot(prefix: string): string {
@@ -33,7 +33,7 @@ function makeRaw(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
   return createMemory(text, {
     layer: Layer.Buffer,
     confidence: 'observed',
-    kind: 'raw' as MemoryKind,
+    kind: 'raw',
     tenantId: opts.tenantId ?? 'default',
   });
 }
@@ -53,12 +53,14 @@ describe('RecallResult.suppressionSummary (C5 WYSIATI, v1.12.13)', () => {
     expect(result.windowSize).toBe(200);
     // New field always present from api.recall.
     expect(result.suppressionSummary).toBeDefined();
-    expect(typeof result.suppressionSummary!.totalCandidates).toBe('number');
-    expect(typeof result.suppressionSummary!.droppedPreRank).toBe('number');
-    expect(typeof result.suppressionSummary!.droppedByBudget).toBe('number');
-    expect(typeof result.suppressionSummary!.summarySubstitutionsAdded).toBe('number');
-    expect(typeof result.suppressionSummary!.freshTailAdded).toBe('number');
-    expect(typeof result.suppressionSummary!.suppressedByInterference).toBe('number');
+    // Each field is a non-negative integer counter (RecallSuppressionSummary,
+    // src/api.ts); Number.isInteger is the domain-correct runtime shape check.
+    expect(Number.isInteger(result.suppressionSummary!.totalCandidates)).toBe(true);
+    expect(Number.isInteger(result.suppressionSummary!.droppedPreRank)).toBe(true);
+    expect(Number.isInteger(result.suppressionSummary!.droppedByBudget)).toBe(true);
+    expect(Number.isInteger(result.suppressionSummary!.summarySubstitutionsAdded)).toBe(true);
+    expect(Number.isInteger(result.suppressionSummary!.freshTailAdded)).toBe(true);
+    expect(Number.isInteger(result.suppressionSummary!.suppressedByInterference)).toBe(true);
   });
 
   it('totalCandidates reflects loaded candidate pool (post tenant + SQL scope predicate)', () => {

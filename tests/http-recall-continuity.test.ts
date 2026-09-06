@@ -12,6 +12,14 @@ import {
 import { createMemory } from '../src/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
+/** Parse a fetch Response body against a caller-declared shape. */
+async function jsonAs<T>(res: Response): Promise<T> {
+  // SAFETY: only used against this file's own /v1/memories route responses,
+  // whose JSON shape is fixed by the handler in src/server.ts and checked by
+  // the assertions immediately following each call site.
+  return (await res.json()) as T;
+}
+
 function makeRoot(): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-http-cont-'));
   mkdirSync(join(home, '.hippo'), { recursive: true });
@@ -38,7 +46,7 @@ describe('GET /v1/memories continuity + scope', () => {
     const res = await fetch(`${handle.url}/v1/memories?q=deploys`);
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).not.toBe('no-store');
-    const body = await res.json() as { continuity?: unknown; results: unknown[] };
+    const body = await jsonAs<{ continuity?: unknown; results: unknown[] }>(res);
     expect(body.continuity).toBeUndefined();
   });
 
@@ -68,10 +76,10 @@ describe('GET /v1/memories continuity + scope', () => {
     const res = await fetch(`${handle.url}/v1/memories?q=deploys&include_continuity=1`);
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe('no-store');
-    const body = await res.json() as {
+    const body = await jsonAs<{
       continuity?: { activeSnapshot?: { task: string } | null };
       continuityTokens?: number;
-    };
+    }>(res);
     expect(body.continuity?.activeSnapshot?.task).toBe('HTTP continuity');
     expect(body.continuityTokens).toBeGreaterThan(0);
   });
@@ -87,9 +95,9 @@ describe('GET /v1/memories continuity + scope', () => {
     });
 
     const res = await fetch(`${handle.url}/v1/memories?q=anything&include_continuity=1`);
-    const body = await res.json() as {
+    const body = await jsonAs<{
       continuity?: { activeSnapshot?: { task: string } | null };
-    };
+    }>(res);
     expect(body.continuity?.activeSnapshot).toBeNull();
   });
 
@@ -105,9 +113,9 @@ describe('GET /v1/memories continuity + scope', () => {
 
     const url = `${handle.url}/v1/memories?q=anything&include_continuity=1&scope=${encodeURIComponent('slack:private:Csecret')}`;
     const res = await fetch(url);
-    const body = await res.json() as {
+    const body = await jsonAs<{
       continuity?: { activeSnapshot?: { task: string } | null };
-    };
+    }>(res);
     expect(body.continuity?.activeSnapshot?.task).toBe('Private HTTP task');
   });
 });

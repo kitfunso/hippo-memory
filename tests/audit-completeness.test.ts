@@ -3,12 +3,20 @@ import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execSync } from 'node:child_process';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';
 import { archiveRawMemory } from '../src/raw-archive.js';
 
 const repoRoot = resolve(__dirname, '..');
 const cli = resolve(repoRoot, 'dist', 'cli.js');
+
+/** Query a single row from the hippo SQLite handle. */
+function queryOne<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T | undefined {
+  // SAFETY: sql is a literal SELECT against known hippo schema columns; the
+  // row shape is declared by the generic type argument at each call site and
+  // checked immediately by the assertions that follow.
+  return db.prepare(sql).get(...params) as T | undefined;
+}
 
 describe('audit log captures every mutation', () => {
   it('remember + recall both logged via CLI flow', () => {
@@ -56,9 +64,10 @@ describe('audit log captures every mutation', () => {
       const dbLocal = openHippoDb(localRoot);
       let localId: string | undefined;
       try {
-        const row = dbLocal
-          .prepare(`SELECT id FROM memories WHERE content LIKE '%audit-promote-canary-55%' LIMIT 1`)
-          .get() as { id?: string } | undefined;
+        const row = queryOne<{ id?: string }>(
+          dbLocal,
+          `SELECT id FROM memories WHERE content LIKE '%audit-promote-canary-55%' LIMIT 1`,
+        );
         localId = row?.id;
       } finally {
         closeHippoDb(dbLocal);
@@ -72,7 +81,7 @@ describe('audit log captures every mutation', () => {
       try {
         const events = queryAuditEvents(dbGlobal, { tenantId: 'default', op: 'promote' });
         expect(events.length).toBeGreaterThan(0);
-        const meta = events[0]!.metadata as { sourceId?: string };
+        const meta = events[0]!.metadata;
         expect(meta.sourceId).toBe(localId);
       } finally {
         closeHippoDb(dbGlobal);
@@ -98,9 +107,10 @@ describe('audit log captures every mutation', () => {
       const db = openHippoDb(localRoot);
       let oldId: string | undefined;
       try {
-        const row = db
-          .prepare(`SELECT id FROM memories WHERE content LIKE '%audit-supersede-canary-33%' LIMIT 1`)
-          .get() as { id?: string } | undefined;
+        const row = queryOne<{ id?: string }>(
+          db,
+          `SELECT id FROM memories WHERE content LIKE '%audit-supersede-canary-33%' LIMIT 1`,
+        );
         oldId = row?.id;
       } finally {
         closeHippoDb(db);
@@ -117,7 +127,7 @@ describe('audit log captures every mutation', () => {
         const events = queryAuditEvents(db2, { tenantId: 'default', op: 'supersede' });
         const match = events.find((e) => e.targetId === oldId);
         expect(match, `expected supersede event for ${oldId}`).toBeTruthy();
-        const meta = match!.metadata as { newId?: string };
+        const meta = match!.metadata;
         expect(meta.newId).toBeTruthy();
         expect(meta.newId).not.toBe(oldId);
       } finally {
@@ -144,7 +154,7 @@ describe('audit log captures every mutation', () => {
       expect(events.length).toBe(1);
       expect(events[0]!.targetId).toBe('raw1');
       expect(events[0]!.actor).toBe('user:42');
-      const meta = events[0]!.metadata as { reason?: string };
+      const meta = events[0]!.metadata;
       expect(meta.reason).toBe('GDPR');
 
       // And nothing leaks into the default tenant.
@@ -174,9 +184,10 @@ describe('audit log captures every mutation', () => {
       const db = openHippoDb(localRoot);
       let rememberedId: string | undefined;
       try {
-        const row = db
-          .prepare(`SELECT id FROM memories WHERE content LIKE '%audit-forget-canary-77%' LIMIT 1`)
-          .get() as { id?: string } | undefined;
+        const row = queryOne<{ id?: string }>(
+          db,
+          `SELECT id FROM memories WHERE content LIKE '%audit-forget-canary-77%' LIMIT 1`,
+        );
         rememberedId = row?.id;
       } finally {
         closeHippoDb(db);

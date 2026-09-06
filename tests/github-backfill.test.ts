@@ -41,6 +41,8 @@ interface CursorRow {
 function readCursorRow(root: string): CursorRow | undefined {
   const db = openHippoDb(root);
   try {
+    // SAFETY: sql is a literal SELECT of exactly CursorRow's three columns
+    // from the known github_cursors schema.
     return db
       .prepare(
         `SELECT issues_hwm, issue_comments_hwm, pr_review_comments_hwm
@@ -83,11 +85,11 @@ function streamOf(url: string): keyof FakePlan {
  * pages, stream 2 throws, stream 3 is empty" cleanly.
  */
 function makeFakeFetcher(plan: FakePlan, capture?: CallCapture): GitHubFetcher {
-  const cursors: Record<keyof FakePlan, number> = {
+  const cursors = {
     issues: 0,
     issueComments: 0,
     prReviewComments: 0,
-  };
+  } satisfies Record<keyof FakePlan, number>;
   return async ({ url }) => {
     capture?.calls.push({ url });
     const stream = streamOf(url);
@@ -98,13 +100,34 @@ function makeFakeFetcher(plan: FakePlan, capture?: CallCapture): GitHubFetcher {
   };
 }
 
+interface GithubIssueItem {
+  number: number;
+  title: string;
+  body: string;
+  user: { login: string; id: number };
+  updated_at: string;
+  pull_request?: { url: string };
+}
+
+interface GithubIssueCommentItem {
+  id: number;
+  body: string;
+  user: { login: string; id: number };
+  updated_at: string;
+  issue_url: string;
+}
+
+interface GithubPrReviewCommentItem {
+  id: number;
+  body: string;
+  user: { login: string; id: number };
+  updated_at: string;
+  pull_request_url: string;
+}
+
 /** Build a stream-1 (issues) item. */
-function issueItem(
-  number: number,
-  updatedAt: string,
-  isPr = false,
-): Record<string, unknown> {
-  const item: Record<string, unknown> = {
+function issueItem(number: number, updatedAt: string, isPr = false): GithubIssueItem {
+  const item: GithubIssueItem = {
     number,
     title: `issue ${number}`,
     body: `body for ${number}`,
@@ -115,11 +138,7 @@ function issueItem(
   return item;
 }
 
-function issueCommentItem(
-  id: number,
-  issueNumber: number,
-  updatedAt: string,
-): Record<string, unknown> {
+function issueCommentItem(id: number, issueNumber: number, updatedAt: string): GithubIssueCommentItem {
   return {
     id,
     body: `comment ${id}`,
@@ -129,11 +148,7 @@ function issueCommentItem(
   };
 }
 
-function prReviewCommentItem(
-  id: number,
-  prNumber: number,
-  updatedAt: string,
-): Record<string, unknown> {
+function prReviewCommentItem(id: number, prNumber: number, updatedAt: string): GithubPrReviewCommentItem {
   return {
     id,
     body: `review comment ${id}`,

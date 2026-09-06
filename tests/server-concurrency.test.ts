@@ -14,13 +14,26 @@ import { serve, type ServerHandle } from '../src/server.js';
 interface TracedResponse {
   status: number;
   text: () => Promise<string>;
-  json: () => Promise<unknown>;
+  json: <T = unknown>() => Promise<T>;
 }
 
 interface TracedRequestInit {
   method?: string;
   headers?: Record<string, string>;
   body?: string;
+}
+
+/** Node's error events hand back NodeJS.ErrnoException-shaped errors, or wrap
+ *  one via `.cause` (undici/node:http connection failures). `.code` is
+ *  optional on that interface, so a miss just yields undefined. */
+function errorCode(err: Error): string | undefined {
+  const cause = err.cause;
+  // SAFETY: see file-level comment above — `.cause` is a Node error object
+  // whose optional `.code` field is what this helper exists to read.
+  const causeCode = cause instanceof Error ? (cause as NodeJS.ErrnoException).code : undefined;
+  // SAFETY: see file-level comment above — err is a Node error object whose
+  // optional `.code` field is what this helper exists to read.
+  return causeCode ?? (err as NodeJS.ErrnoException).code;
 }
 
 // T3c (hardening-1.26.2): fresh-TCP-connection transport, replacing fetch.
@@ -67,18 +80,21 @@ function tracedRequest(label: string, url: string, init?: TracedRequestInit): Pr
           resolve({
             status: res.statusCode ?? 0,
             text: async () => bodyText,
-            json: async () => JSON.parse(bodyText) as unknown,
+            // SAFETY: caller declares T via json<T>() at each call site; this
+            // just hands back JSON.parse of the raw response body as that
+            // caller-declared type.
+            json: async <T = unknown>() => JSON.parse(bodyText) as T,
           });
         });
         res.on('error', (err) => {
-          const code = (err as any)?.cause?.code ?? (err as any)?.code;
+          const code = errorCode(err);
           req.destroy(); // free the un-pooled socket on mid-response failure
           reject(new Error(`${label}: ${code}`, { cause: err }));
         });
       },
     );
     req.on('error', (err) => {
-      const code = (err as any)?.cause?.code ?? (err as any)?.code;
+      const code = errorCode(err);
       req.destroy(); // free the un-pooled socket on request-phase failure
       reject(new Error(`${label}: ${code}`, { cause: err }));
     });
@@ -181,7 +197,7 @@ describe('server concurrency — recall + write under single-writer', () => {
             }
             throw new Error(`writer #${idx} status=${res.status} body=${text}`);
           }
-          const body = (await res.json()) as { id: string; kind: string; tenantId: string };
+          const body = await res.json<{ id: string; kind: string; tenantId: string }>();
           expect(body.id).toMatch(/^mem_/);
           expect(body.kind).toBe('distilled');
           expect(body.tenantId).toBe('default');
@@ -207,6 +223,8 @@ describe('server concurrency — recall + write under single-writer', () => {
         // Final DB state: exactly 150 memories (100 seed + 50 concurrent).
         const db = openHippoDb(home);
         try {
+          // SAFETY: literal COUNT(*) query against the known memories schema
+          // always returns a single { n } row.
           const row = db
             .prepare(`SELECT COUNT(*) AS n FROM memories WHERE tenant_id = 'default'`)
             .get() as { n: number };
@@ -217,6 +235,8 @@ describe('server concurrency — recall + write under single-writer', () => {
             `SELECT COUNT(*) AS n FROM memories WHERE content = ? AND tenant_id = 'default'`,
           );
           for (let n = 0; n < writeCount; n++) {
+            // SAFETY: literal COUNT(*) query against the known memories schema
+            // always returns a single { n } row.
             const hit = stmt.get(`concurrent-canary-${n}`) as { n: number };
             expect(hit.n, `marker concurrent-canary-${n} missing`).toBe(1);
           }

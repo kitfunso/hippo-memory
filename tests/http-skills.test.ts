@@ -23,6 +23,15 @@ import { initStore } from '../src/store.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { createApiKey, type CreatedApiKey } from '../src/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
+import type { Skill } from '../src/skills.js';
+
+/** Parse a fetch Response body against a caller-declared shape. */
+async function jsonAs<T>(res: Response): Promise<T> {
+  // SAFETY: only used against this file's own /v1/skills route responses,
+  // whose JSON shape is fixed by the handler in src/server.ts and checked by
+  // the assertions immediately following each call site.
+  return (await res.json()) as T;
+}
 
 function makeRoot(): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-http-skill-'));
@@ -53,7 +62,13 @@ afterEach(async () => {
 function authHeaders(key: CreatedApiKey = apiKey) {
   return { authorization: `Bearer ${key.plaintext}`, 'content-type': 'application/json' };
 }
-async function createSkill(body: Record<string, unknown>, key: CreatedApiKey = apiKey) {
+interface CreateSkillBody {
+  skillName: string;
+  instructions: string;
+  trigger?: string;
+}
+
+async function createSkill(body: CreateSkillBody, key: CreatedApiKey = apiKey) {
   return fetch(`${handle.url}/v1/skills`, { method: 'POST', headers: authHeaders(key), body: JSON.stringify(body) });
 }
 
@@ -61,7 +76,7 @@ describe('HTTP /v1/skills (E2 executable/exportable first-class object)', () => 
   it('POST /v1/skills creates a skill (201 + Skill, version 1)', async () => {
     const res = await createSkill({ skillName: 'Run tests', instructions: 'npm test', trigger: 'before commit' });
     expect(res.status).toBe(201);
-    const body = await res.json() as { skill: Record<string, unknown> };
+    const body = await jsonAs<{ skill: Skill }>(res);
     expect(body.skill.skillName).toBe('Run tests');
     expect(body.skill.trigger).toBe('before commit');
     expect(body.skill.version).toBe(1);
@@ -69,13 +84,13 @@ describe('HTTP /v1/skills (E2 executable/exportable first-class object)', () => 
   });
 
   it('GET /v1/skills lists + filters by status', async () => {
-    const v1 = (await (await createSkill({ skillName: 'S', instructions: 'a' })).json() as { skill: { id: number } }).skill;
+    const v1 = (await jsonAs<{ skill: Skill }>(await createSkill({ skillName: 'S', instructions: 'a' }))).skill;
     await fetch(`${handle.url}/v1/skills/${v1.id}/supersede`, {
       method: 'POST', headers: authHeaders(), body: JSON.stringify({ instructions: 'b', changeSummary: 'c' }),
     });
-    const all = await (await fetch(`${handle.url}/v1/skills`, { headers: authHeaders() })).json() as { skills: unknown[] };
+    const all = await jsonAs<{ skills: Skill[] }>(await fetch(`${handle.url}/v1/skills`, { headers: authHeaders() }));
     expect(all.skills.length).toBe(2);
-    const active = await (await fetch(`${handle.url}/v1/skills?status=active`, { headers: authHeaders() })).json() as { skills: Array<{ version: number }> };
+    const active = await jsonAs<{ skills: Skill[] }>(await fetch(`${handle.url}/v1/skills?status=active`, { headers: authHeaders() }));
     expect(active.skills.length).toBe(1);
     expect(active.skills[0].version).toBe(2);
   });
@@ -85,7 +100,7 @@ describe('HTTP /v1/skills (E2 executable/exportable first-class object)', () => 
     await createSkill({ skillName: 'Bravo', instructions: 'do bravo' });
     const res = await fetch(`${handle.url}/v1/skills/export`, { headers: authHeaders() });
     expect(res.status).toBe(200);
-    const body = await res.json() as { markdown: string };
+    const body = await jsonAs<{ markdown: string }>(res);
     expect(body.markdown).toContain('## Alpha');
     expect(body.markdown).toContain('**When:** on start');
     expect(body.markdown).toContain('## Bravo');
@@ -94,18 +109,18 @@ describe('HTTP /v1/skills (E2 executable/exportable first-class object)', () => 
   });
 
   it('GET /v1/skills/:id + 404 on missing', async () => {
-    const created = (await (await createSkill({ skillName: 'X', instructions: 'a' })).json() as { skill: { id: number } }).skill;
+    const created = (await jsonAs<{ skill: Skill }>(await createSkill({ skillName: 'X', instructions: 'a' }))).skill;
     expect((await fetch(`${handle.url}/v1/skills/${created.id}`, { headers: authHeaders() })).status).toBe(200);
     expect((await fetch(`${handle.url}/v1/skills/99999`, { headers: authHeaders() })).status).toBe(404);
   });
 
   it('POST /v1/skills/:id/supersede creates v2 (+409 on re-supersede)', async () => {
-    const v1 = (await (await createSkill({ skillName: 'B', instructions: 'a' })).json() as { skill: { id: number } }).skill;
+    const v1 = (await jsonAs<{ skill: Skill }>(await createSkill({ skillName: 'B', instructions: 'a' }))).skill;
     const sup = await fetch(`${handle.url}/v1/skills/${v1.id}/supersede`, {
       method: 'POST', headers: authHeaders(), body: JSON.stringify({ instructions: 'b', changeSummary: 'x' }),
     });
     expect(sup.status).toBe(200);
-    expect((await sup.json() as { skill: { version: number } }).skill.version).toBe(2);
+    expect((await jsonAs<{ skill: Skill }>(sup)).skill.version).toBe(2);
     const conflict = await fetch(`${handle.url}/v1/skills/${v1.id}/supersede`, {
       method: 'POST', headers: authHeaders(), body: JSON.stringify({ instructions: 'c' }),
     });
@@ -113,7 +128,7 @@ describe('HTTP /v1/skills (E2 executable/exportable first-class object)', () => 
   });
 
   it('POST /v1/skills/:id/close retires (+409 on re-close)', async () => {
-    const s = (await (await createSkill({ skillName: 'C', instructions: 'a' })).json() as { skill: { id: number } }).skill;
+    const s = (await jsonAs<{ skill: Skill }>(await createSkill({ skillName: 'C', instructions: 'a' }))).skill;
     expect((await fetch(`${handle.url}/v1/skills/${s.id}/close`, { method: 'POST', headers: authHeaders() })).status).toBe(200);
     expect((await fetch(`${handle.url}/v1/skills/${s.id}/close`, { method: 'POST', headers: authHeaders() })).status).toBe(409);
   });
@@ -139,11 +154,11 @@ describe('HTTP /v1/skills (E2 executable/exportable first-class object)', () => 
   });
 
   it('cross-tenant isolation: tenant-b cannot see default skills (incl export)', async () => {
-    const created = (await (await createSkill({ skillName: 'secret', instructions: 'a' })).json() as { skill: { id: number } }).skill;
-    const bList = await (await fetch(`${handle.url}/v1/skills`, { headers: authHeaders(apiKeyB) })).json() as { skills: unknown[] };
+    const created = (await jsonAs<{ skill: Skill }>(await createSkill({ skillName: 'secret', instructions: 'a' }))).skill;
+    const bList = await jsonAs<{ skills: Skill[] }>(await fetch(`${handle.url}/v1/skills`, { headers: authHeaders(apiKeyB) }));
     expect(bList.skills.length).toBe(0);
     expect((await fetch(`${handle.url}/v1/skills/${created.id}`, { headers: authHeaders(apiKeyB) })).status).toBe(404);
-    const bExport = await (await fetch(`${handle.url}/v1/skills/export`, { headers: authHeaders(apiKeyB) })).json() as { markdown: string };
+    const bExport = await jsonAs<{ markdown: string }>(await fetch(`${handle.url}/v1/skills/export`, { headers: authHeaders(apiKeyB) }));
     expect(bExport.markdown).toBe('');
   });
 
