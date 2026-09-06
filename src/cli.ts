@@ -66,7 +66,6 @@ import {
   MemoryEntry,
   ConfidenceLevel,
 } from './memory.js';
-import { resolveProjectIdentity } from './project-identity.js';
 import { detectSecret } from './secret-detect.js';
 import {
   getHippoRoot,
@@ -234,7 +233,7 @@ import { graphExpandRecall, MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from './graph-reca
 import { DEFAULT_GRAPH_STREAM_WEIGHT } from './graph-stream.js';
 import { getReranker } from './rerankers/index.js';
 import { computeSalience } from './salience.js';
-import { computeAmbientState, renderAmbientSummary } from './ambient.js';
+import { renderAmbientSummary } from './ambient.js';
 import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
 import { pruneAuditLog, parseOlderThanFlag } from './audit-prune.js';
 import { listDlq, replayDlqEntry } from './connectors/slack/dlq.js';
@@ -6084,31 +6083,8 @@ async function cmdContext(
     }
     printCrossProjectSection(crossEntries);
 
-    // Ambient state summary (CLI-side: api.getContext doesn't load all entries
-    // post-selection, so we re-load here for the landscape summary).
-    const ambientConfig = loadConfig(hippoRoot);
-    if (ambientConfig.ambient.enabled && !pinnedOnly) {
-      const tenantId = ctx.tenantId;
-      const globalRoot = getGlobalRoot();
-      const hasGlobalForAmbient = isInitialized(globalRoot);
-      // v39: the landscape summary must reflect the same admission policy as
-      // the injected entries - otherwise excluded rows leak back in as
-      // aggregate signal (codex P2-13).
-      const isolationOff = ambientConfig.contextProjectIsolation === false;
-      const ambientCurrentName = resolveProjectIdentity(process.cwd()).name;
-      const ambientAdmit = (e: MemoryEntry) =>
-        api.ambientAdmitEntry(e, ambientCurrentName, crossProject || isolationOff);
-      const localForAmbient = isInitialized(hippoRoot)
-        ? loadAllEntries(hippoRoot, tenantId).filter(e => !e.superseded_by).filter(ambientAdmit)
-        : [];
-      const globalForAmbient = hasGlobalForAmbient
-        ? loadAllEntries(globalRoot, tenantId).filter(e => !e.superseded_by).filter(ambientAdmit)
-        : [];
-      const allForAmbient = [...localForAmbient, ...globalForAmbient];
-      if (allForAmbient.length > 0) {
-        const ambientState = computeAmbientState(allForAmbient);
-        console.log(`\n${renderAmbientSummary(ambientState)}`);
-      }
+    if (result.ambientState) {
+      console.log(`\n${renderAmbientSummary(result.ambientState)}`);
     }
   }
 }

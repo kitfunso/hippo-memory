@@ -19,7 +19,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore, saveActiveTaskSnapshot, writeEntry } from '../src/store.js';
@@ -284,5 +284,66 @@ describe('GET /v1/context', () => {
     const after = queryAuditEvents(db2, { tenantId: 'default', op: 'recall' });
     closeHippoDb(db2);
     expect(after.length).toBe(before.length + 1);
+  });
+});
+
+// Episode 01M1VQBCH5CFB8RRKNSRE8RP6M, acceptance criterion 4: getContext now
+// returns the computed ambientState, and sendJson(res, 200, result) forwards
+// it unchanged, so the route gains the field for free with no route change.
+describe('GET /v1/context - ambientState field', () => {
+  let home: string;
+  let globalHome: string;
+  let origHippoHome: string | undefined;
+  let handle: ServerHandle;
+
+  async function startServer(ambientEnabled: boolean): Promise<void> {
+    home = makeRoot();
+    globalHome = makeRoot();
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ ambient: { enabled: ambientEnabled } }), 'utf8');
+    origHippoHome = process.env.HIPPO_HOME;
+    process.env.HIPPO_HOME = globalHome;
+    handle = await serve({ hippoRoot: home, port: 0 });
+  }
+
+  afterEach(async () => {
+    await handle.stop();
+    if (origHippoHome === undefined) {
+      delete process.env.HIPPO_HOME;
+    } else {
+      process.env.HIPPO_HOME = origHippoHome;
+    }
+    rmSync(home, { recursive: true, force: true });
+    rmSync(globalHome, { recursive: true, force: true });
+  });
+
+  it('is present with a populated totalMemories when ambient is on and entries are admitted', async () => {
+    await startServer(true);
+    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
+    remember(ctx, { content: 'ambient-route-marker-row' });
+
+    const res = await fetch(`${handle.url}/v1/context?budget=1500`);
+    expect(res.status).toBe(200);
+    const body = await jsonAs<{
+      entries: unknown[];
+      tokens: number;
+      ambientState?: { totalMemories: number };
+    }>(res);
+    expect(body.entries.length).toBeGreaterThan(0);
+    expect(body.tokens).toBeGreaterThan(0);
+    expect(body.ambientState).toBeDefined();
+    expect(body.ambientState!.totalMemories).toBeGreaterThan(0);
+  });
+
+  it('is absent when ambient is off in config, while the existing fields are unchanged', async () => {
+    await startServer(false);
+    const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
+    remember(ctx, { content: 'ambient-off-marker-row' });
+
+    const res = await fetch(`${handle.url}/v1/context?budget=1500`);
+    expect(res.status).toBe(200);
+    const body = await jsonAs<{ entries: unknown[]; tokens: number; ambientState?: unknown }>(res);
+    expect(body.entries.length).toBeGreaterThan(0);
+    expect(body.tokens).toBeGreaterThan(0);
+    expect(body.ambientState).toBeUndefined();
   });
 });

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.38.5 - 2026-09-06
+
+### Fixed
+- **The v39 ambient admission policy lived in two hand-synced copies, and `hippo context` loaded every entry twice to feed them.** `api.getContext` already loaded, superseded-filtered and admission-filtered every local and global entry to build the injected set, but `cli.ts`'s ambient landscape summary re-derived all four steps itself (its own `loadConfig`, its own `resolveProjectIdentity`, its own copy of the admission predicate, a second `loadAllEntries` per store) instead of reading what `getContext` already computed. The CLI's own comment recorded that these two copies had already drifted once (codex P2-13). `getContext` now returns the computed `ambientState` on its one entry-carrying return, and the CLI renders it instead of re-loading. Measured on this machine's two real stores before the fix: 508 rows local and 1818 global, each loaded twice, roughly 40 ms per interactive `hippo context`. The `UserPromptSubmit` hook path (`--pinned-only --format additional-context`) never paid this cost: it is gated by `!pinnedOnly` and the additional-context branch never called the summary at all, so this is not a hot-path fix.
+
 ## 1.38.4 - 2026-09-06
 
 ### Fixed
