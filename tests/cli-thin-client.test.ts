@@ -444,6 +444,30 @@ describe('cli thin-client mode', () => {
     }
   }, 30_000);
 
+  it('a server error quoting a transport-shaped id does not tear down a live pidfile', async () => {
+    const workspace = makeWorkspace();
+    let server: SpawnedServer | null = null;
+    try {
+      const port = await pickFreePort();
+      server = await startServer(workspace, port);
+      const pidfilePath = join(workspace, '.hippo', 'server.pid');
+
+      // isConnectionRefused reads message text, and the server quotes the id
+      // back in its 404, so this id used to be classified as a dead socket.
+      const run = runCli(workspace, 'forget', 'mem_ECONNREFUSED');
+      expect(run.stdout + run.stderr).toMatch(/not found/i);
+
+      // The server never went away, so its pidfile must survive and routing
+      // must still work for the next command.
+      expect(existsSync(pidfilePath)).toBe(true);
+      runCli(workspace, 'remember', 'post-404-canary-88');
+      expect(getActorForContent(workspace, 'post-404-canary-88')).toBe('localhost:cli');
+    } finally {
+      if (server) await server.stop();
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  }, 30_000);
+
   it('forget --archive reaches the same connection-refused fallback as remember', async () => {
     const workspace = makeWorkspace();
     const hippoRoot = join(workspace, '.hippo');

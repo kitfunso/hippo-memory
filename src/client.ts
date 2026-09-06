@@ -38,6 +38,16 @@ function isNonEmptyString(value: string | undefined): value is string {
   return typeof value === 'string' && value.length > 0;
 }
 
+/** An error the server answered with, not one the transport raised. The
+ *  refused-connection classifier sniffs message text, and a server message
+ *  quotes the caller's own id or content back verbatim. */
+export class HttpResponseError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'HttpResponseError';
+  }
+}
+
 /**
  * Throw an Error matching the server's error message. Keeps message strings
  * intact so cli.ts handlers can match on the same substrings ("not found",
@@ -54,7 +64,7 @@ async function throwForStatus(res: Response): Promise<never> {
   } catch {
     // body wasn't JSON; fall back to status line.
   }
-  throw new Error(message);
+  throw new HttpResponseError(message, res.status);
 }
 
 export async function remember(
@@ -255,6 +265,8 @@ function hasObjectCause(e: Error): e is Error & { cause: { code?: unknown } } {
 
 export function isConnectionRefused(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
+  // The server answered, so the transport worked, whatever the message says.
+  if (err instanceof HttpResponseError) return false;
   const message = err.message.toLowerCase();
   // Node fetch wraps the underlying cause; the surface message contains 'fetch failed'
   // and the cause has the syscall code. We check both shapes.
