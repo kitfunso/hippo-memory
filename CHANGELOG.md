@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.38.6 - 2026-09-06
 
 ### Fixed
 - **Sleep was overwriting the stored confidence tier with a time-derived guess, silently upgrading `inferred` memories to `observed`.** Reproduced on a real store: an `inferred` entry 40 days stale went to `stale` on disk after one `consolidate` and then `observed` after one `markRetrieved`, with nothing left to say it had ever been `inferred`. Root cause was `src/replay.ts:104` reading eligibility off the stored `confidence` column instead of deriving it, which forced `src/consolidate.ts` to persist `resolveConfidence`'s time-derived value back to disk on every sleep at three sites, destroying the stored tier for any entry that aged past 30 days. Replay now calls `resolveConfidence` directly; consolidate persists only `strength` and leaves `confidence` as stored. This reverses the confidence half of review round P2-1 (the strength half, refreshing stored strength on every survivor, is untouched and still correct). `src/search.ts:1263`'s `stale` -> `observed` mapping on recall now only fires for rows deliberately marked `stale` by invalidation or already flattened by a pre-fix sleep; those rows cannot be recovered, because the tier is already gone from disk. No export or signature change.
