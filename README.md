@@ -798,7 +798,7 @@ Different tools answer different questions. Mem0 and Basic Memory implement "sav
 
 ## Benchmarks
 
-Two benchmarks testing two different things. Full details in [`benchmarks/`](benchmarks/).
+Three benchmarks testing three different things. Full details in [`benchmarks/`](benchmarks/).
 
 ### LongMemEval (retrieval accuracy)
 
@@ -846,6 +846,23 @@ python ingest_direct.py --data data/longmemeval_oracle.json --store-dir ./store
 python retrieve_fast.py --data data/longmemeval_oracle.json --store-dir ./store --output results/retrieval.jsonl
 python evaluate_retrieval.py --retrieval results/retrieval.jsonl --data data/longmemeval_oracle.json
 ```
+
+### LoCoMo (conversational evidence recall)
+
+[LoCoMo](https://arxiv.org/abs/2402.17753) is 10 long multi-session conversations (5,882 turns, 1,986 questions). Hippo scores it with a deterministic metric: did the gold evidence turn land in the top 5 recalled memories? No LLM judge is in the scoring path, so the numbers are not comparable to the LLM-as-judge accuracy Mem0 and Letta publish for LoCoMo.
+
+**v1.25.0 baseline (measured 2026-07-05, single run).** Zero-dependency default embedder (`Xenova/all-MiniLM-L6-v2`), fresh store per conversation, `hippo recall --budget 4000`, top-k 5, 1,982 scored questions:
+
+| Category | n | Evidence recall@5 |
+|----------|--:|------------------:|
+| single-hop | 282 | 0.239 |
+| multi-hop | 321 | 0.491 |
+| temporal-reasoning | 92 | 0.169 |
+| open-domain | 841 | 0.450 |
+| adversarial | 446 | 0.226 |
+| **overall** | 1,982 | **0.363** |
+
+Read these as a point estimate, not an exact value: n=1, and the run predates the v1.26.0 determinism fix and the harness fix in [#126](https://github.com/kitfunso/hippo-memory/pull/126) (0.9% of stored rows lost their tags at run time). The table has not been re-run on a newer build. Overall recall is 2.10x the April v0.32.0 baseline under the identical protocol. Informational only, gates no feature. Full protocol, caveats and regeneration commands: [`benchmarks/LOCOMO_INVESTIGATION.md`](benchmarks/LOCOMO_INVESTIGATION.md); harness in [`benchmarks/locomo/`](benchmarks/locomo/).
 
 ### Sequential Learning Benchmark (agent improvement over time)
 
