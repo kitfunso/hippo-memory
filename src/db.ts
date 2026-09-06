@@ -2363,8 +2363,8 @@ export function openHippoDb(hippoRoot: string): DatabaseSyncLike {
   fs.mkdirSync(hippoRoot, { recursive: true });
   const db = new DatabaseSync(getHippoDbPath(hippoRoot));
   try {
-    db.exec('PRAGMA journal_mode = WAL');
     db.exec('PRAGMA busy_timeout = 5000');
+    db.exec('PRAGMA journal_mode = WAL');
     db.exec('PRAGMA synchronous = NORMAL');
     db.exec('PRAGMA wal_autocheckpoint = 100');
     db.exec('PRAGMA foreign_keys = ON');
@@ -2520,9 +2520,21 @@ function ensureMetaDefaults(db: DatabaseSyncLike): void {
     ['fts5_available', '0'],
   ];
 
+  // Read-first: an already-current store has all 7 keys, so this is one
+  // SELECT and zero writes instead of 7 no-op INSERT OR IGNOREs, each of
+  // which takes a RESERVED lock even when nothing changes.
+  const keys = defaults.map(([key]) => key);
+  const present = new Set(
+    (db
+      .prepare(`SELECT key FROM meta WHERE key IN (${keys.map(() => '?').join(',')})`)
+      .all(...keys) as Array<{ key: string }>)
+      .map((r) => r.key),
+  );
+  if (present.size === defaults.length) return;
+
   const stmt = db.prepare(`INSERT OR IGNORE INTO meta(key, value) VALUES (?, ?)`);
   for (const [key, value] of defaults) {
-    stmt.run(key, value);
+    if (!present.has(key)) stmt.run(key, value);
   }
 }
 
@@ -2536,7 +2548,10 @@ function ensureOptionalFts(db: DatabaseSyncLike): void {
     available = false;
   }
 
-  db.prepare(`INSERT INTO meta(key, value) VALUES('fts5_available', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(available ? '1' : '0');
+  // Read-first: only write when the flag actually changed, so a healthy
+  // store's open doesn't take a write lock for a same-value upsert.
+  const flag = available ? '1' : '0';
+  if (getMeta(db, 'fts5_available') !== flag) setMeta(db, 'fts5_available', flag);
 }
 
 function backfillFtsIndex(db: DatabaseSyncLike): void {

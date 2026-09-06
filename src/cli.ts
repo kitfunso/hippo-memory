@@ -3174,10 +3174,10 @@ function cmdCompactResume(hippoRoot: string, stdinText: string | undefined): voi
  * immediately. The child writes to the log file and survives TUI teardown;
  * the next SessionStart reads the log via `hippo last-sleep`.
  */
-function cmdSessionEnd(
+async function cmdSessionEnd(
   hippoRoot: string,
   flags: Record<string, string | boolean | string[]>
-): void {
+): Promise<void> {
   const logFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : null;
 
   // Read stdin synchronously. The SessionEnd hook payload carries
@@ -3222,7 +3222,7 @@ function cmdSessionEnd(
     // --session-id (both are stdin-derived, argv-only for the child), so in
     // this fallback capture auto-discovers the transcript and the DF1
     // snapshot close no-ops — the ambient freshness bound is the backstop.
-    cmdSessionEndWorker(hippoRoot, flags);
+    await cmdSessionEndWorker(hippoRoot, flags);
     return;
   }
 }
@@ -3232,12 +3232,12 @@ function cmdSessionEnd(
  * `__session-end-worker` subcommand (not user-facing). Failures in one stage
  * do not block the other.
  */
-function cmdSessionEndWorker(
+async function cmdSessionEndWorker(
   hippoRoot: string,
   flags: Record<string, string | boolean | string[]>
-): void {
+): Promise<void> {
   try {
-    cmdSleep(hippoRoot, flags);
+    await cmdSleep(hippoRoot, flags);
   } catch {
     // sleep errors are already tee'd to the log file via cmdSleep's
     // `[hippo] sleep failed: ...` line. Continue to capture regardless.
@@ -3364,7 +3364,7 @@ function cmdCodexRun(
     process.exit(1);
   });
 
-  child.on('exit', (code, signal) => {
+  child.on('exit', async (code, signal) => {
     const workerArgs = [
       process.argv[1],
       '__codex-session-end-worker',
@@ -3389,13 +3389,18 @@ function cmdCodexRun(
       worker.unref();
     } catch {
       // Fall back to the inline path if the detached worker cannot be created.
-      cmdCodexSessionEndWorker(hippoRoot, {
-        'codex-home': path.dirname(historyPath),
-        'history-path': historyPath,
-        'start-offset': String(startOffsetBytes),
-        'started-at': String(startedAtMs),
-        'log-file': metadata.logFile,
-      });
+      // Awaited so the sleep write can't be killed by the exit calls below.
+      try {
+        await cmdCodexSessionEndWorker(hippoRoot, {
+          'codex-home': path.dirname(historyPath),
+          'history-path': historyPath,
+          'start-offset': String(startOffsetBytes),
+          'started-at': String(startedAtMs),
+          'log-file': metadata.logFile,
+        });
+      } catch {
+        // cmdCodexSessionEndWorker already fail-softs internally; this is belt-and-braces.
+      }
     }
 
     if (signal) {
@@ -3410,14 +3415,14 @@ function cmdCodexRun(
   });
 }
 
-function cmdCodexSessionEndWorker(
+async function cmdCodexSessionEndWorker(
   hippoRoot: string,
   flags: Record<string, string | boolean | string[]>,
-): void {
+): Promise<void> {
   const logFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined;
 
   try {
-    cmdSleep(hippoRoot, logFile ? { 'log-file': logFile } : {});
+    await cmdSleep(hippoRoot, logFile ? { 'log-file': logFile } : {});
   } catch {
     // sleep errors are already written via cmdSleep
   }
@@ -8944,11 +8949,11 @@ async function main(): Promise<void> {
       break;
 
     case 'session-end':
-      cmdSessionEnd(hippoRoot, flags);
+      await cmdSessionEnd(hippoRoot, flags);
       break;
 
     case '__session-end-worker':
-      cmdSessionEndWorker(hippoRoot, flags);
+      await cmdSessionEndWorker(hippoRoot, flags);
       break;
 
     case 'pre-compact': {
@@ -8979,7 +8984,7 @@ async function main(): Promise<void> {
       break;
 
     case '__codex-session-end-worker':
-      cmdCodexSessionEndWorker(hippoRoot, flags);
+      await cmdCodexSessionEndWorker(hippoRoot, flags);
       break;
 
     case 'dedup':
