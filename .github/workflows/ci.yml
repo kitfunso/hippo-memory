@@ -22,8 +22,9 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    # First-run cold cache + @huggingface/transformers optional install can be
-    # slow. 25 minutes gives headroom; subsequent PRs hit the npm cache.
+    # First-run cold npm cache can be slow. 25 minutes gives headroom;
+    # subsequent PRs hit the npm cache. The default install is zero-dep since
+    # 1.33.0 (PR #134); only the micro-eval job below installs Transformers.js.
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -51,3 +52,31 @@ jobs:
           path: provenance-coverage.json
           if-no-files-found: warn
           retention-days: 14
+
+  # Tier-1 micro-eval (benchmarks/micro). Its ranking fixtures are calibrated
+  # with the local embedding backend present, so this job installs it without
+  # touching package.json and caches the ~175 MB of model weights. Kept apart
+  # from `test` so that job stays zero-dep and its timing unchanged. See
+  # docs/plans/2026-09-05-micro-eval-red-fixtures.md.
+  micro-eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      # Pinned so the cache key below names the exact weights layout.
+      - run: npm install --no-save @huggingface/transformers@4.2.0
+      # After the install step: npm would replace the package directory, and
+      # the weights live inside it.
+      - name: Cache model weights
+        uses: actions/cache@v4
+        with:
+          path: node_modules/@huggingface/transformers/.cache
+          key: hf-models-4.2.0-${{ hashFiles('src/embeddings.ts', 'src/rerankers/cross-encoder.ts') }}
+      - run: npm run build
+      - name: Micro-eval
+        run: python3 benchmarks/micro/run.py --verbose

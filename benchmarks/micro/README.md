@@ -8,6 +8,23 @@ Tier 1 in the hippo eval pyramid. Deterministic substring scoring, ~30 seconds.
 | 2 | LoCoMo stratified subsample (`run.py --conversations 1 --sample 10 --score-mode evidence`) | Before opening a PR | ~5-10 min |
 | 3 | LoCoMo full | Release gate | ~85 min evidence / ~6h judge |
 
+## Requirements
+
+The ranking fixtures (goals, salience, utility, value, cross-encoder, path
+boost) are calibrated with the local embedding backend present. It is not part
+of the default install (zero-dep since 1.33.0), so install it into the
+checkout first:
+
+```bash
+npm install --no-save @huggingface/transformers
+```
+
+Before the first fixture the runner probes a remember, a hybrid recall and the
+cross-encoder in a throwaway store and refuses to run if no embedding was
+computed or the reranker fell back to identity order; a BM25-only pass rate is
+not a result for these fixtures. CI runs
+the same check in the `micro-eval` job.
+
 ## Run
 
 ```bash

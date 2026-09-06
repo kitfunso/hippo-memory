@@ -18,6 +18,17 @@ const globalPool = [
   { embedder: 'voyage-3-large (opt-in)', r5: '56.4' },
 ];
 
+// Verified against benchmarks/LOCOMO_INVESTIGATION.md "Per-category" table (v1.25.0 run, 2026-07-05, 3 dp).
+const locomo = [
+  { category: 'single-hop', n: '282', r5: '0.239' },
+  { category: 'multi-hop', n: '321', r5: '0.491' },
+  { category: 'temporal-reasoning', n: '92', r5: '0.169' },
+  { category: 'open-domain', n: '841', r5: '0.450' },
+  { category: 'adversarial', n: '446', r5: '0.226' },
+  { category: 'overall', n: '1,982', r5: '0.363' },
+];
+const locomoDocUrl = `${site.links.repo}/blob/master/benchmarks/LOCOMO_INVESTIGATION.md`;
+
 const benchUrl = `${site.links.longmemeval}`;
 
 // Hero chip group: reuses the page's own receipts (no new claims).
@@ -51,7 +62,7 @@ const jsonLd = {
             Numbers, with the <span class="text-gradient">methodology</span>.
           </h1>
           <p class="mt-5 max-w-2xl leading-relaxed text-zinc-400">
-            hippo's retrieval, measured on <a class="link" href="https://arxiv.org/abs/2410.10813" target="_blank" rel="noopener noreferrer">LongMemEval<span class="sr-only"> (opens in new tab)</span></a> (ICLR 2025), the public 500-question memory benchmark. The harness, the data hash, and the per-question results are in the repo so you can rerun them.
+            hippo's retrieval, measured on <a class="link" href="https://arxiv.org/abs/2410.10813" target="_blank" rel="noopener noreferrer">LongMemEval<span class="sr-only"> (opens in new tab)</span></a> (ICLR 2025), the public 500-question memory benchmark, and on <a class="link" href="https://arxiv.org/abs/2402.17753" target="_blank" rel="noopener noreferrer">LoCoMo<span class="sr-only"> (opens in new tab)</span></a>, 10 long multi-session conversations. The harness, the data hash, and the per-question results are in the repo so you can rerun them.
           </p>
         </div>
         <!-- Metric chips fill the hero's right side on wide viewports; duplicates on-page data. -->
@@ -157,6 +168,38 @@ const jsonLd = {
           <a href={benchUrl} target="_blank" rel="noopener noreferrer" class="rounded-lg bg-zinc-100 px-5 py-2.5 text-sm font-medium text-zinc-900 transition hover:bg-white">Benchmark harness &amp; data<span class="sr-only"> (opens in new tab)</span></a>
           <a href={site.links.repo} target="_blank" rel="noopener noreferrer" class="rounded-lg border border-white/12 px-5 py-2.5 text-sm font-medium text-zinc-200 transition hover:border-white/25">Repository<span class="sr-only"> (opens in new tab)</span></a>
         </div>
+      </div>
+    </section>
+    <!-- LoCoMo per-category disclosure -->
+    <section class="relative scroll-mt-20 border-t border-white/5 bg-white/[0.02]">
+      <div class="mx-auto max-w-6xl px-5 py-24">
+        <h2 class="text-balance text-3xl leading-tight sm:text-4xl">LoCoMo: conversational evidence&nbsp;recall</h2>
+        <p class="mt-4 max-w-2xl leading-relaxed text-zinc-400">
+          <a class="link" href="https://arxiv.org/abs/2402.17753" target="_blank" rel="noopener noreferrer">LoCoMo<span class="sr-only"> (opens in new tab)</span></a> is 10 long multi-session conversations, 5,882 turns and 1,986 questions. hippo scores it deterministically: did the gold evidence turn land in the top 5 recalled memories? No LLM judge. Measured once on v1.25.0 (2026-07-05) with the zero-dependency default embedder, MiniLM-L6:
+        </p>
+        <div class="mt-8 overflow-hidden rounded-2xl border border-white/8">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-white/[0.03] font-mono text-xs uppercase tracking-wider text-zinc-400">
+              <tr>
+                <th scope="col" class="px-5 py-3 font-medium">Category</th>
+                <th scope="col" class="px-5 py-3 font-medium">n</th>
+                <th scope="col" class="px-5 py-3 font-medium">Evidence R@5</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-white/5">
+              {locomo.map((row) => (
+                <tr class="text-zinc-300">
+                  <th scope="row" class="px-5 py-3.5 text-left font-normal">{row.category}</th>
+                  <td class="px-5 py-3.5 font-mono">{row.n}</td>
+                  <td class="px-5 py-3.5 font-mono font-semibold text-gradient">{row.r5}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p class="mt-5 max-w-2xl text-sm leading-relaxed text-zinc-400">
+          A point estimate, not an exact value: n=1, and the run predates the v1.26.0 determinism fix and a harness fix that lost tags on 0.9% of stored rows. Not comparable to the LLM-as-judge numbers Mem0 and Letta publish. Informational only, gates no feature. Protocol, caveats and regeneration commands: <a class="link" href={locomoDocUrl} target="_blank" rel="noopener noreferrer">LOCOMO_INVESTIGATION.md<span class="sr-only"> (opens in new tab)</span></a>.
+        </p>
       </div>
     </section>
   </main>

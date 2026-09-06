@@ -214,11 +214,11 @@ def _resolve_item_cwd(hippo_home: Path, subdir: str | None, fixture_name: str) -
     Returns `hippo_home` unchanged when `subdir` is None (today's behavior).
     Otherwise sanitizes `subdir`, creates `hippo_home / subdir`, and
     auto-initializes a LOCAL hippo store there (idempotent: skipped when
-    `.hippo/hippo.db` already exists). Hippo's local store root is strictly
-    cwd-derived (`getHippoRoot(cwd) = cwd/.hippo`, src/store.ts:255-257) with
-    no ancestor walk-up, so every subdir a fixture addresses needs its own
-    initialized store before any remember/recall/promote/forget call against
-    it will succeed.
+    `.hippo/hippo.db` already exists). Since 1.38.2 `getHippoRoot` walks up to
+    the nearest ancestor store and stops at the home directory; `run_hippo`
+    makes the sandbox that home, so a subdir store nests under it and the
+    sandbox-root store never shadows it. Without an own store the walk would
+    find the sandbox-root store and every subdir would share it.
     """
     if subdir is None:
         return hippo_home
@@ -243,6 +243,9 @@ def run_hippo(
 ) -> subprocess.CompletedProcess:
     env = os.environ.copy()
     env["HIPPO_HOME"] = str(hippo_home)
+    # The sandbox is the home directory from the CLI side, so the ancestor store walk-up ends there.
+    env["HOME"] = str(hippo_home)
+    env["USERPROFILE"] = str(hippo_home)
     if extra_env:
         env.update(extra_env)
     return subprocess.run(
@@ -255,6 +258,34 @@ def run_hippo(
         timeout=timeout,
         cwd=str(cwd if cwd is not None else hippo_home),
     )
+
+
+FALLBACK_WARNING = "cross-encoder reranker unavailable"
+
+
+def preflight_embeddings() -> None:
+    """Every ranking fixture was calibrated with the Transformers.js backend present, so a BM25-only
+    pass rate is not a result. Probes the code paths the fixtures use (remember, hybrid recall,
+    cross-encoder): a package that imports but cannot load its weights fails here, not silently."""
+    with tempfile.TemporaryDirectory(prefix="hippo-micro-preflight-") as tmp:
+        home = Path(tmp)
+        run_hippo(["init", "--no-learn", "--no-hooks", "--no-schedule"], home).check_returncode()
+        run_hippo(["remember", "preflight embedding probe"], home, timeout=300).check_returncode()
+        r = run_hippo(["recall", "embedding probe", "--json", "--why", "--reranker", "cross-encoder"], home, timeout=300)
+    r.check_returncode()
+    rows = json.loads(r.stdout)["results"]
+    cosine = rows[0].get("cosine") if rows else None
+    problems = []
+    # Without a backend hippo reports cosine 0, not null, so the check is on the value.
+    if not isinstance(cosine, (int, float)) or cosine <= 0:
+        problems.append(f"the probe row has cosine {cosine!r}, so no embedding was computed")
+    if FALLBACK_WARNING in r.stderr:
+        problems.append("the cross-encoder fell back to identity ordering")
+    if problems:
+        sys.exit(
+            "micro-eval needs the Transformers.js backend with loadable weights: " + "; ".join(problems)
+            + ". Install it into this checkout (not saved to package.json): npm install --no-save @huggingface/transformers"
+        )
 
 
 @dataclass
@@ -609,6 +640,7 @@ def main() -> int:
         print("no fixtures found", file=sys.stderr)
         return 2
 
+    preflight_embeddings()
     results = []
     print(f"running {len(fixtures)} fixtures...")
     for fx in fixtures:

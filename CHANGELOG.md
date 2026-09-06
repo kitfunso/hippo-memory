@@ -2,6 +2,15 @@
 
 ## 1.38.3 - unreleased
 
+### Added
+- **LoCoMo per-category disclosure table.** The v1.25.0 evidence recall@5 numbers per question category (single-hop 0.239, multi-hop 0.491, temporal-reasoning 0.169, open-domain 0.450, adversarial 0.226, overall 0.363) used to live only in `benchmarks/LOCOMO_INVESTIGATION.md`. README's Benchmarks section and the website benchmarks page now carry the table with the conditions that must travel with it: MiniLM-L6 default embedder, single run, v1.25.0 build, pre-#126 harness, no LLM judge. `website/scripts/check-readme-sync.mjs` fails the site build if the page's LoCoMo rows drift from the README (F19).
+
+### Fixed
+- **Micro-eval: five fixtures were red on every fresh checkout and nothing noticed.** `benchmarks/micro/run.py` now probes a remember, a hybrid recall and the cross-encoder in a throwaway store and refuses to run when no embedding is computed or the reranker falls back to identity order, because dlpfc-goals, pineal-salience, reranker-cross-encoder and vmpfc-value were calibrated with it present and the 1.33.0 zero-dep install (PR #134) silently turned every fresh run BM25-only, with the cross-encoder falling back to identity order. The runner also sets `HOME`/`USERPROFILE` to its sandbox so the 1.38.2 ancestor walk-up stops there: before, `hippo init` in a fixture subdirectory reused the sandbox root store and path-boost lost its per-project stores. `ofc_utility.json` recalibrated (measured ratio 1.18 inside the flip window; the old 1.331 sat just past it). No `src/` change. Details: `docs/plans/2026-09-05-micro-eval-red-fixtures.md`.
+
+### CI
+- New `micro-eval` job runs the tier-1 micro-eval on every PR with the embedding backend installed (`--no-save`) and the model weights cached. The `test` job is unchanged.
+
 ### Tests
 - **`tests/session-end-snapshot-close.test.ts` no longer flakes on CI.** Test 1 polled `loadActiveTaskSnapshot` at 20 Hz while waiting for the detached `session-end` worker. Every poll is two `openHippoDb` cycles whose per-open migrations write, so the poll itself made the worker's close fail with `database is locked`, silently because the test passed no `--log-file`, and then waited 25 s for a row that would never change. Tests 1 and 2 now wait on the worker's own close-step log line, as tests 3 and 4 already did, and read the database once. Follow-ups in TODOS.md: the instant `database is locked` despite `busy_timeout`, and the unawaited `cmdSleep` in the worker.
 
