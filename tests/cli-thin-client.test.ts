@@ -281,7 +281,7 @@ describe('cli thin-client mode', () => {
     }
   }, 15_000);
 
-  it('hippo forget --archive bypasses the server and archives directly (A3)', async () => {
+  it('hippo forget --archive routes through HTTP when a server is up (A3)', async () => {
     const workspace = makeWorkspace();
     let server: SpawnedServer | null = null;
     try {
@@ -303,20 +303,89 @@ describe('cli thin-client mode', () => {
       const port = await pickFreePort();
       server = await startServer(workspace, port);
 
-      // With the server up, a plain forget routes over HTTP. forget --archive must
-      // not route there (the HTTP path cannot archive); it takes the direct path.
+      // With the server up, forget --archive now routes over HTTP like plain
+      // forget does; the archive endpoint has existed since ea155d6.
       const run = runCli(workspace, 'forget', 'mem_rawthin', '--archive', '--reason', 'thin-client archive test');
       expect(run.stdout, `stderr: ${run.stderr}`).toMatch(/Archived mem_rawthin/);
 
-      // Row archived: gone from memories, archive_raw audit emitted.
+      // Row archived: gone from memories, archive_raw audit emitted with the
+      // HTTP-path actor (parity with the remember test's actor split above).
       const db2 = openHippoDb(hippoRoot);
       try {
         expect(db2.prepare(`SELECT id FROM memories WHERE id = 'mem_rawthin'`).get()).toBeUndefined();
         const events = queryAuditEvents(db2, { tenantId: 'default', op: 'archive_raw', limit: 10 });
         expect(events.length).toBeGreaterThan(0);
+        expect(events[0].actor).toBe('localhost:cli');
       } finally {
         closeHippoDb(db2);
       }
+    } finally {
+      if (server) await server.stop();
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  it('forget --archive errors instead of falling back when HIPPO_REQUIRE_SERVER is set', () => {
+    const workspace = makeWorkspace();
+    const hippoRoot = join(workspace, '.hippo');
+    try {
+      const db = openHippoDb(hippoRoot);
+      try {
+        db.prepare(
+          `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, ` +
+          `half_life_days, layer, tags_json, emotional_valence, schema_fit, source, ` +
+          `conflicts_with_json, pinned, confidence, content, kind) VALUES ` +
+          `('mem_rsarchive', '2026-01-01', '2026-01-01', 0, 1.0, 7, 'episodic', '[]', ` +
+          `'neutral', 0.5, 'connector', '[]', 0, 'observed', 'require-server raw content', 'raw')`,
+        ).run();
+      } finally {
+        closeHippoDb(db);
+      }
+
+      // No server running. --archive must now honour HIPPO_REQUIRE_SERVER the
+      // same way plain forget does, instead of silently writing directly.
+      process.env.HIPPO_REQUIRE_SERVER = '1';
+      const run = runCli(workspace, 'forget', 'mem_rsarchive', '--archive', '--reason', 'require-server archive test');
+      expect(run.stdout + run.stderr).toMatch(/HIPPO_REQUIRE_SERVER/);
+
+      const db2 = openHippoDb(hippoRoot);
+      try {
+        expect(db2.prepare(`SELECT id FROM memories WHERE id = 'mem_rsarchive'`).get()).toBeDefined();
+      } finally {
+        closeHippoDb(db2);
+      }
+    } finally {
+      delete process.env.HIPPO_REQUIRE_SERVER;
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  }, 15_000);
+
+  it('forget --archive on a non-raw memory prints the same Could-not-archive prefix routed as direct', async () => {
+    const workspace = makeWorkspace();
+    const hippoRoot = join(workspace, '.hippo');
+    let server: SpawnedServer | null = null;
+    try {
+      const db = openHippoDb(hippoRoot);
+      try {
+        db.prepare(
+          `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, ` +
+          `half_life_days, layer, tags_json, emotional_valence, schema_fit, source, ` +
+          `conflicts_with_json, pinned, confidence, content, kind) VALUES ` +
+          `('mem_notraw', '2026-01-01', '2026-01-01', 0, 1.0, 7, 'episodic', '[]', ` +
+          `'neutral', 0.5, 'connector', '[]', 0, 'observed', 'not a raw memory', 'distilled')`,
+        ).run();
+      } finally {
+        closeHippoDb(db);
+      }
+
+      const port = await pickFreePort();
+      server = await startServer(workspace, port);
+
+      // raw-archive.ts throws "is not raw" for a non-raw kind; the routed
+      // catch must wrap it the same way cmdForget's direct catch does.
+      const run = runCli(workspace, 'forget', 'mem_notraw', '--archive', '--reason', 'non-raw archive test');
+      expect(run.stdout + run.stderr).toMatch(/Could not archive mem_notraw: /);
+      expect(run.stdout + run.stderr).toMatch(/is not raw/);
     } finally {
       if (server) await server.stop();
       rmSync(workspace, { recursive: true, force: true });

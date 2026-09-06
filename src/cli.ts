@@ -3658,6 +3658,10 @@ function cmdOutcome(
   console.log(`Applied ${good ? 'positive' : 'negative'} outcome to ${updated} memor${updated === 1 ? 'y' : 'ies'}`);
 }
 
+// Shared between the forget dispatch and cmdForget so the message can't drift.
+const ARCHIVE_REASON_REQUIRED =
+  'hippo forget --archive requires --reason "<why>" (recorded on the archive).';
+
 function cmdForget(
   hippoRoot: string,
   id: string,
@@ -3677,7 +3681,7 @@ function cmdForget(
   if (flags['archive'] === true) {
     const reason = typeof flags['reason'] === 'string' ? flags['reason'] : null;
     if (!reason) {
-      console.error('hippo forget --archive requires --reason "<why>" (recorded on the archive).');
+      console.error(ARCHIVE_REASON_REQUIRED);
       process.exit(1);
     }
     try {
@@ -9131,21 +9135,30 @@ async function main(): Promise<void> {
         console.error('Please provide a memory ID.');
         process.exit(1);
       }
-      // A3: --archive is a direct-DB operation (raw archival via archiveRaw);
-      // the HTTP forget route does not carry it, so archive requests always
-      // take the direct path rather than silently no-op'ing over a server.
-      if (flags['archive'] !== true) {
-        const routed = await runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
-          try {
+      // Archive has its own HTTP route (POST /v1/memories/:id/archive); route
+      // both branches the same way the direct path does.
+      const archive = flags['archive'] === true;
+      const reason = typeof flags['reason'] === 'string' ? flags['reason'] : null;
+      if (archive && !reason) {
+        console.error(ARCHIVE_REASON_REQUIRED);
+        process.exit(1);
+      }
+      const routed = await runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
+        try {
+          if (archive) {
+            await client.archiveRaw(info.url, apiKey, id, reason!);
+            console.log(`Archived ${id}`);
+          } else {
             await client.forget(info.url, apiKey, id);
             console.log(`Forgot ${id}`);
-          } catch (err) {
-            console.error((err as Error).message);
-            process.exit(1);
           }
-        });
-        if (routed) break;
-      }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(archive ? `Could not archive ${id}: ${msg}` : msg);
+          process.exit(1);
+        }
+      });
+      if (routed) break;
       cmdForget(hippoRoot, id, flags);
       break;
     }

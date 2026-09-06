@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.38.7 - 2026-09-06
+
+### Fixed
+- **`hippo forget --archive` silently dropped out of server routing.** The dispatch's own comment claimed "the HTTP forget route does not carry it, so archive requests always take the direct path", but `POST /v1/memories/:id/archive` and `client.archiveRaw` had existed since `ea155d6` (2026-04-29); the comment was written three weeks later in `29d96d8` (2026-05-21) and never checked against the code it described. Because archive skipped `runViaServerIfAvailable`, `HIPPO_REQUIRE_SERVER=1` was also silently bypassed: with a server up and required, `hippo forget X --archive` still wrote directly instead of erroring like plain `forget` does. Archive now routes through the existing endpoint the same way plain forget already does; `--reason` is validated before routing so the error is identical whether or not a server is up.
+- **Archiver provenance on the routed path is now `localhost:cli`, not `cli`.** The routed path builds its actor from the request (`buildContextWithAuth`) instead of `api.adminActor('cli')`, so a server-up `forget --archive` now records `localhost:cli` in `raw_archive.archived_by` and the `archive_raw` audit row, matching every other routed command. This is a visible provenance change for anyone reading that column, not a bug.
+
 ## 1.38.6 - 2026-09-06
 
 ### Fixed
