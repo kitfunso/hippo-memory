@@ -156,8 +156,46 @@ describe('pinned-only context loads a slice, not the corpus', () => {
     const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
 
     const returned = ids(result);
-    expect(returned.length).toBeGreaterThan(0);
+    expect(returned.length).toBe(5);
     for (const id of returned) expect(older.map((o) => o.id)).toContain(id);
+  });
+
+  it('returns a pin whose own content fails the quality floor', async () => {
+    const JUNK = 'need to check the cache thing';
+    expect(isContentWorthStoring(JUNK)).toBe(false);
+
+    const junkPin = seed(local, JUNK, { pinned: true, created: '2020-01-01T00:00:00.000Z' });
+    seed(local, 'an ordinary recent row with enough words to clear the floor', {
+      created: '2026-06-01T00:00:00.000Z',
+    });
+
+    const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
+
+    expect(ids(result)).toContain(junkPin.id);
+  });
+
+  it('widens the search when the window yields some rows but fewer than N', async () => {
+    const JUNK = 'need to check the cache thing';
+    const older = Array.from({ length: 5 }, (_, i) =>
+      seed(local, `an older row ${i} that carries enough words to clear the quality floor`, {
+        created: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString(),
+      }),
+    );
+    const partial = Array.from({ length: 2 }, (_, i) =>
+      seed(local, `a mid row ${i} that carries enough words to clear the quality floor`, {
+        created: new Date(Date.UTC(2026, 4, 1, 0, i)).toISOString(),
+      }),
+    );
+    for (let i = 0; i < 30; i++) {
+      seed(local, JUNK, { created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString() });
+    }
+
+    const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
+
+    const returned = ids(result);
+    expect(returned).toContain(partial[1].id);
+    expect(returned).toContain(older[4].id);
+    expect(returned.length).toBe(5);
   });
 
   it('returns exactly the pins plus the newest N, nothing else', async () => {
