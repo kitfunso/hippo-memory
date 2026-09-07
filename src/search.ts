@@ -1249,6 +1249,8 @@ export function search(
  * P2), so those write loops skip under the flag.
  * The default `now` honors HIPPO_FAKE_NOW (simulated-time protocols).
  */
+// Confidence is deliberately absent below: it is an epistemic tier, not a
+// recency signal, and a stored 'stale' is always a deliberate mark (2026-09-07).
 export function markRetrieved(entries: MemoryEntry[], now: Date = evalNow()): MemoryEntry[] {
   if (isRecallBoostAblated()) return entries;
   return entries.map((e) => {
@@ -1259,10 +1261,6 @@ export function markRetrieved(entries: MemoryEntry[], now: Date = evalNow()): Me
       last_retrieved: now.toISOString(),
       // Extend half-life by +2 days per retrieval (PLAN.md)
       half_life_days: e.half_life_days + 2,
-      // Only fires for rows deliberately marked 'stale' (invalidation.ts,
-      // cli.ts) or already flattened by a pre-fix sleep; age-out staleness
-      // is derived by resolveConfidence and never stored, so it never reaches this branch.
-      confidence: e.confidence === 'stale' ? 'observed' : e.confidence,
     };
     updated.strength = calculateStrength(updated, now);
     return updated;
