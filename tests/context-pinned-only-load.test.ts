@@ -7,6 +7,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore, writeEntry, loadAmbientCandidates } from '../src/store.js';
 import { createMemory } from '../src/memory.js';
+import { isContentWorthStoring } from '../src/audit.js';
 import { getContext, type Context } from '../src/api.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
 
@@ -135,6 +136,78 @@ describe('pinned-only context loads a slice, not the corpus', () => {
     });
 
     expect(ids(result)).toContain(pin.id);
+  });
+
+  // The load's "found enough?" test has to use the caller's whole admission
+  // rule, quality floor included, or it stops at a window of junk.
+  it('reaches past newest rows that pass admission but fail the quality floor', async () => {
+    const JUNK = 'need to check the cache thing';
+    expect(isContentWorthStoring(JUNK)).toBe(false);
+
+    const older = Array.from({ length: 10 }, (_, i) =>
+      seed(local, `an older row ${i} that carries enough words to clear the quality floor`, {
+        created: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString(),
+      }),
+    );
+    for (let i = 0; i < 32; i++) {
+      seed(local, JUNK, { created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString() });
+    }
+
+    const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
+
+    const returned = ids(result);
+    expect(returned.length).toBeGreaterThan(0);
+    for (const id of returned) expect(older.map((o) => o.id)).toContain(id);
+  });
+
+  it('returns exactly the pins plus the newest N, nothing else', async () => {
+    const pinA = seed(local, 'the first pinned decision, old but always injected', {
+      pinned: true,
+      created: '2020-01-01T00:00:00.000Z',
+    });
+    const pinB = seed(local, 'the second pinned decision, also old and also injected', {
+      pinned: true,
+      created: '2020-01-02T00:00:00.000Z',
+    });
+    const recents = Array.from({ length: 4 }, (_, i) =>
+      seed(local, `an ordinary recent row ${i} with enough words to clear the floor`, {
+        created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
+      }),
+    );
+
+    const result = await getContext(ctx, {
+      pinnedOnly: true,
+      includeRecent: 2,
+      budget: 5000,
+      currentProject: PROJECT,
+    });
+
+    expect(new Set(ids(result))).toEqual(
+      new Set([pinA.id, pinB.id, recents[3].id, recents[2].id]),
+    );
+  });
+
+  it('sources recent-N candidates from the global store too', async () => {
+    seed(local, 'one old local row so the local store is not empty', {
+      created: '2020-01-01T00:00:00.000Z',
+    });
+    const globals = Array.from({ length: 3 }, (_, i) =>
+      seed(globalRoot, `a recent global row ${i} with enough words to clear the floor`, {
+        created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
+      }),
+    );
+
+    const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 2, currentProject: PROJECT });
+
+    expect(ids(result)).toContain(globals[2].id);
+    expect(ids(result)).toContain(globals[1].id);
+  });
+
+  it('returns nothing for two empty stores', async () => {
+    const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
+
+    expect(result.entries).toEqual([]);
+    expect(result.tokens).toBe(0);
   });
 });
 

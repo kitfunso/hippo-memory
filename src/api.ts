@@ -207,9 +207,14 @@ function ambientAdmitEntry(
  * exact-match). A flagged row is only admitted inside its owning project;
  * flagged rows with no project origin never ambient-inject.
  */
-// getContext's pinned-only branch reads its working set for three things: the
-// empty-store early return, the pins, and the recent-N candidates. Loading the
-// whole corpus for that ran `admit` over every row on every UserPromptSubmit.
+export function ambientSecretAdmit(e: MemoryEntry, currentProjectName: string): boolean {
+  if (!detectSecret(e).flagged) return true;
+  const origin = e.origin_project;
+  if (origin === undefined || origin === null || origin === '') return false;
+  return origin === currentProjectName;
+}
+
+// The pinned-only branch needs pins and recent-N candidates, not the corpus.
 function loadAmbientEntries(
   hippoRoot: string,
   tenantId: string,
@@ -217,16 +222,12 @@ function loadAmbientEntries(
   includeRecent: number,
   admit: (e: MemoryEntry) => boolean,
 ): MemoryEntry[] {
-  return pinnedOnly
-    ? loadAmbientCandidates(hippoRoot, tenantId, includeRecent, admit)
-    : loadAllEntries(hippoRoot, tenantId).filter(admit);
-}
-
-export function ambientSecretAdmit(e: MemoryEntry, currentProjectName: string): boolean {
-  if (!detectSecret(e).flagged) return true;
-  const origin = e.origin_project;
-  if (origin === undefined || origin === null || origin === '') return false;
-  return origin === currentProjectName;
+  if (!pinnedOnly) return loadAllEntries(hippoRoot, tenantId).filter(admit);
+  // DF3's quality floor runs on the recent-N slice AFTER this load, so the load
+  // counts by it too, or it stops short of a store whose newest rows are junk.
+  const admitAmbient = (e: MemoryEntry): boolean =>
+    admit(e) && (e.pinned || isContentWorthStoring(e.content));
+  return loadAmbientCandidates(hippoRoot, tenantId, includeRecent, admitAmbient);
 }
 
 export interface RememberOpts {
