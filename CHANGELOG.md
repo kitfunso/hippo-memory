@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.38.8 - 2026-09-07
+
+### Fixed
+- **`hippo forget` counted toward `total_forgotten` only when the command missed the server.** The dispatch routes through `runViaServerIfAvailable` when `hippo serve` is up (`src/cli.ts:9145`), but the counter lived in the CLI's direct path and `api.forget` incremented nothing, so the same command moved the number or not depending on whether a server happened to be running. Anyone running `hippo serve` full time saw a counter that tracked only the forgets that missed it. v1.38.7 fixed one instance of this class by moving the archive counter into `api.archiveRaw`; this is the plain-forget half. `api.forget` now counts and `src/cli.ts` no longer does, because that function's only two callers (`src/cli.ts:3698` and the HTTP route at `src/server.ts:1094`) are the two paths of one user command, so no surface can miss it. Pinned by a real-server test that runs a routed pair and a direct pair and asserts the recorded actor on each, so it cannot pass by taking the direct path twice.
+- **The comment above the thin-client routing filter claimed salience gates need the direct path. They do not.** `richFlag` (`src/cli.ts:8808`) has no salience condition, and `api.remember` has no gate, so a routed remember stores what a direct one would skip. Measured on a real spawned server with `salience.enabled: true`: a duplicate is `Skipped (100% overlap)` with no server up and `Remembered` twice with one up. Same shape as the v1.38.7 archive bug, a comment describing behaviour nobody re-checked. The comment now states the bypass; the bypass itself is a product call and is filed in `TODOS.md`.
+
+`remember` was attempted in this release and reverted before merge. There is no correct place for its counter yet: `api.remember` is the bulk write path for the Slack and GitHub connectors and for `import`, and the `POST /v1/memories` route is not a user surface either, since `deploy/aml/adapter/adapter.mjs` posts to it per leaderboard add and the Python SDK is a general client on it. Counting there would also make two paths that store different things report the same number. Recorded in `TODOS.md` behind the salience item. Three related gaps stay open there too: an HTTP-only recall does not count, no MCP operation counts, and `updateStats` is a non-atomic read-modify-write now reachable from a long-running daemon.
+
 ## 1.38.7 - 2026-09-06
 
 ### Fixed
