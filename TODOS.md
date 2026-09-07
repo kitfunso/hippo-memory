@@ -452,7 +452,7 @@ From the B3 dlPFC ship (v0.38.0). 3 of 5 items closed in v1.7.4 (2026-05-07); co
 From the E1.3 Slack ingestion ship (v0.37.0). Operator UX, eval polish, and
 ranking improvements; none are correctness blockers.
 
-- [ ] **DLQ replay command.** `hippo slack dlq retry <id>` to re-run a parked event after fixing the underlying parser. Today the DLQ is read-only via `hippo slack dlq list`.
+- [x] **DLQ replay command.** ALREADY SHIPPED, found 2026-09-07. The verb is `replay`, not `retry`: `hippo slack dlq replay <id> [--force]` dispatches at `src/cli.ts:8245`, `replayDlqEntry` imported at `src/cli.ts:239`, usage string at `src/cli.ts:8267`. This item stayed open because every grep searched for the name in the TODO rather than the capability.
 
 - [x] **Workspace registration CLI.** SHIPPED 2026-05-24 — `hippo slack workspaces <add|list|remove>`. `add --team <T> --tenant <t>` upserts on team_id conflict (operators move workspaces between tenants). `list` returns tab-separated rows sorted by team_id. `remove --team <T>` reports not-found on miss. Helper module at `src/connectors/slack/workspaces.ts`; 7 unit + 10 CLI tests at `tests/slack-workspaces.test.ts` + `tests/slack-workspaces-cli.test.ts`.
 
@@ -460,7 +460,7 @@ ranking improvements; none are correctness blockers.
 
 - [ ] **Thread-aware ranking.** Treat `thread_ts` as a parent boost so replies surface their thread root in recall. V1 ranks each message independently.
 
-- [ ] **Incremental real-time backfill.** Today `backfillChannel` drains the channel until exhaustion. For live workspaces add a "stop at cursor" mode so the loop terminates when it catches up to the live cursor instead of paginating to history start.
+- [x] **Incremental real-time backfill.** ALREADY SHIPPED, premise was false, checked 2026-09-07. `backfillChannel` does NOT drain on rerun: the persisted cursor is replayed as `oldest` on page 0 (`src/connectors/slack/backfill.ts:92`) and `web-client.ts:31` sets it as a query param, so Slack bounds the range server-side. Only a FIRST run on a fresh channel drains, which is what backfill means. Verified by probe, then pinned: `tests/slack-backfill-cursor.test.ts` case 3 asserts a rerun makes one call with `oldest=<stored cursor>`. Mutation-tested (forcing `oldest: undefined` fails it).
 
 - [x] **BM25 sentinel-token leakage in evals.** SHIPPED v1.12.6 — `docs/evals/AUTHORING.md` documents the lesson (descriptive scenario IDs leak into ambient noise via shared tokens, inflating BM25 recall scores) + pre-commit checklist (list every shared string between signal/noise fixtures, confirm it's intentional signal or opaque enough not to bias scoring, run noise-only baseline). Also documents 3 other eval-authoring lessons: pre-registration discipline (v1.8.1 rule), multi-seed harnesses + paired-comparison statistics, workload-validity gate before mechanism gate. Template at end of doc.
 
