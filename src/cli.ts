@@ -3696,7 +3696,6 @@ function cmdForget(
 
   try {
     api.forget(ctx, id);
-    updateStats(hippoRoot, { forgotten: 1 });
     console.log(`Forgot ${id}`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -8801,8 +8800,11 @@ async function main(): Promise<void> {
       }
       // Thin-client routing. When a server is up, simple `remember` calls go
       // over HTTP so the daemon stays single-writer (footgun #2). Rich CLI
-      // flags (--pin, --layer, --extract, --global, salience gates) still
-      // need the direct path; we only intercept the minimal envelope.
+      // flags (--pin, --layer, --extract, --global) still need the direct
+      // path; we only intercept the minimal envelope. The salience gate is
+      // NOT in richFlag and the route does not apply it, so a routed remember
+      // stores what a direct one would skip. Measured 2026-09-07, tracked in
+      // TODOS.md; do not read this list as covering salience.
       const richFlag =
         flags['pin'] || flags['global'] || flags['extract'] || flags['force'] ||
         flags['observed'] || flags['inferred'] || flags['verified'] ||

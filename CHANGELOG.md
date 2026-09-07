@@ -3,7 +3,11 @@
 ## 1.38.9 - 2026-09-07
 
 ### Fixed
+- **`hippo forget` counted toward `total_forgotten` only when the command missed the server.** The dispatch routes through `runViaServerIfAvailable` when `hippo serve` is up (`src/cli.ts:9145`), but the counter lived in the CLI's direct path and `api.forget` incremented nothing, so the same command moved the number or not depending on whether a server happened to be running. Anyone running `hippo serve` full time saw a counter that tracked only the forgets that missed it. v1.38.7 fixed one instance of this class by moving the archive counter into `api.archiveRaw`; this is the plain-forget half. `api.forget` now counts and `src/cli.ts` no longer does, because that function's only two callers (`src/cli.ts:3698` and the HTTP route at `src/server.ts:1094`) are the two paths of one user command, so no surface can miss it. Pinned by a real-server test that runs a routed pair and a direct pair and asserts the recorded actor on each, so it cannot pass by taking the direct path twice.
+- **The comment above the thin-client routing filter claimed salience gates need the direct path. They do not.** `richFlag` (`src/cli.ts:8808`) has no salience condition, and `api.remember` has no gate, so a routed remember stores what a direct one would skip. Measured on a real spawned server with `salience.enabled: true`: a duplicate is `Skipped (100% overlap)` with no server up and `Remembered` twice with one up. Same shape as the v1.38.7 archive bug, a comment describing behaviour nobody re-checked. The comment now states the bypass; the bypass itself is a product call and is filed in `TODOS.md`.
 - **`hippo stats` counters lost increments under concurrency, and a write to one counter could roll back another.** `updateStats` (`src/store.ts:2316`) read all three `meta` counters, added the delta in JS, and wrote all three back, with no transaction. Two writers interleaving between the read and the write lost one increment, and because the two counters the caller never named were written back too, a stale total could be stamped over another process's committed value. Reproduced with real node processes before the fix: four workers doing 40 increments each counted 140 of 160, and two workers incrementing different counters left one at 52 of 60. Both binds are the same string on purpose: `node:sqlite` binds a JS number as REAL, which stores `"1.0"` into this TEXT column. Each counter is now a single atomic `INSERT ... ON CONFLICT DO UPDATE SET value = CAST(meta.value AS INTEGER) + CAST(? AS INTEGER)`, applied only to the counters the delta names. No call site changes: all nine increment sites route through this one writer. `bootstrapLegacyStore` (`src/store.ts:1128-1130`) also writes these keys, but it sets absolute values once on a cold legacy store, so it is not part of this race. Per-counter atomicity is sufficient because the only consumer reads the three independently (`src/cli.ts:3539-3541`).
+
+`remember` was attempted in this release and reverted before merge. There is no correct place for its counter yet: `api.remember` is the bulk write path for the Slack and GitHub connectors and for `import`, and the `POST /v1/memories` route is not a user surface either, since `deploy/aml/adapter/adapter.mjs` posts to it per leaderboard add and the Python SDK is a general client on it. Counting there would also make two paths that store different things report the same number. Recorded in `TODOS.md` behind the salience item. Two related gaps stay open there too: an HTTP-only recall does not count, and no MCP operation counts.
 
 ### Known limitations
 - Two processes opening a store that does not exist yet can still crash with `database is locked` (`errcode 517`, `SQLITE_BUSY_SNAPSHOT`) inside `runMigrations`, which `busy_timeout` does not retry. Found while building the test for this fix and recorded in `TODOS.md`; it needs its own reproduce-and-measure pass. Warm stores are unaffected, because `runMigrations` short-circuits once the schema version is current.
@@ -491,6 +495,7 @@
 ### Added
 - Regression pin: the `--graph-stream` RRF stream is re-rank-only within the caller's (already scope-filtered) candidate pool - a graph-reachable out-of-pool private-scoped memory is structurally unindexable by the stream. Pinned with a non-empty-output test so the property is exercised, not assumed.
 
+
 ### Known limitations
 - **The scope rule runs at emit time, not traversal time** (cross-model review, P2). Three consequences on a store whose graph references scoped memories: (1) denied neighbours still consume `loadNeighborRelations` window and `--max-neighbors` frontier slots, so a seed whose newest relations mostly point at denied rows can starve admitted neighbours out of the per-hop window (completeness, not confidentiality); (2) the BFS traverses THROUGH denied nodes, so at `--hops >= 2` a public row reachable only via a private stepping-stone still surfaces (deliberate: content never leaks, reachability does); (3) entity NAMES derived from a scoped object remain visible to graph observability surfaces. All three share one root (scope-aware graph traversal) and one trigger (graph rows referencing scoped memories, which NO shipped write path produces today - the graph derives from the four E2 tables, whose mirrors carry no scope). Filed as a single follow-up in TODOS.md, gated on E2 objects gaining scope plumbing.
 
@@ -503,6 +508,7 @@
 ### Changed
 - **One-time embedding reindex on upgrade (intended).** The stored embedding-index identity now carries an embed-text-format version (`<model>#t2`). Pre-1.26.0 indexes were computed over path-contaminated text, so the first embed-touching operation after upgrade rebuilds the index via the existing atomic reindex path. Until that happens, a RECALL-ONLY store gates dense/hybrid scoring off (BM25-only, deterministic) - run `hippo embed` once after upgrading to reindex immediately. Mixed hippo versions sharing a store will ping-pong reindexes (same class as an embedding-model swap); upgrade installs together.
 - `--evc-adaptive`'s on-topic test now accepts candidates by query coverage (fraction of query tokens present) as well as by score floor. The score floor alone proxied topicality through ranking score, and the disambiguating update the mechanic exists to surface (phrased differently by nature) measured 0.33x max under the corrected embeddings - below any sane floor. Query coverage is the mechanic's own "same topic, different fact" definition applied to the query, and is score-scale independent.
+
 
 ### Known limitations
 - The lexical (BM25/FTS) corpus still tokenizes `path:*` tags: two stores whose directory paths differ in DEPTH have slightly different doc lengths, a residual determinism gap for BM25-only ranking flagged by cross-model review. Stripping path tags from the lexical index changes real matching behavior (project-name queries currently match `path:<project>` tags), so it is deferred as its own eval-gated change - tracked in TODOS.md.
@@ -942,6 +948,7 @@
 - The detector reads each pipeline's scope-filtered candidate pool, so private
   or cross-scope rows never contribute to the signal.
 
+
 ### Known limitations
 
 - In a genuinely recency-heavy corpus the hint can fire on correct behavior
@@ -1009,6 +1016,7 @@ would permanently delete non-pinned error-tagged memories on the next
 `hippo sleep` cycle. The 30-day retrieval-relevance eval gate from the
 J5 roadmap entry defers to natural usage; we cannot validate the
 calibration in-PR.
+
 
 ### Known limitations
 
@@ -1097,6 +1105,7 @@ calibration in-PR.
 - `src/mcp/server.ts`: handler reads `apiResult.planningFallacyWatching`
   and renders the new `## Planning fallacy watch` block when present.
 
+
 ### Known limitations
 
 - Python SDK (`hippo-memory-sdk`) is NOT updated in this release. The
@@ -1153,6 +1162,7 @@ calibration in-PR.
   UNCHANGED. Consumers parsing the structured field see no difference.
   Only the text-rendering changes.
 
+
 ### Known limitations
 
 - The dogfood that motivated this fix tested a single sub-agent per warning
@@ -1199,6 +1209,7 @@ calibration in-PR.
   - New module `src/recall-history.ts` (pure detector + ring buffer
     helpers); per-pipeline rings in cli.ts + mcp/server.ts + server.ts
     (no IPC; per-pipeline architecture).
+
 
 ### Known limitations
 
@@ -3876,6 +3887,7 @@ Continuity-first recall: one call returns both relevant memories AND where the a
 ### Performance
 - Continuity-on adds ~17ms p99 over the BM25 path on a 2k-store warm-DB benchmark (in-process, no HTTP). Cost is dominated by three additional `openHippoDb`/`closeHippoDb` cycles plus the markdown mirror write inside `loadActiveTaskSnapshot`. This is an opt-in boot-time cost, not per-message hot-path overhead. Optimization (shared connection, readOnly snapshot path) tracked for v1.2.0+.
 
+
 ### Known limitations
 - **Continuity tables ship with `scope=NULL`** (carried over from v1.0.0). v1.1.0 adds a forward-compatible default-deny filter in `api.recall` and `cmdRecall`: a no-`scope` caller will not see continuity rows whose `scope` starts with `slack:private:`. This is currently a no-op because no writer sets `scope` on snapshots / handoffs / events. v1.2.0 wires the writers and closes the loop. Until then, callers in multi-tenant deployments with private-channel ingestion should pass an explicit `scope` when calling `recall(..., { includeContinuity: true })` to make the intended scope explicit.
 - **`client.recall` throws** when `includeContinuity` is set. HTTP transport for the continuity block lands in v1.2.0; failing loudly is preferable to silently dropping the flag.
@@ -3902,6 +3914,7 @@ helpers gained a required `tenantId` parameter.
 ### Schema
 - Migration v22: `ALTER TABLE session_events ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'` plus a nullable `scope` column for future read-side default-deny work. Same on `session_handoffs`. Composite indexes on `(tenant_id, session_id, created_at)`. Self-heals partial-init stores via `CREATE TABLE IF NOT EXISTS` before the ALTERs. Migration runs inside the existing `BEGIN`/`ROLLBACK` transaction.
 - Smart backfill: rows whose session_id maps to exactly one tenant in `task_snapshots` inherit that tenant; ambiguous or unmapped rows stay at `'default'`. Conservative: never crosses tenant boundaries on guesses.
+
 
 ### Known limitations
 - **`scope` column on continuity tables is currently NULL on all writes.** The column was added in v22 to support a future read-side default-deny rule (mirroring the existing private-Slack filter on memories), but the read path is not wired yet. Wiring both sides at once will land in a follow-up release. No regression vs v0.40.0; private-channel handoffs were not filtered there either.

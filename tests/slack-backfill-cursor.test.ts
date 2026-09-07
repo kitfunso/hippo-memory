@@ -88,4 +88,40 @@ describe('backfillChannel cursor / oldest semantics', () => {
     expect(calls[1].cursor).toBe('OPAQUE_PAGE2_TOKEN');
     expect(calls[1].oldest).toBeUndefined(); // Page 2+ never sets oldest.
   });
+  it('a rerun resumes at the stored cursor instead of re-paging history', async () => {
+    // TODOS v0.38.0 asked for a "stop at cursor" mode on the claim that backfill
+    // drains a channel every run. It does not: the persisted cursor is replayed as
+    // `oldest`, so Slack bounds the range server-side. This pins that.
+    const mkPage = (tss: string[], next: string | null) => ({
+      messages: tss.map((ts) => ({ ts, text: `m${ts}`, user: 'U1', type: 'message' })),
+      next_cursor: next,
+    });
+
+    let firstRun = 0;
+    const seed: SlackHistoryFetcher = async () => {
+      firstRun++;
+      return firstRun === 1 ? mkPage(['300.0', '200.0'], 'PAGE2') : mkPage(['100.0'], null);
+    };
+    const r1 = await backfillChannel(ctx(root), {
+      teamId: 'T1',
+      channel: { id: 'C1', is_private: false },
+      fetcher: seed,
+    });
+    expect(r1.pages).toBe(2); // Fresh channel: drains, which is what backfill means.
+
+    const calls: Array<{ cursor: string | null; oldest?: string }> = [];
+    const rerun: SlackHistoryFetcher = async ({ cursor, oldest }) => {
+      calls.push({ cursor, oldest });
+      return mkPage([], null);
+    };
+    await backfillChannel(ctx(root), {
+      teamId: 'T1',
+      channel: { id: 'C1', is_private: false },
+      fetcher: rerun,
+    });
+
+    expect(calls).toHaveLength(1); // Caught up: one page, no walk back through history.
+    expect(calls[0].oldest).toBe('300.0'); // Newest ts from run 1, replayed as the bound.
+    expect(calls[0].cursor).toBeNull();
+  });
 });

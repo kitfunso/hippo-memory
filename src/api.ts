@@ -1715,6 +1715,10 @@ export function forget(ctx: Context, id: string): ForgetResult {
   if (!removed) {
     throw new Error(`memory not found: ${id}`);
   }
+  // Counted here, not in the CLI: both callers of this function (cmdForget and
+  // the HTTP route) are the two paths of one user command, so neither can miss
+  // it. api.remember cannot take the same move; see the server route.
+  updateStats(ctx.hippoRoot, { forgotten: 1 });
   return { ok: true, id };
 }
 
