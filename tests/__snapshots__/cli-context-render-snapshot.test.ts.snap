@@ -1,5 +1,11 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`printContextMarkdown snapshots > aged-out observed item renders tier and age separately 1`] = `
+"## Project Memory (1 entries, 10 tokens)
+
+- **[observed, aged] ⚠️ Previously observed (2026-01-01): an observed row nobody has retrieved lately** [aged] (4%)"
+`;
+
 exports[`printContextMarkdown snapshots > empty items 1`] = `
 "## Project Memory (0 entries, 0 tokens)
 "

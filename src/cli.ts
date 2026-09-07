@@ -60,6 +60,8 @@ import {
   calculateRewardFactor,
   deriveHalfLife,
   resolveConfidence,
+  confidenceFacets,
+  confidenceLabel,
   applyOutcome,
   computeSchemaFit,
   Layer,
@@ -1961,7 +1963,9 @@ async function cmdRecall(
       }
       if (showWhy) {
         const explanation = explainMatch(query, r);
-        base.confidence = resolveConfidence(r.entry);
+        const facets = confidenceFacets(r.entry);
+        base.confidence = facets.tier;
+        base.aged_out = facets.agedOut;
         base.source = isGlobal ? 'global' : 'local';
         base.reason = explanation.reason;
         base.bm25 = r.bm25;
@@ -2075,8 +2079,8 @@ async function cmdRecall(
 
   for (const r of results) {
     const e = r.entry;
-    const conf = resolveConfidence(e);
-    const confLabel = conf === 'stale' || conf === 'inferred' ? `[${conf}] \u26A0\uFE0F` : `[${conf}]`;
+    const label = confidenceLabel(e);
+    const confLabel = label.warn ? `[${label.text}] \u26A0\uFE0F` : `[${label.text}]`;
     const strengthBar = '\u2588'.repeat(Math.round(e.strength * 10)) + '\u2591'.repeat(10 - Math.round(e.strength * 10));
     const isGlobal = isInitialized(globalRoot) && !localIndex.entries[e.id];
     const globalMark = isGlobal ? ' [global]' : '';
@@ -2087,7 +2091,7 @@ async function cmdRecall(
     console.log(`    [${strengthBar}] tags: ${e.tags.join(', ') || 'none'} | retrieved: ${e.retrieval_count}x`);
     if (showWhy) {
       const explanation = explainMatch(query, r);
-      console.log(`    source:${sourceMark} | layer: [${e.layer}] | confidence: [${conf}]`);
+      console.log(`    source:${sourceMark} | layer: [${e.layer}] | confidence: [${label.text}]`);
       console.log(`    reason: ${explanation.reason}`);
       if (explanation.envelope) {
         const env = explanation.envelope;
@@ -2251,7 +2255,8 @@ async function cmdExplain(
       rank: rank + 1,
       id: r.entry.id,
       layer: r.entry.layer,
-      confidence: resolveConfidence(r.entry),
+      confidence: confidenceFacets(r.entry).tier,
+      aged_out: confidenceFacets(r.entry).agedOut,
       score: r.score,
       tokens: r.tokens,
       tags: r.entry.tags,
@@ -2615,7 +2620,8 @@ function cmdTrace(
   const ageDays = (now.getTime() - createdMs) / 86_400_000;
   const lastMs = new Date(entry.last_retrieved).getTime();
   const sinceLast = (now.getTime() - lastMs) / 86_400_000;
-  const conf = resolveConfidence(entry, now);
+  const facets = confidenceFacets(entry, now);
+  const conf = confidenceLabel(entry, now).text;
 
   // Projected strength: same decay curve, just push `now` out.
   const projectedAt = (days: number): number =>
@@ -2640,7 +2646,8 @@ function cmdTrace(
       id: entry.id,
       source: sourceLabel,
       layer: entry.layer,
-      confidence: conf,
+      confidence: facets.tier,
+      aged_out: facets.agedOut,
       pinned: entry.pinned,
       starred: entry.starred,
       tags: entry.tags,
@@ -3513,6 +3520,7 @@ function cmdStatus(hippoRoot: string): void {
   let totalStrength = 0;
   let pinned = 0;
   let atRisk = 0; // strength < 0.2
+  let agedOut = 0;
 
   for (const e of entries) {
     const s = calculateStrength(e, now);
@@ -3520,8 +3528,9 @@ function cmdStatus(hippoRoot: string): void {
     totalStrength += s;
     if (e.pinned) pinned++;
     if (s < 0.2) atRisk++;
-    const conf = resolveConfidence(e, now);
-    byConfidence[conf] = (byConfidence[conf] ?? 0) + 1;
+    const facets = confidenceFacets(e, now);
+    byConfidence[facets.tier] = (byConfidence[facets.tier] ?? 0) + 1;
+    if (facets.agedOut) agedOut++;
   }
 
   const avgStrength = entries.length > 0 ? totalStrength / entries.length : 0;
@@ -3545,6 +3554,7 @@ function cmdStatus(hippoRoot: string): void {
   console.log(`  Observed:        ${byConfidence['observed'] ?? 0}`);
   console.log(`  Inferred:        ${byConfidence['inferred'] ?? 0}`);
   console.log(`  Stale:           ${byConfidence['stale'] ?? 0}`);
+  console.log(`  Aged out:        ${agedOut}  (excludes pinned, verified)`);
   console.log('');
   console.log(`Total remembered:  ${(stats as Record<string,number>)['total_remembered'] ?? 0}`);
   console.log(`Total recalled:    ${(stats as Record<string,number>)['total_recalled'] ?? 0}`);
@@ -6038,6 +6048,7 @@ async function cmdContext(
       strength: r.entry.strength,
       tags: r.entry.tags,
       confidence: r.entry.confidence,
+      aged_out: confidenceFacets(r.entry).agedOut,
       content: r.entry.content,
       global: r.isGlobal ?? false,
       origin: r.origin ?? null,
@@ -6129,9 +6140,10 @@ export function printContextMarkdown(
     const tagStr = e.tags.length > 0 ? ` [${e.tags.join(', ')}]` : '';
     const strengthPct = Math.round(calculateStrength(e) * 100);
     const globalPrefix = item.isGlobal ? '[global] ' : '';
-    const effectiveConf = resolveConfidence(e, now);
-    const confWarning = (effectiveConf === 'stale' || effectiveConf === 'inferred') ? ' \u26A0\uFE0F' : '';
-    const confTag = `[${effectiveConf}]${confWarning}`;
+    const effectiveConf = confidenceFacets(e, now).tier;
+    const label = confidenceLabel(e, now);
+    const confWarning = label.warn ? ' \u26A0\uFE0F' : '';
+    const confTag = `[${label.text}]${confWarning}`;
 
     if (framing === 'observe') {
       const dateStr = new Date(e.created).toISOString().slice(0, 10);

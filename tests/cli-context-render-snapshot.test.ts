@@ -144,6 +144,21 @@ describe('printContextMarkdown snapshots', () => {
     expect(out).toMatchSnapshot();
   });
 
+  it('aged-out observed item renders tier and age separately', () => {
+    const agedObserved = makeMemory({
+      id: 'mem_test_004',
+      content: 'an observed row nobody has retrieved lately',
+      created: '2026-01-01T10:00:00.000Z',
+      last_retrieved: '2026-01-01T10:00:00.000Z',
+      confidence: 'observed',
+      tags: ['aged'],
+    });
+    const out = captureStdout(() =>
+      printContextMarkdown([{ entry: agedObserved, score: 0.5, tokens: 10, isGlobal: false }], 10, 'observe'),
+    );
+    expect(out).toMatchSnapshot();
+  });
+
   it('empty items', () => {
     const out = captureStdout(() => printContextMarkdown([], 0, 'observe'));
     expect(out).toMatchSnapshot();
