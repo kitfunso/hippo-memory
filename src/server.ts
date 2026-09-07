@@ -5,6 +5,7 @@ import { resolveProjectIdentity } from './project-identity.js';
 import { detectServer, writePidfile, removePidfileIfOwned } from './server-detect.js';
 import { resolveTenantId } from './tenant.js';
 import { openHippoDb, closeHippoDb } from './db.js';
+import { updateStats } from './store.js';
 import {
   buildSessionKey,
   getOrCreateRing,
@@ -948,6 +949,10 @@ async function handleRequest(
       const topId = result.results[0]?.id ?? null;
       appendRecall(httpRing, hashQueryText(q), topId, result.anchoringHint?.memoryId);
     }
+
+    // Each recall surface counts its own hits; api.recall is no chokepoint,
+    // since the CLI never calls it and MCP shows the user a different band.
+    updateStats(opts.hippoRoot, { recalled: result.results.length });
 
     // Continuity payloads should never be cached. The caller is asking for
     // session-state-aware data; intermediaries must not reuse it across users.
