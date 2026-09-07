@@ -11,7 +11,7 @@ function mem(id: string, tags: string[]): Memory {
   return {
     id, content: `c-${id}`, tags, layer: "episodic", strength: 0.5,
     half_life_days: 30, retrieval_count: 1, schema_fit: 0.5,
-    emotional_valence: "neutral", confidence: "inferred", pinned: false,
+    emotional_valence: "neutral", confidence: "inferred", aged_out: false, pinned: false,
     created: "2026-05-01T00:00:00Z", last_retrieved: "2026-05-20T00:00:00Z",
     age_days: 10, projected_strength_7d: 0.5, projected_strength_30d: 0.5,
   };

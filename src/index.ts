@@ -2,7 +2,7 @@
  * Hippo public API  - re-exports for programmatic use.
  */
 
-export { MemoryEntry, Layer, EmotionalValence, ConfidenceLevel, DecayOptions, calculateStrength, resolveConfidence, createMemory, applyOutcome, generateId, computeSchemaFit } from './memory.js';
+export { MemoryEntry, Layer, EmotionalValence, ConfidenceLevel, DecayOptions, calculateStrength, resolveConfidence, confidenceFacets, type ConfidenceFacets, createMemory, applyOutcome, generateId, computeSchemaFit } from './memory.js';
 export { search, hybridSearch, physicsSearch, markRetrieved, estimateTokens, textOverlap, tokenize, explainMatch, detectTemporalDirection, temporalBoost, computeTemporalRange, SearchResult, MatchExplanation } from './search.js';
 export { multihopSearch } from './multihop.js';
 export { graphExpandRecall, MAX_HOPS, DEFAULT_MAX_NEIGHBORS, type GraphExpandOpts } from './graph-recall.js';

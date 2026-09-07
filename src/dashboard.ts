@@ -9,7 +9,7 @@ import * as http from 'http';
 import * as path from 'path';
 import * as fs from 'fs';
 import { loadAllEntries, listMemoryConflicts, readEntry, writeEntry } from './store.js';
-import { calculateStrength, resolveConfidence, type MemoryEntry } from './memory.js';
+import { calculateStrength, confidenceFacets, type MemoryEntry } from './memory.js';
 import { loadConfig } from './config.js';
 import { listPeers } from './shared.js';
 import { loadEmbeddingIndex } from './embeddings.js';
@@ -54,6 +54,7 @@ interface DashboardData {
     avg_half_life: number;
     by_layer: Record<string, number>;
     by_confidence: Record<string, number>;
+    aged_out: number;
     embedding_coverage: number;
     open_conflicts: number;
   };
@@ -86,12 +87,14 @@ function buildDashboardData(hippoRoot: string): DashboardData {
   let totalStrength = 0;
   let totalHalfLife = 0;
   let atRisk = 0;
+  let agedOut = 0;
   const byLayer: Record<string, number> = {};
   const byConfidence: Record<string, number> = {};
 
   const memories = entries.map((e) => {
     const strength = calculateStrength(e, now);
-    const confidence = resolveConfidence(e, now);
+    const facets = confidenceFacets(e, now);
+    const confidence = facets.tier;
     const ageDays = (now.getTime() - new Date(e.created).getTime()) / (1000 * 60 * 60 * 24);
 
     totalStrength += strength;
@@ -99,6 +102,7 @@ function buildDashboardData(hippoRoot: string): DashboardData {
     if (strength < 0.1 && !e.pinned) atRisk++;
     byLayer[e.layer] = (byLayer[e.layer] ?? 0) + 1;
     byConfidence[confidence] = (byConfidence[confidence] ?? 0) + 1;
+    if (facets.agedOut) agedOut++;
 
     // Project strength at +7d and +30d
     const future7 = { ...e, last_retrieved: e.last_retrieved };
@@ -117,6 +121,7 @@ function buildDashboardData(hippoRoot: string): DashboardData {
       schema_fit: e.schema_fit,
       emotional_valence: e.emotional_valence,
       confidence,
+      aged_out: facets.agedOut,
       pinned: e.pinned,
       created: e.created,
       last_retrieved: e.last_retrieved,
@@ -148,6 +153,7 @@ function buildDashboardData(hippoRoot: string): DashboardData {
       avg_half_life: entries.length > 0 ? totalHalfLife / entries.length : 0,
       by_layer: byLayer,
       by_confidence: byConfidence,
+      aged_out: agedOut,
       embedding_coverage: entries.length > 0 ? embeddedCount / entries.length : 0,
       // v0.28 — open_conflicts must count only 'open' rows now that
       // `conflicts` includes all statuses. Preserves the existing badge

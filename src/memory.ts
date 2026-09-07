@@ -439,19 +439,41 @@ export function generateId(prefix: string = 'mem'): string {
   return `${prefix}_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 }
 
+// Pinned and verified are exempt from ageing by policy, so this reads "aged out
+// for trust purposes", not "old". The 30-day threshold lives here and nowhere else.
+function isAgedOut(entry: MemoryEntry, now: Date): boolean {
+  if (entry.pinned || entry.confidence === 'verified') return false;
+  const lastRetrieved = new Date(entry.last_retrieved);
+  return (now.getTime() - lastRetrieved.getTime()) / (1000 * 60 * 60 * 24) > 30;
+}
+
+export interface ConfidenceFacets {
+  // Stored: why we believe the entry. Derived: nobody retrieved it lately.
+  tier: ConfidenceLevel;
+  agedOut: boolean;
+}
+
+export function confidenceFacets(entry: MemoryEntry, now: Date = evalNow()): ConfidenceFacets {
+  return { tier: entry.confidence, agedOut: isAgedOut(entry, now) };
+}
+
+// `warn` covers exactly the rows the old collapsed-value rule did: an aged-out row
+// used to read 'stale', so warning on it separately keeps the same set.
+export function confidenceLabel(entry: MemoryEntry, now: Date = evalNow()): { text: string; warn: boolean } {
+  const { tier, agedOut } = confidenceFacets(entry, now);
+  return {
+    text: agedOut ? `${tier}, aged` : tier,
+    warn: agedOut || tier === 'stale' || tier === 'inferred',
+  };
+}
+
 /**
  * Resolve the effective confidence for a memory entry.
  * If the entry has not been retrieved in 30+ days and is not 'verified',
  * returns 'stale'. Otherwise returns the stored confidence value.
  */
 export function resolveConfidence(entry: MemoryEntry, now: Date = evalNow()): ConfidenceLevel {
-  if (entry.pinned || entry.confidence === 'verified') return entry.confidence;
-
-  const lastRetrieved = new Date(entry.last_retrieved);
-  const daysSince = (now.getTime() - lastRetrieved.getTime()) / (1000 * 60 * 60 * 24);
-
-  if (daysSince > 30) return 'stale';
-  return entry.confidence;
+  return isAgedOut(entry, now) ? 'stale' : entry.confidence;
 }
 
 /**

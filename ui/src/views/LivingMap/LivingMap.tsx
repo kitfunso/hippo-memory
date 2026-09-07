@@ -38,6 +38,7 @@ interface LivingMapProps {
   setConfidences: (confidences: Set<Confidence>) => void;
   setAgeMaxDays: (days: number | null) => void;
   setFadingOnly: (v: boolean) => void;
+  setAgedOutOnly: (v: boolean) => void;
   /** v0.27 color-by-tag — drives ViewPanel segmented radio. */
   setColorMode: (mode: ColorMode) => void;
   /** v0.28+ (E3 local view) — set/clear focus on a memory's neighborhood. */
@@ -179,7 +180,7 @@ function DetailPanel({ memory, onClose, open, localView, setLocalView }: {
               {[
                 ["Half-life", `${memory.half_life_days}d`], ["Retrievals", String(memory.retrieval_count)],
                 ["Age", `${memory.age_days}d`], ["Schema fit", memory.schema_fit.toFixed(2)],
-                ["Valence", memory.emotional_valence], ["Confidence", memory.confidence],
+                ["Valence", memory.emotional_valence], ["Confidence", memory.aged_out ? `${memory.confidence} (aged out)` : memory.confidence],
                 ["+7d", memory.projected_strength_7d.toFixed(3)], ["+30d", memory.projected_strength_30d.toFixed(3)],
               ].map(([label, val]) => (
                 <div key={label}>
@@ -208,7 +209,7 @@ function DetailPanel({ memory, onClose, open, localView, setLocalView }: {
 
 export function LivingMap({
   memories, embeddings, stats, conflicts, filterState, frozenOrigin,
-  setQuery, setFrozen, setLayers, setStrengthRange, setConfidences, setAgeMaxDays, setFadingOnly,
+  setQuery, setFrozen, setLayers, setStrengthRange, setConfidences, setAgeMaxDays, setFadingOnly, setAgedOutOnly,
   setColorMode, setLocalView, resetFilters,
 }: LivingMapProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -450,6 +451,7 @@ export function LivingMap({
         setConfidences={setConfidences}
         setAgeMaxDays={setAgeMaxDays}
         setFadingOnly={setFadingOnly}
+        setAgedOutOnly={setAgedOutOnly}
         setColorMode={setColorMode}
         resetFilters={resetFilters}
         projects={projectsForSidebar}

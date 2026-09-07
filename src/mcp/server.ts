@@ -25,7 +25,7 @@ import { consolidate } from '../consolidate.js';
 import { execSync } from 'child_process';
 import { fetchGitLog, extractLessons, partitionLessons, deduplicateLesson, isGitRepo } from '../autolearn.js';
 import { loadConfig } from '../config.js';
-import { resolveConfidence } from '../memory.js';
+import { confidenceLabel } from '../memory.js';
 import { resolveTenantId } from '../tenant.js';
 import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, drillDown as apiDrillDown, assemble as apiAssemble, isPrivateScope, adminActor, buildSuppressionSummary, ambientSecretAdmit, type Context as ApiContext } from '../api.js';
 import { resolveProjectIdentity, classifyOriginProject, findHippoStoreDir, type ResolveProjectIdentityOpts } from '../project-identity.js';
@@ -207,7 +207,7 @@ function formatMemories(results: ReturnType<typeof search>, hippoRoot: string): 
   const lines: string[] = [`Found ${results.length} memories:\n`];
 
   for (const r of results) {
-    const conf = resolveConfidence(r.entry);
+    const conf = confidenceLabel(r.entry).text;
     const tags = r.entry.tags.length > 0 ? ` tags: ${r.entry.tags.join(', ')}` : '';
     lines.push(`[${conf}]${tags} (strength=${r.entry.strength.toFixed(2)})`);
     lines.push(r.entry.content);

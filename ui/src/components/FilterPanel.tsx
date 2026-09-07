@@ -16,6 +16,7 @@ interface FilterPanelProps {
   setConfidences: (confidences: Set<Confidence>) => void;
   setAgeMaxDays: (days: number | null) => void;
   setFadingOnly: (v: boolean) => void;
+  setAgedOutOnly: (v: boolean) => void;
 }
 
 const ALL_LAYERS: Array<{ key: Layer; label: string }> = [
@@ -38,9 +39,10 @@ function toggleSet<T>(set: Set<T>, value: T): Set<T> {
   return next;
 }
 
-export function FilterPanel({ filterState, stats, setLayers, setStrengthRange, setConfidences, setAgeMaxDays, setFadingOnly }: FilterPanelProps) {
+export function FilterPanel({ filterState, stats, setLayers, setStrengthRange, setConfidences, setAgeMaxDays, setFadingOnly, setAgedOutOnly }: FilterPanelProps) {
   const [strMin, strMax] = filterState.strengthRange;
   const atRisk = stats?.at_risk ?? 0;
+  const agedOut = stats?.aged_out ?? 0;
   const totalMemories = stats?.total ?? 0;
 
   return (
@@ -156,6 +158,31 @@ export function FilterPanel({ filterState, stats, setLayers, setStrengthRange, s
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>fading</span>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-faint)", marginLeft: 6 }}>
             &lt; 0.1 strength, unpinned
+          </span>
+        </label>
+      </div>
+
+      {/* Aged out is a separate axis from the confidence tier: a row can be
+          observed and cold at once, which the tier alone cannot say. */}
+      <div style={filterGroup}>
+        <div style={filterLabel}>
+          <span>Aged out only</span>
+          <span style={filterValue}>
+            {agedOut === 0 ? "(none)" : `${agedOut} of ${totalMemories}`}
+          </span>
+        </div>
+        <label style={{ ...chkRow, opacity: agedOut === 0 ? 0.5 : 1, cursor: agedOut === 0 ? "not-allowed" : "pointer" }}>
+          <input
+            type="checkbox"
+            checked={filterState.agedOutOnly}
+            disabled={agedOut === 0}
+            onChange={(e) => setAgedOutOnly(e.target.checked)}
+            aria-label="Show only memories aged out of trust"
+            style={{ accentColor: "var(--accent)", cursor: "inherit" }}
+          />
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>aged out</span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-faint)", marginLeft: 6 }}>
+            not retrieved in 30d, unpinned
           </span>
         </label>
       </div>

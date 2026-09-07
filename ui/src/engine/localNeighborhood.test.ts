@@ -22,6 +22,7 @@ function mem(over: Partial<Memory> & { id: string }): Memory {
     schema_fit: over.schema_fit ?? 0.5,
     emotional_valence: over.emotional_valence ?? "neutral",
     confidence: over.confidence ?? "inferred",
+    aged_out: over.aged_out ?? false,
     pinned: over.pinned ?? false,
     created: over.created ?? "2026-05-25T00:00:00Z",
     last_retrieved: over.last_retrieved ?? "2026-05-25T00:00:00Z",

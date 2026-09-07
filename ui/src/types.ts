@@ -9,6 +9,7 @@ export interface Memory {
   schema_fit: number;
   emotional_valence: "neutral" | "positive" | "negative" | "critical";
   confidence: "verified" | "observed" | "inferred" | "stale";
+  aged_out: boolean;
   pinned: boolean;
   created: string;
   last_retrieved: string;
@@ -35,6 +36,7 @@ export interface Stats {
   avg_half_life: number;
   by_layer: Record<string, number>;
   by_confidence: Record<string, number>;
+  aged_out: number;
   embedding_coverage: number;
   open_conflicts: number;
 }
