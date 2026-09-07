@@ -13,6 +13,7 @@ import { initStore, writeEntry } from '../src/store.js';
 import { createMemory, confidenceFacets, resolveConfidence, type MemoryEntry } from '../src/memory.js';
 import { serveDashboard } from '../src/dashboard.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
+import { _resetAblationCacheForTests } from '../src/ablation.js';
 
 const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
 const NOW = new Date('2026-09-07T12:00:00.000Z');
@@ -61,6 +62,7 @@ describe('confidence facets', () => {
   let hippoRoot: string;
   let server: Server | undefined;
   let prevHome: string | undefined;
+  let prevNow: string | undefined;
 
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), 'hippo-facets-'));
@@ -69,6 +71,11 @@ describe('confidence facets', () => {
     initStore(hippoRoot);
     prevHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = join(home, '.hippo-global');
+    // Fixtures are dated from NOW, so the runtime clock has to be NOW too, in
+    // this process and in the CLI that runCli spawns off this env.
+    prevNow = process.env.HIPPO_FAKE_NOW;
+    process.env.HIPPO_FAKE_NOW = NOW.toISOString();
+    _resetAblationCacheForTests();
   });
 
   afterEach(async () => {
@@ -78,6 +85,9 @@ describe('confidence facets', () => {
     }
     if (prevHome === undefined) delete process.env.HIPPO_HOME;
     else process.env.HIPPO_HOME = prevHome;
+    if (prevNow === undefined) delete process.env.HIPPO_FAKE_NOW;
+    else process.env.HIPPO_FAKE_NOW = prevNow;
+    _resetAblationCacheForTests();
     rmSync(home, { recursive: true, force: true });
   });
 
