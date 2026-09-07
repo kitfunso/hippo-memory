@@ -300,4 +300,40 @@ describe('loadAmbientCandidates', () => {
 
     expect(got.map((e) => e.id)).toEqual([pin.id]);
   });
+
+  // Legacy markdown keeps offset timestamps, and SQL orders text:
+  // '...T09:00:00-04:00' bytes below '...T12:00:00.000Z' while being newer.
+  it('does not lose a chronologically newer row written with a UTC offset', () => {
+    for (let i = 0; i < 32; i++) {
+      writeEntry(local, {
+        ...createMemory(`canonical filler row ${i} with enough words to be worth storing`),
+        created: new Date(Date.UTC(2026, 5, 1, 12, i)).toISOString(),
+      });
+    }
+    const drifted = {
+      ...createMemory('a legacy row whose frontmatter recorded a local offset'),
+      created: '2026-06-01T09:00:00-04:00',
+    };
+    writeEntry(local, drifted);
+
+    const got = loadAmbientCandidates(local, 'default', 1, () => true);
+
+    expect(got.map((e) => e.id)).toContain(drifted.id);
+  });
+
+  // include_recent is any non-negative finite number at the HTTP edge, and the
+  // Array.slice this replaced truncated it. A SQL LIMIT cannot.
+  it('truncates a fractional recent count the way the slice it replaced did', () => {
+    for (let i = 0; i < 40; i++) {
+      writeEntry(local, {
+        ...createMemory(`fractional filler row ${i} with enough words to be worth storing`),
+        created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
+      });
+    }
+
+    const whole = loadAmbientCandidates(local, 'default', 8, () => true);
+    const fractional = loadAmbientCandidates(local, 'default', 8.1, () => true);
+
+    expect(fractional.map((e) => e.id)).toEqual(whole.map((e) => e.id));
+  });
 });

@@ -2199,6 +2199,9 @@ export function loadAmbientCandidates(
   admit: (e: MemoryEntry) => boolean,
 ): MemoryEntry[] {
   initStore(hippoRoot);
+  // A SQL LIMIT takes an integer; the Array.slice this replaced truncated one,
+  // and include_recent is any non-negative finite number at the HTTP edge.
+  const needed = Math.trunc(recentNeeded);
   const db = openHippoDb(hippoRoot);
   try {
     // SAFETY: every `where` below starts from MEMORY_SELECT_COLUMNS' table.
@@ -2213,14 +2216,19 @@ export function loadAmbientCandidates(
       if (admit(e)) byId.set(e.id, e);
     }
 
-    if (recentNeeded > 0) {
-      // `id DESC` mirrors getContext's own comparator, deliberately not the
-      // cross-ingest-stable order loadFreshRawMemories uses: changing it would
-      // change which rows the UserPromptSubmit hook injects.
-      const window = Math.max(recentNeeded * 4, 32);
-      const windowed = run(`${scoped} ORDER BY created DESC, id DESC LIMIT ?`, [tenantId, window]);
+    if (needed > 0) {
+      // Text order is chronological only for canonical UTC ISO (memory.ts).
+      const drifted = db.prepare(
+        `SELECT 1 FROM memories WHERE ${scoped} AND (length(created) <> 24 OR created NOT LIKE '%Z') LIMIT 1`,
+      ).get(tenantId) !== undefined;
+      // `id DESC` mirrors getContext's comparator, not loadFreshRawMemories'
+      // cross-ingest-stable order: that would change what the hook injects.
+      const window = Math.max(needed * 4, 32);
+      const windowed = drifted
+        ? []
+        : run(`${scoped} ORDER BY created DESC, id DESC LIMIT ?`, [tenantId, window]);
       let kept = windowed.filter(admit);
-      if (kept.length < recentNeeded && windowed.length === window) {
+      if (drifted || (kept.length < needed && windowed.length === window)) {
         kept = run(`${scoped} ORDER BY created DESC, id DESC`, [tenantId]).filter(admit);
       }
       for (const e of kept) byId.set(e.id, e);
