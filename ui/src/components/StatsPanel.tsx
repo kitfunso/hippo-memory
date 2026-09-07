@@ -67,6 +67,7 @@ export function StatsPanel({ stats, totalVisible, fadingOnly }: StatsPanelProps)
       }}>
         <span>{stats.pinned} pinned</span>
         {stats.at_risk > 0 && <span style={{ color: "var(--accent)", fontWeight: 600 }}>{stats.at_risk} at risk</span>}
+        {stats.aged_out > 0 && <span>{stats.aged_out} aged out</span>}
         <span>avg {stats.avg_strength.toFixed(2)}</span>
       </div>
     </div>

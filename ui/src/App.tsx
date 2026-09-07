@@ -88,6 +88,10 @@ export function App() {
   }, []);
 
   // v0.26.1: fadingOnly toggle wired from Header pill + FilterPanel toggle.
+  const setAgedOutOnly = useCallback((agedOutOnly: boolean) => {
+    setFilterState((prev) => ({ ...prev, agedOutOnly }));
+  }, []);
+
   const setFadingOnly = useCallback((fadingOnly: boolean) => {
     setFilterState((prev) => ({ ...prev, fadingOnly }));
   }, []);
@@ -242,6 +246,7 @@ export function App() {
         setConfidences={setConfidences}
         setAgeMaxDays={setAgeMaxDays}
         setFadingOnly={setFadingOnly}
+        setAgedOutOnly={setAgedOutOnly}
         setColorMode={setColorMode}
         setLocalView={setLocalView}
         resetFilters={resetFilters}

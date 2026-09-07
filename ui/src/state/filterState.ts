@@ -57,6 +57,11 @@ export interface FilterState {
    */
   fadingOnly: boolean;
   /**
+   * Shortcut filter: only rows aged out of trust (not retrieved in 30
+   * days, excluding pinned and verified). Composes (AND) with the rest.
+   */
+  agedOutOnly: boolean;
+  /**
    * v0.27 — selects which attribute drives node color. "layer" is default
    * (back-compat with pre-v0.27 render). VIEW state — NOT a filter, so
    * NOT included in isFilterActive, and resetFilters preserves the user's
@@ -81,6 +86,7 @@ export const INITIAL_FILTER_STATE: FilterState = {
   ageMaxDays: null,
   frozen: false,
   fadingOnly: false,
+  agedOutOnly: false,
   colorMode: "layer",
   localView: null,
 };
@@ -123,6 +129,7 @@ export function isFilterActive(state: FilterState): boolean {
   // no-op the engine + Sidebar + BottomBar + Drawer + TagCloud which all
   // gate on filterActive (plan-eng-critic R1 HIGH #1).
   if (state.fadingOnly) return true;
+  if (state.agedOutOnly) return true;
   // v0.28+ (E3) — local view IS a filter (hides memories outside the
   // N-hop neighborhood). Same trap as fadingOnly: without this branch,
   // line-visibility extension in scene.setFiltered would silently no-op.
@@ -179,6 +186,7 @@ export function deriveVisibleIds(
     if (filterStrength && (m.strength < strMin || m.strength > strMax)) continue;
     if (filterAge && state.ageMaxDays !== null && m.age_days > state.ageMaxDays) continue;
     if (state.fadingOnly && !isFading(m)) continue;
+    if (state.agedOutOnly && !m.aged_out) continue;
     // v0.28+ (E3) — local-view filter. Only apply when both the state flag
     // AND the neighborhood Set are present (safe degradation otherwise).
     if (state.localView !== null && localNeighborhood !== undefined

@@ -9,7 +9,7 @@ export interface Memory {
   schema_fit: number;
   emotional_valence: "neutral" | "positive" | "negative" | "critical";
   confidence: "verified" | "observed" | "inferred" | "stale";
-  aged_out?: boolean;
+  aged_out: boolean;
   pinned: boolean;
   created: string;
   last_retrieved: string;

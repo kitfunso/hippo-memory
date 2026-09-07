@@ -29,6 +29,7 @@ function mem(over: Partial<Memory> & { id: string }): Memory {
     schema_fit: over.schema_fit ?? 0.5,
     emotional_valence: over.emotional_valence ?? "neutral",
     confidence: over.confidence ?? "inferred",
+    aged_out: over.aged_out ?? false,
     pinned: over.pinned ?? false,
     created: over.created ?? "2026-05-01T00:00:00Z",
     last_retrieved: over.last_retrieved ?? "2026-05-20T00:00:00Z",
@@ -254,6 +255,45 @@ describe("deriveVisibleIds + fadingOnly (v0.26.1)", () => {
 
   it("fadingOnly false (default): returns all memories", () => {
     expect(ids(deriveVisibleIds(FADING_FIXTURE, INITIAL_FILTER_STATE))).toHaveLength(5);
+  });
+});
+
+describe("deriveVisibleIds + agedOutOnly", () => {
+  // The tier and the age-out are independent axes: B is observed and cold,
+  // C is a human rejection that is not cold.
+  const AGED_FIXTURE: Memory[] = [
+    mem({ id: "A", confidence: "observed", aged_out: false, layer: "buffer" }),
+    mem({ id: "B", confidence: "observed", aged_out: true, layer: "buffer" }),
+    mem({ id: "C", confidence: "stale", aged_out: false, layer: "episodic" }),
+    mem({ id: "D", confidence: "stale", aged_out: true, layer: "episodic" }),
+  ];
+
+  it("agedOutOnly true: returns only aged-out memories whatever their tier", () => {
+    const state: FilterState = { ...INITIAL_FILTER_STATE, agedOutOnly: true };
+    expect(ids(deriveVisibleIds(AGED_FIXTURE, state))).toEqual(["B", "D"]);
+  });
+
+  it("agedOutOnly is not the stale tier: stale-and-fresh is excluded", () => {
+    const state: FilterState = { ...INITIAL_FILTER_STATE, agedOutOnly: true };
+    expect(ids(deriveVisibleIds(AGED_FIXTURE, state))).not.toContain("C");
+  });
+
+  it("agedOutOnly composes (AND) with the confidence filter", () => {
+    const state: FilterState = {
+      ...INITIAL_FILTER_STATE,
+      agedOutOnly: true,
+      confidences: new Set<Confidence>(["observed"]),
+    };
+    expect(ids(deriveVisibleIds(AGED_FIXTURE, state))).toEqual(["B"]);
+  });
+
+  it("agedOutOnly false (default): returns all memories", () => {
+    expect(ids(deriveVisibleIds(AGED_FIXTURE, INITIAL_FILTER_STATE))).toHaveLength(4);
+  });
+
+  it("isFilterActive is true when only agedOutOnly is set", () => {
+    expect(isFilterActive({ ...INITIAL_FILTER_STATE, agedOutOnly: true })).toBe(true);
+    expect(isFilterActive(INITIAL_FILTER_STATE)).toBe(false);
   });
 });
 

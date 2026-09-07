@@ -171,7 +171,7 @@ describe('confidence facets', () => {
 
     expect(out).toMatch(/Observed:\s+1/);
     expect(out).toMatch(/Stale:\s+1/);
-    expect(out).toMatch(/Aged out:\s+1 {2}\(excludes pinned, verified\)/);
+    expect(out).toMatch(/Aged out:\s+1 {2}\(of the above; excludes pinned, verified\)/);
   });
 
   it('reports the stored tier and aged_out from recall --why JSON', () => {
@@ -202,19 +202,20 @@ describe('confidence facets', () => {
     expect(out.results[0]!.aged_out).toBe(true);
   });
 
-  it('reports aged_out from context --format json', () => {
-    seed(hippoRoot, 'a distinctive haddock fact a human rejected', {
-      confidence: 'stale',
-      last_retrieved: ago(1),
+  it('omits aged_out from context --format json, which reports post-retrieval state', () => {
+    seed(hippoRoot, 'a distinctive haddock fact nobody retrieved lately', {
+      confidence: 'observed',
+      last_retrieved: ago(45),
     });
 
     const payload = JSON.parse(
       runCli(home, ['context', 'haddock', '--format', 'json']),
-    ) as { memories: Array<{ confidence: string; aged_out: boolean }> };
+    ) as { memories: Array<Record<string, unknown>> };
 
-    const row = payload.memories.find((e) => e.confidence === 'stale');
+    const row = payload.memories.find((e) => String(e['content']).includes('haddock'));
     expect(row).toBeDefined();
-    expect(row!.aged_out).toBe(false);
+    expect(row!['confidence']).toBe('observed');
+    expect(row).not.toHaveProperty('aged_out');
   });
 
   it('reports the stored tier and aged_out from the dashboard payload', async () => {
@@ -261,6 +262,24 @@ describe('confidence facets', () => {
     };
     expect(json.confidence).toBe('observed');
     expect(json.aged_out).toBe(true);
+  });
+
+  it('keeps the Pinned column aligned when the label carries its aged suffix', () => {
+    const aged = seed(hippoRoot, 'a traced row nobody has retrieved lately', {
+      confidence: 'observed',
+      last_retrieved: ago(45),
+    });
+    const fresh = seed(hippoRoot, 'a traced row retrieved yesterday', {
+      confidence: 'observed',
+      last_retrieved: ago(1),
+    });
+
+    const line = (id: string): string =>
+      /Confidence:.*/.exec(runCli(home, ['trace', id]))![0];
+    const agedLine = line(aged.id);
+
+    expect(agedLine).toContain('observed, aged');
+    expect(agedLine.indexOf('Pinned:')).toBe(line(fresh.id).indexOf('Pinned:'));
   });
 
   it('renders the pair on hippo recall, while context un-ages what it returns', () => {

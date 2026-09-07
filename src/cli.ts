@@ -2674,7 +2674,7 @@ function cmdTrace(
   console.log(`Memory: ${entry.id}  [${sourceLabel}]`);
   console.log('='.repeat(50));
   console.log(`Content:   ${entry.content.replace(/\s+/g, ' ').slice(0, 160)}${entry.content.length > 160 ? '...' : ''}`);
-  console.log(`Layer:     ${entry.layer.padEnd(10)} Confidence: ${conf.padEnd(10)} Pinned: ${entry.pinned ? 'yes' : 'no'}${entry.starred ? '  Starred: yes' : ''}`);
+  console.log(`Layer:     ${entry.layer.padEnd(10)} Confidence: ${conf.padEnd(14)} Pinned: ${entry.pinned ? 'yes' : 'no'}${entry.starred ? '  Starred: yes' : ''}`);
   console.log(`Tags:      ${entry.tags.join(', ') || '(none)'}`);
   console.log(`Created:   ${entry.created}  (${fmt(ageDays, 1)} days ago)`);
   console.log();
@@ -3554,7 +3554,7 @@ function cmdStatus(hippoRoot: string): void {
   console.log(`  Observed:        ${byConfidence['observed'] ?? 0}`);
   console.log(`  Inferred:        ${byConfidence['inferred'] ?? 0}`);
   console.log(`  Stale:           ${byConfidence['stale'] ?? 0}`);
-  console.log(`  Aged out:        ${agedOut}  (excludes pinned, verified)`);
+  console.log(`  Aged out:        ${agedOut}  (of the above; excludes pinned, verified)`);
   console.log('');
   console.log(`Total remembered:  ${(stats as Record<string,number>)['total_remembered'] ?? 0}`);
   console.log(`Total recalled:    ${(stats as Record<string,number>)['total_recalled'] ?? 0}`);
@@ -6048,7 +6048,6 @@ async function cmdContext(
       strength: r.entry.strength,
       tags: r.entry.tags,
       confidence: r.entry.confidence,
-      aged_out: confidenceFacets(r.entry).agedOut,
       content: r.entry.content,
       global: r.isGlobal ?? false,
       origin: r.origin ?? null,

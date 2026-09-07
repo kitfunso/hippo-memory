@@ -25,6 +25,7 @@ interface SidebarProps {
   setConfidences: (confidences: Set<Confidence>) => void;
   setAgeMaxDays: (days: number | null) => void;
   setFadingOnly: (v: boolean) => void;
+  setAgedOutOnly: (v: boolean) => void;
   /** v0.27 color-by-tag — drives ViewPanel segmented radio. */
   setColorMode: (mode: ColorMode) => void;
   /** P4: reset all filters back to INITIAL_FILTER_STATE (keeping frozen flag). */
@@ -53,6 +54,7 @@ export function Sidebar({
   setConfidences,
   setAgeMaxDays,
   setFadingOnly,
+  setAgedOutOnly,
   setColorMode,
   resetFilters,
   projects,
@@ -150,6 +152,7 @@ export function Sidebar({
         setConfidences={setConfidences}
         setAgeMaxDays={setAgeMaxDays}
         setFadingOnly={setFadingOnly}
+        setAgedOutOnly={setAgedOutOnly}
       />
 
       {/* Empty filter-match state */}

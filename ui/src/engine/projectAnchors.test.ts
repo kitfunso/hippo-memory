@@ -33,6 +33,7 @@ function mem(id: string, tags: string[]): Memory {
     schema_fit: 0,
     emotional_valence: "neutral",
     confidence: "observed",
+    aged_out: false,
     pinned: false,
     projected_strength_7d: 0.5,
     projected_strength_30d: 0.5,

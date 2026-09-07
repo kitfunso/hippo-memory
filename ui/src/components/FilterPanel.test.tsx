@@ -20,6 +20,7 @@ function renderPanel(overrides: { filterState?: Partial<FilterState> } = {}) {
   const setAgeMaxDays = vi.fn<(days: number | null) => void>();
   const filterState: FilterState = { ...INITIAL_FILTER_STATE, ...overrides.filterState };
   const setFadingOnly = vi.fn<(v: boolean) => void>();
+  const setAgedOutOnly = vi.fn<(v: boolean) => void>();
   render(
     <FilterPanel
       filterState={filterState}
@@ -29,9 +30,10 @@ function renderPanel(overrides: { filterState?: Partial<FilterState> } = {}) {
       setConfidences={setConfidences}
       setAgeMaxDays={setAgeMaxDays}
       setFadingOnly={setFadingOnly}
+      setAgedOutOnly={setAgedOutOnly}
     />,
   );
-  return { setLayers, setStrengthRange, setConfidences, setAgeMaxDays, setFadingOnly };
+  return { setLayers, setStrengthRange, setConfidences, setAgeMaxDays, setFadingOnly, setAgedOutOnly };
 }
 
 describe("FilterPanel (E3)", () => {
