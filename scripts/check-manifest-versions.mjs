@@ -7,8 +7,8 @@
  * slip cost a follow-up patch ship. This script ends the class.
  *
  * Wired into `prepublishOnly` in package.json. Exits non-zero with a
- * specific error message if any drift exists. Ignores node_modules and
- * package-lock.json (the lockfile has its own multi-version semantics).
+ * specific error message if any drift exists. Ignores node_modules, and
+ * ignores the lockfile's dependency entries, which carry their own versions.
  *
  * Ticket: TODOS.md "Engineering hygiene (release pipeline)" #1.
  */
@@ -87,6 +87,36 @@ if (!existsSync(VERSION_TS)) {
   }
 }
 
+// The lockfile was excluded wholesale for a property only part of it has. Its
+// `packages["node_modules/..."]` entries do carry independent dependency
+// versions, but `.version` and `.packages[""].version` mirror the root package
+// and npm rewrites both on every `npm version`. Excluding the file let a stale
+// pair sail past this gate on v1.38.9. Check the two lockstep fields only.
+const LOCKFILE = 'package-lock.json';
+if (!existsSync(LOCKFILE)) {
+  drifts.push({ path: LOCKFILE, found: '(missing)', expected: expectedVersion });
+} else {
+  let lock = null;
+  try {
+    lock = JSON.parse(readFileSync(LOCKFILE, 'utf8'));
+  } catch (e) {
+    drifts.push({ path: LOCKFILE, found: '(parse error: ' + e.message + ')', expected: expectedVersion });
+  }
+  if (lock !== null) {
+    const lockstep = [
+      [LOCKFILE + ' .version', manifestVersion(lock)],
+      [LOCKFILE + ' .packages[""].version', manifestVersion(lock.packages?.[''])],
+    ];
+    for (const [label, version] of lockstep) {
+      if (version === null) {
+        drifts.push({ path: label, found: '(no version field)', expected: expectedVersion });
+      } else if (version !== expectedVersion) {
+        drifts.push({ path: label, found: version, expected: expectedVersion });
+      }
+    }
+  }
+}
+
 if (drifts.length > 0) {
   console.error('');
   console.error('VERSION DRIFT detected. The following manifests do not match package.json:');
@@ -95,9 +125,10 @@ if (drifts.length > 0) {
   }
   console.error('');
   console.error('Fix: bump the drifted manifests to ' + expectedVersion + ' before publishing.');
+  console.error('For package-lock.json, `npm install --package-lock-only` rewrites both fields.');
   console.error('See TODOS.md "Engineering hygiene (release pipeline)" #1 for context.');
   console.error('');
   process.exit(1);
 }
 
-console.log(`All ${LOCKSTEP_MANIFESTS.length} lockstep manifests + src/version.ts at version ${expectedVersion}. OK.`);
+console.log(`All ${LOCKSTEP_MANIFESTS.length} lockstep manifests + src/version.ts + the two package-lock.json root fields at version ${expectedVersion}. OK.`);
