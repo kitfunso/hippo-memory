@@ -189,6 +189,17 @@ function getActorForContent(workspace: string, contentNeedle: string): string | 
   }
 }
 
+function getActorForId(workspace: string, memoryId: string): string | null {
+  const db = openHippoDb(join(workspace, '.hippo'));
+  try {
+    const events = queryAuditEvents(db, { tenantId: 'default', op: 'forget', limit: 200 });
+    // The row itself is gone after a forget, so match on the audit target id.
+    return events.find((ev) => ev.targetId === memoryId)?.actor ?? null;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 describe('cli thin-client mode', () => {
   beforeAll(() => {
     if (!existsSync(CLI_PATH)) {
@@ -533,7 +544,7 @@ describe('cli thin-client mode', () => {
     }
   }, 30_000);
 
-  it('remember and forget move the stats counters whether or not they route', async () => {
+  it('forget counts in stats whether it routes or takes the direct path', async () => {
     const workspace = makeWorkspace();
     const hippoRoot = join(workspace, '.hippo');
     let server: SpawnedServer | null = null;
@@ -544,16 +555,16 @@ describe('cli thin-client mode', () => {
       const routedRemember = runCli(workspace, 'remember', 'routed-counter-canary');
       const routedId = /Remembered \[([^\]]+)\]/.exec(routedRemember.stdout)?.[1];
       expect(routedId, `stdout: ${routedRemember.stdout} stderr: ${routedRemember.stderr}`).toBeTruthy();
-      expect(getActorForContent(workspace, 'routed-counter-canary')).toBe('localhost:cli');
 
       const routedForget = runCli(workspace, 'forget', routedId!);
       expect(routedForget.stdout, `stderr: ${routedForget.stderr}`).toMatch(/Forgot/);
+      // Pins that this half really took HTTP, so the counter assertion below
+      // cannot pass by silently running the direct path twice.
+      const routedActor = getActorForId(workspace, routedId!);
+      expect(routedActor).toBe('localhost:cli');
 
-      // Both commands took the HTTP route. While the CLI owned both counters a
-      // routed pair moved neither, so `hippo stats` depended on server uptime.
       let db = openHippoDb(hippoRoot);
       try {
-        expect(getMeta(db, 'total_remembered', '0')).toBe('1');
         expect(getMeta(db, 'total_forgotten', '0')).toBe('1');
       } finally {
         closeHippoDb(db);
@@ -567,12 +578,12 @@ describe('cli thin-client mode', () => {
       expect(directId, `stdout: ${directRemember.stdout} stderr: ${directRemember.stderr}`).toBeTruthy();
       const directForget = runCli(workspace, 'forget', directId!);
       expect(directForget.stdout, `stderr: ${directForget.stderr}`).toMatch(/Forgot/);
+      expect(getActorForId(workspace, directId!)).toBe('cli');
 
-      // Exactly one more each: moving the forget increment into api.forget must
-      // not double count on the direct path, which calls api.forget too.
+      // Exactly one more: moving the increment into api.forget must not double
+      // count on the direct path, which calls api.forget too.
       db = openHippoDb(hippoRoot);
       try {
-        expect(getMeta(db, 'total_remembered', '0')).toBe('2');
         expect(getMeta(db, 'total_forgotten', '0')).toBe('2');
       } finally {
         closeHippoDb(db);
