@@ -174,6 +174,11 @@ Cross-cutting tickets surfaced by the week-of-2026-05-21 retro. Small, automate-
 - [x] **Em-dash guard for release notes** (DONE v1.13.5 ship cycle, 2026-05-27). `scripts/check-em-dashes-in-release-notes.mjs` scoped to the CHANGELOG section for the current `package.json` version. Wired into `prepublishOnly`. Historical entries not in scope. (Pivoted from "pre-commit hook" to "pre-publish hook" because hippo has no husky and a pre-publish gate catches what matters most.)
 - [x] **Codex iteration-threshold heuristic** (DONE v1.13.5 ship cycle, 2026-05-27). Lives at `docs/release-policy.md` "Critic chain iteration threshold". Rule: two rounds of only-P2/LOW catches = ship with Known Limitations. Derived from observed convergence on J1/J3.2/J5.
 
+### Store concurrency (2026-09-07)
+
+- [x] **`updateStats` lost increments and clobbered counters it had not been asked to touch.** FIXED v1.38.9. It read all three `meta` counters, added the delta in JS, and wrote all three back through `setMeta`, with no transaction, so a second writer landing between the read and the write was lost, and the unconditional write-back of the two untouched keys stamped their stale values over whatever else had committed. Reproduced with real processes before the fix: four workers doing 40 increments each counted 140 of 160, and two workers on different counters left one at 52 of 60. Now one atomic `INSERT ... ON CONFLICT DO UPDATE SET value = CAST(meta.value AS INTEGER) + ?` per counter, and only for the counters the delta names. All nine call sites are unchanged; the fix is in the one shared writer. Pinned by `tests/store-stats-concurrency.test.ts`, which spawns real node processes against one store. This closes the item filed alongside the v1.38.8 forget-counter fix.
+- [ ] **Two processes opening a brand-new store at the same time can crash with `database is locked`.** Found while building the test above: four workers calling `updateStats` on a store that did not exist yet died in `runMigrations` with `errcode 517` (`SQLITE_BUSY_SNAPSHOT`), one inside a migration's `db.exec`, one inside `setSchemaVersion`. 517 is not retried by `busy_timeout`, so the v1.38.4 pragma-order fix does not cover it: a deferred read transaction whose snapshot went stale cannot be upgraded to a write, and the open throws instead of waiting. Only cold stores are affected, because `runMigrations` short-circuits once the schema version is current; the test now calls `initStore` in the parent first, which is why it is green. Likely fix is a `BEGIN IMMEDIATE` around the migration run so the writer takes the lock before reading, but that needs its own reproduce-and-measure pass.
+
 ---
 
 ## v1.11.4 (Episode B) — follow-ups for Episode C / future
@@ -600,15 +605,14 @@ v0.39 could ship the CRITICAL cross-tenant fixes without scope creep.
   read-to-unlink window is documented and accepted, consistent with
   `detectServer`.
 
-- [ ] **Version-parity guard across all manifests.** The v1.10.1 release found
-  `src/version.ts` `PACKAGE_VERSION` stranded at `1.8.1` and the
-  `extensions/openclaw-plugin` manifests at `1.9.3`: v1.9.x and v1.10.0 bumped
-  only some version fields. `tests/openclaw-package.test.ts` checks the root
-  `openclaw.plugin.json` against `package.json` only. Add a test or
-  release-script check asserting `package.json`, `openclaw.plugin.json`,
-  `src/version.ts`, and both `extensions/openclaw-plugin` manifests all carry
-  the same version, so the drift cannot recur. All five were synced to
-  `1.10.1` in that release.
+- [x] **Version-parity guard across all manifests.** ALREADY SHIPPED, this entry was a
+  duplicate that never got checked off. `scripts/check-manifest-versions.mjs` asserts
+  the four lockstep manifests plus `src/version.ts` `PACKAGE_VERSION` against
+  `package.json` and is wired into `prepublishOnly`; `tests/openclaw-package.test.ts:50`
+  pins the `src/version.ts` half as a test as well. Recorded as done in the
+  "Engineering hygiene (release pipeline)" section above since the v1.13.5 ship cycle.
+  Verified 2026-09-07 by running the script: "All 4 lockstep manifests + src/version.ts
+  at version 1.38.9. OK."
 
 - [x] **Migration v16 partial-apply self-heal.** SHIPPED v1.12.7 — migration
   v27 re-asserts the v16 schema (`api_keys` + `audit_log` + indexes,

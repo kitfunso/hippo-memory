@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.38.9 - 2026-09-07
+
+### Fixed
+- **`hippo stats` counters lost increments under concurrency, and a write to one counter could roll back another.** `updateStats` (`src/store.ts:2316`) read all three `meta` counters, added the delta in JS, and wrote all three back, with no transaction. Two writers interleaving between the read and the write lost one increment, and because the two counters the caller never named were written back too, a stale total could be stamped over another process's committed value. Reproduced with real node processes before the fix: four workers doing 40 increments each counted 140 of 160, and two workers incrementing different counters left one at 52 of 60. Each counter is now a single atomic `INSERT ... ON CONFLICT DO UPDATE SET value = CAST(meta.value AS INTEGER) + ?`, applied only to the counters the delta names. No call site changes: all nine route through this one writer. Per-counter atomicity is sufficient because the only consumer reads the three independently (`src/cli.ts:3539-3541`).
+
+### Known limitations
+- Two processes opening a store that does not exist yet can still crash with `database is locked` (`errcode 517`, `SQLITE_BUSY_SNAPSHOT`) inside `runMigrations`, which `busy_timeout` does not retry. Found while building the test for this fix and recorded in `TODOS.md`; it needs its own reproduce-and-measure pass. Warm stores are unaffected, because `runMigrations` short-circuits once the schema version is current.
+
 ## 1.38.7 - 2026-09-06
 
 ### Fixed
