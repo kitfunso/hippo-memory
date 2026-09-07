@@ -14,6 +14,7 @@ import {
   RingBuffer,
 } from './recall-history.js';
 import { appendAuditEvent } from './audit.js';
+import { updateStats } from './store.js';
 
 // v0.33 / J1 — Module-level per-(tenant, session) recall-history ring map
 // for the HTTP pipeline. Separate from CLI/MCP rings per plan v3 (per-
@@ -776,6 +777,10 @@ async function handleRequest(
       artifactRef: getString(body, 'artifactRef'),
       tags: getStringArray(body, 'tags'),
     });
+    // Counted at this surface rather than inside api.remember: that function is
+    // also the bulk write path for the Slack and GitHub connectors and for
+    // import, and a backfill must not move the user-facing remembered counter.
+    updateStats(ctx.hippoRoot, { remembered: 1 });
     sendJson(res, 200, result);
     return;
   }

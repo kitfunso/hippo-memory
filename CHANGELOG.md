@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.38.8 - 2026-09-07
+
+### Fixed
+- **`hippo stats` counted a `remember` or a `forget` only when the command missed the server.** Both dispatches route through `runViaServerIfAvailable` when `hippo serve` is up (`src/cli.ts:8828`, `src/cli.ts:9145`), but the counters lived in the CLI's direct path, and neither `api.remember` nor `api.forget` incremented anything. The same command therefore moved `total_remembered` / `total_forgotten` or not depending on whether a server happened to be running, and anyone running `hippo serve` full time saw counters that tracked only the commands that missed it. v1.38.7 fixed one instance of this class by moving the archive counter into `api.archiveRaw`; this is the rest of it. `api.forget` now counts and `src/cli.ts` no longer does, because that function's only two callers are the two paths of one user command, so no surface can miss it. `remember` could not take the same move: `api.remember` is also the bulk write path for the Slack and GitHub connectors and for `import`, so counting inside it would let a backfill flood a user-facing number; its increment sits at the HTTP route instead, mirroring what the CLI surface already does. Pinned by a real-server test that runs a routed pair and a direct pair and asserts one increment each. Two related gaps stay open and are recorded in `TODOS.md`: an HTTP-only recall still does not count, and no MCP operation counts at all. Both are consistent rather than uptime-dependent, so both are product calls rather than the same bug.
+
 ## 1.38.7 - 2026-09-06
 
 ### Fixed

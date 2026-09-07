@@ -532,4 +532,54 @@ describe('cli thin-client mode', () => {
       rmSync(workspace, { recursive: true, force: true });
     }
   }, 30_000);
+
+  it('remember and forget move the stats counters whether or not they route', async () => {
+    const workspace = makeWorkspace();
+    const hippoRoot = join(workspace, '.hippo');
+    let server: SpawnedServer | null = null;
+    try {
+      const port = await pickFreePort();
+      server = await startServer(workspace, port);
+
+      const routedRemember = runCli(workspace, 'remember', 'routed-counter-canary');
+      const routedId = /Remembered \[([^\]]+)\]/.exec(routedRemember.stdout)?.[1];
+      expect(routedId, `stdout: ${routedRemember.stdout} stderr: ${routedRemember.stderr}`).toBeTruthy();
+      expect(getActorForContent(workspace, 'routed-counter-canary')).toBe('localhost:cli');
+
+      const routedForget = runCli(workspace, 'forget', routedId!);
+      expect(routedForget.stdout, `stderr: ${routedForget.stderr}`).toMatch(/Forgot/);
+
+      // Both commands took the HTTP route. While the CLI owned both counters a
+      // routed pair moved neither, so `hippo stats` depended on server uptime.
+      let db = openHippoDb(hippoRoot);
+      try {
+        expect(getMeta(db, 'total_remembered', '0')).toBe('1');
+        expect(getMeta(db, 'total_forgotten', '0')).toBe('1');
+      } finally {
+        closeHippoDb(db);
+      }
+
+      await server.stop();
+      server = null;
+
+      const directRemember = runCli(workspace, 'remember', 'direct-counter-canary');
+      const directId = /Remembered \[([^\]]+)\]/.exec(directRemember.stdout)?.[1];
+      expect(directId, `stdout: ${directRemember.stdout} stderr: ${directRemember.stderr}`).toBeTruthy();
+      const directForget = runCli(workspace, 'forget', directId!);
+      expect(directForget.stdout, `stderr: ${directForget.stderr}`).toMatch(/Forgot/);
+
+      // Exactly one more each: moving the forget increment into api.forget must
+      // not double count on the direct path, which calls api.forget too.
+      db = openHippoDb(hippoRoot);
+      try {
+        expect(getMeta(db, 'total_remembered', '0')).toBe('2');
+        expect(getMeta(db, 'total_forgotten', '0')).toBe('2');
+      } finally {
+        closeHippoDb(db);
+      }
+    } finally {
+      if (server) await server.stop();
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  }, 30_000);
 });

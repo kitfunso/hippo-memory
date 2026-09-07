@@ -3696,7 +3696,6 @@ function cmdForget(
 
   try {
     api.forget(ctx, id);
-    updateStats(hippoRoot, { forgotten: 1 });
     console.log(`Forgot ${id}`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
