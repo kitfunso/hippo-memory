@@ -2320,13 +2320,23 @@ export function updateStats(
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    const remembered = Number(getMeta(db, 'total_remembered', '0')) + Number(delta.remembered ?? 0);
-    const recalled = Number(getMeta(db, 'total_recalled', '0')) + Number(delta.recalled ?? 0);
-    const forgotten = Number(getMeta(db, 'total_forgotten', '0')) + Number(delta.forgotten ?? 0);
-
-    setMeta(db, 'total_remembered', String(remembered));
-    setMeta(db, 'total_recalled', String(recalled));
-    setMeta(db, 'total_forgotten', String(forgotten));
+    // One atomic statement per counter, and only for counters the caller
+    // named: the read-modify-write this replaces both lost increments to a
+    // concurrent writer and stamped stale values over the untouched two.
+    const increments: ReadonlyArray<readonly [string, number]> = [
+      ['total_remembered', delta.remembered ?? 0],
+      ['total_recalled', delta.recalled ?? 0],
+      ['total_forgotten', delta.forgotten ?? 0],
+    ];
+    for (const [key, amount] of increments) {
+      if (amount === 0) continue;
+      // Both binds are the same string: node:sqlite binds a JS number as REAL,
+      // which would store "1.0" into this TEXT column instead of "1".
+      db.prepare(`
+        INSERT INTO meta(key, value) VALUES(?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = CAST(meta.value AS INTEGER) + CAST(? AS INTEGER)
+      `).run(key, String(amount), String(amount));
+    }
 
     writeStatsMirror(hippoRoot, buildStatsFromDb(db));
   } finally {
