@@ -343,13 +343,23 @@ async function runViaServerIfAvailable(
     await httpFn(info, apiKey);
     return true;
   } catch (err) {
-    if (client.isConnectionRefused(err)) {
+    const failure = client.classifyTransportFailure(err);
+    if (failure === 'never-sent') {
       failIfServerRequired('the server pidfile was stale (connection refused)');
       console.error('hippo: stale server pidfile detected, falling back to direct mode');
       // Clear the pidfile only if it still names the dead server we just
       // probed — a newer server may have rewritten it (removePidfileIfOwned).
       removePidfileIfOwned(hippoRoot, { pid: info.pid, startedAt: info.started_at });
       return false;
+    }
+    if (failure === 'delivery-unknown') {
+      // Every caller of this helper is a non-idempotent write, so replaying on
+      // the direct path would store a row the server may already have committed.
+      // Leave the pidfile alone: the next command's connect-phase failure heals it.
+      console.error(
+        `hippo: the connection to ${info.url} dropped mid-request, so the write may already have been applied. Not retrying locally. Check with \`hippo recall\` before running this again.`,
+      );
+      process.exit(1);
     }
     throw err;
   }
@@ -9154,9 +9164,9 @@ async function main(): Promise<void> {
             console.log(`Forgot ${id}`);
           }
         } catch (err) {
-          // A server that died after the health probe is the caller's stale
-          // pidfile fallback to handle, not an error to report to the user.
-          if (client.isConnectionRefused(err)) throw err;
+          // A server that died after the health probe is the caller's transport
+          // fallback to handle, not an error to report to the user.
+          if (client.classifyTransportFailure(err) !== 'none') throw err;
           const msg = err instanceof Error ? err.message : String(err);
           console.error(archive ? `Could not archive ${id}: ${msg}` : msg);
           process.exit(1);

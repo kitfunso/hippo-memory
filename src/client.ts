@@ -252,32 +252,37 @@ export async function auditList(
 }
 
 /**
- * True for fetch failures that look like "server not actually running" (the
- * pidfile said one was, but the connection refused, or DNS / abort errors).
- * The CLI uses this to detect a stale pidfile and self-heal back to direct mode.
+ * How far a request got before the transport failed.
+ *
+ * 'never-sent' means the connection never opened, so the caller may safely
+ * replay the call locally. 'delivery-unknown' means the socket broke with the
+ * request already on the wire: the server may have committed it, so replaying a
+ * write would store it twice. 'none' means this was not a transport failure.
  */
+export type TransportFailure = 'none' | 'never-sent' | 'delivery-unknown';
+
 function hasObjectCause(e: Error): e is Error & { cause: { code?: unknown } } {
   // Node's fs/net system errors (ECONNREFUSED, ECONNRESET) attach the syscall
-  // code on a non-null object `cause`; the strict-equality checks at the call
-  // site validate the code value before it is used for anything.
+  // code on a non-null object `cause`; the strict-equality checks below
+  // validate the code value before it is used for anything.
   return typeof e.cause === 'object' && e.cause !== null;
 }
 
-export function isConnectionRefused(err: unknown): boolean {
-  if (!(err instanceof Error)) return false;
+export function classifyTransportFailure(err: unknown): TransportFailure {
+  if (!(err instanceof Error)) return 'none';
   // The server answered, so the transport worked, whatever the message says.
-  if (err instanceof HttpResponseError) return false;
+  if (err instanceof HttpResponseError) return 'none';
   const message = err.message.toLowerCase();
-  // Node fetch wraps the underlying cause; the surface message contains 'fetch failed'
-  // and the cause has the syscall code. We check both shapes.
-  if (message.includes('econnrefused')) return true;
-  if (message.includes('connect econnrefused')) return true;
-  if (hasObjectCause(err)) {
-    const code = err.cause.code;
-    if (code === 'ECONNREFUSED' || code === 'ECONNRESET') return true;
+  const code = hasObjectCause(err) ? err.cause.code : undefined;
+  // Connect-phase failures: no request bytes ever left the client, so a stale
+  // pidfile can be healed and the call replayed on the direct path.
+  if (code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'EAI_AGAIN') return 'never-sent';
+  if (message.includes('econnrefused')) return 'never-sent';
+  // The socket died mid-exchange. Node fetch surfaces this as a bare
+  // 'fetch failed' with the syscall code on the cause, so check both shapes.
+  if (code === 'ECONNRESET' || code === 'ECONNABORTED' || code === 'EPIPE' || code === 'UND_ERR_SOCKET') {
+    return 'delivery-unknown';
   }
-  // Fallthrough: 'fetch failed' alone is suspicious. Treat as connection failure
-  // so the CLI heals on a stale pidfile rather than surfacing a cryptic error.
-  if (message.includes('fetch failed')) return true;
-  return false;
+  if (message.includes('socket hang up') || message.includes('fetch failed')) return 'delivery-unknown';
+  return 'none';
 }
