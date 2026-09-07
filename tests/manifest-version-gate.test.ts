@@ -13,6 +13,7 @@ interface Overrides {
   lockVersion?: string | null;
   lockRootVersion?: string | null;
   omitLockfile?: boolean;
+  rawLockfile?: string;
 }
 
 /** A minimal repo the gate accepts: every manifest it reads, all at `version`. */
@@ -24,7 +25,9 @@ function makeRepo(version: string, overrides: Overrides = {}): string {
     writeFileSync(join(root, path), JSON.stringify({ name: 'fixture', version }));
   }
   writeFileSync(join(root, 'src', 'version.ts'), `export const PACKAGE_VERSION = '${version}';\n`);
-  if (!overrides.omitLockfile) {
+  if (overrides.rawLockfile !== undefined) {
+    writeFileSync(join(root, 'package-lock.json'), overrides.rawLockfile);
+  } else if (!overrides.omitLockfile) {
     const lock: Record<string, unknown> = {
       name: 'fixture',
       lockfileVersion: 3,
@@ -94,6 +97,21 @@ describe('check-manifest-versions.mjs and the lockfile', () => {
         const r = runGate(root);
         expect(r.status).toBe(1);
         expect(r.stderr).toContain('package-lock.json');
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    }
+  });
+
+  // A lockfile holding literal `null` parses without throwing, so a null
+  // sentinel for "parse failed" would silently skip both checks here.
+  it('fails on a lockfile that parses to null or to a non-object', () => {
+    for (const raw of ['null', '[]', '"1.0.0"', '{}']) {
+      const root = makeRepo('2.0.0', { rawLockfile: raw });
+      try {
+        const r = runGate(root);
+        expect(r.status, `raw=${raw} stdout=${r.stdout}`).toBe(1);
+        expect(r.stderr).toContain('package-lock.json .version: (no version field)');
       } finally {
         rmSync(root, { recursive: true, force: true });
       }

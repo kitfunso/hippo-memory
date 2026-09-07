@@ -96,16 +96,21 @@ const LOCKFILE = 'package-lock.json';
 if (!existsSync(LOCKFILE)) {
   drifts.push({ path: LOCKFILE, found: '(missing)', expected: expectedVersion });
 } else {
-  let lock = null;
+  // `parsed` rather than a null sentinel: a lockfile holding literal `null`
+  // parses fine, and testing `lock !== null` would skip both checks and let
+  // the gate report OK, the exact failure this block exists to close.
+  let lock;
+  let parsed = true;
   try {
     lock = JSON.parse(readFileSync(LOCKFILE, 'utf8'));
   } catch (e) {
+    parsed = false;
     drifts.push({ path: LOCKFILE, found: '(parse error: ' + e.message + ')', expected: expectedVersion });
   }
-  if (lock !== null) {
+  if (parsed) {
     const lockstep = [
       [LOCKFILE + ' .version', manifestVersion(lock)],
-      [LOCKFILE + ' .packages[""].version', manifestVersion(lock.packages?.[''])],
+      [LOCKFILE + ' .packages[""].version', manifestVersion(lock?.packages?.[''])],
     ];
     for (const [label, version] of lockstep) {
       if (version === null) {
