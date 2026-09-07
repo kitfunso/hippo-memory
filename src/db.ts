@@ -2359,12 +2359,34 @@ function readMinCompatibleBinary(db: DatabaseSyncLike): string | null {
   }
 }
 
+function isSqliteBusy(error: unknown): boolean {
+  const code = (error as { errcode?: number } | null)?.errcode;
+  return code === 5 || code === 6 || code === 517;
+}
+
+// busy_timeout covers neither of this file's two contended statements: SQLite
+// skips the busy handler for `PRAGMA journal_mode` and for a write that upgrades
+// a deferred read snapshot. Both need an explicit wait instead.
+function execWithBusyRetry(db: DatabaseSyncLike, sql: string, timeoutMs = 30000): void {
+  const deadline = Date.now() + timeoutMs;
+  const idle = new Int32Array(new SharedArrayBuffer(4));
+  for (;;) {
+    try {
+      db.exec(sql);
+      return;
+    } catch (error) {
+      if (!isSqliteBusy(error) || Date.now() >= deadline) throw error;
+      Atomics.wait(idle, 0, 0, 10 + Math.floor(Math.random() * 20));
+    }
+  }
+}
+
 export function openHippoDb(hippoRoot: string): DatabaseSyncLike {
   fs.mkdirSync(hippoRoot, { recursive: true });
   const db = new DatabaseSync(getHippoDbPath(hippoRoot));
   try {
     db.exec('PRAGMA busy_timeout = 5000');
-    db.exec('PRAGMA journal_mode = WAL');
+    execWithBusyRetry(db, 'PRAGMA journal_mode = WAL');
     db.exec('PRAGMA synchronous = NORMAL');
     db.exec('PRAGMA wal_autocheckpoint = 100');
     db.exec('PRAGMA foreign_keys = ON');
@@ -2410,8 +2432,16 @@ function runMigrations(db: DatabaseSyncLike, hippoRoot?: string): void {
   for (const migration of MIGRATIONS) {
     if (migration.version <= currentVersion) continue;
 
-    db.exec('BEGIN');
+    execWithBusyRetry(db, 'BEGIN IMMEDIATE');
     try {
+      // Re-read under the write lock: another process may have applied this
+      // migration while we waited, and re-running one is not idempotent.
+      const applied = getSchemaVersion(db);
+      if (applied >= migration.version) {
+        db.exec('COMMIT');
+        currentVersion = applied;
+        continue;
+      }
       migration.up(db, { hippoRoot });
       setSchemaVersion(db, migration.version);
       db.exec('COMMIT');
