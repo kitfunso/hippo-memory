@@ -166,11 +166,13 @@ describe('markRetrieved', () => {
     expect(updated.half_life_days).toBe(beforeHL + 2);
   });
 
-  it('wakes stale memories back to observed on retrieval', () => {
+  // Replaces 'wakes stale memories back to observed on retrieval' (471ba86),
+  // whose paired sleep half no longer stores a derived staleness to wake.
+  it('leaves a stored stale tier alone on retrieval', () => {
     const entry = createMemory('old memory', { confidence: 'observed' });
     const stale = { ...entry, confidence: 'stale' as const };
 
     const [updated] = markRetrieved([stale]);
-    expect(updated.confidence).toBe('observed');
+    expect(updated.confidence).toBe('stale');
   });
 });
