@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **Several processes opening a store that does not exist yet crashed with `database is locked`.** `openHippoDb` rested its whole concurrency story on `PRAGMA busy_timeout = 5000`, and both of the statements that actually contend are ones SQLite refuses to run the busy handler for, so the timeout covered neither. `PRAGMA journal_mode = WAL` (`src/db.ts:2367`) needs an exclusive lock to convert a fresh rollback-journal file, and returns BUSY immediately instead of waiting. The migration loop's `BEGIN` (`src/db.ts:2413`) was DEFERRED, so `migration.up` and `setSchemaVersion` were writes trying to upgrade a read snapshot, which SQLite fails on the spot rather than risk a deadlock. Reproduced with 6 real processes released from a barrier onto one cold store: 13 of 30 workers died across 5 trials, most with `errcode 5` and some with `517`. The WAL pragma now retries against a 30s deadline, and the loop takes `BEGIN IMMEDIATE` and re-reads the schema version inside the write lock, because a waiter that re-runs a migration another process already applied is not idempotent. `BEGIN IMMEDIATE` was already the convention at 14 other sites, documented at `src/store.ts:2026-2035`; this file was the hold-out. The four other deferred-`BEGIN` sites were checked and are clean, because each takes its lock on its first statement. After the fix, 0 of 48 and 0 of 72 workers failed and every one reached schema version 41. Pinned by `tests/db-cold-store-concurrency.test.ts`, which fails 6 of its 8 workers if either half is reverted. Warm stores were never affected.
+
 ## 1.38.9 - 2026-09-07
 
 ### Fixed
@@ -10,7 +15,7 @@
 `remember` was attempted in this release and reverted before merge. There is no correct place for its counter yet: `api.remember` is the bulk write path for the Slack and GitHub connectors and for `import`, and the `POST /v1/memories` route is not a user surface either, since `deploy/aml/adapter/adapter.mjs` posts to it per leaderboard add and the Python SDK is a general client on it. Counting there would also make two paths that store different things report the same number. Recorded in `TODOS.md` behind the salience item. Two related gaps stay open there too: an HTTP-only recall does not count, and no MCP operation counts.
 
 ### Known limitations
-- Two processes opening a store that does not exist yet can still crash with `database is locked` (`errcode 517`, `SQLITE_BUSY_SNAPSHOT`) inside `runMigrations`, which `busy_timeout` does not retry. Found while building the test for this fix and recorded in `TODOS.md`; it needs its own reproduce-and-measure pass. Warm stores are unaffected, because `runMigrations` short-circuits once the schema version is current.
+- Two processes opening a store that does not exist yet could crash with `database is locked` (`errcode 517`, `SQLITE_BUSY_SNAPSHOT`) inside `runMigrations`, which `busy_timeout` does not retry. Found while building the test for this fix and recorded in `TODOS.md`; it needs its own reproduce-and-measure pass. Warm stores are unaffected, because `runMigrations` short-circuits once the schema version is current. Fixed in the next release; see Unreleased.
 
 ## 1.38.7 - 2026-09-06
 
