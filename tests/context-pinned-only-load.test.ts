@@ -1,0 +1,192 @@
+// The pinned-only branch of getContext used to load every row of both stores to
+// return about eleven. These pin what the narrower load must still return.
+
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { initStore, writeEntry, loadAmbientCandidates } from '../src/store.js';
+import { createMemory } from '../src/memory.js';
+import { getContext, type Context } from '../src/api.js';
+import { _resetAblationCacheForTests } from '../src/ablation.js';
+
+const PROJECT = 'proj-a';
+
+let tmpRoot: string;
+let local: string;
+let globalRoot: string;
+let ctx: Context;
+
+function seed(root: string, content: string, extra: Record<string, unknown> = {}) {
+  const entry = { ...createMemory(content), origin_project: PROJECT, ...extra };
+  writeEntry(root, entry);
+  return entry;
+}
+
+function ids(result: { entries: Array<{ entry: { id: string } }> }) {
+  return result.entries.map((e) => e.entry.id);
+}
+
+beforeEach(() => {
+  _resetAblationCacheForTests();
+  tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-pinned-load-'));
+  local = path.join(tmpRoot, 'local', '.hippo');
+  globalRoot = path.join(tmpRoot, 'global');
+  fs.mkdirSync(local, { recursive: true });
+  fs.mkdirSync(globalRoot, { recursive: true });
+  initStore(local);
+  initStore(globalRoot);
+  process.env.HIPPO_HOME = globalRoot;
+  ctx = { hippoRoot: local, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+});
+
+afterEach(() => {
+  delete process.env.HIPPO_HOME;
+  _resetAblationCacheForTests();
+  fs.rmSync(tmpRoot, { recursive: true, force: true });
+});
+
+describe('pinned-only context loads a slice, not the corpus', () => {
+  it('returns a pin that sits far outside the recent window', async () => {
+    for (let i = 0; i < 60; i++) {
+      seed(local, `filler row number ${i} with enough words to be worth storing`, {
+        created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
+      });
+    }
+    const oldPin = seed(local, 'the pinned decision that predates every filler row', {
+      pinned: true,
+      created: '2020-01-01T00:00:00.000Z',
+    });
+
+    const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
+
+    expect(ids(result)).toContain(oldPin.id);
+  });
+
+  it('returns the newest admissible rows for the recent-N backfill', async () => {
+    const rows = Array.from({ length: 40 }, (_, i) =>
+      seed(local, `recent candidate row ${i} with enough words to be worth storing`, {
+        created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
+      }),
+    );
+
+    const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 3, currentProject: PROJECT });
+
+    const newest = rows.slice(-3).map((r) => r.id);
+    for (const id of newest) expect(ids(result)).toContain(id);
+  });
+
+  it('falls back to the whole store when the window is all cross-project', async () => {
+    for (let i = 0; i < 50; i++) {
+      seed(local, `another project's newest row ${i} with enough words to be worth storing`, {
+        origin_project: 'proj-b',
+        created: new Date(Date.UTC(2026, 6, 1, 0, i)).toISOString(),
+      });
+    }
+    const buried = seed(local, 'the only row this project owns, far behind the window', {
+      created: '2026-01-01T00:00:00.000Z',
+    });
+
+    const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
+
+    expect(ids(result)).toContain(buried.id);
+  });
+
+  it('never returns a superseded row, however new it is', async () => {
+    const superseded = seed(local, 'the superseded row is the newest thing in the store', {
+      created: '2026-08-01T00:00:00.000Z',
+      superseded_by: 'some-newer-id',
+      pinned: true,
+    });
+    seed(local, 'an ordinary current row that keeps the store non-empty', {
+      created: '2026-07-01T00:00:00.000Z',
+    });
+
+    const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
+
+    expect(ids(result)).not.toContain(superseded.id);
+  });
+
+  it('pulls pins from the global store as well as the local one', async () => {
+    const globalPin = seed(globalRoot, 'a global pin that must still reach the prompt', { pinned: true });
+    seed(local, 'a local row so both stores have something in them');
+
+    const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT });
+
+    expect(ids(result)).toContain(globalPin.id);
+  });
+
+  it('keeps the pinned budget reserve, so a pin is not displaced by recents', async () => {
+    for (let i = 0; i < 20; i++) {
+      seed(local, `a long recent row ${i} ${'padding words '.repeat(30)}`, {
+        created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
+      });
+    }
+    const pin = seed(local, 'the pin that a greedy recent loop would starve', {
+      pinned: true,
+      created: '2020-01-01T00:00:00.000Z',
+    });
+
+    const result = await getContext(ctx, {
+      pinnedOnly: true,
+      includeRecent: 5,
+      budget: 400,
+      currentProject: PROJECT,
+    });
+
+    expect(ids(result)).toContain(pin.id);
+  });
+});
+
+describe('loadAmbientCandidates', () => {
+  it('scopes to the caller tenant', () => {
+    const mine = { ...createMemory('a row belonging to tenant a', { tenantId: 'tenant-a' }), pinned: true };
+    const theirs = { ...createMemory('a row belonging to tenant b', { tenantId: 'tenant-b' }), pinned: true };
+    writeEntry(local, mine);
+    writeEntry(local, theirs);
+
+    const got = loadAmbientCandidates(local, 'tenant-a', 5, () => true);
+
+    expect(got.map((e) => e.id)).toContain(mine.id);
+    expect(got.map((e) => e.id)).not.toContain(theirs.id);
+  });
+
+  it('breaks a same-created tie on id descending, matching the caller comparator', () => {
+    const created = '2026-05-05T05:05:05.000Z';
+    for (let i = 0; i < 40; i++) {
+      writeEntry(local, { ...createMemory(`tied row ${i}`), created, id: `id-${String(i).padStart(3, '0')}` });
+    }
+
+    const got = loadAmbientCandidates(local, 'default', 3, () => true);
+    const newestThree = got.map((e) => e.id).sort().slice(-3);
+
+    expect(newestThree).toEqual(['id-037', 'id-038', 'id-039']);
+  });
+
+  it('returns rows in loadAllEntries order so a stable sort downstream sees the same input', () => {
+    for (let i = 0; i < 10; i++) {
+      writeEntry(local, {
+        ...createMemory(`ordered row ${i}`),
+        pinned: true,
+        created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
+      });
+    }
+
+    const got = loadAmbientCandidates(local, 'default', 5, () => true);
+    const sorted = [...got].sort((a, b) =>
+      a.created.localeCompare(b.created) || a.id.localeCompare(b.id),
+    );
+
+    expect(got.map((e) => e.id)).toEqual(sorted.map((e) => e.id));
+  });
+
+  it('asks for nothing recent when the caller wants no backfill', () => {
+    writeEntry(local, { ...createMemory('an unpinned row nobody asked for'), created: '2026-08-08T00:00:00.000Z' });
+    const pin = { ...createMemory('the only pin in the store'), pinned: true };
+    writeEntry(local, pin);
+
+    const got = loadAmbientCandidates(local, 'default', 0, () => true);
+
+    expect(got.map((e) => e.id)).toEqual([pin.id]);
+  });
+});

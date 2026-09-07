@@ -33,6 +33,7 @@ import {
   loadIndex,
   saveIndex,
   loadAllEntries,
+  loadAmbientCandidates,
   updateStats,
   isInitialized,
   markSummaryDirtyInTx,
@@ -206,6 +207,21 @@ function ambientAdmitEntry(
  * exact-match). A flagged row is only admitted inside its owning project;
  * flagged rows with no project origin never ambient-inject.
  */
+// getContext's pinned-only branch reads its working set for three things: the
+// empty-store early return, the pins, and the recent-N candidates. Loading the
+// whole corpus for that ran `admit` over every row on every UserPromptSubmit.
+function loadAmbientEntries(
+  hippoRoot: string,
+  tenantId: string,
+  pinnedOnly: boolean,
+  includeRecent: number,
+  admit: (e: MemoryEntry) => boolean,
+): MemoryEntry[] {
+  return pinnedOnly
+    ? loadAmbientCandidates(hippoRoot, tenantId, includeRecent, admit)
+    : loadAllEntries(hippoRoot, tenantId).filter(admit);
+}
+
 export function ambientSecretAdmit(e: MemoryEntry, currentProjectName: string): boolean {
   if (!detectSecret(e).flagged) return true;
   const origin = e.origin_project;
@@ -2402,14 +2418,6 @@ export async function getContext(
   const globalRoot = getGlobalRoot();
   const hasGlobal = isInitialized(globalRoot);
 
-  // Tenant-scoped loads (v1.11.1 lesson: NEVER resolveTenantId({}) here).
-  let localEntries = hasLocal ? loadAllEntries(ctx.hippoRoot, ctx.tenantId) : [];
-  let globalEntries = hasGlobal ? loadAllEntries(globalRoot, ctx.tenantId) : [];
-
-  // Filter superseded — context never includes superseded rows.
-  localEntries = localEntries.filter((e) => !e.superseded_by);
-  globalEntries = globalEntries.filter((e) => !e.superseded_by);
-
   // v39 memory scope isolation (docs/plans/2026-07-01-memory-scope-isolation.md).
   // S2: envelope-filter parity with api.recall for AMBIENT context - private
   // scopes and quarantine buckets never inject. `requested` is deliberately
@@ -2424,8 +2432,18 @@ export async function getContext(
   const includeCrossProject = opts.crossProject === true || !isolationEnabled;
   const ambientAdmit = (e: MemoryEntry): boolean =>
     ambientAdmitEntry(e, currentProjectName, includeCrossProject);
-  localEntries = localEntries.filter(ambientAdmit);
-  globalEntries = globalEntries.filter(ambientAdmit);
+  // Superseded rows never inject, and ambientAdmitEntry regex-scans content for
+  // secrets, so WHICH rows reach this predicate is what loadAmbientEntries cares
+  // about below.
+  const admit = (e: MemoryEntry): boolean => !e.superseded_by && ambientAdmit(e);
+
+  // Tenant-scoped loads (v1.11.1 lesson: NEVER resolveTenantId({}) here).
+  let localEntries = hasLocal
+    ? loadAmbientEntries(ctx.hippoRoot, ctx.tenantId, pinnedOnly, includeRecent, admit)
+    : [];
+  let globalEntries = hasGlobal
+    ? loadAmbientEntries(globalRoot, ctx.tenantId, pinnedOnly, includeRecent, admit)
+    : [];
 
   // Computed below, after markRetrieved runs, so avgStrength reflects the
   // post-retrieval strengths rather than a stale pre-mutation snapshot.
@@ -2477,20 +2495,9 @@ export async function getContext(
     const selectedIds = new Set<string>();
     let usedP = 0;
 
-    // Pinned entries are explicit user intent; the recent-N list is an
-    // automatic backfill. Both loops below share ONE budget (`usedP`
-    // against `effBudget`), and the recent loop runs first (see it further
-    // down) then the pinned loop takes what is left, `continue`-skipping
-    // any pin that no longer fits. DF3's quality filter on the recent list
-    // means junk rows (short, cheap) get skipped and full-size qualifying
-    // entries backfill in their place, so the recent loop now systematically
-    // spends more before the pinned loop ever runs -- a pin outside the
-    // recent-N window can get silently displaced. The `entry.pinned ||`
-    // bypass in the recent filter below only protects a pin that is itself
-    // inside the recent window; it does nothing for pins outside it. Fix:
-    // rank pins here (before the recent loop spends anything) and reserve
-    // their share of `effBudget` up front, so the recent loop is capped to
-    // what pins do NOT need.
+    // Pinned entries are explicit user intent, the recent-N list an automatic
+    // backfill. Both loops share ONE budget and the recent loop runs first, so
+    // pins are ranked here and reserve their share before it can spend.
     const pinnedLocal = localEntries.filter((e) => e.pinned);
     const pinnedGlobal = globalEntries.filter((e) => e.pinned);
     const rankedPinned = [

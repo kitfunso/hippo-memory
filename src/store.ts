@@ -2189,6 +2189,54 @@ export function loadAllEntries(hippoRoot: string, tenantId?: string): MemoryEntr
   }
 }
 
+// The pins plus the `recentNeeded` newest rows that pass `admit`, for ambient
+// injection. One connection: opening one costs ~5.8ms on a warm 1896-row store,
+// so a second handle loses more than the narrower scan saves.
+export function loadAmbientCandidates(
+  hippoRoot: string,
+  tenantId: string,
+  recentNeeded: number,
+  admit: (e: MemoryEntry) => boolean,
+): MemoryEntry[] {
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    // SAFETY: every `where` below starts from MEMORY_SELECT_COLUMNS' table.
+    const run = (where: string, params: Array<string | number>): MemoryEntry[] =>
+      (db.prepare(
+        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${where}`,
+      ).all(...params) as MemoryRow[]).map(rowToEntry);
+
+    const byId = new Map<string, MemoryEntry>();
+    const scoped = 'superseded_by IS NULL AND tenant_id = ?';
+    for (const e of run(`pinned = 1 AND ${scoped} ORDER BY created ASC, id ASC`, [tenantId])) {
+      if (admit(e)) byId.set(e.id, e);
+    }
+
+    if (recentNeeded > 0) {
+      // `id DESC` mirrors getContext's own comparator, deliberately not the
+      // cross-ingest-stable order loadFreshRawMemories uses: changing it would
+      // change which rows the UserPromptSubmit hook injects.
+      const window = Math.max(recentNeeded * 4, 32);
+      const windowed = run(`${scoped} ORDER BY created DESC, id DESC LIMIT ?`, [tenantId, window]);
+      let kept = windowed.filter(admit);
+      if (kept.length < recentNeeded && windowed.length === window) {
+        kept = run(`${scoped} ORDER BY created DESC, id DESC`, [tenantId]).filter(admit);
+      }
+      for (const e of kept) byId.set(e.id, e);
+    }
+
+    // loadAllEntries' order: rankedPinned's comparator can tie and Array.sort
+    // is stable, so input order is load-bearing downstream.
+    return [...byId.values()].sort((a, b) => {
+      const byCreated = a.created.localeCompare(b.created);
+      return byCreated !== 0 ? byCreated : a.id.localeCompare(b.id);
+    });
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 /**
  * Load likely search candidates directly from SQLite.
  * Uses FTS5 when available, falls back to LIKE matching, then full-store fallback.
