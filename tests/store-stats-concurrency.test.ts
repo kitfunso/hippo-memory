@@ -2,7 +2,7 @@
 // wrote all three back, so concurrent writers lost increments and clobbered
 // counters they had not touched (store.ts:2316 atomic-increment fix).
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -21,8 +21,23 @@ afterEach(() => {
 });
 
 // The workers must exercise the shipped updateStats, not a copy of it, so they
-// import the build output. `npm test` runs `pretest` -> `npm run build` first.
-const STORE_URL = pathToFileURL(join(import.meta.dirname, '..', 'dist', 'store.js')).href;
+// import the build output. Nothing in `npx vitest run` builds it, so check
+// rather than trust: a stale dist would pass this file against old code.
+const SRC_STORE = join(import.meta.dirname, '..', 'src', 'store.ts');
+const DIST_STORE = join(import.meta.dirname, '..', 'dist', 'store.js');
+const STORE_URL = pathToFileURL(DIST_STORE).href;
+
+function assertFreshBuild(): void {
+  let distMtime: number;
+  try {
+    distMtime = statSync(DIST_STORE).mtimeMs;
+  } catch {
+    throw new Error(`${DIST_STORE} is missing. Run \`npm run build\` before this test.`);
+  }
+  if (statSync(SRC_STORE).mtimeMs > distMtime) {
+    throw new Error(`${DIST_STORE} is older than ${SRC_STORE}. Run \`npm run build\`; this test spawns processes that import the build output, so a stale dist would test old code.`);
+  }
+}
 
 function workerScript(hippoRoot: string, field: string, iterations: number): string {
   return `
@@ -50,6 +65,7 @@ function runWorkers(specs: ReadonlyArray<{ field: string; iterations: number }>)
 
 describe('updateStats under concurrent writers', () => {
   it('every increment to one counter lands', async () => {
+    assertFreshBuild();
     root = mkdtempSync(join(tmpdir(), 'hippo-stats-race-'));
     initStore(root);
 
@@ -73,6 +89,7 @@ describe('updateStats under concurrent writers', () => {
   }, 60_000);
 
   it('a write to one counter does not roll back another', async () => {
+    assertFreshBuild();
     root = mkdtempSync(join(tmpdir(), 'hippo-stats-clobber-'));
     initStore(root);
 
