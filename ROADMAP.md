@@ -1173,3 +1173,94 @@ Fixed at the cause rather than the instance: a `(?=\p{L})` lookahead makes "lett
 **Effort:** 1-2d (actual: 1 episode). **Success (met):** re-running auto-learn on a repo with junk subjects stores none of them, verified end to end through the built CLI; detail-carrying subjects still store; the drop count is reported per repo and rolled up. **NOT met, and not attempted:** "audit issue count drops to single digits after cleanup" - cleanup is blocked on AT3 quarantine [planned], and hard-delete is barred by the never-delete rule. The 36 existing rows remain. **Measured scope:** 24 of 413 real auto-learn rows (6%) would be gated.
 
 **Pattern note (binding for this part):** all four defects are one failure shape - a producer writes without the quality check that already exists elsewhere in the system (audit heuristic, sentence-boundary discipline, lifecycle close). The fix discipline is the one Part V's tombstone item set: move the verifier to the producer; post-hoc cleanup passes are the patch, not the fix. Cross-reference: the cross-tenant consolidation/trace leak recorded in the v1.31.0 episode notes was verified FIXED in v1.32.0/v1.33.0 (changelog: merge/trace tenant inheritance, tenant-partitioned dedupe) and is deliberately absent here.
+
+---
+
+## Part VII - 2026-09-12 update: work plane (cards, dispatch, cross-runtime migration)
+
+Triggered by a community request on X (Sep 2026, attributed to @sophiamyang; the post itself could not be fetched unauthenticated, so treat the attribution as unverified) for a meta-harness plus kanban that orchestrates Claude Code, Codex, Grok Build and Muse Code, tracks progress, handles model limits, and hands off cleanly when one runtime hits a wall. The question put to hippo: it already covers the handoff half; can it grow the board and dispatch halves without becoming another agent runtime?
+
+**Answer (source-verified):** yes for the board, conditionally for dispatch, and only as a thin control plane over the existing SQLite store. Every claim below was checked against `src/` at v1.38.10 and against the cited papers' arXiv text on 2026-09-12; corrections to the original proposal are listed at the end of this part.
+
+### What hippo already has (read from source, v1.38.10)
+
+| Existing | Where | What it becomes |
+|---|---|---|
+| `hippo handoff create --summary --next --session --task --artifact`, `hippo session resume` | `src/cli.ts:4271`, `src/store.ts:3339`, table `session_handoffs` (`src/db.ts:2515`: session_id, repo_root, task_id, summary, next_action, artifacts_json) | the migration envelope, once it carries constraints, evidence and outcome (W1) |
+| `hippo session complete --outcome success/failure/partial`, `session_events`, `task_snapshots` | `src/cli.ts:4183`, `src/db.ts:2486-2513` | card progress and audit trail (W2) |
+| `hippo wm push/read/flush` working memory | README "Working memory" | per-card scratchpad, cleared on handoff |
+| `hippo outcome --good/--bad`, `--error` 2x half-life | README "errors stick" | limit and failure signal per runtime (W3) |
+| `hippo share` / `hippo peers`, `owner` in the envelope | `src/cli.ts:9268-9330`, `MEMORY_ENVELOPE.md` | multi-agent attribution |
+| Hooks and MCP for Claude Code, Codex, Cursor, OpenClaw, OpenCode, Pi | `integrations/`, `extensions/` | the adapter layer; Grok Build and Muse Code are NOT covered today |
+| `hippo dashboard` web UI (localhost:3333) | README command table, `ui/` | the board view; the proposal called the UI "planned", it is shipped |
+| CS1 PreCompact capture + compact-resume hook | Part IV | first limit detector (W4) |
+
+**Not there, and not to be faked:** cards table, atomic claim, leases, heartbeats, process supervision, worktree isolation, per-runtime capability matrix, verification gates. `grep -rn heartbeat src/` returns nothing.
+
+### Boundary with existing non-goals (must be resolved before W2 starts)
+
+- **Non-goal #3 (never replace Jira / Linear / GitHub as the system of record).** The board is an *agent work queue*, the same object Hermes Kanban is: rows an agent claims, not the team's tracker. Team-tracker items flow IN via the already-planned E1.5 Jira / Linear ingestion (read-only), and status flows OUT only through the human-approved write-back path of non-goal #8. If a card exists in Linear, Linear stays authoritative for the ticket; hippo owns the runtime, envelope and outcome.
+- **Non-goal #8 (no autonomous actuation in V1).** A dispatcher that spawns Codex is local process supervision, not write-back to a source system, so it does not literally violate #8. It is still the first time hippo would *start* an agent rather than inform one. V1 keeps the `ready -> running` transition human-approved (a click or a CLI confirm); unattended dispatch is a separate switch, off by default.
+- **Bet #2 (local-first never gets worse).** Board and dispatcher live in the same SQLite file, zero new deps. Hosted mode follows A6 / A10 later.
+- **Bet #6 (hot path stays cheap).** Routing reads hippo's own outcome memory; no LLM call on claim.
+
+### Track W - Work plane
+
+Three planes, one SQLite file: memory (exists), work (W1-W2), dispatch (W3-W4). Runtimes stay plugins. The formal frame is Zhao et al. 2026 (arXiv 2609.00546): the persistent part P_t = (identity, durable memory, versioned body) is what hippo owns; the execution part E_t = (reasoner, harness, host) is Claude Code / Codex / Grok Build / Muse Code and is replaceable. Extending hippo to orchestration means owning P_t plus a small dispatcher, never swallowing E_t.
+
+#### W0. Boundary constitution [next, doc-only, 1-2d]
+One page in `docs/plans/`: hippo will not become an agent loop; no in-process sub-agents; no supervisor LLM that chats with worker LLMs; the envelope (W1) is the only legal handoff; the board is a work queue, not a tracker (non-goal #3 resolution above). Publish the envelope schema. **Success:** the page exists, is linked from `AGENTS.md`, and the non-goals table gains rows 11 (in-process agent loop) and 12 (shared transcript as handoff).
+
+#### W1. Handoff envelope promotion [next, 3-5d] - closes the one open E2 item
+`handoff` is the last E2 object still session-scoped (Phase E2 table above, "3d to fully promote"). Promote `session_handoffs` to the migration envelope: add `constraints`, `evidence_json` (git ref, dirty-tree flag, test status), `outcome`, `target_runtime`, `card_id`; `hippo session-end` writes one automatically when a card is open; `session resume` and `context --auto` inject the latest envelope for the card, not the session. Per Li et al. 2026 (arXiv 2605.19140), cross-agent information is the artifact plus a compact score, never a dumped context window; the paper frames richness as a tradeoff against privacy and computation, not a monotone win, so the envelope stays bounded (budgeted like `context`).
+**Success (the IC-SMDP test):** a second runtime resumes a card from the envelope plus `hippo context` alone, with no prior transcript, and completes it on a 10-card fixture at parity with same-runtime resume. Red-under-old: today's envelope has no evidence or outcome fields to resume from.
+
+#### W2. Cards table, status machine, board view [planned, 2-3w]
+Tables: `cards` (id, title, status, assignee_runtime, repo, contract, budget, lease_until, heartbeat_at, tenant_id, scope), `card_deps` (parent, child), `card_runs` (card, runtime, session_id, started, ended, outcome). Status machine `backlog -> ready -> running -> blocked | review -> done | shelved`; children promote to `ready` when parents are `done` (Hermes pattern). Comments on a card are the human gate. CLI `hippo card create|claim|block|review|complete|show`, MCP tools `board_show`, `card_create`, `card_block`, `card_complete`. Board view is a new tab in the existing dashboard, not a new UI. Schema migration lands in the cross-track migration order above.
+**Success:** progress tracking for a 20-card / 2-runtime dogfood week on hippo's own backlog with no state kept anywhere but the DB; a crashed session leaves a `running` card that a `hippo card reclaim` pass returns to `ready` with its last envelope intact.
+
+#### W3. Runtime adapter kit + dispatcher [planned, gated on W0 human-gate decision, 4-6w]
+One adapter contract: `start(card)`, `signal_limit()`, `stop()`, `health()`. Adapters: Claude Code and Codex (hooks exist), Pi, OpenClaw, OpenCode (extensions exist), Grok Build (xAI terminal agent, v1.0 Aug 2026, Apache 2.0) and Muse Code (Meta terminal agent, GA Sep 2026); both isolate sub-agents in git worktrees, so the adapter passes a worktree, never a shared tree. Generic MCP-agent fallback. Dispatcher: atomic claim (`BEGIN IMMEDIATE`) -> spawn the runtime as a separate OS process -> inject `hippo context` plus the envelope -> heartbeat -> on exit require `handoff create` and `outcome` -> reclaim on dead heartbeat. Capability file per runtime (context window, repo tools, vision, cost, known failure modes) stored as memories, per RESEARCH "Protocol and interoperability" item 7 (the capability registry and the memory store may be one structure). Limit events are `--error` memories with slow decay, so "Codex hit compaction on this module" is a first-class fact the next runtime retrieves.
+**Success:** a card started on Codex that signals a limit is resumed on Claude Code by the dispatcher with the W1 envelope, on the 10-card fixture, with the human gate on `ready -> running` exercised.
+
+#### W4. Limit-triggered migration [planned, 2-3w, after W3]
+Detectors: CS1 PreCompact hook (exists), repeated tool-error streak, quota / rate-limit response, test-loop stall (same failing test N times), explicit "I am stuck" self-report via `hippo card block`. Migration runs the six-step protocol from Zhao et al. 2026: quiesce tools, checkpoint (envelope + git ref + test status), validate the target runtime can see the workspace, bind credentials, rehydrate the envelope into the new session, resume only after the review column or a verifier says so. Never hand off a dirty tree: missing evidence moves the card to `blocked`.
+**Success:** each detector has a red-under-old fixture; a migration with a dirty tree is refused; zero cards resume without evidence.
+
+#### W5. Learned routing over outcome memory [research -> Track LC / D11]
+Routing policy starts explicit: prefer the runtime with the strongest similar-success memories and the lowest recent limit-rate on this repo. Learned version is LC3-class (needs LC1 trace data). Two constraints from the literature: Le et al. 2026 (arXiv 2609.04518) measure the harness moving SWE-bench solve rate by 4.3x while the training recipe moves it 1.16x, and cross-harness RL learning configuration adaptation rather than portable skill, so hippo keeps per-runtime capability and failure memory and never assumes one policy fits Codex and Muse alike. Living-Harness (arXiv 2607.26598: tools frozen, procedural repairs and a state graph accumulate from traces) is the later, bounded shape for repairing the routing graph; a proposer never gets write access to the dispatcher. Stanford Meta-Harness (arXiv 2603.28052: 7.7 points at 4x fewer context tokens on classification, beats hand-built TerminalBench-2 scaffolds) optimises harness source code with a strong coding proposer and is explicitly NOT the v1 loop here. Ties to D11 (cross-agent transfer matrix) and O3 (the unfunded multi-agent spec now has a concrete object to specify).
+**Success:** routing beats round-robin on card completion rate on the dogfood board, Wilcoxon-tested on the paired A/B harness.
+
+#### W6. Association index over cards + memories [research, extends F4 / E3]
+HippoRAG (arXiv 2405.14831) shows single-step Personalized PageRank over a sparse graph matching or beating iterative retrieval at 10-30x lower cost; F4 already holds this as [research] and E3.2 multi-hop recall is shipped. Add card, runtime and error entities to the consolidated graph so "this card is stuck on auth tests" surfaces prior auth-test failures and which runtime fixed them. Stays on consolidated state per Bet #5.
+**Success:** recall of the fixing runtime for a repeated failure class on the dogfood board, measured against E3.2 without card entities.
+
+### What not to build
+- A supervisor LLM that chats with four worker LLMs (the survey arXiv 2606.20683 and Hermes both treat this as the failure mode; Hermes separates `delegate_task`, a function call, from the kanban, a work queue every profile and human can see).
+- One shared transcript as the handoff (violates the interface-artifact model and blows context).
+- Absorbing Claude / Codex / Grok / Muse into one Node process; isolation is the product.
+- Stanford Meta-Harness as the v1 loop.
+- A routing policy trained on one harness applied to another.
+
+### Honest forecast
+| Goal | With Track W | With a UI over memories only |
+|---|---|---|
+| Progress tracking (board) | High: same SQLite, snapshots and events exist | Fake board, no leases, no reclaim |
+| Clean handoffs | High: the envelope is the whole game | Medium: already have most of it |
+| True cross-runtime orchestration | Medium: adapters and capability memory are the grind | Low: still copy-paste between apps |
+
+### Sequencing
+W0 and W1 first: small, close the last E2 item, no non-goal tension. W2 next. W3 and W4 need one decision from Keith before scoping: does hippo spawn agent processes at all, even behind a human gate? That is a product-scope change, not an engineering call, and it decides whether Track W stops at "board + envelope" or continues to "dispatcher". W5 and W6 ride the LC and E3 tracks.
+
+### Corrections to the source proposal (verified 2026-09-12)
+- **"Zhao & Zhao (2026)"** is Zhao, Zhao et al. (five authors), "Runtime-Independent Persistent Agents", arXiv 2609.00546. Formalism and six-step protocol confirmed verbatim.
+- **"Yan's IC-SMDP"** is Li, Zhang, Zhou, Chen and Yan, "Learning to Hand Off", arXiv 2605.19140; Yan is last author. The "richer artifact shrinks the interface gap" claim is NOT in the paper; it describes a richness-versus-privacy/computation tradeoff.
+- **Meta-Harness** "greps raw traces" is a paraphrase; the paper says the proposer has unrestricted filesystem access to prior search history. The 7.7 / 4x / TerminalBench-2 numbers are confirmed.
+- **HippoRAG 2** (arXiv 2502.14802) does not restate the PPR-versus-iterative claim; that comes from HippoRAG 1 (arXiv 2405.14831).
+- **Hermes Kanban** claims (SQLite board, atomic claim, OS-process workers, parent/child deps, blocked plus human gate, crash reclaim) are confirmed at hermes-agent.nousresearch.com, not openorchestrators.org. The "A2A protocol" delegation claim is NOT supported by the docs.
+- **"corvicai" handoff tools**: not found; corvic.ai is an unrelated enterprise data platform. Dropped.
+- **Sophia Yang**: NumFOCUS lists her on the HoloViz steering committee and grant review, not the board; "ex-Mistral" unconfirmed. The post itself was not retrievable. Cite as an unverified community request.
+- **hippo "planned web UI"**: `hippo dashboard` is shipped. **Pi** is an integration the proposal omitted.
+- **Muse** = Muse Code (Meta), **Grok** = Grok Build (xAI); both real terminal agents with worktree isolation, neither integrated with hippo today.
+
+**Discipline note (same as Part V):** the proposal was LLM-authored and carried three attribution errors, one fabricated product and one overstated paper claim; every item above that cites a paper or a product was re-read at source before it landed here.
