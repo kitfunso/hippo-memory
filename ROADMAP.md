@@ -906,6 +906,8 @@ Things hippo will not do. Each one is a deliberate position derived from the pro
 | 8 | Autonomous write-back / actuation into source systems in V1 | Every write-back to Slack/Jira/Gmail/etc. must be human-approved. RESEARCH §"Phase 1" says write-backs stay human-approved. Auto-actuation invites compliance disasters and trust failures | RESEARCH §"Phase 1: safest bridge" |
 | 9 | Employee-surveillance / compliance-archive product | Hippo helps agents do the work, not record people. Surveillance use cases are out of scope and will be refused | thesis-derived (eng-review) |
 | 10 | Opaque, non-rebuildable, or model-locked latent/parametric artifacts as the *system of record* | Such artifacts (weights, or KV/vectors that cannot be regenerated from the markdown) are non-portable + non-auditable and destroy the lifecycle + inspectability moat (Bets #1/#2/#4/#7). ALLOWED as derived caches: rebuildable latent artifacts over the markdown of record (Track L Rule 2), including the L2 sleep-built KV cartridge | Track L debate 2026-06-02 |
+| 11 | An in-process agent loop | Runtimes (Claude Code, Codex, Grok Build, Muse Code) are external processes hippo dispatches and informs. Hippo stores state and hands it off; it never runs the agent loop itself | Part VII, Track W boundary, W0 |
+| 12 | A shared transcript as the handoff between agents | A dumped context window blows the token budget and loses the interface-artifact model. The handoff is a structured envelope: summary, next action, constraints, evidence, outcome | Part VII, Track W boundary, W0 |
 
 ## Deferred / speculative
 
