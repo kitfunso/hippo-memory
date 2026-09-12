@@ -3,6 +3,7 @@
 ## Project
 - `hippo-memory`, a TypeScript memory system and CLI with UI, integrations, benchmarks, and evaluation harnesses.
 - Read `README.md`, `PLAN.md`, `ROADMAP.md`, and relevant docs before broad product or architecture changes.
+- Work plane boundary: `docs/plans/2026-09-12-work-plane-boundary.md` (ROADMAP Part VII, Track W, W0).
 
 ## Commands
 ```bash
