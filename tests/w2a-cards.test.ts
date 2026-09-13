@@ -636,6 +636,10 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
       expect(typo.status).toBe(1);
       expect(typo.out).toContain('Unknown flag --depend-on for hippo card create');
 
+      const protoKey = runCli(home, env, 'card', 'constructor', '--x');
+      expect(protoKey.status).toBe(1);
+      expect(protoKey.out).toContain('Usage: hippo card <create|show|list|claim|block|review|complete|comment>');
+
       const list = runCli(home, env, 'card', 'list');
       expect(list.status, list.out).toBe(0);
       expect(list.out).toContain('No cards found.');

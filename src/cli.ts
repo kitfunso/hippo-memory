@@ -4560,8 +4560,8 @@ function cmdCard(
   const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
 
-  if (subcommand in CARD_SUBCOMMAND_FLAGS) {
-    // SAFETY: the `in` check above guarantees subcommand is a key of CARD_SUBCOMMAND_FLAGS.
+  if (Object.hasOwn(CARD_SUBCOMMAND_FLAGS, subcommand)) {
+    // SAFETY: hasOwn, unlike `in`, skips inherited keys such as constructor, so subcommand is a real key.
     const allowedFlags = CARD_SUBCOMMAND_FLAGS[subcommand as CardSubcommand];
     for (const key of Object.keys(flags)) {
       if (!allowedFlags.includes(key)) {
