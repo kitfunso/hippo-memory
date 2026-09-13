@@ -711,7 +711,7 @@ describe('CLI round trip: handoff create -> handoff latest --json', () => {
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
-  }, 20_000);
+  });
 
   it('rejects a value-less --target-runtime instead of persisting the string "true"', () => {
     const { home, env } = setupCliHome();
@@ -726,7 +726,7 @@ describe('CLI round trip: handoff create -> handoff latest --json', () => {
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
-  }, 20_000);
+  });
 
   it('rejects a value-less --card-id when another flag follows it', () => {
     const { home, env } = setupCliHome();
@@ -741,5 +741,5 @@ describe('CLI round trip: handoff create -> handoff latest --json', () => {
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
-  }, 20_000);
+  });
 });
