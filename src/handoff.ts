@@ -17,7 +17,7 @@ export interface HandoffEvidence {
 }
 
 /** Narrows an unvalidated value (e.g. CLI input or event content) to a HandoffOutcome. */
-export function isHandoffOutcome(v: unknown): v is HandoffOutcome {
+export function isHandoffOutcome(v: string | boolean | string[] | null | undefined): v is HandoffOutcome {
   return v === 'success' || v === 'failure' || v === 'partial';
 }
 
@@ -86,6 +86,7 @@ export function rowToSessionHandoff(row: SessionHandoffRow): SessionHandoff {
 
   let evidence: HandoffEvidence | null = null;
   try {
+    // SAFETY: catch below falls back to null on malformed JSON, so a wrong shape never escapes.
     evidence = row.evidence_json ? (JSON.parse(row.evidence_json) as HandoffEvidence) : null;
   } catch {
     evidence = null;

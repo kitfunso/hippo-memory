@@ -3311,6 +3311,7 @@ async function cmdSessionEndWorker(
         );
       }
     } catch (err) {
+      // SAFETY: catch clauses bind unknown, but Node/V8 always throws an Error here.
       appendSessionEndCloseLog(closeLogFile, `handoff write failed: ${(err as Error).message}`);
     }
   }
@@ -4358,9 +4359,10 @@ function cmdHandoff(
       ? artifactFlag
       : (typeof artifactFlag === 'string' ? [artifactFlag] : []);
     const constraintFlag = flags['constraint'];
+    const isFlagString = (v: typeof constraintFlag): v is string => typeof v === 'string';
     const constraints: string[] = Array.isArray(constraintFlag)
       ? constraintFlag
-      : (typeof constraintFlag === 'string' ? [constraintFlag] : []);
+      : (isFlagString(constraintFlag) ? [constraintFlag] : []);
     for (const name of ['target-runtime', 'card-id'] as const) {
       // parseArgs turns a value-less flag into `true`; refuse rather than store "true".
       if (flags[name] === true) {
@@ -4386,6 +4388,7 @@ function cmdHandoff(
       artifacts,
       constraints,
       evidence,
+      // SAFETY: isHandoffOutcome above already refused any non-matching value.
       outcome: outcomeRaw as HandoffOutcome | undefined,
       targetRuntime,
       cardId,

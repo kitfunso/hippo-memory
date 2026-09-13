@@ -485,13 +485,14 @@ describe('CLI round trip: handoff create -> handoff latest --json', () => {
       });
       return { out: stdout, status: 0 };
     } catch (e) {
+      // SAFETY: execFileSync throws this exact shape (stdout/stderr/status) on a non-zero exit.
       const err = e as { stdout?: string | Buffer; stderr?: string | Buffer; status?: number };
       return { out: toUtf8(err.stdout) + toUtf8(err.stderr), status: err.status ?? 1 };
     }
   }
 
   // Shared by every CLI case below: a throwaway git repo plus an initialised hippo store.
-  function setupCliHome(): { home: string; env: Record<string, string> } {
+  function setupCliHome() {
     const home = mkdtempSync(join(tmpdir(), 'hippo-w1-cli-'));
     const globalDir = join(home, 'global');
     mkdirSync(globalDir, { recursive: true });
