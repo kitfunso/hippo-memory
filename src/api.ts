@@ -24,12 +24,12 @@ import {
   loadSessionRawMemories,
   countSessionRawMemories,
   DEFAULT_SEARCH_CANDIDATE_LIMIT,
-  RECALL_DEFAULT_DENY_SCOPES,
   removeEntryMirrors,
   loadActiveTaskSnapshot,
   loadFreshActiveTaskSnapshot,
   loadLatestHandoff,
   listSessionEvents,
+  SNAPSHOT_AMBIENT_MAX_AGE_MS,
   loadIndex,
   saveIndex,
   loadAllEntries,
@@ -43,7 +43,7 @@ import {
 } from './store.js';
 import { RejectedValueError, type RejectedValueRow } from './rejection.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from './reject-flow.js';
-import type { SessionHandoff } from './handoff.js';
+import { formatHandoffEvidenceLine, type SessionHandoff } from './handoff.js';
 import {
   createMemory,
   applyOutcome,
@@ -481,8 +481,8 @@ export interface RecallResult {
   continuity?: ContinuityBlock;
   /**
    * Tokens consumed by the continuity block: snapshot (task + summary + next_step)
-   * + handoff (summary + nextAction + artifacts) + every event's full content
-   * across the last 5 events. Each measured by Math.ceil(len/4), matching
+   * + handoff (summary + nextAction + artifacts + constraints + evidence line)
+   * + every event's full content across the last 5 events. Each measured by Math.ceil(len/4), matching
    * the existing `tokens` count and src/search.ts estimateTokens().
    * Undefined when continuity not requested. Callers needing a tighter budget
    * should truncate event.content themselves before display.
@@ -1060,26 +1060,13 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
       r: { scope?: string | null } | null | undefined,
     ): string | null => r?.scope ?? null;
     // v1.2: TaskSnapshot / SessionHandoff / SessionEvent now carry scope; the
-    // wrapper just normalizes null vs undefined.
-    const passesScopeFilter = (s: string | null): boolean => {
-      if (opts.scope !== undefined && opts.scope !== '') {
-        return s === opts.scope;
-      }
-      if (s === null) return true;
-      if (isPrivateScope(s)) return false;
-      // v1.7.2: read from RECALL_DEFAULT_DENY_SCOPES (single source of truth
-      // shared with SQL + passesScopeFilterForRecall).
-      // SAFETY: RECALL_DEFAULT_DENY_SCOPES is declared as a readonly tuple of
-      // string literals; widening to readonly string[] only relaxes the
-      // element type for Array.includes(s: string), it does not change values.
-      if ((RECALL_DEFAULT_DENY_SCOPES as readonly string[]).includes(s)) return false;
-      return true;
-    };
+    // wrapper just normalizes null vs undefined. W1: was its own copy of
+    // passesScopeFilterForRecall (cloned 3x); calls the shared helper now.
     const filteredSnapshot =
-      snapshot && passesScopeFilter(rowScope(snapshot)) ? snapshot : null;
+      snapshot && passesScopeFilterForRecall(rowScope(snapshot), opts.scope) ? snapshot : null;
     const filteredHandoff =
-      sessionHandoff && passesScopeFilter(rowScope(sessionHandoff)) ? sessionHandoff : null;
-    const filteredEvents = recentSessionEvents.filter((e) => passesScopeFilter(rowScope(e)));
+      sessionHandoff && passesScopeFilterForRecall(rowScope(sessionHandoff), opts.scope) ? sessionHandoff : null;
+    const filteredEvents = recentSessionEvents.filter((e) => passesScopeFilterForRecall(rowScope(e), opts.scope));
     continuity = {
       activeSnapshot: filteredSnapshot,
       sessionHandoff: filteredHandoff,
@@ -1094,6 +1081,8 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
       tokenize(filteredHandoff?.summary) +
       tokenize(filteredHandoff?.nextAction) +
       (filteredHandoff?.artifacts ?? []).reduce((acc, a) => acc + tokenize(a), 0) +
+      (filteredHandoff?.constraints ?? []).reduce((acc, c) => acc + tokenize(c), 0) +
+      tokenize(filteredHandoff?.evidence ? formatHandoffEvidenceLine(filteredHandoff.evidence) : null) +
       filteredEvents.reduce((acc, e) => acc + tokenize(e.content), 0);
   }
 
@@ -2456,19 +2445,36 @@ export async function getContext(
   // reads (opts.currentSessionId matches the snapshot's session_id) stay
   // unbounded; see loadFreshActiveTaskSnapshot's own doc comment for the
   // exact null/empty-id matching rules.
-  const activeSnapshot = hasLocal
+  const rowScope = (r: { scope?: string | null } | null | undefined): string | null => r?.scope ?? null;
+  const rawActiveSnapshot = hasLocal
     ? loadFreshActiveTaskSnapshot(ctx.hippoRoot, ctx.tenantId, {
         sessionId: opts.currentSessionId,
       })
     : null;
-  const sessionHandoff = hasLocal && activeSnapshot?.session_id
-    ? loadLatestHandoff(ctx.hippoRoot, ctx.tenantId, activeSnapshot.session_id)
-    : null;
+  // W1: pre-existing leak; same `requested: undefined` ambientAdmitEntry
+  // already uses when it scope-filters memory rows above.
+  const activeSnapshot =
+    rawActiveSnapshot && passesScopeFilterForRecall(rowScope(rawActiveSnapshot), undefined)
+      ? rawActiveSnapshot
+      : null;
+  // Key on the RAW snapshot: a scope-hidden active session must not fall through to another session's ambient handoff.
+  const rawSessionHandoff = !hasLocal
+    ? null
+    : rawActiveSnapshot?.session_id
+      ? loadLatestHandoff(ctx.hippoRoot, ctx.tenantId, rawActiveSnapshot.session_id)
+      : loadLatestHandoff(ctx.hippoRoot, ctx.tenantId, undefined, {
+          unfinishedOnly: true,
+          maxAgeMs: SNAPSHOT_AMBIENT_MAX_AGE_MS,
+        });
+  const sessionHandoff =
+    rawSessionHandoff && passesScopeFilterForRecall(rowScope(rawSessionHandoff), undefined)
+      ? rawSessionHandoff
+      : null;
   const recentSessionEvents = hasLocal && activeSnapshot?.session_id
     ? listSessionEvents(ctx.hippoRoot, ctx.tenantId, {
         session_id: activeSnapshot.session_id,
         limit: 5,
-      })
+      }).filter((e) => passesScopeFilterForRecall(rowScope(e), undefined))
     : [];
 
   if (

@@ -94,13 +94,15 @@ import {
   saveSessionHandoff,
   loadLatestHandoff,
   loadHandoffById,
+  stampHandoffOutcome,
+  writeSessionEndHandoff,
   TaskSnapshot,
   SessionEvent,
-  RECALL_DEFAULT_DENY_SCOPES,
 } from './store.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from './reject-flow.js';
 import { RejectedValueError } from './rejection.js';
-import type { SessionHandoff } from './handoff.js';
+import { isHandoffOutcome, formatHandoffEvidenceLine, type SessionHandoff, type HandoffOutcome, type HandoffEvidence } from './handoff.js';
+import { passesScopeFilterForRecall } from './recall-scope.js';
 import { search, markRetrieved, estimateTokens, hybridSearch, physicsSearch, explainMatch, textOverlap, tokenize as tokenizeQuery, type RerankStep } from './search.js';
 import { compareEntryIdentity } from './compare.js';
 import { renderTraceContent, parseSteps } from './trace.js';
@@ -393,8 +395,8 @@ export function parseArgs(argv: string[]): { command: string; args: string[]; fl
         flags[key] = true;
         i++;
       } else {
-        // Check if it's a repeatable flag (tag, artifact, link, step)
-        if (key === 'tag' || key === 'artifact' || key === 'link' || key === 'step') {
+        // Check if it's a repeatable flag (tag, artifact, link, step, constraint)
+        if (key === 'tag' || key === 'artifact' || key === 'link' || key === 'step' || key === 'constraint') {
           if (Array.isArray(flags[key])) {
             (flags[key] as string[]).push(next);
           } else {
@@ -1754,36 +1756,18 @@ async function cmdRecall(
     const rawEvents = sessionId
       ? listSessionEvents(hippoRoot, tenantId, { session_id: sessionId, limit: 5 })
       : [];
-    // Mirror the api.recall default-deny rule for forward compat: when v1.2.0
-    // continuity writers start setting scope, a no-scope caller must not see
-    // private-channel-derived rows. Today scope is NULL on all continuity
-    // rows so this is a no-op. Caller-supplied --scope bypasses the gate
-    // (matches existing memory recall behavior).
-    // Scope filter mirrors api.recall: exact match when scope is set, default-deny
-    // on ANY `<source>:private:*` and 'unknown:legacy' otherwise. recallActiveScope
-    // merges --scope flag and detectScope() so auto-detected source contexts get
-    // matched. v1.2.1: generalized from slack-only to source-agnostic via
-    // api.isPrivateScope so v1.3 GitHub (and future sources) cannot leak.
-    const effectiveScope = recallActiveScope ?? '';
-    const passesScopeFilter = (s: string | null): boolean => {
-      if (effectiveScope) {
-        return s === effectiveScope;
-      }
-      if (s === null) return true;
-      if (api.isPrivateScope(s)) return false;
-      // v1.7.2: read from RECALL_DEFAULT_DENY_SCOPES (single source of truth
-      // shared with SQL + api.passesScopeFilterForRecall).
-      if ((RECALL_DEFAULT_DENY_SCOPES as readonly string[]).includes(s)) return false;
-      return true;
-    };
+    // W1: was its own copy of passesScopeFilterForRecall (cloned 3x);
+    // calls the shared helper directly now (recallActiveScope merges
+    // --scope and detectScope()).
+    const effectiveScope = recallActiveScope || undefined;
     const rowScope = (
       r: { scope?: string | null } | null | undefined,
     ): string | null => r?.scope ?? null;
     activeSnapshot =
-      rawSnapshot && passesScopeFilter(rowScope(rawSnapshot)) ? rawSnapshot : null;
+      rawSnapshot && passesScopeFilterForRecall(rowScope(rawSnapshot), effectiveScope) ? rawSnapshot : null;
     sessionHandoff =
-      rawHandoff && passesScopeFilter(rowScope(rawHandoff)) ? rawHandoff : null;
-    recentSessionEvents = rawEvents.filter((e) => passesScopeFilter(rowScope(e)));
+      rawHandoff && passesScopeFilterForRecall(rowScope(rawHandoff), effectiveScope) ? rawHandoff : null;
+    recentSessionEvents = rawEvents.filter((e) => passesScopeFilterForRecall(rowScope(e), effectiveScope));
     const tokenize = (s?: string | null): number =>
       s ? Math.ceil(s.length / 4) : 0;
     continuityTokens =
@@ -1793,6 +1777,8 @@ async function cmdRecall(
       tokenize(sessionHandoff?.summary) +
       tokenize(sessionHandoff?.nextAction) +
       (sessionHandoff?.artifacts ?? []).reduce((acc, a) => acc + tokenize(a), 0) +
+      (sessionHandoff?.constraints ?? []).reduce((acc, c) => acc + tokenize(c), 0) +
+      tokenize(sessionHandoff?.evidence ? formatHandoffEvidenceLine(sessionHandoff.evidence) : null) +
       recentSessionEvents.reduce((acc, e) => acc + tokenize(e.content), 0);
   }
   const hasContinuity =
@@ -3248,6 +3234,29 @@ async function cmdSessionEnd(
  * `__session-end-worker` subcommand (not user-facing). Failures in one stage
  * do not block the other.
  */
+// Best-effort git state; a missing git, non-repo cwd, or the timeout all
+// yield null fields rather than throw (autolearn.ts execFileSync shape).
+function collectHandoffEvidence(cwd: string, testStatus: HandoffEvidence['testStatus']): HandoffEvidence {
+  let gitRef: string | null = null;
+  try {
+    gitRef = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd, encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim() || null;
+  } catch {
+    gitRef = null;
+  }
+  let dirtyTree: boolean | null = null;
+  try {
+    const status = execFileSync('git', ['status', '--porcelain'], {
+      cwd, encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    dirtyTree = status.trim().length > 0;
+  } catch {
+    dirtyTree = null;
+  }
+  return { gitRef, dirtyTree, testStatus };
+}
+
 async function cmdSessionEndWorker(
   hippoRoot: string,
   flags: Record<string, string | boolean | string[]>
@@ -3286,6 +3295,25 @@ async function cmdSessionEndWorker(
   // in loadFreshActiveTaskSnapshot is the backstop layer, not this close.
   const closeLogFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : null;
   const closeSessionId = typeof flags['session-id'] === 'string' ? (flags['session-id'] as string) : null;
+  // Handoff write happens BEFORE the snapshot close below, while the
+  // snapshot writeSessionEndHandoff reads is still active.
+  if (closeSessionId) {
+    try {
+      const activeForHandoff = loadActiveTaskSnapshot(hippoRoot, resolveTenantId({}));
+      if (!activeForHandoff || activeForHandoff.session_id !== closeSessionId) {
+        appendSessionEndCloseLog(closeLogFile, 'skip: no active snapshot for session');
+      } else {
+        const evidence = collectHandoffEvidence(process.cwd(), 'unknown');
+        const handoff = writeSessionEndHandoff(hippoRoot, resolveTenantId({}), closeSessionId, evidence);
+        appendSessionEndCloseLog(
+          closeLogFile,
+          handoff ? `wrote handoff for session ${closeSessionId}` : 'skip: handoff newer than snapshot',
+        );
+      }
+    } catch (err) {
+      appendSessionEndCloseLog(closeLogFile, `handoff write failed: ${(err as Error).message}`);
+    }
+  }
   try {
     if (closeSessionId) {
       const closed = closeTaskSnapshotsForSession(hippoRoot, resolveTenantId({}), closeSessionId);
@@ -4181,18 +4209,18 @@ function cmdSession(
   }
 
   if (subcommand === 'complete') {
-    const outcome = String(flags['outcome'] ?? '').trim();
+    const outcomeRaw = String(flags['outcome'] ?? '').trim();
     const summary = String(flags['summary'] ?? '').trim();
-    const validOutcomes = ['success', 'failure', 'partial'];
 
     if (!sessionId) {
       console.error('Usage: hippo session complete --session <session-id> --outcome <success|failure|partial> [--summary "..."]');
       process.exit(1);
     }
-    if (!validOutcomes.includes(outcome)) {
-      console.error(`Invalid outcome: "${outcome}". Must be one of: ${validOutcomes.join(', ')}.`);
+    if (!isHandoffOutcome(outcomeRaw)) {
+      console.error(`Invalid outcome: "${outcomeRaw}". Must be one of: success, failure, partial.`);
       process.exit(1);
     }
+    const outcome: HandoffOutcome = outcomeRaw;
 
     const metadata: Record<string, unknown> = { ended_at: new Date().toISOString() };
     if (summary) metadata.summary = summary;
@@ -4207,6 +4235,11 @@ function cmdSession(
     });
 
     console.log(`Completed session ${event.session_id} with outcome=${outcome} (event #${event.id})`);
+
+    const stamped = stampHandoffOutcome(hippoRoot, resolveTenantId({}), sessionId, outcome);
+    if (stamped > 0) {
+      console.log(`Stamped outcome on handoff for session ${sessionId}`);
+    }
     return;
   }
 
@@ -4225,6 +4258,9 @@ function cmdSession(
     ];
     if (handoff.taskId) lines.push(`- Task: ${handoff.taskId}`);
     if (handoff.repoRoot) lines.push(`- Repo: ${handoff.repoRoot}`);
+    if (handoff.outcome) lines.push(`- Outcome: ${handoff.outcome}`);
+    if (handoff.targetRuntime) lines.push(`- Target runtime: ${handoff.targetRuntime}`);
+    if (handoff.cardId) lines.push(`- Card: ${handoff.cardId}`);
     lines.push('', '### Summary', handoff.summary);
     if (handoff.nextAction) {
       lines.push('', '### Next action', handoff.nextAction);
@@ -4234,6 +4270,15 @@ function cmdSession(
       for (const artifact of handoff.artifacts) {
         lines.push(`- ${artifact}`);
       }
+    }
+    if (handoff.constraints && handoff.constraints.length > 0) {
+      lines.push('', '### Constraints');
+      for (const constraint of handoff.constraints) {
+        lines.push(`- ${constraint}`);
+      }
+    }
+    if (handoff.evidence) {
+      lines.push('', '### Evidence', formatHandoffEvidenceLine(handoff.evidence));
     }
     lines.push('');
     console.log(lines.join('\n'));
@@ -4250,6 +4295,9 @@ function printHandoff(handoff: SessionHandoff): void {
   console.log(`- Updated: ${handoff.updatedAt}`);
   if (handoff.taskId) console.log(`- Task: ${handoff.taskId}`);
   if (handoff.repoRoot) console.log(`- Repo: ${handoff.repoRoot}`);
+  if (handoff.outcome) console.log(`- Outcome: ${handoff.outcome}`);
+  if (handoff.targetRuntime) console.log(`- Target runtime: ${handoff.targetRuntime}`);
+  if (handoff.cardId) console.log(`- Card: ${handoff.cardId}`);
   console.log('');
   console.log('### Summary');
   console.log(handoff.summary);
@@ -4264,6 +4312,18 @@ function printHandoff(handoff: SessionHandoff): void {
     for (const artifact of handoff.artifacts) {
       console.log(`- ${artifact}`);
     }
+  }
+  if (handoff.constraints && handoff.constraints.length > 0) {
+    console.log('');
+    console.log('### Constraints');
+    for (const constraint of handoff.constraints) {
+      console.log(`- ${constraint}`);
+    }
+  }
+  if (handoff.evidence) {
+    console.log('');
+    console.log('### Evidence');
+    console.log(formatHandoffEvidenceLine(handoff.evidence));
   }
   console.log('');
 }
@@ -4280,7 +4340,13 @@ function cmdHandoff(
   if (subcommand === 'create') {
     const summary = String(flags['summary'] ?? '').trim();
     if (!summary) {
-      console.error('Usage: hippo handoff create --summary "..." [--next "..."] [--session <id>] [--task <id>] [--artifact <path>...]');
+      console.error('Usage: hippo handoff create --summary "..." [--next "..."] [--session <id>] [--task <id>] [--artifact <path>...] [--constraint <text>...] [--outcome <success|failure|partial>] [--target-runtime <name>] [--card-id <id>] [--tests <pass|fail|unknown>]');
+      process.exit(1);
+    }
+
+    const outcomeRaw = flags['outcome'];
+    if (outcomeRaw !== undefined && !isHandoffOutcome(outcomeRaw)) {
+      console.error(`Invalid outcome: "${String(outcomeRaw)}". Must be one of: success, failure, partial.`);
       process.exit(1);
     }
 
@@ -4291,6 +4357,24 @@ function cmdHandoff(
     const artifacts: string[] = Array.isArray(artifactFlag)
       ? artifactFlag
       : (typeof artifactFlag === 'string' ? [artifactFlag] : []);
+    const constraintFlag = flags['constraint'];
+    const constraints: string[] = Array.isArray(constraintFlag)
+      ? constraintFlag
+      : (typeof constraintFlag === 'string' ? [constraintFlag] : []);
+    for (const name of ['target-runtime', 'card-id'] as const) {
+      // parseArgs turns a value-less flag into `true`; refuse rather than store "true".
+      if (flags[name] === true) {
+        console.error(`--${name} needs a value`);
+        process.exit(1);
+      }
+    }
+    const targetRuntime = String(flags['target-runtime'] ?? '').trim() || undefined;
+    const cardId = String(flags['card-id'] ?? '').trim() || undefined;
+    const testStatus = String(flags['tests'] ?? '').trim();
+    const evidence = collectHandoffEvidence(
+      process.cwd(),
+      testStatus === 'pass' || testStatus === 'fail' ? testStatus : 'unknown',
+    );
 
     const handoff = saveSessionHandoff(hippoRoot, resolveTenantId({}), {
       version: 1,
@@ -4300,6 +4384,11 @@ function cmdHandoff(
       summary,
       nextAction,
       artifacts,
+      constraints,
+      evidence,
+      outcome: outcomeRaw as HandoffOutcome | undefined,
+      targetRuntime,
+      cardId,
     });
 
     console.log(`Created session handoff for session ${handoff.sessionId}`);
@@ -4308,6 +4397,13 @@ function cmdHandoff(
     if (handoff.artifacts && handoff.artifacts.length > 0) {
       console.log(`   Artifacts: ${handoff.artifacts.join(', ')}`);
     }
+    if (handoff.constraints && handoff.constraints.length > 0) {
+      console.log(`   Constraints: ${handoff.constraints.join(', ')}`);
+    }
+    if (handoff.outcome) console.log(`   Outcome: ${handoff.outcome}`);
+    if (handoff.targetRuntime) console.log(`   Target runtime: ${handoff.targetRuntime}`);
+    if (handoff.cardId) console.log(`   Card: ${handoff.cardId}`);
+    if (handoff.evidence) console.log(`   Evidence: ${formatHandoffEvidenceLine(handoff.evidence)}`);
     return;
   }
 
@@ -8511,6 +8607,11 @@ Commands:
       --session <id>       Session ID (auto-generated if omitted)
       --task <id>          Associated task ID
       --artifact <path>    Related file path (repeatable)
+      --constraint <text>  Constraint for the successor to respect (repeatable)
+      --outcome <o>        success | failure | partial
+      --target-runtime <n> Name of the runtime the successor will run in
+      --card-id <id>       Associated card/ticket ID
+      --tests <status>     pass | fail | unknown (default: unknown)
     handoff latest         Show the most recent handoff
       --session <id>       Filter by session
       --json               Output as JSON
@@ -8739,6 +8840,7 @@ Examples:
   hippo session resume
   hippo snapshot save --task "Ship feature" --summary "Tests are green" --next-step "Open the PR" --session sess_123
   hippo handoff create --summary "PR is open, tests green" --next "Merge after review" --session sess_123 --artifact src/foo.ts
+  hippo handoff create --summary s --constraint a --constraint b --outcome partial --target-runtime codex --card-id c1 --tests pass
   hippo embed --status
   hippo watch "npm run build"
   hippo learn --git --days 30

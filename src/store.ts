@@ -19,7 +19,7 @@ import {
   getHippoDbPath,
   type DatabaseSyncLike,
 } from './db.js';
-import { SessionHandoff, SessionHandoffRow, rowToSessionHandoff } from './handoff.js';
+import { SessionHandoff, SessionHandoffRow, rowToSessionHandoff, HandoffEvidence, HandoffOutcome, isHandoffOutcome } from './handoff.js';
 import { tokenize } from './search.js';
 import { appendAuditEvent, type AuditOp } from './audit.js';
 import { resolveTenantId } from './tenant.js';
@@ -3333,6 +3333,10 @@ export function resolveConflict(
   }
 }
 
+// W1: the nine-column SELECT was cloned four times (plan rule 8); one
+// definition so a sixth caller can't drift from the other five.
+const HANDOFF_COLUMNS = 'id, session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, created_at, constraints_json, evidence_json, outcome, target_runtime, card_id';
+
 /**
  * Save a session handoff record. Returns the persisted handoff.
  */
@@ -3350,8 +3354,8 @@ export function saveSessionHandoff(
   // cmdRecall continuity excludes slack:private:* and 'unknown:legacy'.
   try {
     const result = db.prepare(`
-      INSERT INTO session_handoffs(session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, tenant_id, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO session_handoffs(session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, tenant_id, created_at, constraints_json, evidence_json, outcome, target_runtime, card_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       handoff.sessionId,
       handoff.repoRoot ?? null,
@@ -3362,13 +3366,17 @@ export function saveSessionHandoff(
       handoff.scope ?? null,
       tenantId,
       now,
+      JSON.stringify(handoff.constraints ?? []),
+      handoff.evidence ? JSON.stringify(handoff.evidence) : null,
+      handoff.outcome ?? null,
+      handoff.targetRuntime ?? null,
+      handoff.cardId ?? null,
     );
 
     const id = Number(result.lastInsertRowid ?? 0);
-    // SAFETY: row's shape matches the nine columns named in the SELECT
-    // above.
+    // SAFETY: row's shape matches HANDOFF_COLUMNS.
     const row = db.prepare(`
-      SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, created_at
+      SELECT ${HANDOFF_COLUMNS}
       FROM session_handoffs
       WHERE id = ?
     `).get(id) as SessionHandoffRow | undefined;
@@ -3383,37 +3391,40 @@ export function saveSessionHandoff(
   }
 }
 
-/**
- * Load the most recent handoff, optionally filtered by session ID.
- */
-export function loadLatestHandoff(hippoRoot: string, tenantId: string, sessionId?: string): SessionHandoff | null {
+/** Load the most recent handoff, optionally filtered by session ID. */
+export function loadLatestHandoff(
+  hippoRoot: string,
+  tenantId: string,
+  sessionId?: string,
+  opts: { unfinishedOnly?: boolean; maxAgeMs?: number } = {},
+): SessionHandoff | null {
   assertTenantId('loadLatestHandoff', tenantId);
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
 
   try {
-    let row: SessionHandoffRow | undefined;
+    const conditions: string[] = ['tenant_id = ?'];
+    const params: Array<string | number> = [tenantId];
     if (sessionId) {
-      // SAFETY: row's shape matches the nine columns named in the SELECT
-      // below.
-      row = db.prepare(`
-        SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, created_at
-        FROM session_handoffs
-        WHERE session_id = ? AND tenant_id = ?
-        ORDER BY created_at DESC, id DESC
-        LIMIT 1
-      `).get(sessionId, tenantId) as SessionHandoffRow | undefined;
-    } else {
-      // SAFETY: row's shape matches the nine columns named in the SELECT
-      // below.
-      row = db.prepare(`
-        SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, created_at
-        FROM session_handoffs
-        WHERE tenant_id = ?
-        ORDER BY created_at DESC, id DESC
-        LIMIT 1
-      `).get(tenantId) as SessionHandoffRow | undefined;
+      conditions.push('session_id = ?');
+      params.push(sessionId);
     }
+    if (opts.unfinishedOnly) {
+      conditions.push(`(outcome IS NULL OR outcome IN ('partial','failure'))`);
+    }
+    if (opts.maxAgeMs != null) {
+      conditions.push('created_at >= ?');
+      params.push(new Date(Date.now() - opts.maxAgeMs).toISOString());
+    }
+
+    // SAFETY: row's shape matches HANDOFF_COLUMNS.
+    const row = db.prepare(`
+      SELECT ${HANDOFF_COLUMNS}
+      FROM session_handoffs
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY created_at DESC, id DESC
+      LIMIT 1
+    `).get(...params) as SessionHandoffRow | undefined;
 
     return row ? rowToSessionHandoff(row) : null;
   } finally {
@@ -3430,10 +3441,9 @@ export function loadHandoffById(hippoRoot: string, tenantId: string, id: number)
   const db = openHippoDb(hippoRoot);
 
   try {
-    // SAFETY: row's shape matches the nine columns named in the SELECT
-    // above.
+    // SAFETY: row's shape matches HANDOFF_COLUMNS.
     const row = db.prepare(`
-      SELECT id, session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, created_at
+      SELECT ${HANDOFF_COLUMNS}
       FROM session_handoffs
       WHERE id = ? AND tenant_id = ?
     `).get(id, tenantId) as SessionHandoffRow | undefined;
@@ -3442,6 +3452,74 @@ export function loadHandoffById(hippoRoot: string, tenantId: string, id: number)
   } finally {
     closeHippoDb(db);
   }
+}
+
+/** Stamp the outcome on a session's newest handoff, only if it has none yet. Returns rows changed. */
+export function stampHandoffOutcome(hippoRoot: string, tenantId: string, sessionId: string, outcome: HandoffOutcome): number {
+  assertTenantId('stampHandoffOutcome', tenantId);
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    const result = db.prepare(`
+      UPDATE session_handoffs SET outcome = ?
+      WHERE tenant_id = ? AND session_id = ? AND outcome IS NULL
+        AND id = (
+          SELECT id FROM session_handoffs
+          WHERE tenant_id = ? AND session_id = ?
+          ORDER BY created_at DESC, id DESC LIMIT 1
+        )
+    `).run(outcome, tenantId, sessionId, tenantId, sessionId);
+    return Number(result.changes ?? 0);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/**
+ * Auto-write a handoff at session-end from the session's active snapshot (DF1 T3).
+ * @param evidence best-effort git state; outcome comes from the newest session_complete event.
+ * @returns null unless the snapshot belongs to sessionId and no newer handoff already covers it.
+ */
+export function writeSessionEndHandoff(
+  hippoRoot: string,
+  tenantId: string,
+  sessionId: string,
+  evidence: HandoffEvidence | null,
+): SessionHandoff | null {
+  assertTenantId('writeSessionEndHandoff', tenantId);
+  const snapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
+  if (!snapshot || snapshot.session_id !== sessionId) return null;
+
+  const existing = loadLatestHandoff(hippoRoot, tenantId, sessionId);
+  // Strict '>': a same-millisecond tie must not swallow the session's only write (test 6e).
+  if (existing && existing.updatedAt > snapshot.updated_at) return null;
+
+  const db = openHippoDb(hippoRoot);
+  let outcome: HandoffOutcome | null = null;
+  try {
+    // SAFETY: row's shape matches the single `content` column below.
+    const completeEvent = db.prepare(`
+      SELECT content FROM session_events
+      WHERE tenant_id = ? AND session_id = ? AND event_type = 'session_complete'
+      ORDER BY created_at DESC, id DESC LIMIT 1
+    `).get(tenantId, sessionId) as { content?: string } | undefined;
+    if (isHandoffOutcome(completeEvent?.content)) outcome = completeEvent!.content;
+  } finally {
+    closeHippoDb(db);
+  }
+
+  return saveSessionHandoff(hippoRoot, tenantId, {
+    version: 1,
+    sessionId,
+    repoRoot: undefined,
+    taskId: snapshot.task,
+    summary: snapshot.summary,
+    nextAction: snapshot.next_step,
+    artifacts: [],
+    scope: snapshot.scope,
+    evidence,
+    outcome,
+  });
 }
 
 // ---------------------------------------------------------------------------

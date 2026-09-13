@@ -30,12 +30,14 @@ export {
   saveSessionHandoff,
   loadLatestHandoff,
   loadHandoffById,
+  stampHandoffOutcome,
+  writeSessionEndHandoff,
   loadSessionDecayContext,
   SessionDecayContext,
 } from './store.js';
 
 // Feature 5: Session handoff
-export { SessionHandoff } from './handoff.js';
+export { SessionHandoff, HandoffOutcome, HandoffEvidence, isHandoffOutcome } from './handoff.js';
 export { consolidate, ConsolidationResult } from './consolidate.js';
 // Announced public in CHANGELOG 1.26.3 but never re-exported; the rest of dedupe.js stays internal.
 export { strengthBucket } from './dedupe.js';

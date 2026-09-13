@@ -36,8 +36,8 @@ describe('schema v5+v6 migration', () => {
     initStore(tmpDir);
     const db = openHippoDb(tmpDir);
     try {
-      expect(getSchemaVersion(db)).toBe(41);
-      expect(getCurrentSchemaVersion()).toBe(41);
+      expect(getSchemaVersion(db)).toBe(42);
+      expect(getCurrentSchemaVersion()).toBe(42);
     } finally {
       closeHippoDb(db);
     }
@@ -259,6 +259,11 @@ describe('rowToSessionHandoff', () => {
       next_action: 'Review',
       artifacts_json: '["a.ts","b.ts"]',
       created_at: '2026-01-01T00:00:00.000Z',
+      constraints_json: null,
+      evidence_json: null,
+      outcome: null,
+      target_runtime: null,
+      card_id: null,
     };
 
     const handoff = rowToSessionHandoff(row);
@@ -282,6 +287,11 @@ describe('rowToSessionHandoff', () => {
       next_action: null,
       artifacts_json: '[]',
       created_at: '2026-01-01T00:00:00.000Z',
+      constraints_json: null,
+      evidence_json: null,
+      outcome: null,
+      target_runtime: null,
+      card_id: null,
     };
 
     const handoff = rowToSessionHandoff(row);
@@ -301,6 +311,11 @@ describe('rowToSessionHandoff', () => {
       next_action: null,
       artifacts_json: 'not-json',
       created_at: '2026-01-01T00:00:00.000Z',
+      constraints_json: null,
+      evidence_json: null,
+      outcome: null,
+      target_runtime: null,
+      card_id: null,
     };
 
     const handoff = rowToSessionHandoff(row);

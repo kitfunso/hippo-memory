@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Session handoffs carry a fuller envelope: `constraints`, `evidence` (git ref, dirty tree, test status), `outcome`, `target_runtime` and `card_id` columns, all nullable and additive (`src/handoff.ts`, `src/store.ts`, schema v42).
+- `hippo handoff create` gains `--constraint` (repeatable), `--outcome`, `--target-runtime`, `--card-id` and `--tests`; evidence is collected from `process.cwd()` via `git rev-parse HEAD` / `git status --porcelain` on every create.
+- Session-end now writes a handoff automatically before closing the session's active task snapshot, so a crash-free session end always leaves a fresh envelope behind.
+- Context injection falls back to the newest unfinished handoff (`outcome` is null, `partial`, or `failure`) within the same 72-hour window active snapshots use, when there is no active snapshot to key off.
+
+### Changed
+- `hippo session complete` stamps the `outcome` onto the session's latest handoff and prints a line when it changes a row.
+- `printHandoff`, `session resume` and the MCP continuity block render outcome, target runtime, card, constraints and the evidence line.
+- The three inline scope-filter closures in `src/api.ts`, `src/cli.ts` and `src/mcp/server.ts` are now one shared `passesScopeFilterForRecall` (`src/recall-scope.ts`), closing a pre-existing gap where `getContext`'s active snapshot, handoff and recent session events passed through unfiltered.
+
 ## 1.38.10 - 2026-09-07
 
 ### Fixed

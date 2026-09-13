@@ -27,7 +27,7 @@ import { fetchGitLog, extractLessons, partitionLessons, deduplicateLesson, isGit
 import { loadConfig } from '../config.js';
 import { confidenceLabel } from '../memory.js';
 import { resolveTenantId } from '../tenant.js';
-import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, drillDown as apiDrillDown, assemble as apiAssemble, isPrivateScope, adminActor, buildSuppressionSummary, ambientSecretAdmit, type Context as ApiContext } from '../api.js';
+import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, drillDown as apiDrillDown, assemble as apiAssemble, isPrivateScope, passesScopeFilterForRecall, adminActor, buildSuppressionSummary, ambientSecretAdmit, type Context as ApiContext } from '../api.js';
 import { resolveProjectIdentity, classifyOriginProject, findHippoStoreDir, type ResolveProjectIdentityOpts } from '../project-identity.js';
 import { computePredictionBaserate } from '../predictions.js';
 import { appendAuditEvent } from '../audit.js';
@@ -164,6 +164,7 @@ interface DrillDownExtraOpts {
 // ── Format helpers ──
 
 import type { ContinuityBlock } from '../api.js';
+import { formatHandoffEvidenceLine } from '../handoff.js';
 
 function formatContinuityBlock(block: ContinuityBlock): string {
   const lines: string[] = ['## Continuity'];
@@ -183,6 +184,21 @@ function formatContinuityBlock(block: ContinuityBlock): string {
     }
     if ((block.sessionHandoff.artifacts ?? []).length > 0) {
       lines.push(`- Artifacts: ${(block.sessionHandoff.artifacts ?? []).join(', ')}`);
+    }
+    if (block.sessionHandoff.outcome) {
+      lines.push(`- Outcome: ${block.sessionHandoff.outcome}`);
+    }
+    if (block.sessionHandoff.targetRuntime) {
+      lines.push(`- Target runtime: ${block.sessionHandoff.targetRuntime}`);
+    }
+    if (block.sessionHandoff.cardId) {
+      lines.push(`- Card: ${block.sessionHandoff.cardId}`);
+    }
+    if ((block.sessionHandoff.constraints ?? []).length > 0) {
+      lines.push(`- Constraints: ${(block.sessionHandoff.constraints ?? []).join(', ')}`);
+    }
+    if (block.sessionHandoff.evidence) {
+      lines.push(`- Evidence: ${formatHandoffEvidenceLine(block.sessionHandoff.evidence)}`);
     }
   }
   if (block.recentSessionEvents.length > 0) {
@@ -1058,16 +1074,6 @@ async function executeTool(
       // results and the snapshot. Pre-v1.2 this surface returned all memories
       // and the snapshot unfiltered, which would have leaked private-channel
       // content to no-scope MCP callers once scope writers shipped.
-      // v1.2.1: source-agnostic via api.isPrivateScope.
-      const passesScopeFilter = (s: string | null): boolean => {
-        if (explicitScope !== undefined) return s === explicitScope;
-        if (s === null) return true;
-        if (isPrivateScope(s)) return false;
-        // v1.7.2: read from RECALL_DEFAULT_DENY_SCOPES (single source of truth
-        // shared with SQL + api.passesScopeFilterForRecall).
-        if (RECALL_DEFAULT_DENY_SCOPES.some((deny) => deny === s)) return false;
-        return true;
-      };
       const allEntries = loadAllEntries(hippoRoot, tenantId);
       // v39 memory scope isolation: this surface reads the LOCAL store only,
       // but synced-down or legacy rows can still carry another project's
@@ -1089,7 +1095,7 @@ async function executeTool(
         : resolveProjectIdentity(process.cwd()).name;
       const isolationOff = config.contextProjectIsolation === false;
       const entries = allEntries.filter((e) => {
-        if (!passesScopeFilter(e.scope ?? null)) return false;
+        if (!passesScopeFilterForRecall(e.scope ?? null, explicitScope)) return false;
         if (!ambientSecretAdmit(e, mcpProjectName)) return false;
         if (isolationOff) return true;
         return classifyOriginProject(e.origin_project, mcpProjectName) !== 'cross-project';
@@ -1111,7 +1117,7 @@ async function executeTool(
       // only) — an orphaned snapshot must age out here too, not just on the
       // UserPromptSubmit path.
       const rawSnapshot = loadFreshActiveTaskSnapshot(hippoRoot, tenantId);
-      const snapshot = rawSnapshot && passesScopeFilter(rawSnapshot.scope)
+      const snapshot = rawSnapshot && passesScopeFilterForRecall(rawSnapshot.scope, explicitScope)
         ? rawSnapshot
         : null;
       const snapshotText = snapshot

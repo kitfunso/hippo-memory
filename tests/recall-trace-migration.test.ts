@@ -34,8 +34,8 @@ describe('LC1 schema migration v40', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-lc1-mig-'));
     const db = openHippoDb(home);
     try {
-      expect(getSchemaVersion(db)).toBe(41);
-      expect(getCurrentSchemaVersion()).toBe(41);
+      expect(getSchemaVersion(db)).toBe(42);
+      expect(getCurrentSchemaVersion()).toBe(42);
       const tables = tableNames(db);
       expect(tables).toContain('recall_traces');
       expect(tables).toContain('recall_trace_results');
@@ -159,7 +159,7 @@ describe('LC1 schema migration v40', () => {
     // Re-open triggers runMigrations, which should re-run v40.
     db = openHippoDb(home);
     try {
-      expect(getMeta(db, 'schema_version')).toBe('41');
+      expect(getMeta(db, 'schema_version')).toBe('42');
       const tables = tableNames(db);
       expect(tables).toContain('recall_traces');
       expect(tables).toContain('recall_trace_results');
