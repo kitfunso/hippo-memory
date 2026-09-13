@@ -3520,7 +3520,9 @@ export function writeSessionEndHandoff(
 
   // codex P2: same-task refresh carries forward envelope fields nobody cleared,
   // rather than dropping them when the snapshot rewrite has no opinion on them.
-  const carryForward = existing != null && existing.taskId === snapshot.task;
+  // codex P1: a scope mismatch must not leak private metadata into an unscoped envelope.
+  const carryForward = existing != null && existing.taskId === snapshot.task
+    && (existing.scope ?? null) === (snapshot.scope ?? null);
 
   return saveSessionHandoff(hippoRoot, tenantId, {
     version: 1,

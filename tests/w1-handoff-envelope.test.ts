@@ -552,6 +552,35 @@ describe('fix 3: writeSessionEndHandoff carries forward same-task envelope metad
     expect(notCarried!.artifacts).toEqual([]);
     expect(notCarried!.repoRoot).toBeUndefined();
   });
+
+  it('same task but scope mismatch does not carry a private handoff into an unscoped envelope', () => {
+    initStore(root);
+    saveSessionHandoff(root, 'default', {
+      version: 1,
+      sessionId: 'sess-scope-mismatch',
+      taskId: 'T',
+      summary: 'private handoff',
+      artifacts: ['secret.ts'],
+      constraints: ['no schema break'],
+      cardId: 'card-9',
+      targetRuntime: 'codex',
+      repoRoot: '/repo/root',
+      scope: 'proj:private:x',
+    });
+    // Unscoped snapshot for the same task/session, as pre-compact and `snapshot save` produce.
+    saveActiveTaskSnapshot(root, 'default', {
+      task: 'T',
+      summary: 'snapshot summary',
+      next_step: 'next',
+      session_id: 'sess-scope-mismatch',
+    });
+    const handoff = writeSessionEndHandoff(root, 'default', 'sess-scope-mismatch', null);
+    expect(handoff!.artifacts).toEqual([]);
+    expect(handoff!.constraints).toEqual([]);
+    expect(handoff!.cardId).toBeNull();
+    expect(handoff!.targetRuntime).toBeNull();
+    expect(handoff!.repoRoot).toBeUndefined();
+  });
 });
 
 describe('fix 4: v42 migration backfills outcome from session_complete events', () => {
