@@ -18,7 +18,7 @@
  * an ESM `import` can resolve cleanly, and a hardcoded constant survives
  * any packager that drops .json files.
  */
-export const PACKAGE_VERSION = '1.38.10';
+export const PACKAGE_VERSION = '1.39.0';
 // Bump on every release alongside the 4 other manifests + lockfile.
 
 /**

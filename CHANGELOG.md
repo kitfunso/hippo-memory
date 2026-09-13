@@ -1,17 +1,21 @@
 # Changelog
 
-## Unreleased
+## 1.39.0 - 2026-09-13
 
 ### Added
-- Session handoffs carry a fuller envelope: `constraints`, `evidence` (git ref, dirty tree, test status), `outcome`, `target_runtime` and `card_id` columns, all nullable and additive (`src/handoff.ts`, `src/store.ts`, schema v42).
-- `hippo handoff create` gains `--constraint` (repeatable), `--outcome`, `--target-runtime`, `--card-id` and `--tests`; evidence is collected from `process.cwd()` via `git rev-parse HEAD` / `git status --porcelain` on every create.
-- Session-end now writes a handoff automatically before closing the session's active task snapshot, so a crash-free session end always leaves a fresh envelope behind.
-- Context injection falls back to the newest unfinished handoff (`outcome` is null, `partial`, or `failure`) within the same 72-hour window active snapshots use, when there is no active snapshot to key off.
+- **Session handoffs are now a runtime-agnostic envelope (roadmap Track W, milestone W1).** The `session_handoffs` row gains `constraints`, `evidence` (git ref, dirty tree, test status), `outcome`, `target_runtime` and `card_id`, all nullable and additive (`src/handoff.ts`, `src/store.ts`, schema v41 to v42). Migration 42 also backfills `outcome` on handoff rows of sessions that already recorded a `session_complete` event, so pre-existing finished handoffs do not read as unfinished. That backfill stamps every historical row of such a session, while the live `session complete` path stamps only the newest row; older revisions are never surfaced by `loadLatestHandoff`, so the difference is not user-visible. Existing `handoff create` calls and `loadLatestHandoff(hippoRoot, tenantId, sessionId?)` keep working.
+- `hippo handoff create` gains `--constraint` (repeatable), `--outcome`, `--target-runtime`, `--card-id` and `--tests`; a flag given without a value is refused. Evidence is collected from `process.cwd()` via `git rev-parse HEAD` and `git status --porcelain` on every create.
+- Session end writes a handoff automatically before closing the session's active task snapshot, so a crash-free session end always leaves a fresh envelope behind. Carried-forward metadata (artifacts, constraints, repo root, target runtime, card id) is copied only when the previous handoff has the same task and the same scope, so a private-scoped handoff never leaks into an unscoped envelope.
+- Context injection falls back to the newest unfinished handoff (`outcome` null, `partial` or `failure`) within the same 72-hour window active snapshots use, when there is no active snapshot to key off. The lookup applies the same scope deny list as recall.
 
 ### Changed
 - `hippo session complete` stamps the `outcome` onto the session's latest handoff and prints a line when it changes a row.
-- `printHandoff`, `session resume` and the MCP continuity block render outcome, target runtime, card, constraints and the evidence line.
-- The three inline scope-filter closures in `src/api.ts`, `src/cli.ts` and `src/mcp/server.ts` are now one shared `passesScopeFilterForRecall` (`src/recall-scope.ts`), closing a pre-existing gap where `getContext`'s active snapshot, handoff and recent session events passed through unfiltered.
+- `printHandoff`, `session resume` and the MCP continuity block render outcome, target runtime, card, constraints and the evidence line. The continuity token estimate counts those fields too.
+- The three inline scope-filter closures in `src/api.ts`, `src/cli.ts` and `src/mcp/server.ts` are now one shared `passesScopeFilterForRecall` (`src/recall-scope.ts`), closing a pre-existing gap where `getContext`'s active snapshot, handoff and recent session events passed through unfiltered. Recent session events are keyed on the raw active snapshot's session id and filtered per event, matching recall and the CLI.
+
+### Known follow-ups
+- The ambient handoff lookup ignores card identity; card-keyed lookup lands with W2.
+- The ambient envelope is not bounded by the context budget and `ContextResult.tokens` excludes it, as was already true of the snapshot and events blocks.
 
 ## 1.38.10 - 2026-09-07
 
