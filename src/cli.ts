@@ -4539,16 +4539,17 @@ function cardStringFlag(flags: Record<string, string | boolean | string[]>, key:
 
 // One entry per subcommand: the flags cmdCard actually reads for it, so a typo like
 // --depend-on fails fast instead of silently doing nothing.
-const CARD_SUBCOMMAND_FLAGS: Record<string, string[]> = {
+type CardSubcommand = 'create' | 'show' | 'list' | 'claim' | 'block' | 'review' | 'complete' | 'comment';
+const CARD_SUBCOMMAND_FLAGS = {
   create: ['title', 'repo', 'contract', 'budget', 'depends-on'],
   show: ['json'],
   list: ['status', 'json'],
   claim: ['runtime', 'session'],
   block: ['reason'],
-  review: [],
+  review: new Array<string>(),
   complete: ['outcome'],
   comment: ['body', 'author'],
-};
+} satisfies Record<CardSubcommand, string[]>;
 
 function cmdCard(
   hippoRoot: string,
@@ -4559,8 +4560,9 @@ function cmdCard(
   const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
 
-  const allowedFlags = CARD_SUBCOMMAND_FLAGS[subcommand];
-  if (allowedFlags) {
+  if (subcommand in CARD_SUBCOMMAND_FLAGS) {
+    // SAFETY: the `in` check above guarantees subcommand is a key of CARD_SUBCOMMAND_FLAGS.
+    const allowedFlags = CARD_SUBCOMMAND_FLAGS[subcommand as CardSubcommand];
     for (const key of Object.keys(flags)) {
       if (!allowedFlags.includes(key)) {
         // --flag=value never splits on '=' (see parseArgs), so it lands here as one long key.

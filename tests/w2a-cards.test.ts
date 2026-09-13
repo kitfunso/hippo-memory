@@ -659,7 +659,8 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
 
       const list = runCli(home, env, 'card', 'list', '--status', 'backlog', '--json');
       expect(list.status, list.out).toBe(0);
-      expect((JSON.parse(list.out).cards as Array<{ id: string }>).some((c) => c.id === childId)).toBe(true);
+      const listed = JSON.parse(list.out);
+      expect(listed.cards.some((c: { id: string }) => c.id === childId)).toBe(true);
 
       const claim = runCli(home, env, 'card', 'claim', parentId, '--runtime', 'r1', '--session', 's1');
       expect(claim.status, claim.out).toBe(0);
