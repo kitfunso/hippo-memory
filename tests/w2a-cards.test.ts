@@ -132,6 +132,13 @@ describe('test 4: createCard initial status', () => {
     const child = createCard(root, 'default', { title: 'Child of done', dependsOn: [parent.id] });
     expect(child.status).toBe('ready');
   });
+
+  it('a repeated dependsOn id is recorded once', () => {
+    const parent = createCard(root, 'default', { title: 'Parent' });
+    const child = createCard(root, 'default', { title: 'Child', dependsOn: [parent.id, parent.id] });
+    expect(child.status).toBe('backlog');
+    expect(loadCardDeps(root, 'default', child.id).parents).toEqual([parent.id]);
+  });
 });
 
 describe('test 5: status-transition matrix', () => {

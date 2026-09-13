@@ -3661,7 +3661,7 @@ export function transitionCard(
   return Number(result.changes ?? 0);
 }
 
-/** Creates a card; status is ready with no deps or once every dependsOn id is done, else backlog. An unknown dependsOn id throws and commits nothing. */
+/** Creates a card; status is ready with no deps or once every dependsOn id is done, else backlog. An unknown dependsOn id throws and commits nothing. A repeated dependsOn id is recorded once. */
 export function createCard(
   hippoRoot: string,
   tenantId: string,
@@ -3671,7 +3671,7 @@ export function createCard(
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    const dependsOn = input.dependsOn ?? [];
+    const dependsOn = [...new Set(input.dependsOn ?? [])];
 
     db.exec('BEGIN IMMEDIATE');
     try {
