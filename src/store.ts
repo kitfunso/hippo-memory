@@ -3668,6 +3668,12 @@ export function createCard(
   input: { title: string; repo?: string; contract?: string; budget?: number; dependsOn?: string[] },
 ): Card {
   assertTenantId('createCard', tenantId);
+  if (input.title.trim() === '') {
+    throw new Error('title must not be empty');
+  }
+  if (input.budget !== undefined && !(Number.isSafeInteger(input.budget) && input.budget > 0)) {
+    throw new Error(`Invalid budget: ${input.budget} (expected a positive integer)`);
+  }
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
@@ -3823,6 +3829,9 @@ export function loadLatestHandoffForCard(hippoRoot: string, tenantId: string, ca
 /** Atomic claim: WHERE status IN (ready, blocked) AND assignee_runtime IS NULL decides the race. Throws on an unknown card id; returns null for a card not ready/blocked or already claimed. */
 export function claimCard(hippoRoot: string, tenantId: string, id: string, runtime: string, sessionId?: string): Card | null {
   assertTenantId('claimCard', tenantId);
+  if (runtime.trim() === '') {
+    throw new Error('runtime must not be empty');
+  }
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
@@ -3859,6 +3868,9 @@ export function claimCard(hippoRoot: string, tenantId: string, id: string, runti
 /** Requires the card be running; closes the live run as blocked and files reason as a comment. Throws on an unknown card id; returns null for a card not running. */
 export function blockCard(hippoRoot: string, tenantId: string, id: string, reason: string): Card | null {
   assertTenantId('blockCard', tenantId);
+  if (reason.trim() === '') {
+    throw new Error('reason must not be empty');
+  }
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
@@ -3986,6 +3998,9 @@ export function completeCard(
 /** Appends a comment to cardId in any card status; throws if cardId is not a card of this tenant. */
 export function addCardComment(hippoRoot: string, tenantId: string, cardId: string, author: string, body: string): CardComment {
   assertTenantId('addCardComment', tenantId);
+  if (body.trim() === '') {
+    throw new Error('body must not be empty');
+  }
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {

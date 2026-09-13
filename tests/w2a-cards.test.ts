@@ -609,6 +609,20 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
       rmSync(home, { recursive: true, force: true });
     }
   });
+
+  it('Fix C CLI: card create --budget 0 exits 1 and creates no card', () => {
+    const { home, env } = setupCliHome();
+    try {
+      const create = runCli(home, env, 'card', 'create', '--title', 't', '--budget', '0');
+      expect(create.status).toBe(1);
+      expect(create.out).toContain('Invalid budget: 0 (expected a positive integer)');
+      const list = runCli(home, env, 'card', 'list');
+      expect(list.status, list.out).toBe(0);
+      expect(list.out).toContain('No cards found.');
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('test 11: audit rule 2 sites return exactly one grep hit each', () => {
@@ -697,5 +711,51 @@ describe('Fix B: claim/block/review/complete throw on an unknown card id, keep n
     const readyCard = createCard(root, 'default', { title: 'ready-one' });
     expect(blockCard(root, 'default', readyCard.id, 'why')).toBeNull();
     expect(reviewCard(root, 'default', readyCard.id)).toBeNull();
+  });
+});
+
+describe('Fix C: createCard/claimCard/blockCard/addCardComment validate their inputs', () => {
+  it('createCard throws for an empty or whitespace-only title and commits nothing', () => {
+    const db = openHippoDb(root);
+    try {
+      expect(() => createCard(root, 'default', { title: '' })).toThrow('title must not be empty');
+      expect(() => createCard(root, 'default', { title: '   ' })).toThrow('title must not be empty');
+      expect(countRows(db, 'cards')).toBe(0);
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
+  it('createCard throws for a budget that is not a positive integer and commits nothing', () => {
+    const db = openHippoDb(root);
+    try {
+      expect(() => createCard(root, 'default', { title: 'x', budget: 0 })).toThrow('Invalid budget: 0 (expected a positive integer)');
+      expect(() => createCard(root, 'default', { title: 'x', budget: -3 })).toThrow('Invalid budget: -3 (expected a positive integer)');
+      expect(() => createCard(root, 'default', { title: 'x', budget: 2.5 })).toThrow('Invalid budget: 2.5 (expected a positive integer)');
+      expect(countRows(db, 'cards')).toBe(0);
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
+  it('claimCard throws for an empty runtime and leaves the card unclaimed', () => {
+    const card = createCard(root, 'default', { title: 'x' });
+    expect(() => claimCard(root, 'default', card.id, '')).toThrow('runtime must not be empty');
+    expect(loadCard(root, 'default', card.id)?.status).toBe('ready');
+    expect(loadCardRuns(root, 'default', card.id)).toEqual([]);
+  });
+
+  it('blockCard throws for an empty reason and leaves the card running with no comment', () => {
+    const card = createCard(root, 'default', { title: 'x' });
+    claimCard(root, 'default', card.id, 'r1');
+    expect(() => blockCard(root, 'default', card.id, '')).toThrow('reason must not be empty');
+    expect(loadCard(root, 'default', card.id)?.status).toBe('running');
+    expect(loadCardComments(root, 'default', card.id)).toEqual([]);
+  });
+
+  it('addCardComment throws for an empty body and adds no comment', () => {
+    const card = createCard(root, 'default', { title: 'x' });
+    expect(() => addCardComment(root, 'default', card.id, 'author', '')).toThrow('body must not be empty');
+    expect(loadCardComments(root, 'default', card.id)).toEqual([]);
   });
 });
