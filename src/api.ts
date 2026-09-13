@@ -2465,6 +2465,8 @@ export async function getContext(
       : loadLatestHandoff(ctx.hippoRoot, ctx.tenantId, undefined, {
           unfinishedOnly: true,
           maxAgeMs: SNAPSHOT_AMBIENT_MAX_AGE_MS,
+          // codex P2: admit scope in SQL so a newer denied row can't hide an older eligible one before LIMIT 1.
+          scopeFilter: 'default-deny',
         });
   const sessionHandoff =
     rawSessionHandoff && passesScopeFilterForRecall(rowScope(rawSessionHandoff), undefined)

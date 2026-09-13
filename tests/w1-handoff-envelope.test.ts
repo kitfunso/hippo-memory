@@ -463,6 +463,135 @@ describe('test 9: helper swap leaves no local passesScopeFilter clone', () => {
   });
 });
 
+describe('fix 1: unfinishedOnly selects the newest revision per session', () => {
+  it('does not resurrect an older null-outcome revision after the newest is stamped', () => {
+    initStore(root);
+    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-s', summary: 'older', artifacts: [] });
+    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-s', summary: 'newer', artifacts: [] });
+    expect(stampHandoffOutcome(root, 'default', 'sess-s', 'success')).toBe(1);
+
+    // Session S is fully done: ambient unfinishedOnly must not fall back to its older null row.
+    expect(loadLatestHandoff(root, 'default', undefined, { unfinishedOnly: true })).toBeNull();
+
+    // A genuinely unfinished session still surfaces.
+    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-t', summary: 'still open', artifacts: [] });
+    const unfinished = loadLatestHandoff(root, 'default', undefined, { unfinishedOnly: true });
+    expect(unfinished!.sessionId).toBe('sess-t');
+  });
+});
+
+describe('fix 2: scopeFilter default-deny admits scope before LIMIT 1', () => {
+  it('skips a newer private-scoped row to return an older public one', () => {
+    initStore(root);
+    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-pub', summary: 'public', artifacts: [], scope: null });
+    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-priv', summary: 'private', artifacts: [], scope: 'proj:private:x' });
+
+    const admitted = loadLatestHandoff(root, 'default', undefined, { unfinishedOnly: true, scopeFilter: 'default-deny' });
+    expect(admitted!.sessionId).toBe('sess-pub');
+  });
+
+  it('skips an unknown:legacy scoped row', () => {
+    initStore(root);
+    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-pub2', summary: 'public', artifacts: [], scope: null });
+    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-legacy', summary: 'legacy', artifacts: [], scope: 'unknown:legacy' });
+
+    const admitted = loadLatestHandoff(root, 'default', undefined, { unfinishedOnly: true, scopeFilter: 'default-deny' });
+    expect(admitted!.sessionId).toBe('sess-pub2');
+  });
+});
+
+describe('fix 3: writeSessionEndHandoff carries forward same-task envelope metadata', () => {
+  it('same task keeps constraints/cardId/targetRuntime/artifacts/repoRoot; a different task does not inherit them', () => {
+    initStore(root);
+    saveSessionHandoff(root, 'default', {
+      version: 1,
+      sessionId: 'sess-carry',
+      taskId: 'T',
+      summary: 'explicit handoff',
+      artifacts: ['file.ts'],
+      constraints: ['no schema break'],
+      cardId: 'card-9',
+      targetRuntime: 'codex',
+      repoRoot: '/repo/root',
+    });
+    saveActiveTaskSnapshot(root, 'default', {
+      task: 'T',
+      summary: 'snapshot summary',
+      next_step: 'next',
+      session_id: 'sess-carry',
+    });
+    const refreshed = writeSessionEndHandoff(root, 'default', 'sess-carry', null);
+    expect(refreshed!.constraints).toEqual(['no schema break']);
+    expect(refreshed!.cardId).toBe('card-9');
+    expect(refreshed!.targetRuntime).toBe('codex');
+    expect(refreshed!.artifacts).toEqual(['file.ts']);
+    expect(refreshed!.repoRoot).toBe('/repo/root');
+
+    // Different task on refresh: nothing carries forward.
+    saveSessionHandoff(root, 'default', {
+      version: 1,
+      sessionId: 'sess-diff',
+      taskId: 'T-old',
+      summary: 'explicit handoff',
+      artifacts: ['old.ts'],
+      constraints: ['old constraint'],
+      cardId: 'card-old',
+      targetRuntime: 'old-runtime',
+      repoRoot: '/old/root',
+    });
+    saveActiveTaskSnapshot(root, 'default', {
+      task: 'T-new',
+      summary: 'snapshot summary',
+      next_step: 'next',
+      session_id: 'sess-diff',
+    });
+    const notCarried = writeSessionEndHandoff(root, 'default', 'sess-diff', null);
+    expect(notCarried!.constraints).toEqual([]);
+    expect(notCarried!.cardId).toBeNull();
+    expect(notCarried!.targetRuntime).toBeNull();
+    expect(notCarried!.artifacts).toEqual([]);
+    expect(notCarried!.repoRoot).toBeUndefined();
+  });
+});
+
+describe('fix 4: v42 migration backfills outcome from session_complete events', () => {
+  it('backfills success from the newest session_complete event; leaves eventless rows null', () => {
+    initStore(root);
+    const db1 = openHippoDb(root);
+    try {
+      db1.exec('DROP TABLE session_handoffs');
+      db1.exec(PRE_W1_SESSION_HANDOFFS_DDL);
+      db1.prepare(`
+        INSERT INTO session_handoffs(session_id, summary, artifacts_json, created_at, tenant_id)
+        VALUES ('sess-done', 'done work', '[]', '2026-01-01T00:00:00.000Z', 'default')
+      `).run();
+      db1.prepare(`
+        INSERT INTO session_handoffs(session_id, summary, artifacts_json, created_at, tenant_id)
+        VALUES ('sess-noevent', 'no event', '[]', '2026-01-01T00:00:00.000Z', 'default')
+      `).run();
+      db1.prepare(`
+        INSERT INTO session_events(session_id, event_type, content, source, metadata_json, created_at, tenant_id)
+        VALUES ('sess-done', 'session_complete', 'success', 'test', '{}', '2026-01-01T00:01:00.000Z', 'default')
+      `).run();
+      setMeta(db1, 'schema_version', '41');
+    } finally {
+      closeHippoDb(db1);
+    }
+
+    const db2 = openHippoDb(root);
+    try {
+      expect(getMeta(db2, 'schema_version')).toBe('42');
+    } finally {
+      closeHippoDb(db2);
+    }
+
+    const done = loadHandoffById(root, 'default', 1);
+    expect(done!.outcome).toBe('success');
+    const noEvent = loadHandoffById(root, 'default', 2);
+    expect(noEvent!.outcome).toBeNull();
+  });
+});
+
 describe('CLI round trip: handoff create -> handoff latest --json', () => {
   const REPO_ROOT = join(__dirname, '..');
   const CLI_PATH = join(REPO_ROOT, 'dist', 'cli.js');

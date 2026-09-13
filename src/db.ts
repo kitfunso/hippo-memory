@@ -2334,6 +2334,21 @@ const MIGRATIONS: Migration[] = [
       }
       if (!tableHasColumn(db, 'session_handoffs', 'outcome')) {
         db.exec(`ALTER TABLE session_handoffs ADD COLUMN outcome TEXT`);
+        // codex P2: backfill from session_complete so pre-existing handoffs don't
+        // all read as unfinished and get injected by the new 72h ambient fallback.
+        db.exec(`
+          UPDATE session_handoffs SET outcome = (
+            SELECT e.content FROM session_events e
+            WHERE e.tenant_id = session_handoffs.tenant_id AND e.session_id = session_handoffs.session_id
+              AND e.event_type = 'session_complete' AND e.content IN ('success','partial','failure')
+            ORDER BY e.created_at DESC, e.id DESC LIMIT 1
+          )
+          WHERE outcome IS NULL AND EXISTS (
+            SELECT 1 FROM session_events e
+            WHERE e.tenant_id = session_handoffs.tenant_id AND e.session_id = session_handoffs.session_id
+              AND e.event_type = 'session_complete' AND e.content IN ('success','partial','failure')
+          )
+        `);
       }
       if (!tableHasColumn(db, 'session_handoffs', 'target_runtime')) {
         db.exec(`ALTER TABLE session_handoffs ADD COLUMN target_runtime TEXT`);

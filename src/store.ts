@@ -3396,7 +3396,7 @@ export function loadLatestHandoff(
   hippoRoot: string,
   tenantId: string,
   sessionId?: string,
-  opts: { unfinishedOnly?: boolean; maxAgeMs?: number } = {},
+  opts: { unfinishedOnly?: boolean; maxAgeMs?: number; scopeFilter?: 'default-deny' } = {},
 ): SessionHandoff | null {
   assertTenantId('loadLatestHandoff', tenantId);
   initStore(hippoRoot);
@@ -3410,11 +3410,21 @@ export function loadLatestHandoff(
       params.push(sessionId);
     }
     if (opts.unfinishedOnly) {
+      // codex P2: restrict to each session's newest revision first — stampHandoffOutcome
+      // only stamps the newest row, so an older null-outcome revision must not resurrect.
+      conditions.push(`id IN (SELECT MAX(id) FROM session_handoffs WHERE tenant_id = ? GROUP BY session_id)`);
+      params.push(tenantId);
       conditions.push(`(outcome IS NULL OR outcome IN ('partial','failure'))`);
     }
     if (opts.maxAgeMs != null) {
       conditions.push('created_at >= ?');
       params.push(new Date(Date.now() - opts.maxAgeMs).toISOString());
+    }
+    if (opts.scopeFilter === 'default-deny') {
+      // codex P2: admit scope before LIMIT 1, else a newer denied row hides an older eligible one.
+      const placeholders = RECALL_DEFAULT_DENY_SCOPES.map(() => '?').join(', ');
+      conditions.push(`(scope IS NULL OR (scope NOT IN (${placeholders}) AND scope NOT LIKE '%:private:%'))`);
+      params.push(...RECALL_DEFAULT_DENY_SCOPES);
     }
 
     // SAFETY: row's shape matches HANDOFF_COLUMNS.
@@ -3508,17 +3518,24 @@ export function writeSessionEndHandoff(
     closeHippoDb(db);
   }
 
+  // codex P2: same-task refresh carries forward envelope fields nobody cleared,
+  // rather than dropping them when the snapshot rewrite has no opinion on them.
+  const carryForward = existing != null && existing.taskId === snapshot.task;
+
   return saveSessionHandoff(hippoRoot, tenantId, {
     version: 1,
     sessionId,
-    repoRoot: undefined,
+    repoRoot: carryForward ? existing.repoRoot : undefined,
     taskId: snapshot.task,
     summary: snapshot.summary,
     nextAction: snapshot.next_step,
-    artifacts: [],
+    artifacts: carryForward ? existing.artifacts : [],
     scope: snapshot.scope,
     evidence,
     outcome,
+    constraints: carryForward ? existing.constraints : undefined,
+    targetRuntime: carryForward ? existing.targetRuntime : undefined,
+    cardId: carryForward ? existing.cardId : undefined,
   });
 }
 
