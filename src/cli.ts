@@ -4641,7 +4641,7 @@ function cmdCard(
       console.error('Usage: hippo card claim <id> --runtime <name> [--session <id>]');
       process.exit(1);
     }
-    const sessionId = String(flags['session'] ?? '').trim() || undefined;
+    const sessionId = cardStringFlag(flags, 'session') || undefined;
     const card = claimCard(hippoRoot, tenantId, id, runtime, sessionId);
     if (!card) {
       console.error(`Could not claim card ${id} (not ready/blocked, or already claimed).`);
