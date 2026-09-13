@@ -356,6 +356,70 @@ describe('test 8: completeCard from a non-review status returns null and touches
   });
 });
 
+describe('Fix A: completeCard shelves a non-success outcome and releases no children', () => {
+  it('failure leaves the card shelved, the child in backlog, and closes the run with outcome failure', () => {
+    const a = createCard(root, 'default', { title: 'A' });
+    const b = createCard(root, 'default', { title: 'B', dependsOn: [a.id] });
+    claimCard(root, 'default', a.id, 'codex');
+    reviewCard(root, 'default', a.id);
+
+    const result = completeCard(root, 'default', a.id, 'failure');
+    expect(result).not.toBeNull();
+    expect(result!.card.status).toBe('shelved');
+    expect(result!.promotedChildren).toEqual([]);
+    expect(loadCard(root, 'default', b.id)?.status).toBe('backlog');
+
+    const runs = loadCardRuns(root, 'default', a.id);
+    expect(runs[0]?.ended).not.toBeNull();
+    expect(runs[0]?.outcome).toBe('failure');
+  });
+
+  it('partial leaves the card shelved, the child in backlog, and closes the run with outcome partial', () => {
+    const a = createCard(root, 'default', { title: 'A' });
+    const b = createCard(root, 'default', { title: 'B', dependsOn: [a.id] });
+    claimCard(root, 'default', a.id, 'codex');
+    reviewCard(root, 'default', a.id);
+
+    const result = completeCard(root, 'default', a.id, 'partial');
+    expect(result).not.toBeNull();
+    expect(result!.card.status).toBe('shelved');
+    expect(result!.promotedChildren).toEqual([]);
+    expect(loadCard(root, 'default', b.id)?.status).toBe('backlog');
+
+    const runs = loadCardRuns(root, 'default', a.id);
+    expect(runs[0]?.ended).not.toBeNull();
+    expect(runs[0]?.outcome).toBe('partial');
+  });
+
+  it('a shelved parent never releases a child even after every other parent completes', () => {
+    const a = createCard(root, 'default', { title: 'A' });
+    const c = createCard(root, 'default', { title: 'C' });
+    const b = createCard(root, 'default', { title: 'B', dependsOn: [a.id, c.id] });
+
+    claimCard(root, 'default', a.id, 'codex');
+    reviewCard(root, 'default', a.id);
+    completeCard(root, 'default', a.id, 'failure');
+    expect(loadCard(root, 'default', b.id)?.status).toBe('backlog');
+
+    claimCard(root, 'default', c.id, 'codex');
+    reviewCard(root, 'default', c.id);
+    const result = completeCard(root, 'default', c.id, 'success');
+    expect(result!.promotedChildren).toEqual([]);
+    expect(loadCard(root, 'default', b.id)?.status).toBe('backlog');
+  });
+
+  it('createCard with dependsOn a shelved parent creates the child in backlog', () => {
+    const a = createCard(root, 'default', { title: 'A' });
+    claimCard(root, 'default', a.id, 'codex');
+    reviewCard(root, 'default', a.id);
+    completeCard(root, 'default', a.id, 'failure');
+    expect(loadCard(root, 'default', a.id)?.status).toBe('shelved');
+
+    const b = createCard(root, 'default', { title: 'B', dependsOn: [a.id] });
+    expect(b.status).toBe('backlog');
+  });
+});
+
 describe('test 9: loadLatestHandoffForCard', () => {
   it('round-trips a handoff saved with a matching cardId and ignores others', () => {
     const card = createCard(root, 'default', { title: 'Handoff target' });
@@ -500,6 +564,24 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
 
       const claim = runCli(home, env, 'card', 'claim', id!, '--runtime');
       expect(claim.status).toBe(1);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('Fix A CLI: card complete --outcome failure prints status shelved and no Promoted line', () => {
+    const { home, env } = setupCliHome();
+    try {
+      const create = runCli(home, env, 'card', 'create', '--title', 't');
+      const id = create.out.match(/Created card (\S+)/)?.[1];
+      expect(id).toBeTruthy();
+      runCli(home, env, 'card', 'claim', id!, '--runtime', 'r1');
+      runCli(home, env, 'card', 'review', id!);
+
+      const complete = runCli(home, env, 'card', 'complete', id!, '--outcome', 'failure');
+      expect(complete.status, complete.out).toBe(0);
+      expect(complete.out).toContain('(status: shelved)');
+      expect(complete.out).not.toContain('Promoted to ready');
     } finally {
       rmSync(home, { recursive: true, force: true });
     }

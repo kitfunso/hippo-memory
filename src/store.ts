@@ -3907,7 +3907,7 @@ export function reviewCard(hippoRoot: string, tenantId: string, id: string): Car
   }
 }
 
-/** Requires the card be in review; closes the live run with outcome and, in the same transaction, promotes any child whose parents are now all done. */
+/** Requires the card be in review; closes the live run with outcome. Outcome 'success' moves the card to done and, in the same transaction, promotes any child whose parents are now all done; 'failure' or 'partial' moves it to shelved and promotes nothing. */
 export function completeCard(
   hippoRoot: string,
   tenantId: string,
@@ -3923,7 +3923,8 @@ export function completeCard(
   try {
     db.exec('BEGIN IMMEDIATE');
     try {
-      const changes = transitionCard(db, tenantId, id, ['review'], 'done');
+      const target: CardStatus = outcome === 'success' ? 'done' : 'shelved';
+      const changes = transitionCard(db, tenantId, id, ['review'], target);
       if (changes === 0) {
         db.exec('ROLLBACK');
         return null;
@@ -3936,23 +3937,25 @@ export function completeCard(
 
       // Not best-effort (rule 12): promotion runs in this same transaction, so a
       // card can never be `done` with an un-evaluated child.
-      // SAFETY: rows' shape matches the single `child` column named in the SELECT below.
-      const children = (db.prepare(`SELECT child FROM card_deps WHERE tenant_id = ? AND parent = ?`).all(tenantId, id) as Array<{ child: string }>).map((r) => r.child);
       const promotedChildren: string[] = [];
-      for (const childId of children) {
-        // SAFETY: row's shape matches the single `status` column named in the SELECT below.
-        const child = db.prepare(`SELECT status FROM cards WHERE tenant_id = ? AND id = ?`).get(tenantId, childId) as { status: string } | undefined;
-        if (!child || child.status !== 'backlog') continue;
-        // SAFETY: rows' shape matches the single `parent` column named in the SELECT below.
-        const parents = (db.prepare(`SELECT parent FROM card_deps WHERE tenant_id = ? AND child = ?`).all(tenantId, childId) as Array<{ parent: string }>).map((r) => r.parent);
-        const placeholders = parents.map(() => '?').join(', ');
-        // SAFETY: row's shape matches the single `c` column named in the SELECT below.
-        const doneCount = (db.prepare(
-          `SELECT COUNT(*) as c FROM cards WHERE tenant_id = ? AND id IN (${placeholders}) AND status = 'done'`,
-        ).get(tenantId, ...parents) as { c: number }).c;
-        if (doneCount === parents.length) {
-          transitionCard(db, tenantId, childId, ['backlog'], 'ready');
-          promotedChildren.push(childId);
+      if (target === 'done') {
+        // SAFETY: rows' shape matches the single `child` column named in the SELECT below.
+        const children = (db.prepare(`SELECT child FROM card_deps WHERE tenant_id = ? AND parent = ?`).all(tenantId, id) as Array<{ child: string }>).map((r) => r.child);
+        for (const childId of children) {
+          // SAFETY: row's shape matches the single `status` column named in the SELECT below.
+          const child = db.prepare(`SELECT status FROM cards WHERE tenant_id = ? AND id = ?`).get(tenantId, childId) as { status: string } | undefined;
+          if (!child || child.status !== 'backlog') continue;
+          // SAFETY: rows' shape matches the single `parent` column named in the SELECT below.
+          const parents = (db.prepare(`SELECT parent FROM card_deps WHERE tenant_id = ? AND child = ?`).all(tenantId, childId) as Array<{ parent: string }>).map((r) => r.parent);
+          const placeholders = parents.map(() => '?').join(', ');
+          // SAFETY: row's shape matches the single `c` column named in the SELECT below.
+          const doneCount = (db.prepare(
+            `SELECT COUNT(*) as c FROM cards WHERE tenant_id = ? AND id IN (${placeholders}) AND status = 'done'`,
+          ).get(tenantId, ...parents) as { c: number }).c;
+          if (doneCount === parents.length) {
+            transitionCard(db, tenantId, childId, ['backlog'], 'ready');
+            promotedChildren.push(childId);
+          }
         }
       }
 

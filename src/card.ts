@@ -55,7 +55,7 @@ export const CARD_TRANSITIONS: CardTransitions = {
   ready: ['running'],
   running: ['blocked', 'review'],
   blocked: ['running'],
-  review: ['done'],
+  review: ['done', 'shelved'],
   done: [],
   shelved: [],
 };

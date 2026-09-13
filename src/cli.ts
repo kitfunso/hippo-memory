@@ -4687,7 +4687,7 @@ function cmdCard(
       console.error(`Could not complete card ${id} (not in review).`);
       process.exit(1);
     }
-    console.log(`Completed card ${result.card.id}`);
+    console.log(`Completed card ${result.card.id} (status: ${result.card.status})`);
     if (result.promotedChildren.length > 0) {
       console.log(`Promoted to ready: ${result.promotedChildren.join(', ')}`);
     }
