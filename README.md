@@ -619,6 +619,14 @@ hippo watch "npm run build"
 | `hippo session latest` | Show latest task snapshot + events |
 | `hippo session resume` | Re-inject latest handoff as context |
 | `hippo current show` | Compact current state (task + session events) |
+| `hippo card create --title "..."` | Create a work-queue card (`--repo`, `--contract`, `--budget`, repeatable `--depends-on <id>`) |
+| `hippo card show <id>` | Show a card, its deps, runs, comments and latest handoff |
+| `hippo card list [--status <status>]` | List cards, newest-updated first |
+| `hippo card claim <id> --runtime <name>` | Claim a ready or blocked card |
+| `hippo card block <id> --reason "<why>"` | Block a running card; the reason is recorded as a comment |
+| `hippo card review <id>` | Move a running card to review |
+| `hippo card complete <id> --outcome <success\|failure\|partial>` | Complete a card in review: `success` marks it done and promotes children whose parents are all done; `failure` or `partial` shelves it |
+| `hippo card comment <id> --body "..."` | Add a comment to a card |
 | `hippo wm push --scope <s> --content "..."` | Push to working memory |
 | `hippo wm read --scope <s>` | Read working memory entries |
 | `hippo wm clear --scope <s>` | Clear working memory |
