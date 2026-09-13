@@ -13,6 +13,7 @@ import {
   loadCardDeps,
   loadCardRuns,
   claimCard,
+  blockCard,
   reviewCard,
   completeCard,
   transitionCard,
@@ -256,6 +257,31 @@ describe('test 7: completeCard promotes only children whose parents are all done
     const runs = loadCardRuns(root, 'default', a.id);
     expect(runs[0]?.ended).not.toBeNull();
     expect(runs[0]?.outcome).toBe('success');
+  });
+});
+
+describe('test 7b: claim -> block -> reclaim -> review -> complete closes exactly the live run', () => {
+  it('the blocked run keeps outcome blocked; the reclaimed run gets the final outcome', () => {
+    const card = createCard(root, 'default', { title: 'Reclaimed' });
+    claimCard(root, 'default', card.id, 'r1');
+    blockCard(root, 'default', card.id, 'waiting on input');
+    claimCard(root, 'default', card.id, 'r2');
+    reviewCard(root, 'default', card.id);
+    const result = completeCard(root, 'default', card.id, 'success');
+    expect(result).not.toBeNull();
+
+    const runs = loadCardRuns(root, 'default', card.id);
+    expect(runs).toHaveLength(2);
+    expect(runs[0]?.runtime).toBe('r2');
+    expect(runs[0]?.ended).not.toBeNull();
+    expect(runs[0]?.outcome).toBe('success');
+    expect(runs[1]?.runtime).toBe('r1');
+    expect(runs[1]?.ended).not.toBeNull();
+    expect(runs[1]?.outcome).toBe('blocked');
+
+    const finalCard = loadCard(root, 'default', card.id);
+    expect(finalCard?.status).toBe('done');
+    expect(finalCard?.assigneeRuntime).toBe('r2');
   });
 });
 

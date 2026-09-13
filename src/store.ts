@@ -3766,7 +3766,7 @@ export function loadCardRuns(hippoRoot: string, tenantId: string, id: string): C
     // SAFETY: rows' shape matches CardRunRow.
     const rows = db.prepare(`
       SELECT id, card, runtime, session_id, started, ended, outcome
-      FROM card_runs WHERE tenant_id = ? AND card = ? ORDER BY started DESC
+      FROM card_runs WHERE tenant_id = ? AND card = ? ORDER BY started DESC, id DESC
     `).all(tenantId, id) as CardRunRow[];
     return rows.map(rowToCardRun);
   } finally {
@@ -3852,6 +3852,12 @@ export function blockCard(hippoRoot: string, tenantId: string, id: string, reaso
         db.exec('ROLLBACK');
         return null;
       }
+      const now = new Date().toISOString();
+      // Close the interrupted run here so completeCard's ended IS NULL scope only ever matches the live run.
+      db.prepare(`
+        UPDATE card_runs SET ended = ?, outcome = 'blocked', updated_at = ?
+        WHERE card = ? AND tenant_id = ? AND ended IS NULL
+      `).run(now, now, id, tenantId);
       insertCardComment(db, tenantId, id, 'system', reason);
       db.exec('COMMIT');
       return loadCardRow(db, tenantId, id);
@@ -3869,9 +3875,19 @@ export function reviewCard(hippoRoot: string, tenantId: string, id: string): Car
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    const changes = transitionCard(db, tenantId, id, ['running'], 'review');
-    if (changes === 0) return null;
-    return loadCardRow(db, tenantId, id);
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const changes = transitionCard(db, tenantId, id, ['running'], 'review');
+      if (changes === 0) {
+        db.exec('ROLLBACK');
+        return null;
+      }
+      db.exec('COMMIT');
+      return loadCardRow(db, tenantId, id);
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
   } finally {
     closeHippoDb(db);
   }
