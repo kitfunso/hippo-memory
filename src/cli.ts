@@ -4548,11 +4548,12 @@ function cmdCard(
     const budgetRaw = flags['budget'];
     let budget: number | undefined;
     if (budgetRaw !== undefined) {
-      budget = Number(budgetRaw);
-      if (!Number.isFinite(budget)) {
-        console.error(`Invalid budget: "${String(budgetRaw)}"`);
+      // Strict digits: a value-less --budget parses as `true` and Number(true) is 1.
+      if (typeof budgetRaw !== 'string' || !/^\d+$/.test(budgetRaw)) {
+        console.error(`Invalid budget: "${String(budgetRaw)}" (expected a positive integer)`);
         process.exit(1);
       }
+      budget = Number(budgetRaw);
     }
     const dependsOnFlag = flags['depends-on'];
     const dependsOn: string[] = Array.isArray(dependsOnFlag)
