@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Work-queue cards (roadmap Track W, milestone W2a).** Four new tables (`cards`, `card_deps`, `card_runs`, `card_comments`, schema v42 to v43) give hippo a claimable unit of work: N candidates can attempt to claim one row and exactly one wins, the same single-writer guarantee `PRAGMA busy_timeout` already gives every other write path. `src/card.ts` defines the status machine (`backlog -> ready -> running -> {blocked, review} -> done`, plus `shelved`) as `CARD_TRANSITIONS`, and `transitionCard` in `src/store.ts` is the one function that ever writes `cards.status`, checking the static map before issuing any SQL so an illegal transition fails fast regardless of the row's current state. `createCard` pre-checks every `dependsOn` id exists for the tenant before opening its transaction, and `completeCard` promotes backlog children whose parents are all done inside the same transaction as the completion it belongs to, not best-effort.
+- `hippo card create|show|list|claim|block|review|complete|comment`, mirroring `hippo handoff`'s subcommand and tenant-resolution shape. `card show <id>` renders the card, its dependency graph, its runs, its comments, and `loadLatestHandoffForCard(hippoRoot, tenantId, cardId)`, the new store function that lets a card-keyed handoff (`session_handoffs.card_id`, added in W1) be looked up from the card side.
+- `createCard`, `loadCard`, `listCards`, `loadCardDeps`, `loadCardRuns`, `loadCardComments`, `claimCard`, `blockCard`, `reviewCard`, `completeCard`, `addCardComment`, `loadLatestHandoffForCard`, and the `card.ts` types are exported from `src/index.ts` for programmatic use.
+
 ## 1.39.0 - 2026-09-13
 
 ### Added

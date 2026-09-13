@@ -3633,7 +3633,7 @@ function insertCardComment(db: DatabaseSyncLike, tenantId: string, cardId: strin
 
 // The single status-mutating seam (rule 15): CARD_TRANSITIONS is the one
 // runtime authority, so a hand-copied wrong `from` list fails fast here.
-function transitionCard(
+export function transitionCard(
   db: DatabaseSyncLike,
   tenantId: string,
   cardId: string,
