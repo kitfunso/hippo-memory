@@ -1,7 +1,7 @@
 // W2a work-queue cards (trajectories/01M2D5VSYJFK4YXQ0RG2NGCPYJ/plan.md), tests 1,2,4-12.
 // Test 3 (self-heal parity) lives in tests/db-continuity-tables-self-heal.test.ts's CONTINUITY_TABLES.
 import { describe, it, expect, beforeEach, afterEach, beforeAll } from 'vitest';
-import { mkdtempSync, rmSync, existsSync, statSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, statSync, mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync, execSync } from 'node:child_process';
@@ -366,22 +366,94 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
       rmSync(home, { recursive: true, force: true });
     }
   });
+
+  it('a value-less --title exits 1 and creates no card', () => {
+    const { home, env } = setupCliHome();
+    try {
+      const create = runCli(home, env, 'card', 'create', '--title');
+      expect(create.status).toBe(1);
+      const list = runCli(home, env, 'card', 'list');
+      expect(list.status, list.out).toBe(0);
+      expect(list.out).toContain('No cards found.');
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('a value-less --depends-on exits 1', () => {
+    const { home, env } = setupCliHome();
+    try {
+      const create = runCli(home, env, 'card', 'create', '--title', 't', '--depends-on');
+      expect(create.status).toBe(1);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('a value-less --reason on card block exits 1 and leaves the card running', () => {
+    const { home, env } = setupCliHome();
+    try {
+      const create = runCli(home, env, 'card', 'create', '--title', 't');
+      const id = create.out.match(/Created card (\S+)/)?.[1];
+      expect(id).toBeTruthy();
+      const claim = runCli(home, env, 'card', 'claim', id!, '--runtime', 'r');
+      expect(claim.status, claim.out).toBe(0);
+
+      const block = runCli(home, env, 'card', 'block', id!, '--reason');
+      expect(block.status).toBe(1);
+
+      const show = runCli(home, env, 'card', 'show', id!, '--json');
+      expect(show.status, show.out).toBe(0);
+      expect(JSON.parse(show.out).card.status).toBe('running');
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('a value-less --runtime on card claim exits 1', () => {
+    const { home, env } = setupCliHome();
+    try {
+      const create = runCli(home, env, 'card', 'create', '--title', 't');
+      const id = create.out.match(/Created card (\S+)/)?.[1];
+      expect(id).toBeTruthy();
+
+      const claim = runCli(home, env, 'card', 'claim', id!, '--runtime');
+      expect(claim.status).toBe(1);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('card comment on an unknown id exits 1 with the friendly message, not a raw FK error', () => {
+    const { home, env } = setupCliHome();
+    try {
+      const comment = runCli(home, env, 'card', 'comment', 'nope', '--body', 'x');
+      expect(comment.status).toBe(1);
+      expect(comment.out).toContain('No card found with id nope.');
+      expect(comment.out).not.toContain('FOREIGN KEY');
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('test 11: audit rule 2 sites return exactly one grep hit each', () => {
+  // In-process regex count, not a `grep` shell-out: a bare Windows runner may lack the binary.
+  function hitCount(filePath: string, needle: string): number {
+    const text = readFileSync(filePath, 'utf8');
+    return text.split('\n').filter((line) => line.includes(needle)).length;
+  }
+
   it('depends-on appears once in the repeatable-flag allow-list', () => {
-    const cli = execFileSync('grep', ['-c', "key === 'depends-on'", join(__dirname, '..', 'src', 'cli.ts')], { encoding: 'utf8' });
-    expect(cli.trim()).toBe('1');
+    expect(hitCount(join(__dirname, '..', 'src', 'cli.ts'), "key === 'depends-on'")).toBe(1);
   });
 
   it("case 'card' appears once in the dispatch switch", () => {
-    const cli = execFileSync('grep', ['-c', "case 'card':", join(__dirname, '..', 'src', 'cli.ts')], { encoding: 'utf8' });
-    expect(cli.trim()).toBe('1');
+    expect(hitCount(join(__dirname, '..', 'src', 'cli.ts'), "case 'card':")).toBe(1);
   });
 
   it('createCard is re-exported exactly once from src/index.ts', () => {
-    const idx = execFileSync('grep', ['-c', 'createCard', join(__dirname, '..', 'src', 'index.ts')], { encoding: 'utf8' });
-    expect(idx.trim()).toBe('1');
+    expect(hitCount(join(__dirname, '..', 'src', 'index.ts'), 'createCard')).toBe(1);
   });
 });
 

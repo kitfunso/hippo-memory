@@ -4528,6 +4528,16 @@ function printCard(hippoRoot: string, tenantId: string, card: Card): void {
   console.log('');
 }
 
+// parseArgs turns a value-less flag into `true`; refuse rather than silently
+// stringifying it (String(true) === 'true'), mirroring cmdHandoff's guard.
+function cardStringFlag(flags: Record<string, string | boolean | string[]>, key: string): string | undefined {
+  const v = flags[key];
+  if (v === undefined) return undefined;
+  if (typeof v === 'string') return v.trim();
+  console.error(`--${key} requires a value`);
+  process.exit(1);
+}
+
 function cmdCard(
   hippoRoot: string,
   args: string[],
@@ -4538,13 +4548,13 @@ function cmdCard(
   const subcommand = args[0] ?? '';
 
   if (subcommand === 'create') {
-    const title = String(flags['title'] ?? '').trim();
+    const title = cardStringFlag(flags, 'title') ?? '';
     if (!title) {
       console.error('Usage: hippo card create --title "..." [--repo <name>] [--contract <text>] [--budget <n>] [--depends-on <id>...]');
       process.exit(1);
     }
-    const repo = String(flags['repo'] ?? '').trim() || undefined;
-    const contract = String(flags['contract'] ?? '').trim() || undefined;
+    const repo = cardStringFlag(flags, 'repo') || undefined;
+    const contract = cardStringFlag(flags, 'contract') || undefined;
     const budgetRaw = flags['budget'];
     let budget: number | undefined;
     if (budgetRaw !== undefined) {
@@ -4556,9 +4566,16 @@ function cmdCard(
       budget = Number(budgetRaw);
     }
     const dependsOnFlag = flags['depends-on'];
-    const dependsOn: string[] = Array.isArray(dependsOnFlag)
-      ? dependsOnFlag
-      : (typeof dependsOnFlag === 'string' ? [dependsOnFlag] : []);
+    if (dependsOnFlag === true) {
+      console.error('--depends-on requires a value');
+      process.exit(1);
+    }
+    // SAFETY: parseArgs types depends-on as string[], guard defensively anyway.
+    const dependsOn: string[] = Array.isArray(dependsOnFlag) ? dependsOnFlag : [];
+    if (dependsOn.some((d) => typeof d !== 'string')) {
+      console.error('--depends-on requires a value');
+      process.exit(1);
+    }
 
     let card: Card;
     try {
@@ -4619,7 +4636,7 @@ function cmdCard(
 
   if (subcommand === 'claim') {
     const id = args[1];
-    const runtime = String(flags['runtime'] ?? '').trim();
+    const runtime = cardStringFlag(flags, 'runtime') ?? '';
     if (!id || !runtime) {
       console.error('Usage: hippo card claim <id> --runtime <name> [--session <id>]');
       process.exit(1);
@@ -4636,7 +4653,7 @@ function cmdCard(
 
   if (subcommand === 'block') {
     const id = args[1];
-    const reason = String(flags['reason'] ?? '').trim();
+    const reason = cardStringFlag(flags, 'reason') ?? '';
     if (!id || !reason) {
       console.error(CARD_BLOCK_REASON_REQUIRED);
       process.exit(1);
@@ -4686,12 +4703,22 @@ function cmdCard(
 
   if (subcommand === 'comment') {
     const id = args[1];
-    const body = String(flags['body'] ?? '').trim();
-    if (!id || !body) {
+    if (!id) {
       console.error('Usage: hippo card comment <id> --body "..." [--author <name>]');
       process.exit(1);
     }
-    const author = String(flags['author'] ?? 'cli').trim() || 'cli';
+    // Matches show/claim/block/review/complete: friendly message, not a raw FK error.
+    const card = loadCard(hippoRoot, tenantId, id);
+    if (!card) {
+      console.error(`No card found with id ${id}.`);
+      process.exit(1);
+    }
+    const body = cardStringFlag(flags, 'body') ?? '';
+    if (!body) {
+      console.error('Usage: hippo card comment <id> --body "..." [--author <name>]');
+      process.exit(1);
+    }
+    const author = cardStringFlag(flags, 'author') || 'cli';
     const comment = addCardComment(hippoRoot, tenantId, id, author, body);
     console.log(`Added comment ${comment.id} to card ${id}`);
     return;
