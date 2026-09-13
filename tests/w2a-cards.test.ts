@@ -194,7 +194,7 @@ describe('test 5: status-transition matrix', () => {
 
 // Runs a real second thread (its own node:sqlite connection) so the lock is genuinely
 // held while this process's claimCard blocks under PRAGMA busy_timeout, not simulated in-process.
-function holdLockThenRelease(dbPath: string, cardId: string, holdMs: number): { locked: Promise<void>; released: Promise<void> } {
+function holdLockThenRelease(dbPath: string, cardId: string, holdMs: number) {
   const workerCode = `
     const { parentPort, workerData } = require('node:worker_threads');
     const { DatabaseSync } = require('node:sqlite');
@@ -296,7 +296,7 @@ describe('test 7b: claim -> block -> reclaim -> review -> complete closes exactl
 
 // Runs a real second connection that takes BEGIN IMMEDIATE, completes the parent, then
 // commits, so createCard's parent-status probe is forced to happen after that commit.
-function holdLockThenCompleteParent(dbPath: string, parentId: string, holdMs: number): { locked: Promise<void>; released: Promise<void> } {
+function holdLockThenCompleteParent(dbPath: string, parentId: string, holdMs: number) {
   const workerCode = `
     const { parentPort, workerData } = require('node:worker_threads');
     const { DatabaseSync } = require('node:sqlite');

@@ -3549,7 +3549,7 @@ export function writeSessionEndHandoff(
 interface CardRow {
   id: string;
   title: string;
-  status: string;
+  status: CardStatus;
   assignee_runtime: string | null;
   repo: string | null;
   contract: string | null;
@@ -3568,7 +3568,7 @@ function rowToCard(row: CardRow): Card {
   return {
     id: row.id,
     title: row.title,
-    status: row.status as CardStatus,
+    status: row.status,
     assigneeRuntime: row.assignee_runtime,
     repo: row.repo,
     contract: row.contract,
@@ -3583,7 +3583,7 @@ function rowToCard(row: CardRow): Card {
 }
 
 function loadCardRow(db: DatabaseSyncLike, tenantId: string, id: string): Card | null {
-  // SAFETY: row's shape matches CARD_COLUMNS.
+  // SAFETY: row's shape matches CARD_COLUMNS; status only ever holds a CardStatus value.
   const row = db.prepare(`SELECT ${CARD_COLUMNS} FROM cards WHERE id = ? AND tenant_id = ?`).get(id, tenantId) as CardRow | undefined;
   return row ? rowToCard(row) : null;
 }
@@ -3742,7 +3742,7 @@ export function listCards(hippoRoot: string, tenantId: string, opts: { status?: 
       conditions.push('status = ?');
       params.push(opts.status);
     }
-    // SAFETY: rows' shape matches CARD_COLUMNS.
+    // SAFETY: rows' shape matches CARD_COLUMNS; status only ever holds a CardStatus value.
     const rows = db.prepare(`
       SELECT ${CARD_COLUMNS} FROM cards WHERE ${conditions.join(' AND ')} ORDER BY updated_at DESC, id DESC
     `).all(...params) as CardRow[];
@@ -3753,7 +3753,7 @@ export function listCards(hippoRoot: string, tenantId: string, opts: { status?: 
 }
 
 /** Returns this card's parent and child ids from card_deps. */
-export function loadCardDeps(hippoRoot: string, tenantId: string, id: string): { parents: string[]; children: string[] } {
+export function loadCardDeps(hippoRoot: string, tenantId: string, id: string) {
   assertTenantId('loadCardDeps', tenantId);
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);

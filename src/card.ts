@@ -1,13 +1,15 @@
 // Work-queue card types (W2a plan.md): a claimable unit of work, N candidates claim one row, first wins.
+/** A work-queue card's lifecycle state; CARD_TRANSITIONS lists the legal moves between them. */
 export type CardStatus = 'backlog' | 'ready' | 'running' | 'blocked' | 'review' | 'done' | 'shelved';
 
 const CARD_STATUSES: readonly CardStatus[] = ['backlog', 'ready', 'running', 'blocked', 'review', 'done', 'shelved'];
 
-/** Narrows an unvalidated value (e.g. CLI input) to a CardStatus. */
-export function isCardStatus(v: unknown): v is CardStatus {
-  return typeof v === 'string' && (CARD_STATUSES as readonly string[]).includes(v);
+/** Narrows a raw string, such as a CLI flag value, to a CardStatus. */
+export function isCardStatus(v: string): v is CardStatus {
+  return CARD_STATUSES.some((s) => s === v);
 }
 
+/** A card row; leaseUntil and heartbeatAt are reserved for W2b's lease and heartbeat, W2a never writes them and they stay null. */
 export interface Card {
   id: string;
   title: string;
@@ -24,6 +26,7 @@ export interface Card {
   scope: string | null;
 }
 
+/** One claim-to-close attempt at a card by a runtime. */
 export interface CardRun {
   id: number;
   card: string;
@@ -34,6 +37,7 @@ export interface CardRun {
   outcome: string | null;
 }
 
+/** A comment left on a card. */
 export interface CardComment {
   id: number;
   cardId: string;
@@ -42,8 +46,11 @@ export interface CardComment {
   createdAt: string;
 }
 
-// The interface every write path calls (rule 15). One seam, no second copy.
-export const CARD_TRANSITIONS: Record<CardStatus, CardStatus[]> = {
+/** The legal next-statuses for each CardStatus. */
+export type CardTransitions = { readonly [S in CardStatus]: readonly CardStatus[] };
+
+/** transitionCard checks every status write against this map. */
+export const CARD_TRANSITIONS: CardTransitions = {
   backlog: ['ready'],
   ready: ['running'],
   running: ['blocked', 'review'],

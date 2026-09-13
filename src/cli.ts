@@ -115,7 +115,7 @@ import {
 import { rejectValue, unrejectValue, listRejectionsForTenant } from './reject-flow.js';
 import { RejectedValueError } from './rejection.js';
 import { isHandoffOutcome, formatHandoffEvidenceLine, type SessionHandoff, type HandoffOutcome, type HandoffEvidence } from './handoff.js';
-import { type Card, type CardStatus, isCardStatus } from './card.js';
+import { type Card, isCardStatus } from './card.js';
 import { passesScopeFilterForRecall } from './recall-scope.js';
 import { search, markRetrieved, estimateTokens, hybridSearch, physicsSearch, explainMatch, textOverlap, tokenize as tokenizeQuery, type RerankStep } from './search.js';
 import { compareEntryIdentity } from './compare.js';
@@ -4533,9 +4533,8 @@ function printCard(hippoRoot: string, tenantId: string, card: Card): void {
 function cardStringFlag(flags: Record<string, string | boolean | string[]>, key: string): string | undefined {
   const v = flags[key];
   if (v === undefined) return undefined;
-  if (typeof v === 'string') return v.trim();
-  console.error(`--${key} requires a value`);
-  process.exit(1);
+  if (v === true || v === false || Array.isArray(v)) { console.error(`--${key} requires a value`); process.exit(1); }
+  return v.trim();
 }
 
 function cmdCard(
@@ -4555,12 +4554,11 @@ function cmdCard(
     }
     const repo = cardStringFlag(flags, 'repo') || undefined;
     const contract = cardStringFlag(flags, 'contract') || undefined;
-    const budgetRaw = flags['budget'];
+    const budgetRaw = cardStringFlag(flags, 'budget');
     let budget: number | undefined;
     if (budgetRaw !== undefined) {
-      // Strict digits: a value-less --budget parses as `true` and Number(true) is 1.
-      if (typeof budgetRaw !== 'string' || !/^\d+$/.test(budgetRaw)) {
-        console.error(`Invalid budget: "${String(budgetRaw)}" (expected a positive integer)`);
+      if (!/^\d+$/.test(budgetRaw)) {
+        console.error(`Invalid budget: "${budgetRaw}" (expected a positive integer)`);
         process.exit(1);
       }
       budget = Number(budgetRaw);
@@ -4570,12 +4568,7 @@ function cmdCard(
       console.error('--depends-on requires a value');
       process.exit(1);
     }
-    // SAFETY: parseArgs types depends-on as string[], guard defensively anyway.
     const dependsOn: string[] = Array.isArray(dependsOnFlag) ? dependsOnFlag : [];
-    if (dependsOn.some((d) => typeof d !== 'string')) {
-      console.error('--depends-on requires a value');
-      process.exit(1);
-    }
 
     let card: Card;
     try {
@@ -4614,12 +4607,12 @@ function cmdCard(
   }
 
   if (subcommand === 'list') {
-    const statusRaw = flags['status'];
-    if (statusRaw !== undefined && !isCardStatus(statusRaw)) {
-      console.error(`Invalid status: "${String(statusRaw)}".`);
+    const status = cardStringFlag(flags, 'status');
+    if (status !== undefined && !isCardStatus(status)) {
+      console.error(`Invalid status: "${status}".`);
       process.exit(1);
     }
-    const cards = listCards(hippoRoot, tenantId, { status: statusRaw as CardStatus | undefined });
+    const cards = listCards(hippoRoot, tenantId, { status });
     if (flags['json']) {
       console.log(JSON.stringify({ cards }, null, 2));
       return;

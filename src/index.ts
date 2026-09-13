@@ -51,7 +51,7 @@ export {
 // Feature 5: Session handoff
 export { SessionHandoff, HandoffOutcome, HandoffEvidence, isHandoffOutcome } from './handoff.js';
 // W2a: work-queue cards
-export { Card, CardStatus, CardRun, CardComment, isCardStatus, CARD_TRANSITIONS } from './card.js';
+export { Card, CardStatus, CardRun, CardComment, CardTransitions, isCardStatus, CARD_TRANSITIONS } from './card.js';
 export { consolidate, ConsolidationResult } from './consolidate.js';
 // Announced public in CHANGELOG 1.26.3 but never re-exported; the rest of dedupe.js stays internal.
 export { strengthBucket } from './dedupe.js';
