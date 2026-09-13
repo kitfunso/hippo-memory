@@ -8,6 +8,7 @@
 - `createCard`, `loadCard`, `listCards`, `loadCardDeps`, `loadCardRuns`, `loadCardComments`, `claimCard`, `blockCard`, `reviewCard`, `completeCard`, `addCardComment`, `loadLatestHandoffForCard`, and the `card.ts` types are exported from `src/index.ts` for programmatic use.
 - `blockCard` now closes the run it interrupts with `outcome = 'blocked'`, so a later `completeCard` on a reclaimed card only ever closes the live run.
 - `addCardComment` throws `unknown card id: <id>` unless the card belongs to the caller's tenant.
+- `createCard` records a repeated `dependsOn` id once instead of failing on the `card_deps` primary key.
 
 ## 1.39.0 - 2026-09-13
 
