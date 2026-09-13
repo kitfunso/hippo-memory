@@ -1083,6 +1083,9 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
       (filteredHandoff?.artifacts ?? []).reduce((acc, a) => acc + tokenize(a), 0) +
       (filteredHandoff?.constraints ?? []).reduce((acc, c) => acc + tokenize(c), 0) +
       tokenize(filteredHandoff?.evidence ? formatHandoffEvidenceLine(filteredHandoff.evidence) : null) +
+      tokenize(filteredHandoff?.outcome) +
+      tokenize(filteredHandoff?.targetRuntime) +
+      tokenize(filteredHandoff?.cardId) +
       filteredEvents.reduce((acc, e) => acc + tokenize(e.content), 0);
   }
 
@@ -2472,9 +2475,10 @@ export async function getContext(
     rawSessionHandoff && passesScopeFilterForRecall(rowScope(rawSessionHandoff), undefined)
       ? rawSessionHandoff
       : null;
-  const recentSessionEvents = hasLocal && activeSnapshot?.session_id
+  // Raw session id here too: each event is admitted on its own scope, same as recall and the CLI.
+  const recentSessionEvents = hasLocal && rawActiveSnapshot?.session_id
     ? listSessionEvents(ctx.hippoRoot, ctx.tenantId, {
-        session_id: activeSnapshot.session_id,
+        session_id: rawActiveSnapshot.session_id,
         limit: 5,
       }).filter((e) => passesScopeFilterForRecall(rowScope(e), undefined))
     : [];

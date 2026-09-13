@@ -274,4 +274,26 @@ describe('api.recall continuity flag', () => {
     // 4 + 4 + 4 chars at Math.ceil(len/4) = 1+1+1 = 3
     expect(result.continuityTokens).toBe(3);
   });
+
+  it('counts outcome, targetRuntime and cardId toward continuityTokens', () => {
+    initStore(tmpDir);
+    saveActiveTaskSnapshot(tmpDir, 'default', {
+      task: 'aaaa', summary: 'bbbb', next_step: 'cccc',
+      session_id: 'sess-1', source: 'test',
+    });
+    const before = recall(
+      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+      { query: 'anything', includeContinuity: true },
+    );
+
+    saveSessionHandoff(tmpDir, 'default', {
+      version: 1, sessionId: 'sess-1', summary: 'handoff', artifacts: [],
+      outcome: 'success', targetRuntime: 'node', cardId: 'CARD-1',
+    });
+    const after = recall(
+      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+      { query: 'anything', includeContinuity: true },
+    );
+    expect(after.continuityTokens!).toBeGreaterThan(before.continuityTokens!);
+  });
 });

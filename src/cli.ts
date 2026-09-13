@@ -1779,6 +1779,9 @@ async function cmdRecall(
       (sessionHandoff?.artifacts ?? []).reduce((acc, a) => acc + tokenize(a), 0) +
       (sessionHandoff?.constraints ?? []).reduce((acc, c) => acc + tokenize(c), 0) +
       tokenize(sessionHandoff?.evidence ? formatHandoffEvidenceLine(sessionHandoff.evidence) : null) +
+      tokenize(sessionHandoff?.outcome) +
+      tokenize(sessionHandoff?.targetRuntime) +
+      tokenize(sessionHandoff?.cardId) +
       recentSessionEvents.reduce((acc, e) => acc + tokenize(e.content), 0);
   }
   const hasContinuity =

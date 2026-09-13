@@ -452,6 +452,25 @@ describe('test 8: scope filtering on the continuity read paths', () => {
     expect(result.activeSnapshot).toBeUndefined();
     expect(result.sessionHandoff).toBeUndefined();
   });
+
+  it('8f: recentEvents admits each event on its own scope, keyed on the raw snapshot', async () => {
+    initStore(root);
+    saveActiveTaskSnapshot(root, 'default', {
+      task: 'private task', summary: 'summary', next_step: 'next',
+      session_id: 'sess-mix', scope: 'proj:private:x',
+    });
+    appendSessionEvent(root, 'default', {
+      session_id: 'sess-mix', event_type: 'note', content: 'public event',
+    });
+    appendSessionEvent(root, 'default', {
+      session_id: 'sess-mix', event_type: 'note', content: 'private event', scope: 'proj:private:x',
+    });
+    const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test') };
+    const result = await getContext(ctx, { currentSessionId: 'sess-mix' });
+    expect(result.activeSnapshot).toBeUndefined();
+    expect(result.recentEvents).toHaveLength(1);
+    expect(result.recentEvents?.[0].content).toBe('public event');
+  });
 });
 
 describe('test 9: helper swap leaves no local passesScopeFilter clone', () => {
