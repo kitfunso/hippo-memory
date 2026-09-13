@@ -4537,6 +4537,19 @@ function cardStringFlag(flags: Record<string, string | boolean | string[]>, key:
   return v.trim();
 }
 
+// One entry per subcommand: the flags cmdCard actually reads for it, so a typo like
+// --depend-on fails fast instead of silently doing nothing.
+const CARD_SUBCOMMAND_FLAGS: Record<string, string[]> = {
+  create: ['title', 'repo', 'contract', 'budget', 'depends-on'],
+  show: ['json'],
+  list: ['status', 'json'],
+  claim: ['runtime', 'session'],
+  block: ['reason'],
+  review: [],
+  complete: ['outcome'],
+  comment: ['body', 'author'],
+};
+
 function cmdCard(
   hippoRoot: string,
   args: string[],
@@ -4545,6 +4558,19 @@ function cmdCard(
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
+
+  const allowedFlags = CARD_SUBCOMMAND_FLAGS[subcommand];
+  if (allowedFlags) {
+    for (const key of Object.keys(flags)) {
+      if (!allowedFlags.includes(key)) {
+        // --flag=value never splits on '=' (see parseArgs), so it lands here as one long key.
+        const hint = key.includes('=') ? ` Use --${key.slice(0, key.indexOf('='))} <value>, not --${key}.` : '';
+        const valid = allowedFlags.length > 0 ? allowedFlags.map((f) => `--${f}`).join(', ') : '(none)';
+        console.error(`Unknown flag --${key} for hippo card ${subcommand}.${hint} Valid flags: ${valid}`);
+        process.exit(1);
+      }
+    }
+  }
 
   if (subcommand === 'create') {
     const title = cardStringFlag(flags, 'title') ?? '';

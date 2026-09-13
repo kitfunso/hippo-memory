@@ -623,6 +623,53 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
       rmSync(home, { recursive: true, force: true });
     }
   });
+
+  it('Fix D CLI: an unrecognized flag, or one mistyped with = or a wrong name, exits 1 and creates no card', () => {
+    const { home, env } = setupCliHome();
+    try {
+      const equalsForm = runCli(home, env, 'card', 'create', '--title', 't', '--depends-on=nope');
+      expect(equalsForm.status).toBe(1);
+      expect(equalsForm.out).toContain('Unknown flag --depends-on=nope for hippo card create');
+      expect(equalsForm.out).toContain('Use --depends-on <value>, not --depends-on=nope.');
+
+      const typo = runCli(home, env, 'card', 'create', '--title', 't', '--depend-on', 'x');
+      expect(typo.status).toBe(1);
+      expect(typo.out).toContain('Unknown flag --depend-on for hippo card create');
+
+      const list = runCli(home, env, 'card', 'list');
+      expect(list.status, list.out).toBe(0);
+      expect(list.out).toContain('No cards found.');
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('Fix D CLI: every subcommand still accepts each flag it legitimately reads', () => {
+    const { home, env } = setupCliHome();
+    try {
+      const parent = runCli(home, env, 'card', 'create', '--title', 'parent');
+      expect(parent.status, parent.out).toBe(0);
+      const parentId = parent.out.match(/Created card (\S+)/)?.[1]!;
+      expect(parentId).toBeTruthy();
+
+      const create = runCli(home, env, 'card', 'create', '--title', 'child', '--repo', 'r', '--contract', 'c', '--budget', '5', '--depends-on', parentId);
+      expect(create.status, create.out).toBe(0);
+      const childId = create.out.match(/Created card (\S+)/)?.[1]!;
+      expect(childId).toBeTruthy();
+
+      const list = runCli(home, env, 'card', 'list', '--status', 'backlog', '--json');
+      expect(list.status, list.out).toBe(0);
+      expect((JSON.parse(list.out).cards as Array<{ id: string }>).some((c) => c.id === childId)).toBe(true);
+
+      const claim = runCli(home, env, 'card', 'claim', parentId, '--runtime', 'r1', '--session', 's1');
+      expect(claim.status, claim.out).toBe(0);
+
+      const comment = runCli(home, env, 'card', 'comment', parentId, '--body', 'note', '--author', 'me');
+      expect(comment.status, comment.out).toBe(0);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('test 11: audit rule 2 sites return exactly one grep hit each', () => {
