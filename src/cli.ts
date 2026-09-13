@@ -4635,7 +4635,13 @@ function cmdCard(
       process.exit(1);
     }
     const sessionId = cardStringFlag(flags, 'session') || undefined;
-    const card = claimCard(hippoRoot, tenantId, id, runtime, sessionId);
+    let card: Card | null;
+    try {
+      card = claimCard(hippoRoot, tenantId, id, runtime, sessionId);
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
     if (!card) {
       console.error(`Could not claim card ${id} (not ready/blocked, or already claimed).`);
       process.exit(1);
@@ -4651,7 +4657,13 @@ function cmdCard(
       console.error(CARD_BLOCK_REASON_REQUIRED);
       process.exit(1);
     }
-    const card = blockCard(hippoRoot, tenantId, id, reason);
+    let card: Card | null;
+    try {
+      card = blockCard(hippoRoot, tenantId, id, reason);
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
     if (!card) {
       console.error(`Could not block card ${id} (not running).`);
       process.exit(1);
@@ -4666,7 +4678,13 @@ function cmdCard(
       console.error('Usage: hippo card review <id>');
       process.exit(1);
     }
-    const card = reviewCard(hippoRoot, tenantId, id);
+    let card: Card | null;
+    try {
+      card = reviewCard(hippoRoot, tenantId, id);
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
     if (!card) {
       console.error(`Could not move card ${id} to review (not running).`);
       process.exit(1);
@@ -4682,7 +4700,13 @@ function cmdCard(
       console.error('Usage: hippo card complete <id> --outcome <success|failure|partial>');
       process.exit(1);
     }
-    const result = completeCard(hippoRoot, tenantId, id, outcomeRaw);
+    let result: { card: Card; promotedChildren: string[] } | null;
+    try {
+      result = completeCard(hippoRoot, tenantId, id, outcomeRaw);
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
     if (!result) {
       console.error(`Could not complete card ${id} (not in review).`);
       process.exit(1);
@@ -4700,7 +4724,7 @@ function cmdCard(
       console.error('Usage: hippo card comment <id> --body "..." [--author <name>]');
       process.exit(1);
     }
-    // Matches show/claim/block/review/complete: friendly message, not a raw FK error.
+    // Only show and comment look the card up directly; claim/block/review/complete throw from the store instead.
     const card = loadCard(hippoRoot, tenantId, id);
     if (!card) {
       console.error(`No card found with id ${id}.`);

@@ -598,6 +598,17 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
       rmSync(home, { recursive: true, force: true });
     }
   });
+
+  it('Fix B CLI: card claim on an unknown id exits 1 with the unknown-id message', () => {
+    const { home, env } = setupCliHome();
+    try {
+      const claim = runCli(home, env, 'card', 'claim', 'card_000000000000', '--runtime', 'r1');
+      expect(claim.status).toBe(1);
+      expect(claim.out).toContain('unknown card id: card_000000000000');
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('test 11: audit rule 2 sites return exactly one grep hit each', () => {
@@ -646,5 +657,45 @@ describe('test 13: addCardComment checks the card belongs to the caller\'s tenan
     const comment = addCardComment(root, 'default', card.id, 'x', 'y');
     expect(comment.body).toBe('y');
     expect(loadCardComments(root, 'default', card.id)).toHaveLength(1);
+  });
+});
+
+describe('Fix B: claim/block/review/complete throw on an unknown card id, keep null for the wrong state', () => {
+  it('claimCard throws for a nonexistent id and for a card read under another tenant', () => {
+    const card = createCard(root, 'default', { title: 'x' });
+    expect(() => claimCard(root, 'default', 'nope', 'r1')).toThrow('unknown card id: nope');
+    expect(() => claimCard(root, 'tenant2', card.id, 'r1')).toThrow(`unknown card id: ${card.id}`);
+  });
+
+  it('blockCard throws for a nonexistent id and for a card read under another tenant', () => {
+    const card = createCard(root, 'default', { title: 'x' });
+    claimCard(root, 'default', card.id, 'r1');
+    expect(() => blockCard(root, 'default', 'nope', 'why')).toThrow('unknown card id: nope');
+    expect(() => blockCard(root, 'tenant2', card.id, 'why')).toThrow(`unknown card id: ${card.id}`);
+  });
+
+  it('reviewCard throws for a nonexistent id and for a card read under another tenant', () => {
+    const card = createCard(root, 'default', { title: 'x' });
+    claimCard(root, 'default', card.id, 'r1');
+    expect(() => reviewCard(root, 'default', 'nope')).toThrow('unknown card id: nope');
+    expect(() => reviewCard(root, 'tenant2', card.id)).toThrow(`unknown card id: ${card.id}`);
+  });
+
+  it('completeCard throws for a nonexistent id and for a card read under another tenant', () => {
+    const card = createCard(root, 'default', { title: 'x' });
+    claimCard(root, 'default', card.id, 'r1');
+    reviewCard(root, 'default', card.id);
+    expect(() => completeCard(root, 'default', 'nope', 'success')).toThrow('unknown card id: nope');
+    expect(() => completeCard(root, 'tenant2', card.id, 'success')).toThrow(`unknown card id: ${card.id}`);
+  });
+
+  it('a card that exists but is in the wrong state still returns null, not throws', () => {
+    const parent = createCard(root, 'default', { title: 'parent' });
+    const backlogChild = createCard(root, 'default', { title: 'child', dependsOn: [parent.id] });
+    expect(claimCard(root, 'default', backlogChild.id, 'r1')).toBeNull();
+
+    const readyCard = createCard(root, 'default', { title: 'ready-one' });
+    expect(blockCard(root, 'default', readyCard.id, 'why')).toBeNull();
+    expect(reviewCard(root, 'default', readyCard.id)).toBeNull();
   });
 });

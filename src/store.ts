@@ -3672,6 +3672,7 @@ export function createCard(
   const db = openHippoDb(hippoRoot);
   try {
     const dependsOn = [...new Set(input.dependsOn ?? [])];
+    let id = '';
 
     db.exec('BEGIN IMMEDIATE');
     try {
@@ -3694,7 +3695,7 @@ export function createCard(
         allParentsDone = dependsOn.every((pid) => found.get(pid) === 'done');
       }
 
-      const id = generateId('card');
+      id = generateId('card');
       const now = new Date().toISOString();
       const status: CardStatus = dependsOn.length === 0 || allParentsDone ? 'ready' : 'backlog';
 
@@ -3708,11 +3709,11 @@ export function createCard(
         `).run(parentId, id, tenantId, now);
       }
       db.exec('COMMIT');
-      return loadCardRow(db, tenantId, id)!;
     } catch (error) {
-      db.exec('ROLLBACK');
+      try { db.exec('ROLLBACK'); } catch { /* commit may have already rolled back */ }
       throw error;
     }
+    return loadCardRow(db, tenantId, id)!;
   } finally {
     closeHippoDb(db);
   }
@@ -3819,7 +3820,7 @@ export function loadLatestHandoffForCard(hippoRoot: string, tenantId: string, ca
   }
 }
 
-/** Atomic claim: WHERE status IN (ready, blocked) AND assignee_runtime IS NULL decides the race. */
+/** Atomic claim: WHERE status IN (ready, blocked) AND assignee_runtime IS NULL decides the race. Throws on an unknown card id; returns null for a card not ready/blocked or already claimed. */
 export function claimCard(hippoRoot: string, tenantId: string, id: string, runtime: string, sessionId?: string): Card | null {
   assertTenantId('claimCard', tenantId);
   initStore(hippoRoot);
@@ -3833,6 +3834,9 @@ export function claimCard(hippoRoot: string, tenantId: string, id: string, runti
         params: [runtime],
       });
       if (changes === 0) {
+        if (!loadCardRow(db, tenantId, id)) {
+          throw new Error(`unknown card id: ${id}`);
+        }
         db.exec('ROLLBACK');
         return null;
       }
@@ -3842,17 +3846,17 @@ export function claimCard(hippoRoot: string, tenantId: string, id: string, runti
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `).run(id, runtime, sessionId ?? null, now, now, now, tenantId);
       db.exec('COMMIT');
-      return loadCardRow(db, tenantId, id);
     } catch (error) {
-      db.exec('ROLLBACK');
+      try { db.exec('ROLLBACK'); } catch { /* commit may have already rolled back */ }
       throw error;
     }
+    return loadCardRow(db, tenantId, id);
   } finally {
     closeHippoDb(db);
   }
 }
 
-/** Requires the card be running; closes the live run as blocked and files reason as a comment. */
+/** Requires the card be running; closes the live run as blocked and files reason as a comment. Throws on an unknown card id; returns null for a card not running. */
 export function blockCard(hippoRoot: string, tenantId: string, id: string, reason: string): Card | null {
   assertTenantId('blockCard', tenantId);
   initStore(hippoRoot);
@@ -3862,6 +3866,9 @@ export function blockCard(hippoRoot: string, tenantId: string, id: string, reaso
     try {
       const changes = transitionCard(db, tenantId, id, ['running'], 'blocked', { setSql: 'assignee_runtime = NULL' });
       if (changes === 0) {
+        if (!loadCardRow(db, tenantId, id)) {
+          throw new Error(`unknown card id: ${id}`);
+        }
         db.exec('ROLLBACK');
         return null;
       }
@@ -3873,17 +3880,17 @@ export function blockCard(hippoRoot: string, tenantId: string, id: string, reaso
       `).run(now, now, id, tenantId);
       insertCardComment(db, tenantId, id, 'system', reason);
       db.exec('COMMIT');
-      return loadCardRow(db, tenantId, id);
     } catch (error) {
-      db.exec('ROLLBACK');
+      try { db.exec('ROLLBACK'); } catch { /* commit may have already rolled back */ }
       throw error;
     }
+    return loadCardRow(db, tenantId, id);
   } finally {
     closeHippoDb(db);
   }
 }
 
-/** Requires the card be running; moves it to review with no other side effects. */
+/** Requires the card be running; moves it to review with no other side effects. Throws on an unknown card id; returns null for a card not running. */
 export function reviewCard(hippoRoot: string, tenantId: string, id: string): Card | null {
   assertTenantId('reviewCard', tenantId);
   initStore(hippoRoot);
@@ -3893,21 +3900,24 @@ export function reviewCard(hippoRoot: string, tenantId: string, id: string): Car
     try {
       const changes = transitionCard(db, tenantId, id, ['running'], 'review');
       if (changes === 0) {
+        if (!loadCardRow(db, tenantId, id)) {
+          throw new Error(`unknown card id: ${id}`);
+        }
         db.exec('ROLLBACK');
         return null;
       }
       db.exec('COMMIT');
-      return loadCardRow(db, tenantId, id);
     } catch (error) {
-      db.exec('ROLLBACK');
+      try { db.exec('ROLLBACK'); } catch { /* commit may have already rolled back */ }
       throw error;
     }
+    return loadCardRow(db, tenantId, id);
   } finally {
     closeHippoDb(db);
   }
 }
 
-/** Requires the card be in review; closes the live run with outcome. Outcome 'success' moves the card to done and, in the same transaction, promotes any child whose parents are now all done; 'failure' or 'partial' moves it to shelved and promotes nothing. */
+/** Requires the card be in review; closes the live run with outcome. Outcome 'success' moves the card to done and, in the same transaction, promotes any child whose parents are now all done; 'failure' or 'partial' moves it to shelved and promotes nothing. Throws on an unknown card id; returns null for a card not in review. */
 export function completeCard(
   hippoRoot: string,
   tenantId: string,
@@ -3922,10 +3932,14 @@ export function completeCard(
   const db = openHippoDb(hippoRoot);
   try {
     db.exec('BEGIN IMMEDIATE');
+    let promotedChildren: string[] = [];
     try {
       const target: CardStatus = outcome === 'success' ? 'done' : 'shelved';
       const changes = transitionCard(db, tenantId, id, ['review'], target);
       if (changes === 0) {
+        if (!loadCardRow(db, tenantId, id)) {
+          throw new Error(`unknown card id: ${id}`);
+        }
         db.exec('ROLLBACK');
         return null;
       }
@@ -3937,7 +3951,6 @@ export function completeCard(
 
       // Not best-effort (rule 12): promotion runs in this same transaction, so a
       // card can never be `done` with an un-evaluated child.
-      const promotedChildren: string[] = [];
       if (target === 'done') {
         // SAFETY: rows' shape matches the single `child` column named in the SELECT below.
         const children = (db.prepare(`SELECT child FROM card_deps WHERE tenant_id = ? AND parent = ?`).all(tenantId, id) as Array<{ child: string }>).map((r) => r.child);
@@ -3960,11 +3973,11 @@ export function completeCard(
       }
 
       db.exec('COMMIT');
-      return { card: loadCardRow(db, tenantId, id)!, promotedChildren };
     } catch (error) {
-      db.exec('ROLLBACK');
+      try { db.exec('ROLLBACK'); } catch { /* commit may have already rolled back */ }
       throw error;
     }
+    return { card: loadCardRow(db, tenantId, id)!, promotedChildren };
   } finally {
     closeHippoDb(db);
   }
