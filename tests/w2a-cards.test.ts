@@ -285,6 +285,52 @@ describe('test 7b: claim -> block -> reclaim -> review -> complete closes exactl
   });
 });
 
+// Runs a real second connection that takes BEGIN IMMEDIATE, completes the parent, then
+// commits, so createCard's parent-status probe is forced to happen after that commit.
+function holdLockThenCompleteParent(dbPath: string, parentId: string, holdMs: number): { locked: Promise<void>; released: Promise<void> } {
+  const workerCode = `
+    const { parentPort, workerData } = require('node:worker_threads');
+    const { DatabaseSync } = require('node:sqlite');
+    const db = new DatabaseSync(workerData.dbPath);
+    db.exec('PRAGMA busy_timeout = 5000');
+    db.exec('BEGIN IMMEDIATE');
+    parentPort.postMessage('locked');
+    setTimeout(() => {
+      db.prepare("UPDATE cards SET status = 'done', updated_at = ? WHERE id = ? AND tenant_id = ?")
+        .run(new Date().toISOString(), workerData.parentId, 'default');
+      db.exec('COMMIT');
+      db.close();
+      parentPort.postMessage('released');
+    }, workerData.holdMs);
+  `;
+  const worker = new Worker(workerCode, { eval: true, workerData: { dbPath, parentId, holdMs } });
+  const locked = new Promise<void>((resolve) => {
+    worker.once('message', (msg) => { if (msg === 'locked') resolve(); });
+  });
+  const released = new Promise<void>((resolve) => {
+    worker.on('message', (msg) => { if (msg === 'released') { worker.terminate(); resolve(); } });
+  });
+  return { locked, released };
+}
+
+describe('test 7c: a parent completing while createCard waits for the write lock still yields a ready child', () => {
+  it('createCard blocks on BEGIN IMMEDIATE, then reads the parent as done once the lock is released', async () => {
+    const parent = createCard(root, 'default', { title: 'Parent' });
+    claimCard(root, 'default', parent.id, 'codex');
+    reviewCard(root, 'default', parent.id); // running, not done yet: the pre-fix read would see this.
+
+    const dbPath = join(root, 'hippo.db');
+    const { locked, released } = holdLockThenCompleteParent(dbPath, parent.id, 300);
+    await locked;
+
+    const child = createCard(root, 'default', { title: 'Child', dependsOn: [parent.id] });
+
+    expect(child.status).toBe('ready');
+    expect(loadCard(root, 'default', child.id)?.status).toBe('ready');
+    await released;
+  });
+});
+
 describe('test 8: completeCard from a non-review status returns null and touches nothing', () => {
   it('leaves card_deps and card_runs untouched', () => {
     const parent = createCard(root, 'default', { title: 'Still backlog' });

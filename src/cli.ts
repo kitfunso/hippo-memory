@@ -409,7 +409,7 @@ export function parseArgs(argv: string[]): { command: string; args: string[]; fl
         flags[key] = true;
         i++;
       } else {
-        // Check if it's a repeatable flag (tag, artifact, link, step, constraint)
+        // Check if it's a repeatable flag (tag, artifact, link, step, constraint, depends-on)
         if (key === 'tag' || key === 'artifact' || key === 'link' || key === 'step' || key === 'constraint' || key === 'depends-on') {
           if (Array.isArray(flags[key])) {
             (flags[key] as string[]).push(next);

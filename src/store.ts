@@ -3657,6 +3657,7 @@ export function transitionCard(
   return Number(result.changes ?? 0);
 }
 
+/** Creates a card; status is ready with no deps or once every dependsOn id is done, else backlog. An unknown dependsOn id throws and commits nothing. */
 export function createCard(
   hippoRoot: string,
   tenantId: string,
@@ -3667,29 +3668,32 @@ export function createCard(
   const db = openHippoDb(hippoRoot);
   try {
     const dependsOn = input.dependsOn ?? [];
-    let allParentsDone = true;
-    if (dependsOn.length > 0) {
-      const placeholders = dependsOn.map(() => '?').join(', ');
-      // SAFETY: rows' shape matches the two columns named in the SELECT below.
-      const rows = db.prepare(
-        `SELECT id, status FROM cards WHERE tenant_id = ? AND id IN (${placeholders})`,
-      ).all(tenantId, ...dependsOn) as Array<{ id: string; status: string }>;
-      const found = new Map(rows.map((r) => [r.id, r.status]));
-      // Pre-check before any write: a typo'd --depends-on can never commit a card row.
-      for (const parentId of dependsOn) {
-        if (!found.has(parentId)) {
-          throw new Error(`unknown parent card id: ${parentId}`);
-        }
-      }
-      allParentsDone = dependsOn.every((id) => found.get(id) === 'done');
-    }
-
-    const id = generateId('card');
-    const now = new Date().toISOString();
-    const status: CardStatus = dependsOn.length === 0 || allParentsDone ? 'ready' : 'backlog';
 
     db.exec('BEGIN IMMEDIATE');
     try {
+      // Probe runs inside the transaction (mirrors batchWriteAndDelete): a parent
+      // completing between an outside-the-lock read and the INSERT would strand the child.
+      let allParentsDone = true;
+      if (dependsOn.length > 0) {
+        const placeholders = dependsOn.map(() => '?').join(', ');
+        // SAFETY: rows' shape matches the two columns named in the SELECT below.
+        const rows = db.prepare(
+          `SELECT id, status FROM cards WHERE tenant_id = ? AND id IN (${placeholders})`,
+        ).all(tenantId, ...dependsOn) as Array<{ id: string; status: string }>;
+        const found = new Map(rows.map((r) => [r.id, r.status]));
+        // Pre-check before any write: a typo'd --depends-on can never commit a card row.
+        for (const parentId of dependsOn) {
+          if (!found.has(parentId)) {
+            throw new Error(`unknown parent card id: ${parentId}`);
+          }
+        }
+        allParentsDone = dependsOn.every((pid) => found.get(pid) === 'done');
+      }
+
+      const id = generateId('card');
+      const now = new Date().toISOString();
+      const status: CardStatus = dependsOn.length === 0 || allParentsDone ? 'ready' : 'backlog';
+
       db.prepare(`
         INSERT INTO cards (id, title, status, repo, contract, budget, created_at, updated_at, tenant_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -3700,17 +3704,17 @@ export function createCard(
         `).run(parentId, id, tenantId, now);
       }
       db.exec('COMMIT');
+      return loadCardRow(db, tenantId, id)!;
     } catch (error) {
       db.exec('ROLLBACK');
       throw error;
     }
-
-    return loadCardRow(db, tenantId, id)!;
   } finally {
     closeHippoDb(db);
   }
 }
 
+/** Returns the card row for id, or null if it does not exist under this tenant. */
 export function loadCard(hippoRoot: string, tenantId: string, id: string): Card | null {
   assertTenantId('loadCard', tenantId);
   initStore(hippoRoot);
@@ -3722,6 +3726,7 @@ export function loadCard(hippoRoot: string, tenantId: string, id: string): Card 
   }
 }
 
+/** Lists cards for this tenant, optionally filtered to one status, newest-updated first. */
 export function listCards(hippoRoot: string, tenantId: string, opts: { status?: CardStatus } = {}): Card[] {
   assertTenantId('listCards', tenantId);
   initStore(hippoRoot);
@@ -3743,6 +3748,7 @@ export function listCards(hippoRoot: string, tenantId: string, opts: { status?: 
   }
 }
 
+/** Returns this card's parent and child ids from card_deps. */
 export function loadCardDeps(hippoRoot: string, tenantId: string, id: string): { parents: string[]; children: string[] } {
   assertTenantId('loadCardDeps', tenantId);
   initStore(hippoRoot);
@@ -3758,6 +3764,7 @@ export function loadCardDeps(hippoRoot: string, tenantId: string, id: string): {
   }
 }
 
+/** Returns this card's run history, most recent first. */
 export function loadCardRuns(hippoRoot: string, tenantId: string, id: string): CardRun[] {
   assertTenantId('loadCardRuns', tenantId);
   initStore(hippoRoot);
@@ -3774,6 +3781,7 @@ export function loadCardRuns(hippoRoot: string, tenantId: string, id: string): C
   }
 }
 
+/** Returns this card's comments, most recent first. */
 export function loadCardComments(hippoRoot: string, tenantId: string, id: string): CardComment[] {
   assertTenantId('loadCardComments', tenantId);
   initStore(hippoRoot);
@@ -3840,6 +3848,7 @@ export function claimCard(hippoRoot: string, tenantId: string, id: string, runti
   }
 }
 
+/** Requires the card be running; closes the live run as blocked and files reason as a comment. */
 export function blockCard(hippoRoot: string, tenantId: string, id: string, reason: string): Card | null {
   assertTenantId('blockCard', tenantId);
   initStore(hippoRoot);
@@ -3870,6 +3879,7 @@ export function blockCard(hippoRoot: string, tenantId: string, id: string, reaso
   }
 }
 
+/** Requires the card be running; moves it to review with no other side effects. */
 export function reviewCard(hippoRoot: string, tenantId: string, id: string): Card | null {
   assertTenantId('reviewCard', tenantId);
   initStore(hippoRoot);
@@ -3893,6 +3903,7 @@ export function reviewCard(hippoRoot: string, tenantId: string, id: string): Car
   }
 }
 
+/** Requires the card be in review; closes the live run with outcome and, in the same transaction, promotes any child whose parents are now all done. */
 export function completeCard(
   hippoRoot: string,
   tenantId: string,
@@ -3952,6 +3963,7 @@ export function completeCard(
   }
 }
 
+/** Appends a comment to cardId; does not require any particular card status. */
 export function addCardComment(hippoRoot: string, tenantId: string, cardId: string, author: string, body: string): CardComment {
   assertTenantId('addCardComment', tenantId);
   initStore(hippoRoot);
