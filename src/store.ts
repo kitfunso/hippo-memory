@@ -7,7 +7,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { MemoryEntry, Layer, ConfidenceLevel, MemoryKind } from './memory.js';
+import { MemoryEntry, Layer, ConfidenceLevel, MemoryKind, generateId } from './memory.js';
 import { dumpFrontmatter, parseFrontmatter } from './yaml.js';
 import {
   openHippoDb,
@@ -20,6 +20,7 @@ import {
   type DatabaseSyncLike,
 } from './db.js';
 import { SessionHandoff, SessionHandoffRow, rowToSessionHandoff, HandoffEvidence, HandoffOutcome, isHandoffOutcome } from './handoff.js';
+import { Card, CardStatus, CardRun, CardComment, CARD_TRANSITIONS } from './card.js';
 import { tokenize } from './search.js';
 import { appendAuditEvent, type AuditOp } from './audit.js';
 import { resolveTenantId } from './tenant.js';
@@ -3539,6 +3540,411 @@ export function writeSessionEndHandoff(
     targetRuntime: carryForward ? existing.targetRuntime : undefined,
     cardId: carryForward ? existing.cardId : undefined,
   });
+}
+
+// ---------------------------------------------------------------------------
+// W2a work-queue cards (trajectories/01M2D5VSYJFK4YXQ0RG2NGCPYJ/plan.md).
+// ---------------------------------------------------------------------------
+
+interface CardRow {
+  id: string;
+  title: string;
+  status: string;
+  assignee_runtime: string | null;
+  repo: string | null;
+  contract: string | null;
+  budget: number | null;
+  lease_until: string | null;
+  heartbeat_at: string | null;
+  created_at: string;
+  updated_at: string;
+  tenant_id: string;
+  scope: string | null;
+}
+
+const CARD_COLUMNS = 'id, title, status, assignee_runtime, repo, contract, budget, lease_until, heartbeat_at, created_at, updated_at, tenant_id, scope';
+
+function rowToCard(row: CardRow): Card {
+  return {
+    id: row.id,
+    title: row.title,
+    status: row.status as CardStatus,
+    assigneeRuntime: row.assignee_runtime,
+    repo: row.repo,
+    contract: row.contract,
+    budget: row.budget,
+    leaseUntil: row.lease_until,
+    heartbeatAt: row.heartbeat_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    tenantId: row.tenant_id,
+    scope: row.scope,
+  };
+}
+
+function loadCardRow(db: DatabaseSyncLike, tenantId: string, id: string): Card | null {
+  // SAFETY: row's shape matches CARD_COLUMNS.
+  const row = db.prepare(`SELECT ${CARD_COLUMNS} FROM cards WHERE id = ? AND tenant_id = ?`).get(id, tenantId) as CardRow | undefined;
+  return row ? rowToCard(row) : null;
+}
+
+interface CardRunRow {
+  id: number;
+  card: string;
+  runtime: string;
+  session_id: string | null;
+  started: string;
+  ended: string | null;
+  outcome: string | null;
+}
+
+function rowToCardRun(row: CardRunRow): CardRun {
+  return {
+    id: row.id,
+    card: row.card,
+    runtime: row.runtime,
+    sessionId: row.session_id,
+    started: row.started,
+    ended: row.ended,
+    outcome: row.outcome,
+  };
+}
+
+interface CardCommentRow {
+  id: number;
+  card_id: string;
+  author: string;
+  body: string;
+  created_at: string;
+}
+
+function rowToCardComment(row: CardCommentRow): CardComment {
+  return { id: row.id, cardId: row.card_id, author: row.author, body: row.body, createdAt: row.created_at };
+}
+
+function insertCardComment(db: DatabaseSyncLike, tenantId: string, cardId: string, author: string, body: string): CardComment {
+  const now = new Date().toISOString();
+  const result = db.prepare(`
+    INSERT INTO card_comments (card_id, author, body, created_at, tenant_id) VALUES (?, ?, ?, ?, ?)
+  `).run(cardId, author, body, now, tenantId);
+  const id = Number(result.lastInsertRowid ?? 0);
+  return { id, cardId, author, body, createdAt: now };
+}
+
+// The single status-mutating seam (rule 15): CARD_TRANSITIONS is the one
+// runtime authority, so a hand-copied wrong `from` list fails fast here.
+function transitionCard(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  cardId: string,
+  from: CardStatus[],
+  to: CardStatus,
+  extra?: { setSql?: string; whereSql?: string; params?: unknown[] },
+): number {
+  for (const status of from) {
+    if (!CARD_TRANSITIONS[status].includes(to)) {
+      throw new Error(`illegal card transition: ${status} -> ${to}`);
+    }
+  }
+  const now = new Date().toISOString();
+  const fromPlaceholders = from.map(() => '?').join(', ');
+  const sql = `
+    UPDATE cards SET status = ?, updated_at = ?${extra?.setSql ? `, ${extra.setSql}` : ''}
+    WHERE id = ? AND tenant_id = ? AND status IN (${fromPlaceholders})${extra?.whereSql ? ` AND ${extra.whereSql}` : ''}
+  `;
+  const params: unknown[] = [to, now, ...(extra?.params ?? []), cardId, tenantId, ...from];
+  const result = db.prepare(sql).run(...params);
+  return Number(result.changes ?? 0);
+}
+
+export function createCard(
+  hippoRoot: string,
+  tenantId: string,
+  input: { title: string; repo?: string; contract?: string; budget?: number; dependsOn?: string[] },
+): Card {
+  assertTenantId('createCard', tenantId);
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    const dependsOn = input.dependsOn ?? [];
+    let allParentsDone = true;
+    if (dependsOn.length > 0) {
+      const placeholders = dependsOn.map(() => '?').join(', ');
+      // SAFETY: rows' shape matches the two columns named in the SELECT below.
+      const rows = db.prepare(
+        `SELECT id, status FROM cards WHERE tenant_id = ? AND id IN (${placeholders})`,
+      ).all(tenantId, ...dependsOn) as Array<{ id: string; status: string }>;
+      const found = new Map(rows.map((r) => [r.id, r.status]));
+      // Pre-check before any write: a typo'd --depends-on can never commit a card row.
+      for (const parentId of dependsOn) {
+        if (!found.has(parentId)) {
+          throw new Error(`unknown parent card id: ${parentId}`);
+        }
+      }
+      allParentsDone = dependsOn.every((id) => found.get(id) === 'done');
+    }
+
+    const id = generateId('card');
+    const now = new Date().toISOString();
+    const status: CardStatus = dependsOn.length === 0 || allParentsDone ? 'ready' : 'backlog';
+
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      db.prepare(`
+        INSERT INTO cards (id, title, status, repo, contract, budget, created_at, updated_at, tenant_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, input.title, status, input.repo ?? null, input.contract ?? null, input.budget ?? null, now, now, tenantId);
+      for (const parentId of dependsOn) {
+        db.prepare(`
+          INSERT INTO card_deps (parent, child, tenant_id, created_at) VALUES (?, ?, ?, ?)
+        `).run(parentId, id, tenantId, now);
+      }
+      db.exec('COMMIT');
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
+
+    return loadCardRow(db, tenantId, id)!;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+export function loadCard(hippoRoot: string, tenantId: string, id: string): Card | null {
+  assertTenantId('loadCard', tenantId);
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    return loadCardRow(db, tenantId, id);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+export function listCards(hippoRoot: string, tenantId: string, opts: { status?: CardStatus } = {}): Card[] {
+  assertTenantId('listCards', tenantId);
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    const conditions = ['tenant_id = ?'];
+    const params: unknown[] = [tenantId];
+    if (opts.status) {
+      conditions.push('status = ?');
+      params.push(opts.status);
+    }
+    // SAFETY: rows' shape matches CARD_COLUMNS.
+    const rows = db.prepare(`
+      SELECT ${CARD_COLUMNS} FROM cards WHERE ${conditions.join(' AND ')} ORDER BY updated_at DESC
+    `).all(...params) as CardRow[];
+    return rows.map(rowToCard);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+export function loadCardDeps(hippoRoot: string, tenantId: string, id: string): { parents: string[]; children: string[] } {
+  assertTenantId('loadCardDeps', tenantId);
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    // SAFETY: rows' shape matches the single `parent` column named in the SELECT below.
+    const parents = (db.prepare(`SELECT parent FROM card_deps WHERE tenant_id = ? AND child = ?`).all(tenantId, id) as Array<{ parent: string }>).map((r) => r.parent);
+    // SAFETY: rows' shape matches the single `child` column named in the SELECT below.
+    const children = (db.prepare(`SELECT child FROM card_deps WHERE tenant_id = ? AND parent = ?`).all(tenantId, id) as Array<{ child: string }>).map((r) => r.child);
+    return { parents, children };
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+export function loadCardRuns(hippoRoot: string, tenantId: string, id: string): CardRun[] {
+  assertTenantId('loadCardRuns', tenantId);
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    // SAFETY: rows' shape matches CardRunRow.
+    const rows = db.prepare(`
+      SELECT id, card, runtime, session_id, started, ended, outcome
+      FROM card_runs WHERE tenant_id = ? AND card = ? ORDER BY started DESC
+    `).all(tenantId, id) as CardRunRow[];
+    return rows.map(rowToCardRun);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+export function loadCardComments(hippoRoot: string, tenantId: string, id: string): CardComment[] {
+  assertTenantId('loadCardComments', tenantId);
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    // SAFETY: rows' shape matches CardCommentRow.
+    const rows = db.prepare(`
+      SELECT id, card_id, author, body, created_at
+      FROM card_comments WHERE tenant_id = ? AND card_id = ? ORDER BY created_at DESC
+    `).all(tenantId, id) as CardCommentRow[];
+    return rows.map(rowToCardComment);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** Read side of the card <-> handoff round trip: the newest handoff filed against this card. */
+export function loadLatestHandoffForCard(hippoRoot: string, tenantId: string, cardId: string): SessionHandoff | null {
+  assertTenantId('loadLatestHandoffForCard', tenantId);
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    // SAFETY: row's shape matches HANDOFF_COLUMNS.
+    const row = db.prepare(`
+      SELECT ${HANDOFF_COLUMNS} FROM session_handoffs
+      WHERE tenant_id = ? AND card_id = ? ORDER BY created_at DESC, id DESC LIMIT 1
+    `).get(tenantId, cardId) as SessionHandoffRow | undefined;
+    return row ? rowToSessionHandoff(row) : null;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** Atomic claim: WHERE status IN (ready, blocked) AND assignee_runtime IS NULL decides the race. */
+export function claimCard(hippoRoot: string, tenantId: string, id: string, runtime: string, sessionId?: string): Card | null {
+  assertTenantId('claimCard', tenantId);
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const changes = transitionCard(db, tenantId, id, ['ready', 'blocked'], 'running', {
+        setSql: 'assignee_runtime = ?',
+        whereSql: 'assignee_runtime IS NULL',
+        params: [runtime],
+      });
+      if (changes === 0) {
+        db.exec('ROLLBACK');
+        return null;
+      }
+      const now = new Date().toISOString();
+      db.prepare(`
+        INSERT INTO card_runs (card, runtime, session_id, started, created_at, updated_at, tenant_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(id, runtime, sessionId ?? null, now, now, now, tenantId);
+      db.exec('COMMIT');
+      return loadCardRow(db, tenantId, id);
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+export function blockCard(hippoRoot: string, tenantId: string, id: string, reason: string): Card | null {
+  assertTenantId('blockCard', tenantId);
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const changes = transitionCard(db, tenantId, id, ['running'], 'blocked', { setSql: 'assignee_runtime = NULL' });
+      if (changes === 0) {
+        db.exec('ROLLBACK');
+        return null;
+      }
+      insertCardComment(db, tenantId, id, 'system', reason);
+      db.exec('COMMIT');
+      return loadCardRow(db, tenantId, id);
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+export function reviewCard(hippoRoot: string, tenantId: string, id: string): Card | null {
+  assertTenantId('reviewCard', tenantId);
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    const changes = transitionCard(db, tenantId, id, ['running'], 'review');
+    if (changes === 0) return null;
+    return loadCardRow(db, tenantId, id);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+export function completeCard(
+  hippoRoot: string,
+  tenantId: string,
+  id: string,
+  outcome: HandoffOutcome,
+): { card: Card; promotedChildren: string[] } | null {
+  assertTenantId('completeCard', tenantId);
+  if (!isHandoffOutcome(outcome)) {
+    throw new Error(`invalid card outcome: ${String(outcome)}`);
+  }
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const changes = transitionCard(db, tenantId, id, ['review'], 'done');
+      if (changes === 0) {
+        db.exec('ROLLBACK');
+        return null;
+      }
+      const now = new Date().toISOString();
+      db.prepare(`
+        UPDATE card_runs SET ended = ?, outcome = ?, updated_at = ?
+        WHERE card = ? AND tenant_id = ? AND ended IS NULL
+      `).run(now, outcome, now, id, tenantId);
+
+      // Not best-effort (rule 12): promotion runs in this same transaction, so a
+      // card can never be `done` with an un-evaluated child.
+      // SAFETY: rows' shape matches the single `child` column named in the SELECT below.
+      const children = (db.prepare(`SELECT child FROM card_deps WHERE tenant_id = ? AND parent = ?`).all(tenantId, id) as Array<{ child: string }>).map((r) => r.child);
+      const promotedChildren: string[] = [];
+      for (const childId of children) {
+        // SAFETY: row's shape matches the single `status` column named in the SELECT below.
+        const child = db.prepare(`SELECT status FROM cards WHERE tenant_id = ? AND id = ?`).get(tenantId, childId) as { status: string } | undefined;
+        if (!child || child.status !== 'backlog') continue;
+        // SAFETY: rows' shape matches the single `parent` column named in the SELECT below.
+        const parents = (db.prepare(`SELECT parent FROM card_deps WHERE tenant_id = ? AND child = ?`).all(tenantId, childId) as Array<{ parent: string }>).map((r) => r.parent);
+        const placeholders = parents.map(() => '?').join(', ');
+        // SAFETY: row's shape matches the single `c` column named in the SELECT below.
+        const doneCount = (db.prepare(
+          `SELECT COUNT(*) as c FROM cards WHERE tenant_id = ? AND id IN (${placeholders}) AND status = 'done'`,
+        ).get(tenantId, ...parents) as { c: number }).c;
+        if (doneCount === parents.length) {
+          transitionCard(db, tenantId, childId, ['backlog'], 'ready');
+          promotedChildren.push(childId);
+        }
+      }
+
+      db.exec('COMMIT');
+      return { card: loadCardRow(db, tenantId, id)!, promotedChildren };
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+export function addCardComment(hippoRoot: string, tenantId: string, cardId: string, author: string, body: string): CardComment {
+  assertTenantId('addCardComment', tenantId);
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    return insertCardComment(db, tenantId, cardId, author, body);
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 // ---------------------------------------------------------------------------
