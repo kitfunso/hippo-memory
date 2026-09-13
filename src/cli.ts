@@ -13,6 +13,7 @@
  *   hippo snapshot <save|show|clear>
  *   hippo session <log|show|latest|resume|complete>
  *   hippo handoff <create|latest|show>
+ *   hippo card <create|show|list|claim|block|review|complete|comment>
  *   hippo current <show>
  *   hippo forget <id> [--archive --reason "<why>"]
  *   hippo reject <id>|--value "<text>" --reason "<why>"
@@ -98,10 +99,23 @@ import {
   writeSessionEndHandoff,
   TaskSnapshot,
   SessionEvent,
+  createCard,
+  loadCard,
+  listCards,
+  loadCardDeps,
+  loadCardRuns,
+  loadCardComments,
+  claimCard,
+  blockCard,
+  reviewCard,
+  completeCard,
+  addCardComment,
+  loadLatestHandoffForCard,
 } from './store.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from './reject-flow.js';
 import { RejectedValueError } from './rejection.js';
 import { isHandoffOutcome, formatHandoffEvidenceLine, type SessionHandoff, type HandoffOutcome, type HandoffEvidence } from './handoff.js';
+import { type Card, type CardStatus, isCardStatus } from './card.js';
 import { passesScopeFilterForRecall } from './recall-scope.js';
 import { search, markRetrieved, estimateTokens, hybridSearch, physicsSearch, explainMatch, textOverlap, tokenize as tokenizeQuery, type RerankStep } from './search.js';
 import { compareEntryIdentity } from './compare.js';
@@ -396,7 +410,7 @@ export function parseArgs(argv: string[]): { command: string; args: string[]; fl
         i++;
       } else {
         // Check if it's a repeatable flag (tag, artifact, link, step, constraint)
-        if (key === 'tag' || key === 'artifact' || key === 'link' || key === 'step' || key === 'constraint') {
+        if (key === 'tag' || key === 'artifact' || key === 'link' || key === 'step' || key === 'constraint' || key === 'depends-on') {
           if (Array.isArray(flags[key])) {
             (flags[key] as string[]).push(next);
           } else {
@@ -4469,6 +4483,220 @@ function cmdHandoff(
   }
 
   console.error('Usage: hippo handoff <create|latest|show>');
+  process.exit(1);
+}
+
+// Mirrors ARCHIVE_REASON_REQUIRED so the block message can't drift from its usage line.
+const CARD_BLOCK_REASON_REQUIRED = 'hippo card block <id> requires --reason "<why>" (recorded as a comment).';
+
+function printCard(hippoRoot: string, tenantId: string, card: Card): void {
+  console.log(`## Card ${card.id}\n`);
+  console.log(`- Title: ${card.title}`);
+  console.log(`- Status: ${card.status}`);
+  if (card.assigneeRuntime) console.log(`- Assignee: ${card.assigneeRuntime}`);
+  if (card.repo) console.log(`- Repo: ${card.repo}`);
+  if (card.contract) console.log(`- Contract: ${card.contract}`);
+  if (card.budget !== null) console.log(`- Budget: ${card.budget}`);
+  console.log(`- Updated: ${card.updatedAt}`);
+
+  const deps = loadCardDeps(hippoRoot, tenantId, card.id);
+  if (deps.parents.length > 0) console.log(`- Parents: ${deps.parents.join(', ')}`);
+  if (deps.children.length > 0) console.log(`- Children: ${deps.children.join(', ')}`);
+
+  const runs = loadCardRuns(hippoRoot, tenantId, card.id);
+  if (runs.length > 0) {
+    console.log('\n### Runs');
+    for (const run of runs) {
+      console.log(`- ${run.runtime} started ${run.started}${run.ended ? ` ended ${run.ended} (${run.outcome})` : ' (open)'}`);
+    }
+  }
+
+  const comments = loadCardComments(hippoRoot, tenantId, card.id);
+  if (comments.length > 0) {
+    console.log('\n### Comments');
+    for (const comment of comments) {
+      console.log(`- [${comment.createdAt}] ${comment.author}: ${comment.body}`);
+    }
+  }
+
+  const handoff = loadLatestHandoffForCard(hippoRoot, tenantId, card.id);
+  if (handoff) {
+    console.log('\n### Latest handoff');
+    console.log(`- Session: ${handoff.sessionId}, updated ${handoff.updatedAt}`);
+    console.log(handoff.summary);
+  }
+  console.log('');
+}
+
+function cmdCard(
+  hippoRoot: string,
+  args: string[],
+  flags: Record<string, string | boolean | string[]>
+): void {
+  requireInit(hippoRoot);
+  const tenantId = resolveTenantId({});
+  const subcommand = args[0] ?? '';
+
+  if (subcommand === 'create') {
+    const title = String(flags['title'] ?? '').trim();
+    if (!title) {
+      console.error('Usage: hippo card create --title "..." [--repo <name>] [--contract <text>] [--budget <n>] [--depends-on <id>...]');
+      process.exit(1);
+    }
+    const repo = String(flags['repo'] ?? '').trim() || undefined;
+    const contract = String(flags['contract'] ?? '').trim() || undefined;
+    const budgetRaw = flags['budget'];
+    let budget: number | undefined;
+    if (budgetRaw !== undefined) {
+      budget = Number(budgetRaw);
+      if (!Number.isFinite(budget)) {
+        console.error(`Invalid budget: "${String(budgetRaw)}"`);
+        process.exit(1);
+      }
+    }
+    const dependsOnFlag = flags['depends-on'];
+    const dependsOn: string[] = Array.isArray(dependsOnFlag)
+      ? dependsOnFlag
+      : (typeof dependsOnFlag === 'string' ? [dependsOnFlag] : []);
+
+    let card: Card;
+    try {
+      card = createCard(hippoRoot, tenantId, { title, repo, contract, budget, dependsOn });
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
+    console.log(`Created card ${card.id} (status: ${card.status})`);
+    return;
+  }
+
+  if (subcommand === 'show') {
+    const id = args[1];
+    if (!id) {
+      console.error('Usage: hippo card show <id> [--json]');
+      process.exit(1);
+    }
+    const card = loadCard(hippoRoot, tenantId, id);
+    if (!card) {
+      console.error(`No card found with id ${id}.`);
+      process.exit(1);
+    }
+    if (flags['json']) {
+      console.log(JSON.stringify({
+        card,
+        deps: loadCardDeps(hippoRoot, tenantId, id),
+        runs: loadCardRuns(hippoRoot, tenantId, id),
+        comments: loadCardComments(hippoRoot, tenantId, id),
+        handoff: loadLatestHandoffForCard(hippoRoot, tenantId, id),
+      }, null, 2));
+      return;
+    }
+    printCard(hippoRoot, tenantId, card);
+    return;
+  }
+
+  if (subcommand === 'list') {
+    const statusRaw = flags['status'];
+    if (statusRaw !== undefined && !isCardStatus(statusRaw)) {
+      console.error(`Invalid status: "${String(statusRaw)}".`);
+      process.exit(1);
+    }
+    const cards = listCards(hippoRoot, tenantId, { status: statusRaw as CardStatus | undefined });
+    if (flags['json']) {
+      console.log(JSON.stringify({ cards }, null, 2));
+      return;
+    }
+    if (cards.length === 0) {
+      console.log('No cards found.');
+      return;
+    }
+    for (const card of cards) {
+      console.log(`${card.id}\t${card.status}\t${card.title}${card.assigneeRuntime ? `\t(${card.assigneeRuntime})` : ''}`);
+    }
+    return;
+  }
+
+  if (subcommand === 'claim') {
+    const id = args[1];
+    const runtime = String(flags['runtime'] ?? '').trim();
+    if (!id || !runtime) {
+      console.error('Usage: hippo card claim <id> --runtime <name> [--session <id>]');
+      process.exit(1);
+    }
+    const sessionId = String(flags['session'] ?? '').trim() || undefined;
+    const card = claimCard(hippoRoot, tenantId, id, runtime, sessionId);
+    if (!card) {
+      console.error(`Could not claim card ${id} (not ready/blocked, or already claimed).`);
+      process.exit(1);
+    }
+    console.log(`Claimed card ${card.id} for ${runtime}`);
+    return;
+  }
+
+  if (subcommand === 'block') {
+    const id = args[1];
+    const reason = String(flags['reason'] ?? '').trim();
+    if (!id || !reason) {
+      console.error(CARD_BLOCK_REASON_REQUIRED);
+      process.exit(1);
+    }
+    const card = blockCard(hippoRoot, tenantId, id, reason);
+    if (!card) {
+      console.error(`Could not block card ${id} (not running).`);
+      process.exit(1);
+    }
+    console.log(`Blocked card ${card.id}`);
+    return;
+  }
+
+  if (subcommand === 'review') {
+    const id = args[1];
+    if (!id) {
+      console.error('Usage: hippo card review <id>');
+      process.exit(1);
+    }
+    const card = reviewCard(hippoRoot, tenantId, id);
+    if (!card) {
+      console.error(`Could not move card ${id} to review (not running).`);
+      process.exit(1);
+    }
+    console.log(`Card ${card.id} moved to review`);
+    return;
+  }
+
+  if (subcommand === 'complete') {
+    const id = args[1];
+    const outcomeRaw = flags['outcome'];
+    if (!id || !isHandoffOutcome(outcomeRaw)) {
+      console.error('Usage: hippo card complete <id> --outcome <success|failure|partial>');
+      process.exit(1);
+    }
+    const result = completeCard(hippoRoot, tenantId, id, outcomeRaw);
+    if (!result) {
+      console.error(`Could not complete card ${id} (not in review).`);
+      process.exit(1);
+    }
+    console.log(`Completed card ${result.card.id}`);
+    if (result.promotedChildren.length > 0) {
+      console.log(`Promoted to ready: ${result.promotedChildren.join(', ')}`);
+    }
+    return;
+  }
+
+  if (subcommand === 'comment') {
+    const id = args[1];
+    const body = String(flags['body'] ?? '').trim();
+    if (!id || !body) {
+      console.error('Usage: hippo card comment <id> --body "..." [--author <name>]');
+      process.exit(1);
+    }
+    const author = String(flags['author'] ?? 'cli').trim() || 'cli';
+    const comment = addCardComment(hippoRoot, tenantId, id, author, body);
+    console.log(`Added comment ${comment.id} to card ${id}`);
+    return;
+  }
+
+  console.error('Usage: hippo card <create|show|list|claim|block|review|complete|comment>');
   process.exit(1);
 }
 
@@ -8622,6 +8850,28 @@ Commands:
       --session <id>       Filter by session
       --json               Output as JSON
     handoff show <id>      Show a specific handoff by ID
+  card <sub>                Manage claimable work-queue cards
+    card create             Create a new card
+      --title <text>        Card title (required)
+      --repo <name>         Associated repo
+      --contract <text>     Associated contract
+      --budget <n>           Token/step budget
+      --depends-on <id>     Parent card id (repeatable)
+    card show <id>          Show a card, its deps, runs, comments and latest handoff
+      --json                 Output as JSON
+    card list                List cards, newest-updated first
+      --status <status>     Filter by status
+    card claim <id>          Claim a ready or blocked card
+      --runtime <name>       Claiming runtime (required)
+      --session <id>         Session ID
+    card block <id>           Block a running card
+      --reason "<why>"       Reason recorded as a card comment (required)
+    card review <id>          Move a running card to review
+    card complete <id>       Complete a card in review
+      --outcome <o>          success | failure | partial (required)
+    card comment <id>         Add a comment to a card
+      --body <text>          Comment body (required)
+      --author <name>       Comment author (default: cli)
   current <sub>            Show compact current state for agent injection
     current show           Active task + recent session events (default)
       --json               Output as JSON
@@ -8847,6 +9097,9 @@ Examples:
   hippo snapshot save --task "Ship feature" --summary "Tests are green" --next-step "Open the PR" --session sess_123
   hippo handoff create --summary "PR is open, tests green" --next "Merge after review" --session sess_123 --artifact src/foo.ts
   hippo handoff create --summary s --constraint a --constraint b --outcome partial --target-runtime codex --card-id c1 --tests pass
+  hippo card create --title "Add cards table" --repo hippo --depends-on card_abc
+  hippo card claim card_abc --runtime codex
+  hippo card complete card_abc --outcome success
   hippo embed --status
   hippo watch "npm run build"
   hippo learn --git --days 30
@@ -9249,6 +9502,10 @@ async function main(): Promise<void> {
 
     case 'handoff':
       cmdHandoff(hippoRoot, args, flags);
+      break;
+
+    case 'card':
+      cmdCard(hippoRoot, args, flags);
       break;
 
     case 'predict':
