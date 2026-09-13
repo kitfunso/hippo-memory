@@ -3625,8 +3625,12 @@ function rowToCardComment(row: CardCommentRow): CardComment {
 function insertCardComment(db: DatabaseSyncLike, tenantId: string, cardId: string, author: string, body: string): CardComment {
   const now = new Date().toISOString();
   const result = db.prepare(`
-    INSERT INTO card_comments (card_id, author, body, created_at, tenant_id) VALUES (?, ?, ?, ?, ?)
-  `).run(cardId, author, body, now, tenantId);
+    INSERT INTO card_comments (card_id, author, body, created_at, tenant_id)
+    SELECT ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM cards WHERE id = ? AND tenant_id = ?)
+  `).run(cardId, author, body, now, tenantId, cardId, tenantId);
+  if (Number(result.changes ?? 0) === 0) {
+    throw new Error(`unknown card id: ${cardId}`);
+  }
   const id = Number(result.lastInsertRowid ?? 0);
   return { id, cardId, author, body, createdAt: now };
 }
@@ -3740,7 +3744,7 @@ export function listCards(hippoRoot: string, tenantId: string, opts: { status?: 
     }
     // SAFETY: rows' shape matches CARD_COLUMNS.
     const rows = db.prepare(`
-      SELECT ${CARD_COLUMNS} FROM cards WHERE ${conditions.join(' AND ')} ORDER BY updated_at DESC
+      SELECT ${CARD_COLUMNS} FROM cards WHERE ${conditions.join(' AND ')} ORDER BY updated_at DESC, id DESC
     `).all(...params) as CardRow[];
     return rows.map(rowToCard);
   } finally {
@@ -3790,7 +3794,7 @@ export function loadCardComments(hippoRoot: string, tenantId: string, id: string
     // SAFETY: rows' shape matches CardCommentRow.
     const rows = db.prepare(`
       SELECT id, card_id, author, body, created_at
-      FROM card_comments WHERE tenant_id = ? AND card_id = ? ORDER BY created_at DESC
+      FROM card_comments WHERE tenant_id = ? AND card_id = ? ORDER BY created_at DESC, id DESC
     `).all(tenantId, id) as CardCommentRow[];
     return rows.map(rowToCardComment);
   } finally {
@@ -3963,7 +3967,7 @@ export function completeCard(
   }
 }
 
-/** Appends a comment to cardId; does not require any particular card status. */
+/** Appends a comment to cardId in any card status; throws if cardId is not a card of this tenant. */
 export function addCardComment(hippoRoot: string, tenantId: string, cardId: string, author: string, body: string): CardComment {
   assertTenantId('addCardComment', tenantId);
   initStore(hippoRoot);

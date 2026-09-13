@@ -16,6 +16,8 @@ import {
   blockCard,
   reviewCard,
   completeCard,
+  addCardComment,
+  loadCardComments,
   transitionCard,
   saveSessionHandoff,
   loadLatestHandoffForCard,
@@ -317,7 +319,7 @@ describe('test 7c: a parent completing while createCard waits for the write lock
   it('createCard blocks on BEGIN IMMEDIATE, then reads the parent as done once the lock is released', async () => {
     const parent = createCard(root, 'default', { title: 'Parent' });
     claimCard(root, 'default', parent.id, 'codex');
-    reviewCard(root, 'default', parent.id); // running, not done yet: the pre-fix read would see this.
+    reviewCard(root, 'default', parent.id); // in review, not done yet: the pre-fix read would see this.
 
     const dbPath = join(root, 'hippo.db');
     const { locked, released } = holdLockThenCompleteParent(dbPath, parent.id, 300);
@@ -539,5 +541,21 @@ describe('test 12: unknown dependsOn pre-check', () => {
     } finally {
       closeHippoDb(db);
     }
+  });
+});
+
+describe('test 13: addCardComment checks the card belongs to the caller\'s tenant', () => {
+  it('throws unknown card id for a foreign-tenant card and for a missing id; happy path still works', () => {
+    const card = createCard(root, 'default', { title: 'Commented' });
+
+    expect(() => addCardComment(root, 'tenant2', card.id, 'x', 'y')).toThrow(`unknown card id: ${card.id}`);
+    expect(() => addCardComment(root, 'default', 'nope', 'x', 'y')).toThrow('unknown card id: nope');
+
+    expect(loadCardComments(root, 'default', card.id)).toEqual([]);
+    expect(loadCardComments(root, 'tenant2', card.id)).toEqual([]);
+
+    const comment = addCardComment(root, 'default', card.id, 'x', 'y');
+    expect(comment.body).toBe('y');
+    expect(loadCardComments(root, 'default', card.id)).toHaveLength(1);
   });
 });
