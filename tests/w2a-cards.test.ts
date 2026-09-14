@@ -638,7 +638,7 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
 
       const protoKey = runCli(home, env, 'card', 'constructor', '--x');
       expect(protoKey.status).toBe(1);
-      expect(protoKey.out).toContain('Usage: hippo card <create|show|list|claim|block|review|complete|comment>');
+      expect(protoKey.out).toContain('Usage: hippo card <create|show|list|claim|heartbeat|block|review|complete|reclaim|comment>');
 
       const list = runCli(home, env, 'card', 'list');
       expect(list.status, list.out).toBe(0);
