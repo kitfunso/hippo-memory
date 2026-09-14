@@ -20,7 +20,7 @@ import {
   type DatabaseSyncLike,
 } from './db.js';
 import { SessionHandoff, SessionHandoffRow, rowToSessionHandoff, HandoffEvidence, HandoffOutcome, isHandoffOutcome } from './handoff.js';
-import { Card, CardStatus, CardRun, CardComment, CARD_TRANSITIONS } from './card.js';
+import { Card, CardStatus, CardRun, CardComment, CARD_TRANSITIONS, CARD_LEASE_MS } from './card.js';
 import { tokenize } from './search.js';
 import { appendAuditEvent, type AuditOp } from './audit.js';
 import { resolveTenantId } from './tenant.js';
@@ -3635,6 +3635,33 @@ function insertCardComment(db: DatabaseSyncLike, tenantId: string, cardId: strin
   return { id, cardId, author, body, createdAt: now };
 }
 
+function leaseUntilFrom(now: string): string {
+  return new Date(Date.parse(now) + CARD_LEASE_MS).toISOString();
+}
+
+function assertRunId(runId: number): void {
+  if (!Number.isSafeInteger(runId) || runId <= 0) {
+    throw new Error(`Invalid run id: ${runId} (expected a positive integer)`);
+  }
+}
+
+// A second run that has not ended means a corrupt store; throw rather than guess which run the caller means.
+function isLiveRun(db: DatabaseSyncLike, tenantId: string, cardId: string, runId: number): boolean {
+  // SAFETY: rows' shape matches the single `id` column named in the SELECT below.
+  const rows = db.prepare(`SELECT id FROM card_runs WHERE tenant_id = ? AND card = ? AND ended IS NULL`).all(tenantId, cardId) as Array<{ id: number }>;
+  if (rows.length > 1) {
+    throw new Error(`card ${cardId} has ${rows.length} runs that have not ended`);
+  }
+  return rows[0]?.id === runId;
+}
+
+function closeLiveRun(db: DatabaseSyncLike, tenantId: string, cardId: string, outcome: string, now: string): void {
+  db.prepare(`
+    UPDATE card_runs SET ended = ?, outcome = ?, updated_at = ?
+    WHERE card = ? AND tenant_id = ? AND ended IS NULL
+  `).run(now, outcome, now, cardId, tenantId);
+}
+
 // The single status-mutating seam (rule 15): CARD_TRANSITIONS is the one
 // runtime authority, so a hand-copied wrong `from` list fails fast here.
 export function transitionCard(
@@ -3651,12 +3678,14 @@ export function transitionCard(
     }
   }
   const now = new Date().toISOString();
+  // Lease columns follow status: set on the move to running, cleared on every other move (rule 15).
+  const lease = to === 'running' ? [leaseUntilFrom(now), now] : [null, null];
   const fromPlaceholders = from.map(() => '?').join(', ');
   const sql = `
-    UPDATE cards SET status = ?, updated_at = ?${extra?.setSql ? `, ${extra.setSql}` : ''}
+    UPDATE cards SET status = ?, updated_at = ?, lease_until = ?, heartbeat_at = ?${extra?.setSql ? `, ${extra.setSql}` : ''}
     WHERE id = ? AND tenant_id = ? AND status IN (${fromPlaceholders})${extra?.whereSql ? ` AND ${extra.whereSql}` : ''}
   `;
-  const params: unknown[] = [to, now, ...(extra?.params ?? []), cardId, tenantId, ...from];
+  const params: unknown[] = [to, now, ...lease, ...(extra?.params ?? []), cardId, tenantId, ...from];
   const result = db.prepare(sql).run(...params);
   return Number(result.changes ?? 0);
 }
@@ -3826,8 +3855,8 @@ export function loadLatestHandoffForCard(hippoRoot: string, tenantId: string, ca
   }
 }
 
-/** Atomic claim: WHERE status IN (ready, blocked) AND assignee_runtime IS NULL decides the race. Throws on an unknown card id; returns null for a card not ready/blocked or already claimed. */
-export function claimCard(hippoRoot: string, tenantId: string, id: string, runtime: string, sessionId?: string): Card | null {
+/** Atomic claim: WHERE status IN (ready, blocked) AND assignee_runtime IS NULL decides the race. Throws on an unknown card id; returns null for a card not ready/blocked or already claimed. Sets a CARD_LEASE_MS lease and returns the new run's id as runId. */
+export function claimCard(hippoRoot: string, tenantId: string, id: string, runtime: string, sessionId?: string): (Card & { runId: number }) | null {
   assertTenantId('claimCard', tenantId);
   if (runtime.trim() === '') {
     throw new Error('runtime must not be empty');
@@ -3836,6 +3865,7 @@ export function claimCard(hippoRoot: string, tenantId: string, id: string, runti
   const db = openHippoDb(hippoRoot);
   try {
     db.exec('BEGIN IMMEDIATE');
+    let runId = 0;
     try {
       const changes = transitionCard(db, tenantId, id, ['ready', 'blocked'], 'running', {
         setSql: 'assignee_runtime = ?',
@@ -3850,10 +3880,42 @@ export function claimCard(hippoRoot: string, tenantId: string, id: string, runti
         return null;
       }
       const now = new Date().toISOString();
-      db.prepare(`
+      const insert = db.prepare(`
         INSERT INTO card_runs (card, runtime, session_id, started, created_at, updated_at, tenant_id)
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `).run(id, runtime, sessionId ?? null, now, now, now, tenantId);
+      runId = Number(insert.lastInsertRowid ?? 0);
+      db.exec('COMMIT');
+    } catch (error) {
+      try { db.exec('ROLLBACK'); } catch { /* commit may have already rolled back */ }
+      throw error;
+    }
+    return { ...loadCardRow(db, tenantId, id)!, runId };
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** Moves a running card's lease to CARD_LEASE_MS from now and records the heartbeat; updated_at is left alone. Throws on an unknown card id or a run id that is not a positive integer; returns null unless the card is running and runId is its live run. */
+export function heartbeatCard(hippoRoot: string, tenantId: string, id: string, runId: number): Card | null {
+  assertTenantId('heartbeatCard', tenantId);
+  assertRunId(runId);
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const card = loadCardRow(db, tenantId, id);
+      if (!card) {
+        throw new Error(`unknown card id: ${id}`);
+      }
+      if (card.status !== 'running' || !isLiveRun(db, tenantId, id, runId)) {
+        db.exec('ROLLBACK');
+        return null;
+      }
+      const now = new Date().toISOString();
+      db.prepare(`UPDATE cards SET lease_until = ?, heartbeat_at = ? WHERE id = ? AND tenant_id = ?`)
+        .run(leaseUntilFrom(now), now, id, tenantId);
       db.exec('COMMIT');
     } catch (error) {
       try { db.exec('ROLLBACK'); } catch { /* commit may have already rolled back */ }
@@ -3865,18 +3927,20 @@ export function claimCard(hippoRoot: string, tenantId: string, id: string, runti
   }
 }
 
-/** Requires the card be running; closes the live run as blocked and files reason as a comment. Throws on an unknown card id; returns null for a card not running. */
-export function blockCard(hippoRoot: string, tenantId: string, id: string, reason: string): Card | null {
+/** Requires the card be running; closes the live run as blocked and files reason as a comment. Throws on an unknown card id; returns null for a card not running. When runId is given, returns null unless it is the card's live run. */
+export function blockCard(hippoRoot: string, tenantId: string, id: string, reason: string, runId?: number): Card | null {
   assertTenantId('blockCard', tenantId);
   if (reason.trim() === '') {
     throw new Error('reason must not be empty');
   }
+  if (runId !== undefined) assertRunId(runId);
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
     db.exec('BEGIN IMMEDIATE');
     try {
-      const changes = transitionCard(db, tenantId, id, ['running'], 'blocked', { setSql: 'assignee_runtime = NULL' });
+      const allowed = runId === undefined || isLiveRun(db, tenantId, id, runId);
+      const changes = allowed ? transitionCard(db, tenantId, id, ['running'], 'blocked', { setSql: 'assignee_runtime = NULL' }) : 0;
       if (changes === 0) {
         if (!loadCardRow(db, tenantId, id)) {
           throw new Error(`unknown card id: ${id}`);
@@ -3886,10 +3950,7 @@ export function blockCard(hippoRoot: string, tenantId: string, id: string, reaso
       }
       const now = new Date().toISOString();
       // Close the interrupted run here so completeCard's ended IS NULL scope only ever matches the live run.
-      db.prepare(`
-        UPDATE card_runs SET ended = ?, outcome = 'blocked', updated_at = ?
-        WHERE card = ? AND tenant_id = ? AND ended IS NULL
-      `).run(now, now, id, tenantId);
+      closeLiveRun(db, tenantId, id, 'blocked', now);
       insertCardComment(db, tenantId, id, 'system', reason);
       db.exec('COMMIT');
     } catch (error) {
@@ -3902,15 +3963,17 @@ export function blockCard(hippoRoot: string, tenantId: string, id: string, reaso
   }
 }
 
-/** Requires the card be running; moves it to review with no other side effects. Throws on an unknown card id; returns null for a card not running. */
-export function reviewCard(hippoRoot: string, tenantId: string, id: string): Card | null {
+/** Requires the card be running; moves it to review, clearing its lease and heartbeat and keeping its live run. When runId is given, returns null unless it is the card's live run. Throws on an unknown card id; returns null for a card not running. */
+export function reviewCard(hippoRoot: string, tenantId: string, id: string, runId?: number): Card | null {
   assertTenantId('reviewCard', tenantId);
+  if (runId !== undefined) assertRunId(runId);
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
     db.exec('BEGIN IMMEDIATE');
     try {
-      const changes = transitionCard(db, tenantId, id, ['running'], 'review');
+      const allowed = runId === undefined || isLiveRun(db, tenantId, id, runId);
+      const changes = allowed ? transitionCard(db, tenantId, id, ['running'], 'review') : 0;
       if (changes === 0) {
         if (!loadCardRow(db, tenantId, id)) {
           throw new Error(`unknown card id: ${id}`);
@@ -3929,17 +3992,19 @@ export function reviewCard(hippoRoot: string, tenantId: string, id: string): Car
   }
 }
 
-/** Requires the card be in review; closes the live run with outcome. Outcome 'success' moves the card to done and, in the same transaction, promotes any child whose parents are now all done; 'failure' or 'partial' moves it to shelved and promotes nothing. Throws on an unknown card id; returns null for a card not in review. */
+/** Requires the card be in review; closes the live run with outcome. Outcome 'success' moves the card to done and, in the same transaction, promotes any child whose parents are now all done; 'failure' or 'partial' moves it to shelved and promotes nothing. Throws on an unknown card id; returns null for a card not in review. When runId is given, returns null unless it is the card's live run. */
 export function completeCard(
   hippoRoot: string,
   tenantId: string,
   id: string,
   outcome: HandoffOutcome,
+  runId?: number,
 ): { card: Card; promotedChildren: string[] } | null {
   assertTenantId('completeCard', tenantId);
   if (!isHandoffOutcome(outcome)) {
     throw new Error(`invalid card outcome: ${String(outcome)}`);
   }
+  if (runId !== undefined) assertRunId(runId);
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
@@ -3947,7 +4012,8 @@ export function completeCard(
     let promotedChildren: string[] = [];
     try {
       const target: CardStatus = outcome === 'success' ? 'done' : 'shelved';
-      const changes = transitionCard(db, tenantId, id, ['review'], target);
+      const allowed = runId === undefined || isLiveRun(db, tenantId, id, runId);
+      const changes = allowed ? transitionCard(db, tenantId, id, ['review'], target) : 0;
       if (changes === 0) {
         if (!loadCardRow(db, tenantId, id)) {
           throw new Error(`unknown card id: ${id}`);
@@ -3956,10 +4022,7 @@ export function completeCard(
         return null;
       }
       const now = new Date().toISOString();
-      db.prepare(`
-        UPDATE card_runs SET ended = ?, outcome = ?, updated_at = ?
-        WHERE card = ? AND tenant_id = ? AND ended IS NULL
-      `).run(now, outcome, now, id, tenantId);
+      closeLiveRun(db, tenantId, id, outcome, now);
 
       // Not best-effort (rule 12): promotion runs in this same transaction, so a
       // card can never be `done` with an un-evaluated child.
@@ -3990,6 +4053,37 @@ export function completeCard(
       throw error;
     }
     return { card: loadCardRow(db, tenantId, id)!, promotedChildren };
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** Returns to ready every running card of the tenant whose lease has expired or is missing: clears its assignee, closes its live run as 'reclaimed' and leaves its handoffs alone, all in one write transaction. Returns the reclaimed card ids in id order. */
+export function reclaimExpiredCards(hippoRoot: string, tenantId: string): string[] {
+  assertTenantId('reclaimExpiredCards', tenantId);
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      // Read lease times under the write lock, so a heartbeat that committed while we waited wins.
+      const now = new Date().toISOString();
+      // SAFETY: rows' shape matches the single `id` column named in the SELECT below.
+      const ids = (db.prepare(`
+        SELECT id FROM cards
+        WHERE tenant_id = ? AND status = 'running' AND (lease_until IS NULL OR lease_until < ?)
+        ORDER BY id
+      `).all(tenantId, now) as Array<{ id: string }>).map((r) => r.id);
+      for (const id of ids) {
+        transitionCard(db, tenantId, id, ['running'], 'ready', { setSql: 'assignee_runtime = NULL' });
+        closeLiveRun(db, tenantId, id, 'reclaimed', now);
+      }
+      db.exec('COMMIT');
+      return ids;
+    } catch (error) {
+      try { db.exec('ROLLBACK'); } catch { /* commit may have already rolled back */ }
+      throw error;
+    }
   } finally {
     closeHippoDb(db);
   }

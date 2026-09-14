@@ -13,7 +13,7 @@
  *   hippo snapshot <save|show|clear>
  *   hippo session <log|show|latest|resume|complete>
  *   hippo handoff <create|latest|show>
- *   hippo card <create|show|list|claim|block|review|complete|comment>
+ *   hippo card <create|show|list|claim|heartbeat|block|review|complete|reclaim|comment>
  *   hippo current <show>
  *   hippo forget <id> [--archive --reason "<why>"]
  *   hippo reject <id>|--value "<text>" --reason "<why>"
@@ -106,9 +106,11 @@ import {
   loadCardRuns,
   loadCardComments,
   claimCard,
+  heartbeatCard,
   blockCard,
   reviewCard,
   completeCard,
+  reclaimExpiredCards,
   addCardComment,
   loadLatestHandoffForCard,
 } from './store.js';
@@ -4494,6 +4496,8 @@ function printCard(hippoRoot: string, tenantId: string, card: Card): void {
   console.log(`- Title: ${card.title}`);
   console.log(`- Status: ${card.status}`);
   if (card.assigneeRuntime) console.log(`- Assignee: ${card.assigneeRuntime}`);
+  if (card.leaseUntil) console.log(`- Lease until: ${card.leaseUntil}`);
+  if (card.heartbeatAt) console.log(`- Heartbeat: ${card.heartbeatAt}`);
   if (card.repo) console.log(`- Repo: ${card.repo}`);
   if (card.contract) console.log(`- Contract: ${card.contract}`);
   if (card.budget !== null) console.log(`- Budget: ${card.budget}`);
@@ -4507,7 +4511,7 @@ function printCard(hippoRoot: string, tenantId: string, card: Card): void {
   if (runs.length > 0) {
     console.log('\n### Runs');
     for (const run of runs) {
-      console.log(`- ${run.runtime} started ${run.started}${run.ended ? ` ended ${run.ended} (${run.outcome})` : ' (open)'}`);
+      console.log(`- run ${run.id}: ${run.runtime} started ${run.started}${run.ended ? ` ended ${run.ended} (${run.outcome})` : ' (open)'}`);
     }
   }
 
@@ -4537,17 +4541,38 @@ function cardStringFlag(flags: Record<string, string | boolean | string[]>, key:
   return v.trim();
 }
 
+// A too-large --run would silently round to a different id (mirrors parsePositiveIncidentId).
+function cardRunFlag(flags: Record<string, string | boolean | string[]>): number | undefined {
+  const raw = cardStringFlag(flags, 'run');
+  if (raw === undefined) return undefined;
+  const n = Number(raw);
+  if (!/^\d+$/.test(raw) || !Number.isSafeInteger(n) || n <= 0) {
+    console.error(`Invalid --run: "${raw}" (expected a positive integer).`);
+    process.exit(1);
+  }
+  return n;
+}
+
+// Reads after the store already refused, so this only explains the refusal, never changes it.
+function cardRefusal(hippoRoot: string, tenantId: string, id: string): string {
+  const card = loadCard(hippoRoot, tenantId, id);
+  const liveRun = loadCardRuns(hippoRoot, tenantId, id).find((r) => !r.ended);
+  return `status ${card?.status ?? 'unknown'}, live run ${liveRun?.id ?? 'none'}`;
+}
+
 // One entry per subcommand: the flags cmdCard actually reads for it, so a typo like
 // --depend-on fails fast instead of silently doing nothing.
-type CardSubcommand = 'create' | 'show' | 'list' | 'claim' | 'block' | 'review' | 'complete' | 'comment';
+type CardSubcommand = 'create' | 'show' | 'list' | 'claim' | 'heartbeat' | 'block' | 'review' | 'complete' | 'reclaim' | 'comment';
 const CARD_SUBCOMMAND_FLAGS = {
   create: ['title', 'repo', 'contract', 'budget', 'depends-on'],
   show: ['json'],
   list: ['status', 'json'],
   claim: ['runtime', 'session'],
-  block: ['reason'],
-  review: new Array<string>(),
-  complete: ['outcome'],
+  heartbeat: ['run'],
+  block: ['reason', 'run'],
+  review: ['run'],
+  complete: ['outcome', 'run'],
+  reclaim: new Array<string>(),
   comment: ['body', 'author'],
 } satisfies Record<CardSubcommand, string[]>;
 
@@ -4663,7 +4688,7 @@ function cmdCard(
       process.exit(1);
     }
     const sessionId = cardStringFlag(flags, 'session') || undefined;
-    let card: Card | null;
+    let card: (Card & { runId: number }) | null;
     try {
       card = claimCard(hippoRoot, tenantId, id, runtime, sessionId);
     } catch (error) {
@@ -4674,7 +4699,29 @@ function cmdCard(
       console.error(`Could not claim card ${id} (not ready/blocked, or already claimed).`);
       process.exit(1);
     }
-    console.log(`Claimed card ${card.id} for ${runtime}`);
+    console.log(`Claimed card ${card.id} for ${runtime} (run ${card.runId}, lease until ${card.leaseUntil})`);
+    return;
+  }
+
+  if (subcommand === 'heartbeat') {
+    const id = args[1];
+    const runId = cardRunFlag(flags);
+    if (!id || runId === undefined) {
+      console.error('Usage: hippo card heartbeat <id> --run <n>');
+      process.exit(1);
+    }
+    let card: Card | null;
+    try {
+      card = heartbeatCard(hippoRoot, tenantId, id, runId);
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
+    if (!card) {
+      console.error(`Could not heartbeat card ${id} (${cardRefusal(hippoRoot, tenantId, id)}).`);
+      process.exit(1);
+    }
+    console.log(`Heartbeat card ${card.id}: lease until ${card.leaseUntil}`);
     return;
   }
 
@@ -4685,15 +4732,17 @@ function cmdCard(
       console.error(CARD_BLOCK_REASON_REQUIRED);
       process.exit(1);
     }
+    const runId = cardRunFlag(flags);
     let card: Card | null;
     try {
-      card = blockCard(hippoRoot, tenantId, id, reason);
+      card = blockCard(hippoRoot, tenantId, id, reason, runId);
     } catch (error) {
       console.error(error instanceof Error ? error.message : String(error));
       process.exit(1);
     }
     if (!card) {
-      console.error(`Could not block card ${id} (not running).`);
+      const why = runId === undefined ? 'not running' : cardRefusal(hippoRoot, tenantId, id);
+      console.error(`Could not block card ${id} (${why}).`);
       process.exit(1);
     }
     console.log(`Blocked card ${card.id}`);
@@ -4703,18 +4752,20 @@ function cmdCard(
   if (subcommand === 'review') {
     const id = args[1];
     if (!id) {
-      console.error('Usage: hippo card review <id>');
+      console.error('Usage: hippo card review <id> [--run <n>]');
       process.exit(1);
     }
+    const runId = cardRunFlag(flags);
     let card: Card | null;
     try {
-      card = reviewCard(hippoRoot, tenantId, id);
+      card = reviewCard(hippoRoot, tenantId, id, runId);
     } catch (error) {
       console.error(error instanceof Error ? error.message : String(error));
       process.exit(1);
     }
     if (!card) {
-      console.error(`Could not move card ${id} to review (not running).`);
+      const why = runId === undefined ? 'not running' : cardRefusal(hippoRoot, tenantId, id);
+      console.error(`Could not move card ${id} to review (${why}).`);
       process.exit(1);
     }
     console.log(`Card ${card.id} moved to review`);
@@ -4725,23 +4776,41 @@ function cmdCard(
     const id = args[1];
     const outcomeRaw = flags['outcome'];
     if (!id || !isHandoffOutcome(outcomeRaw)) {
-      console.error('Usage: hippo card complete <id> --outcome <success|failure|partial>');
+      console.error('Usage: hippo card complete <id> --outcome <success|failure|partial> [--run <n>]');
       process.exit(1);
     }
+    const runId = cardRunFlag(flags);
     let result: { card: Card; promotedChildren: string[] } | null;
     try {
-      result = completeCard(hippoRoot, tenantId, id, outcomeRaw);
+      result = completeCard(hippoRoot, tenantId, id, outcomeRaw, runId);
     } catch (error) {
       console.error(error instanceof Error ? error.message : String(error));
       process.exit(1);
     }
     if (!result) {
-      console.error(`Could not complete card ${id} (not in review).`);
+      const why = runId === undefined ? 'not in review' : cardRefusal(hippoRoot, tenantId, id);
+      console.error(`Could not complete card ${id} (${why}).`);
       process.exit(1);
     }
     console.log(`Completed card ${result.card.id} (status: ${result.card.status})`);
     if (result.promotedChildren.length > 0) {
       console.log(`Promoted to ready: ${result.promotedChildren.join(', ')}`);
+    }
+    return;
+  }
+
+  if (subcommand === 'reclaim') {
+    if (args.length > 1) {
+      console.error('Usage: hippo card reclaim (sweeps every expired lease; use hippo card block <id> for one card)');
+      process.exit(1);
+    }
+    const ids = reclaimExpiredCards(hippoRoot, tenantId);
+    if (ids.length === 0) {
+      console.log('No expired leases.');
+      return;
+    }
+    for (const id of ids) {
+      console.log(`Reclaimed card ${id} (now ready)`);
     }
     return;
   }
@@ -4752,7 +4821,7 @@ function cmdCard(
       console.error('Usage: hippo card comment <id> --body "..." [--author <name>]');
       process.exit(1);
     }
-    // Only show and comment look the card up directly; claim/block/review/complete throw from the store instead.
+    // Only show and comment look the card up directly; claim/heartbeat/block/review/complete throw from the store instead.
     const card = loadCard(hippoRoot, tenantId, id);
     if (!card) {
       console.error(`No card found with id ${id}.`);
@@ -4769,7 +4838,7 @@ function cmdCard(
     return;
   }
 
-  console.error('Usage: hippo card <create|show|list|claim|block|review|complete|comment>');
+  console.error('Usage: hippo card <create|show|list|claim|heartbeat|block|review|complete|reclaim|comment>');
   process.exit(1);
 }
 
@@ -8934,14 +9003,20 @@ Commands:
       --json                 Output as JSON
     card list                List cards, newest-updated first
       --status <status>     Filter by status
-    card claim <id>          Claim a ready or blocked card
+    card claim <id>          Claim a ready or blocked card; prints its run id and lease
       --runtime <name>       Claiming runtime (required)
       --session <id>         Session ID
+    card heartbeat <id>       Extend a running card's lease
+      --run <n>              Your run id, as card claim printed it (required)
     card block <id>           Block a running card
       --reason "<why>"       Reason recorded as a card comment (required)
+      --run <n>              Refuse unless <n> is the card's live run
     card review <id>          Move a running card to review
+      --run <n>              Refuse unless <n> is the card's live run
     card complete <id>       Complete a card in review
       --outcome <o>          success | failure | partial (required)
+      --run <n>              Refuse unless <n> is the card's live run
+    card reclaim              Return every running card whose lease has expired to ready
     card comment <id>         Add a comment to a card
       --body <text>          Comment body (required)
       --author <name>       Comment author (default: cli)
@@ -9173,6 +9248,8 @@ Examples:
   hippo card create --title "Add cards table" --repo hippo --depends-on card_abc
   hippo card claim card_abc --runtime codex
   hippo card complete card_abc --outcome success
+  hippo card heartbeat card_abc --run 7
+  hippo card reclaim
   hippo embed --status
   hippo watch "npm run build"
   hippo learn --git --days 30

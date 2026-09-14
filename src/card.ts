@@ -9,7 +9,7 @@ export function isCardStatus(v: string): v is CardStatus {
   return CARD_STATUSES.some((s) => s === v);
 }
 
-/** A card row; leaseUntil and heartbeatAt are reserved for W2b's lease and heartbeat, W2a never writes them and they stay null. */
+/** A card row; leaseUntil and heartbeatAt are set while the card is running and null otherwise. */
 export interface Card {
   id: string;
   title: string;
@@ -53,9 +53,13 @@ export type CardTransitions = { readonly [S in CardStatus]: readonly CardStatus[
 export const CARD_TRANSITIONS: CardTransitions = {
   backlog: ['ready'],
   ready: ['running'],
-  running: ['blocked', 'review'],
+  running: ['blocked', 'review', 'ready'],
   blocked: ['running'],
   review: ['done', 'shelved'],
   done: [],
   shelved: [],
 };
+
+// SHORTCUT: one fixed lease for every claim; add a per-claim lease when the W3 dispatcher heartbeats on a timer.
+/** How long a claim or a heartbeat keeps a running card's lease before reclaimExpiredCards may return it to ready. */
+export const CARD_LEASE_MS = 4 * 60 * 60 * 1000;

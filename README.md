@@ -622,10 +622,12 @@ hippo watch "npm run build"
 | `hippo card create --title "..."` | Create a work-queue card (`--repo`, `--contract`, `--budget`, repeatable `--depends-on <id>`) |
 | `hippo card show <id>` | Show a card, its deps, runs, comments and latest handoff |
 | `hippo card list [--status <status>]` | List cards, newest-updated first |
-| `hippo card claim <id> --runtime <name>` | Claim a ready or blocked card |
-| `hippo card block <id> --reason "<why>"` | Block a running card; the reason is recorded as a comment |
-| `hippo card review <id>` | Move a running card to review |
-| `hippo card complete <id> --outcome <success\|failure\|partial>` | Complete a card in review: `success` marks it done and promotes children whose parents are all done; `failure` or `partial` shelves it |
+| `hippo card claim <id> --runtime <name>` | Claim a ready or blocked card; prints its run id and the time its 4-hour lease expires |
+| `hippo card heartbeat <id> --run <n>` | Extend a claimed card's lease |
+| `hippo card block <id> --reason "<why>" [--run <n>]` | Block a running card; the reason is recorded as a comment |
+| `hippo card review <id> [--run <n>]` | Move a running card to review |
+| `hippo card complete <id> --outcome <success\|failure\|partial> [--run <n>]` | Complete a card in review: `success` marks it done and promotes children whose parents are all done; `failure` or `partial` shelves it |
+| `hippo card reclaim` | Sweep every card whose lease has passed and return it to ready |
 | `hippo card comment <id> --body "..."` | Add a comment to a card |
 | `hippo wm push --scope <s> --content "..."` | Push to working memory |
 | `hippo wm read --scope <s>` | Read working memory entries |
@@ -634,6 +636,8 @@ hippo watch "npm run build"
 | `hippo dashboard` | Open web dashboard at localhost:3333 |
 | `hippo dashboard --port <n>` | Use custom port |
 | `hippo mcp` | Start MCP server (stdio transport) |
+
+On `heartbeat`, `block`, `review` and `complete`, a given `--run` is checked against the card's live run and the command is refused, unchanged, if the two do not match.
 
 ---
 

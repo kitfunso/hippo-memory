@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Card leases, heartbeat and reclaim (roadmap Track W, milestone W2b).** `claimCard` now sets a fixed `CARD_LEASE_MS` (4 hours) lease on the card it claims and returns the claim's run id alongside the card. The new `heartbeatCard(hippoRoot, tenantId, id, runId)` extends that lease, and the new `reclaimExpiredCards(hippoRoot, tenantId)` sweeps every `running` card whose lease has passed (or was never set) back to `ready` inside one `BEGIN IMMEDIATE`, closing its live run with outcome `reclaimed`. `blockCard`, `reviewCard` and `completeCard` take an optional `runId`: given one, the call is refused unless it names the card's live run, so a claimant that lost its card to a sweep cannot act on it under its old run id. The run id is a staleness check, not an authentication boundary; tenant scoping still does that job.
+- `hippo card heartbeat <id> --run <n>` extends a claim's lease. `hippo card reclaim` sweeps every expired lease and prints what it reclaimed, or `No expired leases.`; it takes no id (use `hippo card block <id>` to act on one card). `hippo card block`, `review` and `complete` accept an optional `--run <n>`; a mismatched run id is refused with the card's status and live run.
+- `heartbeatCard`, `reclaimExpiredCards` and `CARD_LEASE_MS` are exported from `src/index.ts`. `claimCard`'s return value gains a `runId` field; every 1.40.0 caller that discarded it, null-checked it or destructured only known fields is unaffected.
+
+### Notes
+- A card claimed under 1.40.0 has no lease (`lease_until` was NULL on every such row), so the first `hippo card reclaim` run after upgrading returns it to `ready` as if its claimant were gone. Send one heartbeat with the run id `hippo card show <id>` prints before running `reclaim` to keep a card claimed under 1.40.0 in its claimant's hands.
+
 ## 1.40.0 - 2026-09-13
 
 ### Added
