@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.41.0 - 2026-09-16
 
 ### Added
 - **Card leases, heartbeat and reclaim (roadmap Track W, milestone W2b).** `claimCard` now sets a fixed `CARD_LEASE_MS` (4 hours) lease on the card it claims and returns the claim's run id alongside the card. The new `heartbeatCard(hippoRoot, tenantId, id, runId)` extends that lease, and the new `reclaimExpiredCards(hippoRoot, tenantId)` sweeps every `running` card whose lease has passed (or was never set) back to `ready` inside one `BEGIN IMMEDIATE`, closing its live run with outcome `reclaimed`. `blockCard`, `reviewCard` and `completeCard` take an optional `runId`: given one, the call is refused unless it names the card's live run, so a claimant that lost its card to a sweep cannot act on it under its old run id. The run id is a staleness check, not an authentication boundary; tenant scoping still does that job.

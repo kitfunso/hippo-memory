@@ -18,23 +18,10 @@
  * an ESM `import` can resolve cleanly, and a hardcoded constant survives
  * any packager that drops .json files.
  */
-export const PACKAGE_VERSION = '1.40.0';
+export const PACKAGE_VERSION = '1.41.0';
 // Bump on every release alongside the 4 other manifests + lockfile.
 
-/**
- * Compare two semver strings. Returns positive if a > b, 0 if equal, negative
- * if a < b.
- *
- * v1.3.2 (claude review): pre-release/build-metadata tags throw rather than
- * silently coerce. The v1.3.1 implementation used `Number(n) || 0` which
- * parsed `'1-beta'` as 0, so `'1.3.1-beta'` → `[1,3,0]` and compared LESS
- * than `'1.3.1'`. If anyone ever stamped a pre-release version into
- * `meta.min_compatible_binary`, the rollback guard would silently misfire.
- * Loud failure is the right call on a security-relevant compare.
- *
- * Releases use plain `x.y.z` (no pre-release tags). If you need
- * pre-release semantics later, replace this with a real semver lib.
- */
+/** Compares plain x.y.z versions, positive if a > b; tags throw so the rollback guard never misfires silently. */
 export function compareSemver(a: string, b: string): number {
   const parse = (v: string): number[] => {
     const parts = v.split('.');
