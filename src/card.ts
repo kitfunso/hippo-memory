@@ -9,7 +9,7 @@ export function isCardStatus(v: string): v is CardStatus {
   return CARD_STATUSES.some((s) => s === v);
 }
 
-/** A card row; leaseUntil and heartbeatAt are set while the card is running and null otherwise. */
+/** A card row; leaseUntil and heartbeatAt are null unless the card is running, and a card claimed under 1.40.0 runs with both null until a heartbeat sets them. */
 export interface Card {
   id: string;
   title: string;
