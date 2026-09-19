@@ -78,5 +78,10 @@ jobs:
           path: node_modules/@huggingface/transformers/.cache
           key: hf-models-4.2.0-${{ hashFiles('src/embeddings.ts', 'src/rerankers/cross-encoder.ts') }}
       - run: npm run build
+      # The zero-dep `test` job skips these; here the backend is installed.
+      - name: Cross-encoder against the real model
+        run: npx vitest run tests/rerankers/cross-encoder.test.ts
+        env:
+          HIPPO_REQUIRE_CROSS_ENCODER: '1'
       - name: Micro-eval
         run: python3 benchmarks/micro/run.py --verbose

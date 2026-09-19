@@ -1,39 +1,38 @@
 import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
 
 const MODEL_NAME = 'Xenova/ms-marco-MiniLM-L-6-v2';
 
-type CrossEncoderScore = { score: number };
-// The raw Transformers.js text-classification pipeline: called with the
-// combined query/candidate text, resolves to either a single score object or
-// an array of them depending on library version.
-type CrossEncoderPipeline = (input: string) => Promise<CrossEncoderScore | CrossEncoderScore[]>;
-type TransformersPipelineFactory = (task: string, model: string) => Promise<CrossEncoderPipeline>;
-
-interface TransformersModuleNamespace {
-  pipeline?: TransformersPipelineFactory;
-  default?: { pipeline?: TransformersPipelineFactory };
+type Tokenized = Record<string, unknown>;
+type TokenizerFn = (
+  text: string,
+  opts: { text_pair: string; padding: boolean; truncation: boolean },
+) => Promise<Tokenized>;
+type SeqClsModel = (inputs: Tokenized) => Promise<{ logits: { data: ArrayLike<number> } }>;
+interface FromPretrained<T> {
+  from_pretrained: (model: string) => Promise<T>;
 }
 
-// Use Function constructor to bypass TypeScript static module resolution
-// for optional peer dependencies that may not be installed (mirrors the
-// pattern in src/embeddings.ts).
-// SAFETY: this declares the contract we require from the dynamically
-// imported package (a `pipeline` factory, top-level or under `default`);
-// loadTransformersModule validates the resolved value is callable via
-// isPipelineFactory before it is ever invoked.
-const _dynImport = new Function('s', 'return import(s)') as (
-  s: string,
-) => Promise<TransformersModuleNamespace>;
+interface TransformersExports {
+  AutoTokenizer?: FromPretrained<TokenizerFn>;
+  AutoModelForSequenceClassification?: FromPretrained<SeqClsModel>;
+}
+interface TransformersModuleNamespace extends TransformersExports {
+  default?: TransformersExports;
+}
+
 const _require = createRequire(import.meta.url);
 
 const TRANSFORMERS_PACKAGES = ['@huggingface/transformers', '@xenova/transformers'] as const;
 
-function resolveTransformersPackage(): (typeof TRANSFORMERS_PACKAGES)[number] | null {
+// Returns a file URL, not the bare specifier: under a bundler's module runner
+// a raw dynamic import cannot resolve bare specifiers, which silently forced
+// the identity fallback and left the model untested in CI.
+function resolveTransformersPackage(): string | null {
   for (const name of TRANSFORMERS_PACKAGES) {
     try {
-      _require.resolve(name);
-      return name;
+      return pathToFileURL(_require.resolve(name)).href;
     } catch {
       // Try the legacy fallback only when the preferred package is not installed.
     }
@@ -41,31 +40,23 @@ function resolveTransformersPackage(): (typeof TRANSFORMERS_PACKAGES)[number] | 
   return null;
 }
 
-function isPipelineFactory(
-  value: TransformersPipelineFactory | undefined,
-): value is TransformersPipelineFactory {
-  return typeof value === 'function';
-}
-
-async function loadTransformersModule(): Promise<{
-  pipeline: TransformersPipelineFactory;
-} | null> {
+async function loadTransformersModule(): Promise<Required<TransformersExports> | null> {
   // Import one backend only. Loading both native ONNX runtimes in one process
   // can abort during finalization; Hugging Face is the maintained default.
-  const name = resolveTransformersPackage();
-  if (!name) return null;
+  const url = resolveTransformersPackage();
+  if (!url) return null;
   try {
-    const mod = await _dynImport(name);
-    const pipeline = mod.pipeline ?? mod.default?.pipeline;
-    return isPipelineFactory(pipeline)
-      ? { pipeline }
-      : null;
+    const mod = (await import(/* @vite-ignore */ url)) as TransformersModuleNamespace;
+    const tok = mod.AutoTokenizer ?? mod.default?.AutoTokenizer;
+    const seq =
+      mod.AutoModelForSequenceClassification ?? mod.default?.AutoModelForSequenceClassification;
+    return tok && seq ? { AutoTokenizer: tok, AutoModelForSequenceClassification: seq } : null;
   } catch {
     return null;
   }
 }
 
-type CrossEncoderFn = (query: string, candidate: string) => Promise<{ score: number }[]>;
+type CrossEncoderFn = (query: string, candidate: string) => Promise<number>;
 let cachedPipeline: CrossEncoderFn | null = null;
 let warnedOnFallback = false;
 
@@ -79,15 +70,26 @@ export async function isCrossEncoderAvailable(): Promise<boolean> {
   return (await loadTransformersModule()) !== null;
 }
 
+// NOT the text-classification pipeline: this model is a num_labels=1
+// regression head, and that pipeline softmaxes a length-1 logit vector, which
+// is identically 1.0 for every input. Read the logit, then squash it.
 async function loadPipeline(): Promise<CrossEncoderFn | null> {
   if (cachedPipeline) return cachedPipeline;
   try {
     const mod = await loadTransformersModule();
     if (!mod) return null;
-    const p = await mod.pipeline('text-classification', MODEL_NAME);
+    const [tokenizer, model] = await Promise.all([
+      mod.AutoTokenizer.from_pretrained(MODEL_NAME),
+      mod.AutoModelForSequenceClassification.from_pretrained(MODEL_NAME),
+    ]);
     cachedPipeline = async (query: string, candidate: string) => {
-      const out = await p(`${query} [SEP] ${candidate}`);
-      return Array.isArray(out) ? out : [out];
+      const inputs = await tokenizer(query, {
+        text_pair: candidate,
+        padding: true,
+        truncation: true,
+      });
+      const { logits } = await model(inputs);
+      return 1 / (1 + Math.exp(-Number(logits.data[0])));
     };
     return cachedPipeline;
   } catch {
@@ -95,14 +97,7 @@ async function loadPipeline(): Promise<CrossEncoderFn | null> {
   }
 }
 
-/**
- * Track 2 reranker: MS-MARCO MiniLM cross-encoder.
- * Loads model on first call, then sub-100ms per query for top-K=50 candidates
- * on a typical developer laptop CPU. Falls back to identity ordering if the
- * model fails to load (no transformers, no network for first download, etc.).
- *
- * See docs/plans/2026-05-10-f6-reranker-hardening.md Task 6.
- */
+/** Track 2 reranker: MS-MARCO MiniLM cross-encoder, identity fallback if the model will not load. */
 export const crossEncoderReranker: RerankerFn = async (
   query,
   results,
@@ -113,9 +108,8 @@ export const crossEncoderReranker: RerankerFn = async (
 
   const pipe = await loadPipeline();
   if (!pipe) {
-    // Fallback: identity ordering with rerankScore = original score. Warn
-    // once per process so a silent identity-fallback doesn't mislead users
-    // into thinking the cross-encoder is doing work it isn't.
+    // Warn once per process: a silent identity fallback otherwise reads as a
+    // working reranker.
     if (!warnedOnFallback) {
       warnedOnFallback = true;
       // eslint-disable-next-line no-console
@@ -135,12 +129,9 @@ export const crossEncoderReranker: RerankerFn = async (
     head.map(async (r, i) => {
       let ceScore: number;
       try {
-        const out = await pipe(query, r.entry.content);
-        ceScore = Array.isArray(out) && out.length > 0 ? out[0].score : 0;
+        ceScore = await pipe(query, r.entry.content);
       } catch {
-        // Per-call inference failure (transient tensor error, bad input,
-        // etc.): fall back to original score for this candidate so a
-        // single bad inference doesn't sink the whole rerank pass.
+        // One bad inference must not sink the whole pass.
         ceScore = r.score;
       }
       return {
@@ -152,12 +143,8 @@ export const crossEncoderReranker: RerankerFn = async (
     }),
   );
 
-  // T2 note: PLAIN stable score sort on purpose. The input `head` is already
-  // deterministically ordered (upstream content tail), so stability inherits
-  // that -- and when the cross-encoder produces tied scores (degenerate or
-  // no-signal cases), ties MUST fall back to the prior relevance order, not
-  // an arbitrary content order (the reranker-cross-encoder micro fixture
-  // fails otherwise: an all-tie rerank pass reordered its input).
+  // Plain stable sort on purpose: tied scores MUST fall back to the prior
+  // relevance order, never an arbitrary content order.
   scored.sort((a, b) => b.rerankScore - a.rerankScore);
   scored.forEach((r, i) => (r.postRerankRank = i + 1));
   return scored;
