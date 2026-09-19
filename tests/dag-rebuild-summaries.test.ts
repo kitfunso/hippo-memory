@@ -22,6 +22,7 @@ import {
 import { openHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
 import { rebuildDirtySummaries, buildDag, generateDagSummary } from '../src/dag.js';
+import * as dagModule from '../src/dag.js';
 import { consolidate } from '../src/consolidate.js';
 import { archiveRawMemory } from '../src/raw-archive.js';
 import { insertRejectedValue, rejectionDigest, normalizeValueForRejection } from '../src/rejection.js';
@@ -662,59 +663,43 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
     }
   });
 
-  it('test #12: cap hard-ceiling — HIPPO_DAG_REBUILD_CAP=99999 clamps to 1000', async () => {
+  it('test #12: cap hard-ceiling: consolidate() clamps HIPPO_DAG_REBUILD_CAP before it reaches rebuildDirtySummaries', async () => {
     const saved = process.env.HIPPO_DAG_REBUILD_CAP;
-    process.env.HIPPO_DAG_REBUILD_CAP = '99999';
-    // The test verifies the ceiling lives in consolidate.ts wire. Call
-    // rebuildDirtySummaries DIRECTLY with cap=99999 would bypass the wire;
-    // we test the consolidate path. But seeding 1500 summaries to verify
-    // the cap clamps to 1000 is slow. Compromise: seed 50 + cap=99999, but
-    // assert the WIRE in consolidate.ts evaluates Math.min(99999, 1000)=1000.
-    // We can't directly read the cap; but loading 1500 entries is fine in real DB.
+    const savedKey = process.env.ANTHROPIC_API_KEY;
+    const originalFetch = global.fetch;
+    // The spy reads the cap consolidate() computed, so the 1000 ceiling is
+    // proven without seeding more than 1000 dirty rows.
+    const rebuildSpy = vi.spyOn(dagModule, 'rebuildDirtySummaries');
     try {
-      // Seed 1500 dirty summaries to exercise the cap. Each is a 2-row write
-      // (summary + 1 child). This is 3000 inserts — slow but real.
-      for (let i = 0; i < 1500; i++) {
-        const sum = makeSummary(`sum-${i}`);
-        writeEntry(hippoRoot, sum);
-        writeEntry(hippoRoot, makeChild(sum.id, `fact-${i}`));
-        forceMarkDirty(hippoRoot, sum.id);
-        // Yield every 50 rows so the fork can service Vitest's birpc
-        // heartbeat: a fully synchronous 4500-insert stretch can exceed
-        // birpc's hardcoded 60s RPC timeout on loaded hosts, failing a run
-        // whose tests all passed (vitest-dev/vitest#8164).
-        if (i % 50 === 49) await new Promise((res) => setImmediate(res));
-      }
-
-      // Mock global fetch so the consolidate path's apiKey gate is satisfied
-      // without making 1000 real HTTP calls. Inject via stub.
-      const originalFetch = global.fetch;
+      const sum = makeSummary('sum-0');
+      writeEntry(hippoRoot, sum);
+      writeEntry(hippoRoot, makeChild(sum.id, 'fact-0'));
+      forceMarkDirty(hippoRoot, sum.id);
       global.fetch = makeOkFetcher('clamped-ceiling-XXX-content');
-      const savedKey = process.env.ANTHROPIC_API_KEY;
       process.env.ANTHROPIC_API_KEY = 'k';
-      try {
+
+      const table: Array<[string, number]> = [
+        ['99999', 1000], ['1001', 1000], ['1000', 1000], ['50', 50], ['0', 20], ['-5', 20], ['abc', 20],
+      ];
+      for (const [index, [raw, expected]] of table.entries()) {
+        process.env.HIPPO_DAG_REBUILD_CAP = raw;
         const result = await consolidate(hippoRoot);
-        // Ceiling 1000 enforced → at most 1000 summaries processed
-        const totalProcessed = result.summariesRebuilt + result.summariesZeroChildSkipped + result.summariesRebuildFailed;
-        expect(totalProcessed).toBeLessThanOrEqual(1000);
-        expect(totalProcessed).toBeGreaterThan(0); // some work happened
-        expect(result.summariesRebuildCapped).toBe(true);
-      } finally {
-        global.fetch = originalFetch;
-        if (savedKey !== undefined) {
-          process.env.ANTHROPIC_API_KEY = savedKey;
-        } else {
-          delete process.env.ANTHROPIC_API_KEY;
+        expect(rebuildSpy).toHaveBeenCalledTimes(index + 1);
+        expect(rebuildSpy.mock.calls[index][1].cap).toBe(expected);
+        if (index === 0) {
+          const processed = result.summariesRebuilt + result.summariesZeroChildSkipped + result.summariesRebuildFailed;
+          expect(processed).toBeGreaterThan(0);
         }
       }
     } finally {
-      if (saved !== undefined) {
-        process.env.HIPPO_DAG_REBUILD_CAP = saved;
-      } else {
-        delete process.env.HIPPO_DAG_REBUILD_CAP;
-      }
+      rebuildSpy.mockRestore();
+      global.fetch = originalFetch;
+      if (savedKey !== undefined) process.env.ANTHROPIC_API_KEY = savedKey;
+      else delete process.env.ANTHROPIC_API_KEY;
+      if (saved !== undefined) process.env.HIPPO_DAG_REBUILD_CAP = saved;
+      else delete process.env.HIPPO_DAG_REBUILD_CAP;
     }
-  }, 240_000); // 1500-row real-DB seed is intentionally slow on low-power CI/dev hosts; passes in ~90s solo but full-suite fork-pool contention can double it
+  });
 
   it('test #13: T4 — tombstone-hit rebuild increments refused, not rebuilt (dirty still clears, content unchanged)', async () => {
     const summary = makeSummary('original summary content');
