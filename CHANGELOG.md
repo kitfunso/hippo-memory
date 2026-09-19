@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.42.1 - 2026-09-19
+
+### Fixed
+- **Recall traces written from inside Claude Code carried no session id.** `hippo recall` took the session only from `--session-id` or `HIPPO_SESSION_ID`, and `hippo context` only from a hook's stdin payload or `HIPPO_SESSION_ID`. Claude Code exports `CLAUDE_CODE_SESSION_ID` instead, so every recall an agent ran from its shell wrote a `recall_traces` row with `session_id` NULL, and the row could not be joined to the session that saw the memories. The CLI now falls back to `CLAUDE_CODE_SESSION_ID` when `HIPPO_SESSION_ID` is unset. `--session-id`, a stdin payload and `HIPPO_SESSION_ID` still win over it. In `hippo recall` the fallback reaches the trace stamp only, so the goal-stack boost and the result order are unchanged. In `hippo context` it also feeds the active-snapshot owner match, the way `HIPPO_SESSION_ID` already did.
+- **`getContext` stamped its trace with the snapshot writer's session, not the caller's.** The trace row took `session_id` from the active task snapshot, which can belong to an older session, and the zero-result path always stamped NULL. Both paths now stamp `opts.currentSessionId` first and fall back to the snapshot's session. `--pinned-only` still writes no trace row. The MCP tools and the HTTP server are unchanged.
+- Pinned by five new cases in `tests/recall-trace-wiring.test.ts`. The test run now clears `CLAUDE_CODE_SESSION_ID` in its global setup, so a suite started from a Claude Code shell cannot leak that id into the CLI children it spawns.
+
 ## 1.42.0 - 2026-09-19
 
 ### Fixed

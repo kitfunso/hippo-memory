@@ -2334,13 +2334,13 @@ export interface ContextOpts {
    *  should pass it explicitly. */
   currentProject?: string;
   /** DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md, T2): the calling
-   *  session's id, used ONLY as the owner-match input to
+   *  session's id. Stamped on this call's recall trace, and the owner-match input to
    *  `loadFreshActiveTaskSnapshot` — when it strictly equals the active
    *  snapshot's `session_id`, the read is unbounded (same-session
    *  continuity); otherwise the snapshot must pass the freshness bound to
    *  surface. Absent (undefined/null/'') never short-circuits as a match;
    *  it just means every snapshot goes through the age check. Host-resolved
-   *  (stdin payload / HIPPO_SESSION_ID) so this stays host-agnostic. */
+   *  (stdin payload, HIPPO_SESSION_ID, else the host's session var) so this stays host-agnostic. */
   currentSessionId?: string | null;
 }
 
@@ -2768,12 +2768,10 @@ export async function getContext(
     // path stays read-only, same reason it skips markRetrieved). Fail-soft
     // internally; never throws.
     if (!pinnedOnly) {
-      // No sessionId to pull here: !activeSnapshot holds in this branch by
-      // construction (one of the AND conditions above), so there is no
-      // active snapshot to derive a session id from.
+      // No snapshot in this branch, so the caller's own id is the only session to stamp.
       writeRecallTraceAtRoot(ctx.hippoRoot, {
         tenantId: ctx.tenantId,
-        sessionId: null,
+        sessionId: opts.currentSessionId || null,
         pipeline: 'context',
         query,
         explainMode: false,
@@ -2823,7 +2821,7 @@ export async function getContext(
     // internally; never throws.
     const traceId = writeRecallTraceAtRoot(ctx.hippoRoot, {
       tenantId: ctx.tenantId,
-      sessionId: activeSnapshot?.session_id ?? null,
+      sessionId: opts.currentSessionId || activeSnapshot?.session_id || null,
       pipeline: 'context',
       query,
       explainMode: false,

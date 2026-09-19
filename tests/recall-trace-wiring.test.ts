@@ -242,6 +242,41 @@ describe('api.getContext — trace wiring', () => {
       restore();
     }
   });
+
+  it('stamps the trace session_id from opts.currentSessionId on a real-query recall', async () => {
+    const { home, restore } = tmpHome();
+    try {
+      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+      remember(ctx, { content: 'context-trace-target-caller-session' });
+
+      const result = await getContext(ctx, { q: 'context-trace-target-caller', budget: 1000, currentSessionId: 'sess-caller-1' });
+      expect(result.entries.length).toBeGreaterThan(0);
+
+      const traces = traceRows(home, 'context');
+      expect(traces).toHaveLength(1);
+      expect(traces[0].session_id).toBe('sess-caller-1');
+    } finally {
+      restore();
+    }
+  });
+
+  it('F5 + caller id: the zero-result early-return trace also stamps opts.currentSessionId', async () => {
+    const { home, restore } = tmpHome();
+    try {
+      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+      remember(ctx, { content: 'context-empty-baseline-caller unrelated content' });
+
+      const result = await getContext(ctx, { q: 'zzz-query-matches-absolutely-nothing-xyzzy', budget: 1000, currentSessionId: 'sess-caller-2' });
+      expect(result.entries).toEqual([]);
+
+      const traces = traceRows(home, 'context');
+      expect(traces).toHaveLength(1);
+      expect(traces[0].result_count).toBe(0);
+      expect(traces[0].session_id).toBe('sess-caller-2');
+    } finally {
+      restore();
+    }
+  });
 });
 
 describe('CLI cmdRecall — trace wiring', () => {
@@ -316,6 +351,58 @@ describe('CLI cmdRecall — trace wiring', () => {
 
       // last_trace_id must still point at the FIRST (non-empty) trace.
       expect(lastTraceId(localStore)).toBe(baselineTraceId);
+    } finally {
+      rmSync(hippoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('hostSessionId(): falls back to CLAUDE_CODE_SESSION_ID when HIPPO_SESSION_ID is absent', () => {
+    const hippoRoot = mkdtempSync(join(tmpdir(), 'hippo-cli-recall-trace-host1-'));
+    try {
+      const env = { ...process.env, HIPPO_HOME: hippoRoot };
+      delete env.HIPPO_SESSION_ID;
+      env.CLAUDE_CODE_SESSION_ID = 'sess-host-1';
+      execFileSync('node', [hippoBin, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: hippoRoot, env });
+      execFileSync('node', [hippoBin, 'remember', 'host-fallback-target zeta fact'], { cwd: hippoRoot, env });
+      execFileSync('node', [hippoBin, 'recall', 'host-fallback-target'], { cwd: hippoRoot, env, encoding: 'utf-8' });
+
+      const traces = traceRows(join(hippoRoot, '.hippo'), 'cli');
+      expect(traces).toHaveLength(1);
+      expect(traces[0].session_id).toBe('sess-host-1');
+    } finally {
+      rmSync(hippoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('hostSessionId(): HIPPO_SESSION_ID wins over CLAUDE_CODE_SESSION_ID when both are set', () => {
+    const hippoRoot = mkdtempSync(join(tmpdir(), 'hippo-cli-recall-trace-host2-'));
+    try {
+      const env = { ...process.env, HIPPO_HOME: hippoRoot, HIPPO_SESSION_ID: 'own-1', CLAUDE_CODE_SESSION_ID: 'sess-host-1' };
+      execFileSync('node', [hippoBin, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: hippoRoot, env });
+      execFileSync('node', [hippoBin, 'remember', 'host-fallback-target-both theta fact'], { cwd: hippoRoot, env });
+      execFileSync('node', [hippoBin, 'recall', 'host-fallback-target-both'], { cwd: hippoRoot, env, encoding: 'utf-8' });
+
+      const traces = traceRows(join(hippoRoot, '.hippo'), 'cli');
+      expect(traces).toHaveLength(1);
+      expect(traces[0].session_id).toBe('own-1');
+    } finally {
+      rmSync(hippoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('hostSessionId(): session_id is null when neither var is set', () => {
+    const hippoRoot = mkdtempSync(join(tmpdir(), 'hippo-cli-recall-trace-host3-'));
+    try {
+      const env = { ...process.env, HIPPO_HOME: hippoRoot };
+      delete env.HIPPO_SESSION_ID;
+      delete env.CLAUDE_CODE_SESSION_ID;
+      execFileSync('node', [hippoBin, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: hippoRoot, env });
+      execFileSync('node', [hippoBin, 'remember', 'host-fallback-target-none iota fact'], { cwd: hippoRoot, env });
+      execFileSync('node', [hippoBin, 'recall', 'host-fallback-target-none'], { cwd: hippoRoot, env, encoding: 'utf-8' });
+
+      const traces = traceRows(join(hippoRoot, '.hippo'), 'cli');
+      expect(traces).toHaveLength(1);
+      expect(traces[0].session_id).toBeNull();
     } finally {
       rmSync(hippoRoot, { recursive: true, force: true });
     }

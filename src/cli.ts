@@ -1819,7 +1819,7 @@ async function cmdRecall(
     // internally; never throws.
     writeRecallTraceAtRoot(hippoRoot, {
       tenantId,
-      sessionId: sessionId || null,
+      sessionId: sessionId || hostSessionId() || null,
       pipeline: 'cli',
       query,
       explainMode: showWhy,
@@ -1930,7 +1930,7 @@ async function cmdRecall(
   // internally; never throws.
   const traceId = writeRecallTraceAtRoot(hippoRoot, {
     tenantId,
-    sessionId: sessionId || null,
+    sessionId: sessionId || hostSessionId() || null,
     pipeline: 'cli',
     query,
     explainMode: showWhy,
@@ -6418,6 +6418,11 @@ function cmdCurrent(
   process.exit(1);
 }
 
+// Claude Code exports its own session var, not ours; without the fallback agent-run recalls trace with no session.
+function hostSessionId(): string | undefined {
+  return process.env.HIPPO_SESSION_ID?.trim() || process.env.CLAUDE_CODE_SESSION_ID?.trim() || undefined;
+}
+
 async function cmdContext(
   hippoRoot: string,
   args: string[],
@@ -6461,7 +6466,7 @@ async function cmdContext(
   // DF1 T2: resolve the calling session's id for the bounded active-task-
   // snapshot read (api.getContext -> loadFreshActiveTaskSnapshot). Stdin
   // payload (the UserPromptSubmit hook JSON) wins; falls back to
-  // HIPPO_SESSION_ID; absent both, undefined -- api.getContext then applies
+  // hostSessionId(); absent both, undefined -- api.getContext then applies
   // the pure freshness bound with no owner-match short-circuit.
   let payloadSessionId: string | undefined;
   if (stdinText && stdinText.trim() !== '') {
@@ -6474,7 +6479,7 @@ async function cmdContext(
       // Malformed/non-JSON stdin: fall through to the env fallback below.
     }
   }
-  const currentSessionId = payloadSessionId ?? (process.env.HIPPO_SESSION_ID || undefined);
+  const currentSessionId = payloadSessionId ?? hostSessionId();
 
   const opts: api.ContextOpts = {
     q: query,
