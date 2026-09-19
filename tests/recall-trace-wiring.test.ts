@@ -408,3 +408,44 @@ describe('CLI cmdRecall — trace wiring', () => {
     }
   });
 });
+
+describe('CLI goal-stack boost — ignores the CLAUDE_CODE_SESSION_ID host var', () => {
+  it('boosts under --session-id but not under a bare CLAUDE_CODE_SESSION_ID host var', () => {
+    const hippoRoot = mkdtempSync(join(tmpdir(), 'hippo-cli-goalboost-hostvar-'));
+    try {
+      const env = { ...process.env, HIPPO_HOME: hippoRoot };
+      delete env.HIPPO_SESSION_ID;
+      delete env.CLAUDE_CODE_SESSION_ID;
+      execFileSync('node', [hippoBin, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: hippoRoot, env });
+      // Tag shares no substring with the query, so any ranking gap is the goal boost, not a tag/query match.
+      execFileSync('node', [hippoBin, 'remember', 'zzgoalboostquery bug fix details', '--tag', 'sprintx'], { cwd: hippoRoot, env });
+      execFileSync('node', [hippoBin, 'remember', 'zzgoalboostquery UI polish', '--tag', 'ui'], { cwd: hippoRoot, env });
+      execFileSync('node', [hippoBin, 'goal', 'push', 'sprintx', '--session-id', 'S'], { cwd: hippoRoot, env });
+
+      type RecallJson = { results: Array<{ id: string; score: number }> };
+      // SAFETY: parses this test's own `hippo recall --json` output, whose shape (cli.ts's asJson branch) is fixed above.
+      const parse = (out: string): RecallJson => JSON.parse(out) as RecallJson;
+
+      const noSession = parse(
+        execFileSync('node', [hippoBin, 'recall', 'zzgoalboostquery', '--json'], { cwd: hippoRoot, env, encoding: 'utf8' }),
+      );
+
+      // Control: --session-id S makes the boost visible at all (order flips).
+      const control = parse(
+        execFileSync('node', [hippoBin, 'recall', 'zzgoalboostquery', '--json', '--session-id', 'S'], { cwd: hippoRoot, env, encoding: 'utf8' }),
+      );
+      expect(control.results.map((r) => r.id)).not.toEqual(noSession.results.map((r) => r.id));
+
+      // Test arm: CLAUDE_CODE_SESSION_ID=S only -- must match the no-session run, not the control.
+      const hostEnv = { ...env, CLAUDE_CODE_SESSION_ID: 'S' };
+      const host = parse(
+        execFileSync('node', [hippoBin, 'recall', 'zzgoalboostquery', '--json'], { cwd: hippoRoot, env: hostEnv, encoding: 'utf8' }),
+      );
+      // Score has a real-time decay term, so re-running moments apart drifts ~1e-8; toBeCloseTo tolerates that, not a real boost's ~2x jump.
+      expect(host.results.map((r) => r.id)).toEqual(noSession.results.map((r) => r.id));
+      host.results.forEach((r, i) => expect(r.score).toBeCloseTo(noSession.results[i].score, 4));
+    } finally {
+      rmSync(hippoRoot, { recursive: true, force: true });
+    }
+  });
+});

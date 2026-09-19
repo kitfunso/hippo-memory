@@ -239,4 +239,67 @@ describe('bonus: `hippo context` ambient CLI surface end-to-end (DF1 T2 wiring)'
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('DF1 CLI context owner-match marker');
   });
+
+  it('host-var fallback: CLAUDE_CODE_SESSION_ID alone (no stdin payload) owner-matches the snapshot', () => {
+    const hippoRoot = getHippoRoot(dir);
+    const saved = saveActiveTaskSnapshot(hippoRoot, 'default', {
+      task: 'DF1 CLI context host-var owner-match marker',
+      summary: 's',
+      next_step: 'n',
+      session_id: 'sess-owner-hostvar',
+      source: 'test',
+    });
+    backdateSnapshot(hippoRoot, saved.id, isoAgo(SEVEN_DAYS_MS));
+
+    delete env.HIPPO_SESSION_ID;
+    delete env.CLAUDE_CODE_SESSION_ID;
+    env.CLAUDE_CODE_SESSION_ID = 'sess-owner-hostvar';
+    // Empty string, not omitted: guarantees stdin EOF instead of a hung read on fd 0.
+    const result = runHippo(['context', '--format', 'json'], dir, env, '');
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('DF1 CLI context host-var owner-match marker');
+  });
+
+  it('payload wins over the host var: a different payload session_id still excludes the env owner\'s snapshot', () => {
+    const hippoRoot = getHippoRoot(dir);
+    const saved = saveActiveTaskSnapshot(hippoRoot, 'default', {
+      task: 'DF1 CLI context payload-beats-hostvar marker',
+      summary: 's',
+      next_step: 'n',
+      session_id: 'sess-owner-hostvar2',
+      source: 'test',
+    });
+    backdateSnapshot(hippoRoot, saved.id, isoAgo(SEVEN_DAYS_MS));
+
+    delete env.HIPPO_SESSION_ID;
+    delete env.CLAUDE_CODE_SESSION_ID;
+    env.CLAUDE_CODE_SESSION_ID = 'sess-owner-hostvar2';
+    const payload = JSON.stringify({ session_id: 'sess-other', hook_event_name: 'UserPromptSubmit' });
+    const result = runHippo(['context', '--format', 'json'], dir, env, payload);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).not.toContain('DF1 CLI context payload-beats-hostvar marker');
+  });
+
+  it('blank payload session_id counts as absent: falls back to CLAUDE_CODE_SESSION_ID and owner-matches', () => {
+    const hippoRoot = getHippoRoot(dir);
+    const saved = saveActiveTaskSnapshot(hippoRoot, 'default', {
+      task: 'DF1 CLI context blank-payload-falls-back marker',
+      summary: 's',
+      next_step: 'n',
+      session_id: 'sess-owner-hostvar3',
+      source: 'test',
+    });
+    backdateSnapshot(hippoRoot, saved.id, isoAgo(SEVEN_DAYS_MS));
+
+    delete env.HIPPO_SESSION_ID;
+    delete env.CLAUDE_CODE_SESSION_ID;
+    env.CLAUDE_CODE_SESSION_ID = 'sess-owner-hostvar3';
+    const payload = JSON.stringify({ session_id: '', hook_event_name: 'UserPromptSubmit' });
+    const result = runHippo(['context', '--format', 'json'], dir, env, payload);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('DF1 CLI context blank-payload-falls-back marker');
+  });
 });

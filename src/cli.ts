@@ -6472,7 +6472,7 @@ async function cmdContext(
   if (stdinText && stdinText.trim() !== '') {
     try {
       const payload = JSON.parse(stdinText.trim()) as Record<string, unknown>;
-      if (payload && typeof payload === 'object' && typeof payload.session_id === 'string') {
+      if (payload && typeof payload === 'object' && typeof payload.session_id === 'string' && payload.session_id.trim() !== '') {
         payloadSessionId = payload.session_id;
       }
     } catch {
