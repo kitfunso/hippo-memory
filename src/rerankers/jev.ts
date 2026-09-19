@@ -5,6 +5,8 @@ import type { SearchResult } from '../search.js';
 const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 const DEFAULT_TIMEOUT_MS = 5_000;
 const TRUNCATE_CHARS = 1200;
+// The pool size every number in docs/evals/2026-09-19-jev-reranker.md was measured at.
+export const JEV_DEFAULT_TOP_K = 40;
 
 interface JevAnswer {
   noul?: number;
@@ -63,7 +65,9 @@ async function requestScores(query: string, head: SearchResult[]): Promise<numbe
       signal: controller.signal,
     });
     if (!resp.ok) {
-      const requestId = resp.headers.get('x-request-id');
+      // A third-party header ends up on stderr, so keep printable ASCII only.
+      const requestId = resp.headers.get('x-request-id')?.replace(/[^\x20-\x7e]/g, '').slice(0, 64);
+      await resp.body?.cancel();
       throw new Error(`HTTP ${resp.status}${requestId ? `, request ${requestId}` : ''}`);
     }
     const body: { answers?: Record<string, JevAnswer> } = await resp.json();
@@ -84,7 +88,7 @@ async function requestScores(query: string, head: SearchResult[]): Promise<numbe
 export function createJevReranker(localFallback: RerankerFn): RerankerFn {
   let warned = false;
   return async (query, results, options?: RerankerOptions): Promise<RerankResult[]> => {
-    const head = results.slice(0, options?.topK ?? 40);
+    const head = results.slice(0, options?.topK ?? JEV_DEFAULT_TOP_K);
     if (head.length === 0) return [];
 
     let scores: readonly number[];
@@ -101,7 +105,7 @@ export function createJevReranker(localFallback: RerankerFn): RerankerFn {
           `[hippo] jev reranker unavailable (${reason}); falling back to the local cross-encoder. Subsequent calls will not repeat this warning.`,
         );
       }
-      return localFallback(query, results, options);
+      return localFallback(query, head, options);
     }
 
     const scored = head.map((r, i) => ({

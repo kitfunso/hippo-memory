@@ -40,6 +40,8 @@ const contents = (out: Array<{ entry: { content: string } }>) => out.map((r) => 
 describe('jevReranker', () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
   const inputs = () => [asResult('alpha', 1.0), asResult('beta', 0.9), asResult('gamma', 0.8)];
+  const many = (n: number): SearchResult[] =>
+    Array.from({ length: n }, (_, i) => asResult(`cand${i}`, 1 - i / 100));
 
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -52,6 +54,7 @@ describe('jevReranker', () => {
   afterEach(() => {
     delete process.env.TYPESAFE_API_KEY;
     delete process.env.HIPPO_JEV_TIMEOUT_MS;
+    delete process.env.HIPPO_JEV_MODEL;
   });
 
   it('orders candidates by the returned probabilities, in one batched request', async () => {
@@ -147,5 +150,79 @@ describe('jevReranker', () => {
 
   it('is registered under the name jev, wired to the shipped reranker', () => {
     expect(getReranker('jev')).toBe(jevReranker);
+  });
+
+  it("sends the default 40 candidates, or the caller's topK", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(jevResponse(Array(40).fill(0.5)))
+      .mockResolvedValueOnce(jevResponse(Array(5).fill(0.5)));
+
+    const out = await freshReranker()('q', many(45));
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    expect(Object.keys(body.questions)).toHaveLength(40);
+    expect(out).toHaveLength(40);
+
+    const out2 = await freshReranker()('q', many(45), { topK: 5 });
+    const body2 = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
+    expect(Object.keys(body2.questions)).toHaveLength(5);
+    expect(out2).toHaveLength(5);
+  });
+
+  it('hands the fallback the same slice Jev was given', async () => {
+    delete process.env.TYPESAFE_API_KEY;
+    const fallback = vi.fn(reversingFallback);
+    await createJevReranker(fallback)('q', many(45));
+    expect(fallback.mock.calls[0][1]).toHaveLength(40);
+  });
+
+  it('ignores a zero, negative or non-numeric timeout', async () => {
+    for (const value of ['0', '-5', 'abc']) {
+      process.env.HIPPO_JEV_TIMEOUT_MS = value;
+      let signal: AbortSignal | undefined;
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+        signal = init?.signal ?? undefined;
+        return jevResponse([0.1, 0.9, 0.5]);
+      });
+      const out = await freshReranker()('q', inputs());
+      expect(contents(out)).toEqual(['beta', 'gamma', 'alpha']);
+      expect(signal?.aborted).toBe(false);
+      expect(warnSpy).not.toHaveBeenCalled();
+    }
+  });
+
+  it('cuts each candidate to 1200 characters before it leaves the machine', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jevResponse([0.5]));
+    await freshReranker()('q', [asResult('x'.repeat(2000), 1.0)]);
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    expect(body.state).toContain(`${'x'.repeat(1200)}...`);
+    expect(body.state).not.toContain('x'.repeat(1201));
+  });
+
+  it('sends HIPPO_JEV_MODEL when it is set', async () => {
+    process.env.HIPPO_JEV_MODEL = 'jev-1.13.0';
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jevResponse([0.1, 0.9, 0.5]));
+    await freshReranker()('q', inputs());
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    expect(body.model).toBe('jev-1.13.0');
+  });
+
+  it('names the request id, stripped of control characters', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(null, { status: 500, headers: { 'x-request-id': 'req-123' } }),
+    );
+    await freshReranker()('q', inputs());
+    const text = String(warnSpy.mock.calls[0][0]);
+    expect(text).toContain('request req-123');
+    expect(text).toMatch(/^[\x20-\x7e]+$/);
+  });
+
+  it('falls back when the body is not JSON', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('not json', { status: 200 }));
+    const out = await freshReranker()('q', inputs());
+    expect(contents(out)).toEqual(['gamma', 'beta', 'alpha']);
+    expect(warnSpy).toHaveBeenCalledOnce();
   });
 });

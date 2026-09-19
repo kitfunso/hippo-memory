@@ -30,15 +30,21 @@ const _require = createRequire(import.meta.url);
 
 const TRANSFORMERS_PACKAGES = ['@huggingface/transformers', '@xenova/transformers'] as const;
 
-// Returns a file URL, not the bare specifier: under a bundler's module runner
-// a raw dynamic import cannot resolve bare specifiers, which silently forced
-// the identity fallback and left the model untested in CI.
+// Returns the ESM entry URL, the same build src/embeddings.ts imports. A
+// require-style resolve picks the CommonJS build and puts a second copy of
+// the library, with its own ONNX sessions, in the process.
 function resolveTransformersPackage(): string | null {
   for (const name of TRANSFORMERS_PACKAGES) {
     try {
-      return pathToFileURL(_require.resolve(name)).href;
+      return import.meta.resolve(name);
     } catch {
-      // Try the legacy fallback only when the preferred package is not installed.
+      // import.meta.resolve is missing under some module runners (vitest's
+      // included); fall through to the require-based resolve there.
+      try {
+        return pathToFileURL(_require.resolve(name)).href;
+      } catch {
+        // Try the legacy fallback only when the preferred package is not installed.
+      }
     }
   }
   return null;
@@ -61,7 +67,7 @@ async function loadTransformersModule(): Promise<Required<TransformersExports> |
 }
 
 type CrossEncoderFn = (query: string, candidate: string) => Promise<number>;
-let cachedPipeline: CrossEncoderFn | null = null;
+let pipelineLoading: Promise<CrossEncoderFn | null> | null = null;
 let warnedOnFallback = false;
 
 /**
@@ -77,8 +83,7 @@ export async function isCrossEncoderAvailable(): Promise<boolean> {
 // NOT the text-classification pipeline: this model is a num_labels=1
 // regression head, and that pipeline softmaxes a length-1 logit vector, which
 // is identically 1.0 for every input. Read the logit, then squash it.
-async function loadPipeline(): Promise<CrossEncoderFn | null> {
-  if (cachedPipeline) return cachedPipeline;
+async function buildPipeline(): Promise<CrossEncoderFn | null> {
   try {
     const mod = await loadTransformersModule();
     if (!mod) return null;
@@ -86,19 +91,32 @@ async function loadPipeline(): Promise<CrossEncoderFn | null> {
       mod.AutoTokenizer.from_pretrained(MODEL_NAME),
       mod.AutoModelForSequenceClassification.from_pretrained(MODEL_NAME),
     ]);
-    cachedPipeline = async (query: string, candidate: string) => {
+    return async (query: string, candidate: string) => {
       const inputs = await tokenizer(query, {
         text_pair: candidate,
         padding: true,
         truncation: true,
       });
       const { logits } = await model(inputs);
-      return 1 / (1 + Math.exp(-Number(logits.data[0])));
+      const score = 1 / (1 + Math.exp(-Number(logits.data[0])));
+      // NaN would make the sort comparator a no-op; throwing hands this
+      // candidate to the per-candidate fallback instead.
+      if (!Number.isFinite(score)) throw new Error('cross-encoder returned a non-finite score');
+      return score;
     };
-    return cachedPipeline;
   } catch {
     return null;
   }
+}
+
+// One shared in-flight load: two first calls must not fetch the model twice.
+// A failed load clears the slot so a later call can try again.
+function loadPipeline(): Promise<CrossEncoderFn | null> {
+  pipelineLoading ??= buildPipeline().then((pipe) => {
+    if (!pipe) pipelineLoading = null;
+    return pipe;
+  });
+  return pipelineLoading;
 }
 
 /** Track 2 reranker: MS-MARCO MiniLM cross-encoder, identity fallback if the model will not load. */

@@ -8,9 +8,12 @@ import type { SearchResult } from '../search.js';
  * already filtered out by score-zero or supersession.
  *
  * Rerankers MUST be deterministic for a given (query, results) input
- * unless explicitly documented as stochastic (LLM track). Determinism is
- * required for paired A/B and for the workload-validity gate in
- * docs/evals/2026-05-10-f6-reranker-prereg.md.
+ * unless explicitly documented as stochastic (the LLM track, and the
+ * hosted jev reranker, whose scores move slightly run to run).
+ * Determinism is required for paired A/B and for the workload-validity
+ * gate in docs/evals/2026-05-10-f6-reranker-prereg.md.
+ *
+ * @returns Reordered (and optionally rescaled) results.
  */
 export type RerankerFn = (
   query: string,
@@ -29,7 +32,7 @@ export type RerankerConfigValue =
   | { [key: string]: RerankerConfigValue };
 
 export interface RerankerOptions {
-  /** Cap candidates passed to the reranker. Default 50. */
+  /** Cap candidates passed to the reranker. Each reranker sets its own default. */
   topK?: number;
   /** Per-track config blob; opaque to the seam. */
   config?: Record<string, RerankerConfigValue>;

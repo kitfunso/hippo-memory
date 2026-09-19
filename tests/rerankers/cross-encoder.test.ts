@@ -30,7 +30,8 @@ describe('crossEncoderReranker', () => {
         ]);
         // The fallback path echoes the input score (0.5 here), so a score
         // that moved off 0.5 proves the model actually ran.
-        live = hit[0].rerankScore !== 0.5 || miss[0].rerankScore !== 0.5;
+        const finite = Number.isFinite(hit[0].rerankScore) && Number.isFinite(miss[0].rerankScore);
+        live = finite && (hit[0].rerankScore !== 0.5 || miss[0].rerankScore !== 0.5);
         available = live && hit[0].rerankScore !== miss[0].rerankScore;
       } catch {
         available = false;
