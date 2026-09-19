@@ -4,7 +4,11 @@ import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
 
 const MODEL_NAME = 'Xenova/ms-marco-MiniLM-L-6-v2';
 
-type Tokenized = Record<string, unknown>;
+// Opaque here: the tokenizer output goes straight into the model.
+interface Tokenized {
+  readonly input_ids: object;
+  readonly attention_mask: object;
+}
 type TokenizerFn = (
   text: string,
   opts: { text_pair: string; padding: boolean; truncation: boolean },
@@ -46,7 +50,7 @@ async function loadTransformersModule(): Promise<Required<TransformersExports> |
   const url = resolveTransformersPackage();
   if (!url) return null;
   try {
-    const mod = (await import(/* @vite-ignore */ url)) as TransformersModuleNamespace;
+    const mod: TransformersModuleNamespace = await import(/* @vite-ignore */ url);
     const tok = mod.AutoTokenizer ?? mod.default?.AutoTokenizer;
     const seq =
       mod.AutoModelForSequenceClassification ?? mod.default?.AutoModelForSequenceClassification;

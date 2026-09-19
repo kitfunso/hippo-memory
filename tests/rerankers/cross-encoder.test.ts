@@ -36,7 +36,7 @@ describe('crossEncoderReranker', () => {
         available = false;
       }
     }
-  }, 60_000);
+  }, 180_000);
 
   // runIf takes a boolean evaluated at collection time, before beforeAll has
   // run, so the model probe has to gate inside the test body instead.

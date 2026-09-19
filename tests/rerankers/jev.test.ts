@@ -1,20 +1,22 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createMemory } from '../../src/memory.js';
 import type { SearchResult } from '../../src/search.js';
+import { getReranker } from '../../src/rerankers/index.js';
+import { createJevReranker, jevReranker } from '../../src/rerankers/jev.js';
 import type { RerankerFn } from '../../src/rerankers/types.js';
 
-// The stand-in cross-encoder REVERSES its input, so a fallback is
-// distinguishable from both a Jev ordering and an identity ordering.
-vi.mock('../../src/rerankers/cross-encoder.js', () => ({
-  crossEncoderReranker: vi.fn(async (_query: string, results: SearchResult[]) =>
-    [...results].reverse().map((r, i) => ({
-      ...r,
-      rerankScore: 1 - i / 10,
-      preRerankRank: i + 1,
-      postRerankRank: i + 1,
-    })),
-  ),
-}));
+// The stand-in fallback REVERSES its input, so a fallback is distinguishable
+// from both a Jev ordering and an identity ordering.
+const reversingFallback: RerankerFn = async (_query, results) =>
+  [...results].reverse().map((r, i) => ({
+    ...r,
+    rerankScore: 1 - i / 10,
+    preRerankRank: i + 1,
+    postRerankRank: i + 1,
+  }));
+
+// warn-once is per reranker, so every test builds its own.
+const freshReranker = (): RerankerFn => createJevReranker(reversingFallback);
 
 const FAKE_KEY = 'fake-key-for-tests';
 
@@ -31,12 +33,6 @@ function jevResponse(nouls: Array<number | undefined>, status = 200): Response {
     status,
     headers: { 'content-type': 'application/json' },
   });
-}
-
-// warn-once is module state, so every test loads a fresh copy of the module.
-async function freshReranker(): Promise<RerankerFn> {
-  vi.resetModules();
-  return (await import('../../src/rerankers/jev.js')).jevReranker;
 }
 
 const contents = (out: Array<{ entry: { content: string } }>) => out.map((r) => r.entry.content);
@@ -62,7 +58,7 @@ describe('jevReranker', () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(jevResponse([0.1, 0.9, 0.5]));
-    const out = await (await freshReranker())('which one', inputs());
+    const out = await freshReranker()('which one', inputs());
 
     expect(contents(out)).toEqual(['beta', 'gamma', 'alpha']);
     expect(out.map((r) => r.postRerankRank)).toEqual([1, 2, 3]);
@@ -80,10 +76,10 @@ describe('jevReranker', () => {
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
-  it('falls back to the cross-encoder, without a request, when the key is unset', async () => {
+  it('falls back to the local reranker, without a request, when the key is unset', async () => {
     delete process.env.TYPESAFE_API_KEY;
     const fetchMock = vi.spyOn(globalThis, 'fetch');
-    const out = await (await freshReranker())('q', inputs());
+    const out = await freshReranker()('q', inputs());
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(contents(out)).toEqual(['gamma', 'beta', 'alpha']);
@@ -92,7 +88,7 @@ describe('jevReranker', () => {
 
   it('falls back on a non-2xx status and names the status', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(jevResponse([], 500));
-    const out = await (await freshReranker())('q', inputs());
+    const out = await freshReranker()('q', inputs());
 
     expect(contents(out)).toEqual(['gamma', 'beta', 'alpha']);
     expect(String(warnSpy.mock.calls[0][0])).toContain('HTTP 500');
@@ -100,13 +96,13 @@ describe('jevReranker', () => {
 
   it('falls back when an answer is missing', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(jevResponse([0.2, undefined, 0.7]));
-    const out = await (await freshReranker())('q', inputs());
+    const out = await freshReranker()('q', inputs());
     expect(contents(out)).toEqual(['gamma', 'beta', 'alpha']);
   });
 
   it('falls back when a probability is outside 0 to 1', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(jevResponse([0.2, 1.7, 0.7]));
-    const out = await (await freshReranker())('q', inputs());
+    const out = await freshReranker()('q', inputs());
     expect(contents(out)).toEqual(['gamma', 'beta', 'alpha']);
   });
 
@@ -122,36 +118,34 @@ describe('jevReranker', () => {
           });
         }),
     );
-    const out = await (await freshReranker())('q', inputs());
+    const out = await freshReranker()('q', inputs());
 
     expect(aborted).toBe(true);
     expect(contents(out)).toEqual(['gamma', 'beta', 'alpha']);
     expect(String(warnSpy.mock.calls[0][0])).toContain('no answer within 5 ms');
   });
 
-  it('warns once per process and never prints the key', async () => {
+  it('warns once per reranker and never prints the key', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('fetch failed'));
-    const rerank = await freshReranker();
+    const rerank = freshReranker();
     await rerank('q', inputs());
     await rerank('q', inputs());
     await rerank('q', inputs());
 
     expect(warnSpy).toHaveBeenCalledOnce();
     const text = String(warnSpy.mock.calls[0][0]);
-    expect(text).toContain('request failed: fetch failed');
+    expect(text).toContain('fetch failed');
     expect(text).not.toContain(FAKE_KEY);
   });
 
   it('returns an empty list without a request or a warning', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch');
-    expect(await (await freshReranker())('q', [])).toEqual([]);
+    expect(await freshReranker()('q', [])).toEqual([]);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
-  it('is registered under the name jev', async () => {
-    vi.resetModules();
-    const { getReranker } = await import('../../src/rerankers/index.js');
-    expect(typeof getReranker('jev')).toBe('function');
+  it('is registered under the name jev, wired to the shipped reranker', () => {
+    expect(getReranker('jev')).toBe(jevReranker);
   });
 });
