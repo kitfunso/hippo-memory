@@ -70,6 +70,19 @@ describe('prepublish test gate (scripts/check-tests-pass.mjs)', () => {
     expect(r.stderr).toContain('refusing to publish');
   });
 
+  test('refuses to publish when vitest tallied more errors than the gate could read', () => {
+    const r = runGate('undercount');
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('numPassedTests=1');
+    expect(r.stderr).toContain('workerIpcArtifactOnly=false');
+  });
+
+  test('an extra reporter reprints the error section and the artifact is still forgiven', () => {
+    const r = runGate('unhandled', {}, ['--reporter=verbose']);
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stderr).toContain('WARNING');
+  });
+
   test('exits 1 when the suite never collects', () => {
     const r = runGate('collect');
     expect(r.status).toBe(1);

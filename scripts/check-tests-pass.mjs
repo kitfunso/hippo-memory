@@ -10,6 +10,8 @@ const require = createRequire(import.meta.url);
 const vitestPkgPath = require.resolve('vitest/package.json');
 const vitestBin = path.join(path.dirname(vitestPkgPath), require(vitestPkgPath).bin.vitest);
 const WORKER_IPC_ARTIFACT = '[vitest-worker]: Timeout calling';
+// Built from a char code so no invisible ESC byte lands in source; vitest colorizes even when redirected.
+const SGR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
 
 // vitest sends its error sections to stdout on some runs and stderr on others, so capture both and echo them live.
 function runVitest(args) {
@@ -74,8 +76,8 @@ async function runGate() {
     }
 
     // The report covers assertions only, so a globalSetup teardown throw (tests/_real-store-guard.ts) is green in it.
-    // Vitest's own tally is the reliable discriminator; passing tests also print lines beginning with "Error:".
-    const plain = (run.output ?? '').replace(/\[[0-9;]*m/g, '');
+    // Vitest's own tally discriminates; our passing tests print "Error:" lines and a second reporter reprints the section.
+    const plain = (run.output ?? '').replace(SGR, '');
     const caught = plain.match(/Vitest caught (\d+) unhandled error/);
     const sectionAt = plain.indexOf('Unhandled Errors');
     const messages = (sectionAt === -1 ? '' : plain.slice(sectionAt))
@@ -84,7 +86,7 @@ async function runGate() {
     const artifactOnly =
       caught !== null &&
       messages.length > 0 &&
-      messages.length === Number(caught[1]) &&
+      messages.length >= Number(caught[1]) &&
       messages.every((line) => line.includes(WORKER_IPC_ARTIFACT)) &&
       !plain.includes('Startup Error');
 
