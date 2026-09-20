@@ -236,6 +236,46 @@ describe("Board", () => {
     await waitFor(() => expect(router.callCount(`/api/cards/${card.id}`)).toBe(2));
   });
 
+  it("B12: a failed detail refresh shows an alert without losing the open card, a later good refresh clears it", async () => {
+    const router = createRouter();
+    const card = makeCard({ id: "card_1", title: "Keep me open" });
+    router.queue("/api/cards", { status: 200, body: { cards: [card] } });
+    router.queue(`/api/cards/${card.id}`, { status: 200, body: makeDetail(card) });
+    renderBoard(router);
+
+    const tile = await screen.findByRole("button", { name: /keep me open/i });
+    fireEvent.click(tile);
+    const dialog = await screen.findByRole("dialog", { name: "Card details" });
+    await within(dialog).findByText("Keep me open");
+
+    router.queue("/api/cards", { status: 200, body: { cards: [card] } });
+    router.queue(`/api/cards/${card.id}`, { status: 500, body: { error: "boom" } });
+    fireEvent.click(screen.getByRole("button", { name: /^refresh$/i }));
+
+    expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
+    expect(within(dialog).getByText("Keep me open")).toBeInTheDocument();
+
+    router.queue("/api/cards", { status: 200, body: { cards: [card] } });
+    router.queue(`/api/cards/${card.id}`, { status: 200, body: makeDetail(card) });
+    fireEvent.click(screen.getByRole("button", { name: /^refresh$/i }));
+
+    await waitFor(() => expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument());
+  });
+
+  it("B13: the dialog panel starts under the 48px board bar", async () => {
+    const router = createRouter();
+    const card = makeCard({ id: "card_1", title: "Panel offset" });
+    router.queue("/api/cards", { status: 200, body: { cards: [card] } });
+    router.queue(`/api/cards/${card.id}`, { status: 200, body: makeDetail(card) });
+    renderBoard(router);
+
+    const tile = await screen.findByRole("button", { name: /panel offset/i });
+    fireEvent.click(tile);
+    const dialog = await screen.findByRole("dialog", { name: "Card details" });
+
+    expect(dialog).toHaveStyle({ top: "48px" });
+  });
+
   it("B10: one card shows the singular count", async () => {
     const router = createRouter();
     router.queue("/api/cards", { status: 200, body: { cards: [makeCard()] } });

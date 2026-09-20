@@ -88,6 +88,9 @@ export function CardDialog({ cardId, refreshKey, onClose }: CardDialogProps) {
       <div style={bodyStyle}>
         {detail ? (
           <>
+            {error !== null && (
+              <div role="alert" style={errorTextStyle}>{error}</div>
+            )}
             <div style={contentTitleStyle}>{detail.card.title}</div>
             <div style={gridStyle}>
               <GridRow label="Status" value={detail.card.status} />
@@ -140,8 +143,9 @@ export function CardDialog({ cardId, refreshKey, onClose }: CardDialogProps) {
   );
 }
 
+// Starts under the 48px board bar so its refresh button stays clickable with a card open.
 const panelStyle: React.CSSProperties = {
-  position: "absolute", top: 0, right: 0, width: "min(360px, 48vw)", height: "100%",
+  position: "absolute", top: 48, right: 0, width: "min(360px, 48vw)", height: "calc(100% - 48px)",
   background: "var(--glass-bg-strong)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)",
   borderLeft: "1px solid var(--glass-border)", overflowY: "auto", zIndex: 50,
 };
