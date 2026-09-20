@@ -80,16 +80,19 @@ entries is a separate doc-clean-up task, not a release blocker.
 ## Test suite (pre-publish guard)
 
 `prepublishOnly` ends with `node scripts/check-tests-pass.mjs`, which runs `vitest run` through
-node and vitest's own bin (no npm shim, no `pretest` rebuild) and exits with the suite's status.
-It runs after `build:all` so the CLI-spawning tests see the fresh `dist/`. Extra arguments pass
-through to vitest, so `node scripts/check-tests-pass.mjs tests/foo.test.ts` gates on one file.
+node and vitest's own bin (no npm shim, no `pretest` rebuild). It runs after `build:all` so the
+CLI-spawning tests see the fresh `dist/`. Extra arguments pass through to vitest, so
+`node scripts/check-tests-pass.mjs tests/foo.test.ts` gates on one file; `--outputFile` is the one
+argument it rejects, because the gate reserves vitest's JSON report for itself.
 
-Known artifact: under load vitest can exit 1 with zero failed tests and
-`[vitest-worker]: Timeout calling "onTaskUpdate"`. Rerun the failed files alone first. If the
-suite is green that way and you still need to publish, set
-`HIPPO_PUBLISH_SKIP_TESTS="<reason>"`; the gate prints a WARNING with the reason and exits 0. An
-empty value does not skip. `npm publish --ignore-scripts` is not the escape hatch: it skips the
-manifest, em-dash and graph-write guards too.
+Known artifact: under load vitest can exit non-zero with a green suite, for example
+`[vitest-worker]: Timeout calling "onTaskUpdate"`. The gate reads vitest's own JSON report rather
+than trusting the exit code: a non-zero exit with `success: true` and zero failed tests and failed
+test suites passes, with a WARNING naming the exit code and the counts. Everything else, including
+a report that is missing or unreadable, fails closed on the original exit code. The hatch is for a
+genuinely red suite: set `HIPPO_PUBLISH_SKIP_TESTS="<reason>"` and the gate prints a WARNING with
+the reason and exits 0; an empty value does not skip. `npm publish --ignore-scripts` is not the
+escape hatch: it skips the manifest, em-dash and graph-write guards too.
 
 ## Test isolation patterns
 
