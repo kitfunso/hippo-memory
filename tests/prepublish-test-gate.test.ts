@@ -77,6 +77,12 @@ describe('prepublish test gate (scripts/check-tests-pass.mjs)', () => {
     expect(r.stderr).toContain('workerIpcArtifactOnly=false');
   });
 
+  test('an extra reporter cannot pad the count past an error the gate could not read', () => {
+    const r = runGate('undercount', {}, ['--reporter=verbose']);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('workerIpcArtifactOnly=false');
+  });
+
   test('an extra reporter reprints the error section and the artifact is still forgiven', () => {
     const r = runGate('unhandled', {}, ['--reporter=verbose']);
     expect(r.status, r.stderr).toBe(0);

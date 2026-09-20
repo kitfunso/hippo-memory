@@ -76,17 +76,18 @@ async function runGate() {
     }
 
     // The report covers assertions only, so a globalSetup teardown throw (tests/_real-store-guard.ts) is green in it.
-    // Vitest's own tally discriminates; our passing tests print "Error:" lines and a second reporter reprints the section.
+    // Vitest's tally discriminates; read ONE section because every reporter reprints it and pooled copies mask an error.
     const plain = (run.output ?? '').replace(SGR, '');
-    const caught = plain.match(/Vitest caught (\d+) unhandled error/);
     const sectionAt = plain.indexOf('Unhandled Errors');
-    const messages = (sectionAt === -1 ? '' : plain.slice(sectionAt))
-      .split('\n')
-      .filter((line) => /^\w*(Error|Exception): /.test(line));
+    const nextSection = plain.indexOf('Unhandled Errors', sectionAt + 1);
+    const section =
+      sectionAt === -1 ? '' : plain.slice(sectionAt, nextSection === -1 ? plain.length : nextSection);
+    const caught = section.match(/Vitest caught (\d+) unhandled error/);
+    const messages = section.split('\n').filter((line) => /^\w*(Error|Exception): /.test(line));
     const artifactOnly =
       caught !== null &&
       messages.length > 0 &&
-      messages.length >= Number(caught[1]) &&
+      messages.length === Number(caught[1]) &&
       messages.every((line) => line.includes(WORKER_IPC_ARTIFACT)) &&
       !plain.includes('Startup Error');
 
