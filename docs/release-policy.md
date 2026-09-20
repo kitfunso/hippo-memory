@@ -87,9 +87,11 @@ argument it rejects, because the gate reserves vitest's JSON report for itself.
 
 Known artifact: under load vitest can exit non-zero with a green suite, for example
 `[vitest-worker]: Timeout calling "onTaskUpdate"`. The gate reads vitest's own JSON report rather
-than trusting the exit code: a non-zero exit with `success: true` and zero failed tests and failed
-test suites passes, with a WARNING naming the exit code and the counts. Everything else, including
-a report that is missing or unreadable, fails closed on the original exit code. The hatch is for a
+than trusting the exit code: a non-zero exit passes only when the report says `success: true`, zero
+failed tests, zero failed test suites and at least one test that actually passed, with a WARNING
+naming the exit code and the counts. An all-skipped run does not qualify, because skipped and todo
+tests count toward `numTotalTests` but not toward `numPassedTests`. Everything else, including a
+report that is missing or unreadable, fails closed on the original exit code. The hatch is for a
 genuinely red suite: set `HIPPO_PUBLISH_SKIP_TESTS="<reason>"` and the gate prints a WARNING with
 the reason and exits 0; an empty value does not skip. `npm publish --ignore-scripts` is not the
 escape hatch: it skips the manifest, em-dash and graph-write guards too.

@@ -65,6 +65,12 @@ describe('prepublish test gate (scripts/check-tests-pass.mjs)', () => {
     expect(r.status).toBe(1);
   });
 
+  test('exits 1 when the report is green but nothing actually passed', () => {
+    const r = runGate('skipped');
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('numPassedTests=0');
+  });
+
   test('rejects a caller-supplied --outputFile before spawning vitest', () => {
     const r = runGate('passing', {}, ['--outputFile=/tmp/should-not-be-used.json']);
     expect(r.status).toBe(1);

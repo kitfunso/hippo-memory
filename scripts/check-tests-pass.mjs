@@ -61,14 +61,14 @@ function runGate() {
       report.success === true &&
       report.numFailedTests === 0 &&
       report.numFailedTestSuites === 0 &&
-      report.numTotalTests > 0;
+      report.numPassedTests > 0;
 
     if (green) {
       return {
         code: 0,
         lines: [
           `WARNING: vitest exited with ${run.signal ?? code} but the test results were green ` +
-            `(numTotalTests=${report.numTotalTests}, numFailedTests=${report.numFailedTests}, ` +
+            `(numPassedTests=${report.numPassedTests}, numFailedTests=${report.numFailedTests}, ` +
             `numFailedTestSuites=${report.numFailedTestSuites}); publishing.`,
         ],
       };
@@ -80,7 +80,7 @@ function runGate() {
     }
 
     const verdictLine = report
-      ? `check-tests-pass: report verdict success=${report.success} numTotalTests=${report.numTotalTests} ` +
+      ? `check-tests-pass: report verdict success=${report.success} numPassedTests=${report.numPassedTests} ` +
         `numFailedTests=${report.numFailedTests} numFailedTestSuites=${report.numFailedTestSuites}.`
       : `check-tests-pass: no usable JSON report (${reportError ? reportError.message : 'unknown error'}).`;
 
@@ -94,6 +94,7 @@ function runGate() {
       ],
     };
   } finally {
+    // Swallowed on purpose: a cleanup EPERM says nothing, and throwing here would lose the verdict.
     try {
       rmSync(reportDir, { recursive: true, force: true });
     } catch {}
