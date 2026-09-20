@@ -81,22 +81,22 @@ export function Header({ memoryCount, matchCount, stats, filterState, frozenOrig
   }, [setQuery]);
 
   return (
-    <div style={{
+    <div className="dashboard-bar" style={{
       position: "absolute", top: 0, left: 0, right: 0, height: 48, zIndex: 20,
       background: "var(--glass-bg)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
       borderBottom: "1px solid var(--glass-border)",
-      display: "flex", alignItems: "center", padding: "0 24px", gap: 20,
+      display: "flex", alignItems: "center",
       pointerEvents: "auto",
     }}>
       <div style={{ flex: "0 0 auto", display: "flex", alignItems: "baseline", gap: 12 }}>
         <span style={{ color: "var(--text)", fontSize: 16, fontWeight: 700, fontFamily: "var(--font-serif)", letterSpacing: "0.3px" }}>
           hippo
         </span>
-        <span style={{ color: "var(--accent)", fontSize: 11, fontFamily: "var(--font-serif)", fontStyle: "italic" }}>
+        <span className="bar-decorative" style={{ color: "var(--accent)", fontSize: 11, fontFamily: "var(--font-serif)", fontStyle: "italic" }}>
           brain observatory
         </span>
         {viewSwitch}
-        <span style={{ color: "var(--dim)", fontSize: 10, fontFamily: "var(--font-mono)" }}>
+        <span className="bar-decorative" style={{ color: "var(--dim)", fontSize: 10, fontFamily: "var(--font-mono)" }}>
           {memoryCount} memories
         </span>
         {/* v0.26.1 — clickable fading pill. Hides at at_risk===0 (empty state).
@@ -127,7 +127,7 @@ export function Header({ memoryCount, matchCount, stats, filterState, frozenOrig
 
       <div style={{ flex: 1 }} />
 
-      <div role="search" style={{ position: "relative", width: 240 }}>
+      <div role="search" style={{ position: "relative", flex: "0 1 240px", minWidth: 0 }}>
         <input
           ref={inputRef}
           type="text"

@@ -250,6 +250,14 @@ describe("Board", () => {
     expect(await screen.findByText("2 cards")).toBeInTheDocument();
   });
 
+  it("W2c: subtitle and count carry the phone-width hide class", async () => {
+    const router = createRouter();
+    router.queue("/api/cards", { status: 200, body: { cards: [makeCard()] } });
+    renderBoard(router);
+    expect(await screen.findByText("1 card")).toHaveClass("bar-decorative");
+    expect(screen.getByText("brain observatory")).toHaveClass("bar-decorative");
+  });
+
   it("B11: two refreshes where the first response resolves last shows the second response", async () => {
     const router = createRouter();
     const cardInitial = makeCard({ id: "card_1", title: "Initial" });

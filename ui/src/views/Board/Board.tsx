@@ -77,17 +77,17 @@ export function Board({ viewSwitch }: BoardProps) {
 
   return (
     <div style={{ width: "100%", height: "100%", position: "relative" }}>
-      <div style={barStyle}>
+      <div className="dashboard-bar" style={barStyle}>
         <div style={{ flex: "0 0 auto", display: "flex", alignItems: "baseline", gap: 12 }}>
           <span style={{ color: "var(--text)", fontSize: 16, fontWeight: 700, fontFamily: "var(--font-serif)", letterSpacing: "0.3px" }}>
             hippo
           </span>
-          <span style={{ color: "var(--accent)", fontSize: 11, fontFamily: "var(--font-serif)", fontStyle: "italic" }}>
+          <span className="bar-decorative" style={{ color: "var(--accent)", fontSize: 11, fontFamily: "var(--font-serif)", fontStyle: "italic" }}>
             brain observatory
           </span>
         </div>
         {viewSwitch}
-        <span aria-live="polite" style={{ color: "var(--dim)", fontSize: 10, fontFamily: "var(--font-mono)" }}>
+        <span aria-live="polite" className="bar-decorative" style={{ color: "var(--dim)", fontSize: 10, fontFamily: "var(--font-mono)" }}>
           {cards !== null ? `${total} ${total === 1 ? "card" : "cards"}` : ""}
         </span>
         <div style={{ flex: 1 }} />
@@ -170,7 +170,7 @@ const barStyle: React.CSSProperties = {
   position: "absolute", top: 0, left: 0, right: 0, height: 48, zIndex: 20,
   background: "var(--glass-bg)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
   borderBottom: "1px solid var(--glass-border)",
-  display: "flex", alignItems: "center", padding: "0 24px", gap: 20,
+  display: "flex", alignItems: "center",
   pointerEvents: "auto",
 };
 

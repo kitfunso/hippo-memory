@@ -136,4 +136,10 @@ describe("Header (E2)", () => {
     renderHeader({ matchCount: 12, memoryCount: 305 });
     expect(screen.getByText("12/305")).toBeInTheDocument();
   });
+
+  it("W2c: subtitle and count carry the phone-width hide class", () => {
+    renderHeader({ memoryCount: 305 });
+    expect(screen.getByText("brain observatory")).toHaveClass("bar-decorative");
+    expect(screen.getByText("305 memories")).toHaveClass("bar-decorative");
+  });
 });
