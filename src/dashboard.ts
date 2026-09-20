@@ -8,12 +8,13 @@
 import * as http from 'http';
 import * as path from 'path';
 import * as fs from 'fs';
-import { loadAllEntries, listMemoryConflicts, readEntry, writeEntry } from './store.js';
+import { loadAllEntries, listCards, listMemoryConflicts, readEntry, writeEntry } from './store.js';
 import { calculateStrength, confidenceFacets, type MemoryEntry } from './memory.js';
 import { loadConfig } from './config.js';
 import { listPeers } from './shared.js';
 import { loadEmbeddingIndex } from './embeddings.js';
 import { resolveTenantId } from './tenant.js';
+import { loadCardDetail } from './card-detail.js';
 
 interface DashboardData {
   memories: Array<{
@@ -240,6 +241,15 @@ export function serveDashboard(hippoRoot: string, port: number = 3333): http.Ser
         entry.starred = !entry.starred;
         writeEntry(hippoRoot, entry);
         return jsonResponse(res, { id, starred: entry.starred });
+      }
+
+      if (pathname === '/api/cards' && req.method === 'GET') {
+        return jsonResponse(res, { cards: listCards(hippoRoot, resolveTenantId({})) });
+      }
+      const cardMatch = pathname.match(/^\/api\/cards\/([A-Za-z0-9_-]+)$/);
+      if (cardMatch && req.method === 'GET') {
+        const detail = loadCardDetail(hippoRoot, resolveTenantId({}), cardMatch[1]);
+        return detail ? jsonResponse(res, detail) : jsonResponse(res, { error: 'Not found' }, 404);
       }
 
       const data = buildDashboardData(hippoRoot);

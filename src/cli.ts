@@ -102,9 +102,7 @@ import {
   createCard,
   loadCard,
   listCards,
-  loadCardDeps,
   loadCardRuns,
-  loadCardComments,
   claimCard,
   heartbeatCard,
   blockCard,
@@ -112,12 +110,12 @@ import {
   completeCard,
   reclaimExpiredCards,
   addCardComment,
-  loadLatestHandoffForCard,
 } from './store.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from './reject-flow.js';
 import { RejectedValueError } from './rejection.js';
 import { isHandoffOutcome, formatHandoffEvidenceLine, type SessionHandoff, type HandoffOutcome, type HandoffEvidence } from './handoff.js';
 import { type Card, isCardStatus } from './card.js';
+import { loadCardDetail, type CardDetail } from './card-detail.js';
 import { passesScopeFilterForRecall } from './recall-scope.js';
 import { search, markRetrieved, estimateTokens, hybridSearch, physicsSearch, explainMatch, textOverlap, tokenize as tokenizeQuery, type RerankStep } from './search.js';
 import { compareEntryIdentity } from './compare.js';
@@ -4492,7 +4490,8 @@ function cmdHandoff(
 // Mirrors ARCHIVE_REASON_REQUIRED so the block message can't drift from its usage line.
 const CARD_BLOCK_REASON_REQUIRED = 'hippo card block <id> requires --reason "<why>" (recorded as a comment).';
 
-function printCard(hippoRoot: string, tenantId: string, card: Card): void {
+function printCard(detail: CardDetail): void {
+  const { card, deps, runs, comments, handoff } = detail;
   console.log(`## Card ${card.id}\n`);
   console.log(`- Title: ${card.title}`);
   console.log(`- Status: ${card.status}`);
@@ -4504,11 +4503,9 @@ function printCard(hippoRoot: string, tenantId: string, card: Card): void {
   if (card.budget !== null) console.log(`- Budget: ${card.budget}`);
   console.log(`- Updated: ${card.updatedAt}`);
 
-  const deps = loadCardDeps(hippoRoot, tenantId, card.id);
   if (deps.parents.length > 0) console.log(`- Parents: ${deps.parents.join(', ')}`);
   if (deps.children.length > 0) console.log(`- Children: ${deps.children.join(', ')}`);
 
-  const runs = loadCardRuns(hippoRoot, tenantId, card.id);
   if (runs.length > 0) {
     console.log('\n### Runs');
     for (const run of runs) {
@@ -4516,7 +4513,6 @@ function printCard(hippoRoot: string, tenantId: string, card: Card): void {
     }
   }
 
-  const comments = loadCardComments(hippoRoot, tenantId, card.id);
   if (comments.length > 0) {
     console.log('\n### Comments');
     for (const comment of comments) {
@@ -4524,7 +4520,6 @@ function printCard(hippoRoot: string, tenantId: string, card: Card): void {
     }
   }
 
-  const handoff = loadLatestHandoffForCard(hippoRoot, tenantId, card.id);
   if (handoff) {
     console.log('\n### Latest handoff');
     console.log(`- Session: ${handoff.sessionId}, updated ${handoff.updatedAt}`);
@@ -4641,22 +4636,16 @@ function cmdCard(
       console.error('Usage: hippo card show <id> [--json]');
       process.exit(1);
     }
-    const card = loadCard(hippoRoot, tenantId, id);
-    if (!card) {
+    const detail = loadCardDetail(hippoRoot, tenantId, id);
+    if (!detail) {
       console.error(`No card found with id ${id}.`);
       process.exit(1);
     }
     if (flags['json']) {
-      console.log(JSON.stringify({
-        card,
-        deps: loadCardDeps(hippoRoot, tenantId, id),
-        runs: loadCardRuns(hippoRoot, tenantId, id),
-        comments: loadCardComments(hippoRoot, tenantId, id),
-        handoff: loadLatestHandoffForCard(hippoRoot, tenantId, id),
-      }, null, 2));
+      console.log(JSON.stringify(detail, null, 2));
       return;
     }
-    printCard(hippoRoot, tenantId, card);
+    printCard(detail);
     return;
   }
 
