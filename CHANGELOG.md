@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **`pre-compact`, `compact-resume`, `context`, `session-end` and `capture --last-session` no longer hang on an idle hook payload.** Each read its optional stdin payload with a blocking `fs.readFileSync(0)`, which waits for EOF. A host that opens the pipe but never writes or closes it, the real Claude Code hook shape in some environments, froze the process forever. Reading now waits up to `HIPPO_STDIN_WAIT_MS` (default 1000ms) and proceeds with whatever arrived, or nothing. `pre-compact` treats a timeout with no usable payload as a skip, the same as a payload it cannot use, so it never falls back to auto-discovering an unrelated session's transcript.
+
 ## 1.43.0 - 2026-09-20
 
 ### Added

@@ -180,6 +180,7 @@ import {
   ImportOptions,
 } from './importers.js';
 import { cmdCapture, CaptureOptions, cmdPreCompact, truncateCodePointSafe, sanitizeLogMessage } from './capture.js';
+import { readStdinBounded } from './stdin.js';
 import {
   auditMemories,
   appendAuditEvent,
@@ -3200,16 +3201,12 @@ async function cmdSessionEnd(
 ): Promise<void> {
   const logFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : null;
 
-  // Read stdin synchronously. The SessionEnd hook payload carries
-  // `transcript_path` as JSON; we extract it here and pass it to the worker
-  // via argv so the detached child doesn't need to inherit stdin.
-  // DF1 T3 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md): `session_id`
-  // is extracted the same way, so the worker can close the ending session's
-  // own active task snapshot after sleep+capture finish.
+  // Bounded read (DF1 T3, docs/plans/2026-08-23-df1-snapshot-lifecycle.md):
+  // extracts transcript_path + session_id for the detached worker's argv.
   let transcriptPath: string | null = null;
   let sessionId: string | null = null;
+  const { text: stdinText } = await readStdinBounded();
   try {
-    const stdinText = fs.readFileSync(0, 'utf8');
     if (stdinText && stdinText.trim().startsWith('{')) {
       const payload = JSON.parse(stdinText) as Record<string, unknown>;
       if (typeof payload.transcript_path === 'string') {
@@ -9471,24 +9468,18 @@ async function main(): Promise<void> {
       break;
 
     case 'pre-compact': {
-      // Same TTY guard as `capture --last-session`: skip reading stdin when
-      // it's an interactive terminal so a manual invocation never hangs.
-      let stdinText: string | undefined;
-      if (!process.stdin.isTTY) {
-        try { stdinText = fs.readFileSync(0, 'utf8'); } catch { stdinText = undefined; }
-      }
+      // Bounded wait, not a TTY guard: an idle non-TTY pipe must not hang.
+      const { text: stdinText, timedOut: stdinTimedOut } = await readStdinBounded();
       await cmdPreCompact(hippoRoot, {
         stdinText,
+        stdinTimedOut,
         logFile: typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined,
       });
       break;
     }
 
     case 'compact-resume': {
-      let stdinText: string | undefined;
-      if (!process.stdin.isTTY) {
-        try { stdinText = fs.readFileSync(0, 'utf8'); } catch { stdinText = undefined; }
-      }
+      const { text: stdinText } = await readStdinBounded();
       cmdCompactResume(hippoRoot, stdinText);
       break;
     }
@@ -9715,18 +9706,8 @@ async function main(): Promise<void> {
     }
 
     case 'context': {
-      // DF1 T2 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md): same TTY
-      // guard as `pre-compact` / `compact-resume` above — skip reading stdin
-      // when it's an interactive terminal so a manual invocation never
-      // hangs. `hippo context` is both the hot UserPromptSubmit path
-      // (non-TTY, stdin carries the hook JSON with `session_id`) and a
-      // manually-invocable command (TTY, no payload) — the guardless read in
-      // cmdSessionEnd is the wrong sibling to copy here; it only runs under
-      // a hook that always supplies stdin.
-      let stdinText: string | undefined;
-      if (!process.stdin.isTTY) {
-        try { stdinText = fs.readFileSync(0, 'utf8'); } catch { stdinText = undefined; }
-      }
+      // Bounded, not a TTY guard: the hot stdin path and a manual run share it.
+      const { text: stdinText } = await readStdinBounded();
       await cmdContext(hippoRoot, args, flags, stdinText);
       break;
     }
@@ -9903,10 +9884,17 @@ async function main(): Promise<void> {
         process.exit(1);
       }
 
+      // Bounded, and only when last-session has no explicit path: the
+      // --stdin source keeps its own blocking read in capture.ts by design.
+      const stdinText = captureSource === 'last-session' && !transcriptPath
+        ? (await readStdinBounded()).text
+        : undefined;
+
       cmdCapture(hippoRoot, {
         source: captureSource,
         filePath: captureFile,
         transcriptPath,
+        stdinText,
         logFile: typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined,
         dryRun: Boolean(flags['dry-run']),
         global: Boolean(flags['global']),

@@ -49,3 +49,9 @@ _Avoid_: expiry, steal, requeue, release
 **Board**:
 Every card in the work queue, laid out in one column per status.
 _Avoid_: kanban, tracker
+
+### Hooks
+
+**Hook payload**:
+The JSON a host writes to a hook command's stdin at spawn. Optional: absent means a manual run.
+_Avoid_: stdin text, hook input, hook data
