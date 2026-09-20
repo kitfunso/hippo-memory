@@ -89,6 +89,12 @@ describe('prepublish test gate (scripts/check-tests-pass.mjs)', () => {
     expect(r.stderr).toContain('WARNING');
   });
 
+  test('a fake error section printed by a test cannot hide the real one after it', () => {
+    const r = runGate('spoofed-section');
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('workerIpcArtifactOnly=false');
+  });
+
   test('exits 1 when the suite never collects', () => {
     const r = runGate('collect');
     expect(r.status).toBe(1);

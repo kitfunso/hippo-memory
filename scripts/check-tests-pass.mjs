@@ -13,6 +13,18 @@ const WORKER_IPC_ARTIFACT = '[vitest-worker]: Timeout calling';
 // Built from a char code so no invisible ESC byte lands in source; vitest colorizes even when redirected.
 const SGR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
 
+// Vitest's own tally must match the error lines the matcher could read; a shorter count means a shape it cannot see.
+function isArtifactOnlySection(section) {
+  const caught = section.match(/Vitest caught (\d+) unhandled error/);
+  const messages = section.split('\n').filter((line) => /^\w*(Error|Exception): /.test(line));
+  return (
+    caught !== null &&
+    messages.length > 0 &&
+    messages.length === Number(caught[1]) &&
+    messages.every((line) => line.includes(WORKER_IPC_ARTIFACT))
+  );
+}
+
 // vitest sends its error sections to stdout on some runs and stderr on others, so capture both and echo them live.
 function runVitest(args) {
   return new Promise((resolve) => {
@@ -76,19 +88,15 @@ async function runGate() {
     }
 
     // The report covers assertions only, so a globalSetup teardown throw (tests/_real-store-guard.ts) is green in it.
-    // Vitest's tally discriminates; read ONE section because every reporter reprints it and pooled copies mask an error.
+    // Vitest's tally discriminates, and EVERY printed section has to clear it: the first one can be a test's own output.
     const plain = (run.output ?? '').replace(SGR, '');
-    const sectionAt = plain.indexOf('Unhandled Errors');
-    const nextSection = plain.indexOf('Unhandled Errors', sectionAt + 1);
-    const section =
-      sectionAt === -1 ? '' : plain.slice(sectionAt, nextSection === -1 ? plain.length : nextSection);
-    const caught = section.match(/Vitest caught (\d+) unhandled error/);
-    const messages = section.split('\n').filter((line) => /^\w*(Error|Exception): /.test(line));
+    const starts = [];
+    for (let at = plain.indexOf('Unhandled Errors'); at !== -1; at = plain.indexOf('Unhandled Errors', at + 1)) {
+      starts.push(at);
+    }
     const artifactOnly =
-      caught !== null &&
-      messages.length > 0 &&
-      messages.length === Number(caught[1]) &&
-      messages.every((line) => line.includes(WORKER_IPC_ARTIFACT)) &&
+      starts.length > 0 &&
+      starts.every((start, i) => isArtifactOnlySection(plain.slice(start, starts[i + 1] ?? plain.length))) &&
       !plain.includes('Startup Error');
 
     const green =

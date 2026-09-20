@@ -93,7 +93,10 @@ failed tests, zero failed test suites, at least one test that actually passed, a
 vitest's own unhandled-error tally is that same worker IPC artifact, with a WARNING naming the exit
 code and the counts. The gate captures both of vitest's output streams, because vitest prints that
 tally to stdout on some runs and to stderr on others, and passing tests of our own print lines
-starting with `Error:` that the tally correctly excludes. The JSON report covers assertion results
+starting with `Error:` that the tally correctly excludes. `Unhandled Errors` is a plain string that
+a test can print itself, and vitest reprints its own section once per active reporter, so the gate
+splits the captured output at every occurrence and requires each section to clear the tally check on
+its own; one unreadable section refuses the publish. The JSON report covers assertion results
 only, so a failing globalSetup teardown, which is how this repo's store-isolation guard reports a
 leak, is green in the report and must not publish. An all-skipped run does not qualify, because
 skipped and todo tests count toward `numTotalTests` but not toward `numPassedTests`. Everything
