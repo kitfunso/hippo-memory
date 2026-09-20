@@ -388,7 +388,7 @@ async function runViaServerIfAvailable(
 // Flags that NEVER take a value. Without this, a positional following the
 // flag is silently swallowed as its value (`invalidate --dry-run "X"` would
 // eat the pattern). Every existing --dry-run consumer reads it as boolean.
-const BOOLEAN_FLAGS = new Set(['dry-run']);
+const BOOLEAN_FLAGS = new Set(['dry-run', 'stdin-timed-out']);
 
 export function parseArgs(argv: string[]): { command: string; args: string[]; flags: Record<string, string | boolean | string[]> } {
   const [, , command = '', ...rest] = argv;
@@ -3096,7 +3096,7 @@ function cmdLastSleep(flags: Record<string, string | boolean | string[]>): void 
 // printSessionEvents stays untouched for every other caller.
 const COMPACT_RESUME_EVENT_CONTENT_CAP = 400;
 
-function cmdCompactResume(hippoRoot: string, stdinText: string | undefined): void {
+function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdinTimedOut: boolean): void {
   try {
     // X3: gate on the non-exiting isInitialized check before any
     // store-opening call (loadActiveTaskSnapshot/listSessionEvents both
@@ -3112,7 +3112,9 @@ function cmdCompactResume(hippoRoot: string, stdinText: string | undefined): voi
     // carries a different source (e.g. 'startup') means the matcher-based
     // gate failed to apply — stay silent rather than print stale state.
     const nonEmptyStdin = !!stdinText && stdinText.trim() !== '';
-    let suppressOutput = false;
+    // Without a payload session_id the X5 cross-restore guard below can
+    // never fire, so a timed-out empty read must not reach the print path.
+    let suppressOutput = stdinTimedOut && !nonEmptyStdin;
     let payloadSessionId: string | null = null;
 
     if (nonEmptyStdin) {
@@ -3205,7 +3207,7 @@ async function cmdSessionEnd(
   // extracts transcript_path + session_id for the detached worker's argv.
   let transcriptPath: string | null = null;
   let sessionId: string | null = null;
-  const { text: stdinText } = await readStdinBounded();
+  const { text: stdinText, timedOut: stdinTimedOut } = await readStdinBounded();
   try {
     if (stdinText && stdinText.trim().startsWith('{')) {
       const payload = JSON.parse(stdinText) as Record<string, unknown>;
@@ -3225,6 +3227,12 @@ async function cmdSessionEnd(
   if (logFile) workerArgs.push('--log-file', logFile);
   if (transcriptPath) workerArgs.push('--transcript', transcriptPath);
   if (sessionId) workerArgs.push('--session-id', sessionId);
+  // The worker's capture would otherwise auto-discover another project's
+  // transcript; only this process knows the payload never turned up.
+  if (stdinTimedOut && !transcriptPath) {
+    workerArgs.push('--stdin-timed-out');
+    flags['stdin-timed-out'] = true;
+  }
 
   try {
     const child = spawn(process.execPath, workerArgs, {
@@ -3288,6 +3296,7 @@ async function cmdSessionEndWorker(
       transcriptPath: typeof flags['transcript'] === 'string'
         ? (flags['transcript'] as string)
         : undefined,
+      stdinTimedOut: flags['stdin-timed-out'] === true,
       logFile: typeof flags['log-file'] === 'string'
         ? (flags['log-file'] as string)
         : undefined,
@@ -9479,8 +9488,8 @@ async function main(): Promise<void> {
     }
 
     case 'compact-resume': {
-      const { text: stdinText } = await readStdinBounded();
-      cmdCompactResume(hippoRoot, stdinText);
+      const { text: stdinText, timedOut: stdinTimedOut } = await readStdinBounded();
+      cmdCompactResume(hippoRoot, stdinText, stdinTimedOut);
       break;
     }
 
@@ -9706,7 +9715,8 @@ async function main(): Promise<void> {
     }
 
     case 'context': {
-      // Bounded, not a TTY guard: the hot stdin path and a manual run share it.
+      // Bounded, not a TTY guard (DF1 T2, docs/plans/2026-08-23-df1-snapshot-lifecycle.md):
+      // the hot stdin path and a manual run share this one command.
       const { text: stdinText } = await readStdinBounded();
       await cmdContext(hippoRoot, args, flags, stdinText);
       break;
@@ -9886,15 +9896,16 @@ async function main(): Promise<void> {
 
       // Bounded, and only when last-session has no explicit path: the
       // --stdin source keeps its own blocking read in capture.ts by design.
-      const stdinText = captureSource === 'last-session' && !transcriptPath
-        ? (await readStdinBounded()).text
-        : undefined;
+      const bounded = captureSource === 'last-session' && !transcriptPath
+        ? await readStdinBounded()
+        : { text: undefined, timedOut: false };
 
       cmdCapture(hippoRoot, {
         source: captureSource,
         filePath: captureFile,
         transcriptPath,
-        stdinText,
+        stdinText: bounded.text,
+        stdinTimedOut: bounded.timedOut,
         logFile: typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined,
         dryRun: Boolean(flags['dry-run']),
         global: Boolean(flags['global']),

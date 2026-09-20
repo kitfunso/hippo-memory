@@ -4,7 +4,8 @@
 
 ### Fixed
 
-- **`pre-compact`, `compact-resume`, `context`, `session-end` and `capture --last-session` no longer hang on an idle hook payload.** Each read its optional stdin payload with a blocking `fs.readFileSync(0)`, which waits for EOF. A host that opens the pipe but never writes or closes it, the real Claude Code hook shape in some environments, froze the process forever. Reading now waits up to `HIPPO_STDIN_WAIT_MS` (default 1000ms) and proceeds with whatever arrived, or nothing. `pre-compact` treats a timeout with no usable payload as a skip, the same as a payload it cannot use, so it never falls back to auto-discovering an unrelated session's transcript.
+- **`pre-compact`, `compact-resume`, `context`, `session-end` and `capture --last-session` no longer hang on an idle hook payload.** Each read its optional stdin payload with a blocking `fs.readFileSync(0)`, which waits for EOF. A host that opens the pipe but never writes or closes it, the real Claude Code hook shape in some environments, froze the process forever. Reading now waits up to `HIPPO_STDIN_WAIT_MS` of idle (default 1000ms, refreshed per chunk, capped at ten times that in total) and proceeds with whatever arrived, or nothing.
+- **A hook payload that never turned up no longer reads as a manual run.** A timed-out read cannot tell "no payload" from "payload still coming", so every command that used to fall back to scanning `~/.claude/projects/` for the newest transcript now stops instead. `pre-compact` logs the skip, `capture --last-session` reports no transcript found, `compact-resume` stays silent rather than printing a snapshot its cross-session guard could not check, and `session-end` passes the same signal to its detached worker. `context` is unaffected: its fallback is the current process environment, not a cross-project scan.
 
 ## 1.43.0 - 2026-09-20
 

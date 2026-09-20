@@ -568,9 +568,10 @@ export interface CaptureOptions {
   /** Explicit transcript path for `--last-session`. Falls back to
    * `stdinText`, then to auto-discovery under `~/.claude/projects/`. */
   transcriptPath?: string;
-  /** JSON payload already read from stdin by the caller (cli.ts), which
-   * owns the bounded wait since only it knows the invocation context. */
+  /** Read from stdin by the caller (cli.ts), which owns the bounded wait.
+   * `stdinTimedOut` marks an empty read "unknown", not "no payload". */
   stdinText?: string;
+  stdinTimedOut?: boolean;
   /**
    * Tee stdout/stderr to this log file while capture runs. Mirrors the
    * pattern used by `hippo sleep --log-file` so the SessionEnd hook output
@@ -715,13 +716,14 @@ export function summariseTranscript(jsonl: string): string {
  * Priority:
  *   1. Explicit `transcriptPath` option (from `--transcript <path>`)
  *   2. Stdin JSON payload (Claude Code / OpenCode SessionEnd hook shape)
- *   3. Most recent `.jsonl` under `~/.claude/projects/<any>/`
+ *   3. Most recent `.jsonl` under `~/.claude/projects/<any>/`, and only when `stdinTimedOut` is false: while stdin is still open a missing payload is unproven, and this scan spans every project on the box
  *
  * Returns null when nothing resolves. Never throws.
  */
 export function resolveLastSessionTranscript(
   explicit: string | undefined,
-  stdinText: string | undefined
+  stdinText: string | undefined,
+  stdinTimedOut = false
 ): string | null {
   if (explicit && fs.existsSync(explicit)) return explicit;
 
@@ -738,7 +740,8 @@ export function resolveLastSessionTranscript(
     }
   }
 
-  // Auto-discover the most recent transcript
+  if (stdinTimedOut) return null;
+
   const home = process.env.HOME || process.env.USERPROFILE;
   if (!home) return null;
   const projectsDir = path.join(home, '.claude', 'projects');
@@ -887,7 +890,7 @@ function cmdCaptureCore(
       break;
     }
     case 'last-session': {
-      const resolved = resolveLastSessionTranscript(options.transcriptPath, options.stdinText);
+      const resolved = resolveLastSessionTranscript(options.transcriptPath, options.stdinText, options.stdinTimedOut);
       if (!resolved) {
         console.log('No transcript found. Pass --transcript <path> or run from a SessionEnd hook.');
         return;
@@ -1212,8 +1215,8 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, stdinTi
     return [];
   }
 
-  // A timed-out read must fail closed here too, or it would fall through
-  // to auto-discovery and risk snapshotting an unrelated session (X4).
+  // Same hazard X4 guards below, different trigger: a read that timed out
+  // must not reach auto-discovery either, or it snapshots another session.
   if (stdinTimedOut && (!stdinText || stdinText.trim() === '')) {
     appendPreCompactLog(logFile, 'skip: no PreCompact payload arrived before the stdin wait window closed');
     return [];

@@ -75,6 +75,7 @@ interface BoundedRunResult {
 type StdinPlan =
   | { mode: 'ignore' }
   | { mode: 'idle' }
+  | { mode: 'dribble'; text: string; everyMs: number }
   | { mode: 'write'; text: string; end: boolean; delayMs?: number };
 
 // Long enough the fix's <=1000ms default wait never reaches it, short
@@ -109,14 +110,23 @@ function spawnBounded(
       reject(new Error(`hippo ${args.join(' ')} did not exit within ${KILL_GUARD_MS}ms (killed by test guard)`));
     }, KILL_GUARD_MS);
 
+    let dribble: NodeJS.Timeout | undefined;
     child.once('error', (err) => {
       clearTimeout(guard);
+      clearInterval(dribble);
       reject(err);
     });
     child.once('close', (status, signal) => {
       clearTimeout(guard);
+      clearInterval(dribble);
       resolve({ status, signal, stdout, stderr, elapsedMs: Date.now() - start });
     });
+
+    if (stdin.mode === 'dribble') {
+      // EPIPE once the child exits is expected, not a test failure.
+      child.stdin!.on('error', () => {});
+      dribble = setInterval(() => { child.stdin?.write(stdin.text, () => {}); }, stdin.everyMs);
+    }
 
     if (stdin.mode === 'write') {
       const write = (): void => {
@@ -331,5 +341,75 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
     expect(fs.readFileSync(logFile, 'utf8')).toContain(
       'skip: no PreCompact payload arrived before the stdin wait window closed',
     );
+  });
+
+  /** Plants a transcript where resolveLastSessionTranscript's step-3 scan looks. */
+  function seedDecoyProject(dir: string): void {
+    const decoyDir = path.join(dir, '.claude', 'projects', 'other-project');
+    fs.mkdirSync(decoyDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(decoyDir, 'decoy.jsonl'),
+      transcriptJsonl([
+        { type: 'user', message: { role: 'user', content: 'DECOY SESSION: this belongs to another project entirely.' } },
+        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'DECOY SESSION marker: rotate the queue consumer next.' }] } },
+      ]),
+    );
+  }
+
+  const NO_TRANSCRIPT = 'No transcript found.';
+
+  it('case 8: a timed-out capture --last-session refuses the cross-project scan', async () => {
+    seedDecoyProject(dir);
+
+    // Positive control: stdin closed, not idle, must still find the decoy,
+    // proving the scan is reachable here and step d is a real discriminator.
+    let result = await spawnBounded(['capture', '--last-session', '--dry-run'], dir, env, { mode: 'ignore' });
+    expect(result.status).toBe(0);
+    expect(result.stdout).not.toContain(NO_TRANSCRIPT);
+
+    result = await spawnBounded(
+      ['capture', '--last-session', '--dry-run'],
+      dir,
+      { ...env, HIPPO_STDIN_WAIT_MS: '200' },
+      { mode: 'idle' },
+    );
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain(NO_TRANSCRIPT);
+    expect(result.stdout).not.toContain('DECOY SESSION');
+  });
+
+  it('case 9: a timed-out compact-resume prints nothing, since X5 cannot check a session it never got', async () => {
+    const { payloadText } = seedPreCompactPayload(dir, 'sess-case9');
+    let result = await spawnBounded(['pre-compact'], dir, env, { mode: 'write', text: payloadText, end: true });
+    expect(result.status).toBe(0);
+    expectRowFor(dir, 'sess-case9');
+
+    // Positive control: the snapshot is live and printable on a manual run.
+    result = await spawnBounded(['compact-resume'], dir, env, { mode: 'ignore' });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('## Restored after compaction');
+
+    result = await spawnBounded(
+      ['compact-resume'],
+      dir,
+      { ...env, HIPPO_STDIN_WAIT_MS: '200' },
+      { mode: 'idle' },
+    );
+    expect(result.status).toBe(0);
+    expect(result.stdout).not.toContain('## Restored after compaction');
+    expect(result.stdout.trim()).toBe('');
+  });
+
+  it('case 10: a host that dribbles bytes forever and never ends still exits, via the total cap', async () => {
+    const result = await spawnBounded(
+      ['context'],
+      dir,
+      { ...env, HIPPO_STDIN_WAIT_MS: '200' },
+      { mode: 'dribble', text: ' ', everyMs: 50 },
+    );
+    expect(result.status).toBe(0);
+    expect(result.signal).toBeNull();
+    // 200ms idle refreshed every 50ms would never fire; only the 10x cap ends it.
+    expect(result.elapsedMs).toBeGreaterThanOrEqual(1500);
   });
 });
