@@ -633,7 +633,7 @@ hippo watch "npm run build"
 | `hippo wm read --scope <s>` | Read working memory entries |
 | `hippo wm clear --scope <s>` | Clear working memory |
 | `hippo wm flush --scope <s>` | Flush working memory (session end) |
-| `hippo dashboard` | Open web dashboard at localhost:3333 |
+| `hippo dashboard` | Open web dashboard at localhost:3333 (memory map and card board) |
 | `hippo dashboard --port <n>` | Use custom port |
 | `hippo mcp` | Start MCP server (stdio transport) |
 

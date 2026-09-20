@@ -44,6 +44,7 @@ interface LivingMapProps {
   /** v0.28+ (E3 local view) — set/clear focus on a memory's neighborhood. */
   setLocalView: (v: LocalViewState | null) => void;
   resetFilters: () => void;
+  viewSwitch?: React.ReactNode;
 }
 
 function StrengthBar({ value }: { value: number }) {
@@ -210,7 +211,7 @@ function DetailPanel({ memory, onClose, open, localView, setLocalView }: {
 export function LivingMap({
   memories, embeddings, stats, conflicts, filterState, frozenOrigin,
   setQuery, setFrozen, setLayers, setStrengthRange, setConfidences, setAgeMaxDays, setFadingOnly, setAgedOutOnly,
-  setColorMode, setLocalView, resetFilters,
+  setColorMode, setLocalView, resetFilters, viewSwitch,
 }: LivingMapProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -428,6 +429,7 @@ export function LivingMap({
         setQuery={setQuery}
         setFrozen={setFrozen}
         setFadingOnly={setFadingOnly}
+        viewSwitch={viewSwitch}
       />
 
       {/* P3 marquee feature: per-frame HTML node-label overlay. */}

@@ -28,6 +28,11 @@ _Avoid_: fencing token, receipt, lock id
 The runtime whose run is a card's live run.
 _Avoid_: holder, owner, worker
 
+**Assignee**:
+The runtime a card names: its claimant while running or in review, the runtime of its last run once
+done or shelved, and none otherwise.
+_Avoid_: owner, worker
+
 **Lease**:
 The time until which a running card's claimant counts as alive. A lease has expired once that
 time has passed, and a running card with no lease counts as expired.
@@ -40,3 +45,7 @@ _Avoid_: ping, keepalive, renewal
 **Reclaim**:
 The sweep that returns every running card whose lease has expired to ready.
 _Avoid_: expiry, steal, requeue, release
+
+**Board**:
+Every card in the work queue, laid out in one column per status.
+_Avoid_: kanban, tracker

@@ -25,9 +25,11 @@ interface HeaderProps {
   setFrozen: (frozen: boolean) => void;
   /** v0.26.1: toggles fading-only shortcut filter. */
   setFadingOnly: (v: boolean) => void;
+  /** W2c: the map/board switch, rendered between the subtitle and the memory count. */
+  viewSwitch?: React.ReactNode;
 }
 
-export function Header({ memoryCount, matchCount, stats, filterState, frozenOrigin, setQuery, setFrozen, setFadingOnly }: HeaderProps) {
+export function Header({ memoryCount, matchCount, stats, filterState, frozenOrigin, setQuery, setFrozen, setFadingOnly, viewSwitch }: HeaderProps) {
   // Local input state - debounced before propagating to FilterState. This
   // keeps typing snappy while delaying the scene re-highlight by 150ms.
   const [inputValue, setInputValue] = useState(filterState.query);
@@ -93,6 +95,7 @@ export function Header({ memoryCount, matchCount, stats, filterState, frozenOrig
         <span style={{ color: "var(--accent)", fontSize: 11, fontFamily: "var(--font-serif)", fontStyle: "italic" }}>
           brain observatory
         </span>
+        {viewSwitch}
         <span style={{ color: "var(--dim)", fontSize: 10, fontFamily: "var(--font-mono)" }}>
           {memoryCount} memories
         </span>

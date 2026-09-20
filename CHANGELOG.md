@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **Board view in the dashboard.** `hippo dashboard` has a map/board switch in its header. The board lays out every card in one column per status, marks a running card whose lease has expired, and opens a card's runs, comments, dependencies and latest handoff on click. It reads two new routes, `GET /api/cards` and `GET /api/cards/:id`, which return the same JSON as `hippo card list --json` and `hippo card show <id> --json`.
+
 ### Fixed
 
 - **A malformed request no longer stops the dashboard.** A request such as `GET //` threw inside the request handler and ended the `hippo dashboard` process. The handler now answers 500 and keeps serving.

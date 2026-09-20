@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import type { Memory, Stats, Conflict, EmbeddingIndex } from "./types.js";
-import { fetchMemories, fetchStats, fetchConflicts, fetchEmbeddings } from "./api/client.js";
+import { fetchMemories, fetchStats, fetchConflicts, fetchEmbeddings, errorMessage } from "./api/client.js";
 import { LivingMap } from "./views/LivingMap/LivingMap.js";
 import { INITIAL_FILTER_STATE, type FilterState, type Layer, type Confidence, type ColorMode, type LocalViewState } from "./state/filterState.js";
+import { ViewSwitch, type View } from "./components/ViewSwitch.js";
+import { Board } from "./views/Board/Board.js";
 
 /**
  * E5 S6 — Origin of the current freeze state. Lets the freeze button surface
@@ -12,10 +14,6 @@ import { INITIAL_FILTER_STATE, type FilterState, type Layer, type Confidence, ty
 type FrozenOrigin = "os" | "user" | null;
 
 type LoadState = "loading" | "ready" | "error";
-
-function errorMessage<T>(err: T): string {
-  return err instanceof Error ? err.message : String(err);
-}
 
 const loadingStyles = `
   @keyframes hippo-float {
@@ -36,6 +34,14 @@ export function App() {
   const [filterState, setFilterState] = useState<FilterState>(INITIAL_FILTER_STATE);
   // E5 S6: track whether the current frozen state originated from OS or user.
   const [frozenOrigin, setFrozenOrigin] = useState<FrozenOrigin>(null);
+
+  // W2c: autoFocus only after a user-initiated switch, never on first load.
+  const [view, setView] = useState<View>("map");
+  const [focusSwitch, setFocusSwitch] = useState(false);
+  const changeView = useCallback((next: View) => {
+    setView(next);
+    setFocusSwitch(true);
+  }, []);
 
   const setQuery = useCallback((query: string) => {
     setFilterState((prev) => ({ ...prev, query }));
@@ -129,13 +135,14 @@ export function App() {
   // user's keyboard nav over rows doesn't accidentally freeze the scene.
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
+      if (view !== "map") return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.target instanceof HTMLElement && e.target.closest('[data-drawer="memory-list"]')) return;
       if (e.key === "f" || e.key === "F") setFrozen(!filterState.frozen);
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [filterState.frozen, setFrozen]);
+  }, [filterState.frozen, setFrozen, view]);
 
   useEffect(() => {
     Promise.all([fetchMemories(), fetchStats(), fetchConflicts(), fetchEmbeddings()])
@@ -152,9 +159,19 @@ export function App() {
       });
   }, []);
 
+  const viewSwitch = <ViewSwitch view={view} onChange={changeView} autoFocus={focusSwitch} />;
+
+  if (view === "board") {
+    return (
+      <main style={{ width: "100%", height: "100%" }}>
+        <Board viewSwitch={viewSwitch} />
+      </main>
+    );
+  }
+
   if (state === "loading") {
     return (
-      <div style={centerStyle} role="status" aria-live="polite">
+      <div style={centerStyle}>
         <style>{loadingStyles}</style>
         <div style={{ textAlign: "center" }}>
           <div style={{
@@ -165,7 +182,7 @@ export function App() {
           }}>
             🧠
           </div>
-          <div style={{
+          <div role="status" aria-live="polite" style={{
             color: "var(--dim)",
             fontFamily: "var(--font-mono)",
             fontSize: 11,
@@ -173,6 +190,7 @@ export function App() {
           }}>
             loading memories
           </div>
+          <div style={{ marginTop: 16 }}>{viewSwitch}</div>
         </div>
       </div>
     );
@@ -197,6 +215,7 @@ export function App() {
           }}>
             is hippo dashboard running?
           </div>
+          <div style={{ marginTop: 16 }}>{viewSwitch}</div>
         </div>
       </div>
     );
@@ -224,6 +243,7 @@ export function App() {
             <span style={{ color: "var(--accent)" }}>hippo remember</span>
             {" "}to begin
           </div>
+          <div style={{ marginTop: 16 }}>{viewSwitch}</div>
         </div>
       </div>
     );
@@ -250,6 +270,7 @@ export function App() {
         setColorMode={setColorMode}
         setLocalView={setLocalView}
         resetFilters={resetFilters}
+        viewSwitch={viewSwitch}
       />
       {/* v0.26.1 — aria-live announcement for auto-clear (design-critic LOW). */}
       <div role="status" aria-live="polite" className="sr-only">{autoClearAnnouncement}</div>

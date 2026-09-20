@@ -54,3 +54,64 @@ export interface DashboardConfig {
 }
 
 export type EmbeddingIndex = Record<string, number[]>;
+
+// W2c board view: mirrors src/card.ts field for field, same nullability.
+export type CardStatus = "backlog" | "ready" | "running" | "blocked" | "review" | "done" | "shelved";
+
+export interface Card {
+  id: string;
+  title: string;
+  status: CardStatus;
+  assigneeRuntime: string | null;
+  repo: string | null;
+  contract: string | null;
+  budget: number | null;
+  leaseUntil: string | null;
+  heartbeatAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  tenantId: string;
+  scope: string | null;
+}
+
+export interface CardRun {
+  id: number;
+  card: string;
+  runtime: string;
+  sessionId: string | null;
+  started: string;
+  ended: string | null;
+  outcome: string | null;
+}
+
+export interface CardComment {
+  id: number;
+  cardId: string;
+  author: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface CardDeps {
+  parents: string[];
+  children: string[];
+}
+
+/** Only the handoff fields the UI reads (src/handoff.ts's SessionHandoff has more). */
+export interface CardHandoff {
+  sessionId: string;
+  summary: string;
+  updatedAt: string;
+}
+
+export interface CardDetail {
+  card: Card;
+  deps: CardDeps;
+  runs: CardRun[];
+  comments: CardComment[];
+  handoff: CardHandoff | null;
+}
+
+export interface CardList {
+  cards: Card[];
+}
