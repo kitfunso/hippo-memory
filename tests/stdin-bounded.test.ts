@@ -142,7 +142,7 @@ function spawnBounded(
 }
 
 /** Writes a synthetic transcript and matching PreCompact payload for `sessionId`. */
-function seedPreCompactPayload(dir: string, sessionId: string): { transcriptPath: string; payloadText: string } {
+function seedPreCompactPayload(dir: string, sessionId: string) {
   const transcriptPath = path.join(dir, `${sessionId}-transcript.jsonl`);
   fs.writeFileSync(
     transcriptPath,
