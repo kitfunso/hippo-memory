@@ -4,11 +4,11 @@
 
 ### Added
 
-- **Board view in the dashboard.** `hippo dashboard` has a map/board switch in its header. The board lays out every card in one column per status, marks a running card whose lease has expired, and opens a card's runs, comments, dependencies and latest handoff on click. It reads two new routes, `GET /api/cards` and `GET /api/cards/:id`, which return the same JSON as `hippo card list --json` and `hippo card show <id> --json`.
+- **Board view in the dashboard.** `hippo dashboard` has a map/board switch in its header. The board lays out every card in one column per status, marks a running card whose lease has expired, and opens a card's runs, comments, dependencies and latest handoff on click. It reads two new routes, `GET /api/cards` and `GET /api/cards/:id`, which return the same JSON as `hippo card list --json` and `hippo card show <id> --json`. Load errors on the board and in the card dialog are announced to screen readers.
 
 ### Changed
 
-- **The dashboard top bar fits a phone-width screen.** At 640px wide and below, the top bar of both views drops its subtitle and its count, tightens its padding, and lets the map's search box shrink. At 400px nothing in the bar overflows and the page does not scroll sideways. Wider screens look the same as before.
+- **The dashboard top bar fits a phone-width screen.** At 640px wide and below, the top bar of both views drops its subtitle and its count, tightens its padding, and lets the map's search box shrink. At 400px nothing in the bar overflows and the page does not scroll sideways. Wider screens look the same as before. On the board the count stays available to screen readers at that width.
 
 ### Fixed
 

@@ -123,7 +123,7 @@ describe('dashboard entry', () => {
     expect(root.acaoPresent).toBe(false);
   });
 
-  it('E2: a foreign Host gets 403 Forbidden, on API and static paths', async () => {
+  it('E2: a foreign Host gets 403 Forbidden, on API, static and star POST paths', async () => {
     const stats = await dashboardRequest(port, '/api/stats', `evil.example:${port}`);
     expect(stats.status).toBe(403);
     expect(stats.body).toBe('Forbidden');
@@ -131,6 +131,10 @@ describe('dashboard entry', () => {
     const root = await dashboardRequest(port, '/', `evil.example:${port}`);
     expect(root.status).toBe(403);
     expect(root.body).toBe('Forbidden');
+
+    const star = await dashboardRequest(port, '/api/star/mem_x', `evil.example:${port}`, 'POST');
+    expect(star.status).toBe(403);
+    expect(star.body).toBe('Forbidden');
   });
 
   it('E3: localhost, LOCALHOST and a portless 127.0.0.1 all get 200', async () => {

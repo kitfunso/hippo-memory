@@ -106,4 +106,13 @@
   .bar-decorative {
     display: none;
   }
+  /* Live region: clipped like .sr-only, because display:none would silence the count. */
+  .bar-live {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
 }

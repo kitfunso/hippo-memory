@@ -113,6 +113,7 @@ describe("Board", () => {
     router.queue("/api/cards", { status: 500, body: { error: "Internal error" } });
     renderBoard(router);
     expect(await screen.findByText("is hippo dashboard running?")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toBeInTheDocument();
   });
 
   it("B5: tile meta reflects the lease predicate", async () => {
@@ -276,6 +277,20 @@ describe("Board", () => {
     expect(dialog).toHaveStyle({ top: "48px" });
   });
 
+  it("B14: a failed first detail load shows an alert in the dialog", async () => {
+    const router = createRouter();
+    const card = makeCard({ id: "card_1", title: "Broken detail" });
+    router.queue("/api/cards", { status: 200, body: { cards: [card] } });
+    router.queue(`/api/cards/${card.id}`, { status: 500, body: { error: "boom" } });
+    renderBoard(router);
+
+    const tile = await screen.findByRole("button", { name: /broken detail/i });
+    fireEvent.click(tile);
+    const dialog = await screen.findByRole("dialog", { name: "Card details" });
+
+    expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
+  });
+
   it("B10: one card shows the singular count", async () => {
     const router = createRouter();
     router.queue("/api/cards", { status: 200, body: { cards: [makeCard()] } });
@@ -290,11 +305,14 @@ describe("Board", () => {
     expect(await screen.findByText("2 cards")).toBeInTheDocument();
   });
 
-  it("W2c: subtitle and count carry the phone-width hide class", async () => {
+  it("W2c: the subtitle hides at phone width, the count stays a live region", async () => {
     const router = createRouter();
     router.queue("/api/cards", { status: 200, body: { cards: [makeCard()] } });
     renderBoard(router);
-    expect(await screen.findByText("1 card")).toHaveClass("bar-decorative");
+    const count = await screen.findByText("1 card");
+    expect(count).toHaveClass("bar-live");
+    expect(count).not.toHaveClass("bar-decorative");
+    expect(count).toHaveAttribute("aria-live", "polite");
     expect(screen.getByText("brain observatory")).toHaveClass("bar-decorative");
   });
 

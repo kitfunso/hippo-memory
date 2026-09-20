@@ -134,7 +134,7 @@ export function CardDialog({ cardId, refreshKey, onClose }: CardDialogProps) {
             <div style={footerStyle}>{detail.card.id}</div>
           </>
         ) : error ? (
-          <div style={errorTextStyle}>{error}</div>
+          <div role="alert" style={errorTextStyle}>{error}</div>
         ) : (
           <div role="status" style={loadingTextStyle}>loading card</div>
         )}

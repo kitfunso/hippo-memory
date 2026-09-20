@@ -87,7 +87,7 @@ export function Board({ viewSwitch }: BoardProps) {
           </span>
         </div>
         {viewSwitch}
-        <span aria-live="polite" className="bar-decorative" style={{ color: "var(--dim)", fontSize: 10, fontFamily: "var(--font-mono)" }}>
+        <span aria-live="polite" className="bar-live" style={{ color: "var(--dim)", fontSize: 10, fontFamily: "var(--font-mono)" }}>
           {cards !== null ? `${total} ${total === 1 ? "card" : "cards"}` : ""}
         </span>
         <div style={{ flex: 1 }} />
@@ -109,7 +109,7 @@ export function Board({ viewSwitch }: BoardProps) {
         )}
         {cards === null && error !== null && (
           <div style={frameCenterStyle}>
-            <div style={errorTextStyle}>{error}</div>
+            <div role="alert" style={errorTextStyle}>{error}</div>
             <div style={hintTextStyle}>is hippo dashboard running?</div>
           </div>
         )}
