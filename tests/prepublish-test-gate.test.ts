@@ -55,6 +55,21 @@ describe('prepublish test gate (scripts/check-tests-pass.mjs)', () => {
     expect(r.stderr).toContain('green');
   });
 
+  test('refuses to publish when the report is green but a global teardown fails', () => {
+    const r = runGate('teardown');
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('numPassedTests=1');
+    expect(r.stderr).toContain('refusing to publish');
+  });
+
+  test('refuses to publish when the unhandled error is not the known worker IPC artifact', () => {
+    const r = runGate('other-rejection');
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('numPassedTests=1');
+    expect(r.stderr).toContain('workerIpcArtifactOnly=false');
+    expect(r.stderr).toContain('refusing to publish');
+  });
+
   test('exits 1 when the suite never collects', () => {
     const r = runGate('collect');
     expect(r.status).toBe(1);
@@ -75,6 +90,12 @@ describe('prepublish test gate (scripts/check-tests-pass.mjs)', () => {
     const r = runGate('passing', {}, ['--outputFile=/tmp/should-not-be-used.json']);
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('--outputFile');
+    expect(r.stderr).toContain('reserved');
+  });
+
+  test('rejects a caller-supplied --output-file before spawning vitest', () => {
+    const r = runGate('passing', {}, ['--output-file=/tmp/should-not-be-used.json']);
+    expect(r.status).toBe(1);
     expect(r.stderr).toContain('reserved');
   });
 
