@@ -41,6 +41,7 @@ export const proofs = [
     stat: 'R@1 0.41 to 0.62',
     text: 'with the opt-in Jev reranker, against the free local cross-encoder. Ranking only: no answer-rate win was shown.',
     href: site.links.jevEval,
+    hrefLabel: 'the Jev reranker eval',
   },
 ] as const;
 
@@ -108,7 +109,7 @@ export const receipts = [
   {
     stat: '0.62',
     label: 'R@1 with --reranker jev',
-    note: 'Up from 0.41 with the free local cross-encoder, on a 300-query developer store. Ranking only: no answer-rate win was shown. Opt-in, off by default.',
+    note: 'Up from 0.41 with the free local cross-encoder, on a private 300-query developer store. Ranking only: no answer-rate win was shown. Opt-in, off by default.',
     href: site.links.jevEval,
   },
   {
@@ -203,9 +204,8 @@ export const getStarted = {
 /** Local-first / privacy. Every receipt sourced verbatim to README (L46/L57/L58). */
 export const localFirst = {
   kicker: 'Local-first',
-  heading: 'Your memory never leaves your machine.',
   points: [
-    { stat: '0', label: 'outbound HTTP', body: 'Proven by a globalThis.fetch spy that throws on call, across the 1000-event ingestion smoke. Not a hardcoded zero.' },
+    { stat: '0', label: 'outbound HTTP', body: 'Proven by a globalThis.fetch spy that throws on call, across the 1000-event ingestion smoke. Not a hardcoded zero. The default recall path makes no network call either; the opt-in Jev reranker is the one switch that does.' },
     { stat: 'SQLite', label: 'on disk', body: 'Memories live in a local .hippo/ store you can read, grep, and git-track. No cloud, no account, no telemetry.' },
     { stat: '1 call', label: 'to forget', body: 'Right-to-be-forgotten is a single API call. Every row carries kind, scope, owner, and provenance.' },
     { stat: 'tenant-safe', label: 'by default', body: 'Multi-tenant keys are scrypt-hashed with an audit log on every mutation. Tenant A cannot see tenant B, proven by a negative test.' },
@@ -220,7 +220,7 @@ export const localFirst = {
 export const faq = [
   { q: 'Is this just RAG?', a: 'No. RAG retrieves from a static corpus; hippo is a memory lifecycle. Memories decay on a half-life, retrieval strengthens them, errors stick, and sleep consolidates repeats into patterns. It forgets by default and earns persistence through use.' },
   { q: 'Does it need embeddings?', a: 'No. Recall runs on BM25 out of the box (74% R@5 on LongMemEval, BM25 only). Embeddings are an optional dependency for hybrid scoring; nothing is required at runtime.' },
-  { q: 'Where does my data go?', a: 'Nowhere. Everything is a local SQLite store with markdown mirrors: 0 outbound HTTP on the ingestion smoke, proven by a fetch spy. No cloud, no account, no telemetry.' },
+  { q: 'Where does my data go?', a: 'Nowhere, unless you opt in. Everything is a local SQLite store with markdown mirrors: 0 outbound HTTP on the ingestion smoke, proven by a fetch spy. No cloud, no account, no telemetry. One switch changes that: hippo recall --reranker jev sends your query and your candidate memory text to TypeSafe. It is off unless you turn it on.' },
   { q: 'Which agents does it work with?', a: 'hippo init auto-installs hooks for Claude Code, Codex, Cursor, OpenClaw, and OpenCode, and exposes an MCP server for any MCP client (Cursor, Windsurf, Cline, Claude Desktop).' },
   { q: 'How is hippo different from mem0, Letta, or Zep?', a: 'hippo optimizes the full memory lifecycle. mem0 and similar tools save and search; Zep and Cognee extract entities into a knowledge graph; Letta has the agent edit its own memory blocks. hippo forgets by default and earns persistence through use, with reward-weighted decay, conflict detection, and sleep consolidation, and it runs locally with zero runtime dependencies.' },
   { q: 'Is it production-ready?', a: `It is MIT-licensed at v${pkg.version}, with 926 tests against a real database and zero mocks. Multi-tenant isolation is proven by a negative test.` },

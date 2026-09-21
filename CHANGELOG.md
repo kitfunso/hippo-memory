@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.43.2 - 2026-09-21
+
+### Fixed
+
+- **The privacy answer no longer contradicts the reranker.** The homepage FAQ answered "Where does my data go?" with "Nowhere", and the local-first section was headed "Your memory never leaves your machine", on the same page that now advertises `--reranker jev`, which sends the query and the candidate memory text to a third party. The README already carried that caveat and the website did not. The FAQ answer, the heading and the `0 outbound HTTP` card now all name the one opt-in switch that makes a network call. The FAQ is published as `FAQPage` structured data, so the uncorrected answer was eligible for a search rich result.
+- **`HIPPO_JEV_MODEL` is proven to work again.** Pinning the default to `jev-1.13.0` in 1.43.1 left the override test setting the env var to the same string the default already was, so code that ignored the variable entirely would have passed. The test now uses a distinct value, and was mutation-tested: stubbing the override out fails it.
+- **The benchmarks page no longer publishes the ranking win without its bound.** The page description feeds `meta`, `og:description`, `twitter:description` and the `TechArticle` structured data, and those travel without the page that qualifies them. It now names the corpus and states "no answer-rate win was shown" before the numbers, so any truncation that reaches the figures has already shown the bound.
+- **The reranking table shows the ranking metric that tied.** Recall at the token budget was measured alongside R@1, R@5 and MRR and was flat (+0.007 [0.000, 0.020]). Omitting it made the result read as a clean sweep. The LongMemEval replication line now also says R@5 tied there, and the corpus is described as private on every surface, because it cannot be redistributed and the numbers cannot be rerun outside this machine.
+
+### Documentation
+
+- **The npm page now carries the words people search on.** `package.json` gained ten keywords: `agent-memory`, `long-term-memory`, `mcp`, `model-context-protocol`, `claude-code`, `rag`, `retrieval`, `sqlite`, `cli` and `typescript`. npm ranks search results on keywords and the registry only reads them at publish time, so the set added right after 1.43.1 shipped never reached the package page. This release carries them there.
+- **Every published measurement is indexed.** `docs/evals/README.md` lists all of them, pre-registrations kept next to their results, including the runs that failed and the one claim we retracted. It gained the row for the 74.0% BM25-only figure the README quotes, and a note that the Jev ranking table cannot be regenerated outside this machine.
+- **The reranker result reaches the front page.** The homepage hero carried only the LongMemEval number while the Jev result sat in a receipts tile most visitors never scrolled to. The hero now states it in its second proof line, with the bound in the same sentence. `website/scripts/check-readme-sync.mjs` fails the build if that claim leaves the hero, loses its null result, or stops being rendered; all three are mutation-tested.
+
 ## 1.43.1 - 2026-09-21
 
 ### Changed

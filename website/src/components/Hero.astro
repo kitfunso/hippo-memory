@@ -40,12 +40,12 @@ const stats = await getStats(); // build-time social proof (cached + fallback)
           <p class="text-sm leading-relaxed text-zinc-400">
             {'href' in p && p.href ? (
               <a
-                class="link font-medium text-zinc-200 tabular-nums"
+                class="link font-medium tabular-nums"
                 href={p.href}
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                {p.stat}<span class="sr-only"> (opens in new tab)</span>
+                {p.stat}<span class="sr-only"> ({p.hrefLabel}, opens in new tab)</span>
               </a>
             ) : (
               <span class="font-medium text-zinc-200 tabular-nums">{p.stat}</span>
