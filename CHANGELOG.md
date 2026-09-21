@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`--flag=value` now works alongside `--flag value`.** Every CLI flag accepts either form: `hippo recall "deploy steps" --budget=1500` is the same as `hippo recall "deploy steps" --budget 1500`, including for repeatable flags (`--tag=a --tag=b` collects both) and values that contain their own `=` (`--reason=a=b` keeps the full `a=b`). An empty glued value (`--tag=`, `--scope=`) carries no information: on a repeatable flag it adds nothing to the list instead of clobbering what was already collected, and on any other flag it counts as no value at all, the same as typing the flag with nothing after it. `--budget=<value>` on `recall`, `explain` and `context` also now rejects a missing or non-numeric value (`--budget=`, `--budget=abc`) instead of silently falling back to the default; `--budget=0` is still accepted. `--dry-run`, the one flag that takes no value at all, rejects any `=` form outright rather than guess which way the caller meant it.
+
+### Changed
+
+- **`--flag=false` on a switch-style flag now behaves like `--flag false`.** Flags such as `--json`, `--force` and `--global` (roughly 45 in total, everything except `--dry-run`) are switches whose code only checks whether a value is present or truthy, not what it says. `--json=false` therefore stores the string `'false'`, which is truthy, so JSON output turns on, exactly like `--json false` does today. This falls out of treating `=` as a faithful stand-in for a space; it is a change only from the previous accident, where `--json=false` was an unrecognized flag name and got silently dropped.
+
 ## 1.43.0 - 2026-09-20
 
 ### Added

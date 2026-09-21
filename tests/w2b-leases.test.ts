@@ -719,9 +719,10 @@ describe('CLI cases C1-C7: card heartbeat and reclaim through the built CLI', ()
       expect(reclaimProto.status).toBe(1);
       expect(reclaimProto.out).toContain('Usage: hippo card reclaim (sweeps every expired lease; use hippo card block <id> for one card)');
 
+      // --run=5 is a real flag now, so it reaches the live-run check instead of the parser guard.
       const equalsForm = runCli(home, env, 'card', 'heartbeat', id, '--run=5');
       expect(equalsForm.status).toBe(1);
-      expect(equalsForm.out).toContain('Use --run <value>, not --run=5.');
+      expect(equalsForm.out).toContain('Could not heartbeat card');
 
       for (const result of [ctor, proto, runCtor, runNeg, runHuge, reclaimProto, equalsForm]) {
         expect(/^\s+at\s/m.test(result.out)).toBe(false);

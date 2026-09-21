@@ -624,13 +624,13 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     }
   });
 
-  it('Fix D CLI: an unrecognized flag, or one mistyped with = or a wrong name, exits 1 and creates no card', () => {
+  it('Fix D CLI: an unrecognized flag, a wrong name, or a glued --flag=value with a bad value, exits 1 and creates no card', () => {
     const { home, env } = setupCliHome();
     try {
+      // --depends-on=nope is a real flag now, so it fails on the parent lookup instead of on parsing.
       const equalsForm = runCli(home, env, 'card', 'create', '--title', 't', '--depends-on=nope');
       expect(equalsForm.status).toBe(1);
-      expect(equalsForm.out).toContain('Unknown flag --depends-on=nope for hippo card create');
-      expect(equalsForm.out).toContain('Use --depends-on <value>, not --depends-on=nope.');
+      expect(equalsForm.out).toContain('unknown parent card id: nope');
 
       const typo = runCli(home, env, 'card', 'create', '--title', 't', '--depend-on', 'x');
       expect(typo.status).toBe(1);
