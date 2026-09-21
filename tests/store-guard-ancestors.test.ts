@@ -4,7 +4,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { watchedStoreDirs } from './_real-store-guard.js';
+import { snapshot, watchedStoreDirs } from './_real-store-guard.js';
 
 function globalStoreRootLocal(): string {
   const hippoHome = process.env.HIPPO_HOME?.trim();
@@ -50,10 +50,9 @@ describe('watchedStoreDirs ancestor coverage', () => {
     expect(fs.existsSync(path.join(checkout, '.hippo'))).toBe(false);
   });
 
-  it('arm 3: the walk never crosses the home bound, so cwd === home returns only the global store', () => {
+  it('arm 3: cwd on the home bound still watches its own store, because getHippoRoot falls back to cwd/.hippo', () => {
     const dirs = watchedStoreDirs(home, home);
-    expect(dirs).not.toContain(path.join(home, '.hippo'));
-    expect(dirs).toEqual([globalStoreRootLocal()]);
+    expect(dirs).toEqual([path.join(home, '.hippo'), globalStoreRootLocal()]);
   });
 
   it('arm 4: the walk stops at the real temp root when home is off the walk entirely', () => {
@@ -108,5 +107,16 @@ describe('watchedStoreDirs ancestor coverage', () => {
       path.join(outer, '.hippo'),
       globalStoreRootLocal(),
     ]);
+  });
+
+  it('arm 9: an ancestor holding a FILE named .hippo is still watched, and snapshotting it does not throw ENOTDIR', () => {
+    const fileMarker = path.join(checkout, '.hippo');
+    fs.writeFileSync(fileMarker, 'not a store');
+    try {
+      expect(watchedStoreDirs(fixture, home)).toContain(fileMarker);
+      expect(snapshot(fileMarker)).toBe('<not-a-directory>');
+    } finally {
+      fs.rmSync(fileMarker, { force: true });
+    }
   });
 });

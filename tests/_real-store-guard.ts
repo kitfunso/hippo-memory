@@ -45,22 +45,27 @@ export function watchedStoreDirs(cwd: string, home: string): string[] {
   const homeReal = realpathOrResolve(home);
   const tmpReal = realpathOrResolve(tmpdir());
   const dirs: string[] = [];
+  const add = (d: string): void => {
+    if (!dirs.some((x) => samePath(x, d))) dirs.push(d);
+  };
   let dir = realpathOrResolve(cwd);
-  for (let depth = 0; depth < 64; depth++) {
+  // getHippoRoot falls back to cwd/.hippo when the walk finds no marker, so it is reachable even at a bound.
+  add(join(dir, '.hippo'));
+  for (let depth = 0; depth < 64; depth++) { // mirrors MAX_WALK_DEPTH, src/project-identity.ts:43 (not exported)
     if (samePath(dir, homeReal) || samePath(dir, tmpReal)) break;
     // Every ancestor's store is listed even when absent: a test can create one mid-run.
-    dirs.push(join(dir, '.hippo'));
+    add(join(dir, '.hippo'));
     const parent = dirname(dir);
-    if (samePath(parent, dir)) break; // filesystem root, already pushed above
+    if (samePath(parent, dir)) break; // filesystem root, already added above
     dir = parent;
   }
-  const global = globalStoreRoot();
-  if (!dirs.some((d) => samePath(d, global))) dirs.push(global); // HIPPO_HOME can collide with an ancestor
+  add(globalStoreRoot()); // HIPPO_HOME can collide with an ancestor
   return dirs;
 }
 
-function snapshot(dir: string): string {
+export function snapshot(dir: string): string {
   if (!existsSync(dir)) return '<absent>';
+  if (!statSync(dir).isDirectory()) return '<not-a-directory>'; // a file .hippo is not a store (project-identity.ts:148)
   const files: string[] = [];
   const walk = (d: string, rel: string): void => {
     for (const name of readdirSync(d).sort()) {
