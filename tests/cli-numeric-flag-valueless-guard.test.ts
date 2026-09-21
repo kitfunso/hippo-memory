@@ -143,6 +143,7 @@ describe('dedup --threshold: the no-undo data-loss pin', () => {
   function memoryCount(): number {
     const db = openHippoDb(join(home, '.hippo'));
     try {
+      // SAFETY: COUNT(*) AS n always yields exactly one row with a numeric n.
       const row = db.prepare('SELECT COUNT(*) AS n FROM memories').get() as { n: number };
       return row.n;
     } finally {
