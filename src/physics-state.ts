@@ -149,7 +149,7 @@ export function savePhysicsState(
     }
     db.exec('COMMIT');
   } catch (error) {
-    db.exec('ROLLBACK');
+    try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
     throw error;
   }
 }

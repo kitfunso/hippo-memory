@@ -2552,7 +2552,7 @@ function runMigrations(db: DatabaseSyncLike, hippoRoot?: string): void {
       db.exec('COMMIT');
       currentVersion = migration.version;
     } catch (error) {
-      db.exec('ROLLBACK');
+      try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
       throw error;
     }
   }

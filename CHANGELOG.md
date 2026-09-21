@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Original error survives a failed transaction.** Nine catch-side `ROLLBACK` calls could themselves throw when SQLite had already discarded the transaction, masking the real failure (disk full, I/O error) with `cannot rollback - no transaction is active`. Each now uses the guarded form already used elsewhere in the codebase.
+
 ## 1.43.0 - 2026-09-20
 
 ### Added

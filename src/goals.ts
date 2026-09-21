@@ -189,7 +189,7 @@ export function pushGoalWithDb(db: DatabaseSyncLike, opts: PushGoalOpts): Goal {
 
     db.exec('COMMIT');
   } catch (err) {
-    db.exec('ROLLBACK');
+    try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
     throw err;
   }
 
@@ -497,7 +497,7 @@ export function completeGoal(hippoRoot: string, goalId: string, opts: CompleteGo
 
       db.exec('COMMIT');
     } catch (err) {
-      db.exec('ROLLBACK');
+      try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
       throw err;
     }
   } finally {
@@ -534,7 +534,7 @@ export function resumeGoal(hippoRoot: string, goalId: string): void {
       db.prepare(`UPDATE goal_stack SET status = 'active' WHERE id = ?`).run(goalId);
       db.exec('COMMIT');
     } catch (err) {
-      db.exec('ROLLBACK');
+      try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
       throw err;
     }
   } finally {
