@@ -9325,7 +9325,7 @@ async function main(): Promise<void> {
     const raw = flags[key];
     if (raw === undefined) continue;
     if (typeof raw !== 'string' || !raw.trim() || !Number.isFinite(Number(raw))) {
-      console.error(`--${key} requires a numeric value (e.g. --${key} 10).`);
+      console.error(`--${key} requires a numeric value.`);
       process.exit(1);
     }
   }
