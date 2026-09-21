@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.43.1 - 2026-09-21
+
+### Changed
+
+- **`--reranker jev` now pins the model to `jev-1.13.0` instead of the `jev-latest` alias.** Every number in `docs/evals/2026-09-19-jev-reranker.md` was measured on 1.13.0, and `jev-latest` and `jev-preview` are aliases that move whenever TypeSafe ships a release, so the published evidence and the shipped behaviour could silently diverge. `HIPPO_JEV_MODEL` still overrides the default, so anyone tracking the alias sets that one variable. No other behaviour changes, and the default recall path still makes no network call.
+
+### Documentation
+
+- **The README Receipts section carries the Jev result.** R@1 0.41 to 0.62 on a 300-query developer store with `--reranker jev`, the bootstrap and permutation-null detail, the cost a recall, and the negative result: three graded tests did not show a better answer rate than the free local cross-encoder. The `0 outbound HTTP` receipt now says plainly that the opt-in Jev reranker is the one switch that makes a network call.
+- **The website receipt cards carry the same number**, linking to the full eval. The MIT card it replaces is still in the footer, the comparison matrix and the FAQ.
+
 ## 1.43.0 - 2026-09-20
 
 ### Added

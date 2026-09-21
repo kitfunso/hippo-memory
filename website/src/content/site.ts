@@ -30,6 +30,7 @@ export const site = {
     benchmarks: `${REPO}/tree/master/benchmarks`,
     longmemeval: `${REPO}/tree/master/benchmarks/longmemeval`,
     license: `${REPO}/blob/master/LICENSE`,
+    jevEval: `${REPO}/blob/master/docs/evals/2026-09-19-jev-reranker.md`,
     atlas: 'https://neoneye.github.io/agent-memory-atlas/systems/hippo-memory/',
   },
 } as const;
@@ -108,10 +109,10 @@ export const receipts = [
     href: site.links.repo,
   },
   {
-    stat: 'MIT',
-    label: 'licensed',
-    note: 'SQLite backbone with markdown mirrors. Git-trackable, human-readable.',
-    href: site.links.license,
+    stat: '0.62',
+    label: 'R@1 with --reranker jev',
+    note: 'Up from 0.41 with the free local cross-encoder, on a 300-query developer store. Ranking only: no answer-rate win was shown. Opt-in, off by default.',
+    href: site.links.jevEval,
   },
 ] as const;
 

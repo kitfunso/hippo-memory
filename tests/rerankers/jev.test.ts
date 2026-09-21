@@ -71,7 +71,7 @@ describe('jevReranker', () => {
     expect(fetchMock).toHaveBeenCalledOnce();
     const init = fetchMock.mock.calls[0][1];
     const body = JSON.parse(String(init?.body));
-    expect(body.model).toBe('jev-latest');
+    expect(body.model).toBe('jev-1.13.0');
     expect(body.state).toContain('Query: which one');
     expect(body.state).toContain('[2] beta');
     expect(Object.keys(body.questions)).toEqual(['c1', 'c2', 'c3']);
