@@ -6,7 +6,7 @@ import { site } from '../content/site';
 
 const title = 'hippo benchmarks: LongMemEval retrieval (R@5 98.6 / 99.8)';
 const description =
-  "hippo's retrieval on the public LongMemEval benchmark, with the harness and data to reproduce it. 98.6% R@5 with the zero-dependency default, 99.8% with an opt-in frontier embedder.";
+  "hippo's retrieval on the public LongMemEval benchmark, with the harness and data to reproduce it. 98.6% R@5 with the zero-dependency default, 99.8% with an opt-in frontier embedder, and R@1 0.41 to 0.62 with the opt-in Jev reranker.";
 
 // Verified against README.md + docs/evals/2026-06-09-longmemeval-per-haystack-dual.md.
 const perHaystack = [
@@ -29,11 +29,21 @@ const locomo = [
 ];
 const locomoDocUrl = `${site.links.repo}/blob/master/benchmarks/LOCOMO_INVESTIGATION.md`;
 
+// Verified against docs/evals/2026-09-19-jev-reranker.md, ranking table, 300-query
+// developer store, n=300, 40 candidates each. Intervals are 98.75%.
+const rerank = [
+  { metric: 'R@1', base: '0.260', ce: '0.413', jev: '0.617', delta: '+0.203 [0.133, 0.273]' },
+  { metric: 'R@5', base: '0.460', ce: '0.613', jev: '0.740', delta: '+0.127 [0.080, 0.177]' },
+  { metric: 'MRR', base: '0.358', ce: '0.509', jev: '0.672', delta: '+0.163 [0.113, 0.217]' },
+];
+
 const benchUrl = `${site.links.longmemeval}`;
+const evalIndexUrl = `${site.links.repo}/blob/master/docs/evals/README.md`;
 
 // Hero chip group: reuses the page's own receipts (no new claims).
 const heroChips = [
   { num: '98.6%', label: 'R@5, zero-dep default' },
+  { num: '0.62', label: 'R@1 with --reranker jev' },
   { num: '926', label: 'tests, real database' },
   { num: '0', label: 'outbound HTTP' },
 ];
@@ -133,8 +143,54 @@ const jsonLd = {
       </div>
     </section>
 
+    <!-- Reranking: the Jev result, win and null together -->
+    <section id="reranking" class="relative scroll-mt-20 border-t border-white/5 bg-white/[0.02]">
+      <div class="mx-auto max-w-6xl px-5 py-24">
+        <h2 class="text-balance text-3xl leading-tight sm:text-4xl">Reranking: what a paid model bought, and what it&nbsp;did&nbsp;not</h2>
+        <p class="mt-4 max-w-2xl leading-relaxed text-zinc-400">
+          <code class="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-sm text-zinc-300">hippo recall "&lt;query&gt;" --reranker jev</code> sends the top 40 candidates to the hosted <a class="link" href="https://typesafe.ai" target="_blank" rel="noopener noreferrer">TypeSafe Jev<span class="sr-only"> (opens in new tab)</span></a> API and reorders them. It is off by default and the default recall path makes no network call. Ranking on a 300-query developer store, all figures aggregated over 2,000-draw paired bootstrap runs:
+        </p>
+        <div class="mt-8 overflow-x-auto rounded-2xl border border-white/8">
+          <table class="w-full min-w-[34rem] text-left text-sm">
+            <thead class="bg-white/[0.03] font-mono text-xs uppercase tracking-wider text-zinc-400">
+              <tr>
+                <th scope="col" class="px-5 py-3 font-medium">Metric</th>
+                <th scope="col" class="px-5 py-3 font-medium">Base</th>
+                <th scope="col" class="px-5 py-3 font-medium">Cross-encoder</th>
+                <th scope="col" class="px-5 py-3 font-medium">Jev</th>
+                <th scope="col" class="px-5 py-3 font-medium">Jev minus cross-encoder</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-white/5">
+              {rerank.map((row) => (
+                <tr class="text-zinc-300">
+                  <th scope="row" class="px-5 py-3.5 text-left font-normal">{row.metric}</th>
+                  <td class="px-5 py-3.5 font-mono">{row.base}</td>
+                  <td class="px-5 py-3.5 font-mono">{row.ce}</td>
+                  <td class="px-5 py-3.5 font-mono font-semibold text-gradient">{row.jev}</td>
+                  <td class="px-5 py-3.5 font-mono text-xs text-zinc-400">{row.delta}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p class="mt-5 max-w-2xl text-sm leading-relaxed text-zinc-400">
+          The R@1 margin held in 20 of 20 bootstrap seeds, and a permutation null with arm labels shuffled inside each query reached it in 0 of 200 runs. It replicated on LongMemEval at n=500: R@1 +0.0700 [0.0200, 0.1200]. Cost is about 0.0004 USD a recall, p50 295&nbsp;ms over 300 calls.
+        </p>
+        <div class="mt-8 max-w-2xl rounded-2xl border border-amber-400/20 bg-amber-400/[0.04] p-6">
+          <p class="font-mono text-xs uppercase tracking-wider text-amber-300/90">What it did not do</p>
+          <p class="mt-3 text-sm leading-relaxed text-zinc-300">
+            Better ranking did not produce better answers. Three graded-answer tests on LongMemEval all tied against the free local cross-encoder, and those three share one 150-question set, so they are not three independent tries. What Jev buys today is a shorter context: 2 Jev-ranked memories answer as well as 5 ranked by the cross-encoder, roughly 900 fewer tokens a query. Turning it on also sends your query and candidate memory text to a third party.
+          </p>
+        </div>
+        <p class="mt-5 max-w-2xl text-sm leading-relaxed text-zinc-400">
+          Method, every interval, the cost table and the full limits list: <a class="link" href={site.links.jevEval} target="_blank" rel="noopener noreferrer">the Jev reranker eval<span class="sr-only"> (opens in new tab)</span></a>.
+        </p>
+      </div>
+    </section>
+
     <!-- Other receipts -->
-    <section class="relative scroll-mt-20 border-t border-white/5 bg-white/[0.02]">
+    <section class="relative scroll-mt-20 border-t border-white/5">
       <div class="mx-auto max-w-6xl px-5 py-24">
         <h2 class="text-balance text-3xl leading-tight sm:text-4xl">Tested, and local by default</h2>
         <div class="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -158,20 +214,24 @@ const jsonLd = {
     </section>
 
     <!-- Methodology + reproduce -->
-    <section class="relative scroll-mt-20 border-t border-white/5">
+    <section class="relative scroll-mt-20 border-t border-white/5 bg-white/[0.02]">
       <div class="mx-auto max-w-6xl px-5 py-24">
         <h2 class="text-balance text-3xl leading-tight sm:text-4xl">Reproduce it</h2>
         <p class="mt-4 max-w-2xl leading-relaxed text-zinc-400">
           The data is <code class="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-sm text-zinc-300">longmemeval_s_cleaned.json</code> (SHA-256 <code class="font-mono text-xs text-zinc-400">d6f21ea9...</code>), 500 questions over 19,195 sessions. Retrieval is turn-level dense plus BM25, fused with reciprocal rank fusion and max-pooled to session. Embeddings are L2-normalized; the default is local MiniLM, with an opt-in pluggable provider for frontier embedders.
         </p>
+        <p class="mt-4 max-w-2xl leading-relaxed text-zinc-400">
+          Every measurement hippo has published, pre-registrations kept next to their results, is indexed in <a class="link" href={evalIndexUrl} target="_blank" rel="noopener noreferrer">docs/evals<span class="sr-only"> (opens in new tab)</span></a>. That index includes the runs that failed and the one claim we retracted.
+        </p>
         <div class="mt-7 flex flex-wrap gap-3">
           <a href={benchUrl} target="_blank" rel="noopener noreferrer" class="rounded-lg bg-zinc-100 px-5 py-2.5 text-sm font-medium text-zinc-900 transition hover:bg-white">Benchmark harness &amp; data<span class="sr-only"> (opens in new tab)</span></a>
+          <a href={evalIndexUrl} target="_blank" rel="noopener noreferrer" class="rounded-lg border border-white/12 px-5 py-2.5 text-sm font-medium text-zinc-200 transition hover:border-white/25">All eval documents<span class="sr-only"> (opens in new tab)</span></a>
           <a href={site.links.repo} target="_blank" rel="noopener noreferrer" class="rounded-lg border border-white/12 px-5 py-2.5 text-sm font-medium text-zinc-200 transition hover:border-white/25">Repository<span class="sr-only"> (opens in new tab)</span></a>
         </div>
       </div>
     </section>
     <!-- LoCoMo per-category disclosure -->
-    <section class="relative scroll-mt-20 border-t border-white/5 bg-white/[0.02]">
+    <section class="relative scroll-mt-20 border-t border-white/5">
       <div class="mx-auto max-w-6xl px-5 py-24">
         <h2 class="text-balance text-3xl leading-tight sm:text-4xl">LoCoMo: conversational evidence&nbsp;recall</h2>
         <p class="mt-4 max-w-2xl leading-relaxed text-zinc-400">

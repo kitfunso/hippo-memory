@@ -40,6 +40,9 @@ It also fixes the portability problem. Your ChatGPT memories don't travel to Cla
 ## Receipts
 
 Numbers, not adjectives. Every claim links to the benchmark or the test that proves it.
+Every measurement we have ever published is indexed in [`docs/evals/`](docs/evals/README.md),
+pre-registrations kept next to their results, including the runs that failed and the one
+claim we retracted.
 
 - **Sequential Learning Benchmark.** [benchmarks/sequential-learning/](benchmarks/sequential-learning/). 50 tasks, 10 buried traps. Measures whether agents learn from past mistakes, not just retrieve text. v0.11.0 informal magnitude RETRACTED v1.7.9; mechanism remains shipped. See [CHANGELOG.md](./CHANGELOG.md) v1.7.9 entry.
 - **R@5 = 74.0%** on [LongMemEval](benchmarks/longmemeval/). 500-question industry retrieval benchmark, BM25 only, no embeddings.
