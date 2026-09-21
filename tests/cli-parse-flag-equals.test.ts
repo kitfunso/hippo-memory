@@ -1,4 +1,4 @@
-/** `--flag=value` (glued) form, episode 01M30N835TCCFCRYTYW193VWSJ: cases 1-14 unit-test parseArgs, 15-21(+20b) drive the built CLI. */
+/** `--flag=value` (glued) form: the first describe unit-tests parseArgs, the second drives the built CLI. */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
