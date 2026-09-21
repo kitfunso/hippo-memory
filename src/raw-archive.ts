@@ -117,8 +117,10 @@ export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: Archive
     }
     db.exec('RELEASE SAVEPOINT archive_raw');
   } catch (e) {
-    db.exec('ROLLBACK TO SAVEPOINT archive_raw');
-    db.exec('RELEASE SAVEPOINT archive_raw');
+    try {
+      db.exec('ROLLBACK TO SAVEPOINT archive_raw');
+      db.exec('RELEASE SAVEPOINT archive_raw');
+    } catch { /* savepoint already discarded; keep the original error */ }
     throw e;
   }
 }

@@ -1,4 +1,4 @@
-/** A6 item 4: guards the nine catch-side bare ROLLBACK sites (see plan.md). */
+/** A6 item 4: guards the ten catch-side bare rollback sites, savepoints included (see plan.md). */
 
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -42,19 +42,21 @@ describe('rollback guard (A6 item 4)', () => {
     }
   });
 
-  it('flags zero catch-side bare ROLLBACK sites under src/ (closes the class)', () => {
+  it('flags zero catch-side bare rollback sites under src/, savepoints included (closes the class)', () => {
     const flagged = findCatchSideBareRollbacks(join(repoRoot, 'src'));
     expect(flagged).toEqual([]);
   });
 });
 
-// Mirrors scratchpad/catchside.awk: flag only a bare ROLLBACK sitting right after a catch opener.
+// A savepoint rollback throws for the same reason a plain one does, so both families count.
+const BARE_ROLLBACK = /^db\.exec\((['"])ROLLBACK(?: TO SAVEPOINT \w+)?\1\);$/;
+
 function findCatchSideBareRollbacks(srcDir: string): string[] {
   const flagged: string[] = [];
   for (const file of listTsFilesRecursive(srcDir)) {
     const lines = readFileSync(file, 'utf8').split('\n');
     for (let i = 0; i < lines.length; i++) {
-      if (lines[i].trim() !== "db.exec('ROLLBACK');") continue;
+      if (!BARE_ROLLBACK.test(lines[i].trim())) continue;
       let p = i - 1;
       while (p >= 0 && lines[p].trim() === '') p--;
       if (p >= 0 && /catch\s*(\([^)]*\))?\s*\{\s*$/.test(lines[p].trim())) {
