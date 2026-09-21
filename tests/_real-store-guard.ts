@@ -14,9 +14,9 @@
  * The filename has no `.test.` segment, so vitest's `include` glob does not
  * collect it as a test file.
  */
-import { existsSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, realpathSync, rmSync, statSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 // Resolve the global store the way src/shared.ts getGlobalRoot() does:
 // HIPPO_HOME, then XDG_DATA_HOME/hippo, then ~/.hippo.
@@ -28,10 +28,36 @@ function globalStoreRoot(): string {
   return join(homedir(), '.hippo');
 }
 
-const WATCHED_STORES = [
-  join(process.cwd(), '.hippo'), // project-local store
-  globalStoreRoot(), // global store (isolated to a temp dir by vitest.config.ts)
-];
+function realpathOrResolve(p: string): string {
+  try {
+    return realpathSync.native(p);
+  } catch {
+    return resolve(p);
+  }
+}
+
+function samePath(a: string, b: string): boolean {
+  return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
+}
+
+// Mirrors src/project-identity.ts's walkProjectMarkers: home/tmpdir stop before the marker check, root stops after.
+export function watchedStoreDirs(cwd: string, home: string): string[] {
+  const homeReal = realpathOrResolve(home);
+  const tmpReal = realpathOrResolve(tmpdir());
+  const dirs: string[] = [];
+  let dir = realpathOrResolve(cwd);
+  for (let depth = 0; depth < 64; depth++) {
+    if (samePath(dir, homeReal) || samePath(dir, tmpReal)) break;
+    // Every ancestor's store is listed even when absent: a test can create one mid-run.
+    dirs.push(join(dir, '.hippo'));
+    const parent = dirname(dir);
+    if (samePath(parent, dir)) break; // filesystem root, already pushed above
+    dir = parent;
+  }
+  const global = globalStoreRoot();
+  if (!dirs.some((d) => samePath(d, global))) dirs.push(global); // HIPPO_HOME can collide with an ancestor
+  return dirs;
+}
 
 function snapshot(dir: string): string {
   if (!existsSync(dir)) return '<absent>';
@@ -56,7 +82,7 @@ export function setup(): void {
   // This shell is itself a Claude Code session; the var would leak into every spawned CLI
   // child and falsify null-session_id trace assertions, so drop it before workers fork.
   delete process.env.CLAUDE_CODE_SESSION_ID;
-  baseline = WATCHED_STORES.map((dir) => [dir, snapshot(dir)] as const);
+  baseline = watchedStoreDirs(process.cwd(), homedir()).map((dir) => [dir, snapshot(dir)] as const);
 }
 
 export function teardown(): void {
