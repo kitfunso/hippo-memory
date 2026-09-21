@@ -35,10 +35,13 @@ function hippo(cwd: string, env: Record<string, string>, ...args: string[]): str
 }
 
 function hippoRun(cwd: string, env: Record<string, string>, ...args: string[]) {
+  // A reverted guard lets `serve --port` bind and hang forever, and spawnSync blocks
+  // the worker's event loop, so vitest's own testTimeout could never fire on it.
   const res = spawnSync('node', [HIPPO_BIN, ...args], {
     cwd,
     env: childEnv(env),
     encoding: 'utf-8',
+    timeout: 10_000,
   });
   return { status: res.status, stdout: res.stdout, stderr: res.stderr };
 }
