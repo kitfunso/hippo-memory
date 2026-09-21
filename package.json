@@ -50,7 +50,17 @@
     "episodic",
     "semantic",
     "embeddings",
-    "hybrid-search"
+    "hybrid-search",
+    "agent-memory",
+    "long-term-memory",
+    "mcp",
+    "model-context-protocol",
+    "claude-code",
+    "rag",
+    "retrieval",
+    "sqlite",
+    "cli",
+    "typescript"
   ],
   "author": "Keith",
   "license": "MIT",
