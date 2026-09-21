@@ -42,25 +42,34 @@ describe('rollback guard (A6 item 4)', () => {
     }
   });
 
-  it('flags zero catch-side bare rollback sites under src/, savepoints included (closes the class)', () => {
-    const flagged = findCatchSideBareRollbacks(join(repoRoot, 'src'));
+  it('flags zero bare rollback sites on an error path under src/, catch and finally alike', () => {
+    const flagged = findErrorPathBareRollbacks(join(repoRoot, 'src'));
     expect(flagged).toEqual([]);
   });
 });
 
 // A savepoint rollback throws for the same reason a plain one does, so both families count.
 const BARE_ROLLBACK = /^db\.exec\((['"])ROLLBACK(?: TO SAVEPOINT \w+)?\1\);$/;
+// An error-path rollback is reached through catch or finally; walk past intervening
+// block openers so a nested `finally { if (!committed) {` counts, but stop at a
+// `try {`, which is the guard this test exists to require.
+const ERROR_PATH_OPENER = /(catch\s*(\([^)]*\))?|finally)\s*\{$/;
+const GUARD_OPENER = /(^|\W)try\s*\{$/;
 
-function findCatchSideBareRollbacks(srcDir: string): string[] {
+function findErrorPathBareRollbacks(srcDir: string): string[] {
   const flagged: string[] = [];
   for (const file of listTsFilesRecursive(srcDir)) {
     const lines = readFileSync(file, 'utf8').split('\n');
     for (let i = 0; i < lines.length; i++) {
       if (!BARE_ROLLBACK.test(lines[i].trim())) continue;
-      let p = i - 1;
-      while (p >= 0 && lines[p].trim() === '') p--;
-      if (p >= 0 && /catch\s*(\([^)]*\))?\s*\{\s*$/.test(lines[p].trim())) {
-        flagged.push(`${file}:${i + 1}`);
+      for (let p = i - 1; p >= 0; p--) {
+        const prev = lines[p].trim();
+        if (prev === '') continue;
+        if (!prev.endsWith('{') || GUARD_OPENER.test(prev)) break;
+        if (ERROR_PATH_OPENER.test(prev)) {
+          flagged.push(`${file}:${i + 1}`);
+          break;
+        }
       }
     }
   }
