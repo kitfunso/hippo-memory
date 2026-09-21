@@ -169,4 +169,34 @@ describe('built CLI: --flag=value end-to-end guards', () => {
     const res = runCli(['recall', 'deploy steps', '--budget=0', '--json']);
     expect(res.status).toBe(0);
   });
+
+  it('case 22: recall --budget abc (separated form) is rejected too, not only the glued form', () => {
+    const res = runCli(['recall', 'deploy steps', '--budget', 'abc']);
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('Invalid --budget: "abc"');
+  });
+
+  it('case 23: recall --budget=-1 is rejected (a negative bound is not a bound)', () => {
+    const res = runCli(['recall', 'deploy steps', '--budget=-1']);
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('Invalid --budget: "-1"');
+  });
+
+  it('case 24: assemble --budget=abc errors instead of silently using the api default', () => {
+    const res = runCli(['assemble', '--session', 's1', '--budget=abc']);
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('Invalid --budget: "abc"');
+  });
+
+  it('case 25: drill --budget=abc errors instead of silently dropping the size cap', () => {
+    const res = runCli(['drill', 'no-such-id', '--budget=abc']);
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('Invalid --budget: "abc"');
+  });
+
+  it('case 26: share --force=false is rejected, never read as the truthy string "false"', () => {
+    const res = runCli(['share', 'no-such-id', '--force=false']);
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('--force takes no value');
+  });
 });

@@ -283,15 +283,15 @@ function parseCountFlag(value: string | boolean | string[] | undefined): number 
 
 function parseBudgetFlag(value: string | boolean | string[] | undefined, fallback: number): number {
   if (value === undefined) return fallback;
-  // A value-less flag and a junk value are different typos; --hops (1196-1207) already splits them.
+  // A value-less flag and a junk value are different typos; the --hops guard already splits them.
   if (typeof value !== 'string') {
     console.error('--budget requires an integer value (e.g. --budget 1500).');
     process.exit(1);
   }
   // Number(), like the --hops guard: parseInt('12abc') is 12, silently accepting what this message rejects.
   const parsed = Number(value);
-  if (!Number.isInteger(parsed)) {
-    console.error(`Invalid --budget: "${value}". Must be an integer.`);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    console.error(`Invalid --budget: "${value}". Must be a non-negative integer.`);
     process.exit(1);
   }
   return parsed;
@@ -403,7 +403,9 @@ async function runViaServerIfAvailable(
 // Flags that NEVER take a value. Without this, a positional following the
 // flag is silently swallowed as its value (`invalidate --dry-run "X"` would
 // eat the pattern). Every existing --dry-run consumer reads it as boolean.
-const BOOLEAN_FLAGS = new Set(['dry-run']);
+// force and pin are read as both Boolean(...) and === true by different consumers,
+// so an inline value would mean two opposite things in one run. Reject it, like --dry-run.
+const BOOLEAN_FLAGS = new Set(['dry-run', 'force', 'pin']);
 
 // Shared by both the separated and glued (`=`) forms so the list can't drift.
 function isRepeatableFlag(key: string): boolean {
@@ -7912,7 +7914,8 @@ function cmdDag(hippoRoot: string, flags: Record<string, string | boolean | stri
 
 function cmdAssemble(hippoRoot: string, sessionId: string, flags: Record<string, string | boolean | string[]>): void {
   requireInit(hippoRoot);
-  const budget = typeof flags['budget'] === 'string' ? Number(flags['budget']) : undefined;
+  // Absent stays undefined so the api default applies; the 0 fallback is unreachable.
+  const budget = flags['budget'] === undefined ? undefined : parseBudgetFlag(flags['budget'], 0);
   const freshTailCount = typeof flags['fresh-tail'] === 'string' ? Number(flags['fresh-tail']) : undefined;
   const summarizeOlder = flags['no-summarize-older'] !== true;
   const scope = typeof flags['scope'] === 'string' && (flags['scope'] as string).length > 0
@@ -7944,7 +7947,8 @@ function cmdAssemble(hippoRoot: string, sessionId: string, flags: Record<string,
 function cmdDrillDown(hippoRoot: string, summaryId: string, flags: Record<string, string | boolean | string[]>): void {
   requireInit(hippoRoot);
   const limit = typeof flags['limit'] === 'string' ? Number(flags['limit']) : undefined;
-  const budget = typeof flags['budget'] === 'string' ? Number(flags['budget']) : undefined;
+  // Absent stays undefined so the api default applies; the 0 fallback is unreachable.
+  const budget = flags['budget'] === undefined ? undefined : parseBudgetFlag(flags['budget'], 0);
   // v0.30 / E5: --depth N walks N levels down (default 1, hard cap 10).
   // L4 fold: reject out-of-range explicitly (no silent clamp).
   const rawDepth = typeof flags['depth'] === 'string' ? Number(flags['depth']) : undefined;
@@ -10018,7 +10022,7 @@ async function main(): Promise<void> {
       const onlyId = typeof flags['id'] === 'string' ? (flags['id'] as string) : undefined;
       if (typeof flags['dry-run'] === 'string') {
         // Dead: the earlier global BOOLEAN_FLAGS guard now exits first on any --dry-run=<v>.
-        // Kept as defence in depth on a destructive command (plan 3.2).
+        // Kept as defence in depth on a destructive command.
         console.error('--dry-run takes no value');
         process.exit(1);
       }
