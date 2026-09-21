@@ -101,7 +101,7 @@ describe('built CLI: --flag=value end-to-end guards', () => {
       const stdout = execFileSync('node', [CLI, ...args], { cwd: tmpDir, env, encoding: 'utf8' });
       return { stdout, stderr: '', status: 0 };
     } catch (err) {
-      // execFileSync attaches stdout/stderr/status to the thrown Error on a non-zero exit.
+      // SAFETY: execFileSync attaches stdout/stderr/status to the thrown Error on a non-zero exit.
       const e = err as { stdout?: string; stderr?: string; status?: number };
       return { stdout: e.stdout ?? '', stderr: e.stderr ?? '', status: e.status ?? 1 };
     }
