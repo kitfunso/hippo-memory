@@ -18,8 +18,6 @@ export const site = {
   // README line 12 (verbatim intent).
   description:
     'A memory layer for AI agents, modeled on the hippocampus. Decay by default, strength through use, provenance on every memory.',
-  // One proof line under the hero subhead (audit: lead with capability proof, not adjectives).
-  proof: { stat: '98.6% R@5', text: 'on LongMemEval with the zero-dependency default.' },
   installCmd: 'npm install -g hippo-memory',
   initCmd: 'hippo init --scan ~',
   links: {
@@ -34,6 +32,17 @@ export const site = {
     atlas: 'https://neoneye.github.io/agent-memory-atlas/systems/hippo-memory/',
   },
 } as const;
+
+// Hero proof lines, above the fold (audit: lead with capability proof, not adjectives).
+// The reranker line carries its null result inline; the win never travels without it.
+export const proofs = [
+  { stat: '98.6% R@5', text: 'on LongMemEval with the zero-dependency default.' },
+  {
+    stat: 'R@1 0.41 to 0.62',
+    text: 'with the opt-in Jev reranker, against the free local cross-encoder. Ranking only: no answer-rate win was shown.',
+    href: site.links.jevEval,
+  },
+] as const;
 
 export const nav = [
   { label: 'How it works', href: '/#how' },
@@ -97,6 +106,12 @@ export const receipts = [
     href: site.links.longmemeval,
   },
   {
+    stat: '0.62',
+    label: 'R@1 with --reranker jev',
+    note: 'Up from 0.41 with the free local cross-encoder, on a 300-query developer store. Ranking only: no answer-rate win was shown. Opt-in, off by default.',
+    href: site.links.jevEval,
+  },
+  {
     stat: '926',
     label: 'tests, real DB',
     note: 'Zero mocks. Project rule: no mocked dependencies in tests.',
@@ -107,12 +122,6 @@ export const receipts = [
     label: 'runtime deps',
     note: 'Node 22.5+. SQLite under the hood. Optional embeddings.',
     href: site.links.repo,
-  },
-  {
-    stat: '0.62',
-    label: 'R@1 with --reranker jev',
-    note: 'Up from 0.41 with the free local cross-encoder, on a 300-query developer store. Ranking only: no answer-rate win was shown. Opt-in, off by default.',
-    href: site.links.jevEval,
   },
 ] as const;
 

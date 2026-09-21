@@ -67,6 +67,18 @@ for (const [, category, n, r5] of locoRows) {
   if (!locoNorm.includes(`| ${category} | ${n} | ${r5} |`)) missing.push(`locomo row: | ${category} | ${n} | ${r5} |`);
 }
 
+// Presence anywhere on the site is not the check: the reranker result has to reach the
+// hero, and it never travels without the negative result that bounds it.
+const proofsBlock = (site.match(/export const proofs = \[([\s\S]*?)\n\] as const;/) || [])[1] || '';
+if (!proofsBlock) {
+  missing.push('proofs: block not found in site.ts (the hero renders it)');
+} else {
+  if (!/reranker/i.test(proofsBlock)) missing.push('proofs: the hero carries no reranker claim');
+  if (!/no answer-rate win was shown/.test(proofsBlock)) {
+    missing.push('proofs: the reranker claim lost its null result');
+  }
+}
+
 if (missing.length) {
   console.error('[readme-sync] DRIFT: website entries missing from README.md (comparison cells vs #comparison, locomo rows vs ### LoCoMo):');
   for (const m of missing) console.error('  - ' + m);
