@@ -9315,6 +9315,20 @@ async function main(): Promise<void> {
     console.error('--scope requires a non-empty value (e.g. --scope slack:private:C1).');
     process.exit(1);
   }
+  // parseArgs stores a value-less flag as boolean true, and NaN then survives every
+  // downstream guard because each comparison against it is false.
+  const NUMERIC_FLAGS = [
+    'days', 'threshold', 'min-score', 'port', 'limit', 'mmr-lambda', 'local-bump',
+    'min-results', 'reranker-top-k', 'min-mrr', 'embedding-weight', 'max-cases',
+  ];
+  for (const key of NUMERIC_FLAGS) {
+    const raw = flags[key];
+    if (raw === undefined) continue;
+    if (typeof raw !== 'string' || !raw.trim() || !Number.isFinite(Number(raw))) {
+      console.error(`--${key} requires a numeric value (e.g. --${key} 10).`);
+      process.exit(1);
+    }
+  }
   switch (command) {
     case 'init':
       cmdInit(hippoRoot, flags);
