@@ -3,10 +3,10 @@
  *
  * vitest.config.ts points HIPPO_HOME at a fresh per-run temp dir, so the whole
  * test run resolves the global hippo store to an isolated location no external
- * process touches. This guard snapshots that isolated global store and the
- * project-local store (process.cwd()/.hippo) before the run and fails the run
- * if a test left either mutated — catching a test that writes a store without
- * isolating it. On a clean run, teardown() removes the isolated temp dir.
+ * process touches. This guard snapshots that isolated global store and every
+ * `.hippo` the real resolver could reach from the suite's cwd (cwd's own, then
+ * each ancestor up to the home and temp-root bounds), then fails the run if any
+ * of them was mutated. On a clean run, teardown() removes the isolated temp dir.
  *
  * Tests must write only to temp dirs: isolate the local store with the spawn
  * `cwd` option and the global store with a per-test `HIPPO_HOME`.
@@ -51,7 +51,8 @@ export function watchedStoreDirs(cwd: string, home: string): string[] {
   let dir = realpathOrResolve(cwd);
   // getHippoRoot falls back to cwd/.hippo when the walk finds no marker, so it is reachable even at a bound.
   add(join(dir, '.hippo'));
-  for (let depth = 0; depth < 64; depth++) { // mirrors MAX_WALK_DEPTH, src/project-identity.ts:43 (not exported)
+  // SHORTCUT: 64 copies the unexported MAX_WALK_DEPTH (project-identity.ts:43); export it there to end the drift.
+  for (let depth = 0; depth < 64; depth++) {
     if (samePath(dir, homeReal) || samePath(dir, tmpReal)) break;
     // Every ancestor's store is listed even when absent: a test can create one mid-run.
     add(join(dir, '.hippo'));
@@ -122,9 +123,10 @@ export function teardown(): void {
   // (4) on a leak, leave the temp dir for inspection and fail the run.
   throw new Error(
     `Test-isolation leak: the test run mutated hippo store(s): ` +
-      `${leaked.join(', ')}. A test wrote a store without isolating it — ` +
-      `isolate the local store via the spawn 'cwd' option and the global ` +
-      `store via a per-test HIPPO_HOME. Re-run with --no-file-parallelism ` +
-      `to attribute the leak to a test file.`,
+      `${leaked.join(', ')}. Either a test wrote a store without isolating it ` +
+      `(isolate the local store via the spawn 'cwd' option and the global ` +
+      `store via a per-test HIPPO_HOME), or an ancestor store listed above was ` +
+      `written from outside this suite while it ran. Re-run with ` +
+      `--no-file-parallelism to attribute the leak to a test file.`,
   );
 }
