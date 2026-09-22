@@ -185,14 +185,86 @@ describe('resolveLastSessionTranscript', () => {
     expect(resolveLastSessionTranscript(undefined, undefined)).toBeNull();
   });
 
-  it('does not throw on a non-existent explicit path', () => {
-    const bogus = path.join(tmp.dir, 'nope.jsonl');
-    // Falls through to stdin + auto-discover, both unavailable here
-    expect(resolveLastSessionTranscript(bogus, undefined)).toBeNull();
-  });
-
   it('does not throw on non-JSON stdin text', () => {
     expect(resolveLastSessionTranscript(undefined, 'some plain text')).toBeNull();
+  });
+
+  // Another project's newest transcript, which only a manual run may pick up.
+  function plantOtherProjectTranscript(): string {
+    const dir = path.join(tmp.dir, '.claude', 'projects', 'other-project');
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, 'newest.jsonl');
+    fs.writeFileSync(file, '{}');
+    return file;
+  }
+
+  it('a named transcript that is missing returns null instead of scanning every project', () => {
+    plantOtherProjectTranscript();
+    expect(resolveLastSessionTranscript(path.join(tmp.dir, 'nope.jsonl'), undefined)).toBeNull();
+  });
+
+  it('a payload without a readable transcript_path returns null instead of scanning', () => {
+    plantOtherProjectTranscript();
+    const gone = JSON.stringify({ session_id: 'abc', transcript_path: path.join(tmp.dir, 'gone.jsonl') });
+    expect(resolveLastSessionTranscript(undefined, gone)).toBeNull();
+    expect(resolveLastSessionTranscript(undefined, JSON.stringify({ session_id: 'abc' }))).toBeNull();
+    expect(resolveLastSessionTranscript(undefined, 'some plain text')).toBeNull();
+  });
+
+  it('scans only on a proven manual run: no path, no stdin text, no timed-out read', () => {
+    const planted = plantOtherProjectTranscript();
+    expect(resolveLastSessionTranscript(undefined, undefined)).toBe(planted);
+    expect(resolveLastSessionTranscript(undefined, '  \n')).toBe(planted);
+    expect(resolveLastSessionTranscript(undefined, undefined, true)).toBeNull();
+  });
+});
+
+describe('session workers never capture a transcript they were not handed', () => {
+  let tmp: { dir: string; cleanup: () => void };
+  const binPath = path.resolve(process.cwd(), 'bin', 'hippo.js');
+
+  beforeEach(() => {
+    tmp = withTmpDir();
+    const env = { ...process.env, HIPPO_HOME: tmp.dir, HOME: tmp.dir, USERPROFILE: tmp.dir };
+    const init = spawnSync(process.execPath, [binPath, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: tmp.dir, env });
+    expect(init.status).toBe(0);
+    const other = path.join(tmp.dir, '.claude', 'projects', 'other-project');
+    fs.mkdirSync(other, { recursive: true });
+    fs.writeFileSync(
+      path.join(other, 'newest.jsonl'),
+      JSON.stringify({ type: 'user', message: { role: 'user', content: "let's go with PostgreSQL" } }) + '\n',
+    );
+  });
+
+  afterEach(() => {
+    tmp.cleanup();
+  });
+
+  function runWorker(args: string[]): string {
+    const logFile = path.join(tmp.dir, 'worker.log');
+    const env = { ...process.env, HIPPO_HOME: tmp.dir, HOME: tmp.dir, USERPROFILE: tmp.dir };
+    const result = spawnSync(process.execPath, [binPath, ...args, '--log-file', logFile], { cwd: tmp.dir, env, encoding: 'utf8' });
+    expect(result.status).toBe(0);
+    return fs.readFileSync(logFile, 'utf8');
+  }
+
+  it('the session-end worker skips capture without --transcript', () => {
+    const log = runWorker(['__session-end-worker']);
+    expect(log).toContain('skip capture: no transcript for this session');
+    expect(log).not.toContain('capturing session');
+  });
+
+  it('positive control: the session-end worker captures the transcript it is handed', () => {
+    const handed = path.join(tmp.dir, '.claude', 'projects', 'other-project', 'newest.jsonl');
+    const log = runWorker(['__session-end-worker', '--transcript', handed]);
+    expect(log).toContain('capturing session');
+  });
+
+  it('the Codex worker skips capture when no Codex transcript is found', () => {
+    const codexHome = path.join(tmp.dir, '.codex');
+    const log = runWorker(['__codex-session-end-worker', '--codex-home', codexHome, '--history-path', path.join(codexHome, 'history.jsonl')]);
+    expect(log).toContain('skip capture: no Codex transcript for this session');
+    expect(log).not.toContain('capturing session');
   });
 });
 

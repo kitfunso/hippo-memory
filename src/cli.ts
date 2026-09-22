@@ -179,7 +179,7 @@ import {
   importVault,
   ImportOptions,
 } from './importers.js';
-import { cmdCapture, CaptureOptions, cmdPreCompact, truncateCodePointSafe, sanitizeLogMessage } from './capture.js';
+import { cmdCapture, CaptureOptions, cmdPreCompact, resolveLastSessionTranscript, truncateCodePointSafe, sanitizeLogMessage } from './capture.js';
 import { readStdinBounded } from './stdin.js';
 import {
   auditMemories,
@@ -411,7 +411,7 @@ export const BOOLEAN_FLAGS: ReadonlySet<string> = new Set([
   'help', 'include-superseded', 'inferred', 'json', 'last-session', 'multihop', 'no-hooks',
   'no-learn', 'no-mmr', 'no-propagate', 'no-schedule', 'no-share', 'no-summarize-older',
   'observed', 'open', 'physics', 'pin', 'pinned-only', 'reject-loser', 'rerank-utility',
-  'reset-physics', 'save-baseline', 'show-cases', 'stats', 'stdin', 'stdin-timed-out',
+  'reset-physics', 'save-baseline', 'show-cases', 'stats', 'stdin',
   'strict', 'suite', 'value-aware', 'verified', 'version', 'why',
 ]);
 
@@ -3259,34 +3259,25 @@ async function cmdSessionEnd(
 
   // Bounded read (DF1 T3, docs/plans/2026-08-23-df1-snapshot-lifecycle.md):
   // extracts transcript_path + session_id for the detached worker's argv.
-  let transcriptPath: string | null = null;
   let sessionId: string | null = null;
   const { text: stdinText, timedOut: stdinTimedOut } = await readStdinBounded();
   try {
     if (stdinText && stdinText.trim().startsWith('{')) {
       const payload = JSON.parse(stdinText) as Record<string, unknown>;
-      if (typeof payload.transcript_path === 'string') {
-        transcriptPath = payload.transcript_path;
-      }
       if (typeof payload.session_id === 'string') {
         sessionId = payload.session_id;
       }
     }
   } catch {
-    // No stdin, not JSON, or read failure — capture will fall back to
-    // transcript auto-discovery; the snapshot close below will no-op.
+    // No stdin, not JSON, or read failure: the snapshot close below will no-op.
   }
+  // Resolved here because only this process saw the payload; the worker captures just the path it is handed.
+  const transcriptPath = resolveLastSessionTranscript(undefined, stdinText, stdinTimedOut);
 
   const workerArgs: string[] = [process.argv[1], '__session-end-worker'];
   if (logFile) workerArgs.push('--log-file', logFile);
   if (transcriptPath) workerArgs.push('--transcript', transcriptPath);
   if (sessionId) workerArgs.push('--session-id', sessionId);
-  // The worker's capture would otherwise auto-discover another project's
-  // transcript; only this process knows the payload never turned up.
-  if (stdinTimedOut && !transcriptPath) {
-    workerArgs.push('--stdin-timed-out');
-    flags['stdin-timed-out'] = true;
-  }
 
   try {
     const child = spawn(process.execPath, workerArgs, {
@@ -3296,11 +3287,9 @@ async function cmdSessionEnd(
     });
     child.unref();
   } catch (err) {
-    // If spawn fails, run inline as a last resort — better late output than
-    // no consolidation at all. NOTE: `flags` carries neither --transcript nor
-    // --session-id (both are stdin-derived, argv-only for the child), so in
-    // this fallback capture auto-discovers the transcript and the DF1
-    // snapshot close no-ops — the ambient freshness bound is the backstop.
+    // If spawn fails, run inline as a last resort, handed what the child's argv would have carried.
+    if (transcriptPath) flags['transcript'] = transcriptPath;
+    if (sessionId) flags['session-id'] = sessionId;
     await cmdSessionEndWorker(hippoRoot, flags);
     return;
   }
@@ -3345,20 +3334,21 @@ async function cmdSessionEndWorker(
     // `[hippo] sleep failed: ...` line. Continue to capture regardless.
   }
   try {
-    const captureOpts: CaptureOptions = {
-      source: 'last-session',
-      transcriptPath: typeof flags['transcript'] === 'string'
-        ? (flags['transcript'] as string)
-        : undefined,
-      stdinTimedOut: flags['stdin-timed-out'] === true,
-      logFile: typeof flags['log-file'] === 'string'
-        ? (flags['log-file'] as string)
-        : undefined,
-      dryRun: false,
-      global: false,
-      tenantId: resolveTenantId({}),
-    };
-    cmdCapture(hippoRoot, captureOpts);
+    const logFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined;
+    const transcriptPath = typeof flags['transcript'] === 'string' ? (flags['transcript'] as string) : undefined;
+    // With no stdin of its own, capture would read this as a manual run and scan every project.
+    if (!transcriptPath) {
+      appendSessionEndCloseLog(logFile ?? null, 'skip capture: no transcript for this session');
+    } else {
+      cmdCapture(hippoRoot, {
+        source: 'last-session',
+        transcriptPath,
+        logFile,
+        dryRun: false,
+        global: false,
+        tenantId: resolveTenantId({}),
+      });
+    }
   } catch {
     // Same treatment — the failure line is already in the log.
   }
@@ -3565,6 +3555,11 @@ async function cmdCodexSessionEndWorker(
       startOffsetBytes,
       startedAtMs,
     }) ?? undefined;
+    // No Codex transcript must not fall through to the scan of Claude Code projects.
+    if (!transcriptPath) {
+      appendSessionEndCloseLog(logFile ?? null, 'skip capture: no Codex transcript for this session');
+      return;
+    }
 
     const captureOpts: CaptureOptions = {
       source: 'last-session',

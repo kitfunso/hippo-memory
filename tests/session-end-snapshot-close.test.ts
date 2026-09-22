@@ -244,4 +244,20 @@ describe('6. session-end wiring: --session-id argv + worker close (DF1 T3)', () 
     expect(forgedLine).toBeUndefined();
     expect(logText).toContain('sess-evilFORGED [hippo] fake linesess-tail');
   });
+
+  it('a payload whose transcript is missing skips capture instead of reading another project\'s newest transcript', async () => {
+    const other = path.join(dir, '.claude', 'projects', 'other-project');
+    fs.mkdirSync(other, { recursive: true });
+    fs.writeFileSync(path.join(other, 'newest.jsonl'), JSON.stringify({ type: 'user', message: { role: 'user', content: "let's go with PostgreSQL" } }) + '\n');
+
+    const logFile = path.join(dir, 'session-end-missing-transcript.log');
+    const payload = JSON.stringify({ session_id: 'sess-gone', transcript_path: path.join(dir, 'gone.jsonl'), hook_event_name: 'SessionEnd' });
+    const result = runHippo(['session-end', '--log-file', logFile], dir, env, payload);
+    expect(result.status).toBe(0);
+
+    await waitUntil(() => closeStepLogged(logFile));
+    const logText = fs.readFileSync(logFile, 'utf8');
+    expect(logText).toContain('skip capture: no transcript for this session');
+    expect(logText).not.toContain('capturing session');
+  });
 });

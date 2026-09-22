@@ -565,8 +565,8 @@ function writeExtractedItems(
 export interface CaptureOptions {
   source: 'stdin' | 'file' | 'last-session';
   filePath?: string;
-  /** Explicit transcript path for `--last-session`. Falls back to
-   * `stdinText`, then to auto-discovery under `~/.claude/projects/`. */
+  /** Explicit transcript path for `--last-session`. Without one, `stdinText`
+   * is used, then auto-discovery under `~/.claude/projects/` on a manual run. */
   transcriptPath?: string;
   /** Read from stdin by the caller (cli.ts), which owns the bounded wait.
    * `stdinTimedOut` marks an empty read "unknown", not "no payload". */
@@ -713,22 +713,21 @@ export function summariseTranscript(jsonl: string): string {
 /**
  * Resolve a transcript path for `--last-session`.
  *
- * Priority:
+ * Priority, where the first source present is the only one tried:
  *   1. Explicit `transcriptPath` option (from `--transcript <path>`)
  *   2. Stdin JSON payload (Claude Code / OpenCode SessionEnd hook shape)
- *   3. Most recent `.jsonl` under `~/.claude/projects/<any>/`, and only when `stdinTimedOut` is false: while stdin is still open a missing payload is unproven, and this scan spans every project on the box
+ *   3. Most recent `.jsonl` under `~/.claude/projects/<any>/`, only on a proven manual run (no path, no stdin text, no timed-out read), because this scan spans every project on the box
  *
- * Returns null when nothing resolves. Never throws.
+ * Returns null when nothing resolves, a named transcript or payload whose file is missing included. Never throws.
  */
 export function resolveLastSessionTranscript(
   explicit: string | undefined,
   stdinText: string | undefined,
   stdinTimedOut = false
 ): string | null {
-  if (explicit && fs.existsSync(explicit)) return explicit;
+  if (explicit) return fs.existsSync(explicit) ? explicit : null;
 
-  // Try parsing stdin as the SessionEnd JSON payload
-  if (stdinText && stdinText.trim().startsWith('{')) {
+  if (stdinText && stdinText.trim() !== '') {
     try {
       const payload: unknown = JSON.parse(stdinText);
       if (isObjectLike(payload) && 'transcript_path' in payload) {
@@ -736,8 +735,9 @@ export function resolveLastSessionTranscript(
         if (isStringValue(tp) && fs.existsSync(tp)) return tp;
       }
     } catch {
-      // not JSON - fall through
+      // not JSON, but still a payload, so no scan
     }
+    return null;
   }
 
   if (stdinTimedOut) return null;
