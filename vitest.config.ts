@@ -1,5 +1,5 @@
 import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { defineConfig } from 'vitest/config';
 
@@ -15,6 +15,13 @@ import { defineConfig } from 'vitest/config';
 const isolatedHippoHome = mkdtempSync(join(tmpdir(), 'hippo-test-home-'));
 process.env.HIPPO_HOME = isolatedHippoHome;
 process.env.HIPPO_TEST_TMP_HOME = isolatedHippoHome;
+// Fake the home folder too, or `hippo init` imports the developer's ~/.claude memories into test stores.
+process.env.HIPPO_TEST_REAL_HOME ??= homedir();
+const isolatedUserHome = mkdtempSync(join(tmpdir(), 'hippo-test-userhome-'));
+process.env.HIPPO_TEST_TMP_USERHOME = isolatedUserHome;
+process.env.HOME = isolatedUserHome;
+process.env.USERPROFILE = isolatedUserHome;
+delete process.env.XDG_DATA_HOME;
 
 export default defineConfig({
   test: {
@@ -22,7 +29,7 @@ export default defineConfig({
     environment: 'node',
     // Inject HIPPO_HOME into the test workers; the process.env assignment at
     // module scope above covers the main process. Both are required.
-    env: { HIPPO_HOME: isolatedHippoHome },
+    env: { HIPPO_HOME: isolatedHippoHome, HOME: isolatedUserHome, USERPROFILE: isolatedUserHome, XDG_DATA_HOME: '' },
     globalSetup: ['tests/_real-store-guard.ts'],
     // 55 of 384 files spawn git/hippo/nested-vitest children, so one fork per
     // core oversubscribes a big box. Detail: CHANGELOG 1.38.3.

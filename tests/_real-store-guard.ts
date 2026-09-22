@@ -88,7 +88,8 @@ export function setup(): void {
   // This shell is itself a Claude Code session; the var would leak into every spawned CLI
   // child and falsify null-session_id trace assertions, so drop it before workers fork.
   delete process.env.CLAUDE_CODE_SESSION_ID;
-  baseline = watchedStoreDirs(process.cwd(), homedir()).map((dir) => [dir, snapshot(dir)] as const);
+  const realHome = process.env.HIPPO_TEST_REAL_HOME || homedir(); // vitest.config.ts fakes HOME
+  baseline = watchedStoreDirs(process.cwd(), realHome).map((dir) => [dir, snapshot(dir)] as const);
 }
 
 export function teardown(): void {
@@ -105,16 +106,17 @@ export function teardown(): void {
     // Defence-in-depth on a destructive op: only remove a directory that is
     // under the OS temp dir and carries vitest.config.ts's mkdtemp prefix, so
     // the rmSync is safe by construction, not merely by the variable's name.
-    const tmpHome = process.env.HIPPO_TEST_TMP_HOME?.trim();
-    if (
-      tmpHome &&
-      tmpHome.startsWith(tmpdir()) &&
-      /[\\/]hippo-test-home-[^\\/]+$/.test(tmpHome)
-    ) {
-      try {
-        rmSync(tmpHome, { recursive: true, force: true, maxRetries: 3 });
-      } catch {
-        /* best-effort; the OS temp sweep reclaims it */
+    for (const tmpHome of [process.env.HIPPO_TEST_TMP_HOME?.trim(), process.env.HIPPO_TEST_TMP_USERHOME?.trim()]) {
+      if (
+        tmpHome &&
+        tmpHome.startsWith(tmpdir()) &&
+        /[\\/]hippo-test-(user)?home-[^\\/]+$/.test(tmpHome)
+      ) {
+        try {
+          rmSync(tmpHome, { recursive: true, force: true, maxRetries: 3 });
+        } catch {
+          /* best-effort; the OS temp sweep reclaims it */
+        }
       }
     }
     return;
