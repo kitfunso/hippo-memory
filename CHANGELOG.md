@@ -4,7 +4,7 @@
 
 ### Documentation
 
-- **The npm package description now says what the package does.** It read "Biologically-inspired memory system for AI agents. Decay by default, strength through use.", which named none of the things someone picks the package for. That one line is what npmjs.com prints under the package name and what every npm search result shows, and like `keywords` it only reaches the registry on a publish, so the repo description and the package page had drifted apart. It now leads with zero runtime deps, SQLite, the MCP server and the opt-in TypeSafe Jev reranker, ahead of the biology, because search listings truncate from the right. No code changed.
+- **The npm package description now says what the package does.** It read "Biologically-inspired memory system for AI agents. Decay by default, strength through use.", which named none of the things someone picks the package for. That one line is what npmjs.com prints under the package name and what every npm search result shows, and like `keywords` it only reaches the registry on a publish, so the repo description and the package page had drifted apart. After its one-line category it now names zero runtime deps, SQLite, the MCP server and the opt-in TypeSafe Jev reranker, ahead of the decay and consolidation mechanics, because search listings truncate from the right. No code changed.
 
 ## 1.43.2 - 2026-09-21
 
