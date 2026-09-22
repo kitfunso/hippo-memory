@@ -5,6 +5,9 @@ import type { SearchResult } from '../search.js';
 const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 const DEFAULT_TIMEOUT_MS = 5_000;
 const TRUNCATE_CHARS = 1200;
+// Pinned, not `jev-latest`: every number in docs/evals/2026-09-19-jev-reranker.md was
+// measured on this version, and the alias moves whenever the vendor ships a release.
+const DEFAULT_MODEL = 'jev-1.13.0';
 // The pool size every number in docs/evals/2026-09-19-jev-reranker.md was measured at.
 export const JEV_DEFAULT_TOP_K = 40;
 
@@ -59,7 +62,7 @@ async function requestScores(query: string, head: SearchResult[]): Promise<numbe
       headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
       body: JSON.stringify({
         state,
-        model: process.env.HIPPO_JEV_MODEL ?? 'jev-latest',
+        model: process.env.HIPPO_JEV_MODEL ?? DEFAULT_MODEL,
         questions,
       }),
       signal: controller.signal,

@@ -7,6 +7,38 @@
 - **`pre-compact`, `compact-resume`, `context`, `session-end` and `capture --last-session` no longer hang on an idle hook payload.** Each read its optional stdin payload with a blocking `fs.readFileSync(0)`, which waits for EOF. A host that opens the pipe but never writes or closes it, the real Claude Code hook shape in some environments, froze the process forever. Reading now waits up to `HIPPO_STDIN_WAIT_MS` of idle (default 1000ms, refreshed per chunk, capped at ten times that in total) and proceeds with whatever arrived, or nothing.
 - **A hook payload that never turned up no longer reads as a manual run.** A timed-out read cannot tell "no payload" from "payload still coming", so every command that used to fall back to scanning `~/.claude/projects/` for the newest transcript now stops instead. `pre-compact` logs the skip, `capture --last-session` reports no transcript found, `compact-resume` stays silent rather than printing a snapshot its cross-session guard could not check, and `session-end` passes the same signal to its detached worker. `context` is unaffected: its fallback is the current process environment, not a cross-project scan.
 
+## 1.43.3 - 2026-09-22
+
+### Documentation
+
+- **The npm package description now says what the package does.** It read "Biologically-inspired memory system for AI agents. Decay by default, strength through use.", which named none of the things someone picks the package for. That one line is what npmjs.com prints under the package name and what every npm search result shows, and like `keywords` it only reaches the registry on a publish, so the repo description and the package page had drifted apart. After its one-line category it now names zero runtime deps, SQLite, the MCP server and the opt-in hosted TypeSafe Jev reranker, ahead of the decay and consolidation mechanics, because search listings truncate from the right. "Hosted" is there because the reranker is the one switch that sends the query and candidate memory text off the machine, and a search listing shows this line without the README's caveat. No code changed.
+
+## 1.43.2 - 2026-09-21
+
+### Fixed
+
+- **The privacy answer no longer contradicts the reranker.** The homepage FAQ answered "Where does my data go?" with "Nowhere", and the local-first section was headed "Your memory never leaves your machine", on the same page that now advertises `--reranker jev`, which sends the query and the candidate memory text to a third party. The README already carried that caveat and the website did not. The FAQ answer, the heading and the `0 outbound HTTP` card now all name the one opt-in switch that makes a network call. The FAQ is published as `FAQPage` structured data, so the uncorrected answer was eligible for a search rich result.
+- **`HIPPO_JEV_MODEL` is proven to work again.** Pinning the default to `jev-1.13.0` in 1.43.1 left the override test setting the env var to the same string the default already was, so code that ignored the variable entirely would have passed. The test now uses a distinct value, and was mutation-tested: stubbing the override out fails it.
+- **The benchmarks page no longer publishes the ranking win without its bound.** The page description feeds `meta`, `og:description`, `twitter:description` and the `TechArticle` structured data, and those travel without the page that qualifies them. It now names the corpus and states "no answer-rate win was shown" before the numbers, so any truncation that reaches the figures has already shown the bound.
+- **The reranking table shows the ranking metric that tied.** Recall at the token budget was measured alongside R@1, R@5 and MRR and was flat (+0.007 [0.000, 0.020]). Omitting it made the result read as a clean sweep. The LongMemEval replication line now also says R@5 tied there, and the corpus is described as private on every surface, because it cannot be redistributed and the numbers cannot be rerun outside this machine.
+
+### Documentation
+
+- **The npm page now carries the words people search on.** `package.json` gained ten keywords: `agent-memory`, `long-term-memory`, `mcp`, `model-context-protocol`, `claude-code`, `rag`, `retrieval`, `sqlite`, `cli` and `typescript`. npm ranks search results on keywords and the registry only reads them at publish time, so the set added right after 1.43.1 shipped never reached the package page. This release carries them there.
+- **Every published measurement is indexed.** `docs/evals/README.md` lists all of them, pre-registrations kept next to their results, including the runs that failed and the one claim we retracted. It gained the row for the 74.0% BM25-only figure the README quotes, and a note that the Jev ranking table cannot be regenerated outside this machine.
+- **The reranker result reaches the front page.** The homepage hero carried only the LongMemEval number while the Jev result sat in a receipts tile most visitors never scrolled to. The hero now states it in its second proof line, with the bound in the same sentence. `website/scripts/check-readme-sync.mjs` fails the build if that claim leaves the hero, loses its null result, or stops being rendered; all three are mutation-tested.
+
+## 1.43.1 - 2026-09-21
+
+### Changed
+
+- **`--reranker jev` now pins the model to `jev-1.13.0` instead of the `jev-latest` alias.** Every number in `docs/evals/2026-09-19-jev-reranker.md` was measured on 1.13.0, and `jev-latest` and `jev-preview` are aliases that move whenever TypeSafe ships a release, so the published evidence and the shipped behaviour could silently diverge. `HIPPO_JEV_MODEL` still overrides the default, so anyone tracking the alias sets that one variable. No other behaviour changes, and the default recall path still makes no network call.
+
+### Documentation
+
+- **The README Receipts section carries the Jev result.** R@1 0.41 to 0.62 on a 300-query developer store with `--reranker jev`, the bootstrap and permutation-null detail, the cost a recall, and the negative result: three graded tests did not show a better answer rate than the free local cross-encoder. The `0 outbound HTTP` receipt now says plainly that the opt-in Jev reranker is the one switch that makes a network call.
+- **The website receipt cards carry the same number**, linking to the full eval. The MIT card it replaces is still in the footer, the comparison matrix and the FAQ.
+
 ## 1.43.0 - 2026-09-20
 
 ### Added
