@@ -2,10 +2,10 @@
 
 > A memory layer for AI agents, modeled on the hippocampus. hippo forgets by default and earns persistence through use: memories decay on a half-life, retrieval strengthens them, errors stick, and a sleep cycle consolidates repeats into patterns. Open source (MIT), zero runtime dependencies, runs locally.
 
-hippo (npm package `hippo-memory`) is an open-source memory system for AI agents and LLM applications. Unlike "save everything and search later" stores, hippo models the full memory lifecycle: decay by default, retrieval strengthening, outcome-weighted half-lives, error tagging, conflict detection, supersession, and sleep consolidation. It is local-first (SQLite source of truth with git-friendly markdown mirrors, zero outbound HTTP), framework-agnostic, and ships an MCP server plus auto-installed hooks for Claude Code, Codex, Cursor, OpenClaw, and OpenCode.
+hippo (npm package `hippo-memory`) is an open-source memory system for AI agents and LLM applications. Unlike "save everything and search later" stores, hippo models the full memory lifecycle: decay by default, retrieval strengthening, outcome-weighted half-lives, error tagging, conflict detection, supersession, and sleep consolidation. It is local-first (SQLite source of truth with git-friendly markdown mirrors, no outbound HTTP unless you opt in to a network reranker or an API embedder), framework-agnostic, and ships an MCP server plus auto-installed hooks for Claude Code, Codex, Cursor, OpenClaw, and OpenCode.
 
 ## Key facts
-- License: MIT. Current version: 1.23.0. Runtime: Node.js 22.5+. Zero runtime dependencies (embeddings are optional).
+- License: MIT. Runtime: Node.js 22.16+. Zero runtime dependencies (embeddings are optional).
 - Storage: local SQLite source of truth plus markdown mirrors. No cloud, no account, no telemetry.
 - Retrieval: BM25 out of the box; optional hybrid BM25 + embeddings via a pluggable provider (local MiniLM default, or opt-in OpenAI / Voyage / Cohere).
 - Mechanics: decay by default, retrieval strengthening, reward-proportional half-lives, error and emotional tagging, sleep consolidation, conflict detection, bi-temporal supersession.

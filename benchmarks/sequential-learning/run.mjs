@@ -14,7 +14,7 @@
  *   node run.mjs --adapter all             # Run all (default)
  *   node run.mjs --output results/         # Custom output directory
  *
- * Zero npm dependencies beyond Node.js 22.5+ built-ins.
+ * Zero npm dependencies beyond Node.js 22.16+ built-ins.
  */
 
 import { writeFileSync, mkdirSync, existsSync } from 'node:fs';

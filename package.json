@@ -70,7 +70,7 @@
   },
   "homepage": "https://hippo-memory.com",
   "engines": {
-    "node": ">=22.5.0"
+    "node": ">=22.16.0"
   },
   "devDependencies": {
     "@oxlint/plugins": "^1.78.0",
