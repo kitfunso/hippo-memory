@@ -8,14 +8,15 @@ Grep this file for a metric or a feature name to find the doc that owns it.
 
 ## The numbers we quote publicly
 
-These four are the claims that appear in the README, on hippo-memory.com, or in release
+These five are the claims that appear in the README, on hippo-memory.com, or in release
 notes. Each links to the document that holds the method, the intervals and the limits.
 
 | Claim | Number | Source |
 |---|---|---|
 | LongMemEval-S retrieval, per-question haystack, R@5 | 98.6% zero-dep default, 99.8% voyage-3-large | [2026-06-09-longmemeval-per-haystack-dual.md](2026-06-09-longmemeval-per-haystack-dual.md) |
 | LongMemEval-S, one unified store of 19,195 sessions, R@5 | 47.2% default, 56.4% voyage-3-large | [2026-06-09-longmemeval-per-haystack-dual.md](2026-06-09-longmemeval-per-haystack-dual.md) |
-| Jev reranker, R@1 on a 300-query developer store | 0.2600 base, 0.4133 cross-encoder, 0.6167 Jev | [2026-09-19-jev-reranker.md](2026-09-19-jev-reranker.md) |
+| LongMemEval-S, BM25 only, no embeddings, R@5 | 74.0% | [../../benchmarks/README.md](../../benchmarks/README.md) |
+| Jev reranker, R@1 on a private 300-query developer store | 0.2600 base, 0.4133 cross-encoder, 0.6167 Jev | [2026-09-19-jev-reranker.md](2026-09-19-jev-reranker.md) |
 | LoCoMo evidence R@5, overall, n=1,982 | 0.363 | [../../benchmarks/LOCOMO_INVESTIGATION.md](../../benchmarks/LOCOMO_INVESTIGATION.md) |
 
 **Read the Jev doc before quoting it.** The ranking win is real and replicated on two
@@ -126,3 +127,7 @@ The LongMemEval harness, the data and its SHA-256 are in
 [`benchmarks/`](../../benchmarks/). Each result document names the command that
 regenerates its own table. A document that does not name one is descriptive and is
 marked as such in its title.
+
+One document is neither: [2026-09-19-jev-reranker.md](2026-09-19-jev-reranker.md)
+measures its ranking table on a private developer store that cannot be redistributed, so
+that table cannot be regenerated outside this machine. Its LongMemEval replication can.
