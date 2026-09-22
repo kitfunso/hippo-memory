@@ -3,10 +3,10 @@
  *
  * vitest.config.ts points HIPPO_HOME at a fresh per-run temp dir, so the whole
  * test run resolves the global hippo store to an isolated location no external
- * process touches. This guard snapshots that isolated global store and the
- * project-local store (process.cwd()/.hippo) before the run and fails the run
- * if a test left either mutated — catching a test that writes a store without
- * isolating it. On a clean run, teardown() removes the isolated temp dir.
+ * process touches. This guard snapshots that isolated global store and every
+ * `.hippo` the real resolver could reach from the suite's cwd (cwd's own, then
+ * each ancestor up to the home and temp-root bounds), then fails the run if any
+ * of them was mutated. On a clean run, teardown() removes the isolated temp dir.
  *
  * Tests must write only to temp dirs: isolate the local store with the spawn
  * `cwd` option and the global store with a per-test `HIPPO_HOME`.
@@ -14,9 +14,9 @@
  * The filename has no `.test.` segment, so vitest's `include` glob does not
  * collect it as a test file.
  */
-import { existsSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, realpathSync, rmSync, statSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 // Resolve the global store the way src/shared.ts getGlobalRoot() does:
 // HIPPO_HOME, then XDG_DATA_HOME/hippo, then ~/.hippo.
@@ -28,13 +28,45 @@ function globalStoreRoot(): string {
   return join(homedir(), '.hippo');
 }
 
-const WATCHED_STORES = [
-  join(process.cwd(), '.hippo'), // project-local store
-  globalStoreRoot(), // global store (isolated to a temp dir by vitest.config.ts)
-];
+function realpathOrResolve(p: string): string {
+  try {
+    return realpathSync.native(p);
+  } catch {
+    return resolve(p);
+  }
+}
 
-function snapshot(dir: string): string {
+function samePath(a: string, b: string): boolean {
+  return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
+}
+
+// Mirrors src/project-identity.ts's walkProjectMarkers: home/tmpdir stop before the marker check, root stops after.
+export function watchedStoreDirs(cwd: string, home: string): string[] {
+  const homeReal = realpathOrResolve(home);
+  const tmpReal = realpathOrResolve(tmpdir());
+  const dirs: string[] = [];
+  const add = (d: string): void => {
+    if (!dirs.some((x) => samePath(x, d))) dirs.push(d);
+  };
+  let dir = realpathOrResolve(cwd);
+  // getHippoRoot falls back to cwd/.hippo when the walk finds no marker, so it is reachable even at a bound.
+  add(join(dir, '.hippo'));
+  // SHORTCUT: 64 copies the unexported MAX_WALK_DEPTH (project-identity.ts:43); export it there to end the drift.
+  for (let depth = 0; depth < 64; depth++) {
+    if (samePath(dir, homeReal) || samePath(dir, tmpReal)) break;
+    // Every ancestor's store is listed even when absent: a test can create one mid-run.
+    add(join(dir, '.hippo'));
+    const parent = dirname(dir);
+    if (samePath(parent, dir)) break; // filesystem root, already added above
+    dir = parent;
+  }
+  add(globalStoreRoot()); // HIPPO_HOME can collide with an ancestor
+  return dirs;
+}
+
+export function snapshot(dir: string): string {
   if (!existsSync(dir)) return '<absent>';
+  if (!statSync(dir).isDirectory()) return '<not-a-directory>'; // a file .hippo is not a store (project-identity.ts:148)
   const files: string[] = [];
   const walk = (d: string, rel: string): void => {
     for (const name of readdirSync(d).sort()) {
@@ -56,7 +88,7 @@ export function setup(): void {
   // This shell is itself a Claude Code session; the var would leak into every spawned CLI
   // child and falsify null-session_id trace assertions, so drop it before workers fork.
   delete process.env.CLAUDE_CODE_SESSION_ID;
-  baseline = WATCHED_STORES.map((dir) => [dir, snapshot(dir)] as const);
+  baseline = watchedStoreDirs(process.cwd(), homedir()).map((dir) => [dir, snapshot(dir)] as const);
 }
 
 export function teardown(): void {
@@ -91,9 +123,10 @@ export function teardown(): void {
   // (4) on a leak, leave the temp dir for inspection and fail the run.
   throw new Error(
     `Test-isolation leak: the test run mutated hippo store(s): ` +
-      `${leaked.join(', ')}. A test wrote a store without isolating it — ` +
-      `isolate the local store via the spawn 'cwd' option and the global ` +
-      `store via a per-test HIPPO_HOME. Re-run with --no-file-parallelism ` +
-      `to attribute the leak to a test file.`,
+      `${leaked.join(', ')}. Either a test wrote a store without isolating it ` +
+      `(isolate the local store via the spawn 'cwd' option and the global ` +
+      `store via a per-test HIPPO_HOME), or an ancestor store listed above was ` +
+      `written from outside this suite while it ran. Re-run with ` +
+      `--no-file-parallelism to attribute the leak to a test file.`,
   );
 }

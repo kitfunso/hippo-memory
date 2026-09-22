@@ -4,7 +4,7 @@
  * The local `@huggingface/transformers` path stays the zero-DEPENDENCY DEFAULT. Opt-in
  * API providers (OpenAI / Voyage / Cohere) let a user bring a frontier embedder
  * (e.g. text-embedding-3-large) for frontier-class retrieval. They use the native
- * `fetch` global (Node >= 22.5, see package.json engines — NO new dependency) and
+ * `fetch` global (Node >= 22.16, see package.json engines; NO new dependency) and
  * read their key from a conventional env var. The provider is selected by
  * `config.embeddings.provider` (default `'local'`).
  *

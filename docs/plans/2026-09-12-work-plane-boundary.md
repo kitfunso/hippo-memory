@@ -14,9 +14,9 @@ already has. Three things make it up:
 - **Handoff envelopes.** A structured record of what happened on a card:
   summary, next action, constraints, evidence, outcome. See Part VII,
   section "W1. Handoff envelope promotion".
-- **Dispatch.** A process supervisor that starts a runtime on a card, watches
-  a heartbeat, and reclaims the card if the runtime dies. See Part VII,
-  section "W3. Runtime adapter kit + dispatcher".
+- **Pull-mode adapters.** A per-runtime recipe: how the runtime claims a card, a
+  launch command that hippo prints and never runs, and a limit-signal hook. See
+  Part VII, section "W3. Pull-mode runtime adapter kit".
 
 ## What the work plane is not
 
@@ -33,20 +33,18 @@ already has. Three things make it up:
 - **Not a shared transcript as handoff.** The handoff is the structured
   envelope above, never a dumped context window or a shared chat log. See
   Part VII, section "What not to build".
-- **Not unattended dispatch, not in V1.** See the boundary rules below.
+- **Not a dispatcher.** Hippo never starts, stops or supervises a runtime. See the
+  boundary rules below.
 
 ## The two boundary rules
 
-1. **`ready -> running` is human-approved in V1.** A card only starts running
-   on a click or a CLI confirm. This is how Track W treats non-goal #8 (no
-   autonomous actuation in V1): starting a local process is not the same as
-   writing back to a source system, but it is still the first time hippo
-   would start an agent rather than inform one, so it keeps a human in the
-   loop.
-2. **Unattended dispatch is a separate switch, off by default.** Any future
-   mode where cards move to `running` without a human click is a distinct,
-   explicitly enabled setting. It is not part of the V1 work plane and this
-   page does not authorize building it.
+1. **Hippo starts no agent process.** A human, or the human's own scheduler, starts
+   the runtime. The runtime moves its own card from `ready` to `running` with
+   `hippo card claim`. This settles non-goal #8 for the work plane: hippo informs
+   an agent and never starts one.
+2. **No dispatch switch exists, attended or unattended.** Building one needs a new
+   decision record that supersedes
+   `docs/decisions/2026-09-20-no-agent-spawn.md`.
 
 ## Where Linear and GitHub stay authoritative
 
@@ -57,21 +55,22 @@ read-only: it brings ticket data in, and it does not write hippo's card
 state back to Linear or GitHub. See Part VII, section "Boundary with
 existing non-goals".
 
-## The one open product decision
+## The product decision (closed 2026-09-20)
 
-Track W stops at "board plus envelope" (W0-W2) until this is decided:
+The question was:
 
 > Does hippo spawn agent processes at all, even behind a human gate?
 
-This is a product-scope call, not an engineering one. W3 (the dispatcher)
-and W4 (limit-triggered migration) both wait on it. See Part VII, section
-"Sequencing".
+Answer: no. W3 and W4 go ahead in pull mode. Reasons, alternatives and the
+condition that reopens it: `docs/decisions/2026-09-20-no-agent-spawn.md`. See
+Part VII, section "Sequencing".
 
 ## Non-goal table changes
 
-This page is the reason ROADMAP Part II's non-goals table gains two rows:
+This page is the reason ROADMAP Part II's non-goals table gains these rows:
 
 - Row 11: hippo never runs an in-process agent loop.
 - Row 12: a shared transcript is never the handoff.
+- Row 13 (added 2026-09-20): hippo never starts or supervises an agent process.
 
-Both are restated above and match the wording in ROADMAP.md.
+All three are restated above and match the wording in ROADMAP.md.

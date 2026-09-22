@@ -114,7 +114,7 @@ export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput):
       db.exec('COMMIT');
       return traceId;
     } catch (error) {
-      db.exec('ROLLBACK');
+      try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
       throw error;
     }
   } catch (error) {

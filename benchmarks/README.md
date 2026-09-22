@@ -30,7 +30,7 @@ The benchmark, harness, and adapter contract remain shipped.
 node run.mjs --adapter your-adapter
 ```
 
-Zero dependencies. Node.js 22.5+ only.
+Zero dependencies. Node.js 22.16+ only.
 
 ## 2. LongMemEval Integration
 
@@ -112,4 +112,4 @@ python score_evidence.py \
 | Hippo result | RETRACTED v1.7.9 — mechanism shipped, no magnitude claimed (see CHANGELOG v1.7.9) | 74.0% R@5 (BM25 only) | 0.363 evidence recall@5 (v1.25.0; informational only, never gates a feature) |
 | What it proves | Decay + strengthening + outcome feedback produce learning curves | BM25 keyword search competes with embedding systems at zero dependency cost | Deterministic before/after tracking of hippo's own retrieval stack on conversational memory (no LLM judge) |
 | Metric | Trap-hit-rate decline (early vs late) | Recall@K, answer-in-content | Evidence recall@5 (gold dia_id, deterministic) |
-| Dependencies | Node.js 22.5+ | Python 3.9+ (retrieval eval needs no API key) | Python 3.9+ (evidence scoring needs no API key) |
+| Dependencies | Node.js 22.16+ | Python 3.9+ (retrieval eval needs no API key) | Python 3.9+ (evidence scoring needs no API key) |

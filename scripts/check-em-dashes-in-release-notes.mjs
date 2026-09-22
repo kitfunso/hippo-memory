@@ -24,9 +24,10 @@ const changelog = readFileSync('CHANGELOG.md', 'utf8');
 
 // Extract the section for the current version: from "## X.Y.Z" up to
 // the next "## " (or EOF). The regex is anchored to start-of-line.
+// JS has no \z: it matched a literal "z" and cut the section at the first one.
 const versionEscaped = version.replace(/\./g, '\\.');
 const sectionRegex = new RegExp(
-  `^## ${versionEscaped}[\\s\\S]*?(?=^## \\d|\\z)`,
+  `^## ${versionEscaped}[\\s\\S]*?(?=^## \\d|(?![\\s\\S]))`,
   'm',
 );
 const match = changelog.match(sectionRegex);

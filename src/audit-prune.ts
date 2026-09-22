@@ -109,7 +109,7 @@ export function pruneAuditLog(
       });
       db.exec('COMMIT');
     } catch (e) {
-      db.exec('ROLLBACK');
+      try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
       throw e;
     }
   }

@@ -1148,7 +1148,7 @@ function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: str
     setMeta(db, 'legacy_bootstrap_completed', '1');
     db.exec('COMMIT');
   } catch (error) {
-    db.exec('ROLLBACK');
+    try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
     throw error;
   }
   return true;
@@ -1522,7 +1522,7 @@ export function saveIndex(hippoRoot: string, index: HippoIndex): void {
       setMeta(db, 'last_trace_id', index.last_trace_id ?? '');
       db.exec('COMMIT');
     } catch (error) {
-      db.exec('ROLLBACK');
+      try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
       throw error;
     }
     writeIndexMirror(hippoRoot, buildIndexFromDb(db));

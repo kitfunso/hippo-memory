@@ -180,6 +180,7 @@ import {
   ImportOptions,
 } from './importers.js';
 import { cmdCapture, CaptureOptions, cmdPreCompact, truncateCodePointSafe, sanitizeLogMessage } from './capture.js';
+import { readStdinBounded } from './stdin.js';
 import {
   auditMemories,
   appendAuditEvent,
@@ -405,7 +406,7 @@ async function runViaServerIfAvailable(
 // eat the pattern). Every existing --dry-run consumer reads it as boolean.
 // force and pin are read as both Boolean(...) and === true by different consumers,
 // so an inline value would mean two opposite things in one run. Reject it, like --dry-run.
-const BOOLEAN_FLAGS = new Set(['dry-run', 'force', 'pin']);
+const BOOLEAN_FLAGS = new Set(['dry-run', 'force', 'pin', 'stdin-timed-out']);
 
 // Shared by both the separated and glued (`=`) forms so the list can't drift.
 function isRepeatableFlag(key: string): boolean {
@@ -3138,7 +3139,7 @@ function cmdLastSleep(flags: Record<string, string | boolean | string[]>): void 
 // printSessionEvents stays untouched for every other caller.
 const COMPACT_RESUME_EVENT_CONTENT_CAP = 400;
 
-function cmdCompactResume(hippoRoot: string, stdinText: string | undefined): void {
+function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdinTimedOut: boolean): void {
   try {
     // X3: gate on the non-exiting isInitialized check before any
     // store-opening call (loadActiveTaskSnapshot/listSessionEvents both
@@ -3154,7 +3155,9 @@ function cmdCompactResume(hippoRoot: string, stdinText: string | undefined): voi
     // carries a different source (e.g. 'startup') means the matcher-based
     // gate failed to apply — stay silent rather than print stale state.
     const nonEmptyStdin = !!stdinText && stdinText.trim() !== '';
-    let suppressOutput = false;
+    // Without a payload session_id the X5 cross-restore guard below can
+    // never fire, so a timed-out empty read must not reach the print path.
+    let suppressOutput = stdinTimedOut && !nonEmptyStdin;
     let payloadSessionId: string | null = null;
 
     if (nonEmptyStdin) {
@@ -3243,16 +3246,12 @@ async function cmdSessionEnd(
 ): Promise<void> {
   const logFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : null;
 
-  // Read stdin synchronously. The SessionEnd hook payload carries
-  // `transcript_path` as JSON; we extract it here and pass it to the worker
-  // via argv so the detached child doesn't need to inherit stdin.
-  // DF1 T3 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md): `session_id`
-  // is extracted the same way, so the worker can close the ending session's
-  // own active task snapshot after sleep+capture finish.
+  // Bounded read (DF1 T3, docs/plans/2026-08-23-df1-snapshot-lifecycle.md):
+  // extracts transcript_path + session_id for the detached worker's argv.
   let transcriptPath: string | null = null;
   let sessionId: string | null = null;
+  const { text: stdinText, timedOut: stdinTimedOut } = await readStdinBounded();
   try {
-    const stdinText = fs.readFileSync(0, 'utf8');
     if (stdinText && stdinText.trim().startsWith('{')) {
       const payload = JSON.parse(stdinText) as Record<string, unknown>;
       if (typeof payload.transcript_path === 'string') {
@@ -3271,6 +3270,12 @@ async function cmdSessionEnd(
   if (logFile) workerArgs.push('--log-file', logFile);
   if (transcriptPath) workerArgs.push('--transcript', transcriptPath);
   if (sessionId) workerArgs.push('--session-id', sessionId);
+  // The worker's capture would otherwise auto-discover another project's
+  // transcript; only this process knows the payload never turned up.
+  if (stdinTimedOut && !transcriptPath) {
+    workerArgs.push('--stdin-timed-out');
+    flags['stdin-timed-out'] = true;
+  }
 
   try {
     const child = spawn(process.execPath, workerArgs, {
@@ -3334,6 +3339,7 @@ async function cmdSessionEndWorker(
       transcriptPath: typeof flags['transcript'] === 'string'
         ? (flags['transcript'] as string)
         : undefined,
+      stdinTimedOut: flags['stdin-timed-out'] === true,
       logFile: typeof flags['log-file'] === 'string'
         ? (flags['log-file'] as string)
         : undefined,
@@ -9358,6 +9364,20 @@ async function main(): Promise<void> {
     console.error('--scope requires a non-empty value (e.g. --scope slack:private:C1).');
     process.exit(1);
   }
+  // parseArgs stores a value-less flag as boolean true, and NaN then survives every
+  // downstream guard because each comparison against it is false.
+  const NUMERIC_FLAGS = [
+    'days', 'threshold', 'min-score', 'port', 'limit', 'mmr-lambda', 'local-bump',
+    'min-results', 'reranker-top-k', 'min-mrr', 'embedding-weight', 'max-cases',
+  ];
+  for (const key of NUMERIC_FLAGS) {
+    const raw = flags[key];
+    if (raw === undefined) continue;
+    if (typeof raw !== 'string' || !raw.trim() || !Number.isFinite(Number(raw))) {
+      console.error(`--${key} requires a numeric value.`);
+      process.exit(1);
+    }
+  }
   // Reject rather than coerce: consumers read --dry-run both as Boolean() and === true,
   // so no single coercion of an inline value would be correct for every one of them.
   for (const key of BOOLEAN_FLAGS) {
@@ -9522,25 +9542,19 @@ async function main(): Promise<void> {
       break;
 
     case 'pre-compact': {
-      // Same TTY guard as `capture --last-session`: skip reading stdin when
-      // it's an interactive terminal so a manual invocation never hangs.
-      let stdinText: string | undefined;
-      if (!process.stdin.isTTY) {
-        try { stdinText = fs.readFileSync(0, 'utf8'); } catch { stdinText = undefined; }
-      }
+      // Bounded wait, not a TTY guard: an idle non-TTY pipe must not hang.
+      const { text: stdinText, timedOut: stdinTimedOut } = await readStdinBounded();
       await cmdPreCompact(hippoRoot, {
         stdinText,
+        stdinTimedOut,
         logFile: typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined,
       });
       break;
     }
 
     case 'compact-resume': {
-      let stdinText: string | undefined;
-      if (!process.stdin.isTTY) {
-        try { stdinText = fs.readFileSync(0, 'utf8'); } catch { stdinText = undefined; }
-      }
-      cmdCompactResume(hippoRoot, stdinText);
+      const { text: stdinText, timedOut: stdinTimedOut } = await readStdinBounded();
+      cmdCompactResume(hippoRoot, stdinText, stdinTimedOut);
       break;
     }
 
@@ -9766,18 +9780,9 @@ async function main(): Promise<void> {
     }
 
     case 'context': {
-      // DF1 T2 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md): same TTY
-      // guard as `pre-compact` / `compact-resume` above — skip reading stdin
-      // when it's an interactive terminal so a manual invocation never
-      // hangs. `hippo context` is both the hot UserPromptSubmit path
-      // (non-TTY, stdin carries the hook JSON with `session_id`) and a
-      // manually-invocable command (TTY, no payload) — the guardless read in
-      // cmdSessionEnd is the wrong sibling to copy here; it only runs under
-      // a hook that always supplies stdin.
-      let stdinText: string | undefined;
-      if (!process.stdin.isTTY) {
-        try { stdinText = fs.readFileSync(0, 'utf8'); } catch { stdinText = undefined; }
-      }
+      // Bounded, not a TTY guard (DF1 T2, docs/plans/2026-08-23-df1-snapshot-lifecycle.md):
+      // the hot stdin path and a manual run share this one command.
+      const { text: stdinText } = await readStdinBounded();
       await cmdContext(hippoRoot, args, flags, stdinText);
       break;
     }
@@ -9954,10 +9959,18 @@ async function main(): Promise<void> {
         process.exit(1);
       }
 
+      // Bounded, and only when last-session has no explicit path: the
+      // --stdin source keeps its own blocking read in capture.ts by design.
+      const bounded = captureSource === 'last-session' && !transcriptPath
+        ? await readStdinBounded()
+        : { text: undefined, timedOut: false };
+
       cmdCapture(hippoRoot, {
         source: captureSource,
         filePath: captureFile,
         transcriptPath,
+        stdinText: bounded.text,
+        stdinTimedOut: bounded.timedOut,
         logFile: typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined,
         dryRun: Boolean(flags['dry-run']),
         global: Boolean(flags['global']),

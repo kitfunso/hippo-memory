@@ -7,8 +7,12 @@ const REPO = process.cwd();
 const SCRIPT = path.join(REPO, 'scripts', 'check-tests-pass.mjs');
 const FIXTURES = path.join(REPO, 'tests', 'fixtures', 'prepublish-gate');
 
-function runGate(fixture: string, env: Record<string, string | undefined> = {}) {
-  const r = spawnSync(process.execPath, [SCRIPT, '--root', path.join(FIXTURES, fixture)], {
+function runGate(
+  fixture: string,
+  env: Record<string, string | undefined> = {},
+  extraArgs: string[] = [],
+) {
+  const r = spawnSync(process.execPath, [SCRIPT, '--root', path.join(FIXTURES, fixture), ...extraArgs], {
     cwd: REPO,
     encoding: 'utf-8',
     env: { ...process.env, HIPPO_PUBLISH_SKIP_TESTS: undefined, ...env },
@@ -26,7 +30,7 @@ describe('prepublish test gate (scripts/check-tests-pass.mjs)', () => {
     const r = runGate('failing');
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('HIPPO_PUBLISH_SKIP_TESTS');
-    expect(r.stderr).toContain('onTaskUpdate');
+    expect(r.stderr).toContain('numFailedTests=1');
   });
 
   test('a non-empty HIPPO_PUBLISH_SKIP_TESTS reason turns a failure into a warning', () => {
@@ -40,6 +44,84 @@ describe('prepublish test gate (scripts/check-tests-pass.mjs)', () => {
     const r = runGate('failing', { HIPPO_PUBLISH_SKIP_TESTS: value });
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('refusing to publish');
+  });
+
+  // Not covered: an absent/unparseable report also fails closed; no fixture can force that shape (plan 3.3).
+  test('exits 0 with a warning when the suite is green but the process exits non-zero', () => {
+    const r = runGate('unhandled');
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stderr).toContain('WARNING');
+    expect(r.stderr).toContain('exited with 1');
+    expect(r.stderr).toContain('green');
+  });
+
+  test('refuses to publish when the report is green but a global teardown fails', () => {
+    const r = runGate('teardown');
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('numPassedTests=1');
+    expect(r.stderr).toContain('refusing to publish');
+  });
+
+  test('refuses to publish when the unhandled error is not the known worker IPC artifact', () => {
+    const r = runGate('other-rejection');
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('numPassedTests=1');
+    expect(r.stderr).toContain('workerIpcArtifactOnly=false');
+    expect(r.stderr).toContain('refusing to publish');
+  });
+
+  test('refuses to publish when vitest tallied more errors than the gate could read', () => {
+    const r = runGate('undercount');
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('numPassedTests=1');
+    expect(r.stderr).toContain('workerIpcArtifactOnly=false');
+  });
+
+  test('an extra reporter cannot pad the count past an error the gate could not read', () => {
+    const r = runGate('undercount', {}, ['--reporter=verbose']);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('workerIpcArtifactOnly=false');
+  });
+
+  test('an extra reporter reprints the error section and the artifact is still forgiven', () => {
+    const r = runGate('unhandled', {}, ['--reporter=verbose']);
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stderr).toContain('WARNING');
+  });
+
+  test('a fake error section printed by a test cannot hide the real one after it', () => {
+    const r = runGate('spoofed-section');
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('workerIpcArtifactOnly=false');
+  });
+
+  test('exits 1 when the suite never collects', () => {
+    const r = runGate('collect');
+    expect(r.status).toBe(1);
+  });
+
+  test('exits 1 when there are no test files', () => {
+    const r = runGate('no-tests');
+    expect(r.status).toBe(1);
+  });
+
+  test('exits 1 when the report is green but nothing actually passed', () => {
+    const r = runGate('skipped');
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('numPassedTests=0');
+  });
+
+  test('rejects a caller-supplied --outputFile before spawning vitest', () => {
+    const r = runGate('passing', {}, ['--outputFile=/tmp/should-not-be-used.json']);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('--outputFile');
+    expect(r.stderr).toContain('reserved');
+  });
+
+  test('rejects a caller-supplied --output-file before spawning vitest', () => {
+    const r = runGate('passing', {}, ['--output-file=/tmp/should-not-be-used.json']);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('reserved');
   });
 
   test('prepublishOnly keeps the three checks and build:all, then runs the gate last', () => {

@@ -565,13 +565,13 @@ function writeExtractedItems(
 export interface CaptureOptions {
   source: 'stdin' | 'file' | 'last-session';
   filePath?: string;
-  /**
-   * Explicit transcript path for `--last-session`. When not set, we fall back
-   * to reading a JSON payload from stdin (the shape Claude Code / OpenCode
-   * SessionEnd hooks pass) and then to auto-discovery under
-   * `~/.claude/projects/`.
-   */
+  /** Explicit transcript path for `--last-session`. Falls back to
+   * `stdinText`, then to auto-discovery under `~/.claude/projects/`. */
   transcriptPath?: string;
+  /** Read from stdin by the caller (cli.ts), which owns the bounded wait.
+   * `stdinTimedOut` marks an empty read "unknown", not "no payload". */
+  stdinText?: string;
+  stdinTimedOut?: boolean;
   /**
    * Tee stdout/stderr to this log file while capture runs. Mirrors the
    * pattern used by `hippo sleep --log-file` so the SessionEnd hook output
@@ -716,13 +716,14 @@ export function summariseTranscript(jsonl: string): string {
  * Priority:
  *   1. Explicit `transcriptPath` option (from `--transcript <path>`)
  *   2. Stdin JSON payload (Claude Code / OpenCode SessionEnd hook shape)
- *   3. Most recent `.jsonl` under `~/.claude/projects/<any>/`
+ *   3. Most recent `.jsonl` under `~/.claude/projects/<any>/`, and only when `stdinTimedOut` is false: while stdin is still open a missing payload is unproven, and this scan spans every project on the box
  *
  * Returns null when nothing resolves. Never throws.
  */
 export function resolveLastSessionTranscript(
   explicit: string | undefined,
-  stdinText: string | undefined
+  stdinText: string | undefined,
+  stdinTimedOut = false
 ): string | null {
   if (explicit && fs.existsSync(explicit)) return explicit;
 
@@ -739,7 +740,8 @@ export function resolveLastSessionTranscript(
     }
   }
 
-  // Auto-discover the most recent transcript
+  if (stdinTimedOut) return null;
+
   const home = process.env.HOME || process.env.USERPROFILE;
   if (!home) return null;
   const projectsDir = path.join(home, '.claude', 'projects');
@@ -888,21 +890,7 @@ function cmdCaptureCore(
       break;
     }
     case 'last-session': {
-      // Try to read stdin non-blockingly: SessionEnd hooks pass a JSON payload,
-      // but manual / test invocations have no piped stdin. fs.readFileSync(0)
-      // will block waiting for input when run interactively, so:
-      //   - skip entirely when caller passed an explicit --transcript path
-      //   - skip when stdin is a TTY (interactive shell)
-      let stdinText: string | undefined;
-      if (!options.transcriptPath && !process.stdin.isTTY) {
-        try {
-          stdinText = fs.readFileSync(0, 'utf8');
-        } catch {
-          stdinText = undefined;
-        }
-      }
-
-      const resolved = resolveLastSessionTranscript(options.transcriptPath, stdinText);
+      const resolved = resolveLastSessionTranscript(options.transcriptPath, options.stdinText, options.stdinTimedOut);
       if (!resolved) {
         console.log('No transcript found. Pass --transcript <path> or run from a SessionEnd hook.');
         return;
@@ -1218,13 +1206,19 @@ function isReadableFile(filePath: string): boolean {
  * off along the way (empty on every skip path) so `cmdPreCompact` can await
  * them, bounded, before it exits (X6).
  */
-function runPreCompact(hippoRoot: string, stdinText: string | undefined, logFile: string): Promise<unknown>[] {
+function runPreCompact(hippoRoot: string, stdinText: string | undefined, stdinTimedOut: boolean, logFile: string): Promise<unknown>[] {
   // X3: the PreCompact hook fires in every Claude Code project, including
-  // ones that never ran `hippo init`. Gate on the non-exiting isInitialized
-  // check BEFORE any store-opening call (saveActiveTaskSnapshot etc. all
-  // call initStore internally, which would silently create a store here).
+  // ones that never ran `hippo init`, so gate before any store-opening call
+  // (saveActiveTaskSnapshot etc. call initStore, which would create one).
   if (!isInitialized(hippoRoot)) {
     appendPreCompactLog(logFile, 'skip: store not initialized');
+    return [];
+  }
+
+  // Same hazard X4 guards below, different trigger: a read that timed out
+  // must not reach auto-discovery either, or it snapshots another session.
+  if (stdinTimedOut && (!stdinText || stdinText.trim() === '')) {
+    appendPreCompactLog(logFile, 'skip: no PreCompact payload arrived before the stdin wait window closed');
     return [];
   }
 
@@ -1419,6 +1413,7 @@ function runPreCompact(hippoRoot: string, stdinText: string | undefined, logFile
 
 export interface PreCompactOptions {
   stdinText?: string;
+  stdinTimedOut?: boolean;
   logFile?: string;
 }
 
@@ -1439,7 +1434,7 @@ export async function cmdPreCompact(hippoRoot: string, options: PreCompactOption
   const logFile = options.logFile ?? defaultPreCompactLogPath();
   let embeds: Promise<unknown>[] = [];
   try {
-    embeds = runPreCompact(hippoRoot, options.stdinText, logFile);
+    embeds = runPreCompact(hippoRoot, options.stdinText, options.stdinTimedOut ?? false, logFile);
   } catch (err) {
     appendPreCompactLog(logFile, `pre-compact failed: ${errorMessage(err)}`);
   }

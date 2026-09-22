@@ -72,7 +72,7 @@ the same sandbox. It never reads or writes the user's real
 3. On subsequent encounters of the same category, step 1 finds the
    prior success and the agent applies the hint deterministically.
 
-No network, no LLM calls, no external dependencies beyond Node 22.5+
+No network, no LLM calls, no external dependencies beyond Node 22.16+
 and the hippo CLI (which the demo resolves from the local checkout at
 `../../bin/hippo.js`, falling back to a PATH-installed `hippo`).
 
