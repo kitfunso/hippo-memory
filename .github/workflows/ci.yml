@@ -39,8 +39,11 @@ jobs:
         run: npm run audit:security
       - run: npm run build
       - run: node scripts/check-openclaw-dist.mjs
+      # Test stores on tmpfs: some runners' disks are slow enough to time out store-heavy files.
       - name: Vitest
         run: npx vitest run
+        env:
+          TMPDIR: /dev/shm
       - name: Provenance gate
         run: node scripts/ci-seed-provenance.mjs
       - name: Upload provenance JSON
@@ -102,3 +105,5 @@ jobs:
       - run: npm run build
       - name: Vitest
         run: npx vitest run
+        env:
+          TMPDIR: /dev/shm
