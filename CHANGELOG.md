@@ -1,15 +1,5 @@
 # Changelog
 
-## Unreleased
-
-### Added
-
-- **`--flag=value` now works alongside `--flag value`.** Every CLI flag accepts either form: `hippo recall "deploy steps" --budget=1500` is the same as `hippo recall "deploy steps" --budget 1500`, including for repeatable flags (`--tag=a --tag=b` collects both) and values that contain their own `=` (`--reason=a=b` keeps the full `a=b`). An empty glued value (`--tag=`, `--scope=`) carries no information: on a repeatable flag it adds nothing to the list instead of clobbering what was already collected, and on any other flag it counts as no value at all, the same as typing the flag with nothing after it. That list guarantee is specific to the glued form; the separated `--tag ''` still reads as a value-less flag and replaces any tags already collected, unchanged by this release. `--budget` on `recall`, `explain`, `context`, `assemble` and `drill` also now rejects a missing, non-numeric or negative value instead of silently falling back to a default. This applies to **both** forms, so the long-standing `--budget abc` now exits 1 the same way `--budget=abc` does; on `drill` a bad value used to drop the size cap altogether, returning up to 50 full entries with no limit on their size. `--budget 0` and `--budget=0` are both still accepted. `--dry-run`, `--force` and `--pin` take no value at all and reject any `=` form outright rather than guess which way the caller meant it; `--force=false` used to be dropped as an unknown flag name, and treating it as a value would have turned the flag on.
-
-### Changed
-
-- **`--flag=false` on a switch-style flag now behaves like `--flag false`.** Flags such as `--json`, `--global` and `--extract` (roughly 45 in total, everything except `--dry-run`, `--force` and `--pin`) are switches whose code only checks whether a value is present or truthy, not what it says. `--json=false` therefore stores the string `'false'`, which is truthy, so JSON output turns on, exactly like `--json false` does today. This falls out of treating `=` as a faithful stand-in for a space; it is a change only from the previous accident, where `--json=false` was an unrecognized flag name and got silently dropped.
-
 ## 1.43.3 - 2026-09-22
 
 ### Documentation
