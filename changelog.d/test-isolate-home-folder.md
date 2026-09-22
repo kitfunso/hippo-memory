@@ -1,3 +1,0 @@
-### Internal
-
-- **The test suite no longer reads the developer's home folder.** `hippo init` imports every Claude Code memory file under `~/.claude/projects`, and the suite isolated only `HIPPO_HOME`, so on a developer's machine each test store filled with that person's real notes: `recall-why-envelope` failed wherever one of them outranked its test memory, and the publish gate runs the suite on the publishing machine. The suite now points `HOME` and `USERPROFILE` at a temp folder for the whole run and clears `XDG_DATA_HOME`, so a test that clears `HIPPO_HOME` also lands in that temp folder instead of the real `~/.hippo`.
