@@ -40,11 +40,15 @@ It also fixes the portability problem. Your ChatGPT memories don't travel to Cla
 ## Receipts
 
 Numbers, not adjectives. Every claim links to the benchmark or the test that proves it.
+Every measurement we have ever published is indexed in [`docs/evals/`](docs/evals/README.md),
+pre-registrations kept next to their results, including the runs that failed and the one
+claim we retracted.
 
 - **Sequential Learning Benchmark.** [benchmarks/sequential-learning/](benchmarks/sequential-learning/). 50 tasks, 10 buried traps. Measures whether agents learn from past mistakes, not just retrieve text. v0.11.0 informal magnitude RETRACTED v1.7.9; mechanism remains shipped. See [CHANGELOG.md](./CHANGELOG.md) v1.7.9 entry.
 - **R@5 = 74.0%** on [LongMemEval](benchmarks/longmemeval/). 500-question industry retrieval benchmark, BM25 only, no embeddings.
+- **R@1 0.41 to 0.62 with `hippo recall "<query>" --reranker jev`** on a private 300-query developer store ([full eval](docs/evals/2026-09-19-jev-reranker.md)). The opt-in [TypeSafe Jev](https://typesafe.ai) reranker, off by default, about 0.0004 USD a recall. 2000-draw paired bootstrap; the margin held in 20 of 20 seeds and a permutation null reached it in 0 of 200 runs. Ranking only: three graded tests did **not** show a better answer rate than the free local cross-encoder, and that negative result is in the same doc. What it buys today is a shorter context, 2 memories ranked by Jev answering as well as 5 ranked by the cross-encoder.
 - **10 of 10 incident scenarios beat transcript replay** on a staged Slack corpus ([benchmarks/e1.3/](benchmarks/e1.3/)). Recall surfaces the cause faster than scrolling the last N messages.
-- **0 outbound HTTP** on the 1000-event ingestion smoke. Proven by a `globalThis.fetch` spy that throws on call, not a hardcoded zero.
+- **0 outbound HTTP** on the 1000-event ingestion smoke. Proven by a `globalThis.fetch` spy that throws on call, not a hardcoded zero. The default recall path makes no network call either; the opt-in Jev reranker above is the one switch that does.
 - **926 tests, real DB, zero mocks.** Project rule. The one mocks-vs-prod divergence that bit us early is now the constraint that kept the next ten releases honest.
 - **dlPFC goal-conditioned cluster discrimination, 3/3 queries pass** — full goal stack with policy weighting and lifespan-windowed outcome propagation. Per-goal lift on a 3-cluster fixture where BM25 alone cannot discriminate; deterministic test in [`benchmarks/micro/results/b3-depth.json`](benchmarks/micro/results/b3-depth.json).
 

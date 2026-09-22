@@ -1,5 +1,5 @@
 ---
-import { site, worksWith } from '../content/site';
+import { site, proofs, worksWith } from '../content/site';
 import Terminal from './Terminal.astro';
 import CopyCommand from './CopyCommand.astro';
 import { getStats } from '../lib/stats';
@@ -35,9 +35,24 @@ const stats = await getStats(); // build-time social proof (cached + fallback)
         {site.description}
       </p>
 
-      <p class="reveal mt-4 max-w-md text-sm leading-relaxed text-zinc-400" style="animation-delay: 170ms">
-        <span class="font-medium text-zinc-200 tabular-nums">{site.proof.stat}</span> {site.proof.text}
-      </p>
+      <div class="reveal mt-4 flex max-w-md flex-col gap-1.5" style="animation-delay: 170ms">
+        {proofs.map((p) => (
+          <p class="text-sm leading-relaxed text-zinc-400">
+            {'href' in p && p.href ? (
+              <a
+                class="link font-medium tabular-nums"
+                href={p.href}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {p.stat}<span class="sr-only"> ({p.hrefLabel}, opens in new tab)</span>
+              </a>
+            ) : (
+              <span class="font-medium text-zinc-200 tabular-nums">{p.stat}</span>
+            )}{' '}{p.text}
+          </p>
+        ))}
+      </div>
 
       <div class="reveal mt-8 max-w-md" style="animation-delay: 210ms">
         <CopyCommand command={site.installCmd} size="lg" />
