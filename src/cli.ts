@@ -401,12 +401,19 @@ async function runViaServerIfAvailable(
   }
 }
 
-// Flags that NEVER take a value. Without this, a positional following the
-// flag is silently swallowed as its value (`invalidate --dry-run "X"` would
-// eat the pattern). Every existing --dry-run consumer reads it as boolean.
-// force and pin are read as both Boolean(...) and === true by different consumers,
-// so an inline value would mean two opposite things in one run. Reject it, like --dry-run.
-const BOOLEAN_FLAGS = new Set(['dry-run', 'force', 'pin', 'stdin-timed-out']);
+// Every switch the CLI reads. A value on one reads as on under Boolean() (`--fix=false` would fix)
+// and as off under === true (`--pin=true` would not pin), so parseArgs and main() refuse one.
+// tests/cli-parse-flag-equals.test.ts fails when a switch read is missing from this set.
+export const BOOLEAN_FLAGS: ReadonlySet<string> = new Set([
+  'all', 'all-tenants', 'archive', 'auto', 'bad', 'bootstrap', 'classic', 'continuity',
+  'cross-project', 'dry-run', 'equal-sources', 'error', 'evc-adaptive', 'extract',
+  'filter-conflicts', 'fix', 'force', 'forget', 'git', 'global', 'good', 'graph-stream',
+  'help', 'include-superseded', 'inferred', 'json', 'last-session', 'multihop', 'no-hooks',
+  'no-learn', 'no-mmr', 'no-propagate', 'no-schedule', 'no-share', 'no-summarize-older',
+  'observed', 'open', 'physics', 'pin', 'pinned-only', 'reject-loser', 'rerank-utility',
+  'reset-physics', 'save-baseline', 'show-cases', 'stats', 'stdin', 'stdin-timed-out',
+  'strict', 'suite', 'value-aware', 'verified', 'version', 'why',
+]);
 
 // Shared by both the separated and glued (`=`) forms so the list can't drift.
 function isRepeatableFlag(key: string): boolean {
@@ -455,7 +462,11 @@ export function parseArgs(argv: string[]): { command: string; args: string[]; fl
       const key = part.slice(2);
       const next = rest[i + 1];
 
-      if (!next || next.startsWith('--') || BOOLEAN_FLAGS.has(key)) {
+      if (BOOLEAN_FLAGS.has(key) && (next === 'true' || next === 'false')) {
+        // Kept as a value so main() rejects it, instead of `--pin true` pinning the text "... true".
+        flags[key] = next;
+        i += 2;
+      } else if (!next || next.startsWith('--') || BOOLEAN_FLAGS.has(key)) {
         // Boolean flag
         flags[key] = true;
         i++;

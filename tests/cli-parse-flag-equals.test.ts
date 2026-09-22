@@ -2,10 +2,10 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { parseArgs } from '../src/cli.js';
+import { BOOLEAN_FLAGS, parseArgs } from '../src/cli.js';
 
 const argv = (...rest: string[]) => ['node', 'hippo', ...rest];
 
@@ -82,6 +82,39 @@ describe('parseArgs: --flag=value (glued form)', () => {
   it('case 14: end-of-flags "--" still works; the = split never sees the literal token', () => {
     const { args } = parseArgs(argv('remember', 'text', '--', '--not-a-flag'));
     expect(args).toEqual(['text', '--not-a-flag']);
+  });
+
+  it('case 14b: a switch never swallows the token after it', () => {
+    const { flags, args } = parseArgs(argv('recall', '--json', 'deploy steps'));
+    expect(flags['json']).toBe(true);
+    expect(args).toEqual(['deploy steps']);
+  });
+
+  it('case 14c: a bare true or false after a switch is kept as its value, for main() to reject', () => {
+    expect(parseArgs(argv('remember', 'x', '--pin', 'true')).flags['pin']).toBe('true');
+    expect(parseArgs(argv('audit', '--fix', 'false')).flags['fix']).toBe('false');
+  });
+});
+
+describe('BOOLEAN_FLAGS: every switch the CLI reads is registered', () => {
+  // SHORTCUT: idiom regexes, not a type check; a switch read only through a local variable slips past.
+  const ON_OFF = /Boolean\(\s*<>|<>\s*[!=]==\s*true|!\s*<>|if \(\s*<>\s*\)|<>\s*\?(?![?.])|&&\s*<>|<>\s*&&|\|\|\s*<>/;
+  const AS_VALUE = /String\(\s*<>|Number\(\s*<>|parse\w*\(\s*<>|<>\s*as string|typeof <>|<>\.\w|`[^`]*\$\{\s*<>/;
+
+  it('case 14d: a flag read only as on/off is in BOOLEAN_FLAGS, so no value can switch it on', () => {
+    const onOff = new Set<string>();
+    const asValue = new Set<string>();
+    for (const file of ['cli.ts', join('connectors', 'github', 'cli-impl.ts')]) {
+      const src = readFileSync(resolve(__dirname, '..', 'src', file), 'utf8');
+      for (const m of src.matchAll(/flags\[['"]([a-z0-9-]+)['"]\]/g)) {
+        const at = m.index ?? 0;
+        const read = `${src.slice(Math.max(0, at - 40), at)}<>${src.slice(at + m[0].length, at + m[0].length + 30)}`;
+        if (AS_VALUE.test(read)) asValue.add(m[1]);
+        else if (ON_OFF.test(read)) onOff.add(m[1]);
+      }
+    }
+    const unregistered = [...onOff].filter((key) => !asValue.has(key) && !BOOLEAN_FLAGS.has(key));
+    expect(unregistered).toEqual([]);
   });
 });
 
@@ -198,5 +231,17 @@ describe('built CLI: --flag=value end-to-end guards', () => {
     const res = runCli(['share', 'no-such-id', '--force=false']);
     expect(res.status).toBe(1);
     expect(res.stderr).toContain('--force takes no value');
+  });
+
+  it('case 27: audit --fix=false is rejected before any memory is deleted', () => {
+    const res = runCli(['audit', '--fix=false']);
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('--fix takes no value');
+  });
+
+  it('case 28: remember --pin true is rejected, not stored as the text "use pnpm true"', () => {
+    const res = runCli(['remember', 'use pnpm', '--pin', 'true']);
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('--pin takes no value');
   });
 });
