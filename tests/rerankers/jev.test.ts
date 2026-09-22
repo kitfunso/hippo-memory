@@ -71,7 +71,7 @@ describe('jevReranker', () => {
     expect(fetchMock).toHaveBeenCalledOnce();
     const init = fetchMock.mock.calls[0][1];
     const body = JSON.parse(String(init?.body));
-    expect(body.model).toBe('jev-latest');
+    expect(body.model).toBe('jev-1.13.0');
     expect(body.state).toContain('Query: which one');
     expect(body.state).toContain('[2] beta');
     expect(Object.keys(body.questions)).toEqual(['c1', 'c2', 'c3']);
@@ -200,13 +200,13 @@ describe('jevReranker', () => {
   });
 
   it('sends HIPPO_JEV_MODEL when it is set', async () => {
-    process.env.HIPPO_JEV_MODEL = 'jev-1.13.0';
+    process.env.HIPPO_JEV_MODEL = 'jev-override-sentinel';
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(jevResponse([0.1, 0.9, 0.5]));
     await freshReranker()('q', inputs());
     const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
-    expect(body.model).toBe('jev-1.13.0');
+    expect(body.model).toBe('jev-override-sentinel');
   });
 
   it('names the request id, stripped of control characters', async () => {

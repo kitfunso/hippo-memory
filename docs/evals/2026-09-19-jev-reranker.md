@@ -15,7 +15,7 @@ Date: 2026-09-19. Applies to `--reranker jev` (`src/rerankers/jev.ts`), added in
 |---|---|---|
 | `TYPESAFE_API_KEY` | unset | Bearer token. Read from the environment only. Hippo never stores or prints it. |
 | `HIPPO_JEV_TIMEOUT_MS` | 5000 | Abort the request after this many ms. |
-| `HIPPO_JEV_MODEL` | `jev-latest` | Model name sent to the API. |
+| `HIPPO_JEV_MODEL` | `jev-1.13.0` | Model name sent to the API. Pinned since 1.43.1: every number below was measured on this version, and `jev-latest` is an alias that moves when the vendor ships a release. |
 
 Request shape: one POST per recall to `https://api.typesafe.ai/v1/systemone`. The `state` field holds the query and the numbered candidates, each cut to 1,200 characters. There is one `noul` question per candidate, and each answer is a probability from 0 to 1. `hippo recall --reranker jev` scores the top 40 candidates by default, the pool every number below was measured at; `--reranker-top-k` overrides it, and the fallback reranks the same slice.
 

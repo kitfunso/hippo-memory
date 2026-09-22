@@ -67,6 +67,24 @@ for (const [, category, n, r5] of locoRows) {
   if (!locoNorm.includes(`| ${category} | ${n} | ${r5} |`)) missing.push(`locomo row: | ${category} | ${n} | ${r5} |`);
 }
 
+// Presence anywhere on the site is not the check: the reranker result has to reach the
+// hero, and it never travels without the negative result that bounds it.
+// Comments are stripped first so a caveat parked in a code comment cannot satisfy it.
+const hero = await readFile(join(root, 'src', 'components', 'Hero.astro'), 'utf8');
+const proofsRaw = (site.match(/export const proofs\s*(?::[^=]+)?=\s*\[([\s\S]*?)\n\][^\n]*;/) || [])[1] || '';
+const proofsBlock = proofsRaw.replace(/\/\/[^\n]*/g, '');
+if (!proofsRaw) {
+  missing.push('proofs: block not found in site.ts (the hero renders it)');
+} else {
+  if (!/reranker/i.test(proofsBlock)) missing.push('proofs: the hero carries no reranker claim');
+  if (!/no answer-rate win was shown/.test(proofsBlock)) {
+    missing.push('proofs: the reranker claim lost its null result');
+  }
+}
+if (!/proofs\.map\(/.test(hero) || !/p\.text/.test(hero)) {
+  missing.push('proofs: Hero.astro no longer renders each proof with its text');
+}
+
 if (missing.length) {
   console.error('[readme-sync] DRIFT: website entries missing from README.md (comparison cells vs #comparison, locomo rows vs ### LoCoMo):');
   for (const m of missing) console.error('  - ' + m);
