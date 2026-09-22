@@ -20,6 +20,7 @@ npm run smoke:openclaw-install
 - Document public APIs with JSDoc.
 - Prefer focused tests in `tests/` or nearby integration/eval harnesses before changing memory behavior.
 - Do not commit generated `dist/` or UI build output unless the repo expects it for a release.
+- A PR's changelog entry goes in its own `changelog.d/<branch-with-dashes>.md`, never in `CHANGELOG.md`; the release commit folds them in (`changelog.d/README.md`).
 - Use Hippo memory commands when useful, but do not store secrets.
 
 ## Never Do

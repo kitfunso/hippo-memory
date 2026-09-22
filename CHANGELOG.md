@@ -1,14 +1,5 @@
 # Changelog
 
-## Unreleased
-
-### Fixed
-
-- **The Node floor now matches what hippo needs.** `engines` said `>=22.5.0`. Below 22.13, `node:sqlite` needs `--experimental-sqlite`, which `bin/hippo.js` does not pass, so every command, `hippo --version` included, died with `ERR_UNKNOWN_BUILTIN_MODULE`. On 22.13 to 22.15 hippo ran, but Node's bundled SQLite had no FTS5: recall fell back to a LIKE scan, and every open tried to create the full-text table and waited out the 5-second busy timeout whenever another process was writing. FTS5 arrives in Node 22.16.0. The floor is now `>=22.16.0` in `package.json` and the lockfile, and the README, the website, `llms.txt` and the benchmark and demo docs say 22.16+. A new `node-floor` CI job runs the suite on exactly the floor and fails if `engines` moves without it.
-- **The release-notes em-dash gate reads the whole entry.** Its section regex ended on `\z`, which JavaScript reads as a literal "z", so the gate stopped at the first "z" in the entry and passed any em dash after it. The section now ends at the next version heading or the end of the file, and `tests/em-dash-release-gate.test.ts` covers both.
-- **The network claims name more than the Jev reranker.** The README receipt and the website said the Jev reranker was the one switch that makes a network call, and `llms.txt` said zero outbound HTTP with no caveat. The LLM reranker and the API embedders call out too; all three are off unless you turn them on. The 1.43.3 entry below repeats the old wording.
-- **`llms.txt` no longer names a version.** It said 1.23.0. The npm page it links carries the live one.
-
 ## 1.43.3 - 2026-09-22
 
 ### Documentation
