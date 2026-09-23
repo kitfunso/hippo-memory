@@ -16,6 +16,9 @@
  *     --out <path>   (JSONL output) \
  *     [--rrf-weight-bm25 0.5] [--rrf-weight-dense 0.5] [--rrf-k 60] [--top-k 100] \
  *     [--questions <int>]  (limit to first N questions, for dry-run / smoke)
+ *     [--per-haystack]  (rank only each question's own haystack_session_ids:
+ *                        the standard LongMemEval-S task; default is the
+ *                        global pool over every session in the file)
  *
  * The BM25 corpus's `_meta.level` field determines granularity (turn vs session)
  * and how max-pool aggregation works:
@@ -45,7 +48,7 @@ function parseArgs(argv) {
     if (a.startsWith('--')) {
       const key = a.slice(2);
       // boolean flag with no value follows
-      if (['mock-dense'].includes(key)) {
+      if (['mock-dense', 'per-haystack'].includes(key)) {
         args[key] = true;
         continue;
       }
@@ -79,6 +82,7 @@ console.log(`[f9-hybrid] config:`, {
   'rrf-k': args['rrf-k'],
   'top-k': args['top-k'],
   questions: args.questions ?? 'all',
+  'per-haystack': Boolean(args['per-haystack']),
 });
 
 // ---------------------------------------------------------------------------
@@ -206,7 +210,7 @@ if (!args['mock-dense']) {
   POOLING = IS_BGE ? 'cls' : 'mean';
 
   console.log(`[f9-hybrid] loading embedder ${denseModel}...`);
-  const { pipeline, env } = await import('@huggingface/transformers');
+  const { pipeline, env } = await import(process.env.LME_TRANSFORMERS || '@huggingface/transformers');
   env.cacheDir = process.env.HIPPO_MODEL_CACHE;
   env.localModelPath = process.env.HIPPO_MODEL_CACHE;
   env.allowRemoteModels = false;
@@ -252,6 +256,8 @@ function mockDenseScore(query, sessionId) {
 
 for (let qi = 0; qi < questions.length; qi++) {
   const q = questions[qi];
+  // BM25 df/N/avgLen stay corpus-wide; only the candidate set shrinks.
+  const hay = args['per-haystack'] ? new Set(q.haystack_session_ids) : null;
 
   // ---- dense ----
   let denseSessionMax;
@@ -259,6 +265,7 @@ for (let qi = 0; qi < questions.length; qi++) {
     denseSessionMax = new Map();
     for (let i = 0; i < denseN; i++) {
       const sid = denseSessionIds[i];
+      if (hay && !hay.has(sid)) continue;
       const s = mockDenseScore(q.question, sid);
       denseSessionMax.set(sid, { score: s, bestTurnIdx: i });
     }
@@ -270,6 +277,7 @@ for (let qi = 0; qi < questions.length; qi++) {
     // dot product against all turn vectors → per-turn score
     const denseTurnScores = new Float32Array(denseN);
     for (let i = 0; i < denseN; i++) {
+      if (hay && !hay.has(denseSessionIds[i])) continue;
       let s = 0;
       const off = i * denseDim;
       for (let j = 0; j < denseDim; j++) s += denseMat[off + j] * qv[j];
@@ -279,6 +287,7 @@ for (let qi = 0; qi < questions.length; qi++) {
     denseSessionMax = new Map(); // sid -> { score, bestTurnIdx }
     for (let i = 0; i < denseN; i++) {
       const sid = denseSessionIds[i];
+      if (hay && !hay.has(sid)) continue;
       const s = denseTurnScores[i];
       const prev = denseSessionMax.get(sid);
       if (prev === undefined || s > prev.score) {
@@ -299,9 +308,10 @@ for (let qi = 0; qi < questions.length; qi++) {
   if (bm25Level === 'turn') {
     // per-turn score → max-pool to session
     for (let i = 0; i < bm25Ids.length; i++) {
+      const sid = bm25Ids[i].session_id;
+      if (hay && !hay.has(sid)) continue;
       const s = bm25Score(i, qTerms);
       if (s <= 0) continue;
-      const sid = bm25Ids[i].session_id;
       const prev = bm25SessionMax.get(sid);
       if (prev === undefined || s > prev.score) {
         bm25SessionMax.set(sid, { score: s, bestDocIdx: i });
@@ -310,9 +320,10 @@ for (let qi = 0; qi < questions.length; qi++) {
   } else {
     // per-session BM25 directly
     for (let i = 0; i < bm25Ids.length; i++) {
+      const sid = bm25Ids[i].session_id;
+      if (hay && !hay.has(sid)) continue;
       const s = bm25Score(i, qTerms);
       if (s <= 0) continue;
-      const sid = bm25Ids[i].session_id;
       bm25SessionMax.set(sid, { score: s, bestDocIdx: i });
     }
   }

@@ -43,7 +43,8 @@ if (!process.env.HIPPO_MODEL_CACHE) {
 
 // Use the @huggingface/transformers backend that F12 wired in (it handles
 // external-data ONNX correctly, which @xenova/transformers v2 does not).
-const { pipeline, env } = await import('@huggingface/transformers');
+// LME_TRANSFORMERS swaps the backend, e.g. a file:// URL to @xenova/transformers v2 (int8 by default) to replay June 2026.
+const { pipeline, env } = await import(process.env.LME_TRANSFORMERS || '@huggingface/transformers');
 env.cacheDir = process.env.HIPPO_MODEL_CACHE;
 env.localModelPath = process.env.HIPPO_MODEL_CACHE;
 env.allowRemoteModels = false;
