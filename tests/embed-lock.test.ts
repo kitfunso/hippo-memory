@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { initStore, writeEntry } from '../src/store.js';
 import { createMemory } from '../src/memory.js';
 import { embedAll, loadEmbeddingIndex } from '../src/embeddings.js';
@@ -40,13 +40,61 @@ describe('embeddings.json cross-process lock', () => {
   });
 
   it('waits for a live holder, then writes once the lock is released', async () => {
+    const holder = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)']);
+    try {
+      const lockPath = path.join(root, 'embeddings.lock');
+      fs.writeFileSync(lockPath, String(holder.pid));
+      const pending = embedAll(root);
+      await new Promise((r) => setTimeout(r, 150));
+      expect(fetchMock).not.toHaveBeenCalled();
+      fs.rmSync(lockPath);
+      expect(await pending).toBe(1);
+      expect(fetchMock).toHaveBeenCalled();
+    } finally {
+      holder.kill();
+    }
+  });
+
+  it('breaks a lock with our PID written before this process started, which is a reused PID', async () => {
     const lockPath = path.join(root, 'embeddings.lock');
     fs.writeFileSync(lockPath, String(process.pid));
+    const before = new Date(Date.now() - process.uptime() * 1000 - 60_000);
+    fs.utimesSync(lockPath, before, before);
+    expect(await embedAll(root)).toBe(1);
+  });
+
+  it('waits for a worker thread that shares our PID', async () => {
+    const lockPath = path.join(root, 'embeddings.lock');
+    fs.writeFileSync(lockPath, `${process.pid}:another-worker`);
     const pending = embedAll(root);
     await new Promise((r) => setTimeout(r, 150));
     expect(fetchMock).not.toHaveBeenCalled();
     fs.rmSync(lockPath);
     expect(await pending).toBe(1);
-    expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it('breaks a lock this module leaked instead of waiting on itself', async () => {
+    const lockPath = path.join(root, 'embeddings.lock');
+    let held = '';
+    fetchMock.mockImplementation(async () => {
+      held = fs.readFileSync(lockPath, 'utf8');
+      return new Response(JSON.stringify({ data: [{ embedding: [1, 0] }] }));
+    });
+    expect(await embedAll(root)).toBe(1);
+    expect(held).toMatch(new RegExp(`^${process.pid}:.+`));
+    fs.writeFileSync(lockPath, held);
+    writeEntry(root, createMemory('a second memory to embed'));
+    expect(await embedAll(root)).toBe(1);
+    expect(fs.existsSync(lockPath)).toBe(false);
+  });
+
+  it('leaves the lock alone when another writer has taken it over', async () => {
+    const lockPath = path.join(root, 'embeddings.lock');
+    fetchMock.mockImplementation(async () => {
+      fs.writeFileSync(lockPath, '999999');
+      return new Response(JSON.stringify({ data: [{ embedding: [1, 0] }] }));
+    });
+    expect(await embedAll(root)).toBe(1);
+    expect(fs.readFileSync(lockPath, 'utf8')).toBe('999999');
   });
 });

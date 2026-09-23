@@ -2,11 +2,12 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { BOOLEAN_FLAGS, KNOWN_FLAGS, parseArgs, shouldAutoRepairCodexWrapper } from '../src/cli.js';
+import { loadAllEntries } from '../src/store.js';
 
 const argv = (...rest: string[]) => ['node', 'hippo', ...rest];
 
@@ -278,6 +279,39 @@ describe('built CLI: --flag=value end-to-end guards', () => {
     const res = runCli(['reject', 'X', '--dry-run']);
     expect(res.status).toBe(2);
     expect(res.stderr).toContain('hippo reject has no --dry-run');
+  });
+
+  it('case 33: share <id> --dry-run stops with exit 2 instead of sharing for real', () => {
+    const res = runCli(['share', 'X', '--dry-run']);
+    expect(res.status).toBe(2);
+    expect(res.stderr).toContain('hippo share has no --dry-run outside `hippo share --auto`');
+  });
+
+  it('case 34: brief close <id> --dry-run stops with exit 2 instead of closing the brief', () => {
+    const res = runCli(['brief', 'close', '1', '--dry-run']);
+    expect(res.status).toBe(2);
+    expect(res.stderr).toContain('hippo brief has no --dry-run outside `hippo brief refresh`');
+  });
+
+  it('case 35: share --auto and brief refresh keep their dry runs', () => {
+    const share = runCli(['share', '--auto', '--dry-run']);
+    expect(share.status).toBe(0);
+    expect(share.stderr).not.toContain('has no --dry-run');
+    expect(runCli(['brief', 'refresh', 'my-repo', '--dry-run']).stderr).not.toContain('has no --dry-run');
+  });
+
+  it('case 36: sleep --dry-run imports no MEMORY.md file and learns no commits', () => {
+    const home = join(tmpDir, 'home');
+    const memDir = join(home, '.claude', 'projects', 'p', 'memory');
+    mkdirSync(memDir, { recursive: true });
+    writeFileSync(join(memDir, 'note.md'), '---\nname: note\ntype: reference\n---\nThe staging deploy waits for the friday freeze.\n');
+    env = { ...env, HOME: home, USERPROFILE: home };
+
+    const res = runCli(['sleep', '--dry-run']);
+
+    expect(res.status).toBe(0);
+    expect(res.stdout).toContain('Dry run: skipped learning');
+    expect(loadAllEntries(join(tmpDir, '.hippo'))).toEqual([]);
   });
 
   it('case 32: importing dist/cli.js runs nothing; only bin/hippo.js and a direct run do', () => {

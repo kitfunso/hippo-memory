@@ -478,7 +478,8 @@ export function resolveConfidence(entry: MemoryEntry, now: Date = evalNow()): Co
 
 export const DEFAULT_HALF_LIFE_DAYS = 7;
 
-// Pinned means keep; raw rows leave only through archiveRawMemory.
+// Pinned means keep; raw rows leave only through archiveRawMemory. The SQL twin guards the DELETE itself.
+export const AUTO_DELETABLE_SQL = "pinned = 0 AND kind != 'raw'";
 export function canAutoDelete(entry: Pick<MemoryEntry, 'pinned' | 'kind'>): boolean {
   return !entry.pinned && entry.kind !== 'raw';
 }

@@ -17,9 +17,9 @@ import {
   applyOutcome,
   calculateStrength,
 } from '../memory.js';
-import { search, hybridSearch, physicsSearch, markRetrieved, estimateTokens } from '../search.js';
-import { isRecallBoostAblated, evalNow } from '../ablation.js';
-import { loadAllEntries, writeEntry, readEntry, initStore, loadFreshActiveTaskSnapshot, listMemoryConflicts, resolveConflict, RECALL_DEFAULT_DENY_SCOPES, countCreatedSinceLastSleep } from '../store.js';
+import { search, hybridSearch, physicsSearch, estimateTokens } from '../search.js';
+import { evalNow } from '../ablation.js';
+import { loadAllEntries, writeEntry, strengthenRetrieved, readEntry, initStore, loadFreshActiveTaskSnapshot, listMemoryConflicts, resolveConflict, RECALL_DEFAULT_DENY_SCOPES, countCreatedSinceLastSleep } from '../store.js';
 import { shareMemory, listPeers, getGlobalRoot } from '../shared.js';
 import { consolidate } from '../consolidate.js';
 import { execSync } from 'child_process';
@@ -649,14 +649,9 @@ async function executeTool(
         }
       }
 
-      // Mark retrieved and persist
-      const retrieved = markRetrieved(results.map((r) => r.entry));
-      // EVAL-ONLY ablation (see ablation.ts): skip persistence under the recall
-      // flag; ids below stay populated for outcome attribution.
-      if (!isRecallBoostAblated()) {
-        for (const entry of retrieved) writeEntry(hippoRoot, entry, { actor: ctx?.actor ?? 'mcp' });
-      }
-      lastRecalledIds.set(resolveClientKey(ctx), retrieved.map((e) => e.id));
+      const retrievedIds = results.map((r) => r.entry.id);
+      strengthenRetrieved(hippoRoot, retrievedIds);
+      lastRecalledIds.set(resolveClientKey(ctx), retrievedIds);
 
       // v0.33 / J1 — MCP per-pipeline anchoring detector. UNLIKE J3.2's
       // planningFallacyHint (which is pipeline-invariant because it
@@ -1102,13 +1097,9 @@ async function executeTool(
       const results = usePhysicsCtx
         ? await physicsSearch(query, entries, { budget, hippoRoot, physicsConfig: config.physics })
         : await hybridSearch(query, entries, { budget, hippoRoot });
-      const retrieved = markRetrieved(results.map((r) => r.entry));
-      // EVAL-ONLY ablation (see ablation.ts): skip persistence under the recall
-      // flag; ids below stay populated for outcome attribution.
-      if (!isRecallBoostAblated()) {
-        for (const entry of retrieved) writeEntry(hippoRoot, entry, { actor: ctx?.actor ?? 'mcp' });
-      }
-      lastRecalledIds.set(resolveClientKey(ctx), retrieved.map((e) => e.id));
+      const retrievedIds = results.map((r) => r.entry.id);
+      strengthenRetrieved(hippoRoot, retrievedIds);
+      lastRecalledIds.set(resolveClientKey(ctx), retrievedIds);
 
       // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md, T2): bounded
       // read, no session id available on this surface (freshness bound

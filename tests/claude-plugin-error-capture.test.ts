@@ -30,10 +30,10 @@ describe.skipIf(process.platform === 'win32')('Claude Code plugin error capture'
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  function runHook(payload: FailurePayload): void {
+  function runHook(stdin: string): string {
     const result = spawnSync('bash', [SCRIPT], {
       cwd: dir,
-      input: JSON.stringify(payload),
+      input: stdin,
       env: {
         ...process.env,
         PATH: [dir, path.dirname(process.execPath), process.env.PATH].join(path.delimiter),
@@ -42,16 +42,17 @@ describe.skipIf(process.platform === 'win32')('Claude Code plugin error capture'
       encoding: 'utf8',
     });
     expect(result.status).toBe(0);
+    return result.stderr;
   }
 
   it('remembers the failed tool and its error from the stdin payload', () => {
-    runHook({
+    runHook(JSON.stringify({
       hook_event_name: 'PostToolUseFailure',
       tool_name: 'Bash',
       tool_input: { command: 'npm test' },
       error: "Exit code 1\nError: Cannot find module 'express'",
       is_interrupt: false,
-    });
+    } satisfies FailurePayload));
     expect(fs.readFileSync(argsFile, 'utf8').trim().split('\n')).toEqual([
       'remember',
       "Bash: Exit code 1 Error: Cannot find module 'express'",
@@ -62,7 +63,15 @@ describe.skipIf(process.platform === 'win32')('Claude Code plugin error capture'
   });
 
   it('skips interrupts', () => {
-    runHook({ tool_name: 'Bash', error: 'Interrupted by user', is_interrupt: true });
+    runHook(JSON.stringify({ tool_name: 'Bash', error: 'Interrupted by user', is_interrupt: true } satisfies FailurePayload));
     expect(fs.existsSync(argsFile)).toBe(false);
+  });
+
+  it('says so in one line, with no stack trace, when the payload is not a JSON object', () => {
+    for (const bad of ['not json', 'null', '42']) {
+      const stderr = runHook(bad);
+      expect(stderr.trim().split('\n'), bad).toEqual(['hippo: capture-error hook got a payload that is not a JSON object']);
+      expect(fs.existsSync(argsFile)).toBe(false);
+    }
   });
 });

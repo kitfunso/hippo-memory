@@ -505,6 +505,26 @@ export function isLoopback(remoteAddress: string | undefined): boolean {
   return false;
 }
 
+// Any other Host on a loopback socket is DNS rebinding: a hostile page resolved to 127.0.0.1.
+export const LOOPBACK_HOST_HEADER = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+
+/** A browser request sent by another site. Non-browser clients send neither header and pass. */
+export function isCrossSite(req: IncomingMessage): boolean {
+  const site = req.headers['sec-fetch-site'];
+  if (site !== undefined && site !== 'same-origin' && site !== 'none') return true;
+  const origin = req.headers.origin;
+  return origin !== undefined && origin !== `http://${req.headers.host}`;
+}
+
+// A browser on this machine is loopback too, so the no-key fallback also needs a local Host and a same-site caller.
+function assertLocalCaller(req: IncomingMessage): void {
+  if (!isLoopback(req.socket.remoteAddress)) throw new HttpError(401, 'auth required');
+  const host = req.headers.host;
+  if ((host !== undefined && !LOOPBACK_HOST_HEADER.test(host)) || isCrossSite(req)) {
+    throw new HttpError(403, 'cross-site or non-local request refused; send an API key');
+  }
+}
+
 /**
  * Read the Authorization header in a case-insensitive way and pull the
  * bearer token out. Returns:
@@ -622,9 +642,7 @@ function buildContextWithAuth(req: IncomingMessage, hippoRoot: string): Context 
   if (process.env.HIPPO_REQUIRE_AUTH === '1') {
     throw new HttpError(401, 'auth required');
   }
-  if (!isLoopback(req.socket.remoteAddress)) {
-    throw new HttpError(401, 'auth required');
-  }
+  assertLocalCaller(req);
 
   // v1.12.0: loopback fallback is process-local, treat as admin.
   return {
@@ -660,9 +678,7 @@ function requireAuth(req: IncomingMessage, hippoRoot: string): void {
   if (process.env.HIPPO_REQUIRE_AUTH === '1') {
     throw new HttpError(401, 'auth required');
   }
-  if (!isLoopback(req.socket.remoteAddress)) {
-    throw new HttpError(401, 'auth required');
-  }
+  assertLocalCaller(req);
 }
 
 function getString(obj: Record<string, JsonValue>, key: string): string | undefined {
@@ -812,10 +828,7 @@ async function handleRequest(
       throw new HttpError(400, 'q is required');
     }
     const limitRaw = query.get('limit');
-    const limit = limitRaw === null ? undefined : Number(limitRaw);
-    if (limit !== undefined && (!Number.isFinite(limit) || limit <= 0)) {
-      throw new HttpError(400, 'limit must be a positive number');
-    }
+    const limit = limitRaw === null ? undefined : parseListLimit(limitRaw);
     const mode = query.get('mode');
     if (mode !== null && mode !== 'bm25' && mode !== 'hybrid' && mode !== 'physics') {
       throw new HttpError(400, "mode must be 'bm25', 'hybrid', or 'physics'");
@@ -851,11 +864,12 @@ async function handleRequest(
     const summarizeOverflow = summarizeOverflowRaw === null
       ? undefined
       : (summarizeOverflowRaw === '1' || summarizeOverflowRaw === 'true');
-    // v1.7.2 T4: forward as Number(...) — NaN, 0, negative all reach
-    // recall() which throws RecallContractError with code='invalid_scorer_window'.
-    // No transport-side validation; recall() owns the contract.
+    // recall() owns the shape rule (NaN, 0 and negatives throw invalid_scorer_window); the transport caps remote cost.
     const scorerWindowRaw = query.get('scorer_window');
     const scorerWindow = scorerWindowRaw === null ? undefined : Number(scorerWindowRaw);
+    if (scorerWindow !== undefined && scorerWindow > 1000) {
+      throw new HttpError(400, 'scorer_window must be <= 1000');
+    }
     // v1.7.4: session_id for the dlPFC goal-stack boost. 256-char cap mirrors
     // fresh_tail_session_id (above). Trim then drop if empty so api.recall
     // sees undefined when the param is omitted or whitespace-only.

@@ -1,6 +1,7 @@
 import { crossEncoderReranker } from './cross-encoder.js';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
 import type { SearchResult } from '../search.js';
+import { redactSecrets } from '../secret-detect.js';
 
 const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 const DEFAULT_TIMEOUT_MS = 5_000;
@@ -42,8 +43,8 @@ async function requestScores(query: string, head: SearchResult[]): Promise<numbe
   const key = process.env.TYPESAFE_API_KEY;
   if (!key) throw new Error('TYPESAFE_API_KEY not set');
 
-  const lines = head.map((r, i) => `[${i + 1}] ${truncate(r.entry.content, TRUNCATE_CHARS)}`);
-  const state = `Query: ${query}\n\nNumbered candidate memories from an AI coding agent's project store:\n\n${lines.join('\n\n')}`;
+  const lines = head.map((r, i) => `[${i + 1}] ${truncate(redactSecrets(r.entry.content), TRUNCATE_CHARS)}`);
+  const state = `Query: ${redactSecrets(query)}\n\nNumbered candidate memories from an AI coding agent's project store:\n\n${lines.join('\n\n')}`;
   const questions: Record<string, { type: string; instructions: string }> = {};
   for (let i = 1; i <= head.length; i++) {
     questions[`c${i}`] = {

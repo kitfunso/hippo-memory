@@ -250,6 +250,7 @@ export async function searchBothHybrid(
       ? loadRecallSearchEntries(
           root, query, searchWindow, tenantId, recallScope.requested,
           recallScope.additive ? 'additive' : 'exact',
+          Boolean(includeSuperseded) || Boolean(asOf),
         )
       : loadSearchEntries(root, query, searchWindow, tenantId);
   };

@@ -4,8 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createMemory, type MemoryEntry } from '../src/memory.js';
-import { initStore, writeEntry, readEntry, deleteEntry, loadAllEntries } from '../src/store.js';
+import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import {
+  initStore, writeEntry, readEntry, deleteEntry, loadAllEntries, loadAllDirtySummaries, batchWriteAndDelete,
+} from '../src/store.js';
 import { consolidate } from '../src/consolidate.js';
 import { deduplicateStore } from '../src/dedupe.js';
 import { sleep, supersede, type Context } from '../src/api.js';
@@ -30,6 +32,12 @@ const ctxFor = (hippoRoot: string): Context =>
   ({ hippoRoot, tenantId: 'default', actor: { subject: 'sleep-test', role: 'admin' } });
 const sixtyDaysOn = (): Date => new Date(Date.now() + 60 * DAY);
 const CACHE_FACT = 'the build cache lives in /var/cache/hippo on the CI runners';
+
+function summarizer(text: string) {
+  vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('real network call in a test'); }));
+  vi.stubEnv('ANTHROPIC_API_KEY', 'test-not-a-key');
+  return vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ content: [{ text }] }), { status: 200 }));
+}
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -92,6 +100,33 @@ describe('H10: the sleep audit and dedup respect raw and pinned rows', () => {
     expect(readEntry(root, pinnedCopy.id)).not.toBeNull();
   });
 
+  it('an automatic delete refuses a pinned or raw row; an explicit forget still deletes', () => {
+    const root = newRoot();
+    const pinned = createMemory('ok ok', { pinned: true });
+    const raw = rawRow('yes!');
+    for (const e of [pinned, raw]) writeEntry(root, e);
+
+    expect(deleteEntry(root, pinned.id, { automatic: true })).toBe(false);
+    expect(deleteEntry(root, raw.id, { automatic: true })).toBe(false);
+    expect(readEntry(root, raw.id)).not.toBeNull();
+    expect(deleteEntry(root, pinned.id)).toBe(true);
+  });
+
+  it('the sleep audit keeps a row pinned after its snapshot was taken', async () => {
+    const root = newRoot();
+    const pinned = createMemory('nope', { pinned: true });
+    writeEntry(root, pinned);
+    const staleIssue = { memoryId: pinned.id, content: 'nope', severity: 'error' as const, reason: 'too short' };
+
+    const result = await sleep(ctxFor(root), {
+      noShare: true,
+      __phases: { auditMemories: () => ({ total: 1, clean: 0, issues: [staleIssue] }) },
+    });
+
+    expect(readEntry(root, pinned.id)).not.toBeNull();
+    expect(result.audit?.errorsRemoved ?? 0).toBe(0);
+  });
+
   it('a dry run previews the dedup and audit deletes and deletes nothing', async () => {
     const root = newRoot();
     const rows = [createMemory('nope'), createMemory(CACHE_FACT), { ...createMemory(CACHE_FACT), strength: 0.5 }];
@@ -140,11 +175,58 @@ describe('C1: a row changed while sleep awaits the LLM keeps the change', () => 
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('real network call in a test'); }));
     vi.stubEnv('ANTHROPIC_API_KEY', 'test-not-a-key');
 
-    await consolidate(root, { now: sixtyDaysOn(), fetcher });
+    const result = await consolidate(root, { now: sixtyDaysOn(), fetcher });
 
     expect(fetcher).toHaveBeenCalled();
     expect(readEntry(root, condemned.id)?.pinned).toBe(true);
     expect(readEntry(root, forgotten.id)).toBeNull();
     expect(readEntry(root, replaced.id)?.superseded_by).toBeTruthy();
+    expect(result.removed).toBe(0);
+    expect(result.removedIds).toEqual([]);
+    expect(result.details).toContain(`  ↩  ${condemned.id} not removed: pinned or already gone before sleep saved`);
+  });
+
+  it('facts linked to a new summary keep the link, so the next sleep pays for no duplicate or rebuild', async () => {
+    const root = newRoot();
+    const facts = ['alice moved the deploy to friday', 'alice owns the billing service', 'alice reviews every schema change']
+      .map((text) => createMemory(text, { layer: Layer.Semantic, dag_level: 1, tags: ['extracted', 'speaker:alice'] }));
+    for (const f of facts) writeEntry(root, f);
+    const fetcher = summarizer('Alice moved the deploy to Friday, owns billing and reviews schema changes.');
+
+    await consolidate(root, { now: new Date(Date.now() + DAY), fetcher });
+    await consolidate(root, { now: new Date(Date.now() + 2 * DAY), fetcher });
+
+    const after = facts.map((f) => readEntry(root, f.id)!);
+    expect(after[0]!.dag_parent_id).toBeTruthy();
+    expect(new Set(after.map((f) => f.dag_parent_id)).size).toBe(1);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(loadAllDirtySummaries(root)).toEqual([]);
+  });
+
+  it('a summary rebuilt during sleep keeps its new text', async () => {
+    const root = newRoot();
+    const summary = createMemory('alice owns the billing service', {
+      layer: Layer.Semantic, dag_level: 2, tags: ['speaker:alice', 'dag-summary'],
+    });
+    writeEntry(root, summary);
+    writeEntry(root, createMemory('alice now also runs the friday deploy', {
+      layer: Layer.Semantic, dag_level: 1, dag_parent_id: summary.id, tags: ['extracted', 'speaker:alice'],
+    }));
+    const rebuilt = 'Alice owns the billing service and runs the Friday deploy.';
+
+    await consolidate(root, { now: new Date(Date.now() + DAY), fetcher: summarizer(rebuilt) });
+
+    expect(readEntry(root, summary.id)?.content).toBe(rebuilt);
+  });
+
+  it('a row queued twice in one flush keeps its last version, even a field set back to its loaded value', () => {
+    const root = newRoot();
+    writeEntry(root, createMemory('the deploy runs on friday'));
+    const [loaded] = loadAllEntries(root);
+    const snapshot = new Map([[loaded!.id, structuredClone(loaded!)]]);
+
+    batchWriteAndDelete(root, [{ ...loaded!, strength: 0.5 }, { ...loaded!, retrieval_count: 1 }], [], { snapshot });
+
+    expect(readEntry(root, loaded!.id)).toMatchObject({ strength: loaded!.strength, retrieval_count: 1 });
   });
 });

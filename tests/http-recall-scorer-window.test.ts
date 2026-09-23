@@ -81,4 +81,12 @@ describe('HTTP /v1/memories scorer_window (v1.7.2 T4)', () => {
     const body = await jsonAs<{ error?: string; code?: string }>(res);
     expect(body.code).toBe('invalid_scorer_window');
   });
+
+  it('caps what one remote recall can load and strengthen at 1000', async () => {
+    for (const qs of ['scorer_window=1001', 'limit=1001', 'limit=1.5']) {
+      const res = await fetch(`${handle.url}/v1/memories?q=alpha&${qs}`);
+      expect(res.status, qs).toBe(400);
+    }
+    expect((await fetch(`${handle.url}/v1/memories?q=alpha&scorer_window=1000&limit=1000`)).status).toBe(200);
+  });
 });

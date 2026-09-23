@@ -159,11 +159,7 @@ export function deduplicateStore(
     }
   }
 
-  if (!dryRun) {
-    for (const p of pairs) {
-      deleteEntry(hippoRoot, p.removed, { actor: options.actor, reason: `dedup: duplicate of ${p.kept}` });
-    }
-  }
-
-  return { removed: removed.size, pairs };
+  const done = dryRun ? pairs : pairs.filter((p) =>
+    deleteEntry(hippoRoot, p.removed, { actor: options.actor, reason: `dedup: duplicate of ${p.kept}`, automatic: true }));
+  return { removed: done.length, pairs: done };
 }

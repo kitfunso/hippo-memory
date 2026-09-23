@@ -5,7 +5,16 @@ ERROR_TEXT=$(node -e '
 let raw = "";
 process.stdin.on("data", (chunk) => { raw += chunk; });
 process.stdin.on("end", () => {
-  const payload = JSON.parse(raw);
+  let payload;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    payload = undefined;
+  }
+  if (payload === null || typeof payload !== "object") {
+    process.stderr.write("hippo: capture-error hook got a payload that is not a JSON object\n");
+    return;
+  }
   if (payload.is_interrupt || typeof payload.error !== "string") return;
   const text = `${payload.tool_name}: ${payload.error}`.replace(/\s+/g, " ").trim();
   process.stdout.write(text.slice(0, 200));

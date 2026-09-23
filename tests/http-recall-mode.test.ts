@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { createMemory } from '../src/memory.js';
 import { initStore, writeEntry, loadEntriesByIds, loadIndex } from '../src/store.js';
 import { serve, __resetSessionRecallHistoryHttp, type ServerHandle } from '../src/server.js';
+import { recall, supersede, type Context } from '../src/api.js';
 
 let home: string;
 let handle: ServerHandle;
@@ -54,6 +55,15 @@ describe('GET /v1/memories honours mode and strengthens', () => {
 
   it('mode=hybrid keeps the recency fallback for a query that matches nothing', async () => {
     expect((await recallIds('q=zzzznothingmatches&mode=hybrid')).sort()).toEqual([weakId, strongId].sort());
+  });
+
+  it.each(['bm25', 'hybrid'])('mode=%s and api.recall never return a superseded row', async (mode) => {
+    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' } };
+    const { newId } = supersede(ctx, weakId, 'alpha epsilon zeta');
+    const ids = await recallIds(`q=alpha&mode=${mode}`);
+    expect(ids).toContain(newId);
+    expect(ids).not.toContain(weakId);
+    expect(recall(ctx, { query: 'alpha' }).results.map((r) => r.id)).not.toContain(weakId);
   });
 
   it('strengthens every returned row and leaves last_retrieval_ids alone', async () => {

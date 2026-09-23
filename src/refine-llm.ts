@@ -15,6 +15,7 @@
 
 import { MemoryEntry, Layer } from './memory.js';
 import { loadAllEntries, readEntry, writeEntry } from './store.js';
+import { redactSecrets } from './secret-detect.js';
 
 const REFINED_TAG = 'llm-refined';
 const CONSOLIDATED_MARKERS = [
@@ -64,7 +65,7 @@ export async function refineSemanticMemory(
 
   const sourceBlock = sources
     .slice(0, 8)
-    .map((s, i) => `[source ${i + 1}] ${s.content.slice(0, 400)}`)
+    .map((s, i) => `[source ${i + 1}] ${redactSecrets(s.content).slice(0, 400)}`)
     .join('\n\n');
 
   const prompt = `You are refining a semantic memory in an agent's memory store. The rule-based consolidator merged several related episodic memories into one, but the output is clumsy. Produce a single coherent semantic memory that captures the underlying principle.
@@ -77,7 +78,7 @@ Rules:
 - Do NOT include the "[Consolidated from N ...]" marker.
 
 Current merged content:
-${merged}
+${redactSecrets(merged)}
 
 Source memories (up to 8 shown):
 ${sourceBlock}`;

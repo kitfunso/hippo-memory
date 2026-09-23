@@ -12,7 +12,7 @@ import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import {
   writeEntry,
   writeEntryDbOnly,
-  batchWriteAndDelete,
+  strengthenRetrieved,
   stampOriginProject,
   writeEntryMirrors,
   readEntry,
@@ -63,7 +63,7 @@ import {
 } from './audit.js';
 import { promoteToGlobal, getGlobalRoot, autoShare, searchBothHybrid } from './shared.js';
 import { writeRecallTrace, writeRecallTraceAtRoot, recordTraceOutcome } from './recall-trace.js';
-import { evalNow, isRecallBoostAblated } from './ablation.js';
+import { evalNow } from './ablation.js';
 import { archiveRawMemory } from './raw-archive.js';
 import {
   createApiKey,
@@ -705,13 +705,13 @@ export function buildSuppressionSummary(counts: {
  */
 export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   const windowSize = recallWindowSize(opts);
-  return recallFrom(ctx, opts, windowSize, loadRecallSearchEntries(ctx.hippoRoot, opts.query, windowSize, ctx.tenantId, opts.scope));
+  return recallFrom(ctx, opts, windowSize, loadRecallSearchEntries(ctx.hippoRoot, opts.query, windowSize, ctx.tenantId, opts.scope, 'exact', false));
 }
 
 /** Mode-aware recall that strengthens each returned row; never writes last_retrieval_ids (v1.11.5 lock). */
 export async function retrieve(ctx: Context, opts: RecallOpts): Promise<RecallResult> {
   const windowSize = recallWindowSize(opts);
-  let candidates = loadRecallSearchEntries(ctx.hippoRoot, opts.query, windowSize, ctx.tenantId, opts.scope);
+  let candidates = loadRecallSearchEntries(ctx.hippoRoot, opts.query, windowSize, ctx.tenantId, opts.scope, 'exact', false);
   if (opts.mode === 'hybrid' || opts.mode === 'physics') {
     const searchOpts = { budget: Infinity, hippoRoot: ctx.hippoRoot, scope: opts.scope ?? null };
     const ranked = opts.mode === 'physics'
@@ -721,10 +721,7 @@ export async function retrieve(ctx: Context, opts: RecallOpts): Promise<RecallRe
     candidates = [...ranked.map((r) => r.entry), ...candidates.filter((e) => !rankedIds.has(e.id))];
   }
   const result = recallFrom(ctx, opts, windowSize, candidates);
-  if (!isRecallBoostAblated()) {
-    const retrieved = markRetrieved(loadEntriesByIds(ctx.hippoRoot, result.results.map((r) => r.id), ctx.tenantId));
-    batchWriteAndDelete(ctx.hippoRoot, retrieved, [], { snapshotIds: new Set(retrieved.map((e) => e.id)) });
-  }
+  strengthenRetrieved(ctx.hippoRoot, result.results.map((r) => r.id), ctx.tenantId);
   return result;
 }
 
@@ -803,12 +800,13 @@ function recallFrom(ctx: Context, opts: RecallOpts, windowSize: number, all: Mem
   // v1.12.13 / C5 — WYSIATI totalCandidates counter (post tenant + SQL scope
   // predicate, pre JS scope filter).
   totalCandidatesCount = all.length;
+  const current = all.filter((e) => !e.superseded_by);
   let entries: typeof all;
   if (opts.scope !== undefined && opts.scope !== '') {
     // SQL already exact-matched in loadRecallSearchEntries; keep the JS
     // filter as defense-in-depth so a future SQL-clause regression cannot
     // silently surface cross-scope rows.
-    entries = all.filter((e) => e.scope === opts.scope);
+    entries = current.filter((e) => e.scope === opts.scope);
   } else {
     // SQL already excluded `unknown:legacy` AND (v1.25.0) pre-filtered
     // ':private:' scopes with a conservative LIKE before the candidate
@@ -817,7 +815,7 @@ function recallFrom(ctx: Context, opts: RecallOpts, windowSize: number, all: Mem
     // anchored `<source>:private:*` rule (v1.2.1 generalization) and
     // defense-in-depth: connector authors cannot silently surface private
     // rows to no-scope callers even if the SQL clause regresses.
-    entries = all.filter((e) => !isPrivateScope(e.scope ?? null));
+    entries = current.filter((e) => !isPrivateScope(e.scope ?? null));
   }
   // v1.12.13 / C5 — WYSIATI dropped_pre_rank counter (JS scope filter drops
   // for api.recall; cmdRecall pipeline rolls --outcome/--layer/--as-of/etc.
@@ -896,7 +894,7 @@ function recallFrom(ctx: Context, opts: RecallOpts, windowSize: number, all: Mem
     if (eligibleParentIds.length > 0) {
       const parents = loadEntriesByIds(ctx.hippoRoot, eligibleParentIds, ctx.tenantId);
       const eligibleParents = parents.filter(
-        (p) => (p.dag_level ?? 0) === 2 && passesScopeFilterForRecall(p.scope ?? null, opts.scope),
+        (p) => (p.dag_level ?? 0) === 2 && !p.superseded_by && passesScopeFilterForRecall(p.scope ?? null, opts.scope),
       );
       const maxSub = Math.max(1, Math.ceil(limit * 0.3));
       // Order parents by overflow count descending so the most
@@ -1400,7 +1398,7 @@ export function assemble(
     );
     const parents = eligibleParentIds.length > 0
       ? loadEntriesByIds(ctx.hippoRoot, eligibleParentIds, ctx.tenantId)
-          .filter((p) => (p.dag_level ?? 0) === 2)
+          .filter((p) => (p.dag_level ?? 0) === 2 && !p.superseded_by)
           .filter((p) => passesScopeFilterForRecall(p.scope ?? null, opts.scope))
       : [];
     const claimedRawIds = new Set<string>();
@@ -2825,23 +2823,11 @@ export async function getContext(
     const toUpdate = selectedItems.map((s) => s.entry);
     const updatedEntries = markRetrieved(toUpdate);
     const localIndex = loadIndex(ctx.hippoRoot);
+    const retrievedIds = updatedEntries.map((u) => u.id);
+    const strengthenedHere = strengthenRetrieved(ctx.hippoRoot, retrievedIds);
+    if (hasGlobal) strengthenRetrieved(globalRoot, retrievedIds.filter((id) => !strengthenedHere.has(id)));
 
-    // EVAL-ONLY ablation (see ablation.ts): under the recall flag,
-    // markRetrieved returns unmutated entries (ids preserved for outcome
-    // attribution) and persistence is skipped (identical-row writes still
-    // refresh updated_at / mirrors / DAG dirty flags).
-    if (!isRecallBoostAblated()) {
-      for (const u of updatedEntries) {
-        const targetRoot = localIndex.entries[u.id]
-          ? ctx.hippoRoot
-          : hasGlobal
-            ? globalRoot
-            : ctx.hippoRoot;
-        writeEntry(targetRoot, u);
-      }
-    }
-
-    localIndex.last_retrieval_ids = updatedEntries.map((u) => u.id);
+    localIndex.last_retrieval_ids = retrievedIds;
 
     // LC1 F1 structural fix (docs/plans/2026-08-02-lc1-recall-trace-persistence.md):
     // write the trace FIRST — post-limit, post-annotation `selectedItems`
@@ -3115,7 +3101,7 @@ export async function sleep(
       let removed = 0;
       for (const issue of errors) {
         const reason = `sleep-audit: ${issue.reason}`;
-        if (dryRun || phases.deleteEntry(ctx.hippoRoot, issue.memoryId, { actor: ctx.actor.subject, reason })) removed++;
+        if (dryRun || phases.deleteEntry(ctx.hippoRoot, issue.memoryId, { actor: ctx.actor.subject, reason, automatic: true })) removed++;
       }
       auditDeletedCount = removed;
       if (removed > 0 || warnings.length > 0) {

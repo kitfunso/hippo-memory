@@ -1,7 +1,7 @@
 ### Fixed
 
 - **A mistyped flag no longer runs a delete.** The CLI dropped flags it did not know, so `hippo forget <id> --dryrun` forgot the memory. An unknown flag on `audit`, `dedup`, `forget`, `invalidate`, `reject`, `resolve`, `sleep` or `supersede` now stops the run with exit code 2 and changes nothing. Other commands print a warning to stderr and run as before; a later release will reject the flag there too.
-- **`--dry-run` on a command that has no dry run stops the run.** `hippo reject <id> --dry-run` rejected for real. Only `audit`, `brief`, `capture`, `dedup`, `forget`, `import`, `invalidate`, `project-brief`, `refine`, `setup`, `share` and `sleep` accept it; any other command exits 2 and changes nothing.
+- **`--dry-run` on a command that has no dry run stops the run.** `hippo reject <id> --dry-run` rejected for real. Only `audit`, `capture`, `dedup`, `forget`, `import`, `invalidate`, `refine`, `setup` and `sleep` accept it, and `share`, `brief` and `project-brief` accept it only as `share --auto`, `brief refresh` and `project-brief refresh`. Any other command or form exits 2 and changes nothing.
 - **`hippo forget --dry-run` previews.** It ignored the flag and deleted the memory. It now prints `Would forget <id>`, or `Would archive <id>` with `--archive`, and refuses in the same places the real run does: a missing id, a raw memory without `--archive`, a non-raw memory with it.
 - **`hippo audit --fix --dry-run` previews.** It deleted every error-severity memory. It now lists them and prints `Would remove N error-severity memories`.
 - **`hippo init --no-hooks` no longer repairs the Codex wrapper.** The check looked for `--no-hooks` among the positional arguments, where the parser never puts it, so the repair ran anyway.

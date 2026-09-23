@@ -24,7 +24,7 @@ Any-evidence R@5: a hit when any answer session is in the top 5, as `evaluate_re
 | session_asym | 0.2 : 0.8, session BM25 | 97.8 | 97.8 | **98.0** |
 
 - The replay also matches June's R@3 and R@10 in every setting. R@1 matches in three settings and differs in two: turn_sym gives 89.0 against June's 88.6, and session_sym 88.8 against 89.6. The cause was not investigated.
-- Today's R@1 by setting: 85.4, 90.0, 87.0, 88.4, 87.4.
+- Today's R@1 by setting: 85.4, 90.0, 87.0, 88.4, 87.4. Today's R@10: 98.8, 99.6, 98.8, 99.4, 99.0.
 - All-evidence R@5 counts a hit only when every answer session is in the top 5. It is 85.8 to 87.6 on the June build and 86.0 to 87.4 today. It matters for the questions that have more than one answer session.
 - Embedding the 199,509 turns took 68 minutes on the June build and 44 minutes on today's, on a 24-thread desktop CPU.
 

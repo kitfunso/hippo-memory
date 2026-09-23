@@ -30,7 +30,7 @@
  *   hippo wm <push|read|clear|flush>
  */
 
-import { evalNow, isRecallBoostAblated } from './ablation.js';
+import { evalNow } from './ablation.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -75,6 +75,7 @@ import {
   isInitialized,
   initStore,
   writeEntry,
+  strengthenRetrieved,
   readEntry,
   deleteEntry,
   loadAllEntries,
@@ -117,7 +118,7 @@ import { isHandoffOutcome, formatHandoffEvidenceLine, type SessionHandoff, type 
 import { type Card, isCardStatus } from './card.js';
 import { loadCardDetail, type CardDetail } from './card-detail.js';
 import { passesScopeFilterForRecall } from './recall-scope.js';
-import { search, markRetrieved, estimateTokens, hybridSearch, physicsSearch, explainMatch, textOverlap, tokenize as tokenizeQuery, type RerankStep } from './search.js';
+import { search, estimateTokens, hybridSearch, physicsSearch, explainMatch, textOverlap, tokenize as tokenizeQuery, type RerankStep } from './search.js';
 import { compareEntryIdentity } from './compare.js';
 import { renderTraceContent, parseSteps } from './trace.js';
 import { writeRecallTraceAtRoot } from './recall-trace.js';
@@ -440,9 +441,19 @@ const DESTRUCTIVE_COMMANDS: ReadonlySet<string> = new Set([
 
 // Commands that honour --dry-run. Any other command would ignore it and run for real.
 const DRY_RUN_COMMANDS: ReadonlySet<string> = new Set([
-  'audit', 'brief', 'capture', 'dedup', 'forget', 'import', 'invalidate', 'project-brief', 'refine',
-  'setup', 'share', 'sleep',
+  'audit', 'capture', 'dedup', 'forget', 'import', 'invalidate', 'refine', 'setup', 'sleep',
 ]);
+
+// share and brief honour --dry-run in one form only; their other forms write for real.
+function dryRunRefusal(command: string, args: string[], flags: Record<string, string | boolean | string[]>): string | null {
+  const isBrief = command === 'brief' || command === 'project-brief';
+  const onlyForm = command === 'share' ? 'share --auto' : isBrief ? `${command} refresh` : null;
+  const honoured = command === 'share' ? args[0] === '--auto' || Boolean(flags['auto'])
+    : isBrief ? args[0] === 'refresh' : DRY_RUN_COMMANDS.has(command);
+  if (honoured) return null;
+  const where = onlyForm ? ` outside \`hippo ${onlyForm}\`` : '';
+  return `hippo ${command} has no --dry-run${where}, so it would run for real. Nothing was changed.`;
+}
 
 // Shared by both the separated and glued (`=`) forms so the list can't drift.
 function isRepeatableFlag(key: string): boolean {
@@ -1086,8 +1097,9 @@ async function cmdRecall(
   const recallExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
   const requestedScopeForFilter = recallExplicitScope || undefined;
 
-  let localEntries = loadRecallSearchEntries(hippoRoot, query, undefined, tenantId, requestedScopeForFilter, 'additive');
-  let globalEntries = isInitialized(globalRoot) ? loadRecallSearchEntries(globalRoot, query, undefined, tenantId, requestedScopeForFilter, 'additive') : [];
+  const loadSuperseded = includeSuperseded || Boolean(asOf);
+  let localEntries = loadRecallSearchEntries(hippoRoot, query, undefined, tenantId, requestedScopeForFilter, 'additive', loadSuperseded);
+  let globalEntries = isInitialized(globalRoot) ? loadRecallSearchEntries(globalRoot, query, undefined, tenantId, requestedScopeForFilter, 'additive', loadSuperseded) : [];
 
   // v1.12.13 / C5 — WYSIATI counters. Track filter activity per the plan v3
   // Task 3 mapping table. dropped_pre_rank is the SUM of all non-budget
@@ -1989,22 +2001,13 @@ async function cmdRecall(
     return;
   }
 
-  // Update retrieval metadata and persist
-  const updated = markRetrieved(results.map((r) => r.entry));
+  const retrievedIds = results.map((r) => r.entry.id);
   const localIndex = loadIndex(hippoRoot);
-  // EVAL-ONLY ablation (see ablation.ts): under the recall flag, markRetrieved
-  // returns unmutated entries (ids preserved for outcome attribution below)
-  // and persistence is skipped - writeEntry on identical rows still refreshes
-  // updated_at, rewrites mirrors, and marks DAG parents dirty.
-  if (!isRecallBoostAblated()) {
-    for (const u of updated) {
-      const targetRoot = localIndex.entries[u.id] ? hippoRoot : (isInitialized(globalRoot) ? globalRoot : hippoRoot);
-      writeEntry(targetRoot, u);
-    }
-  }
+  const strengthenedHere = strengthenRetrieved(hippoRoot, retrievedIds);
+  if (isInitialized(globalRoot)) strengthenRetrieved(globalRoot, retrievedIds.filter((id) => !strengthenedHere.has(id)));
 
   // Track last retrieval IDs for outcome command
-  localIndex.last_retrieval_ids = updated.map((u) => u.id);
+  localIndex.last_retrieval_ids = retrievedIds;
 
   // LC1 F1 structural fix (docs/plans/2026-08-02-lc1-recall-trace-persistence.md):
   // ONE trace at hippoRoot (where last_retrieval_ids and outcome
@@ -2245,8 +2248,9 @@ async function cmdExplain(
   // command honest for an operator debugging a hidden row.
   const explainExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
   const explainRequestedScope = explainExplicitScope || undefined;
-  let explainLocalEntries = loadRecallSearchEntries(hippoRoot, query, undefined, tenantId, explainRequestedScope, 'additive');
-  let explainGlobalEntries = isInitialized(globalRoot) ? loadRecallSearchEntries(globalRoot, query, undefined, tenantId, explainRequestedScope, 'additive') : [];
+  const explainLoadSuperseded = explainIncludeSuperseded || Boolean(explainAsOf);
+  let explainLocalEntries = loadRecallSearchEntries(hippoRoot, query, undefined, tenantId, explainRequestedScope, 'additive', explainLoadSuperseded);
+  let explainGlobalEntries = isInitialized(globalRoot) ? loadRecallSearchEntries(globalRoot, query, undefined, tenantId, explainRequestedScope, 'additive', explainLoadSuperseded) : [];
   const passesExplainScope = (e: MemoryEntry) =>
     api.passesCliRecallScopeFilter(e.scope ?? null, explainRequestedScope);
   explainLocalEntries = explainLocalEntries.filter(passesExplainScope);
@@ -3112,7 +3116,9 @@ async function cmdSleepCore(
 
   // Phase 1: Auto-learn from git + MEMORY.md (CLI-only, uses process.cwd() / os.homedir()).
   // Stays in cli.ts; api.sleep covers Phase 2-6 only.
-  if (!flags['no-learn']) {
+  if (!flags['no-learn'] && flags['dry-run']) {
+    console.log('Dry run: skipped learning from git commits and MEMORY.md files.');
+  } else if (!flags['no-learn']) {
     const config = loadConfig(hippoRoot);
     if (config.autoLearnOnSleep && isGitRepo(process.cwd())) {
       const { added } = learnFromRepo(hippoRoot, process.cwd(), 1);
@@ -9450,8 +9456,9 @@ async function main(
     }
     console.error(`hippo: ignoring unknown flag ${names}. A later release will reject it.`);
   }
-  if (Object.hasOwn(flags, 'dry-run') && !DRY_RUN_COMMANDS.has(command)) {
-    console.error(`hippo ${command} has no --dry-run, so it would run for real. Nothing was changed.`);
+  const refusal = Object.hasOwn(flags, 'dry-run') ? dryRunRefusal(command, args, flags) : null;
+  if (refusal) {
+    console.error(refusal);
     process.exit(2);
   }
   switch (command) {
@@ -9686,10 +9693,9 @@ async function main(
             console.log(`\nWould remove ${errors.length} error-severity memories (dry run, nothing deleted).`);
             console.log(`${result.issues.length - errors.length} warnings would remain (review manually).`);
           } else if (errors.length > 0) {
-            for (const issue of errors) {
-              deleteEntry(hippoRoot, issue.memoryId, { reason: `audit --fix: ${issue.reason}` });
-            }
-            console.log(`\nRemoved ${errors.length} error-severity memories.`);
+            const removedCount = errors.filter((issue) =>
+              deleteEntry(hippoRoot, issue.memoryId, { reason: `audit --fix: ${issue.reason}`, automatic: true })).length;
+            console.log(`\nRemoved ${removedCount} error-severity memories.`);
             console.log(`${result.issues.length - errors.length} warnings remain (review manually).`);
           } else {
             console.log(`\nNo error-severity issues. Warnings require manual review.`);

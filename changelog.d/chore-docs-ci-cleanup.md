@@ -7,7 +7,7 @@
 
 ### Fixed
 
-- **The Claude Code plugin's error capture stores errors.** Its script read `$ARGUMENTS`, which Claude Code never sets for hooks, so it saved nothing. It now reads the failure JSON on stdin, skips interrupts and saves the tool name and error as an error memory.
+- **The Claude Code plugin's error capture stores errors.** Its script read `$ARGUMENTS`, which Claude Code never sets for hooks, so it saved nothing. It now reads the failure JSON on stdin, skips interrupts and saves the tool name and error as an error memory. A payload that is not a JSON object, `null` included, prints one line to stderr and saves nothing.
 - **The Claude Code plugin runs the same hooks as `hippo hook install`.** Session end now writes the sleep log that the next session start prints, and the plugin gains the pinned-rule inject on each prompt, the snapshot before compaction and the resume after it. The plugin is now 0.5.0.
 
 ### Documentation

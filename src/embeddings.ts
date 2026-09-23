@@ -6,6 +6,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { randomUUID } from 'crypto';
 import { createRequire } from 'module';
 import { MemoryEntry } from './memory.js';
 import { loadAllEntries } from './store.js';
@@ -424,8 +425,9 @@ export function saveEmbeddingIndex(hippoRoot: string, index: Record<string, numb
 
 const EMBED_LOCK_FILE = 'embeddings.lock';
 const EMBED_LOCK_WAIT_MS = 10_000;
+const EMBED_LOCK_OWNER = `${process.pid}:${randomUUID()}`;
 
-// In-process mutex plus an O_EXCL lock file, so no two processes read-modify-write embeddings.json at once.
+// In-process mutex plus an O_EXCL "<pid>:<token>" lock file: our token is a lock we leaked; our PID with another token is a live worker thread, unless the lock predates this process (a reused PID).
 let _embedWriteLock: Promise<void> = Promise.resolve();
 
 function embedLockHolderAlive(lockPath: string): boolean {
@@ -435,11 +437,12 @@ function embedLockHolderAlive(lockPath: string): boolean {
   } catch (err) {
     return !(err instanceof Error && 'code' in err && err.code === 'ENOENT');
   }
-  const pid = Number(raw);
+  const mtimeMs = fs.statSync(lockPath, { throwIfNoEntry: false })?.mtimeMs ?? 0;
+  const pid = Number(raw.split(':')[0]);
   // An empty lock is a holder between create and write; after 5 s it is a crashed one.
-  if (!Number.isInteger(pid) || pid <= 0) {
-    return Date.now() - (fs.statSync(lockPath, { throwIfNoEntry: false })?.mtimeMs ?? 0) < 5_000;
-  }
+  if (!Number.isInteger(pid) || pid <= 0) return Date.now() - mtimeMs < 5_000;
+  if (raw === EMBED_LOCK_OWNER) return false;
+  if (pid === process.pid) return mtimeMs >= Date.now() - process.uptime() * 1000;
   try {
     process.kill(pid, 0);
     return true;
@@ -448,13 +451,25 @@ function embedLockHolderAlive(lockPath: string): boolean {
   }
 }
 
+// After the double-break race below the file can be another writer's lock, so remove only our own.
+function releaseEmbedFileLock(lockPath: string): void {
+  let raw: string;
+  try {
+    raw = fs.readFileSync(lockPath, 'utf8');
+  } catch (err) {
+    if (err instanceof Error && 'code' in err && err.code === 'ENOENT') return;
+    throw err;
+  }
+  if (raw === EMBED_LOCK_OWNER) fs.rmSync(lockPath, { force: true });
+}
+
 async function acquireEmbedFileLock(hippoRoot: string): Promise<() => void> {
   const lockPath = path.join(hippoRoot, EMBED_LOCK_FILE);
   const deadline = Date.now() + EMBED_LOCK_WAIT_MS;
   for (;;) {
     try {
-      fs.writeFileSync(lockPath, String(process.pid), { flag: 'wx' });
-      return () => fs.rmSync(lockPath, { force: true });
+      fs.writeFileSync(lockPath, EMBED_LOCK_OWNER, { flag: 'wx' });
+      return () => releaseEmbedFileLock(lockPath);
     } catch (err) {
       if (!(err instanceof Error && 'code' in err && err.code === 'EEXIST')) throw err;
     }

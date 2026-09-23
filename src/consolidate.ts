@@ -150,6 +150,7 @@ export async function consolidate(
   // with no cross-tenant dedup. The api.sleep audit row tags this with the
   // admin synthetic actor; see api.ts:2050 for the rationale.
   const all = loadAllEntries(hippoRoot);
+  const snapshot = new Map(structuredClone(all).map((e) => [e.id, e]));
 
   // Load decay options from config + session context
   const config = loadConfig(hippoRoot);
@@ -504,7 +505,7 @@ export async function consolidate(
     survivors.filter((e) => e.extracted_from).map((e) => e.extracted_from!),
   );
   const extractionCandidates = survivors.filter(
-    (e) => e.layer === Layer.Episodic && !extractedFromIds.has(e.id),
+    (e) => e.layer === Layer.Episodic && !e.superseded_by && !extractedFromIds.has(e.id),
   );
   result.extractionCandidates = extractionCandidates.length;
 
@@ -541,7 +542,7 @@ export async function consolidate(
   // 1.7. DAG summarization — cluster extracted facts and generate summaries
   // -------------------------------------------------------------------------
   const extractedFacts = survivors.filter(
-    (e) => e.tags.includes('extracted') && e.dag_level === 1,
+    (e) => e.tags.includes('extracted') && e.dag_level === 1 && !e.superseded_by,
   );
   if (apiKey && extractedFacts.length >= 3 && !dryRun) {
     try {
@@ -684,7 +685,7 @@ export async function consolidate(
   // 3. Merge pass  - episodic entries only
   // -------------------------------------------------------------------------
   const mergeCandidates = survivors.filter(
-    (e) => e.layer === Layer.Episodic && !e.tags.includes('extracted'),
+    (e) => e.layer === Layer.Episodic && !e.superseded_by && !e.tags.includes('extracted'),
   );
   const used = new Set<string>();
 
@@ -830,9 +831,14 @@ export async function consolidate(
   }
 
   result.removedIds = pendingDeletes;
-  // Flush all writes/deletes in a single transaction
+  // One transaction; the snapshot keeps what the DAG passes and other writers changed while sleep ran.
   if (!dryRun) {
-    batchWriteAndDelete(hippoRoot, pendingWrites, pendingDeletes, { snapshotIds: new Set(all.map((e) => e.id)) });
+    const deleted = new Set(batchWriteAndDelete(hippoRoot, pendingWrites, pendingDeletes, { snapshot }));
+    for (const id of pendingDeletes) {
+      if (!deleted.has(id)) result.details.push(`  ↩  ${id} not removed: pinned or already gone before sleep saved`);
+    }
+    result.removedIds = pendingDeletes.filter((id) => deleted.has(id));
+    result.removed = result.removedIds.length;
   }
 
   // -------------------------------------------------------------------------
