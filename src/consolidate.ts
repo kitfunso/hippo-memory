@@ -8,7 +8,7 @@
  */
 
 import { evalNow, isRecallBoostAblated } from './ablation.js';
-import { MemoryEntry, Layer, calculateStrength, createMemory, type DecayOptions } from './memory.js';
+import { MemoryEntry, Layer, calculateStrength, canAutoDelete, createMemory, type DecayOptions } from './memory.js';
 import {
   loadAllEntries,
   writeEntry,
@@ -98,6 +98,8 @@ export interface ConsolidationResult {
   dryRun: boolean;
   details: string[];
   physicsSimulated: number;
+  /** Ids the decay pass removes (or would remove, under dryRun). */
+  removedIds?: string[];
 }
 
 const REPLAY_COUNT_DEFAULT = 5;
@@ -116,7 +118,7 @@ function isJsonString(value: JsonValue): value is string {
  */
 export async function consolidate(
   hippoRoot: string,
-  options: { dryRun?: boolean; now?: Date } = {}
+  options: { dryRun?: boolean; now?: Date; fetcher?: typeof fetch } = {}
 ): Promise<ConsolidationResult> {
   const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
   const dryRun = options.dryRun ?? false;
@@ -191,13 +193,13 @@ export async function consolidate(
     for (const entry of all) {
       const strength = calculateStrength(entry, now, decayOpts);
       strengthById.set(entry.id, strength);
-      if (!entry.pinned && strength < DECAY_THRESHOLD) {
+      if (canAutoDelete(entry) && strength < DECAY_THRESHOLD) {
         condemned.push(entry);
       }
     }
 
     // --- Phase 2a: rescue decision (pure compute) ---
-    // Runs under --dry-run too (only pendingDeletes/the audit write in
+    // Runs under --dry-run too (only the pendingDeletes flush and the audit write in
     // "4. Log run" below stay !dryRun-gated), so the preview matches what a
     // real run would decide.
     const condemnedIds = new Set(condemned.map((e) => e.id));
@@ -238,7 +240,7 @@ export async function consolidate(
     // preserves flag-off's ordering semantics exactly.)
     for (const entry of all) {
       const strength = strengthById.get(entry.id)!;
-      if (!entry.pinned && strength < DECAY_THRESHOLD) {
+      if (canAutoDelete(entry) && strength < DECAY_THRESHOLD) {
         if (rescuedIds.has(entry.id)) {
           // Rescued (D1): standard survivor stored-strength refresh (P2-1).
           // Confidence is left alone here: it is an epistemic tier, not a
@@ -258,9 +260,7 @@ export async function consolidate(
         } else {
           result.removed++;
           result.details.push(`  🗑  removed ${entry.id} (strength ${strength.toFixed(4)} < ${DECAY_THRESHOLD})`);
-          if (!dryRun) {
-            pendingDeletes.push(entry.id);
-          }
+          pendingDeletes.push(entry.id);
         }
       } else {
         const updated = { ...entry, strength };
@@ -275,12 +275,10 @@ export async function consolidate(
     for (const entry of all) {
       const strength = calculateStrength(entry, now, decayOpts);
 
-      if (!entry.pinned && strength < DECAY_THRESHOLD) {
+      if (canAutoDelete(entry) && strength < DECAY_THRESHOLD) {
         result.removed++;
         result.details.push(`  🗑  removed ${entry.id} (strength ${strength.toFixed(4)} < ${DECAY_THRESHOLD})`);
-        if (!dryRun) {
-          pendingDeletes.push(entry.id);
-        }
+        pendingDeletes.push(entry.id);
       } else {
         // Only strength is a cached computation; confidence stays as stored.
         const updated = { ...entry, strength };
@@ -510,23 +508,30 @@ export async function consolidate(
   );
   result.extractionCandidates = extractionCandidates.length;
 
-  const apiKey = process.env.ANTHROPIC_API_KEY ?? '';
+  // extraction.enabled=false is the opt-out for every LLM phase below, key or no key.
+  const apiKey = config.extraction.enabled !== false ? (process.env.ANTHROPIC_API_KEY ?? '') : '';
+  const llmErrorsSeen = new Set<string>();
+  const llmError = (phase: string) => (msg: string): void => {
+    const line = `  ⚠️ ${phase}: ${msg}`;
+    if (llmErrorsSeen.has(line)) return;
+    llmErrorsSeen.add(line);
+    result.details.push(line);
+    console.error(`consolidate ${phase}: ${msg}`);
+  };
+  const llmOpts = { apiKey, model: config.extraction.model, fetcher: options.fetcher };
   if (apiKey && extractionCandidates.length > 0 && !dryRun) {
     const { extractFacts, storeExtractedFacts } = await import('./extract.js');
     const batchLimit = 20;
     let extractedCount = 0;
     for (const candidate of extractionCandidates.slice(0, batchLimit)) {
       try {
-        const facts = await extractFacts(candidate.content, {
-          apiKey,
-          model: config.extraction.model,
-        });
+        const facts = await extractFacts(candidate.content, { ...llmOpts, onError: llmError('extraction') });
         if (facts.length > 0) {
           storeExtractedFacts(hippoRoot, candidate, facts);
           extractedCount += facts.length;
         }
-      } catch {
-        // Best-effort — continue with next candidate
+      } catch (err) {
+        llmError('extraction')(String(err));
       }
     }
     result.extracted = extractedCount;
@@ -541,17 +546,14 @@ export async function consolidate(
   if (apiKey && extractedFacts.length >= 3 && !dryRun) {
     try {
       const { buildDag } = await import('./dag.js');
-      const dagResult = await buildDag(hippoRoot, extractedFacts, {
-        apiKey,
-        model: config.extraction.model,
-      });
+      const dagResult = await buildDag(hippoRoot, extractedFacts, { ...llmOpts, onError: llmError('dag') });
       result.dagCandidateClusters = dagResult.candidateClusters;
       result.dagSummariesCreated = dagResult.summariesCreated;
       if (dagResult.summariesCreated > 0) {
         result.details.push(`  🌳 DAG: ${dagResult.summariesCreated} summaries created, ${dagResult.factsLinked} facts linked`);
       }
-    } catch {
-      // Best-effort
+    } catch (err) {
+      llmError('dag')(String(err));
     }
   }
 
@@ -572,11 +574,7 @@ export async function consolidate(
       const cap = Number.isFinite(rawCap) && rawCap > 0
         ? Math.min(rawCap, 1000)
         : 20;
-      const rebuildResult = await rebuildDirtySummaries(hippoRoot, {
-        apiKey,
-        model: config.extraction.model,
-        cap,
-      });
+      const rebuildResult = await rebuildDirtySummaries(hippoRoot, { ...llmOpts, onError: llmError('dag rebuild'), cap });
       result.summariesRebuilt = rebuildResult.rebuilt;
       result.summariesRebuildFailed = rebuildResult.failed;
       result.summariesZeroChildSkipped = rebuildResult.zeroChildSkipped;
@@ -591,8 +589,8 @@ export async function consolidate(
         if (rebuildResult.capped) parts.push(`CAPPED@${cap}`);
         result.details.push(`  🌳 DAG rebuild: ${parts.join(', ')}`);
       }
-    } catch {
-      // Best-effort — same posture as buildDag block above.
+    } catch (err) {
+      llmError('dag rebuild')(String(err));
     }
   }
 
@@ -611,17 +609,14 @@ export async function consolidate(
       const { loadAllL2Summaries } = await import('./store.js');
       const l2Summaries = loadAllL2Summaries(hippoRoot);
       if (l2Summaries.length >= 2) {
-        const profileResult = await buildEntityProfiles(hippoRoot, l2Summaries, {
-          apiKey,
-          model: config.extraction.model,
-        });
+        const profileResult = await buildEntityProfiles(hippoRoot, l2Summaries, { ...llmOpts, onError: llmError('dag profiles') });
         result.entityProfilesCreated = profileResult.profilesCreated;
         if (profileResult.profilesCreated > 0) {
           result.details.push(`  🌲 DAG L3: ${profileResult.profilesCreated} entity profiles, ${profileResult.l2sLinked} L2s linked`);
         }
       }
-    } catch {
-      // Best-effort.
+    } catch (err) {
+      llmError('dag profiles')(String(err));
     }
   }
 
@@ -834,9 +829,10 @@ export async function consolidate(
     );
   }
 
+  result.removedIds = pendingDeletes;
   // Flush all writes/deletes in a single transaction
   if (!dryRun) {
-    batchWriteAndDelete(hippoRoot, pendingWrites, pendingDeletes);
+    batchWriteAndDelete(hippoRoot, pendingWrites, pendingDeletes, { snapshotIds: new Set(all.map((e) => e.id)) });
   }
 
   // -------------------------------------------------------------------------

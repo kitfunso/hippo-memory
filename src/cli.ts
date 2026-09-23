@@ -865,6 +865,7 @@ async function cmdRemember(
   // A5 stub auth: stamp tenant_id from env (HIPPO_TENANT) so recall isolation
   // can filter on this row. Default tenant 'default' for unauthenticated CLI.
   const tenantId = resolveTenantId({});
+  const rememberConfig = loadConfig(targetRoot);
 
   const entry = createMemory(text, {
     layer: Layer.Episodic,
@@ -878,6 +879,7 @@ async function cmdRemember(
     owner: ownerFlag,
     artifact_ref: artifactRefFlag,
     tenantId,
+    baseHalfLifeDays: rememberConfig.defaultHalfLifeDays,
   });
 
   // Auto-tag with path context
@@ -895,7 +897,6 @@ async function cmdRemember(
   }
 
   // Salience gate: decide if this memory is worth storing
-  const rememberConfig = loadConfig(targetRoot);
   if (rememberConfig.salience.enabled && !Boolean(flags['pin']) && !Boolean(flags['force'])) {
     const salienceResult = computeSalience(text, entry.tags, existing, {
       recentWindow: rememberConfig.salience.recentWindow,
@@ -940,13 +941,15 @@ async function cmdRemember(
       const facts = await extractFacts(entry.content, {
         apiKey,
         model: config.extraction.model,
+        onError: (msg) => console.error(`  (extraction failed: ${msg})`),
       });
       if (facts.length > 0) {
         storeExtractedFacts(targetRoot, entry, facts);
         console.error(`  extracted ${facts.length} fact(s)`);
       }
-    } catch {
-      // Extraction is best-effort — never block remember
+    } catch (err) {
+      // Extraction is best-effort: report it, never block remember.
+      console.error(`  (extraction failed: ${err instanceof Error ? err.message : String(err)})`);
     }
   } else if (shouldExtract && !apiKey) {
     console.error('  (extraction skipped: ANTHROPIC_API_KEY not set)');
@@ -3036,12 +3039,12 @@ export function renderSleepResult(result: api.SleepResult): void {
     if (semDups > 0) parts.push(`${semDups} redundant semantic patterns`);
     if (epiDups > 0) parts.push(`${epiDups} duplicate episodic lessons`);
     if (crossDups > 0) parts.push(`${crossDups} cross-layer duplicates`);
-    console.log(`\nDeduped ${removed} duplicates (${parts.join(', ')}). Kept stronger copies.`);
+    console.log(`\n${result.dryRun ? 'Would dedupe' : 'Deduped'} ${removed} duplicates (${parts.join(', ')}). ${result.dryRun ? 'Would keep' : 'Kept'} stronger copies.`);
   }
 
   if (result.audit) {
     if (result.audit.errorsRemoved > 0) {
-      console.log(`\nAudit: removed ${result.audit.errorsRemoved} junk memories (too short/empty).`);
+      console.log(`\nAudit: ${result.dryRun ? 'would remove' : 'removed'} ${result.audit.errorsRemoved} junk memories (too short/empty).`);
     }
     if (result.audit.warningCount > 0) {
       console.log(`Audit: ${result.audit.warningCount} low-quality memories detected (run \`hippo audit\` for details).`);

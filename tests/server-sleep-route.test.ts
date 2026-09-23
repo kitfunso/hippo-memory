@@ -81,7 +81,7 @@ describe('POST /v1/sleep', () => {
     expect(body.removed).toEqual(expect.any(Number));
   });
 
-  it('dry_run=true returns dryRun:true and skips later phases', async () => {
+  it('dry_run=true previews dedup/audit and skips share/ambient', async () => {
     const ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     remember(ctx, { content: 'dry-run-canary' });
 
@@ -100,7 +100,7 @@ describe('POST /v1/sleep', () => {
     }>(res);
     expect(body.dryRun).toBe(true);
     expect(body.deduped).toBeUndefined();
-    expect(body.audit).toBeUndefined();
+    expect(body.audit).toEqual({ errorsRemoved: 0, warningCount: 1 });
     expect(body.shared).toBeUndefined();
     expect(body.ambient).toBeUndefined();
   });

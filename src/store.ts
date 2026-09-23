@@ -1958,7 +1958,7 @@ export function loadChildrenOf(
 export function deleteEntryCore(
   db: ReturnType<typeof openHippoDb>,
   id: string,
-  opts?: { actor?: string; suppressForgetAudit?: boolean },
+  opts?: { actor?: string; suppressForgetAudit?: boolean; reason?: string },
 ): { tenantId: string; dagParentId: string | null } | null {
   // SAFETY: row's shape matches the three columns named in the SELECT above.
   const row = db
@@ -1969,7 +1969,7 @@ export function deleteEntryCore(
   db.prepare(`DELETE FROM memories WHERE id = ?`).run(id);
   deleteFtsRow(db, id);
   if (!opts?.suppressForgetAudit) {
-    audit(db, 'forget', id, undefined, opts?.actor ?? 'cli', row.tenant_id);
+    audit(db, 'forget', id, opts?.reason ? { reason: opts.reason } : undefined, opts?.actor ?? 'cli', row.tenant_id);
   }
   // v0.30 / E2 — DAG live-coupling: forget of a child under a level-2
   // summary marks parent dirty. Non-atomic with the DELETE (no SAVEPOINT
@@ -1996,7 +1996,7 @@ export function deleteEntryCore(
 export function deleteEntry(
   hippoRoot: string,
   id: string,
-  opts?: { actor?: string },
+  opts?: { actor?: string; reason?: string },
 ): boolean {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
@@ -2013,13 +2013,14 @@ export function deleteEntry(
 }
 
 /**
- * Batch-write and batch-delete entries in a single transaction.
- * Used by consolidation to avoid N open/close cycles.
+ * Batch-write and batch-delete entries in one transaction (consolidation's flush).
+ * A write for a `snapshotIds` row that is gone now was forgotten mid-sleep: skip it, never resurrect.
  */
 export function batchWriteAndDelete(
   hippoRoot: string,
   toWrite: MemoryEntry[],
   toDeleteIds: string[],
+  opts?: { snapshotIds?: ReadonlySet<string> },
 ): void {
   if (toWrite.length === 0 && toDeleteIds.length === 0) return;
 
@@ -2042,14 +2043,16 @@ export function batchWriteAndDelete(
     // dirty for the dominant mutation source (decay, merge, garbage-collect).
     const dirtyParents = new Set<string>();
     const tenantById = new Map<string, string>();
+    const deletableIds: string[] = [];
     if (toDeleteIds.length > 0) {
       const placeholders = toDeleteIds.map(() => '?').join(',');
-      // SAFETY: rows' shape matches the two columns named in the SELECT
-      // above.
+      // `pinned = 0`: a row pinned after the caller decided to delete it survives.
+      // SAFETY: rows' shape matches the three columns named in the SELECT.
       const rows = db.prepare(
-        `SELECT dag_parent_id, tenant_id FROM memories WHERE id IN (${placeholders})`,
-      ).all(...toDeleteIds) as Array<{ dag_parent_id: string | null; tenant_id: string | null }>;
+        `SELECT id, dag_parent_id, tenant_id FROM memories WHERE id IN (${placeholders}) AND pinned = 0`,
+      ).all(...toDeleteIds) as Array<{ id: string; dag_parent_id: string | null; tenant_id: string | null }>;
       for (const row of rows) {
+        deletableIds.push(row.id);
         if (row.dag_parent_id) {
           dirtyParents.add(row.dag_parent_id);
           tenantById.set(row.dag_parent_id, row.tenant_id ?? 'default');
@@ -2079,7 +2082,7 @@ export function batchWriteAndDelete(
     // demotion/replay re-persist of a rejected-removed row means it stays
     // gone, which is the entire point of the tombstone.
     let batchRejectedSkips = 0;
-    const skippedWriteIds = new Set<string>();
+    const written: MemoryEntry[] = [];
     for (const entry of stampedWrites) {
       const entryTenantId = entry.tenantId ?? 'default';
       // Codex delta-review P2 fix: reuse checkRejectionGuard rather than a
@@ -2096,7 +2099,6 @@ export function batchWriteAndDelete(
       } catch (err) {
         if (err instanceof RejectedValueError) {
           batchRejectedSkips++;
-          skippedWriteIds.add(entry.id);
           audit(
             db,
             'reject_refusal',
@@ -2109,6 +2111,12 @@ export function batchWriteAndDelete(
         }
         throw err;
       }
+      // SAFETY: the SELECT names these three columns. The live row wins: pin, kind and supersession can change mid-sleep.
+      const live = db.prepare('SELECT pinned, kind, superseded_by FROM memories WHERE id = ?')
+        .get(entry.id) as { pinned: number; kind: MemoryKind; superseded_by: string | null } | undefined;
+      if (!live && opts?.snapshotIds?.has(entry.id)) continue;
+      const row = live ? { ...entry, pinned: live.pinned === 1, kind: live.kind, superseded_by: live.superseded_by } : entry;
+      written.push(row);
       // AT1 (plan §3, corrected): bypass the rejection guard here.
       // Consolidation merges are DETERMINISTIC CONCATENATION (mergeContents,
       // consolidate.ts:736-751) of already-guarded leaf facts, not an LLM
@@ -2121,14 +2129,14 @@ export function batchWriteAndDelete(
       // check and this COMMIT. The guard itself still belongs on leaf
       // inserts, which write through writeEntry / writeEntryDbOnly and stay
       // guarded (bypassRejectionGuard defaults false).
-      upsertEntryRow(db, entry, true);
+      upsertEntryRow(db, row, true);
       // Hook for writes: child upserted under a level-2 summary marks parent dirty.
-      if (entry.dag_parent_id) {
-        dirtyParents.add(entry.dag_parent_id);
-        tenantById.set(entry.dag_parent_id, entry.tenantId);
+      if (row.dag_parent_id) {
+        dirtyParents.add(row.dag_parent_id);
+        tenantById.set(row.dag_parent_id, row.tenantId);
       }
     }
-    for (const id of toDeleteIds) {
+    for (const id of deletableIds) {
       db.prepare('DELETE FROM memories WHERE id = ?').run(id);
       deleteFtsRow(db, id);
     }
@@ -2148,11 +2156,10 @@ export function batchWriteAndDelete(
     // Sync mirrors once after all DB writes. Entries skipped above were
     // never inserted — writing their markdown mirror would resurrect the
     // exact content the skip just kept out of the DB.
-    for (const entry of stampedWrites) {
-      if (skippedWriteIds.has(entry.id)) continue;
+    for (const entry of written) {
       writeMarkdownMirror(hippoRoot, entry);
     }
-    for (const id of toDeleteIds) {
+    for (const id of deletableIds) {
       removeEntryMirrors(hippoRoot, id);
     }
     writeIndexMirror(hippoRoot, buildIndexFromDb(db));
@@ -2428,6 +2435,22 @@ export function appendConsolidationRun(
     );
     pruneConsolidationRuns(db, 50);
     writeStatsMirror(hippoRoot, buildStatsFromDb(db));
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** Rows a tenant created since the last sleep (runs are host-wide), looking back at most 24 hours. */
+export function countCreatedSinceLastSleep(hippoRoot: string, tenantId: string, now: Date = new Date()): number {
+  initStore(hippoRoot);
+  const db = openHippoDb(hippoRoot);
+  try {
+    const dayAgo = new Date(now.getTime() - 86_400_000).toISOString();
+    const row = db.prepare(
+      `SELECT COUNT(*) AS n FROM memories WHERE tenant_id = ?
+         AND created > MAX(?, COALESCE((SELECT MAX(timestamp) FROM consolidation_runs), ''))`,
+    ).get<{ n: number }>(tenantId, dayAgo);
+    return row.n;
   } finally {
     closeHippoDb(db);
   }

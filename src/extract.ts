@@ -1,6 +1,7 @@
 import { MemoryEntry, Layer, EmotionalValence, createMemory } from './memory.js';
 import { writeEntry } from './store.js';
 import { RejectedValueError } from './rejection.js';
+import { redactSecrets } from './secret-detect.js';
 
 export interface ExtractedFact {
   content: string;
@@ -12,6 +13,8 @@ export interface ExtractOptions {
   apiKey: string;
   model?: string;
   fetcher?: typeof fetch;
+  /** Told why a call produced nothing, so callers can surface it instead of guessing. */
+  onError?: (msg: string) => void;
 }
 
 /** JSON value shape for fields pulled off the untyped, parsed LLM response
@@ -54,14 +57,18 @@ export async function extractFacts(
       body: JSON.stringify({
         model,
         max_tokens: 1200,
-        messages: [{ role: 'user', content: EXTRACTION_PROMPT + text }],
+        messages: [{ role: 'user', content: EXTRACTION_PROMPT + redactSecrets(text) }],
       }),
     });
-  } catch {
+  } catch (err) {
+    opts.onError?.(`request failed: ${err instanceof Error ? err.message : String(err)}`);
     return [];
   }
 
-  if (!res.ok) return [];
+  if (!res.ok) {
+    opts.onError?.(`HTTP ${res.status}`);
+    return [];
+  }
 
   try {
     const data: { content?: Array<{ text?: string }> } = await res.json();
@@ -96,7 +103,8 @@ export async function extractFacts(
     }
 
     return facts;
-  } catch {
+  } catch (err) {
+    opts.onError?.(`unparseable response: ${err instanceof Error ? err.message : String(err)}`);
     return [];
   }
 }

@@ -2,7 +2,7 @@
  * Runtime tests for api.sleep (Episode A, Task 4).
  *
  * Validates the documented contract of the narrowed sleep API:
- *   - dryRun returns early after consolidate; dedup/audit/share/ambient skipped
+ *   - dryRun previews dedup/audit, then returns before share/ambient
  *   - non-dry-run runs the full pure-storage pipeline
  *   - empty store returns the well-formed zero SleepResult
  *   - noShare prevents auto-share regardless of config.autoShareOnSleep
@@ -53,7 +53,7 @@ function tmpHome() {
 }
 
 describe('api.sleep', () => {
-  it('dryRun returns SleepResult.dryRun=true and skips dedup/audit/share/ambient', async () => {
+  it('dryRun previews dedup/audit, skips share/ambient, and deletes nothing', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: Context = {
@@ -66,9 +66,9 @@ describe('api.sleep', () => {
       const result = await sleep(ctx, { dryRun: true });
 
       expect(result.dryRun).toBe(true);
-      // dryRun returns immediately after consolidate; no other phases run.
+      // H10: the preview reports what a real sleep would dedupe and audit.
       expect(result.deduped).toBeUndefined();
-      expect(result.audit).toBeUndefined();
+      expect(result.audit).toEqual({ errorsRemoved: 0, warningCount: 1 });
       expect(result.shared).toBeUndefined();
       expect(result.ambient).toBeUndefined();
     } finally {

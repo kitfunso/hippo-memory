@@ -262,6 +262,7 @@ export function remember(ctx: Context, opts: RememberOpts): RememberResult {
     artifact_ref: opts.artifactRef ?? null,
     tags: opts.tags,
     tenantId: ctx.tenantId,
+    baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays,
   });
   // writeEntry threads ctx.actor.subject into its internal audit hook, so exactly
   // one 'remember' event lands in the log with the supplied actor.
@@ -2949,10 +2950,9 @@ export interface SleepResult {
  * serving lands — at that point the route will need an admin-role gate OR
  * api.sleep itself will need to scope dedup / audit / delete by ctx.tenantId.
  *
- * Audit emission gap: the consolidation phases (dedup, audit-delete) do
- * NOT emit audit_log rows today, matching pre-refactor cmdSleepCore. Same
- * CLI/MCP parity gap that T6 fixed for cmdOutcome, now visible at the api
- * surface. Tracked in TODOS.md "Episode A follow-ups" for a future minor.
+ * Dedup and audit deletes each log a `forget` row with the ctx actor and a
+ * `metadata.reason`. Pinned and raw rows are never auto-deleted (canAutoDelete).
+ * dryRun previews consolidate, dedup and audit, then returns before share/ambient.
  */
 /**
  * v1.12.2: Test-only DI seam shape for `sleep`'s phase dependencies.
@@ -3052,10 +3052,8 @@ export async function sleep(
       details: consolidateResult.details,
     };
 
-    if (dryRun) return result;
-
     // Phase 2: Dedup (post-consolidate near-duplicate cleanup).
-    const dedupResult = phases.deduplicateStore(ctx.hippoRoot);
+    const dedupResult = phases.deduplicateStore(ctx.hippoRoot, { dryRun, actor: ctx.actor.subject });
     dedupCount = dedupResult.removed;
     if (dedupResult.removed > 0) {
       const semDups = dedupResult.pairs.filter(
@@ -3075,25 +3073,28 @@ export async function sleep(
       };
     }
 
-    // Phase 3: Quality audit (remove junk, report warnings).
-    const allEntries = phases.loadAllEntries(ctx.hippoRoot);
+    // Phase 3: Quality audit (remove junk, report warnings; a dry run skips rows earlier phases would remove).
+    const planned = new Set(dryRun ? [...(consolidateResult.removedIds ?? []), ...dedupResult.pairs.map((p) => p.removed)] : []);
+    const allEntries = phases.loadAllEntries(ctx.hippoRoot).filter((e) => !planned.has(e.id));
     const auditOut = phases.auditMemories(allEntries);
     if (auditOut.issues.length > 0) {
       const errors = auditOut.issues.filter((i) => i.severity === 'error');
       const warnings = auditOut.issues.filter((i) => i.severity === 'warning');
-      if (errors.length > 0) {
-        for (const issue of errors) {
-          phases.deleteEntry(ctx.hippoRoot, issue.memoryId);
-        }
+      let removed = 0;
+      for (const issue of errors) {
+        const reason = `sleep-audit: ${issue.reason}`;
+        if (dryRun || phases.deleteEntry(ctx.hippoRoot, issue.memoryId, { actor: ctx.actor.subject, reason })) removed++;
       }
-      auditDeletedCount = errors.length;
-      if (errors.length > 0 || warnings.length > 0) {
+      auditDeletedCount = removed;
+      if (removed > 0 || warnings.length > 0) {
         result.audit = {
-          errorsRemoved: errors.length,
+          errorsRemoved: removed,
           warningCount: warnings.length,
         };
       }
     }
+
+    if (dryRun) return result;
 
     // Phase 4: Auto-share high-transfer-score memories to global.
     if (!opts.noShare) {

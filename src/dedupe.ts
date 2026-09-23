@@ -24,7 +24,7 @@
 import { textOverlap } from './search.js';
 import { loadAllEntries, deleteEntry } from './store.js';
 import { compareEntryIdentity } from './compare.js';
-import type { MemoryEntry } from './memory.js';
+import { canAutoDelete, type MemoryEntry } from './memory.js';
 
 export interface DedupPair {
   kept: string;
@@ -86,7 +86,7 @@ export function strengthBucket(strength: number | null | undefined): number {
  */
 export function deduplicateStore(
   hippoRoot: string,
-  options: { threshold?: number; dryRun?: boolean } = {}
+  options: { threshold?: number; dryRun?: boolean; actor?: string } = {}
 ): DedupResult {
   const threshold = options.threshold ?? 0.7;
   const dryRun = options.dryRun ?? false;
@@ -138,7 +138,7 @@ export function deduplicateStore(
     for (let i = 0; i < tenantEntries.length; i++) {
       if (removed.has(tenantEntries[i].id)) continue;
       for (let j = i + 1; j < tenantEntries.length; j++) {
-        if (removed.has(tenantEntries[j].id)) continue;
+        if (removed.has(tenantEntries[j].id) || !canAutoDelete(tenantEntries[j])) continue;
 
         const similarity = textOverlap(tenantEntries[i].content, tenantEntries[j].content);
         if (similarity <= threshold) continue;
@@ -160,8 +160,8 @@ export function deduplicateStore(
   }
 
   if (!dryRun) {
-    for (const id of removed) {
-      deleteEntry(hippoRoot, id);
+    for (const p of pairs) {
+      deleteEntry(hippoRoot, p.removed, { actor: options.actor, reason: `dedup: duplicate of ${p.kept}` });
     }
   }
 

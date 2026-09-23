@@ -7,6 +7,7 @@ import {
   clearSummaryDirtyAfterBuild,
 } from './store.js';
 import { RejectedValueError } from './rejection.js';
+import { redactSecrets } from './secret-detect.js';
 
 export interface FactCluster {
   label: string;
@@ -58,6 +59,7 @@ export interface DagSummaryOptions {
   apiKey: string;
   model?: string;
   fetcher?: typeof fetch;
+  onError?: (msg: string) => void;
 }
 
 const DAG_SUMMARY_PROMPT = `You are summarizing a cluster of facts about a specific topic/entity for a memory system.
@@ -76,9 +78,9 @@ export async function generateDagSummary(
   const model = opts.model ?? 'claude-sonnet-4-6';
   const fetchFn = opts.fetcher ?? fetch;
 
-  const factsBlock = factContents.map((f, i) => `${i + 1}. ${f}`).join('\n');
+  const factsBlock = factContents.map((f, i) => `${i + 1}. ${redactSecrets(f)}`).join('\n');
   const prompt = DAG_SUMMARY_PROMPT
-    .replace('{label}', label)
+    .replace('{label}', redactSecrets(label))
     .replace('{facts}', factsBlock);
 
   let res: Response;
@@ -96,17 +98,22 @@ export async function generateDagSummary(
         messages: [{ role: 'user', content: prompt }],
       }),
     });
-  } catch {
+  } catch (err) {
+    opts.onError?.(`request failed: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
 
-  if (!res.ok) return null;
+  if (!res.ok) {
+    opts.onError?.(`HTTP ${res.status}`);
+    return null;
+  }
 
   try {
     const data: { content?: Array<{ text?: string }> } = await res.json();
     const text = data.content?.[0]?.text?.trim() ?? '';
     return text.length >= 20 ? text : null;
-  } catch {
+  } catch (err) {
+    opts.onError?.(`unparseable response: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
 }

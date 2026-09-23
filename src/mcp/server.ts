@@ -19,7 +19,7 @@ import {
 } from '../memory.js';
 import { search, hybridSearch, physicsSearch, markRetrieved, estimateTokens } from '../search.js';
 import { isRecallBoostAblated, evalNow } from '../ablation.js';
-import { loadAllEntries, writeEntry, readEntry, initStore, loadFreshActiveTaskSnapshot, listMemoryConflicts, resolveConflict, RECALL_DEFAULT_DENY_SCOPES } from '../store.js';
+import { loadAllEntries, writeEntry, readEntry, initStore, loadFreshActiveTaskSnapshot, listMemoryConflicts, resolveConflict, RECALL_DEFAULT_DENY_SCOPES, countCreatedSinceLastSleep } from '../store.js';
 import { shareMemory, listPeers, getGlobalRoot } from '../shared.js';
 import { consolidate } from '../consolidate.js';
 import { execSync } from 'child_process';
@@ -480,6 +480,7 @@ const TOOLS = [
 // `${tenantId}:default` if a McpContext is constructed in tests without a
 // pid-bound transport.
 const lastRecalledIds = new Map<string, string[]>();
+const autoSleepInFlight = new Set<string>();
 
 function resolveClientKey(ctx: { clientKey?: string; tenantId: string } | undefined): string {
   if (ctx?.clientKey) return ctx.clientKey;
@@ -1008,22 +1009,19 @@ async function executeTool(
       });
       const entry = readEntry(hippoRoot, result.id, tenantId);
 
-      // Auto-sleep check
-      if (config.autoSleep.enabled) {
-        const allEntries = loadAllEntries(hippoRoot, tenantId);
-        const recentCount = allEntries.filter((e) => {
-          const age = (Date.now() - new Date(e.created).getTime()) / (1000 * 60 * 60);
-          return age < 24; // created in last 24 hours
-        }).length;
-        if (recentCount >= config.autoSleep.threshold) {
-          // Fire-and-forget by design (never block the remember response), but
-          // an unhandled rejection here can kill the MCP server process — any
-          // consolidate error (DB contention, or the memoryValue fail-loud
-          // throw) must land as a logged line, not a crash.
-          consolidate(hippoRoot).catch((err) => {
-            console.error(`auto-sleep consolidate failed: ${err instanceof Error ? err.message : err}`);
-          });
-        }
+      // Auto-sleep: one run per store at a time, triggered by what arrived since the last one.
+      if (
+        config.autoSleep.enabled &&
+        !autoSleepInFlight.has(hippoRoot) &&
+        countCreatedSinceLastSleep(hippoRoot, tenantId) >= config.autoSleep.threshold
+      ) {
+        autoSleepInFlight.add(hippoRoot);
+        // Fire-and-forget (never block the response); an unhandled rejection would kill the server, so log it.
+        consolidate(hippoRoot)
+          .catch((err) => {
+            console.error(`auto-sleep consolidate failed (tenant ${tenantId}): ${err instanceof Error ? err.message : err}`);
+          })
+          .finally(() => autoSleepInFlight.delete(hippoRoot));
       }
 
       const halfLife = entry?.half_life_days ?? config.defaultHalfLifeDays;

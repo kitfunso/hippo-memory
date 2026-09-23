@@ -476,6 +476,13 @@ export function resolveConfidence(entry: MemoryEntry, now: Date = evalNow()): Co
   return isAgedOut(entry, now) ? 'stale' : entry.confidence;
 }
 
+export const DEFAULT_HALF_LIFE_DAYS = 7;
+
+// Pinned means keep; raw rows leave only through archiveRawMemory.
+export function canAutoDelete(entry: Pick<MemoryEntry, 'pinned' | 'kind'>): boolean {
+  return !entry.pinned && entry.kind !== 'raw';
+}
+
 /**
  * Create a new memory entry with defaults.
  */
@@ -520,7 +527,7 @@ export function createMemory(
   const schema_fit = options.schema_fit ?? 0.5;
 
   const partial: Partial<MemoryEntry> = { tags, schema_fit };
-  const half_life_days = deriveHalfLife(options.baseHalfLifeDays ?? 7, partial);
+  const half_life_days = deriveHalfLife(options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS, partial);
 
   const entry: MemoryEntry = {
     id: generateId(layer === Layer.Semantic ? 'sem' : 'mem'),
