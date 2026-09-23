@@ -1,3 +1,6 @@
+// The ui package has no Node types; only vitest imports this file, and it runs in Node.
+declare const process: { env: { UI_PERF_BUDGET_SCALE?: string } };
+
 /** Test wall-clock budgets, scaled by UI_PERF_BUDGET_SCALE on hardware slower than a dev machine (the CI ui job sets it). */
 export function perfBudgetMs(ms: number): number {
   const scale = Number(process.env.UI_PERF_BUDGET_SCALE);
