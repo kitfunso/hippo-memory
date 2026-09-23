@@ -126,6 +126,13 @@ jobs:
         with:
           node-version: '24'
           cache: npm
+      # Store-heavy files timed out here: Defender scanned every store write, on the C: temp drive.
+      - name: Test stores on D:, out of the real-time scan
+        shell: pwsh
+        run: |
+          Set-MpPreference -DisableRealtimeMonitoring $true
+          "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+          "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
       - run: npm ci
       - run: npm run build
       - run: npx vitest run
