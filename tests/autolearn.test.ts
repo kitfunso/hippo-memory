@@ -223,7 +223,7 @@ describe('extractLessons unchanged by DF4', () => {
 // detail-carrying one must.
 // ---------------------------------------------------------------------------
 
-const CLI = path.join(process.cwd(), 'dist', 'src', 'cli.js');
+const CLI = path.join(process.cwd(), 'dist', 'cli.js');
 
 function initGitRepoWithCommits(subjects: string[]): string {
   const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-df4-repo-'));

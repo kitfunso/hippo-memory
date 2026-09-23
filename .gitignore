@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-bench/
 dist-ui/
 *.js.map
 .hippo/

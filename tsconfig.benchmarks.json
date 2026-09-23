@@ -2,7 +2,7 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "rootDir": ".",
-    "outDir": "./dist",
+    "outDir": "./dist-bench",
     "declaration": false,
     "declarationMap": false,
     "noEmit": false

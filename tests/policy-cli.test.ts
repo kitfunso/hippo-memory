@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store.js';
 
-const CLI = join(process.cwd(), 'dist', 'src', 'cli.js');
+const CLI = join(process.cwd(), 'dist', 'cli.js');
 
 interface TestEnv { cwd: string; hippoRoot: string; globalRoot: string; }
 

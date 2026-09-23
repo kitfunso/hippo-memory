@@ -19,7 +19,7 @@ import { initStore } from '../src/store.js';
 import { remember } from '../src/api.js';
 import { pushGoal } from '../src/goals.js';
 
-const CLI = join(process.cwd(), 'dist', 'src', 'cli.js');
+const CLI = join(process.cwd(), 'dist', 'cli.js');
 
 interface TestEnv {
   cwd: string;

@@ -38,7 +38,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { buildCorpus } from '../../dist/src/search.js';
+import { buildCorpus } from '../../dist/search.js';
 
 const INPUT = process.argv[2];
 const OUT_PREFIX = process.argv[3];

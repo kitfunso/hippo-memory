@@ -17,6 +17,8 @@
   },
   "files": [
     "dist",
+    "!dist/src",
+    "!dist/**/*.map",
     "dist-ui",
     "bin",
     "scripts/postinstall.cjs",
@@ -25,7 +27,7 @@
   ],
   "scripts": {
     "baseline": "npm run build && npm test",
-    "build": "tsc && tsc -p tsconfig.benchmarks.json && tsc -p tsconfig.extensions.json",
+    "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc && tsc -p tsconfig.benchmarks.json && tsc -p tsconfig.extensions.json",
     "dev": "tsc --watch",
     "pretest": "npm run build",
     "test": "vitest run",

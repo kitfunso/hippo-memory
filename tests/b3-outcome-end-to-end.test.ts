@@ -22,7 +22,7 @@ import { remember } from '../src/api.js';
 import { pushGoal, completeGoal } from '../src/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
-const CLI = join(process.cwd(), 'dist', 'src', 'cli.js');
+const CLI = join(process.cwd(), 'dist', 'cli.js');
 
 interface TestEnv {
   cwd: string;

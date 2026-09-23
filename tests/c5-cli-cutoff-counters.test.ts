@@ -21,7 +21,7 @@
 //
 // Same isolation harness as tests/b3-retrieval-policy.test.ts: per-test cwd
 // tempdir, separate HIPPO_HOME global root, HIPPO_SKIP_AUTO_INTEGRATIONS=1,
-// initStore + api.remember for seeding, execFileSync against dist/src/cli.js
+// initStore + api.remember for seeding, execFileSync against dist/cli.js
 // for the recall itself (real DB, real CLI, project convention).
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -34,7 +34,7 @@ import { createMemory, Layer } from '../src/memory.js';
 import { insertEntity, insertRelation } from '../src/graph.js';
 import { remember, type Context } from '../src/api.js';
 
-const CLI = join(process.cwd(), 'dist', 'src', 'cli.js');
+const CLI = join(process.cwd(), 'dist', 'cli.js');
 
 interface TestEnv {
   cwd: string;

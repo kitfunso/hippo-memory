@@ -9401,13 +9401,7 @@ async function main(
   if (command === '--version' || command === '-v' || flags['version']) {
     const __filename_local = fileURLToPath(import.meta.url);
     const __dirname_local = path.dirname(__filename_local);
-    const pkgPath = path.join(__dirname_local, '..', 'package.json');
-    let pkgJson: string;
-    try {
-      pkgJson = fs.readFileSync(pkgPath, 'utf-8');
-    } catch {
-      pkgJson = fs.readFileSync(path.join(__dirname_local, '..', '..', 'package.json'), 'utf-8');
-    }
+    const pkgJson = fs.readFileSync(path.join(__dirname_local, '..', 'package.json'), 'utf-8');
     const { version } = JSON.parse(pkgJson) as { version: string };
     console.log(version);
     process.exit(0);

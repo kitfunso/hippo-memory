@@ -72,10 +72,10 @@ cloudflared tunnel run hippo-aml
 
 ```sh
 # mint the evaluation key (shown ONCE; hippo stores only a scrypt hash)
-docker exec -w /data hippo-aml node /app/dist/src/cli.js auth create --label aml-eval --role member --json
+docker exec -w /data hippo-aml node /app/dist/cli.js auth create --label aml-eval --role member --json
 
 # revoke a key
-docker exec -w /data hippo-aml node /app/dist/src/cli.js auth revoke <keyId>
+docker exec -w /data hippo-aml node /app/dist/cli.js auth revoke <keyId>
 
 # smoke-check from outside (AML contract)
 curl https://aml.hippo-memory.com/health
