@@ -1455,11 +1455,20 @@ function buildStatsFromDb(db: ReturnType<typeof openHippoDb>): LegacyStats {
  * `buildIndexFromDb`'s query.
  */
 export function writeIndexMirror(hippoRoot: string, index: HippoIndex): void {
-  fs.writeFileSync(path.join(hippoRoot, 'index.json'), JSON.stringify(index, null, 2), 'utf8');
+  mirrorBestEffort('index.json', () => fs.writeFileSync(path.join(hippoRoot, 'index.json'), JSON.stringify(index, null, 2), 'utf8'));
 }
 
 function writeStatsMirror(hippoRoot: string, stats: LegacyStats): void {
-  fs.writeFileSync(path.join(hippoRoot, 'stats.json'), JSON.stringify(stats, null, 2), 'utf8');
+  mirrorBestEffort('stats.json', () => fs.writeFileSync(path.join(hippoRoot, 'stats.json'), JSON.stringify(stats, null, 2), 'utf8'));
+}
+
+/** Mirrors are derived from SQLite and written after COMMIT, so a failed write warns instead of failing a committed change. */
+function mirrorBestEffort(what: string, write: () => void): void {
+  try {
+    write();
+  } catch (err) {
+    console.error(`hippo: ${what} not refreshed (${err instanceof Error ? err.message : String(err)}); the database write succeeded`);
+  }
 }
 
 function syncMirrorFiles(hippoRoot: string, db: ReturnType<typeof openHippoDb>): void {
@@ -1467,9 +1476,9 @@ function syncMirrorFiles(hippoRoot: string, db: ReturnType<typeof openHippoDb>):
   // MemoryRow's field set.
   const entries = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`).all() as MemoryRow[];
 
-  for (const entry of entries.map(rowToEntry)) {
-    writeMarkdownMirror(hippoRoot, entry);
-  }
+  mirrorBestEffort('markdown mirrors', () => {
+    for (const entry of entries.map(rowToEntry)) writeMarkdownMirror(hippoRoot, entry);
+  });
 
   // SAFETY: conflicts' shape matches the eight columns named in the SELECT
   // above.
@@ -1479,7 +1488,7 @@ function syncMirrorFiles(hippoRoot: string, db: ReturnType<typeof openHippoDb>):
     WHERE status = 'open'
     ORDER BY updated_at DESC, id DESC
   `).all() as MemoryConflictRow[];
-  writeConflictMirrors(hippoRoot, conflicts.map(rowToMemoryConflict));
+  mirrorBestEffort('conflict mirrors', () => writeConflictMirrors(hippoRoot, conflicts.map(rowToMemoryConflict)));
 
   writeIndexMirror(hippoRoot, buildIndexFromDb(db));
   writeStatsMirror(hippoRoot, buildStatsFromDb(db));
@@ -1685,7 +1694,7 @@ export function writeEntryMirrors(
   db: DatabaseSyncLike,
   entry: MemoryEntry,
 ): void {
-  writeMarkdownMirror(hippoRoot, entry);
+  mirrorBestEffort(`${entry.id}.md`, () => writeMarkdownMirror(hippoRoot, entry));
   writeIndexMirror(hippoRoot, buildIndexFromDb(db));
 }
 
@@ -2000,7 +2009,7 @@ export function deleteEntry(
     const result = deleteEntryCore(db, id, opts);
     if (!result) return false;
 
-    removeEntryMirrors(hippoRoot, id);
+    purgeMirrorBestEffort(hippoRoot, id, false, 'deleteEntry');
     writeIndexMirror(hippoRoot, buildIndexFromDb(db));
     return true;
   } finally {
@@ -2152,12 +2161,10 @@ export function batchWriteAndDelete(
     // Sync mirrors once after all DB writes. Entries skipped above were
     // never inserted — writing their markdown mirror would resurrect the
     // exact content the skip just kept out of the DB.
-    for (const entry of written) {
-      writeMarkdownMirror(hippoRoot, entry);
-    }
-    for (const id of deletableIds) {
-      removeEntryMirrors(hippoRoot, id);
-    }
+    mirrorBestEffort('markdown mirrors', () => {
+      for (const entry of written) writeMarkdownMirror(hippoRoot, entry);
+    });
+    for (const id of deletableIds) purgeMirrorBestEffort(hippoRoot, id, false, 'batchWriteAndDelete');
     writeIndexMirror(hippoRoot, buildIndexFromDb(db));
   } catch (error) {
     try { db.exec('ROLLBACK'); } catch { /* ignore */ }
@@ -2408,9 +2415,7 @@ export function loadStats(hippoRoot: string): LegacyStats {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    const stats = buildStatsFromDb(db);
-    writeStatsMirror(hippoRoot, stats);
-    return stats;
+    return buildStatsFromDb(db);
   } finally {
     closeHippoDb(db);
   }
