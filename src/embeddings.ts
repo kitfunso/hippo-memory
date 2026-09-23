@@ -433,7 +433,7 @@ function embedLockHolderAlive(lockPath: string): boolean {
   try {
     raw = fs.readFileSync(lockPath, 'utf8');
   } catch (err) {
-    return (err as NodeJS.ErrnoException).code !== 'ENOENT';
+    return !(err instanceof Error && 'code' in err && err.code === 'ENOENT');
   }
   const pid = Number(raw);
   // An empty lock is a holder between create and write; after 5 s it is a crashed one.
@@ -444,7 +444,7 @@ function embedLockHolderAlive(lockPath: string): boolean {
     process.kill(pid, 0);
     return true;
   } catch (err) {
-    return (err as NodeJS.ErrnoException).code === 'EPERM';
+    return err instanceof Error && 'code' in err && err.code === 'EPERM';
   }
 }
 
@@ -456,7 +456,7 @@ async function acquireEmbedFileLock(hippoRoot: string): Promise<() => void> {
       fs.writeFileSync(lockPath, String(process.pid), { flag: 'wx' });
       return () => fs.rmSync(lockPath, { force: true });
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+      if (!(err instanceof Error && 'code' in err && err.code === 'EEXIST')) throw err;
     }
     // SHORTCUT: two waiters can both break one dead holder's lock; a vector lost that way is backfilled by the next `hippo embed`.
     if (!embedLockHolderAlive(lockPath)) {
@@ -546,7 +546,7 @@ export async function embedMemory(
     } catch {
       // Provider failure (API down / bad key). Best-effort: leave the index as-is.
     }
-  }).catch((err: unknown) => {
+  }).catch((err) => {
     console.error(`hippo: skipped embedding ${entry.id} (${err instanceof Error ? err.message : String(err)}); run 'hippo embed' to backfill`);
   });
 }
