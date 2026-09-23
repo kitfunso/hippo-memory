@@ -22,9 +22,9 @@ const rows = [
 ];
 
 // Receipts strip: figures reproduced from the comparison matrix in ../../content/site.ts
-// ("LongMemEval (best published)" row: Hippo 98.6% R@5, Mem0 ~49-85% R@5). Do not invent numbers.
+// ("LongMemEval (best published)" row: Hippo 98.0% R@5, Mem0 ~49-85% R@5). Do not invent numbers.
 const receipts = {
-  hippo: { num: '98.6%', sub: 'per-question haystack, local MiniLM default' },
+  hippo: { num: '98.0%', sub: 'per-question haystack, free local MiniLM' },
   mem0: { num: '~49-85%', sub: 'self-reported, own conditions' },
 };
 
@@ -83,7 +83,7 @@ const faqJsonLd = {
             </div>
           </div>
           <p class="mt-3.5 max-w-2xl text-xs leading-relaxed text-zinc-400">
-            hippo measured 2026-06-09 on longmemeval_s_cleaned. mem0 reports its own LongMemEval figures under its own conditions, so this is not a controlled head-to-head. Full methodology and per-haystack results are on the <a class="link" href="/benchmarks/">benchmarks page</a>.
+            hippo re-measured 2026-09-23 on longmemeval_s_cleaned, the best of five settings in its benchmark scripts. mem0 reports its own LongMemEval figures under its own conditions, so this is not a controlled head-to-head. Full methodology and per-haystack results are on the <a class="link" href="/benchmarks/">benchmarks page</a>.
           </p>
         </div>
       </div>

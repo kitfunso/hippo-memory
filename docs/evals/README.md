@@ -13,8 +13,8 @@ notes. Each links to the document that holds the method, the intervals and the l
 
 | Claim | Number | Source |
 |---|---|---|
-| LongMemEval-S retrieval, per-question haystack, R@5 | 98.6% zero-dep default, 99.8% voyage-3-large | [2026-06-09-longmemeval-per-haystack-dual.md](2026-06-09-longmemeval-per-haystack-dual.md) |
-| LongMemEval-S, one unified store of 19,195 sessions, R@5 | 47.2% default, 56.4% voyage-3-large | [2026-06-09-longmemeval-per-haystack-dual.md](2026-06-09-longmemeval-per-haystack-dual.md) |
+| LongMemEval-S retrieval, per-question haystack, R@5 | 98.0% free local MiniLM (best of five settings; the June build gave 98.6), 99.8% voyage-3-large (June, not re-run) | [2026-09-23-longmemeval-reproduction.md](2026-09-23-longmemeval-reproduction.md), [2026-06-09-longmemeval-per-haystack-dual.md](2026-06-09-longmemeval-per-haystack-dual.md) |
+| LongMemEval-S, one unified store of 19,195 sessions, R@5 | 47.2% MiniLM, 56.4% voyage-3-large (June) | [2026-06-09-longmemeval-per-haystack-dual.md](2026-06-09-longmemeval-per-haystack-dual.md) |
 | LongMemEval-S, BM25 only, no embeddings, R@5 | 74.0% | [../../benchmarks/README.md](../../benchmarks/README.md) |
 | Jev reranker, R@1 on a private 300-query developer store | 0.2600 base, 0.4133 cross-encoder, 0.6167 Jev | [2026-09-19-jev-reranker.md](2026-09-19-jev-reranker.md) |
 | LoCoMo evidence R@5, overall, n=1,982 | 0.363 | [../../benchmarks/LOCOMO_INVESTIGATION.md](../../benchmarks/LOCOMO_INVESTIGATION.md) |

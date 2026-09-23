@@ -36,7 +36,7 @@ export const site = {
 // Hero proof lines, above the fold (audit: lead with capability proof, not adjectives).
 // The reranker line carries its null result inline; the win never travels without it.
 export const proofs = [
-  { stat: '98.6% R@5', text: 'on LongMemEval with the zero-dependency default.' },
+  { stat: '98.0% R@5', text: 'on LongMemEval-S with a free local embedder (best of five settings).' },
   {
     stat: 'R@1 0.41 to 0.62',
     text: 'with the opt-in Jev reranker, against the free local cross-encoder. Ranking only: no answer-rate win was shown.',
@@ -101,9 +101,9 @@ export const mechanics = [
 
 export const receipts = [
   {
-    stat: '98.6%',
+    stat: '98.0%',
     label: 'R@5 on LongMemEval-S',
-    note: 'Standard per-haystack, local MiniLM default. 99.8% with voyage-3-large, at or above gbrain 97.6. Zero-dep BM25-only path: 74%.',
+    note: 'Standard per-haystack, free local MiniLM (an optional install), best of five settings. 99.8% with voyage-3-large (June 2026); gbrain reports 97.6. Zero-dep BM25-only path: 74%.',
     href: site.links.longmemeval,
   },
   {
@@ -175,13 +175,13 @@ export const comparison = {
     { feature: 'Auto-hook install', cells: ['Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No'] },
     { feature: 'MCP server', cells: ['Yes', 'Yes', 'No', 'No', 'Yes (stdio + HTTP/OAuth)', 'Partial (managed)', 'Yes (via Letta Code)', 'Yes (first-party Claude/LangGraph)', 'Yes', '?'] },
     { feature: 'Zero runtime deps', cells: ['Yes', 'No (ChromaDB)', 'No', 'No', 'No (PGLite or PG+pgvector)', 'No (managed service)', 'No (Python deps)', 'No (Python deps)', 'Yes (single Rust binary)', 'No (managed + OSS)'], display: ['Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'Yes', 'No'] },
-    { feature: 'LongMemEval (best published)', cells: ['98.6% default / 99.8% voyage R@5 (s_cleaned, per-haystack)*', '96.6% raw / 100% reranked R@5', '~49-85% R@5', 'N/A', '97.6-97.9% R@5 (s_cleaned*)', 'N/A (LoCoMo 80.3%)', 'N/A', 'N/A', '88.78% overall accuracy w/ reader**', '83.00% overall** (LoCoMo 93.05%, HaluMem 93.04%)'], display: ['98.6% R@5*', '96.6% R@5', '~49-85% R@5', 'N/A', '97.6% R@5*', 'N/A', 'N/A', 'N/A', '88.78%**', '83.00%**'] },
+    { feature: 'LongMemEval (best published)', cells: ['98.0% local / 99.8% voyage R@5 (s_cleaned, per-haystack)*', '96.6% raw / 100% reranked R@5', '~49-85% R@5', 'N/A', '97.6-97.9% R@5 (s_cleaned*)', 'N/A (LoCoMo 80.3%)', 'N/A', 'N/A', '88.78% overall accuracy w/ reader**', '83.00% overall** (LoCoMo 93.05%, HaluMem 93.04%)'], display: ['98.0% R@5*', '96.6% R@5', '~49-85% R@5', 'N/A', '97.6% R@5*', 'N/A', 'N/A', 'N/A', '88.78%**', '83.00%**'] },
     { feature: 'Git-friendly', cells: ['Yes', 'No', 'No', 'Yes', 'Yes', 'No', 'No', 'No', 'Yes (Git is the model)', '?'] },
     { feature: 'Framework agnostic', cells: ['Yes', 'Yes', 'Partial', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes'] },
     { feature: 'License', cells: ['MIT', '(open)', 'Apache-2.0', '(open)', 'MIT', 'Apache-2.0 (community)', 'Apache-2.0', 'MIT (core)', 'Apache-2.0', 'Apache-2.0 (OSS) + cloud'] },
   ],
   footnotes: [
-    "* Hippo's 98.6% (MiniLM default) and 99.8% (voyage-3-large) are on longmemeval_s_cleaned, per-question haystack, directly comparable to gbrain's 97.6% on the same split and metric (measured 2026-06-09). gbrain's figure is their published claim. An older 86.8% on longmemeval_oracle used pooled (non-per-haystack) retrieval and is not comparable.",
+    "* Hippo's 98.0% (free local MiniLM, an optional install) and 99.8% (voyage-3-large, measured 2026-06-09) are on longmemeval_s_cleaned, per-question haystack, the split and metric of gbrain's published 97.6%. Each is the best of five settings in the benchmark scripts, not hippo recall; at 500 questions 98.0 and 97.6 are a tie. The June 2026 build scored 98.6. An older 86.8% on longmemeval_oracle used pooled (non-per-haystack) retrieval and is not comparable.",
     "** Different metric: Memoria's 88.78% and EverMind's 83% are reported as overall accuracy with a reader LLM, not retrieval R@5. Higher denominator + LLM helps. Not directly comparable to retrieval-only R@5 numbers above.",
   ],
   closing:

@@ -4,20 +4,20 @@ import Nav from '../components/Nav.astro';
 import Footer from '../components/Footer.astro';
 import { site } from '../content/site';
 
-const title = 'hippo benchmarks: LongMemEval retrieval (R@5 98.6 / 99.8)';
-// The Jev clause states its corpus and its bound BEFORE its numbers: this string is the
+const title = 'hippo benchmarks: LongMemEval retrieval (R@5 98.0 / 99.8)';
+// Each clause states its corpus and its bound BEFORE its numbers: this string is the
 // meta, OG, Twitter and JSON-LD description, and those travel without the page that
 // qualifies them. Any truncation that reaches the numbers has already shown the bound.
 const description =
-  "hippo's retrieval on the public LongMemEval benchmark, with the harness and data to reproduce it. 98.6% R@5 with the zero-dependency default, 99.8% with an opt-in frontier embedder. Separately, on a private 300-query developer store, the opt-in Jev reranker improves ranking only: no answer-rate win was shown. R@1 0.41 to 0.62.";
+  "hippo's retrieval on the public LongMemEval benchmark, with the harness and data to reproduce it. Best of five settings in the benchmark scripts: 98.0% R@5 with a free local embedder, 99.8% with an opt-in frontier embedder. Separately, on a private 300-query developer store, the opt-in Jev reranker improves ranking only: no answer-rate win was shown. R@1 0.41 to 0.62.";
 
-// Verified against README.md + docs/evals/2026-06-09-longmemeval-per-haystack-dual.md.
+// Verified against README.md, docs/evals/2026-09-23-longmemeval-reproduction.md (MiniLM) and 2026-06-09-longmemeval-per-haystack-dual.md (voyage, global pool).
 const perHaystack = [
-  { embedder: 'MiniLM-L6 (zero-dep default)', r1: '89.6', r5: '98.6', r10: '99.4' },
-  { embedder: 'voyage-3-large (opt-in)', r1: '94.6', r5: '99.8', r10: '99.8' },
+  { embedder: 'MiniLM-L6 (local, optional install)', r1: '88.4', r5: '98.0', r10: '99.4' },
+  { embedder: 'voyage-3-large (opt-in, June 2026)', r1: '94.6', r5: '99.8', r10: '99.8' },
 ];
 const globalPool = [
-  { embedder: 'MiniLM-L6 (zero-dep default)', r5: '47.2' },
+  { embedder: 'MiniLM-L6 (local, optional install)', r5: '47.2' },
   { embedder: 'voyage-3-large (opt-in)', r5: '56.4' },
 ];
 
@@ -43,10 +43,11 @@ const rerank = [
 
 const benchUrl = `${site.links.longmemeval}`;
 const evalIndexUrl = `${site.links.repo}/blob/master/docs/evals/README.md`;
+const reproUrl = `${site.links.repo}/blob/master/docs/evals/2026-09-23-longmemeval-reproduction.md`;
 
 // Hero chip group: reuses the page's own receipts (no new claims).
 const heroChips = [
-  { num: '98.6%', label: 'R@5, zero-dep default' },
+  { num: '98.0%', label: 'R@5, free local embedder' },
   { num: '0.62', label: 'R@1, --reranker jev (dev store)' },
   { num: '926', label: 'tests, real database' },
   { num: '0', label: 'outbound HTTP' },
@@ -55,7 +56,7 @@ const heroChips = [
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'TechArticle',
-  headline: 'hippo on LongMemEval: per-haystack retrieval R@5 98.6 (default) / 99.8 (voyage-3-large)',
+  headline: 'hippo on LongMemEval: per-haystack retrieval R@5 98.0 (local) / 99.8 (voyage-3-large)',
   description,
   about: 'LongMemEval retrieval benchmark for the hippo-memory AI agent memory system',
   author: { '@type': 'Organization', name: 'kitfunso', url: site.links.repo },
@@ -121,7 +122,7 @@ const jsonLd = {
           </table>
         </div>
         <p class="mt-5 max-w-2xl text-sm leading-relaxed text-zinc-400">
-          For reference, gbrain reports 97.6% R@5 on this split with a paid frontier embedder. hippo's free, local, zero-dependency default reaches 98.6%. On the standard task, retrieval recall is effectively saturated, so the embedder is a swappable part, not the differentiator.
+          For reference, gbrain reports 97.6% R@5 on this split with a paid frontier embedder. hippo reaches 98.0% with a free local embedder, the best of five settings in its benchmark scripts; at 500 questions that is a tie. The June 2026 build scored 98.6%, and the <a class="link" href={reproUrl} target="_blank" rel="noopener noreferrer">re-measure<span class="sr-only"> (opens in new tab)</span></a> shows both runs. On the standard task, retrieval recall is effectively saturated, so the embedder is a swappable part, not the differentiator.
         </p>
       </div>
     </section>
@@ -131,7 +132,7 @@ const jsonLd = {
       <div class="mx-auto max-w-6xl px-5 py-24">
         <h2 class="text-balance text-3xl leading-tight sm:text-4xl">Large store: one unified memory</h2>
         <p class="mt-4 max-w-2xl leading-relaxed text-zinc-400">
-          Point retrieval at a single store of all 19,195 sessions, with no pre-scoped haystack, closer to how an agent's memory actually accumulates. Recall stops being free:
+          Point retrieval at a single store of all 19,195 sessions, with no pre-scoped haystack, closer to how an agent's memory actually accumulates. Recall stops being free (measured June 2026):
         </p>
         <div class="mt-8 grid grid-cols-2 gap-4">
           {globalPool.map((row) => (
@@ -222,7 +223,7 @@ const jsonLd = {
       <div class="mx-auto max-w-6xl px-5 py-24">
         <h2 class="text-balance text-3xl leading-tight sm:text-4xl">Reproduce it</h2>
         <p class="mt-4 max-w-2xl leading-relaxed text-zinc-400">
-          The data is <code class="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-sm text-zinc-300">longmemeval_s_cleaned.json</code> (SHA-256 <code class="font-mono text-xs text-zinc-400">d6f21ea9...</code>), 500 questions over 19,195 sessions. Retrieval is turn-level dense plus BM25, fused with reciprocal rank fusion and max-pooled to session. Embeddings are L2-normalized; the default is local MiniLM, with an opt-in pluggable provider for frontier embedders.
+          The data is <code class="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-sm text-zinc-300">longmemeval_s_cleaned.json</code> (SHA-256 <code class="font-mono text-xs text-zinc-400">d6f21ea9...</code>), 500 questions over 19,195 sessions. Retrieval is turn-level dense plus BM25, fused with reciprocal rank fusion and max-pooled to session, by the scripts in benchmarks/longmemeval rather than hippo recall. Embeddings are L2-normalized; the local embedder is MiniLM (an optional install), with an opt-in pluggable provider for frontier embedders.
         </p>
         <p class="mt-4 max-w-2xl leading-relaxed text-zinc-400">
           Every measurement hippo has published, pre-registrations kept next to their results, is indexed in <a class="link" href={evalIndexUrl} target="_blank" rel="noopener noreferrer">docs/evals<span class="sr-only"> (opens in new tab)</span></a>. That index includes the runs that failed and the one claim we retracted.

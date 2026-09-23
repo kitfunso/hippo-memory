@@ -1,5 +1,7 @@
 # LongMemEval-S retrieval: per-haystack dual-embedder measurement + global-pool correction (2026-06-09)
 
+> **CORRECTION 2026-09-23.** The MiniLM 98.6 reproduces only on the build it was measured with (`@xenova/transformers` 2.17.2, int8 weights). Today's build gives 98.0, which ties gbrain's 97.6 at 500 questions, and 98.6 was the best of five settings. MiniLM has been an optional install, not the default, since 1.28.0. The per-haystack and voyage scripts behind this doc were never committed. See [2026-09-23-longmemeval-reproduction.md](2026-09-23-longmemeval-reproduction.md).
+
 ## Summary
 
 Two findings:
