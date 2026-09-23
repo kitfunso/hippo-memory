@@ -1,0 +1,273 @@
+Raw outputs behind 2026-09-23-mechanism-audit-result.md, copied by script. Only change: local paths shortened to $R (E1 campaign dir), $W (harness worktree), $D (LongMemEval data dir), $L (LongMemEval run dir) and $T (its rescored copies).
+
+=== gates: node scripts/e1-lifecycle/gates.mjs $R
+L2 full@7 currentR5 < all-off@7 hl7: 20/20 seeds pass (needs 18) 
+L3a outcome-off trap >= 0.20 hl7: 20/20 seeds pass (needs 18) min 0.267
+L3b strengthen-off hotR5 <= 0.90 hl7: 20/20 seeds pass (needs 18) max 0.215
+L3a outcome-off trap >= 0.20 hl365: 20/20 seeds pass (needs 18) min 0.689
+L3b strengthen-off hotR5 <= 0.90 hl365: 20/20 seeds pass (needs 18) max 0.750
+
+=== compare-L2: node scripts/e1-lifecycle/compare.mjs --a <A> --b <B>
+A=$R/hl365:full  B=$R/hl7:full  seeds=21..40 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.747 | 0.292 | 45.5 | [43.9, 47.1] | [43.3, 47.6] | 20
+mrr | 0.364 | 0.178 | 18.6 | [17.7, 19.5] | [17.4, 19.8] | 20
+staleIntrusionRate | 0.876 | 0.418 | 45.8 | [43.0, 48.7] | [42.1, 49.7] | 20
+trapPersistenceRate | 0.257 | 0.171 | 8.6 | [5.4, 11.7] | [4.7, 12.7] | 20
+contraIntrusionRate | 0.065 | 0.130 | -6.5 | [-9.7, -3.5] | [-10.8, -2.5] | 20
+hotR5 | 0.770 | 0.423 | 34.7 | [31.9, 37.6] | [31.0, 38.5] | 20
+cleanStaleR5 | 0.113 | 0.239 | -12.6 | [-15.2, -9.9] | [-16.1, -9.0] | 20
+nonStaleR5 | 0.675 | 0.179 | 49.6 | [47.5, 51.7] | [46.8, 52.4] | 20
+cleanTrapR5 | 0.549 | 0.222 | 32.7 | [28.4, 36.9] | [27.1, 38.2] | 20
+nonTrapR5 | 0.754 | 0.296 | 45.7 | [44.0, 47.5] | [43.4, 48.1] | 20
+break-even superseded share s* (A wins below it) = 79.8% [76.5, 83.3] | [75.5, 84.5]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 100.0% [100.0, 100.0] | [100.0, 100.0]; this protocol's trapEligible share 15.0%
+
+=== compare-L2g: node scripts/e1-lifecycle/compare.mjs --a <A> --b <B>
+A=$R/hl365:full  B=$R/hl7:all-off  seeds=21..40 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.747 | 0.692 | 5.5 | [4.3, 6.7] | [3.9, 7.1] | 20
+mrr | 0.364 | 0.316 | 4.8 | [4.2, 5.5] | [3.9, 5.6] | 20
+staleIntrusionRate | 0.876 | 0.833 | 4.3 | [2.5, 6.0] | [2.0, 6.6] | 20
+trapPersistenceRate | 0.257 | 0.774 | -51.8 | [-56.6, -46.8] | [-58.0, -45.0] | 20
+contraIntrusionRate | 0.065 | 0.047 | 1.8 | [0.3, 3.7] | [-0.0, 4.3] | 20
+hotR5 | 0.770 | 0.707 | 6.3 | [4.5, 8.2] | [4.0, 8.9] | 20
+cleanStaleR5 | 0.113 | 0.153 | -4.0 | [-5.7, -2.4] | [-6.2, -1.8] | 20
+nonStaleR5 | 0.675 | 0.579 | 9.6 | [7.7, 11.4] | [7.2, 11.9] | 20
+cleanTrapR5 | 0.549 | 0.157 | 39.2 | [34.4, 44.0] | [33.0, 45.6] | 20
+nonTrapR5 | 0.754 | 0.709 | 4.5 | [3.3, 5.7] | [2.9, 6.1] | 20
+break-even superseded share s* (A wins below it) = 70.5% [61.6, 80.4] | [58.9, 84.0]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 100.0% [100.0, 100.0] | [100.0, 100.0]; this protocol's trapEligible share 15.0%
+
+=== compare-L3a-365: node scripts/e1-lifecycle/compare.mjs --a <A> --b <B>
+A=$R/hl365:full  B=$R/hl365:outcome-off  seeds=21..40 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.747 | 0.687 | 6.0 | [5.1, 6.9] | [4.9, 7.1] | 20
+mrr | 0.364 | 0.314 | 5.0 | [4.5, 5.6] | [4.3, 5.8] | 20
+staleIntrusionRate | 0.876 | 0.822 | 5.4 | [4.1, 6.9] | [3.7, 7.4] | 20
+trapPersistenceRate | 0.257 | 0.767 | -51.0 | [-55.6, -46.3] | [-57.0, -44.7] | 20
+contraIntrusionRate | 0.065 | 0.065 | -0.0 | [-0.7, 0.7] | [-1.0, 1.0] | 20
+hotR5 | 0.770 | 0.716 | 5.4 | [3.8, 7.0] | [3.3, 7.6] | 20
+cleanStaleR5 | 0.113 | 0.162 | -4.9 | [-6.4, -3.6] | [-6.9, -3.3] | 20
+nonStaleR5 | 0.675 | 0.573 | 10.2 | [8.9, 11.4] | [8.5, 11.9] | 20
+cleanTrapR5 | 0.549 | 0.151 | 39.8 | [35.3, 44.3] | [34.0, 45.7] | 20
+nonTrapR5 | 0.754 | 0.705 | 4.8 | [4.0, 5.7] | [3.8, 6.0] | 20
+break-even superseded share s* (A wins below it) = 67.4% [61.2, 73.8] | [59.3, 76.0]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 100.0% [100.0, 100.0] | [100.0, 100.0]; this protocol's trapEligible share 15.0%
+
+=== compare-L3a-7: node scripts/e1-lifecycle/compare.mjs --a <A> --b <B>
+A=$R/hl7:full  B=$R/hl7:outcome-off  seeds=21..40 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.292 | 0.256 | 3.7 | [2.9, 4.5] | [2.7, 4.7] | 20
+mrr | 0.178 | 0.149 | 2.9 | [2.4, 3.5] | [2.2, 3.7] | 20
+staleIntrusionRate | 0.418 | 0.383 | 3.5 | [2.3, 4.8] | [2.0, 5.2] | 20
+trapPersistenceRate | 0.171 | 0.394 | -22.3 | [-26.2, -18.4] | [-27.4, -17.4] | 20
+contraIntrusionRate | 0.130 | 0.135 | -0.5 | [-1.7, 0.3] | [-2.0, 0.8] | 20
+hotR5 | 0.423 | 0.363 | 5.9 | [4.3, 7.7] | [3.7, 8.2] | 20
+cleanStaleR5 | 0.239 | 0.256 | -1.7 | [-2.8, -0.8] | [-3.1, -0.5] | 20
+nonStaleR5 | 0.179 | 0.112 | 6.7 | [5.5, 7.9] | [5.2, 8.3] | 20
+cleanTrapR5 | 0.222 | 0.141 | 8.1 | [5.4, 11.1] | [4.6, 12.1] | 20
+nonTrapR5 | 0.296 | 0.258 | 3.8 | [2.9, 4.7] | [2.6, 5.1] | 20
+break-even superseded share s* (A wins below it) = 79.2% [70.7, 88.7] | [68.3, 91.9]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 100.0% [100.0, 100.0] | [100.0, 100.0]; this protocol's trapEligible share 15.0%
+
+=== compare-L3b-365: node scripts/e1-lifecycle/compare.mjs --a <A> --b <B>
+A=$R/hl365:full  B=$R/hl365:strengthen-off  seeds=21..40 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.747 | 0.681 | 6.7 | [5.5, 7.8] | [5.1, 8.2] | 20
+mrr | 0.364 | 0.320 | 4.4 | [3.9, 4.9] | [3.8, 5.0] | 20
+staleIntrusionRate | 0.876 | 0.825 | 5.1 | [3.7, 6.5] | [3.3, 7.0] | 20
+trapPersistenceRate | 0.257 | 0.309 | -5.2 | [-7.4, -3.0] | [-8.1, -2.4] | 20
+contraIntrusionRate | 0.065 | 0.142 | -7.7 | [-10.7, -4.8] | [-11.7, -4.0] | 20
+hotR5 | 0.770 | 0.697 | 7.3 | [5.3, 9.4] | [4.6, 10.1] | 20
+cleanStaleR5 | 0.113 | 0.153 | -4.0 | [-5.5, -2.6] | [-6.0, -2.2] | 20
+nonStaleR5 | 0.675 | 0.564 | 11.1 | [9.4, 12.8] | [8.8, 13.3] | 20
+cleanTrapR5 | 0.549 | 0.458 | 9.1 | [6.1, 12.4] | [5.1, 13.7] | 20
+nonTrapR5 | 0.754 | 0.688 | 6.6 | [5.2, 7.9] | [4.8, 8.3] | 20
+break-even superseded share s* (A wins below it) = 73.2% [66.2, 81.0] | [64.1, 83.4]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 100.0% [100.0, 100.0] | [100.0, 100.0]; this protocol's trapEligible share 15.0%
+
+=== compare-L3b-7: node scripts/e1-lifecycle/compare.mjs --a <A> --b <B>
+A=$R/hl7:full  B=$R/hl7:strengthen-off  seeds=21..40 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.292 | 0.154 | 13.8 | [12.4, 15.2] | [12.0, 15.7] | 20
+mrr | 0.178 | 0.076 | 10.2 | [9.2, 11.2] | [8.9, 11.6] | 20
+staleIntrusionRate | 0.418 | 0.318 | 10.0 | [7.5, 12.5] | [6.8, 13.3] | 20
+trapPersistenceRate | 0.171 | 0.158 | 1.3 | [-0.6, 3.2] | [-1.1, 3.9] | 20
+contraIntrusionRate | 0.130 | 0.157 | -2.7 | [-5.0, -0.5] | [-5.8, 0.2] | 20
+hotR5 | 0.423 | 0.146 | 27.7 | [24.9, 30.5] | [24.0, 31.5] | 20
+cleanStaleR5 | 0.239 | 0.209 | 3.0 | [0.6, 5.4] | [-0.2, 6.1] | 20
+nonStaleR5 | 0.179 | 0.029 | 14.9 | [13.0, 16.8] | [12.4, 17.4] | 20
+cleanTrapR5 | 0.222 | 0.133 | 8.9 | [5.9, 11.9] | [4.8, 12.8] | 20
+nonTrapR5 | 0.296 | 0.154 | 14.3 | [12.7, 15.9] | [12.3, 16.4] | 20
+break-even superseded share s* (A wins below it) = 100.0% [100.0, 100.0] | [99.7, 100.0]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 100.0% [100.0, 100.0] | [100.0, 100.0]; this protocol's trapEligible share 15.0%
+
+=== compare-base-365-bm25: node scripts/e1-lifecycle/compare.mjs --a <A> --b <B>
+A=$R/hl365:full  B=$R/hl7:bm25-static  seeds=21..40 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.747 | 0.776 | -2.9 | [-4.3, -1.4] | [-4.8, -1.1] | 20
+mrr | 0.364 | 0.400 | -3.6 | [-4.9, -2.4] | [-5.3, -1.9] | 20
+staleIntrusionRate | 0.876 | 0.904 | -2.8 | [-4.6, -0.8] | [-5.1, -0.2] | 20
+trapPersistenceRate | 0.257 | 0.739 | -48.2 | [-53.2, -43.0] | [-54.6, -41.3] | 20
+contraIntrusionRate | 0.065 | 0.000 | 6.5 | [4.0, 9.3] | [3.3, 10.3] | 20
+hotR5 | 0.770 | 0.773 | -0.3 | [-3.1, 2.6] | [-4.0, 3.5] | 20
+cleanStaleR5 | 0.113 | 0.089 | 2.4 | [0.5, 4.3] | [0.1, 4.8] | 20
+nonStaleR5 | 0.675 | 0.768 | -9.3 | [-11.2, -7.4] | [-11.8, -6.9] | 20
+cleanTrapR5 | 0.549 | 0.214 | 33.4 | [28.2, 38.8] | [26.8, 40.2] | 20
+nonTrapR5 | 0.754 | 0.789 | -3.5 | [-5.0, -2.0] | [-5.5, -1.6] | 20
+break-even superseded share s* (A wins below it) = 0.0% [0.0, 0.0] | [0.0, 0.0]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 0.0% [0.0, 0.0] | [0.0, 0.0]; this protocol's trapEligible share 15.0%
+
+=== compare-base-365-recency: node scripts/e1-lifecycle/compare.mjs --a <A> --b <B>
+A=$R/hl365:full  B=$R/hl7:recency-window  seeds=21..40 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.747 | 0.000 | 74.7 | [73.2, 76.1] | [72.7, 76.6] | 20
+mrr | 0.364 | 0.000 | 36.4 | [35.2, 37.6] | [34.8, 38.0] | 20
+staleIntrusionRate | 0.876 | 0.004 | 87.2 | [85.4, 89.0] | [84.8, 89.5] | 20
+trapPersistenceRate | 0.257 | 0.002 | 25.4 | [21.3, 29.7] | [20.3, 31.1] | 20
+contraIntrusionRate | 0.065 | 0.000 | 6.5 | [4.0, 9.3] | [3.3, 10.3] | 20
+hotR5 | 0.770 | 0.000 | 77.0 | [74.6, 79.4] | [73.9, 80.1] | 20
+cleanStaleR5 | 0.113 | 0.000 | 11.3 | [9.5, 13.0] | [9.0, 13.5] | 20
+nonStaleR5 | 0.675 | 0.000 | 67.5 | [65.3, 69.6] | [64.6, 70.2] | 20
+cleanTrapR5 | 0.549 | 0.001 | 54.8 | [50.3, 59.2] | [49.1, 60.4] | 20
+nonTrapR5 | 0.754 | 0.000 | 75.4 | [73.9, 76.9] | [73.3, 77.4] | 20
+break-even superseded share s* (A wins below it) = 100.0% [100.0, 100.0] | [100.0, 100.0]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 100.0% [100.0, 100.0] | [100.0, 100.0]; this protocol's trapEligible share 15.0%
+
+=== compare-base-7-bm25: node scripts/e1-lifecycle/compare.mjs --a <A> --b <B>
+A=$R/hl7:full  B=$R/hl7:bm25-static  seeds=21..40 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.292 | 0.776 | -48.4 | [-50.1, -46.5] | [-50.7, -46.0] | 20
+mrr | 0.178 | 0.400 | -22.2 | [-23.6, -20.8] | [-24.0, -20.3] | 20
+staleIntrusionRate | 0.418 | 0.904 | -48.6 | [-51.6, -45.4] | [-52.7, -44.5] | 20
+trapPersistenceRate | 0.171 | 0.739 | -56.8 | [-62.1, -51.3] | [-63.6, -49.6] | 20
+contraIntrusionRate | 0.130 | 0.000 | 13.0 | [9.3, 16.8] | [8.2, 18.0] | 20
+hotR5 | 0.423 | 0.773 | -35.0 | [-38.6, -31.6] | [-39.7, -30.4] | 20
+cleanStaleR5 | 0.239 | 0.089 | 15.0 | [12.5, 17.5] | [11.7, 18.4] | 20
+nonStaleR5 | 0.179 | 0.768 | -58.9 | [-61.3, -56.6] | [-62.0, -55.9] | 20
+cleanTrapR5 | 0.222 | 0.214 | 0.8 | [-3.9, 5.4] | [-5.3, 6.8] | 20
+nonTrapR5 | 0.296 | 0.789 | -49.3 | [-51.1, -47.5] | [-51.6, -46.9] | 20
+break-even superseded share s* (A wins below it) = 0.0% [0.0, 0.0] | [0.0, 0.0]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 0.0% [0.0, 0.0] | [0.0, 0.0]; this protocol's trapEligible share 15.0%
+
+=== compare-base-7-recency: node scripts/e1-lifecycle/compare.mjs --a <A> --b <B>
+A=$R/hl7:full  B=$R/hl7:recency-window  seeds=21..40 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.292 | 0.000 | 29.2 | [27.7, 30.8] | [27.2, 31.3] | 20
+mrr | 0.178 | 0.000 | 17.8 | [16.6, 19.0] | [16.3, 19.3] | 20
+staleIntrusionRate | 0.418 | 0.004 | 41.4 | [38.6, 44.3] | [37.8, 45.2] | 20
+trapPersistenceRate | 0.171 | 0.002 | 16.9 | [13.2, 21.1] | [12.1, 22.6] | 20
+contraIntrusionRate | 0.130 | 0.000 | 13.0 | [9.3, 16.8] | [8.2, 18.0] | 20
+hotR5 | 0.423 | 0.000 | 42.3 | [39.5, 45.0] | [38.7, 45.9] | 20
+cleanStaleR5 | 0.239 | 0.000 | 23.8 | [21.7, 26.0] | [21.1, 26.6] | 20
+nonStaleR5 | 0.179 | 0.000 | 17.9 | [15.9, 19.8] | [15.4, 20.4] | 20
+cleanTrapR5 | 0.222 | 0.001 | 22.1 | [18.7, 25.8] | [17.6, 26.9] | 20
+nonTrapR5 | 0.296 | 0.000 | 29.6 | [28.0, 31.3] | [27.5, 31.8] | 20
+break-even superseded share s* (A wins below it) = 100.0% [100.0, 100.0] | [100.0, 100.0]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 100.0% [100.0, 100.0] | [100.0, 100.0]; this protocol's trapEligible share 15.0%
+
+=== compare-diag-7-alloff-bm25: node scripts/e1-lifecycle/compare.mjs --a <A> --b <B>
+A=$R/hl7:all-off  B=$R/hl7:bm25-static  seeds=21..40 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.692 | 0.776 | -8.4 | [-9.9, -6.9] | [-10.3, -6.5] | 20
+mrr | 0.316 | 0.400 | -8.4 | [-9.6, -7.2] | [-10.0, -6.9] | 20
+staleIntrusionRate | 0.833 | 0.904 | -7.0 | [-9.3, -4.7] | [-9.9, -4.0] | 20
+trapPersistenceRate | 0.774 | 0.739 | 3.6 | [-0.0, 7.2] | [-1.0, 8.6] | 20
+contraIntrusionRate | 0.047 | 0.000 | 4.7 | [2.5, 7.2] | [2.0, 8.2] | 20
+hotR5 | 0.707 | 0.773 | -6.5 | [-9.2, -3.7] | [-10.1, -2.9] | 20
+cleanStaleR5 | 0.153 | 0.089 | 6.4 | [4.2, 8.5] | [3.5, 9.3] | 20
+nonStaleR5 | 0.579 | 0.768 | -18.9 | [-20.7, -17.1] | [-21.3, -16.6] | 20
+cleanTrapR5 | 0.157 | 0.214 | -5.8 | [-9.4, -2.2] | [-10.7, -1.1] | 20
+nonTrapR5 | 0.709 | 0.789 | -8.0 | [-9.5, -6.5] | [-10.0, -5.9] | 20
+break-even superseded share s* (A wins below it) = 0.0% [0.0, 0.0] | [0.0, 0.0]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 0.0% [0.0, 0.0] | [0.0, 0.0]; this protocol's trapEligible share 15.0%
+
+=== LongMemEval: benchmarks/longmemeval/paired_hits.mjs
+Regenerate: for each lane, env -C $W node benchmarks/longmemeval/paired_hits.mjs --data $D/longmemeval_oracle.json --a <A> --b <B>
+Build: build_mech_stores.sh exit 0 (no abort fired), 4012 s. Headroom rule: never-slept hybrid hit@5 = 75.0 (not above 90), so hit@5 stays primary.
+
+=== L1: sleep-physics vs sleep-hybrid
+n=500 questions; top-5 lists differ on 500 (100.0%)
+hit@1: A 15.0 B 53.4 | A-B -38.4pp 95% [-43.6, -33.2] 99% [-45.2, -31.6] | A-only 32, B-only 224
+hit@5: A 55.4 B 77.6 | A-B -22.2pp 95% [-26.6, -17.8] 99% [-27.8, -16.6] | A-only 20, B-only 131
+hit@10: A 67.2 B 84.0 | A-B -16.8pp 95% [-21.0, -12.6] 99% [-22.2, -11.2] | A-only 22, B-only 106
+=== L1n: nosleep-physics vs nosleep-hybrid
+n=500 questions; top-5 lists differ on 500 (100.0%)
+hit@1: A 29.6 B 49.2 | A-B -19.6pp 95% [-23.6, -15.4] 99% [-25.0, -14.4] | A-only 15, B-only 113
+hit@5: A 55.4 B 75.0 | A-B -19.6pp 95% [-23.6, -15.6] 99% [-25.0, -14.4] | A-only 13, B-only 111
+hit@10: A 66.0 B 82.4 | A-B -16.4pp 95% [-20.2, -12.8] 99% [-21.2, -11.6] | A-only 11, B-only 93
+=== L4: sleep-hybrid vs nosleep-hybrid
+n=500 questions; top-5 lists differ on 297 (59.4%)
+hit@1: A 53.4 B 49.2 | A-B 4.2pp 95% [2.4, 6.2] 99% [1.8, 6.8] | A-only 22, B-only 1
+hit@5: A 77.6 B 75.0 | A-B 2.6pp 95% [1.0, 4.4] 99% [0.6, 4.8] | A-only 15, B-only 2
+hit@10: A 84.0 B 82.4 | A-B 1.6pp 95% [0.0, 3.2] 99% [-0.4, 3.8] | A-only 12, B-only 4
+
+Verdicts by the prereg rule (hit@5, helps needs CI low > 0 AND point >= +3 pp):
+L1 HURTS (-22.2). L1n HURTS (-19.6). L4 NO MEASURABLE EFFECT (+2.6, CI above 0 but under the 3 pp floor).
+
+=== DIAGNOSTIC, undeclared: LongMemEval session-hit rule vs the memories sleep merges
+Regenerate: env -C $W node benchmarks/longmemeval/merge_audit.mjs --data $D/longmemeval_oracle.json --run $L --out $T, then paired_hits.mjs as above with --a and --b set to $T/<rule>/ret-<arm>.jsonl for rule header and rule text
+rows: never-slept 940, slept 848 (124 merged by sleep, 124 tagged with more than one session, 112 with sessions of more than one question)
+session tags on a merged row without that session's header: 140; its text is in the row 96, elsewhere in the slept store 44, not found 0
+memories without a physics particle: never-slept 0, slept 124 (124 of them merged by sleep)
+L4 hit@5 A-only questions 15, of which a merged row is the only hit in 14
+ret-sleep-hybrid: 5000 retrieved, 0 missing from its store, 781 are memories sleep merged
+ret-sleep-physics: 5000 retrieved, 0 missing from its store, 2852 are memories sleep merged
+ret-nosleep-hybrid: 5000 retrieved, 0 missing from its store, 0 are memories sleep merged
+ret-nosleep-physics: 5000 retrieved, 0 missing from its store, 0 are memories sleep merged
+=== header rule, L1: sleep-physics vs sleep-hybrid
+n=500 questions; top-5 lists differ on 500 (100.0%)
+hit@1: A 8.6 B 49.8 | A-B -41.2pp 95% [-46.0, -36.2] 99% [-47.4, -34.8] | A-only 19, B-only 225
+hit@5: A 47.8 B 71.4 | A-B -23.6pp 95% [-28.0, -19.2] 99% [-29.2, -18.2] | A-only 15, B-only 133
+hit@10: A 59.2 B 77.0 | A-B -17.8pp 95% [-21.8, -13.8] 99% [-23.0, -12.4] | A-only 17, B-only 106
+=== header rule, L1n: nosleep-physics vs nosleep-hybrid
+n=500 questions; top-5 lists differ on 500 (100.0%)
+hit@1: A 29.4 B 49.0 | A-B -19.6pp 95% [-23.6, -15.6] 99% [-25.0, -14.4] | A-only 14, B-only 112
+hit@5: A 55.4 B 74.8 | A-B -19.4pp 95% [-23.4, -15.4] 99% [-24.8, -14.0] | A-only 14, B-only 111
+hit@10: A 66.0 B 82.4 | A-B -16.4pp 95% [-20.2, -12.8] 99% [-21.2, -11.6] | A-only 11, B-only 93
+=== header rule, L4: sleep-hybrid vs nosleep-hybrid
+n=500 questions; top-5 lists differ on 297 (59.4%)
+hit@1: A 49.8 B 49.0 | A-B 0.8pp 95% [-1.0, 2.6] 99% [-1.4, 3.2] | A-only 12, B-only 8
+hit@5: A 71.4 B 74.8 | A-B -3.4pp 95% [-5.6, -1.2] 99% [-6.4, -0.6] | A-only 7, B-only 24
+hit@10: A 77.0 B 82.4 | A-B -5.4pp 95% [-7.8, -3.2] 99% [-8.6, -2.4] | A-only 6, B-only 33
+=== text rule, L1: sleep-physics vs sleep-hybrid
+n=500 questions; top-5 lists differ on 500 (100.0%)
+hit@1: A 14.2 B 53.6 | A-B -39.4pp 95% [-44.6, -34.2] 99% [-46.0, -32.6] | A-only 30, B-only 227
+hit@5: A 54.6 B 77.6 | A-B -23.0pp 95% [-27.4, -18.6] 99% [-28.6, -17.4] | A-only 19, B-only 134
+hit@10: A 67.0 B 84.0 | A-B -17.0pp 95% [-21.0, -12.8] 99% [-22.4, -11.4] | A-only 21, B-only 106
+=== text rule, L1n: nosleep-physics vs nosleep-hybrid
+n=500 questions; top-5 lists differ on 500 (100.0%)
+hit@1: A 32.0 B 53.2 | A-B -21.2pp 95% [-25.4, -17.0] 99% [-26.8, -15.6] | A-only 15, B-only 121
+hit@5: A 56.0 B 77.2 | A-B -21.2pp 95% [-25.2, -17.2] 99% [-26.6, -16.0] | A-only 11, B-only 117
+hit@10: A 66.4 B 83.8 | A-B -17.4pp 95% [-21.2, -13.8] 99% [-22.2, -12.6] | A-only 10, B-only 97
+=== text rule, L4: sleep-hybrid vs nosleep-hybrid
+n=500 questions; top-5 lists differ on 297 (59.4%)
+hit@1: A 53.6 B 53.2 | A-B 0.4pp 95% [-0.4, 1.2] 99% [-0.6, 1.6] | A-only 3, B-only 1
+hit@5: A 77.6 B 77.2 | A-B 0.4pp 95% [-0.4, 1.2] 99% [-0.6, 1.4] | A-only 3, B-only 1
+hit@10: A 84.0 B 83.8 | A-B 0.2pp 95% [-0.8, 1.2] 99% [-1.2, 1.6] | A-only 4, B-only 3
+=== DIAGNOSTIC, undeclared, from the independent critique: node scripts/e1-lifecycle/strata.mjs $R
+currentR5 hit rate per stratum. non = facts never updated, upd = updated facts. newerTight = lookalikes of the fact (same sentence template, other value) dated after its current version. curSession = the current version's session.
+protocolHash match 80, mismatch 0
+stratum                        n      hl7/all-off  hl7/bm25-static       hl365/full         hl7/full
+non ALL                     3600            0.579            0.768            0.675            0.179
+non curSession=00-3         1206            0.479            0.767            0.571            0.055
+non curSession=04-7         1163            0.565            0.767            0.674            0.144
+non curSession=08-11        1231            0.690            0.769            0.777            0.332
+non newerTight=0              77            0.740            0.727            0.857            0.325
+non newerTight=1             404            0.698            0.745            0.797            0.295
+non newerTight=2             801            0.687            0.775            0.754            0.253
+non newerTight=3            1035            0.596            0.767            0.681            0.180
+non newerTight=4            1013            0.494            0.785            0.594            0.094
+non newerTight=5+            270            0.293            0.730            0.481            0.056
+upd ALL                     2400            0.862            0.788            0.856            0.463
+upd curSession=00-3           51            0.569            0.843            0.510            0.020
+upd curSession=04-7          207            0.696            0.831            0.657            0.072
+upd curSession=08-11         492            0.736            0.791            0.707            0.201
+upd curSession=12-15         765            0.855            0.791            0.867            0.344
+upd curSession=16-19         885            0.993            0.772            0.995            0.828
+upd newerTight=0            1245            0.935            0.790            0.934            0.640
+upd newerTight=1             763            0.826            0.789            0.819            0.334
+upd newerTight=2             340            0.718            0.797            0.709            0.159
+upd newerTight=3              50            0.600            0.680            0.500            0.100
+upd newerTight=4               2            0.000            0.500            0.000            0.000
