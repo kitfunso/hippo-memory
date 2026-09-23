@@ -21,6 +21,7 @@ npm run smoke:openclaw-install
 - Prefer focused tests in `tests/` or nearby integration/eval harnesses before changing memory behavior.
 - Do not commit generated `dist/` or UI build output unless the repo expects it for a release.
 - A PR's changelog entry goes in its own `changelog.d/<branch-with-dashes>.md`, never in `CHANGELOG.md`; the release commit folds them in (`changelog.d/README.md`).
+- CI fails when any oxlint rule's hit count rises above `.oxlint-baseline.json`. Fix new hits in the files you touch; after clearing old ones, `node scripts/check-lint-ratchet.mjs --update` and commit the lower baseline.
 - Use Hippo memory commands when useful, but do not store secrets.
 
 ## Never Do

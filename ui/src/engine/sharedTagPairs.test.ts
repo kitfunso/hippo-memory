@@ -178,7 +178,8 @@ describe("computeSharedTagPairs perf budget (AC7)", () => {
   // roughly 5-10 tags per memory; 10 is a slightly aggressive but
   // grounded stress test. (30 tags/memory was the v0.28 test draft and
   // overstated the live-fixture cost by ~3x.)
-  it("completes in <50ms on a 500-memory fixture with 10 random tags per memory", () => {
+  // Retried: a shared CI runner can stall once; a real slowdown fails all three runs.
+  it("completes in <50ms on a 500-memory fixture with 10 random tags per memory", { retry: 2 }, () => {
     const TAG_VOCAB = Array.from({ length: 100 }, (_, i) => `tag-${i}`);
     const fixture: Memory[] = [];
     const rng = () => Math.floor(Math.random() * TAG_VOCAB.length);

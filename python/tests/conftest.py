@@ -5,10 +5,10 @@ HIPPO_HOME (per-test scope) and a freshly-spawned serve subprocess. Cost:
 ~200ms per test for the subprocess respawn. Worth it for isolation.
 
 If the serve subprocess fails to come up within the timeout (a setup
-issue, not an SDK bug), the test is SKIPPED rather than FAILED so CI
-matrices that lack the npm hippo-memory binary surface "skipped" not
-"red". The integration suite documents the SDK contract regardless of
-whether it runs against a live server in any given environment.
+issue, not an SDK bug), the test is SKIPPED locally so a checkout
+without a built bin/hippo.js still runs. CI builds the bin and sets
+HIPPO_REQUIRE_SERVE=1, which turns every such skip into a FAIL: a run
+that never reached a server must not report green.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
-from typing import Iterator
+from typing import Iterator, NoReturn
 
 import httpx
 import pytest
@@ -34,6 +34,13 @@ def _pick_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
+
+
+def _unavailable(reason: str) -> NoReturn:
+    """Skip locally; fail under HIPPO_REQUIRE_SERVE (set in CI)."""
+    if os.environ.get("HIPPO_REQUIRE_SERVE"):
+        pytest.fail(reason)
+    pytest.skip(reason)
 
 
 def _wait_for_health(url: str, timeout: float = 20.0) -> bool:
@@ -56,7 +63,7 @@ def hippo_server() -> Iterator[str]:
     SIGTERMs the subprocess on teardown. Cleans the per-test HIPPO_HOME.
     """
     if not HIPPO_BIN.exists():
-        pytest.skip(f"hippo binary not found at {HIPPO_BIN} (run `npm run build` in repo root)")
+        _unavailable(f"hippo binary not found at {HIPPO_BIN} (run `npm run build` in repo root)")
 
     home = tempfile.mkdtemp(prefix="hippo-py-test-")
     port = _pick_free_port()
@@ -73,7 +80,7 @@ def hippo_server() -> Iterator[str]:
     )
     if init.returncode != 0:
         shutil.rmtree(home, ignore_errors=True)
-        pytest.skip(f"hippo init failed: {init.stderr or init.stdout}")
+        _unavailable(f"hippo init failed: {init.stderr or init.stdout}")
 
     proc = subprocess.Popen(
         ["node", str(HIPPO_BIN), "serve", "--port", str(port)],
@@ -92,7 +99,7 @@ def hippo_server() -> Iterator[str]:
         except subprocess.TimeoutExpired:
             proc.kill()
         shutil.rmtree(home, ignore_errors=True)
-        pytest.skip(f"hippo serve did not respond on {url}/health within 20s — see TODOS.md python-v0.1 integration-test gap")
+        _unavailable(f"hippo serve did not respond on {url}/health within 20s; see TODOS.md python-v0.1 integration-test gap")
 
     try:
         yield url

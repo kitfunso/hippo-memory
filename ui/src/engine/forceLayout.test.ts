@@ -266,7 +266,8 @@ describe("onSettleStateChange (AC13 + replay)", () => {
 });
 
 describe("position(id) O(1) lookup (AC5)", () => {
-  it("10000 sequential position(id) calls complete in <1ms total on 1373-node sim", () => {
+  // Retried: a shared CI runner can stall once; a real slowdown fails all three runs.
+  it("10000 sequential position(id) calls complete in <1ms total on 1373-node sim", { retry: 2 }, () => {
     const memories = Array.from({ length: 1373 }, (_, i) => mem({ id: `m${i}` }));
     const handle = buildForceLayout(memories, new Map(), null);
     const t0 = performance.now();
@@ -277,7 +278,8 @@ describe("position(id) O(1) lookup (AC5)", () => {
 });
 
 describe("perf budget (AC18 + AC19)", () => {
-  it("300 ticks on 1373-node + ~2100-edge fixture completes in <2.0s with mulberry32(42)", () => {
+  // Retried: a shared CI runner can stall once; a real slowdown fails all three runs.
+  it("300 ticks on 1373-node + ~2100-edge fixture completes in <2.0s with mulberry32(42)", { retry: 2 }, () => {
     const memories = Array.from({ length: 1373 }, (_, i) => mem({ id: `m${i}` }));
     const adj = new Map<string, Set<string>>();
     const rng = mulberry32(42);

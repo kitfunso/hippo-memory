@@ -37,8 +37,16 @@ jobs:
       - run: npm ci
       - name: Dependency security audit
         run: npm run audit:security
+      # Hit counts per rule may fall but never rise; see scripts/check-lint-ratchet.mjs.
+      - name: Lint ratchet
+        run: node scripts/check-lint-ratchet.mjs
+      # Two publish gates that need no build, so a PR learns about them before release day.
+      - run: node scripts/check-manifest-versions.mjs
+      - run: node scripts/check-graph-writes.mjs
       - run: npm run build
       - run: node scripts/check-openclaw-dist.mjs
+      - name: Install the packed tarball
+        run: npm run smoke:pack
       # Test stores on tmpfs: some runners' disks are slow enough to time out store-heavy files.
       - name: Vitest
         run: npx vitest run
@@ -107,3 +115,51 @@ jobs:
         run: npx vitest run
         env:
           TMPDIR: /dev/shm
+
+  # Windows users run hippo too, and path, locking and spawn bugs only show there.
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx vitest run
+
+  # The dashboard is its own package with its own tests; the root suite never runs them.
+  ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: npm --prefix ui ci
+      - run: npm --prefix ui test
+      - run: npm --prefix ui run build
+
+  # The Python SDK tests talk to a real `hippo serve`, so the CLI is built first.
+  python:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: astral-sh/setup-uv@v6
+      - name: Pytest against a live server
+        working-directory: python
+        run: uv run --locked --extra test pytest tests -q -rs
+        env:
+          HIPPO_REQUIRE_SERVE: '1'

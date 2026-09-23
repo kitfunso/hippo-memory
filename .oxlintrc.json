@@ -15,6 +15,7 @@
     ".roo/**",
     ".windsurf/**",
     "dist/**",
+    "dist-bench/**",
     "dist-ui/**",
     "ui/dist/**",
     "tools/oxlint/anti-slop/**"

@@ -216,7 +216,8 @@ describe("computeLocalNeighborhood", () => {
   });
 
   describe("performance (AC8)", () => {
-    it("BFS <5ms at depth=2 on a synthesized 1373-memory + ~3000-edge adjacency", () => {
+    // Retried: a shared CI runner can stall once; a real slowdown fails all three runs.
+    it("BFS <5ms at depth=2 on a synthesized 1373-memory + ~3000-edge adjacency", { retry: 2 }, () => {
       // Build a realistic-ish adjacency: 1373 nodes, each with 2-5 random
       // neighbors. Total edges ~3000-4000.
       const adj = new Map<string, Set<string>>();
