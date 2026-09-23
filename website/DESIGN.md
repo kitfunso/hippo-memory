@@ -48,7 +48,7 @@ confirmed findings are the deltas; the strengths it verified are the rules.
 
 ## Identity
 
-Developer tool, receipts-led. The site argues with numbers (98.0% R@5, 926
+Developer tool, receipts-led. The site argues with numbers (98.0% R@5, 3,500+
 tests, 0 deps) and publishes its own bad results. Every page sequences:
 claim, methodology, trust, reproduce. Dark-premium surface; the violet-cyan
 gradient is a scalpel, not a wash.
