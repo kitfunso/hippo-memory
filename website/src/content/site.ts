@@ -20,6 +20,8 @@ export const site = {
     'A memory layer for AI agents, modeled on the hippocampus. Decay by default, strength through use, provenance on every memory.',
   installCmd: 'npm install -g hippo-memory',
   initCmd: 'hippo init --scan ~',
+  // A floor stays true as the suite grows; check-readme-sync.mjs holds README and llms.txt to it.
+  tests: '3,500+',
   links: {
     repo: REPO,
     npm: 'https://www.npmjs.com/package/hippo-memory',
@@ -113,9 +115,9 @@ export const receipts = [
     href: site.links.jevEval,
   },
   {
-    stat: '926',
+    stat: site.tests,
     label: 'tests, real DB',
-    note: 'Zero mocks. Project rule: no mocked dependencies in tests.',
+    note: 'No module mocks and no mocked store. Only paid network calls are stubbed.',
     href: site.links.benchmarks,
   },
   {
@@ -223,5 +225,5 @@ export const faq = [
   { q: 'Where does my data go?', a: 'Nowhere, unless you opt in. Everything is a local SQLite store with markdown mirrors: 0 outbound HTTP on the ingestion smoke, proven by a fetch spy. No cloud, no account, no telemetry. Opt-in features change that. hippo recall --reranker jev sends your query and your candidate memory text to TypeSafe, and the LLM reranker and the API embedders send text to the provider you configure. Each is off unless you turn it on.' },
   { q: 'Which agents does it work with?', a: 'hippo init auto-installs hooks for Claude Code, Codex, Cursor, OpenClaw, and OpenCode, and exposes an MCP server for any MCP client (Cursor, Windsurf, Cline, Claude Desktop).' },
   { q: 'How is hippo different from mem0, Letta, or Zep?', a: 'hippo optimizes the full memory lifecycle. mem0 and similar tools save and search; Zep and Cognee extract entities into a knowledge graph; Letta has the agent edit its own memory blocks. hippo forgets by default and earns persistence through use, with reward-weighted decay, conflict detection, and sleep consolidation, and it runs locally with zero runtime dependencies.' },
-  { q: 'Is it production-ready?', a: `It is MIT-licensed at v${pkg.version}, with 926 tests against a real database and zero mocks. Multi-tenant isolation is proven by a negative test.` },
+  { q: 'Is it production-ready?', a: `It is MIT-licensed at v${pkg.version}, with ${site.tests} tests against a real database and no mocked store. Multi-tenant isolation is proven by a negative test.` },
 ] as const;

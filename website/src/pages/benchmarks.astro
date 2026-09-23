@@ -48,7 +48,7 @@ const evalIndexUrl = `${site.links.repo}/blob/master/docs/evals/README.md`;
 const heroChips = [
   { num: '98.6%', label: 'R@5, zero-dep default' },
   { num: '0.62', label: 'R@1, --reranker jev (dev store)' },
-  { num: '926', label: 'tests, real database' },
+  { num: site.tests, label: 'tests, real database' },
   { num: '0', label: 'outbound HTTP' },
 ];
 
@@ -204,9 +204,9 @@ const jsonLd = {
             <span class="mt-2 block text-xs leading-relaxed text-zinc-400">Zero dependencies, no embeddings required at runtime.</span>
           </div>
           <div class="glass rounded-2xl p-6">
-            <span class="font-mono text-4xl font-semibold tracking-tight text-gradient">926</span>
+            <span class="font-mono text-4xl font-semibold tracking-tight text-gradient">{site.tests}</span>
             <span class="mt-3 block text-sm font-medium text-zinc-200">tests, real database</span>
-            <span class="mt-2 block text-xs leading-relaxed text-zinc-400">Zero mocks. Project rule: no mocked dependencies.</span>
+            <span class="mt-2 block text-xs leading-relaxed text-zinc-400">No module mocks and no mocked store. Only paid network calls are stubbed.</span>
           </div>
           <div class="glass rounded-2xl p-6">
             <span class="font-mono text-4xl font-semibold tracking-tight text-gradient">0</span>

@@ -49,7 +49,15 @@ const missing = [];
 for (const c of distinctive) if (!cmpNorm.includes(normalize(c))) missing.push(`cell: "${c}"`);
 for (const s of systems) if (!cmpNorm.includes(normalize(s))) missing.push(`system: "${s}"`);
 
-const warns = ['R@5 = 74.0%', '926 tests', '0 outbound HTTP'].filter((c) => !readmeNorm.includes(normalize(c)));
+// The test figure lives once in site.ts; the README and llms.txt must carry the same one.
+const testsFloor = (site.match(/^\s*tests:\s*'([^']+)'/m) || [])[1];
+const llms = await readFile(join(root, 'public', 'llms.txt'), 'utf8');
+if (!testsFloor) missing.push('tests: no `tests:` figure in site.ts');
+else for (const [name, text] of [['README.md', readme], ['llms.txt', llms]]) {
+  if (!text.includes(`${testsFloor} tests`)) missing.push(`tests: ${name} does not say "${testsFloor} tests"`);
+}
+
+const warns = ['R@5 = 74.0%', '0 outbound HTTP'].filter((c) => !readmeNorm.includes(normalize(c)));
 if (warns.length) {
   console.warn('[readme-sync] WARN: receipt claim(s) not found verbatim in README (verify wording):', warns.join(' | '));
 }
