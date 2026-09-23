@@ -1,6 +1,6 @@
 {
   "name": "hippo-memory",
-  "version": "1.44.0",
+  "version": "1.45.0",
   "description": "Biologically-inspired memory for AI agents. Zero runtime deps, SQLite, MCP server, and an opt-in hosted TypeSafe Jev reranker. Decay, retrieval strengthening, consolidation.",
   "type": "module",
   "main": "./dist/index.js",

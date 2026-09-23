@@ -1,4 +1,0 @@
-### Documentation
-
-- **The LongMemEval claim now says what reproduces.** The README and site said 98.6% R@5 "with the zero-dependency default". That number reproduces only on the June 2026 build (`@xenova/transformers` 2.17.2, int8 weights); today's build gives 98.0. Both are the best of five settings in the benchmark scripts, not `hippo recall`, and MiniLM has been an optional install since 1.28.0. At 500 questions 98.0 ties gbrain's 97.6, and the pages now say so. `docs/evals/2026-09-23-longmemeval-reproduction.md` has both runs and the commands.
-- **The per-haystack run can be replayed from the repo.** `chunk_per_turn_hybrid_retrieve.mjs --per-haystack` ranks each question within its own haystack; the June script was never committed. `LME_TRANSFORMERS` picks the embedding backend, and `score_haystack.py` checks for leaks outside each haystack and scores all-evidence recall.
