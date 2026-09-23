@@ -768,7 +768,7 @@ export async function hybridSearch(
     const reranked = await options.reranker(
       query,
       rerankInputWithRank,
-      options.rerankerOptions,
+      { ...options.rerankerOptions, topK },
     );
     const withPostRank = reranked.map((r, i) => ({ ...r, postRerankRank: i + 1 }));
     ordered = [...withPostRank, ...tail];

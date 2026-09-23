@@ -43,6 +43,15 @@ describe('hybridSearch reranker seam', () => {
     expect(out[0].postRerankRank).toBe(1);
   });
 
+  it('passes its topK to the reranker, so a smaller reranker default drops nothing', async () => {
+    const entries = ['alpha failure', 'beta failure', 'gamma failure', 'delta failure'].map((c) => createMemory(c));
+    // Slices like llm.ts and jev.ts do: options.topK, else a default smaller than the search's own.
+    const stub: RerankerFn = async (_query, results, options) =>
+      results.slice(0, options?.topK ?? 2).map((r) => ({ ...r, rerankScore: r.score }));
+    const out = await hybridSearch('failure', entries, { budget: 100000, reranker: stub });
+    expect(out).toHaveLength(4);
+  });
+
   it('skips reranker when option not provided (current behaviour preserved)', async () => {
     const entries = [createMemory('the quick brown fox')];
     const out = await hybridSearch('fox', entries, { budget: 100000 });
