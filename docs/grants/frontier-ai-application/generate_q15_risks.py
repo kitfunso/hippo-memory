@@ -1,5 +1,7 @@
 """Generate Q15 appendix: risk register for Frontier AI Discovery feasibility study."""
 
+from pathlib import Path
+
 from fpdf import FPDF
 
 
@@ -224,7 +226,7 @@ def generate() -> None:
         "Risks reviewed at each milestone gate (M1-M4). Status updated as mitigations are implemented.",
         new_x="LMARGIN", new_y="NEXT")
 
-    pdf.output("C:/Users/skf_s/hippo/frontier-ai-application/q15_risk_register.pdf")
+    pdf.output(str(Path(__file__).with_name("q15_risk_register.pdf")))
     print("Q15 risk register saved.")
 
 

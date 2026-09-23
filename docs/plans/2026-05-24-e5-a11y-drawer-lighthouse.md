@@ -140,8 +140,8 @@ Pin version in eval doc for reproducibility.
 
 - `ui/package.json`: `0.1.0` → `0.2.0`.
 - `docs/CHANGELOG.md`: new entry for v0.26 UI revamp with PR refs #53-#59.
-- `README.md`: refresh screenshots — `mockups/dashboard-before-parchment.png`
-  (existing dark) + `mockups/dashboard-after-parchment.png` (new).
+- `README.md`: refresh screenshots — `docs/mockups/dashboard-before-parchment.png`
+  (existing dark) + `docs/mockups/dashboard-after-parchment.png` (new).
 
 ### S10 — Final ship gate
 

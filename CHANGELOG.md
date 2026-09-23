@@ -2437,7 +2437,7 @@ hardening pass. Manual keyboard + SR walkthrough verified.
 
 ## 1.12.10 (2026-05-24): D1+D2+D3+D4+D5 design picks bundled ship
 
-All five design decisions from `docs/design-decisions/2026-05-24-blocked-items.md`
+All five design decisions from `docs/decisions/2026-05-24-blocked-items.md`
 authorized via Keith's "go with your picks for all 5" — shipped as one
 release. Multi-tenant story now coherent end-to-end.
 

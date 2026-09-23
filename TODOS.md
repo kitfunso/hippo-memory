@@ -215,7 +215,7 @@ All four items closed in v1.7.3. See `docs/plans/2026-05-06-v1.7.3-review-tail.m
 
 ## v0.26 — UI Redesign (warm parchment + 3D)
 
-Redesign direction confirmed: warm parchment Field Notes aesthetic with 3D Three.js memory map. Mockup at `mockups/hybrid-v4.html`.
+Redesign direction confirmed: warm parchment Field Notes aesthetic with 3D Three.js memory map. Mockup at `docs/mockups/hybrid-v4.html`.
 
 ### Design Decisions (locked)
 - Light theme: warm parchment #f4efe6, not dark mode
