@@ -1,11 +1,12 @@
 /** `--flag=value` (glued) form: the first describe unit-tests parseArgs, the second drives the built CLI. */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { execFileSync } from 'node:child_process';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { BOOLEAN_FLAGS, parseArgs } from '../src/cli.js';
+import { pathToFileURL } from 'node:url';
+import { BOOLEAN_FLAGS, KNOWN_FLAGS, parseArgs, shouldAutoRepairCodexWrapper } from '../src/cli.js';
 
 const argv = (...rest: string[]) => ['node', 'hippo', ...rest];
 
@@ -116,6 +117,28 @@ describe('BOOLEAN_FLAGS: every switch the CLI reads is registered', () => {
     const unregistered = [...onOff].filter((key) => !asValue.has(key) && !BOOLEAN_FLAGS.has(key));
     expect(unregistered).toEqual([]);
   });
+
+  it('case 14e: KNOWN_FLAGS is exactly the set of flags the CLI reads, so no typo hides in it', () => {
+    const reads = new Set<string>();
+    const READ = /flags(?:\[['"]([a-z0-9-]+)['"]\]|\.([a-z][a-z0-9]*)\b)|(?:Flag|hasOwn)\(\s*flags,\s*['"]([a-z0-9-]+)['"]/g;
+    for (const file of ['cli.ts', join('connectors', 'github', 'cli-impl.ts')]) {
+      const src = readFileSync(resolve(__dirname, '..', 'src', file), 'utf8');
+      for (const m of src.matchAll(READ)) reads.add(m[1] ?? m[2] ?? m[3]);
+    }
+    expect([...reads].sort()).toEqual([...KNOWN_FLAGS].sort());
+  });
+});
+
+describe('init --no-hooks', () => {
+  it('case 14f: skips the codex wrapper repair, read from the parsed flags', () => {
+    vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '');
+    try {
+      expect(shouldAutoRepairCodexWrapper('init', parseArgs(argv('init')).flags)).toBe(true);
+      expect(shouldAutoRepairCodexWrapper('init', parseArgs(argv('init', '--no-hooks')).flags)).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });
 
 describe('built CLI: --flag=value end-to-end guards', () => {
@@ -130,14 +153,8 @@ describe('built CLI: --flag=value end-to-end guards', () => {
   }
 
   function runCli(args: string[]): { stdout: string; stderr: string; status: number } {
-    try {
-      const stdout = execFileSync('node', [CLI, ...args], { cwd: tmpDir, env, encoding: 'utf8' });
-      return { stdout, stderr: '', status: 0 };
-    } catch (err) {
-      // SAFETY: execFileSync attaches stdout/stderr/status to the thrown Error on a non-zero exit.
-      const e = err as { stdout?: string; stderr?: string; status?: number };
-      return { stdout: e.stdout ?? '', stderr: e.stderr ?? '', status: e.status ?? 1 };
-    }
+    const res = spawnSync('node', [CLI, ...args], { cwd: tmpDir, env, encoding: 'utf8' });
+    return { stdout: res.stdout, stderr: res.stderr, status: res.status ?? 1 };
   }
 
   beforeEach(() => {
@@ -243,5 +260,31 @@ describe('built CLI: --flag=value end-to-end guards', () => {
     const res = runCli(['remember', 'use pnpm', '--pin', 'true']);
     expect(res.status).toBe(1);
     expect(res.stderr).toContain('--pin takes no value');
+  });
+
+  it('case 29: forget X --dryrun (typo) stops with exit 2 instead of forgetting', () => {
+    const res = runCli(['forget', 'X', '--dryrun']);
+    expect(res.status).toBe(2);
+    expect(res.stderr).toContain('Unknown flag --dryrun for hippo forget. Nothing was changed.');
+  });
+
+  it('case 30: recall --limt (typo) on a read-only command warns and still runs', () => {
+    const res = runCli(['recall', 'deploy steps', '--limt', '5', '--json']);
+    expect(res.status).toBe(0);
+    expect(res.stderr).toContain('ignoring unknown flag --limt');
+  });
+
+  it('case 31: reject --dry-run stops with exit 2, because reject has no dry run', () => {
+    const res = runCli(['reject', 'X', '--dry-run']);
+    expect(res.status).toBe(2);
+    expect(res.stderr).toContain('hippo reject has no --dry-run');
+  });
+
+  it('case 32: importing dist/cli.js runs nothing; only bin/hippo.js and a direct run do', () => {
+    const url = pathToFileURL(resolve(__dirname, '..', 'dist', 'cli.js')).href;
+    const res = spawnSync('node', ['-e', `import(${JSON.stringify(url)}).then(() => console.log('imported'))`], {
+      cwd: tmpDir, env, encoding: 'utf8',
+    });
+    expect(res.stdout.trim()).toBe('imported');
   });
 });

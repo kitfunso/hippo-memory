@@ -27,3 +27,20 @@ describe('hippo audit list', () => {
     }
   });
 });
+
+describe('hippo audit --fix --dry-run', () => {
+  it('reports what it would remove and deletes nothing', () => {
+    if (!existsSync(cli)) throw new Error('build first');
+    const home = mkdtempSync(join(tmpdir(), 'hippo-audit-dry-'));
+    const env = { ...process.env, HIPPO_HOME: join(home, 'global'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
+    try {
+      execSync(`node "${cli}" init --no-hooks --no-schedule --no-learn`, { env, cwd: home });
+      execSync(`node "${cli}" remember "tiny note"`, { env, cwd: home });
+      const dry = execSync(`node "${cli}" audit --fix --dry-run`, { env, cwd: home }).toString();
+      expect(dry).toContain('Would remove 1 error-severity');
+      expect(execSync(`node "${cli}" audit`, { env, cwd: home }).toString()).toContain('tiny note');
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+});

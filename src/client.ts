@@ -1,9 +1,9 @@
 /**
  * HTTP client wrapper for `hippo serve`.
  *
- * Mirrors the function signatures in src/api.ts so the CLI can route through
- * either path uniformly. Each function takes (serverUrl, apiKey?, ...) and
- * returns the same shape that api.ts would.
+ * Only the writes the CLI routes (remember, forget, archive, promote), which are
+ * also all HIPPO_REQUIRE_SERVER covers; every other command opens the store
+ * directly. Each call returns the same shape that api.ts would.
  *
  * Errors from the server (4xx/5xx) are mapped back into thrown Errors with
  * the server's `error` message preserved verbatim so existing CLI handlers
@@ -14,18 +14,7 @@
  * native fetch failure so the caller can detect them and self-heal.
  */
 
-import type { MemoryKind } from './memory.js';
-import type { AuditEvent, AuditOp } from './audit.js';
-import type { ApiKeyListItem } from './auth.js';
-import type {
-  RememberOpts,
-  RememberResult,
-  RecallOpts,
-  RecallResult,
-  AuthCreateOpts,
-  AuthCreateResult,
-  AuditListOpts,
-} from './api.js';
+import type { RememberOpts, RememberResult } from './api.js';
 
 function buildHeaders(apiKey: string | undefined, withBody: boolean) {
   const headers: Record<string, string> = {};
@@ -82,50 +71,6 @@ export async function remember(
   return result;
 }
 
-export async function recall(
-  serverUrl: string,
-  apiKey: string | undefined,
-  opts: RecallOpts,
-): Promise<RecallResult> {
-  const params = new URLSearchParams();
-  params.set('q', opts.query);
-  if (opts.limit !== undefined) params.set('limit', String(opts.limit));
-  if (opts.mode !== undefined) params.set('mode', opts.mode);
-  if (opts.scope !== undefined && opts.scope !== '') params.set('scope', opts.scope);
-  if (opts.includeContinuity) params.set('include_continuity', '1');
-  // v1.7.2 T4 — RecallOpts parity sweep. Pre-v1.7.2 the thin-client only
-  // serialized the five fields above; the HTTP server already accepted
-  // fresh_tail_count, fresh_tail_session_id, summarize_overflow. Adding
-  // scorer_window alone would have perpetuated the drift. Serializing all
-  // four together. Validation lives in api.recall(); transport just
-  // forwards.
-  if (opts.freshTailCount !== undefined) params.set('fresh_tail_count', String(opts.freshTailCount));
-  if (opts.freshTailSessionId !== undefined && opts.freshTailSessionId !== '')
-    params.set('fresh_tail_session_id', opts.freshTailSessionId);
-  if (opts.summarizeOverflow !== undefined)
-    params.set('summarize_overflow', opts.summarizeOverflow ? '1' : '0');
-  if (opts.scorerWindow !== undefined) params.set('scorer_window', String(opts.scorerWindow));
-  // v1.7.4 sessionId for dlPFC goal-stack boost + v0.33 / J1 sessionId
-  // for per-session anchoring ring. Pre-v0.33 the thin-client silently
-  // dropped opts.sessionId, so HTTP-routed SDK callers got no goal
-  // boost and (post-J1) the HTTP ring logged recall_anchor_skipped_no_session.
-  // Codex round-3 P2 catch: align serialization with the RecallOpts type.
-  // Note: opts.recallHistory is intentionally NOT serialized — it is an
-  // in-process snapshot only; the HTTP server maintains its own ring per
-  // sessionId, so passing recallHistory over the wire would be a no-op
-  // at best and a tenant-leak risk at worst.
-  if (opts.sessionId !== undefined && opts.sessionId !== '') {
-    params.set('session_id', opts.sessionId);
-  }
-  const res = await fetch(`${serverUrl}/v1/memories?${params.toString()}`, {
-    method: 'GET',
-    headers: buildHeaders(apiKey, false),
-  });
-  if (!res.ok) await throwForStatus(res);
-  const result: RecallResult = await res.json();
-  return result;
-}
-
 export async function forget(
   serverUrl: string,
   apiKey: string | undefined,
@@ -154,22 +99,6 @@ export async function promote(
   return result;
 }
 
-export async function supersede(
-  serverUrl: string,
-  apiKey: string | undefined,
-  oldId: string,
-  newContent: string,
-): Promise<{ ok: true; oldId: string; newId: string }> {
-  const res = await fetch(`${serverUrl}/v1/memories/${encodeURIComponent(oldId)}/supersede`, {
-    method: 'POST',
-    headers: buildHeaders(apiKey, true),
-    body: JSON.stringify({ content: newContent }),
-  });
-  if (!res.ok) await throwForStatus(res);
-  const result: { ok: true; oldId: string; newId: string } = await res.json();
-  return result;
-}
-
 export async function archiveRaw(
   serverUrl: string,
   apiKey: string | undefined,
@@ -183,71 +112,6 @@ export async function archiveRaw(
   });
   if (!res.ok) await throwForStatus(res);
   const result: { ok: true; archivedAt: string } = await res.json();
-  return result;
-}
-
-export async function authCreate(
-  serverUrl: string,
-  apiKey: string | undefined,
-  opts: AuthCreateOpts,
-): Promise<AuthCreateResult> {
-  const res = await fetch(`${serverUrl}/v1/auth/keys`, {
-    method: 'POST',
-    headers: buildHeaders(apiKey, true),
-    body: JSON.stringify(opts),
-  });
-  if (!res.ok) await throwForStatus(res);
-  const result: AuthCreateResult = await res.json();
-  return result;
-}
-
-export async function authList(
-  serverUrl: string,
-  apiKey: string | undefined,
-  opts: { active: boolean },
-): Promise<ApiKeyListItem[]> {
-  const params = new URLSearchParams();
-  params.set('active', opts.active ? 'true' : 'false');
-  const res = await fetch(`${serverUrl}/v1/auth/keys?${params.toString()}`, {
-    method: 'GET',
-    headers: buildHeaders(apiKey, false),
-  });
-  if (!res.ok) await throwForStatus(res);
-  const result: ApiKeyListItem[] = await res.json();
-  return result;
-}
-
-export async function authRevoke(
-  serverUrl: string,
-  apiKey: string | undefined,
-  keyId: string,
-): Promise<{ ok: true; revokedAt: string }> {
-  const res = await fetch(`${serverUrl}/v1/auth/keys/${encodeURIComponent(keyId)}`, {
-    method: 'DELETE',
-    headers: buildHeaders(apiKey, false),
-  });
-  if (!res.ok) await throwForStatus(res);
-  const result: { ok: true; revokedAt: string } = await res.json();
-  return result;
-}
-
-export async function auditList(
-  serverUrl: string,
-  apiKey: string | undefined,
-  opts: AuditListOpts,
-): Promise<AuditEvent[]> {
-  const params = new URLSearchParams();
-  if (opts.op !== undefined) params.set('op', opts.op);
-  if (opts.since !== undefined) params.set('since', opts.since);
-  if (opts.limit !== undefined) params.set('limit', String(opts.limit));
-  const qs = params.toString();
-  const url = qs.length > 0 ? `${serverUrl}/v1/audit?${qs}` : `${serverUrl}/v1/audit`;
-  const res = await fetch(url, {
-    method: 'GET',
-    headers: buildHeaders(apiKey, false),
-  });
-  if (!res.ok) await throwForStatus(res);
-  const result: AuditEvent[] = await res.json();
   return result;
 }
 

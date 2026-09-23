@@ -42,7 +42,7 @@ function runCli(cwd: string, ...args: string[]) {
   }
 }
 
-function makeWorkspaceWithRaw(rawId: string): string {
+function makeWorkspaceWithRaw(rawId: string, kind = 'raw'): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-forget-'));
   const hippoRoot = join(home, '.hippo');
   mkdirSync(hippoRoot, { recursive: true });
@@ -53,11 +53,20 @@ function makeWorkspaceWithRaw(rawId: string): string {
       `INSERT INTO memories (${RAW_COLS}) VALUES ` +
       `(?, '2026-01-01', '2026-01-01', 0, 1.0, 7, 'episodic', '[]', 'neutral', ` +
       `0.5, 'connector', '[]', 0, 'observed', 'connector raw content', ?)`,
-    ).run(rawId, 'raw');
+    ).run(rawId, kind);
   } finally {
     closeHippoDb(db);
   }
   return home;
+}
+
+function hasRow(home: string, id: string): boolean {
+  const db = openHippoDb(join(home, '.hippo'));
+  try {
+    return db.prepare('SELECT id FROM memories WHERE id = ?').get(id) !== undefined;
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 describe('cli forget — raw memory archive (A3)', () => {
@@ -115,6 +124,53 @@ describe('cli forget — raw memory archive (A3)', () => {
       const run = runCli(home, 'forget', 'mem_definitely_missing');
       expect(run.status).not.toBe(0);
       expect(run.out).toMatch(/not found/i);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  }, 15_000);
+});
+
+describe('cli forget --dry-run', () => {
+  it('refuses a raw memory the same way the real run does, and keeps it', () => {
+    const home = makeWorkspaceWithRaw('mem_rawdry1');
+    try {
+      const run = runCli(home, 'forget', 'mem_rawdry1', '--dry-run');
+      expect(run.status).not.toBe(0);
+      expect(run.out).toMatch(/append-only/i);
+      expect(hasRow(home, 'mem_rawdry1')).toBe(true);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  }, 15_000);
+
+  it('previews an archive without archiving or auditing', () => {
+    const home = makeWorkspaceWithRaw('mem_rawdry2');
+    try {
+      const run = runCli(home, 'forget', 'mem_rawdry2', '--archive', '--reason', 'preview', '--dry-run');
+      expect(run.status, run.out).toBe(0);
+      expect(run.out).toMatch(/Would archive mem_rawdry2/);
+      expect(hasRow(home, 'mem_rawdry2')).toBe(true);
+      const db = openHippoDb(join(home, '.hippo'));
+      try {
+        expect(queryAuditEvents(db, { tenantId: 'default', op: 'archive_raw', limit: 10 })).toHaveLength(0);
+      } finally {
+        closeHippoDb(db);
+      }
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  }, 15_000);
+
+  it('previews a plain forget and keeps the row; a missing id is still not found', () => {
+    const home = makeWorkspaceWithRaw('mem_plaindry', 'distilled');
+    try {
+      const run = runCli(home, 'forget', 'mem_plaindry', '--dry-run');
+      expect(run.status, run.out).toBe(0);
+      expect(run.out).toMatch(/Would forget mem_plaindry/);
+      expect(hasRow(home, 'mem_plaindry')).toBe(true);
+      const missing = runCli(home, 'forget', 'mem_definitely_missing', '--dry-run');
+      expect(missing.status).not.toBe(0);
+      expect(missing.out).toMatch(/not found/i);
     } finally {
       rmSync(home, { recursive: true, force: true });
     }

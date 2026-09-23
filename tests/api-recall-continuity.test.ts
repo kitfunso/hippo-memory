@@ -228,35 +228,6 @@ describe('api.recall continuity flag', () => {
     expect(c1Result.continuity!.activeSnapshot?.task).toBe('C1 task');
   });
 
-  // v1.2: client.recall propagates includeContinuity + scope as query params
-  // (the v1.1 throw guard was dropped now that HTTP supports it).
-  it('client.recall sends include_continuity and scope as query params', async () => {
-    const { recall: clientRecall } = await import('../src/client.js');
-    let capturedUrl: string | undefined;
-    const realFetch = globalThis.fetch;
-    // Stub fetch to capture the URL.
-    // SAFETY: globalThis always has a `fetch` property in this Node test runtime
-    // (undici's global fetch); this narrows it to a writable, callable shape.
-    (globalThis as { fetch: typeof globalThis.fetch }).fetch = async (input: RequestInfo | URL) => {
-      capturedUrl = input instanceof URL ? input.toString() : input instanceof Request ? input.url : input;
-      return new Response(JSON.stringify({ results: [], total: 0, tokens: 0 }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      });
-    };
-    try {
-      await clientRecall('http://example.invalid', undefined, {
-        query: 'anything',
-        includeContinuity: true,
-        scope: 'slack:public:Cgeneral',
-      });
-    } finally {
-      globalThis.fetch = realFetch;
-    }
-    expect(capturedUrl).toContain('include_continuity=1');
-    expect(capturedUrl).toContain('scope=slack');
-  });
-
   it('reports continuityTokens with Math.ceil(len/4) accounting', () => {
     initStore(tmpDir);
     saveActiveTaskSnapshot(tmpDir, 'default', {

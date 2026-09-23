@@ -362,6 +362,8 @@ export interface ServeOpts {
   hippoRoot: string;
   port?: number;
   host?: string;
+  /** Stop and exit on SIGINT/SIGTERM. Only `hippo serve` owns the process, so only it sets this. */
+  handleSignals?: boolean;
 }
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
@@ -3454,9 +3456,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     });
   };
 
-  // Skip signal handlers under vitest so each test run does not register a
-  // stray SIGTERM/SIGINT listener that survives until the runner exits.
-  if (!process.env.VITEST) {
+  if (opts.handleSignals) {
     let shuttingDown = false;
     const gracefulShutdown = async (signal: string): Promise<void> => {
       if (shuttingDown) return;
