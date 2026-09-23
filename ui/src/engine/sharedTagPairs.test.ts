@@ -7,6 +7,7 @@
 import { describe, it, expect } from "vitest";
 import type { Memory } from "../types.js";
 import { computeSharedTagPairs } from "./sharedTagPairs.js";
+import { perfBudgetMs } from "./perfBudget.js";
 
 function mem(over: Partial<Memory> & { id: string }): Memory {
   return {
@@ -197,6 +198,6 @@ describe("computeSharedTagPairs perf budget (AC7)", () => {
       runs.push(performance.now() - t0);
     }
     const avg = runs.reduce((a, b) => a + b, 0) / runs.length;
-    expect(avg).toBeLessThan(50);
+    expect(avg).toBeLessThan(perfBudgetMs(50));
   });
 });

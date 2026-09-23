@@ -142,8 +142,11 @@ jobs:
           cache: npm
           cache-dependency-path: ui/package-lock.json
       - run: npm --prefix ui ci
-      # One file at a time: the wall-clock budget tests otherwise share the runner's cores with the jsdom suites.
+      # One file at a time, so the wall-clock budget tests do not share the runner's cores with the jsdom suites.
+      # The budgets were set on a dev machine; serial runs here still took 2.3-2.5 s against the 2.0 s layout budget.
       - run: npm --prefix ui test -- --no-file-parallelism
+        env:
+          UI_PERF_BUDGET_SCALE: '2'
       - run: npm --prefix ui run build
 
   # The Python SDK tests talk to a real `hippo serve`, so the CLI is built first.

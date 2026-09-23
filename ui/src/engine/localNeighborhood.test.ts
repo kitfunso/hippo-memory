@@ -9,6 +9,7 @@
 import { describe, it, expect } from "vitest";
 import type { Memory, Conflict } from "../types.js";
 import { buildAdjacency, computeLocalNeighborhood } from "./localNeighborhood.js";
+import { perfBudgetMs } from "./perfBudget.js";
 
 function mem(over: Partial<Memory> & { id: string }): Memory {
   return {
@@ -252,7 +253,7 @@ describe("computeLocalNeighborhood", () => {
         runs.push(performance.now() - t0);
       }
       const avg = runs.reduce((a, b) => a + b, 0) / runs.length;
-      expect(avg).toBeLessThan(5);
+      expect(avg).toBeLessThan(perfBudgetMs(5));
     });
   });
 });

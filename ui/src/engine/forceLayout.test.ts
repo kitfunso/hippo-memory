@@ -12,6 +12,7 @@ import { describe, it, expect, vi } from "vitest";
 import type { Memory, Conflict } from "../types.js";
 import { buildForceLayout, type ForceNode, LAYOUT_BOUND } from "./forceLayout.js";
 import { buildAdjacency } from "./localNeighborhood.js";
+import { perfBudgetMs } from "./perfBudget.js";
 
 function mem(over: Partial<Memory> & { id: string }): Memory {
   return {
@@ -273,7 +274,7 @@ describe("position(id) O(1) lookup (AC5)", () => {
     const t0 = performance.now();
     for (let i = 0; i < 10000; i++) handle.position(`m${i % 1373}`);
     const ms = performance.now() - t0;
-    expect(ms).toBeLessThan(10); // generous; O(1) Map.get should be sub-ms
+    expect(ms).toBeLessThan(perfBudgetMs(10)); // generous; O(1) Map.get should be sub-ms
   });
 });
 
@@ -312,7 +313,7 @@ describe("perf budget (AC18 + AC19)", () => {
     const t0 = performance.now();
     handle.runToCompletion();
     const ms = performance.now() - t0;
-    expect(ms).toBeLessThan(2000);
+    expect(ms).toBeLessThan(perfBudgetMs(2000));
   });
 });
 
