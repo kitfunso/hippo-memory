@@ -77,7 +77,7 @@
   },
   "devDependencies": {
     "@oxlint/plugins": "^1.78.0",
-    "@types/node": "^20.11.0",
+    "@types/node": "^22.16.0",
     "oxlint": "^1.78.0",
     "typescript": "^5.4.0",
     "vitest": "^3.2.6"
