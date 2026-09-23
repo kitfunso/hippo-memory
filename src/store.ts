@@ -1485,16 +1485,12 @@ function syncMirrorFiles(hippoRoot: string, db: ReturnType<typeof openHippoDb>):
   writeStatsMirror(hippoRoot, buildStatsFromDb(db));
 }
 
-/**
- * Load the current derived index from SQLite and refresh the mirror file.
- */
+/** Load the derived index from SQLite. Read-only: writers refresh index.json, so readers never race on it. */
 export function loadIndex(hippoRoot: string): HippoIndex {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    const index = buildIndexFromDb(db);
-    writeIndexMirror(hippoRoot, index);
-    return index;
+    return buildIndexFromDb(db);
   } finally {
     closeHippoDb(db);
   }
