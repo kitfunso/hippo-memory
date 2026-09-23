@@ -7,6 +7,14 @@ import { fileURLToPath } from 'node:url';
 
 const SCRIPT = fileURLToPath(new URL('../extensions/claude-code-plugin/scripts/capture-error.sh', import.meta.url));
 
+interface FailurePayload {
+  hook_event_name?: string;
+  tool_name: string;
+  tool_input?: { command: string };
+  error: string;
+  is_interrupt: boolean;
+}
+
 // Windows runners can resolve `bash` to the WSL launcher; Claude Code runs this script under sh or Git Bash.
 describe.skipIf(process.platform === 'win32')('Claude Code plugin error capture', () => {
   let dir: string;
@@ -22,7 +30,7 @@ describe.skipIf(process.platform === 'win32')('Claude Code plugin error capture'
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  function runHook(payload: Record<string, unknown>): void {
+  function runHook(payload: FailurePayload): void {
     const result = spawnSync('bash', [SCRIPT], {
       cwd: dir,
       input: JSON.stringify(payload),
