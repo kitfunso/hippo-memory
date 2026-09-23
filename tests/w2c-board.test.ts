@@ -29,10 +29,11 @@ function dashboardRequest(
   path: string,
   host: string,
   method: string = 'GET',
+  extraHeaders: Record<string, string> = {},
 ): Promise<{ status: number; body: string; acaoPresent: boolean }> {
   return new Promise((resolve, reject) => {
     const req = httpRequest(
-      { host: '127.0.0.1', port, path, method, headers: { Host: host } },
+      { host: '127.0.0.1', port, path, method, headers: { Host: host, ...extraHeaders } },
       (res) => {
         let body = '';
         res.setEncoding('utf8');
@@ -135,6 +136,16 @@ describe('dashboard entry', () => {
     const star = await dashboardRequest(port, '/api/star/mem_x', `evil.example:${port}`, 'POST');
     expect(star.status).toBe(403);
     expect(star.body).toBe('Forbidden');
+  });
+
+  it('E2b: a star POST from another site is 403 even with a loopback Host', async () => {
+    const host = `127.0.0.1:${port}`;
+    const star = (headers: Record<string, string>) =>
+      dashboardRequest(port, '/api/star/mem_x', host, 'POST', headers);
+    expect((await star({ Origin: 'http://evil.example' })).status).toBe(403);
+    expect((await star({ 'Sec-Fetch-Site': 'cross-site' })).status).toBe(403);
+    expect((await star({ Origin: `http://${host}`, 'Sec-Fetch-Site': 'same-origin' })).status).toBe(404);
+    expect((await star({})).status).toBe(404);
   });
 
   it('E3: localhost, LOCALHOST and a portless 127.0.0.1 all get 200', async () => {

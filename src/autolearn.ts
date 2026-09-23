@@ -16,7 +16,8 @@ import { isContentWorthStoring } from './audit.js';
 export function captureError(
   exitCode: number,
   stderr: string,
-  command: string
+  command: string,
+  tenantId?: string,
 ): MemoryEntry {
   // Truncate to first 500 chars to avoid storing megabytes of build logs
   const wasTruncated = stderr.length > 500;
@@ -36,6 +37,7 @@ export function captureError(
     tags,
     source: 'autolearn',
     confidence: 'observed',
+    tenantId,
   });
 }
 

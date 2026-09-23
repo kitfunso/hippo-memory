@@ -14,7 +14,7 @@ import { mkdtempSync, rmSync, mkdirSync, existsSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { initStore, writeEntry } from '../src/store.js';
+import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { createMemory } from '../src/memory.js';
 
@@ -145,5 +145,47 @@ describe('CLI tenant-scoping (v1.11.0 residue)', () => {
     );
     expect(trace.status).not.toBe(0);
     expect(trace.out).toMatch(/not found/i);
+  }, 30_000);
+
+  function seed(tenantId: string, content: string): string {
+    const entry = createMemory(content, { tenantId, tags: ['x'] });
+    writeEntry(hippoRoot, entry);
+    return entry.id;
+  }
+
+  const envB = () => ({ ...envBase, HIPPO_TENANT: 'tenant_b' });
+
+  it('audit --fix under tenant_b deletes only tenant_b rows, with a reason', () => {
+    const aJunk = seed('tenant_a', 'tiny note');
+    const bJunk = seed('tenant_b', 'tiny note');
+    const res = runCli(home, envB(), 'audit', '--fix');
+    expect(res.status, res.out).toBe(0);
+    expect(res.out).toContain('Removed 1 error-severity');
+    expect(loadAllEntries(hippoRoot).map((e) => e.id)).toEqual([aJunk]);
+
+    const db = openHippoDb(hippoRoot);
+    try {
+      const row = db.prepare(`SELECT tenant_id, metadata_json FROM audit_log WHERE op = 'forget' AND target_id = ?`).get(bJunk);
+      expect(row).toMatchObject({ tenant_id: 'tenant_b', metadata_json: expect.stringContaining('audit --fix: ') });
+    } finally {
+      closeHippoDb(db);
+    }
+  }, 30_000);
+
+  it('export under tenant_b leaves out tenant_a rows', () => {
+    seed('tenant_a', 'A content for export');
+    seed('tenant_b', 'B content for export');
+    const res = runCli(home, envB(), 'export');
+    expect(res.status, res.out).toBe(0);
+    expect(res.out).toContain('B content for export');
+    expect(res.out).not.toContain('A content for export');
+  }, 30_000);
+
+  it('supersede under tenant_b writes the successor into tenant_b', () => {
+    const old = seed('tenant_b', 'B original content');
+    const res = runCli(home, envB(), 'supersede', old, 'B replacement content');
+    expect(res.status, res.out).toBe(0);
+    const successor = loadAllEntries(hippoRoot).find((e) => e.content === 'B replacement content');
+    expect(successor?.tenantId).toBe('tenant_b');
   }, 30_000);
 });

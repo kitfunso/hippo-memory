@@ -39,6 +39,11 @@ describe('captureError', () => {
     expect(entry.emotional_valence).toBe('negative');
   });
 
+  it('writes into the tenant it is given, else default', () => {
+    expect(captureError(1, 'err', 'cmd', 'tenant_b').tenantId).toBe('tenant_b');
+    expect(captureError(1, 'err', 'cmd').tenantId).toBe('default');
+  });
+
   it('short stderr passes through unchanged', () => {
     const stderr = 'short error';
     const entry = captureError(1, stderr, 'cmd');

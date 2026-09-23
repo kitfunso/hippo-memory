@@ -250,6 +250,6 @@ describe('server concurrency — recall + write under single-writer', () => {
         else process.env.HIPPO_V1_RPS = prevRps;
       }
     },
-    60_000,
+    120_000, // each GET strengthens its results, so all 550 requests are write transactions
   );
 });

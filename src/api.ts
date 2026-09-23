@@ -12,6 +12,7 @@ import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import {
   writeEntry,
   writeEntryDbOnly,
+  batchWriteAndDelete,
   stampOriginProject,
   writeEntryMirrors,
   readEntry,
@@ -318,6 +319,7 @@ export interface RecallOpts {
    * (e.g. mean-of-children summary re-rank).
    */
   scorerWindow?: number;
+  /** Candidate order. `recall` always keeps the BM25 order; `retrieve` honours this. */
   mode?: 'bm25' | 'hybrid' | 'physics';
   /**
    * Restrict results to memories whose `scope` equals this value exactly.
@@ -688,9 +690,8 @@ export function buildSuppressionSummary(counts: {
 
 /**
  * Domain-level recall. Loads BM25-ranked candidates from SQLite scoped to
- * `ctx.tenantId`. The `mode` flag is accepted for forward compatibility (the
- * CLI exposes hybrid/physics paths) but Task 2 wires only the BM25 candidate
- * loader; later tasks can extend this to call the physics/hybrid scorer.
+ * `ctx.tenantId` and keeps that order whatever `mode` says; `retrieve` is the
+ * mode-aware, strengthening variant the HTTP route uses.
  *
  * **api.recall does NOT mutate `index.last_retrieval_ids`** (v1.11.5 contract
  * lock). The CLI `cmdRecall` (cli.ts) writes `last_retrieval_ids` because the
@@ -703,7 +704,32 @@ export function buildSuppressionSummary(counts: {
  * `tests/api-recall-no-side-effects.test.ts`.
  */
 export function recall(ctx: Context, opts: RecallOpts): RecallResult {
-  const limit = opts.limit ?? 10;
+  const windowSize = recallWindowSize(opts);
+  return recallFrom(ctx, opts, windowSize, loadRecallSearchEntries(ctx.hippoRoot, opts.query, windowSize, ctx.tenantId, opts.scope));
+}
+
+/** Mode-aware recall that strengthens each returned row; never writes last_retrieval_ids (v1.11.5 lock). */
+export async function retrieve(ctx: Context, opts: RecallOpts): Promise<RecallResult> {
+  const windowSize = recallWindowSize(opts);
+  let candidates = loadRecallSearchEntries(ctx.hippoRoot, opts.query, windowSize, ctx.tenantId, opts.scope);
+  if (opts.mode === 'hybrid' || opts.mode === 'physics') {
+    const searchOpts = { budget: Infinity, hippoRoot: ctx.hippoRoot, scope: opts.scope ?? null };
+    const ranked = opts.mode === 'physics'
+      ? await physicsSearch(opts.query, candidates, { ...searchOpts, physicsConfig: loadConfig(ctx.hippoRoot).physics })
+      : await hybridSearch(opts.query, candidates, searchOpts);
+    const rankedIds = new Set(ranked.map((r) => r.entry.id));
+    candidates = [...ranked.map((r) => r.entry), ...candidates.filter((e) => !rankedIds.has(e.id))];
+  }
+  const result = recallFrom(ctx, opts, windowSize, candidates);
+  if (!isRecallBoostAblated()) {
+    const retrieved = markRetrieved(loadEntriesByIds(ctx.hippoRoot, result.results.map((r) => r.id), ctx.tenantId));
+    batchWriteAndDelete(ctx.hippoRoot, retrieved, [], { snapshotIds: new Set(retrieved.map((e) => e.id)) });
+  }
+  return result;
+}
+
+/** Contract preflight: throws before any store-touching work. */
+function recallWindowSize(opts: RecallOpts): number {
   // F5 (v1.6.5) preflight — codex P1: original guard fired AFTER
   // loadSearchEntries (which runs initStore, migrating legacy state on first
   // call). For a true contract preflight we want the throw before any
@@ -743,7 +769,11 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
       );
     }
   }
-  const windowSize = opts.scorerWindow ?? DEFAULT_SEARCH_CANDIDATE_LIMIT;
+  return opts.scorerWindow ?? DEFAULT_SEARCH_CANDIDATE_LIMIT;
+}
+
+function recallFrom(ctx: Context, opts: RecallOpts, windowSize: number, all: MemoryEntry[]): RecallResult {
+  const limit = opts.limit ?? 10;
   // v1.7.1 — root-cause fix for the `unknown:legacy` leak. Scope predicate
   // is now pushed into `loadSearchRows` SQL via `loadRecallSearchEntries`.
   // - opts.scope undefined / '': SQL excludes `unknown:legacy`.
@@ -770,13 +800,6 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   let summarySubstitutionsCount = 0;
   let freshTailAddedCount = 0;
 
-  const all = loadRecallSearchEntries(
-    ctx.hippoRoot,
-    opts.query,
-    windowSize,
-    ctx.tenantId,
-    opts.scope,
-  );
   // v1.12.13 / C5 — WYSIATI totalCandidates counter (post tenant + SQL scope
   // predicate, pre JS scope filter).
   totalCandidatesCount = all.length;

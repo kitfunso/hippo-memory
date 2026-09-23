@@ -185,6 +185,14 @@ const MIME_TYPES = {
 // Binds 127.0.0.1 only; refusing other Hosts closes the DNS-rebinding route.
 const LOOPBACK_HOST = /^(localhost|127\.0\.0\.1)(:\d+)?$/i;
 
+// A loopback Host does not stop a form POST from another site open in the same browser.
+function isCrossSite(req: http.IncomingMessage): boolean {
+  const site = req.headers['sec-fetch-site'];
+  if (site !== undefined && site !== 'same-origin' && site !== 'none') return true;
+  const origin = req.headers.origin;
+  return origin !== undefined && origin !== `http://${req.headers.host}`;
+}
+
 type StaticFileExtension = keyof typeof MIME_TYPES;
 
 function isStaticFileExtension(ext: string): ext is StaticFileExtension {
@@ -235,6 +243,11 @@ export function serveDashboard(hippoRoot: string, port: number = 3333): http.Ser
       // POST /api/star/:id - toggle starred on a memory
       const starMatch = pathname.match(/^\/api\/star\/([A-Za-z0-9_\-]+)$/);
       if (starMatch && req.method === 'POST') {
+        if (isCrossSite(req)) {
+          res.writeHead(403, { 'Content-Type': 'text/plain' });
+          res.end('Forbidden');
+          return;
+        }
         const id = starMatch[1];
         const entry = readEntry(hippoRoot, id, resolveTenantId({}));
         if (!entry) return jsonResponse(res, { error: 'Not found' }, 404);

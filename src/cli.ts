@@ -863,7 +863,7 @@ async function cmdRemember(
   if (flags['verified']) confidence = 'verified';
 
   // Compute schema fit against existing memories
-  const existing = loadAllEntries(targetRoot);
+  const existing = loadAllEntries(targetRoot, resolveTenantId({}));
   const schemaFit = computeSchemaFit(text, rawTags, existing);
 
   // A3 envelope flags
@@ -1018,6 +1018,7 @@ function cmdSupersede(
     pinned,
     source: old.source,
     confidence: 'verified',
+    tenantId: old.tenantId,
   });
 
   // AT1: write the SUCCESSOR first. The rejection guard fires on the new
@@ -2673,6 +2674,7 @@ function cmdTraceRecord(
     source: String(flags['source'] ?? 'cli'),
     trace_outcome: outcome as 'success' | 'failure' | 'partial',
     source_session_id: sessionId,
+    tenantId: resolveTenantId({}),
   });
 
   writeEntry(hippoRoot, entry);
@@ -2862,7 +2864,7 @@ export function learnFromMemoryMd(hippoRoot: string, homeDir: string = os.homedi
 
   if (memoryDirs.length === 0) return 0;
 
-  const existing = loadAllEntries(hippoRoot);
+  const existing = loadAllEntries(hippoRoot, resolveTenantId({}));
   let imported = 0;
   let skippedSecret = 0;
   // AT1 (plan §3 containment): a rejection guard refusal is per-VALUE — one
@@ -2909,6 +2911,7 @@ export function learnFromMemoryMd(hippoRoot: string, homeDir: string = os.homedi
           tags: ['claude-code-memory'],
           source: `claude-memory:${file}`,
           confidence: 'observed',
+          tenantId: resolveTenantId({}),
         });
 
         try {
@@ -6888,9 +6891,9 @@ async function cmdWatch(command: string, hippoRoot: string): Promise<void> {
     process.exit(exitCode);
   }
 
-  const entry = captureError(exitCode, stderr, command);
+  const entry = captureError(exitCode, stderr, command, resolveTenantId({}));
   // Compute schema fit against existing memories
-  const existingWatch = loadAllEntries(hippoRoot);
+  const existingWatch = loadAllEntries(hippoRoot, entry.tenantId);
   const watchFit = computeSchemaFit(entry.content, entry.tags, existingWatch);
   entry.schema_fit = watchFit;
   entry.half_life_days = deriveHalfLife(7, entry);
@@ -6989,15 +6992,10 @@ function learnFromRepo(
   // the existing summary line.
   let rejected = 0;
   const gitLearnTags = ['error', 'git-learned'];
-  const existingForSchema = loadAllEntries(hippoRoot);
+  const existingForSchema = loadAllEntries(hippoRoot, resolveTenantId({}));
 
   for (const lesson of lessons) {
-    // L9: learnFromRepo's existingForSchema load just above (the
-    // `loadAllEntries(hippoRoot)` call a few lines up) is host-wide and
-    // intentionally out-of-L9-scope per plan §11 (cli.ts is
-    // single-tenant-per-process). The tenantId arg here is a defensive no-op:
-    // deduplicateLesson's array overload ignores it; the parameter exists
-    // only to mirror the canonical caller pattern used elsewhere in cli.ts.
+    // The array overload ignores the tenant arg; existingForSchema is already scoped.
     if (deduplicateLesson(existingForSchema, lesson, 0.7, resolveTenantId({}))) {
       skipped++;
       continue;
@@ -7019,6 +7017,7 @@ function learnFromRepo(
       source: 'git-learn',
       confidence: 'observed',
       schema_fit: schemaFitVal,
+      tenantId: resolveTenantId({}),
     });
 
     // Auto-tag with path context from the repo being learned
@@ -9674,7 +9673,7 @@ async function main(
         break;
       }
       requireInit(hippoRoot);
-      const entries = loadAllEntries(hippoRoot);
+      const entries = loadAllEntries(hippoRoot, resolveTenantId({}));
       const result = auditMemories(entries);
       const shouldFix = Boolean(flags['fix']);
 
@@ -9688,16 +9687,16 @@ async function main(
           console.log(`         "${issue.content.slice(0, 80)}${issue.content.length > 80 ? '...' : ''}"`);
         }
         if (shouldFix) {
-          const errorIds = result.issues.filter(i => i.severity === 'error').map(i => i.memoryId);
-          if (errorIds.length > 0 && flags['dry-run'] === true) {
-            console.log(`\nWould remove ${errorIds.length} error-severity memories (dry run, nothing deleted).`);
-            console.log(`${result.issues.length - errorIds.length} warnings would remain (review manually).`);
-          } else if (errorIds.length > 0) {
-            for (const id of errorIds) {
-              deleteEntry(hippoRoot, id);
+          const errors = result.issues.filter(i => i.severity === 'error');
+          if (errors.length > 0 && flags['dry-run'] === true) {
+            console.log(`\nWould remove ${errors.length} error-severity memories (dry run, nothing deleted).`);
+            console.log(`${result.issues.length - errors.length} warnings would remain (review manually).`);
+          } else if (errors.length > 0) {
+            for (const issue of errors) {
+              deleteEntry(hippoRoot, issue.memoryId, { reason: `audit --fix: ${issue.reason}` });
             }
-            console.log(`\nRemoved ${errorIds.length} error-severity memories.`);
-            console.log(`${result.issues.length - errorIds.length} warnings remain (review manually).`);
+            console.log(`\nRemoved ${errors.length} error-severity memories.`);
+            console.log(`${result.issues.length - errors.length} warnings remain (review manually).`);
           } else {
             console.log(`\nNo error-severity issues. Warnings require manual review.`);
           }
@@ -9994,7 +9993,7 @@ async function main(
       requireInit(hippoRoot);
       const format = (flags['format'] as string) || 'json';
       const outputPath = args[0] || null;
-      const entries = loadAllEntries(hippoRoot);
+      const entries = loadAllEntries(hippoRoot, resolveTenantId({}));
 
       let output: string;
       if (format === 'markdown' || format === 'md') {

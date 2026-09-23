@@ -33,7 +33,7 @@ import { validateApiKey } from './auth.js';
 import { createRateLimiter, type RateLimiter } from './rate-limit.js';
 import {
   remember,
-  recall,
+  retrieve,
   RecallContractError,
   ForbiddenError,
   drillDown,
@@ -934,7 +934,7 @@ async function handleRequest(
     if (httpRecallHistory !== undefined) recallExtra.recallHistory = httpRecallHistory;
     if (explain) recallExtra.explain = explain;
 
-    const result = recall(ctx, {
+    const result = await retrieve(ctx, {
       query: q,
       limit,
       mode: mode ?? undefined,

@@ -38,7 +38,7 @@ describe('/v1/auth/keys role rules', () => {
     }
   }
 
-  function post(bearer: string, body: object): Promise<Response> {
+  function post(bearer: string, body: { role?: string }): Promise<Response> {
     return fetch(`${handle.url}/v1/auth/keys`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${bearer}` },
