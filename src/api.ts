@@ -102,7 +102,7 @@ import { detectAvailabilityBias, type AvailabilityHint } from './availability.js
  * object carrying both the audit-log subject (formerly the string itself) and
  * a role for /v1/sleep admin gating. Audit helpers continue accepting `string`
  * — callers pass `ctx.actor.subject`. Role checks happen at the request
- * boundary (e.g. /v1/sleep), not inside api functions.
+ * boundary (e.g. /v1/sleep), except in authCreate and authRevoke (ForbiddenError).
  */
 export interface Actor {
   /** 'cli' | 'localhost:cli' | 'api_key:<key_id>' | 'mcp' | 'connector:slack' | 'connector:github' */
@@ -157,6 +157,14 @@ export class RecallContractError extends Error {
     super(message);
     this.name = 'RecallContractError';
     this.code = code;
+  }
+}
+
+/** The actor's role or identity does not allow the operation. HTTP maps it to 403. */
+export class ForbiddenError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ForbiddenError';
   }
 }
 
@@ -2137,11 +2145,13 @@ export interface AuthCreateResult {
  * `src/server.ts` POST /v1/auth/keys mirrors this: it ignores any body
  * `tenantId` and uses the resolved Bearer's tenant exclusively.
  *
- * Per A5 v2 follow-ups (TODOS.md), `auth_create` is currently unaudited —
- * we intentionally match that behavior here for consistency. When A5 v2
- * lands and adds the audit op, this function should mirror the cli handler.
+ * Only an admin actor can mint (ForbiddenError otherwise), so a member key
+ * can never create a key, least of all an admin one.
  */
 export function authCreate(ctx: Context, opts: AuthCreateOpts): AuthCreateResult {
+  if (ctx.actor.role !== 'admin') {
+    throw new ForbiddenError('Only an admin key can create API keys');
+  }
   const db = openHippoDb(ctx.hippoRoot);
   try {
     const role = opts.role ?? 'admin';
@@ -2195,8 +2205,8 @@ export function authList(
  * Revoke an API key.
  *
  * Security: the key must belong to `ctx.tenantId`. Cross-tenant revoke is
- * rejected with the same "not found" message used for missing keys, so that a
- * caller cannot probe which key_ids exist on other tenants.
+ * rejected with the "not found" message used for missing keys, and a member may
+ * revoke only its own key (checked first), so no caller can probe other key_ids.
  *
  * Audit: emits 'auth_revoke' with `tenantId` set to the KEY ROW's tenant_id
  * (M1 fix from A5 review, mirrors src/cli.ts:cmdAuthRevoke). Skipped on no-op
@@ -2210,6 +2220,9 @@ export function authRevoke(
   ctx: Context,
   keyId: string,
 ): AuthRevokeResult {
+  if (ctx.actor.role !== 'admin' && ctx.actor.subject !== `api_key:${keyId}`) {
+    throw new ForbiddenError('A member key can revoke only itself');
+  }
   const db = openHippoDb(ctx.hippoRoot);
   try {
     // SAFETY: row's shape matches the three columns named in the SELECT

@@ -35,6 +35,7 @@ import {
   remember,
   recall,
   RecallContractError,
+  ForbiddenError,
   drillDown,
   assemble,
   forget,
@@ -433,10 +434,13 @@ async function parseJsonBody(req: IncomingMessage): Promise<Record<string, JsonV
  *   - /unknown/i    → 404 (auth_revoke on unknown key_id)
  *   - /already superseded/i → 409 (chain conflict)
  *   - /not raw/i    → 400 (archive_raw on non-raw row)
- * Everything else maps to 400 (bad input).
+ * ForbiddenError maps to 403; everything else to 400 (bad input).
  */
 function mapApiError<E>(err: E) {
   const message = err instanceof Error ? err.message : String(err);
+  if (err instanceof ForbiddenError) {
+    return { status: 403, message };
+  }
   const lower = message.toLowerCase();
   if (/not found/.test(lower) || /^unknown /.test(lower)) {
     return { status: 404, message };
@@ -1262,11 +1266,7 @@ async function handleRequest(
     }
     // v1.12.3: optional body.role mirrors the --role CLI flag. Validated
     // strictly — anything other than 'admin'|'member' is a 400 (no silent
-    // fallback to admin). Required note: admin Bearer can mint a member
-    // key for the same tenant; member Bearer minting an admin key is NOT
-    // blocked here today (auth_create is currently unaudited per the A5 v2
-    // note in authCreate doc). The HTTP layer trusts the buildContextWithAuth
-    // role check at admin-gated routes; mint surface remains permissive.
+    // fallback to admin). authCreate refuses a member caller with a 403.
     const roleRaw = body['role'];
     let role: 'admin' | 'member' | undefined;
     if (roleRaw !== undefined) {
@@ -1305,10 +1305,9 @@ async function handleRequest(
     return;
   }
 
-  // DELETE /v1/auth/keys/:keyId — revoke. authRevoke throws "Unknown key_id"
-  // for missing OR cross-tenant keys (no info leak), which mapApiError
-  // converts to 404. We return 200 with the result body rather than 204 to
-  // surface revokedAt to the caller.
+  // DELETE /v1/auth/keys/:keyId — revoke. Missing or cross-tenant keys are 404
+  // (no info leak); a member key targeting any key but its own is 403.
+  // 200 with the body rather than 204 so the caller sees revokedAt.
   const keyMatch = matchPath('/v1/auth/keys/:keyId', path);
   if (method === 'DELETE' && keyMatch) {
     validateIdSegment(keyMatch.keyId!, 'key id');
