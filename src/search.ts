@@ -460,8 +460,8 @@ export async function hybridSearch(
   if (options.hippoRoot) {
     try {
       const provider = resolveEmbeddingProvider(options.hippoRoot);
-      if (provider.isAvailable() && !embeddingModelRequiresReindex(options.hippoRoot, provider.id)) {
-        const idx = loadEmbeddingIndex(options.hippoRoot);
+      const idx = provider.isAvailable() ? loadEmbeddingIndex(options.hippoRoot) : {};
+      if (provider.isAvailable() && !embeddingModelRequiresReindex(options.hippoRoot, provider.id, idx)) {
         // Only spend a (possibly paid, off-box) query embedding when at least one
         // of THIS search's entries has a cached vector to compare against. An
         // index of only orphaned / out-of-scope vectors yields a meaningless

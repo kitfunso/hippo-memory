@@ -275,17 +275,17 @@ export function saveStoredEmbeddingModel(hippoRoot: string, model: string): void
 
 export function resolveIndexedEmbeddingModel(
   hippoRoot: string,
-  index: Record<string, number[]> = loadEmbeddingIndex(hippoRoot),
+  index?: Record<string, number[]>,
 ): string | null {
   const stored = loadStoredEmbeddingModel(hippoRoot);
   if (stored) return stored;
-  return Object.keys(index).length > 0 ? DEFAULT_EMBEDDING_MODEL : null;
+  return Object.keys(index ?? loadEmbeddingIndex(hippoRoot)).length > 0 ? DEFAULT_EMBEDDING_MODEL : null;
 }
 
 export function embeddingModelRequiresReindex(
   hippoRoot: string,
   model: string,
-  index: Record<string, number[]> = loadEmbeddingIndex(hippoRoot),
+  index?: Record<string, number[]>,
 ): boolean {
   const stored = resolveIndexedEmbeddingModel(hippoRoot, index);
   return stored !== null && stored !== embeddingIndexIdentity(model);
@@ -422,17 +422,65 @@ export function saveEmbeddingIndex(hippoRoot: string, index: Record<string, numb
   }
 }
 
-// Mutex to serialize embedding writes and prevent read-modify-write races
+const EMBED_LOCK_FILE = 'embeddings.lock';
+const EMBED_LOCK_WAIT_MS = 10_000;
+
+// In-process mutex plus an O_EXCL lock file, so no two processes read-modify-write embeddings.json at once.
 let _embedWriteLock: Promise<void> = Promise.resolve();
 
-async function withEmbedLock<T>(fn: () => Promise<T>): Promise<T> {
+function embedLockHolderAlive(lockPath: string): boolean {
+  let raw: string;
+  try {
+    raw = fs.readFileSync(lockPath, 'utf8');
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code !== 'ENOENT';
+  }
+  const pid = Number(raw);
+  // An empty lock is a holder between create and write; after 5 s it is a crashed one.
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return Date.now() - (fs.statSync(lockPath, { throwIfNoEntry: false })?.mtimeMs ?? 0) < 5_000;
+  }
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+async function acquireEmbedFileLock(hippoRoot: string): Promise<() => void> {
+  const lockPath = path.join(hippoRoot, EMBED_LOCK_FILE);
+  const deadline = Date.now() + EMBED_LOCK_WAIT_MS;
+  for (;;) {
+    try {
+      fs.writeFileSync(lockPath, String(process.pid), { flag: 'wx' });
+      return () => fs.rmSync(lockPath, { force: true });
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+    }
+    // SHORTCUT: two waiters can both break one dead holder's lock; a vector lost that way is backfilled by the next `hippo embed`.
+    if (!embedLockHolderAlive(lockPath)) {
+      fs.rmSync(lockPath, { force: true });
+      continue;
+    }
+    if (Date.now() >= deadline) throw new Error(`embeddings.json is busy: another hippo process holds ${lockPath}`);
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
+
+async function withEmbedLock<T>(hippoRoot: string, fn: () => Promise<T>): Promise<T> {
   let resolve!: () => void;
   const next = new Promise<void>(r => { resolve = r; });
   const prev = _embedWriteLock;
   _embedWriteLock = next;
   await prev;
   try {
-    return await fn();
+    const release = await acquireEmbedFileLock(hippoRoot);
+    try {
+      return await fn();
+    } finally {
+      release();
+    }
   } finally {
     resolve();
   }
@@ -449,7 +497,7 @@ export async function embedMemory(
   const provider = resolveEmbeddingProvider(hippoRoot, { model });
   if (!provider.isAvailable()) return;
 
-  return withEmbedLock(async () => {
+  return withEmbedLock(hippoRoot, async () => {
     // embedMemory is best-effort: an embedding failure (API down / bad key / 5xx)
     // must not reject the caller's write — `getEmbedding` historically swallowed
     // failures and returned []. The explicit `hippo embed` / `embedAll` path is
@@ -498,6 +546,8 @@ export async function embedMemory(
     } catch {
       // Provider failure (API down / bad key). Best-effort: leave the index as-is.
     }
+  }).catch((err: unknown) => {
+    console.error(`hippo: skipped embedding ${entry.id} (${err instanceof Error ? err.message : String(err)}); run 'hippo embed' to backfill`);
   });
 }
 
@@ -530,7 +580,7 @@ export async function embedAll(
     return 0;
   }
 
-  return withEmbedLock(async () => {
+  return withEmbedLock(hippoRoot, async () => {
     const identity = provider.id;
     // L9: host-wide by design. embedAll backfills vectors for all tenants'
     // entries into the per-host embedding index. Per-tenant filtering would
