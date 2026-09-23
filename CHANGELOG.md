@@ -3563,7 +3563,7 @@ Hygiene release closing the four consolidation items deferred from v1.7.1. **No 
 
 ### Documented (no migration — by design)
 
-- **CLI recall via `searchBoth` / `searchBothHybrid` (`src/shared.ts:96, 172`, used by `cli.ts:783, 1429`) does NOT default-deny on `unknown:legacy`.** Intentional asymmetry: CLI is an operator-local surface where investigating the quarantine bucket is a feature. Library `recall()` from `index.ts` (used by frontend / programmatic callers) goes through `loadRecallSearchEntries` and DOES default-deny. Import the library API for default-deny semantics; use the CLI for full operator visibility. No `--include-quarantine` flag added; revisit if friction surfaces.
+- **CLI recall via `searchBoth` / `searchBothHybrid` (`src/shared.ts:96, 172`, used by `cli.ts:783, 1429`) does NOT default-deny on `unknown:legacy`.** Intentional asymmetry: CLI is an operator-local surface where investigating the quarantine bucket is a feature. Library `recall()` from `index.ts` (used by frontend / programmatic callers) goes through `loadRecallSearchEntries` and DOES default-deny. Import the library API for default-deny semantics; use the CLI for full operator visibility. No `--include-quarantine` flag added; revisit if friction surfaces. **Correction (1.45.0): `src/index.ts` has never exported `recall()`.** The default-deny path is `api.recall()`, which `hippo serve` (HTTP) calls; MCP applies the same rule to its own ranked results. Exporting the `api.ts` facade from the package entry waits for 1.46.0.
 
 ### Notes
 
