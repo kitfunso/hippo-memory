@@ -2949,26 +2949,22 @@ export interface SleepResult {
    * v1.25.0: count of memories the auto-share secret veto withheld this sleep
    * — rows that passed every other admission gate (transfer score,
    * not-already-global) and were blocked solely by `detectSecret`. Absent
-   * when 0 or when auto-share did not run. Same redaction class as `shared`
-   * (per-invocation activity counter, NOT redacted on egress — see the
-   * "NOT redacted" list in src/sleep-redact.ts).
+   * when 0 or when auto-share did not run.
    */
   secretSkipped?: number;
   /**
    * AT1: count of auto-share candidates the GLOBAL store's rejection
    * tombstone refused this sleep (docs/plans/2026-08-15-at1-rejected-value-tombstone.md
    * plan §3 — copy paths must not let one rejected candidate abort the
-   * batch). Absent when 0 or when auto-share did not run. Same
-   * per-invocation-activity class as `secretSkipped` (sibling counter,
-   * same autoShare call) — NOT redacted on egress, see sleep-redact.ts.
+   * batch). Absent when 0 or when auto-share did not run.
    */
   rejectedSkipped?: number;
   ambient?: AmbientState | null;
   /**
    * E3 sleep enqueue-hook: graph re-extraction totals across the tenants rebuilt
    * this sleep. Absent when no tenant was dirty, and under dryRun (the graph
-   * phase runs only on a real sleep). Cross-tenant aggregate — zeroed on
-   * non-loopback non-self egress by sleep-redact.ts.
+   * phase runs only on a real sleep). Cross-tenant aggregate, one reason
+   * /v1/sleep stays loopback-only.
    */
   graph?: { tenants: number; entities: number; relations: number };
   details?: string[];

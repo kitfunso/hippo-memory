@@ -19,8 +19,10 @@ npm run smoke:openclaw-install
 - Preserve public CLI and package APIs unless the user asks for a breaking change.
 - Document public APIs with JSDoc.
 - Prefer focused tests in `tests/` or nearby integration/eval harnesses before changing memory behavior.
+- Name a new test file after the behaviour it pins, not the ticket (`store-stats-concurrency.test.ts`, not `a7-t3.test.ts`). Seed test stores through `initStore`, `createMemory` and `writeEntry`; write raw SQL only when the test is about SQL.
 - Do not commit generated `dist/` or UI build output unless the repo expects it for a release.
 - A PR's changelog entry goes in its own `changelog.d/<branch-with-dashes>.md`, never in `CHANGELOG.md`; the release commit folds them in (`changelog.d/README.md`).
+- CI fails when any oxlint rule's hit count rises above `.oxlint-baseline.json`. Fix new hits in the files you touch; after clearing old ones, `node scripts/check-lint-ratchet.mjs --update` and commit the lower baseline.
 - Use Hippo memory commands when useful, but do not store secrets.
 
 ## Never Do

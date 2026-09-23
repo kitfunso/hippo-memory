@@ -51,17 +51,31 @@ hippo-memory v1.13.0-v1.13.5 ship cycle (May 26-27, 2026), where:
 
 ## Manifest version lockstep (pre-publish guard)
 
-`scripts/check-manifest-versions.mjs` runs in `prepublishOnly` and
-asserts that 4 lockstep manifests match `package.json` version:
+Seven sites carry the release version:
 
 - `package.json` (root)
+- `package-lock.json`, `.version` and `.packages[""].version`
 - `openclaw.plugin.json` (root)
 - `extensions/openclaw-plugin/package.json`
 - `extensions/openclaw-plugin/openclaw.plugin.json`
+- `src/version.ts` (`PACKAGE_VERSION`)
 
-Adding a new lockstep manifest? Append to `LOCKSTEP_MANIFESTS` in the
-script. Independent packages (`ui/`, `extensions/claude-code-plugin/`)
-that own their release cadence are intentionally excluded.
+Bump them with one command in the release PR:
+
+    npm version <x.y.z> --no-git-tag-version
+
+npm writes `package.json` and the lockfile, then runs the `version` script:
+`scripts/sync-version.mjs` copies the version to the other four sites and
+`scripts/check-manifest-versions.mjs` confirms all seven. Pass
+`--no-git-tag-version` because the tag is cut at publish, from the squash
+commit on master. Never edit the sites by hand.
+
+`scripts/check-manifest-versions.mjs` also runs in `prepublishOnly`, so a
+drifted site still blocks the publish. Adding a new lockstep manifest?
+Append it to `LOCKSTEP_MANIFESTS` in the check and to `JSON_MANIFESTS` in
+the sync script; the check fails `npm version` until both agree.
+Independent packages (`ui/`, `extensions/claude-code-plugin/`) that own
+their release cadence are intentionally excluded.
 
 Provenance: 3 manifest drifts in 7 days (v1.12.11 publish slip, v1.12.12
 bundle fix, v1.13.1 nested manifest drift) before this check existed.

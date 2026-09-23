@@ -1,5 +1,7 @@
 """Generate Q10 appendix: team summary."""
 
+from pathlib import Path
+
 from fpdf import FPDF
 
 
@@ -204,7 +206,7 @@ def generate() -> None:
         pdf.set_font("Helvetica", "", 8.5)
         pdf.cell(0, 5, desc, new_x="LMARGIN", new_y="NEXT")
 
-    pdf.output("C:/Users/skf_s/hippo/frontier-ai-application/q10_team_summary.pdf")
+    pdf.output(str(Path(__file__).with_name("q10_team_summary.pdf")))
     print("Q10 team appendix saved.")
 
 

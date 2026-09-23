@@ -1,5 +1,7 @@
 """Generate Q14 appendix: Gantt chart for Frontier AI Discovery feasibility study."""
 
+from pathlib import Path
+
 from fpdf import FPDF
 
 
@@ -170,7 +172,7 @@ def generate() -> None:
         pdf.cell(5, 5, "-")
         pdf.cell(0, 5, dep, new_x="LMARGIN", new_y="NEXT")
 
-    pdf.output("C:/Users/skf_s/hippo/frontier-ai-application/q14_gantt_chart.pdf")
+    pdf.output(str(Path(__file__).with_name("q14_gantt_chart.pdf")))
     print("Q14 Gantt chart saved.")
 
 

@@ -1,7 +1,7 @@
 # UI token migration map — dark observatory → parchment hybrid-v4
 
 **Companion to** `docs/plans/2026-05-24-ui-hybrid-v4-revamp.md` (E0 deliverable).
-**Aesthetic source:** `mockups/hybrid-v4.html`.
+**Aesthetic source:** `docs/mockups/hybrid-v4.html`.
 **Token files:** `ui/src/tokens.ts` (TS constants), `ui/src/tokens.css` (CSS vars).
 
 ## Surface inventory (pre-revamp)

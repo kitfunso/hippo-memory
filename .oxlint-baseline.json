@@ -1,0 +1,22 @@
+{
+  "anti-slop(no-chained-type-assertions)": 1,
+  "anti-slop(no-conditional-empty-object-spread)": 15,
+  "anti-slop(no-known-value-widening)": 19,
+  "anti-slop(no-runtime-typeof)": 134,
+  "anti-slop(no-shape-in-symbol-names)": 2,
+  "anti-slop(no-unknown-parameters)": 12,
+  "anti-slop(no-unsafe-dictionary-type)": 15,
+  "anti-slop(require-safety-comment-for-type-assertion)": 147,
+  "eslint(no-constant-binary-expression)": 1,
+  "eslint(no-control-regex)": 1,
+  "eslint(no-extra-boolean-cast)": 2,
+  "eslint(no-unsafe-finally)": 1,
+  "eslint(no-unused-vars)": 100,
+  "eslint(no-useless-escape)": 8,
+  "typescript(no-non-null-asserted-optional-chain)": 17,
+  "unicorn(no-invalid-fetch-options)": 1,
+  "unicorn(no-new-array)": 21,
+  "unicorn(no-useless-fallback-in-spread)": 13,
+  "unicorn(no-useless-spread)": 1,
+  "unicorn(prefer-string-starts-ends-with)": 1
+}

@@ -1,11 +1,9 @@
 /**
  * Single source of truth for the hippo-memory binary's package version.
  *
- * Bumped manually on every release alongside this file + four other package
- * manifests (package.json, openclaw.plugin.json,
- * extensions/openclaw-plugin/package.json,
- * extensions/openclaw-plugin/openclaw.plugin.json) and the lockfile —
- * five manifests in total carrying the version field.
+ * Written by `npm version <x> --no-git-tag-version` through
+ * scripts/sync-version.mjs, with the three plugin manifests; never edit it by
+ * hand. scripts/check-manifest-versions.mjs gates publish on all seven sites.
  *
  * Used by:
  *   - src/db.ts rollback-safety guard (refuses to open a DB stamped with
@@ -19,7 +17,6 @@
  * any packager that drops .json files.
  */
 export const PACKAGE_VERSION = '1.44.0';
-// Bump on every release alongside the 4 other manifests + lockfile.
 
 /** Compares plain x.y.z versions, positive if a > b; tags throw so the rollback guard never misfires silently. */
 export function compareSemver(a: string, b: string): number {

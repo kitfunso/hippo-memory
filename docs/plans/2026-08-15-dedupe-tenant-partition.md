@@ -15,7 +15,7 @@ Both callers inherit with no signature change: api.ts:2878 (sleep `phases.dedupl
 
 Deliberate non-goal: cross-tenant dedupe is never correct - the tenant boundary is an isolation boundary (v39 scope isolation; v1.32.0 landing fix). The config-audit cron's "local-vs-global duplicates" pass is cross-STORE (different mechanism, untouched).
 
-Stale-objection note (plan-eng-critic r1): docs/design-decisions/2026-05-24-blocked-items.md D1 claims tenant-scoping deduplicateStore would destroy a "cross-tenant crossDups" feature. Verified false: the crossDups counter (api.ts:2887-2889) is cross-LAYER (semantic vs episodic; cli.ts prints it as "cross-layer duplicates"), not cross-tenant. No code depends on cross-tenant matches surviving; the v1.32.0 CHANGELOG labels cross-tenant dedupe a data-loss bug. Do not resurrect D1's objection.
+Stale-objection note (plan-eng-critic r1): docs/decisions/2026-05-24-blocked-items.md D1 claims tenant-scoping deduplicateStore would destroy a "cross-tenant crossDups" feature. Verified false: the crossDups counter (api.ts:2887-2889) is cross-LAYER (semantic vs episodic; cli.ts prints it as "cross-layer duplicates"), not cross-tenant. No code depends on cross-tenant matches surviving; the v1.32.0 CHANGELOG labels cross-tenant dedupe a data-loss bug. Do not resurrect D1's objection.
 
 ## Tests
 

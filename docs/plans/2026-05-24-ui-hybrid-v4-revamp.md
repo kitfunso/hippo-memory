@@ -4,14 +4,14 @@
 62, 4 HIGH + 3 MED + 2 LOW must-fix items). Pending round 2 review.
 **Date:** 2026-05-24.
 **Author:** Claude (Opus 4.7) under Keith's "completely revamp UI/UX, you decide" direction.
-**Aesthetic lock:** `mockups/hybrid-v4.html` per the v0.26 roadmap memory pointer.
+**Aesthetic lock:** `docs/mockups/hybrid-v4.html` per the v0.26 roadmap memory pointer.
 **Revision history:** v1 → v2 (this doc): plan-eng-critic round 1 fixes folded
 in. v1 reachable via `git log -- docs/plans/2026-05-24-ui-hybrid-v4-revamp.md`.
 
 ## Why this plan exists
 
 `docs/RESEARCH.md` and the MEMORY pointer flagged a "v0.26 UI port — 15-20d
-Three.js + parchment redesign port from mockups/hybrid-v4.html" item. Per
+Three.js + parchment redesign port from docs/mockups/hybrid-v4.html" item. Per
 `dev-framework-rl` SKILL.md, a multi-week effort is C-sized and must be
 decomposed into A-sized episodes BEFORE running an episode.
 
@@ -78,12 +78,12 @@ Mockup is 2168 lines with rich features. Locked subset for this revamp:
 - Produce migration map: `docs/plans/2026-05-24-ui-token-migration-map.md` showing every existing hex → new token name.
 - **Decision required during E0:** delete `dashboardHTML` SSR fallback OR port it to parchment. Recommendation: **delete** because `dist-ui/` already exists; the `hippo dashboard` route should serve the built SPA and 404 on missing assets (rare edge case). Document choice in migration map.
 - **Test infra bootstrap (round-2 HIGH #3):** append to `ui/package.json` devDeps: `vitest`, `jsdom`, `@vitest/ui`, `@testing-library/react`, `pixelmatch`, `pngjs`, `playwright`. Add `"test": "vitest run"` to scripts. Create `ui/vitest.config.ts` with jsdom env + setup file.
-- **Baseline screenshot capture (round-2 MED #4):** run `npx playwright screenshot mockups/hybrid-v4.html --viewport-size=1440,900 --output mockups/hybrid-v4-baseline.png` and commit. Record viewport + chrome version in `mockups/hybrid-v4-baseline.txt` for reproducibility.
+- **Baseline screenshot capture (round-2 MED #4):** run `npx playwright screenshot docs/mockups/hybrid-v4.html --viewport-size=1440,900 --output docs/mockups/hybrid-v4-baseline.png` and commit. Record viewport + chrome version in `docs/mockups/hybrid-v4-baseline.txt` for reproducibility.
 
 **Acceptance.**
 - Migration map exists; tokens.ts + tokens.css both compile.
 - `cd ui && npm install && npx playwright install chromium && npm test` exits 0 (zero tests OK at this stage, but the command runs). **(round-3 consideration #1: playwright chromium is a ~500MB one-time post-install — name it explicitly so a junior doesn't hit "browser not installed" at baseline capture.)**
-- `mockups/hybrid-v4-baseline.png` + `.txt` committed.
+- `docs/mockups/hybrid-v4-baseline.png` + `.txt` committed.
 - No behavioral change yet (E1 implements the swap).
 
 ### E1 — Apply parchment tokens across all 4 surfaces (~1.5d) **[v2: +0.5d for HIGH #1]**
@@ -211,7 +211,7 @@ E3 extends but does NOT rename. (considerations #1 fix)
 **Out of scope.** Layout algorithm. Particle physics. Camera controls (use existing).
 
 **Acceptance (HIGH #3 fix — concrete, verifiable).** Replaces the v1 "~5% visual diff" hand-wave with:
-1. **Chrome screenshot diff:** `playwright screenshot ui/dist/index.html` (with seeded DB) → produces PNG → `pixelmatch` against `mockups/hybrid-v4-baseline.png` excluding canvas region → threshold ≤ 5% per-channel difference on the chrome (header + sidebar + bottom-bar). Tool: `pixelmatch` npm package + small wrapper script `scripts/screenshot-diff.mjs`. Baseline screenshot committed under `mockups/hybrid-v4-baseline.png` (one-time capture from the mockup).
+1. **Chrome screenshot diff:** `playwright screenshot ui/dist/index.html` (with seeded DB) → produces PNG → `pixelmatch` against `docs/mockups/hybrid-v4-baseline.png` excluding canvas region → threshold ≤ 5% per-channel difference on the chrome (header + sidebar + bottom-bar). Tool: `pixelmatch` npm package + small wrapper script `scripts/screenshot-diff.mjs`. Baseline screenshot committed under `docs/mockups/hybrid-v4-baseline.png` (one-time capture from the mockup).
 2. **Canvas region assertion (vitest-jsdom):** assert `renderer.getClearColor().getHex() === 0xf4efe6` (parchment); assert any `.node-label` DOM has computed `font-family` containing `Georgia`; assert `.node-label.selected` computed `border-color` matches `var(--accent)` resolved.
 3. **Label overlay perf:** with 1000-memory seed, overlay update per-frame <8ms (asserted via vitest perf hook).
 

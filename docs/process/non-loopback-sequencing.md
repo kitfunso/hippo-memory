@@ -1,6 +1,6 @@
 # Non-loopback serving — lock-step sequencing commitment
 
-**Decision (2026-05-24, D3 from `docs/design-decisions/2026-05-24-blocked-items.md`):**
+**Decision (2026-05-24, D3 from `docs/decisions/2026-05-24-blocked-items.md`):**
 Ship every gate listed below BEFORE flipping `HIPPO_BIND_ALL` (or any equivalent
 non-loopback binding flag). "Behind a flag first" was rejected because the
 historical pattern is "flag flips before gates close."
@@ -66,6 +66,6 @@ postmortem.
 
 ## See also
 
-- `docs/design-decisions/2026-05-24-blocked-items.md` — the full
+- `docs/decisions/2026-05-24-blocked-items.md` — the full
   options + tradeoffs analysis for D1-D5.
 - `TODOS.md` — current state of M7 and the conflict-subsystem residue.

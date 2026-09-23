@@ -12,6 +12,7 @@ import { describe, it, expect, vi } from "vitest";
 import type { Memory, Conflict } from "../types.js";
 import { buildForceLayout, type ForceNode, LAYOUT_BOUND } from "./forceLayout.js";
 import { buildAdjacency } from "./localNeighborhood.js";
+import { perfBudgetMs } from "./perfBudget.js";
 
 function mem(over: Partial<Memory> & { id: string }): Memory {
   return {
@@ -266,18 +267,20 @@ describe("onSettleStateChange (AC13 + replay)", () => {
 });
 
 describe("position(id) O(1) lookup (AC5)", () => {
-  it("10000 sequential position(id) calls complete in <1ms total on 1373-node sim", () => {
+  // Retried: a shared CI runner can stall once; a real slowdown fails all three runs.
+  it("10000 sequential position(id) calls complete in <1ms total on 1373-node sim", { retry: 2 }, () => {
     const memories = Array.from({ length: 1373 }, (_, i) => mem({ id: `m${i}` }));
     const handle = buildForceLayout(memories, new Map(), null);
     const t0 = performance.now();
     for (let i = 0; i < 10000; i++) handle.position(`m${i % 1373}`);
     const ms = performance.now() - t0;
-    expect(ms).toBeLessThan(10); // generous; O(1) Map.get should be sub-ms
+    expect(ms).toBeLessThan(perfBudgetMs(10)); // generous; O(1) Map.get should be sub-ms
   });
 });
 
 describe("perf budget (AC18 + AC19)", () => {
-  it("300 ticks on 1373-node + ~2100-edge fixture completes in <2.0s with mulberry32(42)", () => {
+  // Retried: a shared CI runner can stall once; a real slowdown fails all three runs.
+  it("300 ticks on 1373-node + ~2100-edge fixture completes in <2.0s with mulberry32(42)", { retry: 2 }, () => {
     const memories = Array.from({ length: 1373 }, (_, i) => mem({ id: `m${i}` }));
     const adj = new Map<string, Set<string>>();
     const rng = mulberry32(42);
@@ -310,7 +313,7 @@ describe("perf budget (AC18 + AC19)", () => {
     const t0 = performance.now();
     handle.runToCompletion();
     const ms = performance.now() - t0;
-    expect(ms).toBeLessThan(2000);
+    expect(ms).toBeLessThan(perfBudgetMs(2000));
   });
 });
 

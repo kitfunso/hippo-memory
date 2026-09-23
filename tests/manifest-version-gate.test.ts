@@ -8,6 +8,7 @@ import { spawnSync } from 'node:child_process';
 // still named the previous version printed OK (v1.38.9).
 
 const SCRIPT = join(import.meta.dirname, '..', 'scripts', 'check-manifest-versions.mjs');
+const SYNC = join(import.meta.dirname, '..', 'scripts', 'sync-version.mjs');
 
 interface Overrides {
   lockVersion?: string | null;
@@ -115,6 +116,22 @@ describe('check-manifest-versions.mjs and the lockfile', () => {
       } finally {
         rmSync(root, { recursive: true, force: true });
       }
+    }
+  });
+});
+
+describe('sync-version.mjs', () => {
+  it('sets every site `npm version` leaves behind, so the gate passes', () => {
+    // npm version has already moved package.json and both lockfile fields to 2.1.0.
+    const root = makeRepo('2.0.0', { lockVersion: '2.1.0', lockRootVersion: '2.1.0' });
+    try {
+      writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'fixture', version: '2.1.0' }));
+      const sync = spawnSync(process.execPath, [SYNC], { cwd: root, encoding: 'utf-8' });
+      expect(sync.status, sync.stderr).toBe(0);
+      const r = runGate(root);
+      expect(r.status, r.stderr).toBe(0);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
     }
   });
 });

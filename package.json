@@ -39,6 +39,7 @@
     "smoke:openclaw-install": "node scripts/smoke-openclaw-install.mjs",
     "build:ui": "cd ui && npm install && npm run build",
     "build:all": "npm run build && npm run build:ui",
+    "version": "node scripts/sync-version.mjs && node scripts/check-manifest-versions.mjs",
     "prepublishOnly": "node scripts/check-manifest-versions.mjs && node scripts/changelog-fragments.mjs check && node scripts/check-em-dashes-in-release-notes.mjs && node scripts/check-graph-writes.mjs && npm run build:all && node scripts/check-openclaw-dist.mjs && npm run smoke:openclaw-install && node scripts/check-tests-pass.mjs"
   },
   "keywords": [
@@ -76,7 +77,7 @@
   },
   "devDependencies": {
     "@oxlint/plugins": "^1.78.0",
-    "@types/node": "^20.11.0",
+    "@types/node": "^22.16.0",
     "oxlint": "^1.78.0",
     "typescript": "^5.4.0",
     "vitest": "^3.2.6"

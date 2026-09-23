@@ -1,5 +1,7 @@
 """Generate Q9 appendix: architecture diagram + validation/benchmark matrix."""
 
+from pathlib import Path
+
 from fpdf import FPDF
 
 
@@ -333,7 +335,7 @@ def generate() -> None:
                 pdf.cell(time_cols[i + 1], 7, "", border=1)
         pdf.ln()
 
-    pdf.output("C:/Users/skf_s/hippo/frontier-ai-application/q9_architecture_benchmarks.pdf")
+    pdf.output(str(Path(__file__).with_name("q9_architecture_benchmarks.pdf")))
     print("Q9 appendix saved.")
 
 

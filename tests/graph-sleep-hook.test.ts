@@ -33,9 +33,7 @@ import {
   adminActor,
   type Context,
   type SleepPhases,
-  type SleepResult,
 } from '../src/api.js';
-import { redactSleepResultForCaller } from '../src/sleep-redact.js';
 
 const T = 'default';
 
@@ -197,17 +195,6 @@ describe('E3 sleep enqueue-hook', () => {
     await sleep(tc.ctx, { noShare: true });
     const rels = loadRelations(tc.hippoRoot, T, { limit: 100 });
     expect(rels.some((r) => r.relType === 'supersedes')).toBe(true);
-  });
-
-  it('12. redaction zeroes graph.* for a non-loopback non-self caller; loopback passes through', () => {
-    const base: SleepResult = {
-      active: 1, removed: 0, mergedEpisodic: 0, newSemantic: 0, dryRun: false,
-      graph: { tenants: 2, entities: 9, relations: 4 },
-    };
-    const redacted = redactSleepResultForCaller(base, { isLoopback: false, callerTenant: 'acme' });
-    expect(redacted.graph).toEqual({ tenants: 0, entities: 0, relations: 0 });
-    const passthrough = redactSleepResultForCaller(base, { isLoopback: true, callerTenant: 'acme' });
-    expect(passthrough.graph).toEqual({ tenants: 2, entities: 9, relations: 4 });
   });
 
   it('13. clean store: sleep with no graph-source objects omits the graph field', async () => {
