@@ -72,6 +72,8 @@ operator and (a) deletes that observability.
 
 **Decision:** DECIDED-(b) redact-on-egress (Keith 2026-05-24, shipped v1.12.10). See `src/sleep-redact.ts` + `tests/sleep-redact.test.ts`.
 
+**Update (1.45.0):** nothing ever called the helper, because `/v1/sleep` stays loopback-only and `serve()` refuses non-loopback hosts at boot, so it was removed. The decision stands: the change that opens non-loopback serving adds the redaction in the `/v1/sleep` handler (git history holds the old helper and its tests).
+
 ---
 
 ## D2 — Consolidate audit row tenant tag

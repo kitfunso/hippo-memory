@@ -1219,7 +1219,8 @@ async function handleRequest(
   // Tenant scope (Episode A follow-up tracked in TODOS.md): api.sleep operates
   // on the WHOLE hippoRoot (cross-tenant by design, matching CLI cmdSleep).
   // The loopback-only guard is the trust boundary today. Future non-loopback
-  // serving needs an admin-role gate before exposing this route.
+  // serving must also zero the cross-tenant counters for other tenants
+  // (D1 in docs/decisions/2026-05-24-blocked-items.md).
   if (method === 'POST' && path === '/v1/sleep') {
     // Defensive per-request loopback guard. Uses the canonical isLoopback()
     // helper above so any future extension (additional mapped/IPv6 forms,
