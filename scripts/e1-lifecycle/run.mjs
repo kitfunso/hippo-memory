@@ -97,6 +97,8 @@ async function probeEpoch(protocol, entries, epoch, epochDate, arm) {
   let active = 0, current5 = 0, staleEligible = 0, staleHit = 0;
   let trapEligible = 0, trapHit = 0, contraEligible = 0, contraHit = 0;
   let hotActive = 0, hotCurrent5 = 0, mrrSum = 0;
+  let cleanStale = 0, nonStaleActive = 0, nonStaleCurrent5 = 0;
+  const probes = [];
 
   for (const probe of protocol.probes) {
     const cur = currentAt(probe, epoch);
@@ -121,33 +123,47 @@ async function probeEpoch(protocol, entries, epoch, epochDate, arm) {
     const texts = top.map((e) => e.content);
     const curTok = probe.tokens[cur.version];
     const rank = texts.findIndex((t) => t.includes(curTok));
+    const row = {
+      factId: probe.factId, hot: !!probe.hot, hit: rank >= 0, rank, staleEligible: cur.version >= 2, staleHit: false,
+      trapEligible: false, trapHit: false, contraEligible: false, contraHit: false,
+    };
     if (rank >= 0) {
       current5++;
       if (probe.hot) hotCurrent5++;
       mrrSum += 1 / (rank + 1);
     }
     // Stale intrusion: only meaningful once an update has superseded v1.
-    if (cur.version >= 2) {
+    if (row.staleEligible) {
       staleEligible++;
       const staleToks = Object.entries(probe.tokens)
         .filter(([v]) => Number(v) < cur.version).map(([, t]) => t);
-      if (texts.some((t) => staleToks.some((s) => t.includes(s)))) staleHit++;
+      row.staleHit = texts.some((t) => staleToks.some((s) => t.includes(s)));
+      if (row.staleHit) staleHit++;
+      else if (rank >= 0) cleanStale++;
+    } else {
+      nonStaleActive++;
+      if (rank >= 0) nonStaleCurrent5++;
     }
     if (probe.trapTokens.length > 0) {
       // Eligible once the trap memory exists in the store.
       const trapLive = entries.some((e) => probe.trapTokens.some((t) => e.content.includes(t)));
       if (trapLive) {
         trapEligible++;
-        if (texts.some((t) => probe.trapTokens.some((tt) => t.includes(tt)))) trapHit++;
+        row.trapEligible = true;
+        row.trapHit = texts.some((t) => probe.trapTokens.some((tt) => t.includes(tt)));
+        if (row.trapHit) trapHit++;
       }
     }
     if (probe.contraTokens.length > 0) {
       const contraLive = entries.some((e) => probe.contraTokens.some((t) => e.content.includes(t)));
       if (contraLive) {
         contraEligible++;
-        if (texts.some((t) => probe.contraTokens.some((ct) => t.includes(ct)))) contraHit++;
+        row.contraEligible = true;
+        row.contraHit = texts.some((t) => probe.contraTokens.some((ct) => t.includes(ct)));
+        if (row.contraHit) contraHit++;
       }
     }
+    probes.push(row);
   }
 
   return {
@@ -158,6 +174,10 @@ async function probeEpoch(protocol, entries, epoch, epochDate, arm) {
     trapEligible, trapPersistenceRate: trapEligible > 0 ? trapHit / trapEligible : null,
     contraEligible, contraIntrusionRate: contraEligible > 0 ? contraHit / contraEligible : null,
     hotActive, hotR5: hotActive > 0 ? hotCurrent5 / hotActive : null,
+    // Split for the break-even superseded share (2026-09-23 mechanism audit prereg).
+    cleanStaleR5: staleEligible > 0 ? cleanStale / staleEligible : null,
+    nonStaleActive, nonStaleR5: nonStaleActive > 0 ? nonStaleCurrent5 / nonStaleActive : null,
+    probes,
   };
 }
 
@@ -240,6 +260,8 @@ export async function runArmSeed(arm, seed, genOpts = {}, inspect = undefined) {
       const entries = loadAllEntries(hippoRoot);
       epochs.push(await probeEpoch(protocol, entries, session.index, session.date, arm));
     }
+    // Only the final epoch is judged, so only it keeps per-probe rows (compare.mjs hierarchical CI).
+    for (const e of epochs.slice(0, -1)) delete e.probes;
 
     if (inspect) await inspect(hippoRoot, idMap);
   } finally {

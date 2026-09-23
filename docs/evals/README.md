@@ -26,6 +26,12 @@ claim is a shorter context, not a better answer.
 
 ## By campaign, newest first
 
+### Mechanism audit (2026-09)
+
+| Doc | What it settles |
+|---|---|
+| [2026-09-23-mechanism-audit-prereg.md](2026-09-23-mechanism-audit-prereg.md) | Pre-registration: which lifecycle mechanisms help retrieval (physics, decay default, outcome feedback, strengthening, sleep), each against its own off switch |
+
 ### Reranking (2026-09)
 
 | Doc | What it settles |
