@@ -72,7 +72,7 @@ describe('v039 server hardening', () => {
         validateApiKey(db, 'hk_unknown_key.unknown_secret_blob');
       }
 
-      // Sample multiple iterations; take the median to dampen GC noise.
+      // Noise only adds time, so each path's fastest sample is its own cost; a median flaked on CI.
       const N = 7;
       const hitTimes: number[] = [];
       const missTimes: number[] = [];
@@ -87,14 +87,9 @@ describe('v039 server hardening', () => {
         const t3 = process.hrtime.bigint();
         missTimes.push(Number(t3 - t2));
       }
-      hitTimes.sort((a, b) => a - b);
-      missTimes.sort((a, b) => a - b);
-      const hit = hitTimes[Math.floor(N / 2)]!;
-      const miss = missTimes[Math.floor(N / 2)]!;
-      // Both branches now run scrypt once. Hard floor: miss must be at
-      // least 30% of hit (proves scrypt ran). Hard ceiling: miss within
-      // +50% of hit (loose for CI; tight enough to catch a regression
-      // where the miss path skipped verifyKey entirely).
+      const hit = Math.min(...hitTimes);
+      const miss = Math.min(...missTimes);
+      // Floor: the miss path ran scrypt. Ceiling: it ran scrypt once, not twice.
       expect(miss).toBeGreaterThan(hit * 0.3);
       expect(miss).toBeLessThan(hit * 1.5);
     } finally {

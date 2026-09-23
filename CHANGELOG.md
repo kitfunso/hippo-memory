@@ -74,6 +74,7 @@
 
 - **Removed six HTTP client calls nothing used.** `src/client.ts` now holds only those four writes.
 - **Tests never reach a real LLM or embedding API.** `vitest.config.ts` clears the Anthropic, OpenAI, Voyage, Cohere, TypeSafe and LLM-reranker keys for the main process and every worker, so a developer's own keys can no longer bill or leak prompts from a test run.
+- **The API-key timing test no longer flakes on CI.** It judges each path by its fastest of seven samples instead of the median; it still fails if a miss skips scrypt or runs it twice.
 
 ## 1.44.0 - 2026-09-22
 
