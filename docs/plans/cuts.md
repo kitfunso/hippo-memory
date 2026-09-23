@@ -10,6 +10,7 @@ Work taken off the active list, one line of reason each. `ROADMAP.md`
 - **Export the `api.ts` facade from `src/index.ts` (M10).** The CLI still calls store functions directly; route it through `api.ts` first so the export has one entry path. 1.45.0 only corrects the CHANGELOG line that told callers to import `recall()` from `index.ts`.
 - **The 47 bare catches (L1).** Each needs a read of its own call site, and routing the CLI through the facade rewrites most of them.
 - **Share the request code of `python/src/hippo_memory/client.py` and `sync_client.py`.** Each file carries the same 117 `/v1` lines; that duplication is the real cost.
+- **A Windows CI job (M14).** On `windows-latest`, 20 tests in 8 store-heavy files still timed out with the test stores on D: and Defender's real-time scan off: vitest took 900 s, against about 2 minutes on Linux. Stores already run WAL with `synchronous = NORMAL`, so commit syncs are not the cost. The job returns once the slow step is measured.
 
 ### Cut
 

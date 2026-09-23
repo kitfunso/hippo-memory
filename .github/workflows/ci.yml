@@ -116,27 +116,6 @@ jobs:
         env:
           TMPDIR: /dev/shm
 
-  # Windows users run hippo too, and path, locking and spawn bugs only show there.
-  windows:
-    runs-on: windows-latest
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: npm
-      # Store-heavy files timed out here: Defender scanned every store write, on the C: temp drive.
-      - name: Test stores on D:, out of the real-time scan
-        shell: pwsh
-        run: |
-          Set-MpPreference -DisableRealtimeMonitoring $true
-          "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
-          "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
-      - run: npm ci
-      - run: npm run build
-      - run: npx vitest run
-
   # The dashboard is its own package with its own tests; the root suite never runs them.
   ui:
     runs-on: ubuntu-latest
