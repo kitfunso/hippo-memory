@@ -747,7 +747,7 @@ Plugin docs: [extensions/openclaw-plugin/](extensions/openclaw-plugin/). Integra
 
 ### Claude Code Plugin
 
-Plugin with SessionStart/Stop hooks and error auto-capture. See [extensions/claude-code-plugin/](extensions/claude-code-plugin/).
+Plugin with session, prompt and compaction hooks plus error auto-capture. See [extensions/claude-code-plugin/](extensions/claude-code-plugin/).
 
 Full integration details: [integrations/](integrations/)
 

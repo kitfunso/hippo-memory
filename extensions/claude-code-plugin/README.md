@@ -44,13 +44,21 @@ hippo init
 
 The `SessionStart` hook automatically runs `hippo context --auto --budget 1500` when you start a Claude Code session. Relevant memories from past sessions appear in context immediately.
 
+### Pinned rules on every prompt
+
+The `UserPromptSubmit` hook runs `hippo context --pinned-only --include-recent 5 --format additional-context`, so pinned memories and the five newest writes stay in context through long sessions.
+
 ### Auto-capture errors
 
-The `PostToolUseFailure` hook captures tool failures as hippo error memories (2x half-life). Next time someone hits the same error, the memory surfaces automatically.
+The `PostToolUseFailure` hook reads the failure Claude Code sends on stdin and saves the tool name and error (first 200 characters) as a hippo error memory (2x half-life). Interrupts are skipped. Next time someone hits the same error, the memory surfaces automatically.
 
-### Auto-outcome and sleep on stop
+### Working state across compaction
 
-The `Stop` hook runs `hippo outcome --good` when a session ends, strengthening the memories that were recalled during the session. It then runs `hippo sleep` to consolidate memories, decay weak ones, and merge related episodes into patterns.
+The `PreCompact` hook runs `hippo pre-compact` to snapshot the working state before the transcript is summarised. After compaction, `hippo compact-resume` puts that snapshot back into context.
+
+### Sleep at session end
+
+The `SessionEnd` hook runs `hippo session-end`, which starts a detached `hippo sleep` and `hippo capture --last-session` and writes their output to `~/.hippo/logs/last-sleep.log`. The next session start prints that log through `hippo last-sleep`, so you see what was consolidated.
 
 ### Memory skill
 
@@ -66,7 +74,7 @@ claude-code-plugin/
     memory/
       SKILL.md           # Memory skill (auto-invoked)
   hooks/
-    hooks.json           # SessionStart, PostToolUseFailure, Stop hooks
+    hooks.json           # SessionStart, UserPromptSubmit, PreCompact, PostToolUseFailure, SessionEnd
   scripts/
     capture-error.sh     # Error capture script
   README.md

@@ -17,6 +17,38 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "hippo compact-resume 2>/dev/null || true",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "hippo context --pinned-only --include-recent 5 --format additional-context 2>/dev/null || true",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "hippo pre-compact 2>/dev/null || true",
+            "timeout": 30
+          }
+        ]
       }
     ],
     "PostToolUseFailure": [
@@ -25,7 +57,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/capture-error.sh"
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/capture-error.sh\""
           }
         ]
       }
@@ -35,7 +67,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "hippo session-end 2>/dev/null || true",
+            "command": "hippo session-end --log-file \"$HOME/.hippo/logs/last-sleep.log\" 2>/dev/null || true",
             "timeout": 5
           }
         ]
