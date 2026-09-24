@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Mechanism-audit diagnostic (undeclared): how sleep's merged memories meet the session-hit rule.
+// How sleep's merged memories meet the session-hit rule; round 2 declares its text/ output as lane R-L4's input.
 // Prints store facts, then writes header-only and text-credit copies of the four retrieval files for
 // paired_hits.mjs to score unchanged. Usage: merge_audit.mjs --data <oracle.json> --run <dir> --out <dir>
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -32,6 +32,9 @@ for (const r of never) {
   const mid = r.content.length >> 1;
   if (sid) snippet.set(sid, r.content.slice(mid, mid + 80));
 }
+// Abstention twins share text, so a snippet found in more than one never-slept row proves nothing.
+const ambiguous = [...snippet].filter(([, text]) => never.filter((r) => r.content.includes(text)).length > 1);
+for (const [sid] of ambiguous) snippet.delete(sid);
 const holds = (text, sid, withSnippet) =>
   text.includes(`[Session: ${sid}]`) || (withSnippet && snippet.has(sid) && text.includes(snippet.get(sid)));
 
@@ -46,6 +49,7 @@ for (const r of merged) for (const s of sessionTags(r)) {
 }
 console.log(`rows: never-slept ${never.length}, slept ${slept.length} (${merged.length} merged by sleep, ` +
   `${merged.filter((r) => sessionTags(r).length > 1).length} tagged with more than one session, ${multiQuestion.length} with sessions of more than one question)`);
+console.log(`text snippets: ${snippet.size} unique, ${ambiguous.length} dropped as shared by more than one never-slept row`);
 console.log(`session tags on a merged row without that session's header: ${inRow + elsewhere + missing}; ` +
   `its text is in the row ${inRow}, elsewhere in the slept store ${elsewhere}, not found ${missing}`);
 const bareSlept = bareIds('sleep');
@@ -56,7 +60,7 @@ const load = (f) => new Map(readFileSync(join(run, `ret-${f}.jsonl`), 'utf8').tr
   .map((l) => JSON.parse(l)).map((r) => [r.question_id, r.retrieved_memories ?? []]));
 // Same rule as paired_hits.mjs, on a top five that is already cut.
 const hit = (top, sids) => top.some((m) => sids.some((sid) =>
-  (m.tags ?? []).some((t) => t.includes(sid)) || (m.content ?? '').includes(`[Session: ${sid}]`)));
+  (m.tags ?? []).includes(sid) || (m.content ?? '').includes(`[Session: ${sid}]`)));
 const mergedIds = new Set(merged.map((r) => r.id));
 const sleepHybrid = load('sleep-hybrid'), nosleepHybrid = load('nosleep-hybrid');
 let aOnly = 0, viaMerged = 0;

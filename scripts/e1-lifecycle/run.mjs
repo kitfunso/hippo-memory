@@ -29,6 +29,12 @@
  *   all-off         all three
  *   bm25-static     all three + probe ranks by raw BM25 component only
  *   recency-window  all three + probe returns the 5 newest entries
+ *   Round 2 (docs/evals/2026-09-23-mechanism-audit-round2-prereg.md):
+ *   recency-off     HIPPO_ABLATE_RECENCY=1          (the search recency factor only)
+ *   bm25-outcome    all off but the fast outcome channel + probe ranks by raw BM25 x outcomeMultiplier
+ *   bm25-newest     all three + probe ranks by raw BM25, ties newest first
+ *   Flags: --recency-days <n> sets the recency scale; --lookalike-window v1 dates
+ *   hard negatives within v1's sessions (both recorded in meta).
  *
  * NO sleep/consolidation in E1 (that is E3's dimension); no embeddings (the
  * lexical+lifecycle composite exercises every mechanism under test; the
@@ -45,7 +51,7 @@ import { fileURLToPath } from 'node:url';
 
 import { createMemory, applyOutcome } from '../../dist/memory.js';
 import { writeEntry, loadAllEntries, initStore } from '../../dist/store.js';
-import { hybridSearch, markRetrieved } from '../../dist/search.js';
+import { hybridSearch, markRetrieved, outcomeMultiplier } from '../../dist/search.js';
 import { isRecallBoostAblated, _resetAblationCacheForTests } from '../../dist/ablation.js';
 import { generateProtocol, GENERATOR_VERSION } from './generate.mjs';
 
@@ -57,6 +63,8 @@ const OUT_DIR = path.join(REPO, 'benchmarks', 'e1-lifecycle', 'raw');
 // signature: probe-replay.mjs imports runArmSeed and relies on the default 7d, which
 // reproduces the registered E1 byte-identically (invariant-tested).
 let SWEEP_HALF_LIFE = 7;
+// Round-2 tuning grid: the search recency scale in days; null keeps the product's 30.
+let SWEEP_RECENCY_DAYS = null;
 
 const ARM_ENV = {
   'full': {},
@@ -66,12 +74,16 @@ const ARM_ENV = {
   'all-off': { HIPPO_ABLATE_DECAY: '1', HIPPO_ABLATE_RECALL_BOOST: '1', HIPPO_ABLATE_OUTCOME: '1' },
   'bm25-static': { HIPPO_ABLATE_DECAY: '1', HIPPO_ABLATE_RECALL_BOOST: '1', HIPPO_ABLATE_OUTCOME: '1' },
   'recency-window': { HIPPO_ABLATE_DECAY: '1', HIPPO_ABLATE_RECALL_BOOST: '1', HIPPO_ABLATE_OUTCOME: '1' },
+  'recency-off': { HIPPO_ABLATE_RECENCY: '1' },
+  'bm25-outcome': { HIPPO_ABLATE_DECAY: '1', HIPPO_ABLATE_RECALL_BOOST: '1', HIPPO_ABLATE_OUTCOME_SLOW: '1' },
+  'bm25-newest': { HIPPO_ABLATE_DECAY: '1', HIPPO_ABLATE_RECALL_BOOST: '1', HIPPO_ABLATE_OUTCOME: '1' },
 };
-const ABLATION_VARS = ['HIPPO_ABLATE_DECAY', 'HIPPO_ABLATE_RECALL_BOOST', 'HIPPO_ABLATE_OUTCOME', 'HIPPO_ABLATE_OUTCOME_SLOW', 'HIPPO_ABLATE_OUTCOME_FAST', 'HIPPO_FAKE_NOW'];
+const ABLATION_VARS = ['HIPPO_ABLATE_DECAY', 'HIPPO_ABLATE_RECALL_BOOST', 'HIPPO_ABLATE_OUTCOME', 'HIPPO_ABLATE_OUTCOME_SLOW', 'HIPPO_ABLATE_OUTCOME_FAST', 'HIPPO_ABLATE_RECENCY', 'HIPPO_EVAL_RECENCY_DAYS', 'HIPPO_FAKE_NOW'];
 
 function setArmEnv(arm) {
   for (const v of ABLATION_VARS) delete process.env[v];
   for (const [k, val] of Object.entries(ARM_ENV[arm])) process.env[k] = val;
+  if (SWEEP_RECENCY_DAYS !== null) process.env.HIPPO_EVAL_RECENCY_DAYS = String(SWEEP_RECENCY_DAYS);
   _resetAblationCacheForTests();
 }
 
@@ -92,6 +104,13 @@ function currentAt(probe, epoch) {
 const PROBE_TOP_K = 5;
 const PROBE_BUDGET = 100000; // token budget never binds at top-5 granularity
 
+const byId = (a, b) => a.entry.id.localeCompare(b.entry.id);
+const BASELINE_RANKERS = {
+  'bm25-static': (a, b) => (b.bm25 - a.bm25) || byId(a, b),
+  'bm25-outcome': (a, b) => (b.bm25 * outcomeMultiplier(b.entry) - a.bm25 * outcomeMultiplier(a.entry)) || byId(a, b),
+  'bm25-newest': (a, b) => (b.bm25 - a.bm25) || (Date.parse(b.entry.created) - Date.parse(a.entry.created)) || byId(a, b),
+};
+
 async function probeEpoch(protocol, entries, epoch, epochDate, arm) {
   const probeNow = new Date(Date.parse(epochDate) + 60 * 60 * 1000); // +1h after session
   let active = 0, current5 = 0, staleEligible = 0, staleHit = 0;
@@ -111,13 +130,11 @@ async function probeEpoch(protocol, entries, epoch, epochDate, arm) {
       top = entries.slice().sort((a, b) => Date.parse(b.created) - Date.parse(a.created)).slice(0, PROBE_TOP_K);
     } else {
       const results = await hybridSearch(probe.query, entries, { budget: PROBE_BUDGET, now: probeNow, minResults: PROBE_TOP_K });
-      // bm25-static tie-break MUST be independent of the composite order: a
+      // Baseline tie-breaks MUST be independent of the composite order: a
       // bare stable sort would let identical-BM25 candidates (this protocol
       // creates many) keep hybridSearch's lifecycle/recency-tinged ordering
       // (codex P2). Entry id is deterministic (seed-derived) and content-blind.
-      const ranked = arm === 'bm25-static'
-        ? results.slice().sort((a, b) => (b.bm25 - a.bm25) || a.entry.id.localeCompare(b.entry.id))
-        : results;
+      const ranked = BASELINE_RANKERS[arm] ? results.slice().sort(BASELINE_RANKERS[arm]) : results;
       top = ranked.slice(0, PROBE_TOP_K).map((r) => r.entry);
     }
     const texts = top.map((e) => e.content);
@@ -274,6 +291,9 @@ export async function runArmSeed(arm, seed, genOpts = {}, inspect = undefined) {
     meta: {
       arm, seed, generatorVersion: GENERATOR_VERSION, protocolHash,
       protocolCounts: protocol.meta.counts, ranAt: new Date().toISOString(),
+      halfLife: SWEEP_HALF_LIFE,
+      recencyDays: SWEEP_RECENCY_DAYS ?? undefined,
+      lookalikeWindow: protocol.meta.lookalikeWindow,
     },
     epochs,
   };
@@ -302,6 +322,14 @@ if (isMain) {
   // A5 sweep: --half-life sets the decay base (default 7 = registered E1); --out-dir
   // isolates sweep output so it never clobbers the registered raw/.
   SWEEP_HALF_LIFE = Number(getArg('half-life', '7'));
+  const recencyDays = getArg('recency-days', null);
+  if (recencyDays !== null && !(Number.isFinite(Number(recencyDays)) && Number(recencyDays) > 0)) {
+    console.error(`--recency-days must be a positive number, got ${recencyDays}`);
+    process.exit(1);
+  }
+  SWEEP_RECENCY_DAYS = recencyDays === null ? null : Number(recencyDays);
+  const lookalikeWindow = getArg('lookalike-window', null);
+  if (lookalikeWindow !== null) genOpts.lookalikeWindow = lookalikeWindow;
   const outDir = path.resolve(getArg('out-dir', OUT_DIR));
   for (const arm of arms) {
     if (!ARM_ENV[arm]) {

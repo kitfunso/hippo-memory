@@ -50,7 +50,13 @@
  *                              arms must not pass it.
  *   HIPPO_ABLATE_OUTCOME_SLOW  rewardFactor := 1 (no half-life modulation).
  *   HIPPO_ABLATE_OUTCOME_FAST  hybridSearch outcomeBoost := 1.
- *   HIPPO_FAKE_NOW             timestamp injected as the default `now` for
+ *   HIPPO_ABLATE_RECENCY       search recency factor := 1 (the creation-age
+ *                              multiplier 0.8 + 0.2*exp(-age/30d)); decay,
+ *                              strengthening and outcomes stay live.
+ *   HIPPO_EVAL_RECENCY_DAYS    a positive number replaces the 30-day scale of
+ *                              that recency factor (tuning grids only). Unset,
+ *                              zero, negative or junk values keep 30.
+ *   HIPPO_FAKE_NOW            timestamp injected as the default `now` for
  *                              strength computation and retrieval stamping
  *                              (simulated-time protocols). MUST be the exact
  *                              Date.toISOString() form
@@ -84,6 +90,9 @@ interface AblationFlags {
   recallBoost: boolean;
   outcomeSlow: boolean;
   outcomeFast: boolean;
+  recency: boolean;
+  /** Parsed HIPPO_EVAL_RECENCY_DAYS, or null when unset/invalid. */
+  recencyDays: number | null;
   /** Parsed HIPPO_FAKE_NOW epoch millis, or null when unset/invalid. */
   fakeNowMs: number | null;
 }
@@ -112,11 +121,14 @@ function readFlags(): AblationFlags {
       fakeNowMs = parsed;
     }
   }
+  const recencyDays = Number(process.env.HIPPO_EVAL_RECENCY_DAYS);
   _cache = {
     decay: isTruthy(process.env.HIPPO_ABLATE_DECAY),
     recallBoost: isTruthy(process.env.HIPPO_ABLATE_RECALL_BOOST),
     outcomeSlow: outcomeBoth || isTruthy(process.env.HIPPO_ABLATE_OUTCOME_SLOW),
     outcomeFast: outcomeBoth || isTruthy(process.env.HIPPO_ABLATE_OUTCOME_FAST),
+    recency: isTruthy(process.env.HIPPO_ABLATE_RECENCY),
+    recencyDays: Number.isFinite(recencyDays) && recencyDays > 0 ? recencyDays : null,
     fakeNowMs,
   };
   return _cache;
@@ -136,6 +148,15 @@ export function isOutcomeSlowAblated(): boolean {
 
 export function isOutcomeFastAblated(): boolean {
   return readFlags().outcomeFast;
+}
+
+export function isRecencyAblated(): boolean {
+  return readFlags().recency;
+}
+
+/** HIPPO_EVAL_RECENCY_DAYS when it is a positive number, else null (callers keep their default). */
+export function evalRecencyScaleDays(): number | null {
+  return readFlags().recencyDays;
 }
 
 /**

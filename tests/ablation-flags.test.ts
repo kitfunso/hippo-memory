@@ -21,7 +21,7 @@ import {
   applyOutcome,
   type MemoryEntry,
 } from '../src/memory.js';
-import { hybridSearch, markRetrieved } from '../src/search.js';
+import { hybridSearch, markRetrieved, outcomeMultiplier } from '../src/search.js';
 import { evalNow, _resetAblationCacheForTests } from '../src/ablation.js';
 
 const ABLATION_ENV_VARS = [
@@ -30,6 +30,8 @@ const ABLATION_ENV_VARS = [
   'HIPPO_ABLATE_OUTCOME',
   'HIPPO_ABLATE_OUTCOME_SLOW',
   'HIPPO_ABLATE_OUTCOME_FAST',
+  'HIPPO_ABLATE_RECENCY',
+  'HIPPO_EVAL_RECENCY_DAYS',
   'HIPPO_FAKE_NOW',
 ] as const;
 
@@ -78,6 +80,49 @@ describe('defaults (no flags set)', () => {
     // Fast outcome channel live.
     const results = await hybridSearch('outcome-laden', [m], { budget: 10000, explain: true });
     expect(results[0].breakdown?.outcomeBoost).toBeGreaterThan(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// HIPPO_ABLATE_RECENCY / HIPPO_EVAL_RECENCY_DAYS (round 2)
+// ---------------------------------------------------------------------------
+
+describe('HIPPO_ABLATE_RECENCY / HIPPO_EVAL_RECENCY_DAYS', () => {
+  const recencyOf = async (daysAgo: number): Promise<number> => {
+    const m = agedMemory(daysAgo, 'recency probe memory');
+    const [r] = await hybridSearch('recency probe', [m], { budget: 10000, explain: true, now: NOW });
+    return r.breakdown!.recencyMultiplier;
+  };
+  const setEnv = (k: string, v: string): void => {
+    process.env[k] = v;
+    _resetAblationCacheForTests();
+  };
+
+  it('default: an older memory gets a recency multiplier below 1', async () => {
+    expect(await recencyOf(30)).toBeLessThan(0.9);
+  });
+
+  it('ablated: the multiplier is 1 and decay stays live (isolation)', async () => {
+    setEnv('HIPPO_ABLATE_RECENCY', '1');
+    expect(await recencyOf(30)).toBe(1);
+    expect(calculateStrength(agedMemory(30), NOW)).toBeLessThan(calculateStrength(agedMemory(0), NOW));
+  });
+
+  it('a 7-day scale lowers the multiplier; junk values keep 30', async () => {
+    const base = await recencyOf(30);
+    setEnv('HIPPO_EVAL_RECENCY_DAYS', '7');
+    expect(await recencyOf(30)).toBeLessThan(base);
+    for (const junk of ['0', '-5', 'abc']) {
+      setEnv('HIPPO_EVAL_RECENCY_DAYS', junk);
+      expect(await recencyOf(30)).toBe(base);
+    }
+  });
+
+  it('outcomeMultiplier matches the breakdown outcomeBoost', async () => {
+    const m = applyOutcome(createMemory('outcome parity memory'), true);
+    const [r] = await hybridSearch('outcome parity', [m], { budget: 10000, explain: true });
+    expect(outcomeMultiplier(m)).toBe(r.breakdown!.outcomeBoost);
+    expect(outcomeMultiplier(m)).toBeGreaterThan(1);
   });
 });
 

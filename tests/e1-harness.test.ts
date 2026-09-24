@@ -22,6 +22,8 @@ const ABLATION_ENV_VARS = [
   'HIPPO_ABLATE_OUTCOME',
   'HIPPO_ABLATE_OUTCOME_SLOW',
   'HIPPO_ABLATE_OUTCOME_FAST',
+  'HIPPO_ABLATE_RECENCY',
+  'HIPPO_EVAL_RECENCY_DAYS',
   'HIPPO_FAKE_NOW',
 ] as const;
 
@@ -71,6 +73,21 @@ describe('E1 generator', () => {
     const trapIds = new Set(p.memories.filter((m: any) => m.kind === 'trap').map((m: any) => m.id));
     expect(p.outcomeSchedule.filter((o: any) => !o.good).every((o: any) => trapIds.has(o.memoryRef))).toBe(true);
     expect(p.outcomeSchedule.some((o: any) => o.good)).toBe(true);
+  });
+
+  it("lookalikeWindow: the default is byte-identical; 'v1' only moves distractor sessions", () => {
+    const base = generateProtocol({ seed: 5, ...TINY });
+    expect(JSON.stringify(generateProtocol({ seed: 5, ...TINY, lookalikeWindow: 'all' }))).toBe(JSON.stringify(base));
+    const v1 = generateProtocol({ seed: 5, ...TINY, lookalikeWindow: 'v1' });
+    expect(v1.meta.lookalikeWindow).toBe('v1');
+    const floor = Math.floor(TINY.numSessions * 0.6);
+    const strip = (p: any, keep: (m: any) => boolean) =>
+      JSON.stringify(p.memories.filter(keep).map((m: any) => ({ ...m, session: m.kind === 'distractor' ? 0 : m.session })));
+    expect(strip(v1, () => true)).toBe(strip(base, () => true));
+    const negs = v1.memories.filter((m: any) => m.kind === 'distractor');
+    expect(negs.length).toBeGreaterThan(0);
+    expect(negs.every((m: any) => m.session < floor)).toBe(true);
+    expect(() => generateProtocol({ seed: 5, ...TINY, lookalikeWindow: 'junk' })).toThrow(/lookalikeWindow/);
   });
 });
 
@@ -140,4 +157,13 @@ describe('E1 driver', () => {
     expect(bm25.epochs[TINY.numSessions - 1].currentR5).not.toBeNull();
     expect(rec.epochs[TINY.numSessions - 1].currentR5).not.toBeNull();
   });
+
+  it('round-2 arms produce rankings and record their settings in meta', async () => {
+    for (const arm of ['recency-off', 'bm25-outcome', 'bm25-newest']) {
+      const r = await runArmSeed(arm, 4, TINY);
+      expect(r.epochs[TINY.numSessions - 1].currentR5).not.toBeNull();
+      expect(r.meta).toHaveProperty('halfLife');
+    }
+    for (const v of ABLATION_ENV_VARS) expect(process.env[v]).toBeUndefined();
+  }, 60_000);
 });

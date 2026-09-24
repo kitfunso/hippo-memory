@@ -26,9 +26,10 @@ function load(file) {
 }
 
 // Same rule as evaluate_retrieval.py check_session_hit; a question with no answer sessions is a miss there too.
+// Tags match exactly: a substring rule credited answer_x to its abstention twin answer_x_abs.
 function hit(memories, sids, k) {
   return memories.slice(0, k).some((m) => sids.some((sid) =>
-    (m.tags ?? []).some((t) => t.includes(sid)) || (m.content ?? '').includes(`[Session: ${sid}]`)));
+    (m.tags ?? []).includes(sid) || (m.content ?? '').includes(`[Session: ${sid}]`)));
 }
 
 const A = load(getArg('a')), Bm = load(getArg('b'));

@@ -58,9 +58,6 @@ def check_session_hit(
             # Check content for session marker
             if f"[Session: {sid}]" in content:
                 return True
-            # Partial match on session ID in tags
-            if any(sid in t for t in tags):
-                return True
     return False
 
 

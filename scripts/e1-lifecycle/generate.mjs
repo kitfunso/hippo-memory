@@ -18,12 +18,14 @@
  * in the content path. Same seed => byte-identical protocol JSON. This file
  * is tagged `e1-generator-freeze` BEFORE any ablation arm is run (anti-bias
  * commitment, design rev #4); changes after the tag = amendment + full re-run.
+ * Amendment (docs/evals/2026-09-23-mechanism-audit-round2-prereg.md): opt-in
+ * `lookalikeWindow: 'v1'`; the default protocol stays byte-identical (P0 check 1).
  *
  * Value tokens are opaque (VAL<fact><version><digits>) so scoring is by
  * token containment, never by memory id, and a probe can detect WHICH
  * version surfaced (current vs superseded vs contradiction vs trap).
  *
- * Run standalone:  node scripts/e1-lifecycle/generate.mjs --seed 1 [--facts 300] [--sessions 20]
+ * Run standalone:  node scripts/e1-lifecycle/generate.mjs --seed 1 [--facts 300] [--sessions 20] [--lookalike-window all|v1]
  */
 
 import * as fs from 'node:fs';
@@ -96,6 +98,7 @@ function shuffle(rand, arr) {
  * @param {number} [opts.distractorMultiple=10]  hard negatives >= multiple * facts
  * @param {string} [opts.baseDate='2025-01-06T09:00:00.000Z']
  * @param {number} [opts.sessionIntervalDays=7]
+ * @param {'all'|'v1'} [opts.lookalikeWindow='all']  'v1' dates hard negatives within the sessions v1 can occupy
  */
 export function generateProtocol(opts) {
   const seed = opts.seed >>> 0;
@@ -104,6 +107,10 @@ export function generateProtocol(opts) {
   const distractorMultiple = opts.distractorMultiple ?? 10;
   const baseDate = opts.baseDate ?? '2025-01-06T09:00:00.000Z';
   const sessionIntervalDays = opts.sessionIntervalDays ?? 7;
+  const lookalikeWindow = opts.lookalikeWindow ?? 'all';
+  if (lookalikeWindow !== 'all' && lookalikeWindow !== 'v1') {
+    throw new Error(`lookalikeWindow must be 'all' or 'v1', got ${lookalikeWindow}`);
+  }
   const rand = mulberry32(seed);
 
   // Sessions with simulated dates (weekly cadence by default).
@@ -240,12 +247,14 @@ export function generateProtocol(opts) {
   // Each carries its own opaque NEG token so it can never satisfy a probe.
   // ------------------------------------------------------------------------
   const negPerFact = distractorMultiple;
+  // One draw per negative either way, so 'v1' keeps every token and only moves sessions.
+  const negSessions = lookalikeWindow === 'v1' ? Math.max(1, Math.floor(numSessions * 0.6)) : numSessions;
   for (let f = 0; f < numFacts; f++) {
     const { entity, attribute } = chosen[f];
     const probe = probes[f];
     for (let n = 0; n < negPerFact; n++) {
       const family = n % 5;
-      const sn = Math.floor(rand() * numSessions);
+      const sn = Math.floor(rand() * negSessions);
       const ntok = `NEG${f}N${n}D${String(Math.floor(rand() * 10000)).padStart(4, '0')}`;
       let content;
       if (family === 0) {
@@ -290,6 +299,8 @@ export function generateProtocol(opts) {
     meta: {
       generatorVersion: GENERATOR_VERSION, seed, numFacts, numSessions,
       distractorMultiple, baseDate, sessionIntervalDays,
+      // undefined drops out of JSON.stringify, so the default protocol and its hash stay byte-identical.
+      lookalikeWindow: lookalikeWindow === 'all' ? undefined : lookalikeWindow,
       counts: {
         memories: memories.length,
         updates: memories.filter((m) => m.kind === 'update').length,
@@ -321,6 +332,7 @@ if (isMain) {
     numFacts: Number(getArg('facts', '300')),
     numSessions: Number(getArg('sessions', '20')),
     distractorMultiple: Number(getArg('distractors', '10')),
+    lookalikeWindow: getArg('lookalike-window', 'all'),
   });
   const outDir = getArg('out', path.join(path.dirname(fileURLToPath(import.meta.url)), 'protocols'));
   fs.mkdirSync(outDir, { recursive: true });

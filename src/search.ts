@@ -4,7 +4,7 @@
  */
 
 import { MemoryEntry, calculateStrength } from './memory.js';
-import { isOutcomeFastAblated, isRecallBoostAblated, evalNow } from './ablation.js';
+import { isOutcomeFastAblated, isRecallBoostAblated, isRecencyAblated, evalRecencyScaleDays, evalNow } from './ablation.js';
 import { extractPathTags, pathBoostMultiplier } from './path-context.js';
 import { detectScope, scopeMatch } from './scope.js';
 import {
@@ -114,10 +114,20 @@ export function estimateTokens(text: string): number {
 // ---------------------------------------------------------------------------
 
 function recencyBoost(entry: MemoryEntry, now: Date): number {
+  if (isRecencyAblated()) return 1; // EVAL-ONLY ablation (see ablation.ts)
   const created = new Date(entry.created);
   const ageDays = (now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24);
   // Exponential decay: memories < 1 day get boost ~1.0, older get less
-  return Math.exp(-ageDays / 30);
+  return Math.exp(-ageDays / (evalRecencyScaleDays() ?? 30));
+}
+
+/** Retrieval-time outcome nudge in [0.85, 1.15]; the E1 bm25-outcome baseline ranks with it too. */
+export function outcomeMultiplier(entry: MemoryEntry): number {
+  const pos = entry.outcome_positive ?? 0;
+  const neg = entry.outcome_negative ?? 0;
+  // EVAL-ONLY ablation (see ablation.ts): the fast outcome channel.
+  if (isOutcomeFastAblated() || (pos === 0 && neg === 0)) return 1.0;
+  return Math.max(0.85, Math.min(1.15, 1 + 0.15 * Math.tanh((pos - neg) / 2)));
 }
 
 // ---------------------------------------------------------------------------
@@ -604,12 +614,7 @@ export async function hybridSearch(
 
     // Retrieval-time outcome personalization: nudge up/down from user feedback.
     // Distinct from reward-factor-via-strength (slow); this is immediate.
-    // EVAL-ONLY ablation (see ablation.ts): the fast outcome channel.
-    const pos = entries[i].outcome_positive ?? 0;
-    const neg = entries[i].outcome_negative ?? 0;
-    const outcomeBoost = isOutcomeFastAblated() || (pos === 0 && neg === 0)
-      ? 1.0
-      : Math.max(0.85, Math.min(1.15, 1 + 0.15 * Math.tanh((pos - neg) / 2)));
+    const outcomeBoost = outcomeMultiplier(entries[i]);
     compositeScore *= outcomeBoost;
 
     // Scope boost: memories tagged with the active scope get 1.5x; mismatching scopes get 0.5x
