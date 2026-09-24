@@ -281,6 +281,19 @@ export function calculateRewardFactor(entry: MemoryEntry): number {
   return 1 + 0.5 * ratio;
 }
 
+/** Bad marks alone never push a memory under sleep's 0.05 retire line; supersede is the hard correction. */
+const MAX_WRONG_HALVINGS = 3;
+
+/**
+ * Net wrongness: bad outcome marks past good ones, never below zero.
+ * Strength halves per unit (capped at 3) and recall stops strengthening
+ * the memory, so a correction outranks pinning, error tags and heavy recall.
+ */
+export function netWrong(entry: MemoryEntry): number {
+  if (isOutcomeSlowAblated() || isDecayAblated()) return 0;
+  return Math.max(0, (entry.outcome_negative ?? 0) - (entry.outcome_positive ?? 0));
+}
+
 /**
  * Options for decay basis.
  * - clock: wall-clock time (default pre-v0.15)
@@ -304,7 +317,7 @@ export interface DecayOptions {
  * - session: decay by sleep cycles instead of days (sessionsSince / halfLife)
  * - adaptive: wall-clock decay with half-life scaled by session frequency
  *
- * Pinned memories always return 1.0 (no decay).
+ * Pinned memories skip time decay; being marked wrong still fades them (netWrong).
  */
 export function calculateStrength(
   entry: MemoryEntry,
@@ -313,7 +326,9 @@ export function calculateStrength(
   now: Date = evalNow(),
   options: DecayOptions = {},
 ): number {
-  if (entry.pinned) return 1.0;
+  // Being marked wrong outranks every shield: pinning, error tags, heavy recall.
+  const wrongPenalty = Math.pow(0.5, Math.min(netWrong(entry), MAX_WRONG_HALVINGS));
+  if (entry.pinned) return wrongPenalty;
 
   // EVAL-ONLY ablation (see ablation.ts): with recall-strengthening ablated,
   // anchor decay at CREATION, not last_retrieved. A never-strengthened memory
@@ -365,7 +380,7 @@ export function calculateStrength(
   // the READ side too, so a store with PRIOR retrieval history (counts > 0
   // written before the flag was set) does not leak strengthening into an
   // ablated arm's rankings (codex P2).
-  const retrievalBoost = isRecallBoostAblated()
+  const retrievalBoost = isRecallBoostAblated() || netWrong(entry) > 0
     ? 1.0
     : 1 + 0.1 * Math.log2(entry.retrieval_count + 1);
 
@@ -381,7 +396,7 @@ export function calculateStrength(
 
   // Clamp to [0, 1] with NaN guard
   const clamped = Math.min(1.0, Math.max(0.0, raw));
-  return Number.isFinite(clamped) ? clamped : 0.0;
+  return Number.isFinite(clamped) ? clamped * wrongPenalty : 0.0;
 }
 
 /**

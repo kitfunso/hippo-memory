@@ -4,7 +4,7 @@
  */
 
 import { estimateTokens } from './token-ledger.js';
-import { MemoryEntry, calculateStrength } from './memory.js';
+import { MemoryEntry, calculateStrength, netWrong } from './memory.js';
 import { isOutcomeFastAblated, isRecallBoostAblated, isRecencyAblated, evalRecencyScaleDays, evalNow } from './ablation.js';
 import { extractPathTags, pathBoostMultiplier } from './path-context.js';
 import { detectScope, scopeMatch } from './scope.js';
@@ -1262,8 +1262,8 @@ export function markRetrieved(entries: MemoryEntry[], now: Date = evalNow()): Me
       ...e,
       retrieval_count: e.retrieval_count + 1,
       last_retrieved: now.toISOString(),
-      // Extend half-life by +2 days per retrieval (PLAN.md)
-      half_life_days: e.half_life_days + 2,
+      // Extend half-life by +2 days per retrieval (PLAN.md); being shown never shields a wrong memory
+      half_life_days: netWrong(e) > 0 ? e.half_life_days : e.half_life_days + 2,
     };
     updated.strength = calculateStrength(updated, now);
     return updated;
