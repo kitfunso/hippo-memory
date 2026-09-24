@@ -1,0 +1,290 @@
+Mechanism audit round 2 raw outputs, collected by script. Lock build hippo-wt-mech2 at f3e916d; W-rel hippo-wt-rel at 39dc65c.
+
+$ node scripts/e1-lifecycle/compare.mjs --a C:/Users/skf_s/hippo-mech-runs/r2/e1/r4:full --b C:/Users/skf_s/hippo-mech-runs/r2/e1/r4:bm25-static --seeds 81-100
+A=C:/Users/skf_s/hippo-mech-runs/r2/e1/r4:full  B=C:/Users/skf_s/hippo-mech-runs/r2/e1/r4:bm25-static  seeds=81..100 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.890 | 0.776 | 11.4 | [10.0, 12.7] | [9.6, 13.2] | 20
+mrr | 0.610 | 0.405 | 20.5 | [19.3, 21.7] | [18.9, 22.2] | 20
+staleIntrusionRate | 0.935 | 0.911 | 2.4 | [0.9, 4.0] | [0.4, 4.5] | 20
+trapPersistenceRate | 0.380 | 0.712 | -33.2 | [-38.9, -27.8] | [-40.7, -25.8] | 20
+contraIntrusionRate | 0.182 | 0.000 | 18.2 | [14.3, 22.2] | [13.2, 23.5] | 20
+hotR5 | 0.892 | 0.790 | 10.3 | [8.0, 12.7] | [7.3, 13.5] | 20
+cleanStaleR5 | 0.064 | 0.084 | -2.0 | [-3.5, -0.5] | [-4.0, -0.1] | 20
+nonStaleR5 | 0.840 | 0.755 | 8.6 | [6.7, 10.4] | [6.2, 11.0] | 20
+cleanTrapR5 | 0.550 | 0.230 | 32.0 | [26.7, 37.2] | [25.0, 38.8] | 20
+nonTrapR5 | 0.892 | 0.785 | 10.7 | [9.3, 12.1] | [8.8, 12.6] | 20
+break-even superseded share s* (A wins below it) = 81.1% [70.0, 94.1] | [66.5, 98.5]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 100.0% [100.0, 100.0] | [100.0, 100.0]; this protocol's trapEligible share 15.0%
+
+$ node scripts/e1-lifecycle/compare.mjs --a C:/Users/skf_s/hippo-mech-runs/r2/e1/r4:full --b C:/Users/skf_s/hippo-mech-runs/r2/e1/r4:bm25-newest --seeds 81-100
+A=C:/Users/skf_s/hippo-mech-runs/r2/e1/r4:full  B=C:/Users/skf_s/hippo-mech-runs/r2/e1/r4:bm25-newest  seeds=81..100 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.890 | 0.809 | 8.0 | [6.8, 9.3] | [6.4, 9.7] | 20
+mrr | 0.610 | 0.494 | 11.6 | [10.8, 12.5] | [10.5, 12.8] | 20
+staleIntrusionRate | 0.935 | 0.904 | 3.1 | [1.8, 4.5] | [1.4, 4.9] | 20
+trapPersistenceRate | 0.380 | 0.788 | -40.8 | [-46.1, -35.6] | [-47.8, -33.9] | 20
+contraIntrusionRate | 0.182 | 0.000 | 18.2 | [14.3, 22.2] | [13.2, 23.5] | 20
+hotR5 | 0.892 | 0.816 | 7.7 | [5.5, 10.1] | [4.9, 10.8] | 20
+cleanStaleR5 | 0.064 | 0.092 | -2.8 | [-4.1, -1.5] | [-4.5, -1.1] | 20
+nonStaleR5 | 0.840 | 0.759 | 8.1 | [6.5, 9.7] | [5.9, 10.2] | 20
+cleanTrapR5 | 0.550 | 0.179 | 37.1 | [32.3, 42.0] | [30.6, 43.4] | 20
+nonTrapR5 | 0.892 | 0.818 | 7.4 | [6.2, 8.6] | [5.8, 9.0] | 20
+break-even superseded share s* (A wins below it) = 74.3% [65.0, 85.0] | [62.3, 88.3]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 100.0% [100.0, 100.0] | [100.0, 100.0]; this protocol's trapEligible share 15.0%
+
+$ node scripts/e1-lifecycle/compare.mjs --a C:/Users/skf_s/hippo-mech-runs/r2/e1/r4:full --b C:/Users/skf_s/hippo-mech-runs/r2/e1/r4:all-off --seeds 81-100
+A=C:/Users/skf_s/hippo-mech-runs/r2/e1/r4:full  B=C:/Users/skf_s/hippo-mech-runs/r2/e1/r4:all-off  seeds=81..100 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.890 | 0.828 | 6.2 | [5.1, 7.2] | [4.7, 7.6] | 20
+mrr | 0.610 | 0.528 | 8.2 | [7.4, 9.0] | [7.2, 9.2] | 20
+staleIntrusionRate | 0.935 | 0.903 | 3.2 | [2.1, 4.4] | [1.7, 4.8] | 20
+trapPersistenceRate | 0.380 | 0.850 | -47.0 | [-51.2, -42.7] | [-52.7, -41.2] | 20
+contraIntrusionRate | 0.182 | 0.115 | 6.7 | [3.8, 9.7] | [3.0, 10.7] | 20
+hotR5 | 0.892 | 0.825 | 6.7 | [4.8, 8.8] | [4.3, 9.5] | 20
+cleanStaleR5 | 0.064 | 0.096 | -3.2 | [-4.4, -2.0] | [-4.8, -1.6] | 20
+nonStaleR5 | 0.840 | 0.751 | 8.9 | [7.3, 10.6] | [6.9, 11.1] | 20
+cleanTrapR5 | 0.550 | 0.131 | 41.9 | [37.8, 46.0] | [36.6, 47.3] | 20
+nonTrapR5 | 0.892 | 0.836 | 5.6 | [4.5, 6.7] | [4.3, 7.1] | 20
+break-even superseded share s* (A wins below it) = 73.9% [65.7, 82.7] | [63.3, 85.3]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 100.0% [100.0, 100.0] | [100.0, 100.0]; this protocol's trapEligible share 15.0%
+
+$ node scripts/e1-lifecycle/compare.mjs --a C:/Users/skf_s/hippo-mech-runs/r2/e1/r4:all-off --b C:/Users/skf_s/hippo-mech-runs/r2/e1/r4:bm25-static --seeds 81-100
+A=C:/Users/skf_s/hippo-mech-runs/r2/e1/r4:all-off  B=C:/Users/skf_s/hippo-mech-runs/r2/e1/r4:bm25-static  seeds=81..100 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.828 | 0.776 | 5.2 | [4.2, 6.3] | [3.9, 6.6] | 20
+mrr | 0.528 | 0.405 | 12.3 | [11.1, 13.5] | [10.7, 13.9] | 20
+staleIntrusionRate | 0.903 | 0.911 | -0.8 | [-2.1, 0.4] | [-2.5, 0.8] | 20
+trapPersistenceRate | 0.850 | 0.712 | 13.8 | [10.1, 17.4] | [9.0, 18.7] | 20
+contraIntrusionRate | 0.115 | 0.000 | 11.5 | [8.0, 15.3] | [7.0, 16.5] | 20
+hotR5 | 0.825 | 0.790 | 3.5 | [1.6, 5.4] | [1.1, 6.0] | 20
+cleanStaleR5 | 0.096 | 0.084 | 1.2 | [-0.1, 2.4] | [-0.5, 2.9] | 20
+nonStaleR5 | 0.751 | 0.755 | -0.4 | [-1.8, 0.9] | [-2.3, 1.4] | 20
+cleanTrapR5 | 0.131 | 0.230 | -9.9 | [-13.7, -6.1] | [-15.0, -4.9] | 20
+nonTrapR5 | 0.836 | 0.785 | 5.1 | [3.9, 6.2] | [3.6, 6.6] | 20
+break-even superseded share s* (A wins below it) = 0.0% [0.0, 100.0] | [0.0, 100.0]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 33.8% [25.6, 45.6] | [23.4, 51.2]; this protocol's trapEligible share 15.0%
+
+$ node scripts/e1-lifecycle/compare.mjs --a C:/Users/skf_s/hippo-mech-runs/r2/e1-am1/r2:bm25-outcome --b C:/Users/skf_s/hippo-mech-runs/r2/e1-am1/r2:bm25-static --seeds 101-120
+A=C:/Users/skf_s/hippo-mech-runs/r2/e1-am1/r2:bm25-outcome  B=C:/Users/skf_s/hippo-mech-runs/r2/e1-am1/r2:bm25-static  seeds=101..120 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.827 | 0.778 | 4.9 | [4.1, 5.6] | [3.9, 5.9] | 20
+mrr | 0.482 | 0.402 | 8.0 | [7.1, 8.9] | [6.8, 9.2] | 20
+staleIntrusionRate | 0.944 | 0.908 | 3.6 | [2.7, 4.7] | [2.4, 5.0] | 20
+trapPersistenceRate | 0.000 | 0.719 | -71.9 | [-75.8, -67.8] | [-76.9, -66.6] | 20
+contraIntrusionRate | 0.000 | 0.000 | 0.0 | [0.0, 0.0] | [0.0, 0.0] | 20
+hotR5 | 0.827 | 0.781 | 4.6 | [3.3, 5.9] | [3.0, 6.3] | 20
+cleanStaleR5 | 0.054 | 0.087 | -3.3 | [-4.3, -2.4] | [-4.6, -2.2] | 20
+nonStaleR5 | 0.840 | 0.762 | 7.8 | [6.7, 8.9] | [6.4, 9.3] | 20
+cleanTrapR5 | 0.828 | 0.223 | 60.4 | [55.8, 65.0] | [54.2, 66.3] | 20
+nonTrapR5 | 0.827 | 0.788 | 3.9 | [3.1, 4.7] | [2.8, 5.0] | 20
+break-even superseded share s* (A wins below it) = 70.1% [63.5, 76.8] | [61.5, 78.7]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 100.0% [100.0, 100.0] | [100.0, 100.0]; this protocol's trapEligible share 15.0%
+
+$ node scripts/e1-lifecycle/compare.mjs --a C:/Users/skf_s/hippo-mech-runs/r2/e1-am1/r2:full --b C:/Users/skf_s/hippo-mech-runs/r2/e1-am1/r2:recency-off --seeds 101-120
+A=C:/Users/skf_s/hippo-mech-runs/r2/e1-am1/r2:full  B=C:/Users/skf_s/hippo-mech-runs/r2/e1-am1/r2:recency-off  seeds=101..120 (n=20), B=10000
+metric | A | B | A-B pp | 95% CI | 99% CI | seeds
+currentR5 | 0.753 | 0.814 | -6.1 | [-7.3, -4.9] | [-7.7, -4.4] | 20
+mrr | 0.369 | 0.441 | -7.3 | [-8.4, -6.1] | [-8.8, -5.8] | 20
+staleIntrusionRate | 0.882 | 0.942 | -6.0 | [-7.7, -4.3] | [-8.2, -3.8] | 20
+trapPersistenceRate | 0.198 | 0.020 | 17.8 | [14.2, 21.3] | [13.2, 22.4] | 20
+contraIntrusionRate | 0.075 | 0.000 | 7.5 | [4.7, 10.7] | [3.8, 11.7] | 20
+hotR5 | 0.765 | 0.813 | -4.8 | [-7.3, -2.2] | [-8.2, -1.4] | 20
+cleanStaleR5 | 0.107 | 0.056 | 5.1 | [3.6, 6.6] | [3.1, 7.1] | 20
+nonStaleR5 | 0.679 | 0.825 | -14.5 | [-16.2, -12.8] | [-16.8, -12.3] | 20
+cleanTrapR5 | 0.609 | 0.814 | -20.6 | [-25.1, -16.1] | [-26.6, -14.9] | 20
+nonTrapR5 | 0.755 | 0.810 | -5.5 | [-6.9, -4.2] | [-7.3, -3.8] | 20
+break-even superseded share s* (A wins below it) = 0.0% [0.0, 0.0] | [0.0, 0.0]; this protocol's staleEligible share 40.0%
+break-even demoted share s* (A wins below it) = 0.0% [0.0, 0.0] | [0.0, 0.0]; this protocol's trapEligible share 15.0%
+
+$ node benchmarks/longmemeval/paired_hits.mjs --data C:/Users/skf_s/hippo/benchmarks/longmemeval/data/longmemeval_oracle.json --a C:/Users/skf_s/hippo-mech-runs/r2/turn/ret-turn-physics.jsonl --b C:/Users/skf_s/hippo-mech-runs/r2/turn/ret-turn-cosine.jsonl
+n=500 questions; top-5 lists differ on 458 (91.6%)
+hit@1: A 44.6 B 47.8 | A-B -3.2pp 95% [-5.6, -0.8] 99% [-6.4, -0.2] | A-only 11, B-only 27
+hit@5: A 64.6 B 66.8 | A-B -2.2pp 95% [-4.8, 0.4] 99% [-5.6, 1.4] | A-only 18, B-only 29
+hit@10: A 75.0 B 76.2 | A-B -1.2pp 95% [-3.4, 1.0] 99% [-4.0, 1.6] | A-only 12, B-only 18
+
+$ node benchmarks/longmemeval/paired_hits.mjs --data C:/Users/skf_s/hippo/benchmarks/longmemeval/data/longmemeval_oracle.json --a C:/Users/skf_s/hippo-mech-runs/r2/turn/ret-turn-physics.jsonl --b C:/Users/skf_s/hippo-mech-runs/r2/turn/ret-turn-hybrid.jsonl
+n=500 questions; top-5 lists differ on 500 (100.0%)
+hit@1: A 44.6 B 55.2 | A-B -10.6pp 95% [-15.0, -6.4] 99% [-16.2, -5.2] | A-only 35, B-only 88
+hit@5: A 64.6 B 78.0 | A-B -13.4pp 95% [-17.4, -9.4] 99% [-18.6, -8.2] | A-only 21, B-only 88
+hit@10: A 75.0 B 84.6 | A-B -9.6pp 95% [-13.0, -6.4] 99% [-14.0, -5.4] | A-only 14, B-only 62
+
+## scorer: hippo-wt-rel
+
+$ node benchmarks/longmemeval/paired_hits.mjs --data C:/Users/skf_s/hippo/benchmarks/longmemeval/data/longmemeval_oracle.json --a C:/Users/skf_s/hippo-mech-runs/r2/rel-lme/ret-sleep-physics.jsonl --b C:/Users/skf_s/hippo-mech-runs/r2/rel-lme/ret-sleep-hybrid.jsonl
+n=500 questions; top-5 lists differ on 500 (100.0%)
+hit@1: A 14.8 B 52.6 | A-B -37.8pp 95% [-43.2, -32.6] 99% [-44.8, -30.8] | A-only 34, B-only 223
+hit@5: A 55.4 B 77.0 | A-B -21.6pp 95% [-26.2, -17.2] 99% [-27.4, -15.8] | A-only 23, B-only 131
+hit@10: A 67.2 B 83.8 | A-B -16.6pp 95% [-20.8, -12.4] 99% [-22.0, -11.0] | A-only 22, B-only 105
+
+$ node benchmarks/longmemeval/paired_hits.mjs --data C:/Users/skf_s/hippo/benchmarks/longmemeval/data/longmemeval_oracle.json --a C:/Users/skf_s/hippo-mech-runs/r2/rel-lme/ret-nosleep-physics.jsonl --b C:/Users/skf_s/hippo-mech-runs/r2/rel-lme/ret-nosleep-hybrid.jsonl
+n=500 questions; top-5 lists differ on 500 (100.0%)
+hit@1: A 29.6 B 49.2 | A-B -19.6pp 95% [-23.6, -15.6] 99% [-25.0, -14.4] | A-only 15, B-only 113
+hit@5: A 55.4 B 75.0 | A-B -19.6pp 95% [-23.6, -15.6] 99% [-25.0, -14.4] | A-only 13, B-only 111
+hit@10: A 66.0 B 82.2 | A-B -16.2pp 95% [-19.8, -12.6] 99% [-21.0, -11.4] | A-only 11, B-only 92
+
+## scorer: hippo-wt-mech2
+
+$ node benchmarks/longmemeval/paired_hits.mjs --data C:/Users/skf_s/hippo/benchmarks/longmemeval/data/longmemeval_oracle.json --a C:/Users/skf_s/hippo-mech-runs/r2/rel-lme/ret-sleep-physics.jsonl --b C:/Users/skf_s/hippo-mech-runs/r2/rel-lme/ret-sleep-hybrid.jsonl
+n=500 questions; top-5 lists differ on 500 (100.0%)
+hit@1: A 14.8 B 52.6 | A-B -37.8pp 95% [-43.2, -32.6] 99% [-44.8, -30.8] | A-only 34, B-only 223
+hit@5: A 55.4 B 77.0 | A-B -21.6pp 95% [-26.2, -17.2] 99% [-27.4, -15.8] | A-only 23, B-only 131
+hit@10: A 67.2 B 83.8 | A-B -16.6pp 95% [-20.8, -12.4] 99% [-22.0, -11.0] | A-only 22, B-only 105
+
+$ node benchmarks/longmemeval/paired_hits.mjs --data C:/Users/skf_s/hippo/benchmarks/longmemeval/data/longmemeval_oracle.json --a C:/Users/skf_s/hippo-mech-runs/r2/rel-lme/ret-nosleep-physics.jsonl --b C:/Users/skf_s/hippo-mech-runs/r2/rel-lme/ret-nosleep-hybrid.jsonl
+n=500 questions; top-5 lists differ on 500 (100.0%)
+hit@1: A 29.4 B 49.0 | A-B -19.6pp 95% [-23.6, -15.6] 99% [-25.2, -14.4] | A-only 14, B-only 112
+hit@5: A 55.4 B 74.8 | A-B -19.4pp 95% [-23.4, -15.4] 99% [-24.8, -14.0] | A-only 14, B-only 111
+hit@10: A 66.0 B 82.2 | A-B -16.2pp 95% [-19.8, -12.6] 99% [-21.0, -11.4] | A-only 11, B-only 92
+
+$ node benchmarks/longmemeval/paired_hits.mjs --data C:/Users/skf_s/hippo/benchmarks/longmemeval/data/longmemeval_oracle.json --a C:/Users/skf_s/hippo-mech-runs/r2/rel-lme/audit/text/ret-sleep-hybrid.jsonl --b C:/Users/skf_s/hippo-mech-runs/r2/rel-lme/audit/text/ret-nosleep-hybrid.jsonl
+n=500 questions; top-5 lists differ on 301 (60.2%)
+hit@1: A 49.4 B 49.0 | A-B 0.4pp 95% [-1.4, 2.2] 99% [-2.0, 2.8] | A-only 12, B-only 10
+hit@5: A 71.2 B 74.8 | A-B -3.6pp 95% [-5.8, -1.4] 99% [-6.4, -0.8] | A-only 6, B-only 24
+hit@10: A 76.8 B 82.2 | A-B -5.4pp 95% [-8.0, -3.0] 99% [-8.6, -2.4] | A-only 6, B-only 33
+
+$ node benchmarks/longmemeval/paired_hits.mjs --data C:/Users/skf_s/hippo/benchmarks/longmemeval/data/longmemeval_oracle.json --a C:/Users/skf_s/hippo-mech-runs/r2/rel-lme/ret-sleep-hybrid.jsonl --b C:/Users/skf_s/hippo-mech-runs/r2/rel-lme/ret-nosleep-hybrid.jsonl
+n=500 questions; top-5 lists differ on 301 (60.2%)
+hit@1: A 52.6 B 49.0 | A-B 3.6pp 95% [1.8, 5.6] 99% [1.2, 6.2] | A-only 21, B-only 3
+hit@5: A 77.0 B 74.8 | A-B 2.2pp 95% [0.6, 3.8] 99% [0.2, 4.4] | A-only 14, B-only 3
+hit@10: A 83.8 B 82.2 | A-B 1.6pp 95% [0.0, 3.2] 99% [-0.4, 3.8] | A-only 12, B-only 4
+
+$ node benchmarks/longmemeval/paired_hits.mjs --data C:/Users/skf_s/hippo/benchmarks/longmemeval/data/longmemeval_oracle.json --a C:/Users/skf_s/hippo-mech-runs/r2/rel-lme/ret-nosleep-physics.jsonl --b C:/Users/skf_s/hippo-mech-runs/r2/rel-lme/ret-nosleep-cosine.jsonl
+n=500 questions; top-5 lists differ on 351 (70.2%)
+hit@1: A 29.4 B 30.8 | A-B -1.4pp 95% [-3.4, 0.6] 99% [-4.0, 1.2] | A-only 9, B-only 16
+hit@5: A 55.4 B 56.2 | A-B -0.8pp 95% [-2.4, 0.8] 99% [-3.0, 1.4] | A-only 7, B-only 11
+hit@10: A 66.0 B 66.2 | A-B -0.2pp 95% [-1.8, 1.4] 99% [-2.2, 2.0] | A-only 8, B-only 9
+
+## C:/Users/skf_s/hippo-mech-runs/r2/log/p0-1-hash-check.log
+seed 21: lock=343cfb97d36438b9 round1=343cfb97d36438b9 MATCH
+seed 22: lock=88e44735865c587e round1=88e44735865c587e MATCH
+seed 23: lock=79a181b7e6203a53 round1=79a181b7e6203a53 MATCH
+seed 24: lock=bf07f53e4941697f round1=bf07f53e4941697f MATCH
+seed 25: lock=e4f31d7f60efda07 round1=e4f31d7f60efda07 MATCH
+seed 26: lock=70dc3afa50a72707 round1=70dc3afa50a72707 MATCH
+seed 27: lock=96bef6280f6d008b round1=96bef6280f6d008b MATCH
+seed 28: lock=8b6a21b9651ab45b round1=8b6a21b9651ab45b MATCH
+seed 29: lock=13bf31ec275c5892 round1=13bf31ec275c5892 MATCH
+seed 30: lock=2215957397e663eb round1=2215957397e663eb MATCH
+seed 31: lock=701354e262b83314 round1=701354e262b83314 MATCH
+seed 32: lock=a3d38f679c32fd70 round1=a3d38f679c32fd70 MATCH
+seed 33: lock=f32bf7cca68056c2 round1=f32bf7cca68056c2 MATCH
+seed 34: lock=2556a00e0a55da58 round1=2556a00e0a55da58 MATCH
+seed 35: lock=c94160900a3aa4f4 round1=c94160900a3aa4f4 MATCH
+seed 36: lock=05753d76b90aad16 round1=05753d76b90aad16 MATCH
+seed 37: lock=97858cf17409eea7 round1=97858cf17409eea7 MATCH
+seed 38: lock=1dde8d5e6e87e8af round1=1dde8d5e6e87e8af MATCH
+seed 39: lock=19e16bbb5b779a9a round1=19e16bbb5b779a9a MATCH
+seed 40: lock=b8633663560fa742 round1=b8633663560fa742 MATCH
+
+P0-1 result: 20 match, 0 mismatch (of 20)
+
+## C:/Users/skf_s/hippo-mech-runs/r2/log/p0-2-3-compare.log
+####### P0 CHECK 2: lock-build vs W-rel #######
+
+=== P0-2a: lock full@365 seed1 vs W-rel full@365 seed1 ===
+lock: C:/Users/skf_s/hippo-mech-runs/r2/p0-3/full-seed1.json (protocolHash=62b5d183f073b6bf)
+wrel: C:/Users/skf_s/hippo-mech-runs/r2/p0-2-wrel/full-seed1.json (protocolHash=62b5d183f073b6bf)
+RESULT: IDENTICAL final-epoch metrics (0 differences)
+
+=== P0-2b: lock bm25-static@365 seed1 vs W-rel bm25-static@365 seed1 ===
+lock: C:/Users/skf_s/hippo-mech-runs/r2/p0-3/bm25-static-seed1.json (protocolHash=62b5d183f073b6bf)
+wrel: C:/Users/skf_s/hippo-mech-runs/r2/p0-2-wrel/bm25-static-seed1.json (protocolHash=62b5d183f073b6bf)
+RESULT: IDENTICAL final-epoch metrics (0 differences)
+
+####### P0 CHECK 3: 4 named pairs, lock-build, seed1 #######
+
+=== P0-3a: recency-off vs full ===
+recency-off: C:/Users/skf_s/hippo-mech-runs/r2/p0-3/recency-off-seed1.json (protocolHash=62b5d183f073b6bf)
+full: C:/Users/skf_s/hippo-mech-runs/r2/p0-3/full-seed1.json (protocolHash=62b5d183f073b6bf)
+RESULT: 8 metric(s) differ:
+  {"key":"currentR5","recency-off":0.8133333333333334,"full":0.7766666666666666}
+  {"key":"mrr","recency-off":0.46038888888888874,"full":0.3862777777777777}
+  {"key":"staleIntrusionRate","recency-off":0.9333333333333333,"full":0.8666666666666667}
+  {"key":"trapPersistenceRate","recency-off":0.044444444444444446,"full":0.17777777777777778}
+  {"key":"contraIntrusionRate","recency-off":0,"full":0.16666666666666666}
+  {"key":"hotR5","recency-off":0.8266666666666667,"full":0.76}
+  {"key":"cleanStaleR5","recency-off":0.058333333333333334,"full":0.13333333333333333}
+  {"key":"nonStaleR5","recency-off":0.8722222222222222,"full":0.7333333333333333}
+
+=== P0-3b: full --recency-days 7 vs full ===
+full-recdays7: C:/Users/skf_s/hippo-mech-runs/r2/p0-3-recdays7/full-seed1.json (protocolHash=62b5d183f073b6bf)
+full: C:/Users/skf_s/hippo-mech-runs/r2/p0-3/full-seed1.json (protocolHash=62b5d183f073b6bf)
+RESULT: 8 metric(s) differ:
+  {"key":"currentR5","full-recdays7":0.79,"full":0.7766666666666666}
+  {"key":"mrr","full-recdays7":0.4206666666666665,"full":0.3862777777777777}
+  {"key":"staleIntrusionRate","full-recdays7":0.8916666666666667,"full":0.8666666666666667}
+  {"key":"trapPersistenceRate","full-recdays7":0.08888888888888889,"full":0.17777777777777778}
+  {"key":"contraIntrusionRate","full-recdays7":0.2,"full":0.16666666666666666}
+  {"key":"hotR5","full-recdays7":0.7866666666666666,"full":0.76}
+  {"key":"cleanStaleR5","full-recdays7":0.08333333333333333,"full":0.13333333333333333}
+  {"key":"nonStaleR5","full-recdays7":0.7888888888888889,"full":0.7333333333333333}
+
+=== P0-3c: bm25-outcome vs bm25-static ===
+bm25-outcome: C:/Users/skf_s/hippo-mech-runs/r2/p0-3/bm25-outcome-seed1.json (protocolHash=62b5d183f073b6bf)
+bm25-static: C:/Users/skf_s/hippo-mech-runs/r2/p0-3/bm25-static-seed1.json (protocolHash=62b5d183f073b6bf)
+RESULT: 7 metric(s) differ:
+  {"key":"currentR5","bm25-outcome":0.8333333333333334,"bm25-static":0.79}
+  {"key":"mrr","bm25-outcome":0.5170555555555554,"bm25-static":0.41999999999999993}
+  {"key":"staleIntrusionRate","bm25-outcome":0.9166666666666666,"bm25-static":0.9083333333333333}
+  {"key":"trapPersistenceRate","bm25-outcome":0,"bm25-static":0.7111111111111111}
+  {"key":"hotR5","bm25-outcome":0.9066666666666666,"bm25-static":0.8133333333333334}
+  {"key":"cleanStaleR5","bm25-outcome":0.075,"bm25-static":0.08333333333333333}
+  {"key":"nonStaleR5","bm25-outcome":0.8777777777777778,"bm25-static":0.8111111111111111}
+
+=== P0-3d: bm25-newest vs bm25-static ===
+bm25-newest: C:/Users/skf_s/hippo-mech-runs/r2/p0-3/bm25-newest-seed1.json (protocolHash=62b5d183f073b6bf)
+bm25-static: C:/Users/skf_s/hippo-mech-runs/r2/p0-3/bm25-static-seed1.json (protocolHash=62b5d183f073b6bf)
+RESULT: 7 metric(s) differ:
+  {"key":"currentR5","bm25-newest":0.7766666666666666,"bm25-static":0.79}
+  {"key":"mrr","bm25-newest":0.38716666666666644,"bm25-static":0.41999999999999993}
+  {"key":"staleIntrusionRate","bm25-newest":0.875,"bm25-static":0.9083333333333333}
+  {"key":"trapPersistenceRate","bm25-newest":0.7555555555555555,"bm25-static":0.7111111111111111}
+  {"key":"hotR5","bm25-newest":0.76,"bm25-static":0.8133333333333334}
+  {"key":"cleanStaleR5","bm25-newest":0.1,"bm25-static":0.08333333333333333}
+  {"key":"nonStaleR5","bm25-newest":0.7611111111111111,"bm25-static":0.8111111111111111}
+
+## C:/Users/skf_s/hippo-mech-runs/r2/log/p0-4-rescoring.log
+=== P0 check 4: old (substring-tag) vs new (exact-tag) rescoring ===
+
+changes per file per k:
+  ret-sleep-hybrid.jsonl: k=1: 0, k=5: 0, k=10: 0
+  ret-sleep-physics.jsonl: k=1: 0, k=5: 0, k=10: 0
+  ret-nosleep-hybrid.jsonl: k=1: 1, k=5: 1, k=10: 0
+  ret-nosleep-physics.jsonl: k=1: 1, k=5: 0, k=10: 0
+
+total (file,question,k) triples with changed credit: 3
+
+of these, 3 confirmed as answer_x / answer_x_abs pairs, 0 with no substring-tag detail captured (old rule fired on exact/content match — should be 0 by construction), 0 NOT an _abs pair (unexpected if >0).
+
+full change list:
+{"file":"ret-nosleep-hybrid.jsonl","question":"0862e8bf","k":1,"oldHit":true,"newHit":false,"matchedTag":"answer_c6fd8ebd_abs","answerSid":"answer_c6fd8ebd","isAbsPair":true}
+{"file":"ret-nosleep-hybrid.jsonl","question":"15745da0","k":5,"oldHit":true,"newHit":false,"matchedTag":"answer_586de428_abs","answerSid":"answer_586de428","isAbsPair":true}
+{"file":"ret-nosleep-physics.jsonl","question":"15745da0","k":1,"oldHit":true,"newHit":false,"matchedTag":"answer_586de428_abs","answerSid":"answer_586de428","isAbsPair":true}
+
+## lookalike gate tail
+=== gate: under v1, after-v1 share must be < 50% on every seed 81-100 ===
+FAIL: 1 seeds >= 50%: [ { seed: 89, afterShare: 50.8 } ]
+
+=== confirm v1 window touches only distractor session ===
+seed 1: CONFIRMED only distractor session moved
+seed 81: CONFIRMED only distractor session moved
+seed 90: CONFIRMED only distractor session moved
+seed 100: CONFIRMED only distractor session moved
+
+## build logs
+nosleep memories=940 particles=940 ingest+embed secs=1045
+sleep memories=848 particles=728 sleep+embed secs=796
+build done secs=2088
+REL-LME EXIT:0
+turn memories=10866 particles=10866 ingest+embed secs=552
+
+## replication: round 1 campaign/ vs r2/rel-e1/, JSON equal with meta removed
+compared 180 files; mismatches 0 []
+
+## store-size diagnostic: VACUUM INTO copy of ~/.hippo/hippo.db (2201 memories), W-rel build, cwd inside the copy, sleep --dry-run, HIPPO_FAKE_NOW = now + d
+copy a (a = half-lives as stored, b = +358 days) +30 days:  Active memories: 1424  Removed (decayed): 777 
+copy a (a = half-lives as stored, b = +358 days) +90 days:  Active memories: 763  Removed (decayed): 1438 
+copy a (a = half-lives as stored, b = +358 days) +365 days:  Active memories: 278  Removed (decayed): 1923 
+copy b (a = half-lives as stored, b = +358 days) +30 days:  Active memories: 2201  Removed (decayed): 0 
+copy b (a = half-lives as stored, b = +358 days) +90 days:  Active memories: 2201  Removed (decayed): 0 
+copy b (a = half-lives as stored, b = +358 days) +365 days:  Active memories: 2201  Removed (decayed): 0 
