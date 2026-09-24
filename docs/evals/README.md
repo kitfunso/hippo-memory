@@ -33,6 +33,7 @@ claim is a shorter context, not a better answer.
 | [2026-09-23-mechanism-audit-prereg.md](2026-09-23-mechanism-audit-prereg.md) | Pre-registration: which lifecycle mechanisms help retrieval (physics, decay default, outcome feedback, strengthening, sleep), each against its own off switch |
 | [2026-09-23-mechanism-audit-result.md](2026-09-23-mechanism-audit-result.md) | Result: physics and the 7-day decay default hurt; on E1, outcome feedback, strengthening, 365 days and the full lifecycle help; sleep's merge falls below the 3 pp floor; the E1 gap to plain BM25 depends on how the generator dates lookalike memories; independent critique included |
 | [2026-09-23-mechanism-audit-round2-prereg.md](2026-09-23-mechanism-audit-round2-prereg.md) | Pre-registration, round 2: replication from the released code, the recency factor, decay and the outcome nudge alone, lookalikes inside v1's window, physics against cosine-only on session and per-turn stores; exact-tag LongMemEval scoring |
+| [2026-09-24-mechanism-audit-round2-amendment-1.md](2026-09-24-mechanism-audit-round2-amendment-1.md) | Amendment: a second decay-default registration reused round 2's seeds 41-60 before the critique; R2b and R2d transfer from it, R2a and R2c move to seeds 101-120, the 365-day half-life and physics-off defaults are gated at npm release until the independent critique signs off |
 
 ### Reranking (2026-09)
 
