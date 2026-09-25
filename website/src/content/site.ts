@@ -16,7 +16,7 @@ export const site = {
   // Hero headline (2026-09-24 Terminal Native direction), split for accent emphasis.
   tagline: { lead: 'Stop re‑teaching', accent: 'your agent.' }, // non-breaking hyphen keeps the word whole
   description:
-    "The mistake your agent made on Monday is a memory by Tuesday. Hippo plugs into Claude Code, Codex, Cursor and any MCP client, keeps what worked, lets the rest fade, and drops what turned out to be wrong.",
+    "The mistake your agent made on Monday is a memory by Tuesday. Hippo plugs into Claude Code, Codex, Cursor and any MCP client, keeps what worked, drops what turned out to be wrong, and replaces facts that changed.",
   installCmd: 'npm install -g hippo-memory',
   initCmd: 'hippo init --scan ~',
   // A floor stays true as the suite grows; check-readme-sync.mjs holds README and llms.txt to it.
@@ -91,7 +91,7 @@ export const mechanics = [
   {
     title: 'Decay by default',
     metric: '365d half-life',
-    body: 'Every memory fades on a one-year half-life unless it is used. Unused memories move to a dormant store you can restore.',
+    body: 'Every memory fades on a one-year half-life unless it is used. We did not tune 365 days: it tied with 730 days and with decay off.',
   },
   {
     title: 'Retrieval strengthens',
@@ -106,7 +106,7 @@ export const mechanics = [
   {
     title: 'Sleep consolidates',
     metric: '3+ → 1',
-    body: 'On `hippo sleep`, three or more related episodes merge into one semantic pattern. The originals decay; the pattern survives.',
+    body: 'On `hippo sleep`, three or more related episodes merge into one semantic pattern. The originals decay; the pattern survives. It keeps the store tidy; it has not been shown to improve recall.',
   },
 ] as const;
 
@@ -142,7 +142,7 @@ export const worksWith = ['Claude Code', 'Codex', 'Cursor', 'OpenClaw', 'OpenCod
 export const importsFrom = ['ChatGPT', 'CLAUDE.md', '.cursorrules', 'Slack', 'markdown'] as const;
 
 export const compare = {
-  heading: 'Forget by default. Earn persistence through use.',
+  heading: 'Learn what is wrong. Stop repeating it.',
   body: 'How hippo compares to the strongest tools in the category, on the features that define a memory lifecycle.',
   sourceHref: `${REPO}#comparison`,
   sourceLabel: 'Full 10-tool matrix on GitHub',
@@ -197,7 +197,7 @@ export const comparison = {
     "** Different metric: Memoria's 88.78% and EverMind's 83% are reported as overall accuracy with a reader LLM, not retrieval R@5. Higher denominator + LLM helps. Not directly comparable to retrieval-only R@5 numbers above.",
   ],
   closing:
-    'Different tools answer different questions. Mem0 and Basic Memory implement "save everything, search later." MemPalace organizes spatially. gbrain, Zep, and Cognee extract typed entities into a knowledge graph. Letta lets the agent edit its own memory blocks. Memoria is Git-style version control over memory. EverMind is self-evolving Skill Memory. Hippo implements "forget by default, earn persistence through use."',
+    'Different tools answer different questions. Mem0 and Basic Memory implement "save everything, search later." MemPalace organizes spatially. gbrain, Zep, and Cognee extract typed entities into a knowledge graph. Letta lets the agent edit its own memory blocks. Memoria is Git-style version control over memory. EverMind is self-evolving Skill Memory. Hippo implements "learn what is wrong and stop repeating it."',
 } as const;
 
 /** Get started = quickstart + the zero-config auto-install differentiator (README L97/L621). */
@@ -230,10 +230,10 @@ export const localFirst = {
 
 /** FAQ - objection handling. Answers sourced to README receipts. */
 export const faq = [
-  { q: 'Is this just RAG?', a: 'No. RAG retrieves from a static corpus; hippo is a memory lifecycle. Memories decay on a half-life, retrieval strengthens them, errors stick, and sleep consolidates repeats into patterns. It forgets by default and earns persistence through use.' },
+  { q: 'Is this just RAG?', a: 'No. RAG retrieves from a static corpus; hippo is a memory lifecycle. Memories decay on a half-life, retrieval strengthens them, errors stick, and sleep consolidates repeats into patterns. Mark a memory wrong and it stops coming back; a newer fact replaces the old one.' },
   { q: 'Does it need embeddings?', a: 'No. Recall runs on BM25 out of the box (74% R@5 on LongMemEval, BM25 only). Embeddings are an optional dependency for hybrid scoring; nothing is required at runtime.' },
   { q: 'Where does my data go?', a: 'Nowhere, unless you opt in. Everything is a local SQLite store with markdown mirrors: 0 outbound HTTP on the ingestion smoke, proven by a fetch spy. No cloud, no account, no telemetry. Opt-in features change that. hippo recall --reranker jev sends your query and your candidate memory text to TypeSafe, and the LLM reranker and the API embedders send text to the provider you configure. Each is off unless you turn it on.' },
   { q: 'Which agents does it work with?', a: 'hippo init auto-installs hooks for Claude Code, Codex, Cursor, OpenClaw, and OpenCode, and exposes an MCP server for any MCP client (Cursor, Windsurf, Cline, Claude Desktop).' },
-  { q: 'How is hippo different from mem0, Letta, or Zep?', a: 'hippo optimizes the full memory lifecycle. mem0 and similar tools save and search; Zep and Cognee extract entities into a knowledge graph; Letta has the agent edit its own memory blocks. hippo forgets by default and earns persistence through use, with reward-weighted decay, conflict detection, and sleep consolidation, and it runs locally with zero runtime dependencies.' },
+  { q: 'How is hippo different from mem0, Letta, or Zep?', a: 'hippo optimizes the full memory lifecycle. mem0 and similar tools save and search; Zep and Cognee extract entities into a knowledge graph; Letta has the agent edit its own memory blocks. hippo learns what turned out wrong and stops repeating it, with outcome marks, supersession, conflict detection, and sleep consolidation, and it runs locally with zero runtime dependencies.' },
   { q: 'Is it production-ready?', a: `It is MIT-licensed at v${pkg.version}, with ${site.tests} tests against a real database and no mocked store. Multi-tenant isolation is proven by a negative test.` },
 ] as const;

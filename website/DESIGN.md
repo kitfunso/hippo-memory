@@ -68,7 +68,8 @@ line under the hero subhead.
 Numbers over adjectives. No em dashes in UI strings. No "not X, it's Y"
 contrast constructions (one earned exception: "Numbers, not adjectives.").
 No rhetorical scaffolding, no market-speak hedging. Footer tagline: "Good
-memory is knowing what to forget."
+memory is knowing what to forget: what was wrong, replaced, or never used." Forgetting
+means wrong, superseded or unused, never age (ROADMAP FE4).
 
 ## Accessibility floor
 

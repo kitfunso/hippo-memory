@@ -1,0 +1,3 @@
+### Documentation
+
+- **Pitch hippo as learning what is wrong, and drop every claim that decay or sleep improves recall (ROADMAP FE4).** Round 2 of the mechanism audit found no measurable effect of decay on E1, sleep costing 3.6 points hit@5, and the outcome nudge cutting marked-bad memories in the top five from 71.9% to 0.0%. The README and the website now lead with outcome marks and supersession, say the 365-day half-life was not tuned (it tied with 730 days and with decay off), and label the hippocampus framing as design inspiration. The site no longer says decay keeps the store small: at 365 days sleep barely deletes.

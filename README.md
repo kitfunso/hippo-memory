@@ -1,6 +1,6 @@
 # 🦛 Hippo
 
-**The secret to good memory isn't remembering more. It's knowing what to forget.**
+**Hippo learns what is wrong and stops repeating it.** Good memory is knowing what to forget: what turned out wrong, what got replaced, what nobody used.
 
 [![npm](https://img.shields.io/npm/v/hippo-memory)](https://npmjs.com/package/hippo-memory)
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
@@ -10,7 +10,7 @@
   <img src="./assets/hippo-init.svg" alt="hippo init --scan ~ — initializing memory across all repos" width="720">
 </p>
 
-A memory layer for AI agents. Modeled on the hippocampus. Decay by default, strength through use, provenance on every memory. SQLite under the hood, zero runtime deps, works with every CLI agent you have.
+A memory layer for AI agents. Mark a memory wrong and it stops coming back. A newer fact replaces the old one. Memories you use get stronger. Provenance on every memory. SQLite under the hood, zero runtime deps, works with every CLI agent you have.
 
 ```bash
 npm install -g hippo-memory && hippo init --scan ~
@@ -33,7 +33,7 @@ Dependencies:  Zero runtime deps. Node.js 22.16+. Optional embeddings: bring-you
 
 Most "AI memory" systems save everything and search later. That's storage with semantic search bolted on. It's why your agent kept hitting the same deploy bug last week. And the week before. The system saw the failure four times. It had no way to know it should remember.
 
-Hippo applies the thing brains have been getting right for 500 million years. Memories decay over time. Retrieval makes them stronger. Three biological layers (buffer, episodic, semantic) consolidate during sleep. Hard lessons stick because you used them. Trivia fades because you didn't.
+Hippo learns from outcomes. When a recalled memory turns out wrong, mark it bad and it drops out of the top results. When a fact changes, the new version supersedes the old one. Memories you keep using get stronger. Those are the parts we measured helping ([mechanism audit, round 2](https://github.com/kitfunso/hippo-memory/pull/232)). The design borrows from the hippocampus (decay, three layers, sleep consolidation), but that is inspiration. We have not measured decay or sleep making recall better.
 
 It also fixes the portability problem. Your ChatGPT memories don't travel to Claude. Your `.cursorrules` don't travel to Codex. Hippo is one process behind every agent. CLAUDE.md, Cursor rules, ChatGPT exports, Slack history, all in one SQLite store, all queryable from any tool that speaks MCP or HTTP.
 
@@ -299,7 +299,7 @@ sequenceDiagram
 
 ### Decay by default
 
-Every memory has a half-life: 365 days by default. Persistence is earned. Until 1.46.0 the default was 7 days. A pre-registered evaluation found 7 days lost the current version of a fact far more often: it was in the top five 29% of the time at 7 days and 75% at 365 ([result](docs/evals/2026-09-24-decay-default-result.md)). 730 days and decay off both tied with 365. `hippo sleep` moves memories still on the old 7-day base to the new one, once, and records each move in the audit log. Set `defaultHalfLifeDays` in `.hippo/config.json` to choose your own.
+Every memory has a half-life: 365 days by default. Until 1.46.0 the default was 7 days. A pre-registered evaluation found 7 days lost the current version of a fact far more often: it was in the top five 29% of the time at 7 days and 75% at 365 ([result](docs/evals/2026-09-24-decay-default-result.md)). 730 days and decay off both tied with 365. So 365 was not tuned: it is the tested value that tied with the others, and on that test decay made no measurable difference to recall. `hippo sleep` moves memories still on the old 7-day base to the new one, once, and records each move in the audit log. Set `defaultHalfLifeDays` in `.hippo/config.json` to choose your own.
 
 ```bash
 hippo remember "always check cache contents after refresh"
@@ -455,6 +455,8 @@ hippo sleep
 
 Three or more related episodes get merged into a single semantic memory. The originals decay. The pattern survives.
 
+Sleep keeps the store tidy. It has not been shown to improve recall. In round 2 of the mechanism audit, a slept LongMemEval store scored 3.6 points lower at hit@5 than the same store never slept, and no scorer showed sleep helping ([PR #232](https://github.com/kitfunso/hippo-memory/pull/232)).
+
 **Experimental: learned memory-value rescue (opt-in, default off).** With
 `{"memoryValue":{"enabled":true}}` in `.hippo/config.json`, sleep consults a learned
 linear memory-value scorer before deleting a decayed memory: a memory that scores in the
@@ -516,6 +518,8 @@ hippo outcome --bad
 ```
 
 Outcomes are cumulative. A memory with 5 positive outcomes and 0 negative has a reward factor of ~1.42, making its effective half-life 42% longer. A memory with 0 positive and 3 negative has a factor of ~0.63, decaying nearly twice as fast. Mixed outcomes converge toward neutral (1.0).
+
+This is the mechanism with the clearest measured win. On the synthetic E1 test, plain BM25 plus the outcome nudge cut how often a marked-bad memory stayed in the top five from 71.9% to 0.0% ([mechanism audit, round 2](https://github.com/kitfunso/hippo-memory/pull/232)). Every mark in E1 is correct; real marks are noisier, since `--bad` marks the whole recall batch.
 
 ---
 
@@ -793,11 +797,11 @@ Full integration details: [integrations/](integrations/)
 
 ## The Neuroscience
 
-Hippo is modeled on seven properties of the human hippocampus. Not metaphorically. Literally.
+Hippo's design borrows seven properties of the human hippocampus. This section is design inspiration, not measured benefit. For what we measured, see the Receipts and [PR #232](https://github.com/kitfunso/hippo-memory/pull/232).
 
 **Why two stores?** The brain uses a fast hippocampal buffer + a slow neocortical store (Complementary Learning Systems theory, McClelland et al. 1995). If the neocortex learned fast, new information would overwrite old knowledge. The buffer absorbs new episodes; the neocortex extracts patterns over time.
 
-**Why does decay help?** New neurons born in the dentate gyrus actively disrupt old memory traces (Frankland et al. 2013). This is adaptive: it reduces interference from outdated information. Forgetting isn't failure. It's maintenance.
+**Why decay at all?** In the brain, new neurons born in the dentate gyrus disrupt old memory traces (Frankland et al. 2013), which may reduce interference from outdated information. That is why hippo has decay. In hippo's own tests, age-based decay made no measurable difference to recall: at the 365-day default it tied with decay switched off. The forgetting that measured helpful is by evidence: a bad outcome mark, or a newer fact superseding an old one.
 
 **Why do errors stick?** The amygdala modulates hippocampal consolidation based on emotional significance. Fear and error signals boost encoding. Your first production incident is burned into memory. Your 200th uneventful deploy isn't.
 
@@ -848,7 +852,7 @@ The AI-memory category matured fast in 2026. Hippo's specific take — bio-decay
 
 \*\* Different metric: Memoria's 88.78% and EverMind's 83% are reported as overall accuracy with a reader LLM, not retrieval R@5. Higher denominator + LLM helps. Not directly comparable to retrieval-only R@5 numbers above.
 
-Different tools answer different questions. Mem0 and Basic Memory implement "save everything, search later." MemPalace implements "store everything, organize spatially for retrieval." gbrain, Zep, and Cognee implement "extract typed entities and relationships into a knowledge graph." Letta implements "the agent edits its own memory blocks." Memoria implements "Git-style version control over the memory state itself." EverMind implements "self-evolving Skill Memory + multi-modal retrieval over hierarchical scopes." Hippo implements "forget by default, earn persistence through use." These are complementary takes, not a single-axis ranking: bio-lifecycle (Hippo) + GraphRAG (gbrain/Cognee/Zep) + agent-self-edit (Letta) + memory-VCS (Memoria) + skill-distillation (EverMind) cover different parts of the same problem.
+Different tools answer different questions. Mem0 and Basic Memory implement "save everything, search later." MemPalace implements "store everything, organize spatially for retrieval." gbrain, Zep, and Cognee implement "extract typed entities and relationships into a knowledge graph." Letta implements "the agent edits its own memory blocks." Memoria implements "Git-style version control over the memory state itself." EverMind implements "self-evolving Skill Memory + multi-modal retrieval over hierarchical scopes." Hippo implements "learn what is wrong and stop repeating it." These are complementary takes, not a single-axis ranking: bio-lifecycle (Hippo) + GraphRAG (gbrain/Cognee/Zep) + agent-self-edit (Letta) + memory-VCS (Memoria) + skill-distillation (EverMind) cover different parts of the same problem.
 
 ---
 
@@ -869,7 +873,7 @@ Three benchmarks testing three different things. Full details in [`benchmarks/`]
 
 gbrain reports 97.6 R@5 on this split with a paid frontier embedder. Hippo reaches 98.0 with a free local embedder, a tie at 500 questions. These numbers come from the scripts in `benchmarks/longmemeval/`, which index every turn and fuse BM25 with dense ranks; they are not `hippo recall`, and a default install has no embedder. Re-measure: [`docs/evals/2026-09-23-longmemeval-reproduction.md`](docs/evals/2026-09-23-longmemeval-reproduction.md). Retrieval recall on the standard task is effectively saturated, so the embedder is a swappable commodity, not the differentiator. Method and the global-pool comparison: [`docs/evals/2026-06-09-longmemeval-per-haystack-dual.md`](docs/evals/2026-06-09-longmemeval-per-haystack-dual.md).
 
-The differentiator is what happens as one store grows. Point retrieval at a single unified memory of tens of thousands of sessions, with no pre-scoped haystack, and recall stops being free (MiniLM 47, voyage 56 on the 19,195-session `_s` store, June 2026). That is where memory lifecycle (decay, consolidation, supersession) earns its keep, and it is what hippo measures next (see ROADMAP Part III).
+The differentiator is what happens as one store grows. Point retrieval at a single unified memory of tens of thousands of sessions, with no pre-scoped haystack, and recall stops being free (MiniLM 47, voyage 56 on the 19,195-session `_s` store, June 2026). That is where we expect the memory lifecycle to matter, and it is what hippo measures next (see ROADMAP Part III). It is not shown yet: in our tests so far, decay made no measurable difference and sleep cost recall. Outcome marks and supersession are what measured helpful.
 
 **Hippo v0.28.0 oracle-split results (hybrid BM25 + cosine, full 500 questions, pooled retrieval):**
 

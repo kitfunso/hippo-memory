@@ -143,7 +143,7 @@ const jsonLd = {
           ))}
         </div>
         <p class="mt-5 max-w-2xl text-sm leading-relaxed text-zinc-400">
-          A stronger embedder helps here (47 to 56) but neither is usable on its own: the answer drowns among thousands of distractors. This is where the memory lifecycle earns its keep, by decaying, consolidating, and superseding so the effective store stays small. Measuring that is the next benchmark on the roadmap.
+          A stronger embedder helps here (47 to 56) but neither is usable on its own: the answer drowns among thousands of distractors. This is where we expect the memory lifecycle to matter, and measuring it is the next benchmark on the roadmap. It is not shown yet: on our tests so far, decay made no measurable difference and sleep cost recall.
         </p>
       </div>
     </section>

@@ -6,10 +6,10 @@ import { site } from '../../content/site';
 
 const title = 'hippo vs mem0: AI agent memory compared';
 const description =
-  'hippo and mem0 are both open-source memory for AI agents, with different philosophies. mem0 saves and searches; hippo runs a memory lifecycle that forgets by default and earns persistence through use. Feature comparison and when to pick which.';
+  'hippo and mem0 are both open-source memory for AI agents, with different philosophies. mem0 saves and searches; hippo learns what is wrong and stops repeating it. Feature comparison and when to pick which.';
 
 const rows = [
-  { feature: 'Core model', hippo: 'Memory lifecycle: forget by default', mem0: 'Save everything, search later' },
+  { feature: 'Core model', hippo: 'Memory lifecycle: learn what is wrong', mem0: 'Save everything, search later' },
   { feature: 'Decay by default', hippo: 'Yes', mem0: 'No' },
   { feature: 'Retrieval strengthening', hippo: 'Yes', mem0: 'No' },
   { feature: 'Reward-proportional decay', hippo: 'Yes', mem0: 'No' },
@@ -45,7 +45,7 @@ const faqJsonLd = {
       name: 'When should I choose hippo over mem0?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'Choose hippo when you want the store to stay small and current over time (decay, consolidation, supersession), local-first storage with no cloud or account, or zero runtime dependencies. mem0 is a fit when you mainly want to save and search facts. The two are not mutually exclusive philosophies, but hippo optimizes what to forget, not just what to retrieve.',
+        text: 'Choose hippo when you want memory that stays current (outcome marks, supersession), local-first storage with no cloud or account, or zero runtime dependencies. mem0 is a fit when you mainly want to save and search facts. The two are not mutually exclusive philosophies, but hippo also learns which memories turned out wrong.',
       },
     },
   ],
@@ -62,7 +62,7 @@ const faqJsonLd = {
           <span class="text-gradient">hippo</span> <span class="text-zinc-500">vs</span> mem0
         </h1>
         <p class="mt-5 max-w-2xl leading-relaxed text-zinc-400">
-          Both are open-source memory for AI agents. The difference is philosophy. mem0 saves and searches: it extracts facts and retrieves them by similarity. hippo runs a memory lifecycle: it forgets by default and earns persistence through use, so the store stays small and current instead of growing without bound.
+          Both are open-source memory for AI agents. The difference is philosophy. mem0 saves and searches: it extracts facts and retrieves them by similarity. hippo runs a memory lifecycle: a memory marked wrong stops coming back, and a newer fact replaces the old one, so what your agent recalls stays current.
         </p>
         <!-- Receipts strip: the one number this page owes its reader. -->
         <div class="mt-10">
@@ -124,7 +124,7 @@ const faqJsonLd = {
         <div class="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div class="glass rounded-2xl p-6">
             <span class="text-sm font-medium text-zinc-100">Choose hippo</span>
-            <span class="mt-2 block text-sm leading-relaxed text-zinc-400">You want the store to stay small and current over time, local-first with no cloud or account, zero runtime dependencies, and a memory that forgets the noise and keeps what gets used.</span>
+            <span class="mt-2 block text-sm leading-relaxed text-zinc-400">You want memory that stays current over time, local-first with no cloud or account, zero runtime dependencies, and a memory that drops what turned out wrong and keeps what gets used.</span>
           </div>
           <div class="glass rounded-2xl p-6">
             <span class="text-sm font-medium text-zinc-100">Choose mem0</span>

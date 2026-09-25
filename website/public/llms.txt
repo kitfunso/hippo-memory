@@ -1,6 +1,6 @@
 # hippo
 
-> A memory layer for AI agents, modeled on the hippocampus. hippo forgets by default and earns persistence through use: memories decay on a half-life, retrieval strengthens them, errors stick, and a sleep cycle consolidates repeats into patterns. Open source (MIT), zero runtime dependencies, runs locally.
+> A memory layer for AI agents that learns what is wrong and stops repeating it: a memory marked bad drops out of recall, a newer fact supersedes the old one, and retrieval strengthens what gets used. Memories also decay on a half-life (365 days, not tuned) and a sleep cycle consolidates repeats; neither has been shown to improve recall. Open source (MIT), zero runtime dependencies, runs locally.
 
 hippo (npm package `hippo-memory`) is an open-source memory system for AI agents and LLM applications. Unlike "save everything and search later" stores, hippo models the full memory lifecycle: decay by default, retrieval strengthening, outcome-weighted half-lives, error tagging, conflict detection, supersession, and sleep consolidation. It is local-first (SQLite source of truth with git-friendly markdown mirrors, no outbound HTTP unless you opt in to a network reranker or an API embedder), framework-agnostic, and ships an MCP server plus auto-installed hooks for Claude Code, Codex, Cursor, OpenClaw, and OpenCode.
 

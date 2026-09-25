@@ -1799,6 +1799,8 @@ A lesson that names a file, symbol or command is marked stale when that file cha
 
 It runs with the in-window dating lane as well. It also includes a **replay of real recall queries** from the founder's store: LC1 retrieval traces with their later outcomes, scored for each arm. This is the only test that reflects actual use, and it runs on the founder's machine.
 
-#### FE4. Messaging [now]
+#### FE4. Messaging [done 2026-09-25]
 Pitch "learns what is wrong and stops repeating it", not "decay by default". "Good memory is knowing what to forget" stays only where forgetting means wrong, superseded or unused, never age.
+
+Done in the README and the website (`website/`): the pitch leads with outcome marks and supersession, the claims that decay or sleep improve recall are gone, the 365-day half-life is labelled as not tuned, and the hippocampus framing is labelled as design inspiration.
 
