@@ -16,7 +16,7 @@
  * an ESM `import` can resolve cleanly, and a hardcoded constant survives
  * any packager that drops .json files.
  */
-export const PACKAGE_VERSION = '1.45.0';
+export const PACKAGE_VERSION = '1.46.0';
 
 /** Compares plain x.y.z versions, positive if a > b; tags throw so the rollback guard never misfires silently. */
 export function compareSemver(a: string, b: string): number {

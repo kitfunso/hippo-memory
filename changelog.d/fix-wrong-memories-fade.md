@@ -1,3 +1,0 @@
-### Fixed
-
-- **A memory marked wrong more often than right now fades, even when pinned, error-tagged or recalled often.** Strength halves for each bad mark past the good ones (up to three halvings), and recall stops adding half-life to it or resetting its decay clock. Before, pinning returned full strength, and heavy recall kept adding half-life, so a wrong memory shown hundreds of times never faded. On a copy of a real 2,206-memory store, the 13 memories marked wrong drop (one recalled 633 times goes from 1.00 to 0.12), and no other memory changes. A good mark cancels a bad one. Lessons tagged `error` keep their double half-life until someone marks them wrong.
