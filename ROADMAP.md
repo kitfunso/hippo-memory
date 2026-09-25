@@ -1427,6 +1427,18 @@ Part III found merge summaries are concatenations and DAG slice 1 cost 6.3pp. An
 #### TE10. VibeMemBench [next when released; plan fixed 2026-09-24]
 VibeMemBench (arXiv 2609.23570, Alibaba DAMO, September 2026) is the first public benchmark that toggles memory on real repository coding tasks with executable tests: 111 SWE-rebench V2 targets, 3,634 history trajectories, five solvers, 4 seeds. Mem0, SimpleMem, MemoryOS and A-MEM landed at or below memory-off in 11 of 12 pairings. Its code and data are not released yet (the DAMO-ConvAI folder says "Coming"). The protocol for hippo is fixed in `docs/evals/2026-09-24-vibemembench-plan.md` before seeing the data: a like-for-like top-1 arm, a separate hippo-native context arm, an outcome-feedback-off control, and publication whatever the result. Before release: trajectory ingestion (a trajectory becomes hippo memories with its outcome, never the gold patch) and a TE5 run on a few SWE-rebench V2 repositories as an early read.
 
+#### TE11. DolphinBench [next; released September 2026; protocol registered before any paid call]
+DolphinBench (arXiv 2609.24971, Mem0, September 2026; site dolphinbench.ai; harness `mem0ai/dolphinbench`, Apache-2.0) grades the action an agent takes after a long history, not a quiz answer. Three knowledge-work personas each carry about 500k tokens of user messages dated January 2023 to December 2027, and its 600 tasks (200 per persona) turn on rules stated once and buried among thousands of unrelated messages. A task passes only when the tool called, its target and its content are all right, against mock email, Slack, Discord, calendar and CRM apps served over MCP; each task was checked to pass with the history and fail without it. Every run reports total cost (ingestion plus tests) and latency beside accuracy, which is this track's rule 1. It is the first public benchmark that tests hippo's automatic capture as well as its recall: ingestion sends every history message through the agent and its normal memory hooks, one fresh conversation each, so a rule the hooks fail to store (the open "we use pnpm, never npm" miss in Part X's capture findings) cannot be recalled later.
+- **Arms:** the paper ran Claude Code with Sonnet on Built-In, Mem0 and Honcho. hippo runs on that harness and model through its Claude Code hooks, beside a Built-In arm we run ourselves, a BM25-only arm over the same captured memories, and a decay-off arm as a sensitivity check.
+- **Verify before reading hippo:** our Built-In arm must reproduce the paper's Built-In row within its noise. Until it does, a hippo delta may only be a setup difference.
+- **Read-only tests:** tests run with memory writes and deletion blocked, capture included, and the harness's `verify_checkpoint` rejects a store that changed after `freeze`. hippo's recall writes retrieval counts back (`markRetrieved`, `src/search.ts:1257`), so the test arm needs a recall path that writes nothing, with the capture hooks off.
+- **Dated clock:** decay runs from `last_retrieved` against `evalNow()` (`src/memory.ts:340-376`). Ingestion takes hours, so unless `HIPPO_FAKE_NOW` follows each message's date, five years of history look a day old and decay never acts. With it, a plain memory stated three years before a test and never recalled keeps about one eighth of its strength at the 365-day default. Whether that buries the rule is FE3's question on a public benchmark; the decay-off arm answers it.
+- **Cost gate:** ingestion is one paid agent session per history message (up to 5,128 per persona), run on the founder's machine. One persona, Built-In and hippo, prices the full run first.
+- **Scope of any claim:** tests block writes and send no feedback, so outcome marks, hippo's clearest measured win, never act. A result speaks to capture and recall for action, at the cost and latency measured.
+- **Published whatever the result:** the runner's `package` output (`ingestion.json`, `tests.json`) goes to the leaderboard, where it shows as self-submitted and unverified. The site does not say how a run becomes verified; ask Mem0 once the Built-In row reproduces.
+
+**Success:** hippo's accuracy, dollars and latency published against Built-In, Mem0 and Honcho on the same harness and model, paired by task with bootstrap 95% intervals, whatever they say.
+
 ### What not to build
 LLM-in-the-loop compression at injection time (adds a model call to every prompt to save tokens on the same prompt); a token saving figure from raw token counts without cache accounting; a claim that hippo beats simpler retrieval without the naive top-k arm (the first registration measures savings against no memory only, and defers naive top-k and dump-all; a claim against them needs a second registration that runs them).
 
@@ -1568,12 +1580,14 @@ Each Part's own "0-3 months" added up to about 16-20 weeks of work against 13 ca
    - EI2 permission-aware recall, with derived-memory negative tests.
    - CD5 poisoning defence with AT3 quarantine.
    - The TE5 scored run, if the pilot's cost per task fits the budget.
+   - TE11 DolphinBench: register the protocol, build the harness adapter (read-only recall, dated clock), then run one persona, Built-In and hippo, to check the Built-In row and price the full run.
    - The E1 paper write-up with the audit's results.
 3. **Weeks 8-13:**
    - The first design partner:
      - EI10's VPC tier and EI11's OAuth and registry entry (CD2), scoped to what that partner needs;
      - the AT4/CD4 review queue's first surface (the first-run approve report);
      - the TE3 LongMemEval run.
+   - The TE11 scored run, if the pilot's cost fits the budget.
 
 **Not in these 90 days:**
 - EI3-EI7, except what a design partner needs;
