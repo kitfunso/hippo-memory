@@ -23,6 +23,17 @@ The record of every block of memory text hippo handed an agent: surface, session
 tokens, and whether it was sent or skipped as unchanged. Counts only, never the text.
 _Avoid_: usage log, telemetry, cost log
 
+**Failure log**:
+Every failed tool call the capture-error hook sees, stored as a memory or not: outcome, session,
+tool, the routine rule that skipped it, and hashes of the error, never its text. Kept 90 days.
+_Avoid_: error log, failure history
+
+**Repeat**:
+A rated failure (stored, duplicate or store-failed, from a session with an id) whose signature
+another session hit first. Repeat-error rate compares repeats per session between a hippo arm and
+a holdout arm; it is never reported as one absolute number.
+_Avoid_: duplicate (that is a lesson hippo already holds), recurrence
+
 ### Work queue
 
 **Card**:

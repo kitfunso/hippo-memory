@@ -78,7 +78,7 @@ describe('migration v27 self-heal — partial-applied v16 state', () => {
       const tables = tableNames(db);
       expect(tables).toContain('api_keys');
       expect(tables).toContain('audit_log');
-      expect(getMeta(db, 'schema_version')).toBe('45');
+      expect(getMeta(db, 'schema_version')).toBe('46');
     } finally {
       closeHippoDb(db);
     }
@@ -142,7 +142,7 @@ describe('migration v27 self-heal — partial-applied v16 state', () => {
       const tables = tableNames(db2);
       expect(tables).toContain('api_keys');
       expect(tables).toContain('audit_log');
-      expect(getMeta(db2, 'schema_version')).toBe('45');
+      expect(getMeta(db2, 'schema_version')).toBe('46');
     } finally {
       closeHippoDb(db2);
     }

@@ -53,6 +53,7 @@ import {
   type ListDormantOpts,
 } from './dormant.js';
 import { recordTokenUse, summarizeTokenUse, type TokenSummary, type TokenSurface } from './token-ledger.js';
+import { summarizeFailures, type FailureSummary } from './failure-log.js';
 import { formatHandoffEvidenceLine, type SessionHandoff } from './handoff.js';
 import {
   createMemory,
@@ -190,6 +191,7 @@ import { isPrivateScope, passesScopeFilterForRecall, assertScopeRequestAllowed }
 export { isPrivateScope, passesScopeFilterForRecall };
 export { passesCliRecallScopeFilter, ScopeForbiddenError } from './recall-scope.js';
 export type { TokenSummary, TokenSurface, TokenSurfaceSummary } from './token-ledger.js';
+export type { FailureSummary } from './failure-log.js';
 
 // v39: classifyOriginProject lives in project-identity.ts (leaf) so
 // shared.ts can use it without an api.ts import cycle. Re-exported here for
@@ -2966,14 +2968,27 @@ export function recordTokens(
  * saved, and mean tokens per session.
  */
 export function tokenSummary(ctx: Context, opts: { days?: number } = {}): TokenSummary {
-  const days = opts.days !== undefined && Number.isFinite(opts.days) && opts.days > 0 ? opts.days : 30;
-  const since = new Date(Date.now() - days * 86_400_000).toISOString();
   const db = openHippoDb(ctx.hippoRoot);
   try {
-    return summarizeTokenUse(db, ctx.tenantId, since);
+    return summarizeTokenUse(db, ctx.tenantId, reportWindowStart(opts.days));
   } finally {
     closeHippoDb(db);
   }
+}
+
+/** Failed tool calls by outcome, and repeats across sessions, over the last `days` days (default 30); ROADMAP CD13. */
+export function failureSummary(ctx: Context, opts: { days?: number } = {}): FailureSummary {
+  const db = openHippoDb(ctx.hippoRoot);
+  try {
+    return summarizeFailures(db, ctx.tenantId, reportWindowStart(opts.days));
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+function reportWindowStart(days: number | undefined): string {
+  const span = days !== undefined && Number.isFinite(days) && days > 0 ? days : 30;
+  return new Date(Date.now() - span * 86_400_000).toISOString();
 }
 
 /**

@@ -10,6 +10,7 @@ import { execFileSync } from 'node:child_process';
 import { initStore, writeEntry } from '../src/store.js';
 import { createMemory } from '../src/memory.js';
 import { runDoctor, formatDoctor } from '../src/doctor.js';
+import { openHippoDb, closeHippoDb } from '../src/db.js';
 
 const HIPPO_JS = resolve(__dirname, '..', 'bin', 'hippo.js');
 const dirs: string[] = [];
@@ -55,8 +56,18 @@ describe('hippo doctor', () => {
     const r = runDoctor({ cwd, home: cwd, version: 'test' });
     expect(r.ok).toBe(true);
     const status = Object.fromEntries(r.checks.map((c) => [c.id, c.status]));
-    expect(status).toMatchObject({ node: 'pass', store: 'pass', schema: 'pass', memories: 'info', 'claude-code': 'pass', sleep: 'warn' });
+    expect(status).toMatchObject({ node: 'pass', store: 'pass', schema: 'pass', memories: 'info', failures: 'info', 'claude-code': 'pass', sleep: 'warn' });
     expect(formatDoctor(r)).toContain('fix: hippo sleep');
+  });
+
+  it('warns when the failure log table is gone, because the capture-error hook then logs nothing', () => {
+    const cwd = tmp('doctor-failures-');
+    process.env.HIPPO_HOME = join(cwd, 'global');
+    initStore(join(cwd, '.hippo'));
+    const db = openHippoDb(join(cwd, '.hippo'));
+    db.exec('DROP TABLE failure_log');
+    closeHippoDb(db);
+    expect(runDoctor({ cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'failures')).toMatchObject({ status: 'warn' });
   });
 
   it('flags old Node, missing Claude Code hooks, and accepts the plugin instead of hooks', () => {

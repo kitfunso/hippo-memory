@@ -28,7 +28,7 @@ const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: new (path: string) => DatabaseSyncLike;
 };
 
-const CURRENT_SCHEMA_VERSION = 45;
+const CURRENT_SCHEMA_VERSION = 46;
 
 /**
  * Context passed to migrations that need to know WHERE the store lives.
@@ -2478,6 +2478,30 @@ const MIGRATIONS: Migration[] = [
           ON token_ledger(tenant_id, session_id, surface, id DESC);
         CREATE INDEX IF NOT EXISTS idx_token_ledger_ts
           ON token_ledger(ts);
+      `);
+    },
+  },
+  {
+    version: 46,
+    up: (db) => {
+      // CD13 failure log (src/failure-log.ts): hashes only, since failure text can carry paths and secrets.
+      // Additive only: no min_compatible_binary bump.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS failure_log (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          ts          TEXT NOT NULL,
+          tenant_id   TEXT NOT NULL DEFAULT 'default',
+          session_id  TEXT,
+          tool        TEXT,
+          outcome     TEXT NOT NULL,
+          skip_rule   TEXT,
+          sig_hash    TEXT,
+          detail_hash TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_failure_log_tenant
+          ON failure_log(tenant_id, id);
+        CREATE INDEX IF NOT EXISTS idx_failure_log_ts
+          ON failure_log(ts);
       `);
     },
   },

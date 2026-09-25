@@ -144,6 +144,7 @@ import { runDoctor, formatDoctor } from './doctor.js';
 import { captureToolFailure } from './capture-error.js';
 import type { JsonValue } from './working-memory.js';
 import { blockHash, hookPayloadSessionId, lastSentState, recordTokenUse, shouldSkipUnchanged, type TokenSurface } from './token-ledger.js';
+import { FAILURE_LOG_RETENTION_DAYS } from './failure-log.js';
 import { getActiveGoalsWithDb, MAX_FINAL_MULTIPLIER, pushGoal, getActiveGoals, completeGoal, suspendGoal, resumeGoal, applyGoalStackBoost } from './goals.js';
 import type { RetrievalPolicy, PolicyType, Goal, GoalRow } from './goals.js';
 import { rowToGoal } from './goals.js';
@@ -4353,6 +4354,52 @@ function cmdTokens(
   console.log(`  Total sent: ${summary.totalTokens} tokens. Saved by skipping unchanged blocks: ${summary.totalTokensAvoided}.`);
   if (summary.meanTokensPerSession > 0) {
     console.log(`  Mean per session (rows with a session id): ${summary.meanTokensPerSession} tokens.`);
+  }
+}
+
+/** `hippo failures [--days <n>] [--json] [--global]`: failed tool calls by outcome, and repeats across sessions (CD13). */
+function cmdFailures(
+  hippoRoot: string,
+  flags: Record<string, string | boolean | string[]>,
+): void {
+  // The store the capture-error hook writes to; a report never creates one.
+  const root = flags['global'] ? getGlobalRoot() : hookStoreRoot(hippoRoot);
+  requireInit(root);
+  const ctx: api.Context = {
+    hippoRoot: root,
+    tenantId: resolveTenantId({}),
+    actor: api.adminActor('cli'),
+  };
+  const days = parseCountFlag(flags['days']);
+  const summary = api.failureSummary(ctx, { days: days > 0 ? days : undefined });
+  if (flags['json']) {
+    console.log(JSON.stringify(summary, null, 2));
+    return;
+  }
+  const windowDays = days > 0 ? days : 30;
+  const kept = windowDays > FAILURE_LOG_RETENTION_DAYS ? ` (rows are kept ${FAILURE_LOG_RETENTION_DAYS} days)` : '';
+  if (summary.total === 0) {
+    console.log(`No failed tool calls recorded in the last ${windowDays} days${kept}.`);
+    return;
+  }
+  const o = summary.outcomes;
+  const errors = o.stored + o.duplicate + o['store-failed'];
+  const unsaved = o['store-failed'] > 0 ? `, ${o['store-failed']} could not be saved` : '';
+  const rows: ReadonlyArray<readonly [string, number, string]> = [
+    ['errors', errors, `(${o.stored} new, ${o.duplicate} already in memory${unsaved})`],
+    ['routine', o['skipped-routine'], ''],
+    ['interrupted', o['skipped-interrupt'], ''],
+    ['unreadable', o['skipped-invalid'], ''],
+  ];
+  console.log(`Failed tool calls seen by the capture-error hook, last ${windowDays} days${kept}\n`);
+  for (const [label, count, note] of rows) {
+    console.log(`  ${label.padEnd(13)}${String(count).padStart(6)}  ${note}`.trimEnd());
+  }
+  // Counts, not a rate: a share means little without a holdout arm to compare against (CD11).
+  if (summary.rated > 0) {
+    const noSession = errors - summary.rated;
+    const unrated = noSession > 0 ? ` ${noSession} more had no session id.` : '';
+    console.log(`\n  Repeats: ${summary.repeats} of ${summary.rated} errors first happened in another session.${unrated}`);
   }
 }
 
@@ -9356,6 +9403,11 @@ Commands:
     --days <n>             Window in days (default: 30)
     --json                 Output as JSON
     --global               Operate on the global store
+  failures                 Failed tool calls capture-error saw, by outcome, and how
+                           many errors first happened in another session
+    --days <n>             Window in days (default: 30)
+    --json                 Output as JSON
+    --global               Operate on the global store
   snapshot <sub>           Persist or inspect the current active task
     snapshot save          Save active task state
       --task <task>
@@ -10119,6 +10171,10 @@ async function main(
 
     case 'tokens':
       cmdTokens(hippoRoot, flags);
+      break;
+
+    case 'failures':
+      cmdFailures(hippoRoot, flags);
       break;
 
     case 'doctor': {

@@ -164,14 +164,36 @@ describe('transcript mining', () => {
 
 describe('failed-tool capture', () => {
   it('skips routine failures and keeps real errors', () => {
-    expect(lessonFromFailure({ tool_name: 'Bash', error: 'Interrupted by user', is_interrupt: true })).toEqual({ skip: 'skipped-interrupt' });
-    expect(lessonFromFailure({ tool_name: 'Edit', error: "The user doesn't want to proceed with this tool use." })).toEqual({ skip: 'skipped-routine' });
-    expect(lessonFromFailure({ tool_name: 'Grep', error: 'No matches found for pattern foo' })).toEqual({ skip: 'skipped-routine' });
-    expect(lessonFromFailure({ tool_name: 'Bash', tool_input: { command: 'grep -r TODO src' }, error: 'Exit code 1 (no output)' })).toEqual({ skip: 'skipped-routine' });
-    expect(lessonFromFailure('not an object')).toEqual({ skip: 'skipped-invalid' });
-    expect(lessonFromFailure({ tool_name: 'Bash', error: 'short' })).toEqual({ skip: 'skipped-invalid' });
+    const unread = (skip: string) => ({ skip, text: null, detail: null });
+    expect(lessonFromFailure({ tool_name: 'Bash', error: 'Interrupted by user', is_interrupt: true })).toEqual(unread('skipped-interrupt'));
+    const declined = "Edit: The user doesn't want to proceed with this tool use.";
+    expect(lessonFromFailure({ tool_name: 'Edit', error: "The user doesn't want to proceed with this tool use." }))
+      .toEqual({ skip: 'skipped-routine', rule: 'declined', text: declined, detail: declined });
+    expect(lessonFromFailure({ tool_name: 'Grep', error: 'No matches found for pattern foo' }))
+      .toMatchObject({ skip: 'skipped-routine', rule: 'no-match', text: 'Grep: No matches found for pattern foo' });
+    expect(lessonFromFailure({ tool_name: 'Glob', error: 'Invalid glob pattern: src/[abc' })).toMatchObject({ rule: 'search-tool' });
+    expect(lessonFromFailure({ tool_name: 'Bash', tool_input: { command: 'grep -r TODO src' }, error: 'Exit code 1 (no output)' }))
+      .toEqual({ skip: 'skipped-routine', rule: 'quiet-exit', text: 'Bash: Exit code 1 (no output)', detail: 'Bash grep -r: Exit code 1 (no output)' });
+    expect(lessonFromFailure('not an object')).toEqual(unread('skipped-invalid'));
+    expect(lessonFromFailure({ tool_name: 'Bash', error: 'short' })).toEqual(unread('skipped-invalid'));
     const real = lessonFromFailure({ tool_name: 'Bash', tool_input: { command: 'npm test' }, error: "Exit code 1\nError: Cannot find module 'express'" });
-    expect(real).toEqual({ text: "Bash: Exit code 1 Error: Cannot find module 'express'" });
+    expect(real).toEqual({
+      text: "Bash: Exit code 1 Error: Cannot find module 'express'",
+      detail: "Bash npm test: Exit code 1 Error: Cannot find module 'express'",
+    });
+  });
+
+  it('reads a command past any leading cd, and tells OS permission errors from declines', () => {
+    const bash = (command: string, error: string) => lessonFromFailure({ tool_name: 'Bash', tool_input: { command }, error });
+    const broke = 'Exit code 1 Error: Cannot find module express';
+    expect(bash('cd /repo && npm test', broke)).toMatchObject({ detail: `Bash npm test: ${broke}` });
+    expect(bash('cd /repo; cd sub && npm run build', broke)).toMatchObject({ detail: `Bash npm run: ${broke}` });
+    expect(bash('cd /missing', 'cd: /missing: No such file or directory'))
+      .toEqual({ text: 'Bash: cd: /missing: No such file or directory', detail: 'Bash cd /missing: cd: /missing: No such file or directory' });
+    expect(bash('cd /repo && grep -r TODO src', 'Exit code 1 (no output)')).toMatchObject({ skip: 'skipped-routine', rule: 'quiet-exit' });
+    expect(bash('git push', 'git@github.com: Permission denied (publickey).')).toMatchObject({ skip: 'skipped-routine', rule: 'os-permission' });
+    expect(lessonFromFailure({ tool_name: 'Read', error: "EACCES: permission denied, open '/srv/app/config.json'" })).toMatchObject({ rule: 'os-permission' });
+    expect(lessonFromFailure({ tool_name: 'Bash', error: 'Permission to use Bash has been denied.' })).toMatchObject({ rule: 'declined' });
   });
 
   it('stores an unverified error memory once, however often it repeats', () => {

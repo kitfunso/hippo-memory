@@ -1500,8 +1500,10 @@ It reports, per arm with intervals:
 - guardrails;
 - hippo's own cost.
 
-#### CD13. Failure-signature log [planned, with CD11]
+#### CD13. Failure-signature log [shipped, schema v46]
 Every failure signature seen is logged with its session, including skipped and duplicate ones, so repeat-error rate can be computed per arm.
+
+**Status:** the `failure_log` table records every failure the capture-error hook sees: outcome, session, tool, the routine rule that skipped it, and two hashes of the error, never its text. `failuresBySession` (`src/failure-log.ts`) is CD12's per-arm input. `hippo failures` prints counts, not a rate, until CD11 gives it a holdout arm. Only Claude Code feeds it. The definition, and its known biases, are in `docs/plans/2026-09-24-buyer-kpis.md`.
 
 #### CD8. Reliability of the central server [merged into EI10]
 Backup and restore, high availability, disaster recovery, upgrade and schema-migration runbooks, and monitoring for the company-hosted server.
@@ -1761,7 +1763,7 @@ Existing items are named by their IDs; new ones are EV1 to EV5 below.
 - **Founder-track work** (IP assignment, contracts, insurance, Cyber Essentials) runs in parallel and is not engineering time.
 
 ### What the 90-day queue gains
-- **Weeks 4-8:** CD13's failure-signature log, since it is small and starts collecting the baseline early.
+- **Weeks 4-8:** CD13's failure-signature log, since it is small and starts collecting the baseline early. Shipped (schema v46).
 - **Weeks 8-13:**
   - CD11 and CD12, scoped to the first design partner's agent;
   - EV1 and EV2, so the pilot runs the edition that will be sold.

@@ -630,6 +630,7 @@ hippo watch "npm run build"
 | `hippo dormant forget <id>` | Delete a dormant memory permanently |
 | `hippo doctor [--json]` | Check the install: Node, store, schema, sleep, agent hooks; each problem names its fix |
 | `hippo tokens [--days n]` | Estimated tokens of memory text handed to agents, per surface, and what skipping unchanged hook blocks saved |
+| `hippo failures [--days n]` | Failed tool calls the capture-error hook saw, by outcome, and how many errors first happened in another session |
 | `hippo embed` | Embed all memories for semantic search |
 | `hippo embed --status` | Show embedding coverage |
 | `hippo watch "<command>"` | Run command, auto-learn from failures |
@@ -725,7 +726,7 @@ For Claude Code, it also adds:
 - a `PreCompact` hook that runs `hippo pre-compact` before the transcript gets summarized. It saves a working-state snapshot (task/summary/next step) and extracts durable memories from the tail, so mid-session compaction can't drop them.
 - a second `SessionStart` hook (matcher `compact`) that runs `hippo compact-resume`, printing that snapshot plus the recent session trail back into context right after compaction.
 - a `PostCompact` hook that runs `hippo post-compact`, which tells you what was saved ("Hippo saved your task snapshot and 2 new memories before compacting"). It prints nothing when nothing was saved.
-- a `PostToolUseFailure` hook that runs `hippo capture-error`, which stores a failed tool call as an error memory. It skips interrupts, declined permissions and searches that found nothing, and stores a repeated failure once.
+- a `PostToolUseFailure` hook that runs `hippo capture-error`, which stores a failed tool call as an error memory. It skips interrupts, declined permissions and searches that found nothing, and stores a repeated failure once. It also logs every failure, stored or not, for `hippo failures`: the session, the tool and hashes of the error, never its text. A hash is not anonymous, since anyone who guesses an error's text can check it against the hash. The log keeps 90 days.
 
 To remove: `hippo hook uninstall claude-code`
 

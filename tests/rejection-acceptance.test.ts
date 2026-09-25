@@ -261,7 +261,7 @@ describe('AT1 case 5: migration v41 idempotence', () => {
 
       const db1 = openHippoDb(home);
       try {
-        expect(getSchemaVersion(db1)).toBe(45);
+        expect(getSchemaVersion(db1)).toBe(46);
         insertRejectedValue(db1, {
           tenantId: 'default',
           digest,
@@ -279,7 +279,7 @@ describe('AT1 case 5: migration v41 idempotence', () => {
       // skipped — a no-op that must not disturb existing data.
       const db2 = openHippoDb(home);
       try {
-        expect(getSchemaVersion(db2)).toBe(45);
+        expect(getSchemaVersion(db2)).toBe(46);
         const row = findRejectedValue(db2, 'default', digest);
         expect(row).not.toBeNull();
         expect(row!.reason).toBe('idempotence check');
@@ -299,7 +299,7 @@ describe('AT1 case 5: migration v41 idempotence', () => {
       let minCompatBefore: string | undefined;
       const db1 = openHippoDb(home);
       try {
-        expect(getSchemaVersion(db1)).toBe(45);
+        expect(getSchemaVersion(db1)).toBe(46);
         // SAFETY: row's shape matches the single `value` column named in
         // the SELECT above.
         minCompatBefore = (
@@ -319,7 +319,7 @@ describe('AT1 case 5: migration v41 idempotence', () => {
 
       const db2 = openHippoDb(home); // re-open re-runs runMigrations
       try {
-        expect(getSchemaVersion(db2)).toBe(45);
+        expect(getSchemaVersion(db2)).toBe(46);
         expect(() =>
           insertRejectedValue(db2, {
             tenantId: 'default',

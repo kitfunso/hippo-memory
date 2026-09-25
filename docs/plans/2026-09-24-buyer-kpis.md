@@ -35,7 +35,10 @@ Four tiers, in the order a buyer cares about them. Every KPI is reported for hip
 - **Turns and active time per session.** A secondary signal for "less wandering".
 
 **Tier 2: what hippo is for.** Attributable to memory by construction.
-- **Repeat-error rate.** The share of failed tool calls whose failure signature (`failureSignature`, `src/capture-error.ts`) was already seen in an earlier session. This is the most direct measure of "your agents stop repeating mistakes". It needs every signature logged, not only the ones stored.
+- **Repeat-error rate.** How often a session hits a failure whose signature (`failureSignature`, `src/capture-error.ts`) another session hit first. This is the most direct measure of "your agents stop repeating mistakes". It needs every signature logged, not only the ones stored: the CD13 failure log does that (`src/failure-log.ts`).
+  - **Headline: repeats per session, per arm.** The session count comes from the agent's telemetry, because a session with no failures leaves no row in the log. The share of failures that are repeats comes second: hippo can prevent new failures as well as repeats, and then the share can rise while repeats fall.
+  - **What counts.** Stored, duplicate and could-not-be-stored failures. Routine skips are logged with the rule that skipped them, so declines can be rated later, but they are not rated now.
+  - **Known biases.** A session retrying one failure counts each retry, so also count each (session, signature) pair once. The log keeps 90 days, so early failures have a shorter lookback; both arms share that bias.
 - **Re-exploration.** File reads per session in areas the repository has been worked in before. TE8 targets this.
 - **Corrections.** How often a developer restates a rule hippo already holds. This is hard to detect reliably, so it is exploratory only.
 
@@ -86,7 +89,7 @@ At 200 developers and three sessions a day, that is about 12 working days for th
 - **CD12. Agent telemetry join.**
   - Import per-session cost from the agent's own telemetry: Claude Code's OpenTelemetry export or its usage API, keyed by session id, which hippo's ledger already records.
   - `hippo report --pilot` joins the two and computes tiers 1 to 4 per arm, with confidence intervals.
-  - Copilot and Cursor expose less per-session data. Their reports fall back to tiers 2 to 4 plus organisation-level usage.
+  - Copilot and Cursor expose less per-session data. Their reports fall back to tiers 2 to 4 plus organisation-level usage, without repeat-error rate for now: only Claude Code's PostToolUseFailure hook feeds the failure log.
 - **CD13. Failure-signature log.** Record every failure signature seen, with session and time, including skipped and duplicate ones, so repeat-error rate can be computed per arm.
 - **CD7, upgraded.** The monthly value report becomes the pilot report: each KPI per arm, the difference with its interval, and hippo's own cost. It gives no saving figure until the interval excludes zero (non-goal 16).
 

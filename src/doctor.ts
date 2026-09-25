@@ -131,6 +131,14 @@ export function runDoctor(opts: DoctorOpts): DoctorReport {
       } catch {
         checks.push({ id: 'tokens', status: 'info', detail: 'no token ledger yet (created on the next write)' });
       }
+      try {
+        // SAFETY: COUNT aggregate row.
+        const row = db.prepare(`SELECT COUNT(*) AS n FROM failure_log WHERE ts >= ?`).get(since) as { n: number } | undefined;
+        checks.push({ id: 'failures', status: 'info', detail: `${Number(row?.n ?? 0)} failed tool calls logged in 7 days (hippo failures for detail)` });
+      } catch {
+        // Opening the store migrates it, so a missing table was dropped: the hook is logging nothing.
+        checks.push({ id: 'failures', status: 'warn', detail: 'the failure_log table is missing, so failed tool calls are not being logged' });
+      }
     } catch (err) {
       checks.push({ id: 'schema', status: 'fail', detail: `cannot open the database: ${err instanceof Error ? err.message : String(err)}`, fix: 'check file permissions on the .hippo folder' });
     } finally {
