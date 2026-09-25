@@ -13,6 +13,7 @@
  */
 import { createMemory, type MemoryEntry } from './memory.js';
 import { writeEntry, loadAllEntries } from './store.js';
+import { loadConfig } from './config.js';
 import type { JsonValue } from './working-memory.js';
 
 /** Why a failure was not stored, or `stored`. */
@@ -88,6 +89,7 @@ export function captureToolFailure(hippoRoot: string, tenantId: string, payload:
     source: 'tool-failure',
     confidence: 'observed',
     tenantId,
+    baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
   });
   writeEntry(hippoRoot, entry);
   return 'stored';

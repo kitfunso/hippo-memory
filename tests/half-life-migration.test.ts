@@ -83,6 +83,42 @@ describe('default half-life migration', () => {
     }
   });
 
+  it('moves recalled memories with their recall bonus, and logs the old half-life', () => {
+    const recalled = legacy('the billing cron runs at 02:00 UTC');
+    recalled.retrieval_count = 3;
+    recalled.half_life_days = 7 + 2 * 3;
+    const overBonus = legacy('a memory with more half-life than its recalls explain');
+    overBonus.retrieval_count = 1;
+    overBonus.half_life_days = 7 + 2 * 2;
+    const invalidated = legacy('an invalidated memory whose halved value lands on the grid', { tags: ['invalidated'] });
+    const root = legacyStore([recalled, overBonus, invalidated]);
+
+    expect(migrateDefaultHalfLife(root, 365)).toMatchObject({ rescaled: 1, kept: 2 });
+    const hl = byContent(root);
+    expect(hl.get(recalled.content)).toBe(365 + 6);
+    expect(hl.get(overBonus.content)).toBe(11);
+    expect(hl.get(invalidated.content)).toBe(7);
+
+    const db = openHippoDb(root);
+    try {
+      // SAFETY: SELECT of one TEXT column.
+      const row = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'half_life_migrate'`).get() as { metadata_json: string };
+      expect(JSON.parse(row.metadata_json).oldHalfLives).toEqual({ [recalled.id]: 13 });
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
+  it('a dry-run sleep previews decay at the new base', async () => {
+    const old = legacy('the staging deploy needs the VPN to reach the health check');
+    old.created = old.last_retrieved = new Date(Date.now() - 60 * 86_400_000).toISOString();
+    const root = legacyStore([old]);
+    const preview = await consolidate(root, { dryRun: true });
+    const real = await consolidate(root);
+    expect([preview.removed, preview.dormant]).toEqual([real.removed, real.dormant]);
+    expect(real.removed + real.dormant).toBe(0);
+  });
+
   it('can be undone by migrating back', () => {
     const plain = legacy('the staging deploy needs the VPN to reach the health check');
     const root = legacyStore([plain]);

@@ -2281,19 +2281,24 @@ export function loadAllEntries(hippoRoot: string, tenantId?: string): MemoryEntr
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
-    // SAFETY: both branches select exactly MEMORY_SELECT_COLUMNS, matching
-    // MemoryRow's field set.
-    const rows = tenantId !== undefined
-      ? db.prepare(
-          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created ASC, id ASC`,
-        ).all(tenantId) as MemoryRow[]
-      : db.prepare(
-          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`,
-        ).all() as MemoryRow[];
-    return rows.map(rowToEntry);
+    return selectAllEntries(db, tenantId);
   } finally {
     closeHippoDb(db);
   }
+}
+
+/** Every memory row on an open connection, so a caller can read inside its own transaction. */
+export function selectAllEntries(db: DatabaseSyncLike, tenantId?: string): MemoryEntry[] {
+  // SAFETY: both branches select exactly MEMORY_SELECT_COLUMNS, matching
+  // MemoryRow's field set.
+  const rows = tenantId !== undefined
+    ? db.prepare(
+        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created ASC, id ASC`,
+      ).all(tenantId) as MemoryRow[]
+    : db.prepare(
+        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`,
+      ).all() as MemoryRow[];
+  return rows.map(rowToEntry);
 }
 
 // The pins plus the `recentNeeded` newest rows that pass `admit`, for ambient

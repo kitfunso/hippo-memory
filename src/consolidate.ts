@@ -198,6 +198,7 @@ export async function consolidate(
   // with no cross-tenant dedup. The api.sleep audit row tags this with the
   // admin synthetic actor; see api.ts:2050 for the rationale.
   const all = loadAllEntries(hippoRoot);
+  if (dryRun) for (const e of all) e.half_life_days = halfLife.halfLives.get(e.id) ?? e.half_life_days;
   const backingObjects = memoriesBackingObjects(hippoRoot);
   // Retirable: auto-deletable (never pinned, never raw) and not backing a first-class object.
   const retirable = (entry: MemoryEntry): boolean => canAutoDelete(entry) && !backingObjects.has(entry.id);

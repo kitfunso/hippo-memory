@@ -30,6 +30,7 @@ import { defaultPreCompactLogPath } from './hooks.js';
 import { redactSecrets } from './secret-detect.js';
 import { RejectedValueError, checkRejectionGuard } from './rejection.js';
 import { openHippoDb, closeHippoDb } from './db.js';
+import { loadConfig } from './config.js';
 
 // ---------------------------------------------------------------------------
 // Pattern definitions
@@ -524,6 +525,7 @@ function writeExtractedItems(
   let skipped = 0;
   let rejected = 0;
 
+  const baseHalfLifeDays = loadConfig(hippoRoot).defaultHalfLifeDays;
   for (const item of extracted) {
     if (isDuplicate(item.content, existing)) {
       skipped++;
@@ -535,6 +537,7 @@ function writeExtractedItems(
       source: 'capture',
       confidence: 'observed',
       tenantId,
+      baseHalfLifeDays,
     });
     // AT1 (plan §3 containment): a refusal is per-VALUE — one rejected
     // extraction must not abort the rest of this transcript's captures.
