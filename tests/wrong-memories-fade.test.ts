@@ -58,4 +58,14 @@ describe('wrong memories fade', () => {
     expect(w.half_life_days).toBe(wrong.half_life_days);
     expect(w.retrieval_count).toBe(wrong.retrieval_count + 1);
   });
+
+  it('recall does not reset the decay clock of an aged memory marked wrong', () => {
+    const monthAgo = new Date(now.getTime() - 30 * 86_400_000).toISOString();
+    const wrong = marked(fresh({ half_life_days: 30, last_retrieved: monthAgo }), 1);
+    const before = calculateStrength(wrong, now);
+    const [w] = markRetrieved([wrong], now);
+    expect(w.last_retrieved).toBe(monthAgo);
+    expect(calculateStrength(w, now)).toBeCloseTo(before);
+    expect(before).toBeLessThan(0.3);
+  });
 });
