@@ -1,12 +1,6 @@
 # Things to run at home (from the 2026-09-25 session)
 
-The work box merged and tagged 1.47.0: TE11 on the roadmap, and CD13, the failure log behind `hippo failures`. What is left needs you or your machine: the work box has no npm login and no hippo install, the home session's branch exists only at home, and home is the source of truth for claude-config.
-
-## 0. Finish the 1.47.0 publish, if it is still open
-`npm view hippo-memory@1.47.0 version` prints `1.47.0` once it is out; if it does, skip this section.
-- [ ] npmjs.com, hippo-memory, Settings, Trusted publishing: check the entry is on the hippo-memory package, reads `kitfunso` / `hippo-memory` / `npm-publish.yml` with no environment, and has "Allow npm publish" ticked. The entry went in on 2026-09-25, and a rerun of publish run 36152076228 minutes later still got E404, the same refusal as before the entry existed.
-- [ ] Rerun the publish: `gh run rerun 36152076228 --repo kitfunso/hippo-memory`. Never publish from your machine; a local publish has no provenance (`docs/release-policy.md`).
-- [ ] Create the GitHub release for `v1.47.0`, with the 1.47.0 section of `CHANGELOG.md` as its notes.
+The work box shipped 1.47.0: TE11 on the roadmap, and CD13, the failure log behind `hippo failures`. It is on npm with provenance and has a GitHub release. What is left needs your machine: the work box has no hippo install, the home session's branch exists only at home, and home is the source of truth for claude-config.
 
 ## 1. Before the home session merges anything
 - [ ] Rebase onto master, which moved to 1.47.0 while the home session was stopped (#237 TE11, #238 CD13, #239 the release).
@@ -14,7 +8,7 @@ The work box merged and tagged 1.47.0: TE11 on the roadmap, and CD13, the failur
 - [ ] Bump the next release past 1.47.0.
 
 ## 2. Check the failure log on your machine
-- [ ] Once 1.47.0 is on npm, update to it (`npm install -g hippo-memory@1.47.0`) and run `hippo doctor`. The failures row should read "N failed tool calls logged in 7 days". A warning that the `failure_log` table is missing means failures are not being logged.
+- [ ] Update to 1.47.0 (`npm install -g hippo-memory@1.47.0`) and run `hippo doctor`. The failures row should read "N failed tool calls logged in 7 days". A warning that the `failure_log` table is missing means failures are not being logged.
 - [ ] After a day of normal sessions, run `hippo failures`. Check that the outcome counts look right and that the repeats across sessions are real repeats. The log keeps two hashes per failure, never the error text.
 
 ## 3. Write-path cost (ROADMAP 90-day queue, weeks 0-4)

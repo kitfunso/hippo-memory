@@ -4,7 +4,7 @@ These need your machine: an OpenAI key, HuggingFace downloads, Docker, or your o
 
 ## 1. Merge and release
 - [x] Review and merge PR #227, then release. Run `npm run build:all` first. Merged 2026-09-24, released in 1.46.0.
-- [ ] npmjs.com: open hippo-memory's settings, then Trusted publishing. Add GitHub Actions for `kitfunso/hippo-memory` with workflow `npm-publish.yml`. From then on, a `v<x.y.z>` tag publishes with provenance. Added 2026-09-25, but the next publish was still refused: see section 0 of `2026-09-25-home-checklist.md`.
+- [x] npmjs.com: open hippo-memory's settings, then Trusted publishing. Add GitHub Actions for `kitfunso/hippo-memory` with workflow `npm-publish.yml`. From then on, a `v<x.y.z>` tag publishes with provenance. Added 2026-09-25 with "Allow npm publish" ticked; 1.47.0 was the first release through it.
 - [x] GitHub: open Settings, then Security, and turn on private vulnerability reporting. `SECURITY.md` points there. Turned on 2026-09-25 through the API.
 
 ## 2. Check automatic capture on your machine
