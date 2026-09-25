@@ -2,13 +2,14 @@
 // Stand-in for `claude -p --output-format json` in tests/token-eval-ab-run.test.ts.
 // Reads the prompt from stdin, runs the UserPromptSubmit hooks from --settings
 // with a real hook payload (so hippo's hook and ledger run for real), "fixes"
-// lib.js when the prompt says FIX, remembers a lesson through the hippo CLI,
+// lib.js when the prompt says FIX, remembers a lesson through the hippo CLI when the workspace has a hippo store,
 // writes a transcript under FAKE_CLAUDE_PROJECTS and prints a JSON result
 // shaped like Claude Code's.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { execSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const argv = process.argv.slice(2);
 if (argv.includes('--version')) {
@@ -28,9 +29,10 @@ for (const group of settings.hooks?.UserPromptSubmit ?? []) {
 }
 if (prompt.includes('FIX')) {
   fs.writeFileSync('lib.js', 'module.exports.add = (a, b) => a + b;\n');
-  if (settings.hooks?.UserPromptSubmit && !prompt.includes('NOREMEMBER')) {
-    const hippoJs = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', '..', 'bin', 'hippo.js');
-    try { execSync(`"${process.execPath}" "${hippoJs}" remember "add() in lib.js had its operator flipped; check operators first"`, { stdio: 'ignore' }); } catch {}
+  if (fs.existsSync('.hippo') && !prompt.includes('NOREMEMBER')) {
+    const hippoJs = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'bin', 'hippo.js');
+    // Let a failed remember crash the run: a swallowed error here hid a Windows path bug.
+    execSync(`"${process.execPath}" "${hippoJs}" remember "add() in lib.js had its operator flipped; check operators first"`, { stdio: ['ignore', 'ignore', 'inherit'] });
   }
 }
 const dir = path.join(process.env.FAKE_CLAUDE_PROJECTS, 'proj');
