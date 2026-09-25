@@ -3,7 +3,7 @@
   "name": "io.github.kitfunso/hippo-memory",
   "title": "Hippo memory",
   "description": "Local-first memory for AI coding agents: decay, recall strengthening, sleep consolidation.",
-  "version": "1.46.0",
+  "version": "1.47.0",
   "websiteUrl": "https://github.com/kitfunso/hippo-memory",
   "repository": {
     "url": "https://github.com/kitfunso/hippo-memory",

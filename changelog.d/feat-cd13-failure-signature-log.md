@@ -1,7 +1,0 @@
-### Added
-
-- **`hippo failures` shows which failed tool calls repeat across sessions.** The capture-error hook now logs every failed tool call it sees, including the routine ones it skips and the repeats it does not store again. Each row keeps the session, the tool, the outcome, the routine rule that skipped it, and two hashes of the error: the key hippo already uses to spot a repeated lesson, and a finer one over the whole error and the command's first two words. The error text is never kept, but a hash is not anonymous: anyone who guesses an error's text can check it against the hash. `hippo failures` (`--days`, `--json`, `--global`) prints counts by outcome and how many errors first happened in another session. It prints counts, not a rate, because a rate means little until there is a holdout group to compare against. A failure whose lesson could not be stored, for example because that lesson was rejected, is logged as `store-failed` instead of vanishing. Rows older than 90 days are pruned. `hippo doctor` shows how many failures were logged in the last 7 days, and warns if the log's table is missing. Schema v46 adds the `failure_log` table; an older binary ignores it.
-
-### Fixed
-
-- **A `grep`, `find` or `diff` that exits 1 after a leading `cd` is no longer stored as an error.** The capture-error hook judged a command by its first word, so `cd /repo && grep -r TODO src` finding nothing was saved as an error memory. It is now skipped as routine, like the same command without the `cd`.
