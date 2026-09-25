@@ -8,7 +8,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { initStore, writeEntry } from '../src/store.js';
 import { createMemory } from '../src/memory.js';
 import { buildSupportBundle } from '../src/support-bundle.js';
-import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion } from '../src/db.js';
+import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, setMeta } from '../src/db.js';
 import type { JsonObject, JsonValue } from '../src/working-memory.js';
 
 const HIPPO_JS = resolve(__dirname, '..', 'bin', 'hippo.js');
@@ -62,6 +62,7 @@ interface Seeded {
   skCanary: string;
   bearerCanary: string;
   jwtCanary: string;
+  pemCanary: string;
 }
 
 function seed(): Seeded {
@@ -93,6 +94,7 @@ function seed(): Seeded {
   const skCanary = 'sk-' + randomUUID().replace(/-/g, '');
   const bearerCanary = 'Bearer ' + randomUUID().replace(/-/g, '');
   const jwtCanary = `eyJ${'A'.repeat(10)}.eyJ${'B'.repeat(10)}.${'C'.repeat(10)}`;
+  const pemCanary = `MIIE${randomUUID().replace(/-/g, '')}`;
   writeFileSync(join(logsDir, 'last-sleep.log'), [
     `memory seen: ${memoryCanary}`,
     `token issued ${ghpCanary}`,
@@ -102,6 +104,9 @@ function seed(): Seeded {
     `home is ${home} now`,
     `saved to ${home}.`,
     `other user ${join(`${home}ty`, 'x')}`,
+    '-----BEGIN RSA PRIVATE KEY-----',
+    pemCanary,
+    '-----END RSA PRIVATE KEY-----',
     '',
   ].join('\n'));
 
@@ -109,7 +114,7 @@ function seed(): Seeded {
   const envCanary = `env-${randomUUID()}`;
   process.env.HIPPO_FAKE = envCanary;
 
-  return { home, cwd, hippoRoot, memoryCanary, pwCanary, qCanary, fCanary, keyCanary, authCanary, envCanary, ghpCanary, skCanary, bearerCanary, jwtCanary };
+  return { home, cwd, hippoRoot, memoryCanary, pwCanary, qCanary, fCanary, keyCanary, authCanary, envCanary, ghpCanary, skCanary, bearerCanary, jwtCanary, pemCanary };
 }
 
 describe('buildSupportBundle', () => {
@@ -118,7 +123,7 @@ describe('buildSupportBundle', () => {
     const bundle = buildSupportBundle({ cwd: s.cwd, home: s.home, version: 'test', includeLogs: false, now: new Date() });
     const text = bundleText(bundle);
 
-    // The unresolved tmpdir form is the 8.3 short name on Windows (KIT~1.SOF), which no home form covers.
+    // On Windows the unresolved tmpdir form can be an 8.3 short name (ABCDEF~1), which no home form covers.
     const homes = [s.home, join(tmpdir(), basename(s.home)), homedir()];
     const forbidden = [
       s.memoryCanary, s.pwCanary, s.qCanary, s.fCanary, s.keyCanary, s.authCanary, s.envCanary,
@@ -141,6 +146,39 @@ describe('buildSupportBundle', () => {
     expect(parsed.logs.tails).toBeUndefined();
   });
 
+  it('swaps a short-name or symlinked form of the home that HIPPO_HOME passes through unresolved', () => {
+    const s = seed();
+    // tmpdir() is often an 8.3 short form on Windows and a symlink on macOS; elsewhere this is the plain path.
+    const aliasHome = join(tmpdir(), basename(s.home));
+    process.env.HIPPO_HOME = join(aliasHome, 'global');
+    initStore(process.env.HIPPO_HOME);
+    const bundle = buildSupportBundle({ cwd: s.cwd, home: s.home, version: 'test', includeLogs: false, now: new Date() });
+    expect(bundleText(bundle).filter((t) => t.includes(aliasHome.toLowerCase())), aliasHome).toEqual([]);
+    // Exact, so a swap of only the user's own home (~\AppData\...\global) does not pass for this one.
+    const globalStore = JSON.parse(JSON.stringify(bundle)).stores.find((st: { kind: string }) => st.kind === 'global');
+    expect(globalStore.path).toBe(join('~', 'global'));
+  });
+
+  it('swaps a home alias that a log line quotes through the temp folder', () => {
+    const s = seed();
+    const aliasHome = join(tmpdir(), basename(s.home));
+    mkdirSync(join(s.home, 'tmp'));
+    writeFileSync(join(s.home, '.hippo', 'logs', 'alias.log'), `wrote ${join(aliasHome, 'tmp', 'scratch.txt')}\n`);
+    const saved = { TEMP: process.env.TEMP, TMP: process.env.TMP, TMPDIR: process.env.TMPDIR };
+    // os.tmpdir() reads these on every call, so the bundle sees a temp folder under the home's alias.
+    for (const k of Object.keys(saved)) process.env[k] = join(aliasHome, 'tmp');
+    let bundle: JsonObject;
+    try {
+      bundle = buildSupportBundle({ cwd: s.cwd, home: s.home, version: 'test', includeLogs: true, now: new Date() });
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+    expect(JSON.parse(JSON.stringify(bundle)).logs.tails['alias.log']).toEqual([`wrote ${join('~', 'tmp', 'scratch.txt')}`]);
+  });
+
   it('includeLogs adds tails with known secret shapes gone; memory text in a log is not (documented opt-in)', () => {
     const s = seed();
     const bundle = buildSupportBundle({ cwd: s.cwd, home: s.home, version: 'test', includeLogs: true, now: new Date() });
@@ -152,6 +190,8 @@ describe('buildSupportBundle', () => {
     expect(tail).not.toContain(s.skCanary);
     expect(tail).not.toContain(s.bearerCanary);
     expect(tail).not.toContain(s.jwtCanary);
+    expect(tail).not.toContain(s.pemCanary);
+    expect(tail).not.toContain('-----END RSA PRIVATE KEY-----');
     expect(tail).toContain('[REDACTED]');
     expect(tail).toContain(s.memoryCanary);
 
@@ -161,10 +201,27 @@ describe('buildSupportBundle', () => {
     expect(tail).not.toContain('~ty');
   });
 
+  it('a log tail that starts inside a private key drops the rest of the key', () => {
+    const s = seed();
+    // About 325 KB of key body, so the 256 KiB tail window starts after the BEGIN line.
+    const bodyLine = `MIIE${'Q'.repeat(60)}`;
+    writeFileSync(join(s.home, '.hippo', 'logs', 'big.log'),
+      `-----BEGIN RSA PRIVATE KEY-----\n${`${bodyLine}\n`.repeat(5000)}-----END RSA PRIVATE KEY-----\nafter the key\n`);
+    const parsed = JSON.parse(JSON.stringify(
+      buildSupportBundle({ cwd: s.cwd, home: s.home, version: 'test', includeLogs: true, now: new Date() }),
+    ));
+    // SAFETY: buildLogsSection always fills tails[name] with the string[] lines returned by tailLogFile.
+    const tail = (parsed.logs.tails['big.log'] as string[]).join('\n');
+
+    expect(tail).not.toContain(bodyLine);
+    expect(tail).not.toContain('-----END');
+    expect(tail).toContain('after the key');
+  });
+
   it('never writes to the store: hippo.db bytes and an older schema_version are unchanged', () => {
     const s = seed();
     const db = openHippoDb(s.hippoRoot);
-    db.prepare(`UPDATE meta SET value = '45' WHERE key = 'schema_version'`).run();
+    setMeta(db, 'schema_version', '45');
     closeHippoDb(db);
 
     const before = sha256(join(s.hippoRoot, 'hippo.db'));

@@ -58,7 +58,7 @@ describe('detectSecret patterns', () => {
 });
 
 describe('redactSecrets / redactSecretsStrict', () => {
-  // Built at runtime, never a literal secret-shaped token in source (executor-rules.md).
+  // Built at runtime, so no secret-shaped literal sits in source.
   const AWS = 'AKIA' + '1234567890ABCDEF';
   const GHP = 'ghp_' + 'A'.repeat(36);
   const GH_PAT = 'github_pat_' + 'A'.repeat(24);

@@ -20,7 +20,7 @@ export function runtimeComponents(bom) {
 /** Merges root + ui CycloneDX BOMs into one runtime-only document: relabels the
  *  ui root (npm names it after the folder) uiName and links it from root. */
 export function mergeRuntimeBoms(rootBom, uiBom, rootName, uiName) {
-  const rootRootRef = rootBom.metadata.component['bom-ref'];
+  const rootRef = rootBom.metadata.component['bom-ref'];
   const uiRootComponent = { ...uiBom.metadata.component, name: uiName };
   const uiRootRef = uiRootComponent['bom-ref'];
 
@@ -33,18 +33,16 @@ export function mergeRuntimeBoms(rootBom, uiBom, rootName, uiName) {
   }
 
   // The root's own bom-ref survives too: it is the document subject, not a components[] entry.
-  const survivors = new Set([rootRootRef, ...components.map((c) => c['bom-ref'])]);
+  const survivors = new Set([rootRef, ...components.map((c) => c['bom-ref'])]);
   const dependencies = [];
   const seenDeps = new Set();
   for (const dep of [...(rootBom.dependencies ?? []), ...(uiBom.dependencies ?? [])]) {
     if (seenDeps.has(dep.ref) || !survivors.has(dep.ref)) continue;
     seenDeps.add(dep.ref);
     const dependsOn = (dep.dependsOn ?? []).filter((ref) => survivors.has(ref));
-    if (dep.ref === rootRootRef) dependsOn.push(uiRootRef);
+    if (dep.ref === rootRef) dependsOn.push(uiRootRef);
     dependencies.push({ ref: dep.ref, dependsOn });
   }
-  // A zero-dependency root may have no entry of its own; the dashboard still hangs off it.
-  if (!seenDeps.has(rootRootRef)) dependencies.unshift({ ref: rootRootRef, dependsOn: [uiRootRef] });
 
   return {
     ...rootBom,

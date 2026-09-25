@@ -112,7 +112,7 @@ describe('hippo doctor', () => {
     const hippoRoot = join(cwd, '.hippo');
     initStore(hippoRoot);
     const seed = openHippoDb(hippoRoot);
-    seed.prepare(`UPDATE meta SET value = '45' WHERE key = 'schema_version'`).run();
+    setMeta(seed, 'schema_version', '45');
     seed.exec('DROP TABLE failure_log');
     closeHippoDb(seed); // last close checkpoints the WAL, so hippo.db alone is a stable hash target
 

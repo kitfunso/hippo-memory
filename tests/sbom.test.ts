@@ -36,9 +36,8 @@ describe('runtimeComponents', () => {
 });
 
 describe('mergeRuntimeBoms', () => {
-  // shared-dep appears in both BOMs (duplicate bom-ref / duplicate dependency entry);
-  // runtime-dep's dependsOn points at a dev component and a package absent from either
-  // BOM (dangling refs); dev-dep / ui-dev must not survive the merge.
+  // shared-dep sits in both BOMs, runtime-dep depends on a dev package and on one in neither BOM,
+  // and dev-dep / ui-dev must not survive the merge.
   const rootBom: CdxBom = {
     specVersion: '1.5',
     metadata: { component: comp('root-pkg@1.0.0') },
@@ -93,13 +92,6 @@ describe('mergeRuntimeBoms', () => {
     expect(uiRoot?.name).toBe('ui-name');
     expect(dep('root-pkg@1.0.0').dependsOn).toContain('ui-pkg@0.1.0');
     expect(dep('ui-pkg@0.1.0').dependsOn).toEqual(expect.arrayContaining(['ui-runtime@1.0.0', 'shared-dep@3.0.0']));
-  });
-
-  it('adds the root entry when the root BOM has none, still linking the ui root', () => {
-    const bare: CdxBom = { ...rootBom, components: [], dependencies: [] };
-    // SAFETY: mergeRuntimeBoms is untyped JS; its return shape matches CdxBom.
-    const m = mergeRuntimeBoms(bare, uiBom, 'root-name', 'ui-name') as CdxBom;
-    expect(m.dependencies.find((d) => d.ref === 'root-pkg@1.0.0')?.dependsOn).toEqual(['ui-pkg@0.1.0']);
   });
 });
 

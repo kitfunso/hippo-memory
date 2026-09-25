@@ -141,7 +141,8 @@ import { computeSystemEnergy, vecNorm } from './physics.js';
 import { loadConfig } from './config.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { runDoctor, formatDoctor } from './doctor.js';
-import { buildSupportBundle } from './support-bundle.js';
+import { buildSupportBundle, TAIL_MAX_LINES } from './support-bundle.js';
+import { PACKAGE_VERSION } from './version.js';
 import { captureToolFailure } from './capture-error.js';
 import type { JsonValue } from './working-memory.js';
 import { blockHash, hookPayloadSessionId, lastSentState, recordTokenUse, shouldSkipUnchanged, type TokenSurface } from './token-ledger.js';
@@ -9401,7 +9402,7 @@ Commands:
   support-bundle           Write a redacted JSON file for a support ticket: versions, doctor,
                            config without secrets, store counts, log names; never memory text
     --out <file>           Where to write it (default: hippo-support-<time>.json here)
-    --include-logs         Add the last 200 lines of each hippo log, known secret shapes removed
+    --include-logs         Add the last ${TAIL_MAX_LINES} lines of each hippo log, known secret shapes removed
   tokens                   Tokens of memory text hippo handed agents, per surface
                            (hook, context, recall, MCP, HTTP), and what skipping
                            unchanged hook blocks saved
@@ -10192,8 +10193,6 @@ async function main(
     }
 
     case 'support-bundle': {
-      // SAFETY: package.json always carries a string "version" (checked at release by check-manifest-versions).
-      const pkg = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf-8')) as { version: string };
       const outFlag = cardStringFlag(flags, 'out');
       if (outFlag === '') {
         console.error('--out requires a file path.');
@@ -10202,7 +10201,7 @@ async function main(
       const includeLogs = flags['include-logs'] === true;
       const home = process.env.HOME || process.env.USERPROFILE || os.homedir();
       const now = new Date();
-      const bundle = buildSupportBundle({ cwd: process.cwd(), home, version: pkg.version, includeLogs, now });
+      const bundle = buildSupportBundle({ cwd: process.cwd(), home, version: PACKAGE_VERSION, includeLogs, now });
       const stamp = now.toISOString().replace(/[:.]/g, '-');
       const file = outFlag ?? path.join(process.cwd(), `hippo-support-${stamp}.json`);
       const json = JSON.stringify(bundle, null, 2);
@@ -10219,7 +10218,7 @@ async function main(
       const kb = Math.round(Buffer.byteLength(json) / 1024);
       console.log(`Wrote ${file} (${kb} KB).`);
       console.log(includeLogs
-        ? 'It holds versions, doctor checks, config with secrets removed, store counts, and the last 200 lines of each hippo log with known secret shapes removed. Those log lines can quote memory text. Read it before you attach it to a ticket.'
+        ? `It holds versions, doctor checks, config with secrets removed, store counts, and the last ${TAIL_MAX_LINES} lines of each hippo log with known secret shapes removed. Those log lines can quote memory text. Read it before you attach it to a ticket.`
         : 'It holds versions, doctor checks, config with secrets removed, store counts and log file names. It never holds memory text. Read it before you attach it to a ticket.');
       break;
     }

@@ -2878,6 +2878,18 @@ export function setMeta(db: DatabaseSyncLike, key: string, value: string): void 
   db.prepare(`INSERT INTO meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(key, value);
 }
 
+/** Row count of one table; null when the table is missing or unreadable, which callers show as unknown. */
+export function countTableRows(db: DatabaseSyncLike, table: string): number | null {
+  try {
+    // SAFETY: COUNT(*) returns one row with one numeric column.
+    const row = db.prepare(`SELECT COUNT(*) AS n FROM "${table.replace(/"/g, '""')}"`).get() as { n: number } | undefined;
+    return Number(row?.n ?? 0);
+  } catch {
+    // Callers treat an uncountable table as unknown; the bundle and doctor still finish.
+    return null;
+  }
+}
+
 export function isFtsAvailable(db: DatabaseSyncLike): boolean {
   return getMeta(db, 'fts5_available', '0') === '1';
 }

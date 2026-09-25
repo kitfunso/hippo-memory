@@ -60,8 +60,8 @@ const CO_OCCURRENCE_GUARDED = new Set(['sk-style-key', 'sk-underscore-key']);
 
 // redactSecretsStrict-only: too noisy for whole-entry memory scanning, worth hiding once text leaves the machine.
 const STRICT_ONLY_PATTERNS: readonly RegExp[] = [
-  /\b[Bb]earer\s+[A-Za-z0-9._~+/-]{16,}=*/,
-  /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*/,
+  /\b[Bb]earer\s+[A-Za-z0-9._~+/-]{16,}=*/g,
+  /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*/g,
 ];
 
 /**
@@ -101,7 +101,7 @@ export function redactSecretsStrict(text: string): string {
 function redactText(text: string, strict: boolean): string {
   if (!text) return text;
   let result = text;
-  // PEM/OpenSSH blocks first: SECRET_PATTERNS only matches BEGIN; consume through END, or to the end of a truncated block (codex round 3).
+  // PEM/OpenSSH blocks first: SECRET_PATTERNS only matches BEGIN; consume through END, or to the end of a truncated block.
   result = result.replace(
     /-----BEGIN [A-Z ]*PRIVATE KEY-----(?:[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----|[\s\S]*$)/g,
     '[REDACTED]',
@@ -112,10 +112,7 @@ function redactText(text: string, strict: boolean): string {
     result = result.replace(new RegExp(re.source, flags), '[REDACTED]');
   }
   if (strict) {
-    for (const re of STRICT_ONLY_PATTERNS) {
-      const flags = re.flags.includes('g') ? re.flags : `${re.flags}g`;
-      result = result.replace(new RegExp(re.source, flags), '[REDACTED]');
-    }
+    for (const re of STRICT_ONLY_PATTERNS) result = result.replace(re, '[REDACTED]');
   }
   return result;
 }
