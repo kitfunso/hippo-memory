@@ -7,7 +7,8 @@ name: Publish to npm
 #
 # One-time setup (npmjs.com, package settings > Trusted publishing): add a
 # GitHub Actions publisher for kitfunso/hippo-memory with workflow file
-# npm-publish.yml. No NPM_TOKEN secret is needed after that.
+# npm-publish.yml and "Allow npm publish" ticked; unticked, it may only stage.
+# No NPM_TOKEN secret is needed after that.
 # docs/release-policy.md covers tags and the `stable` channel.
 
 on:

@@ -3,9 +3,9 @@
 These need your machine: an OpenAI key, HuggingFace downloads, Docker, or your own Claude Code setup. The cloud sandbox has none of them.
 
 ## 1. Merge and release
-- [ ] Review and merge PR #227, then release. Run `npm run build:all` first.
-- [ ] npmjs.com: open hippo-memory's settings, then Trusted publishing. Add GitHub Actions for `kitfunso/hippo-memory` with workflow `npm-publish.yml`. From then on, a `v<x.y.z>` tag publishes with provenance.
-- [ ] GitHub: open Settings, then Security, and turn on private vulnerability reporting. `SECURITY.md` points there.
+- [x] Review and merge PR #227, then release. Run `npm run build:all` first. Merged 2026-09-24, released in 1.46.0.
+- [ ] npmjs.com: open hippo-memory's settings, then Trusted publishing. Add GitHub Actions for `kitfunso/hippo-memory` with workflow `npm-publish.yml`. From then on, a `v<x.y.z>` tag publishes with provenance. Added 2026-09-25, but the next publish was still refused: see section 0 of `2026-09-25-home-checklist.md`.
+- [x] GitHub: open Settings, then Security, and turn on private vulnerability reporting. `SECURITY.md` points there. Turned on 2026-09-25 through the API.
 
 ## 2. Check automatic capture on your machine
 - [ ] Follow `docs/dogfood/2026-09-24-verify-auto-capture.md`: `hippo doctor`, a real `/compact`, and a real tool failure.
