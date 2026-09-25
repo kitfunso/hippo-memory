@@ -25,7 +25,7 @@ export interface DatabaseSyncLike {
 // runtime (Node's built-in synchronous SQLite module); there are no bundled
 // types for it here, so this require + cast is the module's documented boundary.
 const { DatabaseSync } = require('node:sqlite') as {
-  DatabaseSync: new (path: string) => DatabaseSyncLike;
+  DatabaseSync: new (path: string, options?: { readOnly?: boolean }) => DatabaseSyncLike;
 };
 
 const CURRENT_SCHEMA_VERSION = 46;
@@ -2530,11 +2530,14 @@ export function getCurrentSchemaVersion(): number {
   return CURRENT_SCHEMA_VERSION;
 }
 
+/** Thrown by {@link assertBinaryCompatible}; doctor uses it to pick the upgrade fix over a generic permissions fix. */
+export class IncompatibleBinaryError extends Error {}
+
 /** Refuse a store stamped for a newer binary. Fails closed: runMigrations creates meta first, so a failed read is a real error. */
 function assertBinaryCompatible(db: DatabaseSyncLike): void {
   const minRequired = getMeta(db, 'min_compatible_binary');
   if (minRequired && compareSemver(minRequired, PACKAGE_VERSION) > 0) {
-    throw new Error(
+    throw new IncompatibleBinaryError(
       `hippo-memory: this database requires hippo-memory >= ${minRequired}, but the running binary is ${PACKAGE_VERSION}. ` +
       `Upgrade hippo-memory to open it; an older binary does not know this schema and could expose private rows or damage the store.`,
     );
@@ -2581,6 +2584,23 @@ export function openHippoDb(hippoRoot: string): DatabaseSyncLike {
     } catch (cleanupErr) {
       console.error('openHippoDb: cleanupArchivedMirrors failed (non-fatal):', cleanupErr);
     }
+    return db;
+  } catch (error) {
+    try {
+      db.close();
+    } catch {
+      // Best effort only.
+    }
+    throw error;
+  }
+}
+
+/** Open an existing store without changing it: no mkdir, WAL switch, migration or mirror cleanup. Throws when hippo.db is missing. */
+export function openHippoDbReadOnly(hippoRoot: string): DatabaseSyncLike {
+  const db = new DatabaseSync(getHippoDbPath(hippoRoot), { readOnly: true });
+  try {
+    db.exec('PRAGMA busy_timeout = 5000');
+    if (tableExists(db, 'meta')) assertBinaryCompatible(db);
     return db;
   } catch (error) {
     try {
@@ -2639,6 +2659,7 @@ function ensureMetaTable(db: DatabaseSyncLike): void {
 }
 
 export function getSchemaVersion(db: DatabaseSyncLike): number {
+  if (!tableExists(db, 'meta')) return 0;
   // SAFETY: row's shape matches the single `value` column named in the
   // SELECT above.
   const row = db.prepare(`SELECT value FROM meta WHERE key = 'schema_version'`).get() as { value?: string } | undefined;

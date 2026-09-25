@@ -131,10 +131,12 @@ NEXT test file that doesn't touch the env var.
 
 ## Publishing, provenance and the stable channel
 
-**Publishing.** Push a `v<x.y.z>` tag on the squash commit on master. `.github/workflows/npm-publish.yml` checks that the tag matches `package.json`, runs the `prepublishOnly` gate and publishes with `--provenance`. Do not publish from a laptop: a laptop publish has no provenance. The one-time npm setup is described at the top of the workflow.
+**Publishing.** Push a `v<x.y.z>` tag on the squash commit on master. `.github/workflows/npm-publish.yml` checks that the tag matches `package.json`, runs the `prepublishOnly` gate and publishes with `--provenance`. The workflow picks the npm dist-tag with `scripts/publish-dist-tag.mjs`, from the registry's current `latest`: a newer version goes to `latest`, an older one (a backport, see "Support window") to `maint-<x.y>`, and a prerelease to `next`. If the registry cannot be read, the publish stops. Do not publish from a laptop: a laptop publish has no provenance. The one-time npm setup is described at the top of the workflow.
+
+**SBOM.** Publishing the GitHub release for a `v<x.y.z>` tag runs `.github/workflows/sbom.yml`. It builds `hippo-memory-<x.y.z>.cdx.json` from that tag's lockfiles with `scripts/sbom.mjs` and attaches it to the release: a CycloneDX list of the runtime packages the tarball ships, the dashboard's bundled ones included. Create the release with a personal token (the web page, `gh` or the API), because a release made with a workflow's `GITHUB_TOKEN` starts no other workflow. For a release that has no SBOM, run the workflow by hand with its `tag` input.
 
 **Two channels.**
-- `latest`: every release. This is the default `npm install hippo-memory`.
+- `latest`: every release from master. This is the default `npm install hippo-memory`.
 - `stable`: a release that has been on `latest` for at least 7 days with no fix release on top of it. Companies pin this with `npm install hippo-memory@stable`.
 
 To promote a release to `stable`:
@@ -144,3 +146,20 @@ To promote a release to `stable`:
 A security fix may go to `stable` straight away. Record each promotion in the changelog entry of the release it promotes.
 
 **Why.** An outside review (2026-09-24) counted 170 versions in six months, 38 in the last 90 days, and none with provenance. For a developer, frequent releases look like momentum. For a company's security team they look like risk. Without a verified build and a slower channel, hippo cannot pass their review.
+
+## Support window
+
+**What is supported.** The release on `latest` is supported, and its fixes ship in the next release. Each minor version promoted to `stable` is a supported line for 12 months from its promotion, even after `stable` moves to a newer line. Nothing else is supported. `SECURITY.md` carries the same table for people reporting a vulnerability.
+
+**One promotion a quarter.** Promote at most one release to `stable` in each calendar quarter. Any 12 months overlap five calendar quarters at most, so no more than five lines are supported at once. Moving `stable` to a patch release of the line it already points at, as a backport does, is not a promotion: it uses no quarter's slot and does not restart the 12 months.
+
+**What gets backported.** Security fixes and fixes for bugs that lose data. Everything else waits for the next release from master.
+
+**Backporting a fix.** Merge the fix to master first. Then, for each older supported line that needs it:
+
+1. Branch `release/<x.y>` from the line's last `v<x.y.z>` tag, or check that branch out if an earlier backport made it.
+2. Cherry-pick the fix. Its `changelog.d` fragment comes with it; write one if it had none, because `fold` refuses to run without one.
+3. Run `npm version <x.y.z+1> --no-git-tag-version`, then `node scripts/changelog-fragments.mjs fold`, and commit.
+4. Push a `v<x.y.z+1>` tag on that commit. `npm-publish.yml` publishes it under `maint-<x.y>`, so `latest` stays where it is.
+5. Publish a GitHub release for the tag, as for any release, so it gets its SBOM. Untick "Set as the latest release" (in the API, `make_latest: "false"`); GitHub sets it by default, and the backport would then show as the repository's latest release.
+6. If `stable` points at this line, move it: `npm dist-tag add hippo-memory@<x.y.z+1> stable`. This needs an npm login; the workflow never moves `stable`.

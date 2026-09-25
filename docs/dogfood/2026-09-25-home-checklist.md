@@ -17,3 +17,7 @@ The work box shipped 1.47.0: TE11 on the roadmap, and CD13, the failure log behi
 
 ## 4. claude-config (optional)
 - [ ] The global `publish-repo` skill says to run `npm publish` from your machine and never to use `npm version`. `docs/release-policy.md` here says the opposite on both. Add a line to the skill: a repository's own release policy wins over its steps.
+
+## 5. First `stable` promotion, and SECURITY.md (from the 1.48.0 work)
+- [ ] From 2 Oct 2026, promote the newest release that has been `latest` for 7 days with no fix release on top of it: 1.48.0 if nothing has shipped since. Run `npm dist-tag add hippo-memory@<x.y.z> stable` (it needs your npm login), then record the promotion in that release's entry in `CHANGELOG.md`. No release has been promoted before. This one starts its line's 12 months of support and uses the October-December quarter's one promotion (`docs/release-policy.md`, "Support window").
+- [ ] `SECURITY.md` changed on the work box: the supported-versions table (the support window), the provenance line (from 1.47.0, not 1.46.0), a line naming the SBOM on each GitHub release, and a bullet pointing reporters at `hippo support-bundle`. The weeks 0-4 "Company basics" pass should build on this version, not replace it.

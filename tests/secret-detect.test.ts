@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { detectSecret } from '../src/secret-detect.js';
+import { detectSecret, redactSecrets, redactSecretsStrict } from '../src/secret-detect.js';
 import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
 import { createMemory } from '../src/memory.js';
 import { shareMemory, autoShare, syncGlobalToLocal, promoteToGlobal, getGlobalRoot } from '../src/shared.js';
@@ -54,6 +54,40 @@ describe('detectSecret patterns', () => {
     // Credential-shaped values still flag.
     expect(flagged('password: MyDogsName2024x')).toBe(true);
     expect(flagged('config sets api_key=9f8e7d6c5b4a3210ffff')).toBe(true);
+  });
+});
+
+describe('redactSecrets / redactSecretsStrict', () => {
+  // Built at runtime, never a literal secret-shaped token in source (executor-rules.md).
+  const AWS = 'AKIA' + '1234567890ABCDEF';
+  const GHP = 'ghp_' + 'A'.repeat(36);
+  const GH_PAT = 'github_pat_' + 'A'.repeat(24);
+  const SLACK = 'xoxb-' + '1234567890abcdef';
+  const STRIPE = 'sk_live_' + 'A1b2C3d4E5f6G7h8';
+  const GOOGLE = 'AIza' + 'A'.repeat(35);
+  const PEM = '-----BEGIN RSA PRIVATE KEY-----\n' + 'A'.repeat(64) + '\n-----END RSA PRIVATE KEY-----';
+  const SK_NO_KEYWORD = 'sk-' + 'A'.repeat(24);
+  const SK_X_NO_KEYWORD = 'sk_' + 'vendor_deadbeef123456';
+  const ASSIGNMENT = 'api_key=' + '9f8e7d6c5b4a3210' + 'ffff';
+  const BEARER = 'Bearer ' + 'A'.repeat(20);
+  const JWT = 'eyJ' + 'A'.repeat(10) + '.eyJ' + 'B'.repeat(10) + '.' + 'C'.repeat(10);
+
+  it('redactSecretsStrict removes every canary shape, keyword context or not', () => {
+    const canaries = [AWS, GHP, GH_PAT, SLACK, STRIPE, GOOGLE, PEM, SK_NO_KEYWORD, SK_X_NO_KEYWORD, ASSIGNMENT, BEARER, JWT];
+    for (const canary of canaries) {
+      expect(redactSecretsStrict(`before ${canary} after`), canary).not.toContain(canary);
+    }
+  });
+
+  it('plain redactSecrets leaves the co-occurrence-guarded sk shapes alone with no keyword nearby', () => {
+    expect(redactSecrets(`before ${SK_NO_KEYWORD} after`)).toContain(SK_NO_KEYWORD);
+    expect(redactSecrets(`before ${SK_X_NO_KEYWORD} after`)).toContain(SK_X_NO_KEYWORD);
+  });
+
+  it('ordinary prose survives both', () => {
+    const prose = 'the quarterly review covers risk-free rate assumptions and nothing else';
+    expect(redactSecrets(prose)).toBe(prose);
+    expect(redactSecretsStrict(prose)).toBe(prose);
   });
 });
 

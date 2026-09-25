@@ -58,6 +58,12 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
 const KEYISH_CONTEXT_RE = /key|token|secret|credential|bearer|auth|password/i;
 const CO_OCCURRENCE_GUARDED = new Set(['sk-style-key', 'sk-underscore-key']);
 
+// redactSecretsStrict-only: too noisy for whole-entry memory scanning, worth hiding once text leaves the machine.
+const STRICT_ONLY_PATTERNS: readonly RegExp[] = [
+  /\b[Bb]earer\s+[A-Za-z0-9._~+/-]{16,}=*/,
+  /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*/,
+];
+
 /**
  * Scan a memory's tags + content for secret material.
  * Pure and deterministic; no filesystem or store access.
@@ -84,21 +90,32 @@ export function detectSecret(entry: { content: string; tags: string[] }): Secret
  * CS1 pre-compact snapshot fields — can scrub it in place instead.
  */
 export function redactSecrets(text: string): string {
+  return redactText(text, false);
+}
+
+/** Stricter redaction for text that leaves the machine: no co-occurrence guard, plus Bearer headers and JWTs. */
+export function redactSecretsStrict(text: string): string {
+  return redactText(text, true);
+}
+
+function redactText(text: string, strict: boolean): string {
   if (!text) return text;
   let result = text;
-  // PEM/OpenSSH blocks first: the pattern-table entry matches only the
-  // BEGIN delimiter, which is fine for detectSecret's flag-or-not decision
-  // but would leave the base64 payload behind here. Consume through the
-  // matching END delimiter; a truncated block with no END is redacted to
-  // the end of the text (codex round 3).
+  // PEM/OpenSSH blocks first: SECRET_PATTERNS only matches BEGIN; consume through END, or to the end of a truncated block (codex round 3).
   result = result.replace(
     /-----BEGIN [A-Z ]*PRIVATE KEY-----(?:[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----|[\s\S]*$)/g,
     '[REDACTED]',
   );
   for (const { name, re } of SECRET_PATTERNS) {
-    if (CO_OCCURRENCE_GUARDED.has(name) && !KEYISH_CONTEXT_RE.test(text)) continue;
+    if (!strict && CO_OCCURRENCE_GUARDED.has(name) && !KEYISH_CONTEXT_RE.test(text)) continue;
     const flags = re.flags.includes('g') ? re.flags : `${re.flags}g`;
     result = result.replace(new RegExp(re.source, flags), '[REDACTED]');
+  }
+  if (strict) {
+    for (const re of STRICT_ONLY_PATTERNS) {
+      const flags = re.flags.includes('g') ? re.flags : `${re.flags}g`;
+      result = result.replace(new RegExp(re.source, flags), '[REDACTED]');
+    }
   }
   return result;
 }

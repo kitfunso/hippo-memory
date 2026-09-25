@@ -84,3 +84,16 @@ _Avoid_: kanban, tracker
 **Hook payload**:
 The JSON a host writes to a hook command's stdin at spawn. Optional, and absent only counts as a manual run when the read finished on its own; a read that timed out proves nothing either way.
 _Avoid_: stdin text, hook input, hook data
+
+### Support
+
+**Support bundle**:
+The JSON file `hippo support-bundle` writes for a support ticket: versions, doctor checks, config
+with secret fields redacted, store counts and log file names. It never holds memory text, except
+in the log lines `--include-logs` adds, which can quote it.
+_Avoid_: diagnostics dump, debug archive (it is one JSON file)
+
+**Supported line**:
+A minor version (`x.y`) promoted to the `stable` npm tag. It gets security and data-loss fixes as
+patch releases for 12 months from that promotion, even after `stable` moves on.
+_Avoid_: LTS
