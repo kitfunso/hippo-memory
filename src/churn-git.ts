@@ -100,10 +100,9 @@ export function packageScriptsAt(repoRoot: string, rev: string): Record<string, 
   if (runGit(['ls-tree', '--name-only', rev, '--', 'package.json'], repoRoot).trim() === '') return null;
   const raw = runGit(['show', `${rev}:package.json`], repoRoot);
   try {
-    const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null) return null;
-    // SAFETY: checked non-null object above; a non-object `scripts` just yields no script hits.
-    return (parsed as { scripts?: Record<string, string> }).scripts ?? {};
+    // SAFETY: optional chaining makes a `null` or scalar package.json read as "no scripts".
+    const parsed = JSON.parse(raw) as { scripts?: Record<string, string> } | null;
+    return parsed?.scripts ?? {};
   } catch (err) {
     if (err instanceof SyntaxError) return null;
     throw err;
