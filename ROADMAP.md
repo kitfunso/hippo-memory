@@ -1415,6 +1415,8 @@ Sequences of related coding tasks where early tasks produce lessons later ones c
 #### TE6. Adaptive budget [planned, after TE3]
 Stop packing when relevance falls off (score gap or threshold) and inject nothing when nothing is relevant; the budget becomes a ceiling, not a target. **Success:** fewer tokens on TE3 at equal recall, and no resolve-rate loss on TE5.
 
+**Cheap first test (added 2026-09-26):** a pass-by-default gate, where a failed or unsure check injects nothing (the pattern supermemory's open-source company-brain uses before its bot speaks unprompted: answer, acknowledge, investigate or pass). Replay the 133 transcripts from the SI0 kill test, where injected memories had a median overlap of 0.057 with the work, and count how many injections the gate drops and how many of the few relevant ones it keeps. No paid call; it decides whether TE6 needs more than a threshold.
+
 #### TE7. Terse agent format [planned, after TE3]
 A compact rendering for agent-facing output without markdown decoration and repeated labels. **Success:** fewer tokens per fact at equal accuracy on TE3.
 
@@ -1684,6 +1686,14 @@ RRSI's rule, applied to lessons:
 
 This is the evidence AGENTS.md requires before a lesson graduates.
 
+#### SI4. Write contract for agent-written memories [planned, eval first; added 2026-09-26]
+Clean a memory when it is written instead of ranking junk out later. Each agent-written memory must be:
+- one self-contained subject, readable without its thread;
+- free of raw ids, transcript tags and bare name stubs;
+- tagged with an existing tag when one covers the subject, so near-synonym tags stop multiplying.
+
+The source is the `MemoryDoc` schema in supermemory's company-brain (`src/brain/memory/writeback.ts`). `hippo capture` already stores trailing transcript tags as facts, so it is the first place to apply this. **Eval first:** run the contract over a copy of the founder's store and report the share of memories it would reject or rewrite, then check recall on E1 and TE3 does not drop. Ships only if both hold.
+
 #### SI3. Poisoning limits for self-writing agents [planned, with SI0]
 An agent that writes its own memories can amplify its own mistakes. Limits:
 - a per-session cap on auto-captured memories;
@@ -1811,6 +1821,7 @@ A lesson that names a file, symbol or command is marked stale when that file cha
 - full@365, the current default;
 - full@30 and full@90, the untested middle;
 - version-aware recency (FE1);
+- event-date recency (FE5);
 - decay off.
 
 It runs with the in-window dating lane as well. It also includes a **replay of real recall queries** from the founder's store: LC1 retrieval traces with their later outcomes, scored for each arm. This is the only test that reflects actual use, and it runs on the founder's machine.
@@ -1819,6 +1830,9 @@ It runs with the in-window dating lane as well. It also includes a **replay of r
 Pitch "learns what is wrong and stops repeating it", not "decay by default". "Good memory is knowing what to forget" stays only where forgetting means wrong, superseded or unused, never age.
 
 Done in the README and the website (`website/`): the pitch leads with outcome marks and supersession, the claims that decay or sleep improve recall are gone, the 365-day half-life is labelled as not tuned, and the hippocampus framing is labelled as design inspiration.
+
+#### FE5. Recency by event date, not save date [planned, eval first; added 2026-09-26]
+The mechanism audit found recency hurts current-fact recall but guards against stale facts. Part of the cost may be that recency counts from when a memory was saved, not from when its fact became true. `valid_from` already exists, but it defaults to `created` and only filters `--as-of` queries; it never ranks. The arm: fill `valid_from` from the date a memory states (a decision, deadline or incident), then apply recency to that date. It runs as an FE3 arm on E1. Ships only if it keeps the stale-fact guard without the current-fact loss. Idea from supermemory's company-brain, whose writer records an `eventDate` for dated memories.
 
 ---
 
