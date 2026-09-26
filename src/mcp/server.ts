@@ -19,7 +19,7 @@ import {
 } from '../memory.js';
 import { search, hybridSearch, physicsSearch, estimateTokens } from '../search.js';
 import { evalNow } from '../ablation.js';
-import { loadAllEntries, writeEntry, strengthenRetrieved, readEntry, initStore, loadFreshActiveTaskSnapshot, listMemoryConflicts, resolveConflict, RECALL_DEFAULT_DENY_SCOPES, countCreatedSinceLastSleep } from '../store.js';
+import { loadAllEntries, writeEntry, strengthenRetrieved, readEntry, initStore, loadFreshActiveTaskSnapshot, listMemoryConflicts, resolveConflict, countCreatedSinceLastSleep } from '../store.js';
 import { shareMemory, listPeers, getGlobalRoot, initGlobal } from '../shared.js';
 import { consolidate } from '../consolidate.js';
 import { execSync } from 'child_process';
@@ -27,7 +27,7 @@ import { fetchGitLog, extractLessons, partitionLessons, deduplicateLesson, isGit
 import { loadConfig } from '../config.js';
 import { confidenceLabel } from '../memory.js';
 import { resolveTenantId } from '../tenant.js';
-import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, drillDown as apiDrillDown, assemble as apiAssemble, isPrivateScope, passesScopeFilterForRecall, buildSuppressionSummary, ambientSecretAdmit, type Context as ApiContext, type Actor as ApiActor } from '../api.js';
+import { recall as apiRecall, remember as apiRemember, outcome as apiOutcome, drillDown as apiDrillDown, assemble as apiAssemble, passesScopeFilterForRecall, buildSuppressionSummary, ambientSecretAdmit, type Context as ApiContext, type Actor as ApiActor } from '../api.js';
 import { assertScopeRequestAllowed } from '../recall-scope.js';
 import { resolveProjectIdentity, classifyOriginProject, findHippoStoreDir, type ResolveProjectIdentityOpts } from '../project-identity.js';
 import { computePredictionBaserate } from '../predictions.js';
@@ -113,6 +113,8 @@ export interface McpContext {
    * assuming admin, or a member key over HTTP-MCP would act as admin.
    */
   role?: 'admin' | 'member';
+  /** EI2: scope grants for the HTTP-MCP caller's key. Absent for stdio (admin, needs none). */
+  scopes?: readonly string[];
   /**
    * Per-client key for state isolation under HTTP-MCP. For stdio: 'stdio-${pid}'
    * (one process = one client). For HTTP-SSE / HTTP MCP: hash(bearer + remoteAddr)
@@ -128,7 +130,7 @@ export interface McpContext {
  * a member key never acts as admin through MCP.
  */
 function mcpActor(ctx: McpContext | undefined): ApiActor {
-  return { subject: ctx?.actor ?? 'mcp', role: ctx?.role ?? 'admin' };
+  return { subject: ctx?.actor ?? 'mcp', role: ctx?.role ?? 'admin', scopes: ctx?.scopes };
 }
 
 // MCP stdio transport spec: messages are newline-delimited JSON-RPC, no embedded newlines.
@@ -649,7 +651,7 @@ async function executeTool(
       // ordering and the strength bump on retrieval. Apply the same scope
       // rule as api.recall: explicit scope = exact match; no scope =
       // default-deny on ANY `<source>:private:*` AND 'unknown:legacy'.
-      // v1.2.1: generic-private check via api.isPrivateScope.
+      // EI2: one shared predicate (passesScopeFilterForRecall) so MCP never admits what SQL hides.
       const allEntries = loadAllEntries(hippoRoot, tenantId);
       // v1.12.13 / C5 — WYSIATI counters for the MCP physics/hybrid pipeline.
       // Per the plan-eng-critic round 1 CRIT resolution: MCP's user-visible
@@ -661,15 +663,7 @@ async function executeTool(
       const totalCandidatesCountMcp = allEntries.length;
       const entries = explicitScope
         ? allEntries.filter((e) => e.scope === explicitScope)
-        : allEntries.filter((e) => {
-            const s = e.scope ?? null;
-            if (s === null) return true;
-            if (isPrivateScope(s)) return false;
-            // v1.7.2: read from RECALL_DEFAULT_DENY_SCOPES (single source of truth
-            // shared with SQL clause + passesScopeFilterForRecall).
-            if (RECALL_DEFAULT_DENY_SCOPES.some((deny) => deny === s)) return false;
-            return true;
-          });
+        : allEntries.filter((e) => passesScopeFilterForRecall(e.scope ?? null, undefined));
       const droppedPreRankCountMcp = allEntries.length - entries.length;
       const usePhysics = config.physics?.enabled !== false;
       let results = usePhysics
@@ -1130,7 +1124,7 @@ async function executeTool(
       // results and the snapshot. Pre-v1.2 this surface returned all memories
       // and the snapshot unfiltered, which would have leaked private-channel
       // content to no-scope MCP callers once scope writers shipped.
-      assertScopeRequestAllowed(mcpActor(ctx).role, explicitScope);
+      assertScopeRequestAllowed(mcpActor(ctx), explicitScope);
       const allEntries = loadAllEntries(hippoRoot, tenantId);
       // v39 memory scope isolation: this surface reads the LOCAL store only,
       // but synced-down or legacy rows can still carry another project's

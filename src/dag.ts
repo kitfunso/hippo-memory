@@ -8,6 +8,7 @@ import {
 } from './store.js';
 import { RejectedValueError } from './rejection.js';
 import { redactSecrets } from './secret-detect.js';
+import { derivationScope, derivationPartitionKey } from './recall-scope.js';
 
 export interface FactCluster {
   label: string;
@@ -150,12 +151,15 @@ export async function buildDag(
   // behavior there.
   const unparentedByTenant = new Map<string, MemoryEntry[]>();
   for (const fact of unparented) {
-    const bucket = unparentedByTenant.get(fact.tenantId);
+    const key = derivationPartitionKey(fact.tenantId, fact.scope);
+    const bucket = unparentedByTenant.get(key);
     if (bucket) bucket.push(fact);
-    else unparentedByTenant.set(fact.tenantId, [fact]);
+    else unparentedByTenant.set(key, [fact]);
   }
 
-  for (const [factTenant, tenantFacts] of unparentedByTenant) {
+  for (const [, tenantFacts] of unparentedByTenant) {
+    const factTenant = tenantFacts[0].tenantId;
+    const factScope = derivationScope(tenantFacts[0].scope);
     const clusters = clusterFacts(tenantFacts);
     const eligibleClusters = clusters.filter((c) => c.members.length >= 3);
     result.candidateClusters += eligibleClusters.length;
@@ -179,6 +183,7 @@ export async function buildDag(
         confidence: 'inferred',
         dag_level: 2,
         tenantId: factTenant,
+        scope: factScope,
       });
       // Schema v25: cache descendant_count + earliest/latest_at on the summary
       // row so DAG-aware recall (docs/plans/2026-05-05-dag-recall.md Task 2)
@@ -419,12 +424,15 @@ export async function buildEntityProfiles(
   const byTenant = new Map<string, MemoryEntry[]>();
   for (const l2 of unparented) {
     const tid = l2.tenantId ?? 'default';
-    const list = byTenant.get(tid) ?? [];
+    const key = derivationPartitionKey(tid, l2.scope);
+    const list = byTenant.get(key) ?? [];
     list.push(l2);
-    byTenant.set(tid, list);
+    byTenant.set(key, list);
   }
 
-  for (const [tenantId, tenantL2s] of byTenant) {
+  for (const [, tenantL2s] of byTenant) {
+    const tenantId = tenantL2s[0].tenantId ?? 'default';
+    const scope = derivationScope(tenantL2s[0].scope);
     const clusters = clusterFacts(tenantL2s);
     const eligible = clusters.filter((c) => c.members.length >= 2);
     result.candidateClusters += eligible.length;
@@ -448,6 +456,7 @@ export async function buildEntityProfiles(
         confidence: 'inferred',
         dag_level: 3,
         tenantId, // HIGH #1 fold: thread tenant explicitly
+        scope,
       });
       profileEntry.descendant_count = cluster.members.length;
       profileEntry.earliest_at = memberCreatedAts[0];

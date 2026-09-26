@@ -42,7 +42,7 @@ describe('AT1 rejection guard', () => {
       initStore(home);
       const db = openHippoDb(home);
       try {
-        expect(getSchemaVersion(db)).toBe(46);
+        expect(getSchemaVersion(db)).toBe(47);
       } finally {
         closeHippoDb(db);
       }

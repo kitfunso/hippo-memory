@@ -218,6 +218,8 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'conflict_resolve',      // AT1 — emitted by resolveConflict on every resolution path; lockstep
   'half_life_migrate',     // Decay default change — emitted by migrateDefaultHalfLife; lockstep with AuditOp union
   'dormant_restore',       // Dormant memories — emitted by api.restoreDormant; lockstep with AuditOp union + cli.ts VALID_AUDIT_OPS
+  'auth_grant',            // EI2: emitted by api.authGrant; lockstep with AuditOp union + cli.ts VALID_AUDIT_OPS
+  'auth_ungrant',          // EI2: emitted by api.authUngrant; lockstep with AuditOp union + cli.ts VALID_AUDIT_OPS
 ]);
 
 // Cap on GET /v1/audit?limit=. Matches docs/api.md (when written) and is large
@@ -635,6 +637,7 @@ function buildContextWithAuth(req: IncomingMessage, hippoRoot: string): Context 
         actor: {
           subject: `api_key:${result.keyId}`,
           role: result.role,
+          scopes: result.scopes,
         },
       };
     } finally {
@@ -3243,6 +3246,7 @@ async function handleRequest(
         actor: ctx.actor.subject,
         // The caller's real role: MCP tools must not run a member key as admin.
         role: ctx.actor.role,
+        scopes: ctx.actor.scopes,
         clientKey: buildMcpClientKey(req),
       });
     } catch (err) {

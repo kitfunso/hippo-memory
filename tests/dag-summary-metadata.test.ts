@@ -36,13 +36,13 @@ describe('schema v25 — DAG summary metadata', () => {
   afterEach(() => safeRmSync(root));
 
   it('current schema version is 25', () => {
-    expect(getCurrentSchemaVersion()).toBe(46);
+    expect(getCurrentSchemaVersion()).toBe(47);
   });
 
   it('fresh init brings DB to v25 with the three new columns', () => {
     const db = openHippoDb(root);
     try {
-      expect(getSchemaVersion(db)).toBe(46);
+      expect(getSchemaVersion(db)).toBe(47);
       // SAFETY: PRAGMA table_info always returns rows shaped
       // `{ name: string, ... }`; `name` is optional here only to tolerate a
       // driver that omits an unexpected column.

@@ -69,8 +69,8 @@ describe('test 1: fresh store, single open', () => {
       expect(indexNames(db, 'card_runs')).toContain('idx_card_runs_tenant_card');
       expect(indexNames(db, 'card_comments')).toContain('idx_card_comments_tenant_card');
       expect(indexNames(db, 'session_handoffs')).toContain('idx_session_handoffs_tenant_card');
-      expect(getSchemaVersion(db)).toBe(46);
-      expect(getCurrentSchemaVersion()).toBe(46);
+      expect(getSchemaVersion(db)).toBe(47);
+      expect(getCurrentSchemaVersion()).toBe(47);
     } finally {
       closeHippoDb(db);
     }
@@ -90,7 +90,7 @@ describe('test 2: a v42 store migrates to v43 with the four tables present, empt
 
     const db2 = openHippoDb(root);
     try {
-      expect(getSchemaVersion(db2)).toBe(46);
+      expect(getSchemaVersion(db2)).toBe(47);
       expect(countRows(db2, 'cards')).toBe(0);
       expect(countRows(db2, 'card_deps')).toBe(0);
       expect(countRows(db2, 'card_runs')).toBe(0);
