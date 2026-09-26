@@ -1939,6 +1939,11 @@ Hippo has never been shown to beat an agent with no memory. TE5 is the test and 
 3. **Scored run** as registered (H1 to H4), on fresh repositories.
 4. **Every Z item re-runs the same tasks** with its own `hippo` arm; an item that does not move cost per resolved task or repeated errors does not ship as a default.
 
+**Pre-compact audit (2026-09-26, 1.46.0 on the founder's box).** The snapshot is saved and re-injected after every compaction, and 1.46's global-store fallback ended the "store not initialized" losses. Three defects remain, all before Z0's pilot so the hippo arm is not measured with them:
+- **Task field is a background-agent notice** in 66 of 71 snapshots: `isNonHumanUserLine` (`src/capture.ts:648`) does not skip user lines Claude Code tags `promptSource: "system"`. Fix there; it cleans Task, Summary and extraction together.
+- **Pre-compact memories are mostly junk** (2 useful of the last 45): rule matches start at the keyword and drop the subject. Stop extracting in pre-compact, since SessionEnd capture covers it and the snapshot is the product.
+- **A stale snapshot can be restored** when pre-compact skips and the cwd has moved (one restore was about 25 hours old). Ignore snapshots older than about 15 minutes in `compact-resume`.
+
 #### Z1. Recall against the prompt, gated [next]
 The `UserPromptSubmit` hook reads the prompt from its payload and recalls against it, then applies TE6's gate: inject nothing when nothing clears it. Pinned rules stay. **Test first, no paid call:** replay the frozen SI0 corpus (`hippo-archive/transcripts-since-2026-09-01/`) and report overlap with the work and tokens injected, today's hook against Z1. **Ships if** overlap rises well above 0.057 and median injected tokens do not grow. Latency budget: the hook stays under the current 0.28 s at 10,000 memories.
 
