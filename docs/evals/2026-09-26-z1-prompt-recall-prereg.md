@@ -11,7 +11,7 @@ The `UserPromptSubmit` hook today injects pinned rules plus the five newest memo
 ## Data (real, private, read-only)
 
 - **Transcripts:** the frozen SI0 corpus, `hippo-archive/transcripts-since-2026-09-01/` (135 Claude Code session files, outside the repo). Nothing from it is committed; the result reports aggregates only.
-- **Stores:** read-only copies, taken 2026-09-26, of the global store (2,216 memories) and of every project store a hook prompt's `cwd` resolves to: hippo (644), prc26 (337), phzse (597), boring-maths (385), clawd (723), quantamental (508), luminus (178). A prompt's local store is the nearest ancestor `.hippo` of its recorded `cwd`; when that is the home directory, the local store is the global one and it is loaded once. The project name for the origin partition comes from `resolveProjectIdentity(cwd)`, as the hook computes it.
+- **Stores:** read-only copies, taken 2026-09-26, of the global store (2,216 memories) and of every project store a hook prompt's `cwd` resolves to: seven project stores holding 178 to 723 memories each (3,372 in total). A prompt's local store is the nearest ancestor `.hippo` of its recorded `cwd`; when that is the home directory, the local store is the global one and it is loaded once. The project name for the origin partition comes from `resolveProjectIdentity(cwd)`, as the hook computes it.
 - **Not replayable, left out of both arms:** the active-task snapshot, session handoff and session-event lines of the hook block. They are the same for A1 and Z1.
 - **Store as of `t`:** a prompt at time `t` sees only memories with `created < t`. Memories deleted or merged since then are gone and cannot be replayed (limit, stated in the result). Pinned and superseded flags are today's (limit).
 
