@@ -48,8 +48,8 @@ The access boundary of a memory's source, one channel or one repo (`slack:privat
 _Avoid_: ACL, permission, visibility
 
 **Restricted scope**:
-A scope default recall hides: `<source>:private:*`, or a quarantine bucket such as
-`unknown:legacy`. Reading one means naming it.
+A scope default recall hides: `<source>:private:*` (including `quarantine:private:*`), or a
+quarantine bucket such as `unknown:legacy`. Reading one means naming it.
 _Avoid_: private scope (it covers quarantine too), secret scope
 
 **Scope grant**:
@@ -62,6 +62,12 @@ A memory built from other memories' content: a consolidation merge, a DAG summar
 extracted fact. It carries the restricted scope of its sources and is never built from sources in
 two different restricted scopes, or from a restricted and an unrestricted one.
 _Avoid_: summary (one kind only), rollup
+
+**Quarantined memory**:
+Connector-ingested text that reads like instructions to an agent, held under a
+`quarantine:private:<original scope>` restricted scope until an admin approves (scope restored) or
+rejects it (stays hidden).
+_Avoid_: flagged memory, poisoned memory
 
 ### Work queue
 

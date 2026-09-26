@@ -28,7 +28,7 @@ const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: new (path: string, options?: { readOnly?: boolean }) => DatabaseSyncLike;
 };
 
-const CURRENT_SCHEMA_VERSION = 47;
+const CURRENT_SCHEMA_VERSION = 48;
 
 /**
  * Context passed to migrations that need to know WHERE the store lives.
@@ -2518,6 +2518,28 @@ const MIGRATIONS: Migration[] = [
           granted_at TEXT NOT NULL,
           PRIMARY KEY(key_id, scope)
         );
+      `);
+    },
+  },
+  {
+    version: 48,
+    up: (db) => {
+      // Quarantine (src/quarantine.ts, CD5): a poisoned or suspect memory sits here pending
+      // admin review instead of being hidden with no record. Additive only: no min_compatible_binary bump.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS memory_quarantine (
+          tenant_id      TEXT NOT NULL DEFAULT 'default',
+          memory_id      TEXT NOT NULL,
+          original_scope TEXT,
+          reason         TEXT NOT NULL,
+          status         TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+          quarantined_at TEXT NOT NULL,
+          decided_at     TEXT,
+          decided_by     TEXT,
+          PRIMARY KEY (tenant_id, memory_id)
+        ) WITHOUT ROWID;
+        CREATE INDEX IF NOT EXISTS idx_memory_quarantine_status
+          ON memory_quarantine(tenant_id, status, quarantined_at DESC);
       `);
     },
   },

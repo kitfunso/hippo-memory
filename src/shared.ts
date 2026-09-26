@@ -23,6 +23,7 @@ import { search, hybridSearch, SearchResult } from './search.js';
 import { evalNow } from './ablation.js';
 import { deriveOriginProject, classifyOriginProject, resolveGlobalRootDir } from './project-identity.js';
 import { detectSecret } from './secret-detect.js';
+import { isQuarantineScope } from './quarantine.js';
 import { RejectedValueError } from './rejection.js';
 import { embedMemory, embedAll } from './embeddings.js';
 
@@ -388,6 +389,13 @@ export function shareMemory(
     throw new Error(
       `Refusing to share ${id} to the global store: content matches secret material (${secret.reason}). ` +
       `Secrets stay in their owning project's store.`,
+    );
+  }
+
+  // CD5: a quarantined row is unreviewed input, not a lesson; sharing it would spread poison globally.
+  if (isQuarantineScope(entry.scope)) {
+    throw new Error(
+      `Refusing to share ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ${id}'.`,
     );
   }
 

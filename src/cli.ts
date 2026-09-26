@@ -4318,6 +4318,63 @@ function cmdDormant(
   console.log('Bring one back: hippo dormant restore <id>   Delete for good: hippo dormant forget <id>');
 }
 
+/** `hippo quarantine [list] [--all] [--json] [--global]`, `quarantine approve <id>`, `quarantine reject <id>` (CD5 poisoning defence). */
+function cmdQuarantine(
+  hippoRoot: string,
+  args: string[],
+  flags: Record<string, string | boolean | string[]>,
+): void {
+  const root = resolveAuthRoot(hippoRoot, flags);
+  const ctx: api.Context = {
+    hippoRoot: root,
+    tenantId: resolveTenantId({}),
+    actor: api.adminActor('cli'),
+  };
+  const sub = args[0];
+
+  if (sub === 'approve' || sub === 'reject') {
+    const id = (args[1] ?? '').trim();
+    if (!id) {
+      console.error(`Usage: hippo quarantine ${sub} <id>`);
+      process.exit(1);
+    }
+    try {
+      if (sub === 'approve') {
+        api.quarantineApprove(ctx, id);
+        console.log(`Approved ${id}: restored to its original scope.`);
+      } else {
+        api.quarantineReject(ctx, id);
+        console.log(`Rejected ${id}: stays quarantined.`);
+      }
+    } catch (err) {
+      console.error(`Could not ${sub} ${id}: ${err instanceof Error ? err.message : String(err)}`);
+      process.exit(1);
+    }
+    return;
+  }
+
+  const status = flags['all'] ? 'all' : 'pending';
+  const rows = api.quarantineList(ctx, { status });
+
+  if (flags['json']) {
+    console.log(JSON.stringify({ quarantine: rows }, null, 2));
+    return;
+  }
+  if (rows.length === 0) {
+    console.log(status === 'all' ? 'No quarantined memories.' : 'No pending quarantined memories.');
+    return;
+  }
+
+  console.log(`${rows.length} quarantined memor${rows.length === 1 ? 'y' : 'ies'} (newest first):\n`);
+  for (const row of rows) {
+    console.log(`--- ${row.id} [${row.status}]`);
+    console.log(`    ${row.contentPreview}`);
+    console.log(`    ${row.reason}, original scope ${row.originalScope ?? '(none)'}, quarantined ${row.quarantinedAt.slice(0, 10)}`);
+    console.log('');
+  }
+  console.log('Approve: hippo quarantine approve <id>   Reject: hippo quarantine reject <id>');
+}
+
 /**
  * `hippo tokens [--days <n>] [--json] [--global]`: the token ledger
  * (ROADMAP TE0). Tokens of memory text handed to agents per surface, blocks
@@ -8637,6 +8694,9 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'dormant_restore',       // Dormant memories — emitted by api.restoreDormant; lockstep with AuditOp union + server.ts VALID_AUDIT_OPS
   'auth_grant',            // EI2: emitted by api.authGrant; lockstep with AuditOp union + server.ts VALID_AUDIT_OPS
   'auth_ungrant',          // EI2: emitted by api.authUngrant; lockstep with AuditOp union + server.ts VALID_AUDIT_OPS
+  'quarantine',            // CD5: emitted by recordQuarantine; lockstep with AuditOp union + server.ts VALID_AUDIT_OPS
+  'quarantine_approve',    // CD5: emitted by api.quarantineApprove; lockstep
+  'quarantine_reject',     // CD5: emitted by api.quarantineReject; lockstep
 ]);
 
 function formatAuditRow(ev: AuditEvent): string {
@@ -9440,6 +9500,12 @@ Commands:
     --global               Operate on the global store
     dormant restore <id>   Bring a dormant memory back to active memory
     dormant forget <id>    Delete a dormant memory permanently
+  quarantine [list]        List memories a connector flagged as an instruction attempt, pending review
+    --all                  Include approved and rejected rows too (default: pending only)
+    --json                 Output as JSON
+    --global               Operate on the global store
+    quarantine approve <id> Restore a quarantined memory to its original scope
+    quarantine reject <id>  Keep a quarantined memory hidden for good
   capture-error            Store a failed tool call as an error memory (reads the Claude Code
                            PostToolUseFailure hook payload on stdin; skips routine failures)
   doctor                   Check the install: Node, store, schema, sleep, agent hooks
@@ -10224,6 +10290,10 @@ async function main(
 
     case 'dormant':
       cmdDormant(hippoRoot, args, flags);
+      break;
+
+    case 'quarantine':
+      cmdQuarantine(hippoRoot, args, flags);
       break;
 
     case 'tokens':

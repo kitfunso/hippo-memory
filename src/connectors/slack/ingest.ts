@@ -86,6 +86,7 @@ export function ingestMessage(ctx: Context, input: IngestInput): IngestResult {
       ctx,
       {
         ...opts,
+        untrusted: true,
         afterWrite: (innerDb, memoryId) => {
           const inserted = innerDb
             .prepare(

@@ -52,6 +52,9 @@ import {
   sleep,
   adminActor,
   recordTokens,
+  quarantineList,
+  quarantineApprove,
+  quarantineReject,
   type Context,
   type RecallOpts,
   type AssembleOpts,
@@ -220,6 +223,9 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'dormant_restore',       // Dormant memories — emitted by api.restoreDormant; lockstep with AuditOp union + cli.ts VALID_AUDIT_OPS
   'auth_grant',            // EI2: emitted by api.authGrant; lockstep with AuditOp union + cli.ts VALID_AUDIT_OPS
   'auth_ungrant',          // EI2: emitted by api.authUngrant; lockstep with AuditOp union + cli.ts VALID_AUDIT_OPS
+  'quarantine',            // CD5: emitted by recordQuarantine; lockstep with AuditOp union + cli.ts VALID_AUDIT_OPS
+  'quarantine_approve',    // CD5: emitted by api.quarantineApprove; lockstep
+  'quarantine_reject',     // CD5: emitted by api.quarantineReject; lockstep
 ]);
 
 // Cap on GET /v1/audit?limit=. Matches docs/api.md (when written) and is large
@@ -1341,6 +1347,58 @@ async function handleRequest(
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
     const result = authRevoke(ctx, keyMatch.keyId!);
     sendJson(res, 200, result);
+    return;
+  }
+
+  // GET /v1/quarantine?status=: CD5 review queue. quarantineList carries no role gate itself, so it's checked here.
+  if (method === 'GET' && path === '/v1/quarantine') {
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    if (ctx.actor.role !== 'admin') {
+      throw new HttpError(403, '/v1/quarantine requires admin role');
+    }
+    const statusRaw = query.get('status');
+    let status: 'pending' | 'approved' | 'rejected' | 'all' = 'pending';
+    if (statusRaw !== null) {
+      if (statusRaw !== 'pending' && statusRaw !== 'approved' && statusRaw !== 'rejected' && statusRaw !== 'all') {
+        throw new HttpError(400, 'status must be one of: pending | approved | rejected | all');
+      }
+      status = statusRaw;
+    }
+    sendJson(res, 200, { quarantine: quarantineList(ctx, { status }) });
+    return;
+  }
+
+  // POST /v1/quarantine/:id/approve: admin only; ForbiddenError falls through to mapApiError's 403.
+  const quarantineApproveMatch = matchPath('/v1/quarantine/:id/approve', path);
+  if (method === 'POST' && quarantineApproveMatch) {
+    validateIdSegment(quarantineApproveMatch.id!, 'memory id');
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    try {
+      quarantineApprove(ctx, quarantineApproveMatch.id!);
+      sendJson(res, 200, { approved: quarantineApproveMatch.id });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes('not quarantined')) throw new HttpError(404, msg);
+      if (msg.includes('is already')) throw new HttpError(409, msg);
+      throw e;
+    }
+    return;
+  }
+
+  // POST /v1/quarantine/:id/reject: admin only; ForbiddenError falls through to mapApiError's 403.
+  const quarantineRejectMatch = matchPath('/v1/quarantine/:id/reject', path);
+  if (method === 'POST' && quarantineRejectMatch) {
+    validateIdSegment(quarantineRejectMatch.id!, 'memory id');
+    const ctx = buildContextWithAuth(req, opts.hippoRoot);
+    try {
+      quarantineReject(ctx, quarantineRejectMatch.id!);
+      sendJson(res, 200, { rejected: quarantineRejectMatch.id });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes('not quarantined')) throw new HttpError(404, msg);
+      if (msg.includes('is already')) throw new HttpError(409, msg);
+      throw e;
+    }
     return;
   }
 
