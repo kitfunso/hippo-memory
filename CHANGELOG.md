@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.52.0 - 2026-09-26
+
+### Fixed
+
+- **TE5 task tools no longer keep bundled or broken tasks.** `make-tasks.mjs` skips a candidate commit that bundles too many test files or too much code (`--max-test-files`, `--max-code-lines`), excludes fixtures, snapshots and `conftest.py` from the run command while still writing them (`--run-exclude`), drops `e2e/` specs entirely, and reports a failed setup or a timed-out test command as an error instead of a false pass or fail. `ab-run.mjs` no longer imports `dist/` at load time, so `--dry-run` and tasks-file validation need no build; a task whose setup fails is now skipped (no session, no hidden-test run) and recorded `invalid: 'setup'` instead of being graded as a genuine "not resolved"; and the stale-memory arm can borrow a donor store from a previous run via `--donor-runs` when a tasks file has only one cluster.
+- **Background-agent notices no longer become the session task.** User lines Claude Code writes for itself (`promptSource: "system"`: task notifications, cross-session messages, scheduled prompts) are now skipped like meta and sidechain lines, so they stay out of the pre-compact snapshot's Task and Summary and out of SessionEnd capture mining.
+- **Pre-compact only saves a working-state snapshot; it no longer writes memories.** What it extracted was mostly fragments (2 useful of the last 45). SessionEnd capture still extracts, from the last 20 user and 10 assistant turns, so a decision made only before a compaction and outside that tail is no longer captured.
+- **compact-resume only restores a snapshot written for this compaction.** A snapshot older than 15 minutes is skipped as stale, even when its session id matches.
+
 ## 1.51.0 - 2026-09-26
 
 ### Added
