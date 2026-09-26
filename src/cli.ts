@@ -9710,9 +9710,10 @@ Commands:
                            'invalidated' re-weakens previously invalidated
                            memories - preview with --dry-run first
     --reason "<why>"       Optional: what replaced it
-  invalidate --churn       FE2: tag memories 'churn-stale' whose named file,
-                           symbol or npm script changed in this repo's git
-                           history since the memory was stored or confirmed
+  invalidate --churn       FE2: tag memories 'churn-stale' whose named file
+                           changed or was deleted, or whose named symbol or
+                           npm script was removed, in this repo's git history
+                           since the memory was stored or confirmed
     --dry-run              Preview what would be tagged; writes nothing
   wm <sub>                 Working memory — bounded buffer for current state
     wm push                Push a working memory entry
@@ -10639,9 +10640,11 @@ async function main(
           process.exit(1);
         }
         const churnDryRun = flags['dry-run'] === true;
+        let churnFailed = false;
         for (const { root, result } of runChurnStaleForRepo(hippoRoot, churnDryRun)) {
           if (result.error) {
             console.error(`Churn-staleness check failed for ${root}: ${result.error}`);
+            churnFailed = true;
             continue;
           }
           if (result.preview.length === 0) {
@@ -10656,6 +10659,7 @@ async function main(
             console.log(`Skipped ${result.skippedPinned.length} pinned: ${result.skippedPinned.join(', ')}`);
           }
         }
+        if (churnFailed) process.exit(1);
         break;
       }
       const target = args[0];

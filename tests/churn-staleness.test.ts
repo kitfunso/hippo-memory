@@ -676,6 +676,30 @@ describe('hippo invalidate --churn (CLI)', () => {
     expect(live.stdout).toContain('Tagged 1 memories');
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
   });
+
+  it('also tags this repo\'s memories in the global store', () => {
+    initStore(globalRoot);
+    const mem = createMemory('see k.ts for the setup', { tags: [] });
+    mem.created = ANCHOR;
+    mem.origin_project = path.basename(repoDir).toLowerCase();
+    writeEntry(globalRoot, mem);
+    fs.writeFileSync(path.join(repoDir, 'k.ts'), 'v2');
+    commit(repoDir, AFTER_ANCHOR);
+
+    runCli(repoDir, ['invalidate', '--churn'], env);
+    expect(readEntry(globalRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
+  });
+
+  it('exits non-zero when the git read fails', () => {
+    const mem = createMemory('see k.ts for the setup', { tags: [] });
+    mem.created = ANCHOR;
+    mem.origin_project = path.basename(repoDir).toLowerCase();
+    writeEntry(path.join(repoDir, '.hippo'), mem);
+    execFileSync('git', ['update-ref', '-d', 'HEAD'], { cwd: repoDir });
+
+    const { stderr } = runCli(repoDir, ['invalidate', '--churn'], env, { ok: false });
+    expect(stderr).toContain('Churn-staleness check failed');
+  });
 });
 
 describe('hippo sleep + config.churnStaleness.enabled (CLI)', () => {
