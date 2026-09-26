@@ -60,7 +60,7 @@ const CO_OCCURRENCE_GUARDED = new Set(['sk-style-key', 'sk-underscore-key']);
 
 // redactSecretsStrict-only: too noisy for whole-entry memory scanning, worth hiding once text leaves the machine.
 const STRICT_ONLY_PATTERNS: readonly RegExp[] = [
-  /\b[Bb]earer\s+[A-Za-z0-9._~+/-]{16,}=*/g,
+  /\bbearer\s+[A-Za-z0-9._~+/-]{16,}=*/gi,
   /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*/g,
 ];
 
