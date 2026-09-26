@@ -159,7 +159,8 @@ import {
   fetchGitLog,
   isGitRepo,
 } from './autolearn.js';
-import { extractInvalidationTarget, invalidateMatching, InvalidationTarget } from './invalidation.js';
+import { extractInvalidationTarget, invalidateMatching, InvalidationTarget, detectChurnStale, type ChurnStaleResult } from './invalidation.js';
+import { resolveProjectIdentity } from './project-identity.js';
 import { extractPathTags } from './path-context.js';
 import { detectScope, scopeMatch } from './scope.js';
 import {
@@ -345,6 +346,24 @@ function requireInit(hippoRoot: string): void {
   }
 }
 
+/** FE2: run detectChurnStale against every store this repo's memories can live in. */
+function runChurnStaleForRepo(hippoRoot: string, dryRun: boolean): { root: string; result: ChurnStaleResult }[] {
+  const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: process.cwd(), encoding: 'utf8' }).trim();
+  const projectName = resolveProjectIdentity(process.cwd()).name;
+  const globalRoot = getGlobalRoot();
+  const roots = globalRoot !== hippoRoot && isInitialized(globalRoot) ? [hippoRoot, globalRoot] : [hippoRoot];
+  const tenantId = resolveTenantId({});
+  return roots.map((root) => {
+    // One store failing must not abort sleep's later phases or skip the other store.
+    try {
+      return { root, result: detectChurnStale(root, repoRoot, { tenantId, projectName, dryRun }) };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { root, result: { checked: 0, marked: 0, alreadyMarked: 0, skippedPinned: [], dryRun, preview: [], error: message } };
+    }
+  });
+}
+
 /**
  * H2: when HIPPO_REQUIRE_SERVER is set, the CLI must not silently fall back to
  * direct DB mode — a missing server then masks a real misconfiguration (the
@@ -416,7 +435,7 @@ async function runViaServerIfAvailable(
 // and as off under === true (`--pin=true` would not pin), so parseArgs and main() refuse one.
 // tests/cli-parse-flag-equals.test.ts fails when a switch read is missing from this set.
 export const BOOLEAN_FLAGS: ReadonlySet<string> = new Set([
-  'all', 'all-tenants', 'archive', 'auto', 'bad', 'bootstrap', 'classic', 'continuity',
+  'all', 'all-tenants', 'archive', 'auto', 'bad', 'bootstrap', 'classic', 'churn', 'continuity',
   'cross-project', 'dry-run', 'equal-sources', 'error', 'evc-adaptive', 'extract',
   'filter-conflicts', 'fix', 'force', 'forget', 'git', 'global', 'good', 'graph-stream',
   'help', 'include-logs', 'include-superseded', 'inferred', 'json', 'last-session', 'multihop', 'no-hooks',
@@ -2445,6 +2464,7 @@ async function cmdExplain(
       if (b.pathBoost !== 1) console.log(`    path:      x${fmt(b.pathBoost, 3)}  (cwd path tag overlap)`);
       if (b.sourceBump !== 1) console.log(`    source:    x${fmt(b.sourceBump, 2)}  (local priority bump over global)`);
       if (b.outcomeBoost !== 1) console.log(`    outcome:   x${fmt(b.outcomeBoost, 3)}  (user feedback: pos-neg = ${(r.entry.outcome_positive ?? 0) - (r.entry.outcome_negative ?? 0)})`);
+      if (b.churnStaleMultiplier !== 1) console.log(`    churn:     x${fmt(b.churnStaleMultiplier, 2)}  (tagged 'churn-stale')`);
       if (b.preMmrRank !== undefined && b.postMmrRank !== undefined && b.preMmrRank !== b.postMmrRank) {
         const arrow = b.postMmrRank < b.preMmrRank ? 'up' : 'down';
         console.log(`    mmr:       rank ${b.preMmrRank} -> ${b.postMmrRank}  (diversity ${arrow})`);
@@ -3160,6 +3180,14 @@ async function cmdSleepCore(
     if (config.autoLearnOnSleep && isGitRepo(process.cwd())) {
       const { added } = learnFromRepo(hippoRoot, process.cwd(), 1);
       if (added > 0) console.log(`Auto-learned ${added} lessons from today's git commits.`);
+    }
+
+    // FE2: opt-in code-churn staleness, off by default (config.churnStaleness.enabled).
+    if (config.churnStaleness.enabled && isGitRepo(process.cwd())) {
+      for (const { root, result } of runChurnStaleForRepo(hippoRoot, false)) {
+        if (result.marked > 0) console.log(`Tagged ${result.marked} memories churn-stale in ${root}.`);
+        if (result.error) console.error(`Churn-staleness check failed for ${root}: ${result.error}`);
+      }
     }
 
     // Also learn from Claude Code MEMORY.md files
@@ -9682,6 +9710,10 @@ Commands:
                            'invalidated' re-weakens previously invalidated
                            memories - preview with --dry-run first
     --reason "<why>"       Optional: what replaced it
+  invalidate --churn       FE2: tag memories 'churn-stale' whose named file,
+                           symbol or npm script changed in this repo's git
+                           history since the memory was stored or confirmed
+    --dry-run              Preview what would be tagged; writes nothing
   wm <sub>                 Working memory — bounded buffer for current state
     wm push                Push a working memory entry
       --scope <scope>      Scope name (default: default)
@@ -9794,6 +9826,7 @@ Examples:
   hippo invalidate "REST API" --dry-run
   hippo invalidate "REST API" --reason "migrated to GraphQL"
   hippo invalidate --id mem_a1b2c3d4e5f6 --reason "superseded by new policy"
+  hippo invalidate --churn --dry-run
   hippo export memories.json
   hippo export --format markdown memories.md
   hippo sleep --dry-run
@@ -10595,6 +10628,36 @@ async function main(
 
     case 'invalidate': {
       requireInit(hippoRoot);
+      if (flags['churn'] === true) {
+        if (args[0] || flags['id'] !== undefined) {
+          console.error('Usage: hippo invalidate --churn [--dry-run]');
+          console.error('--churn takes no pattern or --id.');
+          process.exit(1);
+        }
+        if (!isGitRepo(process.cwd())) {
+          console.error('hippo invalidate --churn must run inside a git repository.');
+          process.exit(1);
+        }
+        const churnDryRun = flags['dry-run'] === true;
+        for (const { root, result } of runChurnStaleForRepo(hippoRoot, churnDryRun)) {
+          if (result.error) {
+            console.error(`Churn-staleness check failed for ${root}: ${result.error}`);
+            continue;
+          }
+          if (result.preview.length === 0) {
+            console.log(`No churn-stale candidates in ${root}.`);
+          } else if (churnDryRun) {
+            console.log(`DRY RUN - ${result.marked} memories in ${root} WOULD be tagged churn-stale (${result.alreadyMarked} already tagged):`);
+          } else {
+            console.log(`Tagged ${result.marked} memories churn-stale in ${root} (${result.alreadyMarked} already tagged):`);
+          }
+          result.preview.forEach(p => console.log(`   ${p.id}  ${p.evidence}  ${p.already ? '(already) ' : ''}${p.headline}`));
+          if (result.skippedPinned.length > 0) {
+            console.log(`Skipped ${result.skippedPinned.length} pinned: ${result.skippedPinned.join(', ')}`);
+          }
+        }
+        break;
+      }
       const target = args[0];
       if (flags['id'] === true) {
         // Value-less --id must never silently fall through to pattern mode

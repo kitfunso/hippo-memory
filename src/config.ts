@@ -122,6 +122,11 @@ export interface HippoConfig {
      *  Default 180. 0 keeps dormant memories forever. */
     retentionDays: number;
   };
+  /** FE2: tags a memory `churn-stale` when its named file/symbol/script
+   *  changed since storage. Default OFF - FE3 measures before it flips. */
+  churnStaleness: {
+    enabled: boolean;
+  };
 }
 
 const DEFAULT_CONFIG: HippoConfig = {
@@ -192,6 +197,9 @@ const DEFAULT_CONFIG: HippoConfig = {
     enabled: true,
     retentionDays: 180,
   },
+  churnStaleness: {
+    enabled: false,
+  },
 };
 
 function isMemoryValueConfig(
@@ -203,6 +211,12 @@ function isMemoryValueConfig(
 function isDormantConfig(
   value: HippoConfig['dormant'] | undefined,
 ): value is HippoConfig['dormant'] {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isChurnStalenessConfig(
+  value: HippoConfig['churnStaleness'] | undefined,
+): value is HippoConfig['churnStaleness'] {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
@@ -259,6 +273,26 @@ export function loadConfig(hippoRoot: string): HippoConfig {
       );
       dormantRetentionDays = DEFAULT_CONFIG.dormant.retentionDays;
     }
+    // Same "never silently wrong" rule as memoryValue/dormant above.
+    const churnStalenessRaw = raw.churnStaleness;
+    const validChurnStalenessConfig = churnStalenessRaw === undefined || isChurnStalenessConfig(churnStalenessRaw);
+    if (!validChurnStalenessConfig) {
+      console.error(
+        `Warning: config.json's "churnStaleness" must be an object like {"enabled": true} ` +
+        `(got ${JSON.stringify(churnStalenessRaw)}) - using defaults.`,
+      );
+    }
+    let churnStalenessEnabled =
+      churnStalenessRaw !== undefined && isChurnStalenessConfig(churnStalenessRaw)
+        ? churnStalenessRaw.enabled
+        : DEFAULT_CONFIG.churnStaleness.enabled;
+    if (churnStalenessEnabled !== true && churnStalenessEnabled !== false) {
+      console.error(
+        `Warning: config.json's "churnStaleness.enabled" must be true or false ` +
+        `(got ${JSON.stringify(churnStalenessEnabled)}) - using false.`,
+      );
+      churnStalenessEnabled = false;
+    }
     return {
       defaultHalfLifeDays: raw.defaultHalfLifeDays ?? DEFAULT_CONFIG.defaultHalfLifeDays,
       defaultBudget: raw.defaultBudget ?? DEFAULT_CONFIG.defaultBudget,
@@ -289,6 +323,9 @@ export function loadConfig(hippoRoot: string): HippoConfig {
       dormant: {
         enabled: dormantEnabled,
         retentionDays: dormantRetentionDays,
+      },
+      churnStaleness: {
+        enabled: churnStalenessEnabled,
       },
     };
   } catch (err) {

@@ -1807,8 +1807,9 @@ What stays open:
 - **Ranking:** uses outcomes, supersession and strengthening. Time applies only as a tie-break among competing versions of the same fact, not as a penalty on every memory.
 - **Retention:** deletion and dormancy are decided by value (never recalled, never confirmed, low outcomes), not by age alone.
 
-#### FE2. Staleness from code churn [planned]
+#### FE2. Staleness from code churn [built, opt-in: `churnStaleness.enabled`, default off]
 A lesson that names a file, symbol or command is marked stale when that file changes or is deleted after the lesson was stored. It builds on `src/invalidation.ts`. Staleness lowers the lesson's rank and flags it for confirmation; it never deletes it.
+Measured on a copy of the founder's store: 73 of 1,106 lessons flagged, 44 of them still true (60% false stale, 75% counting misattributions). File-level churn is too blunt to default on; FE3 must beat this. See `docs/evals/2026-09-26-fe2-churn-false-stale.md`.
 
 #### FE3. Registered test of the new forgetting [planned, before FE1 or FE2 ship as defaults]
 **E1 on fresh seeds (61 to 80),** with these arms:

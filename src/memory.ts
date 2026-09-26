@@ -149,6 +149,9 @@ export const PROJECT_BRIEF_HALF_LIFE_DAYS = 90;
 
 export const CUSTOMER_NOTE_HALF_LIFE_DAYS = 90;
 
+/** FE2: tag on a memory whose named file/symbol/script changed after it was stored. */
+export const CHURN_STALE_TAG = 'churn-stale';
+
 // Emotional multipliers from PLAN.md.
 //
 // v1.13.5 / J5 loss-aversion calibration (Lovallo-Kahneman TFAS empirics:

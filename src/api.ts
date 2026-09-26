@@ -62,6 +62,7 @@ import {
   type MemoryKind,
   type MemoryEntry,
   Layer,
+  CHURN_STALE_TAG,
 } from './memory.js';
 import {
   appendAuditEvent,
@@ -1710,7 +1711,10 @@ export function outcome(
     for (const id of ids) {
       const entry = readEntry(ctx.hippoRoot, id, ctx.tenantId);
       if (!entry) continue;
-      const updated = applyOutcome(entry, good);
+      let updated = applyOutcome(entry, good);
+      if (good && updated.tags.includes(CHURN_STALE_TAG)) { // FE2: a good outcome reconfirms the entry
+        updated = { ...updated, tags: updated.tags.filter((t) => t !== CHURN_STALE_TAG) };
+      }
       writeEntry(ctx.hippoRoot, updated, { actor: ctx.actor.subject });
       appendAuditEvent(db, {
         tenantId: ctx.tenantId,
