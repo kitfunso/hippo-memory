@@ -534,6 +534,8 @@ export function autoShare(
   );
 
   const candidates = localEntries.filter((entry) => {
+    // CD5: shareMemory refuses quarantined rows; filtering here keeps sleep from aborting on one.
+    if (isQuarantineScope(entry.scope ?? null)) return false;
     const score = transferScore(entry);
     if (score < minScore) return false;
 

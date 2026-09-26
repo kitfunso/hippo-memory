@@ -18,8 +18,8 @@ const INSTRUCTION_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   { name: 'unicode-tag-chars', re: /[\u{E0000}-\u{E007F}]/u },
 ];
 
-// A stray zero-width char has legitimate uses (ZWJ); only a 3+ cluster reads as smuggling.
-const ZERO_WIDTH_RE = /[\u200B-\u200F\u2060-\u2064]/g;
+// A stray zero-width char has legitimate uses (ZWJ); only a run of 3+ adjacent ones reads as smuggling.
+const ZERO_WIDTH_RUN_RE = /[\u200B-\u200F\u2060-\u2064]{3,}/;
 
 export function detectInstruction(content: string): InstructionDetection {
   for (const { name, re } of INSTRUCTION_PATTERNS) {
@@ -27,8 +27,7 @@ export function detectInstruction(content: string): InstructionDetection {
       return { flagged: true, reason: `pattern:${name}` };
     }
   }
-  const zeroWidthMatches = content.match(ZERO_WIDTH_RE);
-  if (zeroWidthMatches && zeroWidthMatches.length >= 3) {
+  if (ZERO_WIDTH_RUN_RE.test(content)) {
     return { flagged: true, reason: 'pattern:zero-width-smuggling' };
   }
   return { flagged: false, reason: null };

@@ -12,5 +12,5 @@
   row is stored under a restricted `quarantine:private:*` scope instead of its normal scope, so
   default recall, `hippo_context` and the hook never surface it until an admin approves it.
   CLI/HTTP/MCP `remember` and local single-user mode are unaffected.
-- **A quarantined row can no longer be shared to the global store**, even with `--force`, and it
-  takes no part in conflict detection, so it cannot mark a visible memory as conflicted.
+- **A quarantined row can no longer be shared to the global store**, even with `--force` or by
+  sleep auto-share, and it takes no part in conflict detection, so it cannot mark a visible memory as conflicted.

@@ -51,6 +51,11 @@ describe('detectInstruction patterns', () => {
     expect(reason(`looks innocent ${zw} but is not`)).toBe('pattern:zero-width-smuggling');
   });
 
+  it('does not flag separated ZWJ emoji (three joiners, none adjacent)', () => {
+    const zwj = '\u200D';
+    expect(detectInstruction(`👩${zwj}💻 Alice, 👨${zwj}💻 Bob, 👩${zwj}🏫 Carol`).flagged).toBe(false);
+  });
+
   it('does not flag one stray zero-width char (legitimate ZWJ use)', () => {
     expect(detectInstruction('emoji\u200Djoin sequence').flagged).toBe(false);
   });

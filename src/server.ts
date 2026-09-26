@@ -1379,7 +1379,7 @@ async function handleRequest(
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('not quarantined')) throw new HttpError(404, msg);
-      if (msg.includes('is already')) throw new HttpError(409, msg);
+      if (msg.includes('is already') || msg.includes('scope changed')) throw new HttpError(409, msg);
       throw e;
     }
     return;
