@@ -14,7 +14,7 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { extractFromText, preCompactMessage, postCompactMessage, preCompactReportPath } from '../src/capture.js';
 import { lessonFromFailure, captureToolFailure, failureSignature } from '../src/capture-error.js';
-import { initStore, loadAllEntries, getHippoRoot } from '../src/store.js';
+import { initStore, loadAllEntries, loadActiveTaskSnapshot, getHippoRoot } from '../src/store.js';
 import { installJsonHooks } from '../src/hooks.js';
 import { runDoctor } from '../src/doctor.js';
 
@@ -62,9 +62,15 @@ describe('transcript mining', () => {
       fs.writeFileSync(transcript, lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
       const payload = JSON.stringify({ session_id: 's1', transcript_path: transcript, cwd: dir, hook_event_name: 'PreCompact', trigger: 'manual' });
       expect(run(['pre-compact'], dir, env, payload).status).toBe(0);
-      const contents = loadAllEntries(getHippoRoot(dir), 'default').map((e) => e.content).join(' | ');
-      expect(contents).toMatch(/npm install/);
-      expect(contents).not.toMatch(/restart the server|local commands|Never mind this output/i);
+
+      const hippoRoot = getHippoRoot(dir);
+      expect(loadAllEntries(hippoRoot, 'default')).toHaveLength(0);
+      const snapshot = loadActiveTaskSnapshot(hippoRoot, 'default');
+      expect(snapshot).not.toBeNull();
+      expect(snapshot!.task).toMatch(/npm install/);
+      expect(snapshot!.summary).toMatch(/npm install/);
+      expect(snapshot!.task).not.toMatch(/restart the server|local commands|Never mind this output/i);
+      expect(snapshot!.summary).not.toMatch(/restart the server|local commands|Never mind this output/i);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
@@ -73,10 +79,9 @@ describe('transcript mining', () => {
   it('after compaction the user is told what hippo saved, once, and pre-compact prints nothing', () => {
     // Claude Code passes PreCompact stdout to the summarising model as
     // instructions, so the message comes from the PostCompact hook instead.
-    expect(preCompactMessage({ snapshotSaved: false, captured: 0 })).toBeNull();
-    expect(preCompactMessage({ snapshotSaved: false, captured: 1 })).toBe('Hippo saved 1 new memory before compacting.');
-    expect(preCompactMessage({ snapshotSaved: true, captured: 3 })).toBe(
-      'Hippo saved your task snapshot and 3 new memories before compacting. The snapshot is restored into the new context.',
+    expect(preCompactMessage({ snapshotSaved: false })).toBeNull();
+    expect(preCompactMessage({ snapshotSaved: true })).toBe(
+      'Hippo saved your task snapshot before compacting. The snapshot is restored into the new context.',
     );
 
     const { dir, env } = scratch();
@@ -99,7 +104,7 @@ describe('transcript mining', () => {
       expect(pre.stdout).toBe('');
       const shown = post('s1');
       expect(shown.status).toBe(0);
-      expect(shown.stdout.trim()).toMatch(/^Hippo saved your task snapshot( and \d+ new memor(y|ies))? before compacting\. The snapshot is restored/);
+      expect(shown.stdout.trim()).toBe('Hippo saved your task snapshot before compacting. The snapshot is restored into the new context.');
       expect(post('s1').stdout).toBe('');
 
       // Another session's report is not shown.

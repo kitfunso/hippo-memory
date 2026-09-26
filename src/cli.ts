@@ -90,6 +90,7 @@ import {
   updateStats,
   saveActiveTaskSnapshot,
   loadActiveTaskSnapshot,
+  loadFreshActiveTaskSnapshot,
   closeTaskSnapshotsForSession,
   clearActiveTaskSnapshot,
   appendSessionEvent,
@@ -3256,6 +3257,9 @@ function cmdLastSleep(flags: Record<string, string | boolean | string[]>): void 
 // printSessionEvents stays untouched for every other caller.
 const COMPACT_RESUME_EVENT_CONTENT_CAP = 400;
 
+// A snapshot older than this was not written for this compaction (pre-compact skipped), so restoring it is stale, not a resume.
+const COMPACT_RESUME_MAX_AGE_MS = 15 * 60_000;
+
 function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdinTimedOut: boolean): void {
   try {
     // X3: gate on the non-exiting isInitialized check before any
@@ -3307,7 +3311,7 @@ function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdi
 
     if (!suppressOutput) {
       const tenantId = resolveTenantId({});
-      const snapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
+      const snapshot = loadFreshActiveTaskSnapshot(hippoRoot, tenantId, { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS });
       // X5: concurrent sessions must not cross-restore. Only suppress when
       // BOTH ids are present and differ — either side missing, or a manual
       // invocation with no payload session_id, still prints.
@@ -9677,7 +9681,7 @@ Commands:
   last-sleep               Print the last 'hippo sleep --log-file' output and clear it
     --path <p>             Log path (default: ~/.hippo/logs/last-sleep.log)
     --keep                 Print without clearing
-  pre-compact              PreCompact hook: snapshot + capture the tail before compaction
+  pre-compact              PreCompact hook: save a working-state snapshot before compaction
     --log-file <p>         Diagnostic log path (default: ~/.hippo/logs/pre-compact.log)
   compact-resume           SessionStart(compact) hook: re-print the snapshot + session trail
   post-compact             PostCompact hook: tell the user what pre-compact saved

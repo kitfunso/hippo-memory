@@ -129,6 +129,17 @@ describe('summariseTranscript', () => {
     expect(summary).toContain('hello');
     expect(summary).toContain('world');
   });
+
+  it('drops promptSource: system lines but keeps queued ones', () => {
+    const jsonl = transcriptJsonl([
+      { type: 'user', message: { role: 'user', content: 'please fix the login bug' }, promptSource: 'queued' },
+      { type: 'user', message: { role: 'user', content: 'Task notification: session idle timeout reached' }, promptSource: 'system' },
+    ]);
+
+    const summary = summariseTranscript(jsonl);
+    expect(summary).toContain('please fix the login bug');
+    expect(summary).not.toContain('session idle timeout reached');
+  });
 });
 
 describe('resolveLastSessionTranscript', () => {

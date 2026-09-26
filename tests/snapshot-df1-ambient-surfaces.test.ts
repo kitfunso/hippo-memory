@@ -163,7 +163,7 @@ describe('8. explicit-surface regression: unaffected by the DF1 bound (real CLI)
     expect(parsed.snapshot!.task).toBe('stale but explicitly requested task');
   });
 
-  it('`compact-resume` same-session path still restores a 7d-old backdated row (X5 unchanged)', () => {
+  it('`compact-resume` no longer exempts a same-session 7d-old backdated row: the 15-min age gate has no owner exemption', () => {
     const hippoRoot = getHippoRoot(dir);
     const saved = saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'stale same-session compact-resume task',
@@ -178,8 +178,7 @@ describe('8. explicit-surface regression: unaffected by the DF1 bound (real CLI)
     const result = runHippo(['compact-resume'], dir, env, payload);
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain('Restored after compaction');
-    expect(result.stdout).toContain('stale same-session compact-resume task');
+    expect(result.stdout).not.toContain('stale same-session compact-resume task');
   });
 });
 

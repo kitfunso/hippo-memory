@@ -17,6 +17,7 @@ import {
   PRE_COMPACT_SUMMARY_CAP,
   PRE_COMPACT_NEXT_STEP_CAP,
 } from '../src/capture.js';
+import { openHippoDb, closeHippoDb } from '../src/db.js';
 
 // Always run against the local built CLI so we're testing our source, not a
 // stale globally-installed version (mirrors tests/pinned-inject.test.ts).
@@ -42,6 +43,17 @@ function withScratchEnv() {
 
 function transcriptJsonl(entries: unknown[]): string {
   return entries.map((e) => JSON.stringify(e)).join('\n') + '\n';
+}
+
+/** Backdates the active snapshot's updated_at directly in sqlite, to test compact-resume's age gate without waiting real minutes. */
+function backdateActiveSnapshot(hippoRoot: string, tenantId: string, minutesAgo: number): void {
+  const db = openHippoDb(hippoRoot);
+  try {
+    const at = new Date(Date.now() - minutesAgo * 60_000).toISOString();
+    db.prepare(`UPDATE task_snapshots SET updated_at = ? WHERE tenant_id = ? AND status = 'active'`).run(at, tenantId);
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 function runHippo(
@@ -76,7 +88,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  it('writes a task_snapshots row (source=pre-compact, payload session_id) and extracts memories from a synthetic transcript', () => {
+  it('writes a task_snapshots row (source=pre-compact, payload session_id) and writes zero memories', () => {
     const transcriptPath = path.join(dir, 'transcript.jsonl');
     fs.writeFileSync(
       transcriptPath,
@@ -126,8 +138,35 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     expect(snapshot!.summary).toContain('PostgreSQL');
 
     const entries = loadAllEntries(hippoRoot, 'default');
-    const decision = entries.find((e) => e.content.includes('PostgreSQL'));
-    expect(decision).toBeDefined();
+    expect(entries).toHaveLength(0);
+  });
+
+  it('last user line is a Claude Code system notification -> Task falls back to the previous typed line, notice stays out of Summary', () => {
+    const transcriptPath = path.join(dir, 'system-notification.jsonl');
+    fs.writeFileSync(
+      transcriptPath,
+      transcriptJsonl([
+        { type: 'user', message: { role: 'user', content: 'fix the login bug' } },
+        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'Looking into the login bug now.' }] } },
+        { type: 'user', promptSource: 'system', message: { role: 'user', content: '<task-notification>Another Claude session finished a task.</task-notification>' } },
+      ]),
+    );
+
+    const payload = JSON.stringify({
+      session_id: 'sess-system-notification',
+      transcript_path: transcriptPath,
+      cwd: dir,
+      hook_event_name: 'PreCompact',
+    });
+
+    const result = runHippo(['pre-compact'], dir, env, payload);
+    expect(result.status).toBe(0);
+
+    const snapshot = loadActiveTaskSnapshot(getHippoRoot(dir), 'default');
+    expect(snapshot).not.toBeNull();
+    expect(snapshot!.task).toBe('fix the login bug');
+    expect(snapshot!.summary).not.toContain('task-notification');
+    expect(snapshot!.summary).not.toContain('Another Claude session');
   });
 
   it('missing transcript_path (no auto-discovery fallback in the scratch env) -> exit 0, no snapshot written', () => {
@@ -271,7 +310,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     expect(loadActiveTaskSnapshot(getHippoRoot(dir), 'default')).toBeNull();
   });
 
-  it('empty transcript file -> exit 0, no snapshot written (skip rule: empty summary + no extracted items)', () => {
+  it('empty transcript file -> exit 0, no snapshot written (skip rule: empty summary)', () => {
     const transcriptPath = path.join(dir, 'empty.jsonl');
     fs.writeFileSync(transcriptPath, '');
     const payload = JSON.stringify({
@@ -456,7 +495,7 @@ describe('codex round-2 regressions (CX5/CX6/CX7)', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  it('CX5: extracted memories are redacted, not just the snapshot fields', () => {
+  it('CX5: the snapshot is redacted, and pre-compact writes zero memories', () => {
     const transcriptPath = path.join(dir, 'cx5.jsonl');
     fs.writeFileSync(
       transcriptPath,
@@ -475,14 +514,13 @@ describe('codex round-2 regressions (CX5/CX6/CX7)', () => {
     const result = runHippo(['pre-compact'], dir, env, payload);
     expect(result.status).toBe(0);
 
-    const entries = loadAllEntries(getHippoRoot(dir), 'default');
-    for (const entry of entries) {
-      expect(entry.content).not.toContain('ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
-    }
-    const decision = entries.find((e) => e.content.includes('deploy bot'));
-    if (decision) {
-      expect(decision.content).toContain('[REDACTED]');
-    }
+    const hippoRoot = getHippoRoot(dir);
+    expect(loadAllEntries(hippoRoot, 'default')).toHaveLength(0);
+    const snapshot = loadActiveTaskSnapshot(hippoRoot, 'default');
+    expect(snapshot).not.toBeNull();
+    expect(snapshot!.task).not.toContain('ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+    expect(snapshot!.summary).not.toContain('ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+    expect(snapshot!.task).toContain('[REDACTED]');
   });
 
   it("CX6: per-field fallback never carries another session's content into this session's snapshot", () => {
@@ -759,6 +797,34 @@ describe('hippo compact-resume (SessionStart(compact) injector, real store)', ()
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('no-session-id task');
+  });
+
+  it('DF-Z0: snapshot updated 16 min ago -> silent, even with a matching session id', () => {
+    const hippoRoot = getHippoRoot(dir);
+    saveActiveTaskSnapshot(hippoRoot, 'default', {
+      task: 'stale snapshot task', summary: 's', next_step: 'n', source: 'pre-compact', session_id: 'sess-stale',
+    });
+    backdateActiveSnapshot(hippoRoot, 'default', 16);
+
+    const payload = JSON.stringify({ session_id: 'sess-stale', source: 'compact' });
+    const result = runHippo(['compact-resume'], dir, env, payload);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim()).toBe('');
+  });
+
+  it('DF-Z0: snapshot updated 14 min ago -> prints', () => {
+    const hippoRoot = getHippoRoot(dir);
+    saveActiveTaskSnapshot(hippoRoot, 'default', {
+      task: 'fresh-enough snapshot task', summary: 's', next_step: 'n', source: 'pre-compact', session_id: 'sess-fresh',
+    });
+    backdateActiveSnapshot(hippoRoot, 'default', 14);
+
+    const payload = JSON.stringify({ session_id: 'sess-fresh', source: 'compact' });
+    const result = runHippo(['compact-resume'], dir, env, payload);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('fresh-enough snapshot task');
   });
 
   it('X8: session event content is capped at 400 chars in compact-resume output', () => {
