@@ -74,11 +74,9 @@ async function addChunk(body) {
   if (text.trim().length < 3) return { results: [] };
   const root = rootFor(body.user_id);
   initStore(root);
-  const entry = createMemory(text, {
-    tags: ['benchmark'],
-    source: 'benchmark',
-    ...(HALF_LIFE_DAYS !== undefined ? { baseHalfLifeDays: Number(HALF_LIFE_DAYS) } : {}),
-  });
+  const opts = { tags: ['benchmark'], source: 'benchmark' };
+  if (HALF_LIFE_DAYS !== undefined) opts.baseHalfLifeDays = Number(HALF_LIFE_DAYS);
+  const entry = createMemory(text, opts);
   if (Number.isFinite(body.timestamp)) {
     const iso = new Date(Number(body.timestamp) * 1000).toISOString();
     entry.created = iso;
