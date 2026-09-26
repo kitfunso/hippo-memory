@@ -53,6 +53,16 @@ import {
   type ListDormantOpts,
 } from './dormant.js';
 import { recordTokenUse, summarizeTokenUse, type TokenSummary, type TokenSurface } from './token-ledger.js';
+import { detectInstruction } from './instruction-detect.js';
+import {
+  quarantineScopeFor,
+  recordQuarantine,
+  getQuarantineRow,
+  listQuarantineRows,
+  approveQuarantineRow,
+  rejectQuarantineRow,
+  type QuarantineStatus,
+} from './quarantine.js';
 import { summarizeFailures, type FailureSummary } from './failure-log.js';
 import { formatHandoffEvidenceLine, type SessionHandoff } from './handoff.js';
 import {
@@ -271,18 +281,24 @@ export interface RememberOpts {
    * back and the error is rethrown.
    */
   afterWrite?: (db: DatabaseSyncLike, memoryId: string) => void;
+  /** CD5: connector-ingested content an agent doesn't control; gates detectInstruction. CLI/HTTP/MCP never set this. */
+  untrusted?: boolean;
 }
 
 export interface RememberResult {
   id: string;
   kind: MemoryKind;
   tenantId: string;
+  /** Set only when untrusted content was flagged and quarantined instead of stored under its requested scope. */
+  quarantined?: { reason: string };
 }
 
 export function remember(ctx: Context, opts: RememberOpts): RememberResult {
+  const detection = opts.untrusted ? detectInstruction(opts.content) : { flagged: false, reason: null };
+  const requestedScope = opts.scope ?? null;
   const entry = createMemory(opts.content, {
     kind: opts.kind ?? 'distilled',
-    scope: opts.scope ?? null,
+    scope: detection.flagged ? quarantineScopeFor(requestedScope) : requestedScope,
     owner: opts.owner ?? null,
     artifact_ref: opts.artifactRef ?? null,
     tags: opts.tags,
@@ -291,9 +307,23 @@ export function remember(ctx: Context, opts: RememberOpts): RememberResult {
   });
   // writeEntry threads ctx.actor.subject into its internal audit hook, so exactly
   // one 'remember' event lands in the log with the supplied actor.
-  writeEntry(ctx.hippoRoot, entry, { actor: ctx.actor.subject, afterWrite: opts.afterWrite });
+  const afterWrite = detection.flagged
+    ? (db: DatabaseSyncLike, memoryId: string) => {
+        recordQuarantine(db, {
+          tenantId: ctx.tenantId,
+          memoryId,
+          originalScope: requestedScope,
+          reason: detection.reason ?? 'unknown',
+          actor: ctx.actor.subject,
+        });
+        opts.afterWrite?.(db, memoryId);
+      }
+    : opts.afterWrite;
+  writeEntry(ctx.hippoRoot, entry, { actor: ctx.actor.subject, afterWrite });
 
-  return { id: entry.id, kind: entry.kind, tenantId: ctx.tenantId };
+  const result: RememberResult = { id: entry.id, kind: entry.kind, tenantId: ctx.tenantId };
+  if (detection.flagged) result.quarantined = { reason: detection.reason ?? 'unknown' };
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -3160,6 +3190,126 @@ export function isDormant(ctx: Context, id: string): boolean {
   const db = openHippoDb(ctx.hippoRoot);
   try {
     return hasDormantRow(db, ctx.tenantId, id);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// quarantine (CD5)
+// ---------------------------------------------------------------------------
+
+export interface QuarantineListItem {
+  id: string;
+  originalScope: string | null;
+  reason: string;
+  status: QuarantineStatus;
+  quarantinedAt: string;
+  decidedAt: string | null;
+  decidedBy: string | null;
+  contentPreview: string;
+}
+
+const QUARANTINE_PREVIEW_CHARS = 200;
+
+/** A tenant's quarantined memories, newest first. Default `status` is 'pending' (the review queue). */
+export function quarantineList(
+  ctx: Context,
+  opts: { status?: QuarantineStatus | 'all'; limit?: number } = {},
+): QuarantineListItem[] {
+  const db = openHippoDb(ctx.hippoRoot);
+  try {
+    const rows = listQuarantineRows(db, ctx.tenantId, opts.status ?? 'pending', opts.limit);
+    return rows.map((row) => {
+      const entry = readEntry(ctx.hippoRoot, row.memoryId, ctx.tenantId);
+      return {
+        id: row.memoryId,
+        originalScope: row.originalScope,
+        reason: row.reason,
+        status: row.status,
+        quarantinedAt: row.quarantinedAt,
+        decidedAt: row.decidedAt,
+        decidedBy: row.decidedBy,
+        contentPreview: entry ? entry.content.slice(0, QUARANTINE_PREVIEW_CHARS) : '',
+      };
+    });
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+function loadPendingQuarantineRow(db: DatabaseSyncLike, tenantId: string, id: string) {
+  const row = getQuarantineRow(db, tenantId, id);
+  if (!row) throw new Error(`not quarantined: ${id}`);
+  if (row.status !== 'pending') throw new Error(`${id} is already ${row.status}`);
+  return row;
+}
+
+/** Release a quarantined memory to its original scope. Admin only; the scope guard refuses a row moved since (mirrors restoreDormant). */
+export function quarantineApprove(ctx: Context, id: string): void {
+  if (ctx.actor.role !== 'admin') {
+    throw new ForbiddenError('Only an admin key can approve a quarantined memory');
+  }
+  const db = openHippoDb(ctx.hippoRoot);
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const row = loadPendingQuarantineRow(db, ctx.tenantId, id);
+      const quarantineScope = quarantineScopeFor(row.originalScope);
+      const updated = db
+        .prepare(`UPDATE memories SET scope = ? WHERE id = ? AND tenant_id = ? AND scope = ?`)
+        .run(row.originalScope, id, ctx.tenantId, quarantineScope);
+      if (Number(updated.changes ?? 0) !== 1) {
+        throw new Error(`memory ${id} scope changed since quarantine; refusing to approve`);
+      }
+      approveQuarantineRow(db, ctx.tenantId, id, ctx.actor.subject);
+      appendAuditEvent(db, {
+        tenantId: ctx.tenantId,
+        actor: ctx.actor.subject,
+        op: 'quarantine_approve',
+        targetId: id,
+        metadata: { originalScope: row.originalScope },
+      });
+      db.exec('COMMIT');
+    } catch (err) {
+      try { db.exec('ROLLBACK'); } catch { /* already rolled back */ }
+      throw err;
+    }
+  } finally {
+    closeHippoDb(db);
+  }
+  // Post-commit, best-effort: a failed rewrite leaves the mirror showing the quarantine scope (fail-closed).
+  try {
+    const restored = readEntry(ctx.hippoRoot, id, ctx.tenantId);
+    if (restored) writeEntryMirrors(ctx.hippoRoot, restored);
+  } catch (err) {
+    console.error(`quarantine: mirror rewrite failed for ${id}: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/** Keep a quarantined memory hidden for good. Admin only; the raw row is untouched (append-only). */
+export function quarantineReject(ctx: Context, id: string): void {
+  if (ctx.actor.role !== 'admin') {
+    throw new ForbiddenError('Only an admin key can reject a quarantined memory');
+  }
+  const db = openHippoDb(ctx.hippoRoot);
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      loadPendingQuarantineRow(db, ctx.tenantId, id);
+      rejectQuarantineRow(db, ctx.tenantId, id, ctx.actor.subject);
+      appendAuditEvent(db, {
+        tenantId: ctx.tenantId,
+        actor: ctx.actor.subject,
+        op: 'quarantine_reject',
+        targetId: id,
+        metadata: {},
+      });
+      db.exec('COMMIT');
+    } catch (err) {
+      try { db.exec('ROLLBACK'); } catch { /* already rolled back */ }
+      throw err;
+    }
   } finally {
     closeHippoDb(db);
   }

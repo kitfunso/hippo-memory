@@ -23,6 +23,7 @@ import { search, hybridSearch, SearchResult } from './search.js';
 import { evalNow } from './ablation.js';
 import { deriveOriginProject, classifyOriginProject, resolveGlobalRootDir } from './project-identity.js';
 import { detectSecret } from './secret-detect.js';
+import { isQuarantineScope } from './quarantine.js';
 import { RejectedValueError } from './rejection.js';
 import { embedMemory, embedAll } from './embeddings.js';
 
@@ -61,6 +62,11 @@ export function promoteToGlobal(
 ): MemoryEntry {
   const entry = readEntry(localRoot, id, opts?.tenantId);
   if (!entry) throw new Error(`Memory not found: ${id}`);
+
+  // CD5: same veto as shareMemory; a promoted copy would have no quarantine record to review.
+  if (isQuarantineScope(entry.scope)) {
+    throw new Error(`Refusing to promote ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ${id}'.`);
+  }
 
   // v39 S4 producer veto: promote is a producer path to the global store
   // exactly like shareMemory - same hard rule (codex gating review P2).
@@ -391,6 +397,13 @@ export function shareMemory(
     );
   }
 
+  // CD5: a quarantined row is unreviewed input, not a lesson; sharing it would spread poison globally.
+  if (isQuarantineScope(entry.scope)) {
+    throw new Error(
+      `Refusing to share ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ${id}'.`,
+    );
+  }
+
   const score = transferScore(entry);
   if (score < 0.3 && !options.force) return null;
 
@@ -526,6 +539,8 @@ export function autoShare(
   );
 
   const candidates = localEntries.filter((entry) => {
+    // CD5: shareMemory refuses quarantined rows; filtering here keeps sleep from aborting on one.
+    if (isQuarantineScope(entry.scope ?? null)) return false;
     const score = transferScore(entry);
     if (score < minScore) return false;
 

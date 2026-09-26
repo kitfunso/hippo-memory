@@ -39,6 +39,7 @@ import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from './memory-value-wei
 import { appendAuditEvent } from './audit.js';
 import { migrateDefaultHalfLife } from './half-life-migration.js';
 import { derivationScope, commonDerivationScope, derivationPartitionKey } from './recall-scope.js';
+import { isQuarantineScope } from './quarantine.js';
 
 const DECAY_THRESHOLD = 0.05;
 const MERGE_OVERLAP_THRESHOLD = 0.35;  // Jaccard similarity for "related"
@@ -1070,6 +1071,8 @@ function detectConflicts(
   const survivors = entries.filter(
     (entry) =>
       entry.layer !== Layer.Semantic
+      // CD5: an unreviewed quarantined row must not taint a visible memory as conflicted.
+      && !isQuarantineScope(entry.scope ?? null)
       && (rescuedIds.has(entry.id) || calculateStrength(entry, now, decayOpts) >= DECAY_THRESHOLD),
   );
   const detected: Array<{ memory_a_id: string; memory_b_id: string; reason: string; score: number }> = [];

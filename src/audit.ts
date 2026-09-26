@@ -246,7 +246,10 @@ export type AuditOp =
   | 'dormant_restore' // Dormant memories — lockstep with cli.ts + server.ts VALID_AUDIT_OPS; emitted by api.restoreDormant (a "forgot it, then needed it" label)
   | 'conflict_resolve' // AT1 — lockstep; emitted by resolveConflict on every resolution path (domain-namespaced, not bare 'resolve' — grill issue 5)
   | 'auth_grant' // EI2: lockstep with cli.ts + server.ts VALID_AUDIT_OPS; emitted by api.authGrant
-  | 'auth_ungrant'; // EI2: lockstep; emitted by api.authUngrant
+  | 'auth_ungrant' // EI2: lockstep; emitted by api.authUngrant
+  | 'quarantine' // CD5: lockstep with cli.ts + server.ts VALID_AUDIT_OPS; emitted by recordQuarantine inside remember's write transaction
+  | 'quarantine_approve' // CD5: lockstep; emitted by api.quarantineApprove
+  | 'quarantine_reject'; // CD5: lockstep; emitted by api.quarantineReject
 
 export interface AppendAuditOpts {
   tenantId: string;

@@ -169,6 +169,7 @@ export function ingestEvent(ctx: Context, input: IngestInput): IngestResult {
       ctx,
       {
         ...opts,
+        untrusted: true,
         afterWrite: (innerDb, memoryId) => {
           if (input.__testInjectBeforeLog) {
             input.__testInjectBeforeLog(innerDb, idempotencyKey);

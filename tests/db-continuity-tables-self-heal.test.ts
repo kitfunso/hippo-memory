@@ -16,7 +16,7 @@ import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 const REPO_ROOT = join(__dirname, '..');
 const CLI_PATH = join(REPO_ROOT, 'dist', 'cli.js');
 
-const CONTINUITY_TABLES = ['task_snapshots', 'session_events', 'session_handoffs', 'cards', 'card_deps', 'card_runs', 'card_comments'] as const;
+const CONTINUITY_TABLES = ['task_snapshots', 'session_events', 'session_handoffs', 'cards', 'card_deps', 'card_runs', 'card_comments', 'memory_quarantine'] as const;
 
 function tableNames(db: DatabaseSyncLike): string[] {
   // SAFETY: row shape guaranteed by the `SELECT name FROM sqlite_master` projection.
@@ -72,7 +72,7 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
     const db1 = openHippoDb(root);
     try {
       db1.exec('DROP TABLE session_handoffs');
-      expect(getMeta(db1, 'schema_version')).toBe('47');
+      expect(getMeta(db1, 'schema_version')).toBe('48');
     } finally {
       closeHippoDb(db1);
     }
@@ -80,7 +80,7 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
     const db2 = openHippoDb(root);
     try {
       expect(tableNames(db2)).toContain('session_handoffs');
-      expect(getMeta(db2, 'schema_version')).toBe('47');
+      expect(getMeta(db2, 'schema_version')).toBe('48');
     } finally {
       closeHippoDb(db2);
     }
@@ -214,7 +214,7 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
         const row = dbAfter.prepare(`SELECT COUNT(*) as c FROM ${table}`).get() as { c: number };
         expect(row.c).toBe(countsBefore[table]);
       }
-      expect(getMeta(dbAfter, 'schema_version')).toBe('47');
+      expect(getMeta(dbAfter, 'schema_version')).toBe('48');
     } finally {
       closeHippoDb(dbAfter);
     }
@@ -233,7 +233,7 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
     const healed = openHippoDb(root);
     try {
       expect(tableNames(healed)).toContain('task_snapshots');
-      expect(getMeta(healed, 'schema_version')).toBe('47');
+      expect(getMeta(healed, 'schema_version')).toBe('48');
     } finally {
       closeHippoDb(healed);
     }
@@ -268,7 +268,7 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
       initStore(fresh);
       const a = openHippoDb(fresh);
       try {
-        expect(getMeta(migrated, 'schema_version')).toBe('47');
+        expect(getMeta(migrated, 'schema_version')).toBe('48');
         expect(columns(migrated, 'task_snapshots')).toEqual(columns(a, 'task_snapshots'));
         expect(indexNames(migrated, 'task_snapshots')).toEqual(indexNames(a, 'task_snapshots'));
       } finally {

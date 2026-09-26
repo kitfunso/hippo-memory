@@ -137,6 +137,9 @@ const AUTHED_ROUTES: ReadonlyArray<{
   { method: 'POST', pattern: '/v1/customer-notes/:id/supersede', body: '{"note":"x"}' },
   { method: 'POST', pattern: '/v1/customer-notes/:id/close' },
   { method: 'GET', pattern: '/v1/customer-notes/:id' },
+  { method: 'GET', pattern: '/v1/quarantine' },
+  { method: 'POST', pattern: '/v1/quarantine/:id/approve' },
+  { method: 'POST', pattern: '/v1/quarantine/:id/reject' },
   { method: 'POST', pattern: '/mcp', body: '{"jsonrpc":"2.0","method":"tools/list","id":1}' },
   { method: 'GET', pattern: '/mcp/stream' },
 ];
