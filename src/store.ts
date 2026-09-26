@@ -1616,7 +1616,7 @@ export function writeEntry(
   try {
     writeEntryDbOnly(db, stamped, opts);
     opts?.afterCommit?.();
-    writeEntryMirrors(hippoRoot, db, stamped);
+    writeEntryMirrors(hippoRoot, stamped);
   } catch (error) {
     // AT1 (plan §3): writeEntryDbOnly's own SAVEPOINT has already unwound by
     // the time this catch runs, so the refusal audit lands post-rollback in
@@ -1692,13 +1692,8 @@ export function writeEntryDbOnly(
   }
 }
 
-/** Markdown mirror path, invoked AFTER commit (a rolled-back tx must leave no orphan markdown).
- *  `db` is unused now that index.json is no longer written per call; kept because three callers pass it. */
-export function writeEntryMirrors(
-  hippoRoot: string,
-  db: DatabaseSyncLike,
-  entry: MemoryEntry,
-): void {
+/** Markdown mirror path, invoked AFTER commit (a rolled-back tx must leave no orphan markdown). */
+export function writeEntryMirrors(hippoRoot: string, entry: MemoryEntry): void {
   mirrorBestEffort(`${entry.id}.md`, () => writeMarkdownMirror(hippoRoot, entry));
 }
 

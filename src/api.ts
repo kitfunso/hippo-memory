@@ -2045,7 +2045,7 @@ export function supersede(
     // markdown mirror from the DB) but DOES NOT desync the DB or
     // roll back the supersede. Logged + swallowed, non-fatal.
     try {
-      writeEntryMirrors(ctx.hippoRoot, db, newEntry);
+      writeEntryMirrors(ctx.hippoRoot, newEntry);
     } catch (mirrorErr) {
       console.error(
         'supersede: mirror write failed (non-fatal, will self-heal):',
@@ -3066,7 +3066,7 @@ export function restoreDormant(ctx: Context, id: string): MemoryEntry {
       }
       throw err;
     }
-    writeEntryMirrors(ctx.hippoRoot, db, restored);
+    writeEntryMirrors(ctx.hippoRoot, restored);
     return restored;
   } finally {
     closeHippoDb(db);

@@ -25,7 +25,7 @@ Line numbers are for master at 1.47.0 (7ddb58a).
 5. **Every database open counts two tables.** `backfillFtsIndex` counts `memories` and `memories_fts` (`src/db.ts:2824-2827`) to decide whether to backfill. In one profiled `remember` at 10k those counts took 24 ms, and `openHippoDb` took 119 ms in all across the command's opens. One profiled run, so treat both as rough.
 6. **CD13 adds one database open per failed tool call** in the capture-error hook, on top of what it already did. Accepted: one open, not a scan.
 
-The same per-call cost shows in `tests/server-outcome-route.test.ts` "1000 ids at boundary", at about 13 ms per lookup of a missing id. The test takes 12-14 s alone on both 1.46.0 and 1.47.0, and 25-30 s in a full local suite, against a 30 s budget; its own comment expects 5-10 s. Re-time it after the fix rather than raising the timeout.
+The same per-call cost shows in `tests/server-outcome-route.test.ts` "1000 ids at boundary", at about 13 ms per lookup of a missing id. The test takes 12-14 s alone on both 1.46.0 and 1.47.0, and 25-30 s in a full local suite, against a 30 s budget; its own comment expects 5-10 s. Re-time it after the fix rather than raising the timeout. (The re-time in "After the fix" shows it is a per-lookup open cost, not a write cost.)
 
 ## After the fix (2026-09-26, home box)
 
