@@ -5,7 +5,7 @@
 > - **Part I (Grant-Tied Deliverables)** is the former `ROADMAP.md`: work organized by funding status (committed, grant-conditional, speculative) plus the grant work packages (Frontier AI Discovery, AI Champions Phase 1).
 > - **Part II (Canonical Execution Roadmap)** is the former `ROADMAP-RESEARCH.md`: the engineering execution plan (Tracks A-F, north star, benchmark priority, schema-migration order, test commitments, bets, non-goals).
 >
-> **Top priority since 2026-09-26: Part XV, Track Z (zero-touch memory).** Start there.
+> **Top priority since 2026-09-26: Part XV, Track Z (zero-touch memory), starting with Z0: prove hippo beats no memory.** Start there.
 >
 > `PLAN.md` remains the architecture and CLS-principles document. `RESEARCH.md` remains the research lineage and seven-mechanisms backgrounder.
 
@@ -1928,7 +1928,14 @@ Resource requests come from profiling hippo's own write, recall and sleep phases
 
 **Goal.** Remember the right thing, surface it when it bears on the prompt, and stop the same mistake from happening twice, with no command from the user. Personal and company stores run the same loop.
 
-**Order is load-bearing.** Z2 cannot credit memories until Z1 makes injections relevant; Z4 needs Z2 and Z3 to know which lessons were ignored.
+**Order is load-bearing.** Z0 comes first and is the scoreboard for every later item. Z2 cannot credit memories until Z1 makes injections relevant; Z4 needs Z2 and Z3 to know which lessons were ignored.
+
+#### Z0. Prove hippo beats no memory [top priority; started 2026-09-26]
+Hippo has never been shown to beat an agent with no memory. TE5 is the test and has had no scored run. It runs real Claude Code sessions on the founder's signed-in plan, so it bills nothing; the limit is plan usage, and the full registration is about 1,200 sessions. Staged:
+1. **Task set.** Draft sequences with `make-tasks.mjs --verify` from 3 repositories with commits after 2026-07-01, rewrite every prompt as a symptom, grep memories against gold patches. This is the blocker today.
+2. **Pilot, descriptive only.** Arms `no-memory` and `hippo` (as shipped), about 20 scored tasks, 2 seeds, one model. Outputs: resolve rate, cost per resolved task, repeated errors, seed-to-seed spread, sessions per plan window. It sizes the full run and catches harness faults. Pilot repositories never enter the scored run, so Z1 may be tuned on them.
+3. **Scored run** as registered (H1 to H4), on fresh repositories.
+4. **Every Z item re-runs the same tasks** with its own `hippo` arm; an item that does not move cost per resolved task or repeated errors does not ship as a default.
 
 #### Z1. Recall against the prompt, gated [next]
 The `UserPromptSubmit` hook reads the prompt from its payload and recalls against it, then applies TE6's gate: inject nothing when nothing clears it. Pinned rules stay. **Test first, no paid call:** replay the frozen SI0 corpus (`hippo-archive/transcripts-since-2026-09-01/`) and report overlap with the work and tokens injected, today's hook against Z1. **Ships if** overlap rises well above 0.057 and median injected tokens do not grow. Latency budget: the hook stays under the current 0.28 s at 10,000 memories.
