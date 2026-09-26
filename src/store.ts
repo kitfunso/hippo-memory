@@ -2419,16 +2419,25 @@ export function loadRecallSearchEntriesFromDb(
 }
 
 /** Rarest-K prompt terms for this connection's FTS index, as a space-joined query string.
- *  Falls back to the first `maxTerms` terms when FTS is unavailable. */
+ *  Without FTS, returns the first 32 terms, as before rarest-term selection. */
 export function pickRarestFtsQuery(db: DatabaseSyncLike, terms: readonly string[], maxTerms = RAREST_TERM_COUNT): string {
-  if (!isFtsAvailable(db) || terms.length === 0) return terms.slice(0, maxTerms).join(' ');
+  // The LIKE path has no bm25 ranking to bound, so it keeps the pre-rarest 32-term query.
+  if (!isFtsAvailable(db)) return terms.slice(0, 32).join(' ');
   db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS temp.z1_rarest_vocab USING fts5vocab(main, 'memories_fts', 'row')`);
+  // unicode61 splits `journal_mode` into two vocab terms; a term's count is its rarest part's (an upper bound).
+  const partsOf = (t: string): string[] => t.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  const vocab = Array.from(new Set(terms.flatMap(partsOf)));
+  if (vocab.length === 0) return '';
   // SAFETY: rows' shape matches the two columns named in the SELECT.
   const rows = db
-    .prepare(`SELECT term, doc FROM temp.z1_rarest_vocab WHERE term IN (${terms.map(() => '?').join(', ')})`)
-    .all(...terms) as Array<{ term: string; doc: number }>;
+    .prepare(`SELECT term, doc FROM temp.z1_rarest_vocab WHERE term IN (${vocab.map(() => '?').join(', ')})`)
+    .all(...vocab) as Array<{ term: string; doc: number }>;
   const counts = new Map(rows.map((r) => [r.term, r.doc]));
-  return rarestPromptTerms(terms, (t) => counts.get(t) ?? 0, maxTerms).join(' ');
+  const docCount = (t: string): number => {
+    const parts = partsOf(t);
+    return parts.length === 0 ? 0 : Math.min(...parts.map((x) => counts.get(x) ?? 0));
+  };
+  return rarestPromptTerms(terms, docCount, maxTerms).join(' ');
 }
 
 /**

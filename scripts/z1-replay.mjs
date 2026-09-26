@@ -515,7 +515,7 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
   const z1FileAccs = runZ1 && !isZ1b ? z1Configs.map(() => emptyZ1Bucket()) : null;
   // Z1b state per config: A1's ids plus a tool-failure block; teBlock gates the block's own skip rule.
   const z1bStates = isZ1b
-    ? z1Configs.map(() => ({ reset: new Set(), lifetime: new Set(), teBlock: null, lastSentItems: [], pendingTokens: 0, intervalHasBlock: false }))
+    ? z1Configs.map(() => ({ reset: new Set(), lifetime: new Set(), teBlock: null, lastSentItems: { items: [], ts: null }, pendingTokens: 0, intervalHasBlock: false, lastIntervalIdx: null }))
     : null;
   const z1bFileAccs = isZ1b ? z1Configs.map(() => emptyZ1bBucket()) : null;
   // A1's per-prompt injection order, oldest first, reset at compaction: judge control C reads from its tail.
@@ -568,9 +568,16 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
         const s = z1bStates[i];
         const acc = z1bFileAccs[i];
         if (a1Sent) for (const it of sel.items) { s.reset.add(it.id); s.lifetime.add(it.id); }
-        acc.tokens.push(a1TokensThisPrompt + s.pendingTokens);
-        acc.intervalHasBlock.total++;
-        if (s.intervalHasBlock) acc.intervalHasBlock.count++;
+        // Finalize the interval this prompt is closing: its blocks landed after it fired, before this new one.
+        if (s.lastIntervalIdx !== null) {
+          acc.tokens[s.lastIntervalIdx] += s.pendingTokens;
+          acc.intervalHasBlock.total++;
+          if (s.intervalHasBlock) acc.intervalHasBlock.count++;
+        } else {
+          acc.tokensUnattributed += s.pendingTokens; // blocks before this file's first hook prompt
+        }
+        acc.tokens.push(a1TokensThisPrompt);
+        s.lastIntervalIdx = acc.tokens.length - 1;
         s.pendingTokens = 0;
         s.intervalHasBlock = false;
       });
@@ -700,10 +707,10 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
               const added = [...s.reset].some((id) => !snap.a1.reset.has(id));
               if (added) {
                 z1bFileAccs[i].addedEvents++;
-                const tItems = z1bStates[i].lastSentItems; // most recent block sent before this event's own injection
-                const tsMs = Date.parse(o.timestamp);
-                for (const it of tItems.slice(0, z1Configs[i].maxItems)) {
-                  const age = tsMs - Date.parse(it.created);
+                const sent = z1bStates[i].lastSentItems; // most recent block sent before this event's own injection
+                const tItems = sent.items.slice(0, z1Configs[i].maxItems);
+                for (const it of tItems) {
+                  const age = sent.ts - Date.parse(it.created); // age against the block's originating failure, not this repeat
                   if (age >= 0 && age <= 10 * 60 * 1000) z1bFileAccs[i].recalledCreatedWithin10MinEligible++;
                 }
                 if (collectJudge) {
@@ -715,7 +722,8 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
           } else {
             firstErr.set(es, true);
           }
-          if (!firstFail.has(cs)) firstFail.set(cs, { err, cmd, snap, a1OrderLen: a1Order ? a1Order.length : 0 });
+          // Snapshot A1's order now: a compaction before the eventual success must not change the judge's control C.
+          if (!firstFail.has(cs)) firstFail.set(cs, { err, cmd, snap, a1OrderSnapshot: a1Order ? a1Order.slice() : [] });
 
           // Z1b tool-failure block: after the event is recorded, so it counts toward later repeats and fail-then-pass.
           if (isZ1b) {
@@ -738,7 +746,7 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
               const tokens = estimateTokens(renderBlock(blk.items, blk.totalTokens, 'Failure-Relevant Memory'));
               for (const it of blk.items) { s.reset.add(it.id); s.lifetime.add(it.id); }
               s.teBlock = { hash: idsKey, skipsSince: 0 };
-              s.lastSentItems = blk.items;
+              s.lastSentItems = { items: blk.items, ts: tsMs };
               s.pendingTokens += tokens;
               s.intervalHasBlock = true;
               acc.blocksSent++;
@@ -772,16 +780,15 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
             const added = [...dReset].some((id) => !dReset1.has(id));
             if (added) {
               z1bFileAccs[i].addedEvents++;
-              const tItems = s.lastSentItems.slice(0, z1Configs[i].maxItems); // live: no block fires on a success line
-              const tsMs = Date.parse(o.timestamp);
+              const sent = s.lastSentItems; // live: no block fires on a success line
+              const tItems = sent.items.slice(0, z1Configs[i].maxItems);
               for (const it of tItems) {
-                const age = tsMs - Date.parse(it.created);
+                const age = sent.ts - Date.parse(it.created); // age against the originating failure, not this success line
                 if (age >= 0 && age <= 10 * 60 * 1000) z1bFileAccs[i].recalledCreatedWithin10MinEligible++;
               }
               if (collectJudge) {
                 const eventId = ctx.judgeEventCounter.n++;
-                const priorOrder = a1Order.slice(0, ff.a1OrderLen);
-                judgeItems.push(...buildJudgeEntries(eventId, ff.cmd, ff.err, tItems, z1Configs[i].maxItems, priorOrder, byId));
+                judgeItems.push(...buildJudgeEntries(eventId, ff.cmd, ff.err, tItems, z1Configs[i].maxItems, ff.a1OrderSnapshot, byId));
               }
             }
           });
@@ -792,7 +799,17 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
   }
 
   if (isZ1b) {
-    z1bStates.forEach((s, i) => { z1bFileAccs[i].tokensUnattributed += s.pendingTokens; });
+    // Include the final interval (blocks after the last hook prompt, to EOF); unattributed only if no prompt ever fired.
+    z1bStates.forEach((s, i) => {
+      const acc = z1bFileAccs[i];
+      if (s.lastIntervalIdx !== null) {
+        acc.tokens[s.lastIntervalIdx] += s.pendingTokens;
+        acc.intervalHasBlock.total++;
+        if (s.intervalHasBlock) acc.intervalHasBlock.count++;
+      } else {
+        acc.tokensUnattributed += s.pendingTokens;
+      }
+    });
   }
 
   return { primary, secondary, tokensPerPrompt, z1PerConfig: z1FileAccs, z1bPerConfig: z1bFileAccs, judgeItems, nonRoutineFailures };

@@ -48,6 +48,18 @@ describe('pickRarestFtsQuery', () => {
     }
   });
 
+  it('keeps snake_case terms the FTS tokenizer splits into parts', () => {
+    writeEntry(root, createMemory('set journal_mode to wal and raise busy_timeout for sqlite'));
+    const db = openHippoDb(root);
+    try {
+      const query = pickRarestFtsQuery(db, ['journal_mode', 'busy_timeout', 'never_seen'], 8);
+      expect(query.split(' ').sort()).toEqual(['busy_timeout', 'journal_mode']);
+      expect(loadRecallSearchEntriesFromDb(db, query, 10)).toHaveLength(1);
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
   it('drops a term with zero FTS doc count (never in any row)', () => {
     writeEntry(root, createMemory('the postgres migration rollback plan'));
     const db = openHippoDb(root);
@@ -59,12 +71,12 @@ describe('pickRarestFtsQuery', () => {
     }
   });
 
-  it('falls back to the first maxTerms terms, in order, when FTS is unavailable', () => {
+  it('falls back to the first 32 terms, in order, when FTS is unavailable', () => {
     const db = openHippoDb(root);
     try {
       setMeta(db, 'fts5_available', '0');
-      const query = pickRarestFtsQuery(db, ['alpha', 'beta', 'gamma', 'delta'], 2);
-      expect(query).toBe('alpha beta');
+      const terms = Array.from({ length: 40 }, (_, i) => `t${i}`);
+      expect(pickRarestFtsQuery(db, terms, 2)).toBe(terms.slice(0, 32).join(' '));
     } finally {
       closeHippoDb(db);
     }
