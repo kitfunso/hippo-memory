@@ -244,7 +244,9 @@ export type AuditOp =
   | 'unreject_value' // AT1 — lockstep; emitted by the `hippo unreject` verb
   | 'half_life_migrate' // Decay default change — lockstep with cli.ts + server.ts VALID_AUDIT_OPS; emitted by migrateDefaultHalfLife with the rescaled ids (src/half-life-migration.ts)
   | 'dormant_restore' // Dormant memories — lockstep with cli.ts + server.ts VALID_AUDIT_OPS; emitted by api.restoreDormant (a "forgot it, then needed it" label)
-  | 'conflict_resolve'; // AT1 — lockstep; emitted by resolveConflict on every resolution path (domain-namespaced, not bare 'resolve' — grill issue 5)
+  | 'conflict_resolve' // AT1 — lockstep; emitted by resolveConflict on every resolution path (domain-namespaced, not bare 'resolve' — grill issue 5)
+  | 'auth_grant' // EI2: lockstep with cli.ts + server.ts VALID_AUDIT_OPS; emitted by api.authGrant
+  | 'auth_ungrant'; // EI2: lockstep; emitted by api.authUngrant
 
 export interface AppendAuditOpts {
   tenantId: string;

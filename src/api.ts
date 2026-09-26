@@ -79,6 +79,8 @@ import {
   createApiKey,
   listApiKeys,
   revokeApiKey,
+  grantScope,
+  ungrantScope,
   type ApiKeyListItem,
 } from './auth.js';
 import { applyGoalStackBoost } from './goals.js';
@@ -119,6 +121,8 @@ export interface Actor {
   /** 'cli' | 'localhost:cli' | 'api_key:<key_id>' | 'mcp' | 'connector:slack' | 'connector:github' */
   subject: string;
   role: 'admin' | 'member';
+  /** EI2: restricted scopes a member key may read (auth.ts grantScope). Unused for admin actors. */
+  scopes?: readonly string[];
 }
 
 export interface Context {
@@ -187,7 +191,7 @@ export class ForbiddenError extends Error {
 // back-compat (`api.isPrivateScope`, test imports). NOTE: the import statement
 // is required — a bare `export { x } from` re-export does not bind the local
 // names this module's ~9 call sites use.
-import { isPrivateScope, passesScopeFilterForRecall, assertScopeRequestAllowed } from './recall-scope.js';
+import { isPrivateScope, passesScopeFilterForRecall, assertScopeRequestAllowed, isRestrictedScope } from './recall-scope.js';
 export { isPrivateScope, passesScopeFilterForRecall };
 export { passesCliRecallScopeFilter, ScopeForbiddenError } from './recall-scope.js';
 export type { TokenSummary, TokenSurface, TokenSurfaceSummary } from './token-ledger.js';
@@ -717,14 +721,14 @@ export function buildSuppressionSummary(counts: {
  */
 export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   // A member key may not unlock a private or quarantined scope by naming it.
-  assertScopeRequestAllowed(ctx.actor.role, opts.scope);
+  assertScopeRequestAllowed(ctx.actor, opts.scope);
   const windowSize = recallWindowSize(opts);
   return recallFrom(ctx, opts, windowSize, loadRecallSearchEntries(ctx.hippoRoot, opts.query, windowSize, ctx.tenantId, opts.scope, 'exact', false));
 }
 
 /** Mode-aware recall that strengthens each returned row; never writes last_retrieval_ids (v1.11.5 lock). */
 export async function retrieve(ctx: Context, opts: RecallOpts): Promise<RecallResult> {
-  assertScopeRequestAllowed(ctx.actor.role, opts.scope);
+  assertScopeRequestAllowed(ctx.actor, opts.scope);
   const windowSize = recallWindowSize(opts);
   let candidates = loadRecallSearchEntries(ctx.hippoRoot, opts.query, windowSize, ctx.tenantId, opts.scope, 'exact', false);
   if (opts.mode === 'hybrid' || opts.mode === 'physics') {
@@ -830,7 +834,7 @@ function recallFrom(ctx: Context, opts: RecallOpts, windowSize: number, all: Mem
     // anchored `<source>:private:*` rule (v1.2.1 generalization) and
     // defense-in-depth: connector authors cannot silently surface private
     // rows to no-scope callers even if the SQL clause regresses.
-    entries = current.filter((e) => !isPrivateScope(e.scope ?? null));
+    entries = current.filter((e) => !isRestrictedScope(e.scope ?? null));
   }
   // v1.12.13 / C5 — WYSIATI dropped_pre_rank counter (JS scope filter drops
   // for api.recall; cmdRecall pipeline rolls --outcome/--layer/--as-of/etc.
@@ -1360,7 +1364,7 @@ export function assemble(
   sessionId: string,
   opts: AssembleOpts = {},
 ): AssembleResult {
-  assertScopeRequestAllowed(ctx.actor.role, opts.scope);
+  assertScopeRequestAllowed(ctx.actor, opts.scope);
   const budget = opts.budget ?? 4000;
   const freshTailCount = opts.freshTailCount ?? 10;
   const summarizeOlder = opts.summarizeOlder ?? true;
@@ -1980,6 +1984,7 @@ export function supersede(
     source: old.source,
     confidence: 'verified',
     tenantId: ctx.tenantId,
+    scope: old.scope,
   });
 
   // Race-safe transition: open a fresh db handle, BEGIN IMMEDIATE, run all
@@ -2306,6 +2311,54 @@ export function authRevoke(
     }
 
     return { ok: true, revokedAt };
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** Shared result shape for authGrant/authUngrant, named per the file's oxlint anti-slop rule. */
+export interface AuthGrantResult {
+  ok: true;
+}
+
+/** Grant `keyId` read access to one restricted `scope` (ROADMAP Part VIII EI2). Admin only. */
+export function authGrant(ctx: Context, keyId: string, scope: string): AuthGrantResult {
+  return changeScopeGrant(ctx, keyId, scope, 'auth_grant');
+}
+
+/** Revoke `keyId`'s grant on `scope`. Same authorization and lookup rules as authGrant. */
+export function authUngrant(ctx: Context, keyId: string, scope: string): AuthGrantResult {
+  return changeScopeGrant(ctx, keyId, scope, 'auth_ungrant');
+}
+
+function changeScopeGrant(ctx: Context, keyId: string, scope: string, op: 'auth_grant' | 'auth_ungrant'): AuthGrantResult {
+  if (ctx.actor.role !== 'admin') {
+    throw new ForbiddenError('Only an admin key can change scope grants');
+  }
+  const db = openHippoDb(ctx.hippoRoot);
+  try {
+    // SAFETY: row's shape matches the single tenant_id column in the SELECT.
+    const row = db
+      .prepare(`SELECT tenant_id, revoked_at FROM api_keys WHERE key_id = ?`)
+      .get(keyId) as { tenant_id: string; revoked_at: string | null } | undefined;
+    if (!row || row.tenant_id !== ctx.tenantId) {
+      throw new Error(`Unknown key_id: ${keyId}`);
+    }
+    if (op === 'auth_grant' && row.revoked_at) {
+      throw new Error(`${keyId} is revoked; a grant on it would never apply`);
+    }
+    if (!isRestrictedScope(scope)) {
+      throw new Error(`${scope} is not a restricted scope; it is already readable by default`);
+    }
+    if (op === 'auth_grant') grantScope(db, keyId, scope);
+    else ungrantScope(db, keyId, scope);
+    try {
+      appendAuditEvent(db, { tenantId: ctx.tenantId, actor: ctx.actor.subject, op, targetId: keyId, metadata: { scope } });
+    } catch (err) {
+      // Audit must not undo a grant change that already committed; surface it instead.
+      console.error(`auth: audit write failed for ${op} ${keyId}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    return { ok: true };
   } finally {
     closeHippoDb(db);
   }

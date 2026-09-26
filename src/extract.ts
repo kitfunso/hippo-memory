@@ -132,6 +132,7 @@ export function storeExtractedFacts(
       confidence: 'inferred',
       source: source.source,
       extracted_from: source.id,
+      scope: source.scope,
       // T1 executor check (2026-08-15 hardening pass): same defect as the
       // consolidate.ts merge/trace passes — createMemory with no tenantId
       // option stamps 'default' (memory.ts:535) regardless of the source

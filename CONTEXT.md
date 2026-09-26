@@ -40,6 +40,29 @@ another session hit first. Repeat-error rate compares repeats per session betwee
 a holdout arm; it is never reported as one absolute number.
 _Avoid_: duplicate (that is a lesson hippo already holds), recurrence
 
+### Access
+
+**Scope**:
+The access boundary of a memory's source, one channel or one repo (`slack:private:C123`,
+`github:public:org/repo`), stored on the memory. Null means no boundary.
+_Avoid_: ACL, permission, visibility
+
+**Restricted scope**:
+A scope default recall hides: `<source>:private:*`, or a quarantine bucket such as
+`unknown:legacy`. Reading one means naming it.
+_Avoid_: private scope (it covers quarantine too), secret scope
+
+**Scope grant**:
+Permission for one member API key to read one restricted scope. Admin keys, the local CLI and
+stdio MCP need none.
+_Avoid_: ACL entry, share, permission
+
+**Derived memory**:
+A memory built from other memories' content: a consolidation merge, a DAG summary or profile, an
+extracted fact. It carries the restricted scope of its sources and is never built from sources in
+two different restricted scopes, or from a restricted and an unrestricted one.
+_Avoid_: summary (one kind only), rollup
+
 ### Work queue
 
 **Card**:

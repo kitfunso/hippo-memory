@@ -57,15 +57,7 @@ export function passesScopeFilterForRecall(
   if (requested !== undefined && requested !== '') {
     return scope === requested;
   }
-  if (scope === null) return true;
-  if (isPrivateScope(scope)) return false;
-  // SAFETY: RECALL_DEFAULT_DENY_SCOPES (v1.7.2, single source of truth
-  // shared with the SQL clause in loadSearchRows) is a readonly tuple of
-  // string literals. Cast the array to readonly string[] so .includes()
-  // accepts arbitrary string scopes without a cast on the input (codex
-  // P0-2: casting `scope` would defeat the constant's safety).
-  if ((RECALL_DEFAULT_DENY_SCOPES as readonly string[]).includes(scope)) return false;
-  return true;
+  return !isRestrictedScope(scope);
 }
 
 /**
@@ -118,20 +110,56 @@ export function isRestrictedScope(scope: string | null | undefined): boolean {
   if (!isScopeString(scope)) return false;
   // SAFETY: RECALL_DEFAULT_DENY_SCOPES is a readonly tuple of string
   // literals; widening the array (not the input) lets .includes() take any scope.
-  return isPrivateScope(scope) || (RECALL_DEFAULT_DENY_SCOPES as readonly string[]).includes(scope);
+  // `:private:` anywhere, any case, matches the store's SQL default-deny (store.ts:894) so JS never admits what SQL hides.
+  return isPrivateScope(scope) || /:private:/i.test(scope) || (RECALL_DEFAULT_DENY_SCOPES as readonly string[]).includes(scope);
 }
 
-/**
- * Authorize an explicitly requested scope before any read honours it.
- *
- * An admin (tenant owner, the local CLI, loopback without a key) may unlock
- * any scope in its tenant. A member key may not unlock a restricted scope by
- * naming it: before this check, any key in a tenant could read every private
- * channel or repo by passing its scope string. Per-scope grants for member
- * keys belong to ROADMAP Part VIII EI2 (permission-aware recall).
- */
-export function assertScopeRequestAllowed(role: 'admin' | 'member', requested: string | undefined): void {
+/** The identity a scope check runs against: a role plus any scope grants. */
+export interface ScopeActor {
+  role: 'admin' | 'member';
+  scopes?: readonly string[];
+}
+
+/** True when `actor` may read `scope`: admin always; member needs an exact grant on a restricted scope. */
+export function canReadScope(actor: ScopeActor, scope: string): boolean {
+  if (actor.role === 'admin') return true;
+  if (!isRestrictedScope(scope)) return true;
+  return (actor.scopes ?? []).includes(scope);
+}
+
+/** Authorize an explicitly requested scope before any read honours it (ROADMAP Part VIII EI2: member scope grants). */
+export function assertScopeRequestAllowed(actor: ScopeActor, requested: string | undefined): void {
   if (requested === undefined || requested === '') return;
-  if (role === 'admin') return;
-  if (isRestrictedScope(requested)) throw new ScopeForbiddenError(requested);
+  if (canReadScope(actor, requested)) return;
+  throw new ScopeForbiddenError(requested);
+}
+
+/** Scope a derived row keeps from one source: the restricted scope itself, else null. */
+export function derivationScope(scope: string | null | undefined): string | null {
+  return isRestrictedScope(scope) ? (scope ?? null) : null;
+}
+
+/** The one derivation scope shared by every source, or `{ ok: false }` when
+ *  two disagree, so the caller skips the derived row instead of under-scoping it. */
+export function commonDerivationScope(
+  scopes: readonly (string | null | undefined)[],
+): { ok: true; scope: string | null } | { ok: false } {
+  let common: string | null = null;
+  let seen = false;
+  for (const raw of scopes) {
+    const scope = derivationScope(raw);
+    if (!seen) {
+      common = scope;
+      seen = true;
+    } else if (scope !== common) {
+      return { ok: false };
+    }
+  }
+  return { ok: true, scope: common };
+}
+
+/** Map-partition key for consolidate/dag producers: tenant + derivation scope,
+ *  so a derived row never blends two restricted scopes or a mixed pair. */
+export function derivationPartitionKey(tenantId: string, scope: string | null | undefined): string {
+  return `${tenantId}\u0000${derivationScope(scope) ?? ''}`;
 }

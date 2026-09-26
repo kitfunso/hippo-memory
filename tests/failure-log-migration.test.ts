@@ -18,7 +18,7 @@ describe('schema v46', () => {
       }
       db = openHippoDb(home);
       try {
-        expect(getMeta(db, 'schema_version')).toBe('46');
+        expect(getMeta(db, 'schema_version')).toBe('47');
         // SAFETY: PRAGMA table_info rows carry a TEXT name column.
         const columns = (db.prepare(`PRAGMA table_info(failure_log)`).all() as Array<{ name: string }>).map((c) => c.name);
         expect(columns).toEqual(['id', 'ts', 'tenant_id', 'session_id', 'tool', 'outcome', 'skip_rule', 'sig_hash', 'detail_hash']);

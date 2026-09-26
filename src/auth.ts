@@ -73,6 +73,8 @@ export interface ValidateResult {
   keyId?: string;
   /** v1.12.0 A5 v2 sub-1: 'admin' | 'member'. Present only when valid=true. */
   role?: 'admin' | 'member';
+  /** EI2: scope grants for this key. Present only when valid=true. */
+  scopes?: string[];
 }
 
 export function validateApiKey(db: DatabaseSyncLike, plaintext: string): ValidateResult {
@@ -103,12 +105,35 @@ export function validateApiKey(db: DatabaseSyncLike, plaintext: string): Validat
   // 'superuser', or a NULL slipped past the NOT NULL constraint) downgrades to
   // 'member'. The migration constrains to 'admin' DEFAULT, but defense-in-depth.
   const role: 'admin' | 'member' = row.role === 'admin' ? 'admin' : 'member';
-  return { valid: true, tenantId: row.tenant_id, keyId, role };
+  const scopes = listScopeGrants(db, keyId);
+  return { valid: true, tenantId: row.tenant_id, keyId, role, scopes };
 }
 
 export function revokeApiKey(db: DatabaseSyncLike, keyId: string): void {
   db.prepare(`UPDATE api_keys SET revoked_at = ? WHERE key_id = ? AND revoked_at IS NULL`)
     .run(new Date().toISOString(), keyId);
+}
+
+/** EI2: grant `keyId` read access to one restricted `scope`. Idempotent. */
+export function grantScope(db: DatabaseSyncLike, keyId: string, scope: string): void {
+  db.prepare(
+    `INSERT INTO api_key_scope_grants (key_id, scope, granted_at) VALUES (?, ?, ?)
+     ON CONFLICT(key_id, scope) DO NOTHING`,
+  ).run(keyId, scope, new Date().toISOString());
+}
+
+/** EI2: revoke `keyId`'s grant on `scope`. Not an error when no such grant exists. */
+export function ungrantScope(db: DatabaseSyncLike, keyId: string, scope: string): void {
+  db.prepare(`DELETE FROM api_key_scope_grants WHERE key_id = ? AND scope = ?`).run(keyId, scope);
+}
+
+/** EI2: every restricted scope `keyId` may read. */
+export function listScopeGrants(db: DatabaseSyncLike, keyId: string): string[] {
+  // SAFETY: rows' shape matches the single `scope` column named in the SELECT above.
+  const rows = db
+    .prepare(`SELECT scope FROM api_key_scope_grants WHERE key_id = ? ORDER BY scope`)
+    .all(keyId) as Array<{ scope: string }>;
+  return rows.map((r) => r.scope);
 }
 
 export interface ApiKeyListItem {
@@ -123,6 +148,8 @@ export interface ApiKeyListItem {
    * Fail-safe-to-member cast: any non-'admin' value reads as 'member'.
    */
   role: 'admin' | 'member';
+  /** EI2: restricted scopes this key may read. */
+  scopes: string[];
 }
 
 export function listApiKeys(db: DatabaseSyncLike, opts: { active: boolean }): ApiKeyListItem[] {
@@ -139,5 +166,6 @@ export function listApiKeys(db: DatabaseSyncLike, opts: { active: boolean }): Ap
     keyId: r.key_id, tenantId: r.tenant_id, label: r.label,
     createdAt: r.created_at, revokedAt: r.revoked_at,
     role: r.role === 'admin' ? 'admin' : 'member',
+    scopes: listScopeGrants(db, r.key_id),
   }));
 }

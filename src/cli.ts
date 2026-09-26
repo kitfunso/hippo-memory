@@ -1047,6 +1047,7 @@ function cmdSupersede(
     source: old.source,
     confidence: 'verified',
     tenantId: old.tenantId,
+    scope: old.scope,
   });
 
   // AT1: write the SUCCESSOR first. The rejection guard fires on the new
@@ -8545,6 +8546,38 @@ function cmdAuthRevoke(hippoRoot: string, keyId: string, flags: Record<string, s
   console.log(`Revoked ${keyId} at ${revokedAt}`);
 }
 
+/** EI2: `hippo auth grant|ungrant <key_id> <scope>`, routed through api so the tenant, restricted-scope and audit checks live in one place. */
+function cmdAuthScopeGrant(hippoRoot: string, keyId: string, scope: string, grant: boolean, flags: Record<string, string | boolean | string[]>): void {
+  const root = resolveAuthRoot(hippoRoot, flags);
+  // The local CLI owns every tenant (as auth revoke does), so the grant runs in the key's own tenant.
+  const db = openHippoDb(root);
+  let keyTenant: string | undefined;
+  try {
+    // SAFETY: row's shape matches the single tenant_id column in the SELECT.
+    const row = db.prepare(`SELECT tenant_id FROM api_keys WHERE key_id = ?`).get(keyId) as { tenant_id: string } | undefined;
+    keyTenant = row?.tenant_id;
+  } finally {
+    closeHippoDb(db);
+  }
+  if (keyTenant === undefined) {
+    console.error(`Unknown key_id: ${keyId}`);
+    process.exit(1);
+  }
+  const ctx: api.Context = { hippoRoot: root, tenantId: keyTenant, actor: api.adminActor('cli') };
+  try {
+    if (grant) api.authGrant(ctx, keyId, scope);
+    else api.authUngrant(ctx, keyId, scope);
+  } catch (err) {
+    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+  if (flags['json']) {
+    console.log(JSON.stringify({ keyId, scope, granted: grant }));
+    return;
+  }
+  console.log(grant ? `Granted ${keyId} read access to ${scope}` : `Removed ${keyId}'s grant on ${scope}`);
+}
+
 // ---------------------------------------------------------------------------
 // Audit log subcommands (A5 stub auth — `hippo audit list`)
 // ---------------------------------------------------------------------------
@@ -8602,6 +8635,8 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>([
   'conflict_resolve',      // AT1 — emitted by resolveConflict on every resolution path; lockstep
   'half_life_migrate',     // Decay default change — emitted by migrateDefaultHalfLife; lockstep with AuditOp union
   'dormant_restore',       // Dormant memories — emitted by api.restoreDormant; lockstep with AuditOp union + server.ts VALID_AUDIT_OPS
+  'auth_grant',            // EI2: emitted by api.authGrant; lockstep with AuditOp union + server.ts VALID_AUDIT_OPS
+  'auth_ungrant',          // EI2: emitted by api.authUngrant; lockstep with AuditOp union + server.ts VALID_AUDIT_OPS
 ]);
 
 function formatAuditRow(ev: AuditEvent): string {
@@ -8959,7 +8994,7 @@ function cmdGoal(hippoRoot: string, args: string[], flags: Record<string, string
 function cmdAuth(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
   const sub = args[0];
   if (!sub) {
-    console.error('Usage: hippo auth <create|list|revoke> [options]');
+    console.error('Usage: hippo auth <create|list|revoke|grant|ungrant> [options]');
     process.exit(1);
   }
   const subArgs = args.slice(1);
@@ -8979,8 +9014,18 @@ function cmdAuth(hippoRoot: string, args: string[], flags: Record<string, string
       cmdAuthRevoke(hippoRoot, keyId, flags);
       return;
     }
+    case 'grant':
+    case 'ungrant': {
+      const [keyId, scope] = subArgs;
+      if (!keyId || !scope) {
+        console.error(`Usage: hippo auth ${sub} <key_id> <scope>`);
+        process.exit(1);
+      }
+      cmdAuthScopeGrant(hippoRoot, keyId, scope, sub === 'grant', flags);
+      return;
+    }
     default:
-      console.error(`Unknown auth subcommand: ${sub}. Expected: create | list | revoke.`);
+      console.error(`Unknown auth subcommand: ${sub}. Expected: create | list | revoke | grant | ungrant.`);
       process.exit(1);
   }
 }
@@ -9686,6 +9731,12 @@ Commands:
       --json               Output as JSON
       --global             Operate on the global store
     auth revoke <key_id>   Revoke an API key (subsequent validate fails)
+      --json               Output as JSON
+      --global             Operate on the global store
+    auth grant <key_id> <scope>    Let a member key read one restricted scope
+      --json               Output as JSON
+      --global             Operate on the global store
+    auth ungrant <key_id> <scope>  Remove a scope grant
       --json               Output as JSON
       --global             Operate on the global store
   audit <sub>              Query the append-only audit log (A5 stub auth)

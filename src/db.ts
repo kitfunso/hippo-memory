@@ -28,7 +28,7 @@ const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: new (path: string, options?: { readOnly?: boolean }) => DatabaseSyncLike;
 };
 
-const CURRENT_SCHEMA_VERSION = 46;
+const CURRENT_SCHEMA_VERSION = 47;
 
 /**
  * Context passed to migrations that need to know WHERE the store lives.
@@ -2502,6 +2502,22 @@ const MIGRATIONS: Migration[] = [
           ON failure_log(tenant_id, id);
         CREATE INDEX IF NOT EXISTS idx_failure_log_ts
           ON failure_log(ts);
+      `);
+    },
+  },
+  {
+    version: 47,
+    up: (db) => {
+      // Scope grants (src/auth.ts, ROADMAP EI2): a member key reads a
+      // restricted scope only by an explicit row here. Additive only: no
+      // min_compatible_binary bump.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS api_key_scope_grants (
+          key_id     TEXT NOT NULL,
+          scope      TEXT NOT NULL,
+          granted_at TEXT NOT NULL,
+          PRIMARY KEY(key_id, scope)
+        );
       `);
     },
   },

@@ -23,7 +23,7 @@
  */
 
 import { openHippoDb, closeHippoDb } from './db.js';
-import { writeEntry, assertTenantId } from './store.js';
+import { writeEntry, assertTenantId, RECALL_DEFAULT_DENY_SCOPES } from './store.js';
 import { markGraphDirty, removeGraphEntitiesForObject } from './graph.js';
 import { createMemory, Layer, PROJECT_BRIEF_HALF_LIFE_DAYS } from './memory.js';
 import { appendAuditEvent } from './audit.js';
@@ -544,6 +544,7 @@ export function assembleBriefFromReceipts(
   }
   const tag = `path:${normalizedRepo.toLowerCase()}`;
   const likeParam = `%"${escapeLike(tag)}"%`;
+  const denyPlaceholders = RECALL_DEFAULT_DENY_SCOPES.map(() => '?').join(', ');
 
   const db = openHippoDb(hippoRoot);
   let receipts: ReceiptRow[];
@@ -555,9 +556,10 @@ export function assembleBriefFromReceipts(
       WHERE tenant_id = ?
         AND source != 'project_brief'
         AND LOWER(tags_json) LIKE ? ESCAPE '\\'
+        AND (scope IS NULL OR (scope NOT IN (${denyPlaceholders}) AND scope NOT LIKE '%:private:%'))
       ORDER BY created DESC, id DESC
       LIMIT ?
-    `).all(tenantId, likeParam, MAX_BRIEF_RECEIPTS) as ReceiptRow[];
+    `).all(tenantId, likeParam, ...RECALL_DEFAULT_DENY_SCOPES, MAX_BRIEF_RECEIPTS) as ReceiptRow[];
   } finally {
     closeHippoDb(db);
   }

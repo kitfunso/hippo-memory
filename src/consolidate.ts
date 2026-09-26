@@ -38,6 +38,7 @@ import { rescueSet, rankNonPinnedByTenant, validateWeights, type MvRankInfo } fr
 import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from './memory-value-weights.js';
 import { appendAuditEvent } from './audit.js';
 import { migrateDefaultHalfLife } from './half-life-migration.js';
+import { derivationScope, commonDerivationScope, derivationPartitionKey } from './recall-scope.js';
 
 const DECAY_THRESHOLD = 0.05;
 const MERGE_OVERLAP_THRESHOLD = 0.35;  // Jaccard similarity for "related"
@@ -87,6 +88,8 @@ export interface ConsolidationResult {
   semanticCreated: number;
   replayed: number;
   promotedTraces: number;
+  /** T7: sessions skipped because their events span two derivation scopes. */
+  tracesSkippedMixedScope: number;
   extractionCandidates: number;
   extracted: number;
   dagCandidateClusters: number;
@@ -171,6 +174,7 @@ export async function consolidate(
     semanticCreated: 0,
     replayed: 0,
     promotedTraces: 0,
+    tracesSkippedMixedScope: 0,
     extractionCandidates: 0,
     extracted: 0,
     dagCandidateClusters: 0,
@@ -439,6 +443,15 @@ export async function consolidate(
         session_id: session.session_id,
         limit: 1000,
       });
+
+      // T7: a mixed-scope session would otherwise leak into one trace.
+      const sessionScope = commonDerivationScope(events.map((e) => e.scope));
+      if (!sessionScope.ok) {
+        result.tracesSkippedMixedScope++;
+        result.details.push(`  ⏭  skipped session ${session.session_id}: events span mixed scopes`);
+        continue;
+      }
+
       const completeEvent = events.find((e) => e.event_type === 'session_complete');
       if (!completeEvent) continue; // defence-in-depth; findPromotableSessions filters already.
 
@@ -467,6 +480,7 @@ export async function consolidate(
           source_session_id: session.session_id,
           tags: ['auto-promoted'],
           source: 'auto-promote',
+          scope: sessionScope.scope,
           // T1 fix (2026-08-15 hardening pass): stamp the trace into the SAME
           // tenant the traceExistsForSession idempotency check (above) runs
           // under. Before
@@ -769,9 +783,10 @@ export async function consolidate(
   // before this fix — byte-identical behavior there.
   const mergeCandidatesByTenant = new Map<string, MemoryEntry[]>();
   for (const entry of mergeCandidates) {
-    const bucket = mergeCandidatesByTenant.get(entry.tenantId);
+    const key = derivationPartitionKey(entry.tenantId, entry.scope);
+    const bucket = mergeCandidatesByTenant.get(key);
     if (bucket) bucket.push(entry);
-    else mergeCandidatesByTenant.set(entry.tenantId, [entry]);
+    else mergeCandidatesByTenant.set(key, [entry]);
   }
 
   // AT1 consolidation-loop fix (docs/plans/2026-08-15-at1-rejected-value-tombstone.md):
@@ -783,7 +798,9 @@ export async function consolidate(
   // declared up at the try's opening above 1.4, not here — it has to
   // survive the try/finally that now wraps this whole section; see the
   // handle-leak restructure comment there.)
-  for (const [mergeTenant, tenantCandidates] of mergeCandidatesByTenant) {
+  for (const [, tenantCandidates] of mergeCandidatesByTenant) {
+    const mergeTenant = tenantCandidates[0].tenantId;
+    const mergeScope = derivationScope(tenantCandidates[0].scope);
     for (let i = 0; i < tenantCandidates.length; i++) {
       if (used.has(tenantCandidates[i].id)) continue;
 
@@ -821,6 +838,7 @@ export async function consolidate(
           source: 'consolidation',
           confidence: 'inferred',
           tenantId: mergeTenant,
+          scope: mergeScope,
         });
       }
 
