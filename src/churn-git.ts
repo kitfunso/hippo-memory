@@ -93,7 +93,7 @@ export function gitGrepPresence(repoRoot: string, patterns: string[], rev: strin
 
 /** Last commit at or before `beforeIso`, or null when the repo has none. */
 export function resolveCommitBefore(repoRoot: string, beforeIso: string): string | null {
-  const raw = runGit(['rev-list', '-1', `--before=${beforeIso}`, 'HEAD'], repoRoot).trim();
+  const raw = runGit(['rev-list', '-1', '--first-parent', `--before=${beforeIso}`, 'HEAD'], repoRoot).trim();
   return raw === '' ? null : raw;
 }
 

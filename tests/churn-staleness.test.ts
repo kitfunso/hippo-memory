@@ -351,6 +351,24 @@ describe('detectChurnStale', () => {
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
   });
 
+  it('resolves the anchor snapshot on first-parent history, so a merged side-branch removal counts', () => {
+    fs.writeFileSync(path.join(repoDir, 's.ts'), 'export function mergedAwaySymbol() {}\n');
+    commit(repoDir, new Date(new Date(BEFORE_ANCHOR).getTime() - DAY).toISOString());
+    const mainline = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repoDir, encoding: 'utf8' }).trim();
+    execFileSync('git', ['checkout', '-q', '-b', 'side'], { cwd: repoDir });
+    fs.writeFileSync(path.join(repoDir, 's.ts'), 'export function replacement() {}\n');
+    commit(repoDir, BEFORE_ANCHOR);
+    execFileSync('git', ['checkout', '-q', mainline], { cwd: repoDir });
+    storeMemory('call `mergedAwaySymbol` first', { created: ANCHOR });
+    execFileSync('git', ['merge', '-q', '--no-ff', '-m', 'merge side', 'side'], {
+      cwd: repoDir,
+      env: { ...process.env, GIT_AUTHOR_DATE: AFTER_ANCHOR, GIT_COMMITTER_DATE: AFTER_ANCHOR },
+    });
+
+    const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project, dryRun: true });
+    expect(result.preview[0]?.evidence).toBe('symbol-gone: `mergedAwaySymbol`');
+  });
+
   it('reads tracked files from HEAD, not the index (a staged removal does not hide a change)', () => {
     fs.writeFileSync(path.join(repoDir, 'r.ts'), 'v1');
     commit(repoDir, BEFORE_ANCHOR);
@@ -500,6 +518,34 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
       const staleScore = results.find((r) => r.entry.id === stale.id)!.score;
       expect(staleScore).toBeCloseTo(CHURN_STALE_RANK_MULTIPLIER, 5);
       expect(results[0].entry.id).toBe(plain.id);
+    } finally {
+      fs.rmSync(hippoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('penalises a churn-stale child injected by DAG drill-down (sync and hybrid)', async () => {
+    const parent = createMemory('quasar ledger overview', { tags: ['dag-summary'] });
+    const child = createMemory('unrelated detail text', { tags: [CHURN_STALE_TAG] });
+    child.dag_parent_id = parent.id;
+    for (const results of [search('quasar ledger', [parent, child]), await hybridSearch('quasar ledger', [parent, child])]) {
+      const p = results.find((r) => r.entry.id === parent.id)!;
+      const c = results.find((r) => r.entry.id === child.id)!;
+      expect(c.score).toBeCloseTo(p.score * 0.9 * CHURN_STALE_RANK_MULTIPLIER, 6);
+    }
+  });
+
+  it('sinks a churn-stale row in the default api.recall path (no search scorer)', () => {
+    const hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-churn-recall-'));
+    try {
+      initStore(hippoRoot);
+      const stale = createMemory('zephyr zephyr zephyr gearbox', { tags: [CHURN_STALE_TAG] });
+      const b = createMemory('zephyr gearbox notes with a few more words', { tags: [] });
+      const c = createMemory('zephyr gearbox notes with many many more padding words here', { tags: [] });
+      for (const m of [stale, b, c]) writeEntry(hippoRoot, m);
+      const ctx: api.Context = { hippoRoot, tenantId: 'default', actor: api.adminActor('test') };
+      const ids = api.recall(ctx, { query: 'zephyr' }).results.map((r) => r.id);
+      expect(ids).toHaveLength(3);
+      expect(ids[0]).not.toBe(stale.id);
     } finally {
       fs.rmSync(hippoRoot, { recursive: true, force: true });
     }

@@ -25,6 +25,10 @@ import { graphRankStream, selectGraphSeeds, DEFAULT_GRAPH_SEED_COUNT } from './g
 import { compareEntryIdentity, compareScoredResults } from './compare.js';
 export const CHURN_STALE_RANK_MULTIPLIER = 0.5; // SHORTCUT: untuned; FE3 measures before any default.
 
+export function churnStaleFactor(entry: MemoryEntry): number {
+  return entry.tags.includes(CHURN_STALE_TAG) ? CHURN_STALE_RANK_MULTIPLIER : 1.0;
+}
+
 // ---------------------------------------------------------------------------
 // Tokenizer
 // ---------------------------------------------------------------------------
@@ -609,7 +613,7 @@ export async function hybridSearch(
     const decisionBoost = entries[i].tags.includes('decision') ? 1.2 : 1.0;
     compositeScore *= decisionBoost;
 
-    const churnStaleMultiplier = entries[i].tags.includes(CHURN_STALE_TAG) ? CHURN_STALE_RANK_MULTIPLIER : 1.0;
+    const churnStaleMultiplier = churnStaleFactor(entries[i]);
     compositeScore *= churnStaleMultiplier;
 
     // Path-based boost: memories tagged with matching path segments get up to 1.3x
@@ -735,7 +739,7 @@ export async function hybridSearch(
     for (const child of childEntriesAsync) {
       if (!scoredDeduped.some((r) => r.entry.id === child.id)) {
         const parentResult = scoredDeduped.find((r) => r.entry.id === child.dag_parent_id);
-        const childScore = parentResult ? parentResult.score * 0.9 : 0;
+        const childScore = parentResult ? parentResult.score * 0.9 * churnStaleFactor(child) : 0;
         scoredDeduped.push({
           entry: child,
           score: childScore,
@@ -1007,7 +1011,7 @@ export async function physicsSearch(
           freshnessMultiplier = summaryFreshnessMultiplier(entry, now);
         }
       }
-      const churnStaleMultiplier = entry.tags.includes(CHURN_STALE_TAG) ? CHURN_STALE_RANK_MULTIPLIER : 1.0;
+      const churnStaleMultiplier = churnStaleFactor(entry);
       const finalScore = s.finalScore * summaryDeboostMultiplier * freshnessMultiplier * churnStaleMultiplier;
       if (finalScore <= 0) continue;
       const result: SearchResult = {
@@ -1085,7 +1089,7 @@ export async function physicsSearch(
 /** Normalize two score pools to [0,1] and combine. */
 function mergeScorePools(poolA: SearchResult[], poolB: SearchResult[]): SearchResult[] {
   const unpenalised = (r: SearchResult): number =>
-    r.entry.tags.includes(CHURN_STALE_TAG) ? r.score / CHURN_STALE_RANK_MULTIPLIER : r.score;
+    r.score / churnStaleFactor(r.entry);
   const maxA = poolA.reduce((m, r) => Math.max(m, unpenalised(r)), 1e-9);
   const maxB = poolB.reduce((m, r) => Math.max(m, unpenalised(r)), 1e-9);
 
@@ -1168,7 +1172,7 @@ export function search(
     const decisionBoost = entries[i].tags.includes('decision') ? 1.2 : 1.0;
     composite *= decisionBoost;
 
-    composite *= entries[i].tags.includes(CHURN_STALE_TAG) ? CHURN_STALE_RANK_MULTIPLIER : 1.0;
+    composite *= churnStaleFactor(entries[i]);
 
     // Path-based boost: memories tagged with matching path segments get up to 1.3x
     composite *= pathBoostMultiplier(entries[i].tags, currentPathTagsSync);
@@ -1220,7 +1224,7 @@ export function search(
     for (const child of childEntries) {
       if (!dedupedSync.some((r) => r.entry.id === child.id)) {
         const parentResult = dedupedSync.find((r) => r.entry.id === child.dag_parent_id);
-        const childScore = parentResult ? parentResult.score * 0.9 : 0;
+        const childScore = parentResult ? parentResult.score * 0.9 * churnStaleFactor(child) : 0;
         dedupedSync.push({
           entry: child,
           score: childScore,

@@ -85,7 +85,7 @@ import {
   type ApiKeyListItem,
 } from './auth.js';
 import { applyGoalStackBoost } from './goals.js';
-import { markRetrieved, estimateTokens, hybridSearch, physicsSearch, type RerankStep } from './search.js';
+import { markRetrieved, estimateTokens, hybridSearch, physicsSearch, churnStaleFactor, type RerankStep } from './search.js';
 import { compareEntryIdentity, compareScoredResults } from './compare.js';
 import { scopeMatch } from './scope.js';
 import { consolidate } from './consolidate.js';
@@ -841,6 +841,10 @@ function recallFrom(ctx: Context, opts: RecallOpts, windowSize: number, all: Mem
   // for api.recall; cmdRecall pipeline rolls --outcome/--layer/--as-of/etc.
   // into the same field per the plan's Task 3 mapping table).
   droppedPreRankCount = all.length - entries.length;
+  entries = entries
+    .map((e, i) => ({ e, s: (1 - i / entries.length) * churnStaleFactor(e) }))
+    .sort((a, b) => b.s - a.s)
+    .map((r) => r.e);
   // BM25 ordering already comes from loadRecallSearchEntries; cap to `limit`.
   // Score is a placeholder — the physics/hybrid scorers in src/search.ts
   // produce richer breakdowns and will replace this when wired up.
