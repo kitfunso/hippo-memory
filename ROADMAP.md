@@ -5,6 +5,8 @@
 > - **Part I (Grant-Tied Deliverables)** is the former `ROADMAP.md`: work organized by funding status (committed, grant-conditional, speculative) plus the grant work packages (Frontier AI Discovery, AI Champions Phase 1).
 > - **Part II (Canonical Execution Roadmap)** is the former `ROADMAP-RESEARCH.md`: the engineering execution plan (Tracks A-F, north star, benchmark priority, schema-migration order, test commitments, bets, non-goals).
 >
+> **Top priority since 2026-09-26: Part XV, Track Z (zero-touch memory), starting with Z0: prove hippo beats no memory.** Start there.
+>
 > `PLAN.md` remains the architecture and CLS-principles document. `RESEARCH.md` remains the research lineage and seven-mechanisms backgrounder.
 
 ---
@@ -1415,6 +1417,8 @@ Sequences of related coding tasks where early tasks produce lessons later ones c
 #### TE6. Adaptive budget [planned, after TE3]
 Stop packing when relevance falls off (score gap or threshold) and inject nothing when nothing is relevant; the budget becomes a ceiling, not a target. **Success:** fewer tokens on TE3 at equal recall, and no resolve-rate loss on TE5.
 
+**Cheap first test (added 2026-09-26):** a pass-by-default gate, where a failed or unsure check injects nothing (the pattern supermemory's open-source company-brain uses before its bot speaks unprompted: answer, acknowledge, investigate or pass). Replay the 133 transcripts from the SI0 kill test, where injected memories had a median overlap of 0.057 with the work, and count how many injections the gate drops and how many of the few relevant ones it keeps. No paid call; it decides whether TE6 needs more than a threshold. If a threshold is not enough, the next arm is a Jev yes/no judgment ("does this memory bear on this prompt?"), opt-in and falling back to the threshold, the same shape as `--reranker jev`. The corpus is frozen at `hippo-archive/transcripts-since-2026-09-01/` (135 files, outside the repo; private text).
+
 #### TE7. Terse agent format [planned, after TE3]
 A compact rendering for agent-facing output without markdown decoration and repeated labels. **Success:** fewer tokens per fact at equal accuracy on TE3.
 
@@ -1685,6 +1689,17 @@ RRSI's rule, applied to lessons:
 
 This is the evidence AGENTS.md requires before a lesson graduates.
 
+#### SI4. Write contract for agent-written memories [planned, eval first; added 2026-09-26]
+Clean a memory when it is written instead of ranking junk out later. Each agent-written memory must be:
+- one self-contained subject, readable without its thread;
+- free of raw ids, transcript tags and bare name stubs;
+- tagged with an existing tag when one covers the subject, so near-synonym tags stop multiplying.
+
+The source is the `MemoryDoc` schema in supermemory's company-brain (`src/brain/memory/writeback.ts`). `hippo capture` already stores trailing transcript tags as facts, so it is the first place to apply this. **Eval first:** run the contract over a copy of the founder's store and report the share of memories it would reject or rewrite, then check recall on E1 and TE3 does not drop. Ships only if both hold. The rule-based check goes first; a Jev judgment is the opt-in second arm for the "self-contained subject" test that rules cannot read.
+
+#### SI5. Distil before the host deletes [planned, after SI4]
+Claude Code deletes session transcripts after 30 days by default (`cleanupPeriodDays`). Hippo distils a session only when its SessionEnd or PreCompact hook fires, so a crashed session, a session from before install, or one on a box without the hooks is lost for good. `hippo capture --backfill` sweeps transcripts older than 20 days whose session id has no capture yet and distils them. It never archives the raw transcript (Phase E6 cut: "Ingesting every raw transcript forever"). `hippo doctor` reports the host's retention and how many sessions are within 7 days of deletion with no capture. Gated on SI4, because backfilling today's capture quality would add junk faster. **Pitch, once SI4 and SI5 ship:** "Claude Code forgets your sessions after 30 days; hippo keeps what they taught."
+
 #### SI3. Poisoning limits for self-writing agents [planned, with SI0]
 An agent that writes its own memories can amplify its own mistakes. Limits:
 - a per-session cap on auto-captured memories;
@@ -1736,7 +1751,9 @@ Existing items are named by their IDs; new ones are EV1 to EV5 below.
    - CD12 telemetry join and pilot report;
    - CD13 failure-signature log;
    - CD6's first admin view.
-7. **Product packaging:** EV1 to EV5.
+7. **Product packaging:** EV2 to EV5.
+
+**EV1's repository comes before step 2 (review 2026-09-26).** Code published in the MIT repository stays MIT for good, so the private repository must exist before the first commercial-only line is written. The first such line is EI2's grants, in step 2. EV1's packaging and CI can still wait until step 7. What has already shipped in the public repository (tenants, API keys, roles, the dashboard) stays MIT.
 
 ### New items
 
@@ -1817,6 +1834,7 @@ Measured on a copy of the founder's store: 73 of 1,106 lessons flagged, 44 of th
 - full@365, the current default;
 - full@30 and full@90, the untested middle;
 - version-aware recency (FE1);
+- event-date recency (FE5);
 - decay off.
 
 It runs with the in-window dating lane as well. It also includes a **replay of real recall queries** from the founder's store: LC1 retrieval traces with their later outcomes, scored for each arm. This is the only test that reflects actual use, and it runs on the founder's machine.
@@ -1825,6 +1843,9 @@ It runs with the in-window dating lane as well. It also includes a **replay of r
 Pitch "learns what is wrong and stops repeating it", not "decay by default". "Good memory is knowing what to forget" stays only where forgetting means wrong, superseded or unused, never age.
 
 Done in the README and the website (`website/`): the pitch leads with outcome marks and supersession, the claims that decay or sleep improve recall are gone, the 365-day half-life is labelled as not tuned, and the hippocampus framing is labelled as design inspiration.
+
+#### FE5. Recency by event date, not save date [planned, eval first; added 2026-09-26]
+The mechanism audit found recency hurts current-fact recall but guards against stale facts. Part of the cost may be that recency counts from when a memory was saved, not from when its fact became true. `valid_from` already exists, but it defaults to `created` and only filters `--as-of` queries; it never ranks. The arm: fill `valid_from` from the date a memory states (a decision, deadline or incident), then apply recency to that date. It runs as an FE3 arm on E1. Ships only if it keeps the stale-fact guard without the current-fact loss. Idea from supermemory's company-brain, whose writer records an `eventDate` for dated memories.
 
 ---
 
@@ -1904,3 +1925,46 @@ Resource requests come from profiling hippo's own write, recall and sleep phases
 
 **Order:** K1, then K2 and K3 together, then K4, K5 and K6, then K7 and K8. K1 is worth doing even if no chart ever ships, because `deploy/aml` has the same gaps.
 
+
+---
+
+## Part XV - 2026-09-26 update: zero-touch memory (Track Z) [top priority]
+
+**Why.** Users prompt; they do not call hippo. Any mechanism that needs a command is, in practice, off. Two facts from source and data:
+- **The per-prompt hook never reads the prompt.** `UserPromptSubmit` runs `hippo context --pinned-only --include-recent 5` (`src/hooks.ts:138`): pinned rules plus the five newest memories, whatever was asked. The SI0 kill test measured the result: injected memories had a median overlap of 0.057 with the work.
+- **The best measured mechanism is manual.** Outcome feedback (a memory marked wrong stops coming back) is the one lifecycle mechanism that clearly helped in the audit, and it runs only when someone calls `hippo outcome`.
+
+**Goal.** Remember the right thing, surface it when it bears on the prompt, and stop the same mistake from happening twice, with no command from the user. Personal and company stores run the same loop.
+
+**Order is load-bearing.** Z0 comes first and is the scoreboard for every later item. Z2 cannot credit memories until Z1 makes injections relevant; Z4 needs Z2 and Z3 to know which lessons were ignored.
+
+#### Z0. Prove hippo beats no memory [top priority; started 2026-09-26]
+Hippo has never been shown to beat an agent with no memory. TE5 is the test and has had no scored run. It runs real Claude Code sessions on the founder's signed-in plan, so it bills nothing; the limit is plan usage, and the full registration is about 1,200 sessions. Staged:
+1. **Task set.** Draft sequences with `make-tasks.mjs --verify` from 3 repositories with commits after 2026-07-01, rewrite every prompt as a symptom, grep memories against gold patches. **Done 2026-09-26:** 28 tasks (22 scored) from hippo, fifty and boring-maths, in `hippo-archive/te5-pilot/` (outside the repo; its README lists every drop and each original commit beside its rewritten prompt). Harness faults found, to fix before the scored run: `make-tasks.mjs` ignores a failed `--setup` (lines 75, 78); its default test pattern sends e2e specs and fixtures to the unit runner (line 32); `--verify` passed 48 tasks that review still had to drop; `ab-run.mjs` imports `dist` so even `--dry-run` needs a build (lines 66-69); the stale-memory arm needs two repositories in one tasks file; fifty's tests run the live `.venv`, so it needs an isolated environment first.
+2. **Pilot, descriptive only.** Arms `no-memory` and `hippo` (as shipped), about 20 scored tasks, 2 seeds, one model. Proposed first run: hippo and boring-maths only (15 scored tasks, 76 sessions), fifty after its environment is isolated. Waits on the founder's go, since it spends several days of plan usage. Outputs: resolve rate, cost per resolved task, repeated errors, seed-to-seed spread, sessions per plan window. It sizes the full run and catches harness faults. Pilot repositories never enter the scored run, so Z1 may be tuned on them.
+3. **Scored run** as registered (H1 to H4), on fresh repositories.
+4. **Every Z item re-runs the same tasks** with its own `hippo` arm; an item that does not move cost per resolved task or repeated errors does not ship as a default.
+
+**Pre-compact audit (2026-09-26, 1.46.0 on the founder's box).** The snapshot is saved and re-injected after every compaction, and 1.46's global-store fallback ended the "store not initialized" losses. Three defects remain, all before Z0's pilot so the hippo arm is not measured with them:
+- **Task field is a background-agent notice** in 66 of 71 snapshots: `isNonHumanUserLine` (`src/capture.ts:648`) does not skip user lines Claude Code tags `promptSource: "system"`. Fix there; it cleans Task, Summary and extraction together.
+- **Pre-compact memories are mostly junk** (2 useful of the last 45): rule matches start at the keyword and drop the subject. Stop extracting in pre-compact, since SessionEnd capture covers it and the snapshot is the product.
+- **A stale snapshot can be restored** when pre-compact skips and the cwd has moved (one restore was about 25 hours old). Ignore snapshots older than about 15 minutes in `compact-resume`.
+
+#### Z1. Recall against the prompt, gated [next]
+The `UserPromptSubmit` hook reads the prompt from its payload and recalls against it, then applies TE6's gate: inject nothing when nothing clears it. Pinned rules stay. **Test first, no paid call:** replay the frozen SI0 corpus (`hippo-archive/transcripts-since-2026-09-01/`) and report overlap with the work and tokens injected, today's hook against Z1. **Ships if** overlap rises well above 0.057 and median injected tokens do not grow. Latency budget: the hook stays under the current 0.28 s at 10,000 memories.
+
+#### Z2. Automatic outcomes [after Z1; this is SI0 re-opened]
+Credit or blame the memories Z1 injected, from signals in the session: a failed command that passes after a memory was shown (helped), the same error recurring after its lesson was shown (did not help), a user correction that contradicts a shown memory (wrong). Each is an `observed` outcome, logged with its evidence and reversible. Re-run SI0's two kill checks on Z1's injections before the write path is built.
+
+#### Z3. Capture corrections [with Z2]
+A user message that corrects the agent ("no, don't...", "stop...", "use X not Y") is the strongest signal we have. Detect it in the hook, distil it through SI4's write contract, and store it as a lesson tied to what it corrected. A repeat of the same correction strengthens the existing lesson instead of adding a new one.
+
+#### Z4. Repeated mistakes become guards [after Z2 and Z3]
+A lesson that was shown and still violated, or corrected twice, is promoted from recalled memory to an enforced check: a `PreToolUse` guard that blocks the matching action with the lesson as the reason. Guards are opt-in per store at first, listed by `hippo doctor`, and each can be dropped with one command. Promotion needs the evidence SI2 requires; a guard that blocks nothing in 30 days demotes back to a memory.
+
+#### Z5. Company stores [after Z4 on personal stores]
+The same loop per person. A lesson moves from a personal store to the team store only when it has helped on work other than the task it came from, for two or more people (SI2). Guards promote the same way.
+
+**What not to build.** New commands for users to learn. Every Z item is reached through hooks `hippo init` already installs; a new CLI verb is for debugging only.
+
+**Evidence gate.** TE5 (paired agent A/B) is still the proof that any of this beats no memory. Z1's replay is the cheap check; TE5 is the claim.
