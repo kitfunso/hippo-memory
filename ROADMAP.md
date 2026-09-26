@@ -1750,7 +1750,9 @@ Existing items are named by their IDs; new ones are EV1 to EV5 below.
    - CD12 telemetry join and pilot report;
    - CD13 failure-signature log;
    - CD6's first admin view.
-7. **Product packaging:** EV1 to EV5.
+7. **Product packaging:** EV2 to EV5.
+
+**EV1's repository comes before step 2 (review 2026-09-26).** Code published in the MIT repository stays MIT for good, so the private repository must exist before the first commercial-only line is written. The first such line is EI2's grants, in step 2. EV1's packaging and CI can still wait until step 7. What has already shipped in the public repository (tenants, API keys, roles, the dashboard) stays MIT.
 
 ### New items
 
