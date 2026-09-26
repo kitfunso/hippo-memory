@@ -63,6 +63,11 @@ export function promoteToGlobal(
   const entry = readEntry(localRoot, id, opts?.tenantId);
   if (!entry) throw new Error(`Memory not found: ${id}`);
 
+  // CD5: same veto as shareMemory; a promoted copy would have no quarantine record to review.
+  if (isQuarantineScope(entry.scope)) {
+    throw new Error(`Refusing to promote ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ${id}'.`);
+  }
+
   // v39 S4 producer veto: promote is a producer path to the global store
   // exactly like shareMemory - same hard rule (codex gating review P2).
   const promoteSecret = detectSecret(entry);

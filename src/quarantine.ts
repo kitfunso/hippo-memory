@@ -89,10 +89,14 @@ export function listQuarantineRows(
   status: QuarantineStatus | 'all' = 'pending',
   limit = 100,
 ): QuarantineRow[] {
+  // A pending row whose memory was deleted (e.g. Slack message_deleted) is dead; keep its history, drop it from the queue.
+  const live = status === 'pending'
+    ? ' AND EXISTS (SELECT 1 FROM memories m WHERE m.id = memory_quarantine.memory_id AND m.tenant_id = memory_quarantine.tenant_id)'
+    : '';
   const rows = status === 'all'
     ? db.prepare(`SELECT ${SELECT_COLUMNS} FROM memory_quarantine WHERE tenant_id = ? ORDER BY quarantined_at DESC LIMIT ?`)
         .all(tenantId, limit)
-    : db.prepare(`SELECT ${SELECT_COLUMNS} FROM memory_quarantine WHERE tenant_id = ? AND status = ? ORDER BY quarantined_at DESC LIMIT ?`)
+    : db.prepare(`SELECT ${SELECT_COLUMNS} FROM memory_quarantine WHERE tenant_id = ? AND status = ?${live} ORDER BY quarantined_at DESC LIMIT ?`)
         .all(tenantId, status, limit);
   // SAFETY: both branches select SELECT_COLUMNS, matching QuarantineDbRow's field set.
   return (rows as QuarantineDbRow[]).map(fromDbRow);

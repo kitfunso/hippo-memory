@@ -16,7 +16,7 @@ import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 const REPO_ROOT = join(__dirname, '..');
 const CLI_PATH = join(REPO_ROOT, 'dist', 'cli.js');
 
-const CONTINUITY_TABLES = ['task_snapshots', 'session_events', 'session_handoffs', 'cards', 'card_deps', 'card_runs', 'card_comments'] as const;
+const CONTINUITY_TABLES = ['task_snapshots', 'session_events', 'session_handoffs', 'cards', 'card_deps', 'card_runs', 'card_comments', 'memory_quarantine'] as const;
 
 function tableNames(db: DatabaseSyncLike): string[] {
   // SAFETY: row shape guaranteed by the `SELECT name FROM sqlite_master` projection.

@@ -2526,21 +2526,7 @@ const MIGRATIONS: Migration[] = [
     up: (db) => {
       // Quarantine (src/quarantine.ts, CD5): a poisoned or suspect memory sits here pending
       // admin review instead of being hidden with no record. Additive only: no min_compatible_binary bump.
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS memory_quarantine (
-          tenant_id      TEXT NOT NULL DEFAULT 'default',
-          memory_id      TEXT NOT NULL,
-          original_scope TEXT,
-          reason         TEXT NOT NULL,
-          status         TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
-          quarantined_at TEXT NOT NULL,
-          decided_at     TEXT,
-          decided_by     TEXT,
-          PRIMARY KEY (tenant_id, memory_id)
-        ) WITHOUT ROWID;
-        CREATE INDEX IF NOT EXISTS idx_memory_quarantine_status
-          ON memory_quarantine(tenant_id, status, quarantined_at DESC);
-      `);
+      db.exec(MEMORY_QUARANTINE_DDL);
     },
   },
 ];
@@ -2710,6 +2696,23 @@ function setSchemaVersion(db: DatabaseSyncLike, version: number): void {
   db.exec(`PRAGMA user_version = ${Math.max(0, Math.trunc(version))}`);
 }
 
+// Shared by migration v48 and the stamped-store self-heal below.
+const MEMORY_QUARANTINE_DDL = `
+    CREATE TABLE IF NOT EXISTS memory_quarantine (
+      tenant_id      TEXT NOT NULL DEFAULT 'default',
+      memory_id      TEXT NOT NULL,
+      original_scope TEXT,
+      reason         TEXT NOT NULL,
+      status         TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+      quarantined_at TEXT NOT NULL,
+      decided_at     TEXT,
+      decided_by     TEXT,
+      PRIMARY KEY (tenant_id, memory_id)
+    ) WITHOUT ROWID;
+    CREATE INDEX IF NOT EXISTS idx_memory_quarantine_status
+      ON memory_quarantine(tenant_id, status, quarantined_at DESC);
+`;
+
 // Before the loop on stamped stores: a table lost after its migration stamped (2026-08-15
 // incident) is never re-migrated, and v4/v16/v22 ALTER or read it. Fresh stores use the chain.
 function ensureContinuityTables(db: DatabaseSyncLike): void {
@@ -2811,6 +2814,7 @@ function ensureContinuityTables(db: DatabaseSyncLike): void {
       tenant_id TEXT NOT NULL DEFAULT 'default'
     )
   `);
+  db.exec(MEMORY_QUARANTINE_DDL);
 }
 
 // After the loop: tenant_id (v16) and scope (v23) do not exist yet on a genuine old store.
