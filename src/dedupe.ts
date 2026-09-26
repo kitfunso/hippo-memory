@@ -25,6 +25,7 @@ import { textOverlap } from './search.js';
 import { loadAllEntries, deleteEntry } from './store.js';
 import { compareEntryIdentity } from './compare.js';
 import { canAutoDelete, type MemoryEntry } from './memory.js';
+import { derivationPartitionKey } from './recall-scope.js';
 
 export interface DedupPair {
   kept: string;
@@ -102,9 +103,11 @@ export function deduplicateStore(
   // pre-fix global pass.
   const entriesByTenant = new Map<string, MemoryEntry[]>();
   for (const entry of entries) {
-    const bucket = entriesByTenant.get(entry.tenantId);
+    // EI2: also split by restricted scope, else a private copy can delete the readable one.
+    const key = derivationPartitionKey(entry.tenantId, entry.scope);
+    const bucket = entriesByTenant.get(key);
     if (bucket) bucket.push(entry);
-    else entriesByTenant.set(entry.tenantId, [entry]);
+    else entriesByTenant.set(key, [entry]);
   }
 
   // finiteCount mirrors strengthBucket's non-finite hardening on the

@@ -13,6 +13,7 @@ import {
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { createMemory, Layer } from '../src/memory.js';
 import { consolidate } from '../src/consolidate.js';
+import { deduplicateStore } from '../src/dedupe.js';
 import { buildDag, buildEntityProfiles } from '../src/dag.js';
 import { storeExtractedFacts, type ExtractedFact } from '../src/extract.js';
 import { saveProjectBrief, assembleBriefFromReceipts } from '../src/project-briefs.js';
@@ -89,6 +90,25 @@ describe('T3: consolidate() merge pass partitions by scope', () => {
       expect(nullSemantic).toBeDefined();
       expect(privateSemantic!.content).toContain('zzzprivatemarkerzzz');
       expect(nullSemantic!.content).not.toContain('zzzprivatemarkerzzz');
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('dedupe partitions by restricted scope', () => {
+  it('a private near-duplicate never deletes the unrestricted copy', () => {
+    const home = tmpHome();
+    try {
+      initStore(home);
+      const text = 'rotate the staging tls certificates before expiry and notify on-call';
+      const priv = createMemory(text, { layer: Layer.Semantic, scope: 'slack:private:C1' });
+      const pub = createMemory(text, { layer: Layer.Semantic, scope: null });
+      writeEntry(home, { ...priv, strength: 0.9 });
+      writeEntry(home, { ...pub, strength: 0.1 });
+
+      expect(deduplicateStore(home).removed).toBe(0);
+      expect(loadAllEntries(home).map((e) => e.scope).sort()).toEqual([null, 'slack:private:C1'].sort());
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
