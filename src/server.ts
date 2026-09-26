@@ -1375,16 +1375,13 @@ async function handleRequest(
       limit = parsed;
     }
     const ctx = buildContextWithAuth(req, opts.hippoRoot);
-    // D2 v1.12.10: optional ?tenant=<t> param. Defaults to ctx.tenantId
-    // (caller's own tenant). Lets admins query the '__host__' synthetic
-    // tenant where host-wide ops like 'consolidate' are recorded. Today
-    // the audit route inherits the auth gate on /v1/audit (Bearer auth);
-    // a future per-tenant authz check should ensure non-admin Bearers
-    // can only pass their own tenant_id here.
+    // ?tenant=<t> reads another tenant (e.g. '__host__' for consolidate rows); admin only.
     const tenantOverride = query.get('tenant');
-    const effectiveCtx = tenantOverride !== null && tenantOverride !== ''
-      ? { ...ctx, tenantId: tenantOverride }
-      : ctx;
+    const crossTenant = tenantOverride !== null && tenantOverride !== '' && tenantOverride !== ctx.tenantId;
+    if (crossTenant && ctx.actor.role !== 'admin') {
+      throw new HttpError(403, '/v1/audit?tenant= for another tenant requires admin role');
+    }
+    const effectiveCtx = crossTenant ? { ...ctx, tenantId: tenantOverride } : ctx;
     const result = auditList(effectiveCtx, { op, since, limit });
     sendJson(res, 200, result);
     return;

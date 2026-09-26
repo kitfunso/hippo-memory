@@ -70,10 +70,11 @@ describe('redactSecrets / redactSecretsStrict', () => {
   const SK_X_NO_KEYWORD = 'sk_' + 'vendor_deadbeef123456';
   const ASSIGNMENT = 'api_key=' + '9f8e7d6c5b4a3210' + 'ffff';
   const BEARER = 'Bearer ' + 'A'.repeat(20);
+  const BEARER_UPPER = 'BEARER ' + 'D'.repeat(20);
   const JWT = 'eyJ' + 'A'.repeat(10) + '.eyJ' + 'B'.repeat(10) + '.' + 'C'.repeat(10);
 
   it('redactSecretsStrict removes every canary shape, keyword context or not', () => {
-    const canaries = [AWS, GHP, GH_PAT, SLACK, STRIPE, GOOGLE, PEM, SK_NO_KEYWORD, SK_X_NO_KEYWORD, ASSIGNMENT, BEARER, JWT];
+    const canaries = [AWS, GHP, GH_PAT, SLACK, STRIPE, GOOGLE, PEM, SK_NO_KEYWORD, SK_X_NO_KEYWORD, ASSIGNMENT, BEARER, BEARER_UPPER, JWT];
     for (const canary of canaries) {
       expect(redactSecretsStrict(`before ${canary} after`), canary).not.toContain(canary);
     }
