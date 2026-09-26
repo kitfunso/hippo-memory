@@ -5,6 +5,8 @@
 > - **Part I (Grant-Tied Deliverables)** is the former `ROADMAP.md`: work organized by funding status (committed, grant-conditional, speculative) plus the grant work packages (Frontier AI Discovery, AI Champions Phase 1).
 > - **Part II (Canonical Execution Roadmap)** is the former `ROADMAP-RESEARCH.md`: the engineering execution plan (Tracks A-F, north star, benchmark priority, schema-migration order, test commitments, bets, non-goals).
 >
+> **Top priority since 2026-09-26: Part XV, Track Z (zero-touch memory).** Start there.
+>
 > `PLAN.md` remains the architecture and CLS-principles document. `RESEARCH.md` remains the research lineage and seven-mechanisms backgrounder.
 
 ---
@@ -1915,3 +1917,34 @@ Resource requests come from profiling hippo's own write, recall and sleep phases
 
 **Order:** K1, then K2 and K3 together, then K4, K5 and K6, then K7 and K8. K1 is worth doing even if no chart ever ships, because `deploy/aml` has the same gaps.
 
+
+---
+
+## Part XV - 2026-09-26 update: zero-touch memory (Track Z) [top priority]
+
+**Why.** Users prompt; they do not call hippo. Any mechanism that needs a command is, in practice, off. Two facts from source and data:
+- **The per-prompt hook never reads the prompt.** `UserPromptSubmit` runs `hippo context --pinned-only --include-recent 5` (`src/hooks.ts:138`): pinned rules plus the five newest memories, whatever was asked. The SI0 kill test measured the result: injected memories had a median overlap of 0.057 with the work.
+- **The best measured mechanism is manual.** Outcome feedback (a memory marked wrong stops coming back) is the one lifecycle mechanism that clearly helped in the audit, and it runs only when someone calls `hippo outcome`.
+
+**Goal.** Remember the right thing, surface it when it bears on the prompt, and stop the same mistake from happening twice, with no command from the user. Personal and company stores run the same loop.
+
+**Order is load-bearing.** Z2 cannot credit memories until Z1 makes injections relevant; Z4 needs Z2 and Z3 to know which lessons were ignored.
+
+#### Z1. Recall against the prompt, gated [next]
+The `UserPromptSubmit` hook reads the prompt from its payload and recalls against it, then applies TE6's gate: inject nothing when nothing clears it. Pinned rules stay. **Test first, no paid call:** replay the frozen SI0 corpus (`hippo-archive/transcripts-since-2026-09-01/`) and report overlap with the work and tokens injected, today's hook against Z1. **Ships if** overlap rises well above 0.057 and median injected tokens do not grow. Latency budget: the hook stays under the current 0.28 s at 10,000 memories.
+
+#### Z2. Automatic outcomes [after Z1; this is SI0 re-opened]
+Credit or blame the memories Z1 injected, from signals in the session: a failed command that passes after a memory was shown (helped), the same error recurring after its lesson was shown (did not help), a user correction that contradicts a shown memory (wrong). Each is an `observed` outcome, logged with its evidence and reversible. Re-run SI0's two kill checks on Z1's injections before the write path is built.
+
+#### Z3. Capture corrections [with Z2]
+A user message that corrects the agent ("no, don't...", "stop...", "use X not Y") is the strongest signal we have. Detect it in the hook, distil it through SI4's write contract, and store it as a lesson tied to what it corrected. A repeat of the same correction strengthens the existing lesson instead of adding a new one.
+
+#### Z4. Repeated mistakes become guards [after Z2 and Z3]
+A lesson that was shown and still violated, or corrected twice, is promoted from recalled memory to an enforced check: a `PreToolUse` guard that blocks the matching action with the lesson as the reason. Guards are opt-in per store at first, listed by `hippo doctor`, and each can be dropped with one command. Promotion needs the evidence SI2 requires; a guard that blocks nothing in 30 days demotes back to a memory.
+
+#### Z5. Company stores [after Z4 on personal stores]
+The same loop per person. A lesson moves from a personal store to the team store only when it has helped on work other than the task it came from, for two or more people (SI2). Guards promote the same way.
+
+**What not to build.** New commands for users to learn. Every Z item is reached through hooks `hippo init` already installs; a new CLI verb is for debugging only.
+
+**Evidence gate.** TE5 (paired agent A/B) is still the proof that any of this beats no memory. Z1's replay is the cheap check; TE5 is the claim.
