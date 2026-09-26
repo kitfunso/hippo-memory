@@ -209,6 +209,7 @@ function idsFromRecall(byId, txt) {
 // A1 (today's hook, simulated as-of a prompt ts)
 // ---------------------------------------------------------------------------
 
+// SHORTCUT: oldest-first, not production's strength order; exact only while all pins fit the budget (740 of 1500 tokens in this corpus).
 function rankPins(localAdm, globalAdm) {
   const combined = [
     ...localAdm.filter((e) => e.pinned).map((entry) => ({ entry, isGlobal: false })),

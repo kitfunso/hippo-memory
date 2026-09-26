@@ -6946,7 +6946,8 @@ async function cmdContext(
     // Z1: split into a static block (snapshot/handoff/events/pins/recent-N,
     // TE2-skippable) and a prompt-recall block (never skipped, own heading).
     const staticEntries = mainEntries.filter((r) => !r.promptRecall);
-    const recallEntries = mainEntries.filter((r) => r.promptRecall);
+    const staticCrossEntries = crossEntries.filter((r) => !r.promptRecall);
+    const recallEntries = result.entries.filter((r) => r.promptRecall);
     const staticItems = staticEntries.map((r) => ({ entry: r.entry, score: r.score, tokens: r.tokens, isGlobal: r.isGlobal ?? false }));
     const recallItems = recallEntries.map((r) => ({ entry: r.entry, score: r.score, tokens: r.tokens, isGlobal: r.isGlobal ?? false }));
     // Header total is static-only once a recall section exists; otherwise byte-identical to today.
@@ -6965,7 +6966,7 @@ async function cmdContext(
         // renders byte-identically turn after turn.
         printContextMarkdown(staticItems, staticHeaderTokens, framing, { showStrength: false });
       }
-      printCrossProjectSection(crossEntries);
+      printCrossProjectSection(staticCrossEntries);
     });
     const recallTokens = recallItems.reduce((sum, r) => sum + r.tokens, 0);
     const recallBlock = recallItems.length > 0

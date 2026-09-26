@@ -81,6 +81,46 @@ describe('getContext prompt recall (api-level)', () => {
     expect(hit!.promptRecall).toBe(true);
   });
 
+  it('recalls from a store with no pins and no include-recent', async () => {
+    enablePromptRecall(local);
+    const relevant = seed(local, 'the postgres migration script needs a rollback plan before deploy');
+
+    const result = await getContext(ctx, {
+      pinnedOnly: true,
+      currentProject: PROJECT,
+      prompt: 'how should the postgres migration rollback plan work',
+    });
+
+    expect(ids(result)).toEqual([relevant.id]);
+  });
+
+  it('treats a non-boolean promptRecall value as off', async () => {
+    fs.writeFileSync(path.join(local, 'config.json'), JSON.stringify({ pinnedInject: { promptRecall: 'false' } }));
+    seed(local, 'the postgres migration script needs a rollback plan before deploy');
+
+    const result = await getContext(ctx, {
+      pinnedOnly: true,
+      currentProject: PROJECT,
+      prompt: 'how should the postgres migration rollback plan work',
+    });
+
+    expect(result.entries).toEqual([]);
+  });
+
+  it('floors a fractional candidate limit instead of failing the hook', async () => {
+    enablePromptRecall(local, { promptRecallCandidates: 1.5 });
+    const relevant = seed(local, 'the postgres migration script needs a rollback plan before deploy');
+
+    const result = await getContext(ctx, {
+      pinnedOnly: true,
+      includeRecent: 5,
+      currentProject: PROJECT,
+      prompt: 'how should the postgres migration rollback plan work',
+    });
+
+    expect(result.entries.find((e) => e.entry.id === relevant.id)?.promptRecall).toBe(true);
+  });
+
   it('falls back to pins only when nothing clears the gate', async () => {
     enablePromptRecall(local);
     const pin = seed(local, 'the pinned decision that always injects', { pinned: true });
@@ -254,6 +294,18 @@ describe('hippo context --pinned-only --format additional-context prompt recall 
     const second = runHippo(['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'], payload);
     const context: string = JSON.parse(second).hookSpecificOutput.additionalContext;
     expect(context).not.toContain('PINNED: always check the rollback plan');
+    expect(context).toContain('## Prompt-Relevant Memory');
+    expect(context).toContain('the deploy rollback plan for the postgres migration');
+  });
+
+  it('keeps a cross-project recall in the always-sent section on a repeated prompt', () => {
+    seedCli('the deploy rollback plan for the postgres migration', { origin_project: 'some-other-project' });
+    seedCli('PINNED: always check the rollback plan before deploy', { pinned: true });
+
+    const payload = JSON.stringify({ session_id: 'sess-z1-cli-x', prompt: 'postgres migration rollback plan' });
+    const args = ['context', '--pinned-only', '--include-recent', '5', '--cross-project', '--format', 'additional-context'];
+    runHippo(args, payload);
+    const context: string = JSON.parse(runHippo(args, payload)).hookSpecificOutput.additionalContext;
     expect(context).toContain('## Prompt-Relevant Memory');
     expect(context).toContain('the deploy rollback plan for the postgres migration');
   });

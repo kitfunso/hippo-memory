@@ -30,6 +30,10 @@ Two runs of `scripts/z1-latency.mjs` at the tuned defaults gave Z1 p95s of 295 /
 
 The signal events are failing Bash commands. What the user typed before them shares little vocabulary with the error text, so memories that match the prompt match the failure no better than the five newest memories do. On the reset metric, 57 of 92 held-out events have no hook context in either arm, which caps what any hook change can move.
 
+## Replay limits
+
+The replay orders pins oldest-first, where the real hook orders them by strength. That only changes which pins are sent when they overflow the budget. Here they never do: at most 740 pin tokens against a 1,500-token budget, local and global combined. So the measured sets and token counts are unaffected. A corpus with more pins would need production's ordering.
+
 ## NOT DONE
 
 - A relevance judge (Jev yes/no, or embeddings) in place of lexical overlap. The prereg named it as the next arm if this one failed on overlap.

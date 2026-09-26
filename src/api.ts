@@ -2637,7 +2637,10 @@ export async function getContext(
       }).filter((e) => passesScopeFilterForRecall(rowScope(e), undefined))
     : [];
 
+  const promptRecallPending = pinnedOnly && Boolean(opts.prompt?.trim())
+    && loadConfig(ctx.hippoRoot).pinnedInject.promptRecall === true;
   if (
+    !promptRecallPending &&
     localEntries.length === 0 &&
     globalEntries.length === 0 &&
     !activeSnapshot &&
@@ -2711,7 +2714,7 @@ export async function getContext(
     const recentBudget = Math.max(0, effBudget - pinnedReserve);
 
     // Z1: gate the backfill on the prompt instead of recency (docs/plans/2026-09-26-z1-prompt-recall.md).
-    const promptRecallOn = Boolean(opts.prompt?.trim()) && pinnedCfg.pinnedInject.promptRecall;
+    const promptRecallOn = Boolean(opts.prompt?.trim()) && pinnedCfg.pinnedInject.promptRecall === true;
     if (promptRecallOn) {
       const rawMetric = pinnedCfg.pinnedInject.promptRecallMetric;
       const metric: PromptRecallMetric = rawMetric === 'cosine' ? 'cosine' : 'jaccard';
@@ -2724,7 +2727,7 @@ export async function getContext(
         minShared: finiteOr(pinnedCfg.pinnedInject.promptRecallMinShared, 2, 0),
         maxItems: finiteOr(pinnedCfg.pinnedInject.promptRecallMaxItems, 5, 1),
       };
-      const candidateLimit = finiteOr(pinnedCfg.pinnedInject.promptRecallCandidates, 100, 1);
+      const candidateLimit = Math.floor(finiteOr(pinnedCfg.pinnedInject.promptRecallCandidates, 100, 1));
       const p = promptTokens(opts.prompt ?? '');
       if (p.size > 0) {
         const ftsQuery = promptRecallFtsQuery(p);
