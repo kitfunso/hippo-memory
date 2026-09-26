@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.52.1 - 2026-09-27
+
+### Added
+
+- **The `UserPromptSubmit` hook can gate its recent-memory backfill on the prompt itself, instead of pure recency.** Behind `pinnedInject.promptRecall`, **off by default**: the replay eval failed its overlap and latency gates (overlap flat at 0.0545 in both arms, hook p95 about 300 ms against 210 ms) while cutting median injected tokens from 847 to 533. See `docs/evals/2026-09-26-z1-prompt-recall-result.md`. When on and a prompt is present, candidates are scored against it by token overlap (tuned defaults: jaccard, threshold 0.04, 2 shared tokens, 5 items) and the survivors are injected under their own `## Prompt-Relevant Memory` section and a new `hook_recall` token-ledger surface. Off, or with no prompt, behaviour is unchanged.
+
+### Changed
+
+- **Every CLI start is about 20 ms faster, and prompt recall's extra cost is roughly halved.** The API-key module no longer computes a scrypt hash when it loads; the dummy hash it compares against is now a constant. With `pinnedInject.promptRecall` on, the hook opens each store once and pre-selects candidates with the 8 rarest prompt terms in that store's full-text index instead of the first 32. At 10,000 memories its p95 went from about 260 to 290 ms to about 210 to 230 ms, now under the 280 ms budget. Recall against the failing command (Z1 second arm) failed its pre-registered replay gates and ships as a result doc only (`docs/evals/2026-09-26-z1b-tool-recall-result.md`).
+
 ## 1.52.0 - 2026-09-26
 
 ### Fixed

@@ -1,3 +1,0 @@
-### Changed
-
-- **Every CLI start is about 20 ms faster, and prompt recall's extra cost is roughly halved.** The API-key module no longer computes a scrypt hash when it loads; the dummy hash it compares against is now a constant. With `pinnedInject.promptRecall` on, the hook opens each store once and pre-selects candidates with the 8 rarest prompt terms in that store's full-text index instead of the first 32. At 10,000 memories its p95 went from about 260 to 290 ms to about 210 to 230 ms, now under the 280 ms budget. Recall against the failing command (Z1 second arm) failed its pre-registered replay gates and ships as a result doc only (`docs/evals/2026-09-26-z1b-tool-recall-result.md`).

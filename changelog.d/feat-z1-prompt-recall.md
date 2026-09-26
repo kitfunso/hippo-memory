@@ -1,3 +1,0 @@
-### Added
-
-- **The `UserPromptSubmit` hook can gate its recent-memory backfill on the prompt itself, instead of pure recency.** Behind `pinnedInject.promptRecall`, **off by default**: the replay eval failed its overlap and latency gates (overlap flat at 0.0545 in both arms, hook p95 about 300 ms against 210 ms) while cutting median injected tokens from 847 to 533. See `docs/evals/2026-09-26-z1-prompt-recall-result.md`. When on and a prompt is present, candidates are scored against it by token overlap (tuned defaults: jaccard, threshold 0.04, 2 shared tokens, 5 items) and the survivors are injected under their own `## Prompt-Relevant Memory` section and a new `hook_recall` token-ledger surface. Off, or with no prompt, behaviour is unchanged.
