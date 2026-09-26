@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.51.0 - 2026-09-26
+
+### Added
+
+- **Opt-in staleness from code churn (ROADMAP FE2), off by default.** With `"churnStaleness": {"enabled": true}` in `.hippo/config.json`, `hippo sleep` checks each lesson from the current repo that names a file path, a backticked code symbol or an `npm run` script. The lesson gets the `churn-stale` tag when, after it was stored, a commit changed or deleted that file, or removed that symbol or script. Tagged lessons rank at half weight in recall and show the tag wherever they appear. Nothing is deleted, and confidence, half-life and strength are left as they were, so sleep keeps or drops the lesson exactly as before. A positive outcome (`hippo outcome --good`) confirms the lesson: it removes the tag, and changes made before the confirmation are not flagged again. `hippo invalidate --churn --dry-run` previews what would be tagged and why; `hippo invalidate --churn` applies it without the setting. Each run checks both the project store and the global store. Turning the setting off stops new tags but leaves existing ones in place; each clears when its lesson gets a good outcome. The evidence is git history only, never text similarity. A lesson is checked only against the repo it came from (`origin_project`), and a path counts only if that repo really tracked it. Limits: lessons with no owning project are never checked, and two repos with the same folder name look like one project. It stays off until the registered test (FE3) measures it: on a copy of a real store, 44 of 73 flagged lessons were still true (60% false stale), so file-level churn alone is too blunt to default on (`docs/evals/2026-09-26-fe2-churn-false-stale.md`). For library users, `HippoConfig` gains `churnStaleness` and `ScoreBreakdown` gains `churnStaleMultiplier`; code that builds either type as a literal needs the new field.
+
 ## 1.50.0 - 2026-09-26
 
 ### Added
