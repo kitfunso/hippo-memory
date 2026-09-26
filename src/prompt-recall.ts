@@ -74,3 +74,21 @@ export function promptRecallFtsQuery(p: ReadonlySet<string>, maxTerms = 32): str
   }
   return terms.join(' ');
 }
+
+// bm25 ranks every row matching any term, so fewer and rarer terms bound latency; 8 is a bound, not tuned.
+export const RAREST_TERM_COUNT = 8;
+
+/** Terms sorted by ascending FTS doc count (rarest first), zero-count terms dropped, ties by term.
+ *  Pure: `docCount` (an FTS lookup in the caller) does the only I/O. */
+export function rarestPromptTerms(
+  terms: Iterable<string>,
+  docCount: (term: string) => number,
+  maxTerms = RAREST_TERM_COUNT,
+): string[] {
+  return Array.from(terms)
+    .map((t) => ({ t, c: docCount(t) }))
+    .filter((x) => x.c > 0)
+    .sort((a, b) => (a.c - b.c) || (a.t < b.t ? -1 : a.t > b.t ? 1 : 0))
+    .slice(0, maxTerms)
+    .map((x) => x.t);
+}

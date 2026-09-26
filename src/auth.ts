@@ -29,7 +29,13 @@ function hashKey(plaintext: string): string {
 // rate limit on /v1/* to bound key-id enumeration. Stored format identical to
 // real hashes: scrypt$saltHex$hashHex.
 const DUMMY_PLAINTEXT = 'hk_dummy_constant_padding_for_timing.dummy_secret_padding_for_timing_x';
-const DUMMY_HASH = hashKey(DUMMY_PLAINTEXT);
+// Precomputed `hashKey(DUMMY_PLAINTEXT)`: computing it at module load put one scrypt on every CLI start.
+const DUMMY_HASH = 'scrypt$5b2117156f1ad78738fd8b6a5bace454$92e098fa28003b7c38ba8f1451bd8618260a4a3c5a64b87cc2b471567c0960e7';
+
+// Not a secret (it's padding, not a real key hash): exposed only so a test can pin its shape.
+export function _dummyHashForTests(): string {
+  return DUMMY_HASH;
+}
 
 function verifyKey(plaintext: string, stored: string): boolean {
   const parts = stored.split('$');

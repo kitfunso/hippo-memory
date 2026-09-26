@@ -36,9 +36,15 @@ function parseArgs(argv) {
     else if (a === '--mode') out.mode = argv[++i];
     else if (a === '--config') out.config = argv[++i];
     else if (a === '--split') out.split = argv[++i];
+    else if (a === '--arm') out.arm = argv[++i];
+    else if (a === '--judge-out') out.judgeOut = argv[++i];
   }
+  if (!out.arm) out.arm = 'z1';
   return out;
 }
+
+// Z1b tool-failure block: same LEADING_CD as src/capture-error.ts, its cd-stripping is query-only here.
+const LEADING_CD = /^\s*(?:(?:cd|pushd)\b[^;&|]*(?:&&|\|\||;)\s*)+/;
 
 // ---------------------------------------------------------------------------
 // Store loading (read-only, tenant 'default' only)
@@ -92,6 +98,15 @@ function admitEntry(entry, tsMs, projectName) {
   if (!ambientSecretAdmit(entry, projectName)) return false;
   if (classifyOriginProject(entry.origin_project, projectName) === 'cross-project') return false;
   return true;
+}
+
+// Admission at an arbitrary (cwd, ts), for the Z1b tool-failure query (not tied to a hook prompt).
+function admittedAt(resolvers, globalEntries, cwd, tsMs) {
+  const projectName = resolvers.projectNameFor(cwd);
+  const localEntries = resolvers.localEntriesFor(cwd);
+  const localAdm = localEntries.filter((e) => admitEntry(e, tsMs, projectName));
+  const globalAdm = globalEntries.filter((e) => admitEntry(e, tsMs, projectName));
+  return { localAdm, globalAdm };
 }
 
 // ---------------------------------------------------------------------------
@@ -310,7 +325,8 @@ function tokensOf(entry) {
   return t;
 }
 
-function z1Candidates(localAdm, globalAdm, promptTok) {
+function z1Candidates(localAdm, globalAdm, promptTok, opts = {}) {
+  const excludeAutoCaptured = opts.excludeAutoCaptured === true;
   const seen = new Set();
   const out = [];
   for (const { entries, isGlobal } of [
@@ -319,6 +335,7 @@ function z1Candidates(localAdm, globalAdm, promptTok) {
   ]) {
     for (const entry of entries) {
       if (entry.pinned || seen.has(entry.id) || !isContentWorthStoring(entry.content)) continue;
+      if (excludeAutoCaptured && entry.tags.includes('auto-captured')) continue;
       seen.add(entry.id);
       const tokens = tokensOf(entry);
       const { shared } = scoreOverlap(promptTok, tokens, 'jaccard');
@@ -327,6 +344,21 @@ function z1Candidates(localAdm, globalAdm, promptTok) {
     }
   }
   return out;
+}
+
+// Z1b tool-failure block: same candidate/gate/budget shape as selectZ1Recall, minus the pin reserve.
+function computeZ1bBlock(localAdm, globalAdm, queryTok, gate) {
+  const candidates = z1Candidates(localAdm, globalAdm, queryTok, { excludeAutoCaptured: true });
+  const gated = gatePromptRecall(queryTok, candidates, gate);
+  const items = [];
+  let used = 0;
+  for (const g of gated) {
+    const tokens = estimateTokens(g.item.entry.content);
+    if (used + tokens > PIN_BUDGET) continue;
+    items.push(toItem(g.item.entry, g.item.isGlobal, tokens));
+    used += tokens;
+  }
+  return { items, totalTokens: used };
 }
 
 // Pins-only, same budget rule as A1's own pin admission; TE2-gated on its own state.
@@ -417,18 +449,79 @@ function setDiff(a, b) {
   return out;
 }
 
+// Same PRNG as scripts/z1-latency.mjs / scripts/lifecycle-stress/inject.mjs: Math.random is banned for reproducibility.
+function mulberry32(seed) {
+  let s = seed >>> 0;
+  return function () {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function seededShuffle(arr, seed) {
+  const rng = mulberry32(seed);
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+// The newest |count| distinct ids A1 put in context, newest first (judge control C).
+function buildControlC(a1OrderList, count, byId) {
+  const seen = new Set();
+  const out = [];
+  for (let idx = a1OrderList.length - 1; idx >= 0 && out.length < count; idx--) {
+    const id = a1OrderList[idx].id;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const e = byId.get(id);
+    if (e) out.push({ id, content: e.content, created: e.created });
+  }
+  return out;
+}
+
+// Judge items T (Z1b block) and C (control) for one eligible event; command/error not pre-collapsed for T's cap.
+function buildJudgeEntries(eventId, cmd, err, tItems, maxItems, a1OrderList, byId) {
+  const command = cmd.slice(0, 500);
+  const error = err.slice(0, 1500);
+  const tMems = tItems.slice(0, maxItems).map((it) => it.content.slice(0, 600));
+  const cList = buildControlC(a1OrderList, Math.min(tItems.length, maxItems), byId);
+  const entries = [{ eventId, arm: 'T', autoNo: false, command, error, memories: tMems }];
+  if (cList.length === 0) {
+    entries.push({ eventId, arm: 'C', autoNo: true, command, error, memories: [] });
+  } else {
+    entries.push({ eventId, arm: 'C', autoNo: false, command, error, memories: cList.map((c) => c.content.slice(0, 600)) });
+  }
+  return entries;
+}
+
 // ---------------------------------------------------------------------------
 // Per-file replay
 // ---------------------------------------------------------------------------
 
-async function processFile(filePath, mode, ctx, z1Configs) {
+async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJudge = false) {
   const { byId, mapBlock, resolvers } = ctx;
   const runZ1 = mode === 'grid' || mode === 'final' || mode === 'selftest';
+  const isZ1b = runZ1 && arm === 'z1b';
   const a0 = { reset: new Set(), lifetime: new Set() };
   const a1 = { reset: new Set(), lifetime: new Set(), te2: null };
   // One state per config: static block has its own TE2; recall is never skipped, so no TE2 state for it.
-  const z1States = runZ1 ? z1Configs.map(() => ({ reset: new Set(), lifetime: new Set(), teStatic: null })) : null;
-  const z1FileAccs = runZ1 ? z1Configs.map(() => emptyZ1Bucket()) : null;
+  const z1States = runZ1 && !isZ1b ? z1Configs.map(() => ({ reset: new Set(), lifetime: new Set(), teStatic: null })) : null;
+  const z1FileAccs = runZ1 && !isZ1b ? z1Configs.map(() => emptyZ1Bucket()) : null;
+  // Z1b state per config: A1's ids plus a tool-failure block; teBlock gates the block's own skip rule.
+  const z1bStates = isZ1b
+    ? z1Configs.map(() => ({ reset: new Set(), lifetime: new Set(), teBlock: null, lastSentItems: [], pendingTokens: 0, intervalHasBlock: false }))
+    : null;
+  const z1bFileAccs = isZ1b ? z1Configs.map(() => emptyZ1bBucket()) : null;
+  // A1's per-prompt injection order, oldest first, reset at compaction: judge control C reads from its tail.
+  let a1Order = isZ1b ? [] : null;
+  const judgeItems = [];
+  let nonRoutineFailures = 0;
 
   const primary = { a0: { reset: makeAcc(), lifetime: makeAcc() }, a1: { reset: makeAcc(), lifetime: makeAcc() } };
   const secondary = { a0: { reset: makeAcc(), lifetime: makeAcc() }, a1: { reset: makeAcc(), lifetime: makeAcc() } };
@@ -438,11 +531,14 @@ async function processFile(filePath, mode, ctx, z1Configs) {
   const firstErr = new Map();
   const firstFail = new Map();
   let pendingPrompt = null;
+  let lastCwd = null;
 
   function fireHookPrompt(ts, cwd, text) {
     const projectName = resolvers.projectNameFor(cwd);
     const localEntries = resolvers.localEntriesFor(cwd);
     const sel = selectA1(localEntries, ctx.globalEntries, ts, projectName);
+    let a1TokensThisPrompt = 0;
+    let a1Sent = false;
     if (sel.items.length === 0) {
       tokensPerPrompt.push(0);
     } else {
@@ -452,16 +548,33 @@ async function processFile(filePath, mode, ctx, z1Configs) {
         tokensPerPrompt.push(0);
         a1.te2 = { hash, skipsSince: a1.te2.skipsSince + 1 };
       } else {
-        tokensPerPrompt.push(estimateTokens(text2));
+        a1TokensThisPrompt = estimateTokens(text2);
+        tokensPerPrompt.push(a1TokensThisPrompt);
         for (const it of sel.items) {
           a1.reset.add(it.id);
           a1.lifetime.add(it.id);
         }
         a1.te2 = { hash, skipsSince: 0 };
+        a1Sent = true;
       }
     }
 
-    if (runZ1) {
+    if (isZ1b) {
+      // Z1b arm = A1's own injections plus the tool-failure block; no prompt-gated recall of its own.
+      if (a1Sent) {
+        for (const it of sel.items) a1Order.push({ id: it.id });
+      }
+      z1Configs.forEach((gate, i) => {
+        const s = z1bStates[i];
+        const acc = z1bFileAccs[i];
+        if (a1Sent) for (const it of sel.items) { s.reset.add(it.id); s.lifetime.add(it.id); }
+        acc.tokens.push(a1TokensThisPrompt + s.pendingTokens);
+        acc.intervalHasBlock.total++;
+        if (s.intervalHasBlock) acc.intervalHasBlock.count++;
+        s.pendingTokens = 0;
+        s.intervalHasBlock = false;
+      });
+    } else if (runZ1) {
       const promptTok = promptTokens(text);
       const precomputed = z1Candidates(sel.localAdm, sel.globalAdm, promptTok);
       // Static (pins) block is gate-independent: compute its text/tokens once, gate its TE2 send per config.
@@ -512,6 +625,8 @@ async function processFile(filePath, mode, ctx, z1Configs) {
       a1.reset.clear();
       a1.te2 = null;
       if (z1States) for (const s of z1States) { s.reset.clear(); s.teStatic = null; }
+      if (z1bStates) for (const s of z1bStates) { s.reset.clear(); s.teBlock = null; }
+      if (a1Order) a1Order = [];
       continue;
     }
 
@@ -532,6 +647,7 @@ async function processFile(filePath, mode, ctx, z1Configs) {
     if (o.type === 'user' && !o.isMeta && String(promptText) === promptText) {
       pendingPrompt = { ts: Date.parse(o.timestamp), cwd: o.cwd, text: promptText };
     }
+    if (o.cwd) lastCwd = o.cwd;
 
     const c = o?.message?.content;
     if (!Array.isArray(c)) continue;
@@ -549,33 +665,89 @@ async function processFile(filePath, mode, ctx, z1Configs) {
         const snap = {
           a0: { reset: new Set(a0.reset), lifetime: new Set(a0.lifetime) },
           a1: { reset: new Set(a1.reset), lifetime: new Set(a1.lifetime) },
-          z1: runZ1 ? z1States.map((s) => ({ reset: new Set(s.reset), lifetime: new Set(s.lifetime) })) : null,
+          z1: runZ1 && !isZ1b ? z1States.map((s) => ({ reset: new Set(s.reset), lifetime: new Set(s.lifetime) })) : null,
+          z1b: isZ1b ? z1bStates.map((s) => ({ reset: new Set(s.reset), lifetime: new Set(s.lifetime) })) : null,
         };
         if (b.is_error) {
           const err = txt.replace(/\s+/g, ' ').trim();
           if (routine(cmd, err)) continue;
+          nonRoutineFailures++;
           const es = sig(('Bash: ' + err).slice(0, 200));
           record(secondary.a0.reset, snap.a0.reset, err, byId);
           record(secondary.a0.lifetime, snap.a0.lifetime, err, byId);
           record(secondary.a1.reset, snap.a1.reset, err, byId);
           record(secondary.a1.lifetime, snap.a1.lifetime, err, byId);
-          if (runZ1) snap.z1.forEach((s, i) => {
+          if (runZ1 && !isZ1b) snap.z1.forEach((s, i) => {
             record(z1FileAccs[i].reset.secondary, s.reset, err, byId);
             record(z1FileAccs[i].lifetime.secondary, s.lifetime, err, byId);
+          });
+          if (isZ1b) snap.z1b.forEach((s, i) => {
+            record(z1bFileAccs[i].reset.secondary, s.reset, err, byId);
+            record(z1bFileAccs[i].lifetime.secondary, s.lifetime, err, byId);
           });
           if (firstErr.has(es)) {
             record(primary.a0.reset, snap.a0.reset, err, byId);
             record(primary.a0.lifetime, snap.a0.lifetime, err, byId);
             record(primary.a1.reset, snap.a1.reset, err, byId);
             record(primary.a1.lifetime, snap.a1.lifetime, err, byId);
-            if (runZ1) snap.z1.forEach((s, i) => {
+            if (runZ1 && !isZ1b) snap.z1.forEach((s, i) => {
               record(z1FileAccs[i].reset.primary, s.reset, err, byId);
               record(z1FileAccs[i].lifetime.primary, s.lifetime, err, byId);
+            });
+            if (isZ1b) snap.z1b.forEach((s, i) => {
+              record(z1bFileAccs[i].reset.primary, s.reset, err, byId);
+              record(z1bFileAccs[i].lifetime.primary, s.lifetime, err, byId);
+              const added = [...s.reset].some((id) => !snap.a1.reset.has(id));
+              if (added) {
+                z1bFileAccs[i].addedEvents++;
+                const tItems = z1bStates[i].lastSentItems; // most recent block sent before this event's own injection
+                const tsMs = Date.parse(o.timestamp);
+                for (const it of tItems.slice(0, z1Configs[i].maxItems)) {
+                  const age = tsMs - Date.parse(it.created);
+                  if (age >= 0 && age <= 10 * 60 * 1000) z1bFileAccs[i].recalledCreatedWithin10MinEligible++;
+                }
+                if (collectJudge) {
+                  const eventId = ctx.judgeEventCounter.n++;
+                  judgeItems.push(...buildJudgeEntries(eventId, cmd, err, tItems, z1Configs[i].maxItems, a1Order, byId));
+                }
+              }
             });
           } else {
             firstErr.set(es, true);
           }
-          if (!firstFail.has(cs)) firstFail.set(cs, { err, snap });
+          if (!firstFail.has(cs)) firstFail.set(cs, { err, cmd, snap, a1OrderLen: a1Order ? a1Order.length : 0 });
+
+          // Z1b tool-failure block: after the event is recorded, so it counts toward later repeats and fail-then-pass.
+          if (isZ1b) {
+            const cwd = o.cwd || lastCwd;
+            const tsMs = Date.parse(o.timestamp);
+            const { localAdm, globalAdm } = admittedAt(resolvers, ctx.globalEntries, cwd, tsMs);
+            const query = cmd.replace(LEADING_CD, '') + '\n' + err;
+            const queryTok = contentTokens(query.slice(0, 4000));
+            z1Configs.forEach((gate, i) => {
+              const s = z1bStates[i];
+              const acc = z1bFileAccs[i];
+              acc.failuresSeen++;
+              const blk = computeZ1bBlock(localAdm, globalAdm, queryTok, gate);
+              if (blk.items.length === 0) return; // nothing clears the gate: no block, no skip-state change
+              const idsKey = blk.items.map((it) => it.id).sort().join(',');
+              if (shouldSkipUnchanged(s.teBlock, idsKey, REFRESH_TURNS)) {
+                s.teBlock = { hash: idsKey, skipsSince: s.teBlock.skipsSince + 1 };
+                return;
+              }
+              const tokens = estimateTokens(renderBlock(blk.items, blk.totalTokens, 'Failure-Relevant Memory'));
+              for (const it of blk.items) { s.reset.add(it.id); s.lifetime.add(it.id); }
+              s.teBlock = { hash: idsKey, skipsSince: 0 };
+              s.lastSentItems = blk.items;
+              s.pendingTokens += tokens;
+              s.intervalHasBlock = true;
+              acc.blocksSent++;
+              for (const it of blk.items) {
+                const age = tsMs - Date.parse(it.created);
+                if (age >= 0 && age <= 10 * 60 * 1000) acc.recalledCreatedWithin10Min++;
+              }
+            });
+          }
         } else if (firstFail.has(cs)) {
           const ff = firstFail.get(cs);
           const dReset0 = setDiff(a0.reset, ff.snap.a0.reset);
@@ -586,11 +758,32 @@ async function processFile(filePath, mode, ctx, z1Configs) {
           record(primary.a0.lifetime, dLife0, ff.err, byId);
           record(primary.a1.reset, dReset1, ff.err, byId);
           record(primary.a1.lifetime, dLife1, ff.err, byId);
-          if (runZ1) z1States.forEach((s, i) => {
+          if (runZ1 && !isZ1b) z1States.forEach((s, i) => {
             const dReset = setDiff(s.reset, ff.snap.z1[i].reset);
             const dLife = setDiff(s.lifetime, ff.snap.z1[i].lifetime);
             record(z1FileAccs[i].reset.primary, dReset, ff.err, byId);
             record(z1FileAccs[i].lifetime.primary, dLife, ff.err, byId);
+          });
+          if (isZ1b) z1bStates.forEach((s, i) => {
+            const dReset = setDiff(s.reset, ff.snap.z1b[i].reset);
+            const dLife = setDiff(s.lifetime, ff.snap.z1b[i].lifetime);
+            record(z1bFileAccs[i].reset.primary, dReset, ff.err, byId);
+            record(z1bFileAccs[i].lifetime.primary, dLife, ff.err, byId);
+            const added = [...dReset].some((id) => !dReset1.has(id));
+            if (added) {
+              z1bFileAccs[i].addedEvents++;
+              const tItems = s.lastSentItems.slice(0, z1Configs[i].maxItems); // live: no block fires on a success line
+              const tsMs = Date.parse(o.timestamp);
+              for (const it of tItems) {
+                const age = tsMs - Date.parse(it.created);
+                if (age >= 0 && age <= 10 * 60 * 1000) z1bFileAccs[i].recalledCreatedWithin10MinEligible++;
+              }
+              if (collectJudge) {
+                const eventId = ctx.judgeEventCounter.n++;
+                const priorOrder = a1Order.slice(0, ff.a1OrderLen);
+                judgeItems.push(...buildJudgeEntries(eventId, ff.cmd, ff.err, tItems, z1Configs[i].maxItems, priorOrder, byId));
+              }
+            }
           });
           firstFail.delete(cs);
         }
@@ -598,7 +791,11 @@ async function processFile(filePath, mode, ctx, z1Configs) {
     }
   }
 
-  return { primary, secondary, tokensPerPrompt, z1PerConfig: z1FileAccs };
+  if (isZ1b) {
+    z1bStates.forEach((s, i) => { z1bFileAccs[i].tokensUnattributed += s.pendingTokens; });
+  }
+
+  return { primary, secondary, tokensPerPrompt, z1PerConfig: z1FileAccs, z1bPerConfig: z1bFileAccs, judgeItems, nonRoutineFailures };
 }
 
 // ---------------------------------------------------------------------------
@@ -718,6 +915,84 @@ function pickConfig(rows, a1TokenMedian) {
   return eligible[0].config;
 }
 
+// One Z1b arm, one config: Z1's fields plus addedEvents, the block-created-recently audit, tokensUnattributed.
+function emptyZ1bBucket() {
+  return {
+    reset: { primary: makeAcc(), secondary: makeAcc() },
+    lifetime: { primary: makeAcc(), secondary: makeAcc() },
+    tokens: [],
+    intervalHasBlock: { count: 0, total: 0 },
+    tokensUnattributed: 0,
+    addedEvents: 0,
+    blocksSent: 0,
+    failuresSeen: 0,
+    recalledCreatedWithin10Min: 0,
+    recalledCreatedWithin10MinEligible: 0,
+  };
+}
+
+function foldZ1b(bucket, result) {
+  foldAcc(bucket.reset.primary, result.reset.primary);
+  foldAcc(bucket.reset.secondary, result.reset.secondary);
+  foldAcc(bucket.lifetime.primary, result.lifetime.primary);
+  foldAcc(bucket.lifetime.secondary, result.lifetime.secondary);
+  bucket.tokens.push(...result.tokens);
+  bucket.intervalHasBlock.count += result.intervalHasBlock.count;
+  bucket.intervalHasBlock.total += result.intervalHasBlock.total;
+  bucket.tokensUnattributed += result.tokensUnattributed;
+  bucket.addedEvents += result.addedEvents;
+  bucket.blocksSent += result.blocksSent;
+  bucket.failuresSeen += result.failuresSeen;
+  bucket.recalledCreatedWithin10Min += result.recalledCreatedWithin10Min;
+  bucket.recalledCreatedWithin10MinEligible += result.recalledCreatedWithin10MinEligible;
+}
+
+function renderZ1bBucket(bucket) {
+  return {
+    reset: { primary: summarize(bucket.reset.primary), secondary: summarize(bucket.reset.secondary) },
+    lifetime: { primary: summarize(bucket.lifetime.primary), secondary: summarize(bucket.lifetime.secondary) },
+    tokens: summarizeTokens(bucket.tokens),
+    tokensUnattributed: bucket.tokensUnattributed,
+    intervalShare: bucket.intervalHasBlock.total ? bucket.intervalHasBlock.count / bucket.intervalHasBlock.total : null,
+    addedEvents: bucket.addedEvents,
+    blocksSent: bucket.blocksSent,
+    failuresSeen: bucket.failuresSeen,
+    recalledCreatedWithin10Min: bucket.recalledCreatedWithin10Min,
+    recalledCreatedWithin10MinEligible: bucket.recalledCreatedWithin10MinEligible,
+  };
+}
+
+// Z1b pick rule (prereg "Split and tuning"): token budget, mean cap, and an addedEvents floor, then max signal.
+function pickConfigZ1b(rows, a1TokenMedian, a1TokenMean) {
+  const eligible = rows.filter((r) => {
+    const tm = r.tune.tokens.median;
+    const mn = r.tune.tokens.mean;
+    return (
+      tm !== null && a1TokenMedian !== null && tm <= a1TokenMedian &&
+      a1TokenMean !== null && mn <= 1.1 * a1TokenMean &&
+      r.tune.addedEvents >= 10
+    );
+  });
+  if (eligible.length === 0) return null;
+  eligible.sort((a, b) => {
+    const byMedian = (b.tune.reset.primary.median ?? -Infinity) - (a.tune.reset.primary.median ?? -Infinity);
+    if (byMedian !== 0) return byMedian;
+    const byMeanTokens = a.tune.tokens.mean - b.tune.tokens.mean;
+    if (byMeanTokens !== 0) return byMeanTokens;
+    return b.config.threshold - a.config.threshold;
+  });
+  return eligible[0].config;
+}
+
+// Judge export: shuffled, unlabelled main file plus a separate itemId -> {eventId, arm} key file.
+function writeJudgeExport(filePath, rawItems) {
+  const shuffled = seededShuffle(rawItems, 20260926);
+  const items = shuffled.map((it, idx) => ({ itemId: idx, autoNo: it.autoNo, command: it.command, error: it.error, memories: it.memories }));
+  const key = shuffled.map((it, idx) => ({ itemId: idx, eventId: it.eventId, arm: it.arm, autoNo: it.autoNo }));
+  fs.writeFileSync(filePath, JSON.stringify({ seed: 20260926, items }, null, 2));
+  fs.writeFileSync(`${filePath}.key.json`, JSON.stringify(key, null, 2));
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const home = path.resolve(args.home);
@@ -735,7 +1010,10 @@ async function main() {
   const { byId, byContent } = buildIndices([...globalEntries, ...namedEntries]);
   const mapBlock = makeMapBlock(byId, byContent);
   const resolvers = makeResolvers(home, storeMap);
-  const ctx = { byId, mapBlock, resolvers, globalEntries };
+  const arm = args.arm === 'z1b' ? 'z1b' : 'z1';
+  const judgeEventCounter = { n: 0 };
+  const ctx = { byId, mapBlock, resolvers, globalEntries, judgeEventCounter };
+  const autoCapturedTotal = [...globalEntries, ...namedEntries].filter((e) => e.tags.includes('auto-captured')).length;
 
   let z1Configs = null;
   if (args.mode === 'grid') {
@@ -759,7 +1037,9 @@ async function main() {
     z1Configs = [JSON.parse(args.config)];
   } else if (args.mode === 'selftest') {
     // Hidden wiring check: fixed config, first 3 tune files, counts only, never a scored run.
-    z1Configs = [{ metric: 'cosine', threshold: 0.2, minShared: 2, maxItems: 3 }];
+    z1Configs = arm === 'z1b'
+      ? [{ metric: 'jaccard', threshold: 0.08, minShared: 2, maxItems: 3 }]
+      : [{ metric: 'cosine', threshold: 0.2, minShared: 2, maxItems: 3 }];
   }
 
   const files = walkCorpus(args.corpus);
@@ -774,19 +1054,33 @@ async function main() {
   }
 
   const buckets = { tune: emptyBucket(), heldout: emptyBucket(), all: emptyBucket() };
-  const z1Buckets = z1Configs ? z1Configs.map(() => ({ tune: emptyZ1Bucket(), heldout: emptyZ1Bucket(), all: emptyZ1Bucket() })) : null;
+  const z1Buckets = z1Configs && arm !== 'z1b' ? z1Configs.map(() => ({ tune: emptyZ1Bucket(), heldout: emptyZ1Bucket(), all: emptyZ1Bucket() })) : null;
+  const z1bBuckets = z1Configs && arm === 'z1b' ? z1Configs.map(() => ({ tune: emptyZ1bBucket(), heldout: emptyZ1bBucket(), all: emptyZ1bBucket() })) : null;
+  const nonRoutineFailures = { tune: 0, heldout: 0, all: 0 };
+  const judgeItems = [];
+  const collectJudgeMode = args.mode === 'final' && arm === 'z1b' && !!args.judgeOut;
   const startedAt = Date.now();
   for (const f of wanted) {
     const label = splitOf(f);
-    const result = await processFile(f, args.mode, ctx, z1Configs);
+    const collectJudge = collectJudgeMode && label === 'heldout';
+    const result = await processFile(f, args.mode, ctx, z1Configs, arm, collectJudge);
     fold(buckets[label], result);
     fold(buckets.all, result);
+    nonRoutineFailures[label] += result.nonRoutineFailures;
+    nonRoutineFailures.all += result.nonRoutineFailures;
     if (z1Buckets) {
       result.z1PerConfig.forEach((r, i) => {
         foldZ1(z1Buckets[i][label], r);
         foldZ1(z1Buckets[i].all, r);
       });
     }
+    if (z1bBuckets) {
+      result.z1bPerConfig.forEach((r, i) => {
+        foldZ1b(z1bBuckets[i][label], r);
+        foldZ1b(z1bBuckets[i].all, r);
+      });
+    }
+    if (result.judgeItems.length) judgeItems.push(...result.judgeItems);
   }
   const runtimeMs = Date.now() - startedAt;
 
@@ -799,17 +1093,49 @@ async function main() {
       heldout: renderBucket(buckets.heldout),
       all: renderBucket(buckets.all),
     }, null, 2));
+  } else if (args.mode === 'grid' && arm === 'z1b') {
+    const a1Tune = renderBucket(buckets.tune).A1;
+    const rows = z1Configs.map((cfg, i) => ({ config: cfg, tune: renderZ1bBucket(z1bBuckets[i].tune) }));
+    const pick = pickConfigZ1b(rows, a1Tune.tokens.median, a1Tune.tokens.mean);
+    console.log(JSON.stringify({ mode: 'grid', arm: 'z1b', filesProcessed: wanted.length, runtimeMs, A1: a1Tune, rows, pick }, null, 2));
   } else if (args.mode === 'grid') {
     const a1Tune = renderBucket(buckets.tune).A1;
     const rows = z1Configs.map((cfg, i) => ({ config: cfg, tune: renderZ1Bucket(z1Buckets[i].tune) }));
     const pick = pickConfig(rows, a1Tune.tokens.median);
     console.log(JSON.stringify({ mode: 'grid', filesProcessed: wanted.length, runtimeMs, A1: a1Tune, rows, pick }, null, 2));
+  } else if (args.mode === 'final' && arm === 'z1b') {
+    const out = {
+      mode: 'final', arm: 'z1b', filesProcessed: wanted.length, runtimeMs, config: z1Configs[0],
+      datasetAudit: { autoCapturedTotal },
+    };
+    for (const split of ['tune', 'heldout', 'all']) {
+      out[split] = {
+        A1: renderBucket(buckets[split]).A1,
+        Z1b: renderZ1bBucket(z1bBuckets[0][split]),
+        nonRoutineFailures: nonRoutineFailures[split],
+      };
+    }
+    console.log(JSON.stringify(out, null, 2));
+    if (args.judgeOut) writeJudgeExport(args.judgeOut, judgeItems);
   } else if (args.mode === 'final') {
     const out = { mode: 'final', filesProcessed: wanted.length, runtimeMs, config: z1Configs[0] };
     for (const split of ['tune', 'heldout', 'all']) {
       out[split] = { A1: renderBucket(buckets[split]).A1, Z1: renderZ1Bucket(z1Buckets[0][split]) };
     }
     console.log(JSON.stringify(out, null, 2));
+  } else if (args.mode === 'selftest' && arm === 'z1b') {
+    const z1bAll = renderZ1bBucket(z1bBuckets[0].all);
+    console.log(JSON.stringify({
+      mode: 'selftest',
+      arm: 'z1b',
+      filesProcessed: wanted.length,
+      hookPrompts: buckets.all.tokens.length,
+      z1bEventsWithContext: z1bAll.reset.primary.withContext,
+      addedEvents: z1bAll.addedEvents,
+      z1bTokenMedian: z1bAll.tokens.median,
+      failuresSeen: z1bAll.failuresSeen,
+      blocksSent: z1bAll.blocksSent,
+    }, null, 2));
   } else if (args.mode === 'selftest') {
     const z1All = renderZ1Bucket(z1Buckets[0].all);
     console.log(JSON.stringify({

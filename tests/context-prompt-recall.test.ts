@@ -194,6 +194,35 @@ describe('getContext prompt recall (api-level)', () => {
     expect(recallIds).not.toContain(pinned.id);
   });
 
+  it('finds a relevant memory via rarest-term pre-select even when its terms are not first in the prompt', async () => {
+    // maxItems raised past the decoy count: they share more prompt tokens than the
+    // target (that's the point -- FTS pre-select is under test, not the overlap gate).
+    enablePromptRecall(local, { promptRecallMinShared: 1, promptRecallThreshold: 0.05, promptRecallMaxItems: 20 });
+    // 8 decoys share every common word (FTS doc count 8 each); a naive
+    // first-8-terms query would never include needle/fingerprint, which
+    // appear in exactly one row (doc count 1) and come last in the prompt.
+    const commonWords = 'alpha bravo charlie delta echo foxtrot golf hotel';
+    for (let i = 0; i < 8; i++) {
+      seed(local, `${commonWords} decoy row number ${i} about something else entirely`, {
+        created: new Date(Date.UTC(2026, 5, 1, 0, i)).toISOString(),
+      });
+    }
+    const relevant = seed(local, 'needle fingerprint distinctive marker for the migration plan', {
+      created: '2026-01-01T00:00:00.000Z',
+    });
+
+    const result = await getContext(ctx, {
+      pinnedOnly: true,
+      includeRecent: 5,
+      currentProject: PROJECT,
+      prompt: `${commonWords} needle fingerprint`,
+    });
+
+    const hit = result.entries.find((e) => e.entry.id === relevant.id);
+    expect(hit).toBeDefined();
+    expect(hit!.promptRecall).toBe(true);
+  });
+
   it('skips an over-budget candidate without blocking a smaller one behind it (skip-not-break)', async () => {
     enablePromptRecall(local, { promptRecallMaxItems: 2 });
     // Same distinct content-token set as `small` (repetition adds no new

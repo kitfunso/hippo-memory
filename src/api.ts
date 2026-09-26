@@ -19,6 +19,8 @@ import {
   deleteEntry,
   loadSearchEntries,
   loadRecallSearchEntries,
+  loadRecallSearchEntriesFromDb,
+  pickRarestFtsQuery,
   loadEntriesByIds,
   loadChildrenOf,
   loadFreshRawMemories,
@@ -105,7 +107,6 @@ import {
   promptTokens,
   contentTokens,
   gatePromptRecall,
-  promptRecallFtsQuery,
   type PromptRecallMetric,
   type PromptRecallGate,
 } from './prompt-recall.js';
@@ -2730,13 +2731,30 @@ export async function getContext(
       const candidateLimit = Math.floor(finiteOr(pinnedCfg.pinnedInject.promptRecallCandidates, 100, 1));
       const p = promptTokens(opts.prompt ?? '');
       if (p.size > 0) {
-        const ftsQuery = promptRecallFtsQuery(p);
-        const localCandidates = hasLocal
-          ? loadRecallSearchEntries(ctx.hippoRoot, ftsQuery, candidateLimit, ctx.tenantId, undefined, 'exact', false)
-          : [];
-        const globalCandidates = hasGlobal && !isGlobalStoreRoot(ctx.hippoRoot)
-          ? loadRecallSearchEntries(globalRoot, ftsQuery, candidateLimit, ctx.tenantId, undefined, 'exact', false)
-          : [];
+        const promptTermList = Array.from(p);
+        // One open connection per store instead of loadRecallSearchEntries's own
+        // initStore+open/close per call: store is already initialized (hasLocal/hasGlobal).
+        let localCandidates: MemoryEntry[] = [];
+        if (hasLocal) {
+          const localDb = openHippoDb(ctx.hippoRoot);
+          try {
+            const ftsQuery = pickRarestFtsQuery(localDb, promptTermList);
+            // An empty query would load the oldest rows, not matches.
+            if (ftsQuery) localCandidates = loadRecallSearchEntriesFromDb(localDb, ftsQuery, candidateLimit, ctx.tenantId, undefined, 'exact', false);
+          } finally {
+            closeHippoDb(localDb);
+          }
+        }
+        let globalCandidates: MemoryEntry[] = [];
+        if (hasGlobal && !isGlobalStoreRoot(ctx.hippoRoot)) {
+          const globalDb = openHippoDb(globalRoot);
+          try {
+            const ftsQuery = pickRarestFtsQuery(globalDb, promptTermList);
+            if (ftsQuery) globalCandidates = loadRecallSearchEntriesFromDb(globalDb, ftsQuery, candidateLimit, ctx.tenantId, undefined, 'exact', false);
+          } finally {
+            closeHippoDb(globalDb);
+          }
+        }
         const seenCandidateIds = new Set<string>();
         const candidateItems: Array<{ id: string; tokens: Set<string>; entry: MemoryEntry; isGlobal: boolean }> = [];
         // Local wins the id collision (a global row synced into the local store).

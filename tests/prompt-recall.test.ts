@@ -5,6 +5,8 @@ import {
   scoreOverlap,
   gatePromptRecall,
   promptRecallFtsQuery,
+  rarestPromptTerms,
+  RAREST_TERM_COUNT,
   PROMPT_RECALL_MAX_CHARS,
   type PromptRecallGate,
 } from '../src/prompt-recall.js';
@@ -132,5 +134,25 @@ describe('promptRecallFtsQuery', () => {
   it('defaults the cap to 32 terms', () => {
     const p = new Set(Array.from({ length: 40 }, (_, i) => `tok${i}`));
     expect(promptRecallFtsQuery(p).split(' ')).toHaveLength(32);
+  });
+});
+
+describe('rarestPromptTerms', () => {
+  it('picks the lowest-doc-count terms first, ties by term asc', () => {
+    const counts = new Map([['common', 500], ['mid', 40], ['rare', 3], ['rarest', 1], ['tie', 3]]);
+    const out = rarestPromptTerms(['common', 'mid', 'rare', 'rarest', 'tie'], (t) => counts.get(t) ?? 0, 3);
+    expect(out).toEqual(['rarest', 'rare', 'tie']);
+  });
+
+  it('drops zero-count (out-of-vocab) terms entirely', () => {
+    const counts = new Map([['known', 5]]);
+    const out = rarestPromptTerms(['known', 'unknown'], (t) => counts.get(t) ?? 0, RAREST_TERM_COUNT);
+    expect(out).toEqual(['known']);
+  });
+
+  it('defaults maxTerms to RAREST_TERM_COUNT (8)', () => {
+    const terms = Array.from({ length: 20 }, (_, i) => `t${i}`);
+    const out = rarestPromptTerms(terms, () => 1, RAREST_TERM_COUNT);
+    expect(out).toHaveLength(RAREST_TERM_COUNT);
   });
 });
