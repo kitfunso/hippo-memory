@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { type PhysicsConfig, DEFAULT_PHYSICS_CONFIG, mergePhysicsConfig } from './physics-config.js';
 import { DEFAULT_HALF_LIFE_DAYS } from './memory.js';
+import type { PromptRecallMetric } from './prompt-recall.js';
 
 export type DecayBasis = 'clock' | 'session' | 'adaptive';
 
@@ -75,6 +76,20 @@ export interface HippoConfig {
      *  sessions still see pinned rules near the latest turn. Default 10; 0
      *  never resends an unchanged block. */
     refreshTurns: number;
+    /** Z1: gate the hook's backfill on the prompt's own content instead of
+     *  the five newest memories. Default false: the eval failed its overlap gate
+     *  (docs/evals/2026-09-26-z1-prompt-recall-result.md). */
+    promptRecall: boolean;
+    /** Z1: overlap metric for the prompt-recall gate. Default 'jaccard' (tuned, docs/evals/2026-09-26-z1-prompt-recall-result.md). */
+    promptRecallMetric: PromptRecallMetric;
+    /** Z1: minimum overlap score to admit a candidate. Default 0.04 (tuned). */
+    promptRecallThreshold: number;
+    /** Z1: minimum shared tokens to admit a candidate. Default 2. */
+    promptRecallMinShared: number;
+    /** Z1: max prompt-recall entries injected per prompt. Default 5 (tuned). */
+    promptRecallMaxItems: number;
+    /** Z1: FTS candidate pool size per store before gating. Default 100. */
+    promptRecallCandidates: number;
   };
   /** Memory scope isolation (v39): when true (default), ambient context
    *  (`hippo context`, the UserPromptSubmit hook, /v1/context, MCP
@@ -171,6 +186,12 @@ const DEFAULT_CONFIG: HippoConfig = {
     budget: 1500,
     skipUnchanged: true,
     refreshTurns: 10,
+    promptRecall: false,
+    promptRecallMetric: 'jaccard',
+    promptRecallThreshold: 0.04,
+    promptRecallMinShared: 2,
+    promptRecallMaxItems: 5,
+    promptRecallCandidates: 100,
   },
   contextProjectIsolation: true,
   extraction: {

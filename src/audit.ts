@@ -17,7 +17,7 @@ export interface AuditResult {
   clean: number;
 }
 
-const STOP_WORDS = new Set([
+export const STOP_WORDS = new Set([
   'the', 'a', 'an', 'is', 'was', 'are', 'were', 'be', 'been', 'being',
   'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from', 'it',
   'this', 'that', 'and', 'or', 'but', 'not', 'no', 'so', 'if', 'do',

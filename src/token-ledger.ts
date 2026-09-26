@@ -25,12 +25,14 @@ import type { JsonObject, JsonValue } from './working-memory.js';
 /**
  * Where a block of memory text was sent.
  * - `hook`: the per-prompt `UserPromptSubmit` hook (`hippo context --pinned-only`).
+ * - `hook_recall`: the same hook's Z1 prompt-recall section (docs/plans/2026-09-26-z1-prompt-recall.md).
  * - `context`, `recall`: the CLI commands.
  * - `mcp_recall`, `mcp_context`: the MCP tools.
  * - `http_recall`, `http_context`, `http_assemble`: the HTTP API.
  */
 export type TokenSurface =
   | 'hook'
+  | 'hook_recall'
   | 'context'
   | 'recall'
   | 'mcp_recall'
@@ -41,7 +43,7 @@ export type TokenSurface =
 
 /** All surfaces, in report order. */
 export const TOKEN_SURFACES: readonly TokenSurface[] = [
-  'hook', 'context', 'recall', 'mcp_recall', 'mcp_context',
+  'hook', 'hook_recall', 'context', 'recall', 'mcp_recall', 'mcp_context',
   'http_recall', 'http_context', 'http_assemble',
 ];
 

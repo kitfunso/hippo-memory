@@ -6864,12 +6864,14 @@ async function cmdContext(
   // hostSessionId(); absent both, undefined -- api.getContext then applies
   // the pure freshness bound with no owner-match short-circuit.
   let payloadSessionId: string | undefined;
+  // Z1: the hook payload's raw prompt, read beside session_id (docs/plans/2026-09-26-z1-prompt-recall.md).
+  let payloadPrompt: string | undefined;
   if (stdinText && stdinText.trim() !== '') {
     try {
-      const payload = JSON.parse(stdinText.trim()) as Record<string, unknown>;
-      if (payload && typeof payload === 'object' && typeof payload.session_id === 'string' && payload.session_id.trim() !== '') {
-        payloadSessionId = payload.session_id;
-      }
+      // SAFETY: both fields are type-checked below before use; `?? {}` covers a JSON null payload.
+      const { session_id: sid, prompt } = (JSON.parse(stdinText.trim()) ?? {}) as { session_id?: unknown; prompt?: unknown };
+      if (typeof sid === 'string' && sid.trim() !== '') payloadSessionId = sid;
+      if (typeof prompt === 'string') payloadPrompt = prompt;
     } catch {
       // Malformed/non-JSON stdin: fall through to the env fallback below.
     }
@@ -6885,6 +6887,7 @@ async function cmdContext(
     includeRecent: parseCountFlag(flags['include-recent']),
     crossProject,
     currentSessionId,
+    prompt: payloadPrompt,
   };
 
   const result = await api.getContext(ctx, opts);
@@ -6940,57 +6943,85 @@ async function cmdContext(
       event: 'inject', items: output.length, tokens: estimateTokens(jsonText),
     }));
   } else if (format === 'additional-context') {
-    // Claude Code UserPromptSubmit hook JSON shape. Capture print* helpers'
-    // output into a string buffer and wrap as `additionalContext`.
-    const textBlock = captureConsole(() => {
+    // Z1: split into a static block (snapshot/handoff/events/pins/recent-N,
+    // TE2-skippable) and a prompt-recall block (never skipped, own heading).
+    const staticEntries = mainEntries.filter((r) => !r.promptRecall);
+    const recallEntries = mainEntries.filter((r) => r.promptRecall);
+    const staticItems = staticEntries.map((r) => ({ entry: r.entry, score: r.score, tokens: r.tokens, isGlobal: r.isGlobal ?? false }));
+    const recallItems = recallEntries.map((r) => ({ entry: r.entry, score: r.score, tokens: r.tokens, isGlobal: r.isGlobal ?? false }));
+    // Header total is static-only once a recall section exists; otherwise byte-identical to today.
+    const staticHeaderTokens = recallItems.length > 0
+      ? staticItems.reduce((sum, r) => sum + r.tokens, 0)
+      : result.tokens;
+
+    const staticBlock = captureConsole(() => {
       if (result.activeSnapshot) printActiveTaskSnapshot(result.activeSnapshot);
       if (result.sessionHandoff) printHandoff(result.sessionHandoff);
       if (result.recentEvents && result.recentEvents.length > 0) {
         printSessionEvents(result.recentEvents);
       }
-      if (renderItems.length > 0) {
+      if (staticItems.length > 0) {
         // TE1: no live strength percentage, so an unchanged set of memories
         // renders byte-identically turn after turn.
-        printContextMarkdown(renderItems, result.tokens, framing, { showStrength: false });
+        printContextMarkdown(staticItems, staticHeaderTokens, framing, { showStrength: false });
       }
       printCrossProjectSection(crossEntries);
     });
-    if (!textBlock.trim()) return;
+    const recallTokens = recallItems.reduce((sum, r) => sum + r.tokens, 0);
+    const recallBlock = recallItems.length > 0
+      ? captureConsole(() => printContextMarkdown(recallItems, recallTokens, framing, { showStrength: false, heading: 'Prompt-Relevant Memory' }))
+      : '';
+    if (!staticBlock.trim() && !recallBlock.trim()) return;
+
     const surface: TokenSurface = pinnedOnly ? 'hook' : 'context';
-    const hash = blockHash(textBlock);
-    const tokens = estimateTokens(textBlock);
-    // TE2: the per-prompt hook skips a block identical to the one this
-    // session already has, and resends it every refreshTurns skips. Only
-    // with a session id from the hook payload itself: an inherited env id
-    // (a manual run inside an agent's shell) must never suppress output.
-    if (pinnedOnly && payloadSessionId !== undefined) {
+    let sendStatic = staticBlock.trim().length > 0;
+    // TE2: the per-prompt hook skips a static block identical to the one this
+    // session already has, resent every refreshTurns skips. Hashed on the
+    // static text alone so an unchanged pin set still skips while recall varies.
+    if (sendStatic && pinnedOnly && payloadSessionId !== undefined) {
       const injectCfg = loadConfig(hippoRoot).pinnedInject;
       if (injectCfg.skipUnchanged !== false) {
         const refreshTurns = Number.isFinite(injectCfg.refreshTurns) && injectCfg.refreshTurns >= 0
           ? injectCfg.refreshTurns
           : 10;
+        const staticHash = blockHash(staticBlock);
         const last = withLedgerDb(hippoRoot, (db) =>
           lastSentState(db, ctx.tenantId, payloadSessionId, surface));
-        if (shouldSkipUnchanged(last ?? null, hash, refreshTurns)) {
+        if (shouldSkipUnchanged(last ?? null, staticHash, refreshTurns)) {
           withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
             tenantId: ctx.tenantId, sessionId: payloadSessionId, surface, event: 'skip',
-            items: renderItems.length, tokens, hash,
+            items: staticItems.length, tokens: estimateTokens(staticBlock), hash: staticHash,
           }));
-          return;
+          sendStatic = false;
         }
       }
     }
+
+    const finalStatic = sendStatic ? staticBlock : '';
+    const additionalContext = finalStatic && recallBlock
+      ? `${finalStatic}\n\n${recallBlock}`
+      : finalStatic || recallBlock;
+    if (!additionalContext.trim()) return;
+
     const payload = {
       hookSpecificOutput: {
         hookEventName: 'UserPromptSubmit',
-        additionalContext: textBlock,
+        additionalContext,
       },
     };
     process.stdout.write(JSON.stringify(payload));
-    withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
-      tenantId: ctx.tenantId, sessionId: currentSessionId, surface, event: 'inject',
-      items: renderItems.length, tokens, hash,
-    }));
+    if (finalStatic) {
+      withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
+        tenantId: ctx.tenantId, sessionId: currentSessionId, surface, event: 'inject',
+        items: staticItems.length, tokens: estimateTokens(finalStatic), hash: blockHash(finalStatic),
+      }));
+    }
+    if (recallBlock) {
+      withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
+        tenantId: ctx.tenantId, sessionId: currentSessionId, surface: 'hook_recall', event: 'inject',
+        items: recallItems.length, tokens: estimateTokens(recallBlock), hash: blockHash(recallBlock),
+      }));
+    }
   } else {
     // markdown (default)
     const text = captureConsole(() => {
@@ -7110,11 +7141,12 @@ export function printContextMarkdown(
   items: Array<{ entry: MemoryEntry; score: number; tokens: number; isGlobal: boolean }>,
   totalTokens: number,
   framing: string = 'observe',
-  opts: { showStrength?: boolean } = {}
+  opts: { showStrength?: boolean; heading?: string } = {}
 ): void {
   const now = evalNow();
   const showStrength = opts.showStrength !== false;
-  console.log(`## Project Memory (${items.length} entries, ${totalTokens} tokens)\n`);
+  const heading = opts.heading ?? 'Project Memory';
+  console.log(`## ${heading} (${items.length} entries, ${totalTokens} tokens)\n`);
   for (const item of items) {
     const e = item.entry;
     const tagStr = e.tags.length > 0 ? ` [${e.tags.join(', ')}]` : '';
@@ -9466,6 +9498,7 @@ Commands:
     --budget <n>           Token budget (default: 1500)
     --pinned-only          Only inject pinned memories (used by UserPromptSubmit hook)
     --include-recent <n>   With --pinned-only, also inject the last N writes regardless of pinning
+    (the hook payload's "prompt" drives prompt recall instead of --include-recent when pinnedInject.promptRecall is on)
     --format <fmt>         Output format: markdown (default), json, or additional-context (Claude Code hook JSON)
     --framing <mode>       Framing: observe (default), suggest, assert
   sleep                    Run consolidation pass (auto-learns + dedup + auto-shares)

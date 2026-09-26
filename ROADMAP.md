@@ -1950,8 +1950,9 @@ Hippo has never been shown to beat an agent with no memory. TE5 is the test and 
 - **Pre-compact memories are mostly junk** (2 useful of the last 45): rule matches start at the keyword and drop the subject. Stop extracting in pre-compact, since SessionEnd capture covers it and the snapshot is the product.
 - **A stale snapshot can be restored** when pre-compact skips and the cwd has moved (one restore was about 25 hours old). Ignore snapshots older than about 15 minutes in `compact-resume`.
 
-#### Z1. Recall against the prompt, gated [next]
+#### Z1. Recall against the prompt, gated [lexical arm failed 2026-09-26; shipped off by default]
 The `UserPromptSubmit` hook reads the prompt from its payload and recalls against it, then applies TE6's gate: inject nothing when nothing clears it. Pinned rules stay. **Test first, no paid call:** replay the frozen SI0 corpus (`hippo-archive/transcripts-since-2026-09-01/`) and report overlap with the work and tokens injected, today's hook against Z1. **Ships if** overlap rises well above 0.057 and median injected tokens do not grow. Latency budget: the hook stays under the current 0.28 s at 10,000 memories.
+**Result (2026-09-26):** the lexical-overlap gate failed. Overlap stayed flat (0.0545 in both arms on the held-out split), hook p95 rose to about 0.30 s, and median tokens fell from 847 to 533. It ships behind `pinnedInject.promptRecall`, off. Next arm: a relevance judge, or recall against recent tool output, not the prompt. See `docs/evals/2026-09-26-z1-prompt-recall-result.md`.
 
 #### Z2. Automatic outcomes [after Z1; this is SI0 re-opened]
 Credit or blame the memories Z1 injected, from signals in the session: a failed command that passes after a memory was shown (helped), the same error recurring after its lesson was shown (did not help), a user correction that contradicts a shown memory (wrong). Each is an `observed` outcome, logged with its evidence and reversible. Re-run SI0's two kill checks on Z1's injections before the write path is built.

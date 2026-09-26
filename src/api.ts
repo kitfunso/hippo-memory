@@ -100,7 +100,15 @@ import { compareEntryIdentity, compareScoredResults } from './compare.js';
 import { scopeMatch } from './scope.js';
 import { consolidate } from './consolidate.js';
 import { loadConfig } from './config.js';
-import { resolveProjectIdentity, classifyOriginProject } from './project-identity.js';
+import { resolveProjectIdentity, classifyOriginProject, isGlobalStoreRoot } from './project-identity.js';
+import {
+  promptTokens,
+  contentTokens,
+  gatePromptRecall,
+  promptRecallFtsQuery,
+  type PromptRecallMetric,
+  type PromptRecallGate,
+} from './prompt-recall.js';
 import { detectSecret } from './secret-detect.js';
 import { deduplicateStore } from './dedupe.js';
 import { computeAmbientState, type AmbientState } from './ambient.js';
@@ -2484,6 +2492,8 @@ export interface ContextOpts {
    *  it just means every snapshot goes through the age check. Host-resolved
    *  (stdin payload, HIPPO_SESSION_ID, else the host's session var) so this stays host-agnostic. */
   currentSessionId?: string | null;
+  /** Z1: raw hook-payload prompt; only the pinned-only branch reads it, gated on `pinnedInject.promptRecall`. */
+  prompt?: string;
 }
 
 export interface ContextResultEntry {
@@ -2492,6 +2502,8 @@ export interface ContextResultEntry {
   tokens: number;
   isGlobal?: boolean;
   isFreshTail?: boolean;
+  /** Z1: admitted by the prompt-recall gate, not the recent-N backfill or a pin. */
+  promptRecall?: boolean;
   /** v39: the entry's owning project ('' = user-global, null = legacy row). */
   origin?: string | null;
   /** v39: how the origin relates to the active project. 'cross-project'
@@ -2698,7 +2710,54 @@ export async function getContext(
     // the safe direction and is not worth extra bookkeeping to recover.
     const recentBudget = Math.max(0, effBudget - pinnedReserve);
 
-    if (includeRecent > 0) {
+    // Z1: gate the backfill on the prompt instead of recency (docs/plans/2026-09-26-z1-prompt-recall.md).
+    const promptRecallOn = Boolean(opts.prompt?.trim()) && pinnedCfg.pinnedInject.promptRecall;
+    if (promptRecallOn) {
+      const rawMetric = pinnedCfg.pinnedInject.promptRecallMetric;
+      const metric: PromptRecallMetric = rawMetric === 'cosine' ? 'cosine' : 'jaccard';
+      // Config values come from JSON with no runtime type check; Number.isFinite also rejects a string there.
+      const finiteOr = (v: number, dflt: number, min: number): number =>
+        Number.isFinite(v) && v >= min ? v : dflt;
+      const gate: PromptRecallGate = {
+        metric,
+        threshold: finiteOr(pinnedCfg.pinnedInject.promptRecallThreshold, 0.04, 0),
+        minShared: finiteOr(pinnedCfg.pinnedInject.promptRecallMinShared, 2, 0),
+        maxItems: finiteOr(pinnedCfg.pinnedInject.promptRecallMaxItems, 5, 1),
+      };
+      const candidateLimit = finiteOr(pinnedCfg.pinnedInject.promptRecallCandidates, 100, 1);
+      const p = promptTokens(opts.prompt ?? '');
+      if (p.size > 0) {
+        const ftsQuery = promptRecallFtsQuery(p);
+        const localCandidates = hasLocal
+          ? loadRecallSearchEntries(ctx.hippoRoot, ftsQuery, candidateLimit, ctx.tenantId, undefined, 'exact', false)
+          : [];
+        const globalCandidates = hasGlobal && !isGlobalStoreRoot(ctx.hippoRoot)
+          ? loadRecallSearchEntries(globalRoot, ftsQuery, candidateLimit, ctx.tenantId, undefined, 'exact', false)
+          : [];
+        const seenCandidateIds = new Set<string>();
+        const candidateItems: Array<{ id: string; tokens: Set<string>; entry: MemoryEntry; isGlobal: boolean }> = [];
+        // Local wins the id collision (a global row synced into the local store).
+        for (const e of localCandidates) {
+          if (!admit(e) || e.pinned || !isContentWorthStoring(e.content) || seenCandidateIds.has(e.id)) continue;
+          seenCandidateIds.add(e.id);
+          candidateItems.push({ id: e.id, tokens: contentTokens(e.content), entry: e, isGlobal: false });
+        }
+        for (const e of globalCandidates) {
+          if (!admit(e) || e.pinned || !isContentWorthStoring(e.content) || seenCandidateIds.has(e.id)) continue;
+          seenCandidateIds.add(e.id);
+          candidateItems.push({ id: e.id, tokens: contentTokens(e.content), entry: e, isGlobal: true });
+        }
+        const gated = gatePromptRecall(p, candidateItems, gate);
+        for (const g of gated) {
+          if (selectedIds.has(g.item.id)) continue;
+          const tokens = estimateTokens(g.item.entry.content);
+          if (usedP + tokens > recentBudget) continue;
+          selectedItems.push({ entry: g.item.entry, score: g.score, tokens, isGlobal: g.item.isGlobal, promptRecall: true });
+          selectedIds.add(g.item.id);
+          usedP += tokens;
+        }
+      }
+    } else if (includeRecent > 0) {
       const recent = [
         ...localEntries.map((entry) => ({ entry, isGlobal: false })),
         ...globalEntries.map((entry) => ({ entry, isGlobal: true })),
