@@ -28,6 +28,12 @@ Every failed tool call the capture-error hook sees, stored as a memory or not: o
 tool, the routine rule that skipped it, and hashes of the error, never its text. Kept 90 days.
 _Avoid_: error log, failure history
 
+**Mirror**:
+A file derived from `hippo.db` and written after the change commits: the markdown files,
+`stats.json` and the conflict files. Never the source of truth; a failed mirror write warns and
+the change stands. `index.json` is an export, written only by `rebuildIndex()`, not a mirror.
+_Avoid_: cache, index (for the markdown files)
+
 **Repeat**:
 A rated failure (stored, duplicate or store-failed, from a session with an id) whose signature
 another session hit first. Repeat-error rate compares repeats per session between a hippo arm and

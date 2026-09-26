@@ -20,8 +20,6 @@ import {
   initStore,
   deleteEntryCore,
   purgeMirrorBestEffort,
-  writeIndexMirror,
-  buildIndexFromDb,
 } from './store.js';
 import {
   rejectionDigest,
@@ -63,8 +61,8 @@ export interface RejectFlowResult {
  * normalized digest matches (kind-aware), one aggregate `reject_value`
  * audit, COMMIT. Then post-commit (mirrors the existing purge+reaper
  * pattern verbatim from api.archiveRaw, api.ts:1913-1938): best-effort
- * mirror purge per removed id, `mirror_cleaned_at` stamps for raw ids, one
- * index mirror rewrite.
+ * mirror purge per removed id, `mirror_cleaned_at` stamps for raw ids.
+ * index.json itself is only refreshed by `rebuildIndex()`.
  */
 export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
   if (!opts.reason.trim()) {
@@ -180,7 +178,7 @@ export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
 
     // Post-commit, db handle still open (same pattern as api.archiveRaw):
     // best-effort mirror purge per removed id, reaper-backstop stamp for
-    // raw ids, one index mirror rewrite.
+    // raw ids.
     for (const id of removedIds) {
       // AT1 fix: purgeMirrorBestEffort retries once, then — for non-raw ids,
       // which cleanupArchivedMirrors' reaper never scans — reports the
@@ -194,9 +192,6 @@ export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
           id,
         );
       }
-    }
-    if (removedIds.length > 0) {
-      writeIndexMirror(opts.hippoRoot, buildIndexFromDb(db));
     }
 
     return { digest, content, removedIds, removedRawIds };

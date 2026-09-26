@@ -34,7 +34,7 @@ initStore(hippoRoot);
 const db = openHippoDb(hippoRoot);
 let written = 0, long = 0;
 try {
-  // One transaction and one index mirror: writeEntry rebuilds index.json per call, O(n^2) at 10k turns.
+  // writeEntryDbOnly skips mirrors entirely; index.json is written once below, after the batch commits.
   db.exec('BEGIN');
   for (const [sid, { date, turns }] of sessions) {
     turns.forEach((turn, t) => {

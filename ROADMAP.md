@@ -1616,10 +1616,10 @@ Failed-tool capture now ships through both install routes as `hippo capture-erro
 | Recall | 0.58 s |
 | Per-prompt hook | 0.28 s |
 | `hippo sleep --dry-run` | 76 s |
-| One write | about 50 ms at 10,000 memories, 18 ms at 2,000 |
+| One write | about 50 ms at 10,000 memories, 18 ms at 2,000; 14 ms and 9 ms after `perf/write-path-cost` |
 
 - **Size is not the constraint:** a million memories is about 1.2 GB, well within SQLite.
-- **The cost of one write grows with the store:** every write rebuilds `index.json` from the whole database (`src/store.ts`, `writeIndexMirror(hippoRoot, buildIndexFromDb(db))`).
+- **The cost of one write grew with the store:** every write rebuilt `index.json` from the whole database, and a full-text delete scanned every row. Both are gone in `perf/write-path-cost`; what growth remains is the store open every command pays (`docs/evals/2026-09-25-write-path-cost.md`, "After the fix").
 - **Many paths load every memory:** consolidation, and duplicate checks in capture and remember.
 - **SQLite allows one writer at a time:** fine per developer; for a company-wide server it is why A6 (Postgres) and EI10 exist.
 - **Fixes, before a design partner's store reaches that size:**

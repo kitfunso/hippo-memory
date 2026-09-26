@@ -27,9 +27,37 @@ Line numbers are for master at 1.47.0 (7ddb58a).
 
 The same per-call cost shows in `tests/server-outcome-route.test.ts` "1000 ids at boundary", at about 13 ms per lookup of a missing id. The test takes 12-14 s alone on both 1.46.0 and 1.47.0, and 25-30 s in a full local suite, against a 30 s budget; its own comment expects 5-10 s. Re-time it after the fix rather than raising the timeout.
 
+## After the fix (2026-09-26, home box)
+
+Branch `perf/write-path-cost`, from master at 1.47.0 (8c48355). The same probe, re-run on the home box before and after, so the two columns are comparable with each other and not with the work-box table above.
+
+| Step | Before 2k | Before 10k | After 2k | After 10k |
+|---|---:|---:|---:|---:|
+| `writeEntry`, total | 17.6 | 52.2 | 9.4 | 14.2 |
+| `initStore` | 2.3 | 5.7 | 2.7 | 5.7 |
+| `openHippoDb` + close | 2.1 | 5.0 | 2.2 | 5.1 |
+| CLI `remember` | 181.0 | 317.0 | 167.4 | 263.4 |
+
+Two changes:
+
+1. **`index.json` is written only by `rebuildIndex()`.** The five write paths above, plus the post-commit refresh in `src/reject-flow.ts`, no longer call `writeIndexMirror`. No reader in `src/` needs the file: `loadIndex` reads SQLite, and the only file reader is the legacy markdown bootstrap.
+2. **A new memory skips the full-text delete.** `memories_fts` declares `id UNINDEXED`, so `DELETE FROM memories_fts WHERE id = ?` scans every row. That scan was the rest of the growth: 0.17 ms at 2k and 0.94 ms at 10k. `upsertEntryRow` now checks whether the row exists and skips the delete for a new one. The database-only write (`writeEntryDbOnly`) is flat after the change, 0.39 ms at 2k and 0.41 ms at 10k.
+
+**The acceptance rule.** The growth that remains should come from opening the store, which every command pays, not from the write: `growth(writeEntry) - growth(initStore) - growth(open_close) <= 2 ms`. After the fix: 4.8 - 3.0 - 2.9 = -1.1 ms, a pass. With only the `index.json` cut it was 3.2 ms, a fail, which is what led to the full-text fix.
+
+**Finding 5 does not reproduce.** In a fresh process per run, like a CLI start, `openHippoDb` took 3.0 ms at 2k and 4.4 ms at 10k, and the two backfill counts took 0.1 to 0.5 ms (medians of 7, `open-cost.mjs` below). The 24 ms came from one profiled run.
+
+**"1000 ids at boundary" is not a write-path cost.** It takes 3.07 s alone before and 2.9 to 3.0 s after on this box, and 3.8 s in a full suite. The 997 missing ids never reach a write: `outcome()` (`src/api.ts:1697`) calls `readEntry` per id, and `readEntry` runs `initStore` plus a database open and close each time, about 3 ms. Opening the database once per request would fix it; that is a separate change.
+
+Still open:
+
+- Updates and deletes still pay the full-text scan (`syncFtsRow` on the patch path, `deleteFtsRow`). The structural fix is an external-content FTS table or an id lookup table, which is a schema migration.
+- The duplicate checks in capture, capture-error and `remember` still load every memory. An indexed check needs a normalised-content column, which is also a migration.
+- Finding 4 (`DUMMY_HASH` computed at module load) is unchanged.
+
 ## Probe scripts
 
-Both import from `dist/`, so run `npm run build` first.
+All three import from `dist/`, so run `npm run build` first.
 
 `node write-cost-probe.mjs <repo> [out.json]` regenerates the table:
 
@@ -166,4 +194,40 @@ console.log(top(new Map([...incl].filter(([k]) => /\.js:/.test(k) && !/node:|int
 console.log('--- self ---');
 console.log(top(self, 15));
 rmSync(home, { recursive: true, force: true });
+```
+
+`node open-cost.mjs <repo>` times a cold database open and the two backfill counts:
+
+```js
+// Seeds 2k/10k stores, then in fresh processes times openHippoDb and the two FTS backfill counts (cold, like a CLI start).
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { execFileSync } from 'node:child_process';
+const repo = process.argv[2];
+const dist = (m) => pathToFileURL(join(repo, 'dist', m)).href;
+if (process.argv[3] === 'child') {
+  const { openHippoDb, closeHippoDb } = await import(dist('db.js'));
+  const root = process.argv[4];
+  let s = process.hrtime.bigint(); const db = openHippoDb(root); const open = Number(process.hrtime.bigint() - s) / 1e6;
+  const t = (sql) => { const s = process.hrtime.bigint(); db.prepare(sql).get(); return Number(process.hrtime.bigint() - s) / 1e6; };
+  const c1 = t('SELECT COUNT(*) c FROM memories'); const c2 = t('SELECT COUNT(*) c FROM memories_fts');
+  closeHippoDb(db);
+  console.log(JSON.stringify({ open, count_memories: c1, count_fts_warm_after_open: c2 }));
+  process.exit(0);
+}
+const { createMemory } = await import(dist('memory.js'));
+const store = await import(dist('store.js'));
+const { openHippoDb, closeHippoDb } = await import(dist('db.js'));
+for (const n of [2000, 10000]) {
+  const home = mkdtempSync(join(tmpdir(), `hippo-oc-${n}-`)); const root = join(home, '.hippo');
+  store.initStore(root); const db = openHippoDb(root); db.exec('BEGIN');
+  for (let i = 0; i < n; i++) store.writeEntryDbOnly(db, createMemory('deploy cache index query latency schema migration tenant recall sleep decay vector ' + i, { tags: ['t' + (i % 50)], tenantId: 'default' }));
+  db.exec('COMMIT'); closeHippoDb(db);
+  const runs = Array.from({ length: 7 }, () => JSON.parse(execFileSync(process.execPath, [process.argv[1], repo, 'child', root], { stdio: ['ignore', 'pipe', 'ignore'] }).toString()));
+  const med = (k) => runs.map((r) => r[k]).sort((a, b) => a - b)[3].toFixed(2);
+  console.log(n, 'open', med('open'), 'count_memories', med('count_memories'), 'count_fts', med('count_fts_warm_after_open'));
+  rmSync(home, { recursive: true, force: true });
+}
 ```
