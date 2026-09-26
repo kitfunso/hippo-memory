@@ -23,6 +23,7 @@ npm run smoke:openclaw-install
 - Do not commit generated `dist/` or UI build output unless the repo expects it for a release.
 - A PR's changelog entry goes in its own `changelog.d/<branch-with-dashes>.md`, never in `CHANGELOG.md`; the release commit folds them in (`changelog.d/README.md`).
 - CI fails when any oxlint rule's hit count rises above `.oxlint-baseline.json`. Fix new hits in the files you touch; after clearing old ones, `node scripts/check-lint-ratchet.mjs --update` and commit the lower baseline.
+- An eval that reads host transcripts (`~/.claude/projects/*.jsonl`) copies its corpus outside the repo at registration and names the copy in the prereg: Claude Code deletes sessions after 30 days by default, so a live-path corpus cannot be re-run.
 - Use Hippo memory commands when useful, but do not store secrets.
 
 ## Never Do
