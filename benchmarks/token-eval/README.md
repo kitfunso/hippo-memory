@@ -83,7 +83,9 @@ node scripts/token-eval/make-tasks.mjs --repo ../some-repo --cluster some-repo \
   --test-cmd "npx vitest run {files}" --setup "npm ci" --verify > tasks.json
 ```
 
-- `--verify` keeps only commits whose tests fail before the fix and pass after it.
+- `--verify` keeps only commits whose tests fail before the fix and pass after it. A candidate whose setup fails or whose test command times out is dropped as an error, not scored as a fail or a pass.
+- **The scope gate skips bundled commits before they cost a test run.** A candidate is skipped when it touches more than `--max-test-files` runnable test files (default 4) or changes more than `--max-code-lines` lines outside tests (default 400); each skip is printed with its reason. Pass `0` to either flag to disable it.
+- **`--run-exclude REGEX`** (default matches `fixtures?/`, `__fixtures__/`, `__snapshots__/`, `conftest.py`) marks hidden test files that are support files, not files the agent must produce: they are still written from the fix commit for the hidden test run, but never appear in the test command or count toward the scope gate. An `e2e/` spec is excluded from both tests and code entirely; it needs a running app, so it is never run as a hidden test.
 - **Then edit every prompt.** A drafted prompt is the commit message, which usually describes the fix. Rewrite each one as the problem a user would report, then delete `needsReview`. The runner refuses tasks that still have it.
 - Use at least two repositories: the stale-memory arm borrows another repository's store.
 
@@ -93,6 +95,10 @@ node scripts/token-eval/make-tasks.mjs --repo ../some-repo --cluster some-repo \
 node scripts/token-eval/ab-run.mjs --tasks tasks.json --out eval-runs --model <model id> --seeds 3 --dry-run
 node scripts/token-eval/ab-run.mjs --tasks tasks.json --out eval-runs --model <model id> --seeds 3 --max-budget-usd 3
 ```
+
+`--dry-run` only validates the tasks file and prints the plan: it needs no `npm run build` and no `dist/`. A real run needs `dist/` (`npm run build` first) and fails fast with a clear message if it is missing.
+
+**One cluster, still want stale-memory?** `--donor-runs DIR` points at another `ab-run.mjs --out` directory. The stale-memory arm first looks for a hippo store finished earlier in this same run (another cluster with `hippo` in `--arms`); failing that, it reads `DIR/runs.jsonl` for a `hippo` arm record from a different cluster and copies its `.hippo` directory. Missing either source throws before the first Claude Code session, not partway through the run.
 
 **3. Analyze:**
 
@@ -106,7 +112,7 @@ What the runner does to keep the comparison fair:
 - **Hippo is isolated and fully counted.** Each run has its own `HIPPO_HOME`, and `hippo` on PATH is this checkout. Hippo's optional LLM extraction is off, so hippo spends nothing outside Claude Code's recorded usage.
 - **Every cost comes from Claude Code's own JSON result.** It uses `modelUsage` for the four token buckets and `total_cost_usd` at list price. Work metrics (tool calls, file reads, repeated errors) are read from the session transcript.
 - **Cache effects are balanced.** One warm-up call happens before the first recorded run, and hippo and no-memory swap order between seeds.
-- **Failures are recorded, not hidden.** A run with no result is recorded as invalid and excluded, never zero-filled. The first task of each sequence is run but not scored.
+- **Failures are recorded, not hidden.** A run with no result is recorded as invalid and excluded, never zero-filled. A task whose setup fails is recorded `invalid: 'setup'` and skipped entirely: no Claude Code session, no hidden-test run, never graded as a genuine "not resolved". The first task of each sequence is run but not scored.
 - **Permissions.** Runs use `--permission-mode bypassPermissions` inside throwaway clones. Claude Code refuses that as root; there, use `--permission-mode acceptEdits`, which allows edits but not shell commands.
 
 **Checked so far.** The runner was exercised end to end with a stand-in for Claude Code in `tests/token-eval-ab-run.test.ts`. It was also run once with real Claude Code (Haiku) on a two-task toy repository, in the no-memory and hippo arms: four real sessions, about $0.08, with usage, cost, turns, tool calls and file reads recorded from the real output and transcripts. That run tests the plumbing and says nothing about hippo: one scored task, one seed, and a repository with no history for hippo to learn from.

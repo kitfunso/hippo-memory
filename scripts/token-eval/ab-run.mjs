@@ -61,16 +61,29 @@ import * as path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-import { installJsonHooks } from '../../dist/hooks.js';
-import { openHippoDb, closeHippoDb } from '../../dist/db.js';
-import { tokensBySession } from '../../dist/token-ledger.js';
-import { loadAllEntries, isInitialized } from '../../dist/store.js';
-
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
 const HIPPO_JS = path.join(REPO, 'bin', 'hippo.js');
 
 export const ARMS = ['no-memory', 'hippo', 'random-text', 'stale-memory'];
+
+// Loading or validating a tasks file never needs dist/; only a real run does.
+let hippo = null;
+async function loadHippo() {
+  if (hippo) return hippo;
+  try {
+    const [{ installJsonHooks }, { openHippoDb, closeHippoDb }, { tokensBySession }, { loadAllEntries, isInitialized }] = await Promise.all([
+      import('../../dist/hooks.js'),
+      import('../../dist/db.js'),
+      import('../../dist/token-ledger.js'),
+      import('../../dist/store.js'),
+    ]);
+    hippo = { installJsonHooks, openHippoDb, closeHippoDb, tokensBySession, loadAllEntries, isInitialized };
+  } catch (err) {
+    throw new Error(`run npm run build first (ab-run needs dist/): ${err.message}`);
+  }
+  return hippo;
+}
 
 // Environment a child Claude Code session must not inherit: a parent
 // session id makes the child report and log under the parent's id.
@@ -116,7 +129,7 @@ function hippoHookSettings(tmpHome) {
   process.env.HOME = tmpHome;
   process.env.USERPROFILE = tmpHome;
   try {
-    installJsonHooks('claude-code');
+    hippo.installJsonHooks('claude-code');
     return JSON.parse(fs.readFileSync(path.join(tmpHome, '.claude', 'settings.json'), 'utf8'));
   } finally {
     for (const [k, v] of Object.entries(saved)) {
@@ -236,21 +249,58 @@ function goldLines(cacheDir, t) {
 }
 
 function storeLeaks(hippoRoot, lines) {
-  if (!isInitialized(hippoRoot) || lines.length === 0) return false;
-  const text = loadAllEntries(hippoRoot).map((e) => e.content).join('\n');
+  if (!hippo.isInitialized(hippoRoot) || lines.length === 0) return false;
+  const text = hippo.loadAllEntries(hippoRoot).map((e) => e.content).join('\n');
   return lines.some((l) => text.includes(l));
 }
 
 function hippoSentFor(hippoRoot, sessionId) {
-  if (!sessionId || !isInitialized(hippoRoot)) return null;
-  const db = openHippoDb(hippoRoot);
+  if (!sessionId || !hippo.isInitialized(hippoRoot)) return null;
+  const db = hippo.openHippoDb(hippoRoot);
   try {
-    const row = tokensBySession(db, 'default', '1970-01-01T00:00:00.000Z').find((r) => r.sessionId === sessionId);
+    const row = hippo.tokensBySession(db, 'default', '1970-01-01T00:00:00.000Z').find((r) => r.sessionId === sessionId);
     return row ?? { sessionId, sent: 0, skipped: 0, injections: 0 };
   } catch {
     return null;
   } finally {
-    closeHippoDb(db);
+    hippo.closeHippoDb(db);
+  }
+}
+
+/** Donor store for stale-memory: another cluster in this run, else a --donor-runs record still on disk. */
+export function findDonor(spec, s, seed, hippoStores, donorRuns) {
+  const donors = spec.sequences.filter((x) => x.id !== s.id && x.cluster !== s.cluster);
+  const inRun = donors.map((x) => hippoStores.get(`${x.id}|${seed}`)).find(Boolean);
+  if (inRun) return inRun;
+  if (!donorRuns) return null;
+  const runsFile = path.join(donorRuns, 'runs.jsonl');
+  if (!fs.existsSync(runsFile)) return null;
+  for (const line of fs.readFileSync(runsFile, 'utf8').split('\n')) {
+    if (!line.trim()) continue;
+    let r;
+    try {
+      r = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (r.arm !== 'hippo' || r.seed !== seed || r.cluster === s.cluster) continue;
+    const dir = path.join(donorRuns, 'work', r.sequence, 'hippo', `seed${seed}`, '.hippo');
+    if (fs.existsSync(dir)) return dir;
+  }
+  return null;
+}
+
+/** Preflight so stale-memory fails before any session, not midway through a run. */
+export function checkDonors(spec, arms, seeds, donorRuns) {
+  if (!arms.includes('stale-memory')) return;
+  for (const s of spec.sequences) {
+    const anotherClusterInFile = spec.sequences.some((x) => x.id !== s.id && x.cluster !== s.cluster);
+    if (anotherClusterInFile && arms.includes('hippo')) continue;
+    for (let seed = 1; seed <= seeds; seed++) {
+      if (!findDonor(spec, s, seed, new Map(), donorRuns)) {
+        throw new Error(`stale-memory for ${s.id} seed ${seed} needs a donor: another cluster with hippo in arms, or --donor-runs pointing at a finished hippo run of another cluster`);
+      }
+    }
   }
 }
 
@@ -273,8 +323,9 @@ export function planRuns(spec, arms, seeds) {
 }
 
 /** Run the whole plan. Returns the records written. */
-export function runAll(opts) {
-  const { spec, arms, seeds, outDir, model, claudeBin = 'claude', maxBudgetUsd = null, projectsDir, settleMs = 5000, warmup = true, permissionMode = 'bypassPermissions', log = console.log } = opts;
+export async function runAll(opts) {
+  await loadHippo();
+  const { spec, arms, seeds, outDir, model, claudeBin = 'claude', maxBudgetUsd = null, projectsDir, settleMs = 5000, warmup = true, permissionMode = 'bypassPermissions', donorRuns = null, log = console.log } = opts;
   fs.mkdirSync(outDir, { recursive: true });
   const runsFile = path.join(outDir, 'runs.jsonl');
   const binDir = path.join(outDir, 'bin');
@@ -334,9 +385,8 @@ export function runAll(opts) {
     if (arm === 'hippo' || arm === 'stale-memory') {
       settings = hippoHookSettings(path.join(outDir, 'hook-home'));
       if (arm === 'stale-memory') {
-        const donors = spec.sequences.filter((x) => x.id !== s.id && x.cluster !== s.cluster);
-        const donor = donors.map((x) => hippoStores.get(`${x.id}|${seed}`)).find(Boolean);
-        if (!donor) throw new Error(`stale-memory for ${s.id} needs a finished hippo run of another repository (run the hippo arm with at least two clusters)`);
+        const donor = findDonor(spec, s, seed, hippoStores, donorRuns);
+        if (!donor) throw new Error(`stale-memory for ${s.id} seed ${seed} needs a donor: pass --donor-runs or run the hippo arm with at least two clusters`);
         fs.cpSync(donor, hippoRoot, { recursive: true });
       } else {
         sh(`"${process.execPath}" "${HIPPO_JS}" init`, workDir, env);
@@ -358,9 +408,25 @@ export function runAll(opts) {
       const startedAt = new Date().toISOString();
       checkoutBase(cached, workDir, s.id, t);
       const leak = (arm === 'hippo' || arm === 'stale-memory') ? storeLeaks(hippoRoot, goldLines(cached, t)) : false;
+      const rawDir = path.join(outDir, 'raw', s.id, arm, `seed${seed}`);
+      fs.mkdirSync(rawDir, { recursive: true });
       if (t.setup) {
         const setup = sh(t.setup, workDir, env);
-        if (setup.status !== 0) log(`  setup failed for ${t.id} (${arm}, seed ${seed}); continuing`);
+        if (setup.status !== 0) {
+          // No claude session, no hidden-test run: a failed setup is not a genuine "not resolved".
+          fs.writeFileSync(path.join(rawDir, `${t.id}.setup.txt`), `${setup.stdout}\n${setup.stderr}`.slice(-20000));
+          const record = {
+            taskId: t.id, cluster: s.cluster, sequence: s.id, position, scored: position > 0, arm, seed,
+            resolved: false, usage: null, costUsd: null, turns: null,
+            sessionId: null, transcriptFound: false,
+            agentError: `setup failed (exit ${setup.status})`,
+            hippo: null, leak, invalid: 'setup', model: model ?? null, claudeVersion, startedAt,
+          };
+          records.push(record);
+          fs.appendFileSync(runsFile, `${JSON.stringify(record)}\n`);
+          log(`${s.id} ${t.id} ${arm} seed${seed}: setup failed (exit ${setup.status}), skipped`);
+          return;
+        }
       }
       // The prompt goes on stdin: long prompts break command-line quoting,
       // especially under Windows cmd.
@@ -375,8 +441,6 @@ export function runAll(opts) {
       } catch {
         result = null;
       }
-      const rawDir = path.join(outDir, 'raw', s.id, arm, `seed${seed}`);
-      fs.mkdirSync(rawDir, { recursive: true });
       fs.writeFileSync(path.join(rawDir, `${t.id}.json`), cc.stdout || JSON.stringify({ error: cc.stderr.slice(0, 4000), status: cc.status }));
       if ((arm === 'hippo' || arm === 'stale-memory') && settleMs > 0) {
         // SessionEnd runs capture and sleep in a background worker; let it finish.
@@ -430,7 +494,7 @@ export function runAll(opts) {
   return records;
 }
 
-function main() {
+async function main() {
   const argv = process.argv;
   const flag = (name, fallback) => {
     const i = argv.indexOf(name);
@@ -439,13 +503,16 @@ function main() {
   const tasksFile = flag('--tasks', null);
   const outDir = flag('--out', null);
   if (!tasksFile || !outDir) {
-    console.error('Usage: node scripts/token-eval/ab-run.mjs --tasks tasks.json --out DIR --model MODEL [--seeds 3] [--arms no-memory,hippo,random-text,stale-memory] [--max-budget-usd N] [--dry-run]');
+    console.error('Usage: node scripts/token-eval/ab-run.mjs --tasks tasks.json --out DIR --model MODEL [--seeds 3] [--arms no-memory,hippo,random-text,stale-memory] [--max-budget-usd N] [--donor-runs DIR] [--dry-run]');
     process.exit(1);
   }
   const spec = validateTasks(JSON.parse(fs.readFileSync(tasksFile, 'utf8')));
   const arms = flag('--arms', 'no-memory,hippo,random-text,stale-memory').split(',').map((a) => a.trim());
   for (const a of arms) if (!ARMS.includes(a)) throw new Error(`unknown arm ${a}; known: ${ARMS.join(', ')}`);
   const seeds = Number(flag('--seeds', '3'));
+  const donorRunsArg = flag('--donor-runs', null);
+  const donorRuns = donorRunsArg ? path.resolve(donorRunsArg) : null;
+  checkDonors(spec, arms, seeds, donorRuns);
   const plan = planRuns(spec, arms, seeds);
   const taskRuns = plan.reduce((n, r) => n + r.sequence.tasks.length, 0);
   console.log(`${plan.length} sequence runs, ${taskRuns} Claude Code sessions (${arms.join(', ')}; ${seeds} seeds).`);
@@ -453,7 +520,7 @@ function main() {
     for (const r of plan) console.log(`  ${r.arm} seed${r.seed} ${r.sequence.id}: ${r.sequence.tasks.map((t) => t.id).join(', ')}`);
     return;
   }
-  runAll({
+  await runAll({
     spec,
     arms,
     seeds,
@@ -465,10 +532,14 @@ function main() {
     settleMs: Number(flag('--settle-ms', '5000')),
     warmup: !argv.includes('--no-warmup'),
     permissionMode: flag('--permission-mode', 'bypassPermissions'),
+    donorRuns,
   });
   console.log(`\nRecords: ${path.join(path.resolve(outDir), 'runs.jsonl')}\nAnalyze: node scripts/token-eval/ab-analyze.mjs --runs ${path.join(outDir, 'runs.jsonl')} --prices prices.json`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main();
+  main().catch((err) => {
+    console.error(err.message);
+    process.exit(1);
+  });
 }

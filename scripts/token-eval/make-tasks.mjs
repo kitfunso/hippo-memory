@@ -29,15 +29,41 @@ import * as path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-export const DEFAULT_TEST_PATTERN = '(^|/)(tests?|__tests__|spec)/|\\.(test|spec)\\.[cm]?[jt]sx?$|_test\\.(py|go)$|(^|/)test_[^/]*\\.py$';
+export const DEFAULT_TEST_PATTERN = '(^|/)(tests?|__tests__|spec)/|\\.(test|spec)\\.[cm]?[jt]sx?$|_test\\.(py|go)$|(^|/)test_[^/]*\\.py$|(^|/)conftest\\.py$';
+// Fixtures and snapshots are hidden test files the fix commit still writes, not files an agent must produce.
+export const DEFAULT_RUN_EXCLUDE = '(^|/)(fixtures?|__fixtures__|__snapshots__)/|(^|/)conftest\\.py$';
+// e2e specs need a running app; they are neither the task's tests nor its code.
+const E2E_PATTERN = /(^|\/)e2e\//;
 
 function git(args, cwd) {
   return execFileSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 1 << 28 }).trim();
 }
 
-/** Candidate commits, oldest first. */
-export function findCandidates(repo, { since = null, max = 40, testPattern = DEFAULT_TEST_PATTERN } = {}) {
+/** Added + deleted lines of files git diff put outside `isTest`; binary rows (`-`) count 0. */
+function codeLinesChanged(repo, parent, sha, isTest) {
+  const out = git(['diff', '--numstat', '--no-renames', parent, sha], repo);
+  let lines = 0;
+  for (const line of out ? out.split('\n') : []) {
+    if (!line) continue;
+    const [added, deleted, file] = line.split('\t');
+    if (isTest(file)) continue;
+    lines += (added === '-' ? 0 : Number(added)) + (deleted === '-' ? 0 : Number(deleted));
+  }
+  return lines;
+}
+
+/** Candidate commits, oldest first, past the scope gate (fault 3: bundled commits cost no test runs). */
+export function findCandidates(repo, {
+  since = null,
+  max = 40,
+  testPattern = DEFAULT_TEST_PATTERN,
+  runExclude = DEFAULT_RUN_EXCLUDE,
+  maxTestFiles = 4,
+  maxCodeLines = 400,
+  onSkip = null,
+} = {}) {
   const re = new RegExp(testPattern);
+  const excludeRe = new RegExp(runExclude);
   const args = ['log', '--no-merges', '--reverse', '--format=%H%x09%P'];
   if (since) args.push(`--since=${since}`);
   const out = git(args, repo);
@@ -46,43 +72,75 @@ export function findCandidates(repo, { since = null, max = 40, testPattern = DEF
     const [sha, parents] = line.split('\t');
     const parentList = (parents ?? '').split(' ').filter(Boolean);
     if (parentList.length !== 1) continue;
-    const changed = git(['diff', '--name-only', '--diff-filter=AM', parentList[0], sha], repo).split('\n').filter(Boolean);
-    const tests = changed.filter((f) => re.test(f));
-    const code = git(['diff', '--name-only', parentList[0], sha], repo).split('\n').filter((f) => f && !re.test(f));
+    const parent = parentList[0];
+    const changed = git(['diff', '--name-only', '--diff-filter=AM', parent, sha], repo).split('\n').filter(Boolean);
+    const tests = changed.filter((f) => re.test(f) && !E2E_PATTERN.test(f));
+    const code = git(['diff', '--name-only', parent, sha], repo).split('\n').filter((f) => f && !re.test(f) && !E2E_PATTERN.test(f));
     if (tests.length === 0 || code.length === 0) continue;
-    candidates.push({
+    const runFiles = tests.filter((f) => !excludeRe.test(f));
+    if (runFiles.length === 0) continue;
+    const candidate = {
       sha,
-      parent: parentList[0],
+      parent,
       testFiles: tests,
+      runFiles,
       subject: git(['log', '-1', '--format=%s', sha], repo),
       body: git(['log', '-1', '--format=%b', sha], repo),
-    });
+    };
+    if (maxTestFiles && runFiles.length > maxTestFiles) {
+      onSkip?.(candidate, `too many runnable test files: ${runFiles.length} > ${maxTestFiles}`);
+      continue;
+    }
+    const codeLines = codeLinesChanged(repo, parent, sha, (f) => re.test(f));
+    if (maxCodeLines && codeLines > maxCodeLines) {
+      onSkip?.(candidate, `too many changed code lines: ${codeLines} > ${maxCodeLines}`);
+      continue;
+    }
+    candidates.push(candidate);
   }
   return candidates.slice(-max);
 }
 
+/** Runs a check command, never throwing on a timeout or kill (status stays null). */
+function run(cmd, cwd, timeoutMs) {
+  const r = spawnSync(cmd, { cwd, shell: true, encoding: 'utf8', timeout: timeoutMs, maxBuffer: 1 << 28 });
+  return { status: r.status, stderrTail: (r.stderr ?? '').slice(-2000) };
+}
+
 /** Hidden tests fail at the base and pass at the fix, checked in a scratch worktree. */
-export function verifyCandidate(repo, c, testCmd, setup) {
+export function verifyCandidate(repo, c, testCmd, setup, { timeoutMs = 20 * 60_000 } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-task-verify-'));
-  const cmd = testCmd.replace('{files}', c.testFiles.join(' '));
+  const cmd = testCmd.replace('{files}', c.runFiles.join(' '));
   try {
     git(['worktree', 'add', '--quiet', '--detach', dir, c.parent], repo);
     for (const f of c.testFiles) {
       fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true });
       fs.writeFileSync(path.join(dir, f), execFileSync('git', ['show', `${c.sha}:${f}`], { cwd: repo, maxBuffer: 1 << 28 }));
     }
-    const run = (c2) => spawnSync(c2, { cwd: dir, shell: true, encoding: 'utf8', timeout: 20 * 60_000 }).status;
-    if (setup) run(setup);
-    const atBase = run(cmd);
+    if (setup) {
+      const s = run(setup, dir, timeoutMs);
+      if (s.status !== 0) return { failsAtBase: null, passesAtFix: null, error: `setup failed at base (exit ${s.status}): ${s.stderrTail}` };
+    }
+    const atBase = run(cmd, dir, timeoutMs);
+    if (atBase.status === null) return { failsAtBase: null, passesAtFix: null, error: `test command timed out or was killed at base: ${atBase.stderrTail}` };
     git(['checkout', '--quiet', '-f', c.sha], dir);
-    if (setup) run(setup);
-    const atFix = run(cmd);
-    return { failsAtBase: atBase !== 0, passesAtFix: atFix === 0 };
+    if (setup) {
+      const s = run(setup, dir, timeoutMs);
+      if (s.status !== 0) return { failsAtBase: null, passesAtFix: null, error: `setup failed at fix (exit ${s.status}): ${s.stderrTail}` };
+    }
+    const atFix = run(cmd, dir, timeoutMs);
+    if (atFix.status === null) return { failsAtBase: null, passesAtFix: null, error: `test command timed out or was killed at fix: ${atFix.stderrTail}` };
+    return { failsAtBase: atBase.status !== 0, passesAtFix: atFix.status === 0, error: null };
   } finally {
     try {
       git(['worktree', 'remove', '--force', dir], repo);
     } catch {
-      fs.rmSync(dir, { recursive: true, force: true });
+      // A just-killed process can hold a Windows lock briefly; best-effort, never mask the result above.
+      try {
+        fs.rmSync(dir, { recursive: true, force: true });
+      } catch (err) {
+        console.error(`could not remove scratch worktree ${dir}: ${err.message}`);
+      }
     }
   }
 }
@@ -98,6 +156,7 @@ export function draftTasks(candidates, { repo, cluster, testCmd, setup = null, p
       cluster,
       repo,
       tasks: chunk.map((c) => {
+        const runFiles = c.runFiles ?? c.testFiles;
         const task = {
           id: c.sha.slice(0, 10),
           baseRef: c.parent,
@@ -105,7 +164,7 @@ export function draftTasks(candidates, { repo, cluster, testCmd, setup = null, p
           needsReview: true,
           prompt: `${c.subject}\n\n${c.body}`.trim(),
           testFiles: c.testFiles,
-          test: testCmd.replace('{files}', c.testFiles.join(' ')),
+          test: testCmd.replace('{files}', runFiles.join(' ')),
         };
         if (setup) task.setup = setup;
         return task;
@@ -121,10 +180,16 @@ function main() {
     const i = argv.indexOf(name);
     return i >= 0 && i + 1 < argv.length ? argv[i + 1] : fallback;
   };
+  // A typo must not read as 0, which would silently switch the scope gate off.
+  const count = (name, fallback) => {
+    const n = Number(flag(name, fallback));
+    if (!Number.isInteger(n) || n < 0) throw new Error(`${name} needs a whole number >= 0`);
+    return n;
+  };
   const repo = flag('--repo', null);
   const testCmd = flag('--test-cmd', null);
   if (!repo || !testCmd) {
-    console.error('Usage: node scripts/token-eval/make-tasks.mjs --repo PATH --cluster NAME --test-cmd "cmd {files}" [--setup CMD] [--since DATE] [--max 40] [--per-sequence 5] [--verify]');
+    console.error('Usage: node scripts/token-eval/make-tasks.mjs --repo PATH --cluster NAME --test-cmd "cmd {files}" [--setup CMD] [--since DATE] [--max 40] [--per-sequence 5] [--verify] [--run-exclude REGEX] [--max-test-files 4] [--max-code-lines 400]');
     process.exit(1);
   }
   const repoPath = path.resolve(repo);
@@ -134,12 +199,17 @@ function main() {
     since: flag('--since', null),
     max: Number(flag('--max', '40')),
     testPattern: flag('--test-pattern', DEFAULT_TEST_PATTERN),
+    runExclude: flag('--run-exclude', DEFAULT_RUN_EXCLUDE),
+    maxTestFiles: count('--max-test-files', '4'),
+    maxCodeLines: count('--max-code-lines', '400'),
+    onSkip: (c, reason) => console.error(`skipped ${c.sha.slice(0, 10)} (${c.subject}): ${reason}`),
   });
   if (argv.includes('--verify')) {
     const kept = [];
     for (const c of candidates) {
       const v = verifyCandidate(repoPath, c, testCmd, setup);
-      if (v.failsAtBase && v.passesAtFix) kept.push(c);
+      if (!v.error && v.failsAtBase && v.passesAtFix) kept.push(c);
+      else if (v.error) console.error(`dropped ${c.sha.slice(0, 10)} (${c.subject}): ${v.error}`);
       else console.error(`dropped ${c.sha.slice(0, 10)} (${c.subject}): fails at base ${v.failsAtBase}, passes at fix ${v.passesAtFix}`);
     }
     candidates = kept;
