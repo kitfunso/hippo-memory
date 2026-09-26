@@ -473,9 +473,11 @@ export function detectChurnStale(
       toTag.push(entry);
     }
 
-    if (!dryRun) {
+    if (!dryRun && toTag.length > 0) {
+      // The git calls above can take seconds; a good outcome landing meanwhile moves the anchor past the evidence.
+      const confirmedNow = queryConfirmedAt(hippoRoot, opts.tenantId);
       for (const stale of toTag) {
-        // Re-read: the git calls above can take seconds, and a recall or outcome may have written meanwhile.
+        if (confirmedNow.get(stale.id) !== confirmedAt.get(stale.id)) continue;
         const entry = readEntry(hippoRoot, stale.id, opts.tenantId);
         if (!entry || entry.tags.includes(CHURN_STALE_TAG)) continue;
         writeEntry(hippoRoot, { ...entry, tags: [...entry.tags, CHURN_STALE_TAG] });

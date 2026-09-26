@@ -1084,8 +1084,10 @@ export async function physicsSearch(
 
 /** Normalize two score pools to [0,1] and combine. */
 function mergeScorePools(poolA: SearchResult[], poolB: SearchResult[]): SearchResult[] {
-  const maxA = poolA.reduce((m, r) => Math.max(m, r.score), 1e-9);
-  const maxB = poolB.reduce((m, r) => Math.max(m, r.score), 1e-9);
+  const unpenalised = (r: SearchResult): number =>
+    r.entry.tags.includes(CHURN_STALE_TAG) ? r.score / CHURN_STALE_RANK_MULTIPLIER : r.score;
+  const maxA = poolA.reduce((m, r) => Math.max(m, unpenalised(r)), 1e-9);
+  const maxB = poolB.reduce((m, r) => Math.max(m, unpenalised(r)), 1e-9);
 
   const merged: SearchResult[] = [];
   for (const r of poolA) {

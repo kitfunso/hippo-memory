@@ -31,8 +31,9 @@ function runGitGrepOrEmpty(args: string[], repoRoot: string): string {
   }
 }
 
+// ls-tree, not ls-files: the index can hold staged adds/deletes that HEAD does not.
 export function gitLsFilesAtHead(repoRoot: string): Set<string> {
-  const raw = runGit(['ls-files'], repoRoot);
+  const raw = runGit(['ls-tree', '-r', '--name-only', 'HEAD'], repoRoot);
   return new Set(raw.split('\n').map((l) => l.trim()).filter(Boolean));
 }
 
@@ -51,7 +52,8 @@ export interface ChurnCommit {
 export function fetchChurnWindowLog(repoRoot: string, sinceIso: string): ChurnCommit[] {
   const buffered = new Date(new Date(sinceIso).getTime() - 24 * 60 * 60 * 1000).toISOString();
   const raw = runGit(
-    ['log', '--no-renames', `--since=${buffered}`, '--pretty=format:%x01%H%x02%cI', '--name-status'],
+    // --first-parent -m: a merge's changes land as one diff against its mainline parent.
+    ['log', '--no-renames', '--first-parent', '-m', `--since=${buffered}`, '--pretty=format:%x01%H%x02%cI', '--name-status'],
     repoRoot,
   );
   const commits: ChurnCommit[] = [];
@@ -95,9 +97,9 @@ export function resolveCommitBefore(repoRoot: string, beforeIso: string): string
   return raw === '' ? null : raw;
 }
 
-/** package.json `scripts` at a revision; null when missing/unparsable there (routine for an old commit). Git failures throw GitReadError. */
+/** package.json `scripts` at a revision; {} when the file is absent, null when unparsable. Git failures throw GitReadError. */
 export function packageScriptsAt(repoRoot: string, rev: string): Record<string, string> | null {
-  if (runGit(['ls-tree', '--name-only', rev, '--', 'package.json'], repoRoot).trim() === '') return null;
+  if (runGit(['ls-tree', '--name-only', rev, '--', 'package.json'], repoRoot).trim() === '') return {};
   const raw = runGit(['show', `${rev}:package.json`], repoRoot);
   try {
     // SAFETY: optional chaining makes a `null` or scalar package.json read as "no scripts".

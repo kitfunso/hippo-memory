@@ -331,6 +331,49 @@ describe('detectChurnStale', () => {
     const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project });
     expect(result.marked).toBe(0);
   });
+
+  it('a merge after the anchor of a branch commit dated before it is evidence (first-parent diff)', () => {
+    fs.writeFileSync(path.join(repoDir, 'm.ts'), 'v1');
+    commit(repoDir, new Date(new Date(BEFORE_ANCHOR).getTime() - DAY).toISOString());
+    const mainline = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repoDir, encoding: 'utf8' }).trim();
+    execFileSync('git', ['checkout', '-q', '-b', 'side'], { cwd: repoDir });
+    fs.writeFileSync(path.join(repoDir, 'm.ts'), 'v2');
+    commit(repoDir, BEFORE_ANCHOR);
+    execFileSync('git', ['checkout', '-q', mainline], { cwd: repoDir });
+    const mem = storeMemory('see m.ts for the setup', { created: ANCHOR });
+    execFileSync('git', ['merge', '-q', '--no-ff', '-m', 'merge side', 'side'], {
+      cwd: repoDir,
+      env: { ...process.env, GIT_AUTHOR_DATE: AFTER_ANCHOR, GIT_COMMITTER_DATE: AFTER_ANCHOR },
+    });
+
+    const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project });
+    expect(result.preview[0]?.evidence).toBe('file-changed: m.ts');
+    expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
+  });
+
+  it('reads tracked files from HEAD, not the index (a staged removal does not hide a change)', () => {
+    fs.writeFileSync(path.join(repoDir, 'r.ts'), 'v1');
+    commit(repoDir, BEFORE_ANCHOR);
+    storeMemory('see r.ts for the setup', { created: ANCHOR });
+    fs.writeFileSync(path.join(repoDir, 'r.ts'), 'v2');
+    commit(repoDir, AFTER_ANCHOR);
+    execFileSync('git', ['rm', '-q', '--cached', 'r.ts'], { cwd: repoDir });
+
+    const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project, dryRun: true });
+    expect(result.preview[0]?.evidence).toBe('file-changed: r.ts');
+  });
+
+  it('script-gone fires when package.json itself was deleted after the anchor', () => {
+    fs.writeFileSync(path.join(repoDir, 'package.json'), JSON.stringify({ scripts: { goner: 'echo hi' } }));
+    fs.writeFileSync(path.join(repoDir, 'keep.txt'), 'x');
+    commit(repoDir, BEFORE_ANCHOR);
+    storeMemory('run `npm run goner` to build', { created: ANCHOR });
+    fs.rmSync(path.join(repoDir, 'package.json'));
+    commit(repoDir, AFTER_ANCHOR);
+
+    const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project, dryRun: true });
+    expect(result.preview[0]?.evidence).toBe('script-gone: goner');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -431,6 +474,32 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
       });
       expect(results.map((r) => r.entry.id)).toEqual([plain.id, stale.id]);
       expect(results[1].breakdown!.churnStaleMultiplier).toBe(CHURN_STALE_RANK_MULTIPLIER);
+    } finally {
+      fs.rmSync(hippoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps the penalty when a churn-stale hit is alone in the physics pool (pool normalisation)', async () => {
+    const hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-churn-pool-'));
+    try {
+      initStore(hippoRoot);
+      const plain = createMemory('flywheel torque limits', { tags: [] });
+      const stale = createMemory('flywheel torque limits', { tags: [CHURN_STALE_TAG] });
+      writeEntry(hippoRoot, plain);
+      writeEntry(hippoRoot, stale);
+      const db = openHippoDb(hippoRoot);
+      try {
+        savePhysicsState(db, [{
+          memoryId: stale.id, position: [1, 0, 0, 0], velocity: [0, 0, 0, 0], mass: 1.0, charge: 0,
+          temperature: 0.5, lastSimulation: new Date().toISOString(),
+        }]);
+      } finally {
+        db.close();
+      }
+      const results = await physicsSearch('flywheel torque', [stale, plain], { hippoRoot, queryEmbedding: [1, 0, 0, 0] });
+      const staleScore = results.find((r) => r.entry.id === stale.id)!.score;
+      expect(staleScore).toBeCloseTo(CHURN_STALE_RANK_MULTIPLIER, 5);
+      expect(results[0].entry.id).toBe(plain.id);
     } finally {
       fs.rmSync(hippoRoot, { recursive: true, force: true });
     }
