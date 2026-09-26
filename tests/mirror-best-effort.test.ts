@@ -10,9 +10,9 @@ let root: string;
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mirror-'));
   initStore(root);
-  // A directory where index.json belongs makes every index mirror write fail after the COMMIT.
-  fs.rmSync(path.join(root, 'index.json'), { force: true });
-  fs.mkdirSync(path.join(root, 'index.json'));
+  // A non-empty store short-circuits initStore's legacy-markdown bootstrap scan,
+  // which would otherwise try to read the blocking directory below as a .md file.
+  writeEntry(root, createMemory('seed row so legacy bootstrap never rescans'));
   vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
@@ -21,18 +21,28 @@ afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
+// writes no longer touch index.json per call (only rebuildIndex does), so the
+// failure vector is the markdown mirror: a directory at the entry's own .md path.
+function blockMarkdownMirror(entryId: string, layer: string): void {
+  fs.mkdirSync(path.join(root, layer, `${entryId}.md`));
+}
+
 describe('mirror write failures after COMMIT', () => {
   it('writeEntry keeps the committed row and warns instead of throwing', () => {
     const entry = createMemory('mirror failure keeps the row');
+    blockMarkdownMirror(entry.id, entry.layer);
     expect(() => writeEntry(root, entry)).not.toThrow();
     expect(readEntry(root, entry.id)?.content).toBe('mirror failure keeps the row');
-    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('index.json not refreshed'));
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining(`${entry.id}.md`));
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('not refreshed'));
   });
 
   it('batchWriteAndDelete and deleteEntry report their committed changes as done', () => {
     const entry = createMemory('batch row survives a mirror failure');
+    blockMarkdownMirror(entry.id, entry.layer);
     expect(() => batchWriteAndDelete(root, [entry], [])).not.toThrow();
     expect(readEntry(root, entry.id)).not.toBeNull();
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining(`${entry.id}.md`));
     expect(deleteEntry(root, entry.id)).toBe(true);
     expect(readEntry(root, entry.id)).toBeNull();
   });

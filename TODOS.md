@@ -182,7 +182,7 @@ Cross-cutting tickets surfaced by the week-of-2026-05-21 retro. Small, automate-
 ### CD13 follow-ups (2026-09-25)
 
 - [ ] **`hippo tokens` has the two gaps CD13's review fixed in `hippo failures`.** `--global` goes through `resolveAuthRoot`, whose `initGlobal()` creates the global store just to read a report (`src/cli.ts:4328`, `8392-8396`). `--days` past the ledger's 90-day retention (`TOKEN_LEDGER_RETENTION_DAYS`) prints the longer window with no note that older rows are gone (`src/cli.ts:4340-4345`). `cmdFailures` (`src/cli.ts:4361`) has the shape to copy: it never creates a store, and its header says "(rows are kept 90 days)".
-- [ ] **`tests/server-outcome-route.test.ts` "1000 ids at boundary" flakes in full local runs.** It takes 12-14 s alone and 25-30 s in a full suite on the work box, against a 30 s budget. The cost is about 13 ms per missing-id lookup, the write path's per-call cost (`docs/evals/2026-09-25-write-path-cost.md`). Re-time it after the write-path fix rather than raising the timeout.
+- [ ] **`tests/server-outcome-route.test.ts` "1000 ids at boundary" flakes in full local runs.** It takes 12-14 s alone and 25-30 s in a full suite on the work box, against a 30 s budget. Re-timed after the write-path fix (2026-09-26, home box): 3.07 s alone before, 2.9 to 3.0 s after, 3.8 s in a full suite. It was never a write cost: the 997 missing ids never write. `outcome()` (`src/api.ts:1697`) calls `readEntry` per id, and each call runs `initStore` plus a database open and close. Fix: open the database once per request and look the ids up on it.
 
 ---
 

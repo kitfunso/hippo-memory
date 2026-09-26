@@ -137,7 +137,7 @@ contribute to reward weaken naturally without an explicit forgetting mechanism.
 ├── conflicts/           # Detected contradictions needing resolution
 │   └── conflict_*.md
 ├── hippo.db             # Source of truth: SQLite backbone
-├── index.json           # Derived compatibility mirror for fast lookup
+├── index.json           # Export written only by rebuildIndex(); writes do not refresh it
 └── stats.json           # Derived compatibility mirror for stats/history
 ```
 

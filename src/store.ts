@@ -1275,6 +1275,7 @@ function upsertEntryRow(
   if (!bypassRejectionGuard) {
     checkRejectionGuard(db, entry.tenantId ?? 'default', entry.id, entry.content);
   }
+  const isNewRow = db.prepare(`SELECT 1 FROM memories WHERE id = ?`).get(entry.id) === undefined;
   db.prepare(`
     INSERT INTO memories(
       id, created, last_retrieved, retrieval_count, strength, half_life_days, layer,
@@ -1370,13 +1371,13 @@ function upsertEntryRow(
     entry.dag_level_3_built_at ?? null,
   );
 
-  syncFtsRow(db, entry);
+  syncFtsRow(db, entry, isNewRow);
 }
 
-function syncFtsRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry): void {
+function syncFtsRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry, isNewRow = false): void {
   if (!isFtsAvailable(db)) return;
   try {
-    db.prepare(`DELETE FROM memories_fts WHERE id = ?`).run(entry.id);
+    if (!isNewRow) db.prepare(`DELETE FROM memories_fts WHERE id = ?`).run(entry.id);
     db.prepare(`INSERT INTO memories_fts(id, content, tags) VALUES (?, ?, ?)`).run(
       entry.id,
       entry.content,
@@ -1396,13 +1397,8 @@ function deleteFtsRow(db: ReturnType<typeof openHippoDb>, id: string): void {
   }
 }
 
-/**
- * Derive the current `HippoIndex` (entries + last-retrieval/trace lockstep
- * meta) from SQLite, the source of truth. Exported (AT1) for the same
- * reason as `writeIndexMirror` below: `src/reject-flow.ts` needs to rebuild
- * the index mirror post-commit after a (possibly multi-row) reject removal,
- * without duplicating this query.
- */
+/** Derive the current `HippoIndex` from SQLite. Exported for `rebuildIndex`
+ *  (the only index.json writer) and the longmemeval benchmark. */
 export function buildIndexFromDb(db: ReturnType<typeof openHippoDb>): HippoIndex {
   // SAFETY: rows' shape matches the seven columns named in the SELECT below.
   const rows = db.prepare(`SELECT id, created, last_retrieved, strength, layer, tags_json, pinned FROM memories ORDER BY created ASC, id ASC`).all() as Array<{
@@ -1469,13 +1465,8 @@ function buildStatsFromDb(db: ReturnType<typeof openHippoDb>): LegacyStats {
   };
 }
 
-/**
- * Write the `index.json` mirror file for a given (already-derived) index.
- * Exported (AT1) so `src/reject-flow.ts` can replicate `deleteEntry`'s exact
- * post-commit "removeEntryMirrors then rewrite the index once" sequence for
- * the reject verb's (possibly multi-row) removal, without duplicating
- * `buildIndexFromDb`'s query.
- */
+/** Write the `index.json` mirror file for an already-derived index. Exported for
+ *  `rebuildIndex` (the only index.json writer) and the longmemeval benchmark. */
 export function writeIndexMirror(hippoRoot: string, index: HippoIndex): void {
   mirrorBestEffort('index.json', () => fs.writeFileSync(path.join(hippoRoot, 'index.json'), JSON.stringify(index, null, 2), 'utf8'));
 }
@@ -1512,11 +1503,10 @@ function syncMirrorFiles(hippoRoot: string, db: ReturnType<typeof openHippoDb>):
   `).all() as MemoryConflictRow[];
   mirrorBestEffort('conflict mirrors', () => writeConflictMirrors(hippoRoot, conflicts.map(rowToMemoryConflict)));
 
-  writeIndexMirror(hippoRoot, buildIndexFromDb(db));
   writeStatsMirror(hippoRoot, buildStatsFromDb(db));
 }
 
-/** Load the derived index from SQLite. Read-only: writers refresh index.json, so readers never race on it. */
+/** Load the derived index from SQLite. Read-only: index.json is only ever written by `rebuildIndex`. */
 export function loadIndex(hippoRoot: string): HippoIndex {
   initStore(hippoRoot);
   const db = openHippoDb(hippoRoot);
@@ -1534,10 +1524,8 @@ export function loadIndex(hippoRoot: string): HippoIndex {
  * land atomically — callers (getContext, cmdRecall) fold a freshly-written
  * trace id into `index.last_trace_id` before calling this, relying on BOTH
  * meta keys committing together. Wrapped in BEGIN/COMMIT so a crash or a
- * mid-write failure can never advance one key without the other. The
- * filesystem mirror write stays AFTER commit — the DB is the source of
- * truth, the mirror is best-effort (matches every other per-call-handle
- * site's convention).
+ * mid-write failure can never advance one key without the other. index.json
+ * is left untouched; only `rebuildIndex` writes it.
  */
 export function saveIndex(hippoRoot: string, index: HippoIndex): void {
   initStore(hippoRoot);
@@ -1552,7 +1540,6 @@ export function saveIndex(hippoRoot: string, index: HippoIndex): void {
       try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
       throw error;
     }
-    writeIndexMirror(hippoRoot, buildIndexFromDb(db));
   } finally {
     closeHippoDb(db);
   }
@@ -1629,7 +1616,7 @@ export function writeEntry(
   try {
     writeEntryDbOnly(db, stamped, opts);
     opts?.afterCommit?.();
-    writeEntryMirrors(hippoRoot, db, stamped);
+    writeEntryMirrors(hippoRoot, stamped);
   } catch (error) {
     // AT1 (plan §3): writeEntryDbOnly's own SAVEPOINT has already unwound by
     // the time this catch runs, so the refusal audit lands post-rollback in
@@ -1705,19 +1692,9 @@ export function writeEntryDbOnly(
   }
 }
 
-/**
- * Filesystem mirrors path. Caller passes `hippoRoot` + an open `db` handle
- * (used by `buildIndexFromDb` to derive the index from the source of truth).
- * MUST be invoked AFTER the outer transaction commits — a mirror write
- * during a tx that subsequently rolls back would leave orphan markdown.
- */
-export function writeEntryMirrors(
-  hippoRoot: string,
-  db: DatabaseSyncLike,
-  entry: MemoryEntry,
-): void {
+/** Markdown mirror path, invoked AFTER commit (a rolled-back tx must leave no orphan markdown). */
+export function writeEntryMirrors(hippoRoot: string, entry: MemoryEntry): void {
   mirrorBestEffort(`${entry.id}.md`, () => writeMarkdownMirror(hippoRoot, entry));
-  writeIndexMirror(hippoRoot, buildIndexFromDb(db));
 }
 
 /**
@@ -2068,7 +2045,6 @@ export function deleteEntry(
     if (!result) return false;
 
     purgeMirrorBestEffort(hippoRoot, id, false, 'deleteEntry');
-    writeIndexMirror(hippoRoot, buildIndexFromDb(db));
     return true;
   } finally {
     closeHippoDb(db);
@@ -2260,7 +2236,6 @@ export function batchWriteAndDelete(
       for (const entry of written) writeMarkdownMirror(hippoRoot, entry);
     });
     for (const id of removedIds) purgeMirrorBestEffort(hippoRoot, id, false, 'batchWriteAndDelete');
-    writeIndexMirror(hippoRoot, buildIndexFromDb(db));
     return removedIds;
   } catch (error) {
     try { db.exec('ROLLBACK'); } catch { /* ignore */ }
@@ -2476,7 +2451,9 @@ export function rebuildIndex(hippoRoot: string): HippoIndex {
     }
 
     syncMirrorFiles(hippoRoot, db);
-    return buildIndexFromDb(db);
+    const index = buildIndexFromDb(db);
+    writeIndexMirror(hippoRoot, index);
+    return index;
   } finally {
     closeHippoDb(db);
   }

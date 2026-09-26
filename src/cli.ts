@@ -653,7 +653,7 @@ function cmdInit(hippoRoot: string, flags: Record<string, string | boolean | str
     initStore(hippoRoot);
     console.log('Initialized Hippo at', hippoRoot);
     console.log('   Directories: buffer/ episodic/ semantic/ conflicts/');
-    console.log('   Files: hippo.db index.json stats.json');
+    console.log('   Files: hippo.db stats.json');
   }
 
   const globalRoot = getGlobalRoot();
