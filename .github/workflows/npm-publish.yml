@@ -2,7 +2,8 @@ name: Publish to npm
 
 # Publishes hippo-memory from CI with npm provenance: a signed record of the
 # commit and workflow that built the package, shown on npmjs.com and checked
-# by `npm audit signatures`. Trigger: push a v*.*.* tag cut from master.
+# by `npm audit signatures`. Trigger: push a v*.*.* tag, cut from master for a
+# release or from release/<x.y> for a backport (docs/release-policy.md).
 # Python has its own tag scheme (python-v*.*.*) in pypi-publish.yml.
 #
 # One-time setup (npmjs.com, package settings > Trusted publishing): add a
@@ -40,6 +41,14 @@ jobs:
           if [ "$GITHUB_REF_NAME" != "$want" ]; then
             echo "tag $GITHUB_REF_NAME does not match package.json ($want)"; exit 1
           fi
+      - name: Pick the publish dist-tag
+        id: disttag
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          tag="$(node scripts/publish-dist-tag.mjs "$version")"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
       # prepublishOnly runs the full release gate: manifest versions, changelog,
       # build:all, the openclaw smoke install and the test suite.
-      - run: npm publish --provenance --access public
+      - run: npm publish --provenance --access public --tag "$DIST_TAG"
+        env:
+          DIST_TAG: ${{ steps.disttag.outputs.tag }}

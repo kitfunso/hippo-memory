@@ -1750,15 +1750,19 @@ Existing items are named by their IDs; new ones are EV1 to EV5 below.
 - **Seats:** counted on trust, with an annual true-up.
 - **On expiry:** a warning period, then the enterprise features turn off. Memories are never deleted or locked, so the MIT core keeps working on the same store.
 
-#### EV3. Release artefacts a security team checks [planned, 2-3d]
+#### EV3. Release artefacts a security team checks [partly shipped, 1.47.0-1.48.0]
 - A software bill of materials (`npm sbom`, CycloneDX) attached to every release.
 - npm provenance: done in PR #227, needs the npm setting turned on.
 - A signed container image for the server tier.
 - A written support window: each `stable` minor version is supported for 12 months.
 
-#### EV4. Support bundle [planned, 2-3d]
+**Status:** three of the four are done. npm provenance ships from 1.47.0; 1.46.0 has none. From 1.48.0, `.github/workflows/sbom.yml` attaches `hippo-memory-<version>.cdx.json` to each GitHub release: a CycloneDX SBOM of the runtime packages in the tarball, the dashboard's bundled ones included. v1.47.0's was backfilled by hand and still lists `@types/three`, which that tag had under the dashboard's dependencies. The support window is written in `docs/release-policy.md` and `SECURITY.md`: 12 months per `stable` minor from its promotion, at most one promotion a calendar quarter, and security and data-loss fixes backported as patch releases under `maint-<x.y>`. Still planned: the signed container image; there is no server-tier image to sign yet.
+
+#### EV4. Support bundle [shipped, 1.48.0]
 - **The command:** `hippo support-bundle` writes a redacted archive for a support ticket: versions, `hippo doctor --json`, config with secrets removed, recent logs, schema version and store counts.
 - **Never included:** memory content, unless the customer adds it explicitly.
+
+**Status:** `hippo support-bundle` writes one JSON file rather than an archive, so the customer can read it before sending it. It holds versions, `hippo doctor`'s report, each store's schema version, file sizes and table counts, the effective config with secret fields redacted, the names (never the values) of the environment variables hippo reads, and the log files' names and sizes. It opens each store read-only and reads no memory text. Log lines are the explicit opt-in: `--include-logs` adds the last 200 lines of each log with known secret shapes removed, and those lines can quote memory text. `hippo doctor` became read-only in the same release, since the bundle embeds its report.
 
 #### EV5. Admin documentation and security overview [planned, 1-2w]
 - An install, upgrade and rollback guide for the server tier.

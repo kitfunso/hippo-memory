@@ -11,7 +11,6 @@
     "test:ui": "vitest --ui"
   },
   "dependencies": {
-    "@types/three": "^0.184.0",
     "d3-force": "^3.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -24,6 +23,7 @@
     "@types/d3-force": "^3.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/three": "^0.184.0",
     "@vitejs/plugin-react": "^4.3.0",
     "@vitest/ui": "^4.1.7",
     "jsdom": "^29.1.1",

@@ -629,6 +629,7 @@ hippo watch "npm run build"
 | `hippo dormant restore <id>` | Bring a dormant memory back to active memory |
 | `hippo dormant forget <id>` | Delete a dormant memory permanently |
 | `hippo doctor [--json]` | Check the install: Node, store, schema, sleep, agent hooks; each problem names its fix |
+| `hippo support-bundle [--out <file>] [--include-logs]` | Write a redacted JSON file for a support ticket: versions, doctor checks, config, store counts and log names, never memory text; `--include-logs` adds each log's last 200 lines, which can quote it |
 | `hippo tokens [--days n]` | Estimated tokens of memory text handed to agents, per surface, and what skipping unchanged hook blocks saved |
 | `hippo failures [--days n]` | Failed tool calls the capture-error hook saw, by outcome, and how many errors first happened in another session |
 | `hippo embed` | Embed all memories for semantic search |

@@ -9,8 +9,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { findHippoStoreDir } from './project-identity.js';
 import { getGlobalRoot } from './shared.js';
-import { isInitialized, loadStats } from './store.js';
-import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion } from './db.js';
+import { isInitialized } from './store.js';
+import { openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, countTableRows, IncompatibleBinaryError, type DatabaseSyncLike } from './db.js';
 import { isEmbeddingAvailable } from './embeddings.js';
 import type { JsonValue } from './working-memory.js';
 
@@ -68,13 +68,42 @@ function readJson(file: string): JsonValue | null {
   }
 }
 
-function countRows(db: ReturnType<typeof openHippoDb>, table: string): number | null {
+// Migration 46 creates failure_log; a read-only open no longer creates it on an older store.
+const FAILURE_LOG_SCHEMA = 46;
+
+/** The failed-tool-call count over the last 7 days, or why it could not be read. */
+function failuresCheck(db: DatabaseSyncLike, since: string, schemaVersion: number): DoctorCheck {
   try {
-    // SAFETY: COUNT(*) returns one row with one numeric column.
-    const row = db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number } | undefined;
-    return Number(row?.n ?? 0);
-  } catch {
-    return null;
+    // SAFETY: COUNT aggregate row.
+    const row = db.prepare(`SELECT COUNT(*) AS n FROM failure_log WHERE ts >= ?`).get(since) as { n: number } | undefined;
+    return { id: 'failures', status: 'info', detail: `${Number(row?.n ?? 0)} failed tool calls logged in 7 days (hippo failures for detail)` };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (!message.includes('no such table')) {
+      return { id: 'failures', status: 'warn', detail: `cannot read the failure log: ${message}` };
+    }
+    return schemaVersion < FAILURE_LOG_SCHEMA
+      ? { id: 'failures', status: 'info', detail: 'no failure log yet (hippo creates it on the next write)' }
+      : { id: 'failures', status: 'warn', detail: 'the failure_log table is missing, so failed tool calls are not being logged' };
+  }
+}
+
+/** How long ago the store last slept (consolidated), or why that history could not be read. */
+function sleepCheck(db: DatabaseSyncLike, now: Date): DoctorCheck {
+  try {
+    // SAFETY: row's shape matches the single `timestamp` column named in the SELECT above.
+    const row = db.prepare(`SELECT timestamp FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT 1`).get() as { timestamp?: string } | undefined;
+    const when = row?.timestamp !== undefined ? Date.parse(row.timestamp) : Number.NaN;
+    if (Number.isNaN(when)) {
+      return { id: 'sleep', status: 'warn', detail: 'hippo has never slept (consolidated) in this store', fix: 'hippo sleep   (the session-end hook runs it automatically)' };
+    }
+    const days = Math.floor((now.getTime() - when) / 86_400_000);
+    return days > 7
+      ? { id: 'sleep', status: 'warn', detail: `last sleep ${days} days ago`, fix: 'hippo sleep, and check the session-end hook is installed' }
+      : { id: 'sleep', status: 'pass', detail: `last sleep ${days === 0 ? 'today' : `${days} day${days === 1 ? '' : 's'} ago`}` };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { id: 'sleep', status: 'info', detail: `sleep history unavailable (${message})` };
   }
 }
 
@@ -94,9 +123,12 @@ export function runDoctor(opts: DoctorOpts): DoctorReport {
   const globalRoot = getGlobalRoot();
   const hasGlobal = isInitialized(globalRoot);
   let store: string | null = null;
-  if (local !== null) {
+  if (local !== null && isInitialized(local)) {
     store = local;
     checks.push({ id: 'store', status: 'pass', detail: `project store at ${local}${hasGlobal ? ` (global store at ${globalRoot} too)` : ''}` });
+  } else if (local !== null) {
+    // The walk stops at the first .hippo it finds, so a bare one (no hippo.db) blocks a parent or global store too.
+    checks.push({ id: 'store', status: 'fail', detail: `${local} has no hippo.db, so hippo commands run here stop at it`, fix: `run hippo init in ${path.dirname(local)}, or remove that .hippo folder` });
   } else if (hasGlobal) {
     store = globalRoot;
     checks.push({ id: 'store', status: 'warn', detail: `no project store here; using the global store at ${globalRoot}`, fix: 'hippo init   (in the project root)' });
@@ -105,9 +137,9 @@ export function runDoctor(opts: DoctorOpts): DoctorReport {
   }
 
   if (store !== null) {
-    let db: ReturnType<typeof openHippoDb> | null = null;
+    let db: DatabaseSyncLike | null = null;
     try {
-      db = openHippoDb(store);
+      db = openHippoDbReadOnly(store);
       const have = getSchemaVersion(db);
       const want = getCurrentSchemaVersion();
       checks.push(have === want
@@ -115,8 +147,8 @@ export function runDoctor(opts: DoctorOpts): DoctorReport {
         : have > want
           ? { id: 'schema', status: 'fail', detail: `database schema v${have} is newer than this hippo (v${want})`, fix: 'npm install -g hippo-memory@latest' }
           : { id: 'schema', status: 'info', detail: `database schema v${have}; hippo migrates it to v${want} on the next write` });
-      const memories = countRows(db, 'memories');
-      const dormant = countRows(db, 'dormant_memories');
+      const memories = countTableRows(db, 'memories');
+      const dormant = countTableRows(db, 'dormant_memories');
       const memoryCheck: DoctorCheck = { id: 'memories', status: 'info', detail: `${memories ?? '?'} memories${dormant !== null ? `, ${dormant} dormant` : ''}` };
       if (memories === 0) {
         memoryCheck.status = 'warn';
@@ -131,36 +163,17 @@ export function runDoctor(opts: DoctorOpts): DoctorReport {
       } catch {
         checks.push({ id: 'tokens', status: 'info', detail: 'no token ledger yet (created on the next write)' });
       }
-      try {
-        // SAFETY: COUNT aggregate row.
-        const row = db.prepare(`SELECT COUNT(*) AS n FROM failure_log WHERE ts >= ?`).get(since) as { n: number } | undefined;
-        checks.push({ id: 'failures', status: 'info', detail: `${Number(row?.n ?? 0)} failed tool calls logged in 7 days (hippo failures for detail)` });
-      } catch {
-        // Opening the store migrates it, so a missing table was dropped: the hook is logging nothing.
-        checks.push({ id: 'failures', status: 'warn', detail: 'the failure_log table is missing, so failed tool calls are not being logged' });
-      }
+      checks.push(failuresCheck(db, since, have));
+      checks.push(sleepCheck(db, now));
     } catch (err) {
-      checks.push({ id: 'schema', status: 'fail', detail: `cannot open the database: ${err instanceof Error ? err.message : String(err)}`, fix: 'check file permissions on the .hippo folder' });
+      checks.push({
+        id: 'schema',
+        status: 'fail',
+        detail: `cannot open the database: ${err instanceof Error ? err.message : String(err)}`,
+        fix: err instanceof IncompatibleBinaryError ? 'npm install -g hippo-memory@latest' : 'check file permissions on the .hippo folder',
+      });
     } finally {
       if (db !== null) closeHippoDb(db);
-    }
-
-    try {
-      const runs = loadStats(store)['consolidation_runs'];
-      const last = Array.isArray(runs) && runs.length > 0 ? runs[runs.length - 1] : null;
-      // SAFETY: the constructor check above narrows `last` to a plain JSON object.
-      const ts = last !== null && last !== undefined && !Array.isArray(last) && last.constructor === Object ? (last as { timestamp?: JsonValue }).timestamp : undefined;
-      const when = ts !== undefined && ts !== null ? Date.parse(String(ts)) : Number.NaN;
-      if (Number.isNaN(when)) {
-        checks.push({ id: 'sleep', status: 'warn', detail: 'hippo has never slept (consolidated) in this store', fix: 'hippo sleep   (the session-end hook runs it automatically)' });
-      } else {
-        const days = Math.floor((now.getTime() - when) / 86_400_000);
-        checks.push(days > 7
-          ? { id: 'sleep', status: 'warn', detail: `last sleep ${days} days ago`, fix: 'hippo sleep, and check the session-end hook is installed' }
-          : { id: 'sleep', status: 'pass', detail: `last sleep ${days === 0 ? 'today' : `${days} day${days === 1 ? '' : 's'} ago`}` });
-      }
-    } catch {
-      checks.push({ id: 'sleep', status: 'info', detail: 'sleep history unavailable' });
     }
   }
 

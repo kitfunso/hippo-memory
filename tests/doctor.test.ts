@@ -3,14 +3,19 @@
  * Real stores, real settings files, the built CLI for the exit code.
  */
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { initStore, writeEntry } from '../src/store.js';
 import { createMemory } from '../src/memory.js';
 import { runDoctor, formatDoctor } from '../src/doctor.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, setMeta } from '../src/db.js';
+
+function sha256(file: string): string {
+  return createHash('sha256').update(readFileSync(file)).digest('hex');
+}
 
 const HIPPO_JS = resolve(__dirname, '..', 'bin', 'hippo.js');
 const dirs: string[] = [];
@@ -99,5 +104,61 @@ describe('hippo doctor', () => {
     }
     expect(status).toBe(1);
     expect(JSON.parse(out).checks.find((c: { id: string }) => c.id === 'store').status).toBe('fail');
+  });
+
+  it('leaves an older store as it found it', () => {
+    const cwd = tmp('doctor-readonly-');
+    process.env.HIPPO_HOME = join(cwd, 'global');
+    const hippoRoot = join(cwd, '.hippo');
+    initStore(hippoRoot);
+    const seed = openHippoDb(hippoRoot);
+    setMeta(seed, 'schema_version', '45');
+    seed.exec('DROP TABLE failure_log');
+    closeHippoDb(seed); // last close checkpoints the WAL, so hippo.db alone is a stable hash target
+
+    const before = sha256(join(hippoRoot, 'hippo.db'));
+    const r = runDoctor({ cwd, home: cwd, version: 'test' });
+    expect(r.checks.find((c) => c.id === 'schema')).toMatchObject({ status: 'info', detail: expect.stringContaining(`v${getCurrentSchemaVersion()}`) });
+    expect(r.checks.find((c) => c.id === 'failures')).toMatchObject({ status: 'info', detail: 'no failure log yet (hippo creates it on the next write)' });
+    expect(sha256(join(hippoRoot, 'hippo.db'))).toBe(before);
+
+    const check = openHippoDbReadOnly(hippoRoot);
+    expect(getSchemaVersion(check)).toBe(45);
+    closeHippoDb(check);
+  });
+
+  it('flags a bare .hippo folder and creates nothing', () => {
+    const cwd = tmp('doctor-bare-');
+    process.env.HIPPO_HOME = join(cwd, 'global');
+    mkdirSync(join(cwd, '.hippo'));
+    const r = runDoctor({ cwd, home: cwd, version: 'test' });
+    const store = r.checks.find((c) => c.id === 'store')!;
+    expect(store.status).toBe('fail');
+    expect(store.detail).toMatch(/\.hippo has no hippo\.db, so hippo commands run here stop at it$/);
+    expect(existsSync(join(cwd, '.hippo', 'hippo.db'))).toBe(false);
+    expect(r.checks.find((c) => c.id === 'schema')).toBeUndefined();
+  });
+
+  it('openHippoDbReadOnly refuses writes', () => {
+    const cwd = tmp('doctor-ro-');
+    process.env.HIPPO_HOME = join(cwd, 'global');
+    const hippoRoot = join(cwd, '.hippo');
+    initStore(hippoRoot);
+    const db = openHippoDbReadOnly(hippoRoot);
+    expect(() => db.exec('CREATE TABLE x (y)')).toThrow(/readonly/i);
+    closeHippoDb(db);
+  });
+
+  it('a store that needs a newer binary names the upgrade', () => {
+    const cwd = tmp('doctor-incompat-');
+    process.env.HIPPO_HOME = join(cwd, 'global');
+    const hippoRoot = join(cwd, '.hippo');
+    initStore(hippoRoot);
+    const seed = openHippoDb(hippoRoot);
+    setMeta(seed, 'min_compatible_binary', '99.0.0');
+    closeHippoDb(seed);
+
+    const r = runDoctor({ cwd, home: cwd, version: 'test' });
+    expect(r.checks.find((c) => c.id === 'schema')).toMatchObject({ status: 'fail', fix: 'npm install -g hippo-memory@latest' });
   });
 });

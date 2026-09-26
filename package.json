@@ -34,6 +34,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "oxlint",
+    "sbom": "node scripts/sbom.mjs",
     "audit:security": "npm audit --audit-level=high && npm --prefix ui audit --audit-level=high",
     "postinstall": "node scripts/postinstall.cjs",
     "smoke:pack": "node scripts/smoke-pack.mjs",

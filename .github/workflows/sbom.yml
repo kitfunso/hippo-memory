@@ -1,0 +1,70 @@
+name: Release SBOM
+
+# Attaches a CycloneDX SBOM (scripts/sbom.mjs) to every GitHub release.
+# workflow_dispatch backfills a tag cut before this workflow existed (e.g.
+# v1.47.0): the first checkout stays on this workflow's own commit for the script.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to attach an SBOM to (e.g. v1.47.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write   # gh release upload needs to attach an asset
+
+jobs:
+  sbom:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout script
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Resolve and validate tag
+        id: tag
+        env:
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+              echo "::error::'$TAG' is not a v<major>.<minor>.<patch> npm release tag."
+              exit 1
+            fi
+            echo "::notice::'$TAG' is not an npm release tag (e.g. a python-v* SDK release); skipping."
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "proceed=true" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout release tag
+        if: steps.tag.outputs.proceed == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+          path: target
+          persist-credentials: false
+
+      - name: Set up Node
+        if: steps.tag.outputs.proceed == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Build and attach SBOM
+        if: steps.tag.outputs.proceed == 'true'
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          FILE="hippo-memory-${TAG#v}.cdx.json"
+          node scripts/sbom.mjs --dir target --out "$FILE"
+          gh release upload "$TAG" "$FILE" --clobber
