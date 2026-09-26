@@ -1,6 +1,6 @@
 {
   "name": "hippo-memory",
-  "version": "1.48.0",
+  "version": "1.49.0",
   "description": "Biologically-inspired memory for AI agents. Zero runtime deps, SQLite, MCP server, and an opt-in hosted TypeSafe Jev reranker. Decay, retrieval strengthening, consolidation.",
   "mcpName": "io.github.kitfunso/hippo-memory",
   "type": "module",

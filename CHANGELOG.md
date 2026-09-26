@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.49.0 - 2026-09-26
+
+### Added
+
+- **Scope grants let a member API key read a restricted scope it is entitled to.** `hippo auth grant <key_id> <scope>` and `hippo auth ungrant <key_id> <scope>` add or remove one grant (admin only, same tenant, restricted scopes only, each one audited). A member key with a grant can name that scope over HTTP and MCP; without one it still gets 403. Schema v47 adds the `api_key_scope_grants` table.
+
+### Security
+
+- **Derived memories keep the scope of their sources.** Consolidation merges, DAG summaries and profiles, extracted facts, auto-promoted traces and supersede successors used to land with no scope, so text from a private channel reached every caller through default recall. They now carry the source's restricted scope, and a derived memory is never built from two different restricted scopes or from restricted and unrestricted sources together. Rows written before this release keep their old scope. Dedupe also stays inside one restricted scope, so a private copy can no longer delete the readable one during sleep.
+- **Project brief refresh no longer quotes private memories.** A brief has no scope and every key can list it, so receipts in a restricted scope are left out of the digest.
+- **A private scope written in mixed case (`Slack:Private:C1`) is now hidden everywhere.** The SQL recall filter already hid it but the JS filter used by MCP recall did not, so it reached callers with no scope. Grants on revoked keys are refused.
+- **`GET /v1/audit?tenant=` for another tenant now needs an admin key.** A member-role key could read any tenant's audit log, including the host-wide `__host__` rows, by passing its name. It now gets a 403; reading its own tenant is unchanged.
+- **Support-bundle redaction catches `BEARER` and `bearer` tokens in any case.** The strict redactor only matched `Bearer`, so an upper-case header in a log survived into `hippo support-bundle --include-logs`.
+
 ## 1.48.0 - 2026-09-26
 
 ### Added
