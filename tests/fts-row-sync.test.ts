@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { initStore, writeEntry } from '../src/store.js';
+import { deleteEntry, initStore, writeEntry } from '../src/store.js';
 import { createMemory } from '../src/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
@@ -40,5 +40,13 @@ describe('full-text row per memory', () => {
     writeEntry(root, entry);
     writeEntry(root, { ...entry, content: 'second version' });
     expect(ftsContents(entry.id)).toEqual(['second version']);
+  });
+
+  it('deleting then rewriting the same id leaves one full-text row', () => {
+    const entry = createMemory('before delete');
+    writeEntry(root, entry);
+    expect(deleteEntry(root, entry.id)).toBe(true);
+    writeEntry(root, { ...entry, content: 'after delete' });
+    expect(ftsContents(entry.id)).toEqual(['after delete']);
   });
 });
