@@ -68,9 +68,9 @@ const HIPPO_JS = path.join(REPO, 'bin', 'hippo.js');
 export const ARMS = ['no-memory', 'hippo', 'random-text', 'stale-memory'];
 
 // Loading or validating a tasks file never needs dist/; only a real run does.
-let hippo = null;
+let hippoLib = null;
 async function loadHippo() {
-  if (hippo) return hippo;
+  if (hippoLib) return hippoLib;
   try {
     const [{ installJsonHooks }, { openHippoDb, closeHippoDb }, { tokensBySession }, { loadAllEntries, isInitialized }] = await Promise.all([
       import('../../dist/hooks.js'),
@@ -78,11 +78,11 @@ async function loadHippo() {
       import('../../dist/token-ledger.js'),
       import('../../dist/store.js'),
     ]);
-    hippo = { installJsonHooks, openHippoDb, closeHippoDb, tokensBySession, loadAllEntries, isInitialized };
+    hippoLib = { installJsonHooks, openHippoDb, closeHippoDb, tokensBySession, loadAllEntries, isInitialized };
   } catch (err) {
     throw new Error(`run npm run build first (ab-run needs dist/): ${err.message}`);
   }
-  return hippo;
+  return hippoLib;
 }
 
 // Environment a child Claude Code session must not inherit: a parent
@@ -129,7 +129,7 @@ function hippoHookSettings(tmpHome) {
   process.env.HOME = tmpHome;
   process.env.USERPROFILE = tmpHome;
   try {
-    hippo.installJsonHooks('claude-code');
+    hippoLib.installJsonHooks('claude-code');
     return JSON.parse(fs.readFileSync(path.join(tmpHome, '.claude', 'settings.json'), 'utf8'));
   } finally {
     for (const [k, v] of Object.entries(saved)) {
@@ -249,21 +249,21 @@ function goldLines(cacheDir, t) {
 }
 
 function storeLeaks(hippoRoot, lines) {
-  if (!hippo.isInitialized(hippoRoot) || lines.length === 0) return false;
-  const text = hippo.loadAllEntries(hippoRoot).map((e) => e.content).join('\n');
+  if (!hippoLib.isInitialized(hippoRoot) || lines.length === 0) return false;
+  const text = hippoLib.loadAllEntries(hippoRoot).map((e) => e.content).join('\n');
   return lines.some((l) => text.includes(l));
 }
 
 function hippoSentFor(hippoRoot, sessionId) {
-  if (!sessionId || !hippo.isInitialized(hippoRoot)) return null;
-  const db = hippo.openHippoDb(hippoRoot);
+  if (!sessionId || !hippoLib.isInitialized(hippoRoot)) return null;
+  const db = hippoLib.openHippoDb(hippoRoot);
   try {
-    const row = hippo.tokensBySession(db, 'default', '1970-01-01T00:00:00.000Z').find((r) => r.sessionId === sessionId);
+    const row = hippoLib.tokensBySession(db, 'default', '1970-01-01T00:00:00.000Z').find((r) => r.sessionId === sessionId);
     return row ?? { sessionId, sent: 0, skipped: 0, injections: 0 };
   } catch {
     return null;
   } finally {
-    hippo.closeHippoDb(db);
+    hippoLib.closeHippoDb(db);
   }
 }
 

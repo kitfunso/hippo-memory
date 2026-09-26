@@ -177,6 +177,23 @@ describe('make-tasks (TE5)', () => {
     expect(skips[1].reason).toMatch(/too many changed code lines/);
   });
 
+  it('e2e support lines do not count toward the code-lines limit', () => {
+    const repo = mkdtempSync(join(tmpdir(), 'hippo-maketasks-e2elines-'));
+    dirs.push(repo);
+    const git = initRepo(repo);
+    mkdirSync(join(repo, 'tests'));
+    mkdirSync(join(repo, 'e2e'));
+    writeFileSync(join(repo, 'lib.js'), 'module.exports.add = (a, b) => a - b;\n');
+    git('add', '.');
+    git('commit', '-qm', 'initial');
+    writeFileSync(join(repo, 'lib.js'), 'module.exports.add = (a, b) => a + b;\n');
+    writeFileSync(join(repo, 'tests', 'add.test.js'), "require('../lib.js');\n");
+    writeFileSync(join(repo, 'e2e', 'support.js'), 'x;\n'.repeat(50));
+    git('add', '.');
+    git('commit', '-qm', 'fix: add, with e2e support');
+    expect(findCandidates(repo, { maxCodeLines: 10 })).toHaveLength(1);
+  });
+
   it('limits of 0 disable the scope gate', () => {
     const repo = repoWithScopeGateCandidates();
     const candidates = findCandidates(repo, { maxTestFiles: 0, maxCodeLines: 0 });

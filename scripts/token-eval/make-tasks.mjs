@@ -39,7 +39,7 @@ function git(args, cwd) {
   return execFileSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 1 << 28 }).trim();
 }
 
-/** Added + deleted lines of files git diff put outside `isTest`; binary rows (`-`) count 0. */
+/** Added + deleted lines of files outside `isTest`; binary rows (`-`) count 0. */
 function codeLinesChanged(repo, parent, sha, isTest) {
   const out = git(['diff', '--numstat', '--no-renames', parent, sha], repo);
   let lines = 0;
@@ -91,7 +91,7 @@ export function findCandidates(repo, {
       onSkip?.(candidate, `too many runnable test files: ${runFiles.length} > ${maxTestFiles}`);
       continue;
     }
-    const codeLines = codeLinesChanged(repo, parent, sha, (f) => re.test(f));
+    const codeLines = codeLinesChanged(repo, parent, sha, (f) => re.test(f) || E2E_PATTERN.test(f));
     if (maxCodeLines && codeLines > maxCodeLines) {
       onSkip?.(candidate, `too many changed code lines: ${codeLines} > ${maxCodeLines}`);
       continue;
@@ -220,5 +220,10 @@ function main() {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main();
+  try {
+    main();
+  } catch (err) {
+    console.error(err.message);
+    process.exit(1);
+  }
 }
