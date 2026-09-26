@@ -1,0 +1,36 @@
+=== locomo hippo365 ===
+         all n=1531 recall@10 52.1  all@10 47.7  recall@50 68.1  all@50 62.1  recall@200 81.8  all@200 74.7
+    temporal n=320  recall@10 63.3  all@10 60.3  recall@50 78.1  all@50 74.7  recall@200 88.7  all@200 86.2
+  single-hop n=841  recall@10 61.1  all@10 59.9  recall@50 76.6  all@50 75.9  recall@200 87.1  all@200 86.0
+   multi-hop n=281  recall@10 20.3  all@10 5.7  recall@50 40.7  all@50 16.4  recall@200 64.7  all@200 36.7
+ open-domain n=89   recall@10 27.6  all@10 20.2  recall@50 38.8  all@50 31.5  recall@200 60.2  all@200 47.2
+=== locomo hippo7 ===
+         all n=1531 recall@10 46.2  all@10 42.7  recall@50 67.3  all@50 61.5  recall@200 82.1  all@200 75.2
+    temporal n=320  recall@10 55.6  all@10 52.8  recall@50 76.6  all@50 73.8  recall@200 89.2  all@200 86.9
+  single-hop n=841  recall@10 55.3  all@10 54.2  recall@50 76.2  all@50 75.4  recall@200 87.0  all@200 85.9
+   multi-hop n=281  recall@10 15.9  all@10 5.3  recall@50 38.9  all@50 15.7  recall@200 65.7  all@200 38.4
+ open-domain n=89   recall@10 22.0  all@10 15.7  recall@50 39.2  all@50 31.5  recall@200 62.2  all@200 49.4
+=== locomo decayoff ===
+         all n=1531 recall@10 52.8  all@10 48.5  recall@50 68.7  all@50 62.8  recall@200 82.2  all@200 75.0
+    temporal n=320  recall@10 63.2  all@10 60.0  recall@50 78.4  all@50 75.3  recall@200 89.2  all@200 86.9
+  single-hop n=841  recall@10 62.0  all@10 60.9  recall@50 77.2  all@50 76.3  recall@200 87.4  all@200 86.2
+   multi-hop n=281  recall@10 21.0  all@10 6.4  recall@50 41.6  all@50 17.8  recall@200 65.6  all@200 37.4
+ open-domain n=89   recall@10 29.9  all@10 22.5  recall@50 40.4  all@50 32.6  recall@200 60.0  all@200 46.1
+=== locomo bm25 ===
+         all n=1531 recall@10 53.1  all@10 48.6  recall@50 69.4  all@50 63.6  recall@200 82.3  all@200 75.0
+    temporal n=320  recall@10 63.8  all@10 60.6  recall@50 78.7  all@50 75.9  recall@200 89.1  all@200 86.6
+  single-hop n=841  recall@10 62.1  all@10 60.9  recall@50 77.8  all@50 76.9  recall@200 87.2  all@200 86.1
+   multi-hop n=281  recall@10 21.8  all@10 7.1  recall@50 42.9  all@50 19.2  recall@200 66.2  all@200 37.7
+ open-domain n=89   recall@10 28.3  all@10 20.2  recall@50 41.4  all@50 32.6  recall@200 63.0  all@200 47.2
+=== locomo hippo365 minus bm25 ===
+minus baseline recall@10: -1.0 [-2.0, -0.0] n=1531
+minus baseline recall@50: -1.3 [-2.0, -0.6] n=1531
+minus baseline recall@200: -0.6 [-1.1, +0.0] n=1531
+=== locomo hippo7 minus bm25 ===
+minus baseline recall@10: -6.9 [-8.5, -5.4] n=1531
+minus baseline recall@50: -2.1 [-3.0, -1.3] n=1531
+minus baseline recall@200: -0.2 [-0.9, +0.5] n=1531
+=== locomo decayoff minus bm25 ===
+minus baseline recall@10: -0.3 [-1.0, +0.4] n=1531
+minus baseline recall@50: -0.7 [-1.2, -0.2] n=1531
+minus baseline recall@200: -0.2 [-0.6, +0.2] n=1531

@@ -81,3 +81,25 @@ The same for every arm: `gpt-5` for both, matching Mem0's published result files
 - **Batching.** Each answering subagent handles 40 questions from one arm. Arm A's batch i and arm B's batch i hold the same questions, so any carry-over between questions inside one agent affects both arms alike. Judges see a shuffled mix of both arms with no arm label.
 - **Scoring:** judge accuracy and the LoCoMo authors' F1. hippo minus bm25 is paired by question, with a 95% bootstrap interval.
 - **Published whatever the result:** `docs/evals/2026-09-24-public-benchmarks-sonnet-trial.md`.
+
+## Amendment 2 (2026-09-25, before any run at 365 days): the new default, and LongMemEval-S
+
+**Why.** The decay decision (`2026-09-24-decay-default-result.md`) moved the default to 365 days on master, and the Sonnet trial's own next step was to re-run once that landed. The paper needs public-benchmark evidence for the default it now reports. Paid models stay out: the registered gpt-5 run still waits, and nothing here costs money.
+
+**Arms,** all through `hippo-mem0-server.mjs` on one master build, no embeddings on any arm (recorded per run):
+- `hippo@365`: hippo's ranking at the new default;
+- `hippo@7`: the same ranking with a 7-day base half-life (the 1.45.0 default), set by an eval-only `--half-life-days` server flag;
+- `decay-off`: `hippo@365` with `HIPPO_ABLATE_DECAY=1`, a sensitivity check only;
+- `bm25`: BM25 alone.
+
+**Lane R, retrieval (no model calls).** Mem0's runner at `4b61c5d`, unchanged, `--predict-only`:
+- LoCoMo, categories 1 to 4, all questions with evidence turns: evidence recall at top 10, 50 and 200 (`evidence_recall.py`).
+- LongMemEval-S, all 500 questions, sessions dated as in the dataset: the share of each question's evidence turns (`has_answer`) whose text appears in the top 10, 50 and 200 memories. Reported overall and per question type; **knowledge-update** is named in advance as the type where superseded facts occur.
+
+**Lane A, answers (Sonnet, as Amendment 1).** Same prompts, cutoff, batching and blind judging as Amendment 1, arms `hippo@365` and `bm25`:
+- LoCoMo: the same 400-question sample (seed 1), so the Amendment 1 answers for `hippo@7` and `bm25` pair with it;
+- LongMemEval-S: all 500 questions, Mem0's LongMemEval answer and judge prompts at `4b61c5d`.
+
+**Primary comparison:** `hippo@365` minus `bm25`, paired by question, 95% bootstrap interval (4,000 draws), on LoCoMo evidence recall at top 10 and LongMemEval-S evidence recall at top 10. Reading, fixed now: **beats** if the lower bound is above 0 and the estimate is at least +3 pp; **trails** if the upper bound is below 0 and the estimate is at most -3 pp; **matches** if the whole interval lies inside ±3 pp; otherwise **unresolved**. Everything else is secondary and labelled so.
+
+**Scope stays as registered:** these benchmarks ingest once and ask once, apart from the dated sessions, so they test retrieval for answering, not the lifecycle. Every result is published in `docs/evals/2026-09-25-public-benchmarks-365.md`, whichever way it goes.

@@ -68,3 +68,7 @@ trajectories/
 benchmarks/lifecycle-stress/results-2*.json
 benchmarks/lifecycle-stress/labels/
 benchmarks/e1-lifecycle/raw/
+# public benchmark runs: prompts and runner predictions regenerate from the committed scripts
+benchmarks/public/results/*/predicted/
+benchmarks/public/results/**/answer_prompts/
+benchmarks/public/results/**/judge_prompts/

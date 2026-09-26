@@ -1,0 +1,19 @@
+=== LoCoMo: hippo@365 vs bm25 (re-judged) ===
+Authors' F1, all                 n=400  A  39.8  B  40.9  diff -1.0 [-3.1, +1.1]
+Judge accuracy, all              n=400  A  71.2  B  71.8  diff -0.5 [-3.5, +2.5]
+  F1 single-hop                  n=219  A  47.2  B  47.9  diff -0.6 [-3.5, +2.2]
+  judge single-hop               n=219  A  74.0  B  74.0  diff +0.0 [-3.7, +3.7]
+  F1 multi-hop                   n=73   A  23.2  B  24.6  diff -1.4 [-5.1, +2.8]
+  judge multi-hop                n=73   A  61.6  B  67.1  diff -5.5 [-15.1, +4.1]
+  F1 temporal                    n=83   A  40.2  B  40.1  diff +0.0 [-4.6, +4.7]
+  judge temporal                 n=83   A  74.7  B  68.7  diff +6.0 [+1.2, +12.0]
+  F1 open-domain                 n=25   A  22.6  B  29.4  diff -6.7 [-18.7, +2.0]
+  judge open-domain              n=25   A  64.0  B  76.0  diff -12.0 [-24.0, +0.0]
+
+=== LoCoMo: hippo@365 vs Amendment 1 hippo@7 (secondary) ===
+Authors' F1, all                 n=400  A  39.8  B  30.8  diff +9.0 [+6.6, +11.5]
+
+=== bm25 judge accuracy: old (Amendment 1 verdicts) vs new (this blind re-judge) ===
+bm25 old vs new                  n=400  A  68.8  B  71.8  diff -3.0 [-5.8, -0.2]
+old bm25 verdicts available: 400/400   new bm25 verdicts available: 400/400
+judge verdicts available (hippo365): 400 of 400
