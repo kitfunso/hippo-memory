@@ -13,6 +13,13 @@ A memory sleep moved out of active memory instead of deleting it, because it fad
 good until `dormant.retentionDays` expires it.
 _Avoid_: archived memory (the raw archive keeps metadata only), deleted, cold
 
+**Churn-stale memory**:
+A memory whose named file, code symbol or `npm run` script changed or disappeared in its own
+repo's git history after the memory was stored or last confirmed (`churnStaleness.enabled`, off by
+default). Tagged `churn-stale`, it ranks at half weight until a positive outcome confirms it.
+Never deleted for it.
+_Avoid_: invalidated (the commit-message path, which halves half-life), outdated, expired
+
 **Raw receipt**:
 A `kind='raw'` memory: a connector message or imported note, append-only. Sleep never
 deletes one; only the raw archive removes it.

@@ -4,7 +4,7 @@
  */
 
 import { estimateTokens } from './token-ledger.js';
-import { MemoryEntry, calculateStrength, netWrong } from './memory.js';
+import { MemoryEntry, calculateStrength, netWrong, CHURN_STALE_TAG } from './memory.js';
 import { isOutcomeFastAblated, isRecallBoostAblated, isRecencyAblated, evalRecencyScaleDays, evalNow } from './ablation.js';
 import { extractPathTags, pathBoostMultiplier } from './path-context.js';
 import { detectScope, scopeMatch } from './scope.js';
@@ -23,6 +23,11 @@ import { openHippoDb, closeHippoDb } from './db.js';
 import { rrfFuse } from './rrf.js';
 import { graphRankStream, selectGraphSeeds, DEFAULT_GRAPH_SEED_COUNT } from './graph-stream.js';
 import { compareEntryIdentity, compareScoredResults } from './compare.js';
+export const CHURN_STALE_RANK_MULTIPLIER = 0.5; // SHORTCUT: untuned; FE3 measures before any default.
+
+export function churnStaleFactor(entry: MemoryEntry): number {
+  return entry.tags.includes(CHURN_STALE_TAG) ? CHURN_STALE_RANK_MULTIPLIER : 1.0;
+}
 
 // ---------------------------------------------------------------------------
 // Tokenizer
@@ -269,6 +274,8 @@ export interface ScoreBreakdown {
    *  to [0.85, 1.15]. Immediate nudge from `hippo outcome --good/--bad`.
    *  Separate from the slow strength-via-reward-factor path. */
   outcomeBoost: number;
+  /** FE2: CHURN_STALE_RANK_MULTIPLIER if tagged 'churn-stale', else 1.0. */
+  churnStaleMultiplier: number;
   /** Pre-MMR rank (1-indexed). Only set when MMR re-ranking ran. */
   preMmrRank?: number;
   /** Post-MMR rank (1-indexed). Only set when MMR re-ranking ran. */
@@ -606,6 +613,9 @@ export async function hybridSearch(
     const decisionBoost = entries[i].tags.includes('decision') ? 1.2 : 1.0;
     compositeScore *= decisionBoost;
 
+    const churnStaleMultiplier = churnStaleFactor(entries[i]);
+    compositeScore *= churnStaleMultiplier;
+
     // Path-based boost: memories tagged with matching path segments get up to 1.3x
     const pathBoost = pathBoostMultiplier(entries[i].tags, currentPathTags);
     compositeScore *= pathBoost;
@@ -670,6 +680,7 @@ export async function hybridSearch(
         scopeBoost,
         sourceBump: 1,
         outcomeBoost,
+        churnStaleMultiplier,
         matchedTerms,
         final: compositeScore,
         ageDays,
@@ -728,7 +739,7 @@ export async function hybridSearch(
     for (const child of childEntriesAsync) {
       if (!scoredDeduped.some((r) => r.entry.id === child.id)) {
         const parentResult = scoredDeduped.find((r) => r.entry.id === child.dag_parent_id);
-        const childScore = parentResult ? parentResult.score * 0.9 : 0;
+        const childScore = parentResult ? parentResult.score * 0.9 * churnStaleFactor(child) : 0;
         scoredDeduped.push({
           entry: child,
           score: childScore,
@@ -1000,7 +1011,8 @@ export async function physicsSearch(
           freshnessMultiplier = summaryFreshnessMultiplier(entry, now);
         }
       }
-      const finalScore = s.finalScore * summaryDeboostMultiplier * freshnessMultiplier;
+      const churnStaleMultiplier = churnStaleFactor(entry);
+      const finalScore = s.finalScore * summaryDeboostMultiplier * freshnessMultiplier * churnStaleMultiplier;
       if (finalScore <= 0) continue;
       const result: SearchResult = {
         entry,
@@ -1028,6 +1040,7 @@ export async function physicsSearch(
           scopeBoost: 1,
           sourceBump: 1,
           outcomeBoost: 1,
+          churnStaleMultiplier,
           matchedTerms: [],
           final: finalScore,
           ageDays,
@@ -1075,8 +1088,10 @@ export async function physicsSearch(
 
 /** Normalize two score pools to [0,1] and combine. */
 function mergeScorePools(poolA: SearchResult[], poolB: SearchResult[]): SearchResult[] {
-  const maxA = poolA.reduce((m, r) => Math.max(m, r.score), 1e-9);
-  const maxB = poolB.reduce((m, r) => Math.max(m, r.score), 1e-9);
+  const unpenalised = (r: SearchResult): number =>
+    r.score / churnStaleFactor(r.entry);
+  const maxA = poolA.reduce((m, r) => Math.max(m, unpenalised(r)), 1e-9);
+  const maxB = poolB.reduce((m, r) => Math.max(m, unpenalised(r)), 1e-9);
 
   const merged: SearchResult[] = [];
   for (const r of poolA) {
@@ -1157,6 +1172,8 @@ export function search(
     const decisionBoost = entries[i].tags.includes('decision') ? 1.2 : 1.0;
     composite *= decisionBoost;
 
+    composite *= churnStaleFactor(entries[i]);
+
     // Path-based boost: memories tagged with matching path segments get up to 1.3x
     composite *= pathBoostMultiplier(entries[i].tags, currentPathTagsSync);
 
@@ -1207,7 +1224,7 @@ export function search(
     for (const child of childEntries) {
       if (!dedupedSync.some((r) => r.entry.id === child.id)) {
         const parentResult = dedupedSync.find((r) => r.entry.id === child.dag_parent_id);
-        const childScore = parentResult ? parentResult.score * 0.9 : 0;
+        const childScore = parentResult ? parentResult.score * 0.9 * churnStaleFactor(child) : 0;
         dedupedSync.push({
           entry: child,
           score: childScore,
