@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.48.0 - 2026-09-26
+
+### Added
+
+- **`hippo support-bundle` writes one redacted JSON file to attach to a support ticket.** It holds the hippo, Node and SQLite versions and the platform, the `hippo doctor` report, each store's schema version, file sizes and row count per table, the effective config, the names of the environment variables hippo reads (never their values), and the name, size and modified time of each file in `~/.hippo/logs`. It opens every store read-only and reads no memory text from it. Config values under names like key, token, secret or password become `[REDACTED]`, URLs lose their user, password, query and fragment, known secret shapes are removed from every string, and your home folder becomes `~`. `--include-logs` adds the last 200 lines of each log, with known secret shapes removed; log lines can quote memory text, so read the file before you attach it. The file goes to `--out <file>`, or to `hippo-support-<time>.json` in the current folder, and an existing file is never overwritten.
+- **The GitHub release of each version carries a CycloneDX SBOM (software bill of materials) of what the npm package ships.** Publishing a release runs `.github/workflows/sbom.yml`, which builds `hippo-memory-<version>.cdx.json` from the tagged commit's lockfiles with `scripts/sbom.mjs` (`npm run sbom`) and attaches it. It lists the packages bundled into the dashboard, such as react, react-dom and three (the CLI itself has no runtime dependencies), and leaves out everything npm marks as development-only. It filters on that mark instead of passing `--omit dev`, because npm 11.17 with `--omit dev` also drops react, react-dom, scheduler and fflate from the dashboard's list. The workflow can also run by hand for an older tag; v1.47.0's release got its SBOM that way.
+
+### Changed
+
+- **A fix for an older supported minor can now be published without moving `latest`.** `npm-publish.yml` picks the npm dist-tag with `scripts/publish-dist-tag.mjs`: a version above the registry's `latest` goes to `latest`, a lower one to `maint-<x.y>`, and a prerelease to `next`. npm refuses to publish a version below `latest` without `--tag`, and the workflow passed none, so a backport could not ship. If the registry cannot be read, the publish stops.
+- **`@types/three` moved to the dashboard's devDependencies.** It holds type declarations only and is never bundled, so it and the packages it pulls in no longer appear in the SBOM. The backfilled v1.47.0 SBOM still lists it, because that tag had it under dependencies.
+- **Writes no longer rebuild `index.json` from the whole store.** Every write, delete, reject and recall used to rewrite the file from every row, so one write cost more as the store grew. Only `rebuildIndex()` from the package writes it now, and no CLI command does; the CLI, MCP server and HTTP API read SQLite and never read it. On the home box, `writeEntry` went from 17.6 ms at 2,000 memories and 52.2 ms at 10,000 to 9.4 ms and 14.2 ms, and CLI `remember` at 10,000 from 317 ms to 263 ms. The 1.45.0 notes promised this for 1.46.0; it lands here.
+- **Saving a new memory no longer scans the full-text table.** Clearing the old full-text row before inserting the new one searched every row, because that table cannot index the id column. A new memory has no old row, so the search is skipped. Updates and deletes still pay it.
+
+### Fixed
+
+- **`hippo doctor` no longer changes the store it checks.** 1.46.0 introduced it as a read-only check, but it opened the store the way a write does: it migrated an older store to the current schema, and in a `.hippo` folder with no database it created one. It now opens the store read-only. On an older store it reports that hippo migrates the schema on the next write, and that the failure log starts then. A `.hippo` folder with no `hippo.db` is now a failure that names the folder, because hippo commands run there stop at it and never reach a parent or the global store; the fix is `hippo init` in its parent folder, or removing it. A store stamped for a newer hippo names the upgrade: `npm install -g hippo-memory@latest`.
+
+### Documentation
+
+- **The support window is written down.** `docs/release-policy.md` has a new "Support window" section: the release on `latest` is supported, and each minor promoted to `stable` is supported for 12 months from its promotion, with at most one promotion a calendar quarter. Security and data-loss fixes are backported as patch releases under `maint-<x.y>`, and the section lists the steps. The supported-versions table in `SECURITY.md` now matches it.
+- **Correct `SECURITY.md`: provenance starts at 1.47.0, not 1.46.0.** 1.46.0 has no provenance attestation; 1.47.0 was the first release published through trusted publishing. `SECURITY.md` also names the SBOM on each GitHub release and suggests attaching `hippo support-bundle` output to a report.
+
 ## 1.47.0 - 2026-09-25
 
 ### Added

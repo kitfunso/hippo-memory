@@ -1,4 +1,0 @@
-### Changed
-
-- **Writes no longer rebuild `index.json` from the whole store.** Every write, delete, reject and recall used to rewrite the file from every row, so one write cost more as the store grew. Only `rebuildIndex()` from the package writes it now, and no CLI command does; the CLI, MCP server and HTTP API read SQLite and never read it. On the home box, `writeEntry` went from 17.6 ms at 2,000 memories and 52.2 ms at 10,000 to 9.4 ms and 14.2 ms, and CLI `remember` at 10,000 from 317 ms to 263 ms. The 1.45.0 notes promised this for 1.46.0; it lands here.
-- **Saving a new memory no longer scans the full-text table.** Clearing the old full-text row before inserting the new one searched every row, because that table cannot index the id column. A new memory has no old row, so the search is skipped. Updates and deletes still pay it.
