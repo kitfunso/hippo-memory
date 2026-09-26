@@ -52,6 +52,7 @@ describe('GET /v1/audit?tenant= admin gate', () => {
   it('member reading another tenant gets 403', async () => {
     const res = await get('?tenant=other', key('member'));
     expect(res.status).toBe(403);
+    // SAFETY: HttpError responses are always JSON shaped { error: string }.
     const body = await res.json() as { error: string };
     expect(body.error).toContain('admin role');
   });
