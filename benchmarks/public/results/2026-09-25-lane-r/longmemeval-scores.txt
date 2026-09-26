@@ -1,0 +1,44 @@
+=== longmemeval hippo365 ===
+                   all n=479  recall@10 82.8  recall@50 94.4  recall@200 99.7
+   single-session-user n=64   recall@10 95.3  recall@50 100.0  recall@200 100.0
+         multi-session n=125  recall@10 69.2  recall@50 88.5  recall@200 98.9
+      knowledge-update n=72   recall@10 93.3  recall@50 98.1  recall@200 100.0
+single-session-preference n=30   recall@10 62.8  recall@50 86.1  recall@200 100.0
+    temporal-reasoning n=132  recall@10 81.2  recall@50 94.9  recall@200 99.7
+single-session-assistant n=56   recall@10 100.0  recall@50 100.0  recall@200 100.0
+=== longmemeval hippo7 ===
+                   all n=479  recall@10 82.7  recall@50 94.1  recall@200 99.7
+   single-session-user n=64   recall@10 93.8  recall@50 100.0  recall@200 100.0
+         multi-session n=125  recall@10 68.7  recall@50 88.5  recall@200 99.1
+      knowledge-update n=72   recall@10 91.9  recall@50 98.8  recall@200 100.0
+single-session-preference n=30   recall@10 61.1  recall@50 81.1  recall@200 100.0
+    temporal-reasoning n=132  recall@10 83.1  recall@50 94.3  recall@200 99.7
+single-session-assistant n=56   recall@10 100.0  recall@50 100.0  recall@200 100.0
+=== longmemeval decayoff ===
+                   all n=479  recall@10 82.8  recall@50 94.4  recall@200 99.7
+   single-session-user n=64   recall@10 95.3  recall@50 100.0  recall@200 100.0
+         multi-session n=125  recall@10 68.8  recall@50 88.1  recall@200 98.9
+      knowledge-update n=72   recall@10 94.0  recall@50 98.1  recall@200 100.0
+single-session-preference n=30   recall@10 62.8  recall@50 86.1  recall@200 100.0
+    temporal-reasoning n=132  recall@10 81.2  recall@50 94.9  recall@200 99.7
+single-session-assistant n=56   recall@10 100.0  recall@50 100.0  recall@200 100.0
+=== longmemeval bm25 ===
+                   all n=479  recall@10 83.0  recall@50 94.2  recall@200 99.7
+   single-session-user n=64   recall@10 95.3  recall@50 100.0  recall@200 100.0
+         multi-session n=125  recall@10 69.2  recall@50 88.5  recall@200 98.9
+      knowledge-update n=72   recall@10 95.4  recall@50 98.1  recall@200 100.0
+single-session-preference n=30   recall@10 62.8  recall@50 86.1  recall@200 100.0
+    temporal-reasoning n=132  recall@10 80.9  recall@50 94.1  recall@200 99.7
+single-session-assistant n=56   recall@10 100.0  recall@50 100.0  recall@200 100.0
+=== longmemeval hippo365 minus bm25 ===
+minus baseline recall@10: -0.2 [-1.0, +0.7] n=479
+minus baseline recall@50: +0.2 [-0.2, +0.7] n=479
+minus baseline recall@200: +0.0 [+0.0, +0.0] n=479
+=== longmemeval hippo7 minus bm25 ===
+minus baseline recall@10: -0.3 [-1.8, +1.2] n=479
+minus baseline recall@50: -0.2 [-1.1, +0.7] n=479
+minus baseline recall@200: +0.0 [+0.0, +0.1] n=479
+=== longmemeval decayoff minus bm25 ===
+minus baseline recall@10: -0.2 [-1.0, +0.6] n=479
+minus baseline recall@50: +0.1 [-0.3, +0.6] n=479
+minus baseline recall@200: +0.0 [+0.0, +0.0] n=479

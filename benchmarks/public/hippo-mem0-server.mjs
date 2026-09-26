@@ -24,13 +24,15 @@ import * as http from 'node:http';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const { createMemory } = await import(path.join(REPO, 'dist', 'memory.js'));
-const { initStore, loadAllEntries, batchWriteAndDelete } = await import(path.join(REPO, 'dist', 'store.js'));
-const { hybridSearch } = await import(path.join(REPO, 'dist', 'search.js'));
-const { isEmbeddingAvailable, embedMemory } = await import(path.join(REPO, 'dist', 'embeddings.js'));
+// pathToFileURL: Windows' ESM loader rejects a bare "C:/..." specifier.
+const distImport = (name) => import(pathToFileURL(path.join(REPO, 'dist', name)).href);
+const { createMemory } = await distImport('memory.js');
+const { initStore, loadAllEntries, batchWriteAndDelete } = await distImport('store.js');
+const { hybridSearch } = await distImport('search.js');
+const { isEmbeddingAvailable, embedMemory } = await distImport('embeddings.js');
 
 const args = process.argv.slice(2);
 const arg = (name, dflt) => {
@@ -40,9 +42,12 @@ const arg = (name, dflt) => {
 const ARM = arg('arm', 'hippo');
 const PORT = Number(arg('port', '8888'));
 const DATA_DIR = path.resolve(arg('data-dir', path.join(REPO, 'benchmarks', 'public', 'stores')));
+// eval-only: overrides the shipped half-life default for sensitivity checks (Amendment 2).
+const HALF_LIFE_DAYS = arg('half-life-days', undefined);
 const DAY_MS = 86_400_000;
 if (!['hippo', 'bm25'].includes(ARM)) throw new Error(`--arm must be hippo or bm25, got ${ARM}`);
-const EMBED = ARM === 'hippo' && isEmbeddingAvailable();
+// Amendment 2 fixes "no embeddings on any arm" regardless of what's installed locally.
+const EMBED = ARM === 'hippo' && isEmbeddingAvailable() && arg('embeddings', '0') === '1';
 
 /** Per-user store root. The user id is hashed so any string is a safe path. */
 function rootFor(userId) {
@@ -69,7 +74,11 @@ async function addChunk(body) {
   if (text.trim().length < 3) return { results: [] };
   const root = rootFor(body.user_id);
   initStore(root);
-  const entry = createMemory(text, { tags: ['benchmark'], source: 'benchmark' });
+  const entry = createMemory(text, {
+    tags: ['benchmark'],
+    source: 'benchmark',
+    ...(HALF_LIFE_DAYS !== undefined ? { baseHalfLifeDays: Number(HALF_LIFE_DAYS) } : {}),
+  });
   if (Number.isFinite(body.timestamp)) {
     const iso = new Date(Number(body.timestamp) * 1000).toISOString();
     entry.created = iso;
@@ -136,7 +145,7 @@ const server = http.createServer((req, res) => {
       if (req.method === 'POST' && url.pathname === '/memories') out = await addChunk(await readBody(req));
       else if (req.method === 'POST' && url.pathname === '/search') out = await search(await readBody(req));
       else if (req.method === 'DELETE' && url.pathname === '/memories') out = deleteUser(url.searchParams.get('user_id') ?? '');
-      else if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/health')) out = { status: 'ok', arm: ARM, embeddings: EMBED };
+      else if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/health')) out = { status: 'ok', arm: ARM, embeddings: EMBED, halfLifeDays: HALF_LIFE_DAYS ?? null };
       else { res.writeHead(404); res.end(); return; }
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify(out));
@@ -147,4 +156,4 @@ const server = http.createServer((req, res) => {
   });
 });
 fs.mkdirSync(DATA_DIR, { recursive: true });
-server.listen(PORT, () => console.error(`hippo-mem0-server arm=${ARM} embeddings=${EMBED} port=${PORT} data=${DATA_DIR}`));
+server.listen(PORT, () => console.error(`hippo-mem0-server arm=${ARM} embeddings=${EMBED} halfLifeDays=${HALF_LIFE_DAYS ?? 'default'} port=${PORT} data=${DATA_DIR}`));
