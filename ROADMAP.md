@@ -1820,3 +1820,81 @@ Pitch "learns what is wrong and stops repeating it", not "decay by default". "Go
 
 Done in the README and the website (`website/`): the pitch leads with outcome marks and supersession, the claims that decay or sleep improve recall are gone, the 365-day half-life is labelled as not tuned, and the hippocampus framing is labelled as design inspiration.
 
+---
+
+## Part XIV - 2026-09-25 update: hippo on Kubernetes (Track K8)
+
+**Why.** EI10 lists Helm as one line of the VPC tier (line 1331) and nothing is built. The research round (`docs/plans/research-k8s-web-2026-09-25.md`, `research-k8s-papers-2026-09-25.md`, `research-k8s-code-audit-2026-09-25.md`) found three things:
+- **No direct memory competitor ships a Helm chart.** Mem0, Zep/Graphiti and Letta stop at Docker Compose, and Mem0 has an open issue asking for one. Cognee and the community Chroma chart ship single-replica and say so plainly. That is the posture to copy.
+- **There is named demand.** kagent (CNCF Sandbox) has an open issue asking for a memory service (#1256). HolmesGPT and k8sgpt show no memory across incidents.
+- **The papers favour one governed service over many independent sidecars.** Kernel-Managed Shared Memory (arXiv 2609.10144) beat unmanaged sharing on both quality and latency. Governed Shared Memory (2606.24535) names four fleet failure modes: leakage, staleness, contradiction and provenance collapse.
+
+**The constraint that shapes everything.** SQLite has one writer, and SQLite's own docs say WAL does not work on a network filesystem. Until A6 (Postgres) ships, the only sound shape is one `hippo serve` process per store:
+- a StatefulSet with replicas fixed at 1;
+- a `ReadWriteOncePod` volume on block storage, because plain `ReadWriteOnce` is per node and lets two pods overlap during a rollout;
+- no NFS, EFS or Azure Files.
+
+**Non-goals until A6.** No multi-writer SQLite (LiteFS, Marmot and cr-sqlite have had no release for 17 to 24 months). No operator or CRD of our own. No hippo-run cluster, since hosting costs money.
+
+#### K1. Make the container honest [planned, first]
+The code audit found gaps that break any pod today, some of which break `deploy/aml` already:
+- **The image has no local embeddings.** `@huggingface/transformers` is only in `peerDependenciesMeta` (`package.json:86-93`), so `npm ci` in `deploy/aml/Dockerfile` never installs it, despite the header comment. Install it pinned in the image and bake the model in with `scripts/fetch_embedding_model.mjs` at the `HIPPO_MODEL_CACHE` path.
+- **A missing model fails silently.** `src/embeddings.ts:219-227` returns null on a load failure, so a pod runs with embeddings quietly off. Log it and fail `/ready` instead.
+- **No readiness check.** `/health` never touches the database (`src/server.ts:754-770`). Add `GET /ready` with a cheap DB round-trip; `/health` stays the liveness check.
+- **The image runs as root** and drops privileges with `setpriv` (`deploy/aml/entrypoint.sh:18-21`), which the `restricted` Pod Security profile rejects. Add a `USER` directive and use `fsGroup` on the volume.
+- **Shutdown kills in-flight writes.** `closeAllConnections()` runs before `server.close()` settles (`src/server.ts:3466-3499`). Stop accepting new requests, let in-flight writes finish, then force-close SSE streams only.
+- **No request log.** Add one JSON line per request to stdout: method, path, status, tenant, latency.
+- **No way to create the first key at install.** Add a post-install Job that runs `hippo auth create --role member --json` and writes the key into a Kubernetes Secret, never to a log.
+
+**Success:** the image boots under `restricted`, embeds with no network, and `/ready` goes false when the volume is missing.
+
+#### K2. Single-replica Helm chart [planned, after K1]
+- **Chart shape:** a StatefulSet on a `ReadWriteOncePod` volume, `HIPPO_HOME` and the model cache on that volume, and `HIPPO_REQUIRE_AUTH=1` always paired with `--host 0.0.0.0` (the server refuses the bind otherwise, `src/server.ts:3354-3360`).
+- **Values and secrets:** `values.schema.json`, `existingSecret` for keys, optional NetworkPolicy.
+- **Security:** a `restricted` securityContext (non-root, `RuntimeDefault` seccomp, no privilege escalation, read-only root filesystem).
+- **Docs:** state the single-replica limit and the block-storage requirement at the top of the chart README.
+- **Publishing, all free:** an OCI chart on GHCR, the image signed keyless with cosign, a BuildKit SBOM.
+
+**Success:** `ct install` passes on a local kind cluster (kind runs Kubernetes inside Docker, free). The same check runs in CI once GitHub Actions billing is back.
+
+#### K3. Consolidation that cannot collide [planned, with K2]
+`/v1/sleep` is loopback-only (`src/server.ts:1247-1263`), and the `hippo sleep` CLI does not check for a live server on the same store (`src/cli.ts:3144-3177`). A separate CronJob pod would therefore open the same database as a second writer.
+- **Chart side:** run the schedule as an in-pod cron that calls `127.0.0.1/v1/sleep`, never as a separate CronJob pod.
+- **Code side:** give `hippo sleep` the same `detectServer` guard that `serve` has, and refuse to run while a server holds the store.
+- SSGM (arXiv 2603.11768) ties drift and leakage to consolidation that has no check before it writes. The sleep run keeps its audit-log row and goes through the conflict checks that already exist.
+
+#### K4. Backup and restore with Litestream [planned, after K2]
+Litestream (v0.5.17, Aug 2026) is the only maintained tool built for this shape. It runs as a native sidecar (GA since Kubernetes v1.33) that streams the WAL to any S3-compatible store, and an initContainer restores the database on first boot. It is an optional value, off by default. This is also EI10's missing backup and restore runbook.
+
+**Success:** delete the volume, reinstall, and the store comes back with the same memory count.
+
+#### K5. Sidecar recipe for one agent [planned, docs only]
+A pod example with hippo as a native sidecar next to an agent, on its own volume, reached over localhost. It is for a single agent or a dev loop. Two limits go in the doc:
+- the sidecar still needs a key, because the loopback admin fallback (`src/server.ts:645-658`) would give every container in the pod admin rights;
+- fleets use K2's shared service, which is the governed shape the papers favour.
+
+#### K6. MCP ecosystem listings [planned, near-zero code]
+- `deploy/toolhive/mcpserver.yaml` using ToolHive's `MCPServer` resource (`toolhive.stacklok.dev/v1beta1`, streamable-http transport).
+- A listing on the MCP registry (registry.modelcontextprotocol.io), which points at the npm package.
+
+Both are discovery, not new plumbing. The registry submission is outward-facing, so Keith approves it before it goes.
+
+#### K7. Incident memory for Kubernetes SRE agents [planned, after K2]
+A thin integration, not new plumbing:
+- the agent calls `hippo remember` when an incident is resolved (root cause, fix, affected resources, outcome);
+- it calls `hippo context` before a new investigation;
+- the tenant is scoped per cluster or namespace.
+
+The first target is kagent (#1256), then HolmesGPT. The papers say to store procedures and fix outcomes, not raw incident text: Flow-of-Action (arXiv 2502.08224) raised root-cause accuracy from 35.5% to 64.0% with standard operating procedures.
+
+Write-time checks are required before any shared fleet. MINJA (2503.03704) poisons memory with only ordinary query access, and AgentPoison (2407.12784) succeeds over 80% of the time at a poison rate under 0.1%, which aggregate monitoring does not catch.
+
+**Success:** a result on AIOpsLab (2501.06706) or ITBench (2502.05352), whose baseline agents resolve 13.8% of SRE scenarios. It uses hippo on against hippo off, the same prompt, and scenario hints stripped. That last part is the Graph Traversal Agent lesson (2606.08590), where a reported gain mostly vanished once the hints were removed. No accuracy claim ships before that ablation.
+
+#### K8. Size from measurement, then scale via A6 [planned, last]
+Resource requests come from profiling hippo's own write, recall and sleep phases (the harness shape in arXiv 2606.06448), not from guesses. Total Recall at What Cost (2608.11879) found serving cost could not be predicted from conversation length. Two limits apply:
+- the rate limiter is an in-memory map per process (`src/rate-limit.ts:40-42`), so N replicas would allow N times the configured rate;
+- more than one replica waits for A6 and EI10, with Postgres and shared rate-limit state.
+
+**Order:** K1, then K2 and K3 together, then K4, K5 and K6, then K7 and K8. K1 is worth doing even if no chart ever ships, because `deploy/aml` has the same gaps.
+
