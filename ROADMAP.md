@@ -249,7 +249,7 @@ LangChain, LlamaIndex, Letta, CrewAI, AutoGen. Consistent semantics across all f
 HNSW with custom metric, parallel sleep-cycle consolidation, sub-linear memory compaction. Already in `ROADMAP.md` WP1.
 **Effort:** ongoing under grant. **Success:** 1M+ items, sub-100ms retrieval, 5x compute cost reduction vs vector RAG.
 
-### A10. Managed cloud [planned]
+### A10. Managed cloud [planned] [commercial repo]
 Multi-tenant SaaS deployment, billing, free tier, paid org tier. After A1-A6.
 **Effort:** 3-6 months. **Success:** first paying enterprise customer.
 
@@ -1334,7 +1334,7 @@ LC2/LC3 value scorers trained per tenant on that company's outcomes and `dormant
 Single-tenant or customer-VPC (Helm, Terraform, Postgres per A6), fully air-gapped (local embeddings, customer model endpoint, no telemetry), and an outbound-only relay so self-hosted Git servers need no inbound port. TLS, per-key quotas, encryption at rest (A4), plus the central server's backup, restore, high availability and upgrade runbooks (was CD8).
 
 #### EI11. Enterprise identity and governance [planned]
-SAML/OIDC SSO and SCIM (the A5 stubs were deleted in 1.45.0, so this is new work), remote MCP over HTTP with OAuth 2.1 and an MCP-registry entry (was CD2), roles from IdP groups, OIDC workload identity for machines, SIEM export of the audit log, listing in internal MCP registries (Copilot "registry only" policies block unlisted servers).
+SAML/OIDC SSO and SCIM [commercial repo] (the A5 stubs were deleted in 1.45.0, so this is new work), remote MCP over HTTP with OAuth 2.1 and an MCP-registry entry (was CD2), roles from IdP groups, OIDC workload identity for machines, SIEM export of the audit log [commercial repo], listing in internal MCP registries (Copilot "registry only" policies block unlisted servers).
 
 #### EI12. Tenant evaluation [merged into TE5: the same runner on a design partner's own history]
 Replay a tenant's own history in time order with memory on and off at matched token budgets and several seeds; report resolve rate, tokens per resolved task, review-acceptance and revert rate, and stale-retrieval rate, with verbatim storage as a baseline. This is the number a buyer and an investor both ask for, and it keeps every later claim honest (arXiv:2606.15017 shows memory gains often vanish at matched budgets; note it studies web agents on WebArena, not coding agents). Shares its harness and cost accounting with TE5 (Part IX).
@@ -1496,16 +1496,16 @@ Lessons move from repository to team to company only with approval. A review que
 Anyone who can write a PR comment, an issue or a chat message can try to plant instructions that become a "lesson" for every agent. Treat ingested text as untrusted: provenance-weighted admission, instruction-like content detection, quarantine for lessons from outside contributors, and approval (CD4) before org-wide reach. Enterprise security reviews will ask about this first.
 **Shipped (first slice):** GitHub and Slack connector text is marked untrusted and screened by `src/instruction-detect.ts`; a flagged row is stored under the restricted scope `quarantine:private:<original>` (so every existing default-deny site hides it) with a pending row in `memory_quarantine` (v48) and a `quarantine` audit event. An admin releases it with `hippo quarantine approve <id>` or `POST /v1/quarantine/:id/approve` (scope restored), or keeps it hidden with `reject`. Quarantined rows cannot be shared and take no part in conflict detection. Local single-user writes are untouched. **Open:** HTTP/MCP member `remember` is not screened; no provenance-weighted admission (author association); derived rows built from a quarantined row keep its scope and are never released; no re-screen of rows stored before v48; rejected content is not tombstoned (AT1); no CD4 approval UI; the detector is regex-only, so a polite paraphrase gets through. Plan: `docs/plans/2026-09-26-cd5-poisoning-defence.md`.
 
-#### CD6. Admin dashboard [planned; part of A7 observability]
+#### CD6. Admin dashboard [planned; part of A7 observability] [commercial repo]
 One place for the buyer: what is stored per team and repository, who used what, audit log search, dormant and banned memories, and token cost from the TE0 ledger.
 
 #### CD7. Value report for buyers [planned, needs TE5; part of A7]
 A monthly report per company: memories used, repeated errors avoided, tokens hippo spent, and, once a CD11 holdout or EI12 has measured it for that company, cost per session and per merged PR with and without hippo (CD12). No saving figure before it is measured (non-goal 16).
 
-#### CD11. Shadow holdout [planned, next after TE5's pilot run; design in `docs/plans/2026-09-24-buyer-kpis.md`]
+#### CD11. Shadow holdout [commercial repo] [planned, next after TE5's pilot run; design in `docs/plans/2026-09-24-buyer-kpis.md`]
 A setting, `holdout.rate`, makes a deterministic share of sessions (or of developers) skip memory injection while capture continues. Each holdout is logged, so a pilot measures hippo against a live control group on the same days, models and people.
 
-#### CD12. Agent telemetry join and pilot report [planned, with CD11]
+#### CD12. Agent telemetry join and pilot report [planned, with CD11] [commercial repo]
 `hippo report --pilot` joins hippo's ledger with the agent's own cost data by session id, computed inside the customer's network:
 - **Claude Code:** its OpenTelemetry export or its organisation usage API.
 - **Copilot and Cursor:** per-developer usage.
@@ -1547,7 +1547,7 @@ What a VC or an enterprise buyer checks that code does not answer:
 - **Activation without telemetry:** hippo promises no telemetry, so measure activation through design partners and voluntary `hippo doctor --json` reports, never a default-on beacon.
 - **Competitive map:** Mem0 (including its AWS Strands memory-provider deal), Zep, Letta, Copilot Memory, Augment's context engine and Tabnine, with what each does that hippo does not and the reverse.
 - **Security and support:** a `SECURITY.md` vulnerability-disclosure policy, a support and incident promise, and documented data export (`hippo export`) and uninstall paths. A solo founder is itself a buyer risk, so write down the continuity plan.
-- **Legal and commercial (was CD9):** IP assigned to the company, a contributor licence agreement, the open-core line (the local single-developer core stays MIT), pricing experiments, and the hosted-SaaS (A10) decision with data residency.
+- **Legal and commercial (was CD9):** IP assigned to the company, contributions under DCO sign-off with no contributor licence agreement (MIT in, MIT out), the open-core line (README "Open source and commercial") (the local single-developer core stays MIT), pricing experiments, and the hosted-SaaS (A10) decision with data residency.
 - **Compliance (was EI14):** SOC 2 Type II needs an observation period and outside audit fees (tens of thousands of dollars; an estimate, not a quote), then ISO 27001 and 42001. Funding-gated.
 
 ### Evidence check: does the lifecycle moat hold? (review 2026-09-24)
@@ -1739,30 +1739,30 @@ Existing items are named by their IDs; new ones are EV1 to EV5 below.
    - EI10's customer-VPC tier: Postgres, Helm, TLS, backup and upgrade runbooks;
    - the per-write cost fix already in the 90-day queue.
 4. **Identity:**
-   - EI11's OIDC and SAML sign-in (an identity broker is acceptable);
+   - EI11's OIDC and SAML sign-in (an identity broker is acceptable) [commercial repo];
    - OAuth 2.1 remote MCP and the registry entry (CD2);
-   - SIEM export of the audit log;
-   - SCIM can follow v1.
+   - SIEM export of the audit log [commercial repo];
+   - SCIM can follow v1 [commercial repo].
 5. **Rollout:**
    - CD1, the agent plugin an admin turns on for everyone;
    - CD10, the remaining install work.
 6. **Proof in production:**
-   - CD11 shadow holdout;
-   - CD12 telemetry join and pilot report;
+   - CD11 shadow holdout [commercial repo];
+   - CD12 telemetry join and pilot report [commercial repo];
    - CD13 failure-signature log;
-   - CD6's first admin view.
+   - CD6's first admin view [commercial repo].
 7. **Product packaging:** EV2 to EV5.
 
-**EV1's repository comes before step 2 (review 2026-09-26).** Code published in the MIT repository stays MIT for good, so the private repository must exist before the first commercial-only line is written. The first such line is EI2's grants, in step 2. EV1's packaging and CI can still wait until step 7. What has already shipped in the public repository (tenants, API keys, roles, the dashboard) stays MIT.
+**EV1's repository comes before step 2 (review 2026-09-26).** Code published in the MIT repository stays MIT for good, so the private repository must exist before the first commercial-only line is written. EI2's per-key scope grants shipped in the MIT repository in 1.49.0 (2026-09-26), before the private repository existed, so they stay MIT. The private repository now exists (2026-09-27), and the first commercial-only item is EI11's SSO. EV1's packaging and CI can still wait until step 7. What has already shipped in the public repository (tenants, API keys, roles, scope grants, the audit log, the dashboard) stays MIT. `scripts/check-open-core.mjs` fails a PR here that adds commercial-only code by mistake.
 
 ### New items
 
-#### EV1. Enterprise edition packaging [planned, 1w]
-- **Where the code lives:** the features that stay out of the MIT core go in a separate private repository and package under a commercial licence. That means permission-aware recall's grants, SSO, the admin view, the pilot report and the licence check.
-- **The line:** documented in the README. The core CLI, MCP server and single-developer store stay MIT.
+#### EV1. Enterprise edition packaging [planned, 1w; private repository created 2026-09-27]
+- **Where the code lives:** the features that stay out of the MIT core go in a separate private repository and package under a commercial licence from KITFUNSO LTD. That means SSO (OIDC and SAML sign-in), SCIM, the CD6 admin view, the CD11 and CD12 pilot report and telemetry join, SIEM export of the audit log, the EV2 licence check, hosted SaaS (A10), and support with an SLA. EI2's scope grants are not on this list: they shipped under MIT in 1.49.0.
+- **The line:** documented in the README ("Open source and commercial"). The line is drawn by buyer: everything an individual developer or a self-hosted team needs stays MIT, including the CLI, MCP server, hooks, connectors, tenants, API keys, roles, scope grants, the audit log and the dashboard.
 - **CI:** builds and tests both packages against each release of the core.
 
-#### EV2. Offline licence keys [planned, 1w]
+#### EV2. Offline licence keys [planned, 1w] [commercial repo]
 - **The key:** a licence file signed with Ed25519 (company, seats, expiry, edition), checked offline against a public key in the enterprise package.
 - **No beacon.** This keeps the no-telemetry promise.
 - **Seats:** counted on trust, with an annual true-up.

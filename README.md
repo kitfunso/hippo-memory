@@ -963,6 +963,12 @@ The interesting problems:
 - **MemPalace-style spatial organization.** Could spatial structure (wings/halls/rooms) improve hippo's semantic layer?
 - **AAAK-style compression for semantic memories.** Lossless token compression for context injection.
 
+## Open source and commercial
+
+Hippo is open core, and the line is drawn by who pays. Everything an individual developer or a self-hosted team needs is in this repository under MIT: the CLI, the MCP server, hooks, connectors, the dashboard, tenants, API keys, roles, per-key scope grants, the audit log and zero-touch memory. Code published here stays MIT and stays here.
+
+A commercial edition for larger companies ships as a separate package under a commercial licence from KITFUNSO LTD. It adds SSO (OIDC and SAML sign-in), SCIM, an org admin view, the pilot report and telemetry join, SIEM export of the audit log, offline licence keys, hosted SaaS, and support with an SLA. Pull requests for those features belong there, not here; see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## License
 
 MIT

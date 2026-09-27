@@ -63,6 +63,21 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  # Commercial-only features live in a separate package; see CONTRIBUTING.md. Own job so
+  # the full-history checkout it needs for the merge base does not slow the test job.
+  open-core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Open-core line
+        run: node scripts/check-open-core.mjs
+
   # Tier-1 micro-eval (benchmarks/micro). Its ranking fixtures are calibrated
   # with the local embedding backend present, so this job installs it without
   # touching package.json and caches the ~175 MB of model weights. Kept apart
