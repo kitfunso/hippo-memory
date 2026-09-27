@@ -574,6 +574,15 @@ function isNonHumanUserLine(entry: TranscriptLineFlags, content: string): boolea
   return CLAUDE_CODE_COMMAND_PREFIXES.some((p) => head.startsWith(p));
 }
 
+function userArrayText(content: unknown): string {
+  if (!Array.isArray(content)) return '';
+  if (content.some((b) => isObjectLike(b) && 'type' in b && b.type === 'tool_result')) return '';
+  return content
+    .map((b) => (isObjectLike(b) && 'type' in b && b.type === 'text' && 'text' in b && isStringValue(b.text) ? b.text.trim() : ''))
+    .filter((t) => t && !t.startsWith('[Request interrupted by user'))
+    .join('\n');
+}
+
 export function collectSessionTurns(jsonl: string): SessionTurn[] {
   const lines = jsonl.split('\n').filter((l) => l.trim());
   const turns: SessionTurn[] = [];
@@ -593,10 +602,10 @@ export function collectSessionTurns(jsonl: string): SessionTurn[] {
       const content = 'content' in message ? message.content : undefined;
 
       if (entry.type === 'user') {
-        // Plain text user messages only (skip tool_result arrays), and only
-        // ones the human wrote (see isNonHumanUserLine).
-        if (isStringValue(content) && content.trim() && !isNonHumanUserLine(entry, content)) {
-          turns.push({ role: 'user', text: content.trim() });
+        // Human text only: a string, or the text blocks of an array (pasted images) that carries no tool_result.
+        const text = isStringValue(content) ? content : userArrayText(content);
+        if (text.trim() && !isNonHumanUserLine(entry, text)) {
+          turns.push({ role: 'user', text: text.trim() });
         }
       } else if (Array.isArray(content)) {
         // Keep assistant text blocks; drop thinking + tool_use

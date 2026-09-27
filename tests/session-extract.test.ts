@@ -27,6 +27,56 @@ describe('extractSessionMemories', () => {
     expect(items).toEqual([]);
   });
 
+  it('drops "The fix is ..." when it names no component', () => {
+    const items = extractSessionMemories([
+      turn('user', 'The fix is to raise the timeout to thirty seconds, because runners are slow.'),
+    ]);
+    expect(items).toEqual([]);
+  });
+
+  it('keeps "The fix is ..." when it names a code token', () => {
+    const items = extractSessionMemories([
+      turn('user', 'The fix is to raise the timeout in upload.spec.ts to thirty seconds, because runners are slow.'),
+    ]);
+    expect(items).toHaveLength(1);
+  });
+
+  it('drops a sentence that points back with "this" mid-sentence', () => {
+    const items = extractSessionMemories([
+      turn('user', 'Reinstalling the CLI globally wipes this silently, because the installer never keeps old config.'),
+    ]);
+    expect(items).toEqual([]);
+  });
+
+  it('drops two sentences glued without a space', () => {
+    const items = extractSessionMemories([
+      turn('user', 'The billing service must never retry payments without a key.Refunds go through the ledger, because audits need it.'),
+    ]);
+    expect(items).toEqual([]);
+  });
+
+  it('prose slashes, plurals and "iPhone" do not count as naming a component', () => {
+    const items = extractSessionMemories([
+      turn('user', 'The fix is to use read/write locks, because readers never block each other.'),
+      turn('user', 'The issues were caused by the iPhone build, because it always strips the cache.'),
+    ]);
+    expect(items).toEqual([]);
+  });
+
+  it('drops an assistant status line with no "I"', () => {
+    const items = extractSessionMemories([
+      turn('assistant', 'Added a guard so the deploy script must never run migrations, because the replica lags.'),
+    ]);
+    expect(items).toEqual([]);
+  });
+
+  it('keeps an assistant sentence that opens with an adjectival participle', () => {
+    const items = extractSessionMemories([
+      turn('assistant', 'Cached embeddings must never be reused across models, because the vector sizes differ.'),
+    ]);
+    expect(items).toHaveLength(1);
+  });
+
   it('drops a markdown table row even when it contains a cue word', () => {
     const items = extractSessionMemories([
       turn('user', '| never crawled | 200 | some other filler text goes here today |'),

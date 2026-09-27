@@ -171,6 +171,15 @@ describe('collectSessionTurns', () => {
     ]);
   });
 
+  it('keeps the text blocks of a user array with no tool_result, drops the interrupt marker', () => {
+    const jsonl = transcriptJsonl([
+      { type: 'user', message: { role: 'user', content: [{ type: 'image', source: {} }, { type: 'text', text: 'the upload page must never resize avatars' }] } },
+      { type: 'user', message: { role: 'user', content: [{ type: 'text', text: '[Request interrupted by user for tool use]' }] } },
+      { type: 'user', message: { role: 'user', content: [{ type: 'tool_result', content: 'x' }, { type: 'text', text: 'tool-side text' }] } },
+    ]);
+    expect(collectSessionTurns(jsonl)).toEqual([{ role: 'user', text: 'the upload page must never resize avatars' }]);
+  });
+
   it('returns turns in chronological order across interleaved roles', () => {
     const jsonl = transcriptJsonl([
       { type: 'user', message: { role: 'user', content: 'first' } },
