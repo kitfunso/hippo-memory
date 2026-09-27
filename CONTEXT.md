@@ -132,11 +132,6 @@ A human message that tells the agent something it just did, said, proposed or as
 or unwanted, or turns it against that. A detected one is a candidate lesson, not a stored memory.
 _Avoid_: feedback (outcomes are feedback too), complaint, redirect
 
-**Session capture**:
-What the SessionEnd hook writes without a model call: whole, subject-bearing sentences pulled
-straight from the session's turns, at most 3 per session, nothing when none qualify.
-_Avoid_: session summary, transcript summary
-
 ### Support
 
 **Support bundle**:

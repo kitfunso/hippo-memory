@@ -4,7 +4,7 @@ import * as os from 'os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { spawnSync } from 'child_process';
-import { summariseTranscript, resolveLastSessionTranscript, collectSessionTurns, sessionCaptureWindow } from '../src/capture.js';
+import { summariseTranscript, resolveLastSessionTranscript } from '../src/capture.js';
 
 /**
  * Per-test tmpdir so the fake transcript fixtures don't leak between cases.
@@ -139,58 +139,6 @@ describe('summariseTranscript', () => {
     const summary = summariseTranscript(jsonl);
     expect(summary).toContain('please fix the login bug');
     expect(summary).not.toContain('session idle timeout reached');
-  });
-});
-
-describe('collectSessionTurns', () => {
-  it('skips tool_result arrays, isMeta/isSidechain/isCompactSummary/system lines, and command lines', () => {
-    const jsonl = transcriptJsonl([
-      { type: 'user', message: { role: 'user', content: [{ type: 'tool_result', content: 'noisy tool output' }] } },
-      { type: 'user', message: { role: 'user', content: 'meta note' }, isMeta: true },
-      { type: 'user', message: { role: 'user', content: 'sidechain note' }, isSidechain: true },
-      { type: 'user', message: { role: 'user', content: 'compact summary note' }, isCompactSummary: true },
-      { type: 'user', message: { role: 'user', content: 'system notice' }, promptSource: 'system' },
-      { type: 'user', message: { role: 'user', content: '<command-name>foo</command-name>' } },
-      { type: 'system', content: 'system msg' },
-      { type: 'user', message: { role: 'user', content: 'please add feature X' } },
-    ]);
-    const turns = collectSessionTurns(jsonl);
-    expect(turns).toEqual([{ role: 'user', text: 'please add feature X' }]);
-  });
-
-  it('keeps the Codex response_item shape', () => {
-    const jsonl = transcriptJsonl([
-      { type: 'response_item', payload: { type: 'message', role: 'developer', content: [{ type: 'input_text', text: 'developer instructions' }] } },
-      { type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'please build the codex wrapper' }] } },
-      { type: 'response_item', payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'adding the failing tests first' }] } },
-    ]);
-    const turns = collectSessionTurns(jsonl);
-    expect(turns).toEqual([
-      { role: 'user', text: 'please build the codex wrapper' },
-      { role: 'assistant', text: 'adding the failing tests first' },
-    ]);
-  });
-
-  it('returns turns in chronological order across interleaved roles', () => {
-    const jsonl = transcriptJsonl([
-      { type: 'user', message: { role: 'user', content: 'first' } },
-      { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'second' }] } },
-      { type: 'user', message: { role: 'user', content: 'third' } },
-    ]);
-    const turns = collectSessionTurns(jsonl);
-    expect(turns.map((t) => t.text)).toEqual(['first', 'second', 'third']);
-  });
-});
-
-describe('sessionCaptureWindow', () => {
-  it('keeps the last 20 user turns then the last 10 assistant turns, block order', () => {
-    const users = Array.from({ length: 21 }, (_, i) => ({ role: 'user' as const, text: `u${i}` }));
-    const assistants = Array.from({ length: 11 }, (_, i) => ({ role: 'assistant' as const, text: `a${i}` }));
-    const window = sessionCaptureWindow([...users, ...assistants]);
-
-    expect(window).toHaveLength(30);
-    expect(window.slice(0, 20).map((t) => t.text)).toEqual(users.slice(1).map((t) => t.text));
-    expect(window.slice(20).map((t) => t.text)).toEqual(assistants.slice(1).map((t) => t.text));
   });
 });
 
