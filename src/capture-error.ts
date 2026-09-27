@@ -1,8 +1,8 @@
 // `hippo capture-error`, run by the Claude Code PostToolUseFailure hook: routine failures and repeats are not
 // stored, because error memories decay slowly and would crowd out real lessons; what is stored stays `observed`
 // until outcome feedback confirms it. Every failure, stored or not, goes to the failure log (ROADMAP CD13).
-import { createMemory, type MemoryEntry } from './memory.js';
-import { writeEntry, loadAllEntries } from './store.js';
+import { createMemory } from './memory.js';
+import { writeEntry, loadContentsWithTag } from './store.js';
 import { loadConfig } from './config.js';
 import { closeHippoDb, openHippoDb } from './db.js';
 import { recordFailure, type FailureOutcome } from './failure-log.js';
@@ -119,8 +119,8 @@ function logFailure(hippoRoot: string, tenantId: string, payload: JsonValue, les
 
 function storeLesson(hippoRoot: string, tenantId: string, text: string): 'stored' | 'duplicate' {
   const sig = failureSignature(text);
-  const repeat = loadAllEntries(hippoRoot, tenantId).some(
-    (e: MemoryEntry) => e.tags.includes('auto-captured') && failureSignature(e.content) === sig,
+  const repeat = loadContentsWithTag(hippoRoot, tenantId, 'auto-captured').some(
+    (content) => failureSignature(content) === sig,
   );
   if (repeat) return 'duplicate';
   const entry = createMemory(text, {

@@ -6,8 +6,8 @@
  * exceeds WM_MAX_ENTRIES per scope.
  */
 
-import { openHippoDb, closeHippoDb } from './db.js';
-import { initStore } from './store.js';
+import { closeHippoDb } from './db.js';
+import { openStore } from './store.js';
 
 export const WM_MAX_ENTRIES = 20;
 
@@ -75,8 +75,7 @@ export function wmPush(hippoRoot: string, opts: {
   taskId?: string;
   metadata?: JsonObject;
 }): number {
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     const now = new Date().toISOString();
     const importance = opts.importance ?? 0;
@@ -140,8 +139,7 @@ export function wmRead(hippoRoot: string, opts?: {
   sessionId?: string;
   limit?: number;
 }): WorkingMemoryItem[] {
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     const clauses: string[] = [];
     const params: Array<string | number> = [];
@@ -182,8 +180,7 @@ export function wmClear(hippoRoot: string, opts?: {
   scope?: string;
   sessionId?: string;
 }): number {
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     const clauses: string[] = [];
     const params: Array<string | number> = [];

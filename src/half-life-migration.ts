@@ -20,7 +20,7 @@
  * (7 days when never recorded) to the configured `defaultHalfLifeDays`.
  */
 import { deriveHalfLife, type MemoryEntry } from './memory.js';
-import { initStore, selectAllEntries, HALF_LIFE_BASE_META_KEY } from './store.js';
+import { openStore, selectAllEntries, HALF_LIFE_BASE_META_KEY } from './store.js';
 import { openHippoDb, closeHippoDb, getMeta, setMeta, type DatabaseSyncLike } from './db.js';
 import { appendAuditEvent } from './audit.js';
 
@@ -84,8 +84,7 @@ function readBase(db: DatabaseSyncLike): number {
 export function migrateDefaultHalfLife(hippoRoot: string, to: number, opts: { dryRun?: boolean; actor?: string } = {}): HalfLifeMigrationResult {
   const dryRun = opts.dryRun ?? false;
   const noop = (from: number): HalfLifeMigrationResult => ({ from, to, rescaled: 0, kept: 0, dryRun, halfLives: new Map() });
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     // Plan, write, audit and record the base under one write lock, so a concurrent write or sleep cannot interleave.
     if (!dryRun) db.exec('BEGIN IMMEDIATE');

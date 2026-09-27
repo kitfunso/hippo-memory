@@ -2885,9 +2885,10 @@ function backfillFtsIndex(db: DatabaseSyncLike): void {
   // SAFETY: this get() result's shape matches the single aliased `c` column
   // named in the SELECT above.
   const memCount = (db.prepare(`SELECT COUNT(*) AS c FROM memories`).get() as { c?: number } | undefined)?.c ?? 0;
-  // SAFETY: this get() result's shape matches the single aliased `c` column
-  // named in the SELECT above.
-  const ftsCount = (db.prepare(`SELECT COUNT(*) AS c FROM memories_fts`).get() as { c?: number } | undefined)?.c ?? 0;
+  // SAFETY: this get() result's shape matches the single aliased `c` column named in the SELECT above.
+  // memories_fts_docsize is FTS5's cheaper one-row-per-document shadow table; fall back for a foreign-built index.
+  const ftsTable = tableExists(db, 'memories_fts_docsize') ? 'memories_fts_docsize' : 'memories_fts';
+  const ftsCount = (db.prepare(`SELECT COUNT(*) AS c FROM ${ftsTable}`).get() as { c?: number } | undefined)?.c ?? 0;
   if (memCount === ftsCount) return;
 
   db.exec(`

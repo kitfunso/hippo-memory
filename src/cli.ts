@@ -7015,17 +7015,26 @@ async function cmdContext(
       },
     };
     process.stdout.write(JSON.stringify(payload));
-    if (finalStatic) {
-      withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
-        tenantId: ctx.tenantId, sessionId: currentSessionId, surface, event: 'inject',
-        items: staticItems.length, tokens: estimateTokens(finalStatic), hash: blockHash(finalStatic),
-      }));
-    }
-    if (recallBlock) {
-      withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
-        tenantId: ctx.tenantId, sessionId: currentSessionId, surface: 'hook_recall', event: 'inject',
-        items: recallItems.length, tokens: estimateTokens(recallBlock), hash: blockHash(recallBlock),
-      }));
+    if (finalStatic || recallBlock) {
+      // One connection for both rows; each insert in its own try so one failing doesn't skip the other.
+      withLedgerDb(hippoRoot, (db) => {
+        if (finalStatic) {
+          try {
+            recordTokenUse(db, {
+              tenantId: ctx.tenantId, sessionId: currentSessionId, surface, event: 'inject',
+              items: staticItems.length, tokens: estimateTokens(finalStatic), hash: blockHash(finalStatic),
+            });
+          } catch { /* best effort; see withLedgerDb doc comment */ }
+        }
+        if (recallBlock) {
+          try {
+            recordTokenUse(db, {
+              tenantId: ctx.tenantId, sessionId: currentSessionId, surface: 'hook_recall', event: 'inject',
+              items: recallItems.length, tokens: estimateTokens(recallBlock), hash: blockHash(recallBlock),
+            });
+          } catch { /* best effort; see withLedgerDb doc comment */ }
+        }
+      });
     }
   } else {
     // markdown (default)

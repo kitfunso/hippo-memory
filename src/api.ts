@@ -19,8 +19,6 @@ import {
   deleteEntry,
   loadSearchEntries,
   loadRecallSearchEntries,
-  loadRecallSearchEntriesFromDb,
-  pickRarestFtsQuery,
   loadEntriesByIds,
   loadChildrenOf,
   loadFreshRawMemories,
@@ -37,6 +35,8 @@ import {
   saveIndex,
   loadAllEntries,
   loadAmbientCandidates,
+  type AmbientRecallRequest,
+  type AmbientLoadResult,
   updateStats,
   isInitialized,
   markSummaryDirtyInTx,
@@ -259,20 +259,21 @@ export function ambientSecretAdmit(e: MemoryEntry, currentProjectName: string): 
   return origin === currentProjectName;
 }
 
-// The pinned-only branch needs pins and recent-N candidates, not the corpus.
+// The pinned-only branch needs pins and recent-N candidates, not the corpus; `recall` applies there only.
 function loadAmbientEntries(
   hippoRoot: string,
   tenantId: string,
   pinnedOnly: boolean,
   includeRecent: number,
   admit: (e: MemoryEntry) => boolean,
-): MemoryEntry[] {
-  if (!pinnedOnly) return loadAllEntries(hippoRoot, tenantId).filter(admit);
+  recall?: AmbientRecallRequest,
+): AmbientLoadResult {
+  if (!pinnedOnly) return { entries: loadAllEntries(hippoRoot, tenantId).filter(admit) };
   // DF3's quality floor runs on the recent-N slice AFTER this load, so the load
   // counts by it too, or it stops short of a store whose newest rows are junk.
   const admitAmbient = (e: MemoryEntry): boolean =>
     admit(e) && (e.pinned || isContentWorthStoring(e.content));
-  return loadAmbientCandidates(hippoRoot, tenantId, includeRecent, admitAmbient);
+  return loadAmbientCandidates(hippoRoot, tenantId, includeRecent, admitAmbient, recall);
 }
 
 export interface RememberOpts {
@@ -2525,6 +2526,9 @@ export interface ContextResult {
   ambientState?: AmbientState;
 }
 
+const finiteOr = (v: number, dflt: number, min: number): number =>
+  Number.isFinite(v) && v >= min ? v : dflt;
+
 /**
  * Assemble a context bundle: recalled memories (pinned-only / strength-sorted
  * fallback / hybrid search) + active task snapshot + session handoff + recent
@@ -2585,13 +2589,26 @@ export async function getContext(
   // about below.
   const admit = (e: MemoryEntry): boolean => !e.superseded_by && ambientAdmit(e);
 
+  // Z1: decided before the ambient loads so the FTS candidate query below (pinned-only
+  // branch) can piggyback on that connection instead of opening its own.
+  const promptRecallPending = pinnedOnly && Boolean(opts.prompt?.trim()) && config.pinnedInject.promptRecall === true;
+  const promptRecallTerms = promptRecallPending && config.pinnedInject.enabled
+    ? Array.from(promptTokens(opts.prompt ?? ''))
+    : [];
+  const recallRequest: AmbientRecallRequest | undefined =
+    promptRecallTerms.length > 0
+      ? { terms: promptRecallTerms, limit: Math.floor(finiteOr(config.pinnedInject.promptRecallCandidates, 100, 1)) }
+      : undefined;
+
   // Tenant-scoped loads (v1.11.1 lesson: NEVER resolveTenantId({}) here).
-  let localEntries = hasLocal
-    ? loadAmbientEntries(ctx.hippoRoot, ctx.tenantId, pinnedOnly, includeRecent, admit)
-    : [];
-  let globalEntries = hasGlobal
-    ? loadAmbientEntries(globalRoot, ctx.tenantId, pinnedOnly, includeRecent, admit)
-    : [];
+  const localLoad: AmbientLoadResult = hasLocal
+    ? loadAmbientEntries(ctx.hippoRoot, ctx.tenantId, pinnedOnly, includeRecent, admit, recallRequest)
+    : { entries: [] };
+  const globalLoad: AmbientLoadResult = hasGlobal
+    ? loadAmbientEntries(globalRoot, ctx.tenantId, pinnedOnly, includeRecent, admit, !isGlobalStoreRoot(ctx.hippoRoot) ? recallRequest : undefined)
+    : { entries: [] };
+  let localEntries = localLoad.entries;
+  let globalEntries = globalLoad.entries;
 
   // Computed below, after markRetrieved runs, so avgStrength reflects the
   // post-retrieval strengths rather than a stale pre-mutation snapshot.
@@ -2638,8 +2655,6 @@ export async function getContext(
       }).filter((e) => passesScopeFilterForRecall(rowScope(e), undefined))
     : [];
 
-  const promptRecallPending = pinnedOnly && Boolean(opts.prompt?.trim())
-    && loadConfig(ctx.hippoRoot).pinnedInject.promptRecall === true;
   if (
     !promptRecallPending &&
     localEntries.length === 0 &&
@@ -2715,46 +2730,21 @@ export async function getContext(
     const recentBudget = Math.max(0, effBudget - pinnedReserve);
 
     // Z1: gate the backfill on the prompt instead of recency (docs/plans/2026-09-26-z1-prompt-recall.md).
-    const promptRecallOn = Boolean(opts.prompt?.trim()) && pinnedCfg.pinnedInject.promptRecall === true;
+    const promptRecallOn = promptRecallPending;
     if (promptRecallOn) {
       const rawMetric = pinnedCfg.pinnedInject.promptRecallMetric;
       const metric: PromptRecallMetric = rawMetric === 'cosine' ? 'cosine' : 'jaccard';
-      // Config values come from JSON with no runtime type check; Number.isFinite also rejects a string there.
-      const finiteOr = (v: number, dflt: number, min: number): number =>
-        Number.isFinite(v) && v >= min ? v : dflt;
       const gate: PromptRecallGate = {
         metric,
         threshold: finiteOr(pinnedCfg.pinnedInject.promptRecallThreshold, 0.04, 0),
         minShared: finiteOr(pinnedCfg.pinnedInject.promptRecallMinShared, 2, 0),
         maxItems: finiteOr(pinnedCfg.pinnedInject.promptRecallMaxItems, 5, 1),
       };
-      const candidateLimit = Math.floor(finiteOr(pinnedCfg.pinnedInject.promptRecallCandidates, 100, 1));
       const p = promptTokens(opts.prompt ?? '');
       if (p.size > 0) {
-        const promptTermList = Array.from(p);
-        // One open connection per store instead of loadRecallSearchEntries's own
-        // initStore+open/close per call: store is already initialized (hasLocal/hasGlobal).
-        let localCandidates: MemoryEntry[] = [];
-        if (hasLocal) {
-          const localDb = openHippoDb(ctx.hippoRoot);
-          try {
-            const ftsQuery = pickRarestFtsQuery(localDb, promptTermList);
-            // An empty query would load the oldest rows, not matches.
-            if (ftsQuery) localCandidates = loadRecallSearchEntriesFromDb(localDb, ftsQuery, candidateLimit, ctx.tenantId, undefined, 'exact', false);
-          } finally {
-            closeHippoDb(localDb);
-          }
-        }
-        let globalCandidates: MemoryEntry[] = [];
-        if (hasGlobal && !isGlobalStoreRoot(ctx.hippoRoot)) {
-          const globalDb = openHippoDb(globalRoot);
-          try {
-            const ftsQuery = pickRarestFtsQuery(globalDb, promptTermList);
-            if (ftsQuery) globalCandidates = loadRecallSearchEntriesFromDb(globalDb, ftsQuery, candidateLimit, ctx.tenantId, undefined, 'exact', false);
-          } finally {
-            closeHippoDb(globalDb);
-          }
-        }
+        // Candidates came off the ambient load's own connection (recallRequest above), not a fresh open.
+        const localCandidates = localLoad.recall ?? [];
+        const globalCandidates = globalLoad.recall ?? [];
         const seenCandidateIds = new Set<string>();
         const candidateItems: Array<{ id: string; tokens: Set<string>; entry: MemoryEntry; isGlobal: boolean }> = [];
         // Local wins the id collision (a global row synced into the local store).

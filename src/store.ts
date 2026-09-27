@@ -315,6 +315,11 @@ export function isInitialized(hippoRoot: string): boolean {
 }
 
 export function initStore(hippoRoot: string): void {
+  closeHippoDb(openStore(hippoRoot));
+}
+
+/** One open connection with init done on it, for callers who used to pay for `initStore` + a second `openHippoDb`. */
+export function openStore(hippoRoot: string): DatabaseSyncLike {
   ensureMirrorDirectories(hippoRoot);
   const db = openHippoDb(hippoRoot);
   try {
@@ -323,8 +328,14 @@ export function initStore(hippoRoot: string): void {
       syncMirrorFiles(hippoRoot, db);
     }
     recordHalfLifeBaseForNewStore(db);
-  } finally {
-    closeHippoDb(db);
+    return db;
+  } catch (error) {
+    try {
+      closeHippoDb(db);
+    } catch {
+      // Best effort only; surface the original init error.
+    }
+    throw error;
   }
 }
 
@@ -1509,8 +1520,7 @@ function syncMirrorFiles(hippoRoot: string, db: ReturnType<typeof openHippoDb>):
 
 /** Load the derived index from SQLite. Read-only: index.json is only ever written by `rebuildIndex`. */
 export function loadIndex(hippoRoot: string): HippoIndex {
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     return buildIndexFromDb(db);
   } finally {
@@ -1529,8 +1539,7 @@ export function loadIndex(hippoRoot: string): HippoIndex {
  * is left untouched; only `rebuildIndex` writes it.
  */
 export function saveIndex(hippoRoot: string, index: HippoIndex): void {
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     db.exec('BEGIN');
     try {
@@ -1611,10 +1620,9 @@ export function writeEntry(
     afterCommit?: () => void;
   },
 ): void {
-  initStore(hippoRoot);
-  const stamped = stampOriginProject(hippoRoot, entry);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
+    const stamped = stampOriginProject(hippoRoot, entry);
     writeEntryDbOnly(db, stamped, opts);
     opts?.afterCommit?.();
     writeEntryMirrors(hippoRoot, stamped);
@@ -1706,8 +1714,7 @@ export function writeEntryMirrors(hippoRoot: string, entry: MemoryEntry): void {
  * legacy single-tenant callers and the writeEntry/readEntry round-trip.
  */
 export function readEntry(hippoRoot: string, id: string, tenantId?: string): MemoryEntry | null {
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     // SAFETY: both branches select exactly MEMORY_SELECT_COLUMNS, matching
     // MemoryRow's field set.
@@ -1737,8 +1744,7 @@ export function loadEntriesByIds(
 ): MemoryEntry[] {
   if (ids.length === 0) return [];
   const capped = ids.slice(0, 500);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     const placeholders = capped.map(() => '?').join(',');
     // T2: no ORDER BY meant row order followed SQLite's IN(...) scan order
@@ -1813,8 +1819,7 @@ export function loadSessionRawMemories(
   cap?: number,
 ): MemoryEntry[] {
   if (!sessionId) return [];
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     const params: Array<string | number> = [];
     let sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' AND source_session_id = ? AND superseded_by IS NULL`;
@@ -1863,8 +1868,7 @@ export function countSessionRawMemories(
   scope?: string,
 ): number {
   if (!sessionId) return 0;
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     const params: Array<string> = [];
     let sql = `SELECT COUNT(*) AS c FROM memories WHERE kind = 'raw' AND source_session_id = ? AND superseded_by IS NULL`;
@@ -1920,8 +1924,7 @@ export function loadFreshRawMemories(
 ): MemoryEntry[] {
   if (count <= 0) return [];
   const capped = Math.min(count, 200);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     const params: Array<string | number> = [];
     let sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' AND superseded_by IS NULL`;
@@ -1958,8 +1961,7 @@ export function loadChildrenOf(
   parentId: string,
   tenantId?: string,
 ): MemoryEntry[] {
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     // SAFETY: both branches select exactly MEMORY_SELECT_COLUMNS, matching
     // MemoryRow's field set.
@@ -2039,8 +2041,7 @@ export function deleteEntry(
   id: string,
   opts?: { actor?: string; reason?: string; automatic?: boolean },
 ): boolean {
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     const result = deleteEntryCore(db, id, opts);
     if (!result) return false;
@@ -2080,8 +2081,7 @@ export function batchWriteAndDelete(
   const dormantMoves = opts?.dormant ?? [];
   if (toWrite.length === 0 && toDeleteIds.length === 0 && dormantMoves.length === 0) return [];
 
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     // BEGIN IMMEDIATE (codex delta-review P2): the AT1 tombstone probes below
     // READ before the first write. Under a deferred BEGIN, that read pins a
@@ -2254,8 +2254,7 @@ export function batchWriteAndDelete(
  * paths that surface results to a user MUST pass a resolved tenant.
  */
 export function loadAllEntries(hippoRoot: string, tenantId?: string): MemoryEntry[] {
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     return selectAllEntries(db, tenantId);
   } finally {
@@ -2277,20 +2276,44 @@ export function selectAllEntries(db: DatabaseSyncLike, tenantId?: string): Memor
   return rows.map(rowToEntry);
 }
 
+// Content of every tenant row tagged `tag`, without reading the rest of the store.
+// `instr` is a substring prefilter over the raw JSON; `includes` below re-checks exactly.
+export function loadContentsWithTag(hippoRoot: string, tenantId: string, tag: string): string[] {
+  const db = openStore(hippoRoot);
+  try {
+    /** SAFETY: rows' shape matches the two columns named in the SELECT below. */
+    const rows = db.prepare(
+      `SELECT content, tags_json FROM memories WHERE tenant_id = ? AND instr(tags_json, ?) > 0`,
+    ).all(tenantId, JSON.stringify(tag)) as Array<{ content: string; tags_json: string }>;
+    return rows.filter((r) => parseJsonArray(r.tags_json).includes(tag)).map((r) => r.content);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+export interface AmbientRecallRequest {
+  terms: string[];
+  limit: number;
+}
+
+export interface AmbientLoadResult {
+  entries: MemoryEntry[];
+  recall?: MemoryEntry[];
+}
+
 // The pins plus the `recentNeeded` newest rows that pass `admit`, for ambient
-// injection. One connection: opening one costs ~5.8ms on a warm 1896-row store,
-// so a second handle loses more than the narrower scan saves.
+// injection. One connection; `recall` piggybacks the Z1 FTS query on it too.
 export function loadAmbientCandidates(
   hippoRoot: string,
   tenantId: string,
   recentNeeded: number,
   admit: (e: MemoryEntry) => boolean,
-): MemoryEntry[] {
-  initStore(hippoRoot);
+  recall?: AmbientRecallRequest,
+): AmbientLoadResult {
   // A SQL LIMIT takes an integer; the Array.slice this replaced truncated one,
   // and include_recent is any non-negative finite number at the HTTP edge.
   const needed = Math.trunc(recentNeeded);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     // SAFETY: every `where` below starts from MEMORY_SELECT_COLUMNS' table.
     const run = (where: string, params: Array<string | number>): MemoryEntry[] =>
@@ -2324,10 +2347,16 @@ export function loadAmbientCandidates(
 
     // loadAllEntries' order: rankedPinned's comparator can tie and Array.sort
     // is stable, so input order is load-bearing downstream.
-    return [...byId.values()].sort((a, b) => {
+    const entries = [...byId.values()].sort((a, b) => {
       const byCreated = a.created.localeCompare(b.created);
       return byCreated !== 0 ? byCreated : a.id.localeCompare(b.id);
     });
+    if (!recall) return { entries };
+    const ftsQuery = pickRarestFtsQuery(db, recall.terms);
+    const recallEntries = ftsQuery
+      ? loadRecallSearchEntriesFromDb(db, ftsQuery, recall.limit, tenantId, undefined, 'exact', false)
+      : [];
+    return { entries, recall: recallEntries };
   } finally {
     closeHippoDb(db);
   }
@@ -2346,8 +2375,7 @@ export function loadSearchEntries(
   limit: number = DEFAULT_SEARCH_CANDIDATE_LIMIT,
   tenantId?: string,
 ): MemoryEntry[] {
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     return loadSearchRows(db, query, limit, tenantId).map(rowToEntry);
   } finally {
@@ -2388,8 +2416,7 @@ export function loadRecallSearchEntries(
   explicitScopeMode: 'exact' | 'additive' = 'exact',
   includeSuperseded = true,
 ): MemoryEntry[] {
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     return loadRecallSearchEntriesFromDb(db, query, limit, tenantId, requestedScope, explicitScopeMode, includeSuperseded);
   } finally {
@@ -2444,8 +2471,7 @@ export function pickRarestFtsQuery(db: DatabaseSyncLike, terms: readonly string[
  * Rebuild mirrors from SQLite, importing any legacy markdown files not already present.
  */
 export function rebuildIndex(hippoRoot: string): HippoIndex {
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     // SAFETY: rows' shape matches the single `id` column selected above.
     const existingIds = new Set(
@@ -2497,8 +2523,7 @@ export function updateStats(
   hippoRoot: string,
   delta: { remembered?: number; recalled?: number; forgotten?: number }
 ): void {
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     // One atomic statement per counter, and only for counters the caller
     // named: the read-modify-write this replaces both lost increments to a
@@ -2525,8 +2550,7 @@ export function updateStats(
 }
 
 export function loadStats(hippoRoot: string): LegacyStats {
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     return buildStatsFromDb(db);
   } finally {
@@ -2538,8 +2562,7 @@ export function appendConsolidationRun(
   hippoRoot: string,
   run: { timestamp: string; decayed: number; merged: number; removed: number }
 ): void {
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     db.prepare(`INSERT INTO consolidation_runs(timestamp, decayed, merged, removed) VALUES (?, ?, ?, ?)`).run(
       run.timestamp,
@@ -2556,8 +2579,7 @@ export function appendConsolidationRun(
 
 /** Rows a tenant created since the last sleep (runs are host-wide), looking back at most 24 hours. */
 export function countCreatedSinceLastSleep(hippoRoot: string, tenantId: string, now: Date = new Date()): number {
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     const dayAgo = new Date(now.getTime() - 86_400_000).toISOString();
     const row = db.prepare(
@@ -2585,8 +2607,7 @@ export interface SessionDecayContext {
  * Uses consolidation_runs timestamps to compute session intervals.
  */
 export function loadSessionDecayContext(hippoRoot: string): SessionDecayContext {
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     // Get recent consolidation timestamps (last 20)
     // SAFETY: rows' shape matches the single `timestamp` column above.
@@ -2619,8 +2640,7 @@ export function loadSessionDecayContext(hippoRoot: string): SessionDecayContext 
  * Increment the sleep counter. Called after each consolidation run.
  */
 export function incrementSleepCount(hippoRoot: string): void {
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     const current = Number(getMeta(db, 'sleep_count', '0')) || 0;
     setMeta(db, 'sleep_count', String(current + 1));
@@ -2671,8 +2691,7 @@ export function saveActiveTaskSnapshot(
   }
 ): TaskSnapshot {
   assertTenantId('saveActiveTaskSnapshot', tenantId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   const now = new Date().toISOString();
 
   try {
@@ -2725,8 +2744,7 @@ export function saveActiveTaskSnapshot(
 
 export function loadActiveTaskSnapshot(hippoRoot: string, tenantId: string): TaskSnapshot | null {
   assertTenantId('loadActiveTaskSnapshot', tenantId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     // SAFETY: row's shape matches the ten columns named in the SELECT above.
     const row = db.prepare(`
@@ -2811,8 +2829,7 @@ export function loadFreshActiveTaskSnapshot(
 
 export function clearActiveTaskSnapshot(hippoRoot: string, tenantId: string, clearedStatus: string = 'cleared'): boolean {
   assertTenantId('clearActiveTaskSnapshot', tenantId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   const now = new Date().toISOString();
 
   try {
@@ -2847,8 +2864,7 @@ export function closeTaskSnapshotsForSession(
   status: string = 'session-ended',
 ): number {
   assertTenantId('closeTaskSnapshotsForSession', tenantId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   const now = new Date().toISOString();
 
   try {
@@ -2875,8 +2891,7 @@ export function appendSessionEvent(
   }
 ): SessionEvent {
   assertTenantId('appendSessionEvent', tenantId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   const now = new Date().toISOString();
 
   // v1.2: scope is wired through. Default-deny in api.recall + cmdRecall
@@ -2934,8 +2949,7 @@ export function listSessionEvents(
   options: { session_id?: string; task?: string; limit?: number } = {}
 ): SessionEvent[] {
   assertTenantId('listSessionEvents', tenantId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     const clauses: string[] = ['tenant_id = ?'];
     const params: Array<string | number> = [tenantId];
@@ -2979,8 +2993,7 @@ export function findPromotableSessions(
   sinceMs: number,
 ): Array<{ session_id: string }> {
   assertTenantId('findPromotableSessions', tenantId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     // SAFETY: rows' shape matches the single `session_id` column selected
     // above.
@@ -3000,8 +3013,7 @@ export function findPromotableSessions(
  */
 export function traceExistsForSession(hippoRoot: string, tenantId: string, session_id: string): boolean {
   assertTenantId('traceExistsForSession', tenantId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     const row = db.prepare(`
       SELECT 1 FROM memories
@@ -3019,8 +3031,7 @@ export function listMemoryConflicts(
   status: string = 'open',
   tenantId?: string,
 ): MemoryConflict[] {
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     // v0.28 — '*' is a sentinel meaning "no status filter, return all rows".
     // Pre-v0.28 callers (cli/mcp/dashboard) always passed 'open' or default,
@@ -3081,8 +3092,7 @@ export function replaceDetectedConflicts(
   detected: Array<{ memory_a_id: string; memory_b_id: string; reason: string; score: number }>,
   detectedAt: string = new Date().toISOString()
 ): void {
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
 
   try {
     db.exec('BEGIN');
@@ -3244,8 +3254,7 @@ export function resolveConflict(
   tenantId?: string,
   opts?: ResolveConflictOpts,
 ): { conflict: MemoryConflict; loserId: string } | null {
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
 
   // When tenantId is set, the conflict lookup requires BOTH members in-tenant
   // and every memories mutation carries AND tenant_id = ?. A cross-tenant probe
@@ -3484,8 +3493,7 @@ export function saveSessionHandoff(
   handoff: Omit<SessionHandoff, 'updatedAt'>,
 ): SessionHandoff {
   assertTenantId('saveSessionHandoff', tenantId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   const now = new Date().toISOString();
 
   // v1.2: scope is wired through. Read-side default-deny in api.recall +
@@ -3537,8 +3545,7 @@ export function loadLatestHandoff(
   opts: { unfinishedOnly?: boolean; maxAgeMs?: number; scopeFilter?: 'default-deny' } = {},
 ): SessionHandoff | null {
   assertTenantId('loadLatestHandoff', tenantId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
 
   try {
     const conditions: string[] = ['tenant_id = ?'];
@@ -3585,8 +3592,7 @@ export function loadLatestHandoff(
  */
 export function loadHandoffById(hippoRoot: string, tenantId: string, id: number): SessionHandoff | null {
   assertTenantId('loadHandoffById', tenantId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
 
   try {
     // SAFETY: row's shape matches HANDOFF_COLUMNS.
@@ -3605,8 +3611,7 @@ export function loadHandoffById(hippoRoot: string, tenantId: string, id: number)
 /** Stamp the outcome on a session's newest handoff, only if it has none yet. Returns rows changed. */
 export function stampHandoffOutcome(hippoRoot: string, tenantId: string, sessionId: string, outcome: HandoffOutcome): number {
   assertTenantId('stampHandoffOutcome', tenantId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     const result = db.prepare(`
       UPDATE session_handoffs SET outcome = ?
@@ -3840,8 +3845,7 @@ export function createCard(
   if (input.budget !== undefined && !(Number.isSafeInteger(input.budget) && input.budget > 0)) {
     throw new Error(`Invalid budget: ${input.budget} (expected a positive integer)`);
   }
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     const dependsOn = [...new Set(input.dependsOn ?? [])];
     let id = '';
@@ -3894,8 +3898,7 @@ export function createCard(
 /** Returns the card row for id, or null if it does not exist under this tenant. */
 export function loadCard(hippoRoot: string, tenantId: string, id: string): Card | null {
   assertTenantId('loadCard', tenantId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     return loadCardRow(db, tenantId, id);
   } finally {
@@ -3906,8 +3909,7 @@ export function loadCard(hippoRoot: string, tenantId: string, id: string): Card 
 /** Lists cards for this tenant, optionally filtered to one status, newest-updated first. */
 export function listCards(hippoRoot: string, tenantId: string, opts: { status?: CardStatus } = {}): Card[] {
   assertTenantId('listCards', tenantId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     const conditions = ['tenant_id = ?'];
     const params: unknown[] = [tenantId];
@@ -3928,8 +3930,7 @@ export function listCards(hippoRoot: string, tenantId: string, opts: { status?: 
 /** Returns this card's parent and child ids from card_deps. */
 export function loadCardDeps(hippoRoot: string, tenantId: string, id: string) {
   assertTenantId('loadCardDeps', tenantId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     // SAFETY: rows' shape matches the single `parent` column named in the SELECT below.
     const parents = (db.prepare(`SELECT parent FROM card_deps WHERE tenant_id = ? AND child = ?`).all(tenantId, id) as Array<{ parent: string }>).map((r) => r.parent);
@@ -3944,8 +3945,7 @@ export function loadCardDeps(hippoRoot: string, tenantId: string, id: string) {
 /** Returns this card's run history, most recent first. */
 export function loadCardRuns(hippoRoot: string, tenantId: string, id: string): CardRun[] {
   assertTenantId('loadCardRuns', tenantId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     // SAFETY: rows' shape matches CardRunRow.
     const rows = db.prepare(`
@@ -3961,8 +3961,7 @@ export function loadCardRuns(hippoRoot: string, tenantId: string, id: string): C
 /** Returns this card's comments, most recent first. */
 export function loadCardComments(hippoRoot: string, tenantId: string, id: string): CardComment[] {
   assertTenantId('loadCardComments', tenantId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     // SAFETY: rows' shape matches CardCommentRow.
     const rows = db.prepare(`
@@ -3978,8 +3977,7 @@ export function loadCardComments(hippoRoot: string, tenantId: string, id: string
 /** Read side of the card <-> handoff round trip: the newest handoff filed against this card. */
 export function loadLatestHandoffForCard(hippoRoot: string, tenantId: string, cardId: string): SessionHandoff | null {
   assertTenantId('loadLatestHandoffForCard', tenantId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     // SAFETY: row's shape matches HANDOFF_COLUMNS.
     const row = db.prepare(`
@@ -3998,8 +3996,7 @@ export function claimCard(hippoRoot: string, tenantId: string, id: string, runti
   if (runtime.trim() === '') {
     throw new Error('runtime must not be empty');
   }
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     db.exec('BEGIN IMMEDIATE');
     let runId = 0;
@@ -4037,8 +4034,7 @@ export function claimCard(hippoRoot: string, tenantId: string, id: string, runti
 export function heartbeatCard(hippoRoot: string, tenantId: string, id: string, runId: number): Card | null {
   assertTenantId('heartbeatCard', tenantId);
   assertRunId(runId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     db.exec('BEGIN IMMEDIATE');
     try {
@@ -4071,8 +4067,7 @@ export function blockCard(hippoRoot: string, tenantId: string, id: string, reaso
     throw new Error('reason must not be empty');
   }
   if (runId !== undefined) assertRunId(runId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     db.exec('BEGIN IMMEDIATE');
     try {
@@ -4104,8 +4099,7 @@ export function blockCard(hippoRoot: string, tenantId: string, id: string, reaso
 export function reviewCard(hippoRoot: string, tenantId: string, id: string, runId?: number): Card | null {
   assertTenantId('reviewCard', tenantId);
   if (runId !== undefined) assertRunId(runId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     db.exec('BEGIN IMMEDIATE');
     try {
@@ -4142,8 +4136,7 @@ export function completeCard(
     throw new Error(`invalid card outcome: ${String(outcome)}`);
   }
   if (runId !== undefined) assertRunId(runId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     db.exec('BEGIN IMMEDIATE');
     let promotedChildren: string[] = [];
@@ -4198,8 +4191,7 @@ export function completeCard(
 /** Returns to ready every running card of the tenant whose lease has expired or is missing: clears its assignee, closes its live run as 'reclaimed' and leaves its handoffs alone, all in one write transaction. Returns the reclaimed card ids in id order. */
 export function reclaimExpiredCards(hippoRoot: string, tenantId: string): string[] {
   assertTenantId('reclaimExpiredCards', tenantId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     db.exec('BEGIN IMMEDIATE');
     try {
@@ -4232,8 +4224,7 @@ export function addCardComment(hippoRoot: string, tenantId: string, cardId: stri
   if (body.trim() === '') {
     throw new Error('body must not be empty');
   }
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     return insertCardComment(db, tenantId, cardId, author, body);
   } finally {
@@ -4264,8 +4255,7 @@ export function loadDirtySummaries(
   tenantId: string,
 ): MemoryEntry[] {
   assertTenantId('loadDirtySummaries', tenantId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
     // MemoryRow's field set.
@@ -4345,8 +4335,7 @@ export function markSummaryDirty(
   actor: string = 'cli',
 ): void {
   assertTenantId('markSummaryDirty', tenantId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     // v0.30 / E5: widened dag_level=2 -> IN (2, 3). RETURNING dag_level reads
     // actual level in same round trip.
@@ -4394,8 +4383,7 @@ export function markSummaryDirty(
  * tenant-scoped via summary.tenantId.
  */
 export function loadAllL2Summaries(hippoRoot: string): MemoryEntry[] {
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
     // MemoryRow's field set.
@@ -4424,8 +4412,7 @@ export function loadAllL2Summaries(hippoRoot: string): MemoryEntry[] {
  * HIPPO_DAG_REBUILD_CAP takes most-recently-changed summaries first.
  */
 export function loadAllDirtySummaries(hippoRoot: string): MemoryEntry[] {
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
     // MemoryRow's field set.
@@ -4455,8 +4442,7 @@ export function loadChildrenOfSummary(
   tenantId: string,
 ): MemoryEntry[] {
   assertTenantId('loadChildrenOfSummary', tenantId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
     // MemoryRow's field set.
@@ -4507,8 +4493,7 @@ export function applyRebuildResult(
   patch: RebuildPatch,
 ) {
   assertTenantId('applyRebuildResult', summary.tenantId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     db.exec('SAVEPOINT rebuild_summary');
     try {
@@ -4697,8 +4682,7 @@ export function clearSummaryDirtyAfterBuild(
   source: string = 'buildDag-clean',
 ): void {
   assertTenantId('clearSummaryDirtyAfterBuild', tenantId);
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     // v0.30 / E5: widened dag_level=2 -> IN (2, 3). RETURNING dag_level reads
     // actual level so audit metadata stays accurate without an extra SELECT.

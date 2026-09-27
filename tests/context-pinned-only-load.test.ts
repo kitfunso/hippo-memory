@@ -256,7 +256,7 @@ describe('loadAmbientCandidates', () => {
     writeEntry(local, mine);
     writeEntry(local, theirs);
 
-    const got = loadAmbientCandidates(local, 'tenant-a', 5, () => true);
+    const { entries: got } = loadAmbientCandidates(local, 'tenant-a', 5, () => true);
 
     expect(got.map((e) => e.id)).toContain(mine.id);
     expect(got.map((e) => e.id)).not.toContain(theirs.id);
@@ -268,7 +268,7 @@ describe('loadAmbientCandidates', () => {
       writeEntry(local, { ...createMemory(`tied row ${i}`), created, id: `id-${String(i).padStart(3, '0')}` });
     }
 
-    const got = loadAmbientCandidates(local, 'default', 3, () => true);
+    const { entries: got } = loadAmbientCandidates(local, 'default', 3, () => true);
     const newestThree = got.map((e) => e.id).sort().slice(-3);
 
     expect(newestThree).toEqual(['id-037', 'id-038', 'id-039']);
@@ -283,7 +283,7 @@ describe('loadAmbientCandidates', () => {
       });
     }
 
-    const got = loadAmbientCandidates(local, 'default', 5, () => true);
+    const { entries: got } = loadAmbientCandidates(local, 'default', 5, () => true);
     const sorted = [...got].sort((a, b) =>
       a.created.localeCompare(b.created) || a.id.localeCompare(b.id),
     );
@@ -296,7 +296,7 @@ describe('loadAmbientCandidates', () => {
     const pin = { ...createMemory('the only pin in the store'), pinned: true };
     writeEntry(local, pin);
 
-    const got = loadAmbientCandidates(local, 'default', 0, () => true);
+    const { entries: got } = loadAmbientCandidates(local, 'default', 0, () => true);
 
     expect(got.map((e) => e.id)).toEqual([pin.id]);
   });
@@ -316,7 +316,7 @@ describe('loadAmbientCandidates', () => {
     };
     writeEntry(local, drifted);
 
-    const got = loadAmbientCandidates(local, 'default', 1, () => true);
+    const { entries: got } = loadAmbientCandidates(local, 'default', 1, () => true);
 
     expect(got.map((e) => e.id)).toContain(drifted.id);
   });
@@ -331,8 +331,8 @@ describe('loadAmbientCandidates', () => {
       });
     }
 
-    const whole = loadAmbientCandidates(local, 'default', 8, () => true);
-    const fractional = loadAmbientCandidates(local, 'default', 8.1, () => true);
+    const { entries: whole } = loadAmbientCandidates(local, 'default', 8, () => true);
+    const { entries: fractional } = loadAmbientCandidates(local, 'default', 8.1, () => true);
 
     expect(fractional.map((e) => e.id)).toEqual(whole.map((e) => e.id));
   });

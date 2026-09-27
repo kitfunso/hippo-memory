@@ -12,12 +12,12 @@
  * cli.ts and api.ts, so it introduces no cycle.
  */
 
-import { openHippoDb, closeHippoDb } from './db.js';
+import { closeHippoDb } from './db.js';
 import { appendAuditEvent } from './audit.js';
 import { archiveRawMemory } from './raw-archive.js';
 import { purgeDormantByDigest } from './dormant.js';
 import {
-  initStore,
+  openStore,
   deleteEntryCore,
   purgeMirrorBestEffort,
 } from './store.js';
@@ -85,8 +85,7 @@ export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
     throw new Error('reject --value requires non-empty content.');
   }
 
-  initStore(opts.hippoRoot);
-  const db = openHippoDb(opts.hippoRoot);
+  const db = openStore(opts.hippoRoot);
   try {
     let content: string;
     if (opts.memoryId !== undefined) {
@@ -225,8 +224,7 @@ export function unrejectValue(
     return { status: 'not_found' };
   }
 
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     const all = listRejectedValues(db, tenantId);
     const matches = all.filter((r) => r.digest.startsWith(digestOrPrefix));
@@ -254,8 +252,7 @@ export function unrejectValue(
 
 /** `hippo rejections` / `api.listRejections` — list tombstones for a tenant. */
 export function listRejectionsForTenant(hippoRoot: string, tenantId: string): RejectedValueRow[] {
-  initStore(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+  const db = openStore(hippoRoot);
   try {
     return listRejectedValues(db, tenantId);
   } finally {
