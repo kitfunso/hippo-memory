@@ -929,7 +929,7 @@ function emptyZ1Bucket() {
     reset: { primary: makeAcc(), secondary: makeAcc() },
     lifetime: { primary: makeAcc(), secondary: makeAcc() },
     tokens: [],
-    tokensScored: [], // per-file only: parallel scored flags, filtered out of processFile's return
+    tokensScored: [], // per-file only: parallel scored flags; fold ignores them
     noRecall: { count: 0, total: 0 },
   };
 }
@@ -976,7 +976,7 @@ function emptyZ1bBucket() {
     reset: { primary: makeAcc(), secondary: makeAcc() },
     lifetime: { primary: makeAcc(), secondary: makeAcc() },
     tokens: [],
-    tokensScored: [], // per-file only: parallel scored flags, filtered out of processFile's return
+    tokensScored: [], // per-file only: parallel scored flags; fold ignores them
     intervalHasBlock: { count: 0, total: 0 },
     tokensUnattributed: 0,
     addedEvents: 0,
@@ -1123,7 +1123,7 @@ async function main() {
   const startedAt = Date.now();
   for (const f of wanted) {
     const label = splitOf(f);
-    const collectJudge = collectJudgeMode && (args.split === 'all' || label === 'heldout');
+    const collectJudge = collectJudgeMode && (sinceMs != null || label === 'heldout');
     const result = await processFile(f, args.mode, ctx, z1Configs, arm, collectJudge);
     fold(buckets[label], result);
     fold(buckets.all, result);

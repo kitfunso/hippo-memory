@@ -108,7 +108,7 @@ function buildDerangement(sessions, seed) {
   const n = sessions.length;
   if (n < 2) return [];
   const order = seededShuffle([...Array(n).keys()], seed);
-  const pi = new Array(n);
+  const pi = Array.from({ length: n });
   for (let k = 0; k < n; k++) pi[order[k]] = order[(k + 1) % n];
   for (let pass = 0; pass < n; pass++) {
     let improved = false;
@@ -138,7 +138,7 @@ function buildDerangement(sessions, seed) {
 const BASE64_KEYS = new Set(['signature', 'data']);
 function mentionsZ1c(line) {
   let s = line;
-  try { s = JSON.stringify(JSON.parse(line), (k, v) => (BASE64_KEYS.has(k) && typeof v === 'string' ? '' : v)); } catch { /* raw line */ }
+  try { s = JSON.stringify(JSON.parse(line), (k, v) => (BASE64_KEYS.has(k) && !(v instanceof Object) ? '' : v)); } catch { /* raw line */ }
   return /\bz1c\b/i.test(s);
 }
 
@@ -276,7 +276,13 @@ function callClaude(model, prompt, cwd) {
     '-p', '--safe-mode', '--model', model, '--tools', '', '--no-session-persistence', '--strict-mcp-config',
     '--system-prompt', 'You label items. Follow the user message exactly.',
   ];
-  return spawnSync(exe, args, { cwd, input: prompt, encoding: 'utf8', timeout: 600000, shell: false, maxBuffer: 1024 * 1024 * 20 });
+  // Transport retries only (non-zero exit, no labels seen): a transient API refusal must not VOID the one scored run.
+  let r;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    r = spawnSync(exe, args, { cwd, input: prompt, encoding: 'utf8', timeout: 600000, shell: false, maxBuffer: 1024 * 1024 * 20 });
+    if (r.status === 0) break;
+  }
+  return r;
 }
 
 function renderItem(it) {
@@ -311,12 +317,19 @@ function readHeadings(file) {
 }
 
 function isolationOk(model, home, judgeCwd) {
+  // Prereg amendment 1: the first wording ("list everything in your context") drew Opus safeguard refusals.
   const prompt =
-    'List every markdown section heading (lines starting with #) that appears anywhere in your context other ' +
-    'than this message, one per line, verbatim. If there are none, reply NONE.';
-  const reply = callClaude(model, prompt, judgeCwd).stdout || '';
+    'Quick setup check before a labelling task. If any project instruction files (for example a CLAUDE.md) were ' +
+    'loaded for you, copy their markdown section headings here, one per line. If none were loaded, reply NONE.';
+  const r = callClaude(model, prompt, judgeCwd);
+  const reply = (r.stdout || '').trim();
+  fs.writeFileSync(path.join(judgeCwd, '..', `isolation-${model}.txt`), `status=${r.status}\n${reply}\n${r.stderr || ''}`);
+  // A failed or empty probe proves nothing, and the marker comes next.
+  if (r.status !== 0 || !reply) return false;
+  const bare = (h) => h.replace(/^[\s#]+/, '').trim();
+  const replyLines = new Set(reply.split(/\r?\n/).map(bare).filter(Boolean));
   const headings = [...readHeadings(path.join(home, '.claude', 'CLAUDE.md')), ...readHeadings(path.join(home, 'CLAUDE.md'))];
-  return !headings.some((h) => reply.includes(h));
+  return !headings.map(bare).some((h) => h && replyLines.has(h));
 }
 
 // judge set construction (step 6)
@@ -358,7 +371,7 @@ function buildJudgeSet(outDir, dryRun) {
 function scoreArm(eventIds, events, key, sonnetLabels, opusLabels, arm) {
   const idxByEventArm = new Map();
   for (const k of key) if (k.arm === arm) idxByEventArm.set(k.eventId, k.itemId);
-  let helps = 0;
+  let helps = 0, sHelps = 0, oHelps = 0;
   const sLabels = [], oLabels = [];
   for (const id of eventIds) {
     const ev = events.get(id);
@@ -366,16 +379,19 @@ function scoreArm(eventIds, events, key, sonnetLabels, opusLabels, arm) {
     const itemId = idxByEventArm.get(id);
     const s = sonnetLabels.get(itemId), o = opusLabels.get(itemId);
     sLabels.push(s); oLabels.push(o);
+    if (s === 'HELPS') sHelps++;
+    if (o === 'HELPS') oHelps++;
     if (s === 'HELPS' && o === 'HELPS') helps++;
   }
-  return { rate: eventIds.length ? helps / eventIds.length : 0, sLabels, oLabels };
+  const n = eventIds.length;
+  return { helps, n, rate: n ? helps / n : 0, sonnetRate: n ? sHelps / n : 0, opusRate: n ? oHelps / n : 0, sLabels, oLabels };
 }
 
 function score(outDir, eventIds, events, key, sonnetLabels, opusLabels, rr) {
   const t = scoreArm(eventIds, events, key, sonnetLabels, opusLabels, 'T');
   const c = scoreArm(eventIds, events, key, sonnetLabels, opusLabels, 'C');
   const pEventIds = key.filter((k) => k.arm === 'P').map((k) => k.eventId);
-  const p = pEventIds.length ? scoreArm(pEventIds, events, key, sonnetLabels, opusLabels, 'P') : { rate: 0, sLabels: [], oLabels: [] };
+  const p = scoreArm(pEventIds, events, key, sonnetLabels, opusLabels, 'P');
 
   let b = 0, c2 = 0;
   for (let i = 0; i < eventIds.length; i++) {
@@ -391,19 +407,23 @@ function score(outDir, eventIds, events, key, sonnetLabels, opusLabels, rr) {
 
   const tokens = rr.all.A1.tokens, z1bTokens = rr.all.Z1b.tokens;
   const ratio = tokens.mean ? z1bTokens.mean / tokens.mean : null;
-  const validity = pEventIds.length > 0 && p.rate <= 0.10;
-  const judgeGate = eventIds.length >= MIN_EVENTS && t.rate >= 0.30 && t.rate - c.rate >= 0.15 && pValue < 0.05;
-  const tokensGate = ratio !== null && ratio <= 1.20 && tokens.hookPrompts >= 200;
+  // Integer comparisons: 0.7 - 0.55 is 0.1499... in floating point.
+  const n = eventIds.length;
+  const validity = p.n > 0 && 10 * p.helps <= p.n;
+  const judgeGate = n >= MIN_EVENTS && 10 * t.helps >= 3 * n && 100 * (t.helps - c.helps) >= 15 * n && pValue < 0.05;
+  const tokensGate = tokens.mean > 0 && 5 * z1bTokens.mean <= 6 * tokens.mean && tokens.hookPrompts >= 200;
   const verdict = !validity ? 'VOID' : judgeGate && tokensGate ? 'PASS' : 'FAIL';
+  const arm = (a) => ({ helps: a.helps, n: a.n, rate: a.rate, sonnetRate: a.sonnetRate, opusRate: a.opusRate });
 
   const result = {
-    eligible: eventIds.length,
-    T: { rate: t.rate }, C: { rate: c.rate }, P: { rate: p.rate },
+    eligible: n,
+    T: arm(t), C: arm(c), P: arm(p),
     discordant: { b, c: c2 }, signTestP: pValue, kappa: kap,
     tokens: { ratio, hookPrompts: tokens.hookPrompts },
     gates: { validity, judge: judgeGate, tokens: tokensGate },
     latency: 'not measured: needs hook code, gated on judge+tokens',
     verdict,
+    replay: { A1: rr.all.A1, Z1c: rr.all.Z1b },
   };
   fs.writeFileSync(path.join(outDir, 'result.json'), JSON.stringify(result, null, 2));
   return result;
@@ -447,8 +467,22 @@ async function main() {
     console.log('refused: --out is inside the repo');
     process.exit(1);
   }
+  if (args.dryRun !== null && !(Number.isInteger(args.dryRun) && args.dryRun > 0)) {
+    console.log('refused: --dry-run needs a positive integer');
+    process.exit(1);
+  }
   const home = path.resolve(args.home || os.homedir());
   const projectsDir = path.resolve(args.projects || path.join(home, '.claude', 'projects'));
+  const marker = path.join(home, '.hippo-eval-locks', 'z1c-2026-09-26T23-00-00Z.json');
+  // Refuse before any cleanup, so a refused rerun cannot wipe the scored run's evidence.
+  if (args.dryRun === null && fs.existsSync(marker)) {
+    console.log('refused: marker already exists, rerun needs a committed prereg amendment');
+    process.exit(4);
+  }
+  if (fs.existsSync(path.join(outDir, 'result.json'))) {
+    console.log('refused: --out holds a scored run');
+    process.exit(4);
+  }
   fs.mkdirSync(outDir, { recursive: true });
   // A rerun into the same --out must not replay stale copies, and VACUUM INTO refuses an existing file.
   for (const sub of ['corpus', 'stores', 'global', 'judge']) fs.rmSync(path.join(outDir, sub), { recursive: true, force: true });
@@ -477,6 +511,7 @@ async function main() {
     process.exit(2);
   }
 
+  fs.writeFileSync(path.join(outDir, 'replay.json'), JSON.stringify(rr, null, 2));
   const eligible = rr.all.Z1b.addedEvents;
   const hookPrompts = rr.all.A1.tokens.hookPrompts;
   const windowHours = latestTs > -Infinity ? (latestTs - Date.parse(SINCE)) / 3600000 : 0;
@@ -505,7 +540,6 @@ async function main() {
   }
 
   if (args.dryRun === null) {
-    const marker = path.join(home, '.hippo-eval-locks', 'z1c-2026-09-26T23-00-00Z.json');
     if (fs.existsSync(marker)) {
       console.log('refused: marker already exists, rerun needs a committed prereg amendment');
       process.exit(4);
@@ -516,6 +550,9 @@ async function main() {
 
   const sonnet = judge('sonnet', items, judgeCwd);
   const opus = judge('opus', items, judgeCwd);
+  // Labels are persisted because the stopping rule forbids a second judge pass to recover them.
+  const dump = (l) => (l ? Object.fromEntries(l) : null);
+  fs.writeFileSync(path.join(outDir, 'judge', 'labels.json'), JSON.stringify({ sonnet: dump(sonnet.labels), opus: dump(opus.labels) }, null, 2));
   if (!sonnet.labels || !opus.labels) {
     if (args.dryRun === null) {
       fs.writeFileSync(path.join(outDir, 'result.json'), JSON.stringify({ eligible: eventIds.length, verdict: 'VOID', reason: 'labelling incomplete after retry' }, null, 2));
