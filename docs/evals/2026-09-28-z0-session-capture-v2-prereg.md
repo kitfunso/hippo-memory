@@ -29,8 +29,8 @@ A session with no human turn is skipped for all arms. Store dedup is not applied
 
 - **Pool:** every held-out memory from A0, A1 and A2. Exact-text duplicates are merged, so a text is labelled once and credited to each arm that wrote it. The pool is shuffled with seed 20260928. The labeller sees only the text, never the arm or the session.
 - **Primary labeller:** Opus labels the whole pool.
-- **Second labeller:** Sonnet labels a seeded random 100 of the pool (the whole pool if smaller), blind to the Opus labels.
-- **Mechanism:** both run as `claude -p --safe-mode --tools '' --no-session-persistence --strict-mcp-config` with a fixed system prompt, from an empty working directory. A setup probe must show that no instruction file reached either model, or the run stops. Batches of 20; a batch missing any id is asked once more; still missing makes the run VOID.
+- **Second labeller:** Sonnet labels a seeded random 100 of the pool (the whole pool if smaller), blind to the Opus labels. The sample is drawn with seed 20260929.
+- **Mechanism:** both run as `claude -p --safe-mode --tools '' --no-session-persistence --strict-mcp-config` with a fixed system prompt, from an empty working directory. A setup probe asks each model to list any instruction-file headings it was given; anything but a bare NONE stops the run (exit 5) before the marker is written. Batches of 20; a batch missing any id is asked once more; still missing makes the run VOID.
 - **Rubric v2, given verbatim to both labellers:**
 
 ```text
@@ -92,7 +92,7 @@ This agreement measures reliability: whether the two judges read the rubric the 
 
 **How 110 was set.** On tune, the frozen A1 wrote 10 memories on 55 sessions with a human turn (0.18 per session). At 110 sessions that is about 20 A1 memories, above the rule-1 floor of 15; at 100 it would be about 18, too close to the floor. The live projects directory held about 120 sessions with a human turn between 2026-09-01 and 2026-09-26, eval runs excluded: about 4.6 a day. The own-work token scan reads tool output too, so any session that opens the extractor's files is dropped; that is deliberate and makes the date below optimistic by the excluded share, which the scorer reports.
 
-**Scoring date.** At that rate the window reaches 110 around **2026-10-22**. By default Claude Code deletes session files after 30 days, so the run must happen before 2026-10-27, when the first window sessions start to expire. If the window is still short on 2026-10-26, the result is NO VERDICT (window too small), recorded as such; the extractor does not ship.
+**Scoring date.** At that rate the window reaches 110 around **2026-10-22**. By default Claude Code deletes session files after 30 days, so the run must happen before 2026-10-27, when the first window sessions start to expire. The scorer refuses to start on or after that date (exit 7). If the window is still short on 2026-10-26, the result is NO VERDICT (window too small), recorded as such; the extractor does not ship.
 
 ## Scoring command
 
@@ -100,9 +100,9 @@ This agreement measures reliability: whether the two judges read the rubric the 
 node scripts/z0-capture-eval.mjs --out <scratch folder outside the repo> --frozen-corpus <the frozen SI0 transcript copy>
 ```
 
-It builds the extractor from `z0-extractor-v2-freeze` (`git archive`, `npm ci --ignore-scripts`, `tsc`), collects and copies the window, runs the arms, labels, scores, and writes `result.json` and `labels.json` into `--out`. Stdout carries aggregate numbers only.
+It builds the extractor from `z0-extractor-v2-freeze`, refusing if the tag does not resolve to `764f73f767528a5d09f476aa8ef38ded286ee754` (`git archive`, `npm ci --ignore-scripts`, `tsc`), collects and copies the window, runs the arms, labels, scores, and writes `result.json` and `labels.json` into `--out`. Stdout carries aggregate numbers only.
 
-**One scored run.** Right before the first label call it writes a marker at `~/.hippo-eval-locks/z0-capture-v2.json`. A second run with the marker present is refused (exit 4), and so is any run whose `--out` already holds a `result.json`. A crashed or VOID run after the marker is not re-run; a rerun needs a committed amendment to this file that says why.
+**One scored run.** Right before the first label call it creates a marker at `~/.hippo-eval-locks/z0-capture-v2.json`, atomically, so two concurrent runs cannot both pass. A second run with the marker present is refused (exit 4), and so is any run whose `--out` already holds a `result.json`. Held-out memory text is written to `--out` only after the marker exists. A crashed or VOID run after the marker is not re-run; a rerun needs a committed amendment to this file that says why.
 
 ## Decision rule (locked)
 
@@ -113,7 +113,7 @@ It builds the extractor from `z0-extractor-v2-freeze` (`git archive`, `npm ci --
 3. A1 useful rate is at least 0.60.
 4. A1 useful rate beats A0's by at least 0.25.
 5. A1's useful count is at least 0.8 times A0's.
-6. No session gets more than 3 memories.
+6. No session gets more than 3 A1 memories.
 
 **Fails** when rules 1 and 2 hold and any of 3 to 6 fails. Useful means labelled useful by Opus. Every bar is checked with integer arithmetic on the counts. The Wilson 95% interval is reported beside each rate; the bars are on point estimates.
 

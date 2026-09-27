@@ -10,6 +10,9 @@ import assert from 'node:assert/strict';
 
 const SINCE = '2026-09-27T23:00:00.000Z';
 const FREEZE_TAG = 'z0-extractor-v2-freeze';
+const FREEZE_SHA = '764f73f767528a5d09f476aa8ef38ded286ee754';
+// Session files expire after 30 days, so the first window sessions start to go on this date.
+const DEADLINE = '2026-10-27T00:00:00.000Z';
 const MIN_SESSIONS = 110;
 const MIN_A1 = 15;
 const SAMPLE = 100;
@@ -233,6 +236,7 @@ function run(cmd, args, cwd, shell = false) {
 
 function buildFrozen(outDir) {
   const sha = run('git', ['-C', REPO_ROOT, 'rev-parse', '--verify', `${FREEZE_TAG}^{commit}`]).trim();
+  if (sha !== FREEZE_SHA) throw new Error(`${FREEZE_TAG} points at ${sha}, the prereg locks ${FREEZE_SHA}`);
   const buildDir = path.join(outDir, 'build');
   fs.rmSync(buildDir, { recursive: true, force: true });
   fs.mkdirSync(buildDir, { recursive: true });
@@ -298,22 +302,13 @@ function callClaude(model, prompt, cwd) {
   return r;
 }
 
-function readHeadings(file) {
-  if (!fs.existsSync(file)) return [];
-  return fs.readFileSync(file, 'utf8').split(/\r?\n/).filter((l) => /^\s*#/.test(l)).map((l) => l.trim()).filter(Boolean);
-}
-
-function isolationOk(model, home, cwd) {
+// Fail closed: anything but a bare NONE (a refusal, a heading, an error) blocks the run.
+function isolationOk(model, cwd) {
   const prompt =
     'Quick setup check before a labelling task. If any project instruction files (for example a CLAUDE.md) were ' +
     'loaded for you, copy their markdown section headings here, one per line. If none were loaded, reply NONE.';
   const r = callClaude(model, prompt, cwd);
-  const reply = (r.stdout || '').trim();
-  if (r.status !== 0 || !reply) return false;
-  const bare = (h) => h.replace(/^[\s#]+/, '').trim();
-  const lines = new Set(reply.split(/\r?\n/).map(bare).filter(Boolean));
-  const headings = [...readHeadings(path.join(home, '.claude', 'CLAUDE.md')), ...readHeadings(path.join(home, 'CLAUDE.md'))];
-  return !headings.map(bare).some((h) => h && lines.has(h));
+  return r.status === 0 && /^none\.?$/i.test((r.stdout || '').trim());
 }
 
 // Batches of 20; a batch missing any id is re-asked once; still missing => null (VOID).
@@ -409,6 +404,7 @@ async function main() {
   const marker = path.join(home, '.hippo-eval-locks', MARKER);
   // Refuse before any cleanup, so a refused rerun cannot wipe the scored run's evidence.
   if (!tune && fs.existsSync(marker)) { console.log('refused: marker exists, a rerun needs a committed prereg amendment'); process.exit(4); }
+  if (!tune && Date.now() >= Date.parse(DEADLINE)) { console.log(`refused: past the ${DEADLINE.slice(0, 10)} deadline, record NO VERDICT`); process.exit(7); }
   if (fs.existsSync(path.join(outDir, 'result.json'))) { console.log('refused: --out holds a scored run'); process.exit(4); }
   fs.mkdirSync(outDir, { recursive: true });
 
@@ -445,19 +441,25 @@ async function main() {
     process.exit(3);
   }
   const { pool, sample } = buildPool(armsRun.rows);
-  fs.writeFileSync(path.join(outDir, 'arms.json'), JSON.stringify(armsRun, null, 1));
-  fs.writeFileSync(path.join(outDir, 'pool.json'), JSON.stringify({ pool, sample }, null, 1));
-
   const cwd = path.join(outDir, 'labeller-cwd');
   fs.mkdirSync(cwd, { recursive: true });
   for (const model of ['sonnet', 'opus']) {
-    if (!isolationOk(model, home, cwd)) { console.log(`isolation check failed for ${model}`); process.exit(5); }
+    if (!isolationOk(model, cwd)) { console.log(`isolation check failed for ${model}`); process.exit(5); }
   }
   if (!tune) {
-    if (fs.existsSync(marker)) { console.log('refused: marker exists, a rerun needs a committed prereg amendment'); process.exit(4); }
     fs.mkdirSync(path.dirname(marker), { recursive: true });
-    fs.writeFileSync(marker, JSON.stringify({ startedAt: new Date().toISOString(), freeze: build.sha }, null, 2));
+    try {
+      // 'wx' makes the create atomic, so two concurrent runs cannot both pass.
+      fs.writeFileSync(marker, JSON.stringify({ startedAt: new Date().toISOString(), freeze: build.sha }, null, 2), { flag: 'wx' });
+    } catch (e) {
+      if (e.code !== 'EEXIST') throw e;
+      console.log('refused: marker exists, a rerun needs a committed prereg amendment');
+      process.exit(4);
+    }
   }
+  // Held-out memory text reaches disk only once the run is committed.
+  fs.writeFileSync(path.join(outDir, 'arms.json'), JSON.stringify(armsRun, null, 1));
+  fs.writeFileSync(path.join(outDir, 'pool.json'), JSON.stringify({ pool, sample }, null, 1));
   const opus = label('opus', pool, cwd);
   const sonnet = label('sonnet', pool.filter((p) => sample.includes(p.id)), cwd);
   const dump = (l) => (l ? Object.fromEntries(l) : null);
