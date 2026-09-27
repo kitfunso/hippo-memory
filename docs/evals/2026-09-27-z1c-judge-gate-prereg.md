@@ -64,6 +64,14 @@ Overlap (the SI0 lexical scorer) is reported for both arms and not gated: the Z1
 - The replay's Z1b numbers on the frozen corpus are unchanged by this change (Z1b held-out final at the strictest grid point reproduces its result doc).
 - Dataset audit, counts only: files collected and excluded (by reason), hook prompts and non-routine Bash failures in the window, memories created within 10 minutes before the failure they were recalled for.
 
+## Amendment 1 (2026-09-27, before any fresh-window event was replayed or judged)
+
+Found by the count-only dry run; no gate, threshold, prompt or window changed.
+
+- **Exclusion scan.** The literal full-text `z1c` scan excluded 121 of 205 transcript files, because base64 thinking signatures and image data contain those three characters by chance. The scan now drops the `signature` and `data` string fields before matching and matches `z1c` as a whole token (case-insensitive, word boundaries). Paths and names such as `z1c-eval` or `feat/z1c-judge-gate` still match. At amendment time the window held 2 kept sessions and 0 eligible events.
+- **Label parsing.** Sonnet answers the locked prompt by echoing each item's `### Item N` header with the label on the next line. The parser now accepts that form and `Item N: LABEL` as well as `N LABEL`. The prompt text is unchanged. Wiring was proven on 5 events from the retired Z1b held-out export (12 items, both judges labelled every item, no retries); no rate was computed.
+- **Expected date.** The frozen corpus produced 68 eligible events under this configuration over about 25.5 days (about 2.7 a day). At that rate the window reaches 30 around 2026-10-08. The count is checked then, counts only.
+
 ## NOT DONE
 
 - Whether the agent behaves differently. TE5 is the paired test.

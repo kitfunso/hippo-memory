@@ -38,6 +38,7 @@ function parseArgs(argv) {
     else if (a === '--split') out.split = argv[++i];
     else if (a === '--arm') out.arm = argv[++i];
     else if (a === '--judge-out') out.judgeOut = argv[++i];
+    else if (a === '--since') out.since = argv[++i];
   }
   if (!out.arm) out.arm = 'z1';
   return out;
@@ -486,16 +487,16 @@ function buildControlC(a1OrderList, count, byId) {
 }
 
 // Judge items T (Z1b block) and C (control) for one eligible event; command/error not pre-collapsed for T's cap.
-function buildJudgeEntries(eventId, cmd, err, tItems, maxItems, a1OrderList, byId) {
+function buildJudgeEntries(eventId, cmd, err, tItems, maxItems, a1OrderList, byId, session) {
   const command = cmd.slice(0, 500);
   const error = err.slice(0, 1500);
   const tMems = tItems.slice(0, maxItems).map((it) => it.content.slice(0, 600));
   const cList = buildControlC(a1OrderList, Math.min(tItems.length, maxItems), byId);
-  const entries = [{ eventId, arm: 'T', autoNo: false, command, error, memories: tMems }];
+  const entries = [{ eventId, arm: 'T', autoNo: false, command, error, memories: tMems, session }];
   if (cList.length === 0) {
-    entries.push({ eventId, arm: 'C', autoNo: true, command, error, memories: [] });
+    entries.push({ eventId, arm: 'C', autoNo: true, command, error, memories: [], session });
   } else {
-    entries.push({ eventId, arm: 'C', autoNo: false, command, error, memories: cList.map((c) => c.content.slice(0, 600)) });
+    entries.push({ eventId, arm: 'C', autoNo: false, command, error, memories: cList.map((c) => c.content.slice(0, 600)), session });
   }
   return entries;
 }
@@ -506,6 +507,8 @@ function buildJudgeEntries(eventId, cmd, err, tItems, maxItems, a1OrderList, byI
 
 async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJudge = false) {
   const { byId, mapBlock, resolvers } = ctx;
+  const scored = (t) => ctx.sinceMs == null || t >= ctx.sinceMs;
+  const session = createHash('sha256').update(path.basename(filePath)).digest('hex').slice(0, 12);
   const runZ1 = mode === 'grid' || mode === 'final' || mode === 'selftest';
   const isZ1b = runZ1 && arm === 'z1b';
   const a0 = { reset: new Set(), lifetime: new Set() };
@@ -526,6 +529,7 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
   const primary = { a0: { reset: makeAcc(), lifetime: makeAcc() }, a1: { reset: makeAcc(), lifetime: makeAcc() } };
   const secondary = { a0: { reset: makeAcc(), lifetime: makeAcc() }, a1: { reset: makeAcc(), lifetime: makeAcc() } };
   const tokensPerPrompt = [];
+  const tokensPerPromptScored = [];
 
   const uses = new Map();
   const firstErr = new Map();
@@ -534,6 +538,7 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
   let lastCwd = null;
 
   function fireHookPrompt(ts, cwd, text) {
+    const isScored = scored(ts);
     const projectName = resolvers.projectNameFor(cwd);
     const localEntries = resolvers.localEntriesFor(cwd);
     const sel = selectA1(localEntries, ctx.globalEntries, ts, projectName);
@@ -541,15 +546,18 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
     let a1Sent = false;
     if (sel.items.length === 0) {
       tokensPerPrompt.push(0);
+      tokensPerPromptScored.push(isScored);
     } else {
       const text2 = renderBlock(sel.items, sel.totalTokens);
       const hash = blockHash(text2);
       if (shouldSkipUnchanged(a1.te2, hash, REFRESH_TURNS)) {
         tokensPerPrompt.push(0);
+        tokensPerPromptScored.push(isScored);
         a1.te2 = { hash, skipsSince: a1.te2.skipsSince + 1 };
       } else {
         a1TokensThisPrompt = estimateTokens(text2);
         tokensPerPrompt.push(a1TokensThisPrompt);
+        tokensPerPromptScored.push(isScored);
         for (const it of sel.items) {
           a1.reset.add(it.id);
           a1.lifetime.add(it.id);
@@ -569,14 +577,19 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
         const acc = z1bFileAccs[i];
         if (a1Sent) for (const it of sel.items) { s.reset.add(it.id); s.lifetime.add(it.id); }
         // Finalize the interval this prompt is closing: its blocks landed after it fired, before this new one.
+        // Since gate: the interval is scored iff the prompt that opened it (acc.tokensScored[idx]) was scored.
         if (s.lastIntervalIdx !== null) {
+          const intervalScored = acc.tokensScored[s.lastIntervalIdx];
           acc.tokens[s.lastIntervalIdx] += s.pendingTokens;
-          acc.intervalHasBlock.total++;
-          if (s.intervalHasBlock) acc.intervalHasBlock.count++;
+          if (intervalScored) {
+            acc.intervalHasBlock.total++;
+            if (s.intervalHasBlock) acc.intervalHasBlock.count++;
+          }
         } else {
           acc.tokensUnattributed += s.pendingTokens; // blocks before this file's first hook prompt
         }
         acc.tokens.push(a1TokensThisPrompt);
+        acc.tokensScored.push(isScored);
         s.lastIntervalIdx = acc.tokens.length - 1;
         s.pendingTokens = 0;
         s.intervalHasBlock = false;
@@ -604,15 +617,16 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
         }
 
         const recallSel = selectZ1Recall(precomputed, promptTok, gate, sel.pinnedReserve);
-        acc.noRecall.total++;
+        if (isScored) acc.noRecall.total++;
         let recallTokens = 0;
         if (recallSel.items.length > 0) {
           recallTokens = estimateTokens(renderBlock(recallSel.items, recallSel.totalTokens, 'Prompt-Relevant Memory'));
           for (const it of recallSel.items) { state.reset.add(it.id); state.lifetime.add(it.id); }
         } else {
-          acc.noRecall.count++;
+          if (isScored) acc.noRecall.count++;
         }
         acc.tokens.push(staticTokens + recallTokens);
+        acc.tokensScored.push(isScored);
       });
     }
   }
@@ -678,64 +692,71 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
         if (b.is_error) {
           const err = txt.replace(/\s+/g, ' ').trim();
           if (routine(cmd, err)) continue;
-          nonRoutineFailures++;
+          const ts = Date.parse(o.timestamp);
+          const isScoredFailure = scored(ts);
+          if (isScoredFailure) nonRoutineFailures++;
           const es = sig(('Bash: ' + err).slice(0, 200));
-          record(secondary.a0.reset, snap.a0.reset, err, byId);
-          record(secondary.a0.lifetime, snap.a0.lifetime, err, byId);
-          record(secondary.a1.reset, snap.a1.reset, err, byId);
-          record(secondary.a1.lifetime, snap.a1.lifetime, err, byId);
-          if (runZ1 && !isZ1b) snap.z1.forEach((s, i) => {
-            record(z1FileAccs[i].reset.secondary, s.reset, err, byId);
-            record(z1FileAccs[i].lifetime.secondary, s.lifetime, err, byId);
-          });
-          if (isZ1b) snap.z1b.forEach((s, i) => {
-            record(z1bFileAccs[i].reset.secondary, s.reset, err, byId);
-            record(z1bFileAccs[i].lifetime.secondary, s.lifetime, err, byId);
-          });
-          if (firstErr.has(es)) {
-            record(primary.a0.reset, snap.a0.reset, err, byId);
-            record(primary.a0.lifetime, snap.a0.lifetime, err, byId);
-            record(primary.a1.reset, snap.a1.reset, err, byId);
-            record(primary.a1.lifetime, snap.a1.lifetime, err, byId);
+          if (isScoredFailure) {
+            record(secondary.a0.reset, snap.a0.reset, err, byId);
+            record(secondary.a0.lifetime, snap.a0.lifetime, err, byId);
+            record(secondary.a1.reset, snap.a1.reset, err, byId);
+            record(secondary.a1.lifetime, snap.a1.lifetime, err, byId);
             if (runZ1 && !isZ1b) snap.z1.forEach((s, i) => {
-              record(z1FileAccs[i].reset.primary, s.reset, err, byId);
-              record(z1FileAccs[i].lifetime.primary, s.lifetime, err, byId);
+              record(z1FileAccs[i].reset.secondary, s.reset, err, byId);
+              record(z1FileAccs[i].lifetime.secondary, s.lifetime, err, byId);
             });
             if (isZ1b) snap.z1b.forEach((s, i) => {
-              record(z1bFileAccs[i].reset.primary, s.reset, err, byId);
-              record(z1bFileAccs[i].lifetime.primary, s.lifetime, err, byId);
-              const added = [...s.reset].some((id) => !snap.a1.reset.has(id));
-              if (added) {
-                z1bFileAccs[i].addedEvents++;
-                const sent = z1bStates[i].lastSentItems; // most recent block sent before this event's own injection
-                const tItems = sent.items.slice(0, z1Configs[i].maxItems);
-                for (const it of tItems) {
-                  const age = sent.ts - Date.parse(it.created); // age against the block's originating failure, not this repeat
-                  if (age >= 0 && age <= 10 * 60 * 1000) z1bFileAccs[i].recalledCreatedWithin10MinEligible++;
-                }
-                if (collectJudge) {
-                  const eventId = ctx.judgeEventCounter.n++;
-                  judgeItems.push(...buildJudgeEntries(eventId, cmd, err, tItems, z1Configs[i].maxItems, a1Order, byId));
-                }
-              }
+              record(z1bFileAccs[i].reset.secondary, s.reset, err, byId);
+              record(z1bFileAccs[i].lifetime.secondary, s.lifetime, err, byId);
             });
+          }
+          if (firstErr.has(es)) {
+            if (isScoredFailure) {
+              record(primary.a0.reset, snap.a0.reset, err, byId);
+              record(primary.a0.lifetime, snap.a0.lifetime, err, byId);
+              record(primary.a1.reset, snap.a1.reset, err, byId);
+              record(primary.a1.lifetime, snap.a1.lifetime, err, byId);
+              if (runZ1 && !isZ1b) snap.z1.forEach((s, i) => {
+                record(z1FileAccs[i].reset.primary, s.reset, err, byId);
+                record(z1FileAccs[i].lifetime.primary, s.lifetime, err, byId);
+              });
+              if (isZ1b) snap.z1b.forEach((s, i) => {
+                record(z1bFileAccs[i].reset.primary, s.reset, err, byId);
+                record(z1bFileAccs[i].lifetime.primary, s.lifetime, err, byId);
+                const added = [...s.reset].some((id) => !snap.a1.reset.has(id));
+                if (added) {
+                  z1bFileAccs[i].addedEvents++;
+                  const sent = z1bStates[i].lastSentItems; // most recent block sent before this event's own injection
+                  const tItems = sent.items.slice(0, z1Configs[i].maxItems);
+                  for (const it of tItems) {
+                    const age = sent.ts - Date.parse(it.created); // age against the block's originating failure, not this repeat
+                    if (age >= 0 && age <= 10 * 60 * 1000) z1bFileAccs[i].recalledCreatedWithin10MinEligible++;
+                  }
+                  if (collectJudge) {
+                    const eventId = ctx.judgeEventCounter.n++;
+                    judgeItems.push(...buildJudgeEntries(eventId, cmd, err, tItems, z1Configs[i].maxItems, a1Order, byId, session));
+                  }
+                }
+              });
+            }
           } else {
             firstErr.set(es, true);
           }
           // Snapshot A1's order now: a compaction before the eventual success must not change the judge's control C.
-          if (!firstFail.has(cs)) firstFail.set(cs, { err, cmd, snap, a1OrderSnapshot: a1Order ? a1Order.slice() : [] });
+          if (!firstFail.has(cs)) firstFail.set(cs, { err, cmd, snap, ts, a1OrderSnapshot: a1Order ? a1Order.slice() : [] });
 
           // Z1b tool-failure block: after the event is recorded, so it counts toward later repeats and fail-then-pass.
+          // The block's own computation/skip-state stays unconditional; only its accounting is since-gated.
           if (isZ1b) {
             const cwd = o.cwd || lastCwd;
-            const tsMs = Date.parse(o.timestamp);
+            const tsMs = ts;
             const { localAdm, globalAdm } = admittedAt(resolvers, ctx.globalEntries, cwd, tsMs);
             const query = cmd.replace(LEADING_CD, '') + '\n' + err;
             const queryTok = contentTokens(query.slice(0, 4000));
             z1Configs.forEach((gate, i) => {
               const s = z1bStates[i];
               const acc = z1bFileAccs[i];
-              acc.failuresSeen++;
+              if (isScoredFailure) acc.failuresSeen++;
               const blk = computeZ1bBlock(localAdm, globalAdm, queryTok, gate);
               if (blk.items.length === 0) return; // nothing clears the gate: no block, no skip-state change
               const idsKey = blk.items.map((it) => it.id).sort().join(',');
@@ -747,51 +768,56 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
               for (const it of blk.items) { s.reset.add(it.id); s.lifetime.add(it.id); }
               s.teBlock = { hash: idsKey, skipsSince: 0 };
               s.lastSentItems = { items: blk.items, ts: tsMs };
-              s.pendingTokens += tokens;
-              s.intervalHasBlock = true;
-              acc.blocksSent++;
-              for (const it of blk.items) {
-                const age = tsMs - Date.parse(it.created);
-                if (age >= 0 && age <= 10 * 60 * 1000) acc.recalledCreatedWithin10Min++;
+              if (isScoredFailure) {
+                s.pendingTokens += tokens;
+                s.intervalHasBlock = true;
+                acc.blocksSent++;
+                for (const it of blk.items) {
+                  const age = tsMs - Date.parse(it.created);
+                  if (age >= 0 && age <= 10 * 60 * 1000) acc.recalledCreatedWithin10Min++;
+                }
               }
             });
           }
         } else if (firstFail.has(cs)) {
           const ff = firstFail.get(cs);
-          const dReset0 = setDiff(a0.reset, ff.snap.a0.reset);
-          const dLife0 = setDiff(a0.lifetime, ff.snap.a0.lifetime);
-          const dReset1 = setDiff(a1.reset, ff.snap.a1.reset);
-          const dLife1 = setDiff(a1.lifetime, ff.snap.a1.lifetime);
-          record(primary.a0.reset, dReset0, ff.err, byId);
-          record(primary.a0.lifetime, dLife0, ff.err, byId);
-          record(primary.a1.reset, dReset1, ff.err, byId);
-          record(primary.a1.lifetime, dLife1, ff.err, byId);
-          if (runZ1 && !isZ1b) z1States.forEach((s, i) => {
-            const dReset = setDiff(s.reset, ff.snap.z1[i].reset);
-            const dLife = setDiff(s.lifetime, ff.snap.z1[i].lifetime);
-            record(z1FileAccs[i].reset.primary, dReset, ff.err, byId);
-            record(z1FileAccs[i].lifetime.primary, dLife, ff.err, byId);
-          });
-          if (isZ1b) z1bStates.forEach((s, i) => {
-            const dReset = setDiff(s.reset, ff.snap.z1b[i].reset);
-            const dLife = setDiff(s.lifetime, ff.snap.z1b[i].lifetime);
-            record(z1bFileAccs[i].reset.primary, dReset, ff.err, byId);
-            record(z1bFileAccs[i].lifetime.primary, dLife, ff.err, byId);
-            const added = [...dReset].some((id) => !dReset1.has(id));
-            if (added) {
-              z1bFileAccs[i].addedEvents++;
-              const sent = s.lastSentItems; // live: no block fires on a success line
-              const tItems = sent.items.slice(0, z1Configs[i].maxItems);
-              for (const it of tItems) {
-                const age = sent.ts - Date.parse(it.created); // age against the originating failure, not this success line
-                if (age >= 0 && age <= 10 * 60 * 1000) z1bFileAccs[i].recalledCreatedWithin10MinEligible++;
+          const successTs = Date.parse(o.timestamp);
+          if (scored(ff.ts) && scored(successTs)) {
+            const dReset0 = setDiff(a0.reset, ff.snap.a0.reset);
+            const dLife0 = setDiff(a0.lifetime, ff.snap.a0.lifetime);
+            const dReset1 = setDiff(a1.reset, ff.snap.a1.reset);
+            const dLife1 = setDiff(a1.lifetime, ff.snap.a1.lifetime);
+            record(primary.a0.reset, dReset0, ff.err, byId);
+            record(primary.a0.lifetime, dLife0, ff.err, byId);
+            record(primary.a1.reset, dReset1, ff.err, byId);
+            record(primary.a1.lifetime, dLife1, ff.err, byId);
+            if (runZ1 && !isZ1b) z1States.forEach((s, i) => {
+              const dReset = setDiff(s.reset, ff.snap.z1[i].reset);
+              const dLife = setDiff(s.lifetime, ff.snap.z1[i].lifetime);
+              record(z1FileAccs[i].reset.primary, dReset, ff.err, byId);
+              record(z1FileAccs[i].lifetime.primary, dLife, ff.err, byId);
+            });
+            if (isZ1b) z1bStates.forEach((s, i) => {
+              const dReset = setDiff(s.reset, ff.snap.z1b[i].reset);
+              const dLife = setDiff(s.lifetime, ff.snap.z1b[i].lifetime);
+              record(z1bFileAccs[i].reset.primary, dReset, ff.err, byId);
+              record(z1bFileAccs[i].lifetime.primary, dLife, ff.err, byId);
+              const added = [...dReset].some((id) => !dReset1.has(id));
+              if (added) {
+                z1bFileAccs[i].addedEvents++;
+                const sent = s.lastSentItems; // live: no block fires on a success line
+                const tItems = sent.items.slice(0, z1Configs[i].maxItems);
+                for (const it of tItems) {
+                  const age = sent.ts - Date.parse(it.created); // age against the originating failure, not this success line
+                  if (age >= 0 && age <= 10 * 60 * 1000) z1bFileAccs[i].recalledCreatedWithin10MinEligible++;
+                }
+                if (collectJudge) {
+                  const eventId = ctx.judgeEventCounter.n++;
+                  judgeItems.push(...buildJudgeEntries(eventId, ff.cmd, ff.err, tItems, z1Configs[i].maxItems, ff.a1OrderSnapshot, byId, session));
+                }
               }
-              if (collectJudge) {
-                const eventId = ctx.judgeEventCounter.n++;
-                judgeItems.push(...buildJudgeEntries(eventId, ff.cmd, ff.err, tItems, z1Configs[i].maxItems, ff.a1OrderSnapshot, byId));
-              }
-            }
-          });
+            });
+          }
           firstFail.delete(cs);
         }
       }
@@ -803,15 +829,26 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
     z1bStates.forEach((s, i) => {
       const acc = z1bFileAccs[i];
       if (s.lastIntervalIdx !== null) {
+        const intervalScored = acc.tokensScored[s.lastIntervalIdx];
         acc.tokens[s.lastIntervalIdx] += s.pendingTokens;
-        acc.intervalHasBlock.total++;
-        if (s.intervalHasBlock) acc.intervalHasBlock.count++;
+        if (intervalScored) {
+          acc.intervalHasBlock.total++;
+          if (s.intervalHasBlock) acc.intervalHasBlock.count++;
+        }
       } else {
         acc.tokensUnattributed += s.pendingTokens;
       }
     });
   }
 
+  // --since: drop token entries for unscored prompts/intervals; no-op (arrays untouched) when sinceMs is unset.
+  if (ctx.sinceMs != null) {
+    const keepScored = (arr, flags) => arr.filter((_, idx) => flags[idx]);
+    const filteredTokensPerPrompt = keepScored(tokensPerPrompt, tokensPerPromptScored);
+    if (z1FileAccs) for (const acc of z1FileAccs) acc.tokens = keepScored(acc.tokens, acc.tokensScored);
+    if (z1bFileAccs) for (const acc of z1bFileAccs) acc.tokens = keepScored(acc.tokens, acc.tokensScored);
+    return { primary, secondary, tokensPerPrompt: filteredTokensPerPrompt, z1PerConfig: z1FileAccs, z1bPerConfig: z1bFileAccs, judgeItems, nonRoutineFailures };
+  }
   return { primary, secondary, tokensPerPrompt, z1PerConfig: z1FileAccs, z1bPerConfig: z1bFileAccs, judgeItems, nonRoutineFailures };
 }
 
@@ -892,6 +929,7 @@ function emptyZ1Bucket() {
     reset: { primary: makeAcc(), secondary: makeAcc() },
     lifetime: { primary: makeAcc(), secondary: makeAcc() },
     tokens: [],
+    tokensScored: [], // per-file only: parallel scored flags, filtered out of processFile's return
     noRecall: { count: 0, total: 0 },
   };
 }
@@ -938,6 +976,7 @@ function emptyZ1bBucket() {
     reset: { primary: makeAcc(), secondary: makeAcc() },
     lifetime: { primary: makeAcc(), secondary: makeAcc() },
     tokens: [],
+    tokensScored: [], // per-file only: parallel scored flags, filtered out of processFile's return
     intervalHasBlock: { count: 0, total: 0 },
     tokensUnattributed: 0,
     addedEvents: 0,
@@ -1005,7 +1044,7 @@ function pickConfigZ1b(rows, a1TokenMedian, a1TokenMean) {
 function writeJudgeExport(filePath, rawItems) {
   const shuffled = seededShuffle(rawItems, 20260926);
   const items = shuffled.map((it, idx) => ({ itemId: idx, autoNo: it.autoNo, command: it.command, error: it.error, memories: it.memories }));
-  const key = shuffled.map((it, idx) => ({ itemId: idx, eventId: it.eventId, arm: it.arm, autoNo: it.autoNo }));
+  const key = shuffled.map((it, idx) => ({ itemId: idx, eventId: it.eventId, arm: it.arm, autoNo: it.autoNo, session: it.session }));
   fs.writeFileSync(filePath, JSON.stringify({ seed: 20260926, items }, null, 2));
   fs.writeFileSync(`${filePath}.key.json`, JSON.stringify(key, null, 2));
 }
@@ -1029,7 +1068,12 @@ async function main() {
   const resolvers = makeResolvers(home, storeMap);
   const arm = args.arm === 'z1b' ? 'z1b' : 'z1';
   const judgeEventCounter = { n: 0 };
-  const ctx = { byId, mapBlock, resolvers, globalEntries, judgeEventCounter };
+  const sinceMs = args.since ? Date.parse(args.since) : null;
+  if (Number.isNaN(sinceMs)) {
+    console.error(`invalid --since ${args.since}`);
+    process.exit(1);
+  }
+  const ctx = { byId, mapBlock, resolvers, globalEntries, judgeEventCounter, sinceMs };
   const autoCapturedTotal = [...globalEntries, ...namedEntries].filter((e) => e.tags.includes('auto-captured')).length;
 
   let z1Configs = null;
@@ -1079,7 +1123,7 @@ async function main() {
   const startedAt = Date.now();
   for (const f of wanted) {
     const label = splitOf(f);
-    const collectJudge = collectJudgeMode && label === 'heldout';
+    const collectJudge = collectJudgeMode && (args.split === 'all' || label === 'heldout');
     const result = await processFile(f, args.mode, ctx, z1Configs, arm, collectJudge);
     fold(buckets[label], result);
     fold(buckets.all, result);
@@ -1123,6 +1167,7 @@ async function main() {
   } else if (args.mode === 'final' && arm === 'z1b') {
     const out = {
       mode: 'final', arm: 'z1b', filesProcessed: wanted.length, runtimeMs, config: z1Configs[0],
+      since: args.since ?? null,
       datasetAudit: { autoCapturedTotal },
     };
     for (const split of ['tune', 'heldout', 'all']) {
