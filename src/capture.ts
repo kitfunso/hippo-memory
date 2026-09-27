@@ -30,7 +30,6 @@ import { defaultPreCompactLogPath } from './hooks.js';
 import { redactSecrets } from './secret-detect.js';
 import { RejectedValueError, checkRejectionGuard } from './rejection.js';
 import { openHippoDb, closeHippoDb } from './db.js';
-import { extractSessionMemories, type SessionTurn } from './session-extract.js';
 
 // ---------------------------------------------------------------------------
 // Pattern definitions
@@ -556,6 +555,15 @@ function errorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
+/**
+ * Build a compact text summary from a Claude Code / OpenCode JSONL transcript.
+ * Keeps plain user messages and the final chunk of assistant text, drops
+ * thinking blocks, tool_use, and tool_result noise. Output is fed to the
+ * existing `extractFromText` pipeline.
+ *
+ * Exported for tests.
+ */
+
 /** Leading markers of the command lines Claude Code writes with type 'user'. */
 const CLAUDE_CODE_COMMAND_PREFIXES = ['<local-command-', '<command-name>', '<command-message>', '<command-args>'];
 
@@ -574,18 +582,10 @@ function isNonHumanUserLine(entry: TranscriptLineFlags, content: string): boolea
   return CLAUDE_CODE_COMMAND_PREFIXES.some((p) => head.startsWith(p));
 }
 
-function userArrayText(content: unknown): string {
-  if (!Array.isArray(content)) return '';
-  if (content.some((b) => isObjectLike(b) && 'type' in b && b.type === 'tool_result')) return '';
-  return content
-    .map((b) => (isObjectLike(b) && 'type' in b && b.type === 'text' && 'text' in b && isStringValue(b.text) ? b.text.trim() : ''))
-    .filter((t) => t && !t.startsWith('[Request interrupted by user'))
-    .join('\n');
-}
-
-export function collectSessionTurns(jsonl: string): SessionTurn[] {
+export function summariseTranscript(jsonl: string): string {
   const lines = jsonl.split('\n').filter((l) => l.trim());
-  const turns: SessionTurn[] = [];
+  const userMessages: string[] = [];
+  const assistantTexts: string[] = [];
 
   for (const line of lines) {
     let entry: unknown;
@@ -602,10 +602,10 @@ export function collectSessionTurns(jsonl: string): SessionTurn[] {
       const content = 'content' in message ? message.content : undefined;
 
       if (entry.type === 'user') {
-        // Human text only: a string, or the text blocks of an array (pasted images) that carries no tool_result.
-        const text = isStringValue(content) ? content : userArrayText(content);
-        if (text.trim() && !isNonHumanUserLine(entry, text)) {
-          turns.push({ role: 'user', text: text.trim() });
+        // Plain text user messages only (skip tool_result arrays), and only
+        // ones the human wrote (see isNonHumanUserLine).
+        if (isStringValue(content) && content.trim() && !isNonHumanUserLine(entry, content)) {
+          userMessages.push(content.trim());
         }
       } else if (Array.isArray(content)) {
         // Keep assistant text blocks; drop thinking + tool_use
@@ -619,7 +619,7 @@ export function collectSessionTurns(jsonl: string): SessionTurn[] {
           }
         }
         if (chunks.length > 0) {
-          turns.push({ role: 'assistant', text: chunks.join('\n') });
+          assistantTexts.push(chunks.join('\n'));
         }
       }
       continue;
@@ -647,35 +647,17 @@ export function collectSessionTurns(jsonl: string): SessionTurn[] {
       }
 
       if (chunks.length === 0) continue;
-      if (role === 'user') turns.push({ role: 'user', text: chunks.join('\n') });
-      if (role === 'assistant') turns.push({ role: 'assistant', text: chunks.join('\n') });
+      if (role === 'user') userMessages.push(chunks.join('\n'));
+      if (role === 'assistant') assistantTexts.push(chunks.join('\n'));
     }
   }
-
-  return turns;
-}
-
-export const SESSION_CAPTURE_TAIL = { users: 20, assistants: 10 } as const;
-
-// Block order (users then assistants), since extractSessionMemories' tie-break was tuned on that shape.
-export function sessionCaptureWindow(turns: readonly SessionTurn[]): SessionTurn[] {
-  const users = turns.filter((t) => t.role === 'user').slice(-SESSION_CAPTURE_TAIL.users);
-  const assistants = turns.filter((t) => t.role === 'assistant').slice(-SESSION_CAPTURE_TAIL.assistants);
-  return [...users, ...assistants];
-}
-
-// Feeds the PreCompact snapshot text; SessionEnd capture uses collectSessionTurns directly.
-export function summariseTranscript(jsonl: string): string {
-  const turns = collectSessionTurns(jsonl);
-  const userMessages = turns.filter((t) => t.role === 'user').map((t) => t.text);
-  const assistantTexts = turns.filter((t) => t.role === 'assistant').map((t) => t.text);
 
   if (userMessages.length === 0 && assistantTexts.length === 0) return '';
 
   // Keep the tail: last ~20 user turns and last ~10 assistant replies.
   // Session-end is about what was decided near the end, not at the start.
-  const tailUsers = userMessages.slice(-SESSION_CAPTURE_TAIL.users);
-  const tailAssistants = assistantTexts.slice(-SESSION_CAPTURE_TAIL.assistants);
+  const tailUsers = userMessages.slice(-20);
+  const tailAssistants = assistantTexts.slice(-10);
 
   return [
     '# Session Summary',
@@ -843,8 +825,7 @@ function cmdCaptureCore(
   }
 
   // Read input text
-  let text = '';
-  let extracted: ExtractedItem[] = [];
+  let text: string;
 
   switch (options.source) {
     case 'stdin': {
@@ -876,23 +857,22 @@ function cmdCaptureCore(
       }
 
       const jsonl = fs.readFileSync(resolved, 'utf8');
-      const turns = collectSessionTurns(jsonl);
-      if (turns.length === 0) {
+      text = summariseTranscript(jsonl);
+      if (!text) {
         console.log('Transcript had no user/assistant messages to summarise.');
         return;
       }
-      extracted = extractSessionMemories(sessionCaptureWindow(turns));
       break;
     }
   }
 
-  if (options.source !== 'last-session') {
-    if (!text || text.trim().length === 0) {
-      console.log('No text to capture from.');
-      return;
-    }
-    extracted = extractFromText(text);
+  if (!text || text.trim().length === 0) {
+    console.log('No text to capture from.');
+    return;
   }
+
+  // Extract items
+  const extracted = extractFromText(text);
 
   if (extracted.length === 0) {
     console.log('No actionable items found in the input.');
