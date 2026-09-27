@@ -128,9 +128,10 @@ function parseLines(text) {
 
 // Attempt-1 family-split filter (30+ chars, human-typed, not a notice), plus array text as the extractor now reads it.
 function userText(content) {
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content) || content.some((b) => b?.type === 'tool_result')) return '';
-  return content.filter((b) => b?.type === 'text' && typeof b.text === 'string').map((b) => b.text.trim())
+  const str = (v) => (Object.prototype.toString.call(v) === '[object String]' ? String(v) : '');
+  if (!Array.isArray(content)) return str(content);
+  if (content.some((b) => b?.type === 'tool_result')) return '';
+  return content.filter((b) => b?.type === 'text').map((b) => str(b.text).trim())
     .filter((t) => t && !t.startsWith('[Request interrupted by user')).join('\n');
 }
 
