@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.52.2 - 2026-09-27
+
+### Changed
+
+- **The Claude Code hooks open far fewer database connections per run, and two of them stopped doing wasted work.** Every loader that used to open a store once to initialize it and again to read it now does both on one connection. The failed-command capture hook no longer reads every stored memory to check for a repeat; it looks up only the rows tagged as auto-captured. Prompt-based recall now runs its full-text search on the same connection the rest of the context lookup already opened, instead of reopening the store for it, for both the local and the shared store. The full-text index's sync check no longer counts every row in the index on each open; it counts a much smaller companion table instead, and falls back to the old count on a store built without it. The context hook's two usage-log writes (the always-sent block and the prompt-relevant block) now share one connection instead of two. None of this changes what a hook returns, only how much work it does to return it.
+
 ## 1.52.1 - 2026-09-27
 
 ### Added
