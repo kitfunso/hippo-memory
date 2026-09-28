@@ -269,23 +269,25 @@ describe('buildSupportBundle', () => {
     }
   });
 
-  it.skipIf(process.platform !== 'win32')('swaps a short Windows home only after its drive, and a drive root never', () => {
+  it.skipIf(process.platform !== 'win32')('swaps a one-folder Windows home only after its drive, and a drive root never', () => {
     const s = seed();
-    // A custom HOME of Q:\x leaves too little below the drive to find alone; the home need not exist to be swapped.
-    const lines = [
-      'Q:\\x\\proj', 'q:/x/proj', 'Q:\\\\x\\\\proj', '/q/x/proj', '/cygdrive/q/x/proj', '/mnt/q/x/proj', 'Q--x-proj',
-      '/usr/x/proj', 'C:\\x\\proj', 'Q:\\xy\\proj', 'foo-q-x-proj',
+    // A custom HOME of Q:\x or Q:\home names a folder any path may hold, however long; the home need not exist to be swapped.
+    const lines = (n: string): string[] => [
+      `Q:\\${n}\\proj`, `q:/${n}/proj`, `Q:\\\\${n}\\\\proj`, `/q/${n}/proj`, `/cygdrive/q/${n}/proj`, `/mnt/q/${n}/proj`, `Q--${n}-proj`,
+      `/${n}/proj`, `/usr/${n}/proj`, `C:\\${n}\\proj`, `Q:\\${n}y\\proj`, `foo-q-${n}-proj`,
     ];
-    writeFileSync(join(s.hippoRoot, 'config.json'), JSON.stringify({ gitLearnPatterns: lines }));
-    const swapped = (home: string): string[] => {
+    const swapped = (home: string, input: string[]): string[] => {
+      writeFileSync(join(s.hippoRoot, 'config.json'), JSON.stringify({ gitLearnPatterns: input }));
       const bundle = buildSupportBundle({ cwd: s.cwd, home, version: 'test', includeLogs: false, now: new Date() });
       return JSON.parse(JSON.stringify(bundle)).stores[0].config.gitLearnPatterns;
     };
-    expect(swapped('Q:\\x')).toEqual([
-      '~\\proj', '~/proj', '~\\\\proj', '~/proj', '~/proj', '~/proj', '~-proj',
-      '/usr/x/proj', 'C:\\x\\proj', 'Q:\\xy\\proj', 'foo-q-x-proj',
-    ]);
-    expect(swapped('Q:\\')).toEqual(lines);
+    for (const n of ['x', 'home']) {
+      expect(swapped(`Q:\\${n}`, lines(n)), n).toEqual([
+        '~\\proj', '~/proj', '~\\\\proj', '~/proj', '~/proj', '~/proj', '~-proj', ...lines(n).slice(7),
+      ]);
+    }
+    expect(swapped('\\home', ['\\home\\proj', '/usr/home/proj'])).toEqual(['~\\proj', '/usr/home/proj']);
+    expect(swapped('Q:\\', lines('x'))).toEqual(lines('x'));
   });
 
   it('a log tail that starts inside a private key drops the rest of the key', () => {

@@ -254,29 +254,35 @@ function mountedDrive(letter: string): string {
 }
 
 /** Regex source for one spelling of the home, or null when too little of it is left to swap safely. */
-function spellingPattern(spelling: string): string | null {
+function spellingPattern(spelling: string, deep: boolean): string | null {
   if (process.platform !== 'win32') return spelling.length >= 3 ? escapeRegExp(spelling) : null;
-  // Each tool that mounts a drive writes it its own way, so the path below the drive, which names the user, matches after
-  // any prefix, with \, / or JSON's \\ between folders. A drive written a known way goes into the swap with it.
+  // Each tool that mounts a drive writes it its own way, so a home two or more folders below its drive (\Users\<name>)
+  // matches after any prefix, with \, / or JSON's \\ between folders. A drive written a known way goes into the swap with it.
   const drive = /^([A-Za-z])[:-]/.exec(spelling);
   const below = drive === null ? spelling : spelling.slice(2);
   const body = below.split(/[\\/]+/).map(escapeRegExp).join('[\\\\/]+');
-  if (below.length >= 3) return drive === null ? body : `${mountedDrive(drive[1])}?${body}`;
-  // Too short to find alone (C:\x leaves \x), so only after its drive and as a whole name. A drive root swaps nothing.
-  if (drive === null || !/[^\\/-]/.test(below)) return null;
-  return `(?<![\\p{L}\\p{N}_])${mountedDrive(drive[1])}${body}`;
+  if (drive === null) {
+    if (spelling.length < 3) return null;
+    return deep ? body : `(?<![\\p{L}\\p{N}_])${body}`;
+  }
+  if (deep) return `${mountedDrive(drive[1])}?${body}`;
+  // One folder (C:\x, D:\home) is a name any path may hold, so it swaps only after its drive and as a whole name; a drive
+  // root swaps nothing.
+  return /[^\\/-]/.test(below) ? `(?<![\\p{L}\\p{N}_])${mountedDrive(drive[1])}${body}` : null;
 }
 
 /** One pattern for every alias of the home in every spelling, or null when none is long enough to swap safely. */
 function buildHomePattern(home: string, probes: readonly string[]): RegExp | null {
-  const spellings = new Set<string>();
+  const spellings: [spelling: string, deep: boolean][] = [];
   for (const alias of collectHomeAliases(home, probes)) {
-    for (const spell of HOME_SPELLINGS) spellings.add(spell(alias));
+    // Counted on the path, since its folder-name spelling cannot tell C:\a-b from C:\a\b.
+    const deep = alias.replace(/^[A-Za-z]:/, '').split(/[\\/]+/).filter(Boolean).length >= 2;
+    for (const spell of HOME_SPELLINGS) spellings.push([spell(alias), deep]);
   }
   // Longest first: where one home nests in another (a test home under the real one), swap the longer.
   const patterns = new Map<string, string>();
-  for (const s of [...spellings].sort((a, b) => b.length - a.length)) {
-    const pattern = spellingPattern(s);
+  for (const [s, deep] of spellings.sort(([a], [b]) => b.length - a.length)) {
+    const pattern = spellingPattern(s, deep);
     if (pattern === null) continue;
     const key = process.platform === 'win32' ? pattern.toLowerCase() : pattern;
     if (!patterns.has(key)) patterns.set(key, pattern);
