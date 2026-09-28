@@ -1,0 +1,3 @@
+### Fixed
+
+- **A new memory now starts on the `defaultHalfLifeDays` set in `.hippo/config.json`, whichever command wrote it.** Only `hippo remember` and the object writers read that setting. Superseding a memory (CLI or API), `hippo trace record`, `hippo learn --git`, `hippo capture`, the Claude Code memory and file imports, fact extraction, the DAG summaries and entity profiles, and the traces and merged memories `hippo sleep` writes all started at the built-in 365 days instead. Each now reads the store's config. `createMemory` now requires `baseHalfLifeDays`, so TypeScript code that leaves it out no longer compiles.

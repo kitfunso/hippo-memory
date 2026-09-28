@@ -13,6 +13,7 @@ import { getGlobalRoot, initGlobal } from './shared.js';
 import { remember, archiveRaw, isPrivateScope, type Context } from './api.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { RejectedValueError, checkRejectionGuard } from './rejection.js';
+import { loadConfig } from './config.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -94,6 +95,7 @@ export function importEntries(
     options.global ? undefined : options.tenantId,
   );
   const allTags = [...new Set([...tags, ...(options.extraTags ?? [])])];
+  const baseHalfLifeDays = loadConfig(targetRoot).defaultHalfLifeDays;
 
   let total = 0;
   let imported = 0;
@@ -154,6 +156,7 @@ export function importEntries(
         source,
         confidence: 'observed',
         tenantId: options.global ? undefined : options.tenantId,
+        baseHalfLifeDays,
       });
 
       if (options.dryRun) {
@@ -851,6 +854,7 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
   let rejected = 0;
   let archived = 0;
   const entries: MemoryEntry[] = [];
+  const baseHalfLifeDays = loadConfig(hippoRoot).defaultHalfLifeDays;
 
   // AT1 P2 fix: dry-run never called remember(), so it never probed
   // tombstones — every note that reached the write step counted as
@@ -965,6 +969,7 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
         owner: 'agent:vault-import',
         artifact_ref: artifactRef,
         tenantId,
+        baseHalfLifeDays,
       });
       // dryRun preview: count what WOULD import, but make no writes (codex P2).
       if (!dryRun) {

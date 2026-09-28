@@ -9,6 +9,7 @@ import {
 import { RejectedValueError } from './rejection.js';
 import { redactSecrets } from './secret-detect.js';
 import { derivationScope, derivationPartitionKey } from './recall-scope.js';
+import { loadConfig } from './config.js';
 
 export interface FactCluster {
   label: string;
@@ -137,6 +138,7 @@ export async function buildDag(
   opts: DagSummaryOptions,
 ): Promise<DagBuildResult> {
   const result: DagBuildResult = { candidateClusters: 0, summariesCreated: 0, factsLinked: 0, rejected: 0 };
+  const baseHalfLifeDays = loadConfig(hippoRoot).defaultHalfLifeDays;
 
   const unparented = facts.filter(
     (f) => f.dag_level === 1 && !f.dag_parent_id && f.tags.includes('extracted'),
@@ -184,6 +186,7 @@ export async function buildDag(
         dag_level: 2,
         tenantId: factTenant,
         scope: factScope,
+        baseHalfLifeDays,
       });
       // Schema v25: cache descendant_count + earliest/latest_at on the summary
       // row so DAG-aware recall (docs/plans/2026-05-05-dag-recall.md Task 2)
@@ -409,6 +412,7 @@ export async function buildEntityProfiles(
     failed: 0,
     rejected: 0,
   };
+  const baseHalfLifeDays = loadConfig(hippoRoot).defaultHalfLifeDays;
 
   // Only L2 with no L3 parent yet (avoid re-clustering already-profiled L2s).
   const unparented = l2Summaries.filter(
@@ -457,6 +461,7 @@ export async function buildEntityProfiles(
         dag_level: 3,
         tenantId, // HIGH #1 fold: thread tenant explicitly
         scope,
+        baseHalfLifeDays,
       });
       profileEntry.descendant_count = cluster.members.length;
       profileEntry.earliest_at = memberCreatedAts[0];

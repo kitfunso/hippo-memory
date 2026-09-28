@@ -2033,6 +2033,7 @@ export function supersede(
     confidence: 'verified',
     tenantId: ctx.tenantId,
     scope: old.scope,
+    baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays,
   });
 
   // Race-safe transition: open a fresh db handle, BEGIN IMMEDIATE, run all
@@ -3197,7 +3198,7 @@ export function restoreDormant(ctx: Context, id: string): MemoryEntry {
       // (The placeholder only satisfies createMemory's minimum length, so a
       // legacy row shorter than 3 chars can still be restored.)
       const revived: MemoryEntry = {
-        ...createMemory('dormant snapshot defaults'),
+        ...createMemory('dormant snapshot defaults', { baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays }),
         ...dormant.entry,
         last_retrieved: now.toISOString(),
       };

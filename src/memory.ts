@@ -496,33 +496,32 @@ export function canAutoDelete(entry: Pick<MemoryEntry, 'pinned' | 'kind'>): bool
   return !entry.pinned && entry.kind !== 'raw';
 }
 
-/**
- * Create a new memory entry with defaults.
- */
-export function createMemory(
-  content: string,
-  options: {
-    layer?: Layer;
-    tags?: string[];
-    emotional_valence?: EmotionalValence;
-    pinned?: boolean;
-    schema_fit?: number;
-    source?: string;
-    confidence?: ConfidenceLevel;
-    baseHalfLifeDays?: number;
-    trace_outcome?: TraceOutcome;
-    source_session_id?: string | null;
-    valid_from?: string;
-    extracted_from?: string;
-    dag_level?: number;
-    dag_parent_id?: string;
-    kind?: MemoryKind;
-    scope?: string | null;
-    owner?: string | null;
-    artifact_ref?: string | null;
-    tenantId?: string;
-  } = {}
-): MemoryEntry {
+export interface CreateMemoryOptions {
+  layer?: Layer;
+  tags?: string[];
+  emotional_valence?: EmotionalValence;
+  pinned?: boolean;
+  schema_fit?: number;
+  source?: string;
+  confidence?: ConfidenceLevel;
+  /** The store's `loadConfig(hippoRoot).defaultHalfLifeDays`; required so no writer falls back to the compiled default by leaving it out. */
+  baseHalfLifeDays: number;
+  trace_outcome?: TraceOutcome;
+  source_session_id?: string | null;
+  valid_from?: string;
+  extracted_from?: string;
+  dag_level?: number;
+  dag_parent_id?: string;
+  kind?: MemoryKind;
+  scope?: string | null;
+  owner?: string | null;
+  artifact_ref?: string | null;
+  tenantId?: string;
+}
+
+/** Create a new memory entry with defaults. Untyped JavaScript callers that omit the options get the compiled default half-life. */
+export function createMemory(content: string, options: CreateMemoryOptions): MemoryEntry;
+export function createMemory(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryEntry {
   const trimmed = content.trim();
   if (trimmed.length < 3) {
     throw new Error(`Memory content too short (${trimmed.length} chars, minimum 3): "${trimmed}"`);

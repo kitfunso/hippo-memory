@@ -1,5 +1,6 @@
 import { MemoryEntry, Layer, EmotionalValence, createMemory } from './memory.js';
 import { writeEntry } from './store.js';
+import { loadConfig } from './config.js';
 import { RejectedValueError } from './rejection.js';
 import { redactSecrets } from './secret-detect.js';
 
@@ -122,6 +123,7 @@ export function storeExtractedFacts(
 
   const entries: MemoryEntry[] = [];
   let rejected = 0;
+  const baseHalfLifeDays = loadConfig(hippoRoot).defaultHalfLifeDays;
 
   for (const fact of facts) {
     const tags = ['extracted', ...inheritedTags, ...fact.tags];
@@ -139,6 +141,7 @@ export function storeExtractedFacts(
       // entry's own tenant. Thread it through so extracted facts land in
       // the same tenant as the episodic memory they were extracted from.
       tenantId: source.tenantId,
+      baseHalfLifeDays,
     });
 
     // AT1 containment: a refusal is per-VALUE — one rejected fact must not

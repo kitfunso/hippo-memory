@@ -4,15 +4,12 @@
  */
 
 import { execSync, execFileSync, spawn } from 'child_process';
-import { MemoryEntry, createMemory, Layer } from './memory.js';
+import { MemoryEntry, createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from './memory.js';
 import { loadAllEntries } from './store.js';
 import { textOverlap } from './search.js';
 import { isContentWorthStoring } from './audit.js';
 
-/**
- * Create a MemoryEntry capturing a command failure.
- * Content format: "Command '<cmd>' failed: <truncated stderr>"
- */
+/** A memory of a failed command, "Command '<cmd>' failed: <truncated stderr>"; no store is in reach, so `hippo watch` re-derives its half-life from the store's config. */
 export function captureError(
   exitCode: number,
   stderr: string,
@@ -38,6 +35,7 @@ export function captureError(
     source: 'autolearn',
     confidence: 'observed',
     tenantId,
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
   });
 }
 

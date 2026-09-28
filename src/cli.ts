@@ -1074,6 +1074,7 @@ function cmdSupersede(
     confidence: 'verified',
     tenantId: old.tenantId,
     scope: old.scope,
+    baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
   });
 
   // AT1: write the SUCCESSOR first. The rejection guard fires on the new
@@ -2735,6 +2736,7 @@ function cmdTraceRecord(
     trace_outcome: outcome as 'success' | 'failure' | 'partial',
     source_session_id: sessionId,
     tenantId: resolveTenantId({}),
+    baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
   });
 
   writeEntry(hippoRoot, entry);
@@ -2925,6 +2927,7 @@ export function learnFromMemoryMd(hippoRoot: string, homeDir: string = os.homedi
   if (memoryDirs.length === 0) return 0;
 
   const existing = loadAllEntries(hippoRoot, resolveTenantId({}));
+  const baseHalfLifeDays = loadConfig(hippoRoot).defaultHalfLifeDays;
   let imported = 0;
   let skippedSecret = 0;
   // AT1 (plan §3 containment): a rejection guard refusal is per-VALUE — one
@@ -2972,6 +2975,7 @@ export function learnFromMemoryMd(hippoRoot: string, homeDir: string = os.homedi
           source: `claude-memory:${file}`,
           confidence: 'observed',
           tenantId: resolveTenantId({}),
+          baseHalfLifeDays,
         });
 
         try {
@@ -7406,7 +7410,8 @@ function learnFromRepo(
 
   // Same patterns as MCP hippo_learn: config.gitLearnPatterns (whose default
   // equals extractLessons' built-in list) so a custom list applies everywhere.
-  const parsedLessons = extractLessons(gitLog, loadConfig(hippoRoot).gitLearnPatterns);
+  const config = loadConfig(hippoRoot);
+  const parsedLessons = extractLessons(gitLog, config.gitLearnPatterns);
   if (parsedLessons.length === 0) {
     console.log(`${prefix}No fix/revert/bug commits found in the specified period.`);
     return { added: 0, skipped: 0, lowInfo: 0 };
@@ -7478,6 +7483,7 @@ function learnFromRepo(
       confidence: 'observed',
       schema_fit: schemaFitVal,
       tenantId: resolveTenantId({}),
+      baseHalfLifeDays: config.defaultHalfLifeDays,
     });
 
     // Auto-tag with path context from the repo being learned

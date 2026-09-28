@@ -30,6 +30,7 @@ import { defaultPreCompactLogPath } from './hooks.js';
 import { redactSecrets } from './secret-detect.js';
 import { RejectedValueError, checkRejectionGuard } from './rejection.js';
 import { openHippoDb, closeHippoDb } from './db.js';
+import { loadConfig } from './config.js';
 
 // ---------------------------------------------------------------------------
 // Pattern definitions
@@ -890,6 +891,7 @@ function cmdCaptureCore(
   let captured = 0;
   let skipped = 0;
   let rejected = 0;
+  const baseHalfLifeDays = loadConfig(targetRoot).defaultHalfLifeDays;
 
   // AT1 P2 fix (dry-run parity, docs/plans/2026-08-15-at1-rejected-value-tombstone.md):
   // dry-run used to skip the guarded write branch ENTIRELY, so a tombstoned
@@ -925,6 +927,7 @@ function cmdCaptureCore(
         source: 'capture',
         confidence: 'observed',
         tenantId: useGlobal ? undefined : options.tenantId,
+        baseHalfLifeDays,
       });
 
       if (options.dryRun) {

@@ -493,6 +493,7 @@ export async function consolidate(
           // consolidationTenant — for any non-default tenant that check never
           // hit, and the trace regenerated every sleep.
           tenantId: consolidationTenant,
+          baseHalfLifeDays: config.defaultHalfLifeDays,
         },
       );
 
@@ -843,6 +844,7 @@ export async function consolidate(
           confidence: 'inferred',
           tenantId: mergeTenant,
           scope: mergeScope,
+          baseHalfLifeDays: config.defaultHalfLifeDays,
         });
       }
 
