@@ -2,9 +2,9 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.kitfunso/hippo-memory",
   "title": "Hippo memory",
-  "description": "Local-first memory for AI coding agents: decay, recall strengthening, sleep consolidation.",
+  "description": "Memory for AI agents that learns what is wrong and stops repeating it. Local SQLite store.",
   "version": "1.52.2",
-  "websiteUrl": "https://github.com/kitfunso/hippo-memory",
+  "websiteUrl": "https://hippo-memory.com",
   "repository": {
     "url": "https://github.com/kitfunso/hippo-memory",
     "source": "github"

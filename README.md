@@ -1,13 +1,15 @@
-# 🦛 Hippo
+# 🦛 Hippo: memory for AI agents that learns what is wrong
 
 **Hippo learns what is wrong and stops repeating it.** Good memory is knowing what to forget: what turned out wrong, what got replaced, what nobody used.
 
 [![npm](https://img.shields.io/npm/v/hippo-memory)](https://npmjs.com/package/hippo-memory)
-[![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+[![npm downloads](https://img.shields.io/npm/dm/hippo-memory)](https://npmjs.com/package/hippo-memory)
+[![CI](https://github.com/kitfunso/hippo-memory/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/kitfunso/hippo-memory/actions/workflows/ci.yml)
+[![license](https://img.shields.io/badge/license-MIT-blue)](https://github.com/kitfunso/hippo-memory/blob/master/LICENSE)
 [![website](https://img.shields.io/badge/website-hippo--memory.com-7c3aed)](https://hippo-memory.com)
 
 <p align="center">
-  <img src="./assets/hippo-init.svg" alt="hippo init --scan ~ — initializing memory across all repos" width="720">
+  <img src="https://raw.githubusercontent.com/kitfunso/hippo-memory/master/assets/hippo-init.svg" alt="hippo init --scan ~ initializing memory across all repos" width="720">
 </p>
 
 A memory layer for AI agents. Mark a memory wrong and it stops coming back. A newer fact replaces the old one. Memories you use get stronger. Provenance on every memory. SQLite under the hood, zero runtime deps, works with every CLI agent you have.
@@ -26,6 +28,8 @@ Imports from:  ChatGPT, Claude (CLAUDE.md), Cursor (.cursorrules), Slack, markdo
 Storage:       SQLite backbone with markdown mirrors. Git-trackable, human-readable.
 Dependencies:  Zero runtime deps. Node.js 22.16+. Optional embeddings: bring-your-own local Transformers.js (`npm i @huggingface/transformers`, or legacy `@xenova/transformers`) or an opt-in API embedder (OpenAI/Voyage/Cohere). Nothing is auto-installed.
 ```
+
+**Contents:** [Why](#why-this-exists) · [Receipts](#receipts) · [Quick start](#quick-start) · [Agent setup](#framework-integrations) · [MCP server](#mcp-server) · [How it works](#how-it-works) · [Features](#key-features) · [CLI](#cli-reference) · [Comparison](#comparison) · [Benchmarks](#benchmarks) · [FAQ](#faq) · [Contributing](#contributing)
 
 ---
 
@@ -112,7 +116,7 @@ hippo init
 #    Auto-installed claude-code hook in CLAUDE.md
 ```
 
-If you have a `CLAUDE.md`, it patches it. `AGENTS.md` for Codex/OpenClaw/OpenCode. `.cursorrules` for Cursor. Your agent starts using Hippo on its next session. For Codex session capture, Hippo wraps the codex launcher only when you explicitly opt in with `hippo hook install codex` (init prints the command when it detects Codex; undo anytime with `hippo hook uninstall codex`).
+If you have a `CLAUDE.md`, it patches it. `AGENTS.md` for Codex/OpenClaw/OpenCode/Pi. `.cursorrules` for Cursor. Your agent starts using Hippo on its next session. For Codex session capture, Hippo wraps the codex launcher only when you explicitly opt in with `hippo hook install codex` (init prints the command when it detects Codex; undo anytime with `hippo hook uninstall codex`).
 
 It also registers the current project in Hippo's workspace registry and installs one machine-level daily runner (6:15am). That runner sweeps every registered workspace, runs `hippo learn --git --days 1`, then `hippo sleep`. You get strict daily consolidation without creating one OS task per project.
 
@@ -696,10 +700,11 @@ On `heartbeat`, `block`, `review` and `complete`, a given `--run` is checked aga
 | Framework | Detected by | Patches |
 |-----------|------------|---------|
 | Claude Code | `CLAUDE.md` or `.claude/settings.json` | `CLAUDE.md` + `SessionStart`/`SessionEnd` hooks in `settings.json` |
-| Codex | `AGENTS.md` or `.codex` | `AGENTS.md` + automatic in-place Codex launcher wrapper |
+| Codex | `AGENTS.md` or `.codex` | `AGENTS.md`; session capture is opt-in with `hippo hook install codex`, which wraps the Codex launcher |
 | Cursor | `.cursorrules` or `.cursor/rules` | `.cursorrules` |
 | OpenClaw | `.openclaw` or `AGENTS.md` | native OpenClaw plugin or `AGENTS.md` |
 | OpenCode | `.opencode/` or `opencode.json` | `AGENTS.md` + TS plugin at `~/.config/opencode/plugins/hippo.ts` (subscribes to `session.idle` + `session.created`) |
+| Pi | `.pi` or `.pi/agent` | `AGENTS.md`; copy the [Pi extension](https://github.com/kitfunso/hippo-memory/tree/master/extensions/pi-extension) for session hooks |
 
 No extra commands needed. Just `hippo init` and your agent knows about Hippo.
 
@@ -843,7 +848,7 @@ The AI-memory category matured fast in 2026. Hippo's specific take — bio-decay
 | Lossless compression | No | Yes (AAAK, 30x) | No | No | No | No | No | No | No | No |
 | Cross-tool import (ChatGPT/Claude/Cursor) | Yes | No | No | No | Partial (data sources) | ? | No | Partial (28 data sources) | No (Git ops) | Partial (mRAG: PDFs/images/URLs) |
 | Auto-hook install | Yes | No | No | No | No | No | No | No | No | No |
-| MCP server | Yes | Yes | No | No | Yes (stdio + HTTP/OAuth) | Partial (managed) | Yes (via Letta Code) | Yes (first-party Claude/LangGraph) | Yes | ? |
+| MCP server | Yes | Yes | Yes (hosted, needs an account) | Yes | Yes (stdio + HTTP/OAuth) | Partial (managed) | Yes (via Letta Code) | Yes (first-party Claude/LangGraph) | Yes | ? |
 | Zero runtime deps | Yes | No (ChromaDB) | No | No | No (PGLite or PG+pgvector) | No (managed service) | No (Python deps) | No (Python deps) | Yes (single Rust binary) | No (managed + OSS) |
 | LongMemEval (best published) | 98.0% local / 99.8% voyage R@5 (s_cleaned, per-haystack)\* | 96.6% raw / 100% reranked R@5 | ~49-85% R@5 | N/A | 97.6-97.9% R@5 (s_cleaned\*) | N/A (LoCoMo 80.3%) | N/A | N/A | 88.78% overall accuracy w/ reader\*\* | 83.00% overall\*\* (LoCoMo 93.05%, HaluMem 93.04%) |
 | Git-friendly | Yes | No | No | Yes | Yes | No | No | No | Yes (Git is the model) | ? |
@@ -947,6 +952,54 @@ The benchmark, harness, and adapter contract remain shipped. Any memory system c
 cd benchmarks/sequential-learning
 node run.mjs --adapter all
 ```
+
+---
+
+## FAQ
+
+### How do I give Claude Code memory between sessions?
+
+Run `npm install -g hippo-memory`, then `hippo init` in the project, or `hippo init --scan ~` for every repo on the machine. If the project has a `CLAUDE.md`, init adds a short block telling Claude to run `hippo context --auto` when a session starts. It also adds hooks to Claude Code's settings that keep your pinned memories in context, save a task snapshot before compaction, and run `hippo sleep` when the session ends. The [Claude Code plugin](https://github.com/kitfunso/hippo-memory/tree/master/extensions/claude-code-plugin) is the alternative to these hooks; use one, not both.
+
+### Does hippo work with Cursor?
+
+Yes. `hippo init` adds its instructions to `.cursorrules` if the project has one, and the [MCP server](#mcp-server) gives Cursor's agent tools to recall and store memories once you add `hippo mcp` to `.cursor/mcp.json`. `hippo import --cursor .cursorrules` turns your existing rules into memories.
+
+### Does hippo work with Codex?
+
+Yes. `hippo init` adds its instructions to your `AGENTS.md`, which Codex reads before it starts work. Capturing Codex sessions is opt-in: `hippo hook install codex` wraps the Codex launcher, and `hippo hook uninstall codex` removes the wrapper.
+
+### Which agents does hippo work with?
+
+`hippo init` detects Claude Code, Codex, Cursor, OpenClaw, OpenCode and Pi, and wires itself into each one's instruction file, hooks or plugin. It only patches instruction files that already exist. Any MCP client can use the [MCP server](#mcp-server), and other tools can call the CLI or the HTTP API that `hippo serve` starts.
+
+### Can I use hippo as an MCP memory server?
+
+Yes. `hippo mcp` runs the server over stdio, and `npx -y hippo-memory mcp` runs it without a global install. Add it to the MCP config of Claude Desktop, Cursor, Windsurf, Cline or any other client (example [above](#mcp-server)); in Claude Code, run `claude mcp add hippo-memory -- hippo mcp`. The agent gets tools such as `hippo_recall`, `hippo_remember` and `hippo_outcome`.
+
+### How is hippo different from mem0?
+
+mem0 uses a language model to extract memories, OpenAI by default in its open-source library, and memories stored through its hosted MCP server live in your Mem0 account ([mem0 docs](https://docs.mem0.ai/platform/mem0-mcp), checked 2026-09-28). Hippo stores memories in SQLite on your machine, needs no account and no model, and `hippo init` wires it into the coding agents it finds. mem0's platform and hippo both mark an older fact superseded when a newer one replaces it. Hippo also lets you mark a recalled memory wrong with `hippo outcome --bad`, and it drops out of the top results.
+
+### Do I still need CLAUDE.md?
+
+Yes, for short standing rules such as build commands, code style and things never to do. Claude Code loads `CLAUDE.md` and its auto memory into every session, and its [memory docs](https://code.claude.com/docs/en/memory) say that when two rules contradict each other, Claude may pick one arbitrarily. Hippo holds the lessons that pile up, recalls the ones that match the task, and retires the ones marked wrong or replaced. `hippo init` adds its block to `CLAUDE.md`, and `hippo import --claude CLAUDE.md` turns existing notes into memories.
+
+### What happens when a memory turns out to be wrong?
+
+Mark it, and it stops coming back. `hippo outcome --bad` weakens the memories from the last recall, `hippo supersede <id> "<new fact>"` replaces one with a newer version, and `hippo reject <id> --reason "<why>"` stops that value from returning at all. On the synthetic E1 test, where every mark is correct, plain BM25 plus the outcome mark cut how often a marked-bad memory stayed in the top five from 71.9% to 0.0%. Real marks are noisier, because `--bad` marks the whole recall batch.
+
+### Where does hippo keep my data?
+
+On your machine, in SQLite: `.hippo/hippo.db` in each project, plus a global store in `~/.hippo/` for lessons shared across projects, with markdown mirrors you can read and commit. Recall makes no network call by default. Text goes to an outside provider only through features that use one: an API embedder, the Jev or LLM reranker, `hippo refine`, and the fact extraction `hippo sleep` runs through Anthropic's API whenever `ANTHROPIC_API_KEY` is set in its environment. To turn that last one off, set `{"extraction":{"enabled":false}}` in `.hippo/config.json`.
+
+### What does hippo cost?
+
+Nothing. Hippo is MIT-licensed and needs no account or API key. Optional features that call an outside provider bill through it: the Jev reranker costs about 0.0004 USD a recall, and API embedders and sleep's fact extraction bill your own keys. Memory text handed to your agent uses context tokens, and `hippo tokens` shows how many.
+
+### Has hippo been shown to make agents better at their work?
+
+Not yet. The published numbers measure retrieval: whether the right memory comes back, and whether a memory marked wrong stays out of the results. The paired test that runs real agent sessions with and without hippo has not had a scored run yet. Every measurement, including failed runs and one retracted claim, is indexed in [docs/evals](https://github.com/kitfunso/hippo-memory/blob/master/docs/evals/README.md).
 
 ---
 

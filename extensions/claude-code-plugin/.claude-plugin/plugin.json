@@ -1,6 +1,6 @@
 {
   "name": "hippo-memory",
-  "description": "Biologically-inspired memory for Claude Code. Memories decay by default, retrieval strengthens them, errors stick longer. Auto-captures context at session start and learns from errors.",
+  "description": "Memory for Claude Code that learns what is wrong and stops repeating it. Session-start context, per-prompt pinned rules, compaction snapshot and resume, error capture, session-end sleep.",
   "version": "0.6.0",
   "author": {
     "name": "Keith So",

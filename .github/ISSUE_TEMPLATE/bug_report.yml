@@ -1,0 +1,59 @@
+name: Bug report
+description: Something in hippo does not work the way the docs say it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Security problem? Do not file it here. Report it privately as [SECURITY.md](https://github.com/kitfunso/hippo-memory/blob/master/SECURITY.md) describes.
+  - type: input
+    id: version
+    attributes:
+      label: hippo version
+      description: Output of `hippo --version`.
+      placeholder: "1.52.2"
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: How do you run hippo?
+      multiple: true
+      options:
+        - CLI
+        - Claude Code hooks or plugin
+        - Codex
+        - Cursor
+        - OpenClaw plugin
+        - OpenCode plugin
+        - Pi extension
+        - MCP server (other client)
+        - HTTP server (hippo serve)
+        - Python SDK
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The commands you ran, in order.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `hippo doctor --json`
+      description: Optional. `hippo support-bundle` writes a redacted file with versions, checks and store counts, and no memory text unless you add `--include-logs`.
+      render: json
+  - type: input
+    id: env
+    attributes:
+      label: OS and Node version
+      placeholder: "macOS 15, Node 24.13.0"

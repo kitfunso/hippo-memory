@@ -1,0 +1,9 @@
+# Blank issues stay on: the website's pilot-request link opens a prefilled blank issue.
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security problem
+    url: https://github.com/kitfunso/hippo-memory/security/advisories/new
+    about: Private report through GitHub. Please do not open a public issue.
+  - name: Install and setup guide
+    url: https://hippo-memory.com/quickstart/
+    about: Install, hooks for each agent, and the MCP config.

@@ -1,0 +1,25 @@
+name: Feature request
+description: Suggest something hippo should do.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The task or the failure you hit, before any solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like hippo to do?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What have you tried instead?
+  - type: markdown
+    attributes:
+      value: |
+        SSO, SCIM, the org admin view, SIEM export and licence keys belong to the commercial edition and will not be merged here. See [CONTRIBUTING.md](https://github.com/kitfunso/hippo-memory/blob/master/CONTRIBUTING.md).

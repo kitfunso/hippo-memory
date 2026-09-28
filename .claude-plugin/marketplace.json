@@ -11,7 +11,7 @@
     {
       "name": "hippo-memory",
       "source": "./extensions/claude-code-plugin",
-      "description": "Memory that decays, strengthens with use and learns from errors. Session-start context, per-prompt pinned rules, compaction snapshot and resume, session-end sleep.",
+      "description": "Memory that learns what is wrong and stops repeating it. Session-start context, per-prompt pinned rules, compaction snapshot and resume, error capture, session-end sleep.",
       "version": "0.6.0",
       "homepage": "https://github.com/kitfunso/hippo-memory",
       "license": "MIT"
