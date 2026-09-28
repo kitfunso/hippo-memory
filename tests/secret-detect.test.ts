@@ -15,6 +15,15 @@ import { shareMemory, autoShare, syncGlobalToLocal, promoteToGlobal, getGlobalRo
 import { getContext, type Context } from '../src/api.js';
 import { clearProjectIdentityCache } from '../src/project-identity.js';
 
+// Built at runtime, so no secret-shaped literal sits in source.
+const HIPPO_KEY = 'hk_' + 'a'.repeat(24) + '.' + 'b'.repeat(32);
+const NPM = 'npm_' + 'A1'.repeat(18);
+const HF = 'hf_' + 'Ab'.repeat(17);
+const GLPAT = 'glpat-' + 'A1_-'.repeat(5);
+const YA29 = 'ya29.' + 'a0Af'.repeat(10);
+const SLACK_HOOK = 'https://hooks.slack.com/services/T' + 'A'.repeat(8) + '/B' + 'B'.repeat(8) + '/' + 'C'.repeat(24);
+const PROVIDER_TOKENS = [HIPPO_KEY, NPM, HF, GLPAT, YA29, SLACK_HOOK];
+
 describe('detectSecret patterns', () => {
   const flagged = (content: string, tags: string[] = []) => detectSecret({ content, tags }).flagged;
 
@@ -30,6 +39,10 @@ describe('detectSecret patterns', () => {
     expect(flagged('config sets api_key=9f8e7d6c5b4a3210ffff')).toBe(true);
   });
 
+  it('flags hippo, npm, Hugging Face, GitLab, Google OAuth and Slack webhook tokens', () => {
+    for (const token of PROVIDER_TOKENS) expect(flagged(`deploy note: ${token}`), token).toBe(true);
+  });
+
   it('flags by tag regardless of content', () => {
     expect(flagged('rotate quarterly', ['api-key'])).toBe(true);
     expect(flagged('rotate quarterly', ['SECRET'])).toBe(true);
@@ -42,6 +55,7 @@ describe('detectSecret patterns', () => {
     expect(flagged('prefer parameterized queries; never concatenate SQL')).toBe(false);
     expect(flagged('password rotation policy: every 90 days, no reuse')).toBe(false);
     expect(flagged('sk-hyphenated-words-in-prose read fine in plain writing')).toBe(false);
+    expect(flagged('npm_config_cache and hf_hub_download are names; the hk_ prefix marks hippo keys')).toBe(false);
   });
 
   it('does not flag code snippets or prose in assignment position (post-merge review FPs)', () => {
@@ -72,12 +86,22 @@ describe('redactSecrets / redactSecretsStrict', () => {
   const BEARER = 'Bearer ' + 'A'.repeat(20);
   const BEARER_UPPER = 'BEARER ' + 'D'.repeat(20);
   const JWT = 'eyJ' + 'A'.repeat(10) + '.eyJ' + 'B'.repeat(10) + '.' + 'C'.repeat(10);
+  const BASIC_CREDENTIAL = Buffer.from(`alice:${'p'.repeat(12)}`).toString('base64');
 
   it('redactSecretsStrict removes every canary shape, keyword context or not', () => {
-    const canaries = [AWS, GHP, GH_PAT, SLACK, STRIPE, GOOGLE, PEM, SK_NO_KEYWORD, SK_X_NO_KEYWORD, ASSIGNMENT, BEARER, BEARER_UPPER, JWT];
+    const canaries = [AWS, GHP, GH_PAT, SLACK, STRIPE, GOOGLE, PEM, SK_NO_KEYWORD, SK_X_NO_KEYWORD, ASSIGNMENT, BEARER, BEARER_UPPER, JWT, ...PROVIDER_TOKENS];
     for (const canary of canaries) {
       expect(redactSecretsStrict(`before ${canary} after`), canary).not.toContain(canary);
     }
+  });
+
+  it('redactSecretsStrict removes a Basic auth credential, as a header or quoted in JSON', () => {
+    expect(redactSecretsStrict(`Authorization: Basic ${BASIC_CREDENTIAL}`)).not.toContain(BASIC_CREDENTIAL);
+    expect(redactSecretsStrict(`{"authorization": "Basic ${BASIC_CREDENTIAL}"}`)).not.toContain(BASIC_CREDENTIAL);
+  });
+
+  it('plain redactSecrets removes the provider tokens too', () => {
+    for (const token of PROVIDER_TOKENS) expect(redactSecrets(`before ${token} after`), token).not.toContain(token);
   });
 
   it('plain redactSecrets leaves the co-occurrence-guarded sk shapes alone with no keyword nearby', () => {

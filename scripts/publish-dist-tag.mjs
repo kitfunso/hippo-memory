@@ -20,31 +20,30 @@ function compareCore(a, b) {
   return a.major - b.major || a.minor - b.minor || a.patch - b.patch;
 }
 
-/** `next` for a prerelease; `latest` when there is none yet or version is newer;
- *  else the maint tag for its minor, so a backport never moves `latest` back. */
+/** `next` for a prerelease; `latest` when version is newer than the current
+ *  `latest`; else the maint tag for its minor, so a backport never moves `latest` back. */
 export function distTagFor(version, latest) {
   const v = parseVersion(version);
   if (v.prerelease) return 'next';
-  if (latest === null || latest === undefined) return 'latest';
   const l = parseVersion(latest);
   const byCore = compareCore(v, l);
   // Semver ranks a release above its own prereleases, so 2.0.0 replaces a 2.0.0-rc.1 left on latest.
   return byCore > 0 || (byCore === 0 && l.prerelease !== null) ? 'latest' : `maint-${v.major}.${v.minor}`;
 }
 
-/** Current `latest` dist-tag, or null when the package has never published
- *  (404). Fails closed: any other status or network error throws. */
-async function fetchLatest() {
+/** Current `latest` dist-tag. Fails closed: hippo has published, so a 404, a missing
+ *  `latest` or any other error throws rather than let a backport go out as `latest`. */
+export async function fetchLatest() {
   let resp;
   try {
     resp = await fetch(REGISTRY_DIST_TAGS_URL);
   } catch (err) {
     throw new Error(`registry request failed: ${err instanceof Error ? err.message : String(err)}`);
   }
-  if (resp.status === 404) return null;
   if (!resp.ok) throw new Error(`registry returned HTTP ${resp.status} ${resp.statusText}`);
-  const body = await resp.json();
-  return body.latest ?? null;
+  const latest = (await resp.json())?.latest;
+  if (latest?.constructor !== String) throw new Error('registry dist-tags have no latest');
+  return latest;
 }
 
 // Guarded so importing this module (e.g. from the test) does not hit the

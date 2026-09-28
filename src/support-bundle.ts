@@ -1,7 +1,8 @@
-/** `hippo support-bundle`: one redacted JSON snapshot for a support ticket. Read-only; never touches memory content. */
+/** `hippo support-bundle`: one redacted JSON snapshot for a support ticket. Read-only (SQLite may leave empty -wal and -shm files); never touches memory content. */
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { pathToFileURL } from 'url';
 import { findHippoStoreDir, isGlobalStoreRoot, realpathOrResolve } from './project-identity.js';
 import { getGlobalRoot } from './shared.js';
 import { isInitialized } from './store.js';
@@ -211,17 +212,11 @@ function nativeRealPathKey(p: string): string | null {
   }
 }
 
-// Longest first: where one home form nests in another (a test home under the real one), swap the longer.
-function collectHomeForms(home: string, probes: readonly string[]): string[] {
-  const forms = new Set<string>();
-  const add = (s: string): void => { if (s.length >= 3) forms.add(s); };
+function collectHomeAliases(home: string, probes: readonly string[]): Set<string> {
+  const aliases = new Set<string>();
   for (const base of [home, realpathOrResolve(home), os.homedir(), realpathOrResolve(os.homedir())]) {
-    add(base);
-    add(path.resolve(base));
-    if (process.platform === 'win32') {
-      add(base.replace(/\\/g, '/'));
-      add(path.resolve(base).replace(/\\/g, '/'));
-    }
+    aliases.add(base);
+    aliases.add(path.resolve(base));
   }
 
   // The alias (e.g. a short-name temp root) can sit above the probe itself, so walk ancestors and
@@ -231,32 +226,54 @@ function collectHomeForms(home: string, probes: readonly string[]): string[] {
     let dir = path.resolve(probe);
     for (;;) {
       const key = nativeRealPathKey(dir);
-      if (key !== null && homeKeys.has(key)) {
-        add(dir);
-        if (process.platform === 'win32') add(dir.replace(/\\/g, '/'));
-      }
+      if (key !== null && homeKeys.has(key)) aliases.add(dir);
       const parent = path.dirname(dir);
       if (parent === dir) break;
       dir = parent;
     }
   }
-
-  const seen = new Set<string>();
-  const deduped: string[] = [];
-  for (const f of [...forms].sort((a, b) => b.length - a.length)) {
-    const key = process.platform === 'win32' ? f.toLowerCase() : f;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    deduped.push(f);
-  }
-  return deduped;
+  return aliases;
 }
 
-function replaceHomeForms(text: string, forms: readonly string[]): string {
-  if (forms.length === 0) return text;
-  // Stop only before another name character: "<home> now" and "<home>." swap, a longer user name ("<home>ty") does not.
-  const re = new RegExp(`(?:${forms.map(escapeRegExp).join('|')})(?![\\p{L}\\p{N}_])`, process.platform === 'win32' ? 'giu' : 'gu');
-  return text.replace(re, '~');
+// Node's own encoding, so it matches file URLs and ESM stack frames; a drive path's URL gains a leading slash.
+function fileUrlPath(p: string): string {
+  const pathname = pathToFileURL(p).pathname;
+  return /^\/[A-Za-z]:/.test(pathname) ? pathname.slice(1) : pathname;
+}
+
+// A home turns up as a path, as a file URL's percent-encoded path, and as a Claude Code project folder name.
+const HOME_SPELLINGS: readonly ((p: string) => string)[] = [
+  (p) => p,
+  fileUrlPath,
+  (p) => p.replace(/[^A-Za-z0-9]/g, '-'),
+];
+
+// A Windows separator can be written \, / or JSON-escaped (\\ in a log line quoting JSON), so any of them matches.
+function spellingPattern(spelling: string): string {
+  if (process.platform !== 'win32') return escapeRegExp(spelling);
+  return spelling.split(/[\\/]+/).map(escapeRegExp).join('(?:\\\\+|/)');
+}
+
+/** One pattern for every alias of the home in every spelling, or null when none is long enough to swap safely. */
+function buildHomePattern(home: string, probes: readonly string[]): RegExp | null {
+  const spellings = new Set<string>();
+  for (const alias of collectHomeAliases(home, probes)) {
+    for (const spell of HOME_SPELLINGS) {
+      const s = spell(alias);
+      if (s.length >= 3) spellings.add(s);
+    }
+  }
+  // Longest first: where one home nests in another (a test home under the real one), swap the longer.
+  const patterns = new Map<string, string>();
+  for (const s of [...spellings].sort((a, b) => b.length - a.length)) {
+    const pattern = spellingPattern(s);
+    const key = process.platform === 'win32' ? pattern.toLowerCase() : pattern;
+    if (!patterns.has(key)) patterns.set(key, pattern);
+  }
+  if (patterns.size === 0) return null;
+  // Whole names only: "<home> now" and "<home>." swap; "<home>ty", or "web-app" for a home of /app, do not.
+  const alternatives = [...patterns.values()].join('|');
+  return new RegExp(`(?<![\\p{L}\\p{N}_])(?:${alternatives})(?![\\p{L}\\p{N}_])`, process.platform === 'win32' ? 'giu' : 'gu');
 }
 
 const URL_RE = /\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi;
@@ -277,16 +294,17 @@ function redactUrlsInString(text: string): string {
   });
 }
 
-function redactString(text: string, homeForms: readonly string[]): string {
-  return replaceHomeForms(redactSecretsStrict(redactUrlsInString(text)), homeForms);
+function redactString(text: string, homePattern: RegExp | null): string {
+  const scrubbed = redactSecretsStrict(redactUrlsInString(text));
+  return homePattern === null ? scrubbed : scrubbed.replace(homePattern, '~');
 }
 
-function redactStrings(value: JsonValue, homeForms: readonly string[]): JsonValue {
-  if (isJsonString(value)) return redactString(value, homeForms);
-  if (Array.isArray(value)) return value.map((v) => redactStrings(v, homeForms));
+function redactStrings(value: JsonValue, homePattern: RegExp | null): JsonValue {
+  if (isJsonString(value)) return redactString(value, homePattern);
+  if (Array.isArray(value)) return value.map((v) => redactStrings(v, homePattern));
   if (isJsonObject(value)) {
     const out: JsonObject = {};
-    for (const [k, v] of Object.entries(value)) out[k] = redactStrings(v, homeForms);
+    for (const [k, v] of Object.entries(value)) out[k] = redactStrings(v, homePattern);
     return out;
   }
   return value;
@@ -294,19 +312,21 @@ function redactStrings(value: JsonValue, homeForms: readonly string[]): JsonValu
 
 /** Read-only: builds one redacted support-ticket snapshot. Never reads a memory content column. */
 export function buildSupportBundle(opts: SupportBundleOpts): JsonObject {
+  // Before doctor: its read-only open leaves an empty -wal that the store's file list would then report.
+  const stores = buildStores(opts);
   const bundle: JsonObject = {
     format: 'hippo-support-bundle/1',
     createdAt: opts.now.toISOString(),
     hippo: opts.version,
     runtime: buildRuntime(),
     doctor: JSON.parse(JSON.stringify(runDoctor(opts))),
-    stores: buildStores(opts),
+    stores,
     env: listSetEnvNames(),
     logs: buildLogsSection(opts),
   };
   // Store paths found from the working folder arrive resolved; the global root arrives as HIPPO_HOME was typed, and log lines
   // often quote the temp folder, which usually sits under the home.
-  const redacted = redactStrings(bundle, collectHomeForms(opts.home, [getGlobalRoot(), os.tmpdir()]));
+  const redacted = redactStrings(bundle, buildHomePattern(opts.home, [getGlobalRoot(), os.tmpdir()]));
   // SAFETY: the value built above is always a JsonObject; redactStrings preserves object shape.
   return redacted as JsonObject;
 }

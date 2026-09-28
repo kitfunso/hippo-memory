@@ -36,6 +36,13 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   { name: 'slack-token', re: /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/ },
   { name: 'stripe-key', re: /\b[sr]k_(?:live|test)_[A-Za-z0-9]{16,}\b/ },
   { name: 'google-api-key', re: /\bAIza[0-9A-Za-z_-]{35}\b/ },
+  // hk_ is hippo's own API key (src/auth.ts); npm, Hugging Face, GitLab and Slack webhook shapes follow gitleaks' rules.
+  { name: 'hippo-api-key', re: /\bhk_[a-z2-7]{24}\.[a-z2-7]{32}\b/ },
+  { name: 'npm-token', re: /\bnpm_[A-Za-z0-9]{36}\b/ },
+  { name: 'huggingface-token', re: /\bhf_[A-Za-z]{34}\b/ },
+  { name: 'gitlab-token', re: /\bglpat-[\w-]{20,}/ },
+  { name: 'google-oauth-token', re: /\bya29\.[\w-]{20,}/ },
+  { name: 'slack-webhook', re: /\bhooks\.slack\.com\/(?:services|workflows|triggers)\/[A-Za-z0-9+/]{43,56}/ },
   { name: 'private-key-block', re: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
   // sk-... (OpenAI/Anthropic style) and sk_<vendor>_... shapes. Both require
   // a key-ish noun somewhere in the content (co-occurrence guard) so prose
@@ -61,6 +68,7 @@ const CO_OCCURRENCE_GUARDED = new Set(['sk-style-key', 'sk-underscore-key']);
 // redactSecretsStrict-only: too noisy for whole-entry memory scanning, worth hiding once text leaves the machine.
 const STRICT_ONLY_PATTERNS: readonly RegExp[] = [
   /\bbearer\s+[A-Za-z0-9._~+/-]{16,}=*/gi,
+  /\bauthorization["']?\s*[:=]\s*["']?basic\s+[A-Za-z0-9+/]{8,}={0,2}/gi,
   /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*/g,
 ];
 
@@ -93,7 +101,7 @@ export function redactSecrets(text: string): string {
   return redactText(text, false);
 }
 
-/** Stricter redaction for text that leaves the machine: no co-occurrence guard, plus Bearer headers and JWTs. */
+/** Stricter redaction for text that leaves the machine: no co-occurrence guard, plus Bearer and Basic auth headers and JWTs. */
 export function redactSecretsStrict(text: string): string {
   return redactText(text, true);
 }

@@ -1,8 +1,9 @@
 /** `hippo support-bundle`: read-only, secret-free, one redacted JSON file. Real stores, canaries built at runtime. */
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, realpathSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, realpathSync, existsSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { randomUUID, createHash } from 'node:crypto';
 import { initStore, writeEntry } from '../src/store.js';
@@ -36,6 +37,11 @@ function isString(v: JsonValue): v is string {
   return typeof v === 'string';
 }
 
+/** How Claude Code names a project's folder under ~/.claude/projects. */
+function claudeFolder(p: string): string {
+  return p.replace(/[^A-Za-z0-9]/g, '-');
+}
+
 /** Every key and string in a bundle, lowercased. Raw JSON text doubles Windows backslashes, so a substring check on it proves nothing. */
 function bundleText(bundle: JsonObject): string[] {
   const out: string[] = [];
@@ -63,6 +69,8 @@ interface Seeded {
   bearerCanary: string;
   jwtCanary: string;
   pemCanary: string;
+  hippoKeyCanary: string;
+  basicCanary: string;
 }
 
 function seed(): Seeded {
@@ -80,11 +88,14 @@ function seed(): Seeded {
   const fCanary = `f-${randomUUID()}`;
   const keyCanary = `k-${randomUUID()}`;
   const authCanary = `a-${randomUUID()}`;
+  // hippo's own key shape under a key name that does not look secret, so only the value's shape can catch it.
+  const hippoKeyCanary = 'hk_' + 'c'.repeat(24) + '.' + 'd'.repeat(32);
   writeFileSync(join(hippoRoot, 'config.json'), JSON.stringify({
     embeddings: {
       apiBaseUrl: `https://user:${pwCanary}@proxy.example.com/v1?key=${qCanary}#${fCanary}`,
       apiKey: keyCanary,
       authToken: authCanary,
+      model: hippoKeyCanary,
     },
   }));
 
@@ -95,15 +106,18 @@ function seed(): Seeded {
   const bearerCanary = 'Bearer ' + randomUUID().replace(/-/g, '');
   const jwtCanary = `eyJ${'A'.repeat(10)}.eyJ${'B'.repeat(10)}.${'C'.repeat(10)}`;
   const pemCanary = `MIIE${randomUUID().replace(/-/g, '')}`;
+  const basicCanary = Buffer.from(`alice:${randomUUID()}`).toString('base64');
   writeFileSync(join(logsDir, 'last-sleep.log'), [
     `memory seen: ${memoryCanary}`,
     `token issued ${ghpCanary}`,
     `fetch failed: ${skCanary}`,
     `saw header ${bearerCanary}`,
+    `Authorization: Basic ${basicCanary}`,
     `jwt ${jwtCanary}`,
     `home is ${home} now`,
     `saved to ${home}.`,
     `other user ${join(`${home}ty`, 'x')}`,
+    `glued x${claudeFolder(home)}-proj`,
     '-----BEGIN RSA PRIVATE KEY-----',
     pemCanary,
     '-----END RSA PRIVATE KEY-----',
@@ -114,7 +128,7 @@ function seed(): Seeded {
   const envCanary = `env-${randomUUID()}`;
   process.env.HIPPO_FAKE = envCanary;
 
-  return { home, cwd, hippoRoot, memoryCanary, pwCanary, qCanary, fCanary, keyCanary, authCanary, envCanary, ghpCanary, skCanary, bearerCanary, jwtCanary, pemCanary };
+  return { home, cwd, hippoRoot, memoryCanary, pwCanary, qCanary, fCanary, keyCanary, authCanary, envCanary, ghpCanary, skCanary, bearerCanary, jwtCanary, pemCanary, hippoKeyCanary, basicCanary };
 }
 
 describe('buildSupportBundle', () => {
@@ -126,7 +140,7 @@ describe('buildSupportBundle', () => {
     // On Windows the unresolved tmpdir form can be an 8.3 short name (ABCDEF~1), which no home form covers.
     const homes = [s.home, join(tmpdir(), basename(s.home)), homedir()];
     const forbidden = [
-      s.memoryCanary, s.pwCanary, s.qCanary, s.fCanary, s.keyCanary, s.authCanary, s.envCanary,
+      s.memoryCanary, s.pwCanary, s.qCanary, s.fCanary, s.keyCanary, s.authCanary, s.envCanary, s.hippoKeyCanary,
       ...homes, ...homes.map((h) => h.replace(/\\/g, '/')),
     ];
     for (const f of forbidden) expect(text.filter((t) => t.includes(f.toLowerCase())), f).toEqual([]);
@@ -179,6 +193,30 @@ describe('buildSupportBundle', () => {
     expect(JSON.parse(JSON.stringify(bundle)).logs.tails['alias.log']).toEqual([`wrote ${join('~', 'tmp', 'scratch.txt')}`]);
   });
 
+  it('swaps the home in every spelling a log line uses: JSON-escaped, file URL, Claude Code folder name', () => {
+    // A space and an accented letter, so the file URL spelling differs from the path.
+    const home = join(tmp('hippo-bundle-home-'), 'José Q');
+    const cwd = join(home, 'proj');
+    mkdirSync(cwd, { recursive: true });
+    mkdirSync(join(home, '.hippo', 'logs'), { recursive: true });
+    process.env.HIPPO_HOME = join(home, 'unused-global');
+    writeFileSync(join(home, '.hippo', 'logs', 'hook.log'), [
+      `payload ${JSON.stringify({ cwd })}`,
+      `at ${pathToFileURL(join(cwd, 'x.js')).href}:1:2`,
+      `transcript ${join(home, '.claude', 'projects', claudeFolder(cwd), 'abc.jsonl')}`,
+      '',
+    ].join('\n'));
+
+    const bundle = buildSupportBundle({ cwd, home, version: 'test', includeLogs: true, now: new Date() });
+    const tail = JSON.parse(JSON.stringify(bundle)).logs.tails['hook.log'];
+    expect(tail[0]).toBe(`payload ${JSON.stringify({ cwd: join('~', 'proj') })}`);
+    expect(tail[1]).toMatch(/^at file:\/\/\/?~\/proj\/x\.js:1:2$/);
+    expect(tail[2]).toBe(`transcript ${join('~', '.claude', 'projects', '~-proj', 'abc.jsonl')}`);
+    for (const leaf of ['josé q', 'jos%c3%a9%20q', 'jos--q']) {
+      expect(bundleText(bundle).filter((t) => t.includes(leaf)), leaf).toEqual([]);
+    }
+  });
+
   it('includeLogs adds tails with known secret shapes gone; memory text in a log is not (documented opt-in)', () => {
     const s = seed();
     const bundle = buildSupportBundle({ cwd: s.cwd, home: s.home, version: 'test', includeLogs: true, now: new Date() });
@@ -191,6 +229,7 @@ describe('buildSupportBundle', () => {
     expect(tail).not.toContain(s.bearerCanary);
     expect(tail).not.toContain(s.jwtCanary);
     expect(tail).not.toContain(s.pemCanary);
+    expect(tail).not.toContain(s.basicCanary);
     expect(tail).not.toContain('-----END RSA PRIVATE KEY-----');
     expect(tail).toContain('[REDACTED]');
     expect(tail).toContain(s.memoryCanary);
@@ -199,6 +238,8 @@ describe('buildSupportBundle', () => {
     expect(tail).toContain('saved to ~.');
     expect(tail).toContain(`${basename(s.home)}ty`);
     expect(tail).not.toContain('~ty');
+    // A name that only ends in the home's folder name is another name.
+    expect(tail).toContain(`glued x${claudeFolder(s.home)}-proj`);
   });
 
   it('a log tail that starts inside a private key drops the rest of the key', () => {
@@ -231,6 +272,15 @@ describe('buildSupportBundle', () => {
     const check = openHippoDbReadOnly(s.hippoRoot);
     expect(getSchemaVersion(check)).toBe(45);
     closeHippoDb(check);
+  });
+
+  it('lists the store files as they were: its own doctor check does not add an empty -wal', () => {
+    const s = seed();
+    expect(existsSync(join(s.hippoRoot, 'hippo.db-wal'))).toBe(false);
+    const parsed = JSON.parse(JSON.stringify(
+      buildSupportBundle({ cwd: s.cwd, home: s.home, version: 'test', includeLogs: false, now: new Date() }),
+    ));
+    expect(Object.keys(parsed.stores[0].files)).toEqual(['hippo.db']);
   });
 
   it('a bare cwd has no stores; a bare .hippo is one error entry', () => {

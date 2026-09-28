@@ -21,6 +21,12 @@ permissions:
   contents: read
   id-token: write   # OIDC token for npm trusted publishing and provenance
 
+# One publish at a time: the dist-tag is picked before the long release gate, so two tags
+# pushed together would both read the old `latest`. `max` queues extra runs instead of cancelling them.
+concurrency:
+  group: npm-publish
+  queue: max
+
 jobs:
   publish:
     runs-on: ubuntu-latest

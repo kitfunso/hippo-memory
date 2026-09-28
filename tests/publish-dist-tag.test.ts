@@ -1,8 +1,8 @@
 /** npm 11 refuses to publish below `latest` without --tag, so a backport
  *  needs the right maint-<major>.<minor> tag. */
 
-import { describe, it, expect } from 'vitest';
-import { distTagFor } from '../scripts/publish-dist-tag.mjs';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { distTagFor, fetchLatest } from '../scripts/publish-dist-tag.mjs';
 
 describe('distTagFor', () => {
   it('publishes a version newer than latest as latest', () => {
@@ -21,10 +21,6 @@ describe('distTagFor', () => {
     expect(distTagFor('2.0.0-rc.1', '1.48.0')).toBe('next');
   });
 
-  it('is latest when the package has never published', () => {
-    expect(distTagFor('1.0.0', null)).toBe('latest');
-  });
-
   it('compares major.minor.patch numerically, not as strings', () => {
     expect(distTagFor('1.10.0', '1.9.9')).toBe('latest');
   });
@@ -39,5 +35,26 @@ describe('distTagFor', () => {
 
   it('throws on a version that is not x.y.z[-pre]', () => {
     expect(() => distTagFor('not-a-version', '1.0.0')).toThrow();
+  });
+});
+
+describe('fetchLatest', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('fails closed on a 404, so a backport never goes out as latest', async () => {
+    vi.stubGlobal('fetch', async () => new Response('{}', { status: 404, statusText: 'Not Found' }));
+    await expect(fetchLatest()).rejects.toThrow(/404/);
+  });
+
+  it('fails closed when the registry has no latest tag', async () => {
+    vi.stubGlobal('fetch', async () => Response.json({ next: '2.0.0-rc.1' }));
+    await expect(fetchLatest()).rejects.toThrow(/no latest/);
+  });
+
+  it('returns the latest tag', async () => {
+    vi.stubGlobal('fetch', async () => Response.json({ latest: '1.52.2' }));
+    await expect(fetchLatest()).resolves.toBe('1.52.2');
   });
 });
