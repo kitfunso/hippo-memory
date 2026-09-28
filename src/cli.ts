@@ -2948,7 +2948,7 @@ function claudeMemoryFolderNames(projectRoot: string): Set<string> {
   return new Set(roots.map((root) => (process.platform === 'win32' ? claudeFolderName(root).toLowerCase() : claudeFolderName(root))));
 }
 
-/** Claude Code's rule: a linked worktree shares its main checkout's folder, or its bare repository's; any other checkout, a submodule included, keeps its own. */
+/** Claude Code's rule: a linked worktree shares its main checkout's folder, or the git folder's when that sits outside a checkout (a bare repository, or --separate-git-dir); any other checkout, a submodule included, keeps its own. */
 function claudeCheckoutRoot(top: string, gitDir: string, common: string): string {
   if (gitDir === common) return top;
   if (path.basename(common) === '.git') return path.dirname(common);

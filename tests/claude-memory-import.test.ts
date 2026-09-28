@@ -138,4 +138,47 @@ describe('learnFromMemoryMd reads only the Claude Code memory of the store proje
     expect(claudeFolder(project).length).toBeGreaterThan(200);
     expect(learnFromMemoryMd(store(project), home)).toBe(1);
   });
+
+  it("reads a long-named repository's hashed folder for a store in a subfolder", () => {
+    // git prints a win32 toplevel as C:/..., while Claude Code hashes the resolved C:\... form.
+    const home = tmp();
+    const base = fs.realpathSync.native(tmp());
+    const repo = path.join(base, 'r'.repeat(204 - base.length));
+    fs.mkdirSync(repo);
+    git(repo, 'init', '-q');
+    fs.mkdirSync(path.join(repo, 'pkg'));
+    writeLesson(home, repo, 'repo.md', 'The long-named repository builds its docs before the package.');
+
+    expect(claudeFolder(repo).length).toBeGreaterThan(200);
+    expect(learnFromMemoryMd(store(path.join(repo, 'pkg')), home)).toBe(1);
+  });
+
+  it('keeps a folder name of exactly 200 characters plain', () => {
+    const home = tmp();
+    const base = fs.realpathSync.native(tmp());
+    const project = path.join(base, 'q'.repeat(199 - base.length));
+    fs.mkdirSync(project);
+    writeLesson(home, project, 'own.md', 'The exact-length project keeps its fixtures beside the tests.');
+
+    expect(claudeFolder(project)).toHaveLength(200);
+    expect(learnFromMemoryMd(store(project), home)).toBe(1);
+  });
+
+  it("keeps a bare repository's worktree in its own folder when the bare repository holds a .git entry", () => {
+    const home = tmp();
+    const parent = tmp();
+    const seed = tmp();
+    git(seed, 'init', '-q');
+    git(seed, 'commit', '-q', '--allow-empty', '-m', 'init');
+    git(parent, 'clone', '-q', '--bare', seed, 'proj.git');
+    git(path.join(parent, 'proj.git'), 'worktree', 'add', '-q', path.join(parent, 'wt'));
+    fs.mkdirSync(path.join(parent, 'proj.git', '.git'));
+    writeLesson(home, path.join(parent, 'wt'), 'own.md', 'This worktree runs the smoke tests against staging only.');
+    writeLesson(home, path.join(parent, 'proj.git'), 'bare.md', 'The bare repository mirrors the upstream every night.');
+    const hippoRoot = store(path.join(parent, 'wt'));
+
+    expect(learnFromMemoryMd(hippoRoot, home)).toBe(1);
+    expect(contents(hippoRoot)).toContain('smoke tests');
+    expect(contents(hippoRoot)).not.toContain('mirrors the upstream');
+  });
 });
