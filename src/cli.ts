@@ -775,17 +775,24 @@ function patchInstructionFiles(dir: string, agents: readonly string[]): void {
   }
 }
 
-/** Swap an unedited block from an earlier hippo for the current one; an edited block stays, with a hint. */
-function refreshShippedBlock(filePath: string, text: string, hook: string): void {
-  const start = text.indexOf(HOOK_MARKERS.start) + HOOK_MARKERS.start.length;
+/** The first hippo block in `text` and the agent whose current or shipped text it is; `owner` is undefined for an edited block. */
+function hippoBlock(text: string): { start: number; end: number; eol: string; inner: string; owner?: string } | null {
+  const at = text.indexOf(HOOK_MARKERS.start);
+  const start = at + HOOK_MARKERS.start.length;
   const end = text.indexOf(HOOK_MARKERS.end, start);
-  if (end < 0) return;
+  if (at < 0 || end < 0) return null;
   // git autocrlf checks these files out with CRLF: match as LF, write back in the file's own ending.
   const raw = text.slice(start, end);
-  const eol = raw.includes('\r\n') ? '\r\n' : '\n';
   const inner = raw.replace(/\r\n/g, '\n').trim();
-  if (Object.values(HOOKS).some((h) => h.content === inner)) return;
-  const owner = SHIPPED_HOOK_HASHES.get(createHash('sha256').update(inner).digest('hex'));
+  const owner = Object.keys(HOOKS).find((k) => HOOKS[k].content === inner) ?? SHIPPED_HOOK_HASHES.get(createHash('sha256').update(inner).digest('hex'));
+  return { start, end, eol: raw.includes('\r\n') ? '\r\n' : '\n', inner, owner };
+}
+
+/** Swap an unedited block from an earlier hippo for the current one; an edited block stays, with a hint. */
+function refreshShippedBlock(filePath: string, text: string, hook: string): void {
+  const block = hippoBlock(text);
+  if (!block || (block.owner && HOOKS[block.owner].content === block.inner)) return;
+  const { start, end, eol, owner } = block;
   const name = path.basename(filePath);
   if (!owner) {
     console.log(`   Left the edited hippo block in ${name} as is; \`hippo hook install ${hook}\` replaces it.`);
@@ -7983,6 +7990,8 @@ function cmdHook(
 ): void {
   const subcommand = args[0];
   const target = args[1];
+  // Cursor has no init row, so the AGENTS.md block is usually another agent's, and Cursor reads that one as it is.
+  const othersBlock = (text: string) => target === 'cursor' && hippoBlock(text)?.owner !== 'cursor';
 
   if (subcommand === 'list') {
     console.log('Available hooks:\n');
@@ -8010,7 +8019,9 @@ function cmdHook(
     if (fs.existsSync(filepath)) {
       const existing = fs.readFileSync(filepath, 'utf8');
 
-      if (existing.includes(HOOK_MARKERS.start)) {
+      if (existing.includes(HOOK_MARKERS.start) && othersBlock(existing)) {
+        console.log(`${hook.file} already has a hippo block, which Cursor reads; left it as is.`);
+      } else if (existing.includes(HOOK_MARKERS.start)) {
         const re = new RegExp(
           `${escapeRegex(HOOK_MARKERS.start)}[\\s\\S]*?${escapeRegex(HOOK_MARKERS.end)}`,
           'g',
@@ -8102,7 +8113,9 @@ function cmdHook(
 
     if (fs.existsSync(filepath)) {
       const existing = fs.readFileSync(filepath, 'utf8');
-      if (existing.includes(HOOK_MARKERS.start)) {
+      if (existing.includes(HOOK_MARKERS.start) && othersBlock(existing)) {
+        console.log(`Left the hippo block in ${hook.file}: it is not Cursor's, and other agents may read it. Delete it by hand if none does.`);
+      } else if (existing.includes(HOOK_MARKERS.start)) {
         fs.writeFileSync(filepath, withoutHookBlock(existing) + '\n', 'utf8');
         console.log(`Removed Hippo hook from ${hook.file}`);
       } else {

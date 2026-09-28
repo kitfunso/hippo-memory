@@ -72,6 +72,19 @@ describe('Cursor integration writes AGENTS.md', () => {
     expect(read('.cursorrules')).toBe('Use tabs.\n');
   });
 
+  it('hook uninstall and install cursor leave the block init wrote for Codex', () => {
+    write('AGENTS.md', '# Agents\n');
+    hippo('init', '--no-schedule', '--no-learn');
+    const agentsMd = read('AGENTS.md');
+    expect(agentsMd).toContain("Hippo's Codex wrapper");
+    write('.cursorrules', `Use tabs.\n\n${OLD_BLOCK}`);
+    hippo('hook', 'uninstall', 'cursor');
+    expect(read('AGENTS.md')).toBe(agentsMd);
+    expect(read('.cursorrules')).toBe('Use tabs.\n');
+    hippo('hook', 'install', 'cursor');
+    expect(read('AGENTS.md')).toBe(agentsMd);
+  });
+
   it('hook uninstall cursor deletes a .cursorrules that held only the old hippo block', () => {
     write('.cursorrules', OLD_BLOCK);
     hippo('hook', 'uninstall', 'cursor');

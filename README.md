@@ -974,7 +974,7 @@ Run `npm install -g hippo-memory`, then `hippo init` in the project. If the proj
 
 ### How do I give Cursor memory between sessions?
 
-`hippo init` adds its instructions to `AGENTS.md` if the project has one, and Cursor reads that file from the project root. The [MCP server](#mcp-server) gives Cursor's agent tools to recall and store memories once you add `hippo mcp` to `.cursor/mcp.json`. Older hippo versions wrote the block to `.cursorrules`; `hippo hook uninstall cursor` removes it from there and from `AGENTS.md`, and `hippo hook install cursor` puts it back in `AGENTS.md`. `hippo import --cursor .cursor/rules` turns your existing rules into memories; it reads an older single `.cursorrules` file too.
+`hippo init` adds its instructions to `AGENTS.md` if the project has one, and Cursor reads that file from the project root. The [MCP server](#mcp-server) gives Cursor's agent tools to recall and store memories once you add `hippo mcp` to `.cursor/mcp.json`. Older hippo versions wrote the block to `.cursorrules`; `hippo hook uninstall cursor` removes it from there, and from `AGENTS.md` only when the block there is Cursor's own (`hippo hook install cursor` puts it back). A block written for Codex or another agent stays, since Cursor reads it too. `hippo import --cursor .cursor/rules` turns your existing rules into memories; it reads an older single `.cursorrules` file too.
 
 ### How do I give Codex memory across sessions?
 
