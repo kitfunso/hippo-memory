@@ -9,6 +9,8 @@ The JSONL rows are what evaluate_retrieval.py and score_haystack.py read, unchan
   python recall_cli_haystack.py recall --hippo <install>/... --data D --work W --store stores|embedded --run NAME
          [--budget N] [--shuffle] [--why]
   python recall_cli_haystack.py stats  --data D --work W --runs NAME ... --pairs B:A ... --out stats.json
+  python recall_cli_haystack.py analyze --data D --work W --runs NAME ... --out raw.json
+  python recall_cli_haystack.py checks --data D --work W [--write-time W2]
 Every command takes --limit N (first N questions) and --workers N.
 """
 from __future__ import annotations
@@ -38,6 +40,7 @@ PASS_ENV = {"PATH", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "PATHEXT",
 REMEMBERED = re.compile(r"^Remembered \[([^\]]+)\]", re.M)
 EMBED_STATUS = re.compile(r"Embedding status: (\d+)/(\d+) memories embedded")
 TOP_KEEP = 10  # evaluate_retrieval.py reads at most the top 10
+DEFAULT_BUDGET = 4000  # src/cli.ts:1109
 
 
 def hippo(bin_path: str, inst: Path, args: list[str], stdin: str | None = None) -> str:
@@ -152,7 +155,8 @@ def cmd_recall(args: argparse.Namespace, qs: list[dict[str, Any]]) -> None:
     rows = fan_out(lambda job: recall_one(job[0], job[1], args.work, args.hippo, args.store, args.run, flags),
                    jobs, args.workers, f"recall {args.run}")
     out = args.work / f"{args.run}.jsonl"
-    out.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
+    # ASCII-escaped: session text holds raw U+2028, which str.splitlines() readers treat as a line break.
+    out.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
     log.info("wrote %s", out)
 
 
@@ -237,9 +241,148 @@ def cmd_stats(args: argparse.Namespace, qs: list[dict[str, Any]]) -> None:
     log.info("wrote %s", args.out)
 
 
+def first_answer_rank(row: dict[str, Any], gold: set[str]) -> int | None:
+    return next((i + 1 for i, m in enumerate(row["retrieved_memories"]) if m["tags"][0] in gold), None)
+
+
+def replay_budget(ranked: list[dict[str, Any]], budget: int) -> list[str]:
+    """The budget loop of src/search.ts:791-800, minResults 1, over a list already in rank order."""
+    kept, used = [], 0
+    for m in ranked:
+        if kept and used + m["tokens"] > budget:
+            continue
+        used += m["tokens"]
+        kept.append(m["id"])
+    return kept
+
+
+def budget_mechanics(default: dict[str, Any], lifted: dict[str, Any], qs: list[dict[str, Any]]) -> dict[str, Any]:
+    """What the default budget kept and cut, measured against the same arm's lifted ranking."""
+    later: list[tuple[int | None, int]] = []  # (rank in the lifted top 10 or None, tokens)
+    first_tokens, top1_same, replayed, lost, lost_too_big = [], 0, 0, [], 0
+    for q in qs:
+        d, lf = default[q["question_id"]], lifted[q["question_id"]]
+        got, order = [m["id"] for m in d["retrieved_memories"]], [m["id"] for m in lf["retrieved_memories"]]
+        first = d["retrieved_memories"][0]["tokens"]
+        first_tokens.append(first)
+        top1_same += got[0] == order[0]
+        later += [(order.index(i) + 1 if i in order else None, m["tokens"])
+                  for i, m in zip(got[1:], d["retrieved_memories"][1:])]
+        sim = replay_budget(lf["retrieved_memories"], DEFAULT_BUDGET)
+        replayed += got[: len(sim)] == sim and not set(got[len(sim):]) & set(order)
+        gold = set(q["answer_session_ids"])
+        rank = first_answer_rank(lf, gold)
+        if rank and rank <= 5 and (first_answer_rank(d, gold) or TOP_KEEP + 1) > 5:
+            lost.append(lf["retrieved_memories"][rank - 1]["tokens"])
+            lost_too_big += lost[-1] > DEFAULT_BUDGET - first
+    returned = [default[q["question_id"]]["num_retrieved"] for q in qs]
+    return {
+        "returned_counts": {n: returned.count(n) for n in sorted(set(returned))},
+        "first_result_tokens_median": statistics.median(first_tokens),
+        "first_result_is_lifted_top1": top1_same,
+        "returned_after_first": len(later),
+        "after_first_tokens_median": statistics.median(t for _, t in later) if later else None,
+        "after_first_below_lifted_rank_5": sum(r is None or r > 5 for r, _ in later),
+        "after_first_outside_lifted_top_10": sum(r is None for r, _ in later),
+        "default_equals_budget_replayed_on_lifted": replayed,
+        "lost_to_budget": len(lost),
+        "lost_answer_tokens_median": statistics.median(lost) if lost else None,
+        "lost_answer_bigger_than_room_after_first": lost_too_big,
+    }
+
+
+def cmd_analyze(args: argparse.Namespace, qs: list[dict[str, Any]]) -> None:
+    """The committed raw file: stats.json, R@k, the budget cut and a compact per-question table."""
+    sys.path.insert(0, str(HERE))
+    from evaluate_retrieval import check_session_hit
+
+    runs = {name: load_rows(args.work / f"{name}.jsonl") for name in args.runs}
+    gold = {q["question_id"]: set(q["answer_session_ids"]) for q in qs}
+    summary: dict[str, Any] = {}
+    for name, rows in runs.items():
+        mems = {q["question_id"]: rows[q["question_id"]]["retrieved_memories"] for q in qs}
+        summary[name] = {
+            "r_at": {k: round(100 * statistics.mean(
+                check_session_hit(mems[qid], list(g), k) for qid, g in gold.items()), 1) for k in (1, 2, 3, 4, 5, 10)},
+            "all_evidence_r5": round(100 * statistics.mean(
+                g <= {m["tags"][0] for m in mems[qid][:5]} for qid, g in gold.items()), 1),
+        }
+        log.info("%s %s", name, summary[name])
+    for arm in ("A", "B"):
+        if f"{arm}-default" in runs and f"{arm}-lifted" in runs:
+            summary[f"{arm}-budget"] = budget_mechanics(runs[f"{arm}-default"], runs[f"{arm}-lifted"], qs)
+            log.info("%s budget %s", arm, summary[f"{arm}-budget"])
+    lifted = runs.get("A-lifted")
+    if lifted:
+        toks = [m["tokens"] for q in qs for m in lifted[q["question_id"]]["retrieved_memories"][:5]
+                if m["tags"][0] in gold[q["question_id"]]]
+        cands = [lifted[q["question_id"]]["suppression"]["totalCandidates"] for q in qs]
+        hay = [len(q["haystack_session_ids"]) for q in qs]
+        summary["answer_sessions_in_A_lifted_top5"] = {
+            "n": len(toks), "tokens_median": statistics.median(toks), "over_budget": sum(t > DEFAULT_BUDGET for t in toks)}
+        summary["candidates"] = {
+            "median": statistics.median(cands), "haystack_median": statistics.median(hay),
+            "sessions_never_candidates": sum(h - c for h, c in zip(hay, cands)),
+            "questions_with_non_candidates": sum(h > c for h, c in zip(hay, cands))}
+    cols = ["question_id", "type"] + [f"{r}.{f}" for r in runs for f in ("first_answer_rank", "returned", "returned_tokens")]
+    table = [[q["question_id"], q["question_type"]]
+             + [v for rows in runs.values() for v in (first_answer_rank(rows[q["question_id"]], gold[q["question_id"]]),
+                                                      rows[q["question_id"]]["num_retrieved"],
+                                                      rows[q["question_id"]]["returned_tokens"])]
+             for q in qs]
+    head = json.dumps({"stats": json.loads((args.work / "stats.json").read_text(encoding="utf-8")),
+                       "summary": summary, "per_question_columns": cols}, indent=1).rstrip()
+    # One question per line keeps a 500-row table readable in a diff.
+    text = head[:-1].rstrip() + ',\n "per_question": [\n  ' + ",\n  ".join(map(json.dumps, table)) + "\n ]\n}\n"
+    if json.loads(text)["per_question"] != table:
+        raise RuntimeError("per-question table did not round-trip")
+    args.out.write_text(text, encoding="utf-8")
+    log.info("wrote %s", args.out)
+
+
+def same_order(a: Path, b: Path) -> tuple[list[str], float]:
+    """Questions whose top-10 session order differs, and the largest score gap among the rest."""
+    ra, rb = load_rows(a), load_rows(b)
+    sids = {q: ([m["tags"][0] for m in ra[q]["retrieved_memories"]], [m["tags"][0] for m in rb[q]["retrieved_memories"]])
+            for q in ra}
+    diff = [q for q, (x, y) in sids.items() if x != y]
+    gap = max((abs(x["score"] - y["score"]) for q in ra if q not in diff
+               for x, y in zip(ra[q]["retrieved_memories"], rb[q]["retrieved_memories"])), default=0.0)
+    return diff, gap
+
+
+def cmd_checks(args: argparse.Namespace, qs: list[dict[str, Any]]) -> None:
+    """Prereg checks 5 and 6 on every run in --work; 7 when the --why runs exist; 8 with --write-time."""
+    hay = {q["question_id"]: set(q["haystack_session_ids"]) for q in qs}
+    failed: list[str] = []
+    for path in sorted(args.work.glob("*.jsonl")):
+        rows = load_rows(path)
+        outside = sum(m["tags"][0] not in hay[qid] for qid, r in rows.items() for m in r["retrieved_memories"])
+        log.info("checks 5-6 %s: %d rows, %d sessions outside their haystack", path.name, len(rows), outside)
+        if set(rows) != set(hay) or outside:
+            failed.append(path.name)
+    pairs = [(args.work / f"{r}.jsonl", args.work / f"{r}-why.jsonl") for r in ("B-default", "B-lifted", "A-lifted")]
+    if args.write_time:
+        pairs += [(args.work / f"{r}.jsonl", args.write_time / f"{r}.jsonl") for r in ("B-default", "B-lifted")]
+    for a, b in pairs:
+        if b.exists():
+            diff, gap = same_order(a, b)
+            log.info("same top-10 order, %s vs %s: %d questions differ %s; max score gap %.2e", a, b, len(diff), diff[:5], gap)
+            failed += [f"{a.name} vs {b}"] if diff else []
+    for run, want_cosine in (("B-lifted-why", True), ("A-lifted-why", False)):
+        if (args.work / f"{run}.jsonl").exists():
+            rows = load_rows(args.work / f"{run}.jsonl")
+            bad = [q for q, r in rows.items() if any((m.get("cosine") or 0) != 0 for m in r["retrieved_memories"]) != want_cosine]
+            log.info("check 7 %s: %d questions %s a non-zero cosine", run, len(bad), "without" if want_cosine else "with")
+            failed += [run] if bad else []
+    if failed:
+        raise SystemExit(f"checks FAILED: {failed}")
+    log.info("all checks pass")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("command", choices=["build", "embed", "recall", "stats"])
+    parser.add_argument("command", choices=["build", "embed", "recall", "stats", "analyze", "checks"])
     parser.add_argument("--data", type=Path, required=True)
     parser.add_argument("--work", type=Path, required=True)
     parser.add_argument("--hippo", help="path to bin/hippo.js of the install under test")
@@ -253,6 +396,7 @@ def main() -> None:
     parser.add_argument("--runs", nargs="*", default=[])
     parser.add_argument("--pairs", nargs="*", default=[], help="FIRST:SECOND, reported as FIRST - SECOND")
     parser.add_argument("--out", type=Path)
+    parser.add_argument("--write-time", type=Path, help="checks: a work dir whose stores got vectors from remember")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     qs = json.loads(args.data.read_text(encoding="utf-8"))[: args.limit]
@@ -263,6 +407,10 @@ def main() -> None:
         fan_out(lambda q: embed_one(q, args.work, args.hippo), qs, args.workers, "embed")
     elif args.command == "recall":
         cmd_recall(args, qs)
+    elif args.command == "analyze":
+        cmd_analyze(args, qs)
+    elif args.command == "checks":
+        cmd_checks(args, qs)
     else:
         cmd_stats(args, qs)
 
