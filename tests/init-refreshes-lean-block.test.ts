@@ -155,6 +155,25 @@ describe('hippo init on a file that already has a hippo block', () => {
     expect(out).not.toContain('Refreshed');
   });
 
+  it('refreshes an unedited old block in a CRLF file and keeps its line endings', () => {
+    const before = `# Rules\n\nKeep this line.\n\n${START}\n${OLD_CLAUDE}\n${END}\n\nAnd this one.\n`.replace(/\n/g, '\r\n');
+    write('CLAUDE.md', before);
+    expect(init()).toContain('Refreshed the claude-code hippo block in CLAUDE.md');
+
+    const fresh = path.join(home, 'fresh');
+    fs.mkdirSync(fresh);
+    fs.writeFileSync(path.join(fresh, 'CLAUDE.md'), '# Rules\n');
+    init(fresh);
+
+    const after = read('CLAUDE.md');
+    expect(outside(after)).toEqual(outside(before));
+    expect(inner(after).replace(/\r\n/g, '\n')).toBe(inner(read('CLAUDE.md', fresh)));
+    expect(after).not.toMatch(/(^|[^\r])\n/);
+    const out = init();
+    expect(read('CLAUDE.md')).toBe(after);
+    expect(out).not.toMatch(/Refreshed|Left the edited/);
+  });
+
   it('changes nothing on a second run', () => {
     write('CLAUDE.md', `# Rules\n\n${START}\n${OLD_CLAUDE}\n${END}\n`);
     expect(init()).toContain('Refreshed the claude-code hippo block in CLAUDE.md');

@@ -780,7 +780,10 @@ function refreshShippedBlock(filePath: string, text: string, hook: string): void
   const start = text.indexOf(HOOK_MARKERS.start) + HOOK_MARKERS.start.length;
   const end = text.indexOf(HOOK_MARKERS.end, start);
   if (end < 0) return;
-  const inner = text.slice(start, end).trim();
+  // git autocrlf checks these files out with CRLF: match as LF, write back in the file's own ending.
+  const raw = text.slice(start, end);
+  const eol = raw.includes('\r\n') ? '\r\n' : '\n';
+  const inner = raw.replace(/\r\n/g, '\n').trim();
   if (Object.values(HOOKS).some((h) => h.content === inner)) return;
   const owner = SHIPPED_HOOK_HASHES.get(createHash('sha256').update(inner).digest('hex'));
   const name = path.basename(filePath);
@@ -788,7 +791,7 @@ function refreshShippedBlock(filePath: string, text: string, hook: string): void
     console.log(`   Left the edited hippo block in ${name} as is; \`hippo hook install ${hook}\` replaces it.`);
     return;
   }
-  fs.writeFileSync(filePath, `${text.slice(0, start)}\n${HOOKS[owner].content}\n${text.slice(end)}`, 'utf8');
+  fs.writeFileSync(filePath, `${text.slice(0, start)}${eol}${HOOKS[owner].content.replace(/\n/g, eol)}${eol}${text.slice(end)}`, 'utf8');
   console.log(`   Refreshed the ${owner} hippo block in ${name}`);
 }
 
