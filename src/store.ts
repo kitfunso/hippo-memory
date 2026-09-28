@@ -3631,24 +3631,29 @@ export function stampHandoffOutcome(hippoRoot: string, tenantId: string, session
   }
 }
 
-/**
- * Auto-write a handoff at session-end from the session's active snapshot (DF1 T3).
+/** Auto-write a handoff at session-end (DF1 T3) from the session's active snapshot, else from `derived`, its transcript state.
  * @param evidence best-effort git state; outcome comes from the newest session_complete event.
- * @returns null unless the snapshot belongs to sessionId and no newer handoff already covers it.
- */
+ * @returns null when neither source is the session's, or a newer handoff already covers it. */
 export function writeSessionEndHandoff(
   hippoRoot: string,
   tenantId: string,
   sessionId: string,
   evidence: HandoffEvidence | null,
+  derived: Pick<TaskSnapshot, 'task' | 'summary' | 'next_step'> | null = null,
 ): SessionHandoff | null {
   assertTenantId('writeSessionEndHandoff', tenantId);
-  const snapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
-  if (!snapshot || snapshot.session_id !== sessionId) return null;
-
+  const active = loadActiveTaskSnapshot(hippoRoot, tenantId);
   const existing = loadLatestHandoff(hippoRoot, tenantId, sessionId);
-  // Strict '>': a same-millisecond tie must not swallow the session's only write (test 6e).
-  if (existing && existing.updatedAt > snapshot.updated_at) return null;
+  let snapshot: Pick<TaskSnapshot, 'task' | 'summary' | 'next_step' | 'scope'>;
+  if (active && active.session_id === sessionId) {
+    // Strict '>': a same-millisecond tie must not swallow the session's only write (test 6e).
+    if (existing && existing.updatedAt > active.updated_at) return null;
+    snapshot = active;
+  } else {
+    // A handoff the session wrote itself beats one read off its transcript.
+    if (!derived || existing) return null;
+    snapshot = { ...derived, scope: null };
+  }
 
   const db = openHippoDb(hippoRoot);
   let outcome: HandoffOutcome | null = null;

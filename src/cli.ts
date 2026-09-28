@@ -192,7 +192,7 @@ import {
   importVault,
   ImportOptions,
 } from './importers.js';
-import { cmdCapture, CaptureOptions, cmdPreCompact, postCompactMessage, resolveLastSessionTranscript, truncateCodePointSafe, sanitizeLogMessage } from './capture.js';
+import { cmdCapture, CaptureOptions, cmdPreCompact, postCompactMessage, resolveLastSessionTranscript, truncateCodePointSafe, sanitizeLogMessage, transcriptWorkingState } from './capture.js';
 import { readStdinBounded } from './stdin.js';
 import {
   auditMemories,
@@ -3498,9 +3498,9 @@ async function cmdSessionEndWorker(
     // sleep errors are already tee'd to the log file via cmdSleep's
     // `[hippo] sleep failed: ...` line. Continue to capture regardless.
   }
+  const transcriptPath = typeof flags['transcript'] === 'string' ? (flags['transcript'] as string) : undefined;
   try {
     const logFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined;
-    const transcriptPath = typeof flags['transcript'] === 'string' ? (flags['transcript'] as string) : undefined;
     // With no stdin of its own, capture would read this as a manual run and scan every project.
     if (!transcriptPath) {
       appendSessionEndCloseLog(logFile ?? null, 'skip capture: no transcript for this session');
@@ -3532,15 +3532,20 @@ async function cmdSessionEndWorker(
   // snapshot writeSessionEndHandoff reads is still active.
   if (closeSessionId) {
     try {
-      const activeForHandoff = loadActiveTaskSnapshot(hippoRoot, resolveTenantId({}));
-      if (!activeForHandoff || activeForHandoff.session_id !== closeSessionId) {
-        appendSessionEndCloseLog(closeLogFile, 'skip: no active snapshot for session');
+      const tenantId = resolveTenantId({});
+      const ownSnapshot = loadActiveTaskSnapshot(hippoRoot, tenantId)?.session_id === closeSessionId;
+      // A session that never compacted has no snapshot, so its own transcript supplies the same fields.
+      const derived = !ownSnapshot && transcriptPath
+        ? transcriptWorkingState(transcriptPath, (message) => appendSessionEndCloseLog(closeLogFile, message))
+        : null;
+      if (!ownSnapshot && !derived) {
+        appendSessionEndCloseLog(closeLogFile, 'skip: no snapshot or transcript for session');
       } else {
         const evidence = collectHandoffEvidence(process.cwd(), 'unknown');
-        const handoff = writeSessionEndHandoff(hippoRoot, resolveTenantId({}), closeSessionId, evidence);
+        const handoff = writeSessionEndHandoff(hippoRoot, tenantId, closeSessionId, evidence, derived);
         appendSessionEndCloseLog(
           closeLogFile,
-          handoff ? `wrote handoff for session ${closeSessionId}` : 'skip: handoff newer than snapshot',
+          handoff ? `wrote handoff for session ${closeSessionId}` : 'skip: a newer handoff covers the session',
         );
       }
     } catch (err) {
