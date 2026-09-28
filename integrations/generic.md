@@ -218,7 +218,7 @@ Agents that want to understand what they're working with:
 - Error tag (`--error`): 2x base half-life
 - Outcomes (`hippo outcome --good` / `--bad`): scale the effective half-life between 0.5x and 1.5x by the balance of good and bad marks, and each net bad mark halves strength, at most three times
 - Pin: no decay
-- Decision (`hippo decide`) and the other objects: the default half-life
+- Decision (`hippo decide`) and the other objects: the default half-life (on a store made before 1.52.7, 90 days until its first `hippo sleep` on 1.52.7 or later)
 - Recall boost: 1.2x for decisions, up to 1.3x for path-matching memories
 - Consolidation removes memories below strength 0.05
 

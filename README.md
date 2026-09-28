@@ -356,7 +356,7 @@ hippo invalidate "REST API" --reason "migrated to GraphQL"
 
 ### Architectural decisions
 
-One-off decisions don't repeat, so they can't earn their keep through retrieval alone. `hippo decide` stores them with verified confidence and the store's default half-life, the same as any other memory, and sleep never retires the memory behind a decision.
+One-off decisions don't repeat, so they can't earn their keep through retrieval alone. `hippo decide` stores them with verified confidence and the store's default half-life, the same as any other memory, and sleep never retires the memory behind a decision. On a store made before 1.52.7, decisions get 90 days until the store's first `hippo sleep` on 1.52.7 or later moves them to the default.
 
 ```bash
 hippo decide "Use PostgreSQL for all new services" --context "JSONB support"
