@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.52.4 - 2026-09-28
+
+### Documentation
+
+- **The README answers the questions people ask about agent memory in a new FAQ.** It covers Claude Code memory between sessions, Cursor, Codex, MCP clients, how hippo differs from mem0 and from `CLAUDE.md`, where the data lives, what leaves the machine and what it costs. The README also gains a contents line, npm download and CI badges, and an absolute image URL, so the header image renders on npmjs.com.
+- **The README now says when memory text leaves the machine.** With `ANTHROPIC_API_KEY` set in its environment, `hippo sleep` sends episodic memories to Anthropic's API for fact extraction and summaries. `{"extraction":{"enabled":false}}` in `.hippo/config.json` turns that off. The README did not mention it before.
+- **The README describes `hippo init` correctly for Codex and Pi.** It said init wraps the Codex launcher; since issue #133 init only prints the opt-in command, `hippo hook install codex`. Pi joins the table of agents init detects.
+- **The Codex integration guide no longer says hippo wraps Codex on install.** `integrations/codex.md` said installs and routine commands set the wrapper up by themselves. Since issue #133 they only re-apply a wrapper you opted into, and the guide now says so and names the two switches that turn the re-apply off. `llms-install.md`, the install guide for agents, now names Pi and says Codex session capture is opt-in.
+- **The comparison table shows that Mem0 and Basic Memory have MCP servers.** Both cells said No. Mem0's server is hosted and needs an account, per its docs on 2026-09-28.
+- **The npm, MCP registry, Claude Code plugin, OpenClaw plugin and Python SDK descriptions lead with the README's line: memory for AI agents that learns what is wrong and stops repeating it.** Most opened with "biologically-inspired", which the README calls design inspiration, not a measured benefit. The OpenClaw description no longer promises sleep consolidation, which the plugin leaves off by default, and the MCP registry entry points at hippo-memory.com. The npm keywords add terms people search for, such as `persistent-memory`, `mcp-server`, `codex` and `cursor`.
+- **The repo has issue forms and a pull request template.** A bug report asks for the version, the agent and `hippo doctor --json`; a feature request says which features belong to the commercial edition; security reports go to GitHub's private advisory form.
+
 ## 1.52.3 - 2026-09-28
 
 ### Fixed
