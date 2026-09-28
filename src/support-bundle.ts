@@ -248,32 +248,43 @@ const HOME_SPELLINGS: readonly ((p: string) => string)[] = [
   (p) => p.replace(/[^A-Za-z0-9]/g, '-'),
 ];
 
-// A Windows separator can be written \, / or JSON-escaped (\\ in a log line quoting JSON), so any of them matches.
-function spellingPattern(spelling: string): string {
-  if (process.platform !== 'win32') return escapeRegExp(spelling);
-  return spelling.split(/[\\/]+/).map(escapeRegExp).join('(?:\\\\+|/)');
+// Git Bash, Cygwin and WSL mount a drive at /c, /cygdrive/c and /mnt/c; a Claude Code folder name writes each / and : as -.
+function mountedDrive(letter: string): string {
+  return `(?:${letter}[:-]|(?:[-/](?:cygdrive|mnt))?[-/]${letter})`;
+}
+
+/** Regex source for one spelling of the home, or null when too little of it is left to swap safely. */
+function spellingPattern(spelling: string): string | null {
+  if (process.platform !== 'win32') return spelling.length >= 3 ? escapeRegExp(spelling) : null;
+  // Each tool that mounts a drive writes it its own way, so the path below the drive, which names the user, matches after
+  // any prefix, with \, / or JSON's \\ between folders. A drive written a known way goes into the swap with it.
+  const drive = /^([A-Za-z])[:-]/.exec(spelling);
+  const below = drive === null ? spelling : spelling.slice(2);
+  if (below.length < 3) return null;
+  const body = below.split(/[\\/]+/).map(escapeRegExp).join('[\\\\/]+');
+  return drive === null ? body : `${mountedDrive(drive[1])}?${body}`;
 }
 
 /** One pattern for every alias of the home in every spelling, or null when none is long enough to swap safely. */
 function buildHomePattern(home: string, probes: readonly string[]): RegExp | null {
   const spellings = new Set<string>();
   for (const alias of collectHomeAliases(home, probes)) {
-    for (const spell of HOME_SPELLINGS) {
-      const s = spell(alias);
-      if (s.length >= 3) spellings.add(s);
-    }
+    for (const spell of HOME_SPELLINGS) spellings.add(spell(alias));
   }
   // Longest first: where one home nests in another (a test home under the real one), swap the longer.
   const patterns = new Map<string, string>();
   for (const s of [...spellings].sort((a, b) => b.length - a.length)) {
     const pattern = spellingPattern(s);
+    if (pattern === null) continue;
     const key = process.platform === 'win32' ? pattern.toLowerCase() : pattern;
     if (!patterns.has(key)) patterns.set(key, pattern);
   }
   if (patterns.size === 0) return null;
-  // Whole names only: "<home> now" and "<home>." swap; "<home>ty", or "web-app" for a home of /app, do not.
+  // Whole names only: "<home> now" and "<home>." swap; "<home>ty", or "web-app" for a home of /app, do not. On Windows
+  // only the end is checked, because the path below the drive may follow anything.
+  const before = process.platform === 'win32' ? '' : '(?<![\\p{L}\\p{N}_])';
   const alternatives = [...patterns.values()].join('|');
-  return new RegExp(`(?<![\\p{L}\\p{N}_])(?:${alternatives})(?![\\p{L}\\p{N}_])`, process.platform === 'win32' ? 'giu' : 'gu');
+  return new RegExp(`${before}(?:${alternatives})(?![\\p{L}\\p{N}_])`, process.platform === 'win32' ? 'giu' : 'gu');
 }
 
 const URL_RE = /\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi;

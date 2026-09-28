@@ -238,8 +238,35 @@ describe('buildSupportBundle', () => {
     expect(tail).toContain('saved to ~.');
     expect(tail).toContain(`${basename(s.home)}ty`);
     expect(tail).not.toContain('~ty');
-    // A name that only ends in the home's folder name is another name.
-    expect(tail).toContain(`glued x${claudeFolder(s.home)}-proj`);
+    // A name that only ends in the home's folder name is another name, except on Windows, where the path below the drive names the user.
+    expect(tail).toContain(process.platform === 'win32' ? 'glued x~-proj' : `glued x${claudeFolder(s.home)}-proj`);
+  });
+
+  it.skipIf(process.platform !== 'win32')('swaps a Windows home however a shell mounts its drive, short name included', () => {
+    const s = seed();
+    // tmpdir() is usually the 8.3 short form; HIPPO_HOME under it makes the bundle find that alias of the home.
+    const shortHome = join(tmpdir(), basename(s.home));
+    process.env.HIPPO_HOME = join(shortHome, 'unused-global');
+    // Git Bash writes C:\x as /c/x; Cygwin and WSL put the same path under /cygdrive and /mnt.
+    const mount = (root: string, p: string): string => `${root}/${p[0].toLowerCase()}${p.slice(2).replace(/\\/g, '/')}`;
+    writeFileSync(join(s.home, '.hippo', 'logs', 'shell.log'), [
+      `cd ${mount('', s.cwd)} && npm test`,
+      `ls ${mount('/cygdrive', s.cwd)}`,
+      `ls ${mount('/mnt', s.cwd)}`,
+      `ls ${mount('', join(shortHome, 'proj'))}`,
+      `ls ${mount('/run/desktop/mnt/host', s.cwd)}`,
+      `ls \\\\localhost\\${s.cwd[0]}$${s.cwd.slice(2)}`,
+      `ls ${claudeFolder(mount('/mnt', s.cwd))}`,
+      '',
+    ].join('\n'));
+
+    const bundle = buildSupportBundle({ cwd: s.cwd, home: s.home, version: 'test', includeLogs: true, now: new Date() });
+    const tail: string[] = JSON.parse(JSON.stringify(bundle)).logs.tails['shell.log'];
+    expect(tail.slice(0, 4)).toEqual(['cd ~/proj && npm test', 'ls ~/proj', 'ls ~/proj', 'ls ~/proj']);
+    // A mount or share no list names keeps its prefix, but the path that names the user still goes.
+    for (const leaf of [basename(s.home), basename(homedir())].map((n) => n.toLowerCase())) {
+      expect(tail.filter((t) => t.toLowerCase().includes(leaf) || t.toLowerCase().includes(claudeFolder(leaf))), leaf).toEqual([]);
+    }
   });
 
   it('a log tail that starts inside a private key drops the rest of the key', () => {

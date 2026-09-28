@@ -51,13 +51,14 @@ hippo-memory v1.13.0-v1.13.5 ship cycle (May 26-27, 2026), where:
 
 ## Manifest version lockstep (pre-publish guard)
 
-Seven sites carry the release version:
+Eight sites carry the release version:
 
 - `package.json` (root)
 - `package-lock.json`, `.version` and `.packages[""].version`
 - `openclaw.plugin.json` (root)
 - `extensions/openclaw-plugin/package.json`
 - `extensions/openclaw-plugin/openclaw.plugin.json`
+- `server.json` (the MCP registry entry)
 - `src/version.ts` (`PACKAGE_VERSION`)
 
 Bump them with one command in the release PR:
@@ -65,8 +66,8 @@ Bump them with one command in the release PR:
     npm version <x.y.z> --no-git-tag-version
 
 npm writes `package.json` and the lockfile, then runs the `version` script:
-`scripts/sync-version.mjs` copies the version to the other four sites and
-`scripts/check-manifest-versions.mjs` confirms all seven. Pass
+`scripts/sync-version.mjs` copies the version to the other five sites and
+`scripts/check-manifest-versions.mjs` confirms all eight. Pass
 `--no-git-tag-version` because the tag is cut at publish, from the squash
 commit on master. Never edit the sites by hand.
 
@@ -144,6 +145,8 @@ To promote a release to `stable`:
     npm dist-tag add hippo-memory@<x.y.z> stable
 
 A security fix may go to `stable` straight away. Record each promotion in the changelog entry of the release it promotes.
+
+**A release on the wrong tag.** A dist-tag is only a pointer, so moving it back loses nothing: `npm dist-tag add hippo-memory@<x.y.z> latest` (or `stable`, or `maint-<x.y>`) with an npm login puts the right release back, and the release that was there by mistake stays installable by its version.
 
 **Why.** An outside review (2026-09-24) counted 170 versions in six months, 38 in the last 90 days, and none with provenance. For a developer, frequent releases look like momentum. For a company's security team they look like risk. Without a verified build and a slower channel, hippo cannot pass their review.
 
