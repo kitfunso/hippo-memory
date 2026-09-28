@@ -1326,7 +1326,8 @@ async function cmdRecall(
       graphStream: { weight: DEFAULT_GRAPH_STREAM_WEIGHT, tenantId, hops: graphStreamHops, seedCount: graphStreamSeeds },
     });
   } else if (useMultihop) {
-    const allEntries = [...localEntries, ...globalEntries];
+    // Unlike searchBothHybrid below, multihop ranks one pooled list, so a shared memory's two copies both compete.
+    const allEntries = api.oneCopyPerMemory(localEntries, globalEntries, evalNow()).flat();
     results = multihopSearch(query, allEntries, {
       budget,
       hippoRoot,
@@ -3251,12 +3252,8 @@ async function cmdSleepCore(
   renderSleepResult(result);
 }
 
-/**
- * Print the contents of the SessionEnd sleep log to stdout, then clear it.
- * Called from SessionStart hooks so the user sees the previous session's
- * consolidation output (SessionEnd hook output is invisible because the TUI
- * is tearing down when it runs).
- */
+/** Prints the SessionEnd sleep log, then clears it. Stderr, because Claude Code adds
+ *  SessionStart stdout to the model's context and this log is for the user. */
 function cmdLastSleep(flags: Record<string, string | boolean | string[]>): void {
   const logPath = typeof flags['path'] === 'string'
     ? (flags['path'] as string)
@@ -3272,10 +3269,10 @@ function cmdLastSleep(flags: Record<string, string | boolean | string[]>): void 
   }
 
   if (content.trim().length > 0) {
-    console.log('=== Previous session hippo consolidation ===');
-    process.stdout.write(content);
-    if (!content.endsWith('\n')) console.log();
-    console.log('===========================================');
+    console.error('=== Previous session hippo consolidation ===');
+    process.stderr.write(content);
+    if (!content.endsWith('\n')) console.error();
+    console.error('===========================================');
   }
 
   if (!flags['keep']) {
@@ -9785,7 +9782,7 @@ Commands:
     --all                  Install for every JSON-hook tool, even if not detected
     --dry-run              Show what would be installed without writing
     --no-schedule          Skip installing or repairing the daily runner
-  last-sleep               Print the last 'hippo sleep --log-file' output and clear it
+  last-sleep               Print the last 'hippo sleep --log-file' output to stderr and clear it
     --path <p>             Log path (default: ~/.hippo/logs/last-sleep.log)
     --keep                 Print without clearing
   session-end              SessionEnd hook: run sleep, then capture this session, in a detached worker

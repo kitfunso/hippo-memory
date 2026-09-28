@@ -103,16 +103,14 @@ function loadByIdsChunked(root: string, tenantId: string, ids: string[]): Memory
   return out;
 }
 
-/**
- * Traverse one store's graph from the seeds present in it and accumulate new graph hits
- * into `hitsByOrigin`. Mutates `seenMemoryIds` so a memory is surfaced at most once across
- * stores. Pure reads.
- */
+/** Traverse one store's graph from its seeds into `hitsByOrigin`. Pure reads; mutates `seenMemoryIds`
+ *  and `seenContent` so a memory, or a share/promote copy of it, surfaces at most once across stores. */
 function produceHitsForRoot(
   root: string,
   baseResults: SearchResult[],
   baseScoreByMemId: Map<string, number>,
   seenMemoryIds: Set<string>,
+  seenContent: Set<string>,
   hitsByOrigin: Map<string, GraphHit[]>,
   opts: Required<Pick<GraphExpandOpts, 'hops' | 'maxNeighbors' | 'tenantId' | 'includeSuperseded'>> & {
     asOfDate: Date | null;
@@ -189,6 +187,7 @@ function produceHitsForRoot(
     const mem = loadedById.get(ent.memoryId);
     if (!mem) continue;                       // not found / wrong tenant / already in base
     if (seenMemoryIds.has(mem.id)) continue;  // another reached entity already added it
+    if (seenContent.has(mem.content)) continue; // share/promote copy: same text, another id
     const via = reached.get(ent.id)!;
     // A node reached as the `to` endpoint of a `supersedes` edge IS the superseded
     // (older) version — the graph is the authoritative signal (the memory mirror's
@@ -213,6 +212,7 @@ function produceHitsForRoot(
     const origin = originMemByEntityId.get(ent.id) ?? baseResults[0].entry.id;
     const originScore = baseScoreByMemId.get(origin) ?? baseResults[baseResults.length - 1].score;
     seenMemoryIds.add(mem.id);
+    seenContent.add(mem.content);
     const hit: GraphHit = {
       entry: mem,
       score: originScore * (1 - HOP_DISCOUNT * via.hops),
@@ -250,12 +250,13 @@ export function graphExpandRecall(
 
   const baseScoreByMemId = new Map(baseResults.map((r) => [r.entry.id, r.score]));
   const seenMemoryIds = new Set<string>(baseResults.map((r) => r.entry.id));
+  const seenContent = new Set<string>(baseResults.map((r) => r.entry.content));
   const hitsByOrigin = new Map<string, GraphHit[]>();
 
   // Expand against each distinct store the seeds may live in (local + global).
   const roots = globalRoot && globalRoot !== hippoRoot ? [hippoRoot, globalRoot] : [hippoRoot];
   for (const root of roots) {
-    produceHitsForRoot(root, baseResults, baseScoreByMemId, seenMemoryIds, hitsByOrigin, {
+    produceHitsForRoot(root, baseResults, baseScoreByMemId, seenMemoryIds, seenContent, hitsByOrigin, {
       hops, maxNeighbors, tenantId, includeSuperseded, asOfDate, recallScope,
     });
   }

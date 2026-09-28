@@ -605,7 +605,7 @@ export function autoShare(
 
 /**
  * Copy all global memories into the local store.
- * Skips entries that already exist locally (by ID or by near-identical content).
+ * Skips entries that already exist locally, by ID or by text (promote and share copy under a new ID).
  * Returns the count of newly copied entries.
  */
 export function syncGlobalToLocal(
@@ -620,6 +620,8 @@ export function syncGlobalToLocal(
   // the local-root context provides one.
   const globalEntries = loadAllEntries(globalRoot);
   const localIndex = loadIndex(localRoot);
+  const textKey = (e: MemoryEntry): string => `${e.tenantId}\n${e.content}`;
+  const localText = new Set(loadAllEntries(localRoot).map(textKey));
 
   // v39 (codex P1-4): syncing down must not re-import what ambient context
   // excludes - other-project rows are skipped by default and secret rows
@@ -637,6 +639,7 @@ export function syncGlobalToLocal(
   for (const entry of globalEntries) {
     // Skip if already present by ID
     if (localIndex.entries[entry.id]) continue;
+    if (localText.has(textKey(entry))) continue;
     if (detectSecret(entry).flagged) continue;
     if (
       !opts.includeCrossProject &&
@@ -652,6 +655,7 @@ export function syncGlobalToLocal(
       }
       throw err;
     }
+    localText.add(textKey(entry));
     count++;
   }
 

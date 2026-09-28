@@ -12,7 +12,7 @@
       "name": "hippo-memory",
       "source": "./extensions/claude-code-plugin",
       "description": "Memory that learns what is wrong and stops repeating it. Session-start context, per-prompt pinned rules, compaction snapshot and resume, error capture, session-end sleep.",
-      "version": "0.6.0",
+      "version": "0.6.1",
       "homepage": "https://github.com/kitfunso/hippo-memory",
       "license": "MIT"
     }

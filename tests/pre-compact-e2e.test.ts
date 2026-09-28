@@ -970,8 +970,10 @@ describe('combined firing: last-sleep + compact-resume against the same store/lo
 
     const lastSleep = runHippo(['last-sleep'], dir, env);
     expect(lastSleep.status).toBe(0);
-    expect(lastSleep.stdout).toContain('Previous session hippo consolidation');
-    expect(lastSleep.stdout).toContain('a previous session already consolidated memory');
+    // The log goes to stderr: SessionStart stdout would put it in the model's context.
+    expect(lastSleep.stdout.trim()).toBe('');
+    expect(lastSleep.stderr).toContain('Previous session hippo consolidation');
+    expect(lastSleep.stderr).toContain('a previous session already consolidated memory');
     // last-sleep clears the log by default — confirms it ran the real path,
     // not a no-op, and that clearing doesn't touch the sqlite-backed snapshot.
     expect(fs.existsSync(logPath)).toBe(false);

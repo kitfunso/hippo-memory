@@ -10,8 +10,8 @@
  *        sequence, writing both outputs to the log file. The parent returns in
  *        <100ms so the TUI teardown can't kill the child before it finishes.
  *      - SessionStart: `hippo last-sleep --path <path>` - prints the log
- *        written by the previous session's detached worker and then clears it,
- *        so the user actually sees what was consolidated.
+ *        written by the previous session's detached worker to stderr, which
+ *        keeps it out of the model's context, and then clears it.
  *    Earlier Claude Code forms are detected and migrated automatically:
  *      - < 0.20.2: `Stop` hook firing `hippo sleep` on every assistant turn.
  *      - < 0.21.0: bare `hippo sleep` in SessionEnd, no `--log-file`.

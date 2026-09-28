@@ -276,6 +276,28 @@ function loadAmbientEntries(
   return loadAmbientCandidates(hippoRoot, tenantId, includeRecent, admitAmbient, recall);
 }
 
+// Share and promote copy a memory to the global store under a new id, so equal content is the only link.
+// A pinned copy wins, then the stronger one after the ranking's own global discount; a tie keeps the local copy.
+export function oneCopyPerMemory(
+  local: readonly MemoryEntry[],
+  global: readonly MemoryEntry[],
+  now: Date,
+): [MemoryEntry[], MemoryEntry[]] {
+  const score = (e: MemoryEntry, isGlobal: boolean): number => calculateStrength(e, now) * (isGlobal ? 1 / 1.2 : 1);
+  const best = new Map<string, { entry: MemoryEntry; isGlobal: boolean }>();
+  const offer = (entry: MemoryEntry, isGlobal: boolean): void => {
+    const held = best.get(entry.content);
+    const wins = !held || (held.entry.pinned !== entry.pinned
+      ? entry.pinned
+      : score(entry, isGlobal) > score(held.entry, held.isGlobal));
+    if (wins) best.set(entry.content, { entry, isGlobal });
+  };
+  for (const e of local) offer(e, false);
+  for (const e of global) offer(e, true);
+  const kept = new Set([...best.values()].map((b) => b.entry));
+  return [local.filter((e) => kept.has(e)), global.filter((e) => kept.has(e))];
+}
+
 export interface RememberOpts {
   content: string;
   kind?: MemoryKind;
@@ -2679,14 +2701,15 @@ export async function getContext(
     // Effective budget: explicit opts.budget wins over config.
     const effBudget = opts.budget !== undefined ? budget : pinnedCfg.pinnedInject.budget;
     const nowP = evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
+    const [localPool, globalPool] = oneCopyPerMemory(localEntries, globalEntries, nowP);
     const selectedIds = new Set<string>();
     let usedP = 0;
 
     // Pinned entries are explicit user intent, the recent-N list an automatic
     // backfill. Both loops share ONE budget and the recent loop runs first, so
     // pins are ranked here and reserve their share before it can spend.
-    const pinnedLocal = localEntries.filter((e) => e.pinned);
-    const pinnedGlobal = globalEntries.filter((e) => e.pinned);
+    const pinnedLocal = localPool.filter((e) => e.pinned);
+    const pinnedGlobal = globalPool.filter((e) => e.pinned);
     const rankedPinned = [
       ...pinnedLocal.map((e) => ({ entry: e, isGlobal: false })),
       ...pinnedGlobal.map((e) => ({ entry: e, isGlobal: true })),
@@ -2744,18 +2767,25 @@ export async function getContext(
       const p = promptTokens(opts.prompt ?? '');
       if (p.size > 0) {
         // Candidates came off the ambient load's own connection (recallRequest above), not a fresh open.
-        const localCandidates = localLoad.recall ?? [];
-        const globalCandidates = globalLoad.recall ?? [];
+        // A candidate carrying a pin's text would inject that memory a second time.
+        const pinnedText = new Set(rankedPinned.map((r) => r.entry.content));
+        const eligible = (e: MemoryEntry): boolean =>
+          admit(e) && !e.pinned && isContentWorthStoring(e.content) && !pinnedText.has(e.content);
+        const [localCandidates, globalCandidates] = oneCopyPerMemory(
+          (localLoad.recall ?? []).filter(eligible),
+          (globalLoad.recall ?? []).filter(eligible),
+          nowP,
+        );
         const seenCandidateIds = new Set<string>();
         const candidateItems: Array<{ id: string; tokens: Set<string>; entry: MemoryEntry; isGlobal: boolean }> = [];
         // Local wins the id collision (a global row synced into the local store).
         for (const e of localCandidates) {
-          if (!admit(e) || e.pinned || !isContentWorthStoring(e.content) || seenCandidateIds.has(e.id)) continue;
+          if (seenCandidateIds.has(e.id)) continue;
           seenCandidateIds.add(e.id);
           candidateItems.push({ id: e.id, tokens: contentTokens(e.content), entry: e, isGlobal: false });
         }
         for (const e of globalCandidates) {
-          if (!admit(e) || e.pinned || !isContentWorthStoring(e.content) || seenCandidateIds.has(e.id)) continue;
+          if (seenCandidateIds.has(e.id)) continue;
           seenCandidateIds.add(e.id);
           candidateItems.push({ id: e.id, tokens: contentTokens(e.content), entry: e, isGlobal: true });
         }
@@ -2771,8 +2801,8 @@ export async function getContext(
       }
     } else if (includeRecent > 0) {
       const recent = [
-        ...localEntries.map((entry) => ({ entry, isGlobal: false })),
-        ...globalEntries.map((entry) => ({ entry, isGlobal: true })),
+        ...localPool.map((entry) => ({ entry, isGlobal: false })),
+        ...globalPool.map((entry) => ({ entry, isGlobal: true })),
       ]
         // T2 (src/compare.ts) note: this already carries an explicit
         // per-instance tiebreak (created desc -> id localeCompare) and is
@@ -2840,7 +2870,8 @@ export async function getContext(
   } else if (query === '*') {
     // No query: return strongest memories by strength, up to budget.
     const now = evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
-    const localRanked = localEntries
+    const [localPool, globalPool] = oneCopyPerMemory(localEntries, globalEntries, now);
+    const localRanked = localPool
       .map((e) => ({
         entry: e,
         score: calculateStrength(e, now),
@@ -2849,7 +2880,7 @@ export async function getContext(
       }))
       .sort(compareScoredResults);
 
-    const globalRanked = globalEntries
+    const globalRanked = globalPool
       .map((e) => ({
         entry: e,
         score: calculateStrength(e, now) * (1 / 1.2),

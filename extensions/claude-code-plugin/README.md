@@ -58,7 +58,7 @@ The `PreCompact` hook runs `hippo pre-compact` to snapshot the working state bef
 
 ### Sleep at session end
 
-The `SessionEnd` hook runs `hippo session-end`, which starts a detached `hippo sleep` and `hippo capture --last-session` and writes their output to `~/.hippo/logs/last-sleep.log`. The next session start prints that log through `hippo last-sleep`, so you see what was consolidated.
+The `SessionEnd` hook runs `hippo session-end`, which starts a detached `hippo sleep` and `hippo capture --last-session` and writes their output to `~/.hippo/logs/last-sleep.log`. The next session start prints that log through `hippo last-sleep` on stderr, which keeps it out of the model's context. To see what was consolidated, start `claude --debug` and read `~/.claude/debug/<session-id>.txt`.
 
 ### Memory skill
 
