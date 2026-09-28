@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.52.3 - 2026-09-28
+
+### Fixed
+
+- **A release now replaces its own prerelease on `latest`.** `scripts/publish-dist-tag.mjs` compared only major.minor.patch, so if a prerelease such as `2.0.0-rc.1` ever sat on `latest`, publishing `2.0.0` went to `maint-2.0` and left the rc as the default install. The workflow sends prereleases to `next` and none has been published, so this could only follow a hand publish.
+- **`hippo support-bundle` swaps your home folder in every spelling a log line uses.** It missed the home written with JSON's doubled backslashes, as a Claude Code project folder name (`C--Users-<name>-...`), and as a file URL when the path holds a space or an accented letter (`Jos%C3%A9`), so a bundle made with `--include-logs` could carry your user name.
+- **hippo knows more token shapes.** Its own API keys (`hk_...`), npm, Hugging Face and GitLab tokens, Google OAuth access tokens and Slack webhook URLs now get the treatment GitHub and AWS keys already had: removed from the support bundle and from text sent to embedding and LLM providers, never shared or promoted to the global store, never imported from a Claude Code memory file, and deleted rather than kept dormant when they fade. The support bundle also removes `Authorization: Basic` credentials.
+- **The support bundle lists store files as they were.** Its own doctor check ran first, and that read-only open left an empty `hippo.db-wal` that the bundle then listed. Neither `hippo doctor` nor the bundle changes `hippo.db`, but SQLite may leave empty `hippo.db-wal` and `hippo.db-shm` files beside it; the README now says so.
+- **A registry error can no longer publish a backport as `latest`.** `scripts/publish-dist-tag.mjs` read a 404 from the npm registry as "never published" and picked `latest`; it now stops the publish. Publishes also run one at a time, so two tags pushed together cannot both read the old `latest`.
+
 ## 1.52.2 - 2026-09-27
 
 ### Changed
