@@ -23,9 +23,10 @@ beforeEach(() => {
 });
 afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 
-function hippo(...args: string[]): void {
+function hippo(...args: string[]): string {
   const r = spawnSync(process.execPath, [HIPPO_JS, ...args], { cwd: proj, env, encoding: 'utf8' });
   expect(r.status, r.stderr).toBe(0);
+  return r.stdout;
 }
 const write = (f: string, text: string) => fs.writeFileSync(path.join(proj, f), text);
 const read = (f: string) => fs.readFileSync(path.join(proj, f), 'utf8');
@@ -78,11 +79,20 @@ describe('Cursor integration writes AGENTS.md', () => {
     const agentsMd = read('AGENTS.md');
     expect(agentsMd).toContain("Hippo's Codex wrapper");
     write('.cursorrules', `Use tabs.\n\n${OLD_BLOCK}`);
-    hippo('hook', 'uninstall', 'cursor');
+    expect(hippo('hook', 'uninstall', 'cursor')).toContain('hippo wrote it for codex');
     expect(read('AGENTS.md')).toBe(agentsMd);
     expect(read('.cursorrules')).toBe('Use tabs.\n');
     hippo('hook', 'install', 'cursor');
     expect(read('AGENTS.md')).toBe(agentsMd);
+  });
+
+  it('hook uninstall cursor leaves an edited block and says hippo cannot tell whose it is', () => {
+    write('AGENTS.md', '# Agents\n');
+    hippo('hook', 'install', 'cursor');
+    const edited = read('AGENTS.md').replace('<!-- hippo:end -->', 'Run the linter before every commit.\n<!-- hippo:end -->');
+    write('AGENTS.md', edited);
+    expect(hippo('hook', 'uninstall', 'cursor')).toContain('it has been edited, so hippo cannot tell whose it is');
+    expect(read('AGENTS.md')).toBe(edited);
   });
 
   it('hook uninstall cursor deletes a .cursorrules that held only the old hippo block', () => {

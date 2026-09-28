@@ -61,7 +61,7 @@ Then start remembering.
 3. Or add the snippet above to `AGENTS.md` yourself, or run `hippo hook install cursor` once the file exists
 4. Optionally add `.hippo/` to `.gitignore` if you don't want to track memory in git (or commit it to share memory with your team)
 
-Older hippo versions wrote their block to `.cursorrules`. `hippo hook uninstall cursor` removes it from there. In `AGENTS.md` it removes only Cursor's own block; a block written for Codex or another agent stays, since Cursor reads it too. If that took Cursor's block out of `AGENTS.md`, run `hippo hook install cursor` to put it back.
+Older hippo versions wrote their block to `.cursorrules`. `hippo hook uninstall cursor` removes it from there. In `AGENTS.md` it removes only Cursor's own unedited block; a block written for Codex or another agent stays, since Cursor reads it too, and so does an edited block, since hippo cannot tell whose it is. If that took Cursor's block out of `AGENTS.md`, run `hippo hook install cursor` to put it back.
 
 ## Token budget guidance
 

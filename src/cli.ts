@@ -8114,7 +8114,9 @@ function cmdHook(
     if (fs.existsSync(filepath)) {
       const existing = fs.readFileSync(filepath, 'utf8');
       if (existing.includes(HOOK_MARKERS.start) && othersBlock(existing)) {
-        console.log(`Left the hippo block in ${hook.file}: it is not Cursor's, and other agents may read it. Delete it by hand if none does.`);
+        const owner = hippoBlock(existing)?.owner;
+        const whose = owner ? `hippo wrote it for ${owner}` : 'it has been edited, so hippo cannot tell whose it is';
+        console.log(`Left the hippo block in ${hook.file}: ${whose}. Delete it by hand if no agent needs it.`);
       } else if (existing.includes(HOOK_MARKERS.start)) {
         fs.writeFileSync(filepath, withoutHookBlock(existing) + '\n', 'utf8');
         console.log(`Removed Hippo hook from ${hook.file}`);
