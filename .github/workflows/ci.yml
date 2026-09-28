@@ -132,6 +132,25 @@ jobs:
         env:
           TMPDIR: /dev/shm
 
+  # Every other job is Linux, where Windows-only tests skip and win32 branches never run.
+  # Selecting files that name win32 keeps a new Windows test covered without editing this list.
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Vitest on the test files that name win32
+        shell: bash
+        run: |
+          files=$(git grep -l win32 -- 'tests/*.test.ts' 'tests/*.test.mjs')
+          npx vitest run $files
+
   # The dashboard is its own package with its own tests; the root suite never runs them.
   ui:
     runs-on: ubuntu-latest
