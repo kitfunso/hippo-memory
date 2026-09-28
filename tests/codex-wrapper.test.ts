@@ -144,10 +144,29 @@ describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
     // Simulate a Codex update clobbering the shim with a fresh real launcher.
     fs.writeFileSync(realCodex, '@echo off\r\necho updated real codex\r\n', 'utf8');
 
-    const result = repairCodexWrapperIfInstalled();
+    const installedCli = path.join(env.home, 'npm', 'node_modules', 'hippo-memory', 'bin', 'hippo.js');
+    const result = repairCodexWrapperIfInstalled(installedCli);
 
     expect(result.status).toBe('installed');
     expect(fs.readFileSync(realCodex, 'utf8')).toContain('codex-run');
+  });
+
+  it('repair-only ensure never points the launcher at a source checkout', () => {
+    const realBin = path.join(env.home, 'real-bin');
+    const realCodex = path.join(realBin, 'codex.cmd');
+    fs.mkdirSync(realBin, { recursive: true });
+    fs.writeFileSync(realCodex, '@echo off\r\necho real codex\r\n', 'utf8');
+    process.env.PATH = realBin;
+
+    expect(ensureCodexWrapperInstalled().status).toBe('installed');
+    fs.writeFileSync(realCodex, '@echo off\r\necho updated real codex\r\n', 'utf8');
+
+    // No argument: the running copy is this checkout, as in a checkout's own npm install.
+    const result = repairCodexWrapperIfInstalled();
+
+    expect(result.status).toBe('source-checkout');
+    expect(fs.readFileSync(realCodex, 'utf8')).toContain('updated real codex');
+    expect(isCodexWrapperInstalled()).toBe(true);
   });
 });
 

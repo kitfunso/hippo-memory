@@ -84,7 +84,7 @@ export interface CodexWrapperMetadata {
 }
 
 export interface EnsureCodexWrapperResult {
-  status: 'installed' | 'already-installed' | 'not-found';
+  status: 'installed' | 'already-installed' | 'not-found' | 'source-checkout';
   metadataPath?: string;
   realCodexPath?: string;
   commandPath?: string;
@@ -550,9 +550,15 @@ export function isCodexWrapperInstalled(): boolean {
  * doing it from postinstall or routine commands is a consent violation and
  * reads as binary hijacking to security scanners (issue #133).
  */
-export function repairCodexWrapperIfInstalled(): EnsureCodexWrapperResult {
+export function repairCodexWrapperIfInstalled(hippoCliPath: string = resolveHippoCliPath()): EnsureCodexWrapperResult {
   if (readCodexWrapperMetadata() === null) {
     return { status: 'not-found' };
+  }
+  // A checkout's own `npm install` or CLI would point the user's launcher at a folder that may be deleted.
+  // SHORTCUT: any node_modules copy (npx cache, a project dependency) still repairs; record the opted-in CLI path in the metadata to close that.
+  const packageDir = path.dirname(path.dirname(hippoCliPath));
+  if (path.basename(path.dirname(packageDir)).toLowerCase() !== 'node_modules') {
+    return { status: 'source-checkout' };
   }
   return ensureCodexWrapperInstalled();
 }
