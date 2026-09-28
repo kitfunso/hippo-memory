@@ -1,7 +1,7 @@
 """The Mem0 arm's integrity gate (prereg Amendments 4 and 5), run before any answer; `h2h.py answer` refuses without it.
 
 Prints GATE: PASS or GATE: FAIL and writes gate.json with a fingerprint of what it checked.
-Usage, in Mem0's environment so replies parse with Mem0's own helpers: python gate.py --run SCRATCH_DIR
+Usage, in Mem0's environment so replies parse with Mem0's own helpers: python gate.py --run SCRATCH_DIR [--ingest DIR]
 """
 from __future__ import annotations
 
@@ -273,8 +273,10 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--run", type=Path, required=True, help="scratch run dir holding ingest/")
     ap.add_argument("--qdrant", default="http://127.0.0.1:6333")
+    ap.add_argument("--ingest", default="ingest", choices=("ingest", "ingest-fixed"),
+                    help="the ingestion to check: ingest-fixed is the mem0-fixed arm's (Amendment 6)")
     a = ap.parse_args()
-    ingest = a.run / "ingest"
+    ingest = a.run / a.ingest
     res = check(ingest, a.qdrant)
     ok = all(passed for passed, _ in res)
     lines = [f"{'ok  ' if passed else 'FAIL'} {text}" for passed, text in res] + [f"GATE: {'PASS' if ok else 'FAIL'}"]

@@ -1,4 +1,4 @@
-"""LoCoMo head-to-head with Mem0 (prereg Amendments 4 and 5): answer, judge and score three arms on the Lane A sample.
+"""LoCoMo head-to-head with Mem0 (prereg Amendments 4 to 6): answer, judge and score four arms on the Lane A sample.
 
 Prompts and parsing are Mem0's runner's at 4b61c5d (run.py:529-556), one `claude -p` call each through claude_llm.py.
 Usage: python h2h.py {answer,judge,score} --run SCRATCH_DIR --out RESULTS_DIR [--slots 10]
@@ -22,7 +22,10 @@ RUNNER = Path.home() / "hippo-bench" / "memory-benchmarks"
 LOCOMO = Path.home() / "hippo-bench" / "locomo"
 LANE_R = Path.home() / "hippo" / "benchmarks" / "public" / "results" / "2026-09-25-lane-r" / "predicted"
 SAMPLE = HERE.parent / "results" / "2026-09-25-lane-a" / "locomo" / "sample.json"
-ARMS, CUTOFFS, LABELS = ("hippo365", "bm25", "mem0"), (200, 50, 10), ("CORRECT", "WRONG")
+ARMS, CUTOFFS, LABELS = ("hippo365", "bm25", "mem0", "mem0fixed"), (200, 50, 10), ("CORRECT", "WRONG")
+INGEST = {"mem0": "ingest", "mem0fixed": "ingest-fixed"}  # each Mem0 arm's ingestion under --run, gated on its own
+PAIRS = (("hippo365", "mem0"), ("hippo365", "mem0fixed"), ("mem0fixed", "mem0"), ("bm25", "mem0"), ("bm25", "mem0fixed"),
+         ("hippo365", "bm25"))
 FENCE = re.compile(r"```[a-zA-Z0-9]*\n([\s\S]*?)\n```")  # a whole-reply code fence, as claude_llm.json_reply reads it
 CAT = {1: "multi-hop", 2: "temporal", 3: "open-domain", 4: "single-hop"}
 
@@ -97,7 +100,7 @@ def qa_of(data: list, qid: str) -> dict:
 
 
 def predicted(run: Path, arm: str, qid: str) -> dict:
-    d = run / "ingest" / "predicted_locomo-mem0" if arm == "mem0" else LANE_R / f"predicted_locomo-{arm}"
+    d = run / INGEST[arm] / "predicted_locomo-mem0" if arm in INGEST else LANE_R / f"predicted_locomo-{arm}"
     return load(d / f"{qid}.json")
 
 
@@ -107,10 +110,12 @@ def tokens_in(rec: dict) -> int:
 
 
 def check_gate(run: Path) -> None:
-    ingest = run / "ingest"
-    g = load(ingest / "gate.json") if (ingest / "gate.json").exists() else {}
-    if not g.get("pass") or g.get("fingerprint") != fingerprint(ingest):
-        sys.exit("Mem0's ingestion has no passing gate for its current files; run gate.py first (prereg Amendment 5)")
+    for name in INGEST.values():
+        ingest = run / name
+        g = load(ingest / "gate.json") if (ingest / "gate.json").exists() else {}
+        if not g.get("pass") or g.get("fingerprint") != fingerprint(ingest):
+            sys.exit(f"Mem0's ingestion in {name} has no passing gate for its current files; run gate.py --ingest {name} "
+                     f"first (prereg Amendments 5 and 6)")
 
 
 def answer_prompts(run: Path) -> dict:
@@ -231,7 +236,7 @@ def answer(a: argparse.Namespace) -> None:
     prompts = answer_prompts(a.run)
     done = answers_on_file(a.run, a.out, prompts)
     jobs = [(arm, c, qid, n, prompt) for (arm, c, qid), (n, prompt) in prompts.items() if (arm, c, qid) not in done]
-    random.Random(4).shuffle(jobs)  # arms interleaved, so a slow or limited stretch hits all three alike
+    random.Random(4).shuffle(jobs)  # arms interleaved, so a slow or limited stretch hits every arm alike
     claude = Claude(a.run / "claude", a.run / "calls-answer.jsonl", a.slots)
 
     def one(job: tuple) -> dict:
@@ -314,7 +319,7 @@ def score(a: argparse.Namespace) -> None:
             means = "  ".join(f"{m} {100 * sum(metric[m][(arm, c, q)] for q in sample) / len(sample):5.1f}" for m in metric)
             lines.append(f"{arm:>9}  n={len(rs)}  {means}  memories {sum(r['memories'] for r in rs) / len(rs):6.1f}"
                          f"  input tokens {sum(r['tokens_in'] for r in rs) / len(rs):7.0f}")
-        for x, y in (("hippo365", "mem0"), ("bm25", "mem0"), ("hippo365", "bm25")):
+        for x, y in PAIRS:
             for m, vals in metric.items():
                 cats = [(None, sample)] + [(k, [q for q in sample if qa_of(data, q)["category"] == k]) for k in CAT]
                 for cat, ids in cats:
