@@ -7975,6 +7975,7 @@ const SHIPPED_HOOK_HASHES = new Map([
   ['15abcece9712279fb4721f7a8f0ba117457400278977beb5cf5b5d7ba49f7b1a', 'codex'],
   ['0c81a6b2c21473313001f624b80ea870e661aecbfda9bfe8503febc0d5f34533', 'codex'],
   ['88e45358aba4f17912f113221c991dc758275991335d1daa4aa1974a69c46769', 'codex'],
+  ['a1415ecda9b2f8f317c233738e4a5ac16e6b2cc385a017c0c8ecfbfacbcab6a3', 'cursor'],
   ['a38c428bbdfc14ec50f6f7b9183785170a4eae1ce9cde60257cca6efc7206b3a', 'cursor'],
   ['40524c3bd5a2eb04036567cc761451961d950995768bccd93a9900b0f75eafea', 'openclaw'],
   ['7b3518e8c0feaa7b8b454cde7743f7598ad14cd9979e1680d0954484e2464aae', 'openclaw'],

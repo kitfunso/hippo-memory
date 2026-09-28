@@ -10,6 +10,8 @@ const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 const START = '<!-- hippo:start -->';
 // What hippo wrote to .cursorrules before this change, trimmed.
 const OLD_BLOCK = `${START}\n# Project Memory (Hippo)\n#   hippo context --auto --budget 1500\n<!-- hippo:end -->\n`;
+// The block every release up to 1.52.6 wrote to .cursorrules, verbatim.
+const RELEASED_BLOCK = '# Project Memory (Hippo)\n# Before each task, load context:\n#   hippo context --auto --budget 1500\n# After errors:\n#   hippo remember "<error description>" --error\n# After completing:\n#   hippo outcome --good';
 
 let dir: string;
 let proj: string;
@@ -93,6 +95,12 @@ describe('Cursor integration writes AGENTS.md', () => {
     write('AGENTS.md', edited);
     expect(hippo('hook', 'uninstall', 'cursor')).toContain('it has been edited, so hippo cannot tell whose it is');
     expect(read('AGENTS.md')).toBe(edited);
+  });
+
+  it("hook uninstall cursor removes a released Cursor block a user moved into AGENTS.md", () => {
+    write('AGENTS.md', `# Agents\n\n${START}\n${RELEASED_BLOCK}\n<!-- hippo:end -->\n`);
+    expect(hippo('hook', 'uninstall', 'cursor')).not.toContain('edited');
+    expect(read('AGENTS.md')).toBe('# Agents\n');
   });
 
   it('hook uninstall cursor deletes a .cursorrules that held only the old hippo block', () => {
