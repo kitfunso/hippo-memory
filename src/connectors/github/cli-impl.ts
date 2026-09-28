@@ -86,10 +86,6 @@ export async function cmdGithubBackfill(
   flags: Flags,
   fetcher: GitHubFetcher = realGitHubFetcher,
 ): Promise<void> {
-  if (flags['help']) {
-    printGithubBackfillUsage();
-    return;
-  }
   const repo = flags['repo'];
   if (!isFlagString(repo) || !repo.includes('/')) {
     printGithubBackfillUsage();

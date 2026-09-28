@@ -277,7 +277,7 @@ import {
   listWorkspaces as listSlackWorkspaces,
   removeWorkspace as removeSlackWorkspace,
 } from './connectors/slack/workspaces.js';
-import { cmdGithub } from './connectors/github/cli-impl.js';
+import { cmdGithub, printGithubBackfillUsage } from './connectors/github/cli-impl.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -547,6 +547,10 @@ export function parseArgs(argv: string[]): { command: string; args: string[]; fl
         flags[key] = next;
         i += 2;
       }
+    } else if (part === '-h') {
+      // Running a verb when help was asked costs more than losing a literal -h; `-- -h` still passes one.
+      flags['help'] = true;
+      i++;
     } else {
       args.push(part);
       i++;
@@ -8843,10 +8847,6 @@ function printAuditPruneUsage(): void {
 }
 
 function cmdAuditPrune(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
-  if (flags['help']) {
-    printAuditPruneUsage();
-    return;
-  }
   const olderThanRaw = typeof flags['older-than'] === 'string' ? (flags['older-than'] as string) : '';
   if (!olderThanRaw) {
     console.error('Usage: hippo audit prune --older-than <Nd> [--dry-run] [--tenant <t>]');
@@ -9175,12 +9175,6 @@ function printSlackBackfillUsage(): void {
 }
 
 function cmdSlackBackfill(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
-  // M3: detect --help BEFORE token check so operators can read usage in
-  // environments without SLACK_BOT_TOKEN configured.
-  if (flags['help']) {
-    printSlackBackfillUsage();
-    return;
-  }
   const channel = typeof flags['channel'] === 'string' ? (flags['channel'] as string) : undefined;
   if (!channel) {
     printSlackBackfillUsage();
@@ -9276,10 +9270,6 @@ function cmdSlackWorkspacesAdd(
   hippoRoot: string,
   flags: Record<string, string | boolean | string[]>,
 ): void {
-  if (flags['help']) {
-    printSlackWorkspacesUsage();
-    return;
-  }
   const teamId = typeof flags['team'] === 'string' ? (flags['team'] as string).trim() : '';
   const tenantId = typeof flags['tenant'] === 'string' ? (flags['tenant'] as string).trim() : '';
   if (!teamId || !tenantId) {
@@ -9315,10 +9305,6 @@ function cmdSlackWorkspacesRemove(
   hippoRoot: string,
   flags: Record<string, string | boolean | string[]>,
 ): void {
-  if (flags['help']) {
-    printSlackWorkspacesUsage();
-    return;
-  }
   const teamId = typeof flags['team'] === 'string' ? (flags['team'] as string).trim() : '';
   if (!teamId) {
     console.error('Usage: hippo slack workspaces remove --team <T>');
@@ -9374,9 +9360,9 @@ function cmdSlack(hippoRoot: string, args: string[], flags: Record<string, strin
   process.exit(1);
 }
 
-function printUsage(): void {
-  console.log(`
-Hippo - biologically-inspired memory system for AI agents
+export function usageText(): string {
+  return `
+Hippo - memory for AI agents that learns what is wrong and stops repeating it
 
 Usage: hippo <command> [options]
 
@@ -9396,6 +9382,10 @@ Commands:
     --observed             Set confidence: observed
     --inferred             Set confidence: inferred
     --global               Store in global store ($HIPPO_HOME or ~/.hippo/)
+  supersede <id> "<text>"  Replace a memory with a new version; the old one points at it
+    --layer <layer>        Layer for the new memory (default: the old memory's layer)
+    --tag <tag>            Tag for the new memory (repeatable; default: the old memory's tags)
+    --pin                  Pin the new memory (default: pinned if the old one was)
   recall <query>           Search and retrieve memories (local + global)
     --budget <n>           Token budget (default: 4000)
     --min-results <n>      Minimum results regardless of budget (default: 1)
@@ -9531,9 +9521,19 @@ Commands:
     dlq list               List DLQ entries for the active tenant
     dlq replay <id> [--force]
                            Re-ingest a DLQ entry (--force skips sig check)
+  slack                    Slack connector subcommands (backfill, dlq, workspaces)
+    backfill --channel <id> [--since ISO]
+                           Backfill a channel's history (needs SLACK_BOT_TOKEN)
+    dlq list               List DLQ entries for the active tenant
+    dlq replay <id> [--force]
+                           Re-ingest a DLQ entry (--force skips sig check)
+    workspaces <add|list|remove>
+                           Map Slack workspaces (team ids) to tenants
   provenance               Provenance coverage gate for kind='raw' rows
     --json                 Output as JSON
     --strict               Exit non-zero when coverage < 100%
+  dag                      Show the summary tree: entity profiles, topic summaries, facts
+    --stats                Count memories per DAG level instead
   drill <summary-id>       Walk down a DAG level-2 summary to its children
     --limit N              Cap children list (default 50)
     --budget N             Cap total child token cost (≈ chars/4)
@@ -9724,6 +9724,8 @@ Commands:
   last-sleep               Print the last 'hippo sleep --log-file' output and clear it
     --path <p>             Log path (default: ~/.hippo/logs/last-sleep.log)
     --keep                 Print without clearing
+  session-end              SessionEnd hook: run sleep, then capture this session, in a detached worker
+    --log-file <path>      Tee the worker's output to a log file (paired with 'hippo last-sleep')
   pre-compact              PreCompact hook: save a working-state snapshot before compaction
     --log-file <p>         Diagnostic log path (default: ~/.hippo/logs/pre-compact.log)
   compact-resume           SessionStart(compact) hook: re-print the snapshot + session trail
@@ -9738,6 +9740,20 @@ Commands:
                            SessionStart(compact) for mid-session continuity;
                            codex wraps the detected launcher in place
     hook uninstall <target> Remove hook
+  predict "<claim>"        Record a prediction to score against the actual outcome later
+    --class <c>            Reference class (required)
+    --estimate <v>         Numeric estimate
+    --unit <u>             Unit of the estimate
+    --target <YYYY-MM-DD>  When the outcome is due
+  predict close <id>       Close a prediction
+    --state <s>            closed | closed-unknown (required)
+    --actual <v>           The actual value
+    --note "<text>"        Closure note
+  predict list [--class <c>] [--status open|closed|closed-unknown|all] [--limit N]
+                           List predictions (closed and closed-unknown need --class)
+  predict show <id>        Show one prediction
+  predict baserate --class <c>
+                           How past estimates in a class compared with the actuals
   decide "<decision>"      Record a decision (first-class object + memory mirror)
     --context "<why>"      Why this decision was made
     --supersedes <mem-id>  Supersede the decision backed by this memory id
@@ -9849,6 +9865,9 @@ Commands:
   dashboard                Open web dashboard for memory health
     --port <n>             Port to serve on (default: 3333)
   mcp                      Start MCP server (stdio transport)
+  serve                    Start the HTTP API server for this store (Ctrl+C stops it)
+    --port <n>             Port to serve on (default: $HIPPO_PORT or 6789)
+    --host <host>          Address to bind (default: 127.0.0.1)
   goal <sub>               dlPFC goal stack (B3) — scoped per session
     goal push <name>       Push a new active goal; prints the new goal id
       --policy <type>      schema-fit-biased | error-prioritized |
@@ -9946,7 +9965,40 @@ Examples:
   hippo sleep --dry-run
   hippo outcome --good
   hippo status
-`);
+`;
+}
+
+function printUsage(): void {
+  console.log(usageText());
+}
+
+const USAGE_ALIASES: ReadonlyMap<string, string> = new Map([['project-brief', 'brief'], ['customer-note', 'note']]);
+
+// Cut from usageText() so a verb's help can never drift from the full listing.
+export function verbUsage(verb: string): string | null {
+  const name = USAGE_ALIASES.get(verb) ?? verb;
+  const block: string[] = [];
+  let inBlock = false;
+  for (const line of usageText().split('\n')) {
+    if (/^ {2}\S/.test(line)) inBlock = line.trimStart().split(' ', 1)[0] === name;
+    else if (!line.startsWith('    ')) inBlock = false;
+    if (inBlock) block.push(line);
+  }
+  return block.length > 0 ? block.join('\n') : null;
+}
+
+// These sub-commands have fuller usage text than their lines in usageText().
+const SUBCOMMAND_USAGE: ReadonlyMap<string, () => void> = new Map([
+  ['audit prune', printAuditPruneUsage],
+  ['slack backfill', printSlackBackfillUsage],
+  ['slack workspaces', printSlackWorkspacesUsage],
+  ['github backfill', printGithubBackfillUsage],
+]);
+
+function printHelp(command: string, args: string[]): void {
+  const printSubcommandUsage = SUBCOMMAND_USAGE.get(`${command} ${args[0] ?? ''}`);
+  if (printSubcommandUsage) printSubcommandUsage();
+  else console.log(verbUsage(command) ?? usageText());
 }
 
 // ---------------------------------------------------------------------------
@@ -9966,6 +10018,15 @@ async function main(
     const { version } = JSON.parse(pkgJson) as { version: string };
     console.log(version);
     process.exit(0);
+  }
+  if (command === '' || command === 'help' || command === '--help' || command === '-h') {
+    printUsage();
+    return;
+  }
+  // Before every other step, so help never opens a store, installs a hook or starts a server.
+  if (Object.hasOwn(flags, 'help')) {
+    printHelp(command, args);
+    return;
   }
   maybeRepairCodexWrapper(command, flags);
   /** Global --scope well-formedness guard (v1.26.2). parseArgs stores a value-less
@@ -10859,13 +10920,6 @@ async function main(
 
     case 'graph':
       cmdGraph(hippoRoot, args, flags);
-      break;
-
-    case 'help':
-    case '--help':
-    case '-h':
-    case '':
-      printUsage();
       break;
 
     default:
