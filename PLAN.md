@@ -276,7 +276,7 @@ Ship the smallest thing that demonstrates the core insight (decay + retrieval st
 - [x] Explainable recall (`hippo recall --why`)
 - [x] Auto-sleep on Claude Code session exit (Stop hook)
 - [x] Active invalidation (`hippo invalidate`, auto-detect in `hippo learn --git`)
-- [x] Architectural decisions (`hippo decide --context --supersedes`, 90-day half-life)
+- [x] Architectural decisions (`hippo decide --context --supersedes`, on the default half-life)
 - [x] Path-based memory triggers (auto-tag with cwd, recall boost up to 1.3x)
 - [x] OpenCode integration (`hippo hook install opencode`)
 - [x] `hippo export` (JSON or markdown)

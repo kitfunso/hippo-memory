@@ -152,7 +152,7 @@ For agents that accept structured tool definitions:
   },
   {
     "name": "memory_decide",
-    "description": "Record an architectural decision with 90-day half-life. Decisions survive longer than normal memories.",
+    "description": "Record an architectural decision. It stays active until superseded or closed, however its memory decays.",
     "parameters": {
       "decision": {
         "type": "string",
@@ -213,13 +213,13 @@ Exposes 10 tools: recall, remember, outcome, context, status, learn, conflicts, 
 
 Agents that want to understand what they're working with:
 
-- Default half-life: 7 days
+- Default half-life: 365 days (`defaultHalfLifeDays` in `.hippo/config.json`)
 - Each retrieval: +2 days to half-life
 - Error tag (`--error`): 2x base half-life
 - Positive outcome: +5 days to half-life
 - Negative outcome: -3 days to half-life
 - Pin: no decay
-- Decision (`hippo decide`): 90-day half-life
+- Decision (`hippo decide`) and the other objects: the default half-life
 - Recall boost: 1.2x for decisions, up to 1.3x for path-matching memories
 - Consolidation removes memories below strength 0.05
 

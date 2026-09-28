@@ -24,8 +24,9 @@
 
 import { openHippoDb, closeHippoDb } from './db.js';
 import { writeEntry, assertTenantId } from './store.js';
-import { createMemory, Layer, SKILL_HALF_LIFE_DAYS } from './memory.js';
+import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';
+import { loadConfig } from './config.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -222,9 +223,9 @@ export function saveSkill(
     layer: Layer.Semantic,
     confidence: 'verified',
     source: 'skill',
+    baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
     tenantId,
   });
-  mem.half_life_days = SKILL_HALF_LIFE_DAYS;
 
   let savedRow: SkillRow | undefined;
 

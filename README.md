@@ -356,7 +356,7 @@ hippo invalidate "REST API" --reason "migrated to GraphQL"
 
 ### Architectural decisions
 
-One-off decisions don't repeat, so they can't earn their keep through retrieval alone. `hippo decide` stores them with a 90-day half-life and verified confidence so they survive long enough to matter.
+One-off decisions don't repeat, so they can't earn their keep through retrieval alone. `hippo decide` stores them with verified confidence and the store's default half-life, the same as any other memory, and sleep never retires the memory behind a decision.
 
 ```bash
 hippo decide "Use PostgreSQL for all new services" --context "JSONB support"
@@ -657,7 +657,7 @@ hippo watch "npm run build"
 | `hippo sync` | Pull global memories into local project |
 | `hippo invalidate "<pattern>"` | Actively weaken memories matching an old pattern |
 | `hippo invalidate "<pattern>" --reason "<why>"` | Include what replaced it |
-| `hippo decide "<decision>"` | Record architectural decision (90-day half-life) |
+| `hippo decide "<decision>"` | Record architectural decision |
 | `hippo decide "<decision>" --context "<why>"` | Include reasoning |
 | `hippo decide "<decision>" --supersedes <id>` | Supersede a previous decision |
 | `hippo hook list` | Show available framework hooks |

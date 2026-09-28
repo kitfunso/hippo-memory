@@ -28,8 +28,9 @@
 
 import { openHippoDb, closeHippoDb } from './db.js';
 import { writeEntry, assertTenantId } from './store.js';
-import { createMemory, Layer, INCIDENT_HALF_LIFE_DAYS } from './memory.js';
+import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';
+import { loadConfig } from './config.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -141,7 +142,7 @@ const INCIDENT_COLS = `
  * inside writeEntry's SAVEPOINT 'write_entry'.
  *
  * The memory mirror: tags ['incident', ...extraTags], source 'incident',
- * confidence 'verified', half_life INCIDENT_HALF_LIFE_DAYS, content =
+ * confidence 'verified', the store's default half-life, content =
  * "<text>\n\nContext: <context>" when context is given.
  *
  * linked_memory_ids are validated BEFORE insert: each must exist in the SAME
@@ -167,9 +168,9 @@ export function saveIncident(
     layer: Layer.Semantic,
     confidence: 'verified',
     source: 'incident',
+    baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
     tenantId,
   });
-  mem.half_life_days = INCIDENT_HALF_LIFE_DAYS;
 
   const linkInput = opts.linkedMemoryIds ?? [];
 

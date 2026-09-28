@@ -27,8 +27,9 @@
 import { openHippoDb, closeHippoDb } from './db.js';
 import { writeEntry, assertTenantId } from './store.js';
 import { markGraphDirty, removeGraphEntitiesForObject } from './graph.js';
-import { createMemory, Layer, DECISION_HALF_LIFE_DAYS } from './memory.js';
+import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';
+import { loadConfig } from './config.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -127,7 +128,7 @@ const DECISION_COLS = `
  *
  * The memory mirror preserves the legacy `hippo decide` shape: tags
  * ['decision', ...extraTags], source 'decision', confidence 'verified',
- * half_life DECISION_HALF_LIFE_DAYS, content = "<text>\n\nContext: <context>"
+ * the store's default half-life, content = "<text>\n\nContext: <context>"
  * when context is given (so existing recall output is unchanged).
  */
 export function saveDecision(
@@ -149,9 +150,9 @@ export function saveDecision(
     layer: Layer.Semantic,
     confidence: 'verified',
     source: 'decision',
+    baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
     tenantId,
   });
-  mem.half_life_days = DECISION_HALF_LIFE_DAYS;
 
   // Populated inside afterWrite so the INSERT, the supersede UPDATE, and the
   // memory write all share one SAVEPOINT.

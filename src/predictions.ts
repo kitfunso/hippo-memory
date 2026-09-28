@@ -29,6 +29,7 @@ import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import { writeEntry, assertTenantId } from './store.js';
 import { createMemory, Layer, type MemoryKind } from './memory.js';
 import { appendAuditEvent } from './audit.js';
+import { loadConfig } from './config.js';
 import { detectForwardClaim } from './forward-claim-detector.js';
 
 // ---------------------------------------------------------------------------
@@ -153,6 +154,7 @@ export function savePrediction(
     source: 'prediction',
     // SAFETY: 'distilled' is a valid MemoryKind literal (see memory.ts).
     kind: 'distilled' as MemoryKind,
+    baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
     tenantId,
   });
 

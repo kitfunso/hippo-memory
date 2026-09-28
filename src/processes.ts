@@ -33,8 +33,9 @@
 
 import { openHippoDb, closeHippoDb } from './db.js';
 import { writeEntry, assertTenantId } from './store.js';
-import { createMemory, Layer, PROCESS_HALF_LIFE_DAYS } from './memory.js';
+import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';
+import { loadConfig } from './config.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -243,9 +244,9 @@ export function saveProcess(
     layer: Layer.Semantic,
     confidence: 'verified',
     source: 'process',
+    baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
     tenantId,
   });
-  mem.half_life_days = PROCESS_HALF_LIFE_DAYS;
 
   let savedRow: ProcessRow | undefined;
 

@@ -17,7 +17,7 @@ Work taken off the active list, one line of reason each. `ROADMAP.md`
 - **Align `ui/` on the root vitest (M16).** `ui/` is its own package, and a root vitest 4 bump would change the output `scripts/check-tests-pass.mjs` parses.
 - **Rename the OpenClaw plugin package (M16).** The package name equals the manifest id `hippo-memory` and the install folder `~/.openclaw/extensions/hippo-memory`; a rename breaks existing installs for no gain.
 - **A Python `/v1` base-path constant (M16).** Speculative until a `/v2` exists.
-- **Collapse the seven 90-day half-life constants (L1).** Each kind module imports its own constant, so a decay change can move one kind without touching the others.
+- **Collapse the seven 90-day half-life constants (L1).** Each kind module imports its own constant, so a decay change can move one kind without touching the others. Reversed 2026-09-28 (`fix/typed-half-life`): when the default moved to 365 days the constants stayed at 90, so decisions and the other objects faded four times faster than an ordinary memory. The constants are gone and every object writer takes the configured default.
 - **Drop `peerDependenciesMeta` (L3).** It is not empty: it marks both transformers packages as optional peers, and Yarn adds a `*` peer for any name listed only there.
 - **Drop the `protobufjs` override (L3).** The base tree has no protobufjs, but the micro-eval job installs `@huggingface/transformers@4.2.0`, whose `onnxruntime-web` pulls protobufjs ^7.2.4; the override pins that tree.
 

@@ -10,11 +10,13 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { initStore, writeEntry, loadAllEntries, HALF_LIFE_BASE_META_KEY } from '../src/store.js';
+import { initStore, writeEntry, readEntry, loadAllEntries, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from '../src/store.js';
 import { createMemory, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { migrateDefaultHalfLife, storeHalfLifeBase, planHalfLifeMigration } from '../src/half-life-migration.js';
+import { migrateDefaultHalfLife, storeHalfLifeBase, planHalfLifeMigration, LEGACY_TYPED_HALF_LIFE } from '../src/half-life-migration.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { consolidate } from '../src/consolidate.js';
+import { saveDecision } from '../src/decisions.js';
+import { saveCustomerNote } from '../src/customer-notes.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -26,16 +28,20 @@ function store(): string {
   initStore(root);
   return root;
 }
+/** Deletes the store's record of where its half-lives stand, as a hippo that predates `keys` left it. */
+function unrecord(root: string, ...keys: string[]): void {
+  const db = openHippoDb(root);
+  try {
+    for (const key of keys) db.prepare(`DELETE FROM meta WHERE key = ?`).run(key);
+  } finally {
+    closeHippoDb(db);
+  }
+}
 /** A store as a pre-1.46 hippo left it: memories on the 7-day base and no recorded base. */
 function legacyStore(entries: ReturnType<typeof createMemory>[]): string {
   const root = store();
   for (const e of entries) writeEntry(root, e);
-  const db = openHippoDb(root);
-  try {
-    db.prepare(`DELETE FROM meta WHERE key = ?`).run(HALF_LIFE_BASE_META_KEY);
-  } finally {
-    closeHippoDb(db);
-  }
+  unrecord(root, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY);
   return root;
 }
 const legacy = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
@@ -151,5 +157,85 @@ describe('default half-life migration', () => {
     const result = await consolidate(root);
     expect(result.details.join('\n')).not.toMatch(/half-life/);
     expect([...byContent(root).values()][0]).toBeLessThan(20);
+  });
+});
+
+/** Rewrites memory `id` as a typed writer pinned it before it took the default: 90 days plus 2 per recall. */
+function pinTo90(root: string, id: string, recalls = 0): void {
+  writeEntry(root, { ...readEntry(root, id, 'default')!, retrieval_count: recalls, half_life_days: LEGACY_TYPED_HALF_LIFE + 2 * recalls });
+}
+function halfLifeOf(root: string, id: string): number {
+  return readEntry(root, id, 'default')!.half_life_days;
+}
+function migrateAudits(root: string): unknown[] {
+  const db = openHippoDb(root);
+  try {
+    // SAFETY: SELECT of one TEXT column.
+    const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'half_life_migrate'`).all() as { metadata_json: string }[];
+    return rows.map((r) => JSON.parse(r.metadata_json));
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+describe('memories of decisions, incidents and other objects pinned to 90 days', () => {
+  it('move to the default with their recall bonus, once, and log their old half-lives', () => {
+    const root = store();
+    const decision = saveDecision(root, 'default', { decisionText: 'we release on Tuesdays after the staging soak' }).memoryId!;
+    const note = saveCustomerNote(root, 'default', { customer: 'Acme', note: 'renewal is due in March' }).memoryId!;
+    pinTo90(root, decision);
+    pinTo90(root, note, 3);
+    const ordinary = createMemory('the staging deploy needs the VPN to reach the health check');
+    writeEntry(root, ordinary);
+    unrecord(root, TYPED_HALF_LIFE_META_KEY);
+
+    expect(migrateDefaultHalfLife(root, 365)).toMatchObject({ from: 365, to: 365, rescaled: 0, typed: 2, kept: 1 });
+    expect(halfLifeOf(root, decision)).toBe(365);
+    expect(halfLifeOf(root, note)).toBe(365 + 6);
+    expect(halfLifeOf(root, ordinary.id)).toBe(365);
+
+    expect(migrateDefaultHalfLife(root, 365)).toMatchObject({ rescaled: 0, typed: 0 });
+    const audits = migrateAudits(root);
+    expect(audits).toHaveLength(1);
+    expect(audits[0]).toMatchObject({ from: 90, to: 365, oldHalfLives: { [decision]: 90, [note]: 96 } });
+  });
+
+  it('keep a half-life hippo shortened or a user set by hand', () => {
+    const root = store();
+    const superseded = saveDecision(root, 'default', { decisionText: 'use REST for all public APIs' }).memoryId!;
+    const handSet = saveDecision(root, 'default', { decisionText: 'use Postgres for all new services' }).memoryId!;
+    const old = readEntry(root, superseded, 'default')!;
+    writeEntry(root, { ...old, half_life_days: 45, confidence: 'stale', tags: [...old.tags, 'superseded'] });
+    writeEntry(root, { ...readEntry(root, handSet, 'default')!, half_life_days: 200 });
+    unrecord(root, TYPED_HALF_LIFE_META_KEY);
+
+    expect(migrateDefaultHalfLife(root, 365)).toMatchObject({ typed: 0, kept: 2 });
+    expect(halfLifeOf(root, superseded)).toBe(45);
+    expect(halfLifeOf(root, handSet)).toBe(200);
+  });
+
+  it('sleep moves them to a configured default along with ordinary memories', async () => {
+    const root = store();
+    const decision = saveDecision(root, 'default', { decisionText: 'we release on Tuesdays after the staging soak' }).memoryId!;
+    pinTo90(root, decision);
+    const ordinary = createMemory('the staging deploy needs the VPN to reach the health check');
+    writeEntry(root, ordinary);
+    unrecord(root, TYPED_HALF_LIFE_META_KEY);
+    fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ defaultHalfLifeDays: 730 }));
+
+    const details = (await consolidate(root)).details.join('\n');
+    expect(details).toMatch(/moved 1 memories from the 365-day to the 730-day half-life/);
+    expect(details).toMatch(/moved 1 memories of decisions, incidents and other objects from the 90-day to the 730-day half-life/);
+    // Sleep's replay pass may lengthen them further (+2 days per replay).
+    expect(halfLifeOf(root, decision)).toBeGreaterThanOrEqual(730);
+    expect(halfLifeOf(root, ordinary.id)).toBeGreaterThanOrEqual(730);
+  });
+
+  it('a new store never moves one, even one set to 90 days by hand', () => {
+    const root = store();
+    const decision = saveDecision(root, 'default', { decisionText: 'we release on Tuesdays after the staging soak' }).memoryId!;
+    pinTo90(root, decision);
+    expect(migrateDefaultHalfLife(root, 365)).toMatchObject({ rescaled: 0, typed: 0 });
+    expect(halfLifeOf(root, decision)).toBe(90);
   });
 });

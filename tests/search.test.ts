@@ -111,8 +111,6 @@ describe('decision recall boost', () => {
       confidence: 'verified',
       source: 'decision',
     });
-    // Give it a longer half-life typical for decisions
-    decision.half_life_days = 90;
 
     const normal = createMemory('PostgreSQL connection pool maximum is set to 20', {
       tags: ['database'],

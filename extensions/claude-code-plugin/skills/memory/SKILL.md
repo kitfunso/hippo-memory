@@ -56,7 +56,7 @@ hippo recall "<what's going wrong>" --budget 2000 --why
 hippo decide "<decision>" --context "<why>"
 ```
 
-Decisions get a 90-day half-life and a recall boost so they surface when relevant.
+Decisions get a recall boost so they surface when relevant, and stay active until superseded.
 
 ## When migrating or replacing a tool
 

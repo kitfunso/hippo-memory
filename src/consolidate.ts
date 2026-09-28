@@ -37,7 +37,7 @@ import { resolveTenantId } from './tenant.js';
 import { rescueSet, rankNonPinnedByTenant, validateWeights, type MvRankInfo } from './memory-value.js';
 import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from './memory-value-weights.js';
 import { appendAuditEvent } from './audit.js';
-import { migrateDefaultHalfLife } from './half-life-migration.js';
+import { migrateDefaultHalfLife, LEGACY_TYPED_HALF_LIFE } from './half-life-migration.js';
 import { derivationScope, commonDerivationScope, derivationPartitionKey } from './recall-scope.js';
 import { isQuarantineScope } from './quarantine.js';
 
@@ -196,6 +196,9 @@ export async function consolidate(
   const halfLife = migrateDefaultHalfLife(hippoRoot, loadConfig(hippoRoot).defaultHalfLifeDays, { dryRun });
   if (halfLife.rescaled > 0) {
     result.details.push(`  ⏳ ${dryRun ? 'would move' : 'moved'} ${halfLife.rescaled} memories from the ${halfLife.from}-day to the ${halfLife.to}-day half-life`);
+  }
+  if (halfLife.typed > 0) {
+    result.details.push(`  ⏳ ${dryRun ? 'would move' : 'moved'} ${halfLife.typed} memories of decisions, incidents and other objects from the ${LEGACY_TYPED_HALF_LIFE}-day to the ${halfLife.to}-day half-life`);
   }
 
   // L9: host-wide by design. Consolidation runs across all tenants in one

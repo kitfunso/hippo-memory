@@ -17,15 +17,20 @@
  *   migration runs once.
  *
  * `hippo sleep` runs it before its decay pass, from the base the store is on
- * (7 days when never recorded) to the configured `defaultHalfLifeDays`.
+ * (7 days when never recorded) to the configured `defaultHalfLifeDays`. Once per store it also
+ * moves memories of decisions, incidents and other objects off the flat 90 days they used to get.
  */
 import { deriveHalfLife, type MemoryEntry } from './memory.js';
-import { openStore, selectAllEntries, HALF_LIFE_BASE_META_KEY } from './store.js';
+import { openStore, selectAllEntries, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from './store.js';
 import { openHippoDb, closeHippoDb, getMeta, setMeta, type DatabaseSyncLike } from './db.js';
 import { appendAuditEvent } from './audit.js';
 
 /** The base every store used before the base was recorded. */
 export const LEGACY_HALF_LIFE_BASE = 7;
+
+/** The flat half-life the decision, incident and other object writers gave their memories before they took the default. */
+export const LEGACY_TYPED_HALF_LIFE = 90;
+const TYPED_SOURCES: ReadonlySet<string> = new Set(['decision', 'incident', 'process', 'policy', 'skill', 'project_brief', 'customer_note']);
 
 export { HALF_LIFE_BASE_META_KEY };
 
@@ -35,6 +40,8 @@ export interface HalfLifeMigrationResult {
   to: number;
   /** Memories moved to the new base. */
   rescaled: number;
+  /** Memories of decisions, incidents and other objects moved off the flat 90 days. */
+  typed: number;
   /** Memories left alone because they are not on the old base. */
   kept: number;
   dryRun: boolean;
@@ -44,10 +51,10 @@ export interface HalfLifeMigrationResult {
 
 type HalfLifeFields = Pick<MemoryEntry, 'half_life_days' | 'tags' | 'schema_fit' | 'retrieval_count' | 'superseded_by'>;
 
-/** Recall bonus over what `base` gave `entry`, or null when off that base; pre-1.46 recalls each added 2 days. */
-export function halfLifeRecallBonus(entry: HalfLifeFields, base: number): number | null {
+/** Recall bonus over `written`, the half-life `entry` got at write, or null when off it; each recall added 2 days. */
+export function halfLifeRecallBonus(entry: HalfLifeFields, written: number): number | null {
   if (entry.superseded_by || entry.tags.includes('invalidated') || entry.tags.includes('superseded')) return null;
-  const bonus = entry.half_life_days - deriveHalfLife(base, entry);
+  const bonus = entry.half_life_days - written;
   const k = Math.round(bonus / 2);
   return Math.abs(bonus - 2 * k) < 1e-9 && k >= 0 && k <= entry.retrieval_count ? bonus : null;
 }
@@ -56,8 +63,17 @@ export function halfLifeRecallBonus(entry: HalfLifeFields, base: number): number
 export function planHalfLifeMigration(entries: readonly MemoryEntry[], from: number, to: number): MemoryEntry[] {
   if (from === to) return [];
   return entries.flatMap((e) => {
-    const bonus = halfLifeRecallBonus(e, from);
+    const bonus = halfLifeRecallBonus(e, deriveHalfLife(from, e));
     return bonus === null ? [] : [{ ...e, half_life_days: deriveHalfLife(to, e) + bonus }];
+  });
+}
+
+/** Memories of decisions, incidents and other objects still on the flat 90 days, as copies on `to` that keep their recall bonus. Pure. */
+export function planTypedHalfLifeMigration(entries: readonly MemoryEntry[], to: number): MemoryEntry[] {
+  return entries.flatMap((e) => {
+    const bonus = TYPED_SOURCES.has(e.source) ? halfLifeRecallBonus(e, LEGACY_TYPED_HALF_LIFE) : null;
+    const next = bonus === null ? e.half_life_days : deriveHalfLife(to, e) + bonus;
+    return next === e.half_life_days ? [] : [{ ...e, half_life_days: next }];
   });
 }
 
@@ -77,40 +93,39 @@ function readBase(db: DatabaseSyncLike): number {
 }
 
 /**
- * Move the store's memories from the base they are on to `to`. A no-op when
- * they are already on it. Under `dryRun` nothing is written, the recorded
+ * Move the store's memories from the base they are on, and those of objects from
+ * the old flat 90 days, to `to`, once. Under `dryRun` nothing is written, the recorded
  * base included.
  */
 export function migrateDefaultHalfLife(hippoRoot: string, to: number, opts: { dryRun?: boolean; actor?: string } = {}): HalfLifeMigrationResult {
   const dryRun = opts.dryRun ?? false;
-  const noop = (from: number): HalfLifeMigrationResult => ({ from, to, rescaled: 0, kept: 0, dryRun, halfLives: new Map() });
+  const noop = (from: number): HalfLifeMigrationResult => ({ from, to, rescaled: 0, typed: 0, kept: 0, dryRun, halfLives: new Map() });
   const db = openStore(hippoRoot);
   try {
     // Plan, write, audit and record the base under one write lock, so a concurrent write or sleep cannot interleave.
     if (!dryRun) db.exec('BEGIN IMMEDIATE');
     try {
       const from = readBase(db);
-      if (!(Number.isFinite(to) && to > 0) || from === to) {
+      const typedPending = getMeta(db, TYPED_HALF_LIFE_META_KEY, '') === '';
+      if (!(Number.isFinite(to) && to > 0) || (from === to && !typedPending)) {
         if (!dryRun) db.exec('COMMIT');
         return noop(from);
       }
       const all = selectAllEntries(db);
-      const plan = planHalfLifeMigration(all, from, to);
+      // Pinned memories of objects were never on the base, so only the typed plan may move them.
+      const typedPlan = typedPending ? planTypedHalfLifeMigration(all, to) : [];
+      const basePlan = planHalfLifeMigration(typedPending ? all.filter((e) => !TYPED_SOURCES.has(e.source)) : all, from, to);
+      const plan = [...basePlan, ...typedPlan];
       const halfLives = new Map(plan.map((e) => [e.id, e.half_life_days]));
-      const result: HalfLifeMigrationResult = { from, to, rescaled: plan.length, kept: all.length - plan.length, dryRun, halfLives };
+      const result: HalfLifeMigrationResult = { from, to, rescaled: basePlan.length, typed: typedPlan.length, kept: all.length - plan.length, dryRun, halfLives };
       if (dryRun) return result;
 
       const old = new Map(all.map((e) => [e.id, e.half_life_days]));
-      const update = db.prepare('UPDATE memories SET half_life_days = ? WHERE id = ?');
-      const byTenant = new Map<string, Record<string, number>>();
-      for (const e of plan) {
-        update.run(e.half_life_days, e.id);
-        byTenant.set(e.tenantId, { ...byTenant.get(e.tenantId), [e.id]: old.get(e.id)! });
-      }
-      for (const [tenantId, oldHalfLives] of byTenant) {
-        appendAuditEvent(db, { tenantId, actor: opts.actor ?? 'system', op: 'half_life_migrate', metadata: { from, to, ids: Object.keys(oldHalfLives), oldHalfLives } });
-      }
+      const actor = opts.actor ?? 'system';
+      writePlan(db, basePlan, old, { from, to, actor });
+      writePlan(db, typedPlan, old, { from: LEGACY_TYPED_HALF_LIFE, to, actor });
       setMeta(db, HALF_LIFE_BASE_META_KEY, String(to));
+      setMeta(db, TYPED_HALF_LIFE_META_KEY, '1');
       db.exec('COMMIT');
       return result;
     } catch (err) {
@@ -119,5 +134,18 @@ export function migrateDefaultHalfLife(hippoRoot: string, to: number, opts: { dr
     }
   } finally {
     closeHippoDb(db);
+  }
+}
+
+/** Writes `plan`, then one audit event per tenant with each id's old half-life, so the move can be undone. */
+function writePlan(db: DatabaseSyncLike, plan: readonly MemoryEntry[], old: ReadonlyMap<string, number>, move: { from: number; to: number; actor: string }): void {
+  const update = db.prepare('UPDATE memories SET half_life_days = ? WHERE id = ?');
+  const byTenant = new Map<string, Record<string, number>>();
+  for (const e of plan) {
+    update.run(e.half_life_days, e.id);
+    byTenant.set(e.tenantId, { ...byTenant.get(e.tenantId), [e.id]: old.get(e.id)! });
+  }
+  for (const [tenantId, oldHalfLives] of byTenant) {
+    appendAuditEvent(db, { tenantId, actor: move.actor, op: 'half_life_migrate', metadata: { from: move.from, to: move.to, ids: Object.keys(oldHalfLives), oldHalfLives } });
   }
 }

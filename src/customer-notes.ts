@@ -23,8 +23,9 @@
 import { openHippoDb, closeHippoDb } from './db.js';
 import { writeEntry, assertTenantId } from './store.js';
 import { markGraphDirty, removeGraphEntitiesForObject } from './graph.js';
-import { createMemory, Layer, CUSTOMER_NOTE_HALF_LIFE_DAYS } from './memory.js';
+import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';
+import { loadConfig } from './config.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -201,9 +202,9 @@ export function saveCustomerNote(
     layer: Layer.Semantic,
     confidence: 'verified',
     source: 'customer_note',
+    baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
     tenantId,
   });
-  mem.half_life_days = CUSTOMER_NOTE_HALF_LIFE_DAYS;
 
   let savedRow: CustomerNoteRow | undefined;
 

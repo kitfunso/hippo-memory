@@ -341,6 +341,8 @@ export function openStore(hippoRoot: string): DatabaseSyncLike {
 
 /** `meta` key holding the default half-life base a store's memories are on (src/half-life-migration.ts). */
 export const HALF_LIFE_BASE_META_KEY = 'default_half_life_base';
+/** `meta` key set once no memory of a decision, incident or other object sits on the old flat 90 days. */
+export const TYPED_HALF_LIFE_META_KEY = 'typed_half_life_on_default';
 
 /**
  * A store with no memories starts on the current default half-life base, so
@@ -352,6 +354,7 @@ function recordHalfLifeBaseForNewStore(db: DatabaseSyncLike): void {
   if (getMeta(db, HALF_LIFE_BASE_META_KEY, '') !== '') return;
   if (db.prepare(`SELECT 1 AS x FROM memories LIMIT 1`).get() !== undefined) return;
   setMeta(db, HALF_LIFE_BASE_META_KEY, String(DEFAULT_HALF_LIFE_DAYS));
+  setMeta(db, TYPED_HALF_LIFE_META_KEY, '1');
 }
 
 function ensureMirrorDirectories(hippoRoot: string): void {

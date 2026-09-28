@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { createMemory, DECISION_HALF_LIFE_DAYS, Layer } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../src/memory.js';
 import { initStore, writeEntry, readEntry } from '../src/store.js';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -19,14 +19,13 @@ describe('decision memory', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('creates a decision memory with 90-day half-life', () => {
+  it('creates a decision memory on the default half-life', () => {
     const mem = createMemory('Use PostgreSQL over MySQL for JSONB support', {
       tags: ['decision', 'database'],
       layer: Layer.Semantic,
       confidence: 'verified',
       source: 'decision',
     });
-    mem.half_life_days = DECISION_HALF_LIFE_DAYS;
     writeEntry(hippoRoot, mem);
 
     const entry = readEntry(hippoRoot, mem.id);
@@ -34,7 +33,7 @@ describe('decision memory', () => {
     expect(entry!.tags).toContain('decision');
     expect(entry!.layer).toBe('semantic');
     expect(entry!.confidence).toBe('verified');
-    expect(entry!.half_life_days).toBe(90);
+    expect(entry!.half_life_days).toBe(DEFAULT_HALF_LIFE_DAYS);
     expect(entry!.source).toBe('decision');
   });
 
@@ -45,7 +44,6 @@ describe('decision memory', () => {
       confidence: 'verified',
       source: 'decision',
     });
-    mem.half_life_days = DECISION_HALF_LIFE_DAYS;
     writeEntry(hippoRoot, mem);
 
     // Supersede
@@ -56,7 +54,7 @@ describe('decision memory', () => {
     writeEntry(hippoRoot, old);
 
     const updated = readEntry(hippoRoot, mem.id)!;
-    expect(updated.half_life_days).toBe(45);
+    expect(updated.half_life_days).toBe(Math.floor(DEFAULT_HALF_LIFE_DAYS / 2));
     expect(updated.tags).toContain('superseded');
     expect(updated.confidence).toBe('stale');
   });

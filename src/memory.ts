@@ -135,20 +135,6 @@ export interface MemoryEntry {
   bm25_score?: number;
 }
 
-export const DECISION_HALF_LIFE_DAYS = 90;
-
-export const INCIDENT_HALF_LIFE_DAYS = 90;
-
-export const PROCESS_HALF_LIFE_DAYS = 90;
-
-export const POLICY_HALF_LIFE_DAYS = 90;
-
-export const SKILL_HALF_LIFE_DAYS = 90;
-
-export const PROJECT_BRIEF_HALF_LIFE_DAYS = 90;
-
-export const CUSTOMER_NOTE_HALF_LIFE_DAYS = 90;
-
 /** FE2: tag on a memory whose named file/symbol/script changed after it was stored. */
 export const CHURN_STALE_TAG = 'churn-stale';
 
