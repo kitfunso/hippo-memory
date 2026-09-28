@@ -1,13 +1,13 @@
 # Hippo + Codex (OpenAI) Integration
 
-Codex does not currently give Hippo a true `SessionEnd` hook in the same way Claude Code and OpenCode do, so Hippo uses a launcher wrapper for Codex session-end consolidation.
+Codex does not currently give Hippo a true `SessionEnd` hook in the same way Claude Code and OpenCode do, so Hippo offers an opt-in launcher wrapper for Codex session-end consolidation.
 
 ## What the Codex integration does
 
-Hippo's Codex integration now does two things:
+Hippo's Codex integration does two things:
 
 1. Patches `AGENTS.md` in the current project if it exists, so the agent still runs `hippo context`, `hippo remember`, and `hippo outcome` during normal work.
-2. Wraps the detected `codex` launcher in place and writes metadata in `~/.hippo/integrations/codex.json`.
+2. Only if you opt in, wraps the detected `codex` launcher in place and writes metadata in `~/.hippo/integrations/codex.json`.
 
 The wrapper starts the real Codex binary, waits for the session to exit, then spawns a detached Hippo worker that runs:
 
@@ -20,13 +20,13 @@ On the next wrapped Codex start, Hippo prints that log via `hippo last-sleep` be
 
 ## Install and updates
 
-Hippo now attempts this automatically on install and update. If Hippo was installed before Codex, common Hippo commands will also try to self-heal the integration the next time they run.
-
-You can still run the manual repair path:
+Hippo never wraps Codex on its own (issue #133). `hippo init` and the npm install print the opt-in command when they find Codex. To turn on session capture, run:
 
 ```bash
 hippo hook install codex
 ```
+
+`hippo setup` also wraps Codex when it detects it. After you opt in, a Codex update can put the real binary back over the wrapper, so installs, updates and routine Hippo commands re-apply it; they never apply it for the first time. `HIPPO_SKIP_POSTINSTALL=1` stops the re-apply on install and update, `HIPPO_SKIP_AUTO_INTEGRATIONS=1` stops it in routine commands, and `hippo hook uninstall codex` restores the original launcher.
 
 Hippo renames the original launcher to a sibling backup such as `codex.hippo-real.cmd` or `codex.hippo-real.exe`, then drops a wrapper at the command path that users already invoke. No extra `PATH` step is required.
 
