@@ -2,7 +2,7 @@
 // A digit, sign or word that differs is a different value, so nothing looser may count as a copy.
 import type { MemoryEntry } from './memory.js';
 
-type Text = Pick<MemoryEntry, 'content'> & { source?: string };
+type Text = Pick<MemoryEntry, 'content'> & { source?: string; pinned?: boolean };
 
 export function duplicateKey(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
@@ -22,13 +22,14 @@ export function storedTextKeys(entries: readonly Text[]): Set<string> {
   return new Set(entries.flatMap(heldTextKeys));
 }
 
-/** A final result list without copies: drops each row a sleep-merged row in the list holds word for word, and each later copy of a text. */
+/** A final result list without copies: drops each unpinned row a sleep-merged row in the list holds word for word, and each later unpinned copy of a text. */
 export function dropHeldCopies<T>(rows: readonly T[], textOf: (row: T) => Text): T[] {
   const held = new Set(rows.flatMap((r) => heldTextKeys(textOf(r)).slice(1)));
   const seen = new Set<string>();
   return rows.filter((r) => {
     const keys = heldTextKeys(textOf(r));
-    if (seen.has(keys[0]) || (keys.length === 1 && held.has(keys[0]))) return false;
+    const hidden = seen.has(keys[0]) || (keys.length === 1 && held.has(keys[0]));
+    if (hidden && !textOf(r).pinned) return false; // rows merged by older releases can hold a pin's text
     seen.add(keys[0]);
     return true;
   });

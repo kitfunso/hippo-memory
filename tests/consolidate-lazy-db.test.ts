@@ -52,12 +52,12 @@ describe('T3: consolidateDb lazy open', () => {
 
       const shortText = 'renew the expiring vpn certificate before the weekend';
       const longText = 'renew the expiring vpn certificate before the weekend and alert the network team';
-      const e1 = createMemory(shortText, { layer: Layer.Episodic });
+      const e1 = { ...createMemory(shortText, { layer: Layer.Episodic }), created: new Date(Date.now() - 60_000).toISOString() };
       const e2 = createMemory(longText, { layer: Layer.Episodic });
       writeEntry(home, e1);
       writeEntry(home, e2);
 
-      const mergedContent = `[Consolidated from 2 related memories]\n\n- ${longText}\n- ${shortText}`;
+      const mergedContent = `[Consolidated from 2 related memories, newest first]\n\n- ${longText}\n- ${shortText}`;
       const mergedDigest = rejectionDigest(mergedContent);
       const db = openHippoDb(home);
       try {

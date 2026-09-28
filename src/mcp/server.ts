@@ -666,14 +666,16 @@ async function executeTool(
       const entries = explicitScope
         ? allEntries.filter((e) => e.scope === explicitScope)
         : allEntries.filter((e) => passesScopeFilterForRecall(e.scope ?? null, undefined));
-      const droppedPreRankCountMcp = allEntries.length - entries.length;
+      let droppedPreRankCountMcp = allEntries.length - entries.length;
       const usePhysics = config.physics?.enabled !== false;
       let results = usePhysics
         ? await physicsSearch(query, entries, { budget, hippoRoot, physicsConfig: config.physics })
         : await hybridSearch(query, entries, { budget, hippoRoot });
+      const beforeHeldCopies = results.length;
       results = dropHeldCopies(results, (r) => r.entry);
+      droppedPreRankCountMcp += beforeHeldCopies - results.length; // the bucket CLI and API recall put hidden copies in
       // v1.12.13 / C5 — droppedByBudget for MCP is an UPPER BOUND. The
-      // difference (entries.length - results.length) lumps three things
+      // difference (entries.length - beforeHeldCopies) lumps three things
       // together: rows hybridSearch/physicsSearch internally dropped because
       // they scored zero (didn't match the query at all), rows the search
       // engine filtered internally (e.g. superseded when --include-
@@ -689,7 +691,7 @@ async function executeTool(
       // compute droppedByBudget = scoredCount - results.length, with the
       // remainder (entries.length - scoredCount) attributed to
       // droppedPreRank or a new "noQueryMatch" counter.
-      const droppedByBudgetCountMcp = Math.max(0, entries.length - results.length);
+      const droppedByBudgetCountMcp = Math.max(0, entries.length - beforeHeldCopies);
 
       // v1.7.4 -- dlPFC goal-stack boost on the MCP physics/hybrid result
       // list BEFORE formatMemories. MCP's user-visible primary ordering does

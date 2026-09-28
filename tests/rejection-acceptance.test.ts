@@ -390,16 +390,16 @@ describe('AT1 consolidation-loop fix: merge tombstone check', () => {
       // "sources not demoted" half_life_days assertion below.
       writeFileSync(join(home, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
 
-      // longText is the longer of the two, so mergeContents' length-sort
-      // deterministically puts it first in the 2-entry merge.
+      // longText is the newer of the two, so mergeContents' newest-first
+      // sort deterministically puts it first in the 2-entry merge.
       const shortText = 'migrate the billing database before the next release window';
       const longText = 'migrate the billing database before the next release window with full backups enabled';
-      const e1 = createMemory(shortText, { layer: Layer.Episodic });
+      const e1 = { ...createMemory(shortText, { layer: Layer.Episodic }), created: new Date(Date.now() - 60_000).toISOString() };
       const e2 = createMemory(longText, { layer: Layer.Episodic });
       writeEntry(home, e1);
       writeEntry(home, e2);
 
-      const mergedContent = `[Consolidated from 2 related memories]\n\n- ${longText}\n- ${shortText}`;
+      const mergedContent = `[Consolidated from 2 related memories, newest first]\n\n- ${longText}\n- ${shortText}`;
       const mergedDigest = rejectionDigest(mergedContent);
       const db = openHippoDb(home);
       try {
@@ -590,12 +590,12 @@ describe('AT1 codex-P1 fix 2: merge tombstone check uses the destination tenant'
 
       const shortText = 'rotate the staging tls certificates before expiry';
       const longText = 'rotate the staging tls certificates before expiry and notify the on-call channel';
-      const e1 = createMemory(shortText, { layer: Layer.Episodic, tenantId: 'tenant-a' });
+      const e1 = { ...createMemory(shortText, { layer: Layer.Episodic, tenantId: 'tenant-a' }), created: new Date(Date.now() - 60_000).toISOString() };
       const e2 = createMemory(longText, { layer: Layer.Episodic, tenantId: 'tenant-a' });
       writeEntry(home, e1);
       writeEntry(home, e2);
 
-      const mergedContent = `[Consolidated from 2 related memories]\n\n- ${longText}\n- ${shortText}`;
+      const mergedContent = `[Consolidated from 2 related memories, newest first]\n\n- ${longText}\n- ${shortText}`;
       const mergedDigest = rejectionDigest(mergedContent);
 
       // Tombstone lives in 'tenant-a' — the cluster's own tenant, and (post
@@ -645,12 +645,12 @@ describe('AT1 codex-P1 fix 2: merge tombstone check uses the destination tenant'
 
       const shortText = 'archive the quarterly billing export before cleanup';
       const longText = 'archive the quarterly billing export before cleanup and confirm checksum';
-      const e1 = createMemory(shortText, { layer: Layer.Episodic, tenantId: 'tenant-a' });
+      const e1 = { ...createMemory(shortText, { layer: Layer.Episodic, tenantId: 'tenant-a' }), created: new Date(Date.now() - 60_000).toISOString() };
       const e2 = createMemory(longText, { layer: Layer.Episodic, tenantId: 'tenant-a' });
       writeEntry(home, e1);
       writeEntry(home, e2);
 
-      const mergedContent = `[Consolidated from 2 related memories]\n\n- ${longText}\n- ${shortText}`;
+      const mergedContent = `[Consolidated from 2 related memories, newest first]\n\n- ${longText}\n- ${shortText}`;
       const mergedDigest = rejectionDigest(mergedContent);
 
       // Tombstone lives in an unrelated tenant ('default') — the write now

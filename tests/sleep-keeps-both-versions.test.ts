@@ -9,6 +9,7 @@ import { initStore, writeEntry, loadAllEntries, readEntry } from '../src/store.j
 import { consolidate } from '../src/consolidate.js';
 import { deduplicateStore } from '../src/dedupe.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { queryAuditEvents } from '../src/audit.js';
 import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../src/rejection.js';
 import * as api from '../src/api.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
@@ -219,6 +220,39 @@ describe('merge caps', () => {
     expect((await consolidate(root, { now: new Date() })).semanticCreated).toBe(0);
     halfLifeKept(root, rows);
   });
+
+  // Seven look-alikes, oldest first, so the first five form the capped merge.
+  function sevenLookAlikes(root: string): MemoryEntry[] {
+    const start = Date.now() - DAY;
+    return ['alpha', 'bravo', 'delta', 'gamma', 'kappa', 'omega', 'sigma'].map((name, i) =>
+      write(root, `The nightly build for the ${name} service writes its cache to the shared volume.`, { created: new Date(start + i * 60_000).toISOString() }));
+  }
+
+  it('a rejected merge leaves the rows past the cap free to merge', async () => {
+    const root = newRoot();
+    const rows = sevenLookAlikes(root);
+    reject(root, [`[Consolidated pattern from 5 related memories, newest first]\n\n${rows.slice(0, 5).reverse().map((e) => `- ${e.content}`).join('\n')}`]);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    expect((await consolidate(root, { now: new Date() })).semanticCreated).toBe(1);
+    expect([...merged(root)[0].parents].sort()).toEqual(rows.slice(5).map((e) => e.id).sort());
+    const db = openHippoDb(root);
+    try {
+      expect(queryAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' })[0].metadata.sourceIds).toEqual(rows.slice(0, 5).map((e) => e.id));
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
+  it('a merge rejected before this release still covers the rows past the cap', async () => {
+    const root = newRoot();
+    const rows = sevenLookAlikes(root);
+    reject(root, [`[Consolidated pattern from 7 related memories]\n\n${rows.map((e) => `- ${e.content}`).join('\n')}`]); // the old format merged every look-alike
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    expect((await consolidate(root, { now: new Date() })).semanticCreated).toBe(0);
+    halfLifeKept(root, rows);
+  });
 });
 
 describe('merged row', () => {
@@ -233,6 +267,27 @@ describe('merged row', () => {
     expect(row.parents).toHaveLength(3);
     expect(row.content.split('port 4400')).toHaveLength(2);
     expect(row.content).toContain('The analytics service listens on port 7700.');
+  });
+
+  it('lists its texts newest first, and a rejection of the old format still matches', async () => {
+    // The oldest text is also the longest and first by text, so a length or text sort would lead with the old value.
+    const texts = [
+      'Deploy note: the staging service listens on port 4400 for the internal dashboard traffic.',
+      'Deploy note: the staging service listens on port 4401 for the internal dashboard.',
+      'Deploy note: the staging service listens on port 4402 for the dashboard.',
+    ];
+    const writeAll = (root: string): void => texts.forEach((text, i) => { write(root, text, { created: new Date(Date.now() - DAY + i * 60_000).toISOString() }); });
+    const root = newRoot();
+    writeAll(root);
+
+    await consolidate(root, { now: new Date() });
+    expect(merged(root)[0].content).toBe(`[Consolidated pattern from 3 related memories, newest first]\n\n${[...texts].reverse().map((t) => `- ${t}`).join('\n')}`);
+
+    const again = newRoot();
+    writeAll(again);
+    reject(again, [`[Consolidated pattern from 3 related memories]\n\n${texts.map((t) => `- ${t}`).join('\n')}`]); // the old format: longest first
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect((await consolidate(again, { now: new Date() })).semanticCreated).toBe(0);
   });
 
   it('a merge rejected before this release stays rejected', async () => {
@@ -306,6 +361,34 @@ describe('recall and context show a merged row, not the sources it holds', () =>
     } finally {
       process.chdir(cwd);
     }
+  });
+
+  it('MCP recall counts the hidden sources as filtered before ranking, as CLI and API recall do', async () => {
+    const { root } = await mergedStore();
+    expect(await mcp(root, 'hippo_recall', { query: QUERY })).toContain('Showing 1 of 3 candidates; 2 filtered pre-rank.');
+  });
+
+  const hookContext = async (root: string): Promise<string[]> =>
+    (await api.getContext(ctx(root), { pinnedOnly: true, includeRecent: 5, budget: 4000, crossProject: true })).entries.map((r) => r.entry.id);
+
+  it('a pinned memory never merges, so the per-prompt block still shows it after a sleep', async () => {
+    vi.stubEnv('HIPPO_HOME', join(tmp(), 'global'));
+    const root = newRoot();
+    const pin = write(root, 'Deploy rule: the staging service listens on port 4400.', { pinned: true });
+    write(root, 'Deploy rule: the staging service listens on port 4401.');
+
+    expect((await consolidate(root, { now: new Date() })).semanticCreated).toBe(0);
+    expect(await hookContext(root)).toContain(pin.id);
+  });
+
+  it('a merged row from an older release does not hide a pinned memory it holds', async () => {
+    vi.stubEnv('HIPPO_HOME', join(tmp(), 'global'));
+    const root = newRoot();
+    const text = 'Deploy rule: the staging service listens on port 4400.';
+    const pin = write(root, text, { pinned: true, created: new Date(Date.now() - DAY).toISOString() });
+    const old = write(root, `[Consolidated from 2 related memories]\n\n${text}`, { layer: Layer.Semantic, source: 'consolidation' });
+
+    expect(await hookContext(root)).toEqual(expect.arrayContaining([old.id, pin.id]));
   });
 });
 

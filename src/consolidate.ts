@@ -781,6 +781,7 @@ export async function consolidate(
   const alreadyMergedIds = new Set(survivors.flatMap((e) => e.parents));
   const mergeCandidates = survivors.filter(
     (e) => e.layer === Layer.Episodic && !e.superseded_by && !e.tags.includes('extracted') && !alreadyMergedIds.has(e.id)
+      && !e.pinned // a pin merged with a look-alike would read as one of two values
       && tokenize(e.content).length > 0, // two empty token sets overlap 1, so tokenless text would merge with any other
   );
   const used = new Set<string>();
@@ -884,7 +885,8 @@ export async function consolidate(
           // Still mark used — these members are not re-tried against a
           // DIFFERENT cluster within this same pass; next sleep re-clusters
           // them fresh.
-          for (const e of related) used.add(e.id);
+          const rejected = newHit ? cluster : related; // the old format digested the uncapped list, so rows past the cap were rejected too
+          for (const e of rejected) used.add(e.id);
           mergesSkippedRejected++;
           try {
             appendAuditEvent(consolidateDb, {
@@ -894,7 +896,7 @@ export async function consolidate(
               metadata: {
                 digest: mergeDigest,
                 reason: tombstone.reason,
-                sourceIds: related.map((e) => e.id),
+                sourceIds: rejected.map((e) => e.id),
               },
             });
           } catch {
@@ -1057,13 +1059,13 @@ export async function consolidate(
 
 function mergeContents(entries: MemoryEntry[]): string {
   // Each distinct text goes in once and in full (the merge demotes every source), one bullet with its lines indented, so heldTextKeys can read it back.
-  // Length desc, then compareEntryIdentity, keeps the row and its rejection digest byte-identical across ingest orders.
-  const sorted = [...entries].sort((a, b) => (b.content.length - a.content.length) || compareEntryIdentity(a, b));
+  // Newest first says which version is current; compareEntryIdentity settles ties, so the row and its rejection digest depend only on the sources.
+  const sorted = [...entries].sort((a, b) => (Date.parse(b.created) - Date.parse(a.created)) || compareEntryIdentity(a, b));
   const texts = new Map<string, string>();
   for (const e of sorted) {
     if (!texts.has(duplicateKey(e.content))) texts.set(duplicateKey(e.content), e.content.trim().replace(/\n/g, '\n  '));
   }
-  const header = entries.length === 2 ? '[Consolidated from 2 related memories]' : `[Consolidated pattern from ${entries.length} related memories]`;
+  const header = entries.length === 2 ? '[Consolidated from 2 related memories, newest first]' : `[Consolidated pattern from ${entries.length} related memories, newest first]`;
   return `${header}\n\n${[...texts.values()].map((t) => `- ${t}`).join('\n')}`;
 }
 

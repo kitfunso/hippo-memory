@@ -261,15 +261,11 @@ describe('dedupe survivor determinism', () => {
     }
   });
 
-  it('7. mergeContents equal-length tie: merged base identical across opposite ingest orders (content asc tie key)', async () => {
-    // Equal length (verified below), one same-length word swapped -->
-    // Jaccard 5/7 = 0.714 > MERGE_OVERLAP_THRESHOLD (0.35), so the merge
-    // pass fires and mergeContents' content.length primary key is a REAL
-    // tie; only the compareEntryIdentity tie key decides the base. Same
-    // `now` for both consolidate calls guards against decay flakiness.
+  it('7. mergeContents same-created tie: merged base identical across opposite ingest orders (content asc tie key)', async () => {
+    // One word swapped: Jaccard 5/7 = 0.714 > MERGE_OVERLAP_THRESHOLD (0.35), so the merge pass fires.
+    // Both rows share one `created`, so the newest-first key is a REAL tie and only compareEntryIdentity decides the base.
     const contentAlpha = 'cache refresh failure data pipeline alpha';
     const contentOmega = 'cache refresh failure data pipeline omega';
-    expect(contentAlpha.length).toBe(contentOmega.length);
 
     const now = new Date();
     const bases: string[] = [];
@@ -278,17 +274,17 @@ describe('dedupe survivor determinism', () => {
       const { home, restore } = tmpHome('hippo-dedupe-det-7-');
       try {
         for (const content of order) {
-          writeEntry(home, createMemory(content, { layer: Layer.Episodic }));
+          writeEntry(home, { ...createMemory(content, { layer: Layer.Episodic }), created: now.toISOString() });
         }
 
         const result = await consolidate(home, { now });
         expect(result.merged).toBeGreaterThan(0);
 
         const semantics = loadAllEntries(home).filter(
-          (e) => e.layer === Layer.Semantic && e.content.startsWith('[Consolidated from 2 related memories]'),
+          (e) => e.layer === Layer.Semantic && e.content.startsWith('[Consolidated from 2 related memories, newest first]'),
         );
         expect(semantics.length).toBe(1);
-        // Content shape: '[Consolidated from 2 related memories]\n\n- <base>\n- <other>'.
+        // Content shape: '[Consolidated from 2 related memories, newest first]\n\n- <base>\n- <other>'.
         bases.push(semantics[0].content.split('\n\n')[1].split('\n')[0]);
       } finally {
         restore();
@@ -416,13 +412,11 @@ describe('dedupe survivor determinism', () => {
     }
   });
 
-  it('14. mergeContents 3+ bullets: bullet order and merged tags identical across all 6 ingest orders (base order: length desc -> content asc)', async () => {
+  it('14. mergeContents 3+ bullets: bullet order and merged tags identical across all 6 ingest orders (base order: created desc -> content asc)', async () => {
     // Distinct texts, one word swapped each: the merge writes each distinct text once, so the spacing-only VARIANT_* would make one bullet.
     const textA = 'our deployment pipeline automatically runs full suite of integration tests before every production release each week without exception this time';
     const textB = 'the nightly pipeline automatically runs full suite of integration tests before every production release each week without exception this time';
     const textC = 'the deployment pipeline automatically runs full suite of integration tests before every production release each week without exception last time';
-    expect(textA.length).toBe(textC.length);
-    expect(textB.length).toBeLessThan(textA.length);
 
     const now = new Date();
     const variants = [
@@ -430,23 +424,21 @@ describe('dedupe survivor determinism', () => {
       { content: textB, tags: ['t-b'] },
       { content: textC, tags: ['t-c'] },
     ];
-    const expectedOrder = [...variants].sort(
-      (a, b) => b.content.length - a.content.length || (a.content < b.content ? -1 : a.content > b.content ? 1 : 0),
-    );
+    const expectedOrder = [...variants].sort((a, b) => (a.content < b.content ? -1 : a.content > b.content ? 1 : 0));
     const expectedBlock = expectedOrder.map((v) => `- ${v.content}`).join('\n');
 
     for (const perm of permutationsOf3()) {
       const { home, restore } = tmpHome('hippo-dedupe-det-14-');
       try {
-        for (const idx of perm) {
-          writeEntry(home, createMemory(variants[idx].content, { layer: Layer.Episodic, tags: variants[idx].tags }));
+        for (const idx of perm) { // one shared `created`, so the ingest order cannot reach the primary key
+          writeEntry(home, { ...createMemory(variants[idx].content, { layer: Layer.Episodic, tags: variants[idx].tags }), created: now.toISOString() });
         }
 
         const result = await consolidate(home, { now });
         expect(result.merged).toBeGreaterThan(0);
 
         const semantics = loadAllEntries(home).filter(
-          (e) => e.layer === Layer.Semantic && e.content.startsWith('[Consolidated pattern from 3 related memories]'),
+          (e) => e.layer === Layer.Semantic && e.content.startsWith('[Consolidated pattern from 3 related memories, newest first]'),
         );
         expect(semantics.length).toBe(1);
         expect(semantics[0].content.split('\n\n')[1]).toBe(expectedBlock);
