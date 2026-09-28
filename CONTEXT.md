@@ -20,6 +20,14 @@ default). Tagged `churn-stale`, it ranks at half weight until a positive outcome
 Never deleted for it.
 _Avoid_: invalidated (the commit-message path, which halves half-life), outdated, expired
 
+**Superseded memory**:
+A memory replaced by a newer one that states the changed fact: `superseded_by` names the
+replacement. Context never injects it; recall and explain skip it unless asked
+(`--include-superseded`, `--as-of`).
+Only an explicit supersede sets it today (`hippo supersede`, `POST /v1/memories/:id/supersede`).
+ROADMAP Z6's "retired" means superseded or invalidated, never deleted.
+_Avoid_: deduped (sleep's dedup deletes a near-copy outright), dormant, stale
+
 **Raw receipt**:
 A `kind='raw'` memory: a connector message or imported note, append-only. Sleep never
 deletes one; only the raw archive removes it.
