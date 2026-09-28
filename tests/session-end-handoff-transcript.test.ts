@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { transcriptWorkingState } from '../src/capture.js';
+import { PRE_COMPACT_NEXT_STEP_CAP, PRE_COMPACT_SUMMARY_CAP, PRE_COMPACT_TASK_CAP, transcriptWorkingState } from '../src/capture.js';
 import {
   initStore,
   loadActiveTaskSnapshot,
@@ -49,13 +49,37 @@ describe('transcriptWorkingState', () => {
       user('set up the webhook handler'),
       assistant('Handler wired.'),
       user(`add rate limiting; the staging key is ${FAKE_KEY}`),
-      assistant('Adding the limiter next.'),
+      assistant(`Adding the limiter next, with ${FAKE_KEY} for staging.`),
     ]);
 
     const derived = transcriptWorkingState(file, () => {});
     expect(derived!.task).toContain('add rate limiting');
-    expect(derived!.next_step).toBe('Adding the limiter next.');
+    expect(derived!.next_step).toBe('Adding the limiter next, with [REDACTED] for staging.');
     expect(JSON.stringify(derived)).not.toContain(FAKE_KEY);
+  });
+
+  it('scrubs Bearer tokens and JWTs from every field', () => {
+    const bearer = 'Bearer ' + 'A'.repeat(20);
+    const jwt = 'eyJ' + 'A'.repeat(10) + '.eyJ' + 'B'.repeat(10) + '.' + 'C'.repeat(10);
+    const file = transcript([user(`call the webhook with ${bearer} and ${jwt}`), assistant(`Called it with ${bearer} and ${jwt}.`)]);
+
+    const derived = transcriptWorkingState(file, () => {});
+    for (const field of [derived!.task, derived!.summary, derived!.next_step]) {
+      expect(field).toContain('[REDACTED]');
+      expect(field).not.toContain(bearer);
+      expect(field).not.toContain(jwt);
+    }
+  });
+
+  it('caps each field', () => {
+    const marker = '[...earlier turns trimmed]\n';
+    const file = transcript([user('u'.repeat(1000)), assistant('a'.repeat(3000)), user('v'.repeat(1000)), assistant('b'.repeat(3000))]);
+
+    const derived = transcriptWorkingState(file, () => {});
+    expect(derived!.task).toBe('v'.repeat(PRE_COMPACT_TASK_CAP));
+    expect(derived!.next_step).toBe('b'.repeat(PRE_COMPACT_NEXT_STEP_CAP));
+    expect(derived!.summary.startsWith(marker)).toBe(true);
+    expect(derived!.summary.length).toBeLessThanOrEqual(PRE_COMPACT_SUMMARY_CAP + marker.length);
   });
 
   it('returns null and logs why when the transcript has nothing to read', () => {

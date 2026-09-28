@@ -27,7 +27,7 @@ import { embedMemory } from './embeddings.js';
 import { isEmbeddingConfigured } from './embedding-provider.js';
 import { resolveTenantId } from './tenant.js';
 import { defaultPreCompactLogPath } from './hooks.js';
-import { redactSecrets } from './secret-detect.js';
+import { redactSecretsStrict } from './secret-detect.js';
 import { RejectedValueError, checkRejectionGuard } from './rejection.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { loadConfig } from './config.js';
@@ -1213,11 +1213,11 @@ export function transcriptWorkingState(transcriptPath: string, log: (message: st
     return null;
   }
 
-  // X9: these fields skip the capture content gate, so secrets are scrubbed here. The caps protect the
+  // X9: these fields skip the capture content gate and reach a prompt, so the strict scrub runs. The caps protect the
   // re-injection token budget and never split a surrogate pair (X2); `hippo snapshot save` stays uncapped.
-  const task = redactSecrets(rawTask);
-  const summary = redactSecrets(rawSummary);
-  const nextStep = redactSecrets(rawNextStep);
+  const task = redactSecretsStrict(rawTask);
+  const summary = redactSecretsStrict(rawSummary);
+  const nextStep = redactSecretsStrict(rawNextStep);
   return {
     task: task.trim() ? truncateCodePointSafe(task, PRE_COMPACT_TASK_CAP) : '',
     summary: summary.trim() ? truncateKeepNewest(summary, PRE_COMPACT_SUMMARY_CAP) : '',
